@@ -135,7 +135,24 @@ export function mergeRefTiles(
       card,
     })
   }
-  return tiles.sort((a, b) => a.index - b.index)
+  /**
+   * 显示顺序（用户口径 2026-10-26：卡片可以拖到任意位置，排序必须生效）：
+   * - **有内容的格子**按 cards 的出现顺序排（cards 已按 refOrder/连线顺序排好）；
+   * - **待输入格**排在它们后面（按序号升序）—— 用户拖的只是有内容的那些。
+   *
+   * 为什么不能只按 index 排：序号是「正文里的引用位置」（图片3），排序不会改它；
+   * 若显示顺序也按它，用户拖完立刻被拉回原样（真机踩过：拖到最后又弹回去）。
+   */
+  const orderOf = new Map<string, number>()
+  cards.forEach((c, i) => orderOf.set(c.id, i))
+  return tiles.sort((a, b) => {
+    const ac = a.card ? orderOf.get(a.card.id) : undefined
+    const bc = b.card ? orderOf.get(b.card.id) : undefined
+    if (ac !== undefined && bc !== undefined) return ac - bc
+    if (ac !== undefined) return -1
+    if (bc !== undefined) return 1
+    return a.index - b.index
+  })
 }
 
 /**

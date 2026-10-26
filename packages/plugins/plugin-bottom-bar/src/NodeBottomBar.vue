@@ -749,30 +749,13 @@ function onReorderTiles(next?: Array<{ key?: string }>): void {
   if (ids.length === 0) return
   try {
     /**
-     * 排序要同时改写「槽位归属」（data.refSlot）：引用名（图片N）现在以槽位为准，
-     * 只改 refOrder 的话编号不变、画面看起来没动（真机踩过：有空格时排序无效）。
-     * 按拖完后的顺序重新分配序号：第 i 个有内容的格子 = 第 i 个参考。
+     * 只写 refOrder（素材显示顺序）。
+     *
+     * **不要重编 data.refSlot**：那个序号是「用户提示词里的引用位置」（图片3 就指第 3 个参考），
+     * 重编等于把卡片顺序强行拉回 1,2,3…，排序看起来完全没生效（真机踩过）。
+     * 显示顺序由 refTiles 按 refOrder 排（见 mergeRefTiles 的 displayOrder）。
      */
-    const hints: Record<string, { kind: string; index: number }> = {
-      ...((props.data?.refSlot as Record<string, { kind: string; index: number }>) ?? {}),
-    }
-    const alive = new Set(ids)
-    for (const id of Object.keys(hints)) if (!alive.has(id)) delete hints[id]
-    const seqByKind: Record<string, number> = {}
-    for (const t of next) {
-      const key = t.key ?? ''
-      if (!key.startsWith('card:')) continue
-      const id = key.slice(5)
-      // 种类：优先取该素材当前 refName 的前缀（图片N → image），回退到已有 hint
-      const refName = shownMaterials.value.find((m) => m.id === id)?.refName ?? ''
-      const fromRef = refName.startsWith('视频') ? 'video' : refName.startsWith('音频') ? 'audio' : refName.startsWith('文本') ? 'text' : refName.startsWith('图片') ? 'image' : ''
-      const kind = fromRef || hints[id]?.kind || 'image'
-      // 每种类型各自从 1 编号（图片1/图片2、视频1…），与 refName 规则一致
-      const k = kind || 'image'
-      seqByKind[k] = (seqByKind[k] ?? 0) + 1
-      hints[id] = { kind: k, index: seqByKind[k] }
-    }
-    ctx.get('doc').updateNode(props.id, { data: { refOrder: ids, refSlot: hints } })
+    ctx.get('doc').updateNode(props.id, { data: { refOrder: ids } })
   } catch {
     /* 节点已不在等情况：忽略 */
   }

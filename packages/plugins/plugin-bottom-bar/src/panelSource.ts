@@ -612,7 +612,7 @@ export function applySlotHints(
   // 每个种类：已被 hint 占用的序号 → 素材；其余素材排队补空位
   const byKind = new Map<string, { taken: Map<number, UpstreamMaterial>; rest: UpstreamMaterial[] }>()
   for (const m of materials) {
-    const bucket = byKind.get(m.kind) ?? { taken: new Map(), rest: [] }
+    const bucket = byKind.get(m.kind) ?? { taken: new Map<number, UpstreamMaterial>(), rest: [] as UpstreamMaterial[] }
     const hint = hints[m.id]
     if (hint && hint.kind === m.kind && hint.index > 0 && !bucket.taken.has(hint.index)) {
       bucket.taken.set(hint.index, m)
