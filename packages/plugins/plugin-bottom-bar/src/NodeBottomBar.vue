@@ -740,6 +740,7 @@ const refTiles = computed(() =>
   mergeRefTiles(
     promptRefSlots.value,
     shownMaterials.value.map((m) => ({ id: m.id, name: m.name, refName: m.refName, url: m.url, isText: m.kind === 'text' })),
+    refOrder.value, // 完整序列（含 slot: 空格）—— 用户拖出来的顺序
   ),
 )
 
@@ -765,9 +766,14 @@ function slotErrorOf(tile: { slotKey?: string }): string {
  */
 function onReorderTiles(next?: Array<{ key?: string }>): void {
   if (!next || next.length === 0) return
-  const ids = next
-    .map((t) => (t.key ?? '').replace(/^card:/, ''))
-    .filter((id) => id && !id.includes(':')) // slot:image:2 这种不是节点 id
+  // **整个序列**（含 slot: 空格）都落盘：空格也参与排序（用户口径 2026-10-26）。
+  // slot: 键对 resolveMaterialOrder 是"未列到的 id"，不影响材质排序；但 mergeRefTiles
+  // 会用它恢复用户拖出来的完整顺序。
+  const ids = next.map((t) => {
+    const key = t.key ?? ''
+    // card:N 是材质节点 id（id=N）；slot:kind:n 原样保留（mergeRefTiles 靠它恢复顺序）
+    return key.startsWith('card:') ? key.slice(5) : key
+  }).filter(Boolean)
   if (ids.length === 0) return
   try {
     /**

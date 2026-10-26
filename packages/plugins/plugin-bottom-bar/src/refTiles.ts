@@ -73,6 +73,8 @@ export function refNameToSlotKey(refName: string, slotKind: 'image' | 'video' | 
 export function mergeRefTiles(
   slots: ReadonlyArray<TileSlotLike>,
   cards: ReadonlyArray<TileCardLike>,
+  /** 用户拖出来的完整顺序（card:N 与 slot:kind:n 混排）。空 = 无自定义顺序 */
+  displayOrder?: readonly string[],
 ): RefTile[] {
   // 序号 → 素材（连线顺序里第 N 张图 / 第 N 段音频…）
   const seqOf = (kind: 'image' | 'video' | 'audio'): Map<number, TileCardLike> => {
@@ -144,15 +146,33 @@ export function mergeRefTiles(
    * 若显示顺序也按它，用户拖完立刻被拉回原样（真机踩过：拖到最后又弹回去）。
    */
   const orderOf = new Map<string, number>()
-  cards.forEach((c, i) => orderOf.set(c.id, i))
-  return tiles.sort((a, b) => {
-    const ac = a.card ? orderOf.get(a.card.id) : undefined
-    const bc = b.card ? orderOf.get(b.card.id) : undefined
-    if (ac !== undefined && bc !== undefined) return ac - bc
-    if (ac !== undefined) return -1
-    if (bc !== undefined) return 1
+  // 优先用 displayOrder（用户拖出来的完整序列）；没有时按 cards 出现顺序
+  if (displayOrder && displayOrder.length > 0) {
+    displayOrder.forEach((key, i) => {
+      orderOf.set(key, i)
+      // 兼容带前缀的键（card:N）
+      if (key.startsWith('card:')) orderOf.set(key.slice(5), i)
+      // 兼容不带前缀的键（refOrder 落盘时 card: 已剥掉）—— tiles 的 key 是 card:N
+      else orderOf.set('card:' + key, i)
+    })
+  } else {
+    cards.forEach((c, i) => orderOf.set('card:' + c.id, i))
+  }
+  const sorted = tiles.sort((a, b) => {
+    const ao = orderOf.get(a.key)
+    const bo = orderOf.get(b.key)
+    // 都在用户序列里 → 按用户顺序；都不在 → 按序号；一有一无 → 在序列的排前面
+    if (ao !== undefined && bo !== undefined) return ao - bo
+    if (ao !== undefined) return -1
+    if (bo !== undefined) return 1
     return a.index - b.index
   })
+  /**
+   * 显示序号 = 显示位置（用户口径 2026-10-26）：排完序后从 1 重编。
+   * 这样拖到哪就是第几格，索引永远 1,2,3…（之前拖完索引留在原素材上 → 3,2,1 的错乱）。
+   * 正文 @图片N 的解析按「第 N 个 chip 的名字」匹配 —— 与此处的 index 无关。
+   */
+  return sorted.map((t, i) => ({ ...t, index: i + 1 }))
 }
 
 /**
