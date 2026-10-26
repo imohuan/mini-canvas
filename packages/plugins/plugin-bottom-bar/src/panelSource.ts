@@ -69,6 +69,11 @@ export function collectUpstreamMaterials(
   targetId: string,
   getNode: (nodeId: string) => UpstreamNodeLike | undefined,
   refOrder?: readonly string[],
+  /**
+   * 用户**指定**的槽位（上传/替换到第 N 格时写入）—— 决定该素材的 refName 序号。
+   * 不给时行为与以前完全一致（按出现顺序从 1 编）。
+   */
+  slotHints?: RefSlotHints,
 ): UpstreamMaterial[] {
   const out: UpstreamMaterial[] = []
   // 同一个上游节点可能有多条边连过来（重复连），只算一次：素材行不该出现两张一样的卡片
@@ -166,7 +171,8 @@ export function collectUpstreamMaterials(
   }
 
   // 顺序 + 引用名：两件事必须一起做（引用名是按**最终顺序**编的）
-  return numberRefNames(resolveMaterialOrder(out, refOrder))
+  const ordered = resolveMaterialOrder(out, refOrder)
+  return slotHints ? applySlotHints(ordered, slotHints) : numberRefNames(ordered)
 }
 
 /**
@@ -295,8 +301,11 @@ export function placeRefAtSlot(
   // 同类型才能插位：图片2 的「位置」只在图片序列里有意义（视频/音频各自编号）。
   void kind
   const rest = order.filter((id) => id !== nodeId)
-  const at = Math.max(0, Math.min(index - 1, rest.length))
-  return [...rest.slice(0, at), nodeId, ...rest.slice(at)]
+  // 「第 N 格」必须真的排在第 N 位 —— 当前素材比 N 少时补占位，
+  // 否则会被压到第 1 位（真机踩过：8 格空着时点第 8 格上传，图出现在第 1 格）。
+  const padded = [...rest]
+  while (padded.length < index - 1) padded.push('__slot__' + padded.length)
+  return [...padded.slice(0, index - 1), nodeId, ...padded.slice(index - 1)]
 }
 
 /** 素材 → 生成请求里的资源（只带工具需要的字段，避免把 UI 用的东西塞进请求） */
@@ -485,7 +494,9 @@ const TEXT_ICON =
  */
 function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {
   const name = self.name || ''
-  const isText = self.mediaType === undefined
+  // url 为空 = 该槽位现在是「待输入」：不给 <img>（空 src 会渲染成裂图/空白，
+  // 用户看到的就是"删掉资源后标签图标不见了"），改走图标/占位分支。
+  const isText = self.mediaType === undefined || !self.url
   return [
     'span',
     {
@@ -578,3 +589,53 @@ export function panelStatusText(input: {
   }
   return { tone: 'idle', text: '' }
 }
+
+/**
+ * 槽位提示：用户**指定**某素材放在第 N 格（上传/替换时写进节点 data.refSlot）。
+ * 形状：{ [nodeId]: { kind, index } }
+ */
+export type RefSlotHints = Record<string, { kind: ToolResourceKind; index: number }>
+
+/**
+ * 把「用户指定的槽位」落到 refName 上 —— 这是「第 N 格上传就落在第 N 格」的唯一依据。
+ *
+ * 为什么不能只靠顺序：refName 是按素材出现顺序从 1 编的。8 个格子都空着时点第 8 格
+ * 上传，素材序列里只有 1 张 → 编成「图片1」→ 于是显示在第 1 格（真机踩过的 bug）。
+ * 有 hint 时按 hint 编号，同类型的其余素材填到空出来的位置（保持原有先后）。
+ */
+export function applySlotHints(
+  materials: ReadonlyArray<UpstreamMaterial>,
+  hints: RefSlotHints | undefined,
+): UpstreamMaterial[] {
+  if (!hints) return numberRefNames(materials)
+  const CN: Record<string, string> = { image: "图片", video: "视频", audio: "音频", text: "文本" }
+  // 每个种类：已被 hint 占用的序号 → 素材；其余素材排队补空位
+  const byKind = new Map<string, { taken: Map<number, UpstreamMaterial>; rest: UpstreamMaterial[] }>()
+  for (const m of materials) {
+    const bucket = byKind.get(m.kind) ?? { taken: new Map(), rest: [] }
+    const hint = hints[m.id]
+    if (hint && hint.kind === m.kind && hint.index > 0 && !bucket.taken.has(hint.index)) {
+      bucket.taken.set(hint.index, m)
+    } else {
+      bucket.rest.push(m)
+    }
+    byKind.set(m.kind, bucket)
+  }
+  const out: UpstreamMaterial[] = []
+  for (const m of materials) {
+    const bucket = byKind.get(m.kind)!
+    // 本素材是否占着某个 hint 序号
+    let slot = 0
+    for (const [idx, item] of bucket.taken) if (item === m) slot = idx
+    if (slot === 0) {
+      // 找一个没被占用的序号（从 1 起）
+      let i = 1
+      while (bucket.taken.has(i)) i += 1
+      slot = i
+      bucket.taken.set(i, m)
+    }
+    out.push({ ...m, refName: (CN[m.kind] ?? "素材") + slot })
+  }
+  return out
+}
+

@@ -43,6 +43,7 @@ import {
   materialCards,
   nextRefOrder,
   placeRefAtSlot,
+  type RefSlotHints,
   resolveMaterialUrls,
   toEditorResources,
   toToolResources,
@@ -373,6 +374,20 @@ function stringArray(v: unknown): string[] {
 }
 const refOrder = computed<string[]>(() => stringArray(props.data?.refOrder))
 
+/** 用户指定的槽位（上传/替换到第 N 格时写入 data.refSlot） */
+const refSlotHints = computed<RefSlotHints>(() => {
+  const raw = props.data?.refSlot
+  if (!raw || typeof raw !== 'object') return {}
+  const out: RefSlotHints = {}
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    const o = v as { kind?: unknown; index?: unknown }
+    if (typeof o?.kind === 'string' && typeof o?.index === 'number') {
+      out[id] = { kind: o.kind as RefSlotHints[string]['kind'], index: o.index }
+    }
+  }
+  return out
+})
+
 const materials = computed<UpstreamMaterial[]>(() =>
   collectUpstreamMaterials(
     renderEdges.value,
@@ -382,6 +397,7 @@ const materials = computed<UpstreamMaterial[]>(() =>
       return node ? { type: node.type, data: node.data } : undefined
     },
     refOrder.value,
+    refSlotHints.value,
   ),
 )
 
@@ -827,9 +843,21 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
          * 直接拿空数组去 placeRefAtSlot 会把新素材插到第 0 位，于是第 8 格上传的图
          * 跑到了第 1 格（真机踩过）。没存过时用当前实际素材顺序兜底。
          */
-        refOrder: () =>
-          refOrder.value.length > 0 ? refOrder.value : shownMaterials.value.map((m) => m.id),
-        writeOrder: (ids) => doc.updateNode(props.id, { data: { refOrder: ids } }),
+        /**
+         * 排位用的「当前顺序」：必须**只含仍然连着的素材**。
+         * refOrder 里会残留已断开/已删除节点的死 id —— 直接拿去插位会让位置算错，
+         * 于是「第 8 格上传」的图跑到第 1 格（真机踩过）。死 id 过滤掉；
+         * 过滤后为空就用当前实际素材顺序。
+         */
+        refOrder: () => {
+          const alive = new Set(shownMaterials.value.map((m) => m.id))
+          const kept = refOrder.value.filter((id) => alive.has(id))
+          return kept.length > 0 ? kept : shownMaterials.value.map((m) => m.id)
+        },
+        // 占位 id（__slot__N）只用于算位，不落盘（落盘会留下永远不会有人认领的死 id）
+        writeOrder: (ids) => {
+          doc.updateNode(props.id, { data: { refOrder: ids.filter((id) => !id.startsWith('__slot__')) } })
+        },
         pickCreated: () => {
           ;(window as any).__upDbg.step = 'pick-created'
           // 为什么不能到 shownMaterials 里找：素材是**按边**收集的（collectUpstreamMaterials），
@@ -848,6 +876,11 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
       },
     )
     if (!result.ok) { setSlotError(index, result.error ?? '上传失败'); return }
+    // 记住「这张素材属于第 N 格」—— refName 编号以它为准（否则 8 格空着时上传第 8 格
+    // 会被编成「图片1」显示到第 1 格，真机踩过）。
+    if (result.created?.id) doc.updateNode(props.id, {
+      data: { refSlot: { ...((props.data?.refSlot as Record<string, unknown>) ?? {}), [result.created.id]: { kind, index } } },
+    })
     // 内容已就位（连线进来了），正文里那颗虚线标签刷新成实线（名字/缩略图）
     refreshSlotChips()
   } catch (err) {
@@ -1197,7 +1230,11 @@ async function replaceSlotMaterial(
     const order = placeRefAtSlot(refOrder.value, kind, index, source.nodeId)
     const oldId = material?.id
     const cleaned = oldId && oldId !== source.nodeId ? order.filter((id) => id !== oldId) : order
-    doc.updateNode(props.id, { data: { refOrder: cleaned } })
+    // 槽位归属也跟着换：新素材接管第 N 格，旧素材的 hint 删掉
+    const hints = { ...((props.data?.refSlot as Record<string, unknown>) ?? {}) }
+    if (oldId) delete hints[oldId]
+    hints[source.nodeId] = { kind, index }
+    doc.updateNode(props.id, { data: { refOrder: cleaned, refSlot: hints } })
     slotErrors.value = {}
     // 等一拍：shownMaterials 是「按边收集」的 computed，连线刚写入 doc 但渲染层
     // 还没回灌 —— 不等的话这里读到的是**旧素材**（没有刚连线的那格）→ 刷不上去

@@ -56,7 +56,8 @@ describe('上传槽位：建节点 → 还选中 → 连线 → 排位', () => {
   it('往第 2 格上传 → 新素材排到第 2 位（「属于第二个参考」）', async () => {
     const d = deps()
     await uploadToRefSlot({ file: new File([], 'a.png'), kind: 'image', index: 2, targetId: 'me' }, d.deps)
-    expect(d.getOrder()).toEqual(['n-new'])
+    // 第 2 格 = 序列第 2 位（第 1 位用占位补上，落盘时占位被过滤）
+    expect(d.getOrder()).toEqual(['__slot__0', 'n-new'])
   })
 
   it('已有素材时往第 1 格上传 → 插到最前', async () => {
@@ -161,9 +162,8 @@ describe('参考缺号 → 不许发送（只看连线内容）', () => {
 
 describe('placeRefAtSlot：上传落到第几格，就是第几个参考', () => {
   it('空列表 + 第 2 格 → 只有一个素材时它就是第 1 个（缺的第 2 格由发送校验拦住）', () => {
-    // 插入位置超出长度会夹到末尾：不会凭空造一个空参考。
-    // 用户要的「这是图片2」由「序号对齐 + 缺号禁用发送」一起保证（见下一个 describe）。
-    expect(placeRefAtSlot([], 'image', 2, 'n2')).toEqual(['n2'])
+    // 第 2 格必须真的占第 2 位（前面补占位；落盘时占位被过滤，序号由 data.refSlot 保证）
+    expect(placeRefAtSlot([], 'image', 2, 'n2')).toEqual(['__slot__0', 'n2'])
   })
 
   it('已有 1 个素材，再往第 2 格上传 → 排到第 2 位', () => {
@@ -179,7 +179,11 @@ describe('placeRefAtSlot：上传落到第几格，就是第几个参考', () =>
   })
 
   it('序号超出已有长度 → 夹到末尾（不制造空洞）', () => {
-    expect(placeRefAtSlot(['a'], 'image', 9, 'z')).toEqual(['a', 'z'])
+    // 第 9 格 = 第 9 位（补 7 个占位）；落盘时占位被过滤
+    const out = placeRefAtSlot(['a'], 'image', 9, 'z')
+    expect(out.length).toBe(9)
+    expect(out[8]).toBe('z')
+    expect(out.filter((x) => !x.startsWith('__slot__'))).toEqual(['a', 'z'])
   })
 })
 

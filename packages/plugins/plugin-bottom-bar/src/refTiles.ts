@@ -77,12 +77,12 @@ export function mergeRefTiles(
   // 序号 → 素材（连线顺序里第 N 张图 / 第 N 段音频…）
   const seqOf = (kind: 'image' | 'video' | 'audio'): Map<number, TileCardLike> => {
     const map = new Map<number, TileCardLike>()
-    let seq = 0
     for (const c of cards) {
       const parsed = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
       if (!parsed || parsed.kind !== kind) continue
-      seq += 1
-      map.set(seq, c)
+      // 用 **refName 自带的序号**（图片8 就是第 8 格），不再按出现顺序递增 ——
+      // 否则「第 8 格上传」的素材会被排到第 1/2 格（真机踩过）。
+      if (!map.has(parsed.index)) map.set(parsed.index, c)
     }
     return map
   }
@@ -104,7 +104,8 @@ export function mergeRefTiles(
     const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频'
     const bySeq = seqOf(kind)
     const declared = slots.filter((s) => s.kind === kind).map((s) => s.index)
-    const max = Math.max(bySeq.size, ...(declared.length ? declared : [0]), 0)
+    const maxSeq = Math.max(0, ...bySeq.keys())
+    const max = Math.max(maxSeq, ...(declared.length ? declared : [0]), 0)
     for (let index = 1; index <= max; index++) {
       const card = bySeq.get(index)
       tiles.push({
