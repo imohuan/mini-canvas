@@ -15,7 +15,7 @@
  * ② 切亮/暗主题 → `<html class="dark">` 变化（见 watchThemeMode）。
  */
 import { onBeforeUnmount, ref, type Ref } from 'vue'
-import { useCanvasRender } from './renderContext'
+import { useCanvasContext } from './canvasContext'
 import {
   currentThemeMode,
   resolveThemeColorValue,
@@ -27,14 +27,14 @@ import {
 /**
  * 取某个色板 token 在当前主题下的颜色（响应式）。
  *
- * 必须在 `<CanvasHost>` 渲染子树内调用（用的是 useCanvasRender 的 ctx）；
+ * 必须在 `<CanvasProvider>` 内调用（用的是 useCanvasContext 的 ctx）；
  * 读不到 settings（极简宿主/单测桩）时回落 token 默认值，不抛错。
  *
  * @param tokenKey 色板基名（如 'edgeRailColor'），见 THEME_COLOR_TOKENS
  * @param root 主题 class 所在元素，默认 `document.documentElement`（测试可传假元素）
  */
 export function useThemeColor(tokenKey: string, root?: Element | null): Ref<string> {
-  const { ctx } = useCanvasRender()
+  const { ctx } = useCanvasContext()
   const settings = ctx.get<ThemePaletteSettingsLike | undefined>('settings')
 
   const read = (mode: ThemeColorMode): string =>

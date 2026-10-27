@@ -5,7 +5,9 @@ import { createSSRApp } from 'vue'
 import { Context } from '@mini-canvas/canvas-data'
 import { RegistryImpl } from '@mini-canvas/kernel'
 import { uiComponent, uiNames, useUiComponent } from '../uiCatalog'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '../renderContext'
+import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../canvasContext'
+import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
+import type { PluginManager } from '../../host/pluginManager'
 
 /**
  * ui 目录场（设计文档 §4.5 / 案例 4 / 决策 4）：
@@ -67,7 +69,12 @@ describe('useUiComponent：目录变了，消费组件跟着换', () => {
       },
     })
     const app = createSSRApp({ render: () => h(Consumer) })
-    app.provide(RENDER_CONTEXT_KEY, { ctx: { registryOf: () => field } } as unknown as CanvasRenderContext)
+    app.provide(CANVAS_CONTEXT_KEY, {
+      ctx: { registryOf: () => field } as unknown as CanvasContext['ctx'],
+      host: {} as CanvasHostHandle,
+      api: {} as MiniCanvasApi,
+      manager: {} as PluginManager,
+    })
     return renderToString(app)
   }
 

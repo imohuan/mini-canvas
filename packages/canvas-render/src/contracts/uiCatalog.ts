@@ -10,7 +10,7 @@
  */
 import type { Context } from '@mini-canvas/canvas-data'
 import { onScopeDispose, shallowRef, type Ref } from 'vue'
-import { useCanvasRender } from './renderContext'
+import { useCanvasContext } from './canvasContext'
 
 /** ui 场的条目值：opaque 组件句柄（内核不解析、不 import Vue） */
 export type UiComponentHandle = unknown;
@@ -60,7 +60,7 @@ export function uiComponent(ctx: Context | undefined, name: string): UiComponent
  * ```ts
  * const Button = useUiComponent('button')   // 模板里 <Button /> 即可（ref 自动解包）
  * ```
- * 必须在画布渲染子树内调用（走 useCanvasRender 拿 ctx）；树外抛清晰错误。
+ * 必须在 CanvasProvider 内调用（走 useCanvasContext 拿 ctx）；树外抛清晰错误。
  *
  * **返回 Ref**（返回的是"当前这个名字对应的组件"，而不是一次性快照）：目录被换主题时它当场变，
  * 消费组件不必重挂就跟着换 —— 与 themeRegistry.subscribe 驱动重装配同一套语义。
@@ -69,7 +69,7 @@ export function uiComponent(ctx: Context | undefined, name: string): UiComponent
  * 名字不存在时 value 为 undefined + console.warn（不静默、也不炸 —— 与决策 9 的缺项策略同调）。
  */
 export function useUiComponent(name: string): Ref<UiComponentHandle | undefined> {
-  const { ctx } = useCanvasRender();
+  const { ctx } = useCanvasContext();
   const field = ctx.registryOf<UiComponentHandle>('ui');
   const found = shallowRef<UiComponentHandle | undefined>(field.top(name)?.value);
   /** 缺名提示只给一次（同一文案别写两遍）：首次就缺时立刻给，之后只在"变过再变缺"时给 */

@@ -9,9 +9,10 @@
 //
 // 职责边界（只管"读一个槽并按序渲染 occupants"）：
 // - 不做定位/pointer-events/容器样式——那是具体槽(如 overlay 盖满画布那层)的布局职责，由使用方套 CSS。
-// - 只在 CanvasHost 渲染子树内用（经 useCanvasRender 拿 ctx）；组件树外会抛清晰错误。
+// - 只依赖基础画布上下文（CanvasProvider 提供）：外壳和 CanvasHost 子树内都能用；
+//   需要 flow / renderNodes 的组件不要塞进这里，那些仍属于画布渲染上下文。
 import { markRaw, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '../contracts/renderContext'
+import { useCanvasContext } from '../contracts/canvasContext'
 
 const props = defineProps<{
   /** 要渲染的槽名（插件经 ctx.slots.register(同名, ...) 往里填） */
@@ -20,7 +21,7 @@ const props = defineProps<{
   itemClass?: string
 }>()
 
-const { ctx } = useCanvasRender()
+const { ctx } = useCanvasContext()
 
 // —— occupant 列表：读内核槽 + markRaw，插件装卸时整体替换以触发 Vue 更新 ——
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
