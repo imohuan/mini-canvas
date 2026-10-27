@@ -208,18 +208,18 @@ export function findRefGap(
   slots: ReadonlyArray<{ kind: 'image' | 'video' | 'audio' | 'av'; index: number }>,
   cards: ReadonlyArray<TileCardLike>,
 ): { kind: 'image' | 'video' | 'audio' | 'av'; missing: number[] } | null {
-  // 每种类型已就绪的序号集合（来自连线素材的名字）
-  const haveBy = (kind: 'image' | 'video' | 'audio'): Set<number> => {
-    const set = new Set<number>()
-    let seq = 0
-    for (const c of cards) {
-      const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
-      if (!p || p.kind !== kind) continue
-      seq += 1
-      set.add(seq)
+    // 每种类型已就绪的序号集合（来自连线素材的真实序号）
+    const haveBy = (kind: 'image' | 'video' | 'audio'): Set<number> => {
+      const set = new Set<number>()
+      for (const c of cards) {
+        const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
+        if (!p || p.kind !== kind) continue
+        // 用 **refName 自带的序号**：以前是 seq += 1 按出现顺序数，
+        // 于是「图片2 + 图片4」会被当成第 1、2 格，缺号判断整体错位（真机踩过）。
+        set.add(p.index)
+      }
+      return set
     }
-    return set
-  }
   for (const s of slots) {
     if (s.kind === 'av') continue
     const have = haveBy(s.kind)
