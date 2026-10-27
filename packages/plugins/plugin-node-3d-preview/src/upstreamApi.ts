@@ -3,6 +3,9 @@
  *
  * 背景（用户口径 2026-10-27）：上游资源的取法已经换成一个**单独的 API**，
  * 插件里还在走老的「扫边 + 认字段」方式，所以看起来没有生效。
+ * 配置项见 `D:\Code\Git\mini-canvas\packages\plugins\plugin-node-3d-preview\src\node3dPreviewPlugin.ts`
+ * （preview3dUpstreamApi），消费方见
+ * `D:\Code\Git\mini-canvas\packages\plugins\plugin-node-3d-preview\src\PanoramaContent.vue`。
  *
  * 这里把两件事分开：
  * 1. **读画布图**（谁连进来了）：仍由宿主的能力/doc 提供；

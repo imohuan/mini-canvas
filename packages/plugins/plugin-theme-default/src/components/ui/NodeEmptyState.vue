@@ -7,7 +7,8 @@
  * 一个共用件：换文案、换说明、换图标、加一个可选动作就够了，不必每加一种节点
  * 再抄一份空态。
  *
- * 用法（插件不要直接 import 本文件，按设计系统目录取，换主题时一起换）：
+ * 用法（插件不要直接 import 本文件，按设计系统目录取，换主题时一起换；
+ * 登记处：`D:\Code\Git\mini-canvas\packages\plugins\plugin-theme-default\src\index.ts`）：
  *   const Empty = useUiComponent('nodeEmptyState')
  *   <Empty text="（无图片）" description="上传一张图片，或把图片节点连进来" />
  *
