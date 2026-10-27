@@ -608,6 +608,41 @@ describe('plugin-manager 服务：config 后端切换时的安装名单对齐（
     expect(host.installed.has('plugin-a')).toBe(true)
     ctx.stop()
   })
+
+  it('首次上云（云端没有名单）→ 把本地备份整份推上去，换台机器也能恢复', async () => {
+    const storage = new MemoryStorage()
+    ;(globalThis as { localStorage?: unknown }).localStorage = storage
+    // 本地已有备份（a、b），云端是空白（从未存过）
+    storage.setItem('config:' + INSTALLED_KEY, JSON.stringify(['plugin-a', 'plugin-b']))
+    const local = new LocalStorageAdapter(storage as unknown as Storage)
+    const emptyCloud = new MemoryStorageAdapter()
+
+    const ctx = new Context()
+    const host = fakeHost()
+    const save = new SaveServiceImpl(local)
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    expect(host.installed.has('plugin-a')).toBe(true)
+    expect(host.installed.has('plugin-b')).toBe(true)
+
+    // 连上后台（config 切到空白云端）→ 应把名单搬上去
+    save.useAdapter('config', emptyCloud)
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(await emptyCloud.get<string[]>('config:' + INSTALLED_KEY), '首次上云应把本地名单推到云端').toEqual([
+      'plugin-a',
+      'plugin-b',
+    ])
+    ctx.stop()
+  })
 })
 
 describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用户实测的多余 404）', () => {

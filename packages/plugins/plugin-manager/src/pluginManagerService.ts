@@ -390,11 +390,22 @@ export function createPluginManagerService(
     // 本服务在这次切换之前刚写过名单 → 新后端里承载的就是我们那份，不必（也不能）回灌。
     // 只在"从没写过"（真正换台机器 / 首次上云）时才以新后端为准。
     if (intentWrittenAt > 0) return
-    const saved = await readSavedIntent()
+    // 这里必须**直接问当前后端**，不能走 readSavedIntent：那样本地备份会把"后端还是空的"
+    // 这件事盖住，导致首次上云永远不把名单推上去（换台机器就又没有安装记录了）。
+    let saved: string[] | undefined
+    try {
+      const current = await save()?.get<string[]>(INSTALLED_KEY, 'config')
+      if (Array.isArray(current) && current.every((x) => typeof x === 'string')) saved = current
+    } catch (err) {
+      console.warn('[plugin-manager] 切换后端后读取安装名单失败，本次不对齐', err)
+      return
+    }
     if (saved === undefined) {
-      // 全新后端：把当前意图搬过去（不重装，现有状态已符合意图），别让后端的空抹掉已装插件。
-      save()?.set(INSTALLED_KEY, [...state.intent], 'config')
-      writeLocalBackup(state.intent)
+      // 全新后端：把本地备份（没有就用当前意图）搬过去，别让后端的空抹掉已装插件。
+      const seed = readLocalBackup() ?? [...state.intent]
+      state.intent = [...seed]
+      save()?.set(INSTALLED_KEY, [...seed], 'config')
+      writeLocalBackup(seed)
       return
     }
     state.intent = [...saved]
