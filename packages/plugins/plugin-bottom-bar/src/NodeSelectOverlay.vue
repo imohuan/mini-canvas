@@ -187,21 +187,31 @@ function onDragPointerDown(ev: PointerEvent): void {
   >
     <span v-if="state === 'connected'" class="nso-badge">✓</span>
     <span v-else-if="state === 'selectable'" class="nso-badge">+</span>
+    <span v-else-if="state === 'blocked'" class="nso-badge" aria-hidden="true">
+      <!-- 禁用图标（🚫）：圆 + 斜杠，与 + / ✓ 同一套左上角角标位 -->
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9" />
+        <line x1="5.8" y1="5.8" x2="18.2" y2="18.2" />
+      </svg>
+    </span>
   </div>
 </template>
 
 <style scoped>
-/* 通用面孔（两种模式一致）：紫描边/淡紫底/角标/灰罩，走 --ui-* token */
+/* 通用面孔（两种模式一致）：主题色描边/蒙版/角标，blocked 用红色蒙版 + 禁用角标（2026-10-27 用户定稿，demo docs/tmp/node-select-overlay-demo.html） */
 .nso-layer { position: absolute; inset: 0; border-radius: inherit;
   /* 父容器 .v2-overlay 是 pointer-events:none（BaseNode 红线文件）——
      不显式设 auto 的话本层点击/拖拽会全部穿透到节点（真机踩过）。 */
   pointer-events: auto; }
 .nso-layer.is-reference { cursor: pointer; }
 .nso-layer.is-ctrl-drag { cursor: grab; }
-.nso-layer.is-selectable { background: transparent; }
-.nso-layer.is-reference.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 14%, transparent); }
-.nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); }
+.nso-layer.is-selectable { background: color-mix(in srgb, var(--ui-accent) 16%, transparent); }
+.nso-layer.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 26%, transparent); }
+.nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 20%, transparent); }
+.nso-layer.is-connected:hover { background: color-mix(in srgb, var(--ui-accent) 30%, transparent); }
 .nso-layer.is-owner { pointer-events: none; }
-.nso-layer.is-blocked { background: color-mix(in srgb, var(--ui-scrim) 42%, transparent); pointer-events: none; }
+/* 主题色白名单: 红色语义 = 危险/禁用，走 --ui-danger（形状为蒙版与角标，非主题强调色） */
+.nso-layer.is-blocked { border-color: var(--ui-danger); background: color-mix(in srgb, var(--ui-danger) 16%, transparent); pointer-events: none; }
 .nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-primary-ink, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
+.nso-layer.is-blocked .nso-badge { background: var(--ui-danger); }
 </style>

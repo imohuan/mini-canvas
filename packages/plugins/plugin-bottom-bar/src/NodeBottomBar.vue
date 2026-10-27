@@ -1675,8 +1675,8 @@ function onGlobalLeave(el: Element): void {
           />
           <span v-else-if="tile.pending" class="nb-card-pending">
             <span class="nb-card-plus" aria-hidden="true">+</span>
-            <span class="nb-card-pending-label">{{ tile.label }}</span>
-            <span class="nb-card-pending-tag">待输入</span>
+<span class="nb-card-pending-label">{{ tile.label }}</span>
+<span class="nb-card-pending-tag">待输入</span>
           </span>
           <span v-else class="nb-card-text">{{ (tile.name || '文')[0] }}</span>
           <span class="nb-card-index">{{ tile.index }}</span>
@@ -1790,9 +1790,12 @@ function onGlobalLeave(el: Element): void {
         </button> -->
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
         <!-- 参考序号有缺时：发送按钮左边一个警告图标，hover 出 tooltip 说清楚缺哪一格 -->
-        <Tooltip v-if="refGapHint" :content="refGapHint" placement="bottom">
-          <span class="nb-gap-hint" role="button" tabindex="0"><span aria-hidden="true" v-html="ICON_WARN" /></span>
-        </Tooltip>
+        <div class="nb-warn">
+          <Tooltip v-if="refGapHint" :content="refGapHint" placement="bottom">
+            <span class="nb-gap-hint" role="button" tabindex="0"><span aria-hidden="true" v-html="ICON_WARN" /></span>
+          </Tooltip>
+        </div>
+        
         <button
           class="nb-run"
           :class="{ 'is-running': running }"
@@ -2609,6 +2612,11 @@ function onGlobalLeave(el: Element): void {
   line-height: 32px;
   color: var(--ui-ink-mute, #8c95a3);
 }
+
+.nb-warn {
+  padding-right: 10px;
+}
+
 /* 参考序号缺格提示：小警告图标贴着发送按钮，hover 出鼠标跟随提示（详情走 tip 服务） */
 .nb-gap-hint {
   display: inline-flex;
