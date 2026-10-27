@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>生成历史 · 卡片方案实验室</title>
+<link rel="stylesheet" href="./history-card-lab.css" />
+</head>
+<body>
+<div class="lab">
+  <header class="lab-head">
+    <div class="lab-intro">
+      <div class="eyebrow">GENERATION HISTORY · CARD LAB</div>
+      <h1>生成历史卡片方案</h1>
+      <p class="lede">同一批真实记录，五种卡外信息摆法 + 一个现状对照。全部是流式卡片；资源没有标题，只显示宽高与文件大小（视频多一段时长）。</p>
+      <div class="source"><span class="dot" id="source-dot"></span><span id="source-text">正在读取历史数据…</span></div>
+    </div>
+    <div class="legend">
+      <span><b>1–5</b> 新方案</span>
+      <span><b>6</b> 现状对照</span>
+    </div>
+  </header>
+
+  <nav class="lab-tabs" id="tabs" role="tablist" aria-label="卡片方案"></nav>
+
+  <div class="toolbar">
+    <label class="switch">
+      <input type="checkbox" id="selecting" />
+      <span>多选模式</span>
+    </label>
+    <span class="toolbar-hint" id="count"></span>
+  </div>
+
+  <section class="scheme" id="scheme" aria-live="polite"></section>
+
+  <!-- 多选底栏：与成品里的批量操作栏同一位置与信息量 -->
+  <div class="batchbar" id="batchbar" hidden>
+    <span>已选 <b id="batch-count">0</b> 项</span>
+    <div class="batch-actions">
+      <button type="button">保存到资产</button>
+      <button type="button" class="ghost">取消</button>
+    </div>
+  </div>
+
+  <footer class="lab-foot">
+    <span>数据来源：本机 cloud-server 的 /api/history（图片 / 视频 / 音频）。</span>
+    <span>布局示意页，未接入真实操作；多选状态仅演示外观。</span>
+  </footer>
+</div>
+<script src="./history-card-lab.js"></script>
+</body>
+</html>
