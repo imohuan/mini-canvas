@@ -169,6 +169,23 @@ export function collectUpstreamMaterials(
         value: typeof data.text === 'string' ? data.text : '',
       })
     }
+    // 空媒体节点（图片/视频/音频但 url、resourceId 都还没有）也要收下（用户 2026-10-28 报：
+    // 连了一个空视频节点，参考区出现一格「空白卡片」、正文标签缩略图空白）。
+    // 为什么不能跳过：用户「先连线、后上传」是正常流程，连上就该占一个格子；
+    // 跳过它会导致 displayOrder 里有它、tiles 里没有 → 后面格子的序号错位，
+    // 且正文引用它的标签拿不到任何 item，缩略图渲染成空白。
+    // 这里收下时 url 留空，卡片显示「待输入」样式，标签显示默认图标。
+    if (node && ['image', 'video', 'audio'].includes(node.type ?? '')) {
+      const kind: ToolResourceKind = node.type as ToolResourceKind
+      seen.add(edge.source)
+      out.push({
+        id: edge.source,
+        kind,
+        name: label || (kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '图片'),
+        refName: '',
+      })
+      continue
+    }
   }
 
   // 顺序 + 引用名：两件事必须一起做（引用名是按**最终顺序**编的）
