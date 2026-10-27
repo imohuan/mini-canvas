@@ -1694,15 +1694,6 @@ function onGlobalLeave(el: Element): void {
         v-model:prompt-doc="promptDoc"
         :resources="editorResources"
         :resolve-resource="resolveResource"
-        @update:model-value="onPromptUpdate"
-        @click.stop
-      />
-      <ProseMirrorEditor
-        ref="editorComponentRef"
-        v-model="prompt"
-        v-model:prompt-doc="promptDoc"
-        :resources="editorResources"
-        :resolve-resource="resolveResource"
         :editable="!aiEditorLocked"
         @update:model-value="onPromptUpdate"
         @click.stop
