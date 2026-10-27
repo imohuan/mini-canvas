@@ -10,6 +10,7 @@
  * onMounted 里的 three 初始化在 SSR 不会执行，因此本测试不需要 WebGL。
  */
 import { beforeAll, describe, it, expect, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
@@ -138,5 +139,22 @@ describe('空状态的判定（上游撤掉 / 加载失败不能残留上一张�
     const html = await render('p1', { imageUrl: '/definitely/missing.png' })
     // SSR 没有加载器，加载成功与否无法判定 → 必须按"还没好"处理，显示空状态
     expect(html).toContain('（无全景图）')
+  })
+})
+
+describe('底色（用户口径 2026-10-27）', () => {
+  it('3D 内容层不自己铺底色——空态必须是壳的内容底（亮色白 / 暗色深），不能是一层灰', async () => {
+    const src = readFileSync(new URL('../PanoramaContent.vue', import.meta.url), 'utf8')
+    const style = src.slice(src.indexOf('<style'))
+    // 样式段里 .pano 规则不能自己铺底色：否则会盖住壳的 --card-content-surface（亮白/暗深）
+    const panoRule = style.match(/\.pano\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(panoRule).not.toMatch(/background\s*:/)
+  })
+
+  it('WebGL 用透明清屏、不设场景底色（没贴图时不画那层灰）', async () => {
+    const src = readFileSync(new URL('../PanoramaContent.vue', import.meta.url), 'utf8')
+    expect(src).toContain('alpha: true')
+    expect(src).toContain('setClearAlpha(0)')
+    expect(src).not.toMatch(/scene\.background\s*=/)
   })
 })

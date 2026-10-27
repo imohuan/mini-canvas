@@ -1310,7 +1310,9 @@ const hint = computed(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--canvas-node-surface, #fff);
+  /* 不铺底色：与视频/图片节点同源，空态/未画时让壳的内容底透出来
+     （--card-content-surface：亮色白 / 暗色深）。这里曾经写 --canvas-node-surface（卡片表面灰），
+     于是可视化节点比其它节点灰一档（用户 2026-10-27 截图对比出来）。 */
 }
 .ui-frame {
   display: block;

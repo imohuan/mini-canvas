@@ -249,6 +249,7 @@ function updateTexture(url: string): void {
   const mat = material.value
   const ldr = loader.value
   if (!mat || !ldr) return
+  const scn = scene.value
   const token = ++textureToken
   if (!url) {
     mat.map = null
@@ -258,11 +259,14 @@ function updateTexture(url: string): void {
     // three 吃不到 CSS 变量：运行时按主题读一次占位色（与节点表面色同源）
     mat.color.set(themeColor('--canvas-node-border', FALLBACK.border))
     mat.needsUpdate = true
+    // 空态：连球体一起藏掉，画布完全透明（只剩壳的底色）
+    if (scn && scn.children[0]) scn.children[0].visible = false
     textureLoaded.value = false
     return
   }
   // 换图期间先标记"未就绪"：宁可持续显示空态，也不要挂着上一张图冒充新图。
   textureLoaded.value = false
+  if (scn && scn.children[0]) scn.children[0].visible = false
   ldr.load(
     url,
     (tex) => {
@@ -279,6 +283,7 @@ function updateTexture(url: string): void {
       // 贴图颜色乘数：白色 = 原图不变，无需跟主题
       material.value.color.set('#ffffff') // 主题色白名单: 贴图乘数恒白，改色会污染原图
       material.value.needsUpdate = true
+      if (scn && scn.children[0]) scn.children[0].visible = true
       textureLoaded.value = true
       renderError.value = ''
     },
@@ -351,7 +356,9 @@ function initThree(): void {
   const { w, h } = containerSize()
 
   try {
-    const rnd = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+    // alpha:true：没贴图时不画底色（透明），空态由壳的内容底决定（亮白/暗深）
+    const rnd = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    rnd.setClearAlpha(0)
     rnd.setSize(w, h, false)
     rnd.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     rnd.domElement.style.cssText =
@@ -359,8 +366,7 @@ function initThree(): void {
     el.appendChild(rnd.domElement)
 
     const scn = new THREE.Scene()
-    // 全景背景是"没贴图时的底色"，跟节点表面色走（three 不认 CSS 变量，故运行时读）
-    scn.background = new THREE.Color(themeColor('--canvas-node-surface', FALLBACK.surface))
+    // 不设 scene.background：透明清屏，让节点的内容底透出来（贴图加载后由球体铺满）
     const cam = new THREE.PerspectiveCamera(current.fov, w / h, 0.1, 1100)
     cam.position.set(0, 0, 0)
 
@@ -538,13 +544,13 @@ watch(
   () => onReset(),
 )
 
-// 上游/自身图片变化 → 换贴图（挂载前就记录地址，挂载时一次初始化）
+// 上游/自身图片变化 → 换贴图（画面容器由 textureUrl 同步决定，三处状态一起跟）
 watch(ownImageUrl, (url) => {
   // 地址被撤掉时主动清掉旧纹理（这是"上游断开但画面还留着图"的直接修法）。
   if (shouldClearTexture(textureUrl.value, url)) textureLoaded.value = false
-  textureUrl.value = url
   if (renderer.value) updateTexture(url)
 })
+
 
 // 点画布空白退出交互（与 v1 的 paneClick 收起 _editing 同义）。
 // 用内核事件桥而不是自己监听 document：宿主已经把"点空白"归一成 RenderEvents.PaneClick。
@@ -610,7 +616,8 @@ onBeforeUnmount(() => {
   height: 100%;
   overflow: hidden;
   border-radius: 8px;
-  background: var(--canvas-node-surface, #f3f4f6);
+  /* 不铺底色：空态/未出图时让壳的内容底透出来（--card-content-surface，亮色白 / 暗色深）。
+     这里曾经写 var(--canvas-node-surface)（卡片表面灰），于是 3D 空态比同类节点灰一档 */
 }
 .pano-surface {
   position: absolute;
