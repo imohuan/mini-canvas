@@ -11,6 +11,7 @@
  */
 import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, type ToolResource, type ToolResourceKind } from '@mini-canvas/kernel'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
+import type { TagMatch, TagSpec } from 'prosemirror-editor-bundle'
 import { h } from 'vue'
 
 /** 一条连进本节点的上游素材（面板素材行 / @ 引用 / 生成输入 共用同一份） */
@@ -514,6 +515,45 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
     ['span', { class: 'resource-chip-name' }, name],
   ]
 }
+/**
+ * 底栏自己的**标签规格**（用户口径 2026-10-27：标签实现交给插件）。
+ *
+ * 编辑器只提供「文字 → 标签」的通用通道；认什么写法、标签长什么样，由这里决定。
+ * 现在这套规则与改造前完全一致：认 @图片N / @视频N / @音频N / @音视频N，
+ * 生成 `ref-slot:<kind>:<N>` 的槽位标签。
+ *
+ * 想换成别的写法（比如 @角色1），只改这里的 scan 即可，不用碰编辑器。
+ */
+export const bottomBarTagSpec: TagSpec = {
+  scan(text: string): TagMatch[] {
+    const out: TagMatch[] = []
+    const re = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text)) !== null) {
+      const kind = m[1].toLowerCase()
+      const slotKind: 'image' | 'video' | 'audio' | 'av' =
+        kind === '图片' || kind === 'image' ? 'image'
+        : kind === '视频' || kind === 'video' ? 'video'
+        : kind === '音频' || kind === 'audio' ? 'audio'
+        : 'av'
+      const label =
+        slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+      const index = Number(m[2])
+      if (!index) continue
+      const item: ResourceItem = {
+        id: 'ref-slot:' + slotKind + ':' + index,
+        name: label + index,
+        category: '素材',
+        mediaType: slotKind === 'av' ? undefined : slotKind,
+      }
+      out.push({ from: m.index, to: m.index + m[0].length, item })
+    }
+    return out
+  },
+  // 标签外观沿用底栏卡片样式；冷启动缺注册表时也能画对
+  render: (item) => resourceEditorSpec(item),
+}
+
 
 /**
  * 素材 → 编辑器资源项（ProseMirrorEditor 的 resources）。

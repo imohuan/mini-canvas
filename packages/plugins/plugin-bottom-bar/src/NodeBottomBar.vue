@@ -25,6 +25,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import { registerItem, type ResourceItem } from 'prosemirror-editor-bundle'
+// 标签识别规则外置（用户 2026-10-27）：认什么写法由插件决定，编辑器只提供通道
+import { registerTagSpec } from 'prosemirror-editor-bundle'
 // 素材卡拖拽排序（用户要求：「这个顺序可以进行拖拽改变，用 Vue Draggable Plus，动画效果挺好的」）
 import { VueDraggable } from 'vue-draggable-plus'
 import {
@@ -39,6 +41,7 @@ import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { BarAction } from './barTypes'
 import {
   collectUpstreamMaterials,
+  bottomBarTagSpec,
   previewListFor,
   makeResourceResolver,
   materialCards,
@@ -1510,6 +1513,8 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
 }
 
 onMounted(() => {
+  // 把底栏的标签规格交给编辑器（用户 2026-10-27：标签实现交给插件，编辑器不再写死规则）
+  registerTagSpec(bottomBarTagSpec)
   registerStartDragHandler(startCtrlDrag)
   window.addEventListener('pointermove', onCtrlDragPointerMove, true)
   window.addEventListener('pointerup', onCtrlDragPointerUp, true)
@@ -1522,6 +1527,8 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   registerStartDragHandler(null)
+  // 卸掉自己的标签规格，避免影响别的插件/编辑器的默认行为
+  registerTagSpec(null)
   // 底栏消失 = 两个选择态都收（用户口径 2026-10-26：覆盖层要跟底栏同步消失）。
   // 参考选择与 Ctrl 拖是挂在节点上的覆盖层，底栏走了它们就失去操作对象。
   exitCtrlDragMode()

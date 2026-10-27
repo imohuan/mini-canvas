@@ -340,6 +340,26 @@ const mySchema = new Schema({
         // 默认渲染
         const { id, name, url, thumbnail_url, category } = node.attrs
         /**
+         * 外部注册的 tagSpec 优先兜底渲染（用户 2026-10-27：标签实现交给插件）。
+         * 放在内置 ref-slot 分支之前：插件可能用自己的 id 规则（@角色1 之类），
+         * 内置规则认不出来，但只要它给了 render 就能画对。
+         */
+        const spec = activeTagSpec
+        if (spec?.render) {
+          const item = itemRegistry.get(String(id ?? ''))
+          if (item) {
+            const rendered = spec.render(item)
+            if (rendered instanceof HTMLElement) {
+              rendered.classList.add('resource-node')
+              rendered.setAttribute('data-id', String(id ?? ''))
+              rendered.setAttribute('data-name', String(name ?? ''))
+              rendered.setAttribute('data-category', category || '素材')
+              return rendered
+            }
+            return rendered
+          }
+        }
+        /**
          * 槽位标签（ref-slot:image:3 这种）兜底走 chip 外观。
          *
          * 为什么：注册表冷启动时可能还没有条目（或者被别的路径覆盖），走到这里的默认渲染
@@ -882,6 +902,78 @@ export function chipAttrsNeedUpdate(
   if (want.name != null && String(attrs.name ?? '') !== String(want.name)) return true
   return false
 }
+/**
+ * 文字 → 标签的匹配结果。
+ *
+ * `from` / `to` 是**这段文字在文本节点内的偏移**（不含节点起始位置，由调用方加上）。
+ */
+export interface TagMatch {
+  from: number
+  to: number
+  item: ResourceItem
+}
+
+/**
+ * 标签识别规格：由调用方提供（用户口径 2026-10-27）。
+ *
+ * 为什么外置：编辑器不该知道「图片N 就是槽位」这种业务规则。
+ * 插件想用 `@角色1`、`@素材A` 或完全不同的写法，只提供自己的 scan 即可。
+ *
+ * `scan` 必须支持一段文字里的**多个**匹配（`看 @图片1 和 @图片2` 要转两个）。
+ */
+export interface TagSpec {
+  scan(text: string): TagMatch[]
+  /**
+   * 兜底渲染：注册表里没有条目时才用（例如冷启动恢复文档）。
+   * 不传 = 组件内置 chip。
+   */
+  render?(item: ResourceItem): HTMLElement | [string, Record<string, any>, ...any[]]
+}
+
+/**
+ * 全局标签规格。
+ *
+ * 为什么用模块级而不是 prop：toDOM 是 schema 的静态方法（mySchema 是模块级单例），
+ * 渲染时拿不到组件实例，只能从这里读。
+ */
+let activeTagSpec: TagSpec | null = null
+
+/** 注册标签规格（传 null = 取消注册，恢复组件默认规则） */
+export function registerTagSpec(spec: TagSpec | null): void {
+  activeTagSpec = spec
+}
+
+/** 读当前标签规格（渲染兜底用） */
+export function currentTagSpec(): TagSpec | null {
+  return activeTagSpec
+}
+/**
+ * 组件内置的标签识别规则（没注册 tagSpec 时使用）。
+ *
+ * 与改造前等价：认 `@图片N / @视频N / @音频N / @音视频N`（中英双写），
+ * 生成 `ref-slot:<kind>:<N>` 的槽位标签。插件注册了 tagSpec 就不会走到这里。
+ */
+export function builtinScan(text: string): TagMatch[] {
+  const out: TagMatch[] = []
+  const re = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const kind = m[1].toLowerCase()
+    const slotKind: 'image' | 'video' | 'audio' | 'av' =
+      kind === '图片' || kind === 'image' ? 'image'
+      : kind === '视频' || kind === 'video' ? 'video'
+      : kind === '音频' || kind === 'audio' ? 'audio'
+      : 'av'
+    const label =
+      slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+    const index = Number(m[2])
+    if (!index) continue
+    out.push({ from: m.index, to: m.index + m[0].length, item: buildSlotItem(slotKind, label + index) })
+  }
+  return out
+}
+
+
 
 /**
  * 按「节点 id 列表」批量替换资源标签的缩略图（用户口径 2026-10-27）。
@@ -1835,27 +1927,23 @@ export function useEditor(
     if (!view) return 0
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return 0
-    // 先收集、再从后往前替换：从前往后会让后面的位置随前面的替换整体偏移
+    /**
+     * 识别规则优先用外部注册的 tagSpec（用户 2026-10-27：标签实现交给插件）。
+     * 没注册时退回组件内置的「@图片N / @视频N / @音频N」规则，保证老调用方不受影响。
+     */
+    const spec = activeTagSpec
     const hits: Array<{ start: number; len: number; item: ResourceItem }> = []
     view.state.doc.descendants((node, pos) => {
       if (node.type.name !== 'paragraph' || !node.isTextblock) return
       node.forEach((child, offset) => {
         if (!child.isText || !child.text) return
-        const re = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
-        let m: RegExpExecArray | null
-        while ((m = re.exec(child.text)) !== null) {
-          const kind = m[1].toLowerCase()
-          const slotKind: 'image' | 'video' | 'audio' | 'av' =
-            kind === '图片' || kind === 'image' ? 'image'
-            : kind === '视频' || kind === 'video' ? 'video'
-            : kind === '音频' || kind === 'audio' ? 'audio'
-            : 'av'
-          const label =
-            slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
-          const index = Number(m[2])
-          if (!index) continue
-          const item = buildSlotItem(slotKind, label + index)
-          hits.push({ start: pos + 1 + offset + m.index, len: m[0].length, item })
+        const text = child.text
+        const matches = spec
+          ? spec.scan(text)
+          : builtinScan(text)
+        for (const m of matches) {
+          if (m.to <= m.from) continue
+          hits.push({ start: pos + 1 + offset + m.from, len: m.to - m.from, item: m.item })
         }
       })
     })

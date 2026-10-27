@@ -6,6 +6,8 @@ export * from './types.ts';
 export * from './utils.ts';
 export * from './referenceMarkup.ts';
 export { parsePlainTextToContent } from './useEditor.ts';
+export type { PasteFilesContext, PasteFilesHandler, TagMatch, TagSpec } from './useEditor.ts';
+export { registerTagSpec, currentTagSpec, builtinScan, pickFilesFromClipboard } from './useEditor.ts';
 export { registeredItem } from './useEditor.ts';
 export { registerItem } from './useEditor.ts';
 export * from './mentionFilter.ts';
