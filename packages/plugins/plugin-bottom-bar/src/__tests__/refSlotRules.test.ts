@@ -93,14 +93,17 @@ describe('参考区只排一行（不再重复）', () => {
     expect(tiles.every((t) => !t.pending)).toBe(true)
   })
 
-  it('连线 1 条、声明到图片2 → 第 1 格有内容，第 2 格「待输入」', () => {
+  /**
+   * 语义更新（用户 2026-10-27）：声明序号会先归一化成 1..n。
+   * 所以「只声明了 1 个」时格数 = max(连线数, 1) = 1，不再按原始序号 2 补出第 2 格。
+   */
+  it('连线 1 条、声明 1 个 → 只有 1 格（归一化后不存在第 2 格）', () => {
     const tiles = mergeRefTiles(
-      [{ kind: 'image', index: 2 }],
+      [{ kind: 'image', index: 1 }],
       [{ id: 'a', name: '图片1', url: 'a.png', isText: false }],
     )
-    expect(tiles).toHaveLength(2)
-    expect(tiles[0]).toMatchObject({ index: 1, pending: false, name: '图片1' })
-    expect(tiles[1]).toMatchObject({ index: 2, pending: true, label: '图片 2' })
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]).toMatchObject({ index: 1, slotIndex: 1, pending: false, name: '图片1' })
   })
 
   it('连线 1 条、正文没写任何 @ → 只有 1 格（参考不凭空消失）', () => {
@@ -132,6 +135,34 @@ describe('参考区只排一行（不再重复）', () => {
     )
     expect(tiles.map((t) => t.label)).toEqual(['图片 1', '音频 1'])
     expect(tiles.every((t) => !t.pending)).toBe(true)
+  })
+})
+
+describe('格子数量 = max(连线数, 归一化声明数)（用户 2026-10-27）', () => {
+  it('只声明归一化后的 1 个、连线 4 条 → 4 格，全部有图', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'image', index: 1 }],
+      [
+        { id: 'a', name: '图片1', url: 'a.png', isText: false },
+        { id: 'b', name: '图片2', url: 'b.png', isText: false },
+        { id: 'c', name: '图片3', url: 'c.png', isText: false },
+        { id: 'd', name: '图片4', url: 'd.png', isText: false },
+      ],
+    )
+    expect(tiles).toHaveLength(4)
+    expect(tiles.every((t) => !t.pending)).toBe(true)
+  })
+
+  it('声明 3 个、连线 2 条 → 3 格（第 3 格空壳）', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'image', index: 1 }, { kind: 'image', index: 2 }, { kind: 'image', index: 3 }],
+      [
+        { id: 'a', name: '图片1', url: 'a.png', isText: false },
+        { id: 'b', name: '图片2', url: 'b.png', isText: false },
+      ],
+    )
+    expect(tiles).toHaveLength(3)
+    expect(tiles[2]).toMatchObject({ pending: true, slotIndex: 3 })
   })
 })
 

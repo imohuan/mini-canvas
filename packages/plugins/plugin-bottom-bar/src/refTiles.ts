@@ -24,6 +24,15 @@ export interface RefTile {
   isText: boolean
   /** 有内容格对应的素材（卡片删除/预览要拿它找连线）；待输入格没有 */
   card?: TileCardLike
+  /**
+   * 正文里的**槽位序号**（标签名中的序号）。
+   *
+   * 与 index 的区别（用户 2026-10-27 口径）：
+   * - slotIndex 是「这条引用指向第几张」，拖拽**不会**改变它；
+   * - index 是「显示在第几格」，排序后按位置重编。
+   * 上传、报错、拼 ref-slot:kind:N 一律用 slotIndex，否则拖拽后点第 2 格会写到第 4 号去。
+   */
+  slotIndex: number
 }
 
 /** 正文槽位（@ 标签）的最小形状 */
@@ -64,11 +73,12 @@ export function refNameToSlotKey(refName: string, slotKind: 'image' | 'video' | 
 /**
  * 参考区**只排一行**，格子身份 = **连线的序号**。
  *
- * 规则（用户口径 2026-10-26）：
- * - 格子数量 = max(连线素材数， 正文声明的最大序号) —— 连了 3 条就最多 3 格；
+ * 规则（用户口径 2026-10-27，替换掉旧的「补齐到最大声明序号」）：
+ * - 格子数量 = max(该类型连线数, 该类型声明数)。声明序号已由 normalizeRefSlots 归一化成 1..n，
+ *   所以**不会**因为写了 `@图片44` 就铺出 44 格；
  * - 第 N 格有内容 ⇔ 连线素材里存在序号 N（正文声明 @图片N **不**产生内容）；
  * - 第 N 格没内容 → 虚线「待输入」；
- * - 连线素材多于声明数时，多出来的照常显示（序号继续往后编）。
+ * - slotIndex = 正文序号（拖拽不变）；index = 显示位（排序后重编）。
  */
 export function mergeRefTiles(
   slots: ReadonlyArray<TileSlotLike>,
@@ -106,17 +116,26 @@ export function mergeRefTiles(
     const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频'
     const bySeq = seqOf(kind)
     const declared = slots.filter((s) => s.kind === kind).map((s) => s.index)
-    const maxSeq = Math.max(0, ...bySeq.keys())
-    const max = Math.max(maxSeq, ...(declared.length ? declared : [0]), 0)
-    for (let index = 1; index <= max; index++) {
-      const card = bySeq.get(index)
+    /**
+     * 格数 = max(连线数, 声明数)（用户 2026-10-27 口径）。
+     *
+     * 为什么不再补齐 1..最大声明序号：正文里写了 `@图片44` 时，旧规则会把 1..44 全部铺满，
+     * 界面上凭空长出一堆空格（用户截图：4 张图却出现 44 格）。
+     * 归一化之后声明序号本来就是 1..n，这里只按数量取 max 即可。
+     */
+    const cardCount = bySeq.size
+    const declaredCount = new Set(declared).size
+    const total = Math.max(cardCount, declaredCount)
+    for (let slotIndex = 1; slotIndex <= total; slotIndex++) {
+      const card = bySeq.get(slotIndex)
       tiles.push({
-        key: card ? 'card:' + card.id : 'slot:' + kind + ':' + index,
-        slotKey: card ? undefined : kind + ':' + index,
-        index,
-        label: label + ' ' + index,
+        key: card ? 'card:' + card.id : 'slot:' + kind + ':' + slotIndex,
+        slotKey: card ? undefined : kind + ':' + slotIndex,
+        slotIndex,
+        index: slotIndex, // 临时值，排序后按显示位重编
+        label: label + ' ' + slotIndex,
         pending: !card,
-        name: card?.name ?? (label + ' ' + index),
+        name: card?.name ?? (label + ' ' + slotIndex),
         url: card?.url,
         isText: false,
         card,
@@ -128,6 +147,9 @@ export function mergeRefTiles(
     if (refNameToSlot((card as TileCardLike & WithRefName).refName || card.name)) continue
     tiles.push({
       key: 'card:' + card.id,
+      // 文本这类没有序号的素材：slotIndex 用 0 表示「没有槽位序号」，
+      // 它们不参与 @图片N 引用，也不参与上传排位。
+      slotIndex: 0,
       index: tiles.length + 1,
       label: card.name,
       pending: false,
