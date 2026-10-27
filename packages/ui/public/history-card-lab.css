@@ -195,6 +195,16 @@ body.selecting .sel-only { display: inline; }
 /* 方案 5：极简 —— 字号更小、颜色更淡 */
 .facts-quiet { margin-top: 6px; font-size: 10px; }
 .facts-quiet span { color: var(--ink-faint); }
+/* 方案 5：类型标签在文字行最左侧（用户口径：不要压在图里），后面紧跟尺寸/时长/大小 */
+.cap-line { display: flex; align-items: center; gap: 6px; justify-content: flex-start; }
+.cap-kind {
+  display: inline-flex; align-items: center; gap: 3px; flex: none;
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--fill-quiet); color: var(--ink-muted);
+  font-size: 9.5px; letter-spacing: 0.02em;
+}
+.cap-kind svg { width: 9px; height: 9px; }
+.cap-facts { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 方案 6：现状对照（信息压在图上） */
 .cell.current { margin-bottom: 14px; }

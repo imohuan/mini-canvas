@@ -5,7 +5,7 @@
  *   1. 只保留**流式（瀑布流）卡片**布局 —— 列表 / 表格类方案全部删掉；
  *   2. 资源**没有标题**，卡外只显示：宽高、文件大小；视频再加时长；
  *   3. 音频**没有宽高**（它没有画面），只显示时长与大小；
- *   4. 类型标签放在**左下角**；
+ *   4. 类型标签放在**卡外文字行的左侧**（不压图片）；
  *   5. 要有明确的**多选状态**。
  *
  * 纯静态页：只读 /api/history，不写任何数据；文件大小优先用历史里记的 media.bytes，
@@ -179,7 +179,7 @@
       var src = item.url || fallbackArt(index, 'image')
       inner = '<img src="' + esc(src) + '" alt="" loading="lazy" data-fallback="' + esc(fallbackArt(index, 'image')) + '" />'
     }
-    // 类型标签固定放**左下角**（用户口径）；视频时长放右下角
+    // 类型标签默认压在图片左下角（方案 1–4）；方案 5 用 noKind/noDur 把标签与时长移到卡外
     var kindTag = o.noKind ? '' : '<span class="kind">' + ICON[item.kind] + KIND_LABEL[item.kind] + '</span>'
     var durTag = !o.noDur && item.kind === 'video' && item.durationMs
       ? '<span class="dur">' + fmtDur(item.durationMs) + '</span>'
@@ -213,15 +213,21 @@
     return [dim, dur, fmtBytes(item.bytes)].filter(Boolean).join(' · ')
   }
 
+  /** 卡外文字行：类型标签在左，后面跟尺寸（音频只有时长）与大小 */
+  function kindLine(it) {
+    var chip = '<span class="cap-kind">' + ICON[it.kind] + KIND_LABEL[it.kind] + '</span>'
+    return '<div class="facts facts-quiet cap-line">' + chip + '<span class="cap-facts">' + esc(factLine(it)) + '</span></div>'
+  }
+
   /**
-   * 所有方案共用同一张卡的骨架（方案 1 定的标准）：
-   *   图片（类型标签左下角） + 卡外一行信息。
-   * 变体只改间距 / 字号 / 信息排布，不改标签位置，也不把信息塞回图面。
+   * 所有方案共用同一张卡的骨架：图片 + 卡外信息。
+   * 标签位置由各方案决定（方案 5 在文字行左侧），信息一律不塞回图面。
    */
   function cell(it, i, extraClass, factsHtml) {
+    var noKind = extraClass === 'quiet'
     return '<article class="cell' + (extraClass ? ' ' + extraClass : '') +
       (state.picks[it.id] ? ' selected' : '') + '" data-id="' + esc(it.id) + '">' +
-      '<div class="frame">' + thumb(it, i) + pickBox(it.id) + '</div>' +
+      '<div class="frame">' + thumb(it, i, noKind ? { noKind: true, noDur: true } : undefined) + pickBox(it.id) + '</div>' +
       factsHtml +
       '</article>'
   }
@@ -257,7 +263,8 @@
   /* ---------------- 方案 5：极简（更小更淡） ---------------- */
   function renderS5(items) {
     return '<div class="masonry m-4">' + items.map(function (it, i) {
-      return cell(it, i, 'quiet', '<div class="facts facts-quiet"><span>' + esc(factLine(it)) + '</span></div>')
+      // 图上什么都不放：类型标签 + 尺寸/时长/大小都在图片外的一行里
+      return cell(it, i, 'quiet', kindLine(it))
     }).join('') + '</div>'
   }
 
