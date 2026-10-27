@@ -245,8 +245,29 @@ function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): H
       : '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>') +
     '<span class="hist-card-meta">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
   wrap.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
-  if (s.histBatchMode && item.id) wrap.appendChild(buildCheckOverlay(item.id))
+  // 勾选层由外层卡片统一挂载（这里再挂一次会出现两个叠加的勾选钮）
   return wrap
+}
+
+/**
+ * 有产物地址、但图片实际打不开（文件被清理 / 换地址）：这也算异常。
+ *
+ * 「显示异常」关着时**整条不显示** —— 用户的口径是"开关关着就不该看到异常卡"，
+ * 只把红卡换成灰卡仍然算异常卡（实测 2026-10-27：关掉后还剩 2 张灰卡）。
+ * 开着时才换成中性卡（用"资源走丢"而不是"生成失败"，因为生成其实成功过）。
+ */
+function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
+  if (!s.histShowError) {
+    // 连外层瀑布流格子一起摘掉：只删内层卡会留下一个空白的列位（视觉上空一格）
+    const slot = card.closest('.hist-masonry-item') ?? card
+    slot.remove()
+    masonry.layout()
+    return
+  }
+  const fallback = buildErrorCard(item, { missingResource: true })
+  if (s.histBatchMode && item.id) fallback.appendChild(buildCheckOverlay(item.id))
+  card.replaceWith(fallback)
+  masonry.layout()
 }
 
 /** 历史条目类型（卡片构建函数共用；id 参与批量勾选） */
@@ -342,8 +363,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
     img.addEventListener('error', () => {
       // 与图片卡同一口径：地址打不开 ≠ 生成失败 —— 用中性「资源走丢」卡，
       // 不亮红色异常卡（否则"显示异常"关着也会冒出红叹号，用户实测 2026-10-27）。
-      card.replaceWith(buildErrorCard(item, { missingResource: true }))
-      masonry.layout()
+      showBrokenResourceCard(card, item)
     })
   }
   card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
@@ -387,11 +407,9 @@ function createMasonryElement(item: HistItem): HTMLElement {
       }
     })
     img.addEventListener('error', () => {
-      // 裂图：退「资源走丢」卡 —— 这不是"生成失败"（那条路没有 urls，被显示异常开关管住），
-      // 而是记录有产物、文件却被清理/换地址了。用中性文案与中性描边，
-      // 不占用红色的"生成异常"，避免开关关着还满屏红叹号（用户实测 2026-10-27）。
-      media.replaceWith(buildErrorCard(item, { missingResource: true }))
-      masonry.layout()
+      // 裂图：记录有产物、文件却被清理/换地址了 —— 同样归入异常，
+      // 开关关着时整条隐藏，开着时给中性「资源走丢」卡（不占用红色的"生成失败"）。
+      showBrokenResourceCard(card, item)
     })
     card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
   } else {
@@ -694,7 +712,7 @@ watch(() => s.shortcutsOpen, async (open) => {
           </button>
           <button
             class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
-            :class="s.histBatchMode ? 'bg-brand text-primary-ink' : 'hover:bg-hover'"
+            :class="s.histBatchMode ? 'bg-brand text-primary-ink hover:bg-brand hover:opacity-90' : 'hover:bg-hover'"
             aria-label="批量操作" @click="toggleBatchMode">
             <ListChecks :size="16" /> {{ s.histBatchMode ? '退出批量' : '批量操作' }}
           </button>
@@ -875,10 +893,6 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-error-toggle { appearance: none; width: 14px; height: 14px; margin: 0; border: 1.5px solid var(--ui-ink-mute, #888); border-radius: 4px; background: transparent; cursor: pointer; display: grid; place-items: center; }
 .hist-error-toggle:checked { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); }
 .hist-error-toggle:checked::after { content: ""; width: 8px; height: 8px; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E"); }
-/* 批量模式勾选层：卡片左上角圆形勾选钮 */
-.hist-card-check { position: absolute; left: 6px; top: 6px; z-index: 5; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 9999px; border: 1.5px solid var(--ui-tip-ink, rgb(255 255 255 / 0.85)); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); color: transparent; cursor: pointer; backdrop-filter: blur(4px); transition: background .15s ease, border-color .15s ease; }
-.hist-card-check svg { width: 12px; height: 12px; }
-.hist-card-check.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); color: var(--ui-on-accent, #fff); /* 主题色白名单: 勾选态对勾在主题色上的前景色 */ }
 /* 批量操作栏 */
 .hist-batch-bar { background: var(--ui-panel, #fff); }
 
@@ -931,6 +945,15 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-video-plugin .vpv-root { height: 100%; }
 /* 异常卡：警示圆圈 + 「生成异常 · 无产物」说明 */
 .hist-card-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 130px; padding: 16px 12px; cursor: pointer; text-align: center; }
+/* 批量模式勾选层：卡片左上角圆形勾选钮。
+   必须放在全局块里 —— 卡片是 createMasonryElement 用 createElement 现拼的，拿不到
+   scoped 的 data-v 属性；写在 scoped 里等于整段样式不存在，内联 SVG 会按默认 300×150
+   铺满整张卡（用户实测 2026-10-27：勾选后每张卡都是一个大对勾）。 */
+.hist-card-check { position: absolute; left: 6px; top: 6px; z-index: 5; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 9999px; border: 1.5px solid var(--ui-tip-ink, rgb(255 255 255 / 0.85)); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); color: transparent; cursor: pointer; backdrop-filter: blur(4px); transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.hist-card-check svg { width: 12px; height: 12px; flex: none; }
+.hist-card-check:hover { transform: scale(1.08); }
+.hist-card-check.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); color: var(--ui-on-accent, #fff); /* 主题色白名单: 勾选态对勾在主题色上的前景色 */ }
+.hist-card-fallback .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-ink-mute, #888); color: var(--ui-ink-mute, #888); font-size: 15px; font-weight: 700; }
 .hist-card-fallback.is-error .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-danger, #ef4444); color: var(--ui-danger, #ef4444); font-size: 15px; font-weight: 700; }
 .hist-card-fallback strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; color: var(--ui-ink, inherit); }
 .hist-card-fallback .hist-card-meta { font-size: 10px; color: var(--ui-ink-mute, #888); }

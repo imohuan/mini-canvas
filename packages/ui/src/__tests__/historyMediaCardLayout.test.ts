@@ -60,3 +60,44 @@ describe('生成历史的视频/音频卡面保持干净（没有任何信息浮
   })
 })
 
+/**
+ * 批量勾选钮的样式必须在**全局块**里（用户实测 2026-10-27：勾选后每张卡都是一个大对勾）。
+ *
+ * 根因：卡片由 createMasonryElement 用 document.createElement 现拼，拿不到 scoped 的
+ * data-v 属性 —— 样式写在 scoped 里等于整段不存在，SVG 按默认 300×150 铺满整卡。
+ * 这条契约按样式块切分来判，避免靠"文件里出现过 .hist-card-check"误判为已生效。
+ */
+describe('批量勾选钮样式对动态卡片生效', () => {
+  // 取**最后一个**无 scoped 的 <style> 块。之前只用 indexOf 取第一个 <style>，
+  // 取到的是 <style scoped> —— 断言会把"写在 scoped 里"当成通过，正是这次要防的坑。
+  const globalStart = modalsArea.lastIndexOf('<style>')
+  const globalStyle = modalsArea.slice(globalStart, modalsArea.indexOf('</style>', globalStart))
+
+  it('勾选钮的尺寸/定位写在全局样式块', () => {
+    expect(globalStart, '找不到不带 scoped 的全局样式块').toBeGreaterThan(-1)
+    expect(globalStyle, '全局块里没有 .hist-card-check 的定位（scoped 里写等于没写）').toMatch(/\.hist-card-check\s*\{/)
+    const rule = globalStyle.match(/\.hist-card-check\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(rule, '勾选钮没有固定尺寸，会退化成内联 SVG 的默认 300×150').toMatch(/width:\s*20px;/)
+    expect(rule, '勾选钮没有绝对定位，会撑开卡片').toMatch(/position:\s*absolute;/)
+  })
+
+  it('勾选钮里的对勾 SVG 有 12px 约束', () => {
+    expect(globalStyle, '全局块缺 .hist-card-check svg 尺寸约束').toMatch(/\.hist-card-check svg\s*\{[^}]*width:\s*12px;/)
+  })
+
+  it('勾选层只由外层卡片挂一次（异常卡自己不再复制一份）', () => {
+    // 只取 buildErrorCard 这一个函数体（后面的 showBrokenResourceCard 才负责挂勾选层）
+    const errFn = modalsArea.slice(
+      modalsArea.indexOf('function buildErrorCard'),
+      modalsArea.indexOf('function showBrokenResourceCard'),
+    )
+    expect(errFn, 'buildErrorCard 里又挂了一次勾选层 → 同一张卡出现两个勾选钮').not.toMatch(/buildCheckOverlay/)
+  })
+
+  it('批量模式的主按钮 hover 不退成灰底白字（用户实测：按钮像消失了）', () => {
+    const btn = modalsArea.slice(modalsArea.indexOf('aria-label="批量操作"') - 500, modalsArea.indexOf('aria-label="批量操作"'))
+    expect(btn, '批量按钮仍会在 hover 时套上 hover:bg-hover（白字落在浅灰底上）').not.toMatch(/'bg-brand text-primary-ink'/)
+    expect(btn, '批量按钮 hover 时没有保持品牌底').toMatch(/hover:bg-brand/)
+  })
+})
+
