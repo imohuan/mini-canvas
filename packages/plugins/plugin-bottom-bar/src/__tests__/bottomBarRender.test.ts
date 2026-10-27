@@ -298,11 +298,9 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect(withText).toContain('prose-mirror-editor')
     expect(withText).not.toContain('描述你想要的内容')
 
-    // 用户手动开的调试块（aiPhase 恒 starting / aiEditorLocked 恒 true）会让占位符
-    // 不渲染（占位符只在 aiPhase===idle 时出现）。调试结束后应恢复原断言：
-    // expect(empty).toContain('描述你想要的内容')
     const empty = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
-    expect(empty).not.toContain('描述你想要的内容')
+    // 调试块已注释回退到 idle：空输入恢复显示占位符（原始契约）
+    expect(empty).toContain('描述你想要的内容')
   })
 })
 

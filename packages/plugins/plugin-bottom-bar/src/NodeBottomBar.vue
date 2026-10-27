@@ -741,8 +741,8 @@ const aiEditorLocked = ref(false)
 
 {
   // debug
-  aiPhase.value = "starting"
-  aiEditorLocked.value = true
+  // aiPhase.value = "starting"
+  // aiEditorLocked.value = true
 }
 
 const aiError = ref('')
@@ -1900,35 +1900,9 @@ function onGlobalLeave(el: Element): void {
   padding: 8px 12px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 16px;
-  /*
-   * 流光实现（轮式描边）：不用 mask/padding 方案（rolldown 压缩时把 padding:2px
-   * 与 mask 简写合并展开曾丢 padding，导致 mask 双层全遮、::before 整面被盖死）——
-   * 改用两层 background + outline 的思路太绕，这里直接：
-   *   · background 铺 conic 渐变（整面）；
-   *   · mask 用 radial 不做，改用 **box-shadow 0 0 0 2px 的外圈描边** 由父级 ::after 完成。
-   * 最终取最稳的写法：background 渐变整面 + 内层用同色遮罩（inset 2px 的 ::after）。
-   */
-  background: conic-gradient(
-    from var(--ai-sweep, 0deg),
-    transparent 0deg,
-    color-mix(in srgb, var(--ui-accent, #0891b2) 85%, transparent) 40deg,
-    color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent) 90deg,
-    transparent 150deg,
-    color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent) 250deg,
-    transparent 330deg
-  );
-  pointer-events: none;
-  animation: nb-ai-sweep 2.4s linear infinite;
-  z-index: 0;
-}
-.nb-root.is-ai-locking::after {
-  /* 内层挖空：盖住 ::before 的中间部分，只留 2px 外圈流光 */
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 14px;
+  /* 面板底色必须一直在（用户点名：基础背景是白色）。此前被误删导致整体透明，
+     暗色画布下整个面板透出画布背景 —— 与流光无关，常态就要有。 */
   background: var(--ui-panel, #fff);
-  pointer-events: none;
 }
 
 /* —— 一排 pill（参考图顶行） —— */
@@ -2337,13 +2311,12 @@ function onGlobalLeave(el: Element): void {
   inset: -2px;
   border-radius: 16px;
   /*
-   * 流光实现（轮式描边，最终版）：不用 mask/padding 方案 —— rolldown 压缩时把
-   * `padding: 2px` + mask 简写合并展开后**丢掉 padding**，mask 双层全遮，::before
-   * 整面被盖死（这就是你看不到效果的原因）。这里改成最稳的两层法：
-   *   · ::before 整面铺 conic 渐变（旋转动画不变）；
-   *   · ::after 盖一层面板色（inset 2px），把中间挖空 → 只剩 2px 外圈流光。
-   * 内容全部在 z-index 1 之上，不会被这两层盖住。
+   * 流光环：整面 conic 渐变 + 负 z-index 垫在内容**下面**。
+   * 为什么不用 mask：rolldown 会把 `mask` 简写展开成一串 longhand，并在那次合并里
+   * **丢掉 padding: 2px** —— 双层 mask 全重合，整面被 mask 盖死、什么都看不见
+   * （2026-10-27 解剖产物确认）。负 z-index 方案不依赖任何简写，压缩后行为一致。
    */
+  z-index: -2;
   background: conic-gradient(
     from var(--ai-sweep, 0deg),
     transparent 0deg,
@@ -2357,18 +2330,27 @@ function onGlobalLeave(el: Element): void {
   animation: nb-ai-sweep 2.4s linear infinite;
 }
 .nb-root.is-ai-locking::after {
-  /* 内层挖空层：面板色，留出 2px 外圈流光；内容直接压在它上面（z-index 1） */
+  /*
+   * 内层遮罩：把 ::before 的渐变中间盖掉，只留 2px 外圈；同样是负 z-index（-1），
+   * 压在流光上面、内容下面。**不响应指针**，顶部参考列表/底部下拉照常可点
+   * （用户口径 2026-10-27：加载中只有输入框不可操作）。
+   */
   content: '';
   position: absolute;
   inset: 2px;
   border-radius: 14px;
   background: var(--ui-panel, #fff);
+  z-index: -1;
   pointer-events: none;
 }
-/* AI 生成期间：内容抬到挖空层之上（面板直接子级） */
-.nb-root.is-ai-locking > * {
-  position: relative;
-  z-index: 1;
+
+/*
+ * 负 z-index 的两层要能被内容盖住：给面板建一个"隔离"的层叠上下文。
+ * 用 isolation 而不是给每个子元素塞 position:relative + z-index（那会动到参考列表/
+ * 下拉的定位与点击，用户口径：加载中只有输入框不可操作，其余照常可用）。
+ */
+.nb-root.is-ai-locking {
+  isolation: isolate;
 }
 @property --ai-sweep {
   syntax: '<angle>';
@@ -2799,3 +2781,6 @@ function onGlobalLeave(el: Element): void {
   pointer-events: none;
 }
 </style>
+  /* 面板底色必须一直在（用户点名：基础背景是白色）。此前被误删导致整体透明，
+     暗色画布下整个面板透出画布背景 —— 与流光无关，常态就要有。 */
+  background: var(--ui-panel, #fff);
