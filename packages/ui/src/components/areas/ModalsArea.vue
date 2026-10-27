@@ -69,6 +69,9 @@ function thumbOf(item: { kind: string; urls?: string[]; canvasId?: string; nodeI
 /** 点开的预览：接主题注册的 MediaViewer（图片放大 / 视频 / 音频原生播放） */
 const previewItem = ref<{ name: string; kind: string; url: string } | null>(null)
 
+/** 点开「详情」的那一条历史（生成参数弹窗的数据源） */
+const detailItem = ref<HistItem | null>(null)
+
 // ==================== Masonry 瀑布流（照 web2api TaskResultGalleryView 搬入） ====================
 const masonry = useMasonry()
 const MASONRY_ID = 'hist-masonry'
@@ -256,6 +259,7 @@ function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): H
       : '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>') +
     '<span class="hist-card-meta">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
   wrap.addEventListener('click', () => onCardClick(item))
+  wrap.appendChild(buildDetailButton(item))
   // 勾选层由外层卡片统一挂载（这里再挂一次会出现两个叠加的勾选钮）
   return wrap
 }
@@ -272,13 +276,14 @@ function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
     // 连外层瀑布流格子一起摘掉：只删内层卡会留下一个空白的列位（视觉上空一格）
     const slot = card.closest('.hist-masonry-item') ?? card
     slot.remove()
-    masonry.layout()
+    // 删掉一个瀑布流项后要通知布局重排（否则 Masonry 还按旧高度留位）
+    masonry.instance.value?.layout()
     return
   }
   const fallback = buildErrorCard(item, { missingResource: true })
   if (s.histBatchMode && item.id) fallback.appendChild(buildCheckOverlay(item.id))
   card.replaceWith(fallback)
-  masonry.layout()
+  masonry.instance.value?.layout()
 }
 
 /**
@@ -304,6 +309,13 @@ interface HistItem {
   urls?: string[]
   canvasId?: string
   nodeId?: string
+  /** 提示词 / 参数 / 参考素材 / 媒体元数据（详情弹窗与卡片角标用） */
+  prompt?: string
+  values?: Record<string, unknown>
+  resources?: Array<{ kind: string; url?: string; value?: string }>
+  media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
+  finishedAt?: number
+  error?: string
 }
 
 /** 批量模式下的勾选覆盖层（点它切换选中；不在批量模式不出现） */
@@ -332,6 +344,103 @@ function toggleHistSelected(id: string): void {
  * 音频/视频卡：封面 + 播放圆钮（点卡片直接开 MediaViewer 预览/播放）。
  * 音频没有画面 —— 给柔和渐变底 + 波形点阵装饰；视频有封面帧。
  */
+/**
+ * 媒体（视频 / 音频）卡的外框：与图片卡**同一套瀑布流格子**，按产物真实宽高比排布。
+ *
+ * 用户口径 2026-10-27：
+ * - 视频要和图片一样走瀑布流（以前视频卡写死 180px 高、16:9，所以整排等高、和图片格格不入）；
+ * - 卡片上要有宽高比、时长、文件大小；图片卡上现有的"尺寸 + 时间"样式保持一致。
+ * - 音视频地址打不开时不许出黑框，要和图片一样归入「显示异常」。
+ */
+function mediaAspect(item: HistItem, fallback: number): string {
+  const w = item.media?.width
+  const h = item.media?.height
+  return w && h && w > 0 && h > 0 ? w + ' / ' + h : String(fallback)
+}
+
+/** 字节数 → 人能读的大小（0 / 缺省返回空串，不显示） */
+function formatBytes(n?: number): string {
+  if (!n || n <= 0) return ''
+  const kb = 1024
+  const mb = kb * 1024
+  if (n >= mb) return (n / mb).toFixed(1) + ' MB'
+  if (n >= kb) return Math.round(n / kb) + ' KB'
+  return n + ' B'
+}
+
+/** 毫秒 → m:ss（缺省 / 非正数返回空串） */
+function formatDuration(ms?: number): string {
+  if (!ms || ms <= 0) return ''
+  const total = Math.round(ms / 1000)
+  const m = Math.floor(total / 60)
+  const sec = total % 60
+  return m + ':' + String(sec).padStart(2, '0')
+}
+
+/** 详情弹窗里的时长：带单位，超过一分钟说"X 分 Y 秒"，比 m:ss 更好读 */
+function formatDurationLong(ms?: number): string {
+  if (!ms || ms <= 0) return ''
+  const total = Math.round(ms / 1000)
+  const m = Math.floor(total / 60)
+  const sec = total % 60
+  return m > 0 ? m + ' 分 ' + sec + ' 秒' : sec + ' 秒'
+}
+
+/** 宽高 → 最简比（如 1086×1448 → 543:724；用最大公约数，不四舍五入成假比例） */
+function ratioLabel(w: number, h: number): string {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
+  const g = gcd(Math.round(w), Math.round(h)) || 1
+  return Math.round(w / g) + ':' + Math.round(h / g)
+}
+
+/** 完成时间：精确到分钟（卡片上只显示"多久前"，复盘要看具体时刻） */
+function formatExactTime(ts: number): string {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+}
+
+/**
+ * 卡片底部的信息角标（与图片卡同一套 .hist-tag）：
+ * 左 = 宽高比（尺寸） · 时长 · 文件大小，右 = 类型 · 多久前。缺的字段直接省略。
+ */
+function buildMediaTags(item: HistItem): HTMLElement {
+  const left: string[] = []
+  const { width, height, durationMs, bytes } = item.media ?? {}
+  if (width && height) left.push(width + '×' + height)
+  const dur = formatDuration(durationMs)
+  if (dur) left.push(dur)
+  const size = formatBytes(bytes)
+  if (size) left.push(size)
+  const tags = document.createElement('div')
+  tags.className = 'hist-card-tags'
+  tags.innerHTML =
+    '<span class="hist-tag hist-tag--dim">' + esc(left.join(' · ')) + '</span>' +
+    '<span class="hist-tag">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
+  return tags
+}
+
+/**
+ * 卡片右上角的「详情」小按钮：打开该条历史的生成参数弹窗。
+ *
+ * 用户口径 2026-10-27：历史里要能看到当时的提示词、参考图/视频/音频与参数，
+ * 所以卡片上得有一个明确入口（点卡片本身仍是预览 / 批量勾选，不做第二语义）。
+ */
+function buildDetailButton(item: HistItem): HTMLElement {
+  const btn = document.createElement('button')
+  btn.className = 'hist-card-detail'
+  btn.type = 'button'
+  btn.title = '查看生成参数'
+  btn.setAttribute('aria-label', '查看生成参数：' + item.title)
+  btn.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>'
+  btn.addEventListener('click', (ev) => {
+    ev.stopPropagation()
+    detailItem.value = item
+  })
+  return btn
+}
+
 function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): HTMLElement {
   const card = document.createElement('div')
   card.className = 'hist-card'
@@ -342,10 +451,18 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
   const PluginPreview = isAudio
     ? (uiComponentOf('audioPreview') as Component | undefined)
     : (uiComponentOf('videoPreview') as Component | undefined)
+  // 媒体框：与图片卡同一套瀑布流格子。按产物真实宽高比给高度，
+  // 这样竖版视频就是竖的、横版就是横的（不再全部写死 180px）。
+  const media = document.createElement('div')
+  media.className = isAudio
+    ? 'hist-card-media hist-card-media--audio'
+    : 'hist-card-media hist-card-media--video'
+  media.style.aspectRatio = mediaAspect(item, isAudio ? 3 / 1 : 16 / 9)
+  card.appendChild(media)
   if (PluginPreview) {
       const mount = document.createElement('div')
       mount.className = isAudio ? 'hist-card-audio-plugin' : 'hist-card-video-plugin'
-      card.appendChild(mount)
+      media.appendChild(mount)
       // 视频件自带「按宽度自适应」：小卡片走小屏态（只有一个居中播放键），宽了给完整控制栏。
       // 颜色/时间浮层由这里加（与图片卡同一套 hist-card-tags），不再另起一条独立信息栏。
       //
@@ -362,23 +479,58 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
           ),
       })
       app.mount(mount)
-      // 不再加任何信息浮层（用户口径 2026-10-11）：视频右下角那个「时间」会压住
-      // 小屏态的「进入预览」按钮（实测两者矩形相交），而且标签本身就是多余的。
-      // 媒体件自己已经带播放键/时间/进度，卡面保持干净。
+      // 角标：与图片卡同款。视频的「进入预览」在右下角，角标避让它（padding-right 见样式）。
+      media.appendChild(buildMediaTags(item))
+      media.appendChild(buildDetailButton(item))
+      // 媒体加载失败（文件被清理 / 换地址）：与图片卡同一口径，开关关着就整条隐藏
+      const tag = isAudio ? 'audio' : 'video'
+      const el = mount.querySelector(tag) as HTMLMediaElement | null
+      el?.addEventListener('error', () => showBrokenResourceCard(card, item))
+      if (el) {
+        /**
+         * 老记录没有 media 元数据（历史里还没存宽高/时长）。
+         * 媒体加载出 metadata 后自己补上：卡片比例按真实宽高重排，左下角角标补宽高与时长，
+         * 这样即使没重新生成，旧视频也能显示"宽高 + 时长"，而不是只有"视频 · 12 天前"。
+         * 已经记过的（新记录）不覆盖 —— 后端量出来的值更准，也避免二次跳动。
+         */
+        const syncFromMedia = (): void => {
+          const w = el.videoWidth || 0
+          const h = el.videoHeight || 0
+          const durSec = Number.isFinite(el.duration) ? el.duration : 0
+          if (w > 0 && h > 0) {
+            if (!item.media) item.media = {}
+            if (!item.media.width) item.media.width = w
+            if (!item.media.height) item.media.height = h
+            media.style.aspectRatio = w + ' / ' + h
+          }
+          if (durSec > 0 && !item.media?.durationMs) {
+            if (!item.media) item.media = {}
+            item.media.durationMs = Math.round(durSec * 1000)
+          }
+          const old = media.querySelector('.hist-card-tags')
+          if (old) old.replaceWith(buildMediaTags(item))
+          masonry.instance.value?.layout()
+        }
+        el.addEventListener('loadedmetadata', syncFromMedia)
+        el.addEventListener('loadeddata', syncFromMedia)
+      }
+
       card.addEventListener('click', () => onCardClick(item))
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
       return card
   }
-  card.innerHTML =
-    '<div class="hist-card-media" style="aspect-ratio:' + (isAudio ? '4/3' : '16/9') + '">' +
-    (isAudio
-      ? '<div class="hist-card-audio"><span class="hist-card-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>'
-      : '<img src="' + esc(url) + '" alt="" loading="lazy" />') +
-    '<div class="hist-card-play">▶</div>' +
-    '</div>'
+  // 没有注册件时的兜底卡面：同样套在 media 框里，保留同一套角标与比例
+  const inner = document.createElement('div')
+  inner.style.cssText = 'position:absolute;inset:0'
+  inner.innerHTML = isAudio
+    ? '<div class="hist-card-audio"><span class="hist-card-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>'
+    : '<img src="' + esc(url) + '" alt="" loading="lazy" />'
+  inner.insertAdjacentHTML('beforeend', '<div class="hist-card-play">▶</div>')
+  media.appendChild(inner)
+  media.appendChild(buildMediaTags(item))
+  media.appendChild(buildDetailButton(item))
   if (!isAudio) {
-    const img = card.querySelector('img')!
-    const media = card.querySelector('.hist-card-media') as HTMLElement
+    const img = inner.querySelector('img')!
     img.addEventListener('load', () => {
       if (img.naturalWidth && img.naturalHeight) {
         media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
@@ -413,21 +565,26 @@ function createMasonryElement(item: HistItem): HTMLElement {
   }
 
   if (url) {
-    // 图片卡：aspect-ratio 先给 1/1 骨架，onload 后按真实宽高比重设（再触发 masonry 重排）
+    // 图片卡：优先用历史里记下的真实宽高（不用等图加载，卡片不会先闪 1:1 再跳）；
+    // 早期记录没有 media 时退回 1/1 骨架，等 onload 再按真实宽高比重设。
+    const known = !!(item.media?.width && item.media?.height)
     card.innerHTML =
-      '<div class="hist-card-media" style="aspect-ratio:1/1">' +
+      '<div class="hist-card-media" style="aspect-ratio:' + (known ? mediaAspect(item, 1) : '1/1') + '">' +
       '<img src="' + esc(url) + '" alt="" loading="lazy" />' +
-      '<div class="hist-card-skeleton"><span class="hist-card-pulse"></span></div>' +
-      '<div class="hist-card-tags"><span class="hist-tag hist-tag--dim"><b class="hist-card-dim"></b></span><span class="hist-tag">' + esc(item.kind) + ' · ' + esc(item.time) + '</span></div>' +
+      (known ? '' : '<div class="hist-card-skeleton"><span class="hist-card-pulse"></span></div>') +
       '</div>'
+    const mediaEl = card.querySelector('.hist-card-media') as HTMLElement
+    mediaEl.appendChild(buildMediaTags(item))
+    mediaEl.appendChild(buildDetailButton(item))
     const img = card.querySelector('img')!
     const media = card.querySelector('.hist-card-media') as HTMLElement
     img.addEventListener('load', () => {
       if (img.naturalWidth && img.naturalHeight) {
         media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
         card.querySelector('.hist-card-skeleton')?.remove()
-        const dim = card.querySelector('.hist-card-dim') as HTMLElement | null
-        if (dim) dim.textContent = img.naturalWidth + '×' + img.naturalHeight
+        // 老记录没有 media 元数据时，用实测尺寸补上左下角那格
+        const dim = card.querySelector('.hist-tag--dim') as HTMLElement | null
+        if (dim && !dim.textContent?.trim()) dim.textContent = img.naturalWidth + '×' + img.naturalHeight
         masonry.layout()
       }
     })
@@ -633,9 +790,13 @@ function openHistoryItem(item: { title: string; kind: string; urls?: string[] })
     ui.showToast('这条记录没有产物（可能失败或已过清理）')
     return
   }
-  // 预览地址必须走 thumbOf 的同源转换（原始 urls 可能是跨端地址打不开）；
+  // 预览地址必须走同源转换（原始 urls 可能是跨端地址打不开）；
   // kind 用原始中文标签即可 —— MediaViewer 里做了归一化。
-  const viewUrl = thumbOf(item)
+  // 媒体（视频/音频）的地址本身就可能是画布资源地址，原样给它，别按缩略图规则改写。
+  // 图片才按缩略图规则换成同源地址；音视频必须用原始地址（改写会把
+  // /api/resources/... 拼成画布资源路径 → 找不到文件 → 卡片「加载失败」）。
+  const isImage = item.kind === '图片' || item.kind === 'image'
+  const viewUrl = isImage ? thumbOf(item) : url
   if (!viewUrl) {
     ui.showToast('这条记录没有可预览的产物')
     return
@@ -817,6 +978,80 @@ watch(() => s.shortcutsOpen, async (open) => {
        视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
   <MediaViewer :item="previewItem" @close="previewItem = null" />
 
+  <!-- 生成详情：一条历史的完整参数（提示词 / 参数 / 参考素材 / 产物信息）。
+       用户口径 2026-10-27：卡片上要有入口，能复盘"当时到底用了什么"。 -->
+  <AxDialog :model-value="!!detailItem" width="640px" height="auto" max-height="80vh" radius="16px"
+    @update:model-value="!$event && (detailItem = null)">
+    <div v-if="detailItem" class="hist-detail">
+      <header class="hist-detail-head">
+        <div class="min-w-0">
+          <strong class="hist-detail-title">{{ detailItem.title }}</strong>
+          <span class="hist-detail-sub">{{ detailItem.kind }} · {{ detailItem.time }}</span>
+        </div>
+        <AxButton variant="ghost" size="icon" aria-label="关闭生成详情" @click="detailItem = null">
+          <X :size="15" />
+        </AxButton>
+      </header>
+
+      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-4 pb-4">
+        <div class="hist-detail-body">
+          <!-- 产物信息：图片给宽高比，视频/音频额外给时长，所有类型都给文件大小 -->
+          <section class="hist-detail-sec">
+            <h4 class="hist-detail-h">产物</h4>
+            <dl class="hist-detail-kv">
+              <template v-if="detailItem.media?.width && detailItem.media?.height">
+                <dt>宽高</dt>
+                <dd>{{ detailItem.media.width }}×{{ detailItem.media.height }}
+                  <span class="hist-detail-dim">（{{ ratioLabel(detailItem.media.width, detailItem.media.height) }}）</span>
+                </dd>
+              </template>
+              <template v-if="detailItem.media?.durationMs">
+                <dt>时长</dt><dd>{{ formatDurationLong(detailItem.media.durationMs) }}</dd>
+              </template>
+              <template v-if="detailItem.media?.bytes">
+                <dt>文件大小</dt><dd>{{ formatBytes(detailItem.media.bytes) }}</dd>
+              </template>
+              <template v-if="detailItem.finishedAt">
+                <dt>完成时间</dt><dd>{{ formatExactTime(detailItem.finishedAt) }}</dd>
+              </template>
+              <template v-if="detailItem.error">
+                <dt>失败原因</dt><dd class="hist-detail-danger">{{ detailItem.error }}</dd>
+              </template>
+            </dl>
+          </section>
+
+          <section class="hist-detail-sec">
+            <h4 class="hist-detail-h">提示词</h4>
+            <p v-if="detailItem.prompt" class="hist-detail-prompt">{{ detailItem.prompt }}</p>
+            <p v-else class="hist-detail-empty">这条记录没有保存提示词（早期记录没有这一项）</p>
+          </section>
+
+          <section v-if="detailItem.values && Object.keys(detailItem.values).length" class="hist-detail-sec">
+            <h4 class="hist-detail-h">生成参数</h4>
+            <dl class="hist-detail-kv">
+              <template v-for="(v, k) in detailItem.values" :key="k">
+                <dt>{{ k }}</dt><dd>{{ String(v) }}</dd>
+              </template>
+            </dl>
+          </section>
+
+          <section class="hist-detail-sec">
+            <h4 class="hist-detail-h">参考素材</h4>
+            <div v-if="detailItem.resources?.length" class="hist-detail-refs">
+              <div v-for="(r, i) in detailItem.resources" :key="i" class="hist-detail-ref">
+                <span class="hist-detail-ref-kind">{{ r.kind }}</span>
+                <img v-if="r.url && r.kind !== 'video' && r.kind !== 'audio'" :src="r.url" alt="" loading="lazy" />
+                <span v-else-if="r.url" class="hist-detail-ref-url">{{ r.url }}</span>
+                <span v-else class="hist-detail-ref-value">{{ r.value }}</span>
+              </div>
+            </div>
+            <p v-else class="hist-detail-empty">这条记录没有参考素材（早期记录没有这一项）</p>
+          </section>
+        </div>
+      </AxScrollArea>
+    </div>
+  </AxDialog>
+
   <!-- TV Director 全局设置：独立全局弹窗（不在 Agent 面板内） -->
   <AxDialog :model-value="s.directorOpen" width="600px" height="532px" radius="12px"
     @update:model-value="!$event && (s.directorOpen = false)">
@@ -958,6 +1193,28 @@ watch(() => s.shortcutsOpen, async (open) => {
 /* 批量操作栏 */
 .hist-batch-bar { background: var(--ui-panel, #fff); }
 
+/* 详情弹窗：与历史面板同一套中性灰阶；只有失败原因用语义红 */
+.hist-detail { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.hist-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 12px 8px 16px; }
+.hist-detail-title { display: block; font-size: 15px; font-weight: 700; color: var(--ui-ink, inherit); }
+.hist-detail-sub { display: block; margin-top: 2px; font-size: 11px; color: var(--ui-ink-mute, #888); }
+.hist-detail-body { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+.hist-detail-sec { display: flex; flex-direction: column; gap: 6px; }
+.hist-detail-h { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ui-ink-mute, #888); }
+.hist-detail-kv { display: grid; grid-template-columns: 68px 1fr; gap: 4px 10px; margin: 0; font-size: 12px; }
+.hist-detail-kv dt { color: var(--ui-ink-mute, #888); }
+.hist-detail-kv dd { margin: 0; color: var(--ui-ink, inherit); word-break: break-word; }
+.hist-detail-dim { color: var(--ui-ink-mute, #888); }
+.hist-detail-danger { color: var(--ui-danger, #ef4444); }
+.hist-detail-prompt { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--ui-veil, rgb(127 127 127 / .08)); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--ui-ink, inherit); }
+.hist-detail-empty { margin: 0; font-size: 12px; color: var(--ui-ink-mute, #888); }
+.hist-detail-refs { display: flex; flex-wrap: wrap; gap: 8px; }
+.hist-detail-ref { display: flex; flex-direction: column; gap: 4px; width: 104px; padding: 6px; border-radius: 8px; border: 1px solid var(--ui-line, rgb(128 128 128 / .2)); background: var(--ui-veil, rgb(127 127 127 / .06)); }
+.hist-detail-ref img { width: 100%; height: 68px; object-fit: cover; border-radius: 6px; display: block; }
+.hist-detail-ref-kind { font-size: 10px; color: var(--ui-ink-mute, #888); text-transform: uppercase; }
+.hist-detail-ref-value { font-size: 11px; line-height: 1.4; color: var(--ui-ink, inherit); max-height: 68px; overflow: auto; }
+.hist-detail-ref-url { font-size: 10px; line-height: 1.35; color: var(--ui-ink-mute, #888); word-break: break-all; max-height: 68px; overflow: auto; }
+
 /* 加载下一页指示 */
 .hist-loading { pointer-events: none; }
 
@@ -983,8 +1240,13 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-skeleton { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: var(--ui-veil, rgba(127,127,127,.12)); }
 .hist-card-pulse { width: 40px; height: 40px; border-radius: 12px; background: var(--ui-hover, rgba(127,127,127,.25)); animation: hist-pulse 1.4s ease-in-out infinite; }
 @keyframes hist-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
-/* 底部渐变 tag 行：类型 tag（左）+ 时间 tag（右），压在媒体底部 */
+/* 底部渐变 tag 行：类型 tag（左）+ 时间 tag（右），压在媒体底部。
+   视频卡右下角有「进入预览」小方块，右侧留出避让（用户实测两者会压在一起）。 */
 .hist-card-tags { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 18px 8px 7px; background: linear-gradient(transparent, var(--ui-scrim, rgb(0 0 0 / 0.55))); pointer-events: none; }
+.hist-card-media--video .hist-card-tags { padding-right: 46px; }
+/* 视频卡的信息角标压在深色画面上：用固定浅色，避免亮色主题下的深字看不清。
+   音频卡改成白底（用户口径 2026-10-27），角标就按普通卡走主题文字色。 */
+.hist-card-media--video .hist-tag { color: var(--ui-tip-ink, #fff); }
 .hist-tag { display: inline-flex; align-items: center; gap: 3px; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 7px; border-radius: 999px; font-size: 10px; line-height: 1.5; color: var(--ui-tip-ink, #fff); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); backdrop-filter: blur(4px); }
 .hist-tag--dim { color: color-mix(in srgb, var(--ui-tip-ink, #fff) 85%, transparent); background: transparent; padding-inline: 0; }
 /* 图片卡媒体底部渐变（tags 自带渐变即可，无需额外层） */
@@ -992,18 +1254,29 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-play { position: absolute; left: 50%; top: 50%; z-index: 3; transform: translate(-50%, -50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ui-scrim, rgb(0 0 0 / 0.45)); color: var(--ui-tip-ink, #fff); font-size: 12px; backdrop-filter: blur(4px); transition: transform 0.16s ease; pointer-events: none; }
 .hist-card-media:hover .hist-card-play { transform: translate(-50%, -50%) scale(1.1); }
 /* 音频卡（静态装饰兜底）：柔和渐变底 + 波形竖条 */
-.hist-card-audio { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(135deg, var(--ui-accent-soft, rgb(8 145 178 / 0.12)), var(--ui-veil, rgb(127 127 127 / 0.1))); }
+.hist-card-audio { position: absolute; inset: 0; display: grid; place-items: center; background: var(--ui-veil, rgb(127 127 127 / 0.06)); }
 .hist-card-wave { display: flex; align-items: center; justify-content: center; gap: 3px; width: 70%; height: 46%; }
-.hist-card-wave i { flex: 1 1 auto; max-width: 5px; height: 30%; border-radius: 2px; background: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent); }
+.hist-card-wave i { flex: 1 1 auto; max-width: 5px; height: 30%; border-radius: 2px; background: var(--ui-ink-mute, #9ca3af); opacity: .75; }
 .hist-card-wave i:nth-child(3n) { height: 62%; }
 .hist-card-wave i:nth-child(4n) { height: 44%; }
 .hist-card-wave i:nth-child(5n) { height: 78%; }
 .hist-card-wave i:nth-child(7n) { height: 24%; }
 /* 音频注册件卡（上下布局）：组件舞台定高 96px 自适应宽，下方信息条 fixed 行高 —— 用户口径 */
-.hist-card-audio-plugin { position: relative; width: 100%; height: 96px; overflow: hidden; background: linear-gradient(135deg, var(--ui-accent-soft, rgb(8 145 178 / 0.1)), var(--ui-veil, rgb(127 127 127 / 0.08))); }
+.hist-card-audio-plugin { position: absolute; inset: 0; overflow: hidden; background: var(--ui-panel, #fff); }
 .hist-card-audio-plugin .apv-root { height: 100%; }
 .hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
-.hist-card-video-plugin { position: relative; width: 100%; height: 180px; overflow: hidden; background: var(--ui-scrim, #000); /* 主题色白名单: 视频黑边属媒体底色，不随主题 */ }
+/* 历史卡里的音频波形一律中性灰阶（用户口径 2026-10-27：不要主题紫）。
+   只覆盖卡片内的表现，节点里的播放器仍按自己的主题走。 */
+.hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
+.hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
+.hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,
+.hist-card-audio-plugin .aw-wave:hover .aw-wave-bar.is-played { background: var(--ui-ink, #374151); }
+.hist-card-audio-plugin .aw-knob::after { background: var(--ui-ink, #374151); }
+.hist-card-audio-plugin .aw-knob:hover::after,
+.hist-card-audio-plugin .aw-knob:active::after { background: var(--ui-ink, #111827); }
+.hist-card-audio-plugin .aw-progress-fill { background: var(--ui-ink-mute, #9ca3af); }
+.hist-card-audio-plugin .aw-progress-thumb { border-color: var(--ui-ink-mute, #9ca3af); }
+.hist-card-video-plugin { position: absolute; inset: 0; overflow: hidden; background: var(--ui-scrim, #000); /* 主题色白名单: 视频黑边属媒体底色，不随主题 */ }
 .hist-card-video-plugin .vpv-root { height: 100%; }
 /* 异常卡：警示圆圈 + 「生成异常 · 无产物」说明 */
 .hist-card-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 130px; padding: 16px 12px; cursor: pointer; text-align: center; }
@@ -1015,6 +1288,12 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-check svg { width: 12px; height: 12px; flex: none; }
 .hist-card-check:hover { transform: scale(1.08); }
 .hist-card-check.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); color: var(--ui-on-accent, #fff); /* 主题色白名单: 勾选态对勾在主题色上的前景色 */ }
+/* 卡片右上角的「详情」入口：中性玻璃小圆钮，压在画面上也看得清（不抢缩略图） */
+.hist-card-detail { position: absolute; right: 6px; top: 6px; z-index: 6; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--ui-line, rgb(255 255 255 / .35)); border-radius: 9999px; background: var(--ui-panel, rgb(0 0 0 / .45)); color: var(--ui-ink, #fff); cursor: pointer; opacity: .82; transition: opacity .15s ease, transform .15s ease; }
+.hist-card-detail:hover { opacity: 1; transform: scale(1.08); }
+.hist-card-detail svg { width: 13px; height: 13px; }
+/* 视频卡左上角有勾选钮时，详情钮仍在右上角，互不遮挡 */
+.hist-card-media--video .hist-card-detail { color: var(--ui-tip-ink, #fff); }
 .hist-card-fallback .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-ink-mute, #888); color: var(--ui-ink-mute, #888); font-size: 15px; font-weight: 700; }
 .hist-card-fallback.is-error .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-danger, #ef4444); color: var(--ui-danger, #ef4444); font-size: 15px; font-weight: 700; }
 .hist-card-fallback strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; color: var(--ui-ink, inherit); }

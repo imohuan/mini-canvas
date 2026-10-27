@@ -147,6 +147,43 @@ describe('下单', () => {
     expect(String(rsUrls?.[0] ?? '')).toMatch(/^\/api\/canvases\/default\/resources\//)
   })
 
+  it('历史记下生成参数：提示词 / 参数 / 参考素材 / 媒体元数据（尺寸·时长·大小）', async () => {
+    const p: Provider = {
+      id: 'p', actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() { return { status: 'done', urls: ['https://x/1.png'] } },
+    }
+    const { tasks, history } = await setup(p, { artifact: pngBytes(1024, 1536) })
+    const job = await tasks.createJob({
+      canvasId: 'default',
+      nodeId: 'n1',
+      actionId: ACTION.id,
+      prompt: '一个坐在窗边的女孩',
+      values: { ratio: '2:3', quality: '2k' },
+      resources: [
+        { kind: 'image', url: '/api/canvases/default/resources/abc.png' },
+        { kind: 'text', value: '参考风格：柔和逆光' },
+      ],
+    })
+    expect('error' in job).toBe(false)
+    await waitFor(() => tasks.getJob((job as { id: string }).id)?.status === 'done')
+    const all = await history.readAll('default')
+    expect(all).toHaveLength(1)
+    const h = all[0]
+    // 参数与参考素材必须落进账本 —— 否则详情弹窗只能看到一张图，无法复盘
+    expect(h.prompt).toBe('一个坐在窗边的女孩')
+    expect(h.values).toEqual({ ratio: '2:3', quality: '2k' })
+    expect(h.resources).toEqual([
+      { kind: 'image', url: '/api/canvases/default/resources/abc.png' },
+      { kind: 'text', value: '参考风格：柔和逆光' },
+    ])
+    // 媒体元数据：尺寸 + 字节数（图片没有时长，不该瞎填一个 0）
+    expect(h.media?.width).toBe(1024)
+    expect(h.media?.height).toBe(1536)
+    expect(h.media?.bytes).toBeGreaterThan(0)
+    expect(h.media?.durationMs).toBeUndefined()
+  })
+
   it('同一（画布, 节点）已有在跑任务时 → 挡下重复下单（连点保护）', async () => {
     const p: Provider = { id: 'p', actions: [ACTION], async submit() { return { taskId: 'pt1' } }, async poll() { return { status: 'running' } } }
     const { tasks } = await setup(p, { interval: 100000 })

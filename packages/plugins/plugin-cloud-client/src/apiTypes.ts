@@ -45,6 +45,12 @@ export interface ServerHistoryEntry {
   urls?: string[]
   text?: string
   prompt?: string
+  /** 当时的生成参数（比例 / 时长 / 质量…） */
+  values?: Record<string, unknown>
+  /** 参考素材（画布内地址或文本值） */
+  resources?: Array<{ kind: string; url?: string; value?: string }>
+  /** 产物媒体元数据（尺寸 / 时长 / 字节数） */
+  media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
   createdAt: number
   finishedAt: number
   error?: string

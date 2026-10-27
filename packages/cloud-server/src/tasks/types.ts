@@ -27,6 +27,18 @@ export interface Job {
   message?: string
   /** 终态产物 */
   result?: { ok: boolean; urls?: string[]; text?: string; error?: string; taskId?: string }
+  /**
+   * 下单时的原始请求快照（提示词 / 参数 / 参考素材）。
+   *
+   * 存**原始引用**而不是 resolveInput 之后的数据地址：后者是 provider 用的内嵌字节，
+   * 塞进历史会把账本撑爆（一条视频参考动辄几十 MB）。这里只留画布内地址与文本值，
+   * 详情弹窗据此还原"当时用了什么"。
+   */
+  request?: {
+    prompt?: string
+    values?: Record<string, unknown>
+    resources?: Array<{ kind: string; url?: string; value?: string }>
+  }
   createdAt: number
   finishedAt?: number
 }
@@ -51,7 +63,26 @@ export interface HistoryEntry {
   rating: 'passed' | 'pending' | 'rejected'
   urls?: string[]
   text?: string
+  /** 用户当时的提示词（生成参数的一部分） */
   prompt?: string
+  /** 用户当时选的参数（比例 / 时长 / 模型档位…，键 = 动作声明的 ActionParam.key） */
+  values?: Record<string, unknown>
+  /**
+   * 参考素材（连进节点 / @ 引用的图、视频、文本）。
+   *
+   * url 是**画布内地址**（/api/canvases/.../resources/...），详情弹窗可直接显示缩略图；
+   * 参考文本放 value。
+   */
+  resources?: Array<{ kind: string; url?: string; value?: string }>
+  /** 产物媒体元数据（尺寸 / 时长 / 字节数）：卡片用它画比例与角标，不必等媒体加载完 */
+  media?: {
+    width?: number
+    height?: number
+    /** 视频 / 音频时长（毫秒） */
+    durationMs?: number
+    /** 产物字节数（文件大小） */
+    bytes?: number
+  }
   createdAt: number
   finishedAt: number
   error?: string

@@ -250,7 +250,24 @@ function createUi() {
      * 生成历史 —— **数据来自后台**（gen-history 服务），不是写死的假数组。
      * 由 loadHistory() 拉取并填充；历史弹窗只负责渲染。
      */
-    historyItems: [] as Array<{ id: string; title: string; time: string; kind: string; urls?: string[]; canvasId?: string; nodeId?: string }>,
+    historyItems: [] as Array<{
+      id: string
+      title: string
+      time: string
+      kind: string
+      urls?: string[]
+      canvasId?: string
+      nodeId?: string
+      /** 提示词 / 参数 / 参考素材 / 媒体元数据：详情弹窗与卡片角标用 */
+      prompt?: string
+      values?: Record<string, unknown>
+      resources?: Array<{ kind: string; url?: string; value?: string }>
+      media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
+      /** 生成完成的时间戳（详情弹窗显示精确时间；卡片显示"多久前"） */
+      finishedAt?: number
+      /** 失败原因（详情弹窗直接给出，不用再猜） */
+      error?: string
+    }>,
     /** 汇总：一共生成过多少（按类型分）—— 喂给历史弹窗上的计数徽章 */
     historySummary: { total: 0, byKind: {} as Record<string, number> },
     /** 是否拿到了后台历史（没连后台时为 false，弹窗给一句说明而不是空转） */
@@ -870,7 +887,20 @@ function createUi() {
   async function loadHistory(): Promise<void> {
       const svc = readyHost?.ctx?.get<{
       query(q?: Record<string, unknown>): Promise<{
-        items: Array<{ id: string; title: string; kind: string; finishedAt: number; urls?: string[]; canvasId?: string; nodeId?: string }>
+        items: Array<{
+          id: string
+          title: string
+          kind: string
+          finishedAt: number
+          urls?: string[]
+          canvasId?: string
+          nodeId?: string
+          prompt?: string
+          values?: Record<string, unknown>
+          resources?: Array<{ kind: string; url?: string; value?: string }>
+          media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
+          error?: string
+        }>
         total: number
         page: number
         pageSize: number
@@ -908,6 +938,13 @@ function createUi() {
         // 画布 / 节点 id 也要带上：卡片缩略图要按「同源资源地址」取图（见 ModalsArea 的 thumbOf）
         ...(e.canvasId ? { canvasId: e.canvasId } : {}),
         ...(e.nodeId ? { nodeId: e.nodeId } : {}),
+        // 生成参数 / 参考素材 / 媒体元数据：卡片角标与详情弹窗都要用
+        finishedAt: e.finishedAt,
+        ...(e.prompt ? { prompt: e.prompt } : {}),
+        ...(e.values && Object.keys(e.values).length > 0 ? { values: e.values } : {}),
+        ...(e.resources && e.resources.length > 0 ? { resources: e.resources } : {}),
+        ...(e.media && Object.keys(e.media).length > 0 ? { media: e.media } : {}),
+        ...(e.error ? { error: e.error } : {}),
       }))
       // 追加式分页：第 1 页（或筛选切换后回到第 1 页）替换整表；后续页**追加**，
       // 无限滚动才能不断把下一批接到已有卡片后面（历史卡片 DOM 与滚动位置都保留）。

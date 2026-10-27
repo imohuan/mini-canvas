@@ -130,5 +130,44 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const setup = modalsArea.slice(modalsArea.indexOf('function setupLoadSentinel'), modalsArea.indexOf('function teardownLoadSentinel'))
     expect(setup, '同一哨兵重复 setup 会重复观察').toMatch(/observedSentinel/)
   })
+
+  it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {
+    // 旧实现：.hist-card-video-plugin { height: 180px } + 卡片固定 16:9 —— 视频整排等高、与图片不齐
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    expect(style, '视频卡仍写死高度，瀑布流按真实比例排布会失效').not.toMatch(/\.hist-card-video-plugin\s*\{[^}]*height:\s*180px/)
+    expect(style, '视频媒体框没有铺满媒体区').toMatch(/\.hist-card-video-plugin\s*\{[^}]*position:\s*absolute/)
+    expect(style, '媒体框缺少按产物宽高比排布的能力（aspect-ratio 未与 media 元数据联动）').toMatch(/\.hist-card-media\s*\{/)
+    expect(modalsArea, '卡片没有用 media 元数据给真实比例').toMatch(/function mediaAspect/)
+  })
+
+  it('视频/音频卡显示宽高比、时长、文件大小（与图片卡同一套角标）', () => {
+    const tags = modalsArea.slice(modalsArea.indexOf('function buildMediaTags'), modalsArea.indexOf('function buildDetailButton'))
+    expect(tags, '角标没显示宽高').toMatch(/width\s*\+\s*'×'\s*\+\s*height/)
+    expect(tags, '角标没显示时长').toMatch(/formatDuration\(durationMs\)/)
+    expect(tags, '角标没显示文件大小').toMatch(/formatBytes\(bytes\)/)
+    expect(modalsArea, '媒体卡没有调用统一角标').toMatch(/media\.appendChild\(buildMediaTags\(item\)\)/)
+  })
+
+  it('音频卡在亮色主题下不用主题强调色（白底 + 中性波形）', () => {
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    expect(style, '音频兜底卡仍在用主题强调色渐变').not.toMatch(/\.hist-card-audio\s*\{[^}]*--ui-accent-soft/)
+    expect(style, '音频兜底卡没有改成中性底色').toMatch(/\.hist-card-audio\s*\{[^}]*--ui-veil/)
+    expect(style, '历史卡里的音频波形仍会吃主题强调色').not.toMatch(/\.hist-card-audio-plugin \.aw-wave-bar\.is-played[^}]*--ui-accent/)
+  })
+
+  it('坏掉的媒体归入「显示异常」：关着时整条隐藏（与图片同一口径）', () => {
+    const fn = modalsArea.slice(modalsArea.indexOf('function showBrokenResourceCard'), modalsArea.indexOf('/** 历史条目类型'))
+    expect(fn, '坏媒体没有走统一的异常处理').toMatch(/if \(!s\.histShowError\)/)
+    expect(fn, '关掉开关时没有把整格摘除').toMatch(/slot\.remove\(\)/)
+    expect(modalsArea, '视频/音频元素没有接 error → 坏媒体不会归入异常').toMatch(/addEventListener\('error', \(\) => showBrokenResourceCard\(card, item\)\)/)
+  })
+
+  it('卡片有「详情」入口，弹窗展示提示词/参数/参考素材/产物信息', () => {
+    expect(modalsArea, '卡片上没有详情按钮构建函数').toMatch(/function buildDetailButton/)
+    expect(modalsArea, '详情入口没有挂到卡片上').toMatch(/appendChild\(buildDetailButton\(item\)\)/)
+    expect(modalsArea, '详情弹窗没有提示词').toMatch(/detailItem\.prompt/)
+    expect(modalsArea, '详情弹窗没有生成参数').toMatch(/detailItem\.values/)
+    expect(modalsArea, '详情弹窗没有参考素材').toMatch(/detailItem\.resources/)
+  })
 })
 

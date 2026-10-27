@@ -17,7 +17,13 @@ import type { ProviderRegistry } from '../providers/registry.js'
 import type { ActionDef, JobInput, Provider } from '../providers/types.js'
 import type { HistoryStore } from './history.js'
 import type { HistoryEntry, Job } from './types.js'
-import { imageSizeFromBytes, videoSizeFromBytes, mediaKindFromName } from './mediaSize.js'
+import {
+  imageSizeFromBytes,
+  videoSizeFromBytes,
+  mediaKindFromName,
+  probeMedia,
+  type MediaProbe,
+} from './mediaSize.js'
 
 /** 默认轮询间隔（ms） */
 export const DEFAULT_INTERVAL = 1500
@@ -122,6 +128,19 @@ export class TaskManager {
       status: 'running',
       progress: 0,
       message: '任务已提交，等待执行…',
+      request: {
+        ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+        ...(input.values ? { values: input.values } : {}),
+        ...(input.resources && input.resources.length > 0
+          ? {
+              resources: input.resources.map((r) => ({
+                kind: r.kind,
+                ...(r.url ? { url: r.url } : {}),
+                ...(typeof r.value === 'string' ? { value: r.value } : {}),
+              })),
+            }
+          : {}),
+      },
       createdAt: this.now(),
     }
     this.jobs.set(job.id, job)
@@ -251,7 +270,11 @@ export class TaskManager {
    * `<画布>/resources/`（按内容哈希，重复不重复存），再把 `saveResource` 返回的同源地址写进节点。
    * 这个地址形如 `/api/canvases/<画布>/resources/<hash>.<ext>`，文件**确实存在**，图片节点直接就能加载。
    */
-  private async writeMediaFields(job: Job, action: ActionDef, urls: string[] | undefined): Promise<string | undefined> {
+  private async writeMediaFields(
+    job: Job,
+    action: ActionDef,
+    urls: string[] | undefined,
+  ): Promise<{ url: string; media: MediaProbe } | undefined> {
     const raw = urls?.[0]
     if (!raw) return undefined
     try {
@@ -266,6 +289,22 @@ export class TaskManager {
           })()
       const fileName = raw.split('?')[0]?.split('/').pop() ?? undefined
       const stored = await doc.saveResource(bytes, fileName ? { fileName } : {})
+      // 一次量全卡片要用的元数据（尺寸 / 时长 / 字节数）：历史里存下来，
+      // 卡片就不必等 <video>/<audio> 的 metadata 才敢画真实比例（会先闪一下再跳）。
+      // 后缀认不出（如 web2api 给的 .bin / 无扩展名）时按节点类型兜底：
+      // 视频节点必然要量视频、音频节点必然要量音频，否则历史里就永远缺时长。
+      const kindByAction = this.kindOf(action)
+      const probeName =
+        fileName && mediaKindFromName(fileName) !== 'unknown'
+          ? fileName
+          : fileName
+            ? fileName.replace(/\.[^./]*$/, '') + (kindByAction === 'video' ? '.mp4' : kindByAction === 'audio' ? '.mp3' : '.png')
+            : kindByAction === 'video'
+              ? 'out.mp4'
+              : kindByAction === 'audio'
+                ? 'out.mp3'
+                : 'out.png'
+      const media = fileName ? probeMedia(bytes, probeName) : { bytes: bytes.length }
       // 量出宽高一起写：前端靠 imageWidth/Height（图片）或 videoWidth/Height（视频）算卡片比例，
       // 缺了就会停在类型默认的 4:3 —— 9:16 的竖图被塞成横的（用户实测）。
       const size = fileName ? this.measureBytes(bytes, fileName) : null
@@ -282,7 +321,7 @@ export class TaskManager {
         ],
       })
       // 返回**同源地址**（存在的那份）：历史 / runState 都用它，前端缩略图才加载得出来
-      return stored.url
+      return { url: stored.url, media }
     } catch (err) {
       this.deps.onError?.('[tasks] 写节点产物字段失败（产物可能取不到，或节点已被删除）', err)
       return undefined
@@ -401,9 +440,13 @@ export class TaskManager {
     // 写之前先把字节收进画布资源目录（见 writeMediaFields），写的是**确实存在**的同源地址。
     // 它返回的同源地址要**回填进 result**：历史 / runState 也用它 —— 否则那两处仍存 web2api 的原始地址，
     // 前端拿它当缩略图会因为「文件名不是内容哈希」被资源接口判非法（400），历史卡片就是一片裂图。
+    let media: MediaProbe | undefined
     if (result.ok) {
       const sameOrigin = await this.writeMediaFields(job, action, result.urls)
-      if (sameOrigin) result = { ...result, urls: [sameOrigin, ...(result.urls ?? []).slice(1)] }
+      if (sameOrigin) {
+        result = { ...result, urls: [sameOrigin.url, ...(result.urls ?? []).slice(1)] }
+        media = sameOrigin.media
+      }
     }
     await this.writeRunState(
       job,
@@ -412,7 +455,7 @@ export class TaskManager {
         : { status: 'error', message: result.error ?? '任务失败', actionId: action.id, taskId: job.id },
     )
 
-    await this.deps.history.append(job.canvasId, this.toHistoryEntry(job, action, result, finishedAt))
+    await this.deps.history.append(job.canvasId, this.toHistoryEntry(job, action, result, finishedAt, media))
 
     // 产物登记（onArtifact）**已经在上游做过**（见 run 里轮询到终态那一步）——
     // 这里不再重复调：目的是让「字节先落进画布资源目录」发生在写节点媒体字段之前。
@@ -433,7 +476,9 @@ export class TaskManager {
     action: ActionDef,
     result: { ok: boolean; urls?: string[]; text?: string; error?: string },
     finishedAt: number,
+    media?: MediaProbe,
   ): HistoryEntry {
+    const req = job.request
     return {
       id: randomUUID(),
       jobId: job.id,
@@ -447,6 +492,11 @@ export class TaskManager {
       rating: 'passed',
       ...(result.urls && result.urls.length > 0 ? { urls: result.urls } : {}),
       ...(result.text ? { text: result.text } : {}),
+      // 生成参数与参考素材：详情弹窗据此还原"当时到底用了什么"
+      ...(req?.prompt ? { prompt: req.prompt } : {}),
+      ...(req?.values && Object.keys(req.values).length > 0 ? { values: req.values } : {}),
+      ...(req?.resources && req.resources.length > 0 ? { resources: req.resources } : {}),
+      ...(media && Object.keys(media).length > 0 ? { media } : {}),
       createdAt: job.createdAt,
       finishedAt,
       ...(result.error ? { error: result.error } : {}),

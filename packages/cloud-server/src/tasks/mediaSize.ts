@@ -143,6 +143,185 @@ export function videoSizeFromBytes(bytes: Uint8Array): MediaSize | null {
   return findTkhd(bytes, 0, bytes.length, 0)
 }
 
+/**
+ * 读 MP4 系列容器的时长（毫秒）：读 moov 下 mvhd 的 timescale 与 duration。
+ * version 0 是 u32 duration，version 1 是 u64；认不出返回 null，绝不猜。
+ */
+export function videoDurationFromBytes(bytes: Uint8Array): number | null {
+  const found = findMvhd(bytes, 0, bytes.length, 0)
+  if (!found) return null
+  const { timescale, duration } = found
+  if (!(timescale > 0) || !(duration > 0)) return null
+  return Math.round((duration / timescale) * 1000)
+}
+
+/** 遍历盒子树找第一个 mvhd（返回 timescale / duration） */
+function findMvhd(
+  b: Uint8Array,
+  start: number,
+  end: number,
+  depth: number,
+): { timescale: number; duration: number } | null {
+  if (depth > 6) return null
+  let o = start
+  while (o + 8 <= end) {
+    const size = u32be(b, o)
+    if (size === null || size < 8) return null
+    const type = ascii(b, o + 4, 4)
+    const boxEnd = Math.min(o + size, end)
+    if (type === 'mvhd') {
+      const version = b[o + 8]
+      const base = o + 8
+      if (version === 1) {
+        // version 1：creation/modification 各 8 字节，timescale 在 +20，duration 在 +24（u64）
+        const timescale = u32be(b, base + 20)
+        const hi = u32be(b, base + 24)
+        const lo = u32be(b, base + 28)
+        if (timescale === null || hi === null || lo === null) return null
+        return { timescale, duration: hi * 2 ** 32 + lo }
+      }
+      // version 0：creation/modification 各 4 字节，timescale 在 +12，duration 在 +16（u32）
+      const timescale = u32be(b, base + 12)
+      const duration = u32be(b, base + 16)
+      if (timescale === null || duration === null) return null
+      return { timescale, duration }
+    }
+    if (type === 'moov') {
+      const inner = findMvhd(b, o + 8, boxEnd, depth + 1)
+      if (inner) return inner
+    }
+    o = boxEnd
+  }
+  return null
+}
+
+/**
+ * 读音频时长（毫秒）。
+ *
+ * 分三路：
+ * - MP4 容器里的音频（m4a）→ 与视频同一个 mvhd；
+ * - WAV → 头里的 byteRate 与 data 长度；
+ * - MP3 → 帧头比特率 + 文件长度估算（VBR 会有偏差，属已知近似）。
+ * 认不出（ogg / flac / opus 等）返回 null，由前端 audio 的 loadedmetadata 兜底。
+ */
+export function audioDurationFromBytes(bytes: Uint8Array, fileName?: string): number | null {
+  const ext = (fileName ?? '').toLowerCase().split('?')[0].split('.').pop() ?? ''
+  if (ascii(bytes, 4, 4) === 'ftyp') {
+    const d = videoDurationFromBytes(bytes)
+    if (d !== null) return d
+  }
+  if (ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 4) === 'WAVE') return wavDuration(bytes)
+  if (ext === 'mp3' || ascii(bytes, 0, 3) === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) {
+    return mp3Duration(bytes)
+  }
+  return null
+}
+
+/** WAV：fmt 段给 byteRate，data 段给字节数 → 时长 */
+function wavDuration(b: Uint8Array): number | null {
+  let o = 12
+  let byteRate = 0
+  let dataBytes = 0
+  while (o + 8 <= b.length) {
+    const id = ascii(b, o, 4)
+    const size = u32le(b, o + 4)
+    if (size === null) return null
+    if (id === 'fmt ') byteRate = u32le(b, o + 16) ?? 0
+    else if (id === 'data') {
+      dataBytes = Math.min(size, b.length - (o + 8))
+      break
+    }
+    o += 8 + size + (size % 2)
+  }
+  if (!(byteRate > 0) || !(dataBytes > 0)) return null
+  return Math.round((dataBytes / byteRate) * 1000)
+}
+
+/** MP3：跳过 ID3v2，按第一帧比特率与总长估算 */
+function mp3Duration(b: Uint8Array): number | null {
+  let o = 0
+  if (ascii(b, 0, 3) === 'ID3' && b.length > 10) {
+    const size = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f)
+    o = 10 + size
+  }
+  while (o + 4 <= b.length) {
+    if (b[o] === 0xff && (b[o + 1] & 0xe0) === 0xe0) {
+      const bitrate = parseMp3Bitrate(b, o)
+      if (bitrate) {
+        const audioBytes = b.length - o
+        return Math.round((audioBytes * 8 * 1000) / bitrate)
+      }
+    }
+    o++
+  }
+  return null
+}
+
+/** MPEG-1/2/2.5 Layer III 帧头 → 比特率（bps） */
+function parseMp3Bitrate(b: Uint8Array, o: number): number | null {
+  const versionBits = (b[o + 1] >> 3) & 0x3
+  const layerBits = (b[o + 1] >> 1) & 0x3
+  const bitrateIdx = (b[o + 2] >> 4) & 0xf
+  if (layerBits !== 0x1) return null
+  const table: Record<number, number[]> = {
+    3: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0],
+    2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0],
+    0: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0],
+  }
+  const kbps = table[versionBits]?.[bitrateIdx] ?? 0
+  return kbps > 0 ? kbps * 1000 : null
+}
+
+/** 产物媒体元数据（历史卡片用） */
+export interface MediaProbe {
+  width?: number
+  height?: number
+  durationMs?: number
+  bytes?: number
+}
+
+/**
+ * 从产物字节量出历史卡片需要的元数据。
+ *
+ * 为什么要一次性量全：卡片要画"真实比例"和"时长/大小"角标；前端等视频 metadata
+ * 才拿到时长，会先闪一个 16:9 的占位，之后尺寸跳一下（用户实测的卡顿感）。
+ * 认不出就不给该字段 —— 宁可少显示，不要瞎猜。
+ */
+export function probeMedia(bytes: Uint8Array, fileName: string): MediaProbe {
+  const kind = mediaKindFromName(fileName)
+  const probe: MediaProbe = { bytes: bytes.length }
+  if (kind === 'image') {
+    const s = imageSizeFromBytes(bytes)
+    if (s) {
+      probe.width = s.width
+      probe.height = s.height
+    }
+    return probe
+  }
+  if (kind === 'video') {
+    const s = videoSizeFromBytes(bytes)
+    if (s) {
+      probe.width = s.width
+      probe.height = s.height
+    }
+    const d = videoDurationFromBytes(bytes)
+    if (d !== null) probe.durationMs = d
+    return probe
+  }
+  if (kind === 'audio') {
+    const d = audioDurationFromBytes(bytes, fileName)
+    if (d !== null) probe.durationMs = d
+    return probe
+  }
+  // 后缀认不出：图 / 视频都试一下（产物常见就是这两类）
+  const s = imageSizeFromBytes(bytes) ?? videoSizeFromBytes(bytes)
+  if (s) {
+    probe.width = s.width
+    probe.height = s.height
+  }
+  return probe
+}
+
 /** 按文件名后缀判断产物是图还是视频（用于决定读哪种尺寸、写哪对字段） */
 export function mediaKindFromName(name: string): 'image' | 'video' | 'audio' | 'unknown' {
   const ext = name.toLowerCase().split('?')[0].split('.').pop() ?? ''
