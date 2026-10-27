@@ -397,6 +397,19 @@ defineExpose({
   /** 当前选中节点的最新位置（多选拖动落盘用：VueFlow 已把位移应用到全部选中节点） */
   getSelectedNodePositions: () =>
     (vfApi.getSelectedNodes.value ?? []).map((n) => ({ id: n.id, x: n.position.x, y: n.position.y })),
+  /**
+   * 当前正在被 VueFlow 拖动的节点及其实时位置（拖动期间 store 尚未落盘）。
+   * 宿主重灌渲染态时用它保留拖动位置，避免滚轮缩放引发的可见集合变化把节点拉回旧位置。
+   */
+  getDraggingNodePositions: () => {
+    const out = new Map<string, { x: number; y: number }>()
+    for (const node of vfApi.getNodes.value ?? []) {
+      if (!node.dragging) continue
+      const p = node.computedPosition || node.position
+      out.set(node.id, { x: p.x, y: p.y })
+    }
+    return out
+  },
   /** 当前被 VueFlow 选中的边 id */
   /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
   screenToFlow: (x: number, y: number): { x: number; y: number } => {

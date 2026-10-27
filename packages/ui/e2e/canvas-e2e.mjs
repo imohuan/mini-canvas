@@ -17,7 +17,9 @@ const EXE = process.env.CANVAS_E2E_CHROME
   ?? 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe';
 // BASE 可经 CANVAS_PORT 覆盖：多个 worktree 可能同时起 dev（vite.config 是 strictPort:false，
 // 谁先占 5288 谁就是 5288）——写死 5288 会打到别人的代码上，验证结果不算数。
-const BASE = `http://localhost:${process.env.CANVAS_PORT ?? 5288}/`;
+// 路由改版后 `/` 是项目列表页；画布工作台在 `#/canvas/<id>`。
+// 写死一个测试画布 id：与线上项目数据隔离，且 localStorage 会先被清空（seed 生效）。
+const BASE = `http://localhost:${process.env.CANVAS_PORT ?? 5288}/#/canvas/e2e-main`;
 
 const errors = [];
 const warns = [];
@@ -467,6 +469,71 @@ if (resizeZoom.skipped) {
   }
 }
 
+// 9j. 拖动节点时滚轮缩放：可见集合变化会触发宿主重灌，但**正在拖的节点不能回跳**。
+// 用户实测：大画布拖完节点、滚轮缩放，节点跳回拖拽前的位置（拖动中 store 还是旧位置，
+// 可见剔除集合一变就按 store 整批重灌）。判据：滚轮前后节点 transform 保持不变，松手才落盘。
+// 这里**不能清 localStorage**：本轮前面已经写入 seed / 历史，清掉会打乱后面的底栏用例。
+// 只切到独立画布并清空节点（不动存储）。
+await page.goto(BASE, { waitUntil: 'load' }).catch(() => {});
+await page.waitForSelector('.vue-flow__node', { timeout: 30000 }).catch(() => null);
+// 独立画布可能还没渲染出任何节点（seed 只在空存储时给），先等宿主就绪再自己灌节点。
+await page.waitForFunction(() => !!window.MiniCanvasUI?.getHost?.(), null, { timeout: 30000 }).catch(() => {});
+const dragZoomCull = await page.evaluate(() => {
+  const h = window.MiniCanvasUI.getHost();
+  const doc = h.ctx.get('doc');
+  const old = doc.getNodes();
+  if (old.length) doc.removeNodes(old.map((n) => n.id));
+  const nodes = [];
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      nodes.push({
+        id: `e2e-cull-${row}-${col}`,
+        type: 'text',
+        position: { x: col * 420, y: row * 300 },
+        size: { w: 180, h: 110 },
+        data: { label: `E2E ${row}-${col}`, text: `E2E ${row}-${col}` },
+      });
+    }
+  }
+  doc.addNodes(nodes);
+  h.viewport.setViewport({ x: 40, y: 40, zoom: 0.6 });
+  return { count: nodes.length };
+});
+await page.waitForTimeout(1200);
+const cullBox = await page.locator('.vue-flow__node[data-id="e2e-cull-0-0"]').boundingBox();
+const cullNode = () => page.evaluate(() => {
+  const el = document.querySelector('.vue-flow__node[data-id="e2e-cull-0-0"]');
+  const n = window.MiniCanvasUI.getHost().ctx.get('doc').getNode('e2e-cull-0-0');
+  return { transform: el?.style.transform ?? null, doc: { ...n.position }, nodeEls: document.querySelectorAll('.vue-flow__node').length };
+});
+const cullRows = [await cullNode()];
+const csx = cullBox.x + cullBox.width / 2;
+const csy = cullBox.y + 8;
+await page.mouse.move(csx, csy);
+await page.mouse.down();
+await page.mouse.move(csx + 220, csy + 120, { steps: 12 });
+await page.waitForTimeout(180);
+cullRows.push(await cullNode());
+// 按住不放做两次滚轮缩小：可见节点数必须真的变多（否则这条等于没测到重灌路径）
+await page.mouse.wheel(0, 160);
+await page.waitForTimeout(350);
+cullRows.push(await cullNode());
+await page.mouse.wheel(0, 160);
+await page.waitForTimeout(350);
+cullRows.push(await cullNode());
+await page.mouse.up();
+await page.waitForTimeout(600);
+cullRows.push(await cullNode());
+const cullBad = cullRows.slice(1, 4).filter((r) => r.transform !== cullRows[1].transform);
+const cullGrown = cullRows[2].nodeEls > cullRows[0].nodeEls || cullRows[3].nodeEls > cullRows[0].nodeEls;
+const cullKeptVisual = cullRows[1].transform !== cullRows[0].transform;
+const cullPersisted = Math.abs(cullRows[4].doc.x - cullRows[0].doc.x) > 100 || Math.abs(cullRows[4].doc.y - cullRows[0].doc.y) > 50;
+check(
+  '拖动中滚轮缩放：可见集合重灌时节点不回跳（松手才落盘）',
+  !!cullBox && cullKeptVisual && cullBad.length === 0 && cullGrown && cullPersisted,
+  JSON.stringify({ seeded: dragZoomCull.count, rows: cullRows, grown: cullGrown, kept: cullKeptVisual, persisted: cullPersisted }),
+);
+
 
 // ==================== 底栏 / 覆盖层 / 落盘 / 刷新（Task 10 新增断言） ====================
 {
@@ -492,14 +559,23 @@ if (resizeZoom.skipped) {
   });
   check(
     '底栏装配：overlay 槽宿主 + over:inset 覆盖层 + image 动作',
-    assembled.bar === true && assembled.overlay === 1 && assembled.actions > 0,
+    // overlay 数量随插件增减（本轮 3 = 底栏 + tip + Ctrl 拖拽）；这里只锁"至少一层 + 底栏宿主在"
+    assembled.bar === true && assembled.overlay >= 1 && assembled.actions > 0,
     JSON.stringify(assembled),
   );
 
   // 选中图片节点 → 默认底栏渲染出来
   const hasBar = await (async () => {
-    const img = page.locator('.vue-flow__node').nth(1);
-    await img.click();
+    // 不能按下标取：本轮用例已把画布换成 text-only 的 64 节点网格。
+    // 按类型找图片节点（seed 场景下一定有），没有就造一个。
+    const hasImage = await page.evaluate(() => {
+      const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+      if (doc.getNodes().some((n) => n.type === 'image')) return true;
+      doc.addNodes([{ id: 'e2e-bottom-bar-image', type: 'image', position: { x: 80, y: 80 }, data: {} }]);
+      return true;
+    });
+    const img = page.locator('.vue-flow__node[data-id="e2e-bottom-bar-image"], .vue-flow__node[data-id="2"]').first();
+    if (hasImage) await img.click({ timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(400);
     return (await page.locator('[data-testid="node-bottom-bar"]').count()) > 0;
   })();

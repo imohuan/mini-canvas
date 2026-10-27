@@ -7,6 +7,7 @@ import {
   hitNodeIdAt,
   nodeShellSlot,
   nodesFromStore,
+  overlayDraggingPositions,
   edgesFromStore,
   pruneDanglingEdges,
   splitNodeWritePatch,
@@ -168,6 +169,23 @@ describe('nodesFromStore', () => {
 })
 
 describe('pruneDanglingEdges', () => {
+  it('拖动中的实时位置优先于 store 旧位置（滚轮缩放触发可见集合重灌时不回跳）', () => {
+    const s = makeStore()
+    s.addNodes([
+      { id: 'a', type: 'text', position: { x: 10, y: 20 } },
+      { id: 'b', type: 'text', position: { x: 30, y: 40 } },
+    ])
+    const projected = overlayDraggingPositions(nodesFromStore(s), new Map([['a', { x: 300, y: 400 }]]))
+    expect(projected.find((n) => n.id === 'a')!.position).toEqual({ x: 300, y: 400 })
+    // 没被拖动的节点仍以 store 为准（不能顺手把别人的布局也改了）
+    expect(projected.find((n) => n.id === 'b')!.position).toEqual({ x: 30, y: 40 })
+    // 只是渲染投影：数据层仍是拖拽前的位置，松手才统一落盘
+    expect(s.getNode('a')!.position).toEqual({ x: 10, y: 20 })
+    expect(overlayDraggingPositions(nodesFromStore(s), new Map())).toEqual(nodesFromStore(s))
+    // 对照：不覆盖时就是用户报的旧位置（证明这条用例真的锁住了修复，而非恒真）
+    expect(nodesFromStore(s).find((n) => n.id === 'a')!.position).toEqual({ x: 10, y: 20 })
+  })
+
   it('滤掉 source/target 已不在存活集的边', () => {
     const alive = new Set(['a', 'b'])
     const edges = [

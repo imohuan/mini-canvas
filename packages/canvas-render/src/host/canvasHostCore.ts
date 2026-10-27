@@ -180,6 +180,29 @@ export function nodesFromStore(
   })
 }
 
+/**
+ * 拖动中的节点位置覆盖层（store → VueFlow 投影用）。
+ *
+ * 为什么需要它：VueFlow 原生拖拽**只在松手时落盘**，拖动期间 store 仍是起手位置。
+ * 而滚轮缩放会改变可见剔除集合，宿主随即用 store 整批重灌渲染态 —— 结果是正在拖的
+ * 节点被旧位置拉回（用户实测：拖动后缩放，节点跳回拖拽前的位置）。
+ *
+ * 投影时把「VueFlow 此刻的真实位置」盖在 store 位置之上，既保留拖动跟手，
+ * 又不把这次位移写进数据层（松手仍由宿主 onNodeDragStop 统一落盘）。
+ *
+ * @param positions 被拖动节点的实时位置（id → flow 坐标）；空表 = 不覆盖
+ */
+export function overlayDraggingPositions(
+  target: FlowNode[],
+  positions: ReadonlyMap<string, { x: number; y: number }> | undefined,
+): FlowNode[] {
+  if (!positions || positions.size === 0) return target
+  return target.map((node) => {
+    const live = positions.get(node.id)
+    return live ? { ...node, position: { x: live.x, y: live.y } } : node
+  })
+}
+
 /** 现有边保留(宿主内维护)；当节点被删时清掉悬挂边 */
 export function pruneDanglingEdges<T extends { source: string; target: string }>(
   edges: T[],

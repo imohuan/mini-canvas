@@ -79,6 +79,7 @@ import {
   nodeShellSlot,
   hitNodeIdAt,
   nodesFromStore,
+  overlayDraggingPositions,
   edgesFromStore,
   splitNodeWritePatch,
   DEFAULT_EDGE_VISUAL,
@@ -165,6 +166,8 @@ const surfaceRef = shallowRef<{
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
   queryNodeEl?: (nodeId: string) => HTMLElement | null
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
+  /** 正在拖动节点的实时位置（拖动中 store 尚未落盘；重灌时用它保留画面位置） */
+  getDraggingNodePositions?: () => Map<string, { x: number; y: number }>
   setCenter?: (x: number, y: number, zoom?: number) => void
   animateViewport?: (v: { x: number; y: number; zoom: number }, durationMs?: number) => void
 } | undefined>()
@@ -301,7 +304,10 @@ let stagedTarget: ReturnType<typeof nodesFromStore> = []
 function syncNodesFromStore(): void {
   const h = hostRef.value
   if (!h) return
-  const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value, linkedIds, compactShellsEnabled())
+  const target = overlayDraggingPositions(
+    nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value, linkedIds, compactShellsEnabled()),
+    surfaceRef.value?.getDraggingNodePositions?.(),
+  )
   /*
    * 分批进行中：已有节点必须**立即**吃到新数据（远端改内容、进度帧、拖动位置），
    * 只有尚未挂载的新节点继续排队。以前这里直接 return，分批窗口内所有更新都只写进

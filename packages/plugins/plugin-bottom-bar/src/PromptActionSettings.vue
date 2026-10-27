@@ -19,6 +19,7 @@ import {
   loadAiActions,
   saveAiActions,
   normalizeAiActions,
+  resolveAgentBaseUrl,
   DEFAULT_AI_ACTIONS,
   TEMPLATE_VARS,
   AI_ICON_PRESETS,
@@ -46,17 +47,13 @@ let seq = 0
 /** 模板文本域（插入变量要往光标处插） */
 const textarea = ref<HTMLTextAreaElement | null>(null)
 
-/** 插件自己的 agentBaseUrl 配置（与 Agent 插件同一口径；缺省 = 同源） */
-function backendBase(): string {
-  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
-  const v = settings?.get('bottomBarAiBaseUrl')
-  return typeof v === 'string' ? v : ''
-}
+/** 后台地址直接取 Agent 插件的配置（底栏不再单独配一份地址） */
+const baseUrl = (): string => resolveAgentBaseUrl(ctx)
 
 async function reload(): Promise<void> {
   syncing.value = true
   try {
-    draft.value = normalizeAiActions(await loadAiActions({ baseUrl: backendBase() }))
+    draft.value = normalizeAiActions(await loadAiActions({ baseUrl: baseUrl() }))
     if (!draft.value.some((a) => a.id === selectedId.value)) {
       selectedId.value = draft.value[0]?.id ?? ''
     }
@@ -152,7 +149,7 @@ async function save(): Promise<void> {
   busy.value = true
   error.value = ''
   try {
-    const r = await saveAiActions(draft.value, { baseUrl: backendBase() })
+    const r = await saveAiActions(draft.value, { baseUrl: baseUrl() })
     if (!r.ok) {
       error.value = r.error ?? '保存失败'
       return
@@ -220,6 +217,40 @@ async function save(): Promise<void> {
             </button>
           </div>
         </div>
+        <div class="pas-field">
+          <div class="pas-label-row">
+            <span class="pas-label">图标（选一个预设，或自己贴 SVG）</span>
+            <span class="pas-count">{{ AI_ICON_PRESETS.length }} 个预设</span>
+          </div>
+          <div class="pas-icons" role="radiogroup" aria-label="图标预设">
+            <button
+              v-for="p in AI_ICON_PRESETS"
+              :key="p.key"
+              type="button"
+              role="radio"
+              class="pas-icon-btn"
+              :class="{ 'is-on': active.icon === p.svg }"
+              :aria-checked="active.icon === p.svg"
+              :title="p.label"
+              @click="pickPresetIcon(p.key, p.svg)"
+            >
+              <span aria-hidden="true" v-html="p.svg" />
+            </button>
+          </div>
+          <textarea
+            v-model="active.icon"
+            class="pas-textarea pas-svg-input"
+            rows="2"
+            spellcheck="false"
+            aria-label="自定义图标 SVG"
+            placeholder="也可以贴自己的 SVG（viewBox 0 0 24 24，stroke=currentColor）。留空 = 用默认星星。"
+            @input="touch()"
+          ></textarea>
+          <div class="pas-svg-preview">
+            <span class="pas-label">当前预览</span>
+            <span class="pas-icon pas-icon--preview" aria-hidden="true" v-html="active.icon || DEFAULT_AI_ICON" />
+          </div>
+        </div>
 
         <div class="pas-field">
           <div class="pas-label-row">
@@ -280,6 +311,11 @@ async function save(): Promise<void> {
 .pas-input, .pas-textarea { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b); font-size: 12px; outline: none; font-family: inherit; }
 .pas-textarea { line-height: 1.6; resize: vertical; }
 .pas-icons { display: flex; gap: 4px; }
+/* 17 个预设：自动换行，每个 30×30（点击区域够大且不挤） */
+.pas-icons { display: flex; flex-wrap: wrap; gap: 4px; }
+.pas-svg-input { margin-top: 6px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; }
+.pas-svg-preview { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.pas-icon--preview { width: 18px; height: 18px; color: var(--ui-accent, #0891b2); }
 .pas-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #6b7280); cursor: pointer; }
 .pas-icon-btn.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent, #0891b2); }
 .pas-icon-btn :deep(svg) { width: 15px; height: 15px; }

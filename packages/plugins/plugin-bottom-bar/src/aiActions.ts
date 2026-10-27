@@ -43,11 +43,16 @@ export const DEFAULT_AI_ICON =
 export const DEFAULT_AI_ACTIONS: readonly AiActionConfig[] = [
   {
     id: 'translate',
-    name: '翻译',
-    description: '把输入框内容翻译成英文（AI 结果直接替换正文）',
+    name: '翻译成中文',
+    description: '翻译成通顺的中文，顺手改掉错别字（AI 结果直接替换正文）',
     icon:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 3v2c0 4-2 7-5 8"/><path d="M5 9c1 3 3 5 6 6"/><path d="M14 20l4-9 4 9"/><path d="M15.5 17h5"/></svg>',
-    template: '将下面的内容翻译成地道的英文，只输出译文，不要任何解释或前后缀：\n\n{{prompt}}',
+    // 用户口径 2026-10-27：默认翻成**中文**（不是英文），并且要「通顺」——
+    // 原文里常有错别字、断句、同音字，一并按原意校正，不要逐字硬翻。
+    template:
+      '把下面的内容翻译成通顺自然的中文，只输出译文，不要任何解释或前后缀。\n' +
+      '如果原文有错别字、同音字或明显笔误，按上下文意思改正后再翻译（保持原意，不要擅自增删信息）。\n\n' +
+      '{{prompt}}',
     enabled: true,
     builtin: true,
   },
@@ -55,10 +60,15 @@ export const DEFAULT_AI_ACTIONS: readonly AiActionConfig[] = [
     id: 'optimize',
     name: '提示词优化',
     description: '用 AI 优化当前提示词的表达（结果直接替换正文）',
+    // 用户口径 2026-10-27：先修错别字/病句，再补细节；不要凭空编造主体或风格。
     icon:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M17.8 6.2 19 5"/><path d="M12.2 6.2 11 5"/><path d="M3 21 12 12"/></svg>',
     template:
-      '你是资深的 AI 提示词工程师。请优化下面的提示词：补全主体、风格、构图、光影等关键要素，保持原意，语言精炼。直接输出优化后的提示词，不要任何解释：\n\n{{prompt}}',
+      '你是资深的提示词编辑。请把下面这段提示词改得更清楚、更准确：\n' +
+      '1. 先改正错别字、同音字、标点与不通顺的句子；\n' +
+      '2. 再补齐原文已经暗示、但没写清的细节（主体、动作、风格、光线、构图等），保持原意，不要凭空编造新主体；\n' +
+      '3. 语言精炼，去掉重复和口水话。\n' +
+      '只输出改好的提示词本身，不要解释、不要加引号或前缀：\n\n{{prompt}}',
     enabled: true,
     builtin: true,
   },
@@ -85,6 +95,45 @@ export const AI_ICON_PRESETS: readonly { key: string; label: string; svg: string
     label: '对话气泡',
     svg:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  },
+  { key: 'sparkles', label: '多颗星', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l1.6 3.9L16.5 8.5l-3.9 1.6L11 14l-1.6-3.9L5.5 8.5l3.9-1.6z"/><path d="M18 14l.9 2.1 2.1.9-2.1.9L18 20l-.9-2.1-2.1-.9 2.1-.9z"/></svg>',
+  },
+  { key: 'pen', label: '笔', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  },
+  { key: 'wandStars', label: '魔棒+星', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M17.8 6.2 19 5"/><path d="M12.2 6.2 11 5"/><path d="M3 21 12 12"/></svg>',
+  },
+  { key: 'check', label: '对勾', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  },
+  { key: 'spellCheck', label: '拼写检查', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16l6-12 6 12"/><path d="M9 12h6"/><path d="M3 21l3-3 3 3"/><path d="M15 21l3-3 3 3"/></svg>',
+  },
+  { key: 'languages', label: '多语言', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg>',
+  },
+  { key: 'text', label: '文字', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M12 20V4"/><path d="M8 20h8"/></svg>',
+  },
+  { key: 'quote', label: '引号', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v4a4 4 0 0 1-4 4z"/><path d="M14 7h4v4a4 4 0 0 1-4 4z"/></svg>',
+  },
+  { key: 'bolt', label: '闪电', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',
+  },
+  { key: 'lightbulb', label: '灯泡', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4.9 1 .9 1.7V17h5.2v-1.4c0-.7.3-1.3.9-1.7A6 6 0 0 0 12 3z"/></svg>',
+  },
+  { key: 'wandSparkles2', label: '星星笔', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l9-9"/><path d="M12.5 6.5 15 4l2.5 2.5L15 9z"/><path d="M18 12l1.2 2.8L22 16l-2.8 1.2L18 20l-1.2-2.8L14 16l2.8-1.2z"/></svg>',
+  },
+  { key: 'search', label: '放大镜', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+  },
+  { key: 'star', label: '五角星', svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6-5.4-2.8-5.4 2.8 1-6L3.2 9.5l6.1-.9z"/></svg>',
   },
 ]
 
@@ -376,4 +425,28 @@ export async function saveAiActions(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+// ==================== 后台地址：直接取 Agent 插件的配置 ====================
+
+/**
+ * AI 请求该打到哪个后台。
+ *
+ * 用户口径（2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」——
+ * 地址取 plugin-agent 的 `agentBaseUrl`（留空 = 与画布同源），渠道与模型也是 Agent 里
+ * 配好的默认那条。底栏**不另存一份地址**：两份配置一定会漂移（改了 Agent、底栏还打旧端口），
+ * 而且用户根本没必要在这里再填一次。
+ *
+ * 兜底顺序：settings.agentBaseUrl（Agent 的 Config 登记项）→ ctx.get('agent').state.baseUrl
+ * （Agent 服务上那份运行时值）→ ''（同源）。
+ */
+export function resolveAgentBaseUrl(ctx: {
+  tryGet<T>(name: string): T | undefined
+}): string {
+  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
+  const fromSettings = settings?.get('agentBaseUrl')
+  if (typeof fromSettings === 'string' && fromSettings) return fromSettings.trim()
+  const agent = ctx.tryGet<{ state?: { baseUrl?: string } }>('agent')
+  const fromService = agent?.state?.baseUrl
+  return typeof fromService === 'string' ? fromService.trim() : ''
 }

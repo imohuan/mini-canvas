@@ -233,19 +233,29 @@ export const name = 'bottom-bar'
 export const inject = ['doc', 'nodeRegistry', 'themeRegistry'] as string[]
 
 /**
- * 插件可配置项（设置面板「底栏」组）：
- * - bottomBarAiBaseUrl：AI 请求后台根地址。留空 = 与画布同源（cloud-server 托管时就是同源），
- *   与 Agent 插件的 agentBaseUrl 同一口径；真正调的接口是 /api/agent/chat/completion，
- *   渠道与模型由 Agent 插件里配好的默认渠道决定（这里不重复配模型）。
- * - 结构化清单（按钮图标 / 描述 / 提示词模板）不走标量 schema，见 PromptActionSettings。
+ * 插件可配置项（设置面板「常规/底栏」组）。
+ *
+ * **这里不声明后台地址**（用户口径 2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」——
+ * AI 请求的后台地址直接取 plugin-agent 的 `agentBaseUrl` 配置（缺省同源），渠道与模型也由
+ * Agent 里配好的默认那条决定。底栏再放一份地址就是第二个真源：用户在 Agent 里改了地址，
+ * 底栏还打到旧端口上，排查起来很难看出是哪一份生效。
+ *
+ * 结构化清单（按钮图标 / 描述 / 提示词模板）不走标量 schema，见 PromptActionSettings。
+ *
+ * 这里的字段还承担一个硬作用：**分组需要一个真 schema 字段才会被登记**
+ *（settings.groups() 里没有这个组，挂在上面的自绘页就永远不渲染）。
+ * 所以放的是「失败重试轮数」这个确实有用的旋钮（用户口径：默认 3 轮），不编占位字段。
  */
 export const Config = {
-  bottomBarAiBaseUrl: {
-    type: 'string' as const,
-    default: '',
-    label: 'AI 后台地址',
+  bottomBarAiRetries: {
+    type: 'number' as const,
+    default: 3,
+    min: 1,
+    max: 10,
+    step: 1,
+    label: 'AI 失败重试',
     group: '常规/底栏',
-    description: 'AI 按钮请求的后台根地址。留空 = 与画布同源；模型用 Agent 插件配好的默认渠道。',
+    description: 'AI 按钮请求失败时最多试几轮（含第一次）。网络抖动/5xx 会退避重试，4xx 参数错误不重试。',
   },
 }
 
