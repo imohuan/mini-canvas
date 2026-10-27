@@ -1294,7 +1294,8 @@ const hint = computed(() => {
     </template>
 
     <!-- 空态：还没画 -->
-    <NodeEmptyState v-if="NodeEmptyState" text="可视化" :description="hint" />
+    <!-- 空态完全走默认组件的默认 UI：默认插槽不再接管正文 -->
+    <NodeEmptyState v-if="NodeEmptyState" text="（无可视化）" :description="hint" />
     <div v-else class="ui-empty">
       <div class="ui-empty-title">可视化</div>
       <div class="ui-empty-hint">{{ hint }}</div>

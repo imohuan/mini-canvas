@@ -109,10 +109,10 @@ describe('交互模式（双击进入）：用来转视角', () => {
 })
 
 describe('没贴图时的占位', () => {
-  it('默认只显示统一的空状态：不要求输入 URL，提示怎么补上', async () => {
+    it('默认只显示统一的空状态：不要求输入 URL，提示怎么补上', async () => {
     const html = await render('p1')
     expect(html).toContain('nes-root')
-    expect(html).toContain('还没有全景图')
+    expect(html).toContain('（无全景图）')
     expect(html).toContain('把图片节点连进来')
     expect(html).not.toContain('aria-label="全景图地址"')
     expect(html).not.toContain('<input')
@@ -134,9 +134,9 @@ describe('全屏（f 命令切换）', () => {
 })
 
 describe('空状态的判定（上游撤掉 / 加载失败不能残留上一张图）', () => {
-  it('画面容器与空状态是两件事：没图时永远有空状态（不会只剩黑底）', async () => {
+    it('画面容器与空状态是两件事：没图时永远有空状态（不会只剩黑底）', async () => {
     const html = await render('p1', { imageUrl: '/definitely/missing.png' })
     // SSR 没有加载器，加载成功与否无法判定 → 必须按"还没好"处理，显示空状态
-    expect(html).toContain('还没有全景图')
+    expect(html).toContain('（无全景图）')
   })
 })

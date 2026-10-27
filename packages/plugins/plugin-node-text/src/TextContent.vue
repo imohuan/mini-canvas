@@ -203,10 +203,9 @@ onBeforeUnmount(() => {
         title="双击编辑"
         @dblclick.stop="startEdit"
       >
+        <!-- 空态完全走默认组件的默认 UI（column + md），与其它节点同一观感 -->
         <NodeEmptyState
           v-if="!shown && NodeEmptyState"
-          layout="row"
-          size="sm"
           text="（空）"
           description="双击编辑"
         />

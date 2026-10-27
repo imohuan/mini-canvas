@@ -583,23 +583,14 @@ onBeforeUnmount(() => {
     <!-- 没贴图时的空状态：默认只显示「空」，不再要求用户输入 URL。
          默认主题装了就复用统一的 NodeEmptyState（与图片/视频/音频同款）；
          极简宿主没装主题时回落一行灰字，保证仍有可读反馈。 -->
+    <!-- 空态完全走默认组件的默认 UI：不传自定义图标，不传 tone，观感与图片/视频/音频一致 -->
     <NodeEmptyState
       v-if="!hasTexture && NodeEmptyState"
-      :text="renderError || (hasUpstream ? '全景图暂时不可用' : '还没有全景图')"
-      :description="renderError ? '' : hasUpstream ? '请检查上游图片是否仍然有效' : '把图片节点连进来，就能查看 360° 全景'"
-      :tone="renderError ? 'danger' : 'muted'"
-    >
-      <template #icon>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" />
-          <ellipse cx="12" cy="12" rx="6" ry="2" />
-          <path d="M6 12c0 3.3 2.7 6 6 6s6-2.7 6-6" />
-          <path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-        </svg>
-      </template>
-    </NodeEmptyState>
+      text="（无全景图）"
+      :description="hasUpstream ? '上游图片暂时不可用' : '把图片节点连进来，就能查看 360° 全景'"
+    />
     <div v-else-if="!hasTexture" class="pano-empty">
-      <span class="pano-empty-text">{{ hasUpstream ? '全景图暂时不可用' : '还没有全景图' }}</span>
+      <span class="pano-empty-text">{{ hasUpstream ? '上游图片暂时不可用' : '（无全景图）' }}</span>
     </div>
 
   </div>

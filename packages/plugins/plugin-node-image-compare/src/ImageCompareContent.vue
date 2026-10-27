@@ -214,19 +214,12 @@ onBeforeUnmount(() => {
 <template>
   <div ref="surfaceRef" class="cmp">
     <!-- 一张都没连：占位说明 -->
+    <!-- 空态完全走默认组件的默认 UI：不传自定义图标，观感与其它媒体节点一致 -->
     <NodeEmptyState
       v-if="!hasAny && NodeEmptyState"
       text="（无对比）"
       description="把两个图片节点连进来做对比"
-    >
-      <template #icon>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <rect x="3" y="3" width="8" height="18" rx="1" />
-          <rect x="13" y="3" width="8" height="18" rx="1" />
-          <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
-        </svg>
-      </template>
-    </NodeEmptyState>
+    />
     <div v-else-if="!hasAny" class="cmp-empty">
       <span class="cmp-empty-text">把两个图片节点连进来做对比</span>
     </div>
@@ -301,6 +294,10 @@ onBeforeUnmount(() => {
   gap: 8px;
   pointer-events: none;
 }
+.cmp-empty {
+  padding: 12px;
+  text-align: center;
+}
 .cmp-empty-icon {
   width: 36px;
   height: 36px;
@@ -309,6 +306,10 @@ onBeforeUnmount(() => {
 .cmp-empty-text {
   color: var(--canvas-node-text-muted, #9ca3af);
   font-size: 12px;
+  line-height: 1.5;
+}
+.cmp-empty-text {
+  line-height: 1.5;
 }
 
 /* 图与图层 */

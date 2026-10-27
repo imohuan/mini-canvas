@@ -285,6 +285,7 @@ onBeforeUnmount(() => {
         @error="onImgError"
         @load="onImgLoad"
       />
+      <!-- 失效也算空态的一种：只换语义色，布局/图标仍是默认件 -->
       <NodeEmptyState
         v-else-if="broken && NodeEmptyState"
         text="图片已失效"
