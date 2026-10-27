@@ -1293,13 +1293,16 @@ const hint = computed(() => {
       </div>
     </template>
 
-    <!-- 空态：还没画 -->
-    <!-- 空态完全走默认组件的默认 UI：默认插槽不再接管正文 -->
+    <!-- 空态：只给"还没画"的节点（v-if="!hasHtml" 必须写！
+         2026-10-27 用户截图：节点里已经画了「点我」，空态还盖在上面 —— 根因就是少了这条与
+         iframe 分支互斥的判断。有内容时必须只画 iframe + 遮罩，空态一律不出现。 -->
+    <template v-else>
     <NodeEmptyState v-if="NodeEmptyState" text="（无可视化）" :description="hint" />
     <div v-else class="ui-empty">
       <div class="ui-empty-title">可视化</div>
       <div class="ui-empty-hint">{{ hint }}</div>
     </div>
+    </template>
   </div>
 </template>
 

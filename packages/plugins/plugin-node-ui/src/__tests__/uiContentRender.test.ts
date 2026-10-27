@@ -45,6 +45,22 @@ function render(data: Record<string, unknown>, doc?: Record<string, unknown>): P
 }
 
 describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () => {
+  it('有内容时不显示空态（用户 2026-10-27 截图：里面已经画了点我，空态还盖着）', async () => {
+    const html = await render({ uiHtml: '<div id="paint-me">hi</div>' })
+    expect(html).toContain('<iframe')
+    // 空态件与兜底空态都不该出现
+    expect(html).not.toContain('（无可视化）')
+    expect(html).not.toContain('ui-empty')
+  })
+
+  it('没内容时才显示空态（锁住上一条不是把空态删掉）', async () => {
+    const html = await render({})
+    // 极简宿主（没有主题 ui 目录）→ 走组件自带兜底空态
+    expect(html).toContain('ui-empty')
+    expect(html).toContain('让 Agent 帮你画')
+    expect(html).not.toContain('<iframe')
+  })
+
   it('有内容时：默认盖着交互遮罩（不盖住的话 iframe 会吃掉鼠标事件）', async () => {
     const html = await render({ uiHtml: '<div>hi</div>' })
     expect(html).toContain('ui-gate')
