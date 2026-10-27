@@ -62,7 +62,7 @@ export interface CanvasInteractionSettings {
    * 否则跨内外连线会被 hidden 连坐消失（2026-10-26 断线教训，绝不可用 hidden 于有跨线牵扯的节点）。
    */
   cullCompactShells: boolean
-  /** 拖拽快速模式：手势期间给节点层加 will-change: transform（快但略糊） */
+  /** 拖拽快速模式：手势期间把节点层提升为合成层（快但略糊；不建层叠上下文，不改变 z 语义） */
   dragRapidMode: boolean
   preventScrolling: boolean
   /** VueFlow 绑定用：snapGridX/Y 拼成的 [x, y] 元组 */
@@ -95,7 +95,7 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   // 压缩档缺省开：用户场景（1000 节点/屏内 20）壳数量从 1000 → ~50，滚回视野的闪变由
   // 缓冲带 300px 提前挂载兜住大半；关掉即回到"壳全挂"（零闪变但壳多）。
   cullCompactShells: true,
-  // 默认关（2026-10-16 卡死排查实锤）：大画布下节点层 will-change:transform 会固化为超大位图，
+  // 默认关（2026-10-16 卡死排查实锤）：大画布下节点层合成层会固化为超大位图，
   // 超 GPU 显存限制时 Chrome 反复分配/回收 → GPU 进程打满 → 整机卡死（AI 对话改画布后触发）。
   // 小画布用户可在设置里手动开启（仍有加速收益）。
   dragRapidMode: false,

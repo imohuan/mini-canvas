@@ -30,6 +30,7 @@ import type { CanvasInteractionSettings } from '../contracts/canvasInteractionSe
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 import { useNodeMeasure, resolveMeasureContainer } from './useNodeMeasure'
+import { applyRapidModeStyle, clearRapidModeStyle } from './rapidModeStyle'
 import { usePaneSizeObserver } from './paneSize'
 import { applyNodeVisualSize, type NodeVisualSyncApi } from './nodeVisualSync'
 import { createCanvasFlowController } from '../contracts/canvasFlowApi'
@@ -199,20 +200,26 @@ function refreshVisibleRect(): void {
 // viewport 变化时刷新可视矩形；onMounted 量到 pane 后由 paneRectRef 的 watch 刷一次
 watch(viewportRef, refreshVisibleRect)
 // —— 拖拽快速模式（dragRapidMode，2026-10-15 性能优化 P1）——
-// Chrome：脚本改 transform scale 时每帧重光栅化，will-change:transform 让内容固定位图提升速度
+// Chrome：脚本改 transform scale 时每帧重光栅化，把节点层提升为合成层能固定位图、提升速度
 // （developer.chrome.com/blog/re-rastering-composite；实测节点层 96ms→24.8ms/帧）。
 // 代价：手势期间放大看略糊。挂在节点层（比 transformationpane 更省，见诊断报告 §三原因2）。
+//
+// ⚠️ 绝不能用 will-change: transform（2026-10-27 用户实测：平移画布时连线在节点上下反复跳）。
+// 原因：.vue-flow__nodes 是每边 SVG 的兄弟。给它写 will-change:transform（或 transform/filter/
+// opacity/isolation 这类会建层叠上下文的属性）会把节点层变成层叠上下文 —— 此时该容器 z-index 为
+// auto、不参与兄弟间 z 比较，容器内所有节点（普通 200 / 选中 300）整体落到兄弟边的层叠顺序里，
+// 于是由「节点压边」变成「边压节点」。平移时加、300ms 后摘，画面就来回切。
+// 改用 backface-visibility: hidden：同样触发合成层提升，但不创建层叠上下文，层级语义不变
+// （见 contracts/layers.ts 门牌：层序只有一处可读、可测、可改）。
 // 开关时机：viewport 开始变化时加，停止 300ms 后摘（避免频繁开关本身的一次性成本）。
 let rapidOffTimer: ReturnType<typeof setTimeout> | null = null
 watch(viewportRef, () => {
   if (!props.interactionSettings.dragRapidMode) return
-  const nodesLayer = rootEl.value?.querySelector<HTMLElement>('.vue-flow__nodes')
-  if (nodesLayer) nodesLayer.style.willChange = 'transform'
+  applyRapidModeStyle(rootEl.value?.querySelector<HTMLElement>('.vue-flow__nodes'))
   if (rapidOffTimer) clearTimeout(rapidOffTimer)
   rapidOffTimer = setTimeout(() => {
     rapidOffTimer = null
-    const el = rootEl.value?.querySelector<HTMLElement>('.vue-flow__nodes')
-    if (el) el.style.willChange = ''
+    clearRapidModeStyle(rootEl.value?.querySelector<HTMLElement>('.vue-flow__nodes'))
   }, 300)
 })
 // 可视矩形 → 宿主（剔除刷新入口；宿主侧 rAF 节流，这里直呼不节流）
