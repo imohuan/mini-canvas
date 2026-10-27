@@ -1,0 +1,116 @@
+{
+  "rows": [
+    {
+      "tag": "start",
+      "doc": {
+        "x": 120,
+        "y": 120
+      },
+      "transform": "translate(120px, 120px)",
+      "dom": {
+        "x": 220,
+        "y": 220,
+        "w": 300,
+        "h": 200
+      },
+      "vp": {
+        "x": 100,
+        "y": 100,
+        "zoom": 1
+      },
+      "sel": []
+    },
+    {
+      "tag": "drag-visual",
+      "doc": {
+        "x": 120,
+        "y": 120
+      },
+      "transform": "translate(182px, 164px)",
+      "dom": {
+        "x": 282,
+        "y": 264,
+        "w": 300,
+        "h": 200
+      },
+      "vp": {
+        "x": 100,
+        "y": 100,
+        "zoom": 1
+      },
+      "sel": [
+        "1"
+      ]
+    },
+    {
+      "tag": "after-wheel-while-holding",
+      "doc": {
+        "x": 120,
+        "y": 120
+      },
+      "transform": "translate(182px, 164px)",
+      "dom": {
+        "x": 253.4,
+        "y": 261.1,
+        "w": 354.3,
+        "h": 236.2
+      },
+      "vp": {
+        "x": 38.462495113959676,
+        "y": 67.42132094268456,
+        "zoom": 1.1809926614295303
+      },
+      "sel": [
+        "1"
+      ]
+    },
+    {
+      "tag": "move-after-wheel",
+      "doc": {
+        "x": 120,
+        "y": 120
+      },
+      "transform": "translate(207.402px, 180.935px)",
+      "dom": {
+        "x": 283.4,
+        "y": 281.1,
+        "w": 354.3,
+        "h": 236.2
+      },
+      "vp": {
+        "x": 38.462495113959676,
+        "y": 67.42132094268456,
+        "zoom": 1.1809926614295303
+      },
+      "sel": [
+        "1"
+      ]
+    },
+    {
+      "tag": "after-release",
+      "doc": {
+        "x": 207.4,
+        "y": 180.93
+      },
+      "transform": "translate(207.402px, 180.935px)",
+      "dom": {
+        "x": 283.4,
+        "y": 281.1,
+        "w": 354.3,
+        "h": 236.2
+      },
+      "vp": {
+        "x": 38.462495113959676,
+        "y": 67.42132094268456,
+        "zoom": 1.1809926614295303
+      },
+      "sel": [
+        "1"
+      ]
+    }
+  ],
+  "errors": [
+    "CONSOLE Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "CONSOLE Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+}

@@ -1,0 +1,14 @@
+fix(bottom-bar): Ctrl 拖节点改用画布真实拖拽事件（原 MIME 方案不存在）
+
+自查发现：我原以为画布节点拖动会往 dataTransfer 写 payload，因此按
+'application/x-mini-canvas-node' 读取。实际全仓没有任何插件写这个 MIME，
+这条路永远拿不到节点 —— 规则 3(c) 等于没实现。
+
+改成走画布自己的事件：
+- 订阅 RenderEvents.NodeDragStart 记住被拖的节点（id + 类型 + 名字）；
+- window pointerup（捕获阶段）时用槽位矩形命中落点（hitSlotAtPoint 纯函数）；
+- 命中的槽位再交给 judgeSlotDrop 判定：必须按 Ctrl，且类型要匹配。
+
+顺带把命中判定抽成纯函数并补 3 条测试（矩形内 / 空隙与外面 / 边界算命中）。
+
+测试：plugin-bottom-bar 165（refSlots 17 条）、prosemirror-editor-bundle 38，两个包 typecheck 干净。

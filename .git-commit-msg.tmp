@@ -1,0 +1,31 @@
+feat(debug): 调试监听心跳协议 + 在场状态 + /api 404 兜底
+
+用户口径：监听脚本由插件作者自己实现，平台只统一「上报格式」；
+watch 被关掉要能看见，但**不能**因此自动卸载插件。
+
+后台（cloud-server）：
+- 新增 pluginPresence：纯内存在场表（心跳不落盘），10 秒心跳 / 30 秒判失联 /
+  10 分钟清理；超时**只标记 stale，不卸载任何插件**
+- 新增 /api/plugin-presence（快照）、/heartbeat、/leave；入参严格校验
+  （插件名、instance、state、front 必须是 http(s) 或 / 开头）
+- 变化广播复用现有 /api/kv/events：固定写一个 plugin-presence key，不按插件累积
+- 只在 MINI_CANVAS_DEBUG_PRESENCE=1 时装载；扫描定时器走 ctx.effect，卸载即停
+- 顺手补 /api/* 的 404 JSON 兜底（放在所有代理之后，只拦 /api/）：
+  没注册的接口不再落到 SPA 返回 200 HTML
+
+画布（plugin-hot-reload）：
+- 清单合并「内核已装」与「心跳在场」两套事实：已安装 / 监听 分两列显示
+- 状态映射：online / building / paused / failed / stale / stopped / unknown；
+  旧版 watch 无心跳 = unknown，绝不显示成在线
+- 收到在场广播即刷新；页面从后台切回前台再对账一次（推送会漏）
+- 订阅地址与读快照统一走配置的后台地址（修跨源下收不到变化）
+
+demo watch 脚本补为参考实现：启动心跳、构建中/失败状态、Ctrl+C 告别。
+
+文档：docs/plugin-dev/10-debug-protocol.md（协议 + 状态定义 + 最简实现），
+09 篇同步说明「脚本自实现」。
+
+验证：cloud-server 896/897（唯一失败是队列调度器时序测试，单独复跑 13/13 通过）、
+plugin-hot-reload 36、plugin-manager 51；类型检查干净；
+真机验过：心跳→快照、36 秒后 stale=true 且广播、leave 立即清除、
+非法输入 400、关闭开关后 404 JSON。

@@ -1,0 +1,297 @@
+diff --git a/packages/plugins/plugin-bottom-bar/src/NodeBottomBar.vue b/packages/plugins/plugin-bottom-bar/src/NodeBottomBar.vue
+index 9e6d17c3..bcb956e2 100644
+--- a/packages/plugins/plugin-bottom-bar/src/NodeBottomBar.vue
++++ b/packages/plugins/plugin-bottom-bar/src/NodeBottomBar.vue
+@@ -33,7 +33,6 @@ import {
+   useSoleNodeSelected,
+   useUiComponent,
+   RenderEvents,
+-  LAYERS,
+ } from '@mini-canvas/canvas-render'
+ import type { ToolParamDef } from '@mini-canvas/kernel'
+ import type { BarAction } from './barTypes'
+@@ -791,7 +790,7 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
+   if (!source.trim()) return
+   // 地址取 Agent 插件那份（同源时为空串），模型也由 Agent 的默认渠道决定
+   const base = resolveAgentBaseUrl(ctx)
+-  // 重试轮数：设置面板「常规/底栏」可调（默认 3；坏值回落 3，aiActions 里兜底）
++  // 重试轮数：设置面板「常规/底栏」可调（默认 3；坏值交给 aiActions 兜底）
+   const retriesRaw = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')?.get('bottomBarAiRetries')
+   const retryRounds = typeof retriesRaw === 'number' && retriesRaw >= 1 ? Math.floor(retriesRaw) : undefined
+   aiRunningId.value = action.id
+@@ -1485,7 +1484,6 @@ function onGlobalLeave(el: Element): void {
+     v-if="visible && hasActions && !submitted"
+     class="nb-shell"
+     :class="{ 'is-expanded': expanded }"
+-    :style="expanded ? { zIndex: LAYERS.nodeToolbar + 1 } : undefined"
+     @pointerdown.self="expanded = false"
+   >
+   <div
+@@ -1498,8 +1496,7 @@ function onGlobalLeave(el: Element): void {
+     @pointerdown.stop
+   >
+     <!-- 一排 pill（参考图顶行：+参考 / 标记 / 风格；动作也在这里成排，选中高亮） -->
+-    <!-- 全屏态隐藏 pill 行（用户口径：展开后不显示「参考 / 标记」） -->
+-    <div v-if="!expanded" class="nb-pills">
++    <div class="nb-pills">
+       <button
+         class="nb-pill"
+         :class="{ 'is-active': referencing }"
+@@ -1783,9 +1780,7 @@ function onGlobalLeave(el: Element): void {
+ .nb-shell.is-expanded {
+   position: fixed;
+   inset: 0;
+-  /* 全屏态必须压过节点上/下控制栏（LAYERS.nodeToolbar=500，截图的"上传"按钮就在那层）
+-     且低于模态（LAYERS.modal）—— 层值统一取自渲染层的层叠带，不写裸数字。 */
+-  /* z-index 由模板按 LAYERS.nodeToolbar + 1 内联（层值单一出处，见 canvas-render/contracts/layers） */
++  z-index: 95;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+diff --git a/packages/plugins/plugin-bottom-bar/src/PromptActionSettings.vue b/packages/plugins/plugin-bottom-bar/src/PromptActionSettings.vue
+index ff8ac73d..5a68262a 100644
+--- a/packages/plugins/plugin-bottom-bar/src/PromptActionSettings.vue
++++ b/packages/plugins/plugin-bottom-bar/src/PromptActionSettings.vue
+@@ -19,7 +19,6 @@ import {
+   loadAiActions,
+   saveAiActions,
+   normalizeAiActions,
+-  resolveAgentBaseUrl,
+   DEFAULT_AI_ACTIONS,
+   TEMPLATE_VARS,
+   AI_ICON_PRESETS,
+@@ -47,13 +46,17 @@ let seq = 0
+ /** 模板文本域（插入变量要往光标处插） */
+ const textarea = ref<HTMLTextAreaElement | null>(null)
+ 
+-/** 后台地址直接取 Agent 插件的配置（底栏不再单独配一份地址） */
+-const baseUrl = (): string => resolveAgentBaseUrl(ctx)
++/** 插件自己的 agentBaseUrl 配置（与 Agent 插件同一口径；缺省 = 同源） */
++function backendBase(): string {
++  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
++  const v = settings?.get('bottomBarAiBaseUrl')
++  return typeof v === 'string' ? v : ''
++}
+ 
+ async function reload(): Promise<void> {
+   syncing.value = true
+   try {
+-    draft.value = normalizeAiActions(await loadAiActions({ baseUrl: baseUrl() }))
++    draft.value = normalizeAiActions(await loadAiActions({ baseUrl: backendBase() }))
+     if (!draft.value.some((a) => a.id === selectedId.value)) {
+       selectedId.value = draft.value[0]?.id ?? ''
+     }
+@@ -149,7 +152,7 @@ async function save(): Promise<void> {
+   busy.value = true
+   error.value = ''
+   try {
+-    const r = await saveAiActions(draft.value, { baseUrl: baseUrl() })
++    const r = await saveAiActions(draft.value, { baseUrl: backendBase() })
+     if (!r.ok) {
+       error.value = r.error ?? '保存失败'
+       return
+@@ -217,40 +220,6 @@ async function save(): Promise<void> {
+             </button>
+           </div>
+         </div>
+-        <div class="pas-field">
+-          <div class="pas-label-row">
+-            <span class="pas-label">图标（选一个预设，或自己贴 SVG）</span>
+-            <span class="pas-count">{{ AI_ICON_PRESETS.length }} 个预设</span>
+-          </div>
+-          <div class="pas-icons" role="radiogroup" aria-label="图标预设">
+-            <button
+-              v-for="p in AI_ICON_PRESETS"
+-              :key="p.key"
+-              type="button"
+-              role="radio"
+-              class="pas-icon-btn"
+-              :class="{ 'is-on': active.icon === p.svg }"
+-              :aria-checked="active.icon === p.svg"
+-              :title="p.label"
+-              @click="pickPresetIcon(p.key, p.svg)"
+-            >
+-              <span aria-hidden="true" v-html="p.svg" />
+-            </button>
+-          </div>
+-          <textarea
+-            v-model="active.icon"
+-            class="pas-textarea pas-svg-input"
+-            rows="2"
+-            spellcheck="false"
+-            aria-label="自定义图标 SVG"
+-            placeholder="也可以贴自己的 SVG（viewBox 0 0 24 24，stroke=currentColor）。留空 = 用默认星星。"
+-            @input="touch()"
+-          ></textarea>
+-          <div class="pas-svg-preview">
+-            <span class="pas-label">当前预览</span>
+-            <span class="pas-icon pas-icon--preview" aria-hidden="true" v-html="active.icon || DEFAULT_AI_ICON" />
+-          </div>
+-        </div>
+ 
+         <div class="pas-field">
+           <div class="pas-label-row">
+@@ -311,11 +280,6 @@ async function save(): Promise<void> {
+ .pas-input, .pas-textarea { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b); font-size: 12px; outline: none; font-family: inherit; }
+ .pas-textarea { line-height: 1.6; resize: vertical; }
+ .pas-icons { display: flex; gap: 4px; }
+-/* 17 个预设：自动换行，每个 30×30（点击区域够大且不挤） */
+-.pas-icons { display: flex; flex-wrap: wrap; gap: 4px; }
+-.pas-svg-input { margin-top: 6px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; }
+-.pas-svg-preview { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+-.pas-icon--preview { width: 18px; height: 18px; color: var(--ui-accent, #0891b2); }
+ .pas-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #6b7280); cursor: pointer; }
+ .pas-icon-btn.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent, #0891b2); }
+ .pas-icon-btn :deep(svg) { width: 15px; height: 15px; }
+diff --git a/packages/plugins/plugin-bottom-bar/src/aiActions.ts b/packages/plugins/plugin-bottom-bar/src/aiActions.ts
+index 5794f90e..0c6ab8b6 100644
+--- a/packages/plugins/plugin-bottom-bar/src/aiActions.ts
++++ b/packages/plugins/plugin-bottom-bar/src/aiActions.ts
+@@ -43,16 +43,11 @@ export const DEFAULT_AI_ICON =
+ export const DEFAULT_AI_ACTIONS: readonly AiActionConfig[] = [
+   {
+     id: 'translate',
+-    name: '翻译成中文',
+-    description: '翻译成通顺的中文，顺手改掉错别字（AI 结果直接替换正文）',
++    name: '翻译',
++    description: '把输入框内容翻译成英文（AI 结果直接替换正文）',
+     icon:
+       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 3v2c0 4-2 7-5 8"/><path d="M5 9c1 3 3 5 6 6"/><path d="M14 20l4-9 4 9"/><path d="M15.5 17h5"/></svg>',
+-    // 用户口径 2026-10-27：默认翻成**中文**（不是英文），并且要「通顺」——
+-    // 原文里常有错别字、断句、同音字，一并按原意校正，不要逐字硬翻。
+-    template:
+-      '把下面的内容翻译成通顺自然的中文，只输出译文，不要任何解释或前后缀。\n' +
+-      '如果原文有错别字、同音字或明显笔误，按上下文意思改正后再翻译（保持原意，不要擅自增删信息）。\n\n' +
+-      '{{prompt}}',
++    template: '将下面的内容翻译成地道的英文，只输出译文，不要任何解释或前后缀：\n\n{{prompt}}',
+     enabled: true,
+     builtin: true,
+   },
+@@ -60,15 +55,10 @@ export const DEFAULT_AI_ACTIONS: readonly AiActionConfig[] = [
+     id: 'optimize',
+     name: '提示词优化',
+     description: '用 AI 优化当前提示词的表达（结果直接替换正文）',
+-    // 用户口径 2026-10-27：先修错别字/病句，再补细节；不要凭空编造主体或风格。
+     icon:
+       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M17.8 6.2 19 5"/><path d="M12.2 6.2 11 5"/><path d="M3 21 12 12"/></svg>',
+     template:
+-      '你是资深的提示词编辑。请把下面这段提示词改得更清楚、更准确：\n' +
+-      '1. 先改正错别字、同音字、标点与不通顺的句子；\n' +
+-      '2. 再补齐原文已经暗示、但没写清的细节（主体、动作、风格、光线、构图等），保持原意，不要凭空编造新主体；\n' +
+-      '3. 语言精炼，去掉重复和口水话。\n' +
+-      '只输出改好的提示词本身，不要解释、不要加引号或前缀：\n\n{{prompt}}',
++      '你是资深的 AI 提示词工程师。请优化下面的提示词：补全主体、风格、构图、光影等关键要素，保持原意，语言精炼。直接输出优化后的提示词，不要任何解释：\n\n{{prompt}}',
+     enabled: true,
+     builtin: true,
+   },
+@@ -96,45 +86,6 @@ export const AI_ICON_PRESETS: readonly { key: string; label: string; svg: string
+     svg:
+       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+   },
+-  { key: 'sparkles', label: '多颗星', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l1.6 3.9L16.5 8.5l-3.9 1.6L11 14l-1.6-3.9L5.5 8.5l3.9-1.6z"/><path d="M18 14l.9 2.1 2.1.9-2.1.9L18 20l-.9-2.1-2.1-.9 2.1-.9z"/></svg>',
+-  },
+-  { key: 'pen', label: '笔', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+-  },
+-  { key: 'wandStars', label: '魔棒+星', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M17.8 6.2 19 5"/><path d="M12.2 6.2 11 5"/><path d="M3 21 12 12"/></svg>',
+-  },
+-  { key: 'check', label: '对勾', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+-  },
+-  { key: 'spellCheck', label: '拼写检查', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16l6-12 6 12"/><path d="M9 12h6"/><path d="M3 21l3-3 3 3"/><path d="M15 21l3-3 3 3"/></svg>',
+-  },
+-  { key: 'languages', label: '多语言', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg>',
+-  },
+-  { key: 'text', label: '文字', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M12 20V4"/><path d="M8 20h8"/></svg>',
+-  },
+-  { key: 'quote', label: '引号', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v4a4 4 0 0 1-4 4z"/><path d="M14 7h4v4a4 4 0 0 1-4 4z"/></svg>',
+-  },
+-  { key: 'bolt', label: '闪电', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',
+-  },
+-  { key: 'lightbulb', label: '灯泡', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4.9 1 .9 1.7V17h5.2v-1.4c0-.7.3-1.3.9-1.7A6 6 0 0 0 12 3z"/></svg>',
+-  },
+-  { key: 'wandSparkles2', label: '星星笔', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l9-9"/><path d="M12.5 6.5 15 4l2.5 2.5L15 9z"/><path d="M18 12l1.2 2.8L22 16l-2.8 1.2L18 20l-1.2-2.8L14 16l2.8-1.2z"/></svg>',
+-  },
+-  { key: 'search', label: '放大镜', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+-  },
+-  { key: 'star', label: '五角星', svg:
+-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6-5.4-2.8-5.4 2.8 1-6L3.2 9.5l6.1-.9z"/></svg>',
+-  },
+ ]
+ 
+ /** 从 KV 原始值归一成可用清单：丢非法项；非数组（从未配置）→ 内置默认 */
+@@ -426,27 +377,3 @@ export async function saveAiActions(
+     return { ok: false, error: err instanceof Error ? err.message : String(err) }
+   }
+ }
+-
+-// ==================== 后台地址：直接取 Agent 插件的配置 ====================
+-
+-/**
+- * AI 请求该打到哪个后台。
+- *
+- * 用户口径（2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」——
+- * 地址取 plugin-agent 的 `agentBaseUrl`（留空 = 与画布同源），渠道与模型也是 Agent 里
+- * 配好的默认那条。底栏**不另存一份地址**：两份配置一定会漂移（改了 Agent、底栏还打旧端口），
+- * 而且用户根本没必要在这里再填一次。
+- *
+- * 兜底顺序：settings.agentBaseUrl（Agent 的 Config 登记项）→ ctx.get('agent').state.baseUrl
+- * （Agent 服务上那份运行时值）→ ''（同源）。
+- */
+-export function resolveAgentBaseUrl(ctx: {
+-  tryGet<T>(name: string): T | undefined
+-}): string {
+-  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
+-  const fromSettings = settings?.get('agentBaseUrl')
+-  if (typeof fromSettings === 'string' && fromSettings) return fromSettings.trim()
+-  const agent = ctx.tryGet<{ state?: { baseUrl?: string } }>('agent')
+-  const fromService = agent?.state?.baseUrl
+-  return typeof fromService === 'string' ? fromService.trim() : ''
+-}
+diff --git a/packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts b/packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts
+index e6f59739..7ce9c8dd 100644
+--- a/packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts
++++ b/packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts
+@@ -235,16 +235,14 @@ export const inject = ['doc', 'nodeRegistry', 'themeRegistry'] as string[]
+ /**
+  * 插件可配置项（设置面板「常规/底栏」组）。
+  *
+- * **这里不声明后台地址**（用户口径 2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」——
+- * AI 请求的后台地址直接取 plugin-agent 的 `agentBaseUrl` 配置（缺省同源），渠道与模型也由
+- * Agent 里配好的默认那条决定。底栏再放一份地址就是第二个真源：用户在 Agent 里改了地址，
+- * 底栏还打到旧端口上，排查起来很难看出是哪一份生效。
++ * **这里不声明后台地址**（用户口径 2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」。
++ * AI 请求的后台根地址直接取 plugin-agent 的 `agentBaseUrl`（缺省同源），渠道与模型也是
++ * Agent 里配好的默认那条。底栏再放一份地址就是第二个真源：改了 Agent、底栏还打旧端口，
++ * 那种问题很难看出来是哪一份生效。
+  *
+- * 结构化清单（按钮图标 / 描述 / 提示词模板）不走标量 schema，见 PromptActionSettings。
+- *
+- * 这里的字段还承担一个硬作用：**分组需要一个真 schema 字段才会被登记**
+- *（settings.groups() 里没有这个组，挂在上面的自绘页就永远不渲染）。
+- * 所以放的是「失败重试轮数」这个确实有用的旋钮（用户口径：默认 3 轮），不编占位字段。
++ * 分组必须有**至少一个真 schema 字段**才会被登记（否则 settings.groups() 里没有它，
++ * 挂在上面的自绘页永远不渲染）。所以这里放「失败重试轮数」这个确实有用的旋钮
++ * （用户口径：默认 3 轮），而不是编个占位字段。
+  */
+ export const Config = {
+   bottomBarAiRetries: {
+@@ -255,7 +253,7 @@ export const Config = {
+     step: 1,
+     label: 'AI 失败重试',
+     group: '常规/底栏',
+-    description: 'AI 按钮请求失败时最多试几轮（含第一次）。网络抖动/5xx 会退避重试，4xx 参数错误不重试。',
++    description: 'AI 按钮请求失败时最多试几轮（含第一次）。网络抖动 / 5xx 会退避重试；4xx 参数错误不重试。',
+   },
+ }
+ 

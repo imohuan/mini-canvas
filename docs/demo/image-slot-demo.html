@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>看图 · 待输入槽位 Demo</title>
+<style>
+  :root{
+    --ink:#111827; --body:#374151; --muted:#6b7280; --faint:#9ca3af;
+    --line:rgba(0,0,0,.08); --hover:rgba(0,0,0,.05); --subtle:rgba(0,0,0,.035);
+    --accent:#0891b2; --accent-soft:rgba(8,145,178,.12);
+    --panel:#fff; --shadow:0 20px 40px rgba(0,0,0,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    background:#f5f6f8; color:var(--body);
+    background-image:radial-gradient(rgba(0,0,0,.10) 1px, transparent 1px);
+    background-size:16px 16px;
+    min-height:100%;
+  }
+  .stage{max-width:1180px;margin:0 auto;padding:32px 24px 64px}
+
+  .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:18px}
+  .title{font-size:18px;font-weight:700;color:var(--ink);margin:0 0 4px}
+  .sub{font-size:13px;color:var(--muted);margin:0;line-height:1.6}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:999px;display:inline-block}
+
+  .workspace{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .left{flex:1 1 640px;min-width:520px}
+  .right{flex:0 1 300px;min-width:260px;display:flex;flex-direction:column;gap:12px}
+
+  /* ===== 输入框上方的预览槽位（待输入状态在这里显示） ===== */
+  .slots{
+    display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px;
+    padding:10px;border:1px dashed transparent;border-radius:14px;
+    transition:border-color .15s ease,background .15s ease;
+  }
+  .slots.drop-hot{
+    border-color:var(--accent); background:var(--accent-soft);
+  }
+  .slot{
+    position:relative;width:96px;height:96px;flex:none;
+    border-radius:10px;overflow:visible;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;cursor:pointer;
+    transition:border-color .15s ease, background .15s ease, transform .15s ease;
+  }
+  .slot--empty{
+    border:1px dashed rgba(0,0,0,.22); background:rgba(0,0,0,.025);
+    color:var(--muted);
+  }
+  .slot--empty:hover{border-color:var(--accent);background:var(--accent-soft);color:#0e7490}
+  .slot--empty.is-target{border-color:var(--accent);background:var(--accent-soft);transform:scale(1.02)}
+  .slot--filled{border:1px solid var(--line);background:#fff}
+  .slot-media{position:absolute;inset:0;border-radius:10px;overflow:hidden;background:#eef0f3}
+  .slot-media img,.slot-media video{width:100%;height:100%;object-fit:cover;display:block}
+  .slot-audio{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:6px;background:linear-gradient(160deg,#eef7fa,#e3eef4);color:#0e7490;
+  }
+  .slot-audio .bars{display:flex;align-items:flex-end;gap:3px;height:26px}
+  .slot-audio .bars i{width:3px;border-radius:2px;background:currentColor;opacity:.75}
+  .slot-badge{
+    position:absolute;left:5px;bottom:5px;z-index:2;
+    font-size:10px;font-weight:700;line-height:1;
+    padding:3px 5px;border-radius:5px;
+    background:rgba(17,24,39,.78);color:#fff;
+  }
+  .slot-pending{
+    position:absolute;left:5px;bottom:5px;z-index:2;
+    font-size:10px;font-weight:700;line-height:1;padding:3px 5px;border-radius:5px;
+    background:rgba(255,255,255,.92);color:#b45309;border:1px solid rgba(180,83,9,.28);
+  }
+  .slot-x{
+    position:absolute;right:-6px;top:-6px;z-index:3;
+    width:20px;height:20px;border-radius:999px;border:1px solid var(--line);
+    background:#fff;color:var(--muted);font-size:12px;line-height:1;
+    display:none;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.12);
+  }
+  .slot:hover .slot-x,.slot-x:focus-visible{display:flex}
+  .slot-add{
+    width:22px;height:22px;border-radius:999px;border:1px solid rgba(0,0,0,.16);
+    display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;
+    background:#fff;color:var(--muted);
+  }
+  .slot-label{font-size:11px;font-weight:600;color:var(--muted)}
+  .slot--empty .slot-label{color:inherit}
+  .slot-error{position:absolute;inset:auto 0 -18px;font-size:10px;color:#b91c1c;text-align:center}
+
+  /* ===== 底栏 ===== */
+  .bar{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);padding:12px 14px 10px;
+  }
+  .bar-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .pill{
+    display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;
+    border:1px solid var(--line);border-radius:999px;background:#fff;
+    font-size:12px;font-weight:600;color:var(--body);cursor:pointer;
+  }
+  .pill:hover{background:var(--hover)}
+  .pill .count{font-size:11px;color:var(--faint);font-weight:700}
+
+  .editor{
+    position:relative;min-height:96px;max-height:240px;overflow:auto;
+    padding:8px 6px;font-size:13px;line-height:1.9;color:var(--ink);
+    outline:none;white-space:pre-wrap;word-break:break-word;
+  }
+  .editor:empty::before{
+    content:attr(data-placeholder);color:var(--faint);pointer-events:none;
+  }
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;max-width:180px;height:22px;
+    padding:0 7px 0 3px;margin:0 2px;border:1px solid rgba(17,24,39,.18);
+    border-radius:6px;background:rgba(0,0,0,.04);vertical-align:bottom;
+    line-height:1;font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;
+    user-select:none;
+  }
+  .chip img{width:16px;height:16px;border-radius:4px;object-fit:cover;flex:none}
+  .chip .ico{display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;flex:none;color:var(--muted)}
+  .chip .ico svg{width:14px;height:14px}
+  .chip .nm{overflow:hidden;text-overflow:ellipsis}
+  .chip--pending{
+    border-style:dashed;border-color:rgba(180,83,9,.45);background:rgba(245,158,11,.10);
+    color:#92400e;
+  }
+  .chip--pending .ico{color:#b45309}
+
+  .bar-foot{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .select{
+    display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;
+    border-radius:8px;border:1px solid transparent;background:transparent;
+    font-size:13px;font-weight:600;color:var(--body);cursor:default;
+  }
+  .select:hover{background:var(--hover)}
+  .select .arrow{margin-left:2px;color:var(--faint);font-size:10px}
+  .sep{width:1px;height:14px;background:var(--line);margin:0 2px}
+  .mode{
+    display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px;
+    border-radius:8px;background:rgba(0,0,0,.035);font-size:12px;font-weight:600;color:var(--muted);
+  }
+  .mode .arrow{font-size:10px;color:var(--faint)}
+  .grow{flex:1}
+  .icon-btn{
+    width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--muted);
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .icon-btn:hover{background:var(--hover);color:var(--ink)}
+  .count{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .send{
+    width:30px;height:30px;border:0;border-radius:999px;background:var(--ink);color:#fff;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .send:hover{background:#000}
+
+  /* ===== 右侧：节点与说明 ===== */
+  .panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+  .panel h3{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--ink)}
+  .panel p{margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.7}
+  .nodes{display:flex;gap:8px;flex-wrap:wrap}
+  .node{
+    width:104px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;
+    cursor:grab;user-select:none;transition:box-shadow .15s ease,border-color .15s ease,transform .1s ease;
+  }
+  .node:hover{border-color:rgba(8,145,178,.5);box-shadow:0 6px 16px rgba(0,0,0,.10)}
+  .node:active{cursor:grabbing}
+  .node .thumb{height:62px;background:#eef0f3;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:11px;overflow:hidden}
+  .node .thumb img{width:100%;height:100%;object-fit:cover}
+  .node .cap{padding:5px 6px;font-size:11px;color:var(--body);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hint{font-size:11px;color:var(--faint);margin-top:8px;line-height:1.6}
+  kbd{
+    font-family:ui-monospace,Consolas,monospace;font-size:10px;padding:1px 4px;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:4px;background:#fff;color:var(--body);
+  }
+  .log{margin:0;padding:0;list-style:none;font-size:11px;color:var(--muted);max-height:170px;overflow:auto;line-height:1.8}
+  .log li{padding:2px 0;border-bottom:1px dashed rgba(0,0,0,.05)}
+  .log b{color:var(--ink);font-weight:600}
+  .toggle{display:flex;align-items:center;justify-content:space-between;font-size:12px;margin:6px 0}
+  .toggle input{accent-color:var(--accent)}
+  .btn{
+    width:100%;height:30px;margin-top:6px;border:1px solid var(--line);border-radius:8px;background:#fff;
+    font-size:12px;font-weight:600;color:var(--body);cursor:pointer;
+  }
+  .btn:hover{background:var(--hover)}
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(12px);
+    background:var(--ink);color:#fff;font-size:12px;padding:8px 14px;border-radius:8px;
+    opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:50;white-space:pre-wrap;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .drag-ghost{
+    position:fixed;z-index:60;pointer-events:none;width:96px;height:96px;border-radius:10px;
+    border:2px solid var(--accent);background:rgba(8,145,178,.10);
+    display:none;align-items:center;justify-content:center;font-size:11px;color:#0e7490;font-weight:700;
+  }
+  @media (max-width:960px){
+    .left{min-width:0;flex-basis:100%}
+    .right{flex-basis:100%}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar">
+    <div>
+      <h1 class="title">「看图」· 引用槽位 demo</h1>
+      <p class="sub">在输入框里打 <b>@图片123</b> / <b>@音频123</b> / <b>@音视频123</b>，会被识别成标签。<br>
+      没有连线时标签是「待输入」，可以拖文件、点上传、或按住 <kbd>Ctrl</kbd> 把右边的节点拖进来。</p>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#b45309"></i>待输入</span>
+      <span><i class="dot" style="background:#0891b2"></i>已就绪</span>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="left">
+      <!-- 输入框上方的预览框 -->
+      <div class="slots" id="slots"></div>
+
+      <div class="bar">
+        <div class="bar-head">
+          <button class="pill" id="refBtn" type="button">＋ 参考 <span class="count" id="refCount">0</span></button>
+          <button class="pill" type="button">◇ 标记</button>
+        </div>
+
+        <div class="editor" id="editor" contenteditable="true"
+             data-placeholder="描述你想要的内容，可用 @ 引用素材（试试输入 @图片1）"></div>
+
+        <div class="bar-foot">
+          <span class="select">GPT Image 2 <span class="arrow">▾</span></span>
+          <span class="sep"></span>
+          <span class="mode">▭ 3:4 · 1K · 1张 <span class="arrow">▴</span></span>
+          <span class="grow"></span>
+          <button class="icon-btn" title="翻译提示词" type="button">文</button>
+          <button class="icon-btn" title="增强" type="button">✦</button>
+          <button class="icon-btn" title="设置" type="button">⚙</button>
+          <span class="count" id="charCount">0/2000</span>
+          <button class="send" title="发送" type="button">↑</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <h3>画布上的节点</h3>
+        <p>按住 <kbd>Ctrl</kbd>（Mac 用 ⌘）把它拖到上面的槽位里。</p>
+        <div class="nodes" id="nodes"></div>
+      </div>
+
+      <div class="panel">
+        <h3>规则开关</h3>
+        <label class="toggle">边输入边识别 <input type="checkbox" id="liveParse" checked></label>
+        <label class="toggle">识别「@音视频」<input type="checkbox" id="avKind" checked></label>
+        <button class="btn" id="resetBtn" type="button">清空，重来</button>
+        <button class="btn" id="selfTest" type="button">规则自检（4 条）</button>
+        <button class="btn" id="simCtrlDrag" type="button">模拟：Ctrl 拖「图片1」进第 2 格</button>
+        <div class="hint">右上角 <b>×</b> 把槽位退回「待输入」；已就绪的标签再点一次可以跳到对应槽位。</div>
+      </div>
+
+      <div class="panel">
+        <h3>发生了什么</h3>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="drag-ghost" id="dragGhost">放到槽位</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- 小工具 ----------
+  const $ = (s, r) => (r || document).querySelector(s);
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+  let toastTimer = 0;
+  function toast(msg){
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+  function log(msg){
+    const li = el('li');
+    li.innerHTML = msg;
+    const box = $('#log');
+    box.insertBefore(li, box.firstChild);
+    while (box.children.length > 24) box.removeChild(box.lastChild);
+  }
+
+  // ---------- 数据 ----------
+  const KIND_META = {
+    image:   { label: '图片', unit: '张', accept: 'image/*' },
+    video:   { label: '视频', unit: '个', accept: 'video/*' },
+    audio:   { label: '音频', unit: '个', accept: 'audio/*' },
+    av:      { label: '音视频', unit: '个', accept: 'video/*,audio/*' },
+  };
+
+  /**
+   * 三条规则的核心：把正文里的 @图片123 解析成「槽位」。
+   * 支持：@图片1 / @视频1 / @音频1 / @音视频1（数字任意位）
+   * 也支持英文 @image1 / @video1 / @audio1 / @media1 —— 方便试手。
+   */
+  const TOKEN_RE = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi;
+  const KIND_BY_TOKEN = {
+    '图片':'image','image':'image',
+    '视频':'video','video':'video',
+    '音频':'audio','audio':'audio',
+    '音视频':'av','media':'av','av':'av',
+  };
+
+  let state = {
+    // key = kind + ':' + index，例如 image:1
+    refs: new Map(),
+    chars: 0,
+  };
+
+  function refKey(kind, index){ return kind + ':' + index; }
+  function makeRef(kind, index){
+    return {
+      key: refKey(kind, index),
+      kind,
+      index,
+      status: 'pending', // pending | filling | ready
+      mediaType: null,   // image | video | audio
+      url: '',
+      name: '',
+      error: '',
+    };
+  }
+
+  /** 解析正文 → 同步槽位集合（保留已有内容，只新增/删除） */
+  function syncFromText(text){
+    const seen = new Map();
+    let m;
+    TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(text)) !== null) {
+      const kind = KIND_BY_TOKEN[m[1].toLowerCase()];
+      if (!kind) continue;
+      if (kind === 'av' && !$('#avKind').checked) continue;
+      const index = Number(m[2]);
+      if (!Number.isFinite(index) || index < 1) continue;
+      const key = refKey(kind, index);
+      if (seen.has(key)) continue;
+      const prev = state.refs.get(key);
+      seen.set(key, prev || makeRef(kind, index));
+    }
+    // 正文里已经转成 chip 的标签，innerText 读不到 `@图片2` 这种原文 ——
+    // 但它们**确实还在正文里**，必须一并算作「存在」，否则会被下面那步误删
+    // （用户规则 2：没有连线时槽位也要在，不能因为转成标签就消失）。
+    chipsInEditor().forEach((chip) => {
+      const key = chip.dataset.key;
+      if (!key || seen.has(key)) return;
+      const prev = state.refs.get(key);
+      if (prev) seen.set(key, prev);
+    });
+    // 已不在正文里的槽位：如果已经有内容，保留（用户可能只是删了文字），
+    // 但 pending 的槽位跟着正文消失（避免越积越多）。
+    for (const [key, ref] of state.refs) {
+      if (seen.has(key)) continue;
+      if (ref.status === 'pending') state.refs.delete(key);
+    }
+    for (const [key, ref] of seen) state.refs.set(key, ref);
+    renderSlots();
+    renderRefCount();
+  }
+
+  // ---------- 渲染 ----------
+  const AUDIO_BARS = [10,16,22,14,20,11,17];
+
+  function renderSlots(){
+    const box = $('#slots');
+    box.textContent = '';
+    const refs = [...state.refs.values()].sort((a,b) =>
+      a.kind === b.kind ? a.index - b.index : a.kind.localeCompare(b.kind)
+    );
+    if (!refs.length) {
+      box.style.display = 'none';
+      return;
+    }
+    box.style.display = 'flex';
+
+    for (const ref of refs) {
+      const slot = el('div', 'slot ' + (ref.status === 'ready' ? 'slot--filled' : 'slot--empty'));
+      slot.dataset.key = ref.key;
+      slot.title = ref.status === 'ready'
+        ? '点一下回到正文里的标签'
+        : '待输入：拖文件到这里 / 点一下上传 / Ctrl 拖节点进来';
+
+      if (ref.status === 'ready') {
+        if (ref.mediaType === 'audio') {
+          const cover = el('div', 'slot-audio');
+          const bars = el('div', 'bars');
+          AUDIO_BARS.forEach(h => { const bar = el('i'); bar.style.height = h + 'px'; bars.appendChild(bar); });
+          cover.appendChild(bars);
+          cover.appendChild(el('span', '', ref.name ? ref.name.slice(0, 8) : '音频'));
+          slot.appendChild(cover);
+        } else {
+          const media = el('div', 'slot-media');
+          if (ref.mediaType === 'video') {
+            const v = el('video');
+            v.src = ref.url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+            media.appendChild(v);
+          } else {
+            const img = el('img');
+            img.src = ref.url; img.alt = ref.name;
+            media.appendChild(img);
+          }
+          slot.appendChild(media);
+        }
+        slot.appendChild(el('span', 'slot-badge', String(ref.index)));
+      } else {
+        slot.appendChild(el('span', 'slot-add', '+'));
+        slot.appendChild(el('span', 'slot-label', KIND_META[ref.kind].label + ' ' + ref.index));
+        slot.appendChild(el('span', 'slot-pending', '待输入'));
+      }
+
+      if (ref.status === 'ready') {
+        const x = el('button', 'slot-x', '×');
+        x.type = 'button';
+        x.title = '退回待输入';
+        x.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          ref.status = 'pending'; ref.url = ''; ref.name = ''; ref.mediaType = null;
+          renderSlots();
+          refreshChips();
+          log('<b>' + ref.key + '</b> 退回「待输入」');
+        });
+        slot.appendChild(x);
+      }
+
+      if (ref.error) {
+        slot.appendChild(el('span', 'slot-error', ref.error));
+        setTimeout(() => { ref.error = ''; renderSlots(); }, 2400);
+      }
+
+      // 点击：空槽打开文件选择；已填的跳到正文里那个标签
+      slot.addEventListener('click', () => {
+        if (ref.status === 'ready') { focusChip(ref.key); return; }
+        pickFile(ref);
+      });
+      slot.addEventListener('dragover', onSlotDragOver);
+      slot.addEventListener('dragleave', onSlotDragLeave);
+      slot.addEventListener('drop', (ev) => onSlotDrop(ev, ref));
+
+      box.appendChild(slot);
+    }
+  }
+
+  function renderRefCount(){
+    const ready = [...state.refs.values()].filter(r => r.status === 'ready').length;
+    $('#refCount').textContent = String(ready);
+  }
+
+  function focusChip(key){
+    const chip = document.querySelector('.chip[data-key="' + key + '"]');
+    if (!chip) return;
+    chip.scrollIntoView({ block: 'nearest' });
+    chip.animate(
+      [{ boxShadow: '0 0 0 0 rgba(8,145,178,.45)' }, { boxShadow: '0 0 0 4px rgba(8,145,178,.22)' }, { boxShadow: '0 0 0 0 rgba(8,145,178,0)' }],
+      { duration: 700, easing: 'ease-out' }
+    );
+  }
+
+  // ---------- 文件 → 槽位 ----------
+  const SUPPORTED = {
+    image: /^image\//,
+    video: /^video\//,
+    audio: /^audio\//,
+  };
+  function mediaTypeOfFile(file){
+    const t = (file.type || '').toLowerCase();
+    if (SUPPORTED.image.test(t)) return 'image';
+    if (SUPPORTED.video.test(t)) return 'video';
+    if (SUPPORTED.audio.test(t)) return 'audio';
+    // 有些系统给不出 MIME，按扩展名兜底
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (['png','jpg','jpeg','gif','webp','bmp','avif','svg'].includes(ext)) return 'image';
+    if (['mp4','webm','mov','mkv','avi','m4v'].includes(ext)) return 'video';
+    if (['mp3','wav','ogg','m4a','aac','flac','opus'].includes(ext)) return 'audio';
+    return null;
+  }
+  function kindMatches(refKind, mediaType){
+    if (refKind === 'av') return mediaType === 'video' || mediaType === 'audio';
+    return refKind === mediaType;
+  }
+
+  function acceptFile(ref, file){
+    const mediaType = mediaTypeOfFile(file);
+    if (!mediaType) { ref.error = '不支持的文件类型'; renderSlots(); return false; }
+    if (!kindMatches(ref.kind, mediaType)) {
+      const want = ref.kind === 'av' ? '视频 / 音频' : KIND_META[ref.kind].label;
+      ref.error = '这个槽位只收' + want;
+      renderSlots();
+      toast('「' + KIND_META[ref.kind].label + ' ' + ref.index + '」只收 ' + want + '，你给的是 ' + mediaType);
+      return false;
+    }
+    ref.status = 'ready';
+    ref.mediaType = mediaType;
+    ref.url = URL.createObjectURL(file);
+    ref.name = file.name || (KIND_META[ref.kind].label + ref.index);
+    renderSlots();
+    renderRefCount();
+    // 正文里那个标签也要跟着变（从虚线「待输入」变成实线已就绪 + 缩略图）
+    refreshChips();
+    log('<b>' + ref.key + '</b> ← ' + mediaType + '：' + escapeHtml(ref.name));
+    return true;
+  }
+
+  function pickFile(ref){
+    const input = el('input');
+    input.type = 'file';
+    input.accept = KIND_META[ref.kind].accept;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const f = input.files && input.files[0];
+      if (f) acceptFile(ref, f);
+      input.remove();
+    });
+    input.addEventListener('cancel', () => input.remove());
+    input.click();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- 拖放：本地文件 ----------
+  let dragDepth = 0;
+  function onSlotDragOver(ev){
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+    ev.currentTarget.classList.add('is-target');
+    $('#slots').classList.add('drop-hot');
+  }
+  function onSlotDragLeave(ev){
+    ev.currentTarget.classList.remove('is-target');
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) $('#slots').classList.remove('drop-hot');
+  }
+  /** 拖节点用的自定义 MIME（画布与槽位之间唯一的约定） */
+  const NODE_MIME = 'application/x-mini-canvas-node';
+  /**
+   * 落点判定（纯逻辑）：本地文件看类型；画布节点必须按 Ctrl / ⌘（规则 3c）。
+   * 返回 { ok, reason, mediaType }，由 applyDrop 翻译成人话。
+   */
+  function judgeDrop(ref, input) {
+    if (input.node) {
+      if (!input.modifier) return { ok: false, reason: 'no-modifier' };
+      const mediaType = mediaTypeOfFile({ name: input.node.name, type: input.node.mime });
+      if (!mediaType) return { ok: false, reason: 'unsupported' };
+      if (!kindMatches(ref.kind, mediaType)) return { ok: false, reason: 'kind-mismatch', mediaType };
+      return { ok: true, mediaType };
+    }
+    if (!input.fileMediaType) return { ok: false, reason: 'unsupported' };
+    if (!kindMatches(ref.kind, input.fileMediaType)) {
+      return { ok: false, reason: 'kind-mismatch', mediaType: input.fileMediaType };
+    }
+    return { ok: true, mediaType: input.fileMediaType };
+  }
+
+  function dropMessage(ref, verdict) {
+    const want = ref.kind === 'av' ? '视频 / 音频' : KIND_META[ref.kind].label;
+    if (verdict.reason === 'no-modifier') return '拖节点时要按住 Ctrl（Mac 用 ⌘）才能放进槽位';
+    if (verdict.reason === 'kind-mismatch') return '这个槽位只收 ' + want;
+    return '不支持的文件类型';
+  }
+
+  /** 判定通过 → 落到槽位；并在最后同步正文里的标签 */
+  function applyDrop(ref, verdict, sourceName, makeUrl) {
+    if (!verdict.ok) {
+      toast(dropMessage(ref, verdict));
+      log('拒绝：' + escapeHtml(dropMessage(ref, verdict)));
+      return false;
+    }
+    ref.status = 'ready';
+    ref.mediaType = verdict.mediaType;
+    ref.name = sourceName || (KIND_META[ref.kind].label + ref.index);
+    if (makeUrl) ref.url = makeUrl();
+    renderSlots();
+    renderRefCount();
+    refreshChips();
+    log('<b>' + ref.key + '</b> ← ' + verdict.mediaType + '：' + escapeHtml(ref.name));
+    return true;
+  }
+
+  function onSlotDrop(ev, ref) {
+    ev.preventDefault();
+    dragDepth = 0;
+    ev.currentTarget.classList.remove('is-target');
+    $('#slots').classList.remove('drop-hot');
+    const dt = ev.dataTransfer;
+
+    // (c) 画布节点
+    const nodeRaw = dt ? dt.getData(NODE_MIME) : '';
+    if (nodeRaw) {
+      let payload = null;
+      try { payload = JSON.parse(nodeRaw); } catch (_) {}
+      if (!payload) { toast('节点数据坏了'); return; }
+      const modifier = dragModifier || ctrlHeld || !!payload.modifier;
+      const verdict = judgeDrop(ref, { node: payload, modifier });
+      // 节点自带缩略图就拿来当槽位预览（demo 里节点就是资源本身）
+      const nodePreview = (NODES.find((n) => n.id === payload.id) || {}).thumb || '';
+      if (applyDrop(ref, verdict, payload.name, nodePreview ? () => nodePreview : undefined)) {
+        log('节点 <b>' + escapeHtml(payload.name) + '</b> + Ctrl → 槽位 ✓');
+      }
+      return;
+    }
+
+    // (a) 本地文件
+    const files = dt && dt.files;
+    if (files && files.length) {
+      const file = files[0];
+      const verdict = judgeDrop(ref, { fileMediaType: mediaTypeOfFile(file) });
+      applyDrop(ref, verdict, file.name, () => URL.createObjectURL(file));
+      return;
+    }
+    toast('没识别到文件或节点');
+  }
+
+  function makeNodePayload(node, modifier) {
+    return JSON.stringify({ id: node.id, name: node.name, mime: node.mime, modifier: !!modifier });
+  }
+
+  function wireNodeDrag(nodeEl, node) {
+    nodeEl.addEventListener('dragstart', (ev) => {
+      const modifier = !!(ev.ctrlKey || ev.metaKey);
+      if (ev.dataTransfer) {
+        ev.dataTransfer.setData(NODE_MIME, makeNodePayload(node, modifier));
+        ev.dataTransfer.setData('text/plain', '@' + node.name);
+        ev.dataTransfer.effectAllowed = 'copy';
+      }
+      nodeEl.style.opacity = '.55';
+      log('拖起节点 <b>' + escapeHtml(node.name) + '</b>' + (modifier ? '（按着 Ctrl ✓）' : '（没按 Ctrl，槽位会拒绝）'));
+    });
+    nodeEl.addEventListener('dragend', () => {
+      nodeEl.style.opacity = '';
+      document.querySelectorAll('.slot.is-target').forEach((s) => s.classList.remove('is-target'));
+      $('#slots').classList.remove('drop-hot');
+    });
+  }
+
+  let ctrlHeld = false;
+  let dragModifier = false;
+  window.addEventListener('keydown', (e) => { if (e.key === 'Control' || e.key === 'Meta') ctrlHeld = true; });
+  window.addEventListener('keyup', (e) => { if (e.key === 'Control' || e.key === 'Meta') ctrlHeld = false; });
+  window.addEventListener('blur', () => { ctrlHeld = false; dragModifier = false; });
+  document.addEventListener('dragstart', (e) => { dragModifier = !!(e.ctrlKey || e.metaKey); }, true);
+  document.addEventListener('dragend', () => { dragModifier = false; }, true);
+
+  // ---------- 节点数据 ----------
+  const SAMPLE_IMG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="#fde7c7"/><stop offset="1" stop-color="#f4c6a8"/></linearGradient></defs>' +
+    '<rect width="160" height="160" fill="url(#g)"/>' +
+    '<circle cx="80" cy="62" r="26" fill="#f6d7c4"/>' +
+    '<path d="M30 160c4-34 26-52 50-52s46 18 50 52z" fill="#e8b79a"/>' +
+    '<text x="80" y="150" font-size="11" text-anchor="middle" fill="#9a6b52" font-family="sans-serif">参考图</text>' +
+    '</svg>'
+  );
+
+  const NODES = [
+    { id: 'n1', name: '图片1', mime: 'image/svg+xml', thumb: SAMPLE_IMG, type: 'image' },
+    { id: 'n2', name: '图片2', mime: 'image/svg+xml', thumb: SAMPLE_IMG, type: 'image' },
+    { id: 'n3', name: '视频1', mime: 'video/mp4', thumb: '', type: 'video' },
+    { id: 'n4', name: '音频1', mime: 'audio/mpeg', thumb: '', type: 'audio' },
+  ];
+
+  function renderNodes(){
+    const box = $('#nodes');
+    box.textContent = '';
+    NODES.forEach((node) => {
+      const card = el('div', 'node');
+      card.draggable = true;
+      card.title = '按住 Ctrl 拖到左边的槽位';
+      const thumb = el('div', 'thumb');
+      if (node.type === 'image') {
+        const img = el('img'); img.src = node.thumb; img.alt = node.name; thumb.appendChild(img);
+      } else {
+        thumb.textContent = node.type === 'video' ? '▶ 视频' : '♪ 音频';
+      }
+      card.appendChild(thumb);
+      card.appendChild(el('div', 'cap', node.name));
+      wireNodeDrag(card, node);
+      box.appendChild(card);
+    });
+  }
+
+  // ---------- 正文：把 @xxx123 变成标签 ----------
+  // 说明：demo 用 contenteditable 简化实现。
+  // 规则：输入 @图片1 + 空格/回车/标点 时才转成标签（避免打到一半就跳）。
+  const TRIGGER_RE = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})$/i;
+
+  function currentText(){
+    return $('#editor').innerText.replace(/\u00a0/g, ' ');
+  }
+
+  function chipsInEditor(){
+    return [...document.querySelectorAll('#editor .chip')];
+  }
+
+  /** 当前光标是否紧跟在某个 @单词后面 */
+  function caretToken(){
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return null;
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return null;
+    const textBefore = node.textContent.slice(0, range.startOffset);
+    const m = TRIGGER_RE.exec(textBefore);
+    if (!m) return null;
+    return { match: m, textNode: node, start: range.startOffset - m[0].length, end: range.startOffset };
+  }
+
+  function replaceRangeWithChip(matchInfo){
+    const { match, textNode, start, end } = matchInfo;
+    const kind = KIND_BY_TOKEN[match[1].toLowerCase()];
+    if (!kind) return false;
+    if (kind === 'av' && !$('#avKind').checked) return false;
+    const index = Number(match[2]);
+    if (!index) return false;
+
+    const key = refKey(kind, index);
+    const ref = state.refs.get(key) || makeRef(kind, index);
+    state.refs.set(key, ref);
+
+    // 切掉正文里的 @xxx123，换成 chip
+    const before = textNode.textContent.slice(0, start);
+    const after = textNode.textContent.slice(end);
+    textNode.textContent = before;
+    const chip = buildChip(ref);
+    const parent = textNode.parentNode;
+    parent.insertBefore(chip, textNode.nextSibling);
+
+    const tail = document.createTextNode(after || '\u00a0');
+    parent.insertBefore(tail, chip.nextSibling);
+
+    // 光标放到 chip 后面
+    const r = document.createRange();
+    r.setStart(tail, after ? 0 : 1);
+    r.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+
+    renderSlots();
+    log('识别 <b>@' + match[1] + match[2] + '</b> → 槽位「' + KIND_META[kind].label + ' ' + index + '」待输入');
+    return true;
+  }
+
+  function buildChip(ref){
+    const chip = el('span', 'chip' + (ref.status === 'ready' ? '' : ' chip--pending'));
+    chip.contentEditable = 'false';
+    chip.dataset.key = ref.key;
+    chip.title = ref.status === 'ready' ? ref.name : '待输入：点上方槽位添加';
+    chip.appendChild(iconFor(ref));
+    chip.appendChild(el('span', 'nm', ref.name || (KIND_META[ref.kind].label + ' ' + ref.index)));
+    chip.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const slot = document.querySelector('.slot[data-key="' + ref.key + '"]');
+      if (slot) slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (ref.status === 'pending') pickFile(ref);
+    });
+    return chip;
+  }
+
+  function iconFor(ref){
+    const span = el('span', 'ico');
+    if (ref.status === 'ready' && ref.mediaType === 'image' && ref.url) {
+      const img = el('img'); img.src = ref.url; img.alt = '';
+      return img;
+    }
+    const kind = ref.status === 'ready' ? ref.mediaType : ref.kind;
+    const paths = {
+      image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/>',
+      video: '<rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="m16.5 10 5-3v10l-5-3z"/>',
+      audio: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+      av: '<rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="m16.5 10 5-3v10l-5-3z"/>',
+    };
+    span.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[kind] || paths.image) + '</svg>';
+    return span;
+  }
+
+  /** 已就绪后，把正文里的 chip 文案换成真实名字 */
+  function refreshChips(){
+    chipsInEditor().forEach((chip) => {
+      const ref = state.refs.get(chip.dataset.key);
+      if (!ref) return;
+      chip.classList.toggle('chip--pending', ref.status !== 'ready');
+      chip.title = ref.status === 'ready' ? ref.name : '待输入：点上方槽位添加';
+      const nm = chip.querySelector('.nm');
+      if (nm) nm.textContent = ref.name || (KIND_META[ref.kind].label + ' ' + ref.index);
+      const oldIcon = chip.querySelector('.ico, img');
+      if (oldIcon) oldIcon.replaceWith(iconFor(ref));
+    });
+  }
+
+  // ---------- 编辑器事件 ----------
+  const editor = $('#editor');
+
+  editor.addEventListener('input', () => {
+    state.chars = currentText().length;
+    $('#charCount').textContent = state.chars + '/2000';
+    if ($('#liveParse').checked) {
+      const token = caretToken();
+      if (token) replaceRangeWithChip(token);
+      else syncFromText(currentText());
+    }
+  });
+
+  editor.addEventListener('keydown', (ev) => {
+    // 空格/回车/标点：把刚打完的 @图片1 立刻变成标签
+    if ([' ', 'Enter', ',', '.', '，', '。', '\n'].includes(ev.key)) {
+      const token = caretToken();
+      if (token && replaceRangeWithChip(token)) {
+        ev.preventDefault();
+        // 补回用户按下的那个分隔符
+        document.execCommand('insertText', false, ev.key === 'Enter' ? '\n' : ev.key);
+      }
+    }
+  });
+
+  // 粘贴纯文本时也解析一遍（避免粘贴带 HTML）
+  editor.addEventListener('paste', (ev) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  });
+
+  $('#refBtn').addEventListener('click', () => {
+    // 「＋ 参考」快捷插入一个待输入槽位
+    const used = new Set([...state.refs.values()].filter(r => r.kind === 'image').map(r => r.index));
+    let i = 1;
+    while (used.has(i)) i++;
+    insertChipAtCaret('image', i);
+  });
+
+  function insertChipAtCaret(kind, index){
+    const ref = makeRef(kind, index);
+    state.refs.set(ref.key, ref);
+    const chip = buildChip(ref);
+    editor.focus();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(chip);
+      const space = document.createTextNode('\u00a0');
+      range.setStartAfter(chip);
+      range.insertNode(space);
+      range.setStartAfter(space);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editor.appendChild(chip);
+      editor.appendChild(document.createTextNode('\u00a0'));
+    }
+    renderSlots();
+    log('插入「' + KIND_META[kind].label + ' ' + index + '」待输入');
+  }
+
+  $('#resetBtn').addEventListener('click', () => {
+    state.refs.clear();
+    state.chars = 0;
+    editor.textContent = '';
+    $('#charCount').textContent = '0/2000';
+    renderSlots();
+    $('#log').textContent = '';
+    toast('已清空');
+  });
+
+  // 「模拟 Ctrl 拖节点」：页面内构造 DataTransfer 并派发真实事件（自动化合成拖拽带不了按键状态，
+  // 所以用它演示规则 3c 的完整链路：payload 写入 → 落点判定 → 槽位就绪）。
+  $('#simCtrlDrag').addEventListener('click', () => {
+    const node = NODES[0];
+    const target = [...state.refs.values()].find((r) => r.kind === 'image' && r.status === 'pending');
+    if (!target) { toast('先点「＋参考」建一个待输入的图片槽位'); return; }
+    const slotEl = document.querySelector('.slot[data-key="' + target.key + '"]');
+    if (!slotEl) { toast('槽位没渲染出来'); return; }
+    const dt = new DataTransfer();
+    dt.setData(NODE_MIME, makeNodePayload(node, true));
+    slotEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, ctrlKey: true }));
+    slotEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, ctrlKey: true }));
+    toast('已模拟：按住 Ctrl 把「' + node.name + '」拖进「图片 ' + target.index + '」');
+  });
+
+
+  $('#liveParse').addEventListener('change', (e) => {
+    if (!e.target.checked) toast('关闭后，只在按空格/回车时才识别');
+  });
+
+  // ---------- 启动 ----------
+  // 自检入口：把纯判定暴露出来，浏览器控制台或自动化都能直接验规则。
+  window.__slotDemo = {
+    judgeDrop: (slotKind, input) => judgeDrop({ kind: slotKind, index: 1 }, input),
+    state: () => ({ refs: [...state.refs.values()].map((r) => ({ ...r })) }),
+  };
+  // 给非工程师看的「规则自检」按钮：点一下把 4 条判定跑一遍，结果写进日志。
+  const selfTestBtn = document.getElementById('selfTest');
+  if (selfTestBtn) selfTestBtn.dataset.bound = '1';
+  selfTestBtn?.addEventListener('click', () => {
+    const node = { name: '图片1', mime: 'image/svg+xml' };
+    const cases = [
+      ['本地图片 → 图片槽位', judgeDrop({ kind: 'image', index: 1 }, { fileMediaType: 'image' })],
+      ['音频文件 → 图片槽位', judgeDrop({ kind: 'image', index: 1 }, { fileMediaType: 'audio' })],
+      ['拖节点（没按 Ctrl）', judgeDrop({ kind: 'image', index: 1 }, { node, modifier: false })],
+      ['拖节点（按住 Ctrl）', judgeDrop({ kind: 'image', index: 1 }, { node, modifier: true })],
+    ];
+    cases.forEach(([name, v]) => {
+      log('自检 · ' + name + ' → ' + (v.ok ? '✅ 通过' : '⛔ ' + v.reason));
+    });
+    toast('规则自检完成，见右下角日志');
+  });
+  renderNodes();
+  renderSlots();
+  // 预置一个示例，打开就能看到效果
+  insertChipAtCaret('image', 1);
+  editor.appendChild(document.createTextNode('将 '));
+  insertChipAtCaret('image', 2);
+  editor.appendChild(document.createTextNode(' 中女子的身份与五官、发型完整保留：银灰色长卷发、金色花枝发饰、浅灰棕睡衣、同龄少女。生成一张全新的单人角色设定图：纯白浅灰无渐变背景，均匀柔光无阴影，画面干净；竖向 3:4。'));
+  // 让第一个槽位有内容，第二个保持待输入，便于对比
+  const first = state.refs.get('image:1');
+  if (first) {
+    first.status = 'ready';
+    first.mediaType = 'image';
+    first.url = SAMPLE_IMG;
+    first.name = '参考图 1';
+  }
+  refreshChips();
+  renderSlots();
+  renderRefCount();
+  log('示例已就绪：<b>图片1</b> 已填入，<b>图片2</b> 等你添加');
+})();
+</script>
+</body>
+</html>

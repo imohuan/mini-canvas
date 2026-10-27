@@ -77,6 +77,33 @@ export const DEFAULT_AI_ACTIONS: readonly AiActionConfig[] = [
 /** KV 裸键（config 作用域；路径 = /api/kv/config/bottomBarAiActions） */
 export const AI_ACTIONS_KV_KEY = 'bottomBarAiActions'
 
+// ==================== 配置变更的**实时生效**事件 ====================
+
+/**
+ * 「底栏 AI 按钮清单保存成功」这条系统事件的名字与载荷（唯一一份）。
+ *
+ * 用户口径（2026-10-27）：「保存之后，它并没有实时生效，只有我重新触发这个下拉菜单，
+ * 它才生效」。根因：设置页把清单写进云端 KV 后没人通知底栏 —— 底栏只在挂载时拉一次，
+ * 挂着的底栏一直用旧清单，直到下次重挂载。
+ *
+ * 做法（与 agent:ref-click 同一条路）：设置页保存成功后 ctx.emit 广播；底栏组件
+ * ctx.on 监听并立即重拉清单。两边互不 import 组件，只共享这个常量。
+ *
+ * 载荷：actions = 保存后的**完整清单**（底栏直接采用，省一次网络往返；
+ * 同时保留 baseUrl 供多标签页场景自校 —— 别的标签页收到后自己重拉）。
+ */
+export const AI_ACTIONS_CHANGED_EVENT = 'bottom-bar:ai-actions-changed'
+
+export interface AiActionsChangedPayload {
+  /** 保存后的完整清单（监听方直接用它，不必再发一次 GET） */
+  actions: AiActionConfig[]
+  /** 本次保存用的后台地址（空 = 同源）；跨标签页的监听方据此自行重拉 */
+  baseUrl?: string
+}
+
+// 模块加载时登记：dev 下 emit 未登记的事件名会 warn（每个名字只提示一次）。
+registerEventName(AI_ACTIONS_CHANGED_EVENT)
+
 /** 模板里认得的变量（设置页的提示 chips 也用这份） */
 export const TEMPLATE_VARS: readonly { token: string; description: string }[] = [
   { token: '{{prompt}}', description: '输入框当前内容' },

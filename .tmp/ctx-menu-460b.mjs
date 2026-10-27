@@ -1,0 +1,15 @@
+// @ts-nocheck
+import { chromium } from '../packages/ui/node_modules/playwright-core/index.mjs'
+const browser = await chromium.launch({ executablePath: 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe', headless: true })
+const page = await browser.newPage({ viewport: { width: 1024, height: 460 } })
+page.on('pageerror', e => console.log('pageerror', e.message))
+page.on('console', m => { if (m.type() === 'error') console.log('console.error', m.text().slice(0, 300)) })
+await page.goto('http://localhost:5288/#/canvas/default', { waitUntil: 'load' })
+await page.waitForSelector('.vue-flow', { timeout: 30000 })
+await page.waitForTimeout(2500)
+await page.evaluate(() => window.addEventListener('contextmenu', (e) => console.log('contextmenu defaultPrevented?', e.defaultPrevented, e.target.className?.toString().slice(0, 60)), true))
+await page.mouse.click(994, 390, { button: 'right' })
+await page.waitForTimeout(1200)
+console.log('menus', await page.locator('.ctx-menu').count())
+await page.screenshot({ path: '.tmp/ctx-menu-460b.png' })
+await browser.close()

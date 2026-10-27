@@ -1,0 +1,18 @@
+feat(bottom-bar): 看图引用槽位（@标签 + 待输入 + 三种填充）
+
+用户口径（2026-10-25，附截图）：
+1. 输入框里 @图片123 / @音频123 / @音视频123 解析成标签；
+2. 没有连线也要有标签，状态「待输入」，输入框上方预览框同步显示；
+3. 待输入槽位可以拖本地文件、点击上传、按住 Ctrl 拖节点进来。
+
+改动：
+- 新增 plugin-bottom-bar/src/refSlots.ts：标签解析 / 素材类型 / 落点判定的纯函数；
+- NodeBottomBar：输入框上方渲染槽位（虚线待输入、实线就绪、× 退回），
+  接上传、拖文件、Ctrl 拖节点；填好后原地刷新正文里的标签（不重插、不动光标）；
+- prosemirror-editor-bundle：新增 replaceResource（原地改标签属性）与
+  createSlotTagPlugin（打完 @图片1 敲空格转成标签）。
+
+测试：plugin-bottom-bar 162（新增 refSlots 14 条 + 渲染 3 条）、
+prosemirror-editor-bundle 38（时序守卫改为只扫 insertSelectedItem 函数体）、
+canvas-render 482 通过；ui 412/413（唯一红是既有的 themeColorHygiene）。
+三个包 typecheck 干净。真机验过：@图片1 出槽位、点上传后标签变实线并显示缩略图。

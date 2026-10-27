@@ -1,0 +1,20 @@
+fix(bottom-bar): 参考格身份改用 refName（连线序号），修「多格/串位/不连线」
+
+接上一提交后的第二次返工（用户截图复现）：连 3 条线显示 5 格、声明 @图片2 内容
+出现在图片3、上传建了节点仍没连线。
+
+根因：mergeRefTiles 用**节点显示名**（label，如「干净参考」）认序号 ——
+认不出「图片N」格式的素材就被当成额外参考补到末尾（→ 多格）；
+槽位与素材对不上时内容落到错误序号（→ 串位）；上传后到「已连素材」里找
+新节点，但素材要等连线后才会出现（collectUpstreamMaterials 按边收），
+旧代码在连线**之前**去找 → 永远找不到 → 提前 return（→ 不连线）。
+
+改法：
+- 格子身份与序号一律用 **refName**（图片1/图片2，连线顺序编号，
+  collectUpstreamMaterials/numberRefNames 统一分配），不再用节点显示名；
+- mergeRefTiles/findRefGap 收带 refName 的素材形状（refTiles.ts 内部声明 WithRefName）；
+- 组件把 shownMaterials（带 refName）喂进去；
+- 测试按新语义重写：连 3 条 = 3 格、声明 @图片2 内容在第 1 格、
+  上传顺序钉死（建节点→还选中→等帧→连线→排位）。
+
+测试：plugin-bottom-bar 189、ui 413；typecheck 干净。
