@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "watch": "node scripts/watch.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

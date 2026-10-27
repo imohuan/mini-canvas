@@ -2743,4 +2743,3 @@ function onGlobalLeave(el: Element): void {
   height: 40px;
 }
 </style>
-    <!-- AI 生成期：流光画在**面板最外缘**（nb-root 的 ::before），不在内容区内部。 -->

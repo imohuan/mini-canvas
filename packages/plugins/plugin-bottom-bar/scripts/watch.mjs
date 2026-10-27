@@ -1,32 +1,22 @@
 #!/usr/bin/env node
 /**
- * watch —— 插件热重载的本地半（用户口径的最终形态，**零 SSE、零自建服务**）。
+ * watch —— bottom-bar 的调试监听（协议见 docs/plugin-dev/10-debug-protocol.md）。
  *
  *   pnpm watch
  *
- * 做两件事：
- * 1. **盯 src/**：文件一变就自动 vite build（构建失败不通知 —— 半成品不该进画布）；
- * 2. **build 成功后发一条 HTTP PUT**：
- *      PUT {后台}/api/kv/config/plugin-watch:<插件名>   值 = { t: 时间戳 }
- *    后台的 KV 实时通道（/api/kv/events，现成）会把它推给所有打开的画布页；
- *    画布里的热重载监听看到 key 前缀就**读这条值里的地址**，按它拉新产物重装。
+ * 与旧版的区别（都是真踩过的坑，别改回去）：
+ * 1. **不跨包引依赖**。旧版从 plugin-hot-reload-demo 的 node_modules 里 import chokidar，
+ *    demo 包一动（重装依赖 / 被删）这里立刻崩。本版用 Node 自带的 fs.watch，零依赖。
+ * 2. **构建期间不丢变更**。旧版 building=true 时直接 return —— 你在构建那 1~2 秒里
+ *    再保存一次，那次改动就静默没了。本版记 pending，构建完立刻补跑。
+ * 3. **接入心跳**。产物记录只说明「构建成功过」，不说明 watch 活着；
+ *    没心跳时调试页只能显示「未上报心跳」。构建期间心跳也照发（长构建不被误判掉线）。
  *
- * 值里带什么（用户口径：地址由上报方给出，读取方不再猜目录）：
- *   {
- *     "t": 1760000000000,
- *     "front":  "http://127.0.0.1:8865/plugins/<包目录>/<产物>.js",  // 浏览器可直接请求
- *     "server": "D:\\work\\my-plugin\\dist\\server.js"                // 后台可直接读的磁盘路径（有才带）
- *   }
- * 地址就是"这个插件此刻在哪"的唯一真相源；插件换目录、换端口，改这里即可，
- * 画布和后台都不需要重新配置。
- *
- * 全程只需要后台在跑（开发时它本来就在跑）。无自建端口、无 SSE 客户端、无声明文件。
- * 插件名取自 package.json 的 miniCanvas.pluginName（退回落包名去作用域）。
- * 后台地址：--backend 或环境变量 MINI_CANVAS_BACKEND，缺省 http://127.0.0.1:8865。
+ * 值里带地址（唯一真相源，读取方不猜目录）：
+ *   { t, front: "http://…/plugins/<包目录>/<产物>.js", server?: "D:\\…\\dist\\server.js" }
  */
-import { watch } from '../../plugin-hot-reload-demo/node_modules/chokidar/index.js'
 import { spawn } from 'node:child_process'
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, watch as fsWatch } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -36,42 +26,36 @@ const BACKEND = (process.argv.includes('--backend')
   ? process.argv[process.argv.indexOf('--backend') + 1]
   : process.env.MINI_CANVAS_BACKEND) || 'http://127.0.0.1:8865'
 
-/**
- * 前端产物地址（浏览器请求用）。
- * 缺省：按后台的插件托管规则拼出来（/plugins/<包目录>/<产物文件名>）。
- * 插件不在后台插件目录里时，用 --front 明确给一个浏览器能打开的地址。
- */
+/** 前端产物地址覆盖（产物不在后台插件目录里时用） */
 const FRONT_OVERRIDE = process.argv.includes('--front')
   ? process.argv[process.argv.indexOf('--front') + 1]
   : process.env.MINI_CANVAS_PLUGIN_FRONT
-
-/**
- * 后端产物路径（后台机器上的绝对路径）。
- * 缺省：dist/server.js（存在才带）；不存在就只上报前端半。
- */
+/** 后台产物路径覆盖（跨机器调试时不要带） */
 const SERVER_OVERRIDE = process.argv.includes('--server')
   ? process.argv[process.argv.indexOf('--server') + 1]
   : process.env.MINI_CANVAS_PLUGIN_SERVER
 
-/** 插件身份：package.json 的 miniCanvas.pluginName（前端按它卸旧装新） */
 const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8'))
 const PLUGIN_NAME = pkg.miniCanvas?.pluginName || String(pkg.name || '').replace(/^@[^/]+\//, '')
-/** 包目录名：后台的 /plugins/<包目录>/<文件> 用的就是它 */
 const PKG_DIR = PKG_ROOT.split(/[\\/]/).filter(Boolean).pop() || PLUGIN_NAME
 const KV_URL = BACKEND + '/api/kv/config/plugin-watch:' + encodeURIComponent(PLUGIN_NAME)
+const HEARTBEAT_URL = BACKEND + '/api/plugin-presence/heartbeat'
+const LEAVE_URL = BACKEND + '/api/plugin-presence/leave'
+/** 本 watch 进程的唯一 id（同一插件跑两个 watch 时，调试页会提示多实例） */
+const INSTANCE = process.pid + '-' + Math.random().toString(36).slice(2, 8)
+const HEARTBEAT_MS = 10_000
 
-/** 找 dist 里的前端产物（实际扫描 dist，避免 vite fileName 与插件名不一致时拼错地址） */
+/** dist 里的前端产物（实际扫描，避免 vite fileName 与插件名不一致时拼错） */
 function frontUrlNow() {
   if (FRONT_OVERRIDE) return FRONT_OVERRIDE
   const distDir = join(PKG_ROOT, 'dist')
   if (existsSync(distDir)) {
-    const found = readdirSync(distDir).find((f) => f === PLUGIN_NAME + '.js' || f.endsWith('.js'))
+    const found = readdirSync(distDir).find((f) => f === PLUGIN_NAME + '.js' || (f.endsWith('.js') && !f.endsWith('.min.js')))
     if (found) return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + found
   }
   return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + PLUGIN_NAME + '.js'
 }
 
-/** 找后端产物路径（dist/server.js / plugin-server.js） */
 function serverPathNow() {
   if (SERVER_OVERRIDE) return resolve(SERVER_OVERRIDE)
   for (const name of ['server.js', 'plugin-server.js']) {
@@ -81,13 +65,63 @@ function serverPathNow() {
   return undefined
 }
 
+/** 心跳 / 产物上报共用的属性包（少一处不一致） */
+function presenceProps() {
+  const front = frontUrlNow()
+  const server = serverPathNow()
+  return { ...(front ? { front } : {}), ...(server ? { server } : {}) }
+}
+
+/** 心跳。失败静默：后台没起 / 没开在场通道时，构建照样能跑 */
+function beat(state, message) {
+  const body = {
+    name: PLUGIN_NAME,
+    instance: INSTANCE,
+    state,
+    ...presenceProps(),
+    ...(message ? { message } : {}),
+  }
+  void fetch(HEARTBEAT_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {})
+}
+
+/** 正常退出时的告别（最多等 500ms，不阻塞退出） */
+async function sayGoodbye() {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 500)
+  try {
+    await fetch(LEAVE_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: PLUGIN_NAME, instance: INSTANCE }),
+      signal: ctrl.signal,
+    })
+  } catch {
+    /* 后台不在了：没什么可告别 */
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 let building = false
-/** 防抖：一次保存会触发一串 change 事件，等 200ms 静默了再 build */
+/** 构建期间又来了变更 → 记下来，构建完立刻补跑（旧版这里直接丢，改动会静默消失） */
+let pending = false
 let debounce = null
+let presenceState = 'watching'
+let presenceMessage = ''
 
 async function buildOnce(reason) {
-  if (building) return
+  if (building) {
+    pending = true
+    return
+  }
   building = true
+  presenceState = 'building'
+  presenceMessage = ''
+  beat(presenceState)
   const t0 = Date.now()
   try {
     await new Promise((resolve, reject) => {
@@ -95,45 +129,79 @@ async function buildOnce(reason) {
       let out = ''
       child.stdout.on('data', (d) => { out += d })
       child.stderr.on('data', (d) => { out += d })
-      child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('vite build exit ' + code + '\n' + out.slice(-600)))))
+      child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('vite build exit ' + code + '\n' + out.slice(-800)))))
     })
-    // build 成功才通知（半成品不进画布）。值里带地址：读取方不需要知道插件目录在哪。
-    const front = frontUrlNow()
-    const serverPath = serverPathNow()
-    const value = {
-      t: Date.now(),
-      ...(front ? { front } : {}),
-      ...(serverPath ? { server: serverPath } : {}),
-    }
+    const { front, server } = presenceProps()
     const res = await fetch(KV_URL, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ value }),
+      body: JSON.stringify({ value: { t: Date.now(), ...(front ? { front } : {}), ...(server ? { server } : {}) } }),
     })
+    presenceState = 'watching'
+    presenceMessage = ''
     console.log(
       '[watch] built in ' + (Date.now() - t0) + 'ms (' + reason + ') → 通知 ' +
         (res.ok ? 'OK' : '失败 ' + res.status) + ' | front=' + (front || '-') +
-        (serverPath ? ' | server=' + serverPath : ''),
+        (server ? ' | server=' + server : ''),
     )
   } catch (err) {
+    // 如实上报失败：调试页显示「构建失败」+ 原因，但仍算在线（进程活着，能重试）
+    presenceState = 'failed'
+    presenceMessage = '构建失败：' + String(err?.message ?? err).slice(0, 300)
     console.error('[watch] build failed:', err?.message ?? err)
   } finally {
     building = false
+    beat(presenceState, presenceMessage)
+    if (pending) {
+      pending = false
+      scheduleBuild('pending-changes')
+    }
   }
 }
 
 function scheduleBuild(file) {
   if (debounce) clearTimeout(debounce)
-  debounce = setTimeout(() => void buildOnce(file), 200)
+  debounce = setTimeout(() => {
+    debounce = null
+    void buildOnce(String(file ?? ''))
+  }, 200)
 }
 
-watch(SRC_DIR, { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 80 } })
-  .on('change', scheduleBuild)
-  .on('add', scheduleBuild)
-  .on('unlink', scheduleBuild)
+/**
+ * 盯 src/：Node 自带 fs.watch，零依赖（旧版跨包引 chokidar 是真坑）。
+ * recursive: true —— Windows 支持子目录；Node ≥20 在 Linux/macOS 也支持。
+ * 编辑器保存常见的「先删临时文件再改名」会被防抖窗口归并，不需要逐事件精确处理。
+ */
+const watcher = fsWatch(SRC_DIR, { recursive: true }, (_event, file) => {
+  scheduleBuild(file)
+})
+watcher.on('error', (err) => {
+  console.error('[watch] 目录监听出错（文件保存可能不再触发构建，请重启本脚本）：', err?.message ?? err)
+  presenceState = 'paused'
+  presenceMessage = '目录监听出错，请重启 watch'
+  beat(presenceState, presenceMessage)
+})
 
-console.log('[watch] 盯着 src/（插件: ' + PLUGIN_NAME + '）')
+console.log('[watch] bottom-bar · 盯着 src/（插件: ' + PLUGIN_NAME + '）')
 console.log('[watch] 变更 → 自动 build → 通知 ' + KV_URL)
 console.log('[watch] 上报地址：front=' + frontUrlNow() + (serverPathNow() ? ' | server=' + serverPathNow() : ''))
-console.log('[watch] 改地址：--front <浏览器可访问的地址> / --server <后台产物绝对路径>')
+console.log('[watch] 改地址：--front <浏览器可访问的地址> / --server <后台产物绝对路径> / --backend <后台地址>')
+console.log('[watch] 心跳 ' + HEARTBEAT_URL + '（实例 ' + INSTANCE + '，' + HEARTBEAT_MS / 1000 + 's）')
 console.log('[watch] Ctrl+C 停止')
+
+// 启动立刻报在线，之后定期心跳（构建期间也照发）
+beat(presenceState)
+const heartbeatTimer = setInterval(() => beat(presenceState, presenceMessage), HEARTBEAT_MS)
+heartbeatTimer.unref?.()
+
+// Ctrl+C / 正常退出：先告别再走（强杀时只能靠 30 秒超时发现）
+let stopping = false
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    if (stopping) return
+    stopping = true
+    clearInterval(heartbeatTimer)
+    watcher.close()
+    void sayGoodbye().finally(() => process.exit(0))
+  })
+}
