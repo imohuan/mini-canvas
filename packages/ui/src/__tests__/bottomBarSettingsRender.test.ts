@@ -79,9 +79,11 @@ beforeAll(async () => {
 
 describe('底栏设置页：Config 真的进了设置、界面真的画得出来', () => {
   it('「常规/底栏」分组存在，且带后面的 Config 字段', () => {
-    const settings = ctx.get<{ groups(): string[]; has(k: string): boolean }>('settings')
+    const settings = ctx.get<{ groups(): string[]; has(k: string): boolean; get(k: string): unknown }>('settings')
     expect(settings.groups()).toContain('常规/底栏')
-    expect(settings.has('bottomBarAiBaseUrl')).toBe(true)
+    expect(settings.get('bottomBarAiRetries')).toBe(3)
+    // 用户口径 2026-10-27：底栏不再自己配地址，直接用 Agent 插件那份
+    expect(settings.has('bottomBarAiBaseUrl')).toBe(false)
   })
 
   it('自绘页是 append 模式（不顶掉同组的 schema 字段）', () => {
@@ -93,10 +95,12 @@ describe('底栏设置页：Config 真的进了设置、界面真的画得出来
     expect(occ.find((o) => o.id === 'bottom-bar/prompt-actions')?.meta?.mode).toBe('append')
   })
 
-  it('schema 字段渲染成真实输入框（AI 后台地址看得见、可改）', async () => {
-    const html = await render(SettingsSchemaField as Component, { group: '常规/底栏', fieldKey: 'bottomBarAiBaseUrl', settings: ctx.get('settings') }, ctx)
-    expect(html).toContain('AI 后台地址')
-    expect(html).toContain('<input')
+  it('schema 字段渲染成真实控件（失败重试轮数，默认 3）', async () => {
+    const html = await render(SettingsSchemaField as Component, { group: '常规/底栏', fieldKey: 'bottomBarAiRetries', settings: ctx.get('settings') }, ctx)
+    expect(html).toContain('AI 失败重试')
+    // number 字段是精度滑块（role=slider），不是 <input>：按真实控件断言
+    expect(html).toContain('role="slider"')
+    expect(html).toContain('aria-valuenow="3"')
   })
 
   it('AI 按钮清单那张表渲染出来（标题 / 名称 / 模板 / 变量提示）', async () => {

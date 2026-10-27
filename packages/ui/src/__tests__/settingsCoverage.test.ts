@@ -143,13 +143,14 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
    * 把 Config 漏在对象之外 —— 内核读 mod.Config 读不到，整组配置**静默消失**，
    * 设置面板里一行都没有、也不报错。只测「模块上导出了 Config」不够，必须跑真内核。
    */
-  it('底栏的后台地址出现在「常规/底栏」下（Config 真的被内核读到）', async () => {
+  it('底栏注册进「常规/底栏」，但**不再**自己存一份后台地址（直接用 Agent 的）', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     expect(settings.groups()).toContain('常规/底栏')
-    expect(settings.has('bottomBarAiBaseUrl')).toBe(true)
-    // 默认同源（空串 = 与画布同源），不是写死某个端口
-    expect(settings.get('bottomBarAiBaseUrl')).toBe('')
+    expect(settings.get('bottomBarAiRetries')).toBe(3)
+    // 用户口径 2026-10-27：「这边本身就是使用 Agent 之间配置的这个数据」——
+    // 底栏若再存一份地址就是第二个真源（改了 Agent、底栏还打旧端口）。
+    expect(settings.has('bottomBarAiBaseUrl')).toBe(false)
     ctx.stop()
   })
 

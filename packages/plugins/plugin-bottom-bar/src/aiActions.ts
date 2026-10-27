@@ -137,6 +137,30 @@ export const AI_ICON_PRESETS: readonly { key: string; label: string; svg: string
   },
 ]
 
+// ==================== 后台地址：直接取 Agent 插件的配置 ====================
+
+/**
+ * AI 请求该打到哪个后台。
+ *
+ * 用户口径（2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」——
+ * 地址取 plugin-agent 的 `agentBaseUrl`（留空 = 与画布同源），渠道与模型也是 Agent 里
+ * 配好的默认那条。底栏**不另存一份地址**：两份配置一定会漂移（改了 Agent、底栏还打旧端口），
+ * 而且用户根本没必要在这里再填一次。
+ *
+ * 兜底顺序：settings.agentBaseUrl（Agent 的 Config 登记项）→ ctx.get('agent').state.baseUrl
+ * （Agent 服务上那份运行时值）→ ''（同源）。
+ */
+export function resolveAgentBaseUrl(ctx: {
+  tryGet<T>(name: string): T | undefined
+}): string {
+  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
+  const fromSettings = settings?.get('agentBaseUrl')
+  if (typeof fromSettings === 'string' && fromSettings) return fromSettings.trim()
+  const agent = ctx.tryGet<{ state?: { baseUrl?: string } }>('agent')
+  const fromService = agent?.state?.baseUrl
+  return typeof fromService === 'string' ? fromService.trim() : ''
+}
+
 /** 从 KV 原始值归一成可用清单：丢非法项；非数组（从未配置）→ 内置默认 */
 export function normalizeAiActions(raw: unknown): AiActionConfig[] {
   if (!Array.isArray(raw)) return DEFAULT_AI_ACTIONS.map((a) => ({ ...a }))
@@ -425,28 +449,4 @@ export async function saveAiActions(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
-}
-
-// ==================== 后台地址：直接取 Agent 插件的配置 ====================
-
-/**
- * AI 请求该打到哪个后台。
- *
- * 用户口径（2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」——
- * 地址取 plugin-agent 的 `agentBaseUrl`（留空 = 与画布同源），渠道与模型也是 Agent 里
- * 配好的默认那条。底栏**不另存一份地址**：两份配置一定会漂移（改了 Agent、底栏还打旧端口），
- * 而且用户根本没必要在这里再填一次。
- *
- * 兜底顺序：settings.agentBaseUrl（Agent 的 Config 登记项）→ ctx.get('agent').state.baseUrl
- * （Agent 服务上那份运行时值）→ ''（同源）。
- */
-export function resolveAgentBaseUrl(ctx: {
-  tryGet<T>(name: string): T | undefined
-}): string {
-  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
-  const fromSettings = settings?.get('agentBaseUrl')
-  if (typeof fromSettings === 'string' && fromSettings) return fromSettings.trim()
-  const agent = ctx.tryGet<{ state?: { baseUrl?: string } }>('agent')
-  const fromService = agent?.state?.baseUrl
-  return typeof fromService === 'string' ? fromService.trim() : ''
 }

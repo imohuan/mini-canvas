@@ -58,7 +58,13 @@ import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleR
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
 import { openPreview } from './mediaPreview'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
-import { loadAiActions, requestAiText, renderTemplate, DEFAULT_AI_ICON, type AiActionConfig } from './aiActions'
+import {
+  loadAiActions,
+  requestAiText,
+  resolveAgentBaseUrl,
+  DEFAULT_AI_ICON,
+  type AiActionConfig,
+} from './aiActions'
 // 「看图」@ 素材槽位：标签解析 / 落点判定（纯函数，已单测）
 import {
   parseRefSlots,
@@ -727,9 +733,8 @@ let aiLoadSeq = 0
 /** 拉一次按钮清单（挂载时调；后到的响应作废先到的） */
 async function reloadAiActions(): Promise<void> {
   const seq = ++aiLoadSeq
-  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
-  const baseRaw = settings?.get('bottomBarAiBaseUrl')
-  const base = typeof baseRaw === 'string' ? baseRaw : ''
+  // 地址直接取 Agent 插件的配置（用户口径：不要再在这里配一份）
+  const base = resolveAgentBaseUrl(ctx)
   try {
     const list = await loadAiActions({ baseUrl: base })
     if (seq === aiLoadSeq) aiActions.value = list
@@ -784,9 +789,11 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
   if (aiRunningId.value) return
   const source = prompt.value
   if (!source.trim()) return
-  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
-  const baseRaw = settings?.get('bottomBarAiBaseUrl')
-  const base = typeof baseRaw === 'string' ? baseRaw : ''
+  // 地址取 Agent 插件那份（同源时为空串），模型也由 Agent 的默认渠道决定
+  const base = resolveAgentBaseUrl(ctx)
+  // 重试轮数：设置面板「常规/底栏」可调（默认 3；坏值回落 3，aiActions 里兜底）
+  const retriesRaw = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')?.get('bottomBarAiRetries')
+  const retryRounds = typeof retriesRaw === 'number' && retriesRaw >= 1 ? Math.floor(retriesRaw) : undefined
   aiRunningId.value = action.id
   aiError.value = ''
   aiAbort = new AbortController()
@@ -804,6 +811,7 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
         nodeId: props.id,
       },
       baseUrl: base,
+      ...(retryRounds === undefined ? {} : { retryRounds }),
       signal: aiAbort.signal,
       onDelta: (delta) => {
         full += delta
@@ -1489,9 +1497,9 @@ function onGlobalLeave(el: Element): void {
     data-testid="node-bottom-bar"
     @pointerdown.stop
   >
-    <!-- 一排 pill（参考图顶行：+参考 / 标记 / 风格；动作也在这里成排，选中高亮）。
-         全屏态隐藏（用户口径：展开后不显示「参考 / 标记」）。 -->
-    <div v-if="!expanded" class="nb-pills">
+    <!-- 一排 pill（参考图顶行：+参考 / 标记 / 风格；动作也在这里成排，选中高亮） -->
+    <!-- 全屏态隐藏 pill 行（用户口径：展开后不显示「参考 / 标记」） -->
+    <div class="nb-pills">
       <button
         class="nb-pill"
         :class="{ 'is-active': referencing }"
@@ -1503,8 +1511,8 @@ function onGlobalLeave(el: Element): void {
         <span>参考</span>
         <span v-if="cards.length > 0" class="nb-pill-badge">{{ cards.length }}</span>
       </button>
-      <!-- 标记：功能尚未实现，置灰（用户要求：给一个透明度效果表示不支持） -->
-      <button class="nb-pill is-disabled" type="button" disabled :title="'标记：暂未支持'" @click.stop>
+      <!-- 标记：功能尚未实现，置灰（用户要求：给一个透明度效果表示不支持）。全屏态隐藏。 -->
+      <button v-if="!expanded" class="nb-pill is-disabled" type="button" disabled :title="'标记：暂未支持'" @click.stop>
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>
       </button>
@@ -1775,9 +1783,9 @@ function onGlobalLeave(el: Element): void {
 .nb-shell.is-expanded {
   position: fixed;
   inset: 0;
-  /* 全屏要压过节点上/下控制栏（LAYERS.nodeToolbar=500，截图里的「上传」就在那层）。
-     实际层值由模板内联（LAYERS.nodeToolbar + 1）—— 这里只留兜底，别写裸数字。 */
-  z-index: 501;
+  /* 全屏态必须压过节点上/下控制栏（LAYERS.nodeToolbar=500，截图的"上传"按钮就在那层）
+     且低于模态（LAYERS.modal）—— 层值统一取自渲染层的层叠带，不写裸数字。 */
+  /* z-index 由模板按 LAYERS.nodeToolbar + 1 内联（层值单一出处，见 canvas-render/contracts/layers） */
   display: flex;
   align-items: center;
   justify-content: center;
