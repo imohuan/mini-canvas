@@ -804,6 +804,8 @@ export function useEditor(
 
   // 计时器
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 标签点击后的延迟落光标（0.5s）；连点只保留最后一次 */
+  let chipClickTimer: ReturnType<typeof setTimeout> | null = null;
 
   // 过滤后的项目
   const filteredItems = ref<ResourceItem[]>([])
@@ -1055,20 +1057,27 @@ export function useEditor(
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
     /**
-     * 点标签后把光标放到**标签之后**（用户口径 2026-10-27）。
-     * 默认行为是 NodeSelection（整颗选中）→ 随后焦点变化时光标落到标签**之前**，
-     * 用户接着打字就会跑到标签前面。这里显式落一个文本光标在节点末尾。
+     * 点标签：**先**保持 ProseMirror 默认的节点选中（NodeSelection，视觉上整颗高亮），
+     * 0.5s 后再把光标落到标签**之后**（用户口径 2026-10-27）。
+     *
+     * 为什么延后：直接跳光标会让人看不到"这一下点中了什么"；先选中再落光标，
+     * 既确认了点击对象，又能让用户紧接着在标签后面打字（默认落点在标签之前）。
      */
     if (view) {
       const pos = view.posAtDOM(el, 0)
       const node = view.state.doc.nodeAt(pos)
       if (node && isAtomNode(node.type.name)) {
         const after = pos + node.nodeSize
-        try {
-          view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, after)))
-        } catch {
-          /* 文档已变等边界：忽略，交给 PM 默认处理 */
-        }
+        if (chipClickTimer) clearTimeout(chipClickTimer)
+        chipClickTimer = setTimeout(() => {
+          chipClickTimer = null
+          if (!view) return
+          try {
+            view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, after)))
+          } catch {
+            /* 文档已变（用户又点了别处/删了标签）：忽略 */
+          }
+        }, 500)
       }
     }
     if (item?.onClick) { item.onClick(item); return }
@@ -1331,6 +1340,10 @@ export function useEditor(
     }
     if (hoverTimer) {
       clearTimeout(hoverTimer);
+    }
+    if (chipClickTimer) {
+      clearTimeout(chipClickTimer);
+      chipClickTimer = null;
     }
     if (view) {
       view.destroy();
