@@ -35,6 +35,12 @@ typecheck 干净、build 通过；ui `vue-tsc` 干净、themeColorHygiene 2/2；
 
 ### 追记（2026-10-27，底栏「翻译 / 提示词优化」改成可配置 AI 按钮）
 
+**补记 4（同日，流光框范围改整块）**：用户截图反馈流光只围输入框不够 —— 要罩住
+「参考卡列表 + 输入区」**整块**，顶边在卡片列表上方。模板新增 `nb-ai-frame` 容器
+（包住 VueDraggable 卡列表与 nb-editor 两块；平时零样式不改布局），流光描边样式从
+`.nb-editor.is-ai-locking` 迁到 `.nb-ai-frame.is-ai-locking`（inset -2px、radius 10px、
+conic 旋转不变）。**验证**：198/198 + 420/420，两包 typecheck 干净。
+
 **补记 3（同日，AI 生成期间的三条交互口径）**：
 
 1. **延迟清空**：点按钮后**不再立刻清空**输入框 —— 分两阶段（`aiPhase`：starting →
