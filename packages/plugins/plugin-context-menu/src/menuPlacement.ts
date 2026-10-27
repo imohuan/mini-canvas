@@ -102,7 +102,7 @@ export function submenuPosition(
 
 /**
  * 二次定位用：已知实际尺寸与视口大小，算好主/二级菜单的左上角。
- * 组件在 onMounted / ResizeObserver 里拿真实 rect 调它，避免首帧估算误差。
+ * 组件在渲染后 / ResizeObserver 回调里拿真实尺寸调它，避免按条数估算的误差。
  */
 export function measureViewport(): ViewportSize {
   if (typeof window === 'undefined') return { width: 1024, height: 768 }
