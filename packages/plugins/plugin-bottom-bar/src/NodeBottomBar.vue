@@ -1754,8 +1754,8 @@ function onGlobalLeave(el: Element): void {
           role="alert"
           :title="aiError"
         >{{ aiError }}</span>
-        <!-- 全局设置（右侧 = 跟插件/动作无关的全局项）：点它在底栏下面展开一块设置区 -->
-        <button
+        <!-- TODO: 占时关闭 全局设置（右侧 = 跟插件/动作无关的全局项）：点它在底栏下面展开一块设置区 -->
+        <!-- <button
           class="nb-icon-btn"
           :class="{ 'is-on': settingsOpen }"
           type="button"
@@ -1765,7 +1765,7 @@ function onGlobalLeave(el: Element): void {
           @click.stop="settingsOpen = !settingsOpen"
         >
           <span aria-hidden="true" v-html="ICON_SETTINGS" />
-        </button>
+        </button> -->
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
         <!-- 参考序号有缺时：发送按钮左边一个警告图标，hover 出 tooltip 说清楚缺哪一格 -->
         <Tooltip v-if="refGapHint" :content="refGapHint" placement="bottom">
@@ -2583,6 +2583,8 @@ function onGlobalLeave(el: Element): void {
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  padding: 0px 10px;
+  line-height: 32px;
   color: var(--ui-ink-mute, #8c95a3);
 }
 /* 参考序号缺格提示：小警告图标贴着发送按钮，hover 出鼠标跟随提示（详情走 tip 服务） */

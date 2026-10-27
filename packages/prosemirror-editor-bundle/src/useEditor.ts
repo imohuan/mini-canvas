@@ -1,6 +1,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, type Ref, unref } from "vue";
 import { Schema, type Node as PMNode, type ResolvedPos } from "prosemirror-model";
-import { EditorState, Plugin, PluginKey, Selection, type Transaction } from "prosemirror-state";
+import { EditorState, Plugin, PluginKey, Selection, TextSelection, type Transaction } from "prosemirror-state";
 import { EditorView, Decoration, DecorationSet } from "prosemirror-view";
 import { schema as baseSchema } from "prosemirror-schema-basic";
 import { keymap } from "prosemirror-keymap";
@@ -1054,6 +1054,23 @@ export function useEditor(
   function handleResourceClick(el: HTMLElement) {
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
+    /**
+     * 点标签后把光标放到**标签之后**（用户口径 2026-10-27）。
+     * 默认行为是 NodeSelection（整颗选中）→ 随后焦点变化时光标落到标签**之前**，
+     * 用户接着打字就会跑到标签前面。这里显式落一个文本光标在节点末尾。
+     */
+    if (view) {
+      const pos = view.posAtDOM(el, 0)
+      const node = view.state.doc.nodeAt(pos)
+      if (node && isAtomNode(node.type.name)) {
+        const after = pos + node.nodeSize
+        try {
+          view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, after)))
+        } catch {
+          /* 文档已变等边界：忽略，交给 PM 默认处理 */
+        }
+      }
+    }
     if (item?.onClick) { item.onClick(item); return }
   }
 

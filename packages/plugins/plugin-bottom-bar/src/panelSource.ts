@@ -506,7 +506,7 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
       'data-name': name,
       'data-value': self.value || '',
       'data-category': self.category,
-      title: name,
+      // 不设 title：原生 title 会弹浏览器默认 tooltip（用户口径 2026-10-27 不喜欢）
     },
     isText
       ? ['span', { class: 'resource-chip-icon', innerHTML: TEXT_ICON }]
