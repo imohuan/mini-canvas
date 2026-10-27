@@ -10,10 +10,11 @@
  * 其余行为不变：fixed(clientX,clientY) 翻折定位；按 group 连续分组 + 分隔线；
  * 点击 props.onSelect(item)；点外部/按 Esc/滚动关闭由宿主插件负责监听。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { iconRenderMode } from '@mini-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 import { splitComboChips } from './shortcutText'
+import { mainMenuPosition, measureViewport, submenuPosition, type Size } from './menuPlacement'
 
 /** 菜单浮层 UI 状态（reactive 对象整体传入；visible/x/y/items 变化自动重渲染） */
 export interface ContextMenuUiState {
@@ -77,6 +78,16 @@ const groups = computed(() => {
 const openKey = ref<string | null>(null)
 /** 右栏的纵向位置（贴着那一行） */
 const openTop = ref(0)
+/** 主菜单实测尺寸（真实渲染后才能量到；v-if 首帧为 null） */
+const mainSize = ref<Size | null>(null)
+/** 二级菜单实测尺寸 */
+const subSize = ref<Size | null>(null)
+/** 主菜单 DOM（量尺寸 / 观察内容变化） */
+const mainRef = ref<HTMLElement | null>(null)
+/** 二级菜单 DOM */
+const subRef = ref<HTMLElement | null>(null)
+/** 视口尺寸（窗口 resize 时更新，避免旋转屏幕后还按旧宽度算） */
+const viewport = ref(measureViewport())
 /** 当前展开行对应的子项 */
 const openChildren = computed(() => {
   if (!openKey.value) return []
@@ -94,26 +105,154 @@ function onRowHover(row: MenuRow, e: MouseEvent): void {
     return
   }
   openKey.value = row.key
-  openTop.value = (e.currentTarget as HTMLElement).offsetTop
+  // 用两块的真实 rect 求行在菜单内的纵向偏移：主菜单内部滚动后 offsetTop 仍是未滚动的值，
+  // 直接用会把二级菜单算到下面去。
+  const el = e.currentTarget as HTMLElement
+  const main = mainRef.value
+  openTop.value = main
+    ? el.getBoundingClientRect().top - main.getBoundingClientRect().top
+    : el.offsetTop
 }
+
+/** 主菜单内部滚动：收掉展开的二级菜单，避免它挂在旧位置 */
+function onMainScroll(): void {
+  openKey.value = null
+}
+
+/**
+ * 量面板真实尺寸。
+ *
+ * 为什么必须在渲染后量：旧实现用「条数 × 44 + 48」估高，带描述/快捷键的行更高，
+ * 估算偏小 → 面板底部压到屏幕边（用户截图的主菜单与底栏重合）。
+ * 只在尺寸真的变了才写回，避免 ResizeObserver 自触发死循环。
+ */
+function measureMenu(): void {
+  const main = mainRef.value
+  if (main) {
+    const w = main.offsetWidth
+    const h = main.offsetHeight
+    if (w > 0 && h > 0 && (mainSize.value?.width !== w || mainSize.value?.height !== h)) {
+      mainSize.value = { width: w, height: h }
+    }
+  }
+  const sub = subRef.value
+  if (sub) {
+    const w = sub.offsetWidth
+    const h = sub.offsetHeight
+    if (w > 0 && h > 0 && (subSize.value?.width !== w || subSize.value?.height !== h)) {
+      subSize.value = { width: w, height: h }
+    }
+  }
+}
+
+let resizeObserver: ResizeObserver | null = null
+
+/** 首次渲染前先量；尺寸变化（内容/字体/主题切换）跟着重算 */
+function observeMenus(): void {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (typeof ResizeObserver === 'undefined') return
+  resizeObserver = new ResizeObserver(() => measureMenu())
+  if (mainRef.value) resizeObserver.observe(mainRef.value)
+  if (subRef.value) resizeObserver.observe(subRef.value)
+}
+
+function onWindowResize(): void {
+  viewport.value = measureViewport()
+  measureMenu()
+}
+
+onMounted(() => {
+  window.addEventListener('resize', onWindowResize)
+  void nextTick(() => {
+    measureMenu()
+    observeMenus()
+  })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onWindowResize)
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
 
 /** 菜单内容换了（重新打开/换模式）→ 收掉展开态，别留着上回的残余 */
 watch(
   () => props.state.items,
   () => {
     openKey.value = null
+    mainSize.value = null
+    subSize.value = null
+    openTop.value = 0
+    void nextTick(() => {
+      measureMenu()
+      observeMenus()
+    })
   },
+  { flush: 'post' },
 )
 
-/** 菜单左上角定位：fixed(clientX/clientY)，超出视口右/下边缘时收进视口 */
+/** 二级菜单展开后量它的真实尺寸（同一条入口行的子项数量会变） */
+watch(
+  openKey,
+  () => {
+    subSize.value = null
+    void nextTick(() => {
+      measureMenu()
+      observeMenus()
+    })
+  },
+  { flush: 'post' },
+)
+
+/** 菜单显示/隐藏（重新打开）也要重新量：v-if 会重建 DOM */
+watch(
+  () => props.state.visible,
+  (visible) => {
+    if (!visible) {
+      // 元素已卸载：停掉观察，避免 observer 继续持有旧 DOM
+      resizeObserver?.disconnect()
+      resizeObserver = null
+      mainSize.value = null
+      subSize.value = null
+      return
+    }
+    mainSize.value = null
+    subSize.value = null
+    void nextTick(() => {
+      measureMenu()
+      observeMenus()
+    })
+  },
+  { flush: 'post' },
+)
+
+/**
+ * 主菜单左上角：用实测尺寸算，整块收进视口并留 8px 间隔。
+ * 首帧（还没量到）先用最小尺寸顶一帧，量完立刻校正。
+ */
 const position = computed(() => {
-  const vw = typeof window === 'undefined' ? 1024 : window.innerWidth
-  const vh = typeof window === 'undefined' ? 768 : window.innerHeight
-  const estimatedH = Math.min(420, props.state.items.length * 44 + 48)
-  return {
-    left: Math.min(props.state.x, vw - 260),
-    top: Math.min(props.state.y, vh - estimatedH),
-  }
+  const size = mainSize.value ?? { width: 252, height: 1 }
+  const { left, top } = mainMenuPosition(
+    { x: props.state.x, y: props.state.y },
+    size,
+    viewport.value,
+  )
+  return { left, top }
+})
+
+/**
+ * 二级菜单左上角：右侧放不下就翻到主菜单左侧；纵向贴着入口行并夹在视口内。
+ * 首帧用最小尺寸，实测后立即重算。
+ */
+const submenu = computed(() => {
+  const size = subSize.value ?? { width: 252, height: 1 }
+  return submenuPosition(
+    position.value,
+    mainSize.value ?? { width: 252, height: 1 },
+    openTop.value,
+    size,
+    viewport.value,
+  )
 })
 
 function onItemClick(item: ContextMenuItem): void {
@@ -141,10 +280,12 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
     <Transition name="ctx-pop">
       <div
         v-if="state.visible"
+        ref="mainRef"
         class="ctx-menu"
         :style="{ left: position.left + 'px', top: position.top + 'px' }"
         role="menu"
         @contextmenu.prevent
+        @scroll.passive="onMainScroll"
       >
         <template v-for="(group, gi) in groups" :key="group.group">
           <div v-if="gi > 0" class="ctx-menu-divider" />
@@ -203,8 +344,9 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
     <Transition name="ctx-pop">
       <div
         v-if="state.visible && openChildren.length"
+        ref="subRef"
         class="ctx-menu ctx-submenu"
-        :style="{ left: position.left + 252 + 'px', top: position.top + openTop + 'px' }"
+        :style="{ left: submenu.left + 'px', top: submenu.top + 'px' }"
         role="menu"
         @contextmenu.prevent
       >
@@ -257,7 +399,12 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   z-index: var(--layer-modal, 100000);
   min-width: 252px;
   max-width: 340px;
-  padding: 6px;
+  /* 视口不够高时菜单在**自己内部**滚动，绝不撑出屏幕；上下各留 8px（与定位函数同一间隔）。 */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 菜单容器的内边距（规范 §2.4：菜单容器 10px），行与卡片边缘之间有呼吸空间 */
+  padding: 10px;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 16px;
   background: var(--ui-overlay-solid, #ffffff);
@@ -265,6 +412,16 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   color: var(--ui-ink, #374151);
   font-size: 13px;
   user-select: none;
+}
+.ctx-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.ctx-menu::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.2));
+}
+.ctx-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.32));
 }
 .ctx-menu-divider {
   height: 1px;

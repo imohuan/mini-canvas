@@ -16,6 +16,16 @@ export {
   type PortSide,
 } from './cardInverseScale'
 export {
+  MENU_VIEWPORT_GAP,
+  SUBMENU_OFFSET_X,
+  mainMenuPosition,
+  submenuPosition,
+  measureViewport,
+  type AnchorPoint,
+  type MenuPoint,
+  type ViewportSize,
+} from './menuPlacement'
+export {
   CARD_BORDER,
   CARD_PADDING_Y,
   CARD_WIDTH,

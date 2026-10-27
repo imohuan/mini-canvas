@@ -420,13 +420,22 @@ export function apply(ctx: Context): void {
     document.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('keydown', onKeydown, true)
     window.addEventListener('blur', closeMenu)
-    document.addEventListener('scroll', closeMenu, true)
+    /**
+     * 页面/画布滚动 → 菜单关掉（菜单会跟着内容错位）。
+     * 菜单**自己**的 overflow-y 滚动除外：长菜单现在能在面板内部滚，滚一下不该把菜单关掉。
+     */
+    function onScroll(e: Event): void {
+      const el = e.target as HTMLElement | null
+      if (el && el.closest && el.closest('.ctx-menu')) return
+      closeMenu()
+    }
+    document.addEventListener('scroll', onScroll, true)
 
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('keydown', onKeydown, true)
       window.removeEventListener('blur', closeMenu)
-      document.removeEventListener('scroll', closeMenu, true)
+      document.removeEventListener('scroll', onScroll, true)
       app.unmount()
       container.remove()
     }
