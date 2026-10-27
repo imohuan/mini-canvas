@@ -29,7 +29,7 @@ typecheck 干净、build 通过；ui `vue-tsc` 干净、themeColorHygiene 2/2；
 真机 Chromium `packages/ui/e2e/context-menu-viewport-check.mjs` 在 1024×640 / 900×600 /
 1440×900 / 1024×460 / 560×640 五种窗口全绿（主菜单四边 ≥8px、二级菜单翻转后仍在屏内、padding 10px、
 从入口行滑到翻转后的二级项能点中且整组收起）。该脚本抓的是**真实几何**；首版偶发“找不到空白画布”
-是取点范围落到视口左下而那里全是节点，现改为等 `.vue-flow` 挂载、排除底栏/状态条后扫描空白，
+是取点范围落到视口左下、那里全是节点/状态条，现改为等 `.vue-flow` 挂载、排除底栏与状态条后扫描空白，
 连跑两次稳定 PASS。
 
 
