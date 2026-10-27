@@ -738,6 +738,13 @@ const aiRunningId = ref<string | null>(null)
 const aiPhase = ref<'idle' | 'starting' | 'streaming'>('idle')
 /** 加载期间输入框禁编辑（starting + streaming 都锁；结束解锁） */
 const aiEditorLocked = ref(false)
+
+{
+  // debug
+  aiPhase.value = "starting"
+  aiEditorLocked.value = true
+}
+
 const aiError = ref('')
 let aiAbort: AbortController | null = null
 let aiFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -1680,7 +1687,7 @@ function onGlobalLeave(el: Element): void {
     <div v-if="showEditor" class="nb-editor nodrag nopan nowheel" :style="editorStyle">
       <!-- starting 阶段提示（原文还在，只是右上角小字说一句，不遮内容） -->
       <span v-if="aiPhase === 'starting'" class="nb-ai-hint" aria-hidden="true">AI 处理中，即将写入…</span>
-      <span v-if="prompt.length === 0 && aiPhase !== 'starting'" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
+      <span v-if="prompt.length === 0 && aiPhase === 'idle'" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
       <ProseMirrorEditor
         ref="editorComponentRef"
         v-model="prompt"
@@ -1893,8 +1900,35 @@ function onGlobalLeave(el: Element): void {
   padding: 8px 12px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 16px;
+  /*
+   * 流光实现（轮式描边）：不用 mask/padding 方案（rolldown 压缩时把 padding:2px
+   * 与 mask 简写合并展开曾丢 padding，导致 mask 双层全遮、::before 整面被盖死）——
+   * 改用两层 background + outline 的思路太绕，这里直接：
+   *   · background 铺 conic 渐变（整面）；
+   *   · mask 用 radial 不做，改用 **box-shadow 0 0 0 2px 的外圈描边** 由父级 ::after 完成。
+   * 最终取最稳的写法：background 渐变整面 + 内层用同色遮罩（inset 2px 的 ::after）。
+   */
+  background: conic-gradient(
+    from var(--ai-sweep, 0deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 85%, transparent) 40deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent) 90deg,
+    transparent 150deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent) 250deg,
+    transparent 330deg
+  );
+  pointer-events: none;
+  animation: nb-ai-sweep 2.4s linear infinite;
+  z-index: 0;
+}
+.nb-root.is-ai-locking::after {
+  /* 内层挖空：盖住 ::before 的中间部分，只留 2px 外圈流光 */
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 14px;
   background: var(--ui-panel, #fff);
-  box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(15 23 42 / 0.16));
+  pointer-events: none;
 }
 
 /* —— 一排 pill（参考图顶行） —— */
@@ -2302,6 +2336,14 @@ function onGlobalLeave(el: Element): void {
   position: absolute;
   inset: -2px;
   border-radius: 16px;
+  /*
+   * 流光实现（轮式描边，最终版）：不用 mask/padding 方案 —— rolldown 压缩时把
+   * `padding: 2px` + mask 简写合并展开后**丢掉 padding**，mask 双层全遮，::before
+   * 整面被盖死（这就是你看不到效果的原因）。这里改成最稳的两层法：
+   *   · ::before 整面铺 conic 渐变（旋转动画不变）；
+   *   · ::after 盖一层面板色（inset 2px），把中间挖空 → 只剩 2px 外圈流光。
+   * 内容全部在 z-index 1 之上，不会被这两层盖住。
+   */
   background: conic-gradient(
     from var(--ai-sweep, 0deg),
     transparent 0deg,
@@ -2311,12 +2353,22 @@ function onGlobalLeave(el: Element): void {
     color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent) 250deg,
     transparent 330deg
   );
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 主题色白名单: mask 蒙版形状色 */
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 主题色白名单: mask 蒙版形状色 */
-  mask-composite: exclude;
   pointer-events: none;
   animation: nb-ai-sweep 2.4s linear infinite;
+}
+.nb-root.is-ai-locking::after {
+  /* 内层挖空层：面板色，留出 2px 外圈流光；内容直接压在它上面（z-index 1） */
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 14px;
+  background: var(--ui-panel, #fff);
+  pointer-events: none;
+}
+/* AI 生成期间：内容抬到挖空层之上（面板直接子级） */
+.nb-root.is-ai-locking > * {
+  position: relative;
+  z-index: 1;
 }
 @property --ai-sweep {
   syntax: '<angle>';
@@ -2734,7 +2786,10 @@ function onGlobalLeave(el: Element): void {
   height: 40px;
 }
 </style>
-/* starting 阶段的小字提示（用户口径：放**输入框右下角**）——不遮原文，跟随输入区 */
+<style>
+/* starting 阶段的小字提示（用户口径：放**输入框右下角**）——不遮原文，跟随输入区。
+   必须放非 scoped 块：提示 span 挂在 .nb-editor 内、由 v-if 控制，scoped 属性选择器
+   对 v-if 重建的节点时序不稳；这里用类名直配（.nb-ai-hint 全站唯一，无冲突面）。 */
 .nb-ai-hint {
   position: absolute;
   right: 4px;
@@ -2743,3 +2798,4 @@ function onGlobalLeave(el: Element): void {
   color: var(--ui-accent, #0891b2);
   pointer-events: none;
 }
+</style>
