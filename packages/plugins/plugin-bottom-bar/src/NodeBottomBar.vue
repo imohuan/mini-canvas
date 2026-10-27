@@ -2297,10 +2297,14 @@ function onGlobalLeave(el: Element): void {
  * 颜色吃 --ui-accent 跟主题走；prefers-reduced-motion 退化为静态描边（全站动效规矩）。
  */
 .nb-ai-frame.is-ai-locking {
-  /* 与面板内容的间距：流光框不贴文字/卡片（左右 10、上 8、下 6）；负 margin 抵消
-     nb-root 的 flex gap，不额外占一行高度。 */
+  /* 内外都有间距（用户口径：内外各留一点，但不改动「参考按钮行 / 卡片 / 输入框」
+     三者之间原有的 8px flex gap）：
+     · padding 10/8/6/10 —— 框到内容（卡片、文字）的**内**边距；
+     · margin -12px（左右与上）—— 把框**向外**扩到面板内容边缘之外，框线离面板边
+       还有 2px 空隙（面板自身 padding 12 - 框外扩 10 = 2px），不再与外边框重合；
+     · 下边 -6px：框底部离底行仍保持一拍空隙，不压发送行。 */
   position: relative;
-  margin: -8px -10px -6px;
+  margin: -12px -10px -6px;
   padding: 8px 10px 6px;
   border-radius: 12px;
 }
