@@ -68,7 +68,7 @@ describe('内置插件 · 行为不变（Task 3）', () => {
     srv.stop()
   })
 
-  it('内置插件清单齐全（17 个，且都声明了 inject）', () => {
+  it('内置插件清单齐全（18 个，且都声明了 inject）', () => {
     const names = BUILTIN_PLUGINS.map((p) => p.name).sort()
     expect(names).toEqual(
       [
@@ -87,6 +87,7 @@ describe('内置插件 · 行为不变（Task 3）', () => {
         'npm-plugins',
         'plugin-routes',
         'plugin-watch',
+        'plugin-presence',
         'projects',
         'server-plugins',
       ].sort(),

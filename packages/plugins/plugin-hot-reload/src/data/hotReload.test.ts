@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createHotReload, guessType, looksLikeUrl, originOf, pathOf, type HotReloadDeps } from './hotReload'
+import { presenceStatusOf, type PresenceRowLike } from './hotReload'
 
 /** 内存版 storage */
 function memStorage(): { getItem(k: string): string | null; setItem(k: string, v: string): void } {
@@ -440,6 +441,137 @@ describe('调试插件清单：是否已装只看内核里的唯一名字', () =
       fetchJson: async () => ({ ok: true, values: {} }),
     })
     await expect(hr.reinstallDebugPlugin('demo')).rejects.toThrow(/没有这个插件的上报记录/)
+  })
+})
+
+describe('调试监听状态（心跳 / 失联 / 未知）', () => {
+  const okRow = (over: Partial<PresenceRowLike> = {}): PresenceRowLike => ({
+    name: 'demo',
+    instance: 'pid-1',
+    state: 'watching',
+    front: 'http://h/demo.js',
+    lastSeenAt: 1_000_000,
+    ageMs: 2_000,
+    stale: false,
+    instances: 1,
+    multiple: false,
+    ...over,
+  })
+
+  it('快照映射：在线 / 构建中 / 暂停 / 失败 / 失联 / 停止', () => {
+    expect(presenceStatusOf(okRow())).toBe('online')
+    expect(presenceStatusOf(okRow({ state: 'building' }))).toBe('building')
+    expect(presenceStatusOf(okRow({ state: 'paused' }))).toBe('paused')
+    expect(presenceStatusOf(okRow({ state: 'failed' }))).toBe('failed')
+    expect(presenceStatusOf(okRow({ stale: true }))).toBe('stale')
+    expect(presenceStatusOf(okRow({ state: 'stopped' }))).toBe('stopped')
+  })
+
+  it('失联优先于最后一条原文状态（进程崩了时最后可能还是 watching）', () => {
+    expect(presenceStatusOf(okRow({ state: 'watching', stale: true }))).toBe('stale')
+  })
+
+  it('快照里没有这个插件 → unknown（旧版 watch / 没心跳），不能当作在线', () => {
+    expect(presenceStatusOf(undefined)).toBe('unknown')
+  })
+
+  it('清单合并：有心跳用快照状态；没心跳仍列出来但标 unknown', async () => {
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo', 'legacy'],
+      fetchJson: async (url) => {
+        const u = String(url)
+        if (u.includes('/api/kv/config?values=1')) {
+          return {
+            ok: true,
+            values: {
+              'plugin-watch:demo': { front: 'http://h/demo.js', t: 1 },
+              'plugin-watch:legacy': { front: 'http://h/legacy.js', t: 2 },
+            },
+          }
+        }
+        if (u.includes('/api/plugin-presence')) {
+          return { ok: true, staleAfterMs: 30000, now: 1_000_000, plugins: [okRow()] }
+        }
+        return { ok: true }
+      },
+    })
+    const rows = await hr.listDebugPlugins()
+    const demo = rows.find((r) => r.name === 'demo')!
+    const legacy = rows.find((r) => r.name === 'legacy')!
+    expect(demo.presence).toBe('online')
+    expect(demo.presenceAgeMs).toBe(2000)
+    expect(legacy.presence, '旧版 watch 没有心跳').toBe('unknown')
+    expect(legacy.installed, '没心跳不影响「已安装」的判断').toBe(true)
+  })
+
+  it('后台没开在场通道（快照 404）→ 全部 unknown，不假装在线', async () => {
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo'],
+      fetchJson: async (url) => {
+        const u = String(url)
+        if (u.includes('/api/kv/config?values=1')) {
+          return { ok: true, values: { 'plugin-watch:demo': { front: 'http://h/demo.js' } } }
+        }
+        throw new Error('404')
+      },
+    })
+    const rows = await hr.listDebugPlugins()
+    expect(rows[0]!.presence).toBe('unknown')
+  })
+
+  it('多实例：instances>1 时带出来（界面要 warning）', async () => {
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => [],
+      fetchJson: async (url) => {
+        const u = String(url)
+        if (u.includes('/api/kv/config?values=1')) {
+          return { ok: true, values: { 'plugin-watch:demo': { front: 'http://h/demo.js' } } }
+        }
+        return { ok: true, staleAfterMs: 30000, now: 1, plugins: [okRow({ instances: 2, multiple: true })] }
+      },
+    })
+    const row = (await hr.listDebugPlugins())[0]!
+    expect(row.presenceInstances).toBe(2)
+  })
+
+  it('快照里的地址更新了 → 用快照的（比产物记录新）', async () => {
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => [],
+      fetchJson: async (url) => {
+        const u = String(url)
+        if (u.includes('/api/kv/config?values=1')) {
+          return { ok: true, values: { 'plugin-watch:demo': { front: 'http://old/demo.js' } } }
+        }
+        return { ok: true, staleAfterMs: 30000, now: 1, plugins: [okRow({ front: 'http://new/demo.js' })] }
+      },
+    })
+    expect((await hr.listDebugPlugins())[0]!.front).toBe('http://new/demo.js')
+  })
+
+  it('配置了调试服务地址 → 订阅与快照走同一个后台（不能一个跨源、一个同源）', () => {
+    const w = globalThis as Record<string, unknown>
+    const paths: string[] = []
+    w.__miniCanvasKvEvents = {
+      subscribe(path: string) {
+        paths.push(path)
+        return () => {}
+      },
+    }
+    try {
+      const hr = createHotReload({
+        storage: memStorage(),
+        backendUrl: 'http://127.0.0.1:8865',
+        fetchJson: async () => ({ ok: true, staleAfterMs: 30000, now: 1, plugins: [] }),
+      })
+      hr.watchDebugPresence(() => {})
+      expect(paths).toEqual(['http://127.0.0.1:8865/api/kv/events'])
+    } finally {
+      delete w.__miniCanvasKvEvents
+    }
   })
 })
 

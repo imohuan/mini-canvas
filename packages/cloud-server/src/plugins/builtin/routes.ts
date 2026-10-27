@@ -31,6 +31,8 @@ import { hotLoadedNames } from '../../serverFramework/hotLoad.js'
 import { buildPluginCatalog } from '../catalog.js'
 import { healthPlugin } from './health.js'
 import { pluginWatchRoutes } from '../pluginWatch.js'
+import { createPluginPresenceRoutes } from '../../routes/pluginPresenceRoute.js'
+import { PluginPresence, PRESENCE_SWEEP_MS } from '../pluginPresence.js'
 import { runAgentMiddleware } from '../../serverFramework/agent.js'
 import type { KvStore } from '../../store/kvStore.js'
 import type { CanvasStore } from '../../store/canvasStore.js'
@@ -90,6 +92,32 @@ export const eventsPlugin: PluginModule = {
   inject: [S.kvStore],
   apply(ctx) {
     ctx.routes.adopt(eventsRoutes(need<KvStore>(ctx, S.kvStore), ctx.tryGet<CanvasStore>(S.canvasStore)))
+  },
+}
+
+/**
+ * plugin-presence 内置插件：调试监听的「在场」接口（心跳 / 告别 / 快照）。
+ *
+ * 只在开发调试时启用（见 server.ts 的开关）；纯测试与生产默认不装 ——
+ * 这条通道的存在意义就是本机开发时回答「watch 还在不在跑」。
+ */
+export const pluginPresencePlugin: PluginModule = {
+  name: 'plugin-presence',
+  inject: [S.kvStore],
+  apply(ctx) {
+    // 在场表由宿主注入（server.ts）。纯框架测试没注入时直接跳过，不装死：
+    // 没有这张表就没有「在不在线」可答，插件本身也没有别的职责。
+    const presence = ctx.tryGet<PluginPresence>('pluginPresence')
+    if (!presence) return
+    const built = createPluginPresenceRoutes({
+      presence,
+      kv: need<KvStore>(ctx, S.kvStore),
+    })
+    ctx.routes.adopt(built.app)
+    // 扫超时的定时器跟随插件作用域：卸载即停（不在路由工厂里自己起 setInterval）
+    const timer = setInterval(() => void built.sweep(), PRESENCE_SWEEP_MS)
+    ;(timer as unknown as { unref?: () => void }).unref?.()
+    ctx.effect(() => () => clearInterval(timer))
   },
 }
 
@@ -363,6 +391,7 @@ export const npmPluginsPlugin: PluginModule = {
 export const BUILTIN_PLUGINS: PluginModule[] = [
   healthPlugin,
   eventsPlugin,
+  pluginPresencePlugin,
   pluginWatchPlugin,
   projectsPlugin,
   canvasesPlugin,

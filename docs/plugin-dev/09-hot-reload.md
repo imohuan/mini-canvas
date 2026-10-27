@@ -5,6 +5,9 @@
 >
 > 本文写的是**现在的实际链路**（KV 上报制，2026-10 落地）。
 > 老文章里的 SSE 声明文件、`hotReloadManifest`、「设置 → 热重载」面板都**已经下线**，别照抄。
+>
+> **监听脚本由插件作者自己写**，平台不强制任何构建工具。格式契约与状态定义见
+> `docs/plugin-dev/10-debug-protocol.md`；本文是**照着做一遍**的教程。
 
 ---
 
@@ -97,6 +100,10 @@ export default defineConfig({
 ### 2.3 复制 watch 脚本
 
 把 `plugin-hot-reload-demo/scripts/watch.mjs` 复制到你的包 `scripts/` 下即可，**零配置可用**：
+
+> 这份脚本只是**参考实现**。你用 rollup / esbuild / 自写脚本都可以，只要按协议发那几条 HTTP
+> 请求（见 `10-debug-protocol.md` §3 的最简实现，不装任何包也能用）。脚本留在各自插件里，
+> 平台不统管构建方式。
 
 - 插件名：自动读 `package.json` 的 `miniCanvas.pluginName`（退回落包名去作用域）；
 - 前端地址：自动拼 `http://<后台>/plugins/<包目录>/<插件名>.js`（按后台的托管规则）；

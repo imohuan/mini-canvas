@@ -186,7 +186,20 @@ export function flushRoutes(app: Hono, ctx: Context, opts: { hotFallback?: boole
     app.all('*', ((c: Parameters<Handler>[0], next: () => Promise<void>) => {
       const key = c.req.method + ' ' + new URL(c.req.url).pathname
       const e = field.list(key)[0]
-      return e ? (e.value.handler as (c: unknown, n: unknown) => unknown)(c, next) : next()
+      if (e) return (e.value.handler as (c: unknown, n: unknown) => unknown)(c, next)
+      return next()
     }) as never)
   }
+
+  /**
+   * ⑤ `/api/*` 的 404 兜底 —— 必须在所有代理与挂载**之后**。
+   *
+   * 为什么放在框架层而不是某个插件里：插件注册的通配路由会被当成普通 path 挂到 Hono，
+   * 按注册顺序可能排在后装插件之前，把真实路由吃掉（实测：热装插件全 404）。
+   * 挂在这里时，上面的代理已经全部跑过；只有确实没人接手（`next()` 走到了末尾）才回 404。
+   *
+   * 只拦 `/api/`：页面路由（刷新画布 / 深链）仍要落到外层 SPA。
+   */
+  app.all('/api/*', ((c: Parameters<Handler>[0]) =>
+    c.json({ ok: false, error: '接口不存在: ' + c.req.path }, 404)) as never)
 }

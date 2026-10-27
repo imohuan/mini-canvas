@@ -23,6 +23,7 @@ import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
+import { PluginPresence } from './plugins/pluginPresence.js'
 import type { Context } from '@mini-canvas/kernel'
 import { loadServerPluginsFromDir, DEFAULT_SERVER_PLUGINS_DIR } from './serverFramework/pluginLoader.js'
 import { bindHotLoadedTracking } from './serverFramework/hotLoad.js'
@@ -717,6 +718,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('history', history)
   host.ctx.inject('pluginsDir', pluginsDir)
   host.ctx.inject('serverPluginsDir', serverPluginsDir)
+  // 调试监听的「在场表」：只存内存（心跳不落盘）。
+  // 只有显式打开调试开关时才装 plugin-presence 插件；否则这个服务根本不存在。
+  const pluginPresence = new PluginPresence()
+  host.ctx.inject('pluginPresence', pluginPresence)
   // 审计日志：插件路由（server-plugins / npm-plugins）经 ctx 取它，装配时注入一次。
   // 没注入就是 no-op —— 那些路由在纯框架单测里照样能跑。
   host.ctx.inject('auditLog', audit)
@@ -788,6 +793,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   for (const plugin of BUILTIN_PLUGINS) {
     // agent 相关的两组按开关决定装不装
     if (!agentEnabled && (plugin.name === 'agent-routes' || plugin.name === 'agent-sessions')) continue
+    // 调试在场通道只在开发时开：生产环境不该有「谁在监听」这类本机调试接口
+    if (plugin.name === 'plugin-presence' && process.env.MINI_CANVAS_DEBUG_PRESENCE !== '1') continue
     host.ctx.plugin(plugin)
   }
 

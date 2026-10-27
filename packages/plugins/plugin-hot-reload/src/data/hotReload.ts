@@ -99,6 +99,13 @@ export interface HotReload {
   reinstallDebugPlugin(name: string): Promise<void>
   /** 卸载一个调试插件：内核卸载 + 后台卸载 + 删掉它的上报记录 */
   uninstallDebugPlugin(name: string): Promise<void>
+  /**
+   * 订阅「调试监听状态变了」（在线 / 掉线 / 暂停），返回取消函数。
+   *
+   * 为什么还要这个：SSE 在页面隐藏、断网时会漏；所以除了订阅，页面重新可见时
+   * 也必须自己再拉一次快照（见 HotReloadPage 的 visibilitychange）。
+   */
+  watchDebugPresence(onChange: () => void): () => void
 }
 
 /** 调试插件清单里的一行 */
@@ -115,6 +122,66 @@ export interface DebugPluginRow {
   server?: string
   /** 上报时间（毫秒时间戳） */
   at?: number
+  /**
+   * **调试监听**此刻的状态（与「插件装没装」是两件事）。
+   *
+   * - `unknown`：查不到（旧版 watch 没心跳 / 后台没开在场通道 / 请求失败）—— 不能当作在线；
+   * - `stopped`：收到了正常告别；
+   * - `stale`：心跳超时（多半是 watch 被关掉或崩了）。
+   */
+  presence?: DebugPresenceStatus
+  /** 心跳状态原文（watching / building / paused / failed），便于排查 */
+  presenceState?: string
+  /** 距上次心跳多久（毫秒） */
+  presenceAgeMs?: number
+  /** 同一插件有几个 watch 实例（>1 要在界面上 warning） */
+  presenceInstances?: number
+  /** 监听失败时的一句话原因 */
+  presenceMessage?: string
+}
+
+/** 调试听的对在线判定（画布侧） */
+export type DebugPresenceStatus = 'online' | 'building' | 'paused' | 'failed' | 'stale' | 'stopped' | 'unknown'
+
+/** 后台 GET /api/plugin-presence 的元素（与 cloud-server 的协议同形） */
+export interface PresenceRowLike {
+  name: string
+  instance: string
+  state: 'watching' | 'building' | 'paused' | 'failed' | 'stopped'
+  front?: string
+  server?: string
+  message?: string
+  lastSeenAt: number
+  ageMs: number
+  stale: boolean
+  instances: number
+  multiple: boolean
+}
+
+export interface PresenceSnapshot {
+  ok: true
+  staleAfterMs: number
+  now: number
+  plugins: PresenceRowLike[]
+}
+
+/**
+ * 把后台快照里的一行翻译成界面状态。
+ *
+ * 注意 `unknown` 的两种情况必须分开看：
+ * - 快照里根本没有这个插件 → 旧版 watch（没心跳）或还没上报过；
+ * - 整个快照取不到 → 后台没开调试通道 / 连不上。
+ * 两者都不能显示成「在线」。
+ */
+export function presenceStatusOf(row: PresenceRowLike | undefined): DebugPresenceStatus {
+  if (!row) return 'unknown'
+  if (row.state === 'stopped') return 'stopped'
+  // 超时优先于原文状态：进程崩了时最后一条可能还是 watching
+  if (row.stale) return 'stale'
+  if (row.state === 'building') return 'building'
+  if (row.state === 'paused') return 'paused'
+  if (row.state === 'failed') return 'failed'
+  return 'online'
 }
 
 /** 取"路径名"（去协议/主机/查询/哈希）——用于跨形态比较同一个产物（与 pluginReload 同口径） */
@@ -230,6 +297,12 @@ export const SOURCES_KEY = 'hot-reload:sources'
  * 老格式（只有 `t`）继续可用：那时退回清单反查，行为与以前一致。
  */
 export const PLUGIN_WATCH_PREFIX = 'plugin-watch:'
+
+/**
+ * 在场变化广播用的 KV key（与 cloud-server 的 routes/pluginPresenceRoute.ts 一致）。
+ * 值里带 name；订阅方收到就现拉一次快照。
+ */
+export const PRESENCE_KEY = 'plugin-presence'
 
 /**
  * 给受保护的写请求补管理令牌（与 canvas-base 的同名工具同一份约定）。
@@ -783,19 +856,70 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     }
   }
 
+  /** 后台在场快照（调试监听接口；没开 / 旧版后台 / 请求失败 → undefined） */
+  async function readPresence(): Promise<PresenceSnapshot | undefined> {
+    try {
+      const raw = deps.fetchJson
+        ? await deps.fetchJson(backend('/api/plugin-presence'))
+        : await (await fetch(backend('/api/plugin-presence'), { cache: 'no-store' })).json()
+      const body = raw as Partial<PresenceSnapshot>
+      if (!body || body.ok !== true || !Array.isArray(body.plugins)) return undefined
+      return body as PresenceSnapshot
+    } catch {
+      // 后台没开调试通道 / 连不上：界面显示「未知」，不能假装在线
+      return undefined
+    }
+  }
+
   async function listDebugPlugins(): Promise<DebugPluginRow[]> {
     const installed = new Set(installedList())
-    const reports = await readWatchReports()
+    const [reports, presence] = await Promise.all([readWatchReports(), readPresence()])
     return reports
-      .map(({ name, report }) => ({
-        name,
-        installed: installed.has(name),
-        ...(runtimeStateOf(name) ? { state: runtimeStateOf(name) } : {}),
-        ...(report.front ? { front: report.front } : {}),
-        ...(report.server ? { server: report.server } : {}),
-        ...(report.t ? { at: report.t } : {}),
-      }))
+      .map(({ name, report }) => {
+        const live = presence?.plugins.find((p) => p.name === name)
+        return {
+          name,
+          installed: installed.has(name),
+          ...(runtimeStateOf(name) ? { state: runtimeStateOf(name) } : {}),
+          // 地址优先用「在场快照」（最新）里的，再退回产物记录 —— 两边都可能是空的
+          ...(live?.front || report.front ? { front: live?.front || report.front } : {}),
+          ...(live?.server || report.server ? { server: live?.server || report.server } : {}),
+          ...(report.t ? { at: report.t } : {}),
+          presence: presenceStatusOf(live),
+          ...(live ? { presenceState: live.state, presenceAgeMs: live.ageMs } : {}),
+          ...(live && live.instances > 1 ? { presenceInstances: live.instances } : {}),
+          ...(live?.message ? { presenceMessage: live.message } : {}),
+        }
+      })
       .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  function watchDebugPresence(onChange: () => void): () => void {
+    const w = globalThis as unknown as {
+      __miniCanvasKvEvents?: { subscribe(path: string, onEvent: (e: { type: string; key: string }) => void): () => void }
+    }
+    const KEY = PRESENCE_KEY
+    const onEvent = (e: { type: string; key: string }): void => {
+      if (e.type !== 'config' || e.key !== KEY) return
+      onChange()
+    }
+    const shared = w.__miniCanvasKvEvents
+    // 订阅地址必须跟「读快照」用同一个后台（配置了调试服务地址就跨源，不能还连页面同源）
+    const eventsPath = backend('/api/kv/events')
+    if (shared && typeof shared.subscribe === 'function') {
+      return shared.subscribe(eventsPath, onEvent)
+    }
+    if (typeof EventSource === 'undefined') return () => {}
+    const es = new EventSource(eventsPath)
+    es.onmessage = (ev): void => {
+      try {
+        const e = JSON.parse((ev as MessageEvent).data) as { type?: string; key?: string }
+        if (e?.type && e?.key) onEvent(e as { type: string; key: string })
+      } catch {
+        /* 坏帧忽略 */
+      }
+    }
+    return () => es.close()
   }
 
   /** 删掉某个插件的上报记录（卸载时顺手清；失败不致命） */
@@ -940,6 +1064,7 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     stopAll,
     clearLogs,
     watchPluginChanges,
+    watchDebugPresence,
     listDebugPlugins,
     reinstallDebugPlugin,
     uninstallDebugPlugin,
