@@ -233,14 +233,16 @@ function esc(t: string): string {
   return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
 }
 
-/** 无产物（失败/裂图）的异常卡：警示图标 + 标题（用户口径：没数据 = 异常，不装作正常素材） */
-function buildErrorCard(item: HistItem): HTMLElement {
+/** 无产物（失败）的异常卡 / 有地址但资源打不开的中性卡：警示图标 + 标题（没数据 = 异常，不装作正常素材） */
+function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): HTMLElement {
   const wrap = document.createElement('div')
-  wrap.className = 'hist-card-fallback is-error'
+  wrap.className = 'hist-card-fallback' + (opts?.missingResource ? '' : ' is-error')
   wrap.innerHTML =
     '<span class="hist-card-fallback-icon">!</span>' +
     '<strong>' + esc(item.title) + '</strong>' +
-    '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>' +
+    (opts?.missingResource
+      ? '<span class="hist-card-meta">资源走丢 · 无法预览</span>'
+      : '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>') +
     '<span class="hist-card-meta">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
   wrap.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
   if (s.histBatchMode && item.id) wrap.appendChild(buildCheckOverlay(item.id))
@@ -338,7 +340,9 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       }
     })
     img.addEventListener('error', () => {
-      card.replaceWith(buildErrorCard(item))
+      // 与图片卡同一口径：地址打不开 ≠ 生成失败 —— 用中性「资源走丢」卡，
+      // 不亮红色异常卡（否则"显示异常"关着也会冒出红叹号，用户实测 2026-10-27）。
+      card.replaceWith(buildErrorCard(item, { missingResource: true }))
       masonry.layout()
     })
   }
@@ -383,8 +387,10 @@ function createMasonryElement(item: HistItem): HTMLElement {
       }
     })
     img.addEventListener('error', () => {
-      // 裂图：退异常卡
-      media.replaceWith(buildErrorCard(item))
+      // 裂图：退「资源走丢」卡 —— 这不是"生成失败"（那条路没有 urls，被显示异常开关管住），
+      // 而是记录有产物、文件却被清理/换地址了。用中性文案与中性描边，
+      // 不占用红色的"生成异常"，避免开关关着还满屏红叹号（用户实测 2026-10-27）。
+      media.replaceWith(buildErrorCard(item, { missingResource: true }))
       masonry.layout()
     })
     card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
