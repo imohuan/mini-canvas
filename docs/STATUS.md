@@ -35,6 +35,24 @@ typecheck 干净、build 通过；ui `vue-tsc` 干净、themeColorHygiene 2/2；
 
 ### 追记（2026-10-27，底栏「翻译 / 提示词优化」改成可配置 AI 按钮）
 
+**补记 3（同日，AI 生成期间的三条交互口径）**：
+
+1. **延迟清空**：点按钮后**不再立刻清空**输入框 —— 分两阶段（`aiPhase`：starting →
+   streaming）。starting 期间原文原样可见（加载几秒时用户不至于以为内容丢了）；
+   **第一帧正文到达**（onDelta 首次触发）那一刻才清空原文并开始流式写入。
+   个别 provider 只回完整帧不走 delta 时，成功收尾处兜底置位。失败时：starting 阶段
+   原文原样还在无需还原；streaming 阶段保留已生成的部分（原文不可恢复），只提示重试。
+2. **加载期间锁编辑**：prosemirror-editor-bundle 新增 `editable` prop（缺省 true）与
+   `setEditable(next)` 方法 —— 内部走 ProseMirror `view.editable` 布尔位 + watch(props.editable)
+   动态同步。底栏在 starting/streaming 全程锁编辑，结束（成功/失败/取消）统一解锁。
+3. **流光动效**：`.nb-editor.is-ai-locking::before` 铺一圈 2px conic 渐变描边，
+   `@property --ai-sweep` 让角度可动画（2.4s/圈）；`prefers-reduced-motion` 降级为静态描边。
+   starting 阶段另给顶部小字「AI 处理中，即将写入…」（不遮原文）。
+   两处 mask 蒙版 `#000` 按规范加了主题色白名单标记（形状色，非显示色）。
+
+**验证**：plugin-bottom-bar 198/198、ui 420/420、两包 typecheck 干净
+（prosemirror-editor-bundle 新增 prop/方法亦过 vue-tsc）。
+
 **补记 2（同日，按用户三条口径调整 + 保存实时生效）**：
 
 1. **去掉独立后台地址**（「这边本身就是使用 Agent 之间配置的这个数据」）：
