@@ -775,6 +775,11 @@ export function useEditor(
     promptDoc?: Ref<any | undefined>
     resources?: Ref<ResourceItem[] | undefined>
     resolveResource?: Ref<((token: string) => ResourceItem | null) | undefined>
+    /**
+     * 是否允许编辑（缺省 true）。false = 只读：光标不出现、键盘/粘贴/拖拽改动全禁。
+     * 用于「AI 生成期间锁输入」（底栏的用户口径：加载中不允许编辑）。
+     */
+    editable?: Ref<boolean | undefined>
   },
   emit: {
     (e: "update:modelValue", value: string): void
@@ -1208,6 +1213,8 @@ export function useEditor(
 
     view = new EditorView(editorRef.value, {
       state,
+      // 缺省可编辑；props.editable === false 时只读（contenteditable 移除、输入全禁）
+      editable: () => unref(props.editable) !== false,
       dispatchTransaction(transaction) {
         if (!view) return;
         const newState = view.state.apply(transaction);
@@ -1347,6 +1354,16 @@ export function useEditor(
   );
 
   // 监听 resources 变化，更新过滤列表
+  /**
+   * 编辑中状态外部变了（AI 生成开始/结束）→ 同步 ProseMirror 的 contenteditable。
+   * 为什么不能用别的方式：ProseMirror 自己管 DOM，外部只能走 view.editable 布尔位。
+   */
+  watch(
+    () => unref(props.editable),
+    (next) => {
+      if (view) view.editable = next !== false
+    },
+  );
   watch(
     () => unref(props.resources),
     (newResources) => {
@@ -1543,5 +1560,15 @@ export function useEditor(
     replaceResource,
     replaceResourceThumbByName,
     refreshChips,
+    /**
+     * 动态切换可编辑态（AI 生成开始 = false，结束 = true）。
+     * 与 props.editable 双通道：prop 管声明式场景，这个方法管命令式场景；内部同一个布尔位。
+     */
+    setEditable(next: boolean) {
+      if (view) view.editable = next
+      if (props.editable && 'value' in props.editable) {
+        (props.editable as { value: boolean }).value = next
+      }
+    },
   };
 }

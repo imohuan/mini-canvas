@@ -49,6 +49,11 @@ const props = defineProps<{
   resources?: ResourceItem[];
   placeholder?: string;
   resolveResource?: (name: string) => ResourceItem | null;
+  /**
+   * 是否允许编辑（底栏 AI 生成期间要**锁输入**，用户口径 2026-10-27：加载中不允许编辑）。
+   * 缺省 true；false = 只读（ProseMirror view.editable = false，光标/输入/粘贴全禁）。
+   */
+  editable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -62,6 +67,7 @@ const modelValueRef = toRef(props, 'modelValue');
 const promptDocRef = toRef(props, 'promptDoc');
 const resourcesRef = toRef(props, 'resources');
 const resolveResourceRef = toRef(props, 'resolveResource');
+const editableRef = toRef(props, 'editable');
 
 const {
   menuVisible,
@@ -86,11 +92,13 @@ const {
   replaceResource,
   replaceResourceThumbByName,
   refreshChips,
+  setEditable,
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
   promptDoc: promptDocRef,
   resources: resourcesRef,
   resolveResource: resolveResourceRef,
+  editable: editableRef,
 }, emit);
 
 // 暴露导出方法给父组件
@@ -104,6 +112,7 @@ defineExpose({
   replaceResource,
   replaceResourceThumbByName,
   refreshChips,
+  setEditable,
   /**
    * 编辑器内部的 @ 菜单是否开着（只读）。
    *

@@ -281,6 +281,8 @@ if (hasActions.value && !currentId.value) selectAction(initialActionId())
  * 'none' 绑定写 data.barPrompt —— 这是用户报的「内容消失」的落点。
  */
 function persistValues(): void {
+  let cleared = false
+  let full = ''
   try {
     ctx.get('doc').updateNode(props.id, {
       data: {
@@ -727,6 +729,15 @@ const settingsOpen = ref(false)
 // - 失败自动重试 3 轮（aiActions 内置退避），全失败提示错误；跑着时按钮转圈并禁点。
 const aiActions = ref<AiActionConfig[]>([])
 const aiRunningId = ref<string | null>(null)
+/**
+ * AI 生成分两个阶段（用户口径 2026-10-27）：
+ * - starting：已点按钮、还没收到第一帧 —— 输入框**保持原文可读**（只是锁编辑）；
+ * - streaming：第一帧已到 —— 这一刻才清空原文，开始流式写入。
+ * 为什么不一开始就清：加载可能要好几秒，原文一直空着用户会以为内容丢了。
+ */
+const aiPhase = ref<'idle' | 'starting' | 'streaming'>('idle')
+/** 加载期间输入框禁编辑（starting + streaming 都锁；结束解锁） */
+const aiEditorLocked = ref(false)
 const aiError = ref('')
 let aiAbort: AbortController | null = null
 let aiFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -818,9 +829,12 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
   aiRunningId.value = action.id
   aiError.value = ''
   aiAbort = new AbortController()
-  // 第一帧到来前先清空正文：AI 输出是「替换」语义，残留旧文会和新文拼在一起
-  prompt.value = ''
-  promptDoc.value = undefined
+  // 阶段一（starting）：**不清空**——加载期间原文保持可见（用户口径：避免加载时
+  // 看不到当前输入内容），只是锁编辑；真正的清空推迟到第一帧到来（onAiDelta 首次调用）。
+  aiPhase.value = 'starting'
+  aiEditorLocked.value = true
+  editorComponentRef.value?.setEditable?.(false)
+  let cleared = false
   let full = ''
   try {
     const res = await requestAiText({
@@ -835,17 +849,37 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
       ...(retryRounds === undefined ? {} : { retryRounds }),
       signal: aiAbort.signal,
       onDelta: (delta) => {
+        // 第一帧到了：此刻才清空原文（有真实数据支撑的清空），随后切到 streaming
+        if (!cleared) {
+          cleared = true
+          aiPhase.value = 'streaming'
+          prompt.value = ''
+          promptDoc.value = undefined
+          full = ''
+        }
         full += delta
         onAiDelta(full)
       },
     })
     if (res.ok) {
+      // 成功收尾兜底：个别 provider 只回完整帧不走 delta 时，上面 cleared 还没置位 ——
+      // 这里把正文落成最终文本（onAiDelta 内部会再排批量落盘，这里直接 flush 一次）。
+      if (!cleared) {
+        cleared = true
+        aiPhase.value = 'streaming'
+        prompt.value = ''
+        promptDoc.value = undefined
+        full = ''
+      }
       onAiDelta(full)
       flushAiPrompt()
     } else {
-      // 失败：把原文还回去（别让用户内容被一次失败吃掉）
-      prompt.value = source
-      promptDoc.value = undefined
+      // 失败：starting 阶段原文原样还在（没清过），无需还原；streaming 阶段原文已被
+      // 部分输出替换（不可恢复），保留已生成内容，只提示用户重试。
+      if (!cleared) {
+        prompt.value = source
+        promptDoc.value = undefined
+      }
       flushAiPrompt()
       aiError.value = res.error
       setTimeout(() => { if (aiError.value === res.error) aiError.value = '' }, 4000)
@@ -853,6 +887,9 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
   } finally {
     aiRunningId.value = null
     aiAbort = null
+    aiPhase.value = 'idle'
+    aiEditorLocked.value = false
+    editorComponentRef.value?.setEditable?.(true)
     if (aiFlushTimer) { clearTimeout(aiFlushTimer); aiFlushTimer = null }
     aiFlushPending = false
   }
@@ -946,6 +983,8 @@ const editorComponentRef = ref<{
   replaceResource?(item: ResourceItem): boolean
   replaceResourceThumbByName?(name: string, url: string): boolean
   refreshChips?(): void
+  /** 动态切可编辑态（AI 生成期间锁输入用；bundle 侧 view.editable 布尔位） */
+  setEditable?(next: boolean): void
 } | null>(null)
 
 /** 点击槽位：空的 = 选文件上传；已填的 = 把光标带回正文那个标签 */
@@ -1635,14 +1674,36 @@ function onGlobalLeave(el: Element): void {
     <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
 
     <!-- 输入区：内联在卡下面（点得进去、能打字、@ 引用素材） -->
-    <div v-if="showEditor" class="nb-editor nodrag nopan nowheel" :style="editorStyle">
-      <span v-if="prompt.length === 0" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
+    <!--
+      输入区：内联在卡下面（点得进去、能打字、@ 引用素材）。
+      AI 生成期间：is-ai-locking = 流光描边动效 + 只读（用户口径：加载时不许编辑）；
+      is-ai-streaming = 已在写正文（第一帧后）。两种态共用流光，观感区分靠光标有无。
+    -->
+    <div
+      v-if="showEditor"
+      class="nb-editor nodrag nopan nowheel"
+      :class="{ 'is-ai-locking': aiEditorLocked, 'is-ai-streaming': aiPhase === 'streaming' }"
+      :style="editorStyle"
+    >
+      <!-- starting 阶段提示（原文还在，只是顶部小字说一句，不遮内容） -->
+      <span v-if="aiPhase === 'starting'" class="nb-ai-hint" aria-hidden="true">AI 处理中，即将写入…</span>
+      <span v-if="prompt.length === 0 && aiPhase !== 'starting'" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
       <ProseMirrorEditor
         ref="editorComponentRef"
         v-model="prompt"
         v-model:prompt-doc="promptDoc"
         :resources="editorResources"
         :resolve-resource="resolveResource"
+        @update:model-value="onPromptUpdate"
+        @click.stop
+      />
+      <ProseMirrorEditor
+        ref="editorComponentRef"
+        v-model="prompt"
+        v-model:prompt-doc="promptDoc"
+        :resources="editorResources"
+        :resolve-resource="resolveResource"
+        :editable="!aiEditorLocked"
         @update:model-value="onPromptUpdate"
         @click.stop
       />
@@ -2238,6 +2299,74 @@ function onGlobalLeave(el: Element): void {
   padding: 0 2px;
   cursor: text;
 }
+/* —— 输入区（内联在卡下面；点得进去、能打字） —— */
+.nb-editor {
+  position: relative;
+  min-height: 24px;
+  padding: 0 2px;
+  cursor: text;
+  border-radius: 8px;
+}
+
+/*
+ * AI 生成期间的**流光描边**（用户口径 2026-10-27：加载时要有 UI 动效）。
+ * 做法：::before 铺一圈 2px 渐变描边 + conic 渐变旋转（@property 让 --ai-sweep 可动画），
+ * 只在 is-ai-locking（starting + streaming）时出现。颜色吃 --ui-accent，跟主题走。
+ * prefers-reduced-motion：光斑停转，只留静态描边（全站动效规矩）。
+ */
+.nb-editor.is-ai-locking {
+  position: relative;
+  cursor: progress;
+}
+.nb-editor.is-ai-locking::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 10px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--ai-sweep, 0deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 85%, transparent) 40deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent) 90deg,
+    transparent 150deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent) 250deg,
+    transparent 330deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 主题色白名单: mask 蒙版形状色 */
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 主题色白名单: mask 蒙版形状色 */
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: nb-ai-sweep 2.4s linear infinite;
+}
+@property --ai-sweep {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes nb-ai-sweep {
+  to {
+    --ai-sweep: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-editor.is-ai-locking::before {
+    animation: none;
+    /* 光斑停转：退化为静态的柔和描边 */
+    background: color-mix(in srgb, var(--ui-accent, #0891b2) 45%, transparent);
+  }
+}
+
+/* starting 阶段的顶部小字提示（不遮原文，让用户确认内容还在） */
+.nb-ai-hint {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 10px;
+  color: var(--ui-accent, #0891b2);
+  pointer-events: none;
+}
 /*
  * 字号/行高/最小高必须写在 **.ProseMirror 本体**上，不能只写在 .prose-mirror-editor 外壳上：
  * bundle 的 `.prose-mirror-editor .ProseMirror` 把这些值直配在正文元素自己身上（16px/120px），
@@ -2638,3 +2767,4 @@ function onGlobalLeave(el: Element): void {
 </style>
  
  
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 主题色白名单: mask 蒙版形状色 */
