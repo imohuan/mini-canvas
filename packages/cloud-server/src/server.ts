@@ -719,9 +719,24 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('pluginsDir', pluginsDir)
   host.ctx.inject('serverPluginsDir', serverPluginsDir)
   // 调试监听的「在场表」：只存内存（心跳不落盘）。
-  // 只有显式打开调试开关时才装 plugin-presence 插件；否则这个服务根本不存在。
+  // 只有「本机调试」时才装 plugin-presence 插件；否则这个服务根本不存在。
   const pluginPresence = new PluginPresence()
   host.ctx.inject('pluginPresence', pluginPresence)
+  /**
+   * 在场通道的开关（用户口径：本机自动开门，不用手动设环境变量）。
+   *
+   * 自动开 = 服务只监听**本机回环**（hostname 是 127.0.0.1 / localhost / ::1）。
+   * 为什么：这条通道的数据由「本机文件系统上跑的任何进程」提供，只在本机有意义；
+   * 监听 0.0.0.0 / 局域网地址时它是暴露面（外人能伪造「合法插件」引导用户点重装）。
+   * 环境变量仍是最高优先级：'1' 强制开（含反代回环场景），'0' 强制关（部署者兜底）。
+   */
+  const loopbackHost = ['127.0.0.1', 'localhost', '::1'].includes(opts.hostname ?? '127.0.0.1')
+  const presenceEnabled =
+    process.env.MINI_CANVAS_DEBUG_PRESENCE === '1'
+      ? true
+      : process.env.MINI_CANVAS_DEBUG_PRESENCE === '0'
+        ? false
+        : loopbackHost
   // 审计日志：插件路由（server-plugins / npm-plugins）经 ctx 取它，装配时注入一次。
   // 没注入就是 no-op —— 那些路由在纯框架单测里照样能跑。
   host.ctx.inject('auditLog', audit)
@@ -793,8 +808,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   for (const plugin of BUILTIN_PLUGINS) {
     // agent 相关的两组按开关决定装不装
     if (!agentEnabled && (plugin.name === 'agent-routes' || plugin.name === 'agent-sessions')) continue
-    // 调试在场通道只在开发时开：生产环境不该有「谁在监听」这类本机调试接口
-    if (plugin.name === 'plugin-presence' && process.env.MINI_CANVAS_DEBUG_PRESENCE !== '1') continue
+    // 调试在场通道：本机回环自动开（见上面 presenceEnabled 的说明）
+    if (plugin.name === 'plugin-presence' && !presenceEnabled) continue
     host.ctx.plugin(plugin)
   }
 

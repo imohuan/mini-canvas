@@ -36,7 +36,8 @@ export interface PluginPresenceRoutes {
   sweep(): Promise<void>
 }
 
-/** 允许的写请求来源：只在本机调试时开；真机服务通过开关控制是否装这个插件 */
+/** 路由工厂。装不装由 server.ts 按开关决定（本机回环自动开，见其 presenceEnabled 注释）；
+ *  这里再加一道 Host 校验：即使插件被强制开启（环境变量），也只收本机回环请求。 */
 export function createPluginPresenceRoutes(opts: PluginPresenceRouteOptions): PluginPresenceRoutes {
   const app = new Hono()
   const presence = opts.presence
@@ -57,6 +58,12 @@ export function createPluginPresenceRoutes(opts: PluginPresenceRouteOptions): Pl
   })
 
   app.post('/api/plugin-presence/heartbeat', async (c) => {
+    // 双保险：Host 必须是本机回环（与 install-from-path 同一判断口径）
+    const hostHeader = (c.req.header('host') ?? '').trim().toLowerCase()
+    const hostname = hostHeader.startsWith('[') ? hostHeader.slice(0, hostHeader.indexOf(']') + 1) : (hostHeader.split(':')[0] ?? '')
+    if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(hostname)) {
+      return c.json({ ok: false, error: '在场接口只允许本机调用（Host 不是回环地址）' }, 403)
+    }
     let body: unknown
     try {
       body = await c.req.json()
@@ -70,6 +77,11 @@ export function createPluginPresenceRoutes(opts: PluginPresenceRouteOptions): Pl
   })
 
   app.post('/api/plugin-presence/leave', async (c) => {
+    const hostHeader = (c.req.header('host') ?? '').trim().toLowerCase()
+    const hostname = hostHeader.startsWith('[') ? hostHeader.slice(0, hostHeader.indexOf(']') + 1) : (hostHeader.split(':')[0] ?? '')
+    if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(hostname)) {
+      return c.json({ ok: false, error: '在场接口只允许本机调用（Host 不是回环地址）' }, 403)
+    }
     let body: unknown
     try {
       body = await c.req.json()

@@ -112,6 +112,9 @@ describe('plugin-presence 路由', () => {
     return { host, presence, built }
   }
 
+  /** 在场接口要求 Host 是本机回环（双保险校验）；测试请求统一带合法 Host */
+  const LOOPBACK = { host: '127.0.0.1' } as const
+
   it('POST 心跳 → 200；GET 快照能读回；POST 告别 → 消失', async () => {
     const { host } = boot()
     await host.start()
@@ -120,7 +123,7 @@ describe('plugin-presence 路由', () => {
         new Request('http://x' + path, {
           method: 'POST',
           body: JSON.stringify(body),
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', ...LOOPBACK },
         }),
       )
     expect((await post('/api/plugin-presence/heartbeat', base)).status).toBe(200)
@@ -141,7 +144,7 @@ describe('plugin-presence 路由', () => {
       new Request('http://x/api/plugin-presence/heartbeat', {
         method: 'POST',
         body: JSON.stringify({ ...base, state: 'nope' }),
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...LOOPBACK },
       }),
     )
     expect(res.status).toBe(400)
@@ -168,6 +171,20 @@ describe('plugin-presence 路由', () => {
     await built.sweep()
     nowSpy.mockRestore()
     expect(written.some((w) => w.key === 'plugin-presence')).toBe(true)
+    host.ctx.stop()
+  })
+
+  it('Host 不是回环 → 403（即使插件被强制开启，外人也写不进来）', async () => {
+    const { host } = boot()
+    await host.start()
+    const res = await host.app.fetch(
+      new Request('http://x/api/plugin-presence/heartbeat', {
+        method: 'POST',
+        body: JSON.stringify(base),
+        headers: { 'content-type': 'application/json', host: 'evil.example' },
+      }),
+    )
+    expect(res.status).toBe(403)
     host.ctx.stop()
   })
 })
