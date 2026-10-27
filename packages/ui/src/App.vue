@@ -256,10 +256,17 @@ onBeforeUnmount(() => {
     </template>
 
     <template #status>
-      <StatusArea />
+      <div class="flex items-end gap-1">
+        <StatusArea />
+        <SlotHost slot="shell.status.end" item-class="flex-none" />
+      </div>
     </template>
     <template #dock>
+      <SlotHost slot="shell.dock.start" item-class="flex-none" />
       <DockArea />
+    </template>
+    <template #dock-append>
+      <SlotHost slot="shell.dock.end" item-class="flex-none" />
     </template>
 
     <LeftDrawer />
