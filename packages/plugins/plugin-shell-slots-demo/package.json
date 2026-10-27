@@ -1,0 +1,44 @@
+{
+  "name": "@mini-canvas/plugin-shell-slots-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "外壳插槽演示",
+    "description": "开发用：往状态条 / 底栏 / 左抽屉页签各挂一块演示 UI，验证外壳插槽链路",
+    "pluginName": "shell-slots-demo",
+    "installable": true,
+    "defaultInstalled": false
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "build:esm": "vite build --config vite.esm.config.ts",
+    "watch": "node scripts/watch.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*"
+    ,
+    "@mini-canvas/canvas-data": "workspace:*"
+  },
+  "peerDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}
