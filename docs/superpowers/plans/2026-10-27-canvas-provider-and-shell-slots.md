@@ -2,64 +2,64 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 
-**Goal:** 把画布上下文从 CanvasHost 内部提到应用最外层，让左侧抽屉、状态条、底栏等外壳区域可以直接消费 ctx，并通过 ctx.slots 提供可扩展插槽，不再使用 Teleport 桥接层。
+**Goal:** 把画布内核的启动和基础上下文移到应用最外层，让左侧抽屉、状态条、底栏直接消费 ctx，并通过 ctx.slots 提供可扩展插槽；不保留旧 CanvasHost 自启动用法，不写任何兼容层。
 
-**Architecture:** 新增无 UI 的 CanvasProvider，负责启动唯一画布宿主并提供基础画布上下文。CanvasHost 拆成“兼容外壳 + 纯画布内层”；外壳插槽用 SlotHost 直接渲染，左侧抽屉用 DrawerTabHost 的同一套页签状态管理。画布渲染上下文仍只存在于 CanvasHost 内部，两层上下文职责分开。
+**Architecture:** 新增无 UI 的 CanvasProvider，唯一负责 createMiniCanvasHost、window API 暴露和卸载收尾。CanvasHost 原地改成纯画布组件，只消费 Provider 提供的 ctx/host，不再创建内核。外壳用 SlotHost 渲染插件组件；左抽屉的扩展页签由 DrawerHost 统一管理 activeTab、开合、收起和宽度。
 
 **Tech Stack:** Vue 3.5、TypeScript、VueFlow、Vitest、Playwright、pnpm workspace。
 
-**Spec:** 本文件 §1-§4 同时承担需求、设计与实施计划；用户 2026-10-27 的评审意见是本计划的来源。
+**Spec:** 本文件 §1-§4 同时承担需求、设计与实施计划。用户 2026-10-27 已确认：不做兼容、接受整页 loading、外壳按钮走命令控制抽屉。
 
 ## Global Constraints
 
 - 不碰 v1：根 src/ 与 packages/canvas-core 一律不动。
-- 不碰核心节点件：BaseNode.vue、MovingHandle.vue、BaseTitle.vue、CustomEdge.vue、ConnectionLine.vue、DefaultBackground.vue 一律不动。
-- 编辑文件只用 apply_patch，不用 PowerShell 写文件。
-- 检索优先用 codegraph；开工先执行 codegraph status，改完执行 codegraph index。
-- 每个任务完成即 git add + git commit；禁止把大量改动堆在工作区。
-- 插件不得反向 import @mini-canvas/ui；插件只依赖 ctx、canvas-base 或 canvas-render 的公开面。
-- CanvasProvider 每个画布实例只能有一个；不能在外壳里再包第二个 Provider。
-- SettingsHost 仍留在 CanvasHost 的 #ui 内，因为设置面板内容依赖 useCanvasRender()。
-- 外壳槽只保证基础画布上下文（ctx + host）；需要 flow / renderNodes / visibleRect 的组件仍必须住在 CanvasHost 内。
-- 抽屉页签保留 canvas 与 assets 两个保留 id；插件页签不能占用它们。
+- 不碰六个核心节点件：BaseNode.vue、MovingHandle.vue、BaseTitle.vue、CustomEdge.vue、ConnectionLine.vue、DefaultBackground.vue。
+- 编辑文件只用 apply_patch，不使用 PowerShell 写文件。
+- 检索优先 codegraph；开工先跑 codegraph status，结束跑 codegraph index。
+- 每个任务完成立即 git add + git commit；不允许大量改动堆在工作区。
+- 插件不反向 import @mini-canvas/ui；插件只依赖 ctx、canvas-base 或 canvas-render 的公开面。
+- 每个画布实例必须各自包一个 CanvasProvider；同一个 Provider 不能服务两个画布。
+- 不保留 CanvasHost 自启动、Provider 缺失时自动补一层、useCanvasContext 回退读 RENDER_CONTEXT_KEY 等兼容路径。
+- SettingsHost 仍留在 CanvasHost 的 #ui 内；设置面板内容继续用 useCanvasRender()。
+- 外壳槽只提供基础上下文（ctx/host/api/manager）；需要 flow、renderNodes、visibleRect 的组件仍住 CanvasHost 内。
+- 抽屉保留 id 只有 canvas 和 assets；插件不能占用。
 - UI 数值走 docs/design/ui-style-guide.md 的 token；不自造颜色、圆角、字号、z-index。
-- 测试是裁判：每步先写红，再写最小实现，再跑绿。
+- 测试是裁判：每一步先写失败测试，再写最小实现，再跑绿。
 
 ---
 
 ## 1. 需求与结论
 
-### 1.1 用户要的结果
+### 1.1 要做的三块区域
 
-1. 三个红框区域可以被插件塞入自定义 UI：左侧抽屉页签行、左下状态条、底部中央工具栏。
-2. 不再为每个区域写 Teleport 桥、DOM 锚点表或 querySelector。
-3. 最外层有一个类似 n-config-provider 的组件，负责初始化上下文；里面的内容可以直接使用上下文。
-4. 左侧抽屉的页签切换、折叠、展开、隐藏仍由应用壳统一管理；插件只交按钮和面板。
-5. 后续代码应更精简，尤其是删掉重复的桥接和查找目标的逻辑。
+1. 左侧抽屉顶部页签行：可以追加“完整页签”（按钮 + 正文面板）。
+2. 左下状态条：可以追加按钮或小状态块。
+3. 底部中央工具栏：可以在最前或最后追加入口。
 
-### 1.2 关键判断
+### 1.2 用户已确认的决策
 
-当前问题的根因不是插槽不够，而是上下文边界放错了：
+| 决策 | 结论 |
+|---|---|
+| 是否保留旧 CanvasHost 用法 | 不保留。所有调用点一起迁移。 |
+| 首次启动 | 接受整页 loading，内核就绪后再显示外壳。 |
+| 抽屉控制 | 外壳按钮通过命令打开抽屉、切页签、收起或展开。 |
+| 审核方式 | 文档由主代理自审；不创建子代理、不创建分支。 |
+
+### 1.3 根因
 
     现在
     CanvasShell
-      +- CanvasHost        <- 在这里启动内核并提供 ctx
+      +- CanvasHost        <- 在内部启动内核并提供 ctx
       +- LeftDrawer        <- 兄弟节点，拿不到 ctx
 
     目标
     CanvasProvider        <- 只启动内核、提供 ctx，不画业务 UI
       +- CanvasShell
-           +- CanvasHost  <- 只画 VueFlow，不再启动内核
-           +- LeftDrawer  <- 直接拿到 ctx
+           +- CanvasHost  <- 只画 VueFlow
+           +- LeftDrawer  <- 直接拿 ctx
+           +- StatusArea / DockArea
 
-因此不需要再让插件自己 Teleport 到外壳。组件在 Vue 树里本来就是外壳的后代，provide / inject 正常，DOM 关系也正常。
-
-### 1.3 不在本次范围
-
-- 不把设置面板外壳搬出 CanvasHost。
-- 不把节点、连线、画布内浮层迁移到基础上下文。
-- 不新增第二套插件系统。
-- 不新增分支，不创建子代理；按用户要求由主代理完成文档自审。
+问题的本质是上下文的提供范围太小，不是“插槽不够”。把启动和基础上下文提到外层，Teleport 桥、锚点表和插件自己查找 DOM 都不再需要。
 
 ---
 
@@ -70,32 +70,32 @@
 | 上下文 | 提供方 | 内容 | 使用范围 |
 |---|---|---|---|
 | CanvasContext | CanvasProvider | ctx、host、api、manager | 整个应用壳、左侧抽屉、状态条、底栏、外壳插槽 |
-| CanvasRenderContext | CanvasSurface | ctx、host、flow、renderNodes、renderEdges、visibleRect、interaction、edgeVisual 等 | 只在 VueFlow 渲染子树内 |
+| CanvasRenderContext | CanvasSurface | 再加 flow、renderNodes、renderEdges、visibleRect、interaction、edgeVisual 等 | 只在 CanvasHost 的渲染子树内 |
 
 规则：
 
-- 只读服务、命令、设置、插槽、主题目录 → 用 useCanvasContext()。
-- 需要视口、节点渲染快照、连线反馈、拖拽状态 → 用 useCanvasRender()。
-- useCanvasContext() 在找不到基础上下文时，回退读取 RENDER_CONTEXT_KEY，保证现有单元测试和旧渲染子树兼容。
+- 只读服务、命令、设置、插槽、主题目录 → useCanvasContext()。
+- 需要视口、节点画面快照、连线反馈、拖拽状态 → useCanvasRender()。
+- useCanvasContext() 只认 CanvasProvider；找不到就抛错，不回退到 RENDER_CONTEXT_KEY。
+- useCanvasRender() 保持原样，只认 CanvasSurface；找不到就抛错。
 
 ### 2.2 组件关系
 
     CanvasProvider
       provide(CANVAS_CONTEXT_KEY)
+      ready 后渲染默认插槽
       +- CanvasShell
-           +- TopLeftArea
-           +- TopRightArea
+           +- TopLeftArea / TopRightArea
            +- StatusArea + SlotHost(shell.status.end)
            +- DockArea + SlotHost(shell.dock.start/end)
            +- LeftDrawer
-                +- 内置画布/资产页签
+                +- 内置页签：画布 / 资产
                 +- 插件页签按钮（shell.drawer.tabs）
                 +- 插件页签面板（meta.panel）
-           +- CanvasHost（兼容外壳）
-                +- CanvasHostInner
-                     +- CanvasSurface
-                          provide(RENDER_CONTEXT_KEY)
-                          +- VueFlow / overlay / 节点 / 连线
+           +- CanvasHost
+                +- CanvasSurface
+                     provide(RENDER_CONTEXT_KEY)
+                     +- VueFlow / overlay / 节点 / 连线
 
 ### 2.3 插槽表
 
@@ -108,91 +108,129 @@
 
 已有槽不改：overlay、mini-map、agent-conversation、settingsNav、settingsTab、settingsGroup/<key>。
 
-### 2.4 左侧抽屉页签契约
+### 2.4 “插件页”是什么
 
-插件注册：
+“插件页”不是路由页面、不是设置页、不是画布节点。它专指：
+
+**左侧抽屉里的第三个及之后的页签，以及点中它时显示的正文面板。**
+
+现在抽屉顶部是：
+
+    画布 | 资产
+
+插件注册完整页签后是：
+
+    画布 | 资产 | 灵感
+
+点“灵感”时：
+
+- 页签行里的“灵感”高亮；
+- 下方正文从“画布树 / 资产树”切换成插件自己的面板；
+- 浏览器 URL 不变，不换路由；
+- 再点“画布”或“资产”，抽屉回到原来的树，插件面板卸载。
+
+适合做抽屉页签的内容：
+
+| 例子 | 为什么适合 |
+|---|---|
+| “灵感 / 备注”列表 | 宽高和抽屉一致，需要长期停留在左侧 |
+| 某个工具的补充素材面板 | 和画布同时看，打开抽屉即可操作 |
+| 生成历史或操作记录 | 一列一条，适合抽屉宽度 |
+| 带搜索和批量操作的表单 | 需要整页空间 |
+
+不适合做抽屉页签的内容：
+
+| 例子 | 应放哪里 |
+|---|---|
+| 单个按钮 | 状态条或底栏槽 |
+| 画布上的浮层 | 现有 overlay 槽 |
+| 设置项 | 现有 settingsGroup/<key> |
+| 独立页面 | 路由，不进抽屉 |
+
+注册示例：
 
     ctx.slots.register('shell.drawer.tabs', {
-      id: 'my-panel',
+      id: 'inspiration',
       order: 20,
-      component: MyTabButton,
+      component: InspirationTabButton,
       meta: {
-        title: '我的面板',
-        panel: MyPanel,
+        title: '灵感',
+        panel: InspirationPanel,
       },
     })
 
-页签按钮收到：
+按钮收到：
 
     {
       active: boolean,
       onSelect: () => void,
-      host: {
-        activeTab: string,
-        width: number,
-        openTab(id: string): void,
-        close(): void,
-        toggleCollapsed(): void,
-      },
+      host: DrawerHost,
     }
 
-页签面板收到：
+面板收到：
 
     {
-      host: 上面同一个 host,
+      host: DrawerHost,
     }
 
-抽屉外壳负责：
+DrawerHost 接口：
 
-- 当前页签是高亮还是普通。
-- 点击页签后是否切换。
-- 抽屉打开、关闭、收起、展开、拖宽。
-- 插件卸载后如果当前页签正是它，自动退回 canvas。
-- 画布/资产两个内置页签保持不变。
+    export interface DrawerHost {
+      readonly activeTab: string
+      readonly width: number
+      readonly collapsed: boolean
+      openTab(id: string): void
+      close(): void
+      toggleCollapsed(): void
+    }
 
-插件不负责：
+宿主负责：
 
-- 直接改 state.leftTab 或 state.drawer。
-- 自己写 fixed 定位。
-- 自己查找抽屉 DOM。
+- 哪个页签高亮；
+- 点页签后切到哪一页；
+- 抽屉打开、关闭、收起、展开、拖宽；
+- 插件卸载后，当前页签若消失就回退到 canvas；
+- 画布/资产两个内置页签的行为不变。
+
+插件负责：
+
+- 只画页签按钮和面板内容；
+- 使用宿主给的 active/onSelect/host；
+- 不直接改 ui.state.leftTab 或 ui.state.drawer；
+- 不自己写 fixed 定位，不自己找抽屉 DOM。
 
 ### 2.5 外壳操作命令
 
-为了外壳插槽里的按钮能打开抽屉或切换页签，又不必 import @mini-canvas/ui，注册三条公共命令：
-
 | 命令 id | payload | 行为 |
 |---|---|---|
-| shell:open-drawer | 无 | 打开左侧抽屉 |
-| shell:open-drawer-tab | { id: string } | 打开抽屉并切到指定页签 |
-| shell:toggle-drawer | 无 | 收起/展开左侧抽屉 |
+| shell:open-drawer | 无 | 打开左侧抽屉，保留当前页签 |
+| shell:open-drawer-tab | { id: string } | 打开左侧抽屉并切到指定页签 |
+| shell:toggle-drawer | 无 | 收起或展开左侧抽屉 |
 
-插件按钮这样调用：
+插件按钮调用：
 
-    ctx.get('command').execute('shell:open-drawer-tab', { id: 'my-panel' })
+    ctx.get('command').execute('shell:open-drawer-tab', { id: 'inspiration' })
 
-这比新增一个全局 shell 服务更轻，也沿用本项目“动作走命令表”的既有模式。
+不新增全局 shell 服务；动作继续走命令表，和项目现有快捷键/右键菜单同一条路。
 
-### 2.6 兼容策略
-
-- 直接写 CanvasHost 的旧用法继续有效：CanvasHost 检测不到 Provider 时，内部临时包一层 CanvasProvider。
-- CanvasHost 的公开 ref 继续提供 host、api、manager、ready、bootErrorText。
-- CanvasHost 的 @ready 仍表示“画布渲染子树准备完成”，不是“内核刚建好”。
-- CanvasProvider 自己的 @ready 表示“内核已启动、ctx 可用”；应用壳应优先使用 CanvasHost 的 @ready 做原有 onReady 初始化。
-
-### 2.7 文件结构
+### 2.6 文件结构
 
 新建：
 
 - packages/canvas-render/src/contracts/canvasContext.ts
 - packages/canvas-render/src/host/CanvasProvider.vue
-- packages/canvas-render/src/host/CanvasHostInner.vue
-- packages/canvas-render/src/host/canvasHostTypes.ts
-- packages/canvas-render/src/components/__tests__/slotHost.test.ts
 - packages/canvas-render/src/contracts/__tests__/canvasContext.test.ts
+- packages/canvas-render/src/host/__tests__/canvasProvider.test.ts
+- packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts
+- packages/canvas-render/src/components/__tests__/slotHost.test.ts
 - packages/ui/src/composables/drawerTabs.ts
 - packages/ui/src/composables/__tests__/drawerTabs.test.ts
 - packages/ui/src/shellCommands.ts
 - packages/ui/src/__tests__/shellCommands.test.ts
+- packages/ui/src/__tests__/drawerTabState.test.ts
+- packages/ui/src/__tests__/appCanvasProvider.test.ts
+- packages/ui/src/__tests__/shellSlotMounts.test.ts
+- packages/ui/src/__tests__/leftDrawerTabs.test.ts
 - packages/ui/e2e/shell-slots-check.mjs
 - docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md
 
@@ -203,31 +241,50 @@
 - packages/canvas-render/src/contracts/uiCatalog.ts
 - packages/canvas-render/src/contracts/useThemeColor.ts
 - packages/canvas-render/src/contracts/nodeLayoutSettings.ts
+- packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts
 - packages/canvas-render/src/index.ts
 - packages/ui/src/App.vue
 - packages/ui/src/composables/ui.ts
 - packages/ui/src/components/areas/LeftDrawer.vue
+- packages/plugins/plugin-theme-gallery/src/GalleryCanvasStage.vue
+- packages/plugins/plugin-theme-default/demo-web/App.vue
+- packages/docs/public/examples/canvas-render/canvas-host/src/App.vue
 - docs/代码开发/canvas-render/05-渲染上下文与content组件.md
+- docs/代码开发/canvas-render/09-端到端可运行Demo.md
 - docs/代码开发/00-总览与架构.md
+- docs/代码开发/plugins/plugin-theme-default.md
+- packages/docs/canvas-render/canvas-host.md
+- packages/docs/canvas-render/demo.md
+- packages/plugins/README.md
 - docs/STATUS.md
 
 不动：
 
 - packages/canvas-core 与根 src。
 - 六个核心节点件。
-- packages/canvas-data 与 packages/kernel 的公共 API。
+- packages/kernel 的公共 API。
+- packages/canvas-data 的公共 API。
+
+### 2.7 失败行为
+
+- CanvasProvider 启动失败：默认插槽不渲染，显示 error 插槽；默认文案“启动失败：…”；不再尝试启动第二次。
+- CanvasHost 被放在 Provider 外：useCanvasContext 抛清晰错误，提示“请放在 CanvasProvider 内”。
+- 抽屉页签缺 meta.panel：忽略该页签并 console.warn 一次，不给空白页。
+- 抽屉页签 id 是 canvas/assets：忽略并 warn。
+- 插件卸载导致当前页签消失：自动回 canvas，不抛错。
+- 启动期间组件卸载：Provider 在异步启动返回后检查 disposed，若已卸载则直接 stop，不写入上下文。
 
 ---
 
 ## 3. 实施任务
 
-### Task 0: 清理开工条件
+### Task 0: 开工条件
 
 **Files:** 无代码改动。
 
 **Interfaces:** 无。
 
-- [ ] **Step 1: 确认工作区没有本计划之外的未提交改动**
+- [ ] **Step 1: 处理工作区已有 WIP**
 
 Run:
 
@@ -235,20 +292,10 @@ Run:
 
 Expected:
 
-- 如果只剩你已确认的 WIP，先把它们单独提交或备份。
-- 本计划不能建立在未提交的 bottom-bar / ref-slot-decoupling 等工作之上。
+- 只留下与本计划无关、且已确认的 WIP。
+- 未确认的改动先单独提交或备份；不要把本计划建立在别人未提交的半成品上。
 
-- [ ] **Step 2: 确认 codegraph 索引可用**
-
-Run:
-
-    codegraph status
-
-Expected:
-
-    Index is up to date
-
-- [ ] **Step 3: 跑一次基线测试**
+- [ ] **Step 2: 跑基线测试**
 
 Run:
 
@@ -257,12 +304,20 @@ Run:
 
 Expected:
 
-- 两个包都绿。
-- 如果基线本来就红，先记录红项，不在本任务里修无关问题。
+- 两包基线全绿。
+- 若有既有红项，记录在案，本计划不顺手修无关问题。
+
+- [ ] **Step 3: 更新 codegraph**
+
+Run:
+
+    codegraph status
+
+Expected: Index is up to date。
 
 ---
 
-### Task 1: 基础画布上下文
+### Task 1: 基础上下文，严格只认 Provider
 
 **Files:**
 
@@ -275,8 +330,8 @@ Expected:
     export interface CanvasContext {
       ctx: Context
       host: CanvasHostHandle
-      api?: MiniCanvasApi
-      manager?: PluginManager
+      api: MiniCanvasApi
+      manager: PluginManager
     }
 
     export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext>
@@ -290,39 +345,34 @@ Create packages/canvas-render/src/contracts/__tests__/canvasContext.test.ts:
     import { createSSRApp, defineComponent, h } from 'vue'
     import { renderToString } from 'vue/server-renderer'
     import { Context } from '@mini-canvas/canvas-data'
-    import type { CanvasHostHandle } from '../host/createMiniCanvasHost'
+    import type { CanvasHostHandle, MiniCanvasApi } from '../host/createMiniCanvasHost'
+    import type { PluginManager } from '../host/pluginManager'
     import { CANVAS_CONTEXT_KEY, useCanvasContext } from '../canvasContext'
-    import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '../renderContext'
 
     const Probe = defineComponent({
       name: 'CanvasContextProbe',
       setup() {
         const { ctx } = useCanvasContext()
-        return () => h('div', { 'data-state': ctx.getState() }, 'ok')
+        return () => h('div', { 'data-probe': 'ok' }, ctx.getState())
       },
     })
 
     describe('CanvasContext', () => {
-      it('在 Provider 内取到 ctx / host', async () => {
+      it('在 Provider 内取到 ctx / host / api / manager', async () => {
         const ctx = new Context()
+        const host = { ctx } as unknown as CanvasHostHandle
+        const api = {} as MiniCanvasApi
+        const manager = {} as PluginManager
         const app = createSSRApp(Probe)
-        app.provide(CANVAS_CONTEXT_KEY, { ctx, host: {} as CanvasHostHandle })
+        app.provide(CANVAS_CONTEXT_KEY, { ctx, host, api, manager })
         const html = await renderToString(app)
-        expect(html).toContain('data-state')
-        expect(html).toContain('ok')
+        expect(html).toContain('data-probe="ok"')
+        expect(html).toContain('created')
       })
 
-      it('没有 Provider 时给出清晰错误', async () => {
+      it('没有 Provider 时直接抛错，不回退读渲染上下文', async () => {
         const app = createSSRApp(Probe)
         await expect(renderToString(app)).rejects.toThrow(/CanvasProvider/)
-      })
-
-      it('兼容旧渲染上下文：只有 RENDER_CONTEXT_KEY 时也能取到 ctx', async () => {
-        const ctx = new Context()
-        const app = createSSRApp(Probe)
-        app.provide(RENDER_CONTEXT_KEY, { ctx, host: {} as CanvasHostHandle } as unknown as CanvasRenderContext)
-        const html = await renderToString(app)
-        expect(html).toContain('ok')
       })
     })
 
@@ -332,11 +382,9 @@ Run:
 
     pnpm -C packages/canvas-render test -- canvasContext
 
-Expected:
+Expected: 模块不存在或 useCanvasContext 未定义。
 
-- 模块不存在或 useCanvasContext 未定义。
-
-- [ ] **Step 3: 写最小实现**
+- [ ] **Step 3: 写实现**
 
 Create packages/canvas-render/src/contracts/canvasContext.ts:
 
@@ -344,28 +392,25 @@ Create packages/canvas-render/src/contracts/canvasContext.ts:
     import type { Context } from '@mini-canvas/canvas-data'
     import type { CanvasHostHandle, MiniCanvasApi } from '../host/createMiniCanvasHost'
     import type { PluginManager } from '../host/pluginManager'
-    import { RENDER_CONTEXT_KEY } from './renderContext'
 
     export interface CanvasContext {
       ctx: Context
       host: CanvasHostHandle
-      api?: MiniCanvasApi
-      manager?: PluginManager
+      api: MiniCanvasApi
+      manager: PluginManager
     }
 
     export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext> = Symbol('mini-canvas-context')
 
     export function useCanvasContext(): CanvasContext {
       const base = inject(CANVAS_CONTEXT_KEY, null)
-      if (base) return base
-
-      const render = inject(RENDER_CONTEXT_KEY, null)
-      if (render) return { ctx: render.ctx, host: render.host }
-
-      throw new Error(
-        '[useCanvasContext] 缺少画布上下文：请把组件放在 <CanvasProvider> 内，' +
-          '或放在 <CanvasHost> 的渲染子树内。',
-      )
+      if (!base) {
+        throw new Error(
+          '[useCanvasContext] 缺少画布上下文：请把组件放在 <CanvasProvider> 内。' +
+            '如果这里需要视口/节点渲染快照，它应该放在 <CanvasHost> 内并用 useCanvasRender()。',
+        )
+      }
+      return base
     }
 
 Modify packages/canvas-render/src/index.ts:
@@ -385,7 +430,7 @@ Expected: 全绿。
 - [ ] **Step 5: 提交**
 
     git add packages/canvas-render/src/contracts/canvasContext.ts packages/canvas-render/src/contracts/__tests__/canvasContext.test.ts packages/canvas-render/src/index.ts
-    git commit -m "feat(canvas-render): add base canvas context"
+    git commit -m "feat(canvas-render): add strict base canvas context"
 
 ---
 
@@ -418,18 +463,28 @@ Expected: 全绿。
       persistViewport?: boolean
     }
 
-    export type CanvasHostProps = CanvasHostBootProps & CanvasHostRenderProps
+    export interface CanvasContextMenuPayload {
+      kind: 'node' | 'pane' | 'edge'
+      clientX: number
+      clientY: number
+      nodeId?: string
+      edgeId?: string
+    }
 
     export interface CanvasHostEmits {
       ready: [host: CanvasHostHandle]
-      'boot-error': [error: Error]
       'context-menu': [payload: CanvasContextMenuPayload]
       'plugin-issue': [payload: { name: string; lifecycle: string }]
     }
 
+    export interface CanvasProviderEmits {
+      ready: [host: CanvasHostHandle]
+      'boot-error': [error: Error]
+    }
+
 - [ ] **Step 1: 写失败测试**
 
-Create packages/canvas-render/src/host/__tests__/canvasProvider.test.ts。这里测的是启动责任真的搬走了，而不是组件绘制细节（Node 没有 DOM，onMounted 不稳定）。
+Create packages/canvas-render/src/host/__tests__/canvasProvider.test.ts:
 
     import { describe, expect, it } from 'vitest'
     import { readFileSync } from 'node:fs'
@@ -440,22 +495,17 @@ Create packages/canvas-render/src/host/__tests__/canvasProvider.test.ts。这里
     }
 
     describe('CanvasProvider 启动责任', () => {
-      it('Provider 调用 createMiniCanvasHost 并在卸载时 stop', () => {
+      it('Provider 是唯一启动点，并在卸载后 stop', () => {
         const src = read('../CanvasProvider.vue')
         expect(src).toContain('createMiniCanvasHost')
-        expect(src).toContain('exposeToWindow')
+        expect(src).toContain('exposeToWindow(props.windowKey)')
+        expect(src).toContain('onUnmounted')
         expect(src).toContain('host.stop()')
         expect(src).toContain('CANVAS_CONTEXT_KEY')
+        expect(src).toContain('disposed')
       })
 
-      it('CanvasHost 内层不再自己启动内核', () => {
-        const src = read('../CanvasHostInner.vue')
-        expect(src).not.toContain('createMiniCanvasHost')
-        expect(src).not.toContain('new MemoryStorageAdapter')
-        expect(src).not.toContain('exposeToWindow')
-      })
-
-      it('Provider 的默认插槽只在 ready 后出现', () => {
+      it('Provider 只在 ready 后显示默认插槽', () => {
         const src = read('../CanvasProvider.vue')
         expect(src).toContain('v-if="ready"')
         expect(src).toContain('name="loading"')
@@ -469,9 +519,9 @@ Run:
 
     pnpm -C packages/canvas-render test -- canvasProvider
 
-Expected: CanvasProvider.vue / CanvasHostInner.vue 不存在。
+Expected: CanvasProvider.vue 不存在。
 
-- [ ] **Step 3: 写类型文件**
+- [ ] **Step 3: 写共享类型**
 
 Create packages/canvas-render/src/host/canvasHostTypes.ts:
 
@@ -503,8 +553,6 @@ Create packages/canvas-render/src/host/canvasHostTypes.ts:
       persistViewport?: boolean
     }
 
-    export type CanvasHostProps = CanvasHostBootProps & CanvasHostRenderProps
-
     export interface CanvasContextMenuPayload {
       kind: 'node' | 'pane' | 'edge'
       clientX: number
@@ -515,9 +563,13 @@ Create packages/canvas-render/src/host/canvasHostTypes.ts:
 
     export interface CanvasHostEmits {
       ready: [host: CanvasHostHandle]
-      'boot-error': [error: Error]
       'context-menu': [payload: CanvasContextMenuPayload]
       'plugin-issue': [payload: { name: string; lifecycle: string }]
+    }
+
+    export interface CanvasProviderEmits {
+      ready: [host: CanvasHostHandle]
+      'boot-error': [error: Error]
     }
 
 - [ ] **Step 4: 写 CanvasProvider**
@@ -528,17 +580,14 @@ Create packages/canvas-render/src/host/CanvasProvider.vue:
     import { onBeforeUnmount, onMounted, onUnmounted, provide, ref, shallowRef } from 'vue'
     import { createMiniCanvasHost, type CanvasHostHandle, type MiniCanvasApi } from './createMiniCanvasHost'
     import type { PluginManager } from './pluginManager'
-    import type { CanvasHostBootProps } from './canvasHostTypes'
-    import { CANVAS_CONTEXT_KEY } from '../contracts/canvasContext'
+    import type { CanvasHostBootProps, CanvasProviderEmits } from './canvasHostTypes'
+    import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../contracts/canvasContext'
 
     const props = withDefaults(defineProps<CanvasHostBootProps>(), {
       plugins: () => [],
     })
 
-    const emit = defineEmits<{
-      ready: [host: CanvasHostHandle]
-      'boot-error': [error: Error]
-    }>()
+    const emit = defineEmits<CanvasProviderEmits>()
 
     interface Boot {
       host: CanvasHostHandle
@@ -549,23 +598,27 @@ Create packages/canvas-render/src/host/CanvasProvider.vue:
     const boot = shallowRef<Boot | null>(null)
     const error = ref<Error | null>(null)
     const ready = ref(false)
+    let disposed = false
+
+    function mustBoot(): Boot {
+      if (!boot.value) throw new Error('[CanvasProvider] 上下文尚未就绪')
+      return boot.value
+    }
 
     provide(CANVAS_CONTEXT_KEY, {
       get ctx() {
-        if (!boot.value) throw new Error('[CanvasProvider] 上下文尚未就绪')
-        return boot.value.host.ctx
+        return mustBoot().host.ctx
       },
       get host() {
-        if (!boot.value) throw new Error('[CanvasProvider] 上下文尚未就绪')
-        return boot.value.host
+        return mustBoot().host
       },
       get api() {
-        return boot.value?.api
+        return mustBoot().api
       },
       get manager() {
-        return boot.value?.manager
+        return mustBoot().manager
       },
-    })
+    } satisfies CanvasContext)
 
     onMounted(async () => {
       try {
@@ -576,28 +629,30 @@ Create packages/canvas-render/src/host/CanvasProvider.vue:
           seedDefault: props.seed,
           dev: props.dev,
         })
+        if (disposed) {
+          r.host.stop()
+          return
+        }
         boot.value = { host: r.host, api: r.api, manager: r.manager }
         if (props.windowKey) r.exposeToWindow(props.windowKey)
         ready.value = true
         emit('ready', r.host)
       } catch (e) {
+        if (disposed) return
         error.value = e instanceof Error ? e : new Error(String(e))
         emit('boot-error', error.value)
       }
     })
 
     onBeforeUnmount(() => {
-      const b = boot.value
-      if (!b) return
-      void b.host.save.flush()
+      if (!boot.value) return
+      void boot.value.host.save.flush()
     })
 
     onUnmounted(() => {
-      // 必须在所有子组件卸载后再停内核：否则 CanvasHostInner 的订阅仍在，
-      // 会看到内核正在拆除中的注册表事件。
-      const b = boot.value
-      if (!b) return
-      b.host.stop()
+      disposed = true
+      if (!boot.value) return
+      boot.value.host.stop()
       boot.value = null
     })
 
@@ -637,6 +692,7 @@ Create packages/canvas-render/src/host/CanvasProvider.vue:
       justify-content: center;
       width: 100%;
       height: 100%;
+      min-height: 100vh;
       color: var(--ui-ink-dim, #6b7280);
       background: var(--ui-canvas-bg, #f5f6f8);
       font: 13px system-ui, 'Microsoft YaHei', sans-serif;
@@ -646,14 +702,25 @@ Create packages/canvas-render/src/host/CanvasProvider.vue:
     }
     </style>
 
-注意：Provider 只启动一次内核；它不创建 NodeRegistry，也不渲染 VueFlow。nodeRegistry 由 createMiniCanvasHost 建好后从 host.nodeRegistry 取，避免两份实例。
+说明：
+
+- Provider 不创建 NodeRegistry；CanvasHost 使用 host.nodeRegistry。
+- Provider 不做任何画布渲染。
+- onUnmounted 才 stop，保证 CanvasHost 的订阅先卸载。
+- 如果启动还没返回组件就卸载，disposed 分支会 stop 刚建好的宿主。
 
 - [ ] **Step 5: 导出 Provider 与类型**
 
 Modify packages/canvas-render/src/index.ts:
 
     export { default as CanvasProvider } from './host/CanvasProvider.vue'
-    export type { CanvasHostBootProps, CanvasHostRenderProps, CanvasHostProps, CanvasHostEmits } from './host/canvasHostTypes'
+    export type {
+      CanvasHostBootProps,
+      CanvasHostRenderProps,
+      CanvasContextMenuPayload,
+      CanvasHostEmits,
+      CanvasProviderEmits,
+    } from './host/canvasHostTypes'
 
 - [ ] **Step 6: 跑测试确认通过**
 
@@ -667,32 +734,30 @@ Expected: 全绿。
 - [ ] **Step 7: 提交**
 
     git add packages/canvas-render/src/host/CanvasProvider.vue packages/canvas-render/src/host/canvasHostTypes.ts packages/canvas-render/src/host/__tests__/canvasProvider.test.ts packages/canvas-render/src/index.ts
-    git commit -m "feat(canvas-render): add CanvasProvider for shared canvas context"
+    git commit -m "feat(canvas-render): add CanvasProvider as the only host boot point"
 
 ---
 
-### Task 3: 拆分 CanvasHost 为兼容外壳与纯画布内层
+### Task 3: CanvasHost 改成纯画布组件，并迁移所有调用点
 
 **Files:**
 
-- Move: packages/canvas-render/src/host/CanvasHost.vue -> packages/canvas-render/src/host/CanvasHostInner.vue
-- Create: packages/canvas-render/src/host/CanvasHost.vue（新的兼容外壳）
-- Modify: packages/canvas-render/src/host/CanvasHostInner.vue
-- Test: packages/canvas-render/src/host/__tests__/canvasHostSplit.test.ts
+- Modify: packages/canvas-render/src/host/CanvasHost.vue
+- Modify: packages/ui/src/App.vue
+- Modify: packages/plugins/plugin-theme-gallery/src/GalleryCanvasStage.vue
+- Modify: packages/plugins/plugin-theme-default/demo-web/App.vue
+- Modify: packages/docs/public/examples/canvas-render/canvas-host/src/App.vue
+- Test: packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts
 
 **Interfaces:**
 
-    CanvasHost.vue
-      props: CanvasHostProps
-      emits: ready / boot-error / context-menu / plugin-issue
-
-    CanvasHostInner.vue
-      props: CanvasHostRenderProps
-      emits: ready / boot-error / context-menu / plugin-issue
+    CanvasHost props = CanvasHostRenderProps
+    CanvasHost emits = CanvasHostEmits
+    CanvasHost 不接收 plugins / adapter / seed / windowKey
 
 - [ ] **Step 1: 写失败测试**
 
-Create packages/canvas-render/src/host/__tests__/canvasHostSplit.test.ts:
+Create packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts:
 
     import { describe, expect, it } from 'vitest'
     import { readFileSync } from 'node:fs'
@@ -702,20 +767,21 @@ Create packages/canvas-render/src/host/__tests__/canvasHostSplit.test.ts:
       return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
     }
 
-    describe('CanvasHost 拆分', () => {
-      it('CanvasHost 是兼容外壳：有 Provider 就用，没有就临时包一层', () => {
+    describe('CanvasHost 纯画布化', () => {
+      it('不再创建内核、不再创建 NodeRegistry、不再 stop host', () => {
         const src = read('../CanvasHost.vue')
-        expect(src).toContain('inject(CANVAS_CONTEXT_KEY')
-        expect(src).toContain('<CanvasProvider')
-        expect(src).toContain('<CanvasHostInner')
-        expect(src).toContain('hasProvider')
+        expect(src).not.toContain('createMiniCanvasHost')
+        expect(src).not.toContain('new NodeRegistry')
+        expect(src).not.toContain('new MemoryStorageAdapter')
+        expect(src).not.toContain('host.stop()')
+        expect(src).not.toContain('exposeToWindow')
       })
 
-      it('CanvasHostInner 只消费上下文，不再启动', () => {
-        const src = read('../CanvasHostInner.vue')
+      it('改为消费基础上下文，并用 host.nodeRegistry', () => {
+        const src = read('../CanvasHost.vue')
         expect(src).toContain('useCanvasContext')
-        expect(src).not.toContain('createMiniCanvasHost')
-        expect(src).not.toContain('host.stop()')
+        expect(src).toContain('host.nodeRegistry')
+        expect(src).toContain('CanvasHostRenderProps')
       })
     })
 
@@ -723,42 +789,50 @@ Create packages/canvas-render/src/host/__tests__/canvasHostSplit.test.ts:
 
 Run:
 
-    pnpm -C packages/canvas-render test -- canvasHostSplit
+    pnpm -C packages/canvas-render test -- canvasHostPure
 
-Expected: CanvasHostInner.vue 不存在或旧 CanvasHost 仍含 createMiniCanvasHost。
+Expected: 当前 CanvasHost 仍含 createMiniCanvasHost。
 
-- [ ] **Step 3: 把现有 CanvasHost 内容移到 CanvasHostInner**
+- [ ] **Step 3: 改 CanvasHost 顶部**
 
-执行文件移动后，在 CanvasHostInner 的 script 顶部把启动改为消费上下文：
+在 CanvasHost.vue 的 script 顶部：
 
-    import type { CanvasHostEmits, CanvasHostRenderProps } from './canvasHostTypes'
-    import { useCanvasContext } from '../contracts/canvasContext'
+- 删除 createMiniCanvasHost、MemoryStorageAdapter 的 import；
+- 增加 useCanvasContext、CanvasHostRenderProps、CanvasHostEmits 的 import；
+- 加：
 
     const { host, api, manager } = useCanvasContext()
-    const hostRef = shallowRef<CanvasHostHandle>(host)
-    const registry = host.nodeRegistry
 
     const props = withDefaults(defineProps<CanvasHostRenderProps>(), {
       persistViewport: true,
     })
     const emit = defineEmits<CanvasHostEmits>()
 
-删除：
+    const hostRef = shallowRef<CanvasHostHandle>(host)
+    const registry = host.nodeRegistry
 
-    - createMiniCanvasHost 的 import
-    - MemoryStorageAdapter 的 import
-    - booting / bootError 这两个启动态
-    - apiRef / managerRef 这两个启动结果 ref
-    - onMounted 里的 createMiniCanvasHost 调用
-    - exposeToWindow
-    - onBeforeUnmount 里的 host.stop() 与 save.flush()
+把原来的：
 
-保留并改为内层挂载态：
+    const booting = ref(true)
+    const bootError = ref('')
+    const hostRef = shallowRef<CanvasHostHandle | undefined>()
+    const apiRef = shallowRef<MiniCanvasApi | undefined>()
+    const managerRef = shallowRef<PluginManager | undefined>()
+
+改成：
 
     const surfaceReady = ref(false)
     const mountError = ref('')
 
-把原 onMounted 里“createMiniCanvasHost 之后”的整段逻辑保留，改成一个挂载流程：
+注意：原文件里的 const registry = new NodeRegistry() 整行删除；所有 registry 引用继续用，但现在指向 host.nodeRegistry。
+
+- [ ] **Step 4: 改 onMounted**
+
+原 onMounted 从 const { host, api, manager, exposeToWindow } = await createMiniCanvasHost({ ... }) 开始。
+
+删除这一段启动代码以及 hostRef.value = host、apiRef.value = api、managerRef.value = manager、exposeToWindow。
+
+保留原有启动后的逻辑，改为：
 
     onMounted(async () => {
       try {
@@ -781,14 +855,13 @@ Expected: CanvasHostInner.vue 不存在或旧 CanvasHost 仍含 createMiniCanvas
 
         unsubStore = host.nodeStore.subscribe(syncFromStore)
         unsubEdge = host.edgeStore.subscribe(syncFromStore)
-
         unsubSel = host.selection.onChange(syncSelected)
         syncSelected()
         applyTheme()
         syncFromStore()
 
-        // 插件热装/热卸、主题场、node/shell 场的现有订阅原样保留
-        // ...
+        // 原文件里的插件热装/热卸、themeRegistry、nodeRegistry、node/shell、plugin-issue 订阅原样保留
+        // 这里只把启动时的 host 改成上文的常量 host。
 
         window.addEventListener('keydown', onKeydown)
         keydownBound = true
@@ -805,17 +878,6 @@ Expected: CanvasHostInner.vue 不存在或旧 CanvasHost 仍含 createMiniCanvas
         window.addEventListener('blur', resetViewportMoveIfIdle)
         window.addEventListener('visibilitychange', resetViewportMoveIfIdle)
 
-        // 原来在 boot 里注入的 edit-guard 依赖 interaction，必须留在内层
-        subs.push({
-          dispose: host.ctx.inject('cloud-client/edit-guard', (nodeId: string): ReadonlySet<'position' | 'data' | 'size'> => {
-            const held = new Set<'position' | 'data' | 'size'>()
-            const act = interaction.activity.value
-            if (act.nodeDragging && act.nodeDragId === nodeId) held.add('position')
-            if (act.nodeResizing && act.nodeResizeId === nodeId) held.add('size')
-            return held
-          }),
-        })
-
         if (props.persistViewport) {
           const vp = await host.save.get<ViewportState>(GRAPH_VIEWPORT_KEY, 'canvas')
           savedViewport.value = vp
@@ -826,11 +888,14 @@ Expected: CanvasHostInner.vue 不存在或旧 CanvasHost 仍含 createMiniCanvas
       } catch (err) {
         mountError.value = err instanceof Error ? err.message : String(err)
         surfaceReady.value = true
-        emit('boot-error', err instanceof Error ? err : new Error(String(err)))
       }
     })
 
-模板把启动态改成内层准备态：
+注意：cloud-client/edit-guard 的 ctx.inject 依赖 interaction，仍留在内层，位置和内容不变。
+
+- [ ] **Step 5: 改模板与 defineExpose**
+
+模板把启动态替换成内层准备态：
 
     <div v-if="!surfaceReady" class="chost-status">正在准备画布…</div>
     <div v-else-if="mountError" class="chost-status chost-err">启动失败：{{ mountError }}</div>
@@ -854,139 +919,158 @@ defineExpose 改为：
       },
     })
 
-- [ ] **Step 4: 写新的 CanvasHost 兼容外壳**
+onBeforeUnmount 里删除：
 
-Create packages/canvas-render/src/host/CanvasHost.vue:
+    void hostRef.value?.save.flush()
+    hostRef.value?.stop()
 
-    <script setup lang="ts">
-    import { computed, inject, shallowRef } from 'vue'
-    import { CANVAS_CONTEXT_KEY } from '../contracts/canvasContext'
-    import CanvasProvider from './CanvasProvider.vue'
-    import CanvasHostInner from './CanvasHostInner.vue'
-    import type {
-      CanvasContextMenuPayload,
-      CanvasHostEmits,
-      CanvasHostProps,
-    } from './canvasHostTypes'
+其余解绑（rAF、subs、window listeners）保留。
 
-    const props = withDefaults(defineProps<CanvasHostProps>(), {
-      persistViewport: true,
+全文件搜一次 booting、bootError、apiRef、managerRef，确认没有残留。
+
+- [ ] **Step 6: 迁移 App.vue**
+
+App.vue 改成：
+
+    import { CanvasHost, CanvasProvider, SettingsHost, SlotHost } from '@mini-canvas/canvas-render'
+    import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
+
+    let shellCommandDisposers: Array<{ dispose(): void }> = []
+
+    function onProviderReady(host: CanvasHostHandle): void {
+      setReadyHost(host)
+      ui.setHostEl({ host })
+      void ui.onReady()
+      for (const d of shellCommandDisposers) d.dispose()
+      shellCommandDisposers = registerShellCommands(host.ctx, ui)
+    }
+
+    onBeforeUnmount(() => {
+      for (const d of shellCommandDisposers) d.dispose()
+      shellCommandDisposers = []
     })
 
-    const emit = defineEmits<CanvasHostEmits>()
+模板（注意 Provider 在 CanvasShell 外面）：
 
-    const hasProvider = inject(CANVAS_CONTEXT_KEY, null) !== null
-    const innerRef = shallowRef<InstanceType<typeof CanvasHostInner> | null>(null)
+    <CanvasProvider
+      :plugins="plugins"
+      :adapter="adapter"
+      :seed="seedDefaultCanvas"
+      :dev="DEV"
+      window-key="MiniCanvasUI"
+      @ready="onProviderReady"
+    >
+      <CanvasShell ...>
+        ...原有内容...
+      </CanvasShell>
+    </CanvasProvider>
 
-    const bootProps = computed(() => ({
-      plugins: props.plugins,
-      manifest: props.manifest,
-      adapter: props.adapter,
-      seed: props.seed,
-      dev: props.dev,
-      windowKey: props.windowKey,
-    }))
+CanvasHost 只保留渲染参数和 #ui：
 
-    const renderProps = computed(() => ({
-      nodeWrite: props.nodeWrite,
-      edgeVisual: props.edgeVisual,
-      handleVisual: props.handleVisual,
-      debugVisual: props.debugVisual,
-      snapZoneVisual: props.snapZoneVisual,
-      persistViewport: props.persistViewport,
-    }))
-    </script>
+    <CanvasHost
+      :edge-visual="ui.cfg.edge"
+      :handle-visual="ui.cfg.handle"
+      :debug-visual="ui.cfg.debug"
+      :snap-zone-visual="ui.cfg.snapZone"
+    >
+      <template #ui>
+        <SettingsHost v-if="s.settingsOpen" />
+        <AgentPanel />
+        <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" :style="{ pointerEvents: 'none', visibility: miniMapPlaced ? 'visible' : 'hidden' }">
+          <div style="pointer-events: auto">
+            <SlotHost slot="mini-map" />
+          </div>
+        </div>
+        <AssetUiSlot />
+      </template>
+    </CanvasHost>
 
-    <template>
-      <CanvasHostInner
-        v-if="hasProvider"
-        ref="innerRef"
-        v-bind="renderProps"
-        @ready="emit('ready', $event)"
-        @boot-error="emit('boot-error', $event)"
-        @plugin-issue="emit('plugin-issue', $event)"
-        @context-menu="emit('context-menu', $event as CanvasContextMenuPayload)"
+删掉 CanvasHost 上的 :ref、:plugins、:adapter、:seed、:dev、window-key、@ready。
+
+补小地图挂载 watch：
+
+    watch(miniMapEl, () => placeMiniMap(), { flush: 'post' })
+
+- [ ] **Step 7: 迁移 GalleryCanvasStage**
+
+改成：
+
+    import { CanvasHost, CanvasProvider } from '@mini-canvas/canvas-render'
+
+    <div class="gcs-stage" :style="{ height: (height ?? 300) + 'px' }">
+      <CanvasProvider :plugins="plugins" :adapter="adapter">
+        <CanvasHost :persist-viewport="false" />
+      </CanvasProvider>
+    </div>
+
+- [ ] **Step 8: 迁移 theme-default demo**
+
+改成：
+
+    import { CanvasHost, CanvasProvider } from '@mini-canvas/canvas-render'
+
+    <CanvasProvider
+      :plugins="[themeDefaultPlugin, demoNodePlugin]"
+      :seed="seedDefault"
+      window-key="MiniCanvasThemePreview"
+    >
+      <CanvasHost class="canvas-area" @ready="ready = true" />
+    </CanvasProvider>
+
+外层 .preview-root 和 .bar 不变。
+
+- [ ] **Step 9: 迁移 docs 的 CanvasHost 示例**
+
+packages/docs/public/examples/canvas-render/canvas-host/src/App.vue：
+
+    import { CanvasHost, CanvasProvider, type CanvasHostHandle } from '@mini-canvas/canvas-render'
+
+    <CanvasProvider
+      :plugins="plugins"
+      :adapter="adapter"
+      :dev="import.meta.env.DEV"
+      window-key="MiniCanvasHostDemo"
+    >
+      <CanvasHost
+        ref="canvas"
+        :edge-visual="edge"
+        :handle-visual="handle"
+        @ready="onReady"
+        @plugin-issue="(p) => console.warn('插件出问题了：', p.name, p.lifecycle)"
       >
         <template #ui>
-          <slot name="ui" />
+          <div class="demo-bar">...</div>
         </template>
-        <slot />
-      </CanvasHostInner>
+      </CanvasHost>
+    </CanvasProvider>
 
-      <CanvasProvider
-        v-else
-        v-bind="bootProps"
-        @boot-error="emit('boot-error', $event)"
-      >
-        <CanvasHostInner
-          ref="innerRef"
-          v-bind="renderProps"
-          @ready="emit('ready', $event)"
-          @boot-error="emit('boot-error', $event)"
-          @plugin-issue="emit('plugin-issue', $event)"
-          @context-menu="emit('context-menu', $event as CanvasContextMenuPayload)"
-        >
-          <template #ui>
-            <slot name="ui" />
-          </template>
-          <slot />
-        </CanvasHostInner>
-        <template #loading>
-          <slot name="loading">正在启动内核…</slot>
-        </template>
-        <template #error="{ error }">
-          <slot name="error" :error="error">启动失败：{{ error.message }}</slot>
-        </template>
-      </CanvasProvider>
-    </template>
-
-    在 script setup 末尾补：
-
-    defineExpose({
-      get host() {
-        return innerRef.value?.host
-      },
-      get api() {
-        return innerRef.value?.api
-      },
-      get manager() {
-        return innerRef.value?.manager
-      },
-      get ready() {
-        return innerRef.value?.ready ?? false
-      },
-      get bootErrorText() {
-        return innerRef.value?.bootErrorText ?? ''
-      },
-    })
-
-注意：
-
-- Provider 的 @ready 不向外转发；CanvasHost 的 @ready 仍只代表画布内层就绪。
-- 旧用法 <CanvasHost :plugins="..." @ready="..."> 继续可用。
-- 新用法在 CanvasProvider 内直接写 CanvasHost 时，不会创建第二个宿主。
-
-- [ ] **Step 5: 跑测试与类型检查**
+- [ ] **Step 10: 跑测试与类型检查**
 
 Run:
 
-    pnpm -C packages/canvas-render test -- canvasHostSplit
+    pnpm -C packages/canvas-render test -- canvasHostPure
     pnpm -C packages/canvas-render test
     pnpm -C packages/canvas-render typecheck
+    pnpm -C packages/ui test
+    pnpm -C packages/ui typecheck
+    pnpm -C packages/plugins/plugin-theme-gallery test
+    pnpm -C packages/plugins/plugin-theme-gallery typecheck
+    pnpm -C packages/plugins/plugin-theme-default test
+    pnpm -C packages/plugins/plugin-theme-default typecheck
 
 Expected:
 
-- canvas-render 原有测试全绿。
-- 如果旧测试依赖 CanvasHost 的启动时序，按“内层仍 emit ready”的语义修测试，不改产品行为。
+- 全绿。
+- 如果组件测试里出现“找不到 CanvasProvider”，说明该测试还只 provide RENDER_CONTEXT_KEY；按 Task 4 改成 provide CANVAS_CONTEXT_KEY。
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 11: 提交**
 
-    git add packages/canvas-render/src/host/CanvasHost.vue packages/canvas-render/src/host/CanvasHostInner.vue packages/canvas-render/src/host/__tests__/canvasHostSplit.test.ts
-    git commit -m "refactor(canvas-render): split CanvasHost boot from canvas rendering"
+    git add packages/canvas-render/src/host/CanvasHost.vue packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts packages/ui/src/App.vue packages/plugins/plugin-theme-gallery/src/GalleryCanvasStage.vue packages/plugins/plugin-theme-default/demo-web/App.vue packages/docs/public/examples/canvas-render/canvas-host/src/App.vue
+    git commit -m "refactor(canvas-render): make CanvasHost a pure canvas consumer"
 
 ---
 
-### Task 4: SlotHost 改用基础上下文
+### Task 4: SlotHost 与相关 helper 改用基础上下文
 
 **Files:**
 
@@ -994,12 +1078,13 @@ Expected:
 - Modify: packages/canvas-render/src/contracts/uiCatalog.ts
 - Modify: packages/canvas-render/src/contracts/useThemeColor.ts
 - Modify: packages/canvas-render/src/contracts/nodeLayoutSettings.ts
+- Modify: packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts
 - Test: packages/canvas-render/src/components/__tests__/slotHost.test.ts
 
 **Interfaces:**
 
-    SlotHost 继续收 { slot: string, itemClass?: string }
-    组件树外不再要求 CanvasSurface，只要求 CanvasProvider（或旧渲染上下文兼容）。
+    useCanvasContext() -> CanvasContext
+    SlotHost 仍收 { slot: string, itemClass?: string }
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1009,27 +1094,31 @@ Create packages/canvas-render/src/components/__tests__/slotHost.test.ts:
     import { createSSRApp, defineComponent, h } from 'vue'
     import { renderToString } from 'vue/server-renderer'
     import { Context } from '@mini-canvas/canvas-data'
-    import type { CanvasHostHandle } from '../../host/createMiniCanvasHost'
-    import { CANVAS_CONTEXT_KEY } from '../../contracts/canvasContext'
+    import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
+    import type { PluginManager } from '../../host/pluginManager'
+    import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../../contracts/canvasContext'
     import SlotHost from '../SlotHost.vue'
 
-    function renderWithBase(ctx: Context): Promise<string> {
-      const app = createSSRApp({
-        render: () => h(SlotHost, { slot: 'shell.dock.end' }),
-      })
-      app.provide(CANVAS_CONTEXT_KEY, { ctx, host: {} as CanvasHostHandle })
-      return renderToString(app)
+    function baseContext(ctx: Context): CanvasContext {
+      return {
+        ctx,
+        host: {} as CanvasHostHandle,
+        api: {} as MiniCanvasApi,
+        manager: {} as PluginManager,
+      }
     }
 
-    describe('SlotHost 在外壳里可用', () => {
-      it('只提供基础上下文也能渲染占位组件', async () => {
+    describe('SlotHost 使用基础上下文', () => {
+      it('Provider 内可渲染外壳槽', async () => {
         const ctx = new Context()
         await ctx.start()
         ctx.slots.register('shell.dock.end', {
           id: 'demo',
           component: defineComponent({ render: () => h('button', { 'data-demo': '1' }, '扩展') }),
         })
-        const html = await renderWithBase(ctx)
+        const app = createSSRApp({ render: () => h(SlotHost, { slot: 'shell.dock.end' }) })
+        app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+        const html = await renderToString(app)
         expect(html).toContain('data-demo')
         expect(html).toContain('扩展')
         ctx.stop()
@@ -1042,65 +1131,82 @@ Run:
 
     pnpm -C packages/canvas-render test -- slotHost
 
-Expected: 抛缺少渲染上下文。
+Expected: SlotHost 仍抛“缺少渲染上下文”。
 
 - [ ] **Step 3: 换消费入口**
 
-Modify packages/canvas-render/src/components/SlotHost.vue:
+SlotHost.vue：
 
     import { useCanvasContext } from '../contracts/canvasContext'
     const { ctx } = useCanvasContext()
 
-Modify packages/canvas-render/src/contracts/uiCatalog.ts:
+uiCatalog.ts：
 
     import { useCanvasContext } from './canvasContext'
     const { ctx } = useCanvasContext()
 
-Modify packages/canvas-render/src/contracts/useThemeColor.ts:
+useThemeColor.ts：
 
     import { useCanvasContext } from './canvasContext'
     const { ctx } = useCanvasContext()
 
-Modify packages/canvas-render/src/contracts/nodeLayoutSettings.ts:
+nodeLayoutSettings.ts 的两处：
 
     import { useCanvasContext } from './canvasContext'
     const { ctx } = useCanvasContext()
 
-保持注释同步：useCanvasContext 从“只在 CanvasHost 子树内”改成“在 CanvasProvider 内或 CanvasHost 子树内”。
+把注释里“必须在 CanvasHost 渲染子树内”改成“在 CanvasProvider 内或 CanvasHost 内”。
 
-- [ ] **Step 4: 跑测试与类型检查**
+- [ ] **Step 4: 修 uiCatalog 测试**
+
+packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts 里：
+
+- 删掉 RENDER_CONTEXT_KEY / CanvasRenderContext 的 import；
+- 增加 CANVAS_CONTEXT_KEY / CanvasContext；
+- renderWithCatalog 改成：
+
+    const app = createSSRApp({ render: () => h(Consumer) })
+    app.provide(CANVAS_CONTEXT_KEY, {
+      ctx: { registryOf: () => field } as unknown as Context,
+      host: {} as CanvasHostHandle,
+      api: {} as MiniCanvasApi,
+      manager: {} as PluginManager,
+    })
+    return renderToString(app)
+
+需要的类型从 createMiniCanvasHost / pluginManager 导入。
+
+- [ ] **Step 5: 跑测试与类型检查**
 
 Run:
 
     pnpm -C packages/canvas-render test -- slotHost
+    pnpm -C packages/canvas-render test -- uiCatalog
     pnpm -C packages/canvas-render test
     pnpm -C packages/canvas-render typecheck
 
-Expected: 全绿；旧测试只提供 RENDER_CONTEXT_KEY 时由 useCanvasContext 的回退分支继续工作。
+Expected: 全绿。
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 6: 提交**
 
-    git add packages/canvas-render/src/components/SlotHost.vue packages/canvas-render/src/contracts/uiCatalog.ts packages/canvas-render/src/contracts/useThemeColor.ts packages/canvas-render/src/contracts/nodeLayoutSettings.ts packages/canvas-render/src/components/__tests__/slotHost.test.ts
-    git commit -m "refactor(canvas-render): let slot hosts consume base canvas context"
+    git add packages/canvas-render/src/components/SlotHost.vue packages/canvas-render/src/contracts/uiCatalog.ts packages/canvas-render/src/contracts/useThemeColor.ts packages/canvas-render/src/contracts/nodeLayoutSettings.ts packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts packages/canvas-render/src/components/__tests__/slotHost.test.ts
+    git commit -m "refactor(canvas-render): consume base context in slot hosts and helpers"
 
 ---
 
-### Task 5: App 用 CanvasProvider 包住整个外壳
+### Task 5: App 的 Provider 装配（整合进 Task 3 后只补测试）
 
 **Files:**
 
-- Modify: packages/ui/src/App.vue
 - Test: packages/ui/src/__tests__/appCanvasProvider.test.ts
 
 **Interfaces:**
 
-    <CanvasProvider :plugins :adapter :seed :dev window-key="MiniCanvasUI">
-      <CanvasShell>...</CanvasShell>
-    </CanvasProvider>
+    CanvasProvider 包住 CanvasShell
+    CanvasProvider 持有 plugins / adapter / seed / dev / windowKey
+    CanvasHost 只持有渲染参数
 
-    <CanvasHost :ref="ui.setHostEl" :edge-visual ... @ready="onCanvasReady">
-
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: 写测试**
 
 Create packages/ui/src/__tests__/appCanvasProvider.test.ts:
 
@@ -1111,24 +1217,30 @@ Create packages/ui/src/__tests__/appCanvasProvider.test.ts:
     const app = readFileSync(fileURLToPath(new URL('../App.vue', import.meta.url)), 'utf8')
 
     describe('App 装配层级', () => {
-      it('CanvasProvider 在 CanvasShell 外面', () => {
-        const provider = app.indexOf('<CanvasProvider')
-        const shell = app.indexOf('<CanvasShell')
-        expect(provider).toBeGreaterThan(-1)
-        expect(shell).toBeGreaterThan(provider)
+      it('Provider 在 CanvasShell 外面', () => {
+        expect(app.indexOf('<CanvasProvider')).toBeGreaterThan(-1)
+        expect(app.indexOf('<CanvasShell')).toBeGreaterThan(app.indexOf('<CanvasProvider'))
       })
 
-      it('CanvasHost 不再自己带 plugins / adapter / seed / window-key', () => {
+      it('CanvasHost 不再携带启动参数', () => {
         const host = app.slice(app.indexOf('<CanvasHost'), app.indexOf('</CanvasHost>'))
         expect(host).not.toContain(':plugins=')
         expect(host).not.toContain(':adapter=')
         expect(host).not.toContain(':seed=')
         expect(host).not.toContain('window-key=')
+        expect(host).not.toContain(':ref=')
       })
 
       it('设置面板仍在 CanvasHost 的 #ui 内', () => {
         const host = app.slice(app.indexOf('<CanvasHost'), app.indexOf('</CanvasHost>'))
         expect(host).toContain('<SettingsHost')
+      })
+
+      it('Provider 的 ready 负责旧 onReady 工作', () => {
+        expect(app).toContain('@ready="onProviderReady"')
+        expect(app).toContain('setReadyHost(host)')
+        expect(app).toContain('ui.setHostEl({ host })')
+        expect(app).toContain('registerShellCommands(host.ctx, ui)')
       })
     })
 
@@ -1138,86 +1250,12 @@ Run:
 
     pnpm -C packages/ui test -- appCanvasProvider
 
-Expected: 当前 App 没有 CanvasProvider。
+Expected: Task 3 变绿前红；Task 3 完成后应绿。
 
-- [ ] **Step 3: 改 App 模板**
+- [ ] **Step 3: 提交**
 
-在 App.vue 的 template 外加 Provider：
-
-    <CanvasProvider
-      :plugins="plugins"
-      :adapter="adapter"
-      :seed="seedDefaultCanvas"
-      :dev="DEV"
-      window-key="MiniCanvasUI"
-    >
-      <CanvasShell ...>
-        ...原有内容...
-      </CanvasShell>
-    </CanvasProvider>
-
-CanvasHost 改成只收渲染参数：
-
-    <CanvasHost
-      :ref="ui.setHostEl"
-      :edge-visual="ui.cfg.edge"
-      :handle-visual="ui.cfg.handle"
-      :debug-visual="ui.cfg.debug"
-      :snap-zone-visual="ui.cfg.snapZone"
-      @ready="onCanvasReady"
-    >
-      <template #ui>
-        <SettingsHost v-if="s.settingsOpen" />
-        <AgentPanel />
-        <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" ...>
-          <div style="pointer-events: auto">
-            <SlotHost slot="mini-map" />
-          </div>
-        </div>
-        <AssetUiSlot />
-      </template>
-    </CanvasHost>
-
-import 增加：
-
-    import { CanvasHost, CanvasProvider, SettingsHost, SlotHost } from '@mini-canvas/canvas-render'
-
-同时删掉 CanvasHost 上的 :plugins、:adapter、:seed、:dev、window-key。
-
-- [ ] **Step 4: 加小地图的挂载 watch**
-
-因为外壳现在晚于 App 的 onMounted 出现，补一条：
-
-    watch(miniMapEl, () => placeMiniMap(), { flush: 'post' })
-
-这样不必等 2 秒兜底轮询才把地图贴到状态栏按钮上方。
-
-- [ ] **Step 5: 跑测试与类型检查**
-
-Run:
-
-    pnpm -C packages/ui test -- appCanvasProvider
-    pnpm -C packages/ui test
-    pnpm -C packages/ui typecheck
-
-Expected: 全绿。
-
-- [ ] **Step 6: 真机冒烟**
-
-Run:
-
-    pnpm -C packages/ui dev
-
-浏览器打开 http://localhost:5288/#/canvas/default，确认：
-
-- 首次打开出现“正在启动内核…”后进入画布。
-- 左侧抽屉、状态条、底栏、设置面板、Agent 面板都正常。
-- 控制台零 error。
-
-- [ ] **Step 7: 提交**
-
-    git add packages/ui/src/App.vue packages/ui/src/__tests__/appCanvasProvider.test.ts
-    git commit -m "refactor(ui): wrap app shell with CanvasProvider"
+    git add packages/ui/src/__tests__/appCanvasProvider.test.ts
+    git commit -m "test(ui): lock CanvasProvider app wiring"
 
 ---
 
@@ -1286,9 +1324,9 @@ Expected: 找不到槽。
 
 说明：
 
-- CanvasShell 已经有 dock-append，不需要新增它。
-- 插件按钮自己只画按钮内容，不自带 fixed 定位和外层容器。
-- 状态条、底栏的推挤/居中仍由 CanvasShell 负责。
+- CanvasShell 已有 dock-append，不新增它。
+- 插件按钮只画按钮本身，不自带 fixed 定位和外层容器。
+- 推挤和居中仍由 CanvasShell 负责。
 
 - [ ] **Step 4: 跑测试与类型检查**
 
@@ -1307,15 +1345,16 @@ Expected: 全绿。
 
 ---
 
-### Task 7: 抽屉页签纯逻辑与外壳命令
+### Task 7: 抽屉页签纯逻辑、DrawerHost 状态与 shell 命令
 
 **Files:**
 
 - Create: packages/ui/src/composables/drawerTabs.ts
 - Create: packages/ui/src/shellCommands.ts
+- Modify: packages/ui/src/composables/ui.ts
 - Test: packages/ui/src/composables/__tests__/drawerTabs.test.ts
 - Test: packages/ui/src/__tests__/shellCommands.test.ts
-- Modify: packages/ui/src/composables/ui.ts
+- Test: packages/ui/src/__tests__/drawerTabState.test.ts
 
 **Interfaces:**
 
@@ -1332,28 +1371,32 @@ Expected: 全绿。
       title: string
     }
 
-    export interface DrawerTabsInvalid {
-      id: string
-      reason: 'reserved' | 'missing-panel' | 'missing-button'
+    export interface DrawerHost {
+      readonly activeTab: string
+      readonly width: number
+      readonly collapsed: boolean
+      openTab(id: string): void
+      close(): void
+      toggleCollapsed(): void
     }
 
     export function resolveDrawerTabs(
       occ: Array<{ id: string; order: number; component: unknown; meta?: unknown }>,
       opts?: { reserved?: string[] },
-    ): { tabs: DrawerTabEntry[]; invalid: DrawerTabsInvalid[] }
+    ): { tabs: DrawerTabEntry[]; invalid: Array<{ id: string; reason: 'reserved' | 'missing-panel' | 'missing-button' }> }
 
     export function fallbackDrawerTab(active: string, pluginIds: string[]): string
 
     export function registerShellCommands(
       ctx: Context,
       host: {
-        openDrawer(which: 'left'): void
+        showLeftDrawer(): void
         openDrawerTab(id: string): void
         toggleLeftCollapsed(): void
       },
     ): Array<{ dispose(): void }>
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: 写 drawerTabs 测试**
 
 Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
 
@@ -1365,7 +1408,7 @@ Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
     const P = { name: 'P' }
 
     describe('resolveDrawerTabs', () => {
-      it('按 order 排序，保留有面板的插件页签', () => {
+      it('按 order 排序，只保留带按钮与面板的页签', () => {
         const r = resolveDrawerTabs([
           { id: 'b', order: 20, component: B, meta: { panel: P, title: 'B' } },
           { id: 'a', order: 10, component: A, meta: { panel: P, title: 'A' } },
@@ -1373,11 +1416,12 @@ Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
         expect(r.tabs.map((t) => t.id)).toEqual(['a', 'b'])
       })
 
-      it('保留 id 与缺面板的条目被拒绝，并给出原因', () => {
+      it('保留 id、缺面板、缺按钮都被拒绝并给出原因', () => {
         const r = resolveDrawerTabs(
           [
             { id: 'canvas', order: 0, component: A, meta: { panel: P } },
             { id: 'no-panel', order: 30, component: A, meta: {} },
+            { id: 'no-button', order: 40, component: undefined, meta: { panel: P } },
             { id: 'ok', order: 10, component: A, meta: { panel: P } },
           ],
           { reserved: ['canvas', 'assets'] },
@@ -1386,6 +1430,7 @@ Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
         expect(r.invalid).toEqual([
           { id: 'canvas', reason: 'reserved' },
           { id: 'no-panel', reason: 'missing-panel' },
+          { id: 'no-button', reason: 'missing-button' },
         ])
       })
     })
@@ -1398,6 +1443,8 @@ Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
       })
     })
 
+- [ ] **Step 2: 写 shell 命令测试**
+
 Create packages/ui/src/__tests__/shellCommands.test.ts:
 
     import { describe, expect, it } from 'vitest'
@@ -1406,26 +1453,26 @@ Create packages/ui/src/__tests__/shellCommands.test.ts:
     import { registerShellCommands } from '../shellCommands'
 
     describe('shell 命令', () => {
-      it('外壳按钮能通过命令打开抽屉和页签', async () => {
+      it('打开抽屉 / 切页签 / 收起展开都走命令', async () => {
         const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
         const calls: string[] = []
         const disposers = registerShellCommands(host.ctx, {
-          openDrawer: (which) => calls.push('open:' + which),
+          showLeftDrawer: () => calls.push('open'),
           openDrawerTab: (id) => calls.push('tab:' + id),
           toggleLeftCollapsed: () => calls.push('toggle'),
         })
 
         host.command.execute('shell:open-drawer')
-        host.command.execute('shell:open-drawer-tab', { id: 'my-tab' })
+        host.command.execute('shell:open-drawer-tab', { id: 'inspiration' })
         host.command.execute('shell:toggle-drawer')
 
-        expect(calls).toEqual(['open:left', 'tab:my-tab', 'toggle'])
+        expect(calls).toEqual(['open', 'tab:inspiration', 'toggle'])
         for (const d of disposers) d.dispose()
         host.stop()
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [ ] **Step 3: 跑测试确认失败**
 
 Run:
 
@@ -1434,7 +1481,7 @@ Run:
 
 Expected: 模块不存在。
 
-- [ ] **Step 3: 写纯逻辑**
+- [ ] **Step 4: 写 drawerTabs**
 
 Create packages/ui/src/composables/drawerTabs.ts:
 
@@ -1456,6 +1503,15 @@ Create packages/ui/src/composables/drawerTabs.ts:
     export interface DrawerTabsInvalid {
       id: string
       reason: DrawerTabsInvalidReason
+    }
+
+    export interface DrawerHost {
+      readonly activeTab: string
+      readonly width: number
+      readonly collapsed: boolean
+      openTab(id: string): void
+      close(): void
+      toggleCollapsed(): void
     }
 
     export const DRAWER_TAB_CANVAS = 'canvas'
@@ -1502,22 +1558,27 @@ Create packages/ui/src/composables/drawerTabs.ts:
       return pluginIds.includes(active) ? active : DRAWER_TAB_CANVAS
     }
 
+- [ ] **Step 5: 写 shellCommands**
+
 Create packages/ui/src/shellCommands.ts:
 
     import type { Context } from '@mini-canvas/canvas-data'
 
     export interface ShellCommandHost {
-      openDrawer(which: 'left'): void
+      showLeftDrawer(): void
       openDrawerTab(id: string): void
       toggleLeftCollapsed(): void
     }
 
-    export function registerShellCommands(ctx: Context, host: ShellCommandHost): Array<{ dispose(): void }> {
+    export function registerShellCommands(
+      ctx: Context,
+      host: ShellCommandHost,
+    ): Array<{ dispose(): void }> {
       return [
         ctx.commands.register({
           id: 'shell:open-drawer',
           title: '打开左侧抽屉',
-          run: () => host.openDrawer('left'),
+          run: () => host.showLeftDrawer(),
         }),
         ctx.commands.register({
           id: 'shell:open-drawer-tab',
@@ -1535,13 +1596,17 @@ Create packages/ui/src/shellCommands.ts:
       ]
     }
 
-- [ ] **Step 4: 改 ui.ts**
+- [ ] **Step 6: 改 ui.ts**
 
-把 leftTab 类型从闭集放宽为 string：
+1. state.leftTab 改成 string：
 
     leftTab: DRAWER_TAB_CANVAS as string,
 
-新增唯一入口：
+2. 新增：
+
+    function showLeftDrawer(): void {
+      state.drawer = 'left'
+    }
 
     function openDrawerTab(id: string): void {
       state.leftTab = id
@@ -1552,7 +1617,7 @@ Create packages/ui/src/shellCommands.ts:
       }
     }
 
-把 toggleLeftCollapsed 的展开分支改成保留上次页签：
+3. toggleLeftCollapsed 去掉强制回 canvas：
 
     function toggleLeftCollapsed(): void {
       state.leftCollapsed = !state.leftCollapsed
@@ -1565,16 +1630,16 @@ Create packages/ui/src/shellCommands.ts:
       }
     }
 
-把 openDrawerTab 加进 return 对象，并导出常量：
+4. return 对象加 showLeftDrawer、openDrawerTab。
 
-    return {
-      ...,
-      openDrawerTab,
-    }
+5. 文件顶部导入常量，并 re-export：
 
+    import { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
     export { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
 
-为 UI 状态补测试：
+6. App 的 onProviderReady 已经调用 registerShellCommands；不需要再加一处。
+
+- [ ] **Step 7: 写 ui 状态测试**
 
 Create packages/ui/src/__tests__/drawerTabState.test.ts:
 
@@ -1585,47 +1650,25 @@ Create packages/ui/src/__tests__/drawerTabState.test.ts:
       it('openDrawerTab 打开抽屉并切页签', () => {
         const ui = useUi()
         ui.state.drawer = null
-        ui.openDrawerTab('my-tab')
+        ui.openDrawerTab('inspiration')
         expect(ui.state.drawer).toBe('left')
-        expect(ui.state.leftTab).toBe('my-tab')
+        expect(ui.state.leftTab).toBe('inspiration')
       })
 
       it('收起再展开保留上次页签', () => {
         const ui = useUi()
-        ui.state.leftTab = 'my-tab'
+        ui.state.leftTab = 'inspiration'
+        ui.state.leftCollapsed = false
         ui.state.drawer = 'left'
         ui.toggleLeftCollapsed()
         expect(ui.state.drawer).toBe(null)
         ui.toggleLeftCollapsed()
         expect(ui.state.drawer).toBe('left')
-        expect(ui.state.leftTab).toBe('my-tab')
+        expect(ui.state.leftTab).toBe('inspiration')
       })
     })
 
-- [ ] **Step 5: 在 App 注册命令**
-
-在 App.vue 的 onCanvasReady 内：
-
-    let shellCommandDisposers: Array<{ dispose(): void }> = []
-
-    function onCanvasReady(host: unknown): void {
-      setReadyHost(host)
-      void ui.onReady()
-      for (const d of shellCommandDisposers) d.dispose()
-      shellCommandDisposers = registerShellCommands((host as CanvasHostHandle).ctx, ui)
-    }
-
-onBeforeUnmount:
-
-    for (const d of shellCommandDisposers) d.dispose()
-    shellCommandDisposers = []
-
-import:
-
-    import { registerShellCommands } from './shellCommands'
-    import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
-
-- [ ] **Step 6: 跑测试与类型检查**
+- [ ] **Step 8: 跑测试与类型检查**
 
 Run:
 
@@ -1637,14 +1680,14 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 7: 提交**
+- [ ] **Step 9: 提交**
 
-    git add packages/ui/src/composables/drawerTabs.ts packages/ui/src/shellCommands.ts packages/ui/src/composables/__tests__/drawerTabs.test.ts packages/ui/src/__tests__/shellCommands.test.ts packages/ui/src/__tests__/drawerTabState.test.ts packages/ui/src/composables/ui.ts packages/ui/src/App.vue
-    git commit -m "feat(ui): add drawer tab registry and shell commands"
+    git add packages/ui/src/composables/drawerTabs.ts packages/ui/src/shellCommands.ts packages/ui/src/composables/__tests__/drawerTabs.test.ts packages/ui/src/__tests__/shellCommands.test.ts packages/ui/src/__tests__/drawerTabState.test.ts packages/ui/src/composables/ui.ts
+    git commit -m "feat(ui): add drawer tab logic and shell commands"
 
 ---
 
-### Task 8: 左侧抽屉接入插件页签
+### Task 8: 左侧抽屉渲染插件页签
 
 **Files:**
 
@@ -1654,14 +1697,8 @@ Expected: 全绿。
 **Interfaces:**
 
     const { ctx } = useCanvasContext()
-
-    const drawerHost = {
-      get activeTab() { return s.leftTab },
-      get width() { return s.drawerWidth },
-      openTab: (id: string) => ui.openDrawerTab(id),
-      close: () => { s.drawer = null },
-      toggleCollapsed: () => ui.toggleLeftCollapsed(),
-    }
+    ctx.slots.occupants('shell.drawer.tabs')
+    DrawerHost 通过 props 交给页签按钮和面板
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1677,18 +1714,18 @@ Create packages/ui/src/__tests__/leftDrawerTabs.test.ts:
     )
 
     describe('LeftDrawer 插件页签', () => {
-      it('使用基础上下文并读 shell.drawer.tabs', () => {
+      it('读基础上下文与 shell.drawer.tabs', () => {
         expect(src).toContain('useCanvasContext')
         expect(src).toContain("occupants('shell.drawer.tabs')")
       })
 
-      it('页签按钮收到 active / onSelect / host', () => {
+      it('按钮收到 active / onSelect / host', () => {
         expect(src).toContain(':active=')
         expect(src).toContain(':on-select=')
         expect(src).toContain(':host="drawerHost"')
       })
 
-      it('插件面板只在当前页签是它时渲染', () => {
+      it('面板只在当前页签时渲染', () => {
         expect(src).toContain('activePluginTab')
         expect(src).toContain(':is="activePluginTab.panel"')
       })
@@ -1702,9 +1739,9 @@ Run:
 
 Expected: 当前 LeftDrawer 没有这些内容。
 
-- [ ] **Step 3: 改 LeftDrawer 脚本**
+- [ ] **Step 3: 加脚本**
 
-加 import：
+在 LeftDrawer.vue 的 setup 中增加：
 
     import { markRaw } from 'vue'
     import { useCanvasContext } from '@mini-canvas/canvas-render'
@@ -1713,9 +1750,8 @@ Expected: 当前 LeftDrawer 没有这些内容。
       DRAWER_TAB_CANVAS,
       fallbackDrawerTab,
       resolveDrawerTabs,
+      type DrawerHost,
     } from '../../composables/drawerTabs'
-
-在 setup 里：
 
     const { ctx } = useCanvasContext()
     const slotTick = ref(0)
@@ -1723,7 +1759,6 @@ Expected: 当前 LeftDrawer 没有这些内容。
 
     const slotRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
     const slotOff = slotRegistry?.subscribe?.(bumpSlots)
-
     const offInstalled = ctx.on('ctx:plugin-installed', bumpSlots)
     const offUninstalled = ctx.on('ctx:plugin-uninstalled', bumpSlots)
 
@@ -1761,20 +1796,23 @@ Expected: 当前 LeftDrawer 没有这些内容。
       { immediate: true },
     )
 
-    const drawerHost = {
-      get activeTab(): string { return s.leftTab },
-      get width(): number { return s.drawerWidth },
-      openTab: (id: string): void => ui.openDrawerTab(id),
-      close: (): void => { s.drawer = null },
-      toggleCollapsed: (): void => ui.toggleLeftCollapsed(),
+    const drawerHost: DrawerHost = {
+      get activeTab() { return s.leftTab },
+      get width() { return s.drawerWidth },
+      get collapsed() { return s.leftCollapsed },
+      openTab: (id: string) => ui.openDrawerTab(id),
+      close: () => { s.drawer = null },
+      toggleCollapsed: () => ui.toggleLeftCollapsed(),
     }
 
-开发态提示非法页签（只提示一次，不打断）：
-
+    const warned = new Set<string>()
     watch(
       () => pluginTabsResult.value.invalid,
       (list) => {
         for (const item of list) {
+          const key = item.id + ':' + item.reason
+          if (warned.has(key)) continue
+          warned.add(key)
           console.warn('[left-drawer] 忽略页签 ' + item.id + '：' + item.reason)
         }
       },
@@ -1783,7 +1821,16 @@ Expected: 当前 LeftDrawer 没有这些内容。
 
 - [ ] **Step 4: 改页签行**
 
-保留原有 canvas/assets 两个按钮，但在循环后追加：
+原有内置按钮改成走统一入口：
+
+    <button
+      v-for="t in ([DRAWER_TAB_CANVAS, DRAWER_TAB_ASSETS] as const)"
+      :key="t"
+      ...
+      @click="ui.openDrawerTab(t)"
+    >{{ t === DRAWER_TAB_CANVAS ? '画布' : '资产' }}</button>
+
+在循环后追加：
 
     <component
       v-for="tab in pluginTabs"
@@ -1794,13 +1841,9 @@ Expected: 当前 LeftDrawer 没有这些内容。
       :host="drawerHost"
     />
 
-把内置按钮的点击从直接写 state 改成统一入口：
+- [ ] **Step 5: 加插件正文**
 
-    @click="ui.openDrawerTab(t)"
-
-- [ ] **Step 5: 改页签内容**
-
-原有画布与资产内容不动。追加插件页签内容：
+原有画布/资产内容不动。在它们之后、底部状态条之前追加：
 
     <AxScrollArea
       v-if="activePluginTab"
@@ -1811,9 +1854,50 @@ Expected: 当前 LeftDrawer 没有这些内容。
       <component :is="activePluginTab.panel" :host="drawerHost" />
     </AxScrollArea>
 
-放在原有内容之后、底部状态条之前。它用独立 v-if，不与画布/资产的 v-if 链冲突。
+注意：不要把它塞进 s.leftTab === 'assets' 的 v-if 里；它必须是独立分支。
 
-- [ ] **Step 6: 跑测试与类型检查**
+- [ ] **Step 6: 加真机验证**
+
+Run:
+
+    pnpm -C packages/ui dev
+
+浏览器控制台执行：
+
+    const Vue = window.Vue
+    const ctx = window.MiniCanvasUI.getContext()
+    const Tab = {
+      props: ['active', 'onSelect'],
+      render() {
+        return Vue.h('button', {
+          role: 'tab',
+          'aria-selected': String(this.active),
+          onClick: () => this.onSelect(),
+        }, '灵感')
+      },
+    }
+    const Panel = {
+      props: ['host'],
+      render() {
+        return Vue.h('div', { 'data-inspiration': '1' }, '灵感列表')
+      },
+    }
+    ctx.slots.register('shell.drawer.tabs', {
+      id: 'inspiration',
+      component: Tab,
+      meta: { title: '灵感', panel: Panel },
+    })
+    ctx.get('command').execute('shell:open-drawer-tab', { id: 'inspiration' })
+
+确认：
+
+- 抽屉顶部出现“灵感”页签；
+- 点中后高亮，正文显示“灵感列表”；
+- 再点“画布”，正文回到画布树，URL 不变；
+- 收起再展开仍停在“灵感”（插件还在）；
+- 移除该槽后自动回“画布”。
+
+- [ ] **Step 7: 跑测试与类型检查**
 
 Run:
 
@@ -1823,63 +1907,18 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 7: 真机验证**
-
-Run:
-
-    pnpm -C packages/ui dev
-
-在浏览器控制台注册一个测试页签：
-
-    const Vue = window.Vue
-    const ctx = window.MiniCanvasUI.getContext()
-    const Tab = {
-      props: ['active', 'onSelect'],
-      render() {
-        return Vue.h(
-          'button',
-          {
-            role: 'tab',
-            'aria-selected': String(this.active),
-            onClick: () => this.onSelect(),
-          },
-          '测试页签',
-        )
-      },
-    }
-    const Panel = {
-      props: ['host'],
-      render() {
-        return Vue.h('div', { 'data-test-panel': '1' }, '测试面板')
-      },
-    }
-    ctx.slots.register('shell.drawer.tabs', {
-      id: 'test-tab',
-      component: Tab,
-      meta: { title: '测试页签', panel: Panel },
-    })
-    ctx.get('command').execute('shell:open-drawer-tab', { id: 'test-tab' })
-
-确认：
-
-- 抽屉打开并高亮测试页签。
-- 面板显示“测试面板”。
-- 卸载插件/移除槽后自动回画布页签。
-- 收起再展开仍停在测试页签（只要插件还在）。
-
 - [ ] **Step 8: 提交**
 
     git add packages/ui/src/components/areas/LeftDrawer.vue packages/ui/src/__tests__/leftDrawerTabs.test.ts
-    git commit -m "feat(ui): render plugin tabs in left drawer"
+    git commit -m "feat(ui): render plugin tabs in the left drawer"
 
 ---
 
-### Task 9: 真机外壳插槽 e2e
+### Task 9: 真机 e2e
 
 **Files:**
 
 - Create: packages/ui/e2e/shell-slots-check.mjs
-- Modify: docs/STATUS.md（验证记录）
 
 **Interfaces:**
 
@@ -1887,7 +1926,7 @@ Run:
     ctx.slots.register / ctx.slots.remove
     window.Vue.h
 
-- [ ] **Step 1: 写 e2e 脚本**
+- [ ] **Step 1: 写脚本**
 
 Create packages/ui/e2e/shell-slots-check.mjs:
 
@@ -1909,10 +1948,6 @@ Create packages/ui/e2e/shell-slots-check.mjs:
     const errors = []
     page.on('pageerror', (e) => errors.push(String(e.message)))
 
-// 本脚本在 SPA 内注册测试槽后会离开页面；收尾必须把宿主清干净，否则 ctx 里残留的
-// 测试按钮会跨用例污染，也会让同一 dev server 上的其它 e2e 看到多出来的按钮。
-// 注意：page.evaluate 在导航后拿不到旧 ctx，所以清理放在 test 结束前显式做。
-
     let failed = 0
     function check(name, ok, detail = '') {
       console.log((ok ? 'PASS' : 'FAIL') + '  ' + name + (detail ? '  -- ' + detail : ''))
@@ -1930,39 +1965,28 @@ Create packages/ui/e2e/shell-slots-check.mjs:
       const ctx = window.MiniCanvasUI.getContext()
       if (!Vue || !ctx) return false
 
-      const button = (text, attr) => ({
+      const button = (text) => ({
         render() {
-          return Vue.h('button', { [attr]: text, type: 'button' }, text)
+          return Vue.h('button', { 'data-e2e-slot': text, type: 'button' }, text)
         },
       })
 
-      ctx.slots.register('shell.status.end', {
-        id: 'e2e-status',
-        component: button('STATUS', 'data-e2e-slot'),
-      })
-      ctx.slots.register('shell.dock.end', {
-        id: 'e2e-dock',
-        component: button('DOCK', 'data-e2e-slot'),
-      })
+      ctx.slots.register('shell.status.end', { id: 'e2e-status', component: button('STATUS') })
+      ctx.slots.register('shell.dock.end', { id: 'e2e-dock', component: button('DOCK') })
 
       const Tab = {
         props: ['active', 'onSelect'],
         render() {
-          return Vue.h(
-            'button',
-            {
-              type: 'button',
-              role: 'tab',
-              'aria-selected': String(this.active),
-              'data-e2e-slot': 'DRAWER_TAB',
-              onClick: () => this.onSelect(),
-            },
-            'DRAWER_TAB',
-          )
+          return Vue.h('button', {
+            type: 'button',
+            role: 'tab',
+            'aria-selected': String(this.active),
+            'data-e2e-slot': 'DRAWER_TAB',
+            onClick: () => this.onSelect(),
+          }, 'DRAWER_TAB')
         },
       }
       const Panel = {
-        props: ['host'],
         render() {
           return Vue.h('div', { 'data-e2e-slot': 'DRAWER_PANEL' }, 'DRAWER_PANEL')
         },
@@ -1987,19 +2011,19 @@ Create packages/ui/e2e/shell-slots-check.mjs:
     await page.waitForSelector('[data-e2e-slot="DRAWER_PANEL"]', { timeout: 5000 })
     check('点击插件页签后出现插件面板', (await page.locator('[data-e2e-slot="DRAWER_PANEL"]').count()) === 1)
 
-    const removed = await page.evaluate(() => {
+    await page.evaluate(() => {
       const ctx = window.MiniCanvasUI.getContext()
       ctx.slots.remove('shell.status.end', 'e2e-status')
       ctx.slots.remove('shell.dock.end', 'e2e-dock')
       ctx.slots.remove('shell.drawer.tabs', 'e2e-tab')
-      return true
     })
-    check('能移除外壳槽', removed)
     await page.waitForTimeout(300)
     check('状态条按钮随槽移除而消失', (await page.locator('[data-e2e-slot="STATUS"]').count()) === 0)
     check('底栏按钮随槽移除而消失', (await page.locator('[data-e2e-slot="DOCK"]').count()) === 0)
-    check('当前插件页签移除后回画布', (await page.locator('.left-drawer [role=tab][aria-selected=true]').innerText()).includes('画布'))
-
+    check(
+      '当前插件页签移除后回画布',
+      (await page.locator('.left-drawer [role=tab][aria-selected=true]').innerText()).includes('画布'),
+    )
     check('零 pageerror', errors.length === 0, errors.join(' | '))
 
     await browser.close()
@@ -2007,7 +2031,7 @@ Create packages/ui/e2e/shell-slots-check.mjs:
 
 - [ ] **Step 2: 跑 e2e**
 
-先起服务：
+Run:
 
     pnpm -C packages/ui dev
 
@@ -2015,97 +2039,112 @@ Create packages/ui/e2e/shell-slots-check.mjs:
 
     node packages/ui/e2e/shell-slots-check.mjs
 
-Expected:
+Expected: 全部 PASS。
 
-- 所有 check PASS。
-- 状态条、底栏、抽屉页签三处都能注册、显示、点击、移除。
-
-- [ ] **Step 3: 跑既有 e2e 回归**
+- [ ] **Step 3: 回归既有 e2e**
 
     node packages/ui/e2e/canvas-e2e.mjs
     node packages/ui/e2e/context-menu-viewport-check.mjs
 
-Expected: 全 PASS；控制台零 error。
+Expected: 全部 PASS，零 pageerror。
 
 - [ ] **Step 4: 提交**
 
     git add packages/ui/e2e/shell-slots-check.mjs
-    git commit -m "test(ui): cover shell slots in real browser"
+    git commit -m "test(ui): cover shell slots and drawer tabs in browser"
 
 ---
 
-### Task 10: 文档、索引与最终验证
+### Task 10: 文档与全量验证
 
 **Files:**
 
 - Create: docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md
 - Modify: docs/代码开发/canvas-render/05-渲染上下文与content组件.md
+- Modify: docs/代码开发/canvas-render/09-端到端可运行Demo.md
 - Modify: docs/代码开发/00-总览与架构.md
+- Modify: docs/代码开发/plugins/plugin-theme-default.md
+- Modify: packages/docs/canvas-render/canvas-host.md
+- Modify: packages/docs/canvas-render/demo.md
+- Modify: packages/plugins/README.md
 - Modify: docs/STATUS.md
 
-**Interfaces:** 无新代码接口；只把已实现契约写清楚。
+**Interfaces:** 无新代码接口。
 
 - [ ] **Step 1: 写新手册**
 
-Create docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md，至少写清：
+Create docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md，包含：
 
     # CanvasProvider 与外壳插槽
 
-    1. 为什么需要 CanvasProvider
-       - Context 与 VueFlow 渲染上下文的边界
-       - 为什么外壳不能直接用 useCanvasRender
+    ## 1. 为什么需要 Provider
+    - 旧结构：CanvasHost 启动内核，外壳是兄弟节点，拿不到 ctx。
+    - 新结构：Provider 启动内核，外壳和 CanvasHost 都是它的后代。
+    - 整页 loading 是已确认的行为。
 
-    2. 两层上下文速查
-       - CanvasContext: ctx / host / api / manager
-       - CanvasRenderContext: 再加 flow / renderNodes / visibleEdges / interaction
+    ## 2. 两层上下文
+    - useCanvasContext：ctx / host / api / manager。
+    - useCanvasRender：再加 flow / renderNodes / visibleRect / interaction。
 
-    3. 插槽表
-       - shell.status.end
-       - shell.dock.start
-       - shell.dock.end
-       - shell.drawer.tabs
+    ## 3. 外壳插槽
+    - shell.status.end
+    - shell.dock.start
+    - shell.dock.end
+    - shell.drawer.tabs
 
-    4. 抽屉页签完整示例
-       - 注册按钮 + meta.panel
-       - 按钮收到 active / onSelect / host
-       - 面板收到 host
-       - 保留 id 与缺面板会被忽略
+    ## 4. 什么叫抽屉页签（插件页）
+    - 画布 | 资产 | 灵感
+    - 点“灵感”只切抽屉正文，不换 URL。
+    - 不是设置页，不是画布浮层，不是路由页面。
 
-    5. 外壳按钮打开抽屉
-       - command: shell:open-drawer-tab
+    ## 5. 完整示例
+    - InspirationTabButton.vue
+    - InspirationPanel.vue
+    - apply(ctx) 注册
+    - DrawerHost 接口
 
-    6. 边界与坑
-       - 外壳槽不能用 useCanvasRender
-       - SettingsHost 仍在 CanvasHost 内
-       - Provider 每个画布只能一个
-       - 不要自己写 fixed 定位或 z-index
+    ## 6. 外壳按钮控制抽屉
+    - shell:open-drawer
+    - shell:open-drawer-tab
+    - shell:toggle-drawer
 
-- [ ] **Step 2: 更新旧手册**
+    ## 7. 边界与坑
+    - 外壳槽不能用 useCanvasRender。
+    - SettingsHost 仍在 CanvasHost 内。
+    - Provider 每个画布只能一个。
+    - 不写 fixed 定位或 z-index。
 
-在 docs/代码开发/canvas-render/05-渲染上下文与content组件.md 增加两段：
+- [ ] **Step 2: 更新旧文档**
+
+在 05-渲染上下文与content组件.md 增加：
 
     ## CanvasProvider 与两层上下文
-
     - useCanvasRender：CanvasHost 内，含 flow 等渲染能力。
-    - useCanvasContext：CanvasProvider 内，含 ctx / host，外壳区域用。
-    - 只有 ctx 需求的组件优先 useCanvasContext，这样它既能放外壳也能放画布。
+    - useCanvasContext：Provider 内，含 ctx/host/api/manager。
+    - 只有 ctx 需求的组件优先 useCanvasContext。
 
     ## 外壳槽与画布槽的区别
+    - overlay / mini-map / agent-conversation 在 CanvasHost 内。
+    - shell.status.end / shell.dock.* / shell.drawer.tabs 在外壳里。
 
-    - overlay / mini-map / agent-conversation 在 CanvasHost 内，可用 useCanvasRender。
-    - shell.status.end / shell.dock.* / shell.drawer.tabs 在外壳里，只能用 useCanvasContext。
+在 09-端到端可运行Demo.md、docs 的 canvas-host 示例、plugin-theme-default 文档、plugins/README 里，把
+<CanvasHost :plugins ... :adapter ... /> 全部改成：
 
-在 docs/代码开发/00-总览与架构.md 的架构图与入口表里补 CanvasProvider。
+    <CanvasProvider :plugins="plugins" :adapter="adapter">
+      <CanvasHost />
+    </CanvasProvider>
+
+在 00-总览与架构.md 的架构图、入口表里补 CanvasProvider。
 
 - [ ] **Step 3: 更新 STATUS**
 
-在 docs/STATUS.md 顶部“现在该做什么”下新增一条追记，写清：
+在 docs/STATUS.md 顶部增加一条追记：
 
-    - 根因：上下文在 CanvasHost 内，外壳是兄弟节点，只能靠 Teleport 桥。
+    - 根因：上下文在 CanvasHost 内，外壳是兄弟节点。
     - 落地：CanvasProvider / 两层上下文 / 三处外壳槽 / 抽屉页签 / 三条 shell 命令。
+    - 无兼容：CanvasHost 不再自启动；所有调用点已迁移。
     - 验证：各包测试数字、typecheck、e2e 脚本名。
-    - 兼容：直接写 CanvasHost 的旧用法仍有效。
-    - 已知边界：外壳槽不能使用 flow 相关能力；SettingsHost 仍留在 CanvasHost。
+    - 边界：外壳槽不能用 flow 相关能力；SettingsHost 仍在 CanvasHost。
 
 - [ ] **Step 4: 全量验证**
 
@@ -2116,14 +2155,14 @@ Run:
     pnpm -C packages/ui test
     pnpm -C packages/ui typecheck
     pnpm -C packages/plugins/plugin-theme-default test
+    pnpm -C packages/plugins/plugin-theme-default typecheck
+    pnpm -C packages/plugins/plugin-theme-gallery test
+    pnpm -C packages/plugins/plugin-theme-gallery typecheck
     pnpm -C packages/plugins/plugin-mini-map test
     pnpm -C packages/plugins/plugin-agent test
     pnpm -C packages/plugins/plugin-manager test
 
-Expected:
-
-- 全绿。
-- 任何一包红都先修根因，不跳过。
+Expected: 全绿。任何红项先修根因。
 
 Run:
 
@@ -2132,10 +2171,7 @@ Run:
     node packages/ui/e2e/canvas-e2e.mjs
     node packages/ui/e2e/context-menu-viewport-check.mjs
 
-Expected:
-
-- build 通过。
-- 三条 e2e 全 PASS。
+Expected: build 通过，三条 e2e 全 PASS。
 
 - [ ] **Step 5: 更新 codegraph**
 
@@ -2148,7 +2184,7 @@ Expected: Index is up to date。
 
 - [ ] **Step 6: 提交**
 
-    git add docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md docs/代码开发/canvas-render/05-渲染上下文与content组件.md docs/代码开发/00-总览与架构.md docs/STATUS.md
+    git add docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md docs/代码开发/canvas-render/05-渲染上下文与content组件.md docs/代码开发/canvas-render/09-端到端可运行Demo.md docs/代码开发/00-总览与架构.md docs/代码开发/plugins/plugin-theme-default.md packages/docs/canvas-render/canvas-host.md packages/docs/canvas-render/demo.md packages/plugins/README.md docs/STATUS.md
     git commit -m "docs(canvas-render): document provider and shell slots"
 
 ---
@@ -2157,47 +2193,49 @@ Expected: Index is up to date。
 
 ### 4.1 需求覆盖
 
-| 用户要求 | 对应任务 |
+| 要求 | 任务 |
 |---|---|
-| 最外层 Provider 初始化上下文 | Task 1 / Task 2 / Task 5 |
-| 删除 Teleport 桥与锚点表 | Task 2 / Task 4 / Task 5 |
-| 左侧抽屉页签行可扩展 | Task 7 / Task 8 |
-| 状态条可扩展 | Task 6 / Task 9 |
-| 底栏可扩展 | Task 6 / Task 9 |
-| 抽屉折叠/展开/隐藏仍由壳管理 | Task 7 / Task 8 |
-| 页签上下文传递 | Task 7 / Task 8 |
-| 代码更精简 | Task 2 / Task 4 / Task 5；桥接层不再需要 |
-| 不破坏旧 CanvasHost 用法 | Task 3 |
+| 最外层 Provider 初始化上下文 | Task 1 / Task 2 / Task 3 |
+| 不做兼容 | Task 1（无回退）/ Task 2（唯一启动点）/ Task 3（迁移全部调用点） |
+| 整页 loading | Task 2 / Task 3 |
+| 状态条插槽 | Task 6 / Task 9 |
+| 底栏插槽 | Task 6 / Task 9 |
+| 左抽屉插件页签 | Task 7 / Task 8 / Task 9 |
+| 抽屉开合/收起/宽度 | Task 7 / Task 8 |
+| 页签 active/onSelect/host | Task 7 / Task 8 |
+| 命令控制抽屉 | Task 7 / Task 8 |
+| 删除 Teleport 桥 | Task 3 / Task 4 |
 
 ### 4.2 类型一致性
 
-- CanvasContext.ctx / host / api / manager 在 Provider、CanvasHostInner、useCanvasContext 中同名。
-- CanvasHostProps = CanvasHostBootProps + CanvasHostRenderProps，只在兼容外壳使用。
-- drawerHost 的 activeTab / width / openTab / close / toggleCollapsed 在 LeftDrawer 与文档一致。
-- 槽名 shell.status.end / shell.dock.start / shell.dock.end / shell.drawer.tabs 在代码、测试、e2e、文档中一致。
-- 命令 id shell:open-drawer / shell:open-drawer-tab / shell:toggle-drawer 在 shellCommands、测试、文档中一致。
+- CanvasContext 的 ctx/host/api/manager 在 Provider、CanvasHost、useCanvasContext 中同名且必填。
+- CanvasHost 只使用 CanvasHostRenderProps；CanvasHostBootProps 只在 Provider 使用。
+- DrawerHost 的 activeTab/width/collapsed/openTab/close/toggleCollapsed 在 drawerTabs、LeftDrawer、文档中一致。
+- 槽名 shell.status.end/shell.dock.start/shell.dock.end/shell.drawer.tabs 在代码、测试、e2e、文档中一致。
+- 命令名 shell:open-drawer/shell:open-drawer-tab/shell:toggle-drawer 在 shellCommands、测试、文档中一致。
 
-### 4.3 风险与限制
+### 4.3 风险
 
-1. **外壳晚于 App 挂载**：Provider 只在 ready 后渲染默认插槽，所以 App 的 onMounted 早于 CanvasShell。小地图已用 MutationObserver + 2s 兜底；本计划另加 watch(miniMapEl)，避免依赖轮询。
-2. **设置面板仍依赖 useCanvasRender**：SettingsHost 继续留在 CanvasHost #ui，不搬去外壳。这限制外壳槽不能直接渲染设置面板内容，但不影响本次三处插槽。
-3. **外壳槽的能力边界**：插件组件只能 useCanvasContext；需要 flow 的组件必须留在画布内。文档必须写清楚。
-4. **抽屉页签卸载**：插件卸载后，LeftDrawer 的 watch 会把当前页签回退到 canvas，不留下空白面板。
-5. **多画布实例**：每个画布实例必须各自包一个 CanvasProvider；不能跨实例共享 Provider。
-6. **工作区当前不干净**：Task 0 必须先处理已有 WIP，否则大改中途回退会丢工作。
+1. CanvasHost 是一个大文件，启动代码搬走后要全文件搜 booting、bootError、apiRef、managerRef、host.stop，避免残留。
+2. Provider 的 onUnmounted 必须在子组件卸载之后 stop；不能换成 onBeforeUnmount。
+3. 外壳槽只在 Provider 的 ready 后出现；App 的 onMounted 会早于 CanvasShell，所有依赖 DOM 的定位要监听 ref/挂载事件。
+4. 没有兼容层后，任何漏迁移的 CanvasHost :plugins=... 都会直接报错；Task 3 必须覆盖 ui、gallery、demo、docs 示例。
+5. uiCatalog.test 等只 provide RENDER_CONTEXT_KEY 的测试必须改为 CANVAS_CONTEXT_KEY，否则会红。
+6. 抽屉页签缺面板会 warn 并忽略；不产生空白页。
 
 ### 4.4 自审结论
 
-- 文档没有把“子代理审核”写成已完成；按用户要求，不创建子代理。
-- 文档没有把“创建分支”写成步骤；按用户要求，不创建分支。
-- 文档没有涉及 v1 或核心节点件。
-- 文档把“Provider 外提”和“外壳插槽”拆成独立任务，便于逐段验证。
+- 没有把子代理审核写成已完成；按用户要求不创建子代理。
+- 没有创建分支步骤；按用户要求不创建分支。
+- 没有涉及 v1 或核心节点件。
+- 已把用户确认的三点写进约束与任务。
+- 已把“插件页”定义成左侧抽屉第三个及之后的页签与正文面板。
 
 ---
 
-## 5. 评审时需要你拍板的点
+## 5. 开工前最后确认
 
-1. **第一次打开是否接受整页 loading**：Provider ready 前不渲染 CanvasShell。这样最安全，但首屏会先看到“正在启动内核…”。如果你要保留顶栏骨架，需要额外做“可空上下文 + 骨架壳”，复杂度会上升。
-2. **抽屉插件页签是否必须带面板**：本计划要求 meta.panel；只有按钮没有面板的注册会被忽略并 warn。这样避免点了页签出现空白。若你要“只加按钮、不新增页签”，应改用状态条/底栏槽，而不是 drawer.tabs。
-3. **是否保留直接写 CanvasHost 的旧用法**：本计划保留，代价是多一个兼容外壳文件。若你愿意一次性迁移所有 demo/docs，可以删除兼容外壳，代码更少，但改动面更大。
-4. **外壳按钮是否走命令**：本计划用 shell:* 命令控制抽屉，不新增全局 shell 服务。若你更希望 ctx.get('shell') 直接拿对象，可以改成服务，但会多一个服务名。
+1. 抽屉页签的正文宽度就是抽屉宽度，不额外弹窗；这符合你对“左侧菜单”的要求。
+2. 插件页签必须同时有按钮和面板；只有按钮的入口应使用状态条/底栏槽。
+3. 旧 CanvasHost 用法全部迁移，不保留兼容分支；文档和 demo 同步更新。
+4. 首次打开先显示整页“正在启动内核…”，就绪后一次性出现外壳并挂载画布。
