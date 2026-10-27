@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 左侧抽屉：头部（复用 ProjectCluster）+ 画布/资产 tab + 列表/宫格双模式树 + 底部收起条 + 拖宽手柄。
 // 图标用 LibIcon（照 LibTV 官网 SVG 原样复刻），交互行为照目标实测。
-import { ref, computed, isRef, nextTick, h, defineComponent, onMounted, onBeforeUnmount, reactive } from 'vue'
+import { ref, computed, isRef, nextTick, h, defineComponent, onMounted, onBeforeUnmount, reactive, watch, markRaw } from 'vue'
 import { ArrowLeftToLine as ArrowLeftToLineIcon, Folder as FolderIcon, Video as VideoIcon, Type as TypeIcon, Image as ImageIcon, Music as AudioIcon, Download as DownloadIcon, Trash2 as Trash2Icon, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon, Check as CheckIcon, ChevronRight as ChevronIcon, MoreHorizontal as MoreIcon, Palette as PaletteIcon, Pencil as PencilIconLucide, ArrowRightFromLine as AddCanvasIcon, Wand2 as AgentIcon, Cloud as CloudIcon, Aperture as ApertureIcon, Car as CarIcon, BookUser as BookUserIcon, CircleDot as CircleDotIcon, Plane as PlaneIcon, Film as FilmIcon, Cookie as CookieIcon, Flame as FlameIcon, Wrench as WrenchIcon, Paintbrush as PaintbrushIcon, Shapes as ShapesIcon, Candy as CandyIcon, Monitor as MonitorIcon, Landmark as LandmarkIcon, Book as BookIcon, Camera as CameraIcon, Ghost as GhostIcon, Briefcase as BriefcaseIcon } from 'lucide-vue-next'
 import folderImg from '../../assets/folder.png'
 import { AnimatePresence, motion } from 'motion-v'
@@ -23,9 +23,88 @@ import { assetKindOf } from '../../composables/assetModel'
 import { folderIconComponent } from '../../composables/folderIcons'
 import { openAssetManager, openAssetPreviewFromAsset } from '../../composables/assetUiBus'
 import { siblingPreview } from '../../composables/assetSiblings'
+import { useCanvasContext } from '@mini-canvas/canvas-render'
+import {
+  DRAWER_TAB_ASSETS,
+  DRAWER_TAB_CANVAS,
+  fallbackDrawerTab,
+  resolveDrawerTabs,
+  type DrawerHost,
+} from '../../composables/drawerTabs'
 
 const ui = useUi()
 const s = ui.state
+
+// ===== 插件页签（第三个及之后的页签）=====
+//
+// 这是“左侧抽屉里多出来的一页”，不是路由/设置页。宿主负责高亮、切换、开合；
+// 插件只交按钮 + meta.panel。槽变化、插件装卸都要重读。
+const { ctx } = useCanvasContext()
+const slotTick = ref(0)
+const bumpSlots = (): void => { slotTick.value += 1 }
+const slotRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+const slotOff = slotRegistry?.subscribe?.(bumpSlots)
+const offInstalled = ctx.on('ctx:plugin-installed', bumpSlots)
+const offUninstalled = ctx.on('ctx:plugin-uninstalled', bumpSlots)
+
+const pluginTabsResult = computed(() => {
+  void slotTick.value
+  return resolveDrawerTabs(ctx.slots.occupants('shell.drawer.tabs'), {
+    reserved: [DRAWER_TAB_CANVAS, DRAWER_TAB_ASSETS],
+  })
+})
+
+const pluginTabs = computed(() =>
+  pluginTabsResult.value.tabs.map((t) => ({
+    ...t,
+    button: markRaw(t.button as object),
+    panel: markRaw(t.panel as object),
+  })),
+)
+
+const activePluginTab = computed(() =>
+  pluginTabs.value.find((t) => t.id === s.leftTab),
+)
+
+// 插件卸载后当前页签可能消失：自动回画布，避免留一个空白正文。
+watch(
+  pluginTabs,
+  (tabs) => {
+    const next = fallbackDrawerTab(s.leftTab, tabs.map((t) => t.id))
+    if (next !== s.leftTab) s.leftTab = next
+  },
+  { immediate: true },
+)
+
+const drawerHost: DrawerHost = {
+  get activeTab() { return s.leftTab },
+  get width() { return s.drawerWidth },
+  get collapsed() { return s.leftCollapsed },
+  openTab: (id: string) => ui.openDrawerTab(id),
+  close: () => { s.drawer = null },
+  toggleCollapsed: () => ui.toggleLeftCollapsed(),
+}
+
+// 非法页签只提示一次：热装期间短暂缺面板是正常现象，不该刷屏。
+const warnedInvalid = new Set<string>()
+watch(
+  () => pluginTabsResult.value.invalid,
+  (list) => {
+    for (const item of list) {
+      const key = item.id + ':' + item.reason
+      if (warnedInvalid.has(key)) continue
+      warnedInvalid.add(key)
+      console.warn('[left-drawer] 忽略页签 ' + item.id + '：' + item.reason)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  slotOff?.()
+  offInstalled.dispose()
+  offUninstalled.dispose()
+})
 /** 展示模式：list（树行）/ grid（宫格卡片），照目标「展示设置」下拉 */
 const viewMode = ref<'list' | 'grid'>('grid')
 const menuOpen = ref(false)
@@ -601,12 +680,21 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
       <!-- 标签栏 -->
       <div class="flex h-[50px] flex-none items-center gap-1 border-y border-line px-2" role="tablist">
         <button
-          v-for="t in (['canvas', 'assets'] as const)" :key="t"
+          v-for="t in ([DRAWER_TAB_CANVAS, DRAWER_TAB_ASSETS] as const)" :key="t"
           class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
           :class="s.leftTab === t ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"
           role="tab" :aria-selected="s.leftTab === t"
-          @click="s.leftTab = t; t === 'assets' && (ui.loadAssets(), ui.loadAssetFolders())"
-        >{{ t === 'canvas' ? '画布' : '资产' }}</button>
+          @click="ui.openDrawerTab(t)"
+        >{{ t === DRAWER_TAB_CANVAS ? '画布' : '资产' }}</button>
+        <!-- 插件页签按钮：宿主给 active/onSelect/host；插件只画按钮 -->
+        <component
+          v-for="tab in pluginTabs"
+          :key="tab.id"
+          :is="tab.button"
+          :active="s.leftTab === tab.id"
+          :on-select="() => ui.openDrawerTab(tab.id)"
+          :host="drawerHost"
+        />
       </div>
 
       <!-- ===== 画布 tab 工具行：普通态 ⇄ 搜索态（点放大镜展开输入框，筛选/关闭在右侧） ===== -->
@@ -943,6 +1031,16 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           </template>
         </template>
 
+      </AxScrollArea>
+
+      <!-- 插件页签正文：只在当前选中的是插件页签时渲染（画布/资产树走各自的 v-if） -->
+      <AxScrollArea
+        v-if="activePluginTab"
+        class="min-h-0 flex-1"
+        direction="y"
+        body-class="p-2"
+      >
+        <component :is="activePluginTab.panel" :host="drawerHost" />
       </AxScrollArea>
 
       <!-- 底部状态条 -->

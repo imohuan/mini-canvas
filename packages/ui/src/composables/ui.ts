@@ -18,6 +18,10 @@ import { registerPendingSave, unregisterPendingSave } from './pendingSave'
 import { importPack, isNodePackFile, resolvePackBase, VERSION_SEP } from './nodePack'
 import { uniqueLabel } from './nodeLabel'
 import { queueUploads, type PendingUpload } from './assetUploadBus'
+import { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
+
+// 抽屉保留页签：画布 / 资产。插件页签不得占用这两个 id。
+export { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
 
 const log = createV2Logger('config')
 
@@ -112,7 +116,8 @@ function createUi() {
     drawer: null as 'left' | 'roles' | null,
     drawerWidth: 320,
     leftCollapsed: false,
-    leftTab: 'canvas' as 'canvas' | 'assets',
+    // 放开成 string：插件页签会追加第三个及之后的 id（canvas/assets 仍由内置页签占用）。
+    leftTab: DRAWER_TAB_CANVAS as string,
     filterTypeOpen: false,
     filterRatingOpen: false,
     filterType: '全部',
@@ -2128,6 +2133,24 @@ function createUi() {
   function openDrawer(which: 'left' | 'roles'): void {
     state.drawer = state.drawer === which ? null : which
   }
+  /** 打开左侧抽屉，保留当前页签（外壳命令用）。 */
+  function showLeftDrawer(): void {
+    state.drawer = 'left'
+  }
+  /**
+   * 打开左侧抽屉并切到指定页签。
+   *
+   * 唯一入口：内置页签、插件页签、外壳命令都走它，避免各处直接写 state.leftTab
+   * 后漏掉“打开资产页时要拉清单”这类副作用。
+   */
+  function openDrawerTab(id: string): void {
+    state.leftTab = id
+    state.drawer = 'left'
+    if (id === DRAWER_TAB_ASSETS) {
+      void loadAssets()
+      void loadAssetFolders()
+    }
+  }
   /** 开面板前先重读一次注册表（插件热装/热卸后开面板即见最新键位） */
   function toggleShortcuts(): void {
     if (!state.shortcutsOpen) refreshShortcuts()
@@ -2144,7 +2167,6 @@ function createUi() {
       state.drawer = null
       showToast('已收起节点侧栏')
     } else {
-      state.leftTab = 'canvas'
       state.drawer = 'left'
       showToast('已展开节点侧栏')
     }
@@ -2401,7 +2423,7 @@ function createUi() {
     unbindThemeMode,
     syncZoomDisplay, zoomInStep, zoomOutStep, zoomToPercent, zoomToMax, zoomFit, unbindZoomSync,
     loadHistory, unbindHistory,
-    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
+    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, showLeftDrawer, openDrawerTab, closeSettings,
     runCommand,
     addAssetToCanvas, dropAssetToCanvas, addAssetToAgent, addFolderToAgent, addFolderAssetsToCanvas, screenToFlow, createAssetNode,
     addFilesToCanvas,

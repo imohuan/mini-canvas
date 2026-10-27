@@ -24,6 +24,7 @@ import ModalsArea from './components/areas/ModalsArea.vue'
 import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
 import { setReadyHost, useUi } from './composables/ui'
+import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -31,6 +32,10 @@ const ui = useUi()
 const s = ui.state
 // 装载清单 = 静态装配 + 按运行环境追加的自带件（cloud-server 托管时含云端连接，见 assembly）
 const plugins = resolveAppPlugins()
+
+// 外壳命令（打开抽屉 / 切页签 / 收起展开）：注册在 Provider 的 ctx 上，
+// 插件按钮通过 command 调用，不反向依赖 @mini-canvas/ui 的状态。
+let shellCommandDisposers: Array<{ dispose(): void }> = []
 
 // ===== 小地图跟随定位：每帧读状态栏「切换小地图」按钮的屏幕矩形，把地图贴在它正上方 =====
 // 为什么要逐帧（而不是监听事件）：抽屉开合走 transform 过渡（getBoundingClientRect 每帧都变），
@@ -48,6 +53,8 @@ function onProviderReady(host: CanvasHostHandle): void {
   setReadyHost(host)
   ui.setHostEl({ host })
   void ui.onReady()
+  for (const d of shellCommandDisposers) d.dispose()
+  shellCommandDisposers = registerShellCommands(host.ctx, ui)
 }
 function placeMiniMap(): void {
   const root = miniMapEl.value
@@ -156,6 +163,8 @@ onMounted(() => {
 watch(() => s.theme, (v) => ui.applyTheme(v))
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  for (const d of shellCommandDisposers) d.dispose()
+  shellCommandDisposers = []
   // 撤掉 settings:ui-close 订阅：面板关闭广播的唯一落点，宿主销毁时不该继续持有 ctx 回调。
   ui.unbindSettingsClose()
   // 撤掉画布开关的设置订阅（edgeVisible / snapToGrid / nodesDraggable 的镜像同步）。
