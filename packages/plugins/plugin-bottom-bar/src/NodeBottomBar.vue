@@ -1675,8 +1675,8 @@ function onGlobalLeave(el: Element): void {
           />
           <span v-else-if="tile.pending" class="nb-card-pending">
             <span class="nb-card-plus" aria-hidden="true">+</span>
-<span class="nb-card-pending-label">{{ tile.label }}</span>
-<span class="nb-card-pending-tag">待输入</span>
+            <!-- <span class="nb-card-pending-label">{{ tile.label }}</span>
+            <span class="nb-card-pending-tag">待输入</span> -->
           </span>
           <span v-else class="nb-card-text">{{ (tile.name || '文')[0] }}</span>
           <span class="nb-card-index">{{ tile.index }}</span>
