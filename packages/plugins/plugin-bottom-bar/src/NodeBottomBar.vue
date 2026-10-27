@@ -1248,20 +1248,25 @@ async function onPasteFiles(
     (t) => t.key.startsWith('card:') || t.key.startsWith('slot:image:'),
   )
   const index = Math.max(0, ...imageTiles.map((t) => t.slotIndex || 0)) + 1
-  try {
-    await fillSlotFromFile('image', index, image)
-  } catch {
-    // 上传失败：不吞粘贴，交给默认行为（至少别让用户以为成功了）
-    return false
-  }
-  // 显式插标签：这一步是「粘贴也要出现 chip」的关键
+  /**
+   * 顺序对调（用户 2026-10-28 报「粘贴后没插入标签」）：
+   * **先插标签，再异步建节点连线。**
+   *
+   * 为什么不能反过来：fillSlotFromFile 内部会把选中还给原节点并触发底栏刷新，
+   * 编辑器的 view 可能在异步间隙被销毁——等我们再调 ctx.insert 时 dispatch 直接抛错，
+   * 异常被编辑器的 void handler(...) 吞掉，于是「节点有了、连线有了，标签没有」。
+   * 先插标签时编辑器一定还活着（用户刚粘贴完焦点就在这里）。
+   */
   ctx.insert({
     id: 'ref-slot:image:' + index,
     name: '图片' + index,
     category: '素材',
     mediaType: 'image',
   })
-  refreshSlotChips()
+  // 建节点 + 连线放后台：不阻塞标签插入
+  void fillSlotFromFile('image', index, image)
+    .then(() => refreshSlotChips())
+    .catch(() => { /* 上传失败不回滚标签（用户可手动删）；错误已在 slotErrors 提示 */ })
   return true
 }
 

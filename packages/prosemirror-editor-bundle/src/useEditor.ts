@@ -1948,6 +1948,25 @@ export function useEditor(
       })
     })
     if (hits.length === 0) return 0
+    /**
+     * 归一化（用户 2026-10-28 报：标记后仍出现 图片100 这种序号）。
+     *
+     * 同类型按**出现顺序**重编成 1..n：正文写 `@图片1 @图片100 @图片10`，
+     * 转换后应该是 图片1、图片2、图片3 —— 序号连续，格子数 = 声明数，
+     * 缩略图才能按「该类型数组第 N 项」取。这是文档里「归一化」的直接落点。
+     *
+     * 具体做法：转换时直接用新 id/名字建节点（一个事务内完成，不产生中间态）。
+     */
+    const seq: Record<string, number> = {}
+    const order = [...hits].sort((a, b) => a.start - b.start)  // 按出现顺序
+    for (const h of order) {
+      const kind = h.item.mediaType ?? 'image'
+      seq[kind] = (seq[kind] ?? 0) + 1
+      const index = seq[kind]
+      if (h.item.id !== 'ref-slot:' + kind + ':' + index) {
+        h.item = { ...h.item, id: 'ref-slot:' + kind + ':' + index, name: (h.item.name || '').replace(/\d+$/, '') + index }
+      }
+    }
     const tr = view.state.tr
     for (const h of hits.sort((a, b) => b.start - a.start)) {
       itemRegistry.set(h.item.id, h.item)
