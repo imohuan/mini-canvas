@@ -1606,6 +1606,11 @@ function onGlobalLeave(el: Element): void {
         · 没有内容 → 虚线「待输入」，点它上传 / 拖文件 / Ctrl 拖节点
       从前把「待输入槽」和「已有素材卡」画成两排，同一个参考就出现两次；现在合并成一条序列。
     -->
+      从前把「待输入槽」和「已有素材卡」画成两排，同一个参考就出现两次；现在合并成一条序列。
+    -->
+    <!-- AI 生成期的流光容器（用户口径 2026-10-27 截图）：框罩住「参考卡列表 + 输入区」
+         整块，顶边在卡片列表上方。平时零样式不改布局，仅 is-ai-locking 画描边。 -->
+    <div class="nb-ai-frame" :class="{ 'is-ai-locking': aiEditorLocked }">
     <VueDraggable
       v-if="refTiles.length > 0"
       class="nb-cards"
@@ -1673,19 +1678,10 @@ function onGlobalLeave(el: Element): void {
     <!-- 动作专属面板（video 剪辑时间轴这类） -->
     <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
 
-    <!-- 输入区：内联在卡下面（点得进去、能打字、@ 引用素材） -->
-    <!--
-      输入区：内联在卡下面（点得进去、能打字、@ 引用素材）。
-      AI 生成期间：is-ai-locking = 流光描边动效 + 只读（用户口径：加载时不许编辑）；
-      is-ai-streaming = 已在写正文（第一帧后）。两种态共用流光，观感区分靠光标有无。
-    -->
-    <div
-      v-if="showEditor"
-      class="nb-editor nodrag nopan nowheel"
-      :class="{ 'is-ai-locking': aiEditorLocked, 'is-ai-streaming': aiPhase === 'streaming' }"
-      :style="editorStyle"
-    >
-      <!-- starting 阶段提示（原文还在，只是顶部小字说一句，不遮内容） -->
+    <!-- 输入区：内联在卡下面（点得进去、能打字、@ 引用素材）。
+      AI 生成期间：外层 nb-ai-frame 画流光 + 锁编辑；is-ai-streaming = 已在写正文。 -->
+    <div v-if="showEditor" class="nb-editor nodrag nopan nowheel" :style="editorStyle">
+      <!-- starting 阶段提示（原文还在，只是右上角小字说一句，不遮内容） -->
       <span v-if="aiPhase === 'starting'" class="nb-ai-hint" aria-hidden="true">AI 处理中，即将写入…</span>
       <span v-if="prompt.length === 0 && aiPhase !== 'starting'" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
       <ProseMirrorEditor
@@ -1699,6 +1695,7 @@ function onGlobalLeave(el: Element): void {
         @click.stop
       />
     </div>
+    </div> <!-- /nb-ai-frame -->
 
     <!-- 底部行：左模型 + 参数串，右图标·计数·圆形发送（照参考图） -->
     <div class="nb-bottom">
@@ -2302,16 +2299,16 @@ function onGlobalLeave(el: Element): void {
 }
 
 /*
- * AI 生成期间的**流光描边**（用户口径 2026-10-27：加载时要有 UI 动效）。
- * 做法：::before 铺一圈 2px 渐变描边 + conic 渐变旋转（@property 让 --ai-sweep 可动画），
- * 只在 is-ai-locking（starting + streaming）时出现。颜色吃 --ui-accent，跟主题走。
- * prefers-reduced-motion：光斑停转，只留静态描边（全站动效规矩）。
+ * AI 生成期间的**流光描边**（用户口径 2026-10-27 截图：框罩住「参考卡列表 + 输入区」
+ * 整块，顶边在卡片列表上方）。容器 nb-ai-frame 平时零样式不改布局；is-ai-locking 时
+ * ::before 铺 2px 渐变描边 + conic 渐变旋转（@property 让 --ai-sweep 可动画）。
+ * 颜色吃 --ui-accent 跟主题走；prefers-reduced-motion 退化为静态描边（全站动效规矩）。
  */
-.nb-editor.is-ai-locking {
+.nb-ai-frame.is-ai-locking {
   position: relative;
-  cursor: progress;
+  border-radius: 10px;
 }
-.nb-editor.is-ai-locking::before {
+.nb-ai-frame.is-ai-locking::before {
   content: '';
   position: absolute;
   inset: -2px;
@@ -2344,7 +2341,7 @@ function onGlobalLeave(el: Element): void {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .nb-editor.is-ai-locking::before {
+  .nb-ai-frame.is-ai-locking::before {
     animation: none;
     /* 光斑停转：退化为静态的柔和描边 */
     background: color-mix(in srgb, var(--ui-accent, #0891b2) 45%, transparent);
