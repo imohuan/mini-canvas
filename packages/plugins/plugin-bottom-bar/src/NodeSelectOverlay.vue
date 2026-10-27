@@ -205,7 +205,7 @@ function onDragPointerDown(ev: PointerEvent): void {
   pointer-events: auto; }
 .nso-layer.is-reference { cursor: pointer; }
 .nso-layer.is-ctrl-drag { cursor: grab; }
-.nso-layer.is-selectable { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); }
+.nso-layer.is-selectable { background: color-mix(in srgb, var(--ui-accent) 4%, transparent); }
 .nso-layer.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 26%, transparent); }
 .nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 20%, transparent); }
 .nso-layer.is-connected:hover { background: color-mix(in srgb, var(--ui-accent) 30%, transparent); }
