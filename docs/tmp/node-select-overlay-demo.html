@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>节点选择态蒙版 · 效果 demo</title>
+<style>
+:root{
+  --ui-accent:#7c3aed;
+  --ui-accent-ink:#fff;
+  --ui-danger:#ef4444;
+  --tint-sel:16%;        /* 可选 · 平时 */
+  --tint-sel-hover:26%;  /* 可选 · 悬停 */
+  --tint-con:20%;        /* 已连接 · 平时 */
+  --tint-con-hover:30%;  /* 已连接 · 悬停 */
+  --tint-block:16%;      /* 不可用 · 红蒙 */
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Segoe UI","Microsoft YaHei",sans-serif;color:#111827;background:#f6f7fb;}
+
+/* ── 页头 ── */
+.page-head{padding:18px 28px 6px;}
+.page-head h1{margin:0;font-size:18px;font-weight:700;}
+.page-head p{margin:6px 0 0;font-size:13px;color:#6b7280;}
+.legend{display:flex;gap:14px;margin-top:10px;font-size:12px;color:#374151;flex-wrap:wrap;}
+.legend b{display:inline-flex;width:16px;height:16px;border-radius:999px;background:var(--ui-accent);color:#fff;align-items:center;justify-content:center;font-size:11px;margin-right:5px;vertical-align:-3px;}
+.legend .none{display:inline-block;width:16px;height:16px;border-radius:999px;background:#9ca3af;color:#fff;align-items:center;justify-content:center;font-size:10px;margin-right:5px;vertical-align:-3px;text-align:center;line-height:16px;}
+
+/* ── 控制面板 ── */
+.panel{margin:14px 28px;padding:12px 16px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.panel .grp{display:flex;flex-direction:column;gap:6px;}
+.panel .grp-label{font-size:11px;color:#9ca3af;font-weight:600;letter-spacing:.02em;}
+.presets{display:flex;gap:8px;}
+.presets button{padding:7px 14px;border-radius:8px;border:1px solid rgba(0,0,0,.12);background:#fff;font-size:13px;cursor:pointer;color:#374151;}
+.presets button.on{background:var(--ui-accent);border-color:var(--ui-accent);color:#fff;}
+.swatches{display:flex;gap:8px;}
+.swatches button{width:26px;height:26px;border-radius:999px;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);cursor:pointer;}
+.swatches button.on{box-shadow:0 0 0 2px #111827;}
+.sliders{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:10px 18px;}
+.sliders label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151;}
+.sliders .val{color:#6b7280;font-variant-numeric:tabular-nums;}
+input[type=range]{accent-color:var(--ui-accent);}
+
+/* ── 模拟画布 ── */
+.canvas{position:relative;margin:6px 28px 30px;min-height:400px;border-radius:14px;border:1px solid rgba(0,0,0,.06);
+  background-image:radial-gradient(circle,#d9dce3 1px,transparent 1px);background-size:22px 22px;background-position:center;
+  display:flex;gap:34px;padding:44px 40px;flex-wrap:wrap;align-content:flex-start;}
+.cell{display:flex;flex-direction:column;gap:8px;}
+.cell .cap{font-size:12px;color:#6b7280;text-align:center;}
+
+/* 节点卡片（模仿 app 里的 v2-card） */
+.node{position:relative;width:250px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;}
+.node-title{display:flex;align-items:center;gap:6px;padding:7px 10px 5px;font-size:12px;color:#374151;}
+.node-title .ic{width:14px;height:14px;border-radius:3px;background:currentColor;opacity:.25;}
+.node-title .dims{margin-left:auto;color:#9ca3af;font-variant-numeric:tabular-nums;}
+.img{position:relative;height:170px;}
+.img .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;color:rgb(255 255 255 / .8);}
+.g1{background:linear-gradient(135deg,#fbc2eb 0%,#a6c1ee 100%);}
+.g2{background:linear-gradient(135deg,#fddb92 0%,#d1fdff 100%);}
+.g3{background:linear-gradient(120deg,#a1c4fd 0%,#c2e9fb 100%);}
+.g4{background:linear-gradient(135deg,#f5f7fa 0%,#e4ebf0 100%);}
+
+/* 空态（图片对比节点的灰底） */
+.empty-body{position:absolute;inset:0;background:#f9fafb;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#9ca3af;font-size:12px;}
+.empty-body svg{width:34px;height:34px;color:#d1d5db;}
+
+/* ── 覆盖层（demo 的主角，与 app 里 .nso-layer 同构） ── */
+.nso{position:absolute;inset:0;border-radius:inherit;border:1px solid var(--ui-accent);}
+.nso .badge{position:absolute;left:6px;top:6px;width:18px;height:18px;border-radius:999px;background:var(--ui-accent);color:var(--ui-accent-ink);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1;}
+.nso .tip{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);padding:3px 10px;border-radius:999px;background:rgb(17 24 39 / .92);color:#fff;font-size:11px;white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none;}
+.nso:hover .tip{opacity:1;}
+
+.nso.is-selectable{background:color-mix(in srgb,var(--ui-accent) var(--tint-sel),transparent);cursor:grab;}
+.nso.is-selectable:hover{background:color-mix(in srgb,var(--ui-accent) var(--tint-sel-hover),transparent);}
+.nso.is-connected{background:color-mix(in srgb,var(--ui-accent) var(--tint-con),transparent);}
+.nso.is-connected:hover{background:color-mix(in srgb,var(--ui-accent) var(--tint-con-hover),transparent);}
+.nso.is-blocked{border-color:var(--ui-danger);background:color-mix(in srgb,var(--ui-danger) var(--tint-block),transparent);pointer-events:none;}
+.nso.is-blocked .badge{background:var(--ui-danger);}
+
+.footnote{margin:0 28px 40px;font-size:12px;color:#9ca3af;}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>节点选择态 · 蒙版效果 demo</h1>
+  <p>按 Ctrl / 点「参考」时节点上的那层膜 —— 三种状态 + 悬停。下面每个卡片都能真的悬停，右上滑杆实时调浓度。</p>
+  <div class="legend">
+    <span><b>+</b>可选：还没连上，可以拖走</span>
+    <span><b>✓</b>已连接：已经在参考格里</span>
+    <span><span class="none">×</span>不可用：不是资源节点（红蒙版 + 禁用角标）</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="grp">
+    <span class="grp-label">预设</span>
+    <div class="presets">
+      <button id="p-tuned" class="on" type="button">优化后（推荐）</button>
+      <button id="p-current" type="button">当前线上效果</button>
+    </div>
+  </div>
+  <div class="grp">
+    <span class="grp-label">主题色</span>
+    <div class="swatches" id="swatches">
+      <button data-c="#7c3aed" class="on" style="background:#7c3aed" title="紫（你当前主题）"></button>
+      <button data-c="#0891b2" style="background:#0891b2" title="青"></button>
+      <button data-c="#2563eb" style="background:#2563eb" title="蓝"></button>
+      <button data-c="#db2777" style="background:#db2777" title="粉"></button>
+      <button data-c="#ea580c" style="background:#ea580c" title="橙"></button>
+    </div>
+  </div>
+  <div class="grp" style="flex:1;min-width:420px;">
+    <span class="grp-label">蒙版浓度（0–60%）</span>
+    <div class="sliders">
+      <label>可选 · 平时<input id="s-sel" type="range" min="0" max="60" step="2" value="16"><span class="val" id="v-sel">16%</span></label>
+      <label>可选 · 悬停<input id="s-selh" type="range" min="0" max="60" step="2" value="26"><span class="val" id="v-selh">26%</span></label>
+      <label>已连 · 平时<input id="s-con" type="range" min="0" max="60" step="2" value="20"><span class="val" id="v-con">20%</span></label>
+      <label>已连 · 悬停<input id="s-conh" type="range" min="0" max="60" step="2" value="30"><span class="val" id="v-conh">30%</span></label>
+      <label>不可用 · 红蒙<input id="s-block" type="range" min="0" max="60" step="2" value="16"><span class="val" id="v-block">16%</span></label>
+    </div>
+  </div>
+</div>
+
+<div class="canvas">
+  <div class="cell">
+    <div class="node">
+      <div class="node-title"><span class="ic"></span>图片 1<span class="dims">1536×1024</span></div>
+      <div class="img g1"><span class="ph">🖼️</span></div>
+    </div>
+    <div class="cap">会话外的节点（对照）</div>
+  </div>
+
+  <div class="cell">
+    <div class="node">
+      <div class="node-title"><span class="ic"></span>图片 18<span class="dims">2048×1152</span></div>
+      <div class="img g2">
+        <span class="ph">🌸</span>
+        <div class="nso is-selectable"><span class="badge">+</span><span class="tip">按住拖到参考格</span></div>
+      </div>
+    </div>
+    <div class="cap">可选（悬停试试）</div>
+  </div>
+
+  <div class="cell">
+    <div class="node">
+      <div class="node-title"><span class="ic"></span>角色 B<span class="dims">1086×1448</span></div>
+      <div class="img g3">
+        <span class="ph">🧍</span>
+        <div class="nso is-connected"><span class="badge">✓</span><span class="tip">已连接 · 不可重复拖拽</span></div>
+      </div>
+    </div>
+    <div class="cap">已连接</div>
+  </div>
+
+  <div class="cell">
+    <div class="node">
+      <div class="node-title"><span class="ic"></span>图片对比 1</div>
+      <div class="img">
+        <div class="empty-body">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+          <span>未输出</span>
+        </div>
+        <div class="nso is-blocked"><span class="badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.8" y1="5.8" x2="18.2" y2="18.2"/></svg></span></div>
+      </div>
+    </div>
+    <div class="cap">不可用（红蒙版 + 禁用角标）</div>
+  </div>
+
+  <div class="cell">
+    <div class="node">
+      <div class="node-title"><span class="ic"></span>视频 1</div>
+      <div class="img g4">
+        <span class="ph" style="color:#94a3b8">🎬</span>
+        <div class="nso is-selectable"><span class="badge">+</span><span class="tip">按住拖到参考格</span></div>
+      </div>
+    </div>
+    <div class="cap">浅色素材上的可选效果</div>
+  </div>
+</div>
+
+<p class="footnote">这层膜在 app 里就画在图片上面（DOM 层级没问题），你看到"背景像被压在下面"只是浓度太低。在这里调到满意的数字告诉我即可。</p>
+
+<script>
+const root = document.documentElement;
+const KEY = { 's-sel':'--tint-sel', 's-selh':'--tint-sel-hover', 's-con':'--tint-con', 's-conh':'--tint-con-hover', 's-block':'--tint-block' };
+const VK  = { 's-sel':'v-sel', 's-selh':'v-selh', 's-con':'v-con', 's-conh':'v-conh', 's-block':'v-block' };
+
+function bind(id){
+  const el = document.getElementById(id), out = document.getElementById(VK[id]);
+  el.addEventListener('input', () => {
+    root.style.setProperty(KEY[id], el.value + '%');
+    out.textContent = el.value + '%';
+    document.querySelectorAll('.presets button').forEach(b => b.classList.remove('on'));
+  });
+  return el;
+}
+const sliders = Object.fromEntries(Object.keys(KEY).map(bind).map(el => [el.id, el]));
+
+const PRESETS = {
+  'p-tuned':   { 's-sel':16, 's-selh':26, 's-con':20, 's-conh':30, 's-block':16 },
+  'p-current': { 's-sel':0,  's-selh':14, 's-con':10, 's-conh':14, 's-block':16 },
+};
+document.querySelectorAll('.presets button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = PRESETS[btn.id];
+    for (const [id, v] of Object.entries(p)) {
+      sliders[id].value = v;
+      sliders[id].dispatchEvent(new Event('input'));
+    }
+    document.querySelectorAll('.presets button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+  });
+});
+
+document.getElementById('swatches').addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]');
+  if (!b) return;
+  root.style.setProperty('--ui-accent', b.dataset.c);
+  document.querySelectorAll('#swatches button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+});
+</script>
+</body>
+</html>
