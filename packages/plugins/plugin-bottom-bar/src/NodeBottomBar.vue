@@ -1973,6 +1973,7 @@ function onGlobalLeave(el: Element): void {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
 /* 展开按钮浮在右上角；右缘与面板内容边（左右 padding 12）对齐 */
 .nb-expand {
   position: absolute;
@@ -2280,7 +2281,6 @@ function onGlobalLeave(el: Element): void {
   font-variant-numeric: tabular-nums;
 }
 
-}
 /* —— 输入区（内联在卡下面；点得进去、能打字） —— */
 .nb-editor {
   position: relative;
