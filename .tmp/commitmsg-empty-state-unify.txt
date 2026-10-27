@@ -1,0 +1,8 @@
+feat(theme-default): 空状态组件补插槽/布局参数，其余节点空态统一接入
+
+- NodeEmptyState 新增 layout（column/row）与 size（md/sm）参数，
+  并开放默认插槽完全接管正文 —— 可视化节点的「标题 + 提示」两行也能用它。
+- 图片对比、可视化、文本三个节点接统一空态（此前各自手写一套），
+  文本空态改成「（空）+ 双击编辑」行内样式。
+- settingsCoverage 补回 3D 上游接口键的断言（上次 cherry-pick 丢失）。
+- 插件测试夹具补 registryOf 空目录，保持「没装主题也能回落」的路径可测。

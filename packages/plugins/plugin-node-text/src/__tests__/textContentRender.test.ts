@@ -15,6 +15,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import TextContent from '../TextContent.vue'
 import { beginEdit, endEdit, resetTextEditSessions } from '../textEditSession'
 
@@ -25,7 +26,12 @@ function renderCtx(zoom = 1, settings?: { get(key: string): unknown }): CanvasRe
     ...(settings ? { settings: { ...settings, onChange: () => ({ dispose: () => {} }) } } : {}),
   }
   return {
-    ctx: { get: (name: string) => services[name], tryGet: (name: string) => services[name] },
+    ctx: {
+      get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
+      // 极简 ui 目录：空态回落组件自身的一行灰字
+      registryOf: () => new RegistryImpl(),
+    },
     flow: { viewport: { value: { x: 0, y: 0, zoom } } },
   } as unknown as CanvasRenderContext
 }

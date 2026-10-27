@@ -11,12 +11,15 @@
  * 登记处：`D:\Code\Git\mini-canvas\packages\plugins\plugin-theme-default\src\index.ts`）：
  *   const Empty = useUiComponent('nodeEmptyState')
  *   <Empty text="（无图片）" description="上传一张图片，或把图片节点连进来" />
+ *   <Empty layout="row" size="sm"><template #icon>…</template>…</Empty>
  *
  * 分工：
  * - 本组件只画「卡片里面」的空态；端口 / 标题 / 上传入口仍归节点壳与上控制栏；
  * - 根层 pointer-events:none —— 按住空态区域照样能拖节点；只有真正的动作按钮可点，
  *   并带 nodrag/nopan/nowheel，避免点按钮时把画布拖走 / 缩放画布；
  * - 颜色与字号全走主题 token，不引入新的灰阶（配色卫生测试会拦裸色值）。
+ * - **插槽与默认值**：`#icon` 换图标；**默认插槽**完全接管正文（可视化节点那种
+ *   「标题 + 提示」两行用）；`layout="row"` 图标在左（窄卡片）、`size="sm"` 更紧凑。
  */
 withDefaults(
   defineProps<{
@@ -30,8 +33,15 @@ withDefaults(
     actionDisabled?: boolean
     /** 语义色：danger=失效、warning=需要注意；缺省是普通空态 */
     tone?: 'muted' | 'warning' | 'danger'
+    /**
+     * 布局方向：`column` = 图标在上（默认，媒体类节点用）；`row` = 图标在左、
+     * 文案在右（窄卡片 / 行内空态用）。不给就用默认。
+     */
+    layout?: 'column' | 'row'
+    /** 尺寸档：`md` = 缺省（媒体卡片）；`sm` = 更小的图标与更紧凑的间距（窄卡片用） */
+    size?: 'md' | 'sm'
   }>(),
-  { description: '', actionText: '', actionDisabled: false, tone: 'muted' },
+  { description: '', actionText: '', actionDisabled: false, tone: 'muted', layout: 'column', size: 'md' },
 )
 
 const emit = defineEmits<{
@@ -41,19 +51,25 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="nes-root" :class="`is-${tone}`" role="status">
-    <div class="nes-icon" aria-hidden="true">
-      <!-- 节点可以换自己的图标；没给就用默认的「素材占位」图形 -->
-      <slot name="icon">
-        <svg class="nes-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="16" rx="3" />
-          <circle cx="8.5" cy="9.5" r="1.5" />
-          <path d="M4 17l5-5 4 4 2-2 5 5" />
-        </svg>
-      </slot>
-    </div>
-    <div class="nes-text">{{ text }}</div>
-    <div v-if="description" class="nes-description">{{ description }}</div>
+  <div class="nes-root" :class="[`is-${tone}`, `is-${layout}`, `is-${size}`]" role="status">
+    <!-- 有默认插槽时完全交给调用方（可视化节点那种「标题 + 提示」两行的样子） -->
+    <slot>
+      <div class="nes-icon" aria-hidden="true">
+        <!-- 节点可以换自己的图标；没给就用默认的「素材占位」图形 -->
+        <slot name="icon">
+          <svg class="nes-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <circle cx="8.5" cy="9.5" r="1.5" />
+            <path d="M4 17l5-5 4 4 2-2 5 5" />
+          </svg>
+        </slot>
+      </div>
+      <div class="nes-body">
+        <div class="nes-text">{{ text }}</div>
+        <div v-if="description" class="nes-description">{{ description }}</div>
+      </div>
+    </slot>
+    <!-- 动作按钮独立于正文插槽：用了默认插槽时也仍然可点 -->
     <button
       v-if="actionText"
       class="nes-action nodrag nopan nowheel"
@@ -80,6 +96,33 @@ const emit = defineEmits<{
   /* 空态本身不吃手势：按住空白处仍然拖节点（只有下面的 action 按钮例外） */
   pointer-events: none;
   color: var(--canvas-node-text-muted, #9ca3af);
+}
+
+.nes-root.is-row {
+  flex-direction: row;
+  gap: 10px;
+  text-align: left;
+}
+
+.nes-root.is-sm {
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+.nes-root.is-sm .nes-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.nes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nes-root.is-row .nes-body {
+  align-items: flex-start;
 }
 
 .nes-icon {

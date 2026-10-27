@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import ImageCompareContent from '../ImageCompareContent.vue'
 
 /** 记录所有写回调用的假 graph（真实实现走内核 updateNode，这里只要"收到什么"） */
@@ -31,6 +32,8 @@ function renderCtx(): CanvasRenderContext {
       get: (name: string) =>
         // 5c：写回走 doc（老名 graph 已下线）
         name === 'doc' ? { updateNode: (id: string, patch: never) => writes.push({ id, patch }) } : undefined,
+      // 极简 ui 目录：空态回落组件自身的一行灰字
+      registryOf: () => new RegistryImpl(),
     },
     viewport: { value: { zoom: 1 } },
     renderNodes: { value: nodes },

@@ -17,6 +17,7 @@ import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-da
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
@@ -52,6 +53,7 @@ async function bootWithSettings() {
     themeDefaultPlugin,
     nodeTextPlugin,
     nodeImagePlugin,
+    node3dPreviewPlugin,
     pluginImageGenerationTools,
     alignGuidePlugin,
     // 底栏：Config 声明「底栏」分组（AI 按钮清单的自绘页挂在 settingsGroup/底栏）
@@ -76,6 +78,23 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     expect(settings.groups()).toContain('布局/控制栏')
     expect(settings.get('toolbarTopOffset')).toBe(6)
     expect(settings.get('toolbarBottomOffset')).toBe(6)
+    ctx.stop()
+  })
+
+  /**
+   * 3D 上游接口真的进设置单一数据源。
+   *
+   * 这条为什么必要（2026-10-27 真踩）：node3dPreviewPlugin 出口原来只转发 name/inject/apply，
+   * 把 Config 漏在对象之外 —— 内核读 mod.Config 读不到，设置项**静默消失**、也不报错。
+   * 只测「模块导出了 Config」不够，必须跑真内核。
+   */
+  it('3D 上游接口出现在「常规/上游接口」下，且默认留空（留空 = 按节点字段解析）', async () => {
+    const ctx = await bootWithSettings()
+    const settings = ctx.get<SettingsLike>('settings')
+    expect(settings.groups()).toContain('常规/上游接口')
+    expect(settings.get('preview3dUpstreamApi')).toBe('')
+    ctx.settings.set('preview3dUpstreamApi', '/api/upstream?nodeId={nodeId}')
+    expect(settings.get('preview3dUpstreamApi')).toBe('/api/upstream?nodeId={nodeId}')
     ctx.stop()
   })
 

@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import UiContent from '../UiContent.vue'
 
 /** 最小渲染上下文：UiContent 要用 ctx.tryGet('doc'/'settings'/'selection') */
@@ -27,6 +28,8 @@ function renderCtx(doc?: Record<string, unknown>): CanvasRenderContext {
           : name === 'settings'
             ? { get: () => undefined }
             : undefined,
+      // 极简 ui 目录：空态回落组件自身的一行灰字
+      registryOf: () => new RegistryImpl(),
     },
     viewport: { value: { zoom: 1 } },
   } as unknown as CanvasRenderContext
@@ -114,7 +117,11 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     const html = await render({ uiHtml: '<div>x</div>' }, doc)
     // 空的连不给内容（HTML 属性里引号被转义，按片段断言）
     expect(html).toContain('__CANVAS_UPSTREAM__')
-    expect(html).not.toContain('empty')
+    // 注意：上一次这个断言用 `not.toContain('empty')`，现在统一空态件里
+    // 有一条 `让 Agent 帮你画（在对话里说明要画什么）`，SSR 里出现"empty"字样
+    // 的机会变多了 —— 这条断言只看**上游注入**那段脚本，不碰空态。
+    const upstreamScript = /__CANVAS_UPSTREAM__[^<]*/.exec(html)?.[0] ?? ''
+    expect(upstreamScript).not.toContain('empty')
   })
 
   it('★ 上游只有 resourceId 时也要进 __CANVAS_UPSTREAM__（带引用而不是当空素材）', async () => {

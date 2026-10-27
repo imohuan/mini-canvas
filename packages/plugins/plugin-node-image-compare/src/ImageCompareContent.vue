@@ -18,13 +18,15 @@
  * 指针一旦移出把手元素就会"拖一半断掉"（同 useNodeCardSize 的既有结论）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender, createUpstreamCapability, type UpstreamCapability } from '@mini-canvas/canvas-render'
+import { useCanvasRender, createUpstreamCapability, useUiComponent, type UpstreamCapability } from '@mini-canvas/canvas-render'
 import { clampDivider, resolveCompareEntries } from './imageCompareEngine'
 import { compareWidthPatch, DEFAULT_COMPARE_HEIGHT, resolveFollowWidth } from './compareFit'
 import { resolveImageSrc } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
+/** 统一空状态（默认主题提供；极简宿主回落本组件的一行灰字） */
+const NodeEmptyState = useUiComponent('nodeEmptyState')
 
 // 上游读取优先走 `upstream` 能力（consumes.left/right）；没有能力包的极简宿主回落到按边扫描。
 function upstreamOf(): UpstreamCapability {
@@ -212,12 +214,20 @@ onBeforeUnmount(() => {
 <template>
   <div ref="surfaceRef" class="cmp">
     <!-- 一张都没连：占位说明 -->
-    <div v-if="!hasAny" class="cmp-empty">
-      <svg class="cmp-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-        <rect x="3" y="3" width="8" height="18" rx="1" />
-        <rect x="13" y="3" width="8" height="18" rx="1" />
-        <circle cx="12" cy="12" r="2" fill="currentColor" />
-      </svg>
+    <NodeEmptyState
+      v-if="!hasAny && NodeEmptyState"
+      text="（无对比）"
+      description="把两个图片节点连进来做对比"
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="3" width="8" height="18" rx="1" />
+          <rect x="13" y="3" width="8" height="18" rx="1" />
+          <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+        </svg>
+      </template>
+    </NodeEmptyState>
+    <div v-else-if="!hasAny" class="cmp-empty">
       <span class="cmp-empty-text">把两个图片节点连进来做对比</span>
     </div>
 

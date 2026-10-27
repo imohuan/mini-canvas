@@ -31,7 +31,7 @@
  * 经 onChange 订阅实时生效；读不到时回落默认（0.18 / 0.5）。
  */
 import { ref, computed, nextTick, onBeforeUnmount, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { TextNodeService } from './nodeTextPlugin'
 import { isSkeletonMode, resolveLodThresholds, resolveTextContentSpec } from './textViewMode'
 import { beginEdit, endEdit, isTextEditing } from './textEditSession'
@@ -45,6 +45,8 @@ const props = defineProps<{ id: string; data: { text?: string; cardWidth?: numbe
 // 统一渲染上下文经 useCanvasRender() 取(宿主 provide)；ctx 是裸内核上下文(boot 后已就绪，见 CanvasSurface)。
 // 根 Context 没有服务属性 Proxy（declare module 只增强类型）；这里用 ctx.get 取 text 服务，避免 ctx.text 运行时为 undefined。
 const { ctx, flow } = useCanvasRender()
+/** 统一空状态：文本为空时显示「双击编辑」提示（与其它节点同一套空态观感） */
+const NodeEmptyState = useUiComponent('nodeEmptyState')
 const viewport = flow.viewport
 function textService() {
   return ctx.get<TextNodeService>('text')
@@ -200,7 +202,16 @@ onBeforeUnmount(() => {
         class="preview"
         title="双击编辑"
         @dblclick.stop="startEdit"
-      >{{ shown || '（空）' }}</div>
+      >
+        <NodeEmptyState
+          v-if="!shown && NodeEmptyState"
+          layout="row"
+          size="sm"
+          text="（空）"
+          description="双击编辑"
+        />
+        <template v-else>{{ shown || '（空）' }}</template>
+      </div>
     </div>
   </div>
 </template>
