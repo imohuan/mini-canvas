@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest'
-import { Context, SaveServiceImpl, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { Context, SaveServiceImpl, MemoryStorageAdapter, LocalStorageAdapter } from '@mini-canvas/canvas-data'
 import { createPluginManagerService, INSTALLED_KEY, absolutize, baseOfCatalogUrl } from '../pluginManagerService'
 import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@mini-canvas/canvas-base'
 
@@ -477,6 +477,136 @@ describe('plugin-manager 服务：config 后端切换时的安装名单对齐（
     await new Promise((r) => setTimeout(r, 50))
     expect(kv.get(INSTALLED_KEY), '后端名单不能被清空').toEqual(['plugin-a'])
     expect(host.installed.has('plugin-a')).toBe(true)
+  })
+
+  it('装云端连接后名单只进了云端 → 刷新（本地没有名单、云端连接也不在本地）仍应恢复已装插件', async () => {
+    // 用户实测场景：ui dev 起本地；装「云端连接」后 config 后端切到云端，安装名单被写进云端。
+    // 刷新时本地名单是空的（从未写过），而 cloud-client 自己不作为本地自带件启动
+    // —— 于是没人把云端名单读回来，用户看到「装好的插件全没了」。
+    // 期望：插件管理必须把名单在**本地留一份备份**，刷新先用它恢复。
+    const storage = new MemoryStorage()
+    ;(globalThis as { localStorage?: unknown }).localStorage = storage
+    const local = new LocalStorageAdapter(storage as unknown as Storage)
+    const cloud = new MemoryStorageAdapter()
+    // 第一次打开：用户先装好 plugin-a；随后装云端连接，config 切到云端。
+    // 云端里此刻只有旧名单（不含刚装的 plugin-b）—— 模拟真实时序。
+    await local.set('config:' + INSTALLED_KEY, ['plugin-a'])
+    await cloud.set('config:' + INSTALLED_KEY, ['plugin-a'])
+
+    // 第一轮：装 plugin-b，并把 config 切到云端（此时应把名单备份到本地）
+    {
+      const ctx = new Context()
+      const host = fakeHost()
+      ctx.inject('pluginManager', host.manager)
+      const save = new SaveServiceImpl(local)
+      ctx.inject('save', save)
+      const win: Record<string, unknown> = {}
+      const svc = createPluginManagerService(ctx, {
+        catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+        fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+        document: fakeDom(win),
+        win,
+      })
+      await svc.refresh()
+      await svc.install('plugin-b')
+      save.useAdapter('config', cloud)
+      await save.flush()
+      ctx.stop()
+    }
+    expect(await local.get<string[]>('config:' + INSTALLED_KEY), '本地应留一份名单备份').toEqual(['plugin-a', 'plugin-b'])
+
+    // 第二轮：刷新页面（本地后端），cloud-client 不在启动清单里 → 只能靠本地备份恢复
+    {
+      const ctx = new Context()
+      const host = fakeHost()
+      ctx.inject('pluginManager', host.manager)
+      ctx.inject('save', new SaveServiceImpl(local))
+      const win: Record<string, unknown> = {}
+      const svc = createPluginManagerService(ctx, {
+        catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+        fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+        document: fakeDom(win),
+        win,
+      })
+      await svc.refresh()
+      expect(host.installed.has('plugin-a'), '刷新后 plugin-a 应被重新装上').toBe(true)
+      expect(host.installed.has('plugin-b'), '刷新后 plugin-b 也应被重新装上').toBe(true)
+      ctx.stop()
+    }
+  })
+
+  it('卸载 → 刷新：本地备份跟着更新，不会把卸掉的插件又装回来', async () => {
+    const storage = new MemoryStorage()
+    ;(globalThis as { localStorage?: unknown }).localStorage = storage
+    const local = new LocalStorageAdapter(storage as unknown as Storage)
+
+    // 第一轮：名单 = a、b，然后用户卸掉 b
+    {
+      const ctx = new Context()
+      const host = fakeHost()
+      ctx.inject('pluginManager', host.manager)
+      ctx.inject('save', new SaveServiceImpl(local))
+      const win: Record<string, unknown> = {}
+      const svc = createPluginManagerService(ctx, {
+        catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+        fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+        document: fakeDom(win),
+        win,
+      })
+      await svc.refresh()
+      await svc.install('plugin-a')
+      await svc.install('plugin-b')
+      await svc.uninstall('plugin-b')
+      ctx.stop()
+    }
+
+    // 第二轮：刷新 —— 只该装回 a
+    {
+      const ctx = new Context()
+      const host = fakeHost()
+      ctx.inject('pluginManager', host.manager)
+      ctx.inject('save', new SaveServiceImpl(local))
+      const win: Record<string, unknown> = {}
+      const svc = createPluginManagerService(ctx, {
+        catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+        fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+        document: fakeDom(win),
+        win,
+      })
+      await svc.refresh()
+      expect(host.installed.has('plugin-a')).toBe(true)
+      expect(host.installed.has('plugin-b'), '用户卸掉的插件不该被备份装回来').toBe(false)
+      ctx.stop()
+    }
+  })
+
+  it('云端暂时读失败 → 用本地备份先恢复（不会把已装插件判成没装）', async () => {
+    const storage = new MemoryStorage()
+    ;(globalThis as { localStorage?: unknown }).localStorage = storage
+    // 本地备份里有 a；当前后端读的时候直接抛（模拟云端断网）
+    storage.setItem('config:' + INSTALLED_KEY, JSON.stringify(['plugin-a']))
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    const flaky = {
+      ...save,
+      async get<T>(k: string) {
+        if (k === INSTALLED_KEY) throw new Error('网络暂时不可用')
+        return save.get<T>(k)
+      },
+    }
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', flaky)
+    const win: Record<string, unknown> = {}
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    expect(host.installed.has('plugin-a')).toBe(true)
+    ctx.stop()
   })
 })
 

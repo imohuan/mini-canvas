@@ -20,6 +20,22 @@ import { createUmdLoader, bustCache, type LoadedPluginModule } from './umdLoader
 /** 存「已装 id 集合」的 save key（config 域） */
 export const INSTALLED_KEY = 'plugin-manager:installed'
 
+/**
+ * 安装名单的**本地备份**物理 key（直接走浏览器 localStorage，不经过可切换的 config adapter）。
+ *
+ * 为什么需要它（用户实测）：装「云端连接」时，这个插件会把 config 域整体切到云端；
+ * 之后写安装名单只落到云端。刷新页面时本地后端里没有名单，而 cloud-client 在 ui dev 下
+ * 又不是自带件 —— 没人去读云端，于是「装好的插件刷新后全没了」。
+ *
+ * 与 INSTALLED_KEY 同名前缀（'config:' 是 SaveService 的物理 key 规则），这样：
+ * - 本地后端就是激活后端时，备份与正式存档是同一格，不会出现两份互相矛盾的本地名单；
+ * - 切到云端后，本地这一格保留最后一次同步，刷新时仍能先把插件装回来。
+ *
+ * 它是"启动用的种子"，不是第二份权威数据：一旦 cloud-client 连上后台，云端名单仍会
+ * 通过 onAdapterChange 重读并对齐（见 reloadFromBackend）。
+ */
+export const INSTALLED_BACKUP_STORAGE_KEY = 'config:' + INSTALLED_KEY
+
 /** 一行清单 + 它此刻的运行态 */
 export interface PluginRow {
   entry: CatalogEntry
@@ -261,6 +277,59 @@ export function createPluginManagerService(
     return ctx.tryGet<{ get<T>(k: string, t?: string): Promise<T | undefined>; set(k: string, v: unknown, t?: string): void }>('save')
   }
 
+  /** 浏览器本地那份备份（拿不到 localStorage 时安静返回 undefined） */
+  function localBackupStorage(): Storage | undefined {
+    try {
+      return typeof localStorage === 'undefined' ? undefined : localStorage
+    } catch {
+      // Safari 隐私模式等：访问 localStorage 本身就会抛
+      return undefined
+    }
+  }
+
+  /** 读本地备份的安装名单（形状不对一律当没有） */
+  function readLocalBackup(): string[] | undefined {
+    const storage = localBackupStorage()
+    if (!storage) return undefined
+    try {
+      const raw = storage.getItem(INSTALLED_BACKUP_STORAGE_KEY)
+      if (!raw) return undefined
+      const parsed = JSON.parse(raw) as unknown
+      return Array.isArray(parsed) && parsed.every((x) => typeof x === 'string') ? (parsed as string[]) : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /** 把安装名单写一份到本地（配额不足等失败不抛：正式存档仍会照常写） */
+  function writeLocalBackup(ids: string[]): void {
+    const storage = localBackupStorage()
+    if (!storage) return
+    try {
+      storage.setItem(INSTALLED_BACKUP_STORAGE_KEY, JSON.stringify(ids))
+    } catch {
+      /* 本地配额满 / 隐私模式：备份失败不影响主流程 */
+    }
+  }
+
+  /**
+   * 读「已装名单」：**当前后端优先，本地备份兜底**。
+   *
+   * 为什么要有兜底（用户实测）：装云端连接后 config 被切到云端，名单只写进了云端；
+   * 刷新时本地后端里没有名单，cloud-client 本身又不在启动清单里，于是没人把云端那份读回来。
+   * 本地留一份备份，刷新时先按它把插件装回来，云端连上后再由 onAdapterChange 对齐。
+   */
+  async function readSavedIntent(): Promise<string[] | undefined> {
+    try {
+      const saved = await save()?.get<string[]>(INSTALLED_KEY, 'config')
+      if (Array.isArray(saved) && saved.every((x) => typeof x === 'string')) return saved
+    } catch (err) {
+      // 云端暂时连不上：不要因此把已装插件判成"从没装过"
+      console.warn('[plugin-manager] 读取安装名单失败，改用本地备份', err)
+    }
+    return readLocalBackup()
+  }
+
   /**
    * 按一份「想要的 id 集合」把内核里的插件对齐：多的卸掉、少的装上。
    * 复用 install/uninstall 的正常路径（它们各自会把意图写回当前后端）。
@@ -321,10 +390,11 @@ export function createPluginManagerService(
     // 本服务在这次切换之前刚写过名单 → 新后端里承载的就是我们那份，不必（也不能）回灌。
     // 只在"从没写过"（真正换台机器 / 首次上云）时才以新后端为准。
     if (intentWrittenAt > 0) return
-    const saved = await save()?.get<string[]>(INSTALLED_KEY, 'config')
+    const saved = await readSavedIntent()
     if (saved === undefined) {
       // 全新后端：把当前意图搬过去（不重装，现有状态已符合意图），别让后端的空抹掉已装插件。
       save()?.set(INSTALLED_KEY, [...state.intent], 'config')
+      writeLocalBackup(state.intent)
       return
     }
     state.intent = [...saved]
@@ -400,6 +470,8 @@ export function createPluginManagerService(
   }
   function persistIntent(): void {
     save()?.set(INSTALLED_KEY, [...state.intent], 'config')
+    // 同时留一份本地备份：即使 config 已切到云端，刷新时也能先把插件装回来
+    writeLocalBackup(state.intent)
     intentWrittenAt = Date.now()
   }
 
@@ -712,7 +784,7 @@ export function createPluginManagerService(
       const entries = normalizeCatalog(json)
 
       // 读存档（未存过 = undefined → 首次默认全装）
-      const saved = await save()?.get<string[]>(INSTALLED_KEY, 'config')
+      const saved = await readSavedIntent()
       const desired = resolveDesiredIds(entries, saved)
       state.intent = [...desired]
 
