@@ -19,6 +19,7 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
+import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
 
 /** 起一个与宿主同形的内核（真服务），装载声明了 Config 的几个插件 */
 async function bootWithSettings() {
@@ -47,7 +48,15 @@ async function bootWithSettings() {
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
 
-  for (const p of [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, pluginImageGenerationTools, alignGuidePlugin]) {
+  for (const p of [
+    themeDefaultPlugin,
+    nodeTextPlugin,
+    nodeImagePlugin,
+    pluginImageGenerationTools,
+    alignGuidePlugin,
+    // 底栏：Config 声明「底栏」分组（AI 按钮清单的自绘页挂在 settingsGroup/底栏）
+    pluginBottomBar,
+  ]) {
     ctx.plugin(p)
   }
   await ctx.start()
@@ -124,6 +133,23 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     expect(settings.get('alignGuideEnabled')).toBe(true)
     ctx.settings.set('alignGuideEnabled', false)
     expect(settings.get('alignGuideEnabled')).toBe(false)
+    ctx.stop()
+  })
+
+  /**
+   * 底栏的 Config 真的进了设置单一数据源。
+   *
+   * 这条为什么必要（2026-10-27 真踩）：pluginBottomBar 出口原来只转发 name/inject/apply，
+   * 把 Config 漏在对象之外 —— 内核读 mod.Config 读不到，整组配置**静默消失**，
+   * 设置面板里一行都没有、也不报错。只测「模块上导出了 Config」不够，必须跑真内核。
+   */
+  it('底栏的后台地址出现在「常规/底栏」下（Config 真的被内核读到）', async () => {
+    const ctx = await bootWithSettings()
+    const settings = ctx.get<SettingsLike>('settings')
+    expect(settings.groups()).toContain('常规/底栏')
+    expect(settings.has('bottomBarAiBaseUrl')).toBe(true)
+    // 默认同源（空串 = 与画布同源），不是写死某个端口
+    expect(settings.get('bottomBarAiBaseUrl')).toBe('')
     ctx.stop()
   })
 

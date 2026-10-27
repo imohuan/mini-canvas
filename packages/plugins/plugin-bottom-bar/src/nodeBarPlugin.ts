@@ -244,7 +244,7 @@ export const Config = {
     type: 'string' as const,
     default: '',
     label: 'AI 后台地址',
-    group: '底栏',
+    group: '常规/底栏',
     description: 'AI 按钮请求的后台根地址。留空 = 与画布同源；模型用 Agent 插件配好的默认渠道。',
   },
 }
@@ -257,10 +257,14 @@ import PromptActionSettings from './PromptActionSettings.vue'
 /** 应用插件：上架服务 + 挂底栏宿主/覆盖层 + 刷新续查（默认皮登记见 Task 5） */
 export function apply(ctx: Context) {
   // 设置面板「底栏」组的内容插槽：AI 按钮清单（增删改 / 模板 / 图标）自绘页。
-  ctx.slots.register('settingsGroup/底栏', {
+  // meta.mode = 'append'：这一页**追加**在 schema 字段之后，而不是顶替它们。
+  // 缺省是 replace —— 那样「AI 后台地址」这个 Config 字段会被整组盖掉、根本不渲染
+  // （设置面板 blocksOf：有 replace 插槽时不铺 fields，2026-10-27 实测）。
+  ctx.slots.register('settingsGroup/常规/底栏', {
     id: 'bottom-bar/prompt-actions',
     order: 5,
     component: PromptActionSettings,
+    meta: { mode: 'append' },
   })
 
   // 构造即上架（随本插件 scope 回收）
