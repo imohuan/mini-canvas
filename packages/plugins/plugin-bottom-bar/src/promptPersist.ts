@@ -45,3 +45,26 @@ export function promptPersistFields(
   if (binding === 'text') return {}
   return { barPrompt: value === '' ? undefined : value }
 }
+/**
+ * 富文本快照的落盘字段名（存 ProseMirror doc JSON）。
+ *
+ * 为什么需要它（用户 2026-10-27 报）：只存纯文本 `@图片10` 时，重开底栏只能按文本重建，
+ * 认不出那本来是「待输入」标签 → 标签退化成文字，还被当成声明了第 10 格、凭空长出一排空槽。
+ * 存一份 doc JSON，重开时按节点原样恢复（标签还是标签）。
+ */
+export const PROMPT_DOC_FIELD = 'barPromptDoc'
+
+/** 挂载时该拿哪份富文本快照（没有 / 形状不对 → undefined，调用方退回纯文本恢复） */
+export function initialPromptDoc(data: Record<string, unknown> | undefined | null): unknown {
+  const doc = data?.[PROMPT_DOC_FIELD]
+  if (!doc || typeof doc !== 'object') return undefined
+  const shaped = doc as { type?: unknown }
+  return shaped.type === 'doc' ? doc : undefined
+}
+
+/** 要写回 data 的富文本字段（doc 为空 = 清掉旧快照，避免恢复出过期内容） */
+export function promptDocPersistFields(doc: unknown): Record<string, unknown> {
+  if (!doc) return { [PROMPT_DOC_FIELD]: undefined }
+  return { [PROMPT_DOC_FIELD]: doc }
+}
+

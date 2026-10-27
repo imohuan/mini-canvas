@@ -75,6 +75,42 @@ export function parseRefSlots(text: string, options: { allowAv?: boolean } = {})
   return out
 }
 
+/**
+ * 从**富文本 doc JSON** 里取出真正的槽位标签（`ref-slot:image:3` 这种）。
+ *
+ * 为什么不再拿纯文本正则扫（用户 2026-10-27 报「只有 2 条连线却出现 9 个槽位」）：
+ * 纯文本扫会把「正文里剩下的一串 @图片10 文字」也当成声明，把参考区撑到第 10 格。
+ * 现在文字就是文字，只有点了「标记」转出来的标签节点才算声明。
+ */
+export function refSlotsFromDoc(doc: unknown): RefSlotRef[] {
+  const root = doc as { type?: unknown; content?: unknown } | null | undefined
+  if (!root || root.type !== 'doc' || !Array.isArray(root.content)) return []
+  const out: RefSlotRef[] = []
+  const seen = new Set<string>()
+  const walk = (nodes: unknown[]): void => {
+    for (const n of nodes) {
+      const node = n as { type?: string; attrs?: { id?: unknown }; content?: unknown } | null
+      if (!node || typeof node !== 'object') continue
+      if (node.type === 'resource') {
+        const id = typeof node.attrs?.id === 'string' ? node.attrs.id : ''
+        const m = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(id)
+        if (m) {
+          const kind = m[1] as RefSlotKind
+          const index = Number(m[2])
+          const key = refSlotKey(kind, index)
+          if (index >= 1 && !seen.has(key)) {
+            seen.add(key)
+            out.push({ key, kind, index })
+          }
+        }
+      }
+      if (Array.isArray(node.content)) walk(node.content)
+    }
+  }
+  walk(root.content)
+  return out
+}
+
 /** 扩展名兜底（有些系统给不出 MIME） */
 const EXT_KIND: Array<['image' | 'video' | 'audio', string[]]> = [
   ['image', ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'svg']],

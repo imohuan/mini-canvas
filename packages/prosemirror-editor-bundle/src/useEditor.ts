@@ -339,6 +339,25 @@ const mySchema = new Schema({
         }
         // 默认渲染
         const { id, name, url, thumbnail_url, category } = node.attrs
+        /**
+         * 槽位标签（ref-slot:image:3 这种）兜底走 chip 外观。
+         *
+         * 为什么：注册表冷启动时可能还没有条目（或者被别的路径覆盖），走到这里的默认渲染
+         * 会画成 `@图片1` 的下划线文字 —— 用户看到的就是「重开底栏后标签变成文本」
+         *（2026-10-27 报）。槽位标签的外观是确定的，不依赖注册表也能画对（缩略图靠
+         * renderEditor 再刷新）。
+         */
+        const slotHit = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(String(id ?? ''))
+        if (slotHit) {
+          const slotKind = slotHit[1] as 'image' | 'video' | 'audio' | 'av'
+          const slotItem = buildSlotItem(slotKind, String(name ?? id))
+          itemRegistry.set(String(id), { ...slotItem, ...(url ? { url } : {}) })
+          const rendered = slotItem.renderEditor?.(slotItem)
+          if (rendered instanceof HTMLElement) {
+            rendered.setAttribute('data-category', category || '素材')
+            return rendered
+          }
+        }
         if (url) {
           const thumbUrl = thumbnail_url || getThumbnailUrlFromAssetUrl(url)
           return [
@@ -425,88 +444,74 @@ function createSelectionDecorationPlugin() {
 const SLOT_CHIP_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 
-function createSlotTagPlugin() {
-  return new Plugin({
-    key: new PluginKey('ref-slot-tag'),
-    appendTransaction(transactions, _oldState, newState) {
-      if (!transactions.some((tr) => tr.docChanged)) return null
-      const tr = newState.tr
-      const nodeType = mySchema.nodes.resource
-      if (!nodeType) return null
-      // 先收集所有命中（含位置），再**从后往前**替换 —— 从前往后会让后面的位置随
-      // 前面的替换整体偏移，第二处开始就替换错位（实测：一段里只有第一个 @ 转成了标签）
-      const hits: Array<{ start: number; len: number; item: any }> = []
-      newState.doc.descendants((node, pos) => {
-        if (node.type.name !== 'paragraph' || !node.isTextblock) return
-        node.forEach((child, offset) => {
-          if (!child.isText || !child.text) return
-          const m = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/i.exec(child.text)
-          if (!m) return
-          const kind = m[1].toLowerCase()
-          const slotKind: 'image' | 'video' | 'audio' | 'av' =
-            kind === '图片' || kind === 'image' ? 'image'
-            : kind === '视频' || kind === 'video' ? 'video'
-            : kind === '音频' || kind === 'audio' ? 'audio'
-            : 'av'
-          const label =
-            slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
-          const index = Number(m[2])
-          if (!index) return
-          const nodeType = mySchema.nodes.resource
-          if (!nodeType) return
-          const id = 'ref-slot:' + slotKind + ':' + index
-          const item: ResourceItem = {
-            id,
-            name: label + index,
-            category: '素材',
-            mediaType: slotKind === 'av' ? undefined : (slotKind as 'image' | 'video' | 'audio'),
-          }
-          item.renderEditor = (self) => {
-            // **渲染时**读注册表：正文标签的内容随连线变化（上传/替换后从待输入变已填），
-            // 如果这里读闭包里的旧 item，标签就永远是虚线（实测：上传成功后正文标签不变）
-            const latest = itemRegistry.get(self.id) ?? self
-            const span = document.createElement('span')
-            const isPending = !latest.url
-            span.className = 'resource-node resource-chip' + (isPending ? ' is-pending' : '')
-            span.dataset.id = self.id
-            span.dataset.name = latest.name
-            if (latest.url && latest.mediaType === 'image') {
-              const img = document.createElement('img')
-              img.className = 'resource-chip-thumb'
-              img.src = latest.url
-              img.alt = ''
-              span.append(img)
-            } else {
-              const ic = document.createElement('span')
-              ic.className = 'resource-chip-icon'
-              ic.innerHTML = SLOT_CHIP_ICON
-              span.append(ic)
-            }
-            const nm = document.createElement('span')
-            nm.className = 'resource-chip-name'
-            nm.textContent = latest.name
-            span.append(nm)
-            return span
-          }
-          itemRegistry.set(item.id, item)
-          const start = pos + 1 + offset + m.index
-          hits.push({ start, len: m[0].length, item })
-        })
-      })
-      for (const h of hits.sort((a, b) => b.start - a.start)) {
-        /**
-         * 光标还停在这段 @ 文字末尾 → 用户**正在输入**（选数字是在过滤 @ 菜单，
-         * 不是在声明槽位）。此时转成标签会让菜单闪没、像"自动选中"（用户 2026-10-27 报）。
-         * 等光标移开（打空格 / 回车 / 点别处）再转换，行为与 @ 菜单一致。
-         */
-        const sel = newState.selection
-        if (sel.empty && sel.from === h.start + h.len) continue
-        tr.replaceWith(h.start, h.start + h.len, buildResourceNode(nodeType, h.item))
-      }
-      return hits.length ? tr : null
-    },
-  })
+/** 造一个「待输入 / 已填」槽位素材项（renderEditor 读注册表，缩略图跟着连线变化） */
+function buildSlotItem(
+  slotKind: 'image' | 'video' | 'audio' | 'av',
+  name: string,
+): ResourceItem {
+  const id = 'ref-slot:' + slotKind + ':' + name.replace(/\D/g, '')
+  const item: ResourceItem = {
+    id,
+    name,
+    category: '素材',
+    mediaType: slotKind === 'av' ? undefined : slotKind,
+  }
+  item.renderEditor = (self) => {
+    // 渲染时读注册表：待输入 → 已填（连线变化）时外观要跟着变
+    const latest = itemRegistry.get(self.id) ?? self
+    const span = document.createElement('span')
+    const isPending = !latest.url
+    span.className = 'resource-node resource-chip' + (isPending ? ' is-pending' : '')
+    span.dataset.id = self.id
+    span.dataset.name = latest.name
+    if (latest.url && latest.mediaType === 'image') {
+      const img = document.createElement('img')
+      img.className = 'resource-chip-thumb'
+      img.src = latest.url
+      img.alt = ''
+      span.append(img)
+    } else {
+      const ic = document.createElement('span')
+      ic.className = 'resource-chip-icon'
+      ic.innerHTML = SLOT_CHIP_ICON
+      span.append(ic)
+    }
+    const nm = document.createElement('span')
+    nm.className = 'resource-chip-name'
+    nm.textContent = latest.name
+    span.append(nm)
+    return span
+  }
+  return item
 }
+/**
+ * 按 doc JSON 把 `ref-slot:*` 标签的样式登记进注册表（幂等）。
+ *
+ * 为什么需要：标签的 toDOM 渲染时去注册表取 item（决定 chip 外观）。冷启动
+ * （底栏刚打开、注册表还是空的）时直接建节点，标签就会退化成默认渲染 ——
+ * 用户看到的就是「重开底栏后标签变成 @图片1 文本」（2026-10-27 报的那个）。
+ */
+function registerSlotItemsFromDoc(docJson: unknown): void {
+  const walk = (nodes: unknown): void => {
+    if (!Array.isArray(nodes)) return
+    for (const raw of nodes) {
+      const node = raw as { type?: string; attrs?: { id?: unknown; name?: unknown }; content?: unknown } | null
+      if (!node || typeof node !== 'object') continue
+      if (node.type === 'resource') {
+        const id = String(node.attrs?.id ?? '')
+        const m = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(id)
+        if (m && !itemRegistry.has(id)) {
+          const slotKind = m[1] as 'image' | 'video' | 'audio' | 'av'
+          itemRegistry.set(id, buildSlotItem(slotKind, String(node.attrs?.name ?? id)))
+        }
+      }
+      walk(node.content)
+    }
+  }
+  const root = docJson as { content?: unknown } | null | undefined
+  walk(root?.content)
+}
+
 
 function createCursorFixPlugin() {
   return new Plugin({
@@ -734,6 +739,37 @@ export function parsePlainTextToContent(
     } else {
       // 旧 @token
       const token = match[4]
+      /**
+       * `@图片3` / `@音频2` 这种槽位引用：连线素材的回查表里没有它（还没连图），
+       * 但它本来就是一个「待输入」素材标签。以前回查失败就退化成纯文字 ——
+       * 底栏重新挂载后标签全变成 `@图片10` 文本，还被当成声明了第 10 格，凭空长出一排空槽。
+       */
+      const slotHit = /^(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})$/i.exec(token)
+      if (slotHit) {
+        const sk = slotHit[1].toLowerCase()
+        const slotKind: 'image' | 'video' | 'audio' | 'av' =
+          sk === '图片' || sk === 'image' ? 'image'
+          : sk === '视频' || sk === 'video' ? 'video'
+          : sk === '音频' || sk === 'audio' ? 'audio'
+          : 'av'
+        const label =
+          slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+        const index = Number(slotHit[2])
+        if (index) {
+          const slotItem = buildSlotItem(slotKind, label + index)
+          itemRegistry.set(slotItem.id, slotItem)
+          content.push(mySchema.nodes.resource.create({
+            id: slotItem.id,
+            name: slotItem.name,
+            category: slotItem.category,
+            url: '',
+            value: '',
+          }))
+          lastIndex = regex.lastIndex
+          continue
+        }
+      }
+
       const item = resolver ? resolver(token) : null
       if (item) {
         content.push(mySchema.nodes.resource.create({
@@ -903,6 +939,23 @@ export function useEditor(
     if (!view || !docJson) return;
     try {
       const doc = mySchema.nodeFromJSON(docJson);
+      /**
+       * 反序列化时给 `ref-slot:*` 标签补上 chip 外观。
+       *
+       * 为什么必须补：节点的 toDOM 会去注册表取 item；冷启动时注册表是空的，
+       * 于是标签退化成默认渲染（@图片1 的纯文字样式，用户看到的就是「标签变成文本」）。
+       * 这里把样式先登记好，重建出来就是正常 chip。
+       */
+      doc.descendants((node) => {
+        if (node.type.name !== 'resource') return
+        const id = String(node.attrs?.id ?? '')
+        const m = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(id)
+        if (!m) return
+        const slotKind = m[1] as 'image' | 'video' | 'audio' | 'av'
+        if (!itemRegistry.has(id)) {
+          itemRegistry.set(id, buildSlotItem(slotKind, String(node.attrs?.name ?? id)))
+        }
+      })
       const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
       view.dispatch(tr);
       emit("update:modelValue", getPlainText());
@@ -1221,6 +1274,14 @@ export function useEditor(
     });
 
     const promptDocJson = unref(props.promptDoc);
+    /**
+     * 冷启动恢复前先按 doc JSON 把槽位标签的样式登记进注册表。
+     *
+     * 为什么必须在这一步：节点的 toDOM 渲染时要去注册表取 item（决定 chip 外观）。
+     * 底栏刚打开时注册表还是空的，标签就会退化成默认渲染 —— 用户看到的就是
+     * 「重开底栏后标签变成 @图片1 这种文本」（2026-10-27 报的那个）。
+     */
+    registerSlotItemsFromDoc(promptDocJson);
     let paragraphs: any[];
     if (promptDocJson) {
       // 优先用 JSON 恢复完整文档结构
@@ -1255,7 +1316,6 @@ export function useEditor(
         mentionKeymap,
         createSelectionDecorationPlugin(),
         createPasteHandlerPlugin(() => unref(props.resolveResource)),
-        createSlotTagPlugin(),
         createCursorFixPlugin(),
         createDropCursorPlugin({ color: "#2b6df2", width: 2 }),
         keymap(baseKeymap),
@@ -1390,6 +1450,13 @@ export function useEditor(
         deserializeDoc(newPromptDoc)
         return
       }
+      /**
+       * 再一道保护（用户 2026-10-27 报「重开底栏后标签变回文字」）：
+       * 没有富文本快照、且纯文本看起来一样时**别重建**。
+       * 标签导出成纯文本仍是 @图片1，两边相等；按文本重建会把它当普通文字，
+       * 把刚恢复好的标签节点冲掉。
+       */
+      if ((newModelValue ?? '') === getPlainText()) return
 
       // 降级：纯文本恢复（无 promptDoc 的向后兼容路径）
       //
@@ -1625,6 +1692,60 @@ export function useEditor(
     emit('update:promptDoc', doc.toJSON())
   }
 
+  /**
+   * 把正文里的 @图片N / @视频N / @音频N / @音视频N **文字** 转成素材标签（用户口径 2026-10-27）。
+   *
+   * 为什么改成手动触发：以前编辑器自动扫（每敲一个字都可能命中），于是
+   * 「输入 @图片1 时数字还没敲完就被转成标签、菜单闪没」，而且这些标签不落富文本，
+   * 底栏一重挂载就退回成纯文字。
+   *
+   * 现在的规则（用户口述）：
+   *   - 输入框里的文字永远只是文字，@ 符号本身不解析；
+   *   - 只有点「标记」按钮，才把认得出的 @图片N 转成标签；
+   *   - 转好的标签是富文本节点，会跟着 promptDoc 一起存，重开底栏不会再退回文字。
+   *
+   * @returns 转了几个（0 = 没有可转换的文字）
+   */
+  function markRefSlots(): number {
+    if (!view) return 0
+    const nodeType = mySchema.nodes.resource
+    if (!nodeType) return 0
+    // 先收集、再从后往前替换：从前往后会让后面的位置随前面的替换整体偏移
+    const hits: Array<{ start: number; len: number; item: ResourceItem }> = []
+    view.state.doc.descendants((node, pos) => {
+      if (node.type.name !== 'paragraph' || !node.isTextblock) return
+      node.forEach((child, offset) => {
+        if (!child.isText || !child.text) return
+        const re = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
+        let m: RegExpExecArray | null
+        while ((m = re.exec(child.text)) !== null) {
+          const kind = m[1].toLowerCase()
+          const slotKind: 'image' | 'video' | 'audio' | 'av' =
+            kind === '图片' || kind === 'image' ? 'image'
+            : kind === '视频' || kind === 'video' ? 'video'
+            : kind === '音频' || kind === 'audio' ? 'audio'
+            : 'av'
+          const label =
+            slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+          const index = Number(m[2])
+          if (!index) continue
+          const item = buildSlotItem(slotKind, label + index)
+          hits.push({ start: pos + 1 + offset + m.index, len: m[0].length, item })
+        }
+      })
+    })
+    if (hits.length === 0) return 0
+    const tr = view.state.tr
+    for (const h of hits.sort((a, b) => b.start - a.start)) {
+      itemRegistry.set(h.item.id, h.item)
+      tr.replaceWith(h.start, h.start + h.len, buildResourceNode(nodeType, h.item))
+    }
+    view.dispatch(tr)
+    emit('update:modelValue', getPlainText())
+    emit('update:promptDoc', serializeDoc())
+    return hits.length
+  }
+
   return {
     // 菜单
     menuVisible, menuPosition, activeIndex,
@@ -1645,6 +1766,8 @@ export function useEditor(
     deserializeDoc,
     focusEnd,
     setText,
+    /** 把正文里的 @图片N 文字转成素材标签（底栏「标记」按钮调用） */
+    markRefSlots,
     insertResource,
     replaceResource,
     replaceResourceThumbByName,

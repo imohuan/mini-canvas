@@ -113,7 +113,7 @@ async function renderWithTeleport(comp: Component, ctx: CanvasRenderContext): Pr
 }
 
 describe('底栏顶行三枚 pill 的状态', () => {
-  it('参考可点；标记置灰；风格已移除（用户要求 pass 掉，风格归提示词）', async () => {
+  it('参考可点；标记可点（点它才把 @图片N 文字转标签）；风格已移除', async () => {
     const html = await render(NodeBottomBar as Component, { id: 'n2', data: {} }, makeCtx())
     const labels = [...html.matchAll(/<button[^>]*class="nb-pill([^"]*)"[^>]*>([\s\S]*?)<\/button>/g)]
     const pills = labels.map((m) => ({ cls: m[1], text: m[2].replace(/<[^>]+>/g, '').trim() }))
@@ -123,9 +123,13 @@ describe('底栏顶行三枚 pill 的状态', () => {
     expect(ref, '参考 pill 必须在').toBeTruthy()
     expect(mark, '标记 pill 必须在').toBeTruthy()
     expect(style, '风格 pill 已按用户要求移除').toBeUndefined()
-    // 标记：带 is-disabled 且真的 disabled
-    expect(mark!.cls).toContain('is-disabled')
-    expect(mark!.cls).toContain('disabled')
+    /**
+     * 标记：**可点**（用户口径 2026-10-27）。
+     * 以前它是灰的（"暂未支持"），文本靠编辑器自动扫成标签 ——
+     * 结果输入 @图片1 时数字还没敲完就被转成标签、菜单闪没。
+     * 现在文本只是文本，只有点「标记」才解析。
+     */
+    expect(mark!.cls).not.toContain('is-disabled')
     // 参考：不带 disabled
     expect(ref!.cls).not.toContain('is-disabled')
   })

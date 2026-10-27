@@ -52,7 +52,7 @@ import {
   type UpstreamMaterial,
 } from './panelSource'
 import { readRunState } from './runState'
-import { initialPromptText, promptPersistFields } from './promptPersist'
+import { initialPromptDoc, initialPromptText, promptDocPersistFields, promptPersistFields } from './promptPersist'
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
 import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
 import { resolveBottomBarShown } from './bottomBarOverlay'
@@ -72,6 +72,7 @@ import {
 // 「看图」@ 素材槽位：标签解析 / 落点判定（纯函数，已单测）
 import {
   parseRefSlots,
+  refSlotsFromDoc,
   judgeSlotDrop,
   dropVerdictMessage,
   hitSlotAtPoint,
@@ -292,6 +293,12 @@ function persistValues(): void {
         // 否则像文本节点（默认动作是「复制/删除」、压根没有输入框）会被写进一个
         // 多余的 barPrompt（它正文在 data.text，不该再复制一份）。
         ...(showEditor.value ? promptPersistFields(promptBinding.value, prompt.value) : {}),
+        /**
+         * 富文本快照（用户 2026-10-27 报：「重开底栏后，文本转出来的标签变回文字」）。
+         * 只存纯文本的话，重开时只能按文本重建，待输入标签认不出来 → 退化成文字，
+         * 那串文字还会被当成「声明了第 N 格」，凭空长出一排空槽。存 JSON 才能原样还原。
+         */
+        ...(showEditor.value && promptDoc.value ? promptDocPersistFields(promptDoc.value) : {}),
       },
     })
   } catch {
@@ -312,20 +319,32 @@ function persistValuesSoon(): void {
     persistValues()
   }, 400)
 }
-onBeforeUnmount(() => {
-  // 卸载前把攒着的那一拍落掉：用户打完字立刻点别处（底栏被收起 → 本组件卸载）时，
-  // 400ms 防抖还没到点，不 flush 就会丢掉这次输入 —— 正是用户报的「输入后去操作别的画布，再回来内容没了」。
-  if (persistTimer) clearTimeout(persistTimer)
-  persistTimer = null
-  persistValues()
-})
-
 // —— 提示词 ——
 // 'text' 绑定（文本节点）与 data.text 双向；'none' 绑定（图片生成等）落 data.barPrompt，
 // 这样底栏**重新挂载**（切画布/再点节点/任务跑完再回来）后内容还在，发送之后也还在。
 // 用户报的「输入内容一下就全消失」根因就是这个：'none' 绑定从没写过节点 data。
 const prompt = ref(initialPromptText(props.data))
-const promptDoc = ref<unknown>(undefined)
+/**
+ * 富文本快照：**优先用它恢复**（用户 2026-10-27 报「重开底栏后标签变成文字」）。
+ *
+ * 纯文本恢复认不出「待输入」标签（@图片10 在连线表里查不到），标签就会退化成文字。
+ * 存一份 doc JSON，重开时标签还是标签，也不会被误当成声明了第 10 格。
+ */
+const promptDoc = ref<unknown>(initialPromptDoc(props.data))
+/**
+ * 卸载前把攒着的那一拍落掉：用户打完字立刻点别处（底栏被收起 → 本组件卸载）时，
+ * 400ms 防抖还没到点，不 flush 就会丢掉这次输入。
+ *
+ * 必须放在 prompt / promptDoc 之后：放前面会在卸载时读到未初始化的 ref（TDZ），
+ * 整段保存抛错、富文本快照永远写不进去（真机踩过：重开还是纯文本）。
+ */
+onBeforeUnmount(() => {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = null
+  persistValues()
+})
+
+
 watch(
   () => props.data?.text,
   (next) => {
@@ -956,8 +975,15 @@ const refTiles = computed(() =>
   ),
 )
 
-/** 正文里的 @ 声明（只用来「标出哪个序号被点了」与算缺号，不产生内容） */
-const promptRefSlots = computed(() => parseRefSlots(prompt.value))
+/**
+ * 正文里的槽位声明 —— **只认富文本里的标签节点**（用户口径 2026-10-27）。
+ *
+ * 以前用纯文本正则扫，于是「正文里残留的一串 @图片10 文字」也会被当成声明，
+ * 参考区被撑到第 10 格（只有 2 条连线却出现 9 个空槽）。现在文字只是文字，
+ * 只有点了「标记」转出来的标签才算声明。
+ */
+const promptRefSlots = computed(() => refSlotsFromDoc(promptDoc.value))
+
 
 /** 错误提示按「序号」记（格子由连线派生，键会随内容变化，不能按 key 存） */
 const slotErrors = ref<Record<string, string>>({})
@@ -1006,6 +1032,10 @@ const editorComponentRef = ref<{
   replaceResource?(item: ResourceItem): boolean
   replaceResourceThumbByName?(name: string, url: string): boolean
   refreshChips?(): void
+  /** 把正文里的 @图片N 文字转成素材标签（「标记」按钮调用） */
+  markRefSlots?(): number
+  /** 读出正文纯文本（转换后立即同步到 prompt，避免落库的还是旧文本） */
+  exportText?(): string
   /** 动态切可编辑态（AI 生成期间锁输入用；bundle 侧 view.editable 布尔位） */
   setEditable?(next: boolean): void
 } | null>(null)
@@ -1146,6 +1176,32 @@ function setSlotError(index: number, message: string): void {
     slotErrors.value = next
   }, 2600)
 }
+
+/**
+ * 「标记」按钮：把输入框里手写的 @图片1 / @视频2 这类**文字**转成素材标签
+ *（用户口径 2026-10-27：文字不自动解析，只有点这个按钮才解析）。
+ *
+ * 转完再刷一遍标签外观：新标签的缩略图 / 待输入虚线来自注册表。
+ */
+function markRefSlotsInPrompt(): void {
+  const ed = editorComponentRef.value
+  if (!ed?.markRefSlots) return
+  const count = ed.markRefSlots()
+  if (count <= 0) return
+  /**
+   * 编辑器转完后正文变了，但底栏的 prompt 是**另一份 ref**（v-model 回填有时序延迟）。
+   * 这里直接按新正文同步一次：否则落库的仍是转换前的 @图片1 纯文本，
+   * 重开底栏又变回文字（真机踩过）。
+   */
+  // 等一拍：编辑器 dispatch 之后 v-model 的回填是异步的，此刻读 prompt 还是旧值
+  void nextTick().then(() => {
+    const nextText = ed.exportText?.()
+    if (typeof nextText === 'string' && nextText !== prompt.value) prompt.value = nextText
+    persistValues()
+    refreshSlotChips()
+  })
+}
+
 
 /**
  * 正文标签刷新：内容来自连线（collectUpstreamMaterials）。
@@ -1605,11 +1661,11 @@ function onGlobalLeave(el: Element): void {
       </button>
       <button
         v-if="!expanded"
-        class="nb-pill is-disabled"
+        class="nb-pill"
         type="button"
-        disabled
-        :title="'标记：暂未支持'"
-        @click.stop
+        :title="'标记：把输入框里的 @图片1 这类文字转成素材标签'"
+        data-testid="bar-mark"
+        @click.stop="markRefSlotsInPrompt"
       >
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>

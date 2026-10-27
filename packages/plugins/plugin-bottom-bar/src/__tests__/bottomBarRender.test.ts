@@ -304,43 +304,47 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
   })
 })
 
-describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
 describe('「看图」参考区：一行、没连线也有槽位', () => {
   /**
-   * 用户口径（2026-10-25）：输入框里 @图片1 这类文本要变成标签；
-   * **没有连线也要有槽位**，状态是「待输入」，输入框上方同步显示。
+   * 规则变更（用户口径 2026-10-27）：纯文本 @图片1 **不再**被当成声明。
    *
-   * SSR 里 ProseMirror 正文是客户端建的，所以这里直接给一个带 @标签 的 modelValue，
-   * 断言参考区渲染出来（`nb-cards` 里带 `is-pending` 的格子 + 「待输入」字样 + 类型名）。
-   * 用户口径 2026-10-25：「它只有一行的输入，你这边重复了」—— 同一行里不该再有第二排槽位。
+   * 以前用纯文本正则扫，于是「正文里剩着一串 @图片10 文字」也长出一排空槽
+   * （用户截图：只有 2 条连线却出现 9 个槽位）。现在只有点了「标记」转出来的
+   * 标签节点才算声明 —— 所以这里断言纯文本不产生槽位。
    */
-  it('正文里 @图片1 → 上方出现一个「待输入」的图片槽位', async () => {
+  it('纯文本 @图片1（没点标记）→ 不长槽位', async () => {
     const html = await render(
       NodeBottomBar as Component,
       '35',
       { barPrompt: '将 @图片1 中的女子，参照这张图' },
       makeCtx({ selectedIds: ['35'] }),
     )
+    expect(html).not.toContain('nb-cards')
+    expect(html).not.toContain('is-pending')
+  })
+
+  it('富文本里的槽位标签 → 上方出现「待输入」的图片槽位（一行）', async () => {
+    const promptDoc = {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'resource', attrs: { id: 'ref-slot:image:1', name: '图片1' } }],
+      }],
+    }
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      { barPrompt: '图片1', barPromptDoc: promptDoc },
+      makeCtx({ selectedIds: ['35'] }),
+    )
     expect(html).toContain('nb-cards')
-    expect(html).toContain('nb-card')
     expect(html).toContain('is-pending')
-    expect(html).toContain('待输入')
-    expect(html).toContain('图片 1')
-    // 只剩一行：旧的两排容器不该再出现
+    // 格子上的序号角标（卡片里的名字文字被设计上隐藏了，只留序号）
+    expect(html).toContain('nb-card-index')
     expect(html).not.toContain('nb-slots')
     expect(html).not.toContain('nb-slot ')
   })
 
-  it('@音频1 / @图片2 各出一个槽位（三种写法都认）', async () => {
-    const html = await render(
-      NodeBottomBar as Component,
-      '35',
-      { barPrompt: '@音频1 和 @图片2' },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).toContain('音频 1')
-    expect(html).toContain('图片 2')
-  })
 
   it('正文里没有 @ 标签 → 不渲染槽位那一排（不占地方）', async () => {
     const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
@@ -423,6 +427,7 @@ describe('参数区：唯一一个下拉参数直接铺到外面（不套二级�
     expect(html).not.toContain('tpg-inline')
   })
 })
+describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
   it('running + 有百分比 → 渲染超大百分比、耗时胶囊与文案（照参考稿的 3 元素版式）', async () => {
     const html = await render(
       NodeTaskOverlay as Component,
