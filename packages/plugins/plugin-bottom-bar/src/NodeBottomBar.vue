@@ -1606,8 +1606,6 @@ function onGlobalLeave(el: Element): void {
         · 没有内容 → 虚线「待输入」，点它上传 / 拖文件 / Ctrl 拖节点
       从前把「待输入槽」和「已有素材卡」画成两排，同一个参考就出现两次；现在合并成一条序列。
     -->
-      从前把「待输入槽」和「已有素材卡」画成两排，同一个参考就出现两次；现在合并成一条序列。
-    -->
     <!-- AI 生成期的流光容器（用户口径 2026-10-27 截图）：框罩住「参考卡列表 + 输入区」
          整块，顶边在卡片列表上方。平时零样式不改布局，仅 is-ai-locking 画描边。 -->
     <div class="nb-ai-frame" :class="{ 'is-ai-locking': aiEditorLocked }">
@@ -2282,12 +2280,6 @@ function onGlobalLeave(el: Element): void {
   font-variant-numeric: tabular-nums;
 }
 
-/* —— 输入区（内联在卡下面；点得进去、能打字） —— */
-.nb-editor {
-  position: relative;
-  min-height: 24px;
-  padding: 0 2px;
-  cursor: text;
 }
 /* —— 输入区（内联在卡下面；点得进去、能打字） —— */
 .nb-editor {
@@ -2305,8 +2297,12 @@ function onGlobalLeave(el: Element): void {
  * 颜色吃 --ui-accent 跟主题走；prefers-reduced-motion 退化为静态描边（全站动效规矩）。
  */
 .nb-ai-frame.is-ai-locking {
+  /* 与面板内容的间距：流光框不贴文字/卡片（左右 10、上 8、下 6）；负 margin 抵消
+     nb-root 的 flex gap，不额外占一行高度。 */
   position: relative;
-  border-radius: 10px;
+  margin: -8px -10px -6px;
+  padding: 8px 10px 6px;
+  border-radius: 12px;
 }
 .nb-ai-frame.is-ai-locking::before {
   content: '';
