@@ -526,8 +526,12 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
       'data-category': self.category,
       // 不设 title：原生 title 会弹浏览器默认 tooltip（用户口径 2026-10-27 不喜欢）
     },
+    // 【修复】icon 不能走 innerHTML 属性 —— DOMOutputSpec 会把它当**普通属性**写上 DOM
+    //（outerHTML 出现 innerhtml="<svg..."），浏览器不解析 → 视觉空白（用户 2026-10-28
+    // 报「有些标签是空白」的真凶）。改为空占位 span + CSS mask 画图标（图标唯一，
+    // 用 CSS 变量/伪元素最稳）。
     isText
-      ? ['span', { class: 'resource-chip-icon', innerHTML: TEXT_ICON }]
+      ? ['span', { class: 'resource-chip-icon', 'data-icon': 'text' }]
       : ['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }],
     ['span', { class: 'resource-chip-name' }, name],
   ]

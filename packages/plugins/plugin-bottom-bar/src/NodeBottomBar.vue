@@ -2614,6 +2614,16 @@ function onGlobalLeave(el: Element): void {
   width: 16px;
   height: 16px;
 }
+/**
+ * 图标用 mask 画（用户 2026-10-28）：DOMOutputSpec 不解析 innerHTML 属性（会被当成
+ * 普通属性写上 DOM），所以 spec 里不能塞 svg 字符串 —— 这里用 mask + data-icon 渲染，
+ * 图标形状由 CSS 保证，任何渲染路径（HTMLElement / DOMOutputSpec）结果一致。
+ */
+.nb-editor :deep(.resource-chip-icon[data-icon]) {
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cline x1='12' y1='20' x2='12' y2='4'/%3E%3Cline x1='8' y1='20' x2='16' y2='20'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cline x1='12' y1='20' x2='12' y2='4'/%3E%3Cline x1='8' y1='20' x2='16' y2='20'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .nb-editor :deep(.resource-chip-icon svg) {
   width: 14px;
   height: 14px;
