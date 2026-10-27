@@ -42,6 +42,7 @@ import { useEditor } from './useEditor.ts';
 import MentionMenu from './MentionMenu.vue';
 import PreviewBox from './PreviewBox.vue';
 import type { ResourceItem } from './types.ts';
+import type { PasteFilesHandler } from './useEditor.ts';
 
 const props = defineProps<{
   modelValue?: string;
@@ -54,6 +55,13 @@ const props = defineProps<{
    * 缺省 true；false = 只读（ProseMirror view.editable = false，光标/输入/粘贴全禁）。
    */
   editable?: boolean;
+  /**
+   * 粘贴文件时的外部处理器（图片等）。
+   *
+   * 组件只负责「取出文件 → 交给它」，具体建节点/连线/标签由调用方决定。
+   * 不传 = 粘贴文件不做处理（纯文本粘贴照旧）。
+   */
+  onPasteFiles?: PasteFilesHandler;
 }>();
 
 const emit = defineEmits<{
@@ -68,6 +76,7 @@ const promptDocRef = toRef(props, 'promptDoc');
 const resourcesRef = toRef(props, 'resources');
 const resolveResourceRef = toRef(props, 'resolveResource');
 const editableRef = toRef(props, 'editable');
+const onPasteFilesRef = toRef(props, 'onPasteFiles');
 
 const {
   menuVisible,
@@ -101,6 +110,7 @@ const {
   resources: resourcesRef,
   resolveResource: resolveResourceRef,
   editable: editableRef,
+  onPasteFiles: onPasteFilesRef,
 }, emit);
 
 // 暴露导出方法给父组件

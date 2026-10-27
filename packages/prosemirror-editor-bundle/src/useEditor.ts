@@ -587,14 +587,68 @@ function createCursorFixPlugin() {
   });
 }
 
+/**
+ * 从剪贴板里取出文件。
+ *
+ * 为什么要有 items 兜底：真实浏览器里复制图片时，`clipboardData.files` 经常是空的，
+ * 文件挂在 `items` 上（`kind === 'file'`，用 `getAsFile()` 取）。只读 files 会漏掉这类粘贴。
+ */
+export function pickFilesFromClipboard(data: DataTransfer | null | undefined): File[] {
+  if (!data) return []
+  const files = Array.from(data.files ?? [])
+  if (files.length > 0) return files
+  const out: File[] = []
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind !== 'file') continue
+    const file = typeof item.getAsFile === 'function' ? item.getAsFile() : null
+    if (file) out.push(file)
+  }
+  return out
+}
+
+/** 粘贴文件时交给外部的上下文 */
+export interface PasteFilesContext {
+  /** 在**当前**光标处插入一颗标签（执行时才读光标，避免异步导致位置漂移） */
+  insert(item: ResourceItem): void
+}
+
+/** 外部粘贴处理：返回 true = 已处理（编辑器不再走默认粘贴） */
+export type PasteFilesHandler = (files: File[], ctx: PasteFilesContext) => boolean | Promise<boolean>
+
 // 粘贴处理插件
 function createPasteHandlerPlugin(
   getResolver: () => ((name: string) => ResourceItem | null) | undefined,
+  /** 外部粘贴处理器：有文件时优先交给它（底栏用它做「建节点 + 连线 + 标签」） */
+  getPasteFiles: () => PasteFilesHandler | undefined,
 ) {
   return new Plugin({
     key: new PluginKey("paste-handler"),
     props: {
       handlePaste(view, event) {
+        /**
+         * 剪贴板里有**文件**时，先问外部愿不愿意接管。
+         *
+         * 为什么必须交给外部（用户 2026-10-27）：粘贴图片要「建节点 + 连参考线 + 建标签」，
+         * 这些是画布业务，输入框组件不该知道；它只提供能力。
+         */
+        const files = pickFilesFromClipboard(event.clipboardData)
+        const handler = files.length > 0 ? getPasteFiles() : undefined
+        if (handler) {
+          void handler(files, {
+            insert(item) {
+              const type = view.state.schema.nodes.resource
+              if (!type) return
+              itemRegistry.set(item.id, item)
+              // 执行时读光标：handler 是异步的，粘贴那一刻的位置可能已经失效
+              const { from, to } = view.state.selection
+              const tr = view.state.tr.replaceWith(from, to, buildResourceNode(type, item))
+              tr.insertText(' ')
+              view.dispatch(tr)
+            },
+          })
+          return true
+        }
+
         const html = event.clipboardData?.getData("text/html");
         if (html && html.includes("resource-node")) {
           return false;
@@ -881,6 +935,14 @@ export function useEditor(
      * 用于「AI 生成期间锁输入」（底栏的用户口径：加载中不允许编辑）。
      */
     editable?: Ref<boolean | undefined>
+    /**
+     * 粘贴**文件**（图片等）时的外部处理器。
+     *
+     * 组件本身不知道「建节点、连参考线」这些业务（那是调用方的），所以只负责：
+     * 从剪贴板取出文件 → 交给它 → 它决定建什么、并回填标签。
+     * 不传 = 保持原来的纯文本粘贴行为。
+     */
+    onPasteFiles?: Ref<PasteFilesHandler | undefined>
   },
   emit: {
     (e: "update:modelValue", value: string): void
@@ -1355,7 +1417,10 @@ export function useEditor(
         history(),
         mentionKeymap,
         createSelectionDecorationPlugin(),
-        createPasteHandlerPlugin(() => unref(props.resolveResource)),
+        createPasteHandlerPlugin(
+          () => unref(props.resolveResource),
+          () => unref(props.onPasteFiles),
+        ),
         createCursorFixPlugin(),
         createDropCursorPlugin({ color: "#2b6df2", width: 2 }),
         keymap(baseKeymap),
@@ -1675,9 +1740,6 @@ export function useEditor(
     return true
   }
 
-  /**
-   * 把正文里所有 `ref-slot:*` 标签**就地重渲染**一遍（注册表里已是最新 item）。
-+
   /**
    * 按 id 列表换缩略图（拖拽排序后按「该类型数组第 N 项」取图时用）。
    *
