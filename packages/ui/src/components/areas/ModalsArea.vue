@@ -156,6 +156,8 @@ const LOAD_MORE_INTERVAL_MS = 1000
 let loadMoreObserver: IntersectionObserver | null = null
 let lastLoadMoreAt = 0
 let loadMoreRetryTimer: ReturnType<typeof setTimeout> | null = null
+/** 已经挂上观察器的哨兵元素（同一个元素不重复 setup，元素换了才重挂） */
+let observedSentinel: HTMLElement | null = null
 
 /**
  * 哨兵进了可视区：离上次拉页超过间隔才真的拉（否则定时到点补拉一次）。
@@ -181,9 +183,17 @@ function maybeLoadMorePage(): void {
  * root 必须指到它 —— 否则哨兵相对 viewport 永远"在视口外"（弹窗内容超出视口），一次都不会触发。
  */
 function setupLoadSentinel(): void {
-  teardownLoadSentinel()
   const sentinel = loadSentinelEl.value
-  if (!sentinel) return
+  // 数据还没到时哨兵是 v-if=false（DOM 里没有）—— 先记下"没有"，等它出现再由
+  // watch(visibles) 重新调用本函数。以前这里直接 return 且只调用一次，
+  // 于是"先开面板、后到数据"时哨兵后渲染出来却永远没人观察（用户实测：滚到底不加载）。
+  if (!sentinel) {
+    observedSentinel = null
+    return
+  }
+  if (sentinel === observedSentinel && loadMoreObserver) return
+  teardownLoadSentinel()
+  observedSentinel = sentinel
   loadMoreObserver = new IntersectionObserver(
     (entries) => {
       if (entries.some((e) => e.isIntersecting)) maybeLoadMorePage()
@@ -196,6 +206,7 @@ function setupLoadSentinel(): void {
 function teardownLoadSentinel(): void {
   loadMoreObserver?.disconnect()
   loadMoreObserver = null
+  observedSentinel = null
   if (loadMoreRetryTimer) {
     clearTimeout(loadMoreRetryTimer)
     loadMoreRetryTimer = null
@@ -244,7 +255,7 @@ function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): H
       ? '<span class="hist-card-meta">资源走丢 · 无法预览</span>'
       : '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>') +
     '<span class="hist-card-meta">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
-  wrap.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+  wrap.addEventListener('click', () => onCardClick(item))
   // 勾选层由外层卡片统一挂载（这里再挂一次会出现两个叠加的勾选钮）
   return wrap
 }
@@ -268,6 +279,20 @@ function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
   if (s.histBatchMode && item.id) fallback.appendChild(buildCheckOverlay(item.id))
   card.replaceWith(fallback)
   masonry.layout()
+}
+
+/**
+ * 点卡片：
+ * - 普通模式 → 打开预览；
+ * - 批量模式 → **整卡都能勾选/取消**（用户口径 2026-10-27：不想只点左上角小圆点）。
+ *   点左上角那个圆钮仍走它自己的 stopPropagation，不会重复切换。
+ */
+function onCardClick(item: HistItem): void {
+  if (!s.histBatchMode) {
+    openHistoryItem(item)
+    return
+  }
+  if (item.id) toggleHistSelected(item.id)
 }
 
 /** 历史条目类型（卡片构建函数共用；id 参与批量勾选） */
@@ -340,7 +365,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       // 不再加任何信息浮层（用户口径 2026-10-11）：视频右下角那个「时间」会压住
       // 小屏态的「进入预览」按钮（实测两者矩形相交），而且标签本身就是多余的。
       // 媒体件自己已经带播放键/时间/进度，卡面保持干净。
-      card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+      card.addEventListener('click', () => onCardClick(item))
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
       return card
   }
@@ -366,7 +391,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       showBrokenResourceCard(card, item)
     })
   }
-  card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+  card.addEventListener('click', () => onCardClick(item))
   if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
   return card
 }
@@ -411,7 +436,7 @@ function createMasonryElement(item: HistItem): HTMLElement {
       // 开关关着时整条隐藏，开着时给中性「资源走丢」卡（不占用红色的"生成失败"）。
       showBrokenResourceCard(card, item)
     })
-    card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+    card.addEventListener('click', () => onCardClick(item))
   } else {
     card.appendChild(buildErrorCard(item))
   }
@@ -448,6 +473,8 @@ function rebuildMasonry(): void {
       masonry.init('#' + MASONRY_ID, { itemSelector: '.' + ITEM_CLASS, columnWidth, gutter: GUTTER })
       rebuilding = false
       observeLastItem()
+      // 整墙重建后哨兵元素可能被换掉/才刚出现：统一在这里补挂一次观察器
+      setupLoadSentinel()
     })
   })
 }
@@ -503,7 +530,9 @@ watch(() => s.historyOpen, (open) => {
     if (resizeObserver && masonryEl.value) resizeObserver.unobserve(masonryEl.value)
     return
   }
-  renderedCount.value = Math.min(renderedCount.value > 0 ? renderedCount.value : BATCH_SIZE, Math.max(ui.histVisible.value.length, 1))
+  // 首屏还没数据时不要夹到 1：否则数据回来后 renderedCount=1，会跳过第 1 张卡、
+  // 只走"追加"路径（容器刚出现、瀑布流还没 init，append 直接空转）。
+  if (renderedCount.value === 0) renderedCount.value = BATCH_SIZE
   nextTick(() => {
     rebuildMasonry()
     setupLoadSentinel()
@@ -527,33 +556,66 @@ watch(() => [s.histScope, s.histType, s.histRating, s.histSortDesc] as const, ()
  * 翻页后长度可能恰好不变（都是满页），长度 watch 会漏触发，画面就停在旧筛选的卡上。
  * 追加分页 → 只补新增的卡；筛选切换（filterSwitching 被置位）→ 整墙重建。
  */
-watch(() => s.histDataVersion, () => {
+watch(() => s.histDataVersion, async () => {
   const len = ui.histVisible.value.length
   if (!s.historyOpen) return
-  if (filterSwitching) {
+  const switching = filterSwitching
+  if (switching) {
     filterSwitching = false
-    renderedCount.value = Math.min(BATCH_SIZE, len)
-    nextTick(rebuildMasonry)
-    return
   }
-  if (renderedCount.value < len) {
+  /**
+   * 容器是 v-if（有可见数据才渲染）：面板比数据先打开时，rebuildMasonry 当时
+   * masonryEl 还是 null、瀑布流没 init。数据到位后如果只走 append，瀑布流永远不初始化
+   * —— 卡片会按原生块元素排成一列，且底下的加载哨兵也没人观察（用户实测 2026-10-27）。
+   * 所以这里统一"没实例就整墙重建"：既补上 init，也从第 1 张卡开始画。
+   */
+  const needsRebuild = !masonry.instance.value && len > 0
+  if (switching || needsRebuild) {
+    renderedCount.value = Math.min(BATCH_SIZE, len)
+  } else if (renderedCount.value < len) {
     const from = renderedCount.value
     renderedCount.value = len
-    nextTick(() => appendMasonryItems(from, len))
+    await nextTick()
+    appendMasonryItems(from, len)
   } else if (renderedCount.value > len) {
     // 数据变少（异常回落）：整墙重建兜底
     renderedCount.value = Math.min(BATCH_SIZE, len)
-    nextTick(rebuildMasonry)
+    await nextTick()
+    rebuildMasonry()
   }
+  // 哨兵是 v-if（数据 + hasMore）渲染的：数据到位之前它不在 DOM 里，setup 时只能空手而归。
+  // 这里在 DOM 更新完再挂一次 —— 否则"先开面板、后到数据"时永远等不到翻页（用户实测 2026-10-27）。
+  // 同一元素重复调用会被 setup 里的幂等判断挡掉，不会重复观察。
+  await nextTick()
+  if (switching || needsRebuild) {
+    rebuildMasonry()
+    await nextTick()
+  }
+  setupLoadSentinel()
 })
 watch(() => s.histZoom, () => {
   if (s.historyOpen) nextTick(relayoutMasonry)
+})
+/**
+ * 瀑布流容器是 v-if（有可见数据才出现）。数据来得比面板晚时，容器挂载那一刻
+ * 才是"可以 init"的时机 —— 只靠数据版本 watch 里的 nextTick 仍可能早于子节点挂载完。
+ * 观察到容器出现就补一次重建（已有实例时 rebuildMasonry 内部有 rebuilding 守卫，
+ * 不会重复初始化）。
+ */
+watch(masonryEl, (el) => {
+  if (!el || !s.historyOpen) return
+  if (masonry.instance.value) return
+  nextTick(rebuildMasonry)
 })
 // 显示异常开关：切换会过滤/恢复无产物的卡 → 整墙重建（含批量勾选层）
 watch(() => s.histShowError, () => {
   if (s.historyOpen) {
     renderedCount.value = Math.min(BATCH_SIZE, ui.histVisible.value.length)
-    nextTick(rebuildMasonry)
+    nextTick(() => {
+      rebuildMasonry()
+      // 过滤后卡片数可能不足一屏：哨兵还在，但瀑布流重建过；重新确认观察器仍然指向当前元素
+      nextTick(setupLoadSentinel)
+    })
   }
 })
 onBeforeUnmount(() => {

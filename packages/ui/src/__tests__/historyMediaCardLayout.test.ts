@@ -106,5 +106,29 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const staticClass = tag.match(/\sclass="([^"]*)"/)?.[1] ?? ''
     expect(staticClass, '静态 class 里残留 hover:bg-hover → 悬停时品牌底被灰底盖掉').not.toMatch(/hover:bg-hover/)
   })
+
+  it('批量模式下点整张卡片就能选中（不是只能点左上角圆钮）', () => {
+    // 三条卡片路径（媒体卡 / 图片卡 / 无产物卡）都必须走同一个 onCardClick
+    // 卡片本体（异常卡 / 媒体卡 / 图片卡 / 裂图重建）都必须走 onCardClick；
+    // 左上角圆钮是唯一允许自己处理 click 的（它要 stopPropagation 防止重复切换）。
+    const viaHandler = modalsArea.match(/addEventListener\('click', \(\) => onCardClick\(item\)\)/g)?.length ?? 0
+    expect(viaHandler, '卡片点击没全部接 onCardClick（批量模式下点卡片不会选中）').toBe(4)
+    expect(modalsArea, 'onCardClick 在批量模式下没有切换选中').toMatch(
+      /function onCardClick\(item: HistItem\)[\s\S]{0,220}histBatchMode[\s\S]{0,120}toggleHistSelected\(item\.id\)/,
+    )
+  })
+
+  it('数据比面板晚到时，加载哨兵会在渲染后补挂观察（否则滚到底不翻页）', () => {
+    // 哨兵是 v-if；setupLoadSentinel 必须在数据版本变化 + 重建后各补一次
+    const dataWatch = modalsArea.slice(modalsArea.indexOf("watch(() => s.histDataVersion"), modalsArea.indexOf("watch(() => s.histZoom"))
+    expect(dataWatch, '数据到位后没有补挂哨兵观察器').toMatch(/setupLoadSentinel\(\)/)
+    expect(dataWatch, '瀑布流没实例时没有整墙重建（会排成一列且哨兵无人观察）').toMatch(/needsRebuild/)
+
+    const rebuild = modalsArea.slice(modalsArea.indexOf('function rebuildMasonry'), modalsArea.indexOf('/** 只把新增一批'))
+    expect(rebuild, '整墙重建后没有补挂哨兵观察器').toMatch(/setupLoadSentinel\(\)/)
+
+    const setup = modalsArea.slice(modalsArea.indexOf('function setupLoadSentinel'), modalsArea.indexOf('function teardownLoadSentinel'))
+    expect(setup, '同一哨兵重复 setup 会重复观察').toMatch(/observedSentinel/)
+  })
 })
 
