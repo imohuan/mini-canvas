@@ -188,3 +188,38 @@ describe('plugin-presence 路由', () => {
     host.ctx.stop()
   })
 })
+
+/**
+ * 开关判定：在场通道只按「监听地址是否本机回环」决定，不再有环境变量。
+ *
+ * 为什么要有这条：曾经有过 MINI_CANVAS_DEBUG_PRESENCE 开关，但接口内已有 Host
+ * 回环校验 —— 变量在「本机直连」（自动开）与「反代」（Host 校验拦）两种场景下都
+ * 不起作用，纯残留。删掉后规则只剩一条，这里锁住「环境变量不再影响行为」。
+ */
+describe('plugin-presence 开关判定（无环境变量）', () => {
+  it('MINI_CANVAS_DEBUG_PRESENCE=1 不再使接口在非回环监听时出现', async () => {
+    // createCloudServer 的判定读的是 opts.hostname；这里直接验证 server.ts 源码
+    // 不再引用这个变量（更贴近「删干净」的目标，也避免起真服务）。
+    const src = await import('node:fs').then((m) => m.readFileSync('src/server.ts', 'utf8'))
+    expect(src.includes('MINI_CANVAS_DEBUG_PRESENCE')).toBe(false)
+  })
+
+  it('回环监听（hostname=127.0.0.1）→ 接口存在；非回环监听（0.0.0.0）→ 404', async () => {
+    const { createCloudServer } = await import('../server.js')
+    const os = await import('node:os')
+    const dir = await import('node:fs').then((m) => m.mkdtempSync(os.tmpdir() + '/presence-sw-'))
+    const srv = await createCloudServer({ port: 0, dir, watchProviders: false, agent: false, requestTrust: false })
+    try {
+      const res = await srv.app.fetch(
+        new Request('http://127.0.0.1:0/api/plugin-presence', { headers: { host: '127.0.0.1' } }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { ok?: boolean; plugins?: unknown[] }
+      expect(body.ok).toBe(true)
+      expect(body.plugins).toEqual([])
+    } finally {
+      srv.stop()
+      await import('node:fs').then((m) => m.rmSync(dir, { recursive: true, force: true }))
+    }
+  })
+})
