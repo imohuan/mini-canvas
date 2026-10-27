@@ -85,7 +85,48 @@ function beat(state, message) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-  }).catch(() => {})
+  })
+    .then((res) => {
+      // 后台没开调试开关时这里是 404 —— 不说清，用户会一直盯着「未上报心跳」找不到原因
+      if (!res.ok && !hbWarned) {
+        hbWarned = true
+        console.error(
+          '[watch] 心跳被后台拒绝（HTTP ' + res.status + '）：' +
+            (res.status === 404
+              ? '后台没开启调试在场通道。启动后台前设置 $env:MINI_CANVAS_DEBUG_PRESENCE=1 并重启。'
+              : '后台返回异常。'),
+        )
+      }
+    })
+    .catch(() => {
+      // 连不上（后台没起）：只警告一次，别每 10 秒刷屏
+      if (!hbWarned) {
+        hbWarned = true
+        console.error('[watch] 心跳发不出去（后台没起？' + HEARTBEAT_URL + '）——构建与产物上报不受影响')
+      }
+    })
+}
+
+/**
+ * **启动上报**：把当前 dist 里已有的产物先登记一遍（不构建）。
+ *
+ * 为什么需要：调试页的行来自**产物记录**（`plugin-watch:<名>`），心跳只管「在不在线」。
+ * 只发心跳的话，watch 挂着但一行都不出现，用户会以为脚本没生效（真机踩到）。
+ * dist 还没有产物时也发（只有 t）—— 这样调试页至少能看到这一行，地址在首次构建后补上。
+ */
+async function reportArtifacts(reason) {
+  const { front, server } = presenceProps()
+  try {
+    const res = await fetch(KV_URL, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: { t: Date.now(), ...(front ? { front } : {}), ...(server ? { server } : {}) } }),
+    })
+    console.log('[watch] ' + reason + ' → 产物记录 ' + (res.ok ? 'OK' : '失败 ' + res.status) + ' | front=' + (front || '-'))
+    if (!res.ok) console.error('[watch] 后台拒绝了产物记录（HTTP ' + res.status + '）——检查后台是否在跑、地址是否正确')
+  } catch (err) {
+    console.error('[watch] 产物记录发不出去（后台没起？）：' + String(err?.cause?.code ?? err?.message ?? err))
+  }
 }
 
 /** 正常退出时的告别（最多等 500ms，不阻塞退出） */
@@ -112,6 +153,8 @@ let pending = false
 let debounce = null
 let presenceState = 'watching'
 let presenceMessage = ''
+/** 心跳失败只警告一次（每 10 秒打一遍就是刷屏） */
+let hbWarned = false
 
 async function buildOnce(reason) {
   if (building) {
@@ -137,6 +180,7 @@ async function buildOnce(reason) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ value: { t: Date.now(), ...(front ? { front } : {}), ...(server ? { server } : {}) } }),
     })
+    if (!res.ok) console.error('[watch] 后台拒绝了产物记录（HTTP ' + res.status + '）——检查后台是否在跑、地址是否正确')
     presenceState = 'watching'
     presenceMessage = ''
     console.log(
@@ -189,7 +233,9 @@ console.log('[watch] 改地址：--front <浏览器可访问的地址> / --serve
 console.log('[watch] 心跳 ' + HEARTBEAT_URL + '（实例 ' + INSTANCE + '，' + HEARTBEAT_MS / 1000 + 's）')
 console.log('[watch] Ctrl+C 停止')
 
-// 启动立刻报在线，之后定期心跳（构建期间也照发）
+// 启动：① 把当前 dist 里的产物先登记一遍（调试页的行由此而来）；② 报在线。
+// 之后定期心跳（构建期间也照发）。心跳打不通会在 beat 里打一行提示。
+void reportArtifacts('启动上报')
 beat(presenceState)
 const heartbeatTimer = setInterval(() => beat(presenceState, presenceMessage), HEARTBEAT_MS)
 heartbeatTimer.unref?.()

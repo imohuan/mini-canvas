@@ -215,11 +215,15 @@ onMounted(() => {
 .hrp-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .hrp-table th { text-align: left; padding: 6px 8px; font-size: 11px; font-weight: 700; color: var(--ui-ink-dim, #6b7280); border-bottom: 1px solid var(--ui-line, #e2e5ea); white-space: nowrap; }
 .hrp-table td { padding: 8px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }
-.hrp-table th:nth-child(1) { width: 20%; }
-.hrp-table th:nth-child(2) { width: 10%; }
-.hrp-table th:nth-child(3) { width: 14%; }
-.hrp-table th:nth-child(4) { width: 30%; }
-.hrp-table th:nth-child(5) { width: 16%; }
+.hrp-table th:nth-child(1) { width: 16%; }
+.hrp-table th:nth-child(2) { width: 8%; }
+.hrp-table th:nth-child(3) { width: 12%; }
+.hrp-table th:nth-child(4) { width: 26%; }
+.hrp-table th:nth-child(5) { width: 14%; }
+/* 操作列不裁剪：两个小按钮被 table-layout:fixed + overflow:hidden 裁成「…」（真机截图）。
+   只在最后一列放开裁剪；其余列仍按省略号截断。 */
+.hrp-table td.hrp-act { overflow: visible; white-space: nowrap; }
+.hrp-table td.hrp-act .hrp-mini { padding: 0 7px; }
 .hrp-table tbody tr:hover { background: var(--ui-hover, rgb(0 0 0 / 0.03)); }
 .hrp-nowrap { white-space: nowrap; }
 .hrp-name { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
