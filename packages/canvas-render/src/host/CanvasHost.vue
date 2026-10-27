@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * CanvasHost —— 官方渲染宿主组件：把 VueFlow 装配/数据同步/通用交互全部收进内部，调用方一行渲染。
+ * CanvasHost —— 官方**画布渲染**组件：把 VueFlow 装配/数据同步/通用交互全部收进内部，调用方一行渲染。
  *
  * 解决的问题（见 docs/plan/canvas-host-component-plan.md）：CanvasDemo.vue 那套手写装配(~340行)散落在各 demo，
  * 每个宿主都要重复 provide 令牌 + 自己 mount VueFlow + store↔flow 双向同步。本组件把这些收编并藏起来。
  *
  * 职责边界：
- * - 建内核宿主(createMiniCanvasHost) + 冷启动插件 → 订阅 nodeStore 变化自动重灌渲染态。
+ * - **不启动内核**：内核由外层 <CanvasProvider> 建好并提供 ctx/host；
+ *   本组件只消费基础上下文，订阅 nodeStore 变化自动重灌渲染态。
  * - provide 全套渲染契约令牌(HOST/NODE_REGISTRY/NODE_WRITE/CANVAS_PARAMS/EDGE_VISUAL/EDGE_SELECTION)，
  *   供 BaseNode(壳)/content/边 这些渲染插件组件消费。
  * - 内部装配一个 <VueFlow>：读 themeRegistry 的 nodeShell/edge/edgeDefaultType/background 填给 VueFlow。
@@ -17,28 +18,21 @@
  * 驱动业务操作，经 emit('context-menu') 弹自己的菜单。数据(节点增删/编辑)经 nodeStore 变化自动刷渲染态，
  * 父级/插件 service 改 store 后无需手动同步。
  *
- * 模板结构：本组件占满父容器高度(定位 100%)，内部是 booting/error + canvas-wrap(VueFlow+主题背景)。
+ * 模板结构：本组件占满父容器高度(定位 100%)，内部是准备态/错误态 + canvas-wrap(VueFlow+主题背景)。
  * 父级想加自己的 toolbar/面板，在本组件外层套一层 flex 布局即可。
  */
 import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
-import { type PluginClassLike, type PluginModule, type Disposable } from '@mini-canvas/kernel'
-import { type StorageAdapter, MemoryStorageAdapter, type CanvasNode, type CanvasEdge, type EdgeStoreService, GRAPH_VIEWPORT_KEY } from '@mini-canvas/canvas-data'
+import { type Disposable } from '@mini-canvas/kernel'
+import { type CanvasEdge, type EdgeStoreService, GRAPH_VIEWPORT_KEY } from '@mini-canvas/canvas-data'
 import { findCommandByKeys } from '@mini-canvas/kernel'
-import { NodeRegistry, validateConnection, typeConnectionDef, type ValidationResult } from '@mini-canvas/canvas-data'
-import {
-  createMiniCanvasHost,
-  type CanvasHostHandle,
-  type MiniCanvasApi,
-} from './createMiniCanvasHost'
-import type { PluginManager } from './pluginManager'
-import type { PluginManifest } from './pluginManager'
+import { validateConnection, typeConnectionDef, type ValidationResult } from '@mini-canvas/canvas-data'
+import type { CanvasHostHandle } from './createMiniCanvasHost'
+import type { CanvasHostEmits, CanvasHostRenderProps } from './canvasHostTypes'
+import { useCanvasContext } from '../contracts/canvasContext'
 import type { ViewportState } from '../viewport/viewportService'
 import type { NodeWrite, NodeWritePatch } from '../contracts/nodeRegistryKey'
-import type { CanvasParams } from '../contracts/canvasParamKey'
-import type { EdgeVisual } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState, FlowPoint, HoverFeedback, AimedTarget } from '../contracts/connectionContext'
-import type { CanvasDebug } from '../contracts/debugContext'
 import {
   CANVAS_INTERACTION_SCHEMA,
   resolveCanvasInteraction,
@@ -57,7 +51,7 @@ import { clickNode, clickEdge, clickPane, dragSelectNode } from './selectionInte
 import { RenderEvents, toDragPayload } from './renderEvents'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
-import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
+import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import type { FlowRect } from '../geometry/visibleArea'
 import {
@@ -94,70 +88,21 @@ const log = createV2Logger('canvas-host')
 
 // ==================== props / emits ====================
 
-const props = withDefaults(
-  defineProps<{
-    /** 冷启动插件（顺序即装载序）。宿主负责给全：主题 + 业务节点插件。支持 PluginModule 对象与 Service 类。 */
-    plugins: (PluginModule | PluginClassLike)[]
-    /**
-     * 装配清单冷启动（与 plugins 二选一，给则优先走 manifest：disabled/config 覆盖/同 id 换版本生效）。
-     * 见 createMiniCanvasHost 的 MiniCanvasOptions.manifest。
-     */
-    manifest?: PluginManifest
-    /** 存储后端。缺省内存 adapter（刷新即丢）。想要持久化传 LocalStorageAdapter。 */
-    adapter?: StorageAdapter
-    /** 首次(存储为空)生成默认画布；返回的节点会 replaceAll。 */
-    seed?: () => CanvasNode[]
-    /** 覆盖默认的标题写回实现（BaseNode 就地重命名用）。缺省：改 store data + 落盘。 */
-    nodeWrite?: NodeWrite
-    /** 自定义边外观覆盖（缺省对齐 contract §0）。传响应式对象可实时生效。 */
-    edgeVisual?: Partial<EdgeVisual>
-    /** 浮动端口尺寸覆盖（缺省对齐 contract §0）。BaseNode 读 handle 字段无回落，故需传含全部字段的响应式对象。 */
-    handleVisual?: CanvasParams
-    /** 调试可视化开关覆盖（缺省对齐 DEFAULT_DEBUG_VISUAL，均关）。传响应式对象可实时开关。 */
-    debugVisual?: CanvasDebug
-    /** 吸附带配置覆盖（缺省对齐 DEFAULT_SNAP_ZONE_CONFIG）。传响应式对象可实时调整吸附带。 */
-    snapZoneVisual?: SnapZoneConfig
-    /** 挂到 window 的调试 key；传空则不挂 */
-    windowKey?: string
-    /**
-     * 是否持久化画布视口(zoom+平移)并在下次启动恢复(与 nodes/edges 一样落盘，走 save 的 canvas 域)。
-     * 缺省开。首次(无存档)会对所有节点 fitView 一次让图居中；此后记住用户停的位置，刷新不再重置视野。
-     * 宿主想自己管理初始视口(或不要 viewport 落盘)时设 false。
-     */
-    persistViewport?: boolean
-    /**
-     * 开发态开关（落到 ctx.isDev）：决策 9 的"needs 缺项当场抛错"靠它区分 dev/prod。
-     *
-     * **必须由宿主显式传**（不在这里读 `import.meta.env.DEV`）：实测 canvas-render 是
-     * 独立 workspace 包，vite 的 `import.meta.env` 替换只作用于应用包自身源码，深链进
-     * node_modules/workspace 的 .vue 拿不到替换（读出来是 undefined），于是 dev 判定静默失效
-     * —— 正是"配了却没生效"那类坑。所以@mini-canvas/ui 在 `App.vue` 显式传
-     * `:dev="import.meta.env.DEV"`（应用包自己的 env 替换是可靠的），库侧缺省 false = 生产语义。
-     */
-    dev?: boolean
-  }>(),
-  {
-    persistViewport: true,
-  },
-)
+const props = withDefaults(defineProps<CanvasHostRenderProps>(), {
+  persistViewport: true,
+})
 
-const emit = defineEmits<{
-  /** 右键菜单请求（已在内部 preventDefault）。父级据此弹业务菜单。 */
-  (e: 'context-menu', payload: { kind: 'node' | 'pane' | 'edge'; clientX: number; clientY: number; nodeId?: string; edgeId?: string }): void
-  /** 宿主就绪 */
-  (e: 'ready', host: CanvasHostHandle): void
-  (e: 'boot-error', error: Error): void
-  /** 运行期某插件装载失败(经 ctx:lifecycle-change ERROR 事件上报，非轮询) */
-  (e: 'plugin-issue', payload: { name: string; lifecycle: string }): void
-}>()
+const emit = defineEmits<CanvasHostEmits>()
 
-// ==================== boot 状态 ====================
+// ==================== 基础上下文 / 内层准备状态 ====================
 
-const booting = ref(true)
-const bootError = ref('')
-const hostRef = shallowRef<CanvasHostHandle | undefined>()
-const apiRef = shallowRef<MiniCanvasApi | undefined>()
-const managerRef = shallowRef<PluginManager | undefined>()
+/** 由外层 CanvasProvider 建好的唯一宿主；本组件只消费，不负责创建/停止。 */
+const { host, api, manager } = useCanvasContext()
+const hostRef = shallowRef<CanvasHostHandle>(host)
+
+/** 内层准备状态：订阅/监听接好、CanvasSurface 可以挂载了。 */
+const surfaceReady = ref(false)
+const mountError = ref('')
 /** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 screenToFlow / viewport / pane） */
 const surfaceRef = shallowRef<{
   getViewport?: () => ViewportState
@@ -176,9 +121,9 @@ const surfaceRef = shallowRef<{
 // provide 点已移到 CanvasSurface（boot 完成后才挂载，故能 provide 裸 ctx/host）：
 // 这里只负责**准备**渲染子树要用的数据与回调，不 provide。
 
-// 节点展示注册表：宿主自建，同时传入 boot(createMiniCanvasHost)。
+// 节点展示注册表：由 Provider 建好的宿主持有；本组件只读取。
 // 插件 setup 经 ctx.get('nodeRegistry') 把 content 组件注册进来；BaseNode(壳)经此解析 content 段。
-const registry = new NodeRegistry()
+const registry = host.nodeRegistry
 
 // 节点写回（标题就地重命名 / 卡片 resize 尺寸）：缺省 = 改内核 nodeStore 并落盘。
 // nodeStore.subscribe 会自动刷新渲染态，无需像旧 demo 那样手动 map 改 nodes 数组。
@@ -1247,21 +1192,6 @@ let clipboardWriteBound = false
 
 onMounted(async () => {
   try {
-    const { host, api, manager, exposeToWindow } = await createMiniCanvasHost({
-      adapter: props.adapter ?? new MemoryStorageAdapter(),
-      // manifest 与 plugins 二选一(createMiniCanvasHost 内 manifest 优先)
-      manifest: props.manifest,
-      coldPlugins: props.plugins,
-      nodeRegistry: registry,
-      seedDefault: props.seed,
-      // dev 开关：**只认显式传参**（见 props.dev 的注释 —— 本包内读 import.meta.env 拿不到替换）
-      dev: props.dev,
-    })
-    hostRef.value = host
-    apiRef.value = api
-    managerRef.value = manager
-    if (props.windowKey) exposeToWindow(props.windowKey)
-
     // 画布交互配置：读当前值 + 订阅设置面板改动实时生效（unmount 随 subs 统一回收）
     const settingsStore = host.ctx.get<{ get(key: string): unknown; onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
     Object.assign(interactionSettings, resolveCanvasInteraction((key) => settingsStore.get(key)))
@@ -1294,7 +1224,7 @@ onMounted(async () => {
     // 主题 + nodeTypes 装配
     applyTheme()
 
-    // 初始灌入：seed/restore 发生在 subscribe 建立之前(createMiniCanvasHost 内部)，
+    // 初始灌入：seed/restore 发生在 Provider 建宿主时（早于本组件订阅），
     // 不会触发回调，这里主动同步一次把当前 store 节点渲染出来。
     syncFromStore()
 
@@ -1388,18 +1318,17 @@ onMounted(async () => {
     window.addEventListener('visibilitychange', resetViewportMoveIfIdle)
 
     // 读存档视口(仅需持久化时)：有 → 首次挂载后恢复到停的位置；无 → fitView 基线。
-    // 在 booting=false(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
+    // 在 surfaceReady=true(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
     if (props.persistViewport) {
       const vp = await host.save.get<ViewportState>(GRAPH_VIEWPORT_KEY, 'canvas')
       savedViewport.value = vp
     }
 
-    booting.value = false
+    surfaceReady.value = true
     emit('ready', host)
   } catch (err) {
-    bootError.value = err instanceof Error ? err.message : String(err)
-    booting.value = false
-    emit('boot-error', err instanceof Error ? err : new Error(String(err)))
+    mountError.value = err instanceof Error ? err.message : String(err)
+    surfaceReady.value = true
   }
 })
 
@@ -1435,24 +1364,17 @@ function flushSave(): void {
   if (h.save.isDirty()) void h.save.flush()
 }
 
-// 暴露给父级：boot 后拿 host/api 驱动业务(建节点/撤销/读 nodeStore 等)，拿 ready 判断是否可用。
-// 父级经 ref 拿实例：`const c = ref(); c.value.host` / `c.value.host?.command.execute(...)`。
+// 暴露给父级：拿 host/api 驱动业务(建节点/撤销/读 nodeStore 等)，拿 ready 判断画布是否可交互。
+// 启动成功/失败由外层 CanvasProvider 负责，这里只说“画布自己的订阅是否准备完毕”。
 defineExpose({
-  get host(): CanvasHostHandle | undefined {
-    return hostRef.value
-  },
-  get api(): MiniCanvasApi | undefined {
-    return apiRef.value
-  },
-  /** 目标 D 统一安装句柄(manager.install/uninstall/reload/list/applyManifest) */
-  get manager(): PluginManager | undefined {
-    return managerRef.value
-  },
+  host,
+  api,
+  manager,
   get ready(): boolean {
-    return !booting.value && !bootError.value
+    return surfaceReady.value && !mountError.value
   },
   get bootErrorText(): string {
-    return bootError.value
+    return mountError.value
   },
 })
 
@@ -1480,18 +1402,18 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointercancel', resetViewportMoveIfIdle, true)
   window.removeEventListener('blur', resetViewportMoveIfIdle)
   window.removeEventListener('visibilitychange', resetViewportMoveIfIdle)
-  void hostRef.value?.save.flush()
-  hostRef.value?.stop()
+  // 只落盘，不停止内核：生命周期归 CanvasProvider，且它会在子组件全部卸载后再 stop。
+  void host.save.flush()
 })
 </script>
 
 <template>
   <div class="chost">
-    <div v-if="booting" class="chost-status">正在启动内核…</div>
-    <div v-else-if="bootError" class="chost-status chost-err">启动失败：{{ bootError }}</div>
+    <div v-if="!surfaceReady" class="chost-status">正在准备画布…</div>
+    <div v-else-if="mountError" class="chost-status chost-err">画布初始化失败：{{ mountError }}</div>
 
     <div v-else class="chost-canvas">
-      <!-- 内层渲染子树宿主：boot 完成后才挂载，向渲染组件 provide 裸 ctx/host（见 CanvasSurface.vue） -->
+      <!-- 内层渲染子树宿主：订阅接好后挂载，向渲染组件 provide 裸 ctx/host（见 CanvasSurface.vue） -->
       <CanvasSurface
         ref="surfaceRef"
         :host="hostRef"

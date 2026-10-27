@@ -13,7 +13,7 @@
  * "Failed to resolve component: ClientOnly"，然后把它当成未知原生元素直接渲染出来
  * （等于白写，还留一条控制台告警）。画布宿主本来就只在浏览器里跑，不需要这层 SSR 兜底。
  */
-import { CanvasHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, CanvasProvider } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { galleryDemoNodesPlugin } from './demoNodes'
@@ -48,7 +48,9 @@ const adapter = makeAdapter()
 
 <template>
   <div class="gcs-stage" :style="{ height: (height ?? 300) + 'px' }">
-    <CanvasHost :plugins="plugins" :adapter="adapter" :persist-viewport="false" />
+    <CanvasProvider :plugins="plugins" :adapter="adapter">
+      <CanvasHost :persist-viewport="false" />
+    </CanvasProvider>
   </div>
 </template>
 

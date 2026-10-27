@@ -3,7 +3,7 @@
      位置：应用装配层 —— 挂画布 + 用 @ready 拿到的句柄驱动业务 -->
 <script setup lang="ts">
 import { ref, shallowRef } from 'vue'
-import { CanvasHost, type CanvasHostHandle } from '@mini-canvas/canvas-render'
+import { CanvasHost, CanvasProvider, type CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
@@ -43,26 +43,29 @@ function toggleEdgeColor() {
 
 <template>
   <div style="width: 100vw; height: 100vh">
-    <CanvasHost
-      ref="canvas"
+    <CanvasProvider
       :plugins="plugins"
       :adapter="adapter"
-      :edge-visual="edge"
-      :handle-visual="handle"
       :dev="import.meta.env.DEV"
       window-key="MiniCanvasHostDemo"
-      @ready="onReady"
-      @plugin-issue="(p) => console.warn('插件出问题了：', p.name, p.lifecycle)"
     >
-      <!-- ⑥ 业务 UI 放 #ui 里：这里的组件能 useCanvasRender() 读 ctx -->
-      <template #ui>
-        <div class="demo-bar">
-          <button @click="addText">加文本节点</button>
-          <button @click="undo">撤销</button>
-          <button @click="toggleEdgeColor">换连线颜色</button>
-        </div>
-      </template>
-    </CanvasHost>
+      <CanvasHost
+        ref="canvas"
+        :edge-visual="edge"
+        :handle-visual="handle"
+        @ready="onReady"
+        @plugin-issue="(p) => console.warn('插件出问题了：', p.name, p.lifecycle)"
+      >
+        <!-- ⑥ 业务 UI 放 #ui 里：这里的组件能 useCanvasRender() 读 ctx -->
+        <template #ui>
+          <div class="demo-bar">
+            <button @click="addText">加文本节点</button>
+            <button @click="undo">撤销</button>
+            <button @click="toggleEdgeColor">换连线颜色</button>
+          </div>
+        </template>
+      </CanvasHost>
+    </CanvasProvider>
   </div>
 </template>
 

@@ -8,7 +8,7 @@
 // 预览只需要"有节点壳可看"，改用同目录 demoNodePlugin.ts 里的最小示例节点类型；
 // 真实 text/image 节点请装对应插件包。
 import { ref } from 'vue'
-import { CanvasHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, CanvasProvider } from '@mini-canvas/canvas-render'
 import type { CanvasNode } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '../src/index'
 import { demoNodePlugin } from './demoNodePlugin'
@@ -34,13 +34,13 @@ const ready = ref(false)
 <template>
   <div class="preview-root">
     <div v-if="ready" class="bar">plugin-theme-default 独立预览（壳+端口 / 连线 / 背景全来自本插件 · 装配逻辑全在 CanvasHost）</div>
-    <CanvasHost
-      class="canvas-area"
+    <CanvasProvider
       :plugins="[themeDefaultPlugin, demoNodePlugin]"
       :seed="seedDefault"
       window-key="MiniCanvasThemePreview"
-      @ready="ready = true"
-    />
+    >
+      <CanvasHost class="canvas-area" @ready="ready = true" />
+    </CanvasProvider>
   </div>
 </template>
 

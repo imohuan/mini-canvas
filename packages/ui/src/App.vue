@@ -2,13 +2,15 @@
 // App.vue —— 画布应用的**装配层**。
 //
 // 各区域已组件化（components/areas/*），这里只负责：
-//   1. 挂 CanvasShell 布局壳并把区域组件放进对应插槽
-//   2. 挂真实 CanvasHost（插件/数据/命令不动）
-//   3. 全局键盘（Esc / Ctrl+/）
+//   1. 用 CanvasProvider 启动唯一内核、提供基础上下文（插件/存储/窗口句柄都在这）
+//   2. 挂 CanvasShell 布局壳并把区域组件放进对应插槽
+//   3. 挂真实 CanvasHost（只画画布，不再启动）
+//   4. 全局键盘（Esc / Ctrl+/）
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
-import { CanvasHost, SettingsHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, CanvasProvider, SettingsHost } from '@mini-canvas/canvas-render'
 import { SlotHost } from '@mini-canvas/canvas-render'
+import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
 import { createDefaultStorageAdapter, resolveAppPlugins, seedDefaultCanvas } from './assembly'
 import CanvasShell from './components/CanvasShell.vue'
@@ -42,8 +44,9 @@ const miniMapPlaced = ref(false)
 let miniMapResizeOb: ResizeObserver | null = null
 let miniMapMutationOb: MutationObserver | null = null
 let miniMapRetryTimer: ReturnType<typeof setInterval> | null = null
-function onCanvasReady(host: unknown): void {
+function onProviderReady(host: CanvasHostHandle): void {
   setReadyHost(host)
+  ui.setHostEl({ host })
   void ui.onReady()
 }
 function placeMiniMap(): void {
@@ -146,6 +149,9 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   ui.applyTheme(s.theme)
+  // 外壳在 Provider ready 之后才出现：小地图容器可能晚于本组件挂载，
+  // 这里盯 ref 本身，元素一出现就摆位，不必等 2 秒兜底轮询。
+  watch(miniMapEl, () => placeMiniMap(), { flush: 'post' })
 })
 watch(() => s.theme, (v) => ui.applyTheme(v))
 onBeforeUnmount(() => {
@@ -168,6 +174,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <CanvasProvider
+    :plugins="plugins"
+    :adapter="adapter"
+    :seed="seedDefaultCanvas"
+    :dev="DEV"
+    window-key="MiniCanvasUI"
+    @ready="onProviderReady"
+  >
   <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
     :right-width="ui.agent.open && ui.agent.docked ? ui.agent.width : 0" :push-status="true" :push-dock="true">
     <template #top-left>
@@ -218,9 +232,9 @@ onBeforeUnmount(() => {
         <!-- 真实画布 -->
         <!-- 函数 ref：字符串 ref("ui.hostEl") 带点号 Vue 绑不上（hostEl 恒 null → 设置改动永远到不了画布）。
              必须经 setHostEl 写 ref.value；直接 `ui.hostEl = el` 只会覆盖属性、写不进 ref（绑定仍失效）。 -->
-        <CanvasHost :ref="ui.setHostEl" :plugins="plugins" :adapter="adapter" :seed="seedDefaultCanvas"
+        <CanvasHost
           :edge-visual="ui.cfg.edge" :handle-visual="ui.cfg.handle" :debug-visual="ui.cfg.debug"
-          :snap-zone-visual="ui.cfg.snapZone" :dev="DEV" window-key="MiniCanvasUI" @ready="onCanvasReady">
+          :snap-zone-visual="ui.cfg.snapZone">
           <template #ui>
             <SettingsHost v-if="s.settingsOpen" />
             <!-- Agent 面板外壳：放在 #ui 里（它在 <CanvasHost> 渲染子树内），
@@ -254,6 +268,7 @@ onBeforeUnmount(() => {
     <AssetUploadHost />
 
   </CanvasShell>
+  </CanvasProvider>
 </template>
 
 <style scoped>
