@@ -17,6 +17,7 @@ import { applyRowClick } from './assetSelection'
 import { registerPendingSave, unregisterPendingSave } from './pendingSave'
 import { importPack, isNodePackFile, resolvePackBase, VERSION_SEP } from './nodePack'
 import { uniqueLabel } from './nodeLabel'
+import { queueUploads, type PendingUpload } from './assetUploadBus'
 
 const log = createV2Logger('config')
 
@@ -1576,17 +1577,33 @@ function createUi() {
     }
   }
 
-  /** 批量保存到资产（把产物地址登记进资产库，addByUrl 按地址去重） */
-  async function batchSaveAssets(): Promise<void> {
+  /**
+   * 批量保存到资产 —— 与右键菜单「收藏到资产库」**同一条路**（用户口径 2026-10-27）。
+   *
+   * 旧实现直接 POST /api/history/batch-save-assets 静默入库：用户点了没有任何弹窗，
+   * 既不能选保存位置、也不能改名/打标签，看起来就像"按钮没反应"。
+   * 现在把选中记录的产物贴进 assetUploadBus，由 AssetUploadHost 打开左侧同一个上传弹窗，
+   * 用户确认后才落库（去重、文件夹、标签都沿用上传弹窗那套）。
+   */
+  function batchSaveAssets(): void {
     const ids = [...state.histSelectedIds]
     if (ids.length === 0) return
-    try {
-      const r = await histReq<{ saved: number }>('/api/history/batch-save-assets', { ids })
-      showToast('已保存 ' + r.saved + ' 项到资产')
-      state.histSelectedIds = []
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '保存失败')
+    const picked = state.historyItems.filter((h) => h.id && ids.includes(h.id))
+    const items: PendingUpload[] = []
+    for (const e of picked) {
+      const url = e.urls?.[0]
+      if (!url) continue
+      // 文件名：沿用产物地址里的后缀（上传弹窗据此判类型）；认不出就不硬补
+      const ext = url.split('?')[0]?.split('.').pop()?.toLowerCase() ?? ''
+      const safeExt = /^(png|jpe?g|webp|gif|mp4|mov|webm|mp3|wav|m4a|aac|ogg)$/.test(ext) ? '.' + ext : ''
+      const name = (e.title || 'history') + '-' + (e.id?.slice(0, 6) ?? 'item') + safeExt
+      items.push({ url, name })
     }
+    if (items.length === 0) {
+      showToast('选中的记录没有可保存的产物')
+      return
+    }
+    queueUploads(items)
   }
 
   /**

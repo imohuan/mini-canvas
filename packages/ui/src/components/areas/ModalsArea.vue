@@ -17,6 +17,15 @@ import { createApp, h, type Component } from 'vue'
 
 const ui = useUi()
 const s = ui.state
+
+/**
+ * 评级相关 UI 的开关（用户口径 2026-10-27：「评级功能相关 UI 隐藏掉，不删除，直接隐藏即可」）。
+ *
+ * 评级目前是占位（归档时一律写 passed），摆出来的筛选与批量按钮只是假控件。
+ * 这里保留全部逻辑与样式，只把入口收起来；将来真做了审核流程，把 true 改回来即可。
+ */
+const SHOW_RATING_UI = false
+
 const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? AudioLines : ImageIcon)
 
 /**
@@ -494,8 +503,10 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
          * 已经记过的（新记录）不覆盖 —— 后端量出来的值更准，也避免二次跳动。
          */
         const syncFromMedia = (): void => {
-          const w = el.videoWidth || 0
-          const h = el.videoHeight || 0
+          // 视频元素才有 videoWidth/height；音频没有可视尺寸，只补时长
+          const v = el as HTMLVideoElement
+          const w = !isAudio ? v.videoWidth || 0 : 0
+          const h = !isAudio ? v.videoHeight || 0 : 0
           const durSec = Number.isFinite(el.duration) ? el.duration : 0
           if (w > 0 && h > 0) {
             if (!item.media) item.media = {}
@@ -914,19 +925,23 @@ watch(() => s.shortcutsOpen, async (open) => {
             <input v-model="s.histShowError" type="checkbox" class="hist-error-toggle" aria-label="显示异常记录" />
             显示异常<span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-chip px-1 text-[11px]">{{ ui.histErrorCount.value }}</span>
           </label>
-          <AxDropdown v-model="s.histRatingOpen" placement="bottom-end" menu-width="140px">
-            <template #trigger><button
-                class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
-                aria-label="所有评级">{{ s.histRating }}
-                <ChevronDown :size="14" />
-              </button></template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem v-for="r in ['所有评级', '已通过', '待审核', '已拒绝']" :key="r" @click="s.histRating = r; close()">{{ r }}
-                </AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+          <!-- 评级筛选：UI 已隐藏（用户口径 2026-10-27：评级功能还没做，别摆一个假控件）。
+               逻辑与样式保留，要恢复时把 v-if 改成 true 即可。 -->
+          <template v-if="SHOW_RATING_UI">
+            <AxDropdown v-model="s.histRatingOpen" placement="bottom-end" menu-width="140px">
+              <template #trigger><button
+                  class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
+                  aria-label="所有评级">{{ s.histRating }}
+                  <ChevronDown :size="14" />
+                </button></template>
+              <template #default="{ close }">
+                <AxMenu>
+                  <AxMenuItem v-for="r in ['所有评级', '已通过', '待审核', '已拒绝']" :key="r" @click="s.histRating = r; close()">{{ r }}
+                  </AxMenuItem>
+                </AxMenu>
+              </template>
+            </AxDropdown>
+          </template>
           <span class="h-4 w-px bg-line"></span>
           <button
             class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
@@ -963,7 +978,9 @@ watch(() => s.shortcutsOpen, async (open) => {
         <div class="flex items-center gap-2">
           <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
             aria-label="批量删除" @click="ui.batchDeleteHistory()">删除</button>
-          <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
+          <!-- 批量评级：UI 已隐藏（逻辑保留，见 SHOW_RATING_UI 注释） -->
+          <button v-if="SHOW_RATING_UI"
+            class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
             aria-label="批量评级" @click="ui.batchRateHistory('passed')">评级</button>
           <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
             aria-label="保存到资产" @click="ui.batchSaveAssets()">保存到资产</button>

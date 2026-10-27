@@ -17,6 +17,7 @@ const videoPreview = readFileSync(
   'utf-8',
 )
 const modalsArea = readFileSync(new URL('../components/areas/ModalsArea.vue', import.meta.url), 'utf-8')
+const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
 
 describe('VideoPreview 按实测宽度切两套 UI', () => {
   it('用 ResizeObserver 量自己的宽度（宽度的真源在组件内部，不由宿主传）', () => {
@@ -168,6 +169,34 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, '详情弹窗没有提示词').toMatch(/detailItem\.prompt/)
     expect(modalsArea, '详情弹窗没有生成参数').toMatch(/detailItem\.values/)
     expect(modalsArea, '详情弹窗没有参考素材').toMatch(/detailItem\.resources/)
+  })
+
+  it('评级相关 UI 隐藏（逻辑保留，只收起入口）', () => {
+    expect(modalsArea, '缺少评级 UI 开关常量').toMatch(/const SHOW_RATING_UI = false/)
+    // 筛选下拉与批量评级按钮都必须受开关控制
+    expect(modalsArea, '评级筛选仍无条件渲染').toMatch(/<template v-if="SHOW_RATING_UI">[\s\S]{0,400}aria-label="所有评级"/)
+    expect(modalsArea, '批量评级按钮仍无条件渲染').toMatch(/<button v-if="SHOW_RATING_UI"[\s\S]{0,220}aria-label="批量评级"/)
+    // 逻辑不许删：以后要恢复，只是把开关改成 true
+    expect(uiSource, '评级筛选逻辑被删了（要求隐藏不删除）').toMatch(/histRating:/)
+    expect(uiSource, '批量评级逻辑被删了（要求隐藏不删除）').toMatch(/batchRateHistory/)
+  })
+
+  it('「保存到资产」走右键菜单同一条上传弹窗（不是静默入库）', () => {
+    const start = uiSource.indexOf('function batchSaveAssets')
+    // 函数体到下一个顶层注释块 / 顶层函数为止（用花括号配平更稳，避免被内部注释截断）
+    let depth = 0
+    let end = start
+    for (let i = uiSource.indexOf('{', start); i < uiSource.length; i++) {
+      if (uiSource[i] === '{') depth++
+      else if (uiSource[i] === '}') {
+        depth--
+        if (depth === 0) { end = i + 1; break }
+      }
+    }
+    const fn = uiSource.slice(start, end)
+    expect(fn, '仍直接调后台静默入库（用户点了看不到上传弹窗）').not.toMatch(/batch-save-assets/)
+    expect(fn, '没有把选中的产物贴进上传总线').toMatch(/queueUploads\(items\)/)
+    expect(fn, '没有从选中记录取产物地址').toMatch(/const url = e\.urls/)
   })
 })
 
