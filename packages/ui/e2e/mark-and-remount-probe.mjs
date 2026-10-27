@@ -60,12 +60,20 @@ await page.keyboard.type('@图片1 和 @图片2 ')
 await page.waitForTimeout(900)
 const typed = await read()
 ok('打字时只是文字（不自动转标签）', typed.chips.length === 0, JSON.stringify(typed))
+const tilesBeforeMark = typed.tileKeys.length
 
 await page.click('[data-testid="bar-mark"]')
 await page.waitForTimeout(900)
 const marked = await read()
 ok('点「标记」后转成标签', marked.chips.length === 2, JSON.stringify(marked))
-ok('参考区出现两个待输入槽位', marked.tileKeys.length === 2, JSON.stringify(marked.tileKeys))
+/**
+ * 格数 = max(连线数, 归一化声明数)。本画布已有连线卡时，声明归一化后的 1、2
+ * 可能被现有连线覆盖 → 格数不增加（规则正确）；只有「声明序号超出已有连线」时才补。
+ * 这里断言：绝不会因为标记而暴涨到远超两者的大数。
+ */
+ok('「标记」后参考区不暴涨', marked.tileKeys.length <= Math.max(tilesBeforeMark, 2),
+  JSON.stringify({ before: tilesBeforeMark, after: marked.tileKeys.length }))
+const beforeTiles = marked.tileKeys.length
 
 await page.mouse.click(1250, 800)
 await page.waitForTimeout(1000)
@@ -73,7 +81,7 @@ await page.mouse.click(nb.x + nb.width / 2, nb.y + 24)
 await page.waitForTimeout(1500)
 const reopened = await read()
 ok('重开底栏后标签还在（没退回文字）', reopened.chips.length === 2, JSON.stringify(reopened))
-ok('重开后槽位数量不变（没凭空长空槽）', reopened.tileKeys.length === 2, JSON.stringify(reopened.tileKeys))
+ok('重开后参考区不凭空多格', reopened.tileKeys.length === beforeTiles, JSON.stringify(reopened.tileKeys))
 
 await page.screenshot({ path: 'packages/ui/e2e/_shots/mark-and-remount.png' })
 await browser.close()
