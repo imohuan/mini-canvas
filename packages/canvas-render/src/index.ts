@@ -241,6 +241,15 @@ export { default as MediaFrameOverlay } from './crop/MediaFrameOverlay.vue'
 export * from './vueFlowBridge'
 // 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。
 export { default as CanvasHost } from './host/CanvasHost.vue'
+// 应用最外层的上下文初始化器：建唯一内核宿主，provide 基础画布上下文；没有自己的业务 UI。
+export { default as CanvasProvider } from './host/CanvasProvider.vue'
+export type {
+  CanvasHostBootProps,
+  CanvasHostRenderProps,
+  CanvasContextMenuPayload,
+  CanvasHostEmits,
+  CanvasProviderEmits,
+} from './host/canvasHostTypes'
 // 设置面板数据契约(面板消费的最小 settings 接口)仍归渲染抽象层；成品面板组件 PluginSettingsPanel 已迁 @mini-canvas/ui
 export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
 // 设置内容「标准字段控件渲染器」下发令牌（provide/inject）：默认设置内容 provide，
