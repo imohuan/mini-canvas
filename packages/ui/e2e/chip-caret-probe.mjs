@@ -75,6 +75,11 @@ if ((await chips.count()) < 2) {
  * 4) 真实鼠标点标签，随后立刻打字 —— 打字落在哪，就是"用户看到的光标在哪"。
  *    这比量折叠光标矩形可靠（PM 的 NodeSelection 期间 DOM 光标是浏览器就近给的）。
  */
+/**
+ * 同时校验「选中不能中途丢」：点下后 0~500ms 内必须一直是整颗选中。
+ * 之前的 bug：底栏 watcher 每次点标签都重写整个节点（内容没变），
+ * 选中被销毁、光标先弹到标签前面。现在源头不再产生事务，选中应保持到落光标。
+ */
 const readState = () => page.evaluate(() => {
   const ed = document.querySelector('.nb-shell .ProseMirror')
   const chips = [...ed.querySelectorAll('.resource-chip')].map((c) => c.getAttribute('data-name'))
@@ -88,6 +93,18 @@ const readState = () => page.evaluate(() => {
 
 const target = chips.nth(0)
 const tb = await target.boundingBox()
+// 点击前装一个采样器：记录选中状态在整段时间里有没有被中途清掉
+await page.evaluate(() => {
+  window.__selFrames = []
+  window.__selTimer = setInterval(() => {
+    const ed = document.querySelector('.nb-shell .ProseMirror')
+    if (!ed) return
+    window.__selFrames.push({
+      t: Math.round(performance.now()),
+      selected: !!ed.querySelector('.ProseMirror-selectednode'),
+    })
+  }, 20)
+})
 await page.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2)
 
 // 点击后 200ms 采样一次：这一刻应当是「整颗选中」，还没落光标
@@ -95,8 +112,16 @@ await page.waitForTimeout(200)
 const early = await readState()
 ok('点击后先出现「标签整颗选中」', early.selected === true, JSON.stringify(early))
 
+// 选中态必须一直保持到落光标（中途被清掉 = 又回到"光标先跳到前面"的老毛病）
+const frames = await page.evaluate(() => window.__selFrames)
+const firstSelected = frames.findIndex((f) => f.selected)
+const droppedEarly = firstSelected >= 0 && frames.slice(firstSelected).some((f) => !f.selected && f.t - frames[firstSelected].t < 400)
+ok('选中态中途没有被清掉', firstSelected >= 0 && !droppedEarly,
+  '选中帧=' + frames.filter((f) => f.selected).length + '/' + frames.length)
+
 // 等 0.5s 计时器走完，再打字：字必须落在标签**之后**
 await page.waitForTimeout(900)
+await page.evaluate(() => clearInterval(window.__selTimer))
 await page.keyboard.type('ZZ')
 await page.waitForTimeout(400)
 const after = await readState()

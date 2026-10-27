@@ -1,6 +1,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, type Ref, unref } from "vue";
 import { Schema, type Node as PMNode, type ResolvedPos } from "prosemirror-model";
-import { EditorState, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type Transaction } from "prosemirror-state";
+import { EditorState, Plugin, PluginKey, Selection, TextSelection, type Transaction } from "prosemirror-state";
 import { EditorView, Decoration, DecorationSet } from "prosemirror-view";
 import { schema as baseSchema } from "prosemirror-schema-basic";
 import { keymap } from "prosemirror-keymap";
@@ -197,28 +197,6 @@ export function deleteAtomForward(state: EditorState, dispatch?: (tr: Transactio
     dispatch(state.tr.delete($head.pos, start + hit.to).scrollIntoView())
   }
   return true
-}
-
-/**
- * 点标签后那段「等待落光标」的窗口里，浏览器会把原生光标放到标签**前面**
- * （ProseMirror 的 NodeSelection 本身不可见，浏览器就近给了一个文本光标）。
- * ProseMirror 读到这个 DOM 选区会再派发一次「文本光标在标签前」的事务，
- * 于是用户看到光标「先跳到标签前，再跳到标签后」——两次。
- *
- * 这里判断：这条事务是不是那种噪声？是就别应用它，保持整颗标签选中，
- * 等计时器把光标一次性放到标签之后。
- */
-export function isChipCaretNoise(
-  tr: Transaction,
-  pending: { from: number } | null,
-  current: Selection,
-): boolean {
-  if (!pending) return false
-  if (tr.docChanged || !tr.selectionSet) return false
-  // 上一刻必须是「这颗标签被整颗选中」：用户中途点别处（选区换成别的位置）要放行
-  if (!(current instanceof NodeSelection) || current.from !== pending.from) return false
-  const { selection } = tr
-  return selection.empty && selection.from === pending.from
 }
 
 /** 标签（atom 节点）在父块里的内容偏移区间。 */
@@ -790,6 +768,24 @@ function buildResourceNode(nodeType: any, item: ResourceItem): any {
   })
 }
 
+/**
+ * 这颗标签需要改文档吗？（url / 名字真的变了才需要）
+ *
+ * 为什么单独抽出来（用户 2026-10-27 报「点标签后光标先跳到前面再跳回来」）：
+ * 底栏的标签刷新（replaceResourceThumbByName / refreshChips）会被 watcher 反复调用。
+ * 以前它们无条件 setNodeMarkup —— attrs 一个字没变也算「文档改动」，ProseMirror 会
+ * 重建节点，整颗选中随之销毁，浏览器就把光标就近放到标签**前面**。
+ * 内容相同就绝不产生事务，从这个源头掐掉"先跳前面"的那一步。
+ */
+export function chipAttrsNeedUpdate(
+  attrs: { url?: string | null; name?: string | null; thumbnail_url?: string | null },
+  want: { url?: string | null; name?: string | null },
+): boolean {
+  if ((attrs.url ?? '') !== (want.url ?? '')) return true
+  if (want.name != null && String(attrs.name ?? '') !== String(want.name)) return true
+  return false
+}
+
 export function useEditor(
   editorRef: Ref<HTMLElement | null>,
   props: {
@@ -828,8 +824,6 @@ export function useEditor(
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
   /** 标签点击后的延迟落光标（0.5s）；连点只保留最后一次 */
   let chipClickTimer: ReturnType<typeof setTimeout> | null = null;
-  /** 等待落光标的标签区间（期间把"紧贴标签前"的光标钉回去，避免跳两次） */
-  let pendingChipCaret: { from: number; after: number } | null = null;
 
   // 过滤后的项目
   const filteredItems = ref<ResourceItem[]>([])
@@ -1092,17 +1086,9 @@ export function useEditor(
       const node = view.state.doc.nodeAt(pos)
       if (node && isAtomNode(node.type.name)) {
         const after = pos + node.nodeSize
-        /**
-         * 关键：点下去后浏览器会把光标"就近"落到标签**之前**（原生行为），
-         * 500ms 后我们又把它放到标签后 —— 用户看到光标跳了两次。
-         * 这里记下"正在等待落光标"的标签位置，期间若 PM 把选区变成
-         * 紧贴标签前的文本光标，立刻纠正回等待状态（不闪）。
-         */
-        pendingChipCaret = { from: pos, after }
         if (chipClickTimer) clearTimeout(chipClickTimer)
         chipClickTimer = setTimeout(() => {
           chipClickTimer = null
-          pendingChipCaret = null
           if (!view) return
           try {
             view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, after)))
@@ -1275,13 +1261,6 @@ export function useEditor(
       editable: () => unref(props.editable) !== false,
       dispatchTransaction(transaction) {
         if (!view) return;
-        /**
-         * 点标签后的 0.5s 内，浏览器会把原生光标落到标签**前面**，ProseMirror
-         * 读到后派发一条「文本光标在标签前」的事务 —— 用户看到光标先跳到前、
-         * 再跳到后（两次）。这类纯选区噪声直接丢掉，保持整颗标签选中，
-         * 由 handleResourceClick 的计时器一次性落到标签之后。
-         */
-        if (isChipCaretNoise(transaction, pendingChipCaret, view.state.selection)) return;
         const newState = view.state.apply(transaction);
         view.updateState(newState);
 
@@ -1539,10 +1518,31 @@ export function useEditor(
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return false
     let found = false
+    let changed = false
     const tr = view.state.tr
     view.state.doc.descendants((node, pos) => {
       if (found || node.type.name !== 'resource' || node.attrs.name !== name) return
       found = true
+      /**
+       * 内容没变就一个字都别动（用户 2026-10-27 报：点标签后光标先跳到前面再跳回来）。
+       *
+       * 根因：底栏的标签刷新会反复调用这个函数，以前无条件 setNodeMarkup —— 即使 url
+       * 一模一样，也会重建标签节点、让文档"改"一次。节点一重建，整颗选中就没了，
+       * 浏览器顺手把光标就近放到标签**前面**，0.5s 计时器再把它挪到后面。
+       */
+      if (!chipAttrsNeedUpdate(node.attrs, { url })) {
+        // 文档不动；注册表仍需同步（toDOM 读的是它），这一步不产生事务
+        const reg0 = itemRegistry.get(node.attrs.id)
+        if (!reg0 || reg0.url !== url) {
+          itemRegistry.set(node.attrs.id, {
+            ...(reg0 ?? { id: node.attrs.id, category: node.attrs.category }),
+            url,
+            thumbnail_url: '',
+            name: String(node.attrs.name ?? reg0?.name ?? name),
+          })
+        }
+        return
+      }
       // registry（按节点 id 存）同步 url —— chip 走 renderEditor(registry item) 渲染，
       // 只改 attrs 不改 registry，toDOM 重渲染时缩略图还是旧图（真机踩过）。
       const reg = itemRegistry.get(node.attrs.id)
@@ -1554,9 +1554,10 @@ export function useEditor(
         // 缩略图跟着新 url 重算（旧 thumbnail_url 不清会显示旧图，真机踩过）
         thumbnail_url: '',
       })
+      changed = true
     })
     if (!found) return false
-    view.dispatch(tr)
+    if (changed) view.dispatch(tr)
     return true
   }
 
@@ -1574,15 +1575,27 @@ export function useEditor(
     // 这里用一行**无操作事务**（带标记）逼 ProseMirror 重画这些节点：
     // setNodeMarkup 用原 attrs 也会触发 toDOM 重建（注册表已新，外观即为新）。
     const tr = view.state.tr
+    let changed = false
     view.state.doc.descendants((node, pos) => {
       if (node.type.name !== 'resource') return
       // 刷所有**注册表里有条目**的资源节点：正文标签的身份有两种（@声明的 ref-slot:*、
       // 资源面板插入的节点 id）—— 只刷 ref-slot:* 会漏掉后者（真机踩过：排序后那类
       // 标签的缩略图不更新）。registry 没有的（用户手打的裸引用）不动。
-      if (!itemRegistry.has(String(node.attrs.id ?? ''))) return
+      const item = itemRegistry.get(String(node.attrs.id ?? ''))
+      if (!item) return
+      /**
+       * 只刷「外观真的变了」的标签。
+       *
+       * 用户 2026-10-27 报「点标签后光标先跳到前面再跳回来」：这个函数被底栏 watcher
+       * 反复调用，以前**无条件**对每颗标签 setNodeMarkup —— attrs 一个字没变也算文档
+       * 改动，节点被重建、整颗选中被销毁，浏览器顺手把光标放到标签前面。
+       * 外观相同就不该产生事务。
+       */
+      if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '' })) return
       tr.setNodeMarkup(pos, undefined, { ...node.attrs })
+      changed = true
     })
-    view.dispatch(tr)
+    if (changed) view.dispatch(tr)
   }
 
 
