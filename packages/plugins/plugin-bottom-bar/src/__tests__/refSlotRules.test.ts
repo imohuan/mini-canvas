@@ -166,6 +166,26 @@ describe('格子数量 = max(连线数, 归一化声明数)（用户 2026-10-27�
   })
 })
 
+describe('拖拽只改显示顺序，序号（slotIndex）不跟图走（用户 2026-10-27）', () => {
+  /**
+   * 参考区是「按类型的有序数组」：拖拽改数组顺序 → 显示位变。
+   * 标签名（图片N）不变，所以 slotIndex 也必须保持不变。
+   */
+  it('b 排到前面后：显示位 1，但它的槽位序号仍是 2', () => {
+    const tiles = mergeRefTiles(
+      [],
+      [
+        { id: 'a', name: '图片1', url: 'a.png', isText: false },
+        { id: 'b', name: '图片2', url: 'b.png', isText: false },
+      ],
+      ['b', 'a'],
+    )
+    expect(tiles.map((t) => t.card?.id)).toEqual(['b', 'a'])
+    expect(tiles.map((t) => t.index)).toEqual([1, 2])
+    expect(tiles.map((t) => t.slotIndex)).toEqual([2, 1])
+  })
+})
+
 describe('参考缺号 → 不许发送（只看连线内容）', () => {
   it('声明 @图片2、连线只有 1 张图 → 不缺（第 1 格有内容，第 2 格待输入）', () => {
     // 第 2 格本身是待输入 → 也算缺（发出去会是空引用）
