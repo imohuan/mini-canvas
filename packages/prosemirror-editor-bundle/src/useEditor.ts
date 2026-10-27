@@ -1,6 +1,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, type Ref, unref } from "vue";
 import { Schema, type Node as PMNode, type ResolvedPos } from "prosemirror-model";
-import { EditorState, Plugin, PluginKey, Selection, TextSelection, type Transaction } from "prosemirror-state";
+import { EditorState, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type Transaction } from "prosemirror-state";
 import { EditorView, Decoration, DecorationSet } from "prosemirror-view";
 import { schema as baseSchema } from "prosemirror-schema-basic";
 import { keymap } from "prosemirror-keymap";
@@ -197,6 +197,28 @@ export function deleteAtomForward(state: EditorState, dispatch?: (tr: Transactio
     dispatch(state.tr.delete($head.pos, start + hit.to).scrollIntoView())
   }
   return true
+}
+
+/**
+ * 点标签后那段「等待落光标」的窗口里，浏览器会把原生光标放到标签**前面**
+ * （ProseMirror 的 NodeSelection 本身不可见，浏览器就近给了一个文本光标）。
+ * ProseMirror 读到这个 DOM 选区会再派发一次「文本光标在标签前」的事务，
+ * 于是用户看到光标「先跳到标签前，再跳到标签后」——两次。
+ *
+ * 这里判断：这条事务是不是那种噪声？是就别应用它，保持整颗标签选中，
+ * 等计时器把光标一次性放到标签之后。
+ */
+export function isChipCaretNoise(
+  tr: Transaction,
+  pending: { from: number } | null,
+  current: Selection,
+): boolean {
+  if (!pending) return false
+  if (tr.docChanged || !tr.selectionSet) return false
+  // 上一刻必须是「这颗标签被整颗选中」：用户中途点别处（选区换成别的位置）要放行
+  if (!(current instanceof NodeSelection) || current.from !== pending.from) return false
+  const { selection } = tr
+  return selection.empty && selection.from === pending.from
 }
 
 /** 标签（atom 节点）在父块里的内容偏移区间。 */
@@ -806,6 +828,8 @@ export function useEditor(
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
   /** 标签点击后的延迟落光标（0.5s）；连点只保留最后一次 */
   let chipClickTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 等待落光标的标签区间（期间把"紧贴标签前"的光标钉回去，避免跳两次） */
+  let pendingChipCaret: { from: number; after: number } | null = null;
 
   // 过滤后的项目
   const filteredItems = ref<ResourceItem[]>([])
@@ -1068,9 +1092,17 @@ export function useEditor(
       const node = view.state.doc.nodeAt(pos)
       if (node && isAtomNode(node.type.name)) {
         const after = pos + node.nodeSize
+        /**
+         * 关键：点下去后浏览器会把光标"就近"落到标签**之前**（原生行为），
+         * 500ms 后我们又把它放到标签后 —— 用户看到光标跳了两次。
+         * 这里记下"正在等待落光标"的标签位置，期间若 PM 把选区变成
+         * 紧贴标签前的文本光标，立刻纠正回等待状态（不闪）。
+         */
+        pendingChipCaret = { from: pos, after }
         if (chipClickTimer) clearTimeout(chipClickTimer)
         chipClickTimer = setTimeout(() => {
           chipClickTimer = null
+          pendingChipCaret = null
           if (!view) return
           try {
             view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, after)))
@@ -1243,6 +1275,13 @@ export function useEditor(
       editable: () => unref(props.editable) !== false,
       dispatchTransaction(transaction) {
         if (!view) return;
+        /**
+         * 点标签后的 0.5s 内，浏览器会把原生光标落到标签**前面**，ProseMirror
+         * 读到后派发一条「文本光标在标签前」的事务 —— 用户看到光标先跳到前、
+         * 再跳到后（两次）。这类纯选区噪声直接丢掉，保持整颗标签选中，
+         * 由 handleResourceClick 的计时器一次性落到标签之后。
+         */
+        if (isChipCaretNoise(transaction, pendingChipCaret, view.state.selection)) return;
         const newState = view.state.apply(transaction);
         view.updateState(newState);
 
