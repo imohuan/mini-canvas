@@ -5,6 +5,51 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-28，CanvasProvider + 外壳插槽：三层扩展点一次接通）
+
+用户口径（多轮评审定稿）：上下文初始化放到最外层（类 n-config-provider），**不做兼容**；
+首次启动接受整页 loading；抽屉扩展是“完整页签”，外壳按钮走命令控制抽屉。
+
+**根因**：ctx 一直由 `CanvasHost` 在自己子树里 provide，外壳（左抽屉 / 状态条 / 底栏）是它的
+兄弟节点拿不到 ctx —— 插件想插进外壳只能靠 Teleport 桥 + DOM 锚点，各写一遍、还各自踩时序。
+
+**落地**（commit da570359 / e8e20f0f / aa4c77d5 / e57b14b5 / 5c72c6dd / 12de93b0 / ff433759）：
+
+- `CanvasProvider`（canvas-render）：唯一 `createMiniCanvasHost` 启动点，provide 基础上下文
+  `{ ctx, host, api, manager }`；ready 前整页 loading，失败显示错误槽；卸载先 flush 再在
+  `onUnmounted` 里 stop（保证子组件先拆）。启动期间已卸载 → 就地 stop，不挂上下文。
+- `CanvasHost` 纯画布化：不再建内核/NodeRegistry/stop 宿主，改从 `useCanvasContext()` 取
+  host 并用 `host.nodeRegistry`；props 只剩渲染参数。全部旧调用点一次迁完
+  （packages/ui / theme-gallery / theme-default demo / docs 示例），**无兼容分支**。
+- 两层上下文：外壳用 `useCanvasContext()`（只认 Provider，不回退）；
+  画布内继续 `useCanvasRender()`。读配置类的 helper（ui 目录 / 取色 / 控制栏尺寸）走
+  `useCanvasContextOrRender()`，保住仓库里大量只 provide 渲染上下文的旧单测。
+- 外壳插槽：`shell.status.end` / `shell.dock.start` / `shell.dock.end` 直接挂 `SlotHost`；
+  插件 `ctx.slots.register` 即出现、卸载即消失（不再 Teleport / 找 DOM）。
+  新增 `shell-slots-check.mjs` 真机回归（8/8 PASS）。
+- 左抽屉“插件页”：`shell.drawer.tabs` + `meta.panel`；宿主管 active/onSelect/host
+  （DrawerHost 窄接口）、保留 canvas/assets id、插件卸载自动回画布；
+  `openDrawerTab` 成为唯一切页签入口（资产页自动拉清单），收起再展开不再强制回画布。
+  外壳按钮经三条命令控制抽屉：`shell:open-drawer` / `shell:open-drawer-tab` / `shell:toggle-drawer`。
+
+**顺带修掉的两个通用 bug**（e2e 抓到的，与迁移本身无直接关系）：
+
+1. **撤销栈凭空多一条**：图片加载后按 naturalWidth 自动补卡片尺寸走了可撤销写入口，
+   页面一打开就多出“自动测量”历史（两次 Ctrl+Z 退不掉建节点）。新增
+   `ops.writeMeasured`（= doc.updateNodeRuntime：落盘、不进撤销栈），并把“节点上已存动作
+   与当前一致且无参数”的底栏 barValues 写盘跳过（选中→取消不再凭空多一条历史）。
+2. **控制台 Vue warn**：SlotHost 给 occupant 下发 class/data-slot-*，fragment/teleport 根
+   继承不了 → `CanvasProvider` 改单根 + `display:contents`，GalleryOverlay / CtrlDragOverlay /
+   NodeTaskOverlay / NodeBottomBar / MiniMapOverlay 显式 `inheritAttrs: false`。
+
+**验证**：canvas-render **503**、ui **450**、bottom-bar **227**（新增无噪声写盘 7 条）、
+node-image **139**（新增 measured 2 条）、mini-map 21、theme-gallery 9；四包 typecheck 干净；
+真机 canvas-e2e **52/52**（零 error、撤销两步全过）、shell-slots-check **8/8**；
+codegraph index 已更新。
+
+**边界**：外壳槽只有基础上下文（无 flow/renderNodes）；SettingsHost 仍留在 CanvasHost 内；
+Provider 每个画布实例只能一个；抽屉页签必须有 meta.panel，否则忽略并 warn。
+
 ### 追记（2026-10-27，生成历史卡片方案 lab：流式卡片 + 卡外信息）
 
 用户口径（三轮迭代后定稿）：只要**流式（瀑布流）卡片**，列表/表格类方案全删；
