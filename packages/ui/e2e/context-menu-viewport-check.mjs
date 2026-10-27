@@ -124,6 +124,9 @@ async function check(viewport) {
     log(needsScroll ? 'PASS 长菜单在面板内部滚动' : 'PASS 菜单无需滚动')
   }
 
+  // 二级菜单要真的**能用**：从入口行滑到右/左侧面板并点一项，菜单必须关闭（不是只把盒子挪进屏）
+  // 这一段放在画面里的二级入口检查之后，见下方 submenu 段落。
+
   // 悬停「节点包」入口行 → 二级菜单
   const subTrigger = main.locator('.ctx-menu-item[aria-haspopup="menu"]', { hasText: '节点包' }).first()
   if (await subTrigger.count() === 0) {
@@ -153,6 +156,26 @@ async function check(viewport) {
     failed++
   } else {
     log('PASS 二级菜单在视口内')
+  }
+
+  // 真实鼠标从入口行滑到二级项（跨过中间 4px 空隙）再点击：二级菜单应可点中并收掉整组菜单
+  const firstSubItem = sub.locator('.ctx-menu-item').first()
+  const targetBox = await firstSubItem.boundingBox()
+  const rowBox = await subTrigger.boundingBox()
+  if (targetBox && rowBox) {
+    await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2)
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 16 })
+    await page.waitForTimeout(250)
+    const stillOpen = await page.locator('.ctx-menu.ctx-submenu').count()
+    await page.mouse.click(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2)
+    await page.waitForTimeout(500)
+    const left = await page.locator('.ctx-menu').count()
+    if (stillOpen === 0 || left !== 0) {
+      log(`FAIL 二级菜单点击链路：滑过去时还开着=${stillOpen}，点完残留=${left}`)
+      failed++
+    } else {
+      log('PASS 二级菜单可点击且点完收起')
+    }
   }
 
   await page.close()
