@@ -27,7 +27,9 @@
 **验证**：plugin-context-menu **75/75**（新增 menuPlacement 9 条几何契约，含旧算法越界用例）、
 typecheck 干净、build 通过；ui `vue-tsc` 干净、themeColorHygiene 2/2；
 真机 Chromium `packages/ui/e2e/context-menu-viewport-check.mjs` 在 1024×640 / 900×600 /
-1440×900 / 1024×460 / 560×640 五种窗口全绿（主菜单四边 ≥8px、二级菜单翻转后仍在屏内、padding 10px）。
+1440×900 / 1024×460 / 560×640 五种窗口全绿（主菜单四边 ≥8px、二级菜单翻转后仍在屏内、padding 10px、
+从入口行滑到翻转后的二级项能点中且整组收起）。该脚本抓的是**真实几何**；偶发“找不到空白画布”
+是因为开发服务/画布首帧未就绪，脚本已改为等 `.vue-flow` 挂载并按底栏排除取点，连跑两次稳定 PASS。
 
 
 ### 追记（2026-10-27，底栏「翻译 / 提示词优化」改成可配置 AI 按钮）
