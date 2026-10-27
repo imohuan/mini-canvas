@@ -14,7 +14,42 @@ import {
   judgeSlotDrop,
   dropVerdictMessage,
   hitSlotAtPoint,
+  normalizeRefSlots,
 } from '../refSlots'
+
+describe('声明序号归一化（用户口径 2026-10-27）', () => {
+  /**
+   * 为什么需要：正文写 `@图片1 @图片9` 时，按原序号保留会撑出 9 个格子；
+   * 归一化成 图片1、图片2 后，格子数 = 声明数，缩略图也能按「第 N 项」取。
+   */
+  it('同类型按出现顺序重编，跨类型互不影响', () => {
+    const out = normalizeRefSlots([
+      { key: 'image:1', kind: 'image', index: 1 },
+      { key: 'image:9', kind: 'image', index: 9 },
+      { key: 'image:3', kind: 'image', index: 3 },
+      { key: 'audio:5', kind: 'audio', index: 5 },
+    ])
+    expect(out.renamed.map((r) => r.slot.key)).toEqual(['image:1', 'image:9', 'image:3', 'audio:5'])
+    expect(out.renamed.map((r) => r.index)).toEqual([1, 2, 3, 1])
+    expect(out.map.get('image:9')).toBe(2)
+    expect(out.map.get('image:3')).toBe(3)
+    expect(out.map.get('audio:5')).toBe(1)
+  })
+
+  it('已经是 1..n 时不动（幂等）', () => {
+    const out = normalizeRefSlots([
+      { key: 'image:1', kind: 'image', index: 1 },
+      { key: 'image:2', kind: 'image', index: 2 },
+    ])
+    expect(out.renamed.map((r) => r.index)).toEqual([1, 2])
+  })
+
+  it('空输入 → 空结果', () => {
+    const out = normalizeRefSlots([])
+    expect(out.renamed).toEqual([])
+    expect(out.map.size).toBe(0)
+  })
+})
 
 describe('@ 标签解析', () => {
   it('三种中文写法都能认出来，并保持出现顺序', () => {

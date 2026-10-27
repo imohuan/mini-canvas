@@ -52,6 +52,34 @@ export function refSlotKey(kind: RefSlotKind, index: number): string {
 }
 
 /**
+ * 把声明序号**归一化**成 1..n（用户口径 2026-10-27）。
+ *
+ * 为什么需要：正文里写 `@图片1 @图片9` 时，若按原序号保留就会撑出 9 个格子；
+ * 归一化后变成 图片1、图片2 —— 序号连续、格子数量 = 声明数量，
+ * 缩略图规则也退化成「该类型数组第 N 项」，不用维护两套编号。
+ *
+ * 规则：同类型按**出现顺序**重编 1..n；不同类型各自从 1 开始，互不影响。
+ * 已经是 1..n 时结果不变（幂等）。
+ *
+ * @returns `renamed` 保留原顺序的「原槽位 → 新序号」；`map` 用原 key 反查新序号
+ */
+export function normalizeRefSlots(slots: ReadonlyArray<RefSlotRef>): {
+  renamed: Array<{ slot: RefSlotRef; index: number }>
+  map: Map<string, number>
+} {
+  const seq: Record<string, number> = {}
+  const map = new Map<string, number>()
+  const renamed = slots.map((slot) => {
+    seq[slot.kind] = (seq[slot.kind] ?? 0) + 1
+    const index = seq[slot.kind]
+    map.set(slot.key, index)
+    return { slot, index }
+  })
+  return { renamed, map }
+}
+
+
+/**
  * 从正文里认出所有槽位（去重、保持出现顺序）。
  * @param options.allowAv 是否认「@音视频」（设置里可关）
  */
