@@ -15,7 +15,7 @@
  * 6. 失败重试：默认 3 轮（含第一次）；网络错 / 5xx / 429 退避重试，
  *    4xx 参数类错误一次判死（重试也不会成功）。
  */
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { registerEventName, withAdminToken } from '@mini-canvas/canvas-base'
 
 /** 一条可配置的 AI 按钮 */
 export interface AiActionConfig {

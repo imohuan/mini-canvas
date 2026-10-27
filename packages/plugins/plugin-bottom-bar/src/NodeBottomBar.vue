@@ -62,6 +62,9 @@ import {
   loadAiActions,
   requestAiText,
   resolveAgentBaseUrl,
+  normalizeAiActions,
+  AI_ACTIONS_CHANGED_EVENT,
+  type AiActionsChangedPayload,
   DEFAULT_AI_ICON,
   type AiActionConfig,
 } from './aiActions'
@@ -745,6 +748,24 @@ async function reloadAiActions(): Promise<void> {
 reloadAiActions()
 const offAiActions = ctx.on('ctx:plugin-installed', () => void reloadAiActions())
 
+/**
+ * 设置页保存成功 → **实时生效**（用户口径 2026-10-27：「保存之后并没有实时生效，
+ * 只有我重新触发这个下拉菜单它才生效」）。监听广播：
+ * - 载荷带清单（**哪怕空数组** = 用户删光/全隐藏）→ 直接采用，**零延迟**；
+ * - 没带载荷（别的标签页/别的客户端改的）→ 立即重拉一次云端清单。
+ * 两条路径都推进 aiLoadSeq 水位，在途的旧响应作废。
+ */
+const offAiActionsChanged = ctx.on(AI_ACTIONS_CHANGED_EVENT, (payload?: AiActionsChangedPayload) => {
+  // 载荷带清单（哪怕空数组 = 用户把按钮全关/删光）→ 直接采用；
+  // 没带（跨标签页广播）→ 立即重拉云端。两种路径都推进水位，作废在途旧响应。
+  if (Array.isArray(payload?.actions)) {
+    aiLoadSeq += 1
+    aiActions.value = normalizeAiActions(payload.actions)
+    return
+  }
+  void reloadAiActions()
+})
+
 /** 底栏右侧渲染的 AI 按钮（enabled 才出；icon 缺省给星形） */
 const aiButtons = computed(() => aiActions.value.filter((a) => a.enabled).map((a) => ({ ...a, icon: a.icon || DEFAULT_AI_ICON })))
 
@@ -847,6 +868,7 @@ onBeforeUnmount(() => {
   if (aiFlushPending) { aiFlushPending = false; flushAiPrompt() }
   aiAbort?.abort()
   offAiActions.dispose()
+  offAiActionsChanged.dispose()
 })
 
 // ===== 「看图」@ 素材槽位（用户口径 2026-10-25）=====
@@ -1497,9 +1519,10 @@ function onGlobalLeave(el: Element): void {
     data-testid="node-bottom-bar"
     @pointerdown.stop
   >
-    <!-- 一排 pill（参考图顶行：+参考 / 标记；全屏态隐藏「参考 / 标记」，只留右上角全屏按钮）。
-         展开时按钮 absolute 定位到右上角（原来是 pills 行内右侧——隐藏左侧后行空了，白占一行）。 -->
-    <div class="nb-pills">
+    <!-- 一排 pill（参考图顶行：+参考 / 标记）。全屏态整个行不渲染（VueDraggable 的
+         force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
+         行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
+    <div v-if="!expanded" class="nb-pills">
       <button
         v-if="!expanded"
         class="nb-pill"
@@ -1523,17 +1546,19 @@ function onGlobalLeave(el: Element): void {
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>
       </button>
-      <button
-        class="nb-expand nb-icon-btn"
-        type="button"
-        :title="expanded ? '收起为浮动底栏' : '展开为大窗口'"
-        :aria-label="expanded ? '收起' : '展开'"
-        :aria-expanded="expanded"
-        @click.stop="expanded = !expanded"
-      >
-        <span aria-hidden="true" v-html="expanded ? ICON_COLLAPSE : ICON_EXPAND" />
-      </button>
     </div>
+
+    <!-- 全屏按钮：钉在面板右上角（不依赖 pills 行） -->
+    <button
+      class="nb-expand nb-icon-btn"
+      type="button"
+      :title="expanded ? '收起为浮动底栏' : '展开为大窗口'"
+      :aria-label="expanded ? '收起' : '展开'"
+      :aria-expanded="expanded"
+      @click.stop="expanded = !expanded"
+    >
+      <span aria-hidden="true" v-html="expanded ? ICON_COLLAPSE : ICON_EXPAND" />
+    </button>
 
     <!--
       参考素材 = **一行**（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。

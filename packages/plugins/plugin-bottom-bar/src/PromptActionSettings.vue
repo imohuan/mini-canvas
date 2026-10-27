@@ -20,6 +20,8 @@ import {
   saveAiActions,
   normalizeAiActions,
   resolveAgentBaseUrl,
+  AI_ACTIONS_CHANGED_EVENT,
+  type AiActionsChangedPayload,
   DEFAULT_AI_ACTIONS,
   TEMPLATE_VARS,
   AI_ICON_PRESETS,
@@ -156,6 +158,13 @@ async function save(): Promise<void> {
     }
     cloudSnapshot.value = JSON.parse(JSON.stringify(draft.value)) as AiActionConfig[]
     saved.value = true
+    // 保存成功 = **广播**给底栏（用户口径 2026-10-27：保存要实时生效，不等重挂）。
+    // 带上完整清单：本页底栏直接采用（零延迟）；别的标签页收到后按 baseUrl 自行重拉。
+    const payload: AiActionsChangedPayload = {
+      actions: JSON.parse(JSON.stringify(draft.value)) as AiActionConfig[],
+      ...(baseUrl() ? { baseUrl: baseUrl() } : {}),
+    }
+    ctx.emit(AI_ACTIONS_CHANGED_EVENT, payload)
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
   } finally {
