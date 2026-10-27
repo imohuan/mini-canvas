@@ -11,9 +11,12 @@
  *   SSR 渲染不到 hover 之后的状态。）
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import Tooltip from '../Tooltip.vue'
+
+const SOURCE = readFileSync(new URL('../Tooltip.vue', import.meta.url), 'utf-8')
 
 function render(props: Record<string, unknown>, slots: Record<string, unknown> = {}): Promise<string> {
   const app = createSSRApp({
@@ -40,5 +43,27 @@ describe('Tooltip：默认形态', () => {
   it('content 为空且没给 #content 插槽 → 气泡条件判空（默认不会显示）', async () => {
     const html = await render({}, { default: () => 'a' })
     expect(html).not.toContain('tlt-bubble')
+  })
+})
+
+/**
+ * 气泡文本必须完整可读（用户口径 2026-10-27，附截图）：底栏「还缺 图片1、 图片2、…」
+ * 这类长提示以前被 max-width 260px + white-space: nowrap 卡住 —— 宽度到上限就停止变宽，
+ * 单行内容只能横向溢出，右侧整段被裁（实测 84 字提示单行 803px，只显示到 520px）。
+ * 约束：宽度仍封顶（max-width），但到顶后必须换行，不许再丢字。
+ */
+describe('Tooltip：长文本完整显示（换行 + 宽度上限）', () => {
+  it('气泡允许换行（white-space 不再写死 nowrap），到 max-width 就折行', () => {
+    const bubble = SOURCE.slice(SOURCE.indexOf('.tlt-bubble {'), SOURCE.indexOf('}', SOURCE.indexOf('.tlt-bubble {')))
+    expect(bubble).toMatch(/max-width:/)
+    expect(bubble).toMatch(/white-space:\s*normal\b/)
+    expect(bubble).toMatch(/overflow-wrap:\s*anywhere\b/)
+    expect(bubble).not.toMatch(/white-space:\s*nowrap\b/)
+    expect(bubble).not.toMatch(/overflow:\s*hidden\b/)
+  })
+
+  it('行高比字号高一档（两行起也读得清，行间不贴脸）', () => {
+    const bubble = SOURCE.slice(SOURCE.indexOf('.tlt-bubble {'), SOURCE.indexOf('}', SOURCE.indexOf('.tlt-bubble {')))
+    expect(bubble).toMatch(/line-height:\s*1\.6\b/)
   })
 })

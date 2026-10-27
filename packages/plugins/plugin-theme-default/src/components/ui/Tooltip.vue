@@ -156,15 +156,20 @@ const hasContent = computed(() => Boolean(props.content))
 .tlt-bubble {
   position: fixed;
   z-index: 100001;
+  /* 长提示必须完整可读（用户口径 2026-10-27，附截图）：宽度仍封顶，但到顶必须折行 ——
+     以前 nowrap + 260px 一叠加，单行内容只能横向溢出、右侧整段被裁。
+     overflow-wrap:anywhere 兜住没有空格的超长串（路径 / URL 一类）。 */
   max-width: 260px;
+  max-width: min(560px, calc(100vw - 16px));
   padding: 4px 8px;
   border-radius: 6px;
   background: var(--ui-tip, rgb(0 0 0 / 0.9));
   color: var(--ui-tip-ink, #fff);
   box-shadow: 0 4px 6px -1px var(--ui-scrim-soft, rgb(0 0 0 / 0.1));
   font-size: 12px;
-  line-height: 16px;
-  white-space: nowrap;
+  line-height: 1.6;
+  white-space: normal;
+  overflow-wrap: anywhere;
   pointer-events: none;
 }
 .tlt-arrow {
