@@ -711,7 +711,7 @@ watch(() => s.shortcutsOpen, async (open) => {
             <ArrowDownUp :size="14" /> {{ s.histSortDesc ? '时间倒序' : '时间正序' }}
           </button>
           <button
-            class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
+            class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors"
             :class="s.histBatchMode ? 'bg-brand text-primary-ink hover:bg-brand hover:opacity-90' : 'hover:bg-hover'"
             aria-label="批量操作" @click="toggleBatchMode">
             <ListChecks :size="16" /> {{ s.histBatchMode ? '退出批量' : '批量操作' }}

@@ -95,9 +95,16 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('批量模式的主按钮 hover 不退成灰底白字（用户实测：按钮像消失了）', () => {
-    const btn = modalsArea.slice(modalsArea.indexOf('aria-label="批量操作"') - 500, modalsArea.indexOf('aria-label="批量操作"'))
+    const at = modalsArea.indexOf('aria-label="批量操作"')
+    const btn = modalsArea.slice(at - 500, at)
     expect(btn, '批量按钮仍会在 hover 时套上 hover:bg-hover（白字落在浅灰底上）').not.toMatch(/'bg-brand text-primary-ink'/)
     expect(btn, '批量按钮 hover 时没有保持品牌底').toMatch(/hover:bg-brand/)
+    // 静态 class 里的 hover:bg-hover 排在生成 CSS 后面，会盖住 hover:bg-brand：
+    // 它只能出现在「非批量」分支里（三元表达式内），不能写死在 class 上。
+    // 从按钮标签里只抽「静态 class=」这一个属性（:class 三元里允许出现 hover:bg-hover）
+    const tag = btn.slice(btn.lastIndexOf('<button'))
+    const staticClass = tag.match(/\sclass="([^"]*)"/)?.[1] ?? ''
+    expect(staticClass, '静态 class 里残留 hover:bg-hover → 悬停时品牌底被灰底盖掉').not.toMatch(/hover:bg-hover/)
   })
 })
 
