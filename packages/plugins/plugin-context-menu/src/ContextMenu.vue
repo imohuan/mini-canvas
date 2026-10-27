@@ -7,7 +7,8 @@
  * - 中间名称 + hover 时名称上移、下方浮现描述（hasDescription 行才动效）；
  * - 右侧键帽 chips 显示快捷键（mod 已按平台译成 Ctrl/⌘）。
  *
- * 其余行为不变：fixed(clientX,clientY) 翻折定位；按 group 连续分组 + 分隔线；
+ * 定位：fixed(clientX,clientY) 起手，按**实测尺寸**收进视口（四边留 8px），二级菜单右侧放不下
+ * 时翻到左侧；按 group 连续分组 + 分隔线；
  * 点击 props.onSelect(item)；点外部/按 Esc/滚动关闭由宿主插件负责监听。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
