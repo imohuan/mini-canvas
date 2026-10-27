@@ -1203,6 +1203,43 @@ function markRefSlotsInPrompt(): void {
     refreshSlotChips()
   })
 }
+/**
+ * 粘贴图片：走和点击上传**同一条**路（用户口径 2026-10-27）。
+ *
+ * 三步缺一不可：
+ *   ① fillSlotFromFile：建节点 + 连参考线（复用现成链路）；
+ *   ② 在光标处插入标签（refreshChips 只刷已有标签，**不会新建**）；
+ *   ③ 刷新外观（新标签拿到缩略图 / 待输入虚线）。
+ *
+ * 返回 false 时编辑器走默认粘贴（例如粘的是文本、或宿主没有建节点能力）。
+ */
+async function onPasteFiles(
+  files: File[],
+  ctx: { insert(item: ResourceItem): void },
+): Promise<boolean> {
+  const image = files.find((f) => f.type.startsWith('image/'))
+  if (!image) return false
+  // 槽位 = 当前图片格数 + 1（追加到末尾；序号与显示位在这里一致，因为没拖过）
+  const imageTiles = refTiles.value.filter(
+    (t) => t.key.startsWith('card:') || t.key.startsWith('slot:image:'),
+  )
+  const index = Math.max(0, ...imageTiles.map((t) => t.slotIndex || 0)) + 1
+  try {
+    await fillSlotFromFile('image', index, image)
+  } catch {
+    // 上传失败：不吞粘贴，交给默认行为（至少别让用户以为成功了）
+    return false
+  }
+  // 显式插标签：这一步是「粘贴也要出现 chip」的关键
+  ctx.insert({
+    id: 'ref-slot:image:' + index,
+    name: '图片' + index,
+    category: '素材',
+    mediaType: 'image',
+  })
+  refreshSlotChips()
+  return true
+}
 
 
 /**
@@ -1777,6 +1814,7 @@ function onGlobalLeave(el: Element): void {
         :resources="editorResources"
         :resolve-resource="resolveResource"
         :editable="!aiEditorLocked"
+        :on-paste-files="onPasteFiles"
         @update:model-value="onPromptUpdate"
         @click.stop
       />
