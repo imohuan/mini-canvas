@@ -643,6 +643,69 @@ describe('plugin-manager 服务：config 后端切换时的安装名单对齐（
     ])
     ctx.stop()
   })
+
+  it('装「云端连接」：安装过程中就切 config 后端，云端旧名单不含它 → 不能被回灌卸掉，且要写进云端', async () => {
+    // 用户真实场景：ui dev（本地状态）里点安装云端连接。cloud-client 的 apply 会立刻把
+    // config 域切到云端 —— 这一刻安装还没结束、意图还没落盘。
+    // 旧实现会被云端那份旧名单"回灌"，把刚装上的 cloud-client 卸掉；名单里却留着它，
+    // 于是刷新后又装又卸，用户看到的就是"装了没效果、刷新全没了"。
+    const storage = new MemoryStorage()
+    ;(globalThis as { localStorage?: unknown }).localStorage = storage
+    const local = new LocalStorageAdapter(storage as unknown as Storage)
+    const cloud = new MemoryStorageAdapter()
+    // 云端有一份旧名单（不含云端连接）
+    await cloud.set('config:' + INSTALLED_KEY, ['plugin-a'])
+    const catalog = {
+      ok: true,
+      plugins: [
+        { id: 'plugin-a', name: 'a', title: 'A', url: '/plugins/plugin-a/a.js' },
+        {
+          id: 'plugin-cloud-client',
+          name: 'cloud-client',
+          title: '云端连接',
+          url: '/plugins/plugin-cloud-client/plugin-cloud-client.js',
+          format: 'esm',
+        },
+      ],
+    }
+
+    const ctx = new Context()
+    const host = fakeHost()
+    const save = new SaveServiceImpl(local)
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    // 模拟 cloud-client 的 apply：装上那一刻就把 config 切到云端
+    const install = host.manager.install.bind(host.manager)
+    host.manager.install = async (src) => {
+      const name = await install(src)
+      if (name === 'plugin-cloud-client') save.useAdapter('config', cloud)
+      return name
+    }
+    const win: Record<string, unknown> = {}
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl: (async () => ({ ok: true, status: 200, json: async () => catalog })) as unknown as typeof fetch,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    // 先装 plugin-a（写本地）
+    await svc.install('plugin-a')
+    // 再装云端连接：安装中途切后端
+    await svc.install('plugin-cloud-client')
+    // 等切换后的对齐跑完
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(host.installed.has('plugin-cloud-client'), '刚装上的云端连接不能又被卸掉').toBe(true)
+    expect(await cloud.get<string[]>('config:' + INSTALLED_KEY), '云端名单要包含云端连接').toContain(
+      'plugin-cloud-client',
+    )
+    expect(JSON.parse(storage.getItem('config:' + INSTALLED_KEY) ?? '[]'), '本地备份也要包含云端连接').toContain(
+      'plugin-cloud-client',
+    )
+    ctx.stop()
+  })
 })
 
 describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用户实测的多余 404）', () => {
