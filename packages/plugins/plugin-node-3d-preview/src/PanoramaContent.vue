@@ -39,6 +39,7 @@ import {
 import { findUpstreamImageRef, resolveUpstreamImageFields, upstreamSourceFields } from './textureSource'
 import { isDisplayUrl, resolveImageSrc } from './imageRefs'
 import { buildUpstreamApiUrl, readUpstreamMediaPayload } from './upstreamApi'
+import { shouldClearTexture, shouldShowTexture } from './textureLifecycle'
 import { resolveEscapeAction, resolvePanoramaSpec } from './panoramaMode'
 import { beginInteract, endInteract, exitFullscreen, isFullscreen, isInteracting, resetViewToken } from './panoramaSession'
 
@@ -130,7 +131,12 @@ const hostRef = ref<HTMLDivElement | null>(null)
 /** 当前贴的图地址（空 = 显示占位提示） */
 const textureUrl = ref('')
 /** 图上屏后置 true，用来收掉"未贴图"的占位与提示 */
-const hasTexture = ref(false)
+const textureLoaded = ref(false)
+/** 空状态判定：地址为空 / 还没加载完 / 渲染失败，三者任一成立都不算"有画面"。
+ *  这是用户实测的"上游撤掉后旧图还挂着"的根因 —— 只看加载回调的布尔会漏掉"url 变空"。 */
+const hasTexture = computed(() =>
+  shouldShowTexture({ url: textureUrl.value, loaded: textureLoaded.value, error: renderError.value }),
+)
 /** 渲染失败（浏览器不支持 WebGL 等）时降级成文字提示，不让节点白屏 */
 const renderError = ref('')
 // 交互模式：来自会话（按 nodeId 记名，不写 data —— 写进去会落盘/进历史）
@@ -246,12 +252,17 @@ function updateTexture(url: string): void {
   const token = ++textureToken
   if (!url) {
     mat.map = null
+    // 旧贴图也一并释放：只把 map 置空不 dispose，切换多次会累积 GPU 纹理（长会话可见内存上涨）。
+    loadedTexture.value?.dispose()
+    loadedTexture.value = null
     // three 吃不到 CSS 变量：运行时按主题读一次占位色（与节点表面色同源）
     mat.color.set(themeColor('--canvas-node-border', FALLBACK.border))
     mat.needsUpdate = true
-    hasTexture.value = false
+    textureLoaded.value = false
     return
   }
+  // 换图期间先标记"未就绪"：宁可持续显示空态，也不要挂着上一张图冒充新图。
+  textureLoaded.value = false
   ldr.load(
     url,
     (tex) => {
@@ -268,14 +279,14 @@ function updateTexture(url: string): void {
       // 贴图颜色乘数：白色 = 原图不变，无需跟主题
       material.value.color.set('#ffffff') // 主题色白名单: 贴图乘数恒白，改色会污染原图
       material.value.needsUpdate = true
-      hasTexture.value = true
+      textureLoaded.value = true
       renderError.value = ''
     },
     undefined,
     () => {
       if (token !== textureToken) return
       // 图加载失败（会话级 objectURL 刷新后失效等）：回到占位态而非破图
-      hasTexture.value = false
+      textureLoaded.value = false
       renderError.value = ''
     },
   )
@@ -529,6 +540,8 @@ watch(
 
 // 上游/自身图片变化 → 换贴图（挂载前就记录地址，挂载时一次初始化）
 watch(ownImageUrl, (url) => {
+  // 地址被撤掉时主动清掉旧纹理（这是"上游断开但画面还留着图"的直接修法）。
+  if (shouldClearTexture(textureUrl.value, url)) textureLoaded.value = false
   textureUrl.value = url
   if (renderer.value) updateTexture(url)
 })
