@@ -10,6 +10,11 @@
 
 **Spec:** 本文件 §1-§4 同时承担需求、设计与实施计划。用户 2026-10-27 已确认：不做兼容、接受整页 loading、外壳按钮走命令控制抽屉。
 
+> **执行状态（2026-10-28）**：全部任务已完成并验证 —— canvas-render 503 / ui 450 / bottom-bar 227 /
+> node-image 139 全绿，typecheck 干净，canvas-e2e 52/52，shell-slots-check 8/8。逐包提交见
+> da570359 → ff433759 与 STATUS.md 2026-10-28 追记。（步骤复选框已随执行勾选；额外新增的
+> “读入口回退上下文 / inheritAttrs 治理 / 无噪声写盘 / tools 断言调整”等实现细节见 STATUS 追记。）
+
 ## Global Constraints
 
 - 不碰 v1：根 src/ 与 packages/canvas-core 一律不动。
@@ -284,7 +289,7 @@ DrawerHost 接口：
 
 **Interfaces:** 无。
 
-- [ ] **Step 1: 处理工作区已有 WIP**
+- [x] **Step 1: 处理工作区已有 WIP**
 
 Run:
 
@@ -295,7 +300,7 @@ Expected:
 - 只留下与本计划无关、且已确认的 WIP。
 - 未确认的改动先单独提交或备份；不要把本计划建立在别人未提交的半成品上。
 
-- [ ] **Step 2: 跑基线测试**
+- [x] **Step 2: 跑基线测试**
 
 Run:
 
@@ -307,7 +312,7 @@ Expected:
 - 两包基线全绿。
 - 若有既有红项，记录在案，本计划不顺手修无关问题。
 
-- [ ] **Step 3: 更新 codegraph**
+- [x] **Step 3: 更新 codegraph**
 
 Run:
 
@@ -337,7 +342,7 @@ Expected: Index is up to date。
     export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext>
     export function useCanvasContext(): CanvasContext
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create packages/canvas-render/src/contracts/__tests__/canvasContext.test.ts:
 
@@ -376,7 +381,7 @@ Create packages/canvas-render/src/contracts/__tests__/canvasContext.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -384,7 +389,7 @@ Run:
 
 Expected: 模块不存在或 useCanvasContext 未定义。
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 Create packages/canvas-render/src/contracts/canvasContext.ts:
 
@@ -418,7 +423,7 @@ Modify packages/canvas-render/src/index.ts:
     export { CANVAS_CONTEXT_KEY, useCanvasContext } from './contracts/canvasContext'
     export type { CanvasContext } from './contracts/canvasContext'
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run:
 
@@ -427,7 +432,7 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
     git add packages/canvas-render/src/contracts/canvasContext.ts packages/canvas-render/src/contracts/__tests__/canvasContext.test.ts packages/canvas-render/src/index.ts
     git commit -m "feat(canvas-render): add strict base canvas context"
@@ -482,7 +487,7 @@ Expected: 全绿。
       'boot-error': [error: Error]
     }
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create packages/canvas-render/src/host/__tests__/canvasProvider.test.ts:
 
@@ -513,7 +518,7 @@ Create packages/canvas-render/src/host/__tests__/canvasProvider.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -521,7 +526,7 @@ Run:
 
 Expected: CanvasProvider.vue 不存在。
 
-- [ ] **Step 3: 写共享类型**
+- [x] **Step 3: 写共享类型**
 
 Create packages/canvas-render/src/host/canvasHostTypes.ts:
 
@@ -572,7 +577,7 @@ Create packages/canvas-render/src/host/canvasHostTypes.ts:
       'boot-error': [error: Error]
     }
 
-- [ ] **Step 4: 写 CanvasProvider**
+- [x] **Step 4: 写 CanvasProvider**
 
 Create packages/canvas-render/src/host/CanvasProvider.vue:
 
@@ -709,7 +714,7 @@ Create packages/canvas-render/src/host/CanvasProvider.vue:
 - onUnmounted 才 stop，保证 CanvasHost 的订阅先卸载。
 - 如果启动还没返回组件就卸载，disposed 分支会 stop 刚建好的宿主。
 
-- [ ] **Step 5: 导出 Provider 与类型**
+- [x] **Step 5: 导出 Provider 与类型**
 
 Modify packages/canvas-render/src/index.ts:
 
@@ -722,7 +727,7 @@ Modify packages/canvas-render/src/index.ts:
       CanvasProviderEmits,
     } from './host/canvasHostTypes'
 
-- [ ] **Step 6: 跑测试确认通过**
+- [x] **Step 6: 跑测试确认通过**
 
 Run:
 
@@ -731,7 +736,7 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
     git add packages/canvas-render/src/host/CanvasProvider.vue packages/canvas-render/src/host/canvasHostTypes.ts packages/canvas-render/src/host/__tests__/canvasProvider.test.ts packages/canvas-render/src/index.ts
     git commit -m "feat(canvas-render): add CanvasProvider as the only host boot point"
@@ -755,7 +760,7 @@ Expected: 全绿。
     CanvasHost emits = CanvasHostEmits
     CanvasHost 不接收 plugins / adapter / seed / windowKey
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts:
 
@@ -785,7 +790,7 @@ Create packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -793,7 +798,7 @@ Run:
 
 Expected: 当前 CanvasHost 仍含 createMiniCanvasHost。
 
-- [ ] **Step 3: 改 CanvasHost 顶部**
+- [x] **Step 3: 改 CanvasHost 顶部**
 
 在 CanvasHost.vue 的 script 顶部：
 
@@ -826,7 +831,7 @@ Expected: 当前 CanvasHost 仍含 createMiniCanvasHost。
 
 注意：原文件里的 const registry = new NodeRegistry() 整行删除；所有 registry 引用继续用，但现在指向 host.nodeRegistry。
 
-- [ ] **Step 4: 改 onMounted**
+- [x] **Step 4: 改 onMounted**
 
 原 onMounted 从 const { host, api, manager, exposeToWindow } = await createMiniCanvasHost({ ... }) 开始。
 
@@ -893,7 +898,7 @@ Expected: 当前 CanvasHost 仍含 createMiniCanvasHost。
 
 注意：cloud-client/edit-guard 的 ctx.inject 依赖 interaction，仍留在内层，位置和内容不变。
 
-- [ ] **Step 5: 改模板与 defineExpose**
+- [x] **Step 5: 改模板与 defineExpose**
 
 模板把启动态替换成内层准备态：
 
@@ -928,7 +933,7 @@ onBeforeUnmount 里删除：
 
 全文件搜一次 booting、bootError、apiRef、managerRef，确认没有残留。
 
-- [ ] **Step 6: 迁移 App.vue**
+- [x] **Step 6: 迁移 App.vue**
 
 App.vue 改成：
 
@@ -991,7 +996,7 @@ CanvasHost 只保留渲染参数和 #ui：
 
     watch(miniMapEl, () => placeMiniMap(), { flush: 'post' })
 
-- [ ] **Step 7: 迁移 GalleryCanvasStage**
+- [x] **Step 7: 迁移 GalleryCanvasStage**
 
 改成：
 
@@ -1003,7 +1008,7 @@ CanvasHost 只保留渲染参数和 #ui：
       </CanvasProvider>
     </div>
 
-- [ ] **Step 8: 迁移 theme-default demo**
+- [x] **Step 8: 迁移 theme-default demo**
 
 改成：
 
@@ -1019,7 +1024,7 @@ CanvasHost 只保留渲染参数和 #ui：
 
 外层 .preview-root 和 .bar 不变。
 
-- [ ] **Step 9: 迁移 docs 的 CanvasHost 示例**
+- [x] **Step 9: 迁移 docs 的 CanvasHost 示例**
 
 packages/docs/public/examples/canvas-render/canvas-host/src/App.vue：
 
@@ -1044,7 +1049,7 @@ packages/docs/public/examples/canvas-render/canvas-host/src/App.vue：
       </CanvasHost>
     </CanvasProvider>
 
-- [ ] **Step 10: 跑测试与类型检查**
+- [x] **Step 10: 跑测试与类型检查**
 
 Run:
 
@@ -1063,7 +1068,7 @@ Expected:
 - 全绿。
 - 如果组件测试里出现“找不到 CanvasProvider”，说明该测试还只 provide RENDER_CONTEXT_KEY；按 Task 4 改成 provide CANVAS_CONTEXT_KEY。
 
-- [ ] **Step 11: 提交**
+- [x] **Step 11: 提交**
 
     git add packages/canvas-render/src/host/CanvasHost.vue packages/canvas-render/src/host/__tests__/canvasHostPure.test.ts packages/ui/src/App.vue packages/plugins/plugin-theme-gallery/src/GalleryCanvasStage.vue packages/plugins/plugin-theme-default/demo-web/App.vue packages/docs/public/examples/canvas-render/canvas-host/src/App.vue
     git commit -m "refactor(canvas-render): make CanvasHost a pure canvas consumer"
@@ -1086,7 +1091,7 @@ Expected:
     useCanvasContext() -> CanvasContext
     SlotHost 仍收 { slot: string, itemClass?: string }
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create packages/canvas-render/src/components/__tests__/slotHost.test.ts:
 
@@ -1125,7 +1130,7 @@ Create packages/canvas-render/src/components/__tests__/slotHost.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -1133,7 +1138,7 @@ Run:
 
 Expected: SlotHost 仍抛“缺少渲染上下文”。
 
-- [ ] **Step 3: 换消费入口**
+- [x] **Step 3: 换消费入口**
 
 SlotHost.vue：
 
@@ -1157,7 +1162,7 @@ nodeLayoutSettings.ts 的两处：
 
 把注释里“必须在 CanvasHost 渲染子树内”改成“在 CanvasProvider 内或 CanvasHost 内”。
 
-- [ ] **Step 4: 修 uiCatalog 测试**
+- [x] **Step 4: 修 uiCatalog 测试**
 
 packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts 里：
 
@@ -1176,7 +1181,7 @@ packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts 里：
 
 需要的类型从 createMiniCanvasHost / pluginManager 导入。
 
-- [ ] **Step 5: 跑测试与类型检查**
+- [x] **Step 5: 跑测试与类型检查**
 
 Run:
 
@@ -1187,7 +1192,7 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
     git add packages/canvas-render/src/components/SlotHost.vue packages/canvas-render/src/contracts/uiCatalog.ts packages/canvas-render/src/contracts/useThemeColor.ts packages/canvas-render/src/contracts/nodeLayoutSettings.ts packages/canvas-render/src/contracts/__tests__/uiCatalog.test.ts packages/canvas-render/src/components/__tests__/slotHost.test.ts
     git commit -m "refactor(canvas-render): consume base context in slot hosts and helpers"
@@ -1206,7 +1211,7 @@ Expected: 全绿。
     CanvasProvider 持有 plugins / adapter / seed / dev / windowKey
     CanvasHost 只持有渲染参数
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 Create packages/ui/src/__tests__/appCanvasProvider.test.ts:
 
@@ -1244,7 +1249,7 @@ Create packages/ui/src/__tests__/appCanvasProvider.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -1252,7 +1257,7 @@ Run:
 
 Expected: Task 3 变绿前红；Task 3 完成后应绿。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
     git add packages/ui/src/__tests__/appCanvasProvider.test.ts
     git commit -m "test(ui): lock CanvasProvider app wiring"
@@ -1272,7 +1277,7 @@ Expected: Task 3 变绿前红；Task 3 完成后应绿。
     <SlotHost slot="shell.dock.start" />
     <SlotHost slot="shell.dock.end" />
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create packages/ui/src/__tests__/shellSlotMounts.test.ts:
 
@@ -1293,7 +1298,7 @@ Create packages/ui/src/__tests__/shellSlotMounts.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -1301,7 +1306,7 @@ Run:
 
 Expected: 找不到槽。
 
-- [ ] **Step 3: 加挂载点**
+- [x] **Step 3: 加挂载点**
 
 状态条：
 
@@ -1328,7 +1333,7 @@ Expected: 找不到槽。
 - 插件按钮只画按钮本身，不自带 fixed 定位和外层容器。
 - 推挤和居中仍由 CanvasShell 负责。
 
-- [ ] **Step 4: 跑测试与类型检查**
+- [x] **Step 4: 跑测试与类型检查**
 
 Run:
 
@@ -1338,7 +1343,7 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
     git add packages/ui/src/App.vue packages/ui/src/__tests__/shellSlotMounts.test.ts
     git commit -m "feat(ui): expose status and dock shell slots"
@@ -1396,7 +1401,7 @@ Expected: 全绿。
       },
     ): Array<{ dispose(): void }>
 
-- [ ] **Step 1: 写 drawerTabs 测试**
+- [x] **Step 1: 写 drawerTabs 测试**
 
 Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
 
@@ -1443,7 +1448,7 @@ Create packages/ui/src/composables/__tests__/drawerTabs.test.ts:
       })
     })
 
-- [ ] **Step 2: 写 shell 命令测试**
+- [x] **Step 2: 写 shell 命令测试**
 
 Create packages/ui/src/__tests__/shellCommands.test.ts:
 
@@ -1472,7 +1477,7 @@ Create packages/ui/src/__tests__/shellCommands.test.ts:
       })
     })
 
-- [ ] **Step 3: 跑测试确认失败**
+- [x] **Step 3: 跑测试确认失败**
 
 Run:
 
@@ -1481,7 +1486,7 @@ Run:
 
 Expected: 模块不存在。
 
-- [ ] **Step 4: 写 drawerTabs**
+- [x] **Step 4: 写 drawerTabs**
 
 Create packages/ui/src/composables/drawerTabs.ts:
 
@@ -1558,7 +1563,7 @@ Create packages/ui/src/composables/drawerTabs.ts:
       return pluginIds.includes(active) ? active : DRAWER_TAB_CANVAS
     }
 
-- [ ] **Step 5: 写 shellCommands**
+- [x] **Step 5: 写 shellCommands**
 
 Create packages/ui/src/shellCommands.ts:
 
@@ -1596,7 +1601,7 @@ Create packages/ui/src/shellCommands.ts:
       ]
     }
 
-- [ ] **Step 6: 改 ui.ts**
+- [x] **Step 6: 改 ui.ts**
 
 1. state.leftTab 改成 string：
 
@@ -1639,7 +1644,7 @@ Create packages/ui/src/shellCommands.ts:
 
 6. App 的 onProviderReady 已经调用 registerShellCommands；不需要再加一处。
 
-- [ ] **Step 7: 写 ui 状态测试**
+- [x] **Step 7: 写 ui 状态测试**
 
 Create packages/ui/src/__tests__/drawerTabState.test.ts:
 
@@ -1668,7 +1673,7 @@ Create packages/ui/src/__tests__/drawerTabState.test.ts:
       })
     })
 
-- [ ] **Step 8: 跑测试与类型检查**
+- [x] **Step 8: 跑测试与类型检查**
 
 Run:
 
@@ -1680,7 +1685,7 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 9: 提交**
+- [x] **Step 9: 提交**
 
     git add packages/ui/src/composables/drawerTabs.ts packages/ui/src/shellCommands.ts packages/ui/src/composables/__tests__/drawerTabs.test.ts packages/ui/src/__tests__/shellCommands.test.ts packages/ui/src/__tests__/drawerTabState.test.ts packages/ui/src/composables/ui.ts
     git commit -m "feat(ui): add drawer tab logic and shell commands"
@@ -1700,7 +1705,7 @@ Expected: 全绿。
     ctx.slots.occupants('shell.drawer.tabs')
     DrawerHost 通过 props 交给页签按钮和面板
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create packages/ui/src/__tests__/leftDrawerTabs.test.ts:
 
@@ -1731,7 +1736,7 @@ Create packages/ui/src/__tests__/leftDrawerTabs.test.ts:
       })
     })
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -1739,7 +1744,7 @@ Run:
 
 Expected: 当前 LeftDrawer 没有这些内容。
 
-- [ ] **Step 3: 加脚本**
+- [x] **Step 3: 加脚本**
 
 在 LeftDrawer.vue 的 setup 中增加：
 
@@ -1819,7 +1824,7 @@ Expected: 当前 LeftDrawer 没有这些内容。
       { immediate: true },
     )
 
-- [ ] **Step 4: 改页签行**
+- [x] **Step 4: 改页签行**
 
 原有内置按钮改成走统一入口：
 
@@ -1841,7 +1846,7 @@ Expected: 当前 LeftDrawer 没有这些内容。
       :host="drawerHost"
     />
 
-- [ ] **Step 5: 加插件正文**
+- [x] **Step 5: 加插件正文**
 
 原有画布/资产内容不动。在它们之后、底部状态条之前追加：
 
@@ -1856,7 +1861,7 @@ Expected: 当前 LeftDrawer 没有这些内容。
 
 注意：不要把它塞进 s.leftTab === 'assets' 的 v-if 里；它必须是独立分支。
 
-- [ ] **Step 6: 加真机验证**
+- [x] **Step 6: 加真机验证**
 
 Run:
 
@@ -1897,7 +1902,7 @@ Run:
 - 收起再展开仍停在“灵感”（插件还在）；
 - 移除该槽后自动回“画布”。
 
-- [ ] **Step 7: 跑测试与类型检查**
+- [x] **Step 7: 跑测试与类型检查**
 
 Run:
 
@@ -1907,7 +1912,7 @@ Run:
 
 Expected: 全绿。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
     git add packages/ui/src/components/areas/LeftDrawer.vue packages/ui/src/__tests__/leftDrawerTabs.test.ts
     git commit -m "feat(ui): render plugin tabs in the left drawer"
@@ -1926,7 +1931,7 @@ Expected: 全绿。
     ctx.slots.register / ctx.slots.remove
     window.Vue.h
 
-- [ ] **Step 1: 写脚本**
+- [x] **Step 1: 写脚本**
 
 Create packages/ui/e2e/shell-slots-check.mjs:
 
@@ -2029,7 +2034,7 @@ Create packages/ui/e2e/shell-slots-check.mjs:
     await browser.close()
     process.exit(failed ? 1 : 0)
 
-- [ ] **Step 2: 跑 e2e**
+- [x] **Step 2: 跑 e2e**
 
 Run:
 
@@ -2041,14 +2046,14 @@ Run:
 
 Expected: 全部 PASS。
 
-- [ ] **Step 3: 回归既有 e2e**
+- [x] **Step 3: 回归既有 e2e**
 
     node packages/ui/e2e/canvas-e2e.mjs
     node packages/ui/e2e/context-menu-viewport-check.mjs
 
 Expected: 全部 PASS，零 pageerror。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
     git add packages/ui/e2e/shell-slots-check.mjs
     git commit -m "test(ui): cover shell slots and drawer tabs in browser"
@@ -2071,7 +2076,7 @@ Expected: 全部 PASS，零 pageerror。
 
 **Interfaces:** 无新代码接口。
 
-- [ ] **Step 1: 写新手册**
+- [x] **Step 1: 写新手册**
 
 Create docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md，包含：
 
@@ -2114,7 +2119,7 @@ Create docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md，包
     - Provider 每个画布只能一个。
     - 不写 fixed 定位或 z-index。
 
-- [ ] **Step 2: 更新旧文档**
+- [x] **Step 2: 更新旧文档**
 
 在 05-渲染上下文与content组件.md 增加：
 
@@ -2136,7 +2141,7 @@ Create docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md，包
 
 在 00-总览与架构.md 的架构图、入口表里补 CanvasProvider。
 
-- [ ] **Step 3: 更新 STATUS**
+- [x] **Step 3: 更新 STATUS**
 
 在 docs/STATUS.md 顶部增加一条追记：
 
@@ -2146,7 +2151,7 @@ Create docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md，包
     - 验证：各包测试数字、typecheck、e2e 脚本名。
     - 边界：外壳槽不能用 flow 相关能力；SettingsHost 仍在 CanvasHost。
 
-- [ ] **Step 4: 全量验证**
+- [x] **Step 4: 全量验证**
 
 Run:
 
@@ -2173,7 +2178,7 @@ Run:
 
 Expected: build 通过，三条 e2e 全 PASS。
 
-- [ ] **Step 5: 更新 codegraph**
+- [x] **Step 5: 更新 codegraph**
 
 Run:
 
@@ -2182,7 +2187,7 @@ Run:
 
 Expected: Index is up to date。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
     git add docs/代码开发/canvas-render/13-CanvasProvider与外壳插槽.md docs/代码开发/canvas-render/05-渲染上下文与content组件.md docs/代码开发/canvas-render/09-端到端可运行Demo.md docs/代码开发/00-总览与架构.md docs/代码开发/plugins/plugin-theme-default.md packages/docs/canvas-render/canvas-host.md packages/docs/canvas-render/demo.md packages/plugins/README.md docs/STATUS.md
     git commit -m "docs(canvas-render): document provider and shell slots"
