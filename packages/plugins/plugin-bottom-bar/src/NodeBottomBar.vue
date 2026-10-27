@@ -1993,6 +1993,8 @@ function onGlobalLeave(el: Element): void {
   right: 12px;
   top: 8px;
   /* 全屏态：pills 行隐藏后行高没了 —— 按钮改为钉在面板右上角，不占行 */
+  /* 全屏时编辑器宽度溢出到按钮下方 —— 不抬层会被输入框盖住（真机踩过） */
+  z-index: 40;
 }
 
 .nb-icon-btn {
