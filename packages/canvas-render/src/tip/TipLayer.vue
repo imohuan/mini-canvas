@@ -8,6 +8,10 @@
 import { onBeforeUnmount, onMounted, ref } from "vue"
 import { TIP_EVENT } from "./tipService"
 
+// overlay 槽宿主会下发 class/data-slot-*；本组件根是 Teleport，继承不了，
+// 显式关掉避免 Vue warn 刷屏（e2e 有控制台纯净断言）。
+defineOptions({ inheritAttrs: false })
+
 const message = ref("")
 const pos = ref({ x: 0, y: 0 })
 
