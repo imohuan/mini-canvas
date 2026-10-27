@@ -353,6 +353,31 @@ describe('「看图」参考区：一行、没连线也有槽位', () => {
 })
 
 
+describe('待输入参考格：默认图片图标（用户 2026-10-27）', () => {
+  /**
+   * 没有图片的空壳格要显示「图片」形状的占位图标，而不是一个光秃秃的方框；
+   * 同时保留「+」—— 这格的主要操作是点它上传，得让用户看得出能点。
+   */
+  it('空壳格出现 nb-card-placeholder 与「+」', async () => {
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      {
+        barPromptDoc: {
+          type: 'doc',
+          content: [{
+            type: 'paragraph',
+            content: [{ type: 'resource', attrs: { id: 'ref-slot:image:1', name: '图片1' } }],
+          }],
+        },
+      },
+      makeCtx({ selectedIds: ['35'] }),
+    )
+    expect(html).toContain('nb-card-placeholder')
+    expect(html).toContain('nb-card-plus')
+  })
+})
+
 describe('参数区：唯一一个下拉参数直接铺到外面（不套二级面板）', () => {
   const soleSpeaker: BarAction = {
     id: 'test:sole-select',

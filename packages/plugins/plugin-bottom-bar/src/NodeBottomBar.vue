@@ -1031,6 +1031,8 @@ const editorComponentRef = ref<{
   insertResource?(item: ResourceItem): void
   replaceResource?(item: ResourceItem): boolean
   replaceResourceThumbByName?(name: string, url: string): boolean
+  /** 按 id 列表换缩略图（node id 与 ref-slot:kind:N 两种身份都能命中） */
+  replaceResourceThumbByIds?(ids: readonly string[], url: string): boolean
   refreshChips?(): void
   /** 把正文里的 @图片N 文字转成素材标签（「标记」按钮调用） */
   markRefSlots?(): number
@@ -1240,7 +1242,10 @@ function refreshSlotChips(): void {
         renderEditor: editorResources.value[0]?.renderEditor,
       })
       // 删除/断开后该格回到待输入：正文同名标签的缩略图要清掉（否则还显示旧图）
-      editorComponentRef.value?.replaceResourceThumbByName?.(label + Number(i), '')
+      editorComponentRef.value?.replaceResourceThumbByIds?.(
+        ['ref-slot:' + k + ':' + i],
+        '',
+      )
       continue
     }
     // 已填的格子：key = card:<节点id>，序号与内容来自连线素材
@@ -1269,18 +1274,12 @@ function refreshSlotChips(): void {
     const resItem = editorResources.value.find((r) => r.id === nodeId)
     if (resItem) item.renderEditor = resItem.renderEditor
     registerItem(item)
-    // 用户口径（2026-10-26）：拖卡排序 = 「第 N 格现在放哪张图」→ 正文里名字为
-    // 图片N 的标签，缩略图要换成第 N 格当前资源；名字（引用名）绝不能改写。
-    // 按 **attrs.name**（用户当前看到的名字）找 chip、只换图 —— 不依赖 refName
-    // 回灌时序（真机踩过：tiles 新旧错位导致偏移一位）。
-    editorComponentRef.value?.replaceResourceThumbByName?.(item.name, tile.url ?? '')
-    // 已填的格子：用 replaceResource 原地替换正文里对应的标签（虚线→实线 + 缩略图）。
-    // 正文里这个标签有两种身份：@声明转出来的 attrs.id = ref-slot:image:N；
-    // 手工/资源面板插进来的 attrs.id = 上游节点 id（真机踩过：只按 ref-slot 找，
-    // 排序后那类标签的缩略图永远不更新）。两个 id 各刷一次，找不到的那次是 no-op。
-    // 用户口径（2026-10-26）：排序/替换只更新**缩略图**，标签名字（用户提示词里的
-    // 引用名）绝不能被改写 —— name 传 undefined，replaceResource 保留原 attrs.name。
-    const replaced = editorComponentRef.value?.replaceResourceThumbByName?.(item.name, tile.url ?? '')
+    // 用户口径（2026-10-27）：正文里「图片N」的缩略图 = 该类型数组排序后的第 N 项。
+    // 名字绝不改写；id 两种身份都要给：节点 id（资源面板插入的标签）与
+    // ref-slot:kind:slotIndex（「标记」转出来的标签）。
+    const thumbIds = [nodeId, 'ref-slot:' + kind + ':' + tile.slotIndex].filter(Boolean)
+    editorComponentRef.value?.replaceResourceThumbByIds?.(thumbIds, tile.url ?? '')
+    const replaced = true
     // 排序/替换影响所有格子的 refName 编号 —— 逐颗改完统一强制重渲染一次
     //（toDOM 读 registry，registry 已在上面更新；只改 attrs 不触发渲染的漏网之鱼由它兜住）。
     editorComponentRef.value?.refreshChips?.()
@@ -1730,6 +1729,11 @@ function onGlobalLeave(el: Element): void {
             draggable="false"
           />
           <span v-else-if="tile.pending" class="nb-card-pending">
+            <!-- 默认图标：没有图片时显示图片形状的占位（用户口径 2026-10-27） -->
+            <span class="nb-card-placeholder" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="8.5" cy="9.5" r="1.6" /><path d="m21 16-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20" /></svg>
+            </span>
+            <!-- “+” 保留：这格的主要操作是点它上传，必须让用户看得出可以点 -->
             <span class="nb-card-plus" aria-hidden="true">+</span>
             <!-- <span class="nb-card-pending-label">{{ tile.label }}</span>
             <span class="nb-card-pending-tag">待输入</span> -->
@@ -2171,6 +2175,16 @@ function onGlobalLeave(el: Element): void {
 .nb-card-plus {
   font-size: 15px;
   line-height: 1;
+}
+/* 默认图片占位图标（用户口径 2026-10-27：没有图片时显示图片图标） */
+.nb-card-placeholder {
+  display: grid;
+  place-items: center;
+  opacity: 0.9;
+}
+.nb-card-placeholder svg {
+  width: 16px;
+  height: 16px;
 }
 .nb-card-pending-label {
   font-size: 9px;
