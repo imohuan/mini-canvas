@@ -5,6 +5,31 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-27，右键菜单 / 二级菜单完整收进视口）
+
+用户口径（附截图）：右键主菜单底部与底栏完全重合、没有间隔；二级菜单直接弹到屏幕外。
+要求菜单整块留在可视区域内、离边缘有间隔、菜单内部有 padding，并修好二级菜单的弹出逻辑。
+
+**根因**：`ContextMenu.vue` 用「items.length × 44 + 48」估算主菜单高度 —— 带描述/快捷键的行更高，
+估算偏小 → 底边越界（截图里主菜单与底栏重合）；二级菜单横坐标写死「主菜单左缘 + 252px」，
+从不检查右侧空间 → 必出屏。
+
+**落地**（plugin-context-menu，commit `ed584830`）：
+
+- 新增 `menuPlacement.ts`（纯逻辑）：`mainMenuPosition` 用实测尺寸把整块夹在视口内、四边留 8px；
+  `submenuPosition` 优先放主菜单右侧，右侧放不下翻到左侧，两边都窄时选空间大的一侧并夹紧；
+  纵向贴着入口行、越界时上收。
+- `ContextMenu.vue`：渲染后量真实宽高（ResizeObserver 跟随内容/字体/主题），不再估算；
+  容器 padding 6→10px（规范 §2.4）；`max-height: calc(100vh - 16px)` + 面板内部滚动，
+  长菜单不撑出屏幕；主菜单内部滚动时收起二级菜单并重算行偏移（用 rect 差，不用 offsetTop）。
+- `contextMenuPlugin.ts`：页面/画布滚动仍关闭菜单，但菜单**自身**的 overflow 滚动不再误关。
+
+**验证**：plugin-context-menu **75/75**（新增 menuPlacement 9 条几何契约，含旧算法越界用例）、
+typecheck 干净、build 通过；ui `vue-tsc` 干净、themeColorHygiene 2/2；
+真机 Chromium `packages/ui/e2e/context-menu-viewport-check.mjs` 在 1024×640 / 900×600 /
+1440×900 / 1024×460 / 560×640 五种窗口全绿（主菜单四边 ≥8px、二级菜单翻转后仍在屏内、padding 10px）。
+
+
 ### 追记（2026-10-27，底栏「翻译 / 提示词优化」改成可配置 AI 按钮）
 
 **补记（同日，用户反馈「设置里看不到配置」—— 三处叠加的静默失败，已全部修掉）**：
