@@ -829,6 +829,46 @@ export function chipAttrsNeedUpdate(
   return false
 }
 
+/**
+ * 按「节点 id 列表」批量替换资源标签的缩略图（用户口径 2026-10-27）。
+ *
+ * 为什么不再按名字匹配：拖拽排序后标签名不变、指向的图变了，名字匹配会漏/错；
+ * 而正文里的标签有两种身份 ——
+ *   - 资源面板插入：`attrs.id = 节点 id`；
+ *   - 「标记」转出来：`attrs.id = ref-slot:<kind>:<N>`。
+ * 两种都要能命中，所以接口收一个 id 列表。
+ *
+ * **只改 url，绝不改 name**（名字是用户提示词里的引用名）。
+ * 没有命中或内容未变时返回同一个 doc 引用，调用方据此跳过 dispatch。
+ */
+export function applyThumbByIds(doc: PMNode, ids: readonly string[], url: string): PMNode {
+  const set = new Set(ids.filter(Boolean))
+  if (set.size === 0) return doc
+  let changed = false
+  const walk = (node: PMNode): PMNode => {
+    if (
+      node.type.name === 'resource' &&
+      set.has(String(node.attrs.id ?? '')) &&
+      (node.attrs.url ?? '') !== url
+    ) {
+      changed = true
+      return node.type.create({ ...node.attrs, url, thumbnail_url: '' }, null, node.marks)
+    }
+    if (node.childCount === 0) return node
+    const kids: PMNode[] = []
+    let same = true
+    node.forEach((child) => {
+      const next = walk(child)
+      if (next !== child) same = false
+      kids.push(next)
+    })
+    return same ? node : node.type.create(node.attrs, kids, node.marks)
+  }
+  const next = walk(doc)
+  return changed ? next : doc
+}
+
+
 export function useEditor(
   editorRef: Ref<HTMLElement | null>,
   props: {
@@ -1637,6 +1677,29 @@ export function useEditor(
 
   /**
    * 把正文里所有 `ref-slot:*` 标签**就地重渲染**一遍（注册表里已是最新 item）。
++
+  /**
+   * 按 id 列表换缩略图（拖拽排序后按「该类型数组第 N 项」取图时用）。
+   *
+   * 只改 url、不改 name；没有命中或内容未变时不产生事务。
+   */
+  function replaceResourceThumbByIds(ids: readonly string[], url: string): boolean {
+    if (!view) return false
+    const next = applyThumbByIds(view.state.doc, ids, url)
+    if (next === view.state.doc) return false
+    // registry 也同步：chip 走 renderEditor(registry item) 渲染，只改 attrs 不改 registry，
+    // 重渲染时缩略图还是旧图（真机踩过）。
+    const set = new Set(ids.filter(Boolean))
+    for (const id of set) {
+      const reg = itemRegistry.get(id)
+      if (reg) itemRegistry.set(id, { ...reg, url, thumbnail_url: '' })
+    }
+    view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, next.content))
+    return true
+  }
+
+  /**
+   * 把正文里所有 ref-slot 标签**就地重渲染**一遍（注册表里已是最新 item）。
    *
    * 为什么需要整体刷新：底栏的参考内容随连线变化（上传/替换/断开），同一颗「待输入」
    * 标签要跟着从虚线变实线、换名字与缩略图。逐个 replaceResource 也可以，但调用方
@@ -1771,6 +1834,7 @@ export function useEditor(
     insertResource,
     replaceResource,
     replaceResourceThumbByName,
+    replaceResourceThumbByIds,
     refreshChips,
     /**
      * 动态切换可编辑态（AI 生成开始 = false，结束 = true）。

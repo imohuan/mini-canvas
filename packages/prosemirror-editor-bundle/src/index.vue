@@ -92,6 +92,7 @@ const {
   insertResource,
   replaceResource,
   replaceResourceThumbByName,
+  replaceResourceThumbByIds,
   refreshChips,
   setEditable,
 } = useEditor(editorRef, {
@@ -113,6 +114,7 @@ defineExpose({
   insertResource,
   replaceResource,
   replaceResourceThumbByName,
+  replaceResourceThumbByIds,
   refreshChips,
   setEditable,
   /**
