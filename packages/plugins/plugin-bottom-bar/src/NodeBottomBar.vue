@@ -1549,15 +1549,15 @@ function onGlobalLeave(el: Element): void {
     :style="expanded ? { zIndex: LAYERS.nodeToolbar + 1 } : undefined"
     @pointerdown.self="expanded = false"
   >
-  <div
-    class="nb-root nodrag nopan"
-    :class="{ 'is-expanded': expanded }"
-    :style="expanded ? undefined : panelStyle"
-    :role="expanded ? 'dialog' : undefined"
-    :aria-modal="expanded ? 'true' : undefined"
-    data-testid="node-bottom-bar"
-    @pointerdown.stop
-  >
+    <div
+      class="nb-root nodrag nopan"
+      :class="{ 'is-expanded': expanded, 'is-ai-locking': aiEditorLocked }"
+      :style="expanded ? undefined : panelStyle"
+      :role="expanded ? 'dialog' : undefined"
+      :aria-modal="expanded ? 'true' : undefined"
+      data-testid="node-bottom-bar"
+      @pointerdown.stop
+    >
     <!-- 一排 pill（参考图顶行：+参考 / 标记）。全屏态整个行不渲染（VueDraggable 的
          force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
          行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
@@ -1608,7 +1608,6 @@ function onGlobalLeave(el: Element): void {
     -->
     <!-- AI 生成期的流光容器（用户口径 2026-10-27 截图）：框罩住「参考卡列表 + 输入区」
          整块，顶边在卡片列表上方。平时零样式不改布局，仅 is-ai-locking 画描边。 -->
-    <div class="nb-ai-frame" :class="{ 'is-ai-locking': aiEditorLocked }">
     <VueDraggable
       v-if="refTiles.length > 0"
       class="nb-cards"
@@ -1693,7 +1692,6 @@ function onGlobalLeave(el: Element): void {
         @click.stop
       />
     </div>
-    </div> <!-- /nb-ai-frame -->
 
     <!-- 底部行：左模型 + 参数串，右图标·计数·圆形发送（照参考图） -->
     <div class="nb-bottom">
@@ -2291,29 +2289,19 @@ function onGlobalLeave(el: Element): void {
 }
 
 /*
- * AI 生成期间的**流光描边**（用户口径 2026-10-27 截图：框罩住「参考卡列表 + 输入区」
- * 整块，顶边在卡片列表上方）。容器 nb-ai-frame 平时零样式不改布局；is-ai-locking 时
- * ::before 铺 2px 渐变描边 + conic 渐变旋转（@property 让 --ai-sweep 可动画）。
+ * AI 生成期间的**流光描边**（用户口径 2026-10-27 截图）：画在**面板最外缘**，
+ * 位置 = 用户红框处。::before 铺 2px conic 渐变描边旋转（@property 让 --ai-sweep 可动画）。
  * 颜色吃 --ui-accent 跟主题走；prefers-reduced-motion 退化为静态描边（全站动效规矩）。
+ *
+ * 落点（用户口径 2026-10-27 截图）：画在**面板最外缘** —— nb-ai-frame 内部容器已删，
+ * 改为 `.nb-root.is-ai-locking::before`（面板本体），描边沿面板圆角 16px 走一圈，
+ * 位置就是用户红框画的地方。内容区不再有任何额外框。
  */
-.nb-ai-frame.is-ai-locking {
-  /* 内外都有间距（用户口径：内外各留一点，但不改动「参考按钮行 / 卡片 / 输入框」
-     三者之间原有的 8px flex gap）：
-     · padding 10/8/6/10 —— 框到内容（卡片、文字）的**内**边距；
-     · margin -12px（左右与上）—— 把框**向外**扩到面板内容边缘之外，框线离面板边
-       还有 2px 空隙（面板自身 padding 12 - 框外扩 10 = 2px），不再与外边框重合；
-     · 下边 -6px：框底部离底行仍保持一拍空隙，不压发送行。 */
-  position: relative;
-  margin: -12px -10px -6px;
-  padding: 8px 10px 6px;
-  border-radius: 12px;
-}
-.nb-ai-frame.is-ai-locking::before {
+.nb-root.is-ai-locking::before {
   content: '';
   position: absolute;
   inset: -2px;
-  border-radius: 10px;
-  padding: 2px;
+  border-radius: 16px;
   background: conic-gradient(
     from var(--ai-sweep, 0deg),
     transparent 0deg,
@@ -2341,7 +2329,7 @@ function onGlobalLeave(el: Element): void {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .nb-ai-frame.is-ai-locking::before {
+  .nb-root.is-ai-locking::before {
     animation: none;
     /* 光斑停转：退化为静态的柔和描边 */
     background: color-mix(in srgb, var(--ui-accent, #0891b2) 45%, transparent);
@@ -2755,6 +2743,4 @@ function onGlobalLeave(el: Element): void {
   height: 40px;
 }
 </style>
- 
- 
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 主题色白名单: mask 蒙版形状色 */
+    <!-- AI 生成期：流光画在**面板最外缘**（nb-root 的 ::before），不在内容区内部。 -->
