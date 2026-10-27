@@ -52,3 +52,24 @@ export function resolveBottomBarSuppressed(input: BottomBarSuppressInput): boole
     input.handTool
   )
 }
+
+/** 底栏本体是否渲染的输入位（与 NodeBottomBar 模板 v-if 同义） */
+export interface BottomBarShownInput {
+  /** 恰好单选了本节点（useSoleNodeSelected） */
+  soleSelected: boolean
+  /** 本节点类型有可用的底栏动作（nodeBar.list 非空） */
+  hasActions: boolean
+  /** 已经提交过任务、栏暂时收起 */
+  submitted: boolean
+}
+
+/**
+ * 底栏本体（`.nb-root`）该不该渲染。
+ *
+ * **单一事实源**：模板 v-if、Ctrl 快捷键门槛都读这一个判定。
+ * 用户口径（2026-10-27）：快捷键只在「底部状态栏打开」时生效；
+ * 可视化节点没有底栏动作 → 这里 false，哪怕画布级 `.nb-overlay` 外壳还在。
+ */
+export function resolveBottomBarShown(input: BottomBarShownInput): boolean {
+  return input.soleSelected && input.hasActions && !input.submitted
+}

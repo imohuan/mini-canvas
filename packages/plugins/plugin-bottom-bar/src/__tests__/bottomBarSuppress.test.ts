@@ -9,7 +9,7 @@
  * 与"多选 / 框选中 / 本节点 resize 中"并列，不是新的开关。
  */
 import { describe, it, expect } from 'vitest'
-import { resolveBottomBarSuppressed } from '../bottomBarOverlay'
+import { resolveBottomBarShown, resolveBottomBarSuppressed } from '../bottomBarOverlay'
 
 const base = {
   selecting: false,
@@ -56,5 +56,25 @@ describe('底栏压制条件（用户要求：拖拽时不显示）', () => {
 
   it('切回移动工具 → 不压制（抓手那条不是"永久收起"）', () => {
     expect(resolveBottomBarSuppressed({ ...base, handTool: false })).toBe(false)
+  })
+})
+
+describe('底栏本体是否渲染（快捷键门槛与模板共用同一份）', () => {
+  const shown = { soleSelected: true, hasActions: true, submitted: false }
+
+  it('单选 + 有动作 + 未提交 → 渲染（图片/视频节点常态）', () => {
+    expect(resolveBottomBarShown(shown)).toBe(true)
+  })
+
+  it('可视化节点（没有底栏动作）→ 不渲染（本次快捷键误触的根因）', () => {
+    expect(resolveBottomBarShown({ ...shown, hasActions: false })).toBe(false)
+  })
+
+  it('未单选 / 多选 → 不渲染（既有语义）', () => {
+    expect(resolveBottomBarShown({ ...shown, soleSelected: false })).toBe(false)
+  })
+
+  it('已提交任务、栏暂时收起 → 不渲染', () => {
+    expect(resolveBottomBarShown({ ...shown, submitted: true })).toBe(false)
   })
 })

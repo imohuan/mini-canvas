@@ -55,6 +55,35 @@ export function ctrlDragNodeState(input: {
 }
 
 /**
+ * Ctrl 键按下时，要不要进入选择态（纯判定，Node 可测）。
+ *
+ * 用户口径（2026-10-27）：**只有底栏真的显示**才触发。
+ *
+ * 这里刻意喂 `barShown`（底栏本体是否渲染），不喂「有没有选中节点」或
+ * 「画布上有没有 .nb-overlay 外壳」—— 可视化节点（type='ui'）没有任何底栏动作，
+ * 但它的 overlay 外壳照样存在（NodeBottomBarOverlay 只判单选）。把外壳当底栏
+ * 就会在可视化节点上误触（真机复现过）。
+ */
+export function canEnterCtrlDragMode(input: {
+  /** 按下的键（KeyboardEvent.key） */
+  key: string
+  /** 是否是按住不放的重复 keydown */
+  repeat: boolean
+  /** 当前节点的底栏本体是否真的渲染（.nb-root 在、且不是空壳） */
+  barShown: boolean
+  /** 参考选择态是否已在进行（两个会话不共存） */
+  referenceActive: boolean
+  /** 焦点是否在输入/可编辑区（那里 Ctrl 是文本快捷键） */
+  editableTarget: boolean
+}): boolean {
+  if (input.key !== 'Control' || input.repeat) return false
+  if (!input.barShown) return false
+  if (input.referenceActive) return false
+  if (input.editableTarget) return false
+  return true
+}
+
+/**
  * 拖拽启动的**对象数据通道**：覆盖层（长在节点里）拿到 props.id/props.data 的对象数据，
  * 直接调用这里注册的处理器发起拖拽 —— 不再走 window pointerdown + DOM closest 判定
  * （用户口径：DOM 判定会误触节点选中）。

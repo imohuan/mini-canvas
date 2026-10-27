@@ -55,6 +55,7 @@ import { readRunState } from './runState'
 import { initialPromptText, promptPersistFields } from './promptPersist'
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
 import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
+import { resolveBottomBarShown } from './bottomBarOverlay'
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
 import { openPreview } from './mediaPreview'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
@@ -82,7 +83,7 @@ import {
 import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey, type TileCardLike } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf } from './refSlotDrag'
-import { enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
+import { canEnterCtrlDragMode, enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -619,6 +620,21 @@ const submitted = ref(false)
 function resetSubmitted(): void {
   submitted.value = false
 }
+
+/**
+ * 底栏本体是否真的显示（与模板 v-if 同一份条件）。
+ * Ctrl 选择态只认这个 —— 不能认画布上的 `.nb-overlay` 外壳：
+ * 可视化节点没有任何底栏动作，外壳仍在、本体不渲染（用户 2026-10-27 报的误触）。
+ *
+ * 放在 submitted 之后定义：computed 初始化时就会读依赖，放前面会踩 TDZ。
+ */
+const barShown = computed(() =>
+  resolveBottomBarShown({
+    soleSelected: visible.value,
+    hasActions: hasActions.value,
+    submitted: submitted.value,
+  }),
+)
 if (typeof ctx.on === 'function') {
   const clickOff = ctx.on(RenderEvents.NodeClick, (p: { nodeId?: string }) => {
     if (p?.nodeId === props.id) resetSubmitted()
@@ -1257,13 +1273,19 @@ function moveGhost(x: number, y: number): void {
   if (g) { g.style.left = x + 'px'; g.style.top = y + 'px' }
 }
 
-/** Ctrl 按下（底栏开着）→ 进入选择态（画布出高亮/角标/提醒，复刻参考选择）。
- *  松开 Ctrl → 退出。选择态与影子拖拽是两个独立层：选择态是「预告」，拖拽是动作。 */
+/** Ctrl 按下（**本节点的底栏真的显示**）→ 进入选择态（画布出高亮/角标/提醒，复刻参考选择）。
+ *  松开 Ctrl → 退出。选择态与影子拖拽是两个独立层：选择态是「预告」，拖拽是动作。
+ *  注意：不能查 `.nb-overlay` —— 它是画布级外壳，任何单选节点都有；可视化节点没有
+ *  底栏动作、本体不渲染，但外壳照样在，查外壳就会误触（用户 2026-10-27 实测）。 */
 function onCtrlModeKeydown(ev: KeyboardEvent): void {
-  if (ev.key !== 'Control' || ev.repeat) return
-  if (!document.querySelector('.nb-overlay')) return
-  if (referenceActive()) return // 参考选择态已激活时不叠加 Ctrl 选择态
-  if (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, select, [contenteditable="true"]')) return
+  const editableTarget = ev.target instanceof HTMLElement && !!ev.target.closest('input, textarea, select, [contenteditable="true"]')
+  if (!canEnterCtrlDragMode({
+    key: ev.key,
+    repeat: ev.repeat,
+    barShown: barShown.value,
+    referenceActive: referenceActive(),
+    editableTarget,
+  })) return
   enterCtrlDragMode(props.id)
 }
 function onCtrlModeKeyup(ev: KeyboardEvent): void {
@@ -1550,7 +1572,7 @@ function onGlobalLeave(el: Element): void {
   -->
   <Teleport to="body" :disabled="!expanded">
   <div
-    v-if="visible && hasActions && !submitted"
+    v-if="barShown"
     class="nb-shell"
     :class="{ 'is-expanded': expanded }"
     :style="expanded ? { zIndex: LAYERS.nodeToolbar + 1 } : undefined"
