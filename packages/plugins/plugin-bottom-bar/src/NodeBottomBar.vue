@@ -1497,10 +1497,11 @@ function onGlobalLeave(el: Element): void {
     data-testid="node-bottom-bar"
     @pointerdown.stop
   >
-    <!-- 一排 pill（参考图顶行：+参考 / 标记 / 风格；动作也在这里成排，选中高亮） -->
-    <!-- 全屏态隐藏 pill 行（用户口径：展开后不显示「参考 / 标记」） -->
+    <!-- 一排 pill（参考图顶行：+参考 / 标记；全屏态隐藏「参考 / 标记」，只留右上角全屏按钮）。
+         展开时按钮 absolute 定位到右上角（原来是 pills 行内右侧——隐藏左侧后行空了，白占一行）。 -->
     <div class="nb-pills">
       <button
+        v-if="!expanded"
         class="nb-pill"
         :class="{ 'is-active': referencing }"
         type="button"
@@ -1511,13 +1512,17 @@ function onGlobalLeave(el: Element): void {
         <span>参考</span>
         <span v-if="cards.length > 0" class="nb-pill-badge">{{ cards.length }}</span>
       </button>
-      <!-- 标记：功能尚未实现，置灰（用户要求：给一个透明度效果表示不支持）。全屏态隐藏。 -->
-      <button v-if="!expanded" class="nb-pill is-disabled" type="button" disabled :title="'标记：暂未支持'" @click.stop>
+      <button
+        v-if="!expanded"
+        class="nb-pill is-disabled"
+        type="button"
+        disabled
+        :title="'标记：暂未支持'"
+        @click.stop
+      >
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>
       </button>
-      <!-- 风格：不在这里做（用户要求 pass 掉）。团队的风格是写在提示词里的文字，
-           后期会变成输入框里的一个 tag，而不是这里的第二类参考图。 -->
       <button
         class="nb-expand nb-icon-btn"
         type="button"
@@ -1901,6 +1906,7 @@ function onGlobalLeave(el: Element): void {
   position: absolute;
   right: 12px;
   top: 8px;
+  /* 全屏态：pills 行隐藏后行高没了 —— 按钮改为钉在面板右上角，不占行 */
 }
 
 .nb-icon-btn {
