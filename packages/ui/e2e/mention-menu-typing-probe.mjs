@@ -42,10 +42,6 @@ ok('底栏输入框出现', (await editor.count()) > 0)
 if ((await editor.count()) === 0) { await browser.close(); process.exit(1) }
 
 await editor.click()
-await page.evaluate(() => { window.__probeSlot = [] })
-await page.evaluate(() => { window.__probeSlotEnter = [] })
-await page.evaluate(() => { window.__probeExtRestore = [] })
-await page.evaluate(() => { window.__probeMenuSeq = [] })
 await page.keyboard.press('Control+a')
 await page.keyboard.press('Backspace')
 await page.waitForTimeout(300)
@@ -76,13 +72,8 @@ ok('输入 @图片 时尚未转成标签', (await chipCount()) === 0, 'chips=' +
 // 2) 继续打数字 → 菜单仍在、没有被自动转换
 await page.keyboard.type('1')
 await page.waitForTimeout(700)
-console.log('  槽位探针 = ' + JSON.stringify(await page.evaluate(() => window.__probeSlot ?? null)))
-console.log('  插件进入 = ' + JSON.stringify(await page.evaluate(() => window.__probeSlotEnter ?? null)))
-console.log('  外部恢复 = ' + JSON.stringify(await page.evaluate(() => window.__probeExtRestore ?? null), null, 1))
-console.log('  菜单序列 = ' + JSON.stringify(await page.evaluate(() => window.__probeMenuSeq ?? null)))
 ok('打数字后菜单仍在（没有被自动"选中"）', (await menuCount()) > 0)
 ok('打数字后没有自动转成标签', (await chipCount()) === 0, 'chips=' + (await chipCount()))
-console.log('  chip 事件 = ' + JSON.stringify(await page.evaluate(() => window.__chipEvents ?? null)))
 
 // 3) 按回车 → 才插入
 await page.keyboard.press('Enter')

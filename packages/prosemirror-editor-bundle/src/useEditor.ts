@@ -425,22 +425,11 @@ function createSelectionDecorationPlugin() {
 const SLOT_CHIP_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 
-function createSlotTagPlugin(isMenuOpen: () => boolean) {
+function createSlotTagPlugin() {
   return new Plugin({
     key: new PluginKey('ref-slot-tag'),
     appendTransaction(transactions, _oldState, newState) {
       if (!transactions.some((tr) => tr.docChanged)) return null
-      // TEMP-PROBE 每次进入插件都记
-      ;(globalThis as any).__probeSlotEnter?.push?.({ t: Math.round(performance.now()), menuOpen: isMenuOpen() })
-      /**
-       * @ 菜单开着时**不转换**（用户 2026-10-27 报：输入 @图片1 时数字还没敲完，
-       * 文字就被转成了标签，菜单也跟着没了 —— 看起来像菜单"自动选中"了某项）。
-       *
-       * 为什么这里判：槽位转换插件（本函数）是把它变标签的源头。菜单开着说明用户
-       * 正在 @ 补全流程里，此时敲的数字是想**过滤菜单**，不是想声明槽位；
-       * 等菜单关掉（Esc / 点别处 / 回车选中后菜单自然关闭）再按正常规则转换。
-       */
-      if (isMenuOpen()) return null
       const tr = newState.tr
       const nodeType = mySchema.nodes.resource
       if (!nodeType) return null
@@ -505,11 +494,13 @@ function createSlotTagPlugin(isMenuOpen: () => boolean) {
         })
       })
       for (const h of hits.sort((a, b) => b.start - a.start)) {
-        ;(globalThis as any).__probeSlot?.push?.({
-          t: Math.round(performance.now()),
-          menuOpen: isMenuOpen(),
-          stack: (new Error().stack || '').split('\n').slice(1, 6).map((s) => s.trim().slice(0, 80)),
-        })
+        /**
+         * 光标还停在这段 @ 文字末尾 → 用户**正在输入**（选数字是在过滤 @ 菜单，
+         * 不是在声明槽位）。此时转成标签会让菜单闪没、像"自动选中"（用户 2026-10-27 报）。
+         * 等光标移开（打空格 / 回车 / 点别处）再转换，行为与 @ 菜单一致。
+         */
+        const sel = newState.selection
+        if (sel.empty && sel.from === h.start + h.len) continue
         tr.replaceWith(h.start, h.start + h.len, buildResourceNode(nodeType, h.item))
       }
       return hits.length ? tr : null
@@ -1264,7 +1255,7 @@ export function useEditor(
         mentionKeymap,
         createSelectionDecorationPlugin(),
         createPasteHandlerPlugin(() => unref(props.resolveResource)),
-        createSlotTagPlugin(() => menuVisible.value),
+        createSlotTagPlugin(),
         createCursorFixPlugin(),
         createDropCursorPlugin({ color: "#2b6df2", width: 2 }),
         keymap(baseKeymap),
@@ -1277,13 +1268,6 @@ export function useEditor(
       editable: () => unref(props.editable) !== false,
       dispatchTransaction(transaction) {
         if (!view) return;
-        // TEMP-PROBE：记录每次事务前后的菜单状态
-        ;(globalThis as any).__probeMenuSeq?.push?.({
-          t: Math.round(performance.now()),
-          before: menuVisible.value,
-          doc: transaction.docChanged,
-          text: getPlainText().slice(0, 24),
-        })
         const newState = view.state.apply(transaction);
         view.updateState(newState);
 
@@ -1400,15 +1384,6 @@ export function useEditor(
 
       // 正常编辑流程：文本匹配则跳过
       if (getPlainText() === newModelValue) return
-
-      // TEMP-PROBE：外部恢复文档是谁触发的
-      ;(globalThis as any).__probeExtRestore?.push?.({
-        t: Math.round(performance.now()),
-        plain: getPlainText().slice(0, 30),
-        model: String(newModelValue ?? '').slice(0, 30),
-        hasDoc: !!newPromptDoc,
-        stack: (new Error().stack || '').split('\n').slice(1, 8).map((s) => s.trim().slice(0, 80)),
-      })
 
       // 文本不匹配（外部变更），优先用 JSON 完整恢复
       if (newPromptDoc) {
