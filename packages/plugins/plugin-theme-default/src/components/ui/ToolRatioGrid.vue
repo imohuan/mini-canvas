@@ -35,9 +35,9 @@ const options = computed(() => props.param.options ?? [])
 const gridStyle = computed(() => ({ gridTemplateColumns: 'repeat(' + props.columns + ', 1fr)' }))
 
 /** 图标盒边长（参考站 17×17 的图标位） */
-const BOX = 17
+const BOX = 20
 /** 描边矩形最长边（参考站 12×12 左右） */
-const MAX = 12
+const MAX = 18
 
 interface Shape {
   w: number
@@ -127,9 +127,9 @@ function pick(value: string | number): void {
   justify-content: center;
   gap: 4px;
   box-sizing: border-box;
-  min-width: 0;
+  min-width: 50px;
   min-height: 56px;
-  padding: 8px;
+  padding: 8px 10px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 12px;
   background: transparent;
