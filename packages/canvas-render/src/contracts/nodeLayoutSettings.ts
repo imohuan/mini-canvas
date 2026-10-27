@@ -15,7 +15,7 @@
  */
 import { onBeforeUnmount, ref, type Ref } from 'vue'
 
-import { useCanvasContext } from './canvasContext'
+import { useCanvasContextOrRender } from './canvasContext'
 
 /** 控制栏贴边距离（px）：上控制栏离卡片上边、下控制栏离卡片下边 */
 export interface NodeToolbarOffsets {
@@ -139,7 +139,7 @@ export function applyGenPanelMetricChange(
  * - 读不到 settings（极简宿主/单测桩）时回落默认值，不抛错。
  */
 export function useToolbarOffsets(): Ref<NodeToolbarOffsets> {
-  const { ctx } = useCanvasContext()
+  const { ctx } = useCanvasContextOrRender()
   const settings = ctx.get<SettingsLike | undefined>('settings')
   const offsets = ref<NodeToolbarOffsets>({ ...DEFAULT_TOOLBAR_OFFSETS })
 
@@ -159,7 +159,7 @@ export function useToolbarOffsets(): Ref<NodeToolbarOffsets> {
  * 初次读取 → 订阅设置变化实时生效 → 卸载退订 → 读不到回落默认。
  */
 export function useGenPanelMetrics(): Ref<GenPanelMetrics> {
-  const { ctx } = useCanvasContext()
+  const { ctx } = useCanvasContextOrRender()
   const settings = ctx.get<SettingsLike | undefined>('settings')
   const metrics = ref<GenPanelMetrics>({ ...DEFAULT_GEN_PANEL_METRICS })
 

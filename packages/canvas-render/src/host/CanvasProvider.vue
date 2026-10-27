@@ -118,17 +118,27 @@ defineExpose({
 </script>
 
 <template>
-  <!-- 只放一个插槽：不包布局、不包容器，避免让调用方误以为它有尺寸/定位语义。 -->
-  <slot v-if="ready" />
-  <slot v-else-if="error" name="error" :error="error">
-    <div class="canvas-provider-status is-error">启动失败：{{ error.message }}</div>
-  </slot>
-  <slot v-else name="loading">
-    <div class="canvas-provider-status">正在启动内核…</div>
-  </slot>
+  <!--
+    单一根节点：条件插槽如果直接并列，组件就变成 fragment root，
+    父级传下来的 id/class 等属性无法继承（Vue 会警告，实测挂在 App 上会刷屏）。
+    display:contents 让这个根不产生布局盒子，外壳仍按原样铺满。
+  -->
+  <div class="canvas-provider-root">
+    <slot v-if="ready" />
+    <slot v-else-if="error" name="error" :error="error">
+      <div class="canvas-provider-status is-error">启动失败：{{ error.message }}</div>
+    </slot>
+    <slot v-else name="loading">
+      <div class="canvas-provider-status">正在启动内核…</div>
+    </slot>
+  </div>
 </template>
 
 <style scoped>
+/* 根节点只承担“单一根”职责，不占布局；加载/失败态自己撑满一屏。 */
+.canvas-provider-root {
+  display: contents;
+}
 /* 加载/失败是“整页”状态：宽高撑满调用方容器，且至少撑满一屏。 */
 .canvas-provider-status {
   display: flex;

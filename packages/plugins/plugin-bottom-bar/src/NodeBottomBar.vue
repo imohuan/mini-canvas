@@ -23,6 +23,7 @@
  * 服务取值（§0.1）：组件里一律 ctx.get(...)，不直访 ctx.nodeBar。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+defineOptions({ inheritAttrs: false })
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import { registerItem, type ResourceItem } from 'prosemirror-editor-bundle'
 // 标签识别规则外置（用户 2026-10-27）：认什么写法由插件决定，编辑器只提供通道
@@ -286,6 +287,26 @@ if (hasActions.value && !currentId.value) selectAction(initialActionId())
  * 'none' 绑定写 data.barPrompt —— 这是用户报的「内容消失」的落点。
  */
 function persistValues(): void {
+  // 与节点上已存的动作一致（含“没存过而这就是默认动作”的情况）时跳过：
+  // 防止“选中节点 → 底栏挂载 → 选中集清空 → 底栏卸载”这条链路把**默认动作**写进
+  // data.barValues（真实后果：新建文本节点后，页面上点一下空白处，撤销栈凭空多一条
+  // “barValues.actionId=text.duplicate”，用户按一次 Ctrl+Z 撤销的不是自己的操作）。
+  // 读 props.data 的**当前值**（Overlay 的 doc 订阅会在写盘后重读），既做“与现值一致就别再写”的
+  // 防抖，也避免用挂载时刻的旧快照误判。
+  const rawStored = ctx.tryGet<{
+    getNode(id: string): { data?: Record<string, unknown> } | undefined
+  }>('doc')?.getNode(props.id)?.data?.barValues as Record<string, unknown> | undefined
+  const storedAction = storedActionId.value
+  const onlyActionId =
+    !rawStored || (Object.keys(rawStored).length > 0 && Object.keys(rawStored).every((k) => k === 'actionId'))
+  if (storedAction === currentId.value && onlyActionId) {
+    return
+  }
+  // 首次写入也只写“真正有内容”的动作：没有输入框的即时动作（复制/删除）在无参数时
+  // 不落 barValues —— 否则每选中一次节点都会凭空多一条撤销记录（e2e 实测 2026-10-27）。
+  if (!showEditor.value && Object.keys(values.value).length === 0) {
+    return
+  }
   let cleared = false
   let full = ''
   try {

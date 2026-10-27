@@ -129,6 +129,25 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     expect(nodeStore.getNode(id)!.data.resourceId).toBeUndefined()
   })
 
+  it('派生尺寸走 measured 写入：落盘但不占撤销栈（打开页面不再凭空多一条历史）', () => {
+    const { nodeStore, history, ops, id } = boot()
+    const depth = history.undoDepth
+    // 模拟图片加载后补 naturalWidth/naturalHeight + 卡片尺寸：这是测量，不是用户动作。
+    ops.writeMeasured(id, { ...nodeStore.getNode(id)!.data, imageWidth: 320, imageHeight: 240 }, { w: 320, h: 240 })
+    expect(history.undoDepth).toBe(depth)
+    const node = nodeStore.getNode(id)!
+    expect(node.data.imageWidth).toBe(320)
+    expect(node.data.cardWidth).toBe(320)
+    expect(node.size).toEqual({ w: 320, h: 240 })
+  })
+
+  it('普通 write 仍然进撤销栈（用户动作不能被误伤）', () => {
+    const { nodeStore, history, ops, id } = boot()
+    const depth = history.undoDepth
+    ops.write(id, { ...nodeStore.getNode(id)!.data, imageName: 'user.jpg' })
+    expect(history.undoDepth).toBe(depth + 1)
+  })
+
   it('读文件失败 / 节点不存在 / 没有资源库 → 返回 false 且不写坏数据', async () => {
     const { nodeStore, ops, id, graph } = boot()
     expect(await uploadImage(ops, 'missing', new File(['x'], 'c.png'), fakeTransform())).toBe(false)

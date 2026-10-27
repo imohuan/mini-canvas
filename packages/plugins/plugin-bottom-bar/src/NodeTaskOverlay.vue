@@ -28,6 +28,9 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
+
+// over:inset 条目会被 SlotHost/壳下发 class/data-*；fragment 根继承不了，显式关掉防 warn。
+defineOptions({ inheritAttrs: false })
 import type { NodeRunState } from './runState'
 import { readRunState } from './runState'
 

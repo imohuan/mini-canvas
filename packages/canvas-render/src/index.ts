@@ -107,7 +107,7 @@ export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
 export type { CanvasRenderContext } from './contracts/renderContext'
 // 基础画布上下文：CanvasProvider 在应用最外层 provide，外壳（抽屉/状态条/底栏）与画布共用。
 // 只有 ctx / host / api / manager；需要 flow / renderNodes / visibleRect 的组件仍走 useCanvasRender()。
-export { CANVAS_CONTEXT_KEY, useCanvasContext } from './contracts/canvasContext'
+export { CANVAS_CONTEXT_KEY, useCanvasContext, useCanvasContextOrRender } from './contracts/canvasContext'
 export type { CanvasContext } from './contracts/canvasContext'
 // 画布层叠带（z-index 唯一事实源）：所有层级数值从这里取，别处不再写 z-index 字面量
 export { LAYERS } from './contracts/layers'

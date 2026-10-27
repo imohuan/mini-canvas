@@ -38,6 +38,16 @@ export interface ImageOpsContext {
    */
   write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }): void
   /**
+   * 写**派生尺寸**（图片加载后按 naturalWidth/naturalHeight 自动补卡片尺寸）：
+   * 落盘但不进撤销栈。
+   *
+   * 为什么不走 write：那是测量结果、不是用户动作。走可撤销入口会让页面一打开
+   * 撤销栈里就多一条“自动测量”，用户按一次 Ctrl+Z 撤销的不是自己刚做的操作
+   * （2026-10-27 e2e 实测：建节点后连按两次撤销，只退掉拖动+建节点中的一条）。
+   * 与 progress 帧同一语义（doc.updateNodeRuntime）。
+   */
+  writeMeasured(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }): void
+  /**
    * 图片预览上限（配置 imageFitMaxWidth/imageFitMaxHeight）。不注入则回落 420×300。
    * 抽成取值器而不是常量：设置面板改完上限后，下一次换图就该按新上限算。
    */
@@ -152,6 +162,8 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
     types: ReadonlyMap<string, { inputs?: Array<{ port?: string; capacity?: number }> }>
     getEdges(): Array<{ id: string; source: string; target: string }>
     updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
+    /** 写派生尺寸：落盘但不进撤销栈 */
+    updateNodeRuntime?(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
     transaction<T>(reason: string, fn: (tx: TxLike) => T): T
   }
   const doc = (): ImageDocPort | undefined =>
@@ -182,6 +194,13 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
     // size 与 data 在**同一次** updateNode 里提交：内核按 patch 记一条历史 → 一次撤销退干净
     write: (nodeId, data, size) =>
       doc()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
+    // 派生尺寸：有 runtime 写口就用它（落盘、不进历史）；极简宿主没有该口时退回普通写。
+    writeMeasured: (nodeId, data, size) => {
+      const patch = size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }
+      const d = doc()
+      if (d?.updateNodeRuntime) d.updateNodeRuntime(nodeId, patch)
+      else d?.updateNode(nodeId, patch)
+    },
     fitLimits: () => readImageFitLimits(svc),
     listNodes: () => (doc()?.getNodes() ?? []).map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data, size: (n as { size?: { w: number; h: number } }).size })),
     createNodeWithEdge: (type, position, data, target, edgeDirection = 'newToTarget') => {

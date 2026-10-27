@@ -10,6 +10,10 @@
  */
 import { onBeforeUnmount, onMounted, ref } from "vue"
 
+// SlotHost 会下发 class/data-slot-*；本组件根是 fragment/teleport，继承不了，
+// 显式关掉避免 Vue 的“多余属性”warn 刷屏（e2e 有一条控制台纯净断言）。
+defineOptions({ inheritAttrs: false })
+
 const ICON_CLOSE =
   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
 

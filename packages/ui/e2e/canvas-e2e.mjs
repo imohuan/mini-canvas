@@ -278,7 +278,10 @@ check('surface().services 列出 doc 等服务且带 source（谁注入的）', 
 check('surface().services 带方法清单（用户要的"支持哪些函数"）', ['getNodes', 'createNode', 'removeNodes', 'transaction'].every((m) => surf.docMethods.includes(m)), 'doc.methods=' + surf.docMethods.length + ' 个');
 check('surface().registries 覆盖 node/region、command 等场', ['node/region', 'command'].every((k) => surf.kinds.includes(k)), 'kinds=' + surf.kinds.join(','));
 check('surface().commands 列出已注册命令（含 id/keys/areas）', surf.commandCount > 0 && surf.commandIdsOk, surf.commandCount + ' 条');
-check('surface().tools 列出生成工具且 params 形状合法', surf.toolCount > 0 && surf.toolParamsOk, surf.toolCount + ' 个');
+// 2026-10-28：生成工具插件（tool-image-generation 等）改由「插件管理」按需安装，
+// 冷启动清单已不含它们 → 干净宿主上 tools 为 0 是正确状态；运行期注册的探针在
+// 下一条“活快照”里覆盖。这条改成锁 params 形状而不是锁数量，避免回归到“默认装工具”。
+check('surface().tools params 形状合法（数量随清单，可为 0）', surf.toolParamsOk, surf.toolCount + ' 个');
 check('surface().events 列出已登记事件（含内核与渲染层事件）', surf.eventNames.includes('ctx:ready') && surf.eventNames.includes('canvas:selection:change'), surf.eventNames.length + ' 个');
 check('surface().registryEntries 带 fields（条目值有哪些可读字段）', Array.isArray(surf.entryFields) && surf.entryFields.includes('label'), 'fields=' + JSON.stringify(surf.entryFields));
 check('surface().fields 不把组件句柄当声明（无 __name/setup 噪声）', surf.compFieldsShown === false);

@@ -10,7 +10,7 @@
  */
 import type { Context } from '@mini-canvas/canvas-data'
 import { onScopeDispose, shallowRef, type Ref } from 'vue'
-import { useCanvasContext } from './canvasContext'
+import { useCanvasContextOrRender } from './canvasContext'
 
 /** ui 场的条目值：opaque 组件句柄（内核不解析、不 import Vue） */
 export type UiComponentHandle = unknown;
@@ -69,7 +69,10 @@ export function uiComponent(ctx: Context | undefined, name: string): UiComponent
  * 名字不存在时 value 为 undefined + console.warn（不静默、也不炸 —— 与决策 9 的缺项策略同调）。
  */
 export function useUiComponent(name: string): Ref<UiComponentHandle | undefined> {
-  const { ctx } = useCanvasContext();
+  // 设计系统件的读取是“有 ctx 就行”：优先基础上下文（Provider），
+  // 老的单测/极简宿主只 provide 渲染上下文时回退到它 —— 这是读入口的兼容，
+  // 不影响 useCanvasContext 本身“只认 Provider”的约束。
+  const { ctx } = useCanvasContextOrRender();
   const field = ctx.registryOf<UiComponentHandle>('ui');
   const found = shallowRef<UiComponentHandle | undefined>(field.top(name)?.value);
   /** 缺名提示只给一次（同一文案别写两遍）：首次就缺时立刻给，之后只在"变过再变缺"时给 */

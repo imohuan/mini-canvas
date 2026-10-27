@@ -17,6 +17,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { ViewportState } from '@mini-canvas/canvas-base'
+
+// mini-map 槽宿主会下发 class/data-slot-*；根是 v-if 的单元素，正常能继承，
+// 但 visible=false 时渲染注释节点 → 条件根继承失效产生 warn，显式关掉最稳。
+defineOptions({ inheritAttrs: false })
 import {
   computeContentBounds,
   unionRect,

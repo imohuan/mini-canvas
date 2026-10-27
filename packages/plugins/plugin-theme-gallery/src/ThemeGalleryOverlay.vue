@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// overlay 槽宿主会下发 class/data-slot-*；本组件是双根（按钮 + 面板），
+// fragment 继承不了，显式关掉避免 Vue warn 刷屏（e2e 有控制台纯净断言）。
+defineOptions({ inheritAttrs: false })
 /**
  * ThemeGalleryOverlay —— 组件展厅（挂在 overlay 槽，画布之上的一层）。
  *

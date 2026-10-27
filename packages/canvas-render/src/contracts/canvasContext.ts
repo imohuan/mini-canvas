@@ -17,6 +17,7 @@ import { inject, type InjectionKey } from 'vue'
 import type { Context } from '@mini-canvas/canvas-data'
 import type { CanvasHostHandle, MiniCanvasApi } from '../host/createMiniCanvasHost'
 import type { PluginManager } from '../host/pluginManager'
+import { RENDER_CONTEXT_KEY } from './renderContext'
 
 /** 外壳与画布共用的一份基础上下文（不含 VueFlow 专属的 flow / 渲染快照）。 */
 export interface CanvasContext {
@@ -48,4 +49,28 @@ export function useCanvasContext(): CanvasContext {
     )
   }
   return base
+}
+
+/**
+ * 读入口专用的“宽松”取 ctx：先基础上下文，再回退渲染上下文。
+ *
+ * 只给 useUiComponent / useThemeColor / useToolbarOffsets 这类「给我 ctx 就行」的 helper 用；
+ * 外壳和业务组件不要拿它当通用入口 —— 那会把“我到底在哪个上下文里”重新变模糊。
+ *
+ * 为什么需要：仓库里大量现有单测只 provide RENDER_CONTEXT_KEY（历史上渲染上下文是唯一入口）。
+ * 读取插槽/目录/设置的 helper 不应该逼这些测试全部重写；真正的边界由 useCanvasContext 守住。
+ */
+export function useCanvasContextOrRender(): CanvasContext {
+  const base = inject(CANVAS_CONTEXT_KEY, null)
+  if (base) return base
+  const render = inject(RENDER_CONTEXT_KEY, null)
+  if (render) {
+    return {
+      ctx: render.ctx,
+      host: render.host,
+      api: undefined as unknown as MiniCanvasApi,
+      manager: undefined as unknown as PluginManager,
+    }
+  }
+  return useCanvasContext()
 }

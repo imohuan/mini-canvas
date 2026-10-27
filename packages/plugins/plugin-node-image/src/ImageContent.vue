@@ -208,16 +208,17 @@ function onImgError(): void {
 
 function onImgLoad(e: Event): void {
   clearImageBroken(props.id)
+  const el = e.target as HTMLImageElement
+  if (!el?.naturalWidth || !el?.naturalHeight) return
   // 兜底：卡片尺寸缺失（后台没写 imageWidth/Height 的图，如 MCP/上传加的图）时，
   // 用 `<img>` 量到的真实宽高补一次 —— 需要「量到宽高 + 卡片尺寸」两样一起写，
   // 否则缺了尺寸字段，后面按比例算卡片那步无从下手，卡片会停在 4:3（9:16 竖图被塞成横的）。
-  const el = e.target as HTMLImageElement
-  if (!el?.naturalWidth || !el?.naturalHeight) return
   if (positiveNum(props.data?.cardWidth) !== null && positiveNum(props.data?.cardHeight) !== null) return
   const patch = cardSizePatch(el.naturalWidth, el.naturalHeight, ops.fitLimits?.())
   if (!patch) return
   const current = ops.read(props.id) ?? props.data
-  ops.write(
+  // 测量结果不是用户动作：走 measured 写入（落盘、不进撤销栈），否则打开页面就先多一条历史。
+  ops.writeMeasured(
     props.id,
     { ...current, imageWidth: el.naturalWidth, imageHeight: el.naturalHeight },
     patch.size,
@@ -237,7 +238,8 @@ function onImgLoad(e: Event): void {
 function syncCardSize(patch: CardSizePatch | null): void {
   if (!patch) return
   // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐（读回当前 data 保留其它字段）
-  ops.write(props.id, ops.read(props.id) ?? props.data, patch.size)
+  // 这是按图片比例补算的派生尺寸，不是用户拖拽：走 measured 写入，不占撤销栈。
+  ops.writeMeasured(props.id, ops.read(props.id) ?? props.data, patch.size)
 }
 
 /** 正有限数才算有值（与 imageFit 内的判断同口径） */
