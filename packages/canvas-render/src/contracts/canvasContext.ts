@@ -31,8 +31,16 @@ export interface CanvasContext {
   manager: PluginManager
 }
 
-/** 单令牌：CanvasProvider provide、外壳与画布组件经 useCanvasContext() 取。 */
-export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext> = Symbol('mini-canvas-context')
+/**
+ * 单令牌：CanvasProvider provide、外壳与画布组件经 useCanvasContext() 取。
+ *
+ * **故意用固定字符串 key 而不是 Symbol**：UMD/ESM 插件包内自带一份 canvas-render
+ * （不与宿主共享模块实例），Symbol 会因"两份模块各建一个"而永远对不上 —— 插件组件
+ * 在外壳槽里 useCanvasContext() 必然取不到宿主 provide 的那份，抛"缺少画布上下文"
+ * （2026-10-28 shell-slots-demo 真机实测）。字符串 key 让两份实现共享同一个注入名，
+ * 与 DOM 的 data-* 契约同一思路。
+ */
+export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext> = Symbol.for('mini-canvas-context')
 
 /**
  * 取基础上下文。

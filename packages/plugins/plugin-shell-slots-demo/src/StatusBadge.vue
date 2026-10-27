@@ -3,9 +3,20 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useCanvasContext } from '@mini-canvas/canvas-render'
 
-// 外壳槽内用基础上下文（Provider 提供）。插件包内自带的 canvas-render 与宿主同 key
-// （字符串 key），inject 能直接命中宿主 provide 的那一份。
-const { ctx } = useCanvasContext()
+// 外壳槽内拿 ctx：优先基础上下文（Provider provide）；插件是自包含 ESM 时，
+// 插件包内的 canvas-render 与宿主是两份模块，inject 命中不了 —— 兜底读
+// window.MiniCanvasUI.getContext()（宿主唯一 ctx，与 provide 的那份是同一个对象）。
+function resolveCtx(): { get<T>(name: string): T; effect(fn: () => () => void): void } {
+  try {
+    return useCanvasContext().ctx as unknown as ReturnType<typeof resolveCtx>
+  } catch {
+    const w = window as unknown as { MiniCanvasUI?: { getContext(): { get<T>(name: string): T } } }
+    const fallback = w.MiniCanvasUI?.getContext()
+    if (!fallback) throw new Error('[ssd] 既无 Provider 上下文也无 window.MiniCanvasUI')
+    return fallback as unknown as ReturnType<typeof resolveCtx>
+  }
+}
+const ctx = resolveCtx()
 const tick = ref(0)
 const off = ctx.get<{ subscribe(cb: () => void): () => void }>('doc').subscribe(() => { tick.value += 1 })
 onBeforeUnmount(() => off())

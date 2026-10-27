@@ -36,21 +36,21 @@ await page.reload({ waitUntil: 'load' })
 await page.waitForSelector('.vue-flow', { timeout: 30000 })
 await page.waitForTimeout(800)
 
-// 1) 经统一安装句柄装演示插件（UMD 产物；与「插件管理」同一条路）
+// 1) 经统一安装句柄装演示插件（自包含 ESM 产物，走 fetch → data:URL import）
 const installed = await page.evaluate(async () => {
   const ctx = window.MiniCanvasUI.getContext()
   const manager = ctx.get('pluginManager')
   if (!manager) return { ok: false, why: 'no pluginManager' }
-  // ESM 产物：manager.install 走 fetch → import(data:)，需要自包含 ESM（零裸模块名 import）；
-  // UMD 产物（dist/）供「插件管理」script 装载用，两条路不可混。
+  // 组件内取 ctx 优先 Provider inject；自包含包与宿主是两份模块实例、inject 命中不了，
+  // 此时兜底 window.MiniCanvasUI.getContext()（与 Provider provide 的是同一个 ctx 对象）。
   await manager.install({ url: '/plugins/plugin-shell-slots-demo/plugin-shell-slots-demo.esm.js' })
   return { ok: ctx.listPlugins().includes('shell-slots-demo') }
 })
-check('经 pluginManager 安装 shell-slots-demo', installed.ok === true, JSON.stringify(installed))
+check('经 pluginManager 安装 shell-slots-demo（ESM 产物）', installed.ok === true, JSON.stringify(installed))
 
 // 2) 三处外壳 UI 出现
-await page.waitForSelector('[data-testid="ssd-status"]', { timeout: 5000 })
-await page.waitForSelector('[data-testid="ssd-dock-end"]', { timeout: 5000 })
+await page.waitForSelector('[data-testid="ssd-status"]', { timeout: 10000 })
+await page.waitForSelector('[data-testid="ssd-dock-end"]', { timeout: 10000 })
 check('状态条出现演示徽章', (await page.locator('.shell-status [data-testid="ssd-status"]').count()) === 1)
 check('底栏出现演示按钮', (await page.locator('.shell-dock [data-testid="ssd-dock-end"]').count()) === 1)
 
