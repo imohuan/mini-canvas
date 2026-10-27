@@ -12,6 +12,7 @@ import AxDropdown from '../AxDropdown.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AxTooltip from '../AxTooltip.vue'
 import { useUi } from '../../composables/ui'
+import { SlotHost } from '@mini-canvas/canvas-render'
 
 const ui = useUi()
 const s = ui.state
@@ -71,6 +72,8 @@ const s = ui.state
           <AxMenuItem @click="ui.zoomToMax(); close()">缩放到最大</AxMenuItem>
         </template>
       </AxDropdown>
+      <!-- 外壳插槽：状态条末尾（插件可经 ctx.slots.register('shell.status.end', …) 注册，与内置 chip 同排） -->
+      <SlotHost slot="shell.status.end" item-class="flex-none" />
     </div>
   </div>
 </template>

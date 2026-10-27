@@ -18,6 +18,7 @@ import AgentOrb from '../AgentOrb.vue'
 import { useUi } from '../../composables/ui'
 import { openUploadDialog } from '../../composables/assetUploadBus'
 import { ref } from 'vue'
+import { SlotHost } from '@mini-canvas/canvas-render'
 
 const ui = useUi()
 const s = ui.state
@@ -49,6 +50,8 @@ function onUploadPick(e: Event): void {
 <template>
   <div class="flex h-[50px] items-center gap-2 rounded-xl border border-line bg-panel px-2" aria-label="画布工具栏"
     @pointerdown.stop>
+    <!-- 外壳插槽：底栏最前（插件可经 ctx.slots.register('shell.dock.start', …) 注册，按钮与内置按钮同排） -->
+    <SlotHost slot="shell.dock.start" item-class="flex-none" />
     <!--
       隐藏的文件选择器：菜单项「上传」触发它（选完直接建节点，见 script 里 pickUploadFiles）。
       放在**下拉之外**（菜单会被 Teleport 且点完就关）—— 若放进菜单里，
@@ -188,11 +191,13 @@ function onUploadPick(e: Event): void {
       </button></AxTooltip>
     -->
     <AxTooltip content="Agent 对话" placement="left"><button
-        class="absolute left-full top-1/2 ml-1.5 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-line bg-panel text-ink"
+        class="grid size-12 -translate-y-1/2 place-items-center rounded-full border border-line bg-panel text-ink"
         aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }" @click="ui.toggleAgent()">
         <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
              按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
         <AgentOrb :open="ui.agent.open" />
       </button></AxTooltip>
+    <!-- 外壳插槽：底栏末尾（Agent 圆球之后、面板内部，与内置按钮同排） -->
+    <SlotHost slot="shell.dock.end" item-class="flex-none" />
   </div>
 </template>

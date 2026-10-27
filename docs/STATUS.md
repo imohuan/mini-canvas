@@ -5,6 +5,30 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-28 补，外壳插槽落位修偏 + 演示插件补全）
+
+用户实测两个问题：
+
+1. **整页点不动**：画布 overlay 槽里的全画布矩形层（`multi-select-box-layer` 等）
+   被 SlotHost 恢复了 `pointer-events:auto`，盖住外壳面板的所有点击。
+   修：`CanvasSurface` 对 `multi-select-box-layer` / `align-guide-layer` 显式压回
+   `pointer-events:none`（这类"铺满 inset:0 的命中收集层"内部不承载可点内容）。
+2. **底栏按钮浮在面板外**：`shell.dock.end` 原挂在 App 的 `#dock-append`（面板外层）。
+   修：`shell.dock.start` / `shell.dock.end` 移进 `DockArea` 内部（与内置按钮同排、同面板），
+   `shell.status.end` 移进 `StatusArea` 内部；`shellSlotMounts` 测试同步改为"必须挂区域组件内部"。
+
+**演示插件补全**（`plugin-shell-slots-demo`，commit bc972dc6 / f4bd0515 / 本条）：
+
+- 覆盖四类插槽：`shell.status.end` / `shell.dock.start` / `shell.dock.end` / `shell.drawer.tabs`。
+- 四种形态：A 复用内置按钮（`useUiComponent('button')`，32×32 图标，与内置同款）/ 
+  B 内置文本按钮（title+slot）/ C 自绘组件 / D 同槽多 occupant（status.end、dock.end 各两条）。
+- 真机 e2e `shell-slots-demo-check`（经 pluginManager 装自包含 ESM 产物）13/13 PASS：
+  三处 UI + 内置按钮组全出现、点页签出面板、面板"关闭抽屉"生效、底栏按钮经命令开抽屉、
+  卸载后全部消失并回画布。遮罩回归锚 `_overlay-mask-check`：三个面板中心点均未被 overlay 拦截。
+
+**边界**：`shell.dock.end` 现在在 Agent 圆球之后（面板内缘）；`shell.status.end` 在缩放下拉之后。
+新浮层若要可点内容，不要用 `*-box-layer` / `*-layer` 类名结尾（会被压回不可点）。
+
 ### 追记（2026-10-28，CanvasProvider + 外壳插槽：三层扩展点一次接通）
 
 用户口径（多轮评审定稿）：上下文初始化放到最外层（类 n-config-provider），**不做兼容**；

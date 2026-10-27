@@ -53,6 +53,8 @@ await page.waitForSelector('[data-testid="ssd-status"]', { timeout: 10000 })
 await page.waitForSelector('[data-testid="ssd-dock-end"]', { timeout: 10000 })
 check('状态条出现演示徽章', (await page.locator('.shell-status [data-testid="ssd-status"]').count()) === 1)
 check('底栏出现演示按钮', (await page.locator('.shell-dock [data-testid="ssd-dock-end"]').count()) === 1)
+check('底栏出现内置主题按钮组', (await page.locator('.shell-dock [data-testid="ssd-themed"]').count()) >= 1)
+check('状态条出现内置主题按钮组', (await page.locator('.shell-status [data-testid="ssd-themed"]').count()) === 1)
 
 // 3) 打开抽屉 → 演示页签在页签行 → 点它出现正文面板
 await page.getByRole('button', { name: '资产管理' }).first().click()

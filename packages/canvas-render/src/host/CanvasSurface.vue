@@ -562,4 +562,16 @@ defineExpose({
 .csurface-overlay .csurface-overlay-item {
   pointer-events: auto;
 }
+/*
+ * 例外：全画布矩形类浮层（多选框、对齐线、临时选择层…）自身内部不承载可点内容，
+ * 必须把 SlotHost 恢复的 auto 再压回 none，否则会盖住外壳（左抽屉/状态条/底栏）的点击
+ * （2026-10-28 用户实测：装外壳插槽演示插件后整页点不动，DevTools 显示
+ * .multi-select-box-layer.csurface-overlay-item 拦截了所有 pointer events）。
+ * 判定按类名：这些层的共同特征是"铺满 inset:0 的命中收集层"。新浮层若需要可点内容，
+ * 要么给内部元素显式 pointer-events:auto，要么不要用 *-box-layer / *-layer 类名结尾。
+ */
+.csurface-overlay .csurface-overlay-item.multi-select-box-layer,
+.csurface-overlay .csurface-overlay-item.align-guide-layer {
+  pointer-events: none;
+}
 </style>
