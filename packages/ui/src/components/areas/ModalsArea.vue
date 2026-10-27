@@ -410,23 +410,38 @@ function formatExactTime(ts: number): string {
 }
 
 /**
- * 卡片底部的信息角标（与图片卡同一套 .hist-tag）：
- * 左 = 宽高比（尺寸） · 时长 · 文件大小，右 = 类型 · 多久前。缺的字段直接省略。
+ * 卡外信息行（方案 5 定稿，用户口径 2026-10-27）：
+ *
+ *   类型标签 | 宽高 · 时长 · 文件大小
+ *
+ * 标签在**文字最左侧**、整行都在图片**下方**，图片上不放任何文字。
+ * 音频没有画面 → 不显示宽高，只显示时长与大小；图片没有时长。
+ * 不显示标题（资源本来就没有名称）。
  */
-function buildMediaTags(item: HistItem): HTMLElement {
-  const left: string[] = []
-  const { width, height, durationMs, bytes } = item.media ?? {}
-  if (width && height) left.push(width + '×' + height)
-  const dur = formatDuration(durationMs)
-  if (dur) left.push(dur)
-  const size = formatBytes(bytes)
-  if (size) left.push(size)
-  const tags = document.createElement('div')
-  tags.className = 'hist-card-tags'
-  tags.innerHTML =
-    '<span class="hist-tag hist-tag--dim">' + esc(left.join(' · ')) + '</span>' +
-    '<span class="hist-tag">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
-  return tags
+function buildFactsLine(item: HistItem): HTMLElement {
+  const row = document.createElement('div')
+  row.className = 'hist-card-facts'
+  const parts: string[] = []
+  if (item.media?.width && item.media?.height) parts.push(item.media.width + '×' + item.media.height)
+  const dur = formatDuration(item.media?.durationMs)
+  if (dur) parts.push(dur)
+  const size = formatBytes(item.media?.bytes)
+  if (size) parts.push(size)
+  row.innerHTML =
+    '<span class="hist-card-kind">' + esc(item.kind) + '</span>' +
+    '<span class="hist-card-fact-text">' + esc(parts.join(' · ')) + '</span>'
+  return row
+}
+
+/**
+ * 整张卡的最后一行：图 + 卡外信息行。所有卡片（图片/视频/音频/异常）都走这一个出口。
+ * 异常卡自己已经带"生成异常 · 无产物"与类型/时间，这里**只给正常卡**补信息行，
+ * 避免同一张卡出现两行重复说明。
+ */
+function finishCard(card: HTMLElement, item: HistItem): HTMLElement {
+  card.classList.add('hist-card--facts-out')
+  if (!card.querySelector('.hist-card-fallback')) card.appendChild(buildFactsLine(item))
+  return card
 }
 
 /**
@@ -473,7 +488,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       mount.className = isAudio ? 'hist-card-audio-plugin' : 'hist-card-video-plugin'
       media.appendChild(mount)
       // 视频件自带「按宽度自适应」：小卡片走小屏态（只有一个居中播放键），宽了给完整控制栏。
-      // 颜色/时间浮层由这里加（与图片卡同一套 hist-card-tags），不再另起一条独立信息栏。
+      // 信息（类型 / 宽高 / 时长 / 大小）全部放在图外的一行里（见 finishCard），图上只留详情圆钮。
       //
       // 视频卡额外给 expandable + 接 expand：小屏态右下角出现「进入预览」小方块，
       // 点它打开全屏预览（用户口径：视频可以点进全屏）。组件自己不开窗 —— 它不知道
@@ -483,13 +498,13 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
           h(
             PluginPreview,
             isAudio
-              ? { url, name: item.title, compact: true }
+              // 音频：不给 name（资源本来没有标题，播放器底部那行"文件名"会与卡外信息重复）
+              ? { url, compact: true }
               : { url, name: item.title, expandable: true, onExpand: () => openHistoryItem(item) },
           ),
       })
       app.mount(mount)
-      // 角标：与图片卡同款。视频的「进入预览」在右下角，角标避让它（padding-right 见样式）。
-      media.appendChild(buildMediaTags(item))
+      // 详情入口留在图上（右上角小圆钮）；信息行在图外，见 finishCard
       media.appendChild(buildDetailButton(item))
       // 媒体加载失败（文件被清理 / 换地址）：与图片卡同一口径，开关关着就整条隐藏
       const tag = isAudio ? 'audio' : 'video'
@@ -518,8 +533,8 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
             if (!item.media) item.media = {}
             item.media.durationMs = Math.round(durSec * 1000)
           }
-          const old = media.querySelector('.hist-card-tags')
-          if (old) old.replaceWith(buildMediaTags(item))
+          const old = card.querySelector('.hist-card-facts')
+          if (old) old.replaceWith(buildFactsLine(item))
           masonry.instance.value?.layout()
         }
         el.addEventListener('loadedmetadata', syncFromMedia)
@@ -528,7 +543,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
 
       card.addEventListener('click', () => onCardClick(item))
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
-      return card
+      return finishCard(card, item)
   }
   // 没有注册件时的兜底卡面：同样套在 media 框里，保留同一套角标与比例
   const inner = document.createElement('div')
@@ -538,7 +553,6 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
     : '<img src="' + esc(url) + '" alt="" loading="lazy" />'
   inner.insertAdjacentHTML('beforeend', '<div class="hist-card-play">▶</div>')
   media.appendChild(inner)
-  media.appendChild(buildMediaTags(item))
   media.appendChild(buildDetailButton(item))
   if (!isAudio) {
     const img = inner.querySelector('img')!
@@ -556,7 +570,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
   }
   card.addEventListener('click', () => onCardClick(item))
   if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
-  return card
+  return finishCard(card, item)
 }
 
 /** 生成瀑布流里一张卡的 DOM（图片卡带骨架屏 + 底部渐变信息栏；无产物退图标卡） */
@@ -585,7 +599,6 @@ function createMasonryElement(item: HistItem): HTMLElement {
       (known ? '' : '<div class="hist-card-skeleton"><span class="hist-card-pulse"></span></div>') +
       '</div>'
     const mediaEl = card.querySelector('.hist-card-media') as HTMLElement
-    mediaEl.appendChild(buildMediaTags(item))
     mediaEl.appendChild(buildDetailButton(item))
     const img = card.querySelector('img')!
     const media = card.querySelector('.hist-card-media') as HTMLElement
@@ -593,9 +606,12 @@ function createMasonryElement(item: HistItem): HTMLElement {
       if (img.naturalWidth && img.naturalHeight) {
         media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
         card.querySelector('.hist-card-skeleton')?.remove()
-        // 老记录没有 media 元数据时，用实测尺寸补上左下角那格
-        const dim = card.querySelector('.hist-tag--dim') as HTMLElement | null
-        if (dim && !dim.textContent?.trim()) dim.textContent = img.naturalWidth + '×' + img.naturalHeight
+        // 老记录没有 media 元数据时，用实测尺寸补到**卡外的信息行**
+        if (!item.media) item.media = {}
+        if (!item.media.width) item.media.width = img.naturalWidth
+        if (!item.media.height) item.media.height = img.naturalHeight
+        const facts = card.querySelector('.hist-card-facts')
+        if (facts) facts.replaceWith(buildFactsLine(item))
         masonry.layout()
       }
     })
@@ -609,7 +625,7 @@ function createMasonryElement(item: HistItem): HTMLElement {
     card.appendChild(buildErrorCard(item))
   }
   if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
-  return card
+  return finishCard(card, item)
 
 }
 
@@ -965,12 +981,15 @@ watch(() => s.shortcutsOpen, async (open) => {
              进入可视区才拉下一页；两次拉页之间至少隔 1 秒，不会无限连发。 -->
         <div v-if="ui.histVisible.value.length && s.histHasMore" ref="loadSentinelEl" class="hist-load-sentinel"
           aria-hidden="true"></div>
-        <!-- 没有后台：说清楚"去哪开"，而不是装作没有历史 -->
-        <p v-else-if="!s.historyReady" class="pt-24 text-center text-[13px] text-ink/50">
+        <!-- 空状态只在**真的一张卡都没有**时出现。
+             以前这两个 v-else 挂在"加载哨兵"那个 v-if 上：没有下一页时哨兵不渲染，
+             于是列表明明有卡片，底部也会冒出一句"暂无历史记录"（真机截到）。
+             现在改成独立 v-if，用自己的条件判断。 -->
+        <p v-if="!ui.histVisible.value.length && !s.historyReady" class="pt-24 text-center text-[13px] text-ink/50">
           未连接云端服务 —— 生成历史由后台记录<br />
           <span class="text-[11px] text-ink-mute">用 <code>npx mini-canvas-cloud serve</code> 起服务后即可看到</span>
         </p>
-        <p v-else class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
+        <p v-else-if="!ui.histVisible.value.length" class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
       </AxScrollArea>
       <!-- 批量操作栏（图2 参考效果）：进入批量模式才出现 -->
       <div v-if="s.histBatchMode" class="hist-batch-bar flex flex-none items-center justify-between border-t border-line px-6 py-3">
@@ -1257,16 +1276,17 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-skeleton { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: var(--ui-veil, rgba(127,127,127,.12)); }
 .hist-card-pulse { width: 40px; height: 40px; border-radius: 12px; background: var(--ui-hover, rgba(127,127,127,.25)); animation: hist-pulse 1.4s ease-in-out infinite; }
 @keyframes hist-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
-/* 底部渐变 tag 行：类型 tag（左）+ 时间 tag（右），压在媒体底部。
-   视频卡右下角有「进入预览」小方块，右侧留出避让（用户实测两者会压在一起）。 */
-.hist-card-tags { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 18px 8px 7px; background: linear-gradient(transparent, var(--ui-scrim, rgb(0 0 0 / 0.55))); pointer-events: none; }
-.hist-card-media--video .hist-card-tags { padding-right: 46px; }
-/* 视频卡的信息角标压在深色画面上：用固定浅色，避免亮色主题下的深字看不清。
-   音频卡改成白底（用户口径 2026-10-27），角标就按普通卡走主题文字色。 */
-.hist-card-media--video .hist-tag { color: var(--ui-tip-ink, #fff); }
-.hist-tag { display: inline-flex; align-items: center; gap: 3px; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 7px; border-radius: 999px; font-size: 10px; line-height: 1.5; color: var(--ui-tip-ink, #fff); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); backdrop-filter: blur(4px); }
-.hist-tag--dim { color: color-mix(in srgb, var(--ui-tip-ink, #fff) 85%, transparent); background: transparent; padding-inline: 0; }
-/* 图片卡媒体底部渐变（tags 自带渐变即可，无需额外层） */
+/* ===== 方案 5 定稿（用户口径 2026-10-27）：信息全部在图片外 =====
+   卡片本体只包图片；下方一行 = 类型标签（最左）+ 宽高 · 时长 · 大小。
+   图片上不再有任何渐变条/标签文字，缩略图完整可见。 */
+.hist-card--facts-out { border: 0; background: transparent; border-radius: 0; overflow: visible; }
+.hist-card--facts-out:hover { border-color: transparent; box-shadow: none; }
+.hist-card--facts-out .hist-card-media { border-radius: 10px; }
+.hist-card-facts { display: flex; align-items: center; gap: 6px; margin-top: 7px; min-width: 0; font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums; }
+.hist-card-kind { flex: none; display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 4px; background: var(--ui-veil, rgb(127 127 127 / 0.1)); color: var(--ui-ink-dim, #6b7280); font-size: 9.5px; line-height: 1.6; letter-spacing: .02em; }
+.hist-card-fact-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 异常卡不套图片框：保持原来的居中说明，去掉父级透明卡带来的圆角/边框差异 */
+.hist-card--facts-out .hist-card-fallback { border-radius: 10px; background: var(--ui-veil, rgba(127,127,127,.06)); }
 /* 播放圆钮：音频/视频卡中央，hover 微放大 */
 .hist-card-play { position: absolute; left: 50%; top: 50%; z-index: 3; transform: translate(-50%, -50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ui-scrim, rgb(0 0 0 / 0.45)); color: var(--ui-tip-ink, #fff); font-size: 12px; backdrop-filter: blur(4px); transition: transform 0.16s ease; pointer-events: none; }
 .hist-card-media:hover .hist-card-play { transform: translate(-50%, -50%) scale(1.1); }
@@ -1284,6 +1304,12 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
 /* 历史卡里的音频波形一律中性灰阶（用户口径 2026-10-27：不要主题紫）。
    只覆盖卡片内的表现，节点里的播放器仍按自己的主题走。 */
+/* 卡外已经有一行"音频 · 时长 · 大小"：播放器自带的时长/大小/文件名在卡里重复，
+   这里只保留波形与播放键（用户口径：卡片信息只出现一次）。名字早就不传了，
+   时长与大小仍需藏起来。 */
+.hist-card-audio-plugin .apv-time,
+.hist-card-audio-plugin .apv-size,
+.hist-card-audio-plugin .apv-name { display: none; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,

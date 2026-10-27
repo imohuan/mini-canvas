@@ -141,12 +141,25 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, '卡片没有用 media 元数据给真实比例').toMatch(/function mediaAspect/)
   })
 
-  it('视频/音频卡显示宽高比、时长、文件大小（与图片卡同一套角标）', () => {
-    const tags = modalsArea.slice(modalsArea.indexOf('function buildMediaTags'), modalsArea.indexOf('function buildDetailButton'))
-    expect(tags, '角标没显示宽高').toMatch(/width\s*\+\s*'×'\s*\+\s*height/)
-    expect(tags, '角标没显示时长').toMatch(/formatDuration\(durationMs\)/)
-    expect(tags, '角标没显示文件大小').toMatch(/formatBytes\(bytes\)/)
-    expect(modalsArea, '媒体卡没有调用统一角标').toMatch(/media\.appendChild\(buildMediaTags\(item\)\)/)
+  it('方案 5：信息全部在图片外，一行 = 类型标签 + 宽高 · 时长 · 大小', () => {
+    const fn = modalsArea.slice(modalsArea.indexOf('function buildFactsLine'), modalsArea.indexOf('/** 整张卡的最后一行'))
+    expect(fn, '信息行没有类型标签').toMatch(/hist-card-kind/)
+    expect(fn, '信息行没显示宽高').toMatch(/item\.media\.width\s*\+\s*'×'\s*\+\s*item\.media\.height/)
+    expect(fn, '信息行没显示时长').toMatch(/formatDuration\(item\.media\?\.durationMs\)/)
+    expect(fn, '信息行没显示文件大小').toMatch(/formatBytes\(item\.media\?\.bytes\)/)
+    // 图片上不许再有任何信息浮层
+    const globalStyle = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    expect(globalStyle, '图片上还压着渐变信息条').not.toMatch(/\.hist-card-tags\s*\{/)
+    expect(modalsArea, '还有地方把信息角标挂回图片里').not.toMatch(/media\.appendChild\(buildMediaTags/)
+    // 三类卡（媒体卡 / 媒体兜底 / 图片卡）都要走同一个出口补信息行
+    expect(modalsArea.match(/return finishCard\(card, item\)/g)?.length ?? 0, '有卡片没走统一的信息行出口').toBeGreaterThanOrEqual(2)
+  })
+
+  it('音频没有宽高：信息行不显示尺寸；视频/图片才显示', () => {
+    const fn = modalsArea.slice(modalsArea.indexOf('function buildFactsLine'), modalsArea.indexOf('/** 整张卡的最后一行'))
+    // 音频不推送宽高（媒体没有可视尺寸），只推送时长与大小
+    expect(fn, '音频被塞了宽高').toMatch(/item\.media\?\.width\s*&&\s*item\.media\?\.height/)
+    expect(modalsArea, '音频没有画面，不该补 videoWidth/videoHeight').toMatch(/const w = !isAudio \? v\.videoWidth/)
   })
 
   it('音频卡在亮色主题下不用主题强调色（白底 + 中性波形）', () => {
