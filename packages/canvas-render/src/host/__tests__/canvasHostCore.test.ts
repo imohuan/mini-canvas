@@ -379,9 +379,10 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
       { id: 'e2', source: 'c', target: 'd', sourceHandle: 'out2', targetHandle: 'in2' },
     ]
     const out = edgesFromStore(edges, new Set(['a', 'b', 'c', 'd']))
+    // zIndex 恒显式（防 VueFlow 合并语义残留旧层值），见下方"取消选中回落"回归测试
     expect(out).toEqual([
-      { id: 'e1', type: 'custom', source: 'a', target: 'b', sourceHandle: 'out1', targetHandle: 'in1' },
-      { id: 'e2', type: 'custom', source: 'c', target: 'd', sourceHandle: 'out2', targetHandle: 'in2' },
+      { id: 'e1', type: 'custom', source: 'a', target: 'b', sourceHandle: 'out1', targetHandle: 'in1', zIndex: LAYERS.edge },
+      { id: 'e2', type: 'custom', source: 'c', target: 'd', sourceHandle: 'out2', targetHandle: 'in2', zIndex: LAYERS.edge },
     ])
   })
   it('滤掉端点不在存活节点集的悬挂边（不再残留渲染）', () => {
@@ -398,7 +399,10 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
       [{ id: 'e1', source: 'a', target: 'b', type: 'custom' }],
       new Set(['a', 'b']),
     )
-    expect(out[0]).toEqual({ id: 'e1', type: 'custom', source: 'a', target: 'b', sourceHandle: undefined, targetHandle: undefined })
+    expect(out[0]).toEqual({
+      id: 'e1', type: 'custom', source: 'a', target: 'b',
+      sourceHandle: undefined, targetHandle: undefined, zIndex: LAYERS.edge,
+    })
   })
   it('data.isTemp 边：在渲染 DTO 上关掉 selectable/focusable/deletable 并置顶', () => {
     const out = edgesFromStore(
@@ -422,7 +426,7 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
 })
 
 describe('edgesFromStore：选中节点连线的层级（选中节点 > 其连线 > 其余）', () => {
-  it('任一端选中的边抬到 edgeSelected，普通边不带 zIndex', () => {
+  it('任一端选中的边抬到 edgeSelected，普通边显式落在 edge', () => {
     const edges = [
       { id: 'sel-src', source: 'a', target: 'b', type: 'custom' },
       { id: 'sel-tgt', source: 'c', target: 'a', type: 'custom' },
@@ -432,7 +436,7 @@ describe('edgesFromStore：选中节点连线的层级（选中节点 > 其连�
     const byId = (id: string) => out.find((e) => e.id === id)!
     expect(byId('sel-src').zIndex).toBe(LAYERS.edgeSelected)
     expect(byId('sel-tgt').zIndex).toBe(LAYERS.edgeSelected)
-    expect(byId('plain').zIndex).toBeUndefined()
+    expect(byId('plain').zIndex).toBe(LAYERS.edge)
   })
 
   it('临时边仍置顶（tempEdge 优先，选中判定只管普通边）', () => {
@@ -444,12 +448,36 @@ describe('edgesFromStore：选中节点连线的层级（选中节点 > 其连�
     expect(out[0]!.zIndex).toBe(LAYERS.tempEdge)
   })
 
-  it('不传选中集 = 全部普通边（向后兼容，不写 zIndex）', () => {
+  it('不传选中集 = 全部普通边落在 edge（仍显式写 zIndex）', () => {
     const out = edgesFromStore(
       [{ id: 'e1', source: 'a', target: 'b', type: 'custom' }],
       new Set(['a', 'b']),
     )
-    expect(out[0]!.zIndex).toBeUndefined()
+    expect(out[0]!.zIndex).toBe(LAYERS.edge)
+  })
+
+  /**
+   * 回归（2026-10-27 用户实测）：取消选中后连线必须**显式回落**到普通层。
+   *
+   * 为什么这条测试必须断言 100 而不是 undefined：VueFlow 更新边是**合并**语义
+   * （parseEdge 里 Object.assign(existingEdge, edge)），没写 zIndex 的字段会沿用上一次的旧值。
+   * 旧实现"选中时写 250、取消选中时不写"→ 边永远停在 250，压在未选中节点（200）上面，
+   * 用户看到的就是"没选中节点时连线盖住节点""拖拽时层级来回跳"。
+   */
+  it('取消选中：连线显式回落到 LAYERS.edge（不能省略，否则 VueFlow 合并语义会残留旧值）', () => {
+    const edges = [{ id: 'e1', source: 'a', target: 'b', type: 'custom' }]
+    const selected = edgesFromStore(edges, new Set(['a', 'b']), new Set(['a']))
+    expect(selected[0]!.zIndex).toBe(LAYERS.edgeSelected)
+    const cleared = edgesFromStore(edges, new Set(['a', 'b']), new Set())
+    expect(cleared[0]!.zIndex).toBe(LAYERS.edge)
+  })
+
+  it('普通连线一律显式写 LAYERS.edge（选中切换/连接线置顶开关都能把旧值压回去）', () => {
+    const out = edgesFromStore(
+      [{ id: 'e1', source: 'a', target: 'b', type: 'custom' }],
+      new Set(['a', 'b']),
+    )
+    expect(out[0]!.zIndex).toBe(LAYERS.edge)
   })
 })
 

@@ -425,7 +425,7 @@ export function edgesFromStore(
   edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; data?: Record<string, unknown> }>,
   aliveNodeIds: ReadonlySet<string>,
   /** 选中节点 id 集：任一端选中的普通边抬到 LAYERS.edgeSelected（选中节点 > 其连线 > 其余）。
-   *  不传 = 全部普通边不带 zIndex（向后兼容；置顶开关路径也不传，见 CanvasHost.syncFromStore）。 */
+   *  不传 = 全部普通边落在 LAYERS.edge（连线置顶开关路径不传，随后统一改写成 edgeTop）。 */
   selectedNodeIds?: ReadonlySet<string>,
 ): FlowEdge[] {
   return edges
@@ -440,10 +440,17 @@ export function edgesFromStore(
       ...(e.data ? { data: e.data } : {}),
       // 中间态边（拖线占位）—— 同样在 VueFlow 维度隔离：不可选中/不可键盘删除，与正式边视觉共存但语义隔离。
       // 判定读内核通用契约，不认识具体插件。
+      // 普通边**必须显式写层值**，不能"不选中就省略"：
+      // VueFlow 更新边是合并语义（parseEdge 里 Object.assign(existingEdge, edge)），
+      // 省略 zIndex = 沿用上一次的值。旧实现取消选中后边停在 edgeSelected(250)，
+      // 压住所有未选中节点（200）——用户实测"没选中时连线盖住节点、拖拽时来回闪"。
       ...(isTransient(e)
         ? { selectable: false, focusable: false, deletable: false, zIndex: LAYERS.tempEdge }
-        : selectedNodeIds && (selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target))
-          ? { zIndex: LAYERS.edgeSelected }
-          : {}),
+        : {
+            zIndex:
+              selectedNodeIds && (selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target))
+                ? LAYERS.edgeSelected
+                : LAYERS.edge,
+          }),
     }))
 }

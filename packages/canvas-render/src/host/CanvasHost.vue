@@ -504,7 +504,9 @@ function syncFromStore(): void {
     // 之上、选中节点之下（edgeOnTop 开启时不抬，全部走置顶档）。临时边自己的 z 在
     // edgesFromStore 里按 LAYERS.tempEdge 给。
     // 层值唯一事实源 = contracts/layers（见门牌注释与 docs/plans/2026-09-29-canvas-z-layers.md）。
-    edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
+    // 普通边现在恒有 zIndex（显式回落，防 VueFlow 合并语义残留），所以这里不能再写
+    // !e.zIndex 判断，否则「连线置顶」开关会静默失效。临时边保持自己的 tempEdge 档。
+    edgeOnTop && e.zIndex !== LAYERS.tempEdge ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )
   // 灌节点前现算剔除集合与邻接表：保证 syncNodesFromStore 拿到同一份最新状态
   //（store 变化包含节点/边增删改；视口帧回调路径已在 onVisibleRectFrame 内算过，此处幂等重算）。
