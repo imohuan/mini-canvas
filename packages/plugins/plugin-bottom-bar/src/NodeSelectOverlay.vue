@@ -209,7 +209,6 @@ function onDragPointerDown(ev: PointerEvent): void {
 .nso-layer.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 26%, transparent); }
 .nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 20%, transparent); }
 .nso-layer.is-connected:hover { background: color-mix(in srgb, var(--ui-accent) 30%, transparent); }
-.nso-layer.is-blocked:hover { background: color-mix(in srgb, var(--ui-danger) 26%, transparent); }
 .nso-layer.is-owner { pointer-events: none; }
 /* 主题色白名单: 红色语义 = 危险/禁用，走 --ui-danger（形状为蒙版与角标，非主题强调色） */
 .nso-layer.is-blocked { border-color: var(--ui-danger); background: color-mix(in srgb, var(--ui-danger) 16%, transparent); pointer-events: none; }
