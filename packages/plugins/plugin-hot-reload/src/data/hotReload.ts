@@ -274,6 +274,8 @@ export interface HotReloadDeps {
    * 结果直接写在按钮上（重装中/完成）与日志里，再弹通知是噪音。
    */
   onReloaded?: (info: { plugin: string; sourceLabel: string }) => void
+  /** 自动重装**失败**时的提示（与 onReloaded 对称；缺省弹错误 toast） */
+  onReloadFailed?: (info: { plugin: string; sourceLabel: string; error: string }) => void
 }
 
 /** 持久化 key */
@@ -456,6 +458,21 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       })
     } catch {
       /* 通知弹不出来不影响重装本身（比如 Node 环境） */
+    }
+  }
+
+  /** 自动重装失败后的提示（注入优先；缺省右下角错误通知） */
+  function notifyFailed(plugin: string, error: string, sourceLabel = 'watch'): void {
+    if (deps.onReloadFailed) {
+      deps.onReloadFailed({ plugin, sourceLabel, error })
+      return
+    }
+    try {
+      void import('vue-sonner').then(({ toast }) => {
+        toast.error('热重载失败：' + plugin, { description: error.slice(0, 200) })
+      })
+    } catch {
+      /* Node 环境没有 toast：忽略 */
     }
   }
 
@@ -681,8 +698,24 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   // 为什么先 GET 再判断：事件**有意不带值**（见 routes/events.ts，避免大 payload 在通道里搬），
   // 所以地址只能收到通知后现读一次。读回来的值里既有地址也有 t。
 
-  /** 产物 HEAD 对比用的 Last-Modified 缓存：插件名 → 上次见到的值 */
+  /** 产物签名缓存：插件名 → 上次见到的值（内容哈希，见 signatureOf） */
   const lastModifiedBy = new Map<string, string>()
+
+  /**
+   * 产物签名：**内容哈希**（FNV-1a）。
+   *
+   * 为什么不用 Content-Length：等长修改（v14→v15、改文案不增减字数）长度完全不变，
+   * 会被当成「没变」静默跳过 —— 真机表现为「有时有通知有时没有」（用户实测）。
+   * 内容哈希对任何字节变化都敏感。成本：只在收到通知时拉一次全文（~百 KB），可接受。
+   */
+  function signatureOf(text: string): string {
+    let h = 0x811c9dc5
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i)
+      h = Math.imul(h, 0x01000193)
+    }
+    return (h >>> 0).toString(36) + ':' + text.length.toString(36)
+  }
 
   /**
    * 读 watch 上报的那条记录（key = plugin-watch:<插件名>）。
@@ -746,19 +779,21 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       })
       return
     }
-    // 产物签名：服务端 /plugins/* 的静态响应**不带 Last-Modified/Content-Length**（实测），
-    // HEAD 对比不可用 —— 改用轻量 GET 的 Content-Length（构建产物每次 build 长度几乎必变；
-    // 真正的"内容是否一致"由 reload 后的产物完整性兜底，这里只求"明显变了才重装"）。
+    // 产物签名：**拉全文算内容哈希**。
+    // 曾经用 Content-Length 比对，等长修改（v14→v15、改文案不增减字数）会被当成「没变」
+    // 静默丢弃 —— 真机表现就是「有时有通知、有时没有」。内容哈希对任何字节变化都敏感。
+    // 拿不到内容时**不跳过**：宁可多重装一次，也不要静默吞掉用户的修改。
     try {
-      const probe = await fetch(url, { method: 'GET', headers: { range: 'bytes=0-0' }, cache: 'no-store' })
-      // 服务端对 range 的支持不定：拿不到就退回全量长度；两者都拿不到才放弃
-      const lm = probe.headers.get('content-range') ?? probe.headers.get('content-length') ?? 'unknown'
-      const prev = lastModifiedBy.get(pluginName)
-      if (prev !== undefined && prev === lm) return // 旧通知（乱序/重复）：产物没变，静默丢弃
-      lastModifiedBy.set(pluginName, lm) // 记住这次见到的；reload 拉的就是这份
+      const probe = await fetch(url, { cache: 'no-store' })
+      if (probe.ok) {
+        const sig = signatureOf(await probe.text())
+        const prev = lastModifiedBy.get(pluginName)
+        if (prev !== undefined && prev === sig) return // 真的重复通知（没变）：静默丢弃
+        lastModifiedBy.set(pluginName, sig)
+      }
     } catch (err) {
-      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：探测失败 ' + String(err) })
-      return
+      // 探测失败不等于产物没变：继续往下重装（加载器自己会报明确的错）
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：探测失败，仍尝试重装 ' + String(err) })
     }
     try {
       // 有上报地址 → 直接照它拉新产物（不看清单、不看名字对应的目录）
@@ -777,7 +812,10 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       })
       notifyReloaded(pluginName, declared ? 'watch 上报地址' : 'kv-plugin-watch')
     } catch (err) {
-      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：' + String(err) })
+      const msg = String(err)
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：' + msg })
+      // 失败也要让用户看见：静默失败 = 以为热重载坏了却不知道原因
+      notifyFailed(pluginName, msg)
     }
   }
 

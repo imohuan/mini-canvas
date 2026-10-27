@@ -575,3 +575,122 @@ describe('调试监听状态（心跳 / 失联 / 未知）', () => {
   })
 })
 
+describe('通知稳定性：等长修改也要触发重装 + 失败要能看见', () => {
+  /** 造一个「产物内容可变」的假世界；每次 fire 会读当前 text */
+  function boot(content: { text: string }) {
+    const w = globalThis as Record<string, unknown>
+    let handler: ((e: { type: string; key: string }) => void) | undefined
+    w.__miniCanvasKvEvents = {
+      subscribe(_p: string, onEvent: (e: { type: string; key: string }) => void) {
+        handler = onEvent
+        return () => { handler = undefined }
+      },
+    }
+    const reloads: string[] = []
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo'],
+      reloadByUrl: async (name) => void reloads.push(name),
+      onReloaded: () => {},
+      fetchJson: async (url, init) => {
+        const u = String(url)
+        if (u.includes('/api/kv/config/plugin-watch')) {
+          return { ok: true, value: { front: 'http://h/demo.js', t: Date.now() } }
+        }
+        void init
+        return { ok: true }
+      },
+    })
+    // 覆盖全局 fetch：产物内容从 content.text 读，支持任意内容
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: string | URL) => {
+      const u = String(input)
+      if (u.includes('/api/kv/config/')) {
+        return { ok: true, json: async () => ({ value: { front: 'http://h/demo.js' } }), text: async () => '' } as Response
+      }
+      return { ok: true, json: async () => ({}), text: async () => content.text } as Response
+    }) as unknown as typeof fetch
+    const fire = () => handler?.({ type: 'config', key: 'plugin-watch:demo' })
+    const done = async () => {
+      globalThis.fetch = originalFetch
+      delete w.__miniCanvasKvEvents
+    }
+    hr.watchPluginChanges()
+    return { hr, reloads, fire, done }
+  }
+
+  it('内容等长但不同（v14 → v15）→ 必须重装（旧实现按长度比会静默丢弃）', async () => {
+    const content = { text: 'version: v14' }
+    const { reloads, fire, done } = boot(content)
+    try {
+      fire()
+      await tick(30)
+      expect(reloads, '第一次收到通知要重装').toEqual(['demo'])
+
+      // 等长修改：长度完全相同，只有内容不同
+      content.text = 'version: v15'
+      expect(content.text.length).toBe('version: v14'.length)
+      fire()
+      await tick(30)
+      expect(reloads, '等长修改也必须重装').toEqual(['demo', 'demo'])
+    } finally {
+      await done()
+    }
+  })
+
+  it('内容真没变（重复通知）→ 不重复重装（防抖仍然有效）', async () => {
+    const content = { text: 'same' }
+    const { reloads, fire, done } = boot(content)
+    try {
+      fire()
+      await tick(30)
+      fire()
+      await tick(30)
+      expect(reloads).toEqual(['demo'])
+    } finally {
+      await done()
+    }
+  })
+
+  it('重装失败 → 走 onReloadFailed（不再只写在日志里）', async () => {
+    const w = globalThis as Record<string, unknown>
+    let handler: ((e: { type: string; key: string }) => void) | undefined
+    w.__miniCanvasKvEvents = {
+      subscribe(_p: string, onEvent: (e: { type: string; key: string }) => void) {
+        handler = onEvent
+        return () => { handler = undefined }
+      },
+    }
+    const failures: Array<{ plugin: string; error: string }> = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: string | URL) => {
+      const u = String(input)
+      if (u.includes('/api/kv/config/')) {
+        return { ok: true, json: async () => ({ value: { front: 'http://h/demo.js' } }), text: async () => '' } as Response
+      }
+      return { ok: true, json: async () => ({}), text: async () => 'boom' } as Response
+    }) as unknown as typeof fetch
+    try {
+      const hr = createHotReload({
+        storage: memStorage(),
+        listInstalled: () => ['demo'],
+        reloadByUrl: async () => {
+          throw new Error('加载器炸了')
+        },
+        onReloaded: () => {},
+        onReloadFailed: (info) => void failures.push({ plugin: info.plugin, error: info.error }),
+        fetchJson: async () => ({ ok: true }),
+      })
+      hr.watchPluginChanges()
+      handler?.({ type: 'config', key: 'plugin-watch:demo' })
+      await tick(30)
+      expect(failures).toHaveLength(1)
+      expect(failures[0]!.plugin).toBe('demo')
+      expect(failures[0]!.error).toContain('加载器炸了')
+    } finally {
+      globalThis.fetch = originalFetch
+      delete w.__miniCanvasKvEvents
+    }
+  })
+})
+
