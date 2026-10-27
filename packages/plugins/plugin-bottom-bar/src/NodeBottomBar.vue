@@ -2336,15 +2336,6 @@ function onGlobalLeave(el: Element): void {
   }
 }
 
-/* starting 阶段的顶部小字提示（不遮原文，让用户确认内容还在） */
-.nb-ai-hint {
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  font-size: 10px;
-  color: var(--ui-accent, #0891b2);
-  pointer-events: none;
-}
 /*
  * 字号/行高/最小高必须写在 **.ProseMirror 本体**上，不能只写在 .prose-mirror-editor 外壳上：
  * bundle 的 `.prose-mirror-editor .ProseMirror` 把这些值直配在正文元素自己身上（16px/120px），
@@ -2743,3 +2734,12 @@ function onGlobalLeave(el: Element): void {
   height: 40px;
 }
 </style>
+/* starting 阶段的小字提示（用户口径：放**输入框右下角**）——不遮原文，跟随输入区 */
+.nb-ai-hint {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 10px;
+  color: var(--ui-accent, #0891b2);
+  pointer-events: none;
+}
