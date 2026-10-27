@@ -20,7 +20,7 @@
  * 播放器内部的播放头 / 进度条由它自己标注（同一套契约）。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { useCanvasRender } from "@mini-canvas/canvas-render"
+import { useCanvasRender, useUiComponent } from "@mini-canvas/canvas-render"
 import { formatClock } from "./audioPlayback"
 import { isValidWaveform } from "./waveform"
 import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio } from "./audioOps"
@@ -30,6 +30,8 @@ import { readAudioSourceFields, resolveAudioSrc } from "./audioRefs"
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+/** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
+const NodeEmptyState = useUiComponent('nodeEmptyState')
 
 /** 播放器实例：播放/暂停、重开波形源都经它的公开方法（底栏自己不再养 audio 元素） */
 const player = ref<InstanceType<typeof AudioWavePlayer> | null>(null)
@@ -184,6 +186,7 @@ watch(
 
     <!-- 空态：只说"没有音频"。上传入口在上控制栏（AudioTopToolbar），与图片/视频节点一致 ——
          卡片里不再长按钮，三种素材节点的空态长得一样。 -->
+    <NodeEmptyState v-else-if="NodeEmptyState" text="（无音频）" description="上传一段音频，或把音频节点连进来" />
     <div v-else class="audio-empty">
       <svg
         class="audio-empty-icon"

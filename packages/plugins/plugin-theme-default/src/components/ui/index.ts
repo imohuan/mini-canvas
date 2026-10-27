@@ -13,6 +13,8 @@ export { default as ToolParamField } from './ToolParamField.vue'
 export { default as ColorField } from './ColorField.vue'
 // 节点上/下插槽里的通用按钮（插件放按钮不必再自绘一套 32×32/圆角/hover/focus）
 export { default as NodeToolbarButton } from './NodeToolbarButton.vue'
+/** 节点内容区的统一空状态（图片/视频/音频/3D 等共用；文本/说明/图标/动作都可配） */
+export { default as NodeEmptyState } from './NodeEmptyState.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）
 export { default as ToolParamGroup } from './ToolParamGroup.vue'
 // 参数预设件（「按参数类型自动选组件」的那一层，判定表见 paramKind.ts）：

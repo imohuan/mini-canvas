@@ -37,6 +37,9 @@ export async function resolveImageSrc(
   const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : ''
   const legacyUrl = typeof data?.imageUrl === 'string' ? data.imageUrl : ''
   if (!resourceId) return legacyUrl
+  // 引用可能被上一代写入方写成「已经解析好的地址」（新链路曾把同源 URL 同时写进
+  // resourceId）：那它本身就是可显示地址，不必再问资源服务（问也会原样回来）。
+  if (isDisplayUrl(resourceId)) return resourceId
   const port = imageResourcePort(ctx)
   if (port) {
     try {
@@ -47,5 +50,10 @@ export async function resolveImageSrc(
     }
   }
   return legacyUrl // 迁移期：旧存档只有 imageUrl
+}
+
+/** 能直接交给 `<img>` / 纹理加载器的地址（http(s) / blob / data / 同源根路径） */
+export function isDisplayUrl(value: string): boolean {
+  return /^(?:[a-z]+:)?\/\//i.test(value) || /^(?:blob:|data:)/i.test(value) || value.startsWith('/')
 }
 

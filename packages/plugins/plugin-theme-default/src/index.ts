@@ -38,6 +38,7 @@ import {
   ToolParamField,
   NodeToolbarButton,
   ColorField,
+  NodeEmptyState,
 } from "./components/ui";
 import MediaViewer from "./components/ui/MediaViewer.vue";
 import Tooltip from "./components/ui/Tooltip.vue";
@@ -703,6 +704,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
   const ui = ctx.registryOf<unknown>("ui");
   ui.add("button", NodeToolbarButton, { id: "default" });
+  // 统一空状态：节点插件按名取用（图片/视频/音频/3D 共用同一套图标/文案/动作布局）。
+  ui.add("nodeEmptyState", NodeEmptyState, { id: "default" });
   ui.add("dropdown", Dropdown, { id: "default" });
   // 悬浮提示（设计系统件）：插件按名取用，气泡观感随主题一起换。
   // 放在这里而不是各插件自绘，理由与 dropdown 完全相同 —— 见 components/ui/Tooltip.vue 顶部注释。
@@ -744,7 +747,7 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
  * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
  * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
  */
-export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField } from "./components/ui";
+export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, NodeEmptyState } from "./components/ui";
 export { MediaViewer } from "./components/ui";
 export type { DropdownTrigger, SelectOption } from "./components/ui";
 

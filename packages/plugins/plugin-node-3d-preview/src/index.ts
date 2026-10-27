@@ -1,5 +1,5 @@
 // plugin-node-3d-preview —— 3D 全景预览节点插件包统一出口
-export { node3dPreviewPlugin, PANORAMA_NODE_TYPE } from './node3dPreviewPlugin'
+export { node3dPreviewPlugin, PANORAMA_NODE_TYPE, Config as node3dPreviewConfig } from './node3dPreviewPlugin'
 export type { Panorama3DNodeService } from './node3dPreviewPlugin'
 
 // —— 开发期热重载（HMR）：本包源码一改，vite 触发本 accept →

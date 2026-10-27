@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import ImageContent from '../ImageContent.vue'
 import { beginCrop, endCrop } from '../cropSession'
 import {
@@ -38,7 +39,8 @@ function renderCtx(zoom: number): CanvasRenderContext {
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
   }
   return {
-    ctx: { get: (name: string) => services[name] },
+    // 极简上下文：没有主题 ui 目录 → 空态回落组件自身的一行灰字（不依赖主题包）
+    ctx: { get: (name: string) => services[name], registryOf: () => new RegistryImpl() },
     flow: { viewport: { value: { zoom } } },
     // 可视区闸门（生成小图前会问一句"这个节点在不在视野里"）
     visibleNodes: () => [{ id: 'n1', x: 0, y: 0, w: 100, h: 100 }],

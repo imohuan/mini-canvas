@@ -23,6 +23,7 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import ImageContent from '../ImageContent.vue'
 import { beginCrop, endCrop } from '../cropSession'
 
@@ -36,7 +37,8 @@ function renderCtx(): CanvasRenderContext {
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
   }
   return {
-    ctx: { get: (name: string) => services[name] },
+    // 极简上下文：没有主题 ui 目录 → 空态回落到组件自身的一行灰字（这里锁的就是回落路径）
+    ctx: { get: (name: string) => services[name], registryOf: () => new RegistryImpl() },
     // 视口经 flow 暴露（分档显示要读当前缩放）；1 = 第一档（不触发缩略图地址推导）
     flow: { viewport: { value: { zoom: 1 } } },
   } as unknown as CanvasRenderContext

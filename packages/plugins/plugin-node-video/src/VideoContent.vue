@@ -16,7 +16,7 @@
  * 这也意味着**裁剪中必须显示完整画面**（否则用户看不到自己框外的内容没法调框）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RenderEvents, useCanvasRender } from '@mini-canvas/canvas-render'
+import { RenderEvents, useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { captureFrame } from './videoTransform'
 import {
   FrameCache,
@@ -49,6 +49,8 @@ import { endOverlay, isCropping } from './videoSession'
 import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
+/** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
+const NodeEmptyState = useUiComponent('nodeEmptyState')
 
 const { ctx, flow, visibleNodes } = useCanvasRender()
 
@@ -940,7 +942,14 @@ watch(videoUrl, (prev) => {
 
       </template>
 
+      <NodeEmptyState
+        v-else-if="broken && NodeEmptyState"
+        text="视频已失效"
+        description="会话级链接刷新后不可恢复，请重新上传"
+        tone="danger"
+      />
       <div v-else-if="broken" class="video-empty is-broken">视频已失效（会话级链接刷新后不可恢复）</div>
+      <NodeEmptyState v-else-if="NodeEmptyState" text="（无视频）" description="上传一段视频，或把视频节点连进来" />
       <div v-else class="video-empty is-void">（无视频）</div>
     </div>
 

@@ -11,7 +11,7 @@
  *
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层类型(useCanvasRender)，不反向依赖宿主/demo。
  */
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import { Service, type Context, type PluginModule, type ConfigSchema } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import PanoramaContent from './PanoramaContent.vue'
 import {
@@ -68,6 +68,24 @@ export class Panorama3DService extends Service implements Panorama3DNodeService 
 
 export const name = '3d-preview'
 export const inject = ['doc'] as string[]
+
+/**
+ * 3D 预览的可配置项（模块级 Config）：默认主题的全局设置页会自动长出这一组。
+ *
+ * 分组沿用项目既有一级分类「常规」，二级归到「上游接口」—— 用户口径 2026-10-27：
+ * 读上游已经换成一个单独的新 API；这里只放"接口地址"一类，不往画布里写任何节点字段。
+ * 留空 = 不用接口（按节点自带的 resourceId / imageUrl 解析）。
+ */
+export const Config: ConfigSchema = {
+  preview3dUpstreamApi: {
+    type: 'string',
+    default: '',
+    label: '上游资源接口',
+    group: '常规/上游接口',
+    description:
+      '读取某个节点的上游资源时优先请求这个地址。支持 {canvasId} / {nodeId} 占位；不写占位会自动带上这两个查询参数。留空 = 按节点里保存的 resourceId / imageUrl 解析。',
+  },
+}
 
 /**
  * 节点快捷键在"同键竞争"里的优先级。
@@ -155,4 +173,4 @@ export function apply(ctx: Context) {
 }
 
 /** 兼容旧装配的 PluginModule 出口（name='3d-preview' 供 HMR reload） */
-export const node3dPreviewPlugin: PluginModule = { name, inject, apply }
+export const node3dPreviewPlugin: PluginModule = { name, inject, Config, apply }

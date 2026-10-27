@@ -26,7 +26,7 @@
  */
 import * as THREE from 'three'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { RenderEvents, useCanvasRender, createUpstreamCapability, type UpstreamCapability } from '@mini-canvas/canvas-render'
+import { RenderEvents, useCanvasRender, createUpstreamCapability, useUiComponent, type UpstreamCapability } from '@mini-canvas/canvas-render'
 import {
   DEFAULT_VIEW,
   applyDrag,
@@ -36,8 +36,9 @@ import {
   toSpherical,
   type ViewState,
 } from './panoramaView'
-import { findUpstreamImageRef } from './textureSource' // 迁移期保留：单测与旧调用方仍用
-import { resolveImageSrc } from './imageRefs'
+import { findUpstreamImageRef, resolveUpstreamImageFields, upstreamSourceFields } from './textureSource'
+import { isDisplayUrl, resolveImageSrc } from './imageRefs'
+import { buildUpstreamApiUrl, readUpstreamMediaPayload } from './upstreamApi'
 import { resolveEscapeAction, resolvePanoramaSpec } from './panoramaMode'
 import { beginInteract, endInteract, exitFullscreen, isFullscreen, isInteracting, resetViewToken } from './panoramaSession'
 
@@ -45,10 +46,82 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
 
 /**
+ * 统一空状态：默认主题登记在 ui 目录的 nodeEmptyState（图片/视频/音频/3D 共用）。
+ * 没装主题/极简宿主时为空 → 模板里回落本组件自带的一行提示，不让节点白屏。
+ */
+const NodeEmptyState = useUiComponent('nodeEmptyState')
+
+/** 当前画布 id（新上游接口的必填上下文）：URL 查询 ?canvas= 优先，其次哈希路由 #/canvas/<id> */
+function currentCanvasId(): string {
+  if (typeof location === 'undefined') return ''
+  try {
+    const href = location.href
+    const query = new URL(href).searchParams.get('canvas')
+    if (query) return query
+    const m = /#\/canvas\/([^/?#]+)/.exec(href)
+    return m ? decodeURIComponent(m[1]) : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 走**新接口**读上游资源（用户 2026-10-27：上游配置已换成一个单独的新 API）。
+ *
+ * 接口地址来自设置「常规/上游接口」，支持 {canvasId}/{nodeId}；留空返回 null（不用接口）。
+ * 请求失败 / 返回认不出都返回 null，由调用方回落节点字段 —— 接口只是"更准的来源"，
+ * 不是唯一真相（它没配、挂了、或还在灰度时不至于让已有画布变空白）。
+ */
+async function fetchUpstreamFromApi(): Promise<Record<string, unknown> | null> {
+  // ctx 在极简宿主里可能只有 get（没有 tryGet）：两种都试，不能因为缺一个方法整段跳过。
+  const ctxAny = ctx as unknown as {
+    tryGet?: (name: string) => unknown
+    get?: (name: string) => unknown
+  }
+  const settings = (ctxAny.tryGet?.('settings') ?? ctxAny.get?.('settings')) as
+    | { get?(key: string): unknown }
+    | undefined
+  const template = settings?.get?.('preview3dUpstreamApi')
+  if (typeof template !== 'string' || !template.trim()) return null
+  const canvasId = currentCanvasId()
+  const url = buildUpstreamApiUrl(template, { canvasId, nodeId: props.id })
+  if (!url) return null
+  try {
+    const res = await fetch(url, { headers: { accept: 'application/json' } })
+    if (!res.ok) return null
+    const media = readUpstreamMediaPayload(await res.json())
+    return media ? upstreamSourceFields(media) : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 上游读取：优先走宿主注册的 `upstream` 能力（按本类型的 consumes.image）；
  * 没有能力包（极简宿主/单测）时，用同一个工厂按需造一份 —— 不重复实现扫边逻辑。
  */
 function upstreamOf(): UpstreamCapability {
+  // 优先用宿主注册的能力实现；**不能**在这里无条件造一个新的 ——
+  // 极简宿主/单测没有 capability 场时，createUpstreamCapability 仍能按 doc 现读，
+  // 但旧宿主可能连 doc 都没有：两者都走同一个纯函数入口，由它按「读不到 = 没有上游」处理。
+  const field = ctx?.registryOf?.('capability')
+  const factory = field?.top?.('upstream')?.value
+  try {
+    if (typeof factory === 'function') {
+      return factory({
+        ctx,
+        id: props.id,
+        type: '3d-preview',
+        data: computed(() => props.data ?? {}),
+        selected: computed(() => false),
+        solo: computed(() => false),
+        zoom: computed(() => 1),
+        update: () => {},
+      } as never)
+    }
+  } catch {
+    // 能力工厂坏了（宿主实现 bug）不应让整张卡片崩：退回同一个纯函数工厂。
+  }
   return createUpstreamCapability(ctx, { id: props.id, type: '3d-preview' })
 }
 
@@ -77,9 +150,6 @@ const spec = computed(() =>
 const fullscreenHostRef = ref<HTMLDivElement | null>(null)
 /** 是否正在拖拽（拖动时给手柄光标/禁用 canvas 原生手势） */
 const dragging = ref(false)
-/** 空态里手填的图片地址草稿 */
-const draftUrl = ref('')
-
 // three 对象放 shallowRef：它们是重量级外部对象，不需要（也不该）被 Vue 深度代理
 const renderer = shallowRef<THREE.WebGLRenderer | null>(null)
 const scene = shallowRef<THREE.Scene | null>(null)
@@ -123,18 +193,45 @@ const FALLBACK = { surface: '#f3f4f6', border: '#e5e7eb' } // 主题色白名单
 const ownImageUrl = ref('')
 let textureSourceToken = 0
 
+/** 上游是否连了图（空态文案要用；异步解析回来前先保守显示空态） */
+const hasUpstream = ref(false)
+
 async function refreshTextureSource(): Promise<void> {
   const token = ++textureSourceToken
   const d = props.data ?? {}
-  const ownData: Record<string, unknown> = {
-    resourceId: typeof d.resourceId === 'string' ? d.resourceId : typeof d.panoUrl === 'string' ? d.panoUrl : '',
-    imageUrl: typeof d.imageUrl === 'string' ? d.imageUrl : '',
+  const ownData: Record<string, unknown> = {}
+  // 空串不收：`{resourceId: ''}` 会让下游按"有引用"走解析分支，反而丢掉旧 imageUrl。
+  if (typeof d.resourceId === 'string' && d.resourceId.trim()) ownData.resourceId = d.resourceId.trim()
+  if (typeof d.imageUrl === 'string' && d.imageUrl.trim()) ownData.imageUrl = d.imageUrl.trim()
+  // 旧存档里的全景图只写在 panoUrl（v1 遗物）：它可能是资源引用，也可能本身就是地址。
+  // 按形状分派，**不能**一律塞进 resourceId —— 塞错会让资源服务把一个地址当 ID 查、最后变空图。
+  if (typeof d.panoUrl === 'string' && d.panoUrl.trim() && !ownData.imageUrl) {
+    if (isDisplayUrl(d.panoUrl.trim())) ownData.imageUrl = d.panoUrl.trim()
+    else if (!ownData.resourceId) ownData.resourceId = d.panoUrl.trim()
   }
-  const upstream = upstreamOf().media('image')
-  const upstreamRef = upstream?.resourceId
+  // 1) 新接口优先（用户配置了才请求）；2) 宿主 upstream 能力；3) 极简宿主按边扫描。
+  //    三层都只交"引用/地址"，真正解析仍统一走 resolveImageSrc。
+  let sourceData: Record<string, unknown> | undefined = (await fetchUpstreamFromApi()) ?? undefined
+  if (token !== textureSourceToken) return
+  if (!sourceData) {
+    let media: { resourceId?: unknown; url?: unknown } | null = null
+    try {
+      media = upstreamOf().media('image') ?? null
+    } catch {
+      media = null
+    }
+    // 能力读不到（宿主未注册/旧宿主）时，仍按边读上游节点自己的字段：
+    // 新节点可能只写 resourceId，旧节点可能只有 imageUrl —— 两边都要算「有图」。
+    const legacy = findUpstreamImageRef(renderEdges.value, props.id, (nodeId) => {
+      const n = renderNodes.value.find((item) => item.id === nodeId)
+      return n?.data as Record<string, unknown> | undefined
+    })
+    sourceData = resolveUpstreamImageFields({ media, legacy }) ?? undefined
+  }
+  hasUpstream.value = Boolean(sourceData)
   // 上游优先：它一旦有引用/地址就压过节点自身
-  const sourceData: Record<string, unknown> | undefined = upstreamRef ? { resourceId: upstreamRef } : ownData
-  const resolved = sourceData ? await resolveImageSrc(ctx, sourceData) : ''
+  const finalSource = sourceData ?? ownData
+  const resolved = await resolveImageSrc(ctx, finalSource)
   if (token !== textureSourceToken) return
   ownImageUrl.value = resolved
 }
@@ -391,14 +488,6 @@ function onKeydown(e: KeyboardEvent): void {
   else if (action === 'exit-interact') exitInteract()
 }
 
-/** 手填图片地址后写回节点（经插件服务走图写入口，自动进历史/落盘） */
-function applyUrl(): void {
-  const url = draftUrl.value.trim()
-  if (!url) return
-  draftUrl.value = ''
-  ctx.get<{ setImageUrl(id: string, url: string): void }>('panorama3d').setImageUrl(props.id, url)
-}
-
 function disposeThree(): void {
   if (frameId) cancelAnimationFrame(frameId)
   frameId = 0
@@ -478,32 +567,26 @@ onBeforeUnmount(() => {
       :style="spec.capturePointer ? { cursor: dragging ? 'grabbing' : 'grab' } : { pointerEvents: 'none' }"
     />
 
-    <!-- 没贴图时的占位说明：可手填图片地址，或直接把图片节点连进来 -->
-    <div v-if="!hasTexture" class="pano-empty">
-      <svg class="pano-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" />
-        <ellipse cx="12" cy="12" rx="6" ry="2" />
-        <path d="M6 12c0 3.3 2.7 6 6 6s6-2.7 6-6" />
-        <path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-      </svg>
-      <span class="pano-empty-text">{{ renderError || '把图片节点连进来，或填图片地址' }}</span>
-      <form v-if="!renderError" class="pano-url nodrag nopan" @submit.prevent="applyUrl">
-        <input
-          v-model="draftUrl"
-          class="pano-url-input"
-          type="text"
-          inputmode="url"
-          placeholder="粘贴全景图地址"
-          aria-label="全景图地址"
-          @pointerdown.stop
-        />
-        <button class="pano-url-go" type="submit" title="应用地址" aria-label="应用地址" :disabled="!draftUrl.trim()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 12h14" />
-            <path d="M13 6l6 6-6 6" />
-          </svg>
-        </button>
-      </form>
+    <!-- 没贴图时的空状态：默认只显示「空」，不再要求用户输入 URL。
+         默认主题装了就复用统一的 NodeEmptyState（与图片/视频/音频同款）；
+         极简宿主没装主题时回落一行灰字，保证仍有可读反馈。 -->
+    <NodeEmptyState
+      v-if="!hasTexture && NodeEmptyState"
+      :text="renderError || (hasUpstream ? '全景图暂时不可用' : '还没有全景图')"
+      :description="renderError ? '' : hasUpstream ? '请检查上游图片是否仍然有效' : '把图片节点连进来，就能查看 360° 全景'"
+      :tone="renderError ? 'danger' : 'muted'"
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <ellipse cx="12" cy="12" rx="6" ry="2" />
+          <path d="M6 12c0 3.3 2.7 6 6 6s6-2.7 6-6" />
+          <path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+        </svg>
+      </template>
+    </NodeEmptyState>
+    <div v-else-if="!hasTexture" class="pano-empty">
+      <span class="pano-empty-text">{{ hasUpstream ? '全景图暂时不可用' : '还没有全景图' }}</span>
     </div>
 
   </div>
@@ -531,7 +614,7 @@ onBeforeUnmount(() => {
   touch-action: none;
 }
 
-/* 空态 */
+/* 空态（主题没装统一空状态件时的兜底） */
 .pano-empty {
   position: absolute;
   inset: 0;
@@ -544,75 +627,11 @@ onBeforeUnmount(() => {
   padding: 12px;
   text-align: center;
 }
-.pano-empty-icon {
-  width: 36px;
-  height: 36px;
-  color: var(--canvas-node-border-hover, #d1d5db);
-}
 .pano-empty-text {
   color: var(--canvas-node-text-muted, #9ca3af);
   /* 中文正文最低 12px */
   font-size: 12px;
   line-height: 1.5;
-}
-
-/* 空态里的地址输入：凹陷浅底 + 10px 圆角，输入框可点（不拖节点） */
-.pano-url {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: min(260px, 100%);
-  padding: 6px 6px 6px 10px;
-  border-radius: 10px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-  pointer-events: auto;
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.pano-url:focus-within {
-  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
-}
-.pano-url-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  outline: none;
-  color: var(--ui-ink, #111827);
-  font: inherit;
-  font-size: 13px;
-}
-.pano-url-input::placeholder {
-  color: var(--ui-ink-mute, #9ca3af);
-}
-.pano-url-go {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
-  color: var(--ui-accent-hover, #0e7490);
-  cursor: pointer;
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.pano-url-go:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent);
-}
-.pano-url-go:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.pano-url-go:focus-visible {
-  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
-  outline-offset: 1px;
-}
-.pano-url-go svg {
-  width: 14px;
-  height: 14px;
 }
 
 /* 全屏层（f 切换）：铺满视口、纯黑无装饰。
@@ -627,10 +646,4 @@ onBeforeUnmount(() => {
   touch-action: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pano-url,
-  .pano-url-go {
-    transition: none;
-  }
-}
 </style>

@@ -61,8 +61,58 @@ export function findUpstreamImageRef(
     if (e.target !== targetId) continue
     const data = getData(e.source)
     const url = typeof data?.imageUrl === 'string' ? data.imageUrl.trim() : ''
-    const resourceId = typeof data?.resourceId === 'string' ? data.resourceId.trim() : ''
+    const rawRef = data?.resourceId
+    // 引用可能被上一代写入方写成数组 / 对象（MCP 与部分生成链路曾把多产物整包塞进来）：
+    // 不是非空字符串就当没有，**不能** String() 一下拿 "[object Object]" 去解析。
+    const resourceId = typeof rawRef === 'string' ? rawRef.trim() : ''
     if (url || resourceId) return { url, resourceId }
   }
   return null
+}
+
+/**
+ * 从 `upstream.media('image')` 的返回里取出可交给图片解析器的字段。
+ *
+ * 为什么单独一个纯函数：上游能力只保证给 `resourceId`（持久引用），**不保证**给
+ * 显示地址；而旧节点/旧宿主可能只有 `imageUrl`。两条路都收口到这里，组件里不再
+ * 各写一份 `resourceId || imageUrl`（那种写法会把「引用」和「地址」混成一个字段，
+ * 哪边为空都读不对）。
+ */
+export function upstreamSourceFields(
+  media: { resourceId?: unknown; url?: unknown } | null | undefined,
+): Record<string, unknown> | null {
+  if (!media) return null
+  const resourceId = typeof media.resourceId === 'string' ? media.resourceId.trim() : ''
+  const url = typeof media.url === 'string' ? media.url.trim() : ''
+  if (!resourceId && !url) return null
+  return {
+    ...(resourceId ? { resourceId } : {}),
+    ...(url ? { imageUrl: url } : {}),
+  }
+}
+
+/** 上游能力的一条产出（引用 / 地址可能只给一个，甚至都给） */
+export interface UpstreamMediaLike {
+  resourceId?: unknown
+  url?: unknown
+  imageUrl?: unknown
+}
+
+/**
+ * 上游能力优先、按边扫描兜底：把两种来源收成一份**可直接交给解析器**的字段。
+ *
+ * 为什么要兜底，而不是"有能力就只认能力"：能力层要求本节点类型声明了 `consumes.image`
+ * （当前已声明），但极简宿主 / 旧宿主 / 能力实现尚在灰度的组合下，`media()` 可能返回
+ * undefined；这时按边读上游自己的 `resourceId`（新）或 `imageUrl`（旧）仍是正确行为。
+ * 兜底**绝不回写**节点数据，也不猜字段以外的内容。
+ *
+ * 顺序（用户口径 2026-10-27）：新接口 → 能力 → 扫边；本函数负责后两层。
+ */
+export function resolveUpstreamImageFields(input: {
+  /** 能力给的媒体（可能只有引用） */
+  media?: UpstreamMediaLike | null
+  /** 按边扫描得到的候选（极简宿主的兜底） */
+  legacy?: UpstreamImageRef | null
+}): Record<string, unknown> | null {
+  return upstreamSourceFields(input.media ?? null) ?? upstreamSourceFields(input.legacy ?? null)
 }

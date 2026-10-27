@@ -13,7 +13,7 @@
  *   也避免纯展示态占据撤销栈）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { ThumbCache, type ThumbResourcePort, type TierImage } from './thumbCanvas'
 import { makeThumbRef, thumbRefParam } from './thumbKey'
 import { readThumbTiers, resolveThumbTier, thumbTargetFor, thumbTierKeys, type ThumbTierConfig } from './thumbTier'
@@ -26,6 +26,8 @@ import { readImageSourceFields, resolveImageSrc } from './imageRefs'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, flow, visibleNodes } = useCanvasRender()
+/** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
+const NodeEmptyState = useUiComponent('nodeEmptyState')
 
 /**
  * 图片地址：**优先按 resourceId 现取**（本地临时 objectURL / 云端资源路由），
@@ -283,7 +285,18 @@ onBeforeUnmount(() => {
         @error="onImgError"
         @load="onImgLoad"
       />
+      <NodeEmptyState
+        v-else-if="broken && NodeEmptyState"
+        text="图片已失效"
+        description="会话级地址刷新后不可恢复，请重新上传"
+        tone="danger"
+      />
       <div v-else-if="broken" class="empty is-broken">图片已失效（会话级 URL 刷新后不可恢复）</div>
+      <NodeEmptyState
+        v-else-if="NodeEmptyState"
+        text="（无图片）"
+        description="上传一张图片，或把图片节点连进来"
+      />
       <div v-else class="empty">（无图片）</div>
 
     </div>

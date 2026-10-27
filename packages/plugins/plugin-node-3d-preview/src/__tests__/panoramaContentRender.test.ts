@@ -9,12 +9,25 @@
  * 的错，只测内部 computed 是看不出来的，所以这里直接断言渲染出来的属性。
  * onMounted 里的 three 初始化在 SSR 不会执行，因此本测试不需要 WebGL。
  */
-import { describe, it, expect, afterEach } from 'vitest'
+import { beforeAll, describe, it, expect, afterEach } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { Context } from '@mini-canvas/canvas-data'
+import { RegistryImpl } from '@mini-canvas/kernel'
+import type { Registry } from '@mini-canvas/kernel'
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import PanoramaContent from '../PanoramaContent.vue'
 import { beginInteract, enterFullscreen, resetInteractSessions } from '../panoramaSession'
+
+/** 真实主题插件登记的 ui 目录：空状态件与生产同形（不直接 import 主题组件，遵守 T08） */
+let uiField: Registry<unknown>
+beforeAll(async () => {
+  const ctx = new Context()
+  ctx.plugin(themeDefaultPlugin)
+  await ctx.start()
+  uiField = ctx.registryOf<unknown>('ui')
+})
 
 /**
  * 最小渲染上下文：组件用到 ctx.get('panorama3d'/'settings')、ctx.on（画布点空白事件）
@@ -25,6 +38,7 @@ function renderCtx(): CanvasRenderContext {
     ctx: {
       get: () => undefined,
       on: () => () => {},
+      registryOf: (kind: string) => (kind === 'ui' ? uiField : new RegistryImpl()),
     },
     viewport: { value: { zoom: 1 } },
     renderNodes: { value: [] },
@@ -95,10 +109,13 @@ describe('交互模式（双击进入）：用来转视角', () => {
 })
 
 describe('没贴图时的占位', () => {
-  it('占位说明与地址输入框都在，且提示不重复叠"双击进入"', async () => {
+  it('默认只显示统一的空状态：不要求输入 URL，提示怎么补上', async () => {
     const html = await render('p1')
-    expect(html).toContain('把图片节点连进来，或填图片地址')
-    expect(html).toContain('aria-label="全景图地址"')
+    expect(html).toContain('nes-root')
+    expect(html).toContain('还没有全景图')
+    expect(html).toContain('把图片节点连进来')
+    expect(html).not.toContain('aria-label="全景图地址"')
+    expect(html).not.toContain('<input')
     expect(html).not.toContain('双击进入交互')
   })
 })

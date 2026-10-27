@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import VideoContent from '../VideoContent.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
 import { framingStyle } from '../videoCrop'
@@ -32,7 +33,12 @@ function renderCtx(): CanvasRenderContext {
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
   }
   return {
-    ctx: { get: (name: string) => services[name], on: () => ({ dispose: () => {} }) },
+    ctx: {
+      get: (name: string) => services[name],
+      on: () => ({ dispose: () => {} }),
+      // 极简上下文：没有主题 ui 目录 → 空态回落到组件自身的一行灰字
+      registryOf: () => new RegistryImpl(),
+    },
     flow: { viewport: { value: { zoom: 1 } } },
     // 可视区闸门（生成帧图前会问一句"这个节点在不在视野里"）
     visibleNodes: () => [{ id: 'v1', x: 0, y: 0, w: 100, h: 100 }],

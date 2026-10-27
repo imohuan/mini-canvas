@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import AudioContent from '../AudioContent.vue'
 import { WAVEFORM_BUCKETS } from '../waveform'
 
@@ -27,7 +28,11 @@ function renderCtx(): CanvasRenderContext {
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
   }
   return {
-    ctx: { get: (name: string) => services[name], on: () => ({ dispose: () => {} }) },
+    ctx: {
+      get: (name: string) => services[name],
+      on: () => ({ dispose: () => {} }),
+      registryOf: () => new RegistryImpl(),
+    },
     viewport: { value: { zoom: 1 } },
   } as unknown as CanvasRenderContext
 }
