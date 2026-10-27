@@ -13,7 +13,7 @@
  * - 每条：名称 / 描述 / 图标（预设四选一）/ 提示词模板（{{变量}} chips 点一下插入）；
  * - 「恢复默认」= 把内置两条放回编辑副本（保存后才生效）。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import {
   loadAiActions,
@@ -29,12 +29,18 @@ import {
 const { ctx } = useCanvasRender()
 
 /** 本地编辑副本（保存前不动云端） */
-const draft = ref<AiActionConfig[]>([])
-const selectedId = ref('')
+/**
+ * 首屏就摆**内置默认**（与"云端没配过"时的实际生效值一致）。
+ * 为什么不是空表 + 「配置加载中…」：那一瞬间用户看到的是「这里什么都没有」，
+ * 正是 2026-10-27 反馈「设置界面里看不到你的配置」的观感。云端配置回来再整体替换。
+ */
+const draft = ref<AiActionConfig[]>(DEFAULT_AI_ACTIONS.map((a) => ({ ...a })))
+const selectedId = ref(draft.value[0]?.id ?? '')
 const busy = ref(false)
 const saved = ref(false)
 const error = ref('')
-const loading = ref(true)
+/** 正在读云端那一份（读到之前下面显示的是内置默认，按钮先别按） */
+const syncing = ref(true)
 let seq = 0
 
 /** 模板文本域（插入变量要往光标处插） */
@@ -48,7 +54,7 @@ function backendBase(): string {
 }
 
 async function reload(): Promise<void> {
-  loading.value = true
+  syncing.value = true
   try {
     draft.value = normalizeAiActions(await loadAiActions({ baseUrl: backendBase() }))
     if (!draft.value.some((a) => a.id === selectedId.value)) {
@@ -58,12 +64,18 @@ async function reload(): Promise<void> {
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
   } finally {
-    loading.value = false
+    syncing.value = false
   }
 }
-onMounted(() => void reload())
 
 const active = computed(() => draft.value.find((a) => a.id === selectedId.value))
+
+/**
+ * 立即拉一次（不放在 onMounted：设置页在 SSR 里也走这个组件，onMounted 不跑会一直停在
+ * 「配置加载中」；而且真机上想看到表也不该依赖一个生命周期钩子）。
+ * 拉取期间下面照常显示内置默认，读到云端那份再替换 —— 打开即见完整表格。
+ */
+void reload()
 
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(cloudSnapshot.value))
 /** 云端当前那份（脏比对基准；保存成功后同步） */
@@ -158,15 +170,15 @@ async function save(): Promise<void> {
 <template>
   <div class="pas">
     <p v-if="error" class="pas-error">{{ error }}</p>
-    <p v-if="loading" class="pas-hint">配置加载中…</p>
+    <p v-if="syncing" class="pas-hint">正在读取云端配置…（下面先显示内置默认，读到后自动替换）</p>
 
     <section class="pas-block">
       <header class="pas-head">
         <h4>底栏 AI 按钮</h4>
         <span class="pas-quick">
           <span class="pas-count">{{ draft.length }} 个</span>
-          <button class="pas-mini" :disabled="loading" @click="addAction">新增</button>
-          <button class="pas-mini" :disabled="loading" @click="restoreDefaults">恢复默认</button>
+          <button class="pas-mini" :disabled="syncing" @click="addAction">新增</button>
+          <button class="pas-mini" :disabled="syncing" @click="restoreDefaults">恢复默认</button>
         </span>
       </header>
 
@@ -187,7 +199,7 @@ async function save(): Promise<void> {
             <button class="pas-mini danger" aria-label="删除" @click="removeAction(a.id)">删除</button>
           </span>
         </div>
-        <p v-if="!draft.length && !loading" class="pas-hint">还没有按钮，点「新增」或「恢复默认」。</p>
+        <p v-if="!draft.length" class="pas-hint">还没有按钮，点「新增」或「恢复默认」。</p>
       </div>
 
       <div v-if="active" class="pas-edit">
