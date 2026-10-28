@@ -109,6 +109,47 @@ describe('SlotComposer · SSR', () => {
     ctx.stop()
   })
 
+  it('多个条目 after 同一内置项：按 order 紧跟其后（不被甩到最前）', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.slots.register('shell.status', {
+      id: 'plugin/a',
+      order: 40,
+      after: 'host/zoom',
+      component: defineComponent({ render: () => h('i', { 'data-a': '1' }, 'A') }),
+    })
+    ctx.slots.register('shell.status', {
+      id: 'plugin/b',
+      order: 41,
+      after: 'host/zoom',
+      component: defineComponent({ render: () => h('i', { 'data-b': '1' }, 'B') }),
+    })
+
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SlotComposer,
+          { slot: 'shell.status' },
+          () => [
+            h(SlotAnchor, { id: 'host/assets', order: 100 }, () => h('i', { 'data-host': 'assets' }, 'A')),
+            h(SlotAnchor, { id: 'host/zoom', order: 600 }, () => h('i', { 'data-host': 'zoom' }, 'Z')),
+          ],
+        ),
+    })
+    app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+    const html = await renderToString(app)
+
+    const at = ['data-host="assets"', 'data-host="zoom"', 'data-a="1"', 'data-b="1"'].map((k) =>
+      html.indexOf(k),
+    )
+    expect(at.every((i) => i >= 0)).toBe(true)
+    expect(at[0]).toBeLessThan(at[1]!)
+    expect(at[1]).toBeLessThan(at[2]!)
+    expect(at[2]).toBeLessThan(at[3]!)
+
+    ctx.stop()
+  })
+
   it('非法条目 id 不渲染（不静默变成别的项）', async () => {
     const ctx = new Context()
     await ctx.start()

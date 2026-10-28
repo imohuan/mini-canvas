@@ -72,13 +72,46 @@ describe('orderSlotItems · before / after', () => {
     expect(items.map((e) => e.id)).toEqual(['host/history', 'my-plugin/a', 'host/agent'])
   })
 
-  it('同时满足 before 与 after（放在两个目标之间）', () => {
+  it('多个条目 after 同一目标：它们之间按 order 排，紧跟目标之后', () => {
+    const { items, issues } = orderSlotItems([
+      { id: 'host/a', order: 100 },
+      { id: 'host/b', order: 200 },
+      { id: 'host/c', order: 300 },
+      { id: 'host/d', order: 400 },
+      { id: 'plugin/x', order: 30, after: 'host/b' },
+      { id: 'plugin/y', order: 20, after: 'host/b' },
+    ])
+    expect(items.map((e) => e.id)).toEqual(['host/a', 'host/b', 'plugin/y', 'plugin/x', 'host/c', 'host/d'])
+    expect(issues).toEqual([])
+  })
+
+  it('多个条目 before 同一目标：它们之间按 order 排，紧贴目标之前', () => {
     const { items } = orderSlotItems([
       { id: 'host/a', order: 100 },
-      { id: 'host/c', order: 300 },
-      { id: 'my-plugin/b', order: 900, after: 'host/a', before: 'host/c' },
+      { id: 'host/b', order: 200 },
+      { id: 'plugin/x', order: 30, before: 'host/b' },
+      { id: 'plugin/y', order: 20, before: 'host/b' },
     ])
-    expect(items.map((e) => e.id)).toEqual(['host/a', 'my-plugin/b', 'host/c'])
+    expect(items.map((e) => e.id)).toEqual(['host/a', 'plugin/y', 'plugin/x', 'host/b'])
+  })
+
+  it('多个 after 同目标且 order 都很大：依然只在目标之后，不被甩到最前', () => {
+    const { items } = orderSlotItems([
+      { id: 'host/zoom', order: 600 },
+      { id: 'plugin/a', order: 40, after: 'host/zoom' },
+      { id: 'plugin/b', order: 41, after: 'host/zoom' },
+    ])
+    expect(items.map((e) => e.id)).toEqual(['host/zoom', 'plugin/a', 'plugin/b'])
+  })
+
+  it('同时写 before 与 after：只认 before，并报告 conflict', () => {
+    const { items, issues } = orderSlotItems([
+      { id: 'host/a', order: 100 },
+      { id: 'host/c', order: 300 },
+      { id: 'my-plugin/b', order: 900, after: 'host/c', before: 'host/a' },
+    ])
+    expect(items.map((e) => e.id)).toEqual(['my-plugin/b', 'host/a', 'host/c'])
+    expect(issues).toEqual([{ id: 'my-plugin/b', kind: 'conflict', target: 'host/a' }])
   })
 
   it('目标不存在：忽略该约束，按 order 排，并报告 missing-target', () => {

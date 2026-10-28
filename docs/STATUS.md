@@ -314,6 +314,16 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
   但 before/after/order 仍然生效。
 - 实测：左树 12 项、无重复、无死行。
 
+**槽排序 bug 修复（2026-10-28 晚）**：两个条目同时 `after` 同一个目标时，它们被甩到整槽最前面。
+
+- 根因：旧实现"反复把条目挪到目标旁边"，后一个会把前一个挤走，两轮后各自跑到目标另一侧。
+- 新语义（用户定稿）：① 基础按 order；② before/after 优先级更高，插到目标正前/正后；
+  ③ **多项指向同一目标时，它们之间按 order 排**；④ before 与 after 同写时**只认 before**，
+  另报 `conflict`。
+- 实现：改成"一次成型的挂载"（目标 → 前插 → 自身 → 后插），不再迭代挪动。
+- 覆盖：kernel 250 条（含 4 条 after/before 同目标用例）、canvas-render 510 条
+  （含 SSR 验证"两个 after 不跑到最前"）；真机状态条顺序与预期一致。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 

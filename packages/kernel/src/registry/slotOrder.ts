@@ -1,16 +1,16 @@
 /**
  * slotOrder —— 槽内条目的顺序解析（纯逻辑，零 Vue）。
  *
- * 为什么单独一层：UI 槽、底栏动作、右键菜单、节点区域、设置分组都会遇到同一个问题——
- * "我想排在某个已知条目前面/后面"，而数字 order 只能表达绝对优先级。
+ * 用户规则（2026-10-28 定稿）：
+ * 1. 默认先按 order 排（小者在前；同 order 保持传入顺序）；
+ * 2. before / after 优先级更高——把条目插到目标的正前 / 正后；
+ * 3. **多个条目指向同一个目标时，它们之间按 order 排**；
+ * 4. before 与 after 同时写：**只认 before，忽略 after**（并报告 conflict）。
  *
- * 规则：
- * - id 是**槽内条目 id**（如 host/agent、my-plugin/export），不是槽名；
- * - before / after 表示"紧挨着目标"（插到它正前 / 正后），不是"只要在它前/后就行"；
- * - 目标不存在 → 忽略该约束，退回 order；
- * - order 缺省用 fallbackOrder（默认 1000）；同 order 保持传入顺序；
- * - 多个条目指向同一目标时，保持它们之间的传入顺序；
- * - 环 / 自引用 / 重复 id 报告问题，按 order 兜底，不丢条目。
+ * 实现要点：不能靠"反复把条目挪到目标旁边"——两个 after 指向同一个目标时，
+ * 后一个会把前一个挤走，最终它们被甩到目标前面（2026-10-28 实测 bug）。
+ * 这里改成**一次成型的挂载**：把每个目标下的 before/after 各自按 order 排好，
+ * 再按"目标 → 前插 → 自身 → 后插"展开。
  */
 
 /** 参与排序的最小条目形状 */
@@ -28,6 +28,8 @@ export type SlotOrderIssueKind =
   | 'self-reference'
   | 'cycle'
   | 'duplicate-id'
+  /** 同时写了 before 与 after：只认 before */
+  | 'conflict'
 
 /** 排序时发现的问题（调用方可选择 warn / 忽略 / 诊断展示） */
 export interface SlotOrderIssue {
@@ -49,13 +51,7 @@ export const SLOT_ORDER_FALLBACK = 1000
 /**
  * 把条目按 order + before/after 排出最终顺序。
  *
- * 算法：
- * 1. 去重（保留传入顺序先者）+ 按 order 稳定排序，得到基础顺序；
- * 2. 反复应用 before/after：把条目**移到目标旁边**（before = 目标前，after = 目标后）；
- * 3. 多轮仍不收敛 = 有环：报告并回到基础顺序。
- *
- * 为什么不是拓扑排序：拓扑只保证"在目标前/后"，会把条目甩到很远；
- * 用户要的是"插在这个按钮旁边"，所以这里用"相邻插入"语义。
+ * 返回值里的 issues 只报告"约束没生效"的情况；正常排序 issues 为空。
  */
 export function orderSlotItems<T extends SlotOrderItem>(
   items: readonly T[],
@@ -78,7 +74,7 @@ export function orderSlotItems<T extends SlotOrderItem>(
     byId.set(item.id, item)
   }
 
-  // 基础顺序：order 升序；同 order 保持传入顺序
+  // 2) 基础顺序：order 升序；同 order 保持传入顺序
   const base = [...byId.values()]
     .map((item, index) => ({ item, index }))
     .sort(
@@ -87,80 +83,90 @@ export function orderSlotItems<T extends SlotOrderItem>(
         a.index - b.index,
     )
     .map(({ item }) => item)
+  if (base.length === 0) return { items: [], issues }
 
-  // 约束：目标不存在 / 自引用在这里先剔除
-  interface Constraint {
-    mover: string
-    target: string
-    side: 'before' | 'after'
-  }
-  const constraints: Constraint[] = []
+  const rank = new Map(base.map((item, index) => [item.id, index]))
+  const orderOf = (item: T): number => item.order ?? fallbackOrder
+
+  // 3) 归组：每个条目要么是"相对某目标"，要么是"根"（独立按 order 排）
+  type Relation = { target: string; side: 'before' | 'after' }
+  const relation = new Map<string, Relation>()
   for (const item of base) {
-    for (const [side, rawTarget] of [
-      ['before', item.before],
-      ['after', item.after],
-    ] as const) {
-      if (!rawTarget) continue
-      if (rawTarget === item.id) {
-        report({ id: item.id, kind: 'self-reference', target: rawTarget })
-        continue
-      }
-      if (!byId.has(rawTarget)) {
-        report({ id: item.id, kind: 'missing-target', target: rawTarget })
-        continue
-      }
-      constraints.push({ mover: item.id, target: rawTarget, side })
+    const before = item.before
+    const after = item.after
+    if (before && after) {
+      // 用户口径：同时写 before 与 after 不推荐，只认 before
+      report({ id: item.id, kind: 'conflict', target: before })
+    }
+    const rawTarget = before || after
+    const side: 'before' | 'after' = before ? 'before' : 'after'
+    if (!rawTarget) continue
+    if (rawTarget === item.id) {
+      report({ id: item.id, kind: 'self-reference', target: rawTarget })
+      continue
+    }
+    if (!byId.has(rawTarget)) {
+      report({ id: item.id, kind: 'missing-target', target: rawTarget })
+      continue
+    }
+    relation.set(item.id, { target: rawTarget, side })
+  }
+
+  // 4) 找根：沿着 relation 往上走；遇到环就整体降级（环上的条目全部回到 order）
+  const rootOf = (id: string): string | undefined => {
+    const seen = new Set<string>()
+    let cur = id
+    while (relation.has(cur)) {
+      if (seen.has(cur)) return undefined // 环
+      seen.add(cur)
+      cur = relation.get(cur)!.target
+    }
+    return cur
+  }
+  const cyclic = new Set<string>()
+  for (const item of base) {
+    if (relation.has(item.id) && rootOf(item.id) === undefined) {
+      cyclic.add(item.id)
+      report({ id: item.id, kind: 'cycle' })
     }
   }
+  for (const id of cyclic) relation.delete(id)
 
-  if (constraints.length === 0) return { items: base, issues }
-
-  // 2) 相邻插入：before 正序、after 逆序，保证多个条目保持传入顺序
-  const order = base.map((item) => item.id)
-  const beforeConstraints = constraints.filter((c) => c.side === 'before')
-  const afterConstraints = constraints.filter((c) => c.side === 'after').reverse()
-
-  /** 应用一轮；返回是否发生变化 */
-  function applyPass(): boolean {
-    let changed = false
-    for (const c of beforeConstraints) {
-      const from = order.indexOf(c.mover)
-      const target = order.indexOf(c.target)
-      if (from < 0 || target < 0) continue
-      if (from + 1 === target) continue // 已在目标正前
-      order.splice(from, 1)
-      const nextTarget = order.indexOf(c.target)
-      order.splice(nextTarget, 0, c.mover)
-      changed = true
-    }
-    for (const c of afterConstraints) {
-      const from = order.indexOf(c.mover)
-      const target = order.indexOf(c.target)
-      if (from < 0 || target < 0) continue
-      if (from === target + 1) continue // 已在目标正后
-      order.splice(from, 1)
-      const nextTarget = order.indexOf(c.target)
-      order.splice(nextTarget + 1, 0, c.mover)
-      changed = true
-    }
-    return changed
+  // 5) 以"根"为桶收集：before / after 各自按 order 排（同 order 保持传入序）
+  const beforeGroups = new Map<string, T[]>()
+  const afterGroups = new Map<string, T[]>()
+  for (const item of base) {
+    const rel = relation.get(item.id)
+    if (!rel) continue
+    // 嵌套：A after B、B after C → A 也挂到 C 的 after 桶，但要排在 B 后面
+    const root = rootOf(item.id) ?? rel.target
+    const bucket = (rel.side === 'before' ? beforeGroups : afterGroups)
+    const list = bucket.get(root) ?? []
+    list.push(item)
+    bucket.set(root, list)
   }
+  const byOrderThenIndex = (a: T, b: T): number =>
+    orderOf(a) - orderOf(b) || (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+  for (const list of beforeGroups.values()) list.sort(byOrderThenIndex)
+  for (const list of afterGroups.values()) list.sort(byOrderThenIndex)
 
-  const maxPasses = constraints.length + 1
-  let passes = 0
-  while (applyPass() && passes < maxPasses) passes += 1
-
-  // 3) 没有收敛 = 有环：报告并回到基础顺序
-  if (passes >= maxPasses) {
-    for (const c of constraints) report({ id: c.mover, kind: 'cycle' })
-    return { items: base, issues }
+  // 6) 展开：根按 order 排；每根输出 "前插项 → 根自身 → 后插项"
+  const out: T[] = []
+  const emitted = new Set<string>()
+  const emit = (item: T): void => {
+    if (emitted.has(item.id)) return
+    emitted.add(item.id)
+    // 前插项里也可能嵌套别的条目（A before B、C before A）
+    for (const child of beforeGroups.get(item.id) ?? []) emit(child)
+    if (!out.includes(item)) out.push(item)
+    for (const child of afterGroups.get(item.id) ?? []) emit(child)
   }
-
-  const byOrder = new Map(order.map((id, index) => [id, index]))
-  return {
-    items: [...byId.values()].sort(
-      (a, b) => (byOrder.get(a.id) ?? 0) - (byOrder.get(b.id) ?? 0),
-    ),
-    issues,
+  for (const item of base) {
+    if (relation.has(item.id)) continue // 不是根，稍后随根展开
+    emit(item)
   }
+  // 兜底：没有任何根的（理论上只剩环已删除的情况）
+  for (const item of base) emit(item)
+
+  return { items: out, issues }
 }
