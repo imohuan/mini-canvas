@@ -276,12 +276,17 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     const textSpec = textItem.renderEditor!(textItem) as unknown[]
     // 外层 span：resource-chip 卡片类
     expect((imgSpec[1] as Record<string, string>).class).toContain('resource-chip')
-    // 卡内是缩略图 + 名字两段（图片用 img，文本用图标）
+    /**
+     * 卡内顺序（用户 2026-10-29）：**图标在前、缩略图第二、名字最后**。
+     * 图标永远在（图挂了也有东西可看），缩略图是叠加层，加载成功才显示。
+     */
     const imgChildren = imgSpec.slice(2) as unknown[][]
-    expect(imgChildren[0][0]).toBe('img')
-    expect((imgChildren[0][1] as Record<string, string>).class).toBe('resource-chip-thumb')
-    expect((imgChildren[1][1] as Record<string, string>).class).toBe('resource-chip-name')
-    expect(imgChildren[1][2]).toBe('猫')
+    expect(imgChildren[0][0]).toBe('span')
+    expect((imgChildren[0][1] as Record<string, string>).class).toBe('resource-chip-icon')
+    expect(imgChildren[1][0]).toBe('img')
+    expect((imgChildren[1][1] as Record<string, string>).class).toBe('resource-chip-thumb')
+    expect((imgChildren[2][1] as Record<string, string>).class).toBe('resource-chip-name')
+    expect(imgChildren[2][2]).toBe('猫')
     // 文本卡片：图标 + 名字，且带 resource-chip--text 修饰类
     expect((textSpec[1] as Record<string, string>).class).toContain('resource-chip--text')
     expect((textSpec.slice(2) as unknown[][])[0][0]).toBe('span')

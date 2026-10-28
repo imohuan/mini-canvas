@@ -594,9 +594,13 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
     // 报「有些标签是空白」的真凶）。改为空占位 span + CSS mask 画图标。
     // 用户 2026-10-28 追加：图片/视频/音频/文本 **各有自己的默认图标**（data-icon=kind）；
     // 未绑定 = data-icon="resource"（统一资源图标）。
-    isText
-      ? ['span', { class: 'resource-chip-icon', 'data-icon': kind4 ?? 'resource' }]
-      : ['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }],
+    // 图标永远在（用户 2026-10-29：标签左侧的图/图标会莫名不见）。
+    // 旧写法二选一：能画图就只出 img —— 图 404 / 还没 resolve 时左边就是空白。
+    // 现在底图固定是类型图标，图片加载成功才盖上去（CSS 控制显示）。
+    ['span', { class: 'resource-chip-icon', 'data-icon': kind4 ?? 'resource' }],
+    ...(canShowThumb
+      ? [['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }]]
+      : []),
     ['span', { class: 'resource-chip-name' }, name],
   ]
 }

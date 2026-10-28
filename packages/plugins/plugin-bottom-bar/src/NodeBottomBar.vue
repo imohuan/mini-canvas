@@ -504,6 +504,36 @@ function cardImageOf(tile: { url?: string; kind?: string | null }): string {
   return tile.url
 }
 
+/**
+ * 卡片图片的「没出来」状态（用户 2026-10-29：图没加载出来时给加载 UI，不要留空白）。
+ *
+ * loading：图正在取（转圈）；broken：取失败（显示「资源走丢」）。
+ * 图片 load 成功就把这张卡从两张表里摘掉，恢复成正常缩略图。
+ *
+ * 注意：这两个表在模板里会被用到，而 watch 依赖 refTiles（定义在更后面），
+ * 所以**监听器**放在 refTiles 之后注册（放这里会踩 TDZ，单测直接炸）。
+ */
+const loadingTiles = ref<Record<string, boolean>>({})
+const brokenTiles = ref<Record<string, boolean>>({})
+
+function clearBrokenTile(key: string): void {
+  if (loadingTiles.value[key]) {
+    const next = { ...loadingTiles.value }
+    delete next[key]
+    loadingTiles.value = next
+  }
+  if (brokenTiles.value[key]) {
+    const next = { ...brokenTiles.value }
+    delete next[key]
+    brokenTiles.value = next
+  }
+}
+
+function markBrokenTile(key: string): void {
+  if (!loadingTiles.value[key]) return
+  brokenTiles.value = { ...brokenTiles.value, [key]: true }
+}
+
 function videoProvider(): ((videoUrl: string, maxWidth?: number) => Promise<string | null>) | undefined {
   const svc = ctx.tryGet<{ captureThumb?(videoUrl: string, maxWidth?: number): Promise<string | null> }>('video')
   return svc?.captureThumb ? svc.captureThumb.bind(svc) : undefined
@@ -1144,6 +1174,33 @@ const refTiles = computed(() =>
     })),
     refOrder.value,
   ),
+)
+
+/**
+ * 卡片出现（或图地址变了）就进入加载态；**13 秒**既不 load 也不 error 也按失败处理
+ * （与生成历史墙同口径：不留永远转圈的假象）。
+ *
+ * 必须放在 refTiles 之后：immediate 会当场读 refTiles，放前面就是 TDZ。
+ */
+watch(
+  () => refTiles.value.map((t) => [t.key, cardImageOf(t)].join('|')).join(','),
+  () => {
+    const next: Record<string, boolean> = {}
+    for (const t of refTiles.value) {
+      if (!cardImageOf(t)) continue
+      if (brokenTiles.value[t.key]) continue
+      next[t.key] = true
+    }
+    loadingTiles.value = next
+    for (const key of Object.keys(next)) {
+      setTimeout(() => {
+        if (loadingTiles.value[key]) {
+          brokenTiles.value = { ...brokenTiles.value, [key]: true }
+        }
+      }, 13000)
+    }
+  },
+  { immediate: true },
 )
 
 
@@ -1920,7 +1977,20 @@ function onGlobalLeave(el: Element): void {
             :src="cardImageOf(tile)"
             :alt="tile.label"
             draggable="false"
+            :data-broken="brokenTiles[tile.key] ? '1' : undefined"
+            @load="clearBrokenTile(tile.key)"
+            @error="markBrokenTile(tile.key)"
           />
+          <!-- 图还没出来（加载中 / 走丢）：盖住缩略图，露出下面的类型图标 + 转圈/提示 -->
+          <span
+            v-if="!tile.pending && cardImageOf(tile) && loadingTiles[tile.key]"
+            class="nb-card-media-state"
+            :class="{ 'is-broken': brokenTiles[tile.key] }"
+            aria-hidden="true"
+          >
+            <span class="nb-card-media-spinner" v-if="!brokenTiles[tile.key]" />
+            <span v-else class="nb-card-media-lost">!</span>
+          </span>
           <span v-else-if="tile.pending" class="nb-card-pending">
             <!-- 待绑定：统一资源图标（用户 2026-10-28：手打的 @名字 无从判断类型） -->
             <span class="nb-card-placeholder" data-kind="resource" aria-hidden="true" />
@@ -2640,6 +2710,53 @@ function onGlobalLeave(el: Element): void {
   transform: scale(1.18);
   filter: blur(1px);
 }
+/**
+ * 卡片图片没出来时的加载层（用户 2026-10-29：没加载出来就给加载 UI）。
+ *
+ * - 加载中：半透明底 + 转圈；
+ * - 加载失败：半透明底 + 感叹号，并写「资源走丢」在 title 里。
+ * 都盖在缩略图位置上，尺寸与卡片一致，不推动布局。
+ */
+.nb-card-media-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
+}
+.nb-card-media-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent);
+  border-top-color: var(--ui-accent, #0891b2);
+  animation: nb-card-spin 0.9s linear infinite;
+}
+.nb-card-media-lost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 55%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.nb-card-media-state.is-broken {
+  background: color-mix(in srgb, var(--ui-danger, #ef4444) 8%, transparent);
+}
+@keyframes nb-card-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-card-media-spinner {
+    animation: none;
+  }
+}
 /* 内层裁剪：卡片本身的 overflow 必须留 visible（关闭按钮一半在外），
    所以「正方形 + 圆角 + 把图片裁进来」这三件事挪到这一层做。 */
 .nb-card-clip {
@@ -2938,26 +3055,61 @@ function onGlobalLeave(el: Element): void {
   /* 覆盖编辑器公共样式里那条下划线（卡片不需要它） */
   border-bottom-width: 1px;
 }
+/*
+ * 图标与缩略图**叠在同一个格子里**（用户 2026-10-29：图挂了左边就空白）。
+ *
+ * 结构：图标（底，代表类型）+ 缩略图（盖在上面，加载成功才可见）+ 名字。
+ * 两者都占 14×14，用 grid 叠放，所以加载前后**布局不跳**。
+ */
+.nb-editor :deep(.resource-chip) {
+  /* 让图标/缩略图共用同一格：图标先占位，图片绝对定位盖上去 */
+  position: relative;
+}
 .nb-editor :deep(.resource-chip-thumb),
 .nb-editor :deep(.resource-chip-icon) {
-  /* 图标随 chip 缩到 14px，保持与 13px 文字的比例 */
   width: 14px;
   height: 14px;
+  flex: none;
 }
 .nb-editor :deep(.resource-chip-thumb) {
-  width: 16px;
-  height: 16px;
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
   border-radius: 4px;
   object-fit: cover;
-  flex: none;
   pointer-events: none;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
 }
 .nb-editor :deep(.resource-chip-icon) {
   display: inline-flex;
   align-items: center;
-  flex: none;
-  width: 16px;
-  height: 16px;
+  justify-content: center;
+}
+/* 缩略图还没加载好：图标位转一圈，告诉用户「正在取图」（用户 2026-10-29 要求） */
+.nb-editor :deep(.resource-chip-icon.is-loading) {
+  opacity: 0.45;
+}
+.nb-editor :deep(.resource-chip-icon.is-loading)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--ui-ink, #18202b) 22%, transparent);
+  border-top-color: var(--ui-accent, #0891b2);
+  animation: nb-chip-spin 0.9s linear infinite;
+}
+/* 图片已盖住图标：底图不再转圈 */
+.nb-editor :deep(.resource-chip-icon.is-covered) {
+  opacity: 0;
+}
+@keyframes nb-chip-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-editor :deep(.resource-chip-icon.is-loading)::after {
+    animation: none;
+  }
 }
 /**
  * 图标用 mask 画（用户 2026-10-28）：DOMOutputSpec 不解析 innerHTML 属性（会被当成

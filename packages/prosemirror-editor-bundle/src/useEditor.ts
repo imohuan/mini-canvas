@@ -611,26 +611,48 @@ function renderRefChip(item: ResourceItem): HTMLElement {
   if (kind) span.dataset.kind = kind
   if (invalid) span.dataset.invalid = '1'
   /**
-   * 缩略图只在**能当图片画**时出：图片原图、视频帧图。
-   * 音频是 mp3、文本没有画面 —— 塞进 <img> 只会得到裂图（用户 2026-10-28 报过）。
+   * 视觉规则（用户 2026-10-29：标签左侧的缩略图/图标会莫名不见）：
+   *
+   * **图标永远先画出来，图片只是盖在它上面**。
+   * 以前是「有 url 就直接 <img>，失败时由加载器 display:none」——一旦地址 404 / 走到
+   * 视频取帧失败 / 资源还没 resolve，标签左侧就**只剩空白**（用户看到的就是「图没了」）。
+   * 现在：
+   *   · 底图 = 类型图标（图片/视频/音频/文本/未绑定资源）；
+   *   · 有可画缩略图时，叠一张 <img>；**加载成功才显示**，失败/未完成就露出底图；
+   *   · 加载中在图标位加 is-loading 转圈（不改变布局）。
    */
   const thumb =
     kind === 'video' ? (item.thumbnail_url || '')
     : kind === 'image' ? (item.url || '')
     : ''
   const canThumb = !!thumb && (kind === 'image' || thumb.startsWith('data:image/'))
+  const ic = document.createElement('span')
+  ic.className = 'resource-chip-icon'
+  // 没有 chipKind = 待绑定 → 统一资源图标（data-icon 缺省 = 通用方块）
+  ic.dataset.icon = kind ?? 'resource'
+  span.append(ic)
   if (canThumb && !invalid) {
     const img = document.createElement('img')
     img.className = 'resource-chip-thumb'
-    img.src = thumb
     img.alt = ''
+    img.draggable = false
+    /**
+     * 加载态：默认隐藏 + 图标位转圈；onload 才显示图片、onerror 保持图标。
+     * 这样「图没出来」永远是**有个图标**，不会留下空白。
+     */
+    img.style.display = 'none'
+    ic.classList.add('is-loading')
+    img.onload = () => {
+      img.style.display = ''
+      ic.classList.remove('is-loading')
+      ic.classList.add('is-covered')
+    }
+    img.onerror = () => {
+      img.remove()
+      ic.classList.remove('is-loading')
+    }
+    img.src = thumb
     span.append(img)
-  } else {
-    const ic = document.createElement('span')
-    ic.className = 'resource-chip-icon'
-    // 没有 chipKind = 待绑定 → 统一资源图标（data-icon 缺省 = 通用方块）
-    ic.dataset.icon = kind ?? 'resource'
-    span.append(ic)
   }
   const nm = document.createElement('span')
   nm.className = 'resource-chip-name'
