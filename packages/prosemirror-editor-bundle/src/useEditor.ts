@@ -460,6 +460,18 @@ function createSelectionDecorationPlugin() {
 
 // 创建光标修复插件：在特殊情况下插入零宽空格文本节点
 // 只处理：1. 行首/行尾的标签 2. 两个标签相邻的情况
+/** 四种资源类型的默认图标（用户 2026-10-28：图片/视频/音频/文本各有自己的图标） */
+const KIND_ICON_SVG: Record<'image' | 'video' | 'audio' | 'text', string> = {
+  image:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20"/></svg>',
+  video:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="m15 10 6-4v12l-6-4z"/></svg>',
+  audio:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
+  text:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>',
+}
+
 /** 待输入标签的小图标（与底栏槽位同一套线性图标） */
 const SLOT_CHIP_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
@@ -493,7 +505,16 @@ function buildSlotItem(
     } else {
       const ic = document.createElement('span')
       ic.className = 'resource-chip-icon'
-      ic.innerHTML = SLOT_CHIP_ICON
+      /**
+       * 按类型出图标（用户 2026-10-28）：图片/视频/音频/文本各有自己的图标。
+       * 旧实现一律用 SLOT_CHIP_ICON（方框），所以图片2 显示成了文本样式的方框。
+       */
+      const kindKey: 'image' | 'video' | 'audio' | 'text' =
+        latest.mediaType === 'video' ? 'video'
+        : latest.mediaType === 'audio' ? 'audio'
+        : latest.mediaType === 'image' ? 'image'
+        : 'text'
+      ic.innerHTML = KIND_ICON_SVG[kindKey] || SLOT_CHIP_ICON
       span.append(ic)
     }
     const nm = document.createElement('span')

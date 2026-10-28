@@ -495,6 +495,30 @@ export function previewListFor(
   }
 }
 
+/** 四种资源类型的默认图标（用户 2026-10-28：图片/视频/音频/文本各有自己的图标）。
+ *
+ * 为什么用 mask（而不是内联 svg 字符串）：标签走 ProseMirror 的 DOMOutputSpec，
+ * 里面写 innerHTML 会被当普通属性写上 DOM、浏览器不解析 → 视觉空白（真机踩过）。
+ * mask 只依赖 CSS，两条渲染路径（HTMLElement / spec）结果一致。
+ */
+export type MediaKind4 = 'image' | 'video' | 'audio' | 'text'
+
+/** 每种类型的 svg 路径（24 视图，stroke 风格与画布节点图标同一套） */
+export const MEDIA_ICON_PATHS: Record<MediaKind4, string> = {
+  image: 'M3 4h18v16H3z M3 17l5-5 4 4 3-3 6 6 M8.5 9.5a1.5 1.5 0 1 0 0-.001',
+  video: 'M3 6h12v12H3z M15 10l6-4v12l-6-4z',
+  audio: 'M9 18V6l10-2v12 M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+  text: 'M4 7V4h16v3 M12 4v16 M8 20h8',
+}
+
+/** 从 ResourceItem 推断 4 类型之一（无 mediaType → text） */
+export function mediaKindOf(item: ResourceItem): MediaKind4 {
+  if (item.mediaType === 'video') return 'video'
+  if (item.mediaType === 'audio') return 'audio'
+  if (item.mediaType === 'image') return 'image'
+  return 'text'
+}
+
 /** 文本素材在 @ 引用里的图标（插入后显示的小图标） */
 const TEXT_ICON =
   // v-html 进 DOM 的 SVG 字符串：用 currentColor + 内联 color 变量，才能跟着主题走
@@ -528,10 +552,10 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
     },
     // 【修复】icon 不能走 innerHTML 属性 —— DOMOutputSpec 会把它当**普通属性**写上 DOM
     //（outerHTML 出现 innerhtml="<svg..."），浏览器不解析 → 视觉空白（用户 2026-10-28
-    // 报「有些标签是空白」的真凶）。改为空占位 span + CSS mask 画图标（图标唯一，
-    // 用 CSS 变量/伪元素最稳）。
+    // 报「有些标签是空白」的真凶）。改为空占位 span + CSS mask 画图标。
+    // 用户 2026-10-28 追加：图片/视频/音频/文本 **各有自己的默认图标**（data-icon=kind）。
     isText
-      ? ['span', { class: 'resource-chip-icon', 'data-icon': 'text' }]
+      ? ['span', { class: 'resource-chip-icon', 'data-icon': mediaKindOf(self) }]
       : ['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }],
     ['span', { class: 'resource-chip-name' }, name],
   ]

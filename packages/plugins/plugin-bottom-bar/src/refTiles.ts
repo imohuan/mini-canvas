@@ -90,10 +90,12 @@ export function mergeRefTiles(
   const seqOf = (kind: 'image' | 'video' | 'audio'): Map<number, TileCardLike> => {
     const map = new Map<number, TileCardLike>()
     for (const c of cards) {
-      const parsed = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
+      const withRef = c as TileCardLike & WithRefName
+      // 优先 refName；没有时**只接受严格 `图片N` 形式**的 name（无空格）。
+      // node 标题常是「图片 54」（带空格）或任意文案，解析成序号会错位
+      //（用户 2026-10-28 报：格 1 空着却显示缩略图、正文图片1 反而不显示）。
+      const parsed = refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
       if (!parsed || parsed.kind !== kind) continue
-      // 用 **refName 自带的序号**（图片8 就是第 8 格），不再按出现顺序递增 ——
-      // 否则「第 8 格上传」的素材会被排到第 1/2 格（真机踩过）。
       if (!map.has(parsed.index)) map.set(parsed.index, c)
     }
     return map
@@ -102,7 +104,8 @@ export function mergeRefTiles(
   // 出现在参考区的种类：素材自己的种类 + 正文声明的种类
   const kinds = new Set<'image' | 'video' | 'audio'>()
   for (const c of cards) {
-    const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
+    const withRef = c as TileCardLike & WithRefName
+    const p = refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
     if (p) kinds.add(p.kind)
   }
   for (const s of slots) {
@@ -123,9 +126,17 @@ export function mergeRefTiles(
      * 界面上凭空长出一堆空格（用户截图：4 张图却出现 44 格）。
      * 归一化之后声明序号本来就是 1..n，这里只按数量取 max 即可。
      */
-    const cardCount = bySeq.size
+    /**
+     * 格数 = max(最大序号, 声明数)（用户 2026-10-28 修错位）。
+     *
+     * 为什么不是 max(卡片数量, 声明数)：卡片带的序号可能不连续（hint 让某张图占第 2 格），
+     * 按「数量」算格数会把序号 2 的卡片挤出格子外，掉进「无序号尾巴」分支 —— 表现就是
+     * 「第 1 格是空壳、那张有图的卡跑到最后」（用户截图）。
+     * 按**最大序号**算才能保证每张卡都在自己的位置上。
+     */
+    const maxCardIndex = bySeq.size ? Math.max(...bySeq.keys()) : 0
     const declaredCount = new Set(declared).size
-    const total = Math.max(cardCount, declaredCount)
+    const total = Math.max(maxCardIndex, declaredCount)
     for (let slotIndex = 1; slotIndex <= total; slotIndex++) {
       const card = bySeq.get(slotIndex)
       tiles.push({
@@ -144,7 +155,7 @@ export function mergeRefTiles(
   }
   // 没有可识别名字的素材（比如文本）照常补在最后（参考区一直支持显示它们）
   for (const card of cards) {
-    if (refNameToSlot((card as TileCardLike & WithRefName).refName || card.name)) continue
+    if (refNameToSlot((card as TileCardLike & WithRefName).refName || '') ?? refNameToSlot(String(card.name ?? '').trim())) continue
     tiles.push({
       key: 'card:' + card.id,
       // 文本这类没有序号的素材：slotIndex 用 0 表示「没有槽位序号」，
@@ -178,7 +189,33 @@ export function mergeRefTiles(
       else orderOf.set('card:' + key, i)
     })
   } else {
-    cards.forEach((c, i) => orderOf.set('card:' + c.id, i))
+    /**
+     * 没拖过（无 displayOrder）→ **按 slotIndex 排**（用户 2026-10-28 修错位）。
+     *
+     * 旧实现按 cards 数组顺序排，于是「hint 让它占第 2 格」的卡片被硬拉到第 1 位，
+     * 正文「图片1」指向的那一格反而是空壳（用户截图：格 1 空着却显示缩略图）。
+     * 有 displayOrder 时仍以用户拖出来的顺序为准（拖拽优先，那条不能破）。
+     */
+    ;(() => {
+      /**
+       * 按 **类型 + 序号** 排名（用户 2026-10-28 修错位）。
+       *
+       * 只按 slotIndex 全局排会跨类型交错（图片1、视频1、音频1 都从 1 开始）；
+       * 期望是「图片类整体在前、按图片序号排，然后视频、音频」，与 tiles 生成顺序一致。
+       * 无序号（文本等）排最后。
+       */
+      const kindOrder: Record<string, number> = { image: 0, video: 1, audio: 2 }
+      const kindOf = (key: string): string => (key.startsWith('slot:') ? key.split(':')[1] : 'image')
+      const ranked = [...tiles].sort((a, b) => {
+        const ka = kindOf(a.key)
+        const kb = kindOf(b.key)
+        const da = kindOrder[ka] ?? 9
+        const db = kindOrder[kb] ?? 9
+        if (da !== db) return da - db
+        return (a.slotIndex || 9999) - (b.slotIndex || 9999)
+      })
+      ranked.forEach((t, i) => orderOf.set(t.key, i))
+    })()
   }
   const sorted = tiles.sort((a, b) => {
     const ao = orderOf.get(a.key)
