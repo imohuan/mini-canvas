@@ -15,11 +15,12 @@
  * 开关本身住在 composables/assetUiBus.ts：抽屉里的行点击 / Agent 那边的事件都只写它，
  * 本组件只管把开关渲染成浮层。
  */
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import AssetManageDialog from './AssetManageDialog.vue'
 import { MediaViewer } from '@mini-canvas/plugin-theme-default'
 import { assetManager, assetPreview, closeAssetManager } from '../composables/assetUiBus'
-import { currentAssetPreview, setAssetPreviewIndex } from '../composables/assetUiBus'
+import { currentAssetPreview, setAssetPreviewIndex, openAssetPreview } from '../composables/assetUiBus'
+import { peekPack } from '../composables/nodePack'
 import { useAssetRefOpen } from '../composables/useAssetRefOpen'
 import { useUi } from '../composables/ui'
 
@@ -31,7 +32,7 @@ useAssetRefOpen()
 /** 弹窗每次打开都用一个新的组件实例（折叠状态只由 props 决定，不残留） */
 const dialogKey = computed(() => 'am-' + assetManager.value.focusToken)
 
-/** 预览项：外壳与 MediaViewer 的契约形状对齐 */
+/** 预览项：外壳与 MediaViewer 的契约形状对齐（类型 AssetUiSlot.vue 本地推导，见下） */
 const previewItem = computed(() => {
   // 取「当前正在看的那一张」：← / → 切过之后 index 变了，url / name / id 都要跟着它走。
   // 为什么必须在这里解好再传：MediaViewer 的标题读 item.name、音频分支读 item.url
@@ -54,6 +55,33 @@ const previewItem = computed(() => {
           : {}),
       }
     : null
+})
+
+/**
+ * 切张到**节点包**时现取包：当前张 kind='ui' 但还没解出 html → 先给"加载中"，
+ * 取回后把那一条的 html 写回总线（MediaViewer 的 iframe 分支才有内容）。
+ * 取失败回一段能看懂的提示（与首次点开同一条兜底）。
+ */
+watch(previewItem, async (p) => {
+  if (!p || p.kind !== 'ui' || p.html !== undefined) return
+  openAssetPreview({ ...p, html: '' })
+  if (!p.url) {
+    openAssetPreview({ ...p, html: undefined, text: '这个节点包没有地址，读不出来。' })
+    return
+  }
+  try {
+    const pack = await peekPack(p.url)
+    const cur = currentAssetPreview()
+    // 等包的时候用户可能又切走了：只把结果写回"还在看这张"的那一条
+    if (cur && cur.kind === 'ui' && cur.url === p.url) {
+      openAssetPreview({ ...cur, html: pack.html })
+    }
+  } catch (err) {
+    const cur = currentAssetPreview()
+    if (cur && cur.kind === 'ui' && cur.url === p.url) {
+      openAssetPreview({ ...cur, html: undefined, text: '这个节点包读不出来：' + (err instanceof Error ? err.message : String(err)) })
+    }
+  }
 })
 
 /** 右上角删除按钮只在「当前这张是宿主自己的资产」时出现（从引用打开的不带 id） */
