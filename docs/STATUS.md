@@ -338,6 +338,18 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
   `shell-slots-demo/status · order 40 · after host/zoom`；条目元素同时带
   `data-slot-before` / `data-slot-after`。插槽标签追加条目数量。
 
+**插槽调试 UI 优化（2026-10-28 深夜）**：整行长标签挤在一起分不清谁是谁。
+
+- 改成**小圆点**：平时只占 10~12px（插槽橙 / 插件条目绿 / 宿主条目蓝），
+  不再遮挡底栏按钮、也不会互相重叠。
+- 悬停弹出说明面板：插槽显示 `插槽 / 名称 / 条目数 / 注册用法`；
+  条目显示 `id / order / before / after / 来源`。
+- 面板实现在 **plugin-theme-default**（`SlotDebugPopover.vue`，登记进 ui 目录
+  `slotDebugPopover`）：复用主题自己的 `Dropdown`（trigger=hover），
+  所以定位/翻转/点击外部关闭/箭头都与全站下拉一致。
+- `canvas-render` 只负责发"小点 + 内容"，不内置浮层：宿主经 `debug-tip` 传入
+  `uiComponentOf('slotDebugPopover')`；没传时退回原生 `title`。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 

@@ -36,6 +36,7 @@ import {
   onBeforeUnmount,
   shallowRef,
   type Component,
+  type PropType,
   type VNode,
   type VNodeArrayChildren,
   type VNodeChild,
@@ -75,6 +76,12 @@ export default defineComponent({
     debug: { type: Boolean, default: false },
     /** 槽名在 UI 上的简称（缺省用 slot 全名） */
     label: { type: String, default: undefined },
+    /**
+     * 调试标签的悬浮面板组件（可选）。
+     * 宿主可传 AxTooltip / AxDropdown 这类浮层；不传则用浏览器原生 title 兜底。
+     * 组件契约：接收 content（字符串）与默认插槽（触发元素）。
+     */
+    debugTip: { type: [Object, Function] as PropType<Component | null>, default: null },
   },
   setup(props, { slots, attrs }) {
     const { ctx } = useCanvasContext()
@@ -194,7 +201,7 @@ export default defineComponent({
         const content = Array.isArray(raw) ? raw : [raw]
         // 宿主锚点：调试时把"条目身份 + 排序信息"作为一条标签放在内容前
         if (!props.debug) return h(Fragment, { key: item.id }, content)
-        return h(Fragment, { key: item.id }, [slotDebugItemBadge(item, 'host'), ...content])
+        return h(Fragment, { key: item.id }, [slotDebugItemDot(item, 'host'), ...content])
       }
       const extra = (props.itemProps as
         | ((entry: SlotComposerEntry & { component: unknown }) => Record<string, unknown> | undefined)
@@ -215,25 +222,46 @@ export default defineComponent({
       })
       // 插件条目：调试时在组件前面放一条身份/排序标签
       if (!props.debug) return node
-      return h(Fragment, { key: item.id + ':debug' }, [slotDebugItemBadge(item, 'plugin'), node])
+      return h(Fragment, { key: item.id + ':debug' }, [slotDebugItemDot(item, 'plugin'), node])
     }
 
     /**
-     * 条目标签：id / order / before / after 全列出来。
+     * 条目小圆点：平时只显示一个色点（不挡内容），悬停展开完整信息。
      *
-     * 宿主锚点与插件条目两条渲染路径共用，文案只改这一处，避免漂移。
+     * 为什么不再写整行文字：底栏条目很密，长标签会互相重叠、分不清谁是谁
+     * （2026-10-28 用户实测截图）。改成一个点 + 悬浮面板，位置稳定、可读。
      */
-    function slotDebugItemBadge(item: SlotComposerItem, owner: 'host' | 'plugin'): VNode {
-      const parts = [item.id, 'order ' + item.order]
-      if (item.before !== undefined) parts.push('before ' + item.before)
-      if (item.after !== undefined) parts.push('after ' + item.after)
+    function slotDebugItemDot(item: SlotComposerItem, owner: 'host' | 'plugin'): VNode {
+      const lines = [
+        'id: ' + item.id,
+        'order: ' + item.order,
+        ...(item.before !== undefined ? ['before: ' + item.before] : []),
+        ...(item.after !== undefined ? ['after: ' + item.after] : []),
+        '来源: ' + (owner === 'host' ? '宿主内置' : '插件'),
+      ]
+      return debugDot('slot-debug-dot' + (owner === 'host' ? ' is-host' : ''), lines.join('\n'))
+    }
+
+    /**
+     * 统一生成"小点 + 悬浮详情"。
+     *
+     * 有 debugTip（宿主传了浮层组件）就包一层；否则退回原生 title
+     * —— 这样 canvas-render 不反向依赖 @mini-canvas/ui，自定义宿主也能用。
+     */
+    function debugDot(cls: string, title: string): VNode {
+      const dot = h('span', { class: 'slot-debug-dot-inner', 'aria-hidden': 'true' })
+      // 缺省不内置任何浮层：主题插件（plugin-theme-default）经 debug-tip 传默认件；
+      // 没传时退回原生 title，保证极简宿主也能看见内容。
+      const tip = props.debugTip
+      if (!tip) {
+        return h('span', { class: ['slot-debug-dot', cls], title, 'aria-hidden': 'true' }, [dot])
+      }
       return h(
         'span',
-        {
-          class: 'slot-debug-badge slot-debug-item-badge' + (owner === 'host' ? ' is-host' : ''),
-          'aria-hidden': 'true',
-        },
-        parts.join(' · '),
+        { class: ['slot-debug-dot', cls], 'data-slot-tip': '1' },
+        [
+          h(tip as Component, { content: title }, () => dot),
+        ],
       )
     }
 
@@ -259,10 +287,14 @@ export default defineComponent({
       // attrs 内的 class 与固定 class 合并，不能直接覆盖（否则使用方的布局会丢）。
       const userClass = (attrs.class as string | undefined) ?? ''
       const badge = props.debug
-        ? h(
-            'span',
-            { class: 'slot-debug-badge', 'aria-hidden': 'true' },
-            (props.label ?? props.slot) + ' · ' + props.slot + ' · ' + nodes.length + ' 条',
+        ? debugDot(
+            'is-slot',
+            [
+              '插槽: ' + props.slot,
+              '名称: ' + (props.label ?? props.slot),
+              '条目数: ' + nodes.length,
+              '用法: ctx.slots.register(\'' + props.slot + '\', { id: \'插件名/条目\', before/after })',
+            ].join('\n'),
           )
         : null
       return h(

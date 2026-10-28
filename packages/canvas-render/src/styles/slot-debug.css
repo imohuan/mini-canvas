@@ -21,30 +21,51 @@
   outline: 2px solid #10b981 !important;
 }
 
-.slot-debug-badge {
+/*
+ * 调试小点：平时只有一个 8px 圆点，不挡内容；悬停才由宿主浮层展开详情。
+ * 三种颜色区分：插槽（橙）/ 插件条目（绿）/ 宿主内置（蓝）。
+ */
+.slot-debug-dot {
   position: absolute;
   z-index: 200000;
-  transform: translateY(-100%);
-  margin-top: -4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: #f59e0b;
-  color: #1f2937;
-  font: 600 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
-  white-space: nowrap;
-  pointer-events: none;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  cursor: help;
+  pointer-events: auto;
 }
-
-/* 条目标签：比插槽标签小一档，绿色底，与容器标签区分 */
-.slot-debug-item-badge {
+.slot-debug-dot.is-slot {
+  position: relative;
+  top: -1px;
+  width: 10px;
+  height: 10px;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+/* 内层圆点负责真正的颜色与尺寸（外层只当悬停热区，触发器不会 0×0） */
+.slot-debug-dot-inner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
   background: #10b981;
-  color: #052e16;
-  font-size: 10px;
-  font-weight: 600;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85);
 }
-.slot-debug-item-badge.is-host {
-  background: #0ea5e9;
-  color: #082f49;
+.slot-debug-dot.is-host .slot-debug-dot-inner { background: #0ea5e9; }
+.slot-debug-dot.is-slot .slot-debug-dot-inner {
+  background: #f59e0b;
+}
+/* Dropdown 的触发器默认按内容收缩；给圆点一个确定的命中区，悬停才稳定 */
+.slot-debug-dot .dd-trigger {
+  width: 100%;
+  height: 100%;
+}
+.slot-debug-dot .dd,
+.slot-debug-dot .dd-trigger {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* 容器需要定位上下文，标签才能浮在容器上方 */

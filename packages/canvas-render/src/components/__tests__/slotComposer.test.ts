@@ -150,7 +150,7 @@ describe('SlotComposer · SSR', () => {
     ctx.stop()
   })
 
-  it('插槽与条目都带可检索标记；debug 打开时显示插槽名标签', async () => {
+  it('插槽与条目都带可检索标记；debug 打开时出现可悬停的小点', async () => {
     const ctx = new Context()
     await ctx.start()
     ctx.slots.register('demo.slot', {
@@ -177,11 +177,14 @@ describe('SlotComposer · SSR', () => {
 
     const debug = await renderOnce(true)
     expect(debug).toContain('is-slot-debug')
-    expect(debug).toContain('演示 · demo.slot')
+    // 标签改成小圆点 + 悬浮面板：不再把长文字写进 DOM
+    expect(debug).toContain('slot-debug-dot is-slot')
+    // 浮层由宿主/主题经 debug-tip 传入；未传时退回原生 title
+    expect(debug).toContain('title=')
     ctx.stop()
   })
 
-  it('插槽调试会显示条目的 before / after / order', async () => {
+  it('插槽调试：条目的 before / after / order 进数据属性与小点', async () => {
     const ctx = new Context()
     await ctx.start()
     ctx.slots.register('demo.slot', {
@@ -207,10 +210,12 @@ describe('SlotComposer · SSR', () => {
     app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
     const html = await renderToString(app)
 
-    expect(html).toContain('plugin/x · order 20 · after host/a')
-    expect(html).toContain('plugin/y · order 30 · before host/b')
     expect(html).toContain('data-slot-after="host/a"')
     expect(html).toContain('data-slot-before="host/b"')
+    expect(html).toContain('data-slot-order="20"')
+    expect(html).toContain('data-slot-order="30"')
+    // 插槽本体 1 个点 + 每个条目各一个（宿主锚点 2 个 + 插件条目 2 个）
+    expect((html.match(/slot-debug-dot-inner/g) ?? []).length).toBe(5)
     ctx.stop()
   })
 

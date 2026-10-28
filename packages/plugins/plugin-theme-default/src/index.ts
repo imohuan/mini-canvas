@@ -39,6 +39,7 @@ import {
   NodeToolbarButton,
   ColorField,
   NodeEmptyState,
+  SlotDebugPopover,
 } from "./components/ui";
 import MediaViewer from "./components/ui/MediaViewer.vue";
 import Tooltip from "./components/ui/Tooltip.vue";
@@ -719,6 +720,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 悬浮提示（设计系统件）：插件按名取用，气泡观感随主题一起换。
   // 放在这里而不是各插件自绘，理由与 dropdown 完全相同 —— 见 components/ui/Tooltip.vue 顶部注释。
   ui.add("tooltip", Tooltip, { id: "default" });
+  // 插槽调试小点的悬停说明面板：外壳（底栏/状态条/抽屉/设置导航）按名取
+  ui.add("slotDebugPopover", SlotDebugPopover, { id: "default" });
   ui.add("select", Select, { id: "default" });
   // 全屏媒体预览（文本/图片/视频/音频内置；#stage 插槽可扩展新资源类型）。
   // 底栏插件的素材预览浮层与成品应用（生成历史/资产面板）都用它；换主题时一起换。

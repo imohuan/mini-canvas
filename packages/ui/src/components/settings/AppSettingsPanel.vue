@@ -27,6 +27,7 @@
 import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
+import { uiComponentOf } from '../../composables/ui'
 import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
 
@@ -61,6 +62,8 @@ const settingsSlotDebug = computed(() => {
     return false
   }
 })
+/** 插槽调试提示：主题插件登记的默认件 */
+const slotDebugTip = computed(() => uiComponentOf('slotDebugPopover') as never)
 const disposers: Array<{ dispose(): void }> = [
   ctx.on('ctx:plugin-installed', bumpOcc),
   ctx.on('ctx:plugin-uninstalled', bumpOcc),
@@ -357,7 +360,7 @@ function blocksOf(groupKey: string): ContentBlock[] {
         <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor；插件条目只参与排序、不渲染
              （本面板不展示插件自定义导航外观，避免重复项与点不动的死行）。 -->
         <SlotComposer :slot="SETTINGS_NAV_SLOT" class="flex flex-col" :item-props="settingsNavProps"
-          :debug="Boolean(settingsSlotDebug)" label="设置导航">
+          :debug="Boolean(settingsSlotDebug)" :debug-tip="slotDebugTip" label="设置导航">
         <template v-for="nav in navs" :key="nav">
           <SlotAnchor
             :id="'host/settings-' + nav"

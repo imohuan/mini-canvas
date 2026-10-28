@@ -4,6 +4,8 @@
  */
 export { default as Dropdown } from './Dropdown.vue'
 export { default as Tooltip } from './Tooltip.vue'
+/** 插槽调试小点的悬停说明面板（默认主题的调试件） */
+export { default as SlotDebugPopover } from './SlotDebugPopover.vue'
 export { default as Select } from './Select.vue'
 /** 全屏媒体预览（文本/图片/视频/音频内置，#stage 插槽可扩展新类型；详见组件头注释） */
 export { default as MediaViewer } from './MediaViewer.vue'

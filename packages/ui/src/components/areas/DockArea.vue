@@ -28,13 +28,16 @@ import AxMenu from "../AxMenu.vue";
 import AxMenuItem from "../AxMenuItem.vue";
 import AgentOrb from "../AgentOrb.vue";
 import { useUi } from "../../composables/ui";
+import { uiComponentOf } from "../../composables/ui";
 import { openUploadDialog } from "../../composables/assetUploadBus";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { SlotAnchor, SlotComposer } from "@mini-canvas/canvas-render";
 import SlotButton from "./SlotButtons.vue";
 
 const ui = useUi();
 const s = ui.state;
+/** 插槽调试提示：主题插件登记的默认件（plugin-theme-default 的 slotDebugPopover） */
+const slotDebugTip = computed(() => uiComponentOf("slotDebugPopover") as never);
 
 /** 下发给插件条目的共享 props：默认按钮 + 常用函数（插件不必再抄一份样式） */
 const slotShared = {
@@ -85,6 +88,7 @@ function onUploadPick(e: Event): void {
         class="flex items-center gap-2"
         :shared-props="slotShared"
         :debug="Boolean(s.cfg.debug.slotDebug)"
+        :debug-tip="slotDebugTip"
         label="底栏"
       >
         <SlotAnchor id="host/upload-input" :order="90">
