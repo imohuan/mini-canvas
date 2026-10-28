@@ -36,14 +36,14 @@ export const DEMO_FIELD = 'showcase/demo-item'
 
 export function apply(ctx: Context): void {
   // 设置面板：左导航「插件展示」项 + 整页正文（自绘，与光标特效插件同机制）
-  ctx.slots.register('settingsNav', {
-    id: NAV_ID,
+  ctx.slots.register('settings.nav', {
+    id: 'showcase/nav',
     order: 8,
     component: markRaw(ShowcaseNav),
     meta: { title: '插件展示' },
   })
   ctx.slots.register('settingsGroup/' + NAV_ID, {
-    id: 'showcase-page',
+    id: 'showcase/page',
     order: 8,
     component: markRaw(ShowcasePage),
     meta: { mode: 'replace' },

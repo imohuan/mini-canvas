@@ -71,8 +71,10 @@ export function apply(ctx: Context): void {
 
   // ④ 设置面板：「Agent」一级导航 + 整页正文。分组名必须与 Config 的 group 同名，
   //    面板才会把这一页接上（有导航没分组 → 右侧空白）。
-  ctx.slots.register('settingsNav', { id: 'Agent', order: 5, component: markRaw(AgentNav) })
-  ctx.slots.register('settingsGroup/Agent', { id: 'agent-page', order: 5, component: markRaw(AgentPage) })
+  ctx.slots.register('settings.nav', {
+    id: 'agent/nav', order: 5, component: markRaw(AgentNav), meta: { group: 'Agent' },
+  })
+  ctx.slots.register('settingsGroup/Agent', { id: 'agent/page', order: 5, component: markRaw(AgentPage) })
 
   // ⑤ 多选框的上控制栏挂「引用到 Agent」：与「加入资产库」同一条接缝（selection/region 场）。
   //    needs: ['selection'] → 组件按名取选中集，多选插件零改动。

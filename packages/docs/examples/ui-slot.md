@@ -9,7 +9,7 @@
 装上后你会看到：画布上多一个左下角小浮层（一行字 + 一个"清零"按钮），每点一下画布，
 计数 +1；同时 ⚙ 设置面板左侧多出"计数"一项，点进去是本插件自己画的一整页。
 
-本篇一次讲全三个槽：`overlay`（画布浮层，cursor-effect 同款）、`settingsNav` +
+本篇一次讲全三个槽：`overlay`（画布浮层，cursor-effect 同款）、`settings.nav` +
 `settingsGroup/<id>`（设置面板一整页，也是 cursor-effect 的做法）；最后提一句 `mini-map`
 专用槽 —— 宿主想把你放在哪就 `<SlotHost slot="你的槽名" />` 放哪，注册方式完全一样。
 
@@ -74,7 +74,7 @@ import CountSettingsPage from './CountSettingsPage.vue' // 设置面板"计数"�
 // ① 插件名：全画布唯一，卸载/重装都按这个名字找插件
 export const name = 'my-count-overlay'
 
-// ② 硬依赖列表：空数组 = 谁都不依赖。插槽宿主（overlay/settingsNav/settingsGroup）
+// ② 硬依赖列表：空数组 = 谁都不依赖。插槽宿主（overlay/settings.nav/settingsGroup）
 //    由渲染层/默认皮恒在装配，不需要写进 inject
 export const inject = [] as string[]
 
@@ -83,26 +83,26 @@ export function apply(ctx: Context): void {
   // ④ overlay 槽：画布容器里盖满画布的那层（CanvasSurface 内置）
   //    order 越小越靠外层/优先级越高；id 是同槽内的唯一标识
   ctx.slots.register('overlay', {
-    id: 'my-count-overlay',            // 槽内唯一 id（卸载时按它摘除）
+    id: 'count-demo/overlay',          // 槽内唯一 id：插件名/条目名（卸载时按它摘除）
     order: 90,                         // 越小越靠前/越外层；写 90 = 放在常用浮层后面
     component: markRaw(CountOverlay),  // 组件本体；markRaw 包住，避免 Vue 把组件定义变响应式
     meta: { title: '画布计数' },        // 可选说明信息，面板/调试工具会读
   })
 
-  // ⑤ settingsNav 槽：设置面板左侧一级导航。id 要用你自定义的分组名，
+  // ⑤ settings.nav 槽：设置面板左侧一级导航。meta.group 要用你自定义的分组名，
   //    默认皮按 id 匹配激活态、把 group 传给你的组件
-  ctx.slots.register('settingsNav', {
-    id: '计数',
+  ctx.slots.register('settings.nav', {
+    id: 'count-demo/nav',
     order: 7,
     component: markRaw(CountSettingsNav),
-    meta: { title: '计数' },
+    meta: { title: '计数', group: '计数' },
   })
 
-  // ⑥ settingsGroup/<导航 id> 槽：命中导航后右侧的正文。
+  // ⑥ settingsGroup/<分组名> 槽：命中导航后右侧的正文。
   //    槽名是动态拼接的 —— 这就是"一页"怎么挂上去的
   //    meta.mode='replace' = 这一页完全由你的组件接管（缺省也是 replace，写了更醒目）
   ctx.slots.register('settingsGroup/' + '计数', {
-    id: 'my-count-page',
+    id: 'count-demo/page',
     order: 7,
     component: markRaw(CountSettingsPage),
     meta: { mode: 'replace' },
@@ -228,15 +228,15 @@ onBeforeUnmount(() => off?.dispose())
 ## 每一步在干什么
 
 **① name / inject / apply 裸导出。** 内核认这三样：name 是全画布唯一标识，inject 是硬依赖清单
-（空数组 = 谁都不依赖），apply 是装配函数。注意别把渲染槽写成依赖 —— `overlay`/`settingsNav`
+（空数组 = 谁都不依赖），apply 是装配函数。注意别把渲染槽写成依赖 —— `overlay`/`settings.nav`
 这些是"槽名"不是服务名，写进 inject 插件会因缺这个"服务"永远等着（PENDING 不跑）。
 
 **② `slots.register('overlay')` 放画布浮层。** overlay 槽由渲染层 CanvasSurface 内置渲染，
 插件只管往里放组件。`order` 越小越靠前（越靠外层）；不写 order 排最后。`id` 是同槽内唯一标识，
 插件卸载时内核按它摘除你的条目。光标特效插件用 45，示例用 90 —— 数值本身无所谓，相对大小才重要。
 
-**③ `slots.register('settingsNav')` 放左导航项。** id 必须是"你要接管的分组名"（示例用"计数"）。
-默认皮读 `settingsNav` 槽的全部条目，把 `group`（= id）、`active`（是否选中）、`onSelect`
+**③ `slots.register('settings.nav')` 放左导航项。** `meta.group` 是"你要接管的分组名"（示例用"计数"）。
+默认皮读 `settings.nav` 槽的全部条目，把 `group`、`active`（是否选中）、`onSelect`
 （点击回调）传给你的组件 —— 你在组件里 `defineProps` 接住这三个，点击时调 `onSelect(group)`。
 
 **④ `slots.register('settingsGroup/计数')` 放正文页。** 槽名拼了导航 id，命中导航后默认皮把
@@ -259,7 +259,7 @@ try/catch 兜底。想正经登记自己的键（带默认值、有类型约束�
 位置写 `<SlotHost slot="mini-map" />`（成品 UI 写在 App.vue 里，紧跟状态栏按钮）。插件侧的
 注册代码一行不用变。想做一个"宿主自选位置"的部件，就学这个模式。
 
-顺带一提：设置面板还有第四个槽 `settingsTab`（二级页签），语义和 `settingsNav` 对称 ——
+顺带一提：设置面板还有第四个槽 `settings.tab`（二级页签），语义和 `settings.nav` 对称 ——
 id 首段 = 当前一级名，面板同样传 `{ group, active, onSelect }`。想在一页里做自己的页签切换，
 用它（见 `PluginSettingsContent.vue` 顶部注释的三套插槽说明）。
 
@@ -279,11 +279,11 @@ id 首段 = 当前一级名，面板同样传 `{ group, active, onSelect }`。�
 | 真实文件 | 对应示例 | 行为 |
 | --- | --- | --- |
 | `packages/plugins/plugin-cursor-effect/src/index.ts:40` | 步骤 ④ | `ctx.slots.register('overlay', { id: 'cursor-effect-overlay', order: 45, component: markRaw(CursorEffectOverlay), meta })` |
-| `packages/plugins/plugin-cursor-effect/src/index.ts:48` | 步骤 ⑤ | `settingsNav` 注册，id 用 `CURSOR_NAV_ID`（='光标'），order 7 |
+| `packages/plugins/plugin-cursor-effect/src/index.ts` | 步骤 ⑤ | `settings.nav` 注册，id 为 `cursor-effect/nav`，meta.group = 光标，order 7 |
 | `packages/plugins/plugin-cursor-effect/src/index.ts:54` | 步骤 ⑥ | `'settingsGroup/' + CURSOR_NAV_ID`，`meta: { mode: 'replace' }` 整页自绘 |
 | `packages/canvas-render/src/host/CanvasSurface.vue:425` | overlay 消费端 | `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` 渲染该槽全部条目 |
 | `packages/canvas-render/src/components/SlotHost.vue:1` | 通用槽宿主 | 读 `ctx.slots.occupants(slot)` 按 order 逐个渲染，插件装卸时自动重读 |
-| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue:62` | settingsNav 消费端 | 读 `settingsNav` occupants，渲染时给组件传 `{ group, active, onSelect }` |
+| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | settings.nav 消费端 | 读 `settings.nav` occupants，渲染时给组件传 `{ group, active, onSelect }` |
 | `packages/plugins/plugin-cursor-effect/src/components/settings/CursorSettingsNav.vue:1` | 真实导航组件 | `defineProps<{ group: string; active?: boolean; onSelect?: (key: string) => void }>` —— 示例导航组件就是照它缩写的 |
 | `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue:330` | settingsGroup 消费端 | 读 `'settingsGroup/' + sectionKey`；replace 模式接管整组内容 |
 | `packages/plugins/plugin-mini-map/src/miniMapPlugin.ts:55` | 专用槽 | `ctx.slots.register('mini-map', …)` —— 宿主想放哪就 `<SlotHost slot="mini-map" />` 放哪 |
@@ -291,12 +291,12 @@ id 首段 = 当前一级名，面板同样传 `{ group, active, onSelect }`。�
 
 ## 常见坑
 
-- **槽名写错 = 什么都不显示**。`overlay`、`settingsNav`、`settingsGroup/<id>` 都是宿主"认名"渲染的，
+- **槽名写错 = 什么都不显示**。`overlay`、`settings.nav`、`settingsGroup/<id>` 都是宿主"认名"渲染的，
   名字对不上（比如写成 `overlays`）组件永远不渲染，也不报错 —— 内核只是把它存进注册场。
   检查办法：去宿主源码搜 `SlotHost slot="…"` 看它渲染哪些名字。
 - **忘了 markRaw**。组件定义直接塞进注册场会被 Vue 做成响应式代理，渲染时可能性能告警或重复挂载。
   所有 `component:` 都要 `markRaw(...)` 包一层 —— 仓库里的真实插件全这么做。
-- **settingsGroup 槽名里的 id 要和 settingsNav 的 id 完全一致**。左导航 id 是"计数"，正文槽就要是
+- **settingsGroup 槽名里的分组名要和 settings.nav 的 meta.group 完全一致**。左导航是"计数"，正文槽就要是
   `settingsGroup/计数`。差一个字 = 点了导航右边是空白。
 - **overlay 组件里要用 pointer-events**。overlay 容器本身是 `pointer-events: none`（不挡画布），
   你的浮层想被点击，根元素要写 `pointer-events: auto`（示例的 `CountOverlay.vue` 样式里写了）。

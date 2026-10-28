@@ -92,14 +92,14 @@ export const hotReloadPlugin: PluginModule = {
     ctx.effect(() => manager.watchPluginChanges())
 
     // 设置面板：本插件自己的「调试插件」页（与插件管理的「插件」页是两个独立入口）
-    ctx.slots.register('settingsNav', {
-      id: HOT_RELOAD_NAV_ID,
+    ctx.slots.register('settings.nav', {
+    id: 'hot-reload/nav',
       order: 7,
       component: markRaw(HotReloadNav),
       meta: { title: HOT_RELOAD_NAV_ID },
     })
     ctx.slots.register('settingsGroup/' + HOT_RELOAD_NAV_ID, {
-      id: 'hot-reload-page',
+    id: 'hot-reload/page',
       order: 7,
       component: markRaw(HotReloadPage),
     })

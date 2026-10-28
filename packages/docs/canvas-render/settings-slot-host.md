@@ -80,8 +80,8 @@ defineProps<{
 | `overlay` | `plugin-align-guide`（对齐线）、`plugin-multi-select`（框选层 + 选择框）、`plugin-group`（分组控制栏）、`plugin-shortcut-manager`（快捷键面板）、`plugin-style-library`（样式库）、`plugin-cursor-effect`（光标特效）、`plugin-bottom-bar`（节点底栏浮层 + 预览浮层 + 任务浮层） | **`CanvasSurface.vue`** 里固定一行 `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` |
 | `mini-map` | `plugin-mini-map` | 宿主自选：`packages/ui/src/App.vue` 里 `<SlotHost slot="mini-map" />` |
 | `agent-conversation` | `plugin-agent`（消息流 + 输入区） | `packages/ui/src/components/areas/AgentPanel.vue` |
-| `settingsNav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-cloud-client/manager`（插件管理）、`packages/ui/src/hotReloadPlugin.ts` | 设置面板皮：默认皮 `plugin-theme-default` 的 `PluginSettingsContent.vue`（`packages/ui/src/components/settings/AppSettingsPanel.vue` 明确不消费它） |
-| `settingsTab` | 当前生产代码里没有插件注册它（保留给「自定义二级页签」） | 默认设置皮按「一级名匹配 id 首段」归并渲染 |
+| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload` | 设置面板皮：默认皮 `plugin-theme-default` 的 `PluginSettingsContent.vue`（`packages/ui/src/components/settings/AppSettingsPanel.vue` 明确不消费它） |
+| `settings.tab` | 当前生产代码里没有插件注册它（保留给「自定义二级页签」） | 默认设置皮按「一级名匹配 id 首段」归并渲染 |
 | `settingsGroup/<分组名>` | 同上那批插件（每个整页内容一条，如 `settingsGroup/Agent`、`settingsGroup/光标`） | 默认设置皮 / `AppSettingsPanel.vue` 按当前分组读 `occupants('settingsGroup/' + groupKey)` |
 
 想让插件往某个槽放东西，插件那侧写：
@@ -222,8 +222,8 @@ const Field = injectSettingsFieldRenderer()   // ① 不在设置面板子树内
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/ui/src/App.vue` | `<SettingsHost v-if="s.settingsOpen" />` 与 `<SlotHost slot="mini-map" />` 都放在 `#ui` 插槽里 |
-| `packages/ui/src/components/settings/AppSettingsPanel.vue` | 成品应用自己的设置皮（`order -1` 顶替默认皮）：消费 `settingsGroup/<key>`，**不消费** `settingsNav` / `settingsTab` |
-| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 默认设置皮：读 `settingsNav` / `settingsTab` / `settingsGroup/<key>` 三种槽 |
+| `packages/ui/src/components/settings/AppSettingsPanel.vue` | 成品应用自己的设置皮（`order -1` 顶替默认皮）：消费 `settingsGroup/<key>`，**不消费** `settings.nav` / `settings.tab` |
+| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 默认设置皮：读 `settings.nav` / `settings.tab` / `settingsGroup/<key>` 三种槽 |
 | `packages/plugins/plugin-theme-default/src/index.ts` | `ctx.theme.register("settingsPanel", PluginSettingsContent, …)` 注册默认赢家 |
 | `packages/ui/src/settingsPanelPlugin.ts` | 换皮插件：`ctx.theme.register('settingsPanel', AppSettingsPanel, { id: name, order: -1 })` |
 | `packages/canvas-render/src/host/CanvasSurface.vue` | overlay 槽的唯一渲染点 |
@@ -231,7 +231,7 @@ const Field = injectSettingsFieldRenderer()   // ① 不在设置面板子树内
 
 ## 完整例子
 
-一个**真能跑**的插件组合：往 `overlay` 挂一个小浮层，再给自己的插件加一个设置页（`settingsNav` + `settingsGroup/<名>`），全部按真实写法。
+一个**真能跑**的插件组合：往 `overlay` 挂一个小浮层，再给自己的插件加一个设置页（`settings.nav` + `settingsGroup/<名>`），全部按真实写法。
 
 ### 目录长这样
 
@@ -241,7 +241,7 @@ plugin-panel-demo/
 └── src/
     ├── index.ts                 # 插件入口：注册 overlay 浮层 + 设置导航 + 设置页正文
     ├── DemoOverlay.vue          # 挂在 overlay 槽的小浮层（显示当前缩放）
-    ├── DemoNavItem.vue          # 挂在 settingsNav 槽的导航项按钮
+    ├── DemoNavItem.vue          # 挂在 settings.nav 槽的导航项按钮
     └── DemoSettingsPage.vue     # 挂在 settingsGroup/我的演示 的设置页正文
 ```
 
@@ -360,13 +360,13 @@ export function apply(ctx: Context): void {
   })
 
   // ② 设置面板左导航：一条导航项
-  ctx.slots.register('settingsNav', {
+  ctx.slots.register('settings.nav', {
     id: 'panel-demo/nav',
     order: 50,
     component: DemoNavItem,
   })
 
-  // ③ 设置页正文：进键形如 settingsGroup/<一级名>，与②的名称一致
+  // ③ 设置页正文：键形如 settingsGroup/<一级名>，与②的 meta.group 一致
   ctx.slots.register('settingsGroup/我的演示', {
     id: 'panel-demo/page',
     component: DemoSettingsPage,

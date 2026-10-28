@@ -499,7 +499,7 @@ export function apply(ctx: Context) {
   // 分组控制栏挂画布 overlay 槽（压在整个 VueFlow 之上，见上方注释里那段层叠上下文说明）。
   // 浮层宿主自己判"恰好单选了一个分组节点"，并把 GroupTopToolbar 摆到卡片正上方。
   ctx.slots.register('overlay', {
-    id: 'group-top-toolbar',
+    id: 'group/top-toolbar',
     order: 35,
     component: GroupTopToolbarOverlay,
     meta: { title: '分组上控制栏' },

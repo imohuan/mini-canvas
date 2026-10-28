@@ -15,10 +15,10 @@ describe('热重载插件的设置页接线', () => {
     await ctx.start()
     try {
       ctx.installPlugin(hotReloadPlugin as never)
-      const nav = ctx.slots.occupants('settingsNav').map((o) => o.id)
+      const nav = ctx.slots.occupants('settings.nav').map((o) => o.id)
       const body = ctx.slots.occupants('settingsGroup/' + HOT_RELOAD_NAV_ID).map((o) => o.id)
-      expect(nav).toContain(HOT_RELOAD_NAV_ID)
-      expect(body).toContain('hot-reload-page')
+      expect(nav).toContain('hot-reload/nav')
+      expect(body).toContain('hot-reload/page')
     } finally {
       ctx.stop()
     }
@@ -35,11 +35,11 @@ describe('热重载插件的设置页接线', () => {
     try {
       ctx.installPlugin(hotReloadPlugin as never)
       expect(w.MiniCanvasHotReload).toBeDefined()
-      expect(ctx.slots.occupants('settingsNav').some((o) => o.id === HOT_RELOAD_NAV_ID)).toBe(true)
+      expect(ctx.slots.occupants('settings.nav').some((o) => o.id === 'hot-reload/nav')).toBe(true)
 
       ctx.uninstallPlugin('hot-reload')
       expect(w.MiniCanvasHotReload, 'window 上的单例要跟着摘掉').toBeUndefined()
-      expect(ctx.slots.occupants('settingsNav').some((o) => o.id === HOT_RELOAD_NAV_ID)).toBe(false)
+      expect(ctx.slots.occupants('settings.nav').some((o) => o.id === 'hot-reload/nav')).toBe(false)
     } finally {
       delete w.MiniCanvasHotReload
       ctx.stop()

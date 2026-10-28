@@ -21,6 +21,15 @@ export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
 export { orderSlotItems, SLOT_ORDER_FALLBACK } from './registry/slotOrder'
 export type { SlotOrderItem, SlotOrderIssue, SlotOrderIssueKind, SlotOrderOptions } from './registry/slotOrder'
+// 统一命名规范（插件名 / 命令 / 事件 / 槽条目 / 槽名）——全仓唯一事实源
+export {
+  isPluginName,
+  isQualifiedId,
+  isSlotItemId,
+  isSlotName,
+  ownerOfSlotItem,
+  warnIfBadId,
+} from './naming'
 // 通用注册场（ctx.registryOf 的地基）：设计文档 §2.1 的 Registry/Entry 契约与默认实现
 export { RegistryImpl } from './registry/registry'
 export type { Registry, Entry, RegistryWrapper, RegistryChange, RegistryImplOptions } from './registry/registry'

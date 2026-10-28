@@ -15,7 +15,8 @@ import type { PluginManager } from '../../host/pluginManager'
 import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../../contracts/canvasContext'
 import SlotComposer from '../SlotComposer.vue'
 import SlotAnchor from '../SlotAnchor.vue'
-import { isSlotItemId, isSlotName, mergeSlotEntries } from '../slotComposer'
+import { isSlotItemId, isSlotName } from '@mini-canvas/kernel'
+import { mergeSlotEntries } from '../slotComposer'
 
 function baseContext(ctx: Context): CanvasContext {
   return {

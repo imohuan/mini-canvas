@@ -17,7 +17,7 @@ import { Context } from '@mini-canvas/canvas-data'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 
 /** overlay 槽里本插件浮层的 occupant id */
-const SLOT_ID = 'align-guide'
+const SLOT_ID = 'align-guide/overlay'
 
 async function boot(raw?: unknown) {
   const ctx = new Context()

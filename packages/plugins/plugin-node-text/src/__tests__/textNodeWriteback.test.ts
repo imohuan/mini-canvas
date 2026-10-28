@@ -111,7 +111,7 @@ describe('text 节点写回', () => {
     const id = text.addTextNode({ x: 0, y: 0 })
 
     const cmd = ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command')
-    cmd.execute('text.delete', { nodeId: id })
+    cmd.execute('text:delete', { nodeId: id })
     expect(graph.getNode(id)).toBeUndefined()
 
     graph.undo()
@@ -127,11 +127,11 @@ describe('text 节点写回', () => {
     const cmd = ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command')
     const id = text.addTextNode({ x: 0, y: 0 })
 
-    expect(cmd.execute('text.duplicate', { nodeId: id })).toBe(true)
+    expect(cmd.execute('text:duplicate', { nodeId: id })).toBe(true)
     expect(graph.getNodes().length).toBe(2)
 
-    expect(cmd.execute('text.duplicate', {})).toBe(false)
-    expect(cmd.execute('text.delete', {})).toBe(false)
+    expect(cmd.execute('text:duplicate', {})).toBe(false)
+    expect(cmd.execute('text:delete', {})).toBe(false)
     ctx.stop()
   })
 })

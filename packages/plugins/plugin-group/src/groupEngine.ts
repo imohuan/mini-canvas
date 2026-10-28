@@ -248,7 +248,8 @@ export function selectDownloadableGroupChildren<T extends { id: string; parentId
   return nodes.flatMap((node) => {
     if (node.parentId !== groupId) return []
     const type = node.data?.nodeType || node.type || ''
-    const commandId = type + '.download'
+    // 命令 id 统一为 插件名:动作（与 node-image / node-text / node-video 等一致）
+    const commandId = type + ':download'
     return type && hasCommand(commandId) ? [{ node, commandId }] : []
   })
 }

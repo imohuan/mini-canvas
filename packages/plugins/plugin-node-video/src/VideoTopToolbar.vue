@@ -114,7 +114,7 @@ function confirmEdit(): void {
   const draft = overlayDraft(props.id)
   const cropRect = draft._cropRect as Rect | undefined
   if (!cropRect) return
-  run('video.cropConfirm', { rect: cropRect })
+  run('video:crop-confirm', { rect: cropRect })
 }
 
 function cancelEdit(): void {
@@ -153,10 +153,10 @@ function cancelEdit(): void {
 
       <template v-if="hasVideo">
         <NodeToolbarButton title="剪辑时长" :icon="ICON_CLIP" @click="beginOverlay(props.id, 'clip')" />
-        <NodeToolbarButton title="截取当前帧" :icon="ICON_FRAME" @click="run('video.captureFrame')" />
-        <NodeToolbarButton title="下载视频" :icon="ICON_DOWNLOAD" @click="run('video.download')" />
-        <NodeToolbarButton v-if="cropped" title="恢复整幅画面" :icon="ICON_RESET" @click="run('video.resetCrop')" />
-        <NodeToolbarButton v-if="clipped" title="恢复整段时长" :icon="ICON_RESET" @click="run('video.resetClip')" />
+        <NodeToolbarButton title="截取当前帧" :icon="ICON_FRAME" @click="run('video:capture-frame')" />
+        <NodeToolbarButton title="下载视频" :icon="ICON_DOWNLOAD" @click="run('video:download')" />
+        <NodeToolbarButton v-if="cropped" title="恢复整幅画面" :icon="ICON_RESET" @click="run('video:reset-crop')" />
+        <NodeToolbarButton v-if="clipped" title="恢复整段时长" :icon="ICON_RESET" @click="run('video:reset-clip')" />
       </template>
     </template>
   </div>

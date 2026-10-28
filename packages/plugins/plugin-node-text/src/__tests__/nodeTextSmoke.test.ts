@@ -60,7 +60,7 @@ describe('node-text 装配 smoke', () => {
     const ctx = boot()
     await ctx.start()
     const cmd = ctx.get<{ has(id: string): boolean }>('command')
-    for (const id of ['text.duplicate', 'text.delete']) {
+    for (const id of ['text:duplicate', 'text:delete']) {
       expect(cmd.has(id)).toBe(true)
     }
     expect(cmd.has('text.bold')).toBe(false)

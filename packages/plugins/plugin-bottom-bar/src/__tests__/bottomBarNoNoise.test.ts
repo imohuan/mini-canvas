@@ -36,11 +36,11 @@ function shouldSkipPersist(deps: PersistDeps): boolean {
 
 describe('底栏 persistValues：无噪声写盘', () => {
   it('首次挂载即卸载（无输入框、无参数）→ 跳过', () => {
-    expect(shouldSkipPersist({ storedActionId: undefined, currentId: 'text.duplicate', showEditor: false, valuesCount: 0 })).toBe(true)
+    expect(shouldSkipPersist({ storedActionId: undefined, currentId: 'text:duplicate', showEditor: false, valuesCount: 0 })).toBe(true)
   })
 
   it('已存 actionId 与当前一致、且没有参数 → 跳过（反复选中不再写盘）', () => {
-    expect(shouldSkipPersist({ storedActionId: 'text.duplicate', currentId: 'text.duplicate', showEditor: false, valuesCount: 0, storedBarValues: { actionId: 'text.duplicate' } })).toBe(true)
+    expect(shouldSkipPersist({ storedActionId: 'text:duplicate', currentId: 'text:duplicate', showEditor: false, valuesCount: 0, storedBarValues: { actionId: 'text:duplicate' } })).toBe(true)
   })
 
   it('生成类动作（有输入框）→ 正常写（作品要落盘）', () => {
@@ -48,11 +48,11 @@ describe('底栏 persistValues：无噪声写盘', () => {
   })
 
   it('即时动作但带了参数 → 正常写（用户真的调过东西）', () => {
-    expect(shouldSkipPersist({ storedActionId: undefined, currentId: 'text.duplicate', showEditor: false, valuesCount: 1 })).toBe(false)
+    expect(shouldSkipPersist({ storedActionId: undefined, currentId: 'text:duplicate', showEditor: false, valuesCount: 1 })).toBe(false)
   })
 
   it('已存动作与当前不同（即时动作、无参数）→ 跳过：切换动作本身不产生配置', () => {
-    expect(shouldSkipPersist({ storedActionId: 'text.duplicate', currentId: 'text.delete', showEditor: false, valuesCount: 0, storedBarValues: { actionId: 'text.duplicate' } })).toBe(true)
+    expect(shouldSkipPersist({ storedActionId: 'text:duplicate', currentId: 'text:delete', showEditor: false, valuesCount: 0, storedBarValues: { actionId: 'text:duplicate' } })).toBe(true)
   })
 
   it('已存动作与当前不同、且带参数 → 正常写（新配置必须落盘）', () => {

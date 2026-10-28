@@ -145,7 +145,7 @@ describe('AppSettingsPanel 插槽：只消费内容插槽，不消费 nav/tab', 
     expect(CODE).toMatch(/ctx\.slots\.occupants\('settingsGroup\/' \+ groupKey\)/)
   })
 
-  it('不消费 settingsNav / settingsTab（用户口径：这个界面不需要这两个插槽）', () => {
+  it('不消费旧的 settingsNav / settingsTab（统一改名为 settings.nav 之后仍不消费）', () => {
     expect(CODE).not.toMatch(/occupants\('settingsNav'/)
     expect(CODE).not.toMatch(/occupants\('settingsTab'/)
     expect(CODE).not.toMatch(/slots\.register\('settingsNav'/)

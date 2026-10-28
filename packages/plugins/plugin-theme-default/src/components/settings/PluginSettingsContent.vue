@@ -14,11 +14,11 @@
  *   - 右 = 二级页签条 + 内容：某一级下若**多于一个**二级分组则显示页签(tab)切换；只有一个则直接展示内容、不显示 tab
  *
  * ## 三套可扩展插槽（内核 ctx.slots 多 occupant 机制，插件 ctx.slots.register 填充，装卸自动回收）
- *   1) 左导航插槽  `settingsNav`    — 定制一级导航项（id = 一级名，命中顶替；否则末尾追加自定义一级项）。
- *   2) 二级页签插槽 `settingsTab`   — 定制二级页签（id 首段 = 当前一级名），与 settingsNav 语义对称。
+ *   1) 左导航插槽  `settings.nav`  — 定制一级导航项（id = 一级名，命中顶替；否则末尾追加自定义一级项）。
+ *   2) 二级页签插槽 `settings.tab`  — 定制二级页签（id 首段 = 当前一级名），与 settings.nav 语义对称。
  *   3) 右内容插槽  `settingsGroup/<key>` — 接管某个**完整分组 key** 的内容区渲染。
  *
- *   `settingsNav`/`settingsTab` occupant 都通过 props 收到 { group, active, onSelect }；onSelect(key) 切过去，不给则点了没反应。
+ *   `settings.nav`/`settings.tab` occupant 都通过 props 收到 { group, active, onSelect }；onSelect(key) 切过去，不给则点了没反应。
  *
  * 打开/关闭：宿主(App.vue)用 v-if="settingsOpen" 控制是否渲染 <SettingsHost/>；关闭动作由外壳 emit('close')
  * → SettingsHost 广播 'settings:ui-close' → 宿主置 settingsOpen=false。本组件不再自己处理关闭。
@@ -59,7 +59,7 @@ function leafLabelOf(key: string): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const navList = ref<SlotOcc[]>([])
 function reloadNav(): void {
-  navList.value = ctx.slots.occupants('settingsNav').map((e) => ({
+  navList.value = ctx.slots.occupants('settings.nav').map((e) => ({
     id: e.id,
     order: e.order,
     component: markRaw(e.component as object),
@@ -67,11 +67,11 @@ function reloadNav(): void {
 }
 reloadNav()
 
-// —— 二级页签插槽 occupants（settingsTab）：全局读一次，渲染时按"当前一级名"过滤归并 ——
+// —— 二级页签插槽 occupants（settings.tab）：全局读一次，渲染时按"当前一级名"过滤归并 ——
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const tabList = ref<SlotOcc[]>([])
 function reloadTabs(): void {
-  tabList.value = ctx.slots.occupants('settingsTab').map((e) => ({
+  tabList.value = ctx.slots.occupants('settings.tab').map((e) => ({
     id: e.id,
     order: e.order,
     component: markRaw(e.component as object),
@@ -176,7 +176,7 @@ const sections = computed<Section[]>(() => {
   const leaves = sectionMap.value.get(nav) ?? []
   const occs = [...tabList.value]
     .sort((a, b) => a.order - b.order)
-    // settingsTab 只对"id 首段 === 当前一级名"的项生效（避免跨一级串扰）
+    // settings.tab 只对"id 首段 === 当前一级名"的项生效（避免跨一级串扰）
     .filter((oc) => oc.id.startsWith(nav + SEP))
   const occByLeaf = new Map<string, SlotOcc>()
   const customs: SlotOcc[] = []
@@ -440,7 +440,7 @@ watch(sections, () => void nextTick(updateTabsOverflow), { flush: 'post' })
 
               <div ref="tabsEl" class="psd-tabs" role="tablist" @scroll="updateTabsOverflow" @wheel="onTabsWheel">
                 <template v-for="s in sections" :key="s.key">
-                  <!-- settingsTab 插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect }；active 由滚动定位高亮 -->
+                  <!-- settings.tab 插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect }；active 由滚动定位高亮 -->
                   <component v-if="s.kind === 'tab'" :is="s.component" :group="s.key"
                     :active="currentSection === s.key" :on-select="scrollToSection" class="psd-tab-item"
                     :data-tab="s.key" />

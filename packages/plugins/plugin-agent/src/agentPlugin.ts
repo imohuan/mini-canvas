@@ -51,15 +51,15 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
 
   // ① 内容槽：消息流 + 输入区（外壳由 packages/ui 提供）
   ctx.slots.register('agent-conversation', {
-    id: 'agent-conversation',
+    id: 'agent/conversation',
     order: 60,
     component: markRaw(AgentConversation),
     meta: { title: 'Agent 对话' },
   })
 
   // ② 设置面板里的 Agent 页（一级导航 + 三个自定义页签）
-  ctx.slots.register('settingsNav', {
-    id: 'Agent',
+  ctx.slots.register('settings.nav', {
+    id: 'agent/nav',
     order: 5,
     component: markRaw(AgentSettingsNav),
     meta: { title: 'Agent' },
@@ -67,7 +67,7 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
   // 内容：段的正文来自 settingsGroup/<完整分组 key>。整页只注册这一处，
   // 页签切换由页面自己负责（用户口径：上面一排页签切换 provider / 技能 / MCP / 系统提示词…）。
   ctx.slots.register('settingsGroup/Agent', {
-    id: 'agent-page',
+    id: 'agent/page',
     order: 5,
     component: markRaw(AgentSettingsPage),
   })

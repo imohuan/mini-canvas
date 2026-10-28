@@ -125,14 +125,14 @@ describe('NodeBottomBar：版式与显隐契约', () => {
   })
 
   it('needsPrompt=false 的动作不渲染大输入框（即时动作不留空编辑区）', async () => {
-    const instant: BarAction = { id: 'image.rotate', types: ['image'], title: '旋转', run: () => ({ ok: true }) }
+    const instant: BarAction = { id: 'image:rotate', types: ['image'], title: '旋转', run: () => ({ ok: true }) }
     const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'], actions: [instant] }))
     expect(html).toContain('node-bottom-bar')
     expect(html).not.toContain('nb-editor')
   })
 
   it('默认动作优先选可输入的那条（即时动作 order 更小，也不能因此默认选中它）', async () => {
-    const rotate: BarAction = { id: 'image.rotate', types: ['image'], title: '旋转', order: 90, run: () => ({ ok: true }) }
+    const rotate: BarAction = { id: 'image:rotate', types: ['image'], title: '旋转', order: 90, run: () => ({ ok: true }) }
     const gen: BarAction = { id: 'tool:gen', types: ['image'], title: '生成图片', needsPrompt: true, run: () => ({ ok: true }) }
     const html = await render(
       NodeBottomBar as Component,

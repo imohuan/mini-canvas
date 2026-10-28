@@ -113,13 +113,13 @@ export function apply(ctx: Context) {
   // 2. 自绘框选浮层 + SelectionFrame 群组框 → overlay 槽（宿主 CanvasSurface 渲染，
   //    组件内 useCanvasRender 读 pane/viewport/screenToFlow；热卸随插件 scope 自动移除）
   ctx.slots.register('overlay', {
-    id: 'multi-select-box',
+    id: 'multi-select/box',
     order: 30,
     component: BoxSelectLayer,
     meta: { title: 'Shift+拖拽框选' },
   })
   ctx.slots.register('overlay', {
-    id: 'multi-select-frame',
+    id: 'multi-select/frame',
     order: 40,
     component: SelectionFrame,
     meta: { title: '多选群组框' },

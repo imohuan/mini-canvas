@@ -220,7 +220,7 @@ export function apply(ctx: Context) {
     publishToolActions(ctx, { types: ['video'], produces: 'video', needsPrompt: true })
     // 剪辑：选中动作 = 打开剪辑会话（面板显隐交给底栏，会话态由 onSelect/onDeselect 开合）
     registerBarAction(ctx, {
-      id: 'video.clip', types: ['video'], title: '剪辑', panel: VideoClipPanel, needsPrompt: false, apply: 'self',
+      id: 'video:clip', types: ['video'], title: '剪辑', panel: VideoClipPanel, needsPrompt: false, apply: 'self',
       description: '裁掉首尾保留一段（元数据式，不重新编码）',
       onSelect: (id) => beginOverlay(id, 'clip'),
       onDeselect: (id) => endOverlay(id),
@@ -279,7 +279,7 @@ export function apply(ctx: Context) {
   const ops = createVideoOps(ctx)
 
   ctx.commands.register({
-    id: 'video.upload',
+    id: 'video:upload',
     title: '上传视频',
     run: async (_c, payload) => {
       const { nodeId, file } = (payload ?? {}) as { nodeId?: string; file?: Blob }
@@ -288,7 +288,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.crop',
+    id: 'video:crop',
     title: '裁剪视频画面',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -298,7 +298,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.cropConfirm',
+    id: 'video:crop-confirm',
     title: '确认裁剪',
     run: (_c, payload) => {
       const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
@@ -310,7 +310,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.cropCancel',
+    id: 'video:crop-cancel',
     title: '取消裁剪',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -320,7 +320,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.resetCrop',
+    id: 'video:reset-crop',
     title: '恢复整幅画面',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -329,7 +329,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.clip',
+    id: 'video:clip',
     title: '剪辑视频',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -339,7 +339,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.clipConfirm',
+    id: 'video:clip-confirm',
     title: '确认剪辑',
     run: (_c, payload) => {
       const { nodeId, start, end } = (payload ?? {}) as { nodeId?: string; start?: number; end?: number }
@@ -350,7 +350,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.clipCancel',
+    id: 'video:clip-cancel',
     title: '取消剪辑',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -360,7 +360,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.resetClip',
+    id: 'video:reset-clip',
     title: '恢复整段时长',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -369,7 +369,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.captureFrame',
+    id: 'video:capture-frame',
     title: '截取当前帧为图片节点',
     run: async (_c, payload) => {
       const { nodeId, at } = (payload ?? {}) as { nodeId?: string; at?: number }
@@ -380,7 +380,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'video.download',
+    id: 'video:download',
     title: '下载视频',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }

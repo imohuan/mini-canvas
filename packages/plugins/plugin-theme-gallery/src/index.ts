@@ -24,7 +24,7 @@ export const inject = [] as string[]
 export function apply(ctx: Context): void {
   // 画布之上的一层：一个可开关的展厅浮层
   ctx.slots.register('overlay', {
-    id: 'theme-gallery-overlay',
+    id: 'theme-gallery/overlay',
     order: 60,
     component: markRaw(ThemeGalleryOverlay),
     meta: { title: '组件展厅' },

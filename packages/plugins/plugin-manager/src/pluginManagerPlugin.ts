@@ -54,15 +54,15 @@ export function apply(ctx: Context, config?: PluginManagerConfig): void {
   ctx.inject('plugin-manager', reactive(service))
 
   // ① 设置面板左导航项
-  ctx.slots.register('settingsNav', {
-    id: MANAGER_NAV_ID,
+  ctx.slots.register('settings.nav', {
+    id: 'plugin-manager/nav',
     order: 6,
     component: markRaw(PluginManagerNav),
     meta: { title: '插件' },
   })
   // ② 设置面板正文（一级分类「插件」的整页由本组件负责）
   ctx.slots.register('settingsGroup/' + MANAGER_NAV_ID, {
-    id: 'plugin-manager-page',
+    id: 'plugin-manager/page',
     order: 6,
     component: markRaw(PluginManagerPage),
   })

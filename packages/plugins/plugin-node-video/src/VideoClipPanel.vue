@@ -123,7 +123,7 @@ function onPointerUp(ev: PointerEvent): void {
 }
 
 function onConfirm(): void {
-  ctx.get('command').execute('video.clipConfirm', {
+  ctx.get('command').execute('video:clip-confirm', {
     nodeId: props.id,
     start: range.value.start,
     end: range.value.end,
@@ -131,7 +131,7 @@ function onConfirm(): void {
 }
 
 function onCancel(): void {
-  ctx.get('command').execute('video.clipCancel', {
+  ctx.get('command').execute('video:clip-cancel', {
     nodeId: props.id,
   })
 }

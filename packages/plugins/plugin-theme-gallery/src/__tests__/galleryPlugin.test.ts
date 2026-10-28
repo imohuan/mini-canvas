@@ -77,7 +77,7 @@ describe('apply：往 overlay 槽登记展厅', () => {
     expect(register).toHaveBeenCalledTimes(1)
     const [slot, entry] = register.mock.calls[0] as [string, { id: string; order: number; component: unknown }]
     expect(slot).toBe('overlay')
-    expect(entry.id).toBe('theme-gallery-overlay')
+    expect(entry.id).toBe('theme-gallery/overlay')
     expect(typeof entry.order).toBe('number')
     expect(entry.component).toBeTruthy()
   })

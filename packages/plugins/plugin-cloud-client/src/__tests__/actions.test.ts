@@ -88,7 +88,7 @@ describe('清掉同名族的残留动作', () => {
   })
 
   it('其它族的动作不动（不是我们该管的）', () => {
-    expect(staleActionIds(['image.rotate', 'web2api:gone'], [])).toEqual(['web2api:gone'])
+    expect(staleActionIds(['image:rotate', 'web2api:gone'], [])).toEqual(['web2api:gone'])
   })
 
   it('清单里的一个都不清（那是后台在管的）', () => {

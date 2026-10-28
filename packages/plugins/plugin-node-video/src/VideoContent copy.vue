@@ -592,7 +592,7 @@ async function onCaptureFrame(): Promise<void> {
 
 async function captureFrameNode(at: number): Promise<void> {
   const command = ctx.get('command')
-  command.execute('video.captureFrame', { nodeId: props.id, at })
+  command.execute('video:capture-frame', { nodeId: props.id, at })
 }
 
 // ==================== 全屏 ====================

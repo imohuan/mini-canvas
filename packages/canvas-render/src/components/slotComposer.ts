@@ -5,11 +5,12 @@
  * - SlotComposer：把「宿主内置 UI」与「插件注册的 UI」合成一个有序序列的父组件；
  * - SlotAnchor：宿主内置 UI 的稳定锚点，声明 id / order / before / after。
  *
- * id 规范（与槽名分开，避免把 "shell.dock.agent" 误当成条目 id）：
- * - 槽名用点：shell.dock、shell.status、shell.drawer.tabs；
- * - 条目 id 用斜杠：owner/name，例如 host/agent、host/add、my-plugin/export；
- * - host/ 前缀保留给宿主内置项。
+ * id 规范与判定统一走 @mini-canvas/kernel 的 naming 模块（全仓唯一事实源）：
+ * - 槽名用点：shell.dock、shell.status、shell.drawer.tabs
+ * - 条目 id 用斜杠：owner/name，例如 host/agent、my-plugin/export
+ * - host/ 前缀保留给宿主内置项
  */
+export { isSlotItemId, isSlotName } from '@mini-canvas/kernel'
 
 /** 宿主锚点或插件条目的最小排序描述 */
 export interface SlotComposerEntry {
@@ -20,22 +21,6 @@ export interface SlotComposerEntry {
   before?: string
   /** 排在该条目之后（槽内条目 id） */
   after?: string
-}
-
-/**
- * 条目 id 必须是 owner/name（只用斜杠分隔，不用点）。
- *
- * 允许中文等非 ASCII 字符：设置面板的一级分组名就是中文（「节点」「常规」），
- * 锚点 id 会拼成 host/settings-节点 —— 只放行 ASCII 会把这些行全部丢掉（2026-10-28 实测）。
- * 仍禁止空白和第二个斜杠，保证 before/after 的解析不含歧义。
- */
-export function isSlotItemId(id: string): boolean {
-  return /^[^\s/]+\/[^\s/]+$/u.test(id)
-}
-
-/** 槽名必须是点分形式（不出现斜杠）；单段也允许，例如 overlay */
-export function isSlotName(name: string): boolean {
-  return name.length > 0 && !name.includes('/')
 }
 
 /** 合并时本地锚点在前：同 id 时宿主赢，插件不能顶掉内置按钮 */

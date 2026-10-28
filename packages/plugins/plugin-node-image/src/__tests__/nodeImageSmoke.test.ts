@@ -120,7 +120,7 @@ describe('node-image 装配 smoke', () => {
     const ctx = boot()
     await ctx.start()
     const ids = ctx.get<{ list(): Array<{ id: string }> }>('command').list().map((c) => c.id)
-    for (const id of ['image.upload', 'image.crop', 'image.cropConfirm', 'image.cropCancel', 'image.rotate', 'image.download']) {
+    for (const id of ['image:upload', 'image:crop', 'image:crop-confirm', 'image:crop-cancel', 'image:rotate', 'image:download']) {
       expect(ids).toContain(id)
     }
     ctx.stop()
@@ -130,9 +130,9 @@ describe('node-image 装配 smoke', () => {
     const ctx = boot()
     await ctx.start()
     const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
-    expect(command.execute('image.cropCancel', {})).toBe(false)
-    expect(command.execute('image.rotate', {})).toBe(false)
-    expect(command.execute('image.download', {})).toBe(false)
+    expect(command.execute('image:crop-cancel', {})).toBe(false)
+    expect(command.execute('image:rotate', {})).toBe(false)
+    expect(command.execute('image:download', {})).toBe(false)
     ctx.stop()
   })
 
@@ -142,9 +142,9 @@ describe('node-image 装配 smoke', () => {
     const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
     const factory = ctx.get<{ create(t: string, p: { x: number; y: number }): string }>('nodeFactory')
     const id = factory.create('image', { x: 0, y: 0 })
-    expect(command.execute('image.crop', { nodeId: id })).toBe(true)
+    expect(command.execute('image:crop', { nodeId: id })).toBe(true)
     expect(isCropping(id)).toBe(true)
-    expect(command.execute('image.cropCancel', { nodeId: id })).toBe(true)
+    expect(command.execute('image:crop-cancel', { nodeId: id })).toBe(true)
     expect(isCropping(id)).toBe(false)
     ctx.stop()
   })

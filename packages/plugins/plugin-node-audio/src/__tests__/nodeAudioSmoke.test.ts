@@ -121,9 +121,9 @@ describe('音频节点插件整装', () => {
   it('三条命令都登记了（上传 / 下载 / 重新分析波形）', async () => {
     const { ctx } = await boot()
     const ids = ctx.get<{ list(): Array<{ id: string }> }>('command').list().map((c) => c.id)
-    expect(ids).toContain('audio.upload')
-    expect(ids).toContain('audio.download')
-    expect(ids).toContain('audio.reanalyze')
+    expect(ids).toContain('audio:upload')
+    expect(ids).toContain('audio:download')
+    expect(ids).toContain('audio:reanalyze')
     ctx.stop()
   })
 
@@ -134,7 +134,7 @@ describe('音频节点插件整装', () => {
     const command = ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command')
     const file = new File(['x'], 'voice.mp3', { type: 'audio/mpeg' })
     // 命令路径直接给 file（不开系统选文件框）；transform 不注入 = 用真实实现，非浏览器环境分析安全返回 null
-    expect(await command.execute('audio.upload', { nodeId: id, file })).toBe(true)
+    expect(await command.execute('audio:upload', { nodeId: id, file })).toBe(true)
     const data = ctx.get<{ getNode(id: string): { data: Record<string, unknown> } | undefined }>('doc').getNode(id)!.data
     expect(data.audioUrl).toBe('blob:resolved-res-1')
     expect(data.resourceId).toBe('res-1')

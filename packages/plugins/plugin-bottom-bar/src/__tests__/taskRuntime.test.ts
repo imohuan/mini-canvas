@@ -151,7 +151,7 @@ describe('runAction', () => {
 
   it("apply:'self' 的即时动作：不经过写入器", async () => {
     const applied = vi.fn()
-    const action = imageAction({ id: 'image.rotate', apply: 'self', run: () => ({ ok: true }) })
+    const action = imageAction({ id: 'image:rotate', apply: 'self', run: () => ({ ok: true }) })
     const h = harness()
     const out = await runAction(
       { nodeId: 'n1', nodeType: 'image', action, input: {}, registry: registryOf([action], { image: applied }) },

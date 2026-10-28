@@ -131,7 +131,7 @@ export function apply(ctx: Context) {
     publishToolActions(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })
     // 复制 / 删除：即时动作（自己已经写好节点），不经过写入器
     registerBarAction(ctx, {
-      id: 'text.duplicate', types: ['text'], title: '复制', apply: 'self', order: 90,
+      id: 'text:duplicate', types: ['text'], title: '复制', apply: 'self', order: 90,
       description: '复制一份本节点（内容一起带走）',
       run: (_input, runCtx) => {
         text.duplicateTextNode(runCtx.nodeId)
@@ -139,7 +139,7 @@ export function apply(ctx: Context) {
       },
     })
     registerBarAction(ctx, {
-      id: 'text.delete', types: ['text'], title: '删除', apply: 'self', order: 100,
+      id: 'text:delete', types: ['text'], title: '删除', apply: 'self', order: 100,
       description: '删除本节点',
       run: (_input, runCtx) => {
         ctx.doc.removeNodes([runCtx.nodeId])
@@ -191,7 +191,7 @@ export function apply(ctx: Context) {
   //    命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
   //    payload 约定：{ nodeId: string }。
   ctx.commands.register({
-    id: 'text.duplicate',
+    id: 'text:duplicate',
     title: '复制文本节点',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -200,7 +200,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'text.delete',
+    id: 'text:delete',
     title: '删除文本节点',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }

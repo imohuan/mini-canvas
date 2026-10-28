@@ -286,7 +286,7 @@ export function apply(ctx: Context) {
   // 底栏住在节点里就压不过外壳底部工具栏（.shell-dock z-index:30），输入区点击被截走（实测复现）。
   // 挂到画布槽后由 NodeBottomBarOverlay 摆到卡片正下方，栏内内容仍是 themeRegistry 的 winner。
   ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
-    id: 'bottom-bar/host',
+    id: 'bottom-bar/bar',
     order: 40,
     component: NodeBottomBarOverlay,
     meta: { title: '节点底栏' },

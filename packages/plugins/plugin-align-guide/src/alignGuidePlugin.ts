@@ -29,7 +29,7 @@ export type { AlignGuideConfig } from './alignGuideConfig'
  */
 function attach(ctx: Context): () => void {
   const id = ctx.slots.register('overlay', {
-    id: 'align-guide',
+    id: 'align-guide/overlay',
     order: 60,
     component: AlignGuideOverlay,
     meta: { title: '对齐辅助线' },

@@ -171,7 +171,7 @@ export function apply(ctx: Context) {
   //   按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
   //   payload 约定：{ nodeId: string }（节点级操作）；上传额外给 file（不给则开系统选文件框）。
   ctx.commands.register({
-    id: 'audio.upload',
+    id: 'audio:upload',
     title: '上传音频',
     run: async (_c, payload) => {
       const { nodeId, file } = (payload ?? {}) as { nodeId?: string; file?: Blob }
@@ -180,7 +180,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'audio.download',
+    id: 'audio:download',
     title: '下载音频',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -189,7 +189,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'audio.reanalyze',
+    id: 'audio:reanalyze',
     title: '刷新波形与时长',
     run: async (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }

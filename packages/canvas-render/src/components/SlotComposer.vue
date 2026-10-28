@@ -43,7 +43,8 @@ import {
 import { orderSlotItems, type SlotOrderIssue } from '@mini-canvas/kernel'
 import { useCanvasContext } from '../contracts/canvasContext'
 import SlotAnchor from './SlotAnchor.vue'
-import { isSlotItemId, type SlotComposerEntry } from './slotComposer'
+import { isSlotItemId } from '@mini-canvas/kernel'
+import type { SlotComposerEntry } from './slotComposer'
 
 interface SlotComposerItem extends SlotComposerEntry {
   component: unknown

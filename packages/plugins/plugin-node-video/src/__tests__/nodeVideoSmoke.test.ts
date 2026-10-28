@@ -84,17 +84,17 @@ describe('node-video 装配 smoke', () => {
     await ctx.start()
     const ids = ctx.get<{ list(): Array<{ id: string }> }>('command').list().map((c) => c.id)
     for (const id of [
-      'video.upload',
-      'video.crop',
-      'video.cropConfirm',
-      'video.cropCancel',
-      'video.resetCrop',
-      'video.clip',
-      'video.clipConfirm',
-      'video.clipCancel',
-      'video.resetClip',
-      'video.captureFrame',
-      'video.download',
+      'video:upload',
+      'video:crop',
+      'video:crop-confirm',
+      'video:crop-cancel',
+      'video:reset-crop',
+      'video:clip',
+      'video:clip-confirm',
+      'video:clip-cancel',
+      'video:reset-clip',
+      'video:capture-frame',
+      'video:download',
     ]) {
       expect(ids).toContain(id)
     }
@@ -105,16 +105,16 @@ describe('node-video 装配 smoke', () => {
     const { ctx } = boot()
     await ctx.start()
     const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
-    expect(await command.execute('video.upload', {})).toBe(false)
-    expect(command.execute('video.crop', {})).toBe(false)
-    expect(command.execute('video.cropConfirm', {})).toBe(false)
-    expect(command.execute('video.cropConfirm', { nodeId: 'x' })).toBe(false)
-    expect(command.execute('video.clip', {})).toBe(false)
-    expect(command.execute('video.clipConfirm', { nodeId: 'x', start: 0 })).toBe(false)
+    expect(await command.execute('video:upload', {})).toBe(false)
+    expect(command.execute('video:crop', {})).toBe(false)
+    expect(command.execute('video:crop-confirm', {})).toBe(false)
+    expect(command.execute('video:crop-confirm', { nodeId: 'x' })).toBe(false)
+    expect(command.execute('video:clip', {})).toBe(false)
+    expect(command.execute('video:clip-confirm', { nodeId: 'x', start: 0 })).toBe(false)
     // 截图命令是 async（要解码视频取帧）→ 返回 Promise，故 await 后判值
-    expect(await command.execute('video.captureFrame', {})).toBe(false)
-    expect(command.execute('video.download', {})).toBe(false)
-    expect(command.execute('video.resetCrop', {})).toBe(false)
+    expect(await command.execute('video:capture-frame', {})).toBe(false)
+    expect(command.execute('video:download', {})).toBe(false)
+    expect(command.execute('video:reset-crop', {})).toBe(false)
     ctx.stop()
   })
 
@@ -126,7 +126,7 @@ describe('node-video 装配 smoke', () => {
     const command = ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command')
     const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' })
     // 命令路径直接给 file（不开系统选文件框）；transform 不注入 = 用真实实现，非浏览器环境读元数据安全返回 null
-    expect(await command.execute('video.upload', { nodeId: id, file })).toBe(true)
+    expect(await command.execute('video:upload', { nodeId: id, file })).toBe(true)
     const data = nodeStore.getNode(id)!.data
     expect(data.videoUrl).toBe('blob:resolved-res-1')
     expect(data.resourceId).toBe('res-1')
@@ -138,16 +138,16 @@ describe('node-video 装配 smoke', () => {
     const { ctx } = boot()
     await ctx.start()
     const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
-    expect(command.execute('video.crop', { nodeId: 'n1' })).toBe(true)
+    expect(command.execute('video:crop', { nodeId: 'n1' })).toBe(true)
     expect(isCropping('n1')).toBe(true)
-    expect(command.execute('video.cropCancel', { nodeId: 'n1' })).toBe(true)
+    expect(command.execute('video:crop-cancel', { nodeId: 'n1' })).toBe(true)
     expect(isCropping('n1')).toBe(false)
 
-    expect(command.execute('video.clip', { nodeId: 'n1' })).toBe(true)
+    expect(command.execute('video:clip', { nodeId: 'n1' })).toBe(true)
     expect(isClipping('n1')).toBe(true)
     // 进入剪辑会自动退掉裁剪（一个节点同时只有一种覆盖层）
     expect(isCropping('n1')).toBe(false)
-    expect(command.execute('video.clipCancel', { nodeId: 'n1' })).toBe(true)
+    expect(command.execute('video:clip-cancel', { nodeId: 'n1' })).toBe(true)
     expect(isClipping('n1')).toBe(false)
     ctx.stop()
   })

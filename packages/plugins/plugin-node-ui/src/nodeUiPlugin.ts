@@ -245,7 +245,7 @@ export function apply(ctx: Context) {
   //      后台地址与接口说明、当前画布。Agent 调它就够动手了，不必自己去翻画布。
   //    ui.setHtml  ：把生成的 HTML 写回来（也可由 Agent 直接调 ctx.get('uiNode').setHtml）。
   ctx.commands.register({
-    id: 'ui.getContext',
+    id: 'node-ui:get-context',
     title: '读取可视化节点的上下文',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -258,7 +258,7 @@ export function apply(ctx: Context) {
   })
 
   ctx.commands.register({
-    id: 'ui.setHtml',
+    id: 'node-ui:set-html',
     title: '写入可视化 HTML',
     run: (_c, payload) => {
       const { nodeId, html, source } = (payload ?? {}) as { nodeId?: string; html?: string; source?: string }
@@ -268,7 +268,7 @@ export function apply(ctx: Context) {
   })
 
   ctx.commands.register({
-    id: 'ui.clear',
+    id: 'node-ui:clear',
     title: '清空可视化节点',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }

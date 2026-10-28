@@ -174,12 +174,12 @@ export function apply(ctx: Context) {
     publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
     // 旋转 / 下载：即时动作（自己已经写好节点），不经过写入器
     registerBarAction(ctx, {
-      id: 'image.rotate', types: ['image'], title: '旋转', apply: 'self', order: 90,
+      id: 'image:rotate', types: ['image'], title: '旋转', apply: 'self', order: 90,
       description: '把图片旋转 90°（可撤销）',
       run: async (_input, runCtx) => ((await rotateImage(ops, runCtx.nodeId)) ? { ok: true } : { ok: false, error: '旋转失败' }),
     })
     registerBarAction(ctx, {
-      id: 'image.download', types: ['image'], title: '下载', apply: 'self', order: 91,
+      id: 'image:download', types: ['image'], title: '下载', apply: 'self', order: 91,
       description: '把图片保存到本地',
       run: async (_input, runCtx) => ((await downloadImageNode(ops, runCtx.nodeId)) ? { ok: true } : { ok: false, error: '下载失败' }),
     })
@@ -275,7 +275,7 @@ export function apply(ctx: Context) {
   //    按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
   //    payload 约定：{ nodeId: string }（节点级操作）；裁剪确认额外给 rect（图片像素矩形）。
   ctx.commands.register({
-    id: 'image.upload',
+    id: 'image:upload',
     title: '上传图片',
     run: async (_c, payload) => {
       const { nodeId, file } = (payload ?? {}) as { nodeId?: string; file?: Blob }
@@ -287,7 +287,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.crop',
+    id: 'image:crop',
     title: '裁剪图片',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -297,7 +297,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.cropConfirm',
+    id: 'image:crop-confirm',
     title: '确认裁剪',
     run: async (_c, payload) => {
       const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
@@ -308,7 +308,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.cropCancel',
+    id: 'image:crop-cancel',
     title: '取消裁剪',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -319,7 +319,7 @@ export function apply(ctx: Context) {
   })
   // —— 图片扩展（Outpaint）：把画面往外扩出一圈透明画布，等着交给生成模型填内容 ——
   ctx.commands.register({
-    id: 'image.expand',
+    id: 'image:expand',
     title: '扩展图片',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -329,7 +329,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.expandConfirm',
+    id: 'image:expand-confirm',
     title: '确认扩展',
     run: async (_c, payload) => {
       const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
@@ -340,7 +340,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.expandCancel',
+    id: 'image:expand-cancel',
     title: '取消扩展',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -350,7 +350,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.rotate',
+    id: 'image:rotate',
     title: '旋转图片',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
@@ -359,7 +359,7 @@ export function apply(ctx: Context) {
     },
   })
   ctx.commands.register({
-    id: 'image.download',
+    id: 'image:download',
     title: '下载图片',
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }

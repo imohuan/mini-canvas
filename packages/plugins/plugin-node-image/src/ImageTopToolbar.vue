@@ -108,7 +108,7 @@ function confirmEdit(): void {
   if (!rect) return
   ctx
     .get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
-    .execute(expanding.value ? 'image.expandConfirm' : 'image.cropConfirm', { nodeId: props.id, rect })
+    .execute(expanding.value ? 'image:expand-confirm' : 'image:crop-confirm', { nodeId: props.id, rect })
 }
 
 function cancelEdit(): void {

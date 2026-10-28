@@ -38,21 +38,21 @@ export { COLOR_ASSETS } from './colorAssets'
 export function apply(ctx: Context): void {
   // ① 画布之上的一层：光标跟随 + 拖尾 + 点击特效（组件内按配置决定画什么）
   ctx.slots.register('overlay', {
-    id: 'cursor-effect-overlay',
+    id: 'cursor-effect/overlay',
     order: 45,
     component: markRaw(CursorEffectOverlay),
     meta: { title: '光标特效' },
   })
 
   // ② 设置面板：左导航「光标」项 + 整页正文（mode: replace = 这一页完全由本插件自绘）
-  ctx.slots.register('settingsNav', {
-    id: CURSOR_NAV_ID,
+  ctx.slots.register('settings.nav', {
+    id: 'cursor-effect/nav',
     order: 7,
     component: markRaw(CursorSettingsNav),
     meta: { title: '光标' },
   })
   ctx.slots.register('settingsGroup/' + CURSOR_NAV_ID, {
-    id: 'cursor-effect-page',
+    id: 'cursor-effect/page',
     order: 7,
     component: markRaw(CursorSettingsPage),
     meta: { mode: 'replace' },

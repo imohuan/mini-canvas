@@ -52,7 +52,7 @@ export function apply(ctx: Context): void {
 
   // 浮层：overlay 槽 occupant（宿主已渲染该槽）。显隐由 state.visible 控制。
   ctx.slots.register('overlay', {
-    id: 'shortcut-manager-help',
+    id: 'shortcut-manager/help',
     order: 200,
     component: ShortcutHelpPanel,
     meta: { title: '快捷键帮助' },

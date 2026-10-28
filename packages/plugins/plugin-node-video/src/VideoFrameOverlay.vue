@@ -45,7 +45,7 @@ const ratioValue = computed(() => (overlayDraft(props.id)._ratioValue as string)
 
 /** 确认：交给命令（与顶部条/快捷键同一实现），命令负责写回并退出编辑态 */
 function onConfirm(rect: Rect): void {
-  ctx.get('command').execute('video.cropConfirm', {
+  ctx.get('command').execute('video:crop-confirm', {
     nodeId: props.id,
     rect,
   })

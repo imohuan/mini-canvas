@@ -167,8 +167,8 @@ describe('selectDownloadableGroupChildren', () => {
       { id: 't', type: 'text', parentId: 'g' },
       { id: 'o', type: 'image' },
     ]
-    const has = (id: string) => id === 'image.download'
+    const has = (id: string) => id === 'image:download'
     const out = selectDownloadableGroupChildren(nodes, 'g', has)
-    expect(out).toEqual([{ node: nodes[1], commandId: 'image.download' }])
+    expect(out).toEqual([{ node: nodes[1], commandId: 'image:download' }])
   })
 })

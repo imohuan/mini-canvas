@@ -53,7 +53,7 @@ export function apply(ctx: Context) {
   // 2. 注册小地图到专用槽（不再占 overlay 槽：位置由宿主决定 —— 宿主 <SlotHost slot="mini-map"/>
   //    放哪儿它就显示在哪儿；没渲染该槽的宿主不显示小地图。热卸随插件 scope 自动移除）
   ctx.slots.register('mini-map', {
-    id: 'mini-map',
+    id: 'mini-map/host',
     order: 80,
     component: MiniMapOverlay,
     meta: { title: '小地图' },
