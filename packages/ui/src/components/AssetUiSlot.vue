@@ -19,7 +19,7 @@ import { computed, watch } from 'vue'
 import AssetManageDialog from './AssetManageDialog.vue'
 import { MediaViewer } from '@mini-canvas/plugin-theme-default'
 import { assetManager, assetPreview, closeAssetManager } from '../composables/assetUiBus'
-import { currentAssetPreview, setAssetPreviewIndex, openAssetPreview } from '../composables/assetUiBus'
+import { currentAssetPreview, setAssetPreviewIndex } from '../composables/assetUiBus'
 import { peekPack } from '../composables/nodePack'
 import { useAssetRefOpen } from '../composables/useAssetRefOpen'
 import { useUi } from '../composables/ui'
@@ -64,9 +64,19 @@ const previewItem = computed(() => {
  */
 watch(previewItem, async (p) => {
   if (!p || p.kind !== 'ui' || p.html !== undefined) return
-  openAssetPreview({ ...p, html: '' })
+  /**
+   * ★ 只改"当前这一张的内容"，**不能**用投影后的 p 整体替换总线（用户 2026-10-28 实测：
+   * 连按右键都停在同一张）。p 只是喂给 MediaViewer 的投影，里面没有 list / kinds / ids；
+   * 拿它覆盖会把同层清单丢掉，MediaViewer 随即退化成单张，页码与切换一起失效。
+   */
+  const patch = (extra: Record<string, unknown>): void => {
+    const cur = assetPreview.value
+    if (!cur) return
+    assetPreview.value = { ...cur, ...extra }
+  }
+  patch({ html: '' })
   if (!p.url) {
-    openAssetPreview({ ...p, html: undefined, text: '这个节点包没有地址，读不出来。' })
+    patch({ html: undefined, text: '这个节点包没有地址，读不出来。' })
     return
   }
   try {
@@ -74,12 +84,12 @@ watch(previewItem, async (p) => {
     const cur = currentAssetPreview()
     // 等包的时候用户可能又切走了：只把结果写回"还在看这张"的那一条
     if (cur && cur.kind === 'ui' && cur.url === p.url) {
-      openAssetPreview({ ...cur, html: pack.html, htmlUrl: p.url })
+      patch({ html: pack.html, htmlUrl: p.url, text: undefined })
     }
   } catch (err) {
     const cur = currentAssetPreview()
     if (cur && cur.kind === 'ui' && cur.url === p.url) {
-      openAssetPreview({ ...cur, html: undefined, text: '这个节点包读不出来：' + (err instanceof Error ? err.message : String(err)) })
+      patch({ html: undefined, text: '这个节点包读不出来：' + (err instanceof Error ? err.message : String(err)) })
     }
   }
 })

@@ -67,6 +67,24 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
     expect(cur?.url).toBe('/p.mcnode')
     expect(cur?.name).toBe('节点包')
   })
+
+  it('★ 切到另一个节点包时旧界面必须失效（否则连切两张画面不变）', async () => {
+    const { currentAssetPreview, assetPreview } = await import('../composables/assetUiBus')
+    // 已解出第一个包（html 来自 /p1.mcnode）
+    assetPreview.value = {
+      name: '包一', kind: 'ui', html: '<div>包一</div>', htmlUrl: '/p1.mcnode',
+      list: ['/p1.mcnode', '/p2.mcnode'], names: ['包一', '包二'],
+      kinds: ['node-package', 'node-package'], index: 0,
+    }
+    // 切到第二个包：html 仍是包一的 —— 必须当作"还没取"
+    assetPreview.value = { ...assetPreview.value, index: 1 }
+    const second = currentAssetPreview()
+    expect(second?.url).toBe('/p2.mcnode')
+    expect(second?.html).toBeUndefined()
+    // 切回第一个包：html 本来就属于它，保留（不重复取包）
+    assetPreview.value = { ...assetPreview.value, index: 0 }
+    expect(currentAssetPreview()?.html).toBe('<div>包一</div>')
+  })
 })
 
 describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {
