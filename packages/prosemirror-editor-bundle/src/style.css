@@ -203,6 +203,7 @@
 /* @ 下拉里的「带缩略图的资源项」（resource 的 renderItem 用这两个类） */
 .mention-menu .menu-item .mention-thumb {
   flex: none;
+  /* 左侧一律 22px 宽：图片缩略图与类型图标才会左右对齐（用户 2026-10-28） */
   width: 22px;
   height: 22px;
   border-radius: 5px;
@@ -219,12 +220,32 @@
   background-position: center;
   background-repeat: no-repeat;
   display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
 }
 .mention-menu .menu-item .mention-resource {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
+}
+/*
+ * 左侧那一格（缩略图 / 类型图标）统一成固定尺寸 + 固定占位，行与行之间才能对齐。
+ * 用固定 box + flex:none：不随图片宽高比或图标内边距变化（用户 2026-10-28 报「左边没对齐」）。
+ */
+.mention-menu .menu-item .mention-thumb,
+.mention-menu .menu-item .mention-thumb--bg,
+.mention-menu .menu-item .mention-kind {
+  flex: 0 0 22px;
+  width: 22px !important;
+  min-width: 22px;
+  max-width: 22px;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  box-sizing: border-box;
 }
 /*
  * 没有可视化封面的类型（音频 / 文本 / 视频还没取到帧）在 @ 下拉里的图标。
@@ -237,6 +258,7 @@
   flex: none;
   width: 22px;
   height: 22px;
+  box-sizing: border-box;
   border-radius: 5px;
   background-color: color-mix(in srgb, currentColor 14%, transparent);
   position: relative;

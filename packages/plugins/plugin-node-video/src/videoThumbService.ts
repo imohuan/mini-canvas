@@ -1,8 +1,9 @@
 /**
  * videoThumbService —— 给外部（底栏参考卡、标签）提供「视频缩略图」的基础服务。
  *
- * 用户口径 2026-10-28：
- *   ① 尺寸：宽高 50px 就够（参考卡/标签里只是小头像，不需要大图）；
+ * 用户口径 2026-10-28（第三轮）：
+ *   ① 尺寸：一张图管全部用途 —— **宽度上限 1080、短边不小于 50、保持原比例**。
+ *      卡片/标签用 CSS 缩小，hover 直接放大用同一张，不再单独截小图。
  *   ② 纯色检测：开头若是全黑/全白（同色像素占比 > 50%），跳到更后面的帧再截，
  *      避免生成一张没有意义的纯色图。
  *
@@ -11,14 +12,40 @@
  * 不 import 本包代码（插件之间不交叉依赖）。
  */
 
-/** 缩略图边长（用户要求：宽高 50px） */
-export const VIDEO_THUMB_SIZE = 50
+/** 缩略图默认宽度上限（用户口径：1080；原视频更窄就按原宽） */
+export const VIDEO_THUMB_MAX_WIDTH = 1080
+
+/** 短边下限（用户口径：最小的一条边至少 50px） */
+export const VIDEO_THUMB_MIN_SHORT_SIDE = 50
 
 /** 同色像素占比超过这个值就判定为「无意义的纯色帧」 */
 export const SOLID_FRAME_RATIO = 0.5
 
 /** 依次尝试的取帧时刻（秒）：开头 → 稍后 → 更后，避开片头黑场/白场 */
 export const VIDEO_THUMB_SEEK_POINTS = [0, 0.5, 1.5, 3]
+
+/**
+ * 算缩略图的输出尺寸（纯函数，方便直接断言）。
+ *
+ * 规则（用户 2026-10-28 第三轮）：
+ * 1. **保持视频原比例**，绝不拉伸成 1:1；
+ * 2. 宽度 = min(原宽, maxWidth=1080)；原视频更窄就按原宽（不放大）；
+ * 3. 缩放后短边若不足 50，再按短边 50 放大一次（只对极细长的片子生效）。
+ */
+export function thumbSizeFor(
+  videoWidth: number,
+  videoHeight: number,
+  maxWidth: number = VIDEO_THUMB_MAX_WIDTH,
+): { width: number; height: number } {
+  const vw = videoWidth > 0 ? videoWidth : maxWidth
+  const vh = videoHeight > 0 ? videoHeight : maxWidth
+  const shortSide = Math.min(vw, vh)
+  let ratio = Math.min(maxWidth / vw, 1)
+  if (shortSide * ratio < VIDEO_THUMB_MIN_SHORT_SIDE) {
+    ratio = VIDEO_THUMB_MIN_SHORT_SIDE / shortSide
+  }
+  return { width: Math.max(1, Math.round(vw * ratio)), height: Math.max(1, Math.round(vh * ratio)) }
+}
 /**
  * 从视频地址取一张「有意义的」缩略图（dataURL）。
  *
@@ -28,14 +55,11 @@ export const VIDEO_THUMB_SEEK_POINTS = [0, 0.5, 1.5, 3]
  */
 export async function captureVideoThumb(
   videoUrl: string,
-  opts: { size?: number; seekPoints?: number[]; solidRatio?: number } = {},
+  opts: { maxWidth?: number; seekPoints?: number[]; solidRatio?: number } = {},
 ): Promise<string | null> {
   if (typeof document === 'undefined' || !videoUrl) return null
-  /**
-   * size 缺省 = **原始尺寸**（用户 2026-10-28：hover/全屏要看细节，不能拿 50px 放大糊掉）；
-   * 传了数字才缩到那个方块里（参考卡 / 标签用 50）。
-   */
-  const boxSize = typeof opts.size === 'number' && opts.size > 0 ? Math.round(opts.size) : 0
+  /** 宽度上限（缺省 1080）。原视频比它窄就用原宽 —— 不放大，放大只会糊。 */
+  const maxWidth = typeof opts.maxWidth === 'number' && opts.maxWidth > 0 ? Math.round(opts.maxWidth) : VIDEO_THUMB_MAX_WIDTH
   const points = opts.seekPoints ?? VIDEO_THUMB_SEEK_POINTS
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
@@ -93,23 +117,17 @@ export async function captureVideoThumb(
       if (!(await seek(at))) continue
 
       /**
-       * 传了 size → 等比装进 size×size（不拉伸、居中留白）；
-       * 没传 size → **原始尺寸的一帧**（hover/全屏要看细节）。
+       * 尺寸规则（用户 2026-10-28 第三轮）：
+       * - **保持视频原比例**（绝不拉伸成 1:1）；
+       * - 宽度取 min(原宽, 上限 1080)；原视频更窄就按原宽，不放大；
+       * - 缩放后短边若小于 50，再按短边 50 放大一次（用户要求「最小的一条边 50px」）。
+       *   仅对极细长的视频生效，常规 16:9 / 9:16 都不会触发。
        */
-      const vw = video.videoWidth || boxSize || 1
-      const vh = video.videoHeight || boxSize || 1
-      const target = boxSize || Math.max(vw, vh)
-      const ratio = Math.min(target / vw, target / vh, 1)
-      const dw = Math.max(1, Math.round(vw * ratio))
-      const dh = Math.max(1, Math.round(vh * ratio))
-      const cw = boxSize || dw
-      const ch = boxSize || dh
+      const { width: cw, height: ch } = thumbSizeFor(video.videoWidth, video.videoHeight, maxWidth)
       if (canvas.width !== cw) canvas.width = cw
       if (canvas.height !== ch) canvas.height = ch
-      const dx = Math.round((cw - dw) / 2)
-      const dy = Math.round((ch - dh) / 2)
       c2d.clearRect(0, 0, cw, ch)
-      try { c2d.drawImage(video, dx, dy, dw, dh) } catch { continue }
+      try { c2d.drawImage(video, 0, 0, cw, ch) } catch { continue }
 
       // 纯色检测（用户要求：同色 > 50% 就跳过，找后面的帧）
       let solid = false

@@ -1,10 +1,12 @@
-/** 视频缩略图服务（用户 2026-10-28）：50px + 跳过纯色片头 */
+/** 视频缩略图服务（用户 2026-10-28）：保持原比例、宽度上限 1080 + 跳过纯色片头 */
 import { describe, expect, it } from 'vitest'
 import {
-  VIDEO_THUMB_SIZE,
+  VIDEO_THUMB_MAX_WIDTH,
+  VIDEO_THUMB_MIN_SHORT_SIDE,
   SOLID_FRAME_RATIO,
   VIDEO_THUMB_SEEK_POINTS,
   isSolidFrame,
+  thumbSizeFor,
 } from '../videoThumbService'
 
 /** 造一张纯色/混合的像素缓冲 */
@@ -23,8 +25,26 @@ const makePixels = (size: number, color: [number, number, number], mixedRatio = 
 }
 
 describe('视频缩略图参数', () => {
-  it('尺寸 50px（用户要求）', () => {
-    expect(VIDEO_THUMB_SIZE).toBe(50)
+  it('宽度上限 1080、短边下限 50（用户要求）', () => {
+    expect(VIDEO_THUMB_MAX_WIDTH).toBe(1080)
+    expect(VIDEO_THUMB_MIN_SHORT_SIDE).toBe(50)
+  })
+
+  it('1920×1080 → 1080×608（保持原比例，不是 1:1）', () => {
+    expect(thumbSizeFor(1920, 1080)).toEqual({ width: 1080, height: 608 })
+  })
+
+  it('1080×1920 竖屏 → 保持不变（宽已在上限内，不放大也不裁）', () => {
+    expect(thumbSizeFor(1080, 1920)).toEqual({ width: 1080, height: 1920 })
+  })
+
+  it('原视频比 1080 窄 → 用原宽，不放大', () => {
+    expect(thumbSizeFor(640, 360)).toEqual({ width: 640, height: 360 })
+  })
+
+  it('极细长的片子 → 短边补到 50（唯一允许放大的情况）', () => {
+    // 4000×100：按 1080 宽缩放后高只有 27，短边不足 50 → 放大到 50
+    expect(thumbSizeFor(4000, 100)).toEqual({ width: 2000, height: 50 })
   })
 
   it('纯色判定阈值 50%', () => {

@@ -57,14 +57,16 @@ export interface VideoNodeService {
   /** 删除节点（走图唯一写入口，连带清边、可撤销、自动落盘） */
   removeNode(id: string): void
   /**
-   * 取一张「有意义的」视频缩略图（50px、跳过纯色片头）。
+   * 取一张「有意义的」视频缩略图（宽度上限、跳过纯色片头）。
    *
    * 用户口径 2026-10-28：底栏参考卡/标签要显示视频的小缩略图，但视频是流媒体，
    * 直接当 img src 用显示不出来。这里由视频插件自己解码取帧，外部只需拿 dataURL。
+   * 第三轮口径：一张图管全部用途 —— 宽度上限 1080、保持原比例，卡片缩小显示、hover 放大显示。
    *
+   * @param maxWidth 宽度上限（缺省 1080）；原视频更窄就按原宽
    * @returns dataURL；取不到（跨域/解码失败/无视频）返回 null
    */
-  captureThumb(videoUrl: string, size?: number): Promise<string | null>
+  captureThumb(videoUrl: string, maxWidth?: number): Promise<string | null>
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.video 直访时类型为本服务 */
@@ -109,9 +111,9 @@ export class VideoService extends Service implements VideoNodeService {
     this.doc().removeNodes([id])
   }
 
-  /** 取视频缩略图（50px、跳过纯色片头）—— 供底栏参考卡/标签使用 */
-  async captureThumb(videoUrl: string, size?: number): Promise<string | null> {
-    return captureVideoThumb(videoUrl, size ? { size } : {})
+  /** 取视频缩略图（宽度上限 1080、跳过纯色片头）—— 供底栏参考卡/标签/hover 使用 */
+  async captureThumb(videoUrl: string, maxWidth?: number): Promise<string | null> {
+    return captureVideoThumb(videoUrl, maxWidth ? { maxWidth } : {})
   }
 }
 

@@ -526,7 +526,14 @@ function buildSlotItem(
     span.className = 'resource-node resource-chip' + (isPending ? ' is-pending' : '')
     span.dataset.id = self.id
     span.dataset.name = latest.name
-    if (latest.url && latest.mediaType === 'image') {
+    /**
+     * 有图就画图（含视频：视频存的 url 是**帧图**，不是 mp4）。
+     *
+     * 为什么不能只认 `mediaType === 'image'`（用户 2026-10-28 报「刷新后标签变回默认」）：
+     * 冷启动时注册表里只有 `registerSlotItemsFromDoc` 造的最小条目，mediaType 可能缺失，
+     * 于是视频/图片标签一起落到图标分支 —— 看上去就是「刷新后缩略图没了、变回基础标签」。
+     */
+    if (latest.url && !/^文本\s*\d+$/.test(String(latest.name ?? '').trim())) {
       const img = document.createElement('img')
       img.className = 'resource-chip-thumb'
       img.src = latest.url

@@ -479,22 +479,18 @@ async function refreshResolvedMaterials(): Promise<void> {
   if (epoch === materialEpoch.value) resolvedMaterials.value = next
 }
 watch(materials, () => void refreshResolvedMaterials(), { immediate: true })
-/** 视频缩略图：模块级缓存（跨挂载复用，拖拽不重截），两档尺寸 */
+/** 视频缩略图：模块级缓存（跨挂载复用，拖拽不重截）。**一张图**管卡片/标签/hover */
 const videoThumbTick = ref(0) // 取到新帧时 +1，驱动模板重算
 
 function videoThumbOf(url: string | undefined): string | undefined {
-  return peekVideoThumb(url, 'small')
-}
-
-function videoFullThumbOf(url: string | undefined): string | undefined {
-  return peekVideoThumb(url, 'full')
+  return peekVideoThumb(url)
 }
 
 /**
  * 参考卡该显示哪张图（用户 2026-10-28）。
  *
  * - 图片 / 文本类：直接用 url；
- * - 视频：mp4 地址不能当 img src（会渲染成空白），用插件取到的 50px 帧图；
+ * - 视频：mp4 地址不能当 img src（会渲染成空白），用插件取到的帧图（宽 ≤1080，CSS 缩小显示）；
  *   还没取到 → 返回空串，卡片回退成类型图标。
  * - 音频：没有可视化封面，返回空串 → 类型图标。
  */
@@ -506,8 +502,8 @@ function cardImageOf(tile: { url?: string; kind?: string }): string {
   return tile.url
 }
 
-function videoProvider(): ((videoUrl: string, size?: number) => Promise<string | null>) | undefined {
-  const svc = ctx.tryGet<{ captureThumb?(videoUrl: string, size?: number): Promise<string | null> }>('video')
+function videoProvider(): ((videoUrl: string, maxWidth?: number) => Promise<string | null>) | undefined {
+  const svc = ctx.tryGet<{ captureThumb?(videoUrl: string, maxWidth?: number): Promise<string | null> }>('video')
   return svc?.captureThumb ? svc.captureThumb.bind(svc) : undefined
 }
 
@@ -519,17 +515,20 @@ async function ensureVideoThumbs(): Promise<void> {
     if (m.kind === 'video' && m.url) urls.add(m.url)
   }
   for (const url of urls) {
-    if (peekVideoThumb(url, 'small')) continue
-    const thumb = await ensureVideoThumb(url, 'small', capture)
+    if (peekVideoThumb(url)) continue
+    const thumb = await ensureVideoThumb(url, capture)
     if (thumb) videoThumbTick.value += 1
   }
 }
 
-/** hover 预览要**原始尺寸的一帧**（不是 50px 放大糊掉）——用户 2026-10-28 要求 */
+/**
+ * hover 预览用**同一张**帧图（用户 2026-10-28 第三轮：别再单独截一张）。
+ * 缓存里已经有 1080 宽的大图，直接返回；没取到就现场取一次（同一份缓存）。
+ */
 async function ensureFullVideoThumb(url: string): Promise<string | undefined> {
-  const hit = peekVideoThumb(url, 'full')
+  const hit = peekVideoThumb(url)
   if (hit) return hit
-  const thumb = await ensureVideoThumb(url, 'full', videoProvider())
+  const thumb = await ensureVideoThumb(url, videoProvider())
   if (thumb) videoThumbTick.value += 1
   return thumb ?? undefined
 }
