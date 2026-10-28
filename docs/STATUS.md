@@ -5,6 +5,21 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-28，生成历史音频：波形加卡片边框 + 底栏左右分区）
+
+用户口径（附红框截图）：波形要用**卡片边框**包住；底部区域左放"类型 + 当前播放进度"，
+右放"时长 + 播放按钮"；按钮不要圆角边框，单独一个图标按钮。
+
+**做法**：`.hist-card-media--audio` 恢复 1px 边框 + 白底 + 10px 圆角（96px 高）；
+播放器自带底栏仍在条内隐藏；卡外新增 `.hist-card-audio-controls`：
+`.hist-audio-left`（`.hist-card-kind` 类型 + `.hist-audio-progress` 当前/总时长）、
+`.hist-audio-right`（`.hist-audio-duration` 总时长 + `.hist-audio-play`）。
+播放键 `border:0; border-radius:0; background:transparent`，悬停变强调色。
+
+**验证**：ui 456/456（historyMediaCardLayout 27 条）、vue-tsc 干净；
+8860 真机：11 张音频卡，波形条 96px / border 1px rgb(226,229,234) / 白底 / 10px 圆角；
+底栏左侧文本"音频 0:00 / 0:04"、右侧"0:04"，左区在右区左侧；播放键 border 0px、radius 0px、透明底。
+
 ### 追记（2026-10-28，生成历史音频：恢复白底波形细条 + 说明移到卡外）
 
 用户口径（附截图）：音频恢复成最开始那版**白底波形细条**，不要现在这种带边框的卡片；
