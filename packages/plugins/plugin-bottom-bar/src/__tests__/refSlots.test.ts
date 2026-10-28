@@ -16,6 +16,7 @@ import {
   hitSlotAtPoint,
   normalizeRefSlots,
 } from '../refSlots'
+import { mergeRefTiles } from '../refTiles'
 
 describe('声明序号归一化（用户口径 2026-10-27）', () => {
   /**
@@ -143,6 +144,49 @@ describe('待输入槽位的落点判定', () => {
     expect(dropVerdictMessage('image', { ok: false, reason: 'no-modifier' })).toContain('Ctrl')
     expect(dropVerdictMessage('image', { ok: false, reason: 'kind-mismatch' })).toBe('这个槽位只收图片')
     expect(dropVerdictMessage('av', { ok: false, reason: 'kind-mismatch' })).toBe('这个槽位只收视频或音频')
+  })
+
+  it('文本格收文本、不收图片；图片格不收文本', () => {
+    expect(judgeSlotDrop('text', { node: { name: '正文' }, modifier: true, mediaType: 'text' })).toEqual({
+      ok: true,
+      mediaType: 'text',
+    })
+    expect(judgeSlotDrop('text', { node: { name: '图片1' }, modifier: true, mediaType: 'image' })).toEqual({
+      ok: false,
+      reason: 'kind-mismatch',
+      mediaType: 'image',
+    })
+    expect(judgeSlotDrop('image', { node: { name: '正文' }, modifier: true, mediaType: 'text' })).toEqual({
+      ok: false,
+      reason: 'kind-mismatch',
+      mediaType: 'text',
+    })
+  })
+
+  it('类型不匹配的提示会同时说清格子收什么、你拖的是什么', () => {
+    expect(dropVerdictMessage('image', { ok: false, reason: 'kind-mismatch', mediaType: 'text' })).toBe(
+      '这个槽位只收图片，你拖的是文本',
+    )
+  })
+})
+
+describe('文本槽位（用户 2026-10-28：文本也能拖进对应槽位）', () => {
+  it('正文声明 @文本1 → 出现文本格；文本素材落在这一格', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'text', index: 1 }],
+      [{ id: 't', name: '文本1', isText: true }],
+    )
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]).toMatchObject({ kind: 'text', pending: false, isText: true, slotIndex: 1 })
+  })
+
+  it('声明两个文本格、只有一条文本 → 第 2 格是待输入的文本格', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'text', index: 1 }, { kind: 'text', index: 2 }],
+      [{ id: 't', name: '文本1', isText: true }],
+    )
+    expect(tiles.map((t) => t.kind)).toEqual(['text', 'text'])
+    expect(tiles[1]).toMatchObject({ pending: true, slotKey: 'text:2' })
   })
 })
 

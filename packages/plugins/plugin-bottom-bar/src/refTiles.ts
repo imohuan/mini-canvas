@@ -39,7 +39,7 @@ export interface RefTile {
 
 /** 正文槽位（@ 标签）的最小形状 */
 export interface TileSlotLike {
-  kind: 'image' | 'video' | 'audio' | 'av'
+  kind: 'image' | 'video' | 'audio' | 'av' | 'text'
   index: number
 }
 
@@ -57,15 +57,15 @@ interface WithRefName {
 }
 
 /** 素材名（图片2）→ 序号与种类 */
-export function refNameToSlot(refName: string): { index: number; kind: 'image' | 'video' | 'audio'; label: string } | null {
-  const m = /^(图片|视频|音频)(\d+)$/.exec(refName)
+export function refNameToSlot(refName: string): { index: number; kind: 'image' | 'video' | 'audio' | 'text'; label: string } | null {
+  const m = /^(图片|视频|音频|文本)(\d+)$/.exec(refName)
   if (!m) return null
-  const kind = m[1] === '图片' ? 'image' : m[1] === '视频' ? 'video' : 'audio'
+  const kind = m[1] === '图片' ? 'image' : m[1] === '视频' ? 'video' : m[1] === '音频' ? 'audio' : 'text'
   return { index: Number(m[2]), kind, label: m[1] }
 }
 
 /** refName（图片2）+ 槽位种类 → 槽位键（image:2）。对不上（种类不同）→ null */
-export function refNameToSlotKey(refName: string, slotKind: 'image' | 'video' | 'audio' | 'av'): string | null {
+export function refNameToSlotKey(refName: string, slotKind: 'image' | 'video' | 'audio' | 'text' | 'av'): string | null {
   const parsed = refNameToSlot(refName)
   if (!parsed) return null
   if (slotKind !== 'av' && parsed.kind !== slotKind) return null
@@ -89,7 +89,7 @@ export function mergeRefTiles(
   displayOrder?: readonly string[],
 ): RefTile[] {
   // 序号 → 素材（连线顺序里第 N 张图 / 第 N 段音频…）
-  const seqOf = (kind: 'image' | 'video' | 'audio'): Map<number, TileCardLike> => {
+  const seqOf = (kind: 'image' | 'video' | 'audio' | 'text'): Map<number, TileCardLike> => {
     const map = new Map<number, TileCardLike>()
     for (const c of cards) {
       const withRef = c as TileCardLike & WithRefName
@@ -104,21 +104,21 @@ export function mergeRefTiles(
   }
 
   // 出现在参考区的种类：素材自己的种类 + 正文声明的种类
-  const kinds = new Set<'image' | 'video' | 'audio'>()
+  const kinds = new Set<'image' | 'video' | 'audio' | 'text'>()
   for (const c of cards) {
     const withRef = c as TileCardLike & WithRefName
     const p = refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
     if (p) kinds.add(p.kind)
   }
   for (const s of slots) {
-    if (s.kind === 'image' || s.kind === 'video' || s.kind === 'audio') kinds.add(s.kind)
+    if (s.kind === 'image' || s.kind === 'video' || s.kind === 'audio' || s.kind === 'text') kinds.add(s.kind)
   }
 
   const tiles: RefTile[] = []
   // 每个种类独立排：图片1/图片2…、音频1/音频2…（与 collectUpstreamMaterials 的编号同口径）
-  for (const kind of ['image', 'video', 'audio'] as const) {
+  for (const kind of ['image', 'video', 'audio', 'text'] as const) {
     if (!kinds.has(kind)) continue
-    const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频'
+    const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '文本'
     const bySeq = seqOf(kind)
     const declared = slots.filter((s) => s.kind === kind).map((s) => s.index)
     /**
@@ -150,7 +150,7 @@ export function mergeRefTiles(
         pending: !card,
         name: card?.name ?? (label + ' ' + slotIndex),
         url: card?.url,
-        isText: false,
+        isText: kind === 'text',
         kind,
         card,
       })
@@ -208,7 +208,7 @@ export function mergeRefTiles(
        * 期望是「图片类整体在前、按图片序号排，然后视频、音频」，与 tiles 生成顺序一致。
        * 无序号（文本等）排最后。
        */
-      const kindOrder: Record<string, number> = { image: 0, video: 1, audio: 2 }
+      const kindOrder: Record<string, number> = { image: 0, video: 1, audio: 2, text: 3 }
       const kindOf = (key: string): string => (key.startsWith('slot:') ? key.split(':')[1] : 'image')
       const ranked = [...tiles].sort((a, b) => {
         const ka = kindOf(a.key)
@@ -246,11 +246,11 @@ export function mergeRefTiles(
  * 正文没写任何 @ 时不受影响（普通参考图照旧）。
  */
 export function findRefGap(
-  slots: ReadonlyArray<{ kind: 'image' | 'video' | 'audio' | 'av'; index: number }>,
+  slots: ReadonlyArray<{ kind: 'image' | 'video' | 'audio' | 'text' | 'av'; index: number }>,
   cards: ReadonlyArray<TileCardLike>,
-): { kind: 'image' | 'video' | 'audio' | 'av'; missing: number[] } | null {
+): { kind: 'image' | 'video' | 'audio' | 'text' | 'av'; missing: number[] } | null {
     // 每种类型已就绪的序号集合（来自连线素材的真实序号）
-    const haveBy = (kind: 'image' | 'video' | 'audio'): Set<number> => {
+    const haveBy = (kind: 'image' | 'video' | 'audio' | 'text'): Set<number> => {
       const set = new Set<number>()
       for (const c of cards) {
         const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
@@ -304,7 +304,7 @@ export interface UploadResult {
 }
 
 export async function uploadToRefSlot(
-  input: { file: File; kind: 'image' | 'video' | 'audio' | 'av'; index: number; targetId: string },
+  input: { file: File; kind: 'image' | 'video' | 'audio' | 'text' | 'av'; index: number; targetId: string },
   deps: UploadDeps,
 ): Promise<UploadResult> {
   const before = new Set(deps.refOrder())

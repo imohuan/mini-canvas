@@ -10,16 +10,13 @@
  * 这样规则可以单独测，不用起浏览器。
  */
 
-/** 槽位种类（与素材 kind 对齐；av = 音视频混合） */
-export type RefSlotKind = 'image' | 'video' | 'audio' | 'av'
+import { SLOT_KIND_META, slotAccepts as slotAcceptsKind, slotAcceptsLabel, slotMismatchHint, type SlotKind, type SlotMedia } from './slotKinds'
 
-/** 各类槽位的中文名与上传时该允许的文件类型 */
-export const REF_SLOT_META: Record<RefSlotKind, { label: string; accept: string }> = {
-  image: { label: '图片', accept: 'image/*' },
-  video: { label: '视频', accept: 'video/*' },
-  audio: { label: '音频', accept: 'audio/*' },
-  av: { label: '音视频', accept: 'video/*,audio/*' },
-}
+/** 槽位种类（与素材 kind 对齐；av = 音视频混合；text = 文本） */
+export type RefSlotKind = SlotKind
+
+/** 各类槽位的中文名与上传时该允许的文件类型（唯一来源 = slotKinds.ts） */
+export const REF_SLOT_META = SLOT_KIND_META
 
 /** 中文 / 英文写法 → 槽位种类 */
 const KIND_BY_WORD: Record<string, RefSlotKind> = {
@@ -27,6 +24,7 @@ const KIND_BY_WORD: Record<string, RefSlotKind> = {
   '视频': 'video', video: 'video',
   '音频': 'audio', audio: 'audio',
   '音视频': 'av', media: 'av', av: 'av',
+  '文本': 'text', text: 'text',
 }
 
 /**
@@ -36,7 +34,7 @@ const KIND_BY_WORD: Record<string, RefSlotKind> = {
  * （踩过：上一次没扫完，下一次从中间开始）。每次都新建一个。
  */
 export function tokenRegExp(): RegExp {
-  return /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
+  return /@(图片|视频|音频|文本|音视频|image|video|audio|text|media|av)\s*(\d{1,4})/gi
 }
 
 /** 一个被 @ 到的槽位 */
@@ -121,7 +119,7 @@ export function refSlotsFromDoc(doc: unknown): RefSlotRef[] {
       if (!node || typeof node !== 'object') continue
       if (node.type === 'resource') {
         const id = typeof node.attrs?.id === 'string' ? node.attrs.id : ''
-        const m = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(id)
+        const m = /^ref-slot:(image|video|audio|text|av):(\d+)$/.exec(id)
         if (m) {
           const kind = m[1] as RefSlotKind
           const index = Number(m[2])
@@ -160,11 +158,9 @@ export function mediaTypeOf(input: { name?: string; type?: string } | undefined)
   return null
 }
 
-/** 这个槽位收不收这种媒体（「音视频」收视频或音频） */
-export function slotAccepts(kind: RefSlotKind, mediaType: 'image' | 'video' | 'audio' | null): boolean {
-  if (!mediaType) return false
-  if (kind === 'av') return mediaType === 'video' || mediaType === 'audio'
-  return kind === mediaType
+/** 这个槽位收不收这种媒体（规则唯一来源 = slotKinds.ts） */
+export function slotAccepts(kind: RefSlotKind, mediaType: SlotMedia | null): boolean {
+  return slotAcceptsKind(kind, mediaType)
 }
 
 /** 落点判定结果 */
@@ -173,7 +169,7 @@ export interface DropVerdict {
   /** 失败原因：没按 Ctrl / 类型不支持 / 槽位不收这种媒体 */
   reason?: 'no-modifier' | 'unsupported' | 'kind-mismatch'
   /** 认出来的媒体类型（失败时也带上，便于提示「你给的是音频」） */
-  mediaType?: 'image' | 'video' | 'audio'
+  mediaType?: SlotMedia
 }
 
 /**
@@ -184,16 +180,22 @@ export interface DropVerdict {
  */
 export function judgeSlotDrop(
   kind: RefSlotKind,
-  input: { file?: { name?: string; type?: string }; node?: { name?: string; mime?: string }; modifier?: boolean },
+  input: {
+    file?: { name?: string; type?: string }
+    node?: { name?: string; mime?: string }
+    modifier?: boolean
+    /** 节点自带的参考类型（文本节点没有 MIME，只能由调用方从节点内容判断后传进来） */
+    mediaType?: SlotMedia
+  },
 ): DropVerdict {
   if (input.node) {
     if (!input.modifier) return { ok: false, reason: 'no-modifier' }
-    const mediaType = mediaTypeOf({ name: input.node.name, type: input.node.mime })
+    const mediaType = input.mediaType ?? mediaTypeOf({ name: input.node.name, type: input.node.mime })
     if (!mediaType) return { ok: false, reason: 'unsupported' }
     if (!slotAccepts(kind, mediaType)) return { ok: false, reason: 'kind-mismatch', mediaType }
     return { ok: true, mediaType }
   }
-  const mediaType = mediaTypeOf(input.file)
+  const mediaType = input.mediaType ?? mediaTypeOf(input.file)
   if (!mediaType) return { ok: false, reason: 'unsupported' }
   if (!slotAccepts(kind, mediaType)) return { ok: false, reason: 'kind-mismatch', mediaType }
   return { ok: true, mediaType }
@@ -201,9 +203,10 @@ export function judgeSlotDrop(
 
 /** 失败原因 → 给用户看的一句话 */
 export function dropVerdictMessage(kind: RefSlotKind, verdict: DropVerdict): string {
-  const want = kind === 'av' ? '视频或音频' : REF_SLOT_META[kind].label
   if (verdict.reason === 'no-modifier') return '拖节点时要按住 Ctrl（Mac 用 ⌘）才能放进槽位'
-  if (verdict.reason === 'kind-mismatch') return '这个槽位只收' + want
+  if (verdict.reason === 'kind-mismatch') {
+    return verdict.mediaType ? slotMismatchHint(kind, verdict.mediaType) : '这个槽位只收' + slotAcceptsLabel(kind)
+  }
   return '不支持的文件类型'
 }
 

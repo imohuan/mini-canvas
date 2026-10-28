@@ -312,7 +312,7 @@ export function nextRefOrder<T extends { id: string }>(
  */
 export function placeRefAtSlot(
   order: ReadonlyArray<string>,
-  kind: 'image' | 'video' | 'audio' | 'av',
+  kind: 'image' | 'video' | 'audio' | 'text' | 'av',
   index: number,
   nodeId: string,
 ): string[] {

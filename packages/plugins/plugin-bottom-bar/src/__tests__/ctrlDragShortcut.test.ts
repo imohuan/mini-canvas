@@ -4,6 +4,9 @@
  * 用户口径（2026-10-27）：「只有打开底部状态栏的时候，按 Ctrl 才进入选择状态」；
  * 选中可视化节点（type = 'ui'，没有任何底栏动作）时**不能**触发。
  *
+ * 2026-10-28 更新：参考模式进行中也**可以**按 Ctrl 临时切到拖拽模式，
+ * 松开后自动回参考（两套会话已经合并成一套）。
+ *
  * 真机复现：可视化节点被选中时，画布 overlay 槽里仍会挂 `.nb-overlay` 外壳
  * （NodeBottomBarOverlay 只判单选），但里面的 NodeBottomBar 因为 `hasActions=false`
  * 不渲染 `.nb-root` 本体。旧判定只看 `.nb-overlay` → 误把「外壳在」当成「底栏开着」。
@@ -18,7 +21,6 @@ const base = {
   key: 'Control',
   repeat: false,
   barShown: true,
-  referenceActive: false,
   editableTarget: false,
 }
 
@@ -33,10 +35,6 @@ describe('Ctrl 进入选择态：只在底栏真的显示时', () => {
 
   it('按住不放的重复 keydown 不重复进入（既有语义）', () => {
     expect(canEnterCtrlDragMode({ ...base, repeat: true })).toBe(false)
-  })
-
-  it('参考选择态进行中 → 不叠加 Ctrl 选择态（既有语义）', () => {
-    expect(canEnterCtrlDragMode({ ...base, referenceActive: true })).toBe(false)
   })
 
   it('焦点在输入框 / 可编辑区 → 不进入（既有语义）', () => {
