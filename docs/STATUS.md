@@ -244,6 +244,9 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
 不再用浏览器原生 `title` 的小黑框；插件模板直接写 `<CoreButton>`（首字母大写的本地组件名），
 不再用动态组件标签。
 
+插件侧 `CoreButton` 就是 `props.coreButton` 本身（`type Component`），
+**不再 defineComponent 包一层适配组件**：宿主下发的是组件，直接当标签用即可。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 
