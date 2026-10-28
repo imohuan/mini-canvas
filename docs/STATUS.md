@@ -31,15 +31,13 @@
 
 **上下文取件改法（2026-10-28 用户口径：插件不要 import 第三方库/主题包）**：
 
-- 演示插件的 .vue 组件全部改成**只收 props**：不调 `useUiComponent` / `useCanvasContext`、
-  不读 `window.MiniCanvasUI`、不 import `@mini-canvas/canvas-render`。
-- 取件集中在 `src/bindings.ts`：`ctx.registryOf('ui')` 取主题按钮（订阅换主题）、
-  `ctx.tryGet('doc')` 订阅节点数、`ctx.tryGet('command')` 执行 `shell:open-drawer`；
-  订阅用 `ctx.effect` 随插件卸载回收。
-- `index.ts` 用 `defineComponent` 包一层，把 ctx 数据以 props 传给 .vue；
-  抽屉按钮 / 面板仍按宿主窄接口（active/onSelect/host）接收。
-- 单测 `bindings.test.ts` 6 条 + `shellSlotsDemo.test.ts` 3 条（含"组件源码不得取件/读 window"扫描）；
-  typecheck / UMD / ESM 构建通过；ESM 产物从 71 KB 降到 35 KB。
+- 组件自己取上下文：`.vue` 里调 `useShellDemo.ts` 的 `useThemedButton` / `useNodeCount` / `useOpenDrawer`，
+  这些钩子内部走 `useCanvasContext()` → `ctx.registryOf('ui')` / `ctx.tryGet('doc')` / `ctx.tryGet('command')`；
+  订阅在 `onBeforeUnmount` 摘除。**不**由 `apply(ctx)` 预读后再层层传 props。
+- `index.ts` 只做 `ctx.slots.register`；抽屉按钮 / 面板仍按宿主窄接口（active/onSelect/host）接收 props。
+- 纯逻辑留在 `src/bindings.ts`（readThemedButton / readNodeCount / openDrawer），Node 可直接单测。
+- 单测 `bindings.test.ts` 6 条 + `shellSlotsDemo.test.ts` 3 条（含"组件经 useShellDemo 取上下文、不读 window"扫描）；
+  typecheck / UMD / ESM 构建通过。
 - 真机（Chrome MCP，8014）：安装后主题按钮 4 个、徽章"节点 2"、点底栏按钮经命令开抽屉、
   页签切页出面板（面板内节点数 2、按钮同为主题件）、关闭抽屉、卸载后全部消失；重载后控制台零错误。
 

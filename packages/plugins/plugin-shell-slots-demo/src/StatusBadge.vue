@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * 状态条末尾演示徽章：只展示 props 里的节点数。
- *
- * 节点数由 index.ts 在 apply(ctx) 里订阅 doc 后传进来；
- * 本组件不取 ctx、不读 window、不 import 画布包。
+ * 状态条末尾徽章：节点数由组件自己的 useNodeCount() 订阅 doc 得到。
  */
-defineProps<{ count: number }>()
+import { useNodeCount } from './useShellDemo'
+
+const count = useNodeCount()
 </script>
 
 <template>

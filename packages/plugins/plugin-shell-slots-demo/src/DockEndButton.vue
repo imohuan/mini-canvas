@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
- * 底栏末尾演示按钮：点击动作由 props 传入。
- *
- * index.ts 在 apply(ctx) 里把“执行 shell:open-drawer 命令”收成 onOpen 回调再传进来；
- * 本组件不读 window、不 import @mini-canvas/ui。
+ * 底栏末尾按钮：点击动作由组件自己的 useOpenDrawer() 提供（走 command 服务）。
  */
-defineProps<{ onOpen?: () => void }>()
+import { useOpenDrawer } from './useShellDemo'
+
+const openDrawer = useOpenDrawer()
 </script>
 
 <template>
-  <button class="ss-demo-btn" type="button" data-testid="ssd-dock-end" @click="onOpen?.()">
+  <button class="ss-demo-btn" type="button" data-testid="ssd-dock-end" @click="openDrawer">
     插槽按钮
   </button>
 </template>

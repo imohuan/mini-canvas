@@ -58,7 +58,7 @@ describe('plugin-shell-slots-demo', () => {
     expect(slots.occupants('shell.drawer.tabs')).toHaveLength(0)
   })
 
-  it('组件源码只收 props：不调用取件钩子、不读 window 全局', () => {
+  it('组件从上下文取件：调用 useCanvasContext、不读 window、不 import 主题包', () => {
     const files = [
       'ThemedButtons.vue',
       'StatusBadge.vue',
@@ -71,11 +71,18 @@ describe('plugin-shell-slots-demo', () => {
         fileURLToPath(new URL('../' + file, import.meta.url)),
         'utf8',
       )
-      expect(src, file + ' 不应 import 渲染包').not.toContain('@mini-canvas/canvas-render')
       expect(src, file + ' 不应 import 主题包').not.toContain('@mini-canvas/plugin-theme-default')
-      expect(src, file + ' 不应调用 useUiComponent').not.toContain('useUiComponent')
-      expect(src, file + ' 不应调用 useCanvasContext').not.toContain('useCanvasContext')
       expect(src, file + ' 不应读 window.MiniCanvasUI').not.toContain('MiniCanvasUI')
+    }
+
+    // 取 ctx 的组件必须走 useShellDemo 的钩子，而不是主脚本预读后层层传 props
+    const contextUsers = ['ThemedButtons.vue', 'StatusBadge.vue', 'DockEndButton.vue', 'DrawerPanel.vue']
+    for (const file of contextUsers) {
+      const src = readFileSync(
+        fileURLToPath(new URL('../' + file, import.meta.url)),
+        'utf8',
+      )
+      expect(src, file + ' 应经 useShellDemo 取上下文').toContain("from './useShellDemo'")
     }
   })
 })

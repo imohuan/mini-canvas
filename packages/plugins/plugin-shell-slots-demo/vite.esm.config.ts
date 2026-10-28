@@ -19,7 +19,10 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify('production'),
   },
   build: {
-    outDir: 'dist',
+    // 正式装载链路（pluginManager.install({ url }) / e2e）读的是 dist-esm，
+    // 与 UMD 的 dist 分开：UMD 供「插件管理」脚本装载，ESM 供 import(data:) 装载。
+    // 两个产物必须各自有稳定目录，否则重新构建会把对方覆盖掉。
+    outDir: 'dist-esm',
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
       formats: ['es'],

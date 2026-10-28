@@ -2,7 +2,7 @@
 /**
  * 抽屉插件页签按钮：宿主通过 props 下发 active / onSelect / host。
  *
- * host 是宿主抽屉给的窄接口（切页签、关抽屉、收起展开），
+ * host 是宿主抽屉的窄接口（切页签、关抽屉、收起展开），
  * 本组件不 import 宿主 UI 包，只按形状使用。
  */
 import type { DrawerHost } from './types'

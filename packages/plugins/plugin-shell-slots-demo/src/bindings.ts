@@ -1,14 +1,10 @@
 /**
- * bindings —— 把 apply(ctx) 里的上下文数据收成组件可用的窄接口。
+ * bindings —— 从 ctx 取数据的纯逻辑（不依赖 Vue 组件树）。
  *
- * 为什么单独一层：
- * - 插件只认 Context：ui 目录、doc、command 全从 ctx 取，不 import 主题包 / 渲染包；
- * - 组件只收 props：.vue 里不出现取件钩子、不读 window 全局；
- * - 这里不碰 Vue 组件树，纯数据 + 订阅，Node 单测可直接跑。
- *
- * 生命周期：apply 里用 ctx.effect 挂 dispose；插件卸载时订阅一起摘掉。
+ * 组件里先 useCanvasContext() 拿 ctx，再把 ui/doc/command 交给这里；
+ * 这里只做“读 + 订阅 + 返回 Ref”，所以 Node 单测可以直接跑。
  */
-import { shallowRef, type Component, type ShallowRef } from 'vue'
+import { shallowRef, type ShallowRef } from 'vue'
 
 /** ui 注册场的最小读取面（ctx.registryOf('ui') 的子集） */
 export interface UiField {
@@ -27,57 +23,49 @@ export interface CommandField {
   execute(id: string, payload?: unknown): unknown
 }
 
-/** createBindings 需要的上下文服务；doc/command 缺失时降级（节点数 0 / 按钮 no-op） */
-export interface ShellDemoServices {
-  ui: UiField
-  doc?: DocField
-  command?: CommandField
-}
-
-export interface ShellDemoBindings {
-  /** 当前主题登记的 button（换主题时跟着变） */
-  readonly button: Readonly<ShallowRef<Component | undefined>>
-  /** 当前节点数（doc 变化时更新） */
-  readonly nodeCount: Readonly<ShallowRef<number>>
-  /** 打开左侧抽屉：走命令，不反向依赖宿主 UI 包 */
-  openDrawer(): void
-  /** 摘订阅（幂等；apply 里挂到 ctx.effect） */
+/** 主题按钮：当前 ui 场里 button 的赢家；换主题时 Ref 跟着变 */
+export function readThemedButton(ui?: UiField): {
+  button: ShallowRef<unknown>
   dispose(): void
-}
-
-export function createBindings(services: ShellDemoServices): ShellDemoBindings {
-  // 主题按钮：先读一次，之后订阅 ui 场。换主题 / 热装主题都会走到这里。
-  const button = shallowRef<Component | undefined>(
-    services.ui.top('button')?.value as Component | undefined,
-  )
-  const offUi = services.ui.subscribe(() => {
-    button.value = services.ui.top('button')?.value as Component | undefined
+} {
+  const button = shallowRef<unknown>(ui?.top('button')?.value)
+  const sub = ui?.subscribe(() => {
+    button.value = ui.top('button')?.value
   })
-
-  // 节点数：doc 是可选的（极简宿主 / 单测里可能没有画布基础服务）。
-  const nodeCount = shallowRef(0)
-  const doc = services.doc
-  let offDoc: (() => void) | undefined
-  if (doc) {
-    const sync = (): void => {
-      nodeCount.value = doc.getNodes().length
-    }
-    sync()
-    offDoc = doc.subscribe(sync)
-  }
-
   let disposed = false
   return {
     button,
-    nodeCount,
-    openDrawer() {
-      services.command?.execute('shell:open-drawer')
-    },
     dispose() {
       if (disposed) return
       disposed = true
-      offUi.dispose()
-      offDoc?.()
+      sub?.dispose()
     },
   }
+}
+
+/** 节点数：doc 变化时刷新；没有 doc 的极简宿主保持 0 */
+export function readNodeCount(doc?: DocField): {
+  count: ShallowRef<number>
+  dispose(): void
+} {
+  const count = shallowRef(0)
+  const sync = (): void => {
+    count.value = doc ? doc.getNodes().length : 0
+  }
+  sync()
+  const off = doc?.subscribe(sync)
+  let disposed = false
+  return {
+    count,
+    dispose() {
+      if (disposed) return
+      disposed = true
+      off?.()
+    },
+  }
+}
+
+/** 打开左侧抽屉：走宿主外壳命令，不反向依赖 UI 包 */
+export function openDrawer(command?: CommandField): void {
+  command?.execute('shell:open-drawer')
 }
