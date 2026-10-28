@@ -64,7 +64,7 @@ function onUploadPick(e: Event): void {
       @pointerdown.stop>
       <!-- 可排序槽：内置按钮（SlotAnchor）与插件条目（ctx.slots.register('shell.dock')）一起排。
          插件写 before/after 时指向条目 id（host/agent 这种），不是槽名。 -->
-    <SlotComposer slot="shell.dock" item-class="flex-none" class="flex items-center gap-2" :shared-props="slotShared">
+      <SlotComposer slot="shell.dock" item-class="flex-none" class="flex items-center gap-2" :shared-props="slotShared">
         <SlotAnchor id="host/upload-input" :order="90">
           <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true"
             accept="image/*,video/*,audio/*,text/plain,.md,.txt" @change="onUploadPick" />
@@ -217,16 +217,15 @@ function onUploadPick(e: Event): void {
         <CircleQuestionMark :size="16" />
       </button></AxTooltip>
     -->
-        <SlotAnchor id="host/agent" :order="800">
-          <AxTooltip content="Agent 对话" placement="left"><button
-              class="grid size-12 -translate-y-1/2 place-items-center rounded-full border border-line bg-panel text-ink"
-              aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }" @click="ui.toggleAgent()">
-              <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
-                   按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
-              <AgentOrb :open="ui.agent.open" />
-            </button></AxTooltip>
-        </SlotAnchor>
       </SlotComposer>
     </div>
+
+    <AxTooltip content="Agent 对话" placement="left"><button
+        class="grid size-12 place-items-center rounded-full border border-line bg-panel text-ink"
+        aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }" @click="ui.toggleAgent()">
+        <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
+                   按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
+        <AgentOrb :open="ui.agent.open" />
+      </button></AxTooltip>
   </div>
 </template>
