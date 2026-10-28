@@ -478,10 +478,56 @@ async function refreshResolvedMaterials(): Promise<void> {
   if (epoch === materialEpoch.value) resolvedMaterials.value = next
 }
 watch(materials, () => void refreshResolvedMaterials(), { immediate: true })
+/** 视频缩略图缓存（用户 2026-10-28）：流媒体不能当 img src，交给视频插件取帧。 */
+const videoThumbMap = ref<Record<string, string>>({})
+/** 正在取（避免同一 url 并发重复解码） */
+const videoThumbPending = new Set<string>()
 
+function videoThumbOf(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  return videoThumbMap.value[url]
+}
+
+/**
+ * 参考卡该显示哪张图（用户 2026-10-28）。
+ *
+ * - 图片 / 文本类：直接用 url；
+ * - 视频：mp4 地址不能当 img src（会渲染成空白），用插件取到的 50px 帧图；
+ *   还没取到 → 返回空串，卡片回退成类型图标。
+ * - 音频：没有可视化封面，返回空串 → 类型图标。
+ */
+function cardImageOf(tile: { url?: string; kind?: string }): string {
+  if (!tile.url) return ''
+  if (tile.kind === 'video') return videoThumbOf(tile.url) ?? ''
+  if (tile.kind === 'audio') return ''
+  return tile.url
+}
+
+async function ensureVideoThumbs(): Promise<void> {
+  const provider = ctx.tryGet<{ captureThumb?(videoUrl: string, size?: number): Promise<string | null> }>('video')
+  if (!provider?.captureThumb) return
+  const urls = new Set<string>()
+  for (const m of shownMaterials.value) {
+    if (m.kind === 'video' && m.url) urls.add(m.url)
+  }
+  for (const url of urls) {
+    if (videoThumbMap.value[url] || videoThumbPending.has(url)) continue
+    videoThumbPending.add(url)
+    try {
+      const thumb = await provider.captureThumb(url, 50)
+      if (thumb) videoThumbMap.value = { ...videoThumbMap.value, [url]: thumb }
+    } catch {
+      /* 取不到就保持占位图标 */
+    } finally {
+      videoThumbPending.delete(url)
+    }
+  }
+}
 const shownMaterials = computed(() =>
   resolvedMaterials.value.length === materials.value.length ? resolvedMaterials.value : materials.value,
 )
+// 视频缩略图：必须放在 shownMaterials 之后（immediate 会同步执行，放前面会踩 TDZ）
+watch(shownMaterials, () => void ensureVideoThumbs(), { immediate: true })
 const cards = computed(() => materialCards(shownMaterials.value))
 const editorResources = computed<ResourceItem[]>(() => toEditorResources(shownMaterials.value))
 const resolveResource = computed(() => makeResourceResolver(editorResources.value))
@@ -1332,7 +1378,11 @@ function refreshSlotChips(): void {
       // 不是节点标题（真机踩过：排序后缩略图与序号对不上，因为 name 用了 tile.name）
       name: label + index,
       category: '素材',
-      url: tile.url,
+      /**
+       * 视频不能把 mp4 地址当图片用（用户 2026-10-28 报：视频标签/卡片全空白）。
+       * 用视频插件取到的 50px 缩略图地址；还没取到就先留空 → 显示类型图标。
+       */
+      url: kind === 'video' ? (videoThumbOf(tile.url) ?? '') : tile.url,
       mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
     }
     const nodeId = tile.key.replace(/^card:/, '')
@@ -1344,7 +1394,10 @@ function refreshSlotChips(): void {
     // 名字绝不改写；id 两种身份都要给：节点 id（资源面板插入的标签）与
     // ref-slot:kind:slotIndex（「标记」转出来的标签）。
     const thumbIds = [nodeId, 'ref-slot:' + kind + ':' + tile.slotIndex].filter(Boolean)
-    editorComponentRef.value?.replaceResourceThumbByIds?.(thumbIds, tile.url ?? '')
+    editorComponentRef.value?.replaceResourceThumbByIds?.(
+      thumbIds,
+      kind === 'video' ? (videoThumbOf(tile.url) ?? '') : (tile.url ?? ''),
+    )
     const replaced = true
     // 排序/替换影响所有格子的 refName 编号 —— 逐颗改完统一强制重渲染一次
     //（toDOM 读 registry，registry 已在上面更新；只改 attrs 不触发渲染的漏网之鱼由它兜住）。
@@ -1792,9 +1845,9 @@ function onGlobalLeave(el: Element): void {
       >
         <span class="nb-card-clip">
           <img
-            v-if="tile.url && !tile.pending && !tile.isText"
+            v-if="cardImageOf(tile) && !tile.pending"
             class="nb-card-img"
-            :src="tile.url"
+            :src="cardImageOf(tile)"
             :alt="tile.name"
             draggable="false"
           />
@@ -1803,10 +1856,9 @@ function onGlobalLeave(el: Element): void {
             <span class="nb-card-placeholder" :data-kind="tile.kind" aria-hidden="true" />
             <!-- “+” 保留：这格的主要操作是点它上传，必须让用户看得出可以点 -->
             <span class="nb-card-plus" aria-hidden="true">+</span>
-            <!-- <span class="nb-card-pending-label">{{ tile.label }}</span>
-            <span class="nb-card-pending-tag">待输入</span> -->
           </span>
-          <span v-else class="nb-card-text">{{ (tile.name || '文')[0] }}</span>
+          <!-- 有内容但没有可用图（视频还没取到帧 / 音频 / 文本）→ 按类型出图标 -->
+          <span v-else class="nb-card-fallback" :data-kind="tile.kind" aria-hidden="true" />
           <span class="nb-card-index">{{ tile.index }}</span>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
@@ -2260,6 +2312,23 @@ function onGlobalLeave(el: Element): void {
   -webkit-mask-size: contain;
   mask-size: contain;
 }
+/* 有内容但没图（视频未取到帧 / 音频 / 文本）→ 居中显示类型图标 */
+.nb-card-fallback {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: block;
+  width: 18px;
+  height: 18px;
+  color: color-mix(in srgb, var(--ui-ink, #18202b) 45%, transparent);
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
 /* 四类型占位图标（用户 2026-10-28：卡片空态也要区分类型） */
 .nb-card-placeholder[data-kind='image'] {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
@@ -2274,6 +2343,24 @@ function onGlobalLeave(el: Element): void {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
 }
 .nb-card-placeholder[data-kind='text'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+
+/* 有内容但无图时的类型图标（与空槽同一套形状，颜色略淡） */
+.nb-card-fallback[data-kind='image'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.nb-card-fallback[data-kind='video'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-card-fallback[data-kind='audio'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-card-fallback[data-kind='text'] {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
 }

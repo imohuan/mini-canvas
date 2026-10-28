@@ -43,6 +43,7 @@ import {
 } from './videoOps'
 import type { Rect } from './videoCrop'
 import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
+import { captureVideoThumb } from './videoThumbService'
 
 /** 本插件注册的节点类型名 */
 export const VIDEO_NODE_TYPE = 'video'
@@ -55,6 +56,15 @@ export interface VideoNodeService {
   setVideoUrl(id: string, videoUrl: string): void
   /** 删除节点（走图唯一写入口，连带清边、可撤销、自动落盘） */
   removeNode(id: string): void
+  /**
+   * 取一张「有意义的」视频缩略图（50px、跳过纯色片头）。
+   *
+   * 用户口径 2026-10-28：底栏参考卡/标签要显示视频的小缩略图，但视频是流媒体，
+   * 直接当 img src 用显示不出来。这里由视频插件自己解码取帧，外部只需拿 dataURL。
+   *
+   * @returns dataURL；取不到（跨域/解码失败/无视频）返回 null
+   */
+  captureThumb(videoUrl: string, size?: number): Promise<string | null>
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.video 直访时类型为本服务 */
@@ -97,6 +107,11 @@ export class VideoService extends Service implements VideoNodeService {
 
   removeNode(id: string): void {
     this.doc().removeNodes([id])
+  }
+
+  /** 取视频缩略图（50px、跳过纯色片头）—— 供底栏参考卡/标签使用 */
+  async captureThumb(videoUrl: string, size?: number): Promise<string | null> {
+    return captureVideoThumb(videoUrl, size ? { size } : {})
   }
 }
 

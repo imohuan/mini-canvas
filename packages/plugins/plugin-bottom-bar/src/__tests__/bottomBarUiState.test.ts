@@ -271,7 +271,7 @@ describe('素材卡：图片卡（正方形 + cover + 图片本身模糊）', ()
     expect(html).toContain('nb-card-index')
   })
 
-  it('文本素材卡渲染文字（没有图片、也就没有被模糊的图）', async () => {
+  it('文本素材卡按类型出图标（用户 2026-10-28：不再渲染首字文字）', async () => {
     const ctx = makeCtx()
     ;(ctx as unknown as { renderEdges: { value: unknown[] } }).renderEdges.value = [{ source: 'n1', target: 'n2' }]
     ;(ctx as unknown as { renderNodes: { value: unknown[] } }).renderNodes.value = [
@@ -279,7 +279,9 @@ describe('素材卡：图片卡（正方形 + cover + 图片本身模糊）', ()
       { id: 'n2', type: 'image', data: {} },
     ]
     const html = await render(NodeBottomBar as Component, { id: 'n2', data: {} }, ctx)
-    expect(html).toContain('nb-card-text')
+    // 有内容但没有可用图（文本/音频/视频未取到帧）→ 类型图标
+    expect(html).toContain('nb-card-fallback')
+    expect(html).toContain('data-kind="text"')
     expect(html).not.toContain('nb-card-img')
   })
 
