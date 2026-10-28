@@ -547,6 +547,11 @@ function buildFactsLine(item: HistItem): HTMLElement {
 function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLElement): HTMLElement {
   const row = document.createElement('div')
   row.className = 'hist-card-audio-controls'
+  /* 整行两端对齐 + 垂直居中（用户口径 2026-10-28：文字要跟按钮垂直居中）。
+     用内联样式而不是只依赖样式表：这张卡是 JS 现拼的，样式表若被裁剪/覆盖也不会丢。 */
+  row.style.display = 'flex'
+  row.style.alignItems = 'center'
+  row.style.justifyContent = 'space-between'
   /** 左半：类型 + 当前播放进度 */
   const left = document.createElement('div')
   left.className = 'hist-audio-left'
@@ -1566,16 +1571,20 @@ watch(() => s.shortcutsOpen, async (open) => {
    避免和卡外说明重复。 */
 .hist-card-audio-plugin .apv-bar { display: none; }
 /* 卡外底栏（用户口径 2026-10-28 定稿）：
-   左 = 类型 + 当前播放进度；右 = 时长 + 播放按钮。 */
+   左 = 类型 + 当前播放进度；右 = 时长 + 播放按钮。
+   整行用 flex + items-center 做**垂直居中**对齐（用户反馈：之前文字看着没有居中）。 */
 .hist-card-audio-controls {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 7px; min-width: 0;
   font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .hist-audio-left, .hist-audio-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .hist-audio-left { flex: 0 1 auto; }
 .hist-audio-right { flex: none; }
-.hist-audio-progress, .hist-audio-duration { white-space: nowrap; }
+/* 文字用等宽数字 + 与按钮同高，避免"字比按钮高一截"看起来没对齐 */
+.hist-audio-progress, .hist-audio-duration { white-space: nowrap; line-height: 18px; }
+.hist-audio-left .hist-card-kind { line-height: 18px; }
 /* 单独一个按钮：不要圆角边框，不要底色（用户口径） */
 .hist-audio-play {
   flex: none; display: inline-grid; place-items: center;

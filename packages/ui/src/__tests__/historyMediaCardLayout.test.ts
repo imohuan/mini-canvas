@@ -62,6 +62,38 @@ describe('生成历史的视频/音频卡面保持干净（没有任何信息浮
 })
 
 /**
+ * 全屏预览里的音频必须是**黑白灰**（用户口径 2026-10-28）。
+ * 覆盖点住在 MediaViewer（scoped），所以这里读它的源码，断言用的是 :deep()。
+ */
+describe('全屏预览的音频不用主题紫', () => {
+  const mediaViewer = readFileSync(
+    new URL('../../../plugins/plugin-theme-default/src/components/ui/MediaViewer.vue', import.meta.url),
+    'utf-8',
+  )
+
+  it('全屏音频的已播放波形 / 进度条改为主题文字色', () => {
+    const preview = mediaViewer.slice(mediaViewer.indexOf('<style scoped>'))
+    expect(preview, '全屏预览仍让已播放波形吃 --ui-accent（紫色）').toMatch(
+      /\.mv-plugin-stage :deep\(\.aw-wave-bar\.is-played\)[^{]*\{[^}]*var\(--ui-ink/,
+    )
+    expect(preview, '全屏进度条仍是主题强调色').toMatch(
+      /\.mv-plugin-stage :deep\(\.aw-progress-fill\)[^{]*\{[^}]*var\(--ui-ink/,
+    )
+    expect(preview, '全屏进度圆点仍是主题强调色').toMatch(/:deep\(\.aw-progress-thumb\)[^{]*\{[^}]*var\(--ui-ink/)
+  })
+
+  it('用 :deep() 穿透 scoped（否则覆盖不到子组件内部的波形）', () => {
+    const preview = mediaViewer.slice(mediaViewer.indexOf('<style scoped>'))
+    const block = preview.slice(preview.indexOf('.mv-plugin-stage :deep('))
+    expect(block, '缺少 :deep() 穿透，规则不会生效').toMatch(/:deep\(/)
+    // 反例：不带 :deep() 的裸选择器写在 scoped 里等于没写
+    expect(preview, '存在不带 :deep() 的裸覆盖（scoped 下无效）').not.toMatch(
+      /^\s*\.mv-plugin-stage \.aw-wave-bar/m,
+    )
+  })
+})
+
+/**
  * 批量勾选钮的样式必须在**全局块**里（用户实测 2026-10-27：勾选后每张卡都是一个大对勾）。
  *
  * 根因：卡片由 createMasonryElement 用 document.createElement 现拼，拿不到 scoped 的
@@ -193,6 +225,17 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const playRule = style.match(/\.hist-audio-play\s*\{[^}]*\}/)?.[0] ?? ''
     expect(playRule, '播放按钮仍带边框（用户口径：不要圆角边框）').not.toMatch(/border:\s*1px/)
     expect(playRule, '播放按钮仍有圆角').toMatch(/border:\s*0;[^}]*border-radius:\s*0;/)
+  })
+
+  it('音频底栏垂直居中：flex + items-center（文字与按钮同一中心线）', () => {
+    const fn = modalsArea.slice(modalsArea.indexOf('function buildAudioControls'), modalsArea.indexOf('/** 整张卡的最后一行'))
+    expect(fn, '控制行没有用 flex 布局').toMatch(/row\.style\.display = 'flex'/)
+    expect(fn, '控制行没有垂直居中').toMatch(/row\.style\.alignItems = 'center'/)
+
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    const rule = style.match(/\.hist-card-audio-controls\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(rule, '样式表里底栏没有 align-items: center').toMatch(/align-items:\s*center/)
+    expect(rule, '样式表里底栏没有 justify-content: space-between').toMatch(/justify-content:\s*space-between/)
   })
 
   it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {

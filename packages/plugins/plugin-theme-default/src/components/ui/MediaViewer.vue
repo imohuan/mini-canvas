@@ -475,6 +475,20 @@ watch(item, (v) => {
    用 flex 纵向拉伸撑满：apv/vpv/tpv 根都是可拉伸的 flex 列，撑满后波形/画面才铺满卡片。 */
 .mv-media-plugin { flex: 1 1 auto; width: min(720px, 100%); min-height: 0; border-radius: 8px; overflow: hidden; }
 .mv-media-plugin:has(.vpv-root) { width: min(920px, 100%); }
+/*
+ * 全屏预览里的音频：统一按**黑白灰**配色（用户口径 2026-10-28）。
+ * 默认主题的强调色是紫色，频谱/进度条/播放头都吃 --ui-accent ——
+ * 交付页里这些彩色一眼就跳出来，和"预览"的中性观感冲突。
+ * 只覆盖预览舞台内部，节点里的播放器仍按主题走。
+ */
+/* ⚠️ 必须 :deep()：波形条住在 AudioWavePlayer 里，scoped 样式穿不过组件边界 */
+.mv-plugin-stage :deep(.aw-wave-bar.is-played),
+.mv-plugin-stage :deep(.aw-progress-fill) { background: var(--ui-ink, #18202b); }
+.mv-plugin-stage :deep(.aw-wave:hover .aw-wave-bar.is-played) { background: var(--ui-ink, #18202b); }
+.mv-plugin-stage :deep(.aw-knob::after) { background: var(--ui-ink, #18202b); }
+.mv-plugin-stage :deep(.aw-knob:hover::after),
+.mv-plugin-stage :deep(.aw-knob:active::after) { background: var(--ui-ink, #111827); }
+.mv-plugin-stage :deep(.aw-progress-thumb) { border-color: var(--ui-ink, #18202b); }
 /* 视频舞台：撑满整个预览区（不给限宽限高 —— 视频默认就该大）。
    里面是节点插件的 videoPreview（自定义 UI：播放/进度/时间/音量），它自身撑满本层。 */
 .mv-video-stage { flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; border-radius: 8px; overflow: hidden; display: flex; }
