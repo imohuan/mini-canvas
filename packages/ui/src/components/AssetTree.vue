@@ -385,15 +385,15 @@ function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
  * 内容来自后台 /api/node-packages/read 解出的 ui.html —— 不在前端再写一份解压。
  * 缓存一份（url → html）：同一个包重复渲染不重复取；列表里通常只有几个包，够用。
  */
-const packThumbs = new Map<string, string>()
-const packThumbVersion = ref(0)
+// 必须是**响应式集合**：取包是异步的，包回来那一刻要触发模板重算
+//（普通 Map 改了不会重渲染 —— 第一版就是这么写的，取到了也画不出来）。
+const packThumbs = reactive(new Map<string, string>())
 const packHtmlOf = (url?: string): string => (url && packThumbs.get(url)) || ''
 async function loadPackThumb(url?: string): Promise<void> {
   if (!url || packThumbs.has(url)) return
   try {
     const pack = await peekPack(url)
     packThumbs.set(url, pack.html)
-    packThumbVersion.value++
   } catch {
     /* 取不到就维持图标兜底，不打扰 */
   }
@@ -535,8 +535,30 @@ function registerAssetRow(row: AssetTreeRow, el: unknown): void {
             不再依赖右侧那个「整行」按钮的宿主语义（弹窗那侧刻意不预览）。
             @click.stop 也顺手把这次点击留在缩略图上，不连带触发整行的动作（勾选 / 展开）。
           -->
+          <!--
+            节点包单独一支：它要先"取包"才有内容，所以容器带 ref 钩子（挂载即触发取包）。
+            与下面普通缩略图共用同一套外观，不另立尺寸。
+          -->
           <span
+            v-if="row.kind === 'asset' && (row.assetKind ?? '') === 'node-package' && row.url"
             :ref="(el) => registerAssetRow(row, el)"
+            class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
+            :title="'预览 ' + row.name"
+            @click.stop="onThumbClick(row, $event)"
+          >
+            <iframe
+              v-if="packHtmlOf(row.url)"
+              :srcdoc="packHtmlOf(row.url)"
+              sandbox="allow-scripts"
+              class="pack-thumb-frame"
+              title="节点包缩略图"
+              tabindex="-1"
+              aria-hidden="true"
+            ></iframe>
+            <ImageIcon v-else :size="15" />
+          </span>
+          <span
+            v-else
             class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
             :title="'预览 ' + row.name"
             @click.stop="onThumbClick(row, $event)"
@@ -556,16 +578,6 @@ function registerAssetRow(row: AssetTreeRow, el: unknown): void {
               playsinline
               aria-hidden="true"
             ></video>
-            <!-- 节点包：迷你窗口（iframe 缩着显示包内界面），加载失败回落图标 -->
-            <iframe
-              v-else-if="(row.assetKind ?? 'other') === 'node-package' && row.url && packHtmlOf(row.url)"
-              :srcdoc="packHtmlOf(row.url)"
-              sandbox="allow-scripts"
-              class="pack-thumb-frame"
-              title="节点包缩略图"
-              tabindex="-1"
-              aria-hidden="true"
-            ></iframe>
             <component v-else :is="assetIconOf(row.assetKind ?? 'other')" :size="15" />
             <span
               v-if="(row.assetKind ?? 'other') === 'video' && row.url"
