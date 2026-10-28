@@ -818,7 +818,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
           }
           const old = card.querySelector('.hist-card-facts')
           if (old) old.replaceWith(buildFactsLine(item))
-          masonry.instance.value?.layout()
+          scheduleImageRelayout()
         }
         el.addEventListener('loadedmetadata', syncFromMedia)
         el.addEventListener('loadeddata', syncFromMedia)
@@ -870,7 +870,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
     img.addEventListener('load', () => {
       if (img.naturalWidth && img.naturalHeight) {
         media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
-        masonry.layout()
+        scheduleImageRelayout()
       }
     })
     img.addEventListener('error', () => {
@@ -923,7 +923,7 @@ function createMasonryElement(item: HistItem): HTMLElement {
         if (!item.media.height) item.media.height = img.naturalHeight
         const facts = card.querySelector('.hist-card-facts')
         if (facts) facts.replaceWith(buildFactsLine(item))
-        masonry.layout()
+        scheduleImageRelayout()
       }
     })
     img.addEventListener('error', () => {
@@ -1043,6 +1043,21 @@ function prependMasonryItems(count: number): void {
 /** 卡片墙的滚动容器（AxScrollArea 内部真正滚的那一层） */
 function historyScroller(): HTMLElement | null {
   return (masonryEl.value?.closest('.ax-sa-view') as HTMLElement | null) ?? null
+}
+
+/**
+ * 图片陆续加载完时的重排节流（用户口径 2026-10-28：30 张图快的快、慢的慢）。
+ *
+ * 每张图 load 都立刻 layout 一次，会让整面墙在一两秒里被反复推来推去；
+ * 这里合并到一帧里只排一次 —— 先加载完的图仍然立即显示（不等待全部）。
+ */
+let imageRelayoutRaf = 0
+function scheduleImageRelayout(): void {
+  if (imageRelayoutRaf) return
+  imageRelayoutRaf = requestAnimationFrame(() => {
+    imageRelayoutRaf = 0
+    masonry.layoutWhenReady()
+  })
 }
 
 /**

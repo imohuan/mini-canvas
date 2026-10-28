@@ -268,6 +268,23 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(fn, '超时把已加载好的图也误摘了').toMatch(/naturalWidth > 0/) 
   })
 
+  it('30 张图快慢不一时逐张显示，重排合并到一帧（不等待全部、也不反复抖）', () => {
+    expect(modalsArea, '缺少图片加载后的合并重排').toMatch(/function scheduleImageRelayout/)
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function scheduleImageRelayout'),
+      modalsArea.indexOf('function stashCurrentWall'),
+    )
+    expect(fn, '没有合并到一帧').toMatch(/requestAnimationFrame/)
+    expect(fn, '实例没就绪时重排会被丢掉').toMatch(/layoutWhenReady\(\)/)
+    // 每张图的 load 只触发合并重排，不再单张 layout
+    const loadBlocks = modalsArea.match(/img\.addEventListener\('load',[\s\S]{0,400}?\n    \}\)/g) ?? []
+    expect(loadBlocks.length, '找不到图片 load 回调').toBeGreaterThan(0)
+    for (const block of loadBlocks) {
+      expect(block, '图片 load 仍逐张 layout（30 张会抖）').not.toMatch(/masonry\.layout\(\)/)
+      expect(block, '图片 load 没有走合并重排').toMatch(/scheduleImageRelayout\(\)/)
+    }
+  })
+
   it('重开面板时容器还没量到宽度就不建墙（否则格子宽度算错）', () => {
     const fn = modalsArea.slice(
       modalsArea.indexOf('function switchWall'),
