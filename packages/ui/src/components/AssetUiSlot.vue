@@ -32,7 +32,7 @@ useAssetRefOpen()
 /** 弹窗每次打开都用一个新的组件实例（折叠状态只由 props 决定，不残留） */
 const dialogKey = computed(() => 'am-' + assetManager.value.focusToken)
 
-/** 预览项：外壳与 MediaViewer 的契约形状对齐（类型 AssetUiSlot.vue 本地推导，见下） */
+/** 预览项：外壳与 MediaViewer 的契约形状对齐 */
 const previewItem = computed(() => {
   // 取「当前正在看的那一张」：← / → 切过之后 index 变了，url / name / id 都要跟着它走。
   // 为什么必须在这里解好再传：MediaViewer 的标题读 item.name、音频分支读 item.url
