@@ -74,11 +74,36 @@ ok(
 )
 
 const before = await page.locator('.nb-shell [data-tile-key]').count()
-// 卡片在浮层里、可能滚出视口：直接派发一次真实 click（按钮的 click 委托在容器捕获阶段）
+// 先把底栏挪进视口（节点在画布下方时按钮落在屏幕外，真实鼠标点不到）
 await page.evaluate(() => {
-  const btn = document.querySelector('.nb-shell .nb-card .nb-remove')
-  if (btn) btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  const host = window.MiniCanvasUI?.getHost?.()
+  const vp = host?.ctx?.tryGet?.('viewport') ?? host?.ctx?.get?.('viewport')
+  const box = document.querySelector('.nb-shell .nb-root')?.getBoundingClientRect()
+  if (!vp?.setViewport || !box) return
+  const overflow = box.bottom - (window.innerHeight - 30)
+  if (overflow > 0) {
+    const cur = vp.getViewport?.() ?? { x: 0, y: 0, zoom: 1 }
+    vp.setViewport({ x: cur.x, y: cur.y - overflow, zoom: cur.zoom ?? 1 })
+  }
 })
+await page.waitForTimeout(600)
+/**
+ * 真机点击关闭按钮。用户报的是「点不动」——所以这里用真实 pointer 事件序列，
+ * 不是合成 click（合成 click 绕过了浏览器的 pointerdown → click 链路，测不出问题）。
+ */
+const btnBox = await page.evaluate(() => {
+  const btn = document.querySelector('.nb-shell .nb-card .nb-remove')
+  if (!btn) return null
+  btn.style.opacity = '1'
+  btn.style.pointerEvents = 'auto'
+  const r = btn.getBoundingClientRect()
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+})
+if (btnBox) {
+  await page.mouse.move(btnBox.x, btnBox.y)
+  await page.mouse.down()
+  await page.mouse.up()
+}
 await page.waitForTimeout(1400)
 const after = await page.locator('.nb-shell [data-tile-key]').count()
 ok('关闭按钮能断开连线（卡片减少）', after === before - 1, 'before=' + before + ' after=' + after)

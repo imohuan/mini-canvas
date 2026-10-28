@@ -107,13 +107,17 @@ describe('素材卡关闭按钮：一半在卡片外（不能被裁剪）', () =
   it('关闭按钮默认藏起来，hover / 键盘聚焦才露出（且 hover 转危险色）', () => {
     const css = block('.nb-remove')
     expect(css).toMatch(/opacity\s*:\s*0/)
-    // 隐藏时不能吃指针事件（否则会挡住卡片的点击预览）
-    expect(css).toMatch(/pointer-events\s*:\s*none/)
+    /**
+     * 用户 2026-10-29 报「点不动」后改的口径：**视觉隐藏但始终可点**。
+     * 隐藏态若关掉 pointer-events，鼠标从卡片外靠近时那几像素的缝会落到画布上
+     * （真机复现：elementFromPoint 命中别的元素）——所以这里明确要求 auto。
+     */
+    expect(css).toMatch(/pointer-events\s*:\s*auto/)
     // 露出的三条路径：卡 hover / 卡内聚焦 / 按钮自己聚焦
     for (const sel of ['.nb-card:hover .nb-remove', '.nb-card:focus-within .nb-remove', '.nb-remove:focus-visible']) {
       const show = block(sel)
       expect(show, sel + ' 要把按钮露出来').toMatch(/opacity\s*:\s*1/)
-      expect(show, sel + ' 要恢复指针事件').toMatch(/pointer-events\s*:\s*auto/)
+      expect(show, sel + ' 要把按钮显现出来').toMatch(/opacity\s*:\s*1/)
     }
     expect(block('.nb-remove:hover')).toMatch(/--ui-danger/)
   })

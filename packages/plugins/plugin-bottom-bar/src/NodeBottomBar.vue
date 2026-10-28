@@ -616,9 +616,22 @@ function openCard(card: TileCardLike): void {
  */
 function removeCard(nodeId: string): void {
   if (!nodeId) return
-  const edge = renderEdges.value.find((e) => e.source === nodeId && e.target === props.id)
-  const doc = ctx.tryGet<{ removeEdges(ids: string[]): number }>('doc')
-  if (edge && doc) doc.removeEdges([edge.id])
+  const doc = ctx.tryGet<{
+    removeEdges(ids: string[]): number
+    getEdges?(): Array<{ id: string; source: string; target: string }>
+  }>('doc')
+  if (!doc) return
+  /**
+   * 先查渲染层的边，**再兜一次数据层**（用户 2026-10-29 报「点关闭没反应」）：
+   * renderEdges 是 VueFlow 回灌的视图态，刚拖拽/刚连线那一拍可能还不全；
+   * 视图态里没找到就直接问 doc，否则按钮看起来点了却没断开。
+   */
+  const ids = new Set<string>()
+  for (const e of renderEdges.value) if (e.source === nodeId && e.target === props.id) ids.add(e.id)
+  if (ids.size === 0) {
+    for (const e of doc.getEdges?.() ?? []) if (e.source === nodeId && e.target === props.id) ids.add(e.id)
+  }
+  if (ids.size > 0) doc.removeEdges([...ids])
 }
 
 /**
@@ -649,8 +662,28 @@ function clickAfterDrag(ev: MouseEvent): boolean {
   const dy = Math.abs(ev.clientY - lastDragEndY)
   return dx < 6 && dy < 6
 }
+/**
+ * 关闭按钮走 **pointerdown**（用户 2026-10-29 报「点关闭没反应」）。
+ *
+ * 为什么不能只靠 click：拖拽库（Sortable）在 fallback 拖拽结束后会全局吞掉**下一次 click**
+ * （它的 click eater 用 stopImmediatePropagation，比元素上的监听更早）。
+ * pointerdown 不在它吞的范围内，所以删除动作放在这里最稳；
+ * 键盘（Enter/Space）触发的 click 没有 pointerdown，下面的 click 分支继续兜。
+ */
+let removeViaPointerAt = 0
+function onRemovePointerDown(tile: RefTile): void {
+  if (!tile.nodeId) return
+  removeViaPointerAt = Date.now()
+  removeCard(tile.nodeId)
+}
 function onCardsClickCapture(ev: MouseEvent): void {
   ;(window as any).__capDbg = { target: (ev.target as HTMLElement)?.className?.toString().slice(0, 40), t: Date.now() }
+  // 已经由 pointerdown 删掉了（同一个手势的后续 click）：不重复处理
+  if (Date.now() - removeViaPointerAt < 600) {
+    ev.stopPropagation()
+    ev.preventDefault()
+    return
+  }
   if (clickAfterDrag(ev)) {
     ev.stopPropagation()
     ev.preventDefault()
@@ -664,7 +697,11 @@ function onCardsClickCapture(ev: MouseEvent): void {
   const tile = refTiles.value.find((t) => t.key === key)
   if (target.closest('.nb-remove')) {
     ev.stopPropagation()
-    if (tile?.nodeId) removeCard(tile.nodeId)
+    /**
+     * 正常点击走 click；但如果这颗按钮在 pointerdown 已经删过（见 onRemovePointerDown），
+     * 这里不再重复删（重复删会对着已消失的边报错）。
+     */
+    if (tile?.nodeId && Date.now() - removeViaPointerAt > 600) removeCard(tile.nodeId)
     return
   }
   // 待绑定卡：卡片本体点击 = 点上传
@@ -1848,6 +1885,8 @@ function onGlobalLeave(el: Element): void {
       chosen-class="nb-card--chosen"
       drag-class="nb-card--drag"
       :force-fallback="true"
+      filter=".nb-remove"
+      :prevent-on-filter="false"
       @end="onDragEndMark"
       @update:model-value="onReorderTiles"
       @click.capture="onCardsClickCapture"
@@ -1928,6 +1967,7 @@ function onGlobalLeave(el: Element): void {
           type="button"
           :aria-label="'移除素材 ' + tile.label"
           title="移除素材（断开连线）"
+          @pointerdown.stop.prevent="onRemovePointerDown(tile)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
@@ -2619,6 +2659,12 @@ function onGlobalLeave(el: Element): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /**
+   * 命中区放大（用户 2026-10-29 报「点不动」）：
+   * 视觉仍是 16px 圆点，但用 ::before 把可点范围撑到 24px ——
+   * 卡角只有 48px，16px 的圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
+   * 放大用伪元素（不占布局），视觉尺寸不变。
+   */
   width: 16px;
   height: 16px;
   border-radius: 999px;
@@ -2627,18 +2673,26 @@ function onGlobalLeave(el: Element): void {
   box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.28));
   cursor: pointer;
   opacity: 0;
-  pointer-events: none;
+  /* 视觉默认隐藏，但**始终可点**：隐藏态如果连指针都不接，
+     鼠标从卡片外靠近时那几像素的缝会落到画布上（真机踩过）。 */
+  pointer-events: auto;
   transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
+}
+.nb-remove::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
 }
 .nb-remove svg {
   width: 10px;
   height: 10px;
+  pointer-events: none;
 }
 .nb-card:hover .nb-remove,
 .nb-card:focus-within .nb-remove,
 .nb-remove:focus-visible {
   opacity: 1;
-  pointer-events: auto;
 }
 .nb-remove:hover {
   background: var(--ui-danger, #ef4444);
