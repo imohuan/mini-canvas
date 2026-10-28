@@ -202,12 +202,13 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
       expect(it.id).toBeTruthy()
       expect(it.name).toBeTruthy()
     }
-    // 标签身份统一成 ref-slot:<kind>:<N>（用户 2026-10-28：两种 id 合并成一种）
-    expect(items.map((i) => i.id).sort()).toEqual(['ref-slot:image:1', 'ref-slot:text:1', 'ref-slot:video:1'])
+    // 标签身份统一成 ref-slot:<kind>:<N>，且序号是**全局连续**（用户 2026-10-28）
+    // 连线顺序 t1(文本) / i1(图片) / v1(视频) → 文本1、图片2、视频3
+    expect(items.map((i) => i.id).sort()).toEqual(['ref-slot:image:2', 'ref-slot:text:1', 'ref-slot:video:3'])
     // 文本走 value、图片/视频走 url 与 mediaType（编辑器据此画缩略图/播放）
     const text = items.find((i) => i.name === '文本1')
-    const img = items.find((i) => i.name === '图片1')
-    const vid = items.find((i) => i.name === '视频1')
+    const img = items.find((i) => i.name === '图片2')
+    const vid = items.find((i) => i.name === '视频3')
     expect(text?.value).toBe('一段文字')
     expect(img?.url).toBeTruthy()
     expect(img?.mediaType).toBe('image')
@@ -215,10 +216,10 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
   })
 
   /**
-   * 用户要求（2026-09-30）：「连多个素材时按类型各自编号，@ 引用与纯文本里都用
-   * 图片1/视频1/文本1 这种名字，而不是内部节点 id」。
+   * 用户要求（2026-10-28 更新）：「直接按『图片 1、视频 2、音频 3、文本 4』这样排序，
+   * 不需要单独给每个分类设置索引 1」—— 全局连续编号，取代旧的「每类各自从 1」。
    */
-  it('素材引用名按类型各自编号：图片1/图片2、视频1、文本1（不是节点 id）', () => {
+  it('素材引用名全局连续编号：图片1 / 文本2 / 图片3 / 视频4（不是每类从 1）', () => {
     const materials = collectUpstreamMaterials(
       [
         { source: 'i1', target: '35' },
@@ -237,10 +238,10 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     )
     // 节点 id 仍是身份（请求组装 / 去重用），refName 才是给人看的引用名
     expect(materials.map((m) => m.id)).toEqual(['i1', 't1', 'i2', 'v1'])
-    expect(materials.map((m) => m.refName)).toEqual(['图片1', '文本1', '图片2', '视频1'])
+    expect(materials.map((m) => m.refName)).toEqual(['图片1', '文本2', '图片3', '视频4'])
     // 编辑器资源项的 name 就是 refName（@ 下拉 / 卡片文案 / 纯文本 token 三处一致）
     const items = toEditorResources(materials)
-    expect(items.map((i) => i.name)).toEqual(['图片1', '文本1', '图片2', '视频1'])
+    expect(items.map((i) => i.name)).toEqual(['图片1', '文本2', '图片3', '视频4'])
   })
 
   it('@ 引用回查：token 是引用名（图片1）或标签 id 都能回查', () => {
@@ -270,8 +271,9 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
           : { type: 'image', data: { imageUrl: 'https://x/a.png', label: '猫' } },
     )
     const items = toEditorResources(materials)
+    // 全局连续编号：图片在前是图片1，文本是文本2
     const imgItem = items.find((i) => i.name === '图片1')!
-    const textItem = items.find((i) => i.name === '文本1')!
+    const textItem = items.find((i) => i.name === '文本2')!
     const imgSpec = imgItem.renderEditor!(imgItem) as unknown[]
     const textSpec = textItem.renderEditor!(textItem) as unknown[]
     // 外层 span：resource-chip 卡片类

@@ -260,18 +260,22 @@ export function resolveMaterialOrder<T extends { id: string }>(
 }
 
 /**
- * 按**最终顺序**重编引用名：同类型各自从 1 开始（图片1 / 图片2 / 视频1 …）。
+ * 按**最终顺序**重编引用名：**全局连续编号**（图片1 / 视频2 / 音频3 / 文本4 / 图片5）。
  *
- * 为什么必须在排完序之后才编：素材卡左下角的序号角标、@ 下拉/卡片上的名字、
- * 以及纯文本里序列化出来的 token，三处看到的都是这个 refName —— 顺序换了编号不换，
- * 用户写的「图片2」就会指到另一张图。
+ * 用户口径（2026-10-28，替换掉「每类各自从 1 编」）：
+ * 「直接按『图片 1、视频 2、音频 3、文本 4、图片 5』这样的顺序进行排序就行，
+ *   不需要单独给每个分类设置索引 1」。
+ *
+ * 于是：同一批参考里序号唯一、按显示顺序递增，卡片角标、@ 名、纯文本 token 三处一致。
+ * 为什么必须在排完序之后才编：顺序换了编号不换，用户写的「图片2」就会指到另一张图。
  */
 export function numberRefNames(materials: ReadonlyArray<UpstreamMaterial>): UpstreamMaterial[] {
-  const seq: Record<string, number> = { image: 0, video: 0, audio: 0, text: 0 }
   const CN: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
+  // 全局计数器：不按 kind 分开（用户 2026-10-28 的编号规则）
+  let seq = 0
   return materials.map((m) => {
-    seq[m.kind] = (seq[m.kind] ?? 0) + 1
-    return { ...m, refName: (CN[m.kind] ?? '素材') + seq[m.kind] }
+    seq += 1
+    return { ...m, refName: (CN[m.kind] ?? '素材') + seq }
   })
 }
 
@@ -810,9 +814,12 @@ export type RefSlotHints = Record<string, { kind: ToolResourceKind; index: numbe
 /**
  * 把「用户指定的槽位」落到 refName 上 —— 这是「第 N 格上传就落在第 N 格」的唯一依据。
  *
- * 为什么不能只靠顺序：refName 是按素材出现顺序从 1 编的。8 个格子都空着时点第 8 格
+ * 为什么不能只靠顺序：refName 是按素材出现顺序编的。8 个格子都空着时点第 8 格
  * 上传，素材序列里只有 1 张 → 编成「图片1」→ 于是显示在第 1 格（真机踩过的 bug）。
- * 有 hint 时按 hint 编号，同类型的其余素材填到空出来的位置（保持原有先后）。
+ * 有 hint 时按 hint 编号，其余素材填到空出来的位置（保持原有先后）。
+ *
+ * 编号规则与 numberRefNames 一致（用户 2026-10-28）：**所有类型共用一串连续序号**。
+ * 所以这里不再按 kind 分桶 —— hint 的 index 就是「第几格」，跨类型也唯一。
  */
 export function applySlotHints(
   materials: ReadonlyArray<UpstreamMaterial>,
@@ -820,30 +827,22 @@ export function applySlotHints(
 ): UpstreamMaterial[] {
   if (!hints) return numberRefNames(materials)
   const CN: Record<string, string> = { image: "图片", video: "视频", audio: "音频", text: "文本" }
-  // 每个种类：已被 hint 占用的序号 → 素材；其余素材排队补空位
-  const byKind = new Map<string, { taken: Map<number, UpstreamMaterial>; rest: UpstreamMaterial[] }>()
+  /** 已被 hint 占用的序号 → 素材（全局一张表，不按类型分） */
+  const taken = new Map<number, UpstreamMaterial>()
   for (const m of materials) {
-    const bucket = byKind.get(m.kind) ?? { taken: new Map<number, UpstreamMaterial>(), rest: [] as UpstreamMaterial[] }
     const hint = hints[m.id]
-    if (hint && hint.kind === m.kind && hint.index > 0 && !bucket.taken.has(hint.index)) {
-      bucket.taken.set(hint.index, m)
-    } else {
-      bucket.rest.push(m)
-    }
-    byKind.set(m.kind, bucket)
+    if (hint && hint.index > 0 && !taken.has(hint.index)) taken.set(hint.index, m)
   }
   const out: UpstreamMaterial[] = []
   for (const m of materials) {
-    const bucket = byKind.get(m.kind)!
-    // 本素材是否占着某个 hint 序号
     let slot = 0
-    for (const [idx, item] of bucket.taken) if (item === m) slot = idx
+    for (const [idx, item] of taken) if (item === m) slot = idx
     if (slot === 0) {
       // 找一个没被占用的序号（从 1 起）
       let i = 1
-      while (bucket.taken.has(i)) i += 1
+      while (taken.has(i)) i += 1
       slot = i
-      bucket.taken.set(i, m)
+      taken.set(i, m)
     }
     out.push({ ...m, refName: (CN[m.kind] ?? "素材") + slot })
   }

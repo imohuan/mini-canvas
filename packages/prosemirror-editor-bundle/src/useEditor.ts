@@ -514,18 +514,6 @@ function createSelectionDecorationPlugin() {
 
 // 创建光标修复插件：在特殊情况下插入零宽空格文本节点
 // 只处理：1. 行首/行尾的标签 2. 两个标签相邻的情况
-/** 四种资源类型的默认图标（用户 2026-10-28：图片/视频/音频/文本各有自己的图标） */
-const KIND_ICON_SVG: Record<'image' | 'video' | 'audio' | 'text', string> = {
-  image:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20"/></svg>',
-  video:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="m15 10 6-4v12l-6-4z"/></svg>',
-  audio:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
-  text:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>',
-}
-
 /**
  * 从标签名解析资源类型（用户 2026-10-28：标签名自带类型+索引，别再绕注册表猜）。
  *
@@ -541,10 +529,6 @@ export function kindFromName(name: string | null | undefined): 'image' | 'video'
   if (/^文本\s*\d+$/.test(s)) return 'text'
   return 'text'
 }
-
-/** 待输入标签的小图标（与底栏槽位同一套线性图标） */
-const SLOT_CHIP_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 
 /** 造一个「待输入 / 已填」槽位素材项（renderEditor 读注册表，缩略图跟着连线变化） */
 function buildSlotItem(
@@ -590,7 +574,7 @@ function buildSlotItem(
     if (canThumb) {
       const img = document.createElement('img')
       img.className = 'resource-chip-thumb'
-      img.src = latest.url
+      img.src = String(latest.url ?? '')
       img.alt = ''
       span.append(img)
     } else {
@@ -611,7 +595,14 @@ function buildSlotItem(
           : latest.mediaType === 'audio' ? 'audio'
           : latest.mediaType === 'image' ? 'image'
           : 'text'
-      ic.innerHTML = KIND_ICON_SVG[kindKey] || SLOT_CHIP_ICON
+      /**
+       * 图标一律走 **CSS mask + data-icon**，不再内联 svg。
+       *
+       * 为什么（用户 2026-10-28 报「标签图标大小对不上」）：内联 svg 自带 width/height=16，
+       * 而底栏给图标格子的尺寸是 16×16 / 22×22 两套，混在一起就看得出大小不一致；
+       * mask 只吃「形状」，尺寸由 CSS 统一控制，两条渲染路径（这里与资源面板插入）完全一致。
+       */
+      ic.dataset.icon = kindKey
       span.append(ic)
     }
     const nm = document.createElement('span')
@@ -1532,6 +1523,16 @@ export function useEditor(
       const url = el.getAttribute("data-url") || ""
       const name = el.getAttribute("data-name") || ""
       if (!url) return
+      /**
+       * 音频 / 文本**不弹 hover 预览**（用户 2026-10-28）。
+       *
+       * 原因：预览框只会画 `<img>` / `<video>`，把 mp3 地址塞进去就是一张裂图
+       * （用户截图里那个「音频1 + 破图」的悬浮框）。音频本来也没有画面可看，
+       * 要听直接点标签开全屏播放器。
+       */
+      const nameKind = kindFromName(name)
+      const isAudioOrText = nameKind === 'audio' || nameKind === 'text'
+      if (isAudioOrText) return
       const rect = el.getBoundingClientRect()
       const margin = 12; const previewMaxWidth = 400
       let left = rect.left + rect.width / 2

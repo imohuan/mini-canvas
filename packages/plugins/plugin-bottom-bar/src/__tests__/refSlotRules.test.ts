@@ -125,7 +125,11 @@ describe('参考区只排一行（不再重复）', () => {
     expect(tiles.every((t) => !t.pending)).toBe(true)
   })
 
-  it('图片与音频各自编号、按种类分格', () => {
+  /**
+   * 用户口径（2026-10-28）：全局连续编号后，「图片1 + 音频1」这类混合组（旧命名）
+   * 在新规则下会重叠到同一个序号 —— 取第一张。合法的全局编号是「图片1、音频2」。
+   */
+  it('全局编号：图片1 / 音频2 各占一格（旧式两条都叫 1 的只认第一张）', () => {
     const tiles = mergeRefTiles(
       [{ kind: 'audio', index: 1 }],
       [
@@ -133,7 +137,7 @@ describe('参考区只排一行（不再重复）', () => {
         { id: 'v', name: '音频1', url: 'v.mp3', isText: false },
       ],
     )
-    expect(tiles.map((t) => t.label)).toEqual(['图片 1', '音频 1'])
+    expect(tiles.map((t) => t.label)).toEqual(['图片 1'])
     expect(tiles.every((t) => !t.pending)).toBe(true)
   })
 })

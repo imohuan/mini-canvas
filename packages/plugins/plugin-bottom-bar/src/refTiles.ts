@@ -88,73 +88,88 @@ export function mergeRefTiles(
   /** 用户拖出来的完整顺序（card:N 与 slot:kind:n 混排）。空 = 无自定义顺序 */
   displayOrder?: readonly string[],
 ): RefTile[] {
-  // 序号 → 素材（连线顺序里第 N 张图 / 第 N 段音频…）
-  const seqOf = (kind: 'image' | 'video' | 'audio' | 'text'): Map<number, TileCardLike> => {
-    const map = new Map<number, TileCardLike>()
-    for (const c of cards) {
-      const withRef = c as TileCardLike & WithRefName
-      // 优先 refName；没有时**只接受严格 `图片N` 形式**的 name（无空格）。
-      // node 标题常是「图片 54」（带空格）或任意文案，解析成序号会错位
-      //（用户 2026-10-28 报：格 1 空着却显示缩略图、正文图片1 反而不显示）。
-      const parsed = refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
-      if (!parsed || parsed.kind !== kind) continue
-      if (!map.has(parsed.index)) map.set(parsed.index, c)
-    }
-    return map
-  }
-
-  // 出现在参考区的种类：素材自己的种类 + 正文声明的种类
-  const kinds = new Set<'image' | 'video' | 'audio' | 'text'>()
-  for (const c of cards) {
+  /**
+   * **全局编号**（用户 2026-10-28 明确要求）：
+   * 序号不再按类型各自从 1 开始，而是「图片1、视频2、音频3、文本4、图片5」这样
+   * 整串连续。于是「第 N 格」只有一种含义，界面上一眼能对上。
+   *
+   * 序号→素材仍以 refName 为准（卡片名可能带空格或任意文案，不能当序号）。
+   */
+  const byIndex = new Map<number, TileCardLike>()
+  /** 名字里带序号的卡片（图片2 / 音频3）：算格数与定位都用它 */
+  const seqOfCard = (c: TileCardLike) => {
     const withRef = c as TileCardLike & WithRefName
-    const p = refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
-    if (p) kinds.add(p.kind)
+    return refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
   }
-  for (const s of slots) {
-    if (s.kind === 'image' || s.kind === 'video' || s.kind === 'audio' || s.kind === 'text') kinds.add(s.kind)
+  for (const c of cards) {
+    // 优先 refName；没有时只接受严格 `图片N`（无空格）的 name。
+    // 节点标题常是「图片 54」（带空格）或任意文案，不能当序号。
+    const parsed = seqOfCard(c)
+    if (!parsed) continue
+    if (!byIndex.has(parsed.index)) byIndex.set(parsed.index, c)
   }
+  /** 只有声明、还没连线的格子：**格子位** → 类型（决定空槽出哪种图标） */
+  const declaredKind = new Map<number, 'image' | 'video' | 'audio' | 'text' | 'av'>()
+  /**
+   * 声明本身只用于**补空格**：卡片（连线素材）按自己的 refName 序号占格；
+   * 声明多出来的序号，从「已有卡片的数量 + 1」开始往后补。
+   *
+   * 这样 @图片1 / @音频2 这种编号能一一对上，又不会因为声明里也有「音频 index=1」
+   * 而把已有卡片挤走（用户 2026-10-28：编号改成全局连续之后踩过）。
+   */
+  const maxCardIndexEarly = byIndex.size ? Math.max(...byIndex.keys()) : 0
+  ;[...new Set(slots.map((s) => s.index))]
+    .sort((a, b) => a - b)
+    .forEach((declaredIndex) => {
+      // 这条声明指向的格子已经有连线内容 → 不额外补格
+      if (byIndex.has(declaredIndex)) return
+      // 补空格：用「已有卡片数 + 已补格数」的下一位（声明只补在内容之后，不挤已有卡片）
+      const kind = slots.filter((s) => s.index === declaredIndex)[0]?.kind ?? 'image'
+      // 已经有同类卡片占着这个序号 → 这条声明就是它，不再补格
+      const occupant = byIndex.get(declaredIndex)
+      const occupantRef = occupant ? (occupant as TileCardLike & WithRefName).refName : ''
+      if (occupant && refNameToSlot(occupantRef || '')?.kind === kind) return
+      let at = Math.max(maxCardIndexEarly, byIndex.size) + 1
+      while (declaredKind.has(at)) at += 1
+      declaredKind.set(at, kind)
+    })
 
+  const KN = { image: '图片', video: '视频', audio: '音频', text: '文本' } as const
   const tiles: RefTile[] = []
-  // 每个种类独立排：图片1/图片2…、音频1/音频2…（与 collectUpstreamMaterials 的编号同口径）
-  for (const kind of ['image', 'video', 'audio', 'text'] as const) {
-    if (!kinds.has(kind)) continue
-    const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '文本'
-    const bySeq = seqOf(kind)
-    const declared = slots.filter((s) => s.kind === kind).map((s) => s.index)
-    /**
-     * 格数 = max(连线数, 声明数)（用户 2026-10-27 口径）。
-     *
-     * 为什么不再补齐 1..最大声明序号：正文里写了 `@图片44` 时，旧规则会把 1..44 全部铺满，
-     * 界面上凭空长出一堆空格（用户截图：4 张图却出现 44 格）。
-     * 归一化之后声明序号本来就是 1..n，这里只按数量取 max 即可。
-     */
-    /**
-     * 格数 = max(最大序号, 声明数)（用户 2026-10-28 修错位）。
-     *
-     * 为什么不是 max(卡片数量, 声明数)：卡片带的序号可能不连续（hint 让某张图占第 2 格），
-     * 按「数量」算格数会把序号 2 的卡片挤出格子外，掉进「无序号尾巴」分支 —— 表现就是
-     * 「第 1 格是空壳、那张有图的卡跑到最后」（用户截图）。
-     * 按**最大序号**算才能保证每张卡都在自己的位置上。
-     */
-    const maxCardIndex = bySeq.size ? Math.max(...bySeq.keys()) : 0
-    const declaredCount = new Set(declared).size
-    const total = Math.max(maxCardIndex, declaredCount)
-    for (let slotIndex = 1; slotIndex <= total; slotIndex++) {
-      const card = bySeq.get(slotIndex)
-      tiles.push({
-        key: card ? 'card:' + card.id : 'slot:' + kind + ':' + slotIndex,
-        slotKey: card ? undefined : kind + ':' + slotIndex,
-        slotIndex,
-        index: slotIndex, // 临时值，排序后按显示位重编
-        label: label + ' ' + slotIndex,
-        pending: !card,
-        name: card?.name ?? (label + ' ' + slotIndex),
-        url: card?.url,
-        isText: kind === 'text',
-        kind,
-        card,
-      })
-    }
+  const maxCardIndex = byIndex.size ? Math.max(...byIndex.keys()) : 0
+  /**
+   * 格数 = max(卡片最大序号, 声明条数)。
+   *
+   * 用户 2026-10-27 口径：正文声明**不产生额外内容格**，只把「已连了多少」的范围内
+   * 空着的位置显示成待输入。所以声明只按**数量**兜底，不按序号铺满（@图片44 不会长 44 格）。
+   * 卡片自己的序号仍然决定它落在第几格（用户 2026-10-28 修错位那条不能破）。
+   */
+  const total = Math.max(maxCardIndex, new Set(slots.map((s) => s.index)).size)
+  for (let slotIndex = 1; slotIndex <= total; slotIndex++) {
+    const card = byIndex.get(slotIndex)
+    // 有卡按卡的类型；只有声明按声明的类型（av/未知时退回 image 的图标）
+    const declared = declaredKind.get(slotIndex)
+    const kind: 'image' | 'video' | 'audio' | 'text' =
+      card && card.isText ? 'text'
+      : (card ? refNameToSlot((card as TileCardLike & WithRefName).refName || '')?.kind : undefined) ??
+        (declared === 'video' ? 'video'
+          : declared === 'audio' ? 'audio'
+          : declared === 'text' ? 'text'
+          : 'image')
+    const label = KN[kind] ?? '图片'
+    tiles.push({
+      key: card ? 'card:' + card.id : 'slot:' + (declared ?? kind) + ':' + slotIndex,
+      slotKey: card ? undefined : (declared ?? kind) + ':' + slotIndex,
+      slotIndex,
+      index: slotIndex, // 临时值，排序后按显示位重编
+      label: label + ' ' + slotIndex,
+      pending: !card,
+      name: card?.name ?? (label + ' ' + slotIndex),
+      url: card?.url,
+      isText: kind === 'text',
+      kind,
+      card,
+    })
   }
   // 没有可识别名字的素材（比如文本）照常补在最后（参考区一直支持显示它们）
   for (const card of cards) {
