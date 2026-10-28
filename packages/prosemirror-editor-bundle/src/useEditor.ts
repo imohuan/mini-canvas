@@ -313,6 +313,11 @@ const mySchema = new Schema({
         // （回填出来的最小 item 没有这两个字段）。
         refExt: { default: '' },
         refFolderId: { default: '' },
+        /**
+         * 参考标签的类型（用户 2026-10-28）：绑定节点后存节点真实类型，
+         * 冷启动（注册表空）也能按它画对图标；空串 = 待绑定，画统一资源图标。
+         */
+        chipKind: { default: '' },
       },
       group: "inline",
       inline: true,
@@ -383,21 +388,26 @@ const mySchema = new Schema({
          * 没有这一支就会落到下面默认分支（`@名字` + 下划线），和卡片并排成两套 UI。
          */
         const chipId = String(id ?? '')
+        const chipKindAttr = String(node.attrs.chipKind ?? '')
         const isRefChip =
           chipId.startsWith(REF_NODE_PREFIX) ||
           chipId.startsWith(REF_NAME_PREFIX) ||
           chipId.startsWith('ref-slot:')
         if (isRefChip) {
           const legacy = chipId.startsWith('ref-slot:')
-          const boundNodeId = nodeIdOfChipId(chipId)
           const fallback = legacy
             ? buildRefChipItem({ id: chipId, name: String(name ?? id), invalid: true })
-            : buildRefChipItem({ id: chipId, name: String(name ?? id) })
+            : buildRefChipItem({
+                id: chipId,
+                name: String(name ?? id),
+                ...(chipKindAttr === 'image' || chipKindAttr === 'video' || chipKindAttr === 'audio' || chipKindAttr === 'text'
+                  ? { bound: { kind: chipKindAttr } }
+                  : {}),
+              })
           const withData: ResourceItem = {
             ...fallback,
             ...(url ? { url: String(url) } : {}),
             ...(node.attrs.value ? { value: String(node.attrs.value) } : {}),
-            ...(boundNodeId ? { mediaType: undefined } : {}),
           }
           if (id) itemRegistry.set(chipId, withData)
           const rendered = renderRefChip(withData)
@@ -430,6 +440,7 @@ const mySchema = new Schema({
             url: el.getAttribute("data-url") || "",
             thumbnail_url: getThumbnailUrlFromAssetUrl(el.getAttribute("data-url") || ""),
             value: el.getAttribute("data-value") || "",
+            chipKind: el.getAttribute("data-kind") || "",
           }
         },
       }],
@@ -569,6 +580,7 @@ export function buildRefChipItem(input: {
     category: '素材',
     ...(bound ? { chipKind: bound.kind, mediaType: bound.kind === 'text' ? undefined : bound.kind } : {}),
     ...(bound?.url ? { url: bound.url } : {}),
+    ...(bound?.thumb ? { thumbnail_url: bound.thumb } : {}),
     ...(bound?.value ? { value: bound.value } : {}),
     ...(input.invalid ? { invalid: true } : {}),
   }
@@ -603,7 +615,7 @@ function renderRefChip(item: ResourceItem): HTMLElement {
    * 音频是 mp3、文本没有画面 —— 塞进 <img> 只会得到裂图（用户 2026-10-28 报过）。
    */
   const thumb =
-    kind === 'video' ? (item.thumbnail_url || item.url || '')
+    kind === 'video' ? (item.thumbnail_url || '')
     : kind === 'image' ? (item.url || '')
     : ''
   const canThumb = !!thumb && (kind === 'image' || thumb.startsWith('data:image/'))
@@ -1128,7 +1140,18 @@ function buildResourceNode(nodeType: any, item: ResourceItem): any {
    * 只有名字能认出类型（图片N/视频N/音频N/文本N）才改写；技能/MCP/资产那类引用
    * 有自己的 id 规则（item.ref），保持原样。
    */
-  const canonicalId = item.ref ? item.id : slotIdFromName(item.name) ?? item.id
+  /**
+   * 新身份（ref-node / ref-name）**原样保留**（用户 2026-10-28 定案）。
+   *
+   * 只有既不是新身份、又不是显式引用（技能/MCP/资产）的裸标签，才按老规则
+   * 从名字推 `ref-slot:*`（兼容别的调用方，底栏已经不再产生这种 id）。
+   */
+  const keepId =
+    item.ref != null ||
+    item.id.startsWith('ref-node:') ||
+    item.id.startsWith('ref-name:') ||
+    item.id.startsWith('ref-slot:')
+  const canonicalId = keepId ? item.id : slotIdFromName(item.name) ?? item.id
   return nodeType.create({
     id: canonicalId,
     name: item.name,
@@ -1141,6 +1164,8 @@ function buildResourceNode(nodeType: any, item: ResourceItem): any {
     // 资产引用额外字段（见 schema 注释）：导出/复制时要原样写回标记，必须进节点属性。
     refExt: item.ref?.ext || '',
     refFolderId: item.ref?.folderId || '',
+    // 参考标签的类型（用户 2026-10-28）：落进文档，冷启动注册表为空也能画对图标。
+    chipKind: item.chipKind || '',
   })
 }
 
@@ -2356,24 +2381,12 @@ export function useEditor(
     })
     if (hits.length === 0) return 0
     /**
-     * 归一化（用户 2026-10-28 报：标记后仍出现 图片100 这种序号）。
+     * 不再做「按类型重编号」（用户 2026-10-28 定案：标签认节点 / 认名称，序号只做观察）。
      *
-     * 同类型按**出现顺序**重编成 1..n：正文写 `@图片1 @图片100 @图片10`，
-     * 转换后应该是 图片1、图片2、图片3 —— 序号连续，格子数 = 声明数，
-     * 缩略图才能按「该类型数组第 N 项」取。这是文档里「归一化」的直接落点。
-     *
-     * 具体做法：转换时直接用新 id/名字建节点（一个事务内完成，不产生中间态）。
+     * 以前这里把 `@图片1 @图片100 @图片10` 归一化成 1,2,3 并改写成 `ref-slot:*`；
+     * 现在标签身份由调用方的 scan 直接给出（ref-node:<id> 或 ref-name:<名>），
+     * 编辑器只负责替换，不改身份、不改名字。
      */
-    const seq: Record<string, number> = {}
-    const order = [...hits].sort((a, b) => a.start - b.start)  // 按出现顺序
-    for (const h of order) {
-      const kind = h.item.mediaType ?? 'image'
-      seq[kind] = (seq[kind] ?? 0) + 1
-      const index = seq[kind]
-      if (h.item.id !== 'ref-slot:' + kind + ':' + index) {
-        h.item = { ...h.item, id: 'ref-slot:' + kind + ':' + index, name: (h.item.name || '').replace(/\d+$/, '') + index }
-      }
-    }
     const tr = view.state.tr
     for (const h of hits.sort((a, b) => b.start - a.start)) {
       itemRegistry.set(h.item.id, h.item)
