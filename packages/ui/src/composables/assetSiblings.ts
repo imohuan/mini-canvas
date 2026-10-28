@@ -31,6 +31,10 @@ export interface SiblingRow {
   /**
    * 资产类型（image / video / audio / node-package / other）。
    * 切张时按它选渲染分支（2026-10-28 修「切到节点包显示视频加载失败」）。
+   *
+   * 为什么 SiblingRow 的字段名与宿主的 AssetTreeRow 一致（assetKind 而不是 kind）：
+   * 宿主直接把 AssetTreeRow 行喂进来（结构化子类型），字段名一致就不用先做一次
+   * 形状转换 —— 两边各转一遍迟早漂。
    */
   assetKind?: string
 }
