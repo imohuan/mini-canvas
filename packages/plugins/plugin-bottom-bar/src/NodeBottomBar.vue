@@ -91,7 +91,9 @@ import {
   mergeRefTiles,
   invalidRefHint,
   nextChipOrder,
+  nameFromFileName,
   targetOfTile,
+  uniqueNodeName,
   uploadToRefSlot,
   type RefTarget,
   type RefTile,
@@ -1188,7 +1190,16 @@ async function fillSlotFromFile(kind: RefSlotKind, file: File, target?: RefTarge
           const d = freshNode.data ?? {}
           const s = (v: unknown) => (typeof v === 'string' && v ? v : '')
           const url = s(d.imageUrl) || s(d.videoUrl) || s(d.audioUrl)
-          const name = s(d.label) || s(d.imageName) || s(d.videoName) || s(d.audioName) || file.name
+          /**
+           * 名称取**真实文件名**（用户 2026-10-28：标签要用名称，别再是「图片 3」）。
+           * file-drop 建节点时写的是类型默认名，这里改成文件名并保证画布内唯一
+           * （名称唯一是标签能按名字匹配的前提）。
+           */
+          const taken = doc.getNodes()
+            .filter((n) => n.id !== freshNode.id)
+            .map((n) => (typeof n.data?.label === 'string' ? n.data.label : ''))
+          const name = uniqueNodeName(nameFromFileName(file.name), taken)
+          try { doc.updateNode(freshNode.id, { data: { label: name } }) } catch { /* 忽略 */ }
           return { id: freshNode.id, name, url }
         },
         positionFor: () => ({ x: base.x - w - 24, y: base.y }),

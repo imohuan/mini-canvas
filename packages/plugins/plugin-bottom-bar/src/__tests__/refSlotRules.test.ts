@@ -12,8 +12,10 @@ import {
   invalidRefTiles,
   matchMaterialByName,
   mergeRefTiles,
+  nameFromFileName,
   nextChipOrder,
   targetOfTile,
+  uniqueNodeName,
   uploadToRefSlot,
   type TileCardLike,
   type UploadDeps,
@@ -119,6 +121,32 @@ describe('标记：按名称匹配已连线素材', () => {
 
   it('前后空格不影响匹配', () => {
     expect(matchMaterialByName('  雨声 ', [card('n2', '雨声', 'audio')])?.id).toBe('n2')
+  })
+})
+
+describe('新素材命名：文件名 + 画布内唯一（用户 2026-10-28）', () => {
+  it('文件名去扩展名当节点名', () => {
+    expect(nameFromFileName('天空之城.png')).toBe('天空之城')
+    expect(nameFromFileName('雨声 v2.mp3')).toBe('雨声 v2')
+  })
+
+  it('没有扩展名 / 空名 → 原样或兜底', () => {
+    expect(nameFromFileName('封面')).toBe('封面')
+    expect(nameFromFileName('')).toBe('素材')
+    expect(nameFromFileName('.gitignore')).toBe('.gitignore')
+  })
+
+  it('撞名追加序号（名称不允许重复）', () => {
+    expect(uniqueNodeName('天空之城', ['天空之城'])).toBe('天空之城 2')
+    expect(uniqueNodeName('天空之城', ['天空之城', '天空之城 2'])).toBe('天空之城 3')
+  })
+
+  it('名字自带序号 → 从那个号往上找，不叠成「天空之城 2 2」', () => {
+    expect(uniqueNodeName('场景 3', ['场景 3'])).toBe('场景 4')
+  })
+
+  it('不撞名 → 原样使用', () => {
+    expect(uniqueNodeName('雨声', ['天空之城'])).toBe('雨声')
   })
 })
 

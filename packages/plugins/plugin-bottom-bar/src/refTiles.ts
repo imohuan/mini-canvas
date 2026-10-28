@@ -249,6 +249,45 @@ export function pendingChipIdOf(name: string): string {
 }
 
 /**
+ * 文件名 → 节点名称（用户 2026-10-28：新素材用真实文件名当名字，别再叫「图片 3」）。
+ *
+ * 去掉扩展名（「天空之城.png」→「天空之城」）：标签上显示扩展名既占地方又没信息量。
+ * 去掉后为空（例如只有 .gitignore）→ 原样保留。
+ */
+export function nameFromFileName(fileName: string | null | undefined): string {
+  const base = String(fileName ?? '').trim()
+  if (!base) return '素材'
+  const dot = base.lastIndexOf('.')
+  const stem = dot > 0 ? base.slice(0, dot).trim() : base
+  return stem || base
+}
+
+/**
+ * 画布内名称唯一（用户 2026-10-28：节点名称不允许重复）。
+ *
+ * 撞名时追加「 2」「 3」……（与画布自动命名的形态一致）；名字本身带序号就从那个号往上找。
+ */
+export function uniqueNodeName(base: string, taken: Iterable<string>): string {
+  const want = String(base ?? '').trim()
+  if (!want) return '素材'
+  const used = new Set<string>()
+  for (const t of taken) {
+    const s = String(t ?? '').trim()
+    if (s) used.add(s)
+  }
+  if (!used.has(want)) return want
+  const m = /^(.*?\D)?\s*(\d+)$/.exec(want)
+  const stem = m && m[1] !== undefined && m[1].trim() ? m[1].trim() : m ? '' : want
+  let n = m ? Number.parseInt(m[2], 10) + 1 : 2
+  if (!Number.isFinite(n) || n < 2) n = 2
+  for (; n < 100000; n++) {
+    const cand = stem ? stem + ' ' + n : String(n)
+    if (!used.has(cand)) return cand
+  }
+  return want + ' ' + Date.now()
+}
+
+/**
  * 上传一个文件到某张卡片（用户口径 2026-10-25 / 2026-10-28）：
  * 「点击上传时，这 4 个上传你需要添加一个参考节点然后进行连接，这样进行上传」。
  *
