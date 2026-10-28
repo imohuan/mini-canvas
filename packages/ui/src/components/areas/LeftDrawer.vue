@@ -9,6 +9,7 @@ import AxDropdown from '../AxDropdown.vue'
 import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AxScrollArea from '../AxScrollArea.vue'
+import AxResizeHandle from '../AxResizeHandle.vue'
 import LibIcon from '../LibIcon.vue'
 import ProjectCluster from '../ProjectCluster.vue'
 import AssetBatchBar from '../AssetBatchBar.vue'
@@ -1110,11 +1111,8 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
         </button>
         <span class="text-xs text-ink-dim">共 {{ ui.treeTotal }} 节点</span>
       </div>
-      <div
-        class="absolute -right-1 bottom-0 top-0 z-[2] w-3 cursor-col-resize touch-none hover:bg-gradient-to-r hover:from-transparent hover:to-white/[0.14]"
-        role="separator" aria-label="调整侧栏宽度" aria-orientation="vertical"
-        @pointerdown.prevent="ui.startDrawerResize($event)">
-      </div>
+      <AxResizeHandle class="left-drawer-resize" edge="right" label="调整侧栏宽度"
+        @resize-start="ui.startDrawerResize" />
     </motion.aside>
   </AnimatePresence>
 </template>
@@ -1138,4 +1136,6 @@ export const WandIcon = mk('M9.5 2.5v2M9.5 9.5v2M2.5 9.5h2M6.5 6.5 3 3M13.5 13.5
   background: var(--ui-overlay-solid, var(--ui-panel, #fff));
   box-shadow: none;
 }
+/* 拖宽手柄的观感统一在 AxResizeHandle 里；这里只定位置（线贴抽屉右缘） */
+.left-drawer-resize { top: 0; bottom: 0; right: 0; z-index: 2; }
 </style>

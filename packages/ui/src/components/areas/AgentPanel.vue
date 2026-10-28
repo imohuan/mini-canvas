@@ -29,6 +29,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
 import { SlotHost, useUiComponent, broadcastCloseAllDropdowns } from '@mini-canvas/canvas-render'
+import AxResizeHandle from '../AxResizeHandle.vue'
 import { useUi } from '../../composables/ui'
 
 const ui = useUi()
@@ -226,8 +227,8 @@ function startCornerResize(e: PointerEvent): void {
       : { left: floatPos.x + 'px', top: floatPos.y + 'px', width: fitW + 'px', height: fitH + 'px' }"
     aria-label="Agent 对话面板"
   >
-    <div v-if="ui.agent.docked" class="agent-resize" role="separator" aria-orientation="vertical"
-      aria-label="调整 Agent 面板宽度" @pointerdown.prevent="startResize"></div>
+    <AxResizeHandle v-if="ui.agent.docked" class="agent-resize" edge="left"
+      label="调整 Agent 面板宽度" @resize-start="startResize" />
 
     <!-- 头部：两种摆法都能抓（浮窗 = 移动；停靠 = 拖出来），所以 draggable 常开 -->
     <header class="agent-head draggable" @pointerdown="startDrag">
@@ -313,7 +314,8 @@ function startCornerResize(e: PointerEvent): void {
 /* 停靠态：去圆角、去阴影，左缘留一条普通分隔线
    （--ui-line 而不是浮窗那条更亮的 --ui-shell-line：它不是浮起的卡片，是贴在画布边上的一条边）。 */
 .agent-shell.is-docked { top: 0; bottom: 0; right: 0; height: 100%; border-radius: 0; border-width: 0 0 0 1px; border-color: var(--ui-line, #e2e5ea); background: var(--ui-overlay-solid, var(--ui-panel, #fff)); box-shadow: none; }
-.agent-resize { position: absolute; top: 0; bottom: 0; left: 0; z-index: 20; width: 12px; cursor: col-resize; touch-action: none; }
+/* 拖宽手柄的观感（线宽 / 主题色 / 拖拽态）统一在 AxResizeHandle 里；这里只定位置 */
+.agent-resize { top: 1px; bottom: 0; left: 0; z-index: 20; }
 .agent-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 10px 14px 10px 16px; }
 .agent-head.draggable { cursor: grab; user-select: none; }
 .agent-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }
