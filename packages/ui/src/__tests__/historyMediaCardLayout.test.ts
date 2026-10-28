@@ -18,6 +18,10 @@ const videoPreview = readFileSync(
 )
 const modalsArea = readFileSync(new URL('../components/areas/ModalsArea.vue', import.meta.url), 'utf-8')
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
+const audioWavePlayer = readFileSync(
+  new URL('../../../plugins/plugin-node-audio/src/AudioWavePlayer.vue', import.meta.url),
+  'utf-8',
+)
 
 describe('VideoPreview 按实测宽度切两套 UI', () => {
   it('用 ResizeObserver 量自己的宽度（宽度的真源在组件内部，不由宿主传）', () => {
@@ -145,7 +149,10 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     // 卡片本体（异常卡 / 媒体卡 / 图片卡 / 裂图重建）都必须走 onCardClick；
     // 左上角圆钮是唯一允许自己处理 click 的（它要 stopPropagation 防止重复切换）。
     const viaHandler = modalsArea.match(/addEventListener\('click', \(\) => onCardClick\(item\)\)/g)?.length ?? 0
-    expect(viaHandler, '卡片点击没全部接 onCardClick（批量模式下点卡片不会选中）').toBe(4)
+    expect(viaHandler, '非音频卡片点击没全部接 onCardClick（批量模式下点卡片不会选中）').toBe(4)
+    expect(modalsArea, '音频卡点击没有接专用处理（批量模式下点音频卡不会选中）').toMatch(
+      /onAudioCardClick/,
+    )
     expect(modalsArea, 'onCardClick 在批量模式下没有切换选中').toMatch(
       /function onCardClick\(item: HistItem\)[\s\S]{0,220}histBatchMode[\s\S]{0,120}toggleHistSelected\(item\.id\)/,
     )
@@ -236,6 +243,58 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const rule = style.match(/\.hist-card-audio-controls\s*\{[^}]*\}/)?.[0] ?? ''
     expect(rule, '样式表里底栏没有 align-items: center').toMatch(/align-items:\s*center/)
     expect(rule, '样式表里底栏没有 justify-content: space-between').toMatch(/justify-content:\s*space-between/)
+  })
+
+  it('音频卡普通模式点卡片不打开全屏（点击/拖动交给波形 seek）', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function onAudioCardClick'),
+      modalsArea.indexOf('/** 历史条目类型'),
+    )
+    expect(fn, '缺少音频卡专用点击处理').toMatch(/function onAudioCardClick/)
+    expect(fn, '普通模式又打开了全屏预览').not.toMatch(/openHistoryItem/)
+    expect(fn, '批量模式没有切换选中').toMatch(/histBatchMode[\s\S]{0,120}toggleHistSelected/)
+    const media = modalsArea.slice(
+      modalsArea.indexOf('function buildMediaCard'),
+      modalsArea.indexOf('/** 生成瀑布流里一张卡'),
+    )
+    expect(media, '音频卡没有走专用点击处理').toMatch(
+      /isAudio\) card\.addEventListener\('click', \(\) => onAudioCardClick\(item\)\)/,
+    )
+    expect(media, '视频卡不再打开全屏预览').toMatch(
+      /else card\.addEventListener\('click', \(\) => onCardClick\(item\)\)/,
+    )
+  })
+
+  it('音频底栏的播放按钮右侧有独立全屏按钮', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function buildAudioControls'),
+      modalsArea.indexOf('/** 整张卡的最后一行'),
+    )
+    expect(fn, '缺少全屏按钮').toMatch(/hist-audio-expand/)
+    const playAt = fn.indexOf('right.appendChild(btn)')
+    const expandAt = fn.indexOf('right.appendChild(expand)')
+    expect(playAt, '播放按钮没有挂到右半区').toBeGreaterThan(-1)
+    expect(expandAt, '全屏按钮不在播放按钮右侧').toBeGreaterThan(playAt)
+    expect(fn, '全屏按钮没有打开预览').toMatch(
+      /expand\.addEventListener\('click'[\s\S]{0,200}openHistoryItem\(item\)/,
+    )
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    const rule = style.match(/\.hist-audio-expand\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(rule, '全屏按钮带边框/圆角（应与播放按钮同一套无边框样式）').toMatch(
+      /border:\s*0;[^}]*border-radius:\s*0;/,
+    )
+  })
+
+  it('历史卡的波形可点/可拖 seek（只在紧凑模式，不拦画布节点拖动）', () => {
+    expect(audioWavePlayer, '缺少波形指针 seek').toMatch(/function onWavePointerDown/)
+    expect(audioWavePlayer, '波形 seek 没有限制在紧凑模式').toMatch(/if \(!props\.compact\) return/)
+    expect(audioWavePlayer, '波形区没有接 pointerdown').toMatch(/@pointerdown="onWavePointerDown"/)
+    // 批量模式要能点波形选中卡片：波形不拦 click，只拦 pointer 手势
+    expect(audioWavePlayer, '波形上挂了 click 拦截，批量模式点波形会选不中').not.toMatch(/@click=/) 
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    expect(style, '批量模式下波形仍接收指针事件（点波形选不中整卡）').toMatch(
+      /\.hist-card--batch \.hist-card-audio-plugin[^{]*\{[^}]*pointer-events:\s*none/,
+    )
   })
 
   it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {

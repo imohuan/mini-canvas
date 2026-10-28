@@ -401,7 +401,8 @@ function seekByTrackPointer(clientX: number): void {
   seekToTime(fraction * duration.value)
 }
 
-function onKnobPointerDown(e: PointerEvent): void {
+/** 开始一次 seek（播放头与历史卡的整条波形共用同一套逻辑） */
+function beginSeek(e: PointerEvent, captureEl: HTMLElement | null): void {
   if (!props.url) return
   e.stopPropagation()
   e.preventDefault()
@@ -417,12 +418,12 @@ function onKnobPointerDown(e: PointerEvent): void {
     startLoop()
   }
   pointerClientX = e.clientX
-  knobRef.value?.setPointerCapture?.(e.pointerId)
+  captureEl?.setPointerCapture?.(e.pointerId)
   startEdgeScroll()
   armScrubIdleTimer()
 }
 
-function onKnobPointerMove(e: PointerEvent): void {
+function moveSeek(e: PointerEvent): void {
   if (!seeking) return
   e.stopPropagation()
   pointerClientX = e.clientX
@@ -430,7 +431,7 @@ function onKnobPointerMove(e: PointerEvent): void {
   seekTo(e.clientX)
 }
 
-function onKnobPointerUp(e: PointerEvent): void {
+function finishSeek(e: PointerEvent, captureEl: HTMLElement | null): void {
   if (!seeking) return
   seeking = false
   frozenStart.value = null
@@ -450,8 +451,40 @@ function onKnobPointerUp(e: PointerEvent): void {
     }
   }
   wasPlayingBeforeSeek = false
-  knobRef.value?.releasePointerCapture?.(e.pointerId)
+  captureEl?.releasePointerCapture?.(e.pointerId)
   void refreshWindowPeaks()
+}
+
+function onKnobPointerDown(e: PointerEvent): void {
+  beginSeek(e, knobRef.value)
+}
+
+function onKnobPointerMove(e: PointerEvent): void {
+  moveSeek(e)
+}
+
+function onKnobPointerUp(e: PointerEvent): void {
+  finishSeek(e, knobRef.value)
+}
+
+/**
+ * 历史卡（compact）里整条波形都能点/拖：点哪跳哪，按住拖连续 seek。
+ * 只在 compact 模式接管 —— 节点里的波形要留给画布拖拽（手势契约，别回退）。
+ */
+function onWavePointerDown(e: PointerEvent): void {
+  if (!props.compact) return
+  beginSeek(e, waveRef.value)
+  seekTo(e.clientX)
+}
+
+function onWavePointerMove(e: PointerEvent): void {
+  if (!props.compact) return
+  moveSeek(e)
+}
+
+function onWavePointerUp(e: PointerEvent): void {
+  if (!props.compact) return
+  finishSeek(e, waveRef.value)
 }
 
 /** 拖动时每次指针移动重置定时器；到点自动暂停（声音、播放头、时间轴一起停） */
@@ -645,8 +678,12 @@ defineExpose({
     <div
       ref="waveRef"
       class="aw-wave"
-      :class="{ 'is-empty': !bars.length }"
+      :class="{ 'is-empty': !bars.length, 'is-compact': compact }"
       :style="{ minHeight: waveMinHeight + 'px', '--aw-bar-width': barWidth + 'px' }"
+      @pointerdown="onWavePointerDown"
+      @pointermove="onWavePointerMove"
+      @pointerup="onWavePointerUp"
+      @pointercancel="onWavePointerUp"
     >
       <div
         v-if="bars.length"
@@ -725,6 +762,11 @@ defineExpose({
   min-height: 24px;
   overflow: hidden;
   touch-action: none;
+}
+
+/* 紧凑模式（历史卡）：整条波形是 seek 区，给个手型提示 */
+.aw-wave.is-compact {
+  cursor: pointer;
 }
 
 .aw-timeline {

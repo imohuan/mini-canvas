@@ -412,6 +412,14 @@ function onCardClick(item: HistItem): void {
   if (item.id) toggleHistSelected(item.id)
 }
 
+/**
+ * 点音频卡：**不打开全屏预览** —— 用户口径 2026-10-28：点音频要能直接拖波形换进度。
+ * 批量模式下整卡仍然负责勾选（波形那层会被 CSS 关掉 pointer-events，点哪都落到卡上）。
+ */
+function onAudioCardClick(item: HistItem): void {
+  if (s.histBatchMode && item.id) toggleHistSelected(item.id)
+}
+
 /** 历史条目类型（卡片构建函数共用；id 参与批量勾选） */
 interface HistItem {
   id?: string
@@ -577,6 +585,19 @@ function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLE
   btn.innerHTML = playIcon
   right.appendChild(duration)
   right.appendChild(btn)
+  /** 全屏预览按钮：单独一个，放在播放按钮右侧（用户口径 2026-10-28） */
+  const expand = document.createElement('button')
+  expand.type = 'button'
+  expand.className = 'hist-audio-expand'
+  expand.title = '全屏预览'
+  expand.setAttribute('aria-label', '全屏预览：' + item.title)
+  expand.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>'
+  expand.addEventListener('click', (ev) => {
+    ev.stopPropagation()
+    openHistoryItem(item)
+  })
+  right.appendChild(expand)
   const fmt = (sec: number): string => {
     if (!Number.isFinite(sec) || sec <= 0) return '0:00'
     const total = Math.round(sec)
@@ -736,7 +757,10 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
         }
       }
 
-      card.addEventListener('click', () => onCardClick(item))
+      if (isAudio) card.addEventListener('click', () => onAudioCardClick(item))
+      else card.addEventListener('click', () => onCardClick(item))
+      // 批量模式下波形让位给整卡勾选：点在波形上也要落到卡片本身
+      if (isAudio && s.histBatchMode) card.classList.add('hist-card--batch')
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
       if (isAudio && el) {
         /**
@@ -1594,6 +1618,19 @@ watch(() => s.shortcutsOpen, async (open) => {
 }
 .hist-audio-play:hover { color: var(--ui-accent, #0891b2); }
 .hist-audio-play svg { width: 11px; height: 11px; }
+/* 全屏预览：播放键右侧的独立图标按钮，同样是「无边框无圆角」（用户口径 2026-10-28） */
+.hist-audio-expand {
+  flex: none; display: inline-grid; place-items: center;
+  width: 18px; height: 18px; padding: 0; margin-left: 4px;
+  border: 0; border-radius: 0; background: transparent;
+  color: var(--ui-ink-dim, #6b7280); cursor: pointer;
+}
+.hist-audio-expand:hover { color: var(--ui-accent, #0891b2); }
+.hist-audio-expand svg { width: 11px; height: 11px; }
+.hist-audio-expand:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 2px; }
+/* 批量模式：波形与按钮都不接指针，点哪儿都落到整卡勾选（用户口径 2026-10-28） */
+.hist-card--batch .hist-card-audio-plugin,
+.hist-card--batch .hist-card-media--audio { pointer-events: none; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,

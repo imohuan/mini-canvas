@@ -87,15 +87,22 @@ describe('拖拽手感：指针在动才出声，停手即静音（第十一轮�
   })
 
   it('指针每次移动都重置定时器，且停手被暂停后能重新出声（拖动才播）', () => {
-    const moveBlock = SFC.slice(SFC.indexOf('function onKnobPointerMove'), SFC.indexOf('function onKnobPointerUp'))
+    // 播放头与历史卡整条波形共用 moveSeek；两个入口都必须转进来
+    const moveBlock = SFC.slice(SFC.indexOf('function moveSeek'), SFC.indexOf('function finishSeek'))
     expect(moveBlock).toMatch(/noteScrubActivity\(\)/)
+    expect(SFC.slice(SFC.indexOf('function onKnobPointerMove'), SFC.indexOf('function onKnobPointerUp'))).toMatch(
+      /moveSeek\(e\)/,
+    )
+    expect(SFC.slice(SFC.indexOf('function onWavePointerMove'), SFC.indexOf('function onWavePointerUp'))).toMatch(
+      /moveSeek\(e\)/,
+    )
     const noteBlock = SFC.slice(SFC.indexOf('function noteScrubActivity'), SFC.indexOf('function pauseScrub'))
     expect(noteBlock).toMatch(/play\(\)/)
     expect(noteBlock).toMatch(/armScrubIdleTimer\(\)/)
   })
 
   it('松手 / 卸载时清掉停手定时器（不留常驻计时）', () => {
-    const upBlock = SFC.slice(SFC.indexOf('function onKnobPointerUp'), SFC.indexOf('function armScrubIdleTimer'))
+    const upBlock = SFC.slice(SFC.indexOf('function finishSeek'), SFC.indexOf('function armScrubIdleTimer'))
     expect(upBlock).toMatch(/cancelScrubIdle\(\)/)
     const unmount = SFC.slice(SFC.indexOf('onBeforeUnmount'))
     expect(unmount).toMatch(/cancelScrubIdle\(\)/)
@@ -106,7 +113,7 @@ describe('拖拽手感：指针在动才出声，停手即静音（第十一轮�
   })
 
   it('松手后按"拖拽前的状态"恢复：原本暂停就回到暂停', () => {
-    const upBlock = SFC.slice(SFC.indexOf('function onKnobPointerUp'), SFC.indexOf('function runEdgeScroll'))
+    const upBlock = SFC.slice(SFC.indexOf('function finishSeek'), SFC.indexOf('function runEdgeScroll'))
     expect(upBlock).toMatch(/wasPlayingBeforeSeek/)
     expect(upBlock).toMatch(/pause\(\)/)
   })
