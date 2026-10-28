@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * ThemedButtons —— 复用主题登记按钮的展示件。
+ * ThemedButtons —— 全部使用宿主下发的内置按钮（coreButton）。
  *
- * 按钮组件由宿主经 SlotComposer 的 sharedProps 下发（coreButton），不 import 任何主题包：
- * - variant="icon"：32×32 图标按钮（与底栏内置按钮同款）；
- * - variant="text"：带文案的文本按钮。
+ * 按钮组件由 SlotComposer 的 sharedProps 下发，本文件不再自绘任何按钮：
+ * - 第一个：固定 icon 形态（网格图标）；
+ * - 第二个：按 variant 决定 icon / text（缺省 icon）。
  *
- * 宿主没给 coreButton 时退回同尺寸的原生按钮，保证单独安装也看得见入口。
+ * 宿主没给 coreButton 时不渲染按钮（内置按钮是外壳提供的，插件不复制一套样式）。
  */
 import { computed } from 'vue'
 
@@ -34,54 +34,26 @@ const isIcon = computed(() => (props.variant ?? 'icon') === 'icon')
       :is="themed"
       v-if="themed"
       :tone="buttonTone ?? 'dock'"
+      variant="icon"
       title="插槽演示：网格视图"
       :icon="ICON_GRID"
       @click="() => {}"
     />
-    <button v-else class="ssd-fallback" type="button" title="插槽演示：网格视图" @click="() => {}">
-      <span class="ssd-icon" v-html="ICON_GRID" />
-    </button>
 
     <component
       :is="themed"
       v-if="themed"
       :tone="buttonTone ?? 'dock'"
-      :title="isIcon ? '插槽演示：主题按钮111' : '插槽演示：文本按钮11'"
+      :variant="isIcon ? 'icon' : 'text'"
+      :title="isIcon ? '插槽演示：主题按钮' : '插槽演示：文本按钮'"
       :icon="isIcon ? ICON_ZAP : undefined"
       @click="() => {}"
     >
-      <template v-if="!isIcon">主题按钮11</template>
+      <template v-if="!isIcon">主题按钮</template>
     </component>
-    <button
-      v-else
-      class="ssd-fallback"
-      type="button"
-      :title="isIcon ? '插槽演示：主题按钮' : '插槽演示：文本按钮'"
-      @click="() => {}"
-    >
-      <span v-if="isIcon" class="ssd-icon" v-html="ICON_ZAP" />
-      <template v-else>主题按钮</template>
-    </button>
   </span>
 </template>
 
 <style scoped>
 .ssd-themed { display: inline-flex; align-items: center; gap: 4px; flex: none; }
-.ssd-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ntb-text, var(--ui-ink-dim, #6b7280));
-  font: 600 12px system-ui, 'Microsoft YaHei', sans-serif;
-  cursor: pointer;
-}
-.ssd-fallback:hover { background: var(--ntb-fill-hover, var(--ui-hover, rgb(0 0 0 / 0.06))); color: var(--ui-ink, #18202b); }
-.ssd-icon { display: inline-flex; align-items: center; justify-content: center; }
 </style>

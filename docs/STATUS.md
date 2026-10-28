@@ -237,6 +237,9 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
 **默认按钮**：`packages/ui/src/components/areas/SlotButtons.vue`（dock / status / tab 三档），
 宿主经 `shared-props.coreButton` 下发；插件只传 `title` / `icon` / `tone`，不再自绘尺寸与 hover。
 
+演示插件 `ThemedButtons.vue` 已全部改用宿主下发的内置按钮（不再保留自绘 fallback）；
+浏览器实测：状态条 2 个按钮 28×28、底栏 4 个按钮 32×32，class 与内置按钮同一套。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 
