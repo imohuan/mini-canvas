@@ -391,6 +391,47 @@ const mySchema = new Schema({
             return rendered
           }
         }
+        /**
+         * **按节点 id 插入的标签**（`data-id` = 上游节点 id，如 `204`）也要画成同一副卡片。
+         *
+         * 用户 2026-10-28 报「刷新后出现两种标签，一种是带下划线的文字」：
+         * 这类标签的外观全赖注册表（`itemRegistry`），而注册表是运行时态 —— 刷新/冷启动后
+         * 没有对应条目，就落到下面的默认分支（`@名字` + 下划线），和 `ref-slot:*` 的卡片
+         * 并排出现，看起来像两套 UI。
+         *
+         * 兜底规则：名字能认出类型（图片2 / 视频1 / 音频3 / 文本1）就按同一套 chip 画，
+         * 不依赖注册表。认不出（用户手打的裸引用）才走原来的默认渲染。
+         */
+        const byName = /^(图片|视频|音频|文本)\s*\d+$/.exec(String(name ?? '').trim())
+        if (byName) {
+          const nameKind =
+            byName[1] === '图片' ? 'image'
+            : byName[1] === '视频' ? 'video'
+            : byName[1] === '音频' ? 'audio'
+            : 'text'
+          /**
+           * id 用**节点自己的 id**（不是 buildSlotItem 推出来的 ref-slot:xxx）：
+           * renderEditor 里会拿 `self.id` 回注册表读最新条目，这里注册到哪个键就必须用哪个，
+           * 否则读到的是别处那份（可能没 url，画出来又是待输入虚线）。
+           */
+          const fallbackItem = buildSlotItem(nameKind, String(name ?? id))
+          const withUrl = {
+            ...fallbackItem,
+            id: String(id ?? fallbackItem.id),
+            ...(url ? { url } : {}),
+            ...(node.attrs.value ? { value: String(node.attrs.value) } : {}),
+          }
+          if (id) itemRegistry.set(String(id), withUrl)
+          const rendered = withUrl.renderEditor?.(withUrl)
+          if (rendered instanceof HTMLElement) {
+            rendered.classList.add('resource-node')
+            rendered.setAttribute('data-id', String(id ?? ''))
+            rendered.setAttribute('data-url', url || '')
+            rendered.setAttribute('data-name', String(name ?? ''))
+            rendered.setAttribute('data-category', category || '素材')
+            return rendered
+          }
+        }
         if (url) {
           const thumbUrl = thumbnail_url || getThumbnailUrlFromAssetUrl(url)
           return [
@@ -522,7 +563,13 @@ function buildSlotItem(
     // 渲染时读注册表：待输入 → 已填（连线变化）时外观要跟着变
     const latest = itemRegistry.get(self.id) ?? self
     const span = document.createElement('span')
-    const isPending = !latest.url
+    /**
+     * 「待输入」只对**靠地址判断有没有内容**的类型成立（图片/视频/音频）。
+     * 文本标签本来就没有 url（内容是 value），拿 !url 判会把已填的文本标签画成虚线待输入
+     *（用户 2026-10-28 截图里「文本1」就是虚线框）。
+     */
+    const isTextChip = kindFromName(latest.name) === 'text' && /^文本\s*\d+$/.test(String(latest.name ?? '').trim())
+    const isPending = !isTextChip && !latest.url
     span.className = 'resource-node resource-chip' + (isPending ? ' is-pending' : '')
     span.dataset.id = self.id
     span.dataset.name = latest.name
