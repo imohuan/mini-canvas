@@ -102,6 +102,28 @@ let rebuilding = false
 let filterSwitching = false
 
 /**
+ * 每个页签各自保留一面**已经建好的卡片墙**（DOM + 滚动位置 + 视频/音频实例）。
+ *
+ * 用户口径 2026-10-28：切页签 / 开批量操作时整面墙重画，视频会黑一下、音频波形会重建，
+ * 数据一多很难受。现在切走只是把墙挪到旁边存着，切回来原样挂回 —— 媒体元素完全不重建。
+ */
+interface WallSnapshot {
+  /** 墙的容器（masonry 直接挂在这上面） */
+  wall: HTMLElement
+  /** 墙里已经画了多少张（= 当时的 renderedCount） */
+  count: number
+  /** 当时的数据签名：和当前签名不一致就不复用 */
+  signature: string
+  /** 当时的列宽（缩放滑杆档位变了要重排） */
+  columnWidth: number
+  /** 滚动位置：切回来还停在原地 */
+  scrollTop: number
+}
+const wallCache = new Map<string, WallSnapshot>()
+/** 当前挂在页面上的墙属于哪个签名（'' = 还没建） */
+let mountedWallKey = ''
+
+/**
  * histZoom 滑杆 → 最小卡片宽度（px）：滑杆越大卡片越大、列数越少。
  * 瀑布流的列数随容器宽度自适应（calcColumns），这里只提供「最小列宽」。
  */
@@ -147,6 +169,11 @@ function calcColumns(containerWidth: number): { cols: number; columnWidth: numbe
   const cols = Math.max(1, Math.floor((containerWidth + GUTTER) / (minCardSize.value + GUTTER)))
   const columnWidth = Math.floor((containerWidth - GUTTER * (cols - 1)) / cols)
   return { cols, columnWidth }
+}
+
+/** 当前页签的墙缓存键（完整筛选签名；改列数/排序/范围都会换键） */
+function historyWallKey(): string {
+  return [s.histScope, s.histType, s.histRating, s.histSortDesc, s.histPageSize].join('|')
 }
 
 /** 最后一张卡可见 → 追加下一批已拉到的数据（节流交给 maybeLoadMoreBatch，见下） */
@@ -355,11 +382,31 @@ onMounted(() => {
   sentinelWatchdog = setInterval(ensureLoadSentinelAlive, 800)
 })
 
-/** 进入/退出批量模式：卡片要重画（出现/移除勾选层），退出时清空选择 */
+/**
+ * 进入/退出批量模式：**只就地增删勾选层**，绝不重建卡片墙。
+ *
+ * 用户口径 2026-10-28：点批量操作时整面墙重画，视频黑一下、音频波形重建，数据一多很难受。
+ * 卡片本身没有任何变化（勾选层是绝对定位的独立按钮），逐张增删即可。
+ */
 function toggleBatchMode(): void {
   s.histBatchMode = !s.histBatchMode
   s.histSelectedIds = []
-  if (s.historyOpen) nextTick(rebuildMasonry)
+  syncBatchOverlays()
+}
+
+/** 按当前批量状态，给已画出来的卡片增删勾选层（批量模式关着时全摘掉） */
+function syncBatchOverlays(): void {
+  const container = masonryEl.value
+  if (!container) return
+  for (const card of container.querySelectorAll<HTMLElement>('.hist-card')) {
+    const id = card.dataset.histId
+    const existing = card.querySelector('.hist-card-check')
+    if (s.histBatchMode && id && !existing) {
+      card.appendChild(buildCheckOverlay(id))
+    } else if (!s.histBatchMode && existing) {
+      existing.remove()
+    }
+  }
 }
 
 /** 监听最后一张卡：进入可视区（含下方 600px 缓冲）就追加下一批 */
@@ -886,7 +933,12 @@ function createMasonryElement(item: HistItem): HTMLElement {
 
 }
 
-/** 完整重建瀑布流（数据/筛选变更时用） */
+/**
+ * 完整重建瀑布流（**只在没有可复用墙时**用：首次打开 / 数据整表换掉 / 没有缓存）。
+ *
+ * 注意：这里是唯一会创建新卡片 DOM 的地方 —— 视频重新加载、音频重建波形都发生在这一步。
+ * 日常切页签走的是 switchWall()（复用旧墙），不会进这里。
+ */
 function rebuildMasonry(): void {
   const container = masonryEl.value
   if (!container || rebuilding) return
@@ -898,6 +950,7 @@ function rebuildMasonry(): void {
   const { columnWidth } = calcColumns(containerWidth)
   lastColumnWidth = columnWidth
   container.innerHTML = ''
+  mountedWallKey = ''
 
   const items = ui.histVisible.value.slice(0, renderedCount.value)
   for (const item of items) {
@@ -911,8 +964,9 @@ function rebuildMasonry(): void {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       if (!masonryEl.value) { rebuilding = false; return }
-      masonry.init('#' + MASONRY_ID, { itemSelector: '.' + ITEM_CLASS, columnWidth, gutter: GUTTER })
+      masonry.init(masonryEl.value, { itemSelector: '.' + ITEM_CLASS, columnWidth, gutter: GUTTER })
       rebuilding = false
+      mountedWallKey = s.histSignature || historyWallKey()
       observeLastItem()
       // 整墙重建后哨兵元素可能被换掉/才刚出现：统一在这里补挂一次观察器
       setupLoadSentinel()
@@ -940,6 +994,112 @@ function appendMasonryItems(from: number, to: number): void {
   masonry.append(wrappers)
   observeLastItem()
   fillViewportIfNeeded()
+}
+
+/**
+ * 新任务到达：在墙的最前面插入 `count` 张卡（只动新卡，已有卡片一张都不重建）。
+ *
+ * 用户口径 2026-10-28：新任务应该能被看到，但不能因此让视频黑一下、音频波形重建。
+ * 新卡来自 `histVisible` 的前 count 条；页码和滚动位置保持不变。
+ */
+function prependMasonryItems(count: number): void {
+  const container = masonryEl.value
+  if (!container || count <= 0) return
+  const columnWidth = lastColumnWidth || calcColumns(container.clientWidth).columnWidth
+  const wrappers = ui.histVisible.value.slice(0, count).map((item) => {
+    const wrapper = document.createElement('div')
+    wrapper.className = ITEM_CLASS
+    wrapper.style.width = columnWidth + 'px'
+    wrapper.style.marginBottom = GUTTER + 'px'
+    wrapper.appendChild(createMasonryElement(item))
+    return wrapper
+  })
+  masonry.prepend(wrappers)
+  renderedCount.value = Math.min(renderedCount.value + count, ui.histVisible.value.length)
+  // 数据整体多了一条：异常卡过滤掉的那部分也要跟着参与"还能不能加载"的判断
+  observeLastItem()
+}
+
+/** 卡片墙的滚动容器（AxScrollArea 内部真正滚的那一层） */
+function historyScroller(): HTMLElement | null {
+  return (masonryEl.value?.closest('.ax-sa-view') as HTMLElement | null) ?? null
+}
+
+/**
+ * 把当前墙收进缓存（切走页签 / 关面板时调用）。
+ * 只挪 DOM、不删节点：墙里所有视频/音频/图片实例原样保留，切回来直接挂回。
+ */
+function stashCurrentWall(): void {
+  const container = masonryEl.value
+  if (!container) return
+  const key = mountedWallKey || historyWallKey()
+  if (!container.querySelector('.' + ITEM_CLASS)) return
+  const wall = container.cloneNode(false) as HTMLElement
+  wall.removeAttribute('id')
+  wall.className = 'hist-masonry hist-masonry--stashed'
+  while (container.firstChild) wall.appendChild(container.firstChild)
+  wallCache.set(key, {
+    wall,
+    // 以**实际画出来的卡片数**为准：renderedCount 是跨页签共用的，直接记它会把
+    // 上一个页签的数字带进来（真机 2026-10-28：视频只有 11 张，记账却是 26）
+    count: wall.querySelectorAll('.' + ITEM_CLASS).length,
+    signature: s.histSignature || key,
+    columnWidth: lastColumnWidth,
+    scrollTop: historyScroller()?.scrollTop ?? 0,
+  })
+  mountedWallKey = ''
+  masonry.destroy()
+}
+
+/**
+ * 切到当前页签的墙：有缓存就把旧墙整块挂回来（不重建媒体元素），没有才重建。
+ *
+ * 用户口径 2026-10-28：切页签时视频黑一下、音频波形重建 —— 根因就是每次切都
+ * destroy + create。这里把「墙」当成一份可保存的状态：切走时挪进 wallCache，
+ * 切回来原样挂回，连滚动位置一起恢复。
+ */
+function switchWall(): void {
+  const container = masonryEl.value
+  if (!container) return
+  const key = historyWallKey()
+  if (mountedWallKey === key && container.querySelector('.' + ITEM_CLASS)) {
+    // 已经是这面墙：只补挂观察器（数据可能刚变过）
+    masonry.layout()
+    setupLoadSentinel()
+    return
+  }
+  if (mountedWallKey && mountedWallKey !== key) stashCurrentWall()
+
+  const cached = wallCache.get(key)
+  const containerWidth = container.clientWidth
+  const columnWidth = containerWidth > 0 ? calcColumns(containerWidth).columnWidth : lastColumnWidth
+  if (cached) {
+    container.innerHTML = ''
+    while (cached.wall.firstChild) container.appendChild(cached.wall.firstChild)
+    wallCache.delete(key)
+    renderedCount.value = cached.count
+    lastColumnWidth = cached.columnWidth
+    mountedWallKey = key
+    /**
+     * 列宽变了（拖过缩放滑杆 / 容器宽度变了）也**只改宽度**，不重建卡片：
+     * 重建就等于把视频重新加载一遍。 */
+    if (cached.columnWidth !== columnWidth) {
+      container.querySelectorAll<HTMLElement>('.' + ITEM_CLASS).forEach((w) => { w.style.width = columnWidth + 'px' })
+      lastColumnWidth = columnWidth
+    }
+    // 先把卡片挂回来再把实例指回去：masonry.init 认容器里的现有子节点
+    masonry.init(container, { itemSelector: '.' + ITEM_CLASS, columnWidth: lastColumnWidth, gutter: GUTTER })
+    syncBatchOverlays()
+    observeLastItem()
+    setupLoadSentinel()
+    const view = historyScroller()
+    if (view) view.scrollTop = cached.scrollTop
+    fillViewportIfNeeded()
+    return
+  }
+  // 没有可复用墙（或列宽变了）：这张卡从头建，属于必要的一次
+  mountedWallKey = ''
+  rebuildMasonry()
 }
 
 /** 滑杆 / 容器宽度变化：只改列宽后重排（保留 DOM，masonry 自带过渡动画） */
@@ -978,7 +1138,7 @@ onMounted(() => {
 // 弹窗打开 / 筛选变化 / 滑杆变化 / 数据到位 → 重建或重排
 watch(() => s.historyOpen, (open) => {
   if (!open) {
-    masonry.destroy()
+    stashCurrentWall()
     sentinelObserver?.disconnect()
     teardownLoadSentinel()
     if (resizeObserver && masonryEl.value) resizeObserver.unobserve(masonryEl.value)
@@ -988,7 +1148,7 @@ watch(() => s.historyOpen, (open) => {
   // 只走"追加"路径（容器刚出现、瀑布流还没 init，append 直接空转）。
   if (renderedCount.value === 0) renderedCount.value = BATCH_SIZE
   nextTick(() => {
-    rebuildMasonry()
+    switchWall()
     setupLoadSentinel()
     if (masonryEl.value) resizeObserver?.observe(masonryEl.value)
   })
@@ -996,17 +1156,11 @@ watch(() => s.historyOpen, (open) => {
 watch(() => [s.histScope, s.histType, s.histRating, s.histSortDesc] as const, () => {
   if (!s.historyOpen) return
   filterSwitching = true
-  // 不用旧数据重建（旧数据是上一个筛选的）—— 先把已渲染计数清零，容器随 v-if 之外的
-  // 内容等数据版本 watch 接管；这里只把画面上的旧卡清掉，避免"切到图片还挂着音频"。
-  // ⚠️ 不能把 renderedCount 清零：新数据到达时"渲染数 = 0"会让下面的
-  // "renderedCount < len" 分支去 append，而这时容器刚被清空、Masonry 已 destroy，
-  // 结果一张卡都插不进去 —— 用户看到的是"点音频页签没反应，还是图片"。
-  // 计数交给数据版本 watch 里按筛选切换重置即可。
-  nextTick(() => {
-    masonry.destroy()
-    const container = masonryEl.value
-    if (container) container.innerHTML = ''
-  })
+  /**
+   * 切筛选：**不销毁当前墙**，交给数据 watch 调 switchWall()。
+   * 旧实现先 destroy + 清空容器，等于抖一下白屏；视频黑屏、音频重画都从这里来。
+   * 目标页签有缓存墙时，switchWall 会在一帧内把完整墙面挂回去。
+   */
 })
 /**
  * 数据版本变化（loadHistory 落表就 +1）：用版本号而不是数组长度感知更新 ——
@@ -1016,7 +1170,11 @@ watch(() => [s.histScope, s.histType, s.histRating, s.histSortDesc] as const, ()
 watch(() => s.histDataVersion, async () => {
   const len = ui.histVisible.value.length
   if (!s.historyOpen) return
-  const switching = filterSwitching
+  /**
+   * 是否切了页签：除了筛选 watch 的标记，再用"墙上记的键 ≠ 当前键"兜底。
+   * 两个 watch 的触发顺序不保证，只看标记会在某些时序下把新页签当成追加。
+   */
+  const switching = filterSwitching || (mountedWallKey !== '' && mountedWallKey !== historyWallKey())
   if (switching) {
     filterSwitching = false
   }
@@ -1040,38 +1198,80 @@ watch(() => s.histDataVersion, async () => {
    * 后续页到达时墙已 init，被当成普通 append —— 但旧 DOM 已被清空，只剩一部分卡。
    * 等 histRestoring 落到 false 的那一拍统一重建一次，31 条全在。
    */
+  /**
+   * 已经挂着的墙还能接新卡（切回页签时后台同步多出来的新任务就是这样）：
+   * 必须在"切页签/回填"判断之前识别，否则这一拍只切墙、新卡全丢。
+   */
+  await nextTick()
+  const wallReadyForAppend = !!masonry.instance.value && mountedWallKey === historyWallKey() && !switching
+  if (wallReadyForAppend && renderedCount.value < len) {
+    const from = renderedCount.value
+    renderedCount.value = Math.min(from + BATCH_SIZE, len)
+    await nextTick()
+    appendMasonryItems(from, renderedCount.value)
+    setupLoadSentinel()
+    return
+  }
   if (s.histRestoring) {
     await nextTick()
     setupLoadSentinel()
     return
   }
-  const needsRebuild = switching || (!masonry.instance.value && len > 0)
-  if (needsRebuild) {
+  const mode = s.histUpdateMode
+  /**
+   * 数据签名换了（例如首次进视频页签）：这一拍不是"追加/插新"，必须整墙重建。
+   * 否则会把 A 页签的墙当 B 页签的墙继续用（真机 2026-10-28：图片↔视频来回切后卡数错乱）。
+   */
+  if (s.histSignature !== historyWallKey()) {
     renderedCount.value = Math.min(BATCH_SIZE, len)
-  } else if (renderedCount.value < len) {
-    const from = renderedCount.value
-    /**
-     * 一次只接一批（BATCH_SIZE），不要把剩余全部一次渲染完 ——
-     * 一次全渲染会让哨兵立刻满足"到底了"被摘掉，短列表里就再也触发不到下一批；
-     * 分批后哨兵一直存在，可视监听会顺次把余下的批次接上。
-     */
-    renderedCount.value = Math.min(from + BATCH_SIZE, len)
     await nextTick()
-    appendMasonryItems(from, renderedCount.value)
+    rebuildMasonry()
+    setupLoadSentinel()
+    return
+  }
+  await nextTick()
+  if (switching) {
+    // 切页签：有缓存墙就整块挂回（不重建媒体），没有才新建
+    switchWall()
+    setupLoadSentinel()
+    await nextTick()
+    fillViewportIfNeeded()
+    return
+  }
+  if (mode === 'prepend' && s.histUpdateCount > 0) {
+    // 新任务：只把新卡插到最前面，已有卡片（含正在播的视频）一张都不动
+    prependMasonryItems(s.histUpdateCount)
+  } else if (mode === 'append') {
+    const to = Math.min(renderedCount.value + BATCH_SIZE, len)
+    const from = renderedCount.value
+    if (from < to) {
+      renderedCount.value = to
+      await nextTick()
+      appendMasonryItems(from, to)
+    }
+  } else if (!masonry.instance.value && len > 0) {
+    renderedCount.value = Math.min(BATCH_SIZE, len)
+    await nextTick()
+    rebuildMasonry()
   } else if (renderedCount.value > len) {
     // 数据变少（异常回落）：整墙重建兜底
     renderedCount.value = Math.min(BATCH_SIZE, len)
     await nextTick()
     rebuildMasonry()
+  } else if (renderedCount.value < len) {
+    const from = renderedCount.value
+    /**
+     * 一次只接一批（BATCH_SIZE），不要把剩余全部一次渲染完 ——
+     * 一次全渲染会让哨兵立刻满足"到底了"被摘掉，短列表里就再也触发不到下一批。
+     */
+    renderedCount.value = Math.min(from + BATCH_SIZE, len)
+    await nextTick()
+    appendMasonryItems(from, renderedCount.value)
   }
   // 哨兵是 v-if（数据 + hasMore）渲染的：数据到位之前它不在 DOM 里，setup 时只能空手而归。
   // 这里在 DOM 更新完再挂一次 —— 否则"先开面板、后到数据"时永远等不到翻页（用户实测 2026-10-27）。
   // 同一元素重复调用会被 setup 里的幂等判断挡掉，不会重复观察。
   await nextTick()
-  if (needsRebuild) {
-    rebuildMasonry()
-    await nextTick()
-  }
   setupLoadSentinel()
 })
 watch(() => s.histZoom, () => {
@@ -1282,10 +1482,13 @@ watch(() => s.shortcutsOpen, async (open) => {
       <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
         <!-- masonry 瀑布流：卡片按图片原始宽高比展示，列数随容器宽自适应（照 TaskResultGalleryView）。
              卡片 DOM 由 createMasonryElement 手工构建（骨架屏/裂图回退/底部信息栏都在那里）。 -->
-        <div v-if="ui.histVisible.value.length" :id="MASONRY_ID" ref="masonryEl" class="hist-masonry"></div>
+        <!-- 卡片墙：容器**永远在**（不随数据 v-if 挂载/卸载）。切页签只是把旧墙整块
+             收进 wallCache、把目标墙挂回来 —— DOM 不重建，视频不黑、音频波形不重建。
+             墙是动态造的空 div，不交给 Vue 管内容（卡片仍由 createMasonryElement 手工建）。 -->
+        <div :id="MASONRY_ID" ref="masonryEl" class="hist-masonry"></div>
         <div v-if="s.histLoadingMoreVisible" class="hist-loading" role="status" aria-live="polite">
-          <span class="hist-loading-bar" aria-hidden="true"><i></i></span>
-          <span class="hist-loading-text">加载更多…</span>
+          <span class="hist-loading-spinner" aria-hidden="true"></span>
+          <span class="hist-loading-text">正在加载更多</span>
         </div>
         <!-- 加载下一页哨兵（用户口径 2026-10-15：禁止滚动触发）：它在滚动区最底部，
              进入可视区才拉下一页；两次拉页之间至少隔 1 秒，不会无限连发。 -->
@@ -1577,39 +1780,33 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-detail-ref-value { font-size: 11px; line-height: 1.4; color: var(--ui-ink, inherit); max-height: 68px; overflow: auto; }
 .hist-detail-ref-url { font-size: 10px; line-height: 1.35; color: var(--ui-ink-mute, #888); word-break: break-all; max-height: 68px; overflow: auto; }
 
-/* 加载更多指示：可见的细进度条 + 文案（用户口径 2026-10-28：不要藏起来） */
+/* 加载更多指示（用户口径 2026-10-28：显示 1 秒、要更清楚）。
+   中性灰阶：转圈 + 文案，居中放在列表底部；不用主题色。 */
 .hist-loading {
   pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 0 16px;
-  color: var(--ui-ink-mute, #888);
-  font-size: 12px;
+  gap: 10px;
+  padding: 16px 0;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
 }
-.hist-loading-bar {
-  position: relative;
-  overflow: hidden;
-  width: 96px;
-  height: 3px;
+.hist-loading-spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ui-line, rgb(128 128 128 / 0.25));
+  border-top-color: var(--ui-ink-dim, #6b7280);
   border-radius: 999px;
-  background: var(--ui-veil, rgb(127 127 127 / 0.16));
+  animation: hist-loading-spin 0.75s linear infinite;
 }
-.hist-loading-bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 40%;
-  border-radius: inherit;
-  background: var(--ui-ink-dim, #6b7280);
-  animation: hist-loading-sweep 1.05s ease-in-out infinite;
-}
-@keyframes hist-loading-sweep {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+@keyframes hist-loading-spin {
+  to { transform: rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hist-loading-bar i { animation: none; width: 100%; }
+  .hist-loading-spinner { animation: none; }
 }
 
 /* 下一页加载哨兵：滚动区最底部的一小块占位（IntersectionObserver 只认几何，不需要可见样式） */

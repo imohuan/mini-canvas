@@ -31,6 +31,7 @@ export interface MasonryRuntime {
   element: HTMLElement
   options: { columnWidth?: number | string; gutter?: number; [key: string]: unknown }
   appended(elements: HTMLElement[]): void
+  prepended(elements: HTMLElement[]): void
   layout(): void
   option(options: Partial<MasonryRuntime["options"]>): void
   destroy(): void
@@ -50,8 +51,9 @@ export interface MasonryOptions {
 /** useMasonry 返回值 */
 export interface UseMasonryReturn {
   instance: Ref<MasonryRuntime | null>
-  init: (containerSelector: string, options?: MasonryOptions) => Promise<void>
+  init: (target: string | HTMLElement, options?: MasonryOptions) => Promise<void>
   append: (elements: HTMLElement[]) => Promise<void>
+  prepend: (elements: HTMLElement[]) => Promise<void>
   layout: () => void
   setColumnWidth: (columnWidth: number | string) => void
   destroy: () => void
@@ -61,10 +63,10 @@ export interface UseMasonryReturn {
 export function useMasonry(): UseMasonryReturn {
   const instance = ref<MasonryRuntime | null>(null)
 
-  async function init(containerSelector: string, options: MasonryOptions = {}): Promise<void> {
-    const container = document.querySelector(containerSelector) as HTMLElement | null
+  async function init(target: string | HTMLElement, options: MasonryOptions = {}): Promise<void> {
+    const container = typeof target === 'string' ? (document.querySelector(target) as HTMLElement | null) : target
     if (!container) {
-      console.warn("[useMasonry] 容器未找到: " + containerSelector)
+      console.warn("[useMasonry] 容器未找到: " + String(target))
       return
     }
 
@@ -113,6 +115,21 @@ export function useMasonry(): UseMasonryReturn {
     })
   }
 
+  /** 在列表**最前面**插入元素（新任务到达时只补新卡，不重画已有卡片） */
+  async function prepend(elements: HTMLElement[]): Promise<void> {
+    const msnry = instance.value
+    if (!msnry || elements.length === 0) return
+    const first = msnry.element?.firstChild ?? null
+    for (const el of elements) msnry.element?.insertBefore(el, first)
+    msnry.prepended(elements)
+    const imagesLoaded = await loadImagesLoaded()
+    imagesLoaded(elements, () => {
+      requestAnimationFrame(() => {
+        instance.value?.layout()
+      })
+    })
+  }
+
   /** 手动触发完整布局重算 */
   function layout(): void {
     instance.value?.layout()
@@ -134,5 +151,5 @@ export function useMasonry(): UseMasonryReturn {
     }
   }
 
-  return { instance, init, append, layout, setColumnWidth, destroy }
+  return { instance, init, append, prepend, layout, setColumnWidth, destroy }
 }

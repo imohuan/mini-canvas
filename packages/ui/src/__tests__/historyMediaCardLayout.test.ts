@@ -162,7 +162,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     // 哨兵是 v-if；setupLoadSentinel 必须在数据版本变化 + 重建后各补一次
     const dataWatch = modalsArea.slice(modalsArea.indexOf("watch(() => s.histDataVersion"), modalsArea.indexOf("watch(() => s.histZoom"))
     expect(dataWatch, '数据到位后没有补挂哨兵观察器').toMatch(/setupLoadSentinel\(\)/)
-    expect(dataWatch, '瀑布流没实例时没有整墙重建（会排成一列且哨兵无人观察）').toMatch(/needsRebuild/)
+    expect(dataWatch, '瀑布流没实例时没有整墙重建（会排成一列且哨兵无人观察）').toMatch(/rebuildMasonry\(\)/)
 
     const rebuild = modalsArea.slice(modalsArea.indexOf('function rebuildMasonry'), modalsArea.indexOf('/** 只把新增一批'))
     expect(rebuild, '整墙重建后没有补挂哨兵观察器').toMatch(/setupLoadSentinel\(\)/)
@@ -186,15 +186,15 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(setup, '哨兵挂载时没有主动测量（初始即相交时无回调）').toMatch(/fillViewportIfNeeded\(\)/)
   })
 
-  it('加载更多有可见的加载条，且至少显示 500ms 才隐藏', () => {
-    // 用户口径 2026-10-28：接口几十毫秒就返回时，加载态一闪而过看不见 → 至少停 500ms
-    expect(uiSource, '缺少「加载态最短显示时长」常量').toMatch(/HIST_LOADING_MIN_MS\s*=\s*500/)
+  it('加载更多有可见的加载条，且至少显示 1 秒才隐藏', () => {
+    // 用户口径 2026-10-28：接口几十毫秒就返回时，加载态一闪而过看不见 → 至少停 1 秒
+    expect(uiSource, '缺少「加载态最短显示时长」常量').toMatch(/HIST_LOADING_MIN_MS\s*=\s*1000/)
     expect(uiSource, '取消加载态时没有按最短时长延迟').toMatch(/settleHistLoading/)
     const fn = uiSource.slice(uiSource.indexOf('function beginHistLoading'), uiSource.indexOf('function settleHistLoading'))
     expect(fn, '加载态没有记录起始时刻').toMatch(/histLoadingSince/)
     const tpl = modalsArea.slice(modalsArea.indexOf('hist-loading'), modalsArea.indexOf('hist-load-sentinel'))
     expect(tpl, '加载条渲染在哨兵之后/或被藏掉了').not.toBe('')
-    expect(modalsArea, '加载条没有进度动画/文案').toMatch(/hist-loading-bar|hist-loading-dot/)
+    expect(modalsArea, '加载条没有转圈/文案').toMatch(/hist-loading-spinner/)
   })
 
   it('切页签后不必靠拖缩放滑杆才会继续加载（哨兵失效能自愈）', () => {
@@ -210,12 +210,13 @@ describe('批量勾选钮样式对动态卡片生效', () => {
 
   it('切页签后回填已加载的页数，不把之前翻的页丢掉', () => {
     expect(uiSource, '没有按筛选保存「已加载到第几页」').toMatch(/histPageBySignature/)
+    expect(uiSource, '没有保存整表数据缓存（切回来要先秒还原）').toMatch(/histDataCache/)
     const watchFn = uiSource.slice(
       uiSource.indexOf('disposeHistFilterWatch = watch('),
       uiSource.indexOf('function unbindHistoryFilters'),
     )
     expect(watchFn, '切页签仍固定只拉第 1 页（之前的页数全丢）').not.toMatch(/void loadHistory\(1\)/)
-    expect(watchFn, '切页签没有回填已加载页数').toMatch(/histPageBySignature/)
+    expect(watchFn, '切页签没有走统一入口（缓存优先 + 后台同步）').toMatch(/openHistoryView\(/)
     expect(uiSource, '没有按页大小区分缓存（改列数要重拉）').toMatch(/histPageSize/)
   })
 
@@ -224,14 +225,13 @@ describe('批量勾选钮样式对动态卡片生效', () => {
       modalsArea.indexOf('watch(() => s.histDataVersion'),
       modalsArea.indexOf('watch(() => s.histZoom'),
     )
-    const guard = watchFn.indexOf('s.histRestoring')
+    const guardAt = watchFn.indexOf('if (s.histRestoring) {')
     const rebuild = watchFn.indexOf('rebuildMasonry()')
-    const append = watchFn.indexOf('appendMasonryItems(')
-    expect(guard, '数据 watch 没有识别「回填中」').toBeGreaterThan(-1)
-    expect(rebuild, '数据 watch 里找不到整墙重建').toBeGreaterThan(guard)
-    // 回填分支必须在 append 之前就 return —— 否则这一拍会把第一页画上去，后面几页再 append 就丢了
-    expect(append, '数据 watch 里没有追加分支').toBeGreaterThan(guard)
-    expect(watchFn.slice(guard, append), '回填分支没有提前 return（会先画第一页）').toMatch(/return/)
+    expect(guardAt, '数据 watch 没有识别「回填中」').toBeGreaterThan(-1)
+    expect(rebuild, '数据 watch 里找不到整墙重建').toBeGreaterThan(-1)
+    // 回填分支必须自己 return —— 否则这一拍会把第一页画上去，后面几页再 append 就丢了
+    const guardBlock = watchFn.slice(guardAt, watchFn.indexOf('const mode =', guardAt))
+    expect(guardBlock, '回填分支没有提前 return（会先画第一页）').toMatch(/return/)
     expect(uiSource, '回填结束没有补推一拍版本（弹窗不会重建）').toMatch(
       /state\.histRestoring = false[\s\S]{0,160}state\.histDataVersion \+= 1/,
     )
@@ -241,6 +241,60 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, 'ZOOM_MAX 仍是 5').toMatch(/const ZOOM_MAX = 4/)
     expect(modalsArea, '最小档位映射还留着第 5 档').not.toMatch(/5: 120/)
     expect(modalsArea, '第 4 档的宽度没有保留').toMatch(/4: 170/)
+  })
+
+  it('批量模式只增删勾选层，不重建整面墙（视频不会黑一下）', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function toggleBatchMode'),
+      modalsArea.indexOf('/** 监听最后一张卡'),
+    )
+    expect(fn, '批量模式仍整墙重建（视频黑屏 / 音频波形重建）').not.toMatch(/rebuildMasonry/)
+    expect(fn, '批量模式没有就地增删勾选层').toMatch(/syncBatchOverlays\(\)/)
+    const sync = modalsArea.slice(
+      modalsArea.indexOf('function syncBatchOverlays'),
+      modalsArea.indexOf('/** 监听最后一张卡'),
+    )
+    expect(sync, '勾选层没有加到卡片上').toMatch(/appendChild\(buildCheckOverlay/)
+    expect(sync, '退出批量模式没有摘掉勾选层').toMatch(/\.remove\(\)/)
+  })
+
+  it('切页签复用已建好的卡片墙（不重新创建视频/音频元素）', () => {
+    expect(modalsArea, '没有保存每个页签的墙').toMatch(/wallCache/)
+    expect(modalsArea, '切走时没有收墙（会直接销毁 DOM）').toMatch(/function stashCurrentWall/)
+    expect(modalsArea, '切回来没有挂回旧墙').toMatch(/function switchWall/)
+    const stash = modalsArea.slice(
+      modalsArea.indexOf('function stashCurrentWall'),
+      modalsArea.indexOf('function switchWall'),
+    )
+    expect(stash, '收墙时把卡片节点删掉了（媒体会重建）').not.toMatch(/innerHTML = ''/)
+    expect(stash, '收墙没有记住滚动位置').toMatch(/scrollTop/)
+    // 旧实现里"先 destroy + 清空"的那段会导致切页签闪一下，不能再回来
+    const filterWatch = modalsArea.slice(
+      modalsArea.indexOf("watch(() => [s.histScope"),
+      modalsArea.indexOf('watch(() => s.histDataVersion'),
+    )
+    expect(filterWatch, '切页签仍先清空容器（会黑屏/重建波形）').not.toMatch(/innerHTML = ''/)
+    expect(filterWatch, '切页签仍先销毁瀑布流').not.toMatch(/masonry\.destroy\(\)/)
+
+    // 批量模式下的勾选层：卡片本身带 hist-card-check 的不许再走"重建"
+    const batchFn = modalsArea.slice(
+      modalsArea.indexOf('function toggleBatchMode'),
+      modalsArea.indexOf('/** 监听最后一张卡'),
+    )
+    expect(batchFn, '批量操作仍在下一帧重建整墙').not.toMatch(/rebuildMasonry/)
+  })
+
+  it('新任务到达只把新卡插到最前面（不整墙重画）', () => {
+    expect(uiSource, '上下文中没有 prepend 这种更新方式').toMatch(/histUpdateMode = fresh\.length > 0 \? 'prepend' :/)
+    expect(modalsArea, '缺少插到最前面的渲染函数').toMatch(/function prependMasonryItems/)
+    expect(modalsArea, '没有把新卡插到最前面').toMatch(/masonry\.prepend\(wrappers\)/)
+    const subscribeFn = uiSource.slice(
+      uiSource.indexOf('function bindHistoryUpdates'),
+      uiSource.indexOf('function unbindHistory'),
+    )
+    const subscribeBody = subscribeFn.slice(subscribeFn.indexOf('svc.subscribe('))
+    expect(subscribeBody, '收到新任务信号仍按当前页码整页重拉').not.toMatch(/loadHistory\(\)/)
+    expect(subscribeFn, '收到新任务信号没有同步最新第 1 页').toMatch(/syncLatestHistory\(/)
   })
 
   it('是否还有下一页按 total 判断（末页刚好满页不会白拉一次空页）', () => {

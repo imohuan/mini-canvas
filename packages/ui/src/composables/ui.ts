@@ -290,6 +290,10 @@ function createUi() {
     histLoadingFirst: false,
     /** 正在按缓存回填多页：卡片墙要等全部页落地后一次重建（中途 append 会空转） */
     histRestoring: false,
+    /** 最近一次落表的更新方式：prepend（只插新卡）/ append（接上下一页）/ rebuild（整表换血）/ none */
+    histUpdateMode: 'rebuild' as 'rebuild' | 'append' | 'prepend' | 'none',
+    /** 这次更新带了多少条（prepend/append 时是新增卡数） */
+    histUpdateCount: 0,
     /** 加载条起始时刻（毫秒时间戳；0 = 没在显示） */
     histLoadingShownAt: 0,
     /** 加载更多条是否可见（首屏第 1 页不显示） */
@@ -911,6 +915,18 @@ function createUi() {
    */
   const histPageBySignature = new Map<string, number>()
   /**
+   * 每个筛选条件已经拉到的整表数据（内存缓存）。
+   * 切页签不再清空重拉：先恢复这份数据 + 瀑布流 DOM，视频不黑屏、音频波形不重建；
+   * 随后在后台刷新第 1 页，新生成的任务只**插到最前面**，不重画已有卡片。
+   */
+  const histDataCache = new Map<string, {
+    items: typeof state.historyItems
+    page: number
+    hasMore: boolean
+    total: number
+    summary: typeof state.historySummary
+  }>()
+  /**
    * 「整表重拉」在途计数：第 1 页（含按缓存回填的多页）还没落地。
    * >0 时补页**排队**等它完成 —— 不能像旧实现那样直接 return 丢掉
    * （用户实测 2026-10-28：切页签后滚到底再也不加载，得拖一下缩放滑杆才恢复）。
@@ -922,6 +938,8 @@ function createUi() {
    * 否则第 2 页到达时新墙还没 init，append 空转 → 31 条只画出 17 张（真机 2026-10-28）。
    */
   let historyRestoring = false
+  /** 后台刷新第 1 页的在途标记：避免同一切换连发多次 */
+  let historyRefreshing = false
   /** 补页被挡下时的排队标记 */
   let histLoadMoreQueued = false
   /** 排队重试定时器（兜底：万一没有 finally 触发，也能自己续上） */
@@ -939,11 +957,12 @@ function createUi() {
     }
     state.histLoadingFirst = false
     historyRestoring = false
+    historyRefreshing = false
     return historyFilterEpoch
   }
 
-  /** 加载条最短显示时长（毫秒）：接口再快也要让用户看见（用户口径 2026-10-28） */
-  const HIST_LOADING_MIN_MS = 500
+  /** 加载条最短显示时长（毫秒）：接口再快也要让用户看清（用户口径 2026-10-28：改 1 秒） */
+  const HIST_LOADING_MIN_MS = 1000
   /** 本轮「加载更多」的起始时刻（0 = 没在显示） */
   let histLoadingSince = 0
   let histLoadingHideTimer: ReturnType<typeof setTimeout> | null = null
@@ -962,6 +981,12 @@ function createUi() {
     state.histLoadingMore = true
     state.histLoadingMoreVisible = true
     return token
+  }
+
+  /** 这一轮加载至少还要显示多久（毫秒）——弹窗据此把加载条"/占位"再撑一会儿 */
+  function histLoadingRemainingMs(): number {
+    if (!histLoadingSince) return 0
+    return Math.max(0, HIST_LOADING_MIN_MS - (Date.now() - histLoadingSince))
   }
 
   /** 第 1 页开始/结束：用计数而不是布尔，快速连点页签时不会被旧请求的 finally 提前清掉 */
@@ -1111,19 +1136,53 @@ function createUi() {
         }))
         // 追加式分页：第 1 页（或筛选切换后回到第 1 页）替换整表；后续页**追加**
         if (pageNo <= 1) {
-          state.historyItems = mapped
+          /**
+           * 只有「同一套筛选已经在表里」时才走"只插新卡"。
+           * 首次进入某个页签时表里还留着上一个页签的数据（签名不同），
+           * 这时必须整表替换 —— 否则会把图片 60 条和视频 20 条拼成 80 条
+           * （真机 2026-10-28 实测的回归）。
+           */
+          if (isRestore && state.historyItems.length > 0 && state.histSignature === signature) {
+            /**
+             * 后台同步第 1 页：**只把新任务插到最前面**，已有卡片一律保留。
+             * 用户口径 2026-10-28：不能因为来了新任务就整墙重画（视频会黑一下、
+             * 音频波形会重建）。按 id 去重后 unshift，天然按新→旧排列。
+             */
+            const known = new Set(state.historyItems.map((e) => e.id))
+            const fresh = mapped.filter((e) => !known.has(e.id))
+            if (fresh.length > 0) state.historyItems.unshift(...fresh)
+            state.histUpdateMode = fresh.length > 0 ? 'prepend' : 'none'
+            state.histUpdateCount = fresh.length
+            state.histHasMore = state.historyItems.length < page.total
+          } else {
+            state.historyItems = mapped
+            state.histUpdateMode = 'rebuild'
+            state.histUpdateCount = mapped.length
+            state.histPage = pageNo
+            state.histHasMore = page.page * page.pageSize < page.total
+          }
         } else {
           state.historyItems.push(...mapped)
+          state.histUpdateMode = 'append'
+          state.histUpdateCount = mapped.length
+          state.histPage = pageNo
+          state.histHasMore = page.page * page.pageSize < page.total
         }
         state.histSignature = signature
-        state.histPage = pageNo
         // 回填期间落表的每一页都带这个标记：弹窗据此整墙重建（不中途 append）
         state.histRestoring = historyRestoring
         state.historySummary = page.summary
         state.histTotal = page.total
-        state.histHasMore = page.page * page.pageSize < page.total
         // 记下这套筛选已经加载到第几页：切走再切回来时一次补齐（用户口径 2026-10-28）
         histPageBySignature.set(signature, pageNo)
+        // 整表快照进内存缓存：下次切回来先显示它，再后台同步新任务（不闪白、不重建媒体）
+        histDataCache.set(signature, {
+          items: state.historyItems.map((e) => ({ ...e })),
+          page: state.histPage,
+          hasMore: state.histHasMore,
+          total: state.histTotal,
+          summary: state.historySummary,
+        })
         state.histDataVersion += 1
         state.historyReady = true
       } catch (err) {
@@ -1657,7 +1716,15 @@ function createUi() {
     disposeHistorySub = undefined
     const svc = readyHost?.ctx?.get<{ subscribe(fn: () => void): () => void }>('gen-history')
     if (!svc || typeof svc.subscribe !== 'function') return
-    disposeHistorySub = svc.subscribe(() => void loadHistory())
+    /**
+     * 收到「有新任务」信号：只后台同步当前页签的第 1 页，新卡片插到最前面。
+     * 旧实现是按当前页码整页重拉，新任务要多翻一页才看得到，而且会整表替换 → 墙重画。
+     * 用户口径 2026-10-28：新任务必须能看到，但不能让视频黑一下、音频波形重建。
+     */
+    disposeHistorySub = svc.subscribe(() => {
+      if (!state.historyOpen) return
+      void syncLatestHistory(historySignature())
+    })
   }
 
   /** 撤掉历史订阅（宿主销毁时调用） */
@@ -1681,18 +1748,14 @@ function createUi() {
       () => [state.histScope, state.histType, state.histRating, state.histSortDesc, state.histPageSize],
       () => {
         if (!state.historyOpen) return
-        // 切筛选：作废在途请求（旧页签/旧排序的第 2 页晚到会盖掉新页签的数据）
-        resetHistoryRequest()
         /**
-         * 切回一个已经翻过页的筛选（图片 → 视频 → 图片）时，把**之前加载到的页数**补齐，
-         * 而不是只拉第 1 页：旧实现每次切换都回到 20 条，用户以为数据丢了
-         * （2026-10-28 实测：图片原来 31 条，切回来只剩 11 条）。
-         * 缓存键是完整签名（含页大小），改列数滑杆自然回到第 1 页。
+         * 切筛选：先秒还原缓存（不重建视频/音频），再后台同步最新第 1 页；
+         * 没有缓存的页签才回填。缓存键是完整签名（含页大小），改列数滑杆自然回到第 1 页。
+         * 走 openHistoryView 还能保证"作废旧请求 + 期间补页排队"两条不丢。
          */
         const signature = historySignature()
-        const cached = histPageBySignature.get(signature) ?? 1
         state.histPage = 1
-        void restoreHistoryPages(signature, Math.max(1, cached))
+        openHistoryView(signature)
       },
     )
   }
@@ -1720,6 +1783,59 @@ function createUi() {
       state.histDataVersion += 1
       noteFirstPageEnd()
     }
+  }
+
+  /**
+   * 切回一个页签 / 重新打开面板：**先用内存缓存把画面一秒还原**，再后台同步第 1 页。
+   *
+   * 用户口径 2026-10-28：切页签时视频会黑一下、音频波形重建，数据一多很难受。
+   * 所以这里不再清空重拉：缓存命中就直接落表（弹窗只换 DOM，不重建媒体元素），
+   * 然后 fetch 第 1 页做 diff —— 新任务插到最前面，其他卡片保持不动。
+   */
+  function showCachedHistory(signature: string): boolean {
+    const cached = histDataCache.get(signature)
+    if (!cached) return false
+    state.historyItems = cached.items.map((e) => ({ ...e }))
+    state.histPage = cached.page
+    state.histHasMore = cached.hasMore
+    state.histTotal = cached.total
+    state.historySummary = cached.summary
+    state.histSignature = signature
+    state.histUpdateMode = 'rebuild'
+    state.histUpdateCount = cached.items.length
+    state.histDataVersion += 1
+    state.historyReady = true
+    return true
+  }
+
+  /** 后台同步第 1 页（只补新任务，不整墙重画） */
+  async function syncLatestHistory(signature: string): Promise<void> {
+    if (historyRefreshing) return
+    historyRefreshing = true
+    try {
+      await loadHistory(1, signature, true)
+    } finally {
+      historyRefreshing = false
+    }
+  }
+
+  /**
+   * 打开历史的统一入口（切页签 / 重新开面板 / 收到新任务信号都走它）：
+   * 有缓存 → 秒还原 + 后台同步；没缓存 → 按缓存的页数补齐。
+   */
+  function openHistoryView(signature: string = historySignature()): void {
+    const epoch = resetHistoryRequest()
+    const cachedPages = histPageBySignature.get(signature) ?? 1
+    const shown = showCachedHistory(signature)
+    if (shown) {
+      // 显示缓存后先别让补页抢跑：后台同步落地再放行
+      noteFirstPageStart()
+      void syncLatestHistory(signature).finally(() => {
+        if (epoch === historyFilterEpoch) noteFirstPageEnd()
+      })
+      return
+    }
+    void restoreHistoryPages(signature, cachedPages)
   }
 
   /** 撤掉筛选 watch（宿主销毁时调用） */
@@ -2399,10 +2515,8 @@ function createUi() {
      * 只拉第 1 页会让用户以为之前翻的页丢了（用户口径 2026-10-28）。
      */
     resetHistoryRequest()
-    const signature = historySignature()
-    const cached = histPageBySignature.get(signature) ?? 1
     state.histPage = 1
-    void restoreHistoryPages(signature, Math.max(1, cached))
+    openHistoryView()
   }
   function toggleLeftCollapsed(): void {
     state.leftCollapsed = !state.leftCollapsed
