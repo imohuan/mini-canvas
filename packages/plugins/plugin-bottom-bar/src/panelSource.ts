@@ -503,6 +503,24 @@ export function previewListFor(
  */
 export type MediaKind4 = 'image' | 'video' | 'audio' | 'text'
 
+/**
+ * 素材 → **唯一的标签身份**：`ref-slot:<kind>:<序号>`（用户 2026-10-28 统一 id）。
+ *
+ * 序号取自 refName（图片3 → image:3），和「标记」从文本转出来的标签完全同一套；
+ * 认不出的名字（用户自定标签）返回 null，调用方沿用上游节点 id。
+ */
+export function refSlotIdOf(m: { kind?: string; refName?: string }): string | null {
+  const kind =
+    m.kind === 'image' ? 'image'
+    : m.kind === 'video' ? 'video'
+    : m.kind === 'audio' ? 'audio'
+    : m.kind === 'text' ? 'text'
+    : null
+  const index = /(\d+)\s*$/.exec(String(m.refName ?? ''))
+  if (!kind || !index) return null
+  return 'ref-slot:' + kind + ':' + Number(index[1])
+}
+
 /** 每种类型的 svg 路径（24 视图，stroke 风格与画布节点图标同一套） */
 export const MEDIA_ICON_PATHS: Record<MediaKind4, string> = {
   image: 'M3 4h18v16H3z M3 17l5-5 4 4 3-3 6 6 M8.5 9.5a1.5 1.5 0 1 0 0-.001',
@@ -652,7 +670,14 @@ export function toEditorResources(
   return materials.map((m) => {
     // name 用**带序号的引用名**（图片1 / 视频1）：它同时是 @ 下拉的显示名、
     // 插入后的卡片文案、以及纯文本序列化出来的 token —— 三处一致，用户看得懂。
-    const base: ResourceItem = { id: m.id, name: m.refName, category: '素材' }
+    /**
+     * 标签身份统一成 `ref-slot:<kind>:<N>`（用户 2026-10-28）。
+     *
+     * 以前这里用上游节点 id（`204`），和「标记」转出来的 `ref-slot:*` 不是一种东西；
+     * 刷新后注册表一空，节点 id 那类标签就退化成下划线文字（「两种标签」的根因）。
+     * 现在两种插入方式落进文档的 id 完全相同，缩略图刷新也只需认这一种。
+     */
+    const base: ResourceItem = { id: refSlotIdOf(m) ?? m.id, name: m.refName, category: '素材' }
     if (m.kind === 'text') {
       return {
         ...base,

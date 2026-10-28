@@ -197,15 +197,17 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect(materials.map((m) => m.kind).sort()).toEqual(['image', 'text', 'video'])
     const items = toEditorResources(materials)
     expect(items).toHaveLength(3)
-    // 每一项都要有 id（@token = 上游节点 id）与 name（下拉里显示）
+    // 每一项都要有 id（@token）与 name（下拉里显示）
     for (const it of items) {
       expect(it.id).toBeTruthy()
       expect(it.name).toBeTruthy()
     }
+    // 标签身份统一成 ref-slot:<kind>:<N>（用户 2026-10-28：两种 id 合并成一种）
+    expect(items.map((i) => i.id).sort()).toEqual(['ref-slot:image:1', 'ref-slot:text:1', 'ref-slot:video:1'])
     // 文本走 value、图片/视频走 url 与 mediaType（编辑器据此画缩略图/播放）
-    const text = items.find((i) => i.id === 't1')
-    const img = items.find((i) => i.id === 'i1')
-    const vid = items.find((i) => i.id === 'v1')
+    const text = items.find((i) => i.name === '文本1')
+    const img = items.find((i) => i.name === '图片1')
+    const vid = items.find((i) => i.name === '视频1')
     expect(text?.value).toBe('一段文字')
     expect(img?.url).toBeTruthy()
     expect(img?.mediaType).toBe('image')
@@ -241,7 +243,7 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect(items.map((i) => i.name)).toEqual(['图片1', '文本1', '图片2', '视频1'])
   })
 
-  it('@ 引用回查：token 是引用名（图片1）或老的节点 id 都能回查', () => {
+  it('@ 引用回查：token 是引用名（图片1）或标签 id 都能回查', () => {
     const materials = collectUpstreamMaterials(
       [{ source: 'i1', target: '35' }],
       '35',
@@ -249,8 +251,9 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     )
     const items = toEditorResources(materials)
     const resolve = makeResourceResolver(items)
-    expect(resolve('图片1')?.id).toBe('i1')
-    expect(resolve('i1')?.name).toBe('图片1')
+    // 身份统一成 ref-slot:image:1；老的节点 id 回查由纯文本回填那条路兜（resolver 只认名字/id）
+    expect(resolve('图片1')?.id).toBe('ref-slot:image:1')
+    expect(resolve('ref-slot:image:1')?.name).toBe('图片1')
     expect(resolve('不存在')).toBeNull()
   })
 
@@ -267,8 +270,10 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
           : { type: 'image', data: { imageUrl: 'https://x/a.png', label: '猫' } },
     )
     const items = toEditorResources(materials)
-    const imgSpec = items.find((i) => i.id === 'i1')!.renderEditor!(items.find((i) => i.id === 'i1')!) as unknown[]
-    const textSpec = items.find((i) => i.id === 't1')!.renderEditor!(items.find((i) => i.id === 't1')!) as unknown[]
+    const imgItem = items.find((i) => i.name === '图片1')!
+    const textItem = items.find((i) => i.name === '文本1')!
+    const imgSpec = imgItem.renderEditor!(imgItem) as unknown[]
+    const textSpec = textItem.renderEditor!(textItem) as unknown[]
     // 外层 span：resource-chip 卡片类
     expect((imgSpec[1] as Record<string, string>).class).toContain('resource-chip')
     // 卡内是缩略图 + 名字两段（图片用 img，文本用图标）

@@ -1437,13 +1437,20 @@ function refreshSlotChips(): void {
     }
     const nodeId = tile.key.replace(/^card:/, '')
     // 同上：带上 renderEditor，保证 chip 外观与资源面板插入的一致
-    const resItem = editorResources.value.find((r) => r.id === nodeId)
+    // 统一 id 之后，资源项按 ref-slot:* 存，按 nodeId 找不到 → 顺带按节点 id 兜一次
+    const resItem =
+      editorResources.value.find((r) => r.id === item.id) ??
+      editorResources.value.find((r) => r.id === nodeId)
     if (resItem) item.renderEditor = resItem.renderEditor
     registerItem(item)
     // 用户口径（2026-10-27）：正文里「图片N」的缩略图 = 该类型数组排序后的第 N 项。
-    // 名字绝不改写；id 两种身份都要给：节点 id（资源面板插入的标签）与
-    // ref-slot:kind:slotIndex（「标记」转出来的标签）。
-    const thumbIds = [nodeId, 'ref-slot:' + kind + ':' + tile.slotIndex].filter(Boolean)
+    /**
+     * 名字绝不改写；缩略图按**序号**定位。
+     *
+     * id 已统一成 ref-slot:<kind>:<N>（用户 2026-10-28），这里仍然多带一个 nodeId：
+     * 老存档里还有按节点 id 存的标签，刷新时要能一起更新，不至于留一堆旧图。
+     */
+    const thumbIds = ['ref-slot:' + kind + ':' + tile.slotIndex, nodeId].filter(Boolean)
     editorComponentRef.value?.replaceResourceThumbByIds?.(
       thumbIds,
       kind === 'video' ? (videoThumbOf(tile.url) ?? '') : (tile.url ?? ''),

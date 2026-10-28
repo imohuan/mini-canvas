@@ -1023,8 +1023,19 @@ export function parsePlainTextToContent(
   return content
 }
 function buildResourceNode(nodeType: any, item: ResourceItem): any {
+  /**
+   * 标签身份**统一**成 `ref-slot:<kind>:<N>`（用户 2026-10-28 明确要求）。
+   *
+   * 以前两种写法并存：@ 下拉插入用上游节点 id（如 `204`），「标记」转换用 `ref-slot:*`。
+   * 同一颗标签两种身份，刷新后注册表一空，节点 id 那种就画成下划线文字 ——
+   * 用户看到的就是「两种标签」。现在不论从哪条路进来，落进文档的 id 都是同一个。
+   *
+   * 只有名字能认出类型（图片N/视频N/音频N/文本N）才改写；技能/MCP/资产那类引用
+   * 有自己的 id 规则（item.ref），保持原样。
+   */
+  const canonicalId = item.ref ? item.id : slotIdFromName(item.name) ?? item.id
   return nodeType.create({
-    id: item.id,
+    id: canonicalId,
     name: item.name,
     category: item.category || 'resource',
     url: item.url || '',
@@ -1036,6 +1047,50 @@ function buildResourceNode(nodeType: any, item: ResourceItem): any {
     refExt: item.ref?.ext || '',
     refFolderId: item.ref?.folderId || '',
   })
+}
+
+/**
+ * 由引用名推出**唯一的标签身份**：图片3 → `ref-slot:image:3`。
+ * 认不出（技能名、资产名、用户手打的自由文本）返回 null，调用方沿用原 id。
+ */
+export function slotIdFromName(name: string | null | undefined): string | null {
+  const s = String(name ?? '').trim()
+  const m = /^(图片|视频|音频|文本)\s*(\d+)$/.exec(s)
+  if (!m) return null
+  const kind =
+    m[1] === '图片' ? 'image'
+    : m[1] === '视频' ? 'video'
+    : m[1] === '音频' ? 'audio'
+    : 'text'
+  return 'ref-slot:' + kind + ':' + Number(m[2])
+}
+
+/**
+ * 把老存档里「按上游节点 id 存」的素材标签就地改成 `ref-slot:<kind>:<N>`。
+ *
+ * 递归重建（ProseMirror 节点不可变，不能直接改 attrs）；没命中的节点**原样返回**，
+ * 于是内容没变时 `=== doc`，调用方可以据此跳过事务。
+ */
+export function migrateLegacyChipIds(doc: PMNode): PMNode {
+  const walk = (node: PMNode): PMNode => {
+    if (node.type.name === 'resource') {
+      const id = String(node.attrs.id ?? '')
+      if (id.startsWith('ref-slot:')) return node
+      const canonical = slotIdFromName(String(node.attrs.name ?? ''))
+      if (!canonical) return node
+      return node.type.create({ ...node.attrs, id: canonical }, null, node.marks)
+    }
+    if (node.childCount === 0) return node
+    let changed = false
+    const kids: PMNode[] = []
+    node.forEach((child) => {
+      const next = walk(child)
+      if (next !== child) changed = true
+      kids.push(next)
+    })
+    return changed ? node.type.create(node.attrs, kids, node.marks) : node
+  }
+  return walk(doc)
 }
 
 /**
@@ -1309,7 +1364,17 @@ export function useEditor(
           itemRegistry.set(id, buildSlotItem(slotKind, String(node.attrs?.name ?? id)))
         }
       })
-      const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
+      /**
+       * 老存档迁移（用户 2026-10-28 统一 id）：
+       * 以前 @ 下拉插入的标签存的是**上游节点 id**（如 `204`），现在统一成
+       * `ref-slot:<kind>:<N>`。
+       *
+       * 只认「名字能认出类型」的（图片N/视频N/音频N/文本N）；技能/MCP/资产那类引用
+       * 有自己的 id 语义，绝不改。迁移走**重建节点**（node.type.create），不动旧 attrs ——
+       * ProseMirror 的节点是不可变的，直接改字段不会生效。
+       */
+      const migrated = migrateLegacyChipIds(doc)
+      const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, migrated.content);
       view.dispatch(tr);
       emit("update:modelValue", getPlainText());
     } catch (error) {
@@ -1427,13 +1492,19 @@ export function useEditor(
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return
 
+    const node = buildResourceNode(nodeType, item)
     const tr = view.state.tr.replaceWith(
       from - 1 - mentionQuery.value.length,
       from,
-      buildResourceNode(nodeType, item),
+      node,
     )
     tr.insertText(" ")
-    itemRegistry.set(item.id, item)
+    /**
+     * 注册到**落进文档的那个 id**（统一后的 ref-slot:*），不是菜单项的原始 id。
+     * toDOM 拿 node.attrs.id 回查注册表，注册键对不上就会落回默认渲染（下划线文字）。
+     */
+    const actualId = String(node.attrs?.id ?? item.id)
+    itemRegistry.set(actualId, actualId === item.id ? item : { ...item, id: actualId })
     view.dispatch(tr)
     emit("resource-insert", item)
     hideMenu()
@@ -1904,6 +1975,7 @@ export function useEditor(
     if (!view) return
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return
+    // 先登记一次（后面按落进文档的 id 再对齐，保证 toDOM 查得到）
     itemRegistry.set(item.id, item)
     // 光标不在编辑器里（用户刚点了工具栏按钮）时，退到文末再插：
     // 否则会插到旧的 selection 位置，甚至因为 selection 失效而插错地方。
@@ -1912,11 +1984,10 @@ export function useEditor(
       if (end) view.dispatch(view.state.tr.setSelection(end))
     }
     const { from, to } = view.state.selection
-    const tr = view.state.tr.replaceWith(
-      from,
-      to,
-      buildResourceNode(nodeType, item),
-    )
+    const node = buildResourceNode(nodeType, item)
+    const actualId = String(node.attrs?.id ?? item.id)
+    if (actualId !== item.id) itemRegistry.set(actualId, { ...item, id: actualId })
+    const tr = view.state.tr.replaceWith(from, to, node)
     tr.insertText(' ')
     view.dispatch(tr)
     emit('resource-insert', item)
@@ -2050,6 +2121,17 @@ export function useEditor(
    */
   function refreshChips(): void {
     if (!view) return
+    /**
+     * 先做一次 id 迁移（用户 2026-10-28 统一标签身份）。
+     * 为什么放在这里：老存档里按节点 id 存的标签要变成 ref-slot:*；
+     * 这个函数正是「底栏数据变化后统一刷一遍」的入口，挂载后也会跑一次。
+     * 迁移没命中时返回同一个 doc，不会产生多余事务。
+     */
+    const before = view.state.doc
+    const migrated = migrateLegacyChipIds(before)
+    if (migrated !== before) {
+      view.dispatch(view.state.tr.replaceWith(0, before.content.size, migrated.content))
+    }
     // 注册表已更新（调用方先 itemRegistry.set），toDOM 每次渲染都会读 ——
     // 这里用一行**无操作事务**（带标记）逼 ProseMirror 重画这些节点：
     // setNodeMarkup 用原 attrs 也会触发 toDOM 重建（注册表已新，外观即为新）。
