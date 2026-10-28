@@ -395,7 +395,8 @@
 .preview-box {
   position: fixed;
   z-index: 1000;
-  max-width: 400px;
+  /* 与图片的 max-width 对齐：容器先卡 400 的话，宽幅素材会先被压窄、高度白留一截 */
+  max-width: 480px;
   background: #000;
   border-radius: 8px;
   overflow: hidden;
@@ -423,21 +424,25 @@
 
 .preview-box .preview-image {
   /*
-   * hover 预览用**固定方块 + cover**（用户 2026-10-28）：
-   * 长图（竖构图）按 contain 会变成一条竖长条，既看不清又占地方；
-   * 固定 320×320 + cover 裁进方块，跟卡片本身的观感一致。
+   * hover 预览按**素材自身的宽高比**显示，只限制高度（用户 2026-10-28 第四轮）：
+   * 固定方块 + cover 会把长方形的视频裁成正方形，主体被裁掉。
+   * 这里 height 自动、max-height 200px：浏览器等比缩小，横图变宽、竖图变高，绝不裁切。
    */
-  width: 320px;
-  height: 320px;
-  object-fit: cover;
+  max-height: 200px;
+  max-width: 480px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   display: block;
 }
 
 .preview-box .preview-video {
-  /* 与图片同一套框（视频帧图也按 cover 填满方块） */
-  width: 320px;
-  height: 320px;
-  object-fit: cover;
+  /* 与图片同一套规则：只限高度、按原比例 */
+  max-height: 200px;
+  max-width: 480px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   display: block;
 }
 

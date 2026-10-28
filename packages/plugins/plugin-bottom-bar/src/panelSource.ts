@@ -658,6 +658,18 @@ export function toEditorResources(
         ...base,
         value: m.value,
         icon: TEXT_ICON,
+        /**
+         * 文本也要走**同一套行渲染**（用户 2026-10-28 报：「文本图标只有 16px，对不上」）。
+         *
+         * 为什么必须给 renderItem：不给时编辑器走默认分支 —— 左侧是 `<span class="item-icon">`
+         * 里塞 16×16 的 svg，而图片/视频/音频那几行走的是 22×22 的 `mention-kind`。
+         * 两套尺寸混在一列里，左边永远对不齐。
+         */
+        renderItem: (self) =>
+          h('span', { class: 'mention-resource' }, [
+            h('span', { class: 'mention-kind', 'data-kind': 'text' }),
+            h('span', { class: 'mention-name' }, self.name),
+          ]),
         renderEditor: resourceEditorSpec,
       }
     }
