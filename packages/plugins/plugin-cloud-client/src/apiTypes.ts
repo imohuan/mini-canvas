@@ -74,6 +74,8 @@ export interface HistoryQueryInput {
   rating?: string
   order?: 'asc' | 'desc'
   canvasId?: string
+  /** 取消信号（切页签时丢弃过期请求；不影响服务端） */
+  signal?: AbortSignal
 }
 
 /** 注入点：默认用全局 fetch（测试换成假货，不必起服务） */

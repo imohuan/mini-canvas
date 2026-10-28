@@ -132,6 +132,43 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(setup, '同一哨兵重复 setup 会重复观察').toMatch(/observedSentinel/)
   })
 
+  it('列表不足一屏时主动补拉下一页（不再只等 observer 回调）', () => {
+    // 根因：首屏大量记录被过滤后列表比弹窗还短，哨兵一直可见 → observer 不再回调
+    expect(modalsArea, '缺少"哨兵是否在视口内"的主动测量').toMatch(/function isSentinelInView/)
+    expect(modalsArea, '缺少主动补拉入口').toMatch(/function fillViewportIfNeeded/)
+
+    const rebuild = modalsArea.slice(modalsArea.indexOf('function rebuildMasonry'), modalsArea.indexOf('/** 只把新增一批'))
+    expect(rebuild, '整墙重建后没有补拉（列表仍不足一屏就停住）').toMatch(/fillViewportIfNeeded\(\)/)
+
+    const append = modalsArea.slice(modalsArea.indexOf('function appendMasonryItems'), modalsArea.indexOf('/** 滑杆 / 容器宽度变化'))
+    expect(append, '追加一批后没有补拉（还是短列表）').toMatch(/fillViewportIfNeeded\(\)/)
+
+    const setup = modalsArea.slice(modalsArea.indexOf('function setupLoadSentinel'), modalsArea.indexOf('function teardownLoadSentinel'))
+    expect(setup, '哨兵挂载时没有主动测量（初始即相交时无回调）').toMatch(/fillViewportIfNeeded\(\)/)
+  })
+
+  it('是否还有下一页按 total 判断（末页刚好满页不会白拉一次空页）', () => {
+    expect(uiSource, '仍用"本页条数 >= pageSize"判断还有下一页').not.toMatch(/histHasMore = page\.items\.length >=/)
+    expect(uiSource, '没有按 total 计算是否还有下一页').toMatch(/histHasMore = page\.page \* page\.pageSize < page\.total/)
+  })
+
+  it('数据全拉完但还没渲染完时，哨兵仍然保留（否则余下卡片永远接不上）', () => {
+    // 根因：histHasMore=false 时哨兵被 v-if 摘掉 → 剩下一批没渲染的卡永远没触发点
+    const tpl = modalsArea.slice(modalsArea.indexOf('ref="loadSentinelEl"') - 900, modalsArea.indexOf('ref="loadSentinelEl"'))
+    expect(tpl, '哨兵仍只看 histHasMore').not.toMatch(/v-if="ui\.histVisible\.value\.length && s\.histHasMore"/)
+    expect(tpl, '哨兵没有用"还能继续加载"的条件').toMatch(/canLoadMore/)
+    expect(modalsArea, '缺少 canLoadMore 计算（未渲染完也应保留哨兵）').toMatch(/const canLoadMore = computed/)
+    expect(modalsArea, '没有渲染计数这个维度').toMatch(/renderedCount\.value < ui\.histVisible\.value\.length/)
+  })
+
+  it('切页签后不会被旧的补页请求挤掉第 1 页（点音频却还是图片）', () => {
+    expect(uiSource, '缺少切换筛选的短窗口守卫').toMatch(/historyFilterSwitchedAt/)
+    expect(uiSource, '补页没有在切换后暂停').toMatch(/Date\.now\(\) - historyFilterSwitchedAt < FILTER_SETTLE_MS/)
+    expect(uiSource, '筛选变化没有把页码显式传 1').toMatch(/void loadHistory\(1\)/)
+    expect(uiSource, '筛选变化没有重置在途请求').toMatch(/resetHistoryRequest\(\)/)
+    expect(uiSource, '补页没有把页码与筛选签名一起定格').toMatch(/loadHistory\(nextPage, signature\)/)
+  })
+
   it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {
     // 旧实现：.hist-card-video-plugin { height: 180px } + 卡片固定 16:9 —— 视频整排等高、与图片不齐
     const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))

@@ -222,11 +222,14 @@ export class CloudApi {
   async fetchHistory(q: HistoryQueryInput = {}): Promise<ServerHistoryPage> {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(q)) {
+      // signal 不是查询参数（切页签时用它取消过期请求）
+      if (k === 'signal') continue
       if (v !== undefined && v !== '') params.set(k, String(v))
     }
     const qs = params.toString()
     const res = await this.doFetch(this.absolute('/api/history' + (qs ? '?' + qs : '')), {
       headers: { accept: 'application/json' },
+      ...(q.signal ? { signal: q.signal } : {}),
     })
     if (!res.ok) throw httpError('拉历史', res.status, 'GET')
     const body = (await res.json()) as Partial<ServerHistoryPage>

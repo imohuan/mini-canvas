@@ -148,7 +148,7 @@ function calcColumns(containerWidth: number): { cols: number; columnWidth: numbe
   return { cols, columnWidth }
 }
 
-/** 最后一张卡可见且距上次追加超过 1s 时追加下一批（1s 节流 + 可见时续链） */
+/** 最后一张卡可见 → 追加下一批已拉到的数据（节流交给 maybeLoadMoreBatch，见下） */
 function loadMoreBatch(): void {
   const items = ui.histVisible.value
   if (renderedCount.value >= items.length) { lastItemVisible = false; return }
@@ -161,6 +161,26 @@ function loadMoreBatch(): void {
   const previousCount = renderedCount.value
   renderedCount.value = Math.min(renderedCount.value + BATCH_SIZE, items.length)
   nextTick(() => appendMasonryItems(previousCount, renderedCount.value))
+}
+
+/**
+ * 与下一页哨兵同款的可视监听节流（用户口径 2026-10-27：不要滚动事件）。
+ * 旧实现用「Date.now() - lastBatchTime」判可见性：卡片挂上观察器那一刻若仍在
+ * 1 秒节流窗口里，loadMoreBatch 只排了个 setTimeout，而这个 timer 又依赖
+ * lastItemVisible（进可视区才为 true）—— 两把节流锁互相踩，最后一张卡明明
+ * 在屏上也不会追加（用户实测：滚到底也没加载更多）。
+ */
+function maybeLoadMoreBatch(): void {
+  if (!s.historyOpen || renderedCount.value >= ui.histVisible.value.length) {
+    lastItemVisible = false
+    return
+  }
+  const elapsed = Date.now() - lastBatchTime
+  if (elapsed < LOAD_MORE_INTERVAL_MS) {
+    if (lastItemVisible) setTimeout(() => { if (lastItemVisible) loadMoreBatch() }, LOAD_MORE_INTERVAL_MS - elapsed)
+    return
+  }
+  loadMoreBatch()
 }
 
 /** 两次「拉下一页」之间的最小间隔（毫秒）—— 哨兵常驻可视区时也不会连发请求 */
@@ -176,7 +196,17 @@ let observedSentinel: HTMLElement | null = null
  * 数据到位后由 histDataVersion 的 watch 续接瀑布流（appendMasonryItems）。
  */
 function maybeLoadMorePage(): void {
-  if (!s.historyOpen || !s.histHasMore || s.histLoadingMore) return
+  if (!s.historyOpen || s.histLoadingMore) return
+  if (!canLoadMore.value) return
+  // 数据已全部拉到、只剩"没渲染的卡片"时，不需要再打接口：直接让最后一批接上瀑布流。
+  if (!s.histHasMore) {
+    if (renderedCount.value < ui.histVisible.value.length) {
+      const from = renderedCount.value
+      renderedCount.value = Math.min(renderedCount.value + BATCH_SIZE, ui.histVisible.value.length)
+      nextTick(() => appendMasonryItems(from, renderedCount.value))
+    }
+    return
+  }
   const elapsed = Date.now() - lastLoadMoreAt
   if (elapsed < LOAD_MORE_INTERVAL_MS) {
     if (loadMoreRetryTimer) clearTimeout(loadMoreRetryTimer)
@@ -188,6 +218,72 @@ function maybeLoadMorePage(): void {
   }
   lastLoadMoreAt = Date.now()
   ui.loadMoreHistory()
+}
+
+/**
+ * 哨兵现在是否真的在滚动视口里（**不依赖 observer 的阈值回调**）。
+ *
+ * 为什么需要这个函数（用户报的"滚到底不加载"的根因）：
+ * IntersectionObserver 只在"穿过阈值"时回调一次。首屏过滤后只剩十几张卡，
+ * 列表比弹窗还短，哨兵一直完整可见 —— 加载第 2 页后哨兵仍原样可见（只是位置下移），
+ * 比例一直是 1，**不会再收到任何回调**，于是第 3 页永远不拉。
+ * 用户看到的就是：明明到底了、下面一片空白，却再也没有新卡片。
+ *
+ * 于是每次 DOM/高度变化后再主动量一次：哨兵还在视口里就继续拉，直到列表填满视口
+ * 或没有下一页为止（节流仍由 maybeLoadMorePage 负责，不会连发请求）。
+ */
+function isSentinelInView(): boolean {
+  const sentinel = loadSentinelEl.value
+  const view = sentinel?.closest('.ax-sa-view') as HTMLElement | null
+  if (!sentinel || !view) return false
+  const s = sentinel.getBoundingClientRect()
+  const v = view.getBoundingClientRect()
+  return s.top <= v.bottom + 600 && s.bottom >= v.top
+}
+
+/** 列表没填满视口时继续拉下一页（幂等 + 节流，可放心在每次布局变化后调用） */
+function fillViewportIfNeeded(): void {
+  if (!s.historyOpen || !canLoadMore.value) return
+  if (isSentinelInView()) maybeLoadMorePage()
+}
+
+/**
+ * 还能不能继续加载：
+ *   · 后端还有下一页 → 能（哨兵负责拉数据）
+ *   · 数据已全拉到、但还有卡片没渲染 → 也能（哨兵负责把剩余卡片接上瀑布流）
+ *
+ * 两种"能"都要保留哨兵；只有真正到底（没数据、也全渲染完）才把它从 DOM 摘掉。
+ */
+const canLoadMore = computed(() => {
+  if (renderedCount.value < ui.histVisible.value.length) return true
+  return s.histHasMore
+})
+
+/**
+ * 给自动化/排障用：把"到底能不能再加载"的真实状态挂到 DOM 上。
+ * 真机排查时先看这几个数，避免只凭"画面没动"猜原因。
+ */
+function readLoadState(): Record<string, unknown> {
+  const sentinel = loadSentinelEl.value
+  const view = sentinel?.closest('.ax-sa-view') as HTMLElement | null
+  // ⚠️ 不要用 s 命名：s 是 ui.state（被下面的 hasMore / loading 读取）。
+  // 之前这里用 const s = rect 遮蔽了它，模板渲染时直接抛
+  // "Cannot read properties of undefined (reading 'histHasMore')"，整个瀑布流不渲染。
+  const rect = sentinel?.getBoundingClientRect()
+  const v = view?.getBoundingClientRect()
+  return {
+    rendered: renderedCount.value,
+    visible: ui.histVisible.value.length,
+    type: s.histType,
+    first: ui.histVisible.value[0]?.kind ?? null,
+    hasMore: s.histHasMore,
+    loading: s.histLoadingMore,
+    errorCount: ui.histErrorCount.value,
+    masonry: !!masonryEl.value,
+    columns: lastColumnWidth,
+    sentinel: !!sentinel,
+    inView: !!(rect && v && rect.top <= v.bottom + 600 && rect.bottom >= v.top),
+  }
 }
 
 /**
@@ -208,11 +304,18 @@ function setupLoadSentinel(): void {
   observedSentinel = sentinel
   loadMoreObserver = new IntersectionObserver(
     (entries) => {
-      if (entries.some((e) => e.isIntersecting)) maybeLoadMorePage()
+      if (entries.some((e) => e.isIntersecting)) {
+        maybeLoadMorePage()
+        // 一次回调可能既拉页又把旧数据渲染完，再补一次让最新状态接上
+        nextTick(fillViewportIfNeeded)
+      }
     },
     { root: sentinel.closest('.ax-sa-view') ?? null, rootMargin: '0px 0px 600px 0px' },
   )
   loadMoreObserver.observe(sentinel)
+  // 首次挂上时也主动量一次：哨兵一开始就在视口里（列表不足一屏）时，
+  // 浏览器可能不派发 intersecting 回调（初始状态即相交），只靠回调会永远不拉第 2 页。
+  fillViewportIfNeeded()
 }
 
 function teardownLoadSentinel(): void {
@@ -243,7 +346,7 @@ function observeLastItem(): void {
   sentinelObserver = new IntersectionObserver(
     (entries) => {
       lastItemVisible = entries.some((e) => e.isIntersecting)
-      if (lastItemVisible) loadMoreBatch()
+      if (lastItemVisible) maybeLoadMoreBatch()
     },
     { root: container, rootMargin: '0px 0px 600px 0px' },
   )
@@ -481,7 +584,17 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
   media.className = isAudio
     ? 'hist-card-media hist-card-media--audio'
     : 'hist-card-media hist-card-media--video'
-  media.style.aspectRatio = mediaAspect(item, isAudio ? 3 / 1 : 16 / 9)
+  /**
+   * 音频卡保持"之前那版"的横向短条（宽度由瀑布流决定、高度固定 96px），
+   * 不要按 3:1 再被拉成一条细线 —— 用户口径 2026-10-28：改完之后反而更差了。
+   * 图片/视频仍按产物真实宽高比。
+   */
+  if (isAudio) {
+    // 卡片形态：给它一块有边有圆角的面板（96px 的细条看着不像卡片，用户口径 2026-10-28）
+    media.style.height = '120px'
+  } else {
+    media.style.aspectRatio = mediaAspect(item, 16 / 9)
+  }
   card.appendChild(media)
   if (PluginPreview) {
       const mount = document.createElement('div')
@@ -498,12 +611,13 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
           h(
             PluginPreview,
             isAudio
-              // 音频：不给 name（资源本来没有标题，播放器底部那行"文件名"会与卡外信息重复）
-              ? { url, compact: true }
+              // 音频：恢复成改之前那版 —— 播放器里带名称/时长/大小那一行信息
+              ? { url, name: item.title, compact: true }
               : { url, name: item.title, expandable: true, onExpand: () => openHistoryItem(item) },
           ),
       })
       app.mount(mount)
+      // 视频件自带的控制条自带 aria-label，不再额外补；这里只记录媒体元素，供加载失败与尺寸同步
       // 详情入口留在图上（右上角小圆钮）；信息行在图外，见 finishCard
       media.appendChild(buildDetailButton(item))
       // 媒体加载失败（文件被清理 / 换地址）：与图片卡同一口径，开关关着就整条隐藏
@@ -527,7 +641,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
             if (!item.media) item.media = {}
             if (!item.media.width) item.media.width = w
             if (!item.media.height) item.media.height = h
-            media.style.aspectRatio = w + ' / ' + h
+            if (!isAudio) media.style.aspectRatio = w + ' / ' + h
           }
           if (durSec > 0 && !item.media?.durationMs) {
             if (!item.media) item.media = {}
@@ -539,6 +653,20 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
         }
         el.addEventListener('loadedmetadata', syncFromMedia)
         el.addEventListener('loadeddata', syncFromMedia)
+        // 音频：把真实时长回写到播放器（卡外那行的时长也用它），避免显示 0:00
+        if (isAudio) {
+          const durEl = mount.querySelector('.apv-time') as HTMLElement | null
+          const fmt = (sec: number): string => {
+            if (!Number.isFinite(sec) || sec <= 0) return '0:00'
+            const total = Math.round(sec)
+            return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0')
+          }
+          const syncAudioTime = (): void => {
+            if (durEl) durEl.textContent = fmt(el.currentTime) + ' / ' + fmt(el.duration)
+          }
+          el.addEventListener('timeupdate', syncAudioTime)
+          el.addEventListener('loadedmetadata', syncAudioTime)
+        }
       }
 
       card.addEventListener('click', () => onCardClick(item))
@@ -659,6 +787,9 @@ function rebuildMasonry(): void {
       observeLastItem()
       // 整墙重建后哨兵元素可能被换掉/才刚出现：统一在这里补挂一次观察器
       setupLoadSentinel()
+      // 卡片数量可能仍不足一屏（首屏大量记录被"显示异常"过滤掉）：主动补拉下一页，
+      // 不能等 observer 回调 —— 哨兵一直可见时它不会二次触发（用户实测 2026-10-28）。
+      fillViewportIfNeeded()
     })
   })
 }
@@ -679,6 +810,7 @@ function appendMasonryItems(from: number, to: number): void {
   })
   masonry.append(wrappers)
   observeLastItem()
+  fillViewportIfNeeded()
 }
 
 /** 滑杆 / 容器宽度变化：只改列宽后重排（保留 DOM，masonry 自带过渡动画） */
@@ -690,6 +822,15 @@ function relayoutMasonry(): void {
   const { columnWidth } = calcColumns(containerWidth)
   if (columnWidth === lastColumnWidth) return
   lastColumnWidth = columnWidth
+  /**
+   * 缩放到"当前一张都没渲染"的状态时（切筛选 / 首次打开都可能），
+   * 只改列宽没有任何意义 —— 必须整墙重建，否则画面会一直空着（真机 2026-10-28：
+   * 动一下缩放滑杆，整个历史面板就空白了，滚也回不来）。
+   */
+  if (!container.querySelector('.' + ITEM_CLASS)) {
+    nextTick(rebuildMasonry)
+    return
+  }
   const wrappers = container.querySelectorAll<HTMLElement>('.' + ITEM_CLASS)
   wrappers.forEach((w) => { w.style.width = columnWidth + 'px' })
   masonry.setColumnWidth(columnWidth)
@@ -728,7 +869,10 @@ watch(() => [s.histScope, s.histType, s.histRating, s.histSortDesc] as const, ()
   filterSwitching = true
   // 不用旧数据重建（旧数据是上一个筛选的）—— 先把已渲染计数清零，容器随 v-if 之外的
   // 内容等数据版本 watch 接管；这里只把画面上的旧卡清掉，避免"切到图片还挂着音频"。
-  renderedCount.value = 0
+  // ⚠️ 不能把 renderedCount 清零：新数据到达时"渲染数 = 0"会让下面的
+  // "renderedCount < len" 分支去 append，而这时容器刚被清空、Masonry 已 destroy，
+  // 结果一张卡都插不进去 —— 用户看到的是"点音频页签没反应，还是图片"。
+  // 计数交给数据版本 watch 里按筛选切换重置即可。
   nextTick(() => {
     masonry.destroy()
     const container = masonryEl.value
@@ -753,14 +897,24 @@ watch(() => s.histDataVersion, async () => {
    * —— 卡片会按原生块元素排成一列，且底下的加载哨兵也没人观察（用户实测 2026-10-27）。
    * 所以这里统一"没实例就整墙重建"：既补上 init，也从第 1 张卡开始画。
    */
-  const needsRebuild = !masonry.instance.value && len > 0
-  if (switching || needsRebuild) {
+  /**
+   * 筛选切换也走"整墙重建"：不重建就会留在旧筛选的卡片上
+   * （用户实测 2026-10-28：点"音频"，网络里已经在拉 audio，画面还是图片）。
+   * 只有"同一筛选下又拉到新数据"（分页追加）才走 append 分支。
+   */
+  const needsRebuild = switching || (!masonry.instance.value && len > 0)
+  if (needsRebuild) {
     renderedCount.value = Math.min(BATCH_SIZE, len)
   } else if (renderedCount.value < len) {
     const from = renderedCount.value
-    renderedCount.value = len
+    /**
+     * 一次只接一批（BATCH_SIZE），不要把剩余全部一次渲染完 ——
+     * 一次全渲染会让哨兵立刻满足"到底了"被摘掉，短列表里就再也触发不到下一批；
+     * 分批后哨兵一直存在，可视监听会顺次把余下的批次接上。
+     */
+    renderedCount.value = Math.min(from + BATCH_SIZE, len)
     await nextTick()
-    appendMasonryItems(from, len)
+    appendMasonryItems(from, renderedCount.value)
   } else if (renderedCount.value > len) {
     // 数据变少（异常回落）：整墙重建兜底
     renderedCount.value = Math.min(BATCH_SIZE, len)
@@ -771,14 +925,22 @@ watch(() => s.histDataVersion, async () => {
   // 这里在 DOM 更新完再挂一次 —— 否则"先开面板、后到数据"时永远等不到翻页（用户实测 2026-10-27）。
   // 同一元素重复调用会被 setup 里的幂等判断挡掉，不会重复观察。
   await nextTick()
-  if (switching || needsRebuild) {
+  if (needsRebuild) {
     rebuildMasonry()
     await nextTick()
   }
   setupLoadSentinel()
 })
 watch(() => s.histZoom, () => {
-  if (s.historyOpen) nextTick(relayoutMasonry)
+  if (!s.historyOpen) return
+  // 缩放变化后列宽可能不变（同一档），也必须保证墙上有卡可显示。
+  nextTick(() => {
+    const container = masonryEl.value
+    const empty = !container || !container.querySelector('.' + ITEM_CLASS)
+    if (empty) rebuildMasonry()
+    else relayoutMasonry()
+    fillViewportIfNeeded()
+  })
 })
 /**
  * 瀑布流容器是 v-if（有可见数据才出现）。数据来得比面板晚时，容器挂载那一刻
@@ -979,8 +1141,24 @@ watch(() => s.shortcutsOpen, async (open) => {
         <p v-if="ui.state.histLoadingMore" class="hist-loading text-center text-[12px] text-ink/50 pb-4">加载中…</p>
         <!-- 加载下一页哨兵（用户口径 2026-10-15：禁止滚动触发）：它在滚动区最底部，
              进入可视区才拉下一页；两次拉页之间至少隔 1 秒，不会无限连发。 -->
-        <div v-if="ui.histVisible.value.length && s.histHasMore" ref="loadSentinelEl" class="hist-load-sentinel"
-          aria-hidden="true"></div>
+        <!--
+          哨兵的渲染条件 = "还能继续加载"：
+            · 后端还有下一页（histHasMore），**或者**
+            · 已拉到但还没渲染完（renderedCount < 可见条数，每次只渲染 24 张）
+
+          后一条是用户 2026-10-28 报的"滚到底不加载更多"的根因：
+          前面几页全部拉完后 histHasMore=false，哨兵被整个从 DOM 移除，
+          于是最后那批没渲染的卡片永远没有触发点 —— 画面底部留一大片空白，
+          滚到底也不会再动。渲染完最后一页（或后端也没有更多）时才真正隐藏。
+        -->
+        <!--
+          哨兵**常驻**（只要有卡片就渲染），是否真的去加载由脚本里的 canLoadMore 判断。
+          以前用 v-if 把它挂在"还有下一页"上：数据一拉完它就消失，之后无论怎么滚都没有
+          触发点；而且"数据到了但还没渲染完"这一种情况也会把哨兵一起摘掉。常驻之后
+          这两种坑都不存在（元素只有 1px 高、aria-hidden，不影响观感）。
+        -->
+        <div v-if="ui.histVisible.value.length" ref="loadSentinelEl" class="hist-load-sentinel"
+          :data-load-state="JSON.stringify(readLoadState())" aria-hidden="true"></div>
         <!-- 空状态只在**真的一张卡都没有**时出现。
              以前这两个 v-else 挂在"加载哨兵"那个 v-if 上：没有下一页时哨兵不渲染，
              于是列表明明有卡片，底部也会冒出一句"暂无历史记录"（真机截到）。
@@ -1304,12 +1482,17 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
 /* 历史卡里的音频波形一律中性灰阶（用户口径 2026-10-27：不要主题紫）。
    只覆盖卡片内的表现，节点里的播放器仍按自己的主题走。 */
-/* 卡外已经有一行"音频 · 时长 · 大小"：播放器自带的时长/大小/文件名在卡里重复，
-   这里只保留波形与播放键（用户口径：卡片信息只出现一次）。名字早就不传了，
-   时长与大小仍需藏起来。 */
+/* 音频卡做成"卡片"：面板底 + 细边框，和图片/视频卡同一套外观 */
+.hist-card-media--audio {
+  border: 1px solid var(--ui-line, rgba(128, 128, 128, 0.2));
+  background: var(--ui-panel, #fff);
+}
+/* 卡外已经有一行"音频 · 时长 · 大小"：播放器自带那行时长/大小/文件名是重复信息，
+   只保留播放键与波形（用户口径 2026-10-28：底部那块时间/大小是多余的）。 */
 .hist-card-audio-plugin .apv-time,
 .hist-card-audio-plugin .apv-size,
 .hist-card-audio-plugin .apv-name { display: none; }
+.hist-card-audio-plugin .apv-bar { gap: 6px; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,
@@ -1335,8 +1518,10 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-detail { position: absolute; right: 6px; top: 6px; z-index: 6; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--ui-line, rgb(255 255 255 / .35)); border-radius: 9999px; background: var(--ui-panel, rgb(0 0 0 / .45)); color: var(--ui-ink, #fff); cursor: pointer; opacity: .82; transition: opacity .15s ease, transform .15s ease; }
 .hist-card-detail:hover { opacity: 1; transform: scale(1.08); }
 .hist-card-detail svg { width: 13px; height: 13px; }
-/* 视频卡左上角有勾选钮时，详情钮仍在右上角，互不遮挡 */
-.hist-card-media--video .hist-card-detail { color: var(--ui-tip-ink, #fff); }
+/* 视频卡详情钮仍是右上角。
+   ⚠️ 不要在这里把图标强制成白色：详情钮的底是 --ui-panel（亮色主题 = 纯白），
+   白图标压在白底上 = 看不见（用户截图 2026-10-28：视频卡右上角只有一个空圆圈）。
+   图标颜色统一跟随主题文字色 --ui-ink 即可，深浅两套主题都清楚。 */
 .hist-card-fallback .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-ink-mute, #888); color: var(--ui-ink-mute, #888); font-size: 15px; font-weight: 700; }
 .hist-card-fallback.is-error .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-danger, #ef4444); color: var(--ui-danger, #ef4444); font-size: 15px; font-weight: 700; }
 .hist-card-fallback strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; color: var(--ui-ink, inherit); }
