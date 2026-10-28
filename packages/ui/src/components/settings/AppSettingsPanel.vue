@@ -336,7 +336,7 @@ function blocksOf(groupKey: string): ContentBlock[] {
         <div v-if="!navs.length" class="py-6 text-center text-[12px] text-ink-dim">暂无设置分组</div>
 
         <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor，插件可插到指定一级项前后 -->
-        <SlotComposer :slot="SETTINGS_NAV_SLOT" :item-props="settingsNavProps">
+        <SlotComposer :slot="SETTINGS_NAV_SLOT" class="flex flex-col" :item-props="settingsNavProps">
         <template v-for="nav in navs" :key="nav">
           <SlotAnchor
             :id="'host/settings-' + nav"

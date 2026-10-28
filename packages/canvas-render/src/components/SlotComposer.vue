@@ -29,7 +29,6 @@
 import {
   Comment,
   Fragment,
-  cloneVNode,
   defineComponent,
   h,
   isVNode,
@@ -183,14 +182,11 @@ export default defineComponent({
 
     function renderItem(item: SlotComposerItem): VNodeChild {
       if (item.source === 'host') {
-        // 锚点内容直接展开（不包额外 DOM）：多根时用 Fragment，单根时原样返回
+        // 锚点内容用 Fragment 原样展开：不生成 DOM，也不会把子节点合并/改写成别的元素。
+        // 不要对单根 cloneVNode 合并 class/attrs —— 会把 Tailwind class 拼串，
+        // 也会在组件根上丢失 data-*（2026-10-28 设置左树/底栏实测）。
         const raw = item.content ?? []
         const content = Array.isArray(raw) ? raw : [raw]
-        const first = content.find((c) => isVNode(c) && c.type !== Comment)
-        if (content.filter((c) => isVNode(c) && c.type !== Comment).length === 1 && isVNode(first)) {
-          // 单根锚点：把身份合并到原元素上（不新增 DOM，仍可在检查器里定位顺序）
-          return cloneVNode(first, { 'data-slot-item': item.id }, true)
-        }
         return h(Fragment, { key: item.id }, content)
       }
       const extra = (props.itemProps as
@@ -224,9 +220,11 @@ export default defineComponent({
         const node = renderItem(item)
         if (node) nodes.push(node)
       }
-      // 根容器：外壳（底栏/状态条/页签行）需要 flex 布局，没有真实根就排不出来。
-      // class / role 等由使用方通过 attrs 传入（本组件 inheritAttrs: false）。
-      return h('div', { class: 'slot-composer flex items-center gap-1', ...attrs }, nodes)
+      // 根容器：承载 attrs（class/role 等）。布局由使用方通过 class 指定：
+      // 底栏/状态条是横向 flex，设置左树是纵向 flex —— 这里不能写死方向。
+      // attrs 内的 class 与固定 class 合并，不能直接覆盖（否则使用方的布局会丢）。
+      const userClass = (attrs.class as string | undefined) ?? ''
+      return h('div', { ...attrs, class: ['slot-composer', userClass] }, nodes)
     }
   },
 })

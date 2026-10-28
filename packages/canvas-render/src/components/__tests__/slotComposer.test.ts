@@ -30,8 +30,13 @@ describe('slotComposer · 纯逻辑', () => {
   it('条目 id 必须是 owner/name（斜杠），槽名用点', () => {
     expect(isSlotItemId('host/agent')).toBe(true)
     expect(isSlotItemId('my-plugin/export')).toBe(true)
+    // 中文条目名要放行：设置左树的一级分组名就是中文（host/settings-节点）
+    expect(isSlotItemId('host/settings-节点')).toBe(true)
+    expect(isSlotItemId('host/settings-常规')).toBe(true)
     expect(isSlotItemId('shell.dock.agent')).toBe(false)
     expect(isSlotItemId('agent')).toBe(false)
+    expect(isSlotItemId('host/a b')).toBe(false)
+    expect(isSlotItemId('host/a/b')).toBe(false)
     expect(isSlotName('shell.dock')).toBe(true)
     expect(isSlotName('shell/dock')).toBe(false)
   })
@@ -121,6 +126,28 @@ describe('SlotComposer · SSR', () => {
     const html = await renderToString(app)
     expect(html).toContain('正常')
     expect(html).not.toContain('不该出现')
+    ctx.stop()
+  })
+
+  it('中文锚点 id 正常渲染（设置左树场景）', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SlotComposer,
+          { slot: 'settings.nav', class: 'flex flex-col' },
+          () => [
+            h(SlotAnchor, { id: 'host/settings-节点', order: 100 }, () => h('button', '节点')),
+            h(SlotAnchor, { id: 'host/settings-常规', order: 200 }, () => h('button', '常规')),
+          ],
+        ),
+    })
+    app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+    const html = await renderToString(app)
+    expect(html).toContain('节点')
+    expect(html).toContain('常规')
+    expect(html).toContain('flex flex-col')
     ctx.stop()
   })
 })

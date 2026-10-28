@@ -247,6 +247,14 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
 插件侧 `CoreButton` 就是 `props.coreButton` 本身（`type Component`），
 **不再 defineComponent 包一层适配组件**：宿主下发的是组件，直接当标签用即可。
 
+**设置左树回归（2026-10-28）**：
+
+- `isSlotItemId` 允许中文：锚点 id 形如 `host/settings-节点`；只放行 ASCII 会把
+  「节点 / 布局 / 边 / 常规」等一级分组全部丢掉，左侧只剩 `Agent`。
+- `SlotComposer` 根容器不再写死 `flex items-center`，布局由使用方 class 指定；
+  锚点内容统一用 `Fragment` 展开，不对单根做 clone/class 合并（会把 Tailwind class 拼成串）。
+- 三处实测：设置左树 12 个一级分组（纵排、169px 宽）、底栏 8 项、状态条 6 项。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 

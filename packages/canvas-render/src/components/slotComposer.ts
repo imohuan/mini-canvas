@@ -22,9 +22,15 @@ export interface SlotComposerEntry {
   after?: string
 }
 
-/** 条目 id 必须是 owner/name（只用斜杠分隔，不用点） */
+/**
+ * 条目 id 必须是 owner/name（只用斜杠分隔，不用点）。
+ *
+ * 允许中文等非 ASCII 字符：设置面板的一级分组名就是中文（「节点」「常规」），
+ * 锚点 id 会拼成 host/settings-节点 —— 只放行 ASCII 会把这些行全部丢掉（2026-10-28 实测）。
+ * 仍禁止空白和第二个斜杠，保证 before/after 的解析不含歧义。
+ */
 export function isSlotItemId(id: string): boolean {
-  return /^[A-Za-z0-9_.@:-]+\/[A-Za-z0-9_.@:-]+$/.test(id)
+  return /^[^\s/]+\/[^\s/]+$/u.test(id)
 }
 
 /** 槽名必须是点分形式（不出现斜杠）；单段也允许，例如 overlay */
