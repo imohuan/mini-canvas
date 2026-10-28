@@ -373,64 +373,36 @@ const mySchema = new Schema({
           }
         }
         /**
-         * 槽位标签（ref-slot:image:3 这种）兜底走 chip 外观。
+         * 参考标签兜底渲染（用户 2026-10-28 定案：认节点 / 认名称，不认序号）。
          *
-         * 为什么：注册表冷启动时可能还没有条目（或者被别的路径覆盖），走到这里的默认渲染
-         * 会画成 `@图片1` 的下划线文字 —— 用户看到的就是「重开底栏后标签变成文本」
-         *（2026-10-27 报）。槽位标签的外观是确定的，不依赖注册表也能画对（缩略图靠
-         * renderEditor 再刷新）。
+         * 冷启动时注册表可能是空的，但标签身份自己就够画：
+         *   - `ref-node:<id>` → 已绑定，名字来自节点属性（name 已随文档存着）；
+         *   - `ref-name:<名>` → 待绑定，统一资源图标；
+         *   - `ref-slot:<kind>:<N>` → 老格式，**不兼容**，按失效画（用户拍板）。
+         *
+         * 没有这一支就会落到下面默认分支（`@名字` + 下划线），和卡片并排成两套 UI。
          */
-        const slotHit = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(String(id ?? ''))
-        if (slotHit) {
-          const slotKind = slotHit[1] as 'image' | 'video' | 'audio' | 'av'
-          const slotItem = buildSlotItem(slotKind, String(name ?? id))
-          itemRegistry.set(String(id), { ...slotItem, ...(url ? { url } : {}) })
-          const rendered = slotItem.renderEditor?.(slotItem)
-          if (rendered instanceof HTMLElement) {
-            rendered.setAttribute('data-category', category || '素材')
-            return rendered
-          }
-        }
-        /**
-         * **按节点 id 插入的标签**（`data-id` = 上游节点 id，如 `204`）也要画成同一副卡片。
-         *
-         * 用户 2026-10-28 报「刷新后出现两种标签，一种是带下划线的文字」：
-         * 这类标签的外观全赖注册表（`itemRegistry`），而注册表是运行时态 —— 刷新/冷启动后
-         * 没有对应条目，就落到下面的默认分支（`@名字` + 下划线），和 `ref-slot:*` 的卡片
-         * 并排出现，看起来像两套 UI。
-         *
-         * 兜底规则：名字能认出类型（图片2 / 视频1 / 音频3 / 文本1）就按同一套 chip 画，
-         * 不依赖注册表。认不出（用户手打的裸引用）才走原来的默认渲染。
-         */
-        const byName = /^(图片|视频|音频|文本)\s*\d+$/.exec(String(name ?? '').trim())
-        if (byName) {
-          const nameKind =
-            byName[1] === '图片' ? 'image'
-            : byName[1] === '视频' ? 'video'
-            : byName[1] === '音频' ? 'audio'
-            : 'text'
-          /**
-           * id 用**节点自己的 id**（不是 buildSlotItem 推出来的 ref-slot:xxx）：
-           * renderEditor 里会拿 `self.id` 回注册表读最新条目，这里注册到哪个键就必须用哪个，
-           * 否则读到的是别处那份（可能没 url，画出来又是待输入虚线）。
-           */
-          const fallbackItem = buildSlotItem(nameKind, String(name ?? id))
-          const withUrl = {
-            ...fallbackItem,
-            id: String(id ?? fallbackItem.id),
-            ...(url ? { url } : {}),
+        const chipId = String(id ?? '')
+        const isRefChip =
+          chipId.startsWith(REF_NODE_PREFIX) ||
+          chipId.startsWith(REF_NAME_PREFIX) ||
+          chipId.startsWith('ref-slot:')
+        if (isRefChip) {
+          const legacy = chipId.startsWith('ref-slot:')
+          const boundNodeId = nodeIdOfChipId(chipId)
+          const fallback = legacy
+            ? buildRefChipItem({ id: chipId, name: String(name ?? id), invalid: true })
+            : buildRefChipItem({ id: chipId, name: String(name ?? id) })
+          const withData: ResourceItem = {
+            ...fallback,
+            ...(url ? { url: String(url) } : {}),
             ...(node.attrs.value ? { value: String(node.attrs.value) } : {}),
+            ...(boundNodeId ? { mediaType: undefined } : {}),
           }
-          if (id) itemRegistry.set(String(id), withUrl)
-          const rendered = withUrl.renderEditor?.(withUrl)
-          if (rendered instanceof HTMLElement) {
-            rendered.classList.add('resource-node')
-            rendered.setAttribute('data-id', String(id ?? ''))
-            rendered.setAttribute('data-url', url || '')
-            rendered.setAttribute('data-name', String(name ?? ''))
-            rendered.setAttribute('data-category', category || '素材')
-            return rendered
-          }
+          if (id) itemRegistry.set(chipId, withData)
+          const rendered = renderRefChip(withData)
+          rendered.setAttribute('data-category', category || '素材')
+          return rendered
         }
         if (url) {
           const thumbUrl = thumbnail_url || getThumbnailUrlFromAssetUrl(url)
@@ -528,6 +500,131 @@ export function kindFromName(name: string | null | undefined): 'image' | 'video'
   if (/^图片\s*\d+$/.test(s)) return 'image'
   if (/^文本\s*\d+$/.test(s)) return 'text'
   return 'text'
+}
+
+/**
+ * 标签身份（用户 2026-10-28 定案）：**认节点，不认序号**。
+ *
+ * - `ref-node:<节点id>`：已绑定画布节点。显示名永远跟随节点名称；
+ * - `ref-name:<名称>`：还没绑定的手打标签（例如 `@雨声`），名称就是身份。
+ *   绑定成功后由调用方把 id 换成 `ref-node:<id>`。
+ *
+ * 为什么不再用 `ref-slot:<kind>:<N>`：序号会随排序/增删变化，
+ * 标签追着序号跑就必然错位（用户 2026-10-28 拍板：彻底换掉）。
+ */
+export const REF_NODE_PREFIX = 'ref-node:'
+export const REF_NAME_PREFIX = 'ref-name:'
+
+/** 节点 id → 标签身份 */
+export function refNodeChipId(nodeId: string): string {
+  return REF_NODE_PREFIX + String(nodeId ?? '')
+}
+
+/** 名称 → 待绑定标签身份（名称是画布内唯一的，所以可当身份用） */
+export function refNameChipId(name: string): string {
+  return REF_NAME_PREFIX + String(name ?? '').trim()
+}
+
+/** 标签身份 → 绑定的节点 id（不是节点标签 / 老格式 → null） */
+export function nodeIdOfChipId(id: string | null | undefined): string | null {
+  const s = String(id ?? '')
+  if (!s.startsWith(REF_NODE_PREFIX)) return null
+  const nodeId = s.slice(REF_NODE_PREFIX.length)
+  return nodeId || null
+}
+
+/** 标签身份 → 待绑定名称（不是待绑定标签 → null） */
+export function refNameOfChipId(id: string | null | undefined): string | null {
+  const s = String(id ?? '')
+  if (!s.startsWith(REF_NAME_PREFIX)) return null
+  const name = s.slice(REF_NAME_PREFIX.length).trim()
+  return name || null
+}
+
+/**
+ * 造一个参考标签的素材项（唯一入口，三条路径共用：@ 下拉 / 标记 / 连线刷新）。
+ *
+ * - `bound` 有值 = 已绑定节点：按节点真实类型出图标与缩略图；
+ * - 没有 = 待绑定：统一「资源」图标，不猜类型（用户口径：手打的 `@雨生` 无从判断类型）；
+ * - `invalid` = 绑定失效：灰掉，底栏禁止发送。
+ */
+export function buildRefChipItem(input: {
+  id: string
+  name: string
+  bound?: {
+    kind: 'image' | 'video' | 'audio' | 'text'
+    url?: string
+    value?: string
+    /** 视频帧图（mp4 不能当 <img>） */
+    thumb?: string
+  }
+  invalid?: boolean
+  onClick?: (item: ResourceItem) => void
+  hoverPreview?: () => string | undefined | Promise<string | undefined>
+}): ResourceItem {
+  const bound = input.bound
+  const item: ResourceItem = {
+    id: input.id,
+    name: input.name,
+    category: '素材',
+    ...(bound ? { chipKind: bound.kind, mediaType: bound.kind === 'text' ? undefined : bound.kind } : {}),
+    ...(bound?.url ? { url: bound.url } : {}),
+    ...(bound?.value ? { value: bound.value } : {}),
+    ...(input.invalid ? { invalid: true } : {}),
+  }
+  if (input.onClick) item.onClick = input.onClick
+  if (input.hoverPreview) item.hoverPreview = input.hoverPreview
+  /**
+   * 外观在**渲染时**读注册表最新条目（与老 buildSlotItem 同一条理由）：
+   * 连线变化 / 替换节点后，正文里同一颗标签要立刻换名字、换图标、换缩略图。
+   */
+  item.renderEditor = (self) => {
+    const latest = itemRegistry.get(self.id) ?? self
+    return renderRefChip(latest)
+  }
+  return item
+}
+
+/** 参考标签的 DOM（编辑器内 chip；唯一一份外观） */
+function renderRefChip(item: ResourceItem): HTMLElement {
+  const kind = item.chipKind
+  const invalid = item.invalid === true
+  const span = document.createElement('span')
+  span.className =
+    'resource-node resource-chip'
+    + (kind ? ' resource-chip--' + kind : ' resource-chip--unbound')
+    + (invalid ? ' resource-chip--invalid' : '')
+  span.dataset.id = item.id
+  span.dataset.name = item.name
+  if (kind) span.dataset.kind = kind
+  if (invalid) span.dataset.invalid = '1'
+  /**
+   * 缩略图只在**能当图片画**时出：图片原图、视频帧图。
+   * 音频是 mp3、文本没有画面 —— 塞进 <img> 只会得到裂图（用户 2026-10-28 报过）。
+   */
+  const thumb =
+    kind === 'video' ? (item.thumbnail_url || item.url || '')
+    : kind === 'image' ? (item.url || '')
+    : ''
+  const canThumb = !!thumb && (kind === 'image' || thumb.startsWith('data:image/'))
+  if (canThumb && !invalid) {
+    const img = document.createElement('img')
+    img.className = 'resource-chip-thumb'
+    img.src = thumb
+    img.alt = ''
+    span.append(img)
+  } else {
+    const ic = document.createElement('span')
+    ic.className = 'resource-chip-icon'
+    // 没有 chipKind = 待绑定 → 统一资源图标（data-icon 缺省 = 通用方块）
+    ic.dataset.icon = kind ?? 'resource'
+    span.append(ic)
+  }
+  const nm = document.createElement('span')
+  nm.className = 'resource-chip-name'
+  nm.textContent = item.name
+  span.append(nm)
+  return span
 }
 
 /** 造一个「待输入 / 已填」槽位素材项（renderEditor 读注册表，缩略图跟着连线变化） */
@@ -1101,9 +1198,10 @@ export function migrateLegacyChipIds(doc: PMNode): PMNode {
  * 内容相同就绝不产生事务，从这个源头掐掉"先跳前面"的那一步。
  */
 export function chipAttrsNeedUpdate(
-  attrs: { url?: string | null; name?: string | null; thumbnail_url?: string | null },
-  want: { url?: string | null; name?: string | null },
+  attrs: { url?: string | null; name?: string | null; thumbnail_url?: string | null; id?: string | null },
+  want: { url?: string | null; name?: string | null; id?: string | null },
 ): boolean {
+  if (want.id != null && String(attrs.id ?? '') !== String(want.id)) return true
   if ((attrs.url ?? '') !== (want.url ?? '')) return true
   if (want.name != null && String(attrs.name ?? '') !== String(want.name)) return true
   return false
@@ -2015,6 +2113,37 @@ export function useEditor(
     if (!view) return false
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return false
+    /**
+     * 换绑（用户 2026-10-28：替换插槽内容时，正文里的标签名称要跟着换成新节点）。
+     *
+     * `previousId` 给了且与新 id 不同 → 找旧身份那颗标签，**整颗换成新身份**。
+     * 为什么必须改 id 而不只改名字：标签的身份就是「绑定了谁」，只改显示名的话，
+     * 下一次刷新会按旧节点把名字又拉回去（而且失效判断也会错）。
+     */
+    const previousId = item.previousId
+    if (previousId && previousId !== item.id) {
+      const prevItem = itemRegistry.get(previousId)
+      itemRegistry.delete(previousId)
+      itemRegistry.set(item.id, item.renderEditor || !prevItem ? item : { ...prevItem, ...item })
+      let rebound = false
+      const tr = view.state.tr
+      view.state.doc.descendants((node, pos) => {
+        if (rebound || node.type.name !== 'resource' || node.attrs.id !== previousId) return
+        rebound = true
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          id: item.id,
+          name: item.name,
+          url: item.url ?? '',
+          thumbnail_url: item.thumbnail_url ?? '',
+          value: item.value ?? '',
+          category: item.category,
+        })
+      })
+      if (!rebound) return false
+      view.dispatch(tr)
+      return true
+    }
     // 名字 undefined = 保留注册表里原条目的名字（引用名是提示词的一部分，
     // 排序/替换只换图 —— 注册表条目如果被 undefined 覆盖，chip 文字会漂移）。
     const prev = itemRegistry.get(item.id)
