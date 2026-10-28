@@ -531,6 +531,12 @@ watch(item, (v) => {
   border: 0;
   display: block;
   background: transparent;
+  /*
+   * 预览里的界面只作展示，不接收指针/焦点（用户口径 2026-10-28：连切两个可视化节点，
+   * 界面一直不变）。根因是点进 iframe 后焦点被它拿走，← / → 只在 iframe 内部生效、
+   * 传不到预览器，看起来就像"切张失灵"。关掉指针事件后按键始终归预览器。
+   */
+  pointer-events: none;
 }
 .mv-ui-empty {
   margin: 0;
