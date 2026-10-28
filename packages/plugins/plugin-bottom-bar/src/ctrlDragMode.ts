@@ -7,41 +7,16 @@
  *
  * 与 referenceMode（参考按钮会话）互相独立：两个会话不共存，但视觉/结构刻意保持一致。
  */
-import { ref } from 'vue'
-
 export type CtrlDragNodeState = 'owner' | 'selectable' | 'connected' | 'blocked'
 
-const active = ref(false)
-/** 发起节点（底栏宿主） */
-const owner = ref('')
-/** 会话代数：每次进入 +1（组件据此重建悬停态等） */
-const epoch = ref(0)
-
-export function ctrlDragActive(): boolean {
-  return active.value
-}
-export function ctrlDragOwner(): string {
-  return active.value ? owner.value : ''
-}
-export function ctrlDragEpoch(): number {
-  return epoch.value
-}
-/** 进入 Ctrl 拖选择态（owner = 底栏宿主节点） */
-export function enterCtrlDragMode(ownerId: string): void {
-  owner.value = ownerId
-  active.value = true
-  epoch.value += 1
-  ;(globalThis as { __miniCanvasCtrlDrag?: { active: boolean; owner: string } }).__miniCanvasCtrlDrag = { active: true, owner: ownerId }
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:ctrl-drag-mode'))
-}
-/** 退出（幂等） */
-export function exitCtrlDragMode(): void {
-  if (!active.value) return
-  active.value = false
-  epoch.value += 1
-  ;(globalThis as { __miniCanvasCtrlDrag?: { active: boolean; owner: string } }).__miniCanvasCtrlDrag = { active: false, owner: '' }
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:ctrl-drag-mode'))
-}
+// 会话状态已并到 selectionMode（参考与 Ctrl 拖拽共用一套）；保留同名导出。
+export {
+  enterCtrlDragMode,
+  exitCtrlDragMode,
+  ctrlDragActive,
+  ctrlDragOwner,
+  ctrlDragEpoch,
+} from './selectionMode'
 
 /** 节点在 Ctrl 拖选择态里的面孔（复用参考选择的状态语义） */
 export function ctrlDragNodeState(input: {
@@ -71,14 +46,11 @@ export function canEnterCtrlDragMode(input: {
   repeat: boolean
   /** 当前节点的底栏本体是否真的渲染（.nb-root 在、且不是空壳） */
   barShown: boolean
-  /** 参考选择态是否已在进行（两个会话不共存） */
-  referenceActive: boolean
   /** 焦点是否在输入/可编辑区（那里 Ctrl 是文本快捷键） */
   editableTarget: boolean
 }): boolean {
   if (input.key !== 'Control' || input.repeat) return false
   if (!input.barShown) return false
-  if (input.referenceActive) return false
   if (input.editableTarget) return false
   return true
 }

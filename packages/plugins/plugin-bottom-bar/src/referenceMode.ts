@@ -17,7 +17,24 @@
  * 与内核「缺省即全收」保持同一套语义（见 canvas/connection.ts 的 validateConnection）：
  * 目标没声明 acceptsTypes = 来者不拒；源没声明产出内容类型 = 不知道它产出什么，不能当参考。
  */
-import { ref } from 'vue'
+import type { SelectionMode } from './selectionMode'
+
+// 会话状态已并到 selectionMode（参考与 Ctrl 拖拽共用一套）；这里保留同名导出，
+// 现有组件和测试不用一次性改调用点。
+export {
+  enterReference,
+  exitReference,
+  toggleReference,
+  referenceOwner,
+  referenceActive,
+  referenceEpoch,
+  selectionMode,
+  selectionActive,
+  selectionOwner,
+  selectionEpoch,
+  exitSelection,
+  readSelectionSnapshot,
+} from './selectionMode'
 
 /** 端口的能力声明（内核 PortDef 的子集；只取本判定要用的两件） */
 export interface PortLike {
@@ -114,53 +131,25 @@ export function referencePickAction(state: ReferenceNodeState): ReferencePickAct
   return 'none'
 }
 
-// ==================== 会话（module 级共享响应式） ====================
-//
-// 为什么用 module 级状态而不是服务：发起方（底栏的「参考」按钮）与消费方（画布浮层）
-// 是两个兄弟组件，只共享 ctx。把「正在选参考」写进节点 data 会落盘、还会变成一条可撤销操作
-// （纯 UI 状态混进撤销栈）—— 与 plugin-node-image 的 cropSession 同一条理由。
-
-/** 当前正在为哪个节点选参考（null = 不在选择态） */
-const owner = ref<string | null>(null)
-/** 每次进入选择态自增：浮层据此重置本地态（例如已展示过的悬停提示） */
-const epoch = ref(0)
-
-/** 进入选择态（为 ownerId 这个节点选参考） */
-export function enterReference(ownerId: string): void {
-  if (!ownerId) return
-  owner.value = ownerId
-  epoch.value += 1
-  // 广播给节点内覆盖层（跨模块实例 —— 热重载 UMD 拷贝与 bundle 拷贝的模块 ref 不共享）
-  ;(globalThis as { __miniCanvasRefSel?: { active: boolean; owner: string } }).__miniCanvasRefSel = { active: true, owner: ownerId }
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:reference-mode'))
-}
-
-/** 退出选择态（再点一次「参考」、点「返回节点」、Esc、点 ✕ 都调它；幂等） */
-export function exitReference(): void {
-  owner.value = null
-  ;(globalThis as { __miniCanvasRefSel?: { active: boolean; owner: string } }).__miniCanvasRefSel = { active: false, owner: '' }
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:reference-mode'))
-}
-
-/** 切换：正在为 ownerId 选参考 → 退出；否则进入（「参考」按钮的两态） */
-export function toggleReference(ownerId: string): void {
-  if (owner.value === ownerId) exitReference()
-  else enterReference(ownerId)
-}
-
-/** 当前选择态的宿主节点 id（响应式：组件里放进 computed 即可跟随） */
-export function referenceOwner(): string | null {
-  return owner.value
-}
-
-/** 是否正在选择态 */
-export function referenceActive(): boolean {
-  return owner.value !== null
-}
-
-/** 进入次数（浮层用：变化即重置本地态） */
-export function referenceEpoch(): number {
-  return epoch.value
+/**
+ * 节点盖层上那句话（纯函数，Node 可测）。
+ *
+ * 参考模式与拖拽模式共用同一套视觉，只换文字；blocked 也必须给提示
+ * （用户 2026-10-28：红色禁用节点 hover 要说明为什么不能用）。
+ */
+export function selectionNodeHint(
+  mode: SelectionMode,
+  state: ReferenceNodeState,
+  title: string,
+): string {
+  if (state === 'owner') return ''
+  if (state === 'blocked') {
+    return mode === 'ctrl-drag' ? '这个节点不能拖到参考格' : '这个节点不能作为参考'
+  }
+  if (state === 'connected') {
+    return mode === 'ctrl-drag' ? '已连接 · 不可重复拖拽' : '取消选择 ' + title
+  }
+  return mode === 'ctrl-drag' ? '按住拖到参考格 ' + title : '选择 ' + title
 }
 
 // ==================== 「返回节点」的聚焦 ====================
