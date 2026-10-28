@@ -121,6 +121,28 @@ describe('资产树共用（AssetTree）', () => {
     expect(seg).toContain('var(--ui-scrim)')
   })
 
+  /**
+   * 节点包缩略图的定位（2026-10-28 真机截图报的「一小块蓝色跑到行外」）：
+   * 320px 的 iframe 放进 32px 容器后必须**绝对定位到左上角、原点也在左上角**。
+   * 只要改回 grid 居中 / center center，缩完就会整体偏出去 144px —— 这条会立刻红。
+   */
+  it('★ 节点包迷你窗口贴住容器左上角（缩放后不许跑到行外）', () => {
+    const rule = tree.slice(tree.indexOf('.asset-tree .pack-thumb-frame'))
+    const block = rule.slice(0, rule.indexOf('}'))
+    expect(block).toContain('position: absolute')
+    expect(block).toMatch(/left:\s*0/)
+    expect(block).toMatch(/top:\s*0/)
+    expect(block).toMatch(/transform-origin:\s*0 0/)
+    expect(block).not.toContain('center center')
+  })
+
+  /** 缩略图只作展示：沙箱不给脚本权限（包内代码找 CanvasUI 会在控制台刷错） */
+  it('节点包缩略图不执行包内脚本（只显示静态画面）', () => {
+    const seg = tree.slice(tree.indexOf('class="pack-thumb-frame"') - 400, tree.indexOf('class="pack-thumb-frame"'))
+    expect(seg).toContain('sandbox=""')
+    expect(seg).not.toContain('allow-scripts')
+  })
+
   /** 资源可以拖到画布建节点：树把资产 id 写进 dataTransfer（画布侧据此建对应类型的节点） */
   it('资产行拖拽时带上「这是资源树资产」的标记', () => {
     expect(tree).toContain('application/x-mini-canvas-asset')

@@ -542,14 +542,14 @@ function registerAssetRow(row: AssetTreeRow, el: unknown): void {
           <span
             v-if="row.kind === 'asset' && (row.assetKind ?? '') === 'node-package' && row.url"
             :ref="(el) => registerAssetRow(row, el)"
-            class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
+            class="relative grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
             :title="'预览 ' + row.name"
             @click.stop="onThumbClick(row, $event)"
           >
             <iframe
               v-if="packHtmlOf(row.url)"
               :srcdoc="packHtmlOf(row.url)"
-              sandbox="allow-scripts"
+              sandbox=""
               class="pack-thumb-frame"
               title="节点包缩略图"
               tabindex="-1"
@@ -678,13 +678,21 @@ function registerAssetRow(row: AssetTreeRow, el: unknown): void {
  * 节点包的迷你窗口缩略图：iframe 原尺寸 320px 宽，缩到 32×32 的卡片里（transform 缩放
  * 不改 iframe 内部布局，只是显示变小 —— 与生成历史缩略墙同一套做法）。
  * pointer-events: none：它只是"画面"，点击要落到整行/缩略图按钮上（不抢交互）。
+ *
+ * ★ 必须绝对定位 + 原点在左上角（2026-10-28 实测修）：320px 的盒子放在 32px 的
+ * grid 容器里会先被"居中"，缩放中心又在盒子正中，缩完整体偏到父容器右下 144px 处
+ *（实测 iframe 在 204,534，容器在 60,390）—— 用户看到的就是"一小块蓝色跑到了行外"。
+ * 绝对定位到 (0,0)、原点 0 0 之后，缩完正好铺满 32×32。
  */
 .asset-tree .pack-thumb-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 320px;
   height: 320px;
   border: 0;
   transform: scale(0.1);
-  transform-origin: center center;
+  transform-origin: 0 0;
   pointer-events: none;
   background: var(--ui-overlay-solid, #fff);
 }
