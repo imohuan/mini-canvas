@@ -510,7 +510,28 @@ function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
             @click.stop="onThumbClick(row, $event)"
           >
             <img v-if="(row.assetKind ?? 'other') === 'image' && row.url" :src="row.url" alt="" class="h-full w-full object-cover" />
+            <!--
+              视频缩略图（用户口径 2026-10-28）：与上传弹窗 / 画布宫格同一条做法 ——
+              <video preload=metadata muted> 出首帧当画面，中央叠一个小播放圆点做装饰，
+              与图片一眼区分（这个是视频）。不自动播放、不发声，点击仍走整行的预览语义。
+            -->
+            <video
+              v-else-if="(row.assetKind ?? 'other') === 'video' && row.url"
+              :src="row.url"
+              class="h-full w-full object-cover"
+              preload="metadata"
+              muted
+              playsinline
+              aria-hidden="true"
+            ></video>
             <component v-else :is="assetIconOf(row.assetKind ?? 'other')" :size="15" />
+            <span
+              v-if="(row.assetKind ?? 'other') === 'video' && row.url"
+              class="absolute grid size-4 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)]"
+              aria-hidden="true"
+            >
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg>
+            </span>
           </span>
           <input
             v-if="renamingId === row.id"

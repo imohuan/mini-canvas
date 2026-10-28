@@ -112,6 +112,15 @@ describe('资产树共用（AssetTree）', () => {
     expect(dialog).toMatch(/function onOpenThumb\(row: AssetTreeRow\)[\s\S]{0,400}openAssetPreviewFromAsset\(/)
   })
 
+  it('视频行有真缩略图 + 播放圆点（2026-10-28 口径：给首帧、与图片区分）', () => {
+    // 首帧：<video preload=metadata muted>（不是塞 mp4 进 img 的裂图老路）
+    expect(tree).toMatch(/<video[^>]*v-else-if="\(row\.assetKind \?\? 'other'\) === 'video' && row\.url"[\s\S]{0,200}preload="metadata"[\s\S]{0,120}muted/)
+    // 播放圆点：只在视频行出现，尺寸小（size-4），底色走主题 scrim 变量
+    const seg = tree.slice(tree.indexOf('v-else-if="(row.assetKind ?? \'other\') === \'video\''), tree.indexOf('</span>', tree.indexOf('polygon points=')))
+    expect(seg).toContain('size-4')
+    expect(seg).toContain('var(--ui-scrim)')
+  })
+
   /** 资源可以拖到画布建节点：树把资产 id 写进 dataTransfer（画布侧据此建对应类型的节点） */
   it('资产行拖拽时带上「这是资源树资产」的标记', () => {
     expect(tree).toContain('application/x-mini-canvas-asset')
