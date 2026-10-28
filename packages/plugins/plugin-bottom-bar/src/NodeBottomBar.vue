@@ -93,6 +93,7 @@ import { judgeSlotHover } from './refSlotDrag'
 import { canEnterCtrlDragMode, enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
 import {
   clearCtrlSuppression,
+  ctrlSuppressed,
   enterCtrlDragMode as unifiedEnterCtrlDragMode,
   exitCtrlDragMode as unifiedExitCtrlDragMode,
 } from './selectionMode'
@@ -1522,6 +1523,8 @@ function onCtrlModeKeydown(ev: KeyboardEvent): void {
     barShown: barShown.value,
     editableTarget,
   })) return
+  //「返回节点」刚把拖拽收掉、Ctrl 还没松 → 这一路 keydown 不再自动拉回拖拽（松手自动解除）
+  if (ctrlSuppressed()) return
   // 按住 Ctrl 时已在参考模式 → 只临时切到拖拽（参考保留在下面，松手自动回来）
   clearCtrlSuppression()
   unifiedEnterCtrlDragMode(props.id)
