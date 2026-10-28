@@ -551,6 +551,18 @@ async function ensureVideoThumbs(): Promise<void> {
     const thumb = await ensureVideoThumb(url, capture)
     if (thumb) videoThumbTick.value += 1
   }
+  /**
+   * 视频帧取不到（浏览器不给解码 / 跨域 / 服务没回）：把这类卡标记成「走丢」，
+   * 不要留一个永远转圈的加载态（用户 2026-10-29：没加载出来就给加载 UI，
+   * 但取不到也要给出结论）。
+   */
+  for (const t of refTiles.value) {
+    if (t.kind !== 'video') continue
+    if (!t.url) continue
+    if (loadingTiles.value[t.key] && !peekVideoThumb(t.url)) {
+      brokenTiles.value = { ...brokenTiles.value, [t.key]: true }
+    }
+  }
 }
 
 /**
