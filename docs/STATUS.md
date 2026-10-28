@@ -370,6 +370,17 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
 - 重建判定只比较"身份"（插槽名 + 条目 id），坐标变化只原地更新；
   真实浏览器验证：连续 4 个热区都能出面板，鼠标持续移动时保持展开不闪。
 
+**Agent 圆球移出排序容器（2026-10-28，用户明确口径）**：
+
+- `shell.dock` 里不再有 `host/agent` 这个 `SlotAnchor`；Agent 圆球是**独立按钮**，
+  不参与 before/after 排序、不带 `data-slot-id`。
+- 原因：它悬浮在面板外缘，塞进 flex 排序容器会改变底栏布局。此前为了让测试通过把它塞回去，
+  属于错误做法，已撤回。
+- 依赖它的两处演示排序改为别的锚点：自绘按钮 `before host/shortcuts`、
+  主题文本按钮 `after host/separator`。
+- `shellSlotMounts` 改为断言：排序容器里有 add/move/library/roles/history/shortcuts，
+  且**不含** `host/agent`、但页面上仍有 Agent 按钮。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 

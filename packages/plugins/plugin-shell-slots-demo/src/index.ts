@@ -56,18 +56,19 @@ export function apply(ctx: Context): void {
     meta: { title: '插槽演示·主题按钮', variant: 'icon' },
   })
 
-  // ③ 底栏两条：自绘按钮放在 Agent 前，主题文本按钮放在 Agent 后
+  // ③ 底栏两条：自绘按钮放在快捷键前，主题文本按钮放在分隔线后
+  //    （Agent 圆球是独立按钮、不在排序容器里，不能作为 before/after 目标）
   ctx.slots.register('shell.dock', {
     id: 'shell-slots-demo/dock',
     order: 40,
-    before: 'host/agent',
+    before: 'host/shortcuts',
     component: markRaw(DockEndButton),
     meta: { title: '插槽演示·底栏按钮' },
   })
   ctx.slots.register('shell.dock', {
     id: 'shell-slots-demo/dock-themed',
     order: 41,
-    after: 'host/agent',
+    after: 'host/separator',
     component: markRaw(ThemedButtons),
     meta: { title: '插槽演示·主题按钮', variant: 'text' },
   })

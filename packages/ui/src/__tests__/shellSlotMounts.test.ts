@@ -28,8 +28,11 @@ describe('外壳插槽挂载点', () => {
     // 底栏模板是多行写法：只断言标签本身与槽名都在
     expect(dock).toContain('<SlotComposer')
     expect(dock).toContain('slot="shell.dock"')
-    for (const id of ['host/add', 'host/move', 'host/library', 'host/roles', 'host/history', 'host/shortcuts', 'host/agent']) {
+    for (const id of ['host/add', 'host/move', 'host/library', 'host/roles', 'host/history', 'host/shortcuts']) {
       expect(dock).toContain('id="' + id + '"')
     }
+    // Agent 圆球是独立按钮（用户口径）：不在排序容器里，也不使用 SlotAnchor
+    expect(dock).not.toContain('id="host/agent"')
+    expect(dock).toContain('aria-label="Agent 对话"')
   })
 })

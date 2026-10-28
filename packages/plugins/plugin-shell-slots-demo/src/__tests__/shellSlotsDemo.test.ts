@@ -20,7 +20,7 @@ describe('plugin-shell-slots-demo', () => {
       slots: { occupants(slot: string): Array<{ id: string; component: unknown; meta?: unknown }> }
     }).slots
 
-    expect(slots.occupants('shell.status')).toHaveLength(1)
+    expect(slots.occupants('shell.status')).toHaveLength(2)
     expect(slots.occupants('shell.dock')).toHaveLength(3)
     const tabs = slots.occupants('shell.drawer.tabs')
     expect(tabs).toHaveLength(1)

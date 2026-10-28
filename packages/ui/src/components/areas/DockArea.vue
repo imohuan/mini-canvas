@@ -75,7 +75,8 @@ function onUploadPick(e: Event): void {
     <div class="flex h-[50px] items-center gap-2 rounded-xl border border-line bg-panel px-2" aria-label="画布工具栏"
       @pointerdown.stop>
       <!-- 可排序槽：内置按钮（SlotAnchor）与插件条目（ctx.slots.register('shell.dock')）一起排。
-         插件写 before/after 时指向条目 id（host/agent 这种），不是槽名。 -->
+         插件写 before/after 时指向条目 id（host/shortcuts 这种），不是槽名。
+         Agent 圆球是排序容器外的独立按钮，不能作为 before/after 目标。 -->
       <SlotComposer slot="shell.dock" item-class="flex-none" class="flex items-center gap-2" :shared-props="slotShared">
         <SlotAnchor id="host/upload-input" :order="90">
           <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true"
@@ -266,17 +267,18 @@ function onUploadPick(e: Event): void {
         <CircleQuestionMark :size="16" />
       </button></AxTooltip>
     -->
-        <SlotAnchor id="host/agent" :order="800">
-          <AxTooltip content="Agent 对话" placement="left"><button
-              class="grid size-12 place-items-center rounded-full border border-line bg-panel text-ink"
-              aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }"
-              @click="ui.toggleAgent()">
-              <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
-                   按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
-              <AgentOrb :open="ui.agent.open" />
-            </button></AxTooltip>
-        </SlotAnchor>
       </SlotComposer>
     </div>
+
+    <!-- Agent 圆球：**独立按钮**，不属于插槽排序容器（用户口径 2026-10-28）。
+         不使用 SlotAnchor，也不参与 before/after 排序。 -->
+    <AxTooltip content="Agent 对话" placement="left"><button
+        class="grid size-12 place-items-center rounded-full border border-line bg-panel text-ink"
+        aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }"
+        @click="ui.toggleAgent()">
+        <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
+             按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
+        <AgentOrb :open="ui.agent.open" />
+      </button></AxTooltip>
   </div>
 </template>
