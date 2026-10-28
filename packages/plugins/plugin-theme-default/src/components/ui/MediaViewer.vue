@@ -491,7 +491,25 @@ watch(item, (v) => {
 .mv-plugin-stage :deep(.aw-progress-thumb) { border-color: var(--ui-ink, #18202b); }
 /* 视频舞台：撑满整个预览区（不给限宽限高 —— 视频默认就该大）。
    里面是节点插件的 videoPreview（自定义 UI：播放/进度/时间/音量），它自身撑满本层。 */
-.mv-video-stage { flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; border-radius: 8px; overflow: hidden; display: flex; }
+.mv-video-stage {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/*
+ * 全屏预览里的视频：**按画面自身比例收边**（用户口径 2026-10-28：
+ * 「你这里只需要根据视频的宽高进行显示不就行了？我感觉你的背景后面有一片黑色区域」）。
+ * 原先视频组件被拉满整个舞台、根元素又是黑底，于是画面外多出一大片黑色。
+ * 这里让插件组件按自己的宽高比决定大小，舞台只负责居中；黑底不再外露。
+ */
+.mv-video-stage :deep(.vpv-root.is-tall) { background: transparent; }
 .mv-video { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; outline: none; background: transparent; }
 .mv-audio { width: min(560px, 100%); }
 /* 可视化节点预览（kind='ui'）：iframe 装节点那段 HTML。

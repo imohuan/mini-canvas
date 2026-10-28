@@ -59,6 +59,25 @@ const dense = computed(() => width.value > 0 && width.value < DENSE_MAX_WIDTH &&
  *  卡片里的小尺寸件不自动播（一屏几十张，全自动播会很吵、也费资源）。 */
 const shouldAutoplay = computed(() => props.tall && !!props.url)
 
+/**
+ * 大舞台（全屏预览）里**按视频自己的宽高比**显示（用户口径 2026-10-28：
+ * 「你这里只需要根据视频的宽高进行显示不就行了？我感觉你的背景后面有一片黑色区域」）。
+ *
+ * 做法：量到 videoWidth / videoHeight 后，把根容器的宽高比锁成它，并用 max-width/max-height
+ * 收进可用空间 —— 画面外不再多出一圈黑底。小卡片（非 tall）保持原来的铺满行为。
+ */
+const aspect = ref(0)
+const rootFitStyle = computed<Record<string, string> | undefined>(() => {
+  if (!props.tall || !(aspect.value > 0)) return undefined
+  return {
+    aspectRatio: String(aspect.value),
+    width: 'auto',
+    height: 'auto',
+    maxWidth: '100%',
+    maxHeight: '100%',
+  }
+})
+
 const videoRef = ref<HTMLVideoElement | null>(null)
 const playing = ref(false)
 const currentTime = ref(0)
@@ -201,6 +220,8 @@ function toggleMute(): void {
 function onLoadedMetadata(): void {
   const el = videoRef.value
   if (el && Number.isFinite(el.duration) && el.duration > 0) duration.value = el.duration
+  // 记下真实宽高比（大舞台据此收掉多余黑底；量不到就维持原样）
+  if (el && el.videoWidth > 0 && el.videoHeight > 0) aspect.value = el.videoWidth / el.videoHeight
   // 组件记着的设置，元数据就绪时同步给新 video（换 src 会重置元素状态）
   if (el) {
     el.volume = volume.value
@@ -286,6 +307,7 @@ watch(
     ref="rootEl"
     class="vpv-root"
     :class="{ 'is-tall': tall, 'is-idle': !hovering && !rateOpen }"
+    :style="rootFitStyle"
     @pointerenter="hovering = true"
     @pointerleave="hovering = false"
   >

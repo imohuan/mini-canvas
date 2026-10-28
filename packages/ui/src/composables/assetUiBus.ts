@@ -26,6 +26,15 @@ export interface AssetPreviewItem {
    * 用户口径 2026-10-14：「可以在预览中添加一个 iframe 预览框」—— 它进 iframe 的 srcdoc。
    */
   html?: string
+  /**
+   * 这份 html 是从**哪个地址**的包里解出来的。
+   *
+   * 为什么要记：同层清单里可能有多个 .mcnode。切到另一个包时，外壳上的 html
+   * 仍是上一个包的界面 —— 不判来源就会一直显示同一张（用户 2026-10-28 实测：
+   * 连切两个可视化节点，界面完全没变）。有了它，当前张与 html 来源不一致就当作
+   * "还没取"，由 AssetUiSlot 现取。
+   */
+  htmlUrl?: string
   /** 纯文本内容（kind='text' 用）—— 取包失败时把原因写在这里给用户看，别静默什么都不显示 */
   text?: string
   /** 宿主自己的资产 id（预览右上角「删除」用；来自外部打开时不带，也就没有删除按钮） */
@@ -104,11 +113,16 @@ export function currentAssetPreview(): AssetPreviewItem | null {
   // 取包由 AssetUiSlot 的 watch 完成（见下）。
   const itemKind = cur.kinds?.[i] ?? cur.kind
   if (itemKind === 'node-package') {
+    // ★ 只认"从当前这张的地址解出来的 html"：切到另一个包时它已经过期，
+    // 必须当成还没取（交给 AssetUiSlot 现取），否则画面永远停在上一个包。
+    const url = cur.list[i]
+    const htmlIsForThis = cur.html !== undefined && cur.htmlUrl === url
     return {
       ...cur,
       kind: 'ui',
       index: i,
-      url: cur.list[i],
+      url,
+      ...(htmlIsForThis ? { html: cur.html } : { html: undefined }),
       ...(cur.names?.[i] ? { name: cur.names[i] } : {}),
       ...(cur.ids?.[i] ? { id: cur.ids[i] } : {}),
     }
@@ -179,6 +193,7 @@ export async function openAssetPreviewFromAsset(
       // 'ui' 是 MediaViewer 里那个 iframe 分支的 kind（见其模板）
       kind: 'ui',
       html: pack.html,
+      htmlUrl: item.url,
       // 节点包也在同层清单里（与图片/视频一起切）：带上 url 与清单，
       // currentAssetPreview() 才能在切回它时知道"当前张还是节点包"。
       ...(list && list.length > 1

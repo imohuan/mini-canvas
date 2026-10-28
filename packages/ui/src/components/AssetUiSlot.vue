@@ -74,7 +74,7 @@ watch(previewItem, async (p) => {
     const cur = currentAssetPreview()
     // 等包的时候用户可能又切走了：只把结果写回"还在看这张"的那一条
     if (cur && cur.kind === 'ui' && cur.url === p.url) {
-      openAssetPreview({ ...cur, html: pack.html })
+      openAssetPreview({ ...cur, html: pack.html, htmlUrl: p.url })
     }
   } catch (err) {
     const cur = currentAssetPreview()
