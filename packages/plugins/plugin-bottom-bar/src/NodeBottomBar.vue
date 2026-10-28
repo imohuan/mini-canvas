@@ -2867,7 +2867,6 @@ function onGlobalLeave(el: Element): void {
   align-items: center;
   gap: 0px;
   max-width: 160px;
-  height: 22px;
   /**
    * 行高重合修复（用户 2026-10-29）：chip 高 22px，而 .ProseMirror 的 line-height
    * 是 1.6 × 13px ≈ 20.8px —— 两行 chip 的盒子互相重叠（第二行压住第一行底部）。

@@ -121,12 +121,24 @@ const typed = await page.evaluate(() => {
    * 用画布里**已有的图片节点**当「标记」样本（视频节点默认动作是「剪辑」，没有输入框）。
    * 优先挑有 barPromptDoc 的老节点，保证它确实带生成动作。
    */
-  const imageNode = doc.getNodes().find((n) =>
-    n.type === 'image' && typeof n.data?.barValues?.actionId === 'string' && /image/.test(n.data.barValues.actionId),
-  ) ?? doc.getNodes().find((n) => n.type === 'image' && n.data?.barPromptDoc)
+  /**
+   * 现造一个**带生成动作**的图片节点（画布里老节点的动作可能是「旋转」这类即时动作，
+   * 没有输入框 → 「标记」按钮不可用）。
+   */
+  const before = new Set(doc.getNodes().map((n) => n.id))
+  doc.addNodes([{
+    type: 'image',
+    position: { x: 1200, y: 1200 },
+    data: { label: '探针-标记样本' },
+  }])
+  const imageNode = doc.getNodes().find((n) => !before.has(n.id))
   if (!imageNode) return { error: 'no image node' }
+  // 先选中（底栏挂载后才有动作清单），再让底栏选到「带输入框」的生成动作
   host.ctx.get('selection')?.set?.([imageNode.id])
-  return { ok: true, target: imageNode.id }
+  const actions = host.ctx.get('nodeBar')?.list?.({ type: 'image' }) ?? []
+  const gen = actions.find((a) => a.needsPrompt)?.id ?? ''
+  if (gen) doc.updateNode(imageNode.id, { data: { barValues: { actionId: gen } } })
+  return { ok: true, target: imageNode.id, actionCount: actions.length, gen }
 })
 await page.waitForTimeout(2000)
 const typed2 = typed.error ? typed : await page.evaluate(() => {
@@ -172,6 +184,24 @@ if (!typed2.error) {
   ok('待绑定标签 → 空壳卡（可拖入）', !!pendingTile?.pending, JSON.stringify(pendingTile))
 } else {
   console.log('标记步骤跳过：' + JSON.stringify(typed2))
+}
+
+// 行高：两行 chip 不能重叠（用户 2026-10-29 报第二行压住第一行底部）
+const lineGap = await page.evaluate(() => {
+  const chips = [...document.querySelectorAll('.nb-shell .ProseMirror .resource-chip')]
+  if (chips.length < 2) return { error: 'need 2 chips', count: chips.length }
+  const rects = chips.map((c) => c.getBoundingClientRect())
+  let minGap = Infinity
+  for (let i = 1; i < rects.length; i++) {
+    const dy = rects[i].top - rects[i - 1].bottom
+    if (Math.abs(rects[i].top - rects[i - 1].top) > 4) minGap = Math.min(minGap, dy)
+  }
+  return { count: chips.length, minGap }
+})
+if (!lineGap.error) {
+  ok('相邻两行标签不重叠（行间距 ≥ 0）', lineGap.minGap >= 0, JSON.stringify(lineGap))
+} else {
+  console.log('行高检查跳过：' + JSON.stringify(lineGap))
 }
 
 if (errors.length) console.log('页面错误：' + errors.slice(0, 5).join(' | '))
