@@ -8,7 +8,7 @@
  *
  * 宿主没给 coreButton 时不渲染按钮（内置按钮是外壳提供的，插件不复制一套样式）。
  */
-import { computed, type Component } from 'vue'
+import { type Component } from 'vue'
 
 const props = defineProps<{
   variant?: 'icon' | 'text'
@@ -20,10 +20,6 @@ const props = defineProps<{
 
 const ICON_GRID =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
-const ICON_ZAP =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>'
-
-const isIcon = computed(() => (props.variant ?? 'icon') === 'icon')
 /**
  * 宿主下发的按钮组件本身就是组件，直接赋给本地名字当标签用：
  *   <CoreButton … />
@@ -42,17 +38,6 @@ const CoreButton = props.coreButton as Component | undefined
       :icon="ICON_GRID"
       @click="() => {}"
     />
-
-    <CoreButton
-      v-if="CoreButton"
-      :tone="buttonTone ?? 'dock'"
-      :variant="isIcon ? 'icon' : 'text'"
-      :title="isIcon ? '插槽演示：主题按钮' : '插槽演示：文本按钮'"
-      :icon="isIcon ? ICON_ZAP : undefined"
-      @click="() => {}"
-    >
-      <template v-if="!isIcon">主题按钮</template>
-    </CoreButton>
   </span>
 </template>
 

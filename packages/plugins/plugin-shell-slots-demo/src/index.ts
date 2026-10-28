@@ -33,10 +33,11 @@ export function apply(ctx: Context): void {
   ctx.slots.register('shell.status', {
     id: 'shell-slots-demo/status',
     order: 40,
-    before: 'host/zoom',
+    after: 'host/zoom',
     component: markRaw(StatusBadge),
     meta: { title: '插槽演示·状态徽章' },
   })
+  
   // 同槽第二条：主题按钮排在缩放后面（after 目标存在 → 相对位置优先于 order）
   ctx.slots.register('shell.status', {
     id: 'shell-slots-demo/status-themed',

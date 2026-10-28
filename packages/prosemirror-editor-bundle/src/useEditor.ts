@@ -580,7 +580,14 @@ function buildSlotItem(
      * 冷启动时注册表里只有 `registerSlotItemsFromDoc` 造的最小条目，mediaType 可能缺失，
      * 于是视频/图片标签一起落到图标分支 —— 看上去就是「刷新后缩略图没了、变回基础标签」。
      */
-    if (latest.url && !/^文本\s*\d+$/.test(String(latest.name ?? '').trim())) {
+    /**
+     * 只有「能把 url 当图片」的类型才画 `<img>`；音频是 mp3，塞进去必然加载失败、
+     * 编辑器再把失败元素隐藏 —— 标签就只剩名字（用户 2026-10-28 报音频标签没图标）。
+     * 视频的 url 是帧图（data:image/…），所以允许。
+     */
+    const urlIsImage = !!latest.url && !/\.(mp3|wav|ogg|m4a|mp4|webm|mov)(\?|#|$)/i.test(latest.url)
+    const canThumb = urlIsImage && !/^文本\s*\d+$/.test(String(latest.name ?? '').trim()) && latest.mediaType !== 'audio'
+    if (canThumb) {
       const img = document.createElement('img')
       img.className = 'resource-chip-thumb'
       img.src = latest.url

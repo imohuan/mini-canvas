@@ -580,9 +580,16 @@ const TEXT_ICON =
  */
 function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {
   const name = self.name || ''
-  // url 为空 = 该槽位现在是「待输入」：不给 <img>（空 src 会渲染成裂图/空白，
-  // 用户看到的就是"删掉资源后标签图标不见了"），改走图标/占位分支。
-  const isText = self.mediaType === undefined || !self.url
+  const kind4 = mediaKindOf(self)
+  /**
+   * 能不能把 url 当**图片**画：只有图片可以。
+   *
+   * 音频/视频的 url 是 mp3/mp4，塞进 `<img>` 必然加载失败 —— 编辑器再把失败的元素
+   * 设成 `display:none`，标签就只剩名字、没有图标（用户 2026-10-28 报「音频标签没有图标」）。
+   * 视频存的 url 是帧图（data:image/…）所以例外；音频没有封面，一律走类型图标。
+   */
+  const canShowThumb = !!self.url && kind4 !== 'audio' && (kind4 === 'image' || self.url.startsWith('data:image/'))
+  const isText = !canShowThumb
   return [
     'span',
     {
@@ -599,7 +606,7 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
     // 报「有些标签是空白」的真凶）。改为空占位 span + CSS mask 画图标。
     // 用户 2026-10-28 追加：图片/视频/音频/文本 **各有自己的默认图标**（data-icon=kind）。
     isText
-      ? ['span', { class: 'resource-chip-icon', 'data-icon': mediaKindOf(self) }]
+      ? ['span', { class: 'resource-chip-icon', 'data-icon': kind4 }]
       : ['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }],
     ['span', { class: 'resource-chip-name' }, name],
   ]

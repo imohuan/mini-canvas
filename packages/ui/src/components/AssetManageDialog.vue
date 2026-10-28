@@ -457,23 +457,27 @@ function onBatchDownload(): void {
       <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="emit('close')"></div>
       <div
         class="relative flex h-[min(760px,calc(100vh-64px))] w-[min(1560px,calc(100vw-64px))] flex-col overflow-hidden rounded-2xl border border-line bg-panel text-ink shadow-[var(--ui-shadow-md)]"
-        role="dialog" aria-modal="true" aria-label="资产管理"
-      >
+        role="dialog" aria-modal="true" aria-label="资产管理">
         <!-- 标题行 -->
         <div class="flex h-12 flex-none items-center justify-between border-b border-line px-5">
           <span class="text-sm font-medium">资产管理</span>
-          <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="关闭" @click="emit('close')"><XIcon :size="16" /></button>
+          <button
+            class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink"
+            aria-label="关闭" @click="emit('close')">
+            <XIcon :size="16" />
+          </button>
         </div>
 
         <div class="flex min-h-0 flex-1">
           <!-- 左：库列表 -->
           <aside class="flex w-[210px] flex-none flex-col gap-0.5 border-r border-line p-2">
-            <button class="flex h-9 items-center gap-2 rounded-lg bg-hover px-2.5 text-left text-[13px] text-ink" :aria-current="true">
+            <button class="flex h-9 items-center gap-2 rounded-lg bg-hover px-2.5 text-left text-[13px] text-ink"
+              :aria-current="true">
               <LibIcon :size="15" class="text-ink-dim" /> 个人资产库
             </button>
-            <button class="flex h-9 items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink-dim transition-colors hover:bg-hover" aria-label="可灵主体库">
+            <!-- <button class="flex h-9 items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink-dim transition-colors hover:bg-hover" aria-label="可灵主体库">
               <span class="grid size-4 place-items-center rounded-full border border-line text-[9px]">K</span> 可灵主体库
-            </button>
+            </button> -->
           </aside>
 
           <!-- 右：内容区 -->
@@ -481,47 +485,61 @@ function onBatchDownload(): void {
             <!-- 工具行：面包屑 + 搜索/批量/筛选/新建 -->
             <div class="flex h-12 flex-none items-center gap-1 px-4">
               <template v-for="(b, i) in breadcrumb" :key="b.name">
-                <button
-                  class="flex h-7 items-center rounded-lg px-1.5 text-[13px] transition-colors"
+                <button class="flex h-7 items-center rounded-lg px-1.5 text-[13px] transition-colors"
                   :class="i === breadcrumb.length - 1 ? 'font-medium text-ink' : 'text-ink-dim hover:bg-hover'"
-                  :aria-current="i === breadcrumb.length - 1"
-                  @click="goToFolder(b.id)"
-                >{{ b.name }}</button>
+                  :aria-current="i === breadcrumb.length - 1" @click="goToFolder(b.id)">{{ b.name }}</button>
                 <ChevronIcon v-if="i < breadcrumb.length - 1" :size="13" class="text-ink-dim" />
               </template>
               <span class="flex-1"></span>
               <AxDropdown placement="bottom-end" :offset="4">
-                <template #trigger><button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="搜索"><SearchIcon :size="15" /></button></template>
+                <template #trigger><button
+                    class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+                    aria-label="搜索">
+                    <SearchIcon :size="15" />
+                  </button></template>
                 <template #default="{ close }">
                   <div class="p-1.5">
-                    <input
-                      v-model="searchQuery"
+                    <input v-model="searchQuery"
                       class="h-8 w-48 rounded-lg bg-chip px-2.5 text-[13px] text-ink placeholder:text-ink-dim focus:outline-none"
-                      placeholder="搜索资产"
-                      aria-label="搜索资产"
-                      @keydown.esc="close()"
-                    />
+                      placeholder="搜索资产" aria-label="搜索资产" @keydown.esc="close()" />
                   </div>
                 </template>
               </AxDropdown>
-              <button class="grid size-8 place-items-center rounded-lg transition-colors hover:bg-hover" :class="batchOn ? 'bg-brand/15 text-brand' : 'text-ink/85'" aria-label="批量操作" :aria-pressed="batchOn" @click="batchOn ? exitBatch() : batchOn = true"><BatchIcon :size="15" /></button>
+              <button class="grid size-8 place-items-center rounded-lg transition-colors hover:bg-hover"
+                :class="batchOn ? 'bg-brand/15 text-brand' : 'text-ink/85'" aria-label="批量操作" :aria-pressed="batchOn"
+                @click="batchOn ? exitBatch() : batchOn = true">
+                <BatchIcon :size="15" />
+              </button>
               <AxDropdown v-model="kindOpen" placement="bottom-end" :offset="4">
-                <template #trigger><button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="筛选" :aria-expanded="kindOpen"><FilterIcon :size="15" /></button></template>
+                <template #trigger><button
+                    class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+                    aria-label="筛选" :aria-expanded="kindOpen">
+                    <FilterIcon :size="15" />
+                  </button></template>
                 <template #default="{ close }">
                   <AxMenu>
-                    <AxMenuItem v-for="k in ASSET_KINDS" :key="k" :active="s.assetFilterKind === k" @click="s.assetFilterKind = k; close()">{{ k }}</AxMenuItem>
+                    <AxMenuItem v-for="k in ASSET_KINDS" :key="k" :active="s.assetFilterKind === k"
+                      @click="s.assetFilterKind = k; close()">{{ k }}</AxMenuItem>
                   </AxMenu>
                 </template>
               </AxDropdown>
               <!-- 加号下拉：新建文件夹 / 上传资产（照左侧抽屉的加号；用户口径 2026-10-08） -->
               <AxDropdown v-model="plusOpen" placement="bottom-end" :offset="4">
                 <template #trigger>
-                  <button class="ml-2 grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="新建或上传" :aria-expanded="plusOpen"><PlusIcon :size="15" /></button>
+                  <button
+                    class="ml-2 grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+                    aria-label="新建或上传" :aria-expanded="plusOpen">
+                    <PlusIcon :size="15" />
+                  </button>
                 </template>
                 <template #default="{ close }">
                   <AxMenu>
-                    <AxMenuItem @click="close(); addFolderIn(currentFolderId)"><FolderPlusIcon :size="14" class="text-ink-dim" /> 新建文件夹</AxMenuItem>
-                    <AxMenuItem @click="close(); uploadOpen = true"><UploadIcon :size="14" class="text-ink-dim" /> 上传资产</AxMenuItem>
+                    <AxMenuItem @click="close(); addFolderIn(currentFolderId)">
+                      <FolderPlusIcon :size="14" class="text-ink-dim" /> 新建文件夹
+                    </AxMenuItem>
+                    <AxMenuItem @click="close(); uploadOpen = true">
+                      <UploadIcon :size="14" class="text-ink-dim" /> 上传资产
+                    </AxMenuItem>
                   </AxMenu>
                 </template>
               </AxDropdown>
@@ -529,76 +547,49 @@ function onBatchDownload(): void {
 
             <!-- 内容：**树形列表**（与侧边栏同一个共用组件；右键 / 拖拽 / 菜单行为完全一致） -->
             <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-              <AssetTree
-                variant="dialog"
-                show-enter
-                :rows="rows"
-                :batch-on="batchOn"
-                :selected-ids="checkedIds"
-                :collapsed-ids="collapsedIds"
-                :renaming-id="renamingId"
-                :rename-value="renameValue"
-                :tip-id="focusTipId"
-                :folder-icon-name="folderIconNameOf"
-                :icon-of="iconCmp"
-                :move-targets="dialogMoveTargets"
-                :tag-options="[...ASSET_TAGS]"
-                rename-data-attr="data-manage-rename"
-                :empty-compact="false"
-                tip-text="已展开到这一层"
-                @tip-dismiss="clearFocusTip()"
-                @toggle-expand="toggleExpand"
-                @open-folder="goToFolder($event)"
-                @open-asset="onOpenAsset"
-                @open-thumb="onOpenThumb"
-                @toggle-select="onTreeToggleSelect"
-                @rename-input="renameValue = $event"
-                @rename-commit="onTreeRenameCommit"
-                @rename-cancel="renamingId = null"
-                @start-rename="startRename($event.id, $event.name)"
-                @drop-on="onTreeDrop"
-                @add-agent="onTreeAddAgent"
-                @add-canvas="onTreeAddCanvas"
-                @child-folder="addFolderIn($event.id)"
-                @move-to="onTreeMoveTo"
-                @set-icon="onTreeSetIcon"
-                @set-tags="onTreeSetTags"
-                @download="onTreeDownload"
-                @remove="onTreeRemove"
-              />
+              <AssetTree variant="dialog" show-enter :rows="rows" :batch-on="batchOn" :selected-ids="checkedIds"
+                :collapsed-ids="collapsedIds" :renaming-id="renamingId" :rename-value="renameValue" :tip-id="focusTipId"
+                :folder-icon-name="folderIconNameOf" :icon-of="iconCmp" :move-targets="dialogMoveTargets"
+                :tag-options="[...ASSET_TAGS]" rename-data-attr="data-manage-rename" :empty-compact="false"
+                tip-text="已展开到这一层" @tip-dismiss="clearFocusTip()" @toggle-expand="toggleExpand"
+                @open-folder="goToFolder($event)" @open-asset="onOpenAsset" @open-thumb="onOpenThumb"
+                @toggle-select="onTreeToggleSelect" @rename-input="renameValue = $event"
+                @rename-commit="onTreeRenameCommit" @rename-cancel="renamingId = null"
+                @start-rename="startRename($event.id, $event.name)" @drop-on="onTreeDrop" @add-agent="onTreeAddAgent"
+                @add-canvas="onTreeAddCanvas" @child-folder="addFolderIn($event.id)" @move-to="onTreeMoveTo"
+                @set-icon="onTreeSetIcon" @set-tags="onTreeSetTags" @download="onTreeDownload" @remove="onTreeRemove" />
             </div>
           </div>
         </div>
 
         <!-- 底部批量条（宽容器 = 完整文字版） -->
         <div v-if="batchOn" class="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center">
-          <AssetBatchBar
-            :count="selectedIds.length"
-            :folders="flatFolders"
-            :tag-options="[...ASSET_TAGS]"
-            @exit="exitBatch"
-            @add-to="ui.moveSelectedAssets($event, [...selectedIds]); exitBatch()"
-            @move-to="ui.moveSelectedAssets($event || undefined, [...selectedIds]); exitBatch()"
-            @set-tags="onBatchTags"
-            @download="onBatchDownload"
-            @remove="onBatchRemove"
-          />
+          <AssetBatchBar :count="selectedIds.length" :folders="flatFolders" :tag-options="[...ASSET_TAGS]"
+            @exit="exitBatch" @add-to="ui.moveSelectedAssets($event, [...selectedIds]); exitBatch()"
+            @move-to="ui.moveSelectedAssets($event || undefined, [...selectedIds]); exitBatch()" @set-tags="onBatchTags"
+            @download="onBatchDownload" @remove="onBatchRemove" />
         </div>
       </div>
     </div>
 
     <!-- 文件夹「添加到画布」确认（数量 > 10 时出现；与左侧抽屉同一个服务，用户口径：一次加太多会卡死） -->
-    <div v-if="folderConfirm" class="fixed inset-0 z-[100001] grid place-items-center" @pointerdown.self="onFolderConfirmCancel">
+    <div v-if="folderConfirm" class="fixed inset-0 z-[100001] grid place-items-center"
+      @pointerdown.self="onFolderConfirmCancel">
       <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="onFolderConfirmCancel"></div>
-      <div class="relative flex w-[380px] flex-col gap-4 rounded-2xl border border-line bg-panel p-5 text-ink shadow-[var(--ui-shadow-md)]" role="dialog" aria-modal="true" aria-label="确认添加到画布">
+      <div
+        class="relative flex w-[380px] flex-col gap-4 rounded-2xl border border-line bg-panel p-5 text-ink shadow-[var(--ui-shadow-md)]"
+        role="dialog" aria-modal="true" aria-label="确认添加到画布">
         <p class="text-sm font-medium">把「{{ folderConfirm.name }}」添加到画布？</p>
         <p class="text-[13px] leading-relaxed text-ink-dim">
           这个文件夹里有 <span class="font-medium text-ink">{{ folderConfirm.count }}</span> 项内容，
           一次全部添加可能会卡顿。确定要继续吗？
         </p>
         <div class="flex items-center justify-end gap-2">
-          <button class="h-8 rounded-lg border border-line px-3.5 text-[13px] transition-colors hover:bg-hover" aria-label="取消添加" @click="onFolderConfirmCancel">取消</button>
-          <button class="h-8 rounded-lg bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand/85" aria-label="确认添加" @click="onFolderConfirmOk">继续添加</button>
+          <button class="h-8 rounded-lg border border-line px-3.5 text-[13px] transition-colors hover:bg-hover"
+            aria-label="取消添加" @click="onFolderConfirmCancel">取消</button>
+          <button
+            class="h-8 rounded-lg bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand/85"
+            aria-label="确认添加" @click="onFolderConfirmOk">继续添加</button>
         </div>
       </div>
     </div>
@@ -610,12 +601,6 @@ function onBatchDownload(): void {
     渲染在上层 —— 上传弹窗不会被资产管理盖住（反过来也不会盖住它的子浮层）。
     Esc 联动见上面的 onEscKey（上传开着时让位 + stopPropagation，一次 Esc 只关一层）。
   -->
-  <AssetUploadDialog
-    v-if="uploadOpen"
-    :folders="flatFolders"
-    :tag-options="[...ASSET_TAGS]"
-    :initial-folder-id="currentFolderId"
-    @close="uploadOpen = false"
-    @save="onUploadSave"
-  />
+  <AssetUploadDialog v-if="uploadOpen" :folders="flatFolders" :tag-options="[...ASSET_TAGS]"
+    :initial-folder-id="currentFolderId" @close="uploadOpen = false" @save="onUploadSave" />
 </template>

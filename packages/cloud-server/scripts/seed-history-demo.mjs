@@ -35,6 +35,25 @@ async function listByExt(exts) {
 /** 产物地址（同源，前端可直接加载） */
 const urlOf = (name) => '/api/canvases/' + canvasId + '/resources/' + name
 
+/**
+ * 把别的画布里的资源复制进本画布，返回本画布的文件名。
+ *
+ * 为什么必须复制：资源地址是 /api/canvases/<画布>/resources/<名>；写别画布的名字，
+ * 前端会按"本画布 + 那个名字"去取，取不到就是 404（真机踩到：示例视频整卡空白）。
+ * 按内容哈希命名（与 saveResource 一致），重复运行不会堆文件。
+ */
+async function adopt(srcCanvasId, name) {
+  const bytes = await fs.readFile(path.join(dataRoot, 'canvases', srcCanvasId, 'resources', name)).catch(() => null)
+  if (!bytes) return undefined
+  const crypto = await import('node:crypto')
+  const hash = crypto.createHash('sha1').update(bytes).digest('hex').slice(0, 16)
+  const target = hash + path.extname(name)
+  const abs = path.join(resourcesDir, target)
+  const exists = await fs.access(abs).then(() => true).catch(() => false)
+  if (!exists) await fs.writeFile(abs, bytes)
+  return target
+}
+
 async function probe(fileName) {
   const bytes = new Uint8Array(await fs.readFile(path.join(resourcesDir, fileName)))
   const ext = path.extname(fileName).toLowerCase()
@@ -60,7 +79,7 @@ if (images.length === 0) {
   process.exit(1)
 }
 
-// 视频优先从本画布找，找不到就借同数据目录下别的画布（教程示例，仅引用地址）
+// 视频优先从本画布找；找不到就去别的画布找，找到后**复制进本画布**（地址必须同画布）
 let videos = await listByExt(['.mp4', '.mov'])
 let videoCanvasId = canvasId
 if (videos.length === 0) {
@@ -74,6 +93,16 @@ if (videos.length === 0) {
       videoCanvasId = other
       break
     }
+  }
+}
+
+// 别的画布的媒体文件要复制进本画布，否则 /api/canvases/<本画布>/resources/<名> 会 404
+let videoFile = videos[0]
+if (videos.length > 0 && videoCanvasId !== canvasId) {
+  videoFile = await adopt(videoCanvasId, videos[0])
+  if (!videoFile) {
+    console.warn('复制视频失败，跳过视频示例')
+    videos = []
   }
 }
 
@@ -110,8 +139,8 @@ const entries = []
 
 /** 视频示例：横版，带时长（只有画布里真有 mp4 时才加） */
 if (videos.length > 0) {
-  const out = videos[0]
-  const bytes = new Uint8Array(await fs.readFile(path.join(dataRoot, 'canvases', videoCanvasId, 'resources', out)))
+  const out = videoFile
+  const bytes = new Uint8Array(await fs.readFile(path.join(resourcesDir, out)))
   const media = { bytes: bytes.length }
   const size = videoSizeFromBytes(bytes)
   if (size) Object.assign(media, size)
@@ -140,9 +169,33 @@ if (videos.length > 0) {
   })
 }
 
-/** 音频示例：语音合成（引用画布里的任意资源仅作示例，媒体信息仍按真实字节量） */
+/**
+ * 音频示例：语音合成。
+ *
+ * 音频产物必须**真的是音频文件** —— 以前偷懒借用了视频地址，详情与播放都说得过去，
+ * 但卡片上的类型角标与"时长"对不上（真机发现视频文件被当成音频）。
+ * 本画布没有音频资源时，就从别的画布复制一份进来。
+ */
 {
-  const out = videos.length > 0 ? videos[0] : images[0]
+  let audioFile
+  const localAudio = await listByExt(['.mp3', '.wav', '.m4a', '.aac', '.ogg'])
+  if (localAudio.length > 0) audioFile = localAudio[0]
+  else {
+    const others = await fs.readdir(path.join(dataRoot, 'canvases')).catch(() => [])
+    for (const other of others) {
+      const dir = path.join(dataRoot, 'canvases', other, 'resources')
+      const names = await fs.readdir(dir).catch(() => [])
+      const hit = names.find((n) => /\.(mp3|wav|m4a|aac|ogg)$/i.test(n))
+      if (hit) {
+        audioFile = await adopt(other, hit)
+        break
+      }
+    }
+  }
+  if (!audioFile) {
+    console.warn('找不到任何音频资源，跳过音频示例')
+  } else {
+    const bytes = new Uint8Array(await fs.readFile(path.join(resourcesDir, audioFile)))
   entries.push({
     id: randomUUID(),
     jobId: randomUUID(),
@@ -153,14 +206,15 @@ if (videos.length > 0) {
     kind: 'audio',
     status: 'done',
     rating: 'passed',
-    urls: [urlOf(out)],
+    urls: [urlOf(audioFile)],
     prompt: '用温柔的女声朗读：清晨的第一缕阳光落在窗台，新的一天开始了。',
     values: { voice: '温暖女声', speed: 1, format: 'mp3' },
     resources: [{ kind: 'text', value: '音色参考：柔和、语速偏慢、句尾轻微上扬' }],
-    media: { bytes: 8192, durationMs: 12000 },
+    media: { bytes: bytes.length, ...(audioDurationFromBytes(bytes, audioFile) ? { durationMs: audioDurationFromBytes(bytes, audioFile) } : {}) },
     createdAt: now - 10 * 60 * 1000,
     finishedAt: now - 9 * 60 * 1000,
   })
+  }
 }
 
 const existing = await fs.readFile(historyFile, 'utf8').then(JSON.parse).catch(() => [])
