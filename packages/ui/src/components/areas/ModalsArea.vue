@@ -461,15 +461,22 @@ function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
   if (!s.histShowError) {
     // 连外层瀑布流格子一起摘掉：只删内层卡会留下一个空白的列位（视觉上空一格）
     const slot = card.closest('.hist-masonry-item') ?? card
+    /**
+     * 必须走 masonry.remove（内部先摘项再 layout）。
+     * 旧写法 `slot.remove()` + `layout()`：Masonry 仍把这一格当有效项，
+     * 位置上留着空洞，后面的卡看起来就是错位的（用户口径 2026-10-28）。
+     * 而且实例是异步建的，那一刻可能还没有实例 —— 交给 layoutWhenReady 兜住。
+     */
+    masonry.remove([slot as HTMLElement])
     slot.remove()
-    // 删掉一个瀑布流项后要通知布局重排（否则 Masonry 还按旧高度留位）
-    masonry.instance.value?.layout()
+    // 摘掉一张后列表可能仍不足一屏：让哨兵重新评估
+    nextTick(fillViewportIfNeeded)
     return
   }
   const fallback = buildErrorCard(item, { missingResource: true })
   if (s.histBatchMode && item.id) fallback.appendChild(buildCheckOverlay(item.id))
   card.replaceWith(fallback)
-  masonry.instance.value?.layout()
+  masonry.layoutWhenReady()
 }
 
 /**
@@ -924,6 +931,19 @@ function createMasonryElement(item: HistItem): HTMLElement {
       // 开关关着时整条隐藏，开着时给中性「资源走丢」卡（不占用红色的"生成失败"）。
       showBrokenResourceCard(card, item)
     })
+    /**
+     * 加载超时兜底（用户口径 2026-10-28：截图里出现一块空白卡片，拖缩放才消失）。
+     *
+     * 有些地址既不会触发 error、也不会 load（连接挂住 / 被浏览器静默丢弃 / 缓存层返回空），
+     * 卡片就一直是"有格子没画面"的白块。12 秒还没拿到尺寸就按裂图处理：
+     * 归入「显示异常」（开关关着整条隐藏）—— 不留白格，也不误留一幅假图。
+     */
+    window.setTimeout(() => {
+      if (!img.isConnected) return
+      if (img.complete && img.naturalWidth > 0) return
+      if (s.histShowError) return // 用户要看异常时，交给 error 回调统一成中性卡
+      showBrokenResourceCard(card, item)
+    }, 12000)
     card.addEventListener('click', () => onCardClick(item))
   } else {
     card.appendChild(buildErrorCard(item))
@@ -1062,6 +1082,19 @@ function switchWall(): void {
   const container = masonryEl.value
   if (!container) return
   const key = historyWallKey()
+  /**
+   * 容器宽度必须是"真的量到"的。首次打开 / 重开面板时这一帧可能还是 0
+   * （弹窗刚 mount、样式还没算），用 0 去算列宽会得到错误的格子宽度，
+   * 卡片就会排成一团，直到拖一下缩放滑杆才恢复（用户口径 2026-10-28）。
+   * 所以量不到就退到 ResizeObserver 再量一次，绝不用 0/旧值硬建。
+   */
+  if (container.clientWidth <= 0) {
+    requestAnimationFrame(() => {
+      if (!s.historyOpen) return
+      switchWall()
+    })
+    return
+  }
   if (mountedWallKey === key && container.querySelector('.' + ITEM_CLASS)) {
     // 已经是这面墙：只补挂观察器（数据可能刚变过）
     masonry.layout()
@@ -1072,7 +1105,7 @@ function switchWall(): void {
 
   const cached = wallCache.get(key)
   const containerWidth = container.clientWidth
-  const columnWidth = containerWidth > 0 ? calcColumns(containerWidth).columnWidth : lastColumnWidth
+  const columnWidth = calcColumns(containerWidth).columnWidth
   if (cached) {
     container.innerHTML = ''
     while (cached.wall.firstChild) container.appendChild(cached.wall.firstChild)

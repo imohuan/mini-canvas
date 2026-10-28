@@ -5,6 +5,37 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-28，生成历史：重开面板瀑布流错位 / 空白卡）
+
+用户口径（附两张截图）：连着打开两次都是错位（卡片挤成一团、留一大块白），
+拖一下右上角缩放滑杆就恢复正常。
+
+**根因（两条，都在 8860 真机复现）**：
+
+1. **摘卡不重排**：图片/视频打不开时 `showBrokenResourceCard` 只 `slot.remove()` 再
+   `masonry.instance.value?.layout()`。Masonry 的构造是**异步**的（masonry-layout /
+   imagesloaded 都是动态 import），首帧那一刻实例还是 null → 可选链空调用；
+   而已有的实例也不会因为 DOM 被外部删掉就收缩，仍按旧项记账 → 留空洞 / 后面的卡错位。
+   拖缩放会走 `relayoutMasonry` → `setColumnWidth` → 全量 layout，所以一拖就"好了"。
+2. **重开面板时容器宽度还没量到**：`switchWall` 用 `lastColumnWidth` 兜底，
+   拿到的是上一次（或 0）的列宽，格子宽度算错 → 排成一团。
+
+**做法**：
+
+- `useMasonry` 新增 `remove(elements)`（内部 `msnry.remove`）、`layoutWhenReady()`，
+  以及 `layoutPending`：实例没就绪时把重排请求记下来，`init` 完成立刻补一次。
+- `init` 加 `initToken`：快速开关面板时旧的 async init 回来不能覆盖新实例；
+  `destroy` 作废在途 init。
+- `showBrokenResourceCard` 改走 `masonry.remove([slot])` + `slot.remove()`，
+  并 `nextTick(fillViewportIfNeeded)`（摘掉一张后列表可能不足一屏）。
+- `switchWall` 先量 `clientWidth`，为 0 就下一帧重试，**不再用 `lastColumnWidth` 兜底**。
+- 图片新增 12 秒加载超时兜底：既不 load 也不 error 的地址按裂图处理，不留空白卡。
+
+**验证**：ui 475/477（historyMediaCardLayout 44 条；两条失败是别的 agent 正在改的
+shell 插槽与裸颜色）、build 通过。8860 真机 Playwright：拦截 1/3 缩略图让它们 404，
+连开三次面板 + 滚到底，每列最大空隙始终 17px（正常 gutter）、重叠 0、空白媒体 0；
+正常数据连开三次也无重叠（24→36→43 张）。
+
 ### 追记（2026-10-28，生成历史：加载条 1 秒 + 切页签复用卡片墙 + 新任务增量插入）
 
 用户口径：① 加载更多要显示 1 秒，观感也要更好；② "之后不管怎么点都走缓存"——

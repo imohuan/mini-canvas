@@ -18,6 +18,7 @@ const videoPreview = readFileSync(
 )
 const modalsArea = readFileSync(new URL('../components/areas/ModalsArea.vue', import.meta.url), 'utf-8')
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
+const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
   new URL('../../../plugins/plugin-node-audio/src/AudioWavePlayer.vue', import.meta.url),
   'utf-8',
@@ -241,6 +242,41 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, 'ZOOM_MAX 仍是 5').toMatch(/const ZOOM_MAX = 4/)
     expect(modalsArea, '最小档位映射还留着第 5 档').not.toMatch(/5: 120/)
     expect(modalsArea, '第 4 档的宽度没有保留').toMatch(/4: 170/)
+  })
+
+  it('坏资源被摘掉后瀑布流真的重排（不是留空洞 / 全体堆一格）', () => {
+    // 用户口径 2026-10-28：两次打开都是错位，拖一下缩放滑杆才恢复
+    expect(masonrySource, '移除卡片时没有调用 Masonry 的 remove（只 layout 会留空洞）').toMatch(/function remove\(/)
+    expect(masonrySource, 'remove 退化成只 layout').toMatch(/msnry\.remove\(elements\)/)
+    expect(masonrySource, '实例未就绪时丢掉重排请求（异步 init 期间会被吞）').toMatch(/layoutPending/)
+    expect(masonrySource, '重新 init 会覆盖新实例（快速开关面板会错乱）').toMatch(/initToken/)
+
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function showBrokenResourceCard'),
+      modalsArea.indexOf('/**\n * 点卡片'),
+    )
+    expect(fn, '摘卡片没走 masonry.remove').toMatch(/masonry\.remove\(\[/)
+    expect(fn, '摘卡片后仍在用可选链 layout（实例没建好就空调用）').not.toMatch(/instance\.value\?\.layout/)
+  })
+
+  it('图片既不 load 也不 error 时，超时按裂图处理（不留空白卡）', () => {
+    const start = modalsArea.indexOf("img.addEventListener('load'")
+    const end = modalsArea.indexOf('function buildMediaCard')
+    const fn = modalsArea.slice(start, end > start ? end : undefined)
+    expect(fn, '缺加载超时兜底（挂住的请求会留一块白卡）').toMatch(/setTimeout\(/)
+    expect(fn, '超时没有归入异常处理').toMatch(/showBrokenResourceCard\(card, item\)/)
+    expect(fn, '超时把已加载好的图也误摘了').toMatch(/naturalWidth > 0/) 
+  })
+
+  it('重开面板时容器还没量到宽度就不建墙（否则格子宽度算错）', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function switchWall'),
+      modalsArea.indexOf('function relayoutMasonry'),
+    )
+    expect(fn.length, '切墙函数体没截到').toBeGreaterThan(200)
+    expect(fn, '没有挡住 clientWidth=0 的情况').toMatch(/container\.clientWidth <= 0/)
+    expect(fn, '量不到宽度没有下一帧重试').toMatch(/requestAnimationFrame/)
+    expect(fn, '仍拿 lastColumnWidth 兜底（会用上一次的错误列宽）').not.toMatch(/\? calcColumns\(containerWidth\)\.columnWidth : lastColumnWidth/)
   })
 
   it('批量模式只增删勾选层，不重建整面墙（视频不会黑一下）', () => {
