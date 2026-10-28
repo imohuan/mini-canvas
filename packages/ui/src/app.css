@@ -67,7 +67,7 @@
 .mini-map-dock-layer {
   position: absolute;
   left: 0;
-  bottom: 8px;
+  bottom: 14px;
   pointer-events: none;
   overflow: visible;
 }
