@@ -29,38 +29,44 @@ export const name = 'shell-slots-demo'
 export const inject = [] as string[]
 
 export function apply(ctx: Context): void {
-  // ① 状态条末尾（同槽两条：C 自绘徽章 + A 主题图标按钮）
-  ctx.slots.register('shell.status.end', {
+  // ① 状态条：自绘徽章排在缩放前面（before 指向同槽条目 id，不是槽名）
+  ctx.slots.register('shell.status', {
     id: 'shell-slots-demo/status',
     order: 40,
+    before: 'host/zoom',
     component: markRaw(StatusBadge),
     meta: { title: '插槽演示·状态徽章' },
   })
-  ctx.slots.register('shell.status.end', {
+  // 同槽第二条：主题按钮排在缩放后面（after 目标存在 → 相对位置优先于 order）
+  ctx.slots.register('shell.status', {
     id: 'shell-slots-demo/status-themed',
     order: 41,
+    after: 'host/zoom',
     component: markRaw(ThemedButtons),
     meta: { title: '插槽演示·主题按钮', variant: 'icon' },
   })
 
-  // ② 底栏最前：主题图标按钮（A）
-  ctx.slots.register('shell.dock.start', {
+  // ② 底栏：主题图标按钮插到“角色造型室”前面（before 指向内置锚点 host/roles）
+  ctx.slots.register('shell.dock', {
     id: 'shell-slots-demo/dock-start-themed',
     order: 10,
+    before: 'host/roles',
     component: markRaw(ThemedButtons),
     meta: { title: '插槽演示·主题按钮', variant: 'icon' },
   })
 
-  // ③ 底栏末尾（同槽两条：B 主题文本按钮 + C 自绘按钮）
-  ctx.slots.register('shell.dock.end', {
+  // ③ 底栏两条：自绘按钮放在 Agent 前，主题文本按钮放在 Agent 后
+  ctx.slots.register('shell.dock', {
     id: 'shell-slots-demo/dock',
     order: 40,
+    before: 'host/agent',
     component: markRaw(DockEndButton),
     meta: { title: '插槽演示·底栏按钮' },
   })
-  ctx.slots.register('shell.dock.end', {
+  ctx.slots.register('shell.dock', {
     id: 'shell-slots-demo/dock-themed',
     order: 41,
+    after: 'host/agent',
     component: markRaw(ThemedButtons),
     meta: { title: '插槽演示·主题按钮', variant: 'text' },
   })
@@ -69,6 +75,9 @@ export function apply(ctx: Context): void {
   ctx.slots.register('shell.drawer.tabs', {
     id: 'shell-slots-demo/tab',
     order: 40,
+    // 演示"before 目标不存在时的兜底"：这里刻意写一个不存在的 id，
+    // 排序会忽略它并按 order 落到两个内置页签之后。
+    before: 'host/not-installed-tab',
     component: markRaw(DrawerTabButton),
     meta: { title: '演示', panel: markRaw(DrawerPanel) },
   })

@@ -4,11 +4,13 @@
  */
 import { useCanvasContext } from '@mini-canvas/canvas-render'
 
-const { ctx } = useCanvasContext()
+const context = useCanvasContext()
+const { ctx, host: { command } } = context
 
 function openDrawer(): void {
-  ctx.tryGet<{ execute(id: string): unknown }>('command')?.execute('shell:open-drawer')
-}
+  // ctx.tryGet<{ execute(id: string): unknown }>('command')?.execute('shell:open-drawer')
+  command.execute("shell:open-drawer")
+}   
 </script>
 
 <template>
@@ -28,5 +30,8 @@ function openDrawer(): void {
   font: 600 13px system-ui, 'Microsoft YaHei', sans-serif;
   cursor: pointer;
 }
-.ss-demo-btn:hover { background: var(--ui-hover, rgba(0 0 0 / 0.05)); }
+
+.ss-demo-btn:hover {
+  background: var(--ui-hover, rgba(0 0 0 / 0.05));
+}
 </style>

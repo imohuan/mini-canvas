@@ -19,6 +19,7 @@
  *   热卸插件 removeByScope 删声明后重装 define 仍能恢复用户值。
  */
 import type { Disposable } from './types'
+import { orderSlotItems } from './registry/slotOrder'
 
 /** 一项配置的 schema */
 export interface SettingSchema {
@@ -61,6 +62,17 @@ export interface SettingEntry {
 
 type Listener = (scope: string | undefined, key: string, value: unknown) => void
 
+/** 一个分组的排序声明（与 UI 槽同规则：order 兜底 + before/after 相对位置） */
+export interface SettingGroupOrder {
+  /** 组名（完整 key，如「节点/端口」） */
+  group: string
+  order?: number
+  /** 排在该分组之前（填分组名，不是 setting key） */
+  before?: string
+  /** 排在该分组之后（填分组名） */
+  after?: string
+}
+
 /** 一个"已声明项"在库内的登记：所属组 + schema + 当前值 */
 interface DeclaredItem {
   group: string
@@ -75,6 +87,8 @@ export class SettingsStore {
   private listeners = new Set<Listener>()
   /** schema 变更订阅（define/removeByScope 触发；UI 分组列表刷新用） */
   private schemaListeners = new Set<() => void>()
+  /** 分组顺序声明：group → 排序描述（未声明的组按 groups() 原序） */
+  private groupOrders = new Map<string, SettingGroupOrder>()
   /** 用户已保存值快照（settingsPersist 桥注入）：define 命中即以快照值为初值；set 同步写回；clearSavedKeys 删除。 */
   private savedSnapshot: Record<string, string | number | boolean> | null = null
 
@@ -130,7 +144,33 @@ export class SettingsStore {
 
   /** 已申报的所有组名 */
   groups(): string[] {
-    return [...new Set([...this.items.values()].map((i) => i.group))].filter((g) => g !== '')
+    const raw = [...new Set([...this.items.values()].map((i) => i.group))].filter((g) => g !== '')
+    if (this.groupOrders.size === 0) return raw
+    // 未声明顺序的组：order 用「声明项里的最大 order + 原序」，
+    // 这样它们既不插到已声明项前面，也不会因为索引差被 before/after 误伤。
+    const declared = [...this.groupOrders.values()]
+    const declaredMax = declared.reduce((m, d) => Math.max(m, d.order ?? 0), 0)
+    const entries = raw.map((group, index) => {
+      const own = this.groupOrders.get(group)
+      return {
+        id: group,
+        order: own?.order ?? declaredMax + 1 + index,
+        ...(own?.before !== undefined ? { before: own.before } : {}),
+        ...(own?.after !== undefined ? { after: own.after } : {}),
+      }
+    })
+    return orderSlotItems(entries).items.map((e) => e.id)
+  }
+
+  /**
+   * 声明分组的显示顺序（与 UI 槽同规则）：
+   * - order 小的在前；未声明 order 的按 groups() 原序；
+   * - before / after 填**分组名**（如「节点/端口」），目标不存在时退回 order；
+   * - 同组重复声明 = 覆盖（后写赢）。
+   */
+  orderGroups(defs: readonly SettingGroupOrder[]): void {
+    for (const d of defs) this.groupOrders.set(d.group, { ...d })
+    this.notifySchema()
   }
 
   /** 是否已声明某 key */

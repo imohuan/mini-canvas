@@ -61,9 +61,25 @@ declare module '@mini-canvas/kernel' {
     }
     /** 往通用 UI 槽叠 occupant（宿主按序渲染），自动回收 */
     slots: {
-      register(slot: string, req: { id?: string; order?: number; component: unknown; meta?: unknown }): string
+      register(slot: string, req: {
+        id?: string
+        order?: number
+        /** 排在该条目 id 之前（条目 id 用 owner/name，如 host/agent；不是槽名） */
+        before?: string
+        /** 排在该条目 id 之后（条目 id 用 owner/name） */
+        after?: string
+        component: unknown
+        meta?: unknown
+      }): string
       remove(slot: string, id: string): boolean
-      occupants(slot: string): Array<{ id: string; order: number; component: unknown; meta?: unknown }>
+      occupants(slot: string): Array<{
+        id: string
+        order: number
+        before?: string
+        after?: string
+        component: unknown
+        meta?: unknown
+      }>
     }
     /**
      * 配置（cordis P4 形态）：插件在模块级导出 `Config` schema，装配处给 config，
@@ -85,6 +101,16 @@ declare module '@mini-canvas/kernel' {
       onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
       /** 已装配(声明)的组名（UI 面板用） */
       groups(): string[]
+      /**
+       * 声明设置分组的显示顺序（与 UI 槽同规则：order 兜底 + before/after 相对位置）。
+       * before / after 填**分组名**（如「节点/端口」），不是 setting key。
+       */
+      orderGroups(defs: ReadonlyArray<{
+        group: string
+        order?: number
+        before?: string
+        after?: string
+      }>): void
     }
   }
 }

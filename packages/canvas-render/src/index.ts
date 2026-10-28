@@ -328,6 +328,11 @@ export { default as SettingsShell } from './components/SettingsShell.vue'
 export { settingsSourceFrom } from './components/settingsSource'
 // 通用 UI 槽宿主：给槽名就渲染该槽全部 occupant（<SlotHost slot="overlay" />），插件侧 ctx.slots.register 填
 export { default as SlotHost } from './components/SlotHost.vue'
+// 可排序槽：内置 UI（SlotAnchor）与插件条目（ctx.slots）一起按 order + before/after 排
+export { default as SlotComposer } from './components/SlotComposer.vue'
+export { default as SlotAnchor } from './components/SlotAnchor.vue'
+export { isSlotItemId, isSlotName, mergeSlotEntries } from './components/slotComposer'
+export type { SlotComposerEntry } from './components/slotComposer'
 export {
   nodesFromStore,
   edgesFromStore,

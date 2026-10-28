@@ -174,6 +174,43 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
 **边界**：`shell.dock.end` 现在在 Agent 圆球之后（面板内缘）；`shell.status.end` 在缩放下拉之后。
 新浮层若要可点内容，不要用 `*-box-layer` / `*-layer` 类名结尾（会被压回不可点）。
 
+### 追记（2026-10-28，可排序槽 SlotComposer / SlotAnchor + before/after）
+
+用户口径：外壳按钮要能"插到某个已知项前面/后面"，内置 UI 也要一起参与排序；
+`before` / `after` 指向**同槽条目 id**，不是槽名。
+
+**命名与 id 规范**：
+
+- 槽名用点：`shell.dock` / `shell.status` / `shell.drawer.tabs` / `settings.nav`。
+- 条目 id 用斜杠：`owner/name`；内置项 owner 固定为 `host`，例如 `host/agent`、`host/add`。
+- `host/` 保留给宿主；插件用自己的插件名做 owner，例如 `my-plugin/export`。
+- 排序只认**同槽条目 id**；写成槽名（`shell.dock.agent`）会按"目标不存在"处理并 warn。
+
+**内核**（`@mini-canvas/kernel`）：
+
+- `orderSlotItems(items, opts)`：order 兜底 + before/after **相邻插入**（插到目标正前/正后）；
+  目标不存在退回 order；环 / 自引用 / 重复 id 报告问题且不丢条目。
+- `SlotRegistry.ordered(slot)`：UI 宿主用；`list()` / `first()` 仍只按 order（主题单赢家语义不变）。
+- `ctx.slots.register(slot, { id, order, before, after, component, meta })`；
+  `occupants()` 返回已排序结果并透出 before/after。
+
+**渲染层**：
+
+- `<SlotComposer slot="…" :shared-props="…" :item-props="…">`：
+  把内置 `<SlotAnchor>` 与插件条目合并排序；`shared-props` 原样下发给插件组件
+  与锚点插槽内容（默认按钮、打开抽屉等函数都从这里拿）。
+- `<SlotAnchor id="host/x" :order="100">`：**不产生额外 DOM**，只声明身份；
+  必须在 SlotComposer 内使用。
+
+**已接入区域**：底栏 `shell.dock`、状态条 `shell.status`、抽屉页签 `shell.drawer.tabs`、
+设置面板一级导航 `settings.nav`。
+
+**默认按钮**：`packages/ui/src/components/areas/SlotButtons.vue`（dock / status / tab 三档），
+宿主经 `shared-props.coreButton` 下发；插件只传 `title` / `icon` / `tone`，不再自绘尺寸与 hover。
+
+**设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
+before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
+
 **上下文取件改法（2026-10-28 用户口径：插件不要 import 第三方库/主题包）**：
 
 - 组件各自直接取上下文：每个 `.vue` 自己调 `useCanvasContext()`，再读

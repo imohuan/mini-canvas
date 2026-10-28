@@ -61,6 +61,10 @@ export interface ThemeOccupantOpts {
 export interface SlotRegisterReq {
   id?: string
   order?: number
+  /** 排在该条目 id 之前（条目 id = owner/name，例如 host/agent；不是槽名） */
+  before?: string
+  /** 排在该条目 id 之后（条目 id = owner/name） */
+  after?: string
   component: unknown
   /** 可选 occupant 元数据（如设置面板内容槽的 mode: replace/append/prepend）；随 occupant 存入并读回 */
   meta?: unknown
@@ -476,13 +480,30 @@ export function buildCapabilities(
         const slotField = land<unknown>('slot')
         if (!reg && !slotField) return ''
         const id = req.id ?? `slot/${slot}#${slotField?.ids(slot).length ?? 0}`
-        if (slotField) slotField.add(slot, req.component, { id, order: req.order })
+        if (slotField) slotField.add(slot, req.component, {
+          id,
+          order: req.order,
+          ...(req.before !== undefined ? { before: req.before } : {}),
+          ...(req.after !== undefined ? { after: req.after } : {}),
+        })
         if (!reg) return id
-        const compatId = reg.add(slot, { id: req.id, order: req.order, value: req.component, meta: req.meta })
+        const compatId = reg.add(slot, {
+          id: req.id,
+          order: req.order,
+          value: req.component,
+          meta: req.meta,
+          ...(req.before !== undefined ? { before: req.before } : {}),
+          ...(req.after !== undefined ? { after: req.after } : {}),
+        })
         if (compatId !== id) {
           // 兼容容器对自动 id 的取舍与场不同 → 场内条目对齐到兼容 id（返回值单一事实）
           slotField?.remove(slot, id)
-          slotField?.add(slot, req.component, { id: compatId, order: req.order })
+          slotField?.add(slot, req.component, {
+            id: compatId,
+            order: req.order,
+            ...(req.before !== undefined ? { before: req.before } : {}),
+            ...(req.after !== undefined ? { after: req.after } : {}),
+          })
         }
         ctx.effect(() => () => reg.remove(slot, compatId))
         ctx.effect(() => () => slotField?.remove(slot, compatId))
@@ -492,9 +513,11 @@ export function buildCapabilities(
         return uiSlots()?.remove(slot, id) ?? false
       },
       occupants(slot: string) {
-        return (uiSlots()?.list(slot) ?? []).map((e) => ({
+        return (uiSlots()?.ordered(slot) ?? []).map((e) => ({
           id: e.id,
           order: e.order,
+          ...(e.before !== undefined ? { before: e.before } : {}),
+          ...(e.after !== undefined ? { after: e.after } : {}),
           component: e.value,
           meta: e.meta,
         }))

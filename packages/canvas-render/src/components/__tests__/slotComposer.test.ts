@@ -1,0 +1,126 @@
+/**
+ * SlotComposer / SlotAnchor 合约。
+ *
+ * 两组事实：
+ * 1. 纯逻辑（id 规范、合并顺序）不依赖 Vue，Node 可直测；
+ * 2. 组件对外契约由 SSR 跑一遍：锚点 + 插件条目一起排序、sharedProps 下发给两项、
+ *    不合法 id 被忽略、锚点不额外包一层 DOM。
+ */
+import { describe, expect, it } from 'vitest'
+import { createSSRApp, defineComponent, h } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+import { Context } from '@mini-canvas/canvas-data'
+import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
+import type { PluginManager } from '../../host/pluginManager'
+import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../../contracts/canvasContext'
+import SlotComposer from '../SlotComposer.vue'
+import SlotAnchor from '../SlotAnchor.vue'
+import { isSlotItemId, isSlotName, mergeSlotEntries } from '../slotComposer'
+
+function baseContext(ctx: Context): CanvasContext {
+  return {
+    ctx,
+    host: {} as CanvasHostHandle,
+    api: {} as MiniCanvasApi,
+    manager: {} as PluginManager,
+  }
+}
+
+describe('slotComposer · 纯逻辑', () => {
+  it('条目 id 必须是 owner/name（斜杠），槽名用点', () => {
+    expect(isSlotItemId('host/agent')).toBe(true)
+    expect(isSlotItemId('my-plugin/export')).toBe(true)
+    expect(isSlotItemId('shell.dock.agent')).toBe(false)
+    expect(isSlotItemId('agent')).toBe(false)
+    expect(isSlotName('shell.dock')).toBe(true)
+    expect(isSlotName('shell/dock')).toBe(false)
+  })
+
+  it('合并时本地锚点在前（同 id 本地赢）', () => {
+    const merged = mergeSlotEntries([{ id: 'host/a' }], [{ id: 'host/a' }, { id: 'plugin/b' }])
+    expect(merged.map((e) => e.id)).toEqual(['host/a', 'host/a', 'plugin/b'])
+  })
+})
+
+describe('SlotComposer · SSR', () => {
+  it('内置锚点与插件条目一起排序；before 指向条目 id', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.slots.register('shell.dock', {
+      id: 'plugin/export',
+      order: 900,
+      before: 'host/agent',
+      component: defineComponent({ render: () => h('button', { 'data-plugin': 'export' }, '导出') }),
+    })
+
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SlotComposer,
+          { slot: 'shell.dock' },
+          () => [
+            h(SlotAnchor, { id: 'host/add', order: 100 }, () => h('button', { 'data-host': 'add' }, '添加')),
+            h(SlotAnchor, { id: 'host/agent', order: 800 }, () => h('button', { 'data-host': 'agent' }, 'Agent')),
+          ],
+        ),
+    })
+    app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+    const html = await renderToString(app)
+
+    const order = ['data-host="add"', 'data-plugin="export"', 'data-host="agent"'].map((k) => html.indexOf(k))
+    expect(order.every((i) => i >= 0)).toBe(true)
+    expect(order[0]).toBeLessThan(order[1]!)
+    expect(order[1]).toBeLessThan(order[2]!)
+
+    ctx.stop()
+  })
+
+  it('sharedProps 下发给锚点插槽内容与插件组件', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.slots.register('shell.dock', {
+      id: 'plugin/x',
+      component: defineComponent({
+        props: { label: { type: String, default: '' } },
+        render() {
+          return h('button', { 'data-plugin': this.label }, this.label)
+        },
+      }),
+    })
+
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SlotComposer,
+          { slot: 'shell.dock', sharedProps: { label: '来自宿主' } },
+          () => [h(SlotAnchor, { id: 'host/a', order: 100 }, () => h('i', { 'data-host': 'a' }, 'A'))],
+        ),
+    })
+    app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+    const html = await renderToString(app)
+    expect(html).toContain('data-plugin="来自宿主"')
+    expect(html).toContain('data-host="a"')
+    ctx.stop()
+  })
+
+  it('非法条目 id 不渲染（不静默变成别的项）', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const app = createSSRApp({
+      render: () =>
+        h(
+          SlotComposer,
+          { slot: 'shell.dock' },
+          () => [
+            h(SlotAnchor, { id: 'shell.dock.bad', order: 100 }, () => h('b', '不该出现')),
+            h(SlotAnchor, { id: 'host/ok', order: 200 }, () => h('b', '正常')),
+          ],
+        ),
+    })
+    app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+    const html = await renderToString(app)
+    expect(html).toContain('正常')
+    expect(html).not.toContain('不该出现')
+    ctx.stop()
+  })
+})

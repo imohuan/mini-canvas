@@ -25,6 +25,7 @@
 import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
+import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
 
 const props = defineProps<{ settings: SettingsPanelSource }>()
@@ -72,6 +73,22 @@ const tree = computed<Map<string, string[]>>(() => {
   return m
 })
 const navs = computed<string[]>(() => [...tree.value.keys()])
+/**
+ * 一级导航的可排序槽名：宿主把每个一级分组包成 SlotAnchor，
+ * 插件可用 ctx.slots.register('settings.nav', { id: 'my-plugin/nav', before: 'host/nodes' }) 插到指定一级项前后。
+ */
+const SETTINGS_NAV_SLOT = 'settings.nav'
+
+/** 插件插入设置导航项时下发的宿主数据；默认按分组名切过去 */
+function settingsNavProps(entry: { id: string; meta?: unknown }): Record<string, unknown> {
+  const group = (entry.meta as { group?: unknown } | undefined)?.group
+  const target = typeof group === 'string' && group ? group : entry.id
+  return {
+    group: target,
+    active: currentNav.value === target,
+    onSelect: (key: string) => selectNav(key),
+  }
+}
 function leavesOf(nav: string): string[] {
   return tree.value.get(nav) ?? []
 }
@@ -318,7 +335,13 @@ function blocksOf(groupKey: string): ContentBlock[] {
       <nav ref="treeEl" class="flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="设置导航">
         <div v-if="!navs.length" class="py-6 text-center text-[12px] text-ink-dim">暂无设置分组</div>
 
+        <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor，插件可插到指定一级项前后 -->
+        <SlotComposer :slot="SETTINGS_NAV_SLOT" :item-props="settingsNavProps">
         <template v-for="nav in navs" :key="nav">
+          <SlotAnchor
+            :id="'host/settings-' + nav"
+            :order="100 + navs.indexOf(nav)"
+          >
           <!-- 只有一个子节点：合并成一条平级项（不拆两级、不折叠、无箭头） -->
           <div v-if="isSolo(nav)" class="asp-row asp-row--solo"
             :class="{ 'is-current': currentKey === soloLeafOf(nav) }">
@@ -353,7 +376,9 @@ function blocksOf(groupKey: string): ContentBlock[] {
               </div>
             </div>
           </template>
+          </SlotAnchor>
         </template>
+        </SlotComposer>
       </nav>
     </aside>
 

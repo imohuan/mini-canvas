@@ -23,7 +23,8 @@ import { assetKindOf } from '../../composables/assetModel'
 import { folderIconComponent } from '../../composables/folderIcons'
 import { openAssetManager, openAssetPreviewFromAsset } from '../../composables/assetUiBus'
 import { siblingPreview } from '../../composables/assetSiblings'
-import { useCanvasContext } from '@mini-canvas/canvas-render'
+import { useCanvasContext, SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
+import SlotButton from './SlotButtons.vue'
 import {
   DRAWER_TAB_ASSETS,
   DRAWER_TAB_CANVAS,
@@ -83,6 +84,23 @@ const drawerHost: DrawerHost = {
   openTab: (id: string) => ui.openDrawerTab(id),
   close: () => { s.drawer = null },
   toggleCollapsed: () => ui.toggleLeftCollapsed(),
+}
+
+/** 下发给插件页签的共享 props：默认页签按钮 + 抽屉函数 */
+const slotShared = {
+  coreButton: SlotButton,
+  buttonTone: 'tab',
+  openDrawerTab: (id: string) => ui.openDrawerTab(id),
+  closeDrawer: () => { s.drawer = null },
+}
+
+/** 插件页签按钮的宿主数据：active / onSelect / host（与之前逐个 <component> 下发的一致） */
+function drawerTabProps(entry: { id: string }): Record<string, unknown> {
+  return {
+    active: s.leftTab === entry.id,
+    onSelect: () => ui.openDrawerTab(entry.id),
+    host: drawerHost,
+  }
 }
 
 // 非法页签只提示一次：热装期间短暂缺面板是正常现象，不该刷屏。
@@ -678,24 +696,32 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
         />
       </div>
       <!-- 标签栏 -->
-      <div class="flex h-[50px] flex-none items-center gap-1 border-y border-line px-2" role="tablist">
-        <button
-          v-for="t in ([DRAWER_TAB_CANVAS, DRAWER_TAB_ASSETS] as const)" :key="t"
-          class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
-          :class="s.leftTab === t ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"
-          role="tab" :aria-selected="s.leftTab === t"
-          @click="ui.openDrawerTab(t)"
-        >{{ t === DRAWER_TAB_CANVAS ? '画布' : '资产' }}</button>
-        <!-- 插件页签按钮：宿主给 active/onSelect/host；插件只画按钮 -->
-        <component
-          v-for="tab in pluginTabs"
-          :key="tab.id"
-          :is="tab.button"
-          :active="s.leftTab === tab.id"
-          :on-select="() => ui.openDrawerTab(tab.id)"
-          :host="drawerHost"
-        />
-      </div>
+      <!-- 可排序页签行：内置“画布/资产”是 SlotAnchor，插件页签来自 shell.drawer.tabs。
+           插件写 before/after 时指向条目 id（host/canvas-tab 这种），不是槽名。 -->
+      <SlotComposer
+        slot="shell.drawer.tabs"
+        class="flex h-[50px] flex-none items-center gap-1 border-y border-line px-2"
+        role="tablist"
+        :item-props="drawerTabProps"
+        :shared-props="slotShared"
+      >
+        <SlotAnchor id="host/canvas-tab" :order="100">
+          <button
+            class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
+            :class="s.leftTab === DRAWER_TAB_CANVAS ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"
+            role="tab" :aria-selected="s.leftTab === DRAWER_TAB_CANVAS"
+            @click="ui.openDrawerTab(DRAWER_TAB_CANVAS)"
+          >画布</button>
+        </SlotAnchor>
+        <SlotAnchor id="host/assets-tab" :order="200">
+          <button
+            class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
+            :class="s.leftTab === DRAWER_TAB_ASSETS ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"
+            role="tab" :aria-selected="s.leftTab === DRAWER_TAB_ASSETS"
+            @click="ui.openDrawerTab(DRAWER_TAB_ASSETS)"
+          >资产</button>
+        </SlotAnchor>
+      </SlotComposer>
 
       <!-- ===== 画布 tab 工具行：普通态 ⇄ 搜索态（点放大镜展开输入框，筛选/关闭在右侧） ===== -->
       <div v-if="s.leftTab === 'canvas'" class="relative flex h-12 flex-none items-center gap-1 p-2">

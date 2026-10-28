@@ -18,10 +18,21 @@ import AgentOrb from '../AgentOrb.vue'
 import { useUi } from '../../composables/ui'
 import { openUploadDialog } from '../../composables/assetUploadBus'
 import { ref } from 'vue'
-import { SlotHost } from '@mini-canvas/canvas-render'
+import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
+import SlotButton from './SlotButtons.vue'
 
 const ui = useUi()
 const s = ui.state
+
+/** 下发给插件条目的共享 props：默认按钮 + 常用函数（插件不必再抄一份样式） */
+const slotShared = {
+  coreButton: SlotButton,
+  buttonTone: 'dock',
+  openDrawer: () => ui.openDrawer('left'),
+  openHistory: () => ui.toggleHistory(),
+  openShortcuts: () => ui.toggleShortcuts(),
+  showToast: (msg: string) => ui.showToast(msg),
+}
 
 /**
  * 「+ → 上传」：挑本地文件（可多选，图片 / 视频 / 音频）→ **直接落画布**成节点。
@@ -50,15 +61,19 @@ function onUploadPick(e: Event): void {
 <template>
   <div class="flex h-[50px] items-center gap-2 rounded-xl border border-line bg-panel px-2" aria-label="画布工具栏"
     @pointerdown.stop>
-    <!-- 外壳插槽：底栏最前（插件可经 ctx.slots.register('shell.dock.start', …) 注册，按钮与内置按钮同排） -->
-    <SlotHost slot="shell.dock.start" item-class="flex-none" />
+    <!-- 可排序槽：内置按钮（SlotAnchor）与插件条目（ctx.slots.register('shell.dock')）一起排。
+         插件写 before/after 时指向条目 id（host/agent 这种），不是槽名。 -->
+    <SlotComposer slot="shell.dock" item-class="flex-none" :shared-props="slotShared">
+      <SlotAnchor id="host/upload-input" :order="90">
+        <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true"
+          accept="image/*,video/*,audio/*,text/plain,.md,.txt" @change="onUploadPick" />
+      </SlotAnchor>
+      <SlotAnchor id="host/add" :order="100">
     <!--
       隐藏的文件选择器：菜单项「上传」触发它（选完直接建节点，见 script 里 pickUploadFiles）。
       放在**下拉之外**（菜单会被 Teleport 且点完就关）—— 若放进菜单里，
       关掉菜单会把 input 一起卸载，用户选完文件时 change 已经没人接了。
     -->
-    <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true"
-      accept="image/*,video/*,audio/*,text/plain,.md,.txt" @change="onUploadPick" />
     <AxDropdown v-model="s.addMenuOpen" placement="top" align="center" :offset="10" menu-width="240px">
       <template #trigger>
         <AxTooltip content="添加节点" placement="top">
@@ -118,7 +133,9 @@ function onUploadPick(e: Event): void {
           <History :size="15" /> 从生成历史选择
         </AxMenuItem>
       </template>
-    </AxDropdown>
+      </AxDropdown>
+      </SlotAnchor>
+      <SlotAnchor id="host/move" :order="200">
     <!-- 移动：中轴对齐的下拉（菜单中心 = 按钮中心，箭头居中指按钮），V/H 切换 -->
     <AxDropdown v-model="s.moveMenuOpen" placement="top" align="center" :offset="10" menu-width="200px">
       <template #trigger>
@@ -139,7 +156,9 @@ function onUploadPick(e: Event): void {
           </AxMenuItem>
         </AxMenu>
       </template>
-    </AxDropdown>
+      </AxDropdown>
+      </SlotAnchor>
+      <SlotAnchor id="host/library" :order="300">
     <!-- 素材库：**点击触发**（与移动一致；方向键/素材库都点开才展开，不再 hover 弹出） -->
     <AxDropdown v-model="s.libraryMenuOpen" placement="top" align="center" :offset="10" menu-width="228px">
       <template #trigger>
@@ -166,23 +185,30 @@ function onUploadPick(e: Event): void {
           </AxMenuItem>
         </AxMenu>
       </template>
-    </AxDropdown>
+      </AxDropdown>
+      </SlotAnchor>
+      <SlotAnchor id="host/roles" :order="400">
     <AxTooltip content="角色造型室" placement="top"><button
         class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover" aria-label="角色造型室"
         @click="ui.openDrawer('roles')">
         <Shapes :size="16" />
       </button></AxTooltip>
+      </SlotAnchor>
+      <SlotAnchor id="host/history" :order="500">
     <AxTooltip content="生成历史" placement="top"><button
         class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
         :class="{ 'bg-chip': s.historyOpen }" aria-label="生成历史" @click="ui.toggleHistory()">
         <History :size="16" />
       </button></AxTooltip>
-    <span class="h-6 w-px bg-line"></span>
+      </SlotAnchor>
+      <SlotAnchor id="host/separator" :order="600"><span class="h-6 w-px bg-line"></span></SlotAnchor>
+      <SlotAnchor id="host/shortcuts" :order="700">
     <AxTooltip content="快捷键" placement="top"><button
         class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
         :class="{ 'bg-chip': s.shortcutsOpen }" aria-label="快捷键" @click="ui.toggleShortcuts()">
         <Keyboard :size="16" />
       </button></AxTooltip>
+      </SlotAnchor>
     <!-- 
       <AxTooltip content="教程" placement="top"><button
         class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover" aria-label="教程"
@@ -190,6 +216,7 @@ function onUploadPick(e: Event): void {
         <CircleQuestionMark :size="16" />
       </button></AxTooltip>
     -->
+      <SlotAnchor id="host/agent" :order="800">
     <AxTooltip content="Agent 对话" placement="left"><button
         class="grid size-12 -translate-y-1/2 place-items-center rounded-full border border-line bg-panel text-ink"
         aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }" @click="ui.toggleAgent()">
@@ -197,7 +224,7 @@ function onUploadPick(e: Event): void {
              按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
         <AgentOrb :open="ui.agent.open" />
       </button></AxTooltip>
-    <!-- 外壳插槽：底栏末尾（Agent 圆球之后、面板内部，与内置按钮同排） -->
-    <SlotHost slot="shell.dock.end" item-class="flex-none" />
+      </SlotAnchor>
+    </SlotComposer>
   </div>
 </template>

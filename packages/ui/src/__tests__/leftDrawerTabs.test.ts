@@ -3,7 +3,7 @@
  *
  * 这里不测像素，只锁“宿主有没有把四样东西接上”：
  * - 用基础上下文读 shell.drawer.tabs；
- * - 按钮收到 active / onSelect / host；
+ * - 页签行走 SlotComposer，插件按钮由 item-props 收到 active / onSelect / host；
  * - 只渲染当前选中的插件面板；
  * - 当前页签消失时回退到画布。
  */
@@ -23,9 +23,14 @@ describe('LeftDrawer 插件页签', () => {
   })
 
   it('按钮收到 active / onSelect / host', () => {
-    expect(src).toContain(':active=')
-    expect(src).toContain(':on-select=')
-    expect(src).toContain(':host="drawerHost"')
+    // 行本身是可排序槽；插件按钮的宿主数据由 drawerTabProps 下发
+    expect(src).toContain('<SlotComposer')
+    expect(src).toContain('slot="shell.drawer.tabs"')
+    expect(src).toContain(':item-props="drawerTabProps"')
+    expect(src).toContain('function drawerTabProps')
+    expect(src).toContain('active: s.leftTab === entry.id')
+    expect(src).toContain('onSelect: () => ui.openDrawerTab(entry.id)')
+    expect(src).toContain('host: drawerHost')
   })
 
   it('面板只在当前页签时渲染', () => {

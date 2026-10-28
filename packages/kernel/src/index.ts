@@ -19,6 +19,8 @@ export { EventBus, registerEventName, isBailed, hasKnownEvent, knownEventNames }
 export type { DispatchMode } from './EventBus'
 export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
+export { orderSlotItems, SLOT_ORDER_FALLBACK } from './registry/slotOrder'
+export type { SlotOrderItem, SlotOrderIssue, SlotOrderIssueKind, SlotOrderOptions } from './registry/slotOrder'
 // 通用注册场（ctx.registryOf 的地基）：设计文档 §2.1 的 Registry/Entry 契约与默认实现
 export { RegistryImpl } from './registry/registry'
 export type { Registry, Entry, RegistryWrapper, RegistryChange, RegistryImplOptions } from './registry/registry'

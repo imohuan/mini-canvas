@@ -16,6 +16,7 @@
  *
  * scope 回收：返回的 revoke 应由调用方登记进插件 scope（registerThemeSlot 那套既有模式复用）。
  */
+import { orderSlotItems, SLOT_ORDER_FALLBACK } from './slotOrder'
 
 /** 一个 occupant：id 槽内唯一、order 控制排序、value 为 opaque 组件句柄或字面值 */
 export interface SlotEntry {
@@ -24,6 +25,10 @@ export interface SlotEntry {
   value: unknown
   /** 可选 occupant 元数据（如设置面板内容槽的 mode: replace/append/prepend）；宿主读取时原样透出 */
   meta?: unknown
+  /** 可选的相对位置：排在该条目 id 之前（目标不存在时退回 order） */
+  before?: string
+  /** 可选的相对位置：排在该条目 id 之后（目标不存在时退回 order） */
+  after?: string
 }
 
 /** 放入同 slot 的请求：若带 id 且已存在 → 替换；否则追加（同 order 按放入先后稳定） */
@@ -33,6 +38,8 @@ export interface SlotAddRequest {
   value: unknown
   /** 可选 occupant 元数据，随 occupant 一起存入并读回 */
   meta?: unknown
+  before?: string
+  after?: string
 }
 
 /** 槽名 = 字符串；主题/节点槽名沿用现有 ThemeSlot / NodeSegment 的语义字符串，不强制枚举 */
@@ -80,11 +87,22 @@ export class SlotRegistry {
   add(slot: SlotName, req: SlotAddRequest): string {
     const entries = this.ensure(slot)
     const id = req.id ?? this.genId(slot)
-    const order = req.order ?? entries.size
+    // 缺省 order 用统一兜底值（1000），而不是"槽内条目数"：
+    // 后者会让后注册的插件条目拿到很大的数字，也让 before/after 的兜底不可预期。
+    // 同 order 仍按放入顺序稳定排列，老的"按注册顺序"行为不变。
+    const order = req.order ?? SLOT_ORDER_FALLBACK
     // 复用已占 id → 替换；否则新建
     const existed = entries.get(id)
     const meta = req.meta
-    entries.set(id, existed ? { ...existed, order, value: req.value, meta } : { id, order, value: req.value, meta })
+    const next: SlotEntry = {
+      id,
+      order,
+      value: req.value,
+      meta,
+      ...(req.before !== undefined ? { before: req.before } : {}),
+      ...(req.after !== undefined ? { after: req.after } : {}),
+    }
+    entries.set(id, existed ? { ...existed, ...next } : next)
     this.notify()
     return id
   }
@@ -104,6 +122,16 @@ export class SlotRegistry {
     const entries = this.bySlot.get(slot)
     if (!entries) return []
     return [...entries.values()].sort((a, b) => a.order - b.order)
+  }
+
+  /**
+   * 某槽全部 occupant，按 **order + before/after** 排出最终 UI 顺序。
+   *
+   * 与 list() 的分工：list() 只按 order（主题单赢家 first() 用它，不能被相对位置改写）；
+   * UI 宿主统一读 ordered()，这样 before/after 只影响"排在哪"，不影响"谁赢"。
+   */
+  ordered(slot: SlotName): SlotEntry[] {
+    return orderSlotItems(this.list(slot)).items
   }
 
   /** single 语义：order 最小者（"替换/单赢家"槽的当前渲染项）；空槽 undefined */
