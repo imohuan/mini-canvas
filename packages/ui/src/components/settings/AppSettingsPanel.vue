@@ -15,9 +15,11 @@
  *     SettingsSchemaField（color / number 精度滑块 / boolean 开关 / select），不自造第二套。
  *   · **内容插槽** settingsGroup/<完整分组 key> 仍被消费 —— 插件自绘页（Agent / 插件 / 热重载 /
  *     光标 / 插件展示）靠它接管正文；没有这一层，那些页就只剩一个占位项。
- *   · **左导航插槽 settingsNav 与二级页签插槽 settingsTab 本面板不消费**（用户口径：这里不需要这两个
- *     插槽）—— 树的层级完全由 settings.groups() 的分组名推导。各插件都声明了同名占位分组，
- *     所以一级项一个都不会丢，只是不再由插件定制外观。
+ *   · **左导航**：树的层级完全由 settings.groups() 的分组名推导。本面板**不渲染插件注册的
+ *     settings.nav 自定义导航组件**（用户口径：这里不需要插件定制外观）；插件靠声明同名
+ *     分组占位，一级项一个都不会丢。
+ *   · **可排序**：每个一级分组包成 SlotAnchor，经 SlotComposer 与插件条目一起排序；
+ *     插件可用 meta.group 把自己排在某个一级分组前后，且不会被重复渲染成第二个导航项。
  *
  * 窗口外壳不在这里：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗 / 悬浮球由渲染层 <SettingsShell> 提供
  *（见 canvas-render/components/SettingsHost.vue），这里只画外壳里那一格。
@@ -79,15 +81,16 @@ const navs = computed<string[]>(() => [...tree.value.keys()])
  */
 const SETTINGS_NAV_SLOT = 'settings.nav'
 
-/** 插件插入设置导航项时下发的宿主数据；默认按分组名切过去 */
-function settingsNavProps(entry: { id: string; meta?: unknown }): Record<string, unknown> {
-  const group = (entry.meta as { group?: unknown } | undefined)?.group
-  const target = typeof group === 'string' && group ? group : entry.id
-  return {
-    group: target,
-    active: currentNav.value === target,
-    onSelect: (key: string) => selectNav(key),
-  }
+/**
+ * 排序用的入口：插件条目只提供排序信息，**不渲染自己的组件**。
+ *
+ * 为什么返回 undefined：本面板的一级导航完全由分组名推导（用户口径 2026-10-09：
+ * 这里不需要插件定制导航外观）。早先直接把 settings.nav 的组件渲染出来，
+ * 结果是顶部多出「Agent / 插件 / 调试插件」三个点不动、又和下面自动分组重复的项。
+ * 返回 undefined = SlotComposer 跳过渲染，但它的 before/after/order 仍参与排序。
+ */
+function settingsNavProps(): undefined {
+  return undefined
 }
 function leavesOf(nav: string): string[] {
   return tree.value.get(nav) ?? []
@@ -335,7 +338,8 @@ function blocksOf(groupKey: string): ContentBlock[] {
       <nav ref="treeEl" class="flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="设置导航">
         <div v-if="!navs.length" class="py-6 text-center text-[12px] text-ink-dim">暂无设置分组</div>
 
-        <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor，插件可插到指定一级项前后 -->
+        <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor；插件条目只参与排序、不渲染
+             （本面板不展示插件自定义导航外观，避免重复项与点不动的死行）。 -->
         <SlotComposer :slot="SETTINGS_NAV_SLOT" class="flex flex-col" :item-props="settingsNavProps">
         <template v-for="nav in navs" :key="nav">
           <SlotAnchor

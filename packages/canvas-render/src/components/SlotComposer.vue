@@ -193,6 +193,7 @@ export default defineComponent({
       const extra = (props.itemProps as
         | ((entry: SlotComposerEntry & { component: unknown }) => Record<string, unknown> | undefined)
         | undefined)?.(item)
+      // itemProps 返回 undefined = 这一项只参与排序、不渲染（如设置左树只认分组名）
       if (props.itemProps && extra === undefined) return null
       return h(markRaw(item.component as Component), {
         key: item.id,

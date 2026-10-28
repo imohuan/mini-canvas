@@ -304,6 +304,16 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
   锚点内容统一用 `Fragment` 展开，不对单根做 clone/class 合并（会把 Tailwind class 拼成串）。
 - 三处实测：设置左树 12 个一级分组（纵排、169px 宽）、底栏 8 项、状态条 6 项。
 
+**设置左树去重（2026-10-28 晚）**：截图里顶部「Agent / 插件 / 调试插件」三行点不动、
+下方又重复出现同名分组。根因是成品设置面板把插件注册的 `settings.nav` 自定义导航组件
+也渲染了出来（与按分组名自动生成的树重复）。
+
+- 现在 `itemProps` 对这些条目返回 `undefined` = **只参与排序、不渲染**；
+  一级导航完全由 `settings.groups()` 推导。
+- `SlotComposer` 支持"排序占位项"：itemProps 返回 undefined 就跳过渲染，
+  但 before/after/order 仍然生效。
+- 实测：左树 12 项、无重复、无死行。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 
