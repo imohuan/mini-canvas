@@ -31,7 +31,11 @@ export async function captureVideoThumb(
   opts: { size?: number; seekPoints?: number[]; solidRatio?: number } = {},
 ): Promise<string | null> {
   if (typeof document === 'undefined' || !videoUrl) return null
-  const size = opts.size ?? VIDEO_THUMB_SIZE
+  /**
+   * size 缺省 = **原始尺寸**（用户 2026-10-28：hover/全屏要看细节，不能拿 50px 放大糊掉）；
+   * 传了数字才缩到那个方块里（参考卡 / 标签用 50）。
+   */
+  const boxSize = typeof opts.size === 'number' && opts.size > 0 ? Math.round(opts.size) : 0
   const points = opts.seekPoints ?? VIDEO_THUMB_SEEK_POINTS
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
@@ -41,8 +45,6 @@ export async function captureVideoThumb(
   video.src = videoUrl
 
   const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
   const c2d = canvas.getContext('2d', { willReadFrequently: true })
   if (!c2d) return null
 
@@ -90,22 +92,30 @@ export async function captureVideoThumb(
       if (duration > 0 && at > duration) continue
       if (!(await seek(at))) continue
 
-      // 等比装进 size×size（不拉伸），居中留白
-      const vw = video.videoWidth || size
-      const vh = video.videoHeight || size
-      const ratio = Math.min(size / vw, size / vh, 1)
+      /**
+       * 传了 size → 等比装进 size×size（不拉伸、居中留白）；
+       * 没传 size → **原始尺寸的一帧**（hover/全屏要看细节）。
+       */
+      const vw = video.videoWidth || boxSize || 1
+      const vh = video.videoHeight || boxSize || 1
+      const target = boxSize || Math.max(vw, vh)
+      const ratio = Math.min(target / vw, target / vh, 1)
       const dw = Math.max(1, Math.round(vw * ratio))
       const dh = Math.max(1, Math.round(vh * ratio))
-      const dx = Math.round((size - dw) / 2)
-      const dy = Math.round((size - dh) / 2)
-      c2d.clearRect(0, 0, size, size)
+      const cw = boxSize || dw
+      const ch = boxSize || dh
+      if (canvas.width !== cw) canvas.width = cw
+      if (canvas.height !== ch) canvas.height = ch
+      const dx = Math.round((cw - dw) / 2)
+      const dy = Math.round((ch - dh) / 2)
+      c2d.clearRect(0, 0, cw, ch)
       try { c2d.drawImage(video, dx, dy, dw, dh) } catch { continue }
 
       // 纯色检测（用户要求：同色 > 50% 就跳过，找后面的帧）
       let solid = false
       try {
-        const data = c2d.getImageData(0, 0, size, size).data
-        solid = isSolidFrame(data, size, size, opts.solidRatio)
+        const data = c2d.getImageData(0, 0, cw, ch).data
+        solid = isSolidFrame(data, cw, ch, opts.solidRatio)
       } catch {
         // 跨域污染等读不了像素：无法判定纯色，先当可用
         solid = false

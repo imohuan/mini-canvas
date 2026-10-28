@@ -1387,9 +1387,6 @@ export function useEditor(
       const url = el.getAttribute("data-url") || ""
       const name = el.getAttribute("data-name") || ""
       if (!url) return
-      previewUrl.value = url
-      previewTitle.value = name
-      previewType.value = isVideoUrl(url) ? "video" : "image"
       const rect = el.getBoundingClientRect()
       const margin = 12; const previewMaxWidth = 400
       let left = rect.left + rect.width / 2
@@ -1403,7 +1400,24 @@ export function useEditor(
       } else {
         previewPosition.value = { left: `${left}px`, top: `${top}px`, transform: "translateX(-50%)" }
       }
-      previewVisible.value = true
+      /**
+       * 素材自带 `hoverPreview` 时优先用它（用户 2026-10-28：hover 看到的应该是**视频的一帧
+       * 原图**，不能是卡片里那张 50px 缩略图放大糊掉）。它是异步的（要现截帧 / 读资源），
+       * 所以先算好位置、拿到地址再显示，避免「先弹一张糊图再换」的闪动。
+       */
+      const show = (src: string) => {
+        previewUrl.value = src
+        previewTitle.value = name
+        previewType.value = isVideoUrl(src) ? "video" : "image"
+        previewVisible.value = true
+      }
+      if (item?.hoverPreview) {
+        void Promise.resolve(item.hoverPreview())
+          .then((src) => { if (src) show(src) })
+          .catch(() => { /* 取不到高清图：不弹，别拿糊图凑数 */ })
+        return
+      }
+      show(url)
     }, 500)
   }
 

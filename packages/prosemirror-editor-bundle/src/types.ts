@@ -37,6 +37,14 @@ export interface ResourceItem {
   thumbnail_url?: string
   mediaType?: 'image' | 'video' | 'audio'
   value?: string
+  /**
+   * 悬停预览用哪个地址（可选）。
+   *
+   * 为什么不直接用 url：有些素材的 `url` 只是**小尺寸缩略图**（比如视频的 50px 帧图），
+   * 放大到 400px 会糊成一团。插件可以在这里给一个更清晰的来源（例如视频的原始尺寸帧），
+   * 编辑器 hover 预览优先用它；不给就退回 url。
+   */
+  hoverPreview?: () => string | undefined | Promise<string | undefined>
 }
 
 export interface MenuPosition {

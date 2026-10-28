@@ -62,6 +62,7 @@ import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleR
 import { resolveBottomBarShown } from './bottomBarOverlay'
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
 import { openPreview } from './mediaPreview'
+import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
   loadAiActions,
@@ -478,14 +479,15 @@ async function refreshResolvedMaterials(): Promise<void> {
   if (epoch === materialEpoch.value) resolvedMaterials.value = next
 }
 watch(materials, () => void refreshResolvedMaterials(), { immediate: true })
-/** 视频缩略图缓存（用户 2026-10-28）：流媒体不能当 img src，交给视频插件取帧。 */
-const videoThumbMap = ref<Record<string, string>>({})
-/** 正在取（避免同一 url 并发重复解码） */
-const videoThumbPending = new Set<string>()
+/** 视频缩略图：模块级缓存（跨挂载复用，拖拽不重截），两档尺寸 */
+const videoThumbTick = ref(0) // 取到新帧时 +1，驱动模板重算
 
 function videoThumbOf(url: string | undefined): string | undefined {
-  if (!url) return undefined
-  return videoThumbMap.value[url]
+  return peekVideoThumb(url, 'small')
+}
+
+function videoFullThumbOf(url: string | undefined): string | undefined {
+  return peekVideoThumb(url, 'full')
 }
 
 /**
@@ -497,31 +499,39 @@ function videoThumbOf(url: string | undefined): string | undefined {
  * - 音频：没有可视化封面，返回空串 → 类型图标。
  */
 function cardImageOf(tile: { url?: string; kind?: string }): string {
+  void videoThumbTick.value // 依赖 tick：取到新帧时模板重算
   if (!tile.url) return ''
   if (tile.kind === 'video') return videoThumbOf(tile.url) ?? ''
   if (tile.kind === 'audio') return ''
   return tile.url
 }
 
+function videoProvider(): ((videoUrl: string, size?: number) => Promise<string | null>) | undefined {
+  const svc = ctx.tryGet<{ captureThumb?(videoUrl: string, size?: number): Promise<string | null> }>('video')
+  return svc?.captureThumb ? svc.captureThumb.bind(svc) : undefined
+}
+
 async function ensureVideoThumbs(): Promise<void> {
-  const provider = ctx.tryGet<{ captureThumb?(videoUrl: string, size?: number): Promise<string | null> }>('video')
-  if (!provider?.captureThumb) return
+  const capture = videoProvider()
+  if (!capture) return
   const urls = new Set<string>()
   for (const m of shownMaterials.value) {
     if (m.kind === 'video' && m.url) urls.add(m.url)
   }
   for (const url of urls) {
-    if (videoThumbMap.value[url] || videoThumbPending.has(url)) continue
-    videoThumbPending.add(url)
-    try {
-      const thumb = await provider.captureThumb(url, 50)
-      if (thumb) videoThumbMap.value = { ...videoThumbMap.value, [url]: thumb }
-    } catch {
-      /* 取不到就保持占位图标 */
-    } finally {
-      videoThumbPending.delete(url)
-    }
+    if (peekVideoThumb(url, 'small')) continue
+    const thumb = await ensureVideoThumb(url, 'small', capture)
+    if (thumb) videoThumbTick.value += 1
   }
+}
+
+/** hover 预览要**原始尺寸的一帧**（不是 50px 放大糊掉）——用户 2026-10-28 要求 */
+async function ensureFullVideoThumb(url: string): Promise<string | undefined> {
+  const hit = peekVideoThumb(url, 'full')
+  if (hit) return hit
+  const thumb = await ensureVideoThumb(url, 'full', videoProvider())
+  if (thumb) videoThumbTick.value += 1
+  return thumb ?? undefined
 }
 const shownMaterials = computed(() =>
   resolvedMaterials.value.length === materials.value.length ? resolvedMaterials.value : materials.value,
@@ -560,11 +570,17 @@ function openCard(card: TileCardLike): void {
   // 类型 → stage 空白（真机踩过）。找不到（理论上不可能）才用 tile 形状兜底。
   const full = cards.value.find((c) => c.id === card.id)
   const multi = previewListFor(cards.value, full ?? (card as MaterialCard))
+  const kind = (full?.isText ?? card.isText) ? 'text' : ((full?.kind ?? 'image') as 'image' | 'video' | 'audio')
+  const url = full?.url ?? card.url
+  /**
+   * 全屏预览给**原始地址**：视频要能播（塞一张截图进去，播放器只会报「视频加载失败」）。
+   * 「要看一帧原始截图」是 **hover** 的诉求，走 item.hoverPreview（见 refreshSlotChips）。
+   */
   openPreview({
     name: full?.name ?? card.name,
     nodeId: card.id,
-    kind: (full?.isText ?? card.isText) ? 'text' : ((full?.kind ?? 'image') as 'image' | 'video' | 'audio'),
-    url: full?.url ?? card.url,
+    kind,
+    url,
     text: full?.value,
     ...(multi ?? {}),
   }, props.id)
@@ -602,15 +618,20 @@ function onCardsClickCapture(ev: MouseEvent): void {
     if (tile?.card) removeCard(tile.card)
     return
   }
-  if (target.closest('.nb-card-hit')) {
-    ev.stopPropagation()
-    if (tile?.card) openCard(tile.card)
-    return
-  }
   // 待输入格：卡片本体点击 = 点上传
   if (tile?.pending && tile.slotKey) {
     ev.stopPropagation()
     pickSlotFile(tile.slotKey)
+    return
+  }
+  /**
+   * 有内容的卡：**整张卡都能点开预览**（用户 2026-10-28：「除了右上角关闭按钮，
+   * 点哪里都应该进全屏」）。以前只认那个铺满的透明按钮 —— 它被缩略图/序号角标盖住的
+   * 位置，点击会落到那些元素上，于是「时灵时不灵」。现在只要不在关闭按钮里就开预览。
+   */
+  if (tile?.card) {
+    ev.stopPropagation()
+    openCard(tile.card)
   }
 }
 
@@ -1384,6 +1405,14 @@ function refreshSlotChips(): void {
        */
       url: kind === 'video' ? (videoThumbOf(tile.url) ?? '') : tile.url,
       mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
+      /**
+       * hover 预览要**原始尺寸的一帧**（用户 2026-10-28 报：鼠标移上去弹出来的还是那张
+       * 50px 方块，糊）。chips 里的 `url` 是 50px 缩略图（卡片要它），所以单独给一条
+       * 高清来源；图片/音频不需要（url 本来就是原图）。
+       */
+      ...(kind === 'video' && tile.url
+        ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
+        : {}),
     }
     const nodeId = tile.key.replace(/^card:/, '')
     // 同上：带上 renderEditor，保证 chip 外观与资源面板插入的一致
@@ -1859,6 +1888,17 @@ function onGlobalLeave(el: Element): void {
           </span>
           <!-- 有内容但没有可用图（视频还没取到帧 / 音频 / 文本）→ 按类型出图标 -->
           <span v-else class="nb-card-fallback" :data-kind="tile.kind" aria-hidden="true" />
+          <!--
+            类型角标（用户 2026-10-28：卡片分不清是图片还是视频）。
+            只给**有内容**的格子挂在右下角；空槽不需要（它的占位图标就是类型）。
+          -->
+          <span
+            v-if="!tile.pending && tile.kind !== 'image'"
+            class="nb-card-kind"
+            :data-kind="tile.kind"
+            :title="tile.kind === 'video' ? '视频' : tile.kind === 'audio' ? '音频' : '文本'"
+            aria-hidden="true"
+          />
           <span class="nb-card-index">{{ tile.index }}</span>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
@@ -2363,6 +2403,55 @@ function onGlobalLeave(el: Element): void {
 .nb-card-fallback[data-kind='text'] {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+
+/*
+ * 类型角标：右下角一个小白图标 + 半透明底（用户 2026-10-28：卡片分不清图片还是视频）。
+ * 图片不挂（缩略图本身就是它）；视频 / 音频 / 文本挂自己的图标。
+ */
+.nb-card-kind {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background-color: rgb(0 0 0 / 0.55);
+  /* 图标用 mask，颜色取白色（深底上才看得清） */
+  color: #fff;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 10px 10px;
+  mask-size: 10px 10px;
+  pointer-events: none;
+  /* 用两层叠出「深底 + 白图标」：background 是底色，mask 挖出图标形状太复杂，
+     改成伪元素画图标更直接 */
+}
+.nb-card-kind::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.nb-card-kind[data-kind='video']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-card-kind[data-kind='audio']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-card-kind[data-kind='text']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
 }
 .nb-card-placeholder svg {
   width: 16px;
