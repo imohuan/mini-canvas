@@ -2162,10 +2162,16 @@ export function useEditor(
       itemRegistry.delete(previousId)
       itemRegistry.set(item.id, item.renderEditor || !prevItem ? item : { ...prevItem, ...item })
       let rebound = false
+      let changed = false
       const tr = view.state.tr
       view.state.doc.descendants((node, pos) => {
         if (rebound || node.type.name !== 'resource' || node.attrs.id !== previousId) return
         rebound = true
+        changed = chipAttrsNeedUpdate(node.attrs, {
+          id: item.id,
+          name: item.name,
+          url: item.url ?? '',
+        }) || String(node.attrs.chipKind ?? '') !== String(item.chipKind ?? '')
         tr.setNodeMarkup(pos, undefined, {
           ...node.attrs,
           id: item.id,
@@ -2174,10 +2180,15 @@ export function useEditor(
           thumbnail_url: item.thumbnail_url ?? '',
           value: item.value ?? '',
           category: item.category,
+          chipKind: item.chipKind ?? '',
         })
       })
       if (!rebound) return false
-      view.dispatch(tr)
+      /**
+       * 内容没变就不派发事务（用户 2026-10-27 报「点标签后光标跳来跳去」）：
+       * 底栏的刷新 watcher 会反复调这里，无条件 dispatch 会反复重建节点、丢光标。
+       */
+      if (changed) view.dispatch(tr)
       return true
     }
     // 名字 undefined = 保留注册表里原条目的名字（引用名是提示词的一部分，
@@ -2186,6 +2197,7 @@ export function useEditor(
     // renderEditor 等外观字段也要从 prev 继承（item 只带数据，不带渲染函数）。
     itemRegistry.set(item.id, item.name === undefined && prev ? { ...prev, ...item, name: prev.name } : item)
     let found = false
+    let changed = false
     const tr = view.state.tr
     view.state.doc.descendants((node, pos) => {
       if (found || node.type.name !== 'resource' || node.attrs.id !== item.id) return
@@ -2194,7 +2206,7 @@ export function useEditor(
       // 读的是 registry 条目，只改 attrs 不改 registry 的话缩略图不会变（真机踩过）。
       const reg = itemRegistry.get(node.attrs.id)
       if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
-      tr.setNodeMarkup(pos, undefined, {
+      const nextAttrs = {
         ...node.attrs,
         // name 传 undefined = 保留原名字：标签名是用户提示词的一部分（引用名），
         // 排序/替换只换缩略图，绝不能改写它（真机踩过：排序后"图片3"被改成别的名字）。
@@ -2205,10 +2217,16 @@ export function useEditor(
         thumbnail_url: item.thumbnail_url ?? '',
         value: item.value ?? '',
         category: item.category,
-      })
+        chipKind: item.chipKind ?? '',
+      }
+      changed = chipAttrsNeedUpdate(node.attrs, {
+        name: nextAttrs.name,
+        url: nextAttrs.url,
+      }) || String(node.attrs.chipKind ?? '') !== String(nextAttrs.chipKind)
+      tr.setNodeMarkup(pos, undefined, nextAttrs)
     })
     if (!found) return false
-    view.dispatch(tr)
+    if (changed) view.dispatch(tr)
     return true
   }
   /**
