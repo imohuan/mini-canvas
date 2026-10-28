@@ -1397,12 +1397,38 @@ watch(() => s.shortcutsOpen, async (open) => {
   arrowShift.value = btn.getBoundingClientRect().left + btn.getBoundingClientRect().width / 2 - window.innerWidth / 2
 })
 
+function closeShortcutPanel(): void {
+  s.shortcutsOpen = false
+}
+
+/**
+ * 点面板外面就关（用户口径 2026-10-28：「就和 AxDropdown 一样」）。
+ *
+ * 为什么不用遮罩自己的 `@pointerdown.self`：外壳的顶栏 / 底栏 / 状态条是
+ * `--layer-app-chrome`（700），比这层遮罩（90）高 —— 点它们时事件先被外壳接走，
+ * 遮罩根本收不到 pointerdown，面板就一直挂着（真机实测：点底栏「添加节点」不关）。
+ *
+ * 这里在 window **捕获阶段**判 pointerdown：事件从 window 往下走，任何层级、任何
+ * `@pointerdown.stop` 都拦不住，判定与谁盖在上面无关。触发按钮自己除外 —— 它有自己的
+ * toggle，若不排除会「先被关掉、再被 toggle 打开」，看着像没反应。
+ */
+function onDocPointerDown(e: PointerEvent): void {
+  if (!s.shortcutsOpen) return
+  const target = e.target instanceof Element ? e.target : null
+  if (!target) return
+  // 面板本体按类名认（motion.section 的组件 ref 拿不到 DOM；类名是稳定的结构契约）
+  if (target.closest('.shortcut-modal')) return
+  if (target.closest('[aria-label="快捷键"]')) return
+  closeShortcutPanel()
+}
+onMounted(() => document.addEventListener('pointerdown', onDocPointerDown, true))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDown, true))
+
 </script>
 
 <template>
   <!-- 快捷键：毛玻璃，相对**整个视口**居中；底部箭头指向 dock 的「快捷键」按钮（中轴对齐） -->
-  <div v-if="s.shortcutsOpen" class="fixed inset-0 z-[90] flex flex-col items-center justify-end pb-[74px]"
-    @pointerdown.self="s.shortcutsOpen = false">
+  <div v-if="s.shortcutsOpen" class="fixed inset-0 z-[90] flex flex-col items-center justify-end pb-[74px]">
     <motion.section
       class="shortcut-modal relative flex h-[437px] w-[min(1152px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-glass text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.4]"
       role="dialog" aria-modal="true" aria-label="快捷键" :initial="{ opacity: 0, scale: 0.96, y: 8 }"
@@ -1415,7 +1441,7 @@ watch(() => s.shortcutsOpen, async (open) => {
         <h4 v-for="col in ui.shortcuts" :key="col.group" class="text-xs font-bold text-brand">{{ col.group }}</h4>
         <button
           class="absolute right-1.5 top-1.5 grid size-8 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink"
-          aria-label="关闭快捷键面板" @click="s.shortcutsOpen = false">
+          aria-label="关闭快捷键面板" @click="closeShortcutPanel">
           <X :size="15" />
         </button>
       </div>
