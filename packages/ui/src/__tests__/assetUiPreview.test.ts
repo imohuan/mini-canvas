@@ -122,4 +122,13 @@ describe('两处宿主都走统一入口', () => {
     expect(slot).toContain('...(p.html !== undefined ? { html: p.html } : {})')
     expect(slot).toContain('...(p.text !== undefined ? { text: p.text } : {})')
   })
+
+  it('★ 切张取包不得写回预览总线（写回会自激：页面卡死，且同层清单被覆盖）', () => {
+    const slot = read('../components/AssetUiSlot.vue')
+    // 取包结果存在外壳本地（packView），不碰 assetUiBus 的 openAssetPreview
+    expect(slot).toContain('const packView = ref')
+    expect(slot).not.toMatch(/import[^\n]*openAssetPreview[^\n]*assetUiBus/)
+    // 换包时按 url 命中判断：新地址不会复用旧包的界面
+    expect(slot).toMatch(/packView\.value\?\.url === p\.url/)
+  })
 })

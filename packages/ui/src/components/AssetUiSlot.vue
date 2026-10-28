@@ -15,7 +15,7 @@
  * 开关本身住在 composables/assetUiBus.ts：抽屉里的行点击 / Agent 那边的事件都只写它，
  * 本组件只管把开关渲染成浮层。
  */
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import AssetManageDialog from './AssetManageDialog.vue'
 import { MediaViewer } from '@mini-canvas/plugin-theme-default'
 import { assetManager, assetPreview, closeAssetManager } from '../composables/assetUiBus'
@@ -32,6 +32,15 @@ useAssetRefOpen()
 /** 弹窗每次打开都用一个新的组件实例（折叠状态只由 props 决定，不残留） */
 const dialogKey = computed(() => 'am-' + assetManager.value.focusToken)
 
+/**
+ * 节点包解出来的界面（只缓存**一份**：当前正在看的那张）。
+ *
+ * 为什么不写回 assetUiBus：写回会让 previewItem 重算、watch 再触发 —— 形成自激循环
+ *（第一版就踩了：切包时页面卡住几十秒）。取包结果只是"这一张的渲染内容"，
+ * 放在外壳本地最省事；换张时按 url 判断是否命中。
+ */
+const packView = ref<{ url: string; html?: string; error?: string } | null>(null)
+
 /** 预览项：外壳与 MediaViewer 的契约形状对齐 */
 const previewItem = computed(() => {
   // 取「当前正在看的那一张」：← / → 切过之后 index 变了，url / name / id 都要跟着它走。
@@ -41,55 +50,55 @@ const previewItem = computed(() => {
   // html / text 也要带上：可视化节点（kind='ui'）没有 url，它的内容是**一段 HTML**
   // （用户口径 2026-10-14：「可以在预览中添加一个 iframe 预览框」）——
   // 早先这里只透传 name/kind/url，于是 iframe 拿不到内容、显示成"还没画过"。
-  return p
-    ? {
-        name: p.name ?? '',
-        kind: p.kind,
-        url: p.url ?? '',
-        ...(p.html !== undefined ? { html: p.html } : {}),
-        ...(p.text !== undefined ? { text: p.text } : {}),
-        // 同层清单原样透传：MediaViewer 认 list / index，自带 ← / → 与页码
-        //（用户口径 2026-10-14：「全局预览都提供一个列表，可以通过左右快捷键来回切换」）。
-        ...(p.list && p.list.length > 1
-          ? { list: p.list, index: Math.min(Math.max(p.index ?? 0, 0), p.list.length - 1) }
-          : {}),
-      }
-    : null
+  if (!p) return null
+  // 节点包：内容来自 packView（按 url 命中）；未命中 = 还在读，html 保持 undefined
+  const pack = p.kind === 'ui' && packView.value?.url === p.url ? packView.value : null
+  if (pack?.error !== undefined) {
+    // 读包失败：换成文字态，把原因说清楚（别让用户盯着一句"还没画过"）
+    return {
+      name: p.name ?? '',
+      kind: 'text',
+      url: p.url ?? '',
+      text: pack.error,
+    }
+  }
+  return {
+    name: p.name ?? '',
+    kind: p.kind,
+    url: p.url ?? '',
+    ...(pack ? { html: pack.html } : {}),
+    // 首次点开时总线里已经带着 html（openAssetPreviewFromAsset 解好的那份）；
+    // 切张之后由 packView 现取。两处都要透传，少一处就显示成"还没画过"。
+    ...(p.html !== undefined ? { html: p.html } : {}),
+    ...(p.text !== undefined ? { text: p.text } : {}),
+    // 同层清单原样透传：MediaViewer 认 list / index，自带 ← / → 与页码
+    //（用户口径 2026-10-14：「全局预览都提供一个列表，可以通过左右快捷键来回切换」）。
+    ...(p.list && p.list.length > 1
+      ? { list: p.list, index: Math.min(Math.max(p.index ?? 0, 0), p.list.length - 1) }
+      : {}),
+  }
 })
 
 /**
- * 切张到**节点包**时现取包：当前张 kind='ui' 但还没解出 html → 先给"加载中"，
- * 取回后把那一条的 html 写回总线（MediaViewer 的 iframe 分支才有内容）。
- * 取失败回一段能看懂的提示（与首次点开同一条兜底）。
+ * 需要取包的地址：当前张是节点包、且本地还没有它的界面 → 返回 url；否则 null。
+ * 切到另一个包时它会立刻变成新 url（旧界面不再被命中），所以画面一定跟着换。
  */
-watch(previewItem, async (p) => {
-  if (!p || p.kind !== 'ui' || p.html !== undefined) return
-  /**
-   * ★ 只改"当前这一张的内容"，**不能**用投影后的 p 整体替换总线（用户 2026-10-28 实测：
-   * 连按右键都停在同一张）。p 只是喂给 MediaViewer 的投影，里面没有 list / kinds / ids；
-   * 拿它覆盖会把同层清单丢掉，MediaViewer 随即退化成单张，页码与切换一起失效。
-   */
-  const patch = (extra: Record<string, unknown>): void => {
-    const cur = assetPreview.value
-    if (!cur) return
-    assetPreview.value = { ...cur, ...extra }
-  }
-  patch({ html: '' })
-  if (!p.url) {
-    patch({ html: undefined, text: '这个节点包没有地址，读不出来。' })
-    return
-  }
+const packRequest = computed(() => {
+  const p = currentAssetPreview()
+  if (!p || p.kind !== 'ui') return null
+  if (packView.value?.url === p.url) return null
+  return p.url ?? ''
+})
+
+watch(packRequest, async (url) => {
+  if (!url) return
   try {
-    const pack = await peekPack(p.url)
-    const cur = currentAssetPreview()
-    // 等包的时候用户可能又切走了：只把结果写回"还在看这张"的那一条
-    if (cur && cur.kind === 'ui' && cur.url === p.url) {
-      patch({ html: pack.html, htmlUrl: p.url, text: undefined })
-    }
+    const pack = await peekPack(url)
+    // 等包的时候用户可能又切走了：只认还在等的那个地址
+    if (packRequest.value === url) packView.value = { url, html: pack.html }
   } catch (err) {
-    const cur = currentAssetPreview()
-    if (cur && cur.kind === 'ui' && cur.url === p.url) {
-      patch({ html: undefined, text: '这个节点包读不出来：' + (err instanceof Error ? err.message : String(err)) })
+    if (packRequest.value === url) {
+      packView.value = { url, error: '这个节点包读不出来：' + (err instanceof Error ? err.message : String(err)) }
     }
   }
 })
