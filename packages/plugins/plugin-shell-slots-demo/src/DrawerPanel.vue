@@ -2,7 +2,7 @@
 /**
  * 抽屉插件页签正文：host 与默认按钮来自宿主 props；节点数由组件自己从上下文取。
  */
-import { computed, onBeforeUnmount, shallowRef } from 'vue'
+import { computed, defineComponent, h, onBeforeUnmount, shallowRef } from 'vue'
 import { useCanvasContext } from '@mini-canvas/canvas-render'
 import type { DrawerHost } from './types'
 
@@ -15,7 +15,18 @@ const props = defineProps<{
 }>()
 const { ctx } = useCanvasContext()
 
-const button = computed(() => props.coreButton)
+/** 默认按钮：宿主下发哪件就渲染哪件；模板里直接写 <CoreButton> */
+const CoreButton = defineComponent({
+  name: 'CoreButton',
+  inheritAttrs: false,
+  setup(_, { attrs, slots }) {
+    return () => {
+      const comp = props.coreButton
+      if (!comp) return null
+      return h(comp as never, attrs, slots)
+    }
+  },
+})
 
 const doc = ctx.tryGet<{ getNodes(): unknown[]; subscribe(fn: () => void): () => void }>('doc')
 const nodeCount = shallowRef(doc ? doc.getNodes().length : 0)
@@ -38,13 +49,9 @@ onBeforeUnmount(() => {
       <li>当前节点数：{{ nodeCount }}</li>
     </ul>
 
-    <div v-if="button" class="ssd-actions">
-      <component :is="button" :tone="props.buttonTone ?? 'dock'" variant="text" title="关闭抽屉" @click="props.host.close()">关闭抽屉</component>
-      <component :is="button" :tone="props.buttonTone ?? 'dock'" variant="text" title="收起或展开抽屉" @click="props.host.toggleCollapsed()">收起/展开</component>
-    </div>
-    <div v-else class="ssd-actions">
-      <button type="button" @click="props.host.close()">关闭抽屉</button>
-      <button type="button" @click="props.host.toggleCollapsed()">收起/展开</button>
+    <div class="ssd-actions">
+      <CoreButton :tone="props.buttonTone ?? 'dock'" variant="text" title="关闭抽屉" @click="props.host.close()">关闭抽屉</CoreButton>
+      <CoreButton :tone="props.buttonTone ?? 'dock'" variant="text" title="收起或展开抽屉" @click="props.host.toggleCollapsed()">收起/展开</CoreButton>
     </div>
   </div>
 </template>

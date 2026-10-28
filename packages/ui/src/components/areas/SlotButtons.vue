@@ -12,6 +12,7 @@
  * - tab    ：28 高 / 圆角 10 / 13px（抽屉页签）
  */
 import { computed, type Component, type PropType } from 'vue'
+import AxTooltip from '../AxTooltip.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -56,22 +57,24 @@ const TONE = {
 </script>
 
 <template>
-  <button
-    class="inline-flex flex-none items-center justify-center gap-1 text-ink transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
-    :class="[
-      TONE[props.tone],
-      isText ? 'font-medium' : '',
-      props.active ? 'bg-hover-strong' : '',
-    ]"
-    type="button"
-    :title="title"
-    :aria-label="label"
-    :aria-pressed="active === undefined ? undefined : active ? 'true' : 'false'"
-    :disabled="disabled"
-    @click="emit('click', $event)"
-  >
-    <span v-if="iconHtml" class="inline-flex" aria-hidden="true" v-html="iconHtml" />
-    <component :is="iconComp" v-else-if="iconComp" aria-hidden="true" />
-    <span v-if="$slots.default"><slot /></span>
-  </button>
+  <!-- 提示用 AxTooltip：内置按钮那种主题气泡；不再用浏览器原生 title 的小黑框。 -->
+  <AxTooltip :content="title" placement="top" trigger-class="flex-none">
+    <button
+      class="inline-flex flex-none items-center justify-center gap-1 text-ink transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+      :class="[
+        TONE[props.tone],
+        isText ? 'font-medium' : '',
+        props.active ? 'bg-hover-strong' : '',
+      ]"
+      type="button"
+      :aria-label="label"
+      :aria-pressed="active === undefined ? undefined : active ? 'true' : 'false'"
+      :disabled="disabled"
+      @click="emit('click', $event)"
+    >
+      <span v-if="iconHtml" class="inline-flex" aria-hidden="true" v-html="iconHtml" />
+      <component :is="iconComp" v-else-if="iconComp" aria-hidden="true" />
+      <span v-if="$slots.default"><slot /></span>
+    </button>
+  </AxTooltip>
 </template>
