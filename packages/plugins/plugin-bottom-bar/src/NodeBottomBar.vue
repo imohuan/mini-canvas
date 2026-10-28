@@ -87,7 +87,16 @@ import {
   type RefSlotKind,
 } from './refSlots'
 // 参考区合并 + 失效校验（纯函数，已单测）
-import { mergeRefTiles, invalidRefHint, nextChipOrder, targetOfTile, uploadToRefSlot, type TileCardLike } from './refTiles'
+import {
+  mergeRefTiles,
+  invalidRefHint,
+  nextChipOrder,
+  targetOfTile,
+  uploadToRefSlot,
+  type RefTarget,
+  type RefTile,
+  type TileCardLike,
+} from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf } from './refSlotDrag'
 import { judgeSlotHover } from './refSlotDrag'
@@ -485,7 +494,7 @@ function videoThumbOf(url: string | undefined): string | undefined {
  *   还没取到 → 返回空串，卡片回退成类型图标。
  * - 音频：没有可视化封面，返回空串 → 类型图标。
  */
-function cardImageOf(tile: { url?: string; kind?: string }): string {
+function cardImageOf(tile: { url?: string; kind?: string | null }): string {
   void videoThumbTick.value // 依赖 tick：取到新帧时模板重算
   if (!tile.url) return ''
   if (tile.kind === 'video') return videoThumbOf(tile.url) ?? ''
@@ -581,7 +590,7 @@ function openCard(card: TileCardLike): void {
   // 预览 kind 缺失会让 MediaViewer 认不出媒体类型 → stage 空白（真机踩过）。
   const full = cards.value.find((c) => c.id === card.id)
   const multi = previewListFor(cards.value, full ?? (card as MaterialCard))
-  const kind = (full?.isText ?? card.isText) ? 'text' : ((full?.kind ?? 'image') as 'image' | 'video' | 'audio')
+  const kind = full?.isText ? 'text' : ((full?.kind ?? 'image') as 'image' | 'video' | 'audio')
   const url = full?.url ?? card.url
   /**
    * 全屏预览给**原始地址**：视频要能播（塞一张截图进去，播放器只会报「视频加载失败」）。
@@ -638,7 +647,12 @@ function onCardsClickCapture(ev: MouseEvent): void {
    */
   if (tile && !tile.invalid) {
     ev.stopPropagation()
-    openCard({ id: tile.nodeId ?? tile.key, name: tile.label, url: tile.url, isText: tile.kind === 'text' })
+    openCard({
+      id: tile.nodeId ?? tile.key,
+      name: tile.label,
+      kind: tile.kind ?? 'image',
+      ...(tile.url ? { url: tile.url } : {}),
+    })
   }
 }
 
