@@ -207,7 +207,7 @@ function pickAction(
 
 <style scoped>
 /* 全部走主题变量：亮色下 logo 用深墨色，暗色下用浅色，避免"浅底浅图标"看不清 */
-.project-cluster { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0; border: 1px solid var(--ui-line); border-radius: 8px; background: color-mix(in srgb, var(--ui-panel) 80%, transparent); }
+.project-cluster { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-panel); }
 /* 只借「鼠标点锚点」能力的空壳（没有触发器），不占胶囊里的位置 */
 .canvas-action-host { display: none; }
 .logo-button { width: 57px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 8px; color: var(--ui-ink); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }

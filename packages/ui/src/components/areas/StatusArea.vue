@@ -20,7 +20,7 @@ const s = ui.state
 
 <template>
   <div class="flex items-end" aria-label="画布状态栏">
-    <div class="flex h-10 items-center gap-1 rounded-xl bg-canvas-bg/70 p-1.5 backdrop-blur-md">
+    <div class="flex h-10 items-center gap-1 rounded-xl bg-panel p-1.5">
       <AxTooltip v-if="s.drawer !== 'left'" content="资产管理" placement="top">
         <button
           class="flex h-7 items-center gap-1 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
