@@ -1,315 +1,273 @@
 /**
- * refTiles —— 参考区的**展示与校验**（纯函数，零 DOM、零 Vue）。
+ * refTiles —— 参考区卡片行的**展示与校验**（纯函数，零 DOM、零 Vue）。
  *
- * 唯一事实源 = **连线顺序**（collectUpstreamMaterials 按边收、按 refOrder 排、按顺序编号）：
- * 「图片1」= 连线顺序里的第 1 张图。正文里的 @标签只是**指向**某个序号，不产生新的参考。
+ * 用户口径（2026-10-28 定案）：
  *
- * 用户口径（2026-10-25 / 2026-10-26）：
- *   ① 参考区只有一行；连了 3 条线就只有 3 格（不能凭空多出第 4、5 格）；
- *   ② 声明了 @图片2 但只有第 1 格有内容 → 那一格**显示为待输入**，内容不该跑到「图片3」去；
- *   ③ 上传 = 建参考节点 + 连线，连线归到用户点的那个序号；
- *   ④ 序号有缺时**不许发送**。
+ *   - 一张卡片 = 正文里的一颗标签（`ref-node:<id>` 已绑定 / `ref-name:<名>` 待绑定）；
+ *   - 已绑定卡片显示节点**名称**与真实类型图标，顺序由 `refOrder` 决定；
+ *   - 待绑定卡片（空壳）显示名称 + 「待添加」，拖入节点即**添加**；
+ *   - 有内容的卡片拖入节点即**替换**（换绑，标签名跟着新节点走）；
+ *   - 序号角标只用来观察当前顺序，不参与任何判定（用户 2026-10-28 明确要求保留）；
+ *   - 绑定失效（节点被删 / 连线断开 / 老格式）→ 卡片与标签显示失效，**禁止发送**。
  */
 
-/** 参考区里的一格 */
+import { refNodeChipId, refNameChipId, nodeIdOfChip, nameOfChip, type RefChip } from './refSlots'
+
+/** 参考区里的一张卡片 */
 export interface RefTile {
-  /** 稳定键：slot:image:2（正文声明）或 card:<节点id>（没被正文声明的连线素材） */
+  /** 稳定键 = 标签 id（ref-node:<id> / ref-name:<名> / ref-slot:*） */
   key: string
-  slotKey?: string
+  /** 显示序号：只做观察，不参与判定（1..n） */
   index: number
+  /** 卡片上显示的名称（已绑定 = 节点名称；待绑定 = 手打名称） */
   label: string
+  /** 是否待绑定（空壳）：拖入即「添加」 */
   pending: boolean
-  name: string
+  /** 是否失效：绑定的节点已经不在了 */
+  invalid: boolean
+  /** 绑定的节点 id（待绑定 / 失效 → null） */
+  nodeId: string | null
+  /** 节点真实类型（待绑定 / 失效 → null：统一资源图标） */
+  kind: 'image' | 'video' | 'audio' | 'text' | null
   url?: string
-  isText: boolean
-  /** 资源类型（用户 2026-10-28：卡片空态要按类型出图标） */
-  kind: 'image' | 'video' | 'audio' | 'text'
-  /** 有内容格对应的素材（卡片删除/预览要拿它找连线）；待输入格没有 */
-  card?: TileCardLike
-  /**
-   * 正文里的**槽位序号**（标签名中的序号）。
-   *
-   * 与 index 的区别（用户 2026-10-27 口径）：
-   * - slotIndex 是「这条引用指向第几张」，拖拽**不会**改变它；
-   * - index 是「显示在第几格」，排序后按位置重编。
-   * 上传、报错、拼 ref-slot:kind:N 一律用 slotIndex，否则拖拽后点第 2 格会写到第 4 号去。
-   */
-  slotIndex: number
+  value?: string
+  /** 视频帧图（mp4 不能直接当 <img>） */
+  thumb?: string
 }
 
-/** 正文槽位（@ 标签）的最小形状 */
-export interface TileSlotLike {
-  kind: 'image' | 'video' | 'audio' | 'av' | 'text'
-  index: number
-}
-
-/** 一条连线素材的最小形状（name = 图片1 这种按连线顺序编的名字） */
+/** 一条连线素材（= 已绑定到本节点的上游节点） */
 export interface TileCardLike {
   id: string
+  /** 节点名称（画布内唯一） */
   name: string
+  kind: 'image' | 'video' | 'audio' | 'text'
   url?: string
-  isText: boolean
-}
-
-/** 连线顺序编号（图片1 / 音频2 …）：住 UpstreamMaterial 上，卡片沿用 */
-interface WithRefName {
-  refName?: string
-}
-
-/** 素材名（图片2）→ 序号与种类 */
-export function refNameToSlot(refName: string): { index: number; kind: 'image' | 'video' | 'audio' | 'text'; label: string } | null {
-  const m = /^(图片|视频|音频|文本)(\d+)$/.exec(refName)
-  if (!m) return null
-  const kind = m[1] === '图片' ? 'image' : m[1] === '视频' ? 'video' : m[1] === '音频' ? 'audio' : 'text'
-  return { index: Number(m[2]), kind, label: m[1] }
-}
-
-/** refName（图片2）+ 槽位种类 → 槽位键（image:2）。对不上（种类不同）→ null */
-export function refNameToSlotKey(refName: string, slotKind: 'image' | 'video' | 'audio' | 'text' | 'av'): string | null {
-  const parsed = refNameToSlot(refName)
-  if (!parsed) return null
-  if (slotKind !== 'av' && parsed.kind !== slotKind) return null
-  return parsed.kind + ':' + parsed.index
+  value?: string
 }
 
 /**
- * 参考区**只排一行**，格子身份 = **连线的序号**。
+ * 把「正文标签」与「连线素材」合成卡片行。
  *
- * 规则（用户口径 2026-10-27，替换掉旧的「补齐到最大声明序号」）：
- * - 格子数量 = max(该类型连线数, 该类型声明数)。声明序号已由 normalizeRefSlots 归一化成 1..n，
- *   所以**不会**因为写了 `@图片44` 就铺出 44 格；
- * - 第 N 格有内容 ⇔ 连线素材里存在序号 N（正文声明 @图片N **不**产生内容）；
- * - 第 N 格没内容 → 虚线「待输入」；
- * - slotIndex = 正文序号（拖拽不变）；index = 显示位（排序后重编）。
+ * 规则（单一事实源，不要再在组件里另算一套）：
+ * 1. **连线素材**决定哪些节点能绑定：标签指向的节点必须在素材里，否则算失效；
+ * 2. 卡片顺序 = `displayOrder`（用户拖出来的标签 id 序列）→ 没列到的按正文出现顺序垫后；
+ * 3. 有连线的节点如果没有对应标签，也补一张卡（参考区一直支持「连了就有卡」）；
+ * 4. 待绑定标签（`ref-name:`）永远显示成空壳；
+ * 5. 老格式标签（`ref-slot:`）显示失效，不猜它原来指向谁（用户拍板不兼容）。
  */
 export function mergeRefTiles(
-  slots: ReadonlyArray<TileSlotLike>,
+  chips: ReadonlyArray<RefChip>,
   cards: ReadonlyArray<TileCardLike>,
-  /** 用户拖出来的完整顺序（card:N 与 slot:kind:n 混排）。空 = 无自定义顺序 */
+  /** 用户拖出来的完整顺序（标签 id 序列）。空 = 按正文顺序 */
   displayOrder?: readonly string[],
 ): RefTile[] {
-  /**
-   * **全局编号**（用户 2026-10-28 明确要求）：
-   * 序号不再按类型各自从 1 开始，而是「图片1、视频2、音频3、文本4、图片5」这样
-   * 整串连续。于是「第 N 格」只有一种含义，界面上一眼能对上。
-   *
-   * 序号→素材仍以 refName 为准（卡片名可能带空格或任意文案，不能当序号）。
-   */
-  const byIndex = new Map<number, TileCardLike>()
-  /** 名字里带序号的卡片（图片2 / 音频3）：算格数与定位都用它 */
-  const seqOfCard = (c: TileCardLike) => {
-    const withRef = c as TileCardLike & WithRefName
-    return refNameToSlot(withRef.refName || '') ?? refNameToSlot(String(c.name ?? '').trim())
-  }
-  for (const c of cards) {
-    // 优先 refName；没有时只接受严格 `图片N`（无空格）的 name。
-    // 节点标题常是「图片 54」（带空格）或任意文案，不能当序号。
-    const parsed = seqOfCard(c)
-    if (!parsed) continue
-    if (!byIndex.has(parsed.index)) byIndex.set(parsed.index, c)
-  }
-  /** 只有声明、还没连线的格子：**格子位** → 类型（决定空槽出哪种图标） */
-  const declaredKind = new Map<number, 'image' | 'video' | 'audio' | 'text' | 'av'>()
-  /**
-   * 声明本身只用于**补空格**：卡片（连线素材）按自己的 refName 序号占格；
-   * 声明多出来的序号，从「已有卡片的数量 + 1」开始往后补。
-   *
-   * 这样 @图片1 / @音频2 这种编号能一一对上，又不会因为声明里也有「音频 index=1」
-   * 而把已有卡片挤走（用户 2026-10-28：编号改成全局连续之后踩过）。
-   */
-  const maxCardIndexEarly = byIndex.size ? Math.max(...byIndex.keys()) : 0
-  ;[...new Set(slots.map((s) => s.index))]
-    .sort((a, b) => a - b)
-    .forEach((declaredIndex) => {
-      // 这条声明指向的格子已经有连线内容 → 不额外补格
-      if (byIndex.has(declaredIndex)) return
-      // 补空格：用「已有卡片数 + 已补格数」的下一位（声明只补在内容之后，不挤已有卡片）
-      const kind = slots.filter((s) => s.index === declaredIndex)[0]?.kind ?? 'image'
-      // 已经有同类卡片占着这个序号 → 这条声明就是它，不再补格
-      const occupant = byIndex.get(declaredIndex)
-      const occupantRef = occupant ? (occupant as TileCardLike & WithRefName).refName : ''
-      if (occupant && refNameToSlot(occupantRef || '')?.kind === kind) return
-      let at = Math.max(maxCardIndexEarly, byIndex.size) + 1
-      while (declaredKind.has(at)) at += 1
-      declaredKind.set(at, kind)
-    })
+  const byNodeId = new Map<string, TileCardLike>()
+  for (const c of cards) if (!byNodeId.has(c.id)) byNodeId.set(c.id, c)
 
-  const KN = { image: '图片', video: '视频', audio: '音频', text: '文本' } as const
   const tiles: RefTile[] = []
-  const maxCardIndex = byIndex.size ? Math.max(...byIndex.keys()) : 0
-  /**
-   * 格数 = max(卡片最大序号, 声明条数)。
-   *
-   * 用户 2026-10-27 口径：正文声明**不产生额外内容格**，只把「已连了多少」的范围内
-   * 空着的位置显示成待输入。所以声明只按**数量**兜底，不按序号铺满（@图片44 不会长 44 格）。
-   * 卡片自己的序号仍然决定它落在第几格（用户 2026-10-28 修错位那条不能破）。
-   */
-  const total = Math.max(maxCardIndex, new Set(slots.map((s) => s.index)).size)
-  for (let slotIndex = 1; slotIndex <= total; slotIndex++) {
-    const card = byIndex.get(slotIndex)
-    // 有卡按卡的类型；只有声明按声明的类型（av/未知时退回 image 的图标）
-    const declared = declaredKind.get(slotIndex)
-    const kind: 'image' | 'video' | 'audio' | 'text' =
-      card && card.isText ? 'text'
-      : (card ? refNameToSlot((card as TileCardLike & WithRefName).refName || '')?.kind : undefined) ??
-        (declared === 'video' ? 'video'
-          : declared === 'audio' ? 'audio'
-          : declared === 'text' ? 'text'
-          : 'image')
-    const label = KN[kind] ?? '图片'
+  const usedCards = new Set<string>()
+  const seenKeys = new Set<string>()
+
+  for (const chip of chips) {
+    if (seenKeys.has(chip.id)) continue
+    seenKeys.add(chip.id)
+    if (chip.legacy) {
+      tiles.push({
+        key: chip.id,
+        index: 0,
+        label: chip.name || '失效引用',
+        pending: false,
+        invalid: true,
+        nodeId: null,
+        kind: null,
+      })
+      continue
+    }
+    const nodeId = chip.nodeId
+    if (!nodeId) {
+      // 待绑定：统一资源图标，拖入即添加
+      tiles.push({
+        key: chip.id,
+        index: 0,
+        label: chip.pendingName || chip.name || '未命名',
+        pending: true,
+        invalid: false,
+        nodeId: null,
+        kind: null,
+      })
+      continue
+    }
+    const card = byNodeId.get(nodeId)
+    if (!card) {
+      // 绑定的节点不在连线里（被删 / 被断开）→ 失效，禁止发送
+      tiles.push({
+        key: chip.id,
+        index: 0,
+        label: chip.name || '失效引用',
+        pending: false,
+        invalid: true,
+        nodeId,
+        kind: null,
+      })
+      continue
+    }
+    usedCards.add(nodeId)
     tiles.push({
-      key: card ? 'card:' + card.id : 'slot:' + (declared ?? kind) + ':' + slotIndex,
-      slotKey: card ? undefined : (declared ?? kind) + ':' + slotIndex,
-      slotIndex,
-      index: slotIndex, // 临时值，排序后按显示位重编
-      label: label + ' ' + slotIndex,
-      pending: !card,
-      name: card?.name ?? (label + ' ' + slotIndex),
-      url: card?.url,
-      isText: kind === 'text',
-      kind,
-      card,
-    })
-  }
-  // 没有可识别名字的素材（比如文本）照常补在最后（参考区一直支持显示它们）
-  for (const card of cards) {
-    if (refNameToSlot((card as TileCardLike & WithRefName).refName || '') ?? refNameToSlot(String(card.name ?? '').trim())) continue
-    tiles.push({
-      key: 'card:' + card.id,
-      // 文本这类没有序号的素材：slotIndex 用 0 表示「没有槽位序号」，
-      // 它们不参与 @图片N 引用，也不参与上传排位。
-      slotIndex: 0,
-      index: tiles.length + 1,
+      key: chip.id,
+      index: 0,
+      // 名称永远以节点为准（标签只是指向它）——用户 2026-10-28：替换后名字要跟着换
       label: card.name,
       pending: false,
-      name: card.name,
+      invalid: false,
+      nodeId,
+      kind: card.kind,
       url: card.url,
-      isText: card.isText,
-      kind: card.isText ? 'text' : 'image',
-      card,
+      value: card.value,
     })
   }
-  /**
-   * 显示顺序（用户口径 2026-10-26：卡片可以拖到任意位置，排序必须生效）：
-   * - **有内容的格子**按 cards 的出现顺序排（cards 已按 refOrder/连线顺序排好）；
-   * - **待输入格**排在它们后面（按序号升序）—— 用户拖的只是有内容的那些。
-   *
-   * 为什么不能只按 index 排：序号是「正文里的引用位置」（图片3），排序不会改它；
-   * 若显示顺序也按它，用户拖完立刻被拉回原样（真机踩过：拖到最后又弹回去）。
-   */
+
+  // 连了线但正文没写标签：也补一张卡（参考区不吞素材）
+  for (const card of cards) {
+    if (usedCards.has(card.id)) continue
+    const key = refNodeChipId(card.id)
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+    tiles.push({
+      key,
+      index: 0,
+      label: card.name,
+      pending: false,
+      invalid: false,
+      nodeId: card.id,
+      kind: card.kind,
+      url: card.url,
+      value: card.value,
+    })
+  }
+
+  // 顺序：用户拖出来的序列优先；没列到的保持生成顺序
   const orderOf = new Map<string, number>()
-  // 优先用 displayOrder（用户拖出来的完整序列）；没有时按 cards 出现顺序
   if (displayOrder && displayOrder.length > 0) {
     displayOrder.forEach((key, i) => {
-      orderOf.set(key, i)
-      // 兼容带前缀的键（card:N）
-      if (key.startsWith('card:')) orderOf.set(key.slice(5), i)
-      // 兼容不带前缀的键（refOrder 落盘时 card: 已剥掉）—— tiles 的 key 是 card:N
-      else orderOf.set('card:' + key, i)
+      if (!key) return
+      if (!orderOf.has(key)) orderOf.set(key, i)
     })
-  } else {
-    /**
-     * 没拖过（无 displayOrder）→ **按 slotIndex 排**（用户 2026-10-28 修错位）。
-     *
-     * 旧实现按 cards 数组顺序排，于是「hint 让它占第 2 格」的卡片被硬拉到第 1 位，
-     * 正文「图片1」指向的那一格反而是空壳（用户截图：格 1 空着却显示缩略图）。
-     * 有 displayOrder 时仍以用户拖出来的顺序为准（拖拽优先，那条不能破）。
-     */
-    ;(() => {
-      /**
-       * 按 **类型 + 序号** 排名（用户 2026-10-28 修错位）。
-       *
-       * 只按 slotIndex 全局排会跨类型交错（图片1、视频1、音频1 都从 1 开始）；
-       * 期望是「图片类整体在前、按图片序号排，然后视频、音频」，与 tiles 生成顺序一致。
-       * 无序号（文本等）排最后。
-       */
-      const kindOrder: Record<string, number> = { image: 0, video: 1, audio: 2, text: 3 }
-      const kindOf = (key: string): string => (key.startsWith('slot:') ? key.split(':')[1] : 'image')
-      const ranked = [...tiles].sort((a, b) => {
-        const ka = kindOf(a.key)
-        const kb = kindOf(b.key)
-        const da = kindOrder[ka] ?? 9
-        const db = kindOrder[kb] ?? 9
-        if (da !== db) return da - db
-        return (a.slotIndex || 9999) - (b.slotIndex || 9999)
-      })
-      ranked.forEach((t, i) => orderOf.set(t.key, i))
-    })()
   }
-  const sorted = tiles.sort((a, b) => {
-    const ao = orderOf.get(a.key)
-    const bo = orderOf.get(b.key)
-    // 都在用户序列里 → 按用户顺序；都不在 → 按序号；一有一无 → 在序列的排前面
-    if (ao !== undefined && bo !== undefined) return ao - bo
-    if (ao !== undefined) return -1
-    if (bo !== undefined) return 1
-    return a.index - b.index
-  })
-  /**
-   * 显示序号 = 显示位置（用户口径 2026-10-26）：排完序后从 1 重编。
-   * 这样拖到哪就是第几格，索引永远 1,2,3…（之前拖完索引留在原素材上 → 3,2,1 的错乱）。
-   * 正文 @图片N 的解析按「第 N 个 chip 的名字」匹配 —— 与此处的 index 无关。
-   */
-  return sorted.map((t, i) => ({ ...t, index: i + 1 }))
+  const ranked = tiles
+    .map((tile, i) => ({ tile, i }))
+    .sort((a, b) => {
+      const ao = orderOf.get(a.tile.key)
+      const bo = orderOf.get(b.tile.key)
+      if (ao !== undefined && bo !== undefined) return ao - bo
+      if (ao !== undefined) return -1
+      if (bo !== undefined) return 1
+      return a.i - b.i
+    })
+    .map((e) => e.tile)
+
+  // 序号 = 显示位置（只做观察）
+  return ranked.map((t, i) => ({ ...t, index: i + 1 }))
 }
 
 /**
- * 参考序号缺格的判定（用户口径 2026-10-25：「只传了一张图，并且声明的是"图片 2"…
- * 是不允许你点击发送按钮的」）。
+ * 能不能发送：任何失效引用都拦住（用户 2026-10-28：失效标签禁止发送，不做兼容）。
  *
- * 判定只看**连线素材**（有内容的格子）：声明了 @图片N 且 1..N-1 里存在没内容的格子 → 报缺。
- * 正文没写任何 @ 时不受影响（普通参考图照旧）。
+ * 待绑定卡片不算失效 —— 它是「还没拖东西进来」的正常状态，发送时按提示处理。
  */
-export function findRefGap(
-  slots: ReadonlyArray<{ kind: 'image' | 'video' | 'audio' | 'text' | 'av'; index: number }>,
-  cards: ReadonlyArray<TileCardLike>,
-): { kind: 'image' | 'video' | 'audio' | 'text' | 'av'; missing: number[] } | null {
-    // 每种类型已就绪的序号集合（来自连线素材的真实序号）
-    const haveBy = (kind: 'image' | 'video' | 'audio' | 'text'): Set<number> => {
-      const set = new Set<number>()
-      for (const c of cards) {
-        const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
-        if (!p || p.kind !== kind) continue
-        // 用 **refName 自带的序号**：以前是 seq += 1 按出现顺序数，
-        // 于是「图片2 + 图片4」会被当成第 1、2 格，缺号判断整体错位（真机踩过）。
-        set.add(p.index)
-      }
-      return set
-    }
-  for (const s of slots) {
-    if (s.kind === 'av') continue
-    const have = haveBy(s.kind)
-    const missing: number[] = []
-    // 「声明了但还没内容」的那一格本身也算缺（不然用户会发一个空引用给模型）
-    for (let i = 1; i <= s.index; i++) if (!have.has(i)) missing.push(i)
-    if (missing.length) return { kind: s.kind, missing }
-  }
-  return null
+export function invalidRefTiles(tiles: ReadonlyArray<RefTile>): RefTile[] {
+  return tiles.filter((t) => t.invalid)
 }
 
-import { placeRefAtSlot } from './panelSource'
+/** 失效引用的提示文案（给发送按钮旁的警告用） */
+export function invalidRefHint(tiles: ReadonlyArray<RefTile>): string {
+  const bad = invalidRefTiles(tiles)
+  if (bad.length === 0) return ''
+  const names = bad.slice(0, 3).map((t) => '「' + t.label + '」').join('、')
+  const more = bad.length > 3 ? ' 等 ' + bad.length + ' 个' : ''
+  return '有引用已失效：' + names + more + '，删掉或重新拖入后才能发送'
+}
 
 /**
- * 上传一个文件到某个参考槽位（用户口径 2026-10-25：「点击上传时，这 4 个上传你需要
- * 添加一个参考节点然后进行连接，这样进行上传」）。
+ * 「标记」匹配：正文里的 `@名称` → 已连线素材。
+ *
+ * 名称画布内唯一（用户 2026-10-28 定案），所以按名字查只会命中一个；
+ * 名称里可能有空格，优先匹配最长的那个（「天空之城」不会被「天空」抢走）。
+ *
+ * @returns 命中的素材（没命中 → null，调用方转成待绑定标签）
+ */
+export function matchMaterialByName(
+  name: string,
+  cards: ReadonlyArray<TileCardLike>,
+): TileCardLike | null {
+  const want = String(name ?? '').trim()
+  if (!want) return null
+  return cards.find((c) => c.name.trim() === want) ?? null
+}
+
+/** 卡片拖拽排序后要落盘的标签 id 序列（去掉重复与空值） */
+export function nextChipOrder(
+  current: readonly string[],
+  currentTiles: ReadonlyArray<{ key: string }>,
+  dragged?: ReadonlyArray<{ key?: string }>,
+): string[] | null {
+  const list = Array.isArray(dragged) && dragged.length === currentTiles.length ? dragged : currentTiles
+  const ids = list.map((t) => String(t.key ?? '')).filter(Boolean)
+  if (ids.length === 0) return null
+  if (ids.length === current.length && ids.every((id, i) => id === current[i])) return null
+  return ids
+}
+
+/** 参考格键（给上传/替换定位用）：已绑定 = 节点 id，待绑定 = 名称 */
+export interface RefTarget {
+  /** 要替换的旧标签 id（没有 = 添加） */
+  previousChipId?: string
+  /** 目标节点 id（替换时用来断开旧连线） */
+  oldNodeId?: string
+  /** 待绑定名称（空壳卡片的名称，替换成功后不再使用） */
+  pendingName?: string
+}
+
+/** 从卡片推出替换目标 */
+export function targetOfTile(tile: RefTile): RefTarget {
+  if (tile.pending) {
+    return { previousChipId: tile.key, pendingName: nameOfChip(tile.key) ?? tile.label }
+  }
+  return {
+    previousChipId: tile.key,
+    oldNodeId: tile.nodeId ?? nodeIdOfChip(tile.key) ?? undefined,
+  }
+}
+
+/** 待绑定标签的 id（空壳卡片「添加」成功后，正文里那颗标签要换成 ref-node:<id>） */
+export function boundChipIdOf(nodeId: string): string {
+  return refNodeChipId(nodeId)
+}
+
+/** 待绑定名称 → 标签 id */
+export function pendingChipIdOf(name: string): string {
+  return refNameChipId(name)
+}
+
+/**
+ * 上传一个文件到某张卡片（用户口径 2026-10-25 / 2026-10-28）：
+ * 「点击上传时，这 4 个上传你需要添加一个参考节点然后进行连接，这样进行上传」。
  *
  * 顺序缺一不可（单测钉死）：
  *   ① 建节点并落资源（file-drop）；
  *   ② **把选中还给原节点** —— file-drop 建完会选中新节点，底栏挂在原节点上；
  *   ③ 等一拍再连线（节点没进 VueFlow store 时边会被丢掉）；
  *   ④ 连线（doc.addEdge）；
- *   ⑤ 把新素材排到该槽位对应的连线序号（第 2 格 = 连线序列里的第 2 张）。
+ *   ⑤ 调用方把正文里那颗标签换成 `ref-node:<新节点id>`（添加 / 替换同一条路）。
  */
 export interface UploadDeps {
   addFiles(files: File[], at: { x: number; y: number }): Promise<number>
   waitTick(): Promise<unknown>
   afterCreate(): void
   addEdge(source: string, target: string): string | null
-  refOrder(): string[]
-  writeOrder(ids: string[]): void
   /** 建完之后取新节点（id / name / url）；拿不到 → null */
-  pickCreated(before: ReadonlySet<string>): { id: string; name: string; url?: string } | null
-  positionFor(index: number): { x: number; y: number }
+  pickCreated(): { id: string; name: string; url?: string } | null
+  /** 新节点的落点（卡片位置只影响摆放，不影响身份） */
+  positionFor(): { x: number; y: number }
 }
 
 export interface UploadResult {
@@ -319,21 +277,18 @@ export interface UploadResult {
 }
 
 export async function uploadToRefSlot(
-  input: { file: File; kind: 'image' | 'video' | 'audio' | 'text' | 'av'; index: number; targetId: string },
+  input: { file: File; targetId: string },
   deps: UploadDeps,
 ): Promise<UploadResult> {
-  const before = new Set(deps.refOrder())
-  const count = await deps.addFiles([input.file], deps.positionFor(input.index))
+  const count = await deps.addFiles([input.file], deps.positionFor())
   if (!count) return { ok: false, error: '这个文件没建出节点（类型不支持？）' }
   // ② 先把选中还回去（必须早于连线：底栏一旦卸载，后面的状态就没人接了）
   deps.afterCreate()
   await deps.waitTick()
-  const created = deps.pickCreated(before)
+  const created = deps.pickCreated()
   if (!created) return { ok: false, error: '节点建好了但还没连上线，请稍后再试' }
-  // ④ 连线（真实流程；上一次实现里这里少了，导致只建节点没连线）
+  // ④ 连线（真实流程；少了这一步就只建节点、不连线）
   const edge = deps.addEdge(created.id, input.targetId)
   if (edge === null) return { ok: false, error: '当前宿主没有连线能力' }
-  deps.writeOrder(placeRefAtSlot(deps.refOrder(), input.kind, input.index, created.id))
   return { ok: true, created }
 }
-

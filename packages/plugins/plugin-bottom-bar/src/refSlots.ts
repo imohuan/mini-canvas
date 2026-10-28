@@ -1,133 +1,92 @@
 /**
- * refSlots —— 底栏输入框里「@素材标签 + 待输入槽位」的纯逻辑（零 DOM、零 Vue，node 可单测）。
+ * refSlots —— 底栏「参考标签」的纯逻辑（零 DOM、零 Vue，node 可单测）。
  *
- * 用户口径（2026-10-25，附截图）：
- *   1. 输入框里 `@图片123` / `@音频123` / `@音视频123` 要解析成标签；
- *   2. **没有连线也要有标签**，状态是「待输入」，输入框上方的预览框同步显示；
- *   3. 待输入槽位可以：拖本地文件、点击上传、按住 Ctrl 拖节点进来。
+ * 用户口径（2026-10-28 定案，替换掉旧的「类型 + 序号」槽位模型）：
  *
- * 这里只放「认标签 / 判落点」两件事。DOM 与交互在 NodeBottomBar.vue，
- * 这样规则可以单独测，不用起浏览器。
+ *   1. 标签身份 = **绑定的节点 id**（`ref-node:<id>`）；显示名 = 节点名称；
+ *   2. 还没绑定的手打标签 = `ref-name:<名称>`，名称就是身份；
+ *   3. 名称在画布内唯一，所以按名称找节点永远只会命中一个；
+ *   4. 序号只用来观察顺序，**不参与任何判定**；
+ *   5. 旧格式 `ref-slot:<kind>:<N>` 不兼容 —— 按失效处理，用户重新标记一次。
+ *
+ * 这里只放「认标签 / 判落点」两件事，DOM 与交互在 NodeBottomBar.vue。
  */
 
 import { SLOT_KIND_META, slotAccepts as slotAcceptsKind, slotAcceptsLabel, slotMismatchHint, type SlotKind, type SlotMedia } from './slotKinds'
 
-/** 槽位种类（与素材 kind 对齐；av = 音视频混合；text = 文本） */
+/** 参考格种类；`any` = 手打的待绑定标签（还不知道类型） */
 export type RefSlotKind = SlotKind
 
 /** 各类槽位的中文名与上传时该允许的文件类型（唯一来源 = slotKinds.ts） */
 export const REF_SLOT_META = SLOT_KIND_META
 
-/** 中文 / 英文写法 → 槽位种类 */
-const KIND_BY_WORD: Record<string, RefSlotKind> = {
-  '图片': 'image', image: 'image',
-  '视频': 'video', video: 'video',
-  '音频': 'audio', audio: 'audio',
-  '音视频': 'av', media: 'av', av: 'av',
-  '文本': 'text', text: 'text',
+/** 标签身份前缀（与编辑器侧同一套字符串，改动要两边一起改） */
+export const REF_NODE_PREFIX = 'ref-node:'
+export const REF_NAME_PREFIX = 'ref-name:'
+/** 老格式前缀：只用来认出来并标成失效 */
+export const LEGACY_SLOT_PREFIX = 'ref-slot:'
+
+export function refNodeChipId(nodeId: string): string {
+  return REF_NODE_PREFIX + String(nodeId ?? '')
+}
+
+export function refNameChipId(name: string): string {
+  return REF_NAME_PREFIX + String(name ?? '').trim()
+}
+
+/** 标签 id → 绑定的节点 id（不是绑定标签 → null） */
+export function nodeIdOfChip(chipId: string | null | undefined): string | null {
+  const s = String(chipId ?? '')
+  if (!s.startsWith(REF_NODE_PREFIX)) return null
+  const id = s.slice(REF_NODE_PREFIX.length)
+  return id || null
+}
+
+/** 标签 id → 待绑定名称（不是待绑定标签 → null） */
+export function nameOfChip(chipId: string | null | undefined): string | null {
+  const s = String(chipId ?? '')
+  if (!s.startsWith(REF_NAME_PREFIX)) return null
+  const name = s.slice(REF_NAME_PREFIX.length).trim()
+  return name || null
+}
+
+/** 正文里的一颗参考标签 */
+export interface RefChip {
+  /** 标签 id：ref-node:<id> / ref-name:<名> / 老格式 ref-slot:* */
+  id: string
+  /** 正文里显示的名称（绑定标签以它为准刷新） */
+  name: string
+  /** 绑定的节点 id（待绑定 / 老格式 → null） */
+  nodeId: string | null
+  /** 待绑定名称（绑定标签 → null） */
+  pendingName: string | null
+  /** 老格式标签：不兼容，按失效处理 */
+  legacy: boolean
 }
 
 /**
- * 标签正则：`@图片1` / `@音视频12`（1~4 位数字；也认英文写法）。
+ * 从**富文本 doc JSON** 里取出参考标签（按出现顺序）。
  *
- * 为什么不用 `/g` 常量：`lastIndex` 是可变状态，多个调用方共用一个正则会互相干扰
- * （踩过：上一次没扫完，下一次从中间开始）。每次都新建一个。
+ * 只认真正的标签节点：正文里手打的 `@名字` 文字不算声明（用户 2026-10-27 口径，
+ * 不然残留文字会凭空撑出卡片）。
  */
-export function tokenRegExp(): RegExp {
-  return /@(图片|视频|音频|文本|音视频|image|video|audio|text|media|av)\s*(\d{1,4})/gi
-}
-
-/** 一个被 @ 到的槽位 */
-export interface RefSlotRef {
-  /** 稳定键：`image:1` —— 正文标签、槽位、落盘都用它 */
-  key: string
-  kind: RefSlotKind
-  index: number
-}
-
-export function refSlotKey(kind: RefSlotKind, index: number): string {
-  return kind + ':' + index
-}
-
-/**
- * 把声明序号**归一化**成 1..n（用户口径 2026-10-27）。
- *
- * 为什么需要：正文里写 `@图片1 @图片9` 时，若按原序号保留就会撑出 9 个格子；
- * 归一化后变成 图片1、图片2 —— 序号连续、格子数量 = 声明数量，
- * 缩略图规则也退化成「该类型数组第 N 项」，不用维护两套编号。
- *
- * 规则：同类型按**出现顺序**重编 1..n；不同类型各自从 1 开始，互不影响。
- * 已经是 1..n 时结果不变（幂等）。
- *
- * @returns `renamed` 保留原顺序的「原槽位 → 新序号」；`map` 用原 key 反查新序号
- */
-export function normalizeRefSlots(slots: ReadonlyArray<RefSlotRef>): {
-  renamed: Array<{ slot: RefSlotRef; index: number }>
-  map: Map<string, number>
-} {
-  const seq: Record<string, number> = {}
-  const map = new Map<string, number>()
-  const renamed = slots.map((slot) => {
-    seq[slot.kind] = (seq[slot.kind] ?? 0) + 1
-    const index = seq[slot.kind]
-    map.set(slot.key, index)
-    return { slot, index }
-  })
-  return { renamed, map }
-}
-
-
-/**
- * 从正文里认出所有槽位（去重、保持出现顺序）。
- * @param options.allowAv 是否认「@音视频」（设置里可关）
- */
-export function parseRefSlots(text: string, options: { allowAv?: boolean } = {}): RefSlotRef[] {
-  const allowAv = options.allowAv !== false
-  const re = tokenRegExp()
-  const out: RefSlotRef[] = []
-  const seen = new Set<string>()
-  let m: RegExpExecArray | null
-  while ((m = re.exec(String(text ?? ''))) !== null) {
-    const kind = KIND_BY_WORD[m[1].toLowerCase()]
-    if (!kind) continue
-    if (kind === 'av' && !allowAv) continue
-    const index = Number(m[2])
-    if (!Number.isFinite(index) || index < 1) continue
-    const key = refSlotKey(kind, index)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({ key, kind, index })
-  }
-  return out
-}
-
-/**
- * 从**富文本 doc JSON** 里取出真正的槽位标签（`ref-slot:image:3` 这种）。
- *
- * 为什么不再拿纯文本正则扫（用户 2026-10-27 报「只有 2 条连线却出现 9 个槽位」）：
- * 纯文本扫会把「正文里剩下的一串 @图片10 文字」也当成声明，把参考区撑到第 10 格。
- * 现在文字就是文字，只有点了「标记」转出来的标签节点才算声明。
- */
-export function refSlotsFromDoc(doc: unknown): RefSlotRef[] {
+export function refChipsFromDoc(doc: unknown): RefChip[] {
   const root = doc as { type?: unknown; content?: unknown } | null | undefined
   if (!root || root.type !== 'doc' || !Array.isArray(root.content)) return []
-  const out: RefSlotRef[] = []
-  const seen = new Set<string>()
+  const out: RefChip[] = []
   const walk = (nodes: unknown[]): void => {
     for (const n of nodes) {
-      const node = n as { type?: string; attrs?: { id?: unknown }; content?: unknown } | null
+      const node = n as { type?: string; attrs?: { id?: unknown; name?: unknown }; content?: unknown } | null
       if (!node || typeof node !== 'object') continue
       if (node.type === 'resource') {
         const id = typeof node.attrs?.id === 'string' ? node.attrs.id : ''
-        const m = /^ref-slot:(image|video|audio|text|av):(\d+)$/.exec(id)
-        if (m) {
-          const kind = m[1] as RefSlotKind
-          const index = Number(m[2])
-          const key = refSlotKey(kind, index)
-          if (index >= 1 && !seen.has(key)) {
-            seen.add(key)
-            out.push({ key, kind, index })
-          }
+        const name = typeof node.attrs?.name === 'string' ? node.attrs.name : ''
+        if (id.startsWith(REF_NODE_PREFIX)) {
+          out.push({ id, name, nodeId: nodeIdOfChip(id), pendingName: null, legacy: false })
+        } else if (id.startsWith(REF_NAME_PREFIX)) {
+          out.push({ id, name: name || (nameOfChip(id) ?? ''), nodeId: null, pendingName: nameOfChip(id), legacy: false })
+        } else if (id.startsWith(LEGACY_SLOT_PREFIX)) {
+          out.push({ id, name, nodeId: null, pendingName: null, legacy: true })
         }
       }
       if (Array.isArray(node.content)) walk(node.content)
@@ -173,10 +132,11 @@ export interface DropVerdict {
 }
 
 /**
- * 待输入槽位的落点判定。
+ * 参考格的落点判定。
  *
- * - 拖本地文件：只看类型是否匹配，**不需要**按 Ctrl；
- * - 画布节点：必须按住 Ctrl / ⌘（用户规则 3c），并且类型要匹配。
+ * - `any` 格（手打的待绑定标签）：收任何类型；
+ * - 已绑定格：按**节点的真实类型**判断（不按名字猜）；
+ * - 拖画布节点：必须按住 Ctrl / ⌘；拖本地文件不需要。
  */
 export function judgeSlotDrop(
   kind: RefSlotKind,
@@ -203,18 +163,18 @@ export function judgeSlotDrop(
 
 /** 失败原因 → 给用户看的一句话 */
 export function dropVerdictMessage(kind: RefSlotKind, verdict: DropVerdict): string {
-  if (verdict.reason === 'no-modifier') return '拖节点时要按住 Ctrl（Mac 用 ⌘）才能放进槽位'
+  if (verdict.reason === 'no-modifier') return '拖节点时要按住 Ctrl（Mac 用 ⌘）才能放进参考格'
   if (verdict.reason === 'kind-mismatch') {
-    return verdict.mediaType ? slotMismatchHint(kind, verdict.mediaType) : '这个槽位只收' + slotAcceptsLabel(kind)
+    return verdict.mediaType ? slotMismatchHint(kind, verdict.mediaType) : '这个参考格只收' + slotAcceptsLabel(kind)
   }
   return '不支持的文件类型'
 }
 
 /**
- * 松手时该落到哪个槽位：给定鼠标点与槽位矩形，返回命中的槽位键。
+ * 松手时该落到哪个卡片：给定鼠标点与卡片矩形，返回命中的卡片键。
  *
- * 为什么要单独抽出来：真机里槽位是 teleport 到 body 的浮层，`elementFromPoint` 在
- * 合成事件下不可靠；把「点 vs 矩形」的判定放进纯函数，能和真实拖拽用同一套逻辑单测。
+ * 卡片是 teleport 到 body 的浮层，elementFromPoint 在合成事件下不可靠；
+ * 把「点 vs 矩形」的判定放进纯函数，能和真实拖拽用同一套逻辑单测。
  */
 export function hitSlotAtPoint(
   point: { x: number; y: number },

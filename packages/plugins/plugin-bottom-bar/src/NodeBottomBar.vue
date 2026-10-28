@@ -42,13 +42,12 @@ import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { BarAction } from './barTypes'
 import {
   collectUpstreamMaterials,
-  bottomBarTagSpec,
+  bottomBarTagSpecFor,
   previewListFor,
   makeResourceResolver,
   materialCards,
   nextRefOrder,
-  placeRefAtSlot,
-  type RefSlotHints,
+  placeChipAt,
   resolveMaterialUrls,
   toEditorResources,
   toToolResources,
@@ -76,17 +75,19 @@ import {
 } from './aiActions'
 // 「看图」@ 素材槽位：标签解析 / 落点判定（纯函数，已单测）
 import {
-  parseRefSlots,
-  refSlotsFromDoc,
+  refChipsFromDoc,
+  refNodeChipId,
+  refNameChipId,
+  nodeIdOfChip,
+  nameOfChip,
   judgeSlotDrop,
   dropVerdictMessage,
   hitSlotAtPoint,
-  refSlotKey,
   REF_SLOT_META,
   type RefSlotKind,
 } from './refSlots'
-// 参考区合并 + 缺号校验（纯函数，已单测）
-import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey, type TileCardLike } from './refTiles'
+// 参考区合并 + 失效校验（纯函数，已单测）
+import { mergeRefTiles, invalidRefHint, nextChipOrder, targetOfTile, uploadToRefSlot, type TileCardLike } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf } from './refSlotDrag'
 import { judgeSlotHover } from './refSlotDrag'
@@ -425,33 +426,17 @@ function onPromptUpdate(v: string): void {
 
 // —— 上游素材（素材卡与 @ 引用共用） ——
 /**
- * 用户拖出来的素材顺序（节点 id 序列），存节点 `data.refOrder`。
+ * 用户拖出来的**卡片顺序**（标签 id 序列），存节点 `data.refOrder`。
  *
- * 用户口径（2026-10-12）：「参考图的顺序是如何决定的？好像是根据连接的先后顺序来做的。
- * 我希望这个顺序可以进行拖拽改变。」
+ * 用户口径（2026-10-12 / 2026-10-28）：顺序可以拖拽改变，只影响发给模型的先后，
+ * **不影响标签绑定的对象**（标签认节点 id，排序改不了它）。
  *
- * 为什么落在节点 data（与 barValues / barPrompt 同一个记事本）：它是「这个节点准备怎么出图」
- * 的一部分（第 1 张参考图给谁），不是一个纯 UI 会话态 —— 收起再点开必须还在，落盘之后
- * 刷新、换设备也必须还在。
+ * 为什么落在节点 data：它是「这个节点准备怎么出图」的一部分，收起再点开、刷新、换设备都要在。
  */
 function stringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '') : []
 }
 const refOrder = computed<string[]>(() => stringArray(props.data?.refOrder))
-
-/** 用户指定的槽位（上传/替换到第 N 格时写入 data.refSlot） */
-const refSlotHints = computed<RefSlotHints>(() => {
-  const raw = props.data?.refSlot
-  if (!raw || typeof raw !== 'object') return {}
-  const out: RefSlotHints = {}
-  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
-    const o = v as { kind?: unknown; index?: unknown }
-    if (typeof o?.kind === 'string' && typeof o?.index === 'number') {
-      out[id] = { kind: o.kind as RefSlotHints[string]['kind'], index: o.index }
-    }
-  }
-  return out
-})
 
 const materials = computed<UpstreamMaterial[]>(() =>
   collectUpstreamMaterials(
@@ -462,7 +447,6 @@ const materials = computed<UpstreamMaterial[]>(() =>
       return node ? { type: node.type, data: node.data } : undefined
     },
     refOrder.value,
-    refSlotHints.value,
   ),
 )
 
@@ -591,11 +575,10 @@ function onReorder(next?: MaterialCard[]): void {
   }
 }
 
-/** 素材卡点击 → 预览（参考图里卡片点开就是看大图） */
+/** 卡片点击 → 预览（参考图里卡片点开就是看大图） */
 function openCard(card: TileCardLike): void {
-  // tile.card（mergeRefTiles 输出）只有 {id,name,url,isText}，没有 kind/value —— 从
-  // cards.value（MaterialCard 全量）补全：预览 kind 缺失会让 MediaViewer 认不出媒体
-  // 类型 → stage 空白（真机踩过）。找不到（理论上不可能）才用 tile 形状兜底。
+  // 卡片只带最小形状；从 cards.value（MaterialCard 全量）补 kind/value：
+  // 预览 kind 缺失会让 MediaViewer 认不出媒体类型 → stage 空白（真机踩过）。
   const full = cards.value.find((c) => c.id === card.id)
   const multi = previewListFor(cards.value, full ?? (card as MaterialCard))
   const kind = (full?.isText ?? card.isText) ? 'text' : ((full?.kind ?? 'image') as 'image' | 'video' | 'audio')
@@ -620,13 +603,9 @@ function openCard(card: TileCardLike): void {
  * 用户口径（2026-10-12）：「在右上角区域 hover 时，应该显示一个关闭按钮……点击该按钮后可以
  * 进行关闭，即删除与该图片相关的连接线」。连线没了，卡片自然从底栏消失（卡是边派生的）。
  */
-function removeCard(card: TileCardLike): void {
-  if (!card) {
-    console.warn('[bottom-bar] removeCard: tile.card 为空（格子数据缺 card 字段）')
-    return
-  }
-  ;(window as any).__rmDbg = { cardId: card.id, propsId: props.id, edgeCount: renderEdges.value.length, sample: renderEdges.value.slice(0, 5).map((e) => ({ id: e.id, s: e.source, t: e.target })) }
-  const edge = renderEdges.value.find((e) => e.source === card.id && e.target === props.id)
+function removeCard(nodeId: string): void {
+  if (!nodeId) return
+  const edge = renderEdges.value.find((e) => e.source === nodeId && e.target === props.id)
   const doc = ctx.tryGet<{ removeEdges(ids: string[]): number }>('doc')
   if (edge && doc) doc.removeEdges([edge.id])
 }
@@ -643,13 +622,13 @@ function onCardsClickCapture(ev: MouseEvent): void {
   const tile = refTiles.value.find((t) => t.key === key)
   if (target.closest('.nb-remove')) {
     ev.stopPropagation()
-    if (tile?.card) removeCard(tile.card)
+    if (tile?.nodeId) removeCard(tile.nodeId)
     return
   }
-  // 待输入格：卡片本体点击 = 点上传
-  if (tile?.pending && tile.slotKey) {
+  // 待绑定卡：卡片本体点击 = 点上传
+  if (tile?.pending) {
     ev.stopPropagation()
-    pickSlotFile(tile.slotKey)
+    pickSlotFile(tile)
     return
   }
   /**
@@ -657,9 +636,9 @@ function onCardsClickCapture(ev: MouseEvent): void {
    * 点哪里都应该进全屏」）。以前只认那个铺满的透明按钮 —— 它被缩略图/序号角标盖住的
    * 位置，点击会落到那些元素上，于是「时灵时不灵」。现在只要不在关闭按钮里就开预览。
    */
-  if (tile?.card) {
+  if (tile && !tile.invalid) {
     ev.stopPropagation()
-    openCard(tile.card)
+    openCard({ id: tile.nodeId ?? tile.key, name: tile.label, url: tile.url, isText: tile.kind === 'text' })
   }
 }
 
@@ -718,7 +697,7 @@ const infoText = computed(() => {
 const runState = computed(() => readRunState(props.data))
 const running = computed(() => runState.value.status === 'running')
 /** 能不能点发送：还在跑 / 没动作 / **参考序号有缺** 都不行（后两条见 refGap） */
-const canRun = computed(() => !running.value && !!currentAction.value && !refGap.value)
+const canRun = computed(() => !running.value && !!currentAction.value && !invalidHint.value)
 
 /**
  * 参考序号是否连续（用户口径 2026-10-25：「你只传了一张图，并且声明的是\"图片 2\"，这就存在问题…
@@ -727,21 +706,11 @@ const canRun = computed(() => !running.value && !!currentAction.value && !refGap
  * 规则：正文里出现 `@图片N` 时，1..N 必须全部有内容。缺任何一格 = 引用悬空（模型会拿到空引用），
  * 发送按钮禁用并给出明确原因。没写任何 @ 标签时不受影响（普通参考图照旧）。
  */
-const refGap = computed(() =>
-  findRefGap(
-    promptRefSlots.value,
-    shownMaterials.value.map((m) => ({ id: m.id, name: m.name, refName: m.refName, url: m.url, isText: m.kind === 'text' })),
-  ),
-)
-
-const refGapHint = computed(() => {
-  const gap = refGap.value
-  if (!gap) return ''
-  const meta = REF_SLOT_META[gap.kind]
-  if (!meta) return ''
-  const label = meta.label
-  return '还缺' + gap.missing.map((i) => ' ' + label + i).join('、') + '，补上后才能发送'
-})
+/**
+ * 失效引用提示（用户 2026-10-28）：绑定的节点被删 / 被断开 / 老格式标签 → 禁止发送。
+ * 文案由纯函数生成，卡片行与发送按钮旁共用同一份。
+ */
+const invalidHint = computed(() => invalidRefHint(refTiles.value))
 
 const ICON_WARN =
   '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
@@ -1069,77 +1038,48 @@ onBeforeUnmount(() => {
   offAiActionsChanged.dispose()
 })
 
-// ===== 「看图」@ 素材槽位（用户口径 2026-10-25）=====
+// ===== 参考标签 / 参考卡片（用户 2026-10-28 定案：认节点、认名称）=====
 //
-// 输入框里 @图片1 / @音频1 / @音视频1 会变成标签；**没连线也要有槽位**（状态「待输入」），
-// 输入框上方同步显示预览格。待输入格可以：拖本地文件、点击上传、按住 Ctrl 拖节点进来。
-// 规则在 refSlots.ts（纯函数、已单测），这里只管状态与交互。
+// 卡片 = 正文里的一颗标签；标签记的是**节点 id**，显示的是**节点名称**。
+// 空壳卡片（手打还没绑定）拖入节点 = 添加；有内容的卡片拖入节点 = 替换（换绑，名字跟着换）。
+// 序号角标只用来观察当前顺序，不参与任何判定。
 
-/**
- * 参考区**一行**的格子（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。
- *
- * **格子身份 = 连线的序号**（2026-10-26 用户口径）：连了 3 条线就是 3 格；
- * 声明了 @图片2 但连线只有 1 条 → 第 2 格显示「待输入」（内容不会跑到「图片3」去）。
- *
- * 为什么不再维护一份本地槽位状态：上一版把「正文声明」和「已连素材」各记一份，
- * 两边互相覆盖 —— 多出没有的格子、声明图片2 内容跑到图片3、正文删了标签格子还在。
- * 现在格子**完全由连线派生**：有连线 = 有内容，没连线 = 待输入，没有第三种状态。
- */
-/** refName（图片1）是连线顺序编号 —— mergeRefTiles 靠它对齐「第 N 格 = 第 N 条连线」 */
+/** 正文里的参考标签（只认富文本标签节点；手打的 @名字 文字不算） */
+const promptChips = computed(() => refChipsFromDoc(promptDoc.value))
+
+/** 参考区卡片行（顺序 = refOrder；绑定失效的会标 invalid，禁止发送） */
 const refTiles = computed(() =>
   mergeRefTiles(
-    promptRefSlots.value,
-    shownMaterials.value.map((m) => ({ id: m.id, name: m.name, refName: m.refName, url: m.url, isText: m.kind === 'text' })),
-    refOrder.value, // 完整序列（含 slot: 空格）—— 用户拖出来的顺序
+    promptChips.value,
+    shownMaterials.value.map((m) => ({
+      id: m.id,
+      name: m.name,
+      kind: m.kind === 'image' || m.kind === 'video' || m.kind === 'audio' || m.kind === 'text' ? m.kind : 'image',
+      url: m.url,
+      value: m.value,
+    })),
+    refOrder.value,
   ),
 )
 
-/**
- * 正文里的槽位声明 —— **只认富文本里的标签节点**（用户口径 2026-10-27）。
- *
- * 以前用纯文本正则扫，于是「正文里残留的一串 @图片10 文字」也会被当成声明，
- * 参考区被撑到第 10 格（只有 2 条连线却出现 9 个空槽）。现在文字只是文字，
- * 只有点了「标记」转出来的标签才算声明。
- */
-const promptRefSlots = computed(() => refSlotsFromDoc(promptDoc.value))
 
-
-/** 错误提示按「序号」记（格子由连线派生，键会随内容变化，不能按 key 存） */
+/** 错误提示按卡片键记（拖拽/上传失败的即时提示） */
 const slotErrors = ref<Record<string, string>>({})
-/** 某个待输入格的错误文案（按种类+序号查） */
-function slotErrorOf(tile: { slotKey?: string }): string {
-  return tile.slotKey ? (slotErrors.value[tile.slotKey] ?? '') : ''
+/** 某张卡片的错误文案 */
+function slotErrorOf(tile: { key: string }): string {
+  return slotErrors.value[tile.key] ?? ''
 }
 
 /**
- * 一行格子的拖拽排序。
+ * 卡片行拖拽排序（用户 2026-10-28：序号角标只做观察，排序**不影响**标签绑定）。
  *
- * 格子 key 有两种：`card:<节点id>`（有连线的内容）与 `slot:<kind>:<n>`（待输入）。
- * 拖完把**有内容的**（card:*）按新顺序写回 data.refOrder —— collectUpstreamMaterials
- * 会按 refOrder 重排连线素材并重新编号，于是待输入格的位置也跟着对齐。
- *
- * 为什么不能从 `t.card` 拿 id：refTiles 是 mergeRefTiles 的输出，那个形状里没有 card
- * 字段（上一版从这里拿，永远是 undefined → 函数一进来就 return → 排序看起来没生效）。
+ * 落盘的是**标签 id 序列**（ref-node:<id> / ref-name:<名>）：它只决定发给模型的先后，
+ * 标签仍然指着同一个节点，名字也不会变。这是「拖拽不影响标签」的实现点。
  */
 function onReorderTiles(next?: Array<{ key?: string }>): void {
-  if (!next || next.length === 0) return
-  // **整个序列**（含 slot: 空格）都落盘：空格也参与排序（用户口径 2026-10-26）。
-  // slot: 键对 resolveMaterialOrder 是"未列到的 id"，不影响材质排序；但 mergeRefTiles
-  // 会用它恢复用户拖出来的完整顺序。
-  const ids = next.map((t) => {
-    const key = t.key ?? ''
-    // card:N 是材质节点 id（id=N）；slot:kind:n 原样保留（mergeRefTiles 靠它恢复顺序）
-    return key.startsWith('card:') ? key.slice(5) : key
-  }).filter(Boolean)
-  if (ids.length === 0) return
+  const ids = nextChipOrder(refOrder.value, refTiles.value, next)
+  if (!ids) return
   try {
-    /**
-     * 只写 refOrder（素材显示顺序）。
-     *
-     * **不要重编 data.refSlot**：那个序号是「用户提示词里的引用位置」（图片3 就指第 3 个参考），
-     * 重编等于把卡片顺序强行拉回 1,2,3…，排序看起来完全没生效（真机踩过）。
-     * 显示顺序由 refTiles 按 refOrder 排（见 mergeRefTiles 的 displayOrder）。
-     */
     ctx.get('doc').updateNode(props.id, { data: { refOrder: ids } })
   } catch {
     /* 节点已不在等情况：忽略 */
@@ -1149,11 +1089,10 @@ function onReorderTiles(next?: Array<{ key?: string }>): void {
 const editorComponentRef = ref<{
   insertResource?(item: ResourceItem): void
   replaceResource?(item: ResourceItem): boolean
-  replaceResourceThumbByName?(name: string, url: string): boolean
-  /** 按 id 列表换缩略图（node id 与 ref-slot:kind:N 两种身份都能命中） */
+  /** 按 id 列表换缩略图（只用于清理旧图；新模型下标签名字跟着节点走，不再按序号换） */
   replaceResourceThumbByIds?(ids: readonly string[], url: string): boolean
   refreshChips?(): void
-  /** 把正文里的 @图片N 文字转成素材标签（「标记」按钮调用） */
+  /** 把正文里的 @名称 文字转成参考标签（「标记」按钮调用） */
   markRefSlots?(): number
   /** 读出正文纯文本（转换后立即同步到 prompt，避免落库的还是旧文本） */
   exportText?(): string
@@ -1161,17 +1100,18 @@ const editorComponentRef = ref<{
   setEditable?(next: boolean): void
 } | null>(null)
 
-/** 点击槽位：空的 = 选文件上传；已填的 = 把光标带回正文那个标签 */
-function pickSlotFile(slotKey: string): void {
-  const [kind, indexRaw] = slotKey.split(':')
+/** 点空壳卡片：选一个本地文件，建节点并绑定到这张卡（添加） */
+function pickSlotFile(tile: RefTile): void {
+  const target = targetOfTile(tile)
+  const kind: RefSlotKind = tile.kind ?? 'any'
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = REF_SLOT_META[kind as RefSlotKind].accept
+  input.accept = REF_SLOT_META[kind].accept
   input.style.display = 'none'
   document.body.appendChild(input)
   input.addEventListener('change', () => {
     const file = input.files?.[0]
-    if (file) fillSlotFromFile(kind as RefSlotKind, Number(indexRaw), file)
+    if (file) void fillSlotFromFile(kind, file, target)
     input.remove()
   })
   input.addEventListener('cancel', () => input.remove())
@@ -1186,20 +1126,18 @@ function pickSlotFile(slotKey: string): void {
  * 连线进来的素材（collectUpstreamMaterials 按边收），只改本地状态的话：
  *   刷新就没了、生成时也拿不到这张图。所以必须建节点 + 连边。
  */
-async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): Promise<void> {
-  ;(window as any).__upDbg = { step: 'enter', kind, index, name: file.name }
+async function fillSlotFromFile(kind: RefSlotKind, file: File, target?: RefTarget): Promise<void> {
+  const errKey = target?.previousChipId ?? ''
   const verdict = judgeSlotDrop(kind, { file })
   if (!verdict.ok) {
-    ;(window as any).__upDbg.step = 'judge-fail'
-    setSlotError(index, dropVerdictMessage(kind, verdict))
+    setSlotError(errKey, dropVerdictMessage(kind, verdict))
     return
   }
   const fileDrop = ctx.tryGet<{
     addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number>
   }>('file-drop')
   if (!fileDrop) {
-    ;(window as any).__upDbg.step = 'no-file-drop'
-    setSlotError(index, '当前宿主没有文件落库能力，无法建参考节点')
+    setSlotError(errKey, '当前宿主没有文件落库能力，无法建参考节点')
     return
   }
   const doc = ctx.tryGet<{
@@ -1208,27 +1146,17 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
     addEdge(input: { source: string; target: string }): string
     updateNode(id: string, patch: { data: Record<string, unknown> }): void
   }>('doc')
-  if (!doc) { setSlotError(index, '当前宿主没有连线能力'); return }
+  if (!doc) { setSlotError(errKey, '当前宿主没有连线能力'); return }
   const me = doc.getNode(props.id)
   const base = me?.position ?? { x: 0, y: 0 }
   const w = Number(me?.width) || 320
   try {
-    // 建节点 → 还选中 → 等一帧 → 连线 → 按序号排位；顺序在 uploadToRefSlot 里钉死（已单测）
-    ;(window as any).__upDbg.step = 'before-upload'
     // 上传前抓一次全部节点 id：pickCreated 用它区分「这次新建的节点」。
-    // 不能用 refOrder 当 before —— refOrder 可能含已断线的死 id，会把别的节点误认成新节点
-    //（真机踩过：连线连到错误的对象）。
     const idsBeforeUpload = new Set(doc.getNodes().map((n) => n.id))
     const result = await uploadToRefSlot(
-      { file, kind, index, targetId: props.id },
+      { file, targetId: props.id },
       {
-        addFiles: (files, at) => {
-          ;(window as any).__upDbg.step = 'add-files-called'
-          return fileDrop.addFiles(files, at).then((n) => {
-            ;(window as any).__upDbg.addFilesResult = n
-            return n
-          })
-        },
+        addFiles: (files, at) => fileDrop.addFiles(files, at),
         waitTick: () => nextTick(),
         afterCreate: () => {
           // file-drop 建完会把选中改成新节点；底栏挂在原节点上，必须还回去
@@ -1237,28 +1165,7 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
         addEdge: (source, target) => {
           try { return doc.addEdge({ source, target }) } catch { return null }
         },
-        /**
-         * 排位用的「当前顺序」：refOrder 可能从没存过（老画布/从未拖过）——
-         * 直接拿空数组去 placeRefAtSlot 会把新素材插到第 0 位，于是第 8 格上传的图
-         * 跑到了第 1 格（真机踩过）。没存过时用当前实际素材顺序兜底。
-         */
-        /**
-         * 排位用的「当前顺序」：必须**只含仍然连着的素材**。
-         * refOrder 里会残留已断开/已删除节点的死 id —— 直接拿去插位会让位置算错，
-         * 于是「第 8 格上传」的图跑到第 1 格（真机踩过）。死 id 过滤掉；
-         * 过滤后为空就用当前实际素材顺序。
-         */
-        refOrder: () => {
-          const alive = new Set(shownMaterials.value.map((m) => m.id))
-          const kept = refOrder.value.filter((id) => alive.has(id))
-          return kept.length > 0 ? kept : shownMaterials.value.map((m) => m.id)
-        },
-        // 占位 id（__slot__N）只用于算位，不落盘（落盘会留下永远不会有人认领的死 id）
-        writeOrder: (ids) => {
-          doc.updateNode(props.id, { data: { refOrder: ids.filter((id) => !id.startsWith('__slot__')) } })
-        },
         pickCreated: () => {
-          ;(window as any).__upDbg.step = 'pick-created'
           // 为什么不能到 shownMaterials 里找：素材是**按边**收集的（collectUpstreamMaterials），
           // 而此刻连线还没建 —— 新节点根本不在里面，永远找不到 → 提前 return（这就是
           // 「上传只建节点、没连线」的根因）。这里直接查 doc：file-drop 刚建的那个新节点。
@@ -1266,34 +1173,61 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
           if (!freshNode) return null
           const d = freshNode.data ?? {}
           const s = (v: unknown) => (typeof v === 'string' && v ? v : '')
-          const mediaType = verdict.mediaType
           const url = s(d.imageUrl) || s(d.videoUrl) || s(d.audioUrl)
           const name = s(d.label) || s(d.imageName) || s(d.videoName) || s(d.audioName) || file.name
-          return { id: freshNode.id, name, url, mediaType }
+          return { id: freshNode.id, name, url }
         },
-        positionFor: (index) => ({ x: base.x - w - 24 - (index - 1) * (w + 24), y: base.y }),
+        positionFor: () => ({ x: base.x - w - 24, y: base.y }),
       },
     )
-    if (!result.ok) { setSlotError(index, result.error ?? '上传失败'); return }
-    // 记住「这张素材属于第 N 格」—— refName 编号以它为准（否则 8 格空着时上传第 8 格
-    // 会被编成「图片1」显示到第 1 格，真机踩过）。
-    if (result.created?.id) doc.updateNode(props.id, {
-      data: { refSlot: { ...((props.data?.refSlot as Record<string, unknown>) ?? {}), [result.created.id]: { kind, index } } },
-    })
-    // 内容已就位（连线进来了），正文里那颗虚线标签刷新成实线（名字/缩略图）
+    if (!result.ok) { setSlotError(errKey, result.error ?? '上传失败'); return }
+    // 标签换成新节点：添加 / 替换同一条路（用户 2026-10-28：替换后名字跟着新节点走）
+    if (result.created) bindChipToNode(target, result.created.id, result.created.name)
     refreshSlotChips()
   } catch (err) {
     console.warn('[bottom-bar] 上传参考失败', err)
-    setSlotError(index, '上传失败，请重试')
+    setSlotError(errKey, '上传失败，请重试')
   }
 }
 
-/** 错误按「参考序号」记（格子由连线派生，键随内容变），几秒后自动消失 */
-function setSlotError(index: number, message: string): void {
-  slotErrors.value = { ...slotErrors.value, ['image:' + index]: message, ['video:' + index]: message, ['audio:' + index]: message, ['av:' + index]: message }
+/**
+ * 把正文里的标签**换绑**到某个节点（用户 2026-10-28：添加 / 替换同一条路）。
+ *
+ * - 空壳卡（ref-name:名字）→ 换成 ref-node:<id>，名字变节点名（添加）；
+ * - 已有内容的卡（ref-node:旧id）→ 换成 ref-node:<新id>，名字跟着换（替换）。
+ *
+ * 为什么必须改 id：标签的身份就是「绑定了谁」，只改显示名下次刷新会被旧节点拉回去。
+ */
+function bindChipToNode(target: RefTarget | undefined, nodeId: string, name: string): void {
+  const material = shownMaterials.value.find((m) => m.id === nodeId)
+  const item: ResourceItem = {
+    id: refNodeChipId(nodeId),
+    name,
+    category: '素材',
+    ...(material ? { chipKind: material.kind as 'image' | 'video' | 'audio' | 'text' } : {}),
+    ...(material?.url ? { url: material.url } : {}),
+    ...(material?.value ? { value: material.value } : {}),
+    ...(target?.previousChipId ? { previousId: target.previousChipId } : {}),
+  }
+  const replaced = target?.previousChipId
+    ? editorComponentRef.value?.replaceResource?.(item) === true
+    : false
+  // 正文里没有这颗标签（例如从 @ 下拉直接拖进来）：补一颗，别让用户以为拖丢了
+  if (!replaced) editorComponentRef.value?.insertResource?.(item)
+  // 顺序：新标签顶替旧标签的位置（没有旧标签就追加）
+  const order = placeChipAt(refOrder.value, target?.previousChipId, nodeId)
+  try {
+    ctx.get('doc').updateNode(props.id, { data: { refOrder: order } })
+  } catch { /* 节点已不在等情况：忽略 */ }
+}
+
+/** 错误按卡片键记，几秒后自动消失 */
+function setSlotError(key: string, message: string): void {
+  if (!key) return
+  slotErrors.value = { ...slotErrors.value, [key]: message }
   setTimeout(() => {
     const next = { ...slotErrors.value }
-    delete next['image:' + index]; delete next['video:' + index]; delete next['audio:' + index]; delete next['av:' + index]
+    delete next[key]
     slotErrors.value = next
   }, 2600)
 }
@@ -1338,11 +1272,6 @@ async function onPasteFiles(
 ): Promise<boolean> {
   const image = files.find((f) => f.type.startsWith('image/'))
   if (!image) return false
-  // 槽位 = 当前图片格数 + 1（追加到末尾；序号与显示位在这里一致，因为没拖过）
-  const imageTiles = refTiles.value.filter(
-    (t) => t.key.startsWith('card:') || t.key.startsWith('slot:image:'),
-  )
-  const index = Math.max(0, ...imageTiles.map((t) => t.slotIndex || 0)) + 1
   /**
    * 顺序对调（用户 2026-10-28 报「粘贴后没插入标签」）：
    * **先插标签，再异步建节点连线。**
@@ -1352,14 +1281,11 @@ async function onPasteFiles(
    * 异常被编辑器的 void handler(...) 吞掉，于是「节点有了、连线有了，标签没有」。
    * 先插标签时编辑器一定还活着（用户刚粘贴完焦点就在这里）。
    */
-  ctx.insert({
-    id: 'ref-slot:image:' + index,
-    name: '图片' + index,
-    category: '素材',
-    mediaType: 'image',
-  })
+  const pendingName = image.name || '粘贴的图片'
+  const pendingId = refNameChipId(pendingName)
+  ctx.insert({ id: pendingId, name: pendingName, category: '素材' })
   // 建节点 + 连线放后台：不阻塞标签插入
-  void fillSlotFromFile('image', index, image)
+  void fillSlotFromFile('image', image, { previousChipId: pendingId, pendingName })
     .then(() => refreshSlotChips())
     .catch(() => { /* 上传失败不回滚标签（用户可手动删）；错误已在 slotErrors 提示 */ })
   return true
@@ -1367,110 +1293,67 @@ async function onPasteFiles(
 
 
 /**
- * 正文标签刷新：内容来自连线（collectUpstreamMaterials）。
- * 两步：① 把每个 ref-slot 的最新 item 登记进编辑器；② 触发整体重渲染。
+ * 正文标签刷新（用户 2026-10-28：标签认节点、显示节点名称）。
+ *
+ * 卡片行已经算好了每颗标签「现在该是什么样」：
+ *   - 已绑定：名字 = 节点名（节点改名后自动跟上）、类型 = 节点真实类型、缩略图 = 节点资源；
+ *   - 待绑定：统一资源图标；
+ *   - 失效：灰掉（禁止发送）。
+ * 这里把这份外观登记进编辑器，并把**名字变化同步进文档**（导出给模型的提示词才跟着变）。
  */
 function refreshSlotChips(): void {
   try {
   if (typeof window === 'undefined') return
   ;(window as any).__chipRuns = ((window as any).__chipRuns || 0) + 1
-  ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, tiles: refTiles.value.map((t) => ({ key: t.key, pending: t.pending, name: t.name })), mats: shownMaterials.value.map((m) => ({ id: m.id, refName: m.refName })) }
   // SSR / 编辑器未挂载时跳过（只影响标签 UI，不影响数据）
   if (typeof document === 'undefined') return
   if (!editorComponentRef.value) return
   for (const tile of refTiles.value) {
     try {
-    const key = tile.slotKey
-    if (tile.pending) {
-      // 待输入的格子：把「虚线待输入」的 item 登记进去（tile.url 是空的）
-      if (!key) continue
-      // key 形如 slot:image:3 / card:174 —— slot: 前缀时种类在第 2 段
-      const parts = key.split(':')
-      const k = parts[0] === 'slot' ? parts[1] : parts[0]
-      const i = parts[0] === 'slot' ? parts[2] : parts[1]
-      if (k !== 'image' && k !== 'video' && k !== 'audio') continue
-      const label = REF_SLOT_META[k as RefSlotKind]?.label ?? ''
-      registerItem({
-        // id 必须是 ref-slot:<kind>:<n>（之前用了 'ref-slot:slot:image:3' 这种错 id，
-        // 删除资源后正文标签清不回「待输入」——真机踩过）
-        id: 'ref-slot:' + k + ':' + i,
-        name: label + Number(i),
+      if (tile.invalid) {
+        // 失效：只改外观（灰掉），文档里的身份保留 —— 用户删掉或重新拖入即可
+        registerItem({
+          id: tile.key,
+          name: tile.label,
+          category: '素材',
+          invalid: true,
+        })
+        continue
+      }
+      if (tile.pending || !tile.nodeId) {
+        // 待绑定：统一资源图标（不猜类型，用户 2026-10-28 口径）
+        registerItem({
+          id: tile.key,
+          name: tile.label,
+          category: '素材',
+        })
+        continue
+      }
+      const kind = tile.kind ?? undefined
+      const url = kind === 'video' ? (videoThumbOf(tile.url) ?? '') : (tile.url ?? '')
+      const item: ResourceItem = {
+        id: refNodeChipId(tile.nodeId),
+        name: tile.label,
         category: '素材',
-        // 待输入格没有媒体类型 → toDOM 走文本/图标分支（虚线待输入样式）
-        mediaType: undefined,
-        // 借资源条目的 renderEditor：不带的化 toDOM 走默认分支（@名字样式），
-        // 与卡片样式的 chip 并存 = 正文出现两套标签外观（真机踩过）。
-        renderEditor: editorResources.value[0]?.renderEditor,
+        ...(kind ? { chipKind: kind } : {}),
+        ...(url ? { url } : {}),
+        ...(tile.value ? { value: tile.value } : {}),
+        ...(kind === 'video' && tile.url
+          ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
+          : {}),
+      }
+      registerItem(item)
+      // 名字/缩略图同步进文档：导出的提示词、复制出去的内容都跟着节点走
+      editorComponentRef.value?.replaceResource?.({
+        ...item,
+        name: tile.label,
       })
-      // 删除/断开后该格回到待输入：正文同名标签的缩略图要清掉（否则还显示旧图）
-      editorComponentRef.value?.replaceResourceThumbByIds?.(
-        ['ref-slot:' + k + ':' + i],
-        '',
-      )
-      continue
-    }
-    // 已填的格子：key = card:<节点id>，序号与内容来自连线素材
-    // 序号从 **refName**（图片N）取，不是 tile.name（那是节点 label，如「拖我B」）——
-    // 用显示名找会匹配不上（refNameToSlotKey 认不出「拖我B」）→ 从未调 replaceResource
-    //（这就是「上传后连线有了、但正文标签仍是虚线」的根因）
-    const refName = shownMaterials.value.find((m) => m.id === tile.key.replace(/^card:/, ''))?.refName
-    // refNameToSlotKey 返回的是「槽位键字符串」（image:2），不是对象 —— 拆出 kind/index
-    const parsedStr = refNameToSlotKey(refName ?? tile.name, 'image') ?? refNameToSlotKey(refName ?? tile.name, 'video') ?? refNameToSlotKey(refName ?? tile.name, 'audio')
-    if (!parsedStr) continue
-    const [kind, indexStr] = parsedStr.split(':') as [RefSlotKind, string]
-    const index = Number(indexStr)
-    const slotKey = kind + ':' + index
-    const label = REF_SLOT_META[kind as RefSlotKind]?.label ?? ''
-    const item: ResourceItem = {
-      id: 'ref-slot:' + kind + ':' + index,
-      // 名字必须用 refName（图片N）：正文里按序号引用的是「第 N 格」的 refName，
-      // 不是节点标题（真机踩过：排序后缩略图与序号对不上，因为 name 用了 tile.name）
-      name: label + index,
-      category: '素材',
-      /**
-       * 视频不能把 mp4 地址当图片用（用户 2026-10-28 报：视频标签/卡片全空白）。
-       * 用视频插件取到的 50px 缩略图地址；还没取到就先留空 → 显示类型图标。
-       */
-      url: kind === 'video' ? (videoThumbOf(tile.url) ?? '') : tile.url,
-      mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
-      /**
-       * hover 预览要**原始尺寸的一帧**（用户 2026-10-28 报：鼠标移上去弹出来的还是那张
-       * 50px 方块，糊）。chips 里的 `url` 是 50px 缩略图（卡片要它），所以单独给一条
-       * 高清来源；图片/音频不需要（url 本来就是原图）。
-       */
-      ...(kind === 'video' && tile.url
-        ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
-        : {}),
-    }
-    const nodeId = tile.key.replace(/^card:/, '')
-    // 同上：带上 renderEditor，保证 chip 外观与资源面板插入的一致
-    // 统一 id 之后，资源项按 ref-slot:* 存，按 nodeId 找不到 → 顺带按节点 id 兜一次
-    const resItem =
-      editorResources.value.find((r) => r.id === item.id) ??
-      editorResources.value.find((r) => r.id === nodeId)
-    if (resItem) item.renderEditor = resItem.renderEditor
-    registerItem(item)
-    // 用户口径（2026-10-27）：正文里「图片N」的缩略图 = 该类型数组排序后的第 N 项。
-    /**
-     * 名字绝不改写；缩略图按**序号**定位。
-     *
-     * id 已统一成 ref-slot:<kind>:<N>（用户 2026-10-28），这里仍然多带一个 nodeId：
-     * 老存档里还有按节点 id 存的标签，刷新时要能一起更新，不至于留一堆旧图。
-     */
-    const thumbIds = ['ref-slot:' + kind + ':' + tile.slotIndex, nodeId].filter(Boolean)
-    editorComponentRef.value?.replaceResourceThumbByIds?.(
-      thumbIds,
-      kind === 'video' ? (videoThumbOf(tile.url) ?? '') : (tile.url ?? ''),
-    )
-    const replaced = true
-    // 排序/替换影响所有格子的 refName 编号 —— 逐颗改完统一强制重渲染一次
-    //（toDOM 读 registry，registry 已在上面更新；只改 attrs 不触发渲染的漏网之鱼由它兜住）。
-    editorComponentRef.value?.refreshChips?.()
-    ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, name: item.name, url: (tile.url || '').match(/resources\/([a-z0-9.]+)/)?.[1] || 'svg', replaced }
     } catch (err) {
       ;(window as any).__chipErr = { tile: tile.key, msg: String(err), stack: (err as Error)?.stack?.slice(0, 500) }
     }
   }
+  // 外观变了（名字/缩略图/失效态）→ 让 ProseMirror 重画一次
+  editorComponentRef.value?.refreshChips?.()
   } catch (err) {
     // 整体兜底：芯片刷新是纯 UI 增强，绝不能炸掉底栏（真机/单测都踩过 watcher 抛错）
     ;(window as any).__chipErr = { tile: '(outer)', msg: String(err), stack: (err as Error)?.stack?.slice(0, 500) }
@@ -1610,7 +1493,7 @@ function onCtrlDragPointerMove(ev: PointerEvent): void {
    */
   if (key && key !== ctrlDrag.targetTileKey) {
     const tile = refTiles.value.find((t) => t.key === key)
-    const slotKind = (tile?.slotKey?.split(':')[0] ?? tile?.kind) as RefSlotKind | undefined
+    const slotKind = (tile?.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: ctrlDrag.mediaType })
     if (!verdict.ok) ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
     else ctx.tryGet<{ hide(): void }>('tip')?.hide()
@@ -1660,47 +1543,25 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
   if (dropHost?.dataset.tileKey) drag.targetTileKey = dropHost.dataset.tileKey
   const tile = refTiles.value.find((t) => t.key === drag.targetTileKey)
   /**
-   * 松手前**最后一道闸**（用户 2026-10-28）：落点格类型不匹配 → 只给提示，不落。
-   * 不能只靠悬停时的高亮判断（快速拖动可能没触发 move）。
+   * 松手前**最后一道闸**（用户 2026-10-28）：落点卡片类型不匹配 → 只给提示，不落。
+   * 空壳卡（`any`）什么都收；已绑定卡按节点真实类型判断。
    */
   if (tile) {
-    const slotKind = (tile.slotKey?.split(':')[0] ?? tile.kind) as RefSlotKind | undefined
-    const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: drag.mediaType })
+    const slotKind = (tile.kind ?? 'any') as RefSlotKind
+    const verdict = judgeSlotHover({ kind: slotKind, media: drag.mediaType })
     if (!verdict.ok) {
       ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
       return
     }
   }
-  ;(window as any).__upDbg2 = { key: drag.targetTileKey, tileFound: !!tile, slotKey: tile?.slotKey, tileName: tile?.name, allKeys: refTiles.value.map((t) => t.key) }
   if (!tile) return
-  let kind: RefSlotKind
-  let index: number
-  if (tile.slotKey) {
-    // 待输入格：slotKey = image:2
-    const [k, i] = tile.slotKey.split(':')
-    kind = k as RefSlotKind
-    index = Number(i)
-  } else {
-    // **已填格**：slotKey 为空 —— 格子的序号从它当前素材的 refName 取
-    //（真机踩过：card 格 slotKey 为空导致替换被提前 return，拖新图替换已填格完全无效）
-    // 注意 tile.name 是**节点显示名**（如「图片 14」，带空格）不是 refName —— 解析必失败。
-    // refName 要从 shownMaterials 按节点 id 查（图片3 这种带序号的引用名）。
-    const matRefName = shownMaterials.value.find((m) => m.id === tile.key.replace(/^card:/, ''))?.refName
-    if (!matRefName) return
-    const parsed = refNameToSlotKey(matRefName, 'image') ?? refNameToSlotKey(matRefName, 'video') ?? refNameToSlotKey(matRefName, 'audio')
-    if (!parsed) return
-    const [k, i] = parsed.split(':')
-    kind = k as RefSlotKind
-    index = Number(i)
-  }
-  // replaceSlotMaterial 只收三类媒体（text 拖拽已在入口挡掉，这里再收窄一次让类型闭合）
-  if (drag.mediaType === 'text') return
-  void replaceSlotMaterial(kind, index, { nodeId: drag.nodeId, mediaType: drag.mediaType, url: drag.url, name: drag.name })
+  // 添加 / 替换同一条路：把这张卡换绑到拖进来的节点（名字自动跟着换）
+  void bindTileToNode(tile, drag.nodeId, drag.name)
 }
 
 onMounted(() => {
   // 把底栏的标签规格交给编辑器（用户 2026-10-27：标签实现交给插件，编辑器不再写死规则）
-  registerTagSpec(bottomBarTagSpec)
+  registerTagSpec(bottomBarTagSpecFor(materials.value))
   registerStartDragHandler(startCtrlDrag)
   window.addEventListener('pointermove', onCtrlDragPointerMove, true)
   window.addEventListener('pointerup', onCtrlDragPointerUp, true)
@@ -1741,12 +1602,8 @@ onBeforeUnmount(() => {
  *
  * 旧资源**不删节点**：删节点是破坏性操作，用户自己决定（这里只换连线归属）。
  */
-async function replaceSlotMaterial(
-  kind: RefSlotKind,
-  index: number,
-  source: { nodeId: string; mediaType: 'image' | 'video' | 'audio'; url: string; name: string },
-): Promise<void> {
-  ;(window as any).__replDbg = { step: 'enter', kind, index, src: source.nodeId }
+async function bindTileToNode(tile: RefTile, nodeId: string, name: string): Promise<void> {
+  const target = targetOfTile(tile)
   const doc = ctx.tryGet<{
     getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined
     addEdge(input: { source: string; target: string }): string
@@ -1755,36 +1612,28 @@ async function replaceSlotMaterial(
     updateNode(id: string, patch: { data: Record<string, unknown> }): void
   }>('doc')
   if (!doc) return
-  // 该格原本的连线 = 连到本节点、且素材 refName 正好对应这个槽位的那条
-  const material = shownMaterials.value.find((m) => refNameToSlotKey(m.refName, kind) === refSlotKey(kind, index))
-  const oldEdge = material ? renderEdges.value.find((e) => e.source === material.id && e.target === props.id) : undefined
-  // 兜底：renderEdges 回灌慢时用数据层再查一次（同 source+target 的线只有一条）
-  const oldEdgeFallback = material ? doc.getEdges?.().find?.((e) => e.source === material.id && e.target === props.id) : undefined
   try {
-    const stale = [oldEdge?.id, oldEdgeFallback?.id].filter((x): x is string => !!x)
-    if (stale.length) doc.removeEdges(stale)
-    doc.addEdge({ source: source.nodeId, target: props.id })
-    // 顺序对齐：替换不改变该格的序号（仍排在原来的位置）
-    // 同时把**被替换的旧素材**从 refOrder 里清掉（否则它的连线断了但 refOrder 还留着，
-    // 下一轮 numberRefNames 会把它编进序号，卡片/正文标签全错位——真机踩过）
-    const order = placeRefAtSlot(refOrder.value, kind, index, source.nodeId)
-    const oldId = material?.id
-    const cleaned = oldId && oldId !== source.nodeId ? order.filter((id) => id !== oldId) : order
-    // 槽位归属也跟着换：新素材接管第 N 格，旧素材的 hint 删掉
-    const hints = { ...((props.data?.refSlot as Record<string, unknown>) ?? {}) }
-    if (oldId) delete hints[oldId]
-    hints[source.nodeId] = { kind, index }
-    doc.updateNode(props.id, { data: { refOrder: cleaned, refSlot: hints } })
+    /** 要断开的线：同一节点重复连进来的 + 被替换掉的旧节点那条 */
+    const stale: string[] = []
+    for (const e of renderEdges.value) {
+      if (e.target !== props.id) continue
+      if (e.source === nodeId) stale.push(e.id)
+      else if (target.oldNodeId && e.source === target.oldNodeId) stale.push(e.id)
+    }
+    if (stale.length) doc.removeEdges([...new Set(stale)])
+    // 空壳卡（没有旧节点）与替换都要把新节点连进来；已经连着就不重复连
+    if (target.oldNodeId !== nodeId) {
+      try { doc.addEdge({ source: nodeId, target: props.id }) } catch { /* 已存在等：忽略 */ }
+    }
+    // 正文标签换绑 + 改名字（用户 2026-10-28 的核心诉求）
+    bindChipToNode(target, nodeId, name)
     slotErrors.value = {}
-    // 等一拍：shownMaterials 是「按边收集」的 computed，连线刚写入 doc 但渲染层
-    // 还没回灌 —— 不等的话这里读到的是**旧素材**（没有刚连线的那格）→ 刷不上去
-    // 渲染层的 renderEdges 回灌比 nextTick 晚一拍（宿主在 VueFlow 回调里更新），
-    // 只等 nextTick 会读到旧素材（刚连线的那格还是 pending）→ 刷不上去
+    // 等一拍：素材按边收集，连线刚写入 doc、渲染层还没回灌（真机踩过）
     await nextTick()
     await new Promise((r) => setTimeout(r, 300))
     refreshSlotChips()
   } catch (err) {
-    console.warn('[bottom-bar] 替换参考失败', err)
+    console.warn('[bottom-bar] 绑定参考失败', err)
   }
 }
 
@@ -1815,10 +1664,9 @@ function onSlotDrop(ev: DragEvent, _slot?: unknown): void {
   // 落点是**真实 DOM 上的格子**：从格子上的键反查它代表哪个参考
   const host = (ev.currentTarget as HTMLElement | null)?.closest('.nb-card') as HTMLElement | null
   const tile = refTiles.value.find((t) => t.key === (host?.dataset.tileKey || ''))
-  if (!tile?.slotKey) return
-  const kind = tile.slotKey.split(':')[0] as RefSlotKind
-  const index = Number(tile.slotKey.split(':')[1])
-  void fillSlotFromFile(kind, index, file)
+  if (!tile) return
+  // 拖文件到卡片 = 绑定到这张卡（空卡是添加、有内容是替换）
+  void fillSlotFromFile(tile.kind ?? 'any', file, targetOfTile(tile))
 }
 
 const globalRef = ref<HTMLElement | null>(null)
@@ -1940,12 +1788,19 @@ function onGlobalLeave(el: Element): void {
         v-for="tile in refTiles"
         :key="tile.key"
         :data-tile-key="tile.key"
+        :data-tile-name="tile.label"
         tabindex="0"
         class="nb-card"
-        :class="{ 'is-pending': tile.pending }"
-        :title="tile.pending ? '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点' : tile.name + '（可拖动调整顺序）'"
+        :class="{ 'is-pending': tile.pending, 'is-invalid': tile.invalid }"
+        :title="
+          tile.invalid
+            ? '引用已失效：删掉这颗标签，或重新拖一个节点进来'
+            : tile.pending
+              ? '待添加：点击上传 / 拖文件进来 / Ctrl 拖节点'
+              : tile.label + '（可拖动调整顺序）'
+        "
         :style="tile.pending ? 'cursor: pointer' : ''"
-        @click.stop="tile.pending && tile.slotKey ? pickSlotFile(tile.slotKey) : undefined"
+        @click.stop="tile.pending ? pickSlotFile(tile) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
         @drop.stop.prevent="onSlotDrop($event, undefined)"
@@ -1955,29 +1810,31 @@ function onGlobalLeave(el: Element): void {
             v-if="cardImageOf(tile) && !tile.pending"
             class="nb-card-img"
             :src="cardImageOf(tile)"
-            :alt="tile.name"
+            :alt="tile.label"
             draggable="false"
           />
           <span v-else-if="tile.pending" class="nb-card-pending">
-            <!-- 空槽按类型出图标（用户 2026-10-28）：图片/视频/音频/文本各不同 -->
-            <span class="nb-card-placeholder" :data-kind="tile.kind" aria-hidden="true" />
+            <!-- 待绑定：统一资源图标（用户 2026-10-28：手打的 @名字 无从判断类型） -->
+            <span class="nb-card-placeholder" data-kind="resource" aria-hidden="true" />
             <!-- “+” 保留：这格的主要操作是点它上传，必须让用户看得出可以点 -->
             <span class="nb-card-plus" aria-hidden="true">+</span>
           </span>
           <!-- 有内容但没有可用图（视频还没取到帧 / 音频 / 文本）→ 按类型出图标 -->
-          <span v-else class="nb-card-fallback" :data-kind="tile.kind" aria-hidden="true" />
+          <span v-else class="nb-card-fallback" :data-kind="tile.kind ?? 'resource'" aria-hidden="true" />
           <!--
             类型角标（用户 2026-10-28：卡片分不清是图片还是视频）。
             只给**有内容**的格子挂在右下角；空槽不需要（它的占位图标就是类型）。
           -->
           <span
-            v-if="!tile.pending && tile.kind === 'video'"
+            v-if="!tile.pending && tile.kind"
             class="nb-card-kind"
             :data-kind="tile.kind"
-            title="视频"
+            :title="tile.kind === 'video' ? '视频' : tile.kind === 'audio' ? '音频' : tile.kind === 'text' ? '文本' : '图片'"
             aria-hidden="true"
           />
           <span class="nb-card-index">{{ tile.index }}</span>
+          <!-- 拖拽悬停时显示名称（用户 2026-10-28：卡片只有序号看不出是谁） -->
+          <span class="nb-card-namebar">{{ tile.pending ? tile.label + ' · 待添加' : tile.label }}</span>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
         <!-- 键盘排序（无障碍 + 自动化可测）：聚焦卡片后 Ctrl+←/→ 移动 -->
@@ -1985,13 +1842,13 @@ function onGlobalLeave(el: Element): void {
           v-if="!tile.pending"
           class="nb-card-hit"
           type="button"
-          :aria-label="'预览素材 ' + tile.name"
+          :aria-label="'预览素材 ' + tile.label"
         />
         <button
           v-if="!tile.pending"
           class="nb-remove"
           type="button"
-          :aria-label="'移除素材 ' + tile.name"
+          :aria-label="'移除素材 ' + tile.label"
           title="移除素材（断开连线）"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2088,9 +1945,9 @@ function onGlobalLeave(el: Element): void {
           <span aria-hidden="true" v-html="ICON_SETTINGS" />
         </button> -->
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
-        <!-- 参考序号有缺时：发送按钮左边一个警告图标，hover 出 tooltip 说清楚缺哪一格 -->
+        <!-- 有失效引用时：发送按钮左边一个警告图标，hover 出 tooltip 说清楚哪一个失效 -->
         <div class="nb-warn">
-          <Tooltip v-if="refGapHint" :content="refGapHint" placement="bottom">
+          <Tooltip v-if="invalidHint" :content="invalidHint" placement="bottom">
             <span class="nb-gap-hint" role="button" tabindex="0"><span aria-hidden="true" v-html="ICON_WARN" /></span>
           </Tooltip>
         </div>
@@ -2731,6 +2588,63 @@ function onGlobalLeave(el: Element): void {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * 卡片名称条（用户 2026-10-28：卡片只有序号，拖拽时看不出这张是谁）。
+ *
+ * 平时透明（不抢缩略图）；hover / 拖拽悬停 / 键盘聚焦时从底部浮起，
+ * 显示这张卡当前绑定的节点名称（空卡显示「名称 · 待添加」）。
+ * 只动 opacity/transform（设计规范：不动画 width/height）。
+ */
+.nb-card-namebar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 4px;
+  border-radius: 0 0 6px 6px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+}
+.nb-card:hover .nb-card-namebar,
+.nb-card:focus-within .nb-card-namebar,
+.nb-card.is-target .nb-card-namebar,
+.nb-card--ghost .nb-card-namebar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 失效引用：灰掉 + 斜纹，明示「这颗标签指向的节点已经不在了」 */
+.nb-card.is-invalid {
+  border-color: color-mix(in srgb, var(--ui-danger, #ef4444) 45%, transparent);
+}
+.nb-card.is-invalid .nb-card-namebar {
+  background: color-mix(in srgb, var(--ui-danger, #ef4444) 82%, transparent);
+  opacity: 1;
+  transform: translateY(0);
+}
+.nb-editor :deep(.resource-chip--invalid) {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+/* 待绑定（手打的 @名字，还没拖节点）：统一资源图标 */
+.nb-card-placeholder[data-kind='resource'],
+.nb-card-fallback[data-kind='resource'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+}
+
 /* —— 输入区（内联在卡下面；点得进去、能打字） —— */
 .nb-editor {
   position: relative;
@@ -2922,6 +2836,14 @@ function onGlobalLeave(el: Element): void {
 .nb-editor :deep(.resource-chip-icon[data-icon='text']) {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+/*
+ * 待绑定标签（手打的 @名字，还没拖节点进来）：统一「资源」图标。
+ * 用户 2026-10-28 定案：这时无从判断类型，不许猜 —— 绑定后才换成真实类型图标。
+ */
+.nb-editor :deep(.resource-chip-icon[data-icon='resource']) {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
 }
 .nb-editor :deep(.resource-chip-icon svg) {
   width: 14px;

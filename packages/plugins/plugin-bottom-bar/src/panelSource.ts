@@ -13,6 +13,7 @@ import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, 
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import type { TagMatch, TagSpec } from 'prosemirror-editor-bundle'
 import { h } from 'vue'
+import { refNodeChipId, refNameChipId } from './refSlots'
 
 /** 一条连进本节点的上游素材（面板素材行 / @ 引用 / 生成输入 共用同一份） */
 export interface UpstreamMaterial {
@@ -22,9 +23,10 @@ export interface UpstreamMaterial {
   /** 显示名（节点标题优先，回退文件名/默认名） */
   name: string
   /**
-   * **带序号的引用名**（图片1 / 视频1 / 文本1 …）。
-   * 用户要的语义：连多个素材时按类型各自编号，@ 引用与纯文本里都用这个名字 ——
-   * 而不是内部节点 id（那串用户看不懂）。序号只在 UI/提示词里用，节点 id 仍是身份。
+   * 引用名 = **节点名称**（用户 2026-10-28 定案：名称画布内唯一，直接拿来当显示名）。
+   *
+   * 不再有「图片1 / 音频2」这种按顺序编出来的名字：序号会随排序与增删变化，
+   * 标签追着序号跑必然错位。名称是节点自己的属性，改名、排序、替换都跟得住。
    */
   refName: string
   /** 图片/视频类素材的地址 */
@@ -70,11 +72,6 @@ export function collectUpstreamMaterials(
   targetId: string,
   getNode: (nodeId: string) => UpstreamNodeLike | undefined,
   refOrder?: readonly string[],
-  /**
-   * 用户**指定**的槽位（上传/替换到第 N 格时写入）—— 决定该素材的 refName 序号。
-   * 不给时行为与以前完全一致（按出现顺序从 1 编）。
-   */
-  slotHints?: RefSlotHints,
 ): UpstreamMaterial[] {
   const out: UpstreamMaterial[] = []
   // 同一个上游节点可能有多条边连过来（重复连），只算一次：素材行不该出现两张一样的卡片
@@ -96,8 +93,7 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'image',
         name: label || nonEmptyString(data.imageName) || '图片素材',
-        // refName 由 numberRefNames 在**排完序之后**统一分配（角标/@ 名/纯文本 token 三处
-        // 必须与最终顺序一致，否则「图片2」会指到另一张图）
+        // refName 在排完序之后统一取节点名称（见 nameRefNames）
         refName: '',
         url: imageUrl,
       })
@@ -188,9 +184,8 @@ export function collectUpstreamMaterials(
     }
   }
 
-  // 顺序 + 引用名：两件事必须一起做（引用名是按**最终顺序**编的）
-  const ordered = resolveMaterialOrder(out, refOrder)
-  return slotHints ? applySlotHints(ordered, slotHints) : numberRefNames(ordered)
+  // 顺序由 refOrder 决定；引用名一律取节点名称（用户 2026-10-28：不再按顺序编号）
+  return nameRefNames(resolveMaterialOrder(out, refOrder))
 }
 
 /**
@@ -260,23 +255,14 @@ export function resolveMaterialOrder<T extends { id: string }>(
 }
 
 /**
- * 按**最终顺序**重编引用名：**全局连续编号**（图片1 / 视频2 / 音频3 / 文本4 / 图片5）。
+ * 引用名 = **节点名称**（用户 2026-10-28 定案）。
  *
- * 用户口径（2026-10-28，替换掉「每类各自从 1 编」）：
- * 「直接按『图片 1、视频 2、音频 3、文本 4、图片 5』这样的顺序进行排序就行，
- *   不需要单独给每个分类设置索引 1」。
- *
- * 于是：同一批参考里序号唯一、按显示顺序递增，卡片角标、@ 名、纯文本 token 三处一致。
- * 为什么必须在排完序之后才编：顺序换了编号不换，用户写的「图片2」就会指到另一张图。
+ * 以前这里按顺序编「图片1 / 视频2 …」；现在直接用节点名称：
+ * 名称在画布内唯一，改名后标签自动跟着变，排序也不会让标签指错对象。
+ * 保序、保身份，只补 refName 一个字段（节点名称为空时才退回「素材」）。
  */
-export function numberRefNames(materials: ReadonlyArray<UpstreamMaterial>): UpstreamMaterial[] {
-  const CN: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
-  // 全局计数器：不按 kind 分开（用户 2026-10-28 的编号规则）
-  let seq = 0
-  return materials.map((m) => {
-    seq += 1
-    return { ...m, refName: (CN[m.kind] ?? '素材') + seq }
-  })
+export function nameRefNames(materials: ReadonlyArray<UpstreamMaterial>): UpstreamMaterial[] {
+  return materials.map((m) => ({ ...m, refName: String(m.name ?? '').trim() || '素材' }))
 }
 
 /**
@@ -301,34 +287,26 @@ export function nextRefOrder<T extends { id: string }>(
 }
 
 /**
- * 把「某个槽位要用的素材」排到它对应该有的位置（用户口径 2026-10-25：
- * 「点击第二个空区域进行上传，那么这个连接线就属于第二个参考」）。
+ * 把新绑定的素材插到指定卡片位置（用户 2026-10-28：添加 / 替换都是「绑定到那张卡」）。
  *
- * 背景：refName（图片1 / 视频2 / 音频3 / 文本4）是**全局连续**编的（numberRefNames，
- * 用户 2026-10-28 拍板）。用户在第二个空格上传时，这条新边天然排在最末 ——
- * 名字就会变成「图片N」。这里把新素材插到 index 位置，其余顺延；
- * 于是「第 2 格」真的对应「图片2」。
+ * 卡片身份是标签 id（`ref-node:<id>` / `ref-name:<名>`），所以这里排的是**标签 id**，
+ * 不再是节点 id。原来那张卡的标签被新标签顶掉（替换），其余保持相对顺序。
  *
- * @param order  当前 refOrder（节点 id 序列）
- * @param kind   槽位种类（同类型内部编号；视频/音频各自独立）
- * @param index  目标序号（从 1 开始）
- * @param nodeId 新素材的节点 id
- * @returns 新的 refOrder（调用方写回节点 data.refOrder）
+ * @param order         当前顺序（标签 id 序列）
+ * @param replaceChipId 被替换的标签 id（添加时就是那张空壳卡；没有 → 追加到末尾）
+ * @param newNodeId     新绑定到的节点 id
+ * @returns 新的顺序（调用方写回节点 data.refOrder）
  */
-export function placeRefAtSlot(
+export function placeChipAt(
   order: ReadonlyArray<string>,
-  kind: 'image' | 'video' | 'audio' | 'text' | 'av',
-  index: number,
-  nodeId: string,
+  replaceChipId: string | undefined,
+  newNodeId: string,
 ): string[] {
-  // 「第 N 格」= 序列里的第 N 位（编号是全局连续的，跨类型也只有一串序号）。
-  void kind
-  const rest = order.filter((id) => id !== nodeId)
-  // 「第 N 格」必须真的排在第 N 位 —— 当前素材比 N 少时补占位，
-  // 否则会被压到第 1 位（真机踩过：8 格空着时点第 8 格上传，图出现在第 1 格）。
-  const padded = [...rest]
-  while (padded.length < index - 1) padded.push('__slot__' + padded.length)
-  return [...padded.slice(0, index - 1), nodeId, ...padded.slice(index - 1)]
+  const newChip = refNodeChipId(newNodeId)
+  const rest = order.filter((id) => id !== newChip && id !== replaceChipId)
+  const at = replaceChipId ? order.indexOf(replaceChipId) : -1
+  if (at < 0) return [...rest, newChip]
+  return [...rest.slice(0, at), newChip, ...rest.slice(at)]
 }
 
 /** 素材 → 生成请求里的资源（只带工具需要的字段，避免把 UI 用的东西塞进请求） */
@@ -509,21 +487,14 @@ export function previewListFor(
 export type MediaKind4 = 'image' | 'video' | 'audio' | 'text'
 
 /**
- * 素材 → **唯一的标签身份**：`ref-slot:<kind>:<序号>`（用户 2026-10-28 统一 id）。
+ * 素材 → **唯一的标签身份**：`ref-node:<节点 id>`（用户 2026-10-28 定案）。
  *
- * 序号取自 refName（图片3 → image:3），和「标记」从文本转出来的标签完全同一套；
- * 认不出的名字（用户自定标签）返回 null，调用方沿用上游节点 id。
+ * 为什么不再用 `ref-slot:<kind>:<序号>`：序号会随排序/增删变化，标签就必然指错对象。
+ * 节点 id 永远不变；显示名从节点名称取。
  */
-export function refSlotIdOf(m: { kind?: string; refName?: string }): string | null {
-  const kind =
-    m.kind === 'image' ? 'image'
-    : m.kind === 'video' ? 'video'
-    : m.kind === 'audio' ? 'audio'
-    : m.kind === 'text' ? 'text'
-    : null
-  const index = /(\d+)\s*$/.exec(String(m.refName ?? ''))
-  if (!kind || !index) return null
-  return 'ref-slot:' + kind + ':' + Number(index[1])
+export function refChipIdOf(m: { id?: string }): string | null {
+  const id = String(m.id ?? '').trim()
+  return id ? refNodeChipId(id) : null
 }
 
 /** 每种类型的 svg 路径（24 视图，stroke 风格与画布节点图标同一套） */
@@ -585,7 +556,12 @@ const TEXT_ICON =
  */
 function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {
   const name = self.name || ''
-  const kind4 = mediaKindOf(self)
+  /**
+   * 类型只认 `chipKind`（用户 2026-10-28 定案）：
+   * - 有值 = 已绑定节点，按节点真实类型画图标；
+   * - 没值 = 待绑定（手打的 @名字），统一「资源」图标，**不猜类型**。
+   */
+  const kind4 = self.chipKind
   /**
    * 能不能把 url 当**图片**画：只有图片可以。
    *
@@ -593,25 +569,33 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
    * 设成 `display:none`，标签就只剩名字、没有图标（用户 2026-10-28 报「音频标签没有图标」）。
    * 视频存的 url 是帧图（data:image/…）所以例外；音频没有封面，一律走类型图标。
    */
-  const canShowThumb = !!self.url && kind4 !== 'audio' && (kind4 === 'image' || self.url.startsWith('data:image/'))
+  const canShowThumb =
+    !!self.url && !!kind4 && kind4 !== 'audio' && (kind4 === 'image' || self.url.startsWith('data:image/'))
   const isText = !canShowThumb
   return [
     'span',
     {
-      class: 'resource-node resource-chip' + (isText ? ' resource-chip--text' : ''),
+      class:
+        'resource-node resource-chip'
+        + (isText ? ' resource-chip--text' : '')
+        + (kind4 ? '' : ' resource-chip--unbound')
+        + (self.invalid ? ' resource-chip--invalid' : ''),
       'data-id': self.id,
       'data-url': self.url || '',
       'data-name': name,
       'data-value': self.value || '',
       'data-category': self.category,
+      ...(kind4 ? { 'data-kind': kind4 } : {}),
+      ...(self.invalid ? { 'data-invalid': '1' } : {}),
       // 不设 title：原生 title 会弹浏览器默认 tooltip（用户口径 2026-10-27 不喜欢）
     },
     // 【修复】icon 不能走 innerHTML 属性 —— DOMOutputSpec 会把它当**普通属性**写上 DOM
     //（outerHTML 出现 innerhtml="<svg..."），浏览器不解析 → 视觉空白（用户 2026-10-28
     // 报「有些标签是空白」的真凶）。改为空占位 span + CSS mask 画图标。
-    // 用户 2026-10-28 追加：图片/视频/音频/文本 **各有自己的默认图标**（data-icon=kind）。
+    // 用户 2026-10-28 追加：图片/视频/音频/文本 **各有自己的默认图标**（data-icon=kind）；
+    // 未绑定 = data-icon="resource"（统一资源图标）。
     isText
-      ? ['span', { class: 'resource-chip-icon', 'data-icon': kind4 }]
+      ? ['span', { class: 'resource-chip-icon', 'data-icon': kind4 ?? 'resource' }]
       : ['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }],
     ['span', { class: 'resource-chip-name' }, name],
   ]
@@ -619,46 +603,56 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
 /**
  * 底栏自己的**标签规格**（用户口径 2026-10-27：标签实现交给插件）。
  *
- * 编辑器只提供「文字 → 标签」的通用通道；认什么写法、标签长什么样，由这里决定。
- * 认 @图片N / @视频N / @音频N / @文本N / @音视频N（用户 2026-10-28 补 @文本N），
- * 生成 `ref-slot:<kind>:<N>` 的槽位标签。
+ * 新规则（用户 2026-10-28 定案）：正文里写 `@名称`，名称 = 画布上的节点名称。
  *
- * 想换成别的写法（比如 @角色1），只改这里的 scan 即可，不用碰编辑器。
+ * - 名称命中了**已连线**的素材 → 生成已绑定标签 `ref-node:<id>`（带真实类型图标）；
+ * - 没命中 → 生成待绑定标签 `ref-name:<名>`（统一资源图标，拖入节点即完成添加）。
+ *
+ * 为什么按名称而不是按序号：名称在画布内唯一，用户和 AI 都能直接读懂
+ * （`@场景:天空之城` 一眼知道是什么，`@音频1` 不知道）。
  */
-export const bottomBarTagSpec: TagSpec = {
-  scan(text: string): TagMatch[] {
-    const out: TagMatch[] = []
-    const re = /@(图片|视频|音频|文本|音视频|image|video|audio|text|media|av)\s*(\d{1,4})/gi
-    let m: RegExpExecArray | null
-    while ((m = re.exec(text)) !== null) {
-      const kind = m[1].toLowerCase()
-      const slotKind: 'image' | 'video' | 'audio' | 'av' | 'text' =
-        kind === '图片' || kind === 'image' ? 'image'
-        : kind === '视频' || kind === 'video' ? 'video'
-        : kind === '音频' || kind === 'audio' ? 'audio'
-        : kind === '文本' || kind === 'text' ? 'text'
-        : 'av'
-      const label =
-        slotKind === 'image' ? '图片'
-        : slotKind === 'video' ? '视频'
-        : slotKind === 'audio' ? '音频'
-        : slotKind === 'text' ? '文本'
-        : '音视频'
-      const index = Number(m[2])
-      if (!index) continue
-      const item: ResourceItem = {
-        id: 'ref-slot:' + slotKind + ':' + index,
-        name: label + index,
-        category: '素材',
-        // av 是混合、text 靠标签名识别，两者都不给单一 mediaType
-        mediaType: slotKind === 'av' || slotKind === 'text' ? undefined : slotKind,
+export function bottomBarTagSpecFor(materials: ReadonlyArray<UpstreamMaterial>): TagSpec {
+  return {
+    scan(text: string): TagMatch[] {
+      const out: TagMatch[] = []
+      /**
+       * `@` 后面到分隔符之间算名称。名称可能带空格（「天空 之城」），
+       * 所以先按分隔符切段，再在段内用「最长名称优先」匹配已连线素材，
+       * 剩下的段落按整段当待绑定名称。
+       */
+      const names = materials.map((m) => m.name.trim()).filter(Boolean)
+      // 长名优先：避免「天空」把「天空之城」截走
+      const sorted = [...names].sort((a, b) => b.length - a.length)
+      const re = /@([^\n@]{1,80})/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text)) !== null) {
+        const raw = m[1]
+        const hit = sorted.find((name) => raw === name || raw.startsWith(name + ' '))
+        const name = hit ?? raw.trim()
+        if (!name) continue
+        const len = hit ? hit.length : name.length
+        const material = hit ? materials.find((x) => x.name.trim() === hit) : undefined
+        const item: ResourceItem = material
+          ? {
+              id: refNodeChipId(material.id),
+              name: material.name,
+              category: '素材',
+              chipKind: material.kind,
+              ...(material.url ? { url: material.url } : {}),
+              ...(material.value ? { value: material.value } : {}),
+            }
+          : {
+              id: refNameChipId(name),
+              name,
+              category: '素材',
+            }
+        out.push({ from: m.index, to: m.index + 1 + len, item })
       }
-      out.push({ from: m.index, to: m.index + m[0].length, item })
-    }
-    return out
-  },
-  // 标签外观沿用底栏卡片样式；冷启动缺注册表时也能画对
-  render: (item) => resourceEditorSpec(item),
+      return out
+    },
+    // 标签外观沿用底栏卡片样式；冷启动缺注册表时也能画对
+    render: (item) => resourceEditorSpec(item),
+  }
 }
 
 
@@ -680,16 +674,19 @@ export function toEditorResources(
   videoThumbOf?: (url: string) => string | undefined,
 ): ResourceItem[] {
   return materials.map((m) => {
-    // name 用**带序号的引用名**（图片1 / 视频1）：它同时是 @ 下拉的显示名、
-    // 插入后的卡片文案、以及纯文本序列化出来的 token —— 三处一致，用户看得懂。
     /**
-     * 标签身份统一成 `ref-slot:<kind>:<N>`（用户 2026-10-28）。
+     * 三处共用一份身份（用户 2026-10-28 定案）：@ 下拉、卡片、正文标签。
      *
-     * 以前这里用上游节点 id（`204`），和「标记」转出来的 `ref-slot:*` 不是一种东西；
-     * 刷新后注册表一空，节点 id 那类标签就退化成下划线文字（「两种标签」的根因）。
-     * 现在两种插入方式落进文档的 id 完全相同，缩略图刷新也只需认这一种。
+     * id = `ref-node:<节点 id>`（永不随排序变化），name = 节点名称，chipKind = 真实类型。
      */
-    const base: ResourceItem = { id: refSlotIdOf(m) ?? m.id, name: m.refName, category: '素材' }
+    const base: ResourceItem = {
+      id: refNodeChipId(m.id),
+      name: m.refName || m.name,
+      category: '素材',
+      ...(m.kind === 'image' || m.kind === 'video' || m.kind === 'audio' || m.kind === 'text'
+        ? { chipKind: m.kind }
+        : {}),
+    }
     if (m.kind === 'text') {
       return {
         ...base,
@@ -804,49 +801,5 @@ export function panelStatusText(input: {
     return { tone: 'idle', text: '没有可用的生成工具：请先安装提供图片生成能力的工具插件' }
   }
   return { tone: 'idle', text: '' }
-}
-
-/**
- * 槽位提示：用户**指定**某素材放在第 N 格（上传/替换时写进节点 data.refSlot）。
- * 形状：{ [nodeId]: { kind, index } }
- */
-export type RefSlotHints = Record<string, { kind: ToolResourceKind; index: number }>
-
-/**
- * 把「用户指定的槽位」落到 refName 上 —— 这是「第 N 格上传就落在第 N 格」的唯一依据。
- *
- * 为什么不能只靠顺序：refName 是按素材出现顺序编的。8 个格子都空着时点第 8 格
- * 上传，素材序列里只有 1 张 → 编成「图片1」→ 于是显示在第 1 格（真机踩过的 bug）。
- * 有 hint 时按 hint 编号，其余素材填到空出来的位置（保持原有先后）。
- *
- * 编号规则与 numberRefNames 一致（用户 2026-10-28）：**所有类型共用一串连续序号**。
- * 所以这里不再按 kind 分桶 —— hint 的 index 就是「第几格」，跨类型也唯一。
- */
-export function applySlotHints(
-  materials: ReadonlyArray<UpstreamMaterial>,
-  hints: RefSlotHints | undefined,
-): UpstreamMaterial[] {
-  if (!hints) return numberRefNames(materials)
-  const CN: Record<string, string> = { image: "图片", video: "视频", audio: "音频", text: "文本" }
-  /** 已被 hint 占用的序号 → 素材（全局一张表，不按类型分） */
-  const taken = new Map<number, UpstreamMaterial>()
-  for (const m of materials) {
-    const hint = hints[m.id]
-    if (hint && hint.index > 0 && !taken.has(hint.index)) taken.set(hint.index, m)
-  }
-  const out: UpstreamMaterial[] = []
-  for (const m of materials) {
-    let slot = 0
-    for (const [idx, item] of taken) if (item === m) slot = idx
-    if (slot === 0) {
-      // 找一个没被占用的序号（从 1 起）
-      let i = 1
-      while (taken.has(i)) i += 1
-      slot = i
-      taken.set(i, m)
-    }
-    out.push({ ...m, refName: (CN[m.kind] ?? "素材") + slot })
-  }
-  return out
 }
 

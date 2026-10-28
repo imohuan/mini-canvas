@@ -9,8 +9,8 @@
  * 分散写就会出现同一种格子三套说法（以前 refSlots 就只认三种媒体，文本根本没有槽）。
  */
 
-/** 参考格种类；av = 音视频混合格 */
-export type SlotKind = 'image' | 'video' | 'audio' | 'text' | 'av'
+/** 参考格种类；av = 音视频混合格；any = 手打的待绑定标签（还不知道类型，什么都收） */
+export type SlotKind = 'image' | 'video' | 'audio' | 'text' | 'av' | 'any'
 
 /** 能放进参考格的内容类型（文本是一等公民） */
 export type SlotMedia = 'image' | 'video' | 'audio' | 'text'
@@ -22,17 +22,21 @@ export const SLOT_KIND_META: Record<SlotKind, { label: string; accept: string }>
   audio: { label: '音频', accept: 'audio/*' },
   text: { label: '文本', accept: 'text/plain,.txt,.md,.markdown' },
   av: { label: '音视频', accept: 'video/*,audio/*' },
+  any: { label: '资源', accept: 'image/*,video/*,audio/*,text/plain,.txt,.md,.markdown' },
 }
 
 /** 这个格子收不收这种内容 */
 export function slotAccepts(kind: SlotKind, media: SlotMedia | null): boolean {
   if (!media) return false
+  // 待绑定格（手打 @名字）：还没定类型，什么都收 —— 用户 2026-10-28 口径
+  if (kind === 'any') return true
   if (kind === 'av') return media === 'video' || media === 'audio'
   return kind === media
 }
 
 /** 格子收什么的完整说法（音视频要写成「视频或音频」，不能直接念表名） */
 export function slotAcceptsLabel(kind: SlotKind): string {
+  if (kind === 'any') return '任意资源'
   return kind === 'av' ? '视频或音频' : SLOT_KIND_META[kind].label
 }
 
