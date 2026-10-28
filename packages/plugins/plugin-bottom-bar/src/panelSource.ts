@@ -304,9 +304,10 @@ export function nextRefOrder<T extends { id: string }>(
  * 把「某个槽位要用的素材」排到它对应该有的位置（用户口径 2026-10-25：
  * 「点击第二个空区域进行上传，那么这个连接线就属于第二个参考」）。
  *
- * 背景：refName（图片1/图片2）是**按连线顺序**编的（numberRefNames）。
- * 用户在第二个空格上传时，这条新边天然排在最末 —— 名字就会变成「图片N」。
- * 这里把新素材插到 index 位置，其余顺延；于是「第 2 格」真的对应「图片2」。
+ * 背景：refName（图片1 / 视频2 / 音频3 / 文本4）是**全局连续**编的（numberRefNames，
+ * 用户 2026-10-28 拍板）。用户在第二个空格上传时，这条新边天然排在最末 ——
+ * 名字就会变成「图片N」。这里把新素材插到 index 位置，其余顺延；
+ * 于是「第 2 格」真的对应「图片2」。
  *
  * @param order  当前 refOrder（节点 id 序列）
  * @param kind   槽位种类（同类型内部编号；视频/音频各自独立）
@@ -320,7 +321,7 @@ export function placeRefAtSlot(
   index: number,
   nodeId: string,
 ): string[] {
-  // 同类型才能插位：图片2 的「位置」只在图片序列里有意义（视频/音频各自编号）。
+  // 「第 N 格」= 序列里的第 N 位（编号是全局连续的，跨类型也只有一串序号）。
   void kind
   const rest = order.filter((id) => id !== nodeId)
   // 「第 N 格」必须真的排在第 N 位 —— 当前素材比 N 少时补占位，
