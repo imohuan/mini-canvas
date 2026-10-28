@@ -195,3 +195,20 @@ export function exitSelection(): void {
   publish()
 }
 
+/**
+ * 选择态是否还该留着（纯判定，Node 可测）。
+ *
+ * 用户 2026-10-28 真机复现的 bug：以前这里写成「必须恰好单选宿主」，而按 Ctrl 进拖拽、
+ * 拖动资源时选中集本来就会短暂变化 —— 每帧判一次就把刚进入的拖拽模式关掉，
+ * 表现是「按 Ctrl 完全没反应」。正确语义只有一条：**宿主不在选中集里才收**。
+ */
+export function shouldKeepSelection(input: {
+  /** 当前选中节点 id 集合 */
+  selected: ReadonlySet<string>
+  /** 选择态宿主（参考/拖拽的发起节点） */
+  owner: string
+}): boolean {
+  if (!input.owner) return false
+  return input.selected.has(input.owner)
+}
+

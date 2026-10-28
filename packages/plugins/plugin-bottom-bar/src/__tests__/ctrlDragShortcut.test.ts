@@ -15,7 +15,7 @@
  * 不能喂外壳是否存在。
  */
 import { describe, expect, it } from 'vitest'
-import { canEnterCtrlDragMode } from '../ctrlDragMode'
+import { canEnterCtrlDragMode, ctrlBlockedByEditable } from '../ctrlDragMode'
 
 const base = {
   key: 'Control',
@@ -43,5 +43,19 @@ describe('Ctrl 进入选择态：只在底栏真的显示时', () => {
 
   it('不是 Ctrl 键 → 不进入', () => {
     expect(canEnterCtrlDragMode({ ...base, key: 'Shift' })).toBe(false)
+  })
+})
+
+describe('Ctrl 的可编辑区保护：底栏自己的输入框要放行（用户 2026-10-28 真机）', () => {
+  it('页面别处的输入框 → 拦下（文本快捷键归输入框）', () => {
+    expect(ctrlBlockedByEditable({ inEditable: true, inBottomBar: false })).toBe(true)
+  })
+
+  it('底栏里的正文编辑器 → 不拦（点节点后自动聚焦，否则按 Ctrl 永远没反应）', () => {
+    expect(ctrlBlockedByEditable({ inEditable: true, inBottomBar: true })).toBe(false)
+  })
+
+  it('焦点在画布 / 普通元素 → 不拦', () => {
+    expect(ctrlBlockedByEditable({ inEditable: false, inBottomBar: false })).toBe(false)
   })
 })

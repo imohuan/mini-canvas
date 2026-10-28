@@ -33,6 +33,7 @@ import {
   selectionEpoch,
   selectionMode,
   selectionNodeHint,
+  shouldKeepSelection,
   type NodeTypeLike,
   type ReferenceNodeState,
 } from './referenceMode'
@@ -265,14 +266,20 @@ function onBackToNode(): void {
  *
  * 为什么必须守这条：宿主一旦被别的选中操作顶掉，底栏会切去渲染那个新节点，
  * 而选择态浮层还挂在旧宿主上 —— 用户看到的是「底栏换人了、盖层还留着」的错位画面。
- * 宿主一掉，选择态就收（幂等：不在选择态时不会触发主动退出）。
+ *
+ * 判据必须是「**真的换了选中对象**」（选中集非空、且不含宿主），不能写成
+ * 「不满足单选就退出」：按 Ctrl 进拖拽的那一瞬、以及拖动资源时选中会短暂变化，
+ * 用 `size === 1 && has(owner)` 会把正常操作误判成掉选，选择态被逐帧关掉 ——
+ * 用户看到的就是「按 Ctrl 完全没反应」（2026-10-28 真机复现，退出栈来自本函数）。
+ * 选中集为空（点画布空白）仍算离开，与旧行为一致。
  */
 function guardOwnerSelected(): void {
   if (!active.value) return
   const sel = ctx.tryGet<{ ids: ReadonlySet<string> } | undefined>('selection')
   const owner = referenceOwner()
-  const stillThere = !!sel && !!owner && sel.ids.size === 1 && sel.ids.has(owner)
-  if (!stillThere) exitSelection()
+  if (!sel || !owner) return
+  if (shouldKeepSelection({ selected: sel.ids, owner })) return
+  exitSelection()
 }
 
 const offs: Array<{ dispose(): void }> = []

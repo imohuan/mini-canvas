@@ -90,7 +90,7 @@ import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey, type Tile
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf } from './refSlotDrag'
 import { judgeSlotHover } from './refSlotDrag'
-import { canEnterCtrlDragMode, enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
+import { canEnterCtrlDragMode, ctrlBlockedByEditable, enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
 import {
   clearCtrlSuppression,
   ctrlSuppressed,
@@ -1516,7 +1516,18 @@ function moveGhost(x: number, y: number): void {
  *  注意：不能查 `.nb-overlay` —— 它是画布级外壳，任何单选节点都有；可视化节点没有
  *  底栏动作、本体不渲染，但外壳照样在，查外壳就会误触（用户 2026-10-27 实测）。 */
 function onCtrlModeKeydown(ev: KeyboardEvent): void {
-  const editableTarget = ev.target instanceof HTMLElement && !!ev.target.closest('input, textarea, select, [contenteditable="true"]')
+  /**
+   * 可编辑区保护：输入框里的 Ctrl 是文本快捷键，不该抢。
+   *
+   * 但**底栏自己的输入框要放行**（用户 2026-10-28 实测）：点节点后正文编辑器会自动聚焦，
+   * 若一并拦掉，底栏开着按 Ctrl 永远进不了拖拽模式 —— 用户看到的就是「按 Ctrl 没反应」。
+   * 底栏输入框在独立浮层里，进拖拽不会吞掉 Ctrl+A 这类文本快捷键（我们也不 preventDefault）。
+   */
+  const el = ev.target instanceof HTMLElement ? ev.target : null
+  const editableTarget = ctrlBlockedByEditable({
+    inEditable: !!el?.closest('input, textarea, select, [contenteditable="true"]'),
+    inBottomBar: !!el?.closest('.nb-root, .nb-overlay'),
+  })
   if (!canEnterCtrlDragMode({
     key: ev.key,
     repeat: ev.repeat,

@@ -56,6 +56,22 @@ export function canEnterCtrlDragMode(input: {
 }
 
 /**
+ * Ctrl 该不该被「可编辑区」拦下（纯判定，Node 可测）。
+ *
+ * 用户口径（2026-10-28 真机复现）：点节点后正文编辑器会自动聚焦，若把「在输入框里」
+ * 一律当成文本快捷键，底栏开着按 Ctrl 就永远进不了拖拽模式 —— 表现是「按 Ctrl 没反应」。
+ * 所以：**底栏自己的输入框不算**，只有页面别处的输入框/可编辑区才拦。
+ */
+export function ctrlBlockedByEditable(input: {
+  /** 事件目标是否落在输入框 / 可编辑区 */
+  inEditable: boolean
+  /** 事件目标是否落在底栏自己的浮层里 */
+  inBottomBar: boolean
+}): boolean {
+  return input.inEditable && !input.inBottomBar
+}
+
+/**
  * 拖拽启动的**对象数据通道**：覆盖层（长在节点里）拿到 props.id/props.data 的对象数据，
  * 直接调用这里注册的处理器发起拖拽 —— 不再走 window pointerdown + DOM closest 判定
  * （用户口径：DOM 判定会误触节点选中）。
