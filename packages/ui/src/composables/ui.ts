@@ -286,6 +286,14 @@ function createUi() {
     histHasMore: false,
     /** 正在拉下一页（防触底重复请求） */
     histLoadingMore: false,
+    /** 第 1 页 / 按缓存回填是否在途：此期间的补页请求排队，不丢 */
+    histLoadingFirst: false,
+    /** 正在按缓存回填多页：卡片墙要等全部页落地后一次重建（中途 append 会空转） */
+    histRestoring: false,
+    /** 加载条起始时刻（毫秒时间戳；0 = 没在显示） */
+    histLoadingShownAt: 0,
+    /** 加载更多条是否可见（首屏第 1 页不显示） */
+    histLoadingMoreVisible: false,
     /**
      * 数据版本号：每次 loadHistory 成功自增。历史弹窗靠「版本变了」而不是「长度变了」
      * 感知数据更新 —— 翻页/筛选后长度可能恰好相同（都是满页 20 条），长度 watch 会漏触发，
@@ -893,22 +901,121 @@ function createUi() {
    * 这比单纯"请求序号"更严：连续切两次页签时，中间那轮晚到的第 2 页也会被丢掉。
    */
   let historyFilterEpoch = 0
+  /**
+   * 每个筛选条件（含页大小）已经加载到第几页。
+   *
+   * 用户口径 2026-10-28：切回「图片」时之前翻的 3 页全没了 —— 旧实现切页签一律回第 1 页、
+   * 只拉 20 条，等于把已加载的数据丢掉。这里按筛选签名记页码：切回来时把已加载的页
+   * **一次补齐**（第 1 页整表替换 + 后续页追加），画面和数据都回到离开前的样子。
+   * 页大小档位（列数滑杆）也算在签名里：改了列数就是另一套分页，重新从第 1 页拉。
+   */
+  const histPageBySignature = new Map<string, number>()
+  /**
+   * 「整表重拉」在途计数：第 1 页（含按缓存回填的多页）还没落地。
+   * >0 时补页**排队**等它完成 —— 不能像旧实现那样直接 return 丢掉
+   * （用户实测 2026-10-28：切页签后滚到底再也不加载，得拖一下缩放滑杆才恢复）。
+   */
+  let historyFirstPagePending = 0
+  /**
+   * 当前这批数据是不是「按缓存回填」的一页（1 = 是）。
+   * 回填会连续落表好几页，弹窗据此把这几拍都当成「整墙重建」，不能中途 append；
+   * 否则第 2 页到达时新墙还没 init，append 空转 → 31 条只画出 17 张（真机 2026-10-28）。
+   */
+  let historyRestoring = false
+  /** 补页被挡下时的排队标记 */
+  let histLoadMoreQueued = false
+  /** 排队重试定时器（兜底：万一没有 finally 触发，也能自己续上） */
+  let histLoadMoreRetryTimer: ReturnType<typeof setTimeout> | null = null
   /** 切筛选时调用：作废在途请求，并开启新一轮 */
-  function resetHistoryRequest(): void {
+  function resetHistoryRequest(): number {
     historyFilterEpoch += 1
     historyAbort?.abort()
     historyAbort = null
+    historyFirstPagePending = 0
+    histLoadMoreQueued = false
+    if (histLoadMoreRetryTimer) {
+      clearTimeout(histLoadMoreRetryTimer)
+      histLoadMoreRetryTimer = null
+    }
+    state.histLoadingFirst = false
+    historyRestoring = false
+    return historyFilterEpoch
   }
+
+  /** 加载条最短显示时长（毫秒）：接口再快也要让用户看见（用户口径 2026-10-28） */
+  const HIST_LOADING_MIN_MS = 500
+  /** 本轮「加载更多」的起始时刻（0 = 没在显示） */
+  let histLoadingSince = 0
+  let histLoadingHideTimer: ReturnType<typeof setTimeout> | null = null
+  /** 加载态令牌：新一轮开始后，旧请求的收尾不能把新加载条提前关掉 */
+  let histLoadingToken = 0
+
+  /** 开始一轮「加载更多」：立刻显示加载条，并记下起始时刻 */
+  function beginHistLoading(): number {
+    if (histLoadingHideTimer) {
+      clearTimeout(histLoadingHideTimer)
+      histLoadingHideTimer = null
+    }
+    const token = ++histLoadingToken
+    histLoadingSince = Date.now()
+    state.histLoadingShownAt = histLoadingSince
+    state.histLoadingMore = true
+    state.histLoadingMoreVisible = true
+    return token
+  }
+
+  /** 第 1 页开始/结束：用计数而不是布尔，快速连点页签时不会被旧请求的 finally 提前清掉 */
+  function noteFirstPageStart(): void {
+    historyFirstPagePending += 1
+    state.histLoadingFirst = true
+  }
+
+  function noteFirstPageEnd(): void {
+    historyFirstPagePending = Math.max(0, historyFirstPagePending - 1)
+    state.histLoadingFirst = historyFirstPagePending > 0
+    if (!state.histLoadingFirst) flushPendingLoadMore()
+  }
+
   /**
-   * 「刚切换过筛选」的短窗口（ms）。
+   * 补页被「第 1 页/回填在途」挡下时，排队等它完成。
    *
-   * 自动补页的调用方（哨兵进可视区）可能在筛选切换的**同一拍**被触发：
-   * 它读到的是新页签条件 + 旧页码，于是去拉"第 2 页"，把真正该发的第 1 页挤掉
-   * （用户实测 2026-10-28：点"音频"后列表一直是图片）。切换后短暂拒绝补页，
-   * 等第 1 页落地再恢复；补页本来就有 1 秒节流，用户无感。
+   * 旧实现直接 return 丢掉：切页签后 1.2 秒内滚到底的唯一一次触发会被吞掉，
+   * 之后再没有任何东西来叫醒它（用户实测 2026-10-28：必须拖一下缩放滑杆才恢复）。
    */
-  let historyFilterSwitchedAt = 0
-  const FILTER_SETTLE_MS = 1200
+  function flushPendingLoadMore(): void {
+    if (histLoadMoreRetryTimer) {
+      clearTimeout(histLoadMoreRetryTimer)
+      histLoadMoreRetryTimer = null
+    }
+    if (!histLoadMoreQueued) return
+    histLoadMoreQueued = false
+    histLoadMoreRetryTimer = setTimeout(() => {
+      histLoadMoreRetryTimer = null
+      loadMoreHistory()
+    }, 0)
+  }
+
+  /**
+   * 结束加载条：不足 HIST_LOADING_MIN_MS 时**延迟到满 500ms**再隐藏。
+   * 接口几十毫秒就回来的情况下，不延迟的话加载态一闪而过，用户只会看到列表"突然多了几项"。
+   */
+  function settleHistLoading(token: number): void {
+    if (token !== histLoadingToken) return
+    const elapsed = histLoadingSince > 0 ? Date.now() - histLoadingSince : HIST_LOADING_MIN_MS
+    const wait = Math.max(0, HIST_LOADING_MIN_MS - elapsed)
+    const hide = (): void => {
+      histLoadingHideTimer = null
+      histLoadingSince = 0
+      state.histLoadingMore = false
+      state.histLoadingMoreVisible = false
+    }
+    if (histLoadingHideTimer) {
+      clearTimeout(histLoadingHideTimer)
+      histLoadingHideTimer = null
+    }
+    if (wait === 0) hide()
+    else histLoadingHideTimer = setTimeout(hide, wait)
+  }
 
   /**
    * 从后台拉一页历史。
@@ -925,117 +1032,110 @@ function createUi() {
      * 第 1 页永远不来）。
      */
     signature: string = historySignature(),
+    /** 回填模式：按缓存页数一次补齐（第 2 页起也做整表拼接，不校验"当前页 + 1"） */
+    isRestore = false,
   ): Promise<void> {
-      const svc = readyHost?.ctx?.get<{
-      query(q?: Record<string, unknown> & { signal?: AbortSignal }): Promise<{
-        items: Array<{
-          id: string
-          title: string
-          kind: string
-          finishedAt: number
-          urls?: string[]
-          canvasId?: string
-          nodeId?: string
-          prompt?: string
-          values?: Record<string, unknown>
-          resources?: Array<{ kind: string; url?: string; value?: string }>
-          media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
-          error?: string
-        }>
-        total: number
-        page: number
-        pageSize: number
-        summary: { total: number; byKind: Record<string, number> }
-      }>
-    }>('gen-history')
-    if (!svc) {
-      state.historyReady = false
-      return
-    }
-    // 请求序号：快速切页签/触底时多个请求并发，慢的旧响应不能覆盖新响应
-    //（否则点"图片"后，晚到的"音频"响应会把画面改回去 —— 用户报的错乱之一）。
-    const seq = ++historyReqSeq
-    const epoch = historyFilterEpoch
-    // 取消上一次仍在路上的请求：快速切换页签时它已过期，继续占着连接只会让新结果排队。
-    historyAbort?.abort()
-    historyAbort = new AbortController()
-    const signal = historyAbort.signal
+    const isFirstPage = pageNo <= 1
+    // 回填由 restoreHistoryPages 统一持有"整表在途"计数，这里不重复加减
+    if (isFirstPage && !isRestore) noteFirstPageStart()
     try {
-      const page = await svc.query({
-        page: pageNo,
-        pageSize: state.histPageSize,
-        signal,
-        ...(state.histType ? { kind: HIST_KIND[state.histType] ?? state.histType } : {}),
-        ...(state.histRating && state.histRating !== '所有评级'
-          ? { rating: HIST_RATING[state.histRating] ?? state.histRating }
-          : {}),
-        order: state.histSortDesc ? 'desc' : 'asc',
-        // 「本画布」= URL 里那个真实画布 id（`currentCanvasId`）——
-        // 以前写死 `'default'`，于是切到别的画布后「本画布」筛的是 default 的历史（与屏幕上的画布对不上）。
-        ...(state.histScope === '本画布' ? { canvasId: currentCanvasId.value } : {}),
-      })
-      if (seq !== historyReqSeq) return // 已有更新的请求发出，丢弃这份过期响应
-      if (epoch !== historyFilterEpoch) return // 已切换筛选：这份数据属于上一轮，不能落表
-      // 请求发出后筛选变了（哪怕 epoch 没变，例如 histPage 被别的请求动过）：
-      // 这份响应属于旧筛选，丢弃且**不推进 histPage**（否则新筛选会从第 2 页开始）。
-      if (signature !== historySignature()) return
-      // 页码也要对得上：只有"当前页 + 1"的响应才算追加，否则视为过期（不推进 histPage）
-      if (pageNo > 1 && pageNo !== state.histPage + 1) return
-      /**
-       * 分页归属校验：请求发出时的页码必须仍是当前页 + 1，否则说明有别的请求
-       * 已经推进过页码（例如切页签后新请求已从第 1 页开始），这份响应是过期的，
-       * 直接丢弃 —— 也不能推进 histPage。
-       */
-      if (pageNo > 1 && pageNo !== state.histPage + 1) return
-      /** 正常同源 / 相对地址直接用；跨端原始地址按画布资源规则改写（与 thumbOf 同口径） */
-      const mapped = page.items.map((e) => ({
-        id: e.id,
-        title: e.title,
-        time: formatAgo(e.finishedAt),
-        // 后台给英文值，这里换回中文标签（弹窗按中文渲染）
-        kind: e.kind === 'video' ? '视频' : e.kind === 'audio' ? '音频' : '图片',
-        ...(e.urls && e.urls.length > 0 ? { urls: e.urls } : {}),
-        // 画布 / 节点 id 也要带上：卡片缩略图要按「同源资源地址」取图（见 ModalsArea 的 thumbOf）
-        ...(e.canvasId ? { canvasId: e.canvasId } : {}),
-        ...(e.nodeId ? { nodeId: e.nodeId } : {}),
-        // 生成参数 / 参考素材 / 媒体元数据：卡片角标与详情弹窗都要用
-        finishedAt: e.finishedAt,
-        ...(e.prompt ? { prompt: e.prompt } : {}),
-        ...(e.values && Object.keys(e.values).length > 0 ? { values: e.values } : {}),
-        ...(e.resources && e.resources.length > 0 ? { resources: e.resources } : {}),
-        ...(e.media && Object.keys(e.media).length > 0 ? { media: e.media } : {}),
-        ...(e.error ? { error: e.error } : {}),
-      }))
-      // 追加式分页：第 1 页（或筛选切换后回到第 1 页）替换整表；后续页**追加**，
-      // 无限滚动才能不断把下一批接到已有卡片后面（历史卡片 DOM 与滚动位置都保留）。
-      if (pageNo <= 1) {
-        state.historyItems = mapped
-      } else {
-        state.historyItems.push(...mapped)
+      const svc = readyHost?.ctx?.get<{
+        query(q?: Record<string, unknown> & { signal?: AbortSignal }): Promise<{
+          items: Array<{
+            id: string
+            title: string
+            kind: string
+            finishedAt: number
+            urls?: string[]
+            canvasId?: string
+            nodeId?: string
+            prompt?: string
+            values?: Record<string, unknown>
+            resources?: Array<{ kind: string; url?: string; value?: string }>
+            media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
+            error?: string
+          }>
+          total: number
+          page: number
+          pageSize: number
+          summary: { total: number; byKind: Record<string, number> }
+        }>
+      }>('gen-history')
+      if (!svc) {
+        state.historyReady = false
+        return
       }
-      // 每次落表都记录"这批数据属于哪个筛选"：切页签后凡是签名不符的一律不认。
-      state.histSignature = signature
-      // 落表成功后再推进页码（失败/被取消时保持原值，下次重试仍拉同一页）
-      state.histPage = pageNo
-      state.historySummary = page.summary
-      state.histTotal = page.total
-      /**
-       * 是否还有下一页：用「后端总数 vs 本页起点 + 本页条数」判断，而不是"本页满不满"。
-       *
-       * 旧写法 `page.items.length >= pageSize` 在**最后一页恰好满一页**时会多要一次
-       * 空页（多发一个请求）；更糟的是筛选后过滤掉异常记录，用户看到"到底了没新卡"。
-       * 用 total 判断更准：翻完就停，还有剩余就继续。
-       */
-      state.histHasMore = page.page * page.pageSize < page.total
-      state.histDataVersion += 1
-      state.historyReady = true
-    } catch (err) {
-      // 主动取消（切页签/换筛选）：不是失败，不要报"未连接"或推进版本
-      if ((err as { name?: string } | null)?.name === 'AbortError') return
-      console.warn('[ui] 拉历史失败', err)
-      state.historyReady = false
-      // 失败也要推进版本：弹窗可能在等新数据重建（filterSwitching 挂着会白屏）
-      state.histDataVersion += 1
+      // 请求序号：快速切页签/触底时多个请求并发，慢的旧响应不能覆盖新响应
+      const seq = ++historyReqSeq
+      const epoch = historyFilterEpoch
+      // 取消上一次仍在路上的请求：快速切换页签时它已过期，继续占着连接只会让新结果排队。
+      historyAbort?.abort()
+      historyAbort = new AbortController()
+      const signal = historyAbort.signal
+      try {
+        const page = await svc.query({
+          page: pageNo,
+          pageSize: state.histPageSize,
+          signal,
+          ...(state.histType ? { kind: HIST_KIND[state.histType] ?? state.histType } : {}),
+          ...(state.histRating && state.histRating !== '所有评级'
+            ? { rating: HIST_RATING[state.histRating] ?? state.histRating }
+            : {}),
+          order: state.histSortDesc ? 'desc' : 'asc',
+          // 「本画布」= URL 里那个真实画布 id（`currentCanvasId`）
+          ...(state.histScope === '本画布' ? { canvasId: currentCanvasId.value } : {}),
+        })
+        if (seq !== historyReqSeq) return // 已有更新的请求发出，丢弃这份过期响应
+        if (epoch !== historyFilterEpoch) return // 已切换筛选：这份数据属于上一轮，不能落表
+        // 请求发出后筛选变了：这份响应属于旧筛选，丢弃且**不推进 histPage**
+        if (signature !== historySignature()) return
+        /**
+         * 分页归属校验：第 2 页起，只有"当前页 + 1"的响应才算追加。
+         * 回填（restore）是整表替换，它自己带"最多到第几页"，不走这条追加校验。
+         */
+        if (pageNo > 1 && !isRestore && pageNo !== state.histPage + 1) return
+        const mapped = page.items.map((e) => ({
+          id: e.id,
+          title: e.title,
+          time: formatAgo(e.finishedAt),
+          kind: e.kind === 'video' ? '视频' : e.kind === 'audio' ? '音频' : '图片',
+          ...(e.urls && e.urls.length > 0 ? { urls: e.urls } : {}),
+          ...(e.canvasId ? { canvasId: e.canvasId } : {}),
+          ...(e.nodeId ? { nodeId: e.nodeId } : {}),
+          finishedAt: e.finishedAt,
+          ...(e.prompt ? { prompt: e.prompt } : {}),
+          ...(e.values && Object.keys(e.values).length > 0 ? { values: e.values } : {}),
+          ...(e.resources && e.resources.length > 0 ? { resources: e.resources } : {}),
+          ...(e.media && Object.keys(e.media).length > 0 ? { media: e.media } : {}),
+          ...(e.error ? { error: e.error } : {}),
+        }))
+        // 追加式分页：第 1 页（或筛选切换后回到第 1 页）替换整表；后续页**追加**
+        if (pageNo <= 1) {
+          state.historyItems = mapped
+        } else {
+          state.historyItems.push(...mapped)
+        }
+        state.histSignature = signature
+        state.histPage = pageNo
+        // 回填期间落表的每一页都带这个标记：弹窗据此整墙重建（不中途 append）
+        state.histRestoring = historyRestoring
+        state.historySummary = page.summary
+        state.histTotal = page.total
+        state.histHasMore = page.page * page.pageSize < page.total
+        // 记下这套筛选已经加载到第几页：切走再切回来时一次补齐（用户口径 2026-10-28）
+        histPageBySignature.set(signature, pageNo)
+        state.histDataVersion += 1
+        state.historyReady = true
+      } catch (err) {
+        // 主动取消（切页签/换筛选）：不是失败，不要报"未连接"或推进版本
+        if ((err as { name?: string } | null)?.name === 'AbortError') return
+        console.warn('[ui] 拉历史失败', err)
+        state.historyReady = false
+        // 失败也要推进版本：弹窗可能在等新数据重建（filterSwitching 挂着会白屏）
+        state.histDataVersion += 1
+      }
+    } finally {
+      if (isFirstPage && !isRestore) noteFirstPageEnd()
     }
   }
 
@@ -1581,18 +1681,45 @@ function createUi() {
       () => [state.histScope, state.histType, state.histRating, state.histSortDesc, state.histPageSize],
       () => {
         if (!state.historyOpen) return
-        // 切筛选：作废在途请求（旧页签/旧排序的第 2 页晚到会盖掉新页签的数据），再拉第 1 页
+        // 切筛选：作废在途请求（旧页签/旧排序的第 2 页晚到会盖掉新页签的数据）
         resetHistoryRequest()
-        historyFilterSwitchedAt = Date.now()
-        state.histPage = 1 // 换筛选条件要回到第一页
         /**
-         * 必须显式传 1：loadHistory 的默认页码取调用那一刻的 state.histPage，
-         * 不写就会受中间异步代码影响（用户实测 2026-10-28：点"音频"只发了第 2 页，
-         * 第 1 页永远没来，列表停在图片上）。显式传页码断开这条隐式依赖。
+         * 切回一个已经翻过页的筛选（图片 → 视频 → 图片）时，把**之前加载到的页数**补齐，
+         * 而不是只拉第 1 页：旧实现每次切换都回到 20 条，用户以为数据丢了
+         * （2026-10-28 实测：图片原来 31 条，切回来只剩 11 条）。
+         * 缓存键是完整签名（含页大小），改列数滑杆自然回到第 1 页。
          */
-        void loadHistory(1)
+        const signature = historySignature()
+        const cached = histPageBySignature.get(signature) ?? 1
+        state.histPage = 1
+        void restoreHistoryPages(signature, Math.max(1, cached))
       },
     )
+  }
+
+  /**
+   * 按缓存的页数把一套筛选的历史整表补回来：第 1 页替换整表，后续页按顺序追加。
+   * 期间补页排队（state.histLoadingFirst），不会抢页码；全部落表后再放行。
+   */
+  async function restoreHistoryPages(signature: string, pages: number): Promise<void> {
+    const target = Math.max(1, Math.min(pages, 50))
+    noteFirstPageStart()
+    historyRestoring = true
+    state.histRestoring = true
+    try {
+      for (let p = 1; p <= target; p++) {
+        await loadHistory(p, signature, true)
+        // 中途切走了 / 关面板了：后面的页属于上一轮，别再发
+        if (signature !== historySignature() || !state.historyOpen) return
+      }
+    } finally {
+      // 先关标记再放行补页：否则哨兵会看到"回填中"又把自己排回去
+      historyRestoring = false
+      state.histRestoring = false
+      // 再推一拍版本：弹窗在这一拍统一整墙重建（回填期间它一直没建墙）
+      state.histDataVersion += 1
+      noteFirstPageEnd()
+    }
   }
 
   /** 撤掉筛选 watch（宿主销毁时调用） */
@@ -1606,9 +1733,19 @@ function createUi() {
    * 已渲染的卡片与滚动位置都保留 —— 参照 web2api 画廊「触底再加载一批」的体验）。
    */
   function loadMoreHistory(): void {
-    if (!state.historyOpen || !state.histHasMore || state.histLoadingMore) return
-    if (Date.now() - historyFilterSwitchedAt < FILTER_SETTLE_MS) return
-    state.histLoadingMore = true
+    if (!state.historyOpen || !state.histHasMore) return
+    /**
+     * 第 1 页 / 回填还在路上：**排队**，等它落地再拉下一页。
+     * 这里绝不能直接 return 丢掉 —— 切页签后的第一次触底就靠这次排队续上
+     * （用户实测 2026-10-28：切回图片后滚到底没反应，拖一下缩放滑杆才加载）。
+     */
+    if (state.histLoadingFirst) {
+      histLoadMoreQueued = true
+      return
+    }
+    /** 正在拉下一页：不重复发（按钮/哨兵可能同一拍各触发一次） */
+    if (state.histLoadingMore) return
+    const token = beginHistLoading()
     const nextPage = state.histPage + 1
     // 页码与筛选签名必须同时定格：晚一帧就可能拿到"新页签 + 旧页码"的错配组合
     const signature = historySignature()
@@ -1619,7 +1756,7 @@ function createUi() {
      */
     const epoch = historyFilterEpoch
     void loadHistory(nextPage, signature).finally(() => {
-      state.histLoadingMore = false
+      settleHistLoading(token)
       if (epoch !== historyFilterEpoch) return
     })
   }
@@ -2258,12 +2395,14 @@ function createUi() {
     state.historyOpen = !state.historyOpen
     if (!state.historyOpen) return
     /**
-     * 每次打开都从第 1 页重新拉：上次关面板时可能停在第 3 页，
-     * 直接 loadHistory() 会按 histPage=3 去请求，画面开头几张卡永远不出现。
+     * 每次打开都从第 1 页开始，但按这套筛选**上次加载到的页数**一次补齐 ——
+     * 只拉第 1 页会让用户以为之前翻的页丢了（用户口径 2026-10-28）。
      */
     resetHistoryRequest()
+    const signature = historySignature()
+    const cached = histPageBySignature.get(signature) ?? 1
     state.histPage = 1
-    void loadHistory(1)
+    void restoreHistoryPages(signature, Math.max(1, cached))
   }
   function toggleLeftCollapsed(): void {
     state.leftCollapsed = !state.leftCollapsed

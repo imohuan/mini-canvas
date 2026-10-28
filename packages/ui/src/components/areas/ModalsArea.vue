@@ -105,7 +105,7 @@ let filterSwitching = false
  * histZoom 滑杆 → 最小卡片宽度（px）：滑杆越大卡片越大、列数越少。
  * 瀑布流的列数随容器宽度自适应（calcColumns），这里只提供「最小列宽」。
  */
-const minCardSize = computed(() => ({ 1: 340, 2: 280, 3: 220, 4: 170, 5: 120 }[s.histZoom] ?? 220))
+const minCardSize = computed(() => ({ 1: 340, 2: 280, 3: 220, 4: 170 }[s.histZoom] ?? 220))
 
 /**
  * 缩放滑块（自绘，替代原生 input[type=range]）：
@@ -114,7 +114,8 @@ const minCardSize = computed(() => ({ 1: 340, 2: 280, 3: 220, 4: 170, 5: 120 }[s
  * 移动实时换算档位，松手结束。thumb 位置按 (value-1)/(max-1) 居中定位。
  */
 const ZOOM_MIN = 1
-const ZOOM_MAX = 5
+// 用户口径 2026-10-28：删掉最小的那一档（原第 5 档只有 120px，效果太小）
+const ZOOM_MAX = 4
 const zoomPct = computed(() => ((s.histZoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)) * 100)
 let zoomDragging = false
 
@@ -327,6 +328,32 @@ function teardownLoadSentinel(): void {
     loadMoreRetryTimer = null
   }
 }
+
+/**
+ * 哨兵自愈巡检（用户口径 2026-10-28）。
+ *
+ * 症状：切页签后滚到底不再加载，拖一下缩放滑杆才恢复 —— 说明哨兵/观察器在切换那一拍
+ * 失去了唯一的触发机会，之后再没人叫醒它。这里每 800ms 轻量检查一次（只读几何，不发请求）：
+ *   · 元素还在但观察器没了 → 重挂；
+ *   · 哨兵就在视口里、也确实还能加载 → 走一次 fillViewportIfNeeded（内部有 1 秒节流）。
+ * 历史面板关着时直接跳过，不留后台开销。
+ */
+function ensureLoadSentinelAlive(): void {
+  if (!s.historyOpen) return
+  const sentinel = loadSentinelEl.value
+  if (!sentinel) return
+  if (sentinel !== observedSentinel || !loadMoreObserver) {
+    setupLoadSentinel()
+    return
+  }
+  fillViewportIfNeeded()
+}
+
+let sentinelWatchdog: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  if (sentinelWatchdog) clearInterval(sentinelWatchdog)
+  sentinelWatchdog = setInterval(ensureLoadSentinelAlive, 800)
+})
 
 /** 进入/退出批量模式：卡片要重画（出现/移除勾选层），退出时清空选择 */
 function toggleBatchMode(): void {
@@ -1004,6 +1031,20 @@ watch(() => s.histDataVersion, async () => {
    * （用户实测 2026-10-28：点"音频"，网络里已经在拉 audio，画面还是图片）。
    * 只有"同一筛选下又拉到新数据"（分页追加）才走 append 分支。
    */
+  /**
+   * 回填多页时也整墙重建：几页数据会接连落表，中间那几拍 append 到还没 init 的墙上
+   * 会全部丢失（真机 2026-10-28：切回图片，31 条只画出 17 张）。
+   */
+  /**
+   * 回填还没走完（后面还有页）时**先不建墙**：这一拍重建只会画出第 1 页那 24 张，
+   * 后续页到达时墙已 init，被当成普通 append —— 但旧 DOM 已被清空，只剩一部分卡。
+   * 等 histRestoring 落到 false 的那一拍统一重建一次，31 条全在。
+   */
+  if (s.histRestoring) {
+    await nextTick()
+    setupLoadSentinel()
+    return
+  }
   const needsRebuild = switching || (!masonry.instance.value && len > 0)
   if (needsRebuild) {
     renderedCount.value = Math.min(BATCH_SIZE, len)
@@ -1070,6 +1111,8 @@ onBeforeUnmount(() => {
   masonry.destroy()
   sentinelObserver?.disconnect()
   teardownLoadSentinel()
+  if (sentinelWatchdog) clearInterval(sentinelWatchdog)
+  sentinelWatchdog = null
   resizeObserver?.disconnect()
   if (relayoutTimer) clearTimeout(relayoutTimer)
 })
@@ -1240,7 +1283,10 @@ watch(() => s.shortcutsOpen, async (open) => {
         <!-- masonry 瀑布流：卡片按图片原始宽高比展示，列数随容器宽自适应（照 TaskResultGalleryView）。
              卡片 DOM 由 createMasonryElement 手工构建（骨架屏/裂图回退/底部信息栏都在那里）。 -->
         <div v-if="ui.histVisible.value.length" :id="MASONRY_ID" ref="masonryEl" class="hist-masonry"></div>
-        <p v-if="ui.state.histLoadingMore" class="hist-loading text-center text-[12px] text-ink/50 pb-4">加载中…</p>
+        <div v-if="s.histLoadingMoreVisible" class="hist-loading" role="status" aria-live="polite">
+          <span class="hist-loading-bar" aria-hidden="true"><i></i></span>
+          <span class="hist-loading-text">加载更多…</span>
+        </div>
         <!-- 加载下一页哨兵（用户口径 2026-10-15：禁止滚动触发）：它在滚动区最底部，
              进入可视区才拉下一页；两次拉页之间至少隔 1 秒，不会无限连发。 -->
         <!--
@@ -1531,8 +1577,40 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-detail-ref-value { font-size: 11px; line-height: 1.4; color: var(--ui-ink, inherit); max-height: 68px; overflow: auto; }
 .hist-detail-ref-url { font-size: 10px; line-height: 1.35; color: var(--ui-ink-mute, #888); word-break: break-all; max-height: 68px; overflow: auto; }
 
-/* 加载下一页指示 */
-.hist-loading { pointer-events: none; }
+/* 加载更多指示：可见的细进度条 + 文案（用户口径 2026-10-28：不要藏起来） */
+.hist-loading {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0 16px;
+  color: var(--ui-ink-mute, #888);
+  font-size: 12px;
+}
+.hist-loading-bar {
+  position: relative;
+  overflow: hidden;
+  width: 96px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--ui-veil, rgb(127 127 127 / 0.16));
+}
+.hist-loading-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--ui-ink-dim, #6b7280);
+  animation: hist-loading-sweep 1.05s ease-in-out infinite;
+}
+@keyframes hist-loading-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hist-loading-bar i { animation: none; width: 100%; }
+}
 
 /* 下一页加载哨兵：滚动区最底部的一小块占位（IntersectionObserver 只认几何，不需要可见样式） */
 .hist-load-sentinel { height: 1px; width: 100%; }

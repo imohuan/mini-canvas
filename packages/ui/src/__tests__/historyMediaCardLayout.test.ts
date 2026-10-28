@@ -186,6 +186,63 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(setup, '哨兵挂载时没有主动测量（初始即相交时无回调）').toMatch(/fillViewportIfNeeded\(\)/)
   })
 
+  it('加载更多有可见的加载条，且至少显示 500ms 才隐藏', () => {
+    // 用户口径 2026-10-28：接口几十毫秒就返回时，加载态一闪而过看不见 → 至少停 500ms
+    expect(uiSource, '缺少「加载态最短显示时长」常量').toMatch(/HIST_LOADING_MIN_MS\s*=\s*500/)
+    expect(uiSource, '取消加载态时没有按最短时长延迟').toMatch(/settleHistLoading/)
+    const fn = uiSource.slice(uiSource.indexOf('function beginHistLoading'), uiSource.indexOf('function settleHistLoading'))
+    expect(fn, '加载态没有记录起始时刻').toMatch(/histLoadingSince/)
+    const tpl = modalsArea.slice(modalsArea.indexOf('hist-loading'), modalsArea.indexOf('hist-load-sentinel'))
+    expect(tpl, '加载条渲染在哨兵之后/或被藏掉了').not.toBe('')
+    expect(modalsArea, '加载条没有进度动画/文案').toMatch(/hist-loading-bar|hist-loading-dot/)
+  })
+
+  it('切页签后不必靠拖缩放滑杆才会继续加载（哨兵失效能自愈）', () => {
+    expect(modalsArea, '缺少哨兵自愈巡检').toMatch(/function ensureLoadSentinelAlive/)
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function ensureLoadSentinelAlive'),
+      modalsArea.indexOf('onBeforeUnmount\(\(\) =>'),
+    )
+    expect(fn, '哨兵还在却没人观察时不重挂').toMatch(/setupLoadSentinel\(\)/)
+    expect(fn, '哨兵在视口里时没有主动补拉').toMatch(/fillViewportIfNeeded\(\)/)
+    expect(modalsArea, '没有周期性巡检（切页签后没人再触发）').toMatch(/setInterval\([\s\S]{0,120}ensureLoadSentinelAlive/)
+  })
+
+  it('切页签后回填已加载的页数，不把之前翻的页丢掉', () => {
+    expect(uiSource, '没有按筛选保存「已加载到第几页」').toMatch(/histPageBySignature/)
+    const watchFn = uiSource.slice(
+      uiSource.indexOf('disposeHistFilterWatch = watch('),
+      uiSource.indexOf('function unbindHistoryFilters'),
+    )
+    expect(watchFn, '切页签仍固定只拉第 1 页（之前的页数全丢）').not.toMatch(/void loadHistory\(1\)/)
+    expect(watchFn, '切页签没有回填已加载页数').toMatch(/histPageBySignature/)
+    expect(uiSource, '没有按页大小区分缓存（改列数要重拉）').toMatch(/histPageSize/)
+  })
+
+  it('回填期间不提前建墙（否则只画第一页，后面几页追不上）', () => {
+    const watchFn = modalsArea.slice(
+      modalsArea.indexOf('watch(() => s.histDataVersion'),
+      modalsArea.indexOf('watch(() => s.histZoom'),
+    )
+    const guard = watchFn.indexOf('s.histRestoring')
+    const rebuild = watchFn.indexOf('rebuildMasonry()')
+    const append = watchFn.indexOf('appendMasonryItems(')
+    expect(guard, '数据 watch 没有识别「回填中」').toBeGreaterThan(-1)
+    expect(rebuild, '数据 watch 里找不到整墙重建').toBeGreaterThan(guard)
+    // 回填分支必须在 append 之前就 return —— 否则这一拍会把第一页画上去，后面几页再 append 就丢了
+    expect(append, '数据 watch 里没有追加分支').toBeGreaterThan(guard)
+    expect(watchFn.slice(guard, append), '回填分支没有提前 return（会先画第一页）').toMatch(/return/)
+    expect(uiSource, '回填结束没有补推一拍版本（弹窗不会重建）').toMatch(
+      /state\.histRestoring = false[\s\S]{0,160}state\.histDataVersion \+= 1/,
+    )
+  })
+
+  it('缩放滑杆只有 4 档（删掉最小的一档，用户口径 2026-10-28）', () => {
+    expect(modalsArea, 'ZOOM_MAX 仍是 5').toMatch(/const ZOOM_MAX = 4/)
+    expect(modalsArea, '最小档位映射还留着第 5 档').not.toMatch(/5: 120/)
+    expect(modalsArea, '第 4 档的宽度没有保留').toMatch(/4: 170/)
+  })
+
   it('是否还有下一页按 total 判断（末页刚好满页不会白拉一次空页）', () => {
     expect(uiSource, '仍用"本页条数 >= pageSize"判断还有下一页').not.toMatch(/histHasMore = page\.items\.length >=/)
     expect(uiSource, '没有按 total 计算是否还有下一页').toMatch(/histHasMore = page\.page \* page\.pageSize < page\.total/)
@@ -201,9 +258,9 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('切页签后不会被旧的补页请求挤掉第 1 页（点音频却还是图片）', () => {
-    expect(uiSource, '缺少切换筛选的短窗口守卫').toMatch(/historyFilterSwitchedAt/)
-    expect(uiSource, '补页没有在切换后暂停').toMatch(/Date\.now\(\) - historyFilterSwitchedAt < FILTER_SETTLE_MS/)
-    expect(uiSource, '筛选变化没有把页码显式传 1').toMatch(/void loadHistory\(1\)/)
+    expect(uiSource, '第 1 页在途时没有拦住补页').toMatch(/historyFirstPagePending/)
+    expect(uiSource, '仍在用会静默丢请求的时间窗口守卫').not.toMatch(/historyFilterSwitchedAt/)
+    expect(uiSource, '筛选变化没有显式回到第 1 页（会沿用旧页码）').toMatch(/state\.histPage = 1/)
     expect(uiSource, '筛选变化没有重置在途请求').toMatch(/resetHistoryRequest\(\)/)
     expect(uiSource, '补页没有把页码与筛选签名一起定格').toMatch(/loadHistory\(nextPage, signature\)/)
   })
