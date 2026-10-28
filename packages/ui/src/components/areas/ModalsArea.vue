@@ -547,23 +547,40 @@ function buildFactsLine(item: HistItem): HTMLElement {
 function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLElement): HTMLElement {
   const row = document.createElement('div')
   row.className = 'hist-card-audio-controls'
+  /** 左半：类型 + 当前播放进度 */
+  const left = document.createElement('div')
+  left.className = 'hist-audio-left'
+  const kind = document.createElement('span')
+  kind.className = 'hist-card-kind'
+  kind.textContent = item.kind
+  const progress = document.createElement('span')
+  progress.className = 'hist-audio-progress'
+  left.appendChild(kind)
+  left.appendChild(progress)
+
+  /** 右半：总时长 + 播放按钮（纯图标，无边框无圆角） */
+  const right = document.createElement('div')
+  right.className = 'hist-audio-right'
+  const duration = document.createElement('span')
+  duration.className = 'hist-audio-duration'
   const btn = document.createElement('button')
   btn.type = 'button'
   btn.className = 'hist-audio-play'
   btn.setAttribute('aria-label', '播放')
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20"/></svg>'
-  const time = document.createElement('span')
-  time.className = 'hist-audio-time'
+  const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20"/></svg>'
+  const pauseIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+  btn.innerHTML = playIcon
+  right.appendChild(duration)
+  right.appendChild(btn)
   const fmt = (sec: number): string => {
     if (!Number.isFinite(sec) || sec <= 0) return '0:00'
     const total = Math.round(sec)
     return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0')
   }
   const sync = (): void => {
-    time.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration)
-    btn.innerHTML = audio.paused
-      ? '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+    progress.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration)
+    duration.textContent = fmt(audio.duration)
+    btn.innerHTML = audio.paused ? playIcon : pauseIcon
     btn.setAttribute('aria-label', audio.paused ? '播放' : '暂停')
   }
   btn.addEventListener('click', (ev) => {
@@ -576,13 +593,8 @@ function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLE
   audio.addEventListener('pause', sync)
   audio.addEventListener('loadedmetadata', sync)
   sync()
-  row.appendChild(btn)
-  row.appendChild(time)
-
-  // 右侧：卡外信息（音频没有宽高，只有时长与大小）—— 与图片卡同一套文字
-  const facts = buildFactsLine(item)
-  facts.classList.add('hist-card-facts--inline')
-  row.appendChild(facts)
+  row.appendChild(left)
+  row.appendChild(right)
   return row
 }
 
@@ -1543,29 +1555,36 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
 /* 历史卡里的音频波形一律中性灰阶（用户口径 2026-10-27：不要主题紫）。
    只覆盖卡片内的表现，节点里的播放器仍按自己的主题走。 */
-/* 音频：只要一条**白色背景的波形条**，不加边框、不做卡片面板
-   （用户口径 2026-10-28：恢复最开始那版）。 */
+/* 音频：波形本身要**卡片边框包住**（用户口径 2026-10-28 附红框截图），
+   白底 + 1px 细边框 + 圆角；与图片/视频卡同一套卡片外观。 */
 .hist-card-media--audio {
-  border: 0;
+  border: 1px solid var(--ui-line, rgba(128, 128, 128, 0.2));
   background: var(--ui-panel, #fff);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 /* 播放键/文字说明由宿主放到卡片外：播放器自带的底栏（时长/大小/文件名）在条内隐藏，
    避免和卡外说明重复。 */
 .hist-card-audio-plugin .apv-bar { display: none; }
-/* 卡外控制行：播放键 + 时间在左，音频/时长/大小在右（与图片卡同一套字号与灰阶） */
-.hist-card-audio-controls { display: flex; align-items: center; gap: 8px; margin-top: 7px; min-width: 0; }
+/* 卡外底栏（用户口径 2026-10-28 定稿）：
+   左 = 类型 + 当前播放进度；右 = 时长 + 播放按钮。 */
+.hist-card-audio-controls {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 7px; min-width: 0;
+  font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums;
+}
+.hist-audio-left, .hist-audio-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hist-audio-left { flex: 0 1 auto; }
+.hist-audio-right { flex: none; }
+.hist-audio-progress, .hist-audio-duration { white-space: nowrap; }
+/* 单独一个按钮：不要圆角边框，不要底色（用户口径） */
 .hist-audio-play {
   flex: none; display: inline-grid; place-items: center;
-  width: 22px; height: 22px; padding: 0;
-  border: 1px solid var(--ui-line, rgba(128,128,128,.2)); border-radius: 9999px;
-  background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b);
-  cursor: pointer; transition: background .15s ease;
+  width: 18px; height: 18px; padding: 0; margin-left: 2px;
+  border: 0; border-radius: 0; background: transparent;
+  color: var(--ui-ink, #18202b); cursor: pointer;
 }
-.hist-audio-play:hover { background: var(--ui-hover, rgba(0,0,0,.06)); }
+.hist-audio-play:hover { color: var(--ui-accent, #0891b2); }
 .hist-audio-play svg { width: 11px; height: 11px; }
-.hist-audio-time { flex: none; font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums; }
-.hist-card-facts--inline { margin-top: 0; margin-left: auto; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,

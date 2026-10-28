@@ -171,12 +171,28 @@ describe('批量勾选钮样式对动态卡片生效', () => {
 
   it('音频恢复成白底波形细条，播放键与说明在卡片外', () => {
     const globalStyle = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
-    expect(globalStyle, '音频条仍带边框（用户口径：不要卡片面板）').not.toMatch(/\.hist-card-media--audio\s*\{[^}]*border:\s*1px/)
+    // ✅ 用户口径 2026-10-28 最终版：波形要有**卡片边框**包住（附红框截图）
+    expect(globalStyle, '波形没有被卡片边框包住').toMatch(/\.hist-card-media--audio\s*\{[^}]*border:\s*1px/)
     expect(globalStyle, '音频条不是白底').toMatch(/\.hist-card-media--audio\s*\{[^}]*background:\s*var\(--ui-panel/)
     expect(globalStyle, '播放器自带底栏没有隐藏（会与卡外说明重复）').toMatch(/\.hist-card-audio-plugin \.apv-bar\s*\{\s*display:\s*none/)
     expect(globalStyle, '缺少卡外控制行样式').toMatch(/\.hist-card-audio-controls\s*\{/)
     expect(modalsArea, '音频卡没有生成卡外播放键').toMatch(/buildAudioControls\(item, el as HTMLAudioElement/)
     expect(modalsArea, '音频条高度没有恢复成 96px').toMatch(/media\.style\.height = '96px'/)
+  })
+
+  it('音频底栏布局：左=类型+进度，右=时长+无边框播放按钮', () => {
+    const fn = modalsArea.slice(modalsArea.indexOf('function buildAudioControls'), modalsArea.indexOf('/** 整张卡的最后一行'))
+    expect(fn, '缺少左半区（类型 + 当前进度）').toMatch(/hist-audio-left/)
+    expect(fn, '左半区没有类型标签').toMatch(/className = 'hist-card-kind'/)
+    expect(fn, '左半区没有播放进度').toMatch(/hist-audio-progress/)
+    expect(fn, '缺少右半区（时长 + 播放按钮）').toMatch(/hist-audio-right/)
+    expect(fn, '右半区没有时长').toMatch(/hist-audio-duration/)
+    expect(fn, '播放按钮不在右半区').toMatch(/right\.appendChild\(duration\)[\s\S]{0,80}right\.appendChild\(btn\)/)
+
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    const playRule = style.match(/\.hist-audio-play\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(playRule, '播放按钮仍带边框（用户口径：不要圆角边框）').not.toMatch(/border:\s*1px/)
+    expect(playRule, '播放按钮仍有圆角').toMatch(/border:\s*0;[^}]*border-radius:\s*0;/)
   })
 
   it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {
