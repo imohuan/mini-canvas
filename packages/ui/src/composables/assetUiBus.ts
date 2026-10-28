@@ -42,6 +42,8 @@ export interface AssetPreviewItem {
   names?: string[]
   /** 与 list 一一对应的资产 id（切张后删除按钮要按当前这张算） */
   ids?: string[]
+  /** 与 list 一一对应的资产类型（切张后按当前那张的类型渲染，不再沿用第一张的） */
+  kinds?: string[]
   /** 当前张在 list 里的下标 */
   index?: number
 }
@@ -97,8 +99,23 @@ export function currentAssetPreview(): AssetPreviewItem | null {
   const cur = assetPreview.value
   if (!cur?.list?.length) return cur
   const i = Math.min(Math.max(cur.index ?? 0, 0), cur.list.length - 1)
+  // 该下标那张的类型：清单里带了 kinds 才有；没带就沿用整体 kind（老数据兜底）。
+  // 节点包：kind='ui' 是外壳类型，但 html 要按 url 现取 —— 这里只对齐 kind/url，
+  // 取包由 AssetUiSlot 的 watch 完成（见下）。
+  const itemKind = cur.kinds?.[i] ?? cur.kind
+  if (itemKind === 'node-package') {
+    return {
+      ...cur,
+      kind: 'ui',
+      index: i,
+      url: cur.list[i],
+      ...(cur.names?.[i] ? { name: cur.names[i] } : {}),
+      ...(cur.ids?.[i] ? { id: cur.ids[i] } : {}),
+    }
+  }
   return {
     ...cur,
+    kind: itemKind,
     index: i,
     url: cur.list[i],
     ...(cur.names?.[i] ? { name: cur.names[i] } : {}),
@@ -132,9 +149,9 @@ export async function openAssetPreviewFromAsset(
    * 这里原样转交给 MediaViewer —— 它自带 ← / → 与页码，不必在资产这边另写切换。
    * 单张时调用方不必传（或传了也进不去，见下面的 length > 1 判定）。
    */
-  group?: { list: string[]; names?: string[]; ids?: string[]; index?: number },
+  group?: { list: string[]; names?: string[]; ids?: string[]; kinds?: string[]; index?: number },
 ): Promise<void> {
-  const { list, names, ids, index } = group ?? {}
+  const { list, names, ids, kinds, index } = group ?? {}
   const kind = assetKindOf(item)
   if (kind !== 'node-package') {
     openAssetPreview({
@@ -147,6 +164,7 @@ export async function openAssetPreviewFromAsset(
             list,
             ...(names && names.length === list.length ? { names } : {}),
             ...(ids && ids.length === list.length ? { ids } : {}),
+            ...(kinds && kinds.length === list.length ? { kinds } : {}),
             index: Math.min(Math.max(index ?? 0, 0), list.length - 1),
           }
         : {}),
@@ -161,6 +179,18 @@ export async function openAssetPreviewFromAsset(
       // 'ui' 是 MediaViewer 里那个 iframe 分支的 kind（见其模板）
       kind: 'ui',
       html: pack.html,
+      // 节点包也在同层清单里（与图片/视频一起切）：带上 url 与清单，
+      // currentAssetPreview() 才能在切回它时知道"当前张还是节点包"。
+      ...(list && list.length > 1
+        ? {
+            url: item.url,
+            list,
+            ...(names && names.length === list.length ? { names } : {}),
+            ...(ids && ids.length === list.length ? { ids } : {}),
+            ...(kinds && kinds.length === list.length ? { kinds } : {}),
+            index: Math.min(Math.max(index ?? 0, 0), list.length - 1),
+          }
+        : {}),
     })
   } catch (err) {
     openAssetPreview({

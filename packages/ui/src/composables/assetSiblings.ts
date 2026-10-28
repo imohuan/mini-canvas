@@ -28,6 +28,8 @@ export interface SiblingRow {
   parentId?: string
   /** 资产：可加载的地址（空 = 预览不了，跳过） */
   url?: string
+  /** 资产类型（image / video / audio / node-package / other）。切张时按它选渲染分支。 */
+  assetKind?: string
 }
 
 /** 一层用「空串」表示根目录，便于直接比较（与 assetSelection.layerOf 同一口径） */
@@ -53,10 +55,11 @@ export function siblingAssets<T extends SiblingRow>(rows: T[], row: SiblingRow):
 export function siblingPreview<T extends SiblingRow>(
   rows: T[],
   row: SiblingRow,
-): { list: string[]; names: string[]; index: number } {
+): { list: string[]; names: string[]; kinds: string[]; index: number } {
   const group = siblingAssets(rows, row)
   const list = group.map((r) => r.url ?? '')
   const names = group.map((r) => r.name)
+  const kinds = group.map((r) => r.assetKind ?? 'other')
   const i = group.findIndex((r) => r.id === row.id)
-  return { list, names, index: i < 0 ? 0 : i }
+  return { list, names, kinds, index: i < 0 ? 0 : i }
 }
