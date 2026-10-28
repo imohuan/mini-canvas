@@ -295,6 +295,10 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(style, '批量模式下波形仍接收指针事件（点波形选不中整卡）').toMatch(
       /\.hist-card--batch \.hist-card-audio-plugin[^{]*\{[^}]*pointer-events:\s*none/,
     )
+    // 详情钮挂在媒体框上（不是插件层）：媒体框不能一起关指针，否则详情点不开
+    expect(style, '批量模式把媒体框的指针也关了 → 右上角详情点不开').not.toMatch(
+      /\.hist-card--batch \.hist-card-media--audio\s*\{[^}]*pointer-events/,
+    )
   })
 
   it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {

@@ -1623,14 +1623,14 @@ watch(() => s.shortcutsOpen, async (open) => {
   flex: none; display: inline-grid; place-items: center;
   width: 18px; height: 18px; padding: 0; margin-left: 4px;
   border: 0; border-radius: 0; background: transparent;
-  color: var(--ui-ink-dim, #6b7280); cursor: pointer;
+  color: var(--ui-ink, #18202b); cursor: pointer;
 }
 .hist-audio-expand:hover { color: var(--ui-accent, #0891b2); }
 .hist-audio-expand svg { width: 11px; height: 11px; }
 .hist-audio-expand:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 2px; }
-/* 批量模式：波形与按钮都不接指针，点哪儿都落到整卡勾选（用户口径 2026-10-28） */
-.hist-card--batch .hist-card-audio-plugin,
-.hist-card--batch .hist-card-media--audio { pointer-events: none; }
+/* 批量模式：只让波形层让位（点波形落到整卡勾选）；
+   媒体框本身仍可点 —— 右上角「详情」钮是它的子元素，不能一起关掉。 */
+.hist-card--batch .hist-card-audio-plugin { pointer-events: none; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,

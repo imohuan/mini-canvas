@@ -5,6 +5,30 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-28，音频卡：点/拖波形直接 seek，全屏按钮独立）
+
+用户口径：① 点音频卡不要弹全屏，而是能直接拖波形换进度；② 全屏预览单独做一个按钮，
+放在播放按钮右侧。
+
+**做法**：
+
+- 音频卡点击改走 `onAudioCardClick()`：普通模式什么都不做（把点击/拖动让给波形），
+  批量模式仍切换勾选。视频/图片卡不变。
+- 底栏 `.hist-audio-right` 里在 `.hist-audio-play` 右侧新增 `.hist-audio-expand`
+  （四角图标、`border:0; border-radius:0` 与播放键同款），点击 `stopPropagation` 后
+  `openHistoryItem(item)`。
+- `AudioWavePlayer.vue` 把 seek 拆成 `beginSeek / moveSeek / finishSeek`，播放头与
+  **整条波形**共用。波形 pointer 手势**只在 compact（历史卡）接管** —— 节点里仍只有
+  播放头/进度条拦画布手势（原来的手势契约不回退）。
+- 批量模式：`.hist-card--batch .hist-card-audio-plugin { pointer-events:none }`，点波形落到
+  整卡勾选；媒体框本身不关指针，右上角「详情」仍可点（第一版关到媒体框，详情点不开，已修）。
+
+**验证**：ui 462/462（historyMediaCardLayout 33 条）、plugin-node-audio 109/109、
+theme-default 330/330、vue-tsc 干净、build 通过。8860 真机 Playwright：点波形 75% 处
+currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s；
+全屏按钮在播放键右侧（x 325 vs 297）、图标 11px，点它才 `viewerOpen:true`；
+批量模式点音频卡 checked=1、详情钮命中自身（22px）。
+
 ### 追记（2026-10-28，音频底栏垂直居中 + 全屏预览去主题紫）
 
 用户口径（附截图）：卡外底栏的文字看着没垂直居中，要用 flex + items-center 对齐；
