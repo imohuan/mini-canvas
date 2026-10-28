@@ -1486,16 +1486,12 @@ export function useEditor(
         }
       })
       /**
-       * 老存档迁移（用户 2026-10-28 统一 id）：
-       * 以前 @ 下拉插入的标签存的是**上游节点 id**（如 `204`），现在统一成
-       * `ref-slot:<kind>:<N>`。
+       * **不再迁移标签身份**（用户 2026-10-28 定案：旧格式不兼容）。
        *
-       * 只认「名字能认出类型」的（图片N/视频N/音频N/文本N）；技能/MCP/资产那类引用
-       * 有自己的 id 语义，绝不改。迁移走**重建节点**（node.type.create），不动旧 attrs ——
-       * ProseMirror 的节点是不可变的，直接改字段不会生效。
+       * 以前这里把裸节点 id 改写成 `ref-slot:<kind>:<N>`；新模型认节点 / 认名称，
+       * 老格式标签一律按失效显示，由用户重新标记一次。自动改写只会把错的序号带进新模型。
        */
-      const migrated = migrateLegacyChipIds(doc)
-      const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, migrated.content);
+      const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
       view.dispatch(tr);
       emit("update:modelValue", getPlainText());
     } catch (error) {
@@ -2283,17 +2279,7 @@ export function useEditor(
    */
   function refreshChips(): void {
     if (!view) return
-    /**
-     * 先做一次 id 迁移（用户 2026-10-28 统一标签身份）。
-     * 为什么放在这里：老存档里按节点 id 存的标签要变成 ref-slot:*；
-     * 这个函数正是「底栏数据变化后统一刷一遍」的入口，挂载后也会跑一次。
-     * 迁移没命中时返回同一个 doc，不会产生多余事务。
-     */
-    const before = view.state.doc
-    const migrated = migrateLegacyChipIds(before)
-    if (migrated !== before) {
-      view.dispatch(view.state.tr.replaceWith(0, before.content.size, migrated.content))
-    }
+    // 标签身份不再自动迁移（旧格式按失效处理，用户 2026-10-28 定案）
     // 注册表已更新（调用方先 itemRegistry.set），toDOM 每次渲染都会读 ——
     // 这里用一行**无操作事务**（带标记）逼 ProseMirror 重画这些节点：
     // setNodeMarkup 用原 attrs 也会触发 toDOM 重建（注册表已新，外观即为新）。
