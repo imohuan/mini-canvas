@@ -48,6 +48,25 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
     expect(assetPreview.value?.html).toContain('id="paint"')
     vi.unstubAllGlobals()
   })
+
+  it('★ 切张到节点包：类型按当前张走（不再沿用第一张的视频类型）', async () => {
+    // 清单带 kinds：第 0 张视频、第 1 张节点包。从视频切到节点包后，
+    // currentAssetPreview() 必须回 kind='ui' + 节点包 url（外壳据此取包开 iframe）。
+    const { currentAssetPreview } = await import('../composables/assetUiBus')
+    // 先开一张视频（同层清单里混着节点包）
+    await openAssetPreviewFromAsset(
+      { id: 'v', name: '视频', url: '/v.mp4', kind: 'video' },
+      { list: ['/v.mp4', '/p.mcnode'], names: ['视频', '节点包'], kinds: ['video', 'node-package'], index: 0 },
+    )
+    expect(assetPreview.value?.kind).toBe('video')
+    // 模拟 ← / → 切到第二张（setAssetPreviewIndex 的同一条路）
+    const { setAssetPreviewIndex } = await import('../composables/assetUiBus')
+    setAssetPreviewIndex(1)
+    const cur = currentAssetPreview()
+    expect(cur?.kind).toBe('ui')
+    expect(cur?.url).toBe('/p.mcnode')
+    expect(cur?.name).toBe('节点包')
+  })
 })
 
 describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {

@@ -28,7 +28,10 @@ export interface SiblingRow {
   parentId?: string
   /** 资产：可加载的地址（空 = 预览不了，跳过） */
   url?: string
-  /** 资产类型（image / video / audio / node-package / other）。切张时按它选渲染分支。 */
+  /**
+   * 资产类型（image / video / audio / node-package / other）。
+   * 切张时按它选渲染分支（2026-10-28 修「切到节点包显示视频加载失败」）。
+   */
   assetKind?: string
 }
 

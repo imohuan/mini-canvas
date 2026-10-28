@@ -61,6 +61,24 @@ describe('同级文件列表', () => {
     expect(p.index, 'b2 是甲里的第二张').toBe(1)
   })
 
+  it('siblingPreview 带上每张的类型（切张时预览按当前张渲染，2026-10-28）', () => {
+    const kinds: SiblingRow[] = [
+      { kind: 'asset', id: 'v1', name: 'v1', parentId: '甲', url: '/v.mp4', assetKind: 'video' },
+      { kind: 'asset', id: 'p1', name: 'p1', parentId: '甲', url: '/p.mcnode', assetKind: 'node-package' },
+    ]
+    const got = siblingPreview(kinds, kinds[0])
+    expect(got.kinds).toEqual(['video', 'node-package'])
+    expect(got.list).toEqual(['/v.mp4', '/p.mcnode'])
+    expect(got.index).toBe(0)
+  })
+
+  it('行上没有 assetKind 时回落 other（不猜）', () => {
+    const bare: SiblingRow[] = [
+      { kind: 'asset', id: 'x', name: 'x', parentId: '甲', url: '/x.bin' },
+    ]
+    expect(siblingPreview(bare, bare[0]).kinds).toEqual(['other'])
+  })
+
   it('当前行不在结果里时下标回 0（列表非空就得有个合法起点）', () => {
     const onlyOther: SiblingRow[] = [
       { kind: 'asset', id: 'p1', name: 'p1', parentId: '甲', url: '/p1.png' },
