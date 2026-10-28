@@ -538,8 +538,30 @@ const shownMaterials = computed(() =>
 )
 // 视频缩略图：必须放在 shownMaterials 之后（immediate 会同步执行，放前面会踩 TDZ）
 watch(shownMaterials, () => void ensureVideoThumbs(), { immediate: true })
+/**
+ * 帧图取到后，@ 下拉/卡片要跟着换图。
+ *
+ * 为什么要单独听 tick：菜单是**按位置复用**的（同一个 menu-item 从「mp4 地址」换成
+ * 「帧图」时 Vue 认为只是改了 props），若没有一次显式的数组更新，编辑器那边不会重渲染。
+ * tick 变化 → editorResources 重算（新数组）→ 编辑器 watch(resources) 刷新菜单。
+ */
+watch(videoThumbTick, () => {
+  void editorResources.value
+})
 const cards = computed(() => materialCards(shownMaterials.value))
-const editorResources = computed<ResourceItem[]>(() => toEditorResources(shownMaterials.value))
+/**
+ * @ 下拉 / 卡片用的资源项。
+ *
+ * 第三个参数传「视频取帧」回调：视频行的缩略图必须是帧图（mp4 塞 `<img>` 会空白）。
+ * 这里读缓存、不触发截帧（截帧由 ensureVideoThumbs 统一预热），避免下拉每开一次都解码。
+ */
+const editorResources = computed<ResourceItem[]>(() => {
+  // tick 必须在**这里**读：放在 renderItem 回调里读不到（回调是渲染期才执行的，
+  // 那时早过了依赖收集）。读在这里，首帧截好后整份资源数组重算 → 编辑器
+  // 的 watch(props.resources) 收到新数组 → @ 下拉立刻换上帧图。
+  void videoThumbTick.value
+  return toEditorResources(shownMaterials.value, undefined, (url) => videoThumbOf(url))
+})
 const resolveResource = computed(() => makeResourceResolver(editorResources.value))
 
 /**
@@ -1893,10 +1915,10 @@ function onGlobalLeave(el: Element): void {
             只给**有内容**的格子挂在右下角；空槽不需要（它的占位图标就是类型）。
           -->
           <span
-            v-if="!tile.pending && tile.kind !== 'image'"
+            v-if="!tile.pending && tile.kind === 'video'"
             class="nb-card-kind"
             :data-kind="tile.kind"
-            :title="tile.kind === 'video' ? '视频' : tile.kind === 'audio' ? '音频' : '文本'"
+            title="视频"
             aria-hidden="true"
           />
           <span class="nb-card-index">{{ tile.index }}</span>

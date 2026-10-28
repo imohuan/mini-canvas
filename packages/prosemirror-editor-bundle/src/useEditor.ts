@@ -320,7 +320,20 @@ const mySchema = new Schema({
       draggable: true,
       atom: true,
       toDOM: (node) => {
-        const item = itemRegistry.get(node.attrs.id)
+        let item = itemRegistry.get(node.attrs.id)
+        /**
+         * 冷启动（刷新页面 / 重开底栏）时，注册表里只有 `registerSlotItemsFromDoc`
+         * 造出来的**最小条目**（没有 url）。若直接拿它渲染，标签会画成「待输入」虚线
+         * —— 用户看到的「刷新后标签退回原样」就是这个（2026-10-28 报）。
+         *
+         * 富文本节点自己存了 url（落盘的 doc JSON 里有），先用它补齐注册表再渲染：
+         * 视觉一次就对，不依赖底栏之后的异步刷新。
+         */
+        const urlFromAttrs = String(node.attrs.url ?? '')
+        if (item && urlFromAttrs && !item.url) {
+          item = { ...item, url: urlFromAttrs }
+          itemRegistry.set(node.attrs.id, item)
+        }
         if (item?.renderEditor) {
           const result = item.renderEditor(item)
           if (result instanceof HTMLElement) {

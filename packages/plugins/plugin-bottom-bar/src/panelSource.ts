@@ -513,19 +513,36 @@ export const MEDIA_ICON_PATHS: Record<MediaKind4, string> = {
 
 /** 从 ResourceItem 推断 4 类型之一（无 mediaType → text） */
 export function mediaKindOf(item: ResourceItem): MediaKind4 {
-  if (item.mediaType === 'video') return 'video'
-  if (item.mediaType === 'audio') return 'audio'
-  if (item.mediaType === 'image') return 'image'
   /**
    * 用户 2026-10-28：mediaType 只存在运行时注册表里，组件刷新/底栏重开时会丢，
    * 于是所有标签退化成文本图标。名字（图片2 / 视频1 / 音频3 / 文本1）是节点属性，
    * 永远在 —— 所以 mediaType 缺失时**回退按名字判断**。
+   *
+   * 顺序很关键：**先看名字**。混合素材（kind `av`/`media`）在 toEditorResources 里会被
+   * 兜底成 mediaType `image`，若先信 mediaType，就会把视频的 mp4 地址塞进 `<img>`
+   * → 浏览器加载失败、整行空白（用户 2026-10-28 报的「@ 下拉里视频没有缩略图」）。
    */
   const n = String(item.name ?? '').trim()
   if (/^视频\s*\d+$/.test(n)) return 'video'
   if (/^音频\s*\d+$/.test(n)) return 'audio'
   if (/^图片\s*\d+$/.test(n)) return 'image'
+  if (/^文本\s*\d+$/.test(n)) return 'text'
+  /**
+   * 地址兜底：名字认不出来、mediaType 又是兜底的 image，但地址本身是视频容器。
+   * 为什么必须加（用户 2026-10-28 实测）：这类项会被当成图片，把 mp4 塞进 `<img>`
+   * → 加载失败 → 那一行整段空白。
+   */
+  if (looksLikeVideoUrl(item.url)) return 'video'
+  if (item.mediaType === 'video') return 'video'
+  if (item.mediaType === 'audio') return 'audio'
+  if (item.mediaType === 'image') return 'image'
   return 'text'
+}
+
+/** 地址看起来是视频（扩展名判断；blob:/data: 看不出来，交给 mediaType） */
+export function looksLikeVideoUrl(url: string | undefined): boolean {
+  if (!url) return false
+  return /\.(mp4|webm|mov|m4v|ogv|mkv)(\?|#|$)/i.test(url)
 }
 
 /** 文本素材在 @ 引用里的图标（插入后显示的小图标） */
@@ -624,6 +641,13 @@ export const bottomBarTagSpec: TagSpec = {
 export function toEditorResources(
   materials: ReadonlyArray<UpstreamMaterial>,
   onPreview?: (material: UpstreamMaterial) => void,
+  /**
+   * 可选的「视频取帧」回调（由底栏从 ctx.get('video') 拿，模块本身不碰插件）。
+   *
+   * 为什么需要（用户 2026-10-28 报）：@ 下拉里视频那一行原来是空白 —— mp4 地址塞进
+   * `<img src>` 什么也不显示。给了它就用帧图当缩略图；没给就退回类型图标。
+   */
+  videoThumbOf?: (url: string) => string | undefined,
 ): ResourceItem[] {
   return materials.map((m) => {
     // name 用**带序号的引用名**（图片1 / 视频1）：它同时是 @ 下拉的显示名、
@@ -641,11 +665,54 @@ export function toEditorResources(
       ...base,
       url: m.url,
       mediaType: m.kind === 'video' ? 'video' : m.kind === 'audio' ? 'audio' : 'image',
-      // @ 下拉里给图片/视频带缩略图（编辑器默认只画 icon + 名字，看不出是哪张图）
-      renderItem: (self) => h('span', { class: 'mention-resource' }, [
-        h('img', { src: self.url ?? '', class: 'mention-thumb', draggable: false, alt: '' }),
-        h('span', { class: 'mention-name' }, self.name),
-      ]),
+      /**
+       * @ 下拉里的行：**按类型**决定左边画什么（用户 2026-10-28 报：音频/视频那一行是空白）。
+       *
+       * - 图片：缩略图（原图）。
+       * - 视频：帧图（mp4 不能当 `<img>` 用，否则空白）；帧还没取到就先出类型图标。
+       * - 音频 / 文本：没有可视化封面，出各自的类型图标（不再输出一个空 img）。
+       */
+      renderItem: (self) => {
+        /**
+         * 类型从**素材本身**算（不是从 item）：`item.mediaType` 对混合类型（av）会兜底成
+         * image，拿它判断会把视频当图片（用户 2026-10-28 实测的那条空行）。
+         * `m.kind` 是上游素材的真实类型，名字又是第二道保险。
+         */
+        const kind4: MediaKind4 =
+          m.kind === 'video' ? 'video'
+          : m.kind === 'audio' ? 'audio'
+          : m.kind === 'image' ? 'image'
+          : m.kind === 'text' ? 'text'
+          : mediaKindOf(self)
+        /**
+         * 视频地址**绝不能**直接进 `<img src>`（浏览器加载失败 → 整行空白）。
+         * 所以视频只认帧图；拿不到帧图就出类型图标，宁可没图也不要 0×0 的隐形行。
+         * `looksLikeVideoUrl` 再兜一层：万一上游把 kind 标成了图片，也不会漏。
+         */
+        const videoish = kind4 === 'video' || looksLikeVideoUrl(self.url)
+        const src = videoish
+          ? (videoThumbOf?.(self.url ?? '') ?? '')
+          : kind4 === 'image' ? (self.url ?? '') : ''
+        return h('span', { class: 'mention-resource' }, [
+          /**
+           * 视频帧图用**背景图**画，不用 `<img>`。
+           *
+           * 为什么（2026-10-28 实测）：`<img>` 一旦先用过 mp4 地址（浏览器判失败），
+           * 后续即使把 src 换成帧图，元素也可能保留 `display:none`，那一行永远是空的。
+           * 背景图没有「加载失败就隐藏」这套逻辑，换图立刻生效。
+           */
+          videoish && src
+            ? h('span', {
+                class: 'mention-thumb mention-thumb--bg',
+                'data-kind': 'video',
+                style: { backgroundImage: 'url("' + src + '")' },
+              })
+            : src
+              ? h('img', { src, class: 'mention-thumb', 'data-kind': kind4, draggable: false, alt: '' })
+              : h('span', { class: 'mention-kind', 'data-kind': videoish ? 'video' : kind4 }),
+          h('span', { class: 'mention-name' }, self.name),
+        ])
+      },
       renderEditor: resourceEditorSpec,
     }
     if (onPreview) item.onClick = () => onPreview(m)

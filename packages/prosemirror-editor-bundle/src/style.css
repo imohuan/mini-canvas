@@ -213,11 +213,62 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 视频帧图用背景图绘制（见 panelSource 里为什么不给 <img>） */
+.mention-menu .menu-item .mention-thumb--bg {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: block;
+}
 .mention-menu .menu-item .mention-resource {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+/*
+ * 没有可视化封面的类型（音频 / 文本 / 视频还没取到帧）在 @ 下拉里的图标。
+ *
+ * 为什么不用 svg 字符串：DOMOutputSpec 与 innerHTML 两条渲染路径对 svg 处理不一致
+ * （前者会把 svg 当普通字符串属性，渲染成空白 —— 实测踩过）。mask + 背景色只依赖 CSS，
+ * 两种路径结果一致，也自动跟着主题色走（currentColor）。
+ */
+.mention-menu .menu-item .mention-kind {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+  position: relative;
+}
+.mention-menu .menu-item .mention-kind::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background-color: currentColor;
+  opacity: 0.75;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.mention-menu .menu-item .mention-kind[data-kind='image']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.mention-menu .menu-item .mention-kind[data-kind='video']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.mention-menu .menu-item .mention-kind[data-kind='audio']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.mention-menu .menu-item .mention-kind[data-kind='text']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
 }
 
 .mention-menu .menu-content {
@@ -349,20 +400,22 @@
 }
 
 .preview-box .preview-image {
-  max-width: 400px;
-  max-height: 400px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
+  /*
+   * hover 预览用**固定方块 + cover**（用户 2026-10-28）：
+   * 长图（竖构图）按 contain 会变成一条竖长条，既看不清又占地方；
+   * 固定 320×320 + cover 裁进方块，跟卡片本身的观感一致。
+   */
+  width: 320px;
+  height: 320px;
+  object-fit: cover;
   display: block;
 }
 
 .preview-box .preview-video {
-  max-width: 400px;
-  max-height: 400px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
+  /* 与图片同一套框（视频帧图也按 cover 填满方块） */
+  width: 320px;
+  height: 320px;
+  object-fit: cover;
   display: block;
 }
 

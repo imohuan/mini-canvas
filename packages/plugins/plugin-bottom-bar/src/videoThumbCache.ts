@@ -17,7 +17,29 @@ const cache = new Map<string, string>()
 /** 正在取（同一视频同一尺寸只解一次码） */
 const pending = new Map<string, Promise<string | null>>()
 
-const keyOf = (url: string, size: ThumbSize) => size + '|' + url
+/**
+ * 缓存键：**先规范化地址**再用。
+ *
+ * 为什么（用户 2026-10-28 报「@ 下拉里视频那一行是空的、卡片却有图」）：同一个视频在
+ * 不同地方拿到的写法不一样 —— 卡片里是 `http://127.0.0.1:8012/api/...`，@ 下拉里是
+ * `/api/...`。按原字符串当键，等于两份缓存：卡片那份有帧图，下拉那份永远查不到。
+ * 同源的绝对地址一律折成 path+search；blob:/data: 原样保留。
+ */
+function normalizeUrl(url: string): string {
+  if (!url) return url
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url
+  if (typeof location !== 'undefined') {
+    try {
+      const u = new URL(url, location.origin)
+      if (u.origin === location.origin) return u.pathname + u.search
+    } catch {
+      /* 非法地址：退回原串 */
+    }
+  }
+  return url
+}
+
+const keyOf = (url: string, size: ThumbSize) => size + '|' + normalizeUrl(url)
 
 /** 读缓存（同步，渲染时直接用） */
 export function peekVideoThumb(url: string | undefined, size: ThumbSize): string | undefined {
