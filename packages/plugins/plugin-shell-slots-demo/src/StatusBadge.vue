@@ -1,10 +1,17 @@
 <script setup lang="ts">
 /**
- * 状态条末尾徽章：节点数由组件自己的 useNodeCount() 订阅 doc 得到。
+ * 状态条末尾徽章：节点数由组件自己从上下文订阅 doc 得到。
  */
-import { useNodeCount } from './useShellDemo'
+import { onBeforeUnmount, shallowRef } from 'vue'
+import { useCanvasContext } from '@mini-canvas/canvas-render'
 
-const count = useNodeCount()
+const { ctx } = useCanvasContext()
+const doc = ctx.tryGet<{ getNodes(): unknown[]; subscribe(fn: () => void): () => void }>('doc')
+const count = shallowRef(doc ? doc.getNodes().length : 0)
+const offDoc = doc?.subscribe(() => {
+  count.value = doc.getNodes().length
+})
+onBeforeUnmount(() => offDoc?.())
 </script>
 
 <template>

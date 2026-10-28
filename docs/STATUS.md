@@ -31,12 +31,11 @@
 
 **上下文取件改法（2026-10-28 用户口径：插件不要 import 第三方库/主题包）**：
 
-- 组件自己取上下文：`.vue` 里调 `useShellDemo.ts` 的 `useThemedButton` / `useNodeCount` / `useOpenDrawer`，
-  这些钩子内部走 `useCanvasContext()` → `ctx.registryOf('ui')` / `ctx.tryGet('doc')` / `ctx.tryGet('command')`；
-  订阅在 `onBeforeUnmount` 摘除。**不**由 `apply(ctx)` 预读后再层层传 props。
+- 组件各自直接取上下文：每个 `.vue` 自己调 `useCanvasContext()`，再读
+  `ctx.registryOf('ui')` / `ctx.tryGet('doc')` / `ctx.tryGet('command')`；订阅在 `onBeforeUnmount` 摘除。
+  没有额外的 hook 文件或 utils 文件。**不**由 `apply(ctx)` 预读后再层层传 props。
 - `index.ts` 只做 `ctx.slots.register`；抽屉按钮 / 面板仍按宿主窄接口（active/onSelect/host）接收 props。
-- 纯逻辑留在 `src/bindings.ts`（readThemedButton / readNodeCount / openDrawer），Node 可直接单测。
-- 单测 `bindings.test.ts` 6 条 + `shellSlotsDemo.test.ts` 3 条（含"组件经 useShellDemo 取上下文、不读 window"扫描）；
+- 单测 `shellSlotsDemo.test.ts` 3 条（含"组件直接调用 useCanvasContext、不读 window"扫描）；
   typecheck / UMD / ESM 构建通过。
 - 真机（Chrome MCP，8014）：安装后主题按钮 4 个、徽章"节点 2"、点底栏按钮经命令开抽屉、
   页签切页出面板（面板内节点数 2、按钮同为主题件）、关闭抽屉、卸载后全部消失；重载后控制台零错误。

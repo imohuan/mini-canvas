@@ -1,13 +1,30 @@
 <script setup lang="ts">
 /**
- * 抽屉插件页签正文：host 来自宿主 props；节点数与主题按钮由组件自己取上下文。
+ * 抽屉插件页签正文：host 来自宿主 props；节点数与主题按钮由组件自己从上下文取。
  */
+import { onBeforeUnmount, shallowRef } from 'vue'
+import { useCanvasContext } from '@mini-canvas/canvas-render'
 import type { DrawerHost } from './types'
-import { useNodeCount, useThemedButton } from './useShellDemo'
 
 const props = defineProps<{ host: DrawerHost }>()
-const nodeCount = useNodeCount()
-const button = useThemedButton()
+const { ctx } = useCanvasContext()
+
+const ui = ctx.registryOf<unknown>('ui')
+const button = shallowRef(ui.top('button')?.value)
+const uiSub = ui.subscribe(() => {
+  button.value = ui.top('button')?.value
+})
+
+const doc = ctx.tryGet<{ getNodes(): unknown[]; subscribe(fn: () => void): () => void }>('doc')
+const nodeCount = shallowRef(doc ? doc.getNodes().length : 0)
+const offDoc = doc?.subscribe(() => {
+  nodeCount.value = doc.getNodes().length
+})
+
+onBeforeUnmount(() => {
+  uiSub.dispose()
+  offDoc?.()
+})
 </script>
 
 <template>

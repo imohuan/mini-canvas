@@ -8,7 +8,7 @@
  *
  * 上下文边界（2026-10-28 用户口径）：
  * - apply(ctx) 只负责注册：往 slots 里放组件，不预先读 ui/doc/command；
- * - 组件自己 useCanvasContext() 拿 ctx（见 useShellDemo.ts），再取 ui/doc/command；
+ * - 组件各自 useCanvasContext() 拿 ctx，再取 ui/doc/command；
  * - 不 import 主题包 / @mini-canvas/ui；不读 window.MiniCanvasUI。
  *
  * 注册进本插件 scope，卸载时 occupant 自动回收（由内核保证）。

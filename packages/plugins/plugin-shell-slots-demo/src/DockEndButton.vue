@@ -1,10 +1,14 @@
 <script setup lang="ts">
 /**
- * 底栏末尾按钮：点击动作由组件自己的 useOpenDrawer() 提供（走 command 服务）。
+ * 底栏末尾按钮：点击动作由组件自己从上下文取 command 服务。
  */
-import { useOpenDrawer } from './useShellDemo'
+import { useCanvasContext } from '@mini-canvas/canvas-render'
 
-const openDrawer = useOpenDrawer()
+const { ctx } = useCanvasContext()
+
+function openDrawer(): void {
+  ctx.tryGet<{ execute(id: string): unknown }>('command')?.execute('shell:open-drawer')
+}
 </script>
 
 <template>
