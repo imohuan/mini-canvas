@@ -1497,7 +1497,8 @@ watch([shownMaterials, refOrder], () => {
 /** Ctrl 拖拽会话（pointerdown 开始，pointerup 结束） */
 let ctrlDrag: {
   nodeId: string
-  mediaType: 'image' | 'video' | 'audio'
+  // 与 SlotMedia 同形（text 也能拖，见 nodeMediaOf；text 只有名字没有媒体地址）
+  mediaType: 'image' | 'video' | 'audio' | 'text'
   url: string
   name: string
   /** 正被悬停的参考格 key（is-target 高亮 + 松手替换用） */
@@ -1552,6 +1553,8 @@ function startCtrlDrag(nodeId: string, ev: PointerEvent): void {
   const doc = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')
   const media = nodeMediaOf(doc?.getNode(nodeId))
   if (!media) return
+  // text 没有媒体地址可填格（nodeMediaOf 的 text 分支只带名字）—— Ctrl 拖不放行
+  if (media.mediaType === 'text') return
   // 已连到当前节点的资源**禁止拖拽**（用户口径：连线不支持重复连接 —— 它已经在某个
   // 格子里了，再拖到另一格会产生重复连线/抢格冲突）。只放行"还没连进来的"资源。
   if (renderEdges.value.some((e) => e.source === nodeId && e.target === props.id)) return
@@ -1690,6 +1693,8 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
     kind = k as RefSlotKind
     index = Number(i)
   }
+  // replaceSlotMaterial 只收三类媒体（text 拖拽已在入口挡掉，这里再收窄一次让类型闭合）
+  if (drag.mediaType === 'text') return
   void replaceSlotMaterial(kind, index, { nodeId: drag.nodeId, mediaType: drag.mediaType, url: drag.url, name: drag.name })
 }
 

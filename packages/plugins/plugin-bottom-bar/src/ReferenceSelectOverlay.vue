@@ -33,10 +33,11 @@ import {
   selectionEpoch,
   selectionMode,
   selectionNodeHint,
-  shouldKeepSelection,
+  referenceHintText,
   type NodeTypeLike,
   type ReferenceNodeState,
 } from './referenceMode'
+import { shouldKeepSelection } from './selectionMode'
 import { suppressCtrlUntilRelease } from './selectionMode'
 import { exitCtrlDragMode } from './ctrlDragMode'
 
