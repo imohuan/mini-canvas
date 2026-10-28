@@ -36,6 +36,7 @@ import {
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
 import { readClipRange } from './videoClip'
 import { formatTime } from './videoNodeData'
+import VideoPlayerBar from './VideoPlayerBar.vue'
 import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
 import { Play, Pause, Volume2, VolumeX, Camera, Maximize2 } from 'lucide-vue-next'
 import { openPreview } from './mediaPreviewBus'
@@ -529,6 +530,11 @@ const muted = ref(false)
 const volume = ref(1)
 const volumeEffectiveMuted = computed(() => muted.value || volume.value <= 0)
 const volumeOpen = ref(false)
+/** 倍速（共用条引入的能力，节点此前没有）：档位与菜单显隐由本组件持有 */
+const playbackRate = ref(1)
+const rateMenuOpen = ref(false)
+/** 倍速档位清单（与 VideoPlayerBar 菜单一致；挑档写回 video） */
+const RATE_VALUES = [0.5, 1, 1.5, 2, 3] as const
 let volumeDragging = false
 /** 悬浮层延迟关闭（音量滑块/截帧菜单通用）：给鼠标从按钮移进面板留时间，不至于半路就收走 */
 function delayedClose(kind: 'volume' | 'capture'): void {
@@ -737,6 +743,33 @@ function onSeek(e: Event): void {
   const target = clipRange.value.start + offset
   v.currentTime = Math.min(Math.max(target, 0), duration.value || target)
   currentTime.value = v.currentTime
+}
+
+/** 共用条回传数值版 seek（值 = 剪辑段内偏移，与 onSeek 同语义） */
+function onBarSeek(offset: number): void {
+  const v = activeVideo()
+  if (!v || !Number.isFinite(offset)) return
+  const target = clipRange.value.start + offset
+  v.currentTime = Math.min(Math.max(target, 0), duration.value || target)
+  currentTime.value = v.currentTime
+}
+
+/** 共用条：挑倍速档位（写回 video；菜单由模板里的 rateMenuOpen 管） */
+function onRatePick(value: number): void {
+  if (!(RATE_VALUES as readonly number[]).includes(value)) return
+  playbackRate.value = value
+  rateMenuOpen.value = false
+  const v = activeVideo()
+  if (v) v.playbackRate = value
+}
+
+/** 共用条回传数值版音量（>0 解除静音；与旧竖滑杆同语义） */
+function onBarVolume(value: number): void {
+  if (!Number.isFinite(value)) return
+  volume.value = Math.min(1, Math.max(0, value))
+  if (volume.value > 0) muted.value = false
+  const v = activeVideo()
+  if (v) v.volume = volume.value
 }
 
 function onVideoError(): void {
@@ -957,61 +990,45 @@ watch(videoUrl, (prev) => {
          三个 VueFlow 保留类名把画布手势挡在外面：nodrag 不拖节点、nopan 不拖画布、nowheel 不缩放画布。 -->
     <div v-if="videoUrl && !broken && !cropping" class="video-controls nodrag nopan nowheel"
       :class="{ 'is-hidden': !hovering }" @dblclick.stop>
-      <button class="vc-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'"
-        @click.stop="onPlayButton">
-        <Pause v-if="playing" class="vc-ico" :size="15" aria-hidden="true" />
-        <Play v-else class="vc-ico" :size="15" aria-hidden="true" />
-      </button>
-
-      <span class="vc-time vc-time-current">{{ playedTimeLabel }}</span>
-
-      <label class="vc-progress" title="拖动调整进度">
-        <input type="range" min="0" :max="playableLength" step="0.01" :value="playedInClip" aria-label="播放进度"
-          @input="onSeek" />
-        <span class="vc-progress-fill" :style="{ width: progressPct + '%' }" />
-        <span v-if="playableLength > 0" class="vc-progress-thumb" :style="{ left: progressPct + '%' }" />
-      </label>
-
-      <span class="vc-time vc-time-total">{{ totalTimeLabel }}</span>
-
-      <!-- 音量组（liblib 同款）：hover 展开竖向滑块，离开即收 -->
-      <div class="vc-volume" @mouseenter="cancelDelayedClose('volume'); openExclusive('volume')"
-        @mouseleave="delayedClose('volume')">
-        <button class="vc-btn" type="button" :title="volumeEffectiveMuted ? '取消静音' : '静音'" :aria-label="volumeEffectiveMuted ? '取消静音' : '静音'"
-          @click.stop="muted = !muted">
-          <VolumeX v-if="volumeEffectiveMuted" class="vc-ico" :size="15" aria-hidden="true" />
-          <Volume2 v-else class="vc-ico" :size="15" aria-hidden="true" />
-        </button>
-        <!-- 竖向音量滑块：顶部数字 + 轨道（从下往上填充）+ 圆点滑块 -->
-        <div v-if="volumeOpen" class="vc-volume-pop nodrag nopan nowheel"
-          @mouseenter="cancelDelayedClose('volume')" @mouseleave="delayedClose('volume')">
-          <span class="vc-volume-value">{{ Math.round(volume * 100) }}</span>
-          <div class="vc-volume-track" role="slider" :aria-label="'音量 ' + Math.round(volume * 100) + '%'"
-            :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="Math.round(volume * 100)" tabindex="0"
-            @pointerdown.stop="onVolumeTrackDown" @pointermove="onVolumeTrackMove" @pointerup="onVolumeTrackUp"
-            @keydown.down.stop.prevent="volume = Math.max(0, Math.round((volume - 0.05) * 100) / 100)"
-            @keydown.up.stop.prevent="volume = Math.min(1, Math.round((volume + 0.05) * 100) / 100)">
-            <span class="vc-volume-fill" :style="{ height: Math.round(volume * 100) + '%' }" />
-            <span class="vc-volume-thumb" :style="{ bottom: 'calc(' + Math.round(volume * 100) + '% - 6px)' }" />
+      <!-- 控件条 = 共用组件 VideoPlayerBar（视觉标准在节点这一侧，2026-10-29 用户拍板）。
+           节点形态的差异只有截图按钮（插槽传入，含三帧菜单）——其余与全屏预览完全一致。 -->
+      <VideoPlayerBar
+        :playing="playing"
+        :current-time="playedInClip"
+        :duration="playableLength"
+        :rate="playbackRate"
+        :rate-menu-open="rateMenuOpen"
+        :muted="volumeEffectiveMuted"
+        :volume="volume"
+        :volume-menu-open="volumeOpen"
+        :capture-busy="captureBusy"
+        @play="onPlayButton"
+        @seek="onBarSeek"
+        @rate-toggle="rateMenuOpen = !rateMenuOpen"
+        @rate-pick="onRatePick"
+        @mute-toggle="muted = !muted"
+        @volume="onBarVolume"
+        @volume-open="cancelDelayedClose('volume'); openExclusive('volume')"
+        @volume-close="delayedClose('volume')"
+      >
+        <template #capture>
+          <div ref="captureMenuRef" class="vc-capture">
+            <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
+              :aria-expanded="captureMenuOpen" :aria-haspopup="'menu'"
+              @mouseenter="cancelDelayedClose('capture'); openExclusive('capture')"
+              @mouseleave="captureMenuOpen && delayedClose('capture')">
+              <Camera class="vc-ico" :size="15" aria-hidden="true" />
+            </button>
+            <!-- 截帧菜单（liblib 同款三项）：向上弹出 -->
+            <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu"
+              @mouseenter="cancelDelayedClose('capture')" @mouseleave="delayedClose('capture')">
+              <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('current')">截取当前帧</button>
+              <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('first')">截取首帧</button>
+              <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</button>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div ref="captureMenuRef" class="vc-capture">
-        <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
-          :aria-expanded="captureMenuOpen" :aria-haspopup="'menu'"
-          @mouseenter="cancelDelayedClose('capture'); openExclusive('capture')"
-          @mouseleave="captureMenuOpen && delayedClose('capture')">
-          <Camera class="vc-ico" :size="15" aria-hidden="true" />
-        </button>
-        <!-- 截帧菜单（liblib 同款三项）：向上弹出 -->
-        <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu"
-          @mouseenter="cancelDelayedClose('capture')" @mouseleave="delayedClose('capture')">
-          <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('current')">截取当前帧</button>
-          <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('first')">截取首帧</button>
-          <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</button>
-        </div>
-      </div>
+        </template>
+      </VideoPlayerBar>
       <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放"
         @click.stop="openPreview({ name: (typeof props.data?.videoName === 'string' && props.data.videoName) || '视频预览', kind: 'video', url: videoUrl })">
         <Maximize2 class="vc-ico" :size="15" aria-hidden="true" />

@@ -21,6 +21,7 @@
  * `tall`：宿主把它放在**大舞台**（全屏预览）里时传 true —— 控件条略大、进屏自动播放。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import VideoPlayerBar from "./VideoPlayerBar.vue"
 
 const props = withDefaults(
   defineProps<{
@@ -54,6 +55,15 @@ const width = ref(0)
 /** 小屏阈值：窄于它 = 小屏态。360px 约等于一张 3 列卡片再宽一点 */
 const DENSE_MAX_WIDTH = 360
 const dense = computed(() => width.value > 0 && width.value < DENSE_MAX_WIDTH && !props.tall)
+
+/** 加载态：video 元素挂着但还没解码出第一帧（用户口径 2026-10-29：全屏别再是空白，
+ *  之前那块黑底被删了，现在给一个"转圈 + 文字"的占位）。loadeddata / playing 翻假。 */
+const loading = ref(false)
+function markLoading(): void {
+  if (!props.url || broken.value) { loading.value = false; return }
+  loading.value = true
+}
+function markReady(): void { loading.value = false }
 
 /** tall（全屏预览）时**自动播放**：用户点开就是看视频，不该还要再点一次播放。
  *  卡片里的小尺寸件不自动播（一屏几十张，全自动播会很吵、也费资源）。 */
@@ -117,9 +127,6 @@ function closeVolumeNow(): void {
   volumeOpen.value = false
 }
 
-// ===== 倍速 =====
-/** 可选档位 */
-const RATES = [0.5, 1, 1.5, 2, 3] as const
 /** 当前倍速（默认 1） */
 const rate = ref(1)
 /** 倍速菜单是否展开 */
@@ -142,29 +149,6 @@ function toggleLoop(): void {
   if (el) el.loop = loop.value
 }
 
-/** 两位补零 */
-function pad(v: number): string {
-  return v < 10 ? "0" + v : String(v)
-}
-/** 秒 → m:ss（超过一小时 h:mm:ss）；非法给 0:00（与 VideoContent 的 formatTime 同口径） */
-const formatTime = (s: number): string => {
-  const total = Number.isFinite(s) && s > 0 ? Math.floor(s) : 0
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const sec = total % 60
-  return h > 0 ? h + ":" + pad(m) + ":" + pad(sec) : m + ":" + pad(sec)
-}
-
-const timeLabel = computed(() => formatTime(currentTime.value) + " / " + formatTime(duration.value))
-/** 倍速显示文案：1 显示成 "1x"，1.5 显示成 "1.5x" */
-const rateLabel = computed(() => (Number.isInteger(rate.value) ? String(rate.value) : String(rate.value)) + "x")
-
-/** 音量图标：静音 / 低 / 高 三种（一眼看出当前状态） */
-const volumeIcon = computed(() => {
-  if (muted.value || volume.value <= 0) return "mute"
-  return volume.value < 0.5 ? "low" : "high"
-})
-
 async function togglePlay(): Promise<void> {
   const el = videoRef.value
   if (!el || !props.url) return
@@ -179,21 +163,18 @@ async function togglePlay(): Promise<void> {
   }
 }
 
-function onSeek(e: Event): void {
+/** 共用条回传数值版 seek（VideoPlayerBar 已把 input 事件转成秒数） */
+function onSeekValue(v: number): void {
   const el = videoRef.value
-  if (!el) return
-  const v = Number((e.target as HTMLInputElement).value)
-  if (Number.isFinite(v)) {
-    try {
-      el.currentTime = v
-    } catch { /* 元数据还没到 */ }
-  }
+  if (!el || !Number.isFinite(v)) return
+  try {
+    el.currentTime = v
+  } catch { /* 元数据还没到 */ }
 }
 
-/** 拖音量竖滑杆：写回 video.volume，并解除静音（用户拖了就是想听） */
-function onVolume(e: Event): void {
+/** 共用条回传数值版音量（语义与 onVolume 一致：>0 解除静音） */
+function onVolumeValue(v: number): void {
   const el = videoRef.value
-  const v = Number((e.target as HTMLInputElement).value)
   if (!Number.isFinite(v)) return
   volume.value = Math.min(1, Math.max(0, v))
   if (el) {
@@ -222,6 +203,8 @@ function onLoadedMetadata(): void {
   if (el && Number.isFinite(el.duration) && el.duration > 0) duration.value = el.duration
   // 记下真实宽高比（大舞台据此收掉多余黑底；量不到就维持原样）
   if (el && el.videoWidth > 0 && el.videoHeight > 0) aspect.value = el.videoWidth / el.videoHeight
+  // 比例已量到 → 加载占位可以按真实画面尺寸铺了
+  markReady()
   // 组件记着的设置，元数据就绪时同步给新 video（换 src 会重置元素状态）
   if (el) {
     el.volume = volume.value
@@ -297,6 +280,7 @@ watch(
     currentTime.value = 0
     duration.value = 0
     broken.value = false
+    markLoading()
     closePopoversNow()
   },
 )
@@ -319,6 +303,8 @@ watch(
         playsinline
         preload="metadata"
         :autoplay="shouldAutoplay"
+        @loadeddata="markReady"
+        @playing="markReady"
         @loadedmetadata="onLoadedMetadata"
         @timeupdate="onTimeUpdate"
         @play="playing = true"
@@ -343,74 +329,36 @@ watch(
         </button>
       </div>
 
-      <!-- 大屏态：完整控制栏（居中悬浮胶囊；不再铺满屏幕宽 —— 那样小窗口里会被裁切） -->
-      <div v-else class="vpv-bar" @click.stop @mousedown.stop @dblclick.stop>
-        <button class="vpv-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
-          <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-        </button>
+      <!-- 大屏态：完整控制条 = 共用组件（视觉标准在视频节点那一侧，2026-10-29 用户拍板）。
+           全屏与节点的差异只有循环开关（这里给、节点没有 —— 那里是截图按钮）。 -->
+      <VideoPlayerBar
+        v-else
+        class="vpv-bar-host"
+        :playing="playing"
+        :current-time="currentTime"
+        :duration="duration"
+        :rate="rate"
+        :rate-menu-open="rateOpen"
+        :muted="muted || volume <= 0"
+        :volume="volume"
+        :volume-menu-open="volumeOpen"
+        :loop="loop"
+        @play="togglePlay"
+        @seek="onSeekValue"
+        @rate-toggle="rateOpen = !rateOpen"
+        @rate-pick="pickRate"
+        @loop-toggle="toggleLoop"
+        @mute-toggle="toggleMute"
+        @volume="onVolumeValue"
+        @volume-open="openVolume"
+        @volume-close="scheduleCloseVolume"
+      />
 
-        <span class="vpv-time">{{ timeLabel }}</span>
-
-        <input
-          class="vpv-range"
-          type="range"
-          min="0"
-          :max="duration || 0"
-          step="0.01"
-          :value="currentTime"
-          aria-label="播放进度"
-          @input="onSeek"
-        />
-
-        <!-- 倍速：点按钮弹小菜单（当前档高亮） -->
-        <div class="vpv-rate">
-          <button class="vpv-btn vpv-rate-btn" type="button" :class="{ 'is-on': rate !== 1 }"
-            :title="'播放速度 ' + rateLabel" :aria-label="'播放速度 ' + rateLabel" :aria-expanded="rateOpen"
-            @click.stop="rateOpen = !rateOpen">
-            <span class="vpv-rate-label">{{ rateLabel }}</span>
-          </button>
-          <div v-show="rateOpen" class="vpv-menu" role="menu" aria-label="播放速度">
-            <button v-for="r in RATES" :key="r" class="vpv-menu-item" :class="{ 'is-active': rate === r }"
-              type="button" role="menuitemradio" :aria-checked="rate === r" @click.stop="pickRate(r)">
-              {{ r }}x
-            </button>
-          </div>
-        </div>
-
-        <!-- 循环：按钮式开关（亮起 = 开） -->
-        <button class="vpv-btn" type="button" :class="{ 'is-on': loop }"
-          :title="loop ? '循环播放：开' : '循环播放：关'" :aria-label="'循环播放'" :aria-pressed="loop"
-          @click.stop="toggleLoop">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M17 2l4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-            <path d="M7 22l-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" />
-          </svg>
-        </button>
-
-        <!-- 音量：按钮 + 向上弹出的**竖直**滑杆（不占控件条横向空间）。
-             热区 = 包住按钮与弹层的容器（含两者之间 10px 间隙）：鼠标穿过间隙时仍在热区内，
-             pointerleave 不会触发 —— 比纯靠延迟更稳（延迟只兜真正的离开）。 -->
-        <div class="vpv-vol" @pointerenter="openVolume" @pointerleave="scheduleCloseVolume">
-          <button class="vpv-btn" type="button" :title="muted ? '取消静音' : '静音'" :aria-label="muted ? '取消静音' : '静音'" @click.stop="toggleMute">
-            <svg v-if="volumeIcon === 'mute'" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" /><line x1="16" y1="9" x2="21" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round" /><line x1="21" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-            <svg v-else-if="volumeIcon === 'low'" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" /></svg>
-            <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" /><path d="M19 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" /></svg>
-          </button>
-          <div class="vpv-vol-pop" :class="{ 'is-open': volumeOpen }">
-            <span class="vpv-vol-pct">{{ muted ? 0 : Math.round(volume * 100) }}</span>
-            <input
-              class="vpv-vrange"
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              :value="muted ? 0 : volume"
-              aria-label="音量"
-              @input="onVolume"
-            />
-          </div>
-        </div>
+      <!-- 加载占位（用户口径：视频没就绪时别再是一片空白）：转圈 + 文字。
+           底色只铺在这层元素上，且容器已按视频比例收边 —— 不会多出黑边。 -->
+      <div v-if="loading && !dense" class="vpv-loading" role="status" aria-live="polite">
+        <span class="vpv-loading-spinner" aria-hidden="true"></span>
+        <span class="vpv-loading-text">视频加载中…</span>
       </div>
     </template>
     <div v-else-if="broken" class="vpv-empty">视频加载失败</div>
@@ -546,6 +494,37 @@ watch(
 .vpv-root:focus-within .vpv-bar { opacity: 1; translate: 0 0; }
 /* 大舞台（全屏预览）：略微放大一档 */
 .vpv-root.is-tall .vpv-bar { bottom: 16px; padding: 8px 12px; border-radius: 16px; gap: 8px; }
+
+/* ===== 加载占位（用户口径 2026-10-29：视频没就绪时别是一片空白） =====
+   铺满舞台、黑底（这是"视频还在加载"的底色，不是画面外多余的边 ——
+   容器已按视频比例收边，所以这块黑只在画面范围内）。 */
+.vpv-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #000; /* 主题色白名单: 视频加载底衬恒为黑（与画面同口径），与主题无关 */
+}
+.vpv-loading-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25); /* 主题色白名单: 视频覆盖层里的转圈 */
+  border-top-color: rgba(255, 255, 255, 0.95); /* 主题色白名单: 同上 */
+  animation: vpv-loading-spin 0.75s linear infinite;
+}
+.vpv-loading-text {
+  color: rgba(255, 255, 255, 0.75); /* 主题色白名单: 同上 */
+  font-size: 12px;
+}
+@keyframes vpv-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .vpv-loading-spinner { animation: none; }
+}
 .vpv-root.is-tall .vpv-btn { width: 30px; height: 30px; }
 .vpv-root.is-tall .vpv-btn svg { width: 15px; height: 15px; }
 .vpv-root.is-tall .vpv-range { min-width: 120px; }

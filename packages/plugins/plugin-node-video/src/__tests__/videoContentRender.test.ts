@@ -84,6 +84,9 @@ describe('播放控件与可达性', () => {
   it('有视频时渲染播放/进度/截图/全屏，且纯图标按钮都有 title + aria-label', async () => {
     const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1280, videoHeight: 720 })
     expect(html).toContain('video-controls')
+    // 2026-10-29 控件条抽成共用组件：节点形态必须有截图插槽、没有循环开关
+    expect(html).toContain('aria-label="截取画面"')
+    expect(html).not.toContain('aria-label="循环播放"')
     expect(html).toContain('aria-label="播放"')
     expect(html).toContain('aria-label="播放进度"')
     expect(html).toContain('aria-label="截取画面"')

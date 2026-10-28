@@ -39,8 +39,16 @@ describe('VideoPreview 按实测宽度切两套 UI', () => {
 
   it('模板里小屏态与大屏态互斥（v-if dense / v-else 完整控制栏）', () => {
     expect(videoPreview, '没有小屏态分支').toMatch(/v-if="dense"/)
-    expect(videoPreview, '完整控制栏没有挂到 v-else 上').toMatch(/v-else class="vpv-bar"/)
+    // 2026-10-29 控件条抽成共用组件 VideoPlayerBar（视觉标准在视频节点那一侧），
+    // 大屏态挂的是组件（v-else + VideoPlayerBar），不再有本地 .vpv-bar 标签
+    expect(videoPreview, '完整控制栏没有挂到 v-else 上').toMatch(/<VideoPlayerBar\s*v-else/)
     expect(videoPreview, '小屏态缺居中播放键').toMatch(/vpv-dense-play/)
+  })
+
+  it('大屏态控件条来自共用组件（节点与全屏同源，2026-10-29）', () => {
+    expect(videoPreview, '没有引入共用控件条').toMatch(/import VideoPlayerBar from ["']\.\/VideoPlayerBar\.vue["']/)
+    expect(videoPreview, '全屏形态没有给循环开关（截图按钮的位置让给了它）').toMatch(/:loop="loop"/)
+    expect(videoPreview, '不该在预览里出现截图按钮').not.toMatch(/show-capture/)
   })
 
   it('「进入预览」是可选能力：expandable 开关 + expand 事件（组件自己不开窗）', () => {
