@@ -47,6 +47,34 @@
    @mini-canvas/canvas-render/src/styles/ui-theme.css（随 canvas-render 加载即生效）。
    切换方式 = `<html class="dark">`（Tailwind v4 / shadcn 通行做法；旧 data-canvas-theme 仍兼容）。 */
 
+/* ===== 小地图挂点（2026-10-28：跟随状态栏按钮）=====
+   地图 Teleport 到「切换小地图」按钮旁的零尺寸 span 里，用 absolute 浮在按钮上方。
+   它和按钮在同一个父级 transform 上下文 → 抽屉动画带着一起走，不用读坐标轮询。
+
+   为什么 absolute + bottom:100%（而不是 fixed）：fixed 又回到「独立屏幕坐标」，
+   搬不进父级动画里；absolute 会自然吃掉祖先的 transform。
+   为什么 overflow:visible：地图比按钮大得多（默认 240×160），必须允许溢出按钮，
+   否则会被按钮/工具条的尺寸边界裁掉（用户提醒过的 overflow hidden 风险）。 */
+.mini-map-dock {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.mini-map-dock-layer {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  pointer-events: none;
+  overflow: visible;
+}
+.mini-map-dock-layer > * {
+  pointer-events: auto;
+}
+
 /* 全局滚动条（照 LibTV 实测：轨道 6px 透明 / 滑块 4px 圆角 6 / 白 40%） */
 * { scrollbar-width: thin; scrollbar-color: var(--ui-scroll-thumb) transparent; }
 *::-webkit-scrollbar { width: 6px; height: 6px; }

@@ -342,7 +342,8 @@ function onPointerCancel(e: PointerEvent): void {
 <style scoped>
 /* 配色**只走 CSS**：默认（亮色）一套 --mm-*，`.dark`（<html class="dark">）下覆盖另一套。
    组件不再有 theme prop / 配置项，宿主换主题时这里零 JS 参与、零重渲染。
-   dark 风格参考截图：无圆角、深底 + 边框、浅灰节点方块、视口框浅灰描边。 */
+   dark 风格：深底 + 边框、浅灰节点方块、视口框浅灰描边。
+   圆角与亮色**保持一致**（用户口径 2026-10-28：亮色的圆角很好，暗色切过去也必须有）。 */
 .mini-map-overlay {
   --mm-bg: #f8fafc;
   --mm-line: #e2e8f0;
@@ -367,9 +368,10 @@ html.dark .mini-map-overlay {
   /* 视口框内部比小地图底色更深：黑色半透明叠在 --mm-bg 上得到凹陷感 */
   --mm-viewer-bg: rgb(0 0 0 / 0.45);
   --mm-viewer-line: #8a8a8a;
-  --mm-radius: 0px;
-  --mm-node-radius: 0px;
-  --mm-viewer-radius: 0px;
+  /* 暗色不再归零：与亮色同一套嵌套圆角（面板 12 / 节点 2 / 视口 4） */
+  --mm-radius: 12px;
+  --mm-node-radius: 2px;
+  --mm-viewer-radius: 4px;
 }
 
 .mini-map-overlay {

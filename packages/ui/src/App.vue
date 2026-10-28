@@ -26,7 +26,8 @@ import AssetUiSlot from './components/AssetUiSlot.vue'
 import { setReadyHost, useUi } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { provideMiniMapDockTarget } from './composables/miniMapDock'
 
 const ui = useUi()
 const s = ui.state
@@ -37,18 +38,17 @@ const plugins = resolveAppPlugins()
 // 插件按钮通过 command 调用，不反向依赖 @mini-canvas/ui 的状态。
 let shellCommandDisposers: Array<{ dispose(): void }> = []
 
-// ===== 小地图跟随定位：每帧读状态栏「切换小地图」按钮的屏幕矩形，把地图贴在它正上方 =====
-// 为什么要逐帧（而不是监听事件）：抽屉开合走 transform 过渡（getBoundingClientRect 每帧都变），
-// resize/scroll 都感知不到这种过渡；常驻 rAF 逐帧重摆，动画全程贴合、拖拽调宽也跟手。
-// 摆位是无状态重放（按钮左缘 x + 顶边 y → translate 平移自身 0%/100%），不累计差量：
-// 窗口变化、配置改宽高都直接落到正确位置。
-const miniMapEl = ref<HTMLElement | null>(null)
-let miniMapLast = ''
-/** 是否已完成首次摆位：未就位前元素保持不可见（防止闪现在 (0,0) 再跳到正确位置——用户实测报障） */
-const miniMapPlaced = ref(false)
-let miniMapResizeOb: ResizeObserver | null = null
-let miniMapMutationOb: MutationObserver | null = null
-let miniMapRetryTimer: ReturnType<typeof setInterval> | null = null
+// ===== 小地图位置：Teleport 到状态栏按钮旁的挂点 =====
+//
+// 旧实现（2026-10-28 用户报障）：地图在画布 #ui 的 fixed 容器里，位置靠 JS 读按钮矩形
+// 再写 transform。抽屉开合是 CSS transform 动画，尺寸不变 → ResizeObserver 收不到，
+// 只能等 2 秒轮询 → 地图落后按钮 0.5~2 秒「闪」过去。
+//
+// 现在：StatusArea 里的「切换小地图」按钮旁有一个零尺寸挂点，地图 Teleport 到那里，
+// 用 absolute 浮在按钮正上方。地图与按钮处于同一个 transform 上下文，父级动画一起走，
+// 不需要任何读坐标 / 定时器。Teleport 的目标不在画布子树内也不影响：SlotHost 只需要
+// 渲染上下文，Provider 在最外层已经给它包好了。
+const miniMapDock = provideMiniMapDockTarget()
 function onProviderReady(host: CanvasHostHandle): void {
   setReadyHost(host)
   ui.setHostEl({ host })
@@ -56,64 +56,6 @@ function onProviderReady(host: CanvasHostHandle): void {
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = registerShellCommands(host.ctx, ui)
 }
-function placeMiniMap(): void {
-  const root = miniMapEl.value
-  if (root) {
-    const anchor = document.querySelector('button[aria-label="切换小地图"]')
-    if (anchor) {
-      const r = anchor.getBoundingClientRect()
-      if (r.width > 0 || r.height > 0) {
-        // 地图左缘 = 按钮左缘；底边 = 按钮顶边上方 8px
-        const t = 'translate(' + r.left + 'px, calc(' + (r.top - 8) + 'px - 100%))'
-        if (t !== miniMapLast) {
-          miniMapLast = t
-          root.style.transform = t
-          if (!miniMapPlaced.value) miniMapPlaced.value = true // 首次就位 → 放行显示（同帧无闪现）
-        }
-      }
-    }
-  }
-}
-onMounted(() => {
-  placeMiniMap()
-  // 事件驱动摆位（原常驻 rAF 每帧强制回流 17ms/帧，trace 实测 → 33.3ms 空闲帧）。
-  // 坑（2026-10-15 用户实测）：onMounted 时锚点按钮往往**还没渲染**（canvas boot 完才出
-  // 工具栏），旧 rAF 版每帧重查所以最终会贴上；改事件驱动后若只查一次就永远停在 (0,0) 左上角。
-  // 修复：按钮未出现 → MutationObserver 监听 DOM 变化等它出现；出现后 RO 观察**按钮自身**
-  // （显示/隐藏也触发回调）+ 父容器；另留 2s 低频兜底轮询（成本可忽略），不再逐帧。
-  const anchor = document.querySelector('button[aria-label="切换小地图"]')
-  if (anchor && anchor.parentElement) {
-    miniMapResizeOb = new ResizeObserver(() => placeMiniMap())
-    miniMapResizeOb.observe(anchor)
-    miniMapResizeOb.observe(anchor.parentElement)
-  } else {
-    miniMapMutationOb = new MutationObserver(() => {
-      const el = document.querySelector('button[aria-label="切换小地图"]')
-      if (el && el.parentElement) {
-        miniMapMutationOb?.disconnect()
-        miniMapMutationOb = null
-        placeMiniMap()
-        miniMapResizeOb = new ResizeObserver(() => placeMiniMap())
-        miniMapResizeOb.observe(el)
-        miniMapResizeOb.observe(el.parentElement)
-      }
-    })
-    miniMapMutationOb.observe(document.body, { childList: true, subtree: true })
-  }
-  miniMapRetryTimer = setInterval(placeMiniMap, 2000)
-  window.addEventListener('resize', placeMiniMap)
-})
-onBeforeUnmount(() => {
-  miniMapResizeOb?.disconnect()
-  miniMapResizeOb = null
-  miniMapMutationOb?.disconnect()
-  miniMapMutationOb = null
-  if (miniMapRetryTimer) {
-    clearInterval(miniMapRetryTimer)
-    miniMapRetryTimer = null
-  }
-  window.removeEventListener('resize', placeMiniMap)
-})
 const adapter = createDefaultStorageAdapter()
 const DEV = import.meta.env.DEV
 
@@ -156,9 +98,6 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   ui.applyTheme(s.theme)
-  // 外壳在 Provider ready 之后才出现：小地图容器可能晚于本组件挂载，
-  // 这里盯 ref 本身，元素一出现就摆位，不必等 2 秒兜底轮询。
-  watch(miniMapEl, () => placeMiniMap(), { flush: 'post' })
 })
 watch(() => s.theme, (v) => ui.applyTheme(v))
 onBeforeUnmount(() => {
@@ -250,12 +189,15 @@ onBeforeUnmount(() => {
                  里面的 <SlotHost slot="agent-conversation" /> 才拿得到渲染上下文；
                  组件自己用 fixed 定位，所以放哪一层不影响它出现在哪。 -->
             <AgentPanel />
-            <!-- 小地图：插件注册在 mini-map 专用槽；这里只给它一个宿主选择的位置（逐帧跟随状态栏按钮） -->
-            <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" :style="{ pointerEvents: 'none', visibility: miniMapPlaced ? 'visible' : 'hidden' }">
-              <div style="pointer-events: auto">
+            <!-- 小地图：插件注册在 mini-map 专用槽。
+                 Teleport 到状态栏按钮旁的零尺寸挂点（见 miniMapDock.ts），absolute 浮在按钮
+                 正上方 —— 地图与按钮共享父级 transform，开合抽屉时同一帧一起移动。 -->
+            <!-- 挂点还没渲染时整段不渲染：不要退回 body，否则会在地图第一次出现时闪到左上角 -->
+            <Teleport v-if="miniMapDock" :to="miniMapDock" defer>
+              <div class="mini-map-dock-layer">
                 <SlotHost slot="mini-map" />
               </div>
-            </div>
+            </Teleport>
             <!-- 资产浮层（资产管理弹窗 / 全屏预览）+ 「引用被点了」事件的监听。
                  必须待在渲染子树里（ctx.on 与主题注册件都只有子树内取得到），组件本身不占位。 -->
             <AssetUiSlot />
