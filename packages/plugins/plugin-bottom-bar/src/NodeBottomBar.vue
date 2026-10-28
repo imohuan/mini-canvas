@@ -621,10 +621,41 @@ function removeCard(nodeId: string): void {
   if (edge && doc) doc.removeEdges([edge.id])
 }
 
-/** 卡片区域 click 委托（捕获阶段）：vue-draggable 移动 DOM 会让子元素 Vue 绑定失联，
- *  所以在容器上统一分发 —— 删除按钮 / 预览按钮 / 待输入格点击都从这里走。 */
+/**
+ * 卡片区域 click 委托（捕获阶段）：vue-draggable 移动 DOM 会让子元素 Vue 绑定失联，
+ * 所以在容器上统一分发 —— 删除按钮 / 预览按钮 / 待输入格点击都从这里走。
+ *
+ * **拖拽后吞点击**（用户 2026-10-29 报「关闭按钮点不动」）：拖拽库 force-fallback
+ * 模式下，一次拖拽结束后下一次 click 会被它全局吞掉（Sortable 的 click eater）。
+ * 对策：click 里区分「这次 pointer 序列刚拖完一张卡」——拖完的第一次点击不视为
+ * 按钮点击，也不交给预览（那本来就是拖拽的余波），只有正常点击才走删除/预览。
+ */
+/** 最近一次真实拖拽结束的时刻与坐标（onReorderTiles / 拖拽库回调时更新） */
+let lastDragEndAt = 0
+let lastDragEndX = -1
+let lastDragEndY = -1
+/** 拖拽库的 end 回调：记录「刚拖完」（拖拽余波的那次 click 不当按钮点击） */
+function onDragEndMark(payload: Event): void {
+  lastDragEndAt = Date.now()
+  const oe = (payload as { originalEvent?: MouseEvent | TouchEvent } | undefined)?.originalEvent
+  const point = oe && 'clientX' in oe ? oe : (oe as TouchEvent | undefined)?.changedTouches?.[0]
+  lastDragEndX = point?.clientX ?? -1
+  lastDragEndY = point?.clientY ?? -1
+}
+/** click 是否属于刚结束的那次拖拽（300ms 内、同位置附近） */
+function clickAfterDrag(ev: MouseEvent): boolean {
+  if (Date.now() - lastDragEndAt > 350) return false
+  const dx = Math.abs(ev.clientX - lastDragEndX)
+  const dy = Math.abs(ev.clientY - lastDragEndY)
+  return dx < 6 && dy < 6
+}
 function onCardsClickCapture(ev: MouseEvent): void {
   ;(window as any).__capDbg = { target: (ev.target as HTMLElement)?.className?.toString().slice(0, 40), t: Date.now() }
+  if (clickAfterDrag(ev)) {
+    ev.stopPropagation()
+    ev.preventDefault()
+    return
+  }
   const target = ev.target as HTMLElement | null
   if (!target) return
   const card = target.closest<HTMLElement>('.nb-card')
@@ -1560,6 +1591,12 @@ function onCtrlDragEnd(): void {
 function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
   const drag = ctrlDrag
   ctrlDrag = null
+  // Ctrl 拖也是一次「拖拽余波」来源：落点附近的下一次 click 不当作按钮点击
+  if (drag) {
+    lastDragEndAt = Date.now()
+    lastDragEndX = ev.clientX
+    lastDragEndY = ev.clientY
+  }
   if (drag?.targetTileKey) document.querySelector('.nb-card[data-tile-key="' + drag.targetTileKey + '"]')?.classList.remove('is-target')
   drag?.ghost?.remove()
   if (!drag || !drag.targetTileKey) return
@@ -1811,6 +1848,7 @@ function onGlobalLeave(el: Element): void {
       chosen-class="nb-card--chosen"
       drag-class="nb-card--drag"
       :force-fallback="true"
+      @end="onDragEndMark"
       @update:model-value="onReorderTiles"
       @click.capture="onCardsClickCapture"
       @keydown="onCardsKeydown"
@@ -1850,17 +1888,26 @@ function onGlobalLeave(el: Element): void {
             <!-- “+” 保留：这格的主要操作是点它上传，必须让用户看得出可以点 -->
             <span class="nb-card-plus" aria-hidden="true">+</span>
           </span>
-          <!-- 有内容但没有可用图（视频还没取到帧 / 音频 / 文本）→ 按类型出图标 -->
-          <span v-else class="nb-card-fallback" :data-kind="tile.kind ?? 'resource'" aria-hidden="true" />
           <!--
-            类型角标（用户 2026-10-28：卡片分不清是图片还是视频）。
-            只给**有内容**的格子挂在右下角；空槽不需要（它的占位图标就是类型）。
+            有内容但没有可用图 → **只给音频/文本**出居中类型图标（用户 2026-10-29）。
+            图片没图只有一种情况：视频帧还没取到时会先走 fallback —— 那时给视频图标。
           -->
           <span
-            v-if="!tile.pending && tile.kind"
+            v-else-if="tile.kind === 'audio' || tile.kind === 'text' || tile.kind === 'video'"
+            class="nb-card-fallback"
+            :data-kind="tile.kind"
+            aria-hidden="true"
+          />
+          <!--
+            类型角标（用户 2026-10-28：卡片分不清是图片还是视频）。
+            2026-10-29 收紧：**只有视频**挂角标 —— 图片的缩略图本身就是它，
+            音频/文本挂个图标反而看不懂（用户报的「空白正方形」就是图片角标）。
+          -->
+          <span
+            v-if="!tile.pending && tile.kind === 'video'"
             class="nb-card-kind"
             :data-kind="tile.kind"
-            :title="tile.kind === 'video' ? '视频' : tile.kind === 'audio' ? '音频' : tile.kind === 'text' ? '文本' : '图片'"
+            title="视频"
             aria-hidden="true"
           />
           <span class="nb-card-index">{{ tile.index }}</span>
@@ -2353,7 +2400,11 @@ function onGlobalLeave(el: Element): void {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
 }
 
-/* 有内容但无图时的类型图标（与空槽同一套形状，颜色略淡） */
+/*
+ * 有内容但无图时的类型图标（与空槽同一套形状，颜色略淡）。
+ * 2026-10-29：image 规则保留（video 帧图没就绪时兜底用），
+ * 但模板只在 audio/text/video 时渲染 fallback，图片永远走缩略图 —— 不再有「空白方块」。
+ */
 .nb-card-fallback[data-kind='image'] {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
@@ -2776,7 +2827,8 @@ function onGlobalLeave(el: Element): void {
   min-height: var(--nb-min, 20px) !important;
   outline: none !important;
   font-size: 13px;
-  line-height: 1.6;
+  /* 与 .prose-mirror-editor 的 1.75 保持一致（chip 高 20px 需要 ≥22px 行框） */
+  line-height: 1.75;
   color: var(--ui-ink, #18202b);
   word-break: break-word;
 }
@@ -2789,7 +2841,11 @@ function onGlobalLeave(el: Element): void {
   max-height: var(--nb-max, 220px);
   overflow-y: auto;
   font-size: 13px;
-  line-height: 1.6;
+  /**
+   * 行高（用户 2026-10-29：两行标签的底部重合）：chip 高 20px，
+   * 1.75 × 13 ≈ 22.8px 的行框能完整包住它；1.6 时 20.8px 会重叠。
+   */
+  line-height: 1.75;
   color: var(--ui-ink, #18202b);
 }
 /* @ 引用素材的标签：bundle 里写死了深灰字 + 深色下划线，深色主题下同样看不清 */
@@ -2812,15 +2868,28 @@ function onGlobalLeave(el: Element): void {
   gap: 0px;
   max-width: 160px;
   height: 22px;
+  /**
+   * 行高重合修复（用户 2026-10-29）：chip 高 22px，而 .ProseMirror 的 line-height
+   * 是 1.6 × 13px ≈ 20.8px —— 两行 chip 的盒子互相重叠（第二行压住第一行底部）。
+   * vertical-align: bottom 让 22px 的盒子向下沉到基线之下，同样会压住下一行。
+   * 改成「chip 自身 20px 高 + vertical-align: middle」，放进 1.75 的行高里刚好放下。
+   */
+  height: 20px;
   padding: 0 7px 0 3px;
   margin: 0 2px;
   border: 1px solid color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent);
   border-radius: 6px;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
-  vertical-align: bottom;
+  vertical-align: middle;
   line-height: 1;
   /* 覆盖编辑器公共样式里那条下划线（卡片不需要它） */
   border-bottom-width: 1px;
+}
+.nb-editor :deep(.resource-chip-thumb),
+.nb-editor :deep(.resource-chip-icon) {
+  /* 图标随 chip 缩到 14px，保持与 13px 文字的比例 */
+  width: 14px;
+  height: 14px;
 }
 .nb-editor :deep(.resource-chip-thumb) {
   width: 16px;

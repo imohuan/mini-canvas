@@ -13,7 +13,7 @@ import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, 
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import type { TagMatch, TagSpec } from 'prosemirror-editor-bundle'
 import { h } from 'vue'
-import { refNodeChipId, refNameChipId } from './refSlots'
+import { refNodeChipId, refNameChipId, normalizeRefName } from './refSlots'
 
 /** 一条连进本节点的上游素材（面板素材行 / @ 引用 / 生成输入 共用同一份） */
 export interface UpstreamMaterial {
@@ -621,19 +621,23 @@ export function bottomBarTagSpecFor(getMaterials: () => ReadonlyArray<UpstreamMa
        * 剩下的段落按整段当待绑定名称。
        */
       const materials = getMaterials()
-      const names = materials.map((m) => m.name.trim()).filter(Boolean)
       // 长名优先：避免「天空」把「天空之城」截走
-      const sorted = [...names].sort((a, b) => b.length - a.length)
+      const sorted = [...materials]
+        .filter((m) => m.name.trim())
+        .sort((a, b) => normalizeRefName(b.name).length - normalizeRefName(a.name).length)
       // 名称到空白 / 中英文标点 / 换行 / 下一个 @ 为止
       const re = /@([^\s@，。,.、；;：:！!？?（）()【】\[\]"'“”‘’]{1,80})/g
       let m: RegExpExecArray | null
       while ((m = re.exec(text)) !== null) {
         const raw = m[1]
-        const hit = sorted.find((name) => raw === name || raw.startsWith(name))
-        const name = hit ?? raw.trim()
+        const hit = sorted.find((mat) => {
+          const norm = normalizeRefName(mat.name)
+          return raw === norm || raw.startsWith(norm)
+        })
+        const name = hit?.name ?? raw.trim()
         if (!name) continue
-        const len = hit ? hit.length : name.length
-        const material = hit ? materials.find((x) => x.name.trim() === hit) : undefined
+        const len = hit ? normalizeRefName(hit.name).length : name.length
+        const material = hit
         const item: ResourceItem = material
           ? {
               id: refNodeChipId(material.id),

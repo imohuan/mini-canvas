@@ -50,6 +50,25 @@ export function nameOfChip(chipId: string | null | undefined): string | null {
   return name || null
 }
 
+/**
+ * 名称规范化（用户 2026-10-29）：**对比名称时**两侧都用它。
+ *
+ * - 连续空格 → 一个下划线（「天空 之城」与「天空_之城」相等）；
+ * - 去掉中英文标点，只保留中英文、数字、横线；
+ * - 显示名**不变**（用户看到的名字保持原样），只有匹配/查找用规范化结果。
+ */
+export function normalizeRefName(name: string | null | undefined): string {
+  return String(name ?? '')
+    .trim()
+    .replace(/\s+/g, '_')
+    /**
+     * 只保留中英文、数字、横线（用户 2026-10-29）。
+     * 下划线不在保留名单里 —— 空格先转下划线、再在这里被去掉，
+     * 于是「泳装少女 2」「泳装少女2」「泳装少女_2」对比结果一致，都能命中同一个节点。
+     */
+    .replace(/[^\p{L}\p{N}-]/gu, '')
+}
+
 /** 正文里的一颗参考标签 */
 export interface RefChip {
   /** 标签 id：ref-node:<id> / ref-name:<名> / 老格式 ref-slot:* */

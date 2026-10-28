@@ -11,7 +11,7 @@
  *   - 绑定失效（节点被删 / 连线断开 / 老格式）→ 卡片与标签显示失效，**禁止发送**。
  */
 
-import { refNodeChipId, refNameChipId, nodeIdOfChip, nameOfChip, type RefChip } from './refSlots'
+import { refNodeChipId, refNameChipId, nodeIdOfChip, nameOfChip, normalizeRefName, type RefChip } from './refSlots'
 
 /** 参考区里的一张卡片 */
 export interface RefTile {
@@ -199,9 +199,13 @@ export function matchMaterialByName(
   name: string,
   cards: ReadonlyArray<TileCardLike>,
 ): TileCardLike | null {
-  const want = String(name ?? '').trim()
+  /**
+   * 名称对比走**规范化**（用户 2026-10-29）：空格转下划线、去标点。
+   * 「泳装少女 2」与「泳装少女2」「泳装少女_2」都能对上。
+   */
+  const want = normalizeRefName(name)
   if (!want) return null
-  return cards.find((c) => c.name.trim() === want) ?? null
+  return cards.find((c) => normalizeRefName(c.name) === want) ?? null
 }
 
 /** 卡片拖拽排序后要落盘的标签 id 序列（去掉重复与空值） */
