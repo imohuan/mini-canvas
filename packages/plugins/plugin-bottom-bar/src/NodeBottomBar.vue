@@ -2489,9 +2489,9 @@ function onGlobalLeave(el: Element): void {
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  background-color: rgb(0 0 0 / 0.55);
+  background-color: var(--ui-scrim, rgb(0 0 0 / 0.55));
   /* 图标用 mask，颜色取白色（深底上才看得清） */
-  color: #fff;
+  color: var(--ui-tip-ink, #fff);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
