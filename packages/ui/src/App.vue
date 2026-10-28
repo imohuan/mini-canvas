@@ -23,6 +23,8 @@ import AgentPanel from './components/areas/AgentPanel.vue'
 import ModalsArea from './components/areas/ModalsArea.vue'
 import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
+// 插槽调试覆盖层由默认主题提供（与主题的 Dropdown 同一套浮层与定位）
+import SlotDebugOverlay from '@mini-canvas/plugin-theme-default/components/ui/SlotDebugOverlay.vue'
 import { setReadyHost, useUi } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
@@ -122,105 +124,105 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <CanvasProvider
-    :plugins="plugins"
-    :adapter="adapter"
-    :seed="seedDefaultCanvas"
-    :dev="DEV"
-    window-key="MiniCanvasUI"
-    @ready="onProviderReady"
-  >
-  <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
-    :right-width="ui.agent.open && ui.agent.docked ? ui.agent.width : 0" :push-status="true" :push-dock="true">
-    <template #top-left>
-      <TopLeftArea />
-    </template>
-    <template #top-right>
-      <TopRightArea />
-    </template>
+  <CanvasProvider :plugins="plugins" :adapter="adapter" :seed="seedDefaultCanvas" :dev="DEV" window-key="MiniCanvasUI"
+    @ready="onProviderReady">
+    <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
+      :right-width="ui.agent.open && ui.agent.docked ? ui.agent.width : 0" :push-status="true" :push-dock="true">
+      <template #top-left>
+        <TopLeftArea />
+      </template>
+      <template #top-right>
+        <TopRightArea />
+      </template>
 
-    <template #canvas>
-      <div class="absolute inset-0">
-        <!-- 故事板视图：三列面板（照 LibTV 实测 463/451/451） -->
-        <div v-if="s.navMode === 'storyboard'" class="absolute inset-x-0 top-10 z-10 flex justify-center gap-2"
-          aria-label="故事板视图">
-          <section v-for="col in s.storyboard" :key="col.type"
-            class="flex h-[807px] max-h-[calc(100vh-60px)] w-[451px] flex-col overflow-hidden rounded-t-xl bg-panel">
-            <header class="flex items-center gap-2 px-4 py-3">
-              <h3 class="text-sm font-medium">{{ col.type }}</h3><span
-                class="rounded bg-chip px-1.5 text-[10px] text-ink-dim">{{ col.items.length }}</span>
-            </header>
-            <div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
-              <article v-for="item in col.items" :key="item.name"
-                class="flex cursor-pointer items-center gap-2 rounded-lg bg-veil p-2 transition-colors hover:bg-hover"
-                @click="ui.showToast('打开 ' + item.name)">
-                <span class="grid size-8 place-items-center rounded-md bg-chip text-ink-mute">
-                  <component :is="item.icon === 'video' ? Video : item.icon === 'text' ? Type : ImageIcon" :size="16" />
-                </span>
-                <span class="min-w-0 flex-1"><strong class="block truncate text-xs">{{ item.name }}</strong><small
-                    class="block truncate text-[10px] text-ink-dim">{{ item.meta }}</small></span>
-                <button class="grid size-6 place-items-center rounded-md text-ink-dim hover:bg-hover hover:text-ink"
-                  :aria-label="'对话 ' + item.name" @click.stop="ui.showToast('与 ' + item.name + ' 对话')">
-                  <MessageSquarePlus :size="14" />
-                </button>
-              </article>
-            </div>
-          </section>
-        </div>
-        <!-- 「正在跟随」协作横幅 -->
-        <!-- 这是一条**语义状态色**（"正在跟随"= 亮绿，同"录制中"用红）：底色不随主题变，
+      <template #canvas>
+        <div class="absolute inset-0">
+          <!-- 故事板视图：三列面板（照 LibTV 实测 463/451/451） -->
+          <div v-if="s.navMode === 'storyboard'" class="absolute inset-x-0 top-10 z-10 flex justify-center gap-2"
+            aria-label="故事板视图">
+            <section v-for="col in s.storyboard" :key="col.type"
+              class="flex h-[807px] max-h-[calc(100vh-60px)] w-[451px] flex-col overflow-hidden rounded-t-xl bg-panel">
+              <header class="flex items-center gap-2 px-4 py-3">
+                <h3 class="text-sm font-medium">{{ col.type }}</h3><span
+                  class="rounded bg-chip px-1.5 text-[10px] text-ink-dim">{{ col.items.length }}</span>
+              </header>
+              <div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
+                <article v-for="item in col.items" :key="item.name"
+                  class="flex cursor-pointer items-center gap-2 rounded-lg bg-veil p-2 transition-colors hover:bg-hover"
+                  @click="ui.showToast('打开 ' + item.name)">
+                  <span class="grid size-8 place-items-center rounded-md bg-chip text-ink-mute">
+                    <component :is="item.icon === 'video' ? Video : item.icon === 'text' ? Type : ImageIcon"
+                      :size="16" />
+                  </span>
+                  <span class="min-w-0 flex-1"><strong class="block truncate text-xs">{{ item.name }}</strong><small
+                      class="block truncate text-[10px] text-ink-dim">{{ item.meta }}</small></span>
+                  <button class="grid size-6 place-items-center rounded-md text-ink-dim hover:bg-hover hover:text-ink"
+                    :aria-label="'对话 ' + item.name" @click.stop="ui.showToast('与 ' + item.name + ' 对话')">
+                    <MessageSquarePlus :size="14" />
+                  </button>
+                </article>
+              </div>
+            </section>
+          </div>
+          <!-- 「正在跟随」协作横幅 -->
+          <!-- 这是一条**语义状态色**（"正在跟随"= 亮绿，同"录制中"用红）：底色不随主题变，
              所以前景也必须恒为深色才有对比（用 text-ink 的话暗色主题下白字压绿底会看不清）。 -->
-        <!-- 主题色白名单: 「正在跟随」横幅的语义状态色（亮绿），恒亮绿底 + 恒深前景，不随主题变 -->
-        <div v-if="s.following" role="status" class="absolute left-1/2 top-0 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-b-xl bg-[#25e44e] px-3 py-1.5 text-[13px] text-[#111] shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
-          <span class="size-2 rounded-full bg-white"></span>
-          <span>正在跟随</span>
-          <!-- 主题色白名单: 横幅内的白胶囊按钮，压在恒亮绿底上需恒定对比 -->
-          <button class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90" aria-label="退出跟随" @click="s.following = false">取消ESC</button>
-        </div>
-        <!-- 真实画布 -->
-        <!-- 函数 ref：字符串 ref("ui.hostEl") 带点号 Vue 绑不上（hostEl 恒 null → 设置改动永远到不了画布）。
+          <!-- 主题色白名单: 「正在跟随」横幅的语义状态色（亮绿），恒亮绿底 + 恒深前景，不随主题变 -->
+          <div v-if="s.following" role="status"
+            class="absolute left-1/2 top-0 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-b-xl bg-[#25e44e] px-3 py-1.5 text-[13px] text-[#111] shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
+            <span class="size-2 rounded-full bg-white"></span>
+            <span>正在跟随</span>
+            <!-- 主题色白名单: 横幅内的白胶囊按钮，压在恒亮绿底上需恒定对比 -->
+            <button
+              class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90"
+              aria-label="退出跟随" @click="s.following = false">取消ESC</button>
+          </div>
+          <!-- 真实画布 -->
+          <!-- 函数 ref：字符串 ref("ui.hostEl") 带点号 Vue 绑不上（hostEl 恒 null → 设置改动永远到不了画布）。
              必须经 setHostEl 写 ref.value；直接 `ui.hostEl = el` 只会覆盖属性、写不进 ref（绑定仍失效）。 -->
-        <CanvasHost
-          :edge-visual="ui.cfg.edge" :handle-visual="ui.cfg.handle" :debug-visual="ui.cfg.debug"
-          :snap-zone-visual="ui.cfg.snapZone">
-          <template #ui>
-            <SettingsHost v-if="s.settingsOpen" />
-            <!-- Agent 面板外壳：放在 #ui 里（它在 <CanvasHost> 渲染子树内），
+          <CanvasHost :edge-visual="ui.cfg.edge" :handle-visual="ui.cfg.handle" :debug-visual="ui.cfg.debug"
+            :snap-zone-visual="ui.cfg.snapZone">
+            <template #ui>
+              <SettingsHost v-if="s.settingsOpen" />
+              <!-- Agent 面板外壳：放在 #ui 里（它在 <CanvasHost> 渲染子树内），
                  里面的 <SlotHost slot="agent-conversation" /> 才拿得到渲染上下文；
                  组件自己用 fixed 定位，所以放哪一层不影响它出现在哪。 -->
-            <AgentPanel />
-            <!-- 小地图：插件注册在 mini-map 专用槽。
+              <AgentPanel />
+              <!-- 小地图：插件注册在 mini-map 专用槽。
                  Teleport 到状态栏按钮旁的零尺寸挂点（见 miniMapDock.ts），absolute 浮在按钮
                  正上方 —— 地图与按钮共享父级 transform，开合抽屉时同一帧一起移动。 -->
-            <!-- 挂点还没渲染时整段不渲染：不要退回 body，否则会在地图第一次出现时闪到左上角 -->
-            <Teleport v-if="miniMapDock" :to="miniMapDock" defer>
-              <div class="mini-map-dock-layer">
-                <SlotHost slot="mini-map" />
-              </div>
-            </Teleport>
-            <!-- 资产浮层（资产管理弹窗 / 全屏预览）+ 「引用被点了」事件的监听。
+              <!-- 挂点还没渲染时整段不渲染：不要退回 body，否则会在地图第一次出现时闪到左上角 -->
+              <Teleport v-if="miniMapDock" :to="miniMapDock" defer>
+                <div class="mini-map-dock-layer">
+                  <SlotHost slot="mini-map" />
+                </div>
+              </Teleport>
+              <!-- 资产浮层（资产管理弹窗 / 全屏预览）+ 「引用被点了」事件的监听。
                  必须待在渲染子树里（ctx.on 与主题注册件都只有子树内取得到），组件本身不占位。 -->
-            <AssetUiSlot />
-          </template>
-        </CanvasHost>
-      </div>
-    </template>
+              <AssetUiSlot />
+            </template>
+          </CanvasHost>
+        </div>
+      </template>
 
-    <template #status>
-      <div class="flex items-end gap-1">
-        <StatusArea />
-      </div>
-    </template>
-    <template #dock>
-      <DockArea />
-    </template>
+      <template #status>
+        <div class="flex items-end gap-1">
+          <StatusArea />
+        </div>
+      </template>
+      <template #dock>
+        <DockArea />
+      </template>
 
-    <LeftDrawer />
-    <ModalsArea />
-    <!-- 「加入资产库」贴进来的图 → 复用左侧同一个上传弹窗（节点右键 / 多选上控制栏两条入口） -->
-    <AssetUploadHost />
+      <LeftDrawer />
+      <ModalsArea />
+      <!-- 「加入资产库」贴进来的图 → 复用左侧同一个上传弹窗（节点右键 / 多选上控制栏两条入口） -->
+      <AssetUploadHost />
+      <!-- 插槽调试覆盖层：默认主题提供，全应用只挂一次。
+           它读 <html data-slot-debug="on"> 与 data-slot / data-slot-id，不需要各区域传参。 -->
+      <SlotDebugOverlay />
 
-  </CanvasShell>
+    </CanvasShell>
   </CanvasProvider>
 </template>
 

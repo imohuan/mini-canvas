@@ -18,7 +18,6 @@ import AssetTree, { type AssetTreeRow } from '../AssetTree.vue'
 import CanvasRowMenu from '../CanvasRowMenu.vue'
 import AxDialog from '../AxDialog.vue'
 import { useUi, type TreeNode } from '../../composables/ui'
-import { uiComponentOf } from '../../composables/ui'
 import { checkedRowIds } from '../../composables/assetSelection'
 import { canvasTreeBlocks } from '../../composables/canvasTree'
 import { assetKindOf } from '../../composables/assetModel'
@@ -38,7 +37,6 @@ import {
 const ui = useUi()
 const s = ui.state
 /** 插槽调试提示：主题插件登记的默认件 */
-const slotDebugTip = computed(() => uiComponentOf('slotDebugPopover') as never)
 
 // ===== 插件页签（第三个及之后的页签）=====
 //
@@ -691,7 +689,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
       <SlotComposer slot="shell.drawer.tabs"
         class="flex h-[50px] flex-none items-center gap-1 border-y border-line px-2" role="tablist"
         :item-props="drawerTabProps" :shared-props="slotShared"
-        :debug="Boolean(s.cfg.debug.slotDebug)" :debug-tip="slotDebugTip" label="抽屉页签">
+        >
         <SlotAnchor id="host/canvas-tab" :order="100">
           <button class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
             :class="s.leftTab === DRAWER_TAB_CANVAS ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"

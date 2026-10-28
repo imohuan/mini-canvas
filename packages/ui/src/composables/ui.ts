@@ -1640,9 +1640,20 @@ function createUi() {
       const t = targetOf(k as string)
       if (v !== undefined && t) t[k as string] = v
     }
+    // 插槽调试开关 = <html data-slot-debug>：CSS（canvas-render）与调试覆盖层（主题）都只看它，
+    // 不再由每个外壳区域传 debug 参数。
+    const syncSlotDebug = (): void => {
+      // 单测（node 环境）没有 document：跳过即可，不影响任何逻辑
+      if (typeof document === 'undefined') return
+      const root = document.documentElement
+      if (store.get('slotDebug') === true) root.setAttribute('data-slot-debug', 'on')
+      else root.removeAttribute('data-slot-debug')
+    }
+    syncSlotDebug()
     disposeSettingsBind = store.onChange((key, value) => {
       const t = targetOf(key)
       if (t) t[key] = value
+      if (key === 'slotDebug') syncSlotDebug()
     }).dispose
   }
 

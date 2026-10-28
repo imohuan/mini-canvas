@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
- * SlotDebugPopover —— 插槽调试小点的悬停说明面板（默认主题提供）。
+ * SlotDebugPopover —— 插槽调试的悬停说明面板（保留给自定义宿主复用）。
  *
- * 为什么放在主题插件：它是**默认皮的一部分**（外观与文案都跟主题走），
- * 与 Dropdown / Tooltip / NodeToolbarButton 同一类"设计系统件"。
- * canvas-render 只负责发出"这里有个点、内容是什么"，不决定长什么样。
+ * 现行默认实现是 SlotDebugOverlay（全局挂一次、读 data-slot / data-slot-id），
+ * 本组件不再被 SlotComposer 引用；保留它是为了让别的宿主也能拿这一份面板。
  *
- * 实现直接用本包的 Dropdown（trigger=hover）：与全站下拉共用定位、翻转、
+ * 实现用本包的 Dropdown（trigger=hover）：与全站下拉共用定位、翻转、
  * 点击外部关闭与箭头，不另造一套浮层。
  */
 import { computed } from 'vue'

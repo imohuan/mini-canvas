@@ -25,7 +25,9 @@ describe('外壳插槽挂载点', () => {
 
   it('底栏走 shell.dock 的可排序槽，且内置项都是 SlotAnchor', () => {
     expect(app).not.toContain('slot="shell.dock"')
-    expect(dock).toContain('<SlotComposer slot="shell.dock"')
+    // 底栏模板是多行写法：只断言标签本身与槽名都在
+    expect(dock).toContain('<SlotComposer')
+    expect(dock).toContain('slot="shell.dock"')
     for (const id of ['host/add', 'host/move', 'host/library', 'host/roles', 'host/history', 'host/shortcuts', 'host/agent']) {
       expect(dock).toContain('id="' + id + '"')
     }

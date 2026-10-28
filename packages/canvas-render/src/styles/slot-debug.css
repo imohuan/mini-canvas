@@ -1,10 +1,20 @@
 /**
- * slot-debug.css —— 插槽调试的醒目样式（仅在开关打开时由组件加 .is-slot-debug）。
+ * slot-debug.css —— 插槽调试的纯 CSS 视觉（零 DOM、零组件参数）。
  *
- * 目标：让人一眼看出"哪里有插槽、插槽 id 是什么、里面有哪些条目、它们的 order 是多少"。
- * 只在调试时出现，不参与正常视觉；颜色用高对比色，暗色主题也看得清。
+ * 开关只有一个：<html data-slot-debug="on">。
+ * 主题插件的全局调试覆盖层负责面板与文案；这里只负责"看得见边界、
+ * 一眼能找到角标"：
+ * - 插槽容器：橙色虚线 + 斜纹，右上角橙色角标；
+ * - 插件条目：绿色实线 + 右侧绿色角标；
+ * - 宿主内置条目：蓝色实线 + 蓝色角标。
+ *
+ * 角标固定在各自右上角（不再挤在左上角重叠）；只用伪元素，不改 DOM 结构，
+ * 所以按钮不会被包一层、也不会影响 flex 布局。
  */
-.is-slot-debug {
+
+/* ===== 插槽容器 ===== */
+html[data-slot-debug='on'] [data-slot]:not([data-slot-id]) {
+  position: relative;
   outline: 2px dashed #f59e0b !important;
   outline-offset: 2px;
   background-image: repeating-linear-gradient(
@@ -16,59 +26,47 @@
   );
 }
 
-/* 条目：绿色实线，与容器区分 */
-.is-slot-debug[data-slot-id] {
-  outline: 2px solid #10b981 !important;
-}
-
-/*
- * 调试小点：平时只有一个 8px 圆点，不挡内容；悬停才由宿主浮层展开详情。
- * 三种颜色区分：插槽（橙）/ 插件条目（绿）/ 宿主内置（蓝）。
- */
-.slot-debug-dot {
+html[data-slot-debug='on'] [data-slot]:not([data-slot-id])::after {
+  content: '';
   position: absolute;
+  top: -4px;
+  right: -4px;
   z-index: 200000;
-  display: inline-block;
   width: 12px;
   height: 12px;
   border-radius: 9999px;
-  cursor: help;
-  pointer-events: auto;
-}
-.slot-debug-dot.is-slot {
-  position: relative;
-  top: -1px;
-  width: 10px;
-  height: 10px;
-  margin-right: 2px;
-  vertical-align: middle;
-}
-/* 内层圆点负责真正的颜色与尺寸（外层只当悬停热区，触发器不会 0×0） */
-.slot-debug-dot-inner {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 9999px;
-  background: #10b981;
-  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85);
-}
-.slot-debug-dot.is-host .slot-debug-dot-inner { background: #0ea5e9; }
-.slot-debug-dot.is-slot .slot-debug-dot-inner {
   background: #f59e0b;
-}
-/* Dropdown 的触发器默认按内容收缩；给圆点一个确定的命中区，悬停才稳定 */
-.slot-debug-dot .dd-trigger {
-  width: 100%;
-  height: 100%;
-}
-.slot-debug-dot .dd,
-.slot-debug-dot .dd-trigger {
-  display: block;
-  width: 100%;
-  height: 100%;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9);
+  pointer-events: auto;
+  cursor: help;
 }
 
-/* 容器需要定位上下文，标签才能浮在容器上方 */
-.slot-composer.is-slot-debug {
+/* ===== 条目（宿主 / 插件全靠颜色区分，属性只有 data-slot-id） ===== */
+html[data-slot-debug='on'] [data-slot-id] {
   position: relative;
+  outline: 2px solid #10b981 !important;
+  outline-offset: 1px;
+}
+
+html[data-slot-debug='on'] [data-slot-id]::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  z-index: 200000;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9);
+  pointer-events: auto;
+  cursor: help;
+}
+
+/* 宿主内置条目：蓝色（与插件条目区分） */
+html[data-slot-debug='on'] [data-slot-id^='host/'] {
+  outline-color: #0ea5e9 !important;
+}
+html[data-slot-debug='on'] [data-slot-id^='host/']::after {
+  background: #0ea5e9;
 }

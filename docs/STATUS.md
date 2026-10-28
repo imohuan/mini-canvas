@@ -344,11 +344,26 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
   不再遮挡底栏按钮、也不会互相重叠。
 - 悬停弹出说明面板：插槽显示 `插槽 / 名称 / 条目数 / 注册用法`；
   条目显示 `id / order / before / after / 来源`。
-- 面板实现在 **plugin-theme-default**（`SlotDebugPopover.vue`，登记进 ui 目录
-  `slotDebugPopover`）：复用主题自己的 `Dropdown`（trigger=hover），
-  所以定位/翻转/点击外部关闭/箭头都与全站下拉一致。
-- `canvas-render` 只负责发"小点 + 内容"，不内置浮层：宿主经 `debug-tip` 传入
-  `uiComponentOf('slotDebugPopover')`；没传时退回原生 `title`。
+- 面板实现在 **plugin-theme-default**：复用主题自己的 `Dropdown`（trigger=hover），
+  定位/翻转/点击外部关闭/箭头都与全站下拉一致。
+- `canvas-render` 只负责发标记，不内置浮层、也不接收任何调试参数。
+
+**插槽调试解耦（2026-10-28 收口，用户口径）**：
+
+- `SlotComposer` / `SlotHost` **不再接收任何调试参数**：没有 `debug` / `debugTip`，
+  也不生成调试 DOM。只输出稳定标记 —— 容器 `data-slot` / `data-slot-count`，
+  条目 `data-slot-id` / `data-slot-order` / `data-slot-before` / `data-slot-after`。
+  宿主锚点的标记会合并到第一条真实元素上（否则覆盖层找不到条目）。
+- 视觉全部交给 CSS：`html[data-slot-debug="on"]` 一开，插槽橙色虚线 + 右上角橙点，
+  插件条目绿线 + 绿点，宿主条目蓝线 + 蓝点；用 `::after` 定位，不再挤在左上角，
+  也不包任何元素。
+- 面板由主题插件的**全局覆盖层** `SlotDebugOverlay.vue` 提供，全应用只挂一次
+  （`App.vue` 的 `overlays` 区）；只有指针落在角标热区时，才用主题 `Dropdown`
+  在角标上方居中展开，靠它自己翻转让面板留在视口内。
+- 开关只写一次：设置项 `slotDebug` → `ui.ts` 同步 `<html data-slot-debug>`；
+  每个外壳区域一行都不用改。
+- 面板文案：插槽显示【类型=插槽（放东西的位置）/ 槽名 / 条目数 / 注册用法】；
+  条目显示【类型=条目（放进插槽的东西）/ id / order / before / after / 来源 / 所在插槽】。
 
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。

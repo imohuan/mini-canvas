@@ -19,8 +19,6 @@ const props = defineProps<{
   slot: string
   /** 可选：给每个 occupant 根元素额外加的 class（如 overlay 的 pointer-events 命中规则） */
   itemClass?: string
-  /** 插槽调试：描边 + 显示插槽名 / 条目 id（由设置项 slotDebug 控制） */
-  debug?: boolean
 }>()
 
 const { ctx } = useCanvasContext()
@@ -72,14 +70,9 @@ watch(() => props.slot, reload)
        occupants 按内核 order 逐个渲染；每个条目都带 data-slot / data-slot-id，
        方便在开发者工具里直接查"这个槽有哪些条目、id 是什么"。 -->
   <template v-for="oc in list" :key="oc.id">
-    <span v-if="debug" class="slot-debug-badge slot-debug-item-badge" aria-hidden="true">
-      {{ slot }} · {{ oc.id }} · order {{ oc.order
-      }}{{ oc.before ? ' · before ' + oc.before : ''
-      }}{{ oc.after ? ' · after ' + oc.after : '' }}
-    </span>
     <component
       :is="oc.component"
-      :class="[itemClass, debug ? 'is-slot-debug' : '']"
+      :class="itemClass"
       :data-slot-order="oc.order"
       :data-slot-id="oc.id"
       :data-slot="slot"

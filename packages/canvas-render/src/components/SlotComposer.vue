@@ -29,6 +29,7 @@
 import {
   Comment,
   Fragment,
+  cloneVNode,
   defineComponent,
   h,
   isVNode,
@@ -72,16 +73,6 @@ export default defineComponent({
      * 插件组件与 SlotAnchor 的插槽内容都会收到；itemProps 可覆盖同名项。
      */
     sharedProps: { type: Object, default: undefined },
-    /** 插槽调试：描边 + 显示插槽名 / 条目 id（由设置项 slotDebug 控制） */
-    debug: { type: Boolean, default: false },
-    /** 槽名在 UI 上的简称（缺省用 slot 全名） */
-    label: { type: String, default: undefined },
-    /**
-     * 调试标签的悬浮面板组件（可选）。
-     * 宿主可传 AxTooltip / AxDropdown 这类浮层；不传则用浏览器原生 title 兜底。
-     * 组件契约：接收 content（字符串）与默认插槽（触发元素）。
-     */
-    debugTip: { type: [Object, Function] as PropType<Component | null>, default: null },
   },
   setup(props, { slots, attrs }) {
     const { ctx } = useCanvasContext()
@@ -199,9 +190,24 @@ export default defineComponent({
         // 也会在组件根上丢失 data-*（2026-10-28 设置左树/底栏实测）。
         const raw = item.content ?? []
         const content = Array.isArray(raw) ? raw : [raw]
-        // 宿主锚点：调试时把"条目身份 + 排序信息"作为一条标签放在内容前
-        if (!props.debug) return h(Fragment, { key: item.id }, content)
-        return h(Fragment, { key: item.id }, [slotDebugItemDot(item, 'host'), ...content])
+        // 宿主锚点：属性要落到**真实元素**上（否则覆盖层找不到条目）。
+        // 只给第一个可渲染元素补 data-*；组件根不强行塞（多根会 warn）。
+        const first = content.find((c) => isVNode(c) && c.type !== Comment)
+        const marked = content.map((c) =>
+          c === first && isVNode(c)
+            ? cloneVNode(
+                c,
+                {
+                  'data-slot-id': item.id,
+                  'data-slot-order': item.order,
+                  ...(item.before !== undefined ? { 'data-slot-before': item.before } : {}),
+                  ...(item.after !== undefined ? { 'data-slot-after': item.after } : {}),
+                },
+                true,
+              )
+            : c,
+        )
+        return h(Fragment, { key: item.id }, marked)
       }
       const extra = (props.itemProps as
         | ((entry: SlotComposerEntry & { component: unknown }) => Record<string, unknown> | undefined)
@@ -220,49 +226,7 @@ export default defineComponent({
         ...(props.sharedProps ?? {}),
         ...(extra ?? {}),
       })
-      // 插件条目：调试时在组件前面放一条身份/排序标签
-      if (!props.debug) return node
-      return h(Fragment, { key: item.id + ':debug' }, [slotDebugItemDot(item, 'plugin'), node])
-    }
-
-    /**
-     * 条目小圆点：平时只显示一个色点（不挡内容），悬停展开完整信息。
-     *
-     * 为什么不再写整行文字：底栏条目很密，长标签会互相重叠、分不清谁是谁
-     * （2026-10-28 用户实测截图）。改成一个点 + 悬浮面板，位置稳定、可读。
-     */
-    function slotDebugItemDot(item: SlotComposerItem, owner: 'host' | 'plugin'): VNode {
-      const lines = [
-        'id: ' + item.id,
-        'order: ' + item.order,
-        ...(item.before !== undefined ? ['before: ' + item.before] : []),
-        ...(item.after !== undefined ? ['after: ' + item.after] : []),
-        '来源: ' + (owner === 'host' ? '宿主内置' : '插件'),
-      ]
-      return debugDot('slot-debug-dot' + (owner === 'host' ? ' is-host' : ''), lines.join('\n'))
-    }
-
-    /**
-     * 统一生成"小点 + 悬浮详情"。
-     *
-     * 有 debugTip（宿主传了浮层组件）就包一层；否则退回原生 title
-     * —— 这样 canvas-render 不反向依赖 @mini-canvas/ui，自定义宿主也能用。
-     */
-    function debugDot(cls: string, title: string): VNode {
-      const dot = h('span', { class: 'slot-debug-dot-inner', 'aria-hidden': 'true' })
-      // 缺省不内置任何浮层：主题插件（plugin-theme-default）经 debug-tip 传默认件；
-      // 没传时退回原生 title，保证极简宿主也能看见内容。
-      const tip = props.debugTip
-      if (!tip) {
-        return h('span', { class: ['slot-debug-dot', cls], title, 'aria-hidden': 'true' }, [dot])
-      }
-      return h(
-        'span',
-        { class: ['slot-debug-dot', cls], 'data-slot-tip': '1' },
-        [
-          h(tip as Component, { content: title }, () => dot),
-        ],
-      )
+      return node
     }
 
     return () => {
@@ -286,26 +250,15 @@ export default defineComponent({
       // 底栏/状态条是横向 flex，设置左树是纵向 flex —— 这里不能写死方向。
       // attrs 内的 class 与固定 class 合并，不能直接覆盖（否则使用方的布局会丢）。
       const userClass = (attrs.class as string | undefined) ?? ''
-      const badge = props.debug
-        ? debugDot(
-            'is-slot',
-            [
-              '插槽: ' + props.slot,
-              '名称: ' + (props.label ?? props.slot),
-              '条目数: ' + nodes.length,
-              '用法: ctx.slots.register(\'' + props.slot + '\', { id: \'插件名/条目\', before/after })',
-            ].join('\n'),
-          )
-        : null
       return h(
         'div',
         {
           ...attrs,
-          class: ['slot-composer', userClass, props.debug ? 'is-slot-debug' : ''],
+          class: ['slot-composer', userClass],
           'data-slot': props.slot,
           'data-slot-count': nodes.length,
         },
-        badge ? [badge, ...nodes] : nodes,
+        nodes,
       )
     }
   },

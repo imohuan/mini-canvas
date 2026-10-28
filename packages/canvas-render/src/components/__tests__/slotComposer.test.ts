@@ -150,7 +150,7 @@ describe('SlotComposer · SSR', () => {
     ctx.stop()
   })
 
-  it('插槽与条目都带可检索标记；debug 打开时出现可悬停的小点', async () => {
+  it('插槽与条目都带可检索标记（调试 UI 不在组件里）', async () => {
     const ctx = new Context()
     await ctx.start()
     ctx.slots.register('demo.slot', {
@@ -175,16 +175,13 @@ describe('SlotComposer · SSR', () => {
     expect(plain).toContain('data-slot-id="plugin/x"')
     expect(plain).not.toContain('is-slot-debug')
 
-    const debug = await renderOnce(true)
-    expect(debug).toContain('is-slot-debug')
-    // 标签改成小圆点 + 悬浮面板：不再把长文字写进 DOM
-    expect(debug).toContain('slot-debug-dot is-slot')
-    // 浮层由宿主/主题经 debug-tip 传入；未传时退回原生 title
-    expect(debug).toContain('title=')
+    // 组件不认识"调试"：不接收 debug 参数，也不输出任何调试 DOM；
+    // 高亮与面板由主题覆盖层读这些数据属性完成。
+    expect(plain).not.toContain('slot-debug')
     ctx.stop()
   })
 
-  it('插槽调试：条目的 before / after / order 进数据属性与小点', async () => {
+  it('条目的 before / after / order 进数据属性', async () => {
     const ctx = new Context()
     await ctx.start()
     ctx.slots.register('demo.slot', {
@@ -214,8 +211,8 @@ describe('SlotComposer · SSR', () => {
     expect(html).toContain('data-slot-before="host/b"')
     expect(html).toContain('data-slot-order="20"')
     expect(html).toContain('data-slot-order="30"')
-    // 插槽本体 1 个点 + 每个条目各一个（宿主锚点 2 个 + 插件条目 2 个）
-    expect((html.match(/slot-debug-dot-inner/g) ?? []).length).toBe(5)
+    // 不再生成调试小点；数据属性足够覆盖层定位与展示
+    expect(html).not.toContain('slot-debug-dot')
     ctx.stop()
   })
 

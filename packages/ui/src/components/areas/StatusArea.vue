@@ -12,7 +12,6 @@ import AxDropdown from '../AxDropdown.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AxTooltip from '../AxTooltip.vue'
 import { useUi } from '../../composables/ui'
-import { uiComponentOf } from '../../composables/ui'
 import { computed } from 'vue'
 import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import SlotButton from './SlotButtons.vue'
@@ -20,8 +19,6 @@ import { useMiniMapDockTarget } from '../../composables/miniMapDock'
 
 const ui = useUi()
 const s = ui.state
-/** 插槽调试提示：主题插件登记的默认件（plugin-theme-default 的 slotDebugPopover） */
-const slotDebugTip = computed(() => uiComponentOf('slotDebugPopover') as never)
 
 /** 下发给插件条目的共享 props：状态条默认按钮 + 常用函数 */
 const slotShared = {
@@ -49,7 +46,7 @@ const miniMapDock = useMiniMapDockTarget()
   <div class="flex items-end" aria-label="画布状态栏" style="overflow: visible">
     <div class="flex h-10 items-center gap-1 rounded-xl bg-panel p-1.5">
       <SlotComposer slot="shell.status" item-class="flex-none" class="flex items-center gap-1" :shared-props="slotShared"
-        :debug="Boolean(s.cfg.debug.slotDebug)" :debug-tip="slotDebugTip" label="状态条">
+        >
         <SlotAnchor id="host/assets" :order="100">
       <AxTooltip v-if="s.drawer !== 'left'" content="资产管理" placement="top">
         <button
