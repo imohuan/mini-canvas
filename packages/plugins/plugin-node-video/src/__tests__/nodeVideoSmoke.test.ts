@@ -190,13 +190,14 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('连接约束：输出口产 video（供图片/视频节点识别来源）', async () => {
+  it('连接约束：输出口产 video，输入口收文本、音频、图片、视频（供生成参考素材）', async () => {
     const { ctx, nodeStore } = boot()
     await ctx.start()
     const def = nodeStore.types.get(VIDEO_NODE_TYPE)!
     expect(def.outputs?.[0]?.contentType).toBe('video')
-    expect(def.inputs?.[0]?.acceptsTypes).toContain('video')
-    expect(def.inputs?.[0]?.acceptsTypes).toContain('image')
+    expect(def.inputs?.[0]?.acceptsTypes).toEqual(
+      expect.arrayContaining(['text', 'audio', 'image', 'video']),
+    )
     ctx.stop()
   })
 

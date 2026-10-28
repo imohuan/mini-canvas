@@ -158,8 +158,7 @@ export const VIDEO_THUMB_KEYS = videoThumbTierKeys('video')
 /**
  * 插件主体：上架 'video' 服务 + 注册 'video' 节点类型（数据/尺寸/连接约束 + content + 上下操作栏 + create）。
  *
- * 连接约束：输入口收 image（封面/首帧参考）与 video、输出口产 video ——
- * 对齐 v1 VideoNodePlugin 的 acceptsInputs: ['image', 'text', 'video']。
+ * 连接约束：输入口收文本、音频、图片、视频（生成时的参考素材），输出口产 video。
  * 不声明 capacity = 不限条数（视频节点可以接多个上游素材）。
  * 卡片边框：保留外壳默认的 1px 边框（2026-10-12 与图片节点同一条口径）——
  * 空视频 + 白底画面与画布背景糊在一起时，边框是唯一能看出节点边界的东西。
@@ -232,7 +231,7 @@ export function apply(ctx: Context) {
     titleExtra: videoTitleExtra,
     // 尺寸与 v1 NODE_SIZES.video 同：一点元数据都读不到时的兜底
     size: { w: 480, h: 320 },
-    inputs: [{ port: 'target', acceptsTypes: ['image', 'text', 'video'] }],
+    inputs: [{ port: 'target', acceptsTypes: ['text', 'audio', 'image', 'video'] }],
     outputs: [{ port: 'source', contentType: 'video' }],
     // 不支持拖拽改尺寸：显式声明 false（与 v1 VideoNodePlugin 的 `resizable: false` 一致）。
     // 视频卡片的尺寸由画面比例决定（进视频/裁剪/恢复都说一次改到位），
