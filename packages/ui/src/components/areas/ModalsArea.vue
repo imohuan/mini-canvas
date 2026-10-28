@@ -537,6 +537,56 @@ function buildFactsLine(item: HistItem): HTMLElement {
 }
 
 /**
+ * 音频的「卡外控制行」：播放键 + 时间在左，尺寸/时长/大小在右。
+ *
+ * 用户口径 2026-10-28：波形条本身恢复成白底细条（不再是带边框的卡片），
+ * 播放键与文字说明像图片卡那样放到卡片外。播放器组件自己不带这些按钮
+ * （它在条内被隐藏了底栏），所以这里补一个最小的播放键 + 时间，
+ * 点击/拖动进度仍走条内的波形（可点、可拖）。
+ */
+function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLElement): HTMLElement {
+  const row = document.createElement('div')
+  row.className = 'hist-card-audio-controls'
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'hist-audio-play'
+  btn.setAttribute('aria-label', '播放')
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20"/></svg>'
+  const time = document.createElement('span')
+  time.className = 'hist-audio-time'
+  const fmt = (sec: number): string => {
+    if (!Number.isFinite(sec) || sec <= 0) return '0:00'
+    const total = Math.round(sec)
+    return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0')
+  }
+  const sync = (): void => {
+    time.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration)
+    btn.innerHTML = audio.paused
+      ? '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+    btn.setAttribute('aria-label', audio.paused ? '播放' : '暂停')
+  }
+  btn.addEventListener('click', (ev) => {
+    ev.stopPropagation()
+    if (audio.paused) void audio.play().catch(() => {})
+    else audio.pause()
+  })
+  audio.addEventListener('timeupdate', sync)
+  audio.addEventListener('play', sync)
+  audio.addEventListener('pause', sync)
+  audio.addEventListener('loadedmetadata', sync)
+  sync()
+  row.appendChild(btn)
+  row.appendChild(time)
+
+  // 右侧：卡外信息（音频没有宽高，只有时长与大小）—— 与图片卡同一套文字
+  const facts = buildFactsLine(item)
+  facts.classList.add('hist-card-facts--inline')
+  row.appendChild(facts)
+  return row
+}
+
+/**
  * 整张卡的最后一行：图 + 卡外信息行。所有卡片（图片/视频/音频/异常）都走这一个出口。
  * 异常卡自己已经带"生成异常 · 无产物"与类型/时间，这里**只给正常卡**补信息行，
  * 避免同一张卡出现两行重复说明。
@@ -585,13 +635,13 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
     ? 'hist-card-media hist-card-media--audio'
     : 'hist-card-media hist-card-media--video'
   /**
-   * 音频卡保持"之前那版"的横向短条（宽度由瀑布流决定、高度固定 96px），
-   * 不要按 3:1 再被拉成一条细线 —— 用户口径 2026-10-28：改完之后反而更差了。
+   * 音频：恢复成最开始那版的**横向细条**（宽度由瀑布流决定、高度 96px、白底），
+   * 不做带边框的"卡片面板"（用户口径 2026-10-28：不喜欢现在这种卡片形式）。
+   * 播放键与文字说明移到卡片外（见 finishCard 之后挂的 attachAudioControls）。
    * 图片/视频仍按产物真实宽高比。
    */
   if (isAudio) {
-    // 卡片形态：给它一块有边有圆角的面板（96px 的细条看着不像卡片，用户口径 2026-10-28）
-    media.style.height = '120px'
+    media.style.height = '96px'
   } else {
     media.style.aspectRatio = mediaAspect(item, 16 / 9)
   }
@@ -671,6 +721,17 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
 
       card.addEventListener('click', () => onCardClick(item))
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
+      if (isAudio && el) {
+        /**
+         * 音频：卡外放"播放键 + 时间 + 尺寸信息"这一行（波形条内只留白底波形）。
+         * 结构仍与图片卡一致：媒体条在上、说明在下。
+         */
+        const finished = finishCard(card, item)
+        const facts = finished.querySelector('.hist-card-facts')
+        if (facts) facts.remove()
+        finished.appendChild(buildAudioControls(item, el as HTMLAudioElement, finished))
+        return finished
+      }
       return finishCard(card, item)
   }
   // 没有注册件时的兜底卡面：同样套在 media 框里，保留同一套角标与比例
@@ -1482,17 +1543,29 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
 /* 历史卡里的音频波形一律中性灰阶（用户口径 2026-10-27：不要主题紫）。
    只覆盖卡片内的表现，节点里的播放器仍按自己的主题走。 */
-/* 音频卡做成"卡片"：面板底 + 细边框，和图片/视频卡同一套外观 */
+/* 音频：只要一条**白色背景的波形条**，不加边框、不做卡片面板
+   （用户口径 2026-10-28：恢复最开始那版）。 */
 .hist-card-media--audio {
-  border: 1px solid var(--ui-line, rgba(128, 128, 128, 0.2));
+  border: 0;
   background: var(--ui-panel, #fff);
+  border-radius: 8px;
 }
-/* 卡外已经有一行"音频 · 时长 · 大小"：播放器自带那行时长/大小/文件名是重复信息，
-   只保留播放键与波形（用户口径 2026-10-28：底部那块时间/大小是多余的）。 */
-.hist-card-audio-plugin .apv-time,
-.hist-card-audio-plugin .apv-size,
-.hist-card-audio-plugin .apv-name { display: none; }
-.hist-card-audio-plugin .apv-bar { gap: 6px; }
+/* 播放键/文字说明由宿主放到卡片外：播放器自带的底栏（时长/大小/文件名）在条内隐藏，
+   避免和卡外说明重复。 */
+.hist-card-audio-plugin .apv-bar { display: none; }
+/* 卡外控制行：播放键 + 时间在左，音频/时长/大小在右（与图片卡同一套字号与灰阶） */
+.hist-card-audio-controls { display: flex; align-items: center; gap: 8px; margin-top: 7px; min-width: 0; }
+.hist-audio-play {
+  flex: none; display: inline-grid; place-items: center;
+  width: 22px; height: 22px; padding: 0;
+  border: 1px solid var(--ui-line, rgba(128,128,128,.2)); border-radius: 9999px;
+  background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b);
+  cursor: pointer; transition: background .15s ease;
+}
+.hist-audio-play:hover { background: var(--ui-hover, rgba(0,0,0,.06)); }
+.hist-audio-play svg { width: 11px; height: 11px; }
+.hist-audio-time { flex: none; font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums; }
+.hist-card-facts--inline { margin-top: 0; margin-left: auto; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,

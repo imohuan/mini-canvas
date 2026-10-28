@@ -169,6 +169,16 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(uiSource, '补页没有把页码与筛选签名一起定格').toMatch(/loadHistory\(nextPage, signature\)/)
   })
 
+  it('音频恢复成白底波形细条，播放键与说明在卡片外', () => {
+    const globalStyle = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    expect(globalStyle, '音频条仍带边框（用户口径：不要卡片面板）').not.toMatch(/\.hist-card-media--audio\s*\{[^}]*border:\s*1px/)
+    expect(globalStyle, '音频条不是白底').toMatch(/\.hist-card-media--audio\s*\{[^}]*background:\s*var\(--ui-panel/)
+    expect(globalStyle, '播放器自带底栏没有隐藏（会与卡外说明重复）').toMatch(/\.hist-card-audio-plugin \.apv-bar\s*\{\s*display:\s*none/)
+    expect(globalStyle, '缺少卡外控制行样式').toMatch(/\.hist-card-audio-controls\s*\{/)
+    expect(modalsArea, '音频卡没有生成卡外播放键').toMatch(/buildAudioControls\(item, el as HTMLAudioElement/)
+    expect(modalsArea, '音频条高度没有恢复成 96px').toMatch(/media\.style\.height = '96px'/)
+  })
+
   it('视频卡走与图片一致的瀑布流（不再写死 180px 高）', () => {
     // 旧实现：.hist-card-video-plugin { height: 180px } + 卡片固定 16:9 —— 视频整排等高、与图片不齐
     const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
