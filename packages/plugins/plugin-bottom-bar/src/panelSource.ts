@@ -516,6 +516,15 @@ export function mediaKindOf(item: ResourceItem): MediaKind4 {
   if (item.mediaType === 'video') return 'video'
   if (item.mediaType === 'audio') return 'audio'
   if (item.mediaType === 'image') return 'image'
+  /**
+   * 用户 2026-10-28：mediaType 只存在运行时注册表里，组件刷新/底栏重开时会丢，
+   * 于是所有标签退化成文本图标。名字（图片2 / 视频1 / 音频3 / 文本1）是节点属性，
+   * 永远在 —— 所以 mediaType 缺失时**回退按名字判断**。
+   */
+  const n = String(item.name ?? '').trim()
+  if (/^视频\s*\d+$/.test(n)) return 'video'
+  if (/^音频\s*\d+$/.test(n)) return 'audio'
+  if (/^图片\s*\d+$/.test(n)) return 'image'
   return 'text'
 }
 
@@ -564,7 +573,7 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
  * 底栏自己的**标签规格**（用户口径 2026-10-27：标签实现交给插件）。
  *
  * 编辑器只提供「文字 → 标签」的通用通道；认什么写法、标签长什么样，由这里决定。
- * 现在这套规则与改造前完全一致：认 @图片N / @视频N / @音频N / @音视频N，
+ * 认 @图片N / @视频N / @音频N / @文本N / @音视频N（用户 2026-10-28 补 @文本N），
  * 生成 `ref-slot:<kind>:<N>` 的槽位标签。
  *
  * 想换成别的写法（比如 @角色1），只改这里的 scan 即可，不用碰编辑器。
@@ -572,24 +581,30 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
 export const bottomBarTagSpec: TagSpec = {
   scan(text: string): TagMatch[] {
     const out: TagMatch[] = []
-    const re = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
+    const re = /@(图片|视频|音频|文本|音视频|image|video|audio|text|media|av)\s*(\d{1,4})/gi
     let m: RegExpExecArray | null
     while ((m = re.exec(text)) !== null) {
       const kind = m[1].toLowerCase()
-      const slotKind: 'image' | 'video' | 'audio' | 'av' =
+      const slotKind: 'image' | 'video' | 'audio' | 'av' | 'text' =
         kind === '图片' || kind === 'image' ? 'image'
         : kind === '视频' || kind === 'video' ? 'video'
         : kind === '音频' || kind === 'audio' ? 'audio'
+        : kind === '文本' || kind === 'text' ? 'text'
         : 'av'
       const label =
-        slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+        slotKind === 'image' ? '图片'
+        : slotKind === 'video' ? '视频'
+        : slotKind === 'audio' ? '音频'
+        : slotKind === 'text' ? '文本'
+        : '音视频'
       const index = Number(m[2])
       if (!index) continue
       const item: ResourceItem = {
         id: 'ref-slot:' + slotKind + ':' + index,
         name: label + index,
         category: '素材',
-        mediaType: slotKind === 'av' ? undefined : slotKind,
+        // av 是混合、text 靠标签名识别，两者都不给单一 mediaType
+        mediaType: slotKind === 'av' || slotKind === 'text' ? undefined : slotKind,
       }
       out.push({ from: m.index, to: m.index + m[0].length, item })
     }

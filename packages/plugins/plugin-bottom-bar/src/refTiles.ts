@@ -22,6 +22,8 @@ export interface RefTile {
   name: string
   url?: string
   isText: boolean
+  /** 资源类型（用户 2026-10-28：卡片空态要按类型出图标） */
+  kind: 'image' | 'video' | 'audio' | 'text'
   /** 有内容格对应的素材（卡片删除/预览要拿它找连线）；待输入格没有 */
   card?: TileCardLike
   /**
@@ -149,6 +151,7 @@ export function mergeRefTiles(
         name: card?.name ?? (label + ' ' + slotIndex),
         url: card?.url,
         isText: false,
+        kind,
         card,
       })
     }
@@ -167,6 +170,7 @@ export function mergeRefTiles(
       name: card.name,
       url: card.url,
       isText: card.isText,
+      kind: card.isText ? 'text' : 'image',
       card,
     })
   }

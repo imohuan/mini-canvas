@@ -472,13 +472,29 @@ const KIND_ICON_SVG: Record<'image' | 'video' | 'audio' | 'text', string> = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>',
 }
 
+/**
+ * 从标签名解析资源类型（用户 2026-10-28：标签名自带类型+索引，别再绕注册表猜）。
+ *
+ * 为什么必须用名字：类型存在注册表的 mediaType 里，而注册表是运行时态 —— 底栏重开/
+ * 组件刷新时条目会被重建（只剩 name/id），mediaType 丢失 → 所有图标退化成文本图标。
+ * 名字（图片2 / 视频1 / 音频3 / 文本1）是节点属性，永远在。
+ */
+export function kindFromName(name: string | null | undefined): 'image' | 'video' | 'audio' | 'text' {
+  const s = String(name ?? '').trim()
+  if (/^视频\s*\d+$/.test(s)) return 'video'
+  if (/^音频\s*\d+$/.test(s)) return 'audio'
+  if (/^图片\s*\d+$/.test(s)) return 'image'
+  if (/^文本\s*\d+$/.test(s)) return 'text'
+  return 'text'
+}
+
 /** 待输入标签的小图标（与底栏槽位同一套线性图标） */
 const SLOT_CHIP_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 
 /** 造一个「待输入 / 已填」槽位素材项（renderEditor 读注册表，缩略图跟着连线变化） */
 function buildSlotItem(
-  slotKind: 'image' | 'video' | 'audio' | 'av',
+  slotKind: 'image' | 'video' | 'audio' | 'av' | 'text',
   name: string,
 ): ResourceItem {
   const id = 'ref-slot:' + slotKind + ':' + name.replace(/\D/g, '')
@@ -486,7 +502,8 @@ function buildSlotItem(
     id,
     name,
     category: '素材',
-    mediaType: slotKind === 'av' ? undefined : slotKind,
+    // av / text 都没有单一媒体类型：av 是混合，text 靠名字识别
+    mediaType: slotKind === 'av' || slotKind === 'text' ? undefined : slotKind,
   }
   item.renderEditor = (self) => {
     // 渲染时读注册表：待输入 → 已填（连线变化）时外观要跟着变
@@ -507,13 +524,19 @@ function buildSlotItem(
       ic.className = 'resource-chip-icon'
       /**
        * 按类型出图标（用户 2026-10-28）：图片/视频/音频/文本各有自己的图标。
-       * 旧实现一律用 SLOT_CHIP_ICON（方框），所以图片2 显示成了文本样式的方框。
+       *
+       * 类型来源**优先看标签名**（图片2 / 视频1 / 音频3 / 文本1）——名字是节点属性，
+       * 刷新多少次都在；mediaType 只存在注册表里，重开底栏时会丢（用户截图 2 全变
+       * 文本图标就是这个原因）。名字解析不出来时才退回 mediaType。
        */
+      const fromName = kindFromName(latest.name)
       const kindKey: 'image' | 'video' | 'audio' | 'text' =
-        latest.mediaType === 'video' ? 'video'
-        : latest.mediaType === 'audio' ? 'audio'
-        : latest.mediaType === 'image' ? 'image'
-        : 'text'
+        fromName !== 'text' || /^文本\s*\d+$/.test(String(latest.name ?? '').trim())
+          ? fromName
+          : latest.mediaType === 'video' ? 'video'
+          : latest.mediaType === 'audio' ? 'audio'
+          : latest.mediaType === 'image' ? 'image'
+          : 'text'
       ic.innerHTML = KIND_ICON_SVG[kindKey] || SLOT_CHIP_ICON
       span.append(ic)
     }
@@ -655,6 +678,25 @@ export interface PasteFilesContext {
 
 /** 外部粘贴处理：返回 true = 已处理（编辑器不再走默认粘贴） */
 export type PasteFilesHandler = (files: File[], ctx: PasteFilesContext) => boolean | Promise<boolean>
+/**
+ * 这次粘贴是不是「纯文本粘贴」（Ctrl+Shift+V / Cmd+Shift+V）。
+ *
+ * 为什么不能靠 clipboardData 判断：剪贴板内容一样，区别只在用户按的键。
+ * 所以在 keydown 时记一个标记，paste 时读走并清空。
+ */
+let lastPasteWasPlainText = false
+
+export function isPlainTextPasteEvent(_event: ClipboardEvent): boolean {
+  const v = lastPasteWasPlainText
+  lastPasteWasPlainText = false
+  return v
+}
+
+/** 由 keydown 监听调用：记录「用户按的是纯文本粘贴快捷键」 */
+export function markPlainTextPaste(): void {
+  lastPasteWasPlainText = true
+}
+
 
 // 粘贴处理插件
 function createPasteHandlerPlugin(
@@ -687,6 +729,29 @@ function createPasteHandlerPlugin(
               view.dispatch(tr)
             },
           })
+          return true
+        }
+
+        /**
+         * 粘贴规范（用户 2026-10-28）：
+         *
+         * ① 普通粘贴（Ctrl+V）：复制的是标签 → 粘贴出来还是标签；复制的是文字 → 文字。
+         *    浏览器的富文本通道里，标签是带 `resource-node` 的 HTML，交给 ProseMirror 的
+         *    默认粘贴即可原样还原（下面 `return false` 就是这条）。只有「没有 HTML、
+         *    或 HTML 里没有标签」的纯文本，才走我们的 @ 文本解析兜底。
+         * ② 纯文本粘贴（Ctrl+Shift+V）：**强制当文本**，绝不把 @图片1 之类转成标签。
+         *    ProseMirror 的默认粘贴不认这个快捷键，只能我们拦下来自己插纯文本。
+         */
+        const isPlainTextPaste = isPlainTextPasteEvent(event)
+        if (isPlainTextPaste) {
+          const raw = event.clipboardData?.getData('text/plain') ?? ''
+          if (!raw) return false
+          const { from, to } = view.state.selection
+          const lines = raw.split('\n')
+          const nodes = lines.map((line) =>
+            view.state.schema.node('paragraph', null, line ? view.state.schema.text(line) : undefined),
+          )
+          view.dispatch(view.state.tr.replaceWith(from, to, nodes))
           return true
         }
 
@@ -971,22 +1036,28 @@ export function currentTagSpec(): TagSpec | null {
 /**
  * 组件内置的标签识别规则（没注册 tagSpec 时使用）。
  *
- * 与改造前等价：认 `@图片N / @视频N / @音频N / @音视频N`（中英双写），
+ * 认 `@图片N / @视频N / @音频N / @文本N / @音视频N`（中英双写），
  * 生成 `ref-slot:<kind>:<N>` 的槽位标签。插件注册了 tagSpec 就不会走到这里。
  */
 export function builtinScan(text: string): TagMatch[] {
   const out: TagMatch[] = []
-  const re = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/gi
+  // 用户 2026-10-28：@文本N 也要能转成标签（之前只认图片/视频/音频）
+  const re = /@(图片|视频|音频|文本|音视频|image|video|audio|text|media|av)\s*(\d{1,4})/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     const kind = m[1].toLowerCase()
-    const slotKind: 'image' | 'video' | 'audio' | 'av' =
+    const slotKind: 'image' | 'video' | 'audio' | 'av' | 'text' =
       kind === '图片' || kind === 'image' ? 'image'
       : kind === '视频' || kind === 'video' ? 'video'
       : kind === '音频' || kind === 'audio' ? 'audio'
+      : kind === '文本' || kind === 'text' ? 'text'
       : 'av'
     const label =
-      slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+      slotKind === 'image' ? '图片'
+      : slotKind === 'video' ? '视频'
+      : slotKind === 'audio' ? '音频'
+      : slotKind === 'text' ? '文本'
+      : '音视频'
     const index = Number(m[2])
     if (!index) continue
     out.push({ from: m.index, to: m.index + m[0].length, item: buildSlotItem(slotKind, label + index) })
@@ -1542,6 +1613,21 @@ export function useEditor(
 
     view = new EditorView(editorRef.value, {
       state,
+      /**
+       * 记录「纯文本粘贴」意图（用户 2026-10-28 规范）。
+       *
+       * Ctrl/Cmd+Shift+V 与 Ctrl+V 的剪贴板内容完全一样，区别只在按了什么键；
+       * paste 事件本身不带这个信息，所以在 keydown 时先记一笔，paste 时消费。
+       */
+      handleDOMEvents: {
+        keydown: (_view, event) => {
+          const e = event as KeyboardEvent
+          if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+            markPlainTextPaste()
+          }
+          return false
+        },
+      },
       // 缺省可编辑；props.editable === false 时只读（contenteditable 移除、输入全禁）
       editable: () => unref(props.editable) !== false,
       dispatchTransaction(transaction) {
