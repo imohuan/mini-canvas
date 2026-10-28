@@ -686,7 +686,8 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
            插件写 before/after 时指向条目 id（host/canvas-tab 这种），不是槽名。 -->
       <SlotComposer slot="shell.drawer.tabs"
         class="flex h-[50px] flex-none items-center gap-1 border-y border-line px-2" role="tablist"
-        :item-props="drawerTabProps" :shared-props="slotShared">
+        :item-props="drawerTabProps" :shared-props="slotShared"
+        :debug="Boolean(s.cfg.debug.slotDebug)" label="抽屉页签">
         <SlotAnchor id="host/canvas-tab" :order="100">
           <button class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
             :class="s.leftTab === DRAWER_TAB_CANVAS ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"

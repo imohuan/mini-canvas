@@ -1,0 +1,41 @@
+/**
+ * slot-debug.css —— 插槽调试的醒目样式（仅在开关打开时由组件加 .is-slot-debug）。
+ *
+ * 目标：让人一眼看出"哪里有插槽、插槽 id 是什么、里面有哪些条目、它们的 order 是多少"。
+ * 只在调试时出现，不参与正常视觉；颜色用高对比色，暗色主题也看得清。
+ */
+.is-slot-debug {
+  outline: 2px dashed #f59e0b !important;
+  outline-offset: 2px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgb(245 158 11 / 0.08),
+    rgb(245 158 11 / 0.08) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+/* 条目：绿色实线，与容器区分 */
+.is-slot-debug[data-slot-id] {
+  outline: 2px solid #10b981 !important;
+}
+
+.slot-debug-badge {
+  position: absolute;
+  z-index: 200000;
+  transform: translateY(-100%);
+  margin-top: -4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f59e0b;
+  color: #1f2937;
+  font: 600 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 容器需要定位上下文，标签才能浮在容器上方 */
+.slot-composer.is-slot-debug {
+  position: relative;
+}

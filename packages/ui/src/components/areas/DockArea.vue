@@ -84,6 +84,8 @@ function onUploadPick(e: Event): void {
         item-class="flex-none"
         class="flex items-center gap-2"
         :shared-props="slotShared"
+        :debug="Boolean(s.cfg.debug.slotDebug)"
+        label="底栏"
       >
         <SlotAnchor id="host/upload-input" :order="90">
           <input

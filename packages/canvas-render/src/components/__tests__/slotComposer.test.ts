@@ -150,6 +150,37 @@ describe('SlotComposer · SSR', () => {
     ctx.stop()
   })
 
+  it('插槽与条目都带可检索标记；debug 打开时显示插槽名标签', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.slots.register('demo.slot', {
+      id: 'plugin/x',
+      order: 10,
+      component: defineComponent({ render: () => h('i', 'X') }),
+    })
+
+    const renderOnce = (debug: boolean) => {
+      const app = createSSRApp({
+        render: () =>
+          h(SlotComposer, { slot: 'demo.slot', debug, label: '演示' }, () => [
+            h(SlotAnchor, { id: 'host/a', order: 1 }, () => h('i', 'A')),
+          ]),
+      })
+      app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+      return renderToString(app)
+    }
+
+    const plain = await renderOnce(false)
+    expect(plain).toContain('data-slot="demo.slot"')
+    expect(plain).toContain('data-slot-id="plugin/x"')
+    expect(plain).not.toContain('is-slot-debug')
+
+    const debug = await renderOnce(true)
+    expect(debug).toContain('is-slot-debug')
+    expect(debug).toContain('演示 · demo.slot')
+    ctx.stop()
+  })
+
   it('非法条目 id 不渲染（不静默变成别的项）', async () => {
     const ctx = new Context()
     await ctx.start()

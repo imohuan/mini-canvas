@@ -324,6 +324,17 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
 - 覆盖：kernel 250 条（含 4 条 after/before 同目标用例）、canvas-render 510 条
   （含 SSR 验证"两个 after 不跑到最前"）；真机状态条顺序与预期一致。
 
+**插槽可发现性（2026-10-28 晚）**：之前只能翻源码才知道"哪里有插槽、id 是什么"。
+
+- DOM 标记（始终存在，不依赖开关）：插槽容器 `data-slot="<槽名>"`、
+  `data-slot-count`；每个条目 `data-slot-id="<条目 id>"`、`data-slot-order`。
+  `SlotHost` 与 `SlotComposer` 两套宿主一致。
+- 新设置项 `slotDebug`（`常规/调试` → 「插槽调试」）：打开后给容器画橙色虚线、
+  条目画绿色实线，并在容器上方显示 `底栏 · shell.dock` 这类标签；
+  不打开时只是普通 DOM 属性，不影响视觉。
+- 已接入：底栏 `shell.dock`、状态条 `shell.status`、抽屉页签 `shell.drawer.tabs`、
+  设置导航 `settings.nav`。真机实测四处标签与标记都出现。
+
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。
 

@@ -71,6 +71,10 @@ export default defineComponent({
      * 插件组件与 SlotAnchor 的插槽内容都会收到；itemProps 可覆盖同名项。
      */
     sharedProps: { type: Object, default: undefined },
+    /** 插槽调试：描边 + 显示插槽名 / 条目 id（由设置项 slotDebug 控制） */
+    debug: { type: Boolean, default: false },
+    /** 槽名在 UI 上的简称（缺省用 slot 全名） */
+    label: { type: String, default: undefined },
   },
   setup(props, { slots, attrs }) {
     const { ctx } = useCanvasContext()
@@ -200,6 +204,8 @@ export default defineComponent({
         ...(props.itemClass ? { class: props.itemClass } : {}),
         // 身份走下发给组件的普通 prop；同时用 aria/data 不行：多根组件会吞掉并触发 Vue warn。
         slotItem: item.id,
+        'data-slot-id': item.id,
+        'data-slot-order': item.order,
         ...(props.sharedProps ?? {}),
         ...(extra ?? {}),
       })
@@ -226,7 +232,23 @@ export default defineComponent({
       // 底栏/状态条是横向 flex，设置左树是纵向 flex —— 这里不能写死方向。
       // attrs 内的 class 与固定 class 合并，不能直接覆盖（否则使用方的布局会丢）。
       const userClass = (attrs.class as string | undefined) ?? ''
-      return h('div', { ...attrs, class: ['slot-composer', userClass] }, nodes)
+      const badge = props.debug
+        ? h(
+            'span',
+            { class: 'slot-debug-badge', 'aria-hidden': 'true' },
+            (props.label ?? props.slot) + ' · ' + props.slot,
+          )
+        : null
+      return h(
+        'div',
+        {
+          ...attrs,
+          class: ['slot-composer', userClass, props.debug ? 'is-slot-debug' : ''],
+          'data-slot': props.slot,
+          'data-slot-count': nodes.length,
+        },
+        badge ? [badge, ...nodes] : nodes,
+      )
     }
   },
 })

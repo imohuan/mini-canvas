@@ -110,6 +110,7 @@ export const DEFAULT_THEME_HANDLE = {
 export const DEFAULT_THEME_DEBUG = {
   handleDebug: false,
   connectionSnapDebugVisible: false,
+  slotDebug: false,
 } as const;
 
 /**
@@ -680,6 +681,14 @@ export const Config: ConfigSchema = {
     group: "常规/调试",
     description:
       "打开后，拖线悬停到某节点时画出它的端口吸附带与卡片接收区，便于校准吸附判定。",
+  },
+  slotDebug: {
+    type: "boolean",
+    default: DEFAULT_THEME_DEBUG.slotDebug,
+    label: "插槽调试",
+    group: "常规/调试",
+    description:
+      "打开后，给所有插槽容器和槽内条目描边并显示插槽名/条目 id，便于确认有哪些插槽、该把按钮排到哪个 id 前后。",
   },
 };
 

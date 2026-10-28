@@ -44,7 +44,8 @@ const miniMapDock = useMiniMapDockTarget()
 <template>
   <div class="flex items-end" aria-label="画布状态栏" style="overflow: visible">
     <div class="flex h-10 items-center gap-1 rounded-xl bg-panel p-1.5">
-      <SlotComposer slot="shell.status" item-class="flex-none" class="flex items-center gap-1" :shared-props="slotShared">
+      <SlotComposer slot="shell.status" item-class="flex-none" class="flex items-center gap-1" :shared-props="slotShared"
+        :debug="Boolean(s.cfg.debug.slotDebug)" label="状态条">
         <SlotAnchor id="host/assets" :order="100">
       <AxTooltip v-if="s.drawer !== 'left'" content="资产管理" placement="top">
         <button

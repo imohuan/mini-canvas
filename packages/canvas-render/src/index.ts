@@ -13,6 +13,7 @@
 // 通用 UI 主题变量（--ui-* / --sf-* / --ps-* / --dd-*）：包加载即生效于 <html data-canvas-theme>，
 // 所有渲染插件与宿主应用共用同一套 token，插件不必再自己发明“配色”配置项。
 import './styles/ui-theme.css'
+import './styles/slot-debug.css'
 
 export type {
   SegmentComponent,

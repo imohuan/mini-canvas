@@ -100,6 +100,8 @@ function createUi() {
   })
 
   const state = reactive({
+    // 主题配置的镜像（debug 等）：外壳组件（底栏/状态条/抽屉）读它决定是否显示插槽调试
+    cfg,
     // 主题 / 视图
     theme: 'dark' as 'dark' | 'light',
     navMode: 'workflow' as 'workflow' | 'storyboard',

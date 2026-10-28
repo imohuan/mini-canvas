@@ -51,13 +51,29 @@ const occTick = ref(0)
 function bumpOcc(): void {
   occTick.value += 1
 }
+/** 插槽调试开关：读 settings 的 slotDebug（主题 Config 声明），改了就刷新 */
+const slotDebugTick = ref(0)
+const settingsSlotDebug = computed(() => {
+  void slotDebugTick.value
+  try {
+    return Boolean(ctx.get<{ get(k: string): unknown }>('settings')?.get('slotDebug'))
+  } catch {
+    return false
+  }
+})
 const disposers: Array<{ dispose(): void }> = [
   ctx.on('ctx:plugin-installed', bumpOcc),
   ctx.on('ctx:plugin-uninstalled', bumpOcc),
 ]
+const slotDebugOff = ctx.tryGet<{
+  onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
+}>('settings')?.onChange(() => {
+  slotDebugTick.value += 1
+})
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
   cancelScrollAnimation()
+  slotDebugOff?.dispose()
 })
 
 // ———— 树：一级 → 该一级下的完整分组 key 列表（保持 groups() 的原序）————
@@ -340,7 +356,8 @@ function blocksOf(groupKey: string): ContentBlock[] {
 
         <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor；插件条目只参与排序、不渲染
              （本面板不展示插件自定义导航外观，避免重复项与点不动的死行）。 -->
-        <SlotComposer :slot="SETTINGS_NAV_SLOT" class="flex flex-col" :item-props="settingsNavProps">
+        <SlotComposer :slot="SETTINGS_NAV_SLOT" class="flex flex-col" :item-props="settingsNavProps"
+          :debug="Boolean(settingsSlotDebug)" label="设置导航">
         <template v-for="nav in navs" :key="nav">
           <SlotAnchor
             :id="'host/settings-' + nav"

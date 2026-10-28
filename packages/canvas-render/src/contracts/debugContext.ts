@@ -16,4 +16,9 @@ export interface CanvasDebug {
   handleDebug: boolean
   /** 吸附调试：拖线时画出目标节点吸附带与 body 反馈区 */
   connectionSnapDebugVisible: boolean
+  /**
+   * 插槽调试：给每个插槽容器 / 槽内条目画醒目描边和 id 标签，
+   * 便于用户直接看出"哪里有插槽、插槽 id 是什么"。
+   */
+  slotDebug?: boolean
 }

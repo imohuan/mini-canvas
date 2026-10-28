@@ -398,6 +398,7 @@ export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
 export const DEFAULT_DEBUG_VISUAL: CanvasDebug = {
   handleDebug: true,
   connectionSnapDebugVisible: true,
+  slotDebug: false,
 }
 
 /** VueFlow 消费的边最小形状（含端口句柄，B 项：多端口边按 handle 匹配端点） */
