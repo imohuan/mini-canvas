@@ -20,7 +20,7 @@
 **演示插件补全**（`plugin-shell-slots-demo`，commit bc972dc6 / f4bd0515 / 本条）：
 
 - 覆盖四类插槽：`shell.status.end` / `shell.dock.start` / `shell.dock.end` / `shell.drawer.tabs`。
-- 四种形态：A 复用内置按钮（`useUiComponent('button')`，32×32 图标，与内置同款）/ 
+- 四种形态：A 复用主题按钮（`ctx.registryOf('ui')` 取 `button`，32×32 图标，与内置同款）/
   B 内置文本按钮（title+slot）/ C 自绘组件 / D 同槽多 occupant（status.end、dock.end 各两条）。
 - 真机 e2e `shell-slots-demo-check`（经 pluginManager 装自包含 ESM 产物）13/13 PASS：
   三处 UI + 内置按钮组全出现、点页签出面板、面板"关闭抽屉"生效、底栏按钮经命令开抽屉、
@@ -28,6 +28,20 @@
 
 **边界**：`shell.dock.end` 现在在 Agent 圆球之后（面板内缘）；`shell.status.end` 在缩放下拉之后。
 新浮层若要可点内容，不要用 `*-box-layer` / `*-layer` 类名结尾（会被压回不可点）。
+
+**上下文取件改法（2026-10-28 用户口径：插件不要 import 第三方库/主题包）**：
+
+- 演示插件的 .vue 组件全部改成**只收 props**：不调 `useUiComponent` / `useCanvasContext`、
+  不读 `window.MiniCanvasUI`、不 import `@mini-canvas/canvas-render`。
+- 取件集中在 `src/bindings.ts`：`ctx.registryOf('ui')` 取主题按钮（订阅换主题）、
+  `ctx.tryGet('doc')` 订阅节点数、`ctx.tryGet('command')` 执行 `shell:open-drawer`；
+  订阅用 `ctx.effect` 随插件卸载回收。
+- `index.ts` 用 `defineComponent` 包一层，把 ctx 数据以 props 传给 .vue；
+  抽屉按钮 / 面板仍按宿主窄接口（active/onSelect/host）接收。
+- 单测 `bindings.test.ts` 6 条 + `shellSlotsDemo.test.ts` 3 条（含"组件源码不得取件/读 window"扫描）；
+  typecheck / UMD / ESM 构建通过；ESM 产物从 71 KB 降到 35 KB。
+- 真机（Chrome MCP，8014）：安装后主题按钮 4 个、徽章"节点 2"、点底栏按钮经命令开抽屉、
+  页签切页出面板（面板内节点数 2、按钮同为主题件）、关闭抽屉、卸载后全部消失；重载后控制台零错误。
 
 ### 追记（2026-10-28，CanvasProvider + 外壳插槽：三层扩展点一次接通）
 

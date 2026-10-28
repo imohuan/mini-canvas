@@ -1,9 +1,16 @@
 <script setup lang="ts">
-// 抽屉插件页签按钮：宿主下发 active / onSelect / host（DrawerHost 窄接口）。
+/**
+ * 抽屉插件页签按钮：宿主通过 props 下发 active / onSelect / host。
+ *
+ * host 是宿主抽屉给的窄接口（切页签、关抽屉、收起展开），
+ * 本组件不 import 宿主 UI 包，只按形状使用。
+ */
+import type { DrawerHost } from './types'
+
 const props = defineProps<{
   active: boolean
   onSelect: () => void
-  host: { readonly activeTab: string; readonly width: number; openTab(id: string): void; close(): void; toggleCollapsed(): void }
+  host: DrawerHost
 }>()
 
 function onClick(): void {

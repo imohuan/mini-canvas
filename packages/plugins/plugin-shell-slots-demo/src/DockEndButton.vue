@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// 底栏末尾演示按钮：用外壳命令打开抽屉（不反向依赖 @mini-canvas/ui）。
-async function onOpenDrawer(): Promise<void> {
-  const w = globalThis as { MiniCanvasUI?: { getContext(): { get(name: string): { execute(id: string, payload?: unknown): void } } } }
-  const command = w.MiniCanvasUI?.getContext().get('command')
-  command?.execute('shell:open-drawer')
-}
+/**
+ * 底栏末尾演示按钮：点击动作由 props 传入。
+ *
+ * index.ts 在 apply(ctx) 里把“执行 shell:open-drawer 命令”收成 onOpen 回调再传进来；
+ * 本组件不读 window、不 import @mini-canvas/ui。
+ */
+defineProps<{ onOpen?: () => void }>()
 </script>
 
 <template>
-  <button class="ss-demo-btn" type="button" data-testid="ssd-dock-end" @click="onOpenDrawer">
+  <button class="ss-demo-btn" type="button" data-testid="ssd-dock-end" @click="onOpen?.()">
     插槽按钮
   </button>
 </template>

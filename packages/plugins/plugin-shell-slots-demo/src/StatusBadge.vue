@@ -1,26 +1,11 @@
 <script setup lang="ts">
-// 状态条末尾演示徽章：读节点数（纯 ctx，不需要视口）。
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { useCanvasContext } from '@mini-canvas/canvas-render'
-
-// 外壳槽内拿 ctx：优先基础上下文（Provider provide）；插件是自包含 ESM 时，
-// 插件包内的 canvas-render 与宿主是两份模块，inject 命中不了 —— 兜底读
-// window.MiniCanvasUI.getContext()（宿主唯一 ctx，与 provide 的那份是同一个对象）。
-function resolveCtx(): { get<T>(name: string): T; effect(fn: () => () => void): void } {
-  try {
-    return useCanvasContext().ctx as unknown as ReturnType<typeof resolveCtx>
-  } catch {
-    const w = window as unknown as { MiniCanvasUI?: { getContext(): { get<T>(name: string): T } } }
-    const fallback = w.MiniCanvasUI?.getContext()
-    if (!fallback) throw new Error('[ssd] 既无 Provider 上下文也无 window.MiniCanvasUI')
-    return fallback as unknown as ReturnType<typeof resolveCtx>
-  }
-}
-const ctx = resolveCtx()
-const tick = ref(0)
-const off = ctx.get<{ subscribe(cb: () => void): () => void }>('doc').subscribe(() => { tick.value += 1 })
-onBeforeUnmount(() => off())
-const count = computed(() => { void tick.value; return ctx.get<{ getNodes(): unknown[] }>('doc').getNodes().length })
+/**
+ * 状态条末尾演示徽章：只展示 props 里的节点数。
+ *
+ * 节点数由 index.ts 在 apply(ctx) 里订阅 doc 后传进来；
+ * 本组件不取 ctx、不读 window、不 import 画布包。
+ */
+defineProps<{ count: number }>()
 </script>
 
 <template>

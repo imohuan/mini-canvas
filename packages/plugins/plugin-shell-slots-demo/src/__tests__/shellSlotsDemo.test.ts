@@ -5,6 +5,8 @@
  * （卸载时好认，也避免和其它插件撞 id）。
  */
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { Context } from '@mini-canvas/canvas-data'
 import { apply, name } from '../index'
 
@@ -54,5 +56,26 @@ describe('plugin-shell-slots-demo', () => {
     expect(slots.occupants('shell.status.end')).toHaveLength(0)
     expect(slots.occupants('shell.dock.end')).toHaveLength(0)
     expect(slots.occupants('shell.drawer.tabs')).toHaveLength(0)
+  })
+
+  it('组件源码只收 props：不调用取件钩子、不读 window 全局', () => {
+    const files = [
+      'ThemedButtons.vue',
+      'StatusBadge.vue',
+      'DockEndButton.vue',
+      'DrawerTabButton.vue',
+      'DrawerPanel.vue',
+    ]
+    for (const file of files) {
+      const src = readFileSync(
+        fileURLToPath(new URL('../' + file, import.meta.url)),
+        'utf8',
+      )
+      expect(src, file + ' 不应 import 渲染包').not.toContain('@mini-canvas/canvas-render')
+      expect(src, file + ' 不应 import 主题包').not.toContain('@mini-canvas/plugin-theme-default')
+      expect(src, file + ' 不应调用 useUiComponent').not.toContain('useUiComponent')
+      expect(src, file + ' 不应调用 useCanvasContext').not.toContain('useCanvasContext')
+      expect(src, file + ' 不应读 window.MiniCanvasUI').not.toContain('MiniCanvasUI')
+    }
   })
 })
