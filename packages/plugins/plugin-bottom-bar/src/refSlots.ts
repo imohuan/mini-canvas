@@ -156,9 +156,22 @@ export function judgeSlotDrop(
     return { ok: true, mediaType }
   }
   const mediaType = input.mediaType ?? mediaTypeOf(input.file)
-  if (!mediaType) return { ok: false, reason: 'unsupported' }
+  if (!mediaType) {
+    // 文本文件没有 image/video/audio 前缀：待绑定格（any）照样收
+    const looksText = isTextFile(input.file)
+    if (kind === 'any' && looksText) return { ok: true, mediaType: 'text' }
+    return { ok: false, reason: 'unsupported' }
+  }
   if (!slotAccepts(kind, mediaType)) return { ok: false, reason: 'kind-mismatch', mediaType }
   return { ok: true, mediaType }
+}
+
+/** 看起来是文本文件（MIME 或扩展名任一命中） */
+function isTextFile(file: { name?: string; type?: string } | undefined): boolean {
+  const mime = String(file?.type ?? '').toLowerCase()
+  if (mime.startsWith('text/')) return true
+  const ext = (String(file?.name ?? '').split('.').pop() ?? '').toLowerCase()
+  return ext === 'txt' || ext === 'md' || ext === 'markdown'
 }
 
 /** 失败原因 → 给用户看的一句话 */

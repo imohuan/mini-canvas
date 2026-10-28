@@ -202,13 +202,12 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
       expect(it.id).toBeTruthy()
       expect(it.name).toBeTruthy()
     }
-    // 标签身份统一成 ref-slot:<kind>:<N>，且序号是**全局连续**（用户 2026-10-28）
-    // 连线顺序 t1(文本) / i1(图片) / v1(视频) → 文本1、图片2、视频3
-    expect(items.map((i) => i.id).sort()).toEqual(['ref-slot:image:2', 'ref-slot:text:1', 'ref-slot:video:3'])
+    // 标签身份 = 节点 id（用户 2026-10-28：不再按类型+序号）
+    expect(items.map((i) => i.id).sort()).toEqual(['ref-node:i1', 'ref-node:t1', 'ref-node:v1'])
     // 文本走 value、图片/视频走 url 与 mediaType（编辑器据此画缩略图/播放）
-    const text = items.find((i) => i.name === '文本1')
-    const img = items.find((i) => i.name === '图片2')
-    const vid = items.find((i) => i.name === '视频3')
+    const text = items.find((i) => i.id === 'ref-node:t1')
+    const img = items.find((i) => i.id === 'ref-node:i1')
+    const vid = items.find((i) => i.id === 'ref-node:v1')
     expect(text?.value).toBe('一段文字')
     expect(img?.url).toBeTruthy()
     expect(img?.mediaType).toBe('image')
@@ -216,10 +215,10 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
   })
 
   /**
-   * 用户要求（2026-10-28 更新）：「直接按『图片 1、视频 2、音频 3、文本 4』这样排序，
-   * 不需要单独给每个分类设置索引 1」—— 全局连续编号，取代旧的「每类各自从 1」。
+   * 用户 2026-10-28 定案：引用名 = **节点名称**（画布内唯一）。
+   * 没有名字时才按类型兜底，绝不会再出现「图片1 / 文本2」这种按顺序编的名字。
    */
-  it('素材引用名全局连续编号：图片1 / 文本2 / 图片3 / 视频4（不是每类从 1）', () => {
+  it('素材引用名取节点名称（没有名字才按类型兜底）', () => {
     const materials = collectUpstreamMaterials(
       [
         { source: 'i1', target: '35' },
@@ -236,15 +235,15 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
         return undefined
       },
     )
-    // 节点 id 仍是身份（请求组装 / 去重用），refName 才是给人看的引用名
+    // 节点 id 仍是身份（请求组装 / 去重用），refName 是给人看的名称
     expect(materials.map((m) => m.id)).toEqual(['i1', 't1', 'i2', 'v1'])
-    expect(materials.map((m) => m.refName)).toEqual(['图片1', '文本2', '图片3', '视频4'])
+    expect(materials.map((m) => m.refName)).toEqual(['猫', '文本', '狗', '视频'])
     // 编辑器资源项的 name 就是 refName（@ 下拉 / 卡片文案 / 纯文本 token 三处一致）
     const items = toEditorResources(materials)
-    expect(items.map((i) => i.name)).toEqual(['图片1', '文本2', '图片3', '视频4'])
+    expect(items.map((i) => i.name)).toEqual(['猫', '文本', '狗', '视频'])
   })
 
-  it('@ 引用回查：token 是引用名（图片1）或标签 id 都能回查', () => {
+  it('@ 引用回查：token 是节点名称或标签 id 都能回查', () => {
     const materials = collectUpstreamMaterials(
       [{ source: 'i1', target: '35' }],
       '35',
@@ -252,9 +251,9 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     )
     const items = toEditorResources(materials)
     const resolve = makeResourceResolver(items)
-    // 身份统一成 ref-slot:image:1；老的节点 id 回查由纯文本回填那条路兜（resolver 只认名字/id）
-    expect(resolve('图片1')?.id).toBe('ref-slot:image:1')
-    expect(resolve('ref-slot:image:1')?.name).toBe('图片1')
+    // 身份 = ref-node:<节点 id>；名称就是节点名
+    expect(resolve('猫')?.id).toBe('ref-node:i1')
+    expect(resolve('ref-node:i1')?.name).toBe('猫')
     expect(resolve('不存在')).toBeNull()
   })
 
@@ -271,9 +270,8 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
           : { type: 'image', data: { imageUrl: 'https://x/a.png', label: '猫' } },
     )
     const items = toEditorResources(materials)
-    // 全局连续编号：图片在前是图片1，文本是文本2
-    const imgItem = items.find((i) => i.name === '图片1')!
-    const textItem = items.find((i) => i.name === '文本2')!
+    const imgItem = items.find((i) => i.id === 'ref-node:i1')!
+    const textItem = items.find((i) => i.id === 'ref-node:t1')!
     const imgSpec = imgItem.renderEditor!(imgItem) as unknown[]
     const textSpec = textItem.renderEditor!(textItem) as unknown[]
     // 外层 span：resource-chip 卡片类
@@ -283,7 +281,7 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect(imgChildren[0][0]).toBe('img')
     expect((imgChildren[0][1] as Record<string, string>).class).toBe('resource-chip-thumb')
     expect((imgChildren[1][1] as Record<string, string>).class).toBe('resource-chip-name')
-    expect(imgChildren[1][2]).toBe('图片1')
+    expect(imgChildren[1][2]).toBe('猫')
     // 文本卡片：图标 + 名字，且带 resource-chip--text 修饰类
     expect((textSpec[1] as Record<string, string>).class).toContain('resource-chip--text')
     expect((textSpec.slice(2) as unknown[][])[0][0]).toBe('span')
@@ -330,23 +328,24 @@ describe('「看图」参考区：一行、没连线也有槽位', () => {
     expect(html).not.toContain('is-pending')
   })
 
-  it('富文本里的槽位标签 → 上方出现「待输入」的图片槽位（一行）', async () => {
+  it('富文本里的待绑定标签 → 上方出现「待添加」的空壳卡（一行）', async () => {
     const promptDoc = {
       type: 'doc',
       content: [{
         type: 'paragraph',
-        content: [{ type: 'resource', attrs: { id: 'ref-slot:image:1', name: '图片1' } }],
+        content: [{ type: 'resource', attrs: { id: 'ref-name:雨声', name: '雨声' } }],
       }],
     }
     const html = await render(
       NodeBottomBar as Component,
       '35',
-      { barPrompt: '图片1', barPromptDoc: promptDoc },
+      { barPrompt: '雨声', barPromptDoc: promptDoc },
       makeCtx({ selectedIds: ['35'] }),
     )
     expect(html).toContain('nb-cards')
     expect(html).toContain('is-pending')
-    // 格子上的序号角标（卡片里的名字文字被设计上隐藏了，只留序号）
+    // 卡片上的名称与序号角标（序号只做观察）
+    expect(html).toContain('雨声')
     expect(html).toContain('nb-card-index')
     expect(html).not.toContain('nb-slots')
     expect(html).not.toContain('nb-slot ')
@@ -360,9 +359,9 @@ describe('「看图」参考区：一行、没连线也有槽位', () => {
 })
 
 
-describe('待输入参考格：默认图片图标（用户 2026-10-27）', () => {
+describe('待绑定参考卡：统一资源图标（用户 2026-10-28）', () => {
   /**
-   * 没有图片的空壳格要显示「图片」形状的占位图标，而不是一个光秃秃的方框；
+   * 手打的 @名字 还没绑定节点 —— 这时**无从判断类型**，统一画资源图标，不猜；
    * 同时保留「+」—— 这格的主要操作是点它上传，得让用户看得出能点。
    */
   it('空壳格出现 nb-card-placeholder 与「+」', async () => {
@@ -374,7 +373,7 @@ describe('待输入参考格：默认图片图标（用户 2026-10-27）', () =>
           type: 'doc',
           content: [{
             type: 'paragraph',
-            content: [{ type: 'resource', attrs: { id: 'ref-slot:image:1', name: '图片1' } }],
+            content: [{ type: 'resource', attrs: { id: 'ref-name:天空之城', name: '天空之城' } }],
           }],
         },
       },
@@ -382,6 +381,8 @@ describe('待输入参考格：默认图片图标（用户 2026-10-27）', () =>
     )
     expect(html).toContain('nb-card-placeholder')
     expect(html).toContain('nb-card-plus')
+    // 统一资源图标，不按类型出图标
+    expect(html).toContain('data-kind="resource"')
   })
 })
 

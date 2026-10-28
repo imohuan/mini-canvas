@@ -1,286 +1,200 @@
 /**
- * 「看图」参考槽位的两条关键规则（用户口径 2026-10-25）：
+ * 参考卡片的核心规则（用户 2026-10-28 定案）。
  *
- * ① 「点击第二个空区域进行上传，那么这个连接线就属于第二个参考」
- *    → placeRefAtSlot 把新素材插到第 index 位（refName 按连线顺序编号）。
- *
- * ② 「只传了一张图，并且声明的是\"图片 2\"，这就存在问题……是不允许你点击发送按钮的」
- *    → 参考序号有缺时 canRun 必须为 false（这里用同一套纯函数算「缺哪几格」）。
+ * 一张卡 = 正文里的一颗标签；标签认节点 id、显示节点名称。
+ * 添加（空卡）与替换（有内容）是同一条「绑定」路径；替换后名字跟着新节点走。
+ * 失效引用（节点被删 / 断线 / 老格式）禁止发送。
  */
-import { describe, it, expect } from 'vitest'
-import { placeRefAtSlot } from '../panelSource'
-import { refSlotKey } from '../refSlots'
-import { mergeRefTiles, findRefGap, uploadToRefSlot, type UploadDeps } from '../refTiles'
+import { describe, expect, it } from 'vitest'
+import { refNameChipId, refNodeChipId, type RefChip } from '../refSlots'
+import {
+  invalidRefHint,
+  invalidRefTiles,
+  matchMaterialByName,
+  mergeRefTiles,
+  nextChipOrder,
+  targetOfTile,
+  uploadToRefSlot,
+  type TileCardLike,
+  type UploadDeps,
+} from '../refTiles'
+import { placeChipAt } from '../panelSource'
 
-describe('上传槽位：建节点 → 还选中 → 连线 → 排位', () => {
-  /** 记录每次调用顺序的假依赖 */
+const card = (id: string, name: string, kind: TileCardLike['kind'] = 'image', url?: string): TileCardLike => ({
+  id,
+  name,
+  kind,
+  ...(url ? { url } : {}),
+})
+
+const bound = (nodeId: string, name: string): RefChip => ({
+  id: refNodeChipId(nodeId),
+  name,
+  nodeId,
+  pendingName: null,
+  legacy: false,
+})
+
+const pending = (name: string): RefChip => ({
+  id: refNameChipId(name),
+  name,
+  nodeId: null,
+  pendingName: name,
+  legacy: false,
+})
+
+describe('卡片行：名称来自节点，序号只做观察', () => {
+  it('已绑定的卡显示节点名称（不是序号）', () => {
+    const tiles = mergeRefTiles([bound('n1', '天空之城')], [card('n1', '天空之城', 'image', 'a.png')])
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]).toMatchObject({
+      key: 'ref-node:n1',
+      label: '天空之城',
+      kind: 'image',
+      pending: false,
+      invalid: false,
+      index: 1,
+    })
+  })
+
+  it('节点改名 → 卡片名称跟着变（标签显示永远以节点为准）', () => {
+    const tiles = mergeRefTiles([bound('n1', '旧名字')], [card('n1', '新名字')])
+    expect(tiles[0].label).toBe('新名字')
+  })
+
+  it('手打的待绑定标签 → 空壳卡，名称 = 手打的名字，类型未知', () => {
+    const tiles = mergeRefTiles([pending('雨声')], [])
+    expect(tiles[0]).toMatchObject({ key: 'ref-name:雨声', label: '雨声', pending: true, kind: null })
+  })
+
+  it('连了线但正文没写标签 → 也补一张卡（不吞素材）', () => {
+    const tiles = mergeRefTiles([], [card('n1', '封面'), card('n2', '雨声', 'audio')])
+    expect(tiles.map((t) => t.label)).toEqual(['封面', '雨声'])
+    expect(tiles.map((t) => t.kind)).toEqual(['image', 'audio'])
+  })
+
+  it('拖拽顺序只改显示位（序号），不改身份与名字', () => {
+    const chips = [bound('n1', '甲'), bound('n2', '乙')]
+    const cards = [card('n1', '甲'), card('n2', '乙')]
+    const tiles = mergeRefTiles(chips, cards, ['ref-node:n2', 'ref-node:n1'])
+    expect(tiles.map((t) => t.key)).toEqual(['ref-node:n2', 'ref-node:n1'])
+    expect(tiles.map((t) => t.label)).toEqual(['乙', '甲'])
+    // 序号 = 显示位，只做观察
+    expect(tiles.map((t) => t.index)).toEqual([1, 2])
+  })
+})
+
+describe('失效引用：禁止发送（用户 2026-10-28：不做兼容）', () => {
+  it('绑定的节点被删 / 断线 → 失效', () => {
+    const tiles = mergeRefTiles([bound('gone', '天空之城')], [])
+    expect(tiles[0]).toMatchObject({ invalid: true, label: '天空之城', nodeId: 'gone' })
+    expect(invalidRefTiles(tiles)).toHaveLength(1)
+    expect(invalidRefHint(tiles)).toContain('天空之城')
+  })
+
+  it('老格式 ref-slot:* → 失效（不猜它原来指向谁）', () => {
+    const tiles = mergeRefTiles(
+      [{ id: 'ref-slot:image:1', name: '图片1', nodeId: null, pendingName: null, legacy: true }],
+      [card('n1', '天空之城')],
+    )
+    expect(tiles[0]).toMatchObject({ invalid: true, pending: false })
+  })
+
+  it('待绑定卡不算失效（只是还没拖东西进来）', () => {
+    const tiles = mergeRefTiles([pending('雨声')], [])
+    expect(invalidRefTiles(tiles)).toEqual([])
+    expect(invalidRefHint(tiles)).toBe('')
+  })
+})
+
+describe('标记：按名称匹配已连线素材', () => {
+  it('命中 → 返回那个素材（名称唯一，不会有两个候选）', () => {
+    const cards = [card('n1', '天空之城'), card('n2', '雨声', 'audio')]
+    expect(matchMaterialByName('雨声', cards)?.id).toBe('n2')
+  })
+
+  it('没命中 → null（调用方转成待绑定标签）', () => {
+    expect(matchMaterialByName('不存在', [card('n1', '天空之城')])).toBeNull()
+  })
+
+  it('前后空格不影响匹配', () => {
+    expect(matchMaterialByName('  雨声 ', [card('n2', '雨声', 'audio')])?.id).toBe('n2')
+  })
+})
+
+describe('替换 / 添加：同一条绑定路径', () => {
+  it('空壳卡的目标：只有旧标签 id，没有旧节点', () => {
+    const tiles = mergeRefTiles([pending('雨声')], [])
+    expect(targetOfTile(tiles[0])).toEqual({ previousChipId: 'ref-name:雨声', pendingName: '雨声' })
+  })
+
+  it('有内容的卡：目标是换掉旧节点', () => {
+    const tiles = mergeRefTiles([bound('n1', '天空之城')], [card('n1', '天空之城')])
+    expect(targetOfTile(tiles[0])).toEqual({ previousChipId: 'ref-node:n1', oldNodeId: 'n1' })
+  })
+
+  it('placeChipAt：新标签顶替旧标签的位置；没有旧标签则追加', () => {
+    expect(placeChipAt(['ref-node:a', 'ref-name:雨声', 'ref-node:c'], 'ref-name:雨声', 'b')).toEqual([
+      'ref-node:a',
+      'ref-node:b',
+      'ref-node:c',
+    ])
+    expect(placeChipAt(['ref-node:a'], undefined, 'b')).toEqual(['ref-node:a', 'ref-node:b'])
+  })
+})
+
+describe('nextChipOrder：拖拽落盘', () => {
+  const tiles = [{ key: 'ref-node:a' }, { key: 'ref-node:b' }]
+
+  it('顺序变了 → 返回新序列', () => {
+    expect(nextChipOrder(['ref-node:a', 'ref-node:b'], tiles, [{ key: 'ref-node:b' }, { key: 'ref-node:a' }])).toEqual([
+      'ref-node:b',
+      'ref-node:a',
+    ])
+  })
+
+  it('顺序没变 → null（不写盘、不进撤销栈）', () => {
+    expect(nextChipOrder(['ref-node:a', 'ref-node:b'], tiles, tiles)).toBeNull()
+  })
+
+  it('异常形状 → 退回当前顺序', () => {
+    expect(nextChipOrder([], tiles, undefined)).toEqual(['ref-node:a', 'ref-node:b'])
+  })
+})
+
+describe('上传：建节点 → 还选中 → 等帧 → 连线', () => {
   function deps(overrides: Partial<UploadDeps> = {}) {
     const calls: string[] = []
-    let order: string[] = []
     const base: UploadDeps = {
       addFiles: async () => { calls.push('addFiles'); return 1 },
       waitTick: async () => { calls.push('waitTick') },
       afterCreate: () => { calls.push('afterCreate') },
       addEdge: () => { calls.push('addEdge'); return 'e1' },
-      refOrder: () => order,
-      writeOrder: (ids) => { calls.push('writeOrder'); order = ids },
-      pickCreated: () => ({ id: 'n-new', name: '图片2', url: 'u' }),
-      positionFor: (i) => ({ x: -i * 100, y: 0 }),
+      pickCreated: () => ({ id: 'n-new', name: '新素材', url: 'u' }),
+      positionFor: () => ({ x: -100, y: 0 }),
     }
-    return { deps: { ...base, ...overrides }, calls, getOrder: () => order }
+    return { deps: { ...base, ...overrides }, calls }
   }
 
-  it('成功时调用顺序固定：建节点 → 还选中 → 等帧 → 连线 → 排位', async () => {
+  it('成功时顺序固定', async () => {
     const d = deps()
-    const r = await uploadToRefSlot({ file: new File([], 'a.png'), kind: 'image', index: 1, targetId: 'me' }, d.deps)
+    const r = await uploadToRefSlot({ file: new File([], 'a.png'), targetId: 'me' }, d.deps)
     expect(r.ok).toBe(true)
-    expect(d.calls).toEqual(['addFiles', 'afterCreate', 'waitTick', 'addEdge', 'writeOrder'])
+    expect(d.calls).toEqual(['addFiles', 'afterCreate', 'waitTick', 'addEdge'])
+    expect(r.created?.id).toBe('n-new')
   })
 
-  it('建节点失败 → 不连线、不排位', async () => {
+  it('没建出节点 → 不连线', async () => {
     const d = deps()
     d.deps.addFiles = async () => { d.calls.push('addFiles'); return 0 }
-    const r = await uploadToRefSlot({ file: new File([], 'a.txt'), kind: 'image', index: 1, targetId: 'me' }, d.deps)
+    const r = await uploadToRefSlot({ file: new File([], 'a.txt'), targetId: 'me' }, d.deps)
     expect(r.ok).toBe(false)
     expect(d.calls).toEqual(['addFiles'])
-    expect(r.error).toContain('没建出节点')
   })
 
-  it('连线失败 → 报错且不写顺序', async () => {
+  it('连线失败 → 报错', async () => {
     const d = deps({ addEdge: () => null })
-    const r = await uploadToRefSlot({ file: new File([], 'a.png'), kind: 'image', index: 1, targetId: 'me' }, d.deps)
+    const r = await uploadToRefSlot({ file: new File([], 'a.png'), targetId: 'me' }, d.deps)
     expect(r.ok).toBe(false)
-    expect(d.calls).not.toContain('writeOrder')
-  })
-
-  it('往第 2 格上传 → 新素材排到第 2 位（「属于第二个参考」）', async () => {
-    const d = deps()
-    await uploadToRefSlot({ file: new File([], 'a.png'), kind: 'image', index: 2, targetId: 'me' }, d.deps)
-    // 第 2 格 = 序列第 2 位（第 1 位用占位补上，落盘时占位被过滤）
-    expect(d.getOrder()).toEqual(['__slot__0', 'n-new'])
-  })
-
-  it('已有素材时往第 1 格上传 → 插到最前', async () => {
-    const d = deps()
-    d.deps.refOrder = () => ['a', 'b']
-    await uploadToRefSlot({ file: new File([], 'a.png'), kind: 'image', index: 1, targetId: 'me' }, d.deps)
-    // 用的是「上传前」的顺序再插入（a/b 仍在，新的在最前）
-    expect(d.getOrder()[0]).toBe('n-new')
-  })
-})
-
-describe('参考区只排一行（不再重复）', () => {
-  /**
-   * 用户口径（2026-10-26，附两张截图）：
-   *   ① 连了 3 条线就只有 3 格，不能凭空多出第 4、5 格；
-   *   ② 声明了 @图片2、连线只有 1 条 → 内容在第 1 格，第 2 格显示「待输入」。
-   *   格子身份 = **连线的序号**（collectUpstreamMaterials 的 refName），正文声明不产生内容。
-   */
-  it('连了 3 条线 → 只有 3 格（正文声明再多也不加格子）', () => {
-    const tiles = mergeRefTiles(
-      [
-        { kind: 'image', index: 1 },
-        { kind: 'image', index: 2 },
-        { kind: 'image', index: 3 },
-      ],
-      [
-        { id: 'a', name: '图片1', url: 'a.png', isText: false },
-        { id: 'b', name: '图片2', url: 'b.png', isText: false },
-        { id: 'c', name: '图片3', url: 'c.png', isText: false },
-      ],
-    )
-    expect(tiles).toHaveLength(3)
-    expect(tiles.every((t) => !t.pending)).toBe(true)
-  })
-
-  /**
-   * 语义更新（用户 2026-10-27）：声明序号会先归一化成 1..n。
-   * 所以「只声明了 1 个」时格数 = max(连线数, 1) = 1，不再按原始序号 2 补出第 2 格。
-   */
-  it('连线 1 条、声明 1 个 → 只有 1 格（归一化后不存在第 2 格）', () => {
-    const tiles = mergeRefTiles(
-      [{ kind: 'image', index: 1 }],
-      [{ id: 'a', name: '图片1', url: 'a.png', isText: false }],
-    )
-    expect(tiles).toHaveLength(1)
-    expect(tiles[0]).toMatchObject({ index: 1, slotIndex: 1, pending: false, name: '图片1' })
-  })
-
-  it('连线 1 条、正文没写任何 @ → 只有 1 格（参考不凭空消失）', () => {
-    const tiles = mergeRefTiles([], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }])
-    expect(tiles).toHaveLength(1)
-    expect(tiles[0].pending).toBe(false)
-  })
-
-  it('连线 3 条但只声明 @图片2 → 仍是 3 格（第 3 格照常显示）', () => {
-    const tiles = mergeRefTiles(
-      [{ kind: 'image', index: 2 }],
-      [
-        { id: 'a', name: '图片1', url: 'a.png', isText: false },
-        { id: 'b', name: '图片2', url: 'b.png', isText: false },
-        { id: 'c', name: '图片3', url: 'c.png', isText: false },
-      ],
-    )
-    expect(tiles).toHaveLength(3)
-    expect(tiles.every((t) => !t.pending)).toBe(true)
-  })
-
-  /**
-   * 用户口径（2026-10-28）：全局连续编号后，「图片1 + 音频1」这类混合组（旧命名）
-   * 在新规则下会重叠到同一个序号 —— 取第一张。合法的全局编号是「图片1、音频2」。
-   */
-  it('全局编号：图片1 / 音频2 各占一格（旧式两条都叫 1 的只认第一张）', () => {
-    const tiles = mergeRefTiles(
-      [{ kind: 'audio', index: 1 }],
-      [
-        { id: 'a', name: '图片1', url: 'a.png', isText: false },
-        { id: 'v', name: '音频1', url: 'v.mp3', isText: false },
-      ],
-    )
-    expect(tiles.map((t) => t.label)).toEqual(['图片 1'])
-    expect(tiles.every((t) => !t.pending)).toBe(true)
-  })
-})
-
-describe('格子数量 = max(连线数, 归一化声明数)（用户 2026-10-27）', () => {
-  it('只声明归一化后的 1 个、连线 4 条 → 4 格，全部有图', () => {
-    const tiles = mergeRefTiles(
-      [{ kind: 'image', index: 1 }],
-      [
-        { id: 'a', name: '图片1', url: 'a.png', isText: false },
-        { id: 'b', name: '图片2', url: 'b.png', isText: false },
-        { id: 'c', name: '图片3', url: 'c.png', isText: false },
-        { id: 'd', name: '图片4', url: 'd.png', isText: false },
-      ],
-    )
-    expect(tiles).toHaveLength(4)
-    expect(tiles.every((t) => !t.pending)).toBe(true)
-  })
-
-  it('声明 3 个、连线 2 条 → 3 格（第 3 格空壳）', () => {
-    const tiles = mergeRefTiles(
-      [{ kind: 'image', index: 1 }, { kind: 'image', index: 2 }, { kind: 'image', index: 3 }],
-      [
-        { id: 'a', name: '图片1', url: 'a.png', isText: false },
-        { id: 'b', name: '图片2', url: 'b.png', isText: false },
-      ],
-    )
-    expect(tiles).toHaveLength(3)
-    expect(tiles[2]).toMatchObject({ pending: true, slotIndex: 3 })
-  })
-})
-
-describe('拖拽只改显示顺序，序号（slotIndex）不跟图走（用户 2026-10-27）', () => {
-  /**
-   * 参考区是「按类型的有序数组」：拖拽改数组顺序 → 显示位变。
-   * 标签名（图片N）不变，所以 slotIndex 也必须保持不变。
-   */
-  it('b 排到前面后：显示位 1，但它的槽位序号仍是 2', () => {
-    const tiles = mergeRefTiles(
-      [],
-      [
-        { id: 'a', name: '图片1', url: 'a.png', isText: false },
-        { id: 'b', name: '图片2', url: 'b.png', isText: false },
-      ],
-      ['b', 'a'],
-    )
-    expect(tiles.map((t) => t.card?.id)).toEqual(['b', 'a'])
-    expect(tiles.map((t) => t.index)).toEqual([1, 2])
-    expect(tiles.map((t) => t.slotIndex)).toEqual([2, 1])
-  })
-})
-
-describe('参考缺号 → 不许发送（只看连线内容）', () => {
-  it('声明 @图片2、连线只有 1 张图 → 不缺（第 1 格有内容，第 2 格待输入）', () => {
-    // 第 2 格本身是待输入 → 也算缺（发出去会是空引用）
-    expect(
-      findRefGap([{ kind: 'image', index: 2 }], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }]),
-    ).toEqual({ kind: 'image', missing: [2] })
-  })
-
-  it('声明 @图片2、连线一张都没有 → 缺 1 和 2（两格都空）', () => {
-    expect(findRefGap([{ kind: 'image', index: 2 }], [])).toEqual({ kind: 'image', missing: [1, 2] })
-  })
-
-  it('没写任何 @ → 不缺（普通参考图照旧）', () => {
-    expect(findRefGap([], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }])).toBe(null)
-  })
-
-  it('图片与音频各自判定', () => {
-    expect(
-      findRefGap([{ kind: 'audio', index: 2 }], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }]),
-    ).toEqual({ kind: 'audio', missing: [1, 2] })
-  })
-})
-
-
-
-describe('placeRefAtSlot：上传落到第几格，就是第几个参考', () => {
-  it('空列表 + 第 2 格 → 只有一个素材时它就是第 1 个（缺的第 2 格由发送校验拦住）', () => {
-    // 第 2 格必须真的占第 2 位（前面补占位；落盘时占位被过滤，序号由 data.refSlot 保证）
-    expect(placeRefAtSlot([], 'image', 2, 'n2')).toEqual(['__slot__0', 'n2'])
-  })
-
-  it('已有 1 个素材，再往第 2 格上传 → 排到第 2 位', () => {
-    expect(placeRefAtSlot(['n1'], 'image', 2, 'n2')).toEqual(['n1', 'n2'])
-  })
-
-  it('已有 2 个素材，往第 1 格上传 → 新素材插到最前，其余顺延', () => {
-    expect(placeRefAtSlot(['a', 'b'], 'image', 1, 'x')).toEqual(['x', 'a', 'b'])
-  })
-
-  it('重复上传同一个节点 → 不重复出现（先摘掉再插入）', () => {
-    expect(placeRefAtSlot(['a', 'b', 'c'], 'image', 2, 'c')).toEqual(['a', 'c', 'b'])
-  })
-
-  it('序号超出已有长度 → 夹到末尾（不制造空洞）', () => {
-    // 第 9 格 = 第 9 位（补 7 个占位）；落盘时占位被过滤
-    const out = placeRefAtSlot(['a'], 'image', 9, 'z')
-    expect(out.length).toBe(9)
-    expect(out[8]).toBe('z')
-    expect(out.filter((x) => !x.startsWith('__slot__'))).toEqual(['a', 'z'])
-  })
-})
-
-describe('参考缺号："图片 2" 但没有图片 1 → 不许发送', () => {
-  /** 与组件里 refGap 同一套判定：每种类型从 1 数到最大序号，缺任何一格就算缺 */
-  function missingIndices(ready: Array<{ kind: string; index: number }>): number[] {
-    const byKind = new Map<string, Set<number>>()
-    for (const s of ready) {
-      const set = byKind.get(s.kind) ?? new Set<number>()
-      set.add(s.index)
-      byKind.set(s.kind, set)
-    }
-    for (const s of ready) {
-      const have = byKind.get(s.kind) ?? new Set<number>()
-      const max = Math.max(...have)
-      const missing: number[] = []
-      for (let i = 1; i <= max; i++) if (!have.has(i)) missing.push(i)
-      if (missing.length) return missing
-    }
-    return []
-  }
-
-  it('只有图片2 → 缺图片1', () => {
-    expect(missingIndices([{ kind: 'image', index: 2 }])).toEqual([1])
-  })
-
-  it('只有图片1 → 不缺（哪怕只传了一张，也是合法的「图片1」）', () => {
-    expect(missingIndices([{ kind: 'image', index: 1 }])).toEqual([])
-  })
-
-  it('图片1 + 图片3 → 缺图片2', () => {
-    expect(missingIndices([{ kind: 'image', index: 1 }, { kind: 'image', index: 3 }])).toEqual([2])
-  })
-
-  it('图片与音频各自编号：各自从 1 连续即可', () => {
-    // 图片1 + 音频2：音频缺音频1 → 报缺
-    expect(missingIndices([{ kind: 'image', index: 1 }, { kind: 'audio', index: 2 }])).toEqual([1])
-    // 图片1 + 音频1：两边都连续 → 不缺
-    expect(missingIndices([{ kind: 'image', index: 1 }, { kind: 'audio', index: 1 }])).toEqual([])
-  })
-
-  it('槽位键能稳定对上（image:2）', () => {
-    expect(refSlotKey('image', 2)).toBe('image:2')
   })
 })
