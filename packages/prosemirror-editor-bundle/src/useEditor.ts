@@ -1766,6 +1766,39 @@ export function useEditor(
   // 存储资源节点图片的取消加载函数
   const resourceCleanupMap = new WeakMap<HTMLImageElement, () => void>();
 
+  /**
+   * 参考标签里的缩略图接上「加载状态」（用户 2026-10-29）。
+   *
+   * 为什么不在 renderRefChip 里直接接：DOM 每次重建都会重跑 toDOM，
+   * 这里统一在挂载后按**真实 DOM** 接一次，图表和实际元素永远对得上。
+   * 语义：loading 时图标位转圈；load 成功把图片盖上来；error 保持图标。
+   */
+  function attachChipThumbState(el: HTMLElement): void {
+    const img = el.querySelector('img') as HTMLImageElement | null
+    const icon = el.querySelector('.resource-chip-icon') as HTMLElement | null
+    if (!img || !icon) return
+    const done = () => {
+      icon.classList.remove('is-loading')
+      icon.classList.add('is-covered')
+      img.style.display = ''
+    }
+    const fail = () => {
+      icon.classList.remove('is-loading')
+      icon.classList.remove('is-covered')
+      img.style.display = 'none'
+    }
+    if (img.complete) {
+      // 已经在缓存里：直接给结论，不要闪一下转圈
+      if (img.naturalWidth > 0) done()
+      else fail()
+      return
+    }
+    icon.classList.add('is-loading')
+    img.style.display = 'none'
+    img.addEventListener('load', done)
+    img.addEventListener('error', fail)
+  }
+
   // 绑定 atom 节点事件（资源和变量）
   function bindResourceEvents() {
     // 查询所有 atom 节点
@@ -1783,7 +1816,15 @@ export function useEditor(
 
       // 处理缩略图加载
       const img = el.querySelector("img");
-      if (img) {
+      /**
+       * 参考标签（resource-chip）走**自己的**加载状态（用户 2026-10-29）：
+       * 图标垫底，图片加载成功才显示；加载中图标位转圈，失败保持图标。
+       * 不能用 loadImageWithThumbnail —— 它会覆盖 onerror 并把失败的图 display:none，
+       * 把我们的图标重置回未覆盖状态（表现就是「加载完左边忽然空了」）。
+       */
+      if (img && el.classList.contains('resource-chip')) {
+        attachChipThumbState(el)
+      } else if (img) {
         const assetUrl = el.getAttribute("data-url") || "";
         const assetName = el.getAttribute("data-name") || "";
         const assetId = el.getAttribute("data-id") || "";

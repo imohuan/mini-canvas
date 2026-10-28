@@ -15,6 +15,12 @@ import {
   refNodeChipId,
 } from '../useEditor.ts'
 
+/**
+ * 标签缩略图的加载状态（用户 2026-10-29：图没加载出来就给加载 UI，不能留空白）。
+ *
+ * 这条只钉数据契约：DOM 侧的 attachChipThumbState 跑在浏览器里（本包测试是 node 环境），
+ * 真机行为由 Chrome MCP 验证：加载中 is-loading、成功 is-covered、失败保持图标。
+ */
 describe('标签身份：ref-node / ref-name', () => {
   it('节点 id 原样往返', () => {
     expect(refNodeChipId('n9')).toBe('ref-node:n9')
