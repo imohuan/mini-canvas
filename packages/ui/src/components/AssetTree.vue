@@ -28,6 +28,7 @@ import {
 import folderImg from '../assets/folder.png'
 import AssetRowMenu from './AssetRowMenu.vue'
 import { isAssetUsable } from '../composables/assetModel'
+import { peekPack } from '../composables/nodePack'
 
 /** 树的一行（文件夹 / 资产混排，带层级深度）—— 与两处宿主原来的行结构逐字对齐 */
 export interface AssetTreeRow {
@@ -377,6 +378,36 @@ function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
   if (rowClickBlocked(row)) return
   emit('openThumb', row, e)
 }
+
+/**
+ * 节点包（.mcnode）的**迷你窗口缩略图**（用户 2026-10-28 定的"省事路线"）：
+ * 卡片里放一个小 iframe（320px，缩到 32px 高的窗口里），把包里的界面缩着显示出来。
+ * 内容来自后台 /api/node-packages/read 解出的 ui.html —— 不在前端再写一份解压。
+ * 缓存一份（url → html）：同一个包重复渲染不重复取；列表里通常只有几个包，够用。
+ */
+const packThumbs = new Map<string, string>()
+const packThumbVersion = ref(0)
+const packHtmlOf = (url?: string): string => (url && packThumbs.get(url)) || ''
+async function loadPackThumb(url?: string): Promise<void> {
+  if (!url || packThumbs.has(url)) return
+  try {
+    const pack = await peekPack(url)
+    packThumbs.set(url, pack.html)
+    packThumbVersion.value++
+  } catch {
+    /* 取不到就维持图标兜底，不打扰 */
+  }
+}
+
+/**
+ * 行挂载钩子：节点包行出现时触发取包（loadPackThumb），拿到 html 后版本号 +1 重渲染。
+ * 图片/视频行不需要它（它们有地址就能直接画）。
+ */
+function registerAssetRow(row: AssetTreeRow, el: unknown): void {
+  if (row.kind === 'asset' && (row.assetKind ?? '') === 'node-package' && row.url && !packThumbs.has(row.url)) {
+    void loadPackThumb(row.url)
+  }
+}
 </script>
 
 <template>
@@ -505,6 +536,7 @@ function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
             @click.stop 也顺手把这次点击留在缩略图上，不连带触发整行的动作（勾选 / 展开）。
           -->
           <span
+            :ref="(el) => registerAssetRow(row, el)"
             class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
             :title="'预览 ' + row.name"
             @click.stop="onThumbClick(row, $event)"
@@ -524,6 +556,16 @@ function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
               playsinline
               aria-hidden="true"
             ></video>
+            <!-- 节点包：迷你窗口（iframe 缩着显示包内界面），加载失败回落图标 -->
+            <iframe
+              v-else-if="(row.assetKind ?? 'other') === 'node-package' && row.url && packHtmlOf(row.url)"
+              :srcdoc="packHtmlOf(row.url)"
+              sandbox="allow-scripts"
+              class="pack-thumb-frame"
+              title="节点包缩略图"
+              tabindex="-1"
+              aria-hidden="true"
+            ></iframe>
             <component v-else :is="assetIconOf(row.assetKind ?? 'other')" :size="15" />
             <span
               v-if="(row.assetKind ?? 'other') === 'video' && row.url"
@@ -618,5 +660,20 @@ function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
 }
 @media (prefers-reduced-motion: reduce) {
   .asset-tree-tip { animation: none; }
+}
+
+/*
+ * 节点包的迷你窗口缩略图：iframe 原尺寸 320px 宽，缩到 32×32 的卡片里（transform 缩放
+ * 不改 iframe 内部布局，只是显示变小 —— 与生成历史缩略墙同一套做法）。
+ * pointer-events: none：它只是"画面"，点击要落到整行/缩略图按钮上（不抢交互）。
+ */
+.asset-tree .pack-thumb-frame {
+  width: 320px;
+  height: 320px;
+  border: 0;
+  transform: scale(0.1);
+  transform-origin: center center;
+  pointer-events: none;
+  background: var(--ui-overlay-solid, #fff);
 }
 </style>
