@@ -334,6 +334,9 @@ currentTime 0 → 3.19s 且 `viewerOpen:false`；从 30% 拖到 60% 落到 2.56s
   不打开时只是普通 DOM 属性，不影响视觉。
 - 已接入：底栏 `shell.dock`、状态条 `shell.status`、抽屉页签 `shell.drawer.tabs`、
   设置导航 `settings.nav`。真机实测四处标签与标记都出现。
+- 条目标签显示 `id · order · before/after`（有才显示），例如
+  `shell-slots-demo/status · order 40 · after host/zoom`；条目元素同时带
+  `data-slot-before` / `data-slot-after`。插槽标签追加条目数量。
 
 **设置分组顺序**：`ctx.settings.orderGroups([{ group, order, before, after }])`，
 before/after 填**分组名**（如「节点/端口」），与 UI 槽同一套排序规则。

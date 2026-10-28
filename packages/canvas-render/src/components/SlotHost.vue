@@ -26,13 +26,24 @@ const props = defineProps<{
 const { ctx } = useCanvasContext()
 
 // —— occupant 列表：读内核槽 + markRaw，插件装卸时整体替换以触发 Vue 更新 ——
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const list = ref<Array<{ id: string; order: number; component: any }>>([])
+interface SlotOccupant {
+  id: string
+  order: number
+  before?: string
+  after?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component: any
+}
+const list = ref<SlotOccupant[]>([])
 
 function reload(): void {
-  list.value = ctx.slots
-    .occupants(props.slot)
-    .map((e) => ({ id: e.id, order: e.order, component: markRaw(e.component as object) }))
+  list.value = ctx.slots.occupants(props.slot).map((e) => ({
+    id: e.id,
+    order: e.order,
+    ...(e.before !== undefined ? { before: e.before } : {}),
+    ...(e.after !== undefined ? { after: e.after } : {}),
+    component: markRaw(e.component as object),
+  }))
 }
 
 reload() // 初始读一次
@@ -61,8 +72,10 @@ watch(() => props.slot, reload)
        occupants 按内核 order 逐个渲染；每个条目都带 data-slot / data-slot-id，
        方便在开发者工具里直接查"这个槽有哪些条目、id 是什么"。 -->
   <template v-for="oc in list" :key="oc.id">
-    <span v-if="debug" class="slot-debug-badge" aria-hidden="true">
-      {{ slot }} · {{ oc.id }} · order {{ oc.order }}
+    <span v-if="debug" class="slot-debug-badge slot-debug-item-badge" aria-hidden="true">
+      {{ slot }} · {{ oc.id }} · order {{ oc.order
+      }}{{ oc.before ? ' · before ' + oc.before : ''
+      }}{{ oc.after ? ' · after ' + oc.after : '' }}
     </span>
     <component
       :is="oc.component"
@@ -70,6 +83,8 @@ watch(() => props.slot, reload)
       :data-slot-order="oc.order"
       :data-slot-id="oc.id"
       :data-slot="slot"
+      :data-slot-before="oc.before ?? undefined"
+      :data-slot-after="oc.after ?? undefined"
     />
   </template>
 </template>

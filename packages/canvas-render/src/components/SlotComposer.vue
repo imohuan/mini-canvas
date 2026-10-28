@@ -192,23 +192,49 @@ export default defineComponent({
         // 也会在组件根上丢失 data-*（2026-10-28 设置左树/底栏实测）。
         const raw = item.content ?? []
         const content = Array.isArray(raw) ? raw : [raw]
-        return h(Fragment, { key: item.id }, content)
+        // 宿主锚点：调试时把"条目身份 + 排序信息"作为一条标签放在内容前
+        if (!props.debug) return h(Fragment, { key: item.id }, content)
+        return h(Fragment, { key: item.id }, [slotDebugItemBadge(item, 'host'), ...content])
       }
       const extra = (props.itemProps as
         | ((entry: SlotComposerEntry & { component: unknown }) => Record<string, unknown> | undefined)
         | undefined)?.(item)
       // itemProps 返回 undefined = 这一项只参与排序、不渲染（如设置左树只认分组名）
       if (props.itemProps && extra === undefined) return null
-      return h(markRaw(item.component as Component), {
+      const node = h(markRaw(item.component as Component), {
         key: item.id,
         ...(props.itemClass ? { class: props.itemClass } : {}),
         // 身份走下发给组件的普通 prop；同时用 aria/data 不行：多根组件会吞掉并触发 Vue warn。
         slotItem: item.id,
         'data-slot-id': item.id,
         'data-slot-order': item.order,
+        ...(item.before !== undefined ? { 'data-slot-before': item.before } : {}),
+        ...(item.after !== undefined ? { 'data-slot-after': item.after } : {}),
         ...(props.sharedProps ?? {}),
         ...(extra ?? {}),
       })
+      // 插件条目：调试时在组件前面放一条身份/排序标签
+      if (!props.debug) return node
+      return h(Fragment, { key: item.id + ':debug' }, [slotDebugItemBadge(item, 'plugin'), node])
+    }
+
+    /**
+     * 条目标签：id / order / before / after 全列出来。
+     *
+     * 宿主锚点与插件条目两条渲染路径共用，文案只改这一处，避免漂移。
+     */
+    function slotDebugItemBadge(item: SlotComposerItem, owner: 'host' | 'plugin'): VNode {
+      const parts = [item.id, 'order ' + item.order]
+      if (item.before !== undefined) parts.push('before ' + item.before)
+      if (item.after !== undefined) parts.push('after ' + item.after)
+      return h(
+        'span',
+        {
+          class: 'slot-debug-badge slot-debug-item-badge' + (owner === 'host' ? ' is-host' : ''),
+          'aria-hidden': 'true',
+        },
+        parts.join(' · '),
+      )
     }
 
     return () => {
@@ -236,7 +262,7 @@ export default defineComponent({
         ? h(
             'span',
             { class: 'slot-debug-badge', 'aria-hidden': 'true' },
-            (props.label ?? props.slot) + ' · ' + props.slot,
+            (props.label ?? props.slot) + ' · ' + props.slot + ' · ' + nodes.length + ' 条',
           )
         : null
       return h(

@@ -35,6 +35,18 @@
   pointer-events: none;
 }
 
+/* 条目标签：比插槽标签小一档，绿色底，与容器标签区分 */
+.slot-debug-item-badge {
+  background: #10b981;
+  color: #052e16;
+  font-size: 10px;
+  font-weight: 600;
+}
+.slot-debug-item-badge.is-host {
+  background: #0ea5e9;
+  color: #082f49;
+}
+
 /* 容器需要定位上下文，标签才能浮在容器上方 */
 .slot-composer.is-slot-debug {
   position: relative;

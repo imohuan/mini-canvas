@@ -181,6 +181,39 @@ describe('SlotComposer · SSR', () => {
     ctx.stop()
   })
 
+  it('插槽调试会显示条目的 before / after / order', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.slots.register('demo.slot', {
+      id: 'plugin/x',
+      order: 20,
+      after: 'host/a',
+      component: defineComponent({ render: () => h('i', 'X') }),
+    })
+    ctx.slots.register('demo.slot', {
+      id: 'plugin/y',
+      order: 30,
+      before: 'host/b',
+      component: defineComponent({ render: () => h('i', 'Y') }),
+    })
+
+    const app = createSSRApp({
+      render: () =>
+        h(SlotComposer, { slot: 'demo.slot', debug: true }, () => [
+          h(SlotAnchor, { id: 'host/a', order: 10 }, () => h('i', 'A')),
+          h(SlotAnchor, { id: 'host/b', order: 40 }, () => h('i', 'B')),
+        ]),
+    })
+    app.provide(CANVAS_CONTEXT_KEY, baseContext(ctx))
+    const html = await renderToString(app)
+
+    expect(html).toContain('plugin/x · order 20 · after host/a')
+    expect(html).toContain('plugin/y · order 30 · before host/b')
+    expect(html).toContain('data-slot-after="host/a"')
+    expect(html).toContain('data-slot-before="host/b"')
+    ctx.stop()
+  })
+
   it('非法条目 id 不渲染（不静默变成别的项）', async () => {
     const ctx = new Context()
     await ctx.start()
