@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 浮层区：快捷键 / 生成历史（masonry 瀑布流）/ TV Director 设置 / Toast。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare, Download } from 'lucide-vue-next'
 import { motion } from 'motion-v'
 import AxDialog from '../AxDialog.vue'
@@ -1404,25 +1405,31 @@ function closeShortcutPanel(): void {
 /**
  * 点面板外面就关（用户口径 2026-10-28：「就和 AxDropdown 一样」）。
  *
- * 为什么不用遮罩自己的 `@pointerdown.self`：外壳的顶栏 / 底栏 / 状态条是
- * `--layer-app-chrome`（700），比这层遮罩（90）高 —— 点它们时事件先被外壳接走，
- * 遮罩根本收不到 pointerdown，面板就一直挂着（真机实测：点底栏「添加节点」不关）。
+ * 判定用和 AxDropdown 同一个 hook（@vueuse/core 的 onClickOutside），它把监听挂在
+ * document 的捕获阶段，所以外壳顶栏 / 底栏 / 状态条即使层级更高、即使写了
+ * `@pointerdown.stop`，也照样能判出「点到面板外面了」。
  *
- * 这里在 window **捕获阶段**判 pointerdown：事件从 window 往下走，任何层级、任何
- * `@pointerdown.stop` 都拦不住，判定与谁盖在上面无关。触发按钮自己除外 —— 它有自己的
- * toggle，若不排除会「先被关掉、再被 toggle 打开」，看着像没反应。
+ * 只把「快捷键」按钮排除在外：它有自己的 toggle，不排除会「先关再开」，看着像没反应。
  */
-function onDocPointerDown(e: PointerEvent): void {
-  if (!s.shortcutsOpen) return
-  const target = e.target instanceof Element ? e.target : null
-  if (!target) return
-  // 面板本体按类名认（motion.section 的组件 ref 拿不到 DOM；类名是稳定的结构契约）
-  if (target.closest('.shortcut-modal')) return
-  if (target.closest('[aria-label="快捷键"]')) return
-  closeShortcutPanel()
-}
-onMounted(() => document.addEventListener('pointerdown', onDocPointerDown, true))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDown, true))
+const shortcutPanelRef = ref(null)
+onClickOutside(
+  shortcutPanelRef,
+  (e) => {
+    if (!s.shortcutsOpen) return
+    /**
+     * 触发器自己不算「外面」。
+     *
+     * 不能只靠 onClickOutside 的 `ignore`：它把 ignore 判定放在 pointerdown 上，
+     * 而底栏容器写了 `@pointerdown.stop`（见 DockArea），那个 pointerdown 到不了 window，
+     * ignore 就白写了；随后 click 先关面板、按钮自己的 toggle 再打开 —— 看着像没反应。
+     * 这里在回调里再挡一次，两种事件顺序下都稳。
+     */
+    const target = e.target
+    if (target instanceof Element && target.closest('[aria-label="快捷键"]')) return
+    closeShortcutPanel()
+  },
+  { ignore: ['[aria-label="快捷键"]'] },
+)
 
 </script>
 
@@ -1430,6 +1437,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDo
   <!-- 快捷键：毛玻璃，相对**整个视口**居中；底部箭头指向 dock 的「快捷键」按钮（中轴对齐） -->
   <div v-if="s.shortcutsOpen" class="fixed inset-0 z-[90] flex flex-col items-center justify-end pb-[74px]">
     <motion.section
+      ref="shortcutPanelRef"
       class="shortcut-modal relative flex h-[437px] w-[min(1152px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-glass text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.4]"
       role="dialog" aria-modal="true" aria-label="快捷键" :initial="{ opacity: 0, scale: 0.96, y: 8 }"
       :animate="{ opacity: 1, scale: 1, y: 0 }" :transition="{ duration: 0.22, ease: [0.34, 1.56, 0.64, 1] }"
