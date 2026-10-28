@@ -611,7 +611,7 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
  * 为什么按名称而不是按序号：名称在画布内唯一，用户和 AI 都能直接读懂
  * （`@场景:天空之城` 一眼知道是什么，`@音频1` 不知道）。
  */
-export function bottomBarTagSpecFor(materials: ReadonlyArray<UpstreamMaterial>): TagSpec {
+export function bottomBarTagSpecFor(getMaterials: () => ReadonlyArray<UpstreamMaterial>): TagSpec {
   return {
     scan(text: string): TagMatch[] {
       const out: TagMatch[] = []
@@ -620,14 +620,16 @@ export function bottomBarTagSpecFor(materials: ReadonlyArray<UpstreamMaterial>):
        * 所以先按分隔符切段，再在段内用「最长名称优先」匹配已连线素材，
        * 剩下的段落按整段当待绑定名称。
        */
+      const materials = getMaterials()
       const names = materials.map((m) => m.name.trim()).filter(Boolean)
       // 长名优先：避免「天空」把「天空之城」截走
       const sorted = [...names].sort((a, b) => b.length - a.length)
-      const re = /@([^\n@]{1,80})/g
+      // 名称到空白 / 中英文标点 / 换行 / 下一个 @ 为止
+      const re = /@([^\s@，。,.、；;：:！!？?（）()【】\[\]"'“”‘’]{1,80})/g
       let m: RegExpExecArray | null
       while ((m = re.exec(text)) !== null) {
         const raw = m[1]
-        const hit = sorted.find((name) => raw === name || raw.startsWith(name + ' '))
+        const hit = sorted.find((name) => raw === name || raw.startsWith(name))
         const name = hit ?? raw.trim()
         if (!name) continue
         const len = hit ? hit.length : name.length

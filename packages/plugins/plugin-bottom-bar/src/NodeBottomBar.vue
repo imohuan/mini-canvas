@@ -1586,7 +1586,13 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
 
 onMounted(() => {
   // 把底栏的标签规格交给编辑器（用户 2026-10-27：标签实现交给插件，编辑器不再写死规则）
-  registerTagSpec(bottomBarTagSpecFor(materials.value))
+  /**
+   * 标签规格按**名称**识别（用户 2026-10-28）。
+   *
+   * 传一个 getter：素材随连线/改名变化，scan 每次执行时现取，
+   * 不能把挂载那一刻的数组冻进去（否则新连进来的节点永远 @ 不出来）。
+   */
+  registerTagSpec(bottomBarTagSpecFor(() => shownMaterials.value))
   registerStartDragHandler(startCtrlDrag)
   window.addEventListener('pointermove', onCtrlDragPointerMove, true)
   window.addEventListener('pointerup', onCtrlDragPointerUp, true)

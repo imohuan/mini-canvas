@@ -733,14 +733,29 @@ function registerSlotItemsFromDoc(docJson: unknown): void {
   const walk = (nodes: unknown): void => {
     if (!Array.isArray(nodes)) return
     for (const raw of nodes) {
-      const node = raw as { type?: string; attrs?: { id?: unknown; name?: unknown }; content?: unknown } | null
+      const node = raw as {
+        type?: string
+        attrs?: { id?: unknown; name?: unknown; chipKind?: unknown }
+        content?: unknown
+      } | null
       if (!node || typeof node !== 'object') continue
       if (node.type === 'resource') {
         const id = String(node.attrs?.id ?? '')
-        const m = /^ref-slot:(image|video|audio|av):(\d+)$/.exec(id)
-        if (m && !itemRegistry.has(id)) {
-          const slotKind = m[1] as 'image' | 'video' | 'audio' | 'av'
-          itemRegistry.set(id, buildSlotItem(slotKind, String(node.attrs?.name ?? id)))
+        const name = String(node.attrs?.name ?? '')
+        if (!id || itemRegistry.has(id)) {
+          // 已有条目（调用方登记过更新的内容）→ 不动
+        } else if (id.startsWith(REF_NODE_PREFIX) || id.startsWith(REF_NAME_PREFIX)) {
+          const kind = String(node.attrs?.chipKind ?? '')
+          itemRegistry.set(id, buildRefChipItem({
+            id,
+            name: name || id,
+            ...(kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'text'
+              ? { bound: { kind } }
+              : {}),
+          }))
+        } else if (id.startsWith('ref-slot:')) {
+          // 老格式：不兼容（用户拍板），按失效画
+          itemRegistry.set(id, buildRefChipItem({ id, name: name || id, invalid: true }))
         }
       }
       walk(node.content)
