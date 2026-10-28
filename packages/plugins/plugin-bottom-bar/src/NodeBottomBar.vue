@@ -2859,7 +2859,7 @@ function onGlobalLeave(el: Element): void {
 .nb-editor :deep(.resource-chip) {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 0px;
   max-width: 160px;
   height: 22px;
   padding: 0 7px 0 3px;
