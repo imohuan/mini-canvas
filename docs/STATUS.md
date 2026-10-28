@@ -5,6 +5,24 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-28，音频底栏垂直居中 + 全屏预览去主题紫）
+
+用户口径（附截图）：卡外底栏的文字看着没垂直居中，要用 flex + items-center 对齐；
+全屏预览里音频的波形与进度条是主题紫，希望统一成黑白灰；默认（非全屏）样式不动。
+
+**做法**：
+
+- `.hist-card-audio-controls` 明确 `display:flex; align-items:center; justify-content:space-between`，
+  文字行高与按钮同高（18px）；JS 端也写同一套内联样式（卡片是现拼的，样式表被裁剪也不会丢）。
+- `MediaViewer.vue` 里对 `.mv-plugin-stage` 下的 `.aw-wave-bar.is-played / .aw-progress-fill /
+  .aw-progress-thumb / .aw-knob::after` 覆盖为 `var(--ui-ink)` ——
+  **必须用 :deep()**：这些元素住在 `AudioWavePlayer` 子组件里，scoped 样式穿不过组件边界
+  （第一版就踩了这个坑：规则写了但完全不生效）。
+
+**验证**：ui 459/459（historyMediaCardLayout 30 条）、theme-default 330/330、vue-tsc 干净；
+8860 真机：底栏 `display:flex / align-items:center`，左右两区与按钮/进度的中心线全为 331，
+进度与按钮中心差 0px；全屏预览 playedBg / fillBg / thumbBorder 均为 rgb(24,32,43)（无紫色）。
+
 ### 追记（2026-10-28，生成历史音频：波形加卡片边框 + 底栏左右分区）
 
 用户口径（附红框截图）：波形要用**卡片边框**包住；底部区域左放"类型 + 当前播放进度"，
