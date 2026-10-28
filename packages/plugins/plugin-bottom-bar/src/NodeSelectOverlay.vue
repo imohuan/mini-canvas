@@ -1,28 +1,29 @@
 <script setup lang="ts">
 /**
- * NodeSelectOverlay —— **通用的节点选择态覆盖层**（over:inset 挂载，长在节点里跟随变换）。
+ * NodeSelectOverlay —— 选择态的**唯一**节点覆盖层（over:inset 挂载，长在节点里跟随变换）。
  *
- * 用户口径（2026-10-26）：Ctrl 拖选择态与参考选择态的覆盖层效果完全一样，
- * 抽象成一个通用组件 —— 两种模式只是"操作方式"不同（拖拽 vs 点击），
- * 面孔/角标/提醒/灰罩共用同一套。
+ * 用户口径（2026-10-28）：参考选择与 Ctrl 拖拽本来就是同一套，只有操作方式和文字不同。
+ * 所以不再按 mode 注册两份，只读统一会话：
+ *   - 参考模式：点击节点 = 连上/取消；
+ *   - Ctrl 拖拽：按住节点拖到参考格替换；
+ *   - 松开 Ctrl 若仍开着参考，自动回到参考。
  *
- * - mode='reference'：**点击**节点连上/取消；已连接悬停提醒"取消选择 图片N"。
- * - mode='ctrl-drag'：从节点**按住拖拽**到参考格替换；已连接提醒"已连接 · 不可重复拖拽"。
- *
- * 状态读 globalThis（两个会话都同步写）：跨模块实例（热重载 UMD 拷贝 vs bundle 拷贝）
- * 的模块 ref 不共享，靠 enter/exit 广播的事件 + tick 计数驱动重算。
+ * blocked 的红层也**必须接鼠标**（用户 2026-10-28：红色禁用节点 hover 也要出提示）。
+ * 做法是接指针但不接动作：点击/拖拽进来都会被忽略，只有悬停提示生效。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import {
   referenceNodeState,
-  referenceHintText,
   canReference,
+  selectionNodeHint,
   type NodeTypeLike,
   type ReferenceNodeState,
 } from './referenceMode'
 import { nodeMediaOf } from './refSlotDrag'
 import { requestStartDrag } from './ctrlDragMode'
+import { readSelectionSnapshot, selectionMode } from './selectionMode'
+const { ctx } = useCanvasRender()
 /**
  * 提示走**默认主题提供的全局服务** ctx.get('tip')（与节点同级的基础设施，用户口径 2026-10-26）。
  * 本插件不再自绘气泡 —— 位置/观感由主题统一（鼠标右下角、无间隔）。
@@ -34,8 +35,6 @@ function tipService(): { show(m: string): void; hide(): void } | undefined {
 const props = defineProps<{
   id: string
   data: Record<string, unknown>
-  /** 选择态种类：reference=点击连/断；ctrl-drag=按住拖拽替换 */
-  mode: 'reference' | 'ctrl-drag'
   /** 边框配置项（缺省 = BaseNode 选中态同款） */
   borderColor?: string
   borderStyle?: string
@@ -54,25 +53,13 @@ const border = computed(() => ({
   width: props.borderWidth ?? '1px',
 }))
 
-const { ctx } = useCanvasRender()
-
-/** 会话开关的全局事件驱动重算（globalThis 不是响应源，无 tick 触发 computed 永不重算） */
+/** 统一会话变化时 +1（globalThis 不是响应源，无 tick 触发 computed 永不重算） */
 const tick = ref(0)
-const FLAG = (m: 'reference' | 'ctrl-drag') =>
-  m === 'reference' ? '__miniCanvasRefSel' : '__miniCanvasCtrlDrag'
-const EVENT = (m: 'reference' | 'ctrl-drag') =>
-  m === 'reference' ? 'mini-canvas:reference-mode' : 'mini-canvas:ctrl-drag-mode'
-
-function readSession(): { active: boolean; owner: string } {
-  const key = FLAG(props.mode) as 'reference' | 'ctrl-drag'
-  const s = (globalThis as unknown as Record<string, { active: boolean; owner: string } | undefined>)[key]
-  return s?.active ? { active: true, owner: s.owner } : { active: false, owner: '' }
-}
 function onModeChange(): void {
   tick.value += 1
 }
-onMounted(() => window.addEventListener(EVENT(props.mode), onModeChange))
-onBeforeUnmount(() => window.removeEventListener(EVENT(props.mode), onModeChange))
+onMounted(() => window.addEventListener('mini-canvas:selection-mode', onModeChange))
+onBeforeUnmount(() => window.removeEventListener('mini-canvas:selection-mode', onModeChange))
 onMounted(() => {
   syncRadius()
   radiusTimer = setInterval(syncRadius, 250)
@@ -91,8 +78,8 @@ type DocLike = {
 
 const state = computed<null | ReferenceNodeState>(() => {
   void tick.value
-  const session = readSession()
-  if (!session.active) return null
+  const session = readSelectionSnapshot()
+  if (!session.mode) return null
   const d = ctx.tryGet<DocLike>('doc')
   if (!d) return null
   const node = d.getNode(props.id)
@@ -100,8 +87,11 @@ const state = computed<null | ReferenceNodeState>(() => {
   const ownerNode = d.getNode(session.owner)
   const ownerType = d.types.get(ownerNode?.type ?? '') as NodeTypeLike | undefined
   const nodeType = d.types.get(node.type ?? '') as NodeTypeLike | undefined
-  // ctrl-drag 模式只认媒体节点（音频/视频/图片）；reference 沿用 canReference 判定
-  const canUse = props.mode === 'ctrl-drag' ? !!nodeMediaOf(node) : canReference(nodeType, ownerType)
+  /**
+   * 两种模式共用「能连进来」的判定：文本节点产出 text（PortDef 已声明），
+   * 所以文本一直可选、也可拖（拖到文本格）。
+   */
+  const canUse = canReference(nodeType, ownerType)
   const connected = d.getEdges().some((e) => e.source === props.id && e.target === session.owner)
   return referenceNodeState({ isOwner: props.id === session.owner, canReference: canUse, connected })
 })
@@ -118,13 +108,10 @@ function syncRadius(): void {
 }
 
 const hintText = computed(() => {
-  if (!state.value || state.value === 'owner' || state.value === 'blocked') return ''
-  if (props.mode === 'ctrl-drag') {
-    if (state.value === 'connected') return '已连接 · 不可重复拖拽'
-    return ''
-  }
+  const mode = readSelectionSnapshot().mode
+  if (!mode || !state.value) return ''
   const label = (props.data?.label as string) || props.id
-  return referenceHintText(state.value, label)
+  return selectionNodeHint(mode, state.value, label)
 })
 
 /** 悬停：显示通用鼠标提示（用户口径：底部文字标签不要，改成跟随鼠标的提示） */
@@ -137,9 +124,9 @@ function onLeave(): void {
 
 /** 点击行为（仅 reference 模式）：连上/取消；ctrl-drag 模式点击不动作（操作是拖拽） */
 function onPick(): void {
-  if (props.mode !== 'reference') return
-  const session = readSession()
-  if (!session.active) return
+  if (selectionMode() !== 'reference') return
+  const session = readSelectionSnapshot()
+  if (!session.mode) return
   if (!state.value || state.value === 'owner' || state.value === 'blocked') return
   const d = ctx.tryGet<DocLike>('doc')
   if (!d) return
@@ -163,13 +150,23 @@ function onPick(): void {
  * reference 模式直接放行（点击 = 连/断，stop 会吞掉后续 click）。
  */
 function onDragPointerDown(ev: PointerEvent): void {
-  if (props.mode !== 'ctrl-drag') return
-  const session = readSession()
-  if (!session.active) return
+  if (selectionMode() !== 'ctrl-drag') return
+  const session = readSelectionSnapshot()
+  if (!session.mode) return
+  // blocked / owner 一律不发拖拽（红层只负责提示）
+  if (state.value !== 'selectable' && state.value !== 'connected') return
+  if (state.value === 'connected') return
   requestStartDrag(props.id, ev)
   ev.preventDefault()
   ev.stopPropagation()
 }
+
+/** 拖拽模式下这个节点是否真的能拖（有文本/图片/视频/音频内容） */
+const canDragNode = computed(() => {
+  if (readSelectionSnapshot().mode !== 'ctrl-drag') return false
+  const d = ctx.tryGet<DocLike>('doc')
+  return !!nodeMediaOf(d?.getNode(props.id))
+})
 </script>
 
 <template>
@@ -177,7 +174,7 @@ function onDragPointerDown(ev: PointerEvent): void {
     v-if="state"
     ref="rootEl"
     class="nso-layer"
-    :class="['is-' + state, 'is-' + mode]"
+    :class="['is-' + state, selectionMode() ? 'is-' + selectionMode() : '']"
     :style="{ border: border.width + ' ' + border.style + ' ' + border.color, borderRadius: radius }"
     data-testid="node-select-layer"
     @pointerdown.capture="onDragPointerDown($event)"
@@ -194,6 +191,8 @@ function onDragPointerDown(ev: PointerEvent): void {
         <line x1="5.8" y1="5.8" x2="18.2" y2="18.2" />
       </svg>
     </span>
+    <!-- 拖拽模式：可拖的节点右下角给一个小圆点（文字仍走 tip） -->
+    <span v-if="state !== 'owner' && canDragNode" class="nso-drag-dot" aria-hidden="true" />
   </div>
 </template>
 
@@ -210,8 +209,22 @@ function onDragPointerDown(ev: PointerEvent): void {
 .nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 20%, transparent); }
 .nso-layer.is-connected:hover { background: color-mix(in srgb, var(--ui-accent) 30%, transparent); }
 .nso-layer.is-owner { pointer-events: none; }
-/* 主题色白名单: 红色语义 = 危险/禁用，走 --ui-danger（形状为蒙版与角标，非主题强调色） */
-.nso-layer.is-blocked { border-color: var(--ui-danger); background: color-mix(in srgb, var(--ui-danger) 16%, transparent); pointer-events: none; }
+/* 主题色白名单: 红色语义 = 危险/禁用，走 --ui-danger（形状为蒙版与角标，非主题强调色）。
+   blocked 仍然接指针：用户 2026-10-28 要求红色禁用节点 hover 也要有提示；
+   动作本身由 pointerdown / click 里的 state 判断拦住（blocked 一律不响应）。 */
+.nso-layer.is-blocked { border-color: var(--ui-danger); background: color-mix(in srgb, var(--ui-danger) 16%, transparent); cursor: help; }
 .nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-primary-ink, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
 .nso-layer.is-blocked .nso-badge { background: var(--ui-danger); }
+/* 拖拽模式下可拖节点的右下角小圆点（不引入第二种强调色） */
+.nso-drag-dot {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ui-accent);
+  opacity: 0.75;
+  pointer-events: none;
+}
 </style>

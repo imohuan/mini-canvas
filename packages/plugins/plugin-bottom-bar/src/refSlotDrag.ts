@@ -10,9 +10,12 @@
  * DOM 事件绑定在 NodeBottomBar.vue（需要 ctx / refTiles），这里只放「判定」，可单测。
  */
 
-/** 从节点 data 里认出媒体（image/video/audio）与地址/名字；不是资源节点 → null */
+import { slotAccepts, slotMismatchHint, mediaLabel, type SlotKind, type SlotMedia } from './slotKinds'
+
+/** 从节点 data 里认出媒体（image/video/audio/text）与地址/名字；不是资源节点 → null */
+
 export function nodeMediaOf(node: { type?: string; data?: Record<string, unknown> } | undefined): {
-  mediaType: 'image' | 'video' | 'audio'
+  mediaType: SlotMedia
   url: string
   name: string
 } | null {
@@ -25,6 +28,13 @@ export function nodeMediaOf(node: { type?: string; data?: Record<string, unknown
   if (videoUrl) return { mediaType: 'video', url: videoUrl, name: s(data.label) || s(data.videoName) || '视频' }
   const audioUrl = s(data.audioUrl)
   if (audioUrl) return { mediaType: 'audio', url: audioUrl, name: s(data.label) || s(data.audioName) || '音频' }
+  /**
+   * 文本（用户 2026-10-28：文本节点也能拖，只要拖到文本格）。
+   * 放在媒体之后：同一个节点如果既交了图又交了正文，优先当媒体（与上游素材收集同口径）。
+   */
+  if (node.type === 'text' || typeof data.text === 'string') {
+    return { mediaType: 'text', url: '', name: s(data.label) || '文本' }
+  }
   // 只有持久引用（新节点的标准形态）：类型由节点自己声明
   if (s(data.resourceId)) {
     const kind = node.type === 'video' ? 'video' : node.type === 'audio' ? 'audio' : node.type === 'image' ? 'image' : null
@@ -40,6 +50,26 @@ export function isDraggableTarget(target: EventTarget | null): boolean {
 }
 
 /**
+ * 拖拽经过某个参考格时的判定（用户 2026-10-28：拖到不匹配的槽位也要提示）。
+ *
+ * 一条路径同时服务「实时悬停」与「松手落点」，避免两处判断走偏：
+ * - 目标格收这种内容 → ok，格子高亮，允许放下；
+ * - 不收 → 不亮、不落，提示里同时说清格子收什么、你拖的是什么。
+ */
+export function judgeSlotHover(input: {
+  /** 格子种类（image/video/audio/text/av） */
+  kind: SlotKind
+  /** 被拖的内容类型（文本节点也算） */
+  media: SlotMedia | null
+}): { ok: boolean; hint: string } {
+  if (!input.media) return { ok: false, hint: '这个节点没有可拖的内容' }
+  if (!slotAccepts(input.kind, input.media)) {
+    return { ok: false, hint: slotMismatchHint(input.kind, input.media) }
+  }
+  return { ok: true, hint: '松手放到' + mediaLabel(input.media) + '格' }
+}
+
+/**
  * Ctrl 拖替换：把目标槽位的连线换到新资源上。
  *
  * 替换语义（用户口径「替换该插槽的资源」）：
@@ -52,7 +82,7 @@ export function isDraggableTarget(target: EventTarget | null): boolean {
  */
 export function planSlotReplace(input: {
   nodeId: string
-  mediaType: 'image' | 'video' | 'audio'
+  mediaType: 'image' | 'video' | 'audio' | 'text'
   url: string
   name: string
   targetId: string

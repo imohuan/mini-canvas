@@ -23,18 +23,21 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents } from '@mini-canvas/canvas-render'
 import type { DocService } from '@mini-canvas/canvas-data'
 import {
-  exitReference,
+  exitSelection,
   focusViewportFor,
-  referenceActive,
-  referenceEpoch,
-  referenceHintText,
+  readSelectionSnapshot,
   referenceNodeState,
   referenceOwner,
   referencePickAction,
   canReference,
+  selectionEpoch,
+  selectionMode,
+  selectionNodeHint,
   type NodeTypeLike,
   type ReferenceNodeState,
 } from './referenceMode'
+import { suppressCtrlUntilRelease } from './selectionMode'
+import { exitCtrlDragMode } from './ctrlDragMode'
 
 /** 提示胶囊跟随鼠标时与光标的偏移（px）：往右下让开一点，不挡光标也不挡节点）
  *  （与参考站实测一致：胶囊落在光标右下角外侧） */
@@ -58,7 +61,9 @@ const hoverId = ref<string | null>(null)
 const hovered = computed(
   () =>
     layers.value.find(
-      (l) => l.id === hoverId.value && (l.state === 'selectable' || l.state === 'connected'),
+      (l) =>
+        l.id === hoverId.value &&
+        (l.state === 'selectable' || l.state === 'connected' || l.state === 'blocked'),
     ) ?? null,
 )
 /** 悬停提示跟随鼠标的屏幕坐标（用户要求：提示跟着鼠标走、保持偏移，而不是钉在节点上） */
@@ -72,19 +77,32 @@ function onPointerMove(e: PointerEvent): void {
   hintPos.value = { x: e.clientX, y: e.clientY }
 }
 
-const active = computed(() => referenceActive())
-const epoch = ref(referenceEpoch())
-watchEpoch()
-function watchEpoch(): void {
-  // 会话状态是 module 级 ref：用 watch 跟随，进入新一次选择态时清掉悬停高亮
-  watch(referenceEpoch, (v) => {
-    epoch.value = v
-    hoverId.value = null
-  })
+/** 会话驱动（globalThis 不是响应源）：事件 + epoch 一起让顶栏/盖层重算 */
+const tick = ref(0)
+const epoch = ref(selectionEpoch())
+function syncSession(): void {
+  tick.value += 1
+  epoch.value = selectionEpoch()
+  if (selectionMode() === null) hoverId.value = null
 }
+watch(selectionEpoch, syncSession)
+onMounted(() => window.addEventListener('mini-canvas:selection-mode', syncSession))
+onBeforeUnmount(() => window.removeEventListener('mini-canvas:selection-mode', syncSession))
 
-/** 顶栏那句提示 */
-const TOP_TEXT = '从画布或资产管理选择参考'
+const active = computed(() => {
+  void tick.value
+  return readSelectionSnapshot().mode !== null
+})
+const mode = computed(() => {
+  void tick.value
+  return readSelectionSnapshot().mode
+})
+const isDrag = computed(() => mode.value === 'ctrl-drag')
+
+/** 顶栏那句提示：同一条栏，按当前模式换一句话 */
+const topText = computed(() =>
+  isDrag.value ? '按住 Ctrl 拖资源到参考格' : '从画布或资产管理选择参考',
+)
 
 function doc(): DocService | undefined {
   return ctx.tryGet<DocService>('doc')
@@ -187,7 +205,7 @@ function onKeydown(e: KeyboardEvent): void {
   if (!active.value) return
   if (e.key === 'Escape') {
     e.stopPropagation()
-    exitReference()
+    exitSelection()
   }
 }
 
@@ -227,10 +245,19 @@ function focusOwner(): void {
   viewport.setCenter(target.x, target.y, target.zoom)
 }
 
-/** 顶栏「返回节点」：先聚焦回节点，再退出选择态 */
+/**
+ * 顶栏「返回节点」：两种模式共用同一个按钮。
+ * - 参考模式：聚焦后退出整个选择态（与旧行为一致）；
+ * - 拖拽模式：聚焦后退出拖拽；若参考还开着就回到参考，并压住 Ctrl 直到松开。
+ */
 function onBackToNode(): void {
   focusOwner()
-  exitReference()
+  if (isDrag.value) {
+    suppressCtrlUntilRelease()
+    exitCtrlDragMode()
+  } else {
+    exitSelection()
+  }
 }
 
 /**
@@ -245,7 +272,7 @@ function guardOwnerSelected(): void {
   const sel = ctx.tryGet<{ ids: ReadonlySet<string> } | undefined>('selection')
   const owner = referenceOwner()
   const stillThere = !!sel && !!owner && sel.ids.size === 1 && sel.ids.has(owner)
-  if (!stillThere) exitReference()
+  if (!stillThere) exitSelection()
 }
 
 const offs: Array<{ dispose(): void }> = []
@@ -282,8 +309,13 @@ const ICON_CLOSE =
       <!-- 顶部操作框（用户要的「形成一个操作框」） -->
       <div class="rs-top" @pointerdown.stop>
         <span class="rs-top-icon" aria-hidden="true" v-html="ICON_TARGET" />
-        <span class="rs-top-text">{{ TOP_TEXT }}</span>
-        <button class="rs-top-btn" type="button" title="聚焦回当前节点并退出选择" @click.stop="onBackToNode">
+        <span class="rs-top-text">{{ topText }}</span>
+        <button
+          class="rs-top-btn"
+          type="button"
+          :title="isDrag ? '聚焦回当前节点（参考仍开着）' : '聚焦回当前节点并退出选择'"
+          @click.stop="onBackToNode"
+        >
           <span class="rs-top-btn-icon" aria-hidden="true" v-html="ICON_BACK" />
           <span>返回节点</span>
         </button>
@@ -292,17 +324,17 @@ const ICON_CLOSE =
           type="button"
           title="退出选择（Esc）"
           aria-label="退出选择"
-          @click.stop="exitReference"
+          @click.stop="exitSelection"
         >
           <span aria-hidden="true" v-html="ICON_CLOSE" />
         </button>
       </div>
 
-      <!-- 节点高亮/点击已移到 NodeReferenceSelectOverlay（overlay 槽组件，长在节点里跟随变换） -->
+      <!-- 节点高亮/点击由 NodeSelectOverlay（长在节点里的盖层）承担 -->
       <span
         v-if="hovered && hovered.hint"
         class="rs-hint"
-        :class="{ 'is-connected': hovered.state === 'connected' }"
+        :class="{ 'is-connected': hovered.state === 'connected', 'is-blocked': hovered.state === 'blocked' }"
         :style="{ left: hintPos.x + HINT_OFFSET.x + 'px', top: hintPos.y + HINT_OFFSET.y + 'px' }"
       >
         {{ hovered.hint }}
@@ -503,6 +535,10 @@ const ICON_CLOSE =
   /* 已连的提示用强调色底（与"可点"的深色胶囊区分） */
   background: var(--ui-accent);
   color: var(--ui-tip-ink);
+}
+.rs-hint.is-blocked {
+  /* 主题色白名单: 禁用说明用危险色底，与红色蒙版成对 */
+  background: var(--ui-danger);
 }
 
 /* 底部 Esc 提示 */

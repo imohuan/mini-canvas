@@ -25,8 +25,6 @@ import NodeBottomBarOverlay from './NodeBottomBarOverlay.vue'
 import ReferenceSelectOverlay from './ReferenceSelectOverlay.vue'
 // 全屏媒体预览浮层（素材卡点开看大图/全文）
 import MediaPreviewOverlay from './MediaPreviewOverlay.vue'
-// Ctrl 拖选择态浮层（按住 Ctrl 时的画布选择态，视觉复刻参考选择）
-import CtrlDragOverlay from './CtrlDragOverlay.vue'
 import NodeSelectOverlay from './NodeSelectOverlay.vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
@@ -313,18 +311,8 @@ export function apply(ctx: Context) {
     meta: { title: '媒体预览' },
   })
 
-  // Ctrl 拖选择态浮层：按住 Ctrl 时的画布选择态（视觉复刻参考选择：紫描边/角标/提醒）。
-  ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
-    id: 'bottom-bar/ctrl-drag',
-    order: 43,
-    component: CtrlDragOverlay,
-    meta: { title: 'Ctrl 拖选择态' },
-  })
-
-  // 参考选择态的**节点覆盖层**：点击连/断。
-  ctx.nodes.attach('*', { region: 'over:inset', component: NodeSelectOverlay, props: { mode: 'reference' }, id: 'bottom-bar/ref-select-node' })
-  // Ctrl 拖选择态的**节点覆盖层**：按住拖拽替换（同一套面孔，操作是拖拽）。
-  ctx.nodes.attach('*', { region: 'over:inset', component: NodeSelectOverlay, props: { mode: 'ctrl-drag' }, id: 'bottom-bar/ctrl-drag-node' })
+  // 节点盖层只挂一份：参考点击与 Ctrl 拖拽共用统一会话，模式由会话自己判定。
+  ctx.nodes.attach('*', { region: 'over:inset', component: NodeSelectOverlay, id: 'bottom-bar/select-node' })
 
 
   // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；

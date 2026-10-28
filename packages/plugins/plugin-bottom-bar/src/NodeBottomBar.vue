@@ -89,7 +89,13 @@ import {
 import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey, type TileCardLike } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf } from './refSlotDrag'
+import { judgeSlotHover } from './refSlotDrag'
 import { canEnterCtrlDragMode, enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
+import {
+  clearCtrlSuppression,
+  enterCtrlDragMode as unifiedEnterCtrlDragMode,
+  exitCtrlDragMode as unifiedExitCtrlDragMode,
+} from './selectionMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -1514,14 +1520,16 @@ function onCtrlModeKeydown(ev: KeyboardEvent): void {
     key: ev.key,
     repeat: ev.repeat,
     barShown: barShown.value,
-    referenceActive: referenceActive(),
     editableTarget,
   })) return
-  enterCtrlDragMode(props.id)
+  // 按住 Ctrl 时已在参考模式 → 只临时切到拖拽（参考保留在下面，松手自动回来）
+  clearCtrlSuppression()
+  unifiedEnterCtrlDragMode(props.id)
 }
 function onCtrlModeKeyup(ev: KeyboardEvent): void {
   if (ev.key !== 'Control') return
-  exitCtrlDragMode()
+  clearCtrlSuppression()
+  unifiedExitCtrlDragMode()
 }
 
 /** 拖拽启动：由 NodeSelectOverlay 覆盖层经**对象数据通道**调起（props.id/props.data），
@@ -1579,6 +1587,17 @@ function onCtrlDragPointerMove(ev: PointerEvent): void {
   // 而参考格在另一个 teleport 层 —— target 永远不会是它）
   const host = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.nb-card') as HTMLElement | null
   const key = host?.dataset.tileKey
+  /**
+   * 拖拽悬停时**每经过一个格子都按类型判断**（用户 2026-10-28）：
+   * 匹配 → 高亮（is-target）；不匹配 → 不高亮，并出 tip 说明格子收什么、拖的是什么。
+   */
+  if (key && key !== ctrlDrag.targetTileKey) {
+    const tile = refTiles.value.find((t) => t.key === key)
+    const slotKind = (tile?.slotKey?.split(':')[0] ?? tile?.kind) as RefSlotKind | undefined
+    const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: ctrlDrag.mediaType })
+    if (!verdict.ok) ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
+    else ctx.tryGet<{ hide(): void }>('tip')?.hide()
+  }
   if (ctrlDrag.targetTileKey && ctrlDrag.targetTileKey !== key) {
     document.querySelector('.nb-card[data-tile-key="' + ctrlDrag.targetTileKey + '"]')?.classList.remove('is-target')
     ctrlDrag.targetTileKey = undefined
@@ -1623,6 +1642,18 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
   const dropHost = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.nb-card') as HTMLElement | null
   if (dropHost?.dataset.tileKey) drag.targetTileKey = dropHost.dataset.tileKey
   const tile = refTiles.value.find((t) => t.key === drag.targetTileKey)
+  /**
+   * 松手前**最后一道闸**（用户 2026-10-28）：落点格类型不匹配 → 只给提示，不落。
+   * 不能只靠悬停时的高亮判断（快速拖动可能没触发 move）。
+   */
+  if (tile) {
+    const slotKind = (tile.slotKey?.split(':')[0] ?? tile.kind) as RefSlotKind | undefined
+    const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: drag.mediaType })
+    if (!verdict.ok) {
+      ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
+      return
+    }
+  }
   ;(window as any).__upDbg2 = { key: drag.targetTileKey, tileFound: !!tile, slotKey: tile?.slotKey, tileName: tile?.name, allKeys: refTiles.value.map((t) => t.key) }
   if (!tile) return
   let kind: RefSlotKind
@@ -1667,7 +1698,7 @@ onBeforeUnmount(() => {
   registerTagSpec(null)
   // 底栏消失 = 两个选择态都收（用户口径 2026-10-26：覆盖层要跟底栏同步消失）。
   // 参考选择与 Ctrl 拖是挂在节点上的覆盖层，底栏走了它们就失去操作对象。
-  exitCtrlDragMode()
+  unifiedExitCtrlDragMode()
   exitReference()
   // 顺带收掉可能残留的鼠标提示（与覆盖层同寿命）
   ctx.tryGet<{ hide(): void }>('tip')?.hide()

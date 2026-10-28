@@ -40,6 +40,26 @@ const dragOwner = ref('')
 /** 每次状态变化 +1：顶栏/节点盖层据此重建悬停态 */
 const epoch = ref(0)
 
+/**
+ * 「返回节点」在拖拽模式退出后，直到 Ctrl 松开前都不要自动弹回拖拽。
+ * 存 globalThis：顶栏与底栏可能来自不同模块实例。
+ */
+function ctrlSuppressionKey(): string {
+  return '__miniCanvasCtrlSuppressed'
+}
+
+export function suppressCtrlUntilRelease(): void {
+  ;(globalThis as Record<string, unknown>)[ctrlSuppressionKey()] = true
+}
+
+export function ctrlSuppressed(): boolean {
+  return (globalThis as Record<string, unknown>)[ctrlSuppressionKey()] === true
+}
+
+export function clearCtrlSuppression(): void {
+  ;(globalThis as Record<string, unknown>)[ctrlSuppressionKey()] = false
+}
+
 function modeOf(): SelectionMode | null {
   if (dragActive.value) return 'ctrl-drag'
   return refOwner.value ? 'reference' : null
