@@ -330,10 +330,15 @@ watch(
       </div>
 
       <!-- 大屏态：完整控制条 = 共用组件（视觉标准在视频节点那一侧，2026-10-29 用户拍板）。
-           全屏与节点的差异只有循环开关（这里给、节点没有 —— 那里是截图按钮）。 -->
-      <VideoPlayerBar
-        v-else
-        class="vpv-bar-host"
+           全屏与节点的差异只有循环开关（这里给、节点没有 —— 那里是截图按钮）。
+           ⚠️ 必须外面包一层定位容器：共用条自己只管"长什么样"，不负责浮动定位
+           （节点那边由 .video-controls 定位）。少了这层，条会顺着 flex 排到画面外
+           —— 2026-10-29 真机截图复现的就是这个。 -->
+      <div v-else class="vpv-bar-wrap">
+        <!-- 与节点同款的底部渐变衬底：压住画面下半部，白字/白图标在亮画面上也读得清 -->
+        <div class="vpv-scrim" :class="{ 'is-hidden': !hovering }" aria-hidden="true"></div>
+        <VideoPlayerBar
+          class="vpv-bar-host"
         :playing="playing"
         :current-time="currentTime"
         :duration="duration"
@@ -352,7 +357,8 @@ watch(
         @volume="onVolumeValue"
         @volume-open="openVolume"
         @volume-close="scheduleCloseVolume"
-      />
+        />
+      </div>
 
       <!-- 加载占位（用户口径：视频没就绪时别再是一片空白）：转圈 + 文字。
            底色只铺在这层元素上，且容器已按视频比例收边 —— 不会多出黑边。 -->
@@ -467,33 +473,39 @@ watch(
 .vpv-dense-expand:hover { background: var(--vpv-panel); }
 .vpv-dense-expand:focus-visible { outline: 2px solid var(--vpv-ring); outline-offset: 2px; }
 
-/* ===== 控件条：居中悬浮胶囊 =====
-   为什么居中而不铺满：铺满（left/right:8px）在窄舞台里会被左右裁切、按钮挤成一团（用户实测报过）。 */
-.vpv-bar {
+/* ===== 控件条：定位在画面底部（外观在共用组件里，这里只负责浮动位置） =====
+   与视频节点同款：贴底、左右留 10px、hover 淡入。 */
+.vpv-bar-wrap {
   position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  z-index: 5;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  z-index: 9;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
-  border-radius: 14px;
-  max-width: calc(100% - 24px);
-  background: var(--vpv-panel);
-  border: 1px solid var(--vpv-border);
-  box-shadow: var(--vpv-shadow);
-  backdrop-filter: blur(14px);
+  gap: 4px;
   opacity: 0;
   translate: 0 6px;
   transition: opacity 0.18s ease, translate 0.18s ease;
+  pointer-events: none;
 }
-/* hover 显形（键盘 focus 也显形，触屏点一下会先显形） */
-.vpv-root:not(.is-idle) .vpv-bar,
-.vpv-root:focus-within .vpv-bar { opacity: 1; translate: 0 0; }
-/* 大舞台（全屏预览）：略微放大一档 */
-.vpv-root.is-tall .vpv-bar { bottom: 16px; padding: 8px 12px; border-radius: 16px; gap: 8px; }
+.vpv-root:not(.is-idle) .vpv-bar-wrap,
+.vpv-root:focus-within .vpv-bar-wrap { opacity: 1; translate: 0 0; pointer-events: auto; }
+/* 全屏舞台给一档更舒服的底边距（与节点卡片的 8px 略不同，但仍是"贴底"同一套语言） */
+.vpv-root.is-tall .vpv-bar-wrap { bottom: 14px; left: 14px; right: 14px; }
+/* 底部渐变衬底：与节点 .vc-scrim 同一套（56px、黑到透明） */
+.vpv-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)); /* 主题色白名单: 视频画面上的衬底，随画面恒定，与主题无关 */
+  opacity: 1;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.vpv-scrim.is-hidden { opacity: 0; }
 
 /* ===== 加载占位（用户口径 2026-10-29：视频没就绪时别是一片空白） =====
    铺满舞台、黑底（这是"视频还在加载"的底色，不是画面外多余的边 ——

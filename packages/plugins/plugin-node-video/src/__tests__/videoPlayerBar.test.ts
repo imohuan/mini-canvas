@@ -50,4 +50,17 @@ describe('VideoPlayerBar 结构契约', () => {
     expect(preview).not.toMatch(/class="vpv-bar"/)
     expect(content).not.toMatch(/<button class="vc-btn"[^>]*aria-label="播放"/)
   })
+
+  /**
+   * 2026-10-29 真机截图复现的错位：全屏把共用条直接摊在 flex 里，条被排到画面**外面**。
+   * 共用条只负责长相，浮动定位必须由宿主包一层（节点是 .video-controls，全屏是 .vpv-bar-wrap）。
+   */
+  it('★ 全屏必须给共用条包一层定位容器（否则会跑到画面外）', () => {
+    expect(preview).toMatch(/<div v-else class="vpv-bar-wrap">/)
+    const wrapRule = preview.slice(preview.indexOf('.vpv-bar-wrap {'), preview.indexOf('}', preview.indexOf('.vpv-bar-wrap {')))
+    expect(wrapRule).toContain('position: absolute')
+    expect(wrapRule).toMatch(/bottom:\s*8px/)
+    // 与节点同款的底部渐变衬底（白字压在亮画面上也读得清）
+    expect(preview).toContain('class="vpv-scrim"')
+  })
 })
