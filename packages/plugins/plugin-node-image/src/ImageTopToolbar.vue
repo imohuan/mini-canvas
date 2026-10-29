@@ -44,15 +44,15 @@ const editing = computed(() => isEditing(props.id))
 const visible = computed(() => selected.value)
 
 /**
- * 功能模式：某个功能接管了这个节点（nodeBar 服务上的会话）。
+ * 功能模式：某个功能接管了这个节点（nodeToolbar 服务上的会话，主题件）。
  * 是 → 内置的上传/裁剪/扩展整排让位，插槽里只渲染该功能自己的工具栏条目；
  * 否 → 正常显示内置按钮 + 插件追加的按钮。
  * 读的是服务上的响应式会话，顶栏按钮打开功能后这里会立刻重渲染。
  */
 const featureMode = computed(() => {
   try {
-    const bar = ctx.tryGet?.<{ modeOf?(nodeId: string): unknown } | undefined>('nodeBar')
-    return Boolean(bar?.modeOf?.(props.id))
+    const svc = ctx.tryGet?.<{ inMode?(nodeId: string): boolean } | undefined>('nodeToolbar')
+    return Boolean(svc?.inMode?.(props.id))
   } catch {
     return false
   }

@@ -69,6 +69,7 @@ import { resolveBottomBarShown } from './bottomBarOverlay'
 import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
+import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE } from './previewBoxSize'
 import { calculateFocusZoom } from './focusZoom'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
@@ -225,36 +226,6 @@ function iconOfType(type: string | undefined): unknown {
 const currentId = ref('')
 const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
 
-// —— 功能模式（顶栏按钮与底栏 pill 共用的「接管」态）——
-// 响应式跟随 nodeBar 服务上的模块级会话：插件按钮调 selectMode 后，这里立刻重渲染。
-const modeTick = ref(0)
-const barService = ctx.tryGet<{
-  /** nodeBar 服务是可选能力：测试桩只给了 list；modeOf 等方法在才用（?.） */
-  modeOf?(nodeId: string): { nodeId: string; actionId: string } | undefined
-  selectMode?(nodeId: string, actionId: string): void
-  exitMode?(nodeId: string): void
-  /** 查一条动作（功能模式要拿它的 panel 渲染进同一根底栏） */
-  get?(id: string): { panel?: unknown } | undefined
-}>('nodeBar')
-const activeMode = computed<{ nodeId: string; actionId: string } | undefined>(() => {
-  void modeTick.value // 订阅点：插件/底栏切换模式后 bump
-  try {
-    return barService?.modeOf?.(props.id)
-  } catch {
-    // 测试桩 / 极简宿主可能只实现部分接口：按「无功能模式」处理，不影响其余功能
-    return undefined
-  }
-})
-watch(activeMode, (mode) => {
-  if (!mode) return
-  if (currentId.value !== mode.actionId) {
-    // 服务端模式指向的动作与本地选中不同：以服务为准（顶栏按钮先点的场景）
-    currentId.value = mode.actionId
-  }
-}, { immediate: true })
-function refreshModeTick(): void { modeTick.value += 1 }
-pluginOffs.push(ctx.on('nodeBar:mode-changed', refreshModeTick))
-onBeforeUnmount(() => barService?.exitMode?.(props.id))
 
 /**
  * 参数值。**优先用上次留在节点 data 上的那份**（`data.barValues`）。
@@ -330,8 +301,6 @@ function selectAction(id: string): void {
   if (prev?.onDeselect) prev.onDeselect(props.id)
   currentId.value = id
   // 功能接管语义：带 panel 的动作被选中 = 该功能接管底栏（顶栏按钮与底栏 pill 同一真源）
-  if (currentAction.value?.panel) barService?.selectMode?.(props.id, id)
-  else barService?.exitMode?.(props.id)
   // 换动作时**保留**用户已经调过的参数（用户要求：再点进来还是上次那套，不要清空回默认），
   // 但**只保留新动作也声明了的 key** —— 否则旧动作的值会跟着发出去（实测：先选 Dola 视频的
   // model，再切到火山音频，model 还是 "Seedance 2.5"，把正确的 seed-audio-1.0 覆盖掉了）。
@@ -1026,30 +995,11 @@ const barShown = computed(() =>
 )
 
 /**
- * 功能模式（nodeBar 服务上的会话）：某个功能接管了这个节点的底栏。
- * 是 → 默认底栏整块让位，屏幕上只留该功能自己的底栏（各功能用 on:bottom 之类独立层承载）；
- * 否 → 正常渲染默认生成 UI。
- * 读服务态而不是组件状态：顶栏按钮与底栏 pill 打开的是同一份会话，谁先点都同步。
+ * 功能模式的"接管渲染"已上移到主题件 NodeModeBottomBar（用户口径 2026-10-29 重构）：
+ * 本组件只是**默认模式**的底栏内容贡献者 —— 没有模式接管时才会被渲染
+ * （主题渲染器在模式激活时整根替换掉这里的宿主）。内部不再感知任何模式概念。
  */
-const featureMode = computed(() => {
-  try {
-    return Boolean(barService?.modeOf?.(props.id))
-  } catch {
-    return false
-  }
-})
-
-/** 默认底栏本体是否显示：正常显示条件成立，且没有功能在接管 */
-const defaultBarShown = computed(() => barShown.value && !featureMode.value)
-
-/** 功能模式下要渲染的专属面板（= 接管动作的 panel；没有就退回默认内容） */
-const featurePanel = computed(() => {
-  const mode = activeMode.value
-  if (!mode) return undefined
-  return barService?.get?.(mode.actionId)?.panel as unknown
-})
-/** 功能模式真的可用（有 panel 才切；否则保持默认 UI，不留空白栏） */
-const featureShown = computed(() => featureMode.value && Boolean(featurePanel.value))
+const defaultBarShown = computed(() => barShown.value)
 if (typeof ctx.on === 'function') {
   const clickOff = ctx.on(RenderEvents.NodeClick, (p: { nodeId?: string }) => {
     if (p?.nodeId === props.id) resetSubmitted()
@@ -1475,6 +1425,15 @@ function cardTooltip(tile: RefTile): string {
 const previewTile = ref<RefTile | null>(null)
 /** above = 预览在卡片上方（默认），false = 上方放不下时翻到卡片下方 */
 const previewPos = ref({ left: 0, top: 0, above: true })
+/**
+ * 预览素材的原始宽高比与盒子尺寸（用户 2026-10-29：竖图被拉成横框）。
+ *
+ * 规则：最长边封顶 200px，另一边按原始比例算 ——
+ *   横图（w/h ≥ 1）→ 宽 200，高 = 200 / 比例；
+ *   竖图（w/h < 1）→ 高 200，宽 = 200 × 比例。
+ * 图片/视频用同一个公式，视频在拿到 metadata 后再校正一次。
+ */
+const previewBox = ref<{ width: number; height: number }>({ width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE })
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 let previewCloseTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1485,8 +1444,36 @@ function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
     // 只对有「可看内容」的卡出预览（图片/视频帧）；音频/文本没有画面
     if (!cardImageOf(tile) && tile.kind !== 'video') return
     previewTile.value = tile
-    previewPos.value = placeHoverPreview(anchorRect, { width: window.innerWidth, height: window.innerHeight })
+    /**
+     * 先按已知尺寸摆一个方盒子，图片 load 后由 onPreviewMediaReady 用真实宽高比校正。
+     * 位置要等盒子尺寸定下来再算（竖图 200 高、横图 200 宽，占位完全不同）。
+     */
+    previewBox.value = { width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE }
+    previewPos.value = placeHoverPreview(anchorRect, { width: window.innerWidth, height: window.innerHeight }, previewBox.value)
   }, 600)
+}
+
+/**
+ * 预览素材的真实尺寸到手（img load / video metadata）→ 重算盒子与位置（用户 2026-10-29 第 2 点）。
+ *
+ * 只认**当前这张**的尺寸：快速划过几张卡时，先加载完的旧图不能把新图的盒子改掉。
+ */
+function onPreviewMediaReady(tileKey: string, w: number, h: number): void {
+  const cur = previewTile.value
+  if (!cur || cur.key !== tileKey) return
+  const next = fitPreviewBox(w, h)
+  const same = next.width === previewBox.value.width && next.height === previewBox.value.height
+  if (same) return
+  previewBox.value = next
+  // 位置按新盒子重算（translateY(-100%) 仍是「底边贴卡片上方」，这里只补水平夹取）
+  previewPos.value = clampPreviewLeft(previewPos.value, next)
+}
+
+/** 按新宽度把 left 夹进视口（居中于原卡片位置，不重新量卡片） */
+function clampPreviewLeft(pos: { left: number; top: number; above: boolean }, box: { width: number; height: number }): { left: number; top: number; above: boolean } {
+  const margin = 8
+  const left = Math.round(Math.min(Math.max(margin, pos.left + 0), Math.max(margin, window.innerWidth - box.width - margin)))
+  return { ...pos, left }
 }
 function cancelPreviewSchedule(): void {
   if (previewTimer) { clearTimeout(previewTimer); previewTimer = null }
@@ -2522,15 +2509,6 @@ function onGlobalLeave(el: Element): void {
       data-testid="node-bottom-bar"
       @pointerdown.stop
     >
-    <!--
-      功能模式：「同一根底栏换内容」。默认生成 UI 整块让位，只渲染该功能的 panel，
-      外壳（宽度/圆角/阴影/贴边位置）仍是这一条底栏 —— 不会再出现第二套栏。
-      没有 panel 时保持默认 UI（不留空白栏）。
-    -->
-    <template v-if="featureShown">
-      <component :is="(featurePanel as any)" :id="props.id" :data="props.data" />
-    </template>
-    <template v-else>
     <!-- 一排 pill（参考图顶行：+参考 / 标记）。全屏态整个行不渲染（VueDraggable 的
          force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
          行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
@@ -2774,6 +2752,12 @@ function onGlobalLeave(el: Element): void {
         :style="{
           left: previewPos.left + 'px',
           top: previewPos.top + 'px',
+          width: previewBox.width + 'px',
+          /*
+           * 高度必须显式给：图片/视频是 `height:100%`，父盒 auto 高度时百分百失效、
+           * 变成「按宽度反算」，竖图就会比预期矮 1~2px（真机量到 199）。
+           */
+          height: previewBox.height + 'px',
           transform: previewPos.above ? 'translateY(-100%)' : undefined,
         }"
         @pointerenter="cancelPreviewClose()"
@@ -2783,6 +2767,8 @@ function onGlobalLeave(el: Element): void {
           v-if="livePreviewTile.kind === 'video' && livePreviewTile.url"
           class="nb-hover-preview-media"
           :src="livePreviewTile.url"
+          :style="{ height: previewBox.height + 'px' }"
+          @loadedmetadata="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLVideoElement).videoWidth, (ev.target as HTMLVideoElement).videoHeight)"
           autoplay
           muted
           loop
@@ -2793,6 +2779,7 @@ function onGlobalLeave(el: Element): void {
           class="nb-hover-preview-media"
           :src="cardImageOf(livePreviewTile)"
           :alt="livePreviewTile.label"
+          @load="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLImageElement).naturalWidth, (ev.target as HTMLImageElement).naturalHeight)"
         />
         <span v-else class="nb-hover-preview-empty">（无预览）</span>
         <button
@@ -2805,7 +2792,8 @@ function onGlobalLeave(el: Element): void {
     </Teleport>
 
 
-    <!-- 动作专属面板（video 剪辑时间轴这类）。功能模式接管时（activeMode），
+    <!-- 动作专属面板（video 剪辑时间轴这类）。模式接管渲染已上移到主题件 NodeModeBottomBar
+         （2026-10-29 重构），本组件只管默认模式内容；
          面板下方整块默认生成 UI（素材区 / 输入框 / 参数行）按会话由面板自己让位；
          面板自身决定收起条件（VideoClipPanel 会话同理），底栏不重复实现。 -->
     <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
@@ -3047,7 +3035,6 @@ function onGlobalLeave(el: Element): void {
       </div>
     </Transition>
 
-    </template>
   </div>
   </div>
   </Teleport>
@@ -3891,8 +3878,13 @@ function onGlobalLeave(el: Element): void {
  */
 .nb-hover-preview {
   position: fixed;
-  /* 宽度与 placeHoverPreview 的 HOVER_PREVIEW_WIDTH 保持一致（定位按它算居中） */
-  width: 220px;
+  /* 宽高都由 previewBox 内联写入；border-box 保证 200 就是最终外框（含 1px 边框） */
+  box-sizing: border-box;
+  /*
+   * 宽高由 previewBox 内联写入（按素材原始宽高比，最长边 200px —— 用户 2026-10-29 第 2 点）。
+   * 这里只给一个兜底宽度，防止首帧（还没量到素材尺寸）时塌成 0。
+   */
+  width: 200px;
   border-radius: 10px;
   border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
   background: var(--ui-panel, #fff);
@@ -3903,8 +3895,10 @@ function onGlobalLeave(el: Element): void {
 .nb-hover-preview-media {
   display: block;
   width: 100%;
-  max-height: 140px;
-  object-fit: cover;
+  /* 盒子已经按原比例算好，图直接铺满，绝不裁切也绝不留黑边 */
+  height: 100%;
+  max-height: 200px;
+  object-fit: contain;
   /* 主题色白名单: hover 预览里视频画面的衬底（任意视频都要有黑底，与主题无关） */
   background: var(--ui-tip, #000);
 }
@@ -3960,14 +3954,23 @@ function onGlobalLeave(el: Element): void {
   display: flex;
   align-items: stretch;
   gap: 4px;
-  min-height: 180px;
+  /**
+   * **固定高度**（用户 2026-10-29 第 4 点）：以前高度跟着右栏内容走 ——
+   * 鼠标停在一个类别上，右栏节点多就撑高、少就缩矮，整块浮层跟着变。
+   * 浮层一变高，原本在鼠标下方的行就被推到别处，于是又命中下一个类别 →
+   * 内容再换 → 高度再变，来回闪。把高度钉死，鼠标下的那一行永远在同一个位置。
+   * 内容超出就在各自栏里滚（见 .nb-tagmenu-pane 的 overflow）。
+   */
+  height: 268px;
 }
 .nb-tagmenu-pane {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  max-height: 340px;
+  /* 高度由外层 .nb-tagmenu-panes 定，这里只负责在内部滚动 */
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -4019,7 +4022,9 @@ function onGlobalLeave(el: Element): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 340px;
+  /* 搜索结果也钉同一高度：输一个词命中多/少时，浮层不再上下跳 */
+  height: 268px;
+  max-height: 268px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -4288,7 +4293,12 @@ function onGlobalLeave(el: Element): void {
 .nb-editor :deep(.resource-chip) {
   display: inline-flex;
   align-items: center;
-  gap: 0px;
+  /*
+   * 缩略图/图标与名字之间留 2px（用户 2026-10-29 截图报「挤在一起」）。
+   * 缩略图是**绝对定位**盖在图标位上的（见下方 .resource-chip-thumb），不占 flex 流，
+   * 所以这里的 gap 作用在「图标位 → 名字」之间，正好是用户要的那 2px。
+   */
+  gap: 2px;
   max-width: 160px;
   /**
    * 行高重合修复（用户 2026-10-29）：chip 高 22px，而 .ProseMirror 的 line-height

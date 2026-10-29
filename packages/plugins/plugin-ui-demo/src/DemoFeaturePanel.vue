@@ -28,7 +28,7 @@ function notify(text: string): void {
 
 function exit(): void {
   closeDemoMode()
-  ctx.tryGet<{ exitMode?(nodeId: string): void } | undefined>('nodeBar')?.exitMode?.(props.id)
+  ctx.tryGet<{ exit?(nodeId: string): void } | undefined>('nodeToolbar')?.exit?.(props.id)
 }
 </script>
 

@@ -19,7 +19,9 @@ import { imageTitleExtra } from './imageNodeData'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
-import { beginCrop, beginExpand, endEdit } from './cropSession'
+import ImageCropPanel from './ImageCropPanel.vue'
+import ImageExpandPanel from './ImageExpandPanel.vue'
+import { beginCrop, beginExpand, endEdit, onEditModeChange } from './cropSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
 import type { Rect } from '@mini-canvas/canvas-render'
@@ -171,6 +173,46 @@ export function apply(ctx: Context) {
   //
   // 因此这里只剩一件事：把图片的**操作实现**装配好，供下面的命令使用。
   const ops = createImageOps(ctx)
+
+  // 1.6 裁剪 / 扩展 = 节点「功能模式」（用户口径 2026-10-29 重构）：
+  //     「每一套模式都有自己的顶部或底部状态栏」。
+  //
+  // 做法与 plugin-ui-demo 同构：**按服务名**拿 nodeToolbar（主题件，见 theme-default 的
+  // nodeToolbarService），注册一套模式 = 顶栏 + 底栏组件。进入模式后两根栏**整体**替换，
+  // 默认内容（bottom-bar 的生成 UI）自动让位 —— 不需要 bottom-bar 知道任何模式概念。
+  //
+  // 不 import @mini-canvas/plugin-bottom-bar / plugin-theme-default —— 插件之间不互相
+  // import 是硬规则；服务名与 ui 目录名才是跨插件公共契约。
+  const registerEditModes = (): boolean => {
+    const svc = ctx.tryGet<{
+      registerMode?(mode: unknown): void
+    } | undefined>('nodeToolbar')
+    if (!svc?.registerMode) return false
+    svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: ImageCropPanel })
+    svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: ImageExpandPanel })
+    return true
+  }
+  if (!registerEditModes()) {
+    // 底栏插件还没装（装配顺序在后/热装）：等它上架再注册一次
+    const off = ctx.on('ctx:plugin-installed', () => {
+      if (registerEditModes()) off.dispose()
+    })
+  }
+
+  // 1.7 编辑态 ↔ 底栏模式自动同步（同一份会话，两处 UI 不会各说各话）：
+  //     进裁剪/扩展 → 底栏切到对应 panel；确认/取消 → 退出模式回到默认生成 UI。
+  //     监听放在这里而不是 cropSession 内部：那份是纯状态，只负责"记着自己正在编辑"。
+  const offEditMode = onEditModeChange((nodeId, mode) => {
+    const svc = ctx.tryGet<{
+      enter?(nodeId: string, modeId: string): void
+      exit?(nodeId: string): void
+    } | undefined>('nodeToolbar')
+    if (!svc) return
+    if (mode === 'crop') svc.enter?.(nodeId, 'image/crop')
+    else if (mode === 'expand') svc.enter?.(nodeId, 'image/expand')
+    else svc.exit?.(nodeId)
+  })
+  ctx.effect(() => () => offEditMode())
 
   // 2. 注册节点类型：create 委托服务（同一实现）。create 只收 position → 建默认空图节点。
   //    内容类型声明：image 输出产 image；输入口收 text+image（文生图/图生图），视频喂不进图片。

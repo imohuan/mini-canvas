@@ -8,8 +8,8 @@
  *    （触发器 = 主题 button；二级菜单是独立浮层，不嵌进主面板）；
  * ③ 功能模式：**同一根顶栏、同一根底栏换内容**（不是叠加第二套栏）：
  *    - 顶栏：入口组件自己按会话切换成功能按钮（还在同一个按钮组里）；
- *    - 底栏：registerBarAction 的 panel —— 底栏本体不变，只换里面的内容；
- *    两边共享 nodeBar 服务上的会话（selectMode / exitMode），同步开合。
+ *    - 底栏：nodeToolbar 服务的模式 bottomBar —— 进入模式后主题渲染器整根替换；
+ *    两边共享 nodeToolbar 服务（主题件）上的会话（enter / exit），同步开合。
  *
  * 卸载本插件：条目自动回收，画布回原样。
  */
@@ -21,8 +21,8 @@ import { closeDemoMode } from './demoMode'
 
 export const name = 'ui-demo'
 /**
- * nodeBar 是底栏插件的服务：底栏没装时本插件照常工作（顶栏按钮仍在），
- * 只是 selectMode 拿不到 —— 所以不进 inject（可选依赖用 tryGet）。
+ * nodeToolbar 是主题插件的服务（模式注册表 + 会话）：没装主题时本插件照常工作
+ * （顶栏按钮仍在），只是 enter 拿不到 —— 所以不进 inject（可选依赖用 tryGet）。
  */
 export const inject = [] as string[]
 
@@ -34,30 +34,25 @@ export function apply(ctx: Context): void {
     component: markRaw(DemoTopEntry),
   })
 
-  // ② 底栏动作：选中即接管底栏内容（同一根栏换内容）；panel 是功能自己的 UI
-  const registerBar = (): boolean => {
-    const bar = ctx.tryGet<{
-      register?(scope: unknown, action: unknown): void
-    } | undefined>('nodeBar')
-    if (!bar?.register) return false
-    bar.register(ctx, {
-      id: 'ui-demo:mode',
+  // ② 功能模式：注册到 nodeToolbar（主题件）。进入后底栏整根换成 DemoFeaturePanel。
+  const registerMode = (): boolean => {
+    const svc = ctx.tryGet<{
+      registerMode?(mode: unknown): void
+    } | undefined>('nodeToolbar')
+    if (!svc?.registerMode) return false
+    svc.registerMode({
+      id: 'ui-demo/feature',
       types: ['image'],
       title: '功能演示',
-      description: '演示：底栏内容换成该功能的 UI（同一根栏，不叠加）',
-      needsPrompt: false,
-      apply: 'self',
-      panel: markRaw(DemoFeaturePanel),
-      onSelect: () => {},
-      onDeselect: () => closeDemoMode(),
-      run: () => ({ ok: true }),
+      description: '演示：底栏换成该功能的 UI（同一根栏，不叠加）',
+      bottomBar: markRaw(DemoFeaturePanel),
     })
     return true
   }
-  if (!registerBar()) {
-    // 底栏插件还没装（装配顺序在后/热装）：等它上架再注册一次
+  if (!registerMode()) {
+    // 主题还没装（装配顺序在后/热装）：等它上架再注册一次
     const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerBar()) off.dispose()
+      if (registerMode()) off.dispose()
     })
   }
 }

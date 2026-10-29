@@ -105,9 +105,9 @@ function onPick(key: string): void {
     const nodeId = props.nodeId
     if (!nodeId) return
     openDemoMode(nodeId, key === 'mode-a' ? 'alpha' : 'beta')
-    // 底栏同时切到该功能（nodeBar 会话：底栏与顶栏共用同一份）
-    ctx.tryGet<{ selectMode?(nodeId: string, actionId: string): void } | undefined>('nodeBar')
-      ?.selectMode?.(nodeId, 'ui-demo:mode')
+    // 底栏同时切到该功能（nodeToolbar 会话：主题件，底栏与顶栏共用同一份）
+    ctx.tryGet<{ enter?(nodeId: string, modeId: string): void } | undefined>('nodeToolbar')
+      ?.enter?.(nodeId, 'ui-demo/feature')
     return
   }
   notify('演示：点了「' + key + '」（不做业务）')
@@ -116,7 +116,7 @@ function onPick(key: string): void {
 function exit(): void {
   closeDemoMode()
   const nodeId = props.nodeId
-  if (nodeId) ctx.tryGet<{ exitMode?(nodeId: string): void } | undefined>('nodeBar')?.exitMode?.(nodeId)
+  if (nodeId) ctx.tryGet<{ exit?(nodeId: string): void } | undefined>('nodeToolbar')?.exit?.(nodeId)
 }
 
 function pickFeature(label: string): void {
