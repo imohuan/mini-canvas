@@ -4,9 +4,8 @@
  * 按 docs/examples/node-toolbar.md（案例 9）的机制写：
  * - 方式 A：往图片默认顶栏按钮组插一条「旋转与镜像」入口（slots.register('image.topToolbar')）；
  * - 方式 C：注册功能模式 node-rotate/mode，进入后顶栏整格换成 RotatePanel
- *   （退出 / 右转 90° / 水平翻转 / 垂直翻转），底栏不动（不声明 bottomBar）；
- * - 外壳：往状态条插槽 shell.status 插一个「旋转示例」按钮，
- *   一键建两个相连的图片节点并进入第二个的旋转模式。
+ *   （退出 / 右转 90° / 水平翻转 / 垂直翻转），底栏整格隐藏（bottomBar: null）；
+ * - 点击入口 = 复制当前图片节点 + 建连接线，**副本**进入该模式（见 rotateCopy.ts）。
  *
  * 旋转复用图片插件的 image:rotate 命令（同一实现，不重复写）；翻转在本包 flipImage.ts 实现
  * （走 doc/resources 公共契约，不 import 其它插件）。nodeToolbar 是主题的服务：可选依赖
@@ -16,7 +15,7 @@ import { markRaw } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import RotateEntry from './RotateEntry.vue'
 import RotatePanel from './RotatePanel.vue'
-import DemoButton from './DemoButton.vue'
+import { ROTATE_MODE_ID } from './rotateSession'
 
 export const name = 'node-rotate'
 export const inject = [] as string[]
@@ -39,11 +38,12 @@ export function apply(ctx: Context): void {
     const svc = ctx.tryGet<{ registerMode?(mode: unknown): void } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
     svc.registerMode({
-      id: 'node-rotate/mode',
+      id: ROTATE_MODE_ID,
       types: ['image'],
       title: '旋转与镜像',
       topBar: markRaw(RotatePanel),
-      // 底栏不动：不声明 bottomBar = 沿用默认（底部生成 UI 保持原样）
+      // 旋转模式下底部状态栏整格消失（用户口径：编辑期间只留顶栏按钮）
+      bottomBar: null,
       order: MODE_ORDER,
     })
     return true
@@ -54,13 +54,6 @@ export function apply(ctx: Context): void {
       if (registerMode()) off.dispose()
     })
   }
-
-  // ③ 外壳状态条：一键演示按钮（建两个相连节点 + 进旋转模式）
-  ctx.slots.register('shell.status', {
-    id: 'node-rotate/demo',
-    order: 40,
-    component: markRaw(DemoButton),
-  })
 }
 
 export const nodeRotatePlugin: PluginModule = { name, inject, apply }

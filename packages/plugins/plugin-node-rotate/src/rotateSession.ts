@@ -6,6 +6,9 @@
  */
 import { shallowRef } from 'vue'
 
+/** 功能模式 id（入口、注册、测试共用一个常量，避免字符串各写一遍） */
+export const ROTATE_MODE_ID = 'node-rotate/mode'
+
 /** 当前处于旋转模式的节点 id（null = 不在任何节点上） */
 export const rotateMode = shallowRef<string | null>(null)
 
