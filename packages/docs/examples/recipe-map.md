@@ -15,6 +15,7 @@
 | 别的插件能调我的功能 | [案例 5](/examples/provide-service) | `ctx.inject('名字', 实现)` | `plugin-file-drop` |
 | 我的插件要用别人的功能 | 案例 5 | `inject: ['名字']` 或 `ctx.tryGet` | `plugin-node-image` |
 | AI/节点面板能调我的生成能力 | [案例 6](/examples/register-tool) | `ctx.tools.register` | `plugin-tool-text-generation` |
+| 节点顶部/底部状态栏装按钮或换面板 | [案例 9](/examples/node-toolbar) | `registerMode` / `ctx.slots.register` | `plugin-node-image` / `plugin-ui-demo` |
 | 节点底栏多一个动作按钮 | [案例 7](/examples/bottom-bar) | `registerBarAction`（跨插件） | `plugin-node-text` |
 | 拖文件/粘贴进画布建节点 | [案例 8](/examples/file-drop) | `ctx.effect` 包 window 监听 | `plugin-file-drop` |
 | 给节点加图片/视频/音频，只存资源 ID | — | `useCapability('media')` → `put` 拿 ID、`addNode(kind, id, pos)` | `plugin-node-image` / `plugin-node-video` / `plugin-node-audio` |
