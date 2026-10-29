@@ -1,0 +1,37 @@
+{
+  "name": "@mini-canvas/plugin-node-rotate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "旋转与镜像",
+    "description": "图片节点顶栏的「旋转与镜像」模式：向右旋转 90°、水平翻转、垂直翻转",
+    "pluginName": "node-rotate",
+    "builtin": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/canvas-render": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}
