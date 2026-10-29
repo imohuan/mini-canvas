@@ -25,6 +25,7 @@ const props = defineProps<{
 const { ctx } = useCanvasRender()
 const DropdownButton = useUiComponent('toolbarDropdown')
 const Dropdown = useUiComponent('dropdown')
+const Button = useUiComponent('toolbarButton')
 
 const ICON_GRID =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
@@ -77,6 +78,12 @@ function onCustomConfirm(rows: number, cols: number): void {
   customCols.value = cols
   enter(rows, cols)
 }
+
+/** 确定后收起自定义面板（下拉/兜底浮层都传 close 进来） */
+function confirmCustom(rows: number, cols: number, close: () => void): void {
+  onCustomConfirm(rows, cols)
+  close()
+}
 </script>
 
 <template>
@@ -88,6 +95,27 @@ function onCustomConfirm(rows: number, cols: number): void {
     :items="items"
     @pick="onPick"
   />
+  <!-- 自定义行列：独立入口（toolbarDropdown 的 children 只收字符串 label，
+       悬停式网格选择器需要自己的浮层 —— 与预设下拉并排，互不干扰） -->
+  <component
+    v-if="hasImage && !splitting && DropdownButton && Dropdown"
+    :is="Dropdown"
+    placement="bottom-start"
+    :offset="6"
+  >
+    <template #trigger>
+      <span class="gse-custom-trigger">
+        <component :is="Button || 'button'" type="button" :title="'自定义行列'" aria-label="自定义行列">自定义</component>
+      </span>
+    </template>
+    <template #default="{ close }">
+      <GridSizePicker
+        :initial-rows="customRows"
+        :initial-cols="customCols"
+        @confirm="(rows: number, cols: number) => confirmCustom(rows, cols, close)"
+      />
+    </template>
+  </component>
   <component
     v-if="hasImage && !splitting && !DropdownButton && Dropdown"
     :is="Dropdown"
@@ -107,7 +135,11 @@ function onCustomConfirm(rows: number, cols: number): void {
           {{ item.label }}
         </button>
         <div class="gse-sep" />
-        <GridSizePicker :initial-rows="customRows" :initial-cols="customCols" @confirm="onCustomConfirm" />
+        <GridSizePicker
+          :initial-rows="customRows"
+          :initial-cols="customCols"
+          @confirm="(rows: number, cols: number) => confirmCustom(rows, cols, close)"
+        />
       </div>
     </template>
   </component>
@@ -116,6 +148,7 @@ function onCustomConfirm(rows: number, cols: number): void {
 <style scoped>
 /* 主题 dropdown 缺席时的兜底触发器（正常走 toolbarDropdown 时这段不渲染） */
 .gse-trigger { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.gse-custom-trigger { display: inline-flex; }
 .gse-icon { display: inline-flex; width: 16px; height: 16px; }
 .gse-icon :deep(svg) { width: 100%; height: 100%; }
 .gse-menu { display: flex; flex-direction: column; gap: 2px; }

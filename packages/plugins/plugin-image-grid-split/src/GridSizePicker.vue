@@ -55,6 +55,11 @@ function onMove(ev: MouseEvent): void {
   cols.value = (idx % PREVIEW) + 1
 }
 
+/** 点一下网格只"定住"当前行列（与悬停同值），真正的进入靠下方「确定」按钮 */
+function onPick(ev: MouseEvent): void {
+  onMove(ev)
+}
+
 function confirm(): void {
   emit('confirm', rows.value, cols.value)
 }
@@ -68,7 +73,7 @@ function confirm(): void {
     <div
       class="gsp-picker-grid"
       @pointermove="onMove"
-      @click="confirm"
+      @click="onPick"
     >
       <div
         v-for="cell in cells"
