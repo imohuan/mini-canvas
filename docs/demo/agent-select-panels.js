@@ -348,9 +348,7 @@ function searchInline(kind) {
 }
 
 function searchControl(kind) {
-  var query = state.query[kind]
-  return searchInline(kind) +
-    '<button type="button" class="icon-btn search-toggle' + (query ? ' has-query' : '') + '" data-action="toggle-search" data-kind="' + kind + '" aria-expanded="' + (state.searchOpen[kind] ? 'true' : 'false') + '" aria-label="' + (state.searchOpen[kind] ? '收起搜索' : '搜索') + '" title="' + (state.searchOpen[kind] ? '收起搜索' : '搜索') + '">' +
+  return '<button type="button" class="icon-btn search-toggle" data-action="toggle-search" data-kind="' + kind + '" aria-expanded="' + (state.searchOpen[kind] ? 'true' : 'false') + '" aria-label="' + (state.searchOpen[kind] ? '收起搜索' : '搜索') + '" title="' + (state.searchOpen[kind] ? '收起搜索' : '搜索') + '">' +
     icon('search') +
     '</button>'
 }
@@ -369,6 +367,7 @@ function panelHead(kind, title, count, extra) {
   return '<div class="panel-head">' +
     '<div class="panel-head-top">' +
     '<div class="panel-heading"><h2 class="panel-title">' + esc(title) + '</h2><span class="count-pill">' + count + '</span></div>' +
+    '<div class="panel-search">' + searchInline(kind) + '</div>' +
     '<div class="panel-tools">' + searchControl(kind) + (extra || '') + segment(kind) + '</div>' +
     '</div>' +
     '</div>'

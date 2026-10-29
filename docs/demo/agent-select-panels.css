@@ -148,9 +148,9 @@ h1 {
   padding: 12px 12px 8px;
 }
 .panel-head-top {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   min-width: 0;
 }
@@ -189,6 +189,14 @@ h1 {
   justify-content: flex-end;
   gap: 5px;
   flex: none;
+}
+.panel-search {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.panel-search > .search-inline {
+  width: 100%;
 }
 
 .icon-btn {
@@ -1058,25 +1066,24 @@ h1 {
 
 /* ---------------- 容器响应式 ---------------- */
 @container (max-width: 469px) {
-  .panel-tools > .search-inline { display: none; }
+  .panel-head-top { grid-template-columns: auto 1fr; }
+  .panel-search { display: none; }
   .search-toggle { display: grid; }
-  .panel.is-search-open .panel-tools > .search-inline {
+  .panel.is-search-open .panel-search {
     display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
-    flex-basis: 100%;
     min-width: 0;
     height: 32px;
-    order: 3;
     animation: search-expand 0.2s var(--ease-back) both;
   }
+  .panel.is-search-open .panel-search > .search-inline { max-width: none; }
   .panel.is-search-open .search-toggle { display: none; }
-  .panel.is-search-open .panel-tools { flex: 1; flex-wrap: wrap; }
-  .panel.is-search-open .panel-head-top { align-items: flex-start; }
-  .panel.is-search-open .panel-heading { padding-top: 7px; }
-  .panel.is-search-open .panel-heading { flex: 0 0 auto; }
 }
 @container (min-width: 470px) {
   .search-toggle { display: none; }
+  .panel-search { display: flex; }
 }
 @container (max-width: 540px) {
   .detect-btn .detect-label { display: none; }
