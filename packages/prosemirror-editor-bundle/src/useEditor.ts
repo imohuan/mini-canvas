@@ -276,6 +276,14 @@ function childRanges(parent: PMNode): { child: PMNode; from: number; to: number 
 
 // 全局 item 注册表：toDOM 通过 node.attrs.id 查这里获取 ResourceItem（含 renderEditor）
 const itemRegistry = new Map<string, ResourceItem>()
+/**
+ * 点标签**右侧文字**后，光标落到标签之后的延迟（ms）。
+ *
+ * 用户口径 2026-10-29 复述：「点击右侧文字，过 1 秒把光标调整到标签后面」。
+ * 以前是 0.5s —— 手快的人还没反应过来光标就跳了，观感像「点一下光标乱跑」。
+ * 导出给单测钉住这条时长（它是交互契约，不是随口一个魔数）。
+ */
+export const CHIP_CARET_DELAY = 1000
 /** 供测试读取（回填后标签外观靠它 —— 没有 renderEditor 就退化成 @名字 样式） */
 export function registeredItem(id: string): ResourceItem | undefined {
   return itemRegistry.get(id)
@@ -609,12 +617,15 @@ function renderRefChip(item: ResourceItem): HTMLElement {
   span.dataset.id = item.id
   span.dataset.name = item.name
   /**
-   * 替换交互（用户 2026-10-29）：
-   * 有 onReplaceClick 的标签，hover 时左侧图标/缩略图变成「替换」图标 ——
-   * 用 CSS ::after 盖一层（不额外插 DOM，避免破坏上面的加载结构），
-   * 点击仍走 handleResourceClick 的 onClick 通道（调用方展开替换菜单）。
+   * 左侧图标可编辑（用户 2026-10-29 定稿）：hover 时把缩略图/类型图标换成**铅笔**，
+   * 表示「点它换一个节点」。用 CSS ::after 盖一层，不插额外 DOM（保住加载结构）。
+   *
+   * 旧类名 resource-chip--replaceable 保留为兼容别名（别的插件/主题可能还在用）。
    */
-  if (item.onReplaceClick) span.classList.add('resource-chip--replaceable')
+  if (item.onIconClick || item.onReplaceClick) {
+    span.classList.add('resource-chip--editable')
+    span.classList.add('resource-chip--replaceable')
+  }
   if (kind) span.dataset.kind = kind
   if (invalid) span.dataset.invalid = '1'
   /**
@@ -1435,10 +1446,24 @@ export function useEditor(
   const previewTitle = ref("");
   const previewType = ref<"image" | "video">("image");
   const previewPosition = ref<{ left: string; top: string; transform?: string }>({ left: "0px", top: "0px" });
+  /**
+   * 当前预览是谁的（标签 id）。
+   *
+   * 为什么要记：标签 DOM 会随内容刷新被**整颗重建**（换绑 / 失效 / 删除节点），
+   * 旧元素被移除时浏览器不会补发 mouseleave —— 预览框就永远停在屏幕上，
+   * 图删了还显示旧图（用户 2026-10-29 截图报的正是这条）。
+   * 有了 id，DOM 一变就能判断「它还在不在」，不在就立刻收掉。
+   */
+  let previewChipId = "";
+
+  function hideResourcePreview(): void {
+    previewChipId = "";
+    previewVisible.value = false;
+  }
 
   // 计时器
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-  /** 标签点击后的延迟落光标（0.5s）；连点只保留最后一次 */
+  /** 标签点击后的延迟落光标（CHIP_CARET_DELAY）；连点只保留最后一次 */
   let chipClickTimer: ReturnType<typeof setTimeout> | null = null;
 
   // 过滤后的项目
@@ -1718,6 +1743,7 @@ export function useEditor(
         previewUrl.value = src
         previewTitle.value = name
         previewType.value = isVideoUrl(src) ? "video" : "image"
+        previewChipId = id ?? ""
         previewVisible.value = true
       }
       if (item?.hoverPreview) {
@@ -1736,7 +1762,7 @@ export function useEditor(
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
     if (item?.onMouseLeave) { item.onMouseLeave(item); return }
-    previewVisible.value = false
+    hideResourcePreview()
   }
 
   // 处理资源节点点击
@@ -1748,41 +1774,44 @@ export function useEditor(
  * 缩略图是 pointer-events:none，事件目标一定是外层 chip，所以只能按坐标判。
  */
 function clickInsideChipIcon(el: HTMLElement, e: MouseEvent | undefined): boolean {
-  if (!e) return false
-  const icon = (el.querySelector('.resource-chip-thumb') ?? el.querySelector('.resource-chip-icon')) as HTMLElement | null
-  if (!icon) return false
-  const b = icon.getBoundingClientRect()
-  if (b.width <= 0 || b.height <= 0) return false
+  const b = chipIconRect(el)
+  if (!b || !e) return false
   const pad = 2
   return e.clientX >= b.left - pad && e.clientX <= b.right + pad
     && e.clientY >= b.top - pad && e.clientY <= b.bottom + pad
+}
+
+/** 标签左侧图标格（缩略图或类型图标）的屏幕矩形；没有图标 → null */
+function chipIconRect(el: HTMLElement): DOMRect | null {
+  const icon = (el.querySelector('.resource-chip-thumb') ?? el.querySelector('.resource-chip-icon')) as HTMLElement | null
+  if (!icon) return null
+  const b = icon.getBoundingClientRect()
+  return b.width > 0 && b.height > 0 ? b : null
 }
 
   function handleResourceClick(el: HTMLElement, e?: MouseEvent) {
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
     /**
-     * 「替换」标签（用户 2026-10-29）：点击直接交给调用方展开菜单，
-     * **不做** 0.5s 的落光标延时 —— 菜单开着时把光标挪走会让菜单定位闪烁。
-     */
-    if (item?.onReplaceClick) {
-      item.onReplaceClick(item)
-      return
-    }
-
-    /**
      * 点**左侧图标**（用户 2026-10-29 定案）：不在编辑器里弹菜单，只把「点了哪颗标签、
      * 图标在屏幕上的矩形」交给调用方 —— 由底栏在外部用 Dropdown 打开菜单。
-     * 点右侧文字仍走下面的默认行为（0.5s 后光标落到标签后）。
+     * 点右侧文字仍走下面的默认行为（1s 后光标落到标签后）。
+     *
+     * ⚠️ 这里必须**先判图标位置**：上一版把「有替换回调」当成整颗标签都可点，
+     * 结果点右侧文字也会弹菜单（用户 2026-10-29 明确要求文字走默认行为）。
      */
-    if (item?.onIconClick && clickInsideChipIcon(el, e)) {
-      const b = el.getBoundingClientRect()
-      item.onIconClick(item, { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height })
+    if ((item?.onIconClick || item?.onReplaceClick) && clickInsideChipIcon(el, e)) {
+      // 菜单要开了：把还在等的「落光标」取消掉，否则 1s 后光标会跳走、菜单跟着闪
+      if (chipClickTimer) { clearTimeout(chipClickTimer); chipClickTimer = null }
+      const icon = chipIconRect(el) ?? el.getBoundingClientRect()
+      const anchor = { left: icon.left, top: icon.top, right: icon.right, bottom: icon.bottom, width: icon.width, height: icon.height }
+      if (item.onIconClick) item.onIconClick(item, anchor)
+      else item.onReplaceClick?.(item)
       return
     }
     /**
      * 点标签：**先**保持 ProseMirror 默认的节点选中（NodeSelection，视觉上整颗高亮），
-     * 0.5s 后再把光标落到标签**之后**（用户口径 2026-10-27）。
+     * 1s 后再把光标落到标签**之后**（用户口径 2026-10-27 / 2026-10-29 复述）。
      *
      * 为什么延后：直接跳光标会让人看不到"这一下点中了什么"；先选中再落光标，
      * 既确认了点击对象，又能让用户紧接着在标签后面打字（默认落点在标签之前）。
@@ -1801,7 +1830,7 @@ function clickInsideChipIcon(el: HTMLElement, e: MouseEvent | undefined): boolea
           } catch {
             /* 文档已变（用户又点了别处/删了标签）：忽略 */
           }
-        }, 500)
+        }, CHIP_CARET_DELAY)
       }
     }
     if (item?.onClick) { item.onClick(item); return }
@@ -1845,6 +1874,18 @@ function clickInsideChipIcon(el: HTMLElement, e: MouseEvent | undefined): boolea
 
   // 绑定 atom 节点事件（资源和变量）
   function bindResourceEvents() {
+    /**
+     * hover 预览跟着标签的**存在**走（用户 2026-10-29：图片节点删了、hover 还显示旧图）。
+     *
+     * 根因：ProseMirror 刷新标签时整个 DOM 元素被替换，旧元素直接移除 ——
+     * 浏览器不会给被移除的元素补 mouseleave，于是预览框一直留在屏幕上。
+     * 这里每次（DOM 变化后）按 id 回查：标签已经不在了就立刻收掉。
+     */
+    if (previewChipId) {
+      const still = Array.from(document.querySelectorAll('.resource-chip'))
+        .some((n) => (n as HTMLElement).getAttribute('data-id') === previewChipId)
+      if (!still) hideResourcePreview()
+    }
     // 查询所有 atom 节点
     const selector = ".resource-node";
     const atomNodes = document.querySelectorAll(selector);

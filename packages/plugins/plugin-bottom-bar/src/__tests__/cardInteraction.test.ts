@@ -55,9 +55,10 @@ describe('双击卡片：聚焦到节点', () => {
     expect(body).toMatch(/getNodeRect\(/)
   })
 
-  it('优先复用 auto-layout 服务的 focusNode（与 F 键同一套取景 + 动画）', () => {
+  it('优先复用 auto-layout 的聚焦命令（与 F 键同一套取景 + 动画）', () => {
     const body = SCRIPT.slice(SCRIPT.indexOf('function onCardDblClick'), SCRIPT.indexOf('function onCardsKeydown'))
-    expect(body).toMatch(/focusService\.focusNode\(/)
+    // F 键那条命令只认当前选中；这里要的是「按 id 聚焦」，所以走同一个插件的另一条命令。
+    expect(body).toMatch(/auto-layout:focus-node/)
     expect(body).toMatch(/animateViewport/)
     expect(body).toMatch(/resolveFocusZoom\(/)
   })

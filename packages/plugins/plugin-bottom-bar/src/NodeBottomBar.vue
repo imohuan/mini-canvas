@@ -70,7 +70,7 @@ import { resolveBottomBarShown } from './bottomBarOverlay'
 import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
-import { buildTagMenuGroups, type TagMenuEntry } from './tagMenu'
+import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
   loadAiActions,
@@ -851,18 +851,18 @@ function onCardDblClick(tile: RefTile): void {
   const nodeId = tile.nodeId ?? (tile.key.startsWith('ref-node:') ? tile.key.slice('ref-node:'.length) : '')
   if (!nodeId) return
   /**
-   * 用户第二轮追问「你这个聚焦是怎么实现的？参考 F 键那个插件」，所以这里复用同一套：
-   *   1. 有 auto-layout 服务：调它的 focusNode（与 F 键共享取景缩放 + 过渡动画）；
-   *   2. 没有服务：走 focusViewportFor 的同一份缩放规则，并用 viewport.animateViewport 带过渡。
+   * 用户两轮追问「你这个聚焦是怎么实现的？参考 F 键那个插件」，所以这里走 F 键的**同一条实现**：
+   * 命令 `auto-layout:focus-node`（与 F 键共用 focusBounds：focusHeightRatio 留白、
+   * min/max 缩放夹取、animateViewport 过渡）。上一版去 tryGet('auto-layout') 服务，
+   * 而那个插件从来没有 inject 过同名服务 —— 分支永远走不到，于是只剩「挪中心」的观感。
    *
-   * 上一版只调 setCenter：缩放不变、也没有动画，小卡片聚焦后还是很小，看着像没反应。
+   * 为什么用命令而不是把 auto-layout 当硬依赖：底栏也能在没有 auto-layout 的宿主里工作，
+   * 命令未注册时 execute 是 no-op，再回落到下面的通用实现。
    */
-  const focusService = ctx.tryGet<{ focusNode?(id: string): unknown }>('auto-layout')
-  if (focusService?.focusNode) {
-    try {
-      if (focusService.focusNode(nodeId)) return
-    } catch { /* 服务异常：回落到下面的通用实现 */ }
-  }
+  const commands = ctx.tryGet<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+  try {
+    if (commands?.execute('auto-layout:focus-node', nodeId) === true) return
+  } catch { /* 命令异常：回落到下面的通用实现 */ }
   const viewport = ctx.tryGet<{
     getViewport(): { x: number; y: number; zoom: number }
     setViewport(v: { x: number; y: number; zoom: number }): void
@@ -1586,6 +1586,26 @@ function insertTileChip(tile: RefTile): void {
   editorComponentRef.value.insertResource(item)
 }
 
+/**
+ * @ 按钮「按下即插」（用户 2026-10-29 报「hover 时点不动」）。
+ *
+ * 为什么要 pointerdown 而不是只靠 click：卡片包着主题 Tooltip，它在 pointerdown 会 hide()；
+ * 拖拽库（Sortable fallback）也可能吞掉紧随其后的 click。pointerdown 两者都不受影响。
+ *
+ * 去重放在 onAtClick 里（不能放在 insertTileChip 开头）：pointerdown 会先写时间戳再插入，
+ * 若 insertTileChip 自己检查时间戳就会把这一次也挡掉（真机踩过：@ 完全没反应）。
+ * 键盘 Enter/Space 只发 click、没有 pointerdown，仍由 onAtClick 正常插入。
+ */
+let atPointerAt = 0
+function onAtPointerDown(tile: RefTile): void {
+  atPointerAt = Date.now()
+  insertTileChip(tile)
+}
+function onAtClick(tile: RefTile): void {
+  if (Date.now() - atPointerAt < 600) return
+  insertTileChip(tile)
+}
+
 /** 点空壳卡片：选一个本地文件，建节点并绑定到这张卡（添加） */
 function pickSlotFile(tile: RefTile): void {
   const target = targetOfTile(tile)
@@ -1837,8 +1857,6 @@ function refreshSlotChips(): void {
           id: tile.key,
           name: tile.label,
           category: '素材',
-          /** 待绑定标签也走「替换」交互（拖节点 / 点替换菜单皆可） */
-          onReplaceClick: openReplaceMenu,
           /** 待绑定标签同样支持「点左侧图标 → 换一个节点」 */
           onIconClick: openTagMenu,
         })
@@ -1854,11 +1872,9 @@ function refreshSlotChips(): void {
         ...(url ? { url } : {}),
         ...(tile.value ? { value: tile.value } : {}),
         /**
-         * 「替换」交互（用户 2026-10-29）：hover 标签左侧图标变替换键，
-         * 点击展开替换菜单（见 openReplaceMenu）。
+         * 点左侧图标 → 由底栏在外部弹标签菜单（图 4 风格）。
+         * hover 时这颗图标换成编辑（铅笔）图标，见 style.css 的 .resource-chip--editable。
          */
-        onReplaceClick: openReplaceMenu,
-        /** 点左侧图标 → 由底栏在外部弹标签菜单（图 4 风格） */
         onIconClick: openTagMenu,
         ...(kind === 'video' && tile.url
           ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
@@ -1907,14 +1923,34 @@ watch([shownMaterials, refOrder], () => {
 const tagMenuOpen = ref(false)
 const tagMenuQuery = ref('')
 const tagMenuChip = ref<ResourceItem | null>(null)
-const tagMenuAnchor = ref<HTMLElement | null>(null)
+/**
+ * 菜单锚点（屏幕坐标，1×1 的小方块，落在被点图标的下沿）。
+ *
+ * 为什么不用内部 1px 的 fixed 占位元素：主题 Dropdown 量的是**触发器外壳 .dd-trigger**
+ * 的矩形，fixed 子元素不参与父盒布局 → 量到 0×0，菜单跑到左上角（真机踩过：
+ * 菜单出现在屏幕左上、还被画布裁掉一截）。现在直接把触发器根（.dd）本身 fixed 到锚点，
+ * 尺寸给 1×1 —— Dropdown 量到的就是这里，且不会挡住下面的标签。
+ */
+const tagMenuAnchorPos = ref({ left: 0, top: 0 })
+const tagMenuRootStyle = computed<Record<string, string>>(() => ({
+  position: 'fixed',
+  left: tagMenuAnchorPos.value.left + 'px',
+  top: tagMenuAnchorPos.value.top + 'px',
+  width: '1px',
+  height: '1px',
+  pointerEvents: 'none',
+}))
 
 /** 菜单数据源：画布上所有可作为素材的节点（含当前未连线的） */
 const tagMenuEntries = computed<TagMenuEntry[]>(() => {
   const doc = ctx.tryGet<{
     getNodes(): Array<{ id: string; type?: string; data?: Record<string, unknown> }>
   }>('doc')
-  if (!doc) return []
+  /**
+   * 只认**真的能列节点**的 doc：单测 / 精简宿主里的桩对象只有 getNode 之类，
+   * 少一个方法就整条底栏 setup 抛错（真机踩过：直接白屏）。返回空列表即可。
+   */
+  if (!doc || typeof doc.getNodes !== 'function') return []
   const linked = new Map(shownMaterials.value.map((m) => [m.id, m]))
   const out: TagMenuEntry[] = []
   for (const n of doc.getNodes()) {
@@ -1934,18 +1970,30 @@ const tagMenuEntries = computed<TagMenuEntry[]>(() => {
 
 const tagMenuGroups = computed(() => buildTagMenuGroups(tagMenuEntries.value, tagMenuQuery.value))
 
+/** 搜索时平铺（一行行结果），没搜索时两栏（左类别 / 右该类节点）—— 照图 4 的结构。 */
+const tagMenuFlat = computed(() => tagMenuQuery.value.trim().length > 0)
+const tagMenuSections = computed(() => buildTagMenuSections(tagMenuEntries.value, tagMenuQuery.value))
+const tagMenuActiveKind = ref<TagMenuKind | null>(null)
+watch(tagMenuSections, (s) => {
+  if (!s.kinds.some((k) => k.kind === tagMenuActiveKind.value)) {
+    tagMenuActiveKind.value = s.kinds[0]?.kind ?? null
+  }
+}, { immediate: true })
+const tagMenuActiveItems = computed<TagMenuEntry[]>(() => {
+  const kinds = tagMenuSections.value.kinds
+  return kinds.find((k) => k.kind === tagMenuActiveKind.value)?.items ?? kinds[0]?.items ?? []
+})
+const tagMenuFlatItems = computed(() => tagMenuGroups.value.flatMap((g) => g.items))
+
 /** 打开菜单：把 Dropdown 的 0 尺寸锚点挪到被点的图标下沿，定位/翻转/点外关闭全交给 Dropdown */
 function openTagMenu(
   item: ResourceItem,
   anchor: { left: number; top: number; right: number; bottom: number },
 ): void {
-  const el = tagMenuAnchor.value
-  if (el) {
-    el.style.left = Math.round(anchor.left) + 'px'
-    el.style.top = Math.round(anchor.bottom) + 'px'
-  }
+  tagMenuAnchorPos.value = { left: Math.round(anchor.left), top: Math.round(anchor.bottom) }
   tagMenuChip.value = item
   tagMenuQuery.value = ''
+  tagMenuActiveKind.value = null
   tagMenuOpen.value = true
 }
 
@@ -1953,6 +2001,11 @@ function closeTagMenu(): void {
   tagMenuOpen.value = false
   tagMenuChip.value = null
   tagMenuQuery.value = ''
+}
+
+/** 某个节点在本节点正文里被引用了几次（决定换绑是「断旧线」还是「再加一条」） */
+function refCountOf(nodeId: string): number {
+  return promptChips.value.filter((c) => c.nodeId === nodeId).length
 }
 
 /**
@@ -2589,7 +2642,8 @@ function onGlobalLeave(el: Element): void {
             class="nb-card-act nb-card-at"
             type="button"
             :aria-label="'插入标签 @' + tile.label"
-            @pointerdown.stop.prevent="insertTileChip(tile)"
+            @pointerdown.stop="onAtPointerDown(tile)"
+            @click.stop="onAtClick(tile)"
           >@</button>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
@@ -2691,11 +2745,12 @@ function onGlobalLeave(el: Element): void {
         :offset="6"
         :teleport="true"
         body-class="nb-tagmenu-body"
-        menu-width="268px"
+        :menu-width="tagMenuFlat ? '268px' : '452px'"
         menu-max-height="420px"
+        :style="tagMenuRootStyle"
       >
         <template #trigger>
-          <span ref="tagMenuAnchor" class="nb-tagmenu-anchor" aria-hidden="true" />
+          <span class="nb-tagmenu-anchor" aria-hidden="true" />
         </template>
         <template #default>
           <label class="nb-tagmenu-search">
@@ -2710,11 +2765,72 @@ function onGlobalLeave(el: Element): void {
               @keydown.stop
             />
           </label>
-          <div class="nb-tagmenu-list" role="menu" :aria-label="'选择节点'">
-            <div v-for="g in tagMenuGroups" :key="g.kind" class="nb-tagmenu-group">
-              <div class="nb-tagmenu-group-label">{{ g.label }}</div>
+
+          <!-- 搜索中：平铺命中结果（搜了就直接看结果，不再多一次点类别） -->
+          <div v-if="tagMenuFlat" class="nb-tagmenu-list" role="menu" aria-label="搜索结果">
+            <button
+              v-for="e in tagMenuFlatItems"
+              :key="e.id"
+              class="nb-tagmenu-row"
+              :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
+              type="button"
+              role="menuitem"
+              @click.stop="pickTagMenuNode(e)"
+            >
+              <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
+                <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
+              </span>
+              <span class="nb-tagmenu-name">{{ e.name }}</span>
+              <svg v-if="e.referenced" class="nb-tagmenu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m5 12 4 4L19 6" />
+              </svg>
+            </button>
+            <div v-if="tagMenuFlatItems.length === 0" class="nb-tagmenu-empty">没有匹配的节点</div>
+          </div>
+
+          <!-- 没搜索：两栏（左 = 已引用 + 素材类别，右 = 该类节点），与图 4 一致 -->
+          <div v-else class="nb-tagmenu-panes">
+            <div class="nb-tagmenu-pane nb-tagmenu-pane--nav" role="menu" aria-label="节点类别">
+              <template v-if="tagMenuSections.referenced.length > 0">
+                <div class="nb-tagmenu-group-label">已引用</div>
+                <button
+                  v-for="e in tagMenuSections.referenced"
+                  :key="e.id"
+                  class="nb-tagmenu-row"
+                  :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
+                  type="button"
+                  role="menuitem"
+                  @click.stop="pickTagMenuNode(e)"
+                >
+                  <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
+                    <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
+                  </span>
+                  <span class="nb-tagmenu-name">{{ e.name }}</span>
+                </button>
+              </template>
+              <div v-if="tagMenuSections.kinds.length > 0" class="nb-tagmenu-group-label">素材引用</div>
               <button
-                v-for="e in g.items"
+                v-for="k in tagMenuSections.kinds"
+                :key="k.kind"
+                class="nb-tagmenu-row nb-tagmenu-kind"
+                :class="{ 'is-active': k.kind === tagMenuActiveKind }"
+                type="button"
+                :aria-expanded="k.kind === tagMenuActiveKind"
+                @pointerenter="tagMenuActiveKind = k.kind"
+                @focus="tagMenuActiveKind = k.kind"
+                @click.stop="tagMenuActiveKind = k.kind"
+              >
+                <span class="nb-tagmenu-thumb" :data-kind="k.kind" aria-hidden="true" />
+                <span class="nb-tagmenu-name">{{ k.label }}</span>
+                <svg class="nb-tagmenu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                <span class="nb-tagmenu-count">{{ k.items.length }}</span>
+              </button>
+            </div>
+            <div class="nb-tagmenu-pane nb-tagmenu-pane--items" role="menu" :aria-label="'选择节点'">
+              <button
+                v-for="e in tagMenuActiveItems"
                 :key="e.id"
                 class="nb-tagmenu-row"
                 :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
@@ -2726,12 +2842,9 @@ function onGlobalLeave(el: Element): void {
                   <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
                 </span>
                 <span class="nb-tagmenu-name">{{ e.name }}</span>
-                <svg v-if="e.referenced" class="nb-tagmenu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="m5 12 4 4L19 6" />
-                </svg>
               </button>
+              <div v-if="tagMenuActiveItems.length === 0" class="nb-tagmenu-empty">画布上没有可用的节点</div>
             </div>
-            <div v-if="tagMenuGroups.length === 0" class="nb-tagmenu-empty">画布上没有可用的节点</div>
           </div>
         </template>
       </Dropdown>
@@ -3737,18 +3850,40 @@ function onGlobalLeave(el: Element): void {
  * 数值全部走 ui-style-guide：面板 16 → 行 10 → 徽章 6，间距 4/6/8/12。
  */
 .nb-tagmenu-anchor {
-  position: fixed;
   display: block;
-  width: 1px;
-  height: 1px;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 /* Dropdown 浮层被 teleport 到 body，scoped 命不中 → 全局类 */
 :global(.nb-tagmenu-body) {
-  width: 268px;
   padding: 8px;
   border-radius: 16px;
   background: var(--ui-overlay-solid, #fff);
+}
+.nb-tagmenu-panes {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 180px;
+}
+.nb-tagmenu-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.nb-tagmenu-pane--nav {
+  flex: 0 0 156px;
+  padding-right: 4px;
+  border-right: 1px solid var(--ui-line-soft, rgb(0 0 0 / 0.06));
+}
+.nb-tagmenu-pane--items {
+  flex: 1 1 auto;
 }
 .nb-tagmenu-search {
   display: flex;
@@ -3823,6 +3958,25 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-tagmenu-row.is-current {
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+}
+/* 左栏当前类别：浅底 + 强调色条（图 4 的选中格） */
+.nb-tagmenu-row.is-active {
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+  color: var(--ui-ink, #18202b);
+}
+.nb-tagmenu-chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+.nb-tagmenu-count {
+  flex: none;
+  min-width: 16px;
+  text-align: right;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 /* 行首缩略图 / 类型图标：18px 圆角小块，图片盖在类型图标上 */
 .nb-tagmenu-thumb {

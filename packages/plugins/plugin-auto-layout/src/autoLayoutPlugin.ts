@@ -322,6 +322,22 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     order: 30,
     run: () => viewport.fitView(),
   })
+
+  /**
+   * 按节点 id 聚焦（用户 2026-10-29：底栏双击卡片要「和 F 键同一套」）。
+   *
+   * 为什么不复用 F 键那条命令：它只认**当前选中**，而底栏卡片指向的是上游节点，
+   * 选它会把底栏切到另一个节点上。这里与 F 键共用同一个 focusBounds ——
+   * 缩放（focusHeightRatio 留白）、min/max 夹取、animateViewport 过渡全部一致，
+   * 只是目标由调用方指定、不动选中状态。
+   */
+  ctx.commands.register({
+    id: 'auto-layout:focus-node',
+    title: '聚焦指定节点',
+    group: 'auto-layout',
+    order: 21,
+    run: (_ctx: unknown, nodeId: unknown) => focusNode(String(nodeId ?? '')),
+  })
 }
 
 /** 兼容旧装配的 PluginModule 出口 */

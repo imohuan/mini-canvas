@@ -116,17 +116,21 @@
  * 用 ::after 盖在图标位上（不插额外 DOM，保住上面的加载结构）。
  * 位置对准 14px 图标格（chip 的左 padding 3px 起）。
  */
-.prose-mirror-editor .resource-chip--replaceable {
-  --replace-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='11' height='11' rx='2'/%3E%3Crect x='10' y='10' width='11' height='11' rx='2'/%3E%3C/svg%3E");
+.prose-mirror-editor .resource-chip--editable {
+  /*
+   * 铅笔（编辑）图标：用户 2026-10-29 定稿「hover 上去把原图标换成编辑图标」。
+   * 旧的双框「替换」图标看着像「换文件」，与「点它挑一个节点」的语义不符。
+   */
+  --replace-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4l10.5-10.5a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5V20z'/%3E%3Cpath d='M13.5 6.5 17.5 10.5'/%3E%3C/svg%3E");
 }
-.prose-mirror-editor .resource-chip--replaceable .resource-chip-thumb {
+.prose-mirror-editor .resource-chip--editable .resource-chip-thumb {
   transition: opacity 0.15s ease-out;
 }
-.prose-mirror-editor .resource-chip--replaceable:hover .resource-chip-thumb,
-.prose-mirror-editor .resource-chip--replaceable:hover .resource-chip-icon {
+.prose-mirror-editor .resource-chip--editable:hover .resource-chip-thumb,
+.prose-mirror-editor .resource-chip--editable:hover .resource-chip-icon {
   opacity: 0;
 }
-.prose-mirror-editor .resource-chip--replaceable::after {
+.prose-mirror-editor .resource-chip--editable::after {
   content: '';
   display: none;
   position: absolute;
@@ -146,7 +150,7 @@
   mask-repeat: no-repeat;
   pointer-events: none;
 }
-.prose-mirror-editor .resource-chip--replaceable:hover::after {
+.prose-mirror-editor .resource-chip--editable:hover::after {
   display: block;
 }
 

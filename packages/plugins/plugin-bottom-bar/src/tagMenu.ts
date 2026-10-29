@@ -33,22 +33,45 @@ export function naturalCompare(a: string, b: string): number {
 }
 
 export function buildTagMenuGroups(entries: ReadonlyArray<TagMenuEntry>, query: string): TagMenuGroup[] {
+  const { referenced, kinds } = buildTagMenuSections(entries, query)
+  const groups: TagMenuGroup[] = []
+  if (referenced.length > 0) {
+    groups.push({ kind: 'referenced', label: '已引用', items: referenced })
+  }
+  for (const g of kinds) groups.push({ kind: g.kind, label: g.label, items: g.items })
+  return groups
+}
+
+/**
+ * 菜单的两段结构（用户 2026-10-29 定稿，照图 4）：
+ *   · 「已引用」—— 本节点已经连进来的，直接列行；
+ *   · 「素材引用」—— 按 图片 / 视频 / 音频 / 文本 归类，**只列类别**，点开才展开该类节点。
+ *
+ * 为什么不再平铺：画布上几十个节点时，平铺列表一屏放不下、也看不出「有哪些类」。
+ * 图 4 就是「左栏类别 → 右栏该类节点」的两级结构，这里给同一份数据的两段视图。
+ */
+export interface TagMenuSection {
+  referenced: TagMenuEntry[]
+  kinds: Array<{ kind: TagMenuKind; label: string; items: TagMenuEntry[] }>
+}
+
+export function buildTagMenuSections(
+  entries: ReadonlyArray<TagMenuEntry>,
+  query: string,
+): TagMenuSection {
   const q = query.trim().toLowerCase()
   const matched = entries.filter((e) => !q
     || e.name.toLowerCase().includes(q)
     || e.id.toLowerCase().includes(q))
-  const groups: TagMenuGroup[] = []
   const referenced = matched.filter((e) => e.referenced)
-  if (referenced.length > 0) {
-    groups.push({ kind: 'referenced', label: '已引用', items: referenced })
-  }
-  for (const kind of KIND_ORDER) {
-    const items = matched
+  const kinds = KIND_ORDER.map((kind) => ({
+    kind,
+    label: KIND_LABEL[kind],
+    items: matched
       .filter((e) => e.kind === kind && !e.referenced)
-      .sort((a, b) => naturalCompare(a.name, b.name))
-    if (items.length > 0) groups.push({ kind, label: KIND_LABEL[kind], items })
-  }
-  return groups
+      .sort((a, b) => naturalCompare(a.name, b.name)),
+  })).filter((g) => g.items.length > 0)
+  return { referenced, kinds }
 }
 
 /** 某个节点在菜单里能不能点选（已在「已引用」组里的仍可点：等于聚焦到它） */

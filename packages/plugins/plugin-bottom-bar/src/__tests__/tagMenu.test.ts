@@ -69,11 +69,13 @@ describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
     const src = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
     expect(src).toContain('onIconClick')
     expect(src).toContain('clickInsideChipIcon')
-    // 点图标优先：命中图标就交给调用方，不再走默认的「0.5s 后落光标」
-    const idx = src.indexOf('item?.onIconClick && clickInsideChipIcon')
+    // 点图标优先：命中图标就交给调用方，不再走默认的「延迟落光标」
+    const idx = src.indexOf('&& clickInsideChipIcon')
     expect(idx).toBeGreaterThan(0)
-    const afterIcon = src.indexOf('chipClickTimer', idx)
-    expect(afterIcon).toBeGreaterThan(idx)
+    // 图标分支必须排在文本分支（chipClickTimer 落光标）之前
+    const iconBranchEnd = src.indexOf('const pos = view.posAtDOM', idx)
+    expect(iconBranchEnd).toBeGreaterThan(idx)
+    expect(src.slice(idx, iconBranchEnd)).not.toContain('chipClickTimer = setTimeout')
   })
 
   it('标签菜单用主题 Dropdown（不是自绘浮层）', () => {
@@ -82,6 +84,32 @@ describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
     expect(sfc).toContain('v-model="tagMenuOpen"')
     // 数据源 = 整个画布（doc.getNodes），不是当前连线
     expect(sfc).toContain('buildTagMenuGroups(tagMenuEntries.value')
+    // 两栏结构（左类别 / 右节点，图 4），不是平铺一列
+    expect(sfc).toContain('nb-tagmenu-panes')
+    expect(sfc).toContain('tagMenuSections')
+  })
+})
+
+describe('标签的两半点击（用户 2026-10-29 定稿）', () => {
+  const EDITOR = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
+
+  it('点右侧文字 = 1 秒后把光标落到标签后面（默认行为）', () => {
+    expect(EDITOR).toContain('CHIP_CARET_DELAY = 1000')
+    expect(EDITOR).toMatch(/\}, CHIP_CARET_DELAY\)/)
+  })
+
+  it('图标位的命中按真实矩形算（缩略图 pointer-events:none，只能按坐标判）', () => {
+    const body = EDITOR.slice(EDITOR.indexOf('function chipIconRect'), EDITOR.indexOf('function handleResourceClick'))
+    expect(body).toContain('resource-chip-thumb')
+    expect(body).toContain('getBoundingClientRect')
+  })
+
+  it('点图标分支排在文本分支前面，且会取消待落的 1s 光标', () => {
+    const iconAt = EDITOR.indexOf('&& clickInsideChipIcon')
+    const textAt = EDITOR.indexOf('const pos = view.posAtDOM', iconAt)
+    expect(iconAt).toBeGreaterThan(0)
+    expect(textAt).toBeGreaterThan(iconAt)
+    expect(EDITOR.slice(iconAt, textAt)).toContain('clearTimeout(chipClickTimer)')
   })
 })
 
