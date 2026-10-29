@@ -1695,9 +1695,15 @@ const modelScrollRef = ref<HTMLElement | null>(null)
  * 选中态认 `aria-selected="true"` —— 那是选中项的唯一真相，不再另造一个类名当第二处真相。
  */
 function scrollSelectedModelIntoView(): void {
-  const box = modelScrollRef.value
+  // 卡片视图与分栏视图是**两个不同的滚动容器**（.ac-menu-scroll / .ac-split-scroll），
+  // 切视图时 ref 还指着旧的那个 —— 对它写 scrollTop 什么也不会发生，
+  // 表现就是「切到分栏，选中项又跑回列表顶」。所以每次都按当前 DOM 重新取一次，
+  // 并优先认「正真装着选中项」的那个容器。
+  const root = modelScrollRef.value
+  const sel = (root ?? document).querySelector<HTMLElement>('[aria-selected="true"]')
+  const box = sel?.closest<HTMLElement>('.ac-split-scroll, .ac-menu-scroll') ?? root
   if (!box || box.clientHeight <= 0) return
-  const item = box.querySelector<HTMLElement>('[aria-selected="true"]')
+  const item = sel && box.contains(sel) ? sel : box.querySelector<HTMLElement>('[aria-selected="true"]')
   if (!item) return
   // 用**真实矩形**换算，不用 offsetTop：列表项可能挂在不同的 offsetParent 下
   // （模型面板外面还套着 .ac-panel-body / .ac-menu-scroll 两层），
@@ -1711,6 +1717,17 @@ function scrollSelectedModelIntoView(): void {
     { top, height: item.offsetHeight },
     4,
   )
+  // 落地后再量一次，按**实际差**补齐。
+  // 为什么要补：算出来的落点是按「滚之前的布局」估的，滚完滚动条可能出现/消失、
+  // 行高也可能因换行重排而变，实际位置会差几个像素（实测 7px，正好卡在下缘外）。
+  // 与其猜是哪一个量不准，不如按真实矩形收尾 —— 差多少补多少，最多再修一次。
+  const selRect = item.getBoundingClientRect()
+  const boxRect = box.getBoundingClientRect()
+  if (selRect.bottom > boxRect.bottom) {
+    box.scrollTop += selRect.bottom - boxRect.bottom
+  } else if (selRect.top < boxRect.top) {
+    box.scrollTop -= boxRect.top - selRect.top
+  }
 }
 
 /**
@@ -1734,11 +1751,28 @@ function scheduleScrollSelectedModel(): void {
  * 正卡在可视区下缘外。ResizeObserver 直接把「尺寸定型」当成触发条件，不猜时机。
  */
 let modelBoxObserver: ResizeObserver | null = null
+let modelBoxResizeTimer: number | null = null
+
+/**
+ * 高度一变就重新定位 —— 但不能**每次**都立刻滚。
+ *
+ * 坑（2026-10-30 实测）：写 scrollTop 本身会让滚动条出现/消失，可视高度随之变一点，
+ * ResizeObserver 又触发一次，量到的还是「滚动前」的布局，于是把刚滚好的位置往回拉几像素，
+ * 选中项正好卡在下缘外（差 7px）。所以一次尺寸变化先攒 80ms，尺寸稳下来了再算一次。
+ */
 function observeModelBox(): void {
   modelBoxObserver?.disconnect()
-  const box = modelScrollRef.value
+  // 观察「当前真正在滚的那一层」：卡片视图是 .ac-menu-scroll，分栏视图是右栏 .ac-split-scroll。
+  const root = modelScrollRef.value
+  const box = (root?.querySelector<HTMLElement>('.ac-split-scroll') ?? root) as HTMLElement | null
   if (!box || typeof ResizeObserver === 'undefined') return
-  modelBoxObserver = new ResizeObserver(() => scrollSelectedModelIntoView())
+  modelBoxObserver = new ResizeObserver(() => {
+    if (modelBoxResizeTimer !== null) window.clearTimeout(modelBoxResizeTimer)
+    modelBoxResizeTimer = window.setTimeout(() => {
+      modelBoxResizeTimer = null
+      scrollSelectedModelIntoView()
+    }, 80)
+  })
   modelBoxObserver.observe(box)
 }
 
@@ -1757,7 +1791,11 @@ watch(modelOpen, (open) => {
 // 切卡片/分栏会换一整套列表（高度、行高都变），选中项的位置也跟着变，同样要重新定位
 watch(modelView, () => {
   if (!modelOpen.value) return
-  void nextTick(scheduleScrollSelectedModel)
+  void nextTick(() => {
+    // 切视图后滚动容器整个换了，观察者要跟着换到新容器上
+    observeModelBox()
+    scheduleScrollSelectedModel()
+  })
 })
 
 // 组件卸载时断开观察者（面板关掉、Agent 面板被销毁都走这里）
