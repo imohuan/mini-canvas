@@ -1,0 +1,69 @@
+.mck-input {
+  --mck-input-height: var(--mck-size-md, 34px);
+  --mck-input-font: var(--mck-font-md, 13px);
+  --mck-input-pad: var(--mck-pad-x-md, 12px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: var(--mck-input-height);
+  padding: 0 var(--mck-input-pad);
+  border: 1px solid var(--mck-line, #e2e5ea);
+  border-radius: var(--mck-radius-control, 8px);
+  background: var(--mck-panel, #fff);
+  color: var(--mck-ink);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.mck-input:hover:not(.is-disabled) { border-color: color-mix(in srgb, var(--mck-accent) 35%, var(--mck-line)); }
+.mck-input:focus-within { border-color: var(--mck-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mck-accent) 16%, transparent); }
+.mck-input.is-invalid { border-color: var(--mck-danger); }
+.mck-input.is-invalid:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mck-danger) 16%, transparent); }
+.mck-input.is-disabled { opacity: 0.55; cursor: not-allowed; background: var(--mck-panel-soft); }
+
+.mck-input--sm { --mck-input-height: var(--mck-size-sm, 28px); --mck-input-font: var(--mck-font-sm, 12px); --mck-input-pad: var(--mck-pad-x-sm, 10px); }
+.mck-input--lg { --mck-input-height: var(--mck-size-lg, 42px); --mck-input-font: var(--mck-font-lg, 14px); --mck-input-pad: var(--mck-pad-x-lg, 16px); }
+
+.mck-input__control {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--mck-input-font);
+}
+
+.mck-input__control::placeholder { color: var(--mck-ink-muted); }
+.mck-input__prefix,
+.mck-input__suffix { display: inline-flex; flex: none; align-items: center; color: var(--mck-ink-muted); }
+
+.mck-input__clear {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mck-ink-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mck-input__clear:hover { background: var(--mck-hover); color: var(--mck-ink); }
+.mck-input__error,
+.mck-input__hint { margin: 5px 2px 0; font-size: 11px; line-height: 1.4; }
+.mck-input__error { color: var(--mck-danger); }
+.mck-input__hint { color: var(--mck-ink-muted); }
+
+@media (prefers-reduced-motion: reduce) { .mck-input { transition: none; } }

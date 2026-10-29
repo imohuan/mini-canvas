@@ -1,0 +1,41 @@
+.mck-button-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--mck-gap, 6px);
+  max-width: 100%;
+}
+
+.mck-button-group.is-horizontal { flex-direction: row; }
+.mck-button-group.is-vertical { flex-direction: column; }
+.mck-button-group.is-block { display: flex; width: 100%; }
+.mck-button-group.is-block > * { flex: 1; min-width: 0; }
+
+/* 贴在一起：只保留外框圆角，中间共用一条边。 */
+.mck-button-group.is-attached { gap: 0; }
+
+.mck-button-group.is-horizontal.is-attached > .mck-button:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.mck-button-group.is-horizontal.is-attached > .mck-button:not(:first-child) {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.mck-button-group.is-vertical.is-attached > .mck-button:not(:last-child) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.mck-button-group.is-vertical.is-attached > .mck-button:not(:first-child) {
+  margin-top: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.mck-button-group.is-attached > .mck-button:focus-visible {
+  position: relative;
+  z-index: 1;
+}

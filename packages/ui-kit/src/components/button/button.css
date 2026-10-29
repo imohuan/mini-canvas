@@ -1,0 +1,118 @@
+.mck-button {
+  --mck-button-height: var(--mck-size-md, 34px);
+  --mck-button-padding: var(--mck-pad-x-md, 12px);
+  --mck-button-font-size: var(--mck-font-md, 13px);
+  --mck-button-icon: var(--mck-icon-md, 16px);
+  --mck-button-bg: transparent;
+  --mck-button-bg-hover: var(--mck-hover);
+  --mck-button-fg: var(--mck-ink);
+  --mck-button-border: transparent;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: var(--mck-button-height);
+  padding: 0 var(--mck-button-padding);
+  border: 1px solid var(--mck-button-border);
+  border-radius: var(--mck-radius-control, 8px);
+  background: var(--mck-button-bg);
+  color: var(--mck-button-fg);
+  font-family: inherit;
+  font-size: var(--mck-button-font-size);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease,
+    transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mck-button:hover:not(:disabled),
+.mck-button:focus-visible:not(:disabled) {
+  background: var(--mck-button-bg-hover);
+}
+
+.mck-button:not(:disabled):active { transform: scale(0.97); }
+.mck-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.mck-button.is-loading:disabled { opacity: 0.72; cursor: progress; }
+.mck-button.is-block { display: flex; width: 100%; }
+
+/* 正方形图标按钮：宽高来自同一档尺寸，不写死 32px。 */
+.mck-button.is-icon-only {
+  width: var(--mck-button-height);
+  min-width: var(--mck-button-height);
+  padding: 0;
+}
+
+.mck-button.is-round { border-radius: 999px; }
+
+.mck-button--sm {
+  --mck-button-height: var(--mck-size-sm, 28px);
+  --mck-button-padding: var(--mck-pad-x-sm, 10px);
+  --mck-button-font-size: var(--mck-font-sm, 12px);
+  --mck-button-icon: var(--mck-icon-sm, 14px);
+}
+
+.mck-button--lg {
+  --mck-button-height: var(--mck-size-lg, 42px);
+  --mck-button-padding: var(--mck-pad-x-lg, 16px);
+  --mck-button-font-size: var(--mck-font-lg, 14px);
+  --mck-button-icon: var(--mck-icon-lg, 18px);
+}
+
+.mck-button--primary {
+  --mck-button-bg: var(--mck-accent, #0891b2);
+  --mck-button-bg-hover: var(--mck-accent-hover, #0e7490);
+  --mck-button-fg: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mck-accent, #0891b2) 22%, transparent);
+}
+
+.mck-button--secondary {
+  --mck-button-bg: var(--mck-chip, rgb(0 0 0 / 0.07));
+  --mck-button-bg-hover: color-mix(in srgb, var(--mck-chip, rgb(0 0 0 / 0.07)) 150%, transparent);
+}
+
+.mck-button--ghost { --mck-button-bg: transparent; }
+
+.mck-button--danger {
+  --mck-button-bg: color-mix(in srgb, var(--mck-danger, #ef4444) 14%, transparent);
+  --mck-button-bg-hover: color-mix(in srgb, var(--mck-danger, #ef4444) 22%, transparent);
+  --mck-button-fg: var(--mck-danger, #ef4444);
+}
+
+.mck-button__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--mck-button-icon);
+  height: var(--mck-button-icon);
+}
+
+.mck-button__label { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.mck-button__spinner {
+  box-sizing: border-box;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: mck-button-spin 0.8s linear infinite;
+}
+
+@keyframes mck-button-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mck-button { transition: none; }
+  .mck-button:not(:disabled):active { transform: none; }
+  .mck-button__spinner { animation: none; opacity: 0.55; }
+}
