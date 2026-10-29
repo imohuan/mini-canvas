@@ -21,7 +21,7 @@ const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改，按钮/下拉整体换成新主题的。
 // 缺目录（宿主没装登记 ui 的主题）时 undefined + warn（见 useUiComponent）。
 const NodeToolbarButton = useUiComponent('toolbarButton')
-const Select = useUiComponent('select')
+const DropdownButton = useUiComponent('toolbarDropdown')
 // 显隐仍归本段自己判断（"恰好选中一个且是我"）：壳负责位置，插件负责"我该不该出现"。
 // 壳另外还会在框选手势/多选时整体压掉上插槽。
 const selected = useSoleNodeSelected(props.id)
@@ -62,15 +62,15 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
 
 /** 比例下拉的选项与当前值（值存在会话草稿里：换比例只改草稿，确认时才落库） */
-const ratioOptions = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label })))
+const ratioItems = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ key: o.value, label: o.label })))
 const ratioValue = computed(() => (editDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
 
 /**
  * 改比例：只把选择记进会话草稿，**框的调整交给浮层**（它持有当前框）。
  * 这样同一套比例数学只有一份实现（浮层里），不会在控制栏再抄一遍而漂移。
  */
-function onRatioChange(value: string | number): void {
-  setEditDraft(props.id, { ...editDraft(props.id), _ratioValue: String(value) })
+function onRatioChange(key: string): void {
+  setEditDraft(props.id, { ...editDraft(props.id), _ratioValue: key })
 }
 
 /* 图标内联 SVG（与节点类型注册的 icon 同源写法；作为常量放脚本里比塞进属性里可读） */
@@ -140,15 +140,12 @@ function cancelEdit(): void {
     <template v-if="editing">
       <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
       <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。扩展不锁比例（它是往外扩画布）。 -->
-      <Select
+      <DropdownButton
         v-if="cropping"
         class="it-ratio"
-        :model-value="ratioValue"
-        :options="ratioOptions"
-        dropdown-width="match"
-        placeholder="自由"
-        input-id="image-crop-ratio"
-        @update:model-value="onRatioChange"
+        :title="'比例：' + (ratioItems.find((o) => o.key === ratioValue)?.label ?? '自由')"
+        :items="ratioItems"
+        @pick="onRatioChange"
       />
       <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
         确认

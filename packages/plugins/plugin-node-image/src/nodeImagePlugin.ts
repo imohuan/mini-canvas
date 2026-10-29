@@ -19,8 +19,6 @@ import { imageTitleExtra } from './imageNodeData'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
-import ImageCropPanel from './ImageCropPanel.vue'
-import ImageExpandPanel from './ImageExpandPanel.vue'
 import { beginCrop, beginExpand, endEdit, onEditModeChange } from './cropSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
@@ -198,8 +196,10 @@ export function apply(ctx: Context) {
       topBar: ImageTopToolbar,
       order: 100,
     })
-    svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: ImageCropPanel })
-    svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: ImageExpandPanel })
+    // 用户口径 2026-10-29（截图）：裁剪/扩展只显示**顶栏**（确认/取消/比例都在顶栏），
+    // 底栏整格不显示（bottomBar: null）—— 不在底部重复一套控制栏。
+    svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: null })
+    svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: null })
     return true
   }
   if (!registerToolbar()) {
