@@ -125,7 +125,16 @@ describe('素材卡缩略图：不模糊', () => {
   it('圆角裁剪挪到内层 .nb-card-clip（正方形/圆角/图片裁进来仍归它管）', () => {
     const css = block('.nb-card-clip')
     expect(css).toMatch(/overflow\s*:\s*hidden/)
-    expect(css).toMatch(/border-radius\s*:\s*inherit/)
+    /**
+     * 2026-10-29：圆角**不许再用 inherit**，要写和卡片一样的具体值。
+     * 卡片里嵌了主题 Tooltip 的两层透明外壳（.tlt-root / .tlt-trigger，都没圆角），
+     * inherit 只继承直接父级 → 拿到 0，用户截图里卡片就变成直角了。
+     */
+    const clip = css.match(/border-radius\s*:\s*([^;]+)/)?.[1]?.trim()
+    const card = block('.nb-card').match(/border-radius\s*:\s*([^;]+)/)?.[1]?.trim()
+    expect(clip).toBeTruthy()
+    expect(clip).not.toBe('inherit')
+    expect(clip).toBe(card)
   })
 
   it('关闭按钮默认藏起来，hover / 键盘聚焦才露出（且 hover 转危险色）', () => {

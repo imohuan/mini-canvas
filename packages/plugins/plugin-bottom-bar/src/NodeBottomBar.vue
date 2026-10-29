@@ -57,11 +57,19 @@ import {
 import { readRunState } from './runState'
 import { initialPromptDoc, initialPromptText, promptDocPersistFields, promptPersistFields } from './promptPersist'
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
-import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
+import {
+  exitReference,
+  focusViewportFor,
+  referenceActive,
+  referenceEpoch,
+  referenceOwner,
+  toggleReference as toggleReferenceMode,
+} from './referenceMode'
 import { resolveBottomBarShown } from './bottomBarOverlay'
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
 import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
+import { placeHoverPreview } from './hoverPreviewPlacement'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
   loadAiActions,
@@ -805,19 +813,40 @@ function onCardsClickCapture(ev: MouseEvent): void {
     return
   }
   /**
-   * 有内容的卡：**整张卡都能点开预览**（用户 2026-10-28：「除了右上角关闭按钮，
-   * 点哪里都应该进全屏」）。以前只认那个铺满的透明按钮 —— 它被缩略图/序号角标盖住的
-   * 位置，点击会落到那些元素上，于是「时灵时不灵」。现在只要不在关闭按钮里就开预览。
+   * 单点有内容的卡 = **什么都不做**（用户 2026-10-29 明确口径）：
+   * 全屏预览只能从 hover 预览框右下角的「全屏」进；
+   * 卡片被点开全屏会挡住画布，反而不是用户想要的。
+   *
+   * 双击 = 聚焦到这张卡对应的节点（见 onCardDblClick）。
+   * 这里只把单击拦在卡片里，不让它冒到画布（否则会给画布铺一层新的选中态）。
    */
-  if (tile && !tile.invalid) {
-    ev.stopPropagation()
-    openCard({
-      id: tile.nodeId ?? tile.key,
-      name: tile.label,
-      kind: tile.kind ?? 'image',
-      ...(tile.url ? { url: tile.url } : {}),
-    })
-  }
+  if (tile && !tile.invalid) ev.stopPropagation()
+}
+
+/**
+ * 双击卡片 → 把画布视口**聚焦到这张卡对应的节点**（用户 2026-10-29 明确口径）。
+ *
+ * 为什么不是点击：单击只做「选中/无操作」，全屏预览只能走 hover 预览框里的「全屏」。
+ * 双击是"我到那个节点去看看"的手势，与文件管理器的习惯一致。
+ *
+ * 定位优先取 nodeLayout 的 flow 矩形（与「返回节点」同一个口径与缩放规则），
+ * 宿主没装 nodeLayout 时回落到「量节点 DOM 反算 flow 坐标」——量不到就什么都不做。
+ */
+function onCardDblClick(tile: RefTile): void {
+  const nodeId = tile.nodeId ?? (tile.key.startsWith('ref-node:') ? tile.key.slice('ref-node:'.length) : '')
+  if (!nodeId) return
+  const viewport = ctx.tryGet<{
+    getViewport(): { x: number; y: number; zoom: number }
+    setCenter(x: number, y: number, zoom?: number): void
+    setViewport?(v: { x: number; y: number; zoom: number }): void
+  }>('viewport')
+  if (!viewport) return
+  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
+  const rect = layout?.getNodeRect(nodeId) ?? null
+  if (!rect) return
+  const target = focusViewportFor(rect, viewport.getViewport().zoom)
+  if (typeof viewport.setCenter === 'function') viewport.setCenter(target.x, target.y, target.zoom)
+  else viewport.setViewport?.(target)
 }
 
 /**
@@ -1411,20 +1440,7 @@ function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
     // 只对有「可看内容」的卡出预览（图片/视频帧）；音频/文本没有画面
     if (!cardImageOf(tile) && tile.kind !== 'video') return
     previewTile.value = tile
-    /**
-     * 预览定位（用户 2026-10-29 两次反馈后定的口径）：
-     *  · 必须在卡片**上方**（下面是输入框，放下面会盖住输入框，还会和卡片气泡叠在一起）；
-     *  · 气泡（Tooltip）在卡片**下方**，两者上下分开，互不遮挡；
-     *  · 用 translateY(-100%) 让它从「卡片顶 - 10px」往上长，不预先猜高度；
-     *  · 上方真的放不下（卡片已经很靠上）才翻到下方。
-     */
-    const width = 220
-    const estimateHeight = 170
-    const left = Math.min(Math.max(8, anchorRect.left + anchorRect.width / 2 - width / 2), window.innerWidth - width - 8)
-    const above = anchorRect.top - estimateHeight - 10 >= 8
-    previewPos.value = above
-      ? { left, top: Math.round(anchorRect.top - 10), above: true }
-      : { left, top: Math.round(anchorRect.bottom + 10), above: false }
+    previewPos.value = placeHoverPreview(anchorRect, { width: window.innerWidth, height: window.innerHeight })
   }, 600)
 }
 function cancelPreviewSchedule(): void {
@@ -2426,6 +2442,7 @@ function onGlobalLeave(el: Element): void {
         @pointerenter="(ev: PointerEvent) => schedulePreview(tile, (ev.currentTarget as HTMLElement).getBoundingClientRect())"
         @pointerleave="() => { cancelPreviewSchedule(); schedulePreviewClose() }"
         @click.stop="tile.pending ? pickSlotFile(tile) : undefined"
+        @dblclick.stop.prevent="onCardDblClick(tile)"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
         @drop.stop.prevent="onSlotDrop($event, undefined)"
@@ -2534,7 +2551,7 @@ function onGlobalLeave(el: Element): void {
           v-if="!tile.pending"
           class="nb-card-hit"
           type="button"
-          :aria-label="'预览素材 ' + tile.label"
+          :aria-label="'聚焦节点 ' + tile.label + '（双击）'"
         />
         <button
           v-if="!tile.pending"
@@ -2559,7 +2576,12 @@ function onGlobalLeave(el: Element): void {
       <div
         v-if="previewTile"
         class="nb-hover-preview"
-        :style="{ left: previewPos.left + 'px', top: previewPos.top + 'px' }"
+        :class="{ 'is-below': !previewPos.above }"
+        :style="{
+          left: previewPos.left + 'px',
+          top: previewPos.top + 'px',
+          transform: previewPos.above ? 'translateY(-100%)' : undefined,
+        }"
         @pointerenter="cancelPreviewClose()"
         @pointerleave="schedulePreviewClose()"
       >
@@ -3228,14 +3250,16 @@ function onGlobalLeave(el: Element): void {
   flex: none;
   width: 48px;
   height: 48px;
-  /**
-   * 卡片内容铺满（Tooltip 外壳是 inline-flex，会按内容收缩成 0×0，
-   * 导致气泡按错误的矩形定位 —— 用户 2026-10-29 截图里气泡飘到屏幕角落）。
-   * 让它作为绝对定位层铺满卡片，气泡位置就跟着卡片走。
-   */
+  /** 卡片用 block（主题 Tooltip 的透明外壳铺满它，见下方 .tlt-root 说明） */
   display: block;
   padding: 0;
   border: 1px solid var(--ui-line, #e2e5ea);
+  /**
+   * 圆角恢复成 8px（用户 2026-10-29：卡片圆角丢了）。
+   * 根因是包了主题 Tooltip 之后，内层 .nb-card-clip 的 border-radius:inherit
+   * 继承的是中间那层透明外壳 .tlt-trigger（它没有圆角 → 0），圆角被吃掉。
+   * 现在内外两层都显式写同一个值，不再跨层继承。
+   */
   border-radius: 8px;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
   /*
@@ -3365,15 +3389,20 @@ function onGlobalLeave(el: Element): void {
   position: absolute;
   inset: 0;
   display: block;
-  border-radius: inherit;
+  /* 与卡片同一个圆角值（继承会被 Tooltip 外壳截断成 0，见 .nb-card 的说明） */
+  border-radius: 8px;
   overflow: hidden;
 }
-/** Tooltip 外壳铺满卡片（气泡按卡片真实矩形定位） */
+/**
+ * Tooltip 外壳铺满卡片（气泡按卡片真实矩形定位）。
+ * 只铺这两层透明壳；图片裁剪仍归内层 .nb-card-clip 管（它才是 overflow:hidden 的那层）。
+ */
 .nb-card :deep(.tlt-root),
 .nb-card :deep(.tlt-trigger) {
   position: absolute;
   inset: 0;
   display: block;
+  border-radius: 8px;
 }
 /* 右上角关闭按钮：**有一半在卡片外**（所以内层这个 inset 是负的），
    默认隐藏，hover / 键盘聚焦才露出；hover 时转成危险色（照 ui-style-guide §5）。 */
@@ -3504,76 +3533,35 @@ function onGlobalLeave(el: Element): void {
 }
 
 /**
- * 名称条内部（用户 2026-10-29 重构）：名字 + 警示/时长并排，
- * 失效用警示色点出，正常视频的时长原样跟在名字后面。
+ * 卡片**不再**在底部显示名称条（用户 2026-10-29 第三次反馈）：
+ * 名称条浮在卡片底部，正好压住右下角的 @ 按钮，点不到。
+ * 名字统一交给主题 Tooltip（卡片下方弹出）与 aria-label，卡面上只留序号/时长。
  */
-.nb-card-namebar-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.nb-card-namebar-warn {
-  color: var(--ui-warn-ink, #ffd9a8);
-  font-weight: 700;
-}
-.nb-card-namebar-dur {
-  color: color-mix(in srgb, var(--ui-panel, #fff) 72%, transparent);
-  font-variant-numeric: tabular-nums;
-}
-
-/*
- * 卡片名称条（用户 2026-10-28：卡片只有序号，拖拽时看不出这张是谁）。
- *
- * 平时透明（不抢缩略图）；hover / 拖拽悬停 / 键盘聚焦时从底部浮起，
- * 显示这张卡当前绑定的节点名称（空卡显示「名称 · 待添加」）。
- * 只动 opacity/transform（设计规范：不动画 width/height）。
- */
-.nb-card-namebar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 2px 4px;
-  border-radius: 0 0 6px 6px;
-  background: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent);
-  color: var(--ui-panel, #fff);
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 12px;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: 0;
-  transform: translateY(4px);
-  pointer-events: none;
-  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
-}
-.nb-card:hover .nb-card-namebar,
-.nb-card:focus-within .nb-card-namebar,
-.nb-card.is-target .nb-card-namebar,
-.nb-card--ghost .nb-card-namebar {
-  opacity: 1;
-  transform: translateY(0);
-}
-/**
- * 名称条只在 hover 时出现（用户 2026-10-29 重构），出现时**藏掉左上角索引**：
- * 同一时刻只显示一套信息 —— 平时给序号，hover 给名称+操作。
- */
-.nb-card:hover .nb-card-index,
-.nb-card:focus-within .nb-card-index,
-.nb-card.is-target .nb-card-index,
-.nb-card--ghost .nb-card-index {
-  opacity: 0;
-}
 
 /* 失效引用：灰掉 + 斜纹，明示「这颗标签指向的节点已经不在了」 */
 .nb-card.is-invalid {
   border-color: color-mix(in srgb, var(--ui-danger, #ef4444) 45%, transparent);
 }
-.nb-card.is-invalid .nb-card-namebar {
-  background: color-mix(in srgb, var(--ui-danger, #ef4444) 82%, transparent);
-  opacity: 1;
-  transform: translateY(0);
+/**
+ * 失效角标：名称条去掉后，失效不能只靠一条淡红边（用户看不出哪张坏了）。
+ * 居中一颗红色「!」，与编号（左上）、时长（右下）、@（右下 hover）都不打架。
+ */
+.nb-card.is-invalid::after {
+  content: '!';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ui-danger, #ef4444);
+  color: var(--ui-panel, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
 }
 .nb-editor :deep(.resource-chip--invalid) {
   opacity: 0.55;
@@ -3602,7 +3590,13 @@ function onGlobalLeave(el: Element): void {
   border: 0;
   border-radius: 999px;
   background: var(--ui-scrim, rgb(0 0 0 / 0.55));
-  color: var(--ui-panel, #fff);
+  /**
+   * 字/图标颜色**固定白**（用户 2026-10-29 报「hover 时 @ 的文字和背景一样，看不见」）。
+   * 根因：以前写的是 var(--ui-panel)，深色主题下它是 #262626 —— 正好等于半透明黑底
+   * 混出来的灰，按钮就糊成一块。这个圆片本身就是深色底（--ui-scrim），
+   * 对比色应当固定为白，跟主题面板色无关。
+   */
+  color: #fff;
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -3635,6 +3629,7 @@ function onGlobalLeave(el: Element): void {
  */
 .nb-hover-preview {
   position: fixed;
+  /* 宽度与 placeHoverPreview 的 HOVER_PREVIEW_WIDTH 保持一致（定位按它算居中） */
   width: 220px;
   border-radius: 10px;
   border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
@@ -3667,10 +3662,15 @@ function onGlobalLeave(el: Element): void {
   border: 0;
   border-radius: 6px;
   background: var(--ui-scrim, rgb(0 0 0 / 0.55));
-  color: var(--ui-panel, #fff);
+  /* 白字固定在深色半透明底上（同 .nb-card-act：--ui-panel 在深色主题下等于糊底） */
+  color: #fff;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+}
+.nb-hover-preview-open:hover {
+  background: var(--ui-ink, #18202b);
+  color: var(--ui-panel, #fff);
 }
 
 /**
