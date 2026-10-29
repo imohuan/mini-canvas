@@ -1,0 +1,19 @@
+.mck-notify-host { position: fixed; top: 16px; right: 16px; z-index: 99900; display: flex; width: min(360px, calc(100vw - 24px)); flex-direction: column; gap: 8px; pointer-events: none; }
+.mck-notify { display: flex; align-items: flex-start; gap: 9px; box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid var(--mck-line, #e2e5ea); border-radius: 12px; background: var(--mck-panel, #fff); color: var(--mck-ink); box-shadow: var(--mck-shadow); pointer-events: auto; }
+.mck-notify__dot { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 999px; background: var(--mck-info, #2563eb); }
+.mck-notify.is-success .mck-notify__dot { background: var(--mck-success, #16a34a); }
+.mck-notify.is-warning .mck-notify__dot { background: var(--mck-warning, #d97706); }
+.mck-notify.is-danger .mck-notify__dot { background: var(--mck-danger, #ef4444); }
+.mck-notify.is-primary .mck-notify__dot { background: var(--mck-accent, #0891b2); }
+.mck-notify__copy { min-width: 0; flex: 1; }
+.mck-notify__title { display: block; font-size: 12px; font-weight: 700; line-height: 1.5; }
+.mck-notify__desc { margin: 3px 0 0; color: var(--mck-ink-muted); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.mck-notify__action { margin-top: 7px; padding: 0; border: 0; background: transparent; color: var(--mck-accent-hover); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.mck-notify__close { display: grid; flex: none; width: 20px; height: 20px; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--mck-ink-muted); font-size: 15px; cursor: pointer; }
+.mck-notify__close:hover { background: var(--mck-hover); color: var(--mck-ink); }
+.mck-notify-enter-active { transition: opacity 180ms ease, transform 180ms ease; }
+.mck-notify-leave-active { transition: opacity 150ms ease, transform 150ms ease; }
+.mck-notify-enter-from, .mck-notify-leave-to { opacity: 0; transform: translateY(-6px); }
+.mck-notify-move { transition: transform 180ms ease; }
+@media (max-width: 520px) { .mck-notify-host { top: 8px; right: 8px; } }
+@media (prefers-reduced-motion: reduce) { .mck-notify-enter-active, .mck-notify-leave-active, .mck-notify-move { transition: none; } }

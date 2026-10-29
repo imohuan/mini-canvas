@@ -1,0 +1,9 @@
+.mck-messages-host { position: fixed; top: 16px; left: 50%; z-index: 99900; display: flex; max-width: min(520px, calc(100vw - 24px)); flex-direction: column; align-items: center; gap: 6px; transform: translateX(-50%); pointer-events: none; }
+.mck-message { padding: 7px 13px; border: 1px solid var(--mck-line); border-radius: 8px; background: var(--mck-panel); color: var(--mck-ink); box-shadow: 0 8px 24px rgb(0 0 0 / 0.14); font-size: 12px; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
+.mck-message.is-success { border-color: color-mix(in srgb, var(--mck-success) 40%, var(--mck-line)); color: var(--mck-success); }
+.mck-message.is-warning { border-color: color-mix(in srgb, var(--mck-warning) 40%, var(--mck-line)); color: var(--mck-warning); }
+.mck-message.is-danger { border-color: color-mix(in srgb, var(--mck-danger) 40%, var(--mck-line)); color: var(--mck-danger); }
+.mck-message-enter-active, .mck-message-leave-active { transition: opacity 160ms ease, transform 160ms ease; }
+.mck-message-enter-from, .mck-message-leave-to { opacity: 0; transform: translateY(-5px); }
+.mck-message-move { transition: transform 160ms ease; }
+@media (prefers-reduced-motion: reduce) { .mck-message-enter-active, .mck-message-leave-active, .mck-message-move { transition: none; } }

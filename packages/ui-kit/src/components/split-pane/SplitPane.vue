@@ -13,7 +13,7 @@
  * 4. 键盘左右 / 上下键按 16px 调整，Home 回到初始比例。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import '../styles/ui-kit.css'
+import '../../styles/ui-kit.css'
 
 const props = withDefaults(
   defineProps<{
@@ -331,3 +331,5 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 </style>
+
+
