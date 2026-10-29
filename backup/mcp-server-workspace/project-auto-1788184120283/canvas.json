@@ -1,0 +1,33 @@
+{
+  "nodes": [
+    {
+      "id": "fecb2a91-b8d2-4914-ae73-91c6a07e4326",
+      "type": "image",
+      "position": {
+        "x": 250,
+        "y": 300
+      },
+      "data": {
+        "label": "输入图"
+      }
+    },
+    {
+      "id": "5a9a95c2-07ee-4e99-8ccc-eb3746e50526",
+      "type": "text",
+      "position": {
+        "x": 400,
+        "y": 100
+      },
+      "data": {
+        "label": "说明"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "53920488-1ea5-49bc-af7d-5901831bf4a0",
+      "source": "fecb2a91-b8d2-4914-ae73-91c6a07e4326",
+      "target": "5a9a95c2-07ee-4e99-8ccc-eb3746e50526"
+    }
+  ]
+}

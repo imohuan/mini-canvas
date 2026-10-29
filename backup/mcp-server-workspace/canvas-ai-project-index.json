@@ -1,0 +1,32 @@
+[
+  {
+    "id": "auto-1788184120283",
+    "name": "自动化测试画布",
+    "createdAt": 1788184120285,
+    "updatedAt": 1788184120293
+  },
+  {
+    "id": "auto-1788184626152",
+    "name": "自动化测试画布",
+    "createdAt": 1788184626155,
+    "updatedAt": 1788184626162
+  },
+  {
+    "id": "canvas-2026-09-01",
+    "name": "mini-canvas 画布",
+    "createdAt": 1788265463067,
+    "updatedAt": 1788481215649
+  },
+  {
+    "id": "",
+    "name": "sse-valid-test",
+    "createdAt": 1788465778876,
+    "updatedAt": 1788465778876
+  },
+  {
+    "id": "canvas-synctest-0904",
+    "name": "sync-test",
+    "createdAt": 1788486989143,
+    "updatedAt": 1788486989143
+  }
+]

@@ -1,0 +1,120 @@
+{
+  "nodes": [
+    {
+      "id": "fd-1788450604216-1",
+      "type": "custom",
+      "initialized": false,
+      "position": {
+        "x": -279.878641336936,
+        "y": -383.1800434090913
+      },
+      "data": {
+        "label": "Image.png",
+        "nodeType": "image",
+        "cardWidth": 404,
+        "cardHeight": 300,
+        "resizable": false,
+        "assetId": "65e47cfded64b1d5c754d58e6b5901b5a15e49600bcabe46fcd341e15a2d1e60",
+        "imageName": "3b23dfb0e37b8c572af9811fe4595efe.jpg",
+        "imageType": "image/jpeg",
+        "imageSize": 257735,
+        "imageWidth": 1184,
+        "imageHeight": 880
+      },
+      "sourcePosition": "right",
+      "targetPosition": "left"
+    },
+    {
+      "id": "node-image-1788451145943",
+      "type": "custom",
+      "initialized": false,
+      "position": {
+        "x": 352.06156660033224,
+        "y": -288.89212640279925
+      },
+      "data": {
+        "label": "图片",
+        "nodeType": "image",
+        "cardWidth": 360,
+        "cardHeight": 270,
+        "resizable": false,
+        "options": {
+          "promptText": "你真是一个人才 啊111",
+          "promptDoc": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "你真是一个人才 啊111"
+                  }
+                ]
+              }
+            ]
+          },
+          "selectedModel": "apimart-gpt-image-2",
+          "selectedRatio": "1:1",
+          "selectedResolution": "",
+          "selectedTemplate": ""
+        }
+      },
+      "sourcePosition": "right",
+      "targetPosition": "left"
+    },
+    {
+      "id": "image-node-image-1788451145943-source-1788451391450",
+      "type": "custom",
+      "initialized": false,
+      "position": {
+        "x": -267.2035755568085,
+        "y": -30.50131573474394
+      },
+      "data": {
+        "label": "PixPin_2026-08-04_18-28-19.png",
+        "nodeType": "image",
+        "imageName": "45fIT.jpg",
+        "imageType": "image/jpeg",
+        "imageSize": 236210,
+        "imageWidth": 1184,
+        "imageHeight": 880,
+        "cardWidth": 404,
+        "cardHeight": 300,
+        "assetId": "6a0d14d55e60b608574a27eb5dd42cd778adefb038a49911be24c066e04c8e66"
+      },
+      "sourcePosition": "right",
+      "targetPosition": "left"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-fd-1788450604216-1-node-image-1788451145943-1788451145948",
+      "type": "custom",
+      "source": "fd-1788450604216-1",
+      "target": "node-image-1788451145943",
+      "sourceHandle": "source",
+      "targetHandle": "target",
+      "data": {},
+      "label": "",
+      "sourceX": 123.12135866306397,
+      "sourceY": -233.1800434090913,
+      "targetX": 353.06156660033224,
+      "targetY": -153.89212640279925
+    },
+    {
+      "id": "e-image-node-image-1788451145943-source-1788451391450-node-image-1788451145943-1788451391458",
+      "type": "custom",
+      "source": "image-node-image-1788451145943-source-1788451391450",
+      "target": "node-image-1788451145943",
+      "sourceHandle": "source",
+      "targetHandle": "target",
+      "data": {},
+      "label": "",
+      "sourceX": 135.79642444319148,
+      "sourceY": 119.49868807995333,
+      "targetX": 353.06156660033224,
+      "targetY": -153.89212640279925
+    }
+  ]
+}
