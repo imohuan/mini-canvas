@@ -107,6 +107,23 @@ describe('duplicateImageForRotate', () => {
     expect(rotateMode.value).toBeNull()
   })
 
+  it('老存档只在 data 里带尺寸 → 副本沿用迁移后的同一宽高', () => {
+    const { ctx, nodeStore } = makeStack()
+    closeRotateMode()
+    nodeStore.replaceAll([
+      {
+        id: 'legacy-1',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: { label: '旧图', imageUrl: 'blob:old', cardWidth: 360, cardHeight: 240 },
+      },
+    ])
+    const original = nodeStore.getNodes()[0]
+    const copyId = duplicateImageForRotate(ctx, original.id, { schedule: (fn) => fn() })
+    expect(nodeStore.getNode(copyId!)!.size).toEqual({ w: 360, h: 240 })
+    closeRotateMode()
+  })
+
   it('节点不存在 → 返回 null，不抛错', () => {
     const { ctx } = makeStack()
     expect(duplicateImageForRotate(ctx, 'missing', { schedule: (fn) => fn() })).toBeNull()

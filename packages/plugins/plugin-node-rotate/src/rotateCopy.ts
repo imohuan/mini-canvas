@@ -116,11 +116,13 @@ export function duplicateImageForRotate(
   const height = positive(source.size?.h) ?? positive(source.data.cardHeight)
   const data = cloneData(source.data)
   // 副本标题标出它是复制出来的（用户截图里的「图片 1-副本」同一心智）：
-  // 一眼能分清清哪张是原图；原节点没有标题时才退回类型序号名。
+  // 一眼能分清哪张是原图；原节点没有标题时才退回类型序号名。
   const label = typeof source.data.label === 'string' ? source.data.label.trim() : ''
   data.label = label ? `${label}-副本` : doc.nextTypeName(source.type)
   const copyId = doc.nextNodeId()
   const position = { x: source.position.x + width + COPY_GAP, y: source.position.y }
+  // 老节点可能只有 data 里的镜像尺寸：读到了合法宽高就一并带给副本，外观与原图保持一致
+  const size = height !== undefined ? { w: width, h: height } : undefined
 
   try {
     doc.transaction('rotate-duplicate', (tx) => {
@@ -131,7 +133,7 @@ export function duplicateImageForRotate(
           position,
           data,
           ...(source.parentId !== undefined ? { parentId: source.parentId } : {}),
-          ...(source.size !== undefined ? { size: { w: source.size.w, h: source.size.h } } : {}),
+          ...(size !== undefined ? { size } : {}),
         },
       ])
       // 原图是上游、副本是下游（与裁剪出图同方向）
