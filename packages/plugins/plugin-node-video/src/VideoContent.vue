@@ -746,10 +746,16 @@ function onTimeUpdate(e: Event): void {
   // "暂停→拉回末尾"会被重复触发，第二轮开始时进度条在段尾和当前进度之间来回跳
   if (end > start && !endedLatch.value && v.currentTime >= end) {
     endedLatch.value = true
-    v.pause()
-    v.currentTime = end
-    currentTime.value = end
-    resumeTime.value = start
+    // 循环偏好（剪辑面板的「区间循环」按钮）：开 = 回段首接着放；关 = 停在段尾（原有行为）。
+    if (v.loop) {
+      endedLatch.value = false
+      v.currentTime = start
+    } else {
+      v.pause()
+      v.currentTime = end
+      currentTime.value = end
+      resumeTime.value = start
+    }
   }
 }
 
