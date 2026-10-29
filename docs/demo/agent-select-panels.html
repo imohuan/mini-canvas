@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent 选择面板 · UI 实验室</title>
+  <link rel="stylesheet" href="./agent-select-panels.css" />
+  <link rel="icon" href="data:," />
+</head>
+<body>
+  <div class="page">
+    <header class="page-head">
+      <div class="page-intro">
+        <div class="eyebrow">AGENT COMPOSER · SELECT PANELS</div>
+        <h1>选择面板</h1>
+        <p class="page-lede">审核、技能、MCP 与模型的面板布局。每块都能单独放进 Dropdown，并随容器宽度自动调整。</p>
+      </div>
+      <div class="page-meta"><span class="status-dot"></span>4 个面板 · 独立响应式</div>
+    </header>
+
+    <main class="panel-grid" id="panels" aria-label="Agent 选择面板"></main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span class="toast-icon" id="toast-icon"></span>
+    <span id="toast-text"></span>
+  </div>
+
+  <script src="./agent-select-panels.js"></script>
+</body>
+</html>
