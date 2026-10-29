@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { unitCells, toPixelRect, publishPositions, validRowsCols } from '../gridSplit'
+import { unitCells, toPixelRect, publishPositions, validRowsCols, cellIndexAt } from '../gridSplit'
 
 describe('gridSplit 纯计算', () => {
   it('validRowsCols：合法范围 1~8，小数/0/9 都拒', () => {
@@ -49,5 +49,27 @@ describe('gridSplit 纯计算', () => {
   it('publishPositions：越界/未勾选索引跳过；非法行列返回空表', () => {
     expect(publishPositions(2, 2, [0, 4], 100, 100, 12)).toHaveLength(1)
     expect(publishPositions(0, 2, [0], 100, 100, 12)).toEqual([])
+  })
+
+  it('cellIndexAt：各象限命中正确格子（行优先）', () => {
+    expect(cellIndexAt(3, 3, 0.1, 0.1)).toBe(0)
+    expect(cellIndexAt(3, 3, 0.5, 0.1)).toBe(1)
+    expect(cellIndexAt(3, 3, 0.9, 0.1)).toBe(2)
+    expect(cellIndexAt(3, 3, 0.1, 0.9)).toBe(6)
+    expect(cellIndexAt(3, 3, 0.9, 0.9)).toBe(8)
+  })
+
+  it('cellIndexAt：非方阵（2 行 3 列）命中正确', () => {
+    expect(cellIndexAt(2, 3, 0.9, 0.1)).toBe(2)
+    expect(cellIndexAt(2, 3, 0.1, 0.9)).toBe(3)
+  })
+
+  it('cellIndexAt：图外/非法输入给 -1（不抛）', () => {
+    expect(cellIndexAt(3, 3, -0.1, 0.5)).toBe(-1)
+    expect(cellIndexAt(3, 3, 1.1, 0.5)).toBe(-1)
+    expect(cellIndexAt(3, 3, 0.5, -0.1)).toBe(-1)
+    expect(cellIndexAt(3, 3, 0.5, 1.1)).toBe(-1)
+    expect(cellIndexAt(0, 3, 0.5, 0.5)).toBe(-1)
+    expect(cellIndexAt(3, 99, 0.5, 0.5)).toBe(-1)
   })
 })

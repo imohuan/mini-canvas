@@ -5,10 +5,11 @@
  * 按钮必须按名取主题件（toolbarButton / toolbarDropdown），不自绘 ——
  * 否则同一排出现两种圆角/高度。显隐自己判：有图才出现，编辑态由壳切换。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { beginSplit, isSplitting } from './splitSession'
 import { validRowsCols } from './gridSplit'
+import GridSizePicker from './GridSizePicker.vue'
 
 interface ToolbarMenuNode {
   key: string
@@ -23,6 +24,7 @@ const props = defineProps<{
 
 const { ctx } = useCanvasRender()
 const DropdownButton = useUiComponent('toolbarDropdown')
+const Dropdown = useUiComponent('dropdown')
 
 const ICON_GRID =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
@@ -45,6 +47,9 @@ const items: ToolbarMenuNode[] = [
   { key: 'grid:4:4', label: '16 宫格（4×4）' },
   { key: 'grid:5:5', label: '25 宫格（5×5）' },
 ]
+/** 自定义行列面板的行列（默认 3×3；确认后保留回显） */
+const customRows = ref(3)
+const customCols = ref(3)
 
 function notify(text: string): void {
   ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.(text)
@@ -66,6 +71,12 @@ function onPick(key: string): void {
   if (!m) return
   enter(Number(m[1]), Number(m[2]))
 }
+
+function onCustomConfirm(rows: number, cols: number): void {
+  customRows.value = rows
+  customCols.value = cols
+  enter(rows, cols)
+}
 </script>
 
 <template>
@@ -77,4 +88,48 @@ function onPick(key: string): void {
     :items="items"
     @pick="onPick"
   />
+  <component
+    v-if="hasImage && !splitting && !DropdownButton && Dropdown"
+    :is="Dropdown"
+    placement="bottom-start"
+    :offset="6"
+    menu-width="200px"
+  >
+    <template #trigger>
+      <span class="gse-trigger">
+        <span class="gse-icon" v-html="ICON_GRID" />
+        <span>宫格切分</span>
+      </span>
+    </template>
+    <template #default="{ close }">
+      <div class="gse-menu" data-testid="grid-split-entry-menu">
+        <button v-for="item in items" :key="item.key" type="button" class="gse-row" @click.stop="onPick(item.key), close()">
+          {{ item.label }}
+        </button>
+        <div class="gse-sep" />
+        <GridSizePicker :initial-rows="customRows" :initial-cols="customCols" @confirm="onCustomConfirm" />
+      </div>
+    </template>
+  </component>
 </template>
+
+<style scoped>
+/* 主题 dropdown 缺席时的兜底触发器（正常走 toolbarDropdown 时这段不渲染） */
+.gse-trigger { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.gse-icon { display: inline-flex; width: 16px; height: 16px; }
+.gse-icon :deep(svg) { width: 100%; height: 100%; }
+.gse-menu { display: flex; flex-direction: column; gap: 2px; }
+.gse-row {
+  padding: 0 10px;
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-badge, 6px);
+  background: transparent;
+  color: var(--ui-ink, #18202b);
+  font-size: var(--text-base, 13px);
+  text-align: left;
+  cursor: pointer;
+}
+.gse-row:hover { background: var(--ui-hover, rgb(0 0 0 / 0.06)); }
+.gse-sep { height: 1px; background: var(--ui-line, #e2e5ea); margin: 2px 0; }
+</style>

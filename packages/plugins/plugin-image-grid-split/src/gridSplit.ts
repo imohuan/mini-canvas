@@ -64,6 +64,19 @@ export function toPixelRect(cell: UnitRect, imageWidth: number, imageHeight: num
   }
 }
 
+/**
+ * 归一化坐标 → 格子索引（鼠标悬停/点击格子时用）。
+ * 坐标在图外（<0 或 >1）返回 -1；空行列/越界同样给 -1。
+ */
+export function cellIndexAt(rows: number, cols: number, nx: number, ny: number): number {
+  if (!validRowsCols(rows, cols)) return -1
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return -1
+  if (nx < 0 || nx >= 1 || ny < 0 || ny >= 1) return -1
+  const c = Math.min(cols - 1, Math.floor(nx * cols))
+  const r = Math.min(rows - 1, Math.floor(ny * rows))
+  return r * cols + c
+}
+
 /** 发布布局：选中格子在画布上的绝对坐标（保持原行列位置，空格留空；同图等比）。
  *  @param cellW 每格节点宽（px）；@param gap 格子之间的画布间距（px） */
 export function publishPositions(

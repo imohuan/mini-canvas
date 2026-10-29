@@ -12,6 +12,10 @@ export interface SplitState {
   cols: number
   /** 勾选的格子索引集合（reactive Set；默认 = 全部） */
   selected: Set<number>
+  /** 鼠标悬停的格子索引（覆盖层高亮用；-1 = 没有悬停） */
+  hover: number
+  /** 发布进行中（防双击重复发布；完成/失败后复位） */
+  publishing: boolean
 }
 
 /** 节点 id → 当前会话（一个节点同时只有一份；退出清掉） */
@@ -34,7 +38,7 @@ export function beginSplit(nodeId: string, rows: number, cols: number): void {
   if (!nodeId) return
   const cur = sessions.get(nodeId)
   if (cur && cur.rows === rows && cur.cols === cols) return
-  sessions.set(nodeId, { rows, cols, selected: fullSelection(rows, cols) })
+  sessions.set(nodeId, { rows, cols, selected: fullSelection(rows, cols), hover: -1, publishing: false })
 }
 
 /** 结束切分（幂等） */
@@ -55,6 +59,28 @@ export function toggleCell(nodeId: string, index: number): void {
   if (index < 0 || index >= s.rows * s.cols) return
   if (s.selected.has(index)) s.selected.delete(index)
   else s.selected.add(index)
+}
+
+/** 读/写悬停格子（覆盖层每次 mousemove 调；越界清空） */
+export function setHoverCell(nodeId: string, index: number): void {
+  const s = sessions.get(nodeId)
+  if (!s) return
+  if (index < 0 || index >= s.rows * s.cols) index = -1
+  s.hover = index
+}
+
+/** 发布锁（防双击重复发布；调用方负责成功/失败后复位） */
+export function beginPublish(nodeId: string): boolean {
+  const s = sessions.get(nodeId)
+  if (!s || s.publishing) return false
+  s.publishing = true
+  return true
+}
+
+/** 解除发布锁 */
+export function endPublish(nodeId: string): void {
+  const s = sessions.get(nodeId)
+  if (s) s.publishing = false
 }
 
 /** 订阅会话变化（给插件侧同步 nodeToolbar 模式用；返回取消函数） */

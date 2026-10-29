@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   beginSplit, endSplit, isSplitting, splitState, toggleCell, onSplitChange, splitNodeIds,
+  setHoverCell, beginPublish, endPublish,
 } from '../splitSession'
 
 describe('splitSession 会话', () => {
@@ -47,5 +48,25 @@ describe('splitSession 会话', () => {
     endSplit('n4')
     endSplit('n5')
     expect(splitNodeIds()).toEqual([])
+  })
+
+  it('setHoverCell：合法索引写入、越界清空、无会话 no-op', () => {
+    beginSplit('n6', 2, 2)
+    setHoverCell('n6', 3)
+    expect(splitState('n6')?.hover).toBe(3)
+    setHoverCell('n6', 99)
+    expect(splitState('n6')?.hover).toBe(-1)
+    setHoverCell('missing', 1)
+    endSplit('n6')
+  })
+
+  it('beginPublish/endPublish：锁防重入', () => {
+    beginSplit('n7', 2, 2)
+    expect(beginPublish('n7')).toBe(true)
+    expect(beginPublish('n7')).toBe(false)
+    endPublish('n7')
+    expect(beginPublish('n7')).toBe(true)
+    endPublish('n7')
+    endSplit('n7')
   })
 })

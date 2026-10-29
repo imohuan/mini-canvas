@@ -9,6 +9,7 @@
 import { computed } from 'vue'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { endSplit, splitState } from './splitSession'
+import { publishCells, publishDepsOf } from './publish'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
@@ -17,6 +18,8 @@ const Button = useUiComponent('toolbarButton')
 const state = computed(() => splitState(props.id))
 const total = computed(() => (state.value ? state.value.rows * state.value.cols : 0))
 const selectedCount = computed(() => state.value?.selected.size ?? 0)
+/** 发布进行中（锁 + 按钮禁用） */
+const publishing = computed(() => state.value?.publishing ?? false)
 
 function notify(text: string): void {
   ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.(text)
@@ -27,11 +30,33 @@ function exit(): void {
   ctx.tryGet<{ exit?(nodeId: string): void } | undefined>('nodeToolbar')?.exit?.(props.id)
 }
 
-function publish(kind: 'canvas' | 'storyboard'): void {
-  if (!state.value) return
-  notify(kind === 'canvas'
-    ? '发布到画布：开发中（本条只演示接线）'
-    : '创建分镜组：开发中（本条只演示接线）')
+async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
+  const s = state.value
+  if (!s) return
+  const deps = publishDepsOf(ctx)
+  if (!deps) {
+    notify('发布不可用：当前宿主缺少数据层服务')
+    return
+  }
+  const ids = [...s.selected].sort((a, b) => a - b)
+  const total0 = s.rows * s.cols
+  if (ids.length === 0) {
+    notify('先勾选要发布的格子（点图片上的格子）')
+    return
+  }
+  const result = await publishCells(deps, props.id, s.rows, s.cols, ids, kind)
+  if (!result.ok) {
+    notify(result.reason || '发布失败')
+    return
+  }
+  if (kind === 'storyboard') {
+    notify(result.groupId
+      ? '分镜组已创建（' + result.count + ' 格）'
+      : '已发布 ' + result.count + ' 格，打组失败（可手动 Ctrl+G）')
+  } else {
+    notify('已发布 ' + result.count + ' 格到画布')
+  }
+  void total0
 }
 </script>
 
@@ -44,8 +69,8 @@ function publish(kind: 'canvas' | 'storyboard'): void {
     <div class="gsp-actions">
       <component :is="Button || 'button'" type="button" variant="danger" title="退出宫格切分" aria-label="退出宫格切分" @click="exit">退出</component>
       <component :is="Button || 'button'" type="button" title="高清放大（暂未实现）" aria-label="高清放大" disabled>高清放大</component>
-      <component :is="Button || 'button'" type="button" variant="primary" title="把选中格子发布到画布" aria-label="发布到画布" @click="publish('canvas')">发布到画布</component>
-      <component :is="Button || 'button'" type="button" title="用选中格子创建分镜组" aria-label="创建分镜组" @click="publish('storyboard')">创建分镜组</component>
+      <component :is="Button || 'button'" type="button" variant="primary" :disabled="publishing" title="把选中格子发布到画布" aria-label="发布到画布" @click="publish('canvas')">发布到画布</component>
+      <component :is="Button || 'button'" type="button" :disabled="publishing" title="用选中格子创建分镜组" aria-label="创建分镜组" @click="publish('storyboard')">创建分镜组</component>
     </div>
   </div>
 </template>

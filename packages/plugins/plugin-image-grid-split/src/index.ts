@@ -14,6 +14,7 @@ import { markRaw } from 'vue'
 import type { PluginModule, Context } from '@mini-canvas/canvas-base'
 import GridSplitEntry from './GridSplitEntry.vue'
 import GridSplitPanel from './GridSplitPanel.vue'
+import GridSplitOverlay from './GridSplitOverlay.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
 
 export const name = 'image-grid-split'
@@ -30,6 +31,19 @@ export function apply(ctx: Context): void {
     order: 500,
     component: markRaw(GridSplitEntry),
   })
+
+  // ①b 图片上的格子勾选层：往 image 的 over:inset 段叠一个 occupant
+  //    （与 image 插件的 ImageOverlays 同段同屏；本层按会话状态自己显隐）。
+  //    装配顺序上 image 可能还没注册 —— 用 node/region 能力的 contribute，宿主装好 type 后自动补渲染。
+  // 真实宿主 nodeRegistry 恒在；极简 ctx（单测桩）没有 → 跳过即可（没有节点渲染，层挂不挂无意义）
+  try {
+    ctx.nodes.contribute('image', 'over:inset', markRaw(GridSplitOverlay), {
+      id: 'image-grid-split/overlay',
+      order: 10,
+    })
+  } catch {
+    // nodeRegistry 缺席：静默降级（与"主题缺席"同一条宽容口径）
+  }
 
   // ② 功能模式：进入后底栏整格换成 GridSplitPanel（顶栏不动，图片默认栏照常）
   const registerMode = (): boolean => {
