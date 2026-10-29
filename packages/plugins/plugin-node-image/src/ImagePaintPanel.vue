@@ -114,7 +114,7 @@ async function save(): Promise<void> {
       v-if="Slider"
       class="ipp-slider"
       :model-value="session.brushSize"
-      :min="4"
+      :min="1"
       :max="100"
       :step="1"
       aria-label="笔刷粗细"

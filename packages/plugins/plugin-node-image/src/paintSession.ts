@@ -17,7 +17,7 @@ export type PaintTool = 'brush' | 'rect' | 'erase'
 
 /** 绘制会话里每个节点的草稿与笔刷状态 */
 export interface PaintSessionState {
-  /** 笔刷大小（滑块 4~100，保存时按显示区宽换算成比例） */
+  /** 笔刷大小（滑块 1~100，保存时按显示区宽换算成比例） */
   brushSize: number
   /** 当前工具 */
   tool: PaintTool
