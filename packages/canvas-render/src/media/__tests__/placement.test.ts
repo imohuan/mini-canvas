@@ -66,9 +66,24 @@ describe('placeAdjacent：源节点旁的空位', () => {
     expect(placeAdjacent({ size, obstacles })).toEqual({ x: 660, y: 0 })
   })
 
-  it('极端窄视口（比节点还小）→ 仍返回可视区左上角，不跑到屏幕外', () => {
+  it('极端窄视口（比节点还小）→ 仍贴着源节点放，不压上去', () => {
+    // 视口装不下任何空位时，"塞进视口"会让新节点盖住源节点；这里宁可出屏也要留出关系。
     const p = placeAdjacent({ size, source, visible: { x: 0, y: 0, w: 200, h: 150 } })
-    expect(p).toEqual({ x: 0, y: 0 })
+    expect(p).toEqual({ x: 540, y: 100 })
+  })
+
+  /**
+   * 2026-10-30 实测：截图时画布刚被重灌，视口尺寸/缩放还没稳定（可视区只剩一小块），
+   * 旧算法为了"塞进视口"把新节点压在源视频身上（x=212，与源节点 200 重叠）。
+   * 用户口径：**先别叠**，宁可稍微出屏。屏内空位仍是第一优先。
+   */
+  it('视口装不下 → 宁可出屏也不压源节点（源节点也是障碍）', () => {
+    const tiny = { x: 0, y: 0, w: 300, h: 200 }
+    const p = placeAdjacent({ size, source, visible: tiny, obstacles: [source] })
+    const overlaps = p.x < source.x + source.w && p.x + size.w > source.x && p.y < source.y + source.h && p.y + size.h > source.y
+    expect(overlaps).toBe(false)
+    // 仍然优先贴着源节点右边
+    expect(p).toEqual({ x: 540, y: 100 })
   })
 
   it('尺寸非法（0 / NaN）→ 回落到安全默认尺寸，不产生 NaN 坐标', () => {

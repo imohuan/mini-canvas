@@ -164,8 +164,9 @@ function gridPoints(area: FlowRect, size: PlacementSize, preferred: PlacementPoi
  * 规则：
  * 1. 有源节点 → 先放源节点右边（同顶边）；右边放不下/被占 → 下方 → 左边 → 上方。
  * 2. 没有源节点 → 可视区中心；中心被占就在可视区里找最近空位。
- * 3. 全程避开已有节点矩形，并尽量完整落在可视区内。
- * 4. 极端情况（可视区比新节点还小）→ 夹在视口左上角，至少不跑到完全看不见的地方。
+ * 3. **避开已有节点是硬约束**：宁可稍微出屏，也不压在别人的卡片上。
+ * 4. 完整落在可视区是优先项：视口够大时一定选屏内空位；装不下才放宽到屏外。
+ * 5. 极端情况（可视区比新节点还小、且四周都被占满）→ 夹在视口内，至少不跑到完全看不见的地方。
  */
 export function placeAdjacent(input: PlacementInput): PlacementPoint {
   const size = normalizeSize(input.size)
@@ -201,21 +202,32 @@ export function placeAdjacent(input: PlacementInput): PlacementPoint {
     return { x: 0, y: 0 }
   })()
 
-  if (fits(preferred, size, area, obstacles)) return roundPoint(preferred)
+  /** 不压任何已有节点（硬约束） */
+  const clear = (point: PlacementPoint): boolean =>
+    !obstacles.some((obstacle) => rectsOverlap(rectAt(point, size), obstacle))
 
+  // 第一轮：屏内空位（最理想）
+  if (fits(preferred, size, area, obstacles)) return roundPoint(preferred)
   if (source) {
     for (const point of nearSourcePoints(source, size, gap, input.side ?? 'auto')) {
       if (fits(point, size, area, obstacles)) return roundPoint(point)
     }
   }
-
   if (area) {
     for (const point of gridPoints(area, size, preferred)) {
       if (fits(point, size, area, obstacles)) return roundPoint(point)
     }
-    return roundPoint(clampPoint(preferred, size, area))
   }
 
-  if (source) return roundPoint(preferred)
-  return { x: 0, y: 0 }
+  // 第二轮：视口装不下 → 只保证不压节点，允许落到屏外
+  if (clear(preferred)) return roundPoint(preferred)
+  if (source) {
+    for (const point of nearSourcePoints(source, size, gap, input.side ?? 'auto')) {
+      if (clear(point)) return roundPoint(point)
+    }
+  }
+
+  // 第三轮：确实无处可放（可视区被占满且比节点还小）→ 至少留在视口里
+  if (area) return roundPoint(clampPoint(preferred, size, area))
+  return roundPoint(preferred)
 }

@@ -614,7 +614,8 @@ export function createMediaCapability(ctx: Context): MediaCapability {
       const placed = placeAdjacent({
         size: targetSize,
         source: sourceRect,
-        obstacles: obstacles.filter((rect) => rect.id !== sourceId),
+        // 源节点也算障碍：没有这条，视口太小时网格搜索会把新节点压在源节点身上。
+        obstacles,
         visible: visibleRectOf(viewport),
         ...(opts.gap !== undefined ? { gap: opts.gap } : {}),
         ...(opts.side !== undefined ? { side: opts.side } : {}),

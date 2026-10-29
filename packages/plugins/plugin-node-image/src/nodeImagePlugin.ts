@@ -268,7 +268,9 @@ export function apply(ctx: Context) {
     size: { w: 320, h: 240 },
     // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考）。
     // 以前这里写 capacity:1 把它限成一条，用户实测报的「图片输入端口分明可以添加多条连接线」就是它。
-    inputs: [{ port: 'target', acceptsTypes: ['text', 'image'] }],
+    // 视频也收：截图就是“视频 → 新图片”这条连线（media.addNode 给了 sourceNodeId 会自动连边）。
+    // 图片本身不播放视频，它接的是“从这段视频里取出来的一帧”；这条边记的是来源关系。
+    inputs: [{ port: 'target', acceptsTypes: ['text', 'image', 'video'] }],
     outputs: [{ port: 'source', contentType: 'image' }],
     // 保留卡片边框（2026-10-12 用户口径翻案）：以前为"图片贴边"声明 frameless 关掉外壳那圈 1px 边框，
     // 但**空节点**和**白底图片**就与画布背景糊在一起了 —— 用户分不清节点边界在哪。

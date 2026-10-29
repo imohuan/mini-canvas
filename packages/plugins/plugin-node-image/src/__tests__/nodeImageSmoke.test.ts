@@ -33,6 +33,21 @@ function boot() {
 }
 
 describe('node-image 装配 smoke', () => {
+  /**
+   * 视频截图（media.addNode 给 sourceNodeId）会建一条「视频 → 新图片」的边。
+   * 输入口若不收 video，连接校验会拒掉这条边 —— 截图出来的图片节点就成了没来历的孤儿。
+   */
+  it('输入口接受视频：视频截图后 “视频 → 图片” 这条边能落下来', async () => {
+    const ctx = boot()
+    await ctx.start()
+    expect(ctx.get<DocService>('doc').types.get('image')?.inputs?.[0]?.acceptsTypes).toEqual([
+      'text',
+      'image',
+      'video',
+    ])
+    ctx.stop()
+  })
+
   it('插件可装配启动；image 服务上架、节点类型注册', async () => {
     const ctx = boot()
     await ctx.start()
