@@ -170,7 +170,8 @@ function placeVideoNode(
   return placeAdjacent({
     size,
     source: source ? rectOf(source) : null,
-    obstacles: nodes.filter((n) => n.id !== sourceId).map(rectOf),
+    // 源节点也进障碍：可视区算不出来时宁可出屏，也不能把新视频压在源视频上。
+    obstacles: nodes.map(rectOf),
     gap,
   })
 }

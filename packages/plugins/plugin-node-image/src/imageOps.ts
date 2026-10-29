@@ -576,7 +576,8 @@ function placeAcrossSource(
   return placeAdjacent({
     size,
     source: source ? rectOf(source) : null,
-    obstacles: nodes.filter((n) => n.id !== sourceId).map(rectOf),
+    // 源节点也进障碍：视口装不下时宁可出屏，也不能把新图压在原图上。
+    obstacles: nodes.map(rectOf),
     gap,
   })
 }
