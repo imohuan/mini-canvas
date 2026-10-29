@@ -2,12 +2,12 @@
 /**
  * DemoButton —— 画布顶部状态栏左侧的「旋转示例」按钮（外壳插槽 shell.status）。
  *
- * 点击 = 建两个相连图片节点 + 进入第二个的「旋转与镜像」模式（见 imageRotateDemo.ts）。
+ * 点击 = 建原图 + 新节点（连线）→ **新节点**进入「旋转与镜像」模式（见 imageRotateDemo.ts）。
  * 组件用宿主下发的 coreButton（与内置按钮同一套样式），不自绘。
  */
 import { type Component } from 'vue'
 import { useCanvasContext } from '@mini-canvas/canvas-render'
-import { createRotateDemoPair } from './imageRotateDemo'
+import { createRotateDemo } from './imageRotateDemo'
 
 const props = defineProps<{
   /** 宿主下发的默认按钮组件（SlotComposer sharedProps） */
@@ -42,8 +42,8 @@ function viewportCenter(): { x: number; y: number } | undefined {
 }
 
 function run(): void {
-  const second = createRotateDemoPair(ctx, viewportCenter())
-  if (!second) props.showToast?.('旋转示例：建节点失败（图片插件未启用？）')
+  const target = createRotateDemo(ctx, viewportCenter())
+  if (!target) props.showToast?.('旋转示例：建节点失败（图片插件未启用？）')
 }
 </script>
 
