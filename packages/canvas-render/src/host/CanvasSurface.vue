@@ -539,12 +539,15 @@ defineExpose({
   /* z-index 由模板 :style 绑 LAYERS.overlay 注入（唯一事实源）；此处不再写死 */
   overflow: hidden;
 }
-/* 控制栏层：铺满画布、不接事件（真实可点区域是控制栏自己）；零尺寸子容器承载 flow 坐标内容 */
+/* 控制栏层：铺满画布、不接事件（真实可点区域是控制栏自己）；零尺寸子容器承载 flow 坐标内容。
+   overflow 必须 visible：节点上/下状态栏都挂在这一层里（BaseNode 的 out:top / out:bottom 锚点），
+   卡片贴近视口边缘时状态栏会超出画布矩形 —— 裁掉就等于「下栏突然消失」（用户实测报过）。
+   本层 pointer-events:none，溢出内容不会挡住画布交互。 */
 .csurface-node-toolbar-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
 }
 .csurface-node-toolbars {
   position: absolute;

@@ -2,8 +2,8 @@
  * bottomBarOverlay —— 底栏「本体是否渲染」的纯判定（零 Vue / 零 DOM，Node 可测）。
  *
  * 历史：这个文件原先还包含「底栏浮层显隐」的压制条件（框选/多选/resize/拖动/抓手）。
- * 2026-10-29 重构后，底栏的**位置与显隐**收归主题插件的 NodeBottomSlotHost
- * （判定搬去 theme-default 的 nodeBottomSlot.ts），本文件只保留「栏内内容该不该出现」这一条 ——
+ * 2026-10-29 重构后，底栏的**位置与显隐**收归节点壳的 out:bottom 锚点
+ * （与 BaseNode 的 hideSlotBars 同一条规则），本文件只保留「栏内内容该不该出现」这一条 ——
  * 它属于 bottom-bar 自己的语义（没有动作的节点不画空壳），不是画布级规则。
  */
 export interface BottomBarShownInput {

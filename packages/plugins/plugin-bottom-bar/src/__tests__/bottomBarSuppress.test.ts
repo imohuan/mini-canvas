@@ -2,7 +2,7 @@
  * 底栏「本体是否渲染」的语义锁（快捷键门槛与模板 v-if 共用同一份判定）。
  *
  * 注：底栏浮层的压制条件（框选/多选/resize/拖动/抓手）已随 2026-10-29 重构搬到主题插件，
- * 对应测试见 plugin-theme-default 的 nodeBottomSlot 测试 —— 那里才是现在唯一的事实源。
+ * 对应测试见 plugin-theme-default 的 baseNodeSlotsRender 测试 —— 那里才是现在唯一的事实源。
  */
 import { describe, it, expect } from 'vitest'
 import { resolveBottomBarShown } from '../bottomBarOverlay'

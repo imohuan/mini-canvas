@@ -30,7 +30,7 @@ import NodeSelectOverlay from './NodeSelectOverlay.vue'
 export const BOTTOM_BAR_SLOT = 'bottomBar'
 
 /** 底栏所在的画布 UI 槽名（宿主 CanvasSurface 的 overlay 槽里按 order 渲染）。
- *  本插件**不再**往这里注册底栏宿主：位置职责已收归主题（NodeBottomSlotHost，唯一一份）。
+ *  本插件**不再**往这里注册底栏宿主：位置由节点壳的 out:bottom 锚点负责（主题挂解析面板）。
  *  保留这个常量是因为参考选择态 / 媒体预览等其它浮层仍挂在同一槽（见 apply 里的注册）。 */
 export const BOTTOM_BAR_SLOT_NAME = 'overlay'
 
@@ -280,7 +280,7 @@ export function apply(ctx: Context) {
   ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, id: 'bottom-bar/overlay' })
 
   // 底栏内容注册成 nodeToolbar 的「默认模式」—— 与裁剪/扩展等模式完全平等，
-  // 位置由主题的 NodeBottomSlotHost 负责（唯一一份），本插件不再自己摆浮层。
+  // 位置由节点壳的 out:bottom 锚点负责，本插件不再自己摆浮层。
   //
   // 为什么要等主题上架：nodeToolbar 是主题插件的服务。装配顺序不定（热装/清单顺序），
   // 所以这里注册不上就等 ctx:plugin-installed 再试一次，成功后解绑。

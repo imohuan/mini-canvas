@@ -26,7 +26,6 @@ import {
 } from "./components/node/nodeToolbarService";
 import NodeModeTopBar from "./components/node/NodeModeTopBar.vue";
 import NodeModeBottomBar from "./components/node/NodeModeBottomBar.vue";
-import NodeBottomSlotHost from "./components/node/NodeBottomSlotHost.vue";
 import {
   MULTI_RADIO_KEYS,
   MULTI_RADIO_SIZE_MAX,
@@ -724,26 +723,20 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   //
   // 渲染（两条腿，各自只有一个入口）：
   // - 上栏：NodeModeTopBar 挂在节点壳的 out:top 锚点（带主题的偏移配置 + 居中 + 反缩放）；
-  // - 下栏：NodeBottomSlotHost 挂在画布 overlay 槽（贴卡片下缘，避免被画布层 overflow 裁掉）。
+  // - 下栏：NodeModeBottomBar 挂在节点壳的 out:bottom 锚点（与上栏同一套定位）。
   // 两者都只做「问服务 → 渲染那一格」，模式/默认没有第二套渲染路径。
   const toolbarSvc = new NodeToolbarService();
   toolbarSvc.docPeek = ctx.get("doc") as unknown as NodeToolbarService["docPeek"];
   ctx.provide("nodeToolbar", toolbarSvc);
   void toolbarSvc;
 
-  // 下栏唯一的槽位宿主（默认底栏、裁剪面板、任何功能面板都从这里出来）。
-  // order 39：排在 bottom-bar 的其它画布浮层（参考选择态 41 / 媒体预览 42）之前。
-  ctx.slots.register("overlay", {
-    id: "theme-default/node-bottom-slot",
-    order: 39,
-    component: markRaw(NodeBottomSlotHost) as unknown,
-    meta: { title: "节点下状态栏" },
-  });
-
-
-  // 上栏唯一的解析面板：挂到所有节点类型的 out:top 锚点（位置/偏移/居中由壳负责）。
+  // 上/下两根栏各一个解析面板，都挂节点壳的锚点（同一套定位：偏移/居中/反缩放）。
+  //
   // 老的上传条（图片/视频/音频）不受影响：服务解析出「没注册」时透传宿主默认内容。
+  // 下栏同理：bottom-bar 把默认生成 UI 注册成 id='default' 的 bottomBar，解析出来就渲染它。
   ctx.nodes.attach("*", { region: "out:top", id: "theme-default/node-top-slot", component: NodeModeTopBar });
+  ctx.nodes.attach("*", { region: "out:bottom", id: "theme-default/node-bottom-slot", component: NodeModeBottomBar });
+
 
   // 渲染皮：nodeShell/edge/background/edgeDefaultType
   ctx.theme.register("nodeShell", BaseNode); // 完整节点壳（收编自 core）
@@ -829,7 +822,6 @@ export { NodeToolbarService } from "./components/node/nodeToolbarService";
 export type { NodeToolbarMode } from "./components/node/nodeToolbarService";
 export { default as NodeModeTopBar } from "./components/node/NodeModeTopBar.vue";
 export { default as NodeModeBottomBar } from "./components/node/NodeModeBottomBar.vue";
-export { default as NodeBottomSlotHost } from "./components/node/NodeBottomSlotHost.vue";
 
 /**
  * 渲染件出口（供其它插件复用同一套外观，避免各自手绘一份必然漂移）。
