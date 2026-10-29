@@ -1357,6 +1357,17 @@ function modelNote(m: { contextWindow?: number; isVision: boolean }): string {
   return m.isVision ? '视觉' : ''
 }
 
+/** 技能分栏封面：名字 hash 成稳定色相（demo 的彩色渐变封面同款思路，数据里没有 hue 就从名字算）。 */
+function skillCoverStyle(name: string): Record<string, string> {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 360
+  const hue2 = (hash + 42) % 360
+  return {
+    background: 'radial-gradient(circle at 82% 16%, rgb(255 255 255 / 0.3), transparent 34%), linear-gradient(145deg, hsl(' + hash + ' 66% 54%), hsl(' + hue2 + ' 62% 40%))',
+    color: 'rgb(255 255 255 / 0.94)',
+  }
+}
+
 const modelPlatformGroups = computed(() => {
   const order: Array<{ provider: string; label: string; count: number }> = []
   for (const m of usableModels.value) {
@@ -2478,7 +2489,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <div v-if="filteredSkills.length" class="ac-skill-tile-grid">
                         <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option"
                           :title="item.value" @click="insertRef(item, close)">
-                          <span class="ac-skill-cover" v-html="ICON_SKILL" aria-hidden="true"></span>
+                          <span class="ac-skill-cover" :style="skillCoverStyle(item.name)" v-html="ICON_SKILL" aria-hidden="true"></span>
                           <span class="ac-skill-tile-body">
                             <span class="ac-skill-name">{{ item.name }}</span>
                             <span class="ac-skill-desc">{{ item.value }}</span>
@@ -4944,6 +4955,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-model-card:hover,
 .ac-model-row:hover {
   background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.12);
 }
 
 .ac-model-card[aria-checked='true'],
@@ -4951,7 +4964,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-model-row[aria-checked='true'],
 .ac-model-row[aria-selected='true'] {
   border-color: var(--ui-accent, #0891b2);
-  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+  background: linear-gradient(180deg, var(--ui-accent-soft, rgb(8 145 178 / 0.12)), transparent);
 }
 
 .ac-model-brand {
@@ -5032,7 +5045,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   display: flex;
   flex-direction: column;
   flex: none;
-  width: 132px;
+  width: 152px;
   min-height: 0;
   border: 1px solid var(--ui-line, #363636);
   border-radius: 10px;
@@ -5258,8 +5271,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+  color: var(--ui-accent, #0891b2);
 }
 
 .ac-server-icon :deep(svg) {
