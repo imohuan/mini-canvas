@@ -52,10 +52,12 @@ describe('预览态（默认）', () => {
     expect(html).not.toContain('<textarea')
   })
 
-  it('预览态不给滚动条、也不抢滚轮（超出就裁掉是用户要的默认行为）', async () => {
+  it('预览态有滚动区并拦下画布滚轮，但内容区仍允许拖拽节点', async () => {
     const html = await render('n1', { text: '一段文字' })
-    expect(html).toContain('data-scrollable="false"')
-    expect(html).not.toContain('nowheel')
+    expect(html).toContain('data-scrollable="true"')
+    expect(html).toContain('class="text-node nowheel"')
+    // nowheel 只关掉画布滚轮；预览文字上没有 nodrag/nopan，所以按住正文仍能拖节点。
+    expect(html).not.toMatch(/class="preview[^"]*\b(?:nodrag|nopan)\b/)
   })
 
   it('双击进编辑的入口挂在内容上（预览态才绑）', async () => {
@@ -80,6 +82,13 @@ describe('编辑态（双击进入）', () => {
     // 编辑框仍然是"就地编辑"：透明底、没有输入框边框（v1 手感）
     expect(html).toContain('nodrag')
     expect(html).toContain('nopan')
+  })
+
+  it('编辑框不画第二根浏览器原生滚动条（与预览共用 hover 细条）', async () => {
+    beginEdit('n1')
+    const html = await render('n1', { text: '一段文字' })
+    // textarea 自带滚动条都走自绘细条：原生的宽/高为 0。
+    expect(html).not.toContain('scrollbar-width:thin')
   })
 
   it('编辑态按节点隔离：另一个节点还是预览态', async () => {

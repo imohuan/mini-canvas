@@ -23,9 +23,9 @@ export type TextContentMode = 'preview' | 'skeleton' | 'skeleton-mini' | 'editin
 /** 当前内容该怎么渲染（模板直接照它分叉，不再自己判条件） */
 export interface TextContentSpec {
   mode: TextContentMode
-  /** 是否允许滚动（只有编辑态给滚动条；缩略态一律裁掉） */
+  /** 是否允许滚动（预览与编辑可滚；缩略态一律裁掉） */
   scrollable: boolean
-  /** 是否需要把滚轮从画布手里抢过来（只有编辑态抢） */
+  /** 是否需要把滚轮从画布手里抢过来（预览与编辑抢，缩略态还给画布） */
   blockCanvasWheel: boolean
 }
 
@@ -45,6 +45,10 @@ export interface TextContentInput {
  * 算出当前该用哪种内容形态。
  *
  * 优先级：编辑态 > 缩略横条（更小档）> 缩略横条 > 全文预览。
+ *
+ * 预览态也可滚：用户 2026-10-29 对照参考稿确认「不选中、不编辑也能滚」，
+ * 所以滚动与编辑解耦。预览仍**不弹** textarea，双击才编辑；
+ * 拖拽节点由 nodrag/nopan 的缺失 + nowheel 只拦 wheel 保证（见 TextContent 模板）。
  * zoom 非法（NaN / 非有限数）时按常态处理 —— 宁可正常显示，也不要把内容变成占位。
  */
 export function resolveTextContentSpec(input: TextContentInput): TextContentSpec {
@@ -53,7 +57,7 @@ export function resolveTextContentSpec(input: TextContentInput): TextContentSpec
   const zoom = Number.isFinite(input.zoom) ? input.zoom : Number.POSITIVE_INFINITY
   if (zoom < input.iconZoom) return { mode: 'skeleton-mini', scrollable: false, blockCanvasWheel: false }
   if (zoom < input.fullZoom) return { mode: 'skeleton', scrollable: false, blockCanvasWheel: false }
-  return { mode: 'preview', scrollable: false, blockCanvasWheel: false }
+  return { mode: 'preview', scrollable: true, blockCanvasWheel: true }
 }
 
 /** 该形态是不是"骨架横条"（模板要拿它分叉） */

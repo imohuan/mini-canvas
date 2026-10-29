@@ -18,11 +18,11 @@ import { isSkeletonMode, resolveLodThresholds, resolveTextContentSpec } from '..
 const base = { editing: false, zoom: 1, fullZoom: 0.5, iconZoom: 0.18 }
 
 describe('文本节点内容状态', () => {
-  it('常态缩放 → 预览：只显示内容，超出裁掉，不滚也不拦滚轮', () => {
+  it('常态缩放 → 预览：可以滚动，并把滚轮留在文字里（不去缩放画布）', () => {
     const spec = resolveTextContentSpec(base)
     expect(spec.mode).toBe('preview')
-    expect(spec.scrollable).toBe(false)
-    expect(spec.blockCanvasWheel).toBe(false)
+    expect(spec.scrollable).toBe(true)
+    expect(spec.blockCanvasWheel).toBe(true)
   })
 
   it('编辑态 → 给滚动条，并且把滚轮拦下来（不去缩放画布）', () => {
@@ -40,7 +40,7 @@ describe('文本节点内容状态', () => {
 })
 
 describe('缩放分级（LOD）：缩略两档都是骨架横条', () => {
-  it('缩到中等 → skeleton（骨架横条），仍是只读、不滚', () => {
+  it('缩到中等 → skeleton（骨架横条），只剩横条、没有可以滚的真字', () => {
     const spec = resolveTextContentSpec({ ...base, zoom: 0.3 })
     expect(spec.mode).toBe('skeleton')
     expect(spec.scrollable).toBe(false)
