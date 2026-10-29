@@ -12,6 +12,7 @@
 import type { Context } from '@mini-canvas/canvas-base'
 import { mediaCapabilityOf } from '@mini-canvas/canvas-render'
 import { publishPositions, toPixelRect, unitCells } from './gridSplit'
+import { placeStoryboardAt } from './storyboard'
 
 /** 画布默认格宽：与图片节点默认卡片宽一致（320），视觉上就是"一排小图" */
 const PUBLISH_CELL_W = 320
@@ -22,6 +23,8 @@ const PUBLISH_SOURCE_GAP = 100
 
 /** 宿主需要提供的服务形状（按名取，不 import 具体实现） */
 interface PublishDeps {
+  /** 宿主上下文（分镜组落点用：doc / nodeLayout / viewport 按名取） */
+  ctx: Context
   /** 读节点 data */
   getNodeData(id: string): Record<string, unknown> | undefined
   /** 读节点画布绝对矩形（含尺寸） */
@@ -61,6 +64,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     ctx.tryGet<{ createGroup?(ids: string[]): string | null }>('group')
 
   return {
+    ctx: ctx as Context,
     getNodeData: (id) => doc.getNode(id)?.data,
     getNodeRect: (id) => {
       const rect = layout?.getNodeRect(id)
@@ -288,7 +292,9 @@ export async function publishCells(
   // storyboard：建分镜组节点（槽位数 = 行×列），切片按格子索引写进槽
   const slots: Array<string | null> = new Array(rows * cols).fill(null)
   for (const [index, cell] of sliced) slots[index] = cell.ref
-  const boardId = deps.createNode('storyboard', { x: 0, y: 0 }, {
+  // 分镜组节点落点：源图右侧优先（与发布图片节点同一套避让语义），不再硬放 (0,0)
+  const boardAt = placeStoryboardAt({ ctx: deps.ctx, sourceId: nodeId })
+  const boardId = deps.createNode('storyboard', boardAt, {
     rows,
     cols,
     slots,

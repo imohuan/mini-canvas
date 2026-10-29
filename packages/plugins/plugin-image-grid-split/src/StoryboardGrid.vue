@@ -8,7 +8,7 @@
  * 拖拽语义（简化版）：按下有图格 → 移到另一格松开 → 两格交换（含空格）。
  * 不做跨节点拖拽（那是完整版分镜组的事，当前版本只在组内换）。
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { readStoryboard, swapSlots } from './storyboard'
 
@@ -86,10 +86,53 @@ function onCellPointerUp(index: number): void {
   doc?.updateNodeData?.(props.id, { slots: nextSlots })
 }
 
-/** 每格的显示地址：目前直接用资源引用当地址（云端是受控路由、本地是重建地址）。
- *  精细 resolve 由后续版本接（与 ImageContent 的 resolveImageSrc 同一条路）。 */
+/** 资源服务里本组件用到的最小形状（与 ImageContent 的 resolveImageSrc 同一条路） */
+interface ResourcePortLike {
+  resolve(ref: string): Promise<string | undefined>
+}
+
+/** 槽位引用 → 可显示地址（解析完成后替换；resolve 不可用时回落引用本身） */
+const resolvedUrls = reactive(new Map<string, string>())
+/** 作废标记：快速换槽位时，先发的 resolve 不许覆盖后发的 */
+let resolveToken = 0
+
+async function refreshResolvedUrls(): Promise<void> {
+  const token = ++resolveToken
+  const slots = board.value?.slots ?? []
+  const current = new Set(slots.filter((s): s is string => Boolean(s)))
+  // 槽位里已不存在的旧解析结果顺手清掉（换图/换格后 Map 不无限增长）
+  for (const key of resolvedUrls.keys()) if (!current.has(key)) resolvedUrls.delete(key)
+  const resources = ctx.tryGet<ResourcePortLike | undefined>('resources')
+  for (const ref of current) {
+    if (resolvedUrls.has(ref)) continue
+    let url = ref
+    if (resources && typeof resources.resolve === 'function') {
+      try {
+        url = (await resources.resolve(ref)) || ref
+      } catch {
+        url = ref // 解析失败按“取不到”处理：先显示引用兜底，不渲染失败
+      }
+    }
+    if (token !== resolveToken) return
+    resolvedUrls.set(ref, url)
+  }
+}
+
+watch(
+  () => board.value?.slots,
+  () => {
+    void refreshResolvedUrls()
+  },
+  { immediate: true, deep: true },
+)
+onBeforeUnmount(() => {
+  resolveToken++
+})
+
+/** 每格显示地址：优先 resolve 出来的可显示地址；解析没回来时回落引用本身（与旧渲染一致） */
 function slotSrc(ref: string | null): string {
-  return ref ?? ''
+  if (!ref) return ''
+  return resolvedUrls.get(ref) ?? ref
 }
 </script>
 
