@@ -226,7 +226,7 @@ const barService = ctx.tryGet<{
 const activeMode = computed<{ nodeId: string; actionId: string } | undefined>(() => {
   void modeTick.value // 订阅点：插件/底栏切换模式后 bump
   try {
-    return barService?.modeOf(props.id)
+    return barService?.modeOf?.(props.id)
   } catch {
     // 测试桩 / 极简宿主可能只实现部分接口：按「无功能模式」处理，不影响其余功能
     return undefined
@@ -1356,6 +1356,87 @@ function hideCardTip(tile: RefTile): void {
 }
 
 /**
+ * 悬浮预览（用户 2026-10-29 重构：hover 卡片 ≈600ms 在**卡片上方**弹出大图/视频，
+ * 点击预览才进全屏；移开延迟 ~300ms 关闭，移回预览则取消关闭）。
+ *
+ * 为什么不做在卡片本体上：卡片只有 48px，预览需要大图 —— 独立浮层（teleport body）
+ * 才能压过其它 UI 且不参与拖拽布局。
+ */
+const previewTile = ref<RefTile | null>(null)
+const previewPos = ref({ left: 0, top: 0 })
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+let previewCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
+  cancelPreviewClose()
+  if (previewTimer) clearTimeout(previewTimer)
+  previewTimer = setTimeout(() => {
+    // 只对有「可看内容」的卡出预览（图片/视频帧）；音频/文本没有画面
+    if (!cardImageOf(tile) && tile.kind !== 'video') return
+    previewTile.value = tile
+    // 预览宽 240：水平夹进视口；默认在卡片上方 8px
+    const width = 240
+    const left = Math.min(Math.max(8, anchorRect.left + anchorRect.width / 2 - width / 2), window.innerWidth - width - 8)
+    const top = anchorRect.top - 8
+    previewPos.value = { left, top }
+  }, 600)
+}
+function cancelPreviewSchedule(): void {
+  if (previewTimer) { clearTimeout(previewTimer); previewTimer = null }
+}
+function schedulePreviewClose(): void {
+  if (previewCloseTimer) clearTimeout(previewCloseTimer)
+  previewCloseTimer = setTimeout(() => { previewTile.value = null }, 300)
+}
+function cancelPreviewClose(): void {
+  if (previewCloseTimer) { clearTimeout(previewCloseTimer); previewCloseTimer = null }
+}
+function closePreviewNow(): void {
+  cancelPreviewSchedule()
+  cancelPreviewClose()
+  previewTile.value = null
+}
+
+/** 点击悬浮预览 → 进全屏（复用既有 MediaViewer 链路） */
+function openFullscreenFromPreview(tile: RefTile): void {
+  closePreviewNow()
+  openCard({ id: tile.nodeId ?? tile.key, name: tile.label, kind: tile.kind ?? 'image', ...(tile.url ? { url: tile.url } : {}) })
+}
+
+/** 播放音频（用户 2026-10-29：音频卡 hover 中间出播放键） */
+let previewAudio: HTMLAudioElement | null = null
+function toggleAudioPlay(tile: RefTile): void {
+  if (!tile.url) return
+  // 换卡或重复点击同一张 = 停止
+  const same = previewAudio && previewAudio.dataset.tile === tile.key
+  stopPreviewAudio()
+  if (same) return
+  const a = new Audio(tile.url)
+  a.dataset.tile = tile.key
+  void a.play().catch(() => { /* 自动播放被拦等：忽略 */ })
+  previewAudio = a
+}
+function stopPreviewAudio(): void {
+  if (previewAudio) { previewAudio.pause(); previewAudio = null }
+}
+onBeforeUnmount(() => stopPreviewAudio())
+
+/**
+ * @ 按钮（用户 2026-10-29 重构：卡片 hover 出 @ 键，点击把当前标签插进输入框）。
+ */
+function insertTileChip(tile: RefTile): void {
+  const item: ResourceItem = {
+    id: tile.key,
+    name: tile.label,
+    category: '素材',
+    ...(tile.kind ? { chipKind: tile.kind } : {}),
+    ...(tile.url ? { url: tile.url } : {}),
+    ...(tile.value ? { value: tile.value } : {}),
+  }
+  editorComponentRef.value?.insertResource?.(item)
+}
+
+/**
  * 卡片行拖拽排序（用户 2026-10-28：序号角标只做观察，排序**不影响**标签绑定）。
  *
  * 落盘的是**标签 id 序列**（ref-node:<id> / ref-name:<名>）：它只决定发给模型的先后，
@@ -2157,8 +2238,8 @@ function onGlobalLeave(el: Element): void {
         :class="{ 'is-pending': tile.pending, 'is-invalid': tile.invalid }"
         :style="tile.pending ? 'cursor: pointer' : ''"
         :aria-label="cardTooltip(tile)"
-        @pointerenter="showCardTip(tile)"
-        @pointerleave="hideCardTip(tile)"
+        @pointerenter="(ev: PointerEvent) => { showCardTip(tile); schedulePreview(tile, (ev.currentTarget as HTMLElement).getBoundingClientRect()) }"
+        @pointerleave="(ev: PointerEvent) => { hideCardTip(tile); cancelPreviewSchedule(); schedulePreviewClose() }"
         @click.stop="tile.pending ? pickSlotFile(tile) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
@@ -2242,6 +2323,32 @@ function onGlobalLeave(el: Element): void {
               class="nb-card-namebar-dur"
             >{{ formatVideoDuration(tile.duration) }}</span>
           </span>
+        </span>
+        <!--
+          hover 操作层（用户 2026-10-29 重构）：
+          右上角 = 删除（只断线）；右下角 = @（插标签）；音频中间 = 播放。
+          只在 hover 时出现；平时看不到。
+        -->
+        <span v-if="!tile.pending && !tile.invalid" class="nb-card-actions" aria-hidden="false">
+          <!-- 音频：中间播放键（点击播放/停止） -->
+          <button
+            v-if="tile.kind === 'audio'"
+            class="nb-card-act nb-card-play-act"
+            type="button"
+            :aria-label="'播放音频 ' + tile.label"
+            @pointerdown.stop
+            @click.stop="toggleAudioPlay(tile)"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
+          </button>
+          <!-- 右下角 @：把当前标签插进输入框 -->
+          <button
+            class="nb-card-act nb-card-at"
+            type="button"
+            :aria-label="'插入标签 @' + tile.label"
+            @pointerdown.stop
+            @click.stop="insertTileChip(tile)"
+          >@</button>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
         <!-- 键盘排序（无障碍 + 自动化可测）：聚焦卡片后 Ctrl+←/→ 移动 -->
