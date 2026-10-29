@@ -8,7 +8,7 @@
  *    （触发器 = 主题 button；二级菜单是独立浮层，不嵌进主面板）；
  * ③ 功能模式：**同一根顶栏、同一根底栏换内容**（不是叠加第二套栏）：
  *    - 顶栏：入口组件自己按会话切换成功能按钮（还在同一个按钮组里）；
- *    - 底栏：nodeToolbar 服务的模式 bottomBar —— 进入模式后主题渲染器整根替换；
+ *    - 底栏：nodeToolbar 服务的模式 bottomBar —— 进入模式后下栏整格替换；
  *    两边共享 nodeToolbar 服务（主题件）上的会话（enter / exit），同步开合。
  *
  * 卸载本插件：条目自动回收，画布回原样。
@@ -34,7 +34,7 @@ export function apply(ctx: Context): void {
     component: markRaw(DemoTopEntry),
   })
 
-  // ② 功能模式：注册到 nodeToolbar（主题件）。进入后底栏整根换成 DemoFeaturePanel。
+  // ② 功能模式：注册到 nodeToolbar（主题件）。进入后下栏整格换成 DemoFeaturePanel。
   const registerMode = (): boolean => {
     const svc = ctx.tryGet<{
       registerMode?(mode: unknown): void
@@ -44,7 +44,7 @@ export function apply(ctx: Context): void {
       id: 'ui-demo/feature',
       types: ['image'],
       title: '功能演示',
-      description: '演示：底栏换成该功能的 UI（同一根栏，不叠加）',
+      description: '演示：下栏换成该功能的 UI（同一格，不叠加）',
       bottomBar: markRaw(DemoFeaturePanel),
     })
     return true

@@ -46,12 +46,15 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('展示段注册：in + out:top（底栏搬进 plugin-bottom-bar，本包不再自占 out:bottom）', async () => {
+  it('展示段注册：in + over:inset；上栏改由 nodeToolbar 的默认模式提供', async () => {
     const ctx = boot()
     await ctx.start()
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
     expect(resolveSegment(registry, 'image', 'in')).toBeTruthy()
-    expect(resolveSegment(registry, 'image', 'out:top')).toBeTruthy()
+    expect(resolveSegment(registry, 'image', 'over:inset')).toBeTruthy()
+    // 2026-10-29 重构：上栏不再走节点类型的 out:top 段，而是注册成 nodeToolbar 的默认模式 ——
+    // 这样「默认 / 裁剪 / 扩展」共用同一条解析链路，不会出现两套栏。
+    expect(resolveSegment(registry, 'image', 'out:top')).toBeUndefined()
     expect(resolveSegment(registry, 'image', 'out:bottom')).toBeUndefined()
     // 壳没注册的区域不该凭空多出来
     expect(resolveSegment(registry, 'image', 'title')).toBeUndefined()

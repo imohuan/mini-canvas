@@ -174,34 +174,44 @@ export function apply(ctx: Context) {
   // 因此这里只剩一件事：把图片的**操作实现**装配好，供下面的命令使用。
   const ops = createImageOps(ctx)
 
-  // 1.6 裁剪 / 扩展 = 节点「功能模式」（用户口径 2026-10-29 重构）：
-  //     「每一套模式都有自己的顶部或底部状态栏」。
+  // 1.6 两根状态栏都注册进 nodeToolbar（用户口径 2026-10-29 重构）：
   //
-  // 做法与 plugin-ui-demo 同构：**按服务名**拿 nodeToolbar（主题件，见 theme-default 的
-  // nodeToolbarService），注册一套模式 = 顶栏 + 底栏组件。进入模式后两根栏**整体**替换，
-  // 默认内容（bottom-bar 的生成 UI）自动让位 —— 不需要 bottom-bar 知道任何模式概念。
+  //   - 默认模式：上栏 = 图片自己的操作条（上传/裁剪/扩展 + 插件插进来的按钮），
+  //     下栏不声明（= 沿用 bottom-bar 注册的默认生成 UI）；
+  //   - 裁剪/扩展模式：只接管**下栏**（顶栏的确认/取消仍由 ImageTopToolbar 按会话自己切）。
   //
-  // 不 import @mini-canvas/plugin-bottom-bar / plugin-theme-default —— 插件之间不互相
+  // 为什么上栏要注册成「默认模式」而不是继续用节点类型的 out:top 段：
+  // 状态栏的内容必须走同一条解析链路（nodeToolbar），否则「默认 / 功能模式」两套入口会打架。
+  // 节点类型不再声明 out:top 段，避免同一个位置出现两份内容。
+  //
+  // 不 import @mini-canvas/plugin-theme-default / plugin-bottom-bar —— 插件之间不互相
   // import 是硬规则；服务名与 ui 目录名才是跨插件公共契约。
-  const registerEditModes = (): boolean => {
+  const registerToolbar = (): boolean => {
     const svc = ctx.tryGet<{
       registerMode?(mode: unknown): void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
+    svc.registerMode({
+      id: 'default',
+      types: ['image'],
+      title: '图片默认状态栏',
+      topBar: ImageTopToolbar,
+      order: 100,
+    })
     svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: ImageCropPanel })
     svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: ImageExpandPanel })
     return true
   }
-  if (!registerEditModes()) {
-    // 底栏插件还没装（装配顺序在后/热装）：等它上架再注册一次
+  if (!registerToolbar()) {
+    // 主题还没装（装配顺序在后/热装）：等它上架再注册一次
     const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerEditModes()) off.dispose()
+      if (registerToolbar()) off.dispose()
     })
   }
 
-  // 1.7 编辑态 ↔ 底栏模式自动同步（同一份会话，两处 UI 不会各说各话）：
-  //     进裁剪/扩展 → 底栏切到对应 panel；确认/取消 → 退出模式回到默认生成 UI。
-  //     监听放在这里而不是 cropSession 内部：那份是纯状态，只负责"记着自己正在编辑"。
+  // 1.7 编辑态 ↔ 状态栏模式自动同步（同一份会话，两处 UI 不会各说各话）：
+  //     进裁剪/扩展 → 下栏切到对应 panel；确认/取消 → 退出模式回到默认生成 UI。
+  //     监听放在这里而不是 cropSession 内部：那份是纯状态，只负责「记着自己正在编辑」。
   const offEditMode = onEditModeChange((nodeId, mode) => {
     const svc = ctx.tryGet<{
       enter?(nodeId: string, modeId: string): void
@@ -246,7 +256,6 @@ export function apply(ctx: Context) {
     loadingDefaultSize: true,
     in: ImageContent,
     segments: {
-      'out:top': ImageTopToolbar,
       // 编辑浮层（裁剪框/扩展框）画在**卡片外面**：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
       // 扩展框还要能画到卡片之外（扩出来的部分本来就在原图外面），只有这一层做得到。
