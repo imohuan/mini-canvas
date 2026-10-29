@@ -100,12 +100,15 @@ export async function listAssets(): Promise<AssetSummary[]> {
 /** 上传资产：字节直传后台（后台按内容落盘并登记 source='upload'） */
 export async function uploadAsset(name: string, bytes: ArrayBuffer | Blob, folderId?: string): Promise<AssetSummary> {
   const q = '?name=' + encodeURIComponent(name) + (folderId ? '&folderId=' + encodeURIComponent(folderId) : '')
-  const res = await fetch('/api/assets' + q, {
+  /*
+   * 走统一的 req 出口（带管理令牌、统一错误文案）。以前这里裸 fetch：
+   * 后台把资产上传纳入写接口鉴权后，这条会 403，而且报错只说「上传失败」。
+   */
+  const body = await req<{ ok?: boolean; asset?: AssetSummary; error?: string }>('/api/assets' + q, {
     method: 'POST',
     body: bytes as BodyInit,
   })
-  const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; asset?: AssetSummary }
-  if (!res.ok || body?.ok === false || !body.asset) throw new Error(body?.error || '上传失败（HTTP ' + res.status + '）')
+  if (!body?.asset) throw new Error(body?.error || '上传失败')
   return body.asset
 }
 

@@ -6,7 +6,7 @@
  * 看不出是没带令牌。这里钉住：写请求带上了，且没破坏原来的头。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { duplicateCanvas, renameCanvas, deleteCanvas, listCanvases } from '../composables/projectsApi'
+import { duplicateCanvas, renameCanvas, deleteCanvas, listCanvases, uploadAsset } from '../composables/projectsApi'
 
 interface Call {
   url: string
@@ -45,6 +45,14 @@ function headersOf(i?: RequestInit): Record<string, string> {
 }
 
 describe('projectsApi：写请求带管理令牌', () => {
+  it('★ 上传资产（POST /api/assets）带令牌', async () => {
+    stubFetch({ ok: true, asset: { id: 'a1', name: 'a.png', createdAt: 1 } })
+    await uploadAsset('a.png', new Blob(['x']))
+    expect(calls[0]!.url).toBe('/api/assets?name=a.png')
+    expect(calls[0]!.init?.method).toBe('POST')
+    expect(headersOf(calls[0]!.init)['x-admin-token']).toBe('tok-abc')
+  })
+
   it('★ 复制画布（POST .../duplicate）带令牌，content-type 还在', async () => {
     stubFetch()
     await duplicateCanvas('c1')
