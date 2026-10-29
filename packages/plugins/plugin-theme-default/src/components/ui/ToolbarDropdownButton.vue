@@ -58,8 +58,12 @@ const open = ref(false)
 const openSubKey = ref<string | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 
-/** 二级菜单与主菜单卡片之间的固定间隔（px） */
-const SUB_GAP = 8
+/**
+ * 二级菜单与主菜单卡片之间的固定间隔（px）。
+ * 用户口径 2026-10-29（带截图）：8px 看着快贴边了，先到 16 再收回到 12（定稿 12）。
+ * 两张卡片都是浮层，间隔就是它们之间的空气，不参与任何布局。
+ */
+const SUB_GAP = 12
 
 /** 子菜单是独立浮层：定位以**主菜单卡片右边**为锚点，并留出间隔 */
 const subPos = ref({ left: 0, top: 0 })

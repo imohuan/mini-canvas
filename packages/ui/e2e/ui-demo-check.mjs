@@ -88,7 +88,7 @@ const sub = await page.evaluate(() => {
   }
 })
 check('二级菜单是独立浮层（position:fixed 且在主面板右侧之外）', !!sub && sub.position === 'fixed' && sub.outsideMain, JSON.stringify(sub))
-check('二级菜单与主菜单之间留有间隔（8px 左右，不贴死）', !!sub && sub.gapPx >= 6 && sub.gapPx <= 12, JSON.stringify(sub))
+check('二级菜单与主菜单之间留有明显间隔（12px 定稿）', !!sub && sub.gapPx >= 10 && sub.gapPx <= 15, JSON.stringify(sub))
 check('二级菜单有自己的面板与子项', !!sub && sub.ownPanel && sub.rows.includes('子项 1'), JSON.stringify(sub))
 
 // 进入功能模式
