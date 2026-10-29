@@ -240,13 +240,21 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   border-radius: 16px;
   background: var(--dock);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  overflow: visible;
 }
-.film {
+.film-slot {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
-  overflow: hidden;
+  padding: 0;
+  overflow: visible;
+}
+.film {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
   border-radius: 6px;
   background: var(--track);
   touch-action: none;
@@ -295,6 +303,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   bottom: 0;
   z-index: 3;
   min-width: 1px;
+  max-width: none;
   border-radius: 3px;
   background: rgba(59, 130, 246, 0.055);
   box-shadow: inset 0 0 0 3px var(--blue);
@@ -352,6 +361,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   white-space: nowrap;
   text-overflow: ellipsis;
   pointer-events: none;
+  transition: opacity 0.14s ease;
 }
 .film-empty {
   position: absolute;
@@ -380,18 +390,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   transform: translate3d(-1px, 0, 0);
   will-change: transform;
 }
-.playhead::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
-}
 .playhead.is-visible { opacity: 1; }
 .dock-btn {
   align-self: center;
@@ -418,18 +416,155 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), 0 8px 20px rgba(37, 99, 235, 0.28);
 }
 .hint {
+  flex: 1 1 auto;
   margin: 0 2px;
   color: var(--faint);
   font-size: 11.5px;
   line-height: 1.65;
 }
 .hint b { color: #9ba1ac; font-weight: 600; }
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.style-switch {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.style-label {
+  padding: 0 5px 0 4px;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+.style-btn {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  color: #7f8490;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.style-btn:hover { color: #d9dde4; }
+.style-btn.is-on { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
+
+/* 第二套：蓝色胶囊外框 + 可以伸出胶片边界的两只耳朵。 */
+.app[data-style="capsule"] .film-slot { padding: 0 16px; }
+.app[data-style="capsule"] .selection {
+  z-index: 4;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  border: 8px solid var(--blue);
+  box-sizing: border-box;
+}
+.app[data-style="capsule"] .selection.is-dragging,
+.app[data-style="capsule"] .selection:hover { border-color: var(--blue); }
+.app[data-style="capsule"] .shade-left,
+.app[data-style="capsule"] .shade-right { background: rgba(3, 5, 8, 0.58); }
+.app[data-style="capsule"] .frames { border-radius: 8px; }
+.app[data-style="capsule"] .selection-content {
+  position: absolute;
+  inset: -1px;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background-position: center;
+  background-size: cover;
+  pointer-events: none;
+}
+.app[data-style="capsule"] .selection-content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 6, 9, 0.16);
+}
+.app[data-style="capsule"] .shade { z-index: 2; }
+.app[data-style="capsule"] .frames { z-index: 1; }
+.app[data-style="capsule"] .handle {
+  top: 0;
+  bottom: 0;
+  z-index: 9;
+  width: var(--ear-width, 19px);
+  border: 1px solid var(--blue);
+  border-radius: var(--ear-width, 18px);
+  background: var(--blue);
+  box-shadow: none;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+.app[data-style="capsule"] .handle-left { left: calc(-1 * var(--ear-width, 18px) + 1px); }
+.app[data-style="capsule"] .handle-right { right: calc(-1 * var(--ear-width, 18px) + 1px); }
+.app[data-style="capsule"] .film-slot { padding-top: 22px; }
+.app[data-style="capsule"] .film { height: calc(100% - 22px); }
+.app[data-style="capsule"] .frames { border-radius: 8px; }
+.app[data-style="capsule"] .film-empty { border-radius: 8px; }
+.app[data-style="capsule"] .handle-left::before,
+.app[data-style="capsule"] .handle-right::before {
+  content: none;
+}
+.app[data-style="capsule"] .handle::after {
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 22px;
+  margin-top: -11px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: none;
+  opacity: 0.92;
+}
+.app[data-style="capsule"] .film-slot {
+  padding-left: var(--ear-width, 18px);
+  padding-right: var(--ear-width, 18px);
+}
+.app[data-style="capsule"] .clip-length {
+  z-index: 10;
+  max-width: calc(100% - 72px);
+  padding: 8px 12px;
+  border-color: transparent;
+  border-radius: 10px;
+  background: rgba(20, 21, 24, 0.94);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+}
+.app[data-style="capsule"] .clip-length.is-condensed {
+  padding: 10px 11px;
+  max-width: 100px;
+  font-size: 13px;
+}
+.clip-length.is-above {
+  top: 0;
+  transform: translate(-50%, calc(-100% - 5px));
+  padding: 6px 9px;
+  font-size: 12px;
+}
+.app[data-style="capsule"] .clip-length.is-above {
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+}
 .file-input { display: none; }
 @media (max-width: 640px) {
   .app { width: calc(100vw - 22px); padding: 12px 0 14px; gap: 9px; }
   .stage { border-radius: 11px; }
   .stage-empty::before { inset: 11px; }
   .dock { height: 88px; padding: 7px; gap: 6px; border-radius: 12px; }
+  .app[data-style="capsule"] .film-slot { padding: 20px 12px 0; }
+  .app[data-style="capsule"] .film { height: calc(100% - 20px); }
+  .app[data-style="capsule"] .handle { top: 0; bottom: 0; --ear-width: 16px; }
+  .app[data-style="capsule"] .handle-left { left: calc(-1 * var(--ear-width, 16px) + 1px); }
+  .app[data-style="capsule"] .handle-right { right: calc(-1 * var(--ear-width, 16px) + 1px); }
   .film { border-radius: 5px; }
   .dock-btn { width: 44px; height: 44px; border-radius: 12px; }
   .dock-btn svg { width: 21px; height: 21px; }
@@ -438,6 +573,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   .file-meta { display: none; }
   .stage-status { top: 46px; font-size: 10.5px; }
   .hint { font-size: 10.5px; }
+  .foot { flex-wrap: wrap; gap: 6px; }
+  .style-switch { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
@@ -482,17 +619,20 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   </div>
 
   <div class="dock" aria-label="片段选择栏">
-    <div class="film" id="film" role="group" aria-label="视频帧与片段选择">
-      <div class="frames" id="frames" aria-hidden="true"></div>
-      <div class="shade shade-left" id="shadeLeft"></div>
-      <div class="shade shade-right" id="shadeRight"></div>
-      <div class="selection" id="selection" hidden>
-        <div class="handle handle-left" id="handleLeft" role="slider" tabindex="0" aria-label="片段起点" aria-orientation="horizontal" aria-valuemin="0"></div>
-        <div class="handle handle-right" id="handleRight" role="slider" tabindex="0" aria-label="片段终点" aria-orientation="horizontal" aria-valuemin="0"></div>
+    <div class="film-slot">
+      <div class="film" id="film" role="group" aria-label="视频帧与片段选择">
+        <div class="frames" id="frames" aria-hidden="true"></div>
+        <div class="shade shade-left" id="shadeLeft"></div>
+        <div class="shade shade-right" id="shadeRight"></div>
+        <div class="selection" id="selection" hidden>
+          <div class="selection-content" id="selectionContent" aria-hidden="true"></div>
+          <div class="handle handle-left" id="handleLeft" role="slider" tabindex="0" aria-label="片段起点" aria-orientation="horizontal" aria-valuemin="0"></div>
+          <div class="handle handle-right" id="handleRight" role="slider" tabindex="0" aria-label="片段终点" aria-orientation="horizontal" aria-valuemin="0"></div>
+        </div>
+        <div class="playhead" id="playhead" aria-hidden="true"></div>
+        <span class="clip-length" id="clipLength" hidden>0.00 s</span>
+        <div class="film-empty" id="filmEmpty">上传视频后，这里会铺满来自视频的每一帧</div>
       </div>
-      <div class="playhead" id="playhead" aria-hidden="true"></div>
-      <span class="clip-length" id="clipLength" hidden>0.00 s</span>
-      <div class="film-empty" id="filmEmpty">上传视频后，这里会铺满来自视频的每一帧</div>
     </div>
     <button class="dock-btn" id="snapBtn" type="button" aria-pressed="false" title="开启整秒吸附" aria-label="开启整秒吸附">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -509,7 +649,14 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       </svg>
     </button>
   </div>
-  <p class="hint">拖<b>蓝色边框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后，端点会吸附到整秒，循环打开后只播放选中的片段。</p>
+  <div class="foot">
+    <p class="hint">拖<b>蓝色框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后，端点会吸附到整秒，循环打开后只播放选中的片段。</p>
+    <div class="style-switch" role="group" aria-label="选区样式">
+      <span class="style-label">样式</span>
+      <button class="style-btn" id="styleEdge" type="button" aria-pressed="true">细边</button>
+      <button class="style-btn" id="styleCapsule" type="button" aria-pressed="false">胶囊</button>
+    </div>
+  </div>
 </div>
 <input class="file-input" id="fileInput" type="file" accept="video/*" hidden>
 
@@ -523,6 +670,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   var RANGE_KEY = 'mini-canvas-video-clip-demo:range:v1';
   var SNAP_KEY = 'mini-canvas-video-clip-demo:snap:v1';
   var LOOP_KEY = 'mini-canvas-video-clip-demo:loop:v1';
+  var STYLE_KEY = 'mini-canvas-video-clip-demo:style:v1';
   var DEFAULT_CLIP_SECONDS = 3.36;
   var MIN_CLIP_SECONDS = 0.3;
   var THUMB_TARGET_WIDTH = 56;
@@ -547,12 +695,15 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     shadeLeft: document.getElementById('shadeLeft'),
     shadeRight: document.getElementById('shadeRight'),
     selection: document.getElementById('selection'),
+    selectionContent: document.getElementById('selectionContent'),
     playhead: document.getElementById('playhead'),
     handleLeft: document.getElementById('handleLeft'),
     handleRight: document.getElementById('handleRight'),
     clipLength: document.getElementById('clipLength'),
     snapBtn: document.getElementById('snapBtn'),
-    loopBtn: document.getElementById('loopBtn')
+    loopBtn: document.getElementById('loopBtn'),
+    styleEdge: document.getElementById('styleEdge'),
+    styleCapsule: document.getElementById('styleCapsule')
   };
 
   var state = {
@@ -561,6 +712,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     end: 0,
     snap: readFlag(SNAP_KEY),
     loop: readFlag(LOOP_KEY),
+    style: readStyle(),
     objectUrl: '',
     drag: null,
     loadJob: 0,
@@ -576,6 +728,18 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 
   function readFlag(key) {
     try { return localStorage.getItem(key) === '1'; } catch (error) { return false; }
+  }
+
+  function readStyle() {
+    try {
+      return localStorage.getItem(STYLE_KEY) === 'capsule' ? 'capsule' : 'edge';
+    } catch (error) {
+      return 'edge';
+    }
+  }
+
+  function writeStyle(value) {
+    try { localStorage.setItem(STYLE_KEY, value); } catch (error) { /* private mode */ }
   }
 
   function writeFlag(key, value) {
@@ -810,10 +974,31 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.clipLength.textContent = formatClip(state.end - state.start);
     var filmWidth = els.film.clientWidth;
     if (filmWidth > 0) {
-      var center = (left + width / 2) / 100 * filmWidth;
-      var halfLabel = Math.min(62, Math.max(38, els.clipLength.offsetWidth / 2));
-      var labelX = clamp(center, Math.min(halfLabel + 4, filmWidth / 2), Math.max(filmWidth - halfLabel - 4, filmWidth / 2));
+      var startX = left / 100 * filmWidth;
+      var endX = right / 100 * filmWidth;
+      var capsule = state.style === 'capsule';
+      var earWidth = capsule ? Math.min(19, Math.max(15, (endX - startX) * 0.14)) : 20;
+      els.film.style.setProperty('--ear-width', earWidth + 'px');
+      var center = (startX + endX) / 2;
+      var available = Math.max(0, endX - startX - earWidth * 2 - 6);
+      var labelWidth = Math.min(els.clipLength.offsetWidth, capsule ? 108 : 96);
+      var above = available < labelWidth + 6;
+      els.clipLength.classList.toggle('is-above', !capsule && above);
+      els.clipLength.classList.remove('is-condensed');
+      var halfLabel = labelWidth / 2 + 4;
+      var low = Math.min(halfLabel, filmWidth / 2);
+      var high = Math.max(filmWidth - halfLabel, filmWidth / 2);
+      var labelX;
+      if (!capsule && above) {
+        labelX = clamp(center, low, high);
+      } else {
+        labelX = center;
+      }
       els.clipLength.style.left = labelX + 'px';
+      if (els.selectionContent.style.backgroundImage) {
+        var ratio = (endX - startX) / Math.max(1, els.selection.clientHeight);
+        els.selectionContent.style.backgroundSize = ratio >= 16 / 9 ? 'auto 100%' : '100% auto';
+      }
     }
     els.handleLeft.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
     els.handleRight.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
@@ -824,8 +1009,24 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     updatePlayhead();
   }
 
+  function setSelectionPreview(dataUrl) {
+    if (!dataUrl) return;
+    els.selectionContent.style.backgroundImage = 'url(' + dataUrl + ')';
+    var width = els.selection.clientWidth;
+    var height = els.selection.clientHeight;
+    if (!width || !height) return;
+    var ratio = width / height;
+    var frameRatio = 16 / 9;
+    els.selectionContent.style.backgroundSize = ratio >= frameRatio ? 'auto 100%' : '100% auto';
+  }
+
   function updatePlayhead() {
     if (!state.duration) {
+      els.playhead.classList.remove('is-visible');
+      return;
+    }
+    if (state.drag) {
+      state.playheadVisible = false;
       els.playhead.classList.remove('is-visible');
       return;
     }
@@ -938,6 +1139,29 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.loopBtn.setAttribute('aria-label', label);
   }
 
+  function syncStyleUi() {
+    var isCapsule = state.style === 'capsule';
+    els.app.setAttribute('data-style', state.style);
+    els.styleEdge.classList.toggle('is-on', !isCapsule);
+    els.styleCapsule.classList.toggle('is-on', isCapsule);
+    els.styleEdge.setAttribute('aria-pressed', !isCapsule ? 'true' : 'false');
+    els.styleCapsule.setAttribute('aria-pressed', isCapsule ? 'true' : 'false');
+    // 两种样式的耳朵宽度不同，换样式后立刻按新内框重排，避免选区跳一格。
+    requestAnimationFrame(function () {
+      updateSelectionUi();
+      updatePlayhead();
+    });
+  }
+
+  function setStyle(value) {
+    if (value !== 'capsule' && value !== 'edge') return;
+    if (state.style === value) return;
+    state.style = value;
+    writeStyle(value);
+    syncStyleUi();
+    setStatus(value === 'capsule' ? '已切到蓝色胶囊样式' : '已切到细边样式', 'ok', 1600);
+  }
+
   function toggleSnap() {
     state.snap = !state.snap;
     writeFlag(SNAP_KEY, state.snap);
@@ -1003,7 +1227,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
           if (thumbJob !== state.thumbJob || loadJob !== state.loadJob) return;
           try {
             drawCover(context, probe, sourceWidth, sourceHeight, canvas.width, canvas.height);
-            nodes[frameIndex].style.backgroundImage = 'url(' + canvas.toDataURL('image/jpeg', 0.76) + ')';
+            var dataUrl = canvas.toDataURL('image/jpeg', 0.76);
+            nodes[frameIndex].style.backgroundImage = 'url(' + dataUrl + ')';
+            if (frameIndex === 0) setSelectionPreview(dataUrl);
+            if (frameIndex === Math.floor(count / 2)) setSelectionPreview(dataUrl);
           } catch (error) {
             /* One bad frame should not stop the whole strip. */
           }
@@ -1152,6 +1379,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       fromEnd: state.end
     };
     els.selection.classList.add('is-dragging');
+    els.playhead.classList.remove('is-visible');
+    state.playheadVisible = false;
     if (state.rafId) {
       try { els.video.pause(); } catch (error) { /* ignore */ }
     }
@@ -1213,6 +1442,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     window.removeEventListener('pointerup', endDrag);
     window.removeEventListener('pointercancel', endDrag);
     saveRange();
+    state.playheadVisible = false;
+    els.playhead.classList.remove('is-visible');
     previewBoundary(edge, true);
     updateTimeUi();
   }
@@ -1317,6 +1548,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   els.handleRight.addEventListener('keydown', function (event) { nudgeHandle('end', event); });
   els.snapBtn.addEventListener('click', toggleSnap);
   els.loopBtn.addEventListener('click', toggleLoop);
+  els.styleEdge.addEventListener('click', function () { setStyle('edge'); });
+  els.styleCapsule.addEventListener('click', function () { setStyle('capsule'); });
 
   els.film.addEventListener('pointerdown', function (event) {
     if (!state.duration) return;
@@ -1344,6 +1577,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 
   syncSnapUi();
   syncLoopUi();
+  syncStyleUi();
   updateSelectionUi();
   updateTimeUi();
   restoreSavedVideo();
