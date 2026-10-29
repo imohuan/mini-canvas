@@ -2541,7 +2541,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </button>
             </template>
             <template #default="{ close }">
-              <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen }" role="listbox" aria-label="选择模型">
+              <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen, 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
                     <div class="ac-panel-heading">
@@ -2658,7 +2658,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
           <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-end" :offset="8"
-            :menu-width="skillView === 'split' ? '586px' : '320px'" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
+            :menu-width="skillView === 'split' ? '586px' : '320px'" menu-max-width="600px"
+            menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
@@ -2667,7 +2668,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </button>
             </template>
             <template #default="{ close }">
-              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-tall': skillView === 'split' }"
+              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-split': skillView === 'split' }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -5071,15 +5072,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-ddmenu.ac-panel {
   margin: -6px;
   width: calc(100% + 12px);
-  min-height: 0;
+  /* 最小高度（用户口径 2026-10-30：「分栏 / 卡片两种模式都要有最小高度」）。
+     卡片模式只有两三条时别塌成一条窄缝。
+     为什么这么小：卡片模式本来就该贴着内容长，托底只为挡住「一条窄缝」；
+     真要撑高的是分栏（见 .is-split），两种模式的最小高度不是同一个数。
+     外面再套一层 min()：视口极矮时按可用高度收，别把面板顶出屏幕。 */
+  min-height: min(232px, calc(100dvh - 32px));
   padding: 0;
   container-type: inline-size;
   font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-/* 分栏视图固定高度（DEMO 的 .panel-tall：clamp(520px, 72vh, 640px)），左右两列各自滚。 */
-.ac-ddmenu.ac-panel.is-tall {
-  height: clamp(520px, 72vh, 640px);
+.ac-ddmenu.ac-panel.is-split {
+  /* 分栏要高过卡片：左栏是竖排分类、右栏是瓦片网格，太矮两边都只剩两行。
+     上限压到 420 —— 浮层的 max-height 是 440，再高就会被裁掉（inner-scroll 不出滚动条）。
+     下限给到 380：技能分栏只有两张瓦片时也要有「两列都在滚」的样子，不外扩成一条窄带。 */
+  min-height: min(clamp(380px, 56vh, 420px), calc(100dvh - 32px));
 }
 
 .ac-panel-head {
@@ -5740,6 +5748,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0 8px 10px;
+  /* 左栏独立滚：滚到头也不把动作传给外层（否则外层一滚，右栏跟着整块跑） */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
 }
@@ -5824,6 +5834,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   overflow-x: hidden;
   overflow-y: auto;
   padding: 10px 12px 12px;
+  /* 两列各自是一条独立的滚动链：不继承外层、也不把滚动传回外层 */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
 }
@@ -6083,6 +6095,24 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-model-panel .ac-menu-scroll .ac-panel-body {
   overflow: visible;
   padding: 2px 12px 12px;
+}
+
+/* 分栏：**外层不再滚**，滚动交给左右两列各自负责（用户口径 2026-10-30，附截图）。
+   不这么改的话，外层 .ac-menu-scroll 会把整块面板一起滚：左栏被裁掉半行、右栏的滚动条
+   也挂在面板最外缘 —— 两列看着像同一根滚动条，实际谁都没法各自定位。
+   做法与外层同一条链：每层都 flex:1 + min-height:0，把高度一路传下去，最后两列才有
+   确定的视口高度可滚。 */
+.ac-model-panel.is-split .ac-menu-scroll {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ac-model-panel.is-split .ac-menu-scroll .ac-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 /* —— MCP（DEMO 的 .mcp-list / .mcp-card / .status）—— */
