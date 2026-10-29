@@ -543,6 +543,13 @@ function modelRow(model) {
     '</button>'
 }
 
+function modelFooter() {
+  var picked = state.selectedModels.size
+  return '<div class="panel-foot model-foot">' +
+    '<div class="selection-summary">' + (picked ? '已选 <b class="selected-number">1</b> 个模型' : '未选择模型') + '</div>' +
+    '</div>'
+}
+
 function modelCards(list) {
   return '<div class="panel-scroll" data-scroll="model-list">' +
     (list.length
@@ -591,7 +598,7 @@ function renderModel(live) {
   return '<section class="panel' + tall + ' model-panel' + (live ? ' is-live' : '') + (state.searchOpen.model ? ' is-search-open' : '') + '" id="panel-model">' +
     panelHead('model', '模型', MODELS.length) +
     '<div class="panel-body">' + body + '</div>' +
-    footer('model') +
+    modelFooter() +
     '</section>'
 }
 
@@ -823,15 +830,6 @@ function confirmSelection(kind) {
     return
   }
 
-  if (kind === 'model') {
-    var modelCount = state.selectedModels.size
-    if (!modelCount) return
-    state.selectedModels.clear()
-    refreshPanel('model')
-    showToast('已确认引用 1 个模型')
-    return
-  }
-
   var servers = state.selectedServers.size
   var tools = state.selectedTools.size
   if (!servers && !tools) return
@@ -910,6 +908,7 @@ panelHost.addEventListener('click', function (event) {
     state.selectedModels.clear()
     state.selectedModels.add(target.dataset.id)
     refreshPanel('model')
+    showToast('已引用模型：' + target.dataset.id)
     return
   }
 
