@@ -10,7 +10,7 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
+import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon, Blocks, ArrowUpRight } from 'lucide-vue-next'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 
@@ -160,6 +160,9 @@ function dateOf(ts: number): string {
         <button class="flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] transition-colors hover:bg-hover" :class="nav === 'assets' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('assets')">
           <ImageIcon :size="15" /> 资产
         </button>
+        <button class="flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] text-ink/90 transition-colors hover:bg-hover" @click="router.push('/ui-kit')">
+          <Blocks :size="15" /> 组件库
+        </button>
       </nav>
     </aside>
 
@@ -205,9 +208,19 @@ function dateOf(ts: number): string {
           <p v-if="assets.length === 0" class="col-span-5 py-16 text-center text-[13px] text-ink/50">还没有资产。生成或上传之后会出现在这里。</p>
         </div>
 
-        <!-- 首页页签：直接给「全部项目」入口（与项目页一致，先不做额外内容） -->
-        <div v-else-if="nav === 'home'" class="grid place-items-center py-24 text-center text-[13px] text-ink/60">
-          <p>欢迎使用 MiniCanvas。选「项目」开始创作，或「资产」查看生成与上传的素材。</p>
+        <!-- 首页页签：欢迎语 + 组件库入口（展示页在 #/ui-kit） -->
+        <div v-else-if="nav === 'home'" class="py-12">
+          <p class="text-center text-[13px] text-ink/60">欢迎使用 MiniCanvas。选「项目」开始创作，或「资产」查看生成与上传的素材。</p>
+          <button class="mt-8 flex w-full max-w-[420px] items-center gap-4 rounded-2xl border border-line bg-panel px-5 py-4 text-left transition-colors hover:bg-hover" @click="router.push('/ui-kit')">
+            <span class="grid size-10 flex-none place-items-center rounded-xl bg-brand/10 text-brand">
+              <Blocks :size="20" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <strong class="block text-[14px] text-ink">组件库</strong>
+              <span class="mt-0.5 block text-[12px] text-ink-dim">Button 已经就位。调参数、看代码、复制到你的插件里。</span>
+            </span>
+            <ArrowUpRight :size="16" class="flex-none text-ink-dim" />
+          </button>
         </div>
 
         <!-- 项目页签 -->

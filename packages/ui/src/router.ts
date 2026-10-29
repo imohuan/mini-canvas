@@ -2,6 +2,7 @@
  * router —— 应用级路由（hash 模式，静态托管下刷新不 404）。
  *
  *   `#/`            → 项目列表页（ProjectsPage）
+ *   `#/ui-kit`      → 组件库展示页（页面在 @mini-canvas/ui-kit/preview）
  *   `#/canvas/:id`  → 画布工作台（App.vue，现有那套）
  *
  * 为什么用 hash 而不是 history：cloud-server 把 ui/dist 当静态托管、只对「非文件路径」回落 index.html。
@@ -9,6 +10,7 @@
  */
 import { createRouter, createWebHashHistory } from 'vue-router'
 import ProjectsPage from './components/ProjectsPage.vue'
+import UiKitRoute from './components/UiKitRoute.vue'
 import CanvasApp from './App.vue'
 import { flushPendingSave } from './composables/pendingSave'
 
@@ -16,6 +18,7 @@ export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', name: 'projects', component: ProjectsPage },
+    { path: '/ui-kit', name: 'ui-kit', component: UiKitRoute },
     { path: '/canvas/:id', name: 'canvas', component: CanvasApp, props: true },
     // 其它路径（含旧的直接打开根路径）一律回项目页
     { path: '/:pathMatch(.*)*', redirect: '/' },

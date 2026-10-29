@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { catalogPlugin } from './catalogPlugin.mjs'
+import { uiKitDocsPlugin } from '@mini-canvas/ui-kit/vite'
+import { fileURLToPath } from 'node:url'
 
 // @mini-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
 // 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
@@ -9,6 +11,8 @@ export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
+    // 组件文档：把 packages/ui-kit/docs/*.md 里的 vue 示例编译成真实组件
+    uiKitDocsPlugin(fileURLToPath(new URL('../ui-kit/docs', import.meta.url))),
     // 开发期在本 dev server 就地提供插件清单与产物（/plugin-catalog.json + /plugins/**），
     // 这样单开 ui dev 也能用插件管理；生产形态由 cloud-server 提供同两条路由。
     catalogPlugin({ pluginsDir: '../../packages/plugins' }),
@@ -41,6 +45,7 @@ export default defineConfig({
     '@mini-canvas/canvas-render',
     '@mini-canvas/kernel',
     '@mini-canvas/canvas-base',
+    '@mini-canvas/ui-kit',
     '@mini-canvas/plugin-theme-default',
     '@mini-canvas/plugin-node-text',
     '@mini-canvas/plugin-node-ui',

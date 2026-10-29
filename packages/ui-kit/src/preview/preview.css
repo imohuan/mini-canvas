@@ -1,0 +1,92 @@
+/* 独立预览页的基础主题。主应用里这些 token 由 canvas-render 提供。 */
+:root {
+  --ui-canvas-bg: #f5f6f8;
+  --ui-panel: #ffffff;
+  --ui-panel-soft: #ffffff;
+  --ui-panel-active: #e8eaf0;
+  --ui-line: #e2e5ea;
+  --ui-line-soft: #eef0f4;
+  --ui-ink: #18202b;
+  --ui-ink-dim: #6b7280;
+  --ui-ink-mute: #8c95a3;
+  --ui-accent: #0891b2;
+  --ui-accent-hover: #0e7490;
+  --ui-chip: rgb(0 0 0 / 0.07);
+  --ui-hover: rgb(0 0 0 / 0.06);
+  --ui-hover-strong: rgb(0 0 0 / 0.1);
+  --ui-hover-soft: rgb(0 0 0 / 0.035);
+  --ui-veil: rgb(0 0 0 / 0.04);
+  --ui-danger: #ef4444;
+  --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 12%, transparent);
+  /* 和 packages/ui 共用一套滚动条颜色：轨道透明，只露滑块。 */
+  --ui-scroll-thumb: rgb(0 0 0 / 0.2);
+  --ui-scroll-thumb-hover: rgb(0 0 0 / 0.32);
+}
+
+html.dark {
+  --ui-canvas-bg: #141414;
+  --ui-panel: #262626;
+  --ui-panel-soft: #171717;
+  --ui-panel-active: #363636;
+  --ui-line: #363636;
+  --ui-line-soft: #2a2a2a;
+  --ui-ink: #f7f7f7;
+  --ui-ink-dim: #919191;
+  --ui-ink-mute: #a8a8a8;
+  --ui-accent: #0891b2;
+  --ui-accent-hover: #0e7490;
+  --ui-chip: rgb(255 255 255 / 0.1);
+  --ui-hover: rgb(255 255 255 / 0.1);
+  --ui-hover-strong: rgb(255 255 255 / 0.15);
+  --ui-hover-soft: rgb(255 255 255 / 0.05);
+  --ui-veil: rgb(255 255 255 / 0.06);
+  --ui-danger: #f87171;
+  --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 18%, transparent);
+  --ui-scroll-thumb: rgb(255 255 255 / 0.4);
+  --ui-scroll-thumb-hover: rgb(255 255 255 / 0.55);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--ui-canvas-bg);
+  color: var(--ui-ink);
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* 全局滚动条：照 packages/ui/src/app.css，6px 透明轨道 + 圆角滑块。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: var(--ui-scroll-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scroll-thumb-hover);
+}

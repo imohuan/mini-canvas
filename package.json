@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm -C packages/ui dev",
     "dev:docs": "pnpm -C packages/docs dev",
-    "dev:ui-kit": "pnpm -C packages/ui exec vite --open /#/ui-kit",
+    "dev:ui-kit": "pnpm -C packages/ui-kit dev",
     "dev:server": "pnpm -C packages/cloud-server build && pnpm -C packages/cloud-server serve",
     "serve": "pnpm -C packages/cloud-server serve",
     "start": "node scripts/launch-server.mjs",

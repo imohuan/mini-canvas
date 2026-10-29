@@ -13,7 +13,7 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "typecheck": "node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.json",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "e2e": "node ./e2e/canvas-e2e.mjs",
     "dev": "vite",
@@ -64,6 +64,7 @@
     "@mini-canvas/plugin-tool-image-generation": "workspace:*",
     "@mini-canvas/plugin-tool-text-generation": "workspace:*",
     "@mini-canvas/plugin-web2api-tools": "workspace:*",
+    "@mini-canvas/ui-kit": "workspace:*",
     "@vueuse/core": "^14.3.0",
     "lucide-vue-next": "^1.0.0",
     "motion-v": "^2.4.4",
@@ -74,6 +75,8 @@
   "devDependencies": {
     "@types/imagesloaded": "4.1.7",
     "@types/masonry-layout": "4.2.8",
+    "@tailwindcss/vite": "^4.1.14",
+    "tailwindcss": "^4.1.14",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue-flow/core": "^1.48.2",
     "imagesloaded": "5.0.0",

@@ -1185,9 +1185,6 @@ importers:
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-      mediabunny:
-        specifier: ^1.63.0
-        version: 1.63.0
     devDependencies:
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
@@ -1807,12 +1804,24 @@ importers:
 
   packages/ui-kit:
     devDependencies:
+      '@shikijs/langs':
+        specifier: ^2.5.0
+        version: 2.5.0
+      '@shikijs/themes':
+        specifier: ^2.5.0
+        version: 2.5.0
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
       '@vue/server-renderer':
         specifier: 3.5.38
         version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+      shiki:
+        specifier: ^2.5.0
+        version: 2.5.0
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -3385,12 +3394,6 @@ packages:
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
-  '@types/dom-mediacapture-transform@0.1.12':
-    resolution: {integrity: sha512-d7/QsLRwF864A5mgIM/YrfiglHoYn7zgCcAoJgW404r+2DwnNr7EBbLnCWpmOMgH8y0te73L1AV6H1bmauaWFw==}
-
-  '@types/dom-webcodecs@0.1.13':
-    resolution: {integrity: sha512-O5hkiFIcjjszPIYyUSyvScyvrBoV3NOEEZx/pMlsu44TKzWNkLVBBxnxJz42in5n3QIolYOcBYFCPZZ0h8SkwQ==}
-
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
@@ -4571,9 +4574,6 @@ packages:
   media-typer@1.1.1:
     resolution: {integrity: sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ==}
     engines: {node: '>= 0.8'}
-
-  mediabunny@1.63.0:
-    resolution: {integrity: sha512-6958wlfDtass/zNcuSuGzUzFT9ciwEFd5AzDa02EQdPmifB4URcTcZoyQ//Ln5e47Z6EC3EJuKr3MM037w89OA==}
 
   merge-descriptors@1.0.3:
     resolution: {integrity: sha512-gaNvAS7TZ897/rVaZ0nMtAyxNyi/pdbjbAwUpFQpN70GqnVfOiXpeUUMKRBmzXaSQ8DdTX4/0ms62r2K+hE6mQ==}
@@ -7055,12 +7055,6 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
-  '@types/dom-mediacapture-transform@0.1.12':
-    dependencies:
-      '@types/dom-webcodecs': 0.1.13
-
-  '@types/dom-webcodecs@0.1.13': {}
-
   '@types/estree@1.0.9': {}
 
   '@types/geojson@7946.0.16': {}
@@ -8415,11 +8409,6 @@ snapshots:
   media-typer@0.3.0: {}
 
   media-typer@1.1.1: {}
-
-  mediabunny@1.63.0:
-    dependencies:
-      '@types/dom-mediacapture-transform': 0.1.12
-      '@types/dom-webcodecs': 0.1.13
 
   merge-descriptors@1.0.3: {}
 
