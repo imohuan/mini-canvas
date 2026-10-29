@@ -333,10 +333,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 .clip-length {
   position: absolute;
   top: 50%;
-  left: 50%;
-  z-index: 5;
+  left: 0;
+  z-index: 8;
   transform: translate(-50%, -50%);
-  max-width: calc(100% - 18px);
+  max-width: calc(100% - 16px);
   overflow: hidden;
   padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.09);
@@ -353,7 +353,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   text-overflow: ellipsis;
   pointer-events: none;
 }
-.selection.is-tight .clip-length { display: none; }
 .film-empty {
   position: absolute;
   inset: 0;
@@ -367,7 +366,34 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   text-align: center;
   pointer-events: none;
 }
-.snap-btn {
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 7;
+  width: 2px;
+  opacity: 0;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 10px rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  transform: translate3d(-1px, 0, 0);
+  will-change: transform;
+}
+.playhead::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+}
+.playhead.is-visible { opacity: 1; }
+.dock-btn {
   align-self: center;
   flex: none;
   display: grid;
@@ -382,10 +408,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
-.snap-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.065); }
-.snap-btn:active { transform: scale(0.96); }
-.snap-btn svg { width: 24px; height: 24px; }
-.snap-btn.is-on {
+.dock-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.065); }
+.dock-btn:active { transform: scale(0.96); }
+.dock-btn svg { width: 24px; height: 24px; }
+.dock-btn.is-on {
   color: #ffffff;
   background: var(--blue);
   border-color: rgba(147, 197, 253, 0.45);
@@ -405,8 +431,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   .stage-empty::before { inset: 11px; }
   .dock { height: 88px; padding: 7px; gap: 6px; border-radius: 12px; }
   .film { border-radius: 5px; }
-  .snap-btn { width: 44px; height: 44px; border-radius: 12px; }
-  .snap-btn svg { width: 21px; height: 21px; }
+  .dock-btn { width: 44px; height: 44px; border-radius: 12px; }
+  .dock-btn svg { width: 21px; height: 21px; }
   .clip-length { padding: 6px 8px; font-size: 12px; }
   .stage-top { padding: 10px 11px; }
   .file-meta { display: none; }
@@ -462,19 +488,28 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       <div class="shade shade-right" id="shadeRight"></div>
       <div class="selection" id="selection" hidden>
         <div class="handle handle-left" id="handleLeft" role="slider" tabindex="0" aria-label="片段起点" aria-orientation="horizontal" aria-valuemin="0"></div>
-        <span class="clip-length" id="clipLength">0.00 s</span>
         <div class="handle handle-right" id="handleRight" role="slider" tabindex="0" aria-label="片段终点" aria-orientation="horizontal" aria-valuemin="0"></div>
       </div>
+      <div class="playhead" id="playhead" aria-hidden="true"></div>
+      <span class="clip-length" id="clipLength" hidden>0.00 s</span>
       <div class="film-empty" id="filmEmpty">上传视频后，这里会铺满来自视频的每一帧</div>
     </div>
-    <button class="snap-btn" id="snapBtn" type="button" aria-pressed="false" title="开启整秒吸附" aria-label="开启整秒吸附">
+    <button class="dock-btn" id="snapBtn" type="button" aria-pressed="false" title="开启整秒吸附" aria-label="开启整秒吸附">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15"></path>
         <path d="m5 8 4 4"></path><path d="m12 15 4 4"></path>
       </svg>
     </button>
+    <button class="dock-btn" id="loopBtn" type="button" aria-pressed="false" title="开启区间循环" aria-label="开启区间循环">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m17 2 4 4-4 4"></path>
+        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+        <path d="m7 22-4-4 4-4"></path>
+        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+      </svg>
+    </button>
   </div>
-  <p class="hint">拖<b>蓝色边框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后，端点会吸附到整秒。</p>
+  <p class="hint">拖<b>蓝色边框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后，端点会吸附到整秒，循环打开后只播放选中的片段。</p>
 </div>
 <input class="file-input" id="fileInput" type="file" accept="video/*" hidden>
 
@@ -487,9 +522,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   var DB_KEY = 'current';
   var RANGE_KEY = 'mini-canvas-video-clip-demo:range:v1';
   var SNAP_KEY = 'mini-canvas-video-clip-demo:snap:v1';
+  var LOOP_KEY = 'mini-canvas-video-clip-demo:loop:v1';
   var DEFAULT_CLIP_SECONDS = 3.36;
   var MIN_CLIP_SECONDS = 0.3;
-  var THUMB_TARGET_WIDTH = 80;
+  var THUMB_TARGET_WIDTH = 56;
 
   var els = {
     app: document.getElementById('app'),
@@ -511,10 +547,12 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     shadeLeft: document.getElementById('shadeLeft'),
     shadeRight: document.getElementById('shadeRight'),
     selection: document.getElementById('selection'),
+    playhead: document.getElementById('playhead'),
     handleLeft: document.getElementById('handleLeft'),
     handleRight: document.getElementById('handleRight'),
     clipLength: document.getElementById('clipLength'),
-    snapBtn: document.getElementById('snapBtn')
+    snapBtn: document.getElementById('snapBtn'),
+    loopBtn: document.getElementById('loopBtn')
   };
 
   var state = {
@@ -522,12 +560,14 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     start: 0,
     end: 0,
     snap: readFlag(SNAP_KEY),
+    loop: readFlag(LOOP_KEY),
     objectUrl: '',
     drag: null,
     loadJob: 0,
     thumbJob: 0,
     statusTimer: 0,
-    lastPreviewAt: 0
+    lastPreviewAt: 0,
+    rafId: 0
   };
 
   function clamp(value, min, max) {
@@ -747,10 +787,12 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     var duration = state.duration;
     if (!duration) {
       els.selection.hidden = true;
+      els.clipLength.hidden = true;
       els.filmEmpty.hidden = false;
       return;
     }
     els.selection.hidden = false;
+    els.clipLength.hidden = false;
     els.filmEmpty.hidden = true;
     var left = state.start / duration * 100;
     var right = state.end / duration * 100;
@@ -761,22 +803,85 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.shadeRight.style.left = right + '%';
     els.shadeRight.style.width = Math.max(0, 100 - right) + '%';
     els.clipLength.textContent = formatClip(state.end - state.start);
-    els.selection.classList.toggle('is-tight', els.film.clientWidth > 0 && width / 100 * els.film.clientWidth < 82);
+    var filmWidth = els.film.clientWidth;
+    if (filmWidth > 0) {
+      var center = (left + width / 2) / 100 * filmWidth;
+      var halfLabel = Math.min(62, Math.max(38, els.clipLength.offsetWidth / 2));
+      var labelX = clamp(center, Math.min(halfLabel + 4, filmWidth / 2), Math.max(filmWidth - halfLabel - 4, filmWidth / 2));
+      els.clipLength.style.left = labelX + 'px';
+    }
     els.handleLeft.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
     els.handleRight.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
     els.handleLeft.setAttribute('aria-valuenow', String(Number(state.start.toFixed(2))));
     els.handleRight.setAttribute('aria-valuenow', String(Number(state.end.toFixed(2))));
     els.handleLeft.setAttribute('aria-valuetext', formatClip(state.start) + '，片段起点');
     els.handleRight.setAttribute('aria-valuetext', formatClip(state.end) + '，片段终点');
+    updatePlayhead();
+  }
+
+  function updatePlayhead() {
+    if (!state.duration) {
+      els.playhead.classList.remove('is-visible');
+      return;
+    }
+    var width = els.film.clientWidth;
+    if (!width) return;
+    var current = clamp(Number(els.video.currentTime) || 0, 0, state.duration);
+    var x = Math.round((current / state.duration * width - 1) * 2) / 2;
+    if (state.lastPlayheadX !== x) {
+      state.lastPlayheadX = x;
+      els.playhead.style.transform = 'translate3d(' + x + 'px, 0, 0)';
+    }
+    if (!state.playheadVisible) {
+      state.playheadVisible = true;
+      els.playhead.classList.add('is-visible');
+    }
+  }
+
+  function stopPlayheadLoop() {
+    if (!state.rafId) return;
+    cancelAnimationFrame(state.rafId);
+    state.rafId = 0;
+  }
+
+  function tickPlayhead() {
+    state.rafId = 0;
+    if (!state.duration || els.video.paused) {
+      updateTimeUi();
+      return;
+    }
+    var current = els.video.currentTime;
+    if (current >= state.end - 0.015) {
+      if (state.loop) {
+        try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
+      } else {
+        els.video.pause();
+        try { els.video.currentTime = state.end; } catch (error) { /* ignore */ }
+        updateTimeUi();
+        return;
+      }
+    }
+    updatePlayhead();
+    updateTimeUi();
+    state.rafId = requestAnimationFrame(tickPlayhead);
+  }
+
+  function startPlayheadLoop() {
+    if (state.rafId) return;
+    state.rafId = requestAnimationFrame(tickPlayhead);
   }
 
   function updateTimeUi() {
     var current = Number(els.video.currentTime) || 0;
-    els.timecode.textContent = formatClock(current) + ' / ' + formatClock(state.duration);
+    var label = formatClock(current) + ' / ' + formatClock(state.duration);
+    if (els.timecode.textContent !== label) els.timecode.textContent = label;
     var playing = !!state.duration && !els.video.paused && !els.video.ended;
-    els.playPath.setAttribute('d', playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z');
-    els.playBtn.setAttribute('aria-label', playing ? '暂停' : '播放');
-    els.playBtn.classList.toggle('is-playing', playing);
+    if (els.playBtn.getAttribute('data-playing') !== (playing ? '1' : '0')) {
+      els.playBtn.setAttribute('data-playing', playing ? '1' : '0');
+      els.playPath.setAttribute('d', playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z');
+      els.playBtn.setAttribute('aria-label', playing ? '暂停' : '播放');
+    }
+    updatePlayhead();
   }
 
   function setRange(start, end, options) {
@@ -811,6 +916,14 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.snapBtn.setAttribute('aria-label', label);
   }
 
+  function syncLoopUi() {
+    els.loopBtn.classList.toggle('is-on', state.loop);
+    els.loopBtn.setAttribute('aria-pressed', state.loop ? 'true' : 'false');
+    var label = state.loop ? '关闭区间循环' : '开启区间循环';
+    els.loopBtn.title = label;
+    els.loopBtn.setAttribute('aria-label', label);
+  }
+
   function toggleSnap() {
     state.snap = !state.snap;
     writeFlag(SNAP_KEY, state.snap);
@@ -826,6 +939,13 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     } else {
       setStatus('已关闭整秒吸附', 'ok', 1400);
     }
+  }
+
+  function toggleLoop() {
+    state.loop = !state.loop;
+    writeFlag(LOOP_KEY, state.loop);
+    syncLoopUi();
+    setStatus(state.loop ? '已开启区间循环' : '已关闭区间循环', 'ok', 1600);
   }
 
   function startThumbnails(url, loadJob) {
@@ -1142,16 +1262,32 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   });
 
   els.video.addEventListener('click', togglePlay);
+  els.video.addEventListener('error', function () {
+    console.warn('video element error', els.video.error && els.video.error.code);
+  });
   els.playBtn.addEventListener('click', togglePlay);
   els.video.addEventListener('timeupdate', function () {
     if (!state.duration) return;
     if (!els.video.paused && els.video.currentTime >= state.end - 0.02) {
-      try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
+      if (state.loop) {
+        try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
+      } else {
+        els.video.pause();
+        try { els.video.currentTime = state.end; } catch (error) { /* ignore */ }
+      }
     }
     updateTimeUi();
   });
-  els.video.addEventListener('play', updateTimeUi);
-  els.video.addEventListener('pause', updateTimeUi);
+  els.video.addEventListener('play', function () {
+    updateTimeUi();
+    startPlayheadLoop();
+  });
+  els.video.addEventListener('pause', function () {
+    stopPlayheadLoop();
+    updateTimeUi();
+  });
+  els.video.addEventListener('playing', startPlayheadLoop);
+  els.video.addEventListener('seeked', updateTimeUi);
   els.video.addEventListener('loadeddata', updateTimeUi);
 
   els.selection.addEventListener('pointerdown', function (event) {
@@ -1163,6 +1299,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   els.handleLeft.addEventListener('keydown', function (event) { nudgeHandle('start', event); });
   els.handleRight.addEventListener('keydown', function (event) { nudgeHandle('end', event); });
   els.snapBtn.addEventListener('click', toggleSnap);
+  els.loopBtn.addEventListener('click', toggleLoop);
 
   els.film.addEventListener('pointerdown', function (event) {
     if (!state.duration) return;
@@ -1188,10 +1325,46 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   });
 
+  // Dev-only override for automated checks: ?video=<same-origin video URL>.
+  // Normal visitors never hit this path.
+  function loadDevVideoFromQuery() {
+    var url = '';
+    try {
+      url = new URLSearchParams(window.location.search).get('video') || '';
+    } catch (error) {
+      return false;
+    }
+    if (!url) return false;
+    setStatus('正在载入测试视频…', 'ok', 0);
+    fetch(url).then(function (response) {
+      if (!response.ok) throw new Error('http-' + response.status);
+      return response.blob();
+    }).then(function (blob) {
+      var name = decodeURIComponent(url.split('/').pop() || '测试视频.mp4');
+      return handleFile(new File([blob], name, { type: blob.type || 'video/mp4' }));
+    }).catch(function (error) {
+      console.warn('测试视频载入失败', error);
+      setStatus('测试视频载入失败', 'error', 4000);
+    });
+    return true;
+  }
+
   syncSnapUi();
+  syncLoopUi();
   updateSelectionUi();
   updateTimeUi();
-  restoreSavedVideo();
+  if (!loadDevVideoFromQuery()) restoreSavedVideo();
+
+  // Local testing hook: lets an automated check supply a video when the
+  // browser extension cannot open a file picker. It only calls the same
+  // handleFile path as a normal upload and does not bypass validation.
+  window.__videoClipDemo = {
+    loadFile: handleFile,
+    state: state
+  };
+  window.__videoClipDemoReady = true;
+  document.documentElement.setAttribute('data-demo-boot', '1');
+  document.documentElement.setAttribute('data-demo-hook', typeof window.__videoClipDemo);
 })();
 </script>
 </body>
