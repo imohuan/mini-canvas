@@ -26,6 +26,19 @@ describe('卡片单击：不进全屏预览', () => {
     expect(body).not.toMatch(/openPreview\(/)
   })
 
+  /**
+   * 用户 2026-10-29 第二轮报「hover 时右下角 @ 点不动」。
+   * 根因：容器上的 click 委托在**捕获阶段**跑，先 stopPropagation 把事件掐死在
+   * 卡片兜底按钮上，挂在按钮自己的 @click 永远收不到。
+   * 规则：@ / 删除 / 播放这三个按钮的点击必须继续往下走，由按钮自己处理。
+   */
+  it('捕获阶段放行卡片内的按钮（@ / 删除 / 播放），不能一律掐断', () => {
+    const start = SCRIPT.indexOf('function onCardsClickCapture')
+    const body = SCRIPT.slice(start, SCRIPT.indexOf('\n/**', start))
+    expect(body).toMatch(/\.nb-card-act/)
+    expect(body).toMatch(/return/)
+  })
+
   it('卡片上挂了 dblclick，单击仍然是 click', () => {
     const cardTag = TEMPLATE.slice(
       TEMPLATE.indexOf('class="nb-card"') - 600,
@@ -37,20 +50,23 @@ describe('卡片单击：不进全屏预览', () => {
 })
 
 describe('双击卡片：聚焦到节点', () => {
-  it('聚焦实现读 nodeLayout 的真实矩形，并沿用 focusViewportFor 的缩放规则', () => {
-    const start = SCRIPT.indexOf('function onCardDblClick')
-    expect(start).toBeGreaterThan(0)
-    const body = SCRIPT.slice(start, SCRIPT.indexOf('\n/**', start))
+  it('聚焦实现读 nodeLayout 的真实矩形（与 F 键同源）', () => {
+    const body = SCRIPT.slice(SCRIPT.indexOf('function onCardDblClick'), SCRIPT.indexOf('function onCardsKeydown'))
     expect(body).toMatch(/getNodeRect\(/)
-    expect(body).toMatch(/focusViewportFor\(/)
-    expect(body).toMatch(/setCenter\(/)
+  })
+
+  it('优先复用 auto-layout 服务的 focusNode（与 F 键同一套取景 + 动画）', () => {
+    const body = SCRIPT.slice(SCRIPT.indexOf('function onCardDblClick'), SCRIPT.indexOf('function onCardsKeydown'))
+    expect(body).toMatch(/focusService\.focusNode\(/)
+    expect(body).toMatch(/animateViewport/)
+    expect(body).toMatch(/resolveFocusZoom\(/)
   })
 
   it('没有 nodeId 的卡（手打 @名字 待绑定）不强行聚焦', () => {
-    const start = SCRIPT.indexOf('function onCardDblClick')
-    const body = SCRIPT.slice(start, SCRIPT.indexOf('\n/**', start))
+    const body = SCRIPT.slice(SCRIPT.indexOf('function onCardDblClick'), SCRIPT.indexOf('function onCardsKeydown'))
     expect(body).toMatch(/if \(!nodeId\) return/)
   })
+
 })
 
 describe('卡片底部不再有名称条（会盖住 @ 按钮）', () => {

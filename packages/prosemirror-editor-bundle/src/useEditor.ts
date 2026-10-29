@@ -1740,7 +1740,25 @@ export function useEditor(
   }
 
   // 处理资源节点点击
-  function handleResourceClick(el: HTMLElement) {
+/**
+ * 这次点击是否落在标签**左侧图标格**（用户 2026-10-29 定案：标签分左右两半）。
+ *
+ * 图标格 = 缩略图（.resource-chip-thumb，绝对定位在图标位上）或类型图标本身。
+ * 按真实 DOM 矩形判断，不猜 padding/宽度 —— 换主题改尺寸也不用同步常量。
+ * 缩略图是 pointer-events:none，事件目标一定是外层 chip，所以只能按坐标判。
+ */
+function clickInsideChipIcon(el: HTMLElement, e: MouseEvent | undefined): boolean {
+  if (!e) return false
+  const icon = (el.querySelector('.resource-chip-thumb') ?? el.querySelector('.resource-chip-icon')) as HTMLElement | null
+  if (!icon) return false
+  const b = icon.getBoundingClientRect()
+  if (b.width <= 0 || b.height <= 0) return false
+  const pad = 2
+  return e.clientX >= b.left - pad && e.clientX <= b.right + pad
+    && e.clientY >= b.top - pad && e.clientY <= b.bottom + pad
+}
+
+  function handleResourceClick(el: HTMLElement, e?: MouseEvent) {
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
     /**
@@ -1749,6 +1767,17 @@ export function useEditor(
      */
     if (item?.onReplaceClick) {
       item.onReplaceClick(item)
+      return
+    }
+
+    /**
+     * 点**左侧图标**（用户 2026-10-29 定案）：不在编辑器里弹菜单，只把「点了哪颗标签、
+     * 图标在屏幕上的矩形」交给调用方 —— 由底栏在外部用 Dropdown 打开菜单。
+     * 点右侧文字仍走下面的默认行为（0.5s 后光标落到标签后）。
+     */
+    if (item?.onIconClick && clickInsideChipIcon(el, e)) {
+      const b = el.getBoundingClientRect()
+      item.onIconClick(item, { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height })
       return
     }
     /**
@@ -1825,8 +1854,8 @@ export function useEditor(
 
       el.onmouseenter = () => handleResourceMouseEnter(el);
       el.onmouseleave = () => handleResourceMouseLeave(el);
-      el.onclick = () => {
-        handleResourceClick(el);
+      el.onclick = (event: MouseEvent) => {
+        handleResourceClick(el, event);
       };
 
       // 处理缩略图加载

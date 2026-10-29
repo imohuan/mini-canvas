@@ -36,6 +36,17 @@ export interface ResourceItem {
    * 不给 = 该标签没有替换交互（技能 / MCP / 资产引用等）。
    */
   onReplaceClick?: (item: ResourceItem) => void
+  /**
+   * 「点左侧图标」交互（用户 2026-10-29 定案）：
+   * 标签分左右两半 —— 点右侧文字 = 默认行为（0.5s 后光标落到标签后）；
+   * 点左侧图标 = 交给调用方（底栏在**外部**用 Dropdown 弹菜单）。
+   * 菜单本身不放进编辑器：标签是外部声明的，编辑器只负责「告诉你点了哪个图标」。
+   * 载荷带触发元素的屏幕矩形，调用方据此定位浮层。
+   */
+  onIconClick?: (
+    item: ResourceItem,
+    anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number },
+  ) => void
   // 编辑器内交互事件（不传 → 无默认行为）
   onClick?: (item: ResourceItem) => void       // 点击资源节点
   onMouseEnter?: (item: ResourceItem) => void  // 鼠标进入资源节点（默认：悬停预览）

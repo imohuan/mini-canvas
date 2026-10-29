@@ -59,7 +59,7 @@ import { initialPromptDoc, initialPromptText, promptDocPersistFields, promptPers
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
 import {
   exitReference,
-  focusViewportFor,
+  resolveFocusZoom,
   referenceActive,
   referenceEpoch,
   referenceOwner,
@@ -70,6 +70,7 @@ import { resolveBottomBarShown } from './bottomBarOverlay'
 import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
+import { buildTagMenuGroups, type TagMenuEntry } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
   loadAiActions,
@@ -797,6 +798,15 @@ function onCardsClickCapture(ev: MouseEvent): void {
   if (!card) return
   const key = card.getAttribute('data-tile-key') ?? ''
   const tile = refTiles.value.find((t) => t.key === key)
+  /**
+   * 卡片内的操作按钮（@ / 删除 / 播放）必须**先放行**（用户 2026-10-29 第二轮：
+   * 「hover 时右下角 @ 按钮点不动」）。
+   *
+   * 根因：这一层是容器的捕获阶段委托，在事件到达按钮之前就跑；以前对任何卡片命中都
+   * stopPropagation，于是按钮自己的 @click 永远收不到、功能像没实现。
+   * 现在：命中操作按钮直接 return（既不掐断也不重复处理），交给按钮自己的处理逻辑。
+   */
+  if (target.closest('.nb-card-act')) return
   if (target.closest('.nb-remove')) {
     ev.stopPropagation()
     /**
@@ -832,27 +842,46 @@ function onCardsClickCapture(ev: MouseEvent): void {
  * 定位优先取 nodeLayout 的 flow 矩形（与「返回节点」同一个口径与缩放规则），
  * 宿主没装 nodeLayout 时回落到「量节点 DOM 反算 flow 坐标」——量不到就什么都不做。
  */
-function onCardDblClick(tile: RefTile): void {
-  const nodeId = tile.nodeId ?? (tile.key.startsWith('ref-node:') ? tile.key.slice('ref-node:'.length) : '')
-  if (!nodeId) return
-  const viewport = ctx.tryGet<{
-    getViewport(): { x: number; y: number; zoom: number }
-    setCenter(x: number, y: number, zoom?: number): void
-    setViewport?(v: { x: number; y: number; zoom: number }): void
-  }>('viewport')
-  if (!viewport) return
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
-  const rect = layout?.getNodeRect(nodeId) ?? null
-  if (!rect) return
-  const target = focusViewportFor(rect, viewport.getViewport().zoom)
-  if (typeof viewport.setCenter === 'function') viewport.setCenter(target.x, target.y, target.zoom)
-  else viewport.setViewport?.(target)
-}
 
 /**
  * 键盘排序（无障碍 + 真实操作可测）：聚焦卡片后 Ctrl+←/Ctrl+→ 左右移动。
  * 走 onReorderTiles 同一条落盘路径 —— 与鼠标拖拽行为完全一致。
  */
+function onCardDblClick(tile: RefTile): void {
+  const nodeId = tile.nodeId ?? (tile.key.startsWith('ref-node:') ? tile.key.slice('ref-node:'.length) : '')
+  if (!nodeId) return
+  /**
+   * 用户第二轮追问「你这个聚焦是怎么实现的？参考 F 键那个插件」，所以这里复用同一套：
+   *   1. 有 auto-layout 服务：调它的 focusNode（与 F 键共享取景缩放 + 过渡动画）；
+   *   2. 没有服务：走 focusViewportFor 的同一份缩放规则，并用 viewport.animateViewport 带过渡。
+   *
+   * 上一版只调 setCenter：缩放不变、也没有动画，小卡片聚焦后还是很小，看着像没反应。
+   */
+  const focusService = ctx.tryGet<{ focusNode?(id: string): unknown }>('auto-layout')
+  if (focusService?.focusNode) {
+    try {
+      if (focusService.focusNode(nodeId)) return
+    } catch { /* 服务异常：回落到下面的通用实现 */ }
+  }
+  const viewport = ctx.tryGet<{
+    getViewport(): { x: number; y: number; zoom: number }
+    setViewport(v: { x: number; y: number; zoom: number }): void
+    animateViewport?(v: { x: number; y: number; zoom: number }): void
+    getRootEl?(): HTMLElement | null
+  }>('viewport')
+  if (!viewport) return
+  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
+  const rect = layout?.getNodeRect(nodeId) ?? null
+  if (!rect) return
+  const root = viewport.getRootEl?.() ?? null
+  const vw = root?.clientWidth || (typeof window === 'undefined' ? 0 : window.innerWidth)
+  const vh = root?.clientHeight || (typeof window === 'undefined' ? 0 : window.innerHeight)
+  const zoom = resolveFocusZoom(viewport.getViewport().zoom)
+  const next = { x: vw / 2 - (rect.x + rect.w / 2) * zoom, y: vh / 2 - (rect.y + rect.h / 2) * zoom, zoom }
+  if (viewport.animateViewport) viewport.animateViewport(next)
+  else viewport.setViewport(next)
+}
+
 function onCardsKeydown(ev: KeyboardEvent): void {
   if (!(ev.ctrlKey || ev.metaKey)) return
   if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return
@@ -1459,6 +1488,23 @@ function closePreviewNow(): void {
   previewTile.value = null
 }
 
+/**
+ * 悬浮预览必须跟着**当前素材**走（用户 2026-10-29 第二轮：图删了，hover 还显示旧图）。
+ *
+ * 根因：previewTile 存的是 hover 那一刻的整个卡片快照（含 url），之后节点被删、连线断开，
+ * 快照不会自己更新，浮层照旧画旧图。现在每次渲染都按 key 回表重取：
+ *   · 卡还在 → 用最新那份（网址/名字/类型都跟着变）；
+ *   · 卡没了 → 立刻关掉预览。
+ */
+const livePreviewTile = computed<RefTile | null>(() => {
+  const current = previewTile.value
+  if (!current) return null
+  return refTiles.value.find((t) => t.key === current.key) ?? null
+})
+watch(livePreviewTile, (v) => {
+  if (!v && previewTile.value) closePreviewNow()
+})
+
 /** 点击悬浮预览 → 进全屏（复用既有 MediaViewer 链路） */
 function openFullscreenFromPreview(tile: RefTile): void {
   closePreviewNow()
@@ -1783,6 +1829,8 @@ function refreshSlotChips(): void {
           category: '素材',
           /** 待绑定标签也走「替换」交互（拖节点 / 点替换菜单皆可） */
           onReplaceClick: openReplaceMenu,
+          /** 待绑定标签同样支持「点左侧图标 → 换一个节点」 */
+          onIconClick: openTagMenu,
         })
         continue
       }
@@ -1800,6 +1848,8 @@ function refreshSlotChips(): void {
          * 点击展开替换菜单（见 openReplaceMenu）。
          */
         onReplaceClick: openReplaceMenu,
+        /** 点左侧图标 → 由底栏在外部弹标签菜单（图 4 风格） */
+        onIconClick: openTagMenu,
         ...(kind === 'video' && tile.url
           ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
           : {}),
@@ -1838,29 +1888,25 @@ watch([shownMaterials, refOrder], () => {
 }, { immediate: true })
 
 // ===== 输入框标签「替换素材」（用户 2026-10-29 定案）=====
+// ===== 标签下拉菜单（用户 2026-10-29 第三轮定案，图 4 风格）=====
 //
-// hover 标签 → 左侧图标变「替换」键；点击展开替换菜单（按类型分组 + 搜索）。
-// 选中的替换规则（用户定案）：
-//   · 该节点**只有这一处**被引用 → 断旧线、连新线（真正替换）；
-//   · 该节点**还有别处**引用 → 只额外加一条新连线（不动旧线）。
+// 结构：标签分左右两半 —— 点右侧文字 = 默认行为（0.5s 后光标落到标签后）；
+// 点左侧图标 = 编辑器只发事件，由**本文件（底栏外部）**用主题 Dropdown 弹菜单。
+// 数据源 = 整个画布（不是当前连线），分组 已引用 / 图片 / 视频 / 音频 / 文本。
 
-/** 替换菜单状态：null = 关闭；开着时记录「替换的是哪颗标签」 */
-const replaceMenu = ref<{ chipId: string; chipName: string; chipKind: 'image' | 'video' | 'audio' | 'text' | null; nodeId: string | null } | null>(null)
-const replaceSearch = ref('')
-/**
- * 替换菜单的开关（受控给主题 Dropdown，用户 2026-10-29 要求用注册组件）。
- * 定位交给 Dropdown：锚点挪到被点的标签下方，它自己算翻转与夹边。
- */
-const replaceMenuOpen = ref(false)
-const replaceAnchor = ref<HTMLElement | null>(null)
+const tagMenuOpen = ref(false)
+const tagMenuQuery = ref('')
+const tagMenuChip = ref<ResourceItem | null>(null)
+const tagMenuAnchor = ref<HTMLElement | null>(null)
 
-/** 画布上所有可作素材的节点（按类型分组的数据源） */
-const canvasMaterialsForReplace = computed(() => {
+/** 菜单数据源：画布上所有可作为素材的节点（含当前未连线的） */
+const tagMenuEntries = computed<TagMenuEntry[]>(() => {
   const doc = ctx.tryGet<{
     getNodes(): Array<{ id: string; type?: string; data?: Record<string, unknown> }>
   }>('doc')
   if (!doc) return []
-  const out: Array<{ id: string; name: string; kind: 'image' | 'video' | 'audio' | 'text'; url?: string }> = []
+  const linked = new Map(shownMaterials.value.map((m) => [m.id, m]))
+  const out: TagMenuEntry[] = []
   for (const n of doc.getNodes()) {
     if (n.id === props.id) continue
     const media = nodeMediaOf(n)
@@ -1870,62 +1916,49 @@ const canvasMaterialsForReplace = computed(() => {
       name: media.name || n.id,
       kind: media.mediaType,
       ...(media.url ? { url: media.url } : {}),
+      referenced: linked.has(n.id),
     })
   }
   return out
 })
 
-/** 分组 + 搜索后的候选（渲染用） */
-const replaceGroups = computed(() => {
-  const q = replaceSearch.value.trim().toLowerCase()
-  const kindLabel: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
-  const wanted = replaceMenu.value?.chipKind ?? null
-  const buckets = new Map<string, typeof canvasMaterialsForReplace.value>()
-  for (const m of canvasMaterialsForReplace.value) {
-    // 只列与当前标签**同类型**的候选（用户口径：按资源类型选择）
-    if (wanted && m.kind !== wanted) continue
-    if (q && !(m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))) continue
-    const list = buckets.get(m.kind) ?? []
-    list.push(m)
-    buckets.set(m.kind, list)
-  }
-  const order = ['image', 'video', 'audio', 'text']
-  return order
-    .filter((k) => buckets.has(k))
-    .map((k) => ({ kind: k, label: kindLabel[k], items: buckets.get(k) ?? [] }))
-})
+const tagMenuGroups = computed(() => buildTagMenuGroups(tagMenuEntries.value, tagMenuQuery.value))
 
-/** 该节点在正文里被引用了几处（替换策略用：唯一引用 → 换线，多处 → 加线） */
-function refCountOf(nodeId: string): number {
-  return promptChips.value.filter((c) => c.nodeId === nodeId).length
+/** 打开菜单：把 Dropdown 的 0 尺寸锚点挪到被点的图标下沿，定位/翻转/点外关闭全交给 Dropdown */
+function openTagMenu(
+  item: ResourceItem,
+  anchor: { left: number; top: number; right: number; bottom: number },
+): void {
+  const el = tagMenuAnchor.value
+  if (el) {
+    el.style.left = Math.round(anchor.left) + 'px'
+    el.style.top = Math.round(anchor.bottom) + 'px'
+  }
+  tagMenuChip.value = item
+  tagMenuQuery.value = ''
+  tagMenuOpen.value = true
+}
+
+function closeTagMenu(): void {
+  tagMenuOpen.value = false
+  tagMenuChip.value = null
+  tagMenuQuery.value = ''
 }
 
 /**
- * 打开替换菜单（用户 2026-10-29：必须用默认主题注册的 Dropdown）。
- *
- * 做法：把 Dropdown 的锚点**挪到被点那颗标签的正下方**，再打开它 ——
- * 定位/翻转/点外关闭/Esc 全部交给 Dropdown，不再手写 fixed 坐标。
+ * 选一个节点 = 把当前标签换绑过去（与替换菜单同一套规则：唯一引用断旧线，多处引用只加新线）。
+ * 选的就是当前绑定的那个 → 只关菜单，不做任何事。
  */
-function openReplaceMenu(item: ResourceItem): void {
-  const el = document.querySelector<HTMLElement>('.resource-chip[data-id="' + item.id + '"]')
-  const anchor = replaceAnchor.value
-  if (el && anchor) {
-    const r = el.getBoundingClientRect()
-    anchor.style.left = Math.round(r.left) + 'px'
-    anchor.style.top = Math.round(r.bottom) + 'px'
+async function pickTagMenuNode(entry: TagMenuEntry): Promise<void> {
+  const chip = tagMenuChip.value
+  if (!chip) return
+  const oldNodeId = nodeIdOfChip(chip.id)
+  if (oldNodeId === entry.id) {
+    closeTagMenu()
+    return
   }
-  replaceMenu.value = {
-    chipId: item.id,
-    chipName: item.name,
-    chipKind: item.chipKind ?? null,
-    nodeId: nodeIdOfChip(item.id),
-  }
-  replaceSearch.value = ''
-  replaceMenuOpen.value = true
-}
-function closeReplaceMenu(): void {
-  replaceMenuOpen.value = false
-  replaceMenu.value = null
+  await replaceChipWith(entry.id)
+  closeTagMenu()
 }
 
 /**
@@ -1940,7 +1973,7 @@ async function replaceChipWith(newNodeId: string): Promise<void> {
     getEdges?(): Array<{ id: string; source: string; target: string }>
   }>('doc')
   if (!doc) return
-  const chipId = replaceMenu.value?.chipId
+  const chipId = tagMenuChip.value?.id
   if (!chipId) return
   const chip = promptChips.value.find((c) => c.id === chipId)
   const oldNodeId = chip?.nodeId ?? null
@@ -1950,7 +1983,6 @@ async function replaceChipWith(newNodeId: string): Promise<void> {
     if (stale.length) doc.removeEdges(stale)
   }
   try { doc.addEdge({ source: newNodeId, target: props.id }) } catch { /* 已存在等：忽略 */ }
-  closeReplaceMenu()
   await nextTick()
   refreshSlotChips()
 }
@@ -2574,7 +2606,7 @@ function onGlobalLeave(el: Element): void {
     -->
     <Teleport to="body">
       <div
-        v-if="previewTile"
+        v-if="livePreviewTile"
         class="nb-hover-preview"
         :class="{ 'is-below': !previewPos.above }"
         :style="{
@@ -2586,26 +2618,26 @@ function onGlobalLeave(el: Element): void {
         @pointerleave="schedulePreviewClose()"
       >
         <video
-          v-if="previewTile.kind === 'video' && previewTile.url"
+          v-if="livePreviewTile.kind === 'video' && livePreviewTile.url"
           class="nb-hover-preview-media"
-          :src="previewTile.url"
+          :src="livePreviewTile.url"
           autoplay
           muted
           loop
           playsinline
         />
         <img
-          v-else-if="cardImageOf(previewTile)"
+          v-else-if="cardImageOf(livePreviewTile)"
           class="nb-hover-preview-media"
-          :src="cardImageOf(previewTile)"
-          :alt="previewTile.label"
+          :src="cardImageOf(livePreviewTile)"
+          :alt="livePreviewTile.label"
         />
         <span v-else class="nb-hover-preview-empty">（无预览）</span>
         <button
           class="nb-hover-preview-open"
           type="button"
-          :aria-label="'全屏预览 ' + previewTile.label"
-          @click.stop="openFullscreenFromPreview(previewTile)"
+          :aria-label="'全屏预览 ' + livePreviewTile.label"
+          @click.stop="openFullscreenFromPreview(livePreviewTile)"
         >全屏</button>
       </div>
     </Teleport>
@@ -2634,51 +2666,57 @@ function onGlobalLeave(el: Element): void {
         @click.stop
       />
       <!--
-        替换菜单的**锚点**（用户 2026-10-29：必须用默认主题注册的 Dropdown）。
-        编辑器标签的替换键点击后，把 Dropdown 打开并把锚点挪到那颗标签下方。
-        触发器本身透明、0 尺寸：Dropdown 只负责定位/外部点击/Esc 收起的既有能力。
-        菜单内容（分组 + 搜索 + 候选）走 #default 插槽。
+        标签菜单（用户 2026-10-29 第三轮，图 4 风格）：
+        编辑器只发「点了左侧图标」事件，菜单在这里（底栏外部）用主题 Dropdown 展示；
+        数据源 = 整个画布，分组 = 已引用 / 图片 / 视频 / 音频 / 文本，带搜索。
       -->
       <Dropdown
-        v-model="replaceMenuOpen"
+        v-model="tagMenuOpen"
         placement="bottom-start"
         :offset="6"
         :teleport="true"
-        body-class="nb-replace-body"
-        menu-width="260px"
-        menu-max-height="340px"
+        body-class="nb-tagmenu-body"
+        menu-width="268px"
+        menu-max-height="420px"
       >
         <template #trigger>
-          <span ref="replaceAnchor" class="nb-replace-anchor" aria-hidden="true" />
+          <span ref="tagMenuAnchor" class="nb-tagmenu-anchor" aria-hidden="true" />
         </template>
-        <template #default="{ close }">
-          <div class="nb-replace-head">
-            <span class="nb-replace-title">替换「{{ replaceMenu?.chipName }}」</span>
-            <button class="nb-replace-close" type="button" aria-label="关闭替换菜单" @click.stop="close()">×</button>
-          </div>
-          <input
-            v-model="replaceSearch"
-            class="nb-replace-search"
-            type="search"
-            placeholder="搜索画布素材…"
-            @keydown.stop
-          />
-          <div class="nb-replace-list">
-            <div v-for="g in replaceGroups" :key="g.kind" class="nb-replace-group">
-              <div class="nb-replace-group-label">{{ g.label }}</div>
+        <template #default>
+          <label class="nb-tagmenu-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              v-model="tagMenuQuery"
+              type="search"
+              placeholder="搜索"
+              aria-label="搜索画布节点"
+              @keydown.stop
+            />
+          </label>
+          <div class="nb-tagmenu-list" role="menu" :aria-label="'选择节点'">
+            <div v-for="g in tagMenuGroups" :key="g.kind" class="nb-tagmenu-group">
+              <div class="nb-tagmenu-group-label">{{ g.label }}</div>
               <button
-                v-for="m in g.items"
-                :key="m.id"
-                class="nb-replace-item"
+                v-for="e in g.items"
+                :key="e.id"
+                class="nb-tagmenu-row"
+                :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
                 type="button"
                 role="menuitem"
-                @click.stop="replaceChipWith(m.id)"
+                @click.stop="pickTagMenuNode(e)"
               >
-                <span class="nb-replace-item-name">{{ m.name }}</span>
-                <span class="nb-replace-item-id">{{ m.id }}</span>
+                <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
+                  <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
+                </span>
+                <span class="nb-tagmenu-name">{{ e.name }}</span>
+                <svg v-if="e.referenced" class="nb-tagmenu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
               </button>
             </div>
-            <div v-if="replaceGroups.length === 0" class="nb-replace-empty">画布上没有同类素材</div>
+            <div v-if="tagMenuGroups.length === 0" class="nb-tagmenu-empty">画布上没有可用的节点</div>
           </div>
         </template>
       </Dropdown>
@@ -3676,112 +3714,172 @@ function onGlobalLeave(el: Element): void {
 }
 
 /**
- * 替换菜单（用户 2026-10-29 重构）：按类型分组 + 搜索 + 点选替换。
+/* 待绑定（手打的 @名字，还没拖节点）：统一资源图标 */
+/*
+ * 标签下拉菜单（用户 2026-10-29 第三轮，图 4 风格）：
+ * 浮层外框/定位/点外关闭由主题 Dropdown 提供，这里只排内容。
+ * 结构 = 顶部搜索框 + 分组列表（组标题 + 行：缩略图/类型图标 + 名称 + 已引用勾）。
+ * 数值全部走 ui-style-guide：面板 16 → 行 10 → 徽章 6，间距 4/6/8/12。
  */
-.nb-replace-menu {
-  /* 外框/定位/关闭交给默认主题的 Dropdown（用户 2026-10-29），这里只排内容 */
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-/** 触发器：贴在标签下方的 0 尺寸锚点（Dropdown 按它算位置） */
-.nb-replace-anchor {
+.nb-tagmenu-anchor {
   position: fixed;
   display: block;
   width: 1px;
   height: 1px;
   pointer-events: none;
 }
-/* Dropdown 浮层（Teleport 到 body，scoped 命不中，用 :global） */
-:global(.nb-replace-body) {
-  width: 260px;
+/* Dropdown 浮层被 teleport 到 body，scoped 命不中 → 全局类 */
+:global(.nb-tagmenu-body) {
+  width: 268px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--ui-overlay-solid, #fff);
 }
-.nb-replace-head {
+.nb-tagmenu-search {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px 4px;
-}
-.nb-replace-title {
-  color: var(--ui-ink, #18202b);
-  font-size: 12px;
-  font-weight: 700;
-}
-.nb-replace-close {
-  width: 18px;
-  height: 18px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ui-ink-mute, #8c95a3);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-}
-.nb-replace-close:hover {
-  background: var(--ui-hover, rgb(0 0 0 / 0.05));
-  color: var(--ui-ink, #18202b);
-}
-.nb-replace-search {
-  margin: 0 8px 6px;
-  padding: 4px 8px;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0 10px;
+  height: 32px;
   border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--ui-ink, #18202b);
-  outline: none;
+  border-radius: 10px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+  color: var(--ui-ink-mute, #8c95a3);
 }
-.nb-replace-search:focus {
+.nb-tagmenu-search:focus-within {
   border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
 }
-.nb-replace-list {
-  overflow-y: auto;
-  padding: 0 4px 6px;
+.nb-tagmenu-search svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
-.nb-replace-group-label {
-  padding: 4px 6px 2px;
+.nb-tagmenu-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink, #18202b);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.nb-tagmenu-search input::placeholder {
   color: var(--ui-ink-faint, #9ca3af);
-  font-size: 10px;
+}
+.nb-tagmenu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.nb-tagmenu-group-label {
+  padding: 6px 8px 2px;
+  color: var(--ui-ink-faint, #9ca3af);
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
-.nb-replace-item {
+.nb-tagmenu-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 5px 8px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
   color: var(--ui-ink, #18202b);
-  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
   text-align: left;
+  cursor: pointer;
 }
-.nb-replace-item:hover {
-  background: var(--ui-hover, rgb(0 0 0 / 0.05));
+.nb-tagmenu-row:hover {
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
-.nb-replace-item-name {
-  font-size: 12px;
-  font-weight: 600;
+.nb-tagmenu-row.is-current {
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+}
+/* 行首缩略图 / 类型图标：18px 圆角小块，图片盖在类型图标上 */
+.nb-tagmenu-thumb {
+  position: relative;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+  overflow: hidden;
+}
+.nb-tagmenu-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.nb-tagmenu-thumb::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background-color: color-mix(in srgb, var(--ui-ink, #18202b) 55%, transparent);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  /* 默认（未指定类型）：通用资源方块 */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+}
+/* 有真图时把类型图标藏掉，只留图片 */
+.nb-tagmenu-thumb:has(img)::before {
+  display: none;
+}
+.nb-tagmenu-thumb[data-kind='image']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-thumb[data-kind='video']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-thumb[data-kind='audio']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-thumb[data-kind='text']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.nb-replace-item-id {
-  color: var(--ui-ink-faint, #9ca3af);
-  font-size: 10px;
+.nb-tagmenu-check {
   flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ui-accent, #0891b2);
 }
-.nb-replace-empty {
-  padding: 14px 8px;
+.nb-tagmenu-empty {
+  padding: 16px 8px;
   text-align: center;
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 12px;
 }
 
-/* 待绑定（手打的 @名字，还没拖节点）：统一资源图标 */
 .nb-card-placeholder[data-kind='resource'],
 .nb-card-fallback[data-kind='resource'] {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
