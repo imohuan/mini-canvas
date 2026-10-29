@@ -48,14 +48,14 @@ describe('duplicateImageForRotate', () => {
   it('复制图片 → 原图连到副本 → 副本进入旋转模式，原图不变', () => {
     const { ctx, doc, nodeStore, edgeStore, selection, history, entered } = makeStack()
     closeRotateMode()
-    const sourceId = doc.addNodes([
+    doc.addNodes([
       {
         type: 'image',
         position: { x: 40, y: 60 },
         data: { label: '图片 1', resourceId: 'res-1', imageUrl: 'blob:one', imageWidth: 640, imageHeight: 480 },
         size: { w: 320, h: 240 },
       },
-    ]).toString()
+    ])
     const original = nodeStore.getNodes()[0]
     const originalSnapshot = JSON.parse(JSON.stringify(original))
 
@@ -63,7 +63,7 @@ describe('duplicateImageForRotate', () => {
     const copyId = duplicateImageForRotate(ctx, original.id, { schedule: (fn) => void (scheduled = fn) })
 
     expect(typeof copyId).toBe('string')
-    expect(copyId).not.toBe(sourceId)
+    expect(copyId).not.toBe(original.id)
     expect(nodeStore.getNodes()).toHaveLength(2)
     // 原图一个字节都没动
     expect(nodeStore.getNode(original.id)).toEqual(originalSnapshot)
