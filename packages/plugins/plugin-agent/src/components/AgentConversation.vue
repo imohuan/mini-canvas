@@ -367,7 +367,7 @@ function mcpStatusOf(name: string): { ok: boolean; text: string; tools: number }
 }
 
 /** MCP 卡片副行：优先显示地址 / 命令（区分同名服务），没有就显示传输方式 */
-function mcpServerDesc(item: { id: string; value: string }): string {
+function mcpServerDesc(item: { id: string; value?: string }): string {
   if (item.value) return item.value
   const row = s.mcpServers.find((m) => 'mcp:' + m.name === item.id)
   const cfg = row?.config ?? {}

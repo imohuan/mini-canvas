@@ -225,7 +225,20 @@ const menuStyle = computed(() => {
   return base
 })
 
-/** 箭头坐标：贴着菜单的那条边**居中**。fixed 定位（菜单滚动时箭头不会跟着跑）。 */
+/** 触发器中心（'x' 或 'y' 轴）：箭头指向的唯一真相。 */
+function triggerCenter(axis: 'x' | 'y'): number {
+  const el = floatAnchorRef.value
+  if (!el) return 0
+  const r = el.getBoundingClientRect()
+  return axis === 'x' ? r.left + r.width / 2 : r.top + r.height / 2
+}
+
+/** 把值夹进 [lo, hi]（lo > hi 时取 lo，防止 PAD 大于菜单宽时表达式反向）。 */
+function clampTrigger(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(v, Math.max(lo, hi)))
+}
+
+/** 箭头坐标：贴着菜单的那条边，指向触发器。fixed 定位（菜单滚动时箭头不会跟着跑）。 */
 const arrowStyle = computed(() => {
   const side = placement.value?.split('-')[0] ?? 'bottom'
   const base = floatingStyles.value as Record<string, string>
@@ -235,29 +248,27 @@ const arrowStyle = computed(() => {
   const mw = menu ? menu.offsetWidth : 0
   const mh = menu ? menu.offsetHeight : 0
   const HALF = 5
-  // 居中取菜单自己的中线（mw / 2），不是触发器中心：菜单多为 -start 对齐（从按钮往左铺开），
-  // 用触发器中心会把它挤到最左边，看着像"箭头指向左侧"。
+  // 箭头永远指向**触发器中心**，再夹在菜单范围内（防压圆角/出界）。
+  // 为什么不按菜单取点（老做法：align=start 取左缘、center 取中线）：
+  //   菜单宽度随内容/视图变化（如 Agent 面板 320↔586），一旦菜单宽过按钮或被
+  //   shift 推离锚点，按菜单算出的点就不再落在触发器上 —— 表现是「箭头没指着按钮」。
+  //   老代码注释里那句「用触发器中心会挤到最左边」其实是 shift 造成的错觉：
+  //   真正该修的是跟随触发器 + 夹紧，而不是放弃跟随。
   // 也不用 floating-ui 的 arrow 中间件：它按打开那一刻的尺寸算，而 menuWidth 是 min-width，
   // 中文文案会把菜单撑宽，那个偏移随即失准。
   let cx: number
   let cy: number
   if (side === 'right') {
     cx = ml
-    cy = mt + mh / 2
+    cy = clampTrigger(triggerCenter('y'), mt, mt + mh)
   } else if (side === 'left') {
     cx = ml + mw
-    cy = mt + mh / 2
+    cy = clampTrigger(triggerCenter('y'), mt, mt + mh)
   } else {
-    // bottom = 箭头贴菜单**上缘**；top = 贴**下缘**。
-    // 横向位置**跟 align 走**（原先写死取菜单中线，左对齐时菜单左移、箭头还留在中间，看着"没对齐"）：
-    //   start  → 贴菜单左缘内缩（箭头尖对着触发器的左对齐边）
-    //   end    → 贴菜单右缘内缩
-    //   center → 菜单中线（老行为）
+    // 横向：取触发器中心，再夹进 [菜单左缘+PAD, 右缘-PAD]；
+    // 纵向：top 贴菜单下缘、bottom 贴菜单上缘。
     const PAD = 14 // 离菜单边角的距离（避免箭头压在圆角上）
-    const a = effectiveAlign.value
-    cx = a === 'start' ? ml + PAD
-      : a === 'end' ? ml + mw - PAD
-        : ml + mw / 2
+    cx = clampTrigger(triggerCenter('x'), ml + PAD, ml + mw - PAD)
     cy = side === 'top' ? mt + mh : mt
   }
   // 旋转 45° 后，哪些原边会露在外面（决定画哪两条边框，才能和菜单边框接上）
