@@ -181,6 +181,29 @@ export const VIDEO_THUMB_KEYS = videoThumbTierKeys('video')
  * 空视频 + 白底画面与画布背景糊在一起时，边框是唯一能看出节点边界的东西。
  */
 export function apply(ctx: Context) {
+  // 上控制栏注册进 nodeToolbar 的「默认模式」（用户口径 2026-10-29 重构）：
+  // 与裁剪/扩展等模式共用同一条解析链路，节点类型不再声明 out:top 段。
+  // 不 import 主题/底栏插件 —— 跨插件只认服务名。
+  const registerToolbar = (): boolean => {
+    const svc = ctx.tryGet<{
+      registerMode?(mode: unknown): void
+    } | undefined>('nodeToolbar')
+    if (!svc?.registerMode) return false
+    svc.registerMode({
+      id: 'default',
+      types: ['video'],
+      title: '视频默认状态栏',
+      topBar: VideoTopToolbar,
+      order: 100,
+    })
+    return true
+  }
+  if (!registerToolbar()) {
+    const off = ctx.on('ctx:plugin-installed', () => {
+      if (registerToolbar()) off.dispose()
+    })
+  }
+
   const service = new VideoService(ctx)
 
   // 媒体创建器：别的插件要“放一段视频”时经 media 能力路由到这里，
@@ -261,7 +284,6 @@ export function apply(ctx: Context) {
     loadingDefaultSize: true,
     in: VideoContent,
     segments: {
-      'out:top': VideoTopToolbar,
       // 裁剪浮层画在**卡片外面**（over:inset 区域）：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
       'over:inset': VideoFrameOverlay,

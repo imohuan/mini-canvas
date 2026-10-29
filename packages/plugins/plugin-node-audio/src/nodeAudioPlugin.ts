@@ -117,6 +117,28 @@ export const Config: ConfigSchema = {
  * 一屏能放下更多。要改整体大小请改这里的 size，不给用户一个按不住的手柄。
  */
 export function apply(ctx: Context) {
+  // 上控制栏注册进 nodeToolbar 的「默认模式」（用户口径 2026-10-29 重构）：
+  // 与其它节点同一条解析链路，节点类型不再声明 out:top 段。
+  const registerToolbar = (): boolean => {
+    const svc = ctx.tryGet<{
+      registerMode?(mode: unknown): void
+    } | undefined>('nodeToolbar')
+    if (!svc?.registerMode) return false
+    svc.registerMode({
+      id: 'default',
+      types: ['audio'],
+      title: '音频默认状态栏',
+      topBar: AudioTopToolbar,
+      order: 100,
+    })
+    return true
+  }
+  if (!registerToolbar()) {
+    const off = ctx.on('ctx:plugin-installed', () => {
+      if (registerToolbar()) off.dispose()
+    })
+  }
+
   const service = new AudioService(ctx)
   const ops = createAudioOps(ctx)
 
@@ -156,9 +178,6 @@ export function apply(ctx: Context) {
     // 不支持拖拽改尺寸：波形是定长内容，拉伸只会变形（用户明确要求）
     resizable: false,
     in: AudioContent,
-    segments: {
-      'out:top': AudioTopToolbar,
-    },
     create(position) {
       return service.addAudioNode(position)
     },

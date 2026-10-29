@@ -67,12 +67,15 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('展示段注册：in + out:top（底栏搬进 plugin-bottom-bar，本包不再自占 out:bottom）', async () => {
+  it('展示段注册：in + over:inset；上栏改由 nodeToolbar 的默认模式提供', async () => {
     const { ctx } = boot()
     await ctx.start()
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'in')).toBeTruthy()
-    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:top')).toBeTruthy()
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'over:inset')).toBeTruthy()
+    // 2026-10-29 重构：上栏不再走节点类型的 out:top 段，改注册成 nodeToolbar 的默认模式
+    // （与裁剪/扩展共用同一条解析链路，避免同一位置出现两套栏）。
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:top')).toBeUndefined()
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:bottom')).toBeUndefined()
     // 壳没注册的区域不该凭空多出来
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'title')).toBeUndefined()

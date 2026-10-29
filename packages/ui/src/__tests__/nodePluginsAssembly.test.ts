@@ -76,16 +76,16 @@ async function bootAll() {
 /**
  * 各节点类型各自的预期段（壳 BaseNode 实际会读的槽位）。
  * 注意：text 只有底部状态栏 —— 顶部的加粗/字号/颜色/对齐对文本节点无语义，已按用户要求删除；
- * video 是上下都要：上面是"上传/剪辑/裁剪/截图/下载"操作条，下面是剪辑时间轴。
- * audio 是内容段 + 上控制栏：波形与播放控件在 in 段里，**上传入口在 out:top**
- * （用户口径 2026-10-14：上传按钮搬到顶部菜单栏，与图片/视频节点对齐）。
+ * 上控制栏不再走 out:top 段（2026-10-29 重构）：图片/视频/音频都注册成 nodeToolbar 的默认模式。
+ * 音频的内容段仍负责波形与播放控件（in）；上传入口在上控制栏（默认模式）。
+ * （用户口径 2026-10-14：上传按钮搬到顶部菜单栏，与图片/视频节点对齐。）
  * 以后若要给某类型加回顶部栏，必须同步改这里，否则这条测试会拦住（这正是它的用处）。
  */
 const EXPECTED = [
   { type: 'text', extraSegments: [] },
-  { type: 'image', extraSegments: ['out:top', 'over:inset'] },
-  { type: 'video', extraSegments: ['out:top', 'over:inset'] },
-  { type: 'audio', extraSegments: ['out:top'] },
+  { type: 'image', extraSegments: ['over:inset'] },
+  { type: 'video', extraSegments: ['over:inset'] },
+  { type: 'audio', extraSegments: [] },
   { type: '3d-preview', extraSegments: [] },
   { type: 'image-compare', extraSegments: [] },
 ] as const
@@ -108,6 +108,12 @@ describe('节点插件整装', () => {
       for (const seg of extraSegments) {
         expect(segments[seg], `${type} 缺 ${seg} 段`).toBeTruthy()
       }
+    }
+    // 2026-10-29 重构：图片/视频/音频的上控制栏不再走节点类型的 out:top 段，
+    // 而是注册成 nodeToolbar 的默认模式（同一格解析，默认/功能模式共用一条链路）。
+    // 这里锁住「不再注册 out:top」，避免两条渲染入口同时存在。
+    for (const type of ['image', 'video', 'audio']) {
+      expect(nodeRegistry.get(type)?.segments['out:top'], `${type} 不该再注册 out:top 段`).toBeUndefined()
     }
     ctx.stop()
   })

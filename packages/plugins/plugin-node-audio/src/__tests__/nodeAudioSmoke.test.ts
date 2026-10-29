@@ -76,11 +76,14 @@ describe('音频节点插件整装', () => {
     ctx.stop()
   })
 
-  it('注册了 out:top 段（上传入口在上控制栏 —— 用户要求"上传按钮放到顶部菜单栏"）', async () => {
+  it('上控制栏注册成 nodeToolbar 的默认模式（不再自占 out:top 段）', async () => {
     const { ctx, nodeRegistry } = await boot()
-    expect(nodeRegistry.get(AUDIO_NODE_TYPE)?.segments['out:top']).toBeTruthy()
-    // 底栏搬进 plugin-bottom-bar（T8），本包不自占 out:bottom
+    // 2026-10-29 重构：上栏改注册进 nodeToolbar 的默认模式，与其它节点同一条解析链路。
+    expect(nodeRegistry.get(AUDIO_NODE_TYPE)?.segments['out:top']).toBeUndefined()
+    // 底栏仍归 plugin-bottom-bar（本包不自占 out:bottom）
     expect(nodeRegistry.get(AUDIO_NODE_TYPE)?.segments['out:bottom']).toBeUndefined()
+    // 本包不硬依赖主题：没装 nodeToolbar 时照常装配（可选依赖，靠 ctx:plugin-installed 补注册）。
+    expect(ctx.tryGet('nodeToolbar')).toBeUndefined()
     ctx.stop()
   })
 
