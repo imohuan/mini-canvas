@@ -418,7 +418,7 @@ function mcpServerRow(server, expanded, variant) {
     '<button type="button" class="row mcp-svc-main" data-mcp-expand="' + esc(server.name) + '" aria-expanded="' + expanded + '">' +
     '<span class="row-icon">' + icon('plug') + '</span><span class="row-main"><span class="row-name"><span class="nm">' + esc(server.name) + '</span></span>' +
     '<span class="row-desc" title="' + esc(server.desc) + '">' + (server.builtin ? '<span class="badge accent">内置</span> ' : '') + esc(server.desc) + '</span></span>' +
-    '<span class="row-side">' + (server.ok ? '<span class="badge ok">' + server.tools.length + ' 工具</span>' : '<span class="badge warn">未连接</span>') + (server.tools.length ? '<svg class="chev" viewBox="0 0 24 24">' + LINE.chevron + '</svg>' : '') + '</span></button></div>' +
+    '<span class="row-side">' + (quoted ? '<span class="badge accent">已选服务</span>' : '') + (server.ok ? '<span class="badge ok">' + server.tools.length + ' 工具</span>' : '<span class="badge warn">未连接</span>') + (server.tools.length ? '<svg class="chev" viewBox="0 0 24 24">' + LINE.chevron + '</svg>' : '') + '</span></button></div>' +
     (open && server.tools.length ? '<div class="mcp-tools">' + server.tools.map((t) => mcpToolRow(server, t, 'v1')).join('') + '</div>' : '') +
     '</div>'
 }
