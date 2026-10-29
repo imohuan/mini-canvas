@@ -31,6 +31,7 @@ export type {
   BarRunContext,
   BarApplier,
   BarLookup,
+  BarModeState,
 } from './barTypes'
 export type { NodeRunState } from './runState'
 export { readRunState, runningState, progressState, doneState, errorState } from './runState'

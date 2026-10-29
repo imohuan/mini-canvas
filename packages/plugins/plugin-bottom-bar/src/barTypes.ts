@@ -137,5 +137,19 @@ export interface BarLookup {
   applierOf(kind: string): BarApplier | undefined
 }
 
+/**
+ * 底栏的「功能模式」：某个功能接管节点底栏（把默认生成 UI 换成该功能的专属面板）。
+ *
+ * 为什么是服务态而不是组件内状态：顶栏按钮（图片顶栏插槽）与底栏 pill 都要能切换
+ * 同一份选中态 —— 单一真源放在 nodeBar 服务上，两边永远同步。这是纯 UI 会话
+ * （与 plugin-node-image 的 cropSession 同理），不写节点 data、不进撤销栈。
+ */
+export interface BarModeState {
+  /** 处于该模式的节点 id（空串 = 没有功能在接管） */
+  nodeId: string
+  /** 接管用的动作 id（应当指向一个带 panel 的动作） */
+  actionId: string
+}
+
 // 页脚：这些类型是本包对外契约的一部分；改任何一个都要过计划与审核，
 // 因为它们同时是「别的插件怎么往底栏发布动作」的合同。

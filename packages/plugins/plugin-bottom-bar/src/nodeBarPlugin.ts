@@ -13,7 +13,7 @@
 import { Service, type Context } from '@mini-canvas/canvas-base'
 import type { PluginScope } from '@mini-canvas/kernel'
 import type { DocService } from '@mini-canvas/canvas-data'
-import type { BarAction, BarApplier } from './barTypes'
+import type { BarAction, BarApplier, BarModeState } from './barTypes'
 import type { ToolResourceKind } from '@mini-canvas/kernel'
 import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
 import { readRunState } from './runState'
@@ -26,6 +26,7 @@ import ReferenceSelectOverlay from './ReferenceSelectOverlay.vue'
 // 全屏媒体预览浮层（素材卡点开看大图/全文）
 import MediaPreviewOverlay from './MediaPreviewOverlay.vue'
 import NodeSelectOverlay from './NodeSelectOverlay.vue'
+import { reactive } from 'vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
 export const BOTTOM_BAR_SLOT = 'bottomBar'
@@ -86,6 +87,37 @@ export class NodeBarService extends Service {
   state(nodeId: string) {
     const doc = this.ctx.get<DocService>('doc')
     return readRunState(doc.getNode(nodeId)?.data)
+  }
+
+  // ==================== 功能模式（顶栏按钮与底栏 pill 共用的选中态） ====================
+  //
+  // 状态放本服务实例上（模块级 reactive，服务唯一实例）：这是纯 UI 会话，不写节点 data。
+  // 顶栏插槽按钮与底栏动作列表都调 selectMode / exitMode，两边永远同步。
+  private readonly mode = reactive<BarModeState>({ nodeId: '', actionId: '' })
+
+  /** 某节点是否正处于功能接管模式（是 → 底栏渲染该动作的 panel，替换默认生成 UI） */
+  modeOf(nodeId: string): BarModeState | undefined {
+    return this.mode.nodeId && this.mode.nodeId === nodeId
+      ? { ...this.mode }
+      : undefined
+  }
+
+  /** 进入功能模式（动作必须带 panel；不带 panel 的动作走正常选中，不接管） */
+  selectMode(nodeId: string, actionId: string): void {
+    const action = this.get(actionId)
+    if (!nodeId || !action?.panel) return
+    this.mode.nodeId = nodeId
+    this.mode.actionId = actionId
+    action.onSelect?.(nodeId)
+  }
+
+  /** 退出功能模式（幂等；被顶替成别的模式时也先收到 onDeselect 再换） */
+  exitMode(nodeId: string): void {
+    if (!this.mode.nodeId || (nodeId && this.mode.nodeId !== nodeId)) return
+    const action = this.get(this.mode.actionId)
+    action?.onDeselect?.(this.mode.nodeId)
+    this.mode.nodeId = ''
+    this.mode.actionId = ''
   }
 
   // ==================== 写入面（给**别的插件**用；条目归调用方 scope） ====================

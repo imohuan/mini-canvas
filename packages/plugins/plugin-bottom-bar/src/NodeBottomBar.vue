@@ -214,6 +214,29 @@ function iconOfType(type: string | undefined): unknown {
 const currentId = ref('')
 const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
 
+// —— 功能模式（顶栏按钮与底栏 pill 共用的「接管」态）——
+// 响应式跟随 nodeBar 服务上的模块级会话：插件按钮调 selectMode 后，这里立刻重渲染。
+const modeTick = ref(0)
+const barService = ctx.tryGet<{
+  modeOf(nodeId: string): { nodeId: string; actionId: string } | undefined
+  selectMode(nodeId: string, actionId: string): void
+  exitMode(nodeId: string): void
+}>('nodeBar')
+const activeMode = computed<{ nodeId: string; actionId: string } | undefined>(() => {
+  void modeTick.value // 订阅点：插件/底栏切换模式后 bump
+  return barService?.modeOf(props.id)
+})
+watch(activeMode, (mode) => {
+  if (!mode) return
+  if (currentId.value !== mode.actionId) {
+    // 服务端模式指向的动作与本地选中不同：以服务为准（顶栏按钮先点的场景）
+    currentId.value = mode.actionId
+  }
+}, { immediate: true })
+function refreshModeTick(): void { modeTick.value += 1 }
+pluginOffs.push(ctx.on('nodeBar:mode-changed', refreshModeTick))
+onBeforeUnmount(() => barService?.exitMode(props.id))
+
 /**
  * 参数值。**优先用上次留在节点 data 上的那份**（`data.barValues`）。
  * 为什么：用户要求「下次点进来还是上一次提交的数据，不要清空」—— 参数像输入框一样属于
@@ -287,6 +310,9 @@ function selectAction(id: string): void {
   const prev = currentAction.value
   if (prev?.onDeselect) prev.onDeselect(props.id)
   currentId.value = id
+  // 功能接管语义：带 panel 的动作被选中 = 该功能接管底栏（顶栏按钮与底栏 pill 同一真源）
+  if (currentAction.value?.panel) barService?.selectMode(props.id, id)
+  else barService?.exitMode(props.id)
   // 换动作时**保留**用户已经调过的参数（用户要求：再点进来还是上次那套，不要清空回默认），
   // 但**只保留新动作也声明了的 key** —— 否则旧动作的值会跟着发出去（实测：先选 Dola 视频的
   // model，再切到火山音频，model 还是 "Seedance 2.5"，把正确的 seed-audio-1.0 覆盖掉了）。
@@ -1303,52 +1329,24 @@ function cardTooltip(tile: RefTile): string {
 }
 
 /**
- * 卡片的 hover 提示：走主题 Tooltip（用户 2026-10-29）。
+ * 卡片 hover / 拖拽提示统一走 **tip 服务**（用户 2026-10-29：气泡要贴着鼠标，
+ * 位置不能飘。主题 Tooltip 的锚点方案在卡片这种小元素上定位不可靠 ——
+ * 用户截图里气泡飘在半空，就是它 —— 已弃用）。
  *
- * 为什么不用原生 title：浏览器会延迟 1 秒、样式灰扑扑，跟整体 UI 不搭。
- * 这里用一个受控 Tooltip（只包一张卡），hover 哪张就显示哪张的文案；
- * 拖拽时指针被拖拽库接管，hover 不触发 —— 那条路走 tip 服务（见 startCtrlDrag）。
+ * 文案与拖拽共享一份：hover 出名称+类型（+时长）；拖拽时判定消息会占用 tip，
+ * 两者不会同时出现。
  */
-const hoverCard = ref<RefTile | null>(null)
-/** Tooltip 的定位锚点（跟着鼠标下那张卡走） */
-const cardTipAnchor = ref<HTMLElement | null>(null)
-function moveTipAnchor(tile: RefTile): void {
-  const el = cardTipAnchor.value
-  const card = document.querySelector<HTMLElement>('.nb-shell .nb-card[data-tile-key="' + tile.key + '"]')
-  if (!el || !card) return
-  const r = card.getBoundingClientRect()
-  /**
-   * 锚点**盖满这张卡**（不是 1px 的点）：主题 Tooltip 是按触发元素矩形算位置的，
-   * 尺寸对得上，气泡才会正好贴在卡片下方、水平居中。
-   * 它 pointer-events:none，不挡卡片的点击 / 拖拽；hover 事件由卡片自己转发。
-   */
-  el.style.left = Math.round(r.left) + 'px'
-  el.style.top = Math.round(r.top) + 'px'
-  el.style.width = Math.round(r.width) + 'px'
-  el.style.height = Math.round(r.height) + 'px'
+let tipShownFor: string | null = null
+function showCardTip(tile: RefTile): void {
+  if (ctrlDrag) return
+  if (tipShownFor === tile.key) return
+  ctx.get<{ show(m: string): void; hide(): void }>('tip').show(cardTooltip(tile))
+  tipShownFor = tile.key
 }
-function onCardEnter(tile: RefTile): void {
-  hoverCard.value = tile
-  moveTipAnchor(tile)
-  /**
-   * 把 hover 转给 Tooltip 自己的触发器（用户 2026-10-29：要主题 Tooltip，不要原生 title）。
-   * 卡片不能直接包在 Tooltip 里：拖拽库要求直接子元素就是卡片，多包一层会破坏排序。
-   * 所以这里用锚点当替身，收到 hover 就替它把 mouseenter 发一遍。
-   */
-  void nextTick().then(() => {
-    const dot = cardTipAnchor.value
-    /**
-     * mouseenter **不冒泡**：必须派发给 Tooltip 自己的根节点（.tlt-root），
-     * 派给里面的 dot 是没用的（Vue 的 @mouseenter 挂在根上）。
-     */
-    const root = dot?.closest('.tlt-root')
-    root?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }))
-  })
-}
-function onCardLeave(tile: RefTile): void {
-  if (hoverCard.value?.key === tile.key) hoverCard.value = null
-  cardTipAnchor.value?.closest('.tlt-root')
-    ?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
+function hideCardTip(tile: RefTile): void {
+  if (tipShownFor !== tile.key) return
+  ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')?.hide()
+  tipShownFor = null
 }
 
 /**
@@ -1736,6 +1734,18 @@ function onCtrlModeKeyup(ev: KeyboardEvent): void {
   if (ev.key !== 'Control') return
   clearCtrlSuppression()
   unifiedExitCtrlDragMode()
+  /**
+   * **影子残留兜底 2**（用户 2026-10-29：松手后影子还在）：
+   * Ctrl 松开时如果拖拽会话还挂着（原生 drag 事件丢了 / 在空白处松手），
+   * 这里直接把会话和影子一起收掉 —— 影子绝不能跨过一次 Ctrl 抬起还活着。
+   */
+  if (ctrlDrag) {
+    ctrlDrag.ghost?.remove()
+    if (ctrlDrag.targetTileKey) {
+      document.querySelector('.nb-card[data-tile-key="' + ctrlDrag.targetTileKey + '"]')?.classList.remove('is-target')
+    }
+    ctrlDrag = null
+  }
 }
 
 /** 拖拽启动：由 NodeSelectOverlay 覆盖层经**对象数据通道**调起（props.id/props.data），
@@ -1843,14 +1853,24 @@ function onCtrlDragEnd(): void {
 function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
   const drag = ctrlDrag
   ctrlDrag = null
+  /**
+   * **影子残留兜底**（用户 2026-10-29：松手后影子还在）。
+   * 任何路径离开这个函数前都必须把影子摘掉 —— 统一在这里摘，
+   * 后面的分支只管「要不要落格」，不再各自清理。
+   */
+  const dropGhost = () => {
+    if (drag?.targetTileKey) {
+      document.querySelector('.nb-card[data-tile-key="' + drag.targetTileKey + '"]')?.classList.remove('is-target')
+    }
+    drag?.ghost?.remove()
+  }
   // Ctrl 拖也是一次「拖拽余波」来源：落点附近的下一次 click 不当作按钮点击
   if (drag) {
     lastDragEndAt = Date.now()
     lastDragEndX = ev.clientX
     lastDragEndY = ev.clientY
   }
-  if (drag?.targetTileKey) document.querySelector('.nb-card[data-tile-key="' + drag.targetTileKey + '"]')?.classList.remove('is-target')
-  drag?.ghost?.remove()
+  dropGhost()
   if (!drag || !drag.targetTileKey) return
   // 松手点 = 落在参考格上的（用户松手那一刻鼠标在哪，替换就在哪）
   const dropHost = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.nb-card') as HTMLElement | null
@@ -2040,19 +2060,6 @@ function onGlobalLeave(el: Element): void {
       data-testid="node-bottom-bar"
       @pointerdown.stop
     >
-    <!--
-      卡片 hover 提示（用户 2026-10-29）：用主题 Tooltip，不用浏览器原生 title。
-      只包外壳一行 —— 放在卡片列表的**紧邻父级**，位置按鼠标下那张卡算。
-    -->
-    <div class="nb-card-tip-anchor" aria-hidden="true">
-      <Tooltip
-        :content="hoverCard ? cardTooltip(hoverCard) : ''"
-        :disabled="!hoverCard"
-        placement="bottom"
-      >
-        <span ref="cardTipAnchor" class="nb-card-tip-dot" />
-      </Tooltip>
-    </div>
     <!-- 一排 pill（参考图顶行：+参考 / 标记）。全屏态整个行不渲染（VueDraggable 的
          force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
          行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
@@ -2144,8 +2151,8 @@ function onGlobalLeave(el: Element): void {
         :class="{ 'is-pending': tile.pending, 'is-invalid': tile.invalid }"
         :style="tile.pending ? 'cursor: pointer' : ''"
         :aria-label="cardTooltip(tile)"
-        @pointerenter="onCardEnter(tile)"
-        @pointerleave="onCardLeave(tile)"
+        @pointerenter="showCardTip(tile)"
+        @pointerleave="hideCardTip(tile)"
         @click.stop="tile.pending ? pickSlotFile(tile) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
@@ -2162,6 +2169,17 @@ function onGlobalLeave(el: Element): void {
             @load="clearBrokenTile(tile.key)"
             @error="markBrokenTile(tile.key)"
           />
+          <!--
+            视频播放按钮（用户 2026-10-29 重构：视频中间给一个半透明播放键，
+            hover 预览里才会真正播 —— 这里只是身份标识）。
+          -->
+          <span
+            v-if="!tile.pending && tile.kind === 'video' && !loadingTiles[tile.key]"
+            class="nb-card-play"
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
+          </span>
           <!-- 图还没出来（加载中 / 走丢）：盖住缩略图，露出下面的类型图标 + 转圈/提示 -->
           <span
             v-if="!tile.pending && cardImageOf(tile) && loadingTiles[tile.key]"
@@ -2189,18 +2207,6 @@ function onGlobalLeave(el: Element): void {
             aria-hidden="true"
           />
           <!--
-            类型角标（用户 2026-10-28：卡片分不清是图片还是视频）。
-            2026-10-29 收紧：**只有视频**挂角标 —— 图片的缩略图本身就是它，
-            音频/文本挂个图标反而看不懂（用户报的「空白正方形」就是图片角标）。
-          -->
-          <span
-            v-if="!tile.pending && tile.kind === 'video'"
-            class="nb-card-kind"
-            :data-kind="tile.kind"
-            title="视频"
-            aria-hidden="true"
-          />
-          <!--
             视频时长（用户 2026-10-29）：右下角小字「分:秒」，取代原来的视频小图标。
             超过 60 秒用警示色（用户：这边限制 60 秒以内，超了要醒目提醒）。
           -->
@@ -2208,11 +2214,28 @@ function onGlobalLeave(el: Element): void {
             v-if="!tile.pending && tile.kind === 'video' && formatVideoDuration(tile.duration)"
             class="nb-card-duration"
             :class="{ 'is-over': videoOverLimit(tile.duration) }"
-            :title="videoOverLimit(tile.duration) ? '视频超过 60 秒上限' : '视频时长'"
+            aria-hidden="true"
           >{{ formatVideoDuration(tile.duration) }}</span>
+          <!--
+            索引移到**左上角**（用户 2026-10-29 重构：圆角小徽章）。
+            hover 时藏掉（此时有名称条 + 操作按钮，不再需要序号）。
+          -->
           <span class="nb-card-index">{{ tile.index }}</span>
-          <!-- 拖拽悬停时显示名称（用户 2026-10-28：卡片只有序号看不出是谁） -->
-          <span class="nb-card-namebar">{{ tile.pending ? tile.label + ' · 待添加' : tile.label }}</span>
+          <!--
+            名称条：**只在 hover 时出现**（用户 2026-10-29：平时常驻会盖住左下角序号/时长）。
+            内容 = 标签名 + 失效警示（或视频时长）。
+          -->
+          <span class="nb-card-namebar">
+            <span class="nb-card-namebar-name">{{ tile.pending ? tile.label + ' · 待添加' : tile.label }}</span>
+            <span
+              v-if="tile.invalid"
+              class="nb-card-namebar-warn"
+            >引用已失效</span>
+            <span
+              v-else-if="tile.kind === 'video' && formatVideoDuration(tile.duration)"
+              class="nb-card-namebar-dur"
+            >{{ formatVideoDuration(tile.duration) }}</span>
+          </span>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
         <!-- 键盘排序（无障碍 + 自动化可测）：聚焦卡片后 Ctrl+←/→ 移动 -->
@@ -2227,7 +2250,6 @@ function onGlobalLeave(el: Element): void {
           class="nb-remove"
           type="button"
           :aria-label="'移除素材 ' + tile.label"
-          title="移除素材（断开连线）"
           @pointerdown.stop.prevent="onRemovePointerDown(tile)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2235,7 +2257,9 @@ function onGlobalLeave(el: Element): void {
       </div>
     </VueDraggable>
 
-    <!-- 动作专属面板（video 剪辑时间轴这类） -->
+    <!-- 动作专属面板（video 剪辑时间轴这类）。功能模式接管时（activeMode），
+         面板下方整块默认生成 UI（素材区 / 输入框 / 参数行）按会话由面板自己让位；
+         面板自身决定收起条件（VideoClipPanel 会话同理），底栏不重复实现。 -->
     <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
 
     <!-- 输入区：内联在卡下面（点得进去、能打字、@ 引用素材）。
@@ -2866,18 +2890,7 @@ function onGlobalLeave(el: Element): void {
   cursor: inherit;
   outline: none;
 }
-/**
- * Tooltip 锚点（用户 2026-10-29）：一个 1px 的不可见点，hover 时挪到那张卡的中线，
- * 由主题 Tooltip 按它算气泡位置。放这里而不是包住每张卡，是因为拖拽库要求
- * 直接子元素就是卡片，多一层包裹会破坏排序命中。
- */
-.nb-card-tip-anchor {
-  position: fixed;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  z-index: 100001;
-}
+
 .nb-card-tip-dot {
   /* 触发器铺满锚点（锚点尺寸 = 卡片矩形），Tooltip 按它算位置 */
   display: block;
@@ -3037,8 +3050,12 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-card-index {
   position: absolute;
-  left: 2px;
-  bottom: 2px;
+  /**
+   * 索引移到**左上角**（用户 2026-10-29 重构：圆角小徽章）。
+   * hover 时藏掉 —— 那时有名称条和操作按钮，序号不再必要。
+   */
+  left: 3px;
+  top: 3px;
   z-index: 3;
   min-width: 14px;
   height: 14px;
@@ -3080,6 +3097,44 @@ function onGlobalLeave(el: Element): void {
   color: var(--ui-panel, #fff);
 }
 
+/**
+ * 视频播放按钮（用户 2026-10-29 重构：视频卡片中间给半透明播放键）。
+ * 只是身份标识 —— 真正播放发生在 hover 悬浮预览里。
+ */
+.nb-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.nb-card-play svg {
+  width: 18px;
+  height: 18px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  color: var(--ui-panel, #fff);
+}
+
+/**
+ * 名称条内部（用户 2026-10-29 重构）：名字 + 警示/时长并排，
+ * 失效用警示色点出，正常视频的时长原样跟在名字后面。
+ */
+.nb-card-namebar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nb-card-namebar-warn {
+  color: var(--ui-warn-ink, #ffd9a8);
+  font-weight: 700;
+}
+.nb-card-namebar-dur {
+  color: color-mix(in srgb, var(--ui-panel, #fff) 72%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
 /*
  * 卡片名称条（用户 2026-10-28：卡片只有序号，拖拽时看不出这张是谁）。
  *
@@ -3116,8 +3171,8 @@ function onGlobalLeave(el: Element): void {
   transform: translateY(0);
 }
 /**
- * 名称条出现时**藏掉左下角序号**（用户 2026-10-29：两者叠在一起看不清）。
- * 同一时刻只显示一个信息：要么序号（平时），要么名称（hover / 拖拽 / 失效）。
+ * 名称条只在 hover 时出现（用户 2026-10-29 重构），出现时**藏掉左上角索引**：
+ * 同一时刻只显示一套信息 —— 平时给序号，hover 给名称+操作。
  */
 .nb-card:hover .nb-card-index,
 .nb-card:focus-within .nb-card-index,
