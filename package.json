@@ -2,5 +2,15 @@
   "name": "mini-canvas",
   "private": true,
   "version": "0.0.0",
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -C packages/ui dev",
+    "dev:docs": "pnpm -C packages/docs dev",
+    "dev:ui-kit": "pnpm -C packages/ui exec vite --open /#/ui-kit",
+    "dev:server": "pnpm -C packages/cloud-server build && pnpm -C packages/cloud-server serve",
+    "serve": "pnpm -C packages/cloud-server serve",
+    "start": "node scripts/launch-server.mjs",
+    "start:8865": "node scripts/launch-server.mjs --port 8865",
+    "kill-port": "node scripts/kill-port.mjs"
+  }
 }
