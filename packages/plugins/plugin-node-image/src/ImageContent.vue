@@ -18,6 +18,7 @@ import { ThumbCache, type ThumbResourcePort, type TierImage } from './thumbCanva
 import { makeThumbRef, thumbRefParam } from './thumbKey'
 import { readThumbTiers, resolveThumbTier, thumbTargetFor, thumbTierKeys, type ThumbTierConfig } from './thumbTier'
 import { endEdit, isEditing } from './cropSession'
+import { isPainting } from './paintSession'
 import { clearImageBroken, isImageBroken, markImageBroken } from './imageStatus'
 import { createImageOps } from './imageOps'
 import { cardSizePatch, followedCardSizePatch, missingCardSizePatch, type CardSizePatch } from './imageFit'
@@ -71,7 +72,8 @@ const broken = computed(() => isImageBroken(props.id))
  * 若此时仍用平时那套铺满（cover），遮罩会盖错位置、框也会指向错误的像素区域 ——
  * 用户框的这一块与实际算出来的那一块不是同一个地方。
  */
-const editing = computed(() => isEditing(props.id))
+/** 绘制态也要 contain：笔迹坐标系按显示区算，cover 裁切会让蒙版与原图错位（复核 3） */
+const editing = computed(() => isEditing(props.id) || isPainting(props.id))
 
 // ==================== 分档显示（三档缩略图） ====================
 /**
