@@ -2488,7 +2488,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                下面两条大选项（图标托 / 标题 + 徽章 / 说明 / 单选圈）。 -->
           <!-- align=start：面板从按钮左缘铺开，箭头也贴左缘 —— 不传它默认居中，
                宽面板会把按钮挤到面板右端，箭头（按对齐边内缩）就不再指着按钮。 -->
-          <ThemedDropdown v-model="authOpen" placement="top-start" align="start" :offset="8" menu-width="360px" menu-role="listbox">
+          <!-- placement=top-end：菜单右缘对按钮右缘（向左铺开），箭头贴右缘指着按钮。
+               不用 align=start：它经 useFloating 的动态拼接后实际按 end 排、
+               而箭头按 start 算，两边不同源会错位（2026-10-29 实测）。 -->
+          <ThemedDropdown v-model="authOpen" placement="top-end" :offset="8" menu-width="360px" menu-role="listbox">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
@@ -2531,7 +2534,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
-          <ThemedDropdown v-model="modelOpen" placement="top-start" align="start" :offset="8"
+          <ThemedDropdown v-model="modelOpen" placement="top-end" :offset="8"
             :menu-width="modelView === 'split' ? '586px' : '320px'"
             menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
@@ -2656,7 +2659,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
-          <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-start" align="start" :offset="8"
+          <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-end" :offset="8"
             :menu-width="skillView === 'split' ? '586px' : '320px'" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
@@ -2787,7 +2790,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
           <!-- MCP 暂只有轻卡片一种布局：宽度固定在紧凑档（与卡片视图一致）。 -->
-          <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-start" align="start" :offset="8"
+          <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-end" :offset="8"
             menu-width="320px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
