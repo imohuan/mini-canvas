@@ -334,31 +334,38 @@ watch(
            ⚠️ 必须外面包一层定位容器：共用条自己只管"长什么样"，不负责浮动定位
            （节点那边由 .video-controls 定位）。少了这层，条会顺着 flex 排到画面外
            —— 2026-10-29 真机截图复现的就是这个。 -->
-      <div v-else class="vpv-bar-wrap">
-        <!-- 与节点同款的底部渐变衬底：压住画面下半部，白字/白图标在亮画面上也读得清 -->
+      <template v-else>
+        <!--
+          底部渐变衬底：**贴住视频画面的底边、左右铺满**（用户口径 2026-10-29：
+          「底部的阴影都没有对齐视频的底部」）。
+          它不能放在控件条的定位容器里 —— 那层有 14px 内缩，阴影会浮在底边之上、
+          下面还留一条缝。这里直接挂在视频层（vpv-root）上，bottom:0 / 左右 0。
+        -->
         <div class="vpv-scrim" :class="{ 'is-hidden': !hovering }" aria-hidden="true"></div>
-        <VideoPlayerBar
-          class="vpv-bar-host"
-        :playing="playing"
-        :current-time="currentTime"
-        :duration="duration"
-        :rate="rate"
-        :rate-menu-open="rateOpen"
-        :muted="muted || volume <= 0"
-        :volume="volume"
-        :volume-menu-open="volumeOpen"
-        :loop="loop"
-        @play="togglePlay"
-        @seek="onSeekValue"
-        @rate-toggle="rateOpen = !rateOpen"
-        @rate-pick="pickRate"
-        @loop-toggle="toggleLoop"
-        @mute-toggle="toggleMute"
-        @volume="onVolumeValue"
-        @volume-open="openVolume"
-        @volume-close="scheduleCloseVolume"
-        />
-      </div>
+        <div class="vpv-bar-wrap">
+          <VideoPlayerBar
+            class="vpv-bar-host"
+            :playing="playing"
+            :current-time="currentTime"
+            :duration="duration"
+            :rate="rate"
+            :rate-menu-open="rateOpen"
+            :muted="muted || volume <= 0"
+            :volume="volume"
+            :volume-menu-open="volumeOpen"
+            :loop="loop"
+            @play="togglePlay"
+            @seek="onSeekValue"
+            @rate-toggle="rateOpen = !rateOpen"
+            @rate-pick="pickRate"
+            @loop-toggle="toggleLoop"
+            @mute-toggle="toggleMute"
+            @volume="onVolumeValue"
+            @volume-open="openVolume"
+            @volume-close="scheduleCloseVolume"
+          />
+        </div>
+      </template>
 
       <!-- 加载占位（用户口径：视频没就绪时别再是一片空白）：转圈 + 文字。
            底色只铺在这层元素上，且容器已按视频比例收边 —— 不会多出黑边。 -->
@@ -474,7 +481,9 @@ watch(
 .vpv-dense-expand:focus-visible { outline: 2px solid var(--vpv-ring); outline-offset: 2px; }
 
 /* ===== 控件条：定位在画面底部（外观在共用组件里，这里只负责浮动位置） =====
-   与视频节点同款：贴底、左右留 10px、hover 淡入。 */
+   与视频节点同款：贴底、左右留 10px、hover 淡入。
+   ★ 宽度必须铺满该容器：条自身 flex:1 只在父级也铺满时才有效，
+   否则它退化成内容宽度（用户 2026-10-29 截图：全屏只占左侧一小块）。 */
 .vpv-bar-wrap {
   position: absolute;
   left: 10px;
@@ -483,6 +492,7 @@ watch(
   z-index: 9;
   display: flex;
   align-items: center;
+  width: auto;
   gap: 4px;
   opacity: 0;
   translate: 0 6px;
@@ -493,7 +503,9 @@ watch(
 .vpv-root:focus-within .vpv-bar-wrap { opacity: 1; translate: 0 0; pointer-events: auto; }
 /* 全屏舞台给一档更舒服的底边距（与节点卡片的 8px 略不同，但仍是"贴底"同一套语言） */
 .vpv-root.is-tall .vpv-bar-wrap { bottom: 14px; left: 14px; right: 14px; }
-/* 底部渐变衬底：与节点 .vc-scrim 同一套（56px、黑到透明） */
+/* 底部渐变衬底：与节点 .vc-scrim 同一套（56px、黑到透明）。
+   注意它挂在视频层而不是控件条容器里 —— 必须真正贴住画面底边（bottom:0），
+   并左右铺满（left/right:0），否则会浮起来留一条缝（用户截图报的"没对齐"）。 */
 .vpv-scrim {
   position: absolute;
   left: 0;

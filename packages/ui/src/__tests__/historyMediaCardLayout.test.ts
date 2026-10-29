@@ -41,8 +41,9 @@ describe('VideoPreview 按实测宽度切两套 UI', () => {
     expect(videoPreview, '没有小屏态分支').toMatch(/v-if="dense"/)
     // 2026-10-29 控件条抽成共用组件 VideoPlayerBar（视觉标准在视频节点那一侧），
     // 大屏态挂的是组件（v-else + VideoPlayerBar），不再有本地 .vpv-bar 标签
-    // 大屏态是"定位容器 + 共用条"两层（容器才负责浮动位置，见 videoPlayerBar 测试）
-    expect(videoPreview, '完整控制栏没有挂到 v-else 上').toMatch(/<div v-else class="vpv-bar-wrap"/)
+    // 大屏态是"v-else 分支 → 底色衬底 + 定位容器 + 共用条"（容器才负责浮动位置，
+    // 见 videoPlayerBar 的结构测试）
+    expect(videoPreview, '完整控制栏没有挂到 v-else 上').toMatch(/<template v-else>[\s\S]{0,600}<div class="vpv-bar-wrap">/)
     expect(videoPreview, '小屏态缺居中播放键').toMatch(/vpv-dense-play/)
   })
 

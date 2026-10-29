@@ -1028,11 +1028,14 @@ watch(videoUrl, (prev) => {
             </div>
           </div>
         </template>
+        <!-- 全屏按钮放进条内尾部：整条底栏铺满宽度，图标仍在最右侧（与拆分前一致） -->
+        <template #end>
+          <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放"
+            @click.stop="openPreview({ name: (typeof props.data?.videoName === 'string' && props.data.videoName) || '视频预览', kind: 'video', url: videoUrl })">
+            <Maximize2 class="vc-ico" :size="15" aria-hidden="true" />
+          </button>
+        </template>
       </VideoPlayerBar>
-      <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放"
-        @click.stop="openPreview({ name: (typeof props.data?.videoName === 'string' && props.data.videoName) || '视频预览', kind: 'video', url: videoUrl })">
-        <Maximize2 class="vc-ico" :size="15" aria-hidden="true" />
-      </button>
     </div>
 
   </div>

@@ -56,11 +56,47 @@ describe('VideoPlayerBar 结构契约', () => {
    * 共用条只负责长相，浮动定位必须由宿主包一层（节点是 .video-controls，全屏是 .vpv-bar-wrap）。
    */
   it('★ 全屏必须给共用条包一层定位容器（否则会跑到画面外）', () => {
-    expect(preview).toMatch(/<div v-else class="vpv-bar-wrap">/)
+    // 外层是 v-else 分支里的定位容器（内部还嵌着渐变阴影，所以不要求紧贴 v-else）
+    expect(preview).toMatch(/<template v-else>[\s\S]{0,600}<div class="vpv-bar-wrap">/)
     const wrapRule = preview.slice(preview.indexOf('.vpv-bar-wrap {'), preview.indexOf('}', preview.indexOf('.vpv-bar-wrap {')))
     expect(wrapRule).toContain('position: absolute')
     expect(wrapRule).toMatch(/bottom:\s*8px/)
     // 与节点同款的底部渐变衬底（白字压在亮画面上也读得清）
     expect(preview).toContain('class="vpv-scrim"')
+  })
+
+  /**
+   * 2026-10-29 用户连报两次的同一类错：
+   * ① 控件条只占左侧一小块 —— 拆组件后条没有"吃掉剩余宽度"（width:100% 不够，
+   *    与条外兄弟按钮抢空间时会被压窄）；全屏那边则是定位容器没铺满。
+   * ② 全屏底部阴影没对齐视频底边 —— 阴影被放进了有 14px 内缩的控件条容器里。
+   * 这两条都只能靠**结构**钉住，所以写在这里。
+   */
+  it('★ 控件条自己撑满宽度（进度条才有整条的空间）', () => {
+    const rule = bar.slice(bar.indexOf('.vcb-bar {'), bar.indexOf('}', bar.indexOf('.vcb-bar {')))
+    expect(rule).toMatch(/flex:\s*1 1 auto/)
+    expect(rule).toMatch(/min-width:\s*0/)
+  })
+
+  it('★ 节点把「全屏播放」放进条内尾部（不再和条并排抢宽度）', () => {
+    const seg = content.slice(content.indexOf('<VideoPlayerBar'), content.indexOf('</VideoPlayerBar>'))
+    expect(seg).toMatch(/<template #end>/)
+    expect(seg).toMatch(/aria-label="全屏播放"/)
+    expect(content).not.toMatch(/<\/VideoPlayerBar>\s*<button class="vc-btn"[^>]*aria-label="全屏播放"/)
+  })
+
+  it('★ 全屏底部阴影贴在视频层上（bottom:0、左右铺满），不在控件条容器里', () => {
+    // 阴影必须与控件条容器是兄弟，而不是它的子元素
+    const wrapOpen = preview.indexOf('<div class="vpv-bar-wrap">')
+    const scrimAt = preview.indexOf('class="vpv-scrim"')
+    expect(scrimAt).toBeGreaterThan(-1)
+    expect(scrimAt).toBeLessThan(wrapOpen)
+    const scrimRule = preview.slice(preview.indexOf('.vpv-scrim {'), preview.indexOf('}', preview.indexOf('.vpv-scrim {')))
+    expect(scrimRule).toMatch(/left:\s*0/)
+    expect(scrimRule).toMatch(/right:\s*0/)
+    expect(scrimRule).toMatch(/bottom:\s*0/)
+    const wrapRule = preview.slice(preview.indexOf('.vpv-bar-wrap {'), preview.indexOf('}', preview.indexOf('.vpv-bar-wrap {')))
+    expect(wrapRule).toMatch(/left:\s*10px/)
+    expect(wrapRule).toMatch(/right:\s*10px/)
   })
 })
