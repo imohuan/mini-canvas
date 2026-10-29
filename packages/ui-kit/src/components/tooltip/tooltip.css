@@ -1,0 +1,21 @@
+.mck-tooltip-trigger { display: inline-flex; max-width: 100%; }
+.mck-tooltip-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--mck-accent) 60%, transparent); outline-offset: 2px; }
+.mck-tooltip {
+  position: fixed;
+  z-index: 95000;
+  box-sizing: border-box;
+  width: max-content;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--ui-tip, rgb(24 32 43 / 0.95));
+  color: var(--ui-tip-ink, #fff);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+.mck-tooltip-fade-enter-active, .mck-tooltip-fade-leave-active { transition: opacity 120ms ease; }
+.mck-tooltip-fade-enter-from, .mck-tooltip-fade-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .mck-tooltip-fade-enter-active, .mck-tooltip-fade-leave-active { transition: none; } }
