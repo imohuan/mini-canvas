@@ -3596,7 +3596,8 @@ function onGlobalLeave(el: Element): void {
    * 混出来的灰，按钮就糊成一块。这个圆片本身就是深色底（--ui-scrim），
    * 对比色应当固定为白，跟主题面板色无关。
    */
-  color: #fff;
+  /* 主题色白名单: 固定在深色半透明圆片上的对比白（不随主题变） */
+  color: var(--ui-tip-ink, #fff);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -3663,7 +3664,8 @@ function onGlobalLeave(el: Element): void {
   border-radius: 6px;
   background: var(--ui-scrim, rgb(0 0 0 / 0.55));
   /* 白字固定在深色半透明底上（同 .nb-card-act：--ui-panel 在深色主题下等于糊底） */
-  color: #fff;
+  /* 主题色白名单: 同上，深色衬底上的恒定对比白 */
+  color: var(--ui-tip-ink, #fff);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;

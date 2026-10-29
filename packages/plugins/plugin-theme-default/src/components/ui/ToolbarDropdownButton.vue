@@ -58,8 +58,18 @@ const open = ref(false)
 const openSubKey = ref<string | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 
-/** 子菜单是独立浮层：需要自己的定位（贴着入口行右侧） */
+/** 二级菜单与主菜单卡片之间的固定间隔（px） */
+const SUB_GAP = 8
+
+/** 子菜单是独立浮层：定位以**主菜单卡片右边**为锚点，并留出间隔 */
 const subPos = ref({ left: 0, top: 0 })
+/**
+ * 二级浮层的组链（父链 + 自己）。
+ * 为什么必须有：主下拉的「点外关闭」只认 data-floating-chain —— 二级菜单是 teleport 到 body
+ * 的独立元素，不写链就会被判成「点了外面」，点它的条目时父菜单先关、条目点击丢失。
+ * 链直接从主面板元素的同名属性读（它就是父链），再追加自己的 id。
+ */
+const subChain = ref('')
 let subTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearSubTimer(): void {
@@ -73,7 +83,20 @@ function openSub(key: string, ev: MouseEvent): void {
   const r = row.getBoundingClientRect()
   const width = Number.parseInt(props.menuWidth, 10) || 220
   const vw = typeof window === 'undefined' ? 1280 : window.innerWidth
-  const left = r.right + 4 + width > vw - 8 ? Math.max(8, r.left - width - 4) : r.right + 4
+  /**
+   * 锚点必须是**主菜单卡片**的右边，而不是这一行的右边：
+   * 行右缘在主卡片内部（还有内边距），拿它 +4px 会让二级卡片压在主卡片上/贴死。
+   * 右侧放不下就翻到主卡片左侧，同样留 SUB_GAP。
+   */
+  const main = row.closest('[data-toolbar-dropdown-menu="1"]') as HTMLElement | null
+  const mainRect = main?.getBoundingClientRect() ?? null
+  const parentChain = main?.dataset?.floatingChain ?? ''
+  subChain.value = parentChain ? parentChain + ' tdb-sub' : 'tdb-sub'
+  const rightEdge = mainRect ? mainRect.right : r.right
+  const leftEdge = mainRect ? mainRect.left : r.left
+  const left = rightEdge + SUB_GAP + width > vw - 8
+    ? Math.max(8, leftEdge - SUB_GAP - width)
+    : rightEdge + SUB_GAP
   subPos.value = { left, top: r.top }
   openSubKey.value = key
 }
@@ -171,6 +194,7 @@ void (Button as Component | undefined)
       v-if="open && openSubItem?.children?.length"
       class="tdb-menu tdb-sub"
       data-toolbar-dropdown-sub="1"
+      :data-floating-chain="subChain"
       role="menu"
       :aria-label="openSubItem.label"
       :style="{ left: subPos.left + 'px', top: subPos.top + 'px', minWidth: menuWidth }"

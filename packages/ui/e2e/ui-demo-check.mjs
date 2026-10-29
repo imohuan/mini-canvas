@@ -81,11 +81,14 @@ const sub = await page.evaluate(() => {
   return {
     position: getComputedStyle(s).position,
     outsideMain: sr.left >= mr.right - 1,
+    // 用户口径 2026-10-29：二级卡片要在主卡片**外面**，两卡片之间留固定间隔（不是贴死/压住）
+    gapPx: Math.round(sr.left - mr.right),
     ownPanel: s.classList.contains('tdb-sub'),
     rows: [...s.querySelectorAll('button')].map((b) => b.textContent.trim()),
   }
 })
 check('二级菜单是独立浮层（position:fixed 且在主面板右侧之外）', !!sub && sub.position === 'fixed' && sub.outsideMain, JSON.stringify(sub))
+check('二级菜单与主菜单之间留有间隔（8px 左右，不贴死）', !!sub && sub.gapPx >= 6 && sub.gapPx <= 12, JSON.stringify(sub))
 check('二级菜单有自己的面板与子项', !!sub && sub.ownPanel && sub.rows.includes('子项 1'), JSON.stringify(sub))
 
 // 进入功能模式
