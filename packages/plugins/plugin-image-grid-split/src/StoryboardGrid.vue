@@ -98,6 +98,8 @@ function slotSrc(ref: string | null): string {
     v-if="board"
     class="sb-root"
     data-testid="storyboard-grid"
+    nodrag=""
+    nopan=""
     @pointerup="onCellPointerUp(cellFromEvent($event))"
   >
     <div

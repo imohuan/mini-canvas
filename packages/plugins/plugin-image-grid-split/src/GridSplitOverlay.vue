@@ -80,6 +80,7 @@ function onClick(ev: MouseEvent): void {
 .gso-root {
   position: absolute;
   inset: 0;
+  pointer-events: auto;
   overflow: hidden;
   cursor: pointer;
 }
