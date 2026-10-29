@@ -8,7 +8,7 @@
  * 拖拽语义（简化版）：按下有图格 → 移到另一格松开 → 两格交换（含空格）。
  * 不做跨节点拖拽（那是完整版分镜组的事，当前版本只在组内换）。
  */
-import { computed, onBeforeUnmount, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { readStoryboard, swapSlots } from './storyboard'
 
