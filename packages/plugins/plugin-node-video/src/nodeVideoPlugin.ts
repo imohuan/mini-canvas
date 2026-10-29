@@ -282,7 +282,7 @@ export function apply(ctx: Context) {
     // 剪辑：选中动作 = 打开剪辑会话（面板显隐交给底栏，会话态由 onSelect/onDeselect 开合）
     registerBarAction(ctx, {
       id: 'video:clip', types: ['video'], title: '剪辑', panel: VideoClipPanel, needsPrompt: false, apply: 'self',
-      description: '裁掉首尾保留一段（元数据式，不重新编码）',
+      description: '裁掉首尾保留一段（后台 ffmpeg 切成新文件）',
       onSelect: (id) => beginOverlay(id, 'clip'),
       onDeselect: (id) => endOverlay(id),
       run: () => ({ ok: true }),   // 实际提交由面板经命令 video.clipConfirm 完成
