@@ -172,17 +172,8 @@ export function apply(ctx: Context) {
     if (!ctx.tryGet('nodeBar')) return false
     // AI 生成图片：每个 produces:'image' 的工具一条动作（输入框是临时的，发送时组装）
     publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
-    // 旋转 / 下载：即时动作（自己已经写好节点），不经过写入器
-    registerBarAction(ctx, {
-      id: 'image:rotate', types: ['image'], title: '旋转', apply: 'self', order: 90,
-      description: '把图片旋转 90°（可撤销）',
-      run: async (_input, runCtx) => ((await rotateImage(ops, runCtx.nodeId)) ? { ok: true } : { ok: false, error: '旋转失败' }),
-    })
-    registerBarAction(ctx, {
-      id: 'image:download', types: ['image'], title: '下载', apply: 'self', order: 91,
-      description: '把图片保存到本地',
-      run: async (_input, runCtx) => ((await downloadImageNode(ops, runCtx.nodeId)) ? { ok: true } : { ok: false, error: '下载失败' }),
-    })
+    // 旋转 / 下载**不注册进底栏**（用户口径 2026-10-29：图片插件不该往底部状态栏塞功能）。
+    // 两者仍以命令形式对外提供（image:rotate / image:download），右键菜单、快捷键、MCP 照常可用。
     // image 写入器：量尺寸 → 一次 patch 写完 → 清旧描述字段（复用 writeGeneratedImage 的规矩）
     const writeDeps: ImageRunDeps = createImageOpsWriteDeps(ctx)
     registerBarApplier(ctx, 'image', (nodeId, result) => {
