@@ -44,6 +44,7 @@
     "@mini-canvas/plugin-file-drop": "workspace:*",
     "@mini-canvas/plugin-group": "workspace:*",
     "@mini-canvas/plugin-hot-reload": "workspace:*",
+    "@mini-canvas/plugin-image-grid-split": "workspace:*",
     "@mini-canvas/plugin-manager": "workspace:*",
     "@mini-canvas/plugin-mini-map": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",
