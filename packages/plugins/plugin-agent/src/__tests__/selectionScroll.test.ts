@@ -73,18 +73,51 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
   })
 
   it('打开时才滚（那一刻面板与列表才在 DOM 里，ref 才有值）', () => {
-    expect(host).toMatch(/watch\(modelOpen,[\s\S]{0,240}scrollSelectedModelIntoView/)
+    expect(host).toMatch(/watch\(modelOpen,[\s\S]{0,400}scheduleScrollSelectedModel/)
     expect(host).toMatch(/function scrollSelectedModelIntoView\(\): void/)
+  })
+
+  /**
+   * 一次滚不准（用户口径 2026-10-30：点开模型下拉，选中项仍在可视区外）。
+   *
+   * 两个原因叠在一起：① 浮层入场带 0.14s 的 scale 动画，动画中量出来的 rect 是缩过的；
+   * ② inner-scroll 的列表可视高度在动画结束、min-height 生效后还会再变一次（实测 332 → 319）。
+   * 所以「打开即算一次」不够，还要有动画后的二次校正 + 尺寸变化时的重新定位。
+   */
+  it('滚两次并盯着可视高度（入场动画结束后再校正，尺寸一变就重定位）', () => {
+    // 二次校正：定时器再滚一次
+    const at = host.indexOf('function scheduleScrollSelectedModel')
+    expect(at, '没找到 scheduleScrollSelectedModel').toBeGreaterThan(-1)
+    const body = host.slice(at, host.indexOf('\nwatch(modelOpen', at))
+    expect(body, '要做动画后的二次校正').toMatch(/setTimeout\(\(\) => scrollSelectedModelIntoView/)
+    // 尺寸变化兜底：ResizeObserver 盯列表可视高度
+    expect(host, '要用 ResizeObserver 盯列表可视高度').toMatch(/new ResizeObserver\(/)
+    expect(host, '观察的是模型列表滚动区').toMatch(/observe\(box\)/)
+    // 切模式会换一整套列表，位置要重算
+    expect(host).toMatch(/watch\(modelView,[\s\S]{0,200}scheduleScrollSelectedModel/)
+  })
+
+  it('卸载时断开观察者（不留孤儿回调）', () => {
+    expect(host).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]{0,120}modelBoxObserver\?\.disconnect\(\)/)
   })
 
   it('认的是 aria-selected="true"（选中态的唯一真相，不另造一个标记）', () => {
     expect(host).toMatch(/querySelector<HTMLElement>\('\[aria-selected="true"\]'\)/)
   })
 
-  it('几何用 offsetTop 量（不吃入口动画 scale 的影响，量出来的顶边才准）', () => {
+  /**
+   * 几何必须用**真实矩形**换算，不能用 offsetTop 相减（用户口径 2026-10-30）。
+   *
+   * 原来的理由是「rect 会被入场 scale 动画缩过，offsetTop 不吃 transform」。
+   * 但 offsetTop 只在**同一个 offsetParent** 下才可比：模型列表的项与滚动区之间还隔着
+   * .ac-panel-body / .ac-menu-scroll 两层，相减出来根本不是项在内容里的位置，
+   * 滚完选中项仍贴在下缘外面。动画的影响改成「等动画结束再校一次」来消除。
+   */
+  it('几何用 getBoundingClientRect 换算（offsetTop 跨 offsetParent 会算错）', () => {
     const at = host.indexOf('function scrollSelectedModelIntoView')
     const body = host.slice(at, host.indexOf('\nfunction ', at + 10))
-    expect(body).toMatch(/offsetTop/)
+    expect(body).toMatch(/getBoundingClientRect\(\)\.top - box\.getBoundingClientRect\(\)\.top/)
+    expect(body).not.toMatch(/offsetTop\s*-\s*box\.offsetTop/)
     expect(body).toMatch(/scrollTopForVisibleItem\(/)
     // 落点直接写回 scrollTop（打开即到位，不做平滑动画）
     expect(body).toMatch(/box\.scrollTop\s*=/)

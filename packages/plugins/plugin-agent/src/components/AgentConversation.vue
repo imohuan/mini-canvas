@@ -402,13 +402,74 @@ function toggleMcpExpand(name: string): void {
   mcpExpanded.value = next
 }
 
-/** 点工具行 = 插一个工具引用标签（`<ref type="mcp" name="服务.工具" path="mcp__服务__工具" />`） */
-function insertMcpToolRef(server: string, tool: { name: string; description: string; fullName: string }, close: () => void): void {
-  editorRef.value?.insertResource(mcpToolResource(server, tool.name, tool.description))
+/**
+ * MCP 的**待确认选择**（用户口径 2026-10-30：跟参考 HTML 一样支持多选，选完点确认才插入）。
+ *
+ * 为什么不在点击时直接插：服务和工具是两级、都能多选，点一下就插等于逼着用户
+ * 「开面板 → 点一个 → 再开 → 再点」，中间的勾选态也没地方显示。
+ * 所以这里只记「选了什么」，真正落标签在底栏那个「确认引用」上。
+ */
+const mcpPickedServers = ref<Set<string>>(new Set())
+const mcpPickedTools = ref<Set<string>>(new Set())
+
+function mcpToolKey(server: string, toolName: string): string {
+  return server + '/' + toolName
+}
+
+function toggleMcpServer(name: string): void {
+  const next = new Set(mcpPickedServers.value)
+  if (next.has(name)) next.delete(name)
+  else next.add(name)
+  mcpPickedServers.value = next
+}
+
+function toggleMcpTool(server: string, toolName: string): void {
+  const key = mcpToolKey(server, toolName)
+  const next = new Set(mcpPickedTools.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  mcpPickedTools.value = next
+}
+
+/** 某个服务选了几个工具（卡片上显示「已选 N 个工具」） */
+function pickedToolCountOf(server: string): number {
+  let n = 0
+  for (const key of mcpPickedTools.value) if (key.startsWith(server + '/')) n++
+  return n
+}
+
+const mcpPickTotal = computed(() => mcpPickedServers.value.size + mcpPickedTools.value.size)
+
+/** 把勾选的服务 + 工具一次性插成标签（插之前不清勾选，插完清） */
+function confirmMcpPicks(close: () => void): void {
+  const items: ResourceItem[] = []
+  const allServers = mcpResources(s.mcpServers)
+  for (const name of mcpPickedServers.value) {
+    const item = allServers.find((x) => x.name === name)
+    if (item) items.push(item)
+  }
+  for (const key of mcpPickedTools.value) {
+    const cut = key.indexOf('/')
+    if (cut < 0) continue
+    const server = key.slice(0, cut)
+    const toolName = key.slice(cut + 1)
+    const tool = mcpToolsOf(server).find((t) => t.name === toolName)
+    items.push(mcpToolResource(server, toolName, tool?.description ?? ''))
+  }
+  if (!items.length) return
+  for (const item of items) editorRef.value?.insertResource(item)
+  mcpPickedServers.value = new Set()
+  mcpPickedTools.value = new Set()
   close()
 }
 
-async function runMcpProbe(): Promise<void> {
+/**
+ * 探测 MCP（全部一次探完）。
+ *
+ * reconnect=true 时先把**当前会话**的旧连接丢掉（修「外部关了再开、连接已废」的那种），
+ * 面板打开时的自动检测用 false —— 用户只是看一眼工具列表，不该顺手重建会话连接。
+ */
+async function probeMcpServers(reconnect: boolean): Promise<void> {
   if (mcpProbing.value) return
   mcpProbing.value = true
   mcpProbeHint.value = '正在连接…'
@@ -420,7 +481,7 @@ async function runMcpProbe(): Promise<void> {
     //     外部把 MCP 关了再开，那条旧连接就废了；丢掉它，下一句 resume 时会重新连。
     //   · probe：给**用户看**当前到底连得上什么（独立连接，不碰会话）。
     // 先 reconnect 再 probe，用户看到的结果就是"修好之后"的状态。
-    await agent.reconnectMcp()
+    if (reconnect) await agent.reconnectMcp()
     const r = await agent.probeMcp()
     const next: Record<string, { ok: boolean; text: string; tools: number }> = {}
     const tools: Record<string, Array<{ name: string; description: string; fullName: string }>> = {}
@@ -442,6 +503,18 @@ async function runMcpProbe(): Promise<void> {
   } finally {
     mcpProbing.value = false
   }
+}
+
+function runMcpProbe(): void {
+  void probeMcpServers(true)
+}
+
+/** 首开自动检测：没有工具数据时才探一次（探过就记住，别每次开面板都连一遍） */
+const mcpProbedOnce = ref(false)
+function ensureMcpProbed(): void {
+  if (mcpProbedOnce.value) return
+  mcpProbedOnce.value = true
+  void probeMcpServers(false)
 }
 
 onMounted(() => {
@@ -1575,11 +1648,29 @@ function skillSize(name: string): string {
   return Math.max(1, Math.round(bytes / 1024)) + ' KB'
 }
 
+/**
+ * MCP 面板的搜索结果（用户口径 2026-10-30）。
+ *
+ * 搜索范围要覆盖**四样东西**：服务名、服务说明（地址/命令）、工具名、工具描述。
+ * 只按服务名过滤的话，用户记得「有个叫 canvas_get 的工具」却想不起它在哪个服务下，
+ * 就只能一条条展开找 —— 那正是这里要省掉的动作。
+ * 命中工具、但服务名本身没命中时，这批工具单独收窄（toolHits），卡片自动展开只露命中项。
+ */
 const filteredMcpResources = computed(() => {
   const q = mcpQuery.value.trim().toLowerCase()
   const items = mcpResources(s.mcpServers)
-  if (!q) return items
-  return items.filter((item) => (item.name + ' ' + item.value).toLowerCase().includes(q))
+  type McpToolRow = { name: string; description: string; fullName: string }
+  if (!q) return items.map((item) => ({ ...item, toolHits: null as null | McpToolRow[] }))
+  const hit = (text: string): boolean => text.toLowerCase().includes(q)
+  const out: Array<(typeof items)[number] & { toolHits: null | McpToolRow[] }> = []
+  for (const item of items) {
+    const serverHit = hit(item.name) || hit(item.value ?? '')
+    const tools = mcpToolsOf(item.name)
+    const toolHits = tools.filter((t) => hit(t.name) || hit(t.description))
+    if (!serverHit && !toolHits.length) continue
+    out.push({ ...item, toolHits: serverHit ? null : toolHits })
+  }
+  return out
 })
 
 /**
@@ -1597,9 +1688,10 @@ const modelScrollRef = ref<HTMLElement | null>(null)
 /**
  * 把选中的那条滚进列表的可视区（打开下拉时调一次）。
  *
- * 几何量法：用 `offsetTop` 而不是 `getBoundingClientRect()` —— 浮层入场带 0.14s 的
- * `scale(.96)` 动画，rect 会被动画等比缩过、量出来的顶边偏小（真机实测偏 4%），
- * 直接拿它算会滚不到底；offsetTop 是布局值，不吃 transform。
+ * 几何量法：用 `getBoundingClientRect()` 换算（见函数体注释）。
+ * 曾经用 `offsetTop` 相减，理由是「rect 会被入场 scale 动画缩过」。
+ * 但 offsetTop 只在**同一个 offsetParent** 下才可比 —— 模型列表的项与滚动区隔了两层，
+ * 相减出来的值不是项在内容里的位置，滚完选中项仍贴在可视区下缘（2026-10-30 实测）。
  * 选中态认 `aria-selected="true"` —— 那是选中项的唯一真相，不再另造一个类名当第二处真相。
  */
 function scrollSelectedModelIntoView(): void {
@@ -1607,8 +1699,13 @@ function scrollSelectedModelIntoView(): void {
   if (!box || box.clientHeight <= 0) return
   const item = box.querySelector<HTMLElement>('[aria-selected="true"]')
   if (!item) return
-  // 项与滚动区同一个 offsetParent（都在浮层里），直接相减就是它在内容里的顶边
-  const top = item.offsetTop - box.offsetTop
+  // 用**真实矩形**换算，不用 offsetTop：列表项可能挂在不同的 offsetParent 下
+  // （模型面板外面还套着 .ac-panel-body / .ac-menu-scroll 两层），
+  // 一旦 offsetParent 不一致，offsetTop 相减就不是「项在滚动内容里的位置」，
+  // 滚出来的结果就会差一截、选中项仍停在可视区边缘（2026-10-30 实测）。
+  // 公式：项相对可视区的位置 = itemRect.top - boxRect.top，再加上当前 scrollTop
+  // 就换算到内容坐标系。入场 scale 动画的影响在下面 done 回调里已等过一帧。
+  const top = item.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop
   box.scrollTop = scrollTopForVisibleItem(
     { scrollTop: box.scrollTop, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight },
     { top, height: item.offsetHeight },
@@ -1616,9 +1713,62 @@ function scrollSelectedModelIntoView(): void {
   )
 }
 
-// 打开时才滚：那一刻面板与列表才挂在 DOM 上，ref 才有值（v-if 是懒渲染的）。
+/**
+ * 打开下拉时把选中项滚进可视区 —— 要滚两次。
+ *
+ * 第一次在 nextTick：面板刚挂上 DOM，先按当时的布局滚一下，用户不会看到「停在列表顶」。
+ * 第二次在 200ms 后：浮层入场带 0.14s 的 scale(.96) 动画，动画中量出来的 rect 是全比例缩过的，
+ * 换算出的位置会偏；等动画结束再按最终布局校正一次，选中项才真正落在可视区里
+ * （2026-10-30 实测：只滚第一次时选中项停在下缘外面）。
+ */
+function scheduleScrollSelectedModel(): void {
+  scrollSelectedModelIntoView()
+  window.setTimeout(() => scrollSelectedModelIntoView(), 200)
+}
+
+/**
+ * 盯着列表的可视高度：它一变就重新定位选中项。
+ *
+ * 为什么光靠定时器不够：浮层在入场动画里高度是渐变的，菜单设的 min-height 也在第一帧才生效，
+ * 动画结束后可视高度还会再变一次（实测 332 → 319）。只按某个固定时刻算，选中项就会差十几像素、
+ * 正卡在可视区下缘外。ResizeObserver 直接把「尺寸定型」当成触发条件，不猜时机。
+ */
+let modelBoxObserver: ResizeObserver | null = null
+function observeModelBox(): void {
+  modelBoxObserver?.disconnect()
+  const box = modelScrollRef.value
+  if (!box || typeof ResizeObserver === 'undefined') return
+  modelBoxObserver = new ResizeObserver(() => scrollSelectedModelIntoView())
+  modelBoxObserver.observe(box)
+}
+
 watch(modelOpen, (open) => {
-  if (open) void nextTick(() => scrollSelectedModelIntoView())
+  if (!open) {
+    modelBoxObserver?.disconnect()
+    modelBoxObserver = null
+    return
+  }
+  void nextTick(() => {
+    scheduleScrollSelectedModel()
+    observeModelBox()
+  })
+})
+
+// 切卡片/分栏会换一整套列表（高度、行高都变），选中项的位置也跟着变，同样要重新定位
+watch(modelView, () => {
+  if (!modelOpen.value) return
+  void nextTick(scheduleScrollSelectedModel)
+})
+
+// 组件卸载时断开观察者（面板关掉、Agent 面板被销毁都走这里）
+onBeforeUnmount(() => {
+  modelBoxObserver?.disconnect()
+  modelBoxObserver = null
+})
+
+// 首次打开 MCP 面板时自动探一次：不探就没有工具清单，展开区是空的、也搜不到工具名。
+watch(mcpOpen, (open) => {
+  if (open) ensureMcpProbed()
 })
 
 /** 点一项 = 切模型并收起（滚不滚是打开那一刻的事，这里不用管） */
@@ -2831,34 +2981,44 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <div class="ac-panel-body">
                   <div class="ac-panel-scroll">
                     <div v-if="filteredMcpResources.length" class="ac-mcp-list">
+                      <!-- 卡片是勾选 + 展开两件事：左边的框勾「整个服务」，点标题行展开工具（DEMO 同一条分工） -->
                       <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
-                        <button class="ac-mcp-card" role="option" :aria-expanded="mcpExpanded.has(item.name)"
-                          :title="item.value" @click="insertRef(item, close)">
-                          <span class="ac-pick-box" aria-hidden="true"><Check :size="11" /></span>
-                          <span class="ac-mcp-server-main">
-                            <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
-                            <span class="ac-server-copy">
-                              <span class="ac-server-name">{{ item.name }}</span>
-                              <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
-                            </span>
-                          </span>
-                          <span class="ac-server-side">
-                            <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
-                              :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
-                            <span v-else class="ac-status">{{ mcpTransport(item) }}</span>
-                            <span v-if="mcpToolsOf(item.name).length" class="ac-expand-btn" role="button" tabindex="0"
-                              :aria-expanded="mcpExpanded.has(item.name)" aria-label="展开工具" title="展开工具"
-                              @click.stop="toggleMcpExpand(item.name)" @keydown.enter.stop.prevent="toggleMcpExpand(item.name)">
-                              <ChevronDown :size="13" :class="{ 'is-open': mcpExpanded.has(item.name) }" />
-                            </span>
+                        <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name) }">
+                        <button class="ac-pick-box" :aria-pressed="mcpPickedServers.has(item.name)"
+                          :aria-label="'引用整个 ' + item.name + ' 服务'" :title="'引用整个 ' + item.name + ' 服务'"
+                          @click.stop="toggleMcpServer(item.name)">
+                          <Check :size="11" />
+                        </button>
+                        <button class="ac-mcp-server-main" :title="item.value"
+                          :aria-expanded="mcpExpanded.has(item.name) || !!item.toolHits" @click="toggleMcpExpand(item.name)">
+                          <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
+                          <span class="ac-server-copy">
+                            <span class="ac-server-name">{{ item.name }}</span>
+                            <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
                           </span>
                         </button>
-                        <!-- 工具行：探测成功后展开；点一行 = 引用那一个工具 -->
-                        <div v-if="mcpExpanded.has(item.name) && mcpToolsOf(item.name).length" class="ac-mcp-tools">
-                          <button v-for="t in mcpToolsOf(item.name)" :key="t.fullName" class="ac-tool-row"
-                            role="option" :title="t.fullName" @click="insertMcpToolRef(item.name, t, close)">
-                            <span class="ac-tool-name">{{ t.name }}</span>
-                            <span class="ac-tool-desc">{{ t.description }}</span>
+                        <span class="ac-server-side">
+                          <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
+                            :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
+                          <span v-else class="ac-status">{{ mcpTransport(item) }}</span>
+                          <span v-if="mcpToolsOf(item.name).length" class="ac-expand-btn" role="button" tabindex="0"
+                            :aria-expanded="mcpExpanded.has(item.name) || !!item.toolHits" aria-label="展开工具" title="展开工具"
+                            @click.stop="toggleMcpExpand(item.name)" @keydown.enter.stop.prevent="toggleMcpExpand(item.name)">
+                            <ChevronDown :size="13" :class="{ 'is-open': mcpExpanded.has(item.name) || !!item.toolHits }" />
+                          </span>
+                        </span>
+                        </div>
+                        <!-- 工具行：搜索命中工具时自动展开、只列命中的几条；每行都能单独勾选 -->
+                        <div v-if="(mcpExpanded.has(item.name) || item.toolHits) && (item.toolHits || mcpToolsOf(item.name)).length" class="ac-mcp-tools">
+                          <button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
+                            class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"
+                            :title="t.fullName" :aria-pressed="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
+                            @click="toggleMcpTool(item.name, t.name)">
+                            <span class="ac-pick-box is-sm" aria-hidden="true"><Check :size="10" /></span>
+                            <span class="ac-tool-copy">
+                              <span class="ac-tool-name">{{ t.name }}</span>
+                              <span class="ac-tool-desc">{{ t.description }}</span>
+                            </span>
                           </button>
                         </div>
                       </div>
@@ -2872,7 +3032,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   </div>
                 </div>
                 <div class="ac-panel-foot">
-                  <span class="ac-selection-summary">点击服务会直接插入标签</span>
+                  <!-- 多选 + 确认：勾选只记状态，点这里才真正往输入框插标签 -->
+                  <span class="ac-selection-summary">
+                    <template v-if="mcpPickTotal">
+                      已选 <b class="ac-selected-number">{{ mcpPickedServers.size }}</b> 个服务 ·
+                      <b class="ac-selected-number">{{ mcpPickedTools.size }}</b> 个工具
+                    </template>
+                    <template v-else>未选择服务或工具</template>
+                  </span>
+                  <button class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(close)">
+                    <Check :size="13" />确认引用
+                  </button>
                 </div>
               </div>
             </template>
@@ -5444,7 +5614,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
-  cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -6142,7 +6311,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border-color: var(--ui-line, rgba(0, 0, 0, 0.12));
 }
 
-.ac-mcp-card[aria-pressed='true'] {
+.ac-mcp-card.is-picked {
   border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
   background: linear-gradient(180deg, var(--ui-accent-soft, rgba(8, 145, 178, 0.05)), var(--ui-panel, #fff) 42%);
 }
@@ -6153,11 +6322,24 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   width: 20px;
   height: 20px;
   flex: none;
+  padding: 0;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.18));
   border-radius: 6px;
   background: var(--ui-panel, #fff);
   color: var(--ui-panel, #fff);
+  cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.ac-pick-box:hover {
+  border-color: var(--ui-accent, #0891b2);
+  transform: scale(1.04);
+}
+
+.ac-pick-box.is-sm {
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
 }
 
 .ac-pick-box :deep(svg) {
@@ -6165,12 +6347,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   transition: opacity 0.15s ease;
 }
 
-.ac-mcp-card[aria-pressed='true'] .ac-pick-box {
+.ac-pick-box[aria-pressed='true'],
+.ac-mcp-card.is-picked .ac-pick-box,
+.ac-tool-row.is-picked .ac-pick-box {
   border-color: var(--ui-accent, #0891b2);
   background: var(--ui-accent, #0891b2);
 }
 
-.ac-mcp-card[aria-pressed='true'] .ac-pick-box :deep(svg) {
+.ac-pick-box[aria-pressed='true'] :deep(svg),
+.ac-mcp-card.is-picked .ac-pick-box :deep(svg),
+.ac-tool-row.is-picked .ac-pick-box :deep(svg) {
   opacity: 1;
 }
 
@@ -6180,6 +6366,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   gap: 9px;
   flex: 1;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .ac-server-icon {
@@ -6313,11 +6504,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-tool-row {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 5px 7px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -6326,6 +6518,19 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-tool-row:hover {
   background: var(--ui-panel, #fff);
   box-shadow: var(--ui-shadow-e1, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+.ac-tool-row.is-picked {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+  box-shadow: none;
+}
+
+.ac-tool-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
 .ac-tool-name {
@@ -6376,6 +6581,46 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-model-foot .ac-selection-summary {
   justify-content: flex-start;
+}
+
+/* 已选计数：正文色加粗（与 DEMO 的 .selected-number 一致），让「选了几个」一眼看见 */
+.ac-selected-number {
+  color: var(--ui-ink, #111827);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 确认按钮（DEMO 的 .confirm-btn）：主色实心，未选禁用。 */
+.ac-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  flex: none;
+  border: 0;
+  border-radius: 9px;
+  background: var(--ui-accent, #0891b2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.15s ease, opacity 0.18s ease;
+}
+
+.ac-confirm-btn:hover:not(:disabled) {
+  background: var(--ui-accent-hover, #0e7490);
+}
+
+.ac-confirm-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.ac-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* —— 空状态（DEMO 的 .empty-state）—— */
