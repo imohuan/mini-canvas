@@ -128,13 +128,39 @@ describe('平移', () => {
     expect(moved).toEqual({ x: 0, y: 0, width: 200, height: 200 })
   })
 
-  it('moveExpandRect：往左上移会把框拉得更大（新画布加在左上）', () => {
-    const moved = moveExpandRect({ x: 0, y: 0, width: 1000, height: 800 }, -100, -50, 1000, 800)
-    expect(moved.x).toBe(-100)
-    expect(moved.y).toBe(-50)
-    // 右/下缘仍贴住原画面右/下缘 → 尺寸变大
+  it('moveExpandRect：只许平移，宽高一个像素都不变（用户口径：移动不许改尺寸）', () => {
+    const moved = moveExpandRect({ x: -100, y: -50, width: 1300, height: 950 }, -80, -60, 1000, 800)
+    expect(moved.width).toBe(1300)
+    expect(moved.height).toBe(950)
+    expect(moved.x).toBe(-180)
+    expect(moved.y).toBe(-110)
+  })
+
+  it('moveExpandRect：右移到左边贴住画面就停（x 夹到 0，尺寸不变）', () => {
+    const moved = moveExpandRect({ x: -100, y: -50, width: 1300, height: 950 }, 9999, 9999, 1000, 800)
+    expect(moved.x).toBe(0)
+    expect(moved.width).toBe(1300)
+    expect(moved.height).toBe(950)
+  })
+  it('moveExpandRect：左移到右缘贴住画面就停（x+width 夹到 mw，尺寸不变）', () => {
+    // 输入必须先满足「包住画面」：右缘 -300+1300=1000 恰好贴住，再往左移就该被夹住
+    const moved = moveExpandRect({ x: -300, y: -200, width: 1300, height: 1000 }, -9999, -9999, 1000, 800)
     expect(moved.x + moved.width).toBe(1000)
-    expect(moved.y + moved.height).toBe(800)
+    expect(moved.width).toBe(1300)
+    expect(moved.height).toBe(1000)
+  })
+
+  it('moveExpandRect：框与画面重合时没有平移空间（拖不动是数学必然）', () => {
+    const moved = moveExpandRect({ x: 0, y: 0, width: 1000, height: 800 }, -100, -50, 1000, 800)
+    expect(moved).toEqual({ x: 0, y: 0, width: 1000, height: 800 })
+  })
+
+  it('moveExpandRect：非法输入（不包住画面）先收敛再返回', () => {
+    const fixed = moveExpandRect({ x: 50, y: 50, width: 500, height: 400 }, -10, -10, 1000, 800)
+    expect(fixed.x).toBeLessThanOrEqual(0)
+    expect(fixed.y).toBeLessThanOrEqual(0)
+    expect(fixed.x + fixed.width).toBeGreaterThanOrEqual(1000)
+    expect(fixed.y + fixed.height).toBeGreaterThanOrEqual(800)
   })
 
   it('moveExpandRect：往右下移过头 → 被挡回（右/下缘不许离开画面）', () => {
@@ -282,5 +308,18 @@ describe('framedMediaStyle：裁完画面正好填满卡片', () => {
   it('裁框/原画面尺寸非法 → 空样式（宁可显示整幅，也不给出会算出 NaN 的样式）', () => {
     expect(framedMediaStyle({ x: 0, y: 0, width: 0, height: 0 }, 1600, 800)).toEqual({})
     expect(framedMediaStyle({ x: 0, y: 0, width: 100, height: 100 }, 0, 0)).toEqual({})
+  })
+})
+
+
+describe('resizeExpandRect：右/下缩放补偿左上角偏移（截图 1 的 BUG）', () => {
+  it('左上已外扩（x=-300）时缩右缘，右缘不许缩进画面', () => {
+    const r = resizeExpandRect({ x: -300, y: -200, width: 1300, height: 1000 }, 'se', -9999, -9999, 1000, 800)
+    expect(r.x + r.width).toBeGreaterThanOrEqual(1000)
+  })
+
+  it('上边已外扩（y=-200）时缩下缘，下缘不许缩进画面', () => {
+    const r = resizeExpandRect({ x: -300, y: -200, width: 1300, height: 1000 }, 'sw', -9999, -9999, 1000, 800)
+    expect(r.y + r.height).toBeGreaterThanOrEqual(800)
   })
 })

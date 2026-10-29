@@ -139,9 +139,29 @@ export function moveCropRect(rect: Rect, dx: number, dy: number, mediaW: number,
   return clampCropRect({ ...rect, x: rect.x + dx, y: rect.y + dy }, mediaW, mediaH, minEdge)
 }
 
-/** 扩展框整体平移（不能移动到切掉原图；往外移不设限） */
+/**
+ * 扩展框整体平移（用户口径 2026-10-29，两张截图报的 BUG 都在这）：
+ * **只许平移，宽高一个像素都不变**；位移被夹在「框始终包住画面」的可行区间内 ——
+ * 贴住画面那条边就停住，不会把画面甩出框外。
+ *
+ * 为什么不能用 clampExpandRect 收敛平移结果：那个函数会把越界的边拉回画面边缘，
+ * 等于把「平移」偷换成「平移 + 变形」—— 用户向右上拖框时宽高跟着变，正是截图 2 的 BUG。
+ *
+ * 可行区间推导（框必须满足 x≤0 且 x+width≥mw）：
+ *   dx ≤ -x（右移不许让左边切进画面）且 dx ≥ mw - (x+width)（左移不许让右缘离开画面）。
+ * 框与画面完全重合时区间宽度为 0 —— 此时拖不动是数学必然（想腾挪先用手柄往外扩）。
+ * 输入本身就不包住画面（非法态）→ 先用 clampExpandRect 收敛再说。
+ */
 export function moveExpandRect(rect: Rect, dx: number, dy: number, mediaW: number, mediaH: number): Rect {
-  return clampExpandRect({ ...rect, x: rect.x + dx, y: rect.y + dy }, mediaW, mediaH)
+  const mw = positive(mediaW)
+  const mh = positive(mediaH)
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+  const contains = rect.x <= 0 && rect.y <= 0 && right >= mw && bottom >= mh
+  if (!contains) return clampExpandRect(rect, mw, mh)
+  const clampedDx = Math.max(mw - right, Math.min(dx, -rect.x))
+  const clampedDy = Math.max(mh - bottom, Math.min(dy, -rect.y))
+  return { x: rect.x + clampedDx, y: rect.y + clampedDy, width: rect.width, height: rect.height }
 }
 
 /** 该方向是否影响左/右/上/下边 */
@@ -230,14 +250,17 @@ export function resizeExpandRect(
     x = Math.min(0, rect.x + dx)
     width = right - x
   } else if (affectsRight(dir)) {
-    width = Math.max(mw, rect.width + dx)
+    // 最小宽度必须补偿左上角的偏移（用户口径 2026-10-29）：x<0 时右缘 = x+width，
+    // 只保证 width≥mw 会让右缘缩进画面里 —— 截图 1 的「右下角脱离节点」就是它。
+    width = Math.max(mw - rect.x, rect.width + dx)
   }
 
   if (affectsTop(dir)) {
     y = Math.min(0, rect.y + dy)
     height = bottom - y
   } else if (affectsBottom(dir)) {
-    height = Math.max(mh, rect.height + dy)
+    // 同上：下缘 = y+height ≥ mh，最小高度要补上 y 的偏移
+    height = Math.max(mh - rect.y, rect.height + dy)
   }
 
   return { x, y, width, height }
