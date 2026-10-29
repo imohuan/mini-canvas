@@ -689,7 +689,7 @@ describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重�
     expect(filterWatch, '换筛选没有清已摘集合 → 切到别的页签也画不出这条').toMatch(/droppedHistoryIds\.clear\(\)/)
     const errorWatch = modalsArea.slice(
       modalsArea.indexOf('watch(() => s.histShowError'),
-      modalsArea.indexOf('onBeforeUnmount'),
+      modalsArea.indexOf('onBeforeUnmount(),'),
     )
     expect(errorWatch, '打开显示异常没有清已摘集合 → 中性异常卡回不来').toMatch(/droppedHistoryIds\.clear\(\)/)
   })
@@ -700,6 +700,63 @@ describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重�
       modalsArea.indexOf('function setupLoadSentinel'),
     )
     expect(fn, 'readLoadState 没有 dropped 字段').toMatch(/dropped: droppedHistoryIds\.size/)
+  })
+})
+
+/**
+ * 第二条无限加载路径（2026-10-30 复测）：跨端地址的媒体不能被真的挂成 <video>/<audio>。
+ *
+ * 现场证据：视频页签 12 秒内 /api/history 只请求 2 次（主循环已修好），但两个
+ * http://localhost:8033/.../*.mp4 各被请求约 100 次 —— createMasonryElement 直接拿
+ * item.urls[0] 去 buildMediaCard，绕过 previewableUrl；<video> 网络失败后浏览器自己重试。
+ */
+describe('不可预览的媒体不会挂成 video/audio（防浏览器重试刷屏）', () => {
+  const mediaBranch = modalsArea.slice(
+    modalsArea.indexOf('const isAudio = item.kind'),
+    modalsArea.indexOf('if (url) {'),
+  )
+
+  it('媒体分支先过 previewableUrl，不直接用 item.urls[0]', () => {
+    expect(mediaBranch, '媒体卡仍直接拿原始 url 建 <video>（跨端地址会被浏览器反复重试）').not.toMatch(
+      /buildMediaCard\(item, item\.urls\[0\]/,
+    )
+    expect(mediaBranch, '媒体分支没有走 previewableUrl').toMatch(/const mediaUrl = previewableUrl\(item\)/)
+    expect(mediaBranch, '取到可预览地址后没有交给 buildMediaCard').toMatch(/buildMediaCard\(item, mediaUrl/)
+  })
+
+  it('不可预览 + 显示异常关着：整条不画（登记已摘 + 标记跳过格子）', () => {
+    expect(mediaBranch, '不可预览时没有登记已摘').toMatch(/droppedHistoryIds\.add/)
+    expect(mediaBranch, '不可预览时没有标记跳过（还是会留一个空格子）').toMatch(/histSkip/)
+  })
+
+  it('建格子的三条路径都会跳过被标记的卡', () => {
+    expect(modalsArea, '缺少统一的建格子入口').toMatch(/function buildWallWrapper/)
+    for (const name of ['rebuildMasonry', 'appendMasonryItems', 'prependMasonryItems']) {
+      const fn = modalsArea.slice(modalsArea.indexOf('function ' + name), modalsArea.indexOf('function ' + name) + 2200)
+      expect(fn, name + ' 没有走统一建格子入口（跳过的卡会留下空列位）').toMatch(/buildWallWrapper\(/)
+    }
+  })
+})
+
+/**
+ * 第三条无限加载路径：显示异常开着时画的是占位卡，占位卡必须带 data-hist-id。
+ * 不带的话 canLoadMore/补画会把它当成"数据里有、DOM 没有"，再次无限重建。
+ */
+describe('占位卡也带 data-hist-id（否则补漏会无限重建）', () => {
+  it('buildErrorCard 写入 dataset.histId', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function buildErrorCard'),
+      modalsArea.indexOf('function showBrokenResourceCard'),
+    )
+    expect(fn, '占位卡没有 data-hist-id（补漏会把它当成漏画）').toMatch(/wrap\.dataset\.histId = item\.id|dataset\.histId/)
+  })
+
+  it('坏资源替换成占位卡后也带 id', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function showBrokenResourceCard'),
+      modalsArea.indexOf(' * 点卡片：'),
+    )
+    expect(fn, '替换出的占位卡没有把 id 带到 DOM 上').toMatch(/fallback\.dataset\.histId/)
   })
 })
 

@@ -591,6 +591,11 @@ function esc(t: string): string {
 function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'hist-card-fallback' + (opts?.missingResource ? '' : ' is-error')
+  /**
+   * 占位卡也必须带 data-hist-id（2026-10-30 复测）：补漏逻辑按"数据里有、DOM 里没有"
+   * 判断漏画，占位卡不带 id 就会被当成漏画 → 反复重建整墙 → 无限加载。
+   */
+  if (item.id) wrap.dataset.histId = item.id
   wrap.innerHTML =
     '<span class="hist-card-fallback-icon">!</span>' +
     '<strong>' + esc(item.title) + '</strong>' +
@@ -631,6 +636,8 @@ function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
   }
   const fallback = buildErrorCard(item, { missingResource: true })
   if (s.histBatchMode && item.id) fallback.appendChild(buildCheckOverlay(item.id))
+  // 替换出来的占位卡同样要带 id（否则补漏把它当成漏画，反复重建）
+  if (item.id) fallback.dataset.histId = item.id
   card.replaceWith(fallback)
   masonry.layoutWhenReady()
 }
@@ -1054,8 +1061,23 @@ function createMasonryElement(item: HistItem): HTMLElement {
   //  而点开其实能播 —— 用户实测抓到的就是这个）。
   const isAudio = item.kind === '音频' || item.kind === 'audio'
   const isVideo = item.kind === '视频' || item.kind === 'video'
-  if ((isAudio || isVideo) && item.urls?.[0]) {
-    return buildMediaCard(item, item.urls[0], isAudio ? 'audio' : 'video')
+  if (isAudio || isVideo) {
+    /**
+     * 媒体地址先过 previewableUrl（2026-10-30 复测：跨端 http://localhost:8033/.../*.mp4
+     * 被 <video> 反复自动重试，12 秒上百次请求）。不是本服务地址就别挂 video/audio。
+     */
+    const mediaUrl = previewableUrl(item)
+    if (mediaUrl) return buildMediaCard(item, mediaUrl, isAudio ? 'audio' : 'video')
+    /**
+     * 不可预览：与"资源走丢"同一条口径 —— 显示异常关着就整条不画（登记已摘，避免补漏
+     * 又把它画回来）；开着才画一张中性占位卡。
+     */
+    if (item.id) droppedHistoryIds.add(item.id)
+    if (s.histShowError) return buildErrorCard(item, { missingResource: true })
+    const skip = document.createElement('div')
+    skip.className = 'hist-card hist-card--skip'
+    skip.dataset.histSkip = '1'
+    return skip
   }
 
   if (url) {
@@ -1133,12 +1155,8 @@ function rebuildMasonry(): void {
 
   const items = ui.histVisible.value.slice(0, renderedCount.value)
   for (const item of items) {
-    const wrapper = document.createElement('div')
-    wrapper.className = ITEM_CLASS
-    wrapper.style.width = columnWidth + 'px'
-    wrapper.style.marginBottom = GUTTER + 'px'
-    wrapper.appendChild(createMasonryElement(item))
-    container.appendChild(wrapper)
+    const wrapper = buildWallWrapper(item, columnWidth)
+    if (wrapper) container.appendChild(wrapper)
   }
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -1154,6 +1172,24 @@ function rebuildMasonry(): void {
       fillViewportIfNeeded()
     })
   })
+}
+
+/**
+ * 统一建格子入口：三条建墙路径（rebuild / append / prepend）都走它。
+ *
+ * 为什么收口：被跳过的卡（不可预览的媒体）必须整个格子都不出现；各路径各写一份
+ * 迟早漏掉一条，格子会留下空列位。返回 null = 这条不该画。
+ */
+function buildWallWrapper(item: HistItem, columnWidth: number): HTMLElement | null {
+  const card = createMasonryElement(item)
+  // 不可预览且显示异常关着：createMasonryElement 会返回带 histSkip 标记的空壳，整格不画
+  if (card.dataset.histSkip === '1') return null
+  const wrapper = document.createElement('div')
+  wrapper.className = ITEM_CLASS
+  wrapper.style.width = columnWidth + 'px'
+  wrapper.style.marginBottom = GUTTER + 'px'
+  wrapper.appendChild(card)
+  return wrapper
 }
 
 /** 只把新增一批交给 Masonry（保留已有 DOM 与滚动位置） */
@@ -1175,13 +1211,8 @@ function appendMasonryItems(from: number, to: number): void {
     if (item.id) drawnIds.add(item.id)
     return true
   }).map((item) => {
-    const wrapper = document.createElement('div')
-    wrapper.className = ITEM_CLASS
-    wrapper.style.width = columnWidth + 'px'
-    wrapper.style.marginBottom = GUTTER + 'px'
-    wrapper.appendChild(createMasonryElement(item))
-    return wrapper
-  })
+    return buildWallWrapper(item, columnWidth)
+  }).filter((w): w is HTMLElement => !!w)
   masonry.append(wrappers)
   observeLastItem()
   fillViewportIfNeeded()
@@ -1206,13 +1237,8 @@ function prependMasonryItems(count: number): void {
     if (item.id) drawnIds.add(item.id)
     return true
   }).map((item) => {
-    const wrapper = document.createElement('div')
-    wrapper.className = ITEM_CLASS
-    wrapper.style.width = columnWidth + 'px'
-    wrapper.style.marginBottom = GUTTER + 'px'
-    wrapper.appendChild(createMasonryElement(item))
-    return wrapper
-  })
+    return buildWallWrapper(item, columnWidth)
+  }).filter((w): w is HTMLElement => !!w)
   masonry.prepend(wrappers)
   renderedCount.value = Math.min(renderedCount.value + count, ui.histVisible.value.length)
   // 数据整体多了一条：异常卡过滤掉的那部分也要跟着参与"还能不能加载"的判断
