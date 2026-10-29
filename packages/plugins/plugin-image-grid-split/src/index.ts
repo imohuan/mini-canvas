@@ -82,7 +82,7 @@ export function apply(ctx: Context): void {
         slotIndex: p.slotIndex,
         position: p.position ?? { x: 0, y: 0 },
         createImageNode: (resourceId, pos, meta) => {
-          const creator = ctx.registryOf('media/creator').top('image')?.value
+          const creator = ctx.registryOf<{ addNode?(request: { kind: string; resourceId: string; position: { x: number; y: number }; meta?: Record<string, unknown> }): string | undefined }>('media/creator').top('image')?.value
           return creator?.addNode?.({
             kind: 'image',
             resourceId,

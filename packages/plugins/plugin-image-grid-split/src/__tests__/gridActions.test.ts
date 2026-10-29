@@ -22,7 +22,7 @@ function boot() {
   const selection = new Selection()
   const history = new History({
     snapshot: () => ({ nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())), edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) }),
-    restore: (g) => { nodeStore.replaceAll(g.nodes as never); edgeStore.replaceAll(g.edges as never) },
+    restore: (g: { nodes: never[]; edges: never[] }) => { nodeStore.replaceAll(g.nodes as never); edgeStore.replaceAll(g.edges as never) },
   })
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history)
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
@@ -43,7 +43,10 @@ function makeDeps(env: ReturnType<typeof boot>): GridActionDeps {
       },
     },
     mediaCreator: {
-      addNode(_kind, resourceId, position, opts) {
+      addNode(request) {
+        const resourceId = request.resourceId
+        const position = request.position
+        const opts = { meta: (request.meta ?? {}) as { name?: string; width?: number; height?: number } }
         const meta = (opts?.meta ?? {}) as { name?: string; width?: number; height?: number }
         return env.graph.createNode('image', position, {
           resourceId,

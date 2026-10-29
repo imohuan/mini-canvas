@@ -14,7 +14,6 @@ import { computed, ref } from 'vue'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import GridSizePicker from './GridSizePicker.vue'
 import { GRID_PRESETS, presetGridSize, type GridSize } from './gridLogic'
-import { readImageSourceFields } from '@mini-canvas/plugin-node-image/imageRefs'
 import { openGridSession } from './session'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -29,7 +28,8 @@ const customSize = ref<GridSize>({ rows: 3, cols: 3 })
 const busy = ref(false)
 
 const hasImage = computed(() => {
-  const { resourceId, legacyUrl } = readImageSourceFields(props.data)
+  const resourceId = typeof props.data?.resourceId === 'string' ? props.data.resourceId : ''
+  const legacyUrl = typeof props.data?.imageUrl === 'string' ? props.data.imageUrl : ''
   return resourceId !== '' || legacyUrl !== ''
 })
 
@@ -37,7 +37,8 @@ const ICON_GRID =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
 
 async function sourceUrlOf(): Promise<{ url: string; width: number; height: number } | null> {
-  const { resourceId, legacyUrl } = readImageSourceFields(props.data)
+  const resourceId = typeof props.data?.resourceId === 'string' ? props.data.resourceId : ''
+  const legacyUrl = typeof props.data?.imageUrl === 'string' ? props.data.imageUrl : ''
   const resources = ctx.tryGet<{ resolve(ref: string): Promise<string | undefined> } | undefined>('resources')
   let url = legacyUrl
   if (resourceId) {

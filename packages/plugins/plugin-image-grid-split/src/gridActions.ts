@@ -8,7 +8,6 @@
  * 分镜组槽位也只存 resourceId，绝不把 blob:/data: 地址写进节点长期字段。
  */
 import type { DocService } from '@mini-canvas/canvas-data'
-import type { PluginScope } from '@mini-canvas/kernel'
 import type { MediaKindCreator } from '@mini-canvas/canvas-render'
 import {
   publishLayout,
@@ -187,7 +186,10 @@ export async function publishGrid(
     for (const item of layout) {
       const s = byCell.get(`${item.cell.row}:${item.cell.col}`)
       if (!s) continue
-      const id = deps.mediaCreator!.addNode?.('image', s.resourceId, { x: item.x, y: item.y }, {
+      const id = deps.mediaCreator!.addNode?.({
+        kind: 'image',
+        resourceId: s.resourceId,
+        position: { x: item.x, y: item.y },
         nodeType: 'image',
         meta: { name: item.name, width: item.width, height: item.height },
       })
@@ -285,9 +287,3 @@ export function storyboardSlotsOf(data: Record<string, unknown> | undefined): (S
   return readStoryboardSlots(data?.slots, Math.max(0, rows * cols))
 }
 
-/** 媒体创建器从注册场现取（插件卸载后自动消失；调用方不要缓存） */
-export function imageCreatorOf(scope: PluginScope): Pick<MediaKindCreator, 'addNode'> | undefined {
-  const field = scope.registryOf<MediaKindCreator>('media/creator')
-  const creator = field.top('image')?.value
-  return creator && typeof creator.addNode === 'function' ? creator : undefined
-}

@@ -124,7 +124,8 @@ async function resolveSource(): Promise<{ url: string; nodeId: string } | null> 
     notify('原图节点已不存在，切分已取消', 'error')
     return null
   }
-  const { resourceId, legacyUrl } = node.data as { resourceId?: unknown; imageUrl?: unknown }
+  const resourceId = typeof node.data?.resourceId === 'string' ? node.data.resourceId : ''
+  const legacyUrl = typeof node.data?.imageUrl === 'string' ? node.data.imageUrl : ''
   const resources = ctx.tryGet<{ resolve(ref: string): Promise<string | undefined> } | undefined>('resources')
   let url = typeof legacyUrl === 'string' ? legacyUrl : ''
   if (typeof resourceId === 'string' && resourceId) {

@@ -89,7 +89,7 @@ defineExpose({ slots, localOf })
         :data-slot-index="i" :data-has-image="slot ? 'true' : 'false'">
         <img v-if="slot && urlOf(slot)" class="isb-img" :src="urlOf(slot)" :alt="slot.name || `槽位 ${i + 1}`" draggable="false" />
         <div v-else class="isb-empty" aria-hidden="true">+</div>
-        <span class="isb-label" aria-hidden="true">{{ slotPosition(i, cols.value).row + 1 }}-{{ slotPosition(i, cols.value).col + 1 }}</span>
+        <span class="isb-label" aria-hidden="true">{{ slotPosition(i, cols).row + 1 }}-{{ slotPosition(i, cols).col + 1 }}</span>
       </div>
     </div>
   </div>
