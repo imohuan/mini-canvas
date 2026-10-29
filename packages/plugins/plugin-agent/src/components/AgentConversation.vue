@@ -1363,8 +1363,8 @@ function skillCoverStyle(name: string): Record<string, string> {
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 360
   const hue2 = (hash + 42) % 360
   return {
-    background: 'radial-gradient(circle at 82% 16%, rgb(255 255 255 / 0.3), transparent 34%), linear-gradient(145deg, hsl(' + hash + ' 66% 54%), hsl(' + hue2 + ' 62% 40%))',
-    color: 'rgb(255 255 255 / 0.94)',
+    '--cover-h1': String(hash),
+    '--cover-h2': String(hue2),
   }
 }
 
@@ -4893,7 +4893,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-panel-seg[aria-pressed='true'] {
   background: var(--ui-overlay-solid, #212121);
   color: var(--ui-ink, #f7f7f7);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.1));
 }
 
 .ac-detect-btn {
@@ -4956,7 +4956,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-model-row:hover {
   background: var(--ui-hover, rgb(255 255 255 / 0.1));
   transform: translateY(-1px);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.12);
+  box-shadow: var(--ui-shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.12));
 }
 
 .ac-model-card[aria-checked='true'],
@@ -5222,8 +5222,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   place-items: center;
   width: 100%;
   height: 64px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.08));
-  color: var(--ui-ink, #f7f7f7);
+  background:
+    radial-gradient(circle at 82% 16%, var(--ui-hover, rgb(255 255 255 / 0.3)), transparent 34%),
+    /* 主题色白名单: 技能封面是内容生成的艺术渐变（按名字 hash 的色相），不是界面主题色 */
+    linear-gradient(145deg, hsl(var(--cover-h1, 208) 66% 54%), hsl(var(--cover-h2, 250) 62% 40%));
+  color: var(--ui-primary-ink, #ffffff);
 }
 
 .ac-skill-cover :deep(svg) {
