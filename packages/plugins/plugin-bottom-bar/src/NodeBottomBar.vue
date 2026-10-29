@@ -95,6 +95,8 @@ import {
   targetOfTile,
   uniqueNodeName,
   uploadToRefSlot,
+  formatVideoDuration,
+  videoOverLimit,
   type RefTarget,
   type RefTile,
   type TileCardLike,
@@ -515,6 +517,8 @@ function cardImageOf(tile: { url?: string; kind?: string | null }): string {
  */
 const loadingTiles = ref<Record<string, boolean>>({})
 const brokenTiles = ref<Record<string, boolean>>({})
+/** 已经确认加载成功的卡片（按卡片键记；防止素材重算后又进加载态） */
+const imageReady = ref<Record<string, boolean>>({})
 
 function clearBrokenTile(key: string): void {
   if (loadingTiles.value[key]) {
@@ -527,6 +531,11 @@ function clearBrokenTile(key: string): void {
     delete next[key]
     brokenTiles.value = next
   }
+  /**
+   * 图真的出来了 → 记住这张卡已经 OK（用户 2026-10-29：加载完还转圈）。
+   * 后面素材重算时凭这个记号跳过加载态。
+   */
+  imageReady.value = { ...imageReady.value, [key]: true }
 }
 
 function markBrokenTile(key: string): void {
@@ -658,6 +667,14 @@ function openCard(card: TileCardLike): void {
  */
 function removeCard(nodeId: string): void {
   if (!nodeId) return
+  /**
+   * 用户 2026-10-29 重新定下的语义：**只断开连线**，绝不删提示词里的标签。
+   *
+   * 历史：上一版这里也只断线，但卡片仍挂在正文标签上，于是删完立刻变「失效红卡」
+   * 继续留在原处 —— 用户以为删不掉。现在配套的规则是：
+   *   · 关闭按钮 = 只断线（提示词一个字不动，标签自然变失效）；
+   *   · 想彻底清掉 = 顶部「清理失效」（或自己在输入框删标签）。
+   */
   const doc = ctx.tryGet<{
     removeEdges(ids: string[]): number
     getEdges?(): Array<{ id: string; source: string; target: string }>
@@ -837,6 +854,36 @@ const canRun = computed(() => !running.value && !!currentAction.value && !invali
  * 文案由纯函数生成，卡片行与发送按钮旁共用同一份。
  */
 const invalidHint = computed(() => invalidRefHint(refTiles.value))
+/** 失效的卡片（「清理失效」按钮与提示文案共用） */
+const invalidTiles = computed(() => refTiles.value.filter((t) => t.invalid))
+
+/**
+ * 「清理失效」（用户 2026-10-29）：删掉输入框里对应的失效标签，卡片随之消失。
+ *
+ * 这是**唯一**会删提示词内容的操作，所以：
+ *   · 只在真有失效卡时才出现；
+ *   · 先确认（用户写下的文字不该被一次误点抹掉）；
+ *   · 只删失效那几颗，别的标签与正文一个字不动。
+ */
+function clearInvalidRefs(): void {
+  const ids = invalidTiles.value.map((t) => t.key).filter(Boolean)
+  if (ids.length === 0) return
+  const ok = typeof window === 'undefined'
+    ? true
+    : window.confirm('会从提示词里删除 ' + ids.length + ' 个失效引用（正文其它内容不动），继续？')
+  if (!ok) return
+  const removed = editorComponentRef.value?.removeRefChips?.(ids) === true
+  if (!removed) return
+  // 编辑器已发 update:promptDoc（异步回填）：等一拍再清 refOrder 里这些死键
+  void nextTick().then(() => {
+    const alive = new Set(promptChips.value.map((c) => c.id))
+    const order = refOrder.value.filter((k) => alive.has(k))
+    try {
+      ctx.get('doc').updateNode(props.id, { data: { refOrder: order } })
+    } catch { /* 节点已不在：忽略 */ }
+    refreshSlotChips()
+  })
+}
 
 const ICON_WARN =
   '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
@@ -1183,6 +1230,7 @@ const refTiles = computed(() =>
       kind: m.kind === 'image' || m.kind === 'video' || m.kind === 'audio' || m.kind === 'text' ? m.kind : 'image',
       url: m.url,
       value: m.value,
+      ...(m.duration ? { duration: m.duration } : {}),
     })),
     refOrder.value,
   ),
@@ -1199,8 +1247,19 @@ watch(
   () => {
     const next: Record<string, boolean> = {}
     for (const t of refTiles.value) {
+      /**
+       * 只有**视频**才需要「等帧图」的加载态（用户 2026-10-29）：
+       * 图片 / 音频 / 文本要么立刻有图、要么直接给类型图标，转圈反而像出 bug。
+       */
+      if (t.kind !== 'video') continue
       if (!cardImageOf(t)) continue
       if (brokenTiles.value[t.key]) continue
+      /**
+       * 帧图已经取到就不再进加载态（用户 2026-10-29：「图都出来了还转圈」）：
+       * 素材重算（resolve / 排序 / 换帧）会让这个 watch 重跑；若一律置 true，
+       * 浏览器复用缓存的帧图不再触发 load，就永远关不掉转圈。
+       */
+      if (t.url && videoThumbOf(t.url)) continue
       next[t.key] = true
     }
     loadingTiles.value = next
@@ -1221,6 +1280,53 @@ const slotErrors = ref<Record<string, string>>({})
 /** 某张卡片的错误文案 */
 function slotErrorOf(tile: { key: string }): string {
   return slotErrors.value[tile.key] ?? ''
+}
+
+/**
+ * 卡片提示文案（用户 2026-10-29：hover / 拖拽都要有 tooltip，不要浏览器原生 title）。
+ *
+ * 三种状态说清楚「这是什么 / 现在能不能用」：
+ *   · 失效：原名 + 引用已失效（在提示词里删掉，或用「清理失效」）；
+ *   · 空壳：名称 + 待添加；
+ *   · 正常：名称 + 类型 + 时长（视频）。
+ */
+function cardTooltip(tile: RefTile): string {
+  if (tile.invalid) return '「' + tile.label + '」引用已失效'
+  if (tile.pending) return '「' + tile.label + '」待添加：拖节点或点它上传'
+  const kindLabel =
+    tile.kind === 'video' ? '视频'
+    : tile.kind === 'audio' ? '音频'
+    : tile.kind === 'text' ? '文本'
+    : tile.kind === 'image' ? '图片' : '素材'
+  const duration = tile.kind === 'video' ? formatVideoDuration(tile.duration) : ''
+  return '「' + tile.label + '」' + kindLabel + (duration ? ' · ' + duration : '') + '（可拖动调整顺序）'
+}
+
+/**
+ * 卡片的 hover 提示：走主题 Tooltip（用户 2026-10-29）。
+ *
+ * 为什么不用原生 title：浏览器会延迟 1 秒、样式灰扑扑，跟整体 UI 不搭。
+ * 这里用一个受控 Tooltip（只包一张卡），hover 哪张就显示哪张的文案；
+ * 拖拽时指针被拖拽库接管，hover 不触发 —— 那条路走 tip 服务（见 startCtrlDrag）。
+ */
+const hoverCard = ref<RefTile | null>(null)
+/** Tooltip 的定位锚点（跟着鼠标下那张卡走） */
+const cardTipAnchor = ref<HTMLElement | null>(null)
+function moveTipAnchor(tile: RefTile): void {
+  const el = cardTipAnchor.value
+  const card = document.querySelector<HTMLElement>('.nb-shell .nb-card[data-tile-key="' + tile.key + '"]')
+  if (!el || !card) return
+  const r = card.getBoundingClientRect()
+  // 锚点贴在卡片**中线**上：Tooltip 默认按触发器算位置，稳定不抖
+  el.style.left = Math.round(r.left + r.width / 2) + 'px'
+  el.style.top = Math.round(r.top) + 'px'
+}
+function onCardEnter(tile: RefTile): void {
+  hoverCard.value = tile
+  moveTipAnchor(tile)
+}
+function onCardLeave(tile: RefTile): void {
+  if (hoverCard.value?.key === tile.key) hoverCard.value = null
 }
 
 /**
@@ -1247,6 +1353,8 @@ const editorComponentRef = ref<{
   refreshChips?(): void
   /** 把正文里的 @名称 文字转成参考标签（「标记」按钮调用） */
   markRefSlots?(): number
+  /** 按标签 id 删除正文里的参考标签（「清理失效」用，用户 2026-10-29） */
+  removeRefChips?(ids: readonly string[]): boolean
   /** 读出正文纯文本（转换后立即同步到 prompt，避免落库的还是旧文本） */
   exportText?(): string
   /** 动态切可编辑态（AI 生成期间锁输入用；bundle 侧 view.editable 布尔位） */
@@ -1479,6 +1587,22 @@ function refreshSlotChips(): void {
           name: tile.label,
           category: '素材',
           invalid: true,
+          /**
+           * 失效标签**不许再带着旧缩略图/类型**（用户 2026-10-29：图片 18 / 泳装少女
+           * 已经失效，输入框里却还显示旧缩略图，看着像还在用）。
+           * 不给 url、不给 chipKind：渲染出来就是灰掉 + 通用资源图标。
+           */
+          chipKind: undefined,
+          url: '',
+        })
+        // 文档里那颗标签的属性也要清掉旧图和类型（否则下次重渲染又从 attrs 里捡回来）
+        editorComponentRef.value?.replaceResource?.({
+          id: tile.key,
+          name: tile.label,
+          category: '素材',
+          invalid: true,
+          chipKind: undefined,
+          url: '',
         })
         continue
       }
@@ -1894,6 +2018,19 @@ function onGlobalLeave(el: Element): void {
       data-testid="node-bottom-bar"
       @pointerdown.stop
     >
+    <!--
+      卡片 hover 提示（用户 2026-10-29）：用主题 Tooltip，不用浏览器原生 title。
+      只包外壳一行 —— 放在卡片列表的**紧邻父级**，位置按鼠标下那张卡算。
+    -->
+    <div class="nb-card-tip-anchor" aria-hidden="true">
+      <Tooltip
+        :content="hoverCard ? cardTooltip(hoverCard) : ''"
+        :disabled="!hoverCard"
+        placement="bottom"
+      >
+        <span ref="cardTipAnchor" class="nb-card-tip-dot" />
+      </Tooltip>
+    </div>
     <!-- 一排 pill（参考图顶行：+参考 / 标记）。全屏态整个行不渲染（VueDraggable 的
          force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
          行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
@@ -1920,6 +2057,20 @@ function onGlobalLeave(el: Element): void {
       >
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>
+      </button>
+      <!--
+        「清理失效」（用户 2026-10-29）：唯一会动**提示词**的批量操作。
+        只在真有失效卡片时出现；点之前二次确认（删的是用户写下的引用文字）。
+      -->
+      <button
+        v-if="!expanded && invalidTiles.length > 0"
+        class="nb-pill nb-pill--danger"
+        type="button"
+        data-testid="bar-clear-invalid"
+        @click.stop="clearInvalidRefs"
+      >
+        <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
+        <span>清理失效</span>
       </button>
     </div>
 
@@ -1969,14 +2120,10 @@ function onGlobalLeave(el: Element): void {
         tabindex="0"
         class="nb-card"
         :class="{ 'is-pending': tile.pending, 'is-invalid': tile.invalid }"
-        :title="
-          tile.invalid
-            ? '引用已失效：删掉这颗标签，或重新拖一个节点进来'
-            : tile.pending
-              ? '待添加：点击上传 / 拖文件进来 / Ctrl 拖节点'
-              : tile.label + '（可拖动调整顺序）'
-        "
         :style="tile.pending ? 'cursor: pointer' : ''"
+        :aria-label="cardTooltip(tile)"
+        @pointerenter="onCardEnter(tile)"
+        @pointerleave="onCardLeave(tile)"
         @click.stop="tile.pending ? pickSlotFile(tile) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
@@ -2031,6 +2178,16 @@ function onGlobalLeave(el: Element): void {
             title="视频"
             aria-hidden="true"
           />
+          <!--
+            视频时长（用户 2026-10-29）：右下角小字「分:秒」，取代原来的视频小图标。
+            超过 60 秒用警示色（用户：这边限制 60 秒以内，超了要醒目提醒）。
+          -->
+          <span
+            v-if="!tile.pending && tile.kind === 'video' && formatVideoDuration(tile.duration)"
+            class="nb-card-duration"
+            :class="{ 'is-over': videoOverLimit(tile.duration) }"
+            :title="videoOverLimit(tile.duration) ? '视频超过 60 秒上限' : '视频时长'"
+          >{{ formatVideoDuration(tile.duration) }}</span>
           <span class="nb-card-index">{{ tile.index }}</span>
           <!-- 拖拽悬停时显示名称（用户 2026-10-28：卡片只有序号看不出是谁） -->
           <span class="nb-card-namebar">{{ tile.pending ? tile.label + ' · 待添加' : tile.label }}</span>
@@ -2687,6 +2844,27 @@ function onGlobalLeave(el: Element): void {
   cursor: inherit;
   outline: none;
 }
+/**
+ * Tooltip 锚点（用户 2026-10-29）：一个 1px 的不可见点，hover 时挪到那张卡的中线，
+ * 由主题 Tooltip 按它算气泡位置。放这里而不是包住每张卡，是因为拖拽库要求
+ * 直接子元素就是卡片，多一层包裹会破坏排序命中。
+ */
+.nb-card-tip-anchor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 100001;
+}
+.nb-card-tip-dot {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 /*
  * 拖拽三态（Vue Draggable Plus 的 ghost / chosen / drag 三个 class）。
  *
@@ -2840,6 +3018,7 @@ function onGlobalLeave(el: Element): void {
   position: absolute;
   left: 2px;
   bottom: 2px;
+  z-index: 3;
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -2851,6 +3030,33 @@ function onGlobalLeave(el: Element): void {
   line-height: 14px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  transition: opacity 0.15s ease-out;
+}
+
+/**
+ * 视频时长角标（用户 2026-10-29：右下角显示分:秒，字小一点）。
+ * 与序号角标错开：时长在右下、序号在左下，互不打架。
+ * 超过 60 秒用警示色（用户：超过要醒目提醒）。
+ */
+.nb-card-duration {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 3;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 72%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.nb-card-duration.is-over {
+  background: var(--ui-warn, #b45309);
+  color: var(--ui-panel, #fff);
 }
 
 /*
@@ -2887,6 +3093,16 @@ function onGlobalLeave(el: Element): void {
 .nb-card--ghost .nb-card-namebar {
   opacity: 1;
   transform: translateY(0);
+}
+/**
+ * 名称条出现时**藏掉左下角序号**（用户 2026-10-29：两者叠在一起看不清）。
+ * 同一时刻只显示一个信息：要么序号（平时），要么名称（hover / 拖拽 / 失效）。
+ */
+.nb-card:hover .nb-card-index,
+.nb-card:focus-within .nb-card-index,
+.nb-card.is-target .nb-card-index,
+.nb-card--ghost .nb-card-index {
+  opacity: 0;
 }
 
 /* 失效引用：灰掉 + 斜纹，明示「这颗标签指向的节点已经不在了」 */

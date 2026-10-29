@@ -33,6 +33,10 @@ export interface RefTile {
   value?: string
   /** 视频帧图（mp4 不能直接当 <img>） */
   thumb?: string
+  /**
+   * 视频时长（秒）。只有视频有；用户 2026-10-29：右下角显示「分:秒」。
+   */
+  duration?: number
 }
 
 /** 一条连线素材（= 已绑定到本节点的上游节点） */
@@ -43,6 +47,8 @@ export interface TileCardLike {
   kind: 'image' | 'video' | 'audio' | 'text'
   url?: string
   value?: string
+  /** 视频时长（秒，来自节点 data.videoDuration） */
+  duration?: number
 }
 
 /**
@@ -123,6 +129,7 @@ export function mergeRefTiles(
       kind: card.kind,
       url: card.url,
       value: card.value,
+      ...(card.duration ? { duration: card.duration } : {}),
     })
   }
 
@@ -142,6 +149,7 @@ export function mergeRefTiles(
       kind: card.kind,
       url: card.url,
       value: card.value,
+      ...(card.duration ? { duration: card.duration } : {}),
     })
   }
 
@@ -185,6 +193,33 @@ export function invalidRefHint(tiles: ReadonlyArray<RefTile>): string {
   const names = bad.slice(0, 3).map((t) => '「' + t.label + '」').join('、')
   const more = bad.length > 3 ? ' 等 ' + bad.length + ' 个' : ''
   return '有引用已失效：' + names + more + '，删掉或重新拖入后才能发送'
+}
+
+/**
+ * 视频时长 → 卡片右下角的小字（用户 2026-10-29：只显示分:秒，字要小一点）。
+ *
+ * - 秒以下四舍五入；
+ * - 不足 1 分钟也写成 `0:07` 这种（一眼能看出是时长）；
+ * - 非法/缺失 → 空串（调用方据此不画角标）。
+ */
+export function formatVideoDuration(seconds: number | null | undefined): string {
+  const sec = Number(seconds)
+  if (!Number.isFinite(sec) || sec <= 0) return ''
+  const total = Math.round(sec)
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return m + ':' + String(s).padStart(2, '0')
+}
+
+/**
+ * 视频是否超过上限（用户 2026-10-29：这边限制 60 秒以内，超了要醒目提醒）。
+ * 60 秒整不算超（含边界）。
+ */
+export const VIDEO_DURATION_LIMIT_SEC = 60
+
+export function videoOverLimit(seconds: number | null | undefined): boolean {
+  const sec = Number(seconds)
+  return Number.isFinite(sec) && sec > VIDEO_DURATION_LIMIT_SEC
 }
 
 /**

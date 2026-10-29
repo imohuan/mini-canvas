@@ -40,6 +40,11 @@ export interface UpstreamMaterial {
   resourceId?: string
   /** 文本类素材的内容 */
   value?: string
+  /**
+   * 视频时长（秒）。来自节点 data.videoDuration；图片/音频/文本没有。
+   * 用户 2026-10-29：视频卡片右下角要显示「分:秒」，超过 60 秒要醒目提醒。
+   */
+  duration?: number
 }
 
 /** 上游节点在判断素材时用到的字段（只读，避免把整个内核节点类型拖进来） */
@@ -109,6 +114,9 @@ export function collectUpstreamMaterials(
         name: label || nonEmptyString(data.videoName) || '视频',
         refName: '',
         url: videoUrl,
+        ...(Number.isFinite(Number(data.videoDuration)) && Number(data.videoDuration) > 0
+          ? { duration: Number(data.videoDuration) }
+          : {}),
       })
       continue
     }

@@ -2259,6 +2259,12 @@ export function useEditor(
     const prev = itemRegistry.get(item.id)
     // renderEditor 等外观字段也要从 prev 继承（item 只带数据，不带渲染函数）。
     itemRegistry.set(item.id, item.name === undefined && prev ? { ...prev, ...item, name: prev.name } : item)
+    /**
+     * 失效标签（用户 2026-10-29：失效了还挂着旧缩略图）：
+     * 一旦标成 invalid，就把 url / 类型 / 缩略图**一起清空**，只留名字。
+     * 否则 toDOM 会从 attrs 里把旧图捡回来，看着像「还连着」。
+     */
+    const clearing = item.invalid === true
     let found = false
     let changed = false
     const tr = view.state.tr
@@ -2281,6 +2287,12 @@ export function useEditor(
         value: item.value ?? '',
         category: item.category,
         chipKind: item.chipKind ?? '',
+      }
+      if (clearing) {
+        nextAttrs.url = ''
+        nextAttrs.thumbnail_url = ''
+        nextAttrs.chipKind = ''
+        nextAttrs.value = ''
       }
       changed = chipAttrsNeedUpdate(node.attrs, {
         name: nextAttrs.name,
@@ -2403,6 +2415,37 @@ export function useEditor(
     if (changed) view.dispatch(tr)
   }
 
+  /**
+   * 按标签 id **删除**正文里的参考标签（用户 2026-10-29：「清理失效」按钮用）。
+   *
+   * 为什么要这个入口：失效标签的清理必须**只动用户点名的那几颗**，
+   * 不能整段重写（会把用户的正文排版、光标、别的标签一起弄乱）。
+   * 找到几颗删几颗；找不到 → false，调用方据此跳过落盘。
+   *
+   * @returns 是否真的删掉了东西（true = 文档改了，调用方要同步 modelValue/promptDoc）
+   */
+  function removeRefChips(ids: readonly string[]): boolean {
+    if (!view) return false
+    const set = new Set(ids.filter(Boolean))
+    if (set.size === 0) return false
+    const hits: Array<{ from: number; to: number }> = []
+    view.state.doc.descendants((node, pos) => {
+      if (node.type.name !== 'resource') return
+      if (!set.has(String(node.attrs.id ?? ''))) return
+      hits.push({ from: pos, to: pos + node.nodeSize })
+    })
+    if (hits.length === 0) return false
+    const tr = view.state.tr
+    // 从后往前删：前面的位置不受影响
+    for (const h of hits.sort((a, b) => b.from - a.from)) tr.delete(h.from, h.to)
+    view.dispatch(tr)
+    emit('update:modelValue', getPlainText())
+    emit('update:promptDoc', serializeDoc())
+    return true
+  }
+
+  /**
+   * 用纯文本整体覆盖编辑器内容（覆盖式，非追加）。
 
 
   /**
@@ -2507,6 +2550,8 @@ export function useEditor(
     replaceResourceThumbByName,
     replaceResourceThumbByIds,
     refreshChips,
+    /** 按标签 id 删除参考标签（「清理失效」用） */
+    removeRefChips,
     /**
      * 动态切换可编辑态（AI 生成开始 = false，结束 = true）。
      * 与 props.editable 双通道：prop 管声明式场景，这个方法管命令式场景；内部同一个布尔位。

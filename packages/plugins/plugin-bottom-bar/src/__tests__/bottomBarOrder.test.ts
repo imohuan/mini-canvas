@@ -89,32 +89,41 @@ function cardIndexes(html: string): string[] {
 /** 已就绪卡片的 title（= 素材名）按 DOM 顺序 —— 用来验证「谁排在第几」。
  *  待输入格（is-pending）的 title 是操作提示，不是素材名，不能混进来。 */
 function cardTitles(html: string): string[] {
-  return [...html.matchAll(/class="nb-card"[^>]*title="([^"]*)"/g)].map((m) => m[1])
+  /**
+   * 2026-10-29：卡片不再用浏览器原生 title（用户要求改主题 Tooltip），
+   * 名称改挂在 aria-label 上 —— 它同时也是无障碍名称，测试继续按它比对顺序。
+   */
+  return [...html.matchAll(/class="nb-card"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])
+}
+
+/** aria-label 形如「图A」图片（可拖动…）：取引号里的名称来比对顺序 */
+function nameOfCard(label: string): string {
+  return /^「(.+?)」/.exec(label)?.[1] ?? label
 }
 
 describe('素材卡顺序：按用户拖出来的顺序渲染', () => {
   it('没存过顺序 → 连线先后（既有行为不变）', async () => {
     const html = await render({})
     expect(cardIndexes(html)).toEqual(['1', '2', '3'])
-    expect(cardTitles(html).map((t) => t.split('（')[0])).toEqual(['图A', '图B', '图C'])
+    expect(cardTitles(html).map(nameOfCard)).toEqual(['图A', '图B', '图C'])
   })
 
   it('存过 refOrder → 卡片按它排（用户拖过的顺序被记住）', async () => {
     const html = await render({ refOrder: ['c', 'a', 'b'] })
-    expect(cardTitles(html).map((t) => t.split('（')[0])).toEqual(['图C', '图A', '图B'])
+    expect(cardTitles(html).map(nameOfCard)).toEqual(['图C', '图A', '图B'])
     // 角标永远是 1..N（跟着最终顺序走，不是跟着连线顺序）
     expect(cardIndexes(html)).toEqual(['1', '2', '3'])
   })
 
   it('refOrder 里留着已断开的死 id → 忽略，不产生幽灵卡', async () => {
     const html = await render({ refOrder: ['gone', 'b', 'a', 'c'] })
-    expect(cardTitles(html).map((t) => t.split('（')[0])).toEqual(['图B', '图A', '图C'])
+    expect(cardTitles(html).map(nameOfCard)).toEqual(['图B', '图A', '图C'])
   })
 
   it('refOrder 是脏数据（字符串/数字项）→ 当作没存过，回连线顺序', async () => {
     expect(cardIndexes(await render({ refOrder: 'c,a,b' }))).toEqual(['1', '2', '3'])
     const html = await render({ refOrder: [1, 2] })
-    expect(cardTitles(html).map((t) => t.split('（')[0])).toEqual(['图A', '图B', '图C'])
+    expect(cardTitles(html).map(nameOfCard)).toEqual(['图A', '图B', '图C'])
   })
 
   it('卡片提示语说明可以拖动（用户要的「顺序可拖拽改变」）', async () => {
