@@ -353,7 +353,14 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
       const capability = media()
       if (typeof capability?.addNode === 'function') {
         try {
-          const id = capability.addNode('image', resourceId, position, { nodeType: 'image', meta })
+          // 把源节点转发给 media：它负责统一算落点并在同一事务里连边。
+          // 老宿主不认这两个字段时会被忽略，行为等同旧坐标。
+          const id = capability.addNode('image', resourceId, position, {
+            nodeType: 'image',
+            meta,
+            ...(meta?.sourceNodeId ? { sourceNodeId: meta.sourceNodeId } : {}),
+            ...(meta?.gap !== undefined ? { gap: meta.gap } : {}),
+          })
           // 回退入口（image 服务）不认 sourceNodeId，无法自动连边；不要退回旧坐标冒充成功。
           if (id) return id
         } catch {
