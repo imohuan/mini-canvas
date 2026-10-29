@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { unitCells, toPixelRect, publishPositions, validRowsCols, cellIndexAt } from '../gridSplit'
+import {
+  unitCells, toPixelRect, publishPositions, validRowsCols, cellIndexAt, pickerRowsColsAt,
+} from '../gridSplit'
 
 describe('gridSplit 纯计算', () => {
   it('validRowsCols：合法范围 1~8，小数/0/9 都拒', () => {
@@ -71,5 +73,19 @@ describe('gridSplit 纯计算', () => {
     expect(cellIndexAt(3, 3, 0.5, 1.1)).toBe(-1)
     expect(cellIndexAt(0, 3, 0.5, 0.5)).toBe(-1)
     expect(cellIndexAt(3, 99, 0.5, 0.5)).toBe(-1)
+  })
+
+  it('pickerRowsColsAt：8×8 预览按格子给出行列（1 起）', () => {
+    expect(pickerRowsColsAt(0.01, 0.01)).toEqual({ rows: 1, cols: 1 })
+    expect(pickerRowsColsAt(0.5, 0.01)).toEqual({ rows: 1, cols: 5 })
+    expect(pickerRowsColsAt(0.26, 0.39)).toEqual({ rows: 4, cols: 3 })
+    expect(pickerRowsColsAt(0.99, 0.99)).toEqual({ rows: 8, cols: 8 })
+  })
+
+  it('pickerRowsColsAt：越界返回 null（调用方保持上次行列、不提交）', () => {
+    expect(pickerRowsColsAt(-0.01, 0.5)).toBeNull()
+    expect(pickerRowsColsAt(0.5, 1.01)).toBeNull()
+    expect(pickerRowsColsAt(0.5, 0.5, 0)).toBeNull()
+    expect(pickerRowsColsAt(Number.NaN, 0.5)).toBeNull()
   })
 })

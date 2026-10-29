@@ -6,7 +6,7 @@
  * 点「确定」进入切分。滑出网格保持最后一次的行列（不闪空）。
  */
 import { computed, ref } from 'vue'
-import { cellIndexAt } from './gridSplit'
+import { pickerRowsColsAt } from './gridSplit'
 
 const props = withDefaults(
   defineProps<{
@@ -21,7 +21,7 @@ const emit = defineEmits<{
   (e: 'confirm', rows: number, cols: number): void
 }>()
 
-/** 网格最大 8×8（与 gridSplit.MAX_ROWS/COLS 同口径；这里写死渲染上限） */
+/** 网格最大 8×8（与 gridSplit.MAX_ROWS/COLS 同口径） */
 const PREVIEW = 8
 
 const rows = ref(props.initialRows)
@@ -49,10 +49,10 @@ function onMove(ev: MouseEvent): void {
   if (!el) return
   const rect = el.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0) return
-  const idx = cellIndexAt(PREVIEW, PREVIEW, (ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height)
-  if (idx < 0) return
-  rows.value = Math.floor(idx / PREVIEW) + 1
-  cols.value = (idx % PREVIEW) + 1
+  const hit = pickerRowsColsAt((ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height, PREVIEW)
+  if (!hit) return
+  rows.value = hit.rows
+  cols.value = hit.cols
 }
 
 /** 点一下网格只"定住"当前行列（与悬停同值），真正的进入靠下方「确定」按钮 */

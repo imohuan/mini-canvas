@@ -77,6 +77,24 @@ export function cellIndexAt(rows: number, cols: number, nx: number, ny: number):
   return r * cols + c
 }
 
+/**
+ * 选择器网格（固定 8×8 预览）的悬停 → 行列。
+ * 返回值 = 0 表示**越界**（鼠标在网格外），调用方应保持上一次行列不变。
+ * 抽出来单测，是因为「点网格只预选、不提交」这条交互规则最容易在组件里悄悄改回去。
+ */
+export const PICKER_PREVIEW = 8
+
+export function pickerRowsColsAt(
+  nx: number,
+  ny: number,
+  preview = PICKER_PREVIEW,
+): { rows: number; cols: number } | null {
+  if (!Number.isInteger(preview) || preview < 1) return null
+  const idx = cellIndexAt(preview, preview, nx, ny)
+  if (idx < 0) return null
+  return { rows: Math.floor(idx / preview) + 1, cols: (idx % preview) + 1 }
+}
+
 /** 发布布局：选中格子在画布上的绝对坐标（保持原行列位置，空格留空；同图等比）。
  *  @param cellW 每格节点宽（px）；@param gap 格子之间的画布间距（px） */
 export function publishPositions(
