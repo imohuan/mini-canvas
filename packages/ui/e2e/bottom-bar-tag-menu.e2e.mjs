@@ -28,9 +28,13 @@ const ok = (name, cond, detail = '') => {
   if (!cond) fails.push(name)
 }
 
+/**
+ * 竖屏素材（327×581）：用来验证 hover 预览保持竖屏、长边封顶 200。
+ * 之前这里是 480×320 的横图，竖图问题（用户 2026-10-29 图 2）测不出来。
+ */
 const svgOf = (color) => 'data:image/svg+xml;base64,' + Buffer.from(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320">'
-  + '<rect width="480" height="320" fill="' + color + '"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" width="327" height="581">'
+  + '<rect width="327" height="581" fill="' + color + '"/></svg>',
 ).toString('base64')
 
 const browser = await chromium.launch({ executablePath: EXE, headless: true })
@@ -145,6 +149,26 @@ const hoverState = await page.evaluate(() => {
 ok('hover 弹出预览框', !!hoverState.preview)
 ok('预览在卡片上方', !!hoverState.preview && hoverState.preview.bottom <= hoverState.card.top, JSON.stringify(hoverState.preview))
 ok('说明气泡在卡片下方（与预览分开）', !!hoverState.bubble && hoverState.bubble.top >= hoverState.card.bottom - 2, JSON.stringify(hoverState.bubble))
+
+// 预览框要按素材原始宽高比（竖图 327×581 → 高 200、宽约 113）
+const previewAspect = await page.evaluate(() => {
+  const box = document.querySelector('.nb-hover-preview')
+  const media = box?.querySelector('img, video')
+  const r = box?.getBoundingClientRect()
+  if (!box || !media || !r) return null
+  const nw = media.naturalWidth || media.videoWidth || 0
+  const nh = media.naturalHeight || media.videoHeight || 0
+  return {
+    box: { w: Math.round(r.width), h: Math.round(r.height) },
+    natural: { w: nw, h: nh },
+  }
+})
+ok('竖屏素材的 hover 预览保持竖屏（高 200、宽 < 高）',
+  !!previewAspect && previewAspect.box.h === 200 && previewAspect.box.w < previewAspect.box.h,
+  JSON.stringify(previewAspect))
+ok('预览长边封顶 200px',
+  !!previewAspect && Math.max(previewAspect.box.w, previewAspect.box.h) === 200,
+  JSON.stringify(previewAspect?.box))
 ok('@ 按钮文字是白色', hoverState.atColor === 'rgb(255, 255, 255)', hoverState.atColor)
 ok('@ 按钮 hover 时可见', hoverState.atOpacity === '1', hoverState.atOpacity)
 
@@ -158,6 +182,52 @@ if (at) { await page.mouse.click(at.x, at.y); await page.waitForTimeout(1000) }
 const chips = await page.evaluate(() => [...document.querySelectorAll('.nb-editor .resource-chip')]
   .map((c) => ({ id: c.getAttribute('data-id'), name: c.querySelector('.resource-chip-name')?.textContent })))
 ok('@ 按钮点得动（标签插进输入框）', chips.length === 1 && chips[0].name === '甲图', JSON.stringify(chips))
+
+// ① 标签里缩略图与文字之间要有间隔（用户 2026-10-29 图 1）
+const chipGap = await page.evaluate(() => {
+  const chip = document.querySelector('.nb-editor .resource-chip')
+  if (!chip) return null
+  const icon = chip.querySelector('.resource-chip-thumb') || chip.querySelector('.resource-chip-icon')
+  const name = chip.querySelector('.resource-chip-name')
+  if (!icon || !name) return null
+  const ir = icon.getBoundingClientRect()
+  const nr = name.getBoundingClientRect()
+  return { gap: Math.round(nr.left - ir.right), css: getComputedStyle(chip).columnGap }
+})
+ok('缩略图与名字之间有 2px 间隔', !!chipGap && chipGap.gap >= 2, JSON.stringify(chipGap))
+
+// ③ hover 标签 → 预览框显示（不再是 display:none），且图标换成铅笔
+await page.mouse.move(60, 780, { steps: 4 })
+await page.waitForTimeout(500)
+const chipBox = await page.evaluate(() => {
+  const chip = document.querySelector('.nb-editor .resource-chip')
+  const r = chip.getBoundingClientRect()
+  return { x: Math.round(r.left + 6), y: Math.round(r.top + r.height / 2) }
+})
+await page.mouse.move(chipBox.x, chipBox.y, { steps: 5 })
+await page.waitForTimeout(1000)
+const chipHover = await page.evaluate(() => {
+  // 页面上可能有两个 PreviewBox（Agent 面板常驻一个 + 底栏一个）；
+  // querySelector 拿的是第一个（Agent 面板的，永远隐藏），底栏那个要按「可见的那个」找。
+  const box = [...document.querySelectorAll('body > .preview-box')]
+    .find((el) => getComputedStyle(el).display !== 'none')
+  const img = box?.querySelector('.preview-image')
+  const r = img?.getBoundingClientRect()
+  const chip = document.querySelector('.nb-editor .resource-chip')
+  return {
+    shown: !!box && getComputedStyle(box).display !== 'none',
+    box: r ? { w: Math.round(r.width), h: Math.round(r.height) } : null,
+    editable: chip?.classList.contains('resource-chip--editable') ?? false,
+    pencil: chip ? getComputedStyle(chip, '::after').display === 'block' : false,
+  }
+})
+ok('hover 标签时预览框真的显示（不是 display:none）', chipHover.shown, JSON.stringify(chipHover))
+ok('标签 hover 预览也按原比例、长边 200',
+  !!chipHover.box && Math.max(chipHover.box.w, chipHover.box.h) <= 200 && chipHover.box.w < chipHover.box.h,
+  JSON.stringify(chipHover.box))
+ok('hover 标签时图标换成铅笔', chipHover.editable && chipHover.pencil, JSON.stringify(chipHover))
+await page.mouse.move(60, 780, { steps: 4 })
+await page.waitForTimeout(500)
 
 // ⑤ 双击卡片聚焦 = F 键那套取景（缩放按占比算，不是只挪中心）
 const beforeZoom = await page.evaluate(() => document.querySelector('.vue-flow__transformationpane')?.style.transform ?? '')
@@ -257,6 +327,29 @@ if (iconBox) {
     && menu.box.right >= menu.chip.left && menu.box.left <= menu.chip.left + 120,
     JSON.stringify([menu.box, menu.chip]))
 
+  // ④ 高度固定：鼠标停在不同类别上时，浮层高度不许变（否则会来回闪）
+  const kindRows = await page.evaluate(() => [...document.querySelectorAll('.nb-tagmenu-kind')].map((el) => {
+    const r = el.getBoundingClientRect()
+    return { label: el.textContent.trim(), x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+  }))
+  const heights = []
+  for (const row of kindRows) {
+    await page.mouse.move(row.x, row.y, { steps: 3 })
+    await page.waitForTimeout(350)
+    heights.push(await page.evaluate(() => {
+      const body = document.querySelector('.nb-tagmenu-body')
+      const panes = document.querySelector('.nb-tagmenu-panes')
+      return {
+        menu: body ? Math.round(body.getBoundingClientRect().height) : null,
+        panes: panes ? Math.round(panes.getBoundingClientRect().height) : null,
+        items: [...document.querySelectorAll('.nb-tagmenu-pane--items .nb-tagmenu-name')].map((e) => e.textContent.trim()),
+      }
+    }))
+  }
+  const uniqueHeights = new Set(heights.map((h) => h.menu))
+  ok('切换类别时下拉菜单高度固定（不来回闪）', uniqueHeights.size === 1 && heights.length >= 2,
+    JSON.stringify(heights.map((h) => [h.menu, h.items.length])))
+
   // 搜索：输入即筛（打开菜单时焦点已在搜索框里）
   await page.keyboard.type('乙')
   await page.waitForTimeout(500)
@@ -265,14 +358,13 @@ if (iconBox) {
     flat: !!document.querySelector('.nb-tagmenu-list'),
   }))
   ok('菜单搜索能筛出匹配节点', searched.flat && searched.rows.length > 0 && searched.rows.every((r) => r.includes('乙')), JSON.stringify(searched.rows))
-  // 清空搜索，回到两栏，再点「乙图」换绑
-  await page.evaluate(() => {
-    const input = document.querySelector('.nb-tagmenu-search input')
-    if (input) {
-      input.value = ''
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-  })
+  // 清空搜索，回到两栏，再点「乙图」换绑。
+  // 用键盘清（Ctrl+A + Delete）：dispatchEvent(new Event('input')) 只冒泡到 DOM，
+  // 不会带 value setter —— Vue 的 v-model 监听不到，搜索态清不掉、两栏回不来，
+  // 后面点「乙图」命中的还是平铺搜索行，断言就全错位了（真机踩过）。
+  await page.click('.nb-tagmenu-search input')
+  await page.keyboard.press('Control+A')
+  await page.keyboard.press('Delete')
   await page.waitForTimeout(500)
   if (SHOT_DIR) await page.screenshot({ path: SHOT_DIR + '/tag-menu.png' })
 
@@ -304,7 +396,9 @@ if (iconBox) {
 // ④ hover 的节点被删掉 → 预览立刻消失
 await page.mouse.move(60, 60, { steps: 4 })
 await page.waitForTimeout(600)
-const hoverCard = await cardBox('甲图')
+// 换绑后「甲图」这个名字已经不在正文里了，要找换绑后的那张卡（乙图）。
+// 换绑用例没跑（iconBox 为 null 跳过）时才回退找甲图。
+const hoverCard = (await cardBox('乙图')) ?? await cardBox('甲图')
 if (hoverCard) {
   await page.mouse.move(hoverCard.x, hoverCard.y, { steps: 6 })
   await page.waitForTimeout(1100)
@@ -312,7 +406,9 @@ if (hoverCard) {
   ok('hover 时先有预览（前置）', had === 1, String(had))
   await page.evaluate((id) => {
     window.MiniCanvasUI.getHost().ctx.get('doc').removeNodes([id])
-  }, seed.a)
+    // 删的是**被 hover 的那张卡**绑定的节点：换绑用例跑过时卡绑的是 seed.b（乙图），
+    // 没跑过时才是 seed.a（甲图）。删错节点 = 预览当然不消失（上一轮 e2e 踩过）。
+  }, (await cardBox('乙图')) ? seed.b : seed.a)
   await page.waitForTimeout(1500)
   const gone = await page.evaluate(() => document.querySelectorAll('.nb-hover-preview').length)
   ok('图片节点删掉后预览立刻消失（不显示旧图）', gone === 0, String(gone))
