@@ -52,7 +52,8 @@ type PickState = 'pending' | 'uploading' | 'done' | 'failed'
  * 早先不管什么类型都拿 `<img>` 去显示 —— 视频放进去就是一张裂图（.mp4 不是图片）。
  */
 interface PickItem { file?: File; url?: string; state: PickState; preview?: string; name: string; kind: 'image' | 'video' | 'audio' | 'other' }
-const MAX_MB = 20
+/** 与后端对齐（cloud-server/uploads.ts DEFAULT_MAX_UPLOAD_BYTES = 50MB；环境变量可调，前端按缺省值约束） */
+const MAX_MB = 50
 const MAX_FILES = 50
 
 const fileInput = ref<HTMLInputElement | null>(null)
