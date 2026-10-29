@@ -56,6 +56,12 @@
 .prose-mirror-editor .resource-node {
   display: inline-flex;
   align-items: center;
+  /*
+   * 图标与文字之间的间隔（用户 2026-10-29 截图：标签里缩略图和名字贴在一起）。
+   * 底栏的 .resource-chip 会再覆盖成 2px；这里给所有资源标签一个一致的默认值，
+   * 免得其它插入路径（资源面板 / 别的插件）又退回「零间隔」。
+   */
+  gap: 2px;
   padding: 0 4px;
   margin: 0 0px;
   cursor: pointer;

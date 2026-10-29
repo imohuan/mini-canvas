@@ -570,6 +570,30 @@ export function kindFromName(name: string | null | undefined): 'image' | 'video'
 }
 
 /**
+ * 一个资源**到底是什么**（用户 2026-10-29：hover 预览要靠它决定弹不弹、按什么画）。
+ *
+ * 判定顺序（前面的更可信）：
+ *   1. 注册表条目上的 chipKind / mediaType —— 底栏绑定节点时写的就是真实类型；
+ *   2. 地址特征（mp4 / mp3 / data:image / data:video）—— 冷启动没有注册表时也能认；
+ *   3. 名字里的自动编号（图片3 / 视频2）。
+ *
+ * 为什么不能只看名字：用户会给节点起真名（「泳装少女」「雨声」），名字里没有类型词；
+ * 旧实现一律当文本 → 图片标签永远不弹预览。
+ */
+export function kindOfResource(
+  item: { chipKind?: string; mediaType?: string } | undefined,
+  fallback: { name?: string; url?: string },
+): 'image' | 'video' | 'audio' | 'text' {
+  const declared = item?.chipKind ?? item?.mediaType
+  if (declared === 'image' || declared === 'video' || declared === 'audio' || declared === 'text') return declared
+  const url = String(fallback.url ?? '')
+  if (/^data:video\//i.test(url) || /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(url)) return 'video'
+  if (/^data:audio\//i.test(url) || /\.(mp3|wav|ogg|m4a|aac|flac)(\?|#|$)/i.test(url)) return 'audio'
+  if (/^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(url)) return 'image'
+  return kindFromName(fallback.name)
+}
+
+/**
  * 标签身份（用户 2026-10-28 定案）：**认节点，不认序号**。
  *
  * - `ref-node:<节点id>`：已绑定画布节点。显示名永远跟随节点名称；
@@ -666,6 +690,13 @@ function renderRefChip(item: ResourceItem): HTMLElement {
     + (invalid ? ' resource-chip--invalid' : '')
   span.dataset.id = item.id
   span.dataset.name = item.name
+  /**
+   * 类型写进 data-kind（用户 2026-10-29）：hover 预览要按类型判断弹不弹，
+   * 而 DOM 上原来只有 data-url / data-name —— 名字是用户起的真名（「泳装少女」），
+   * 从它猜不出类型，于是图片标签被当成文本、预览永远不显示。
+   * CSS 侧也用得到（图标/缩略图按类型换）。
+   */
+  if (kind) span.dataset.kind = kind
   /**
    * 左侧图标可编辑（用户 2026-10-29 定稿）：hover 时把缩略图/类型图标换成**铅笔**，
    * 表示「点它换一个节点」。用 CSS ::after 盖一层，不插额外 DOM（保住加载结构）。
@@ -1750,7 +1781,14 @@ export function useEditor(
   // 处理资源节点鼠标进入
   function handleResourceMouseEnter(el: HTMLElement) {
     const isSelected = el.classList.contains("ProseMirror-selectednode") || el.classList.contains("resource-node-selected")
-    if (isSelected) return
+    /**
+     * 选中的标签**也要能 hover 预览**（用户 2026-10-29 第 3 点：hover 标签没有预览）。
+     *
+     * 旧逻辑在这里直接 return —— 理由是「选中时已经高亮、弹预览会挡视线」。但底栏里点过
+     * 标签后它会保持 NodeSelection（用户刚插完标签就是选中态），于是**永远不弹预览**：
+     * 真机表现为「之前还能看到预览，现在没有了」。选中态只影响选中样式，不该影响预览。
+     */
+    void isSelected
     if (hoverTimer) clearTimeout(hoverTimer)
 
     const id = el.getAttribute("data-id")
@@ -1762,15 +1800,15 @@ export function useEditor(
       const name = el.getAttribute("data-name") || ""
       if (!url) return
       /**
-       * 音频 / 文本**不弹 hover 预览**（用户 2026-10-28）。
+       * 音频 / 文本**不弹 hover 预览**（用户 2026-10-28），但**必须按类型判断**。
        *
-       * 原因：预览框只会画 `<img>` / `<video>`，把 mp3 地址塞进去就是一张裂图
-       * （用户截图里那个「音频1 + 破图」的悬浮框）。音频本来也没有画面可看，
-       * 要听直接点标签开全屏播放器。
+       * 旧实现拿 `kindFromName(name)` 猜类型 —— 它只认「图片3 / 视频2」这种自动名，
+       * 用户给节点起的真名（如「泳装少女」）一律返回 'text'。于是图片标签永远被判成
+       * 「文本不弹预览」：hover 时预览框存在但 display:none（用户 2026-10-29 报的第 3 点）。
+       * 现在先看注册表里的真实类型（chipKind / mediaType），再看地址扩展名，最后才看名字。
        */
-      const nameKind = kindFromName(name)
-      const isAudioOrText = nameKind === 'audio' || nameKind === 'text'
-      if (isAudioOrText) return
+      const kind = kindOfResource(item, { name, url })
+      if (kind === 'audio' || kind === 'text') return
       const rect = el.getBoundingClientRect()
       const margin = 12; const previewMaxWidth = 400
       let left = rect.left + rect.width / 2
@@ -1792,7 +1830,7 @@ export function useEditor(
       const show = (src: string) => {
         previewUrl.value = src
         previewTitle.value = name
-        previewType.value = isVideoUrl(src) ? "video" : "image"
+        previewType.value = kind === 'video' || isVideoUrl(src) ? "video" : "image"
         previewChipId = id ?? ""
         previewVisible.value = true
       }
@@ -1812,6 +1850,8 @@ export function useEditor(
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
     if (item?.onMouseLeave) { item.onMouseLeave(item); return }
+    // 离开的如果不是当前预览的那颗标签（鼠标从 A 划到 B 只触发 B 的 enter、A 的 leave），不动预览
+    if (previewChipId && id && id !== previewChipId) return
     hideResourcePreview()
   }
 
