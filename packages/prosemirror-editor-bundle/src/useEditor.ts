@@ -276,6 +276,32 @@ function childRanges(parent: PMNode): { child: PMNode; from: number; to: number 
 
 // 全局 item 注册表：toDOM 通过 node.attrs.id 查这里获取 ResourceItem（含 renderEditor）
 const itemRegistry = new Map<string, ResourceItem>()
+// 调试探针（仅 dev）：真机上排查「标签拿不到交互回调」时，可在控制台读注册表
+if (typeof window !== 'undefined') (window as any).__chipRegistry = itemRegistry
+/**
+ * 每颗标签**上一次渲染时**的外观/交互签名。
+ *
+ * 为什么需要：refreshChips 过去只比较文档属性（名字/网址），注册表里新增的交互
+ * （onIconClick / onReplaceClick / hoverPreview）不会触发重画 —— DOM 仍是旧的、
+ * 不带 resource-chip--editable。真机表现：「标签插进来后左侧图标不会变编辑图标、也点不动」。
+ * 记签名后，只有外观/交互真的变了才重建节点（不会每次刷新都产生事务、丢光标）。
+ */
+const chipRenderSig = new Map<string, string>()
+
+/** 影响标签 DOM 的那些字段拼成一个可比较的签名 */
+function chipSignature(item: ResourceItem): string {
+  return JSON.stringify([
+    item.name ?? '',
+    item.url ?? '',
+    item.thumbnail_url ?? '',
+    item.chipKind ?? '',
+    item.invalid === true,
+    Boolean(item.onIconClick),
+    Boolean(item.onReplaceClick),
+    Boolean(item.hoverPreview),
+    Boolean(item.renderEditor),
+  ])
+}
 /**
  * 点标签**右侧文字**后，光标落到标签之后的延迟（ms）。
  *
@@ -351,6 +377,19 @@ const mySchema = new Schema({
           const result = item.renderEditor(item)
           if (result instanceof HTMLElement) {
             result.classList.add("resource-node")
+            /**
+             * 「可编辑」标记在这里**统一补一次**（用户 2026-10-29）。
+             *
+             * 为什么不能只在 renderRefChip 里加：标签的 DOM 有好几条渲染路径
+             * （renderRefChip / buildSlotItem 等），各自拼自己的 class。
+             * 只改其中一条，另一条渲染出来的标签就没有铅笔图标、hover 也不换图 ——
+             * 真机表现就是「有的标签能点图标、有的点不动」。
+             * 放在这个收口上，任何 renderEditor 产出的 DOM 都一致。
+             */
+            if (item.onIconClick || item.onReplaceClick) {
+              result.classList.add('resource-chip--editable')
+              result.classList.add('resource-chip--replaceable')
+            }
             result.setAttribute("data-id", node.attrs.id)
             result.setAttribute("data-url", node.attrs.url || "")
             result.setAttribute("data-name", node.attrs.name || "")
@@ -403,6 +442,12 @@ const mySchema = new Schema({
           chipId.startsWith('ref-slot:')
         if (isRefChip) {
           const legacy = chipId.startsWith('ref-slot:')
+          /**
+           * 注册表里已有的条目 = 调用方刚登记过的最新外观与交互（onIconClick / onReplaceClick / hoverPreview）。
+           * 用它当底，再用文档属性补 url/value —— 绝不能反过来让兜底条目覆盖注册表：
+           * 那会把交互回调全丢掉（真机踩过：标签左侧图标点不动、hover 不换编辑图标）。
+           */
+          const registered = itemRegistry.get(chipId)
           const fallback = legacy
             ? buildRefChipItem({ id: chipId, name: String(name ?? id), invalid: true })
             : buildRefChipItem({
@@ -414,6 +459,9 @@ const mySchema = new Schema({
               })
           const withData: ResourceItem = {
             ...fallback,
+            ...(registered ?? {}),
+            // 名字以文档为准（文档是用户看得见的那份），其余外观/交互以注册表为准
+            name: registered?.name || fallback.name,
             ...(url ? { url: String(url) } : {}),
             ...(node.attrs.value ? { value: String(node.attrs.value) } : {}),
           }
@@ -609,6 +657,8 @@ export function buildRefChipItem(input: {
 function renderRefChip(item: ResourceItem): HTMLElement {
   const kind = item.chipKind
   const invalid = item.invalid === true
+  // 记下「这次实际画成什么样」：refreshChips 据此判断要不要重建（见 chipSignature）
+  if (item.id) chipRenderSig.set(item.id, chipSignature(item))
   const span = document.createElement('span')
   span.className =
     'resource-node resource-chip'
@@ -2270,8 +2320,16 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
     if (!view) return
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return
-    // 先登记一次（后面按落进文档的 id 再对齐，保证 toDOM 查得到）
-    itemRegistry.set(item.id, item)
+    /**
+     * 先登记一次（后面按落进文档的 id 再对齐，保证 toDOM 查得到）。
+     *
+     * **合并已有条目**，不要直接覆盖：调用方往往先 registerItem 了完整条目
+     * （带 onIconClick / hoverPreview / renderEditor），再调这里插入。
+     * 直接 set(item) 会把那些回调全冲掉 —— 真机表现就是「标签插进来后左侧图标点不动、
+     * hover 也不换编辑图标」。item 里显式给了的字段仍然优先（新名字/新图要生效）。
+     */
+    const prevItem = itemRegistry.get(item.id)
+    itemRegistry.set(item.id, prevItem ? { ...prevItem, ...item } : item)
     // 光标不在编辑器里（用户刚点了工具栏按钮）时，退到文末再插：
     // 否则会插到旧的 selection 位置，甚至因为 selection 失效而插错地方。
     if (!view.hasFocus()) {
@@ -2498,7 +2556,11 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
        * 改动，节点被重建、整颗选中被销毁，浏览器顺手把光标放到标签前面。
        * 外观相同就不该产生事务。
        */
-      if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '' })) return
+      const chipId = String(node.attrs.id ?? '')
+      const sig = chipSignature(item)
+      if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '' })
+        && chipRenderSig.get(chipId) === sig) return
+      chipRenderSig.set(chipId, sig)
       tr.setNodeMarkup(pos, undefined, { ...node.attrs })
       changed = true
     })

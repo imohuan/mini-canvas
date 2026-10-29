@@ -1948,6 +1948,7 @@ const tagMenuChip = ref<ResourceItem | null>(null)
  * 尺寸给 1×1 —— Dropdown 量到的就是这里，且不会挡住下面的标签。
  */
 const tagMenuAnchorEl = ref<HTMLElement | null>(null)
+const tagMenuSearchEl = ref<HTMLInputElement | null>(null)
 /** 锚点相对编辑器左上角的位移与尺寸（由 openTagMenu 量一次算出来） */
 const tagMenuAnchorShift = ref({ x: 0, y: 0 })
 const tagMenuAnchorHeight = ref(1)
@@ -2069,6 +2070,12 @@ function openTagMenu(
     return nextTick()
   }).then(() => {
     tagMenuOpen.value = true
+    /**
+     * 打开就把焦点放进搜索框（用户 2026-10-29：菜单要能直接搜）。
+     * 不这么做的话，刚点完标签焦点还在编辑器里，敲字会写进正文、菜单纹丝不动。
+     * 等两拍：Dropdown 的内容是 v-if 挂出来的，teleport 到 body 后才拿得到 input。
+     */
+    void nextTick().then(() => tagMenuSearchEl.value?.focus())
   })
 }
 
@@ -2845,6 +2852,7 @@ function onGlobalLeave(el: Element): void {
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
             </svg>
             <input
+              ref="tagMenuSearchEl"
               v-model="tagMenuQuery"
               type="search"
               placeholder="搜索"

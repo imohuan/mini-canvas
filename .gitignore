@@ -38,6 +38,10 @@ packages/mcp-server/workspace
 
 # cloud-server 的数据目录（画布数据 + 上传资源，运行时生成，不入库）
 # 注：dist/ 与 *.tgz 已在上面被忽略，这里不重复列
+
+# 真机检查脚本的临时截图 / 临时探针（e2e 的正式脚本仍然入库）
+packages/ui/e2e/_*.png
+packages/ui/e2e/_tmp-*.mjs
 .mini-canvas/
 # cloud-server 数据目录的备份（手动/脚本备份出来的运行时快照，可能几百 MB，不入库）
 .mini-canvas-backup-*/
