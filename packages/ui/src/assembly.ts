@@ -13,6 +13,8 @@ import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { uiDemoPlugin } from '@mini-canvas/plugin-ui-demo'
+import { gridSplitPlugin } from '@mini-canvas/plugin-image-grid-split'
+import { nodeRotatePlugin } from '@mini-canvas/plugin-node-rotate'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 // 下面三个插件改为经「插件管理」插件安装（本地中转后台发清单）—— 故意不冷启动装配。
 // 想恢复成冷启动：取消注释 import 与 APP_PLUGINS 里的对应行即可（见文件尾说明）。
@@ -99,6 +101,8 @@ export const APP_PLUGINS = [
   fileDropPlugin,
   nodeImagePlugin,
   uiDemoPlugin,
+  gridSplitPlugin,
+  nodeRotatePlugin,
   nodeVideoPlugin,
   nodeAudioPlugin,
   agentPlugin,
