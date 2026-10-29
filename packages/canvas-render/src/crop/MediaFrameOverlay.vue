@@ -159,6 +159,8 @@ type Session =
   | { kind: 'move'; startX: number; startY: number; from: Rect }
   | { kind: 'resize'; dir: HandleDir; startX: number; startY: number; from: Rect }
 let session: Session | null = null
+/** 是否正在拖拽（三分参考线只在拖拽时显示 —— 用户口径 2026-10-29） */
+const dragging = ref(false)
 
 /**
  * 量测浮层盒子。
@@ -190,9 +192,13 @@ function onPointerDown(ev: PointerEvent, dir?: HandleDir): void {
   // 起手先量一次：卡片可能刚被改过尺寸，几何必须是当下的
   measure()
   rect.value = constrain(rect.value)
+  // 未带 dir = 框整体**平移**会话（两个模式都是）。扩展下 moveExpandRect 锁死宽高，
+  // 并夹取到「x≤0、y≤0、右缘≥画面宽、下缘≥画面高」—— 框永远包住画面，
+  // 不会出现「画面露在框外」的脱节（用户口径 2026-10-29：只许平移，不许改宽高）。
   session = dir
     ? { kind: 'resize', dir, startX: ev.clientX, startY: ev.clientY, from: { ...rect.value } }
     : { kind: 'move', startX: ev.clientX, startY: ev.clientY, from: { ...rect.value } }
+  dragging.value = true
   rootEl.value?.setPointerCapture?.(ev.pointerId)
 }
 
@@ -221,6 +227,7 @@ function onPointerUp(ev: PointerEvent): void {
   if (!session) return
   ev.stopPropagation()
   session = null
+  dragging.value = false
   rootEl.value?.releasePointerCapture?.(ev.pointerId)
   emit('update:draft', rect.value)
 }
@@ -267,6 +274,7 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
   session = null
+  dragging.value = false
 })
 
 // ==================== 显示几何 ====================
@@ -362,10 +370,11 @@ function handleStyle(dir: HandleDir): Record<string, string> {
     <!-- 框外遮罩 -->
     <div v-for="(style, i) in shadeStyles" :key="'sh' + i" class="mfo-shade" :style="style" />
 
-    <!-- 框本体：拖动即整体平移；三分构图线只作参考 -->
+    <!-- 框本体：按下即整体平移（扩展模式锁尺寸、夹取保证包住画面）。
+         三分构图线只在**拖拽中**显示（用户口径：平时不铺满，拖的时候才出参考线）。 -->
     <div class="mfo-frame" :style="frameStyle" @pointerdown="onPointerDown">
       <span class="mfo-size">{{ sizeLabel }}</span>
-      <div class="mfo-grid" aria-hidden="true">
+      <div v-if="dragging" class="mfo-grid" aria-hidden="true">
         <span class="mfo-grid-line mfo-grid-line--h" style="top: 33.333%" />
         <span class="mfo-grid-line mfo-grid-line--h" style="top: 66.666%" />
         <span class="mfo-grid-line mfo-grid-line--v" style="left: 33.333%" />
@@ -418,15 +427,16 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   pointer-events: none;
 }
 
-/* 框：白描边 + 柔影（对齐规范的柔影，不用硬黑边） */
+/* 框：只有描边，没有阴影（用户口径 2026-10-29：去掉框内投影）。
+   描边用灰色调（与控制点描边同色）—— 亮色主题下白描边会糊进底色里。 */
 .mfo-frame {
   position: absolute;
   box-sizing: border-box;
   pointer-events: auto;
   cursor: move;
-  /* 描边与阴影都压在**图片像素**上：白描边保证在暗图上可见、黑影保证在亮图上可见 → 有意不跟随主题。
-     写成一行是为了让豁免标记与两处色值同行（CSS 里 `//` 不是注释，不能写在行尾）。 */
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95), 0 12px 36px rgba(0, 0, 0, 0.28); /* 主题色白名单: 裁剪框描边+投影压在图上看，需恒定白描边/黑影 */
+  /* 描边压在**图片像素**上：必须恒定 → 有意不跟随主题。
+     写成一行是为了让豁免标记与色值同行（CSS 里 `//` 不是注释，不能写在行尾）。 */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); /* 主题色白名单: 裁剪/扩展框描边压在图上看，与控制点描边同色 */
 }
 
 /* 尺寸小标：贴在框左上角外侧一点，不挡画面 */
@@ -452,8 +462,8 @@ function handleStyle(dir: HandleDir): Record<string, string> {
 
 .mfo-grid-line {
   position: absolute;
-  /* 三等分参考线压在图片像素上（恒白半透明才有对比） */
-  background: rgba(255, 255, 255, 0.45); /* 主题色白名单: 压在图上的三等分参考线，需恒定白 */
+  /* 三等分参考线压在图片像素上：灰色调（与控制点描边同色）—— 亮色图上白色看不见 */
+  background: rgba(0, 0, 0, 0.5); /* 主题色白名单: 压在图上的三等分参考线，与控制点描边同色 */
 }
 .mfo-grid-line--h {
   left: 0;

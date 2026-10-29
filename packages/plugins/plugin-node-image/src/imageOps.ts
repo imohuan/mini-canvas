@@ -26,6 +26,7 @@ import { describeImageMeta, downloadFileName } from './imageNodeData'
 import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 import { cardSizePatch, readImageFitLimits, MIN_CARD_WIDTH, type ImageFitLimits } from './imageFit'
 import { expandImage, isExpandEffective, type ExpandBitmapIO } from './imageExpand'
+import { renderMaskBlob, renderResultBlob } from './imagePaint'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
 export interface ImageOpsContext {
@@ -85,6 +86,14 @@ export interface ImageOpsContext {
    * 裁剪/旋转/扩展/下载只经这一个口径，不再各自判断字段。
    */
   displayUrlOf?(data: Record<string, unknown> | undefined): Promise<string | undefined>
+  /**
+   * 在一个事务里批量改图（建节点 + 连边）。绘制保存要一次建两个节点两条边，
+   * 一次撤销整体回退 —— 与 createNodeWithEdge 同源，只是批量的。
+   */
+  transaction?<T>(reason: string, fn: (tx: {
+    createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
+    connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { edgeId: string; status: string }
+  }) => T): T | null
 }
 
 /**
@@ -240,6 +249,18 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
         return (await resources()?.resolve(ref)) || undefined
       } catch {
         return undefined
+      }
+    },
+    transaction: <T,>(reason: string, fn: (tx: {
+      createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
+      connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { edgeId: string; status: string }
+    }) => T): T | null => {
+      const g = doc()
+      if (!g) return null
+      try {
+        return g.transaction(reason, fn)
+      } catch {
+        return null
       }
     },
   }
@@ -428,6 +449,98 @@ export function downloadImageNode(
     return transform.downloadImage(sourceUrl, downloadFileName(data.imageName))
   })()
 }
+
+/** 状态栏文案（文件名 / 尺寸·大小）——组件直接用，避免文案散在模板里 */
+
+// ==================== 绘制保存 ====================
+
+/**
+ * 绘制保存：按会话笔迹生成两张图（蒙版 + 挖洞结果），新建两个 image 节点，
+ * 都从原图连过来（一次撤销整体回退）。原图不动。
+ *
+ * 蒙版坐标系 = 归一化（0~1，相对卡片），保存时按蒙版尺寸（原图像素）换算；
+ * 笔刷半径也按「半径/卡片宽」的比值存，所以卡片被拖大拖小不影响结果。
+ *
+ * 蒙版尺寸取原图真实像素（resolveRef 后读位图尺寸），退化到显示尺寸（data.imageWidth/imageHeight）。
+ */
+export interface PaintSaveInput {
+  /** 归一化笔迹（浮层草稿） */
+  strokes: Array<{ kind: 'paint' | 'erase'; radiusRatio: number; shape: 'round' | 'square'; points: Array<{ x: number; y: number }> }>
+}
+
+export async function paintImageNodes(
+  ctx: ImageOpsContext,
+  nodeId: string,
+  input: PaintSaveInput,
+): Promise<boolean> {
+  const current = ctx.read(nodeId)
+  const data = asImageData(current)
+  if (!current) return false
+  if (!ctx.persistImage) return false
+  if (!ctx.transaction) return false
+  // 取原图地址（裁剪/扩展/下载同一条口径）
+  const sourceUrl = ctx.displayUrlOf ? await ctx.displayUrlOf(current) : data.imageUrl
+  if (!sourceUrl) return false
+  // 没有笔迹就不生成（避免保存出一个全透明的空结果）
+  const strokes = input.strokes
+  if (strokes.length === 0) return false
+
+  // 蒙版尺寸：优先按原图真实像素（读位图），拿不到再退到显示尺寸
+  let maskW = data.imageWidth ?? 0
+  let maskH = data.imageHeight ?? 0
+  if (maskW <= 0 || maskH <= 0) {
+    const size = await readImageSize(sourceUrl)
+    if (size) {
+      maskW = size.width
+      maskH = size.height
+    }
+  }
+  if (maskW <= 0 || maskH <= 0) return false
+
+  // 生成两张图
+  const maskBlob = await renderMaskBlob(strokes, maskW, maskH)
+  if (!maskBlob) return false
+  const result = await renderResultBlob(sourceUrl, strokes, maskW, maskH)
+  if (!result || !result.blob) return false
+
+  // 存资源库
+  const maskPersisted = await ctx.persistImage(maskBlob)
+  const resultPersisted = await ctx.persistImage(result.blob)
+  if (!maskPersisted || !resultPersisted) return false
+
+  // 定位：结果图贴原图右侧，蒙版再往右一格（宽度按结果图实际宽算，不叠在一起）
+  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
+  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? MIN_CARD_WIDTH
+  const y = source?.position.y ?? 0
+  const baseName = (source?.data?.label as string | undefined) || ''
+  const base = baseName.replace(/\s*\d+$/, '') || '图片'
+  try {
+    return ctx.transaction('paint-save', (tx) => {
+      const resultId = tx.createNode('image', { x: (source?.position.x ?? 0) + sourceWidth + PAINT_NODE_GAP, y }, {
+        label: base + ' 结果',
+        ...imageSourceFields(resultPersisted.resourceId, resultPersisted.url),
+        imageWidth: result.width,
+        imageHeight: result.height,
+        imageName: base + ' 结果',
+      })
+      const maskId = tx.createNode('image', { x: (source?.position.x ?? 0) + sourceWidth + PAINT_NODE_GAP * 2 + result.width, y }, {
+        label: base + ' 蒙版',
+        ...imageSourceFields(maskPersisted.resourceId, maskPersisted.url),
+        imageWidth: maskW,
+        imageHeight: maskH,
+        imageName: base + ' 蒙版',
+      })
+      tx.connectEdge({ source: nodeId, target: resultId, sourceHandle: 'source', targetHandle: 'target' })
+      tx.connectEdge({ source: nodeId, target: maskId, sourceHandle: 'source', targetHandle: 'target' })
+      return true
+    }) ?? false
+  } catch {
+    return false
+  }
+}
+
+/** 绘制结果与原图右边缘的间隔（与裁剪的 CROP_NODE_GAP 同一套规矩） */
+export const PAINT_NODE_GAP = 100
 
 /** 状态栏文案（文件名 / 尺寸·大小）——组件直接用，避免文案散在模板里 */
 export function readImageSummary(data: Record<string, unknown> | undefined): { name: string; meta: string } {
