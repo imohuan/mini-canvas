@@ -15,13 +15,39 @@
  * 撤销记录，用户按一次撤销只退回上一帧。草稿留在会话里，确认时一次性提交。
  */
 
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 
 /** 编辑模式：裁剪（框在画面内）/ 扩展（框包住画面，往外扩画布） */
 export type ImageEditMode = 'crop' | 'expand'
 
 /** 节点 id → 当前模式（一个节点同时只可能在一种模式里） */
 const modes = reactive(new Map<string, ImageEditMode>())
+
+/**
+ * 订阅「某人进/出了编辑态」（给插件侧同步底栏功能模式用）。
+ *
+ * 为什么让外部订阅而不是在这里直接调底栏：本文件是**纯状态**（零服务、零 DOM，
+ * node 下可单测）；底栏是可选插件，按名取服务属于装配层的事，放在 apply 里更清楚。
+ *
+ * 回调只报"变化了的节点"：进入/换模式报 state=新模式，退出报 state=null。
+ * @returns 取消订阅
+ */
+export function onEditModeChange(cb: (nodeId: string, mode: ImageEditMode | null) => void): () => void {
+  /** 上一次每个节点处于什么模式（用于算出"谁没了"） */
+  let prev = new Map<string, ImageEditMode>()
+  const stop = watch(
+    () => [...modes.entries()].sort(([a], [b]) => (a < b ? -1 : 1)),
+    (next) => {
+      const now = new Map(next)
+      for (const [id, m] of now) if (prev.get(id) !== m) cb(id, m)
+      for (const id of prev.keys()) if (!now.has(id)) cb(id, null)
+      prev = now
+    },
+    // 不 immediate：订阅时不该"凭空通知一次"（那会让底栏一挂载就被推进编辑模式）。
+    { deep: true },
+  )
+  return stop
+}
 
 /** 当前处于某模式的节点 id（供测试与诊断；只读快照） */
 export function editNodeIds(mode: ImageEditMode): string[] {
