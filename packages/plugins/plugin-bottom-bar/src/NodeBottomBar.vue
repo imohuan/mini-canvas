@@ -1719,6 +1719,8 @@ function refreshSlotChips(): void {
           id: tile.key,
           name: tile.label,
           category: '素材',
+          /** 待绑定标签也走「替换」交互（拖节点 / 点替换菜单皆可） */
+          onReplaceClick: openReplaceMenu,
         })
         continue
       }
@@ -1731,6 +1733,11 @@ function refreshSlotChips(): void {
         ...(kind ? { chipKind: kind } : {}),
         ...(url ? { url } : {}),
         ...(tile.value ? { value: tile.value } : {}),
+        /**
+         * 「替换」交互（用户 2026-10-29）：hover 标签左侧图标变替换键，
+         * 点击展开替换菜单（见 openReplaceMenu）。
+         */
+        onReplaceClick: openReplaceMenu,
         ...(kind === 'video' && tile.url
           ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
           : {}),
@@ -1767,6 +1774,114 @@ watch([shownMaterials, refOrder], () => {
       : undefined)
     .then(() => refreshSlotChips())
 }, { immediate: true })
+
+// ===== 输入框标签「替换素材」（用户 2026-10-29 定案）=====
+//
+// hover 标签 → 左侧图标变「替换」键；点击展开替换菜单（按类型分组 + 搜索）。
+// 选中的替换规则（用户定案）：
+//   · 该节点**只有这一处**被引用 → 断旧线、连新线（真正替换）；
+//   · 该节点**还有别处**引用 → 只额外加一条新连线（不动旧线）。
+
+/** 替换菜单状态：null = 关闭；开着时记录「替换的是哪颗标签」 */
+const replaceMenu = ref<{ chipId: string; chipName: string; chipKind: 'image' | 'video' | 'audio' | 'text' | null; nodeId: string | null } | null>(null)
+const replaceSearch = ref('')
+/** 替换菜单的定位（贴着点击的那颗标签） */
+const replacePos = ref({ left: 0, top: 0 })
+
+/** 画布上所有可作素材的节点（按类型分组的数据源） */
+const canvasMaterialsForReplace = computed(() => {
+  const doc = ctx.tryGet<{
+    getNodes(): Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+  }>('doc')
+  if (!doc) return []
+  const out: Array<{ id: string; name: string; kind: 'image' | 'video' | 'audio' | 'text'; url?: string }> = []
+  for (const n of doc.getNodes()) {
+    if (n.id === props.id) continue
+    const media = nodeMediaOf(n)
+    if (!media) continue
+    out.push({
+      id: n.id,
+      name: media.name || n.id,
+      kind: media.mediaType,
+      ...(media.url ? { url: media.url } : {}),
+    })
+  }
+  return out
+})
+
+/** 分组 + 搜索后的候选（渲染用） */
+const replaceGroups = computed(() => {
+  const q = replaceSearch.value.trim().toLowerCase()
+  const kindLabel: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
+  const wanted = replaceMenu.value?.chipKind ?? null
+  const buckets = new Map<string, typeof canvasMaterialsForReplace.value>()
+  for (const m of canvasMaterialsForReplace.value) {
+    // 只列与当前标签**同类型**的候选（用户口径：按资源类型选择）
+    if (wanted && m.kind !== wanted) continue
+    if (q && !(m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))) continue
+    const list = buckets.get(m.kind) ?? []
+    list.push(m)
+    buckets.set(m.kind, list)
+  }
+  const order = ['image', 'video', 'audio', 'text']
+  return order
+    .filter((k) => buckets.has(k))
+    .map((k) => ({ kind: k, label: kindLabel[k], items: buckets.get(k) ?? [] }))
+})
+
+/** 该节点在正文里被引用了几处（替换策略用：唯一引用 → 换线，多处 → 加线） */
+function refCountOf(nodeId: string): number {
+  return promptChips.value.filter((c) => c.nodeId === nodeId).length
+}
+
+/** 打开替换菜单（贴着那颗标签定位） */
+function openReplaceMenu(item: ResourceItem): void {
+  const el = document.querySelector<HTMLElement>('.resource-chip[data-id="' + item.id + '"]')
+  if (el) {
+    const r = el.getBoundingClientRect()
+    const width = 260
+    replacePos.value = {
+      left: Math.min(Math.max(8, r.left), window.innerWidth - width - 8),
+      top: Math.min(r.bottom + 6, window.innerHeight - 320),
+    }
+  }
+  const nodeId = nodeIdOfChip(item.id)
+  replaceMenu.value = {
+    chipId: item.id,
+    chipName: item.name,
+    chipKind: item.chipKind ?? null,
+    nodeId,
+  }
+  replaceSearch.value = ''
+}
+function closeReplaceMenu(): void {
+  replaceMenu.value = null
+}
+
+/**
+ * 选定替换目标（用户 2026-10-29 规则）：
+ *   · 唯一引用 → 断开「旧节点 → 本节点」的线，连「新节点 → 本节点」（真替换）；
+ *   · 多处引用 → 只加一条新线（旧线留着给别的引用）。
+ */
+async function replaceChipWith(chipId: string, newNodeId: string): Promise<void> {
+  const doc = ctx.tryGet<{
+    addEdge(input: { source: string; target: string }): string
+    removeEdges(ids: string[]): number
+    getEdges?(): Array<{ id: string; source: string; target: string }>
+  }>('doc')
+  if (!doc) return
+  const chip = promptChips.value.find((c) => c.id === chipId)
+  const oldNodeId = chip?.nodeId ?? null
+  const unique = oldNodeId ? refCountOf(oldNodeId) <= 1 : false
+  if (unique && oldNodeId && oldNodeId !== newNodeId) {
+    const stale = renderEdges.value.filter((e) => e.source === oldNodeId && e.target === props.id).map((e) => e.id)
+    if (stale.length) doc.removeEdges(stale)
+  }
+  try { doc.addEdge({ source: newNodeId, target: props.id }) } catch { /* 已存在等：忽略 */ }
+  closeReplaceMenu()
+  await nextTick()
+  refreshSlotChips()
+}
 
 // ===== Ctrl 拖资源到参考格（判定在 refSlotDrag.ts，事件绑定在这里） =====
 
@@ -2370,6 +2485,87 @@ function onGlobalLeave(el: Element): void {
         </button>
       </div>
     </VueDraggable>
+
+    <!--
+      悬浮预览（用户 2026-10-29 重构）：hover 卡片 ~600ms 后在上方弹出大图/视频，
+      视频自动播放（无控件）；点击进全屏；移开 300ms 后自动关闭（移回取消）。
+      Teleport 到 body：要压过底栏其它层，且不参与卡片拖拽布局。
+    -->
+    <Teleport to="body">
+      <div
+        v-if="previewTile"
+        class="nb-hover-preview"
+        :style="{ left: previewPos.left + 'px', top: previewPos.top + 'px' }"
+        @pointerenter="cancelPreviewClose()"
+        @pointerleave="schedulePreviewClose()"
+      >
+        <video
+          v-if="previewTile.kind === 'video' && previewTile.url"
+          class="nb-hover-preview-media"
+          :src="previewTile.url"
+          autoplay
+          muted
+          loop
+          playsinline
+        />
+        <img
+          v-else-if="cardImageOf(previewTile)"
+          class="nb-hover-preview-media"
+          :src="cardImageOf(previewTile)"
+          :alt="previewTile.label"
+        />
+        <span v-else class="nb-hover-preview-empty">（无预览）</span>
+        <button
+          class="nb-hover-preview-open"
+          type="button"
+          :aria-label="'全屏预览 ' + previewTile.label"
+          @click.stop="openFullscreenFromPreview(previewTile)"
+        >全屏</button>
+      </div>
+    </Teleport>
+
+    <!--
+      替换菜单（用户 2026-10-29 重构）：hover 输入框标签 → 左侧图标变替换键，
+      点击展开按类型分组的候选列表（来源 = 画布节点），带搜索框。点 Esc / 关闭按钮收起。
+    -->
+    <Teleport to="body">
+      <div
+        v-if="replaceMenu"
+        class="nb-replace-menu"
+        :style="{ left: replacePos.left + 'px', top: replacePos.top + 'px' }"
+        role="menu"
+        @pointerdown.stop
+      >
+        <div class="nb-replace-head">
+          <span class="nb-replace-title">替换「{{ replaceMenu.chipName }}」</span>
+          <button class="nb-replace-close" type="button" aria-label="关闭替换菜单" @click.stop="closeReplaceMenu">×</button>
+        </div>
+        <input
+          v-model="replaceSearch"
+          class="nb-replace-search"
+          type="search"
+          placeholder="搜索画布素材…"
+          @keydown.stop
+        />
+        <div class="nb-replace-list">
+          <div v-for="g in replaceGroups" :key="g.kind" class="nb-replace-group">
+            <div class="nb-replace-group-label">{{ g.label }}</div>
+            <button
+              v-for="m in g.items"
+              :key="m.id"
+              class="nb-replace-item"
+              type="button"
+              role="menuitem"
+              @click.stop="replaceChipWith(replaceMenu.chipId, m.id)"
+            >
+              <span class="nb-replace-item-name">{{ m.name }}</span>
+              <span class="nb-replace-item-id">{{ m.id }}</span>
+            </button>
+          </div>
+          <div v-if="replaceGroups.length === 0" class="nb-replace-empty">画布上没有同类素材</div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 动作专属面板（video 剪辑时间轴这类）。功能模式接管时（activeMode），
          面板下方整块默认生成 UI（素材区 / 输入框 / 参数行）按会话由面板自己让位；
@@ -3300,6 +3496,198 @@ function onGlobalLeave(el: Element): void {
 .nb-editor :deep(.resource-chip--invalid) {
   opacity: 0.55;
   text-decoration: line-through;
+}
+
+/**
+ * hover 操作层（用户 2026-10-29 重构）：删除右上、@ 右下、音频播放居中。
+ * 按钮都是小圆片，只在卡片 hover 时出现（外层 .nb-card-actions 默认不接指针）。
+ */
+.nb-card-actions {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.nb-card:hover .nb-card-actions {
+  pointer-events: auto;
+}
+.nb-card-act {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  color: var(--ui-panel, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
+}
+.nb-card:hover .nb-card-act {
+  opacity: 1;
+}
+.nb-card-act:hover {
+  background: var(--ui-ink, #18202b);
+}
+.nb-card-at {
+  right: 2px;
+  bottom: 2px;
+  z-index: 4;
+}
+.nb-card-play-act {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  z-index: 4;
+}
+
+/**
+ * 悬浮预览（用户 2026-10-29 重构）：hover 卡片后在上方弹出的大图 / 视频。
+ */
+.nb-hover-preview {
+  position: fixed;
+  width: 240px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
+  overflow: hidden;
+  z-index: 100002;
+}
+.nb-hover-preview-media {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  background: #000;
+}
+.nb-hover-preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
+}
+.nb-hover-preview-open {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  color: var(--ui-panel, #fff);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/**
+ * 替换菜单（用户 2026-10-29 重构）：按类型分组 + 搜索 + 点选替换。
+ */
+.nb-replace-menu {
+  position: fixed;
+  width: 260px;
+  max-height: 340px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
+  border-radius: 10px;
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
+  z-index: 100002;
+}
+.nb-replace-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 4px;
+}
+.nb-replace-title {
+  color: var(--ui-ink, #18202b);
+  font-size: 12px;
+  font-weight: 700;
+}
+.nb-replace-close {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nb-replace-close:hover {
+  background: var(--ui-hover, rgb(0 0 0 / 0.05));
+  color: var(--ui-ink, #18202b);
+}
+.nb-replace-search {
+  margin: 0 8px 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ui-ink, #18202b);
+  outline: none;
+}
+.nb-replace-search:focus {
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
+}
+.nb-replace-list {
+  overflow-y: auto;
+  padding: 0 4px 6px;
+}
+.nb-replace-group-label {
+  padding: 4px 6px 2px;
+  color: var(--ui-ink-faint, #9ca3af);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.nb-replace-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink, #18202b);
+  cursor: pointer;
+  text-align: left;
+}
+.nb-replace-item:hover {
+  background: var(--ui-hover, rgb(0 0 0 / 0.05));
+}
+.nb-replace-item-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nb-replace-item-id {
+  color: var(--ui-ink-faint, #9ca3af);
+  font-size: 10px;
+  flex: none;
+}
+.nb-replace-empty {
+  padding: 14px 8px;
+  text-align: center;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
 }
 
 /* 待绑定（手打的 @名字，还没拖节点）：统一资源图标 */

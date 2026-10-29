@@ -608,6 +608,13 @@ function renderRefChip(item: ResourceItem): HTMLElement {
     + (invalid ? ' resource-chip--invalid' : '')
   span.dataset.id = item.id
   span.dataset.name = item.name
+  /**
+   * 替换交互（用户 2026-10-29）：
+   * 有 onReplaceClick 的标签，hover 时左侧图标/缩略图变成「替换」图标 ——
+   * 用 CSS ::after 盖一层（不额外插 DOM，避免破坏上面的加载结构），
+   * 点击仍走 handleResourceClick 的 onClick 通道（调用方展开替换菜单）。
+   */
+  if (item.onReplaceClick) span.classList.add('resource-chip--replaceable')
   if (kind) span.dataset.kind = kind
   if (invalid) span.dataset.invalid = '1'
   /**
@@ -1736,6 +1743,14 @@ export function useEditor(
   function handleResourceClick(el: HTMLElement) {
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
+    /**
+     * 「替换」标签（用户 2026-10-29）：点击直接交给调用方展开菜单，
+     * **不做** 0.5s 的落光标延时 —— 菜单开着时把光标挪走会让菜单定位闪烁。
+     */
+    if (item?.onReplaceClick) {
+      item.onReplaceClick(item)
+      return
+    }
     /**
      * 点标签：**先**保持 ProseMirror 默认的节点选中（NodeSelection，视觉上整颗高亮），
      * 0.5s 后再把光标落到标签**之后**（用户口径 2026-10-27）。

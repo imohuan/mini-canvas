@@ -29,6 +29,13 @@ export interface ResourceItem {
    * （压缩、清屏这类）时，缺了它就只能插一个假标签，正文里会多出脏文本。
    */
   onPick?: () => void
+  /**
+   * 「替换素材」交互（用户 2026-10-29）：
+   * 参考标签 hover 时，缩略图/图标变成替换图标；点击后调用方展开替换菜单。
+   * 载荷 = 当前这颗标签（id / 名称 / 类型 / url），调用方据此列出画布上的候选。
+   * 不给 = 该标签没有替换交互（技能 / MCP / 资产引用等）。
+   */
+  onReplaceClick?: (item: ResourceItem) => void
   // 编辑器内交互事件（不传 → 无默认行为）
   onClick?: (item: ResourceItem) => void       // 点击资源节点
   onMouseEnter?: (item: ResourceItem) => void  // 鼠标进入资源节点（默认：悬停预览）
