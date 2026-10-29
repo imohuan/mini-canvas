@@ -1900,15 +1900,7 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
        */
       const box = el.getBoundingClientRect()
       const anchor = { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height }
-      /**
-       * 位置也一起交出去（用户 2026-10-29 第 5 点）。
-       *
-       * 同一节点被引用两次时，两颗标签的 data-id 一样；调用方只拿 id 去换绑，
-       * 编辑器按 id 找到的永远是第一颗 —— 用户点第二颗，改的却是第一颗。
-       * pos 是文档坐标，唯一标识用户点的这一颗。
-       */
-      const clickedPos = view ? view.posAtDOM(el, 0) : undefined
-      if (item.onIconClick) item.onIconClick(item, anchor, clickedPos)
+      if (item.onIconClick) item.onIconClick(item, anchor)
       else item.onReplaceClick?.(item)
       return
     }
@@ -2424,17 +2416,7 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
       let changed = false
       const tr = view.state.tr
       view.state.doc.descendants((node, pos) => {
-        if (rebound || node.type.name !== 'resource') return
-        /**
-         * 优先按**位置**认标签（用户 2026-10-29 第 5 点：改第二个却改了第一个）。
-         *
-         * 同一节点被引用两次 → 两颗标签 attrs.id 一模一样，按 id 只能命中第一颗。
-         * 调用方把用户点的那颗的文档坐标（previousPos）带过来，就精确落在它身上。
-         * 位置失效（文档在点菜单到选节点之间变过）时退回按 id 匹配 —— 至少不会什么都不做。
-         */
-        const posMatches = typeof item.previousPos === 'number' && pos === item.previousPos
-        const idMatches = node.attrs.id === previousId
-        if (!posMatches && !(idMatches && typeof item.previousPos !== 'number')) return
+        if (rebound || node.type.name !== 'resource' || node.attrs.id !== previousId) return
         rebound = true
         changed = chipAttrsNeedUpdate(node.attrs, {
           id: item.id,

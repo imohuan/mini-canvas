@@ -262,13 +262,6 @@ export interface RefTarget {
   previousChipId?: string
   /** 目标节点 id（替换时用来断开旧连线） */
   oldNodeId?: string
-  /**
-   * 要替换的那颗标签**在文档里的位置**（ProseMirror 文档坐标）。
-   *
-   * 同一节点被引用两次时两颗标签 id 相同，只按 id 会改到正文里第一颗
-   * （用户 2026-10-29 第 5 点）。位置是唯一坐标。
-   */
-  previousPos?: number
   /** 待绑定名称（空壳卡片的名称，替换成功后不再使用） */
   pendingName?: string
 }

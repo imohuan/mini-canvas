@@ -69,7 +69,7 @@ import { resolveBottomBarShown } from './bottomBarOverlay'
 import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
-import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE, resolvePreviewMaxSide } from './previewBoxSize'
+import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE } from './previewBoxSize'
 import { calculateFocusZoom } from './focusZoom'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
@@ -1428,12 +1428,11 @@ const previewPos = ref({ left: 0, top: 0, above: true })
 /**
  * 预览素材的原始宽高比与盒子尺寸（用户 2026-10-29：竖图被拉成横框）。
  *
- * 规则：最长边封顶（配置项 hoverPreviewMaxSide，默认 200px），另一边按原始比例算 ——
- *   横图（w/h ≥ 1）→ 宽 = 上限，高 = 上限 / 比例；
- *   竖图（w/h < 1）→ 高 = 上限，宽 = 上限 × 比例。
+ * 规则：最长边封顶 200px，另一边按原始比例算 ——
+ *   横图（w/h ≥ 1）→ 宽 200，高 = 200 / 比例；
+ *   竖图（w/h < 1）→ 高 200，宽 = 200 × 比例。
  * 图片/视频用同一个公式，视频在拿到 metadata 后再校正一次。
  */
-const previewMaxSide = computed(() => resolvePreviewMaxSide((props.data?.barValues as Record<string, unknown> | undefined)?.hoverPreviewMaxSide))
 const previewBox = ref<{ width: number; height: number }>({ width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE })
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 let previewCloseTimer: ReturnType<typeof setTimeout> | null = null
@@ -1449,7 +1448,7 @@ function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
      * 先按已知尺寸摆一个方盒子，图片 load 后由 onPreviewMediaReady 用真实宽高比校正。
      * 位置要等盒子尺寸定下来再算（竖图 200 高、横图 200 宽，占位完全不同）。
      */
-    previewBox.value = { width: previewMaxSide.value, height: previewMaxSide.value }
+    previewBox.value = { width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE }
     previewPos.value = placeHoverPreview(anchorRect, { width: window.innerWidth, height: window.innerHeight }, previewBox.value)
   }, 600)
 }
@@ -1462,7 +1461,7 @@ function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
 function onPreviewMediaReady(tileKey: string, w: number, h: number): void {
   const cur = previewTile.value
   if (!cur || cur.key !== tileKey) return
-  const next = fitPreviewBox(w, h, previewMaxSide.value)
+  const next = fitPreviewBox(w, h)
   const same = next.width === previewBox.value.width && next.height === previewBox.value.height
   if (same) return
   previewBox.value = next
@@ -1733,8 +1732,6 @@ function bindChipToNode(target: RefTarget | undefined, nodeId: string, name: str
     ...(material?.url ? { url: material.url } : {}),
     ...(material?.value ? { value: material.value } : {}),
     ...(target?.previousChipId ? { previousId: target.previousChipId } : {}),
-    // 同一节点被引用多次时，靠文档位置认准用户点的那一颗（用户 2026-10-29 第 5 点）
-    ...(typeof target?.previousPos === 'number' ? { previousPos: target.previousPos } : {}),
   }
   const replaced = target?.previousChipId
     ? editorComponentRef.value?.replaceResource?.(item) === true
@@ -1888,15 +1885,9 @@ function refreshSlotChips(): void {
          * hover 时这颗图标换成编辑（铅笔）图标，见 style.css 的 .resource-chip--editable。
          */
         onIconClick: openTagMenu,
-        /**
-         * 视频标签 hover 时给**真实 mp4 地址**，不给帧图（用户 2026-10-29 第 4 点：视频不播放）。
-         *
-         * 根因：这里原来返回 ensureFullVideoThumb() 的帧图（data:image/webp），
-         * 而编辑器按「这颗标签是 video」把预览渲染成 <video src="data:image/...">，
-         * 浏览器解不了图当视频 → 一片黑、时间轴 0:00，看着就是「不播放」。
-         * 卡片缩略图仍然用帧图（那是 <img>），两条路各用各的地址。
-         */
-        ...(kind === 'video' && tile.url ? { hoverPreview: () => tile.url as string } : {}),
+        ...(kind === 'video' && tile.url
+          ? { hoverPreview: () => ensureFullVideoThumb(tile.url as string) }
+          : {}),
       }
       registerItem(item)
       // 名字/缩略图同步进文档：导出的提示词、复制出去的内容都跟着节点走
@@ -1941,14 +1932,6 @@ watch([shownMaterials, refOrder], () => {
 const tagMenuOpen = ref(false)
 const tagMenuQuery = ref('')
 const tagMenuChip = ref<ResourceItem | null>(null)
-/**
- * 被点的那颗标签**在文档里的位置**（用户 2026-10-29 第 5 点）。
- *
- * 同一节点被引用两次时两颗标签的 id 相同（ref-node:<节点 id>），只靠 id 换绑
- * 永远改到正文里的第一颗 —— 真机表现「改第二个标签，第一个变了」。
- * 位置是唯一坐标，打开菜单时记下来，换绑时原样交给编辑器。
- */
-const tagMenuChipPos = ref<number | undefined>(undefined)
 /**
  * 菜单锚点（屏幕坐标，1×1 的小方块，落在被点图标的下沿）。
  *
@@ -2005,15 +1988,7 @@ const tagMenuEntries = computed<TagMenuEntry[]>(() => {
       id: n.id,
       name: media.name || n.id,
       kind: media.mediaType,
-      /**
-       * 视频要用**帧图**，不能给 mp4 地址（用户 2026-10-29 第 3.1 点：菜单里视频没缩略图）。
-       *
-       * 菜单行是 <img :src="e.url">，塞 mp4 会加载失败 → 只剩类型图标。
-       * 卡片/hover 预览一直走 cardImageOf（内部按 kind 换成帧图），菜单漏了这一步。
-       */
-      ...(media.url
-        ? { url: media.mediaType === 'video' ? (videoThumbOf(media.url) || media.url) : media.url }
-        : {}),
+      ...(media.url ? { url: media.url } : {}),
       referenced: linked.has(n.id),
     })
   }
@@ -2037,29 +2012,6 @@ const tagMenuGroups = computed(() => buildTagMenuGroups(tagMenuEntries.value, ta
 const tagMenuFlat = computed(() => tagMenuQuery.value.trim().length > 0)
 const tagMenuSections = computed(() => buildTagMenuSections(tagMenuEntries.value, tagMenuQuery.value))
 const tagMenuActiveKind = ref<TagMenuKind | null>(null)
-/**
- * hover 预览（用户 2026-10-29 第 3.2 点）：鼠标停在节点行上时第三栏显示大图/视频。
- * 记当前 hover 的条目；移开整块菜单或换行时跟着换。视频直接给 mp4（要自动播放），
- * 图片给原地址 —— 预览框按素材比例展示，规则与卡片 hover 预览一致。
- */
-const tagMenuPreviewItem = ref<TagMenuEntry | null>(null)
-const tagMenuPreviewUrl = ref('')
-/** 预览盒尺寸：最长边走配置（与卡片 hover 预览同一个 hoverPreviewMaxSide，默认 200） */
-const tagMenuPreviewBox = ref<{ width: number; height: number }>({ width: previewMaxSide.value, height: previewMaxSide.value })
-function setTagMenuPreview(entry: TagMenuEntry | null): void {
-  tagMenuPreviewItem.value = entry
-  tagMenuPreviewUrl.value = ''
-  tagMenuPreviewBox.value = { width: previewMaxSide.value, height: previewMaxSide.value }
-  if (!entry?.url) return
-  if (entry.kind === 'video') { tagMenuPreviewUrl.value = entry.url; return }
-  const img = new Image()
-  img.onload = () => {
-    // 只认当前 hover 的这张：快速划过时旧图加载完不改新预览的尺寸
-    if (tagMenuPreviewItem.value !== entry) return
-    tagMenuPreviewBox.value = fitPreviewBox(img.naturalWidth, img.naturalHeight, previewMaxSide.value)
-  }
-  img.src = entry.url
-}
 watch(tagMenuSections, (s) => {
   if (!s.kinds.some((k) => k.kind === tagMenuActiveKind.value)) {
     tagMenuActiveKind.value = s.kinds[0]?.kind ?? null
@@ -2075,16 +2027,13 @@ const tagMenuFlatItems = computed(() => tagMenuGroups.value.flatMap((g) => g.ite
 function openTagMenu(
   item: ResourceItem,
   anchor: { left: number; top: number; right: number; bottom: number },
-  /** 被点标签在文档里的位置（同一节点引用多次时用它区分是哪一颗） */
-  chipPos?: number,
 ): void {
   // 同一颗标签的图标再点一次 = 收起（Dropdown 的常规手感）
-  if (tagMenuOpen.value && tagMenuChip.value?.id === item.id && tagMenuChipPos.value === chipPos) {
+  if (tagMenuOpen.value && tagMenuChip.value?.id === item.id) {
     closeTagMenu()
     return
   }
   tagMenuChip.value = item
-  tagMenuChipPos.value = chipPos
   tagMenuQuery.value = ''
   tagMenuActiveKind.value = null
   tagMenuOpen.value = false
@@ -2126,9 +2075,7 @@ function openTagMenu(
 function closeTagMenu(): void {
   tagMenuOpen.value = false
   tagMenuChip.value = null
-  tagMenuChipPos.value = undefined
   tagMenuQuery.value = ''
-  setTagMenuPreview(null)
 }
 
 /** 某个节点在本节点正文里被引用了几次（决定换绑是「断旧线」还是「再加一条」） */
@@ -2182,12 +2129,7 @@ async function replaceChipWith(newNodeId: string, chip: ResourceItem, name: stri
    * bindChipToNode 走的是上传/替换同一条路（改身份 + 名字 + 顺序占位）。
    */
   bindChipToNode(
-    {
-      previousChipId: chip.id,
-      oldNodeId: oldNodeId ?? undefined,
-      // 同一节点被引用多次时靠它区分是哪一颗（用户 2026-10-29 第 5 点）
-      previousPos: tagMenuChipPos.value,
-    },
+    { previousChipId: chip.id, oldNodeId: oldNodeId ?? undefined },
     newNodeId,
     name,
   )
@@ -2830,7 +2772,6 @@ function onGlobalLeave(el: Element): void {
         <video
           v-if="livePreviewTile.kind === 'video' && livePreviewTile.url"
           class="nb-hover-preview-media"
-          data-media="video"
           :src="livePreviewTile.url"
           :style="{ height: previewBox.height + 'px' }"
           @loadedmetadata="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLVideoElement).videoWidth, (ev.target as HTMLVideoElement).videoHeight)"
@@ -2842,7 +2783,6 @@ function onGlobalLeave(el: Element): void {
         <img
           v-else-if="cardImageOf(livePreviewTile)"
           class="nb-hover-preview-media"
-          data-media="image"
           :src="cardImageOf(livePreviewTile)"
           :alt="livePreviewTile.label"
           @load="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLImageElement).naturalWidth, (ev.target as HTMLImageElement).naturalHeight)"
@@ -2893,7 +2833,7 @@ function onGlobalLeave(el: Element): void {
         :offset="6"
         :teleport="true"
         body-class="nb-tagmenu-body"
-        :menu-width="tagMenuFlat ? '268px' : (tagMenuPreviewItem ? '712px' : '452px')"
+        :menu-width="tagMenuFlat ? '268px' : '452px'"
         menu-max-height="420px"
         :style="tagMenuRootStyle"
       >
@@ -2927,12 +2867,7 @@ function onGlobalLeave(el: Element): void {
               @click.stop="pickTagMenuNode(e)"
             >
               <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
-                <!--
-                  视频也画缩略图（用户 2026-10-29 第 3.1 点：菜单里视频没有缩略图）。
-                  视频的 e.url 已在 tagMenuEntries 里换成帧图（data:image/...），
-                  这里只要求「有地址」，不再限定 kind === 'image'。
-                -->
-                <img v-if="e.url && e.kind !== 'audio' && e.kind !== 'text'" :src="e.url" alt="" draggable="false" />
+                <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
               </span>
               <span class="nb-tagmenu-name">{{ e.name }}</span>
               <svg v-if="e.referenced" class="nb-tagmenu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2954,11 +2889,10 @@ function onGlobalLeave(el: Element): void {
                   :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
                   type="button"
                   role="menuitem"
-                @pointerenter="setTagMenuPreview(e)"
                   @click.stop="pickTagMenuNode(e)"
                 >
                   <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
-                    <img v-if="e.url && e.kind !== 'audio' && e.kind !== 'text'" :src="e.url" alt="" draggable="false" />
+                    <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
                   </span>
                   <span class="nb-tagmenu-name">{{ e.name }}</span>
                 </button>
@@ -2991,41 +2925,14 @@ function onGlobalLeave(el: Element): void {
                 :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
                 type="button"
                 role="menuitem"
-                @pointerenter="setTagMenuPreview(e)"
                 @click.stop="pickTagMenuNode(e)"
               >
                 <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
-                  <img v-if="e.url && e.kind !== 'audio' && e.kind !== 'text'" :src="e.url" alt="" draggable="false" />
+                  <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
                 </span>
                 <span class="nb-tagmenu-name">{{ e.name }}</span>
               </button>
               <div v-if="tagMenuActiveItems.length === 0" class="nb-tagmenu-empty">画布上没有可用的节点</div>
-            </div>
-            <!--
-              第三栏：hover 预览（用户 2026-10-29 第 3.2 点）。
-              鼠标停在节点行上时，右侧展开一块大预览（同一张图源 + 视频自动播放），
-              比例跟素材走、最长边 200 —— 与卡片 hover 预览同一套规则。
-            -->
-            <div v-if="tagMenuPreviewItem" class="nb-tagmenu-pane nb-tagmenu-pane--preview" aria-hidden="true">
-              <img
-                v-if="tagMenuPreviewItem.kind !== 'video' && tagMenuPreviewUrl"
-                class="nb-tagmenu-preview-media"
-                :src="tagMenuPreviewUrl"
-                :style="{ width: tagMenuPreviewBox.width + 'px', height: tagMenuPreviewBox.height + 'px' }"
-                alt=""
-              />
-              <video
-                v-else-if="tagMenuPreviewItem.kind === 'video' && tagMenuPreviewItem.url"
-                class="nb-tagmenu-preview-media"
-                data-media="video"
-                :src="tagMenuPreviewItem.url"
-                :style="{ width: tagMenuPreviewBox.width + 'px', height: tagMenuPreviewBox.height + 'px' }"
-                autoplay
-                muted
-                loop
-                playsinline
-              />
-              <span v-else class="nb-tagmenu-preview-empty">（无预览）</span>
             </div>
           </div>
         </template>
@@ -3998,16 +3905,6 @@ function onGlobalLeave(el: Element): void {
   height: 100%;
   max-height: 200px;
   object-fit: contain;
-}
-/*
- * 视频才需要黑底（用户 2026-10-29：图片预览四周有黑边）。
- *
- * 根因：这条背景原本写在共用的 .nb-hover-preview-media 上，图片也吃到了。
- * 图片盒子按原始宽高比算出来之后，图片本身是等比缩放、四边各留 1px 的
- * 亚像素余量，那 1px 露出的就是这层深色底 —— 看着像「黑边框」。
- * 图片不能有底色（透明图也要透出面板底色），只有视频画面需要黑衬底。
- */
-.nb-hover-preview-media[data-media='video'] {
   /* 主题色白名单: hover 预览里视频画面的衬底（任意视频都要有黑底，与主题无关） */
   background: var(--ui-tip, #000);
 }
@@ -4092,35 +3989,6 @@ function onGlobalLeave(el: Element): void {
 .nb-tagmenu-pane--items {
   flex: 1 1 auto;
 }
-/**
- * 第三栏 hover 预览（用户 2026-10-29 第 3.2 点）：
- * 与卡片 hover 预览同一套比例规则（fitPreviewBox 已按素材算好宽高），
- * 视频直接播放（muted/loop/playsinline，与卡片预览一致）。
- */
-.nb-tagmenu-pane--preview {
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  border-left: 1px solid var(--ui-line-soft, rgb(0 0 0 / 0.06));
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
-  border-radius: 0 12px 12px 0;
-}
-.nb-tagmenu-preview-media {
-  display: block;
-  /* 尺寸由内联样式写（配置项 hoverPreviewMaxSide，与卡片 hover 预览同一份） */
-  border-radius: 8px;
-  object-fit: contain;
-  background: transparent;
-}
-.nb-tagmenu-preview-media[data-media='video'] {
-  /* 主题色白名单: 视频画面黑衬底（与卡片 hover 预览同一规则） */
-  background: var(--ui-tip, #000);
-}
-.nb-tagmenu-preview-empty {
-  color: var(--ui-ink-mute, #8c95a3);
-  font-size: 12px;
-}
 .nb-tagmenu-search {
   display: flex;
   align-items: center;
@@ -4128,18 +3996,13 @@ function onGlobalLeave(el: Element): void {
   margin: 0 0 6px;
   padding: 0 10px;
   height: 32px;
-  /**
-   * 黑白亮色（用户 2026-10-29 第 3.3 点：不要主题色）。
-   * 主题的 --ui-line / --ui-accent 会跟着主题切换变色（暗色下发灰、聚焦发主题色），
-   * 菜单是画布上的中性浮层，固定用黑白灰：边 #e2e5ea、聚焦 #18202b。
-   */
-  border: 1px solid #e2e5ea;
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 10px;
-  background: #fff;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
   color: var(--ui-ink-mute, #8c95a3);
 }
 .nb-tagmenu-search:focus-within {
-  border-color: #18202b;
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
 }
 .nb-tagmenu-search svg {
   width: 14px;

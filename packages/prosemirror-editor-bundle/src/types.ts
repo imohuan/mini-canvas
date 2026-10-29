@@ -46,15 +46,6 @@ export interface ResourceItem {
   onIconClick?: (
     item: ResourceItem,
     anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number },
-    /**
-     * 被点的那颗标签**在文档里的位置**（ProseMirror 文档坐标）。
-     *
-     * 为什么需要它（用户 2026-10-29 报「两个相同引用的标签，改第二个却改了第一个」）：
-     * 标签 id 是「绑定了谁」（ref-node:<节点 id>），同一节点被引用两次时两颗标签的 id
-     * **完全相同**。只按 id 定位，永远只能找到正文里的第一颗 —— 用户点第二颗、
-     * 换绑之后变的是第一颗。位置是文档里的唯一坐标，按它替换才落在用户点的那颗上。
-     */
-    pos?: number,
   ) => void
   // 编辑器内交互事件（不传 → 无默认行为）
   onClick?: (item: ResourceItem) => void       // 点击资源节点
@@ -71,14 +62,6 @@ export interface ResourceItem {
    * （id / 名字 / 缩略图一起换），而不是只改显示名 —— 否则下次刷新又会按旧节点拉回名字。
    */
   previousId?: string
-  /**
-   * 「换绑」用：这颗标签**在文档里的位置**（ProseMirror 文档坐标）。
-   *
-   * 同一节点被引用两次时两颗标签的 id 相同，只靠 previousId 永远命中第一颗
-   * （用户 2026-10-29 报「改第二个却改了第一个」）。给了 pos 就按位置精确替换。
-   * 位置失效（文档已变）时退回按 id 查找，不会丢功能。
-   */
-  previousPos?: number
   /**
    * 参考标签要显示的类型图标（用户口径 2026-10-28）。
    *
