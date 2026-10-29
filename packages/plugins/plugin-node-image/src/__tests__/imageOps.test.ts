@@ -14,7 +14,8 @@ import {
   NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter,
   ResourceStore, type GraphEnvelope,
 } from '@mini-canvas/canvas-data'
-import { createImageOps, cropImage, downloadImageNode, nextCropLabel, rotateImage, uploadImage, type ImageTransform } from '../imageOps'
+import { createImageOps, cropImage, downloadImageNode, expandImageNode, nextCropLabel, nextExpandLabel, rotateImage, uploadImage, type ImageTransform } from '../imageOps'
+import type { ExpandBitmapIO } from '../imageExpand'
 import type { Rect } from '@mini-canvas/canvas-render'
 
 const BLOB = (tag = 'x') => new Blob([tag], { type: 'image/png' })
@@ -304,6 +305,82 @@ describe('cropImage：裁剪 = 新建下游图片节点并连边（原图不动�
     expect(history.undoDepth).toBe(depth + 1)
     history.undo()
     expect(nodeStore.getNode(id)!.data.cardWidth).toBe(375)
+  })
+})
+
+describe('expandImageNode：扩展 = 新建下游图片节点并连边（原图不动，与裁剪同一套模式）', () => {
+  /** 假位图端口：不碰真实 canvas，直接回可控结果 */
+  const fakeExpandIO = (overrides: Partial<ExpandBitmapIO> = {}): ExpandBitmapIO => ({
+    load: async () => ({ source: {} as CanvasImageSource, width: 1000, height: 800 }),
+    paint: async (bounds: { width: number; height: number }) => BLOB('expanded:' + bounds.width + 'x' + bounds.height),
+    release: () => {},
+    ...overrides,
+  })
+
+  it('原图不动，新节点装扩展结果（新 resourceId/宽高/名字），并有一条边连到原图节点', async () => {
+    const { nodeStore, graph, ops, id, blobs } = boot()
+    await uploadImage(ops, id, new File(['x'], 'photo.png', { type: 'image/png' }), fakeTransform())
+    const beforeId = String(nodeStore.getNode(id)!.data.resourceId)
+    // 框往左上各扩 100：原图 1000×800 → 结果 1200×1000
+    const ok = await expandImageNode(ops, id, { x: -100, y: -100, width: 1200, height: 1000 }, fakeExpandIO())
+    expect(ok).toBe(true)
+    // 原图节点不动
+    expect(nodeStore.getNode(id)!.data.resourceId).toBe(beforeId)
+    // 多了一个新节点，且装的是扩展结果
+    expect(nodeStore.getNodes().length).toBe(2)
+    const created = nodeStore.getNodes().find((n) => n.id !== id)!
+    const data = created.data
+    expect(typeof data.resourceId).toBe('string')
+    expect(data.resourceId).not.toBe(beforeId)
+    expect(blobs.has(String(data.resourceId))).toBe(true)
+    expect(data.imageWidth).toBe(1200)
+    expect(data.imageHeight).toBe(1000)
+    expect(data.imageName).toBe('扩展')
+    expect(data.label).toBe('扩展')
+    // 连边：原图 → 扩展结果（原图是上游）
+    const edges = graph.getEdges()
+    expect(edges).toHaveLength(1)
+    expect(edges[0].source).toBe(id)
+    expect(edges[0].target).toBe(created.id)
+    // 定位：原图右边缘 + 100 间隔，同一水平线
+    expect(created.position.x).toBe(0 + 375 + 100)
+    expect(created.position.y).toBe(0)
+  })
+
+  it('名字累加：第二次扩展叫「扩展 2」，且与「裁剪」名字空间互不干扰', async () => {
+    const { nodeStore, ops, id } = boot()
+    await uploadImage(ops, id, new File(['x'], 'photo.png', { type: 'image/png' }), fakeTransform())
+    const expandRect = { x: -100, y: -100, width: 1200, height: 1000 }
+    await expandImageNode(ops, id, expandRect, fakeExpandIO())
+    await expandImageNode(ops, id, expandRect, fakeExpandIO())
+    const labels = nodeStore.getNodes().map((n: { data?: Record<string, unknown> }) => n.data?.label)
+    expect(labels).toContain('扩展')
+    expect(labels).toContain('扩展 2')
+    // 名字空间隔离：扩展的扫描不认「裁剪 N」，裁剪的扫描不认「扩展 N」
+    const existing = nodeStore.getNodes().map((n: { type: string; data?: Record<string, unknown> }) => ({ type: n.type, data: n.data as Record<string, unknown> | undefined }))
+    expect(nextExpandLabel(existing)).toBe('扩展 3')
+    expect(nextCropLabel(existing)).toBe('裁剪')
+  })
+
+  it('框没扩出去（仍包着原图）→ 不建节点不连边', async () => {
+    const { nodeStore, graph, ops, id } = boot()
+    await uploadImage(ops, id, new File(['x'], 'photo.png', { type: 'image/png' }), fakeTransform())
+    const ok = await expandImageNode(ops, id, { x: 0, y: 0, width: 1000, height: 800 }, fakeExpandIO())
+    expect(ok).toBe(false)
+    expect(nodeStore.getNodes().length).toBe(1)
+    expect(graph.getEdges()).toHaveLength(0)
+  })
+
+  it('扩展 = 一条撤销记录（新节点 + 连边一次写完）', async () => {
+    const { nodeStore, history, ops, id } = boot()
+    await uploadImage(ops, id, new File(['x'], 'photo.png', { type: 'image/png' }), fakeTransform())
+    const depth = history.undoDepth
+    await expandImageNode(ops, id, { x: -100, y: -100, width: 1200, height: 1000 }, fakeExpandIO())
+    expect(history.undoDepth).toBe(depth + 1)
+    history.undo()
+    // 撤销后：回到只有原图一个节点的状态
+    expect(nodeStore.getNodes().length).toBe(1)
+    expect(nodeStore.getNode(id)!.data.imageWidth).toBe(1000)
   })
 })
 

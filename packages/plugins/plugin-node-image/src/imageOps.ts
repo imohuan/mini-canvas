@@ -593,14 +593,14 @@ export function nextCropLabel(
 }
 
 /**
-* 确认扩展：把画面往外扩出一圈透明画布，**原地替换** imageUrl（与裁剪同一套语义）。
+ * 确认扩展：把画面往外扩出一圈透明画布，**新建下游图片节点并连边**（原图不动）。
  *
- * 为什么原地替换而不是新建节点（与 v1 不同）：用户的心智是「把这张图改一下」而不是「多出一张图」，
- * 与裁剪保持一致也让撤销栈干净。真想要一份新的，复制节点即可。
+ * 与裁剪同一套模式（用户口径 2026-10-30）：确认后新节点 + 原图→新节点连线，
+ * 原图永远保留。新节点摆在原图右侧（右缘 + CROP_NODE_GAP，与裁剪/绘制同一套间距）。
  *
  * 两点刻意的不做：
- * - **扩展没实际变大就不写库**（用户把框又拖回去了）：写一条空历史只是噪音；
- * - 尺寸与 data **同一次写回**：否则一次扩展记两条撤销记录，用户按一次撤销只退半步。
+ * - **扩展没实际变大就不建节点**（用户把框又拖回去了）：写一条空历史只是噪音；
+ * - 建节点与连边走 createNodeWithEdge（内部 graph.transaction）：一次撤销整体回退。
  *
  * @returns 是否写成功（节点不存在 / 没有图 / 环境不支持 / 没实际扩大 → false）
  */
@@ -622,21 +622,59 @@ export async function expandImageNode(
   if (!ctx.persistImage) return false
   const persisted = await ctx.persistImage(result.blob)
   if (!persisted) return false
-  // 扩出来的图是**新位图**：原图的字节数/文件名不再代表它，清掉避免状态栏显示过期信息
-  writeImageData(
-    ctx,
-    nodeId,
-    {
-      ...ctx.read(nodeId),
-      ...imageSourceFields(persisted.resourceId, persisted.url),
-      imageWidth: result.width,
-      imageHeight: result.height,
-      imageSize: undefined,
-    },
-    result.width,
-    result.height,
+
+  // 定位与命名：完全照抄裁剪的模式（右缘 + 间隔；「扩展」名字与「裁剪」互不干扰，
+  // 扫描/累加用同一条规则，撤销/删中间节点后也不撞名）
+  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
+  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? MIN_CARD_WIDTH
+  const position = {
+    x: (source?.position.x ?? 0) + sourceWidth + CROP_NODE_GAP,
+    y: source?.position.y ?? 0,
+  }
+  const label = nextExpandLabel(
+    (ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data ?? {} })),
   )
-  return true
+  const expandData: Record<string, unknown> = {
+    label,
+    ...imageSourceFields(persisted.resourceId, persisted.url),
+    imageWidth: result.width,
+    imageHeight: result.height,
+    imageName: label,
+  }
+  // 原子性/校验/连边统一交给 createNodeWithEdge（内部 graph.transaction：一次撤销退干净）
+  // 原图是上游、扩展结果是下游（用户拖线方向：从原图拉到空白处出新图）
+  const newId = ctx.createNodeWithEdge?.('image', position, expandData, nodeId, 'targetToNew')
+  return typeof newId === 'string' && newId.length > 0
+}
+
+/** 扩展节点名的前缀（与「裁剪」同一套规则，名字空间互不干扰） */
+export const EXPAND_LABEL_PREFIX = '扩展'
+
+/**
+ * 下一个可用的扩展节点名：与 nextCropLabel 同一条规则，只把前缀换成「扩展」。
+ * 抽成独立函数而不是共用参数化版本：两处名字空间故意隔离，「扩展」绝不叫成「裁剪 2」。
+ */
+export function nextExpandLabel(
+  nodes: Array<{ type: string; data?: Record<string, unknown> }>,
+): string {
+  let max = 0
+  const re = new RegExp('^' + EXPAND_LABEL_PREFIX + '\\s*(\\d+)$')
+  const used = new Set<string>()
+  for (const n of nodes) {
+    if (n.type !== 'image') continue
+    const label = (n.data as Record<string, unknown> | undefined)?.label
+    if (typeof label !== 'string') continue
+    used.add(label.trim())
+    const m = re.exec(label.trim())
+    if (!m) continue
+    const num = Number.parseInt(m[1], 10)
+    if (!Number.isNaN(num) && num > max) max = num
+  }
+  if (used.has(EXPAND_LABEL_PREFIX)) {
+    const n = max + 1 === 1 ? 2 : max + 1
+    return EXPAND_LABEL_PREFIX + ' ' + String(n)
+  }
+  return max === 0 ? EXPAND_LABEL_PREFIX : EXPAND_LABEL_PREFIX + ' ' + String(max + 1)
 }
 
 /**
