@@ -89,6 +89,30 @@ describe('素材卡：拖拽必须跟手（transition / 缩放都不许碰 trans
 })
 
 describe('素材卡关闭按钮：一半在卡片外（不能被裁剪）', () => {
+/**
+ * 卡片缩略图**不模糊**（用户 2026-10-29：「这边卡片里面这个图片，不需要给它添加模糊了」）。
+ *
+ * 历史：2026-10-01 用户要求过图片本身加模糊，于是 .nb-card-img 带了
+ * filter: blur(1px) + transform: scale(1.18)（scale 是为了模糊不啃边）。
+ * 2026-10-29 明确取消，两行都要去掉 —— 只删 blur 留下 scale 会让图片被无故放大。
+ */
+describe('素材卡缩略图：不模糊', () => {
+  it('没有 filter: blur', () => {
+    expect(block('.nb-card-img')).not.toMatch(/filter\s*:\s*blur/)
+  })
+
+  it('也没有为模糊补偿的放大（transform: scale）', () => {
+    expect(block('.nb-card-img')).not.toMatch(/transform\s*:\s*scale/)
+  })
+
+  it('仍然是 cover 铺满正方形', () => {
+    const css = block('.nb-card-img')
+    expect(css).toMatch(/object-fit\s*:\s*cover/)
+    expect(css).toMatch(/width\s*:\s*100%/)
+    expect(css).toMatch(/height\s*:\s*100%/)
+  })
+})
+
   /**
    * 用户口径（2026-10-12）：「在右上角区域 hover 时，应该显示一个关闭按钮。需要注意：
    * ① 按钮不要被 overflow:hidden 隐藏掉，因为它放在右上角，有一半在外面；

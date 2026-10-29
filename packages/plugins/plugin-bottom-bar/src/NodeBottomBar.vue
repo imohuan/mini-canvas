@@ -3232,10 +3232,7 @@ function onGlobalLeave(el: Element): void {
   height: 100%;
   object-fit: cover;
   display: block;
-  /* 用户要求：图片本身加模糊（卡片是正方形、cover 铺满）——
-     放一点点 scale 是为了 blur 不把卡片四周"啃"出一圈透明边。 */
-  transform: scale(1.18);
-  filter: blur(1px);
+  /* 用户 2026-10-29：卡片缩略图不要模糊，直接原样铺满。 */
 }
 /**
  * 卡片图片没出来时的加载层（用户 2026-10-29：没加载出来就给加载 UI）。
