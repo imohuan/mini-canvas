@@ -104,6 +104,7 @@ export const REFERENCE_MARKUP_GUIDE = [
   '- <ref type="node" name="…" canvasId="…" nodeId="…" /> —— 画布节点。用画布 MCP 工具按 canvasId + nodeId 读取，不要用本地文件去猜它的资源路径。',
   '- <ref type="skill" name="…" path="/abs/path/SKILL.md" /> —— 技能。需要时打开这份说明书再照做。',
   '- <ref type="mcp" name="…" /> —— MCP 服务（已按名字连好，不需要额外动作）。',
+  '- <ref type="mcp" name="服务.工具" path="mcp__服务__工具" /> —— MCP 的**单个工具**。先按服务名（name 第一段）确认已连上，再按 path（SDK 工具全名）调用。',
   '',
   '标记里的路径都是本机绝对路径，可直接读取。',
 ].join(String.fromCharCode(10))

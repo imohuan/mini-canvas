@@ -1052,7 +1052,9 @@ export class AgentRuntime {
  * 都没有时返回原值（undefined 或空），让 ensureSession 走「全部已配置」的默认路径。
  */
 function mergeMarkupPrefs(prefs: SessionPrefs | undefined, text: string): SessionPrefs | undefined {
-  const fromMarkup = namesOfKind(text, 'mcp')
+  // 工具级引用（name 形如 `服务.工具`）只取服务段：system_config 只认服务名，
+  // 工具全名模型从标记 value（`mcp__服务__工具`）里读，不需要进过滤名单。
+  const fromMarkup = namesOfKind(text, 'mcp').map((n) => n.split('.')[0]!)
   if (!fromMarkup.length) return prefs
   const merged = [...new Set([...(prefs?.mcpServers ?? []), ...fromMarkup])]
   return { ...(prefs ?? {}), mcpServers: merged }

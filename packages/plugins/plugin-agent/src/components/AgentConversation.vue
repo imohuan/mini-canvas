@@ -35,7 +35,7 @@ import { groupTurnBlocks, type TurnRow } from '../turnBlocks.js'
 import { scrollTopForVisibleItem } from '../selectionScroll.js'
 import { brandName, brandSvg, detectPlatform } from '../modelBrandIcons.js'
 // ICON_SKILL / ICON_MCP 由模板直接 v-html（@ 下拉里的菜单卡片头图）；解析那一段已搬去 userSegments。
-import { skillResources, mcpResources, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
+import { skillResources, mcpResources, mcpToolResource, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
 import { stripUserSteering } from '../userSteering.js'
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents.js'
@@ -359,6 +359,8 @@ const mcpProbing = ref(false)
 const mcpProbeHint = ref('')
 /** 服务名 → 检测结果（好没好 / 一句说明 / 工具数） */
 const mcpStatus = ref<Record<string, { ok: boolean; text: string; tools: number }>>({})
+/** 服务名 → 探测到的工具清单（点「重新检测」后填；面板据此展开工具行） */
+const mcpTools = ref<Record<string, Array<{ name: string; description: string; fullName: string }>>>({})
 
 function mcpStatusOf(name: string): { ok: boolean; text: string; tools: number } | null {
   return mcpStatus.value[name] ?? null
@@ -386,6 +388,26 @@ function mcpToolCount(name: string): number {
   return mcpStatusOf(name)?.tools ?? 0
 }
 
+/** 某服务展开的工具行（没探测过 / 探测失败时是空数组，卡片就不画展开区） */
+function mcpToolsOf(name: string): Array<{ name: string; description: string; fullName: string }> {
+  return mcpTools.value[name] ?? []
+}
+
+/** 展开的 MCP 卡片（存服务名；DEMO 的 expandedMcp） */
+const mcpExpanded = ref<Set<string>>(new Set())
+function toggleMcpExpand(name: string): void {
+  const next = new Set(mcpExpanded.value)
+  if (next.has(name)) next.delete(name)
+  else next.add(name)
+  mcpExpanded.value = next
+}
+
+/** 点工具行 = 插一个工具引用标签（`<ref type="mcp" name="服务.工具" path="mcp__服务__工具" />`） */
+function insertMcpToolRef(server: string, tool: { name: string; description: string; fullName: string }, close: () => void): void {
+  editorRef.value?.insertResource(mcpToolResource(server, tool.name, tool.description))
+  close()
+}
+
 async function runMcpProbe(): Promise<void> {
   if (mcpProbing.value) return
   mcpProbing.value = true
@@ -401,11 +423,14 @@ async function runMcpProbe(): Promise<void> {
     await agent.reconnectMcp()
     const r = await agent.probeMcp()
     const next: Record<string, { ok: boolean; text: string; tools: number }> = {}
+    const tools: Record<string, Array<{ name: string; description: string; fullName: string }>> = {}
     for (const sv of r.servers) {
       const ok = sv.status === 'completed'
       next[sv.name] = { ok, text: ok ? sv.tools + ' 个工具' : (sv.error || sv.status || '连接失败'), tools: sv.tools }
+      if (ok) tools[sv.name] = r.tools.filter((t) => t.server === sv.name).map((t) => ({ name: t.name, description: t.description, fullName: t.fullName }))
     }
     mcpStatus.value = next
+    mcpTools.value = tools
     if (r.error) mcpProbeHint.value = r.error
     else if (!r.servers.length) mcpProbeHint.value = '没有任何 MCP 返回结果'
     else {
@@ -2804,22 +2829,37 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <div class="ac-panel-body">
                   <div class="ac-panel-scroll">
                     <div v-if="filteredMcpResources.length" class="ac-mcp-list">
-                      <button v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-card" role="option"
-                        :aria-pressed="false" :title="item.value" @click="insertRef(item, close)">
-                        <span class="ac-pick-box" aria-hidden="true"><Check :size="11" /></span>
-                        <span class="ac-mcp-server-main">
-                          <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
-                          <span class="ac-server-copy">
-                            <span class="ac-server-name">{{ item.name }}</span>
-                            <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
+                      <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
+                        <button class="ac-mcp-card" role="option" :aria-expanded="mcpExpanded.has(item.name)"
+                          :title="item.value" @click="insertRef(item, close)">
+                          <span class="ac-pick-box" aria-hidden="true"><Check :size="11" /></span>
+                          <span class="ac-mcp-server-main">
+                            <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
+                            <span class="ac-server-copy">
+                              <span class="ac-server-name">{{ item.name }}</span>
+                              <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
+                            </span>
                           </span>
-                        </span>
-                        <span class="ac-server-side">
-                          <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
-                            :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
-                          <span v-else class="ac-status">{{ mcpTransport(item) }}</span>
-                        </span>
-                      </button>
+                          <span class="ac-server-side">
+                            <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
+                              :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
+                            <span v-else class="ac-status">{{ mcpTransport(item) }}</span>
+                            <span v-if="mcpToolsOf(item.name).length" class="ac-expand-btn" role="button" tabindex="0"
+                              :aria-expanded="mcpExpanded.has(item.name)" aria-label="展开工具" title="展开工具"
+                              @click.stop="toggleMcpExpand(item.name)" @keydown.enter.stop.prevent="toggleMcpExpand(item.name)">
+                              <ChevronDown :size="13" :class="{ 'is-open': mcpExpanded.has(item.name) }" />
+                            </span>
+                          </span>
+                        </button>
+                        <!-- 工具行：探测成功后展开；点一行 = 引用那一个工具 -->
+                        <div v-if="mcpExpanded.has(item.name) && mcpToolsOf(item.name).length" class="ac-mcp-tools">
+                          <button v-for="t in mcpToolsOf(item.name)" :key="t.fullName" class="ac-tool-row"
+                            role="option" :title="t.fullName" @click="insertMcpToolRef(item.name, t, close)">
+                            <span class="ac-tool-name">{{ t.name }}</span>
+                            <span class="ac-tool-desc">{{ t.description }}</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <div v-else class="ac-empty-state">
                       <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -6196,6 +6236,81 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-status.is-bad::before {
   background: var(--ui-warn, #b45309);
+}
+
+/* 展开工具按钮（DEMO 的 .expand-btn）：无底色小方块，箭头旋转表状态。 */
+.ac-expand-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-mute, #9ca3af);
+  cursor: pointer;
+}
+
+.ac-expand-btn:hover {
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink, #111827);
+}
+
+.ac-expand-btn :deep(svg) {
+  transition: transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+.ac-expand-btn :deep(svg.is-open) {
+  transform: rotate(180deg);
+}
+
+/* 工具行列表：缩进对齐到服务名（20 选择框 + 8 间距），描边虚化一圈。 */
+.ac-mcp-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0 28px;
+  padding: 4px;
+  border: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.05));
+  border-radius: 10px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.02));
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.ac-tool-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-tool-row:hover {
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+.ac-tool-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #111827);
+}
+
+.ac-tool-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ui-ink-mute, #9ca3af);
 }
 
 .ac-panel-note {

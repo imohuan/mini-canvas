@@ -176,6 +176,26 @@ export function mcpResources(servers: McpRow[]): ResourceItem[] {
 }
 
 /**
+ * 单个 MCP 工具 → 资源标签。
+ *
+ * name 用 `服务.工具` —— 后端 `namesOfKind(text,'mcp')` 拿到这份 name 后只取第一段当服务名
+ * （工具名对 system_config 无意义，连上服务才是真开关；工具全名模型从标记的 value 里读）。
+ * value 放 SDK 的全名 `mcp__服务__工具`：模型拿到标记就知道该调哪一个。
+ */
+export function mcpToolResource(server: string, toolName: string, description: string): ResourceItem {
+  const fullName = 'mcp__' + server + '__' + toolName
+  return {
+    id: 'mcp-tool:' + fullName,
+    name: server + '.' + toolName,
+    category: 'MCP',
+    value: fullName,
+    ref: { kind: 'mcp', name: server + '.' + toolName, value: fullName },
+    renderItem: () => renderMenuRow(ICON_MCP, server + '.' + toolName, description),
+    renderEditor: () => renderTag(ICON_MCP, server + '.' + toolName),
+  }
+}
+
+/**
  * 技能目录 → SKILL.md 路径。
  *
  * 后端的 SkillRow 只给名字与说明，不给路径；约定技能说明书固定叫 `SKILL.md`，
