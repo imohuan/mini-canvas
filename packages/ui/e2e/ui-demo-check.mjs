@@ -138,8 +138,12 @@ async function measureAlign(pickRow) {
   return r
 }
 
-const alignCenter = await measureAlign('')
-check('默认居中：菜单中轴对按钮中轴（偏差 ≤ 2px）', !!alignCenter && Math.abs(alignCenter.center) <= 2, JSON.stringify(alignCenter))
+// 默认值（用户口径 2026-10-29 定稿）：底部左对齐 + 不带箭头。
+const alignDefault = await measureAlign('')
+check('默认底部左对齐：菜单左缘贴按钮左缘（偏差 ≤ 2px）', !!alignDefault && Math.abs(alignDefault.left) <= 2, JSON.stringify(alignDefault))
+
+const alignCenter = await measureAlign('底部居中')
+check('align=center：菜单中轴对按钮中轴（偏差 ≤ 2px）', !!alignCenter && Math.abs(alignCenter.center) <= 2, JSON.stringify(alignCenter))
 
 const alignStart = await measureAlign('底部左对齐')
 check('align=start：菜单左缘贴按钮左缘（偏差 ≤ 2px）', !!alignStart && Math.abs(alignStart.left) <= 2, JSON.stringify(alignStart))
@@ -165,6 +169,11 @@ async function probeArrow() {
 
 async function toggleArrow(rowLabel) {
   await reselect()
+  // 上一段测对齐时可能还留着一个开着的菜单（它挡住顶栏、点不到这个按钮）
+  if (await page.locator('.dd-menu').count()) {
+    await page.locator('.tdb-trigger').filter({ hasText: '对齐：' }).first().click()
+    await page.waitForTimeout(250)
+  }
   const btn = page.locator('.tdb-trigger').filter({ hasText: '箭头：' }).first()
   await btn.click()
   await page.waitForTimeout(350)
@@ -179,11 +188,11 @@ async function toggleArrow(rowLabel) {
   return r
 }
 
-const arrowDefault = await toggleArrow('显示箭头（默认）')
-check('arrow 默认显示：箭头露出菜单上缘之外', !!arrowDefault && arrowDefault.hasArrow && arrowDefault.above, JSON.stringify(arrowDefault))
+const arrowDefault = await toggleArrow('隐藏箭头（默认）')
+check('arrow 默认隐藏：不渲染箭头节点', !!arrowDefault && arrowDefault.hasArrow === false, JSON.stringify(arrowDefault))
 
-const arrowHidden = await toggleArrow('隐藏箭头')
-check('arrow=false：箭头不渲染（菜单本身还在）', !!arrowHidden && arrowHidden.hasArrow === false, JSON.stringify(arrowHidden))
+const arrowOn = await toggleArrow('显示箭头')
+check('arrow=true：箭头露出菜单上缘之外', !!arrowOn && arrowOn.hasArrow && arrowOn.above, JSON.stringify(arrowOn))
 
 // 进入功能模式
 await page.locator('.tdb-trigger').filter({ hasText: '功能演示' }).first().click()

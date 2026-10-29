@@ -66,11 +66,11 @@ const props = withDefaults(
     active: undefined,
     disabled: false,
     menuWidth: '220px',
-    arrow: true,
-    // 默认居中：与这件组件改造前的实际观感一致。
-    // （改造前写的是 bottom-start，但两份 dropdown 实现都只认 align，后缀被丢弃 → 实际一直居中。
-    //   现在后缀真正生效了，默认值必须写成 bottom，否则默认观感会从居中悄悄变成左对齐。）
-    placement: 'bottom',
+    // 默认关箭头、底部左对齐（用户口径 2026-10-29：「默认隐藏箭头，底部左对齐」）。
+    // 这是工具栏下拉最稳的一组：菜单从按钮左缘往右铺，读起来像"按钮展开的一列"；
+    // 不带小尖角也不会看不出从哪弹出（菜单紧贴按钮下方）。想要箭头/居中/右对齐显式传。
+    arrow: false,
+    placement: 'bottom-start',
     align: 'auto',
   },
 )

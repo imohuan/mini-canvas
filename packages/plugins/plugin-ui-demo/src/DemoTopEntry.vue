@@ -55,11 +55,12 @@ const LABEL = { alpha: '演示功能 A', beta: '演示功能 B' } as const
 /**
  * 对齐演示：菜单横向贴在按钮的哪条边。
  * 三种取值分别对应 align=center / start / end —— 这就是 toolbarDropdown 的对齐配置。
+ * 默认跟组件一致：**左对齐**（中心/右对齐靠菜单里切换）。
  */
-const align = ref<'center' | 'start' | 'end'>('center')
+const align = ref<'center' | 'start' | 'end'>('start')
 const ALIGN_LABEL = { center: '居中', start: '左对齐', end: '右对齐' } as const
 const alignItems: ToolbarMenuNode[] = [
-  { key: 'center', label: '底部居中（默认）' },
+  { key: 'center', label: '底部居中' },
   { key: 'start', label: '底部左对齐' },
   { key: 'end', label: '底部右对齐' },
 ]
@@ -68,10 +69,10 @@ const alignItems: ToolbarMenuNode[] = [
  * 箭头演示：菜单上那条指向按钮的小尖角（toolbarDropdown 的 arrow 属性）。
  * 默认开；关掉后菜单只剩圆角卡片。
  */
-const arrowOn = ref(true)
+const arrowOn = ref(false)
 const arrowItems: ToolbarMenuNode[] = [
-  { key: 'arrow-on', label: '显示箭头（默认）' },
-  { key: 'arrow-off', label: '隐藏箭头' },
+  { key: 'arrow-on', label: '显示箭头' },
+  { key: 'arrow-off', label: '隐藏箭头（默认）' },
 ]
 
 function pickArrow(key: string): void {
