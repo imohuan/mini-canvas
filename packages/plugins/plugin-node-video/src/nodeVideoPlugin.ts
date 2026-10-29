@@ -3,7 +3,8 @@
  *
  * 对照 v1 packages/canvas-core/src/nodes/Video/（VideoNode.vue + VideoNodePlugin.ts + videoNodeUtils.ts）：
  * - 播放 UI 自己画（不用原生 controls），进度/时间/截图/下载/全屏都在节点上；
- * - 裁剪与剪辑是**元数据式**的：只记裁剪框与保留区间，不重新编码视频（v1 也是这个取舍）；
+ * - 裁剪与剪辑优先**真换文件**：后台 ffmpeg 插件（server/plugin-video-crop.js）重新编码，
+ *   产物装进新建的下游节点 + 连线，原节点不动；后台不可用才回落元数据式（记框 / 记区间）；
  * - 截图产出一个新的 image 节点（"从视频里取一张图继续用"）；
  * - 取帧、尺寸适配、范围收敛等纯逻辑全部抽成可单测的函数（videoCrop / videoClip / videoFit / videoNodeData）。
  *
@@ -11,8 +12,8 @@
  * - v1 靠 data._overlay._cropMode 记"正在裁剪"（要宿主手动 strip 才不落盘）；v2 用**会话态**
  *   （videoSession），刷新后不会复活、也不占撤销栈；
  * - v1 的命令直接改 VueFlow 节点（vf.updateNode）；v2 一律走内核 graph 唯一写入口（自动进历史 + 落盘）；
- * - v1 的"裁剪/剪辑确认后新建节点"在 v2 改成**原地写回**：用户直觉是"把这个节点裁好"，
- *   而不是"多出一个节点"；要取出结果用截图（那才是真的新素材）。
+ * - v1 的"裁剪/剪辑确认后新建节点"在 v2 恢复为**新建下游节点 + 连线**（用户口径 2026-10-30）：
+ *   原视频留着做对比；原地换地址还会让底栏按 URL 缓存的缩略图停在旧画面。
  *
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层(canvas-render) + 默认皮的通用按钮，
  * 不反向依赖宿主/其它节点插件。
@@ -30,7 +31,7 @@ import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
 import { registerBarAction, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
-import { beginOverlay, endOverlay, onOverlayModeChange, setCropPending } from './videoSession'
+import { beginOverlay, endOverlay, isClipPending, onOverlayModeChange, setClipPending, setCropPending } from './videoSession'
 import { clearClipPrefs } from './videoClipStore'
 import {
   captureFrameNode,
@@ -44,6 +45,7 @@ import {
 } from './videoOps'
 import type { Rect } from './videoCrop'
 import { cropNodeWithBackend } from './videoCropFlow'
+import { clipNodeWithBackend } from './videoClipFlow'
 import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 import { captureVideoThumb } from './videoThumbService'
 
@@ -410,12 +412,21 @@ export function apply(ctx: Context) {
   ctx.commands.register({
     id: 'video:clip-confirm',
     title: '确认剪辑',
-    run: (_c, payload) => {
+    run: async (_c, payload) => {
       const { nodeId, start, end } = (payload ?? {}) as { nodeId?: string; start?: number; end?: number }
       if (!nodeId || typeof start !== 'number' || typeof end !== 'number') return false
-      const ok = clipVideo(ops, nodeId, start, end, MIN_CLIP_DURATION)
+      // 真剪辑优先：后台 ffmpeg 把这一段重新编码成新文件，再建下游节点 + 连线。
+      // 后台不可用（没装插件 / 外链源 / 转码失败）→ 回落元数据式，行为与从前一致。
+      setClipPending(nodeId, true)
+      let real: boolean | null = null
+      try {
+        real = await clipNodeWithBackend(ctx, ops, nodeId, start, end)
+      } finally {
+        setClipPending(nodeId, false)
+      }
       endOverlay(nodeId)
-      return ok
+      if (real !== null) return real
+      return clipVideo(ops, nodeId, start, end, MIN_CLIP_DURATION)
     },
   })
   ctx.commands.register({

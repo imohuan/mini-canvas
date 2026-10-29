@@ -47,6 +47,21 @@ export function setCropPending(nodeId: string, pending: boolean): void {
   else cropping.delete(nodeId)
 }
 
+/** 正在跑后台真剪辑的节点 id（与裁剪分开记：两个面板各自禁用自己那一个按钮） */
+const clipping = reactive(new Set<string>())
+
+/** 该节点是否正在等后台切段 */
+export function isClipPending(nodeId: string): boolean {
+  return clipping.has(nodeId)
+}
+
+/** 标记/清除「正在等后台切段」 */
+export function setClipPending(nodeId: string, pending: boolean): void {
+  if (!nodeId) return
+  if (pending) clipping.add(nodeId)
+  else clipping.delete(nodeId)
+}
+
 /**
  * 订阅「某人进/出了覆盖层模式」（给插件侧同步底栏功能模式用）。
  * 与图片节点的 onEditModeChange 同一条写法：本文件是纯状态，订阅交给装配层（apply）。

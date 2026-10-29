@@ -114,7 +114,8 @@ describe('node-video 装配 smoke', () => {
     expect(await command.execute('video:crop-confirm', {})).toBe(false)
     expect(await command.execute('video:crop-confirm', { nodeId: 'x' })).toBe(false)
     expect(command.execute('video:clip', {})).toBe(false)
-    expect(command.execute('video:clip-confirm', { nodeId: 'x', start: 0 })).toBe(false)
+    // clip-confirm 现在会先问后台能否真剪辑（异步）→ 必须 await 才拿得到布尔值
+    expect(await command.execute('video:clip-confirm', { nodeId: 'x', start: 0 })).toBe(false)
     // 截图命令是 async（要解码视频取帧）→ 返回 Promise，故 await 后判值
     expect(await command.execute('video:capture-frame', {})).toBe(false)
     expect(command.execute('video:download', {})).toBe(false)

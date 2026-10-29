@@ -144,6 +144,9 @@ export const CROP_NODE_GAP = 100
 /** 裁剪节点名的前缀（扫描与生成都用它） */
 export const CROP_LABEL_PREFIX = '裁剪'
 
+/** 剪辑（时间切割）出的节点名前缀 */
+export const CLIP_LABEL_PREFIX = '剪辑'
+
 /**
  * 下一个可用的裁剪节点名：扫描现有 video 节点里「裁剪 N」的 N，取最大值 + 1。
  *
@@ -151,8 +154,18 @@ export const CROP_LABEL_PREFIX = '裁剪'
  * 扫描是幂等的：撤销几次、删掉中间哪个，算出来的名字都不会与画布上已有的撞车。
  */
 export function nextVideoCropLabel(nodes: Array<{ type: string; data?: Record<string, unknown> }>): string {
+  return nextVideoLabel(CROP_LABEL_PREFIX, nodes)
+}
+
+/** 下一个可用的剪辑节点名（口径与裁剪同一条：扫描「剪辑 N」取最大 + 1） */
+export function nextVideoClipLabel(nodes: Array<{ type: string; data?: Record<string, unknown> }>): string {
+  return nextVideoLabel(CLIP_LABEL_PREFIX, nodes)
+}
+
+/** 按前缀扫出下一个名字（裁剪 / 剪辑共用；规矩见 nextVideoCropLabel 的注释） */
+function nextVideoLabel(prefix: string, nodes: Array<{ type: string; data?: Record<string, unknown> }>): string {
   let max = 0
-  const re = new RegExp('^' + CROP_LABEL_PREFIX + '\\s*(\\d+)$')
+  const re = new RegExp('^' + prefix + '\\s*(\\d+)$')
   const used = new Set<string>()
   for (const n of nodes) {
     if (n.type !== 'video') continue
@@ -164,11 +177,11 @@ export function nextVideoCropLabel(nodes: Array<{ type: string; data?: Record<st
     const num = Number.parseInt(m[1], 10)
     if (!Number.isNaN(num) && num > max) max = num
   }
-  if (used.has(CROP_LABEL_PREFIX)) {
+  if (used.has(prefix)) {
     const n = max + 1 === 1 ? 2 : max + 1
-    return CROP_LABEL_PREFIX + ' ' + String(n)
+    return prefix + ' ' + String(n)
   }
-  return max === 0 ? CROP_LABEL_PREFIX : CROP_LABEL_PREFIX + ' ' + String(max + 1)
+  return max === 0 ? prefix : prefix + ' ' + String(max + 1)
 }
 
 /**
@@ -596,7 +609,10 @@ function writeWithSize(
 }
 
 /**
- * 确认剪辑：把 [start, end] 写进 data（秒）。播放器据此只播这一段。
+ * 回落路径的剪辑：把 [start, end] 写进 data（秒），播放器据此只播这一段。
+ *
+ * 后台有 ffmpeg 插件时走的是真剪辑（createRealClipNode：换成只剩这段的新文件），
+ * 这里只在后台不可用时兜底 —— 文件没换，靠播放区间取景，恢复整段随时可逆。
  * @returns 是否写成功（节点不存在 / 没有视频 → false）
  */
 export function clipVideo(
@@ -612,6 +628,60 @@ export function clipVideo(
   const range = clampClipRange({ start, end, duration: data.videoDuration ?? 0, minDuration })
   ctx.write(nodeId, { ...current, clipStart: range.start, clipEnd: range.end })
   return true
+}
+
+/**
+ * 后台真剪辑的产物：源视频已经切成只剩这一段的新文件。
+ * 画面尺寸沿用源视频（切时间不改宽高），所以这里不带 width/height。
+ */
+export interface RealClipResult {
+  /** 新视频的同源地址（写进 videoUrl） */
+  url: string
+  /** 新视频的持久引用（可写进 resourceId；没有就保留旧引用） */
+  resourceId?: string
+  /** 这一段有多长（秒） */
+  duration: number
+}
+
+/**
+ * 把后台切好的这一段装进一个**新建的下游节点**，并从原视频连一条线过去。
+ *
+ * 用户口径 2026-10-30（与裁剪同一条）：确认后出新节点 + 连线，原视频保持不动。
+ * 不写 clipStart/clipEnd：新节点的文件本来就只剩这一段，再叠播放区间等于又切一次。
+ * 宽高从源节点抄（切时间不改画面尺寸）；源节点没写宽高就不写，让内容区读元数据补。
+ * 源节点若带着取景框，取景框一起带过去：新文件仍是整幅画面，取景框才让它看起来与原来一致
+ * （取景框是「看哪一块」，剪辑区间是「留哪一段」，两者不冲突）。
+ * @returns 新节点 id；建失败 / 没有图服务 → null
+ */
+export function createRealClipNode(ctx: VideoOpsContext, nodeId: string, result: RealClipResult): string | null {
+  const sourceData = ctx.read(nodeId)
+  if (!sourceData) return null
+  if (!(result.duration > 0) || !result.url) return null
+  if (!ctx.createNodeWithEdge) return null
+  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
+  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? DEFAULT_NODE_WIDTH
+  const width = Number(sourceData.videoWidth) || 0
+  const height = Number(sourceData.videoHeight) || 0
+  const cropRect = asVideoData(sourceData).cropRect
+  const shown = displaySizeOf(sourceData)
+  const sizes = videoCardSizePatch(shown.width, shown.height, ctx.fitLimits?.())
+  const position = {
+    x: (source?.position.x ?? 0) + sourceWidth + CROP_NODE_GAP,
+    y: source?.position.y ?? 0,
+  }
+  const label = nextVideoClipLabel((ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data })))
+  const data: Record<string, unknown> = {
+    label,
+    videoUrl: result.url,
+    videoName: label,
+    videoDuration: result.duration,
+    ...(width > 0 && height > 0 ? { videoWidth: width, videoHeight: height } : {}),
+    ...(cropRect ? { cropRect } : {}),
+    ...(result.resourceId ? { resourceId: result.resourceId } : {}),
+    ...(sizes ? { cardWidth: sizes.size.w, cardHeight: sizes.size.h } : {}),
+  }
+  // 原视频是上游、切出来的是下游（与裁剪同方向：原节点 → 新节点）
+  return ctx.createNodeWithEdge('video', position, data, nodeId, 'targetToNew')
 }
 
 /** 恢复整段：清掉剪辑范围 */

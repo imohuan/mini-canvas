@@ -24,7 +24,7 @@ import {
   moveClipRange,
   readClipRange,
 } from './videoClip'
-import { isClipping, overlayDraft, setOverlayDraft } from './videoSession'
+import { isClipPending, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { readClipPrefs, readDuration, readPlayhead } from './videoClipStore'
 import { frameCountFor, grabStrip, type FilmstripFrame } from './videoFilmstrip'
 import { clipKeyAction, isTypingTarget } from './videoClipKeys'
@@ -52,6 +52,9 @@ const hasVideo = computed(() => {
   const legacy = typeof props.data?.videoUrl === 'string' ? props.data.videoUrl : ''
   return resourceId !== '' || legacy !== ''
 })
+
+/** 正等后台切段：确认按钮显示转码中并禁用（与裁剪面板同一条交互） */
+const pending = computed(() => isClipPending(props.id))
 
 /** 视频总时长：等内容区 loadedmetadata 上报；没上报过退回节点里的 videoDuration */
 const duration = computed(() => {
@@ -282,6 +285,8 @@ function toggleLoop(): void {
 const configOpen = ref(false)
 
 function onConfirm(): void {
+  // 后台转码中再点一次会重复提交（后台对同节点返回 busy），本地先拦住
+  if (pending.value) return
   ctx.get('command').execute('video:clip-confirm', { nodeId: props.id, start: range.value.start, end: range.value.end })
 }
 
@@ -333,7 +338,7 @@ onBeforeUnmount(onDragUp)
           <span class="vclip-ico" v-html="ICON_LOOP" />
         </button>
 
-        <button class="vclip-confirm" type="button" title="确认剪辑" aria-label="确认剪辑" @click="onConfirm">
+        <button class="vclip-confirm" type="button" :disabled="pending" :title="pending ? '剪辑中…' : '确认剪辑'" :aria-label="pending ? '剪辑中' : '确认剪辑'" @click="onConfirm">
           <span class="vclip-ico" v-html="ICON_CONFIRM" />
         </button>
       </div>
@@ -585,6 +590,8 @@ onBeforeUnmount(onDragUp)
 }
 .vclip-confirm:hover { background: #fff; }
 .vclip-confirm:active { transform: scale(0.96); }
+.vclip-confirm:disabled { cursor: progress; opacity: 0.55; }
+.vclip-confirm:disabled:hover { background: #f5f6f8; }
 .vclip-confirm:focus-visible { outline: 2px solid rgba(96, 165, 250, 0.95); outline-offset: 2px; }
 .vclip-confirm .vclip-ico { color: #101216; }
 

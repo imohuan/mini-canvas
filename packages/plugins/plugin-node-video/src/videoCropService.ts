@@ -22,6 +22,8 @@ import type { Rect } from './videoCrop'
 
 /** 后台裁剪接口（插件 server/plugin-video-crop.js 提供） */
 const CROP_ENDPOINT = '/api/video-crop'
+/** 后台按时间切段接口（同一个插件提供） */
+const CUT_ENDPOINT = '/api/video-cut'
 /** 探测接口：判断后台有没有装真裁剪插件 */
 const PING_ENDPOINT = '/api/video-crop/ping'
 /** 单次请求的等待上限（大视频转码要时间；超过就放弃并回落） */
@@ -37,6 +39,16 @@ export interface BackendCropResult {
   /** 裁后画面尺寸（视频像素） */
   width: number
   height: number
+}
+
+/** 后台时间切段的结果：画面尺寸不变，所以只有地址与长度 */
+export interface BackendCutResult {
+  /** 新视频的同源地址（写进节点 videoUrl 用） */
+  url: string
+  /** 新视频的持久引用（写进节点 resourceId 用） */
+  resourceId?: string
+  /** 切出来的这一段有多长（秒） */
+  duration: number
 }
 
 /** 当前画布 id：URL `?canvas=` 优先，其次 hash 路由 `#/canvas/<id>`；都没有用 default（与全仓同一判据） */
@@ -133,3 +145,53 @@ export async function cropVideoOnBackend(input: {
 /** 源视频大小上限（供调用方判断要不要走后台；本地文件拿得到 size 才有意义） */
 export const BACKEND_CROP_MAX_SOURCE_BYTES = MAX_SOURCE_BYTES
 
+/**
+ * 请求后台把视频按时间切成一个新文件（真剪辑：文件里只剩这一段）。
+ *
+ * 与裁剪共用同一个后台插件、同一个探针：能力判断问的是「这台后台有没有 ffmpeg 插件」，
+ * 与操作是裁画面还是切时间无关。
+ *
+ * @param start 起始秒；@param end 结束秒
+ * @returns 成功给新地址与长度；后台不可用 / 源不是画布资源 / 转码失败 → undefined（调用方回落）
+ */
+export async function cutVideoOnBackend(input: {
+  nodeId: string
+  srcUrl: string
+  start: number
+  end: number
+}): Promise<BackendCutResult | undefined> {
+  if (!input.nodeId || !input.srcUrl) return undefined
+  if (!(input.end > input.start)) return undefined
+  if (!(await canCropOnBackend())) return undefined
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), CROP_TIMEOUT_MS) : null
+  try {
+    const res = await fetch(CUT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        canvasId: currentCanvasId(),
+        nodeId: input.nodeId,
+        srcUrl: input.srcUrl,
+        start: input.start,
+        end: input.end,
+      }),
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; url?: string; resourceId?: string; duration?: number; error?: string }
+      | null
+    if (!res.ok || !body?.ok || typeof body.url !== 'string') return undefined
+    if (typeof body.duration !== 'number' || !(body.duration > 0)) return undefined
+    return {
+      url: body.url,
+      ...(typeof body.resourceId === 'string' && body.resourceId ? { resourceId: body.resourceId } : {}),
+      duration: body.duration,
+    }
+  } catch {
+    return undefined
+  } finally {
+    if (timer !== null) clearTimeout(timer)
+  }
+}
