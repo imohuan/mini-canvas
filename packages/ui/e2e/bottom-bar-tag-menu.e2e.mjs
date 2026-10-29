@@ -256,6 +256,24 @@ if (iconBox) {
       || (menu.box.bottom <= menu.chip.top + 2 && menu.box.bottom >= menu.chip.top - 24))
     && menu.box.right >= menu.chip.left && menu.box.left <= menu.chip.left + 120,
     JSON.stringify([menu.box, menu.chip]))
+
+  // 搜索：输入即筛（打开菜单时焦点已在搜索框里）
+  await page.keyboard.type('乙')
+  await page.waitForTimeout(500)
+  const searched = await page.evaluate(() => ({
+    rows: [...document.querySelectorAll('.nb-tagmenu-body .nb-tagmenu-name')].map((e) => e.textContent.trim()),
+    flat: !!document.querySelector('.nb-tagmenu-list'),
+  }))
+  ok('菜单搜索能筛出匹配节点', searched.flat && searched.rows.length > 0 && searched.rows.every((r) => r.includes('乙')), JSON.stringify(searched.rows))
+  // 清空搜索，回到两栏，再点「乙图」换绑
+  await page.evaluate(() => {
+    const input = document.querySelector('.nb-tagmenu-search input')
+    if (input) {
+      input.value = ''
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+  })
+  await page.waitForTimeout(500)
   if (SHOT_DIR) await page.screenshot({ path: SHOT_DIR + '/tag-menu.png' })
 
   // ⑧ 选「乙图」→ 换绑
@@ -271,6 +289,8 @@ if (iconBox) {
     const doc = window.MiniCanvasUI.getHost().ctx.get('doc')
     return {
       chips: [...document.querySelectorAll('.nb-editor .resource-chip')].map((c) => c.getAttribute('data-id')),
+      editorText: document.querySelector('.nb-editor .ProseMirror')?.textContent ?? null,
+      editorHtml: (document.querySelector('.nb-editor .ProseMirror')?.innerHTML ?? '').slice(0, 300),
       edges: doc.getEdges().map((e) => ({ s: e.source, t: e.target })),
       menuOpen: !!document.querySelector('.nb-tagmenu-body'),
       b,
