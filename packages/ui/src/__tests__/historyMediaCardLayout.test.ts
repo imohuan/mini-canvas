@@ -401,9 +401,15 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(tpl, '哨兵仍只看 histHasMore').not.toMatch(/v-if="ui\.histVisible\.value\.length && s\.histHasMore"/)
     expect(tpl, '哨兵没有用"还能继续加载"的条件').toMatch(/canLoadMore/)
     expect(modalsArea, '缺少 canLoadMore 计算（未渲染完也应保留哨兵）').toMatch(/const canLoadMore = computed/)
-    // 渲染维度以 DOM 实际画过的 id 为准（renderedCount 可能与墙脱节，2026-10-30 实测）
-    expect(modalsArea, '没有"数据里还有没画过"这个维度').toMatch(/items\.some\(\(e\) => e\.id && !drawn\.has\(e\.id\)\)/)
-    expect(modalsArea, '没有渲染计数这个维度').toMatch(/renderedCount\.value < items\.length/)
+    // 渲染维度以 DOM 实际画过的 id 为准（renderedCount 可能与墙脱节，2026-10-30 实测）：
+    // fillViewport 先对账（计数对齐墙），再按 missing 补画。
+    expect(modalsArea, '对账前没有以 DOM 为准对齐计数').toMatch(/function syncRenderedCountWithWall/)
+    expect(modalsArea, 'fillViewportIfNeeded 没有先对账').toMatch(
+      /function fillViewportIfNeeded[\s\S]{0,400}syncRenderedCountWithWall\(\)/,
+    )
+    expect(modalsArea, '漏画兜底没有按墙上 id 过滤').toMatch(
+      /const missing = ui\.histVisible\.value\.filter\(\(e\) => !\(e\.id && drawn\.has\(e\.id\)\)\)/,
+    )
   })
 
   it('切页签后不会被旧的补页请求挤掉第 1 页（点音频却还是图片）', () => {

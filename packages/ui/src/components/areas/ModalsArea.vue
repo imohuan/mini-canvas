@@ -308,6 +308,10 @@ function maybeLoadMorePage(): void {
       renderedCount.value = Math.max(renderedCount.value, to)
       nextTick(() => appendMasonryItems(from, to))
     }
+    else {
+      // 没有漏卡时把计数对齐 DOM（防止缓存墙挂回后的虚高把下一轮判断带偏）
+      syncRenderedCountWithWall()
+    }
     return
   }
   const elapsed = Date.now() - lastLoadMoreAt
@@ -347,7 +351,21 @@ function isSentinelInView(): boolean {
 /** 列表没填满视口时继续拉下一页（幂等 + 节流，可放心在每次布局变化后调用） */
 function fillViewportIfNeeded(): void {
   if (!s.historyOpen || !canLoadMore.value) return
+  /**
+   * 先对账再拉页（2026-10-30 实测：renderedCount=26、DOM=11，计数说"画完了"，
+   * 漏掉的卡永远没人补）。以 DOM 实际画过的 id 为准：数据里没画过的先补画，
+   * 计数对齐 DOM —— 之后再走正常的"拉下一页"判断。
+   */
+  syncRenderedCountWithWall()
   if (isSentinelInView()) maybeLoadMorePage()
+}
+
+/** 把 renderedCount 对齐墙上实际画过的卡片数（缓存墙挂回 / 异常回落后的计数漂移） */
+function syncRenderedCountWithWall(): void {
+  const container = masonryEl.value
+  if (!container) return
+  const drawn = container.querySelectorAll('[data-hist-id]').length
+  if (drawn > 0) renderedCount.value = drawn
 }
 
 /**
@@ -363,12 +381,6 @@ const canLoadMore = computed(() => {
    * 数据里还有没画过的条目就继续，别让计数说谎把哨兵摘了。
    */
   const items = ui.histVisible.value
-  if (masonryEl.value) {
-    const drawn = new Set(
-      [...masonryEl.value.querySelectorAll('[data-hist-id]')].map((el) => (el as HTMLElement).dataset.histId),
-    )
-    if (items.some((e) => e.id && !drawn.has(e.id))) return true
-  }
   if (renderedCount.value < items.length) return true
   return s.histHasMore
 })
