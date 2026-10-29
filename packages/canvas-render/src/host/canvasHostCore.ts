@@ -204,45 +204,87 @@ export function overlayDraggingPositions(
 }
 
 /**
- * 裁剪保护名单：哪些节点此刻"显示位置"不能按数据层位置算。
+ * 把拖拽主节点扩展到"整个手势期间都需要保住画面"的节点集。
  *
- * 两种来源都要收：
- * 1. VueFlow 原生拖拽（dragging=true）—— 单节点/多选/分组拖动，位置只在渲染层；
- * 2. 插件用 updateNodeVisual 逐帧写视觉位置（多选整组拖动、对齐吸附）—— dragging 可能仍为 false，
- *    但渲染位置已经离开落盘位置。
+ * 为什么要扩展：
+ * - VueFlow 多选拖动时只给主节点拖拽事件，其它成员的位置也在渲染层被改，却没有 dragging 标志；
+ * - 分组父节点拖动时，子节点相对坐标不变，视觉上却跟着父一起走。
  *
- * 只收 renderNodes 里与 store 位置**不一致**的节点（原生 dragging 例外，它可能刚起手还没位移）。
- * 用相对坐标比较即可：子节点在两侧都是相对父坐标，父节点整体移动不会让子节点被误判。
- * 松手落盘后两边一致，名单自然清空，恢复常规裁剪。
+ * @param seeds 正在拖的节点（VueFlow 的 e.nodes + e.node）
+ * @param allNodeIds 当前存活节点（含子节点）
+ * @param parentOf 节点 → 父节点 id
+ * @param extra 额外已知会移动的节点（插件整组拖动成员、吸附视觉写）
  */
-export function collectLiveNodeIds(
-  renderNodes: ReadonlyArray<{ id: string; position: { x: number; y: number }; dragging?: boolean; parentId?: string }>,
-  storedPositions: ReadonlyMap<string, { x: number; y: number }>,
-  parentOf?: ReadonlyMap<string, string | undefined>,
+export function expandDragProtection(
+  seeds: Iterable<string>,
+  allNodeIds: Iterable<string>,
+  parentOf: ReadonlyMap<string, string | undefined>,
+  extra?: Iterable<string>,
 ): Set<string> {
   const ids = new Set<string>()
-  // 第一遍：自身正在拖，或视觉位置已经离开落盘位置
-  for (const node of renderNodes) {
-    const stored = storedPositions.get(node.id)
-    if (!stored) continue
-    if (node.dragging === true || node.position.x !== stored.x || node.position.y !== stored.y) ids.add(node.id)
+  for (const id of seeds) ids.add(id)
+  for (const id of extra ?? []) ids.add(id)
+  // 下标一次，按子树 BFS：分组可嵌套，深度 1000 的链也不会退化成 O(n²)
+  const children = new Map<string, string[]>()
+  for (const id of allNodeIds) {
+    const parent = parentOf.get(id)
+    if (!parent) continue
+    const list = children.get(parent)
+    if (list) list.push(id)
+    else children.set(parent, [id])
   }
-  // 第二遍：拖父/拖祖先时，子节点相对父坐标不变但视觉上跟着走，一并进名单
-  for (const node of renderNodes) {
-    if (ids.has(node.id)) continue
-    let cur = parentOf?.get(node.id)
-    const seen = new Set<string>([node.id])
-    while (cur) {
-      if (seen.has(cur)) break
-      seen.add(cur)
-      if (ids.has(cur)) {
-        ids.add(node.id)
-        break
-      }
-      cur = parentOf?.get(cur)
+  const queue = [...ids]
+  for (let i = 0; i < queue.length; i++) {
+    for (const child of children.get(queue[i]) ?? []) {
+      if (ids.has(child)) continue
+      ids.add(child)
+      queue.push(child)
     }
   }
   return ids
+}
+
+/**
+ * 裁剪保护是否需要重新收集（快路径判定，O(1)）。
+ *
+ * 没有拖拽、也没有插件视觉位移、且没有历史缓存时，refreshCull 直接返回 undefined，
+ * 不进全量节点扫描。这是视口每帧都会走的路径，1000 节点下也必须常数时间。
+ */
+export function needsLiveProtectionCollection(
+  nodeDragging: boolean,
+  visualMoveCount: number,
+  hasCached: boolean,
+): boolean {
+  return nodeDragging || visualMoveCount > 0 || hasCached
+}
+
+/**
+ * 修剪保护名单（store 删除/撤销/落盘后调用）。
+ *
+ * 规则：
+ * - 节点已不存在 → 移除（删除/撤销后不残留）；
+ * - 正在原生拖拽 → 保留存活成员（拖拽中 store 的其它更新不能把保护名单打掉）；
+ * - 手势结束后 → 只保留"插件视觉位移仍与 store 不一致"的成员；已落盘的对齐成员移除。
+ *
+ * 纯函数：调用方只需给存活集合、视觉位移集合、已对齐集合，便于单测删除/撤销场景。
+ */
+export function pruneProtectionIds(
+  protectedIds: ReadonlySet<string>,
+  aliveIds: ReadonlySet<string>,
+  nodeDragging: boolean,
+  visuallyLiveIds: ReadonlySet<string>,
+  visuallyAlignedIds: ReadonlySet<string>,
+): Set<string> {
+  const next = new Set<string>()
+  for (const id of protectedIds) {
+    if (!aliveIds.has(id)) continue
+    if (nodeDragging) {
+      next.add(id)
+      continue
+    }
+    if (visuallyLiveIds.has(id) && !visuallyAlignedIds.has(id)) next.add(id)
+  }
+  return next
 }
 
 /** 现有边保留(宿主内维护)；当节点被删时清掉悬挂边 */

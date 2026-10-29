@@ -241,6 +241,34 @@ function flowToScreen(flowX: number, flowY: number): { x: number; y: number } {
 /** 拖拽中把单节点视觉位置写到 VueFlow 内部（不触发 store/整组替换）——对齐吸附等插件用 */
 function updateNodeVisual(id: string, position: { x: number; y: number }): void {
   vfApi.updateNode(id, { position })
+  // 插件视觉位移不经过 VueFlow 的 dragging 标志（多选整组拖动/对齐吸附）。
+  // 记下 id 供宿主裁剪保护；计数只用来让宿主知道"有变化"，避免每帧全量扫节点。
+  visuallyMovedIds.add(id)
+  visualMoveEpoch += 1
+}
+
+/** 被插件逐帧移动过、但尚未与 store 对齐的节点 id（updateNodeVisual 写入） */
+const visuallyMovedIds = new Set<string>()
+let visualMoveEpoch = 0
+/**
+ * props.nodes 的 id 索引：视觉位移快照不必每帧 find() 全表，1000 节点下保持 O(1) 查存。
+ * props.nodes 是 ref 解包后的数组，按**内容长度/引用**失效；宿主每次 syncNodesFromStore
+ * 都会整体替换数组，所以引用比较足够，不会读到旧位置。
+ */
+let nodeIndexCache: {
+  source: unknown
+  length: number
+  byId: Map<string, { position: { x: number; y: number } }>
+} | null = null
+function nodeById(id: string): { position: { x: number; y: number } } | undefined {
+  const source = props.nodes
+  const length = source?.length ?? 0
+  if (!nodeIndexCache || nodeIndexCache.source !== source || nodeIndexCache.length !== length) {
+    const byId = new Map<string, { position: { x: number; y: number } }>()
+    for (const n of source ?? []) byId.set(n.id, n)
+    nodeIndexCache = { source, length, byId }
+  }
+  return nodeIndexCache.byId.get(id)
 }
 
 /**
@@ -433,6 +461,28 @@ defineExpose({
       })
     }
     return out
+  },
+  /** 插件视觉位移的节点 id + 变化计数（宿主用于事件驱动收集裁剪保护，避免每帧全量扫描） */
+  getVisualMoveSnapshot: () => {
+    let pruned = false
+    for (const id of visuallyMovedIds) {
+      const node = vfApi.findNode(id)
+      const stored = nodeById(id)
+      // 已经被重新灌回 store 位置（松手/撤销/删除）的 id 从集合里摘掉，防止名单无限增长
+      if (!node || !stored) {
+        visuallyMovedIds.delete(id)
+        pruned = true
+        continue
+      }
+      const p = node.position
+      if (p.x === stored.position.x && p.y === stored.position.y) {
+        visuallyMovedIds.delete(id)
+        pruned = true
+        continue
+      }
+    }
+    if (pruned) visualMoveEpoch += 1
+    return { ids: visuallyMovedIds, epoch: visualMoveEpoch }
   },
   /** 当前被 VueFlow 选中的边 id */
   /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */

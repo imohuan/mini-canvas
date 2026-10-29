@@ -8,7 +8,9 @@ import {
   nodeShellSlot,
   nodesFromStore,
   overlayDraggingPositions,
-  collectLiveNodeIds,
+  expandDragProtection,
+  needsLiveProtectionCollection,
+  pruneProtectionIds,
   edgesFromStore,
   pruneDanglingEdges,
   splitNodeWritePatch,
@@ -198,78 +200,164 @@ describe('pruneDanglingEdges', () => {
   })
 })
 
-/**
- * 拖拽保护名单：不能只看 VueFlow 的 dragging 标志。
- * 多选整组拖动（plugin-multi-select）与对齐吸附都走 updateNodeVisual 直接写渲染节点，
- * dragging 可能仍是 false；这类"视觉位置已离开落盘位置"的节点同样不能被裁剪。
- */
-describe('collectLiveNodeIds（裁剪时哪些节点正被拖动/临时位移）', () => {
-  const stored = new Map([
-    ['native', { x: 100, y: 100 }],
-    ['multi', { x: 200, y: 200 }],
-    ['static', { x: 300, y: 300 }],
+describe('expandDragProtection（事件驱动缓存：一次建好整段手势的保护名单）', () => {
+  const all = ['g', 'a', 'b', 'inner', 'deep', 'other']
+  const parentOf = new Map<string, string | undefined>([
+    ['g', undefined],
+    ['a', 'g'],
+    ['b', 'g'],
+    ['inner', 'g'],
+    ['deep', 'inner'],
+    ['other', undefined],
   ])
 
-  it('VueFlow 原生 dragging=true 的节点进名单', () => {
-    const ids = collectLiveNodeIds(
-      [{ id: 'native', position: { x: 100, y: 100 }, dragging: true }],
-      stored,
-    )
-    expect([...ids]).toEqual(['native'])
+  it('拖分组父节点：整棵嵌套子树都进名单，组外节点不进', () => {
+    const ids = expandDragProtection(['g'], all, parentOf)
+    expect([...ids].sort()).toEqual(['a', 'b', 'deep', 'g', 'inner'])
   })
 
-  it('插件逐帧写视觉位置（dragging 仍 false）也进名单', () => {
-    const ids = collectLiveNodeIds(
-      [{ id: 'multi', position: { x: 640, y: 520 }, dragging: false }],
-      stored,
-    )
-    expect(ids.has('multi')).toBe(true)
+  it('多选整组：每个成员都进名单，父级子节点递归展开', () => {
+    const ids = expandDragProtection(['a', 'other'], all, parentOf)
+    expect([...ids].sort()).toEqual(['a', 'other'])
   })
 
-  it('与落盘位置一致且没在拖的节点不进名单（零例外裁剪仍然生效）', () => {
-    const ids = collectLiveNodeIds(
-      [{ id: 'static', position: { x: 300, y: 300 }, dragging: false }],
-      stored,
-    )
-    expect(ids.size).toBe(0)
+  it('插件额外视觉位移的成员一并合并（updateNodeVisual 不产生 dragging）', () => {
+    const ids = expandDragProtection(['g'], all, parentOf, ['other'])
+    expect(ids.has('other')).toBe(true)
+    expect(ids.has('g')).toBe(true)
   })
 
-  it('分组子节点用相对父坐标比较：父动、子相对位置不变时子不误报', () => {
-    const ids = collectLiveNodeIds(
-      [{ id: 'child', position: { x: 20, y: 20 }, dragging: false }],
-      new Map([['child', { x: 20, y: 20 }]]),
-    )
-    expect(ids.size).toBe(0)
+  it('环状父链不死循环（脏数据兜底）', () => {
+    const cyclic = new Map<string, string | undefined>([
+      ['x', 'y'],
+      ['y', 'x'],
+    ])
+    const ids = expandDragProtection(['x'], ['x', 'y'], cyclic)
+    expect(ids.has('x')).toBe(true)
+    expect(ids.has('y')).toBe(true)
+  })
+})
+
+describe('needsLiveProtectionCollection（每帧快路径，O(1)）', () => {
+  it('没拖拽、没视觉位移、没缓存 → false（不建 Map、不扫节点）', () => {
+    expect(needsLiveProtectionCollection(false, 0, false)).toBe(false)
+  })
+  it('拖拽中 → true', () => {
+    expect(needsLiveProtectionCollection(true, 0, false)).toBe(true)
+  })
+  it('插件视觉位移存在 → true（即使 VueFlow 的 dragging 是 false）', () => {
+    expect(needsLiveProtectionCollection(false, 2, false)).toBe(true)
+  })
+  it('缓存尚未清空 → true（等松手/落盘后恢复常规裁剪）', () => {
+    expect(needsLiveProtectionCollection(false, 0, true)).toBe(true)
+  })
+})
+
+describe('pruneProtectionIds（松手/删除/撤销后名单不残留）', () => {
+  const alive = new Set(['a', 'b'])
+
+  it('拖拽中：存活成员全部保留（store 的其它更新不能打掉正在拖的节点）', () => {
+    const next = pruneProtectionIds(new Set(['a', 'b']), alive, true, new Set(), new Set())
+    expect([...next].sort()).toEqual(['a', 'b'])
   })
 
-  it('拖动分组父节点：子节点相对坐标没变，但视觉上跟着父走，也要进名单', () => {
-    const ids = collectLiveNodeIds(
-      [
-        { id: 'group', position: { x: 0, y: 0 }, dragging: true },
-        { id: 'child-a', position: { x: 20, y: 20 }, dragging: false },
-        { id: 'child-b', position: { x: 40, y: 40 }, dragging: false },
-        { id: 'outside', position: { x: 60, y: 60 }, dragging: false },
-      ],
-      new Map([
-        ['group', { x: 0, y: 0 }],
-        ['child-a', { x: 20, y: 20 }],
-        ['child-b', { x: 40, y: 40 }],
-        ['outside', { x: 60, y: 60 }],
-      ]),
-      new Map([
-        ['child-a', 'group'],
-        ['child-b', 'group'],
-      ]),
-    )
-    expect([...ids].sort()).toEqual(['child-a', 'child-b', 'group'])
+  it('节点被删/撤销：已不存在的 id 立即摘掉', () => {
+    const next = pruneProtectionIds(new Set(['a', 'ghost']), alive, true, new Set(), new Set())
+    expect([...next]).toEqual(['a'])
   })
 
-  it('store 里已不存在的节点（刚被删）不因位置差异进名单', () => {
-    const ids = collectLiveNodeIds(
-      [{ id: 'ghost', position: { x: 999, y: 999 }, dragging: false }],
-      new Map(),
+  it('松手后：只有仍与 store 不一致的插件视觉位移成员保留', () => {
+    const next = pruneProtectionIds(
+      new Set(['a', 'b']),
+      alive,
+      false,
+      new Set(['a', 'b']),
+      new Set(['b']),
     )
-    expect(ids.size).toBe(0)
+    expect([...next]).toEqual(['a'])
+  })
+
+  it('松手且视觉位移已对齐：名单清空，屏外节点恢复常规裁剪', () => {
+    const next = pruneProtectionIds(new Set(['a']), alive, false, new Set(['a']), new Set(['a']))
+    expect(next.size).toBe(0)
+  })
+
+  it('撤销/删除后重新拖拽：旧 id 不会借视觉位移集合复活（视觉集合由上层过滤存活节点）', () => {
+    const afterUndo = pruneProtectionIds(
+      new Set(['deleted']),
+      new Set(['a']),
+      false,
+      new Set(['deleted']),
+      new Set(),
+    )
+    expect(afterUndo.size).toBe(0)
+    // 视觉位移集合里残留的已删 id 不会再进入新名单（调用方先按 store 过滤）
+    const rebuilt = expandDragProtection(['a'], ['a'], new Map(), new Set(['a']))
+    expect([...rebuilt]).toEqual(['a'])
+  })
+
+  it('视觉位移成员变化：a → a+b 能加入 b；a 对齐后只保留 b', () => {
+    const all = ['a', 'b']
+    const parentOf = new Map<string, string | undefined>()
+    // 第一步：插件只移动了 a
+    let protectedIds = expandDragProtection([], all, parentOf, ['a'])
+    expect([...protectedIds].sort()).toEqual(['a'])
+    // 第二步：插件把 b 也加入视觉位移 —— 名单必须扩到 a+b
+    protectedIds = expandDragProtection([], all, parentOf, ['a', 'b'])
+    expect([...protectedIds].sort()).toEqual(['a', 'b'])
+    // 第三步：a 已经和 store 对齐，b 仍在视觉位移 —— 只保留 b
+    const next = pruneProtectionIds(
+      protectedIds,
+      new Set(all),
+      false,
+      new Set(['a', 'b']),
+      new Set(['a']),
+    )
+    expect([...next]).toEqual(['b'])
+  })
+})
+
+describe('1000 节点量级：保护名单与快路径的规模行为', () => {
+  const N = 1000
+  const stored = new Map<string, { x: number; y: number }>()
+  const parentOf = new Map<string, string | undefined>()
+  const allIds: string[] = []
+  for (let i = 0; i < N; i++) {
+    const id = 'n' + i
+    allIds.push(id)
+    stored.set(id, { x: i * 10, y: 0 })
+    // 每 50 个一组：组内 49 个子节点，组头是父。避免构造过宽的子树。
+    parentOf.set(id, i % 50 !== 0 ? 'n' + (i - (i % 50)) : undefined)
+  }
+  it('无拖拽：快路径直接返回 false，不产生任何名单', () => {
+    expect(needsLiveProtectionCollection(false, 0, false)).toBe(false)
+  })
+
+  it('单节点拖拽时名单只含该节点及其子树，不会把 1000 个节点全收进来', () => {
+    const t0 = performance.now()
+    const ids = expandDragProtection(['n10'], allIds, parentOf)
+    const ms = performance.now() - t0
+    expect(ids.has('n10')).toBe(true)
+    expect(ids.size).toBeLessThan(N)
+    // 只为回归留个宽松上限：一次 O(n) 扩展不应接近一帧预算
+    expect(ms).toBeLessThan(50)
+  })
+
+  it('1000 节点全部视觉位移时名单完整（插件整组拖动的极端场景）', () => {
+    const ids = expandDragProtection([], allIds, parentOf, allIds)
+    expect(ids.size).toBe(N)
+  })
+
+  it('1000 节点：拖拽开始只建一次父链 + 子树扩展，成员集合稳定后不再全量扫描', () => {
+    const t0 = performance.now()
+    const ids = expandDragProtection(['n0'], allIds, parentOf)
+    const ms = performance.now() - t0
+    expect(ids.has('n0')).toBe(true)
+    expect(ms).toBeLessThan(100)
+    // 名单建好后，每帧的判定只是 O(1)：
+    expect(needsLiveProtectionCollection(true, 0, true)).toBe(true)
+    // 松手后无需任何收集
+    expect(needsLiveProtectionCollection(false, 0, false)).toBe(false)
   })
 })
 

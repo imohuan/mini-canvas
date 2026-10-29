@@ -71,7 +71,9 @@ import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
   nodeShellSlot,
-  collectLiveNodeIds,
+  expandDragProtection,
+  needsLiveProtectionCollection,
+  pruneProtectionIds,
   hitNodeIdAt,
   nodesFromStore,
   overlayDraggingPositions,
@@ -121,6 +123,8 @@ const surfaceRef = shallowRef<{
     dragging: boolean
     parentId?: string
   }>
+  /** 插件视觉位移的节点 id + 变化计数（事件驱动裁剪保护用） */
+  getVisualMoveSnapshot?: () => { ids: Set<string>; epoch: number }
   setCenter?: (x: number, y: number, zoom?: number) => void
   animateViewport?: (v: { x: number; y: number; zoom: number }, durationMs?: number) => void
 } | undefined>()
@@ -205,41 +209,120 @@ function compactShellsEnabled(): boolean {
   return interactionSettings.cullCompactShells !== false
 }
 /**
- * 当前不能按数据层位置裁剪的节点集：
- * - VueFlow 原生拖拽（dragging=true）；
- * - 插件逐帧视觉写（多选整组拖/吸附）—— 渲染位置已离开 store 但 dragging 还是 false。
+ * 事件驱动缓存：拖拽开始/插件视觉位移变化时才重建，视口每帧只读。
  *
- * 实时位置只在渲染层；按 store 旧坐标裁剪会在平移/缩放后把正在拖的节点判成 culled。
- * 读取失败不能让整条链路坏掉：退化为只用原生拖拽名单。
+ * 为什么不能每帧重算：refreshCull 在平移/缩放时每帧都跑，全量遍历 1000 节点 + 重建两个 Map
+ * 会把裁剪省下的时间吃回去。缓存的生命周期：
+ * - NodeDragStart：按 e.nodes（多选整组）建名单，再扩展到分组子节点；
+ * - updateNodeVisual：插件视觉位移的 id 增补进名单；
+ * - NodeDragStop：清空，松手后立即恢复常规裁剪；
+ * - store 变化：只修剪失效成员（节点删除/撤销/已落盘），不清正在拖的成员。
  */
-function collectLiveIdsNow(): Set<string> | undefined {
+let dragProtectedIds: Set<string> | undefined
+/** 最近一次原生拖拽的种子（含多选成员），手势期间保持不变，只负责派生子节点 */
+let gestureSeedIds = new Set<string>()
+/** 最近一次读到的插件视觉位移（只保留仍与 store 不一致的 id） */
+let liveVisualIds = new Set<string>()
+/** 已知从"视觉位移"回归到 store 的成员，用于修剪，防止插件不清理自身集合时永久保留 */
+let alignedVisualIds = new Set<string>()
+
+/** 清空保护缓存（松手、store 变更、撤销/删除后调用，立即恢复常规裁剪） */
+function clearDragProtection(): void {
+  dragProtectedIds = undefined
+  gestureSeedIds = new Set<string>()
+  liveVisualIds = new Set<string>()
+  alignedVisualIds = new Set<string>()
+}
+
+/**
+ * store 变化后修剪名单：删掉已不存在的节点；视觉位移已与 store 对齐的成员也移除。
+ * 拖拽中 store 的其它更新（远端同步、进度帧）不能清空整张名单 —— 否则正在拖的节点会被裁掉。
+ */
+function pruneDragProtection(): void {
   const h = hostRef.value
-  const surface = surfaceRef.value
-  if (!h) return undefined
-  const stored = new Map<string, { x: number; y: number }>()
+  if (!h || !dragProtectedIds) return
+  const alive = new Set<string>()
+  const aligned = new Set<string>()
+  for (const node of h.nodeStore.getNodes()) alive.add(node.id)
+  const rendered = surfaceRef.value?.getRenderNodePositions?.()
+  if (rendered) {
+    const byId = new Map(rendered.map((n) => [n.id, n.position]))
+    for (const node of h.nodeStore.getNodes()) {
+      const p = byId.get(node.id)
+      if (p && p.x === node.position.x && p.y === node.position.y) aligned.add(node.id)
+    }
+  }
+  for (const id of aligned) if (liveVisualIds.has(id)) alignedVisualIds.add(id)
+  const next = pruneProtectionIds(
+    dragProtectedIds,
+    alive,
+    interaction.activity.value.nodeDragging,
+    liveVisualIds,
+    alignedVisualIds,
+  )
+  if (next.size === dragProtectedIds.size) return
+  if (next.size === 0) {
+    clearDragProtection()
+    return
+  }
+  dragProtectedIds = next
+  for (const id of gestureSeedIds) if (!next.has(id)) gestureSeedIds.delete(id)
+}
+
+/** 拖拽开始：一次 O(n) 收集父链 + 扩展到子节点，之后整段手势都复用 */
+function primeDragProtection(seed: Iterable<string>): void {
+  const h = hostRef.value
+  if (!h) return
+  gestureSeedIds = new Set(seed)
+  const allIds: string[] = []
   const parentOf = new Map<string, string | undefined>()
   for (const node of h.nodeStore.getNodes()) {
-    stored.set(node.id, { x: node.position.x, y: node.position.y })
+    allIds.push(node.id)
     parentOf.set(node.id, node.parentId)
   }
+  dragProtectedIds = expandDragProtection(gestureSeedIds, allIds, parentOf)
+  applyCullProtection()
+}
+
+/** 没有拖拽时的 O(1) 检查：只有插件视觉位移或已有缓存才需要继续处理 */
+function currentVisualMoveSnapshot(): { ids: Set<string>; epoch: number } | undefined {
   try {
-    const renderNodes = surface?.getRenderNodePositions?.()
-    if (renderNodes) {
-      const ids = collectLiveNodeIds(renderNodes, stored, parentOf)
-      return ids.size > 0 ? ids : undefined
-    }
-    const dragging = surface?.getDraggingNodePositions?.()
-    if (dragging && dragging.size > 0) {
-      const ids = new Set<string>()
-      for (const id of dragging.keys()) if (stored.has(id)) ids.add(id)
-      return ids.size > 0 ? ids : undefined
-    }
+    return surfaceRef.value?.getVisualMoveSnapshot?.()
   } catch {
     return undefined
   }
-  return undefined
 }
-function refreshCull(): void {
+
+/** 视觉位移集合变化 → 合并进保护名单（拖拽中增减成员都走这里，不重建父链） */
+function syncVisualMoveProtection(): Set<string> | undefined {
+  const h = hostRef.value
+  if (!h) return undefined
+  const snap = currentVisualMoveSnapshot()
+  if (!snap) return dragProtectedIds
+  // 视觉位移集合被插件/对账清空：只要没有原生拖拽，整个保护名单也可以清掉
+  if (snap.ids.size === 0 && gestureSeedIds.size === 0) {
+    clearDragProtection()
+    return undefined
+  }
+  // 成员没变就复用上一份名单：插件逐帧写位置会让 epoch 一直涨，但名单不必重建
+  const sameMembers = liveVisualIds.size === snap.ids.size && [...snap.ids].every((id) => liveVisualIds.has(id))
+  for (const id of snap.ids) if (!h.nodeStore.getNode(id)) snap.ids.delete(id)
+  if (!sameMembers || !dragProtectedIds) {
+    const allIds: string[] = []
+    const parentOf = new Map<string, string | undefined>()
+    for (const node of h.nodeStore.getNodes()) {
+      allIds.push(node.id)
+      parentOf.set(node.id, node.parentId)
+    }
+    dragProtectedIds = expandDragProtection(gestureSeedIds, allIds, parentOf, snap.ids)
+    liveVisualIds = new Set(snap.ids)
+  }
+  for (const id of [...alignedVisualIds]) if (dragProtectedIds && !dragProtectedIds.has(id)) alignedVisualIds.delete(id)
+  return dragProtectedIds
+}
+
+/** 用当前保护名单重算裁剪（名单为空时就是常规裁剪） */
+function applyCullProtection(): void {
   const h = hostRef.value
   if (!h) return
   const surface = surfaceRef.value
@@ -248,12 +331,36 @@ function refreshCull(): void {
     cullIds.value = null
     return
   }
-  /*
-   * 正在拖拽/被插件视觉移动的节点：store 还是旧位置，渲染层已经离开。
-   * 把这些节点交给裁剪计算保留在可见集，否则平移/缩放开视口后会按旧位置判成 culled，
-   * 画面上的节点直接消失。读取失败退化为原行为（只用 store 坐标）。
-   */
-  const liveIds = collectLiveIdsNow()
+  const liveIds = dragProtectedIds && dragProtectedIds.size > 0 ? dragProtectedIds : undefined
+  if (rect) {
+    cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings(), liveIds)
+    return
+  }
+  if (typeof window === 'undefined') {
+    cullIds.value = null
+    return
+  }
+  const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
+  cullIds.value = computeVisibleIds(h.nodeLayout, approx, cullConfigFromSettings(), liveIds)
+}
+function refreshCull(): void {
+  const h = hostRef.value
+  if (!h) return
+  if (!interactionSettings.visibleCullEnabled) {
+    cullIds.value = null
+    return
+  }
+  /* 快路径：没拖拽、没视觉位移、没缓存 → 不建 Map、不扫节点，直接常规裁剪 */
+  const visual = currentVisualMoveSnapshot()
+  const visualCount = visual?.ids.size ?? 0
+  const needCollect = needsLiveProtectionCollection(
+    interaction.activity.value.nodeDragging,
+    visualCount,
+    !!dragProtectedIds,
+  )
+  const liveIds = needCollect ? syncVisualMoveProtection() : undefined
+  const surface = surfaceRef.value
+  const rect = surface?.getVisibleRect?.() ?? null
   if (rect) {
     cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings(), liveIds)
     return
@@ -504,6 +611,14 @@ function syncFromStore(): void {
   )
   // 灌节点前现算剔除集合与邻接表：保证 syncNodesFromStore 拿到同一份最新状态
   //（store 变化包含节点/边增删改；视口帧回调路径已在 onVisibleRectFrame 内算过，此处幂等重算）。
+  /*
+   * 拖拽中 store 的因果来源只有两种：
+   * 1. 别的插件/云端更新（不是落盘）—— 保护名单不能清；
+   * 2. onNodeDragStop 落盘 —— 那时已经 endNodeDrag + clearDragProtection。
+   * 所以这里**不能无条件清**，否则拖拽期间的 store 更新会把正在拖的节点重新裁掉。
+   * 只清理已不存在 / 已落盘的成员，保证撤销/删除后名单不残留。
+   */
+  pruneDragProtection()
   refreshCull()
   rebuildLinkedIds()
   syncNodesFromStore()
@@ -600,6 +715,8 @@ stopViewportRestore = watch(surfaceRef, (surface) => {
 
 function onNodeDragStart(e: NodeDragEvent): void {
   beginNodeDrag(interaction, e.node.id)
+  // 一次收集本手势的保护名单（多选整组 + 分组子树），之后视口每帧只读缓存
+  primeDragProtection([...e.nodes.map((n) => n.id), e.node.id])
   // 「拖拽选中」：拖动未选中节点时顺手选中它（写进内核 selection 单源；VueFlow 内部
   // select-on-drag 不回写内核，会被渲染投影覆盖 —— 必须在这里显式写）。
   const h0 = hostRef.value
@@ -615,6 +732,8 @@ function onNodeDragStart(e: NodeDragEvent): void {
 
 function onNodeDragStop(e: NodeDragEvent): void {
   endNodeDrag(interaction)
+  // 松手后位置已经落盘：立即清缓存，让视口外的节点恢复常规裁剪
+  clearDragProtection()
   const h = hostRef.value
   if (!h) return
   // VueFlow 拖动多选时已把位移应用到全部选中节点：这里把它们的最终位置一起写回内核 store，
@@ -1428,6 +1547,7 @@ defineExpose({
 })
 
 onBeforeUnmount(() => {
+  clearDragProtection()
   if (dragEmitRaf) cancelAnimationFrame(dragEmitRaf)
   if (mountRaf) { cancelAnimationFrame(mountRaf); mountRaf = 0 }
   unsubStore?.()
