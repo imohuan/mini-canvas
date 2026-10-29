@@ -44,7 +44,15 @@ import PreviewBox from './PreviewBox.vue';
 import type { ResourceItem } from './types.ts';
 import type { PasteFilesHandler } from './useEditor.ts';
 
-const props = defineProps<{
+/**
+ * props 必须走 withDefaults，哪怕只有 editable 一个默认值。
+ *
+ * 为什么：`editable` 是**布尔 prop**，Vue 会把「调用方没传」折算成 `false`，不是 `undefined`。
+ * 于是 `unref(props.editable) !== false` 那条判断永远拿不到 undefined —— 不传 editable 的调用方
+ * （Agent 对话面板）被默认锁成只读，整块输入框打不了字；只有传了 `:editable` 的底栏正常。
+ * 真机症状见 2026-10-30 用户反馈「Agent 输入框无法输入」。
+ */
+const props = withDefaults(defineProps<{
   modelValue?: string;
   promptDoc?: any;
   resources?: ResourceItem[];
@@ -62,7 +70,9 @@ const props = defineProps<{
    * 不传 = 粘贴文件不做处理（纯文本粘贴照旧）。
    */
   onPasteFiles?: PasteFilesHandler;
-}>();
+}>(), {
+  editable: true,
+});
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
