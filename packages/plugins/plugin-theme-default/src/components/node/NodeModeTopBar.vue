@@ -1,32 +1,39 @@
 <script setup lang="ts">
 /**
- * NodeModeTopBar —— 「功能模式」的默认顶栏渲染器（主题件）。
+ * NodeModeTopBar —— 节点**上**状态栏的「解析面板」（主题件，挂在 out:top 锚点）。
  *
- * 职责：读 nodeToolbar 会话；本节点在某个模式里 → 渲染该模式的 topBar 组件；
- * 不在任何模式 → 渲染**默认内容插槽**（宿主 BaseNode 的 out:top 段原样落在这里）。
+ * 它只做一件事：问 nodeToolbar 服务「这个节点的上栏现在该显示什么」，然后渲染那一格。
+ * - 解析出组件 → 渲染它（收 { id, data }）；
+ * - 解析出「不显示」→ 什么都不渲染；
+ * - 解析出「没注册」→ 透传宿主自己的默认内容（兼容老的段注册：图片/视频/音频的上传条）。
  *
- * 为什么需要它：BaseNode 的 out:top 段是节点类型注册时写死的（ImageTopToolbar 等）。
- * 模式系统要"整根栏换内容"，就必须在**段与内容之间**加一层渲染器 —— 这层归主题：
- * 它是默认皮的一部分，与 nodeShell 同级。
+ * 位置不在它这里：离卡片多远、居中、反缩放由 BaseNode 的 out:top 定位层负责 ——
+ * 所以默认面板、裁剪面板、任何模式面板**共用同一个插槽位**，不可能出现两套栏叠在一起。
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { NodeToolbarService } from './nodeToolbarService'
 
-const props = defineProps<{ id: string; data: Record<string, unknown> }>()
+const props = defineProps<{ id: string; data: Record<string, unknown>; type?: string }>()
 const { ctx } = useCanvasRender()
 
-/** 主题插件自己的服务（同包内直接构造读取；跨插件按名取是 apply 之外拿不到 ctx 的场景） */
 const svc = ctx.tryGet<NodeToolbarService | undefined>('nodeToolbar')
 
-const mode = computed(() => svc?.modeOf(props.id))
-const ModeTop = computed(() => (mode.value?.topBar as Component | undefined) ?? null)
+/** 服务缺席（极简宿主/单测）→ 当作「没注册」，透传默认内容 */
+const bar = computed(() =>
+  svc ? svc.resolveBar(props.id, 'top', props.type) : ({ kind: 'inherit' } as const),
+)
+const BarComponent = computed(() =>
+  bar.value.kind === 'component' ? (bar.value.component as Component) : null,
+)
 </script>
 
 <template>
-  <!-- 模式顶栏：整根替换（不带默认内容 —— 模式自己决定里面有什么） -->
-  <component :is="ModeTop" v-if="ModeTop" :id="props.id" :data="props.data" />
-  <!-- 默认模式：透传宿主内容（BaseNode out:top 段的默认 children） -->
+  <!-- 解析出组件：整格换成它（不带默认内容 —— 接管方自己决定里面有什么） -->
+  <component :is="BarComponent" v-if="BarComponent" :id="props.id" :data="props.data" />
+  <!-- 解析出「不显示」：这一格留空 -->
+  <template v-else-if="bar.kind === 'none'" />
+  <!-- 没注册：透传宿主默认内容 -->
   <slot v-else />
 </template>

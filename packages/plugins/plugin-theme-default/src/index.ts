@@ -26,7 +26,7 @@ import {
 } from "./components/node/nodeToolbarService";
 import NodeModeTopBar from "./components/node/NodeModeTopBar.vue";
 import NodeModeBottomBar from "./components/node/NodeModeBottomBar.vue";
-import NodeModeBottomBarOverlay from "./components/node/NodeModeBottomBarOverlay.vue";
+import NodeBottomSlotHost from "./components/node/NodeBottomSlotHost.vue";
 import {
   MULTI_RADIO_KEYS,
   MULTI_RADIO_SIZE_MAX,
@@ -711,31 +711,39 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 如需在插件内"就地订阅自己 config 的变化并窄更新"，可 ctx.settings.onChange(name, ...)（demo 侧已演示该链路）。
   void config;
 
-  // ===== 节点工具栏基础设施（用户口径 2026-10-29 重构）=====
+  // ===== 节点上下状态栏基础设施（用户口径 2026-10-29 重构）=====
   //
-  // nodeToolbar 服务 = 模式注册表 + 会话。归属**主题**：模式决定"节点上下两根栏长什么样"，
-  // 是默认皮的一部分（换主题时整套跟着换）。bottom-bar 降级为默认模式底栏的贡献者。
+  // nodeToolbar 服务 = 注册表 + 会话。归属**主题**：一根栏长什么样是默认皮的一部分，
+  // 换主题时整套跟着换。bottom-bar 降级为「默认底栏的内容贡献者」，与裁剪模式完全平等。
   //
-  // 用法（节点插件，如图片的裁剪/扩展）：
-  //   const svc = ctx.tryGet<NodeToolbarService>('nodeToolbar')   // 按名取，不 import 别的插件
-  //   svc?.registerMode({ id: 'image/crop', types: ['image'], topBar: CropTopBar, bottomBar: CropBottomBar })
+  // 用法（任意插件，按服务名取，不 import 别的插件）：
+  //   const svc = ctx.tryGet<NodeToolbarService>('nodeToolbar')
+  //   svc?.registerMode({ id: 'default', types: ['image'], bottomBar: NodeBottomBar, order: 100 })
+  //   svc?.registerMode({ id: 'image/crop', types: ['image'], topBar: CropTopBar, bottomBar: CropPanel })
   //   svc?.enter(nodeId, 'image/crop')  /  svc?.exit(nodeId)
   //
-  // 渲染：BaseNode 的 out:top / out:bottom 段经由 NodeModeTopBar / NodeModeBottomBar 这层
-  // 主题渲染器 —— 模式在 → 渲染模式的栏；不在 → 透传默认内容。参见两个组件的文件头。
+  // 渲染（两条腿，各自只有一个入口）：
+  // - 上栏：NodeModeTopBar 挂在节点壳的 out:top 锚点（带主题的偏移配置 + 居中 + 反缩放）；
+  // - 下栏：NodeBottomSlotHost 挂在画布 overlay 槽（贴卡片下缘，避免被画布层 overflow 裁掉）。
+  // 两者都只做「问服务 → 渲染那一格」，模式/默认没有第二套渲染路径。
   const toolbarSvc = new NodeToolbarService();
+  toolbarSvc.docPeek = ctx.get("doc") as unknown as NodeToolbarService["docPeek"];
   ctx.provide("nodeToolbar", toolbarSvc);
   void toolbarSvc;
 
-  // 模式底栏的画布级浮层宿主：挂 overlay 槽。只在有模式接管时渲染该模式的 bottomBar；
-  // 没有模式时什么都不渲染 —— 那时是 bottom-bar 的默认底栏（两根浮层互斥）。
+  // 下栏唯一的槽位宿主（默认底栏、裁剪面板、任何功能面板都从这里出来）。
+  // order 39：排在 bottom-bar 的其它画布浮层（参考选择态 41 / 媒体预览 42）之前。
   ctx.slots.register("overlay", {
-    id: "theme-default/node-mode-bottom-overlay",
+    id: "theme-default/node-bottom-slot",
     order: 39,
-    component: markRaw(NodeModeBottomBarOverlay) as unknown,
-    meta: { title: "功能模式底栏" },
+    component: markRaw(NodeBottomSlotHost) as unknown,
+    meta: { title: "节点下状态栏" },
   });
 
+
+  // 上栏唯一的解析面板：挂到所有节点类型的 out:top 锚点（位置/偏移/居中由壳负责）。
+  // 老的上传条（图片/视频/音频）不受影响：服务解析出「没注册」时透传宿主默认内容。
+  ctx.nodes.attach("*", { region: "out:top", id: "theme-default/node-top-slot", component: NodeModeTopBar });
 
   // 渲染皮：nodeShell/edge/background/edgeDefaultType
   ctx.theme.register("nodeShell", BaseNode); // 完整节点壳（收编自 core）
@@ -784,7 +792,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 于是它们不必再直接依赖本主题包；换主题时这些件跟着一起换。
   ui.add("movingHandle", MovingHandle, { id: "default" });
   ui.add("connectionLine", ConnectionLine, { id: "default" });
-  // 模式渲染件（用户口径 2026-10-29 重构）：BaseNode 上/下段经它们透传或整根替换。
+  // 状态栏解析件（用户口径 2026-10-29 重构）：按 nodeToolbar 服务解析「这一格显示什么」。
   // 换主题时一起被顶掉；业务插件不必认识它们，只认 nodeToolbar 服务。
   ui.add("nodeModeTopBar", NodeModeTopBar, { id: "default" });
   ui.add("nodeModeBottomBar", NodeModeBottomBar, { id: "default" });
@@ -821,7 +829,7 @@ export { NodeToolbarService } from "./components/node/nodeToolbarService";
 export type { NodeToolbarMode } from "./components/node/nodeToolbarService";
 export { default as NodeModeTopBar } from "./components/node/NodeModeTopBar.vue";
 export { default as NodeModeBottomBar } from "./components/node/NodeModeBottomBar.vue";
-export { default as NodeModeBottomBarOverlay } from "./components/node/NodeModeBottomBarOverlay.vue";
+export { default as NodeBottomSlotHost } from "./components/node/NodeBottomSlotHost.vue";
 
 /**
  * 渲染件出口（供其它插件复用同一套外观，避免各自手绘一份必然漂移）。

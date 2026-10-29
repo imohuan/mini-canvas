@@ -115,6 +115,16 @@ const isImage = computed(() => kind.value === "image")
  *  视频改用节点插件的 videoPreview（自带播放/进度/音量），底部控制条对视频不再出现。 */
 const canZoom = computed(() => isImage.value)
 
+/**
+ * 底部控制条**常驻**（用户口径 2026-10-29：页码 + 下载是所有媒体都有的常驻项）。
+ *
+ * 中段工具按媒体类型给：
+ *   · 图片：缩放 / 旋转 / 翻转 / 重置（可拖拽平移，所以有缩放与重置）；
+ *   · 视频：旋转 / 翻转（不能缩放，但「镜像 / 旋转」保留；变换作用在视频舞台盒上）；
+ *   · 音频 / 文本 / 其它：只有常驻的页码 + 下载。
+ */
+const hasTools = computed(() => isImage.value || kind.value === "video")
+
 // ===== 图片变换（AxImageViewer 同款：缩放 / 拖拽 / 旋转 / 翻转） =====
 const scale = ref(1)
 const rotation = ref(0)
@@ -142,6 +152,12 @@ function zoomOut(): void { scale.value = Math.max(scale.value - 0.25, 0.25) }
 function rotateImg(): void { rotation.value = (rotation.value + 90) % 360 }
 function toggleFlip(): void { flip.value = !flip.value }
 
+/** 视频的旋转 / 翻转：套在**视频舞台盒**上（不碰插件内部的播放状态，也不改视频元素本身） */
+const videoTransform = computed(() => ({
+  transform: `rotate(${rotation.value}deg) scaleX(${flip.value ? -1 : 1})`,
+  transition: "transform 0.2s ease",
+}))
+
 function handleWheel(e: WheelEvent): void {
   if (!isImage.value) return
   e.preventDefault()
@@ -166,13 +182,21 @@ function prevImage(): void {
   if (!isMultiple.value) return
   currentIdx.value = (currentIdx.value - 1 + list.value.length) % list.value.length
   resetTransform()
+  videoTransformReset()
   emit("index", currentIdx.value)
 }
 function nextImage(): void {
   if (!isMultiple.value) return
   currentIdx.value = (currentIdx.value + 1) % list.value.length
   resetTransform()
+  videoTransformReset()
   emit("index", currentIdx.value)
+}
+
+/** 换张时把视频的旋转/镜像也归零（否则新视频会继承上一张的朝向） */
+function videoTransformReset(): void {
+  rotation.value = 0
+  flip.value = false
 }
 
 // ===== 下载（AxImageViewer 同款：fetch 转 blob；跨域失败退开新窗口） =====
@@ -208,8 +232,8 @@ function handleKeydown(e: KeyboardEvent): void {
     case "+": case "=": if (canZoom.value) zoomIn(); break
     case "-": if (canZoom.value) zoomOut(); break
     case "0": if (canZoom.value) resetTransform(); break
-    case "r": case "R": if (isImage.value) rotateImg(); break
-    case "f": case "F": if (isImage.value) toggleFlip(); break
+    case "r": case "R": if (hasTools.value) rotateImg(); break
+    case "f": case "F": if (hasTools.value) toggleFlip(); break
   }
 }
 
@@ -226,6 +250,7 @@ watch(item, (v) => {
     currentIdx.value = Math.min(Math.max(v.index ?? 0, 0), Math.max(list.value.length - 1, 0))
     emit("index", currentIdx.value)
     resetTransform()
+    videoTransformReset()
     document.body.style.overflow = "hidden"
   } else {
     document.body.style.overflow = ""
@@ -293,8 +318,11 @@ watch(item, (v) => {
             用户口径：不要原生 UI（但要能调音量）；不要缩放假把 —— 默认尺寸已经够大，不用缩放。
           -->
           <div v-else-if="kind === 'video' && currentUrl" class="mv-video-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
-            <component :is="VideoPreview" v-if="VideoPreview" :key="currentUrl" :url="currentUrl" :name="item.name" tall />
-            <video v-else :key="currentUrl" class="mv-video" :src="currentUrl" controls autoplay playsinline />
+            <!-- 旋转/翻转套在舞台盒上：不碰插件内部的播放状态，也不改视频元素本身 -->
+            <div class="mv-video-transform" :style="videoTransform">
+              <component :is="VideoPreview" v-if="VideoPreview" :key="currentUrl" :url="currentUrl" :name="item.name" tall />
+              <video v-else :key="currentUrl" class="mv-video" :src="currentUrl" controls autoplay playsinline />
+            </div>
           </div>
           <div v-else-if="kind === 'audio' && item.url && AudioPreview" class="mv-plugin-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
             <component :is="AudioPreview" :url="item.url" :name="item.name" class="mv-media-plugin" />
@@ -332,24 +360,28 @@ watch(item, (v) => {
         </button>
       </div>
 
-      <!-- 底部浮动控制条（AxImageViewer 同款；只对图片出工具，视频/音频交给原生控制） -->
-      <div v-if="canZoom" class="mv-controls" @mousedown.stop>
+      <!-- 底部浮动控制条（用户口径 2026-10-29：常驻）——
+           页码 + 下载是所有媒体都有的；中段工具按类型：图片=缩放/旋转/翻转/重置，
+           视频=旋转/翻转（不能缩放），音频/文本=只有常驻项。 -->
+      <div class="mv-controls" @mousedown.stop>
         <template v-if="isMultiple">
           <span class="mv-page">{{ currentIdx + 1 }} / {{ list.length }}</span>
           <span class="mv-divider" />
         </template>
-        <button class="mv-btn" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
+        <template v-if="canZoom">
+          <button class="mv-btn" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
-        </button>
+          </button>
         <span class="mv-zoom-label">{{ Math.round(scale * 100) }}%</span>
-        <button class="mv-btn" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
+          <button class="mv-btn" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /><line x1="11" y1="8" x2="11" y2="14" /></svg>
-        </button>
-        <span class="mv-divider" />
-        <button v-if="isImage" class="mv-btn" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
+          </button>
+          <span class="mv-divider" />
+        </template>
+        <button v-if="hasTools" class="mv-btn" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
         </button>
-        <button v-if="isImage" class="mv-btn" type="button" title="翻转 (F)" aria-label="翻转" @click="toggleFlip">
+        <button v-if="hasTools" class="mv-btn" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" /><path d="M8 7 4 12l4 5" /><path d="m16 7 4 5-4 5" /></svg>
         </button>
         <button v-if="canZoom" class="mv-btn" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
@@ -510,6 +542,16 @@ watch(item, (v) => {
  * 这里让插件组件按自己的宽高比决定大小，舞台只负责居中；黑底不再外露。
  */
 .mv-video-stage :deep(.vpv-root.is-tall) { background: transparent; }
+/* 视频的旋转 / 镜像层：撑满舞台、居中；变换只作用在这一层（插件内部不受影响） */
+.mv-video-transform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
 .mv-video { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; outline: none; background: transparent; }
 .mv-audio { width: min(560px, 100%); }
 /* 可视化节点预览（kind='ui'）：iframe 装节点那段 HTML。
