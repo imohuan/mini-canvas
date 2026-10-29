@@ -30,7 +30,7 @@ import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
 import { registerBarAction, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
-import { beginOverlay, endOverlay } from './videoSession'
+import { beginOverlay, endOverlay, onOverlayModeChange } from './videoSession'
 import {
   captureFrameNode,
   clipVideo,
@@ -196,6 +196,9 @@ export function apply(ctx: Context) {
       topBar: VideoTopToolbar,
       order: 100,
     })
+    // 用户口径 2026-10-29：裁剪会话接管顶栏（确认/取消/比例都在顶栏），底栏整格不显示
+    // （bottomBar: null）—— 与图片节点的 image/crop 同一条写法（文档案例 9 的方式 C）。
+    svc.registerMode({ id: 'video/crop', types: ['video'], title: '裁剪视频画面', bottomBar: null })
     return true
   }
   if (!registerToolbar()) {
@@ -203,6 +206,20 @@ export function apply(ctx: Context) {
       if (registerToolbar()) off.dispose()
     })
   }
+
+  // 1.5 裁剪会话 ↔ 状态栏模式自动同步（与图片插件的 onEditModeChange 同一条写法）：
+  //     进裁剪 → nodeToolbar 切到 video/crop 模式（底栏消失、顶栏保持）；确认/取消 → 退出模式。
+  //     监听放在这里而不是 videoSession 内部：那份是纯状态，只负责「记着自己正在编辑」。
+  const offOverlayMode = onOverlayModeChange((nodeId, mode) => {
+    const svc = ctx.tryGet<{
+      enter?(nodeId: string, modeId: string): void
+      exit?(nodeId: string): void
+    } | undefined>('nodeToolbar')
+    if (!svc) return
+    if (mode === 'crop') svc.enter?.(nodeId, 'video/crop')
+    else svc.exit?.(nodeId)
+  })
+  ctx.effect(() => () => offOverlayMode())
 
   const service = new VideoService(ctx)
 

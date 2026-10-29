@@ -8,7 +8,8 @@
  *
  * 本文件只剩三件事：
  * 1. 把视频语汇（videoWidth/videoHeight）翻译成通用件的入参（mediaWidth/mediaHeight）；
- * 2. 把草稿/确认/取消向上冒泡。
+ * 2. 把"进入编辑态把节点拉进视野"的回调转发下去（图片同款；缺它节点贴视口边时控制点会跑出屏幕）；
+ * 3. 把草稿/确认/取消向上冒泡。
  *
  * 只用 crop 模式：扩展（往外扩画布）对视频没有意义 —— 那需要重新编码整段视频，
  * 而本项目刻意不做浏览器端转码。通用件支持 expand 是给**图片**节点用的。
@@ -30,6 +31,8 @@ const props = defineProps<{
   draftRect?: Rect
   /** 当前比例键（来自控制栏的下拉；浮层据此把框调成对应比例） */
   ratioValue?: string
+  /** 进入编辑态时把节点拉进视野（透传给通用件；图片浮层同款） */
+  fitIntoView?: () => void
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +50,7 @@ const emit = defineEmits<{
     :initial-rect="props.initialRect"
     :draft-rect="props.draftRect"
     :ratio-value="props.ratioValue"
+    :fit-into-view="props.fitIntoView"
     @update:draft="emit('update:draft', $event)"
     @confirm="emit('confirm', $event)"
     @cancel="emit('cancel')"

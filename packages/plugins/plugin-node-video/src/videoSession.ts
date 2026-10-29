@@ -14,7 +14,7 @@
  * 拖裁剪框的每一帧都写库会产生几百条撤销记录，用户按一次撤销只会退回上一帧。
  * 草稿留在会话里，确认时一次性提交 —— 这才是"一次操作一条历史"。
  */
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 
 /**
  * 覆盖层模式。
@@ -25,6 +25,28 @@ export type VideoOverlayMode = 'crop' | 'clip'
 
 /** 节点 id → 当前模式 */
 const modes = reactive(new Map<string, VideoOverlayMode>())
+
+/**
+ * 订阅「某人进/出了覆盖层模式」（给插件侧同步底栏功能模式用）。
+ * 与图片节点的 onEditModeChange 同一条写法：本文件是纯状态，订阅交给装配层（apply）。
+ * 回调只报"变化了的节点"：进入/换模式报 state=新模式，退出报 state=null。
+ * @returns 取消订阅
+ */
+export function onOverlayModeChange(cb: (nodeId: string, mode: VideoOverlayMode | null) => void): () => void {
+  /** 上一次每个节点处于什么模式（用于算出"谁没了"） */
+  let prev = new Map<string, VideoOverlayMode>()
+  const stop = watch(
+    () => [...modes.entries()].sort(([a], [b]) => (a < b ? -1 : 1)),
+    (next) => {
+      const now = new Map(next)
+      for (const [id, m] of now) if (prev.get(id) !== m) cb(id, m)
+      for (const id of prev.keys()) if (!now.has(id)) cb(id, null)
+      prev = now
+    },
+    { deep: true },
+  )
+  return stop
+}
 
 /** 当前处于某模式的节点 id（供测试与诊断） */
 export function overlayNodeIds(mode: VideoOverlayMode): string[] {
