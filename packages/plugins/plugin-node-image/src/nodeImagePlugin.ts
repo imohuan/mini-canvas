@@ -19,8 +19,11 @@ import { imageTitleExtra } from './imageNodeData'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
+import ImageOverlays from './ImageOverlays.vue'
+import ImagePaintPanel from './ImagePaintPanel.vue'
 import { beginCrop, beginExpand, endEdit, onEditModeChange } from './cropSession'
-import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
+import { beginPaint, endPaint, isPainting, onPaintModeChange, paintState } from './paintSession'
+import { createImageOps, cropImage, downloadImageNode, expandImageNode, paintImageNodes, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
 import type { Rect } from '@mini-canvas/canvas-render'
 import {
@@ -200,6 +203,13 @@ export function apply(ctx: Context) {
     // 底栏整格不显示（bottomBar: null）—— 不在底部重复一套控制栏。
     svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: null })
     svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: null })
+    svc.registerMode({
+      id: 'image/paint',
+      types: ['image'],
+      title: '绘制图片',
+      topBar: ImagePaintPanel,
+      bottomBar: null,
+    })
     return true
   }
   if (!registerToolbar()) {
@@ -223,6 +233,18 @@ export function apply(ctx: Context) {
     else svc.exit?.(nodeId)
   })
   ctx.effect(() => () => offEditMode())
+
+  // 1.7b 绘制态 ↔ 状态栏模式自动同步（与 cropSession 同一条规矩）
+  const offPaintMode = onPaintModeChange((nodeId, mode) => {
+    const svc = ctx.tryGet<{
+      enter?(nodeId: string, modeId: string): void
+      exit?(nodeId: string): void
+    } | undefined>('nodeToolbar')
+    if (!svc) return
+    if (mode === 'paint') svc.enter?.(nodeId, 'image/paint')
+    else svc.exit?.(nodeId)
+  })
+  ctx.effect(() => () => offPaintMode())
 
   // 2. 注册节点类型：create 委托服务（同一实现）。create 只收 position → 建默认空图节点。
   //    内容类型声明：image 输出产 image；输入口收 text+image（文生图/图生图），视频喂不进图片。
@@ -259,7 +281,7 @@ export function apply(ctx: Context) {
       // 编辑浮层（裁剪框/扩展框）画在**卡片外面**：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
       // 扩展框还要能画到卡片之外（扩出来的部分本来就在原图外面），只有这一层做得到。
-      'over:inset': ImageFrameOverlay,
+       'over:inset': ImageOverlays,
     },
     create(position, extra) {
       // extra 里带 imageUrl 时直接建出有图的节点（右键菜单 / 资产「添加到画布」/ command:create-node 都走这里）。
@@ -369,6 +391,54 @@ export function apply(ctx: Context) {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
       endEdit(nodeId)
+      return true
+    },
+  })
+  // —— 绘制（擦除/重绘的统一入口）：会话笔迹 → 两个图片节点（蒙版 + 结果）——
+  ctx.commands.register({
+    id: 'image:paint-confirm',
+    title: '保存绘制',
+    run: async (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      if (!isPainting(nodeId)) return false
+      const strokes = paintState(nodeId).strokes
+      if (strokes.length === 0) return false
+      const ok = await paintImageNodes(ops, nodeId, { strokes })
+      if (ok) endPaint(nodeId)
+      return ok
+    },
+  })
+  ctx.commands.register({
+    id: 'image:paint-cancel',
+    title: '取消绘制',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      endPaint(nodeId)
+      return true
+    },
+  })
+  // 撤销/清空：浮层组件直接改会话里的同一份数组 —— 命令只做桥（面板 → 命令 → 浮层响应式重画）。
+  ctx.commands.register({
+    id: 'image:paint-undo',
+    title: '撤销绘制笔迹',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      if (!isPainting(nodeId)) return false
+      paintState(nodeId).strokes.pop()
+      return true
+    },
+  })
+  ctx.commands.register({
+    id: 'image:paint-clear',
+    title: '清空绘制笔迹',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      if (!isPainting(nodeId)) return false
+      paintState(nodeId).strokes = []
       return true
     },
   })

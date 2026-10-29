@@ -71,7 +71,15 @@ export function diffGraph(base: unknown, mine: unknown): GraphOps {
   for (const [id, item] of mineIdx) {
     const before = baseIdx.get(id)
     if (before === undefined) ops.add.push(item)
-    else if (stable(before) !== stable(item)) ops.update.push(withExplicitParentRemoval(item, before))
+    else if (stable(before) !== stable(item)) {
+      const entry = withExplicitParentRemoval(item, before)
+      // 本地这份 data 里已经没有、而服务器基准里还有的键：浅合并表达不了「删除」
+      // （对象缺 key = 服务端按「这次没提」处理）。用显式 dataUnset 补上 —— 服务端
+      // batchNodes 的 update 分支已支持（与 MCP 同一条通道）。
+      const unset = removedDataKeys(before, item)
+      const patched = unset.length > 0 ? { ...(entry as Record<string, unknown>), dataUnset: unset } : entry
+      ops.update.push(patched)
+    }
   }
   for (const id of baseIdx.keys()) {
     if (!mineIdx.has(id)) ops.delete.push(id)
@@ -97,6 +105,23 @@ function withExplicitParentRemoval(item: unknown, before: unknown): unknown {
   const hasParent = typeof (item as { parentId?: unknown }).parentId === 'string'
   if (!hadParent || hasParent) return item
   return { ...(item as Record<string, unknown>), parentId: null }
+}
+
+/**
+ * 「本地 data 已没有、服务器基准里还有」的键 —— 保存时必须显式声明删除。
+ * 判据只用基准（服务器那份）与本地这份：本地是权威（保存语义 = 以我为准）。
+ */
+function removedDataKeys(before: unknown, mine: unknown): string[] {
+  if (!before || typeof before !== 'object' || !mine || typeof mine !== 'object') return []
+  const beforeData = (before as { data?: unknown }).data
+  const mineData = (mine as { data?: unknown }).data
+  if (!beforeData || typeof beforeData !== 'object') return []
+  if (!mineData || typeof mineData !== 'object') return []
+  const out: string[] = []
+  for (const key of Object.keys(beforeData as Record<string, unknown>)) {
+    if (!(key in (mineData as Record<string, unknown>))) out.push(key)
+  }
+  return out
 }
 
 /** 这份增量里有没有要干的事（没有就别发请求） */

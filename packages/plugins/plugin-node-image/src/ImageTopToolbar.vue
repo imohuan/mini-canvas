@@ -13,6 +13,7 @@ import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isEx
 import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
+import ImagePaintEntry from './ImagePaintEntry.vue'
 import { readImageSourceFields } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -180,6 +181,9 @@ function cancelEdit(): void {
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/expand" :order="300">
         <NodeToolbarButton v-if="!featureMode" title="扩展图片" :icon="ICON_EXPAND" @click="onExpand" />
+      </SlotAnchor>
+      <SlotAnchor v-if="hasImage" id="host/paint" :order="400">
+        <ImagePaintEntry :node-id="props.id" :data="props.data" />
       </SlotAnchor>
     </SlotComposer>
   </div>
