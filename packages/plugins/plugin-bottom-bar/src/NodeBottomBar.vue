@@ -2515,7 +2515,7 @@ function onGlobalLeave(el: Element): void {
           >{{ formatVideoDuration(tile.duration) }}</span>
           <!--
             索引移到**左上角**（用户 2026-10-29 重构：圆角小徽章）。
-            hover 时藏掉（此时有名称条 + 操作按钮，不再需要序号）。
+            常驻显示：卡片底部不再有名称条，序号是卡面上唯一的"顺序线索"。
           -->
           <span class="nb-card-index">{{ tile.index }}</span>
         </span>
@@ -3466,7 +3466,7 @@ function onGlobalLeave(el: Element): void {
   position: absolute;
   /**
    * 索引移到**左上角**（用户 2026-10-29 重构：圆角小徽章）。
-   * hover 时藏掉 —— 那时有名称条和操作按钮，序号不再必要。
+   * 常驻显示（名称条已移除，序号是卡面上唯一的顺序线索）。
    */
   left: 3px;
   top: 3px;
