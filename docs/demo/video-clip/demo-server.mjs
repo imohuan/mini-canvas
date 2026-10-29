@@ -20,9 +20,11 @@ const types = {
 
 createServer((request, response) => {
   const url = new URL(request.url, 'http://localhost')
-  const file = url.pathname === '/' || url.pathname === '/video-clip-demo.html'
+  const file = url.pathname === '/'
     ? demo
-    : join(here, decodeURIComponent(url.pathname))
+    : url.pathname === '/video-clip-demo.html'
+      ? demo
+      : join(here, decodeURIComponent(url.pathname))
   if (!existsSync(file) || statSync(file).isDirectory()) {
     response.writeHead(404)
     response.end('not found')
