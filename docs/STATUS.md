@@ -11,7 +11,8 @@ mini-canvas 是一个可扩展的画布应用。画布只负责节点、连线�
 文本、图片、视频、音频、3D、Agent、插件管理都由插件提供。
 
 依赖方向单向：`kernel ← canvas-data ← canvas-render ← plugins`。
-`packages/canvas-core` 和根目录 `src/` 是 v1，明确排除。
+`packages/canvas-core` 与 `packages/mcp-server` 已移入 `backup/`，不再参与构建。
+根目录 `src/` 是 v1，明确排除。
 
 当前分支：`main`。最近一次提交：`f14280d7`。
 

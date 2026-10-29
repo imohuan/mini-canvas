@@ -24,12 +24,12 @@ mini-canvas 是一个可扩展的画布应用。画布本身只负责节点、�
 | `packages/ui` | 成品应用：装配插件、路由、外壳和设置面板，开发时用 `pnpm dev` 打开画布。 |
 | `packages/plugins/*` | 插件库，当前 38 个插件包，包含主题、节点、工具、Agent、插件管理等。 |
 | `packages/cloud-server` | 自托管云端：画布与资源存储、静态页面托管、MCP 接口、Agent 后台。 |
-| `packages/mcp-server` | AI 工具链后端：MCP / SSE 服务、无头画布和生成任务。 |
 | `packages/docs` | VitePress 文档站，默认端口 5290。 |
 | `packages/prosemirror-editor-bundle` | 富文本编辑器组件包，供文本节点使用。 |
 
-`packages/canvas-core` 是 v1 老版内核，**明确排除，不修改、不迁移、不作为示例**。
-根目录的 `src/` 也是 v1 老版宿主，同样不碰。
+`backup/canvas-core` 是已移出的 v1 老版内核，**不再参与构建，也不作为示例**。
+`backup/mcp-server` 是已移出的旧 MCP 后端，当前开发以 `packages/cloud-server` 为准。
+根目录的 `src/` 是 v1 老版宿主，不碰。
 
 ## 三、开发流程
 
@@ -159,7 +159,7 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 
 ## 八、红线
 
-1. **不碰 v1**：根 `src/` 与 `packages/canvas-core`。
+1. **不碰 v1**：根 `src/` 与 `backup/canvas-core`。
 2. **核心节点件禁止改坏**：`packages/plugins/plugin-theme-default/src/components/` 下的
    `node/BaseNode.vue`、`node/MovingHandle.vue`、`node/BaseTitle.vue`、`edge/CustomEdge.vue`、
    `edge/ConnectionLine.vue`、`background/DefaultBackground.vue`。
