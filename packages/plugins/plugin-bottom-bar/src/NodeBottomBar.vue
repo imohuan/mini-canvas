@@ -1502,7 +1502,13 @@ function closePreviewNow(): void {
 const livePreviewTile = computed<RefTile | null>(() => {
   const current = previewTile.value
   if (!current) return null
-  return refTiles.value.find((t) => t.key === current.key) ?? null
+  /**
+   * 失效引用（绑定的节点被删/断线）也不出预览（用户 2026-10-29 第 2 轮）：
+   * 图没了还画旧图 = 用户看到的「删了还在」假象。失效卡本身在参考区有 invalid
+   * 提示，浮层就不该再显示。
+   */
+  const tile = refTiles.value.find((t) => t.key === current.key) ?? null
+  return tile && !tile.invalid ? tile : null
 })
 watch(livePreviewTile, (v) => {
   if (!v && previewTile.value) closePreviewNow()
