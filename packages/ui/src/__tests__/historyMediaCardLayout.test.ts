@@ -321,6 +321,36 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(sync, '退出批量模式没有摘掉勾选层').toMatch(/\.remove\(\)/)
   })
 
+  it('批量态标记随开关同步（先开面板再点批量操作也要生效）', () => {
+    const sync = modalsArea.slice(
+      modalsArea.indexOf('function syncBatchOverlays'),
+      modalsArea.indexOf('/** 监听最后一张卡'),
+    )
+    expect(sync, 'syncBatchOverlays 没有同步 hist-card--batch（进入批量模式后波形仍吃指针）').toMatch(
+      /card\.classList\.toggle\('hist-card--batch', s\.histBatchMode\)/,
+    )
+  })
+
+  it('进入批量模式先暂停正在播的媒体（之后没有播放键可点）', () => {
+    const toggle = modalsArea.slice(
+      modalsArea.indexOf('function toggleBatchMode'),
+      modalsArea.indexOf('function syncBatchOverlays'),
+    )
+    expect(toggle, '缺少 pauseAllHistoryMedia（正在播的视频停不下来）').toMatch(/function pauseAllHistoryMedia/)
+    expect(toggle, '进入批量模式没有暂停正在播的媒体').toMatch(/if \(s\.histBatchMode\) pauseAllHistoryMedia\(\)/)
+  })
+
+  it('批量模式下卡外按钮与插件控件让位给整卡勾选', () => {
+    const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
+    expect(style, '批量模式下音频卡外按钮仍可点（会抢勾选点击）').toMatch(
+      /\.hist-card--batch \.hist-card-audio-controls\s*\{[^}]*pointer-events:\s*none/,
+    )
+    expect(style, '批量模式下视频插件仍吃指针（点卡片只会播放）').toMatch(
+      /\.hist-card--batch \.hist-card-video-plugin[^{]*\{[^}]*pointer-events:\s*none/,
+    )
+    expect(style, '批量模式下仍显示播放/暂停键').toMatch(/\.hist-card--batch \.vpv-dense-play[^{]*\{\s*display:\s*none/)
+  })
+
   it('切页签复用已建好的卡片墙（不重新创建视频/音频元素）', () => {
     expect(modalsArea, '没有保存每个页签的墙').toMatch(/wallCache/)
     expect(modalsArea, '切走时没有收墙（会直接销毁 DOM）').toMatch(/function stashCurrentWall/)
@@ -586,8 +616,11 @@ describe('生成历史卡片预览带同页签清单', () => {
     expect(fnBody, '清单没有用 ui.histVisible（会切到看不见的记录上）').toMatch(/ui\.histVisible\.value/)
   })
 
-  it('只收有产物的记录（没有 urls[0] 的跳过）', () => {
-    expect(fnBody, '没有过滤无产物记录（左右键会切到空白页）').toMatch(/if \(!u\) return false/)
+  it('只收「给得出可预览地址」的记录（无产物 / 跨端地址都跳过）', () => {
+    expect(fnBody, '没有按 previewableUrl 过滤（左右键会切到打不开的地址上）').toMatch(/!!previewableUrl\(e\)/)
+    expect(modalsArea, '缺少 previewableUrl 判定（跨端 8033 地址会被当成可预览）').toMatch(
+      /function previewableUrl\(item: HistItem\)[\s\S]{0,300}url\.startsWith\('\/'\)/,
+    )
   })
 
   it('清单带 names 与 kinds（切张后标题与渲染类型跟着换）', () => {
@@ -595,8 +628,10 @@ describe('生成历史卡片预览带同页签清单', () => {
     expect(fnBody, '清单缺 kinds（混合页签切张会按第一张的类型渲染）').toMatch(/kinds: rows\.map\(\(e\) => e\.kind\)/)
   })
 
-  it('图片走 thumbOf 同源转换；视频/音频用原始地址（与 openHistoryItem 同一条规则）', () => {
-    expect(fnBody, '图片没有走 thumbOf 同源转换').toMatch(/e\.kind === '图片' \|\| e\.kind === 'image' \? \(thumbOf\(e\) as string\) : \(e\.urls\?\.\[0\] as string\)/)
+  it('清单地址统一走 previewableUrl（与 openHistoryItem 同一条规则）', () => {
+    expect(fnBody, '清单地址没有统一走 previewableUrl（会和单张预览两条规则）').toMatch(
+      /list: rows\.map\(\(e\) => previewableUrl\(e\) as string\)/,
+    )
   })
 })
 

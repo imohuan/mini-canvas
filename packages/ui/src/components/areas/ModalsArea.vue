@@ -112,19 +112,33 @@ function historyPreviewGroup(item: HistItem): {
   index: number
 } | null {
   const rows = ui.histVisible.value.filter((e) => {
-    const u = e.urls?.[0]
-    if (!u) return false
-    // 与 openHistoryItem 同一条「能不能给预览地址」的判定：图片走 thumbOf（有 canvasId
-    // 才能转出同源地址），其它类型直接用原始地址。
-    return (e.kind === '图片' || e.kind === 'image') ? !!thumbOf(e) : true
+    // 静态判定「这条给得出可预览地址」：没有产物 / 图片转不出同源 / 音视频是跨端
+    // 原始地址的，都不进清单（切过去必然是失败页）。
+    return !!previewableUrl(e)
   })
   if (!rows.some((e) => e.id === item.id)) return null
   return {
-    list: rows.map((e) => (e.kind === '图片' || e.kind === 'image' ? (thumbOf(e) as string) : (e.urls?.[0] as string))),
+    list: rows.map((e) => previewableUrl(e) as string),
     names: rows.map((e) => e.title),
     kinds: rows.map((e) => e.kind),
     index: Math.max(rows.findIndex((e) => e.id === item.id), 0),
   }
+}
+
+/**
+ * 这条记录的产物地址**能不能预览**（不真的发请求，只做静态判定）：
+ *   · 必须是**本画布服务**的地址（/ 开头）。后台留下的跨端原始地址
+ *     （如 web2api 的 http://…:8033/...）在别的环境打不开，切过去必然「加载失败」；
+ *     图片走 thumbOf 的「拼资源地址」兜底也一样 —— 后端只认内容哈希文件名，
+ *     拼 chat-auto 这类旧文件名必得 400（真机 2026-10-29 实测）。
+ *     —— 与「显示异常」开关关着时卡片被隐藏是同一条口径：预览清单里也不该出现。
+ */
+function previewableUrl(item: HistItem): string | null {
+  const url = item.urls?.[0]
+  if (!url) return null
+  // 图片也一样收紧：原始地址不是本服务地址时，thumbOf 的「拼资源地址」兜底
+  // 对旧记录（文件名不是内容哈希）会得到 400，同样打不开 —— 一律不放行。
+  return url.startsWith('/') ? url : null
 }
 
 /** 点开「详情」的那一条历史（生成参数弹窗的数据源） */
@@ -440,7 +454,28 @@ onMounted(() => {
 function toggleBatchMode(): void {
   s.histBatchMode = !s.histBatchMode
   s.histSelectedIds = []
+  // 进入批量模式：正在播的媒体先停掉（用户口径 2026-10-29：批量模式下不再播放/暂停，
+  // 正在播的视频直接暂停；否则整卡点击=勾选之后，用户再也点不到暂停按钮）。
+  if (s.histBatchMode) pauseAllHistoryMedia()
   syncBatchOverlays()
+}
+
+/**
+ * 批量模式下「整卡点击 = 勾选」：把卡片里所有会吞点击的媒体层停掉并让出指针。
+ *
+ * 为什么要停播放：卡片上不再显示播放/暂停键（CSS 隐藏），插件内部的播放键与波形 seek
+ * 也都被关掉 —— 正在播的视频会一直响，用户却没有任何入口停下（用户实测报的）。
+ */
+function pauseAllHistoryMedia(): void {
+  const container = masonryEl.value
+  if (!container) return
+  for (const el of container.querySelectorAll<HTMLMediaElement>('.hist-card video, .hist-card audio')) {
+    try {
+      el.pause()
+    } catch {
+      /* 未就绪的媒体暂停会抛，忽略 */
+    }
+  }
 }
 
 /** 按当前批量状态，给已画出来的卡片增删勾选层（批量模式关着时全摘掉） */
@@ -455,6 +490,13 @@ function syncBatchOverlays(): void {
     } else if (!s.histBatchMode && existing) {
       existing.remove()
     }
+    /**
+     * 批量态标记要**在这里同步**，不能只在建卡时判断。
+     * 旧写法只在 createMasonryElement / buildMediaCard 里加 hist-card--batch：
+     * 卡片是先建好再进批量模式的，于是「先打开面板 → 再点批量操作」时标记永远不生效，
+     * 音频波形继续吃指针（用户 2026-10-29 实测：批量模式下点音频卡没反应）。
+     */
+    card.classList.toggle('hist-card--batch', s.histBatchMode)
   }
 }
 
@@ -889,8 +931,9 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
 
       if (isAudio) card.addEventListener('click', () => onAudioCardClick(item))
       else card.addEventListener('click', () => onCardClick(item))
-      // 批量模式下波形让位给整卡勾选：点在波形上也要落到卡片本身
-      if (isAudio && s.histBatchMode) card.classList.add('hist-card--batch')
+      // 批量模式下媒体层让位给整卡勾选：点在波形/视频上也要落到卡片本身。
+      // 标记由 syncBatchOverlays 统一同步（进入/退出批量模式时也要生效，不只是建卡那一刻）。
+      card.classList.toggle('hist-card--batch', s.histBatchMode)
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
       if (isAudio && el) {
         /**
@@ -930,6 +973,7 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
   }
   card.addEventListener('click', () => onCardClick(item))
   if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
+  card.classList.toggle('hist-card--batch', s.histBatchMode)
   return finishCard(card, item)
 }
 
@@ -998,6 +1042,7 @@ function createMasonryElement(item: HistItem): HTMLElement {
     card.appendChild(buildErrorCard(item))
   }
   if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
+  card.classList.toggle('hist-card--batch', s.histBatchMode)
   return finishCard(card, item)
 
 }
@@ -1432,8 +1477,7 @@ function openHistoryItem(item: HistItem): void {
   // 媒体（视频/音频）的地址本身就可能是画布资源地址，原样给它，别按缩略图规则改写。
   // 图片才按缩略图规则换成同源地址；音视频必须用原始地址（改写会把
   // /api/resources/... 拼成画布资源路径 → 找不到文件 → 卡片「加载失败」）。
-  const isImage = item.kind === '图片' || item.kind === 'image'
-  const viewUrl = isImage ? thumbOf(item) : url
+  const viewUrl = previewableUrl(item)
   if (!viewUrl) {
     ui.showToast('这条记录没有可预览的产物')
     return
@@ -2048,6 +2092,13 @@ onClickOutside(
 /* 批量模式：只让波形层让位（点波形落到整卡勾选）；
    媒体框本身仍可点 —— 右上角「详情」钮是它的子元素，不能一起关掉。 */
 .hist-card--batch .hist-card-audio-plugin { pointer-events: none; }
+.hist-card--batch .hist-card-audio-controls { pointer-events: none; }
+.hist-card--batch .hist-card-video-plugin,
+.hist-card--batch .hist-card-video-plugin * { pointer-events: none; }
+.hist-card--batch .vpv-dense-play,
+.hist-card--batch .vpv-dense-expand,
+.hist-card--batch .vpv-bar-wrap,
+.hist-card--batch .vpv-scrim { display: none; }
 .hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
 .hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
 .hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,
