@@ -96,7 +96,7 @@ function slotSrc(ref: string | null): string {
 <template>
   <div
     v-if="board"
-    class="sb-root"
+    class="sb-root nodrag nopan"
     data-testid="storyboard-grid"
     nodrag=""
     nopan=""

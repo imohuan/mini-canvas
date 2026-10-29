@@ -88,8 +88,8 @@ function onClick(ev: MouseEvent): void {
 .gso-cell {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid rgb(255 255 255 / 0.55);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12);
+  border: 1px solid color-mix(in srgb, var(--ui-overlay, rgb(255 255 255 / 0.88)) 63%, transparent);
+  box-shadow: 0 0 0 1px var(--ui-veil, rgb(0 0 0 / 0.04));
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 /* 悬停：淡青底（跟随鼠标的行/列反馈） */
