@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent 输入框下拉 · 方案实验室</title>
+<link rel="stylesheet" href="./agent-dropdown-lab.css" />
+<link rel="icon" href="data:," />
+</head>
+<body>
+<div class="lab">
+  <header class="lab-head">
+    <div class="lab-intro">
+      <div class="eyebrow">AGENT COMPOSER · DROPDOWN LAB</div>
+      <h1>输入框下拉菜单方案</h1>
+      <p class="lede">技能 / MCP / 模型各有三套整体风格；审核只有两个选项，单独提供三种样式。菜单能真实点选；模型按名称识别平台并显示图标，技能同时演示有封面与暂无封面，MCP 可引用服务或具体工具。</p>
+      <div class="source"><span class="dot ok"></span>静态演示 · 不影响 Agent 面板</div>
+    </div>
+    <div class="legend">
+      <span><b>1</b> 轻卡片</span>
+      <span><b>2</b> 分栏</span>
+      <span><b>3</b> 索引</span>
+    </div>
+  </header>
+
+  <nav class="lab-tabs" id="tabs" role="tablist" aria-label="整体风格方案"></nav>
+
+  <div class="demo-tools">
+    <span class="scheme-note" id="scheme-note"></span>
+    <div class="tools-right">
+      <div class="menu-switch" id="menu-switch" aria-label="预览哪个菜单">
+        <button type="button" data-open="review">审核</button>
+        <button type="button" data-open="skill">技能</button>
+        <button type="button" data-open="mcp">MCP</button>
+        <button type="button" data-open="model">模型</button>
+      </div>
+      <div class="review-switch" id="review-switch" aria-label="审核样式" hidden>
+        <button type="button" data-review-style="compact">紧凑</button>
+        <button type="button" data-review-style="card">卡片</button>
+        <button type="button" data-review-style="compare">对照</button>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="covers-toggle" checked />
+        <span>技能封面</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="chat-bg" aria-hidden="true">
+      <div class="ghost-bubble left">帮我把这个页面改成更清爽的布局。</div>
+      <div class="ghost-bubble right">可以。先选一套你喜欢的下拉风格吧。</div>
+    </div>
+
+    <div class="composer" id="composer">
+      <div class="composer-input">
+        <span class="composer-chips" id="composer-chips"></span>
+        <span class="composer-placeholder">开始你的创作，或者 @ 引用技能 / MCP</span>
+        <span class="composer-caret"></span>
+      </div>
+      <div class="composer-bar">
+        <button class="tb-icon" type="button" aria-label="添加">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="tb-chip" type="button">全能创作 <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+
+        <span class="tb-gap"></span>
+
+        <!-- 审核 -->
+        <div class="dd" data-dd="review">
+          <button class="tb-icon" type="button" data-trigger aria-label="授权方式" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><path d="M9 11V6a2 2 0 0 1 4 0v5"/><path d="M13 11V4a2 2 0 0 1 4 0v7"/><path d="M17 11V6a2 2 0 0 1 4 0v8a6 6 0 0 1-6 6h-2.5a6 6 0 0 1-5.2-3L4 12.5A2 2 0 0 1 7 10l2 2"/></svg>
+          </button>
+        </div>
+
+        <!-- 技能 -->
+        <div class="dd" data-dd="skill">
+          <button class="tb-icon" type="button" data-trigger aria-label="选择技能" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2Z"/><path d="M4 20 14 10"/><path d="M5 5h4M7 3v4M18 15h3M19.5 13.5v3"/></svg>
+          </button>
+        </div>
+
+        <!-- MCP -->
+        <div class="dd" data-dd="mcp">
+          <button class="tb-icon" type="button" data-trigger aria-label="选择 MCP" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><path d="M12 3v6"/><path d="M8 6h8"/><path d="M7 9h10v3a5 5 0 0 1-10 0Z"/><path d="M12 17v4"/></svg>
+          </button>
+        </div>
+
+        <!-- 模型 -->
+        <div class="dd" data-dd="model">
+          <button class="tb-icon tb-modelish" type="button" data-trigger aria-label="选择模型" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+          </button>
+        </div>
+
+        <button class="tb-send" type="button" aria-label="发送">
+          <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </div>
+
+      <div class="menu-layer" id="menu-layer" hidden>
+        <div class="menu-sheet" id="menu-sheet" role="dialog" aria-modal="false"></div>
+      </div>
+      <div class="demo-toast" id="demo-toast" hidden></div>
+    </div>
+  </div>
+
+  <section class="spec">
+    <div class="spec-col">
+      <h2>这套 DEMO 真正解决什么</h2>
+      <ul>
+        <li><b>审核</b>：两个选项 + 规则摘要，危险能力先说清。</li>
+        <li><b>技能</b>：有封面就大卡，没封面也好看；搜索、分类、详情。</li>
+        <li><b>MCP</b>：服务列表 → 展开工具，引用整个服务或单个工具。</li>
+        <li><b>模型</b>：按模型名识别平台，显示官方图标，默认/视觉能力常显。</li>
+      </ul>
+    </div>
+    <div class="spec-col">
+      <h2>接入现有 Dropdown 时</h2>
+      <p>DEMO 只画菜单内部。浮层定位、翻边、点击外部关闭仍交给现有 Dropdown；把 <code>.menu-sheet</code> 的内容放进它的 default 插槽即可。</p>
+      <p class="muted">图标来自开源项目 lobehub/lobe-icons（MIT），已内联，离线也能显示。普通工具图标统一用 24 格线性 SVG，与模型平台标志分开使用。</p>
+    </div>
+  </section>
+
+  <footer class="lab-foot">
+    <span>选择方案后，可继续把对应菜单接入 <code>AgentConversation.vue</code>。</span>
+    <span>演示数据均为示例。</span>
+  </footer>
+</div>
+<script src="./agent-dropdown-lab.js"></script>
+</body>
+</html>
