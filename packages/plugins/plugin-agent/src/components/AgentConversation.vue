@@ -2486,11 +2486,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- 授权方式：接受审核 / 完全自动授权（与设置→Agent→审批规则 是同一个开关）。
                布局照 docs/demo/agent-select-panels 的「审核」面板：标题 + 计数 + 右侧状态小标签，
                下面两条大选项（图标托 / 标题 + 徽章 / 说明 / 单选圈）。 -->
-          <!-- align=start：面板从按钮左缘铺开，箭头也贴左缘 —— 不传它默认居中，
-               宽面板会把按钮挤到面板右端，箭头（按对齐边内缩）就不再指着按钮。 -->
-          <!-- placement=top-end：菜单右缘对按钮右缘（向左铺开），箭头贴右缘指着按钮。
-               不用 align=start：它经 useFloating 的动态拼接后实际按 end 排、
-               而箭头按 start 算，两边不同源会错位（2026-10-29 实测）。 -->
+          <!-- placement=top-end：菜单右缘对按钮右缘（向左铺开）。
+               箭头不看 align、只看触发器中心（AxDropdown 里夹进菜单范围），
+               所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
           <ThemedDropdown v-model="authOpen" placement="top-end" :offset="8" menu-width="360px" menu-role="listbox">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"

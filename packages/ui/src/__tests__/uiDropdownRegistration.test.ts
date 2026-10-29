@@ -170,26 +170,28 @@ describe('箭头的位置契约（结构层）', () => {
 
 
   /**
-   * 箭头横向位置**跟着 align 走**（用户口径 2026-10-07：「下拉左对齐了，但箭头没左对齐」）。
+   * 箭头横向位置**跟着触发器中心走**（用户口径 2026-10-30：「菜单设了宽度，箭头没跟着 trigger」）。
    *
-   * 历史：早先跟触发器中心（箭头全挤左边、看着指向左侧）→ 改成菜单中线；
-   * 但菜单设了 align=start（左对齐触发器）后，菜单左移、箭头仍在中线，于是又不齐了。
-   * 现在按 align 取：start→贴左缘(内缩 PAD)、end→贴右缘、center→中线。
+   * 历史：① 跟触发器中心 → 菜单被 shift 推走时看着偏；② 改跟 align 取菜单左缘/中线/右缘
+   * → 菜单一宽（如 Agent 面板 320↔586）箭头就离按钮很远。
+   * 现在：取触发器中心，只夹进菜单范围内。菜单怎么变宽、怎么被推，箭头都还在按钮正上方。
    */
-  it('箭头横向跟 align 走（start/end/center 三档）', () => {
+  it('箭头横向跟触发器中心走（再夹进菜单）', () => {
     const at = src.indexOf('const arrowStyle = computed')
     const body = src.slice(at, src.indexOf('function clearCloseTimer'))
-    // 必须读到 effectiveAlign（不再写死中线）
-    expect(body, '箭头横向要读 effectiveAlign').toMatch(/effectiveAlign\.value/)
-    // 三档都要有：start 贴左、end 贴右、center 中线
-    expect(body, 'start 档应贴菜单左缘').toMatch(/a === 'start'/)
-    expect(body, 'end 档应贴菜单右缘').toMatch(/a === 'end'/)
-    expect(body, 'center 档仍是中线').toMatch(/ml \+ mw \/ 2/)
-    // 不能再读 floating-ui 的 arrow 中间件输出（按打开那一刻的尺寸算，菜单被内容撑宽后就失准）
+    // 必须读触发器中心，并夹进菜单范围
+    expect(body, '箭头横向要读触发器中心').toMatch(/triggerCenter\('x'\)/)
+    expect(body, '横向要夹进菜单范围').toMatch(/clampTrigger\(triggerCenter\('x'\)/)
+    // 纵向换边时也要跟触发器中心（left/right 方位）
+    expect(body, '纵向要读触发器中心').toMatch(/triggerCenter\('y'\)/)
+    // 不能再按菜单边缘取点，否则菜单一宽箭头就飞走
     const code = body
       .split('\n')
       .filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
       .join('\n')
+    expect(code).not.toMatch(/effectiveAlign\.value/)
+    expect(code).not.toMatch(/ml \+ mw \/ 2/)
+    // 也不能读 floating-ui 的 arrow 中间件输出（按打开那一刻的尺寸算，菜单被内容撑宽后就失准）
     expect(code).not.toMatch(/middlewareData/)
     expect(code).not.toMatch(/d\?\.(x|y)/)
   })
