@@ -1958,6 +1958,73 @@ const tagMenuSearchEl = ref<HTMLInputElement | null>(null)
 /** 锚点相对编辑器左上角的位移与尺寸（由 openTagMenu 量一次算出来） */
 const tagMenuAnchorShift = ref({ x: 0, y: 0 })
 const tagMenuAnchorHeight = ref(1)
+/**
+ * 节点行的 **hover 预览**（用户 2026-10-29 第 3.2 点定稿：右侧独立浮层，不撑开菜单）。
+ *
+ * 结构 = Teleport 到 body 的一块 fixed 浮层，贴在菜单右沿外侧：
+ *   · 菜单本体宽度不变（Dropdown 也不需要知道它的存在）；
+ *   · 媒体与卡片 hover 预览同一套尺寸规则（fitPreviewBox + hoverPreviewMaxSide 配置）；
+ *   · 视频直接播放 mp4（muted/loop/playsinline），图片等比展示。
+ */
+const tagMenuPreviewEntry = ref<TagMenuEntry | null>(null)
+const tagMenuPreviewBox = ref<{ width: number; height: number }>({ width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE })
+const tagMenuPreviewPos = ref({ left: 0, top: 0, above: false })
+const tagMenuPreviewTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const tagMenuPreviewBoxEl = ref<HTMLElement | null>(null)
+/** 命中行 hover：先记条目，120ms 后才真的弹（快速划过不闪） */
+function hoverTagMenuRow(entry: TagMenuEntry, rowEl: HTMLElement): void {
+  if (tagMenuPreviewTimer.value) { clearTimeout(tagMenuPreviewTimer.value); tagMenuPreviewTimer.value = null }
+  tagMenuPreviewEntry.value = entry
+  tagMenuPreviewBox.value = { width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE }
+  tagMenuPreviewTimer.value = setTimeout(() => {
+    tagMenuPreviewTimer.value = null
+    if (tagMenuPreviewEntry.value?.id !== entry.id) return
+    placeTagMenuPreviewByEntry(entry)
+    if (entry.kind === 'video') return // 视频 mp4 直接播，尺寸在 loadedmetadata 校正
+    const img = new Image()
+    img.onload = () => {
+      if (tagMenuPreviewEntry.value?.id !== entry.id) return
+      tagMenuPreviewBox.value = fitPreviewBox(img.naturalWidth, img.naturalHeight)
+      placeTagMenuPreviewByEntry(entry)
+    }
+    img.src = entry.url ?? ''
+  }, 120)
+}
+/**
+ * place 没生效的真机疑点（用户 2026-10-29：浮层总在 0,0）：
+ * 定位不该依赖「hover 瞬间抓到的 rowEl」—— 编辑器重渲染会把行 DOM 换掉，
+ * 闭包里的旧节点 rect 全 0。改为 place 时**现场按 entry.id 查当前行**，
+ * 查不到就查 :hover 行，两路都失败才放弃（浮层仍显示但贴屏角，比错位好）。
+ */
+function placeTagMenuPreviewByEntry(entry: TagMenuEntry): void {
+  const row =
+    (document.querySelector('.nb-tagmenu-row[data-entry-id="' + CSS.escape(entry.id) + '"]') as HTMLElement | null)
+    ?? (document.querySelector('.nb-tagmenu-row:hover') as HTMLElement | null)
+  if (row) placeTagMenuPreview(row.getBoundingClientRect())
+  else console.warn('[bottom-bar] 行 hover 预览：找不到行 DOM（entry=' + entry.id + '）')
+}
+function leaveTagMenuRow(): void {
+  if (tagMenuPreviewTimer.value) { clearTimeout(tagMenuPreviewTimer.value); tagMenuPreviewTimer.value = null }
+  tagMenuPreviewEntry.value = null
+}
+/** 预览盒贴到行右沿外侧（右上对齐行的上沿；右侧放不下翻左侧） */
+function placeTagMenuPreview(rowRect: DOMRect): void {
+  const w = tagMenuPreviewBox.value.width
+  const gap = 8
+  const rightSpace = window.innerWidth - rowRect.right
+  const useLeft = rightSpace < w + gap + 8
+  const left = useLeft ? rowRect.left - w - gap : rowRect.right + gap
+  const maxTop = window.innerHeight - tagMenuPreviewBox.value.height - 8
+  const top = Math.round(Math.min(Math.max(8, rowRect.top), Math.max(8, maxTop)))
+  tagMenuPreviewPos.value = { left: Math.round(left), top, above: !useLeft }
+}
+/** 视频真实尺寸到手 → 校正盒子并重新定位 */
+function onTagMenuPreviewVideoReady(ev: Event): void {
+  const v = ev.target as HTMLVideoElement
+  tagMenuPreviewBox.value = fitPreviewBox(v.videoWidth, v.videoHeight)
+  const entry = tagMenuPreviewEntry.value
+  if (entry) placeTagMenuPreviewByEntry(entry)
+}
 const tagMenuRootStyle = computed<Record<string, string>>(() => ({
   position: 'absolute',
   left: '0px',
@@ -2879,6 +2946,9 @@ function onGlobalLeave(el: Element): void {
               :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
               type="button"
               role="menuitem"
+              :data-entry-id="e.id"
+              @pointerenter="hoverTagMenuRow(e, $event.currentTarget as HTMLElement)"
+              @pointerleave="leaveTagMenuRow()"
               @click.stop="pickTagMenuNode(e)"
             >
               <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
@@ -2904,6 +2974,9 @@ function onGlobalLeave(el: Element): void {
                   :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
                   type="button"
                   role="menuitem"
+                  :data-entry-id="e.id"
+                  @pointerenter="hoverTagMenuRow(e, $event.currentTarget as HTMLElement)"
+                  @pointerleave="leaveTagMenuRow()"
                   @click.stop="pickTagMenuNode(e)"
                 >
                   <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
@@ -2940,6 +3013,9 @@ function onGlobalLeave(el: Element): void {
                 :class="{ 'is-current': e.id === nodeIdOfChip(String(tagMenuChip?.id ?? '')) }"
                 type="button"
                 role="menuitem"
+                :data-entry-id="e.id"
+                @pointerenter="hoverTagMenuRow(e, $event.currentTarget as HTMLElement)"
+                @pointerleave="leaveTagMenuRow()"
                 @click.stop="pickTagMenuNode(e)"
               >
                 <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
@@ -2952,6 +3028,44 @@ function onGlobalLeave(el: Element): void {
           </div>
         </template>
       </Dropdown>
+
+    <!--
+      节点行 hover 预览（用户 2026-10-29 第 3.2 点）：**独立浮层**，Teleport 到 body，
+      贴在菜单行右沿外侧 —— 不在菜单 DOM 里，不撑开菜单宽度/高度。
+      媒体尺寸规则与卡片 hover 预览同一套（fitPreviewBox，视频自动播放）。
+    -->
+    <Teleport to="body">
+      <div
+        v-if="tagMenuOpen && tagMenuPreviewEntry"
+        class="nb-tagpreview"
+        :style="{
+          left: tagMenuPreviewPos.left + 'px',
+          top: tagMenuPreviewPos.top + 'px',
+          width: tagMenuPreviewBox.width + 'px',
+          height: tagMenuPreviewBox.height + 'px',
+        }"
+        ref="tagMenuPreviewBoxEl"
+      >
+        <video
+          v-if="tagMenuPreviewEntry.kind === 'video' && tagMenuPreviewEntry.url"
+          class="nb-tagpreview-media"
+          data-media="video"
+          :src="tagMenuPreviewEntry.url"
+          @loadedmetadata="onTagMenuPreviewVideoReady"
+          autoplay
+          muted
+          loop
+          playsinline
+        />
+        <img
+          v-else-if="tagMenuPreviewEntry.url"
+          class="nb-tagpreview-media"
+          :src="tagMenuPreviewEntry.url"
+          alt=""
+        />
+        <span v-else class="nb-tagpreview-empty">（无预览）</span>
+      </div>
+    </Teleport>
     </div>
 
     <!-- 底部行：左模型 + 参数串，右图标·计数·圆形发送（照参考图） -->
@@ -3979,6 +4093,38 @@ function onGlobalLeave(el: Element): void {
   padding: 8px;
   border-radius: 16px;
   background: var(--ui-overlay-solid, #fff);
+}
+/*
+ * 节点行 hover 预览浮层（用户 2026-10-29 第 3.2 点）：Teleport 到 body 的独立块。
+ * 尺寸由内联样式写（fitPreviewBox 按素材比例算好），这里只管外观与层级。
+ */
+.nb-tagpreview {
+  position: fixed;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100003; /* 菜单之上（Dropdown 的浮层链在上面一级） */
+  pointer-events: none; /* 纯展示：不挡菜单行的 hover/点击 */
+}
+.nb-tagpreview-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.nb-tagpreview-media[data-media='video'] {
+  /* 主题色白名单: 视频画面黑衬底（与卡片 hover 预览同一规则） */
+  background: var(--ui-tip, #000);
+}
+.nb-tagpreview-empty {
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
 }
 .nb-tagmenu-panes {
   display: flex;
