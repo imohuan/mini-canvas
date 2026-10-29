@@ -1967,25 +1967,57 @@ const tagMenuAnchorHeight = ref(1)
  *   · 视频直接播放 mp4（muted/loop/playsinline），图片等比展示。
  */
 const tagMenuPreviewEntry = ref<TagMenuEntry | null>(null)
+/** 浮层可见性：尺寸/位置就绪前不显示（杜绝「弹出后再改大小」的跳动） */
+const tagMenuPreviewVisible = ref(false)
 const tagMenuPreviewBox = ref<{ width: number; height: number }>({ width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE })
 const tagMenuPreviewPos = ref({ left: 0, top: 0, above: false })
 const tagMenuPreviewTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const tagMenuPreviewBoxEl = ref<HTMLElement | null>(null)
-/** 命中行 hover：先记条目，120ms 后才真的弹（快速划过不闪） */
+/**
+ * 命中行 hover：先记条目，120ms 后才真的弹（快速划过不闪）。
+ *
+ * **先量尺寸、再一次定位**（用户 2026-10-30 图 2：浮层显示时还在移动/变大小）：
+ * 图片用 Image 预载拿 naturalWidth/Height 算好盒子，视频已知 kind=video 但
+ * 比例未知 → 按上限给方盒、metadata 后只**缩到真实比例**（中心不变）。
+ * 位置只算一次，之后绝不重摆 —— 浮层出现即稳定。
+ */
 function hoverTagMenuRow(entry: TagMenuEntry, rowEl: HTMLElement): void {
   if (tagMenuPreviewTimer.value) { clearTimeout(tagMenuPreviewTimer.value); tagMenuPreviewTimer.value = null }
   tagMenuPreviewEntry.value = entry
+  // 立刻按行右沿摆一个**隐藏占位**（opacity 0）：尺寸到手才显示，杜绝「先弹 200 方盒再缩」
   tagMenuPreviewBox.value = { width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE }
+  tagMenuPreviewVisible.value = false
   tagMenuPreviewTimer.value = setTimeout(() => {
     tagMenuPreviewTimer.value = null
     if (tagMenuPreviewEntry.value?.id !== entry.id) return
-    placeTagMenuPreviewByEntry(entry)
-    if (entry.kind === 'video') return // 视频 mp4 直接播，尺寸在 loadedmetadata 校正
+    if (entry.kind === 'video') {
+      // 视频：预载 metadata 拿真实宽高比 → 算盒子 → 定位 → 一次显示
+      // （与图片同一流程；探测用的 <video> 不挂 DOM，无声不播，只读尺寸）
+      const probe = document.createElement('video')
+      probe.preload = 'metadata'
+      probe.muted = true
+      probe.onloadedmetadata = () => {
+        if (tagMenuPreviewEntry.value?.id !== entry.id) return
+        tagMenuPreviewBox.value = fitPreviewBox(probe.videoWidth, probe.videoHeight)
+        placeTagMenuPreviewByEntry(entry)
+        tagMenuPreviewVisible.value = true
+      }
+      probe.onerror = () => {
+        if (tagMenuPreviewEntry.value?.id !== entry.id) return
+        // 元数据读不到（编码/跨域）：退回方盒显示，至少有画面
+        placeTagMenuPreviewByEntry(entry)
+        tagMenuPreviewVisible.value = true
+      }
+      probe.src = entry.url ?? ''
+      return
+    }
+    // 图片：预载量尺寸 → 算盒子 → 定位 → 一次显示
     const img = new Image()
     img.onload = () => {
       if (tagMenuPreviewEntry.value?.id !== entry.id) return
       tagMenuPreviewBox.value = fitPreviewBox(img.naturalWidth, img.naturalHeight)
       placeTagMenuPreviewByEntry(entry)
+      tagMenuPreviewVisible.value = true
     }
     img.src = entry.url ?? ''
   }, 120)
@@ -2006,6 +2038,7 @@ function placeTagMenuPreviewByEntry(entry: TagMenuEntry): void {
 function leaveTagMenuRow(): void {
   if (tagMenuPreviewTimer.value) { clearTimeout(tagMenuPreviewTimer.value); tagMenuPreviewTimer.value = null }
   tagMenuPreviewEntry.value = null
+  tagMenuPreviewVisible.value = false
 }
 /** 预览盒贴到行右沿外侧（右上对齐行的上沿；右侧放不下翻左侧） */
 function placeTagMenuPreview(rowRect: DOMRect): void {
@@ -2017,13 +2050,6 @@ function placeTagMenuPreview(rowRect: DOMRect): void {
   const maxTop = window.innerHeight - tagMenuPreviewBox.value.height - 8
   const top = Math.round(Math.min(Math.max(8, rowRect.top), Math.max(8, maxTop)))
   tagMenuPreviewPos.value = { left: Math.round(left), top, above: !useLeft }
-}
-/** 视频真实尺寸到手 → 校正盒子并重新定位 */
-function onTagMenuPreviewVideoReady(ev: Event): void {
-  const v = ev.target as HTMLVideoElement
-  tagMenuPreviewBox.value = fitPreviewBox(v.videoWidth, v.videoHeight)
-  const entry = tagMenuPreviewEntry.value
-  if (entry) placeTagMenuPreviewByEntry(entry)
 }
 const tagMenuRootStyle = computed<Record<string, string>>(() => ({
   position: 'absolute',
@@ -2102,6 +2128,22 @@ const tagMenuActiveItems = computed<TagMenuEntry[]>(() => {
   return kinds.find((k) => k.kind === tagMenuActiveKind.value)?.items ?? kinds[0]?.items ?? []
 })
 const tagMenuFlatItems = computed(() => tagMenuGroups.value.flatMap((g) => g.items))
+/**
+ * 菜单行的缩略图地址（用户 2026-10-30 图 1 第 2 点：视频行没缩略图）。
+ *
+ * 与**标签**同一来源（renderRefChip 造 item 时视频用 videoThumbOf 帧图）：
+ *   · 视频 → videoThumbOf（插件截帧，同源缓存 —— 标签上那张就是它）；
+ *   · 图片 → 原地址；音频/文本没有画面 → 空串（走类型图标）。
+ * 帧图还没截到 → 空串显示图标；openTagMenu 会对全画布视频预热截帧，
+ * 截到后 videoThumbTick +1 驱动行重渲染换图。
+ */
+function tagMenuThumbOf(e: { kind: string; url?: string }): string {
+  void videoThumbTick.value // 截到新帧时行要跟着换图
+  if (!e.url) return ''
+  if (e.kind === 'video') return videoThumbOf(e.url) ?? ''
+  if (e.kind === 'audio' || e.kind === 'text') return ''
+  return e.url
+}
 
 /** 打开菜单：把 Dropdown 的 0 尺寸锚点挪到被点的图标下沿，定位/翻转/点外关闭全交给 Dropdown */
 function openTagMenu(
@@ -2119,6 +2161,27 @@ function openTagMenu(
   tagMenuOpen.value = false
   tagMenuAnchorShift.value = { x: 0, y: 0 }
   tagMenuAnchorHeight.value = Math.max(1, Math.round(anchor.bottom - anchor.top))
+  /**
+   * 菜单要列**全画布**的视频（用户 2026-10-30 图 1：视频行必须有缩略图）。
+   * 帧图缓存平时只预热「本节点参考里的视频」，其它节点的视频没截过帧。
+   * 打开菜单时把全画布视频统一预热一次：有缓存直接跳过；取到新帧
+   * videoThumbTick +1，tagMenuThumbOf 里读了 tick，行自动换上缩略图。
+   */
+  void (async () => {
+    const capture = videoProvider()
+    if (!capture) return
+    const doc = ctx.tryGet<{ getNodes(): Array<{ id: string; type?: string; data?: Record<string, unknown> }> }>('doc')
+    if (!doc || typeof doc.getNodes !== 'function') return
+    let touched = false
+    for (const n of doc.getNodes()) {
+      const media = nodeMediaOf(n) ?? typeOnlyMediaOf(n)
+      if (!media || media.mediaType !== 'video' || !media.url) continue
+      if (peekVideoThumb(media.url)) continue
+      const thumb = await ensureVideoThumb(media.url, capture)
+      if (thumb) touched = true
+    }
+    if (touched) videoThumbTick.value += 1
+  })()
   /**
    * 定位用「量一次、补一次」，不写视口坐标。
    *
@@ -2952,7 +3015,7 @@ function onGlobalLeave(el: Element): void {
               @click.stop="pickTagMenuNode(e)"
             >
               <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
-                <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
+                <img v-if="tagMenuThumbOf(e)" :src="tagMenuThumbOf(e)" alt="" draggable="false" />
               </span>
               <span class="nb-tagmenu-name">{{ e.name }}</span>
               <svg v-if="e.referenced" class="nb-tagmenu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2980,7 +3043,7 @@ function onGlobalLeave(el: Element): void {
                   @click.stop="pickTagMenuNode(e)"
                 >
                   <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
-                    <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
+                    <img v-if="tagMenuThumbOf(e)" :src="tagMenuThumbOf(e)" alt="" draggable="false" />
                   </span>
                   <span class="nb-tagmenu-name">{{ e.name }}</span>
                 </button>
@@ -3019,7 +3082,7 @@ function onGlobalLeave(el: Element): void {
                 @click.stop="pickTagMenuNode(e)"
               >
                 <span class="nb-tagmenu-thumb" :data-kind="e.kind" aria-hidden="true">
-                  <img v-if="e.kind === 'image' && e.url" :src="e.url" alt="" draggable="false" />
+                  <img v-if="tagMenuThumbOf(e)" :src="tagMenuThumbOf(e)" alt="" draggable="false" />
                 </span>
                 <span class="nb-tagmenu-name">{{ e.name }}</span>
               </button>
@@ -3036,7 +3099,7 @@ function onGlobalLeave(el: Element): void {
     -->
     <Teleport to="body">
       <div
-        v-if="tagMenuOpen && tagMenuPreviewEntry"
+        v-if="tagMenuOpen && tagMenuPreviewEntry && tagMenuPreviewVisible"
         class="nb-tagpreview"
         :style="{
           left: tagMenuPreviewPos.left + 'px',
@@ -3051,7 +3114,6 @@ function onGlobalLeave(el: Element): void {
           class="nb-tagpreview-media"
           data-media="video"
           :src="tagMenuPreviewEntry.url"
-          @loadedmetadata="onTagMenuPreviewVideoReady"
           autoplay
           muted
           loop
@@ -4166,13 +4228,17 @@ function onGlobalLeave(el: Element): void {
   margin: 0 0 6px;
   padding: 0 10px;
   height: 32px;
-  border: 1px solid var(--ui-line, #e2e5ea);
+  /**
+   * 黑白基础色（用户 2026-10-30 图 1：暗色主题下边框发紫、底色发灰主题化）。
+   * 菜单是画布上的中性浮层，不跟随主题：边框/底色/聚焦都固定黑白灰。
+   */
+  border: 1px solid #e2e5ea;
   border-radius: 10px;
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
-  color: var(--ui-ink-mute, #8c95a3);
+  background: #fff;
+  color: #8c95a3;
 }
 .nb-tagmenu-search:focus-within {
-  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
+  border-color: #18202b;
 }
 .nb-tagmenu-search svg {
   width: 14px;
@@ -4186,13 +4252,13 @@ function onGlobalLeave(el: Element): void {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ui-ink, #18202b);
+  color: #18202b;
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 .nb-tagmenu-search input::placeholder {
-  color: var(--ui-ink-faint, #9ca3af);
+  color: #9ca3af;
 }
 .nb-tagmenu-list {
   display: flex;
