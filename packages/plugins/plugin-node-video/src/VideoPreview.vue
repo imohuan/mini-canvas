@@ -458,7 +458,9 @@ watch(
 /* 正在播放时一律收起播放键：点卡片本身就是暂停（用户口径 2026-10-29：
    播放中不该再显示站停按钮 —— 之前带 :not(:hover)，鼠标停在画面上它又冒出来）。
    暂停状态永远显示播放键（提示「点这里继续」）。 */
-.vpv-root.is-dense .vpv-dense.is-playing .vpv-dense-play { opacity: 0; pointer-events: none; }
+/* 根元素没有 is-dense class（旧规则 .vpv-root.is-dense 永远不匹配 —— 10-11 起播放中
+   按钮就一直显示，用户实测抓到）。直接按小屏态容器匹配。 */
+.vpv-dense.is-playing .vpv-dense-play { opacity: 0; pointer-events: none; }
 
 .vpv-dense-expand {
   position: absolute;
