@@ -636,22 +636,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     }
   }
 
-  function openDb() {
-    return new Promise(function (resolve, reject) {
-      if (!('indexedDB' in window)) {
-        reject(new Error('indexeddb-unavailable'));
-        return;
-      }
-      var request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = function () {
-        var db = request.result;
-        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
-      };
-      request.onsuccess = function () { resolve(request.result); };
-      request.onerror = function () { reject(request.error || new Error('db-open-failed')); };
-    });
-  }
-
   async function saveVideoBlob(file) {
     var db = await openDb();
     try {
@@ -684,6 +668,27 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     } finally {
       db.close();
     }
+  }
+
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      if (!('indexedDB' in window)) {
+        reject(new Error('indexeddb-unavailable'));
+        return;
+      }
+      try {
+        var request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = function () {
+          var db = request.result;
+          if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+        };
+        request.onsuccess = function () { resolve(request.result); };
+        request.onerror = function () { reject(request.error || new Error('db-open-failed')); };
+        request.onblocked = function () { reject(new Error('db-open-blocked')); };
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   function waitForVideoMetadata(video, timeoutMs) {
@@ -850,12 +855,18 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       updateTimeUi();
       return;
     }
+    if (state.drag) {
+      updatePlayhead();
+      state.rafId = requestAnimationFrame(tickPlayhead);
+      return;
+    }
     var current = els.video.currentTime;
     if (current >= state.end - 0.015) {
       if (state.loop) {
         try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
       } else {
         els.video.pause();
+        stopPlayheadLoop();
         try { els.video.currentTime = state.end; } catch (error) { /* ignore */ }
         updateTimeUi();
         return;
@@ -888,6 +899,9 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     var next = normalizeRange(start, end);
     state.start = next.start;
     state.end = next.end;
+    if (state.rafId && els.video.currentTime > state.end) {
+      try { els.video.currentTime = state.end; } catch (error) { /* ignore */ }
+    }
     updateSelectionUi();
     if (options && options.save) saveRange();
     if (options && options.preview) previewBoundary(options.edge || 'start', true);
@@ -1138,6 +1152,9 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       fromEnd: state.end
     };
     els.selection.classList.add('is-dragging');
+    if (state.rafId) {
+      try { els.video.pause(); } catch (error) { /* ignore */ }
+    }
     window.addEventListener('pointermove', onDragMove);
     window.addEventListener('pointerup', endDrag);
     window.addEventListener('pointercancel', endDrag);
@@ -1325,46 +1342,12 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
   });
 
-  // Dev-only override for automated checks: ?video=<same-origin video URL>.
-  // Normal visitors never hit this path.
-  function loadDevVideoFromQuery() {
-    var url = '';
-    try {
-      url = new URLSearchParams(window.location.search).get('video') || '';
-    } catch (error) {
-      return false;
-    }
-    if (!url) return false;
-    setStatus('正在载入测试视频…', 'ok', 0);
-    fetch(url).then(function (response) {
-      if (!response.ok) throw new Error('http-' + response.status);
-      return response.blob();
-    }).then(function (blob) {
-      var name = decodeURIComponent(url.split('/').pop() || '测试视频.mp4');
-      return handleFile(new File([blob], name, { type: blob.type || 'video/mp4' }));
-    }).catch(function (error) {
-      console.warn('测试视频载入失败', error);
-      setStatus('测试视频载入失败', 'error', 4000);
-    });
-    return true;
-  }
-
   syncSnapUi();
   syncLoopUi();
   updateSelectionUi();
   updateTimeUi();
-  if (!loadDevVideoFromQuery()) restoreSavedVideo();
+  restoreSavedVideo();
 
-  // Local testing hook: lets an automated check supply a video when the
-  // browser extension cannot open a file picker. It only calls the same
-  // handleFile path as a normal upload and does not bypass validation.
-  window.__videoClipDemo = {
-    loadFile: handleFile,
-    state: state
-  };
-  window.__videoClipDemoReady = true;
-  document.documentElement.setAttribute('data-demo-boot', '1');
-  document.documentElement.setAttribute('data-demo-hook', typeof window.__videoClipDemo);
 })();
 </script>
 </body>
