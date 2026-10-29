@@ -289,6 +289,20 @@ describe('cropVideo / resetCrop：取景式裁剪', () => {
     expect(data.cardWidth).toBe(560)
     expect(data.cardHeight).toBe(315)
   })
+
+  it('resetCrop 用 dataUnset 真正删除 cropRect 键（浅合并删不掉键）', () => {
+    const id = makeNode(env.nodeStore, {
+      videoUrl: 'blob:v',
+      videoWidth: 1280,
+      videoHeight: 720,
+      cropRect: { x: 10, y: 10, width: 100, height: 100 },
+    })
+    const ops = createVideoOps(env.ctx)
+    expect(resetCrop(ops, id)).toBe(true)
+    const data = env.nodeStore.getNode(id)!.data
+    // 键必须不存在（而不是留一个值为 undefined 的键 —— 那会随快照/落盘语义漂移）
+    expect('cropRect' in data).toBe(false)
+  })
 })
 
 describe('clipVideo / resetClip：剪辑范围', () => {

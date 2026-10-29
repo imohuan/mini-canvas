@@ -37,8 +37,10 @@ export interface VideoOpsContext {
    * 写回节点 data（务必走内核 graph，带历史与落盘）。
    * @param size 传了就同时写内核**正式尺寸字段** node.size —— 必须与 data 在同一个 patch 里提交，
    *   否则一次换视频/裁剪会记两条撤销记录（用户按一次撤销只退半步）。
+   * @param unset 要**删除**的 data 键（内核 data 是浅合并，给 undefined 删不掉键，
+   *   必须走内核 dataUnset 才真的移除）
    */
-  write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }): void
+  write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }, unset?: string[]): void
   /** 视频预览上限（配置 videoFitMaxWidth/videoFitMaxHeight）；不注入则回落 560×360 */
   fitLimits?(): VideoFitLimits
   /**
@@ -196,8 +198,13 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
   return {
     read: (nodeId) => doc()?.getNode(nodeId)?.data,
     // size 与 data 在**同一次** updateNode 里提交：内核按 patch 记一条历史 → 一次撤销退干净
-    write: (nodeId, data, size) =>
-      doc()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
+  write: (nodeId, data, size, unset) =>
+    doc()?.updateNode(
+      nodeId,
+      size !== undefined
+        ? { data, size: { w: size.w, h: size.h }, ...(unset ? { dataUnset: unset } : {}) }
+        : { data, ...(unset ? { dataUnset: unset } : {}) },
+    ),
     // 上限解析只有一份实现（videoFit.readVideoFitLimits）：不在这里再抄一遍"读配置 + 回落"的兜底
     fitLimits: () => readVideoFitLimits(svc),
     hasType: (type) => (doc() ? doc()!.types.has(type) : true),
@@ -302,14 +309,14 @@ export function videoTitleExtra(data: Record<string, unknown> | undefined): stri
  * 尺寸算不出（元数据没读出来/非法）时只写 data 并**清掉旧尺寸** —— 不能留着上一段视频的
  * 卡片尺寸（那会让新视频被硬塞进旧比例里）。
  */
-function writeVideoData(ctx: VideoOpsContext, nodeId: string, data: Record<string, unknown>): void {
+function writeVideoData(ctx: VideoOpsContext, nodeId: string, data: Record<string, unknown>, unset?: string[]): void {
   const sizes = videoCardSizePatch(data.videoWidth, data.videoHeight, ctx.fitLimits?.())
   if (!sizes) {
-    ctx.write(nodeId, data)
+    ctx.write(nodeId, data, undefined, unset)
     return
   }
   // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐
-  ctx.write(nodeId, data, sizes.size)
+  ctx.write(nodeId, data, sizes.size, unset)
 }
 
 /**
@@ -335,10 +342,6 @@ export async function loadVideo(
   const meta = await transform.readMeta(url)
   const patch: Record<string, unknown> = {
     videoUrl: url,
-    // 全新的画面：裁剪框与剪辑范围都属于上一段视频，一并清掉
-    cropRect: undefined,
-    clipStart: undefined,
-    clipEnd: undefined,
     ...(extra ?? {}),
   }
   if (metaIn?.name) patch.videoName = metaIn.name
@@ -348,7 +351,8 @@ export async function loadVideo(
     patch.videoHeight = meta.height
     patch.videoDuration = meta.duration
   }
-  writeVideoData(ctx, nodeId, { ...(ctx.read(nodeId) ?? {}), ...patch })
+  // 全新的画面：裁剪框与剪辑范围都属于上一段视频，一并清掉（dataUnset 才真的删得掉键）
+  writeVideoData(ctx, nodeId, { ...(ctx.read(nodeId) ?? {}), ...patch }, ['cropRect', 'clipStart', 'clipEnd'])
   return true
 }
 
@@ -434,8 +438,9 @@ export function cropVideo(ctx: VideoOpsContext, nodeId: string, rect: Rect): boo
 export function resetCrop(ctx: VideoOpsContext, nodeId: string): boolean {
   const current = ctx.read(nodeId)
   if (!current) return false
-  const next: Record<string, unknown> = { ...current, cropRect: undefined }
-  return writeWithSize(ctx, nodeId, next, Number(current.videoWidth), Number(current.videoHeight))
+  const next: Record<string, unknown> = { ...current }
+  // cropRect 必须走 dataUnset：浅合并删不掉键（内核 data patch 的合并语义）
+  return writeWithSize(ctx, nodeId, next, Number(current.videoWidth), Number(current.videoHeight), ['cropRect'])
 }
 
 /** 写 data 并同时把卡片调成给定画面尺寸的比例（拿不到尺寸就只写 data） */
@@ -445,16 +450,18 @@ function writeWithSize(
   data: Record<string, unknown>,
   width: unknown,
   height: unknown,
+  unset?: string[],
 ): boolean {
   const sizes = videoCardSizePatch(width, height, ctx.fitLimits?.())
   if (!sizes) {
-    ctx.write(nodeId, data)
+    ctx.write(nodeId, data, undefined, unset)
     return true
   }
   ctx.write(
     nodeId,
     data,
     sizes.size,
+    unset,
   )
   return true
 }
@@ -482,7 +489,7 @@ export function clipVideo(
 export function resetClip(ctx: VideoOpsContext, nodeId: string): boolean {
   const current = ctx.read(nodeId)
   if (!current) return false
-  ctx.write(nodeId, { ...current, clipStart: undefined, clipEnd: undefined })
+  ctx.write(nodeId, { ...current }, undefined, ['clipStart', 'clipEnd'])
   return true
 }
 
