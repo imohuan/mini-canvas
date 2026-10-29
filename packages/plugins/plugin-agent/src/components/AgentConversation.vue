@@ -20,6 +20,7 @@ import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Loader2, Sparkles, Plus, Box,
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
+  Search, LayoutGrid, Columns3,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
   Minimize2, AlertCircle, GripVertical, CircleSlash,
 } from 'lucide-vue-next'
@@ -1341,6 +1342,55 @@ function onKeydown(e: KeyboardEvent): void {
 const usableModels = computed(() => s.models.filter((m) => m.hasKey))
 
 /**
+ * 面板化下拉（demo 同款）的本地状态：搜索词 / 视图 / 平台过滤。
+ * 只放在这里，不进全局 store —— 它是菜单内部的浏览状态，关掉即重置（demo 口径）。
+ */
+const modelQuery = ref('')
+const modelView = ref<'card' | 'split'>('card')
+const modelPlatform = ref('all')
+const skillQuery = ref('')
+const skillView = ref<'card' | 'split'>('card')
+const mcpQuery = ref('')
+
+function modelNote(m: { contextWindow?: number; isVision: boolean }): string {
+  if (m.contextWindow) return Math.round(m.contextWindow / 1000) + 'K'
+  return m.isVision ? '视觉' : ''
+}
+
+const modelPlatformGroups = computed(() => {
+  const order: Array<{ provider: string; label: string; count: number }> = []
+  for (const m of usableModels.value) {
+    const hit = order.find((g) => g.provider === m.provider)
+    if (hit) hit.count++
+    else order.push({ provider: m.provider, label: m.provider, count: 1 })
+  }
+  return [{ provider: 'all', label: '全部平台', count: usableModels.value.length }, ...order]
+})
+
+const filteredModels = computed(() => {
+  const q = modelQuery.value.trim().toLowerCase()
+  return usableModels.value.filter((m) => {
+    if (modelPlatform.value !== 'all' && m.provider !== modelPlatform.value) return false
+    if (!q) return true
+    return (m.modelId + ' ' + m.provider).toLowerCase().includes(q)
+  })
+})
+
+const filteredSkills = computed(() => {
+  const q = skillQuery.value.trim().toLowerCase()
+  const items = skillResources(s.skills)
+  if (!q) return items
+  return items.filter((item) => (item.name + ' ' + item.value).toLowerCase().includes(q))
+})
+
+const filteredMcpResources = computed(() => {
+  const q = mcpQuery.value.trim().toLowerCase()
+  const items = mcpResources(s.mcpServers)
+  if (!q) return items
+  return items.filter((item) => (item.name + ' ' + item.value).toLowerCase().includes(q))
+})
+
+/**
  * 模型列表的滚动区（`.ac-menu-scroll`）。
  *
  * 为什么打开时要滚一下（用户口径 2026-10-10，附截图）：模型可能几十条（自建网关几十上百个
@@ -2278,26 +2328,84 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择模型">
-                <!-- 分组头（照参考图：标题 + 计数），让"这是哪一类"一眼可见 -->
-                <div v-if="usableModels.length" class="ac-menu-head">
-                  <span class="ac-menu-head-title">模型</span>
-                  <span class="ac-menu-head-count">{{ usableModels.length }}</span>
+                <div class="ac-panel-head-top">
+                  <div class="ac-panel-heading">
+                    <span class="ac-panel-title">模型</span>
+                    <span class="ac-panel-count">{{ usableModels.length }}</span>
+                  </div>
+                  <div class="ac-panel-search">
+                    <span class="ac-panel-search-icon" aria-hidden="true"><Search :size="14" /></span>
+                    <input v-model="modelQuery" class="ac-panel-search-input" type="search" name="ac-model-search"
+                      placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
+                    <button v-if="modelQuery" class="ac-panel-search-clear" aria-label="清空搜索" @click="modelQuery = ''">
+                      <X :size="12" />
+                    </button>
+                  </div>
+                  <div class="ac-panel-tools">
+                    <button class="ac-panel-seg" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
+                      <LayoutGrid :size="13" />
+                    </button>
+                    <button class="ac-panel-seg" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
+                      <Columns3 :size="13" />
+                    </button>
+                  </div>
                 </div>
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
                      ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
                 <div class="ac-menu-scroll" ref="modelScrollRef">
-                  <button v-for="m in usableModels" :key="m.provider + '/' + m.modelId" class="ac-menu-card"
-                    role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
-                    <span class="ac-menu-card-icon">
-                      <Box :size="15" />
-                    </span>
-                    <span class="ac-menu-card-text">
-                      <span class="ac-menu-card-name">{{ m.modelId }}</span>
-                      <span class="ac-menu-card-hint">{{ m.provider }}{{ m.isDefault ? ' · 默认' : '' }}</span>
-                    </span>
-                    <CircleCheck v-if="s.model?.modelId === m.modelId" :size="15" class="ac-menu-card-check" />
-                  </button>
+                  <div class="ac-panel-body">
+                  <div v-if="modelView === 'card'">
+                    <div v-if="filteredModels.length" class="ac-model-grid">
+                      <button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" class="ac-model-card"
+                        role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
+                        <span class="ac-model-brand" aria-hidden="true"><Box :size="22" /></span>
+                        <span class="ac-model-copy">
+                          <span class="ac-model-id">{{ m.modelId }}</span>
+                          <span class="ac-model-meta">
+                            <span>{{ m.provider }}</span>
+                            <span class="ac-dot-sep" aria-hidden="true"></span>
+                            <span>{{ modelNote(m) }}</span>
+                          </span>
+                        </span>
+                        <span v-if="m.isDefault" class="ac-model-badge">默认</span>
+                      </button>
+                    </div>
+                    <div v-else class="ac-menu-empty">没有找到模型</div>
+                  </div>
+                  <div v-else class="ac-split">
+                    <aside class="ac-split-rail" aria-label="模型平台">
+                      <div class="ac-rail-scroll">
+                        <button v-for="g in modelPlatformGroups" :key="g.provider" class="ac-rail-item"
+                          :aria-pressed="modelPlatform === g.provider" @click="modelPlatform = g.provider">
+                          <span class="ac-rail-name">{{ g.label }}</span>
+                          <span class="ac-rail-count">{{ g.count }}</span>
+                        </button>
+                      </div>
+                    </aside>
+                    <div class="ac-split-main">
+                      <div v-if="filteredModels.length" class="ac-model-row-list">
+                        <button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" class="ac-model-row"
+                          role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
+                          <span class="ac-model-brand" aria-hidden="true"><Box :size="22" /></span>
+                          <span class="ac-model-copy">
+                            <span class="ac-model-id">{{ m.modelId }}</span>
+                            <span class="ac-model-meta">
+                              <span>{{ m.provider }}</span>
+                              <span class="ac-dot-sep" aria-hidden="true"></span>
+                              <span>{{ modelNote(m) }}</span>
+                            </span>
+                          </span>
+                          <span v-if="m.isDefault" class="ac-model-badge">默认</span>
+                        </button>
+                      </div>
+                      <div v-else class="ac-menu-empty">没有找到模型</div>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+                <div class="ac-panel-foot">
+                  <span class="ac-selection-summary">{{ s.model ? '已选 1 个模型' : '未选择模型' }}</span>
                 </div>
               </div>
             </template>
@@ -2305,7 +2413,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
           <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-start" :offset="8"
-            menu-width="320px" menu-max-width="340px" menu-max-height="340px" menu-role="listbox" layout="inner-scroll">
+            menu-width="420px" menu-max-width="440px" menu-max-height="420px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
@@ -2315,19 +2423,66 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择技能">
-                <div class="ac-menu-head">
-                  <span class="ac-menu-head-title">技能</span>
-                  <span class="ac-menu-head-count">{{ s.skills.length }}</span>
+                <div class="ac-panel-head-top">
+                  <div class="ac-panel-heading">
+                    <span class="ac-panel-title">技能</span>
+                    <span class="ac-panel-count">{{ s.skills.length }}</span>
+                  </div>
+                  <div class="ac-panel-search">
+                    <span class="ac-panel-search-icon" aria-hidden="true"><Search :size="14" /></span>
+                    <input v-model="skillQuery" class="ac-panel-search-input" type="search" name="ac-skill-search"
+                      placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
+                    <button v-if="skillQuery" class="ac-panel-search-clear" aria-label="清空搜索" @click="skillQuery = ''">
+                      <X :size="12" />
+                    </button>
+                  </div>
+                  <div class="ac-panel-tools">
+                    <button class="ac-panel-seg" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
+                      <LayoutGrid :size="13" />
+                    </button>
+                    <button class="ac-panel-seg" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
+                      <Columns3 :size="13" />
+                    </button>
+                  </div>
                 </div>
-                <div class="ac-menu-scroll">
-                  <button v-for="item in skillResources(s.skills)" :key="item.id" class="ac-menu-card" role="option"
-                    :aria-selected="false" :title="item.value" @click="insertRef(item, close)">
-                    <span class="ac-menu-card-icon" v-html="ICON_SKILL" aria-hidden="true"></span>
-                    <span class="ac-menu-card-text">
-                      <span class="ac-menu-card-name">{{ item.name }}</span>
-                      <span v-if="item.value" class="ac-menu-card-hint">{{ item.value }}</span>
-                    </span>
-                  </button>
+                <div class="ac-panel-body">
+                  <div v-if="skillView === 'card'">
+                    <div v-if="filteredSkills.length" class="ac-skill-grid">
+                      <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-card" role="option"
+                        :title="item.value" @click="insertRef(item, close)">
+                        <span class="ac-skill-thumb" v-html="ICON_SKILL" aria-hidden="true"></span>
+                        <span class="ac-skill-copy">
+                          <span class="ac-skill-name">{{ item.name }}</span>
+                          <span class="ac-skill-desc">{{ item.value }}</span>
+                        </span>
+                      </button>
+                    </div>
+                    <div v-else class="ac-menu-empty">没有找到技能</div>
+                  </div>
+                  <div v-else class="ac-split">
+                    <aside class="ac-split-rail" aria-label="技能入口">
+                      <div class="ac-rail-scroll">
+                        <div class="ac-rail-label">入口</div>
+                        <p class="ac-rail-note">技能按名称直接引用；分栏视图保留入口，方便以后加分类。</p>
+                      </div>
+                    </aside>
+                    <div class="ac-split-main">
+                      <div v-if="filteredSkills.length" class="ac-skill-tile-grid">
+                        <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option"
+                          :title="item.value" @click="insertRef(item, close)">
+                          <span class="ac-skill-cover" v-html="ICON_SKILL" aria-hidden="true"></span>
+                          <span class="ac-skill-tile-body">
+                            <span class="ac-skill-name">{{ item.name }}</span>
+                            <span class="ac-skill-desc">{{ item.value }}</span>
+                          </span>
+                        </button>
+                      </div>
+                      <div v-else class="ac-menu-empty">没有找到技能</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="ac-panel-foot">
+                  <span class="ac-selection-summary">点击技能会直接插入标签</span>
                 </div>
               </div>
             </template>
@@ -2335,7 +2490,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
           <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-start" :offset="8"
-            menu-width="320px" menu-max-width="340px" menu-max-height="340px" menu-role="listbox" layout="inner-scroll">
+            menu-width="420px" menu-max-width="440px" menu-max-height="420px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <button class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
@@ -2344,34 +2499,47 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择 MCP">
-                <div class="ac-menu-head">
-                  <span class="ac-menu-head-title">MCP</span>
-                  <span class="ac-menu-head-count">{{ s.mcpServers.length }}</span>
-                  <span class="ac-menu-head-spacer"></span>
-                  <!-- 实时检测：主动连一次，看当前连没连上、有哪些工具。
-                       为什么要它：SDK 的 MCP 是懒连接的（每开一条会话才连一次），
-                       消息流里那条「已连接 MCP」提示已经隐藏，状态得有个地方能看。 -->
-                  <button class="ac-menu-head-btn" :disabled="mcpProbing"
-                    :aria-label="mcpProbing ? '正在检测 MCP' : '检测 MCP 连接'" @click.stop="runMcpProbe">
-                    <Loader2 v-if="mcpProbing" :size="12" class="ac-spin" />
-                    <RefreshCw v-else :size="12" />
-                    {{ mcpProbing ? '检测中' : '检测' }}
-                  </button>
+                <div class="ac-panel-head-top">
+                  <div class="ac-panel-heading">
+                    <span class="ac-panel-title">MCP</span>
+                    <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
+                  </div>
+                  <div class="ac-panel-search">
+                    <span class="ac-panel-search-icon" aria-hidden="true"><Search :size="14" /></span>
+                    <input v-model="mcpQuery" class="ac-panel-search-input" type="search" name="ac-mcp-search"
+                      placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
+                    <button v-if="mcpQuery" class="ac-panel-search-clear" aria-label="清空搜索" @click="mcpQuery = ''">
+                      <X :size="12" />
+                    </button>
+                  </div>
+                  <div class="ac-panel-tools">
+                    <!-- 实时检测：主动连一次，看当前连没连上、有哪些工具（保留原行为） -->
+                    <button class="ac-detect-btn" :disabled="mcpProbing"
+                      :aria-label="mcpProbing ? '正在检测 MCP' : '检测 MCP 连接'" @click.stop="runMcpProbe">
+                      <Loader2 v-if="mcpProbing" :size="12" class="ac-spin" />
+                      <RefreshCw v-else :size="12" />
+                    </button>
+                  </div>
                 </div>
-                <div class="ac-menu-scroll">
-                  <button v-for="item in mcpResources(s.mcpServers)" :key="item.id" class="ac-menu-card" role="option"
-                    :aria-selected="false" :title="item.value" @click="insertRef(item, close)">
-                    <span class="ac-menu-card-icon" v-html="ICON_MCP" aria-hidden="true"></span>
-                    <span class="ac-menu-card-text">
-                      <span class="ac-menu-card-name">{{ item.name }}</span>
-                      <span v-if="item.value" class="ac-menu-card-hint">{{ item.value }}</span>
-                    </span>
-                    <!-- 检测结果：每行右侧一个小徽章（连上几个工具 / 失败） -->
-                    <span v-if="mcpStatusOf(item.name)" class="ac-menu-card-badge"
-                      :class="{ 'is-bad': !mcpStatusOf(item.name)!.ok }" :title="mcpStatusOf(item.name)!.text">{{
-                        mcpStatusOf(item.name)!.text }}</span>
-                  </button>
+                <div class="ac-panel-body">
+                  <div v-if="filteredMcpResources.length" class="ac-mcp-list">
+                    <button v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-card" role="option"
+                      :title="item.value" @click="insertRef(item, close)">
+                      <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
+                      <span class="ac-server-copy">
+                        <span class="ac-server-name">{{ item.name }}</span>
+                        <span class="ac-server-desc">{{ item.value }}</span>
+                      </span>
+                      <span v-if="mcpStatusOf(item.name)" class="ac-menu-card-badge"
+                        :class="{ 'is-bad': !mcpStatusOf(item.name)!.ok }" :title="mcpStatusOf(item.name)!.text">{{
+                          mcpStatusOf(item.name)!.text }}</span>
+                    </button>
+                  </div>
+                  <div v-else class="ac-menu-empty">没有找到服务</div>
                   <p v-if="mcpProbeHint" class="ac-menu-empty">{{ mcpProbeHint }}</p>
+                </div>
+                <div class="ac-panel-foot">
+                  <span class="ac-selection-summary">点击服务会直接插入标签</span>
                 </div>
               </div>
             </template>
@@ -4557,6 +4725,563 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   flex: none;
   margin-top: 5px;
   color: var(--ui-accent, #0891b2);
+}
+
+/* —— 面板化下拉（docs/demo/agent-select-panels.html 同款布局）——
+   头部三格：标题 | 搜索（≤240px）| 工具/视图切换；
+   下方是滚动区（卡片网格或分栏），底部一行状态说明。
+   颜色全部走 --ui-* token，跟随当前主题，不引 demo 的浅色变量。 */
+.ac-panel-head-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: none;
+  padding: 8px 10px 6px;
+}
+
+.ac-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ac-panel-title {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--ui-ink, #f7f7f7);
+  white-space: nowrap;
+}
+
+.ac-panel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ac-panel-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 240px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px 0 10px;
+  border-radius: 10px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+}
+
+.ac-panel-search:focus-within {
+  background: var(--ui-hover, rgb(255 255 255 / 0.12));
+}
+
+.ac-panel-search-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-panel-search-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink, #f7f7f7);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ac-panel-search-input::placeholder {
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-panel-search-input::-webkit-search-cancel-button,
+.ac-panel-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.ac-panel-search-clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-panel-search-clear:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-panel-tools {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.ac-panel-seg {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-panel-seg:hover,
+.ac-panel-seg[aria-pressed='true'] {
+  background: var(--ui-hover, rgb(255 255 255 / 0.14));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-panel-seg[aria-pressed='true'] {
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-detect-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-detect-btn:hover:not(:disabled) {
+  background: var(--ui-hover, rgb(255 255 255 / 0.14));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-detect-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 滚动区：头部与底栏之间，唯一滚动层 */
+.ac-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 10px 10px;
+  scrollbar-width: thin;
+}
+
+/* 模型卡片网格（demo 同款：图标 35 + 标题 13.5 + 副行 10.5） */
+.ac-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 8px;
+}
+
+.ac-model-card,
+.ac-model-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.ac-model-card:hover,
+.ac-model-row:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-model-card[aria-checked='true'],
+.ac-model-card[aria-selected='true'],
+.ac-model-row[aria-checked='true'],
+.ac-model-row[aria-selected='true'] {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+}
+
+.ac-model-brand {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 35px;
+  height: 35px;
+  border-radius: 9px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-model-card[aria-checked='true'] .ac-model-brand,
+.ac-model-card[aria-selected='true'] .ac-model-brand,
+.ac-model-row[aria-checked='true'] .ac-model-brand,
+.ac-model-row[aria-selected='true'] .ac-model-brand {
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-model-brand :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.ac-model-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ac-model-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 13.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-model-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-dot-sep {
+  width: 1px;
+  height: 8px;
+  flex: none;
+  background: var(--ui-line, #363636);
+}
+
+.ac-model-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+  color: var(--ui-accent, #0891b2);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* 分栏骨架（demo 同款）：左侧独立滚，窄面板由容器决定不再额外加查询 */
+.ac-split {
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+
+.ac-split-rail {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 132px;
+  min-height: 0;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.03));
+}
+
+.ac-rail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  scrollbar-width: thin;
+}
+
+.ac-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-rail-item:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-rail-item[aria-pressed='true'] {
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-rail-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.ac-rail-count {
+  flex: none;
+  font-size: 10px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-rail-label {
+  padding: 2px 4px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-rail-note {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-split-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ac-model-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 技能卡片（轻卡片）/ 分栏封面瓦片 */
+.ac-skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+}
+
+.ac-skill-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.ac-skill-card:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-skill-thumb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-skill-thumb :deep(svg) {
+  width: 17px;
+  height: 17px;
+}
+
+.ac-skill-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ac-skill-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-skill-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-skill-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 8px;
+}
+
+.ac-skill-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-skill-tile:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-skill-cover {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 64px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.08));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-skill-cover :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.ac-skill-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px 8px;
+}
+
+/* MCP 服务卡（点一项即插标签，徽章沿用原状态色） */
+.ac-mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ac-mcp-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.ac-mcp-card:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-server-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-server-icon :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+
+.ac-server-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ac-server-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-server-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+/* 底栏：只放状态说明（模型单选即引用，不再有确认按钮） */
+.ac-panel-foot {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--ui-line, #363636);
+}
+
+.ac-selection-summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 11px;
 }
 
 /* 简单两项式下拉（创作模式 / 授权方式）：标题一行 + 说明一行 */
