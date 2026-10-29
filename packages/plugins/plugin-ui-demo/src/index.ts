@@ -45,6 +45,8 @@ export function apply(ctx: Context): void {
       types: ['image'],
       title: '功能演示',
       description: '演示：下栏换成该功能的 UI（同一格，不叠加）',
+      // order 必须大于图片默认模式（100）：本插件是**演示**，不该顶替真实节点的默认状态栏。
+      order: 500,
       bottomBar: markRaw(DemoFeaturePanel),
     })
     return true
