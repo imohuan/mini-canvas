@@ -120,6 +120,8 @@ const Select = useUiComponent('select')
 const ToolParamField = useUiComponent('toolParamField')
 const ToolParamGroup = useUiComponent('toolParamGroup')
 const Tooltip = useUiComponent('tooltip')
+/** 默认主题注册的通用下拉浮层（用户 2026-10-29：替换菜单必须用它，别自绘浮层） */
+const Dropdown = useUiComponent('dropdown')
 
 // 单选才显示（与既有三份面板同语义）
 const visible = useSoleNodeSelected(props.id)
@@ -222,6 +224,8 @@ const barService = ctx.tryGet<{
   modeOf?(nodeId: string): { nodeId: string; actionId: string } | undefined
   selectMode?(nodeId: string, actionId: string): void
   exitMode?(nodeId: string): void
+  /** 查一条动作（功能模式要拿它的 panel 渲染进同一根底栏） */
+  get?(id: string): { panel?: unknown } | undefined
 }>('nodeBar')
 const activeMode = computed<{ nodeId: string; actionId: string } | undefined>(() => {
   void modeTick.value // 订阅点：插件/底栏切换模式后 bump
@@ -597,13 +601,9 @@ async function ensureVideoThumbs(): Promise<void> {
    * 不要留一个永远转圈的加载态（用户 2026-10-29：没加载出来就给加载 UI，
    * 但取不到也要给出结论）。
    */
-  for (const t of refTiles.value) {
-    if (t.kind !== 'video') continue
-    if (!t.url) continue
-    if (loadingTiles.value[t.key] && !peekVideoThumb(t.url)) {
-      brokenTiles.value = { ...brokenTiles.value, [t.key]: true }
-    }
-  }
+  // refTiles 定义在文件更后面：immediate 的 watch 在 setup 阶段就会跑到这里，
+  // 直接读它会踩 TDZ（Cannot access 'refTiles' before initialization，整条底栏渲染失败）。
+  // 标记逻辑挪到 refTiles 之后的 watch 里（见 markBrokenVideoTiles）。
 }
 
 /**
@@ -735,12 +735,15 @@ function removeCard(nodeId: string): void {
  * 按钮点击，也不交给预览（那本来就是拖拽的余波），只有正常点击才走删除/预览。
  */
 /** 最近一次真实拖拽结束的时刻与坐标（onReorderTiles / 拖拽库回调时更新） */
+/** 卡片正在被拖动（用于暂时关掉主题 Tooltip，避免拖拽时气泡乱飘） */
+const dragging = ref(false)
 let lastDragEndAt = 0
 let lastDragEndX = -1
 let lastDragEndY = -1
 /** 拖拽库的 end 回调：记录「刚拖完」（拖拽余波的那次 click 不当按钮点击） */
 function onDragEndMark(payload: Event): void {
   lastDragEndAt = Date.now()
+  dragging.value = false
   const oe = (payload as { originalEvent?: MouseEvent | TouchEvent } | undefined)?.originalEvent
   const point = oe && 'clientX' in oe ? oe : (oe as TouchEvent | undefined)?.changedTouches?.[0]
   lastDragEndX = point?.clientX ?? -1
@@ -947,6 +950,32 @@ const barShown = computed(() =>
     submitted: submitted.value,
   }),
 )
+
+/**
+ * 功能模式（nodeBar 服务上的会话）：某个功能接管了这个节点的底栏。
+ * 是 → 默认底栏整块让位，屏幕上只留该功能自己的底栏（各功能用 on:bottom 之类独立层承载）；
+ * 否 → 正常渲染默认生成 UI。
+ * 读服务态而不是组件状态：顶栏按钮与底栏 pill 打开的是同一份会话，谁先点都同步。
+ */
+const featureMode = computed(() => {
+  try {
+    return Boolean(barService?.modeOf?.(props.id))
+  } catch {
+    return false
+  }
+})
+
+/** 默认底栏本体是否显示：正常显示条件成立，且没有功能在接管 */
+const defaultBarShown = computed(() => barShown.value && !featureMode.value)
+
+/** 功能模式下要渲染的专属面板（= 接管动作的 panel；没有就退回默认内容） */
+const featurePanel = computed(() => {
+  const mode = activeMode.value
+  if (!mode) return undefined
+  return barService?.get?.(mode.actionId)?.panel as unknown
+})
+/** 功能模式真的可用（有 panel 才切；否则保持默认 UI，不留空白栏） */
+const featureShown = computed(() => featureMode.value && Boolean(featurePanel.value))
 if (typeof ctx.on === 'function') {
   const clickOff = ctx.on(RenderEvents.NodeClick, (p: { nodeId?: string }) => {
     if (p?.nodeId === props.id) resetSubmitted()
@@ -1306,6 +1335,24 @@ watch(
   { immediate: true },
 )
 
+/**
+ * 视频帧取不到 → 把卡标记成「资源走丢」。
+ * 必须放在 refTiles 之后（immediate 会当场读 refTiles，放前面就是 TDZ）。
+ * 判定与原来的 ensureVideoThumbs 末尾一致：仍是加载态、且缓存里确实没有帧图。
+ */
+watch(
+  shownMaterials,
+  () => {
+    for (const t of refTiles.value) {
+      if (t.kind !== 'video' || !t.url) continue
+      if (loadingTiles.value[t.key] && !peekVideoThumb(t.url)) {
+        brokenTiles.value = { ...brokenTiles.value, [t.key]: true }
+      }
+    }
+  },
+  { immediate: true },
+ )
+
 
 /** 错误提示按卡片键记（拖拽/上传失败的即时提示） */
 const slotErrors = ref<Record<string, string>>({})
@@ -1335,25 +1382,14 @@ function cardTooltip(tile: RefTile): string {
 }
 
 /**
- * 卡片 hover / 拖拽提示统一走 **tip 服务**（用户 2026-10-29：气泡要贴着鼠标，
- * 位置不能飘。主题 Tooltip 的锚点方案在卡片这种小元素上定位不可靠 ——
- * 用户截图里气泡飘在半空，就是它 —— 已弃用）。
+ * 卡片 hover 提示：用**默认主题注册的 Tooltip 组件**（用户 2026-10-29 明确要求）。
  *
- * 文案与拖拽共享一份：hover 出名称+类型（+时长）；拖拽时判定消息会占用 tip，
- * 两者不会同时出现。
+ * 上一版我用了渲染层的 `tip` 服务（跟随鼠标的黑底条）—— 那是画布拖拽用的，
+ * 不是设计系统里的气泡，风格与位置都不对。现在改成：
+ *   · 每张卡自己包一个 Tooltip，content = 这张卡的说明；
+ *   · hover / 键盘聚焦由组件自己处理，不再手写 pointerenter 文案；
+ *   · 拖拽期间 Tooltip 不弹（由 :disabled 控制），拖拽提示仍由 tip 服务负责。
  */
-let tipShownFor: string | null = null
-function showCardTip(tile: RefTile): void {
-  if (ctrlDrag) return
-  if (tipShownFor === tile.key) return
-  ctx.get<{ show(m: string): void; hide(): void }>('tip').show(cardTooltip(tile))
-  tipShownFor = tile.key
-}
-function hideCardTip(tile: RefTile): void {
-  if (tipShownFor !== tile.key) return
-  ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')?.hide()
-  tipShownFor = null
-}
 
 /**
  * 悬浮预览（用户 2026-10-29 重构：hover 卡片 ≈600ms 在**卡片上方**弹出大图/视频，
@@ -1363,7 +1399,8 @@ function hideCardTip(tile: RefTile): void {
  * 才能压过其它 UI 且不参与拖拽布局。
  */
 const previewTile = ref<RefTile | null>(null)
-const previewPos = ref({ left: 0, top: 0 })
+/** above = 预览在卡片上方（默认），false = 上方放不下时翻到卡片下方 */
+const previewPos = ref({ left: 0, top: 0, above: true })
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 let previewCloseTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1374,11 +1411,20 @@ function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
     // 只对有「可看内容」的卡出预览（图片/视频帧）；音频/文本没有画面
     if (!cardImageOf(tile) && tile.kind !== 'video') return
     previewTile.value = tile
-    // 预览宽 240：水平夹进视口；默认在卡片上方 8px
-    const width = 240
+    /**
+     * 预览定位（用户 2026-10-29 两次反馈后定的口径）：
+     *  · 必须在卡片**上方**（下面是输入框，放下面会盖住输入框，还会和卡片气泡叠在一起）；
+     *  · 气泡（Tooltip）在卡片**下方**，两者上下分开，互不遮挡；
+     *  · 用 translateY(-100%) 让它从「卡片顶 - 10px」往上长，不预先猜高度；
+     *  · 上方真的放不下（卡片已经很靠上）才翻到下方。
+     */
+    const width = 220
+    const estimateHeight = 170
     const left = Math.min(Math.max(8, anchorRect.left + anchorRect.width / 2 - width / 2), window.innerWidth - width - 8)
-    const top = anchorRect.top - 8
-    previewPos.value = { left, top }
+    const above = anchorRect.top - estimateHeight - 10 >= 8
+    previewPos.value = above
+      ? { left, top: Math.round(anchorRect.top - 10), above: true }
+      : { left, top: Math.round(anchorRect.bottom + 10), above: false }
   }, 600)
 }
 function cancelPreviewSchedule(): void {
@@ -1785,8 +1831,12 @@ watch([shownMaterials, refOrder], () => {
 /** 替换菜单状态：null = 关闭；开着时记录「替换的是哪颗标签」 */
 const replaceMenu = ref<{ chipId: string; chipName: string; chipKind: 'image' | 'video' | 'audio' | 'text' | null; nodeId: string | null } | null>(null)
 const replaceSearch = ref('')
-/** 替换菜单的定位（贴着点击的那颗标签） */
-const replacePos = ref({ left: 0, top: 0 })
+/**
+ * 替换菜单的开关（受控给主题 Dropdown，用户 2026-10-29 要求用注册组件）。
+ * 定位交给 Dropdown：锚点挪到被点的标签下方，它自己算翻转与夹边。
+ */
+const replaceMenuOpen = ref(false)
+const replaceAnchor = ref<HTMLElement | null>(null)
 
 /** 画布上所有可作素材的节点（按类型分组的数据源） */
 const canvasMaterialsForReplace = computed(() => {
@@ -1834,27 +1884,31 @@ function refCountOf(nodeId: string): number {
   return promptChips.value.filter((c) => c.nodeId === nodeId).length
 }
 
-/** 打开替换菜单（贴着那颗标签定位） */
+/**
+ * 打开替换菜单（用户 2026-10-29：必须用默认主题注册的 Dropdown）。
+ *
+ * 做法：把 Dropdown 的锚点**挪到被点那颗标签的正下方**，再打开它 ——
+ * 定位/翻转/点外关闭/Esc 全部交给 Dropdown，不再手写 fixed 坐标。
+ */
 function openReplaceMenu(item: ResourceItem): void {
   const el = document.querySelector<HTMLElement>('.resource-chip[data-id="' + item.id + '"]')
-  if (el) {
+  const anchor = replaceAnchor.value
+  if (el && anchor) {
     const r = el.getBoundingClientRect()
-    const width = 260
-    replacePos.value = {
-      left: Math.min(Math.max(8, r.left), window.innerWidth - width - 8),
-      top: Math.min(r.bottom + 6, window.innerHeight - 320),
-    }
+    anchor.style.left = Math.round(r.left) + 'px'
+    anchor.style.top = Math.round(r.bottom) + 'px'
   }
-  const nodeId = nodeIdOfChip(item.id)
   replaceMenu.value = {
     chipId: item.id,
     chipName: item.name,
     chipKind: item.chipKind ?? null,
-    nodeId,
+    nodeId: nodeIdOfChip(item.id),
   }
   replaceSearch.value = ''
+  replaceMenuOpen.value = true
 }
 function closeReplaceMenu(): void {
+  replaceMenuOpen.value = false
   replaceMenu.value = null
 }
 
@@ -1863,13 +1917,15 @@ function closeReplaceMenu(): void {
  *   · 唯一引用 → 断开「旧节点 → 本节点」的线，连「新节点 → 本节点」（真替换）；
  *   · 多处引用 → 只加一条新线（旧线留着给别的引用）。
  */
-async function replaceChipWith(chipId: string, newNodeId: string): Promise<void> {
+async function replaceChipWith(newNodeId: string): Promise<void> {
   const doc = ctx.tryGet<{
     addEdge(input: { source: string; target: string }): string
     removeEdges(ids: string[]): number
     getEdges?(): Array<{ id: string; source: string; target: string }>
   }>('doc')
   if (!doc) return
+  const chipId = replaceMenu.value?.chipId
+  if (!chipId) return
   const chip = promptChips.value.find((c) => c.id === chipId)
   const oldNodeId = chip?.nodeId ?? null
   const unique = oldNodeId ? refCountOf(oldNodeId) <= 1 : false
@@ -2262,6 +2318,15 @@ function onGlobalLeave(el: Element): void {
       data-testid="node-bottom-bar"
       @pointerdown.stop
     >
+    <!--
+      功能模式：「同一根底栏换内容」。默认生成 UI 整块让位，只渲染该功能的 panel，
+      外壳（宽度/圆角/阴影/贴边位置）仍是这一条底栏 —— 不会再出现第二套栏。
+      没有 panel 时保持默认 UI（不留空白栏）。
+    -->
+    <template v-if="featureShown">
+      <component :is="(featurePanel as any)" :id="props.id" :data="props.data" />
+    </template>
+    <template v-else>
     <!-- 一排 pill（参考图顶行：+参考 / 标记）。全屏态整个行不渲染（VueDraggable 的
          force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
          行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
@@ -2340,9 +2405,14 @@ function onGlobalLeave(el: Element): void {
       :prevent-on-filter="false"
       @end="onDragEndMark"
       @update:model-value="onReorderTiles"
+      @start="dragging = true"
       @click.capture="onCardsClickCapture"
       @keydown="onCardsKeydown"
     >
+      <!--
+        每张卡里面包一层**默认主题的 Tooltip**（用户 2026-10-29：必须用注册组件）。
+        放在卡片内部而不是外面：VueDraggable 要求直接子元素就是卡片。
+      -->
       <div
         v-for="tile in refTiles"
         :key="tile.key"
@@ -2353,13 +2423,21 @@ function onGlobalLeave(el: Element): void {
         :class="{ 'is-pending': tile.pending, 'is-invalid': tile.invalid }"
         :style="tile.pending ? 'cursor: pointer' : ''"
         :aria-label="cardTooltip(tile)"
-        @pointerenter="(ev: PointerEvent) => { showCardTip(tile); schedulePreview(tile, (ev.currentTarget as HTMLElement).getBoundingClientRect()) }"
-        @pointerleave="(ev: PointerEvent) => { hideCardTip(tile); cancelPreviewSchedule(); schedulePreviewClose() }"
+        @pointerenter="(ev: PointerEvent) => schedulePreview(tile, (ev.currentTarget as HTMLElement).getBoundingClientRect())"
+        @pointerleave="() => { cancelPreviewSchedule(); schedulePreviewClose() }"
         @click.stop="tile.pending ? pickSlotFile(tile) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
         @drop.stop.prevent="onSlotDrop($event, undefined)"
       >
+        <Tooltip
+          :content="cardTooltip(tile)"
+          placement="bottom"
+          :delay="220"
+          :disabled="dragging || !!ctrlDrag"
+          arrow
+          class="nb-card-tip"
+        >
         <span class="nb-card-clip">
           <img
             v-if="cardImageOf(tile) && !tile.pending"
@@ -2423,21 +2501,6 @@ function onGlobalLeave(el: Element): void {
             hover 时藏掉（此时有名称条 + 操作按钮，不再需要序号）。
           -->
           <span class="nb-card-index">{{ tile.index }}</span>
-          <!--
-            名称条：**只在 hover 时出现**（用户 2026-10-29：平时常驻会盖住左下角序号/时长）。
-            内容 = 标签名 + 失效警示（或视频时长）。
-          -->
-          <span class="nb-card-namebar">
-            <span class="nb-card-namebar-name">{{ tile.pending ? tile.label + ' · 待添加' : tile.label }}</span>
-            <span
-              v-if="tile.invalid"
-              class="nb-card-namebar-warn"
-            >引用已失效</span>
-            <span
-              v-else-if="tile.kind === 'video' && formatVideoDuration(tile.duration)"
-              class="nb-card-namebar-dur"
-            >{{ formatVideoDuration(tile.duration) }}</span>
-          </span>
         </span>
         <!--
           hover 操作层（用户 2026-10-29 重构）：
@@ -2483,6 +2546,7 @@ function onGlobalLeave(el: Element): void {
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
+        </Tooltip>
       </div>
     </VueDraggable>
 
@@ -2524,48 +2588,6 @@ function onGlobalLeave(el: Element): void {
       </div>
     </Teleport>
 
-    <!--
-      替换菜单（用户 2026-10-29 重构）：hover 输入框标签 → 左侧图标变替换键，
-      点击展开按类型分组的候选列表（来源 = 画布节点），带搜索框。点 Esc / 关闭按钮收起。
-    -->
-    <Teleport to="body">
-      <div
-        v-if="replaceMenu"
-        class="nb-replace-menu"
-        :style="{ left: replacePos.left + 'px', top: replacePos.top + 'px' }"
-        role="menu"
-        @pointerdown.stop
-      >
-        <div class="nb-replace-head">
-          <span class="nb-replace-title">替换「{{ replaceMenu.chipName }}」</span>
-          <button class="nb-replace-close" type="button" aria-label="关闭替换菜单" @click.stop="closeReplaceMenu">×</button>
-        </div>
-        <input
-          v-model="replaceSearch"
-          class="nb-replace-search"
-          type="search"
-          placeholder="搜索画布素材…"
-          @keydown.stop
-        />
-        <div class="nb-replace-list">
-          <div v-for="g in replaceGroups" :key="g.kind" class="nb-replace-group">
-            <div class="nb-replace-group-label">{{ g.label }}</div>
-            <button
-              v-for="m in g.items"
-              :key="m.id"
-              class="nb-replace-item"
-              type="button"
-              role="menuitem"
-              @click.stop="replaceChipWith(replaceMenu.chipId, m.id)"
-            >
-              <span class="nb-replace-item-name">{{ m.name }}</span>
-              <span class="nb-replace-item-id">{{ m.id }}</span>
-            </button>
-          </div>
-          <div v-if="replaceGroups.length === 0" class="nb-replace-empty">画布上没有同类素材</div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- 动作专属面板（video 剪辑时间轴这类）。功能模式接管时（activeMode），
          面板下方整块默认生成 UI（素材区 / 输入框 / 参数行）按会话由面板自己让位；
@@ -2589,6 +2611,55 @@ function onGlobalLeave(el: Element): void {
         @update:model-value="onPromptUpdate"
         @click.stop
       />
+      <!--
+        替换菜单的**锚点**（用户 2026-10-29：必须用默认主题注册的 Dropdown）。
+        编辑器标签的替换键点击后，把 Dropdown 打开并把锚点挪到那颗标签下方。
+        触发器本身透明、0 尺寸：Dropdown 只负责定位/外部点击/Esc 收起的既有能力。
+        菜单内容（分组 + 搜索 + 候选）走 #default 插槽。
+      -->
+      <Dropdown
+        v-model="replaceMenuOpen"
+        placement="bottom-start"
+        :offset="6"
+        :teleport="true"
+        body-class="nb-replace-body"
+        menu-width="260px"
+        menu-max-height="340px"
+      >
+        <template #trigger>
+          <span ref="replaceAnchor" class="nb-replace-anchor" aria-hidden="true" />
+        </template>
+        <template #default="{ close }">
+          <div class="nb-replace-head">
+            <span class="nb-replace-title">替换「{{ replaceMenu?.chipName }}」</span>
+            <button class="nb-replace-close" type="button" aria-label="关闭替换菜单" @click.stop="close()">×</button>
+          </div>
+          <input
+            v-model="replaceSearch"
+            class="nb-replace-search"
+            type="search"
+            placeholder="搜索画布素材…"
+            @keydown.stop
+          />
+          <div class="nb-replace-list">
+            <div v-for="g in replaceGroups" :key="g.kind" class="nb-replace-group">
+              <div class="nb-replace-group-label">{{ g.label }}</div>
+              <button
+                v-for="m in g.items"
+                :key="m.id"
+                class="nb-replace-item"
+                type="button"
+                role="menuitem"
+                @click.stop="replaceChipWith(m.id)"
+              >
+                <span class="nb-replace-item-name">{{ m.name }}</span>
+                <span class="nb-replace-item-id">{{ m.id }}</span>
+              </button>
+            </div>
+            <div v-if="replaceGroups.length === 0" class="nb-replace-empty">画布上没有同类素材</div>
+          </div>
+        </template>
+      </Dropdown>
     </div>
 
     <!-- 底部行：左模型 + 参数串，右图标·计数·圆形发送（照参考图） -->
@@ -2693,6 +2764,7 @@ function onGlobalLeave(el: Element): void {
       </div>
     </Transition>
 
+    </template>
   </div>
   </div>
   </Teleport>
@@ -3156,6 +3228,12 @@ function onGlobalLeave(el: Element): void {
   flex: none;
   width: 48px;
   height: 48px;
+  /**
+   * 卡片内容铺满（Tooltip 外壳是 inline-flex，会按内容收缩成 0×0，
+   * 导致气泡按错误的矩形定位 —— 用户 2026-10-29 截图里气泡飘到屏幕角落）。
+   * 让它作为绝对定位层铺满卡片，气泡位置就跟着卡片走。
+   */
+  display: block;
   padding: 0;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 8px;
@@ -3289,6 +3367,13 @@ function onGlobalLeave(el: Element): void {
   display: block;
   border-radius: inherit;
   overflow: hidden;
+}
+/** Tooltip 外壳铺满卡片（气泡按卡片真实矩形定位） */
+.nb-card :deep(.tlt-root),
+.nb-card :deep(.tlt-trigger) {
+  position: absolute;
+  inset: 0;
+  display: block;
 }
 /* 右上角关闭按钮：**有一半在卡片外**（所以内层这个 inset 是负的），
    默认隐藏，hover / 键盘聚焦才露出；hover 时转成危险色（照 ui-style-guide §5）。 */
@@ -3550,7 +3635,7 @@ function onGlobalLeave(el: Element): void {
  */
 .nb-hover-preview {
   position: fixed;
-  width: 240px;
+  width: 220px;
   border-radius: 10px;
   border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
   background: var(--ui-panel, #fff);
@@ -3561,9 +3646,10 @@ function onGlobalLeave(el: Element): void {
 .nb-hover-preview-media {
   display: block;
   width: 100%;
-  max-height: 160px;
+  max-height: 140px;
   object-fit: cover;
-  background: #000;
+  /* 主题色白名单: hover 预览里视频画面的衬底（任意视频都要有黑底，与主题无关） */
+  background: var(--ui-tip, #000);
 }
 .nb-hover-preview-empty {
   display: flex;
@@ -3591,16 +3677,22 @@ function onGlobalLeave(el: Element): void {
  * 替换菜单（用户 2026-10-29 重构）：按类型分组 + 搜索 + 点选替换。
  */
 .nb-replace-menu {
-  position: fixed;
-  width: 260px;
-  max-height: 340px;
+  /* 外框/定位/关闭交给默认主题的 Dropdown（用户 2026-10-29），这里只排内容 */
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
-  border-radius: 10px;
-  background: var(--ui-panel, #fff);
-  box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
-  z-index: 100002;
+  width: 100%;
+}
+/** 触发器：贴在标签下方的 0 尺寸锚点（Dropdown 按它算位置） */
+.nb-replace-anchor {
+  position: fixed;
+  display: block;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+/* Dropdown 浮层（Teleport 到 body，scoped 命不中，用 :global） */
+:global(.nb-replace-body) {
+  width: 260px;
 }
 .nb-replace-head {
   display: flex;

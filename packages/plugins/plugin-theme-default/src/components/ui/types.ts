@@ -31,3 +31,20 @@ export interface SelectOption {
    */
   group?: string
 }
+
+/**
+ * 工具栏下拉菜单的一项（ToolbarDropdownButton 用）。
+ *
+ * children 非空 = 带二级菜单：二级面板是**独立浮层**（teleport 到 body，贴着这一行右侧），
+ * 不再往主面板内部叠一块内嵌区域（那是 2026-10-29 用户截图里的错误形态）。
+ */
+export interface ToolbarMenuNode {
+  key: string
+  label: string
+  /** 图标（opaque 句柄；今天只在按钮触发器上用，菜单行保留字段便于将来带图标） */
+  icon?: unknown
+  disabled?: boolean
+  danger?: boolean
+  /** 子项非空 = 这一行是二级菜单入口 */
+  children?: ToolbarMenuNode[]
+}

@@ -40,6 +40,7 @@ import {
   ColorField,
   NodeEmptyState,
   SlotDebugPopover,
+  ToolbarDropdownButton,
 } from "./components/ui";
 import MediaViewer from "./components/ui/MediaViewer.vue";
 import Tooltip from "./components/ui/Tooltip.vue";
@@ -715,6 +716,9 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
   const ui = ctx.registryOf<unknown>("ui");
   ui.add("button", NodeToolbarButton, { id: "default" });
+  // 工具栏下拉按钮：触发器 = 上面的 button，菜单与二级菜单都是独立浮层。
+  // 插件按名取（useUiComponent('toolbarDropdown')），不必再自己拼 button + dropdown。
+  ui.add("toolbarDropdown", ToolbarDropdownButton, { id: "default" });
   // 统一空状态：节点插件按名取用（图片/视频/音频/3D 共用同一套图标/文案/动作布局）。
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" });
   ui.add("dropdown", Dropdown, { id: "default" });

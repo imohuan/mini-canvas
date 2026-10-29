@@ -43,7 +43,7 @@ import {
   type VNodeChild,
 } from 'vue'
 import { orderSlotItems, type SlotOrderIssue } from '@mini-canvas/kernel'
-import { useCanvasContext } from '../contracts/canvasContext'
+import { useCanvasContextOrRender } from '../contracts/canvasContext'
 import SlotAnchor from './SlotAnchor.vue'
 import { isSlotItemId } from '@mini-canvas/kernel'
 import type { SlotComposerEntry } from './slotComposer'
@@ -75,12 +75,17 @@ export default defineComponent({
     sharedProps: { type: Object, default: undefined },
   },
   setup(props, { slots, attrs }) {
-    const { ctx } = useCanvasContext()
+    // 宽松读取：Provider 存在时走它；只 provide 了渲染上下文的宿主/单测（历史写法）
+    // 也能用同一个槽 —— 读插槽与订阅插件装卸只需要「有 ctx」，不要求外壳上下文。
+    const { ctx } = useCanvasContextOrRender()
     const plugins = shallowRef<Array<SlotComposerEntry & { component: unknown }>>([])
     const warned = new Set<string>()
 
     function reload(): void {
-      plugins.value = ctx.slots.occupants(props.slot).map((e) => ({
+      // slots 是内核能力段：极简上下文（单测桩）可能没有 —— 按「空槽」处理，
+      // 内置锚点仍照常渲染（这也是既有单测依赖的行为）。
+      const occupants = ctx.slots?.occupants?.(props.slot) ?? []
+      plugins.value = occupants.map((e) => ({
         id: e.id,
         order: e.order,
         ...(e.before !== undefined ? { before: e.before } : {}),
@@ -90,11 +95,13 @@ export default defineComponent({
     }
     reload()
 
-    const disposers: Array<{ dispose(): void }> = [
-      ctx.on('ctx:plugin-installed', reload),
-      ctx.on('ctx:plugin-uninstalled', reload),
-    ]
-    const slotRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+    const disposers: Array<{ dispose(): void }> = []
+    if (typeof ctx.on === 'function') {
+      disposers.push(ctx.on('ctx:plugin-installed', reload), ctx.on('ctx:plugin-uninstalled', reload))
+    }
+    const slotRegistry = typeof ctx.get === 'function'
+      ? ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+      : undefined
     if (slotRegistry && typeof slotRegistry.subscribe === 'function') {
       const off = slotRegistry.subscribe(reload)
       disposers.push({ dispose: off })

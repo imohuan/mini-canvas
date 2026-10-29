@@ -10,7 +10,7 @@
  */
 import { computed, ref } from 'vue'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
 import { readImageSourceFields } from './imageRefs'
@@ -42,6 +42,21 @@ const expanding = computed(() => isExpanding(props.id))
 /** 编辑态（裁剪或扩展）：顶栏换成确认/取消，其余入口全部让位（避免一边调框一边误点下载） */
 const editing = computed(() => isEditing(props.id))
 const visible = computed(() => selected.value)
+
+/**
+ * 功能模式：某个功能接管了这个节点（nodeBar 服务上的会话）。
+ * 是 → 内置的上传/裁剪/扩展整排让位，插槽里只渲染该功能自己的工具栏条目；
+ * 否 → 正常显示内置按钮 + 插件追加的按钮。
+ * 读的是服务上的响应式会话，顶栏按钮打开功能后这里会立刻重渲染。
+ */
+const featureMode = computed(() => {
+  try {
+    const bar = ctx.tryGet?.<{ modeOf?(nodeId: string): unknown } | undefined>('nodeBar')
+    return Boolean(bar?.modeOf?.(props.id))
+  } catch {
+    return false
+  }
+})
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
@@ -140,27 +155,36 @@ function cancelEdit(): void {
       </NodeToolbarButton>
     </template>
 
-    <template v-else>
-    <NodeToolbarButton
-      title="上传图片"
-      :icon="ICON_UPLOAD"
-      :disabled="busy"
-      @click="openPicker"
-    />
-
-    <NodeToolbarButton
-      v-if="hasImage"
-      title="裁剪图片"
-      :icon="ICON_CROP"
-      @click="onCrop"
-    />
-    <NodeToolbarButton
-      v-if="hasImage"
-      title="扩展图片"
-      :icon="ICON_EXPAND"
-      @click="onExpand"
-    />
-    </template>
+    <!--
+      正常态：整排按钮 = 一个可排序插槽。内置三个按钮是带 id 的锚点，插件条目
+      （ctx.slots.register('image.topToolbar', { id, order, component })）与它们一起排。
+      这样别的功能加按钮时是**插进这个按钮组内部**，不会在组外另长一块面板。
+      编辑态不渲染插槽：编辑中只留确认/取消。
+    -->
+    <SlotComposer
+      v-else
+      slot="image.topToolbar"
+      class="it-slot"
+      :shared-props="{ nodeId: props.id, data: props.data }"
+    >
+      <SlotAnchor id="host/upload" :order="100">
+        <!-- 功能模式下不渲染内置按钮：整排让位给功能自己的工具栏 -->
+        <template v-if="!featureMode">
+        <NodeToolbarButton
+          title="上传图片"
+          :icon="ICON_UPLOAD"
+          :disabled="busy"
+          @click="openPicker"
+        />
+        </template>
+      </SlotAnchor>
+      <SlotAnchor v-if="hasImage" id="host/crop" :order="200">
+        <NodeToolbarButton v-if="!featureMode" title="裁剪图片" :icon="ICON_CROP" @click="onCrop" />
+      </SlotAnchor>
+      <SlotAnchor v-if="hasImage" id="host/expand" :order="300">
+        <NodeToolbarButton v-if="!featureMode" title="扩展图片" :icon="ICON_EXPAND" @click="onExpand" />
+      </SlotAnchor>
+    </SlotComposer>
   </div>
 </template>
 
@@ -170,5 +194,13 @@ function cancelEdit(): void {
 
 .it-file {
   display: none;
+}
+
+/* SlotComposer 根容器仍是普通 div：只声明「与工具栏同一横排」，
+   不另画一块面板（否则会出现两个方框并排 —— 用户截图里那个错位）。 */
+.it-slot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

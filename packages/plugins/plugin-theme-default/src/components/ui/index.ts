@@ -10,11 +10,14 @@ export { default as Select } from './Select.vue'
 /** 全屏媒体预览（文本/图片/视频/音频内置，#stage 插槽可扩展新类型；详见组件头注释） */
 export { default as MediaViewer } from './MediaViewer.vue'
 export type { DropdownTrigger, SelectOption } from './types'
+export type { ToolbarMenuNode } from './types'
 export { default as PrecisionSlider } from './PrecisionSlider.vue'
 export { default as ToolParamField } from './ToolParamField.vue'
 export { default as ColorField } from './ColorField.vue'
 // 节点上/下插槽里的通用按钮（插件放按钮不必再自绘一套 32×32/圆角/hover/focus）
 export { default as NodeToolbarButton } from './NodeToolbarButton.vue'
+/** 工具栏下拉按钮（触发器 = 主题 button；菜单与二级菜单都是独立浮层） */
+export { default as ToolbarDropdownButton } from './ToolbarDropdownButton.vue'
 /** 节点内容区的统一空状态（图片/视频/音频/3D 等共用；文本/说明/图标/动作都可配） */
 export { default as NodeEmptyState } from './NodeEmptyState.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）
