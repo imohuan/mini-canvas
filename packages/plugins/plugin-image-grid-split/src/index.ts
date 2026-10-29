@@ -15,6 +15,7 @@ import type { PluginModule, Context } from '@mini-canvas/canvas-base'
 import GridSplitEntry from './GridSplitEntry.vue'
 import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'
+import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
 
 export const name = 'image-grid-split'
@@ -25,6 +26,27 @@ export const name = 'image-grid-split'
 export const inject = [] as string[]
 
 export function apply(ctx: Context): void {
+  // ⓪ 分镜组节点类型：固定槽位网格（行×列在 data 里，槽位存资源引用）。
+  //    与 group 节点同一条注册路（nodes.register + in 组件），但**不参与连线**
+  //    （容器不接边：inputs/outputs 显式空数组 = 无端口）。
+  // 真实宿主 nodeStore/nodeRegistry 恒在；极简 ctx（单测桩）没有 → 跳过节点注册（无画布，注册无意义）
+  try {
+    ctx.nodes.register({
+      type: 'storyboard',
+      label: '分镜组',
+      nameTemplate: '分镜组 {{ID}}',
+      description: '把切分好的图片按槽位放进去，槽位间可拖拽交换',
+      size: { w: 480, h: 360 },
+      in: StoryboardGrid,
+      inputs: [],
+      outputs: [],
+      // 不可缩放（版本 1：固定网格；后续版本再放开）
+      resizable: false,
+    })
+  } catch {
+    // 服务缺席/类型冲突：静默跳过（与 overlay/contribute 同一条宽容口径）
+  }
+
   // ① 顶栏入口（与 host/upload / host/crop / host/expand 同排；order 500 排在演示条目后面）
   ctx.slots.register('image.topToolbar', {
     id: 'image-grid-split/entry',

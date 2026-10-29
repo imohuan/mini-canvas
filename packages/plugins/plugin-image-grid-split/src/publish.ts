@@ -1,9 +1,12 @@
 /**
- * publish —— 宫格切分的落库层：切片字节 → 资源库 → 图片节点 → 分组。
+ * publish —— 宫格切分的落库层：切片字节 → 资源库 → 图片节点 / 分镜组。
  *
  * 与 videoOps.persist 同一条路（不退回 base64 / objectURL 写进 data）：
- * 每格 canvas.toBlob 后经 resources.put 拿持久引用，再经 image 服务（或
- * media 能力回退）按引用建节点，最后 group.createGroup 打包。
+ * 每格 canvas.toBlob 后经 resources.put 拿持久引用，再按用途建目标：
+ * - canvas：直接建图片节点，再 group.createGroup 打包；
+ * - storyboard：建一个分镜组节点（storyboard 类型，槽位数 = 行×列），
+ *   切片按槽位号写进槽（槽位号 = 格子索引）。
+ *
  * 纯 DOM/服务编排，不碰会话状态（publishing 锁由调用方管）。
  */
 import type { Context } from '@mini-canvas/canvas-base'
@@ -20,8 +23,6 @@ interface PublishDeps {
   getNodeData(id: string): Record<string, unknown> | undefined
   /** 读节点画布绝对矩形（含尺寸） */
   getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined
-  /** 读当前视口缩放（把屏幕像素换算回图上像素） */
-  zoom(): number
   /** 存资源字节 → 持久引用 */
   putBlob(blob: Blob, name: string): Promise<string | undefined>
   /** 持久引用 → 可显示地址（失败时建节点的兜底显示） */
@@ -30,13 +31,17 @@ interface PublishDeps {
   addImageNodeFromResource(position: { x: number; y: number }, ref: string, meta?: { name?: string; width?: number; height?: number }): string | null
   /** 打组（全部或空返回 null） */
   createGroup(ids: string[]): string | null
+  /** 建任意类型节点（分镜组用）；失败返回 null */
+  createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string | null
 }
 
 /** 从 ctx 组装发布依赖（服务缺失时各调用方自己兜底） */
 export function publishDepsOf(ctx: Context): PublishDeps | null {
-  const doc = ctx.tryGet<{ getNode(id: string): { data?: Record<string, unknown> } | undefined } | undefined>('doc')
+  const doc = ctx.tryGet<{
+    getNode(id: string): { data?: Record<string, unknown> } | undefined
+    transaction<T>(reason: string, fn: (tx: { createNode(type: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
+  } | undefined>('doc')
   const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined } | undefined>('nodeLayout')
-  const viewport = ctx.tryGet<{ getViewport?(): { zoom: number } } | undefined>('viewport')
   const resources = ctx.tryGet<{ put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>; resolve(r: string): Promise<string | undefined> } | undefined>('resources')
   if (!doc) return null
 
@@ -56,7 +61,6 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
       if (rect && rect.w > 0 && rect.h > 0) return rect
       return undefined
     },
-    zoom: () => viewport?.getViewport?.().zoom ?? 1,
     putBlob: async (blob, name) => {
       if (!resources) return undefined
       try {
@@ -96,13 +100,19 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
       const g = group()
       return typeof g?.createGroup === 'function' ? g.createGroup(ids) : null
     },
+    createNode: (type, position, data) => {
+      try {
+        return doc.transaction('grid-split-create-node', (tx) => tx.createNode(type, position, data)) || null
+      } catch {
+        return null
+      }
+    },
   }
 }
 
 /**
- * 切一格：从原图元素裁出 [sx, sy, sw, sh]，缩放到位图后 toBlob。
- *
- * 说明：源矩形直接用**原始图片像素**（data.imageWidth/Height 是图片的真实分辨率），
+ * 切一格：从原图元素裁出 [sx, sy, sw, sh]，按目标尺寸 toBlob。
+ * 源矩形用**原始图片像素**（data.imageWidth/Height 是图片的真实分辨率），
  * 不经过卡片尺寸或视口缩放 —— 切出来的是无损的原图切片。
  */
 function sliceCell(
@@ -125,7 +135,7 @@ function sliceCell(
   })
 }
 
-/** 把当前文档里的图片加载成 HTMLImageElement（crossOrigin 同源；失败给 null） */
+/** 把当前文档里的图片加载成 HTMLImageElement（失败给 null） */
 async function loadImage(url: string): Promise<HTMLImageElement | null> {
   if (!url) return null
   return new Promise((resolve) => {
@@ -141,20 +151,50 @@ export interface PublishResult {
   ok: boolean
   /** 成功发布的格子数 */
   count: number
-  /** 创建的分组 id（打组失败时为 undefined） */
-  groupId?: string
+  /** 创建的组/分镜组节点 id（创建失败时为 undefined） */
+  containerId?: string
   /** 失败原因（用户可读；给 tip 用） */
   reason?: string
 }
 
+/** 解析原图地址：resourceId → resources.resolve，迁移期回退 imageUrl */
+async function resolveSourceUrl(deps: PublishDeps, data: Record<string, unknown> | undefined): Promise<string> {
+  const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : ''
+  const legacyUrl = typeof data?.imageUrl === 'string' ? data.imageUrl : ''
+  if (!resourceId) return legacyUrl
+  const resolved = await deps.resolveRef(resourceId)
+  return resolved || legacyUrl
+}
+
 /**
- * 发布选中格子到画布。
- *
- * @param deps 发布依赖（publishDepsOf 组装）
- * @param nodeId 正在切分的图片节点
- * @param rows/cols 行列
- * @param selected 勾选的格子索引
- * @param kind 'canvas' = 只发布；'storyboard' = 发布后打组（占位实现，与 canvas 相同 + 组）
+ * 切片并上传选中格子；返回按格子索引对齐的资源引用表（失败格缺项）。
+ * 公共步骤：canvas/canvas 与 storyboard 共用，不重复加载原图。
+ */
+async function sliceAndUpload(
+  deps: PublishDeps,
+  img: HTMLImageElement,
+  rows: number,
+  cols: number,
+  selected: number[],
+): Promise<Map<number, { ref: string; width: number; height: number }>> {
+  const cells = unitCells(rows, cols)
+  const out = new Map<number, { ref: string; width: number; height: number }>()
+  for (const index of selected) {
+    const cell = cells[index]
+    if (!cell) continue
+    const px = toPixelRect(cell, img.naturalWidth, img.naturalHeight)
+    if (!px) continue
+    const blob = await sliceCell(img, px.x, px.y, px.width, px.height, px.width, px.height)
+    if (!blob) continue
+    const ref = await deps.putBlob(blob, '宫格-' + (index + 1) + '.png')
+    if (!ref) continue
+    out.set(index, { ref, width: px.width, height: px.height })
+  }
+  return out
+}
+
+/**
+ * 发布选中格子：kind = 'canvas' 建图节点并打组；kind = 'storyboard' 建分镜组节点。
  */
 export async function publishCells(
   deps: PublishDeps,
@@ -174,78 +214,63 @@ export async function publishCells(
   if (imageW <= 0 || imageH <= 0) {
     return { ok: false, count: 0, reason: '图片尺寸未知（还没加载完）' }
   }
-
-  // 1. 解析原图地址（resourceId → resources.resolve，迁移期回退 imageUrl）
-  const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : ''
-  const legacyUrl = typeof data?.imageUrl === 'string' ? data.imageUrl : ''
-  let src = legacyUrl
-  if (resourceId) {
-    const resolved = await deps.resolveRef(resourceId)
-    if (resolved) src = resolved
-  }
+  const src = await resolveSourceUrl(deps, data)
   if (!src) {
     return { ok: false, count: 0, reason: '找不到原图地址' }
   }
-
-  // 2. 加载原图
   const img = await loadImage(src)
   if (!img || !img.naturalWidth) {
     return { ok: false, count: 0, reason: '原图加载失败' }
   }
 
-  // 3. 每格切片 → 存资源 → 建节点
-  const cells = unitCells(rows, cols)
-  const positions = publishPositions(rows, cols, selected, PUBLISH_CELL_W, PUBLISH_CELL_W, PUBLISH_GAP)
-  const createdIds: string[] = []
-  let lastErr = ''
-
-  for (const pos of positions) {
-    const cell = cells[pos.index]
-    if (!cell) continue
-    const px = toPixelRect(cell, img.naturalWidth, img.naturalHeight)
-    if (!px) {
-      lastErr = '格子坐标计算失败'
-      continue
-    }
-    // 切片目标尺寸 = 原图像素尺寸（无损切；节点卡片按比例显示）
-    const blob = await sliceCell(img, px.x, px.y, px.width, px.height, px.width, px.height)
-    if (!blob) {
-      lastErr = '切片生成失败'
-      continue
-    }
-    const name = '宫格-' + (pos.index + 1) + '.png'
-    const ref = await deps.putBlob(blob, name)
-    if (!ref) {
-      lastErr = '资源库不可用（切片没存上）'
-      continue
-    }
-    const id = deps.addImageNodeFromResource(
-      { x: pos.x, y: pos.y },
-      ref,
-      { name, width: px.width, height: px.height },
-    )
-    if (!id) {
-      lastErr = '建图片节点失败（图片插件不可用）'
-      continue
-    }
-    createdIds.push(id)
+  // 公共切片上传步骤
+  const sliced = await sliceAndUpload(deps, img, rows, cols, selected)
+  if (sliced.size === 0) {
+    return { ok: false, count: 0, reason: '切片没存上（资源库不可用？）' }
   }
 
-  if (createdIds.length === 0) {
-    return { ok: false, count: 0, reason: lastErr || '没有格子发布成功' }
+  if (kind === 'canvas') {
+    // 建图节点：保持原行列位置，空格留空
+    const positions = publishPositions(rows, cols, [...sliced.keys()], PUBLISH_CELL_W, PUBLISH_CELL_W, PUBLISH_GAP)
+    const createdIds: string[] = []
+    for (const pos of positions) {
+      const cell = sliced.get(pos.index)
+      if (!cell) continue
+      const id = deps.addImageNodeFromResource(
+        { x: pos.x, y: pos.y },
+        cell.ref,
+        { name: '宫格-' + (pos.index + 1) + '.png', width: cell.width, height: cell.height },
+      )
+      if (id) createdIds.push(id)
+    }
+    if (createdIds.length === 0) {
+      return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }
+    }
+    // 打组：失败不回滚（图已在画布上，用户能手动 Ctrl+G）
+    let groupId: string | undefined
+    if (createdIds.length >= 2) {
+      const gid = deps.createGroup(createdIds)
+      if (gid) groupId = gid
+    }
+    return {
+      ok: true,
+      count: createdIds.length,
+      containerId: groupId,
+      reason: createdIds.length < sliced.size ? '部分格子没发布成功' : undefined,
+    }
   }
 
-  // 4. storyboard：把新节点打成分镜组；失败不回滚（图已在画布上，用户能手动打组）
-  let groupId: string | undefined
-  if (kind === 'storyboard' && createdIds.length >= 2) {
-    const gid = deps.createGroup(createdIds)
-    if (gid) groupId = gid
+  // storyboard：建分镜组节点（槽位数 = 行×列），切片按格子索引写进槽
+  const slots: Array<string | null> = new Array(rows * cols).fill(null)
+  for (const [index, cell] of sliced) slots[index] = cell.ref
+  const boardId = deps.createNode('storyboard', { x: 0, y: 0 }, {
+    rows,
+    cols,
+    slots,
+    slotRefs: slots,
+  })
+  if (!boardId) {
+    return { ok: false, count: 0, reason: '建分镜组失败（插件未装或宿主不支持）' }
   }
-
-  return {
-    ok: true,
-    count: createdIds.length,
-    groupId,
-    reason: createdIds.length < positions.length ? '部分格子没发布成功：' + (lastErr || '未知原因') : undefined,
-  }
+  return { ok: true, count: sliced.size, containerId: boardId }
 }

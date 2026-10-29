@@ -50,7 +50,7 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
     return
   }
   if (kind === 'storyboard') {
-    notify(result.groupId
+    notify(result.containerId
       ? '分镜组已创建（' + result.count + ' 格）'
       : '已发布 ' + result.count + ' 格，打组失败（可手动 Ctrl+G）')
   } else {
