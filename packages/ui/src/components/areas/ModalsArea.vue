@@ -77,7 +77,55 @@ function thumbOf(item: { kind: string; urls?: string[]; canvasId?: string; nodeI
 }
 
 /** 点开的预览：接主题注册的 MediaViewer（图片放大 / 视频 / 音频原生播放） */
-const previewItem = ref<{ name: string; kind: string; url: string } | null>(null)
+/**
+ * 预览项可带**同页签清单**（list / names / kinds / index）—— MediaViewer 本来就认
+ * list + index，给它之后自动出现 ← / → 与页码，键盘 ←→ 也能切（与资产面板同层预览
+ * 同一条路，2026-10-29 用户口径：生成历史里的卡片预览也要能来回切，不能只看单张）。
+ */
+const previewItem = ref<{
+  name: string
+  kind: string
+  url: string
+  list?: string[]
+  names?: string[]
+  kinds?: string[]
+  index?: number
+} | null>(null)
+
+/**
+ * 「生成历史卡片预览」的**同页签清单**：当前筛选下（同一个页签 + 排序）能预览的记录
+ * 按画面顺序（= 数据顺序，用户看到的顺序）排成一列。
+ *
+ * 与资产面板的 assetSiblings 同一套取舍：
+ *   · **只带当前筛选里的记录** —— 眼睛看到什么，← / → 就只在里面走（所见即所得）；
+ *   · 只收有产物的记录 —— 没有产物的（失败/资源走丢）切过去只会一片空白；
+ *   · 图片走 thumbOf 同源转换（卡片缩略图用的同一条），视频/音频用原始地址
+ *     （改写音视频地址会把 /api/resources/... 拼成画布资源路径 → 加载失败）。
+ *
+ * 当前这条不在清单里（理论上点开的就是能预览的，异常情况兜底）时返回 null ——
+ * 调用方退回单张预览。
+ */
+function historyPreviewGroup(item: HistItem): {
+  list: string[]
+  names: string[]
+  kinds: string[]
+  index: number
+} | null {
+  const rows = ui.histVisible.value.filter((e) => {
+    const u = e.urls?.[0]
+    if (!u) return false
+    // 与 openHistoryItem 同一条「能不能给预览地址」的判定：图片走 thumbOf（有 canvasId
+    // 才能转出同源地址），其它类型直接用原始地址。
+    return (e.kind === '图片' || e.kind === 'image') ? !!thumbOf(e) : true
+  })
+  if (!rows.some((e) => e.id === item.id)) return null
+  return {
+    list: rows.map((e) => (e.kind === '图片' || e.kind === 'image' ? (thumbOf(e) as string) : (e.urls?.[0] as string))),
+    names: rows.map((e) => e.title),
+    kinds: rows.map((e) => e.kind),
+    index: Math.max(rows.findIndex((e) => e.id === item.id), 0),
+  }
+}
 
 /** 点开「详情」的那一条历史（生成参数弹窗的数据源） */
 const detailItem = ref<HistItem | null>(null)
@@ -1366,8 +1414,14 @@ onBeforeUnmount(() => {
   if (relayoutTimer) clearTimeout(relayoutTimer)
 })
 
-/** 点一张卡：有产物就打开预览；没有产物（失败 / 老记录）就不弹空窗，给个提示 */
-function openHistoryItem(item: { title: string; kind: string; urls?: string[] }): void {
+/**
+ * 点一张卡：有产物就打开预览；没有产物（失败 / 老记录）就不弹空窗，给个提示。
+ *
+ * 2026-10-29：带上**同页签清单**（historyPreviewGroup），MediaViewer 自动出现
+ * ← / → 与页码、支持键盘 ←→ —— 与资产面板同层预览同一套交互。
+ * 清单给不出（异常兜底）就退回单张预览，行为与从前一致。
+ */
+function openHistoryItem(item: HistItem): void {
   const url = item.urls?.[0]
   if (!url) {
     ui.showToast('这条记录没有产物（可能失败或已过清理）')
@@ -1384,7 +1438,13 @@ function openHistoryItem(item: { title: string; kind: string; urls?: string[] })
     ui.showToast('这条记录没有可预览的产物')
     return
   }
-  previewItem.value = { name: item.title, kind: item.kind, url: viewUrl }
+  const group = historyPreviewGroup(item)
+  previewItem.value = {
+    name: item.title,
+    kind: item.kind,
+    url: viewUrl,
+    ...(group && group.list.length > 1 ? group : {}),
+  }
 }
 
 

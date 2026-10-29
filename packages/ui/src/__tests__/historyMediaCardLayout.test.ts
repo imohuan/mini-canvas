@@ -556,3 +556,47 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 })
 
+/**
+ * 生成历史卡片预览的**同页签清单**（用户口径 2026-10-29：现在只能单次预览一个资源，
+ * 切不了 —— 资产面板同层预览已经走了「把清单交给 MediaViewer」这条路，历史这边照做）。
+ *
+ * 锁四件行为（读源码断言，与 historyMediaCardLayout 其余条目同手法）：
+ *   1. openHistoryItem 必须把 historyPreviewGroup 的清单带给 previewItem；
+ *   2. 清单来自 ui.histVisible（当前筛选，所见即所得）；
+ *   3. 只收有产物的记录（切过去一片空白的记录不进清单）；
+ *   4. 混合类型页签（全部）必须带 kinds —— 切张时预览按当前那张的类型渲染
+ *      （同 2026-10-28「切到节点包被当成视频」那类问题，这里提前钉死）。
+ */
+describe('生成历史卡片预览带同页签清单', () => {
+  const fnBody = modalsArea.slice(
+    modalsArea.indexOf('function historyPreviewGroup'),
+    modalsArea.indexOf('/** 点开「详情」的那一条历史'),
+  )
+
+  it('openHistoryItem 把清单交给 previewItem（单张退回不带 list）', () => {
+    const open = modalsArea.slice(
+      modalsArea.indexOf('function openHistoryItem'),
+      modalsArea.indexOf('/** 箭头水平偏移'),
+    )
+    expect(open, '没有调 historyPreviewGroup（清单没算出来）').toMatch(/historyPreviewGroup\(item\)/)
+    expect(open, '清单没有展开进 previewItem（list 传不进 MediaViewer）').toMatch(/\.\.\.\(group && group\.list\.length > 1 \? group : \{\}\)/)
+  })
+
+  it('清单来自当前筛选（ui.histVisible），不另拉全量', () => {
+    expect(fnBody, '清单没有用 ui.histVisible（会切到看不见的记录上）').toMatch(/ui\.histVisible\.value/)
+  })
+
+  it('只收有产物的记录（没有 urls[0] 的跳过）', () => {
+    expect(fnBody, '没有过滤无产物记录（左右键会切到空白页）').toMatch(/if \(!u\) return false/)
+  })
+
+  it('清单带 names 与 kinds（切张后标题与渲染类型跟着换）', () => {
+    expect(fnBody, '清单缺 names（切张后标题不变）').toMatch(/names: rows\.map\(\(e\) => e\.title\)/)
+    expect(fnBody, '清单缺 kinds（混合页签切张会按第一张的类型渲染）').toMatch(/kinds: rows\.map\(\(e\) => e\.kind\)/)
+  })
+
+  it('图片走 thumbOf 同源转换；视频/音频用原始地址（与 openHistoryItem 同一条规则）', () => {
+    expect(fnBody, '图片没有走 thumbOf 同源转换').toMatch(/e\.kind === '图片' \|\| e\.kind === 'image' \? \(thumbOf\(e\) as string\) : \(e\.urls\?\.\[0\] as string\)/)
+  })
+})
+
