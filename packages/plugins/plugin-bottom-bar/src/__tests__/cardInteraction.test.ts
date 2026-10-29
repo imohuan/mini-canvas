@@ -60,7 +60,9 @@ describe('双击卡片：聚焦到节点', () => {
     // F 键那条命令只认当前选中；这里要的是「按 id 聚焦」，所以走同一个插件的另一条命令。
     expect(body).toMatch(/auto-layout:focus-node/)
     expect(body).toMatch(/animateViewport/)
-    expect(body).toMatch(/resolveFocusZoom\(/)
+    // 兜底（宿主没装 auto-layout）也必须按占比算缩放，不能只挪中心
+    expect(body).toMatch(/calculateFocusZoom\(/)
+    expect(body).toMatch(/focusHeightRatio/)
   })
 
   it('没有 nodeId 的卡（手打 @名字 待绑定）不强行聚焦', () => {

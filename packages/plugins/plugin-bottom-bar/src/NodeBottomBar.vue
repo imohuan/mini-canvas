@@ -59,7 +59,6 @@ import { initialPromptDoc, initialPromptText, promptDocPersistFields, promptPers
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
 import {
   exitReference,
-  resolveFocusZoom,
   referenceActive,
   referenceEpoch,
   referenceOwner,
@@ -70,6 +69,7 @@ import { resolveBottomBarShown } from './bottomBarOverlay'
 import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
+import { calculateFocusZoom } from './focusZoom'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
@@ -876,7 +876,23 @@ function onCardDblClick(tile: RefTile): void {
   const root = viewport.getRootEl?.() ?? null
   const vw = root?.clientWidth || (typeof window === 'undefined' ? 0 : window.innerWidth)
   const vh = root?.clientHeight || (typeof window === 'undefined' ? 0 : window.innerHeight)
-  const zoom = resolveFocusZoom(viewport.getViewport().zoom)
+  /**
+   * 兜底路径也要是「F 键那套取景」，不能只挪中心（用户两轮都在追这个）：
+   * 按 auto-layout 的设置（聚焦高度占比 / 最小最大缩放）算百分比，再居中。
+   * 设置服务缺失（单测 / 精简宿主）时用与插件 schema 相同的默认值，行为不跳。
+   */
+  const settings = ctx.tryGet<{ get(key: string): unknown }>('settings')
+  const readNum = (key: string, fallback: number): number => {
+    const v = settings?.get(key)
+    return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+  }
+  const zoom = calculateFocusZoom({
+    boundsHeight: rect.h,
+    viewportHeight: vh,
+    heightRatio: readNum('focusHeightRatio', 0.5),
+    minZoom: readNum('autoLayoutMinZoom', 0.1),
+    maxZoom: readNum('autoLayoutMaxZoom', 4),
+  })
   const next = { x: vw / 2 - (rect.x + rect.w / 2) * zoom, y: vh / 2 - (rect.y + rect.h / 2) * zoom, zoom }
   if (viewport.animateViewport) viewport.animateViewport(next)
   else viewport.setViewport(next)
@@ -1931,13 +1947,25 @@ const tagMenuChip = ref<ResourceItem | null>(null)
  * 菜单出现在屏幕左上、还被画布裁掉一截）。现在直接把触发器根（.dd）本身 fixed 到锚点，
  * 尺寸给 1×1 —— Dropdown 量到的就是这里，且不会挡住下面的标签。
  */
-const tagMenuAnchorPos = ref({ left: 0, top: 0 })
+const tagMenuAnchorEl = ref<HTMLElement | null>(null)
+/** 锚点相对编辑器左上角的位移与尺寸（由 openTagMenu 量一次算出来） */
+const tagMenuAnchorShift = ref({ x: 0, y: 0 })
+const tagMenuAnchorHeight = ref(1)
 const tagMenuRootStyle = computed<Record<string, string>>(() => ({
-  position: 'fixed',
-  left: tagMenuAnchorPos.value.left + 'px',
-  top: tagMenuAnchorPos.value.top + 'px',
+  position: 'absolute',
+  left: '0px',
+  top: '0px',
   width: '1px',
-  height: '1px',
+  /**
+   * 高度跟**标签本体**一样（不是 1px）。
+   *
+   * 为什么重要：Dropdown 判断「下方放不下就翻到上方」用的是触发器上下沿。
+   * 触发器只有 1px、又贴在标签下沿时，翻上去会从**标签下沿**往上量 ——
+   * 菜单底部正好压在标签上（真机截图：菜单盖住半颗标签）。
+   * 把锚点做成一整颗标签高，翻上去就是「标签上沿 - 菜单高」，天然留出缝。
+   */
+  height: tagMenuAnchorHeight.value + 'px',
+  transform: 'translate(' + tagMenuAnchorShift.value.x + 'px, ' + tagMenuAnchorShift.value.y + 'px)',
   pointerEvents: 'none',
 }))
 
@@ -1955,7 +1983,12 @@ const tagMenuEntries = computed<TagMenuEntry[]>(() => {
   const out: TagMenuEntry[] = []
   for (const n of doc.getNodes()) {
     if (n.id === props.id) continue
-    const media = nodeMediaOf(n)
+    /**
+     * 菜单要列**整个画布**（用户 2026-10-29）：所以不能只认「已经有地址」的节点。
+     * 空图片 / 空视频（先连线后上传）也是画布上的节点，按类型进对应分组；
+     * 地址先空着，换绑后等资源解析回来自然会补上。
+     */
+    const media = nodeMediaOf(n) ?? typeOnlyMediaOf(n)
     if (!media) continue
     out.push({
       id: n.id,
@@ -1967,6 +2000,17 @@ const tagMenuEntries = computed<TagMenuEntry[]>(() => {
   }
   return out
 })
+
+/** 节点没有可用媒体地址时，按**节点类型**给出分类（图片/视频/音频/文本），否则 null */
+function typeOnlyMediaOf(
+  node: { type?: string; data?: Record<string, unknown> },
+): { mediaType: 'image' | 'video' | 'audio' | 'text'; url: string; name: string } | null {
+  const type = node.type
+  if (type !== 'image' && type !== 'video' && type !== 'audio' && type !== 'text') return null
+  const label = typeof node.data?.label === 'string' ? node.data.label.trim() : ''
+  const fallback = type === 'image' ? '图片' : type === 'video' ? '视频' : type === 'audio' ? '音频' : '文本'
+  return { mediaType: type, url: '', name: label || fallback }
+}
 
 const tagMenuGroups = computed(() => buildTagMenuGroups(tagMenuEntries.value, tagMenuQuery.value))
 
@@ -1990,11 +2034,42 @@ function openTagMenu(
   item: ResourceItem,
   anchor: { left: number; top: number; right: number; bottom: number },
 ): void {
-  tagMenuAnchorPos.value = { left: Math.round(anchor.left), top: Math.round(anchor.bottom) }
+  // 同一颗标签的图标再点一次 = 收起（Dropdown 的常规手感）
+  if (tagMenuOpen.value && tagMenuChip.value?.id === item.id) {
+    closeTagMenu()
+    return
+  }
   tagMenuChip.value = item
   tagMenuQuery.value = ''
   tagMenuActiveKind.value = null
-  tagMenuOpen.value = true
+  tagMenuOpen.value = false
+  tagMenuAnchorShift.value = { x: 0, y: 0 }
+  tagMenuAnchorHeight.value = Math.max(1, Math.round(anchor.bottom - anchor.top))
+  /**
+   * 定位用「量一次、补一次」，不写视口坐标。
+   *
+   * 为什么不能直接 `position:fixed; left/top = 视口坐标`：底栏浮层自己就是
+   * `position:fixed; transform:translateX(-50%)` —— **有 transform 的祖先会成为
+   * 后代的包含块**，fixed 子元素写的视口坐标会被整段祖先位移再叠一次。
+   * 真机表现：菜单跑到屏幕右下角，与标签完全不对位。
+   *
+   * 这里把锚点绝对定位在编辑器左上角（0,0），量出它现在的屏幕位置，
+   * 再把「还差多少」写成 transform —— 只补差值，不猜祖先、不写死补偿。
+   */
+  void nextTick().then(() => {
+    const el = tagMenuAnchorEl.value
+    if (el) {
+      const r = el.getBoundingClientRect()
+      tagMenuAnchorShift.value = {
+        x: Math.round(anchor.left - r.left),
+        // 锚点顶端 = 标签顶端；高度是整颗标签（见 tagMenuRootStyle 的说明）
+        y: Math.round(anchor.top - r.top),
+      }
+    }
+    return nextTick()
+  }).then(() => {
+    tagMenuOpen.value = true
+  })
 }
 
 function closeTagMenu(): void {
@@ -2020,7 +2095,7 @@ async function pickTagMenuNode(entry: TagMenuEntry): Promise<void> {
     closeTagMenu()
     return
   }
-  await replaceChipWith(entry.id)
+  await replaceChipWith(entry.id, chip, entry.name)
   closeTagMenu()
 }
 
@@ -2029,24 +2104,35 @@ async function pickTagMenuNode(entry: TagMenuEntry): Promise<void> {
  *   · 唯一引用 → 断开「旧节点 → 本节点」的线，连「新节点 → 本节点」（真替换）；
  *   · 多处引用 → 只加一条新线（旧线留着给别的引用）。
  */
-async function replaceChipWith(newNodeId: string): Promise<void> {
+async function replaceChipWith(newNodeId: string, chip: ResourceItem, name: string): Promise<void> {
   const doc = ctx.tryGet<{
     addEdge(input: { source: string; target: string }): string
     removeEdges(ids: string[]): number
     getEdges?(): Array<{ id: string; source: string; target: string }>
   }>('doc')
   if (!doc) return
-  const chipId = tagMenuChip.value?.id
-  if (!chipId) return
-  const chip = promptChips.value.find((c) => c.id === chipId)
-  const oldNodeId = chip?.nodeId ?? null
+  const oldNodeId = nodeIdOfChip(chip.id)
   const unique = oldNodeId ? refCountOf(oldNodeId) <= 1 : false
   if (unique && oldNodeId && oldNodeId !== newNodeId) {
     const stale = renderEdges.value.filter((e) => e.source === oldNodeId && e.target === props.id).map((e) => e.id)
     if (stale.length) doc.removeEdges(stale)
   }
   try { doc.addEdge({ source: newNodeId, target: props.id }) } catch { /* 已存在等：忽略 */ }
+  // 等连线进 VueFlow store，素材才会出现在 shownMaterials 里（否则改名拿不到新类型/缩略图）
   await nextTick()
+  await nextTick()
+  /**
+   * 标签身份也要一起换（用户 2026-10-29：点左侧图标选一个节点 = 换绑）。
+   *
+   * 只连一条新线是不够的：正文里那颗标签仍写着旧节点的 id/名字，
+   * 下次刷新会按旧身份把名字拉回去，用户看到的就是「选了没反应」。
+   * bindChipToNode 走的是上传/替换同一条路（改身份 + 名字 + 顺序占位）。
+   */
+  bindChipToNode(
+    { previousChipId: chip.id, oldNodeId: oldNodeId ?? undefined },
+    newNodeId,
+    name,
+  )
   refreshSlotChips()
 }
 
@@ -2742,6 +2828,7 @@ function onGlobalLeave(el: Element): void {
       <Dropdown
         v-model="tagMenuOpen"
         placement="bottom-start"
+        align="start"
         :offset="6"
         :teleport="true"
         body-class="nb-tagmenu-body"
@@ -2750,7 +2837,7 @@ function onGlobalLeave(el: Element): void {
         :style="tagMenuRootStyle"
       >
         <template #trigger>
-          <span class="nb-tagmenu-anchor" aria-hidden="true" />
+          <span ref="tagMenuAnchorEl" class="nb-tagmenu-anchor" aria-hidden="true" />
         </template>
         <template #default>
           <label class="nb-tagmenu-search">

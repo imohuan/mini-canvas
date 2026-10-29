@@ -1803,8 +1803,13 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
     if ((item?.onIconClick || item?.onReplaceClick) && clickInsideChipIcon(el, e)) {
       // 菜单要开了：把还在等的「落光标」取消掉，否则 1s 后光标会跳走、菜单跟着闪
       if (chipClickTimer) { clearTimeout(chipClickTimer); chipClickTimer = null }
-      const icon = chipIconRect(el) ?? el.getBoundingClientRect()
-      const anchor = { left: icon.left, top: icon.top, right: icon.right, bottom: icon.bottom, width: icon.width, height: icon.height }
+      /**
+       * 锚点用**整颗标签**的矩形，不是图标格：
+       * 图标格在标签内部（上下各留了内边距），拿它当锚点时，菜单翻到上方会压住标签本体。
+       * 命中判定仍只看图标格（见上），定位则跟着标签走 —— 用户口径是「菜单在标签正下方/正上方」。
+       */
+      const box = el.getBoundingClientRect()
+      const anchor = { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height }
       if (item.onIconClick) item.onIconClick(item, anchor)
       else item.onReplaceClick?.(item)
       return
