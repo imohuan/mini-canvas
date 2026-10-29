@@ -75,9 +75,15 @@
   border-bottom: 1px solid var(--ui-ink, #111);
 }
 
-/* 使用 CSS 伪元素创建光标停靠点 */
-.prose-mirror-editor .resource-node::before,
-.prose-mirror-editor .resource-node::after {
+/*
+ * 光标停靠点（零宽空格）—— 只用 ::before 一个伪元素。
+ *
+ * 用户 2026-10-29 报「标签 hover 不显示编辑图标（时灵时不灵）」：
+ * 这里原来 ::before 和 ::after **都**声明了 content，而下面「hover 换铅笔」
+ * 用的正是 ::after —— 两条规则抢同一个伪元素，谁后注入谁赢。主题/组件库
+ * 注入顺序一变，铅笔就整个消失。::after 现在专属铅笔，停靠只留 ::before。
+ */
+.prose-mirror-editor .resource-node::before {
   content: "\200B"; /* 零宽空格 */
   display: inline;
   letter-spacing: 0;

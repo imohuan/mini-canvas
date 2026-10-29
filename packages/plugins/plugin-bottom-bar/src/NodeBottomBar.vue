@@ -1436,6 +1436,8 @@ const previewPos = ref({ left: 0, top: 0, above: true })
 const previewBox = ref<{ width: number; height: number }>({ width: HOVER_PREVIEW_MAX_SIDE, height: HOVER_PREVIEW_MAX_SIDE })
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 let previewCloseTimer: ReturnType<typeof setTimeout> | null = null
+/** hover 的那张卡片的屏幕矩形：图片加载后按它重新居中（用户 2026-10-29：预览没对准卡片） */
+let previewAnchor: DOMRect | null = null
 
 function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
   cancelPreviewClose()
@@ -1444,6 +1446,7 @@ function schedulePreview(tile: RefTile, anchorRect: DOMRect): void {
     // 只对有「可看内容」的卡出预览（图片/视频帧）；音频/文本没有画面
     if (!cardImageOf(tile) && tile.kind !== 'video') return
     previewTile.value = tile
+    previewAnchor = anchorRect
     /**
      * 先按已知尺寸摆一个方盒子，图片 load 后由 onPreviewMediaReady 用真实宽高比校正。
      * 位置要等盒子尺寸定下来再算（竖图 200 高、横图 200 宽，占位完全不同）。
@@ -1465,8 +1468,18 @@ function onPreviewMediaReady(tileKey: string, w: number, h: number): void {
   const same = next.width === previewBox.value.width && next.height === previewBox.value.height
   if (same) return
   previewBox.value = next
-  // 位置按新盒子重算（translateY(-100%) 仍是「底边贴卡片上方」，这里只补水平夹取）
-  previewPos.value = clampPreviewLeft(previewPos.value, next)
+  /**
+   * 位置按新盒子**整体重算**（用户 2026-10-29：竖图加载后预览偏右，没有对准卡片）。
+   *
+   * 根因：初始位置按 200×200 方盒居中算的；竖图加载完盒子变窄（如 113×200），
+   * 只做视口夹取的话 left 还是方盒的 —— 图片就歪到卡片右侧。
+   * 重新调 placeHoverPreview 用真卡片矩形居中，比单补 left 靠谱。
+   */
+  if (previewAnchor) {
+    previewPos.value = placeHoverPreview(previewAnchor, { width: window.innerWidth, height: window.innerHeight }, next)
+  } else {
+    previewPos.value = clampPreviewLeft(previewPos.value, next)
+  }
 }
 
 /** 按新宽度把 left 夹进视口（居中于原卡片位置，不重新量卡片） */
@@ -2772,6 +2785,7 @@ function onGlobalLeave(el: Element): void {
         <video
           v-if="livePreviewTile.kind === 'video' && livePreviewTile.url"
           class="nb-hover-preview-media"
+          data-media="video"
           :src="livePreviewTile.url"
           :style="{ height: previewBox.height + 'px' }"
           @loadedmetadata="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLVideoElement).videoWidth, (ev.target as HTMLVideoElement).videoHeight)"
@@ -2783,6 +2797,7 @@ function onGlobalLeave(el: Element): void {
         <img
           v-else-if="cardImageOf(livePreviewTile)"
           class="nb-hover-preview-media"
+          data-media="image"
           :src="cardImageOf(livePreviewTile)"
           :alt="livePreviewTile.label"
           @load="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLImageElement).naturalWidth, (ev.target as HTMLImageElement).naturalHeight)"
@@ -3905,6 +3920,15 @@ function onGlobalLeave(el: Element): void {
   height: 100%;
   max-height: 200px;
   object-fit: contain;
+}
+/*
+ * 黑衬底只给**视频**（用户 2026-10-29 第 1.1 点：图片预览四周有黑边）。
+ *
+ * 根因：这条背景原来写在共用类上，图片也吃到了 —— 图片是 contain 等比缩放，
+ * 盒子与图片有 1px 亚像素差，露出的就是这层深色底，看着像「黑边框」。
+ * 图片必须透出面板底色（透明图也要透），视频画面才需要黑衬底。
+ */
+.nb-hover-preview-media[data-media='video'] {
   /* 主题色白名单: hover 预览里视频画面的衬底（任意视频都要有黑底，与主题无关） */
   background: var(--ui-tip, #000);
 }
