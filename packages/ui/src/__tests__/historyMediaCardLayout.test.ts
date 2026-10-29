@@ -769,3 +769,28 @@ describe('占位卡也带 data-hist-id（否则补漏会无限重建）', () => 
   })
 })
 
+/**
+ * 墙缓存的 key 必须带上「显示异常」开关（2026-10-30 复测：打开开关后视频仍 14 张、占位卡 0）。
+ *
+ * 开关变化会先 clear 已摘集合并 rebuildMasonry（这时是 16 张、含占位卡），紧接着数据 watch 走
+ * switchWall()；如果 key 里没有这个维度，switchWall 会用**同一 key 的旧墙**（14 张、无占位）
+ * 把新建的墙覆盖回去 —— 用户看到的就是"开关点了没反应"。
+ */
+describe('显示异常开关是墙缓存 key 的一部分', () => {
+  it('historyWallKey 含 histShowError', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function historyWallKey'),
+      modalsArea.indexOf('/** 最后一张卡可见'),
+    )
+    expect(fn, '墙 key 缺 histShowError → 开关后旧墙会盖掉含占位卡的新墙').toMatch(/histShowError/)
+  })
+
+  it('开关切换时把旧墙从缓存里丢掉（不留 14 张的陈旧快照）', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('watch(() => s.histShowError'),
+      modalsArea.indexOf('onBeforeUnmount(),'),
+    )
+    expect(fn, '开关切换没有清理旧墙缓存').toMatch(/wallCache\.delete|wallCache\.clear/)
+  })
+})
+

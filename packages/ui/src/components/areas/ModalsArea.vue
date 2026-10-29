@@ -245,7 +245,12 @@ function calcColumns(containerWidth: number): { cols: number; columnWidth: numbe
 
 /** 当前页签的墙缓存键（完整筛选签名；改列数/排序/范围都会换键） */
 function historyWallKey(): string {
-  return [s.histScope, s.histType, s.histRating, s.histSortDesc, s.histPageSize].join('|')
+  /**
+   * 「显示异常」也必须是 key 的一部分（2026-10-30 复测：打开开关后视频仍 14 张、占位卡 0）。
+   * 开关会改变墙上该有哪些卡（回填占位 or 整条摘掉）；不带这一维，switchWall() 会用
+   * 同一 key 的旧墙（14 张、无占位）把刚重建的新墙覆盖回去 —— 用户看到"开关没反应"。
+   */
+  return [s.histScope, s.histType, s.histRating, s.histSortDesc, s.histPageSize, s.histShowError ? 'e1' : 'e0'].join('|')
 }
 
 /** 最后一张卡可见 → 追加下一批已拉到的数据（节流交给 maybeLoadMoreBatch，见下） */
@@ -1559,6 +1564,11 @@ watch(() => s.histShowError, () => {
   if (s.historyOpen) {
     // 打开"显示异常"要把之前摘掉的条目重新认作可画：它们这时会画成中性异常卡，不该再被跳过
     droppedHistoryIds.clear()
+    /**
+     * 旧墙缓存一律丢弃：key 现在带开关位，旧 key 的墙再也挂不回来，留着只是内存垃圾；
+     * 更要紧的是避免任何"开关前那面 14 张的墙"被误挂回（用户实测：开了开关还是 14 张）。
+     */
+    wallCache.clear()
     renderedCount.value = Math.min(BATCH_SIZE, ui.histVisible.value.length)
     nextTick(() => {
       rebuildMasonry()
