@@ -31,6 +31,7 @@ import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
 import { registerBarAction, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
 import { beginOverlay, endOverlay, onOverlayModeChange } from './videoSession'
+import { clearClipPrefs } from './videoClipStore'
 import {
   captureFrameNode,
   clipVideo,
@@ -157,6 +158,21 @@ export const Config: ConfigSchema = {
     type: 'number', default: 1, min: 0.1, max: 10, step: 0.1,
     label: '剪辑最短时长', group: '节点/视频剪辑',
     description: '拖动剪辑端点时至少要保留的秒数。设得太小会因为一帧的误差而几乎剪掉整段。',
+  },
+  videoClipSnapStep: {
+    type: 'number', default: 0.1, min: 0.01, max: 10, step: 0.01,
+    label: '吸附间隔', group: '节点/视频剪辑',
+    description: '剪辑胶片条上磁吸的对齐间隔（秒）。磁吸只在拖拽接近对齐点时生效，平时跟手。',
+  },
+  videoClipSnapRadius: {
+    type: 'number', default: 0.12, min: 0.01, max: 5, step: 0.01,
+    label: '吸附范围', group: '节点/视频剪辑',
+    description: '距离对齐点多近才吸上去（秒）。不能超过吸附间隔的一半，超出会被自动收回。',
+  },
+  videoClipLoop: {
+    type: 'boolean', default: false,
+    label: '区间循环', group: '节点/视频剪辑',
+    description: '剪辑确认后只在保留区间内循环播放（预览新剪辑效果用）。',
   },
   // —— 「节点/缩略图」：视频帧图的三档（用户口径：视频这套**独立**配，与图片分开）——
   //
@@ -328,6 +344,7 @@ export function apply(ctx: Context) {
       return uploadVideo(ops, nodeId, file)
     },
   })
+
   ctx.commands.register({
     id: 'video:crop',
     title: '裁剪视频画面',

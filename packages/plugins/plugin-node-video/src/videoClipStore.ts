@@ -9,6 +9,35 @@
  */
 import { reactive } from 'vue'
 
+/** 吸附/循环的会话内默认（settings 服务能读到已保存值时由面板覆盖） */
+export interface ClipPrefs {
+  snap: boolean
+  snapStep: number
+  snapRadius: number
+  loop: boolean
+}
+
+/** demo 同款默认；吸附范围最大 = 间隔/2（超出自动收回，见面板） */
+export const DEFAULT_CLIP_PREFS: ClipPrefs = { snap: false, snapStep: 0.1, snapRadius: 0.12, loop: false }
+
+/** 节点 id → 本会话的偏好（进剪辑模式时从 settings 播一次种子，之后面板本地改） */
+const prefs = reactive(new Map<string, ClipPrefs>())
+
+/** 读偏好；没有就给默认（返回的是引用，面板可直接改字段） */
+export function readClipPrefs(nodeId: string): ClipPrefs {
+  let p = prefs.get(nodeId)
+  if (!p) {
+    p = { ...DEFAULT_CLIP_PREFS }
+    prefs.set(nodeId, p)
+  }
+  return p
+}
+
+/** 节点卸载清偏好 */
+export function clearClipPrefs(nodeId: string): void {
+  prefs.delete(nodeId)
+}
+
 /** 节点 id → 当前播放位置（秒） */
 const playheads = reactive(new Map<string, number>())
 
@@ -30,4 +59,24 @@ export function readPlayhead(nodeId: string): number | null {
 /** 节点卸载时清掉（内存卫生） */
 export function resetPlayhead(nodeId: string): void {
   playheads.delete(nodeId)
+}
+
+/** 节点 id → 视频总时长（loadedmetadata 后有值；面板据此铺胶片格） */
+const durations = reactive(new Map<string, number>())
+
+/** 内容区 onLoadedMetadata 上报 */
+export function publishDuration(nodeId: string, seconds: number): void {
+  if (!nodeId || !Number.isFinite(seconds) || seconds <= 0) return
+  durations.set(nodeId, seconds)
+}
+
+/** 面板读（还没有 = 0，胶片条显示空态） */
+export function readDuration(nodeId: string): number {
+  const v = durations.get(nodeId)
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0
+}
+
+/** 节点卸载清时长 */
+export function resetDuration(nodeId: string): void {
+  durations.delete(nodeId)
 }

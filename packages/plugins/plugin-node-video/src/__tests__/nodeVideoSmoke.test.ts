@@ -177,7 +177,12 @@ describe('node-video 装配 smoke', () => {
       'videoFitMaxHeight',
       'videoFitMaxWidth',
     ])
-    expect(settings.groupOf('节点/视频剪辑').map((i) => i.key)).toEqual(['videoMinClipDuration'])
+    expect(settings.groupOf('节点/视频剪辑').map((i) => i.key)).toEqual([
+      'videoMinClipDuration',
+      'videoClipSnapStep',
+      'videoClipSnapRadius',
+      'videoClipLoop',
+    ])
     ctx.stop()
   })
 

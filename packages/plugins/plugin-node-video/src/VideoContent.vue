@@ -47,7 +47,7 @@ function positiveNum(v: unknown): number | null {
 }
 import { createVideoOps } from './videoOps'
 import { endOverlay, isClipping, isCropping } from './videoSession'
-import { publishPlayhead, resetPlayhead } from './videoClipStore'
+import { clearClipPrefs, publishDuration, publishPlayhead, resetPlayhead } from './videoClipStore'
 import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -714,7 +714,10 @@ function onLoadedMetadata(e: Event): void {
   }
   // 起点在剪辑段之前时先对齐到段首（换过剪辑范围后重新加载也适用）
   const { start } = clipRange.value
-  if (start > 0 && v.currentTime < start) v.currentTime = start/**
+  if (start > 0 && v.currentTime < start) v.currentTime = start
+  // 视频时长到手 = 胶片条可以开工了（剪辑面板 watch 这个标记）
+  publishDuration(props.id, duration.value)
+/**
    * 恢复"上次停在哪"。
    *
    * 为什么必须在这里做（而不是只在 togglePlay 里）：每次离开节点定格后 video 元素会被卸载，
@@ -936,6 +939,7 @@ onBeforeUnmount(() => {
   paneClickSub.dispose()
   endOverlay(props.id)
   resetPlayhead(props.id)
+  clearClipPrefs(props.id)
 })
 
 // 视频地址一变：旧源的帧图全部作废（释放 objectURL）、回到"未播放"态
