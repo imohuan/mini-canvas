@@ -21,6 +21,7 @@ import {
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
   Search, LayoutGrid, Columns3,
+  Check, Layers,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
   Minimize2, AlertCircle, GripVertical, CircleSlash,
 } from 'lucide-vue-next'
@@ -32,6 +33,7 @@ import { useAgent } from '../useAgent.js'
 import { useStickyScroll } from '../useStickyScroll.js'
 import { groupTurnBlocks, type TurnRow } from '../turnBlocks.js'
 import { scrollTopForVisibleItem } from '../selectionScroll.js'
+import { brandName, brandSvg, detectPlatform } from '../modelBrandIcons.js'
 // ICON_SKILL / ICON_MCP 由模板直接 v-html（@ 下拉里的菜单卡片头图）；解析那一段已搬去 userSegments。
 import { skillResources, mcpResources, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
@@ -341,11 +343,33 @@ function dismissHint(): void {
  */
 const mcpProbing = ref(false)
 const mcpProbeHint = ref('')
-/** 服务名 → 检测结果（只存展示需要的两样：好没好 + 一句说明） */
-const mcpStatus = ref<Record<string, { ok: boolean; text: string }>>({})
+/** 服务名 → 检测结果（好没好 / 一句说明 / 工具数） */
+const mcpStatus = ref<Record<string, { ok: boolean; text: string; tools: number }>>({})
 
-function mcpStatusOf(name: string): { ok: boolean; text: string } | null {
+function mcpStatusOf(name: string): { ok: boolean; text: string; tools: number } | null {
   return mcpStatus.value[name] ?? null
+}
+
+/** MCP 卡片副行：优先显示地址 / 命令（区分同名服务），没有就显示传输方式 */
+function mcpServerDesc(item: { id: string; value: string }): string {
+  if (item.value) return item.value
+  const row = s.mcpServers.find((m) => 'mcp:' + m.name === item.id)
+  const cfg = row?.config ?? {}
+  return String(cfg.type ?? (cfg.command ? 'stdio' : '内置'))
+}
+
+/** MCP 卡片右侧的传输方式（还没检测过时显示，代替工具数） */
+function mcpTransport(item: { id: string }): string {
+  const row = s.mcpServers.find((m) => 'mcp:' + m.name === item.id)
+  if (!row) return '服务'
+  if (row.builtin) return '内置'
+  const cfg = row.config ?? {}
+  return String(cfg.type ?? (cfg.command ? 'stdio' : '服务'))
+}
+
+/** 某个服务探测到的工具数（「重新检测」后才有；没有就给 0） */
+function mcpToolCount(name: string): number {
+  return mcpStatusOf(name)?.tools ?? 0
 }
 
 async function runMcpProbe(): Promise<void> {
@@ -362,10 +386,10 @@ async function runMcpProbe(): Promise<void> {
     // 先 reconnect 再 probe，用户看到的结果就是"修好之后"的状态。
     await agent.reconnectMcp()
     const r = await agent.probeMcp()
-    const next: Record<string, { ok: boolean; text: string }> = {}
+    const next: Record<string, { ok: boolean; text: string; tools: number }> = {}
     for (const sv of r.servers) {
       const ok = sv.status === 'completed'
-      next[sv.name] = { ok, text: ok ? sv.tools + ' 个工具' : (sv.error || sv.status || '连接失败') }
+      next[sv.name] = { ok, text: ok ? sv.tools + ' 个工具' : (sv.error || sv.status || '连接失败'), tools: sv.tools }
     }
     mcpStatus.value = next
     if (r.error) mcpProbeHint.value = r.error
@@ -1351,10 +1375,57 @@ const modelPlatform = ref('all')
 const skillQuery = ref('')
 const skillView = ref<'card' | 'split'>('card')
 const mcpQuery = ref('')
+/** 技能分栏的分类过滤（DEMO 的 activeCategory；卡片视图不看它，切到卡片时重置为全部） */
+const skillCategory = ref('全部')
+/** 窄面板下折叠成按钮的搜索框（DEMO 的 searchOpen；三个面板各一份） */
+const modelSearchOpen = ref(false)
+const skillSearchOpen = ref(false)
+const mcpSearchOpen = ref(false)
+
+function searchOpenOf(kind: 'skill' | 'mcp' | 'model') {
+  return kind === 'skill' ? skillSearchOpen : kind === 'mcp' ? mcpSearchOpen : modelSearchOpen
+}
+
+/** 点搜索按钮：展开/收起（展开后自动聚焦输入框，与 DEMO 一致） */
+function togglePanelSearch(kind: 'skill' | 'mcp' | 'model'): void {
+  const box = searchOpenOf(kind)
+  box.value = !box.value
+  if (!box.value) return
+  void nextTick(() => {
+    const el = document.querySelector<HTMLInputElement>('[data-ac-search="' + kind + '"]')
+    el?.focus()
+  })
+}
 
 function modelNote(m: { contextWindow?: number; isVision: boolean }): string {
   if (m.contextWindow) return Math.round(m.contextWindow / 1000) + 'K'
   return m.isVision ? '视觉' : ''
+}
+
+/**
+ * 这条模型是不是当前选中的那个。
+ *
+ * 为什么不能只比 modelId：不同 provider 可能有同名模型 ID（openrouter 的
+ * `deepseek/...` 与 deepseek 官方同名尾巴），只比 ID 会把两条同时点亮。
+ * provider 与 modelId 一起比才是「同一个模型」的唯一真相。
+ */
+function isModelPicked(m: { provider: string; modelId: string }): boolean {
+  return s.model?.provider === m.provider && s.model?.modelId === m.modelId
+}
+
+/** 模型 → 平台 key（品牌图标与分栏分组共用一把尺子） */
+function platformOf(m: { provider: string; modelId: string }): string {
+  return detectPlatform(m.modelId, m.provider)
+}
+
+/** 平台展示名（卡片副行第一段） */
+function brandNameOf(m: { provider: string; modelId: string }): string {
+  return brandName(platformOf(m))
+}
+
+/** 卡片上的品牌图标（35px 托里 22px svg，尺寸由 CSS 管） */
+function brandSvgOf(m: { provider: string; modelId: string }): string {
+  return brandSvg(platformOf(m))
 }
 
 /** 技能分栏封面：名字 hash 成稳定色相（demo 的彩色渐变封面同款思路，数据里没有 hue 就从名字算）。 */
@@ -1368,31 +1439,102 @@ function skillCoverStyle(name: string): Record<string, string> {
   }
 }
 
+/**
+ * 分栏左列的平台分组：按 DEMO 的「平台」聚合（不是按 provider 原样分组）。
+ *
+ * 为什么要聚合：真实配置里 40 个可用模型可能来自 5 个 provider（openrouter 一家就几十个
+ * 模型 ID），按 provider 列出来左列只有 5 行、右边几十行混着所有平台；DEMO 的口径是
+ * 「DeepSeek / OpenAI / Claude … 每个平台一行」，所以先 detectPlatform 再聚合。
+ * key 用平台 key（all 表示全部），过滤时用同一把尺子。
+ */
 const modelPlatformGroups = computed(() => {
-  const order: Array<{ provider: string; label: string; count: number }> = []
+  const order: Array<{ key: string; label: string; count: number }> = []
   for (const m of usableModels.value) {
-    const hit = order.find((g) => g.provider === m.provider)
+    const key = detectPlatform(m.modelId, m.provider)
+    const hit = order.find((g) => g.key === key)
     if (hit) hit.count++
-    else order.push({ provider: m.provider, label: m.provider, count: 1 })
+    else order.push({ key, label: brandName(key), count: 1 })
   }
-  return [{ provider: 'all', label: '全部平台', count: usableModels.value.length }, ...order]
+  return [{ key: 'all', label: '全部平台', count: usableModels.value.length }, ...order]
 })
 
 const filteredModels = computed(() => {
   const q = modelQuery.value.trim().toLowerCase()
   return usableModels.value.filter((m) => {
-    if (modelPlatform.value !== 'all' && m.provider !== modelPlatform.value) return false
+    if (modelPlatform.value !== 'all' && detectPlatform(m.modelId, m.provider) !== modelPlatform.value) return false
     if (!q) return true
-    return (m.modelId + ' ' + m.provider).toLowerCase().includes(q)
+    const brand = brandName(detectPlatform(m.modelId, m.provider))
+    return (m.modelId + ' ' + m.provider + ' ' + modelNote(m) + ' ' + brand).toLowerCase().includes(q)
   })
 })
 
 const filteredSkills = computed(() => {
   const q = skillQuery.value.trim().toLowerCase()
   const items = skillResources(s.skills)
-  if (!q) return items
-  return items.filter((item) => (item.name + ' ' + item.value).toLowerCase().includes(q))
+  // 分栏视图先按分类过滤（DEMO 口径：左列分类 = 全部 / 精选 / 各分类）
+  const byCategory = items.filter((item) => {
+    if (skillCategory.value === '全部') return true
+    if (skillCategory.value === '精选') return skillMetaOf(item.name).featured
+    return skillMetaOf(item.name).category === skillCategory.value
+  })
+  if (!q) return byCategory
+  return byCategory.filter((item) => (item.name + ' ' + item.value).toLowerCase().includes(q))
 })
+
+/**
+ * 技能的展示元数据（分类 / 精选 / 色相）。
+ *
+ * 后端只给名字 + 描述 + 目录，没有分类与封面；DEMO 用「教育培训 / 短视频 / 专业影视…」
+ * 分组并给每个技能一个色相。这里按名字稳定派生：同一技能每次进来分类与颜色都一样
+ *（不能用随机 —— 切一下视图封面就换色，看着像加载错了）。
+ *
+ * 精选 = 目录文件数 >= 4 的那批（DEMO 的 featured 标记；真实数据里 fileCount 是唯一可用的信号）。
+ */
+const SKILL_CATEGORIES = ['教育培训', '短视频', '商业广告', '专业影视', '动漫游戏', '音乐 MV', '短剧漫剧'] as const
+const skillMetaCache = new Map<string, { category: string; featured: boolean; hue: number }>()
+function skillMetaOf(name: string): { category: string; featured: boolean; hue: number } {
+  const hit = skillMetaCache.get(name)
+  if (hit) return hit
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  const row = s.skills.find((k) => k.name === name)
+  const text = name + ' ' + (row?.description ?? '')
+  let textHash = 0
+  for (let i = 0; i < text.length; i++) textHash = (textHash * 31 + text.charCodeAt(i)) >>> 0
+  const meta = {
+    category: SKILL_CATEGORIES[textHash % SKILL_CATEGORIES.length]!,
+    featured: (row?.fileCount ?? 0) >= 4,
+    hue: hash % 360,
+  }
+  skillMetaCache.set(name, meta)
+  return meta
+}
+
+/** 分栏左列的分类行（DEMO 的 skillCategories：全部 → 各分类 → 精选，带计数） */
+const skillCategoryRows = computed(() => {
+  const items = skillResources(s.skills)
+  const rows: Array<{ name: string; count: number }> = [{ name: '全部', count: items.length }]
+  for (const cat of SKILL_CATEGORIES) {
+    const count = items.filter((item) => skillMetaOf(item.name).category === cat).length
+    if (count) rows.push({ name: cat, count })
+  }
+  const featured = items.filter((item) => skillMetaOf(item.name).featured).length
+  if (featured) rows.push({ name: '精选', count: featured })
+  return rows
+})
+
+/** 技能的文件数（后端给了 fileCount；没有就给 0，界面上仍显示「0 文件」） */
+function skillFileCount(name: string): number {
+  return s.skills.find((k) => k.name === name)?.fileCount ?? 0
+}
+
+/** 技能体积：SKILL.md 的字节数，按 KB 显示（不足 1KB 显示字节） */
+function skillSize(name: string): string {
+  const bytes = s.skills.find((k) => k.name === name)?.size ?? 0
+  if (!bytes) return '—'
+  if (bytes < 1024) return bytes + ' B'
+  return Math.max(1, Math.round(bytes / 1024)) + ' KB'
+}
 
 const filteredMcpResources = computed(() => {
   const q = mcpQuery.value.trim().toLowerCase()
@@ -1478,8 +1620,8 @@ const AUTH_MODES = [
   //   接受审核     = 手掌；**无色**（默认样式）—— "先停一下"是常态，不该用彩色喊出来；
   //   完全自动授权 = 盾牌 + 感叹号；**琥珀色**（图标与文字都染）—— 唯一需要用户留意的那个选项。
   // 与 ChatGPT 那份授权菜单的差别：那边"审核"带琥珀、"放行"带红；我们反过来，只给放行上色。
-  { value: 'ask', label: '接受审核', hint: '命中规则的工具先问你', icon: Hand, tone: 'plain' },
-  { value: 'auto', label: '完全自动授权', hint: '所有工具直接放行，不打扰', icon: ShieldAlert, tone: 'auto' },
+  { value: 'ask', label: '接受审核', hint: '需要确认时先停下来问你。', icon: Hand, tone: 'plain' },
+  { value: 'auto', label: '完全自动授权', hint: '所有工具直接执行，不再逐次确认。', icon: ShieldAlert, tone: 'auto' },
 ] as const
 const authMode = computed<'ask' | 'auto'>(() => (s.policy.enabled ? 'ask' : 'auto'))
 function setAuthMode(mode: 'ask' | 'auto'): void {
@@ -2302,8 +2444,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </template>
           </ThemedDropdown>
 
-          <!-- 授权方式：接受审核 / 完全自动授权（与设置→Agent→审批规则 是同一个开关） -->
-          <ThemedDropdown v-model="authOpen" placement="top-start" :offset="8" menu-width="240px" menu-role="listbox">
+          <!-- 授权方式：接受审核 / 完全自动授权（与设置→Agent→审批规则 是同一个开关）。
+               布局照 docs/demo/agent-select-panels 的「审核」面板：标题 + 计数 + 右侧状态小标签，
+               下面两条大选项（图标托 / 标题 + 徽章 / 说明 / 单选圈）。 -->
+          <ThemedDropdown v-model="authOpen" placement="top-start" :offset="8" menu-width="360px" menu-role="listbox">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
@@ -2311,20 +2455,35 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </button>
             </template>
             <template #default="{ close }">
-              <div class="ac-ddmenu" role="listbox" aria-label="选择授权方式">
-                <button v-for="m in AUTH_MODES" :key="m.value" class="ac-menu-item" role="option"
-                  :aria-selected="authMode === m.value" @click="setAuthMode(m.value); close()">
-                  <span class="ac-menu-title-row">
-                    <!-- 图标与文字同染一个语义色（只"完全自动授权"上琥珀；"接受审核"走默认无色） -->
-                    <span class="ac-menu-icon" :class="'is-' + m.tone">
-                      <component :is="m.icon" :size="14" />
-                    </span>
-                    <span class="ac-menu-name" :class="'is-' + m.tone">{{ m.label }}</span>
-                    <CircleCheck v-if="authMode === m.value" :size="14" class="ac-menu-check" />
-                  </span>
-                  <span class="ac-menu-hint">{{ m.hint }}</span>
-                </button>
-                <p class="ac-menu-empty">要问哪些工具，去「设置 → Agent → 审批规则」配。</p>
+              <div class="ac-ddmenu ac-review-panel" role="listbox" aria-label="选择授权方式">
+                <div class="ac-panel-head">
+                  <div class="ac-panel-head-top ac-panel-head-top--review">
+                    <div class="ac-panel-heading">
+                      <span class="ac-panel-title">审核模式</span>
+                      <span class="ac-panel-count">2</span>
+                    </div>
+                    <span class="ac-review-state">{{ authMode === 'ask' ? '需要确认' : '全部放行' }}</span>
+                  </div>
+                  <p class="ac-panel-lede">决定工具调用要不要先停下来问你。</p>
+                </div>
+                <div class="ac-review-body">
+                  <div class="ac-review-list" role="radiogroup" aria-label="审核模式">
+                    <button v-for="m in AUTH_MODES" :key="m.value" class="ac-review-option" :class="{ 'is-auto': m.value === 'auto' }"
+                      type="button" role="radio" :aria-checked="authMode === m.value" @click="setAuthMode(m.value); close()">
+                      <span class="ac-option-icon">
+                        <component :is="m.icon" :size="16" />
+                      </span>
+                      <span class="ac-option-copy">
+                        <span class="ac-option-title">
+                          {{ m.label }}
+                          <span class="ac-badge" :class="m.value === 'auto' ? 'is-warn' : 'is-accent'">{{ m.value === 'auto' ? '谨慎' : '推荐' }}</span>
+                        </span>
+                        <span class="ac-option-desc">{{ m.hint }}</span>
+                      </span>
+                      <span class="ac-radio" aria-hidden="true"><Check :size="11" /></span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </template>
           </ThemedDropdown>
@@ -2338,30 +2497,38 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </button>
             </template>
             <template #default="{ close }">
-              <div class="ac-ddmenu" role="listbox" aria-label="选择模型">
-                <div class="ac-panel-head-top">
-                  <div class="ac-panel-heading">
-                    <span class="ac-panel-title">模型</span>
-                    <span class="ac-panel-count">{{ usableModels.length }}</span>
-                  </div>
-                  <div class="ac-panel-search">
-                    <span class="ac-panel-search-icon" aria-hidden="true"><Search :size="14" /></span>
-                    <input v-model="modelQuery" class="ac-panel-search-input" type="search" name="ac-model-search"
-                      placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
-                    <button v-if="modelQuery" class="ac-panel-search-clear" aria-label="清空搜索" @click="modelQuery = ''">
-                      <X :size="12" />
-                    </button>
-                  </div>
-                  <div class="ac-panel-tools">
-                    <div class="ac-seg-group" role="group" aria-label="面板布局">
-                    <button class="ac-panel-seg" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
-                      <LayoutGrid :size="13" />
-                      <span>卡片</span>
-                    </button>
-                    <button class="ac-panel-seg" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
-                      <Columns3 :size="13" />
-                      <span>分栏</span>
-                    </button>
+              <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen }" role="listbox" aria-label="选择模型">
+                <div class="ac-panel-head">
+                  <div class="ac-panel-head-top">
+                    <div class="ac-panel-heading">
+                      <span class="ac-panel-title">模型</span>
+                      <span class="ac-panel-count">{{ usableModels.length }}</span>
+                    </div>
+                    <div class="ac-panel-search">
+                      <div class="ac-search-inline">
+                        <span class="ac-search-icon" aria-hidden="true"><Search :size="14" /></span>
+                        <input v-model="modelQuery" class="ac-search-input" type="search" name="ac-model-search"
+                          data-ac-search="model" placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
+                        <button v-if="modelQuery" class="ac-search-clear" aria-label="清空搜索" @click="modelQuery = ''">
+                          <X :size="12" />
+                        </button>
+                      </div>
+                    </div>
+                    <div class="ac-panel-tools">
+                      <button class="ac-icon-btn ac-search-toggle" :aria-expanded="modelSearchOpen" aria-label="搜索" @click="togglePanelSearch('model')">
+                        <Search :size="16" />
+                      </button>
+                      <div class="ac-segment" role="group" aria-label="面板布局">
+                        <span class="ac-segment-indicator" :class="'is-' + modelView" aria-hidden="true"></span>
+                        <button class="ac-segment-btn" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
+                          <LayoutGrid :size="14" />
+                          <span class="ac-segment-label">卡片</span>
+                        </button>
+                        <button class="ac-segment-btn" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
+                          <Columns3 :size="14" />
+                          <span class="ac-segment-label">分栏</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2369,57 +2536,76 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
                      ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
                 <div class="ac-menu-scroll" ref="modelScrollRef">
-                  <div class="ac-panel-body">
+                  <div class="ac-panel-body ac-panel-scroll">
                   <div v-if="modelView === 'card'">
                     <div v-if="filteredModels.length" class="ac-model-grid">
                       <button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" class="ac-model-card"
-                        role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
-                        <span class="ac-model-brand" aria-hidden="true"><Box :size="22" /></span>
+                        role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, close)">
+                        <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
                         <span class="ac-model-copy">
-                          <span class="ac-model-id">{{ m.modelId }}</span>
+                          <span class="ac-model-card-top">
+                            <span class="ac-model-id">{{ m.modelId }}</span>
+                            <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
+                            <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
+                          </span>
                           <span class="ac-model-meta">
-                            <span>{{ m.provider }}</span>
+                            <span>{{ brandNameOf(m) }}</span>
                             <span class="ac-dot-sep" aria-hidden="true"></span>
                             <span>{{ modelNote(m) }}</span>
                           </span>
                         </span>
-                        <span v-if="m.isDefault" class="ac-model-badge">默认</span>
                       </button>
                     </div>
-                    <div v-else class="ac-menu-empty">没有找到模型</div>
+                    <div v-else class="ac-empty-state">
+                      <span class="ac-empty-icon"><Search :size="18" /></span>
+                      <span class="ac-empty-title">没有找到模型</span>
+                      <span class="ac-empty-desc">换个模型名或平台名试试。</span>
+                    </div>
                   </div>
                   <div v-else class="ac-split">
                     <aside class="ac-split-rail" aria-label="模型平台">
+                      <div class="ac-rail-label">平台</div>
                       <div class="ac-rail-scroll">
-                        <button v-for="g in modelPlatformGroups" :key="g.provider" class="ac-rail-item"
-                          :aria-pressed="modelPlatform === g.provider" @click="modelPlatform = g.provider">
+                        <button v-for="g in modelPlatformGroups" :key="g.key" class="ac-rail-item"
+                          :aria-pressed="modelPlatform === g.key" @click="modelPlatform = g.key">
+                          <span v-if="g.key === 'all'" class="ac-rail-icon" aria-hidden="true"><Layers :size="14" /></span>
+                          <span v-else class="ac-rail-brand" :title="g.label" aria-hidden="true" v-html="brandSvg(g.key)"></span>
                           <span class="ac-rail-name">{{ g.label }}</span>
                           <span class="ac-rail-count">{{ g.count }}</span>
                         </button>
                       </div>
                     </aside>
                     <div class="ac-split-main">
+                      <div class="ac-split-scroll">
                       <div v-if="filteredModels.length" class="ac-model-row-list">
                         <button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" class="ac-model-row"
-                          role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
-                          <span class="ac-model-brand" aria-hidden="true"><Box :size="22" /></span>
+                          role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, close)">
+                          <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
                           <span class="ac-model-copy">
                             <span class="ac-model-id">{{ m.modelId }}</span>
                             <span class="ac-model-meta">
-                              <span>{{ m.provider }}</span>
+                              <span>{{ brandNameOf(m) }}</span>
                               <span class="ac-dot-sep" aria-hidden="true"></span>
                               <span>{{ modelNote(m) }}</span>
                             </span>
                           </span>
-                          <span v-if="m.isDefault" class="ac-model-badge">默认</span>
+                          <span class="ac-model-badges">
+                            <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
+                          </span>
+                          <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
                         </button>
                       </div>
-                      <div v-else class="ac-menu-empty">没有找到模型</div>
+                      <div v-else class="ac-empty-state">
+                        <span class="ac-empty-icon"><Search :size="18" /></span>
+                        <span class="ac-empty-title">没有找到模型</span>
+                        <span class="ac-empty-desc">换个模型名或平台名试试。</span>
+                      </div>
+                      </div>
                     </div>
                   </div>
                   </div>
                 </div>
-                <div class="ac-panel-foot">
+                <div class="ac-panel-foot ac-model-foot">
                   <span class="ac-selection-summary">{{ s.model ? '已选 1 个模型' : '未选择模型' }}</span>
                 </div>
               </div>
@@ -2437,66 +2623,115 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </button>
             </template>
             <template #default="{ close }">
-              <div class="ac-ddmenu" role="listbox" aria-label="选择技能">
-                <div class="ac-panel-head-top">
-                  <div class="ac-panel-heading">
-                    <span class="ac-panel-title">技能</span>
-                    <span class="ac-panel-count">{{ s.skills.length }}</span>
-                  </div>
-                  <div class="ac-panel-search">
-                    <span class="ac-panel-search-icon" aria-hidden="true"><Search :size="14" /></span>
-                    <input v-model="skillQuery" class="ac-panel-search-input" type="search" name="ac-skill-search"
-                      placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
-                    <button v-if="skillQuery" class="ac-panel-search-clear" aria-label="清空搜索" @click="skillQuery = ''">
-                      <X :size="12" />
-                    </button>
-                  </div>
-                  <div class="ac-panel-tools">
-                    <div class="ac-seg-group" role="group" aria-label="面板布局">
-                    <button class="ac-panel-seg" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
-                      <LayoutGrid :size="13" />
-                      <span>卡片</span>
-                    </button>
-                    <button class="ac-panel-seg" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
-                      <Columns3 :size="13" />
-                      <span>分栏</span>
-                    </button>
+              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-tall': skillView === 'split' }"
+                role="listbox" aria-label="选择技能">
+                <div class="ac-panel-head">
+                  <div class="ac-panel-head-top">
+                    <div class="ac-panel-heading">
+                      <span class="ac-panel-title">技能</span>
+                      <span class="ac-panel-count">{{ s.skills.length }}</span>
+                    </div>
+                    <div class="ac-panel-search">
+                      <div class="ac-search-inline">
+                        <span class="ac-search-icon" aria-hidden="true"><Search :size="14" /></span>
+                        <input v-model="skillQuery" class="ac-search-input" type="search" name="ac-skill-search"
+                          data-ac-search="skill" placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
+                        <button v-if="skillQuery" class="ac-search-clear" aria-label="清空搜索" @click="skillQuery = ''">
+                          <X :size="12" />
+                        </button>
+                      </div>
+                    </div>
+                    <div class="ac-panel-tools">
+                      <button class="ac-icon-btn ac-search-toggle" :aria-expanded="skillSearchOpen" aria-label="搜索" @click="togglePanelSearch('skill')">
+                        <Search :size="16" />
+                      </button>
+                      <div class="ac-segment" role="group" aria-label="面板布局">
+                        <span class="ac-segment-indicator" :class="'is-' + skillView" aria-hidden="true"></span>
+                        <button class="ac-segment-btn" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
+                          <LayoutGrid :size="14" />
+                          <span class="ac-segment-label">卡片</span>
+                        </button>
+                        <button class="ac-segment-btn" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
+                          <Columns3 :size="14" />
+                          <span class="ac-segment-label">分栏</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div class="ac-panel-body">
-                  <div v-if="skillView === 'card'">
+                  <div v-if="skillView === 'card'" class="ac-panel-scroll">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
                       <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-card" role="option"
-                        :title="item.value" @click="insertRef(item, close)">
-                        <span class="ac-skill-thumb" v-html="ICON_SKILL" aria-hidden="true"></span>
+                        :aria-pressed="false" :title="item.value" @click="insertRef(item, close)">
+                        <span class="ac-skill-thumb" :style="skillCoverStyle(item.name)" aria-hidden="true">
+                          <span class="ac-skill-icon" v-html="ICON_SKILL"></span>
+                        </span>
                         <span class="ac-skill-copy">
-                          <span class="ac-skill-name">{{ item.name }}</span>
+                          <span class="ac-skill-name-row">
+                            <span class="ac-skill-name">{{ item.name }}</span>
+                            <span v-if="skillMetaOf(item.name).featured" class="ac-badge is-accent">精选</span>
+                            <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
+                          </span>
                           <span class="ac-skill-desc">{{ item.value }}</span>
+                          <span class="ac-skill-meta">
+                            <span>{{ skillMetaOf(item.name).category }}</span>
+                            <span class="ac-dot-sep" aria-hidden="true"></span>
+                            <span>{{ skillFileCount(item.name) }} 文件</span>
+                          </span>
                         </span>
                       </button>
                     </div>
-                    <div v-else class="ac-menu-empty">没有找到技能</div>
+                    <div v-else class="ac-empty-state">
+                      <span class="ac-empty-icon"><Search :size="18" /></span>
+                      <span class="ac-empty-title">没有找到技能</span>
+                      <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
+                    </div>
                   </div>
                   <div v-else class="ac-split">
-                    <aside class="ac-split-rail" aria-label="技能入口">
+                    <aside class="ac-split-rail" aria-label="技能分类">
+                      <div class="ac-rail-label">分类</div>
                       <div class="ac-rail-scroll">
-                        <div class="ac-rail-label">入口</div>
-                        <p class="ac-rail-note">技能按名称直接引用；分栏视图保留入口，方便以后加分类。</p>
+                        <button v-for="row in skillCategoryRows" :key="row.name" class="ac-rail-item"
+                          :aria-pressed="skillCategory === row.name" @click="skillCategory = row.name">
+                          <span class="ac-rail-icon" aria-hidden="true">
+                            <component :is="row.name === '全部' ? Layers : row.name === '精选' ? Sparkles : Box" :size="14" />
+                          </span>
+                          <span class="ac-rail-name">{{ row.name }}</span>
+                          <span class="ac-rail-count">{{ row.count }}</span>
+                        </button>
                       </div>
                     </aside>
                     <div class="ac-split-main">
-                      <div v-if="filteredSkills.length" class="ac-skill-tile-grid">
-                        <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option"
-                          :title="item.value" @click="insertRef(item, close)">
-                          <span class="ac-skill-cover" :style="skillCoverStyle(item.name)" v-html="ICON_SKILL" aria-hidden="true"></span>
-                          <span class="ac-skill-tile-body">
-                            <span class="ac-skill-name">{{ item.name }}</span>
-                            <span class="ac-skill-desc">{{ item.value }}</span>
-                          </span>
-                        </button>
+                      <div class="ac-split-scroll">
+                        <div v-if="filteredSkills.length" class="ac-skill-grid ac-skill-grid--split">
+                          <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option"
+                            :aria-pressed="false" :title="item.value" @click="insertRef(item, close)">
+                            <span class="ac-skill-cover" :style="skillCoverStyle(item.name)" aria-hidden="true">
+                              <span class="ac-skill-icon" v-html="ICON_SKILL"></span>
+                            </span>
+                            <span class="ac-skill-tile-body">
+                              <span class="ac-tile-top">
+                                <span class="ac-skill-name">{{ item.name }}</span>
+                                <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
+                              </span>
+                              <span class="ac-skill-desc">{{ item.value }}</span>
+                              <span class="ac-skill-meta">
+                                <span>{{ skillMetaOf(item.name).category }}</span>
+                                <span class="ac-dot-sep" aria-hidden="true"></span>
+                                <span>{{ skillFileCount(item.name) }} 文件</span>
+                                <span class="ac-dot-sep" aria-hidden="true"></span>
+                                <span>{{ skillSize(item.name) }}</span>
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                        <div v-else class="ac-empty-state">
+                          <span class="ac-empty-icon"><Search :size="18" /></span>
+                          <span class="ac-empty-title">没有找到技能</span>
+                          <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
+                        </div>
                       </div>
-                      <div v-else class="ac-menu-empty">没有找到技能</div>
                     </div>
                   </div>
                 </div>
@@ -2517,45 +2752,63 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </button>
             </template>
             <template #default="{ close }">
-              <div class="ac-ddmenu" role="listbox" aria-label="选择 MCP">
-                <div class="ac-panel-head-top">
-                  <div class="ac-panel-heading">
-                    <span class="ac-panel-title">MCP</span>
-                    <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
-                  </div>
-                  <div class="ac-panel-search">
-                    <span class="ac-panel-search-icon" aria-hidden="true"><Search :size="14" /></span>
-                    <input v-model="mcpQuery" class="ac-panel-search-input" type="search" name="ac-mcp-search"
-                      placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
-                    <button v-if="mcpQuery" class="ac-panel-search-clear" aria-label="清空搜索" @click="mcpQuery = ''">
-                      <X :size="12" />
-                    </button>
-                  </div>
-                  <div class="ac-panel-tools">
-                    <!-- 实时检测：主动连一次，看当前连没连上、有哪些工具（保留原行为） -->
-                    <button class="ac-detect-btn" :disabled="mcpProbing"
-                      :aria-label="mcpProbing ? '正在检测 MCP' : '检测 MCP 连接'" @click.stop="runMcpProbe">
-                      <Loader2 v-if="mcpProbing" :size="12" class="ac-spin" />
-                      <RefreshCw v-else :size="12" />
-                    </button>
+              <div class="ac-ddmenu ac-panel ac-mcp-panel" :class="{ 'is-search-open': mcpSearchOpen }" role="listbox" aria-label="选择 MCP">
+                <div class="ac-panel-head">
+                  <div class="ac-panel-head-top">
+                    <div class="ac-panel-heading">
+                      <span class="ac-panel-title">MCP</span>
+                      <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
+                    </div>
+                    <div class="ac-panel-search">
+                      <div class="ac-search-inline">
+                        <span class="ac-search-icon" aria-hidden="true"><Search :size="14" /></span>
+                        <input v-model="mcpQuery" class="ac-search-input" type="search" name="ac-mcp-search"
+                          data-ac-search="mcp" placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
+                        <button v-if="mcpQuery" class="ac-search-clear" aria-label="清空搜索" @click="mcpQuery = ''">
+                          <X :size="12" />
+                        </button>
+                      </div>
+                    </div>
+                    <div class="ac-panel-tools">
+                      <button class="ac-icon-btn ac-search-toggle" :aria-expanded="mcpSearchOpen" aria-label="搜索" @click="togglePanelSearch('mcp')">
+                        <Search :size="16" />
+                      </button>
+                      <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
+                      <button class="ac-detect-btn" :class="{ 'is-busy': mcpProbing }" :disabled="mcpProbing"
+                        :aria-label="mcpProbing ? '正在检测 MCP' : '检测全部 MCP 服务'" :title="mcpProbing ? '正在检测' : '检测全部 MCP 服务'" @click.stop="runMcpProbe">
+                        <RefreshCw :size="14" :class="{ 'ac-spin': mcpProbing }" />
+                        <span class="ac-detect-label">{{ mcpProbing ? '检测中' : '重新检测' }}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div class="ac-panel-body">
-                  <div v-if="filteredMcpResources.length" class="ac-mcp-list">
-                    <button v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-card" role="option"
-                      :title="item.value" @click="insertRef(item, close)">
-                      <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
-                      <span class="ac-server-copy">
-                        <span class="ac-server-name">{{ item.name }}</span>
-                        <span class="ac-server-desc">{{ item.value }}</span>
-                      </span>
-                      <span v-if="mcpStatusOf(item.name)" class="ac-menu-card-badge"
-                        :class="{ 'is-bad': !mcpStatusOf(item.name)!.ok }" :title="mcpStatusOf(item.name)!.text">{{
-                          mcpStatusOf(item.name)!.text }}</span>
-                    </button>
+                  <div class="ac-panel-scroll">
+                    <div v-if="filteredMcpResources.length" class="ac-mcp-list">
+                      <button v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-card" role="option"
+                        :aria-pressed="false" :title="item.value" @click="insertRef(item, close)">
+                        <span class="ac-pick-box" aria-hidden="true"><Check :size="11" /></span>
+                        <span class="ac-mcp-server-main">
+                          <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
+                          <span class="ac-server-copy">
+                            <span class="ac-server-name">{{ item.name }}</span>
+                            <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
+                          </span>
+                        </span>
+                        <span class="ac-server-side">
+                          <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
+                            :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
+                          <span v-else class="ac-status">{{ mcpTransport(item) }}</span>
+                        </span>
+                      </button>
+                    </div>
+                    <div v-else class="ac-empty-state">
+                      <span class="ac-empty-icon"><Search :size="18" /></span>
+                      <span class="ac-empty-title">没有找到服务或工具</span>
+                      <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
+                    </div>
+                    <p v-if="mcpProbeHint" class="ac-panel-note">{{ mcpProbeHint }}</p>
                   </div>
-                  <div v-else class="ac-menu-empty">没有找到服务</div>
-                  <p v-if="mcpProbeHint" class="ac-menu-empty">{{ mcpProbeHint }}</p>
                 </div>
                 <div class="ac-panel-foot">
                   <span class="ac-selection-summary">点击服务会直接插入标签</span>
@@ -4746,33 +4999,66 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-accent, #0891b2);
 }
 
-/* —— 面板化下拉（docs/demo/agent-select-panels.html 同款布局）——
-   头部三格：标题 | 搜索（≤240px）| 工具/视图切换；
-   下方是滚动区（卡片网格或分栏），底部一行状态说明。
-   颜色全部走 --ui-* token，跟随当前主题，不引 demo 的浅色变量。 */
+/* —— 面板化下拉（1:1 复刻 docs/demo/agent-select-panels）——
+   结构照 DEMO 的 .panel / .panel-head / .panel-body / .panel-foot：
+   头部三格（标题 | 搜索 ≤240 | 工具/视图），中间滚动区（轻卡片或分栏），底部状态行。
+   所有非颜色数值（尺寸 / 圆角 / 字号 / 字重 / 间距 / 阴影几何 / 动效曲线）与 DEMO 一字不差；
+   颜色一律映射到 --ui-* token，兜底值就是 DEMO 的原色值。
+   响应式用容器查询（DEMO 的 @container 阈值原样保留），以面板自身宽度为准。 */
+
+/* 面板本体：抵消 dropdown 外框的 6px 内边距，让头部/底栏的 12px 从面板边沿算起
+   （DEMO 的 .panel 没有第二层内边距）。外框（圆角 16 / 描边 / 阴影）由 dropdown 提供。 */
+.ac-ddmenu.ac-panel {
+  margin: -6px;
+  width: calc(100% + 12px);
+  min-height: 0;
+  padding: 0;
+  container-type: inline-size;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* 分栏视图固定高度（DEMO 的 .panel-tall：clamp(520px, 72vh, 640px)），左右两列各自滚。 */
+.ac-ddmenu.ac-panel.is-tall {
+  height: clamp(520px, 72vh, 640px);
+}
+
+.ac-panel-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
 .ac-panel-head-top {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: none;
-  padding: 12px 12px 8px;
+}
+
+/* 审核面板只有「标题 + 状态标签」两格（DEMO 的 review 头部没有搜索/视图开关）。 */
+.ac-panel-head-top--review {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .ac-panel-heading {
   display: flex;
   align-items: center;
   gap: 7px;
+  flex: 1;
   min-width: 0;
 }
 
 .ac-panel-title {
+  margin: 0;
   font-size: 15px;
   line-height: 1.3;
   font-weight: 700;
-  color: var(--ui-ink, #f7f7f7);
+  letter-spacing: -0.01em;
   white-space: nowrap;
+  color: var(--ui-ink, #111827);
 }
 
 .ac-panel-count {
@@ -4783,92 +5069,183 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   height: 18px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink-dim, #919191);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }
 
-.ac-panel-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  max-width: 240px;
-  min-width: 0;
-  height: 32px;
-  padding: 0 6px 0 10px;
-  border-radius: 10px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-}
-
-.ac-panel-search:focus-within {
-  background: var(--ui-hover, rgb(255 255 255 / 0.12));
-}
-
-.ac-panel-search-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-panel-search-input {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ui-ink, #f7f7f7);
+.ac-panel-lede {
+  margin: 0;
   font-size: 12px;
-  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ui-ink-dim, #6b7280);
 }
 
-.ac-panel-search-input::placeholder {
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-panel-search-input::-webkit-search-cancel-button,
-.ac-panel-search-input::-webkit-search-decoration {
-  -webkit-appearance: none;
-  appearance: none;
-  display: none;
-}
-
-.ac-panel-search-clear {
-  display: grid;
-  place-items: center;
+/* 审核头部右侧的状态小标签（用户要求：右上角一个状态小标签） */
+.ac-review-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
-  width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-panel-search-clear:hover {
-  color: var(--ui-ink, #f7f7f7);
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  color: var(--ui-accent-hover, #0e7490);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .ac-panel-tools {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 5px;
   flex: none;
 }
 
-.ac-seg-group {
+.ac-panel-search {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 搜索条（DEMO 的 .search-inline）：宽屏 max-width 240、高 32、圆角 10、左 10 右 6。 */
+.ac-search-inline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  max-width: 240px;
+  height: 32px;
+  padding: 0 6px 0 10px;
+  border-radius: 10px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  transition: background 0.18s ease;
+}
+
+.ac-search-inline:focus-within {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
+}
+
+.ac-search-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-search-input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink, #111827);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+.ac-search-input::placeholder {
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-search-input::-webkit-search-cancel-button,
+.ac-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.ac-search-clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-mute, #9ca3af);
+  cursor: pointer;
+}
+
+.ac-search-clear:hover {
+  color: var(--ui-ink, #111827);
+}
+
+/* 图标按钮（DEMO 的 .icon-btn）：32×32、圆角 8、默认浅底。 */
+.ac-icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+}
+
+.ac-icon-btn:hover {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ui-ink, #111827);
+}
+
+.ac-icon-btn:active {
+  transform: scale(0.96);
+}
+
+.ac-icon-btn[aria-expanded='true'] {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  color: var(--ui-accent-hover, #0e7490);
+}
+
+/* 窄屏才出现的搜索按钮；宽屏由容器查询隐藏（DEMO 的 .search-toggle）。 */
+.ac-search-toggle {
+  display: none;
+}
+
+/* 分段切换（DEMO 的 .segment）：容器浅底、2px 内衬、两枚 28 高按钮。
+   选中块用一条独立的指示条（绝对定位 + 平移），观感与 DEMO 的白底阴影一致。 */
+.ac-segment {
+  position: relative;
   display: inline-flex;
+  flex: none;
   gap: 2px;
   padding: 2px;
   border-radius: 10px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
 }
 
-.ac-panel-seg {
+.ac-segment-indicator {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(50% - 3px);
+  height: 28px;
+  border-radius: 8px;
+  background: var(--ui-panel, #fff);
+  box-shadow: 0 1px 3px var(--ui-shadow-soft, rgba(0, 0, 0, 0.08));
+  transition: transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+  pointer-events: none;
+}
+
+.ac-segment-indicator.is-split {
+  transform: translateX(calc(100% + 2px));
+}
+
+.ac-segment-btn {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4878,65 +5255,608 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border: 0;
   border-radius: 8px;
   background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   font-weight: 600;
-  color: var(--ui-ink-dim, #919191);
+  white-space: nowrap;
   cursor: pointer;
+  transition: color 0.18s ease;
 }
 
-.ac-panel-seg:hover,
-.ac-panel-seg[aria-pressed='true'] {
-  background: var(--ui-hover, rgb(255 255 255 / 0.14));
-  color: var(--ui-ink, #f7f7f7);
+.ac-segment-btn:hover {
+  color: var(--ui-ink, #111827);
 }
 
-.ac-panel-seg[aria-pressed='true'] {
-  background: var(--ui-overlay-solid, #212121);
-  color: var(--ui-ink, #f7f7f7);
-  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.1));
+.ac-segment-btn[aria-pressed='true'] {
+  color: var(--ui-ink, #111827);
 }
 
+/* 重新检测（DEMO 的 .detect-btn）：高 32、左右 8、1px 描边、圆角 8、字号 11。 */
 .ac-detect-btn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px;
+  flex: none;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink-dim, #919191);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .ac-detect-btn:hover:not(:disabled) {
-  background: var(--ui-hover, rgb(255 255 255 / 0.14));
-  color: var(--ui-ink, #f7f7f7);
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  color: var(--ui-accent-hover, #0e7490);
 }
 
 .ac-detect-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+  cursor: wait;
+  opacity: 0.72;
 }
 
-/* 滚动区：头部与底栏之间，唯一滚动层 */
+/* 中间区（DEMO 的 .panel-body）：上下 flex 的主内容，自身不滚。 */
 .ac-panel-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 滚动区（DEMO 的 .panel-scroll）：2px 12px 12px 内边距，唯一滚动层。 */
+.ac-panel-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   overflow-x: hidden;
-  padding: 2px 10px 10px;
+  overflow-y: auto;
+  padding: 2px 12px 12px;
   scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
 }
 
-/* 模型卡片网格（demo 同款：图标 35 + 标题 13.5 + 副行 10.5） */
-.ac-model-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+.ac-panel-scroll::-webkit-scrollbar,
+.ac-rail-scroll::-webkit-scrollbar,
+.ac-split-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ac-panel-scroll::-webkit-scrollbar-thumb,
+.ac-rail-scroll::-webkit-scrollbar-thumb,
+.ac-split-scroll::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
+}
+
+.ac-panel-scroll::-webkit-scrollbar-thumb:hover,
+.ac-rail-scroll::-webkit-scrollbar-thumb:hover,
+.ac-split-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
+}
+
+/* —— 审核（DEMO 的 .review-*）—— */
+.ac-review-body {
+  padding: 2px 12px 12px;
+}
+
+.ac-review-list {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.ac-model-card,
-.ac-model-row {
+.ac-review-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 76px;
+  padding: 11px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--ui-panel, #fff);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ac-review-option:hover {
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.12));
+}
+
+.ac-review-option[aria-checked='true'] {
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 8%, transparent),
+    color-mix(in srgb, var(--ui-accent, #0891b2) 4%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent, #0891b2) 4%, transparent);
+}
+
+.ac-option-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-review-option[aria-checked='true'] .ac-option-icon {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  color: var(--ui-accent-hover, #0e7490);
+}
+
+.ac-review-option.is-auto .ac-option-icon {
+  color: var(--ui-warn, #b45309);
+}
+
+.ac-review-option.is-auto[aria-checked='true'] .ac-option-icon {
+  background: var(--ui-warn-soft, rgba(245, 158, 11, 0.14));
+  color: var(--ui-warn, #b45309);
+}
+
+.ac-option-copy {
+  flex: 1;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.ac-option-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--ui-ink, #111827);
+}
+
+.ac-option-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ac-badge.is-accent {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
+  color: var(--ui-accent-hover, #0e7490);
+}
+
+.ac-badge.is-warn {
+  background: var(--ui-warn-soft, rgba(245, 158, 11, 0.14));
+  color: var(--ui-warn, #b45309);
+}
+
+.ac-radio {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 6px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.2));
+  border-radius: 50%;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-panel, #fff);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.ac-radio svg {
+  opacity: 0;
+}
+
+.ac-review-option[aria-checked='true'] .ac-radio {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent, #0891b2);
+}
+
+.ac-review-option[aria-checked='true'] .ac-radio svg {
+  opacity: 1;
+}
+
+/* —— 通用选择卡（DEMO 的 .skill-grid / .skill-card）—— */
+.ac-skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr));
+  gap: 8px;
+}
+
+.ac-skill-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  padding: 8px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--ui-panel, #fff);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.ac-skill-card:hover {
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.12));
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgba(0, 0, 0, 0.04));
+  transform: translateY(-1px);
+}
+
+/* 封面（DEMO 的 .skill-thumb）：54×54、圆角 10、按名字 hash 的双色渐变 + 右上高光。 */
+.ac-skill-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 10px;
+  color: var(--ui-primary-ink, rgba(255, 255, 255, 0.94));
+  background:
+    radial-gradient(circle at 78% 18%, var(--ui-primary-ink, rgba(255, 255, 255, 0.28)), transparent 36%),
+    /* 主题色白名单: 技能封面是内容生成的艺术渐变（按名字 hash 的色相），不是界面主题色 */
+    linear-gradient(145deg, hsl(var(--cover-h1, 208) 66% 54%), hsl(var(--cover-h2, 250) 62% 40%));
+}
+
+.ac-skill-thumb::after {
+  content: '';
+  position: absolute;
+  inset: auto -8px -16px 12px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ui-primary-ink, rgba(255, 255, 255, 0.12));
+  transform: rotate(-8deg);
+}
+
+.ac-skill-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+}
+
+.ac-skill-icon :deep(svg) {
+  width: 23px;
+  height: 23px;
+}
+
+.ac-skill-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ac-skill-name-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ac-skill-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--ui-ink, #111827);
+}
+
+.ac-skill-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-skill-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--ui-ink-mute, #9ca3af);
+  white-space: nowrap;
+}
+
+.ac-dot-sep {
+  width: 1px;
+  height: 8px;
+  flex: none;
+  background: var(--ui-line, rgba(0, 0, 0, 0.08));
+}
+
+/* 选中勾（DEMO 的 .check-mark）：17 圆点，选中才放大出现。 */
+.ac-check-mark {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ui-accent, #0891b2);
+  color: var(--ui-primary-ink, #fff);
+  opacity: 0;
+  transform: scale(0.72);
+  transition: opacity 0.18s ease, transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+[aria-pressed='true'] > .ac-check-mark,
+[aria-pressed='true'] .ac-skill-name-row > .ac-check-mark,
+[aria-pressed='true'] .ac-model-card-top > .ac-check-mark,
+[aria-checked='true'] .ac-model-card-top > .ac-check-mark,
+[aria-checked='true'] > .ac-check-mark,
+[aria-selected='true'] > .ac-check-mark,
+[aria-selected='true'] .ac-model-card-top > .ac-check-mark {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* —— 分栏骨架（DEMO 的 .split / .split-rail / .rail-*）—— */
+.ac-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ac-split-rail {
+  display: flex;
+  flex-direction: column;
+  width: 152px;
+  flex: none;
+  min-height: 0;
+  border-right: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
+  background: var(--ui-thumb-soft, #fafbfc);
+}
+
+.ac-rail-label {
+  flex: none;
+  padding: 8px 12px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-rail-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 8px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
+}
+
+.ac-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 34px;
+  flex: none;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.ac-rail-item:hover {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
+  color: var(--ui-ink, #374151);
+}
+
+.ac-rail-item[aria-pressed='true'] {
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #111827);
+  font-weight: 600;
+  box-shadow: 0 1px 3px var(--ui-shadow-soft, rgba(0, 0, 0, 0.06));
+}
+
+.ac-rail-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.ac-rail-brand {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.ac-rail-brand :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.ac-rail-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-rail-count {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-split-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ac-split-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
+}
+
+.ac-skill-grid--split {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr));
+}
+
+/* 分栏封面瓦片（DEMO 的 .skill-tile / .skill-cover） */
+.ac-skill-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--ui-panel, #fff);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.ac-skill-tile:hover {
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.12));
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgba(0, 0, 0, 0.04));
+  transform: translateY(-1px);
+}
+
+.ac-skill-tile[aria-pressed='true'] {
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent, #0891b2) 7%, transparent);
+}
+
+.ac-skill-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 74px;
+  overflow: hidden;
+  color: var(--ui-primary-ink, rgba(255, 255, 255, 0.94));
+  background:
+    radial-gradient(circle at 82% 16%, var(--ui-primary-ink, rgba(255, 255, 255, 0.3)), transparent 34%),
+    /* 主题色白名单: 技能封面是内容生成的艺术渐变（按名字 hash 的色相），不是界面主题色 */
+    linear-gradient(145deg, hsl(var(--cover-h1, 208) 66% 54%), hsl(var(--cover-h2, 250) 62% 40%));
+}
+
+.ac-skill-cover::after {
+  content: '';
+  position: absolute;
+  inset: auto -20px -22px 16px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--ui-primary-ink, rgba(255, 255, 255, 0.12));
+  transform: rotate(-7deg);
+}
+
+.ac-skill-cover .ac-skill-icon :deep(svg) {
+  width: 26px;
+  height: 26px;
+}
+
+.ac-skill-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 9px 9px;
+}
+
+.ac-tile-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.ac-tile-top .ac-skill-name {
+  white-space: normal;
+}
+
+.ac-tile-top .ac-check-mark {
+  width: 15px;
+  height: 15px;
+  margin-top: 0;
+}
+
+.ac-skill-tile .ac-skill-name {
+  font-size: 12px;
+}
+
+.ac-skill-tile .ac-skill-desc {
+  font-size: 11px;
+}
+
+.ac-skill-tile .ac-skill-meta {
+  font-size: 10px;
+}
+
+/* —— 模型（DEMO 的 .model-grid / .model-card / .brand）—— */
+.ac-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 236px), 1fr));
+  gap: 8px;
+}
+
+.ac-model-card {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4944,45 +5864,40 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   min-width: 0;
   min-height: 58px;
   padding: 7px 9px;
-  border: 1px solid var(--ui-line, #363636);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  background: var(--ui-panel, #fff);
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.ac-model-card:hover,
-.ac-model-row:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+.ac-model-card:hover {
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.12));
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgba(0, 0, 0, 0.04));
   transform: translateY(-1px);
-  box-shadow: var(--ui-shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.12));
 }
 
 .ac-model-card[aria-checked='true'],
-.ac-model-card[aria-selected='true'],
-.ac-model-row[aria-checked='true'],
-.ac-model-row[aria-selected='true'] {
-  border-color: var(--ui-accent, #0891b2);
-  background: linear-gradient(180deg, var(--ui-accent-soft, rgb(8 145 178 / 0.12)), transparent);
+.ac-model-card[aria-selected='true'] {
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 7%, transparent),
+    color-mix(in srgb, var(--ui-accent, #0891b2) 3%, transparent));
 }
 
+/* 品牌图标托（DEMO 的 .brand）：35×35、圆角 9、白底 + 1px 内描边，svg 22×22。 */
 .ac-model-brand {
   display: grid;
   place-items: center;
-  flex: none;
   width: 35px;
   height: 35px;
+  flex: none;
   border-radius: 9px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-model-card[aria-checked='true'] .ac-model-brand,
-.ac-model-card[aria-selected='true'] .ac-model-brand,
-.ac-model-row[aria-checked='true'] .ac-model-brand,
-.ac-model-row[aria-selected='true'] .ac-model-brand {
-  color: var(--ui-accent, #0891b2);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #374151);
+  box-shadow: inset 0 0 0 1px var(--ui-line-soft, rgba(0, 0, 0, 0.05));
 }
 
 .ac-model-brand :deep(svg) {
@@ -4993,7 +5908,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-model-copy {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
@@ -5003,7 +5918,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 600 13.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: var(--ui-ink, #f7f7f7);
+  color: var(--ui-ink, #111827);
 }
 
 .ac-model-meta {
@@ -5014,110 +5929,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   overflow: hidden;
   white-space: nowrap;
   font-size: 10.5px;
-  color: var(--ui-ink-dim, #919191);
+  color: var(--ui-ink-mute, #9ca3af);
 }
 
-.ac-dot-sep {
-  width: 1px;
-  height: 8px;
-  flex: none;
-  background: var(--ui-line, #363636);
-}
-
-.ac-model-badge {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
-  color: var(--ui-accent, #0891b2);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-/* 分栏骨架（demo 同款）：左侧独立滚，窄面板由容器决定不再额外加查询 */
-.ac-split {
+.ac-model-card-top {
   display: flex;
-  gap: 8px;
-  min-height: 0;
-}
-
-.ac-split-rail {
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  width: 152px;
-  min-height: 0;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 10px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.03));
-}
-
-.ac-rail-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 6px;
-  scrollbar-width: thin;
-}
-
-.ac-rail-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 30px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ui-ink-dim, #919191);
-  text-align: left;
-  cursor: pointer;
-}
-
-.ac-rail-item:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-}
-
-.ac-rail-item[aria-pressed='true'] {
-  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
-  color: var(--ui-ink, #f7f7f7);
-}
-
-.ac-rail-name {
-  flex: 1;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
 }
 
-.ac-rail-count {
-  flex: none;
-  font-size: 10px;
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-rail-label {
-  padding: 2px 4px 6px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-rail-note {
-  margin: 0;
-  padding: 0 4px;
-  font-size: 10.5px;
-  line-height: 1.5;
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-split-main {
+.ac-model-card-top .ac-model-id {
   flex: 1;
-  min-width: 0;
-  min-height: 0;
+}
+
+.ac-model-card .ac-check-mark {
+  width: 14px;
+  height: 14px;
 }
 
 .ac-model-row-list {
@@ -5126,122 +5954,66 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   gap: 6px;
 }
 
-/* 技能卡片（轻卡片）/ 分栏封面瓦片 */
-.ac-skill-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
-  gap: 8px;
-}
-
-.ac-skill-card {
+.ac-model-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 12px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.14s ease, border-color 0.14s ease;
-}
-
-.ac-skill-card:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-}
-
-.ac-skill-thumb {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
-}
-
-.ac-skill-thumb :deep(svg) {
-  width: 17px;
-  height: 17px;
-}
-
-.ac-skill-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.ac-skill-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ui-ink, #f7f7f7);
-}
-
-.ac-skill-desc {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 10.5px;
-  line-height: 1.45;
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-skill-tile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
   gap: 8px;
-}
-
-.ac-skill-tile {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 12px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  width: 100%;
+  min-height: 54px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
-.ac-skill-tile:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+.ac-model-row:hover {
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  border-color: var(--ui-line-soft, rgba(0, 0, 0, 0.05));
 }
 
-.ac-skill-cover {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 64px;
-  background:
-    radial-gradient(circle at 82% 16%, var(--ui-hover, rgb(255 255 255 / 0.3)), transparent 34%),
-    /* 主题色白名单: 技能封面是内容生成的艺术渐变（按名字 hash 的色相），不是界面主题色 */
-    linear-gradient(145deg, hsl(var(--cover-h1, 208) 66% 54%), hsl(var(--cover-h2, 250) 62% 40%));
-  color: var(--ui-primary-ink, #ffffff);
+.ac-model-row[aria-checked='true'],
+.ac-model-row[aria-selected='true'] {
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
 }
 
-.ac-skill-cover :deep(svg) {
-  width: 22px;
-  height: 22px;
+.ac-model-row .ac-model-brand {
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  box-shadow: none;
 }
 
-.ac-skill-tile-body {
+.ac-model-row .ac-check-mark {
+  width: 14px;
+  height: 14px;
+}
+
+.ac-model-badges {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 7px 8px 8px;
+  align-items: center;
+  gap: 4px;
+  flex: none;
 }
 
-/* MCP 服务卡（点一项即插标签，徽章沿用原状态色） */
+/* 模型滚动区：契约要求滚动层是 .ac-menu-scroll，内层 .ac-panel-body 只负责内边距。 */
+.ac-model-panel .ac-menu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: block;
+  padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
+}
+
+.ac-model-panel .ac-menu-scroll .ac-panel-body {
+  overflow: visible;
+  padding: 2px 12px 12px;
+}
+
+/* —— MCP（DEMO 的 .mcp-list / .mcp-card / .status）—— */
 .ac-mcp-list {
   display: flex;
   flex-direction: column;
@@ -5251,36 +6023,77 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-mcp-card {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
   width: 100%;
   min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--ui-line, #363636);
+  overflow: hidden;
+  padding: 7px 8px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  background: var(--ui-panel, #fff);
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .ac-mcp-card:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.12));
+}
+
+.ac-mcp-card[aria-pressed='true'] {
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  background: linear-gradient(180deg, var(--ui-accent-soft, rgba(8, 145, 178, 0.05)), var(--ui-panel, #fff) 42%);
+}
+
+.ac-pick-box {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.18));
+  border-radius: 6px;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-panel, #fff);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.ac-pick-box :deep(svg) {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ac-mcp-card[aria-pressed='true'] .ac-pick-box {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent, #0891b2);
+}
+
+.ac-mcp-card[aria-pressed='true'] .ac-pick-box :deep(svg) {
+  opacity: 1;
+}
+
+.ac-mcp-server-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
 }
 
 .ac-server-icon {
   display: grid;
   place-items: center;
-  flex: none;
   width: 30px;
   height: 30px;
+  flex: none;
   border-radius: 9px;
-  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
-  color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  color: var(--ui-accent-hover, #0e7490);
 }
 
 .ac-server-icon :deep(svg) {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .ac-server-copy {
@@ -5296,32 +6109,357 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: var(--ui-ink, #f7f7f7);
+  color: var(--ui-ink, #111827);
 }
 
 .ac-server-desc {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10.5px;
-  color: var(--ui-ink-dim, #919191);
+  font-size: 11px;
+  color: var(--ui-ink-mute, #9ca3af);
 }
 
-/* 底栏：只放状态说明（模型单选即引用，不再有确认按钮） */
+.ac-server-side {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.ac-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ac-status::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-status.is-ok {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.09));
+  color: var(--ui-accent-hover, #0e7490);
+}
+
+.ac-status.is-ok::before {
+  background: var(--ui-accent, #0891b2);
+}
+
+.ac-status.is-bad {
+  background: var(--ui-warn-soft, rgba(245, 158, 11, 0.14));
+  color: var(--ui-warn, #b45309);
+}
+
+.ac-status.is-bad::before {
+  background: var(--ui-warn, #b45309);
+}
+
+.ac-panel-note {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+/* —— 底栏（DEMO 的 .panel-foot）：54 高、9 12 内边距、上描边。 —— */
 .ac-panel-foot {
   display: flex;
   align-items: center;
+  gap: 8px;
   flex: none;
   min-height: 54px;
   padding: 9px 12px;
-  border-top: 1px solid var(--ui-line, #363636);
+  border-top: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
+  background: var(--ui-overlay, rgba(255, 255, 255, 0.94));
 }
 
 .ac-selection-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   flex: 1;
   min-width: 0;
-  color: var(--ui-ink-dim, #919191);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
+  line-height: 1.35;
+}
+
+.ac-model-foot .ac-selection-summary {
+  justify-content: flex-start;
+}
+
+/* —— 空状态（DEMO 的 .empty-state）—— */
+.ac-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 190px;
+  height: 100%;
+  padding: 20px;
+  color: var(--ui-ink-mute, #9ca3af);
+  text-align: center;
+}
+
+.ac-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 2px;
+  border-radius: 12px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-empty-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-empty-desc {
+  font-size: 11px;
+}
+
+/* —— 容器响应式（阈值与 DEMO 的 @container 完全一致）—— */
+@container (max-width: 469px) {
+  .ac-panel-head-top {
+    grid-template-columns: auto 1fr;
+  }
+
+  .ac-panel-search {
+    display: none;
+  }
+
+  .ac-search-toggle {
+    display: grid;
+  }
+
+  .ac-panel.is-search-open .ac-panel-search {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    animation: ac-search-expand 0.2s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  }
+
+  .ac-panel.is-search-open .ac-panel-search > .ac-search-inline {
+    width: 100%;
+    max-width: none;
+  }
+
+  .ac-panel.is-search-open .ac-search-toggle {
+    display: none;
+  }
+}
+
+@container (min-width: 470px) {
+  .ac-search-toggle {
+    display: none;
+  }
+
+  .ac-panel-search {
+    display: flex;
+  }
+}
+
+/* MCP 多一个检测按钮，空间要求更高；放不下时提前换到第二行（DEMO 原样）。 */
+@container (min-width: 470px) and (max-width: 494px) {
+  .ac-mcp-panel .ac-panel-head-top {
+    grid-template-columns: auto 1fr;
+  }
+
+  .ac-mcp-panel .ac-panel-search {
+    display: none;
+  }
+
+  .ac-mcp-panel .ac-search-toggle {
+    display: grid;
+  }
+
+  .ac-mcp-panel.is-search-open .ac-panel-search {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    animation: ac-search-expand 0.2s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  }
+
+  .ac-mcp-panel.is-search-open .ac-panel-search > .ac-search-inline {
+    width: 100%;
+    max-width: none;
+  }
+
+  .ac-mcp-panel.is-search-open .ac-search-toggle {
+    display: none;
+  }
+}
+
+@container (max-width: 540px) {
+  .ac-detect-label {
+    display: none;
+  }
+
+  .ac-detect-btn {
+    width: 32px;
+    padding: 0;
+  }
+}
+
+@container (max-width: 386px) {
+  .ac-segment-btn {
+    width: 28px;
+    padding: 0;
+  }
+
+  .ac-segment-label {
+    display: none;
+  }
+
+  .ac-panel-tools {
+    gap: 4px;
+  }
+
+  .ac-panel-head {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@container (max-width: 460px) {
+  .ac-split {
+    flex-direction: column;
+  }
+
+  .ac-split-rail {
+    width: auto;
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
+  }
+
+  .ac-rail-label {
+    display: none;
+  }
+
+  .ac-rail-scroll {
+    flex-direction: row;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 7px 10px;
+  }
+
+  .ac-rail-item {
+    width: auto;
+    height: 30px;
+    flex: none;
+    gap: 5px;
+    padding: 0 8px;
+    border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+    border-radius: 7px;
+    background: var(--ui-panel, #fff);
+  }
+
+  .ac-rail-icon,
+  .ac-rail-brand {
+    width: 13px;
+    height: 13px;
+  }
+
+  .ac-rail-brand :deep(svg) {
+    width: 13px;
+    height: 13px;
+  }
+
+  .ac-rail-count {
+    display: none;
+  }
+
+  .ac-rail-item[aria-pressed='true'] {
+    border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+    background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+    color: var(--ui-accent-hover, #0e7490);
+    box-shadow: none;
+  }
+
+  .ac-split-scroll {
+    padding: 9px 10px 10px;
+  }
+
+  .ac-skill-grid--split {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 154px), 1fr));
+  }
+}
+
+@container (max-width: 360px) {
+  .ac-panel-head-top {
+    gap: 5px;
+  }
+
+  .ac-panel-title {
+    font-size: 14px;
+  }
+
+  .ac-panel-count {
+    display: none;
+  }
+
+  .ac-skill-grid,
+  .ac-model-grid,
+  .ac-skill-grid--split {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-mcp-card {
+    gap: 5px;
+    padding: 7px 6px;
+  }
+
+  .ac-mcp-card .ac-server-icon {
+    display: none;
+  }
+
+  .ac-server-side .ac-badge {
+    display: none;
+  }
+
+  .ac-panel-foot {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@keyframes ac-search-expand {
+  from {
+    opacity: 0;
+    transform: scaleX(0.92);
+    transform-origin: right center;
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* 简单两项式下拉（创作模式 / 授权方式）：标题一行 + 说明一行 */
