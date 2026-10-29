@@ -11,8 +11,10 @@
  * 设计要点：
  * - **只产出文件，不写节点**：节点数据归前端（撤销栈 / 保存 / 实时同步都在那边）。
  *   后台直接改节点会绕开前端历史，用户按一次撤销只退一半 —— 这条是踩过的坑。
- * - 产物走 saveSlot（slot-<nodeId>.mp4）：同一节点反复裁剪覆盖同一份文件，
- *   不给磁盘堆一次性中间产物（与可视化节点输出同一条规矩）。
+ * - 产物走**内容寻址**（save：文件名 = 内容哈希）：每次裁剪都是新 URL，
+ *   缓存（视频帧图按 URL 做键）自然失效，预览不会停在旧画面。
+ *   为什么不用 saveSlot：槽位地址不变、内容会变，前端那套按 URL 缓存缩略图的机制
+ *   会把旧帧一直显示下去（用户 2026-10-30 实测报的「底栏预览还是原来的效果」）。
  * - 同一节点同时只允许一个 ffmpeg 任务（进程内 Map 判重），重复请求返回 busy。
  * - 裁剪参数交给 ffmpeg 的 crop filter（w:h:x:y）；yuv420p 要求宽高/偏移为偶数，
  *   这里统一向下取偶（最多丢 1px，肉眼不可见）。
@@ -79,7 +81,7 @@ export function apply(ctx) {
 
     const promise = runFfmpegCrop(Buffer.from(src), { x, y, width, height })
       .then(async (out) => {
-        const saved = await resources.saveSlot(canvasId, nodeId, out, '.mp4')
+        const saved = await resources.save(canvasId, out, '.mp4')
         return { ok: true, url: saved.url, resourceId: canvasId + '/' + saved.hashName, width, height, fileName: 'crop-' + name }
       })
       .finally(() => running.delete(nodeId))

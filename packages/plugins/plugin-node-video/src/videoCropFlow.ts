@@ -8,7 +8,7 @@ import type { Context } from '@mini-canvas/canvas-base'
 import type { Rect } from './videoCrop'
 import { resolveVideoSrc } from './videoRefs'
 import { cropVideoOnBackend } from './videoCropService'
-import { applyRealCrop, type VideoOpsContext } from './videoOps'
+import { createRealCropNode, type VideoOpsContext } from './videoOps'
 
 /**
  * 按后台能力裁剪；后台不可用返回 null（调用方回落取景式 cropVideo）。
@@ -27,6 +27,7 @@ export async function cropNodeWithBackend(
   if (!srcUrl) return null
   const result = await cropVideoOnBackend({ nodeId, srcUrl, rect })
   if (!result) return null
-  return applyRealCrop(ops, nodeId, result)
+  // 用户口径 2026-10-30：裁剪出新节点 + 连线，原视频保持不动
+  return createRealCropNode(ops, nodeId, result) !== null
 }
 

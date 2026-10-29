@@ -68,6 +68,22 @@ export interface VideoOpsContext {
   /** 读某节点实测/声明宽度（决定新节点摆多远）；未注入返回 null */
   nodeWidth?(nodeId: string): number | null
   /**
+   * 建一个节点并连线（同一事务，一次撤销退干净）。
+   *
+   * 方向 `targetToNew` = 传入的 target 是**上游**、新节点在下游（裁剪就是这条：
+   * 原视频 → 裁出来的新视频）。缺省 `newToTarget` = 新节点是上游（加素材）。
+   * @returns 新节点 id；拿不到图服务 / 建失败 → null
+   */
+  createNodeWithEdge?(
+    type: string,
+    position: { x: number; y: number },
+    data: Record<string, unknown>,
+    target: string,
+    edgeDirection?: 'newToTarget' | 'targetToNew',
+  ): string | null
+  /** 画布上的全部节点（取名累加、算摆放位置用）；未注入返回空数组 */
+  listNodes?(): Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>; size?: { w: number; h: number } }>
+  /**
    * 把一段图片字节存进宿主资源库，返回可写进节点的引用 + 显示地址。
    * 截图产出的是**新图片**，必须走这条（与图片插件上传同一条路）：
    * 直接写 dataURL 会让 base64 落进画布数据，云端保存时原样上云。
@@ -122,6 +138,39 @@ export const FRAME_NODE_GAP = 40
 /** 视频节点宽度拿不到时的默认值（决定截图节点摆多远） */
 const DEFAULT_NODE_WIDTH = 480
 
+/** 裁剪出的新节点与原视频右边缘的间隔（与图片节点同一条规矩：留 100px，别贴太近） */
+export const CROP_NODE_GAP = 100
+
+/** 裁剪节点名的前缀（扫描与生成都用它） */
+export const CROP_LABEL_PREFIX = '裁剪'
+
+/**
+ * 下一个可用的裁剪节点名：扫描现有 video 节点里「裁剪 N」的 N，取最大值 + 1。
+ *
+ * 为什么不存计数器：计数器要么污染节点 data、要么只在内存里（撤销/刷新后与画布对不上）。
+ * 扫描是幂等的：撤销几次、删掉中间哪个，算出来的名字都不会与画布上已有的撞车。
+ */
+export function nextVideoCropLabel(nodes: Array<{ type: string; data?: Record<string, unknown> }>): string {
+  let max = 0
+  const re = new RegExp('^' + CROP_LABEL_PREFIX + '\\s*(\\d+)$')
+  const used = new Set<string>()
+  for (const n of nodes) {
+    if (n.type !== 'video') continue
+    const label = n.data?.label
+    if (typeof label !== 'string') continue
+    used.add(label.trim())
+    const m = re.exec(label.trim())
+    if (!m) continue
+    const num = Number.parseInt(m[1], 10)
+    if (!Number.isNaN(num) && num > max) max = num
+  }
+  if (used.has(CROP_LABEL_PREFIX)) {
+    const n = max + 1 === 1 ? 2 : max + 1
+    return CROP_LABEL_PREFIX + ' ' + String(n)
+  }
+  return max === 0 ? CROP_LABEL_PREFIX : CROP_LABEL_PREFIX + ' ' + String(max + 1)
+}
+
 /**
  * 用内核服务拼出 ops 读/写句柄 —— 组件与命令共用同一份接线，避免两处各写一遍取值兜底。
  *
@@ -144,7 +193,13 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     getNodes(): NodeLike[]
     types: ReadonlyMap<string, unknown>
     updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
-    transaction<T>(reason: string, fn: (tx: { createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
+    transaction<T>(
+      reason: string,
+      fn: (tx: {
+        createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string
+        connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { edgeId: string; status: string }
+      }) => T,
+    ): T
   }
   /** doc 门面（5c 起数据唯一来源）；缺 doc 则安全降级（读 undefined、写 no-op） */
   const doc = (): VideoDocPort | undefined => svc.get<VideoDocPort | undefined>('doc')
@@ -209,6 +264,31 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     fitLimits: () => readVideoFitLimits(svc),
     hasType: (type) => (doc() ? doc()!.types.has(type) : true),
     nodePosition: (nodeId) => doc()?.getNode(nodeId)?.position ?? null,
+    listNodes: () => (doc()?.getNodes() ?? []).map((n) => ({
+      id: n.id,
+      type: n.type,
+      position: { x: n.position.x, y: n.position.y },
+      data: (n.data ?? {}) as Record<string, unknown>,
+      ...(n.size ? { size: { w: n.size.w, h: n.size.h } } : {}),
+    })),
+    // 建节点 + 连边一个事务：用户按一次撤销把"新节点 + 那条线"一起退掉
+    createNodeWithEdge: (type, position, data, target, edgeDirection = 'newToTarget') => {
+      const g = doc()
+      if (!g) return null
+      try {
+        return g.transaction('video-crop-node', (tx) => {
+          const created = tx.createNode(type, position, data)
+          tx.connectEdge(
+            edgeDirection === 'targetToNew'
+              ? { source: target, target: created, sourceHandle: 'source', targetHandle: 'target' }
+              : { source: created, target, sourceHandle: 'source', targetHandle: 'target' },
+          )
+          return created
+        })
+      } catch {
+        return null
+      }
+    },
     nodeWidth: (nodeId) => {
       const rect = layout()?.getNodeRect(nodeId)
       if (rect && rect.w > 0) return rect.w
@@ -446,31 +526,39 @@ export interface RealCropResult {
 }
 
 /**
- * 把后台真裁剪的产物写回节点：换地址、更新画面尺寸与卡片比例、清掉取景用的 cropRect。
+ * 把后台真裁剪的产物装进一个**新建的下游节点**，并从原视频连一条线过去。
  *
- * 为什么清 cropRect：真裁剪之后画面就是新文件本身，再叠一层取景映射会二次放大（画面糊掉/错位）。
- * 为什么 videoWidth/videoHeight 用后台给的：新文件的真实尺寸就是裁框尺寸，前端不必再解码一遍。
+ * 用户口径 2026-10-30：裁剪要出新节点 + 连线，与图片节点的裁剪一致。
+ * 原地换地址会让底栏按 URL 缓存的缩略图继续显示旧画面（槽位文件名不变，缓存键也不变），
+ * 而且用户丢掉了一次对比"裁前 / 裁后"的机会。原节点保持不动。
+ *
+ * 为什么清 cropRect：新节点装的本来就是裁好的文件，再叠取景映射会二次放大。
+ * @returns 新节点 id；建失败 / 没有图服务 → null
  */
-export function applyRealCrop(ctx: VideoOpsContext, nodeId: string, result: RealCropResult): boolean {
-  const current = ctx.read(nodeId)
-  if (!current) return false
-  if (!(result.width > 0) || !(result.height > 0) || !result.url) return false
+export function createRealCropNode(ctx: VideoOpsContext, nodeId: string, result: RealCropResult): string | null {
+  if (!ctx.read(nodeId)) return null
+  if (!(result.width > 0) || !(result.height > 0) || !result.url) return null
+  if (!ctx.createNodeWithEdge) return null
+  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
+  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? DEFAULT_NODE_WIDTH
   const sizes = videoCardSizePatch(result.width, result.height, ctx.fitLimits?.())
-  const next: Record<string, unknown> = {
-    ...current,
+  const position = {
+    x: (source?.position.x ?? 0) + sourceWidth + FRAME_NODE_GAP,
+    y: source?.position.y ?? 0,
+  }
+  const label = nextVideoCropLabel((ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data })))
+  const data: Record<string, unknown> = {
+    label,
     videoUrl: result.url,
+    videoName: label,
     videoWidth: result.width,
     videoHeight: result.height,
     ...(result.resourceId ? { resourceId: result.resourceId } : {}),
+    ...(sizes ? { cardWidth: sizes.size.w, cardHeight: sizes.size.h } : {}),
   }
-  // dataUnset 才真的删得掉键（浅合并删不掉）
-  if (sizes) {
-    ctx.write(nodeId, next, sizes.size, ['cropRect'])
-    return true
-  }
-  ctx.write(nodeId, next, undefined, ['cropRect'])
-  return true
-}
+  // 原视频是上游、裁出来的是下游（用户拖线方向：从原节点拉到新节点）
+  return ctx.createNodeWithEdge('video', position, data, nodeId, 'targetToNew')
+ }
 
 /**
  * 恢复整幅画面：清掉裁剪框，卡片尺寸回到原始视频比例。

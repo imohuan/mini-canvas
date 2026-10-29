@@ -28,7 +28,7 @@ function boot() {
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history)
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.inject('settings', { get: () => undefined })
-  return { ctx, nodeStore }
+  return { ctx, nodeStore, edgeStore }
 }
 
 const SRC = '/api/canvases/c1/resources/0123456789abcdef.mp4'
@@ -55,22 +55,26 @@ describe('videoCropFlow：真裁剪', () => {
   beforeEach(() => resetCropBackendProbe())
   afterEach(() => vi.unstubAllGlobals())
 
-  it('后台可用 → 写新文件地址与尺寸，并清掉 cropRect', async () => {
+  it('后台可用 → 新建下游节点 + 连线，原视频不动', async () => {
     const env = boot()
-    const id = addVideo(env.nodeStore, { cropRect: { x: 0, y: 0, width: 10, height: 10 } })
+    const id = addVideo(env.nodeStore)
     stubFetch({
       crop: () => new Response(JSON.stringify({
-        ok: true, url: '/api/canvases/c1/resources/slot-v1.mp4', resourceId: 'c1/slot-v1.mp4', width: 200, height: 150,
+        ok: true, url: '/api/canvases/c1/resources/aabbccddeeff0011.mp4', resourceId: 'c1/aabbccddeeff0011.mp4', width: 200, height: 150,
       }), { status: 200 }),
     })
     const ok = await cropNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, { x: 4, y: 6, width: 200, height: 150 })
     expect(ok).toBe(true)
-    const data = env.nodeStore.getNode(id)!.data
-    expect(data.videoUrl).toBe('/api/canvases/c1/resources/slot-v1.mp4')
-    expect(data.videoWidth).toBe(200)
-    expect(data.videoHeight).toBe(150)
-    // 真裁剪后画面就是新文件本身，取景框必须消失
-    expect('cropRect' in data).toBe(false)
+    // 原节点保持不动（用户口径 2026-10-30：裁剪出新节点 + 连线）
+    expect(env.nodeStore.getNode(id)!.data.videoUrl).toBe(SRC)
+    const created = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
+    expect(created).toBeTruthy()
+    expect(created!.data.videoUrl).toBe('/api/canvases/c1/resources/aabbccddeeff0011.mp4')
+    expect(created!.data.videoWidth).toBe(200)
+    expect(created!.data.videoHeight).toBe(150)
+    // 原视频 → 新节点连了一条边
+    expect(env.edgeStore.getEdges()).toHaveLength(1)
+    expect(env.edgeStore.getEdges()[0]).toMatchObject({ source: id, target: created!.id })
   })
 
   it('后台没装插件（ping 失败）→ 返回 null（调用方回落取景式）', async () => {
