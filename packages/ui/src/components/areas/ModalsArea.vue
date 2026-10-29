@@ -194,6 +194,21 @@ interface WallSnapshot {
 const wallCache = new Map<string, WallSnapshot>()
 /** 当前挂在页面上的墙属于哪个签名（'' = 还没建） */
 let mountedWallKey = ''
+/**
+ * 墙缓存上限（LRU 逐出）：每次切页签都会 stash 一整面墙（含 video/audio 实例），
+ * 不设上限的话，多页签反复切换 + 大量媒体会让内存持续增长（扫描记录 2026-10-30 A6）。
+ * 6 面 ≈ 6 个页签/筛选组合，够"来回切"的常用场景；超出的最旧墙直接丢弃（切回去重建）。
+ */
+const WALL_CACHE_LIMIT = 6
+
+/** 收进缓存前先按 LRU 上限逐出最旧的墙（Map 迭代序 = 插入序，最旧在前） */
+function trimWallCache(): void {
+  while (wallCache.size >= WALL_CACHE_LIMIT) {
+    const oldest = wallCache.keys().next().value
+    if (oldest === undefined) break
+    wallCache.delete(oldest)
+  }
+}
 
 /**
  * histZoom 滑杆 → 最小卡片宽度（px）：滑杆越大卡片越大、列数越少。
@@ -1283,6 +1298,7 @@ function stashCurrentWall(): void {
   wall.removeAttribute('id')
   wall.className = 'hist-masonry hist-masonry--stashed'
   while (container.firstChild) wall.appendChild(container.firstChild)
+  trimWallCache()
   wallCache.set(key, {
     wall,
     // 以**实际画出来的卡片数**为准：renderedCount 是跨页签共用的，直接记它会把
