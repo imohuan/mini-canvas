@@ -2,6 +2,8 @@
  * 标签菜单（图 4）的纯逻辑单测：分组 / 搜索 / 自然序 / 已引用优先。
  */
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { buildTagMenuGroups, naturalCompare, type TagMenuEntry } from '../tagMenu'
 
 const entry = (id: string, name: string, kind: TagMenuEntry['kind'], referenced = false): TagMenuEntry => ({
@@ -59,6 +61,27 @@ describe('标签菜单分组', () => {
 describe('naturalCompare', () => {
   it('数字按大小比，不按字符比', () => {
     expect(['图片10', '图片2'].sort(naturalCompare)).toEqual(['图片2', '图片10'])
+  })
+})
+
+describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
+  it('编辑器把点击位置分成「左侧图标」与「右侧文字」两条路', () => {
+    const src = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
+    expect(src).toContain('onIconClick')
+    expect(src).toContain('clickInsideChipIcon')
+    // 点图标优先：命中图标就交给调用方，不再走默认的「0.5s 后落光标」
+    const idx = src.indexOf('item?.onIconClick && clickInsideChipIcon')
+    expect(idx).toBeGreaterThan(0)
+    const afterIcon = src.indexOf('chipClickTimer', idx)
+    expect(afterIcon).toBeGreaterThan(idx)
+  })
+
+  it('标签菜单用主题 Dropdown（不是自绘浮层）', () => {
+    const sfc = readFileSync(fileURLToPath(new URL('../NodeBottomBar.vue', import.meta.url)), 'utf8')
+    expect(sfc).toContain('body-class="nb-tagmenu-body"')
+    expect(sfc).toContain('v-model="tagMenuOpen"')
+    // 数据源 = 整个画布（doc.getNodes），不是当前连线
+    expect(sfc).toContain('buildTagMenuGroups(tagMenuEntries.value')
   })
 })
 

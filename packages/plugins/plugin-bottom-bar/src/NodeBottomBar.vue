@@ -1532,17 +1532,6 @@ onBeforeUnmount(() => stopPreviewAudio())
 /**
  * @ 按钮（用户 2026-10-29 重构：卡片 hover 出 @ 键，点击把当前标签插进输入框）。
  */
-function insertTileChip(tile: RefTile): void {
-  const item: ResourceItem = {
-    id: tile.key,
-    name: tile.label,
-    category: '素材',
-    ...(tile.kind ? { chipKind: tile.kind } : {}),
-    ...(tile.url ? { url: tile.url } : {}),
-    ...(tile.value ? { value: tile.value } : {}),
-  }
-  editorComponentRef.value?.insertResource?.(item)
-}
 
 /**
  * 卡片行拖拽排序（用户 2026-10-28：序号角标只做观察，排序**不影响**标签绑定）。
@@ -1575,6 +1564,27 @@ const editorComponentRef = ref<{
   /** 动态切可编辑态（AI 生成期间锁输入用；bundle 侧 view.editable 布尔位） */
   setEditable?(next: boolean): void
 } | null>(null)
+
+function insertTileChip(tile: RefTile): void {
+  const item: ResourceItem = {
+    id: tile.key,
+    name: tile.label,
+    category: '素材',
+    ...(tile.kind ? { chipKind: tile.kind } : {}),
+    ...(tile.url ? { url: tile.url } : {}),
+    ...(tile.value ? { value: tile.value } : {}),
+  }
+  if (!editorComponentRef.value?.insertResource) {
+    /**
+     * 当前动作没有输入框（如「旋转/下载」这类即时动作）：@ 没有地方可插。
+     * 直接静默失败会让用户以为按钮坏了（用户 2026-10-29 报「点不动」正是这种观感），
+     * 所以给一句明确的提示。
+     */
+    ctx.tryGet<{ show(m: string): void }>('tip')?.show('当前动作没有输入框，先选一个生成类动作再 @')
+    return
+  }
+  editorComponentRef.value.insertResource(item)
+}
 
 /** 点空壳卡片：选一个本地文件，建节点并绑定到这张卡（添加） */
 function pickSlotFile(tile: RefTile): void {
@@ -2568,13 +2578,18 @@ function onGlobalLeave(el: Element): void {
           >
             <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
           </button>
-          <!-- 右下角 @：把当前标签插进输入框 -->
+          <!--
+            右下角 @：把当前标签插进输入框。
+            用 pointerdown 触发（用户 2026-10-29 报「点不动」）：
+            · 卡片包着主题 Tooltip，它在 pointerdown 会 hide() 气泡、焦点随之丢失；
+            · 拖拽库（Sortable fallback）也会吞掉紧随其后的 click。
+            pointerdown 两者都不受影响，和右上角删除按钮走同一条稳妥路径。
+          -->
           <button
             class="nb-card-act nb-card-at"
             type="button"
             :aria-label="'插入标签 @' + tile.label"
-            @pointerdown.stop
-            @click.stop="insertTileChip(tile)"
+            @pointerdown.stop.prevent="insertTileChip(tile)"
           >@</button>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
