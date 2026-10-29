@@ -1096,8 +1096,20 @@ function appendMasonryItems(from: number, to: number): void {
   const container = masonryEl.value
   if (!container || from >= to) return
   const items = ui.histVisible.value
+  /**
+   * 按「墙上已经画过的 id」过滤（用户实测 2026-10-29：切回页签出现一张重复卡）。
+   * 缓存墙挂回后 renderedCount 与数据下标可能短暂错位 —— 数据 append 时把墙上
+   * 已有的条目再画一遍。DOM 里的 id 是唯一真相：出现过的绝不重画。
+   */
+  const drawnIds = new Set(
+    [...container.querySelectorAll('[data-hist-id]')].map((el) => (el as HTMLElement).dataset.histId),
+  )
   const columnWidth = lastColumnWidth || calcColumns(container.clientWidth).columnWidth
-  const wrappers = items.slice(from, to).map((item) => {
+  const wrappers = items.slice(from, to).filter((item) => {
+    if (item.id && drawnIds.has(item.id)) return false
+    if (item.id) drawnIds.add(item.id)
+    return true
+  }).map((item) => {
     const wrapper = document.createElement('div')
     wrapper.className = ITEM_CLASS
     wrapper.style.width = columnWidth + 'px'
@@ -1120,7 +1132,15 @@ function prependMasonryItems(count: number): void {
   const container = masonryEl.value
   if (!container || count <= 0) return
   const columnWidth = lastColumnWidth || calcColumns(container.clientWidth).columnWidth
-  const wrappers = ui.histVisible.value.slice(0, count).map((item) => {
+  // 插到最前面同样按墙上已有 id 去重（新任务与缓存墙挂回的时序竞争里，同一条可能已在墙上）
+  const drawnIds = new Set(
+    [...container.querySelectorAll('[data-hist-id]')].map((el) => (el as HTMLElement).dataset.histId),
+  )
+  const wrappers = ui.histVisible.value.slice(0, count).filter((item) => {
+    if (item.id && drawnIds.has(item.id)) return false
+    if (item.id) drawnIds.add(item.id)
+    return true
+  }).map((item) => {
     const wrapper = document.createElement('div')
     wrapper.className = ITEM_CLASS
     wrapper.style.width = columnWidth + 'px'
