@@ -1,1 +1,0 @@
-STATE= {"goalCards":0,"hasGoalRow":true,"badge":"正在编辑","editorText":"::test 时长=2s 间隔=120ms 内容=123jj"}

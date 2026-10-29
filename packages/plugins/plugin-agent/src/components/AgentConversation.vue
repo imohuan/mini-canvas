@@ -20,7 +20,7 @@ import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Loader2, Sparkles, Plus, Box,
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
-  Search, LayoutGrid, Columns3,
+  Search,
   Check, Layers,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
   Minimize2, AlertCircle, GripVertical, CircleSlash,
@@ -94,6 +94,20 @@ const CONTEXT_CIRCUMFERENCE = 2 * Math.PI * CONTEXT_R
  */
 const ICON_COMPACT =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+
+/**
+ * 分段切换（卡片 / 分栏）的两枚图标 —— 直接照抄 DEMO 的 LINE.grid / LINE.columns。
+ *
+ * 为什么不用 lucide 的 LayoutGrid / Columns3：同一块面板里技能封面、MCP 插头
+ * 都走 agentResources 的内联 SVG（stroke-width 2、圆角 1.6 的方框），再混一套
+ * lucide 组件会出现「线条粗细与圆角不一致」的两套图标观感（用户 2026-10-29 指出过）。
+ * 统一成 DEMO 原图后，面板内部只有一种线稿。
+ */
+const ICON_VIEW_GRID =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>'
+
+const ICON_VIEW_SPLIT =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>'
 
 /**
  * 已用弧的 dashoffset = 周长 × 剩余比例 —— dashoffset 越大弧越短。
@@ -2489,8 +2503,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
-          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="460px"
-            menu-max-width="480px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
+          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="586px"
+            menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
                 <Box :size="16" />
@@ -2521,11 +2535,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <div class="ac-segment" role="group" aria-label="面板布局">
                         <span class="ac-segment-indicator" :class="'is-' + modelView" aria-hidden="true"></span>
                         <button class="ac-segment-btn" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
-                          <LayoutGrid :size="14" />
+                          <span class="ac-segment-icon" v-html="ICON_VIEW_GRID"></span>
                           <span class="ac-segment-label">卡片</span>
                         </button>
                         <button class="ac-segment-btn" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
-                          <Columns3 :size="14" />
+                          <span class="ac-segment-icon" v-html="ICON_VIEW_SPLIT"></span>
                           <span class="ac-segment-label">分栏</span>
                         </button>
                       </div>
@@ -2614,7 +2628,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
           <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-start" :offset="8"
-            menu-width="460px" menu-max-width="480px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
+            menu-width="586px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
@@ -2648,11 +2662,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <div class="ac-segment" role="group" aria-label="面板布局">
                         <span class="ac-segment-indicator" :class="'is-' + skillView" aria-hidden="true"></span>
                         <button class="ac-segment-btn" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
-                          <LayoutGrid :size="14" />
+                          <span class="ac-segment-icon" v-html="ICON_VIEW_GRID"></span>
                           <span class="ac-segment-label">卡片</span>
                         </button>
                         <button class="ac-segment-btn" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
-                          <Columns3 :size="14" />
+                          <span class="ac-segment-icon" v-html="ICON_VIEW_SPLIT"></span>
                           <span class="ac-segment-label">分栏</span>
                         </button>
                       </div>
@@ -2744,7 +2758,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
           <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-start" :offset="8"
-            menu-width="460px" menu-max-width="480px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
+            menu-width="586px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <button class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
@@ -5265,6 +5279,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-segment-btn:hover {
   color: var(--ui-ink, #111827);
+}
+
+/* 分段按钮里的线稿图标（DEMO 的 .segment-btn > svg）：14×14、随 currentColor。 */
+.ac-segment-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.ac-segment-icon :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 .ac-segment-btn[aria-pressed='true'] {

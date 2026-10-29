@@ -1,4 +1,0 @@
-
-> @mini-canvas/ui@0.0.0 typecheck D:\Code\Git\mini-canvas\packages\ui
-> node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.json
-
