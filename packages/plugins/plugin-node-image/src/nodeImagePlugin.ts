@@ -22,7 +22,7 @@ import ImageFrameOverlay from './ImageFrameOverlay.vue'
 import ImageOverlays from './ImageOverlays.vue'
 import ImagePaintPanel from './ImagePaintPanel.vue'
 import { beginCrop, beginExpand, endEdit, onEditModeChange } from './cropSession'
-import { beginPaint, endPaint, isPainting, onPaintModeChange, paintState } from './paintSession'
+import { beginPaint, endPaint, isPainting, onPaintModeChange, paintState, redoStroke, undoStroke } from './paintSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, paintImageNodes, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
 import type { Rect } from '@mini-canvas/canvas-render'
@@ -427,7 +427,18 @@ export function apply(ctx: Context) {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
       if (!isPainting(nodeId)) return false
-      paintState(nodeId).strokes.pop()
+      undoStroke(nodeId)
+      return true
+    },
+  })
+  ctx.commands.register({
+    id: 'image:paint-redo',
+    title: '重做绘制笔迹',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      if (!isPainting(nodeId)) return false
+      redoStroke(nodeId)
       return true
     },
   })
@@ -438,7 +449,9 @@ export function apply(ctx: Context) {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
       if (!isPainting(nodeId)) return false
-      paintState(nodeId).strokes = []
+      const s = paintState(nodeId)
+      s.strokes = []
+      s.redo = []
       return true
     },
   })

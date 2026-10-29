@@ -26,7 +26,7 @@ import { describeImageMeta, downloadFileName } from './imageNodeData'
 import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 import { cardSizePatch, readImageFitLimits, MIN_CARD_WIDTH, type ImageFitLimits } from './imageFit'
 import { expandImage, isExpandEffective, type ExpandBitmapIO } from './imageExpand'
-import { renderMaskBlob, renderResultBlob } from './imagePaint'
+import { renderMaskBlob, renderResultBlob, type PaintStroke } from './imagePaint'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
 export interface ImageOpsContext {
@@ -464,8 +464,8 @@ export function downloadImageNode(
  * 蒙版尺寸取原图真实像素（resolveRef 后读位图尺寸），退化到显示尺寸（data.imageWidth/imageHeight）。
  */
 export interface PaintSaveInput {
-  /** 归一化笔迹（浮层草稿） */
-  strokes: Array<{ kind: 'paint' | 'erase'; radiusRatio: number; shape: 'round' | 'square'; points: Array<{ x: number; y: number }> }>
+  /** 归一化笔迹（浮层草稿，见 imagePaint.PaintStroke） */
+  strokes: PaintStroke[]
 }
 
 export async function paintImageNodes(

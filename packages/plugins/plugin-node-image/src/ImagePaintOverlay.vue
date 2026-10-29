@@ -3,91 +3,93 @@
  * ImagePaintOverlay —— 图片节点绘制模式的画布浮层（over:inset 段）。
  *
  * 与裁剪/扩展浮层同层：BaseNode 把它画在卡片外面，铺满卡片尺寸。
- * 笔迹画在自己的 canvas 上实时可见，坐标用归一化值（0~1）存，
- * 卡片被拖成多大都不影响保存结果（见 imagePaint.ts 的坐标说明）。
+ * 笔迹画在自己的 canvas 上实时可见；坐标归一化（0~1，相对图片显示区）。
  *
- * 数据流：笔迹直接读写会话里的同一份数组（paintSession.strokes），
- * 保存命令从会话里拿 —— 浮层、顶栏面板、命令三方共享，不需要桥。
+ * 三种工具（用户口径 2026-10-30）：画笔（拖出自由笔迹）/ 矩形填充（拖出实心矩形）/ 橡皮擦（挖掉）。
+ * 绘制颜色来自会话（顶栏颜色下拉）；橡皮擦忽略颜色。
  *
- * 挂载门控：ImageOverlays 已用 isPainting 门控，这里只在绘制态挂载，
- * 所以 setup 里读会话、挂监听都是安全的。
+ * 坐标系（用户口径 2026-10-30：绘制必须跟随画布缩放）——
+ * 一切几何都换算回**布局尺寸**（除以 zoom）：
+ *   - canvas 位图 = 卡片布局尺寸（zoom 变化时重建，笔迹按归一化坐标重画）；
+ *   - 指针位置：屏幕坐标 → 减去卡片屏幕位置 → 除以 zoom → 布局坐标；
+ *   - 显示区（img 的 object-contain 矩形）：屏幕矩形 → 除以 zoom → 布局矩形。
+ * 这样画布缩放/平移时笔迹永远钉在图片上。
  */
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { fitEditingNodeIntoView, useCanvasRender } from '@mini-canvas/canvas-render'
-import { paintState } from './paintSession'
+import { paintState, pushStroke } from './paintSession'
+import { paintStrokes } from './imagePaint'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
 
 const rootEl = ref<HTMLElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
-/** 会话（笔刷大小/形状/模式 + 笔迹数组，响应式，状态栏与浮层读同一份） */
+/** 会话（工具/颜色/笔刷大小 + 笔迹，响应式，状态栏与浮层读同一份） */
 const session = paintState(props.id)
 
-/** 本文件里用的轻量笔迹形状（与会话里的 PaintStroke 结构一致） */
-interface PaintStrokeLite {
-  kind: 'paint' | 'erase'
-  radiusRatio: number
-  shape: 'round' | 'square'
-  points: Array<{ x: number; y: number }>
-}
-
-/** 当前正在画的一条 */
-let current: PaintStrokeLite | null = null
-
-/** 图片在卡片里的实际显示区（object-contain 后的 dx dy dw dh，CSS px） */
+/** 图片显示区（**布局坐标**，相对卡片左上角） */
 const dispX = ref(0)
 const dispY = ref(0)
 const dispW = ref(0)
 const dispH = ref(0)
 
+/** 当前画布缩放 */
+const zoom = computed(() => Math.max(flow.viewport.value?.zoom || 1, 0.01))
+
+/** 当前正在画的这一笔（拖拽中） */
+let draft: { tool: "brush" | "rect" | "erase"; color: string; radiusRatio: number; points: Array<{ x: number; y: number }> } | null = null
+
 /**
- * 量测：卡片尺寸 + 图片实际显示位置。
- * 图片的 <img> 用 object-contain/cover 后，它的实际渲染矩形与卡片不一定重合，
- * 量 DOM 是唯一可靠的来源（与裁剪浮层的量测盒子同一套思路）。
+ * 量测：卡片布局尺寸（= canvas 位图尺寸）+ 图片显示区（布局坐标）。
+ * getBoundingClientRect 给的是屏幕尺寸（已乘 zoom），除回去就是布局尺寸。
  */
 function measure(): void {
   const el = rootEl.value
   const c = canvasEl.value
   if (!el) return
-  // canvas 位图必须跟 CSS 尺寸一致，否则笔迹会被拉伸（默认 300x150 的位图被 CSS 拉满）
+  const z = zoom.value
   const w = el.clientWidth
   const h = el.clientHeight
-  if (c && w > 0 && h > 0 && (c.width !== w || c.height !== h)) {
-    c.width = w
-    c.height = h
+  if (w > 0 && h > 0) {
+    if (c && (c.width !== w || c.height !== h)) {
+      c.width = w
+      c.height = h
+    }
   }
-  // 读内容组件里的 <img> 实际渲染矩形（真实显示区）
   const host = el.closest(".v2-node") ?? el.parentElement
   const img = host?.querySelector("img") as HTMLImageElement | null
   if (img && img.naturalWidth > 0) {
     const r = img.getBoundingClientRect()
     const p = el.getBoundingClientRect()
     if (r.width > 0 && r.height > 0) {
-      dispX.value = r.left - p.left
-      dispY.value = r.top - p.top
-      dispW.value = r.width
-      dispH.value = r.height
+      dispX.value = (r.left - p.left) / z
+      dispY.value = (r.top - p.top) / z
+      dispW.value = r.width / z
+      dispH.value = r.height / z
     }
   }
 }
 
-/** 指针位置 → 归一化坐标（0~1，相对图片显示区，不是整张卡片） */
+/** 指针位置 → 归一化坐标（0~1，相对图片显示区；布局坐标系） */
 function pointOf(ev: PointerEvent): { x: number; y: number } {
   const el = rootEl.value
   if (!el) return { x: 0, y: 0 }
   const r = el.getBoundingClientRect()
   if (r.width <= 0 || r.height <= 0) return { x: 0, y: 0 }
-  // 指针相对图片显示区左上角的偏移（CSS px）→ 相对显示区的比例
-  const x = (ev.clientX - r.left - dispX.value) / Math.max(dispW.value, 1)
-  const y = (ev.clientY - r.top - dispY.value) / Math.max(dispH.value, 1)
-  return { x, y }
+  const z = zoom.value
+  const lx = (ev.clientX - r.left) / z
+  const ly = (ev.clientY - r.top) / z
+  return {
+    x: (lx - dispX.value) / Math.max(dispW.value, 1),
+    y: (ly - dispY.value) / Math.max(dispH.value, 1),
+  }
 }
 
-/** 笔刷半径（归一化：会话里的 brushSize 是滑块 4~100，换算成图片显示宽的比例） */
+/** 笔刷半径（归一化：滑块 4~100 → 显示区宽的比例） */
 function brushRadiusRatio(): number {
-  return Math.min(0.05, Math.max(0.008, session.brushSize / 1000))
+  return Math.min(0.08, Math.max(0.008, session.brushSize / 1000))
 }
 
 function onPointerDown(ev: PointerEvent): void {
@@ -95,66 +97,65 @@ function onPointerDown(ev: PointerEvent): void {
   ev.preventDefault()
   ev.stopPropagation()
   measure()
-  current = { kind: session.brushMode, radiusRatio: brushRadiusRatio(), shape: session.brushShape, points: [pointOf(ev)] }
-  session.strokes.push(current)
+  draft = { tool: session.tool, color: session.color, radiusRatio: brushRadiusRatio(), points: [pointOf(ev)] }
   repaint()
   rootEl.value?.setPointerCapture?.(ev.pointerId)
 }
 
 function onPointerMove(ev: PointerEvent): void {
-  if (!current) return
+  if (!draft) return
   ev.stopPropagation()
-  current.points.push(pointOf(ev))
+  const p = pointOf(ev)
+  if (draft.tool === 'rect') {
+    // 矩形只保留起点 + 当前点（每次都替换终点，不累积）
+    draft.points = [draft.points[0], p]
+  } else {
+    draft.points.push(p)
+  }
   repaint()
 }
 
 function onPointerUp(ev: PointerEvent): void {
-  if (!current) return
+  if (!draft) return
   ev.stopPropagation()
-  current = null
+  // 矩形面积太小（点了一下）不记；画笔至少保留一个点（能点出圆点）
+  const d = draft
+  draft = null
+  if (d.tool === 'rect') {
+    const a = d.points[0]
+    const b = d.points[d.points.length - 1]
+    if (Math.abs(b.x - a.x) * dispW.value < 2 || Math.abs(b.y - a.y) * dispH.value < 2) {
+      repaint()
+      return
+    }
+  }
+  pushStroke(props.id, d)
   rootEl.value?.releasePointerCapture?.(ev.pointerId)
   repaint()
 }
 
-/** 重画全部笔迹（半透明白预览；擦用 destination-out 挖掉之前的笔迹） */
+/** 重画：已提交的笔迹 + 正在拖的这一笔（实时预览） */
 function repaint(): void {
   const c = canvasEl.value
   if (!c) return
   const c2d = c.getContext("2d")
   if (!c2d) return
   c2d.clearRect(0, 0, c.width, c.height)
-  // 笔迹坐标系 = 图片显示区，不是整张卡片。先把画布原点挪到显示区左上角
   c2d.save()
   c2d.translate(dispX.value, dispY.value)
   c2d.beginPath()
   c2d.rect(0, 0, dispW.value, dispH.value)
   c2d.clip()
-  for (const s of session.strokes) {
-    c2d.save()
-    c2d.globalCompositeOperation = s.kind === "erase" ? "destination-out" : "source-over"
-    c2d.strokeStyle = "rgba(255,255,255,0.55)"
-    c2d.fillStyle = c2d.strokeStyle
-    const r = s.radiusRatio * dispW.value
-    c2d.lineWidth = r * 2
-    c2d.lineJoin = "round"
-    c2d.lineCap = s.shape === 'round' ? 'round' : 'butt'
-    c2d.beginPath()
-    if (s.points.length > 0) {
-      c2d.moveTo(s.points[0].x * dispW.value, s.points[0].y * dispH.value)
-      for (const p of s.points.slice(1)) c2d.lineTo(p.x * dispW.value, p.y * dispH.value)
-      if (s.points.length === 1) c2d.lineTo(s.points[0].x * dispW.value + 0.01, s.points[0].y * dispH.value)
-    }
-    c2d.stroke()
-    if (s.shape === 'square') {
-      for (const p of s.points) c2d.fillRect(p.x * dispW.value - r, p.y * dispH.value - r, r * 2, r * 2)
-    }
-    c2d.restore()
-  }
+  paintStrokes(c2d, session.strokes, dispW.value, dispH.value, 'preview')
+  if (draft) paintStrokes(c2d, [draft], dispW.value, dispH.value, 'preview')
   c2d.restore()
 }
 
-/** 会话数组被外部改（撤销/清空命令）→ 重画；本组件自己改也走这里 */
 watch(() => session.strokes.length, () => repaint())
+watch(() => session.redo.length, () => repaint())
+
+/** 画布缩放变化：重量测 + 重画（笔迹跟随缩放） */
+watch(zoom, () => { measure(); repaint() })
 
 function onKeydown(ev: KeyboardEvent): void {
   if (ev.key !== "Escape") return
@@ -166,12 +167,11 @@ let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   measure()
-  // 进绘制态先确保节点完整可见（与裁剪/扩展同一条体验规矩）
   fitEditingNodeIntoView(ctx, props.id)
   window.addEventListener("keydown", onKeydown)
   const el = rootEl.value
   if (el && typeof ResizeObserver !== "undefined") {
-    resizeObserver = new ResizeObserver(() => measure())
+    resizeObserver = new ResizeObserver(() => { measure(); repaint() })
     resizeObserver.observe(el)
   }
 })
@@ -181,13 +181,13 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
 })
-
 </script>
 
 <template>
   <div
     ref="rootEl"
     class="ipo nodrag nopan nowheel"
+    :class="'is-tool-' + session.tool"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -205,6 +205,9 @@ onBeforeUnmount(() => {
   pointer-events: auto;
   touch-action: none;
   overflow: visible;
+}
+.ipo.is-tool-rect {
+  cursor: cell;
 }
 .ipo-canvas {
   position: absolute;

@@ -2,37 +2,27 @@
 /**
  * ImageTopToolbar —— 图片节点顶部操作条（**内容**部分）。
  *
- * 定位不在这里：离卡片多远、怎么居中、怎么反缩放，全由节点壳 BaseNode 的上插槽定位层统一负责
- * （用户要求"定位交给 BaseNode 而不是单独的组件"）。本组件只负责"放哪些按钮、点了干什么"，
- * 因此它是一段**普通流式内容**，自己不再写 position / transform。
+ * 定位不在这里：离卡片多远、怎么居中、怎么反缩放，全由节点壳 BaseNode 的上插槽定位层统一负责。
+ * 本组件只负责「放哪些按钮、点了干什么」。
  *
- * 选中态也不在这里：上插槽整体由壳按"框选中/多选收起、否则各段自己看选中态"的规则显隐。
+ * 布局走 ImageToolbarShell 通用外壳（用户口径 2026-10-30：所有模式同一种胶囊行）。
  */
 import { computed, ref } from 'vue'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
-import ImagePaintEntry from './ImagePaintEntry.vue'
 import { readImageSourceFields } from './imageRefs'
+import ImagePaintEntry from './ImagePaintEntry.vue'
+import ImageToolbarShell from './ImageToolbarShell.vue'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改，按钮/下拉整体换成新主题的。
-// 缺目录（宿主没装登记 ui 的主题）时 undefined + warn（见 useUiComponent）。
 const NodeToolbarButton = useUiComponent('toolbarButton')
 const DropdownButton = useUiComponent('toolbarDropdown')
-// 显隐仍归本段自己判断（"恰好选中一个且是我"）：壳负责位置，插件负责"我该不该出现"。
-// 壳另外还会在框选手势/多选时整体压掉上插槽。
 const selected = useSoleNodeSelected(props.id)
 
-/**
- * 有没有图：没有图时裁剪入口无意义，直接不渲染（而不是渲一个点了没反应的按钮）。
- *
- * 判据是“有资源引用或有旧地址” —— 新写入只存 resourceId，
- * 只看 imageUrl 会把有图的节点当成空节点，裁剪/扩展入口凭空消失。
- */
 const hasImage = computed(() => {
   const { resourceId, legacyUrl } = readImageSourceFields(props.data)
   return resourceId !== '' || legacyUrl !== ''
@@ -40,16 +30,10 @@ const hasImage = computed(() => {
 /** 裁剪中：入口按钮隐藏，避免重复进入 */
 const cropping = computed(() => isCropping(props.id))
 const expanding = computed(() => isExpanding(props.id))
-/** 编辑态（裁剪或扩展）：顶栏换成确认/取消，其余入口全部让位（避免一边调框一边误点下载） */
+/** 编辑态（裁剪或扩展）：顶栏换成确认/取消，其余入口全部让位 */
 const editing = computed(() => isEditing(props.id))
 const visible = computed(() => selected.value)
 
-/**
- * 功能模式：某个功能接管了这个节点（nodeToolbar 服务上的会话，主题件）。
- * 是 → 内置的上传/裁剪/扩展整排让位，插槽里只渲染该功能自己的工具栏条目；
- * 否 → 正常显示内置按钮 + 插件追加的按钮。
- * 读的是服务上的响应式会话，顶栏按钮打开功能后这里会立刻重渲染。
- */
 const featureMode = computed(() => {
   try {
     const svc = ctx.tryGet?.<{ inMode?(nodeId: string): boolean } | undefined>('nodeToolbar')
@@ -62,19 +46,13 @@ const featureMode = computed(() => {
 const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
 
-/** 比例下拉的选项与当前值（值存在会话草稿里：换比例只改草稿，确认时才落库） */
 const ratioItems = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ key: o.value, label: o.label })))
 const ratioValue = computed(() => (editDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
 
-/**
- * 改比例：只把选择记进会话草稿，**框的调整交给浮层**（它持有当前框）。
- * 这样同一套比例数学只有一份实现（浮层里），不会在控制栏再抄一遍而漂移。
- */
 function onRatioChange(key: string): void {
   setEditDraft(props.id, { ...editDraft(props.id), _ratioValue: key })
 }
 
-/* 图标内联 SVG（与节点类型注册的 icon 同源写法；作为常量放脚本里比塞进属性里可读） */
 const ICON_UPLOAD =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>'
 const ICON_CROP =
@@ -86,7 +64,6 @@ const ICON_CONFIRM =
 const ICON_CANCEL =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
 
-/** 读/写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘）；与命令侧同一份接线 */
 const ops = createImageOps(ctx)
 
 function openPicker(): void {
@@ -96,7 +73,6 @@ function openPicker(): void {
 async function onFileChange(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement
   const file = input.files && input.files[0]
-  // 先清空 input：同一文件二次选择也要能触发 change
   input.value = ''
   if (!file || busy.value) return
   busy.value = true
@@ -133,14 +109,12 @@ function cancelEdit(): void {
 </script>
 
 <template>
-  <div v-if="visible" class="ntp-root it-root nodrag nopan">
+  <div v-if="visible" class="it-root nodrag nopan">
     <input ref="fileInput" class="it-file" type="file" accept="image/*" @change="onFileChange" />
 
-    <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
-         布局对齐 liblib 的 `× | 原比例 | 确认`：取消在最左、比例下拉居中、确认在最右。 -->
-    <template v-if="editing">
+    <!-- 编辑态：只剩确认 / 取消（布局对齐 liblib：取消在最左、比例下拉居中、确认在最右） -->
+    <div v-if="editing" class="ntp-root it-root">
       <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
-      <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。扩展不锁比例（它是往外扩画布）。 -->
       <DropdownButton
         v-if="cropping"
         class="it-ratio"
@@ -151,30 +125,20 @@ function cancelEdit(): void {
       <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
         确认
       </NodeToolbarButton>
-    </template>
+    </div>
 
     <!--
-      正常态：整排按钮 = 一个可排序插槽。内置三个按钮是带 id 的锚点，插件条目
-      （ctx.slots.register('image.topToolbar', { id, order, component })）与它们一起排。
-      这样别的功能加按钮时是**插进这个按钮组内部**，不会在组外另长一块面板。
-      编辑态不渲染插槽：编辑中只留确认/取消。
+      正常态：ImageToolbarShell 通用外壳 + 可排序插槽。内置按钮是带 id 的锚点，
+      插件条目与它们一起排。功能模式下内置按钮让位（整排归功能模式自己的 topBar）。
     -->
-    <SlotComposer
+    <ImageToolbarShell
       v-else
-      slot="image.topToolbar"
-      class="it-slot"
-      :shared-props="{ nodeId: props.id, data: props.data }"
+      slot-name="image.topToolbar"
+      :node-id="props.id"
+      :data="props.data"
     >
       <SlotAnchor id="host/upload" :order="100">
-        <!-- 功能模式下不渲染内置按钮：整排让位给功能自己的工具栏 -->
-        <template v-if="!featureMode">
-        <NodeToolbarButton
-          title="上传图片"
-          :icon="ICON_UPLOAD"
-          :disabled="busy"
-          @click="openPicker"
-        />
-        </template>
+        <NodeToolbarButton v-if="!featureMode" title="上传图片" :icon="ICON_UPLOAD" :disabled="busy" @click="openPicker" />
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/crop" :order="200">
         <NodeToolbarButton v-if="!featureMode" title="裁剪图片" :icon="ICON_CROP" @click="onCrop" />
@@ -185,23 +149,12 @@ function cancelEdit(): void {
       <SlotAnchor v-if="hasImage" id="host/paint" :order="400">
         <ImagePaintEntry :node-id="props.id" :data="props.data" />
       </SlotAnchor>
-    </SlotComposer>
+    </ImageToolbarShell>
   </div>
 </template>
 
 <style scoped>
-/* 容器（排一行 + 一块面板）由全局 `.ntp-root` 提供（canvas-render 的 ui-theme.css）——
-   位置（贴边/居中/反缩放）由壳的上插槽定位层给，本组件只管内容。 */
-
 .it-file {
   display: none;
-}
-
-/* SlotComposer 根容器仍是普通 div：只声明「与工具栏同一横排」，
-   不另画一块面板（否则会出现两个方框并排 —— 用户截图里那个错位）。 */
-.it-slot {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 </style>
