@@ -587,7 +587,10 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
         'resource-node resource-chip'
         + (isText ? ' resource-chip--text' : '')
         + (kind4 ? '' : ' resource-chip--unbound')
-        + (self.invalid ? ' resource-chip--invalid' : ''),
+        + (self.invalid ? ' resource-chip--invalid' : '')
+        // 可替换标记（用户 2026-10-29）：hover 时左侧图标变「替换」键。
+        // 这条渲染路径（底栏资源项）与编辑器 renderRefChip 是两份实现，两边都要带。
+        + (self.onReplaceClick && !self.invalid ? ' resource-chip--replaceable' : ''),
       'data-id': self.id,
       'data-url': self.url || '',
       'data-name': name,
