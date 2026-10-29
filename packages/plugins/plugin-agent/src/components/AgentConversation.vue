@@ -2461,7 +2461,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- 授权方式：接受审核 / 完全自动授权（与设置→Agent→审批规则 是同一个开关）。
                布局照 docs/demo/agent-select-panels 的「审核」面板：标题 + 计数 + 右侧状态小标签，
                下面两条大选项（图标托 / 标题 + 徽章 / 说明 / 单选圈）。 -->
-          <ThemedDropdown v-model="authOpen" placement="top-start" :offset="8" menu-width="360px" menu-role="listbox">
+          <!-- align=start：面板从按钮左缘铺开，箭头也贴左缘 —— 不传它默认居中，
+               宽面板会把按钮挤到面板右端，箭头（按对齐边内缩）就不再指着按钮。 -->
+          <ThemedDropdown v-model="authOpen" placement="top-start" align="start" :offset="8" menu-width="360px" menu-role="listbox">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
@@ -2503,7 +2505,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
-          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="586px"
+          <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
+          <ThemedDropdown v-model="modelOpen" placement="top-start" align="start" :offset="8"
+            :menu-width="modelView === 'split' ? '586px' : '320px'"
             menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
@@ -2627,8 +2631,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
-          <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-start" :offset="8"
-            menu-width="586px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
+          <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-start" align="start" :offset="8"
+            :menu-width="skillView === 'split' ? '586px' : '320px'" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
@@ -2757,8 +2761,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
-          <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-start" :offset="8"
-            menu-width="586px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
+          <!-- MCP 暂只有轻卡片一种布局：宽度固定在紧凑档（与卡片视图一致）。 -->
+          <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-start" align="start" :offset="8"
+            menu-width="320px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <button class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
