@@ -2319,8 +2319,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
-          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="300px"
-            menu-max-width="320px" menu-max-height="320px" menu-role="listbox" layout="inner-scroll">
+          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="460px"
+            menu-max-width="480px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <button class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
                 <Box :size="16" />
@@ -2342,12 +2342,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     </button>
                   </div>
                   <div class="ac-panel-tools">
+                    <div class="ac-seg-group" role="group" aria-label="面板布局">
                     <button class="ac-panel-seg" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
                       <LayoutGrid :size="13" />
+                      <span>卡片</span>
                     </button>
                     <button class="ac-panel-seg" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
                       <Columns3 :size="13" />
+                      <span>分栏</span>
                     </button>
+                    </div>
                   </div>
                 </div>
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
@@ -2413,7 +2417,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
           <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-start" :offset="8"
-            menu-width="420px" menu-max-width="440px" menu-max-height="420px" menu-role="listbox" layout="inner-scroll">
+            menu-width="460px" menu-max-width="480px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
@@ -2437,12 +2441,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     </button>
                   </div>
                   <div class="ac-panel-tools">
+                    <div class="ac-seg-group" role="group" aria-label="面板布局">
                     <button class="ac-panel-seg" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
                       <LayoutGrid :size="13" />
+                      <span>卡片</span>
                     </button>
                     <button class="ac-panel-seg" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
                       <Columns3 :size="13" />
+                      <span>分栏</span>
                     </button>
+                    </div>
                   </div>
                 </div>
                 <div class="ac-panel-body">
@@ -2490,7 +2498,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
           <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-start" :offset="8"
-            menu-width="420px" menu-max-width="440px" menu-max-height="420px" menu-role="listbox" layout="inner-scroll">
+            menu-width="460px" menu-max-width="480px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <button class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
@@ -4738,7 +4746,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   gap: 8px;
   min-width: 0;
   flex: none;
-  padding: 8px 10px 6px;
+  padding: 12px 12px 8px;
 }
 
 .ac-panel-heading {
@@ -4797,6 +4805,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-panel-search-input {
   width: 100%;
+  height: 100%;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -4840,14 +4849,26 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   flex: none;
 }
 
+.ac-seg-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+}
+
 .ac-panel-seg {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
   border: 0;
   border-radius: 8px;
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--ui-ink-dim, #919191);
   cursor: pointer;
 }
@@ -4859,14 +4880,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-panel-seg[aria-pressed='true'] {
-  color: var(--ui-accent, #0891b2);
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink, #f7f7f7);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
 }
 
 .ac-detect-btn {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 8px;
   background: var(--ui-chip, rgb(255 255 255 / 0.1));
@@ -4897,7 +4920,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 /* 模型卡片网格（demo 同款：图标 35 + 标题 13.5 + 副行 10.5） */
 .ac-model-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   gap: 8px;
 }
 
@@ -4905,9 +4928,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-model-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
+  min-height: 58px;
   padding: 7px 9px;
   border: 1px solid var(--ui-line, #363636);
   border-radius: 12px;
@@ -5272,8 +5296,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   display: flex;
   align-items: center;
   flex: none;
-  min-height: 40px;
-  padding: 6px 12px;
+  min-height: 54px;
+  padding: 9px 12px;
   border-top: 1px solid var(--ui-line, #363636);
 }
 
