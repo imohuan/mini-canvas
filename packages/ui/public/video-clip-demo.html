@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>视频片段 · 极简 Demo</title>
+<style>
+:root {
+  --bg: #08090b;
+  --dock: #0e1014;
+  --track: #1a1d23;
+  --ink: #f4f5f7;
+  --muted: #9b9fa8;
+  --faint: #6d727c;
+  --line: rgba(255, 255, 255, 0.08);
+  --blue: #3b82f6;
+  --blue-soft: rgba(59, 130, 246, 0.16);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font);
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0.8px, transparent 1px);
+  background-size: 22px 22px;
+}
+button { font: inherit; }
+button, .film { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, .film:focus-visible, .handle:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.95);
+  outline-offset: 2px;
+}
+.app {
+  width: min(900px, calc(100vw - 40px));
+  margin: 0 auto;
+  padding: 24px 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stage-shell { display: flex; justify-content: center; }
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #050607;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  isolation: isolate;
+}
+.stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #050607;
+  cursor: pointer;
+}
+.stage-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 24px;
+  text-align: center;
+  background:
+    radial-gradient(80% 100% at 50% 38%, rgba(59, 130, 246, 0.1), transparent 62%),
+    linear-gradient(145deg, #151922, #0a0c10 68%);
+}
+.stage-empty::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+  pointer-events: none;
+}
+.stage.is-drop .stage-empty {
+  background:
+    radial-gradient(80% 100% at 50% 38%, rgba(59, 130, 246, 0.22), transparent 65%),
+    linear-gradient(145deg, #182131, #0a0c10 68%);
+}
+.stage.is-drop .stage-empty::before { border-color: rgba(96, 165, 250, 0.82); }
+.empty-mark {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #c9d2e4;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+}
+.empty-mark svg { width: 24px; height: 24px; }
+.empty-title { margin-top: 3px; font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+.empty-sub { color: var(--muted); font-size: 12px; line-height: 1.65; }
+.choose-btn {
+  margin-top: 5px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 9px;
+  color: #101216;
+  background: #f5f6f8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.choose-btn:hover { background: #ffffff; }
+.choose-btn:active { transform: scale(0.97); }
+.app.has-video .stage-empty { display: none; }
+.stage-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 15px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.48), transparent);
+}
+.file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+}
+.file-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-dot {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid rgba(255, 255, 255, 0.6);
+}
+.stage-top-right { display: flex; align-items: center; gap: 10px; flex: none; }
+.file-meta {
+  color: rgba(255, 255, 255, 0.58);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  background: rgba(17, 20, 25, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.icon-btn:hover { background: rgba(34, 39, 48, 0.88); border-color: rgba(255, 255, 255, 0.16); }
+.icon-btn:active { transform: scale(0.96); }
+.icon-btn svg { width: 17px; height: 17px; }
+.upload-btn { backdrop-filter: blur(8px); }
+.playbar {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.app.has-video .playbar { opacity: 1; pointer-events: auto; }
+.play-btn { width: 32px; height: 32px; border-radius: 9px; }
+.play-btn svg { width: 16px; height: 16px; }
+.timecode {
+  padding: 4px 7px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(10, 12, 16, 0.55);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+.stage-status {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  z-index: 8;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  color: #f5f6f8;
+  background: rgba(12, 14, 18, 0.86);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  backdrop-filter: blur(12px);
+}
+.stage-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.stage-status.is-error { border-color: rgba(248, 113, 113, 0.28); color: #fecaca; }
+.dock {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  height: 124px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: var(--dock);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+}
+.film {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--track);
+  touch-action: none;
+  user-select: none;
+  cursor: default;
+}
+.frames {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+  background: #181b20;
+}
+.frame {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  background-color: #1d2128;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+.frame + .frame { border-left: 1px solid rgba(0, 0, 0, 0.3); }
+.frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 18%, rgba(255, 255, 255, 0.055) 48%, transparent 78%);
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.frame.is-ready::after { opacity: 0; }
+.shade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  background: rgba(3, 5, 8, 0.62);
+  pointer-events: none;
+}
+.shade-left { left: 0; width: 0; }
+.shade-right { left: 100%; right: 0; }
+.selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  min-width: 1px;
+  border-radius: 3px;
+  background: rgba(59, 130, 246, 0.055);
+  box-shadow: inset 0 0 0 3px var(--blue);
+  cursor: grab;
+  touch-action: none;
+}
+.selection.is-dragging { cursor: grabbing; }
+.selection.is-dragging .handle::after,
+.selection:hover .handle::after { opacity: 0.85; }
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 17px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.handle-left { left: 0; }
+.handle-right { right: 0; }
+.handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 26px;
+  margin-top: -13px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.handle-left::after { left: 6px; }
+.handle-right::after { right: 6px; }
+.clip-length {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 18px);
+  overflow: hidden;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  color: #ffffff;
+  background: rgba(18, 21, 27, 0.9);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.selection.is-tight .clip-length { display: none; }
+.film-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: #737985;
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+.snap-btn {
+  align-self: center;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #c8ccd4;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.snap-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.065); }
+.snap-btn:active { transform: scale(0.96); }
+.snap-btn svg { width: 24px; height: 24px; }
+.snap-btn.is-on {
+  color: #ffffff;
+  background: var(--blue);
+  border-color: rgba(147, 197, 253, 0.45);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), 0 8px 20px rgba(37, 99, 235, 0.28);
+}
+.hint {
+  margin: 0 2px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+.hint b { color: #9ba1ac; font-weight: 600; }
+.file-input { display: none; }
+@media (max-width: 640px) {
+  .app { width: calc(100vw - 22px); padding: 12px 0 14px; gap: 9px; }
+  .stage { border-radius: 11px; }
+  .stage-empty::before { inset: 11px; }
+  .dock { height: 88px; padding: 7px; gap: 6px; border-radius: 12px; }
+  .film { border-radius: 5px; }
+  .snap-btn { width: 44px; height: 44px; border-radius: 12px; }
+  .snap-btn svg { width: 21px; height: 21px; }
+  .clip-length { padding: 6px 8px; font-size: 12px; }
+  .stage-top { padding: 10px 11px; }
+  .file-meta { display: none; }
+  .stage-status { top: 46px; font-size: 10.5px; }
+  .hint { font-size: 10.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="stage-shell">
+    <div class="stage" id="stage">
+      <video id="video" playsinline preload="metadata"></video>
+      <div class="stage-empty" id="stageEmpty">
+        <div class="empty-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+            <path d="M7 5v14M17 5v14M7 9h10M7 15h10"></path>
+          </svg>
+        </div>
+        <div class="empty-title">把视频拖到这里</div>
+        <div class="empty-sub">视频和片段会保存在这台电脑的浏览器里<br>下次刷新还能接着用</div>
+        <button class="choose-btn" id="chooseBtn" type="button">选择视频</button>
+      </div>
+      <div class="stage-top">
+        <div class="file-name"><span class="file-dot" aria-hidden="true"></span><span id="fileName">还没有视频</span></div>
+        <div class="stage-top-right">
+          <span class="file-meta" id="fileMeta"></span>
+          <button class="icon-btn upload-btn" id="uploadBtn" type="button" title="换一段视频" aria-label="换一段视频">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="stage-status" id="status" role="status" aria-live="polite"></div>
+      <div class="playbar" id="playbar">
+        <button class="icon-btn play-btn" id="playBtn" type="button" aria-label="播放" title="播放 / 暂停">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="playPath" d="M8 5v14l11-7z"></path></svg>
+        </button>
+        <span class="timecode" id="timecode">0:00 / 0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dock" aria-label="片段选择栏">
+    <div class="film" id="film" role="group" aria-label="视频帧与片段选择">
+      <div class="frames" id="frames" aria-hidden="true"></div>
+      <div class="shade shade-left" id="shadeLeft"></div>
+      <div class="shade shade-right" id="shadeRight"></div>
+      <div class="selection" id="selection" hidden>
+        <div class="handle handle-left" id="handleLeft" role="slider" tabindex="0" aria-label="片段起点" aria-orientation="horizontal" aria-valuemin="0"></div>
+        <span class="clip-length" id="clipLength">0.00 s</span>
+        <div class="handle handle-right" id="handleRight" role="slider" tabindex="0" aria-label="片段终点" aria-orientation="horizontal" aria-valuemin="0"></div>
+      </div>
+      <div class="film-empty" id="filmEmpty">上传视频后，这里会铺满来自视频的每一帧</div>
+    </div>
+    <button class="snap-btn" id="snapBtn" type="button" aria-pressed="false" title="开启整秒吸附" aria-label="开启整秒吸附">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15"></path>
+        <path d="m5 8 4 4"></path><path d="m12 15 4 4"></path>
+      </svg>
+    </button>
+  </div>
+  <p class="hint">拖<b>蓝色边框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后，端点会吸附到整秒。</p>
+</div>
+<input class="file-input" id="fileInput" type="file" accept="video/*" hidden>
+
+<script>
+(function () {
+  'use strict';
+
+  var DB_NAME = 'mini-canvas-video-clip-demo';
+  var DB_STORE = 'media';
+  var DB_KEY = 'current';
+  var RANGE_KEY = 'mini-canvas-video-clip-demo:range:v1';
+  var SNAP_KEY = 'mini-canvas-video-clip-demo:snap:v1';
+  var DEFAULT_CLIP_SECONDS = 3.36;
+  var MIN_CLIP_SECONDS = 0.3;
+  var THUMB_TARGET_WIDTH = 80;
+
+  var els = {
+    app: document.getElementById('app'),
+    stage: document.getElementById('stage'),
+    video: document.getElementById('video'),
+    stageEmpty: document.getElementById('stageEmpty'),
+    fileName: document.getElementById('fileName'),
+    fileMeta: document.getElementById('fileMeta'),
+    fileInput: document.getElementById('fileInput'),
+    chooseBtn: document.getElementById('chooseBtn'),
+    uploadBtn: document.getElementById('uploadBtn'),
+    status: document.getElementById('status'),
+    playBtn: document.getElementById('playBtn'),
+    playPath: document.getElementById('playPath'),
+    timecode: document.getElementById('timecode'),
+    film: document.getElementById('film'),
+    frames: document.getElementById('frames'),
+    filmEmpty: document.getElementById('filmEmpty'),
+    shadeLeft: document.getElementById('shadeLeft'),
+    shadeRight: document.getElementById('shadeRight'),
+    selection: document.getElementById('selection'),
+    handleLeft: document.getElementById('handleLeft'),
+    handleRight: document.getElementById('handleRight'),
+    clipLength: document.getElementById('clipLength'),
+    snapBtn: document.getElementById('snapBtn')
+  };
+
+  var state = {
+    duration: 0,
+    start: 0,
+    end: 0,
+    snap: readFlag(SNAP_KEY),
+    objectUrl: '',
+    drag: null,
+    loadJob: 0,
+    thumbJob: 0,
+    statusTimer: 0,
+    lastPreviewAt: 0
+  };
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function readFlag(key) {
+    try { return localStorage.getItem(key) === '1'; } catch (error) { return false; }
+  }
+
+  function writeFlag(key, value) {
+    try { localStorage.setItem(key, value ? '1' : '0'); } catch (error) { /* private mode */ }
+  }
+
+  function readSavedRange() {
+    try {
+      var raw = localStorage.getItem(RANGE_KEY);
+      if (!raw) return null;
+      var value = JSON.parse(raw);
+      if (!value || !Number.isFinite(value.start) || !Number.isFinite(value.end)) return null;
+      if (Number.isFinite(value.duration) && Math.abs(value.duration - state.duration) > 0.15) return null;
+      return value;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveRange() {
+    try {
+      localStorage.setItem(RANGE_KEY, JSON.stringify({
+        start: Number(state.start.toFixed(3)),
+        end: Number(state.end.toFixed(3)),
+        duration: Number(state.duration.toFixed(3))
+      }));
+    } catch (error) { /* private mode */ }
+  }
+
+  function clearSavedRange() {
+    try { localStorage.removeItem(RANGE_KEY); } catch (error) { /* private mode */ }
+  }
+
+  function formatClock(seconds) {
+    var total = Math.max(0, Math.floor(Number(seconds) || 0));
+    var minutes = Math.floor(total / 60);
+    return minutes + ':' + String(total % 60).padStart(2, '0');
+  }
+
+  function formatClip(seconds) {
+    return Math.max(0, Number(seconds) || 0).toFixed(2) + ' s';
+  }
+
+  function setStatus(message, tone, timeoutMs) {
+    window.clearTimeout(state.statusTimer);
+    if (!message) {
+      els.status.classList.remove('is-visible', 'is-error');
+      els.status.textContent = '';
+      return;
+    }
+    els.status.textContent = message;
+    els.status.classList.toggle('is-error', tone === 'error');
+    els.status.classList.add('is-visible');
+    if (timeoutMs !== 0) {
+      state.statusTimer = window.setTimeout(function () {
+        els.status.classList.remove('is-visible');
+      }, timeoutMs || 2400);
+    }
+  }
+
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      if (!('indexedDB' in window)) {
+        reject(new Error('indexeddb-unavailable'));
+        return;
+      }
+      var request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = function () {
+        var db = request.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+      };
+      request.onsuccess = function () { resolve(request.result); };
+      request.onerror = function () { reject(request.error || new Error('db-open-failed')); };
+    });
+  }
+
+  async function saveVideoBlob(file) {
+    var db = await openDb();
+    try {
+      await new Promise(function (resolve, reject) {
+        var tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).put({
+          blob: file,
+          name: file.name || '视频',
+          type: file.type || 'video/mp4',
+          savedAt: Date.now()
+        }, DB_KEY);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error || new Error('db-write-failed')); };
+        tx.onabort = function () { reject(tx.error || new Error('db-write-aborted')); };
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function readVideoBlob() {
+    var db = await openDb();
+    try {
+      return await new Promise(function (resolve, reject) {
+        var tx = db.transaction(DB_STORE, 'readonly');
+        var request = tx.objectStore(DB_STORE).get(DB_KEY);
+        request.onsuccess = function () { resolve(request.result || null); };
+        request.onerror = function () { reject(request.error || new Error('db-read-failed')); };
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  function waitForVideoMetadata(video, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var timer = 0;
+      function cleanup() {
+        window.clearTimeout(timer);
+        video.removeEventListener('loadedmetadata', onReady);
+        video.removeEventListener('error', onError);
+      }
+      function onReady() {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve();
+      }
+      function onError() {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('video-load-failed'));
+      }
+      if (video.readyState >= 1 && video.videoWidth > 0) {
+        resolve();
+        return;
+      }
+      video.addEventListener('loadedmetadata', onReady);
+      video.addEventListener('error', onError);
+      timer = window.setTimeout(function () {
+        if (done) return;
+        done = true;
+        cleanup();
+        if (video.readyState >= 1 && video.videoWidth > 0) resolve();
+        else reject(new Error('video-metadata-timeout'));
+      }, timeoutMs || 8000);
+    });
+  }
+
+  function seekVideo(video, time, timeoutMs) {
+    return new Promise(function (resolve) {
+      var finished = false;
+      var timer = 0;
+      function finish() {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timer);
+        video.removeEventListener('seeked', onSeeked);
+        resolve();
+      }
+      function onSeeked() { finish(); }
+      video.addEventListener('seeked', onSeeked);
+      timer = window.setTimeout(finish, timeoutMs || 1400);
+      try {
+        var target = clamp(time, 0, Math.max(0, video.duration - 0.01));
+        var before = video.currentTime;
+        video.currentTime = target;
+        if (Math.abs(before - target) < 0.001) window.setTimeout(finish, 30);
+      } catch (error) {
+        finish();
+      }
+    });
+  }
+
+  function drawCover(context, video, sourceWidth, sourceHeight, width, height) {
+    if (!sourceWidth || !sourceHeight) return;
+    var scale = Math.max(width / sourceWidth, height / sourceHeight);
+    var sourceW = width / scale;
+    var sourceH = height / scale;
+    var sourceX = (sourceWidth - sourceW) / 2;
+    var sourceY = (sourceHeight - sourceH) / 2;
+    context.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, width, height);
+  }
+
+  function defaultRange() {
+    return { start: 0, end: Math.min(DEFAULT_CLIP_SECONDS, state.duration) };
+  }
+
+  function normalizeRange(start, end) {
+    var duration = state.duration;
+    if (!duration) return { start: 0, end: 0 };
+    var nextStart = clamp(Number(start) || 0, 0, duration);
+    var nextEnd = clamp(Number(end) || 0, 0, duration);
+    if (nextEnd < nextStart) {
+      var swap = nextStart;
+      nextStart = nextEnd;
+      nextEnd = swap;
+    }
+    var minimum = Math.min(MIN_CLIP_SECONDS, duration);
+    if (nextEnd - nextStart < minimum) {
+      if (nextStart + minimum <= duration) nextEnd = nextStart + minimum;
+      else {
+        nextEnd = duration;
+        nextStart = Math.max(0, nextEnd - minimum);
+      }
+    }
+    return { start: nextStart, end: nextEnd };
+  }
+
+  function updateSelectionUi() {
+    var duration = state.duration;
+    if (!duration) {
+      els.selection.hidden = true;
+      els.filmEmpty.hidden = false;
+      return;
+    }
+    els.selection.hidden = false;
+    els.filmEmpty.hidden = true;
+    var left = state.start / duration * 100;
+    var right = state.end / duration * 100;
+    var width = Math.max(0, right - left);
+    els.selection.style.left = left + '%';
+    els.selection.style.width = width + '%';
+    els.shadeLeft.style.width = left + '%';
+    els.shadeRight.style.left = right + '%';
+    els.shadeRight.style.width = Math.max(0, 100 - right) + '%';
+    els.clipLength.textContent = formatClip(state.end - state.start);
+    els.selection.classList.toggle('is-tight', els.film.clientWidth > 0 && width / 100 * els.film.clientWidth < 82);
+    els.handleLeft.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
+    els.handleRight.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
+    els.handleLeft.setAttribute('aria-valuenow', String(Number(state.start.toFixed(2))));
+    els.handleRight.setAttribute('aria-valuenow', String(Number(state.end.toFixed(2))));
+    els.handleLeft.setAttribute('aria-valuetext', formatClip(state.start) + '，片段起点');
+    els.handleRight.setAttribute('aria-valuetext', formatClip(state.end) + '，片段终点');
+  }
+
+  function updateTimeUi() {
+    var current = Number(els.video.currentTime) || 0;
+    els.timecode.textContent = formatClock(current) + ' / ' + formatClock(state.duration);
+    var playing = !!state.duration && !els.video.paused && !els.video.ended;
+    els.playPath.setAttribute('d', playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z');
+    els.playBtn.setAttribute('aria-label', playing ? '暂停' : '播放');
+    els.playBtn.classList.toggle('is-playing', playing);
+  }
+
+  function setRange(start, end, options) {
+    var next = normalizeRange(start, end);
+    state.start = next.start;
+    state.end = next.end;
+    updateSelectionUi();
+    if (options && options.save) saveRange();
+    if (options && options.preview) previewBoundary(options.edge || 'start', true);
+  }
+
+  function previewBoundary(edge, force) {
+    if (!state.duration || !els.video.paused) return;
+    var now = Date.now();
+    if (!force && now - state.lastPreviewAt < 90) return;
+    state.lastPreviewAt = now;
+    var target = edge === 'end'
+      ? Math.max(state.start, state.end - 0.03)
+      : Math.min(state.end - 0.03, state.start + 0.01);
+    target = clamp(target, 0, Math.max(0, state.duration - 0.01));
+    try {
+      els.video.currentTime = target;
+      updateTimeUi();
+    } catch (error) { /* metadata not ready */ }
+  }
+
+  function syncSnapUi() {
+    els.snapBtn.classList.toggle('is-on', state.snap);
+    els.snapBtn.setAttribute('aria-pressed', state.snap ? 'true' : 'false');
+    var label = state.snap ? '关闭整秒吸附' : '开启整秒吸附';
+    els.snapBtn.title = label;
+    els.snapBtn.setAttribute('aria-label', label);
+  }
+
+  function toggleSnap() {
+    state.snap = !state.snap;
+    writeFlag(SNAP_KEY, state.snap);
+    syncSnapUi();
+    if (!state.duration) return;
+    if (state.snap) {
+      var nextStart = Math.round(state.start);
+      var nextEnd = Math.round(state.end);
+      if (nextStart >= state.duration) nextStart = Math.max(0, Math.floor(state.duration - 1));
+      if (nextEnd <= nextStart) nextEnd = Math.min(state.duration, nextStart + 1);
+      setRange(nextStart, nextEnd, { save: true, preview: true });
+      setStatus('已开启整秒吸附', 'ok', 1600);
+    } else {
+      setStatus('已关闭整秒吸附', 'ok', 1400);
+    }
+  }
+
+  function startThumbnails(url, loadJob) {
+    var thumbJob = ++state.thumbJob;
+    els.frames.replaceChildren();
+    els.filmEmpty.hidden = true;
+    var width = els.film.clientWidth || 900;
+    var count = Math.round(width / THUMB_TARGET_WIDTH);
+    count = clamp(count, 6, 14);
+    var nodes = [];
+    var index;
+    for (index = 0; index < count; index += 1) {
+      var frame = document.createElement('div');
+      frame.className = 'frame';
+      els.frames.appendChild(frame);
+      nodes.push(frame);
+    }
+
+    var probe = document.createElement('video');
+    probe.muted = true;
+    probe.playsInline = true;
+    probe.preload = 'auto';
+    probe.src = url;
+
+    (async function () {
+      try {
+        await waitForVideoMetadata(probe, 7000);
+        if (thumbJob !== state.thumbJob || loadJob !== state.loadJob) return;
+        var canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 144;
+        var context = canvas.getContext('2d');
+        var sourceWidth = probe.videoWidth || state.videoWidth;
+        var sourceHeight = probe.videoHeight || state.videoHeight;
+        if (!context || !sourceWidth || !sourceHeight) return;
+
+        for (var frameIndex = 0; frameIndex < count; frameIndex += 1) {
+          if (thumbJob !== state.thumbJob || loadJob !== state.loadJob) return;
+          var at = state.duration * ((frameIndex + 0.5) / count);
+          await seekVideo(probe, at, 1400);
+          if (thumbJob !== state.thumbJob || loadJob !== state.loadJob) return;
+          try {
+            drawCover(context, probe, sourceWidth, sourceHeight, canvas.width, canvas.height);
+            nodes[frameIndex].style.backgroundImage = 'url(' + canvas.toDataURL('image/jpeg', 0.76) + ')';
+          } catch (error) {
+            /* One bad frame should not stop the whole strip. */
+          }
+          nodes[frameIndex].title = formatClock(at);
+          nodes[frameIndex].classList.add('is-ready');
+        }
+      } catch (error) {
+        if (thumbJob === state.thumbJob) {
+          console.warn('缩略帧生成失败', error);
+          nodes.forEach(function (node) { node.classList.add('is-ready'); });
+        }
+      } finally {
+        try {
+          probe.pause();
+          probe.removeAttribute('src');
+          probe.load();
+        } catch (error) { /* ignore */ }
+      }
+    })();
+  }
+
+  async function attachVideo(blob, name, options) {
+    var loadJob = ++state.loadJob;
+    state.thumbJob += 1;
+    state.duration = 0;
+    state.start = 0;
+    state.end = 0;
+    state.drag = null;
+    els.frames.replaceChildren();
+    els.filmEmpty.hidden = false;
+    els.selection.hidden = true;
+    els.fileMeta.textContent = '';
+    els.fileName.textContent = name || '视频';
+    els.app.classList.add('has-video');
+    els.video.pause();
+
+    if (state.objectUrl) {
+      URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = '';
+    }
+    var url = URL.createObjectURL(blob);
+    state.objectUrl = url;
+    els.video.src = url;
+    els.video.load();
+
+    await waitForVideoMetadata(els.video, 9000);
+    if (loadJob !== state.loadJob) return false;
+
+    state.duration = Number.isFinite(els.video.duration) && els.video.duration > 0 ? els.video.duration : 0;
+    if (!state.duration) throw new Error('video-duration-unavailable');
+    els.fileMeta.textContent = els.video.videoWidth + ' × ' + els.video.videoHeight;
+
+    var next;
+    var saved = options && options.restore ? readSavedRange() : null;
+    if (saved) next = normalizeRange(saved.start, saved.end);
+    else next = normalizeRange(defaultRange().start, defaultRange().end);
+    if (state.snap) {
+      var snappedStart = Math.round(next.start);
+      var snappedEnd = Math.round(next.end);
+      if (snappedStart >= state.duration) snappedStart = Math.max(0, Math.floor(state.duration - 1));
+      if (snappedEnd <= snappedStart) snappedEnd = Math.min(state.duration, snappedStart + 1);
+      next = normalizeRange(snappedStart, snappedEnd);
+    }
+    setRange(next.start, next.end);
+    try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
+    updateTimeUi();
+    startThumbnails(url, loadJob);
+    return true;
+  }
+
+  function isVideoFile(file) {
+    if (!file) return false;
+    if (file.type && file.type.indexOf('video/') === 0) return true;
+    return /\.(mp4|m4v|webm|mov|ogv|ogg)$/i.test(file.name || '');
+  }
+
+  async function handleFile(file) {
+    if (!isVideoFile(file)) {
+      setStatus('请选择视频文件', 'error', 3200);
+      return;
+    }
+    if (!file.size) {
+      setStatus('这个视频是空的', 'error', 3000);
+      return;
+    }
+    setStatus('正在读取视频…', 'ok', 0);
+    try {
+      var attached = await attachVideo(file, file.name || '视频', { restore: false });
+      if (!attached) return;
+      clearSavedRange();
+      saveRange();
+      setStatus('正在保存到本地…', 'ok', 0);
+      try {
+        await saveVideoBlob(file);
+        setStatus('已保存到本地，刷新后还能用', 'ok', 3000);
+      } catch (storageError) {
+        console.warn('视频保存失败', storageError);
+        setStatus('视频能播放，但浏览器没存下（刷新会丢）', 'error', 4600);
+      }
+    } catch (error) {
+      console.warn('视频读取失败', error);
+      setStatus('这个视频打不开，请换一个', 'error', 4200);
+      if (!state.duration) {
+        els.app.classList.remove('has-video');
+        els.video.removeAttribute('src');
+        els.video.load();
+        els.frames.replaceChildren();
+        els.filmEmpty.hidden = false;
+        els.selection.hidden = true;
+      }
+    }
+  }
+
+  async function restoreSavedVideo() {
+    try {
+      var record = await readVideoBlob();
+      if (!record || !record.blob) return;
+      setStatus('正在恢复上次的视频…', 'ok', 0);
+      var attached = await attachVideo(record.blob, record.name || '上次的视频', { restore: true });
+      if (attached) setStatus('已恢复上次的视频', 'ok', 2200);
+    } catch (error) {
+      console.warn('恢复视频失败', error);
+      setStatus('', 'ok', 0);
+    }
+  }
+
+  function currentTimeAt(clientX) {
+    var rect = els.film.getBoundingClientRect();
+    if (!rect.width) return 0;
+    return clamp((clientX - rect.left) / rect.width, 0, 1) * state.duration;
+  }
+
+  function beginDrag(kind, event, edge) {
+    if (!state.duration || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    var rect = els.film.getBoundingClientRect();
+    if (!rect.width) return;
+    try { els.video.pause(); } catch (error) { /* ignore */ }
+    state.drag = {
+      kind: kind,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      width: rect.width,
+      fromStart: state.start,
+      fromEnd: state.end
+    };
+    els.selection.classList.add('is-dragging');
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    previewBoundary(edge || 'start', true);
+  }
+
+  function onDragMove(event) {
+    var drag = state.drag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    var delta = (event.clientX - drag.startX) / drag.width * state.duration;
+    var nextStart = drag.fromStart;
+    var nextEnd = drag.fromEnd;
+
+    if (drag.kind === 'start') {
+      nextStart = drag.fromStart + delta;
+      if (state.snap) nextStart = Math.round(nextStart);
+      nextStart = clamp(nextStart, 0, nextEnd - MIN_CLIP_SECONDS);
+      setRange(nextStart, nextEnd);
+      previewBoundary('start', false);
+    } else if (drag.kind === 'end') {
+      nextEnd = drag.fromEnd + delta;
+      if (state.snap) nextEnd = Math.round(nextEnd);
+      nextEnd = clamp(nextEnd, nextStart + MIN_CLIP_SECONDS, state.duration);
+      setRange(nextStart, nextEnd);
+      previewBoundary('end', false);
+    } else {
+      nextStart = drag.fromStart + delta;
+      nextEnd = drag.fromEnd + delta;
+      if (state.snap) {
+        nextStart = Math.round(nextStart);
+        nextEnd = Math.round(nextEnd);
+      }
+      if (nextStart < 0) {
+        nextEnd -= nextStart;
+        nextStart = 0;
+      }
+      if (nextEnd > state.duration) {
+        nextStart -= nextEnd - state.duration;
+        nextEnd = state.duration;
+      }
+      nextStart = clamp(nextStart, 0, state.duration);
+      nextEnd = clamp(nextEnd, 0, state.duration);
+      setRange(nextStart, nextEnd);
+      previewBoundary('start', false);
+    }
+  }
+
+  function endDrag(event) {
+    if (!state.drag) return;
+    if (event && event.pointerId !== state.drag.pointerId) return;
+    var edge = state.drag.kind === 'end' ? 'end' : 'start';
+    state.drag = null;
+    els.selection.classList.remove('is-dragging');
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', endDrag);
+    window.removeEventListener('pointercancel', endDrag);
+    saveRange();
+    previewBoundary(edge, true);
+    updateTimeUi();
+  }
+
+  function nudgeHandle(kind, event) {
+    if (!state.duration) return;
+    var direction = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+    if (!direction) return;
+    event.preventDefault();
+    var step = state.snap ? 1 : (event.shiftKey ? 0.1 : 0.25);
+    if (kind === 'start') {
+      setRange(state.start + direction * step, state.end, { save: true, preview: true, edge: 'start' });
+    } else {
+      setRange(state.start, state.end + direction * step, { save: true, preview: true, edge: 'end' });
+    }
+    updateTimeUi();
+  }
+
+  function togglePlay() {
+    if (!state.duration) return;
+    if (els.video.paused) {
+      if (els.video.currentTime < state.start || els.video.currentTime >= state.end - 0.02) {
+        els.video.currentTime = state.start;
+      }
+      var promise = els.video.play();
+      if (promise && promise.catch) promise.catch(function () { updateTimeUi(); });
+    } else {
+      els.video.pause();
+    }
+  }
+
+  function getFileFromEvent(event) {
+    var files = event.dataTransfer && event.dataTransfer.files;
+    if (files && files.length) return files[0];
+    return null;
+  }
+
+  els.chooseBtn.addEventListener('click', function () { els.fileInput.click(); });
+  els.uploadBtn.addEventListener('click', function () { els.fileInput.click(); });
+  els.fileInput.addEventListener('change', function () {
+    var file = els.fileInput.files && els.fileInput.files[0];
+    els.fileInput.value = '';
+    if (file) handleFile(file);
+  });
+
+  ['dragenter', 'dragover'].forEach(function (name) {
+    els.stage.addEventListener(name, function (event) {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      els.stage.classList.add('is-drop');
+    });
+  });
+  ['dragleave', 'dragend'].forEach(function (name) {
+    els.stage.addEventListener(name, function (event) {
+      if (name === 'dragleave' && event.relatedTarget && els.stage.contains(event.relatedTarget)) return;
+      els.stage.classList.remove('is-drop');
+    });
+  });
+  els.stage.addEventListener('drop', function (event) {
+    event.preventDefault();
+    els.stage.classList.remove('is-drop');
+    var file = getFileFromEvent(event);
+    if (file) handleFile(file);
+  });
+
+  els.video.addEventListener('click', togglePlay);
+  els.playBtn.addEventListener('click', togglePlay);
+  els.video.addEventListener('timeupdate', function () {
+    if (!state.duration) return;
+    if (!els.video.paused && els.video.currentTime >= state.end - 0.02) {
+      try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
+    }
+    updateTimeUi();
+  });
+  els.video.addEventListener('play', updateTimeUi);
+  els.video.addEventListener('pause', updateTimeUi);
+  els.video.addEventListener('loadeddata', updateTimeUi);
+
+  els.selection.addEventListener('pointerdown', function (event) {
+    if (event.target.closest('.handle')) return;
+    beginDrag('move', event, 'start');
+  });
+  els.handleLeft.addEventListener('pointerdown', function (event) { beginDrag('start', event, 'start'); });
+  els.handleRight.addEventListener('pointerdown', function (event) { beginDrag('end', event, 'end'); });
+  els.handleLeft.addEventListener('keydown', function (event) { nudgeHandle('start', event); });
+  els.handleRight.addEventListener('keydown', function (event) { nudgeHandle('end', event); });
+  els.snapBtn.addEventListener('click', toggleSnap);
+
+  els.film.addEventListener('pointerdown', function (event) {
+    if (!state.duration) return;
+    if (event.target.closest('.selection')) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    var at = currentTimeAt(event.clientX);
+    try { els.video.pause(); } catch (error) { /* ignore */ }
+    els.video.currentTime = clamp(at, state.start, state.end);
+    updateTimeUi();
+  });
+
+  window.addEventListener('resize', updateSelectionUi);
+  window.addEventListener('keydown', function (event) {
+    if (event.code !== 'Space') return;
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!state.duration) return;
+    event.preventDefault();
+    togglePlay();
+  });
+  window.addEventListener('beforeunload', function () {
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+  });
+
+  syncSnapUi();
+  updateSelectionUi();
+  updateTimeUi();
+  restoreSavedVideo();
+})();
+</script>
+</body>
+</html>
+
