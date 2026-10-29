@@ -350,13 +350,16 @@ function isSentinelInView(): boolean {
 
 /** 列表没填满视口时继续拉下一页（幂等 + 节流，可放心在每次布局变化后调用） */
 function fillViewportIfNeeded(): void {
-  if (!s.historyOpen || !canLoadMore.value) return
+  if (!s.historyOpen) return
   /**
    * 先对账再拉页（2026-10-30 实测：renderedCount=26、DOM=11，计数说"画完了"，
    * 漏掉的卡永远没人补）。以 DOM 实际画过的 id 为准：数据里没画过的先补画，
    * 计数对齐 DOM —— 之后再走正常的"拉下一页"判断。
    */
+  // 注意：对账必须发生在 canLoadMore 判断之前 —— 计数虚高时 canLoadMore 恒 false，
+  // 永远走不到补画分支（上一版就是被它挡住的）。
   syncRenderedCountWithWall()
+  if (!canLoadMore.value) return
   if (isSentinelInView()) maybeLoadMorePage()
 }
 
@@ -381,6 +384,16 @@ const canLoadMore = computed(() => {
    * 数据里还有没画过的条目就继续，别让计数说谎把哨兵摘了。
    */
   const items = ui.histVisible.value
+  /**
+   * 以 DOM 实际画过的 id 数为准（renderedCount 可能虚高 —— 缓存墙挂回、异常回落、
+   * 去重过滤都会让计数与墙脱节）：数据里还有没画过的条目就继续。
+   */
+  if (masonryEl.value) {
+    const drawnIds = new Set(
+      [...masonryEl.value.querySelectorAll('[data-hist-id]')].map((el) => (el as HTMLElement).dataset.histId),
+    )
+    if (items.some((e) => e.id && !drawnIds.has(e.id))) return true
+  }
   if (renderedCount.value < items.length) return true
   return s.histHasMore
 })
