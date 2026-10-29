@@ -35,6 +35,15 @@ const props = withDefaults(
     hoverCloseDelay?: number
     menuWidth?: string
     menuMaxWidth?: string
+    /**
+     * 菜单贴着触发按钮那条边的小箭头（默认关）。
+     *
+     * 为什么默认关：这件是主题的基础件，被右键菜单 / 选择器 / 参数面板等一堆地方共用，
+     * 那些场景本来就不画箭头。要让菜单"指一下按钮"的下拉（如 toolbarDropdown）显式传 true。
+     * 与 AxDropdown 的默认值不同（那边默认 true），因为它只服务于"下拉按钮"这一种形态 ——
+     * 差异是刻意的：换实现时两边各自的既有观感不变。
+     */
+    arrow?: boolean
     /** 内容区扩展样式，替换默认内边距 */
     bodyClass?: string
     teleport?: boolean
@@ -62,6 +71,7 @@ const props = withDefaults(
     hoverCloseDelay: 150,
     menuWidth: '',
     menuMaxWidth: '',
+    arrow: false,
     bodyClass: '',
     teleport: true,
     menuMaxHeight: '',
@@ -116,6 +126,67 @@ const menuMaxHeightStyle = computed(() =>
     ? 'min(' + props.menuMaxHeight + ', calc(100vh - 16px))'
     : 'calc(100vh - 16px)',
 )
+
+// ---- 小箭头（贴菜单边、指向触发器）----
+// 位置跟着 pos 与触发器算，不另存一份状态：面板一重定位，箭头自动跟过去。
+const ARROW_HALF = 5
+const ARROW_PAD = 14
+
+/** 面板最终落在触发器的哪一侧（含翻转后的结果）——箭头要贴**朝触发器**的那条边 */
+const arrowSide = computed<'top' | 'bottom' | 'left' | 'right'>(() => {
+  const p = props.placement
+  const base = p.split('-')[0]
+  if (base === 'left' || base === 'right') return base
+  // bottom-* 正常在下方；若 pos.top 已跑到触发器上方（翻转），箭头就贴下缘
+  const trig = triggerRef.value
+  if (trig && pos.value.top < trig.getBoundingClientRect().top) return 'bottom'
+  return 'top'
+})
+
+const arrowStyle = computed<Record<string, string>>(() => {
+  const menu = menuRef.value
+  const trig = triggerRef.value
+  // 首帧（含 SSR）：还没有 DOM 尺寸，先给"贴菜单上缘居中"的兜底，
+  // 挂载后 computePosition 一跑就会重算成真实位置 —— 不加这个会先闪到屏幕外。
+  if (!menu || !trig) {
+    return { position: 'fixed', left: 'calc(50% - 5px)', top: '-5px', width: '10px', height: '10px', display: 'none' }
+  }
+  const tr = trig.getBoundingClientRect()
+  const side = arrowSide.value
+  // 箭头尖要指着触发器：横向对齐取触发器中心，再夹在菜单两端（避免压到圆角）
+  const vertical = side === 'top' || side === 'bottom'
+  const center = vertical ? tr.left + tr.width / 2 : tr.top + tr.height / 2
+  const menuStart = vertical ? pos.value.left : pos.value.top
+  const menuSize = vertical ? menu.offsetWidth : menu.offsetHeight
+  const raw = center - menuStart
+  const lo = ARROW_PAD
+  const hi = Math.max(lo, menuSize - ARROW_PAD)
+  const offset = Math.min(Math.max(raw, lo), hi)
+
+  const style: Record<string, string> = {
+    position: 'fixed',
+    width: '10px',
+    height: '10px',
+    background: 'var(--dd-bg, #fff)',
+    transform: 'rotate(45deg)',
+  }
+  if (vertical) {
+    style.left = pos.value.left + offset - ARROW_HALF + 'px'
+    style.top = (side === 'top' ? pos.value.top : pos.value.top + menu.offsetHeight) - ARROW_HALF + 'px'
+  } else {
+    style.top = pos.value.top + offset - ARROW_HALF + 'px'
+    style.left = (side === 'left' ? pos.value.left : pos.value.left + menu.offsetWidth) - ARROW_HALF + 'px'
+  }
+  // 只画露在外面的两条边（另外两条在菜单内部，画了会有一条线横穿面板）
+  const edges: Record<string, [string, string]> = {
+    top: ['bottom', 'right'],
+    bottom: ['top', 'left'],
+    left: ['top', 'right'],
+    right: ['bottom', 'left'],
+  }
+  for (const e of edges[side]) style['border' + e[0].toUpperCase() + e.slice(1)] = '1px solid var(--dd-line, rgba(0,0,0,.08))'
+  return style
+})
 function computePosition(): void {
   const trig = triggerRef.value
   const menu = menuRef.value
@@ -299,6 +370,9 @@ watch(isOpen, (v) => {
       >
         <slot :close="close" />
       </div>
+      <!-- 箭头放面板**外面**（兄弟节点）：留在里面会被算进可滚区域，inner-scroll 就破了 -->
+      <!-- v-if 只看 arrow + isOpen：位置由 arrowStyle 在挂载后算出（SSR 拿不到 DOM，样式为空但节点在） -->
+      <span v-if="isOpen && arrow" :style="arrowStyle" class="dd-arrow" aria-hidden="true" />
     </Teleport>
   </div>
 </template>
@@ -381,6 +455,12 @@ watch(isOpen, (v) => {
 }
 .dd-menu--inner-scroll > * {
   min-height: 0;
+}
+
+/* 小箭头：与浮层同层，压在浮层之上（DOM 在后）；层级只走 token */
+.dd-arrow {
+  z-index: var(--layer-modal, 100000);
+  pointer-events: none;
 }
 
 </style>

@@ -64,6 +64,23 @@ const alignItems: ToolbarMenuNode[] = [
   { key: 'end', label: '底部右对齐' },
 ]
 
+/**
+ * 箭头演示：菜单上那条指向按钮的小尖角（toolbarDropdown 的 arrow 属性）。
+ * 默认开；关掉后菜单只剩圆角卡片。
+ */
+const arrowOn = ref(true)
+const arrowItems: ToolbarMenuNode[] = [
+  { key: 'arrow-on', label: '显示箭头（默认）' },
+  { key: 'arrow-off', label: '隐藏箭头' },
+]
+
+function pickArrow(key: string): void {
+  if (key === 'arrow-on' || key === 'arrow-off') {
+    arrowOn.value = key === 'arrow-on'
+    notify('演示：箭头已' + (arrowOn.value ? '显示' : '隐藏'))
+  }
+}
+
 function pickAlign(key: string): void {
   if (key === 'center' || key === 'start' || key === 'end') {
     align.value = key
@@ -128,6 +145,16 @@ function pickFeature(label: string): void {
     :items="alignItems"
     :align="align"
     @pick="pickAlign"
+  />
+
+  <!-- 箭头演示：同一件 toolbarDropdown，只改 arrow -->
+  <component
+    v-if="!kind && DropdownButton"
+    :is="DropdownButton"
+    :title="'箭头：' + (arrowOn ? '开' : '关')"
+    :items="arrowItems"
+    :arrow="arrowOn"
+    @pick="pickArrow"
   />
 
   <!-- 功能模式：同一根顶栏，内容换成该功能自己的按钮 -->

@@ -42,6 +42,13 @@ const props = withDefaults(
     active?: boolean
     disabled?: boolean
     menuWidth?: string
+    /**
+     * 菜单上方那条小箭头（指向触发按钮）。默认开。
+     *
+     * 用户口径 2026-10-29：「支持显示隐藏 dropdown 的箭头」—— 想在菜单里再套一层自绘面板、
+     * 或者菜单本来就贴着按钮（不需要指路）时，把它关掉更干净。
+     */
+    arrow?: boolean
     /** 菜单方向 + 对齐：bottom / bottom-start / bottom-end / top-…（start=左缘对齐，缺省居中） */
     placement?: string
     /**
@@ -59,6 +66,7 @@ const props = withDefaults(
     active: undefined,
     disabled: false,
     menuWidth: '220px',
+    arrow: true,
     // 默认居中：与这件组件改造前的实际观感一致。
     // （改造前写的是 bottom-start，但两份 dropdown 实现都只认 align，后缀被丢弃 → 实际一直居中。
     //   现在后缀真正生效了，默认值必须写成 bottom，否则默认观感会从居中悄悄变成左对齐。）
@@ -207,7 +215,7 @@ void (Button as Component | undefined)
     未声明的 prop 会被 Vue 当作 attr 落到根元素上，所以两份实现都能各取所需、不会互相打架。
   -->
   <component :is="Dropdown || 'div'" v-model="open" :placement="resolvedPlacement" :align="effectiveAlign" :offset="6"
-    :menu-width="menuWidth" :teleport="true">
+    :menu-width="menuWidth" :teleport="true" :arrow="arrow">
     <template #trigger>
       <span ref="triggerRef" class="tdb-trigger">
         <component :is="Button || 'button'" :title="title" :aria-label="ariaLabel || title"

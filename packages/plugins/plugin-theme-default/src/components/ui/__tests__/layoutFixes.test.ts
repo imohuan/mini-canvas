@@ -98,4 +98,21 @@ describe('Dropdown：滚动布局', () => {
     expect(html).not.toContain('dd-menu--modal')
     expect(html).toContain('dd-trigger')
   })
+
+  /**
+   * 箭头开关（用户口径 2026-10-29：「支持显示隐藏 dropdown 的箭头」）。
+   *
+   * 主题这件是**基础件**，被右键菜单 / 选择器 / 参数面板共用 —— 默认必须还是"没有箭头"
+   * （那些场景本来就不画），只有显式传 arrow 才加，不能因为新增开关改变既有观感。
+   * 箭头本体是 Teleport 到 body 的独立节点，SSR 里靠类名判断。
+   */
+  it('默认不带箭头（既有调用方观感不变）', async () => {
+    const html = await renderDropdown({})
+    expect(html).not.toContain('dd-arrow')
+  })
+
+  it('传 arrow=true 才渲染箭头', async () => {
+    const html = await renderDropdown({ arrow: true })
+    expect(html).toContain('dd-arrow')
+  })
 })

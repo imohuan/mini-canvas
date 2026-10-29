@@ -147,6 +147,44 @@ check('align=start：菜单左缘贴按钮左缘（偏差 ≤ 2px）', !!alignSt
 const alignEnd = await measureAlign('底部右对齐')
 check('align=end：菜单右缘贴按钮右缘（偏差 ≤ 2px）', !!alignEnd && Math.abs(alignEnd.right) <= 2, JSON.stringify(alignEnd))
 
+// ===== 箭头开关（toolbarDropdown 的 arrow）=====
+// 用户口径 2026-10-29：「支持显示隐藏 dropdown 的箭头」。
+// 量的是箭头**是否露出菜单上缘之外**（只看节点在不在，会把"藏在面板里"也算通过）。
+async function probeArrow() {
+  return page.evaluate(() => {
+    const arrow = document.querySelector('[data-toolbar-dropdown-menu="1"]')?.closest('.dd-menu')?.parentElement
+      ?.querySelector('.axd-arrow, .dd-arrow')
+      ?? document.querySelector('.axd-arrow, .dd-arrow')
+    const menuEl = document.querySelector('[data-toolbar-dropdown-menu="1"]')?.closest('.dd-menu')
+    if (!arrow || !menuEl) return { hasArrow: !!arrow, above: false }
+    const a = arrow.getBoundingClientRect()
+    const m = menuEl.getBoundingClientRect()
+    return { hasArrow: true, above: a.top < m.top + 2 }
+  })
+}
+
+async function toggleArrow(rowLabel) {
+  await reselect()
+  const btn = page.locator('.tdb-trigger').filter({ hasText: '箭头：' }).first()
+  await btn.click()
+  await page.waitForTimeout(350)
+  await page.getByRole('menuitem', { name: rowLabel }).first().click()
+  await page.waitForTimeout(400)
+  const next = page.locator('.tdb-trigger').filter({ hasText: '箭头：' }).first()
+  await next.click()
+  await page.waitForTimeout(450)
+  const r = await probeArrow()
+  await next.click()
+  await page.waitForTimeout(250)
+  return r
+}
+
+const arrowDefault = await toggleArrow('显示箭头（默认）')
+check('arrow 默认显示：箭头露出菜单上缘之外', !!arrowDefault && arrowDefault.hasArrow && arrowDefault.above, JSON.stringify(arrowDefault))
+
+const arrowHidden = await toggleArrow('隐藏箭头')
+check('arrow=false：箭头不渲染（菜单本身还在）', !!arrowHidden && arrowHidden.hasArrow === false, JSON.stringify(arrowHidden))
+
 // 进入功能模式
 await page.locator('.tdb-trigger').filter({ hasText: '功能演示' }).first().click()
 await page.waitForTimeout(400)
