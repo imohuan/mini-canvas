@@ -407,9 +407,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, 'fillViewportIfNeeded 没有先对账').toMatch(
       /function fillViewportIfNeeded[\s\S]{0,400}syncRenderedCountWithWall\(\)/,
     )
-    expect(modalsArea, '漏画兜底没有按墙上 id 过滤').toMatch(
-      /const missing = ui\.histVisible\.value\.filter\(\(e\) => !\(e\.id && drawn\.has\(e\.id\)\)\)/,
-    )
+    expect(modalsArea, '漏画兜底没有按墙上 id 过滤').toMatch(/const missing = ui\.histVisible\.value\.filter\(/)
   })
 
   it('切页签后不会被旧的补页请求挤掉第 1 页（点音频却还是图片）', () => {
@@ -640,6 +638,47 @@ describe('生成历史卡片预览带同页签清单', () => {
     expect(fnBody, '清单地址没有统一走 previewableUrl（会和单张预览两条规则）').toMatch(
       /list: rows\.map\(\(e\) => previewableUrl\(e\) as string\)/,
     )
+  })
+})
+
+/**
+ * 补画不能把**被有意摘掉的卡**当成漏画（2026-10-30 用户实测：视频/音频页签持续闪烁、
+ * 一直加载，最后把电脑拖到崩）。
+ *
+ * 链条：坏资源卡加载失败 → showBrokenResourceCard 在「显示异常」关着时把整格从 DOM 摘掉
+ * （设计如此，避免留白格）→ 补漏逻辑发现"数据里有、DOM 里没有"→ 再画一张 → 再失败 →
+ * 再摘 …… 每 800ms 的 watchdog 还会再推一把，浏览器被无限重建媒体元素拖死。
+ *
+ * 契约：漏画判定必须**排除已经被摘掉的条目**（记在被摘集合里，永不再补）。
+ */
+describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重建）', () => {
+  it('漏画判定排除已摘掉的 id', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('if (!s.histHasMore) {'),
+      modalsArea.indexOf('const elapsed = Date.now() - lastLoadMoreAt'),
+    )
+    expect(fn, '找不到补漏分支').not.toBe('')
+    // 要么按"未摘除"集合过滤，要么根本不按数据- DOM 差集补画
+    const guarded = /droppedHistoryIds|skippedHistoryIds/.test(fn)
+    expect(guarded, '补漏没有排除已摘掉的卡 → 补画/摘卡会无限循环').toBe(true)
+  })
+
+  it('canLoadMore 也不再拿"数据里有、DOM 里没有"当还能加载的唯一依据', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('const canLoadMore = computed'),
+      modalsArea.indexOf('function readLoadState'),
+    )
+    expect(fn, 'canLoadMore 里没有排除已摘掉的卡（watchdog 会每 800ms 推一次重建）').toMatch(
+      /droppedHistoryIds|skippedHistoryIds/,
+    )
+  })
+
+  it('坏资源被摘掉时登记到已摘集合，且不再往回补', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function showBrokenResourceCard'),
+      modalsArea.indexOf(' * 点卡片：'),
+    )
+    expect(fn, '摘卡时没有登记 id（下一次补漏又会把它画回来）').toMatch(/droppedHistoryIds\.add/)
   })
 })
 

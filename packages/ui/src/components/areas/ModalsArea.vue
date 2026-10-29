@@ -155,6 +155,15 @@ const renderedCount = ref(BATCH_SIZE)
 const masonryEl = ref<HTMLElement | null>(null)
 /** 下一页加载哨兵（用户口径 2026-10-15：禁止滚动触发 —— 哨兵进可视区才拉下一页） */
 const loadSentinelEl = ref<HTMLElement | null>(null)
+/**
+ * 已被**有意摘掉**的历史条目（坏资源、且「显示异常」开关关着时整格移除）。
+ *
+ * 为什么必须记：这些条目在数据里仍然存在，但 DOM 里本来就不该有卡。补漏逻辑如果只看
+ * 「数据里有、DOM 里没有」，就会把摘掉的卡再画回来 —— 再加载失败、再摘，形成无限循环
+ * （2026-10-30 用户实测：视频/音频页签持续闪烁、一直加载，电脑被拖崩）。
+ * 记进来之后，补画与 canLoadMore 都跳过它们，并且**永不重画**（除非换筛选/重开面板）。
+ */
+const droppedHistoryIds = new Set<string>()
 let sentinelObserver: IntersectionObserver | null = null
 let lastBatchTime = 0
 let lastItemVisible = false
@@ -301,7 +310,10 @@ function maybeLoadMorePage(): void {
         (el) => (el as HTMLElement).dataset.histId,
       ),
     )
-    const missing = ui.histVisible.value.filter((e) => !(e.id && drawn.has(e.id)))
+    // 排除被有意摘掉的卡（坏资源、显示异常关着时移除）——否则补画/摘卡会互相触发成死循环
+    const missing = ui.histVisible.value.filter(
+      (e) => !(e.id && drawn.has(e.id)) && !(e.id && droppedHistoryIds.has(e.id)),
+    )
     if (missing.length > 0) {
       const from = ui.histVisible.value.findIndex((e) => e === missing[0])
       const to = from + missing.length
@@ -392,7 +404,8 @@ const canLoadMore = computed(() => {
     const drawnIds = new Set(
       [...masonryEl.value.querySelectorAll('[data-hist-id]')].map((el) => (el as HTMLElement).dataset.histId),
     )
-    if (items.some((e) => e.id && !drawnIds.has(e.id))) return true
+    // 已摘掉的坏资源卡不算"还没画"（否则 watchdog 每 800ms 都会推一次重建）
+    if (items.some((e) => e.id && !drawnIds.has(e.id) && !droppedHistoryIds.has(e.id))) return true
   }
   if (renderedCount.value < items.length) return true
   return s.histHasMore
@@ -598,6 +611,8 @@ function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): H
  */
 function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
   if (!s.histShowError) {
+    // 登记成"已摘":补漏逻辑据此不再把它画回来（防 补画→失败→摘 的无限循环）
+    if (item.id) droppedHistoryIds.add(item.id)
     // 连外层瀑布流格子一起摘掉：只删内层卡会留下一个空白的列位（视觉上空一格）
     const slot = card.closest('.hist-masonry-item') ?? card
     /**
