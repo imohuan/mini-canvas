@@ -13,7 +13,7 @@ import { closeDemoMode, demoMode } from './demoMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const ThemedButton = useUiComponent('button')
+const ThemedButton = useUiComponent('toolbarButton')
 
 const LABEL = { alpha: '演示功能 A', beta: '演示功能 B' } as const
 

@@ -23,7 +23,7 @@ import GalleryCanvasStage from './GalleryCanvasStage.vue'
 const open = ref(false)
 
 // —— 设计系统件：全部按名取（这就是"全局可用"的实证）——
-const NodeToolbarButton = useUiComponent('button')
+const NodeToolbarButton = useUiComponent('toolbarButton')
 const Dropdown = useUiComponent('dropdown')
 const Tooltip = useUiComponent('tooltip')
 const Select = useUiComponent('select')

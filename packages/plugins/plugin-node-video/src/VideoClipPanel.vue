@@ -32,7 +32,7 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
-const NodeToolbarButton = useUiComponent('button')
+const NodeToolbarButton = useUiComponent('toolbarButton')
 const selected = useSoleNodeSelected(props.id)
 // 显隐门从「会话态」改成「选中即渲染」：底栏已经决定了它该不该出现（T9）
 const visible = computed(() => selected.value)

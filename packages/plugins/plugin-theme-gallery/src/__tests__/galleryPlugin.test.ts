@@ -88,7 +88,7 @@ describe('展厅里所有件都按名取（useUiComponent），没有写死 impo
 
   it('覆盖全部 12 个设计系统件名字', () => {
     for (const n of [
-      'button', 'dropdown', 'tooltip', 'select', 'slider', 'color',
+      'toolbarButton', 'dropdown', 'tooltip', 'select', 'slider', 'color',
       'toolParamField', 'toolParamGroup', 'toolParamGrid', 'toolParamRatio',
       'toolParamSlider', 'mediaViewer',
     ]) {

@@ -20,7 +20,7 @@ import type { SelectionCapability } from '@mini-canvas/canvas-render'
 import { useCapability } from '@mini-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
-const ThemedButton = useUiComponent('button')
+const ThemedButton = useUiComponent('toolbarButton')
 
 /** 当前选中集（能力包；needs 里声明了才拿得到 —— 见本文件挂载处） */
 const selection = useCapability<SelectionCapability>('selection')

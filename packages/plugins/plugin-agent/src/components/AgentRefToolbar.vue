@@ -25,7 +25,7 @@ import { ICON_NODE } from '../agentResources.js'
 
 const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。缺件回退原生按钮（降级成「还能点」）。
-const ThemedButton = useUiComponent('button')
+const ThemedButton = useUiComponent('toolbarButton')
 
 /** 当前选中集（能力包；needs:['selection'] 在 agentPlugin 的 attach 里声明） */
 const selection = useCapability<SelectionCapability>('selection')

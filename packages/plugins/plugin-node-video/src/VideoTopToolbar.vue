@@ -24,7 +24,7 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
-const NodeToolbarButton = useUiComponent('button')
+const NodeToolbarButton = useUiComponent('toolbarButton')
 const Select = useUiComponent('select')
 const selected = useSoleNodeSelected(props.id)
 

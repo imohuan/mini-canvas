@@ -71,7 +71,7 @@ const emit = defineEmits<{
   (e: 'pick', key: string, path: string[]): void
 }>()
 
-const Button = useUiComponent('button')
+const Button = useUiComponent('toolbarButton')
 const Dropdown = useUiComponent('dropdown')
 
 const open = ref(false)

@@ -49,6 +49,26 @@ describe('NodeToolbarButton：无障碍与图标形态', () => {
     expect(html).not.toContain('ntb-icon')
     expect(html).toContain('发送')
   })
+
+  /**
+   * 两种展示形态（用户口径 2026-10-29）：「他支持只提供一个图标，或者图标 + 文字的显示」。
+   * 形态由**有没有默认插槽**决定，不额外要一个 mode 参数 ——
+   * 少一个参数就少一处「参数和内容对不上」的可能。
+   */
+  it('只给图标 → 纯图标按钮（加 is-icon-only，不带文案区）', async () => {
+    const html = await render({ title: '收藏', icon: UPLOAD_ICON })
+    expect(html).toContain('is-icon-only')
+    expect(html).toContain('ntb-icon')
+    expect(html).not.toContain('ntb-label')
+  })
+
+  it('图标 + 文字 → 两者都渲染（文案区出现，不再走纯图标档）', async () => {
+    const html = await render({ title: '收藏', icon: UPLOAD_ICON }, { default: () => '收藏' })
+    expect(html).not.toContain('is-icon-only')
+    expect(html).toContain('ntb-icon')
+    expect(html).toContain('ntb-label')
+    expect(html).toContain('收藏')
+  })
 })
 
 describe('NodeToolbarButton：状态', () => {

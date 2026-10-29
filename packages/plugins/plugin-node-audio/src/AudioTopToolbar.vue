@@ -24,7 +24,7 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改，按钮整体换成新主题的。
 // 缺目录（宿主没装登记 ui 的主题）时 undefined + warn（见 useUiComponent）。
-const NodeToolbarButton = useUiComponent('button')
+const NodeToolbarButton = useUiComponent('toolbarButton')
 // 显隐归本段自己判断（"恰好选中一个且是我"）：壳负责位置，插件负责"我该不该出现"。
 const selected = useSoleNodeSelected(props.id)
 

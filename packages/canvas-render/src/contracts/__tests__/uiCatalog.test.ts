@@ -14,13 +14,13 @@ import type { PluginManager } from '../../host/pluginManager'
  * 主题把设计系统件登记进 registryOf('ui')，业务插件按名取 —— 换主题零改动。
  */
 describe('ui 组件目录（按名取设计系统件）', () => {
-  it('主题登记后，消费方按名取到组件（uiComponent）', async () => {
+  it('主题登记后，消费方按名取到组件（uiComponent；推荐名 toolbarButton）', async () => {
     const ctx = new Context()
     const ThemeButton = { name: 'ThemeButton' };
-    ctx.registryOf<unknown>('ui').add('button', ThemeButton, { id: 'default' });
+    ctx.registryOf<unknown>('ui').add('toolbarButton', ThemeButton, { id: 'default' });
     await ctx.start();
-    expect(uiComponent(ctx, 'button')).toBe(ThemeButton);
-    expect(uiNames(ctx)).toContain('button');
+    expect(uiComponent(ctx, 'toolbarButton')).toBe(ThemeButton);
+    expect(uiNames(ctx)).toContain('toolbarButton');
     ctx.stop();
   })
 

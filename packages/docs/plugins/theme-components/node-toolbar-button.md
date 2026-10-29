@@ -59,7 +59,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 import { ref } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
-const NodeToolbarButton = useUiComponent('button')
+const NodeToolbarButton = useUiComponent('toolbarButton')
 
 const starred = ref(false)
 // 图标句柄：SVG 字符串（也可以是 Vue 组件）

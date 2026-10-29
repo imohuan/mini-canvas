@@ -88,7 +88,7 @@
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
 // ① 按名取，拿到的是 Ref；模板里直接写 <NodeToolbarButton ... /> 即可（Vue 自动解包）
-const NodeToolbarButton = useUiComponent('button')
+const NodeToolbarButton = useUiComponent('toolbarButton')
 
 function refresh() { /* ... */ }
 </script>

@@ -22,7 +22,7 @@ import { useCapability, useCanvasRender } from '@mini-canvas/canvas-render'
 import { queueUploadsFromNodeIds } from '../composables/assetUploadBus'
 
 const { ctx } = useCanvasRender()
-const ThemedButton = useUiComponent('button')
+const ThemedButton = useUiComponent('toolbarButton')
 
 /** 当前选中集（能力包；needs 里声明了才拿得到 —— 见 uiAssetUploadPlugin 的 attach） */
 const selection = useCapability<SelectionCapability>('selection')

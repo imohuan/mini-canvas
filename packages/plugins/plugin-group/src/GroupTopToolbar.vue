@@ -27,7 +27,7 @@ const { ctx } = useCanvasRender()
  */
 const visible = useSoleNodeSelected(props.id)
 /** 设计系统件按名取（§4.5 目录）：换主题时这里一行不改 */
-const ThemedButton = useUiComponent('button')
+const ThemedButton = useUiComponent('toolbarButton')
 const ThemedDropdown = useUiComponent('dropdown')
 
 /** 解组图标（与 GroupContent 里那枚同源写法：内联 SVG 字符串） */
