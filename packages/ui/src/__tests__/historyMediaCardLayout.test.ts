@@ -680,5 +680,26 @@ describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重�
     )
     expect(fn, '摘卡时没有登记 id（下一次补漏又会把它画回来）').toMatch(/droppedHistoryIds\.add/)
   })
+
+  it('换筛选 / 打开显示异常时清空已摘集合（否则这些卡永远回不来）', () => {
+    const filterWatch = modalsArea.slice(
+      modalsArea.indexOf('watch(() => [s.histScope'),
+      modalsArea.indexOf('watch(() => s.histDataVersion'),
+    )
+    expect(filterWatch, '换筛选没有清已摘集合 → 切到别的页签也画不出这条').toMatch(/droppedHistoryIds\.clear\(\)/)
+    const errorWatch = modalsArea.slice(
+      modalsArea.indexOf('watch(() => s.histShowError'),
+      modalsArea.indexOf('onBeforeUnmount'),
+    )
+    expect(errorWatch, '打开显示异常没有清已摘集合 → 中性异常卡回不来').toMatch(/droppedHistoryIds\.clear\(\)/)
+  })
+
+  it('诊断快照里能看到已摘数量（排障时不再被误判成漏画）', () => {
+    const fn = modalsArea.slice(
+      modalsArea.indexOf('function readLoadState'),
+      modalsArea.indexOf('function setupLoadSentinel'),
+    )
+    expect(fn, 'readLoadState 没有 dropped 字段').toMatch(/dropped: droppedHistoryIds\.size/)
+  })
 })
 

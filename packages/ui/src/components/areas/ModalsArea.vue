@@ -426,6 +426,8 @@ function readLoadState(): Record<string, unknown> {
   return {
     rendered: renderedCount.value,
     visible: ui.histVisible.value.length,
+    // 已摘掉的（坏资源、显示异常关着）不算漏画：补漏与 canLoadMore 都跳过它们
+    dropped: droppedHistoryIds.size,
     type: s.histType,
     first: ui.histVisible.value[0]?.kind ?? null,
     hasMore: s.histHasMore,
@@ -1382,6 +1384,11 @@ watch(() => [s.histScope, s.histType, s.histRating, s.histSortDesc] as const, ()
   if (!s.historyOpen) return
   filterSwitching = true
   /**
+   * 换筛选 = 换一整套数据：已摘集合必须清空。
+   * 不清的话，同一条记录在别的页签里就永远不画了（摘除是"这一轮墙里别画"，不是永久拉黑）。
+   */
+  droppedHistoryIds.clear()
+  /**
    * 切筛选：**不销毁当前墙**，交给数据 watch 调 switchWall()。
    * 旧实现先 destroy + 清空容器，等于抖一下白屏；视频黑屏、音频重画都从这里来。
    * 目标页签有缓存墙时，switchWall 会在一帧内把完整墙面挂回去。
@@ -1524,6 +1531,8 @@ watch(masonryEl, (el) => {
 // 显示异常开关：切换会过滤/恢复无产物的卡 → 整墙重建（含批量勾选层）
 watch(() => s.histShowError, () => {
   if (s.historyOpen) {
+    // 打开"显示异常"要把之前摘掉的条目重新认作可画：它们这时会画成中性异常卡，不该再被跳过
+    droppedHistoryIds.clear()
     renderedCount.value = Math.min(BATCH_SIZE, ui.histVisible.value.length)
     nextTick(() => {
       rebuildMasonry()
