@@ -215,13 +215,18 @@ const state = {
   scheme: 'soft',
   menu: 'model',
   covers: true,
-  modelId: 'deepseek-auto',
   auth: 'ask',
   skillFilter: '',
   skillCat: '全部',
+  skillSelected: [],
+  modelFilter: '',
+  modelPlatform: 'all',
+  modelSelected: [],
+  mcpFilter: '',
   mcpOpen: 'smart',
+  mcpServerPicked: [],
   mcpPicked: [],
-  skillPicked: null,
+  mcpDetecting: false,
   reviewStyle: 'compact',
   refs: [],
 }
@@ -249,8 +254,49 @@ function head(title, count, sub) {
     (sub || '') + '</div></div>'
 }
 
-function searchBox(placeholder, value = '') {
-  return '<div class="m-search">' + icon('search') + '<input type="search" data-skill-search placeholder="' + esc(placeholder) + '" aria-label="' + esc(placeholder) + '" value="' + esc(value) + '"></div>'
+function searchBox(kind, placeholder, value = '') {
+  return '<div class="m-search">' + icon('search') + '<input type="search" data-menu-search="' + esc(kind) + '" placeholder="' + esc(placeholder) + '" aria-label="' + esc(placeholder) + '" value="' + esc(value) + '"></div>'
+}
+
+function filteredModels() {
+  const q = state.modelFilter.trim().toLowerCase()
+  return MODELS.filter((m) => {
+    if (state.modelPlatform !== 'all' && m.platform !== state.modelPlatform) return false
+    if (!q) return true
+    const brand = BRANDS[m.platform] ? BRANDS[m.platform].name : ''
+    return (m.id + ' ' + m.provider + ' ' + m.note + ' ' + brand).toLowerCase().includes(q)
+  })
+}
+
+/** 搜索同时覆盖服务名、说明与工具名；命中工具时只保留命中的工具。 */
+function filteredMcp() {
+  const q = state.mcpFilter.trim().toLowerCase()
+  return MCP.map((s) => {
+    const serverHit = (s.name + ' ' + s.desc + ' ' + s.transport).toLowerCase().includes(q)
+    const tools = q && !serverHit ? s.tools.filter((t) => (t.name + ' ' + t.desc).toLowerCase().includes(q)) : s.tools
+    return !q || serverHit || tools.length ? { ...s, tools } : null
+  }).filter(Boolean)
+}
+
+function quoteCount(kind) {
+  if (kind === 'skill') return state.skillSelected.length
+  if (kind === 'model') return state.modelSelected.length
+  if (kind === 'mcp') return state.mcpServerPicked.length + state.mcpPicked.length
+  return 0
+}
+
+function quoteBar(kind) {
+  const n = quoteCount(kind)
+  const detail = kind === 'mcp'
+    ? '<b>' + state.mcpServerPicked.length + '</b> 个服务 · <b>' + state.mcpPicked.length + '</b> 个工具'
+    : '<b>' + n + '</b> 项'
+  return '<div class="m-actions"><span class="m-actions-count">已选 ' + detail + '</span>' +
+    '<button type="button" class="m-confirm" data-confirm-quote="' + kind + '"' + (n ? '' : ' disabled') + '>' + icon('check') + '确认引用' + (n ? ' ' + n : '') + '</button></div>'
+}
+
+function mcpDetectButton() {
+  return '<button type="button" class="m-btn" data-mcp-redetect' + (state.mcpDetecting ? ' disabled' : '') + ' title="重新检测全部 MCP 服务">' +
+    (state.mcpDetecting ? '<span class="m-spin"></span>检测中…' : icon('refresh') + '重新检测') + '</button>'
 }
 
 function reviewBody() {
@@ -293,7 +339,7 @@ function reviewBody() {
 }
 
 function skillRow(skill, variant) {
-  const picked = state.skillPicked === skill.id
+  const picked = state.skillSelected.includes(skill.id)
   if (variant === 'v2card') {
     return '<button type="button" class="v2-card" data-skill="' + skill.id + '" aria-selected="' + picked + '">' + skillThumb(skill, state.covers) +
       '<span class="v2-card-body"><span class="v2-card-name"><span>' + esc(skill.name) + '</span>' + (picked ? '<span class="check" style="width:14px;height:14px">' + icon('check') + '</span>' : '') + '</span>' +
@@ -316,18 +362,18 @@ function skillBody() {
   const list = filteredSkills()
   const cats = ['全部', '教育培训', '商业广告', '专业影视', '动漫游戏', '短视频', '音乐 MV', '短剧漫剧']
   if (state.scheme === 'split') {
-    return head('技能', SKILLS.length, '<span class="m-sub">点一项插入输入框</span>') +
-      '<div class="v2-body"><div class="v2-rail">' + cats.map((c) => {
+    return head('技能', SKILLS.length, '<span class="m-sub">可多选</span>') +
+      '<div class="m-head" style="padding-top:0">' + searchBox('skill', '搜索技能', state.skillFilter) + '</div>' +
+      '<div class="v2-body"><div class="v2-rail"><div class="m-scroll">' + cats.map((c) => {
         const n = c === '全部' ? SKILLS.length : SKILLS.filter((s) => s.cat === c).length
         if (!n) return ''
         return '<button type="button" class="v2-rail-item' + (state.skillCat === c ? ' active' : '') + '" data-cat="' + esc(c) + '">' + icon(c === '全部' ? 'layers' : 'folder') + '<span>' + esc(c) + '</span><b>' + n + '</b></button>'
-      }).join('') + '</div>' +
-      '<div class="v2-main">' + head('技能库', null, searchBox('搜索技能', state.skillFilter)) +
-      '<div class="m-scroll">' + (list.length ? '<div class="v2-cards">' + list.map((s) => skillRow(s, 'v2card')).join('') + '</div>' : '<div class="m-empty">没有找到匹配的技能</div>') + '</div></div></div>'
+      }).join('') + '</div></div>' +
+      '<div class="v2-main"><div class="m-scroll">' + (list.length ? '<div class="v2-cards">' + list.map((s) => skillRow(s, 'v2card')).join('') + '</div>' : '<div class="m-empty">没有找到匹配的技能</div>') + '</div></div></div>' + quoteBar('skill')
   }
   if (state.scheme === 'index') {
-    return head('技能', SKILLS.length, '<span class="m-sub">插入输入框</span>') +
-      '<div class="m-head" style="padding-top:0">' + searchBox('搜索技能', state.skillFilter) + '</div>' +
+    return head('技能', SKILLS.length, '<span class="m-sub">可多选</span>') +
+      '<div class="m-head" style="padding-top:0">' + searchBox('skill', '搜索技能', state.skillFilter) + '</div>' +
       '<div class="v3-strip-wrap"><div class="v3-strip">' + cats.map((c) => {
         const n = c === '全部' ? SKILLS.length : SKILLS.filter((s) => s.cat === c).length
         if (!n) return ''
@@ -335,11 +381,11 @@ function skillBody() {
       }).join('') + '</div></div>' +
       '<div class="m-scroll"><div class="v3-group-title"><span>' + esc(state.skillCat === '全部' ? '全部技能' : state.skillCat) + '</span><small>' + list.length + ' 个</small></div>' +
       (list.length ? list.map((s) => skillRow(s, 'v3card')).join('') : '<div class="m-empty">没有找到匹配的技能</div>') +
-      (list.length < 3 ? '<div class="v3-empty-fill"><b>搜索小提示</b><br>没写说明的技能也会按名字被搜到；清空搜索即可回来。</div>' : '') + '</div>'
+      (list.length < 3 ? '<div class="v3-empty-fill"><b>搜索小提示</b><br>没写说明的技能也会按名字被搜到；清空搜索即可回来。</div>' : '') + '</div>' + quoteBar('skill')
   }
-  return head('技能', SKILLS.length, '<span class="m-sub">点一项插入</span>') +
-    '<div class="m-head" style="padding-top:0">' + searchBox('搜索技能', state.skillFilter) + '</div>' +
-    '<div class="m-scroll">' + (list.length ? list.map((s) => skillRow(s, 'v1')).join('') : '<div class="m-empty">没有找到匹配的技能</div>') + '</div>'
+  return head('技能', SKILLS.length, '<span class="m-sub">可多选</span>') +
+    '<div class="m-head" style="padding-top:0">' + searchBox('skill', '搜索技能', state.skillFilter) + '</div>' +
+    '<div class="m-scroll">' + (list.length ? list.map((s) => skillRow(s, 'v1')).join('') : '<div class="m-empty">没有找到匹配的技能</div>') + '</div>' + quoteBar('skill')
 }
 
 function mcpToolRow(server, tool, variant) {
@@ -353,46 +399,59 @@ function mcpToolRow(server, tool, variant) {
 
 function mcpServerRow(server, expanded, variant) {
   const status = server.ok ? '<span class="v3-mcp-status"><i></i>' + (server.tools.length || '已连接') + '</span>' : '<span class="v3-mcp-status bad"><i></i>未连接</span>'
+  const quoted = state.mcpServerPicked.includes(server.name)
   if (variant === 'v2') {
-    return '<button type="button" class="v2-rail-item has-icon mcp-rail' + (expanded ? ' active' : '') + '" data-mcpserver="' + esc(server.name) + '"><span class="rail-icon">' + icon('plug') + '</span><span>' + esc(server.name) + '</span><b>' + (server.ok ? server.tools.length : '—') + '</b></button>'
+    return '<button type="button" class="v2-rail-item has-icon mcp-rail' + (expanded ? ' active' : '') + '" data-mcpserver="' + esc(server.name) + '"><span class="rail-icon">' + icon('plug') + '</span><span>' + esc(server.name) + '</span>' +
+      (quoted ? '<span class="rail-quoted" title="已选整个服务">' + icon('check') + '</span>' : '<b>' + (server.ok ? server.tools.length : '—') + '</b>') + '</button>'
   }
   if (variant === 'v3') {
-    return '<div class="v3-mcp' + (expanded ? ' expanded' : '') + '"><div class="v3-mcp-head"><span class="row-icon">' + icon('plug') + '</span>' +
+    return '<div class="v3-mcp' + (expanded ? ' expanded' : '') + (quoted ? ' quoted' : '') + '"><div class="v3-mcp-head"><span class="row-icon">' + icon('plug') + '</span>' +
       '<span class="v3-mcp-name"><strong>' + esc(server.name) + '</strong><span>' + esc(server.desc) + ' · ' + esc(server.transport) + '</span></span>' + status +
-      '<button type="button" class="m-btn" data-usepkg="' + esc(server.name) + '">引用</button>' +
+      '<button type="button" class="m-btn quote' + (quoted ? ' on' : '') + '" data-mcpserver-pick="' + esc(server.name) + '" aria-pressed="' + quoted + '" aria-label="引用整个 ' + esc(server.name) + ' 服务">' + icon('check') + '服务</button>' +
       (server.tools.length ? '<button type="button" class="m-btn" data-mcp-expand="' + esc(server.name) + '" aria-expanded="' + expanded + '" aria-label="展开工具">' + icon('chevron') + '</button>' : '') + '</div>' +
       (expanded && server.tools.length ? '<div class="v3-tool-grid">' + server.tools.map((t) => mcpToolRow(server, t, 'v1')).join('') + '</div>' : '') + '</div>'
   }
-  return '<div class="row mcp-svc' + (expanded ? ' expanded' : '') + '" role="button" tabindex="0" data-mcp-expand="' + esc(server.name) + '" aria-expanded="' + expanded + '">' +
+  const open = expanded || (state.mcpFilter.trim() !== '' && server.tools.length > 0)
+  return '<div class="mcp-svc' + (open ? ' expanded' : '') + (quoted ? ' quoted' : '') + '">' +
+    '<div class="mcp-svc-head">' +
+    '<button type="button" class="mcp-svc-pick" data-mcpserver-pick="' + esc(server.name) + '" aria-pressed="' + quoted + '" aria-label="引用整个 ' + esc(server.name) + ' 服务"><span class="pick">' + icon('check') + '</span></button>' +
+    '<button type="button" class="row mcp-svc-main" data-mcp-expand="' + esc(server.name) + '" aria-expanded="' + expanded + '">' +
     '<span class="row-icon">' + icon('plug') + '</span><span class="row-main"><span class="row-name"><span class="nm">' + esc(server.name) + '</span></span>' +
     '<span class="row-desc" title="' + esc(server.desc) + '">' + (server.builtin ? '<span class="badge accent">内置</span> ' : '') + esc(server.desc) + '</span></span>' +
-    '<span class="row-side">' + (server.ok ? '<span class="badge ok">' + server.tools.length + ' 工具</span>' : '<span class="badge warn">未连接</span>') + (server.tools.length ? '<svg class="chev" viewBox="0 0 24 24">' + LINE.chevron + '</svg>' : '') + '</span></div>' +
-    (expanded && server.tools.length ? '<div class="mcp-tools">' + server.tools.map((t) => mcpToolRow(server, t, 'v1')).join('') + '</div>' : '')
+    '<span class="row-side">' + (server.ok ? '<span class="badge ok">' + server.tools.length + ' 工具</span>' : '<span class="badge warn">未连接</span>') + (server.tools.length ? '<svg class="chev" viewBox="0 0 24 24">' + LINE.chevron + '</svg>' : '') + '</span></button></div>' +
+    (open && server.tools.length ? '<div class="mcp-tools">' + server.tools.map((t) => mcpToolRow(server, t, 'v1')).join('') + '</div>' : '') +
+    '</div>'
 }
 
 function mcpBody() {
-  const picked = state.mcpPicked.length
+  const list = filteredMcp()
   if (state.scheme === 'split') {
-    const active = MCP.find((s) => s.name === state.mcpOpen) || MCP[0]
-    return head('MCP', MCP.length, '<span class="m-sub">可引用服务或工具</span>') +
-      '<div class="v2-body"><div class="v2-rail">' + MCP.map((s) => mcpServerRow(s, s.name === active.name, 'v2')).join('') + '</div>' +
-      '<div class="v2-main"><div class="m-scroll"><div class="v2-mcp-form"><div class="v2-detail"><div class="v2-detail-head"><span class="v2-detail-icon">' + icon('plug') + '</span><span style="flex:1;min-width:0"><span class="v2-detail-title">' + esc(active.name) + '</span><div class="v2-detail-desc">' + esc(active.desc) + ' · ' + esc(active.transport) + '</div></span>' +
-      (active.ok ? '<span class="v3-mcp-status"><i></i>已连接</span>' : '<span class="v3-mcp-status bad"><i></i>未连接</span>') + '</div>' +
-      '<div class="v2-detail-actions"><button type="button" class="m-btn primary" data-usepkg="' + esc(active.name) + '">' + icon('plus') + '引用整个服务</button><button type="button" class="m-btn" data-mcp-probe>' + icon('refresh') + '检测</button></div></div>' +
-      (active.tools.length ? '<div class="v3-group-title"><span>具体工具</span><small>可单独引用 · 已选 ' + picked + '</small></div><div class="v2-tools">' + active.tools.map((t) => mcpToolRow(active, t, 'v2')).join('') + '</div>' : '<div class="m-empty">这个服务还没连上，先点「检测」看看。</div>') +
-      '</div></div></div></div>'
+    const active = list.find((s) => s.name === state.mcpOpen) || list[0]
+    const quoted = active ? state.mcpServerPicked.includes(active.name) : false
+    return head('MCP', MCP.length, mcpDetectButton()) +
+      '<div class="m-head" style="padding-top:0">' + searchBox('mcp', '搜索服务或工具', state.mcpFilter) + '</div>' +
+      '<div class="v2-body"><div class="v2-rail"><div class="m-scroll">' + list.map((s) => mcpServerRow(s, active && s.name === active.name, 'v2')).join('') + '</div></div>' +
+      '<div class="v2-main"><div class="m-scroll"><div class="v2-mcp-form">' +
+      (active
+        ? '<div class="v2-detail' + (quoted ? ' quoted' : '') + '"><div class="v2-detail-head"><span class="v2-detail-icon">' + icon('plug') + '</span><span style="flex:1;min-width:0"><span class="v2-detail-title">' + esc(active.name) + '</span><div class="v2-detail-desc">' + esc(active.desc) + ' · ' + esc(active.transport) + '</div></span>' +
+          (active.ok ? '<span class="v3-mcp-status"><i></i>已连接</span>' : '<span class="v3-mcp-status bad"><i></i>未连接</span>') + '</div>' +
+          '<div class="v2-detail-actions"><button type="button" class="m-btn quote' + (quoted ? ' on' : '') + '" data-mcpserver-pick="' + esc(active.name) + '" aria-pressed="' + quoted + '">' + icon('check') + (quoted ? '已选整个服务' : '选择整个服务') + '</button></div></div>' +
+          (active.tools.length ? '<div class="v3-group-title"><span>具体工具</span><small>可多选 · 已选 ' + state.mcpPicked.length + '</small></div><div class="v2-tools">' + active.tools.map((t) => mcpToolRow(active, t, 'v2')).join('') + '</div>' : '<div class="m-empty">这个服务还没连上，点「重新检测」再看看。</div>')
+        : '<div class="m-empty">没有找到匹配的服务或工具</div>') +
+      '</div></div></div></div>' + quoteBar('mcp')
   }
   if (state.scheme === 'index') {
-    return head('MCP 工具', MCP.length, '<span class="m-sub">已选 ' + picked + ' 个工具</span>') +
-      '<div class="v3-strip-wrap"><div class="v3-strip"><button type="button" aria-pressed="true">全部服务</button><button type="button" aria-pressed="false">已连接 <b>' + MCP.filter((s) => s.ok).length + '</b></button><button type="button" aria-pressed="false">画布内置</button></div></div>' +
-      '<div class="m-scroll">' + MCP.map((s) => mcpServerRow(s, state.mcpOpen === s.name, 'v3')).join('') + '</div>'
+    return head('MCP 工具', MCP.length, mcpDetectButton() + '<span class="m-sub">服务与工具可分开选</span>') +
+      '<div class="m-head" style="padding-top:0">' + searchBox('mcp', '搜索服务或工具', state.mcpFilter) + '</div>' +
+      '<div class="m-scroll">' + (list.length ? list.map((s) => mcpServerRow(s, state.mcpOpen === s.name, 'v3')).join('') : '<div class="m-empty">没有找到匹配的服务或工具</div>') + '</div>' + quoteBar('mcp')
   }
-  return head('MCP', MCP.length, '<button type="button" class="m-btn" data-mcp-probe>' + icon('refresh') + '检测</button>') +
-    '<div class="m-scroll">' + MCP.map((s) => mcpServerRow(s, state.mcpOpen === s.name, 'v1')).join('') + '</div>'
+  return head('MCP', MCP.length, mcpDetectButton()) +
+    '<div class="m-head" style="padding-top:0">' + searchBox('mcp', '搜索服务或工具', state.mcpFilter) + '</div>' +
+    '<div class="m-scroll">' + (list.length ? list.map((s) => mcpServerRow(s, state.mcpOpen === s.name, 'v1')).join('') : '<div class="m-empty">没有找到匹配的服务或工具</div>') + '</div>' + quoteBar('mcp')
 }
 
 function modelRow(m, variant) {
-  const sel = state.modelId === m.id
+  const sel = state.modelSelected.includes(m.id)
   if (variant === 'v2') {
     return '<button type="button" class="row v2-model" data-model="' + esc(m.id) + '" aria-selected="' + sel + '"><span class="row-icon has-brand">' + modelBrand(m) + '</span><span class="row-main"><span class="row-name"><span class="nm">' + esc(m.id) + '</span></span><span class="row-desc">' + esc(m.provider) + ' · ' + esc(m.note) + '</span></span>' + (sel ? '<span class="row-side"><span class="check">' + icon('check') + '</span></span>' : '') + '</button>'
   }
@@ -403,27 +462,28 @@ function modelRow(m, variant) {
 }
 
 function modelBody() {
-  const shown = MODELS.filter((m) => !m.tag || m.tag === '默认')
+  const list = filteredModels()
   if (state.scheme === 'split') {
     const platforms = [...new Set(MODELS.map((m) => m.platform))]
-    return head('模型', MODELS.length, '<span class="m-sub">按平台识别</span>') +
-      '<div class="v2-body"><div class="v2-rail">' + platforms.map((p) => {
+    return head('模型', MODELS.length, '<span class="m-sub">可多选</span>') +
+      '<div class="m-head" style="padding-top:0">' + searchBox('model', '搜索模型或平台', state.modelFilter) + '</div>' +
+      '<div class="v2-body"><div class="v2-rail"><div class="m-scroll"><button type="button" class="v2-rail-item has-icon' + (state.modelPlatform === 'all' ? ' active' : '') + '" data-model-platform="all"><span class="rail-icon">' + icon('layers') + '</span><span>全部平台</span><b>' + MODELS.length + '</b></button>' + platforms.map((p) => {
         const n = MODELS.filter((m) => m.platform === p).length
-        return '<button type="button" class="v2-rail-item has-icon' + (p === 'deepseek' ? ' active' : '') + '"><span class="rail-icon">' + brandIcon(p) + '</span><span>' + esc(BRANDS[p].name) + '</span><b>' + n + '</b></button>'
-      }).join('') + '</div><div class="v2-main">' + head('全部模型', null, '<span class="m-sub">默认 · 视觉 · 长上下文</span>') +
-      '<div class="m-scroll"><div class="v2-model-grid">' + MODELS.slice(0, 10).map((m) => modelRow(m, 'v2')).join('') + '</div></div></div></div>'
+        return '<button type="button" class="v2-rail-item has-icon' + (state.modelPlatform === p ? ' active' : '') + '" data-model-platform="' + esc(p) + '"><span class="rail-icon">' + brandIcon(p) + '</span><span>' + esc(BRANDS[p].name) + '</span><b>' + n + '</b></button>'
+      }).join('') + '</div></div><div class="v2-main">' +
+      '<div class="m-scroll">' + (list.length ? '<div class="v2-model-grid">' + list.map((m) => modelRow(m, 'v2')).join('') + '</div>' : '<div class="m-empty">没有找到匹配的模型</div>') + '</div></div></div>' + quoteBar('model')
   }
   if (state.scheme === 'index') {
-    return head('模型', MODELS.length, '<span class="m-sub">按名称识别平台</span>') +
-      '<div class="v3-strip-wrap"><div class="v3-strip"><button type="button" aria-pressed="true">全部</button><button type="button" aria-pressed="false">已配密钥</button><button type="button" aria-pressed="false">视觉</button><button type="button" aria-pressed="false">长上下文</button></div></div>' +
-      '<div class="m-scroll"><div class="v3-group-title"><span>本地渠道</span><small>5 个可用</small></div><div class="v3-model-grid">' + shown.slice(0, 5).map((m) => modelRow(m, 'v3')).join('') + '</div>' +
-      '<div class="v3-group-title"><span>云端平台</span><small>按平台图标区分</small></div><div class="v3-model-grid">' + MODELS.filter((m) => m.provider !== 'local').slice(0, 8).map((m) => modelRow(m, 'v3')).join('') + '</div></div>'
+    return head('模型', MODELS.length, '<span class="m-sub">可多选</span>') +
+      '<div class="m-head" style="padding-top:0">' + searchBox('model', '搜索模型或平台', state.modelFilter) + '</div>' +
+      '<div class="v3-strip-wrap"><div class="v3-strip">' +
+      '<button type="button" aria-pressed="' + (state.modelPlatform === 'all') + '" data-model-platform="all">全部</button>' +
+      [...new Set(MODELS.map((m) => m.platform))].map((p) => '<button type="button" aria-pressed="' + (state.modelPlatform === p) + '" data-model-platform="' + esc(p) + '">' + esc(BRANDS[p].name) + '</button>').join('') + '</div></div>' +
+      '<div class="m-scroll">' + (list.length ? '<div class="v3-model-grid">' + list.map((m) => modelRow(m, 'v3')).join('') + '</div>' : '<div class="m-empty">没有找到匹配的模型</div>') + '</div>' + quoteBar('model')
   }
-  const first = MODELS.slice(0, 5)
-  const rest = MODELS.slice(5)
-  return head('模型', MODELS.length, '') +
-    '<div class="m-scroll">' + first.map((m) => modelRow(m, 'v1')).join('') +
-    '<div class="m-label">其他平台</div>' + rest.map((m) => modelRow(m, 'v1')).join('') + '</div>'
+  return head('模型', MODELS.length, '<span class="m-sub">可多选</span>') +
+    '<div class="m-head" style="padding-top:0">' + searchBox('model', '搜索模型或平台', state.modelFilter) + '</div>' +
+    '<div class="m-scroll">' + (list.length ? list.map((m) => modelRow(m, 'v1')).join('') : '<div class="m-empty">没有找到匹配的模型</div>') + '</div>' + quoteBar('model')
 }
 
 function renderMenu() {
@@ -524,13 +584,9 @@ document.getElementById('covers-toggle').addEventListener('change', (e) => {
 
 document.getElementById('menu-sheet').addEventListener('click', (e) => {
   const t = e.target
-  const pickModel = t.closest('[data-model]')
-  if (pickModel) {
-    const id = pickModel.dataset.model
-    state.modelId = id
-    const m = MODELS.find((x) => x.id === id)
-    addRef({ kind: 'model', name: id, platform: m ? m.platform : 'custom' }, '已切换到 ' + id)
-    document.getElementById('menu-layer').hidden = true
+  const confirm = t.closest('[data-confirm-quote]')
+  if (confirm) {
+    confirmQuote(confirm.dataset.confirmQuote)
     return
   }
   const auth = t.closest('[data-auth]')
@@ -542,10 +598,20 @@ document.getElementById('menu-sheet').addEventListener('click', (e) => {
   }
   const skill = t.closest('[data-skill]')
   if (skill) {
-    const s = SKILLS.find((x) => x.id === skill.dataset.skill)
-    state.skillPicked = s.id
-    addRef({ kind: 'skill', name: s.name }, '已引用技能：' + s.name)
-    document.getElementById('menu-layer').hidden = true
+    toggleIn(state.skillSelected, skill.dataset.skill)
+    renderMenu()
+    return
+  }
+  const platform = t.closest('[data-model-platform]')
+  if (platform) {
+    state.modelPlatform = platform.dataset.modelPlatform
+    renderMenu()
+    return
+  }
+  const pickModel = t.closest('[data-model]')
+  if (pickModel) {
+    toggleIn(state.modelSelected, pickModel.dataset.model)
+    renderMenu()
     return
   }
   const server = t.closest('[data-mcpserver]')
@@ -562,23 +628,16 @@ document.getElementById('menu-sheet').addEventListener('click', (e) => {
     renderMenu()
     return
   }
-  const tool = t.closest('[data-tool]')
-  if (tool) {
-    const key = tool.dataset.tool
-    const i = state.mcpPicked.indexOf(key)
-    if (i >= 0) state.mcpPicked.splice(i, 1)
-    else {
-      state.mcpPicked.push(key)
-      const [serverName, toolName] = key.split('/')
-      addRef({ kind: 'tool', name: serverName + ' › ' + toolName }, '已引用工具：' + toolName)
-    }
+  const serverPick = t.closest('[data-mcpserver-pick]')
+  if (serverPick) {
+    toggleIn(state.mcpServerPicked, serverPick.dataset.mcpserverPick)
     renderMenu()
     return
   }
-  const usePkg = t.closest('[data-usepkg]')
-  if (usePkg) {
-    addRef({ kind: 'mcp', name: usePkg.dataset.usepkg }, '已引用 MCP：' + usePkg.dataset.usepkg)
-    document.getElementById('menu-layer').hidden = true
+  const tool = t.closest('[data-tool]')
+  if (tool) {
+    toggleIn(state.mcpPicked, tool.dataset.tool)
+    renderMenu()
     return
   }
   const expand = t.closest('.row[data-mcp-expand]')
@@ -587,10 +646,9 @@ document.getElementById('menu-sheet').addEventListener('click', (e) => {
     renderMenu()
     return
   }
-  const probe = t.closest('[data-mcp-probe]')
+  const probe = t.closest('[data-mcp-redetect]')
   if (probe) {
-    toast('正在检测 MCP 连接…')
-    setTimeout(() => toast('检测完成：3 个已连接 · 1 个失败'), 700)
+    redetectAllMcp()
     return
   }
   const cat = t.closest('[data-cat]')
@@ -601,11 +659,15 @@ document.getElementById('menu-sheet').addEventListener('click', (e) => {
 })
 
 document.getElementById('menu-sheet').addEventListener('input', (e) => {
-  if (!e.target.matches('[data-skill-search]')) return
-  state.skillFilter = e.target.value
+  const input = e.target.closest('[data-menu-search]')
+  if (!input) return
+  const kind = input.dataset.menuSearch
+  if (kind === 'skill') state.skillFilter = input.value
+  else if (kind === 'model') state.modelFilter = input.value
+  else if (kind === 'mcp') state.mcpFilter = input.value
   const pos = e.target.selectionStart
   renderMenu()
-  const next = document.querySelector('[data-skill-search]')
+  const next = document.querySelector('[data-menu-search="' + kind + '"]')
   if (next) {
     next.focus()
     try { next.setSelectionRange(pos, pos) } catch { /* search 输入在某些 WebView 不支持选区 */ }
@@ -618,6 +680,66 @@ document.getElementById('composer-chips').addEventListener('click', (e) => {
   state.refs.splice(Number(b.dataset.removeref), 1)
   renderRefs()
 })
+
+function toggleIn(list, value) {
+  const i = list.indexOf(value)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(value)
+}
+
+/**
+ * 勾选只是「待引用」，这里才真正写进输入框。
+ * 服务引用与工具引用是两种独立载荷（与真实 Agent 的 ref.kind 对齐）。
+ */
+function confirmQuote(kind) {
+  const refs = []
+  if (kind === 'skill') {
+    for (const id of state.skillSelected) {
+      const s = SKILLS.find((x) => x.id === id)
+      if (s) refs.push({ kind: 'skill', name: s.name })
+    }
+    state.skillSelected = []
+  } else if (kind === 'model') {
+    for (const id of state.modelSelected) {
+      const m = MODELS.find((x) => x.id === id)
+      if (m) refs.push({ kind: 'model', name: m.id, platform: m.platform })
+    }
+    state.modelSelected = []
+  } else if (kind === 'mcp') {
+    for (const name of state.mcpServerPicked) refs.push({ kind: 'mcp', name })
+    for (const key of state.mcpPicked) {
+      const [server, tool] = key.split('/')
+      refs.push({ kind: 'tool', name: server + ' › ' + tool })
+    }
+    state.mcpServerPicked = []
+    state.mcpPicked = []
+  }
+  if (!refs.length) return
+  addRefs(refs)
+  document.getElementById('menu-layer').hidden = true
+  toast('已引用 ' + refs.length + ' 项')
+}
+
+function addRefs(refs) {
+  for (const ref of refs) {
+    state.refs = state.refs.filter((r) => !(r.kind === ref.kind && r.name === ref.name))
+    state.refs.push(ref)
+  }
+  renderRefs()
+}
+
+/** 重新检测：一次检查所有服务，不提供单服务检测。 */
+function redetectAllMcp() {
+  if (state.mcpDetecting) return
+  state.mcpDetecting = true
+  renderMenu()
+  setTimeout(() => {
+    state.mcpDetecting = false
+    renderMenu()
+    const ok = MCP.filter((s) => s.ok).length
+    toast('重新检测完成：' + ok + '/' + MCP.length + ' 个服务已连接')
+  }, 900)
+}
 
 function addRef(ref, message) {
   state.refs = state.refs.filter((r) => !(r.kind === ref.kind && (ref.kind !== 'tool' || r.name === ref.name)))
@@ -640,5 +762,5 @@ document.querySelector('.stage-wrap').addEventListener('pointerdown', (e) => {
 renderTabs()
 renderMenu()
 renderRefs()
-addRef({ kind: 'model', name: 'deepseek-auto', platform: 'deepseek' }, '')
+addRefs([{ kind: 'model', name: 'deepseek-auto', platform: 'deepseek' }])
 document.getElementById('demo-toast').hidden = true
