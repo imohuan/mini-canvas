@@ -2891,14 +2891,7 @@ function onGlobalLeave(el: Element): void {
   outline: none;
 }
 
-.nb-card-tip-dot {
-  /* 触发器铺满锚点（锚点尺寸 = 卡片矩形），Tooltip 按它算位置 */
-  display: block;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  pointer-events: none;
-}
+
 /*
  * 拖拽三态（Vue Draggable Plus 的 ghost / chosen / drag 三个 class）。
  *
