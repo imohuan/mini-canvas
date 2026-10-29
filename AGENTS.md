@@ -102,7 +102,54 @@ pnpm -C packages/ui typecheck
 测试数量和“当前阶段”会变，不要照抄旧数字；以实际输出为准。
 全绿才继续。Chrome 实测通过后再考虑补 e2e。
 
-## 六、怎么调试
+## 六、写文档规范（packages/docs）
+
+用户可读的功能文档统一写在 `packages/docs`（VitePress 文档站，:5290）。
+写之前先读一篇同类文档（案例看 `examples/`，组件看 `plugins/theme-components/`），照着它的结构和口吻写。
+
+### 放哪里、怎么挂进导航
+
+| 文档类型 | 位置 | 挂侧边栏 |
+| --- | --- | --- |
+| 案例教程（照抄能跑） | `packages/docs/examples/<编号>-<名字>.md` | `.vitepress/config.ts` 的 `examplesSidebar` 加一行 |
+| 概念讲解 | `packages/docs/intro/` `start/` `kernel/` `canvas-data/` `canvas-render/` `theme/` | `config.ts` 的 `guideSidebar` 加一行 |
+| 组件说明 | `packages/docs/plugins/theme-components/<组件名>.md` | `config.ts` 的 `pluginsSidebar` 对应分组加一行 |
+| 插件能力解析 | `packages/docs/plugins/parsed/<插件>/index.md` + 子页 | **不用改**：构建时扫目录自动生成 |
+| 速查表入口 | `packages/docs/examples/recipe-map.md` 的表加一行 | — |
+
+侧边栏显示名 = 页面 H1（插件解析页）。其它分组改标题只改页面，不改 config；
+侧边栏条目名 2～10 个字，不换行。
+
+### 页面结构（案例类，照这个骨架写）
+
+1. **H1**：`案例 N · 干什么（一句话）`。编号顺延，不重复。
+2. **这个案例能做到什么**：装上后用户**看到什么变化**，先写结果再写步骤。
+3. **正文**：完整代码 + 每一步在干什么。代码块要标注文件路径：
+   ```ts
+   // 文件：my-plugin/src/index.ts
+   ```
+4. **注意事项**：容易踩的坑、硬性规矩，用列表，一条一个坑。
+5. **真实插件参照**：指向仓库里已经这么写的插件路径，方便对照源码。
+
+### 写作规矩
+
+1. **说人话**：短句、常见词。面向「第一次抄代码的人」，不是写给 reviewer。
+2. **代码必须真实能跑**：抄仓库现有插件的写法（文件头注明「参照 plugin-xxx」），
+   不写想当然的 API。写完在画布里实测一遍再提交。
+3. **有流程就画 mermaid**：```` ```mermaid ```` 代码块直接渲染。图讲结构，代码讲动作，不重复。
+4. **口吻**：用「你」，直接说「做 X 就写 Y」；不用「我们可以看到」「值得注意的是」。
+5. **一个页面讲一件事**：跨主题的用链接跳转，不要把三个功能塞进一页。
+6. **改了行为要同步改文档**：文档描述与代码不一致 = 文档是错的，按代码为准改文档；
+   反过来发现代码不对，先报给用户再改。
+
+### 写完必须做
+
+1. `pnpm -C packages/docs dev` 起文档站（端口被占就 `--port 529x` 换一个），
+   用 @Chrome 打开新页面：H1、代码块、mermaid、锚点、侧边栏入口逐项看一遍；
+2. 速查表（`recipe-map.md`）加一行，让「我想做 X」能查到这篇；
+3. 与本页相关的其它文档有交叉引用的，检查链接没断。
+
+## 七、怎么调试
 
 ### 一键启动完整服务
 
@@ -149,7 +196,7 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 
 然后把 `BACKEND` 改成你自己的后台端口，或启动时传 `--backend http://127.0.0.1:<端口>`。
 
-## 七、文件操作铁律
+## 八、文件操作铁律
 
 1. **修改文件只用 `apply_patch`**，不要用 PowerShell 写文件。
 2. **每完成一个文件或一组相关修改就 commit**，不要把大量改动堆在工作区。
@@ -157,7 +204,7 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 4. 用户提供的备份文件（如 `* copy.vue`）先提交再使用。
 5. 实验失败也要提交或明确回滚，不要留下未提交的实验代码。
 
-## 八、红线
+## 九、红线
 
 1. **不碰 v1**：根 `src/` 与 `backup/canvas-core`。
 2. **核心节点件禁止改坏**：`packages/plugins/plugin-theme-default/src/components/` 下的
@@ -168,7 +215,7 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 3. **kernel 不依赖任何 @mini-canvas 包**，也不 import `.vue`。
 4. **写 UI 前先读** `docs/design/ui-style-guide.md`，不自造颜色、圆角、字号。
 
-## 九、找文档
+## 十、找文档
 
 - 项目历史与排障记录：`docs/STATUS.md`（只查阅，不通读）
 - 架构与注册场设计：`docs/design/core-layers-and-registry.md`
