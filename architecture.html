@@ -1,0 +1,116 @@
+<html style="margin:0;padding:0;">
+<div style="background-color:transparent;box-sizing:border-box;font-family:'PingFang SC','Segoe UI',Arial,sans-serif;padding:16px 8px;">
+
+<!-- 标题 -->
+<div style="text-align:center;margin-bottom:20px;">
+  <div style="font-size:17px;font-weight:600;color:#1A1B1C;">最小 Cordis 复刻 · 前后端双插件架构</div>
+  <div style="font-size:12px;color:#6B7280;margin-top:4px;">打包后仍可安装第三方依赖 · 后端服务 + 已打包前端 UI</div>
+</div>
+
+<!-- 主架构图：SVG -->
+<svg viewBox="0 0 760 520" width="100%" style="display:block;max-width:760px;margin:0 auto;">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#9EACEA"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#A2DDAA"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#F4B393"/>
+    </marker>
+  </defs>
+
+  <!-- 前端层 -->
+  <rect x="40" y="20" width="680" height="130" rx="14" fill="#F0F4FF" stroke="#9EACEA" stroke-width="1.5"/>
+  <text x="56" y="44" font-size="13" font-weight="600" fill="#4A5568">前端层（已打包 SPA · Vite build）</text>
+
+  <!-- 核心UI -->
+  <rect x="60" y="56" width="200" height="78" rx="10" fill="#fff" stroke="#C7D2FE" stroke-width="1"/>
+  <text x="160" y="82" font-size="12" font-weight="600" fill="#1A1B1C" text-anchor="middle">核心 UI（固定）</text>
+  <text x="160" y="100" font-size="10.5" fill="#6B7280" text-anchor="middle">路由 / 布局 / 基础页面</text>
+  <text x="160" y="116" font-size="10.5" fill="#6B7280" text-anchor="middle">已打包进 asar</text>
+
+  <!-- 插件UI容器 -->
+  <rect x="290" y="56" width="210" height="78" rx="10" fill="#fff" stroke="#C7D2FE" stroke-width="1"/>
+  <text x="395" y="82" font-size="12" font-weight="600" fill="#1A1B1C" text-anchor="middle">插件 UI 容器</text>
+  <text x="395" y="100" font-size="10.5" fill="#6B7280" text-anchor="middle">dynamic import() 加载</text>
+  <text x="395" y="116" font-size="10.5" fill="#6B7280" text-anchor="middle">远程 ESM / MF remote</text>
+
+  <!-- 扩展点API -->
+  <rect x="530" y="56" width="170" height="78" rx="10" fill="#fff" stroke="#C7D2FE" stroke-width="1"/>
+  <text x="615" y="82" font-size="12" font-weight="600" fill="#1A1B1C" text-anchor="middle">扩展点 API</text>
+  <text x="615" y="100" font-size="10.5" fill="#6B7280" text-anchor="middle">addRoute / addMenu</text>
+  <text x="615" y="116" font-size="10.5" fill="#6B7280" text-anchor="middle">addPanel / registerStore</text>
+
+  <!-- HTTP/WebSocket 连接 -->
+  <line x1="380" y1="150" x2="380" y2="185" stroke="#9EACEA" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="395" y="172" font-size="10.5" fill="#6B7280">HTTP / WebSocket</text>
+
+  <!-- 后端层 -->
+  <rect x="40" y="185" width="680" height="200" rx="14" fill="#F0FFF4" stroke="#A2DDAA" stroke-width="1.5"/>
+  <text x="56" y="209" font-size="13" font-weight="600" fill="#4A5568">后端服务层（Node.js · 以服务形式运行）</text>
+
+  <!-- Plugin Host -->
+  <rect x="60" y="222" width="300" height="80" rx="10" fill="#fff" stroke="#B7E4C7" stroke-width="1"/>
+  <text x="210" y="246" font-size="12" font-weight="600" fill="#1A1B1C" text-anchor="middle">Plugin Host（Cordis 内核）</text>
+  <text x="210" y="264" font-size="10.5" fill="#6B7280" text-anchor="middle">Context · Service · Fiber</text>
+  <text x="210" y="280" font-size="10.5" fill="#6B7280" text-anchor="middle">effect(disposer) · inject · events</text>
+
+  <!-- 依赖管理器 -->
+  <rect x="390" y="222" width="150" height="80" rx="10" fill="#fff" stroke="#B7E4C7" stroke-width="1"/>
+  <text x="465" y="246" font-size="12" font-weight="600" fill="#1A1B1C" text-anchor="middle">依赖管理器</text>
+  <text x="465" y="264" font-size="10.5" fill="#6B7280" text-anchor="middle">运行时 npm install</text>
+  <text x="465" y="280" font-size="10.5" fill="#6B7280" text-anchor="middle">pacote / 内置 npm</text>
+
+  <!-- 静态文件服务 -->
+  <rect x="570" y="222" width="130" height="80" rx="10" fill="#fff" stroke="#B7E4C7" stroke-width="1"/>
+  <text x="635" y="246" font-size="12" font-weight="600" fill="#1A1B1C" text-anchor="middle">静态文件服务</text>
+  <text x="635" y="264" font-size="10.5" fill="#6B7280" text-anchor="middle">/plugins/:id/web/*</text>
+  <text x="635" y="280" font-size="10.5" fill="#6B7280" text-anchor="middle">serve 插件前端</text>
+
+  <!-- 后端插件实例 -->
+  <rect x="60" y="318" width="640" height="52" rx="10" fill="#fff" stroke="#B7E4C7" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="80" y="340" font-size="11.5" font-weight="600" fill="#1A1B1C">后端插件实例（运行时 require 加载）</text>
+  <text x="80" y="358" font-size="10.5" fill="#6B7280">plugin-a/server · plugin-b/server · plugin-c/server → 每个插件独立 fiber，注册 API 路由 / 服务 / 事件监听</text>
+
+  <!-- 连接：Plugin Host 到 后端插件 -->
+  <line x1="210" y1="302" x2="210" y2="318" stroke="#A2DDAA" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+  <!-- 插件目录层 -->
+  <rect x="40" y="400" width="680" height="100" rx="14" fill="#FFF8F0" stroke="#F4B393" stroke-width="1.5"/>
+  <text x="56" y="424" font-size="13" font-weight="600" fill="#4A5568">插件存储层（userData 目录 · 打包后可写）</text>
+
+  <!-- 插件A -->
+  <rect x="60" y="436" width="200" height="50" rx="8" fill="#fff" stroke="#FCD5B4" stroke-width="1"/>
+  <text x="160" y="456" font-size="11.5" font-weight="600" fill="#1A1B1C" text-anchor="middle">plugin-a/</text>
+  <text x="160" y="472" font-size="10" fill="#6B7280" text-anchor="middle">manifest.json · server/ · web/ · node_modules/</text>
+
+  <!-- 插件B -->
+  <rect x="280" y="436" width="200" height="50" rx="8" fill="#fff" stroke="#FCD5B4" stroke-width="1"/>
+  <text x="380" y="456" font-size="11.5" font-weight="600" fill="#1A1B1C" text-anchor="middle">plugin-b/</text>
+  <text x="380" y="472" font-size="10" fill="#6B7280" text-anchor="middle">manifest.json · server/ · web/ · node_modules/</text>
+
+  <!-- 插件C -->
+  <rect x="500" y="436" width="200" height="50" rx="8" fill="#fff" stroke="#FCD5B4" stroke-width="1"/>
+  <text x="600" y="456" font-size="11.5" font-weight="600" fill="#1A1B1C" text-anchor="middle">plugin-c/</text>
+  <text x="600" y="472" font-size="10" fill="#6B7280" text-anchor="middle">manifest.json · server/ · web/ · node_modules/</text>
+
+  <!-- 连接：后端到插件目录 -->
+  <line x1="200" y1="370" x2="160" y2="436" stroke="#F4B393" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+  <line x1="380" y1="370" x2="380" y2="436" stroke="#F4B393" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+  <line x1="560" y1="370" x2="600" y2="436" stroke="#F4B393" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+
+  <!-- 图例 -->
+  <g transform="translate(60, 510)">
+    <rect x="0" y="0" width="12" height="12" rx="3" fill="#F0F4FF" stroke="#9EACEA"/>
+    <text x="18" y="10" font-size="10.5" fill="#6B7280">前端</text>
+    <rect x="70" y="0" width="12" height="12" rx="3" fill="#F0FFF4" stroke="#A2DDAA"/>
+    <text x="88" y="10" font-size="10.5" fill="#6B7280">后端服务</text>
+    <rect x="160" y="0" width="12" height="12" rx="3" fill="#FFF8F0" stroke="#F4B393"/>
+    <text x="178" y="10" font-size="10.5" fill="#6B7280">插件存储（可写）</text>
+  </g>
+</svg>
+
+</div>
+</html>
