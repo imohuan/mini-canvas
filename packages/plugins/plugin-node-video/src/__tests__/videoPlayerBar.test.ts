@@ -99,4 +99,43 @@ describe('VideoPlayerBar 结构契约', () => {
     expect(wrapRule).toMatch(/left:\s*10px/)
     expect(wrapRule).toMatch(/right:\s*10px/)
   })
+
+  /**
+   * 2026-10-29 用户截图报的两条样式问题：
+   * ① 进度条紧贴「0:10 / 0:10」和「1x」—— 条本身只有 4px gap；
+   * ② 看着没居中 —— 轨道靠写死的 top:9.5px 定位，与 22px 行高硬绑。
+   */
+  it('★ 进度条左右各留 6px（叠加 4px gap = 10px），两端圆点不顶邻居', () => {
+    const rule = bar.slice(bar.indexOf('.vcb-progress {'), bar.indexOf('}', bar.indexOf('.vcb-progress {')))
+    expect(rule).toMatch(/margin:\s*0 6px/)
+  })
+
+  it('★ 进度轨道/填充/圆点都按 50% 居中，不再写死 9.5px', () => {
+    for (const sel of ['.vcb-progress::before', '.vcb-progress-fill', '.vcb-progress-thumb']) {
+      const at = bar.indexOf(sel + ' {')
+      expect(at).toBeGreaterThan(-1)
+      const rule = bar.slice(at, bar.indexOf('}', at))
+      expect(rule).toMatch(/top:\s*50%/)
+      expect(rule).toMatch(/translate:\s*0 -50%/)
+      expect(rule).not.toMatch(/top:\s*9\.5px/)
+      expect(rule).not.toMatch(/top:\s*5\.5px/)
+    }
+  })
+
+  /**
+   * 音量竖杆拖不动（用户 2026-10-29 报）：抽组件时把「算出音量」的结果丢进了空函数
+   * `(v) => void 0`，拖拽只在改内部标志、从没 emit 出去。
+   * 这里钉住「拖动必须真的把音量 emit 给宿主」。
+   */
+  it('★ 音量竖杆拖拽必须 emit volume（不能只算不用）', () => {
+    expect(bar).not.toMatch(/\(v\)\s*=>\s*void 0/)
+    const fnAt = bar.indexOf('function setVolumeFromPointer')
+    expect(fnAt).toBeGreaterThan(-1)
+    const fnBody = bar.slice(fnAt, bar.indexOf('\n}', fnAt))
+    expect(fnBody).toMatch(/emit\('volume',/)
+    // 拖动期间弹层不能被延迟收起：指针按下也要通知宿主保持展开
+    expect(bar).toMatch(/@pointerdown\.stop="onVolumeTrackDown"/)
+    expect(bar).toMatch(/@pointermove="onVolumeTrackMove"/)
+    expect(bar).toMatch(/@pointerup="onVolumeTrackUp"/)
+  })
 })

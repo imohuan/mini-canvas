@@ -11,7 +11,7 @@
  * 本组件只画"当前是什么样、用户点了什么"。两条宿主的特殊行为（节点的剪辑段循环、
  * 全屏的自动播放）不被组件吃掉。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Play, Pause, Volume2, VolumeX } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -84,6 +84,51 @@ const volumeIcon = computed(() => (props.muted ? VolumeX : Volume2))
 const progressPct = computed(() =>
   props.duration > 0 ? Math.min(100, Math.max(0, (props.currentTime / props.duration) * 100)) : 0,
 )
+
+/** 音量竖杆是否正在拖拽（每个控件条各一份，不跨实例共享） */
+const volumeDragging = ref(false)
+
+/** 指针位置 → 音量（0..1），并把"保持展开"一起通知宿主：拖动期间弹层不能被延迟收起 */
+function setVolumeFromPointer(e: PointerEvent): void {
+  const track = e.currentTarget as HTMLElement
+  const r = track.getBoundingClientRect()
+  if (r.height <= 0) return
+  const pct = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+  emit('volume', Math.round(pct * 100) / 100)
+  emit('volumeOpen')
+}
+function onVolumeTrackDown(e: PointerEvent): void {
+  volumeDragging.value = true
+  emit('volumeOpen')
+  // 合成事件/旧浏览器可能没有活动指针，抓不住也不要让拖拽失效
+  try {
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  } catch { /* 忽略 */ }
+  setVolumeFromPointer(e)
+}
+function onVolumeTrackMove(e: PointerEvent): void {
+  if (!volumeDragging.value) return
+  setVolumeFromPointer(e)
+}
+function onVolumeTrackUp(e: PointerEvent): void {
+  if (!volumeDragging.value) return
+  volumeDragging.value = false
+  try {
+    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+  } catch { /* 忽略 */ }
+  // 松手时指针已经离开整个音量组（按钮 + 弹层）才收起。
+  // 注意弹层是 absolute 子元素，不会被父盒撑大 —— 只量 .vcb-volume 的盒子会把
+  // 「手还在滑杆上」误判成离开，弹层松手就消失（第一版实测就是这样）。
+  const wrap = (e.currentTarget as HTMLElement).closest('.vcb-volume') as HTMLElement | null
+  if (!wrap) return
+  const inRect = (el: Element | null): boolean => {
+    if (!el) return false
+    const r = el.getBoundingClientRect()
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+  }
+  const inside = inRect(wrap) || inRect(wrap.querySelector('.vcb-volume-pop'))
+  if (!inside) emit('volumeClose')
+}
 </script>
 
 <template>
@@ -135,8 +180,9 @@ const progressPct = computed(() =>
     </button>
 
     <!-- 音量：喇叭 + 向上弹的竖直滑杆（数值/显隐都在宿主） -->
-    <div class="vcb-volume" @mouseenter="emit('volumeOpen')" @mouseleave="emit('volumeClose')"
-      @vcb-volume-drag="(e: Event) => emit('volume', (e as CustomEvent<number>).detail)">
+    <!-- 拖动中忽略 mouseleave：手一抖滑出弹层就收起的话，拖到一半弹层没了（用户报的"拖不动"体感） -->
+    <div class="vcb-volume" @mouseenter="emit('volumeOpen')"
+      @mouseleave="volumeDragging || emit('volumeClose')">
       <button class="vcb-btn" type="button" :title="muted ? '取消静音' : '静音'"
         :aria-label="muted ? '取消静音' : '静音'" @click.stop="emit('muteToggle')">
         <component :is="volumeIcon" class="vcb-ico" aria-hidden="true" />
@@ -145,7 +191,8 @@ const progressPct = computed(() =>
         <span class="vcb-volume-value">{{ Math.round(volume * 100) }}</span>
         <div class="vcb-volume-track" role="slider" :aria-label="'音量 ' + Math.round(volume * 100) + '%'"
           :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="Math.round(volume * 100)" tabindex="0"
-          @pointerdown.stop="onVolumeTrackDown" @pointermove="onVolumeTrackMove" @pointerup="onVolumeTrackUp"
+          @pointerdown.stop="onVolumeTrackDown" @pointermove="onVolumeTrackMove"
+          @pointerup="onVolumeTrackUp" @pointercancel="onVolumeTrackUp"
           @keydown.down.stop.prevent="emit('volume', Math.max(0, Math.round((volume - 0.05) * 100) / 100))"
           @keydown.up.stop.prevent="emit('volume', Math.min(1, Math.round((volume + 0.05) * 100) / 100))">
           <span class="vcb-volume-fill" :style="{ height: Math.round((muted ? 0 : volume) * 100) + '%' }" />
@@ -227,6 +274,10 @@ const progressPct = computed(() =>
   height: 22px;
   display: flex;
   align-items: center;
+  /* 左右各留 6px（叠加条自身 4px gap = 10px）：
+     ① 进度条不再紧贴「0:10 / 0:10」和「1x」；
+     ② 圆点在 0%/100% 时外扩 5.5px，这 6px 正好兜住，两端都不顶邻居。 */
+  margin: 0 6px;
   cursor: pointer;
 }
 .vcb-progress::before {
@@ -234,7 +285,9 @@ const progressPct = computed(() =>
   position: absolute;
   left: 0;
   right: 0;
-  top: 9.5px;
+  /* 50% + 位移：轨道中心严格压在控件条中轴线上，不依赖写死的 9.5px */
+  top: 50%;
+  translate: 0 -50%;
   height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.35); /* 主题色白名单: 视频覆盖层进度轨道 */
@@ -242,7 +295,8 @@ const progressPct = computed(() =>
 .vcb-progress-fill {
   position: absolute;
   left: 0;
-  top: 9.5px;
+  top: 50%;
+  translate: 0 -50%;
   height: 3px;
   border-radius: 999px;
   background: #fff; /* 主题色白名单: 视频覆盖层进度填充 */
@@ -251,7 +305,8 @@ const progressPct = computed(() =>
 .vcb-progress input { position: absolute; inset: 0; width: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .vcb-progress-thumb {
   position: absolute;
-  top: 5.5px;
+  top: 50%;
+  translate: 0 -50%;
   width: 11px;
   height: 11px;
   margin-left: -5.5px;
@@ -337,24 +392,3 @@ const progressPct = computed(() =>
 }
 </style>
 
-<script lang="ts">
-// 竖向音量轨道的拖拽（pointer capture 保证拖出轨道也不丢值）——纯 DOM，放普通 script 段
-let volumeDragging = false
-function setVolumeFromEvent(e: PointerEvent, set: (v: number) => void): void {
-  const track = e.currentTarget as HTMLElement
-  const r = track.getBoundingClientRect()
-  const pct = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
-  set(Math.round(pct * 100) / 100)
-}
-function onVolumeTrackDown(e: PointerEvent): void {
-  volumeDragging = true
-  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  setVolumeFromEvent(e, (v) => void 0)
-}
-function onVolumeTrackMove(e: PointerEvent): void {
-  if (volumeDragging) setVolumeFromEvent(e, (v) => void 0)
-}
-function onVolumeTrackUp(): void {
-  volumeDragging = false
-}
-</script>
