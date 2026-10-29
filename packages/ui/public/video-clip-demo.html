@@ -454,6 +454,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 }
 .snap-step input::-webkit-outer-spin-button,
 .snap-step input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+.snap-step + .snap-step { margin-left: 6px; }
 .foot {
   display: flex;
   align-items: center;
@@ -672,10 +673,15 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     </button>
   </div>
   <div class="foot">
-    <p class="hint">拖<b>蓝色框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后，端点按「吸附」间隔对齐，循环打开后只播放选中的片段。</p>
+    <p class="hint">拖<b>蓝色框两端</b>调整片段，拖<b>中间</b>移动；磁铁打开后平时跟手，靠近吸附点（±范围）才吸上去；范围最大为间隔的一半，循环打开后只播放选中的片段。</p>
     <label class="snap-step" title="吸附间隔（秒），默认 0.1">
       <span>吸附</span>
       <input id="snapStepInput" type="number" min="0.01" max="10" step="0.01" inputmode="decimal" value="0.1" aria-label="吸附间隔（秒）">
+      <span>秒</span>
+    </label>
+    <label class="snap-step" title="吸附范围（秒），进入范围才吸附，默认 0.12">
+      <span>范围</span>
+      <input id="snapRadiusInput" type="number" min="0.01" max="5" step="0.01" inputmode="decimal" value="0.12" aria-label="吸附范围（秒）">
       <span>秒</span>
     </label>
     <div class="style-switch" role="group" aria-label="选区样式">
@@ -697,6 +703,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   var RANGE_KEY = 'mini-canvas-video-clip-demo:range:v1';
   var SNAP_KEY = 'mini-canvas-video-clip-demo:snap:v1';
   var SNAP_STEP_KEY = 'mini-canvas-video-clip-demo:snap-step:v1';
+  var SNAP_RADIUS_KEY = 'mini-canvas-video-clip-demo:snap-radius:v1';
   var LOOP_KEY = 'mini-canvas-video-clip-demo:loop:v1';
   var STYLE_KEY = 'mini-canvas-video-clip-demo:style:v1';
   var DEFAULT_CLIP_SECONDS = 3.36;
@@ -704,6 +711,9 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   var DEFAULT_SNAP_STEP = 0.1;
   var MIN_SNAP_STEP = 0.01;
   var MAX_SNAP_STEP = 10;
+  var DEFAULT_SNAP_RADIUS = 0.12;
+  var MIN_SNAP_RADIUS = 0.01;
+  var MAX_SNAP_RADIUS = 5;
   var THUMB_TARGET_WIDTH = 56;
   var CAPSULE_EAR_WIDTH = 16;
 
@@ -733,6 +743,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     clipLength: document.getElementById('clipLength'),
     snapBtn: document.getElementById('snapBtn'),
     snapStepInput: document.getElementById('snapStepInput'),
+    snapRadiusInput: document.getElementById('snapRadiusInput'),
     loopBtn: document.getElementById('loopBtn'),
     styleEdge: document.getElementById('styleEdge'),
     styleCapsule: document.getElementById('styleCapsule')
@@ -744,6 +755,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     end: 0,
     snap: readFlag(SNAP_KEY),
     snapStep: readSnapStep(),
+    snapRadius: readSnapRadius(),
     loop: readFlag(LOOP_KEY),
     style: readStyle(),
     objectUrl: '',
@@ -759,15 +771,17 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     return Math.min(max, Math.max(min, value));
   }
 
-  // 端点统一走这里：返回落在 [0, max] 内、按吸附间隔对齐的时间。
-  // 这里只做正常取整；贴 0 / 总时长由拖拽时的边界判定负责，避免结尾前出现一段不跟手的区域。
-  function snapToStep(value, max) {
-    var high = Number.isFinite(max) ? Math.max(0, max) : Math.max(0, state.duration);
-    var bounded = clamp(Number(value) || 0, 0, high);
-    if (!state.snap) return bounded;
+  // 磁性吸附：平时跟手，只有当「色块时长」离某个格点小于「吸附范围」时才吸上去。
+  // 吸附作用的是色块自己的时长（标签里的数字），不限制背景位置。
+  // 有效范围被限制在半个吸附间隔以内；范围 ≥ 半个间隔时，任意时长都会落入某个格点的范围，等于全程吸附。
+  function snapLength(value) {
+    var length = Math.max(0, Number(value) || 0);
+    if (!state.snap) return length;
     var step = Number(state.snapStep);
-    if (!(step > 0)) return bounded;
-    return clamp(Math.round(bounded / step) * step, 0, high);
+    var radius = Math.min(Number(state.snapRadius) || 0, step / 2);
+    if (!(step > 0)) return length;
+    var nearest = Math.round(length / step) * step;
+    return Math.abs(length - nearest) <= radius ? Math.max(0, nearest) : length;
   }
 
   function readFlag(key) {
@@ -798,6 +812,18 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     return DEFAULT_SNAP_STEP;
   }
 
+  function readSnapRadius() {
+    try {
+      var raw = parseFloat(localStorage.getItem(SNAP_RADIUS_KEY));
+      if (Number.isFinite(raw) && raw >= MIN_SNAP_RADIUS && raw <= MAX_SNAP_RADIUS) return raw;
+    } catch (error) { /* private mode */ }
+    return DEFAULT_SNAP_RADIUS;
+  }
+
+  function writeSnapRadius(value) {
+    try { localStorage.setItem(SNAP_RADIUS_KEY, String(value)); } catch (error) { /* private mode */ }
+  }
+
   function writeSnapStep(value) {
     try { localStorage.setItem(SNAP_STEP_KEY, String(value)); } catch (error) { /* private mode */ }
   }
@@ -806,6 +832,23 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     var number = Number(value);
     if (!Number.isFinite(number)) return String(DEFAULT_SNAP_STEP);
     return String(Number(number.toFixed(3)));
+  }
+
+  function syncSnapRadiusUi() {
+    var text = formatStep(state.snapRadius);
+    if (els.snapRadiusInput.value !== text) els.snapRadiusInput.value = text;
+  }
+
+  function setSnapRadius(raw) {
+    var next = Number(raw);
+    if (!Number.isFinite(next) || next < MIN_SNAP_RADIUS || next > MAX_SNAP_RADIUS) {
+      syncSnapRadiusUi();
+      return;
+    }
+    next = Number(next.toFixed(3));
+    state.snapRadius = next;
+    writeSnapRadius(next);
+    syncSnapRadiusUi();
   }
 
   function readSavedRange() {
@@ -1184,6 +1227,12 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   function syncSnapStepUi() {
     var text = formatStep(state.snapStep);
     if (els.snapStepInput.value !== text) els.snapStepInput.value = text;
+    if (Number(state.snapRadius) > Number(state.snapStep) / 2) {
+      var clamped = Number((Number(state.snapStep) / 2).toFixed(3));
+      state.snapRadius = clamped;
+      writeSnapRadius(clamped);
+      syncSnapRadiusUi();
+    }
   }
 
   function setSnapStep(raw) {
@@ -1196,9 +1245,12 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     state.snapStep = next;
     writeSnapStep(next);
     syncSnapStepUi();
-    // 吸附间隔变了，已选的片段立刻按新间隔重新对齐。
+    // 吸附间隔变了，已选片段立刻按新间隔重新对齐时长，位置尽量不动。
     if (state.duration && state.snap) {
-      setRange(snapToStep(state.start, state.duration), snapToStep(state.end, state.duration), { save: true });
+      var length = snapLength(state.end - state.start);
+      var safeLength = clamp(length, MIN_CLIP_SECONDS, state.duration);
+      var anchor = clamp(state.start, 0, state.duration - safeLength);
+      setRange(anchor, anchor + safeLength, { save: true });
     }
   }
 
@@ -1239,7 +1291,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     syncSnapUi();
     if (!state.duration) return;
     if (state.snap) {
-      setRange(snapToStep(state.start, state.duration), snapToStep(state.end, state.duration), { save: true, preview: true });
+      var length = snapLength(state.end - state.start);
+      var safeLength = clamp(length, MIN_CLIP_SECONDS, state.duration);
+      var anchor = clamp(state.start, 0, state.duration - safeLength);
+      setRange(anchor, anchor + safeLength, { save: true, preview: true });
       setStatus('已开启吸附（' + formatStep(state.snapStep) + ' 秒）', 'ok', 1600);
     } else {
       setStatus('已关闭吸附', 'ok', 1400);
@@ -1353,7 +1408,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     if (saved) next = normalizeRange(saved.start, saved.end);
     else next = normalizeRange(defaultRange().start, defaultRange().end);
     if (state.snap) {
-      next = normalizeRange(snapToStep(next.start, state.duration), snapToStep(next.end, state.duration));
+      var restoredLength = snapLength(next.end - next.start);
+      var safeLength = clamp(restoredLength, MIN_CLIP_SECONDS, state.duration);
+      var anchor = clamp(next.start, 0, state.duration - safeLength);
+      next = normalizeRange(anchor, anchor + safeLength);
     }
     setRange(next.start, next.end);
     try { els.video.currentTime = state.start; } catch (error) { /* ignore */ }
@@ -1472,14 +1530,26 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 
     if (drag.kind === 'start') {
       nextStart = drag.fromStart + delta;
-      // 只有继续往外拖时才贴 0；一旦往回拖，离开边界并按吸附间隔走，避免粘住不动。
-      nextStart = atFilmStart && delta <= 0 ? 0 : snapToStep(nextStart, nextEnd - MIN_CLIP_SECONDS);
+      if (nextStart <= 0) {
+        // 指针越过左边界：贴 0，此时时长就是物理值，不做吸附取整。
+        nextStart = 0;
+      } else {
+        // 边界内：左耳只改片段时长，按吸附间隔对齐，另一端保持不动。
+        var length = snapLength(nextEnd - nextStart);
+        nextStart = clamp(nextEnd - length, 0, nextEnd - MIN_CLIP_SECONDS);
+      }
       setRange(nextStart, nextEnd);
       previewBoundary('start', false);
     } else if (drag.kind === 'end') {
       nextEnd = drag.fromEnd + delta;
-      nextEnd = atFilmEnd && delta >= 0 ? state.duration : snapToStep(nextEnd, state.duration);
-      nextEnd = Math.max(nextEnd, nextStart + MIN_CLIP_SECONDS);
+      if (nextEnd >= state.duration) {
+        // 指针越过右边界：贴总时长，时长就是物理值。
+        nextEnd = state.duration;
+      } else {
+        // 边界内：右耳只改片段时长，按吸附间隔对齐，另一端保持不动。
+        var length = snapLength(nextEnd - nextStart);
+        nextEnd = clamp(nextStart + length, nextStart + MIN_CLIP_SECONDS, state.duration);
+      }
       setRange(nextStart, nextEnd);
       previewBoundary('end', false);
     } else {
@@ -1488,9 +1558,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       // 整段平移：长度不变，起点被限制在 [0, 总时长 - 长度]。
       // 上限这里也用吸附对齐，拖到最右时端点正好等于视频总时长。
       var maxStart = Math.max(0, state.duration - clipLength);
+      // 整段平移不改变色块时长；到边界就把位置贴到 0 或总时长减时长。
       if (atFilmStart && delta <= 0) nextStart = 0;
       else if (atFilmEnd && delta >= 0) nextStart = maxStart;
-      else nextStart = snapToStep(nextStart, maxStart);
+      else nextStart = clamp(nextStart, 0, maxStart);
       nextEnd = nextStart + clipLength;
       setRange(nextStart, nextEnd);
       previewBoundary('start', false);
@@ -1520,10 +1591,13 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     event.preventDefault();
     var step = state.snap ? state.snapStep : (event.shiftKey ? 0.1 : 0.25);
     if (kind === 'start') {
-      var nextStart = snapToStep(state.start + direction * step, state.end - MIN_CLIP_SECONDS);
+      // 键盘微调也按「色块时长」吸附。
+      var length = snapLength(state.end - (state.start + direction * step));
+      var nextStart = clamp(state.end - length, 0, state.end - MIN_CLIP_SECONDS);
       setRange(nextStart, state.end, { save: true, preview: true, edge: 'start' });
     } else {
-      var nextEnd = snapToStep(state.end + direction * step, state.duration);
+      var length = snapLength(state.end + direction * step - state.start);
+      var nextEnd = clamp(state.start + length, state.start + MIN_CLIP_SECONDS, state.duration);
       setRange(state.start, nextEnd, { save: true, preview: true, edge: 'end' });
     }
     updateTimeUi();
@@ -1620,6 +1694,12 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   els.snapStepInput.addEventListener('blur', function () {
     setSnapStep(els.snapStepInput.value);
   });
+  els.snapRadiusInput.addEventListener('change', function () {
+    setSnapRadius(els.snapRadiusInput.value);
+  });
+  els.snapRadiusInput.addEventListener('blur', function () {
+    setSnapRadius(els.snapRadiusInput.value);
+  });
   els.loopBtn.addEventListener('click', toggleLoop);
   els.styleEdge.addEventListener('click', function () { setStyle('edge'); });
   els.styleCapsule.addEventListener('click', function () { setStyle('capsule'); });
@@ -1650,6 +1730,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 
   syncSnapUi();
   syncSnapStepUi();
+  syncSnapRadiusUi();
   syncLoopUi();
   syncStyleUi();
   updateSelectionUi();
