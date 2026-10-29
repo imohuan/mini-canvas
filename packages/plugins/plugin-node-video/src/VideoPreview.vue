@@ -455,7 +455,10 @@ watch(
 .vpv-dense-play:hover { transform: scale(1.06); background: var(--vpv-panel); }
 .vpv-dense-play:focus-visible { outline: 2px solid var(--vpv-ring); outline-offset: 2px; }
 /* 正在播放且鼠标不在画面上：把播放键收起来（别一直挡着画面）；悬停或暂停时显形 */
-.vpv-root.is-dense:not(:hover) .vpv-dense.is-playing .vpv-dense-play { opacity: 0; pointer-events: none; }
+/* 正在播放时一律收起播放键：点卡片本身就是暂停（用户口径 2026-10-29：
+   播放中不该再显示站停按钮 —— 之前带 :not(:hover)，鼠标停在画面上它又冒出来）。
+   暂停状态永远显示播放键（提示「点这里继续」）。 */
+.vpv-root.is-dense .vpv-dense.is-playing .vpv-dense-play { opacity: 0; pointer-events: none; }
 
 .vpv-dense-expand {
   position: absolute;

@@ -1136,6 +1136,20 @@ function createUi() {
           ...(e.media && Object.keys(e.media).length > 0 ? { media: e.media } : {}),
           ...(e.error ? { error: e.error } : {}),
         }))
+        /**
+         * 按 id 去重（用户实测 2026-10-29：视频页签出现一模一样的两张卡）。
+         * 根因：同秒完成任务的时间戳并列时，后端排序在同一 key 上不稳定 ——
+         * 第 1 页把它排后面、第 2 页又把它排前面，翻页就重复。同 id 出现两次时
+         * 保留先到的（页码小的那份），后面的直接丢弃。
+         */
+        const dedup = <T extends { id?: string }>(rows: T[]): T[] => {
+          const set = new Set<string>()
+          return rows.filter((e) => {
+            if (!e.id || set.has(e.id)) return false
+            set.add(e.id)
+            return true
+          })
+        }
         // 追加式分页：第 1 页（或筛选切换后回到第 1 页）替换整表；后续页**追加**
         if (pageNo <= 1) {
           /**
@@ -1151,22 +1165,25 @@ function createUi() {
              * 音频波形会重建）。按 id 去重后 unshift，天然按新→旧排列。
              */
             const known = new Set(state.historyItems.map((e) => e.id))
-            const fresh = mapped.filter((e) => !known.has(e.id))
+            const fresh = dedup(mapped).filter((e) => !known.has(e.id))
             if (fresh.length > 0) state.historyItems.unshift(...fresh)
             state.histUpdateMode = fresh.length > 0 ? 'prepend' : 'none'
             state.histUpdateCount = fresh.length
             state.histHasMore = state.historyItems.length < page.total
           } else {
-            state.historyItems = mapped
+            state.historyItems = dedup(mapped)
             state.histUpdateMode = 'rebuild'
             state.histUpdateCount = mapped.length
             state.histPage = pageNo
             state.histHasMore = page.page * page.pageSize < page.total
           }
         } else {
-          state.historyItems.push(...mapped)
+          // 追加页也要先去重：后端分页窗口可能因为排序并列把同一条给两页
+          const known = new Set(state.historyItems.map((e) => e.id))
+          const fresh = dedup(mapped).filter((e) => !known.has(e.id))
+          state.historyItems.push(...fresh)
           state.histUpdateMode = 'append'
-          state.histUpdateCount = mapped.length
+          state.histUpdateCount = fresh.length
           state.histPage = pageNo
           state.histHasMore = page.page * page.pageSize < page.total
         }

@@ -131,15 +131,27 @@ export class HistoryStore {
     const kindFiltered = q.kind ? filtered.filter((e) => e.kind === q.kind) : filtered
     const byKind: Record<string, number> = {}
     for (const e of filtered) byKind[e.kind] = (byKind[e.kind] ?? 0) + 1
+    /**
+     * 兜底去重（2026-10-29 用户实测：同一条在两页各出现一次）。
+     * append 是插头部，文件里正常不会重；跨画布合并 + 同 finishedAt 并列时
+     * 页与页之间可能给同一条两次 —— 这里按 id 收口，保证分页窗口不重叠。
+     */
+    const seenIds = new Set<string>()
+    const distinct = kindFiltered.filter((e) => {
+      if (!e.id || seenIds.has(e.id)) return false
+      seenIds.add(e.id)
+      return true
+    })
 
     const start = (page - 1) * pageSize
     return {
-      items: kindFiltered.slice(start, start + pageSize),
-      total: kindFiltered.length,
+      items: distinct.slice(start, start + pageSize),
+      total: distinct.length,
       page,
       pageSize,
       // 汇总的 total 跟随类型筛选（页签下划线旁的数字），byKind 永远给全量分布
-      summary: { total: kindFiltered.length, byKind },
+      // （与 distinct 同源：去重后 total 与 items.length 一致，页签徽章不再多算）
+      summary: { total: distinct.length, byKind },
     }
   }
 

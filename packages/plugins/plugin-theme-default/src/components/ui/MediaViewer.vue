@@ -324,8 +324,13 @@ watch(item, (v) => {
               <video v-else :key="currentUrl" class="mv-video" :src="currentUrl" controls autoplay playsinline />
             </div>
           </div>
-          <div v-else-if="kind === 'audio' && item.url && AudioPreview" class="mv-plugin-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
-            <component :is="AudioPreview" :url="item.url" :name="item.name" class="mv-media-plugin" />
+          <!-- 音频也要跟 currentUrl 走：之前写死 item.url，左右切张时波形永远停在第一段（用户实测 2026-10-29） -->
+          <div v-else-if="kind === 'audio' && currentUrl && AudioPreview" class="mv-plugin-stage mv-plugin-stage--audio" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
+            <div class="mv-plugin-title">
+              <strong>{{ item.name }}</strong>
+              <span>音频 · {{ currentIdx + 1 }}/{{ list.length }}</span>
+            </div>
+            <component :is="AudioPreview" :key="currentUrl" :url="currentUrl" :name="item.name" class="mv-media-plugin" />
           </div>
           <div v-else-if="kind === 'text' && TextPreview" class="mv-plugin-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
             <component :is="TextPreview" :text="item.text" :name="item.name" class="mv-media-plugin" />
@@ -387,7 +392,8 @@ watch(item, (v) => {
         <button v-if="canZoom" class="mv-btn" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
         </button>
-        <span class="mv-divider" />
+        <!-- 分隔线只属于工具按钮：没有旋转/镜像的媒体（音频/文本）不再多出第二条线 -->
+        <span v-if="hasTools" class="mv-divider" />
         <button class="mv-btn" type="button" title="下载" aria-label="下载" @click="download">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </button>
@@ -598,6 +604,32 @@ watch(item, (v) => {
   display: flex;
   flex-direction: column;
   color: var(--ui-ink, inherit);
+}
+/* 音频全屏卡片：给插件件一圈内边距与标题（用户口径 2026-10-29：单独一张白卡
+   光秃秃不好看 —— 装饰一下，仍与全屏暗背景对比明显）。 */
+.mv-plugin-stage--audio {
+  width: min(560px, 80vw);
+  min-height: 0;
+  padding: 18px 22px 14px;
+  gap: 10px;
+}
+.mv-plugin-stage--audio .mv-media-plugin {
+  width: 100%;
+}
+.mv-plugin-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ui-ink-dim, #6b7280);
+}
+.mv-plugin-title strong {
+  font-weight: 600;
+  color: var(--ui-ink, #18202b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mv-text {
   max-width: min(880px, 100%);
