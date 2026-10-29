@@ -209,7 +209,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 }
 .stage-status {
   position: absolute;
-  top: 12px;
+  top: 54px;
   left: 50%;
   z-index: 8;
   max-width: calc(100% - 32px);
@@ -459,11 +459,11 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 .style-btn.is-on { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
 
 /* 第二套：1:1 复刻 LibTV 剪辑条（56px 高、12px 圆角、黑色底）。
-   蓝色只用于左右两只实心把手和选区上下的 2px 细线，不再画整圈粗框。 */
-.app[data-style="capsule"] .film-slot { padding: 0 16px; }
+   蓝色只用于左右两只实心把手和选区上下的 2px 细线，不再画整圈粗框。
+   两只耳朵绝对定位、不占布局宽度：它们可以越过胶片和底栏的左右边界。 */
+.app[data-style="capsule"] .film-slot { padding: 0; }
 .app[data-style="capsule"] .film { border-radius: 12px; background: #000000; }
 .app[data-style="capsule"] .frames { border-radius: 12px; }
-.app[data-style="capsule"] .frame + .frame { border-left: 0; }
 .app[data-style="capsule"] .shade-left,
 .app[data-style="capsule"] .shade-right { background: rgba(0, 0, 0, 0.5); }
 .app[data-style="capsule"] .selection {
@@ -472,12 +472,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   bottom: 0;
   border-radius: 12px;
   background: transparent;
-  border-top: 2px solid var(--blue);
-  border-bottom: 2px solid var(--blue);
   box-shadow: none;
   box-sizing: border-box;
-  border-top-width: 2px;
-  border-bottom-width: 2px;
 }
 .app[data-style="capsule"] .selection::after {
   content: "";
@@ -489,26 +485,11 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   border-bottom: 2px solid var(--blue);
   pointer-events: none;
 }
-.app[data-style="capsule"] .selection-content {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-  background-position: center;
-  background-size: cover;
-  pointer-events: none;
-}
-.app[data-style="capsule"] .selection-content::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.06);
-}
 .app[data-style="capsule"] .handle {
   top: 0;
   bottom: 0;
   z-index: 9;
-  width: var(--ear-width, 16px);
+  width: 16px;
   border: 0;
   border-radius: 0 12px 12px 0;
   background: var(--blue);
@@ -518,8 +499,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 }
 .app[data-style="capsule"] .handle-left { left: -16px; border-radius: 12px 0 0 12px; }
 .app[data-style="capsule"] .handle-right { right: -16px; }
-.app[data-style="capsule"] .handle-right { border-radius: 0 12px 12px 0; }
-.app[data-style="capsule"] .selection-content { pointer-events: none; }
 .app[data-style="capsule"] .handle-left::before,
 .app[data-style="capsule"] .handle-right::before { content: none; }
 .app[data-style="capsule"] .handle::after {
@@ -570,7 +549,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   .stage { border-radius: 11px; }
   .stage-empty::before { inset: 11px; }
   .dock { height: 88px; padding: 7px; gap: 6px; border-radius: 12px; }
-  .app[data-style="capsule"] .film-slot { padding: 0 12px; }
+  .app[data-style="capsule"] .film-slot { padding: 0; }
   .app[data-style="capsule"] .handle { width: 14px; }
   .film { border-radius: 5px; }
   .dock-btn { width: 44px; height: 44px; border-radius: 12px; }
@@ -578,7 +557,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   .clip-length { padding: 6px 8px; font-size: 12px; }
   .stage-top { padding: 10px 11px; }
   .file-meta { display: none; }
-  .stage-status { top: 9px; font-size: 10.5px; }
+  .stage-status { top: 42px; font-size: 10.5px; }
   .hint { font-size: 10.5px; }
   .foot { flex-wrap: wrap; gap: 6px; }
   .style-switch { margin-left: auto; }
@@ -632,7 +611,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
         <div class="shade shade-left" id="shadeLeft"></div>
         <div class="shade shade-right" id="shadeRight"></div>
         <div class="selection" id="selection" hidden>
-          <div class="selection-content" id="selectionContent" aria-hidden="true"></div>
           <div class="handle handle-left" id="handleLeft" role="slider" tabindex="0" aria-label="片段起点" aria-orientation="horizontal" aria-valuemin="0"></div>
           <div class="handle handle-right" id="handleRight" role="slider" tabindex="0" aria-label="片段终点" aria-orientation="horizontal" aria-valuemin="0"></div>
         </div>
@@ -703,7 +681,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     shadeLeft: document.getElementById('shadeLeft'),
     shadeRight: document.getElementById('shadeRight'),
     selection: document.getElementById('selection'),
-    selectionContent: document.getElementById('selectionContent'),
     playhead: document.getElementById('playhead'),
     handleLeft: document.getElementById('handleLeft'),
     handleRight: document.getElementById('handleRight'),
@@ -971,10 +948,9 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.selection.hidden = false;
     els.clipLength.hidden = false;
     els.filmEmpty.hidden = true;
-    // 时间刻度必须从两只蓝色耳朵的内沿开始算，否则 0 秒会落在耳朵左侧。
-    var lane = getTimelineLane();
-    var left = (state.start / duration * lane.size + lane.offset) / lane.total * 100;
-    var right = (state.end / duration * lane.size + lane.offset) / lane.total * 100;
+    // 时间轴铺满整条胶片；耳朵不占空间，只是悬在两端的把手。
+    var left = state.start / duration * 100;
+    var right = state.end / duration * 100;
     var width = Math.max(0, right - left);
     els.selection.style.left = left + '%';
     els.selection.style.width = width + '%';
@@ -988,9 +964,9 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       var endX = right / 100 * filmWidth;
       var capsule = state.style === 'capsule';
       var earWidth = capsule ? CAPSULE_EAR_WIDTH : 20;
-      if (capsule) els.film.style.setProperty('--ear-width', earWidth + 'px');
       var center = (startX + endX) / 2;
-      var available = Math.max(0, endX - startX - earWidth * 2 - 6);
+      // 耳朵不占空间，时长标签可以占满整个选区。
+      var available = Math.max(0, endX - startX - 6);
       var labelWidth = Math.min(els.clipLength.offsetWidth, 96);
       var above = !capsule && available < labelWidth + 6;
       els.clipLength.classList.toggle('is-above', above);
@@ -1000,7 +976,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       var high = Math.max(filmWidth - halfLabel, filmWidth / 2);
       var labelX = above ? clamp(center, low, high) : center;
       els.clipLength.style.left = labelX + 'px';
-      if (els.selectionContent.style.backgroundImage) setSelectionPreview('');
     }
     els.handleLeft.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
     els.handleRight.setAttribute('aria-valuemax', String(Number(duration.toFixed(2))));
@@ -1009,24 +984,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.handleLeft.setAttribute('aria-valuetext', formatClip(state.start) + '，片段起点');
     els.handleRight.setAttribute('aria-valuetext', formatClip(state.end) + '，片段终点');
     updatePlayhead();
-  }
-
-  // 胶囊样式的左右耳朵压在胶片两端；真正的时间轴只占两耳之间的内框。
-  function getTimelineLane() {
-    var total = els.film.clientWidth;
-    if (!total) return { total: 0, offset: 0, size: 0 };
-    var inset = state.style === 'capsule' ? CAPSULE_EAR_WIDTH : 0;
-    return { total: total, offset: inset, size: Math.max(1, total - inset * 2) };
-  }
-
-  function setSelectionPreview(dataUrl) {
-    if (dataUrl) els.selectionContent.style.backgroundImage = 'url(' + dataUrl + ')';
-    var width = els.selection.clientWidth;
-    var height = els.selection.clientHeight;
-    if (!width || !height) return;
-    var ratio = width / height;
-    var frameRatio = 16 / 9;
-    els.selectionContent.style.backgroundSize = ratio >= frameRatio ? 'auto 100%' : '100% auto';
   }
 
   function updatePlayhead() {
@@ -1042,9 +999,7 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     var width = els.film.clientWidth;
     if (!width) return;
     var current = clamp(Number(els.video.currentTime) || 0, 0, state.duration);
-    var lane = getTimelineLane();
-    var offset = -1;
-    var x = Math.round((lane.offset + current / state.duration * lane.size + offset) * 2) / 2;
+    var x = Math.round((current / state.duration * width - 1) * 2) / 2;
     if (state.lastPlayheadX !== x) {
       state.lastPlayheadX = x;
       els.playhead.style.transform = 'translate3d(' + x + 'px, 0, 0)';
@@ -1240,8 +1195,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
             drawCover(context, probe, sourceWidth, sourceHeight, canvas.width, canvas.height);
             var dataUrl = canvas.toDataURL('image/jpeg', 0.76);
             nodes[frameIndex].style.backgroundImage = 'url(' + dataUrl + ')';
-            if (frameIndex === 0) setSelectionPreview(dataUrl);
-            if (frameIndex === Math.floor(count / 2)) setSelectionPreview(dataUrl);
           } catch (error) {
             /* One bad frame should not stop the whole strip. */
           }
@@ -1370,25 +1323,26 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 
   function currentTimeAt(clientX) {
     var rect = els.film.getBoundingClientRect();
-    var lane = getTimelineLane();
-    if (!rect.width || !lane.size) return 0;
-    var local = clientX - rect.left - lane.offset;
-    return clamp(local / lane.size, 0, 1) * state.duration;
+    if (!rect.width) return 0;
+    return clamp((clientX - rect.left) / rect.width, 0, 1) * state.duration;
   }
 
   function beginDrag(kind, event, edge) {
     if (!state.duration || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    var handle = event.currentTarget;
+    if (handle && handle.setPointerCapture) {
+      try { handle.setPointerCapture(event.pointerId); } catch (error) { /* synthetic events */ }
+    }
     var rect = els.film.getBoundingClientRect();
     if (!rect.width) return;
     try { els.video.pause(); } catch (error) { /* ignore */ }
-    var lane = getTimelineLane();
     state.drag = {
       kind: kind,
       pointerId: event.pointerId,
       startX: event.clientX,
-      width: lane.size || rect.width,
+      width: rect.width,
       fromStart: state.start,
       fromEnd: state.end
     };
@@ -1412,6 +1366,10 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     if (!drag || event.pointerId !== drag.pointerId) return;
     event.preventDefault();
     var delta = (event.clientX - drag.startX) / drag.width * state.duration;
+    // 拖到胶片两端时直接对齐到 0 / 总时长，避免因耳朵超出边界差几像素而停在 0.06 秒。
+    var filmRect = els.film.getBoundingClientRect();
+    if (event.clientX <= filmRect.left + 1) delta = -drag.fromStart;
+    if (event.clientX >= filmRect.right - 1) delta = state.duration - drag.fromEnd;
     var nextStart = drag.fromStart;
     var nextEnd = drag.fromEnd;
 
