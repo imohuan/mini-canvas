@@ -193,12 +193,9 @@ h1 {
 .panel-search {
   display: flex;
   align-items: center;
+  width: 100%;
   min-width: 0;
 }
-.panel-search > .search-inline {
-  width: 100%;
-}
-
 .icon-btn {
   display: grid;
   place-items: center;
@@ -233,7 +230,8 @@ h1 {
   display: flex;
   align-items: center;
   gap: 7px;
-  width: 150px;
+  width: 100%;
+  max-width: 240px;
   height: 32px;
   padding: 0 6px 0 10px;
   border-radius: var(--radius-row);
@@ -1078,12 +1076,35 @@ h1 {
     height: 32px;
     animation: search-expand 0.2s var(--ease-back) both;
   }
-  .panel.is-search-open .panel-search > .search-inline { max-width: none; }
+  .panel.is-search-open .panel-search > .search-inline {
+    width: 100%;
+    max-width: none;
+  }
   .panel.is-search-open .search-toggle { display: none; }
 }
 @container (min-width: 470px) {
   .search-toggle { display: none; }
   .panel-search { display: flex; }
+}
+/* MCP 多一个检测按钮，空间要求更高；放不下时提前换到第二行。 */
+@container (min-width: 470px) and (max-width: 494px) {
+  .mcp-panel .panel-head-top { grid-template-columns: auto 1fr; }
+  .mcp-panel .panel-search { display: none; }
+  .mcp-panel .search-toggle { display: grid; }
+  .mcp-panel.is-search-open .panel-search {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    animation: search-expand 0.2s var(--ease-back) both;
+  }
+  .mcp-panel.is-search-open .panel-search > .search-inline {
+    width: 100%;
+    max-width: none;
+  }
+  .mcp-panel.is-search-open .search-toggle { display: none; }
 }
 @container (max-width: 540px) {
   .detect-btn .detect-label { display: none; }
