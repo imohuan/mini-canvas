@@ -732,7 +732,16 @@ describe('不可预览的媒体不会挂成 video/audio（防浏览器重试刷�
   it('建格子的三条路径都会跳过被标记的卡', () => {
     expect(modalsArea, '缺少统一的建格子入口').toMatch(/function buildWallWrapper/)
     for (const name of ['rebuildMasonry', 'appendMasonryItems', 'prependMasonryItems']) {
-      const fn = modalsArea.slice(modalsArea.indexOf('function ' + name), modalsArea.indexOf('function ' + name) + 2200)
+      /**
+       * 必须截到**这个函数自己的结尾**：用固定长度切片会把后面 buildWallWrapper 的
+       * 定义也包进来，函数体没走它也会假绿（2026-10-30 抓到）。
+       */
+      const start = modalsArea.indexOf('function ' + name)
+      const nextFn = modalsArea.indexOf('\nfunction ', start + 10)
+      const nextComment = modalsArea.indexOf('\n/**', start + 10)
+      const end = [nextFn, nextComment].filter((i) => i > start).sort((a, b) => a - b)[0] ?? modalsArea.length
+      const fn = modalsArea.slice(start, end)
+      expect(fn.length, name + ' 函数体没截到').toBeGreaterThan(100)
       expect(fn, name + ' 没有走统一建格子入口（跳过的卡会留下空列位）').toMatch(/buildWallWrapper\(/)
     }
   })
