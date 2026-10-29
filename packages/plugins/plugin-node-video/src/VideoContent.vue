@@ -46,7 +46,8 @@ function positiveNum(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
 import { createVideoOps } from './videoOps'
-import { endOverlay, isCropping } from './videoSession'
+import { endOverlay, isClipping, isCropping } from './videoSession'
+import { publishPlayhead, resetPlayhead } from './videoClipStore'
 import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -210,7 +211,15 @@ function schedulePosterHide(): void {
   }, 500)
 }
 const keepPosterOverVideo = computed(() => posterCovering.value)
-const showPoster = computed(() => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0))
+/**
+ * 剪辑会话期间绝不能卸载 video 元素：底部剪辑条的播放头跟的就是这个元素的
+ * currentTime，元素一卸（回帧图）播放头就永远停住。所以三处「回帧图」的口
+ * （showPoster 的显隐计算、onCardLeave 的定格复位、endOverlay 的会话清理）
+ * 都要先看 isClipping —— 剪辑中一律保持 video 挂载。
+ */
+const showPoster = computed(
+  () => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0 && !isClipping(props.id)),
+)
 
 /**
  * 取帧时刻：第 0 帧常是黑场 / 片头，取第 1 秒更有代表性；
@@ -484,6 +493,12 @@ async function freezeFrame(): Promise<void> {
  */
 function stopAndRestorePoster(): void {
   if (!videoRequested.value) return
+  // 剪辑会话中离开节点：video 必须留着（播放头还指着它），只记下时间
+  if (isClipping(props.id)) {
+    const v = videoRef.value
+    if (v && Number.isFinite(v.currentTime)) resumeTime.value = v.currentTime
+    return
+  }
   const epochAtLeave = freezeEpoch.value
   const v = videoRef.value
   if (v) {
@@ -720,6 +735,7 @@ function onTimeUpdate(e: Event): void {
  // （暂停/seek 也会发）不能再来写时间 —— 两个时间源交替写 currentTime 就是进度条闪烁
   if (v !== activeVideo()) return
   currentTime.value = v.currentTime
+  publishPlayhead(props.id, v.currentTime)
   playing.value = !v.paused
   const { start, end } = clipRange.value
   // 播到剪辑段末尾：停了，并把画面停在结尾（不要让用户看到被剪掉的画面）。
@@ -919,6 +935,7 @@ onBeforeUnmount(() => {
   releaseFrameTiers()
   paneClickSub.dispose()
   endOverlay(props.id)
+  resetPlayhead(props.id)
 })
 
 // 视频地址一变：旧源的帧图全部作废（释放 objectURL）、回到"未播放"态

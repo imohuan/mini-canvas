@@ -19,9 +19,6 @@ importers:
       '@floating-ui/vue':
         specifier: ^1
         version: 1.1.11(vue@3.5.38(typescript@6.0.3))
-      '@mini-canvas/canvas-core':
-        specifier: workspace:*
-        version: link:packages/canvas-core
       '@tailwindcss/vite':
         specifier: ^4.3.1
         version: 4.3.1(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
@@ -96,36 +93,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/canvas-core:
-    dependencies:
-      '@dagrejs/dagre':
-        specifier: ^3.0.0
-        version: 3.0.0
-      '@floating-ui/vue':
-        specifier: ^1
-        version: 1.1.11(vue@3.5.38(typescript@6.0.3))
-      '@vue-flow/core':
-        specifier: ^1.48.2
-        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
-      '@vueuse/core':
-        specifier: ^14.3.0
-        version: 14.3.0(vue@3.5.38(typescript@6.0.3))
-      html-to-image:
-        specifier: ^1.11.13
-        version: 1.11.13
-      pinia:
-        specifier: ^3.0.4
-        version: 3.0.4(typescript@6.0.3)(vue@3.5.38(typescript@6.0.3))
-      prosemirror-editor-bundle:
-        specifier: workspace:*
-        version: link:../prosemirror-editor-bundle
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-sonner:
-        specifier: ^2.0.9
-        version: 2.0.9
 
   packages/canvas-data:
     dependencies:
@@ -261,34 +228,6 @@ importers:
 
   packages/kernel:
     devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/mcp-server:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^2.1.1
-        version: 2.1.1(hono@4.13.5)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.0.0
-        version: 1.30.0(zod@3.25.76)
-      commander:
-        specifier: ^12.1.0
-        version: 12.1.0
-      hono:
-        specifier: ^4.6.0
-        version: 4.13.5
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-    devDependencies:
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -1077,9 +1016,6 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-bottom-bar':
-        specifier: workspace:*
-        version: link:../plugin-bottom-bar
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
@@ -1255,6 +1191,9 @@ importers:
       '@mini-canvas/plugin-bottom-bar':
         specifier: workspace:*
         version: link:../plugin-bottom-bar
+      '@mini-canvas/plugin-theme-default':
+        specifier: workspace:*
+        version: link:../plugin-theme-default
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
@@ -3850,10 +3789,6 @@ packages:
 
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
-
-  commander@12.1.0:
-    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
-    engines: {node: '>=18'}
 
   commander@7.2.0:
     resolution: {integrity: sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw==}
@@ -7651,8 +7586,6 @@ snapshots:
       readdirp: 5.1.1
 
   comma-separated-tokens@2.0.3: {}
-
-  commander@12.1.0: {}
 
   commander@7.2.0: {}
 
