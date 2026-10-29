@@ -1,8 +1,6 @@
-# Vue 3 + TypeScript + Vite
+## 一、这个项目是什么
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+mini-canvas 是一个可扩展的画布应用。画布本身只负责节点、连线、视口和保存；
+文本、图片、视频、音频、3D 预览、Agent 对话、插件管理这些功能，都由插件加进来。
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
-
-
-[ ] 支持修改 节点名称
+技术栈：Vue 3 + TypeScript + Vite + VueFlow。仓库用 pnpm workspace 管理多个包。
