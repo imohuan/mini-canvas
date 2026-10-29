@@ -760,16 +760,13 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
   }
 
   // 端点统一走这里：返回落在 [0, max] 内、按吸附间隔对齐的时间。
-  // 距离两端不足半个间隔时直接贴到 0 / max，保证视频结尾不是整间隔时也能拖到底。
+  // 这里只做正常取整；贴 0 / 总时长由拖拽时的边界判定负责，避免结尾前出现一段不跟手的区域。
   function snapToStep(value, max) {
     var high = Number.isFinite(max) ? Math.max(0, max) : Math.max(0, state.duration);
     var bounded = clamp(Number(value) || 0, 0, high);
     if (!state.snap) return bounded;
     var step = Number(state.snapStep);
     if (!(step > 0)) return bounded;
-    var half = step / 2;
-    if (bounded <= half) return 0;
-    if (high - bounded <= half) return high;
     return clamp(Math.round(bounded / step) * step, 0, high);
   }
 
@@ -1475,12 +1472,13 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 
     if (drag.kind === 'start') {
       nextStart = drag.fromStart + delta;
-      nextStart = atFilmStart ? 0 : snapToStep(nextStart, nextEnd - MIN_CLIP_SECONDS);
+      // 只有继续往外拖时才贴 0；一旦往回拖，离开边界并按吸附间隔走，避免粘住不动。
+      nextStart = atFilmStart && delta <= 0 ? 0 : snapToStep(nextStart, nextEnd - MIN_CLIP_SECONDS);
       setRange(nextStart, nextEnd);
       previewBoundary('start', false);
     } else if (drag.kind === 'end') {
       nextEnd = drag.fromEnd + delta;
-      nextEnd = atFilmEnd ? state.duration : snapToStep(nextEnd, state.duration);
+      nextEnd = atFilmEnd && delta >= 0 ? state.duration : snapToStep(nextEnd, state.duration);
       nextEnd = Math.max(nextEnd, nextStart + MIN_CLIP_SECONDS);
       setRange(nextStart, nextEnd);
       previewBoundary('end', false);
@@ -1490,8 +1488,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
       // 整段平移：长度不变，起点被限制在 [0, 总时长 - 长度]。
       // 上限这里也用吸附对齐，拖到最右时端点正好等于视频总时长。
       var maxStart = Math.max(0, state.duration - clipLength);
-      if (atFilmStart) nextStart = 0;
-      else if (atFilmEnd) nextStart = maxStart;
+      if (atFilmStart && delta <= 0) nextStart = 0;
+      else if (atFilmEnd && delta >= 0) nextStart = maxStart;
       else nextStart = snapToStep(nextStart, maxStart);
       nextEnd = nextStart + clipLength;
       setRange(nextStart, nextEnd);
