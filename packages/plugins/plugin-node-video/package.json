@@ -30,7 +30,6 @@
     "@mini-canvas/kernel": "workspace:*",
     "lucide-vue-next": "^1.0.0"
     ,"@mini-canvas/plugin-bottom-bar": "workspace:*"
-    ,"@mini-canvas/plugin-theme-default": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
