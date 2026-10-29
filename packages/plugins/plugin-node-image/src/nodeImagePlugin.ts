@@ -19,9 +19,6 @@ import { imageTitleExtra } from './imageNodeData'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
-import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
-import { writeGeneratedImage, type ImageRunDeps } from './imageRun'
-import { createImageOpsWriteDeps } from './imageApplierDeps'
 import { beginCrop, beginExpand, endEdit } from './cropSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
@@ -165,35 +162,20 @@ export function apply(ctx: Context) {
   // 1. 构造即上架 'image' 服务（super(ctx,'image') → ctx.provide，随插件 scope 回收）
   const image = new ImageService(ctx)
 
-  // 1.5 底栏动作（T8：底部生成栏搬进 plugin-bottom-bar，本包只发布动作与写入器）
-  //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
+  // 1.5 本包**不接触底栏**（用户口径 2026-10-29）。
+  //
+  // 底栏是独立插件（plugin-bottom-bar），"底栏上出现哪些模型"由 cloud-client 统一从后台
+  // 拉清单后注册（见 plugin-cloud-client/src/plugin.ts 的 reloadActions）。图片插件再调一次
+  // publishToolActions 就是第二支笔往同一张表里写 —— 重复项、归属说不清，还逼着本插件
+  // import 另一个插件（插件之间不互相 import，这是硬规则）。
+  //
+  // 因此这里只剩一件事：把图片的**操作实现**装配好，供下面的命令使用。
   const ops = createImageOps(ctx)
-  const registerBar = (): boolean => {
-    if (!ctx.tryGet('nodeBar')) return false
-    // AI 生成图片：每个 produces:'image' 的工具一条动作（输入框是临时的，发送时组装）
-    publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
-    // 旋转 / 下载**不注册进底栏**（用户口径 2026-10-29：图片插件不该往底部状态栏塞功能）。
-    // 两者仍以命令形式对外提供（image:rotate / image:download），右键菜单、快捷键、MCP 照常可用。
-    // image 写入器：量尺寸 → 一次 patch 写完 → 清旧描述字段（复用 writeGeneratedImage 的规矩）
-    const writeDeps: ImageRunDeps = createImageOpsWriteDeps(ctx)
-    registerBarApplier(ctx, 'image', (nodeId, result) => {
-      const url = result.urls?.[0]
-      if (!url) return
-      void writeGeneratedImage(nodeId, url, writeDeps)
-    })
-    return true
-  }
-  if (!registerBar()) {
-    // bottom-bar 还没装（装配顺序在后/热装）：等它上架再注册一次
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerBar()) off.dispose()
-    })
-  }
 
   // 2. 注册节点类型：create 委托服务（同一实现）。create 只收 position → 建默认空图节点。
   //    内容类型声明：image 输出产 image；输入口收 text+image（文生图/图生图），视频喂不进图片。
     //    segments：除 content 外再挂"顶部操作条"一段 —— 壳（BaseNode）注册了段才渲染。
-    //    底部栏（out:bottom）搬进 plugin-bottom-bar（T8）：动作与写入器在上面 1.5 里注册。
+    //    本包**不注册底栏段**（out:bottom）：底栏归 plugin-bottom-bar，模型清单归 cloud-client。
   ctx.nodes.register({
     type: 'image',
     label: '图片',
@@ -207,8 +189,7 @@ export function apply(ctx: Context) {
     // 尺寸一变就写一次 data 会让每次裁剪/旋转多出一条撤销记录。
     titleExtra: imageTitleExtra,
     size: { w: 320, h: 240 },
-    // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考），
-    // 底部生成面板的素材行本就是按「所有连进来的上游」渲染的（见 plugin-bottom-bar 的 panelSource.collectUpstreamMaterials）。
+    // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考）。
     // 以前这里写 capacity:1 把它限成一条，用户实测报的「图片输入端口分明可以添加多条连接线」就是它。
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image'] }],
     outputs: [{ port: 'source', contentType: 'image' }],
