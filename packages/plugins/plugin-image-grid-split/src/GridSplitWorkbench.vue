@@ -365,7 +365,7 @@ void toggleAll
 .igsw-paper { position: relative; flex: none; border-radius: var(--radius-control, 8px); overflow: hidden; box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(15 23 42 / 0.20)); background: var(--ui-panel, #fff); }
 .igsw-img { display: block; width: 100%; height: 100%; object-fit: fill; user-select: none; }
 .igsw-broken { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--ui-ink-mute, #8c95a3); font-size: var(--text-base, 13px); }
-.igsw-grid { position: absolute; inset: 0; display: grid; gap: 1px; background: rgb(0 0 0 / 0.55); }
+.igsw-grid { position: absolute; inset: 0; display: grid; gap: 1px; background: var(--ui-tip, rgb(24 32 43 / 0.92)); } /* 主题色白名单: 图像上的分隔线，压在图片上，与主题无关 */
 .igsw-cell { position: relative; display: block; min-width: 0; min-height: 0; padding: 0; border: 0; background: transparent; color: #fff; cursor: pointer; } /* 主题色白名单: 图片上的选区蒙层，固定在图像画面上，与主题无关 */
 .igsw-cell::after { content: ''; position: absolute; inset: 0; background: rgb(0 0 0 / 0.28); transition: background-color 140ms ease; } /* 主题色白名单: 同上 */
 .igsw-cell.is-on::after { background: transparent; }
