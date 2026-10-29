@@ -1317,16 +1317,38 @@ function moveTipAnchor(tile: RefTile): void {
   const card = document.querySelector<HTMLElement>('.nb-shell .nb-card[data-tile-key="' + tile.key + '"]')
   if (!el || !card) return
   const r = card.getBoundingClientRect()
-  // 锚点贴在卡片**中线**上：Tooltip 默认按触发器算位置，稳定不抖
-  el.style.left = Math.round(r.left + r.width / 2) + 'px'
+  /**
+   * 锚点**盖满这张卡**（不是 1px 的点）：主题 Tooltip 是按触发元素矩形算位置的，
+   * 尺寸对得上，气泡才会正好贴在卡片下方、水平居中。
+   * 它 pointer-events:none，不挡卡片的点击 / 拖拽；hover 事件由卡片自己转发。
+   */
+  el.style.left = Math.round(r.left) + 'px'
   el.style.top = Math.round(r.top) + 'px'
+  el.style.width = Math.round(r.width) + 'px'
+  el.style.height = Math.round(r.height) + 'px'
 }
 function onCardEnter(tile: RefTile): void {
   hoverCard.value = tile
   moveTipAnchor(tile)
+  /**
+   * 把 hover 转给 Tooltip 自己的触发器（用户 2026-10-29：要主题 Tooltip，不要原生 title）。
+   * 卡片不能直接包在 Tooltip 里：拖拽库要求直接子元素就是卡片，多包一层会破坏排序。
+   * 所以这里用锚点当替身，收到 hover 就替它把 mouseenter 发一遍。
+   */
+  void nextTick().then(() => {
+    const dot = cardTipAnchor.value
+    /**
+     * mouseenter **不冒泡**：必须派发给 Tooltip 自己的根节点（.tlt-root），
+     * 派给里面的 dot 是没用的（Vue 的 @mouseenter 挂在根上）。
+     */
+    const root = dot?.closest('.tlt-root')
+    root?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }))
+  })
 }
 function onCardLeave(tile: RefTile): void {
   if (hoverCard.value?.key === tile.key) hoverCard.value = null
+  cardTipAnchor.value?.closest('.tlt-root')
+    ?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
 }
 
 /**
@@ -2853,15 +2875,14 @@ function onGlobalLeave(el: Element): void {
   position: fixed;
   left: 0;
   top: 0;
-  width: 0;
-  height: 0;
   pointer-events: none;
   z-index: 100001;
 }
 .nb-card-tip-dot {
-  position: fixed;
-  width: 1px;
-  height: 1px;
+  /* 触发器铺满锚点（锚点尺寸 = 卡片矩形），Tooltip 按它算位置 */
+  display: block;
+  width: 100%;
+  height: 100%;
   opacity: 0;
   pointer-events: none;
 }

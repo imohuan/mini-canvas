@@ -38,9 +38,9 @@ describe('输入框内 chip 的行高', () => {
 })
 
 describe('卡片角标：只有视频挂类型角标（用户 2026-10-29）', () => {
-  it('模板里角标条件是 tile.kind === video', () => {
-    const i = SFC.indexOf('class="nb-card-kind"')
-    const head = SFC.slice(Math.max(0, i - 400), i)
-    expect(head).toContain("tile.kind === 'video'")
+  it('视频卡片改用**时长角标**（用户 2026-10-29：右下角改成 分:秒）', () => {
+    // 模板里有时长角标，且它的渲染条件限定在视频 + 有时长
+    expect(SFC).toContain('class="nb-card-duration"')
+    expect(SFC).toContain('formatVideoDuration(tile.duration)')
   })
 })

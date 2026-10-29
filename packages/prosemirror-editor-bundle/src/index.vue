@@ -103,6 +103,7 @@ const {
   replaceResourceThumbByName,
   replaceResourceThumbByIds,
   refreshChips,
+  removeRefChips,
   setEditable,
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
@@ -126,6 +127,7 @@ defineExpose({
   replaceResourceThumbByName,
   replaceResourceThumbByIds,
   refreshChips,
+  removeRefChips,
   setEditable,
   /**
    * 编辑器内部的 @ 菜单是否开着（只读）。
