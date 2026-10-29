@@ -50,6 +50,9 @@ export interface ImageNodeMeta {
   name?: string
   width?: number
   height?: number
+  /** 源节点：media 入口据此统一算落点并自动连边（旧调用方不传不受影响） */
+  sourceNodeId?: string
+  gap?: number
 }
 
 /** 类型增强缝（cordis ch3 声明合并）：宿主/作者 ctx.image 直访时类型为 ImageService */

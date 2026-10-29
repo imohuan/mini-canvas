@@ -30,6 +30,14 @@ import type {
   UpstreamGraphInput,
   UpstreamTraversalOptions,
 } from '@mini-canvas/canvas-data'
+import {
+  placeAdjacent,
+  type PlacementRect,
+  type PlacementSide,
+  type PlacementSize,
+} from '../media/placement'
+import type { FlowRect } from '../geometry/visibleArea'
+import { viewportRectInFlow } from '../geometry/visibleArea'
 
 /** node 能力：本节点的身份 / 数据 / 写回 */
 export interface NodeCapability {
@@ -170,6 +178,18 @@ export interface MediaAddOptions {
   nodeType?: string
   /** 一并交给创建器的元数据（来源、文件名等；创建器自己解释） */
   meta?: Record<string, unknown>
+  /**
+   * 源节点 id：新节点是它下游时给出（例如裁剪/剪辑/截图的结果）。
+   *
+   * 给了它，位置改成**按源节点自动找空位**（右 → 下 → 左 → 上，避让已有节点并留在视口内）；
+   * 同时创建一个节点并连一条边，让一条撤销就退回“新节点 + 连线”。
+   * 不给则沿用调用方传的 position（旧行为，保持兼容）。
+   */
+  sourceNodeId?: string
+  /** 新节点与源节点的间距（缺省 40） */
+  gap?: number
+  /** 优先方向；缺省 auto = 右 → 下 → 左 → 上 */
+  side?: PlacementSide
 }
 
 /** 创建器收到的"放一个媒体节点"请求 */
@@ -242,6 +262,8 @@ interface UpstreamDocNode {
   id: string
   type: string
   data?: Record<string, unknown>
+  /** 节点自身坐标（落点回退用；分组子节点这里只用于“没有 nodeLayout 时”的近似） */
+  position?: { x: number; y: number }
 }
 
 interface UpstreamDocEdge {
@@ -253,6 +275,8 @@ interface UpstreamDocEdge {
 interface UpstreamTypeDef {
   produces?: Record<string, DataPortDef>
   consumes?: Record<string, DataPortDef>
+  /** 节点没有自己的尺寸时用的默认尺寸（落点算法据此算新节点外框） */
+  defaultSize?: { w: number; h: number }
 }
 
 interface UpstreamDoc {
@@ -267,6 +291,31 @@ interface UpstreamDoc {
 interface ResourceLike {
   put(blob: Blob, opts?: ResourcePutOptions): Promise<string>
   resolve(id: string): Promise<string | undefined>
+}
+
+/** 落点算法需要的 doc 最小面（读节点、类型默认尺寸、事务内连边） */
+interface PlacementDoc extends UpstreamDoc {
+  transaction<T>(reason: string, fn: (tx: {
+    connectEdge(input: {
+      source: string
+      target: string
+      sourceHandle?: string
+      targetHandle?: string
+    }): { edgeId: string; status: 'ok' | 'rejected' | 'duplicate' }
+    removeNodes(ids: string[]): number
+  }) => T): T
+}
+
+interface PlacementLayout {
+  getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null
+  getAllRects(): Array<{ id: string; x: number; y: number; w: number; h: number }>
+  nodeSize(id: string): { w: number; h: number }
+}
+
+interface PlacementViewport {
+  getViewport(): { x: number; y: number; zoom: number }
+  getPaneEl?(): HTMLElement | null
+  getRendererEl?(): HTMLElement | null
 }
 
 /** 取 doc；宿主没装或取不到 → undefined（上游能力按"没有上游"处理，不抛） */
@@ -284,6 +333,30 @@ function resourceServiceOf(ctx: Context): ResourceLike | undefined {
     return ctx.get('resources') as unknown as ResourceLike | undefined
   } catch {
     return undefined
+  }
+}
+
+/** 取可选服务（命名空间统一收口，避免每个能力各写一遍 try/catch） */
+function tryService<T>(ctx: Context, name: string): T | undefined {
+  try {
+    return ctx.get<T | undefined>(name)
+  } catch {
+    return undefined
+  }
+}
+
+/** 当前可视区（flow 坐标）；拿不到 pane 尺寸时返回 null（落点算法会退化成只避让节点） */
+function visibleRectOf(viewport: PlacementViewport | undefined): FlowRect | null {
+  if (!viewport) return null
+  const pane = viewport.getPaneEl?.() ?? viewport.getRendererEl?.()
+  if (!pane) return null
+  const w = pane.clientWidth
+  const h = pane.clientHeight
+  if (!(w > 0) || !(h > 0)) return null
+  try {
+    return viewportRectInFlow(viewport.getViewport(), w, h)
+  } catch {
+    return null
   }
 }
 
@@ -503,13 +576,71 @@ export function createMediaCapability(ctx: Context): MediaCapability {
     addNode: (kind, resourceId, position, opts) => {
       const creator = mediaCreatorFieldOf(ctx)?.top(kind)?.value
       if (typeof creator?.addNode !== 'function') return undefined
-      return creator.addNode({
+      const request = {
         kind,
         resourceId,
         position,
         nodeType: opts?.nodeType,
         meta: opts?.meta,
+      }
+
+      // 没给源节点 = 旧行为：调用方算好坐标直接建，不擅自挪位置
+      if (!opts?.sourceNodeId) return creator.addNode(request)
+
+      const doc = upstreamDocOf(ctx) as PlacementDoc | undefined
+      const sourceId = opts.sourceNodeId
+      const source = doc?.getNode(sourceId)
+      if (!doc || !source) return creator.addNode(request)
+
+      const layout = tryService<PlacementLayout>(ctx, 'nodeLayout')
+      const viewport = tryService<PlacementViewport>(ctx, 'viewport')
+      const targetType = opts.nodeType ?? kind
+      const typeSize = doc.types?.get(targetType)?.defaultSize
+      const sourceRect = layout?.getNodeRect(sourceId) ?? {
+        id: sourceId,
+        x: source.position?.x ?? 0,
+        y: source.position?.y ?? 0,
+        w: layout?.nodeSize(sourceId).w ?? typeSize?.w ?? 320,
+        h: layout?.nodeSize(sourceId).h ?? typeSize?.h ?? 240,
+      }
+      const obstacles: PlacementRect[] = layout?.getAllRects() ?? doc.getNodes().map((node) => ({
+        id: node.id,
+        x: node.position?.x ?? 0,
+        y: node.position?.y ?? 0,
+        w: doc.types?.get(node.type)?.defaultSize?.w ?? 320,
+        h: doc.types?.get(node.type)?.defaultSize?.h ?? 240,
+      }))
+      const targetSize: PlacementSize = typeSize ?? { w: 320, h: 240 }
+      const placed = placeAdjacent({
+        size: targetSize,
+        source: sourceRect,
+        obstacles: obstacles.filter((rect) => rect.id !== sourceId),
+        visible: visibleRectOf(viewport),
+        ...(opts.gap !== undefined ? { gap: opts.gap } : {}),
+        ...(opts.side !== undefined ? { side: opts.side } : {}),
       })
+
+      // 建节点 + 连边包在同一个事务里：用户按一次撤销整体退回（creator 内部事务会嵌套合并）
+      try {
+        return doc.transaction('media-add-node', (tx) => {
+          const nodeId = creator.addNode!({ ...request, position: placed })
+          if (!nodeId) return undefined
+          const edge = tx.connectEdge({
+            source: sourceId,
+            target: nodeId,
+            sourceHandle: 'source',
+            targetHandle: 'target',
+          })
+          // 连不上（类型不符/容量拒绝）就不留孤儿节点 —— 这个入口承诺的是“节点 + 连线”
+          if (edge.status === 'rejected') {
+            tx.removeNodes([nodeId])
+            return undefined
+          }
+          return nodeId
+        })
+      } catch {
+        return undefined
+      }
     },
 
     applyToNode: (nodeId, slot, resourceId, meta) => {
@@ -532,6 +663,24 @@ export function createMediaCapability(ctx: Context): MediaCapability {
         .filter((kind) => typeof field.top(kind)?.value.addNode === 'function')
         .sort()
     },
+  }
+}
+
+/**
+ * 给**插件代码**（apply / 命令 / 纯逻辑层）取 media 能力。
+ *
+ * media 是 `registryOf('capability')` 里的能力工厂，不是 ctx 服务：
+ * `ctx.tryGet('media')` 永远拿不到（风格库 2026-10-23 踩过这个坑）。
+ * 画布级代码没有“当前节点”，这里给工厂一个只带 ctx 的最小上下文 ——
+ * put/resolve/addNode 都只读 ctx，不读节点 data，够用。
+ */
+export function mediaCapabilityOf(ctx: Context): MediaCapability | undefined {
+  try {
+    const factory = ctx.registryOf<CapabilityFactory>('capability').top('media')?.value
+    if (typeof factory !== 'function') return undefined
+    return factory({ ctx } as never) as MediaCapability
+  } catch {
+    return undefined
   }
 }
 

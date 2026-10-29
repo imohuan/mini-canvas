@@ -26,7 +26,7 @@ import {
 import { downloadFileName, frameFileName } from './videoNodeData'
 import { readVideoFitLimits, videoCardSizePatch, type VideoFitLimits } from './videoFit'
 import { clampClipRange, MIN_CLIP_DURATION } from './videoClip'
-import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
+import { mediaCapabilityOf, placeAdjacent, toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 import type { Services } from '@mini-canvas/canvas-base'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
@@ -61,7 +61,14 @@ export interface VideoOpsContext {
   addImageNodeFromResource?(
     position: { x: number; y: number },
     resourceId: string,
-    meta?: { name?: string; width?: number; height?: number },
+    meta?: {
+      name?: string
+      width?: number
+      height?: number
+      /** 源节点：media 入口据此算落点并自动连边（截图），旧宿主不认也无害 */
+      sourceNodeId?: string
+      gap?: number
+    },
   ): string | null
   /** 读某节点位置（截图产出的新节点摆在它右边）；未注入返回 null */
   nodePosition?(nodeId: string): { x: number; y: number } | null
@@ -141,6 +148,33 @@ const DEFAULT_NODE_WIDTH = 480
 /** 裁剪出的新节点与原视频右边缘的间隔（与图片节点同一条规矩：留 100px，别贴太近） */
 export const CROP_NODE_GAP = 100
 
+/**
+ * 视频加工出新节点时的统一落点：源节点右侧优先，避让已有节点。
+ * 与 media.addNode 用同一个纯函数（canvas-render/media/placement），不再各抄一份偏移。
+ */
+function placeVideoNode(
+  ctx: VideoOpsContext,
+  sourceId: string,
+  size: { w: number; h: number },
+  gap: number,
+): { x: number; y: number } {
+  const nodes = ctx.listNodes?.() ?? []
+  const rectOf = (n: (typeof nodes)[number]) => ({
+    id: n.id,
+    x: n.position.x,
+    y: n.position.y,
+    w: n.size?.w ?? (Number(n.data?.cardWidth) || DEFAULT_NODE_WIDTH),
+    h: n.size?.h ?? (Number(n.data?.cardHeight) || 320),
+  })
+  const source = nodes.find((n) => n.id === sourceId)
+  return placeAdjacent({
+    size,
+    source: source ? rectOf(source) : null,
+    obstacles: nodes.filter((n) => n.id !== sourceId).map(rectOf),
+    gap,
+  })
+}
+
 /** 裁剪节点名的前缀（扫描与生成都用它） */
 export const CROP_LABEL_PREFIX = '裁剪'
 
@@ -218,16 +252,11 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
   const doc = (): VideoDocPort | undefined => svc.get<VideoDocPort | undefined>('doc')
   const layout = () => svc.tryGet('nodeLayout')
 
-  /** 媒体能力（宿主注册在 capability 场里；这里按服务名尝试，未落地时为 undefined） */
-  const media = () =>
-    svc.tryGet<{
-      addNode?(
-        kind: string,
-        id: string,
-        position: { x: number; y: number },
-        opts?: { nodeType?: string; meta?: Record<string, unknown> },
-      ): string | undefined
-    }>('media')
+  /**
+   * 媒体能力：它是 **capability**（registryOf('capability')），不是服务。
+   * 以前这里 `tryGet('media')` 永远拿不到 → 截图/宫格一直走 image 服务的旧坐标。
+   */
+  const media = () => mediaCapabilityOf(svc as never)
 
   /** 图片节点服务（插件身份入口；未装图片插件时为 undefined） */
   const imageService = () =>
@@ -325,6 +354,7 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
       if (typeof capability?.addNode === 'function') {
         try {
           const id = capability.addNode('image', resourceId, position, { nodeType: 'image', meta })
+          // 回退入口（image 服务）不认 sourceNodeId，无法自动连边；不要退回旧坐标冒充成功。
           if (id) return id
         } catch {
           // 能力不可用时继续尝试服务入口
@@ -552,13 +582,8 @@ export function createRealCropNode(ctx: VideoOpsContext, nodeId: string, result:
   if (!ctx.read(nodeId)) return null
   if (!(result.width > 0) || !(result.height > 0) || !result.url) return null
   if (!ctx.createNodeWithEdge) return null
-  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
-  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? DEFAULT_NODE_WIDTH
   const sizes = videoCardSizePatch(result.width, result.height, ctx.fitLimits?.())
-  const position = {
-    x: (source?.position.x ?? 0) + sourceWidth + FRAME_NODE_GAP,
-    y: source?.position.y ?? 0,
-  }
+  const position = placeVideoNode(ctx, nodeId, sizes?.size ?? { w: result.width, h: result.height }, FRAME_NODE_GAP)
   const label = nextVideoCropLabel((ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data })))
   const data: Record<string, unknown> = {
     label,
@@ -658,17 +683,12 @@ export function createRealClipNode(ctx: VideoOpsContext, nodeId: string, result:
   if (!sourceData) return null
   if (!(result.duration > 0) || !result.url) return null
   if (!ctx.createNodeWithEdge) return null
-  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
-  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? DEFAULT_NODE_WIDTH
   const width = Number(sourceData.videoWidth) || 0
   const height = Number(sourceData.videoHeight) || 0
   const cropRect = asVideoData(sourceData).cropRect
   const shown = displaySizeOf(sourceData)
   const sizes = videoCardSizePatch(shown.width, shown.height, ctx.fitLimits?.())
-  const position = {
-    x: (source?.position.x ?? 0) + sourceWidth + CROP_NODE_GAP,
-    y: source?.position.y ?? 0,
-  }
+  const position = placeVideoNode(ctx, nodeId, sizes?.size ?? { w: DEFAULT_NODE_WIDTH, h: 320 }, CROP_NODE_GAP)
   const label = nextVideoClipLabel((ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data })))
   const data: Record<string, unknown> = {
     label,
@@ -735,13 +755,17 @@ export async function captureFrameNode(
   if (!persisted) return null
 
   const source = ctx.nodePosition?.(nodeId) ?? { x: 0, y: 0 }
-  const width = ctx.nodeWidth?.(nodeId) ?? DEFAULT_NODE_WIDTH
-  const position = { x: source.x + width + FRAME_NODE_GAP, y: source.y }
   // 持久引用交给图片类型；显示地址不交给它（节点数据只存 resourceId）。
-  return ctx.addImageNodeFromResource(position, persisted.resourceId, {
+  // 位置交给 media 入口（给 sourceNodeId 就统一找空位并连边）——截图也是“源视频 → 新图片”
+  // 回退入口（老宿主没有 media 能力）不认 sourceNodeId，仍按旧规矩摆在源节点右侧。
+  const width = ctx.nodeWidth?.(nodeId) ?? DEFAULT_NODE_WIDTH
+  const fallback = { x: source.x + width + FRAME_NODE_GAP, y: source.y }
+  return ctx.addImageNodeFromResource(fallback, persisted.resourceId, {
     name: frameFileName(data.videoName, at),
     width: frame.width,
     height: frame.height,
+    sourceNodeId: nodeId,
+    gap: FRAME_NODE_GAP,
   })
 }
 

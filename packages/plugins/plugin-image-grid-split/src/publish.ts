@@ -10,12 +10,15 @@
  * 纯 DOM/服务编排，不碰会话状态（publishing 锁由调用方管）。
  */
 import type { Context } from '@mini-canvas/canvas-base'
+import { mediaCapabilityOf } from '@mini-canvas/canvas-render'
 import { publishPositions, toPixelRect, unitCells } from './gridSplit'
 
 /** 画布默认格宽：与图片节点默认卡片宽一致（320），视觉上就是"一排小图" */
 const PUBLISH_CELL_W = 320
 /** 发布组的画布间距 */
 const PUBLISH_GAP = 12
+/** 发布到画布时第一格与源图之间的最小间距（与图片裁剪同一套：右缘 + 100） */
+const PUBLISH_SOURCE_GAP = 100
 
 /** 宿主需要提供的服务形状（按名取，不 import 具体实现） */
 interface PublishDeps {
@@ -28,7 +31,7 @@ interface PublishDeps {
   /** 持久引用 → 可显示地址（失败时建节点的兜底显示） */
   resolveRef(ref: string): Promise<string | undefined>
   /** 按引用建图片节点；两条入口都不可用返回 null */
-  addImageNodeFromResource(position: { x: number; y: number }, ref: string, meta?: { name?: string; width?: number; height?: number }): string | null
+  addImageNodeFromResource(position: { x: number; y: number }, ref: string, meta?: { name?: string; width?: number; height?: number; sourceNodeId?: string; gap?: number }): string | null
   /** 打组（全部或空返回 null） */
   createGroup(ids: string[]): string | null
   /** 建任意类型节点（分镜组用）；失败返回 null */
@@ -49,8 +52,11 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     ctx.tryGet<{
       addImageNodeFromResource?(position: { x: number; y: number }, resourceId: string, meta?: { name?: string; width?: number; height?: number }): string
     }>('image')
-  const media = () =>
-    ctx.tryGet<{ addNode?(kind: string, id: string, position: { x: number; y: number }, opts?: { nodeType?: string; meta?: Record<string, unknown> }): string | undefined }>('media')
+  /**
+   * media 是能力（registryOf('capability')），不是服务 —— `tryGet('media')` 永远 undefined。
+   * 以前这里取不到就会掉到 image 服务的旧入口，统一落点与连线都不会生效。
+   */
+  const media = () => mediaCapabilityOf(ctx as never)
   const group = () =>
     ctx.tryGet<{ createGroup?(ids: string[]): string | null }>('group')
 
@@ -82,7 +88,12 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
       const capability = media()
       if (typeof capability?.addNode === 'function') {
         try {
-          const id = capability.addNode('image', ref, position, { nodeType: 'image', meta })
+          const id = capability.addNode('image', ref, position, {
+            nodeType: 'image',
+            meta,
+            ...(meta?.sourceNodeId ? { sourceNodeId: meta.sourceNodeId } : {}),
+            ...(meta?.gap !== undefined ? { gap: meta.gap } : {}),
+          })
           if (id) return id
         } catch {
           // 能力不可用时继续试服务入口
@@ -230,18 +241,32 @@ export async function publishCells(
   }
 
   if (kind === 'canvas') {
-    // 建图节点：保持原行列位置，空格留空
+    // 建图节点：保持原行列位置，空格留空。第一格的位置交给 media 入口统一算（源图右侧空位），
+    // 后续格子以它为基点按行列偏移 —— 不再把第一格硬放在 (0,0)（大图会叠到别的节点、跑出视口）。
     const positions = publishPositions(rows, cols, [...sliced.keys()], PUBLISH_CELL_W, PUBLISH_CELL_W, PUBLISH_GAP)
     const createdIds: string[] = []
+    let origin: { x: number; y: number } | undefined
     for (const pos of positions) {
       const cell = sliced.get(pos.index)
       if (!cell) continue
+      const at = origin ? { x: origin.x + pos.x, y: origin.y + pos.y } : { x: pos.x, y: pos.y }
       const id = deps.addImageNodeFromResource(
-        { x: pos.x, y: pos.y },
+        at,
         cell.ref,
-        { name: '宫格-' + (pos.index + 1) + '.png', width: cell.width, height: cell.height },
+        {
+          name: '宫格-' + (pos.index + 1) + '.png',
+          width: cell.width,
+          height: cell.height,
+          ...(origin ? {} : { sourceNodeId: nodeId, gap: PUBLISH_SOURCE_GAP }),
+        },
       )
-      if (id) createdIds.push(id)
+      if (id) {
+        createdIds.push(id)
+        if (!origin) {
+          const first = deps.getNodeRect(id)
+          origin = first ? { x: first.x, y: first.y } : at
+        }
+      }
     }
     if (createdIds.length === 0) {
       return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }

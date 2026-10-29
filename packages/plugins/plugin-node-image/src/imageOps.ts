@@ -23,7 +23,7 @@ import {
 } from './imageTransform'
 import { loadDrawableSource, paintCanvasBlob, releaseDrawable } from './imageBitmap'
 import { describeImageMeta, downloadFileName } from './imageNodeData'
-import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
+import { placeAdjacent, toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 import { cardSizePatch, readImageFitLimits, MIN_CARD_WIDTH, type ImageFitLimits } from './imageFit'
 import { expandImage, isExpandEffective, type ExpandBitmapIO } from './imageExpand'
 import { renderMaskBlob, renderResultBlob, type PaintStroke } from './imagePaint'
@@ -382,11 +382,7 @@ export async function cropImage(
 
   // 定位：原图右边缘 + 间隔（CROP_NODE_GAP）。多个裁剪结果会往右排开，不叠在原图上
   const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
-  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? MIN_CARD_WIDTH
-  const position = {
-    x: (source?.position.x ?? 0) + sourceWidth + CROP_NODE_GAP,
-    y: source?.position.y ?? 0,
-  }
+  const position = placeAcrossSource(ctx, nodeId, source, { w: result.width, h: result.height }, CROP_NODE_GAP)
   // 名字：扫当前画布所有 image 节点里"裁剪 N"的 N，取最大值+1（撤销/删中间节点后也不撞名）
   const label = nextCropLabel(
     (ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data ?? {} })),
@@ -557,6 +553,34 @@ export const SOURCE_NODE_OFFSET = { x: -260, y: 0 }
 /** 裁剪出的新节点与原图右边缘的间隔（用户要求：别贴太近，留 100px） */
 export const CROP_NODE_GAP = 100
 
+/**
+ * 从源图片新建下游节点时的落点（右 → 下 → 左 → 上，避让已有节点）。
+ * 与 media.addNode 共用 canvas-render 的同一个纯函数，避免各插件抄一份偏移后又漂移。
+ */
+function placeAcrossSource(
+  ctx: ImageOpsContext,
+  sourceId: string,
+  source: { id: string; type: string; position: { x: number; y: number }; data?: Record<string, unknown>; size?: { w: number; h: number } } | undefined,
+  pixel: { w: number; h: number },
+  gap: number,
+): { x: number; y: number } {
+  const nodes = ctx.listNodes?.() ?? []
+  const rectOf = (n: (typeof nodes)[number]) => ({
+    id: n.id,
+    x: n.position.x,
+    y: n.position.y,
+    w: n.size?.w ?? (Number(n.data?.cardWidth) || MIN_CARD_WIDTH),
+    h: n.size?.h ?? (Number(n.data?.cardHeight) || 240),
+  })
+  const size = cardSizePatch(pixel.w, pixel.h, ctx.fitLimits?.())?.size ?? { w: MIN_CARD_WIDTH, h: 240 }
+  return placeAdjacent({
+    size,
+    source: source ? rectOf(source) : null,
+    obstacles: nodes.filter((n) => n.id !== sourceId).map(rectOf),
+    gap,
+  })
+}
+
 /** 裁剪节点名的前缀（扫描/生成都用它） */
 export const CROP_LABEL_PREFIX = '裁剪'
 
@@ -626,11 +650,7 @@ export async function expandImageNode(
   // 定位与命名：完全照抄裁剪的模式（右缘 + 间隔；「扩展」名字与「裁剪」互不干扰，
   // 扫描/累加用同一条规则，撤销/删中间节点后也不撞名）
   const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
-  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? MIN_CARD_WIDTH
-  const position = {
-    x: (source?.position.x ?? 0) + sourceWidth + CROP_NODE_GAP,
-    y: source?.position.y ?? 0,
-  }
+  const position = placeAcrossSource(ctx, nodeId, source, { w: result.width, h: result.height }, CROP_NODE_GAP)
   const label = nextExpandLabel(
     (ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data ?? {} })),
   )

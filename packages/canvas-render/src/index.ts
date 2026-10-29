@@ -300,7 +300,10 @@ export type {
 // 需要拿到**同一对象身份**才能 provide/inject 对上，故与 useCapability 一起导出。
 export { CAPABILITY_BAG_KEY, CAPABILITY_SCOPE_KEY } from './contracts/capabilities'
 // 宿主标准能力包（node/zoom/selected/selection/tools/upstream/media）：工厂实现在这里，注册由 createMiniCanvasHost 做
-export { createStandardCapabilities, createUpstreamCapability, createMediaCapability } from './contracts/standardCapabilities'
+export { createStandardCapabilities, createUpstreamCapability, createMediaCapability, mediaCapabilityOf } from './contracts/standardCapabilities'
+// 媒体节点落点规则（新建下游节点时统一算位置；零 Vue，插件也可单独调用）
+export { placeAdjacent, PLACEMENT_GAP, PLACEMENT_MARGIN } from './media/placement'
+export type { PlacementInput, PlacementPoint, PlacementRect, PlacementSide, PlacementSize } from './media/placement'
 export type {
   NodeCapability,
   ZoomCapability,
