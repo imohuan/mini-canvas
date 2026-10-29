@@ -30,7 +30,7 @@ import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
 import { registerBarAction, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
-import { beginOverlay, endOverlay, onOverlayModeChange } from './videoSession'
+import { beginOverlay, endOverlay, onOverlayModeChange, setCropPending } from './videoSession'
 import { clearClipPrefs } from './videoClipStore'
 import {
   captureFrameNode,
@@ -43,6 +43,7 @@ import {
   uploadVideo,
 } from './videoOps'
 import type { Rect } from './videoCrop'
+import { cropNodeWithBackend } from './videoCropFlow'
 import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 import { captureVideoThumb } from './videoThumbService'
 
@@ -358,13 +359,23 @@ export function apply(ctx: Context) {
   ctx.commands.register({
     id: 'video:crop-confirm',
     title: '确认裁剪',
-    run: (_c, payload) => {
+    run: async (_c, payload) => {
       const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
       if (!nodeId || !rect) return false
-      const ok = cropVideo(ops, nodeId, rect)
+      // 真裁剪优先：后台 ffmpeg 把画面按框重新编码成新文件，节点指向新文件。
+      // 后台不可用（没装插件 / 外链源 / 转码失败）→ 回落取景式，行为与从前一致。
+      // 转码期间置「处理中」：顶栏按钮禁用，防止连点重复提交同名槽位。
+      setCropPending(nodeId, true)
+      let real: boolean | null = null
+      try {
+        real = await cropNodeWithBackend(ctx, ops, nodeId, rect)
+      } finally {
+        setCropPending(nodeId, false)
+      }
       // 无论成败都退出覆盖层：失败时留在裁剪态会让用户以为"点了没反应"
       endOverlay(nodeId)
-      return ok
+      if (real !== null) return real
+      return cropVideo(ops, nodeId, rect)
     },
   })
   ctx.commands.register({

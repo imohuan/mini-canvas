@@ -14,7 +14,7 @@
  *   浮层只负责画框，按钮永远在控制栏这个固定位置上。
  */
 import { computed, ref } from 'vue'
-import { beginOverlay, endOverlay, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
+import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import { createVideoOps, uploadVideo } from './videoOps'
@@ -40,6 +40,8 @@ const hasVideo = computed(() => {
 })
 /** 正在裁剪画面：此时顶栏换成确认/取消 */
 const editing = computed(() => isCropping(props.id))
+/** 后台转码中：确认/取消都禁用（同名槽位重复提交会互相覆盖） */
+const pending = computed(() => isCropPending(props.id))
 const clipping = computed(() => isClipping(props.id))
 const visible = computed(() => selected.value && !clipping.value)
 
@@ -132,7 +134,14 @@ function cancelEdit(): void {
     <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
          布局对齐 liblib 的 `× | 原比例 | 确认`：取消在最左、比例下拉居中、确认在最右。 -->
     <template v-if="editing">
-      <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
+      <NodeToolbarButton
+        title="取消编辑"
+        aria-label="取消编辑"
+        variant="danger"
+        :icon="ICON_CANCEL"
+        :disabled="pending"
+        @click="cancelEdit"
+      />
       <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。
            只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。 -->
       <Select
@@ -145,8 +154,16 @@ function cancelEdit(): void {
         input-id="video-crop-ratio"
         @update:model-value="onRatioChange"
       />
-      <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
-        确认
+      <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"） -->
+      <NodeToolbarButton
+        :title="pending ? '正在裁剪…' : '确认编辑'"
+        :aria-label="pending ? '正在裁剪' : '确认编辑'"
+        variant="primary"
+        :icon="ICON_CONFIRM"
+        :disabled="pending"
+        @click="confirmEdit"
+      >
+        {{ pending ? '裁剪中…' : '确认' }}
       </NodeToolbarButton>
     </template>
 

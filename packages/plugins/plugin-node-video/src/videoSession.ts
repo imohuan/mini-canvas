@@ -27,6 +27,27 @@ export type VideoOverlayMode = 'crop' | 'clip'
 const modes = reactive(new Map<string, VideoOverlayMode>())
 
 /**
+ * 正在跑后台真裁剪的节点 id。
+ *
+ * 为什么单独一块而不是塞进 modes：后台转码要几秒到几十秒，这期间**裁剪模式仍要保留**
+ * （浮层还在，用户看得见自己框的区域），只是顶栏的「确认」变成「裁剪中…」并禁用，
+ * 避免连点重复提交（后台对同节点会返回 busy，但那属于兜底，不该让用户看到）。
+ */
+const cropping = reactive(new Set<string>())
+
+/** 该节点是否正在等后台转码 */
+export function isCropPending(nodeId: string): boolean {
+  return cropping.has(nodeId)
+}
+
+/** 标记/清除「正在等后台转码」 */
+export function setCropPending(nodeId: string, pending: boolean): void {
+  if (!nodeId) return
+  if (pending) cropping.add(nodeId)
+  else cropping.delete(nodeId)
+}
+
+/**
  * 订阅「某人进/出了覆盖层模式」（给插件侧同步底栏功能模式用）。
  * 与图片节点的 onEditModeChange 同一条写法：本文件是纯状态，订阅交给装配层（apply）。
  * 回调只报"变化了的节点"：进入/换模式报 state=新模式，退出报 state=null。

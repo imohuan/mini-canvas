@@ -432,6 +432,47 @@ export function cropVideo(ctx: VideoOpsContext, nodeId: string, rect: Rect): boo
 }
 
 /**
+ * 真裁剪的结果（后台 ffmpeg 已把新文件写进画布资源）。
+ * 与 cropVideo 的区别：这不是"记一个框靠 CSS 取景"，而是**换掉节点指向的视频文件**。
+ */
+export interface RealCropResult {
+  /** 新视频的同源地址（写进 videoUrl） */
+  url: string
+  /** 新视频的持久引用（可写进 resourceId；没有就保留旧引用） */
+  resourceId?: string
+  /** 裁后画面尺寸（视频像素） */
+  width: number
+  height: number
+}
+
+/**
+ * 把后台真裁剪的产物写回节点：换地址、更新画面尺寸与卡片比例、清掉取景用的 cropRect。
+ *
+ * 为什么清 cropRect：真裁剪之后画面就是新文件本身，再叠一层取景映射会二次放大（画面糊掉/错位）。
+ * 为什么 videoWidth/videoHeight 用后台给的：新文件的真实尺寸就是裁框尺寸，前端不必再解码一遍。
+ */
+export function applyRealCrop(ctx: VideoOpsContext, nodeId: string, result: RealCropResult): boolean {
+  const current = ctx.read(nodeId)
+  if (!current) return false
+  if (!(result.width > 0) || !(result.height > 0) || !result.url) return false
+  const sizes = videoCardSizePatch(result.width, result.height, ctx.fitLimits?.())
+  const next: Record<string, unknown> = {
+    ...current,
+    videoUrl: result.url,
+    videoWidth: result.width,
+    videoHeight: result.height,
+    ...(result.resourceId ? { resourceId: result.resourceId } : {}),
+  }
+  // dataUnset 才真的删得掉键（浅合并删不掉）
+  if (sizes) {
+    ctx.write(nodeId, next, sizes.size, ['cropRect'])
+    return true
+  }
+  ctx.write(nodeId, next, undefined, ['cropRect'])
+  return true
+}
+
+/**
  * 恢复整幅画面：清掉裁剪框，卡片尺寸回到原始视频比例。
  * 与 cropVideo 是逆操作 —— 裁剪既然是取景式的，就该随时能退回去。
  */
