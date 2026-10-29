@@ -29,7 +29,7 @@ import {
   configureImageModels,
   type CanvasPlugin,
   type BackendSyncControl,
-} from '@mini-canvas/canvas-core'
+} from '../../../canvas-core/src'
 
 const BACKEND_URL = 'http://localhost:8765'
 /** 后台图片模型 provider：工具栏模型下拉/能力走后端，发送走后台任务 */

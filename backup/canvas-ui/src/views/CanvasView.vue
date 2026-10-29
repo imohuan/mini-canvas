@@ -26,7 +26,7 @@ import {
   MiniMapPlugin,
   EdgeCuttingPlugin,
   type CanvasPlugin,
-} from '@mini-canvas/canvas-core'
+} from '../../../canvas-core/src'
 
 interface PluginSlot {
   plugin: CanvasPlugin

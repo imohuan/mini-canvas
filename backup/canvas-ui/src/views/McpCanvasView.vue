@@ -28,7 +28,7 @@ import {
   BackendImageModelProvider,
   configureImageModels,
   type CanvasPlugin,
-} from '@mini-canvas/canvas-core'
+} from '../../../canvas-core/src'
 import { useMcpClient } from '../composables/useMcpClient'
 
 const mcp = useMcpClient({ baseUrl: 'http://localhost:8765' })

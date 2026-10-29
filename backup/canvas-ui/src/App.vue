@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AxToaster } from '@mini-canvas/canvas-core/components/Ui'
+import { AxToaster } from '../../canvas-core/src/components/Ui'
 </script>
 
 <template>

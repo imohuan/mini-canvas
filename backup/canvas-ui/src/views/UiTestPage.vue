@@ -12,8 +12,8 @@ import {
   notifyInfo,
   notifyWarning,
   clearNotifies,
-} from '@mini-canvas/canvas-core/components/Ui'
-import type { SelectOption } from '@mini-canvas/canvas-core/components/Ui/types'
+} from '../../../canvas-core/src/components/Ui'
+import type { SelectOption } from '../../../canvas-core/src/components/Ui/types'
 
 const router = useRouter()
 
