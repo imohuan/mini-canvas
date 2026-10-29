@@ -145,9 +145,13 @@ const componentIcon = computed<Component | null>(() =>
   background: var(--ntb-fill-quiet, rgb(0 0 0 / 0.05));
 }
 
-.ntb-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
+/*
+ * 按下**不做缩放**（用户口径 2026-10-29：「删除这个缩放动画」）。
+ *
+ * 为什么删掉而不是调大：同一个 scale(0.97)，112px 的按钮缩 3.4px 看得见，
+ * 32px 的图标按钮只缩 0.96px 几乎看不出 —— 同一套规则给出「两种手感」。
+ * 要嘛都明显、要嘛都没有；这里选「都没有」，按压反馈交给 hover 底色与 :active 的默认表现。
+ */
 
 /* 焦点环：去掉默认 outline 就必须补上（规范 §5 第 1 条） */
 .ntb-btn:focus-visible {
@@ -196,9 +200,6 @@ const componentIcon = computed<Component | null>(() =>
 @media (prefers-reduced-motion: reduce) {
   .ntb-btn {
     transition: none !important;
-  }
-  .ntb-btn:active:not(:disabled) {
-    transform: none;
   }
 }
 </style>
