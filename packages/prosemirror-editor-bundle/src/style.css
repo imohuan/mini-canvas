@@ -75,9 +75,20 @@
   border-bottom: 1px solid var(--ui-ink, #111);
 }
 
-/* 使用 CSS 伪元素创建光标停靠点 */
-.prose-mirror-editor .resource-node::before,
-.prose-mirror-editor .resource-node::after {
+/*
+ * 光标停靠点（零宽空格）。
+ *
+ * 只用 ::before 一个伪元素（用户 2026-10-29 报「hover 铅笔时灵时不灵」）。
+ *
+ * 根因：这里原来 ::before 和 ::after **都**声明了 content —— 而下面「hover 时
+ * 把图标换成铅笔」用的正是 ::after。两条规则抢同一个伪元素：
+ *   · 谁的后写/优先级高，谁就赢；
+ *   · 组件库/主题再插一条 .resource-node::after 的规则，铅笔就整个消失。
+ * 真机表现就是「有时能看见铅笔、多数时候看不见」——取决于样式表注入顺序。
+ * 现在 ::after 专属铅笔（见下方 .resource-chip--editable::after），
+ * 光标停靠只留 ::before 一处，两者不再互相覆盖。
+ */
+.prose-mirror-editor .resource-node::before {
   content: "\200B"; /* 零宽空格 */
   display: inline;
   letter-spacing: 0;

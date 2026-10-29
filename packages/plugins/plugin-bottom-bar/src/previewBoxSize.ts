@@ -11,8 +11,26 @@
  * 这里先把盒子算对，CSS 只是把图铺满盒子。
  */
 
-/** 最长边上限（px） */
+/**
+ * 最长边上限（px）——**默认值**。
+ *
+ * 用户 2026-10-29 口径：卡片 hover 预览和标签菜单的 hover 预览**共用同一份限制**，
+ * 且可以配置（默认 200）。配置从底栏 Config 读（seeNodeBottomBarConfig），没有就回这里。
+ */
 export const HOVER_PREVIEW_MAX_SIDE = 200
+
+/**
+ * 从画布配置里读预览最长边（用户 2026-10-29：配置项化，默认 200px）。
+ *
+ * 配置路径：节点 data.barValues.hoverPreviewMaxSide（和其它底栏参数同一条路）。
+ * 没配置 / 非法值 → 默认 200。
+ */
+export function resolvePreviewMaxSide(raw: unknown): number {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return HOVER_PREVIEW_MAX_SIDE
+  // 太小会失去预览意义，太大盖过画布 —— 兜在 40~600
+  return Math.min(600, Math.max(40, Math.round(n)))
+}
 /** 极端比例兜底：再细的图也不至于变成 1px 线 */
 const MIN_SIDE = 24
 
