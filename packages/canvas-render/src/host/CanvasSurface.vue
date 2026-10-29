@@ -417,6 +417,23 @@ defineExpose({
     }
     return out
   },
+  /**
+   * 当前全部渲染节点的位置快照（VueFlow 内部值）。
+   * 和 store 对比可识别"插件逐帧写视觉位置"的节点（updateNodeVisual 不改 dragging），
+   * 这些节点同样不能被视口裁剪（多选整组拖动/对齐吸附）。
+   */
+  getRenderNodePositions: () => {
+    const out: Array<{ id: string; position: { x: number; y: number }; dragging: boolean; parentId?: string }> = []
+    for (const node of vfApi.getNodes.value ?? []) {
+      out.push({
+        id: node.id,
+        position: { x: node.position.x, y: node.position.y },
+        dragging: node.dragging === true,
+        ...(node.parentNode ? { parentId: node.parentNode } : {}),
+      })
+    }
+    return out
+  },
   /** 当前被 VueFlow 选中的边 id */
   /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
   screenToFlow: (x: number, y: number): { x: number; y: number } => {

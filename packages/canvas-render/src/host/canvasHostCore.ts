@@ -203,6 +203,48 @@ export function overlayDraggingPositions(
   })
 }
 
+/**
+ * 裁剪保护名单：哪些节点此刻"显示位置"不能按数据层位置算。
+ *
+ * 两种来源都要收：
+ * 1. VueFlow 原生拖拽（dragging=true）—— 单节点/多选/分组拖动，位置只在渲染层；
+ * 2. 插件用 updateNodeVisual 逐帧写视觉位置（多选整组拖动、对齐吸附）—— dragging 可能仍为 false，
+ *    但渲染位置已经离开落盘位置。
+ *
+ * 只收 renderNodes 里与 store 位置**不一致**的节点（原生 dragging 例外，它可能刚起手还没位移）。
+ * 用相对坐标比较即可：子节点在两侧都是相对父坐标，父节点整体移动不会让子节点被误判。
+ * 松手落盘后两边一致，名单自然清空，恢复常规裁剪。
+ */
+export function collectLiveNodeIds(
+  renderNodes: ReadonlyArray<{ id: string; position: { x: number; y: number }; dragging?: boolean; parentId?: string }>,
+  storedPositions: ReadonlyMap<string, { x: number; y: number }>,
+  parentOf?: ReadonlyMap<string, string | undefined>,
+): Set<string> {
+  const ids = new Set<string>()
+  // 第一遍：自身正在拖，或视觉位置已经离开落盘位置
+  for (const node of renderNodes) {
+    const stored = storedPositions.get(node.id)
+    if (!stored) continue
+    if (node.dragging === true || node.position.x !== stored.x || node.position.y !== stored.y) ids.add(node.id)
+  }
+  // 第二遍：拖父/拖祖先时，子节点相对父坐标不变但视觉上跟着走，一并进名单
+  for (const node of renderNodes) {
+    if (ids.has(node.id)) continue
+    let cur = parentOf?.get(node.id)
+    const seen = new Set<string>([node.id])
+    while (cur) {
+      if (seen.has(cur)) break
+      seen.add(cur)
+      if (ids.has(cur)) {
+        ids.add(node.id)
+        break
+      }
+      cur = parentOf?.get(cur)
+    }
+  }
+  return ids
+}
+
 /** 现有边保留(宿主内维护)；当节点被删时清掉悬挂边 */
 export function pruneDanglingEdges<T extends { source: string; target: string }>(
   edges: T[],

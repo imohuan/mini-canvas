@@ -71,6 +71,7 @@ import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
   nodeShellSlot,
+  collectLiveNodeIds,
   hitNodeIdAt,
   nodesFromStore,
   overlayDraggingPositions,
@@ -113,6 +114,13 @@ const surfaceRef = shallowRef<{
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
   /** 正在拖动节点的实时位置（拖动中 store 尚未落盘；重灌时用它保留画面位置） */
   getDraggingNodePositions?: () => Map<string, { x: number; y: number }>
+  /** 当前渲染节点位置快照（含插件逐帧视觉写、dragging 标志、父节点） */
+  getRenderNodePositions?: () => ReadonlyArray<{
+    id: string
+    position: { x: number; y: number }
+    dragging: boolean
+    parentId?: string
+  }>
   setCenter?: (x: number, y: number, zoom?: number) => void
   animateViewport?: (v: { x: number; y: number; zoom: number }, durationMs?: number) => void
 } | undefined>()
@@ -196,6 +204,41 @@ function cullConfigFromSettings(): VisibleCullConfig {
 function compactShellsEnabled(): boolean {
   return interactionSettings.cullCompactShells !== false
 }
+/**
+ * 当前不能按数据层位置裁剪的节点集：
+ * - VueFlow 原生拖拽（dragging=true）；
+ * - 插件逐帧视觉写（多选整组拖/吸附）—— 渲染位置已离开 store 但 dragging 还是 false。
+ *
+ * 实时位置只在渲染层；按 store 旧坐标裁剪会在平移/缩放后把正在拖的节点判成 culled。
+ * 读取失败不能让整条链路坏掉：退化为只用原生拖拽名单。
+ */
+function collectLiveIdsNow(): Set<string> | undefined {
+  const h = hostRef.value
+  const surface = surfaceRef.value
+  if (!h) return undefined
+  const stored = new Map<string, { x: number; y: number }>()
+  const parentOf = new Map<string, string | undefined>()
+  for (const node of h.nodeStore.getNodes()) {
+    stored.set(node.id, { x: node.position.x, y: node.position.y })
+    parentOf.set(node.id, node.parentId)
+  }
+  try {
+    const renderNodes = surface?.getRenderNodePositions?.()
+    if (renderNodes) {
+      const ids = collectLiveNodeIds(renderNodes, stored, parentOf)
+      return ids.size > 0 ? ids : undefined
+    }
+    const dragging = surface?.getDraggingNodePositions?.()
+    if (dragging && dragging.size > 0) {
+      const ids = new Set<string>()
+      for (const id of dragging.keys()) if (stored.has(id)) ids.add(id)
+      return ids.size > 0 ? ids : undefined
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
 function refreshCull(): void {
   const h = hostRef.value
   if (!h) return
@@ -205,8 +248,14 @@ function refreshCull(): void {
     cullIds.value = null
     return
   }
+  /*
+   * 正在拖拽/被插件视觉移动的节点：store 还是旧位置，渲染层已经离开。
+   * 把这些节点交给裁剪计算保留在可见集，否则平移/缩放开视口后会按旧位置判成 culled，
+   * 画面上的节点直接消失。读取失败退化为原行为（只用 store 坐标）。
+   */
+  const liveIds = collectLiveIdsNow()
   if (rect) {
-    cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings())
+    cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings(), liveIds)
     return
   }
   // 视口还量不到（初始挂载窗口）：用**近似视口**先算一版剔除，别全量挂 160 个节点再剔。
@@ -218,7 +267,7 @@ function refreshCull(): void {
     return
   }
   const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-  cullIds.value = computeVisibleIds(h.nodeLayout, approx, cullConfigFromSettings())
+  cullIds.value = computeVisibleIds(h.nodeLayout, approx, cullConfigFromSettings(), liveIds)
 }
 /** 视口帧回调（CanvasSurface 每次可视矩形变化都会调；rAF 节流防同一帧多次重灌） */
 function onVisibleRectFrame(): void {

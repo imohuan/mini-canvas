@@ -50,12 +50,51 @@ describe('visibleCull（可见剔除纯逻辑）', () => {
     expect(computeVisibleIds(layout, null, VISIBLE_CULL_DEFAULTS)).toBeNull()
   })
 
-  it('零例外：被选中/正在拖的节点视口外同样被剔（选中是数据态，不靠渲染维持）', () => {
+  it('选中不豁免：被选中节点在视口外照常剔除（选中是数据态，不靠渲染维持）', () => {
     const layout = {
       getAllRects: () => [{ id: 'sel', x: 5000, y: 5000, w: 100, h: 50 }],
     } as never
     const ids = computeVisibleIds(layout, VIEW, VISIBLE_CULL_DEFAULTS)
     expect(ids!.has('sel')).toBe(false) // 即便它是选中的，判定也一视同仁
+  })
+
+  /**
+   * 回归（用户实测）：拖拽中的节点位置只在 VueFlow 内存里，数据层还是起手位置。
+   * 平移画布让**起手位置**离开视口后，正在拖的节点必须保持可见。
+   */
+  it('正在拖拽的节点：起手位置在视口外时仍保持可见（拖拽期间不参与裁剪）', () => {
+    const layout = {
+      getAllRects: () => [
+        { id: 'dragging', x: 5000, y: 5000, w: 100, h: 50 },
+        { id: 'far', x: 8000, y: 8000, w: 100, h: 50 },
+      ],
+    } as never
+    // 对照：没有拖拽信息时，按数据层旧位置会被剔除（证明这条用例锁住了真实行为）
+    expect(computeVisibleIds(layout, VIEW, VISIBLE_CULL_DEFAULTS)!.has('dragging')).toBe(false)
+    // 拖拽中：起手位置再怎么远也不能被裁掉；其它屏外节点照常剔除
+    const ids = computeVisibleIds(layout, VIEW, VISIBLE_CULL_DEFAULTS, new Set(['dragging']))
+    expect(ids!.has('dragging')).toBe(true)
+    expect(ids!.has('far')).toBe(false)
+  })
+
+  it('多选/分组拖拽：所有成员都在拖拽 id 集里，整组一起豁免裁剪', () => {
+    const layout = {
+      getAllRects: () => [
+        { id: 'group', x: 4200, y: 4200, w: 600, h: 500 },
+        { id: 'member-a', x: 4300, y: 4300, w: 100, h: 50 },
+        { id: 'member-b', x: 4600, y: 4500, w: 100, h: 50 },
+      ],
+    } as never
+    const ids = computeVisibleIds(layout, VIEW, VISIBLE_CULL_DEFAULTS, new Set(['group', 'member-a', 'member-b']))
+    expect([...ids!].sort()).toEqual(['group', 'member-a', 'member-b'])
+  })
+
+  it('松手后拖拽集清空：按落盘后的真实矩形重新裁剪（视口外的节点恢复 culled）', () => {
+    const layout = {
+      getAllRects: () => [{ id: 'dropped', x: 5000, y: 5000, w: 100, h: 50 }],
+    } as never
+    expect(computeVisibleIds(layout, VIEW, VISIBLE_CULL_DEFAULTS, new Set(['dropped']))!.has('dropped')).toBe(true)
+    expect(computeVisibleIds(layout, VIEW, VISIBLE_CULL_DEFAULTS, new Set())!.has('dropped')).toBe(false)
   })
 })
 

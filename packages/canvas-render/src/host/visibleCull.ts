@@ -9,8 +9,10 @@
  * 本文件保留，职责改为**产出视口内 id 集合**，由宿主派生 data._cullState
  * （visible / culled / culled-linked），节点一律常驻，绘制深度由壳按状态自选。
  *
- * 零例外规则（与用户逐条对齐，2026-10-15）：所有节点——普通/分组父/被选中/拖拽中——
- * 一律走同一相交判定，不做特判。理由：
+ * 判定规则（2026-10-15，2026-10-30 补充拖拽例外）：普通/分组父/被选中节点走同一相交判定。
+ * **正在拖拽的节点例外**：它的实时位置只在 VueFlow 内存里，数据层仍是起手位置；平移画布后
+ * 按旧位置判定会把它标成 culled，壳随即藏起卡片（用户实测：拖着的节点一移画布就消失）。
+ * 因此拖拽中的 id 直接保留在可见集，松手落盘后再恢复常规判定。理由：
  * - 选中是数据态（内核 Selection），选中框算数据坐标（nodeLayout.getNodeRect），
  *   不依赖 DOM——实测隐藏 30 个屏外节点选中框坐标不变；
  * - 多选拖拽时成员会散布视口外（用户纠正），不需要渲染也能正常工作，
@@ -55,17 +57,24 @@ export function makeVisiblePredicate(
  * 批量判定哪些节点可见：返回可见 id 集合。
  * layout = host.nodeLayout（getAllRects 数据层全量、绝对坐标）。
  * viewportRect 为 null（未挂载/量不到 pane）→ 返回 null 表示"全量渲染"（安全兜底）。
+ *
+ * @param draggingIds 正在拖拽的节点 id。这些节点**一律保留在可见集**：
+ *   数据层位置要松手才落盘，平移画布后按旧位置判定会把正在拖的节点误标成 culled，
+ *   壳随即隐藏卡片 —— 用户手指还按着它，画面却消失了。
+ *   空/未传 = 没有拖拽（零开销，行为与之前一致）。
  */
 export function computeVisibleIds(
   layout: NodeLayoutService,
   viewportRect: FlowRect | null,
   config: VisibleCullConfig,
+  draggingIds?: ReadonlySet<string>,
 ): Set<string> | null {
   const predicate = makeVisiblePredicate(viewportRect, config)
   if (!predicate) return null
   const ids = new Set<string>()
   for (const rect of layout.getAllRects()) {
-    if (predicate(rect)) ids.add(rect.id)
+    // 拖拽中不受视口裁剪影响；其余节点照常按几何相交判定
+    if (draggingIds?.has(rect.id) || predicate(rect)) ids.add(rect.id)
   }
   return ids
 }

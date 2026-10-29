@@ -8,6 +8,7 @@ import {
   nodeShellSlot,
   nodesFromStore,
   overlayDraggingPositions,
+  collectLiveNodeIds,
   edgesFromStore,
   pruneDanglingEdges,
   splitNodeWritePatch,
@@ -194,6 +195,81 @@ describe('pruneDanglingEdges', () => {
       { id: '3', source: 'gone', target: 'b' },
     ]
     expect(pruneDanglingEdges(edges, alive)).toEqual([{ id: '1', source: 'a', target: 'b' }])
+  })
+})
+
+/**
+ * 拖拽保护名单：不能只看 VueFlow 的 dragging 标志。
+ * 多选整组拖动（plugin-multi-select）与对齐吸附都走 updateNodeVisual 直接写渲染节点，
+ * dragging 可能仍是 false；这类"视觉位置已离开落盘位置"的节点同样不能被裁剪。
+ */
+describe('collectLiveNodeIds（裁剪时哪些节点正被拖动/临时位移）', () => {
+  const stored = new Map([
+    ['native', { x: 100, y: 100 }],
+    ['multi', { x: 200, y: 200 }],
+    ['static', { x: 300, y: 300 }],
+  ])
+
+  it('VueFlow 原生 dragging=true 的节点进名单', () => {
+    const ids = collectLiveNodeIds(
+      [{ id: 'native', position: { x: 100, y: 100 }, dragging: true }],
+      stored,
+    )
+    expect([...ids]).toEqual(['native'])
+  })
+
+  it('插件逐帧写视觉位置（dragging 仍 false）也进名单', () => {
+    const ids = collectLiveNodeIds(
+      [{ id: 'multi', position: { x: 640, y: 520 }, dragging: false }],
+      stored,
+    )
+    expect(ids.has('multi')).toBe(true)
+  })
+
+  it('与落盘位置一致且没在拖的节点不进名单（零例外裁剪仍然生效）', () => {
+    const ids = collectLiveNodeIds(
+      [{ id: 'static', position: { x: 300, y: 300 }, dragging: false }],
+      stored,
+    )
+    expect(ids.size).toBe(0)
+  })
+
+  it('分组子节点用相对父坐标比较：父动、子相对位置不变时子不误报', () => {
+    const ids = collectLiveNodeIds(
+      [{ id: 'child', position: { x: 20, y: 20 }, dragging: false }],
+      new Map([['child', { x: 20, y: 20 }]]),
+    )
+    expect(ids.size).toBe(0)
+  })
+
+  it('拖动分组父节点：子节点相对坐标没变，但视觉上跟着父走，也要进名单', () => {
+    const ids = collectLiveNodeIds(
+      [
+        { id: 'group', position: { x: 0, y: 0 }, dragging: true },
+        { id: 'child-a', position: { x: 20, y: 20 }, dragging: false },
+        { id: 'child-b', position: { x: 40, y: 40 }, dragging: false },
+        { id: 'outside', position: { x: 60, y: 60 }, dragging: false },
+      ],
+      new Map([
+        ['group', { x: 0, y: 0 }],
+        ['child-a', { x: 20, y: 20 }],
+        ['child-b', { x: 40, y: 40 }],
+        ['outside', { x: 60, y: 60 }],
+      ]),
+      new Map([
+        ['child-a', 'group'],
+        ['child-b', 'group'],
+      ]),
+    )
+    expect([...ids].sort()).toEqual(['child-a', 'child-b', 'group'])
+  })
+
+  it('store 里已不存在的节点（刚被删）不因位置差异进名单', () => {
+    const ids = collectLiveNodeIds(
+      [{ id: 'ghost', position: { x: 999, y: 999 }, dragging: false }],
+      new Map(),
+    )
+    expect(ids.size).toBe(0)
   })
 })
 
