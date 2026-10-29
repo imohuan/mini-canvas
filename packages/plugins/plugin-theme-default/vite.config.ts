@@ -19,7 +19,8 @@ export default defineConfig(({ command }) => {
       server: {
         port: 5310,
         strictPort: true,
-        open: true,
+        // 启动服务时不要自动弹浏览器：由人或代理手动打开页面
+        open: false,
       },
       // 让 demo 能 import 同 workspace 的源码包（canvas-data / canvas-render）。
       // 注：demo 不再 import 节点插件（步骤 7 断环：本包 devDeps 里不再有 node-text/node-image，

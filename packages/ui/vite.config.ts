@@ -16,7 +16,8 @@ export default defineConfig({
   server: {
     port: 5288, // 独立端口，避开其它应用/demo 的端口
     strictPort: false,
-    open: true,
+    // 启动服务时不要自动弹浏览器：由人或代理手动打开页面（用户 2026-10-30 明确要求）
+    open: false,
     // /api 转给 cloud-server（8865）：dev 下前端同源相对路径才能真正打到后台，
     // 否则全部回落 index.html（表现为「列表空 / 建文件夹没反应」）。
     proxy: {

@@ -9,7 +9,7 @@
  *
  * 用法：
  *   node scripts/launch-server.mjs
- *   node scripts/launch-server.mjs --port 8865 --open
+ *   node scripts/launch-server.mjs --port 8865
  *   node scripts/launch-server.mjs --no-build
  */
 import { spawn } from 'node:child_process'
@@ -56,8 +56,10 @@ function parseArgs(argv) {
       options.port = parsePort(value, arg)
     } else if (arg.startsWith('--port=')) {
       options.port = parsePort(arg.slice('--port='.length), '--port')
-    } else if (arg === '--open' || arg === '-Open') options.open = true
-    else if (arg === '--no-open') options.open = false
+    } else if (arg === '--open' || arg === '-Open') {
+      // 浏览器由调用方手动打开：忽略历史脚本里的 --open，不在启动时弹页面
+      options.open = false
+    } else if (arg === '--no-open') options.open = false
     else if (arg === '--no-build' || arg === '--skip-build') options.build = false
     else if (arg === '--build') options.build = true
     else if (arg === '--force') options.force = true
@@ -118,7 +120,7 @@ function printHelp() {
 
 选项:
   -p, --port <号>   监听端口（默认 8865）
-  --open            启动后自动打开浏览器（默认不打开）
+  --open            已停用（浏览器由调用方手动打开；保留仅为兼容旧脚本）
   --no-build        跳过第 1、2 步，直接用现有产物启动
   --force           强制重建全部资源（传给 build:assets）
   --jobs <数>       资源构建并发数（传给 build:assets）
@@ -127,7 +129,7 @@ function printHelp() {
 
 例子:
   node scripts/launch-server.mjs --port 8865
-  node scripts/launch-server.mjs --port 8860 --open
+  node scripts/launch-server.mjs --port 8860
   node scripts/kill-port.mjs 8865 8860`)
 }
 

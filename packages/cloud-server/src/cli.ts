@@ -56,8 +56,8 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
       --no-admin-auth 关闭管理令牌与来源边界（**必须**同时设 MINI_CANVAS_ALLOW_INSECURE=1）
       --trusted-host <host:port>   额外信任的 Host（反代 / 另一个主机名；可重复）
       --trusted-origin <origin>    额外信任的 Origin（如 dev 的 http://localhost:5288；可重复）
-      --open          启动后自动打开浏览器（默认开）
-      --no-open       不自动打开浏览器
+      --open          启动后自动打开浏览器（可选；默认不打开）
+      --no-open       不自动打开浏览器（默认行为，保留给旧脚本）
 
 启动后（网页与 MCP 共用一个服务、一份数据）:
   http://127.0.0.1:<端口>/            画布界面
@@ -81,7 +81,8 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     portExplicit: false,
     dir: DEFAULT_DATA_DIR,
     hostname: '127.0.0.1',
-    open: true,
+    // 启动服务时不要自动弹浏览器：由人或代理手动打开页面（用户 2026-10-30 明确要求）
+    open: false,
     mcp: true,
     noAdminAuth: false,
     trustedHosts: [],
