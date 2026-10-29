@@ -218,13 +218,19 @@ const currentAction = computed<BarAction | undefined>(() => actions.value.find((
 // 响应式跟随 nodeBar 服务上的模块级会话：插件按钮调 selectMode 后，这里立刻重渲染。
 const modeTick = ref(0)
 const barService = ctx.tryGet<{
-  modeOf(nodeId: string): { nodeId: string; actionId: string } | undefined
-  selectMode(nodeId: string, actionId: string): void
-  exitMode(nodeId: string): void
+  /** nodeBar 服务是可选能力：测试桩只给了 list；modeOf 等方法在才用（?.） */
+  modeOf?(nodeId: string): { nodeId: string; actionId: string } | undefined
+  selectMode?(nodeId: string, actionId: string): void
+  exitMode?(nodeId: string): void
 }>('nodeBar')
 const activeMode = computed<{ nodeId: string; actionId: string } | undefined>(() => {
   void modeTick.value // 订阅点：插件/底栏切换模式后 bump
-  return barService?.modeOf(props.id)
+  try {
+    return barService?.modeOf(props.id)
+  } catch {
+    // 测试桩 / 极简宿主可能只实现部分接口：按「无功能模式」处理，不影响其余功能
+    return undefined
+  }
 })
 watch(activeMode, (mode) => {
   if (!mode) return
@@ -235,7 +241,7 @@ watch(activeMode, (mode) => {
 }, { immediate: true })
 function refreshModeTick(): void { modeTick.value += 1 }
 pluginOffs.push(ctx.on('nodeBar:mode-changed', refreshModeTick))
-onBeforeUnmount(() => barService?.exitMode(props.id))
+onBeforeUnmount(() => barService?.exitMode?.(props.id))
 
 /**
  * 参数值。**优先用上次留在节点 data 上的那份**（`data.barValues`）。
@@ -311,8 +317,8 @@ function selectAction(id: string): void {
   if (prev?.onDeselect) prev.onDeselect(props.id)
   currentId.value = id
   // 功能接管语义：带 panel 的动作被选中 = 该功能接管底栏（顶栏按钮与底栏 pill 同一真源）
-  if (currentAction.value?.panel) barService?.selectMode(props.id, id)
-  else barService?.exitMode(props.id)
+  if (currentAction.value?.panel) barService?.selectMode?.(props.id, id)
+  else barService?.exitMode?.(props.id)
   // 换动作时**保留**用户已经调过的参数（用户要求：再点进来还是上次那套，不要清空回默认），
   // 但**只保留新动作也声明了的 key** —— 否则旧动作的值会跟着发出去（实测：先选 Dola 视频的
   // model，再切到火山音频，model 还是 "Seedance 2.5"，把正确的 seed-audio-1.0 覆盖掉了）。
@@ -2249,7 +2255,8 @@ function onGlobalLeave(el: Element): void {
           v-if="!tile.pending"
           class="nb-remove"
           type="button"
-          :aria-label="'移除素材 ' + tile.label"
+          :aria-label="'移除素材 ' + tile.label + '（断开连线）'"
+          title="移除素材（断开连线）"
           @pointerdown.stop.prevent="onRemovePointerDown(tile)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
