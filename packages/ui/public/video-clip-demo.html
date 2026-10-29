@@ -464,6 +464,8 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 .app[data-style="capsule"] .film-slot { padding: 0; }
 .app[data-style="capsule"] .film { border-radius: 12px; background: #000000; }
 .app[data-style="capsule"] .frames { border-radius: 12px; }
+.app[data-style="capsule"] .frames.is-at-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.app[data-style="capsule"] .frames.is-at-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .app[data-style="capsule"] .shade-left,
 .app[data-style="capsule"] .shade-right { background: rgba(0, 0, 0, 0.5); }
 .app[data-style="capsule"] .selection {
@@ -520,9 +522,6 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
 .app[data-style="capsule"] .selection.is-at-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .app[data-style="capsule"] .selection.is-at-left::after { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .app[data-style="capsule"] .selection.is-at-right::after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-/* 贴边一侧的蓝耳外角变直角，与胶片边缘贴合；另一侧保持圆角。 */
-.app[data-style="capsule"] .selection.is-at-left .handle-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.app[data-style="capsule"] .selection.is-at-right .handle-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .app[data-style="capsule"] .clip-length {
   z-index: 10;
   padding: 8px 12px;
@@ -956,9 +955,13 @@ button:focus-visible, .film:focus-visible, .handle:focus-visible {
     els.selection.hidden = false;
     els.clipLength.hidden = false;
     els.filmEmpty.hidden = true;
-    // 贴到胶片边缘时，选中区域靠边的一侧必须是直角，不能露出背景圆角。
-    els.selection.classList.toggle('is-at-left', state.start <= 0.001);
-    els.selection.classList.toggle('is-at-right', state.end >= duration - 0.001);
+    // 背景圆角半径是 12px：选区距离边缘 ≤12px 时，该侧帧图的上下角就变直角。
+    var atLeft = state.start <= 0.001 || state.start * (els.film.clientWidth / duration) <= 12;
+    var atRight = state.end >= duration - 0.001 || (duration - state.end) * (els.film.clientWidth / duration) <= 12;
+    els.selection.classList.toggle('is-at-left', atLeft);
+    els.selection.classList.toggle('is-at-right', atRight);
+    els.frames.classList.toggle('is-at-left', atLeft);
+    els.frames.classList.toggle('is-at-right', atRight);
     // 时间轴铺满整条胶片；耳朵不占空间，只是悬在两端的把手。
     var left = state.start / duration * 100;
     var right = state.end / duration * 100;
