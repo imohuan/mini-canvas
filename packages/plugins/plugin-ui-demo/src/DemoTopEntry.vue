@@ -3,14 +3,15 @@
  * DemoTopEntry —— 图片顶栏插槽里的一条（同一个按钮组内部）。
  *
  * 两种状态，**同一根顶栏**：
- * - 普通：显示「功能演示」下拉按钮（主题 toolbarDropdown，二级菜单是独立浮层）；
+ * - 普通：显示「功能演示」下拉按钮（主题 toolbarDropdown，二级菜单是独立浮层）
+ *   + 「对齐」下拉（演示 toolbarDropdown 的 align / placement 配置）；
  * - 功能模式：这根顶栏的内容整体换成该功能自己的按钮（名称 / 动作 / 退出）。
  *
  * 为什么用「同一根栏换内容」而不是再加一条 on:top：
  * 用户口径 2026-10-29：「上下显示了 2 套控制栏……我想要的是只显示一个控制栏」——
  * 功能模式必须是替换，不是叠加。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { closeDemoMode, demoMode, openDemoMode } from './demoMode'
 
@@ -31,6 +32,8 @@ const ThemedButton = useUiComponent('button')
 
 const ICON_DEMO =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>'
+const ICON_ALIGN =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg>'
 
 const items: ToolbarMenuNode[] = [
   { key: 'action-1', label: '动作一' },
@@ -48,6 +51,25 @@ const items: ToolbarMenuNode[] = [
 ]
 
 const LABEL = { alpha: '演示功能 A', beta: '演示功能 B' } as const
+
+/**
+ * 对齐演示：菜单横向贴在按钮的哪条边。
+ * 三种取值分别对应 align=center / start / end —— 这就是 toolbarDropdown 的对齐配置。
+ */
+const align = ref<'center' | 'start' | 'end'>('center')
+const ALIGN_LABEL = { center: '居中', start: '左对齐', end: '右对齐' } as const
+const alignItems: ToolbarMenuNode[] = [
+  { key: 'center', label: '底部居中（默认）' },
+  { key: 'start', label: '底部左对齐' },
+  { key: 'end', label: '底部右对齐' },
+]
+
+function pickAlign(key: string): void {
+  if (key === 'center' || key === 'start' || key === 'end') {
+    align.value = key
+    notify('演示：菜单改为「' + ALIGN_LABEL[key] + '」')
+  }
+}
 
 /** 本节点当前的功能模式（null = 普通态） */
 const kind = computed(() => {
@@ -93,6 +115,19 @@ function pickFeature(label: string): void {
     :icon="ICON_DEMO"
     :items="items"
     @pick="onPick"
+  />
+
+  <!-- 对齐演示：同一件 toolbarDropdown，只改 align；菜单里切换，立刻能看出差别。
+       放在「功能演示」**前面**：它要是排在最右，菜单会被屏幕右边缘夹住，
+       三种对齐看起来都差不多，演示就白搭了（回到根因：这是插件顺序，不是组件问题）。 -->
+  <component
+    v-if="!kind && DropdownButton"
+    :is="DropdownButton"
+    :title="'对齐：' + ALIGN_LABEL[align]"
+    :icon="ICON_ALIGN"
+    :items="alignItems"
+    :align="align"
+    @pick="pickAlign"
   />
 
   <!-- 功能模式：同一根顶栏，内容换成该功能自己的按钮 -->

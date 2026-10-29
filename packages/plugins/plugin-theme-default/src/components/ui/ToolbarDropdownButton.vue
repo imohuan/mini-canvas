@@ -14,8 +14,17 @@
  * 用法：
  *   const DropdownButton = useUiComponent('toolbarDropdown')
  *   <DropdownButton title="宫格切分" :icon="ICON" :items="items" @pick="onPick" />
+ *   <DropdownButton title="对齐演示" align="start" :items="items" />
  *
  * items 形状见 ToolbarMenuNode，children 非空 = 二级菜单（悬停或点击展开独立浮层）。
+ *
+ * 对齐（用户口径 2026-10-29：「当前是居中底部显示，我想可以通过配置来修改，比如底部左对齐」）：
+ * - placement 管**方向 + 对齐**：bottom（默认，底部居中）/ bottom-start（底部左对齐）/ bottom-end（底部右对齐）；
+ * - align 是**显式开关**，给了就压过 placement 后缀（只想改对齐、不动方向时用它）。
+ *
+ * ⚠️ 为什么两个都要传：主题默认件 Dropdown 只认 placement 后缀；成品应用里顶替它的
+ * AxDropdown 只认 align（它把 -start/-end 后缀当噪音丢弃，默认居中）。只传一个的话，
+ * 「换主题 / 换实现」后对齐会悄悄变形 —— 这类「同一个 prop 两套语义」最容易被当成品格问题。
  */
 import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import type { Component } from 'vue'
@@ -33,7 +42,14 @@ const props = withDefaults(
     active?: boolean
     disabled?: boolean
     menuWidth?: string
+    /** 菜单方向 + 对齐：bottom / bottom-start / bottom-end / top-…（start=左缘对齐，缺省居中） */
     placement?: string
+    /**
+     * 横向对齐的显式开关（覆盖 placement 后缀）：
+     * start = 菜单左缘贴按钮左缘；center = 菜单中轴对按钮中轴；end = 菜单右缘贴按钮右缘。
+     * auto（默认）= 跟 placement 后缀走，没后缀就居中 —— 与普通 dropdown 的写法一致。
+     */
+    align?: 'auto' | 'start' | 'center' | 'end'
   }>(),
   {
     ariaLabel: undefined,
@@ -43,7 +59,11 @@ const props = withDefaults(
     active: undefined,
     disabled: false,
     menuWidth: '220px',
-    placement: 'bottom-start',
+    // 默认居中：与这件组件改造前的实际观感一致。
+    // （改造前写的是 bottom-start，但两份 dropdown 实现都只认 align，后缀被丢弃 → 实际一直居中。
+    //   现在后缀真正生效了，默认值必须写成 bottom，否则默认观感会从居中悄悄变成左对齐。）
+    placement: 'bottom',
+    align: 'auto',
   },
 )
 
@@ -57,6 +77,27 @@ const Dropdown = useUiComponent('dropdown')
 const open = ref(false)
 const openSubKey = ref<string | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
+
+/**
+ * 实际生效的横向对齐。
+ * align 显式给了就以它为准；否则读 placement 后缀（-start / -end），都没有就居中。
+ */
+const effectiveAlign = computed<'start' | 'center' | 'end'>(() => {
+  if (props.align !== 'auto') return props.align
+  const suffix = props.placement.split('-')[1]
+  if (suffix === 'start' || suffix === 'center' || suffix === 'end') return suffix
+  return 'center'
+})
+
+/**
+ * 传给**主题默认件 Dropdown** 的 placement：它不看 align，只认后缀。
+ * 必须由 effectiveAlign 反推，否则「align 覆盖」在那份实现里会失效。
+ */
+const resolvedPlacement = computed(() => {
+  const side = props.placement.split('-')[0] || 'bottom'
+  const a = effectiveAlign.value
+  return a === 'center' ? side : side + '-' + a
+})
 
 /**
  * 二级菜单与主菜单卡片之间的固定间隔（px）。
@@ -159,7 +200,13 @@ void (Button as Component | undefined)
 </script>
 
 <template>
-  <component :is="Dropdown || 'div'" v-model="open" :placement="placement" :offset="6"
+  <!--
+    placement 与 align **同时传**（理由见文件头）：
+    - placement 由 effectiveAlign 反推，给只认后缀的主题默认件用；
+    - align 给只认它的 AxDropdown 用（成品应用里它顶替了主题默认件）。
+    未声明的 prop 会被 Vue 当作 attr 落到根元素上，所以两份实现都能各取所需、不会互相打架。
+  -->
+  <component :is="Dropdown || 'div'" v-model="open" :placement="resolvedPlacement" :align="effectiveAlign" :offset="6"
     :menu-width="menuWidth" :teleport="true">
     <template #trigger>
       <span ref="triggerRef" class="tdb-trigger">

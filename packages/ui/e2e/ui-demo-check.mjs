@@ -59,10 +59,10 @@ const slot = await page.evaluate(() => {
   }))
 })
 check('顶栏插槽只有一个容器（按钮组内部，不是组外第二块）', Array.isArray(slot) && slot.length === 1, JSON.stringify(slot))
-check('演示按钮在图片按钮组内部（同一 flex 容器）', !!slot?.[0]?.text?.includes('功能演示'), JSON.stringify(slot))
+check('演示按钮在图片按钮组内部（同一 flex 容器）', !!slot?.[0]?.text?.includes('功能演示') && !!slot?.[0]?.text?.includes('对齐：'), JSON.stringify(slot))
 
 // 打开下拉 + 二级
-await page.getByRole('button', { name: '功能演示' }).first().click()
+await page.locator('.tdb-trigger').filter({ hasText: '功能演示' }).first().click()
 await page.waitForTimeout(400)
 const main = await page.evaluate(() => {
   const m = document.querySelector('[data-toolbar-dropdown-menu="1"]')
@@ -91,7 +91,65 @@ check('二级菜单是独立浮层（position:fixed 且在主面板右侧之外�
 check('二级菜单与主菜单之间留有明显间隔（12px 定稿）', !!sub && sub.gapPx >= 10 && sub.gapPx <= 15, JSON.stringify(sub))
 check('二级菜单有自己的面板与子项', !!sub && sub.ownPanel && sub.rows.includes('子项 1'), JSON.stringify(sub))
 
+/** 重新选中那个图片节点（顶栏只在选中时出现） */
+async function reselect() {
+  await page.evaluate((id) => {
+    window.MiniCanvasUI.getHost().selection.set([id])
+  }, imageId)
+  await page.waitForTimeout(300)
+}
+
+// ===== 对齐配置（toolbarDropdown 的 align / placement）=====
+// 用户口径 2026-10-29：「当前是居中底部显示，我想可以通过配置来修改，比如底部左对齐」。
+// measureAlign 用**外层 .dd-menu** 量（[data-toolbar-dropdown-menu] 只是内容容器，static 无定位）。
+async function measureAlign(pickRow) {
+  // 关菜单用 Escape 会顺带清掉节点选中 → 顶栏整条消失，后续就找不到按钮了。
+  // 这里改用「再点一次触发器」关菜单，选中态不受影响。
+  await reselect()
+  // 上一段测二级菜单时主菜单还开着：先点一次触发器把它关掉，后面才是「干净地打开」
+  if (await page.locator('.dd-menu').count()) {
+    await page.locator('.tdb-trigger').filter({ hasText: '功能演示' }).first().click()
+    await page.waitForTimeout(250)
+  }
+  const btn = page.locator('.tdb-trigger').filter({ hasText: '对齐：' }).first()
+  await btn.click()
+  await page.waitForTimeout(350)
+  if (pickRow) {
+    await page.getByRole('menuitem', { name: pickRow }).first().click()
+    await page.waitForTimeout(400)
+    await btn.click()
+    await page.waitForTimeout(400)
+  }
+  const r = await page.evaluate(() => {
+    const content = document.querySelector('[data-toolbar-dropdown-menu="1"]')
+    const menuEl = content?.closest('.dd-menu')
+    const trigEl = [...document.querySelectorAll('.tdb-trigger')].find((e) => e.querySelector('[aria-expanded="true"]'))
+    if (!menuEl || !trigEl) return null
+    const t = trigEl.getBoundingClientRect()
+    const m = menuEl.getBoundingClientRect()
+    return {
+      left: Math.round(m.left - t.left),
+      center: Math.round(m.left + m.width / 2 - (t.left + t.width / 2)),
+      right: Math.round(m.right - t.right),
+    }
+  })
+  await btn.click()
+  await page.waitForTimeout(250)
+  return r
+}
+
+const alignCenter = await measureAlign('')
+check('默认居中：菜单中轴对按钮中轴（偏差 ≤ 2px）', !!alignCenter && Math.abs(alignCenter.center) <= 2, JSON.stringify(alignCenter))
+
+const alignStart = await measureAlign('底部左对齐')
+check('align=start：菜单左缘贴按钮左缘（偏差 ≤ 2px）', !!alignStart && Math.abs(alignStart.left) <= 2, JSON.stringify(alignStart))
+
+const alignEnd = await measureAlign('底部右对齐')
+check('align=end：菜单右缘贴按钮右缘（偏差 ≤ 2px）', !!alignEnd && Math.abs(alignEnd.right) <= 2, JSON.stringify(alignEnd))
+
 // 进入功能模式
+await page.locator('.tdb-trigger').filter({ hasText: '功能演示' }).first().click()
+await page.waitForTimeout(400)
 await page.getByRole('menuitem', { name: '进入功能模式 A' }).first().click()
 await page.waitForTimeout(900)
 
