@@ -408,7 +408,7 @@ function footer(kind) {
 // ---------------------------------------------------------------- 审核
 
 var REVIEW_OPTIONS = [
-  { id: 'ask', title: '接受审核', desc: '命中规则的工具先停下来问你。', icon: 'hand', auto: false, badge: '推荐' },
+  { id: 'ask', title: '接受审核', desc: '需要确认时先停下来问你。', icon: 'hand', auto: false, badge: '推荐' },
   { id: 'auto', title: '完全自动授权', desc: '所有工具直接执行，不再逐次确认。', icon: 'shield', auto: true, badge: '谨慎' }
 ]
 
