@@ -291,10 +291,22 @@ function maybeLoadMorePage(): void {
   if (!canLoadMore.value) return
   // 数据已全部拉到、只剩"没渲染的卡片"时，不需要再打接口：直接让最后一批接上瀑布流。
   if (!s.histHasMore) {
-    if (renderedCount.value < ui.histVisible.value.length) {
-      const from = renderedCount.value
-      renderedCount.value = Math.min(renderedCount.value + BATCH_SIZE, ui.histVisible.value.length)
-      nextTick(() => appendMasonryItems(from, renderedCount.value))
+    /**
+     * 漏画兜底（2026-10-30 用户实测：视频 27 条全部拉到，visible=16，墙上只有 11 张 ——
+     * renderedCount=26 与 DOM 11 脱节，计数认为画完了，哨兵从此不再补画）。
+     * 以**墙上实际画过的 id** 为准：数据里没画过的全部接上，计数对齐 DOM。
+     */
+    const drawn = new Set(
+      [...(masonryEl.value?.querySelectorAll('[data-hist-id]') ?? [])].map(
+        (el) => (el as HTMLElement).dataset.histId,
+      ),
+    )
+    const missing = ui.histVisible.value.filter((e) => !(e.id && drawn.has(e.id)))
+    if (missing.length > 0) {
+      const from = ui.histVisible.value.findIndex((e) => e === missing[0])
+      const to = from + missing.length
+      renderedCount.value = Math.max(renderedCount.value, to)
+      nextTick(() => appendMasonryItems(from, to))
     }
     return
   }
@@ -346,7 +358,18 @@ function fillViewportIfNeeded(): void {
  * 两种"能"都要保留哨兵；只有真正到底（没数据、也全渲染完）才把它从 DOM 摘掉。
  */
 const canLoadMore = computed(() => {
-  if (renderedCount.value < ui.histVisible.value.length) return true
+  /**
+   * 以 DOM 实际画的数量为准（renderedCount 可能与墙脱节 —— 见 maybeLoadMorePage 兜底）：
+   * 数据里还有没画过的条目就继续，别让计数说谎把哨兵摘了。
+   */
+  const items = ui.histVisible.value
+  if (masonryEl.value) {
+    const drawn = new Set(
+      [...masonryEl.value.querySelectorAll('[data-hist-id]')].map((el) => (el as HTMLElement).dataset.histId),
+    )
+    if (items.some((e) => e.id && !drawn.has(e.id))) return true
+  }
+  if (renderedCount.value < items.length) return true
   return s.histHasMore
 })
 
