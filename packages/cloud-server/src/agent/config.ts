@@ -1116,8 +1116,14 @@ export class AgentConfigService {
       return { ok: failed.length === 0, servers, tools, warnings }
     } finally {
       // 探测完立刻放掉连接：不该因为「点了一下检查」让子进程/连接一直挂着
+      /**
+       * 用 closeQuietly，不用 `provider.close()`：后者返回 Promise，这里不能 await
+       * （探测结果已经拿到，收尾不该再拖住响应），于是它的失败没人接 —— 子进程已经在退出时
+       * 关闭会 reject，在 Node 里就是一条 unhandled rejection（进程级告警，可能把后台带崩）。
+       * closeQuietly 正是 SDK 为「同步收尾」准备的：吞掉错误、幂等。
+       */
       try {
-        provider.close()
+        provider.closeQuietly()
       } catch {
         /* 关不掉不是用户的问题 */
       }
