@@ -20,12 +20,15 @@ export interface SegmentOption {
 }
 
 /** 右侧面板的一种控件。 */
-export type PlaygroundField =
+type PlaygroundFieldControl =
   | { kind: 'text'; key: string; label: string; placeholder?: string; maxlength?: number }
   | { kind: 'number'; key: string; label: string; min?: number; max?: number; step?: number; suffix?: string }
   | { kind: 'segment'; key: string; label: string; options: SegmentOption[] }
   | { kind: 'toggle'; key: string; label: string }
   | { kind: 'range'; key: string; label: string; min: number; max: number; step: number; unit?: string }
+
+/** 分组和补充说明都是可选的；默认面板仍按字段顺序平铺。 */
+export type PlaygroundField = PlaygroundFieldControl & { group?: string; hint?: string }
 
 export interface PlaygroundPreset {
   id: string

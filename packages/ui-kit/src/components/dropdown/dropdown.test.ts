@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import Dropdown from './Dropdown.vue'
 
@@ -43,5 +43,46 @@ describe('Dropdown 组件行为', () => {
     const wrapper = mount(Dropdown, { props: { modelValue: false, disabled: true }, slots: { trigger: '<button data-trigger>x</button>' } })
     await wrapper.find('[data-trigger]').trigger('click')
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('hover 触发器悬停打开，离开后延迟关闭', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(Dropdown, {
+        props: { modelValue: false, trigger: 'hover', hoverCloseDelay: 20 },
+        slots: { trigger: '<button data-trigger>x</button>', default: '<div data-menu />' },
+      })
+      const trigger = wrapper.find('.mck-dropdown__trigger')
+      await trigger.trigger('mouseenter')
+      await trigger.trigger('click')
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+      await trigger.trigger('mouseleave')
+      await vi.advanceTimersByTimeAsync(30)
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('contextmenu 触发器右键打开', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: false, trigger: 'contextmenu' },
+      slots: { trigger: '<button data-trigger>x</button>', default: '<div data-menu />' },
+    })
+    await wrapper.find('[data-trigger]').trigger('contextmenu')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+  })
+
+  it('menuHeight 和 arrow 生效；箭头指向触发器', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, menuHeight: '180px', arrow: true },
+      slots: { trigger: '<button data-trigger>x</button>', default: '<div data-menu />' },
+    })
+    await wrapper.vm.$nextTick()
+    const panel = document.querySelector<HTMLElement>('.mck-dropdown__panel')
+    const arrow = document.querySelector<HTMLElement>('.mck-dropdown__arrow')
+    expect(panel?.style.height).toBe('180px')
+    expect(arrow).not.toBeNull()
+    expect(arrow?.getAttribute('aria-hidden')).toBe('true')
   })
 })

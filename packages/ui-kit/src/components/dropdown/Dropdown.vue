@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<DropdownProps>(), {
   trigger: 'click',
   hoverCloseDelay: 150,
   menuWidth: '',
+  menuHeight: '',
   menuMinWidth: '',
   menuMaxWidth: '',
   menuMaxHeight: '',
@@ -87,6 +88,12 @@ const triggerEvents = computed(() => {
       <slot name="trigger" :open="api.open.value" :toggle="api.toggle" :close="api.hide" />
     </div>
     <Teleport :to="appendTo" :disabled="!teleport">
+      <div
+        v-if="api.open.value && arrow"
+        class="mck-dropdown__arrow"
+        :style="api.arrowStyle.value"
+        aria-hidden="true"
+      />
       <Transition name="mck-dropdown-fade">
         <div
           v-if="api.open.value"

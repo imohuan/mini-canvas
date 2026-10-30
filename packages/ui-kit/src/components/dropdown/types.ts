@@ -11,6 +11,8 @@ export interface DropdownProps {
   trigger?: DropdownTrigger
   hoverCloseDelay?: number
   menuWidth?: string
+  /** 浮层固定高度；不填时由内容撑开 */
+  menuHeight?: string
   menuMinWidth?: string
   menuMaxWidth?: string
   menuMaxHeight?: string

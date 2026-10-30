@@ -665,6 +665,18 @@ body {
   line-height: 1.7;
 }
 
+/* Dropdown 专属面板由组件 Teleport 进来：外壳只负责滚动和留白。 */
+.uk-config--hosted {
+  padding: 12px 14px 24px;
+}
+
+.uk-config-host {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .uk-field {
   display: flex;
   flex-direction: column;

@@ -260,7 +260,11 @@ function resetGlobal(): void {
                   <div class="uk-preview-stage">
                     <div class="uk-preview-canvas" :class="{ 'is-stretch': playground?.stretch }">
                       <div class="uk-canvas-grid" aria-hidden="true"></div>
-                      <PlaygroundPreview :id="activeId" :state="state" />
+                      <PlaygroundPreview
+                        :id="activeId"
+                        :state="state"
+                        :dropdown-config-target="activeId === 'dropdown' ? '#uk-dropdown-config' : null"
+                      />
                       <p v-if="summary" class="uk-canvas-caption">{{ summary }}</p>
                     </div>
                   </div>
@@ -295,7 +299,11 @@ function resetGlobal(): void {
           </template>
 
           <template #right>
-            <aside class="uk-config">
+            <aside v-if="activeId === 'dropdown'" class="uk-config uk-config--hosted">
+              <!-- 内容由 DropdownPlayground.vue 通过 Teleport 渲染；这里只提供位置。 -->
+              <div id="uk-dropdown-config" class="uk-config-host" />
+            </aside>
+            <aside v-else class="uk-config">
               <div class="uk-config-head">
                 <div>
                   <span class="uk-eyebrow">组件配置</span>
@@ -389,7 +397,7 @@ function resetGlobal(): void {
                 </div>
               </template>
 
-              <p v-else class="uk-config-empty">
+              <p v-if="!playground" class="uk-config-empty">
                 这个组件暂时没有可调参数，直接到下方文档里试。
               </p>
             </aside>

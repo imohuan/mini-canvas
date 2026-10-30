@@ -1,0 +1,337 @@
+/* Dropdown 专属试玩区：预览画布 + Teleport 配置面板。 */
+.dd-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.dd-stage {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 270px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--mck-line, #e2e5ea);
+  border-radius: var(--mck-radius-panel, 14px);
+  background: var(--mck-panel-soft, #f7f8fa);
+  touch-action: none;
+}
+
+.dd-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--mck-line, rgb(0 0 0 / 0.1)) 1px, transparent 1px);
+  background-size: 16px 16px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.dd-center-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mck-accent, #0891b2);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.dd-anchor {
+  position: relative;
+  z-index: 1;
+  cursor: grab;
+  user-select: none;
+}
+
+.dd-anchor.is-dragging {
+  cursor: grabbing;
+}
+
+.dd-trigger {
+  cursor: inherit;
+}
+
+.dd-trigger__grip {
+  margin-right: 6px;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 14px;
+  letter-spacing: -2px;
+}
+
+.dd-hud {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 10.5px;
+  pointer-events: none;
+}
+
+.dd-hud button {
+  padding: 3px 6px;
+  border: 1px solid var(--mck-line, #e2e5ea);
+  border-radius: 6px;
+  background: var(--mck-panel, #fff);
+  color: var(--mck-ink-muted, #8c95a3);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.dd-summary {
+  margin: 0;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ---- 菜单内容：验证宽高 / 滚动 ---- */
+.dd-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 150px;
+}
+
+.dd-menu__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 7px 6px;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 10.5px;
+}
+
+.dd-menu__count {
+  flex: none;
+  opacity: 0.75;
+}
+
+.dd-menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mck-ink, inherit);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dd-menu button:hover:not(:disabled) {
+  background: var(--mck-hover, rgb(0 0 0 / 0.06));
+}
+
+.dd-menu button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dd-menu kbd {
+  flex: none;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-family: var(--mck-font-mono, monospace);
+  font-size: 9.5px;
+}
+
+.dd-menu__close {
+  margin-top: 3px;
+  border-top: 1px solid var(--mck-line, #e2e5ea) !important;
+  border-radius: 0 !important;
+  color: var(--mck-ink-muted, #8c95a3) !important;
+}
+
+/* ---- Teleport 到右栏的配置面板 ---- */
+.dd-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+  padding: 0;
+  color: var(--mck-ink, #18202b);
+}
+
+.dd-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-panel__head h2 {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.dd-panel__eyebrow {
+  display: block;
+  color: var(--mck-accent, #0891b2);
+  font-family: var(--mck-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.dd-group {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.dd-group__title {
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid var(--mck-line, #e2e5ea);
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dd-group:first-of-type .dd-group__title {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dd-field,
+.dd-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dd-field > label,
+.dd-fieldset legend,
+.dd-field__label {
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 11px;
+}
+
+.dd-field__label {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.dd-field__label b {
+  color: var(--mck-ink, #18202b);
+}
+
+.dd-hint {
+  margin: 0;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.dd-field .mck-switch {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.dd-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.dd-presets__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-presets__head > span:last-child {
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 9.5px;
+}
+
+.dd-preset {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dd-preset:hover {
+  border-color: var(--mck-line, #e2e5ea);
+  background: var(--mck-hover, rgb(0 0 0 / 0.04));
+}
+
+.dd-preset__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--mck-accent, #0891b2);
+}
+
+.dd-preset:nth-of-type(2n) .dd-preset__dot {
+  background: var(--mck-ink-muted, #8c95a3);
+}
+
+.dd-preset__copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dd-preset__copy strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dd-preset__copy small {
+  overflow: hidden;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-preset__add {
+  flex: none;
+  color: var(--mck-ink-muted, #8c95a3);
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-anchor {
+    transition: none !important;
+  }
+}

@@ -1,6 +1,7 @@
-import { computed, onBeforeUnmount, nextTick, ref, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useFloating } from '../../shared/floating'
 import { useEscape, useOutsideClick } from '../../shared/overlay'
+import type { UiKitPlacement } from '../../shared/types'
 import type { DropdownProps } from './types'
 
 let openInstance: symbol | null = null
@@ -17,6 +18,7 @@ export interface DropdownApi {
   scheduleHide: () => void
   cancelHide: () => void
   panelStyle: Ref<Record<string, string>>
+  arrowStyle: ComputedRef<Record<string, string>>
   closeFromSlot: () => void
 }
 
@@ -28,8 +30,18 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   const panelRef = ref<HTMLElement | null>(null)
   let hideTimer = 0
 
+  /** placement 的后缀与 align 都能决定横向对齐；align 显式值优先。 */
+  const resolvedPlacement = computed<UiKitPlacement>(() => {
+    const base = props.placement ?? 'bottom-start'
+    if (base === 'auto') return 'bottom-start'
+    const align = props.align ?? 'auto'
+    if (align === 'auto') return base
+    const side = base.split('-')[0] as 'top' | 'bottom' | 'left' | 'right'
+    return (align === 'center' ? side : side + '-' + align) as UiKitPlacement
+  })
+
   const options = computed(() => ({
-    placement: props.placement ?? 'bottom-start',
+    placement: resolvedPlacement.value,
     offset: props.offset ?? 6,
     matchWidth: props.matchWidth ?? false,
     maxWidth: props.menuMaxWidth,
@@ -101,8 +113,51 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     }
     if (props.menuWidth) style.width = props.menuWidth
     else if (props.matchWidth && position.value.width) style.width = position.value.width + 'px'
+    if (props.menuHeight) style.height = props.menuHeight
     if (props.menuMinWidth) style.minWidth = props.menuMinWidth
     if (props.menuMaxWidth) style.maxWidth = props.menuMaxWidth
+    return style
+  })
+
+  /**
+   * 箭头是独立 fixed 元素：面板自己 overflow 滚动，画在面板内部会被裁掉。
+   * 只露出朝触发器那一半，内侧一半由面板盖住，看起来像从面板边缘长出来。
+   */
+  const ARROW_SIZE = 10
+  const ARROW_PAD = 12
+  const arrowStyle = computed<Record<string, string>>(() => {
+    const hidden: Record<string, string> = { display: 'none' }
+    if (!props.arrow || !positioned.value) return hidden
+    const panel = panelRef.value
+    const trigger = triggerRef.value
+    if (!panel || !trigger) return hidden
+    const pos = position.value
+    const side = pos.placement.split('-')[0] as 'top' | 'bottom' | 'left' | 'right'
+    const tr = trigger.getBoundingClientRect()
+    const half = ARROW_SIZE / 2
+    const style: Record<string, string> = {
+      position: 'fixed',
+      width: ARROW_SIZE + 'px',
+      height: ARROW_SIZE + 'px',
+      background: 'var(--mck-panel, #fff)',
+      border: '0 solid var(--mck-line, #e2e5ea)',
+      transform: 'rotate(45deg)',
+      pointerEvents: 'none',
+    }
+    const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), Math.max(min, max))
+    if (side === 'top' || side === 'bottom') {
+      const center = tr.left + tr.width / 2
+      style.left = clamp(center - half, pos.left + ARROW_PAD, pos.left + panel.offsetWidth - ARROW_PAD) + 'px'
+      style.top = (side === 'bottom' ? pos.top : pos.top + panel.offsetHeight) - half + 'px'
+      const edges = side === 'bottom' ? ['Top', 'Left'] : ['Bottom', 'Right']
+      for (const edge of edges) style['border' + edge + 'Width'] = '1px'
+    } else {
+      const center = tr.top + tr.height / 2
+      style.top = clamp(center - half, pos.top + ARROW_PAD, pos.top + panel.offsetHeight - ARROW_PAD) + 'px'
+      style.left = (side === 'right' ? pos.left : pos.left + panel.offsetWidth) - half + 'px'
+      const edges = side === 'right' ? ['Bottom', 'Left'] : ['Top', 'Right']
+      for (const edge of edges) style['border' + edge + 'Width'] = '1px'
+    }
     return style
   })
 
@@ -117,5 +172,5 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   }
 
 
-  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, panelStyle, closeFromSlot }
+  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, panelStyle, arrowStyle, closeFromSlot }
 }

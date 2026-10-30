@@ -13,6 +13,7 @@ import {
 } from '../index'
 import type { ContextMenuItem, SelectOption, TabItem, UiKitTone } from '../index'
 import { readBool, readNumber, readSize, readText } from './playground'
+import DropdownPlayground from '../components/dropdown/DropdownPlayground.vue'
 
 /** 把面板里的色调字符串收成 UiKitTone，未知值回落到 fallback。 */
 function readTone(value: string, fallback: UiKitTone): UiKitTone {
@@ -25,6 +26,8 @@ const props = defineProps<{
   id: string
   /** 右侧面板当前参数 */
   state: Record<string, unknown>
+  /** Dropdown 专属配置面板的 Teleport 目标 */
+  dropdownConfigTarget?: string | null
 }>()
 
 /** 统一把 unknown 记录收敛成类型安全的读取器。 */
@@ -37,7 +40,6 @@ const sliderValue = ref(40)
 const switchValue = ref(true)
 const tabValue = ref('preview')
 const selectValue = ref<string | number | null>('image')
-const dropdownOpen = ref(false)
 const popoverOpen = ref(false)
 const dialogOpen = ref(false)
 const confirmOpen = ref(false)
@@ -64,13 +66,6 @@ const tabItems = computed<TabItem[]>(() => {
   ]
   if (readBool(state.value, 'showBadge')) items[1] = { value: 'code', label: '代码', badge: 3 }
   if (readBool(state.value, 'showDisabled')) items.push({ value: 'settings', label: '设置', disabled: true })
-  return items
-})
-
-const menuItems = computed(() => {
-  const count = Math.min(Math.max(readNumber(state.value, 'itemCount', 6), 1), 14)
-  const items: ContextMenuItem[] = []
-  for (let i = 1; i <= count; i += 1) items.push({ id: 'op-' + i, label: i === 1 ? '操作一' : i === 2 ? '操作二' : '长列表 ' + (i - 2) })
   return items
 })
 
@@ -258,25 +253,7 @@ function fireMessage(): void {
 
     <!-- Dropdown -->
     <template v-else-if="id === 'dropdown'">
-      <Dropdown
-        v-model="dropdownOpen"
-        :trigger="(readText(state, 'trigger') || 'click') as 'click' | 'hover' | 'contextmenu'"
-        :placement="(readText(state, 'placement') || 'bottom-start') as 'bottom-start' | 'bottom-end' | 'top-start' | 'right-start'"
-        :offset="readNumber(state, 'offset', 6)"
-        :match-width="readBool(state, 'matchWidth')"
-        :menu-min-width="readText(state, 'menuMinWidth') || '220px'"
-        :menu-max-height="readText(state, 'menuMaxHeight') || '220px'"
-        :disabled="readBool(state, 'disabled')"
-      >
-        <template #trigger="{ open }">
-          <Button variant="secondary" :aria-expanded="open">打开菜单</Button>
-        </template>
-        <template #default="{ close }">
-          <div class="pg-menu">
-            <button v-for="item in menuItems" :key="item.id" type="button" @click="close()">{{ item.label }}</button>
-          </div>
-        </template>
-      </Dropdown>
+      <DropdownPlayground :config-target="dropdownConfigTarget" />
     </template>
 
     <!-- Popover -->
@@ -476,29 +453,6 @@ function fireMessage(): void {
   color: var(--mck-ink-muted, #6b7280);
   font-size: 12px;
   line-height: 1.7;
-}
-
-.pg-menu {
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
-}
-
-.pg-menu button {
-  width: 100%;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.pg-menu button:hover {
-  background: var(--mck-hover, rgb(0 0 0 / 0.06));
 }
 
 .pg-ctx {
