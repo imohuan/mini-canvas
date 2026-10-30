@@ -1,4 +1,10 @@
-/* 独立预览页的基础主题。主应用里这些 token 由 canvas-render 提供。 */
+/*
+ * 独立预览页的基础主题。主应用里这些 token 由 canvas-render 提供。
+ *
+ * ui-kit 自己的组件一律用 --mck-*（来自 UiKitProvider）。
+ * 这里的 --ui-* 只是 preview.css 壳层的兜底，不跟着 Provider 变；
+ * 文档区、示例框、代码块必须写 var(--mck-xxx)，否则切主题时不会跟着变。
+ */
 :root {
   --ui-canvas-bg: #f5f6f8;
   --ui-panel: #ffffff;
@@ -194,6 +200,30 @@ body {
   width: 96px;
   accent-color: var(--mck-accent, var(--ui-accent));
   cursor: pointer;
+}
+
+/* 顶部参数栏里的库内控件：只收紧宽度，视觉交给组件自己。 */
+.uk-control-select {
+  width: 96px;
+}
+
+.uk-control-select .mck-select {
+  height: 28px;
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.uk-control-select .mck-select__arrow {
+  font-size: 10px;
+}
+
+.uk-control-slider {
+  width: 108px;
+}
+
+.uk-control-slider .mck-slider-wrap {
+  gap: 0;
 }
 
 .uk-control--color input[type="color"] {
@@ -523,7 +553,7 @@ body {
   padding: 22px 18px;
   border: 1px solid var(--mck-line, var(--ui-line));
   border-radius: var(--mck-radius-panel, 14px);
-  background: var(--mck-panel, var(--ui-panel));
+  background: var(--mck-panel-soft, var(--ui-panel));
   overflow: hidden;
 }
 
@@ -647,21 +677,25 @@ body {
   font-size: 11px;
 }
 
-.uk-field input {
+.uk-field input,
+.uk-field .mck-input,
+.uk-field .mck-number-wrap,
+.uk-field .mck-select-wrap {
   width: 100%;
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--mck-line, var(--ui-line));
-  border-radius: var(--mck-radius-control, 8px);
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
-  color: var(--mck-ink, var(--ui-ink));
-  font: inherit;
-  font-size: 12px;
 }
 
-.uk-field input:focus-visible {
-  border-color: var(--mck-accent, var(--ui-accent));
-  outline: none;
+.uk-field-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  font-size: 11px;
+}
+
+.uk-field-label b {
+  color: var(--mck-ink, var(--ui-ink));
+  font-weight: 600;
 }
 
 .uk-fieldset {
@@ -678,103 +712,23 @@ body {
   padding: 0;
 }
 
-/* 分段按钮：外观 / 尺寸。 */
-.uk-segment {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--mck-line, var(--ui-line));
-  border-radius: 8px;
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
-}
-
-.uk-segment button {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 26px;
-  padding: 0 4px;
+/* 库内 Tabs 当分段控件用：去掉外框，融进配置面板。 */
+.uk-fieldset .mck-tabs {
+  padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
-  font: inherit;
-  font-size: 11.5px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 130ms ease, color 130ms ease;
 }
 
-.uk-segment button:hover {
-  color: var(--mck-ink, var(--ui-ink));
+.uk-fieldset .mck-tab {
+  flex: 1 1 0;
 }
 
-.uk-segment button.is-active {
-  background: var(--mck-panel, var(--ui-panel));
-  color: var(--mck-ink, var(--ui-ink));
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
-}
-
-/* 开关行。 */
-.uk-switch-list {
+/* 配置面板里的开关：交给库内 Switch，这里只让整行撑满。 */
+.uk-field .mck-switch {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.uk-switch {
-  display: flex;
-  align-items: center;
+  width: 100%;
   justify-content: space-between;
-  gap: 10px;
-  padding: 5px 0;
-  color: var(--mck-ink, var(--ui-ink));
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.uk-switch input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.uk-switch i {
-  position: relative;
-  flex: 0 0 auto;
-  width: 34px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--mck-chip, var(--ui-chip));
-  transition: background-color 150ms ease;
-}
-
-.uk-switch i::after {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--mck-panel, #fff);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.28);
-  content: '';
-  transition: transform 150ms ease;
-}
-
-.uk-switch input:checked + i {
-  background: var(--mck-accent, var(--ui-accent));
-}
-
-.uk-switch input:checked + i::after {
-  transform: translateX(14px);
-}
-
-.uk-switch input:focus-visible + i {
-  outline: 2px solid var(--mck-accent, var(--ui-accent));
-  outline-offset: 2px;
 }
 
 /* 预设列表。 */
@@ -821,7 +775,7 @@ body {
   background: var(--mck-hover, var(--ui-hover));
 }
 
-.uk-preset > span:nth-child(2) {
+.uk-preset-copy {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -840,11 +794,6 @@ body {
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.uk-preset em {
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
-  font-style: normal;
 }
 
 .uk-preset-swatch {
@@ -905,6 +854,21 @@ body {
 }
 
 /*
+ * 文档代码块的双主题配色。
+ *
+ * Shiki 一次输出 --shiki-light / --shiki-dark 两套 token 颜色，这里按
+ * Provider 的 data-ui-kit-dark 切。只输出单套会在另一主题下变成
+ * 「浅底浅字」，看起来像文档样式没生效。
+ */
+.mck-doc-code .shiki span {
+  color: var(--shiki-light);
+}
+
+[data-ui-kit-dark='true'] .mck-doc-code .shiki span {
+  color: var(--shiki-dark);
+}
+
+/*
  * 预览区：内容宽度随配置变化，输入框、滑块、分栏这类需要吃满。
  */
 .uk-preview-canvas.is-stretch {
@@ -916,30 +880,7 @@ body {
   margin-top: 2px;
 }
 
-/* range 控件（试玩面板里的滑杆）。 */
-.uk-range {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  color: var(--mck-ink, var(--ui-ink));
-  font-size: 11.5px;
-}
-
-.uk-range > span {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
-}
-
-.uk-range b {
-  color: var(--mck-ink, var(--ui-ink));
-  font-weight: 600;
-}
-
-.uk-range input[type="range"] {
+/* 配置面板里的滑杆：库内 Slider 自己负责视觉，这里只让它撑满一行。 */
+.uk-field .mck-slider-wrap {
   width: 100%;
-  accent-color: var(--mck-accent, var(--ui-accent));
-  cursor: pointer;
 }

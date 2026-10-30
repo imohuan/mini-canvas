@@ -19,4 +19,6 @@ export interface InputProps {
   autocomplete?: string
   /** 前缀图标区域 */
   prefix?: string
+  /** 读屏名称；没有可见 label 时必填 */
+  ariaLabel?: string
 }

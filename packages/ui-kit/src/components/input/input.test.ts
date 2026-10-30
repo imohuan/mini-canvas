@@ -17,4 +17,16 @@ describe('Input 组件行为', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([''])
     expect(wrapper.emitted('clear')).toHaveLength(1)
   })
+
+  it('ariaLabel 落在真正的 input 上，而不是外层容器', () => {
+    const wrapper = mount(Input, { props: { ariaLabel: '搜索画布' } })
+    expect(wrapper.find('input').attributes('aria-label')).toBe('搜索画布')
+    expect(wrapper.find('.mck-input').attributes('aria-label')).toBeUndefined()
+  })
+
+  it('原生 aria-label 也会转给内部 input', () => {
+    const wrapper = mount(Input, { attrs: { 'aria-label': '文件名' } })
+    expect(wrapper.find('input').attributes('aria-label')).toBe('文件名')
+    expect(wrapper.find('.mck-input').attributes('aria-label')).toBeUndefined()
+  })
 })

@@ -83,3 +83,14 @@ export function readNumber(
   const value = state[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
+
+/**
+ * 配置面板数字字段的当前值。
+ *
+ * 模板里写 `typeof x === 'number' ? x : null` 时 vue-tsc 不会收窄成 number，
+ * 会报「string 不能赋给 number」。放进函数后返回值类型明确，模板只传字段名。
+ */
+export function numberValue(state: Record<string, PlaygroundValue>, key: string): number | null {
+  const value = state[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}

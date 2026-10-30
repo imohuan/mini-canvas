@@ -81,7 +81,13 @@ export async function highlight(code: string, lang: string): Promise<string> {
   const known = CODE_LANGS[lang] ?? 'text'
   return shiki.codeToHtml(code.replace(/\n$/, ''), {
     lang: known,
-    theme: 'github-dark-default',
+    /**
+     * 双主题：同一个代码块同时产出浅色 / 深色两套 token 颜色，
+     * 由 CSS 按 Provider 的 data-ui-kit-dark 切换。只输出单套会在另一主题下变成
+     * 「浅底浅字」，文档区看起来像坏了。
+     */
+    themes: { light: 'github-light-default', dark: 'github-dark-default' },
+    defaultColor: false,
     transformers: [],
   })
 }
@@ -92,15 +98,39 @@ export async function highlight(code: string, lang: string): Promise<string> {
  * 文档和组件同目录：src/components/<id>/docs.md；provider 在 src/provider/docs.md。
  * 找不到就返回 undefined，页面会显示「文档还没写」。
  */
-function readDoc(componentsDir: string, name: string): string | undefined {
+function docFile(componentsDir: string, name: string): string | undefined {
   const candidates = [
     path.join(componentsDir, name, 'docs.md'),
     path.join(path.dirname(componentsDir), name, 'docs.md'),
   ]
-  for (const file of candidates) {
-    if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8')
-  }
-  return undefined
+  return candidates.find((file) => fs.existsSync(file))
+}
+
+/**
+ * 读文档 + 编译示例。
+ *
+ * 按文件 mtime 缓存：改 md 后下一次请求一定会拿到新内容，
+ * 没改就复用上一次的编译结果，不用每次重新高亮整篇文档。
+ */
+interface CompiledDoc {
+  mtimeMs: number
+  markdown: string
+  codeHtml: string[]
+}
+
+const compiledDocs = new Map<string, CompiledDoc>()
+
+async function compileDoc(file: string): Promise<CompiledDoc> {
+  const stat = fs.statSync(file)
+  const cached = compiledDocs.get(file)
+  if (cached && cached.mtimeMs === stat.mtimeMs) return cached
+  const markdown = fs.readFileSync(file, 'utf8')
+  const codeHtml = await Promise.all(
+    codeBlocksOf(markdown).map((block) => highlight(block.code, block.lang)),
+  )
+  const next: CompiledDoc = { mtimeMs: stat.mtimeMs, markdown, codeHtml }
+  compiledDocs.set(file, next)
+  return next
 }
 
 export function uiKitDocsPlugin(componentsDir: string): Plugin {
@@ -119,19 +149,16 @@ export function uiKitDocsPlugin(componentsDir: string): Plugin {
     async load(id) {
       if (id.startsWith(RESOLVED_DOC)) {
         const name = id.slice(RESOLVED_DOC.length)
-        const source = readDoc(componentsDir, name)
-        if (source === undefined) return undefined
-        const modules = examplesOf(source).map((_, index) =>
+        const file = docFile(componentsDir, name)
+        if (!file) return undefined
+        const compiled = await compileDoc(file)
+        const modules = examplesOf(compiled.markdown).map((_, index) =>
           "import Example" + index + " from '" + EXAMPLE_PREFIX + name + "/" + index + "'",
         ).join('\n')
-        const entries = examplesOf(source).map((_, index) => 'Example' + index)
-        const codeBlocks = codeBlocksOf(source)
-        const highlighted = await Promise.all(
-          codeBlocks.map((block) => highlight(block.code, block.lang)),
-        )
+        const entries = examplesOf(compiled.markdown).map((_, index) => 'Example' + index)
         return modules
-          + '\nexport const markdown = ' + JSON.stringify(source) + '\n'
-          + 'export const codeHtml = ' + JSON.stringify(highlighted) + '\n'
+          + '\nexport const markdown = ' + JSON.stringify(compiled.markdown) + '\n'
+          + 'export const codeHtml = ' + JSON.stringify(compiled.codeHtml) + '\n'
           + 'export default [' + entries.join(', ') + ']\n'
       }
       if (id.startsWith(RESOLVED_EXAMPLE)) {
@@ -142,9 +169,10 @@ export function uiKitDocsPlugin(componentsDir: string): Plugin {
         if (slash < 0) return undefined
         const name = rest.slice(0, slash)
         const index = Number(rest.slice(slash + 1))
-        const source = readDoc(componentsDir, name)
-        if (source === undefined || !Number.isInteger(index)) return undefined
-        const examples = examplesOf(source)
+        const file = docFile(componentsDir, name)
+        if (!file || !Number.isInteger(index)) return undefined
+        const compiled = await compileDoc(file)
+        const examples = examplesOf(compiled.markdown)
         if (!examples[index]) return undefined
         // 返回完整 SFC 源码，交给本页的 @vitejs/plugin-vue 继续编译。
         // 这样 TS 脚本、HMR 和源映射都走 Vite 现有管线。

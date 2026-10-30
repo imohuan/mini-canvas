@@ -1,71 +1,34 @@
 # Dropdown 下拉容器
 
-## 拖拽触发器演示
+## 点击打开
+
+最常用的一档：点触发器开，点外面或 Esc 关。
 
 @@VUE@@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Dropdown, Button } from '@mini-canvas/ui-kit'
-import { Menu } from 'lucide-vue-next'
 
 const open = ref(false)
-const trigger = ref({ x: 32, y: 32 })
-let dragging = false
-let start = { x: 0, y: 0 }
-
-function down(event: PointerEvent): void {
-  dragging = true
-  start = { x: event.clientX - trigger.value.x, y: event.clientY - trigger.value.y }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
-function move(event: PointerEvent): void {
-  if (!dragging) return
-  trigger.value = {
-    x: Math.max(8, Math.min(event.clientX - start.x, window.innerWidth - 160)),
-    y: Math.max(8, Math.min(event.clientY - start.y, window.innerHeight - 120)),
-  }
-}
-function up(): void {
-  dragging = false
-  window.removeEventListener('pointermove', move)
-  window.removeEventListener('pointerup', up)
-}
 </script>
 
 <template>
-  <div class="dd-demo">
-    <div class="dd-demo__stage">
-      <div class="dd-demo__trigger" :style="{ left: trigger.x + 'px', top: trigger.y + 'px' }">
-        <Dropdown v-model="open" menu-min-width="220px" menu-max-height="220px">
-          <template #trigger="{ open: isOpen }">
-            <Button variant="secondary" :aria-expanded="isOpen" @pointerdown="down">
-              <Menu :size="15" style="margin-right: 6px" />拖我
-            </Button>
-          </template>
-          <template #default="{ close }">
-            <div class="dd-menu-demo">
-              <button type="button" @click="close()">操作一</button>
-              <button type="button" @click="close()">操作二</button>
-              <button type="button" disabled>禁用项</button>
-              <button v-for="i in 12" :key="i" type="button" @click="close()">长列表 {{ i }}</button>
-            </div>
-          </template>
-        </Dropdown>
+  <Dropdown v-model="open">
+    <template #trigger="{ open: isOpen }">
+      <Button variant="secondary" :aria-expanded="isOpen">打开菜单</Button>
+    </template>
+    <template #default="{ close }">
+      <div class="menu">
+        <button type="button" @click="close()">重命名</button>
+        <button type="button" @click="close()">复制</button>
+        <button type="button" disabled>禁用项</button>
       </div>
-      <p class="dd-demo__hint">拖动按钮到屏幕边缘，观察浮层翻转和夹取；滚轮滚动时浮层持续跟随。</p>
-    </div>
-  </div>
+    </template>
+  </Dropdown>
 </template>
-
 <style>
-.dd-menu-demo {
-  display: flex;
-  flex-direction: column;
-  min-width: 200px;
-}
-.dd-menu-demo button {
-  display: block;
+.menu { display: flex; flex-direction: column; min-width: 180px; }
+.menu button {
   width: 100%;
   padding: 7px 10px;
   border: 0;
@@ -77,28 +40,133 @@ function up(): void {
   text-align: left;
   cursor: pointer;
 }
-.dd-menu-demo button:hover:not(:disabled) { background: var(--mck-hover, rgb(0 0 0 / 0.06)); }
-.dd-menu-demo button:disabled { opacity: 0.5; cursor: not-allowed; }
+.menu button:hover:not(:disabled) { background: var(--mck-hover); }
+.menu button:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 @@ENDVUE@@
 
-Dropdown 是触发器 + 任意浮层的容器：
+## 悬停打开
 
-- trigger：click / hover / contextmenu。
-- placement：bottom-start 等 13 个方位，空间不足自动翻转。
-- 菜单贴视口边缘时被夹回，不会跑出屏幕。
-- 长列表通过 menuMaxHeight 内部滚动。
-- 外点、Esc 关闭；同一时刻全局只保留一个非嵌套浮层。
+`trigger="hover"` 适合工具栏的速览浮层；离开有一小段缓冲，移进浮层不会闪退。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown, Button } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+</script>
+
+<template>
+  <Dropdown v-model="open" trigger="hover">
+    <template #trigger>
+      <Button variant="ghost">悬停展开</Button>
+    </template>
+    <template #default>
+      <div class="tip">悬停浮层，鼠标移进来不会关。</div>
+    </template>
+  </Dropdown>
+</template>
+<style>
+.tip { min-width: 200px; padding: 4px; color: var(--mck-ink-muted); font-size: 12px; }
+</style>
+@@ENDVUE@@
+
+## 长列表内部滚动
+
+`menu-max-height` 到顶后菜单自身滚动，页面不动。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown, Button } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+</script>
+
+<template>
+  <Dropdown v-model="open" menu-max-height="160px" layout="overlay-scroll">
+    <template #trigger="{ open: isOpen }">
+      <Button variant="secondary" :aria-expanded="isOpen">20 个选项</Button>
+    </template>
+    <template #default="{ close }">
+      <div class="menu">
+        <button v-for="i in 20" :key="i" type="button" @click="close()">选项 {{ i }}</button>
+      </div>
+    </template>
+  </Dropdown>
+</template>
+<style>
+.menu { display: flex; flex-direction: column; min-width: 180px; }
+.menu button {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu button:hover { background: var(--mck-hover); }
+</style>
+@@ENDVUE@@
+
+## 匹配触发器宽度
+
+`match-width` 让浮层和触发器同宽，像原生 select 展开。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown, Button } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+</script>
+
+<template>
+  <div style="width: min(260px, 100%)">
+    <Dropdown v-model="open" match-width>
+      <template #trigger="{ open: isOpen }">
+        <Button block :aria-expanded="isOpen">选择类型</Button>
+      </template>
+      <template #default="{ close }">
+        <div class="menu">
+          <button type="button" @click="close()">图片</button>
+          <button type="button" @click="close()">视频</button>
+          <button type="button" @click="close()">音频</button>
+        </div>
+      </template>
+    </Dropdown>
+  </div>
+</template>
+<style>
+.menu { display: flex; flex-direction: column; }
+.menu button {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu button:hover { background: var(--mck-hover); }
+</style>
+@@ENDVUE@@
 
 | 属性 | 默认 | 说明 |
 | --- | --- | --- |
-| placement | bottom-start | 方位 |
+| placement | bottom-start | 方位，空间不足自动翻转 |
 | offset | 6 | 与触发器的间距 |
 | matchWidth | false | 浮层与触发器同宽 |
-| menuWidth / menuMinWidth / menuMaxWidth / menuMaxHeight | 无 | 尺寸控制 |
+| menuMaxHeight | 无 | 长列表内部滚动 |
 | trigger | click | click / hover / contextmenu |
 | layout | overlay-scroll | overlay-scroll / inner-scroll |
 | teleport | true | 是否挂到 body |
-| arrow | false | 要不要小箭头 |
-| disabled | false | 禁用触发 |
 

@@ -108,21 +108,21 @@ async function copyCode(index: number, source: string): Promise<void> {
 
 <style scoped>
 .mck-doc {
-  color: var(--ui-ink-dim, #6b7280);
+  color: var(--mck-ink-muted, #6b7280);
   font-size: 13px;
   line-height: 1.8;
 }
 
 .mck-doc-html :deep(h1) {
   margin: 0 0 10px;
-  color: var(--ui-ink, #18202b);
+  color: var(--mck-ink, #18202b);
   font-size: 18px;
   line-height: 1.4;
 }
 
 .mck-doc-html :deep(h2) {
   margin: 20px 0 8px;
-  color: var(--ui-ink, #18202b);
+  color: var(--mck-ink, #18202b);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
@@ -130,7 +130,7 @@ async function copyCode(index: number, source: string): Promise<void> {
 
 .mck-doc-html :deep(h3) {
   margin: 16px 0 6px;
-  color: var(--ui-ink, #18202b);
+  color: var(--mck-ink, #18202b);
   font-size: 13px;
   font-weight: 700;
 }
@@ -142,8 +142,8 @@ async function copyCode(index: number, source: string): Promise<void> {
 .mck-doc-html :deep(code) {
   padding: 1px 5px;
   border-radius: 5px;
-  background: var(--ui-veil, rgb(0 0 0 / 0.05));
-  color: var(--ui-ink, #18202b);
+  background: var(--mck-chip, rgb(0 0 0 / 0.05));
+  color: var(--mck-ink, #18202b);
   font-family: var(--mck-font-mono);
   font-size: 11px;
 }
@@ -159,20 +159,20 @@ async function copyCode(index: number, source: string): Promise<void> {
 }
 
 .mck-doc-html :deep(strong) {
-  color: var(--ui-ink, #18202b);
+  color: var(--mck-ink, #18202b);
   font-weight: 700;
 }
 
 .mck-doc-html :deep(blockquote) {
   margin: 10px 0;
   padding: 8px 12px;
-  border-left: 2px solid var(--ui-accent, #0891b2);
+  border-left: 2px solid var(--mck-accent, #0891b2);
   border-radius: 0 8px 8px 0;
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  background: var(--mck-hover, rgb(0 0 0 / 0.035));
 }
 
 .mck-doc-html :deep(a) {
-  color: var(--ui-accent, #0891b2);
+  color: var(--mck-accent, #0891b2);
   text-decoration: underline;
 }
 
@@ -180,7 +180,7 @@ async function copyCode(index: number, source: string): Promise<void> {
   width: 100%;
   margin: 10px 0 14px;
   overflow: hidden;
-  border: 1px solid var(--ui-line-soft, #eef0f4);
+  border: 1px solid var(--mck-line, #eef0f4);
   border-collapse: separate;
   border-radius: 10px;
   border-spacing: 0;
@@ -190,14 +190,14 @@ async function copyCode(index: number, source: string): Promise<void> {
 .mck-doc-html :deep(th),
 .mck-doc-html :deep(td) {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
+  border-bottom: 1px solid var(--mck-line, #eef0f4);
   text-align: left;
   vertical-align: top;
 }
 
 .mck-doc-html :deep(th) {
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
-  color: var(--ui-ink, #18202b);
+  background: var(--mck-hover, rgb(0 0 0 / 0.035));
+  color: var(--mck-ink, #18202b);
   font-size: 11px;
   font-weight: 700;
 }
@@ -209,9 +209,9 @@ async function copyCode(index: number, source: string): Promise<void> {
 .mck-doc-example {
   margin: 12px 0 16px;
   overflow: hidden;
-  border: 1px solid var(--ui-line, #e2e5ea);
+  border: 1px solid var(--mck-line, #e2e5ea);
   border-radius: 12px;
-  background: var(--ui-panel, #fff);
+  background: var(--mck-panel, #fff);
 }
 
 .mck-doc-example-head {
@@ -219,12 +219,12 @@ async function copyCode(index: number, source: string): Promise<void> {
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px 6px 12px;
-  border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  border-bottom: 1px solid var(--mck-line, #eef0f4);
+  background: var(--mck-hover, rgb(0 0 0 / 0.035));
 }
 
 .mck-doc-example-label {
-  color: var(--ui-ink-mute, #8c95a3);
+  color: var(--mck-ink-muted, #8c95a3);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -244,15 +244,15 @@ async function copyCode(index: number, source: string): Promise<void> {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--ui-ink-mute, #8c95a3);
+  color: var(--mck-ink-muted, #8c95a3);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 
 .mck-doc-example-tabs button.is-active {
-  background: var(--ui-panel, #fff);
-  color: var(--ui-ink, #18202b);
+  background: var(--mck-panel, #fff);
+  color: var(--mck-ink, #18202b);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
 }
 
@@ -263,24 +263,24 @@ async function copyCode(index: number, source: string): Promise<void> {
   justify-content: center;
   padding: 18px;
   background:
-    radial-gradient(circle, var(--ui-line, rgb(0 0 0 / 0.08)) 1px, transparent 1px) 0 0 / 16px 16px,
-    var(--ui-panel, #fff);
+    radial-gradient(circle, var(--mck-line, rgb(0 0 0 / 0.08)) 1px, transparent 1px) 0 0 / 16px 16px,
+    var(--mck-panel, #fff);
 }
 
 .mck-doc-code-block {
   position: relative;
   margin: 10px 0 12px;
   overflow: hidden;
-  border: 1px solid var(--ui-line, #e2e5ea);
+  border: 1px solid var(--mck-line, #e2e5ea);
   border-radius: 12px;
-  background: var(--ui-code-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.035)));
+  background: var(--mck-panel-soft, rgb(0 0 0 / 0.035));
 }
 
 .mck-doc-code-block.is-example {
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: var(--ui-code-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.035)));
+  background: var(--mck-panel-soft, rgb(0 0 0 / 0.035));
 }
 
 .mck-doc-code-tools {
@@ -304,10 +304,10 @@ async function copyCode(index: number, source: string): Promise<void> {
 
 .mck-doc-code-lang {
   padding: 2px 7px;
-  border: 1px solid var(--ui-line, #e2e5ea);
+  border: 1px solid var(--mck-line, #e2e5ea);
   border-radius: 6px;
-  background: var(--ui-panel, #fff);
-  color: var(--ui-ink-mute, #8c95a3);
+  background: var(--mck-panel, #fff);
+  color: var(--mck-ink-muted, #8c95a3);
   font-family: var(--mck-font-mono);
   font-size: 10px;
   font-weight: 600;
@@ -320,18 +320,18 @@ async function copyCode(index: number, source: string): Promise<void> {
   gap: 4px;
   height: 24px;
   padding: 0 7px;
-  border: 1px solid var(--ui-line, #e2e5ea);
+  border: 1px solid var(--mck-line, #e2e5ea);
   border-radius: 6px;
-  background: var(--ui-panel, #fff);
-  color: var(--ui-ink-dim, #6b7280);
+  background: var(--mck-panel, #fff);
+  color: var(--mck-ink-muted, #6b7280);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 
 .mck-doc-code-copy:hover {
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
-  color: var(--ui-ink, #18202b);
+  background: var(--mck-hover, rgb(0 0 0 / 0.04));
+  color: var(--mck-ink, #18202b);
 }
 
 .mck-doc-code {
@@ -341,6 +341,7 @@ async function copyCode(index: number, source: string): Promise<void> {
 .mck-doc-code :deep(pre.shiki) {
   background: transparent !important;
 }
+
 
 .mck-doc-code :deep(pre) {
   margin: 0;
@@ -366,7 +367,9 @@ async function copyCode(index: number, source: string): Promise<void> {
 
 .mck-doc-empty {
   margin: 0;
-  color: var(--ui-ink-mute, #8c95a3);
+  color: var(--mck-ink-muted, #8c95a3);
   font-size: 12px;
 }
 </style>
+
+

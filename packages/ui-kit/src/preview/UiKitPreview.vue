@@ -9,15 +9,18 @@
  * 按 catalog 注册表取；预览渲染在 PlaygroundPreview.vue 里按 id 分支。
  */
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
-import { ChevronLeft, Moon, RotateCcw, Search, SlidersHorizontal, Sun } from 'lucide-vue-next'
-import { Button, UiKitProvider, type UiKitDensity, type UiKitSize } from '../index'
+import { ChevronLeft, Moon, Plus, RotateCcw, Search, SlidersHorizontal, Sun } from 'lucide-vue-next'
+import {
+  Button, Input, NumberInput, Select, Slider, Switch, Tabs, Tooltip, UiKitProvider,
+  type SelectOption, type TabItem, type UiKitDensity, type UiKitSize,
+} from '../index'
 import SplitPane from '../components/split-pane/SplitPane.vue'
 import UiKitDocView from './UiKitDocView.vue'
 import PlaygroundPreview from './PlaygroundPreview.vue'
 import { CATALOG, CATALOG_TOTAL, findCatalogItem } from './catalog'
 import { loadDocs, type UiKitDoc } from './docModules'
 import { findPlayground } from './playgrounds/catalog'
-import type { PlaygroundField, PlaygroundValue } from './playground'
+import { numberValue, type PlaygroundField, type PlaygroundValue } from './playground'
 import './preview.css'
 
 withDefaults(defineProps<{ showHome?: boolean }>(), { showHome: false })
@@ -30,6 +33,18 @@ const density = ref<UiKitDensity>('comfortable')
 const radius = ref(10)
 const dark = ref(true)
 const accent = ref('#22b8d8')
+
+/** 顶部全局参数用的选项；用组件库的 Select，不再用原生下拉。 */
+const sizeOptions: SelectOption[] = [
+  { value: 'sm', label: '小' },
+  { value: 'md', label: '中' },
+  { value: 'lg', label: '大' },
+]
+const densityOptions: SelectOption[] = [
+  { value: 'compact', label: '紧凑' },
+  { value: 'comfortable', label: '标准' },
+  { value: 'spacious', label: '宽松' },
+]
 
 const active = computed(() => findCatalogItem(activeId.value))
 /** 文档里有编译好的组件对象，用 shallowRef 避免被深度代理。 */
@@ -94,6 +109,16 @@ function onNumberInput(key: string, event: Event): void {
   setValue(key, raw === '' ? null : Number(raw))
 }
 
+/** 库内数字控件清空时给 null，面板统一回落成 0，避免出现空值。 */
+function toNumber(value: number | null): number {
+  return typeof value === 'number' ? value : 0
+}
+
+/** 分段控件把 playground 的选项转成库内 Tabs 需要的形状。 */
+function segmentItems(field: Extract<PlaygroundField, { kind: 'segment' }>): TabItem[] {
+  return field.options.map((option) => ({ value: option.value, label: option.label }))
+}
+
 /** 只显示图标时必须有图标；关掉显示图标就把 iconOnly 一起关掉。 */
 function onToggle(key: string, event: Event): void {
   const target = event.target as HTMLInputElement | null
@@ -156,37 +181,32 @@ function resetGlobal(): void {
       </div>
 
       <div class="uk-global-controls">
-        <label class="uk-control">
+        <div class="uk-control">
           <span>尺寸</span>
-          <select v-model="size">
-            <option value="sm">小</option>
-            <option value="md">中</option>
-            <option value="lg">大</option>
-          </select>
-        </label>
-        <label class="uk-control">
+          <Select v-model="size" :options="sizeOptions" aria-label="默认尺寸" class="uk-control-select" />
+        </div>
+        <div class="uk-control">
           <span>密度</span>
-          <select v-model="density">
-            <option value="compact">紧凑</option>
-            <option value="comfortable">标准</option>
-            <option value="spacious">宽松</option>
-          </select>
-        </label>
-        <label class="uk-control uk-control--range">
+          <Select v-model="density" :options="densityOptions" aria-label="密度" class="uk-control-select" />
+        </div>
+        <div class="uk-control uk-control--range">
           <span>圆角 {{ radius }}px</span>
-          <input v-model.number="radius" type="range" min="0" max="24" step="1" />
-        </label>
+          <Slider v-model="radius" :min="0" :max="24" :step="1" :show-value="false" aria-label="圆角" class="uk-control-slider" />
+        </div>
         <label class="uk-control uk-control--color">
           <span>主题色</span>
           <input v-model="accent" type="color" />
         </label>
-        <button type="button" class="uk-icon-button" :title="dark ? '切到亮色' : '切到暗色'" :aria-label="dark ? '切到亮色' : '切到暗色'" @click="dark = !dark">
-          <Sun v-if="dark" :size="15" />
-          <Moon v-else :size="15" />
-        </button>
-        <button type="button" class="uk-icon-button" title="恢复全局参数" aria-label="恢复全局参数" @click="resetGlobal">
-          <RotateCcw :size="15" />
-        </button>
+        <Tooltip :content="dark ? '切到亮色' : '切到暗色'">
+          <Button icon-only :aria-label="dark ? '切到亮色' : '切到暗色'" @click="dark = !dark">
+            <template #icon><Sun v-if="dark" :size="15" /><Moon v-else :size="15" /></template>
+          </Button>
+        </Tooltip>
+        <Tooltip content="恢复全局参数">
+          <Button icon-only aria-label="恢复全局参数" @click="resetGlobal">
+            <template #icon><RotateCcw :size="15" /></template>
+          </Button>
+        </Tooltip>
       </div>
     </header>
 
@@ -289,62 +309,60 @@ function resetGlobal(): void {
                 <template v-for="field in fields" :key="field.key">
                   <div v-if="field.kind === 'text'" class="uk-field">
                     <label :for="'uk-field-' + field.key">{{ field.label }}</label>
-                    <input
+                    <Input
                       :id="'uk-field-' + field.key"
-                      :value="state[field.key] ?? ''"
+                      :model-value="String(state[field.key] ?? '')"
                       :placeholder="field.placeholder"
                       :maxlength="field.maxlength"
-                      @input="onTextInput(field.key, $event)"
+                      :aria-label="field.label"
+                      @update:model-value="setValue(field.key, $event)"
                     />
                   </div>
 
                   <div v-else-if="field.kind === 'number'" class="uk-field">
                     <label :for="'uk-field-' + field.key">{{ field.label }}</label>
-                    <input
+                    <NumberInput
                       :id="'uk-field-' + field.key"
-                      type="number"
-                      :value="state[field.key] ?? ''"
+                      :model-value="numberValue(state, field.key)"
                       :min="field.min"
                       :max="field.max"
                       :step="field.step"
-                      @input="onNumberInput(field.key, $event)"
+                      :aria-label="field.label"
+                      @update:model-value="setValue(field.key, toNumber($event))"
                     />
                   </div>
 
                   <fieldset v-else-if="field.kind === 'segment'" class="uk-fieldset">
                     <legend>{{ field.label }}</legend>
-                    <div class="uk-segment">
-                      <button
-                        v-for="option in field.options"
-                        :key="option.value"
-                        type="button"
-                        :class="{ 'is-active': String(state[field.key]) === option.value }"
-                        @click="setValue(field.key, option.value)"
-                      >{{ option.label }}</button>
-                    </div>
+                    <Tabs
+                      :model-value="String(state[field.key] ?? '')"
+                      :items="segmentItems(field)"
+                      :aria-label="field.label"
+                      block
+                      @update:model-value="setValue(field.key, $event)"
+                    />
                   </fieldset>
 
-                  <label v-else-if="field.kind === 'toggle'" class="uk-switch">
-                    <span>{{ field.label }}</span>
-                    <input
-                      type="checkbox"
-                      :checked="state[field.key] === true"
-                      @change="onToggle(field.key, $event)"
+                  <div v-else-if="field.kind === 'toggle'" class="uk-field">
+                    <Switch
+                      :model-value="state[field.key] === true"
+                      :label="field.label"
+                      @update:model-value="setValue(field.key, $event)"
                     />
-                    <i aria-hidden="true"></i>
-                  </label>
+                  </div>
 
-                  <label v-else-if="field.kind === 'range'" class="uk-range">
-                    <span>{{ field.label }} <b>{{ rangeLabel(field) }}</b></span>
-                    <input
-                      type="range"
+                  <div v-else-if="field.kind === 'range'" class="uk-field">
+                    <span class="uk-field-label">{{ field.label }} <b>{{ rangeLabel(field) }}</b></span>
+                    <Slider
+                      :model-value="numberValue(state, field.key) ?? field.min"
                       :min="field.min"
                       :max="field.max"
                       :step="field.step"
-                      :value="typeof state[field.key] === 'number' ? state[field.key] : field.min"
-                      @input="onNumberInput(field.key, $event)"
+                      :show-value="false"
+                      :aria-label="field.label"
+                      @update:model-value="setValue(field.key, toNumber($event))"
                     />
-                  </label>
+                  </div>
                 </template>
 
                 <div v-if="presets.length" class="uk-presets">
@@ -360,11 +378,13 @@ function resetGlobal(): void {
                     @click="applyPreset(preset.patch)"
                   >
                     <span class="uk-preset-swatch" :class="'is-' + (preset.patch.variant ?? 'primary')"></span>
-                    <span>
+                    <span class="uk-preset-copy">
                       <strong>{{ preset.name }}</strong>
                       <small>{{ preset.description }}</small>
                     </span>
-                    <em>+</em>
+                    <Button icon-only aria-label="套用这个预设" :title="'套用 ' + preset.name" @click.stop="applyPreset(preset.patch)">
+                      <template #icon><Plus :size="14" /></template>
+                    </Button>
                   </button>
                 </div>
               </template>
@@ -379,3 +399,5 @@ function resetGlobal(): void {
     </SplitPane>
   </UiKitProvider>
 </template>
+
+

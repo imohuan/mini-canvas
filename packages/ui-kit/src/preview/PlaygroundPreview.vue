@@ -42,6 +42,7 @@ const popoverOpen = ref(false)
 const dialogOpen = ref(false)
 const confirmOpen = ref(false)
 const splitText = computed(() => readText(state.value, 'leftLabel') || '左边内容')
+const splitRightText = computed(() => readText(state.value, 'rightLabel') || '右边内容')
 
 /* ---- 选项数据 ---- */
 const selectOptions = computed<SelectOption[]>(() => {
@@ -392,8 +393,20 @@ function fireMessage(): void {
           :min-right="readNumber(state, 'minRight', 120)"
           :snap="readNumber(state, 'snap', 48)"
         >
-          <template #left><div class="pg-split-pane">{{ splitText }}</div></template>
-          <template #right><div class="pg-split-pane">{{ readText(state, 'rightLabel') || '右边内容' }}</div></template>
+          <template #left>
+            <div class="pg-split-pane pg-split-pane--side">
+              <span class="pg-split-pane__eyebrow">侧栏</span>
+              <strong>{{ splitText }}</strong>
+              <span class="pg-split-pane__hint">拖动分隔线调整宽度</span>
+            </div>
+          </template>
+          <template #right>
+            <div class="pg-split-pane">
+              <span class="pg-split-pane__eyebrow">主区域</span>
+              <strong>{{ splitRightText }}</strong>
+              <span class="pg-split-pane__hint">双击分隔线回到初始比例</span>
+            </div>
+          </template>
         </SplitPane>
       </div>
     </template>
@@ -500,19 +513,49 @@ function fireMessage(): void {
 }
 
 .pg-split-frame {
-  width: min(560px, 100%);
-  height: 220px;
+  width: min(640px, 100%);
+  height: 240px;
   overflow: hidden;
   border: 1px solid var(--mck-line);
   border-radius: 10px;
+  background: var(--mck-panel, #fff);
+}
+
+/* SplitPane 默认按内容高度自适应；演示框有固定高度，让它填满才看得清拖动效果。 */
+.pg-split-frame :deep(.mck-split) {
+  height: 100%;
 }
 
 .pg-split-pane {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
   height: 100%;
-  place-items: center;
+  padding: 12px 16px;
+  overflow: hidden;
+}
+
+.pg-split-pane--side {
+  background: var(--mck-panel-soft, rgb(0 0 0 / 0.03));
+}
+
+.pg-split-pane__eyebrow {
   color: var(--mck-ink-muted, #6b7280);
-  font-size: 12px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pg-split-pane strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pg-split-pane__hint {
+  color: var(--mck-ink-muted, #6b7280);
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .pg-provider-surface {
@@ -528,3 +571,9 @@ function fireMessage(): void {
   font-size: 12px;
 }
 </style>
+
+
+
+
+
+
