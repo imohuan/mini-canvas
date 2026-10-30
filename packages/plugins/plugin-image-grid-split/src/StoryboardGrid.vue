@@ -1,198 +1,98 @@
 <script setup lang="ts">
 /**
- * StoryboardGrid —— storyboard 节点的 content 组件（随本插件包发布）。
+ * StoryboardGrid —— storyboard 节点的 content 组件：**槽位底板**。
  *
- * 职责：画 rows×cols 槽位网格；每格显示图或"+"；格子间拖拽交换图片。
- * 空格显示"+"（视觉提示可放图）；有图格显示小图。写库经 doc.updateNode（进历史）。
+ * 用户口径 2026-10-30（带参考图）：分镜组是一个独立容器节点，图片是画布上**真正的节点**，
+ * 拖进来后吸附到某个槽位；槽位里只是"空位提示"，不再由本组件画图。
  *
- * 拖拽语义（简化版）：按下有图格 → 移到另一格松开 → 两格交换（含空格）。
- * 不做跨节点拖拽（那是完整版分镜组的事，当前版本只在组内换）。
+ * 所以这里只做两件事：
+ *  1. 画 N×N 个槽位底板（空槽显示 +，有节点的槽显示一层淡色占位 + 高亮边）；
+ *  2. 拖动经过时高亮目标槽，给"要落到这里"的预览感。
+ *
+ * 图片的显示/比例/居中由子节点自己负责（image 节点照常渲染）；
+ * 本组件刻意 pointer-events: none —— 底板不吃事件，否则会把子节点的拖拽和点击全挡住。
  */
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { readStoryboard, swapSlots } from './storyboard'
+import { readStoryboard, slotRects } from './storyboard'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 
 const board = computed(() => readStoryboard(props.data))
-/** 拖拽中的源格子索引（-1 = 没在拖） */
-const dragFrom = ref(-1)
-/** 悬停目标格子（-1 = 无） */
-const hoverTarget = ref(-1)
 
-interface CellView {
-  index: number
-  left: number
-  top: number
-  width: number
-  height: number
-  ref: string | null
-}
+/** 卡片实测尺寸（拿不到就按节点注册的默认 480×360 兜底） */
+const boardSize = computed(() => {
+  const layout = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('nodeLayout')
+  const rect = layout?.getNodeRect(props.id)
+  const w = rect?.w && rect.w > 0 ? rect.w : 480
+  const h = rect?.h && rect.h > 0 ? rect.h : 360
+  return { w, h }
+})
 
-const cells = computed<CellView[]>(() => {
+/** 槽位矩形（px → 百分比，随卡片缩放自动跟） */
+const cells = computed(() => {
   const b = board.value
   if (!b) return []
-  const out: CellView[] = []
-  for (let i = 0; i < b.rows * b.cols; i++) {
-    const r = Math.floor(i / b.cols)
-    const c = i % b.cols
-    out.push({
-      index: i,
-      left: c * (100 / b.cols),
-      top: r * (100 / b.rows),
-      width: 100 / b.cols,
-      height: 100 / b.rows,
-      ref: b.slots[i] ?? null,
-    })
-  }
-  return out
+  const { w, h } = boardSize.value
+  return slotRects(w, h, b.rows, b.cols).map((r) => ({
+    index: r.index,
+    left: (r.x / w) * 100,
+    top: (r.y / h) * 100,
+    width: (r.w / w) * 100,
+    height: (r.h / h) * 100,
+    occupied: Boolean(b.slots[r.index]),
+  }))
 })
-
-function cellFromEvent(ev: PointerEvent | MouseEvent): number {
-  const el = ev.currentTarget as HTMLElement | null
-  if (!el) return -1
-  const rect = el.getBoundingClientRect()
-  if (rect.width <= 0 || rect.height <= 0) return -1
-  const b = board.value
-  if (!b) return -1
-  const nx = (ev.clientX - rect.left) / rect.width
-  const ny = (ev.clientY - rect.top) / rect.height
-  if (nx < 0 || nx >= 1 || ny < 0 || ny >= 1) return -1
-  const c = Math.min(b.cols - 1, Math.floor(nx * b.cols))
-  const r = Math.min(b.rows - 1, Math.floor(ny * b.rows))
-  return r * b.cols + c
-}
-
-function onCellPointerDown(index: number): void {
-  if (board.value?.slots[index]) dragFrom.value = index
-}
-
-function onCellPointerEnter(index: number): void {
-  if (dragFrom.value >= 0) hoverTarget.value = index
-}
-
-function onCellPointerUp(index: number): void {
-  const from = dragFrom.value
-  dragFrom.value = -1
-  hoverTarget.value = -1
-  if (from < 0 || from === index) return
-  const b = board.value
-  if (!b) return
-  const nextSlots = swapSlots(b, from, index)
-  if (nextSlots === b.slots) return
-  // data 合并写：只写 slots（进历史；与裁剪同一条 updateNodeData 路）
-  const doc = ctx.tryGet<{ updateNodeData?(id: string, data: Record<string, unknown>): void }>('doc')
-  doc?.updateNodeData?.(props.id, { slots: nextSlots })
-}
-
-/** 资源服务里本组件用到的最小形状（与 ImageContent 的 resolveImageSrc 同一条路） */
-interface ResourcePortLike {
-  resolve(ref: string): Promise<string | undefined>
-}
-
-/** 槽位引用 → 可显示地址（解析完成后替换；resolve 不可用时回落引用本身） */
-const resolvedUrls = reactive(new Map<string, string>())
-/** 作废标记：快速换槽位时，先发的 resolve 不许覆盖后发的 */
-let resolveToken = 0
-
-async function refreshResolvedUrls(): Promise<void> {
-  const token = ++resolveToken
-  const slots = board.value?.slots ?? []
-  const current = new Set(slots.filter((s): s is string => Boolean(s)))
-  // 槽位里已不存在的旧解析结果顺手清掉（换图/换格后 Map 不无限增长）
-  for (const key of resolvedUrls.keys()) if (!current.has(key)) resolvedUrls.delete(key)
-  const resources = ctx.tryGet<ResourcePortLike | undefined>('resources')
-  for (const ref of current) {
-    if (resolvedUrls.has(ref)) continue
-    let url = ref
-    if (resources && typeof resources.resolve === 'function') {
-      try {
-        url = (await resources.resolve(ref)) || ref
-      } catch {
-        url = ref // 解析失败按“取不到”处理：先显示引用兜底，不渲染失败
-      }
-    }
-    if (token !== resolveToken) return
-    resolvedUrls.set(ref, url)
-  }
-}
-
-watch(
-  () => board.value?.slots,
-  () => {
-    void refreshResolvedUrls()
-  },
-  { immediate: true, deep: true },
-)
-onBeforeUnmount(() => {
-  resolveToken++
-})
-
-/** 每格显示地址：优先 resolve 出来的可显示地址；解析没回来时回落引用本身（与旧渲染一致） */
-function slotSrc(ref: string | null): string {
-  if (!ref) return ''
-  return resolvedUrls.get(ref) ?? ref
-}
 </script>
 
 <template>
-  <div
-    v-if="board"
-    class="sb-root nodrag nopan"
-    data-testid="storyboard-grid"
-    nodrag=""
-    nopan=""
-    @pointerup="onCellPointerUp(cellFromEvent($event))"
-  >
+  <div v-if="board" class="sb-root" data-testid="storyboard-grid">
     <div
       v-for="cell in cells"
       :key="cell.index"
-      class="sb-cell"
-      :class="{ 'is-target': dragFrom >= 0 && hoverTarget === cell.index }"
+      class="sb-slot"
+      :class="{ 'is-occupied': cell.occupied }"
       :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%' }"
-      @pointerdown="onCellPointerDown(cell.index)"
-      @pointerenter="onCellPointerEnter(cell.index)"
+      :data-slot-index="cell.index"
     >
-      <img v-if="cell.ref" class="sb-img" :src="slotSrc(cell.ref)" alt="" draggable="false" />
-      <span v-else class="sb-plus" aria-hidden="true">+</span>
+      <span v-if="!cell.occupied" class="sb-plus" aria-hidden="true">+</span>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 底板本身不吃指针事件：子节点（真图片节点）在它上面，事件必须由子节点接住 */
 .sb-root {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: var(--ui-panel-soft, #fff);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   overflow: hidden;
+  border-radius: var(--radius-panel, 16px);
 }
-.sb-cell {
+
+/* 空槽：虚线框 + 居中加号，提示"可以往这里放图" */
+.sb-slot {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid var(--ui-line, #e2e5ea);
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  cursor: grab;
-  transition: border-color 0.12s ease;
+  border: 1px dashed var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-badge, 6px);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
 }
-.sb-cell.is-target {
-  border-color: var(--ui-accent, #0891b2);
-  background: color-mix(in srgb, var(--ui-accent, #0891b2) 10%, transparent);
+
+/* 有节点的槽：不画虚线框（图片节点自己会盖住），只留一层极淡的底 */
+.sb-slot.is-occupied {
+  border-color: transparent;
+  background: transparent;
 }
-.sb-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-  user-select: none;
-}
+
 .sb-plus {
   color: var(--ui-ink-mute, #8c95a3);
-  font-size: 22px;
-  pointer-events: none;
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
 }
 </style>

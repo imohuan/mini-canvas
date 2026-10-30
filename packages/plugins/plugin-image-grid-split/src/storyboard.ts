@@ -1,8 +1,13 @@
 /**
  * storyboard —— 分镜组节点的槽位纯逻辑（零 Vue / 零 DOM，node 可单测）。
  *
- * 槽位模型：节点 data.slots = string|null[]，槽位数 = rows*cols；
- * 图片以持久资源引用存槽位。组件只管画格子与收鼠标，写库前先过这里。
+ * 槽位模型（用户口径 2026-10-30）：
+ * - 分镜组是一个**容器节点**，图片仍是画布上真正的 image 节点；
+ * - data.slots = Array<string|null>，存的是**子节点 id**（不是图片数据）；
+ * - 子节点 parentId 指向分镜组，坐标相对分镜组，尺寸固定成槽位大小；
+ * - 拖进某槽 → 吸附对齐；拖到已有节点的槽 → 两者换位；拖出卡片 → 脱离。
+ *
+ * 好处：撤销/保存/复制/删除全走已有的节点机制，不需要并行一套"格子里的图"。
  */
 
 import { placeAdjacent } from '@mini-canvas/canvas-render'
@@ -11,7 +16,7 @@ import { placeAdjacent } from '@mini-canvas/canvas-render'
 export interface StoryboardData {
   rows: number
   cols: number
-  /** 每格的资源引用（null = 空） */
+  /** 每格占用的子节点 id（null = 空槽） */
   slots: Array<string | null>
 }
 
@@ -21,9 +26,170 @@ export function readStoryboard(data: Record<string, unknown> | undefined): Story
   const cols = typeof data?.cols === 'number' ? data.cols : 0
   const slots = Array.isArray(data?.slots) ? data.slots : null
   if (rows < 1 || cols < 1 || rows > 8 || cols > 8 || !slots || slots.length !== rows * cols) return null
-  // 元素收窄：非 string 的槽当空（写库时数据已经过 publish 校验，这里只兜显示）
+  // 元素收窄：非 string 的槽当空（写库时数据已经过校验，这里只兜显示）
   const clean: Array<string | null> = slots.map((s) => (typeof s === 'string' && s !== '' ? s : null))
   return { rows, cols, slots: clean }
+}
+
+/** 分镜组内边距（卡片边框到槽位网格的距离，px） */
+export const STORYBOARD_PADDING = 10
+/** 槽位之间的间隙（px） */
+export const STORYBOARD_GAP = 6
+
+/** 槽位矩形（相对分镜组左上角，px） */
+export interface SlotRect {
+  index: number
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * 由分镜组尺寸 + 行列算出每个槽位的矩形。
+ *
+ * 槽位是等分格子：宽 = (W - 2*pad - (cols-1)*gap) / cols，高同理。
+ * 卡片太小导致宽高 <= 0 时返回空表（组件不渲染网格，防负尺寸）。
+ */
+export function slotRects(
+  boardW: number,
+  boardH: number,
+  rows: number,
+  cols: number,
+  padding = STORYBOARD_PADDING,
+  gap = STORYBOARD_GAP,
+): SlotRect[] {
+  if (!Number.isFinite(boardW) || !Number.isFinite(boardH)) return []
+  if (boardW <= 0 || boardH <= 0) return []
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return []
+  const innerW = boardW - padding * 2 - (cols - 1) * gap
+  const innerH = boardH - padding * 2 - (rows - 1) * gap
+  if (innerW <= 0 || innerH <= 0) return []
+  const w = innerW / cols
+  const h = innerH / rows
+  if (w <= 0 || h <= 0) return []
+  const out: SlotRect[] = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      out.push({
+        index: r * cols + c,
+        x: padding + c * (w + gap),
+        y: padding + r * (h + gap),
+        w,
+        h,
+      })
+    }
+  }
+  return out
+}
+
+/** 点在哪个槽位里（相对分镜组坐标，越界 -1） */
+export function slotIndexAt(rects: SlotRect[], localX: number, localY: number): number {
+  for (const r of rects) {
+    if (localX >= r.x && localX <= r.x + r.w && localY >= r.y && localY <= r.y + r.h) return r.index
+  }
+  return -1
+}
+
+/**
+ * 吸附决策：拖拽结束后该节点归谁。
+ *
+ * @returns
+ *  - { kind: 'none' }              不在任何分镜组范围内、原本也不属于分镜组
+ *  - { kind: 'snap', boardId, slotIndex, slots }   落进某槽（slots = 写库后的新分配）
+ *  - { kind: 'detach' }            原本在分镜组里、拖出了卡片
+ *
+ * 规则（与用户口径一致）：
+ *  1. 落点所在的格空 → 直接占该格；
+ *  2. 落点所在的格被别的节点占着 → 两者换格（保持用户"互相拖拽排序"的直觉）；
+ *  3. 落点在自己原来的格 → 不做任何事（避免无意义的历史记录）；
+ *  4. 拖到卡片外 → 脱离，恢复自由节点。
+ */
+export type SnapDecision =
+  | { kind: 'none' }
+  | { kind: 'detach' }
+  | { kind: 'snap'; boardId: string; slotIndex: number; slots: Array<string | null>; displacedNodeId: string | null }
+
+export function decideSnap(input: {
+  /** 拖拽节点 id */
+  nodeId: string
+  /** 落点中心（画布绝对坐标） */
+  center: { x: number; y: number }
+  /** 该节点原本所属的分镜组 id（不在组里 = null） */
+  currentBoardId: string | null
+  /** 画布上所有分镜组：id + 绝对矩形 + 行列 + 当前 slots */
+  boards: Array<{
+    id: string
+    x: number
+    y: number
+    w: number
+    h: number
+    rows: number
+    cols: number
+    slots: Array<string | null>
+  }>
+}): SnapDecision {
+  const { nodeId, center, currentBoardId, boards } = input
+  // 命中哪个分镜组：取中心点落在其矩形内的那个（多个重叠时取后画的 = 数组靠后）
+  let hit: (typeof boards)[number] | null = null
+  for (const b of boards) {
+    if (center.x < b.x || center.x > b.x + b.w) continue
+    if (center.y < b.y || center.y > b.y + b.h) continue
+    hit = b
+  }
+
+  if (!hit) {
+    return currentBoardId ? { kind: 'detach' } : { kind: 'none' }
+  }
+
+  const rects = slotRects(hit.w, hit.h, hit.rows, hit.cols)
+  const slotIndex = slotIndexAt(rects, center.x - hit.x, center.y - hit.y)
+  if (slotIndex < 0) {
+    // 落在卡片内但不在任何格（内边距区域）：视为该组最近格 → 用中心距离找最近槽
+    const nearest = nearestSlot(rects, center.x - hit.x, center.y - hit.y)
+    if (nearest < 0) return currentBoardId ? { kind: 'detach' } : { kind: 'none' }
+    return snapTo(hit, nearest, nodeId, currentBoardId)
+  }
+  return snapTo(hit, slotIndex, nodeId, currentBoardId)
+
+  function snapTo(
+    board: (typeof boards)[number],
+    index: number,
+    movingId: string,
+    fromBoardId: string | null,
+  ): SnapDecision {
+    const current = board.slots[index] ?? null
+    // 已经在这一格：不动（同组拖回原格）
+    if (current === movingId) return { kind: 'none' }
+    const slots = [...board.slots]
+    const displaced = current
+    // 目标格有别的节点 → 换位；被顶掉的节点回到移动节点原来的格（同组时）
+    if (displaced) {
+      const originIndex = fromBoardId === board.id ? board.slots.indexOf(movingId) : -1
+      if (originIndex >= 0) slots[originIndex] = displaced
+    }
+    slots[index] = movingId
+    return { kind: 'snap', boardId: board.id, slotIndex: index, slots, displacedNodeId: displaced }
+  }
+}
+
+/** 中心点最近的槽位（落在内边距时不至于判成"没命中"） */
+function nearestSlot(rects: SlotRect[], localX: number, localY: number): number {
+  let best = -1
+  let bestD = Infinity
+  for (const r of rects) {
+    const cx = r.x + r.w / 2
+    const cy = r.y + r.h / 2
+    const d = (localX - cx) ** 2 + (localY - cy) ** 2
+    if (d < bestD) { bestD = d; best = r.index }
+  }
+  return best
+}
+
+/** 从 slots 里去掉某个节点（脱离/删除时用），返回新数组或原数组 */
+export function removeFromSlots(slots: Array<string | null>, nodeId: string): Array<string | null> {
+  if (!slots.includes(nodeId)) return slots
+  return slots.map((s) => (s === nodeId ? null : s))
 }
 
 /** placeAdjacent 只认这套形状：id + 左上角 + 宽高（flow 绝对坐标） */

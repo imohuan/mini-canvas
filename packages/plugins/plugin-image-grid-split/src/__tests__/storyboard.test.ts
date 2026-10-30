@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { readStoryboard, swapSlots, placeStoryboardAt } from '../storyboard'
+import {
+  readStoryboard, swapSlots, placeStoryboardAt, slotRects, slotIndexAt, decideSnap, removeFromSlots,
+} from '../storyboard'
 
 describe('storyboard 纯逻辑', () => {
   it('readStoryboard：合法 data 收窄（非 string 槽当空）', () => {
@@ -51,5 +53,92 @@ describe('storyboard 落点', () => {
     const at = placeStoryboardAt({ ctx: stubCtx(nodes), sourceId: 'gone' })
     expect(Number.isFinite(at.x)).toBe(true)
     expect(Number.isFinite(at.y)).toBe(true)
+  })
+})
+
+describe('storyboard 槽位几何', () => {
+  it('slotRects：3×3 等分，留内边距与间隙，行列不重叠', () => {
+    const rects = slotRects(480, 360, 3, 3, 10, 6)
+    expect(rects).toHaveLength(9)
+    const w = (480 - 20 - 12) / 3
+    const h = (360 - 20 - 12) / 3
+    expect(rects[0]).toEqual({ index: 0, x: 10, y: 10, w, h })
+    expect(rects[4]!.x).toBeCloseTo(10 + w + 6)
+    expect(rects[4]!.y).toBeCloseTo(10 + h + 6)
+    // 相邻两格之间正好是 gap
+    expect(rects[1]!.x - (rects[0]!.x + rects[0]!.w)).toBeCloseTo(6)
+  })
+
+  it('slotRects：尺寸不足以放下网格时返回空表（不产负尺寸）', () => {
+    expect(slotRects(10, 10, 3, 3, 10, 6)).toEqual([])
+    expect(slotRects(0, 360, 3, 3)).toEqual([])
+    expect(slotRects(480, 360, 0, 3)).toEqual([])
+    expect(slotRects(Number.NaN, 360, 3, 3)).toEqual([])
+  })
+
+  it('slotIndexAt：命中各格 / 间隙与外部返回 -1', () => {
+    const rects = slotRects(480, 360, 3, 3, 10, 6)
+    expect(slotIndexAt(rects, 15, 15)).toBe(0)
+    expect(slotIndexAt(rects, 470, 350)).toBe(8)
+    expect(slotIndexAt(rects, -5, 15)).toBe(-1)
+    expect(slotIndexAt(rects, 15, 999)).toBe(-1)
+  })
+})
+
+describe('storyboard 吸附决策', () => {
+  const board = {
+    id: 'board', x: 1000, y: 500, w: 480, h: 360, rows: 3, cols: 3,
+    slots: ['a', null, null, null, 'b', null, null, null, null] as Array<string | null>,
+  }
+  /** 第 index 格的中心（画布绝对坐标） */
+  const centerOf = (index: number) => {
+    const r = slotRects(board.w, board.h, board.rows, board.cols)[index]!
+    return { x: board.x + r.x + r.w / 2, y: board.y + r.y + r.h / 2 }
+  }
+
+  it('拖进空槽：占该格', () => {
+    const d = decideSnap({ nodeId: 'img', center: centerOf(4), currentBoardId: null, boards: [board] })
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.boardId).toBe('board')
+    expect(d.slotIndex).toBe(4)
+    expect(d.slots[4]).toBe('img')
+  })
+
+  it('拖到已有节点的格：两者换位（同组内）', () => {
+    const d = decideSnap({ nodeId: 'a', center: centerOf(4), currentBoardId: 'board', boards: [board] })
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.slots[4]).toBe('a')
+    expect(d.slots[0]).toBe('b')
+    expect(d.displacedNodeId).toBe('b')
+  })
+
+  it('拖回自己的格：不动（避免无意义历史）', () => {
+    const d = decideSnap({ nodeId: 'a', center: centerOf(0), currentBoardId: 'board', boards: [board] })
+    expect(d.kind).toBe('none')
+  })
+
+  it('原本在组里、拖出卡片：脱离', () => {
+    const d = decideSnap({ nodeId: 'a', center: { x: 10, y: 10 }, currentBoardId: 'board', boards: [board] })
+    expect(d.kind).toBe('detach')
+  })
+
+  it('本来就不在组里、拖到卡片外：不处理', () => {
+    const d = decideSnap({ nodeId: 'free', center: { x: 10, y: 10 }, currentBoardId: null, boards: [board] })
+    expect(d.kind).toBe('none')
+  })
+
+  it('落在内边距（卡片内但不在格上）：吸到最近的槽', () => {
+    const d = decideSnap({ nodeId: 'img', center: { x: board.x + 2, y: board.y + 2 }, currentBoardId: null, boards: [board] })
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.slotIndex).toBe(0)
+  })
+
+  it('removeFromSlots：清掉指定节点，其它原样；不存在时返回原表', () => {
+    expect(removeFromSlots(['a', 'b', null], 'a')).toEqual([null, 'b', null])
+    const same = ['a', 'b']
+    expect(removeFromSlots(same, 'zzz')).toBe(same)
   })
 })

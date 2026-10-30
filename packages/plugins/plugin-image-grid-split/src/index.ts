@@ -17,6 +17,7 @@ import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'
 import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
+import { onStoryboardDragEnd } from './storyboardDrag'
 
 export const name = 'image-grid-split'
 /**
@@ -26,22 +27,25 @@ export const name = 'image-grid-split'
 export const inject = [] as string[]
 
 export function apply(ctx: Context): void {
-  // ⓪ 分镜组节点类型：固定槽位网格（行×列在 data 里，槽位存资源引用）。
-  //    与 group 节点同一条注册路（nodes.register + in 组件），但**不参与连线**
-  //    （容器不接边：inputs/outputs 显式空数组 = 无端口）。
+  // ⓪ 分镜组节点类型：**容器节点**（和分组同一族，但会把子节点锁进槽位）。
+  //    - data.slots 存子节点 id（图片仍是真节点，不是卡片里画的图）；
+  //    - transparent 让子节点透出、卡片只画底板；
+  //    - resizable 允许用户改行列后拉大卡片；
+  //    - 不接边（inputs/outputs 显式空数组 = 无端口）。
   // 真实宿主 nodeStore/nodeRegistry 恒在；极简 ctx（单测桩）没有 → 跳过节点注册（无画布，注册无意义）
   try {
     ctx.nodes.register({
       type: 'storyboard',
       label: '分镜组',
       nameTemplate: '分镜组 {{ID}}',
-      description: '把切分好的图片按槽位放进去，槽位间可拖拽交换',
+      description: '把图片节点拖进槽位自动吸附，可在槽位间拖拽排序、拖出解除',
       size: { w: 480, h: 360 },
       in: StoryboardGrid,
       inputs: [],
       outputs: [],
-      // 不可缩放（版本 1：固定网格；后续版本再放开）
-      resizable: false,
+      // 容器语义：透明底（子节点在上面），可缩放（行列固定、格子跟着变大）
+      transparent: true,
+      resizable: true,
     })
   } catch {
     // 服务缺席/类型冲突：静默跳过（与 overlay/contribute 同一条宽容口径）
@@ -80,6 +84,9 @@ export function apply(ctx: Context): void {
       description: '宫格切分工作台：底栏换成勾选与发布操作',
       // order 大于默认（100）：本插件不顶替别人的默认栏
       order: 500,
+      // 用户口径 2026-10-30：进入模式后**只有底部状态栏**，顶栏整排让位。
+      // nodeToolbar 的 null = 这一格故意不显示（不是"沿用默认"）。
+      topBar: null,
       bottomBar: markRaw(GridSplitPanel),
     })
     return true
@@ -106,6 +113,18 @@ export function apply(ctx: Context): void {
     // 包作用域回收时清掉所有会话（防热重载后残留旧状态）
     for (const id of splitNodeIds()) endSplit(id)
   })
+
+  // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原
+  const offDrop = onStoryboardDragEnd(ctx, (handled, payload) => {
+    // 非图片节点被拖到槽位上时不吸附，给一句提示（只在真的落在组范围里才提示）
+    if (handled) return
+    const doc = ctx.tryGet<{ getNode(id: string): { type?: string } | undefined } | undefined>('doc')
+    const type = doc?.getNode(payload.nodeId)?.type
+    if (type && type !== 'image' && type !== 'storyboard') {
+      ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('分镜组只收图片节点')
+    }
+  })
+  ctx.effect(() => () => offDrop.dispose())
 }
 
 export const gridSplitPlugin: PluginModule = { name, inject, apply }
