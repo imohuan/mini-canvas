@@ -214,18 +214,7 @@ function onKeydown(event: KeyboardEvent): void {
       @blur="focused = false"
     >
       <div class="mck-split__line" aria-hidden="true"></div>
-      <div class="mck-split__grip" aria-hidden="true">
-        <svg class="mck-split__grip-icon" viewBox="0 0 12 12" aria-hidden="true">
-          <template v-if="isVertical">
-            <path d="M6 1v3M6 8v3" />
-            <path d="m4.2 3.2 1.8-1.8 1.8 1.8M4.2 8.8 6 10.6l1.8-1.8" />
-          </template>
-          <template v-else>
-            <path d="M1 6h3M8 6h3" />
-            <path d="M3.2 4.2 1.4 6l1.8 1.8M8.8 4.2 10.6 6l-1.8 1.8" />
-          </template>
-        </svg>
-      </div>
+      <div class="mck-split__grip" aria-hidden="true"></div>
     </div>
     <div class="mck-split__pane mck-split__pane--second">
       <slot name="right" />
@@ -236,10 +225,10 @@ function onKeydown(event: KeyboardEvent): void {
 <style scoped>
 .mck-split {
   display: flex;
-  flex: 1 1 auto;
+  /* 与参考实现一致：默认自适应父级，不抢占高度。 */
+  flex: 0 1 auto;
   box-sizing: border-box;
   width: 100%;
-  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -315,22 +304,16 @@ function onKeydown(event: KeyboardEvent): void {
 .mck-split__grip {
   position: relative;
   z-index: 1;
-  display: grid;
-  width: 18px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid var(--mck-line);
-  border-radius: 6px;
-  background: var(--mck-panel, #fff);
-  color: var(--mck-ink-muted, #6b7280);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.16);
-  opacity: 0.75;
-  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease, border-color 150ms ease;
+  width: 4px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--mck-line);
+  transition: background-color 150ms ease;
 }
 
 .is-vertical > .mck-split__divider .mck-split__grip {
-  width: 34px;
-  height: 18px;
+  width: 32px;
+  height: 4px;
 }
 
 .mck-split__divider:hover .mck-split__line,
@@ -342,20 +325,7 @@ function onKeydown(event: KeyboardEvent): void {
 .mck-split__divider:hover .mck-split__grip,
 .mck-split__divider.is-focused .mck-split__grip,
 .mck-split__divider.is-dragging .mck-split__grip {
-  border-color: var(--mck-accent);
   background: var(--mck-accent);
-  color: #fff;
-  opacity: 1;
-}
-
-.mck-split__grip-icon {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 @media (prefers-reduced-motion: reduce) {
