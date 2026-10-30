@@ -1708,6 +1708,8 @@ function createUi() {
     bindCanvasTree()
     // 当前画布 / 画布清单：从 URL 认当前是哪张，再拉（可能跨项目）它的清单
     currentCanvasId.value = canvasIdFromUrl()
+    // 换了画布（切画布 / 从项目页进另一张）：历史页码与签名要跟着复位，否则会拿旧页码去拉
+    alignHistoryToCanvas()
     void refreshCanvasList()
     void loadAssets()
     // 文件夹清单也在就绪时拉一次（不只等「打开资产 tab」）：
@@ -1772,6 +1774,31 @@ function createUi() {
     disposeHistorySub?.()
     disposeHistorySub = undefined
     unbindHistoryFilters()
+  }
+
+  /** 上次对齐历史时是哪张画布（'' = 还没对齐过） */
+  let historyCanvasKey = ''
+
+  /**
+   * 切画布后把历史状态对齐到新画布。返回是否真的换过画布。
+   *
+   * 为什么需要：ui 状态是模块级单例，切画布只重建路由组件、不清状态。
+   * 用户在 A 画布翻到第 3 页，切到 B：画布 id 不在筛选 watch 的源里，没人重拉；
+   * onReady 的 loadHistory() 又用**旧页码 3** 发起，落表前被「必须是当前页 + 1」
+   * 的分页校验丢掉 —— 历史墙一直显示 A 画布的卡片。这里把页码/签名复位，
+   * 后面的 loadHistory 自然拉第 1 页。
+   */
+  function alignHistoryToCanvas(): boolean {
+    const id = currentCanvasId.value
+    if (historyCanvasKey === id) return false
+    historyCanvasKey = id
+    resetHistoryRequest()
+    state.histPage = 1
+    // 签名清空：否则第 1 页会走「同一筛选下只插新卡」分支，旧画布的卡片留在墙上
+    state.histSignature = ''
+    // 页码表按旧签名（不含画布 id）记的：再也匹配不上，留着只是内存垃圾
+    histPageBySignature.clear()
+    return true
   }
 
   /**
