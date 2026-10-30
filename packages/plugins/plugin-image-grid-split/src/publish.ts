@@ -12,7 +12,20 @@
 import type { Context } from '@mini-canvas/canvas-base'
 import { mediaCapabilityOf } from '@mini-canvas/canvas-render'
 import { publishPositions, toPixelRect, unitCells } from './gridSplit'
-import { placeStoryboardAt } from './storyboard'
+import { placeStoryboardAt, slotRects } from './storyboard'
+import { centerInsideSlot, fitInsideSlot } from './storyboardDrag'
+
+/** 图片节点宽高比（先看原图分辨率，再看节点尺寸，最后 4:3） */
+function aspectOfNode(node: { size?: { w: number; h: number }; data?: Record<string, unknown> }): number {
+  const d = node.data ?? {}
+  const iw = typeof d.imageWidth === 'number' ? d.imageWidth : 0
+  const ih = typeof d.imageHeight === 'number' ? d.imageHeight : 0
+  if (iw > 0 && ih > 0) return iw / ih
+  const w = node.size?.w ?? 0
+  const h = node.size?.h ?? 0
+  if (w > 0 && h > 0) return w / h
+  return 4 / 3
+}
 
 /** 画布默认格宽：与图片节点默认卡片宽一致（320），视觉上就是"一排小图" */
 const PUBLISH_CELL_W = 320
@@ -289,19 +302,85 @@ export async function publishCells(
     }
   }
 
-  // storyboard：建分镜组节点（槽位数 = 行×列），切片按格子索引写进槽
-  const slots: Array<string | null> = new Array(rows * cols).fill(null)
-  for (const [index, cell] of sliced) slots[index] = cell.ref
-  // 分镜组节点落点：源图右侧优先（与发布图片节点同一套避让语义），不再硬放 (0,0)
+  /**
+   * storyboard：分镜组是**容器节点**（用户口径 2026-10-30）——
+   * 槽位里放的是真正的图片节点 id，不是资源引用。
+   *
+   * 顺序：
+   *  1. 先按格子索引建好每张切片图片节点（自由状态）；
+   *  2. 建分镜组节点（slots 全空）；
+   *  3. 把每张图「吸附」进对应槽位（父级 + 槽位坐标 + 按高度铺满的尺寸）。
+   * 这样落库的图形与用户手动拖进去完全一致，撤销/保存/拖动都走同一套节点机制。
+   */
   const boardAt = placeStoryboardAt({ ctx: deps.ctx, sourceId: nodeId })
-  const boardId = deps.createNode('storyboard', boardAt, {
-    rows,
-    cols,
-    slots,
-    slotRefs: slots,
-  })
+  const emptySlots: Array<string | null> = new Array(rows * cols).fill(null)
+  const boardId = deps.createNode('storyboard', boardAt, { rows, cols, slots: emptySlots })
   if (!boardId) {
     return { ok: false, count: 0, reason: '建分镜组失败（插件未装或宿主不支持）' }
   }
-  return { ok: true, count: sliced.size, containerId: boardId }
+
+  // 1) 先建图片节点（落在分镜组内部附近，随后被吸附对齐；用户看不到中间态）
+  const cellIds = new Map<number, string>()
+  for (const [index, cell] of sliced) {
+    const id = deps.addImageNodeFromResource(
+      { x: boardAt.x, y: boardAt.y },
+      cell.ref,
+      { name: '宫格图片 ' + (Math.floor(index / cols) + 1) + '-' + ((index % cols) + 1) + '.png', width: cell.width, height: cell.height },
+    )
+    if (id) cellIds.set(index, id)
+  }
+  if (cellIds.size === 0) {
+    return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }
+  }
+
+  // 2) 吸附进槽位（与手动拖拽同一条计算：parentId + 槽位坐标 + 等比缩放）
+  const placed = snapIntoBoard(deps.ctx, boardId, cellIds, rows, cols)
+  if (!placed) {
+    return { ok: false, count: 0, reason: '分镜组吸附失败' }
+  }
+  return { ok: true, count: cellIds.size, containerId: boardId }
+}
+
+/**
+ * 把一批图片节点按格子索引吸附进分镜组。
+ * 复用 storyboardDrag 的 fitInsideSlot / centerInsideSlot，保证"自动创建"和"手动拖入"看起来一致。
+ */
+function snapIntoBoard(
+  ctx: Context,
+  boardId: string,
+  cellIds: Map<number, string>,
+  rows: number,
+  cols: number,
+): boolean {
+  const doc = ctx.tryGet<{
+    getNode(id: string): { position?: { x: number; y: number }; size?: { w: number; h: number }; data?: Record<string, unknown>; type?: string } | undefined
+    updateNode(id: string, patch: Record<string, unknown>): unknown
+    updateNodes?(entries: Array<{ id: string; patch: Record<string, unknown> }>): unknown
+  } | undefined>('doc')
+  if (!doc) return false
+  const boardNode = doc.getNode(boardId)
+  if (!boardNode) return false
+  const size = boardNode.size ?? { w: 480, h: 360 }
+  const rects = slotRects(size.w, size.h, rows, cols)
+  if (rects.length === 0) return false
+
+  const slots: Array<string | null> = new Array(rows * cols).fill(null)
+  for (const [index, id] of cellIds) {
+    const slot = rects[index]
+    if (!slot) continue
+    slots[index] = id
+    const node = doc.getNode(id)
+    if (!node) continue
+    const aspect = aspectOfNode(node)
+    const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspect)
+    const inside = centerInsideSlot({ w: slot.w, h: slot.h }, fitted)
+    doc.updateNode(id, {
+      parentId: boardId,
+      position: { x: slot.x + inside.dx, y: slot.y + inside.dy },
+      size: { w: fitted.w, h: fitted.h },
+      data: { _storyboardSize: { w: 320, h: 240 }, _storyboardSlot: index },
+    })
+  }
+  doc.updateNode(boardId, { data: { slots } })
+  return true
 }

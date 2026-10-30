@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   readStoryboard, swapSlots, placeStoryboardAt, slotRects, slotIndexAt, decideSnap, removeFromSlots,
 } from '../storyboard'
+import { fitInsideSlot, centerInsideSlot } from '../storyboardDrag'
 
 describe('storyboard 纯逻辑', () => {
   it('readStoryboard：合法 data 收窄（非 string 槽当空）', () => {
@@ -140,5 +141,33 @@ describe('storyboard 吸附决策', () => {
     expect(removeFromSlots(['a', 'b', null], 'a')).toEqual([null, 'b', null])
     const same = ['a', 'b']
     expect(removeFromSlots(same, 'zzz')).toBe(same)
+  })
+})
+
+describe('槽位内容尺寸（容器式预览）', () => {
+  // 用户口径 2026-10-30 参考图：槽位 1:1、图片 9:16 → 高度铺满、左右居中
+  const slot = { w: 200, h: 200 }
+  it('竖图（9:16）：高度铺满，宽度按比例收窄', () => {
+    const fit = fitInsideSlot(slot, 9 / 16)
+    expect(fit.h).toBe(200)
+    expect(fit.w).toBe(113) // 200 * 9/16 = 112.5 → 取整 113
+  })
+  it('横图（16:9）：高度铺满会溢出宽度 → 改为宽度铺满（不超出槽位）', () => {
+    const fit = fitInsideSlot(slot, 16 / 9)
+    expect(fit.w).toBe(200)
+    expect(fit.h).toBe(113)
+  })
+  it('正方形：正好铺满', () => {
+    expect(fitInsideSlot(slot, 1)).toEqual({ w: 200, h: 200 })
+  })
+  it('居中：剩余空间对半分（左右居中）', () => {
+    const fit = fitInsideSlot(slot, 9 / 16)
+    const c = centerInsideSlot(slot, fit)
+    expect(c.dx).toBe(Math.round((200 - 113) / 2))
+    expect(c.dy).toBe(0)
+  })
+  it('非法宽高比：回落到铺满槽位（不抛）', () => {
+    expect(fitInsideSlot(slot, 0)).toEqual({ w: 200, h: 200 })
+    expect(fitInsideSlot(slot, Number.NaN)).toEqual({ w: 200, h: 200 })
   })
 })
