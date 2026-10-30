@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   readStoryboard, swapSlots, placeStoryboardAt, slotRects, slotIndexAt, decideSnap, removeFromSlots,
   resolveStoryboardLayout, readStoryboardLayout, DEFAULT_STORYBOARD_LAYOUT,
+  storyboardContentSize,
 } from '../storyboard'
 import { fitInsideSlot, centerInsideSlot } from '../storyboardDrag'
 
@@ -55,6 +56,50 @@ describe('storyboard 落点', () => {
     const at = placeStoryboardAt({ ctx: stubCtx(nodes), sourceId: 'gone' })
     expect(Number.isFinite(at.x)).toBe(true)
     expect(Number.isFinite(at.y)).toBe(true)
+  })
+})
+
+describe('storyboardContentSize：外框由内容反推', () => {
+  it('行列取各自行高/列宽最大，加 padding/topPadding/间距', () => {
+    const contents = new Map<number, { w: number; h: number }>([
+      [0, { w: 120, h: 210 }], // 竖图
+      [1, { w: 200, h: 120 }], // 横图
+    ])
+    // 1×2：列宽 [120, 200] 各归各列（CSS grid 语义），行高 = max(210, 120) = 210
+    // 默认布局：padding 8、topPadding 34、colGap 10
+    const s = storyboardContentSize(1, 2, contents)
+    expect(s.w).toBe(120 + 200 + 10 + 16)
+    expect(s.h).toBe(210 + 16 + 34)
+  })
+
+  it('两行两列：行高列宽独立计算，间距计 (n-1) 次', () => {
+    const contents = new Map<number, { w: number; h: number }>([
+      [0, { w: 100, h: 60 }],
+      [3, { w: 80, h: 150 }],
+    ])
+    const s = storyboardContentSize(2, 2, contents)
+    // 列宽 [100, 80]，行高 [60, 150]
+    expect(s.w).toBe(100 + 80 + 10 + 16)
+    expect(s.h).toBe(60 + 150 + 10 + 16 + 34)
+  })
+
+  it('全空内容回落最小可用尺寸；非法行列同样回落', () => {
+    expect(storyboardContentSize(2, 2, new Map())).toEqual({ w: 120, h: 120 })
+    expect(storyboardContentSize(0, 2, new Map([[0, { w: 100, h: 100 }]]))).toEqual({ w: 120, h: 120 })
+  })
+
+  it('自定义布局生效（隐藏标题：topPadding 调 0）', () => {
+    const contents = new Map<number, { w: number; h: number }>([[0, { w: 320, h: 240 }]])
+    const s = storyboardContentSize(1, 1, contents, { padding: 4, topPadding: 0 })
+    expect(s).toEqual({ w: 328, h: 248 })
+  })
+
+  it('placeStoryboardAt 接受目标尺寸参与避让', () => {
+    const source = { id: 'src', type: 'image', position: { x: 1000, y: 500 }, size: { w: 320, h: 240 } }
+    const stubCtx = (nodes: unknown[]) => ({ nodes }) as unknown as import('../storyboard').StoryboardPlacementCtx
+    const at = placeStoryboardAt({ ctx: stubCtx([source]), sourceId: 'src', size: { w: 640, h: 480 } })
+    expect(at.x).toBeGreaterThanOrEqual(1320)
+    expect(at.y).toBe(500)
   })
 })
 
@@ -166,7 +211,7 @@ describe('storyboard 布局配置', () => {
 
   it('readStoryboardLayout：无 settings 服务时回落默认（不抛）', () => {
     expect(readStoryboardLayout(undefined)).toEqual(DEFAULT_STORYBOARD_LAYOUT)
-    expect(readStoryboardLayout({ get: (n) => (n === 'doc' ? undefined : undefined) })).toEqual(DEFAULT_STORYBOARD_LAYOUT)
+    expect(readStoryboardLayout({ get: ((n: string) => undefined) as unknown as <T = unknown>(name: string) => T })).toEqual(DEFAULT_STORYBOARD_LAYOUT)
   })
 })
 

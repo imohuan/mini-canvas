@@ -10,12 +10,27 @@ export interface ImageFitLimitsLike {
   maxLongSide: number
 }
 
+/**
+ * 图片尺寸 → 卡片尺寸（与图片节点同一条规则）：
+ * 等比缩放，最长边不超过 maxLongSide、最短边不小于 minShortSide，冲突时短边优先。
+ * 转发 canvas-base 的 fitMediaCard，避免跨插件包依赖；默认限制与 mediaFit 相同。
+ */
+import { fitMediaCard } from '@mini-canvas/canvas-base'
+
+export function fitCardSize(
+  imageWidth: unknown,
+  imageHeight: unknown,
+  limits?: Partial<ImageFitLimitsLike> | null,
+): { width: number; height: number } | null {
+  return fitMediaCard(imageWidth, imageHeight, limits)
+}
+
 /** 默认值（与 canvas-base mediaFit.DEFAULT_IMAGE_CARD_LIMITS 相同，本地常量避免跨包依赖） */
 export const DEFAULT_IMAGE_LIMITS: ImageFitLimitsLike = Object.freeze({ minShortSide: 120, maxLongSide: 420 })
 
 /** 从宿主服务表读限制；没有 settings 服务时回落默认 */
 export function fitImageLimits(ctx: { tryGet?<T = unknown>(name: string): T } | undefined): ImageFitLimitsLike {
-  const settings = ctx?.tryGet<{ get(key: string): unknown } | undefined>('settings')
+  const settings = typeof ctx?.tryGet === 'function' ? ctx.tryGet<{ get(key: string): unknown } | undefined>('settings') : undefined
   const num = (key: string, fallback: number): number => {
     const v = settings?.get(key)
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback

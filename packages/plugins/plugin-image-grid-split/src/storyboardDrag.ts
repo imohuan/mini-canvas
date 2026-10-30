@@ -261,6 +261,9 @@ export function applyStoryboardDrop(
 
 let detachLayout: LayoutPort | undefined
 
+/** 拖动过程中标了半透明的节点 id（松手/移出时清掉；跨事件共享） */
+let lastMarked = ''
+
 /** 脱离分镜组：清父级、**绝对坐标**、还原尺寸、从 slots 里摘掉。
  *
  * 用户口径 2026-10-30（参考分组节点）：脱离时 store 的 position 还是**相对父**的值，
@@ -306,8 +309,6 @@ export function onStoryboardDragEnd(
 export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
   const doc = ctx.tryGet<DocPort | undefined>('doc')
   const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
-  /** 上一帧标了半透明的节点（本帧不在组上时要清掉） */
-  let lastMarked = ''
   return ctx.on(NODE_DRAG, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     if (!doc) return
     const node = doc.getNode(payload.nodeId)
@@ -327,7 +328,7 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
       w: node.size?.w ?? 0,
       h: node.size?.h ?? 0,
     }
-    let hit: { id: string; rect: { x: number; y: number; w: number; h: number }; board: NonNullable<ReturnType<typeof readStoryboard>> } | null = null
+    let hit: { n: NodeLike; rect: { x: number; y: number; w: number; h: number }; board: NonNullable<ReturnType<typeof readStoryboard>> } | null = null
     for (const b of boards) {
       const overlapW = Math.min(dragRect.x + dragRect.w, b.rect.x + b.rect.w) - Math.max(dragRect.x, b.rect.x)
       const overlapH = Math.min(dragRect.y + dragRect.h, b.rect.y + b.rect.h) - Math.max(dragRect.y, b.rect.y)

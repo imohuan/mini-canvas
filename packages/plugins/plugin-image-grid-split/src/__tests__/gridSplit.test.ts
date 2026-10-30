@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   unitCells, toPixelRect, publishPositions, validRowsCols, cellIndexAt, pickerRowsColsAt,
+  uniformGridPositions,
 } from '../gridSplit'
 
 describe('gridSplit 纯计算', () => {
@@ -87,5 +88,37 @@ describe('gridSplit 纯计算', () => {
     expect(pickerRowsColsAt(0.5, 1.01)).toBeNull()
     expect(pickerRowsColsAt(0.5, 0.5, 0)).toBeNull()
     expect(pickerRowsColsAt(Number.NaN, 0.5)).toBeNull()
+  })
+
+  it('uniformGridPositions：列宽/行高各取最大，行列对齐不重叠', () => {
+    const sizes = new Map<number, { w: number; h: number }>([
+      [0, { w: 120, h: 210 }], // 竖图
+      [1, { w: 200, h: 120 }], // 横图
+      [2, { w: 180, h: 180 }], // 方图
+    ])
+    const pos = uniformGridPositions(1, 3, [0, 1, 2], sizes, 10)
+    // 行内 y 相同；x = 前面各列列宽 + gap
+    expect(pos.map((p) => p.y)).toEqual([0, 0, 0])
+    expect(pos.map((p) => p.x)).toEqual([0, 130, 340])
+  })
+
+  it('uniformGridPositions：两行时行高互不影响，竖直方向也均匀', () => {
+    const sizes = new Map<number, { w: number; h: number }>([
+      [0, { w: 100, h: 60 }],
+      [3, { w: 80, h: 150 }],
+    ])
+    const pos = uniformGridPositions(2, 2, [0, 3], sizes, 8)
+    expect(pos).toEqual([
+      { index: 0, x: 0, y: 0 },
+      { index: 3, x: 108, y: 68 },
+    ])
+  })
+
+  it('uniformGridPositions：缺尺寸的格子跳过；空勾选/非法行列给空表', () => {
+    const sizes = new Map<number, { w: number; h: number }>([[1, { w: 50, h: 50 }]])
+    // 缺尺寸的列宽兜底 1px（实现口径）：index 1 的 x = 1 + gap = 11
+    expect(uniformGridPositions(2, 2, [0, 1], sizes, 10)).toEqual([{ index: 1, x: 11, y: 0 }])
+    expect(uniformGridPositions(2, 2, [], sizes, 10)).toEqual([])
+    expect(uniformGridPositions(0, 2, [0], sizes, 10)).toEqual([])
   })
 })

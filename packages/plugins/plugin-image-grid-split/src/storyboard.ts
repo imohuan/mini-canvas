@@ -80,7 +80,7 @@ export function resolveStoryboardLayout(get: (key: string) => unknown): Storyboa
 
 /** 从宿主服务表读布局参数（无 settings 服务时整体回落默认） */
 export function readStoryboardLayout(ctx: { get?<T = unknown>(name: string): T } | undefined): StoryboardLayout {
-  const settings = ctx?.get<{ get(key: string): unknown } | undefined>('settings')
+  const settings = typeof ctx?.get === 'function' ? ctx.get<{ get(key: string): unknown } | undefined>('settings') : undefined
   if (!settings || typeof settings.get !== 'function') return { ...DEFAULT_STORYBOARD_LAYOUT }
   return resolveStoryboardLayout((key) => settings.get(key))
 }
@@ -144,6 +144,59 @@ export function slotIndexAt(rects: SlotRect[], localX: number, localY: number): 
   }
   return -1
 }
+
+/**
+ * 分镜组的外框尺寸：由**内容（槽位网格）实际占用**反推。
+ *
+ * 用户口径 2026-10-30：「分镜组的大小是你所有图片宫格排布后计算的最佳宽高」——
+ * 不再用固定 480×360 盖住内容，而是从每格里图片的真实尺寸出发：
+ *   每行行高 = 该行图片高度最大值，每列列宽 = 该列图片宽度最大值（CSS grid 语义），
+ *   外框 = 网格总宽高 + 内边距 + 顶部留白 + 行列间距，向下取整防 0.5px 模糊边。
+ *
+ * 槽位空着时不猜：那行/那列按 0 算，等真正有图进来再说（创建时全空则回落默认尺寸）。
+ */
+export interface StoryboardContentSize {
+  w: number
+  h: number
+}
+
+export function storyboardContentSize(
+  rows: number,
+  cols: number,
+  contents: Map<number, { w: number; h: number }>,
+  layout?: Partial<StoryboardLayout> | null,
+): StoryboardContentSize {
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) {
+    return { ...MIN_CONTENT_BOARD_SIZE }
+  }
+  const d = { ...DEFAULT_STORYBOARD_LAYOUT, ...(layout ?? {}) }
+  const rowH = new Array<number>(rows).fill(0)
+  const colW = new Array<number>(cols).fill(0)
+  for (const [index, s] of contents) {
+    if (index < 0 || index >= rows * cols) continue
+    if (!Number.isFinite(s.w) || !Number.isFinite(s.h) || s.w <= 0 || s.h <= 0) continue
+    const r = Math.floor(index / cols)
+    const c = index % cols
+    if (s.h > rowH[r]!) rowH[r] = s.h
+    if (s.w > colW[c]!) colW[c] = s.w
+  }
+  const gridW = colW.reduce((a, b) => a + b, 0) + Math.max(0, cols - 1) * Math.max(0, d.colGap)
+  const gridH = rowH.reduce((a, b) => a + b, 0) + Math.max(0, rows - 1) * Math.max(0, d.rowGap)
+  const w = gridW + d.padding * 2
+  const h = gridH + d.padding * 2 + d.topPadding
+  // 全空（没有任何一格有内容）时回落最小可用尺寸，不猜默认值
+  if (gridW <= 0 || gridH <= 0) return { ...MIN_CONTENT_BOARD_SIZE }
+  return {
+    w: Math.max(MIN_CONTENT_BOARD_SIZE.w, Math.floor(w)),
+    h: Math.max(MIN_CONTENT_BOARD_SIZE.h, Math.floor(h)),
+  }
+}
+
+/**
+ * 内容外框的最小可用尺寸（padding×2、标题条、一两行槽位的高度兜底）。
+ * 内容算出来比这还小（全空/参数被改坏）时不让分镜组塌成一条线。
+ */
+export const MIN_CONTENT_BOARD_SIZE = Object.freeze({ w: 120, h: 120 })
 
 /**
  * 拖动悬停时的目标槽判定：**交叉面积最大者获胜**（用户口径 2026-10-30）。
@@ -379,6 +432,8 @@ const STORYBOARD_DEFAULT_SIZE = { w: 480, h: 360 }
 export function placeStoryboardAt(input: {
   ctx: StoryboardPlacementCtx | undefined
   sourceId: string
+  /** 分镜组目标外框尺寸（创建时按内容算出；缺省用类型默认 480×360） */
+  size?: { w: number; h: number }
 }): { x: number; y: number } {
   const doc = docPortOf(input.ctx)
   const layout = layoutPortOf(input.ctx)
@@ -400,7 +455,8 @@ export function placeStoryboardAt(input: {
   const visible = vp && (vp.width ?? 0) > 0 && (vp.height ?? 0) > 0
     ? { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom, w: vp.width! / vp.zoom, h: vp.height! / vp.zoom }
     : undefined
-  const at = placeAdjacent({ size: STORYBOARD_DEFAULT_SIZE, source, obstacles: rects, visible })
+  const size = input.size && input.size.w > 0 && input.size.h > 0 ? input.size : STORYBOARD_DEFAULT_SIZE
+  const at = placeAdjacent({ size, source, obstacles: rects, visible })
   return { x: at.x, y: at.y }
 }
 

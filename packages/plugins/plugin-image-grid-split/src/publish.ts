@@ -12,8 +12,8 @@
 import type { Context } from '@mini-canvas/canvas-base'
 import { mediaCapabilityOf } from '@mini-canvas/canvas-render'
 import { uniformGridPositions, toPixelRect, unitCells } from './gridSplit'
-import { DEFAULT_IMAGE_LIMITS, fitImageLimits, type ImageFitLimitsLike } from './imageFitBridge'
-import { placeStoryboardAt, readStoryboardLayout, slotRects } from './storyboard'
+import { DEFAULT_IMAGE_LIMITS, fitCardSize, fitImageLimits, type ImageFitLimitsLike } from './imageFitBridge'
+import { placeStoryboardAt, readStoryboardLayout, slotRects, storyboardContentSize } from './storyboard'
 import { centerInsideSlot, fitInsideSlot } from './storyboardDrag'
 
 /** 图片节点宽高比（先看原图分辨率，再看节点尺寸，最后 4:3） */
@@ -62,6 +62,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
   const doc = ctx.tryGet<{
     getNode(id: string): { data?: Record<string, unknown> } | undefined
     transaction<T>(reason: string, fn: (tx: { createNode(type: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
+    updateNode?(id: string, patch: Record<string, unknown>): unknown
   } | undefined>('doc')
   const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined } | undefined>('nodeLayout')
   const resources = ctx.tryGet<{ put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>; resolve(r: string): Promise<string | undefined> } | undefined>('resources')
@@ -140,7 +141,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     },
     setNodeSize: (id, size) => {
       try {
-        doc.updateNode(id, { size: { w: size.w, h: size.h } })
+        doc.updateNode?.(id, { size: { w: size.w, h: size.h } })
       } catch {
         // 尺寸写不上（节点刚被并发删掉等）：布局仍按计划值走，不影响其它格子
       }
@@ -278,7 +279,7 @@ export async function publishCells(
     const sizes = new Map<number, { w: number; h: number }>()
     for (const [index, cell] of sliced) {
       const fit = fitCardSize(cell.width, cell.height, limits)
-      sizes.set(index, fit ?? { w: PUBLISH_CELL_W, h: PUBLISH_CELL_W })
+      sizes.set(index, fit ? { w: fit.width, h: fit.height } : { w: PUBLISH_CELL_W, h: PUBLISH_CELL_W })
     }
     const gap = Math.max(4, readStoryboardLayout(deps.ctx).rowGap)
     const positions = uniformGridPositions(rows, cols, [...sliced.keys()], sizes, gap)
@@ -337,12 +338,28 @@ export async function publishCells(
    *  3. 把每张图「吸附」进对应槽位（父级 + 槽位坐标 + 按高度铺满的尺寸）。
    * 这样落库的图形与用户手动拖进去完全一致，撤销/保存/拖动都走同一套节点机制。
    */
-  const boardAt = placeStoryboardAt({ ctx: deps.ctx, sourceId: nodeId })
+  /**
+   * 分镜组外框 = 内容网格的实际占用（用户口径 2026-10-30：分镜组与分组一样，
+   * 大小是所有图片宫格排布后计算的最佳宽高，不是固定 480×360）：
+   * 每格图片先按「最短边最小 / 最长边最大」规则算出卡片尺寸，
+   * 再按行列取行高/列宽最大值，加内边距与行列间距反推外框。
+   */
+  const limits = fitImageLimits(deps.ctx)
+  const contentSizes = new Map<number, { w: number; h: number }>()
+  for (const [index, cell] of sliced) {
+    const fit = fitCardSize(cell.width, cell.height, limits)
+    if (fit) contentSizes.set(index, { w: fit.width, h: fit.height })
+  }
+  const layout = readStoryboardLayout(deps.ctx)
+  const boardSize = storyboardContentSize(rows, cols, contentSizes, layout)
   const emptySlots: Array<string | null> = new Array(rows * cols).fill(null)
+  const boardAt = placeStoryboardAt({ ctx: deps.ctx, sourceId: nodeId, size: boardSize })
   const boardId = deps.createNode('storyboard', boardAt, { rows, cols, slots: emptySlots })
   if (!boardId) {
     return { ok: false, count: 0, reason: '建分镜组失败（插件未装或宿主不支持）' }
   }
+  // 建节点入口不带 size → 显式写内容外框（槽位几何用 boardNode.size 反推，必须先写对）
+  deps.setNodeSize(boardId, boardSize)
 
   // 1) 先建图片节点（落在分镜组内部附近，随后被吸附对齐；用户看不到中间态）
   const cellIds = new Map<number, string>()
