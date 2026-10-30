@@ -15,7 +15,6 @@ import { uniformGridPositions, toPixelRect, unitCells } from './gridSplit'
 import { DEFAULT_IMAGE_LIMITS, fitImageLimits, type ImageFitLimitsLike } from './imageFitBridge'
 import { placeStoryboardAt, readStoryboardLayout, slotRects } from './storyboard'
 import { centerInsideSlot, fitInsideSlot } from './storyboardDrag'
-import { fitImageLimits } from './imageFitBridge'
 
 /** 图片节点宽高比（先看原图分辨率，再看节点尺寸，最后 4:3） */
 function aspectOfNode(node: { size?: { w: number; h: number }; data?: Record<string, unknown> }): number {
