@@ -227,7 +227,9 @@ const open = ref(false)
 
 | 属性 | 默认 | 说明 |
 | --- | --- | --- |
-| placement | bottom-start | 方位，空间不足自动翻转 |
+| placement | bottom-start | 方位；也支持九宫格 top / left / right / bottom 与中轴写法 |
+| anchor | 无 | 外部 DOM / Ref / getter；设置后浮层贴到这个元素上 |
+| anchorPlacement | 无 | 九宫格方向；给外部锚点用 |
 | offset | 6 | 与触发器的间距 |
 | matchWidth | false | 浮层与触发器同宽 |
 | arrow | false | 显示指向触发器的小箭头 |
@@ -240,4 +242,31 @@ const open = ref(false)
 | trigger | click | click / hover / contextmenu |
 | layout | overlay-scroll | overlay-scroll / inner-scroll |
 | teleport | true | 是否挂到 body |
+
+## 绑定外部元素
+
+页面里有一个嵌套很深的按钮时，可以只把 `anchor` 传给它，浮层就贴上去；
+开关仍用 `v-model`。`anchor` 支持三种形式：直接 DOM、`ref`、或 getter。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+const anchorEl = ref<HTMLElement | null>(null)
+</script>
+
+<template>
+  <div class="deep-page">
+    <div class="deep-toolbar">
+      <button ref="anchorEl" type="button" @click="open = !open">深处的按钮</button>
+    </div>
+
+    <Dropdown v-model="open" :anchor="anchorEl" anchor-placement="bottom-start" arrow>
+      <div class="deep-menu">这里通过外部 anchor 定位，不再需要触发器插槽。</div>
+    </Dropdown>
+  </div>
+</template>
+@@ENDVUE@@
 

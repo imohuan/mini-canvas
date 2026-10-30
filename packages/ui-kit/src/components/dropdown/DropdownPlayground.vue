@@ -16,9 +16,8 @@ import Dropdown from './Dropdown.vue'
 import { dropdownPlayground } from './playground'
 import { readNumber } from '../../preview/playground'
 import type { PlaygroundField, PlaygroundValue } from '../../preview/playground'
-import type { DropdownLayout, DropdownTrigger } from './types'
+import type { DropdownAnchor, DropdownLayout, DropdownTrigger } from './types'
 import type { TabItem } from '../tabs/types'
-import type { UiKitPlacement } from '../../shared/types'
 import './dropdown-playground.css'
 
 type DemoState = Record<string, PlaygroundValue>
@@ -63,7 +62,7 @@ const triggerLabel = computed(() => {
 
 const dropdownProps = computed(() => ({
   trigger: (state.trigger === 'hover' || state.trigger === 'contextmenu' ? state.trigger : 'click') as DropdownTrigger,
-  placement: (typeof state.placement === 'string' ? state.placement : 'bottom-start') as UiKitPlacement,
+  placement: (typeof state.placement === 'string' ? state.placement : 'bottom-start') as DropdownAnchor,
   align: (state.align === 'start' || state.align === 'center' || state.align === 'end' ? state.align : 'auto') as 'auto' | 'start' | 'center' | 'end',
   offset: numberValue('offset') ?? 6,
   matchWidth: state.matchWidth === true,

@@ -1,8 +1,14 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import type { UiKitPlacement } from './types'
 
+export type FloatingAnchor =
+  | 'top-start' | 'top' | 'top-end'
+  | 'right-start' | 'right' | 'right-end'
+  | 'bottom-start' | 'bottom' | 'bottom-end'
+  | 'left-start' | 'left' | 'left-end'
+
 export interface FloatingOptions {
-  placement?: UiKitPlacement
+  placement?: UiKitPlacement | FloatingAnchor
   offset?: number
   padding?: number
   matchWidth?: boolean
@@ -18,7 +24,7 @@ export interface FloatingPosition {
   maxWidth?: number
   minWidth?: number
   maxHeight?: number
-  placement: Exclude<UiKitPlacement, 'auto'>
+  placement: FloatingAnchor
 }
 
 const DEFAULT_POSITION: FloatingPosition = { left: 0, top: 0, placement: 'bottom-start' }
@@ -29,11 +35,11 @@ function numeric(value: string | undefined): number | undefined {
   return match ? Number(match[1]) : undefined
 }
 
-function sideOf(placement: Exclude<UiKitPlacement, 'auto'>): 'top' | 'bottom' | 'left' | 'right' {
+function sideOf(placement: FloatingAnchor): 'top' | 'bottom' | 'left' | 'right' {
   return placement.split('-')[0] as 'top' | 'bottom' | 'left' | 'right'
 }
 
-function alignOf(placement: Exclude<UiKitPlacement, 'auto'>): 'start' | 'center' | 'end' {
+function alignOf(placement: FloatingAnchor): 'start' | 'center' | 'end' {
   const part = placement.split('-')[1]
   return part === 'start' || part === 'end' ? part : 'center'
 }
@@ -45,7 +51,7 @@ function opposite(side: 'top' | 'bottom' | 'left' | 'right'): 'top' | 'bottom' |
 function withSide(
   side: 'top' | 'bottom' | 'left' | 'right',
   align: 'start' | 'center' | 'end',
-): Exclude<UiKitPlacement, 'auto'> {
+): FloatingAnchor {
   return (align === 'center' ? side : `${side}-${align}`) as Exclude<UiKitPlacement, 'auto'>
 }
 
@@ -76,7 +82,7 @@ export function useFloating(
     const panelWidth = panelEl.offsetWidth || 240
     const panelHeight = panelEl.offsetHeight || 120
     const requested = options.value.placement ?? 'bottom-start'
-    const wanted: Exclude<UiKitPlacement, 'auto'> = requested === 'auto' ? 'bottom-start' : requested
+    const wanted: FloatingAnchor = requested === 'auto' ? 'bottom-start' : requested
     let side = sideOf(wanted)
     const align = alignOf(wanted)
     const space = {

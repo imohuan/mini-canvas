@@ -35,12 +35,26 @@ const api = useDropdown(props, (value) => {
   if (value) emit('open')
   else emit('close')
 })
+
+/** 外部想要的 controller：show/hide/toggle/isOpen，不需要 ref 也能直接调用。 */
+const controller = computed(() => ({
+  show: api.show,
+  hide: api.hide,
+  toggle: api.toggle,
+  get isOpen() {
+    return api.open.value
+  },
+}))
+
+defineExpose({ controller, open: api.open, show: api.show, hide: api.hide, toggle: api.toggle })
 /*
   slot 里拿到的 close 直接调用 hide；hide 内部会派发 update:modelValue=false，
   再由上面这里转成 open/close 事件。测试中通过 wrapper.emitted 校验。
 */
 
 const triggerEvents = computed(() => {
+  // 绑定外部 anchor 后，默认不接管本地触发器事件；插槽里仍可用 api.toggle 控制。
+  if (props.anchor) return {}
   if (props.trigger === 'hover') {
     return {
       onMouseenter: api.cancelHide,
@@ -77,6 +91,7 @@ const triggerEvents = computed(() => {
 <template>
   <div class="mck-dropdown" :class="{ 'is-disabled': disabled }">
     <div
+      v-if="!anchor"
       :ref="api.triggerRef"
       class="mck-dropdown__trigger"
       :aria-expanded="api.open.value"

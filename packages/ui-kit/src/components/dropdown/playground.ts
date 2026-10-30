@@ -1,4 +1,5 @@
 import { readBool, readNumber, readText, type ComponentPlayground } from '../../preview/playground'
+import type { DropdownAnchor } from './types'
 
 /**
  * Dropdown 的试玩配置。
@@ -13,7 +14,7 @@ export const dropdownPlayground: ComponentPlayground = {
   id: 'dropdown',
   defaults: {
     trigger: 'click',
-    placement: 'bottom-start',
+  placement: 'bottom-start' as DropdownAnchor,
     align: 'auto',
     offset: 6,
     matchWidth: false,
@@ -34,19 +35,25 @@ export const dropdownPlayground: ComponentPlayground = {
       { value: 'hover', label: '悬停' },
       { value: 'contextmenu', label: '右键' },
     ] },
-    { kind: 'segment', key: 'placement', label: '弹出方向', group: '位置', options: [
-      { value: 'bottom-start', label: '下左' },
-      { value: 'bottom-end', label: '下右' },
-      { value: 'top-start', label: '上左' },
-      { value: 'top-end', label: '上右' },
-      { value: 'right-start', label: '右侧' },
-      { value: 'left-start', label: '左侧' },
+    { kind: 'segment', key: 'placement', label: '弹出方向', group: '位置', hint: '九宫格：上中下 × 左中右，中上/中下/左中/右中是贴边居中。', options: [
+      { value: 'top-start', label: '左上' },
+      { value: 'top', label: '中上' },
+      { value: 'top-end', label: '右上' },
+      { value: 'left-start', label: '左上' },
+      { value: 'left', label: '左中' },
+      { value: 'left-end', label: '左下' },
+      { value: 'right-start', label: '右上' },
+      { value: 'right', label: '右中' },
+      { value: 'right-end', label: '右下' },
+      { value: 'bottom-start', label: '左下' },
+      { value: 'bottom', label: '中下' },
+      { value: 'bottom-end', label: '右下' },
     ] },
-    { kind: 'segment', key: 'align', label: '横向对齐', group: '位置', hint: 'auto = 跟方向后缀走；显式选择会覆盖后缀。', options: [
+    { kind: 'segment', key: 'align', label: '沿边对齐', group: '位置', hint: '只在老写法里用；九宫格已经包含对齐。', options: [
       { value: 'auto', label: '自动' },
-      { value: 'start', label: '左缘' },
+      { value: 'start', label: '起点' },
       { value: 'center', label: '居中' },
-      { value: 'end', label: '右缘' },
+      { value: 'end', label: '终点' },
     ] },
     { kind: 'number', key: 'offset', label: '与触发器间距', group: '位置', min: 0, max: 60, suffix: 'px' },
     { kind: 'toggle', key: 'arrow', label: '显示箭头', group: '外观', hint: '箭头会指向触发器中心；左右弹出时贴在左右边。' },
@@ -73,7 +80,13 @@ export const dropdownPlayground: ComponentPlayground = {
   ],
   summary: (s) => {
     const trigger = { click: '点击', hover: '悬停', contextmenu: '右键' }[readText(s, 'trigger')] ?? '点击'
-    const placement = { 'bottom-start': '下左', 'bottom-end': '下右', 'top-start': '上左', 'top-end': '上右', 'right-start': '右侧', 'left-start': '左侧' }[readText(s, 'placement')] ?? '下左'
+    const placementMap: Record<string, string> = {
+      'top-start': '左上', 'top': '中上', 'top-end': '右上',
+      'left-start': '左上', 'left': '左中', 'left-end': '左下',
+      'right-start': '右上', 'right': '右中', 'right-end': '右下',
+      'bottom-start': '左下', 'bottom': '中下', 'bottom-end': '右下',
+    }
+    const placement = placementMap[readText(s, 'placement')] ?? '左下'
     const flags = [trigger, placement]
     if (readBool(s, 'arrow')) flags.push('箭头')
     if (readBool(s, 'matchWidth')) flags.push('同宽')

@@ -11,7 +11,7 @@
   position: relative;
   display: grid;
   width: 100%;
-  min-height: 270px;
+  min-height: 300px;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--mck-line, #e2e5ea);
@@ -162,7 +162,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 100%;
   padding: 0;
   color: var(--mck-ink, #18202b);
 }
@@ -255,7 +254,6 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin-top: auto;
   padding-top: 4px;
 }
 

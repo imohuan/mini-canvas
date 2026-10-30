@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import Dropdown from './Dropdown.vue'
 
@@ -84,5 +85,38 @@ describe('Dropdown 组件行为', () => {
     expect(panel?.style.height).toBe('180px')
     expect(arrow).not.toBeNull()
     expect(arrow?.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('外部 anchor 可以绑定深层 DOM 并用 v-model 开关', async () => {
+    const externalHost = document.createElement('div')
+    document.body.appendChild(externalHost)
+    const target = document.createElement('button')
+    target.setAttribute('data-external-anchor', '')
+    externalHost.appendChild(target)
+
+    const anchorRef = ref<HTMLElement | null>(null)
+    const open = ref(true)
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, anchor: anchorRef, anchorPlacement: 'top' },
+      slots: { default: '<div data-menu />' },
+    })
+    await nextTick()
+    anchorRef.value = target
+    await nextTick()
+    expect(document.querySelector('[data-menu]')).not.toBeNull()
+
+    // v-model 同步：改成 false 后浮层立刻消失。
+    await wrapper.setProps({ modelValue: false })
+    await nextTick()
+    expect(document.querySelector('[data-menu]')).toBeNull()
+
+    // 换一个外部元素也立即生效（Ref 响应式绑定）。
+    const second = document.createElement('span')
+    second.setAttribute('data-second-anchor', '')
+    externalHost.appendChild(second)
+    anchorRef.value = second
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    expect(document.querySelector('[data-menu]')).not.toBeNull()
   })
 })

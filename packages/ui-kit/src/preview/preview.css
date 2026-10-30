@@ -672,9 +672,9 @@ body {
 
 .uk-config-host {
   display: flex;
-  flex: 1 1 auto;
+  /* 只当 Teleport 落点：高度由内容决定，滚动仍交给外层 .uk-config。 */
+  flex: none;
   flex-direction: column;
-  min-height: 0;
 }
 
 .uk-field {

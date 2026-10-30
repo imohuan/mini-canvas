@@ -1,10 +1,18 @@
-import { computed, onBeforeUnmount, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onBeforeUpdate, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useFloating } from '../../shared/floating'
 import { useEscape, useOutsideClick } from '../../shared/overlay'
-import type { UiKitPlacement } from '../../shared/types'
-import type { DropdownProps } from './types'
+import type { DropdownAnchor, DropdownProps } from './types'
 
 let openInstance: symbol | null = null
+
+/** 把 DOM / Ref / getter 统一读成一个元素；拿不到就返回 null。 */
+function resolveAnchor(anchor: DropdownProps['anchor']): HTMLElement | null {
+  if (!anchor) return null
+  if (anchor instanceof HTMLElement) return anchor
+  if (typeof anchor === 'function') return anchor() ?? null
+  const value = (anchor as { value?: unknown }).value
+  return value instanceof HTMLElement ? value : null
+}
 
 export interface DropdownApi {
   open: Ref<boolean>
@@ -26,18 +34,26 @@ export interface DropdownApi {
 export function useDropdown(props: DropdownProps, emit: (value: boolean) => void): DropdownApi {
   const id = Symbol('dropdown')
   const open = ref(props.modelValue ?? false)
+  /** 真实定位锚点：外部 anchor 优先，否则用触发器插槽的 DOM。 */
+  const anchorEl = ref<HTMLElement | null>(null)
   const triggerRef = ref<HTMLElement | null>(null)
   const panelRef = ref<HTMLElement | null>(null)
   let hideTimer = 0
 
-  /** placement 的后缀与 align 都能决定横向对齐；align 显式值优先。 */
-  const resolvedPlacement = computed<UiKitPlacement>(() => {
+  /**
+   * 实际方向：anchorPlacement 是显式九宫格；没有它才用旧 placement/align 组合。
+   * 兼容已有的 bottom-start 等写法，不破坏 Select 等现有调用。
+   */
+  const resolvedPlacement = computed<DropdownAnchor>(() => {
+    if (props.anchorPlacement) return props.anchorPlacement
     const base = props.placement ?? 'bottom-start'
+    const side = base.split('-')[0] as 'top' | 'right' | 'bottom' | 'left'
     if (base === 'auto') return 'bottom-start'
-    const align = props.align ?? 'auto'
-    if (align === 'auto') return base
-    const side = base.split('-')[0] as 'top' | 'bottom' | 'left' | 'right'
-    return (align === 'center' ? side : side + '-' + align) as UiKitPlacement
+    const suffix = base.split('-')[1]
+    if (suffix === 'start' || suffix === 'end') return (side + '-' + suffix) as DropdownAnchor
+    const align = props.align
+    if (align === 'start' || align === 'end') return (side + '-' + align) as DropdownAnchor
+    return side as DropdownAnchor
   })
 
   const options = computed(() => ({
@@ -48,7 +64,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     minWidth: props.menuMinWidth,
     maxHeight: props.menuMaxHeight,
   }))
-  const { position, positioned, update } = useFloating(triggerRef, panelRef, open, options)
+  const { position, positioned, update } = useFloating(anchorEl, panelRef, open, options)
 
   function setOpen(value: boolean): void {
     if (open.value === value) return
@@ -107,7 +123,24 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     }
   })
 
-  useOutsideClick(open, [triggerRef, panelRef], hide)
+  /**
+   * 锚点跟随：anchor 可以是 Ref，元素也可能晚挂载。
+   * 只在 anchor 或触发器 DOM 变化时重算一次；写入前先比较，
+   * 保证不会在 watcher 里更新自己又触发自己。
+   */
+  /**
+   * 锚点跟随：anchor 可以是 Ref，元素也可能晚挂载。
+   * 这里不用 watcher；每次渲染前从 props.anchor 重新解析一次。
+   * 避免在 watcher 里更新 anchorEl 又引发组件更新，形成递归。
+   */
+  function syncAnchor(): void {
+    const next = resolveAnchor(props.anchor) ?? triggerRef.value
+    if (next !== anchorEl.value) anchorEl.value = next
+  }
+  onBeforeUpdate(syncAnchor)
+  syncAnchor()
+
+  useOutsideClick(open, [triggerRef, panelRef, anchorEl], hide)
   useEscape(open, hide)
   onBeforeUnmount(cancelHide)
 
@@ -117,11 +150,12 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       top: position.value.top + 'px',
       maxHeight: position.value.maxHeight ? position.value.maxHeight + 'px' : '',
     }
-    if (props.menuWidth) style.width = props.menuWidth
+    // 空串是试玩面板里“用默认”的表达；不能让空字符串落到 style 上。
+    if (props.menuWidth?.trim()) style.width = props.menuWidth
     else if (props.matchWidth && position.value.width) style.width = position.value.width + 'px'
-    if (props.menuHeight) style.height = props.menuHeight
-    if (props.menuMinWidth) style.minWidth = props.menuMinWidth
-    if (props.menuMaxWidth) style.maxWidth = props.menuMaxWidth
+    if (props.menuHeight?.trim()) style.height = props.menuHeight
+    if (props.menuMinWidth?.trim()) style.minWidth = props.menuMinWidth
+    if (props.menuMaxWidth?.trim()) style.maxWidth = props.menuMaxWidth
     return style
   })
 
@@ -135,7 +169,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     const hidden: Record<string, string> = { display: 'none' }
     if (!props.arrow || !positioned.value) return hidden
     const panel = panelRef.value
-    const trigger = triggerRef.value
+    const trigger = anchorEl.value
     if (!panel || !trigger) return hidden
     const pos = position.value
     const side = pos.placement.split('-')[0] as 'top' | 'bottom' | 'left' | 'right'
