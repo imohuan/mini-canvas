@@ -58,6 +58,9 @@ const disposers: Array<{ dispose(): void }> = [
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
   cancelScrollAnimation()
+  // 卸载时释放滚动锁：清兜底定时器 + 摘 scrollend 监听（否则会留一个悬空回调，
+  // 在「关面板后立刻重开」时把新面板的锁提前放掉）。
+  releaseScrollLock()
 })
 
 // ———— 树：一级 → 该一级下的完整分组 key 列表（保持 groups() 的原序）————
@@ -204,6 +207,9 @@ function scrollToEl(el: HTMLElement): void {
  */
 let scrollLocked = false
 let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
+/** 当前挂着 scrollend 监听的容器（释放锁时要摘掉，否则监听会跟着悬空） */
+let scrollLockEl: HTMLElement | null = null
+let scrollLockOnEnd: (() => void) | null = null
 const SCROLL_LOCK_MAX_MS = SCROLL_DURATION_MS + 200
 
 function releaseScrollLock(): void {
@@ -212,6 +218,11 @@ function releaseScrollLock(): void {
     clearTimeout(scrollLockTimer)
     scrollLockTimer = null
   }
+  // 摘监听：不摘的话，同一个容器每次程序化滚动都会再挂一个 scrollend 回调，
+  // 而旧回调会去放掉**后来**那次滚动的锁（重启面板后高亮闪一下，正是这个锁要防的）。
+  if (scrollLockEl && scrollLockOnEnd) scrollLockEl.removeEventListener('scrollend', scrollLockOnEnd)
+  scrollLockEl = null
+  scrollLockOnEnd = null
 }
 function lockScrollUntilSettles(el: HTMLElement): void {
   scrollLocked = true
@@ -221,6 +232,13 @@ function lockScrollUntilSettles(el: HTMLElement): void {
     el.removeEventListener('scrollend', onEnd)
     releaseScrollLock()
   }
+  // 记下这次挂在哪、用的是哪个回调：releaseScrollLock 要靠它精确摘掉。
+  // 先释放上一次的（同一时刻只该有一个锁），再挂新的。
+  if (scrollLockEl && scrollLockOnEnd && scrollLockEl !== el) {
+    scrollLockEl.removeEventListener('scrollend', scrollLockOnEnd)
+  }
+  scrollLockEl = el
+  scrollLockOnEnd = onEnd
   el.addEventListener('scrollend', onEnd)
 }
 
