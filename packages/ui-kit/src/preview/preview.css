@@ -482,6 +482,20 @@ body {
   min-height: 0;
 }
 
+/*
+ * SplitPane 根节点自带 flex: 0 1 auto，高度由内容决定。
+ * 嵌在三栏工作区里时，右侧配置内容一变短，整块就缩成内容高度，
+ * 右栏底部露出页面底色，看起来像面板“变形”。
+ * 这里把它钉在父级高度上，三栏始终等高。
+ */
+.uk-body,
+.uk-workspace,
+.uk-center {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
 /* 中栏：预览与文档上下叠放，各自内部滚动。 */
 .uk-preview-panel,
 .uk-doc-panel {
@@ -667,14 +681,24 @@ body {
 
 /* Dropdown 专属面板由组件 Teleport 进来：外壳只负责滚动和留白。 */
 .uk-config--hosted {
-  padding: 12px 14px 24px;
+  /* 滚动由内部 .uk-config-host 承担，外壳只负责固定高度。 */
+  padding: 0;
+  overflow: hidden;
 }
 
 .uk-config-host {
   display: flex;
-  /* 只当 Teleport 落点：高度由内容决定，滚动仍交给外层 .uk-config。 */
-  flex: none;
   flex-direction: column;
+  /*
+   * 落点自己撑满外壳并滚动。
+   * 这样内容再高也只在内部滚，不会把高度传给外层 pane。
+   */
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 14px 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .uk-field {
@@ -848,6 +872,11 @@ body {
 .uk-workspace > .mck-split__pane {
   height: 100%;
   min-height: 0;
+  /*
+   * 右栏配置内容可能很高。这里显式裁切，
+   * 让滚动只发生在 .uk-config 里，不要溢到 pane 上。
+   */
+  overflow: hidden;
 }
 
 .uk-center > .mck-split__pane > .mck-split,

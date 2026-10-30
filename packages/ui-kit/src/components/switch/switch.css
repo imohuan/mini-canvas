@@ -1,6 +1,12 @@
 .mck-switch {
   --mck-switch-w: 34px;
   --mck-switch-h: 20px;
+  /*
+   * 隐藏 input 用 absolute 定位。必须让最近的定位祖先就是这个 label，
+   * 否则 input 会相对更外层容器定位，聚焦时浏览器把整块面板滚走，
+   * 看起来像「面板变形」。
+   */
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 9px;
