@@ -31,7 +31,9 @@ function close(): void {
 }
 
 useFocusTrap(open, panel, {
-  lockScroll: true,
+  // 听 props：文档里写了「不锁滚动适合侧栏临时面板」，写死 true 会让这个开关彻底失效
+  // （类型检查通过、不报错，只是设置无效 —— 这类坑最难被发现）。
+  lockScroll: props.lockScroll,
   onEscape: () => { if (props.closeOnEscape) close() },
 })
 

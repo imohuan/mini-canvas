@@ -3,6 +3,9 @@
 .mck-message.is-success { border-color: color-mix(in srgb, var(--mck-success) 40%, var(--mck-line)); color: var(--mck-success); }
 .mck-message.is-warning { border-color: color-mix(in srgb, var(--mck-warning) 40%, var(--mck-line)); color: var(--mck-warning); }
 .mck-message.is-danger { border-color: color-mix(in srgb, var(--mck-danger) 40%, var(--mck-line)); color: var(--mck-danger); }
+/* info: 蓝色提示。docs 的示例用 tone: 'info'，缺这条时选 info 与默认没有视觉差别 */
+.mck-message.is-info { border-color: color-mix(in srgb, var(--mck-info) 40%, var(--mck-line)); color: var(--mck-info); }
+.mck-message.is-info { border-color: color-mix(in srgb, var(--mck-info) 40%, var(--mck-line)); color: var(--mck-info); }
 .mck-message-enter-active, .mck-message-leave-active { transition: opacity 160ms ease, transform 160ms ease; }
 .mck-message-enter-from, .mck-message-leave-to { opacity: 0; transform: translateY(-5px); }
 .mck-message-move { transition: transform 160ms ease; }

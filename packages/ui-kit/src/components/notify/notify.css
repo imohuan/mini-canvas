@@ -5,6 +5,9 @@
 .mck-notify.is-warning .mck-notify__dot { background: var(--mck-warning, #d97706); }
 .mck-notify.is-danger .mck-notify__dot { background: var(--mck-danger, #ef4444); }
 .mck-notify.is-primary .mck-notify__dot { background: var(--mck-accent, #0891b2); }
+.mck-notify.is-info .mck-notify__dot { background: var(--mck-info, #60a5fa); }
+/* info：蓝点。默认值已经是 info 色，这条显式写出来是为了让 is-info 与「没传 tone」可区分 */
+.mck-notify.is-info .mck-notify__dot { background: var(--mck-info, #2563eb); }
 .mck-notify__copy { min-width: 0; flex: 1; }
 .mck-notify__title { display: block; font-size: 12px; font-weight: 700; line-height: 1.5; }
 .mck-notify__desc { margin: 3px 0 0; color: var(--mck-ink-muted); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
