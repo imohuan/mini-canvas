@@ -204,7 +204,7 @@ const groupedFields = computed(() => {
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
       >
-        <Dropdown :model-value="state.trigger === 'always' ? true : openValue" @update:model-value="openValue = $event" v-bind="dropdownProps" :key="'dropdown-' + state.trigger">
+        <Dropdown :model-value="openValue" @update:model-value="openValue = $event" v-bind="dropdownProps">
           <template #trigger="{ open: isOpen }">
             <Button variant="secondary" :aria-expanded="isOpen" class="dd-trigger" data-demo-trigger>
               <span class="dd-trigger__grip" aria-hidden="true">⠿</span>

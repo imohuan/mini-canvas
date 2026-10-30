@@ -245,7 +245,10 @@
 }
 
 .dd-field .mck-switch {
+  /* 文字在左、开关在右：拉开两端，中间留空气。 */
+  display: flex;
   width: 100%;
+  justify-content: space-between;
 }
 
 /* 九宫格方向：12 格分三行，每行 4 个，防止单行挤压。 */

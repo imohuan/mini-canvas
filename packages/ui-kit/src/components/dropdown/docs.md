@@ -214,7 +214,7 @@ const open = ref(false)
 </script>
 
 <template>
-  <Dropdown v-model="open" placement="bottom-start" align="center" arrow offset="12">
+  <Dropdown v-model="open" placement="bottom-start" align="center" arrow :offset="12">
     <template #trigger="{ open: isOpen }">
       <Button variant="secondary" :aria-expanded="isOpen">居中对齐</Button>
     </template>
@@ -239,7 +239,7 @@ const open = ref(false)
 | menuMinWidth | 无 | 浮层最小宽度 |
 | menuMaxWidth | 无 | 浮层最大宽度 |
 | menuMaxHeight | 无 | 长列表内部滚动 |
-| trigger | click | click / hover / contextmenu |
+| trigger | click | click / hover / contextmenu / always（always = 常显调试，v-model 失效） |
 | layout | overlay-scroll | overlay-scroll / inner-scroll |
 | teleport | true | 是否挂到 body |
 

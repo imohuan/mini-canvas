@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onBeforeUpdate, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useFloating } from '../../shared/floating'
 import { useEscape, useOutsideClick } from '../../shared/overlay'
 import type { DropdownAnchor, DropdownProps } from './types'
@@ -85,10 +85,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     open.value = props.modelValue ?? false
   }, { immediate: true })
 
-  // 常显模式下外部传来的 false 也不关闭：直接拉回 true。
+  // 常显模式下外部传来的 false 也不关闭：模板渲染前拉回 true，
+  // 用 flush sync 避免在同一帧里 false→true 抖动。
   watch(open, (value) => {
     if ((props.trigger ?? 'click') === 'always' && value === false) open.value = true
-  })
+  }, { flush: 'sync' })
 
   function setOpen(value: boolean): void {
     if ((props.trigger ?? 'click') === 'always' && !value) return
@@ -160,6 +161,9 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if (next !== anchorEl.value) anchorEl.value = next
   }
   onBeforeUpdate(syncAnchor)
+  // 常显模式在首次挂载时面板就渲染；onBeforeUpdate 不会触发，
+  // 必须在 mounted 后补一次锚点同步，否则浮层停在默认的 0,0。
+  onMounted(syncAnchor)
   syncAnchor()
 
   useOutsideClick(open, [triggerRef, panelRef, anchorEl], () => {
@@ -231,6 +235,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
    * hide 与外点/ESC 共用，但父级 modelValue 还没同步时也要兜底置 false。
    */
   function closeFromSlot(): void {
+    // 常显 = 不允许从 slot 关闭。
+    if ((props.trigger ?? 'click') === 'always') return
     open.value = false
     if (openInstance === id) openInstance = null
     emit(false)

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import Dropdown from './Dropdown.vue'
 
 describe('Dropdown 组件行为', () => {
+  enableAutoUnmount(afterEach)
+
   afterEach(() => {
     document.body.innerHTML = ''
   })

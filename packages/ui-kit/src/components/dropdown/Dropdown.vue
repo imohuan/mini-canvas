@@ -30,7 +30,8 @@ const props = withDefaults(defineProps<DropdownProps>(), {
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; open: []; close: [] }>()
-const api = useDropdown({ ...props, trigger: props.trigger === 'always' ? 'always' : props.trigger }, (value) => {
+// useDropdown 需要响应式 props：不能展开成快照，否则方向、宽高等后续变化都收不到。
+const api = useDropdown(props, (value) => {
   emit('update:modelValue', value)
   if (value) emit('open')
   else emit('close')
@@ -58,7 +59,10 @@ const triggerEvents = computed(() => {
   if (props.trigger === 'always') return {}
   if (props.trigger === 'hover') {
     return {
-      onMouseenter: api.cancelHide,
+      onMouseenter: () => {
+        api.cancelHide()
+        api.show()
+      },
       onMouseleave: api.scheduleHide,
       onClick: api.toggle,
       onKeydown: (event: KeyboardEvent) => {
