@@ -301,9 +301,9 @@ function ensureGhostStyle(): void {
   el.textContent =
     // 整张卡片（含底色/边框/标题）一起降到 45%：这才是"透过去看得见下面"的观感。
     // 只调 <img> 的 opacity 只会让画面变淡，卡片表面仍然不透明（用户实测截图）。
-    '.vue-flow__node[' + GHOST_ATTR + ']{opacity:.45;transition:opacity 120ms ease;}' +
-    // 拖动期间不要拦指针：否则半透明卡片仍然挡住下面的槽位 hover 判定
-    '.vue-flow__node[' + GHOST_ATTR + '],.vue-flow__node[' + GHOST_ATTR + '] *{pointer-events:none !important;}'
+    // 只改 opacity，**不动 pointer-events**：拖动本身要靠节点接指针事件，
+    // 关掉会把手势打断（边拖边失去拖拽）。半透明已经足够看见底下的槽位。
+    '.vue-flow__node[' + GHOST_ATTR + ']{opacity:.45;transition:opacity 120ms ease;}'
   document.head.appendChild(el)
 }
 
