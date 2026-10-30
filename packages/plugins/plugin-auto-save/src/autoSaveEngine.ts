@@ -68,8 +68,14 @@ export function createAutoSaveEngine(opts: AutoSaveEngineOptions): AutoSaveEngin
     dirty = false
     try {
       await opts.flush()
-    } finally {
-      // 落盘期间若又有新变更（dirty 被再次置位），保持脏 → 下个周期再落
+    } catch (err) {
+      /**
+       * 落盘失败：**把脏位放回去**，下个周期还会重试；同时吞掉这个异常 ——
+       * start() 里是 `void tick()`，没人接的 rejection 在 Node 是进程级告警、
+       * 在浏览器是控制台刷屏。脏位在进 tick 时就清了，不放回去这次改动就悄悄丢了。
+       */
+      dirty = true
+      console.warn('[auto-save] 定时落盘失败，下个周期重试', err)
     }
   }
 
@@ -86,7 +92,15 @@ export function createAutoSaveEngine(opts: AutoSaveEngineOptions): AutoSaveEngin
     },
     async saveNow() {
       dirty = false
-      await opts.flush()
+      try {
+        await opts.flush()
+      } catch (err) {
+        // 手动保存失败：把脏位放回去（调用方可以稍后再存），并吞掉异常 ——
+        // 这个 API 的返回类型是 Promise<void>，调用方普遍是 `void saveNow()`，
+        // 抛出去没人接就是一条 unhandled rejection。
+        dirty = true
+        console.warn('[auto-save] 手动落盘失败', err)
+      }
     },
     markDirty() {
       dirty = true
