@@ -47,6 +47,14 @@ function onEscKey(e: KeyboardEvent): void {
 }
 onMounted(() => document.addEventListener('keydown', onEscKey))
 onBeforeUnmount(() => document.removeEventListener('keydown', onEscKey))
+/**
+ * 关窗即回收：用户最常见的动作是**选完图直接关掉**（Esc / 取消 / 点遮罩），
+ * 这条路径以前不 revoke —— 每张预览 objectURL 都钉着一份完整图片字节，
+ * 反复选大图会把标签页内存顶住。
+ */
+onBeforeUnmount(() => {
+  for (const i of items.value) if (i.file && i.preview) URL.revokeObjectURL(i.preview)
+})
 
 type PickState = 'pending' | 'uploading' | 'done' | 'failed'
 /**
