@@ -240,8 +240,29 @@ function handleKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener("keydown", handleKeydown, true))
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown, true)
-  document.body.style.overflow = ""
+  restoreBodyOverflow()
 })
+
+/**
+ * 打开前 body 的 overflow（null = 我们没锁）。
+ *
+ * 为什么记原值而不是关闭时写 ""：预览常常叠在别的弹窗上（资产/历史/对话框），
+ * 那些弹窗正锁着滚动（body.overflow = hidden）。预览关掉就写 ""，等于把底下的
+ * 弹窗也一起解锁 —— 用户能在弹窗背后滚动画布。恢复原值才是正确语义。
+ */
+let overflowBeforeOpen: string | null = null
+
+function lockBodyOverflow(): void {
+  if (typeof document === "undefined" || overflowBeforeOpen !== null) return
+  overflowBeforeOpen = document.body.style.overflow
+  document.body.style.overflow = "hidden"
+}
+
+function restoreBodyOverflow(): void {
+  if (typeof document === "undefined" || overflowBeforeOpen === null) return
+  document.body.style.overflow = overflowBeforeOpen
+  overflowBeforeOpen = null
+}
 
 /** 打开时锁 body 滚动、从宿主给的 index 起步、变换归零；关闭恢复 */
 watch(item, (v) => {
@@ -251,9 +272,9 @@ watch(item, (v) => {
     emit("index", currentIdx.value)
     resetTransform()
     videoTransformReset()
-    document.body.style.overflow = "hidden"
+    lockBodyOverflow()
   } else {
-    document.body.style.overflow = ""
+    restoreBodyOverflow()
   }
 })
 </script>
