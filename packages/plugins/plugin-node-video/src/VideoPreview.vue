@@ -85,6 +85,10 @@ const rootFitStyle = computed<Record<string, string> | undefined>(() => {
     height: 'auto',
     maxWidth: '100%',
     maxHeight: '100%',
+    // 尺寸下限（2026-10-30 用户口径：小视频不能缩成一小块，最小也要占满屏 80%）。
+    // 横屏用 80% 宽当下限；竖屏（比例 < 1）换成高度 80%，否则 80% 宽会把竖屏撑出屏。
+    // undefined 不放进对象，保持 Record<string, string> 的类型（2026-10-30 typecheck）。
+    ...(aspect.value >= 1 ? { minWidth: '80%' } : { minHeight: '80%' }),
   }
 })
 

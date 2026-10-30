@@ -86,3 +86,26 @@ describe('全屏预览底部控制条', () => {
     expect(viewer, '打开预览时没有重置视频变换').toMatch(/resetTransform\(\)\s*\n\s*videoTransformReset\(\)/)
   })
 })
+
+/**
+ * 视频全屏的尺寸下限（2026-10-30 用户口径）：小竖屏视频按 max-width/max-height 收进
+ * 舞台后可能只有一小块，看不清。用户口径：最小宽度也要占全屏的 80%（与最大宽度同）。
+ * 音频全屏则删掉顶部标题行 —— 名称与插件件自带的名称重复、页码与底部条重复。
+ */
+describe('全屏视频尺寸下限与音频标题', () => {
+  it('tall 模式的根容器有 min-width/min-height 下限（占满屏的 80%）', () => {
+    const preview = readFileSync(
+      new URL('../../../plugins/plugin-node-video/src/VideoPreview.vue', import.meta.url),
+      'utf-8',
+    )
+    const fit = preview.slice(preview.indexOf('const rootFitStyle'), preview.indexOf('const videoRef'))
+    expect(fit, '找不到 rootFitStyle').not.toBe('')
+    expect(fit, '没有 min-width 下限（小视频会缩成一小块）').toMatch(/minWidth/)
+    expect(fit, '没有 min-height 下限').toMatch(/minHeight/)
+    expect(fit, '下限不是 80%').toMatch(/'80%'|"80%"|80%/)
+  })
+
+  it('音频全屏没有顶部标题行（名称与插件自带文案重复）', () => {
+    expect(template, '音频卡里还留着标题行').not.toMatch(/mv-plugin-title/)
+  })
+})

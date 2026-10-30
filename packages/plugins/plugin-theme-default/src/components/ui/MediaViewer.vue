@@ -347,10 +347,6 @@ watch(item, (v) => {
           </div>
           <!-- 音频也要跟 currentUrl 走：之前写死 item.url，左右切张时波形永远停在第一段（用户实测 2026-10-29） -->
           <div v-else-if="kind === 'audio' && currentUrl && AudioPreview" class="mv-plugin-stage mv-plugin-stage--audio" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
-            <div class="mv-plugin-title">
-              <strong>{{ item.name }}</strong>
-              <span>音频 · {{ currentIdx + 1 }}/{{ list.length }}</span>
-            </div>
             <component :is="AudioPreview" :key="currentUrl" :url="currentUrl" :name="item.name" class="mv-media-plugin" />
           </div>
           <div v-else-if="kind === 'text' && TextPreview" class="mv-plugin-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
@@ -626,31 +622,15 @@ watch(item, (v) => {
   flex-direction: column;
   color: var(--ui-ink, inherit);
 }
-/* 音频全屏卡片：给插件件一圈内边距与标题（用户口径 2026-10-29：单独一张白卡
-   光秃秃不好看 —— 装饰一下，仍与全屏暗背景对比明显）。 */
+/* 音频全屏卡片：给插件件一圈内边距（用户口径 2026-10-30：顶部标题与插件自带名称
+   重复，已删；页码走底部控制条，不留第二份）。 */
 .mv-plugin-stage--audio {
   width: min(560px, 80vw);
   min-height: 0;
-  padding: 18px 22px 14px;
-  gap: 10px;
+  padding: 16px 20px 12px;
 }
 .mv-plugin-stage--audio .mv-media-plugin {
   width: 100%;
-}
-.mv-plugin-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--ui-ink-dim, #6b7280);
-}
-.mv-plugin-title strong {
-  font-weight: 600;
-  color: var(--ui-ink, #18202b);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .mv-text {
   max-width: min(880px, 100%);
