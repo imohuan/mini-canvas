@@ -513,7 +513,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
   }
 
   // 设置里改了地址 → 立刻换（不用重装插件）
-  settings?.onChange?.((key, value) => {
+  const offSettings = settings?.onChange?.((key, value) => {
     if (key === 'cloudClientBaseUrl' && typeof value === 'string') {
       api.setBaseUrl(value)
       status.baseUrl = value
@@ -526,6 +526,8 @@ const adapter = new CanvasDiffAdapter(api, CID)
     if (timer) clearInterval(timer)
     timer = null
     sync.stop()
+    // 设置订阅也要退：插件热卸后它还在听 settings，改一次地址就调一次已卸载的 api 实例
+    offSettings?.dispose?.()
   })
 }
 
