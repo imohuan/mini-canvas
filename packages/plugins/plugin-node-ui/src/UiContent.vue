@@ -1207,6 +1207,10 @@ onBeforeUnmount(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('message', onDebugMessage)
   window.removeEventListener('message', onDebugProxyMessage)
+  // SDK 事件监听（connected / eval / result / error / disconnected）也要摘：
+  // 它是挂在 window 上的模块级回调，节点卸载后仍会收到所有 iframe 的 message ——
+  // 每开过一个可视化节点就多留一个（画布上节点一多，消息分发越来越慢）。
+  window.removeEventListener('message', onDebugSdkEvent)
   debugWin.value?.close()
   debugWin.value = null
 })
