@@ -2514,6 +2514,13 @@ onBeforeUnmount(() => {
   registerStartDragHandler(null)
   // 卸掉自己的标签规格，避免影响别的插件/编辑器的默认行为
   registerTagSpec(null)
+  /**
+   * 悬停预览的两个定时器：底栏卸载（预览层关闭 / 切画布）后它们仍会按时回调 ——
+   * 改一个已经没人看的 ref，还把预览图 / 音频引用多留一拍。
+   */
+  cancelPreviewSchedule()
+  cancelPreviewClose()
+  stopPreviewAudio()
   // 底栏消失 = 两个选择态都收（用户口径 2026-10-26：覆盖层要跟底栏同步消失）。
   // 参考选择与 Ctrl 拖是挂在节点上的覆盖层，底栏走了它们就失去操作对象。
   unifiedExitCtrlDragMode()
