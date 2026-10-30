@@ -16,6 +16,9 @@ const value = ref(true)
     <Switch v-model="value" />
   </div>
 </template>
+<style scoped>
+.switch-demo { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+</style>
 @@ENDVUE@@
 
 - label / description 可选，只有开关时也要给 aria-label。

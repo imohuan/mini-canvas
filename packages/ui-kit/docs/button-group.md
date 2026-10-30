@@ -22,6 +22,9 @@ import { ButtonGroup, Button } from '@mini-canvas/ui-kit'
     </ButtonGroup>
   </div>
 </template>
+<style scoped>
+.btngroup-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+</style>
 @@ENDVUE@@
 
 attached：按钮贴合、共用圆角；attached=false 时按钮之间留 gap。

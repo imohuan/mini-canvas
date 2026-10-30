@@ -13,6 +13,9 @@ import { MessagesHost, message, Button } from '@mini-canvas/ui-kit'
     <Button variant="secondary" @click="message({ text: '内容包含较长的中文与 English mixed text，看看换行表现。', tone: 'info' })">长文本</Button>
   </div>
 </template>
+<style scoped>
+.msg-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+</style>
 @@ENDVUE@@
 
 顶部居中，短时反馈；连续出现会向上堆叠。

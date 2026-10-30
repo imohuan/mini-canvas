@@ -26,6 +26,12 @@ const accent = ref('#16a34a')
     </UiKitProvider>
   </div>
 </template>
+<style scoped>
+.provider-demo { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+.provider-demo__controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.provider-demo__color { display: inline-flex; align-items: center; gap: 6px; color: var(--mck-ink-muted); font-size: 12px; }
+.provider-demo__surface { display: flex; flex-wrap: wrap; gap: 10px; padding: 16px; border-radius: 12px; background: var(--mck-panel); }
+</style>
 @@ENDVUE@@
 
 Provider 只包一层：内部所有组件都会用同一份尺寸、密度、圆角、主题色。上面改任何一项都立刻反映到按钮和输入框。

@@ -25,6 +25,9 @@ const value = ref('示例文本')
     </Input>
   </div>
 </template>
+<style scoped>
+.input-demo { display: flex; flex-direction: column; gap: 10px; width: min(380px, 100%); }
+</style>
 @@ENDVUE@@
 
 | 项目 | 说明 |

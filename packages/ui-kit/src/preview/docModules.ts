@@ -1,10 +1,8 @@
-import type { Component } from 'vue'
+import { toDoc, type RawDocModule, type UiKitDoc } from './docRaw'
 
-interface DocModule {
-  markdown: string
-  codeHtml: string[]
-  default: Component[]
-}
+export type { UiKitDoc } from './docRaw'
+
+interface DocModule extends RawDocModule {}
 
 const modules = {
   provider: () => import('virtual:ui-kit-doc/provider') as Promise<DocModule>,
@@ -27,20 +25,10 @@ const modules = {
   'split-pane': () => import('virtual:ui-kit-doc/split-pane') as Promise<DocModule>,
 }
 
-export interface UiKitDoc {
-  markdown: string
-  examples: Component[]
-  codeHtml: string[]
-}
-
 /** 文档加载完成前的占位，避免页面闪空。 */
 export const PLACEHOLDER_DOC: UiKitDoc = { markdown: '', examples: [], codeHtml: [] }
 
 const cache = new Map<string, UiKitDoc>()
-
-function toDoc(entry: DocModule): UiKitDoc {
-  return { markdown: entry.markdown, examples: entry.default ?? [], codeHtml: entry.codeHtml ?? [] }
-}
 
 /**
  * 文档是构建期产物，一次预取全部；个别 md 没写也不会拖垮页面。

@@ -24,6 +24,9 @@ const open = ref(false)
     </Dialog>
   </div>
 </template>
+<style scoped>
+.dlg-demo { display: flex; flex-direction: column; gap: 10px; }
+</style>
 @@ENDVUE@@
 
 - Esc、遮罩、× 都能关闭，可分别禁用。

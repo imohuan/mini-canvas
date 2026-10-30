@@ -22,6 +22,9 @@ async function doConfirm(): Promise<void> {
     </Confirm>
   </div>
 </template>
+<style scoped>
+.confirm-demo__text { margin: 0; color: var(--mck-ink-muted); font-size: 12px; }
+</style>
 @@ENDVUE@@
 
 - 基于 Dialog，继承焦点、ESC、遮罩行为。

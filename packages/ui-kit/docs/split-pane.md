@@ -13,6 +13,9 @@ import { SplitPane } from '@mini-canvas/ui-kit'
     </SplitPane>
   </div>
 </template>
+<style scoped>
+.split-demo__pane { display: grid; height: 100%; place-items: center; color: var(--mck-ink-muted); font-size: 12px; }
+</style>
 @@ENDVUE@@
 
 拖动中间分隔线；越过最小尺寸会吸边收成一栏；双击恢复初始比例；键盘方向键微调。

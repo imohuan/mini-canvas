@@ -15,6 +15,9 @@ let index = 0
     <Button variant="secondary" @click="notify({ title: '同步失败', description: '网络不稳定，稍后自动重试。', tone: 'danger', duration: 0, action: { label: '立即重试', onClick: () => notify({ title: '重试中…', tone: 'primary' }) } })">失败</Button>
   </div>
 </template>
+<style scoped>
+.notify-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+</style>
 @@ENDVUE@@
 
 - 连续弹出会叠在右上角。

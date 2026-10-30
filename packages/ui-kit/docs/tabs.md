@@ -18,6 +18,9 @@ const tab = ref('preview')
     ]" />
   </div>
 </template>
+<style scoped>
+.tabs-demo { display: flex; flex-direction: column; gap: 12px; width: min(460px, 100%); }
+</style>
 @@ENDVUE@@
 
 - 左右方向键在可用项间循环；Home / End 跳到首尾。

@@ -29,6 +29,9 @@ function show(event: MouseEvent): void {
     <ContextMenu ref="menu" :items="items" @select="(item) => console.log(item.id)" />
   </div>
 </template>
+<style scoped>
+.ctx-demo { display: grid; width: 100%; min-height: 120px; place-items: center; border: 1px dashed var(--mck-line); border-radius: 10px; color: var(--mck-ink-muted); font-size: 12px; }
+</style>
 @@ENDVUE@@
 
 - 支持分组、图标、快捷键、禁用、危险项和一级子菜单。

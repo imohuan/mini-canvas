@@ -23,6 +23,9 @@ const open = ref(false)
     </template>
   </Popover>
 </template>
+<style scoped>
+.pop-demo__hint { margin: 10px 0 0; color: var(--mck-ink-muted); font-size: 12px; }
+</style>
 @@ENDVUE@@
 
 - closeOnOutside / closeOnEscape 可分别关。

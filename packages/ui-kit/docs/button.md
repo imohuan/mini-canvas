@@ -50,6 +50,12 @@ async function demo(): Promise<void> {
     </div>
   </div>
 </template>
+<style scoped>
+.btn-wall { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.btn-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.btn-row.is-long { flex-wrap: nowrap; }
+.btn-row.is-long .mck-button { min-width: 0; }
+</style>
 @@ENDVUE@@
 
 图标按钮永远保持正方形：宽高都来自同一档尺寸变量，改 Provider 的 size 也不会变形。

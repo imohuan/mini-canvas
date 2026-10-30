@@ -5,7 +5,7 @@
  * 顶部全局参数直接驱动 UiKitProvider，改尺寸/主题色/密度会作用到当前页所有示例。
  * 页面只负责壳，组件案例与说明都在 docs/<id>.md，由 Vite 插件在构建期编译。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { ChevronLeft, Moon, RotateCcw, Search, Sun } from 'lucide-vue-next'
 import { UiKitProvider, type UiKitDensity, type UiKitSize } from '../index'
 import SplitPane from '../components/split-pane/SplitPane.vue'
@@ -26,7 +26,8 @@ const dark = ref(true)
 const accent = ref('#22b8d8')
 
 const active = computed(() => findCatalogItem(activeId.value))
-const docs = ref<Record<string, UiKitDoc>>({})
+/** 文档里有编译好的组件对象，用 shallowRef 避免被深度代理。 */
+const docs = shallowRef<Record<string, UiKitDoc>>({})
 const doc = computed(() => docs.value[activeId.value])
 
 onMounted(async () => {

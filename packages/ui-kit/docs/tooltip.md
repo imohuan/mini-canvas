@@ -12,6 +12,9 @@ import { Tooltip, Button } from '@mini-canvas/ui-kit'
     <Tooltip content="禁用状态" disabled><Button disabled>禁用</Button></Tooltip>
   </div>
 </template>
+<style scoped>
+.tip-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+</style>
 @@ENDVUE@@
 
 悬停或键盘聚焦都会出现；Esc 关闭。

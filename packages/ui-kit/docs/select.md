@@ -22,6 +22,9 @@ const options = [
     <Select :model-value="value" :options="options" menu-min-width="280px" aria-label="宽下拉" />
   </div>
 </template>
+<style scoped>
+.select-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+</style>
 @@ENDVUE@@
 
 - searchable：打开后直接输入过滤，Enter 选中当前高亮项。

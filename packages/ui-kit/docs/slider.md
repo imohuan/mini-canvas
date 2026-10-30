@@ -15,6 +15,9 @@ const value = ref(64)
     <Slider :model-value="50" :min="0" :max="2" :step="0.1" :format="(v) => v.toFixed(1) + 'x'" />
   </div>
 </template>
+<style scoped>
+.slider-demo { display: flex; flex-direction: column; gap: 14px; width: min(420px, 100%); }
+</style>
 @@ENDVUE@@
 
 拖动、键盘（方向键 / PageUp / PageDown / Home / End）都可用；小数步进会自动取整到步长。

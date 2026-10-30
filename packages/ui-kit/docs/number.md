@@ -16,6 +16,9 @@ const value = ref(8)
     <NumberInput :model-value="6" disabled />
   </div>
 </template>
+<style scoped>
+.num-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+</style>
 @@ENDVUE@@
 
 | 项目 | 说明 |
