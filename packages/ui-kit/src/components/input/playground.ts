@@ -1,4 +1,4 @@
-import { SIZE_OPTIONS, readSize, readText, readBool, type ComponentPlayground } from './types'
+import { SIZE_OPTIONS, readSize, readText, readBool, type ComponentPlayground } from '../../preview/playground'
 
 export const inputPlayground: ComponentPlayground = {
   id: 'input',

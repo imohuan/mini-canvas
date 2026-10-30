@@ -9,7 +9,7 @@ import { uiKitDocsPlugin } from './vite'
 export default defineConfig({
   plugins: [
     vue(),
-    uiKitDocsPlugin(fileURLToPath(new URL('./docs', import.meta.url))),
+    uiKitDocsPlugin(fileURLToPath(new URL('./src/components', import.meta.url))),
   ],
   server: {
     port: 5293,

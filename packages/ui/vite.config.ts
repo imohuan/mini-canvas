@@ -11,8 +11,8 @@ export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
-    // 组件文档：把 packages/ui-kit/docs/*.md 里的 vue 示例编译成真实组件
-    uiKitDocsPlugin(fileURLToPath(new URL('../ui-kit/docs', import.meta.url))),
+    // 组件文档：把 packages/ui-kit/src/components/<id>/docs.md 里的 vue 示例编译成真实组件
+    uiKitDocsPlugin(fileURLToPath(new URL('../ui-kit/src/components', import.meta.url))),
     // 开发期在本 dev server 就地提供插件清单与产物（/plugin-catalog.json + /plugins/**），
     // 这样单开 ui dev 也能用插件管理；生产形态由 cloud-server 提供同两条路由。
     catalogPlugin({ pluginsDir: '../../packages/plugins' }),

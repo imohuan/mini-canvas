@@ -1,4 +1,4 @@
-import { SIZE_OPTIONS, readSize, readNumber, readText, readBool, type ComponentPlayground } from './types'
+import { SIZE_OPTIONS, readSize, readNumber, readText, readBool, type ComponentPlayground } from '../../preview/playground'
 
 export const sliderPlayground: ComponentPlayground = {
   id: 'slider',

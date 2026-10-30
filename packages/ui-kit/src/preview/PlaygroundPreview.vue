@@ -12,7 +12,7 @@ import {
   Switch, Tabs, Tooltip, UiKitProvider, message, notify,
 } from '../index'
 import type { ContextMenuItem, SelectOption, TabItem, UiKitTone } from '../index'
-import { readBool, readNumber, readSize, readText } from './playgrounds/types'
+import { readBool, readNumber, readSize, readText } from './playground'
 
 /** 把面板里的色调字符串收成 UiKitTone，未知值回落到 fallback。 */
 function readTone(value: string, fallback: UiKitTone): UiKitTone {
@@ -28,7 +28,7 @@ const props = defineProps<{
 }>()
 
 /** 统一把 unknown 记录收敛成类型安全的读取器。 */
-const state = computed(() => props.state as Record<string, import('./playgrounds/types').PlaygroundValue>)
+const state = computed(() => props.state as Record<string, import('./playground').PlaygroundValue>)
 
 /* ---- 交互用的临时状态 ---- */
 const inputValue = ref('搜索画布')

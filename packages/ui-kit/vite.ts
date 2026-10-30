@@ -17,7 +17,7 @@ import githubLight from '@shikijs/themes/github-light-default'
 /**
  * ui-kit 独立 Vite 服务 / 主应用共用的文档插件。
  *
- * 把 docs/*.md 里的 @@VUE@@ 示例变成真正的 Vue 组件。
+ * 把 src/components/<id>/docs.md 里的 @@VUE@@ 示例变成真正的 Vue 组件。
  *
  * 浏览器里不引入 Vue 模板编译器，也不 eval 文档内容；示例作为 .vue 虚拟模块
  * 交给 @vitejs/plugin-vue，开发服务器和正式构建走同一条路径。
@@ -86,13 +86,24 @@ export async function highlight(code: string, lang: string): Promise<string> {
   })
 }
 
-function readDoc(docsDir: string, name: string): string | undefined {
-  const file = path.join(docsDir, name + '.md')
-  if (!fs.existsSync(file)) return undefined
-  return fs.readFileSync(file, 'utf8')
+/**
+ * 读取组件目录里的 docs.md。
+ *
+ * 文档和组件同目录：src/components/<id>/docs.md；provider 在 src/provider/docs.md。
+ * 找不到就返回 undefined，页面会显示「文档还没写」。
+ */
+function readDoc(componentsDir: string, name: string): string | undefined {
+  const candidates = [
+    path.join(componentsDir, name, 'docs.md'),
+    path.join(path.dirname(componentsDir), name, 'docs.md'),
+  ]
+  for (const file of candidates) {
+    if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8')
+  }
+  return undefined
 }
 
-export function uiKitDocsPlugin(docsDir: string): Plugin {
+export function uiKitDocsPlugin(componentsDir: string): Plugin {
   return {
     name: 'ui-kit-docs',
     resolveId(id, importer) {
@@ -108,7 +119,7 @@ export function uiKitDocsPlugin(docsDir: string): Plugin {
     async load(id) {
       if (id.startsWith(RESOLVED_DOC)) {
         const name = id.slice(RESOLVED_DOC.length)
-        const source = readDoc(docsDir, name)
+        const source = readDoc(componentsDir, name)
         if (source === undefined) return undefined
         const modules = examplesOf(source).map((_, index) =>
           "import Example" + index + " from '" + EXAMPLE_PREFIX + name + "/" + index + "'",
@@ -131,7 +142,7 @@ export function uiKitDocsPlugin(docsDir: string): Plugin {
         if (slash < 0) return undefined
         const name = rest.slice(0, slash)
         const index = Number(rest.slice(slash + 1))
-        const source = readDoc(docsDir, name)
+        const source = readDoc(componentsDir, name)
         if (source === undefined || !Number.isInteger(index)) return undefined
         const examples = examplesOf(source)
         if (!examples[index]) return undefined
@@ -143,7 +154,7 @@ export function uiKitDocsPlugin(docsDir: string): Plugin {
       return undefined
     },
     handleHotUpdate(ctx) {
-      if (!ctx.file.startsWith(docsDir) || !ctx.file.endsWith('.md')) return
+      if (!ctx.file.startsWith(componentsDir) || !ctx.file.endsWith('.md')) return
       /**
        * Vite 8 的 moduleGraph 上没有 `moduleMap`（那是 Vite 5 之前的字段名）。
        * 用旧写法会在改文档时抛 `Cannot read properties of undefined (reading 'values')`，

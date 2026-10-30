@@ -1,4 +1,4 @@
-import { readText, readNumber, readBool, type ComponentPlayground } from './types'
+import { readText, readNumber, readBool, type ComponentPlayground } from '../../preview/playground'
 
 export const notifyPlayground: ComponentPlayground = {
   id: 'notify',

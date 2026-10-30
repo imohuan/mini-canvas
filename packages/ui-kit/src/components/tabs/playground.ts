@@ -1,4 +1,4 @@
-import { SIZE_OPTIONS, readSize, readBool, type ComponentPlayground } from './types'
+import { SIZE_OPTIONS, readSize, readBool, type ComponentPlayground } from '../../preview/playground'
 
 export const tabsPlayground: ComponentPlayground = {
   id: 'tabs',

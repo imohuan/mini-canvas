@@ -1,4 +1,4 @@
-import { SIZE_OPTIONS, readSize, readText, readBool, type ComponentPlayground } from './types'
+import { SIZE_OPTIONS, readSize, readText, readBool, type ComponentPlayground } from '../../preview/playground'
 
 const VARIANTS = [
   { value: 'primary', label: '主要' },

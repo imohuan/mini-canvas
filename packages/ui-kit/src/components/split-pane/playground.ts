@@ -1,4 +1,4 @@
-import { readNumber, readText, readBool, type ComponentPlayground } from './types'
+import { readNumber, readText, readBool, type ComponentPlayground } from '../../preview/playground'
 
 export const splitPanePlayground: ComponentPlayground = {
   id: 'split-pane',

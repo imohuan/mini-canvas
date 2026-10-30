@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { CATALOG } from '../catalog'
 import { PLAYGROUND_CATALOG, PLAYGROUND_IDS, findPlayground } from './catalog'
+
+const srcDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+
+/** 组件目录里的 docs.md；provider 住在 src/provider 下。 */
+function docsPath(id: string): string {
+  return resolve(srcDir, id === 'provider' ? 'provider' : 'components/' + id, 'docs.md')
+}
 
 describe('试玩配置 catalog', () => {
   it('每个组件目录项都有试玩配置', () => {
@@ -8,6 +18,12 @@ describe('试玩配置 catalog', () => {
     const missing = ids.filter((id) => !PLAYGROUND_CATALOG[id])
     expect(missing).toEqual([])
     expect(ids.length).toBe(PLAYGROUND_IDS.length)
+  })
+
+  it('每份文档都和组件住在同一个目录', () => {
+    for (const id of PLAYGROUND_IDS) {
+      expect(existsSync(docsPath(id)), id + ' 缺少 docs.md').toBe(true)
+    }
   })
 
   it('每条配置的 id 与注册表 key 一致', () => {

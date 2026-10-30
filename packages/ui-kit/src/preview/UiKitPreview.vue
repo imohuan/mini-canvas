@@ -17,7 +17,7 @@ import PlaygroundPreview from './PlaygroundPreview.vue'
 import { CATALOG, CATALOG_TOTAL, findCatalogItem } from './catalog'
 import { loadDocs, type UiKitDoc } from './docModules'
 import { findPlayground } from './playgrounds/catalog'
-import type { PlaygroundField, PlaygroundValue } from './playgrounds/types'
+import type { PlaygroundField, PlaygroundValue } from './playground'
 import './preview.css'
 
 withDefaults(defineProps<{ showHome?: boolean }>(), { showHome: false })
