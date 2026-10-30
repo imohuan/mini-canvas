@@ -14,6 +14,7 @@ import { MediaViewer } from '@mini-canvas/plugin-theme-default'
 import { useMasonry } from '../../composables/useMasonry'
 import { uiComponentOf, useUi } from '../../composables/ui'
 import { useAgentSettings } from '../../composables/agentSettings'
+import { historySignatureOf } from '../../composables/historySignature'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
@@ -343,14 +344,31 @@ function calcColumns(containerWidth: number): { cols: number; columnWidth: numbe
   return { cols, columnWidth }
 }
 
-/** 当前页签的墙缓存键（完整筛选签名；改列数/排序/范围都会换键） */
+/**
+ * 「这一份数据是哪套筛选的」—— 与 ui.ts 里拉数据时的签名同源（不含显示开关）。
+ * 数据 watch 用它判断「这次是新数据还是换了筛选」，与墙的 key 区分开。
+ */
+function historyDataKey(): string {
+  return historySignatureOf(
+    {
+      scope: s.histScope,
+      type: s.histType,
+      rating: s.histRating,
+      sortDesc: s.histSortDesc,
+      pageSize: s.histPageSize,
+    },
+    ui.currentCanvasId.value,
+  )
+}
+
+/** 当前页签的墙缓存键（完整筛选签名 + 显示开关；改列数/排序/范围都会换键） */
 function historyWallKey(): string {
   /**
    * 「显示异常」也必须是 key 的一部分（2026-10-30 复测：打开开关后视频仍 14 张、占位卡 0）。
    * 开关会改变墙上该有哪些卡（回填占位 or 整条摘掉）；不带这一维，switchWall() 会用
    * 同一 key 的旧墙（14 张、无占位）把刚重建的新墙覆盖回去 —— 用户看到"开关没反应"。
    */
-  return [s.histScope, s.histType, s.histRating, s.histSortDesc, s.histPageSize, s.histShowError ? 'e1' : 'e0'].join('|')
+  return historyDataKey() + '|' + (s.histShowError ? 'e1' : 'e0')
 }
 
 /** 最后一张卡可见 → 追加下一批已拉到的数据（节流交给 maybeLoadMoreBatch，见下） */
@@ -1281,7 +1299,9 @@ function rebuildMasonry(): void {
       if (!masonryEl.value) { rebuilding = false; return }
       masonry.init(masonryEl.value, { itemSelector: '.' + ITEM_CLASS, columnWidth, gutter: GUTTER })
       rebuilding = false
-      mountedWallKey = s.histSignature || historyWallKey()
+      // 记**墙的 key**（含显示开关）：记成数据签名的话，开关一开（key 多一位 e1）
+      // 每次数据更新都会被判成「换了筛选」，整面墙反复重建 —— 视频一直重载。
+      mountedWallKey = historyWallKey()
       observeLastItem()
       // 整墙重建后哨兵元素可能被换掉/才刚出现：统一在这里补挂一次观察器
       setupLoadSentinel()
@@ -1402,7 +1422,7 @@ function stashCurrentWall(): void {
     // 以**实际画出来的卡片数**为准：renderedCount 是跨页签共用的，直接记它会把
     // 上一个页签的数字带进来（真机 2026-10-28：视频只有 11 张，记账却是 26）
     count: wall.querySelectorAll('.' + ITEM_CLASS).length,
-    signature: s.histSignature || key,
+    signature: historyDataKey(),
     columnWidth: lastColumnWidth,
     scrollTop: historyScroller()?.scrollTop ?? 0,
   })
@@ -1604,7 +1624,8 @@ watch(() => s.histDataVersion, async () => {
    * 数据签名换了（例如首次进视频页签）：这一拍不是"追加/插新"，必须整墙重建。
    * 否则会把 A 页签的墙当 B 页签的墙继续用（真机 2026-10-28：图片↔视频来回切后卡数错乱）。
    */
-  if (s.histSignature !== historyWallKey()) {
+  // 这里比的是**数据**签名：墙的 key 多了显示开关那一维，拿它比会永远不相等
+  if (s.histSignature !== historyDataKey()) {
     renderedCount.value = Math.min(BATCH_SIZE, len)
     await nextTick()
     rebuildMasonry()

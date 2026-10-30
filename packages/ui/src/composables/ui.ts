@@ -19,6 +19,7 @@ import { importPack, isNodePackFile, resolvePackBase, VERSION_SEP } from './node
 import { uniqueLabel } from './nodeLabel'
 import { queueUploads, type PendingUpload } from './assetUploadBus'
 import { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
+import { historySignatureOf, trimMapToLimit, HIST_DATA_CACHE_LIMIT } from './historySignature'
 
 // 抽屉保留页签：画布 / 资产。插件页签不得占用这两个 id。
 export { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
@@ -1195,6 +1196,8 @@ function createUi() {
         // 记下这套筛选已经加载到第几页：切走再切回来时一次补齐（用户口径 2026-10-28）
         histPageBySignature.set(signature, pageNo)
         // 整表快照进内存缓存：下次切回来先显示它，再后台同步新任务（不闪白、不重建媒体）
+        // 先按上限逐出最旧的：每套筛选存一整份列表，不设上限就随浏览历史一直涨
+        trimMapToLimit(histDataCache, HIST_DATA_CACHE_LIMIT)
         histDataCache.set(signature, {
           items: state.historyItems.map((e) => ({ ...e })),
           page: state.histPage,
@@ -1916,7 +1919,17 @@ function createUi() {
    * 现在按"筛选签名"判断：签名不一致的响应一律丢弃，且不推进 histPage。
    */
   function historySignature(): string {
-    return [state.histScope, state.histType, state.histRating, state.histSortDesc, state.histPageSize].join('|')
+    // 拼接规则抽在 historySignature.ts：ModalsArea 的墙面 key 也用同一份，两边不会漂移
+    return historySignatureOf(
+      {
+        scope: state.histScope,
+        type: state.histType,
+        rating: state.histRating,
+        sortDesc: state.histSortDesc,
+        pageSize: state.histPageSize,
+      },
+      currentCanvasId.value,
+    )
   }
 
   // ===== 批量操作（历史弹窗底部操作栏）=====
