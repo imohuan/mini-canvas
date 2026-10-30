@@ -27,5 +27,6 @@ describe('切画布后历史页码复位', () => {
     expect(fn, '没有作废在途请求').toMatch(/resetHistoryRequest\(\)/)
     expect(fn, '页码没有回到第 1 页').toMatch(/state\.histPage = 1/)
     expect(fn, '旧签名没清（会让第 1 页走成「只插新卡」，旧卡片留在墙上）').toMatch(/state\.histSignature = ''/)
+    expect(fn, '旧画布的条目没清（第 1 页回来之前会先给用户看上一张画布的卡）').toMatch(/state\.historyItems = \[\]/)
   })
 })

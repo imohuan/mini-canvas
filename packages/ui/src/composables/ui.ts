@@ -1796,6 +1796,9 @@ function createUi() {
     state.histPage = 1
     // 签名清空：否则第 1 页会走「同一筛选下只插新卡」分支，旧画布的卡片留在墙上
     state.histSignature = ''
+    // 旧画布的条目也清掉：数据要等第 1 页回来才有，留着就是「先给用户看别人的画布」
+    // （缓存按画布 id 分开存，切回来时 showCachedHistory 仍能秒还原，不会因此变慢）
+    state.historyItems = []
     // 页码表按旧签名（不含画布 id）记的：再也匹配不上，留着只是内存垃圾
     histPageBySignature.clear()
     return true
