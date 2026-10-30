@@ -167,7 +167,7 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('本包 Config 声明进 settings 单一数据源：图片预览上限宽/高（默认 420×300，可调）', async () => {
+  it('本包 Config 声明进 settings 单一数据源：图片最短边 / 最长边（可调）', async () => {
     const ctx = boot()
     await ctx.start()
     const settings = ctx.get<{
@@ -178,27 +178,48 @@ describe('node-image 装配 smoke', () => {
     }>('settings')
 
     // 键名带本包前缀（内核 settings 全局同一张表、先声明者独占，通用名会跟别的插件打架）
-    expect(settings.has('imageFitMaxWidth')).toBe(true)
-    expect(settings.has('imageFitMaxHeight')).toBe(true)
-    expect(settings.get('imageFitMaxWidth')).toBe(420)
-    expect(settings.get('imageFitMaxHeight')).toBe(300)
+    expect(settings.has('imageCardMinShortSide')).toBe(true)
+    expect(settings.has('imageCardMaxLongSide')).toBe(true)
+    expect(settings.has('imageFitMaxWidth')).toBe(false)
+    expect(settings.get('imageCardMinShortSide')).toBe(120)
+    expect(settings.get('imageCardMaxLongSide')).toBe(420)
 
     // 分组与 label 决定设置面板长在哪、叫什么
     const group = settings.groupOf('布局/图片节点尺寸')
-    // 「布局/图片节点尺寸」下现在有四项：默认宽/高（新建节点尺寸）+ 预览上限宽/高（换图后缩放封顶）
+    // 「布局/图片节点尺寸」下现在有四项：默认宽/高（新建节点尺寸）+ 最短边/最长边（换图后缩放）
     expect(group.map((i) => i.key).sort()).toEqual([
-      'imageDefaultHeight', 'imageDefaultWidth', 'imageFitMaxHeight', 'imageFitMaxWidth',
+      'imageCardMaxLongSide', 'imageCardMinShortSide', 'imageDefaultHeight', 'imageDefaultWidth',
     ])
-    expect(group.find((i) => i.key === 'imageFitMaxWidth')?.schema.label).toBe('图片预览上限宽')
-    expect(group.find((i) => i.key === 'imageFitMaxHeight')?.schema.label).toBe('图片预览上限高')
+    expect(group.find((i) => i.key === 'imageCardMinShortSide')?.schema.label).toBe('最短边最小')
+    expect(group.find((i) => i.key === 'imageCardMaxLongSide')?.schema.label).toBe('最长边最大')
 
-    // 用户能改，且越界被夹到 120-2000
-    expect(settings.set('imageFitMaxWidth', 600)).toBe(true)
-    expect(settings.get('imageFitMaxWidth')).toBe(600)
-    settings.set('imageFitMaxWidth', 5)
-    expect(settings.get('imageFitMaxWidth')).toBe(120)
-    settings.set('imageFitMaxWidth', 99999)
-    expect(settings.get('imageFitMaxWidth')).toBe(2000)
+    // 用户能改，且越界被夹到各自的范围
+    expect(settings.set('imageCardMaxLongSide', 600)).toBe(true)
+    expect(settings.get('imageCardMaxLongSide')).toBe(600)
+    settings.set('imageCardMinShortSide', 5)
+    expect(settings.get('imageCardMinShortSide')).toBe(40)
+    settings.set('imageCardMaxLongSide', 99999)
+    expect(settings.get('imageCardMaxLongSide')).toBe(4000)
+    ctx.stop()
+  })
+
+  it('设置里的最短边 / 最长边一改，画布上已有图片节点立刻重算（实时生效）', async () => {
+    const ctx = boot()
+    await ctx.start()
+    const doc = ctx.get<DocService>('doc')
+    const id = doc.createNode('image', { x: 0, y: 0 }, { imageWidth: 1000, imageHeight: 500, cardWidth: 300, cardHeight: 150 })
+    // 基线：300×150 符合当前规则（最长边 420、最短边 120）
+    expect(doc.getNode(id)!.size).toEqual({ w: 300, h: 150 })
+    // 调到最长边 200 → 立刻变成 200×100
+    ctx.settings.set('imageCardMaxLongSide', 200)
+    // 最短边仍是 120，所以 2:1 的图按短边撑成 240×120（最长边允许超上限）
+    expect(doc.getNode(id)!.size).toEqual({ w: 240, h: 120 })
+    // 调到最短边 60 → 240×120 的短边已够，只在最长边 200 内缩成 200×100
+    ctx.settings.set('imageCardMinShortSide', 60)
+    expect(doc.getNode(id)!.size).toEqual({ w: 200, h: 100 })
+    // 调到最短边 150 → 短边撑到 150，最长边跟着到 300（允许超上限）
+    ctx.settings.set('imageCardMinShortSide', 150)
+    expect(doc.getNode(id)!.size).toEqual({ w: 300, h: 150 })
     ctx.stop()
   })
 })

@@ -49,7 +49,8 @@ export interface ImageOpsContext {
    */
   writeMeasured(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }): void
   /**
-   * 图片预览上限（配置 imageFitMaxWidth/imageFitMaxHeight）。不注入则回落 420×300。
+   * 图片尺寸限制（配置 imageCardMinShortSide / imageCardMaxLongSide）。
+   * 不注入则回落最短边 120 / 最长边 420。
    * 抽成取值器而不是常量：设置面板改完上限后，下一次换图就该按新上限算。
    */
   fitLimits?(): ImageFitLimits

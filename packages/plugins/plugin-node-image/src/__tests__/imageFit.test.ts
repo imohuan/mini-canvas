@@ -2,8 +2,8 @@
  * imageFit —— 图片尺寸 → 卡片尺寸的适配规则契约（纯函数，Node 直接跑）。
  *
  * 用户要求："上传图片或者选择图片之后，图片节点的宽高应该和图片的宽高保持一致"。
- * 这里锁的是规则本身：只缩小不放大、比例正确、下限 120×80、上限可配、
- * 拿不到尺寸就返回 null（调用方保持原尺寸，不猜）。
+ * 这里锁的是规则本身：比例正确、最短边不小于下限、最长边不超过上限、
+ * 两条冲突时最短边优先、拿不到尺寸就返回 null（调用方保持原尺寸，不猜）。
  */
 import { describe, it, expect } from 'vitest'
 import {
@@ -11,23 +11,21 @@ import {
   DEFAULT_IMAGE_FIT_LIMITS,
   fitCardSize,
   followedCardSizePatch,
-  MIN_CARD_HEIGHT,
-  MIN_CARD_WIDTH,
   missingCardSizePatch,
   readImageFitLimits,
   resolveImageFitLimits,
 } from '../imageFit'
 
-describe('fitCardSize：等比 + 封顶 + 下限', () => {
+describe('fitCardSize：等比 + 最短边 / 最长边', () => {
   it('大图按比例缩到不超过上限（默认 420×300）', () => {
-    // 1200×800：宽是瓶颈 → ratio=0.35 → 420×280
+    // 1200×800：最长边压到 420 → 420×280
     expect(fitCardSize(1200, 800)).toEqual({ width: 420, height: 280 })
-    // 600×1200：高是瓶颈 → ratio=0.25 → 150×300
-    expect(fitCardSize(600, 1200)).toEqual({ width: 150, height: 300 })
+    // 600×1200：最长边是 1200 → 210×420
+    expect(fitCardSize(600, 1200)).toEqual({ width: 210, height: 420 })
   })
 
-  it('小图不放大（ratio 封在 1）', () => {
-    expect(fitCardSize(200, 100)).toEqual({ width: 200, height: 100 })
+  it('小图放大到最短边，不会小到看不清', () => {
+    expect(fitCardSize(200, 100)).toEqual({ width: 240, height: 120 })
     expect(fitCardSize(420, 300)).toEqual({ width: 420, height: 300 })
   })
 
@@ -36,11 +34,11 @@ describe('fitCardSize：等比 + 封顶 + 下限', () => {
     expect(fit.width / fit.height).toBeCloseTo(1600 / 900, 2)
   })
 
-  it('极端细长图不塌到 0：走最小尺寸 120×80', () => {
-    const fit = fitCardSize(4000, 10)!
-    expect(fit.width).toBe(420)
-    expect(fit.height).toBe(MIN_CARD_HEIGHT)
-    expect(fitCardSize(10, 4000)).toEqual({ width: MIN_CARD_WIDTH, height: 300 })
+  it('极端细长图不塌到 0：按最短边 120 撑开，最长边允许超上限', () => {
+    const fit = fitCardSize(4000, 200)!
+    // 20:1 → 最短边撑到 120，最长边允许超上限
+    expect(fit).toEqual({ width: 2400, height: 120 })
+    expect(fitCardSize(200, 4000)).toEqual({ width: 120, height: 2400 })
   })
 
   it('尺寸非法（0/负数/NaN/缺失/字符串）→ null，调用方保持原尺寸不猜', () => {
@@ -51,40 +49,35 @@ describe('fitCardSize：等比 + 封顶 + 下限', () => {
   })
 })
 
-describe('上限可配', () => {
-  it('上限调小 → 同一张图缩得更狠', () => {
-    expect(fitCardSize(1200, 800, { maxWidth: 300, maxHeight: 300 })).toEqual({ width: 300, height: 200 })
+describe('限制可配', () => {
+  it('最长边调小 → 同一张图缩得更狠', () => {
+    expect(fitCardSize(1200, 800, { minShortSide: 100, maxLongSide: 300 })).toEqual({ width: 300, height: 200 })
   })
 
-  it('上限调大 → 同一张图可以更大', () => {
-    expect(fitCardSize(1200, 800, { maxWidth: 1200, maxHeight: 900 })).toEqual({ width: 1200, height: 800 })
+  it('最长边调大 → 同一张图可以更大', () => {
+    expect(fitCardSize(1200, 800, { minShortSide: 100, maxLongSide: 1200 })).toEqual({ width: 1200, height: 800 })
   })
 
-  it('上限被改坏（0/NaN）→ 该项回落默认值，而不是让整条规则失效', () => {
-    expect(fitCardSize(1200, 800, { maxWidth: 0, maxHeight: 300 })).toEqual({ width: 420, height: 280 })
-    expect(fitCardSize(1200, 800, { maxWidth: Number.NaN, maxHeight: Number.NaN })).toEqual({ width: 420, height: 280 })
+  it('限制被改坏（0/NaN）→ 该项回落默认值，而不是让整条规则失效', () => {
+    expect(fitCardSize(1200, 800, { maxLongSide: 0, minShortSide: 120 })).toEqual({ width: 420, height: 280 })
+    expect(fitCardSize(1200, 800, { maxLongSide: Number.NaN, minShortSide: Number.NaN })).toEqual({ width: 420, height: 280 })
   })
 })
 
-describe('resolveImageFitLimits / readImageFitLimits：从配置读封顶', () => {
+describe('resolveImageFitLimits / readImageFitLimits：从配置读限制', () => {
   it('读到配置值就用配置值', () => {
-    expect(resolveImageFitLimits((k) => (k === 'imageFitMaxWidth' ? 800 : k === 'imageFitMaxHeight' ? 600 : undefined))).toEqual({
-      maxWidth: 800,
-      maxHeight: 600,
-    })
+    expect(resolveImageFitLimits((k) => (k === 'imageCardMinShortSide' ? 90 : k === 'imageCardMaxLongSide' ? 800 : undefined))).toEqual({ minShortSide: 90, maxLongSide: 800 })
   })
 
-  it('读不到 / 非法 → 回落 420×300（v1 同值）', () => {
+  it('读不到 / 非法 → 回落默认（最短边 120、最长边 420）', () => {
     expect(resolveImageFitLimits(() => undefined)).toEqual(DEFAULT_IMAGE_FIT_LIMITS)
-    expect(resolveImageFitLimits((k) => (k === 'imageFitMaxWidth' ? 'x' : -1))).toEqual(DEFAULT_IMAGE_FIT_LIMITS)
+    expect(resolveImageFitLimits((k) => (k === 'imageCardMinShortSide' ? 'x' : -1))).toEqual(DEFAULT_IMAGE_FIT_LIMITS)
   })
 
   it('没有 settings 服务（极简宿主/单测桩）→ 回落默认，不抛错', () => {
     expect(readImageFitLimits(undefined)).toEqual(DEFAULT_IMAGE_FIT_LIMITS)
     expect(readImageFitLimits({ get: (() => undefined) as <T>() => T })).toEqual(DEFAULT_IMAGE_FIT_LIMITS)
-    expect(
-      readImageFitLimits({ get: (() => ({ get: () => 900 })) as <T>() => T }),
-    ).toEqual({ maxWidth: 900, maxHeight: 900 })
+    expect(readImageFitLimits({ get: (() => ({ get: () => 900 })) as <T>() => T })).toEqual({ minShortSide: 900, maxLongSide: 900 })
   })
 })
 
@@ -93,8 +86,8 @@ describe('写回补丁：只给正式字段 size（卡片镜像由 nodeStore 自
     const patch = cardSizePatch(800, 600)!
     expect('cardWidth' in patch).toBe(false)
     expect('cardHeight' in patch).toBe(false)
-    // 800×600：高是瓶颈（300/600=0.5，小于 420/800）→ 400×300
-    expect(patch.size).toEqual({ w: 400, h: 300 })
+    // 800×600：最长边压到 420 → 420×315
+    expect(patch.size).toEqual({ w: 420, h: 315 })
   })
 
   it('尺寸拿不到 → null（调用方只写 data，不动尺寸）', () => {
@@ -131,7 +124,7 @@ describe('followedCardSizePatch：换图时跟随新图 + 幂等', () => {
 
   it('幂等：算出来的尺寸与当前一致 → null，一次都不写（否则自己触发自己成死循环）', () => {
     expect(followedCardSizePatch({ imageWidth: 1200, imageHeight: 800, cardWidth: 420, cardHeight: 280 })).toBeNull()
-    expect(followedCardSizePatch({ imageWidth: 200, imageHeight: 100, cardWidth: 200, cardHeight: 100 })).toBeNull()
+    expect(followedCardSizePatch({ imageWidth: 200, imageHeight: 100, cardWidth: 240, cardHeight: 120 })).toBeNull()
   })
 
   it('用户手动改过尺寸后又换图 → 照样跟随新图（不做"手动调过就锁定"）', () => {

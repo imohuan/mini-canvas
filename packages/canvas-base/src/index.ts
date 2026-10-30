@@ -69,3 +69,15 @@ export {
 } from './adminToken'
 /** 把一个「数值型设置」实时绑到某节点类型的默认尺寸（设置面板调它，未 resize 的节点立刻跟着变） */
 export { bindTypeDefaultSize, type TypeSizeConfigKeys } from './bindTypeDefaultSize'
+/** 图片 / 视频节点的卡片尺寸规则（最短边 / 最长边；图片、视频、拖入、翻转共用一套） */
+export {
+  fitMediaCard,
+  readMediaCardLimits,
+  resolveMediaCardLimits,
+  isMediaCardLimitKey,
+  DEFAULT_IMAGE_CARD_LIMITS,
+  DEFAULT_VIDEO_CARD_LIMITS,
+  IMAGE_CARD_LIMIT_KEYS,
+  VIDEO_CARD_LIMIT_KEYS,
+  type MediaCardLimits,
+} from './mediaFit'

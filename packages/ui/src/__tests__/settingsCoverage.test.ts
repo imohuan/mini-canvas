@@ -98,12 +98,15 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
-  it('图片尺寸上限出现在「布局」一级分类下', async () => {
+  it('图片最短边 / 最长边出现在「布局」一级分类下', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     expect(settings.groups()).toContain('布局/图片节点尺寸')
-    expect(settings.get('imageFitMaxWidth')).toBe(420)
-    expect(settings.get('imageFitMaxHeight')).toBe(300)
+    expect(settings.get('imageCardMinShortSide')).toBe(120)
+    expect(settings.get('imageCardMaxLongSide')).toBe(420)
+    // 旧的宽/高上限已删除，避免设置页出现两套规则
+    expect(settings.has('imageFitMaxWidth')).toBe(false)
+    expect(settings.has('imageFitMaxHeight')).toBe(false)
     ctx.stop()
   })
 

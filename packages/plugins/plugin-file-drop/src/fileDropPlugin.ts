@@ -21,7 +21,11 @@
  * 改为向宿主统一仲裁场 registryOf('clipboard/paste') 注册处理器，按 order 抢这次粘贴
  * （媒体 20 > 纯文本 30；若剪贴板带"来自画布"标记则让位给 clipboard 插件）。
  */
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import {
+  Service, type Context, type PluginModule,
+  DEFAULT_IMAGE_CARD_LIMITS, DEFAULT_VIDEO_CARD_LIMITS,
+  IMAGE_CARD_LIMIT_KEYS, VIDEO_CARD_LIMIT_KEYS, readMediaCardLimits,
+} from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
 import {
   CLIPBOARD_PASTE_KIND,
@@ -315,14 +319,20 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           // 先落字节、再拿地址（见方法头的说明）；拿不到就退 objectURL（无资源库的极简环境）
           const stored = await this.storeAndResolve(file, 'image')
           const url = stored?.url ?? this.readers.createObjectURL(file)
-          const payload = buildImagePayload(file, url, positions[i], dims)
+          const payload = buildImagePayload(
+            file, url, positions[i], dims,
+            readMediaCardLimits(this.ctx, IMAGE_CARD_LIMIT_KEYS, DEFAULT_IMAGE_CARD_LIMITS),
+          )
           if (stored) payload.data.resourceId = stored.ref
           payloads.push(payload)
         } else if (kind === 'video' && this.typeRegistered('video')) {
           const meta = await this.readers.readVideoMeta(file)
           const stored = await this.storeAndResolve(file, 'video')
           const url = stored?.url ?? this.readers.createObjectURL(file)
-          const payload = buildVideoPayload(file, url, positions[i], meta)
+          const payload = buildVideoPayload(
+            file, url, positions[i], meta,
+            readMediaCardLimits(this.ctx, VIDEO_CARD_LIMIT_KEYS, DEFAULT_VIDEO_CARD_LIMITS),
+          )
           if (stored) payload.data.resourceId = stored.ref
           payloads.push(payload)
         } else if (kind === 'audio' && this.typeRegistered('audio')) {

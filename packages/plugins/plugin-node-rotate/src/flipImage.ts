@@ -9,6 +9,13 @@
  * - data 与卡片尺寸在同一次 doc.updateNode 里提交 → 一次撤销退干净；
  * - 环境不支持（node 单测 / 无 canvas）时各步骤安全返回 false，不写坏数据。
  */
+import {
+  DEFAULT_IMAGE_CARD_LIMITS,
+  IMAGE_CARD_LIMIT_KEYS,
+  fitMediaCard,
+  readMediaCardLimits,
+  type MediaCardLimits,
+} from '@mini-canvas/canvas-base'
 import type { Context } from '@mini-canvas/canvas-base'
 
 export type FlipAxis = 'horizontal' | 'vertical'
@@ -20,8 +27,8 @@ export interface FlipBitmapIO {
   release(source: unknown): void
 }
 
-/** 图片预览上限的兜底值（与图片插件 DEFAULT_IMAGE_FIT_LIMITS 同值；插件间不 import，这里抄数值） */
-const FALLBACK_LIMITS = { maxWidth: 420, maxHeight: 300 } as const
+/** 读不到配置时的兜底值（与图片插件同一份来源，经 canvas-base 共享） */
+const FALLBACK_LIMITS: MediaCardLimits = DEFAULT_IMAGE_CARD_LIMITS
 
 /** 本文件用到的 doc / resources / settings 最小形状（按名字取服务，不认具体实现） */
 interface DocPort {
@@ -53,7 +60,7 @@ function resourcesOf(ctx: Context): ResourcesPort | undefined {
 }
 
 /**
- * 读图片预览上限（设置面板可配；读不到用兜底值，不猜）。
+ * 读图片尺寸限制（设置面板可配；读不到用兜底值，不猜）。
  *
  * settings 是内核能力层的**内置服务**（ctx.tryGet('settings') 拿到的是 SettingsStore 真身，
  * get(key) 同步返回），不走 services 表 —— ctx.inject('settings', …) 会被内置服务挡住。
@@ -62,26 +69,24 @@ function resourcesOf(ctx: Context): ResourcesPort | undefined {
 export function readFitLimits(
   ctx: Context,
   overrides?: { get(key: string): unknown },
-): { maxWidth: number; maxHeight: number } {
+): MediaCardLimits {
   const settings: SettingsPort | undefined = overrides ?? (ctx.tryGet<SettingsPort>('settings') as SettingsPort | undefined)
-  const num = (v: unknown, fallback: number): number =>
-    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback
-  return {
-    maxWidth: num(settings?.get('imageFitMaxWidth'), FALLBACK_LIMITS.maxWidth),
-    maxHeight: num(settings?.get('imageFitMaxHeight'), FALLBACK_LIMITS.maxHeight),
+  const host = {
+    get<T = unknown>(name: string): T {
+      return (name === 'settings' ? settings : undefined) as T
+    },
   }
+  return readMediaCardLimits(host, IMAGE_CARD_LIMIT_KEYS, FALLBACK_LIMITS)
 }
 
-/** 卡片尺寸 = 图片等比 + 封顶（不放大小图）；算不出（非法尺寸）返回 undefined → 不动尺寸 */
+/** 卡片尺寸 = 图片等比 + 最短边 / 最长边；算不出（非法尺寸）返回 undefined → 不动尺寸 */
 export function cardSizePatch(
   width: number,
   height: number,
-  limits: { maxWidth: number; maxHeight: number },
+  limits: MediaCardLimits,
 ): { w: number; h: number } | undefined {
-  if (!(width > 0) || !(height > 0)) return undefined
-  const ratio = Math.min(limits.maxWidth / width, limits.maxHeight / height, 1)
-  if (!Number.isFinite(ratio) || ratio <= 0) return undefined
-  return { w: Math.max(1, Math.round(width * ratio)), h: Math.max(1, Math.round(height * ratio)) }
+  const fit = fitMediaCard(width, height, limits, FALLBACK_LIMITS)
+  return fit ? { w: fit.width, h: fit.height } : undefined
 }
 
 /** 「现在能真正读到像素」的地址：旧 imageUrl 优先，只有引用时交给资源服务现取 */

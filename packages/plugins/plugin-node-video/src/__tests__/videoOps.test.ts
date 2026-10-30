@@ -454,9 +454,9 @@ describe('服务缺失时的安全降级（极简宿主 / 单测桩）', () => {
     expect(downloadVideoNode(bare, 'x')).toBe(false)
   })
 
-  it('settings 缺失时 fitLimits 回落 560×360', () => {
+  it('settings 缺失时 fitLimits 回落最短边 120 / 最长边 560', () => {
     const bare = createVideoOps(noServices)
-    expect(bare.fitLimits?.()).toEqual({ maxWidth: 560, maxHeight: 360 })
+    expect(bare.fitLimits?.()).toEqual({ minShortSide: 120, maxLongSide: 560 })
   })
 
   it('没有资源库服务时 persistVideo/persistImage 返回 undefined（调用方各自兜底）', async () => {

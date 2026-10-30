@@ -11,11 +11,14 @@
  *
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
-import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
+import {
+  Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize,
+  DEFAULT_IMAGE_CARD_LIMITS, IMAGE_CARD_LIMIT_KEYS, isMediaCardLimitKey,
+} from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { thumbTierFields, thumbTierKeys } from './thumbTier'
-import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import { imageTitleExtra } from './imageNodeData'
+import { followedCardSizePatch, readImageFitLimits } from './imageFit'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
@@ -137,18 +140,17 @@ export const Config: ConfigSchema = {
     label: '默认高', group: '布局/图片节点尺寸',
     description: '图片节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
   },
-  // —— 「布局 / 图片节点尺寸」：换图后卡片跟着图片等比缩放时的封顶 ——
-  // 键名必须带本包前缀：内核 settings 是全局同一张表、先声明者独占，
-  // 叫 "maxWidth" 这种通用名会和其他插件抢同一个键。
-  imageFitMaxWidth: {
-    type: 'number', default: DEFAULT_IMAGE_FIT_LIMITS.maxWidth, min: 120, max: 2000, step: 10,
-    label: '图片预览上限宽', group: '布局/图片节点尺寸',
-    description: '上传/换图后，图片节点卡片的最大宽度（px）。图片比这个宽就等比缩小，不会放大。',
+  // —— 「布局 / 图片节点尺寸」：换图后卡片跟着图片等比缩放 ——
+  // 只给「最短边最小 / 最长边最大」两条，横图竖图都按同一套规则，不用再理解宽/高上限。
+  [IMAGE_CARD_LIMIT_KEYS.minShortSide]: {
+    type: 'number', default: DEFAULT_IMAGE_CARD_LIMITS.minShortSide, min: 40, max: 2000, step: 10,
+    label: '最短边最小', group: '布局/图片节点尺寸',
+    description: '图片节点卡片最短的一条边至少这么长（px）。小图会等比放大，细长图按这条算。',
   },
-  imageFitMaxHeight: {
-    type: 'number', default: DEFAULT_IMAGE_FIT_LIMITS.maxHeight, min: 120, max: 2000, step: 10,
-    label: '图片预览上限高', group: '布局/图片节点尺寸',
-    description: '上传/换图后，图片节点卡片的最大高度（px）。图片比这个高就等比缩小，不会放大。',
+  [IMAGE_CARD_LIMIT_KEYS.maxLongSide]: {
+    type: 'number', default: DEFAULT_IMAGE_CARD_LIMITS.maxLongSide, min: 120, max: 4000, step: 10,
+    label: '最长边最大', group: '布局/图片节点尺寸',
+    description: '图片节点卡片最长的一条边最多这么长（px）。特别细长的图会超过它，以最短边为准。',
   },
   // —— 「节点/缩略图」：三档显示（用户口径：三档全部可配；第 1 档是原图，不用配）——
   //
@@ -320,6 +322,31 @@ export function apply(ctx: Context) {
 
   // 2b. 默认尺寸接设置面板：改完**实时**生效（没 resize 过的图片节点立刻跟着变）
   bindTypeDefaultSize(ctx, 'image', { w: 320, h: 240 }, { widthKey: 'imageDefaultWidth', heightKey: 'imageDefaultHeight' })
+
+  // 最短边 / 最长边一改，画布上**已有**的图片节点也按新规则重算（用户要的实时效果）。
+  // 只碰有真实图片尺寸的节点；量不到尺寸的保持原样，不猜。
+  // 写派生尺寸优先走 updateNodeRuntime：落盘但不占撤销栈 —— 改设置不该让用户按 Ctrl+Z 撤销。
+  const settingsForFit = ctx.tryGet<{
+    onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
+  }>('settings')
+  const offImageFit = settingsForFit?.onChange((key) => {
+    if (!isMediaCardLimitKey(key, IMAGE_CARD_LIMIT_KEYS)) return
+    const doc = ctx.tryGet<{
+      getNodes(): Array<{ id: string; type: string; data?: Record<string, unknown> }>
+      updateNodeRuntime?(id: string, patch: { size: { w: number; h: number } }): void
+      updateNode?(id: string, patch: { size: { w: number; h: number } }): void
+    }>('doc')
+    if (!doc) return
+    const limits = readImageFitLimits(ctx)
+    for (const node of doc.getNodes()) {
+      if (node.type !== 'image') continue
+      const patch = followedCardSizePatch(node.data, limits)
+      if (!patch) continue
+      if (doc.updateNodeRuntime) doc.updateNodeRuntime(node.id, { size: patch.size })
+      else doc.updateNode?.(node.id, { size: patch.size })
+    }
+  })
+  if (offImageFit) ctx.effect(() => () => offImageFit.dispose())
 
   // 3. 命令：界面按钮与命令走**同一批实现**（uploadImage/cropImage/rotateImage/downloadImageNode）——
   //    按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。

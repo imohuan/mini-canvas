@@ -4,8 +4,8 @@
  * 复刻老版 canvas-core/src/plugins/file-drop 的"判定→读内容→定尺寸→建节点载荷"中的纯部分：
  * - 文件类型判定：ext/mime → 'image' | 'video' | 'text' | 'unsupported'；
  * - 文本截断：MAX_TEXT_LENGTH 超长截断（与老版同文案）；
- * - 图片尺寸适配：真实宽高按比例缩到不超过卡片上限、不低于下限（与老版 fit 同语义）；
- * - 视频卡片尺寸适配：同图片，但封顶取视频的 560×360（与 videoFit 一致）；
+ * - 图片尺寸适配：最短边 / 最长边（与 plugin-node-image 共用 canvas-base 的同一份规则）；
+ * - 视频卡片尺寸适配：同图片，但最长边默认 560（与 plugin-node-video 一致）；
  * - 落点级联：多文件从中心级联排布（与老版 baseX + i*40 同语义）；
  * - 节点载荷：payload = { type, position, data, size? }（v2 nodeStore.addNodes 输入可直接消费）。
  *
@@ -41,13 +41,17 @@ export interface NodePayload {
 /** 单文件最大读取字符数（老版同值） */
 export const MAX_TEXT_LENGTH = 50000
 
-/** image 节点卡片上限（老版 NODE_SIZES.image） */
+import {
+  DEFAULT_IMAGE_CARD_LIMITS,
+  DEFAULT_VIDEO_CARD_LIMITS,
+  fitMediaCard,
+  type MediaCardLimits,
+} from '@mini-canvas/canvas-base'
+
+/** image 节点没有真实尺寸时的默认卡片（与 type defaultSize 不同，这是"尺寸未知"的兜底） */
 export const DEFAULT_IMAGE_SIZE = { cardWidth: 420, cardHeight: 300 }
-/** video 节点卡片上限（老版 fitVideoCardSize 的默认封顶） */
+/** video 节点没有真实尺寸时的默认卡片 */
 export const DEFAULT_VIDEO_SIZE = { cardWidth: 560, cardHeight: 360 }
-/** 图片适配的最小卡片尺寸（老版硬下限） */
-const MIN_IMAGE_W = 120
-const MIN_IMAGE_H = 80
 
 const IMAGE_MIME = /^image\//
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
@@ -81,24 +85,16 @@ export function clampText(text: string, maxLength = MAX_TEXT_LENGTH): string {
 }
 
 /**
- * 图片卡片尺寸适配：真实宽高按比例缩小到不超上限，且不低于最小下限（等比）。
+ * 图片卡片尺寸适配：等比缩放到最长边上限内，短边不足时再放大到最短边下限。
  * 老版语义：ratio = min(maxW/w, maxH/h, 1)；输出 max(minW, w*ratio) × max(minH, h*ratio)。
  * 输入非法（无真实尺寸）返回 null，由调用方退回默认卡片尺寸。
  */
 export function fitImageSize(
   dims: ImageDims,
-  maxW = DEFAULT_IMAGE_SIZE.cardWidth,
-  maxH = DEFAULT_IMAGE_SIZE.cardHeight,
+  limits: MediaCardLimits = DEFAULT_IMAGE_CARD_LIMITS,
 ): { w: number; h: number } {
-  const { width, height } = dims
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return { w: maxW, h: maxH }
-  }
-  const ratio = Math.min(maxW / width, maxH / height, 1)
-  return {
-    w: Math.max(MIN_IMAGE_W, Math.round(width * ratio)),
-    h: Math.max(MIN_IMAGE_H, Math.round(height * ratio)),
-  }
+  const fit = fitMediaCard(dims?.width, dims?.height, limits, DEFAULT_IMAGE_CARD_LIMITS)
+  return fit ? { w: fit.width, h: fit.height } : { w: DEFAULT_IMAGE_SIZE.cardWidth, h: DEFAULT_IMAGE_SIZE.cardHeight }
 }
 
 /**
@@ -107,18 +103,10 @@ export function fitImageSize(
  */
 export function fitVideoSize(
   dims: ImageDims,
-  maxW = DEFAULT_VIDEO_SIZE.cardWidth,
-  maxH = DEFAULT_VIDEO_SIZE.cardHeight,
+  limits: MediaCardLimits = DEFAULT_VIDEO_CARD_LIMITS,
 ): { w: number; h: number } {
-  const { width, height } = dims
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return { w: maxW, h: maxH }
-  }
-  const ratio = Math.min(maxW / width, maxH / height, 1)
-  return {
-    w: Math.max(MIN_IMAGE_W, Math.round(width * ratio)),
-    h: Math.max(MIN_IMAGE_H, Math.round(height * ratio)),
-  }
+  const fit = fitMediaCard(dims?.width, dims?.height, limits, DEFAULT_VIDEO_CARD_LIMITS)
+  return fit ? { w: fit.width, h: fit.height } : { w: DEFAULT_VIDEO_SIZE.cardWidth, h: DEFAULT_VIDEO_SIZE.cardHeight }
 }
 
 /** 多文件从中心点级联排布（老版：baseX = center - count*10，第 i 个 + i*40）。单文件即中心点。 */
@@ -160,8 +148,9 @@ export function buildImagePayload(
   url: string,
   position: { x: number; y: number },
   dims: ImageDims | null,
+  limits?: MediaCardLimits,
 ): NodePayload {
-  const size = dims ? fitImageSize(dims) : { w: DEFAULT_IMAGE_SIZE.cardWidth, h: DEFAULT_IMAGE_SIZE.cardHeight }
+  const size = dims ? fitImageSize(dims, limits) : { w: DEFAULT_IMAGE_SIZE.cardWidth, h: DEFAULT_IMAGE_SIZE.cardHeight }
   const data: Record<string, unknown> = {
     imageUrl: url,
     imageName: file.name,
@@ -189,8 +178,9 @@ export function buildVideoPayload(
   url: string,
   position: { x: number; y: number },
   meta: { width: number; height: number; duration?: number } | null,
+  limits?: MediaCardLimits,
 ): NodePayload {
-  const size = meta ? fitVideoSize({ width: meta.width, height: meta.height }) : { w: DEFAULT_VIDEO_SIZE.cardWidth, h: DEFAULT_VIDEO_SIZE.cardHeight }
+  const size = meta ? fitVideoSize({ width: meta.width, height: meta.height }, limits) : { w: DEFAULT_VIDEO_SIZE.cardWidth, h: DEFAULT_VIDEO_SIZE.cardHeight }
   const data: Record<string, unknown> = {
     videoUrl: url,
     videoName: file.name,

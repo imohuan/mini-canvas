@@ -158,15 +158,15 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     expect(await uploadImage(opsNoRes, id, new File(['x'], 'c.png'), fakeTransform())).toBe(false)
   })
 
-  it('卡片宽高跟图片走（1000×800 由高度封顶 → 375×300）：data 与 node.size 一次写全', async () => {
+  it('卡片宽高跟图片走（1000×800 最长边压到 420 → 420×336）：data 与 node.size 一次写全', async () => {
     const { nodeStore, ops, id } = boot()
     await uploadImage(ops, id, new File(['x'], 'photo.png'), fakeTransform())
     const node = nodeStore.getNode(id)!
-    // 1000×800 / 上限 420×300：高是瓶颈（300/800=0.375 < 420/1000=0.42）→ 375×300
-    expect(node.data.cardWidth).toBe(375)
-    expect(node.data.cardHeight).toBe(300)
+    // 1000×800 / 最长边 420：ratio=0.42 → 420×336
+    expect(node.data.cardWidth).toBe(420)
+    expect(node.data.cardHeight).toBe(336)
     // 内核正式尺寸字段也要有（不能只写 data，否则布局回退链断在中间）
-    expect(node.size).toEqual({ w: 375, h: 300 })
+    expect(node.size).toEqual({ w: 420, h: 336 })
   })
 
   it('换图 = 一条撤销记录（尺寸与 data 同一次提交，不会退半步）', async () => {
@@ -181,8 +181,8 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     history.undo()
     const reverted = nodeStore.getNode(id)!
     expect(reverted.data.imageWidth).toBe(1000)
-    expect(reverted.data.cardWidth).toBe(375)
-    expect(reverted.size).toEqual({ w: 375, h: 300 })
+    expect(reverted.data.cardWidth).toBe(420)
+    expect(reverted.size).toEqual({ w: 420, h: 336 })
   })
 
   it('量不到图片尺寸 → 只写地址与 resourceId，不猜卡片尺寸（保持原尺寸）', async () => {
@@ -207,11 +207,11 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
           : name === 'resources'
             ? resources
             : name === 'settings'
-              ? { get: (k: string) => (k === 'imageFitMaxWidth' || k === 'imageFitMaxHeight' ? 200 : undefined) }
+              ? { get: (k: string) => (k === 'imageCardMaxLongSide' ? 200 : k === 'imageCardMinShortSide' ? 120 : undefined) }
               : undefined,
     } as never)
     await uploadImage(opsWithSettings, id, new File(['x'], 'p.png'), fakeTransform())
-    // 上限 200×200、图 1000×800 → ratio=0.2 → 200×160
+    // 最长边 200、图 1000×800 → ratio=0.2 → 200×160
     expect(nodeStore.getNode(id)!.data.cardWidth).toBe(200)
     expect(nodeStore.getNode(id)!.data.cardHeight).toBe(160)
   })
@@ -247,7 +247,7 @@ describe('cropImage：裁剪 = 新建下游图片节点并连边（原图不动�
     expect(edges[0].source).toBe(id)
     expect(edges[0].target).toBe(created.id)
     // 定位：原图右边缘（x + 卡片宽 375）+ 100 间隔，同一水平线
-    expect(created.position.x).toBe(0 + 375 + 100)
+    expect(created.position.x).toBe(0 + 420 + 100)
     expect(created.position.y).toBe(0)
   })
 
@@ -304,7 +304,7 @@ describe('cropImage：裁剪 = 新建下游图片节点并连边（原图不动�
     await cropImage(ops, id, rect, fakeTransform())
     expect(history.undoDepth).toBe(depth + 1)
     history.undo()
-    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(375)
+    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(420)
   })
 })
 
@@ -343,7 +343,7 @@ describe('expandImageNode：扩展 = 新建下游图片节点并连边（原图�
     expect(edges[0].source).toBe(id)
     expect(edges[0].target).toBe(created.id)
     // 定位：原图右边缘 + 100 间隔，同一水平线
-    expect(created.position.x).toBe(0 + 375 + 100)
+    expect(created.position.x).toBe(0 + 420 + 100)
     expect(created.position.y).toBe(0)
   })
 
@@ -417,12 +417,12 @@ describe('rotateImage / downloadImageNode', () => {
   it('旋转后卡片宽高跟着互换后的比例重算', async () => {
     const { nodeStore, ops, id } = boot()
     await uploadImage(ops, id, new File(['x'], 'p.png'), fakeTransform())
-    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(375)
-    // 旋转把 1000×800 变成 800×1000 → 宽不再封顶，改由高度封顶：ratio=0.3 → 240×300
+    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(420)
+    // 旋转把 1000×800 变成 800×1000 → 最长边压到 420：420×336
     expect(await rotateImage(ops, id, fakeTransform({ rotateToBlob: async () => ({ blob: BLOB('r'), width: 800, height: 1000 }) }))).toBe(true)
     const node = nodeStore.getNode(id)!
-    expect(node.data.cardWidth).toBe(240)
-    expect(node.data.cardHeight).toBe(300)
-    expect(node.size).toEqual({ w: 240, h: 300 })
+    expect(node.data.cardWidth).toBe(336)
+    expect(node.data.cardHeight).toBe(420)
+    expect(node.size).toEqual({ w: 336, h: 420 })
   })
 })

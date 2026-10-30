@@ -77,13 +77,17 @@ describe('clampText（超长截断）', () => {
 })
 
 describe('fitImageSize（图片卡片适配）', () => {
-  it('小图不放大（ratio 上限 1）', () => {
-    expect(fitImageSize({ width: 100, height: 50 })).toEqual({ w: 120, h: 80 })
+  it('小图放大到最短边 120（不会小到看不清）', () => {
+    expect(fitImageSize({ width: 100, height: 50 })).toEqual({ w: 240, h: 120 })
   })
 
-  it('大图等比缩到卡片内，不超上限、不低于下限', () => {
-    // 2000x1000 → ratio = min(420/2000, 300/1000, 1) = 0.21 → 420x210
+  it('大图等比缩到最长边 420 内', () => {
+    // 2000x1000 → 420x210
     expect(fitImageSize({ width: 2000, height: 1000 })).toEqual({ w: 420, h: 210 })
+  })
+
+  it('20:1 细长图：按最短边 120 算，最长边允许超上限', () => {
+    expect(fitImageSize({ width: 4000, height: 200 })).toEqual({ w: 2400, h: 120 })
   })
 
   it('非法尺寸退回默认卡片', () => {
@@ -145,11 +149,11 @@ describe('payload 构建', () => {
 
 describe('fitVideoSize（视频卡片适配）', () => {
   it('大视频等比缩到 560×360 内，不超上限、不低于下限', () => {
-    // 1280×720: min(560/1280, 360/720, 1) = 0.4375 → 560×315
+    // 1280×720: 最长边 560 → 560×315
     expect(fitVideoSize({ width: 1280, height: 720 })).toEqual({ w: 560, h: 315 })
   })
 
-  it('小视频不放大（ratio 上限 1）', () => {
+  it('小视频本身已够大 → 保持原尺寸（不放大）', () => {
     expect(fitVideoSize({ width: 320, height: 240 })).toEqual({ w: 320, h: 240 })
   })
 

@@ -43,7 +43,7 @@ export interface VideoOpsContext {
   write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }, unset?: string[]): void
   /** 写节点运行态（进度/失败原因）：落盘但不进撤销栈（进度帧不该吃掉撤销栈）。 */
   writeRuntime?(nodeId: string, data: Record<string, unknown>): void
-  /** 视频预览上限（配置 videoFitMaxWidth/videoFitMaxHeight）；不注入则回落 560×360 */
+  /** 视频尺寸限制（配置 videoCardMinShortSide / videoCardMaxLongSide）；不注入则回落最短边 120 / 最长边 560 */
   fitLimits?(): VideoFitLimits
   /**
    * 【迁移期保留】在某位置建一个节点。

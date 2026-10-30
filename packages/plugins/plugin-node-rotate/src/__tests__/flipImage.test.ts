@@ -75,27 +75,28 @@ function boot() {
 }
 
 describe('cardSizePatch（等比 + 封顶，与图片插件同一套数学）', () => {
-  it('640×480 在 420×300 上限内 → 420×315… 不对，按封顶比 0.625 算：400×300', () => {
-    expect(cardSizePatch(640, 480, { maxWidth: 420, maxHeight: 300 })).toEqual({ w: 400, h: 300 })
+  it('640×480 最长边压到 420 → 420×315', () => {
+    expect(cardSizePatch(640, 480, { minShortSide: 120, maxLongSide: 420 })).toEqual({ w: 420, h: 315 })
   })
 
-  it('小图不放大小图：200×150 → 原尺寸', () => {
-    expect(cardSizePatch(200, 150, { maxWidth: 420, maxHeight: 300 })).toEqual({ w: 200, h: 150 })
+  it('小图放大到最短边 120：200×100 → 240×120', () => {
+    expect(cardSizePatch(200, 100, { minShortSide: 120, maxLongSide: 420 })).toEqual({ w: 240, h: 120 })
   })
 
   it('非法尺寸（0 / 负数）→ undefined（不动卡片尺寸）', () => {
-    expect(cardSizePatch(0, 100, { maxWidth: 420, maxHeight: 300 })).toBeUndefined()
-    expect(cardSizePatch(-5, 100, { maxWidth: 420, maxHeight: 300 })).toBeUndefined()
+    expect(cardSizePatch(0, 100, { minShortSide: 120, maxLongSide: 420 })).toBeUndefined()
+    expect(cardSizePatch(-5, 100, { minShortSide: 120, maxLongSide: 420 })).toBeUndefined()
   })
 })
 
 describe('readFitLimits', () => {
-  it('读设置服务的 imageFitMax* 键（overrides 缝，与图片插件同款）；读不到用兜底值', () => {
+  it('读设置服务的图片最短边 / 最长边键（overrides 缝）；读不到用兜底值', () => {
     const { ctx } = boot()
-    expect(readFitLimits(ctx, { get: (k: string) => (k === 'imageFitMaxWidth' ? 200 : k === 'imageFitMaxHeight' ? 150 : undefined) }))
-      .toEqual({ maxWidth: 200, maxHeight: 150 })
+    expect(
+      readFitLimits(ctx, { get: (k: string) => (k === 'imageCardMinShortSide' ? 90 : k === 'imageCardMaxLongSide' ? 200 : undefined) }),
+    ).toEqual({ minShortSide: 90, maxLongSide: 200 })
     // 不传 overrides：读真内核 settings（裸 store 里这些 key 未声明 → undefined → 兜底值）
-    expect(readFitLimits(ctx)).toEqual({ maxWidth: 420, maxHeight: 300 })
+    expect(readFitLimits(ctx)).toEqual({ minShortSide: 120, maxLongSide: 420 })
   })
 })
 
@@ -107,14 +108,14 @@ describe('flipImageNode（真内核：doc + resources + 一次撤销）', () => 
     expect(await flipImageNode(ctx, id, 'horizontal', io)).toBe(true)
     // 重绘调用按轴发生、宽高不换
     expect(io.painted).toEqual([{ width: 640, height: 480, axis: 'horizontal' }])
-    // 写回：新 resourceId、显示地址、像素尺寸、卡片尺寸按封顶重算（400×300）
+    // 写回：新 resourceId、显示地址、像素尺寸、卡片尺寸按上限重算（420×315）
     const data = nodeStore.getNode(id)!.data
     expect(typeof data.resourceId).toBe('string')
     expect(blobs.has(String(data.resourceId))).toBe(true)
     expect(String(data.imageUrl)).toMatch(/^blob:mem-/)
     expect(data.imageWidth).toBe(640)
     expect(data.imageHeight).toBe(480)
-    expect(nodeStore.getNode(id)!.size).toEqual({ w: 400, h: 300 })
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 420, h: 315 })
     // 一次写完 = 一条撤销记录
     expect(history.undoDepth).toBe(depth + 1)
   })

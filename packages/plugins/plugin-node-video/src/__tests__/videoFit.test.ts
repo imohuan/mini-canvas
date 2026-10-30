@@ -1,9 +1,9 @@
 /**
  * videoFit —— 视频尺寸 → 卡片尺寸的适配规则契约（纯函数，Node 直接跑）。
  *
- * 规则与图片节点同源（v1 fitVideoCardSize 的语义）：只缩小不放大、比例正确、下限 120×80、
- * 上限可配、拿不到尺寸返回 null（调用方保持原尺寸，不猜）。
- * 默认封顶与图片不同（560×360，v1 视频的默认值），这里单独钉住这个差异。
+ * 规则与图片节点同源：比例正确、最短边不小于下限、最长边不超过上限、
+ * 两条冲突时最短边优先、拿不到尺寸返回 null（调用方保持原尺寸，不猜）。
+ * 默认值与图片不同（最长边 560），这里单独钉住这个差异。
  */
 import { describe, it, expect } from 'vitest'
 import {
@@ -11,24 +11,21 @@ import {
   DEFAULT_VIDEO_FIT_LIMITS,
   fitVideoCardSize,
   followedVideoCardSizePatch,
-  MIN_CARD_HEIGHT,
-  MIN_CARD_WIDTH,
   missingVideoCardSizePatch,
   readVideoFitLimits,
   resolveVideoFitLimits,
   videoCardSizePatch,
 } from '../videoFit'
 
-describe('fitVideoCardSize：等比 + 封顶 + 下限', () => {
-  it('大视频按比例缩到不超过上限（默认 560×360）', () => {
-    // 1920×1080：高是瓶颈（360/1080≈0.333 小于 560/1920≈0.292？不，宽更紧）
-    // 560/1920 = 0.2917，360/1080 = 0.3333 → 取小的 0.2917 → 560×315
+describe('fitVideoCardSize：等比 + 最短边 / 最长边', () => {
+  it('大视频按比例缩到最长边 560', () => {
+    // 1920×1080：最长边压到 560 → 560×315
     expect(fitVideoCardSize(1920, 1080)).toEqual({ width: 560, height: 315 })
-    // 1080×1920 竖屏：宽是瓶颈 560/1080=0.5185，360/1920=0.1875 → 取 0.1875 → 203×360
-    expect(fitVideoCardSize(1080, 1920)).toEqual({ width: 203, height: 360 })
+    // 1080×1920 竖屏：最长边压到 560 → 315×560
+    expect(fitVideoCardSize(1080, 1920)).toEqual({ width: 315, height: 560 })
   })
 
-  it('小视频不放大（ratio 封在 1）', () => {
+  it('小视频放大到最短边，不会小到看不清', () => {
     expect(fitVideoCardSize(320, 240)).toEqual({ width: 320, height: 240 })
     expect(fitVideoCardSize(560, 360)).toEqual({ width: 560, height: 360 })
   })
@@ -38,11 +35,10 @@ describe('fitVideoCardSize：等比 + 封顶 + 下限', () => {
     expect(fit.width / fit.height).toBeCloseTo(3840 / 2160, 2)
   })
 
-  it('极端细长视频不塌到 0：走最小尺寸 120×80', () => {
-    const fit = fitVideoCardSize(8000, 20)!
-    expect(fit.width).toBe(560)
-    expect(fit.height).toBe(MIN_CARD_HEIGHT)
-    expect(fitVideoCardSize(20, 8000)).toEqual({ width: MIN_CARD_WIDTH, height: 360 })
+  it('极端细长视频不塌到 0：按最短边撑开，最长边允许超上限', () => {
+    const fit = fitVideoCardSize(8000, 400)!
+    expect(fit).toEqual({ width: 2400, height: 120 })
+    expect(fitVideoCardSize(400, 8000)).toEqual({ width: 120, height: 2400 })
   })
 
   it('尺寸非法（0/负数/NaN/缺失/字符串）→ null，调用方保持原尺寸不猜', () => {
@@ -52,39 +48,39 @@ describe('fitVideoCardSize：等比 + 封顶 + 下限', () => {
     }
   })
 
-  it('默认封顶是 v1 视频的 560×360（与图片节点的 420×300 刻意不同）', () => {
-    expect(DEFAULT_VIDEO_FIT_LIMITS).toEqual({ maxWidth: 560, maxHeight: 360 })
+  it('默认值是最短边 120 / 最长边 560（与图片的最长边 420 刻意不同）', () => {
+    expect(DEFAULT_VIDEO_FIT_LIMITS).toEqual({ minShortSide: 120, maxLongSide: 560 })
   })
 })
 
-describe('上限可配', () => {
-  it('上限调小 → 同一段视频缩得更狠', () => {
-    expect(fitVideoCardSize(1920, 1080, { maxWidth: 300, maxHeight: 300 })).toEqual({ width: 300, height: 169 })
+describe('限制可配', () => {
+  it('最长边调小 → 同一段视频缩得更狠', () => {
+    expect(fitVideoCardSize(1920, 1080, { minShortSide: 100, maxLongSide: 300 })).toEqual({ width: 300, height: 169 })
   })
 
-  it('上限调大 → 同一段视频可以更大', () => {
-    expect(fitVideoCardSize(1920, 1080, { maxWidth: 1920, maxHeight: 1080 })).toEqual({ width: 1920, height: 1080 })
+  it('最长边调大 → 同一段视频可以更大', () => {
+    expect(fitVideoCardSize(1920, 1080, { minShortSide: 100, maxLongSide: 1920 })).toEqual({ width: 1920, height: 1080 })
   })
 
-  it('上限被改坏（0/NaN）→ 该项回落默认值，而不是让整条规则失效', () => {
-    expect(fitVideoCardSize(1920, 1080, { maxWidth: 0, maxHeight: 360 })).toEqual({ width: 560, height: 315 })
-    expect(fitVideoCardSize(1920, 1080, { maxWidth: Number.NaN, maxHeight: Number.NaN })).toEqual({
+  it('限制被改坏（0/NaN）→ 该项回落默认值，而不是让整条规则失效', () => {
+    expect(fitVideoCardSize(1920, 1080, { maxLongSide: 0, minShortSide: 120 })).toEqual({ width: 560, height: 315 })
+    expect(fitVideoCardSize(1920, 1080, { maxLongSide: Number.NaN, minShortSide: Number.NaN })).toEqual({
       width: 560,
       height: 315,
     })
   })
 })
 
-describe('resolveVideoFitLimits / readVideoFitLimits：从配置读封顶', () => {
+describe('resolveVideoFitLimits / readVideoFitLimits：从配置读限制', () => {
   it('读到配置值就用配置值', () => {
     expect(
-      resolveVideoFitLimits((k) => (k === 'videoFitMaxWidth' ? 800 : k === 'videoFitMaxHeight' ? 600 : undefined)),
-    ).toEqual({ maxWidth: 800, maxHeight: 600 })
+      resolveVideoFitLimits((k) => (k === 'videoCardMinShortSide' ? 90 : k === 'videoCardMaxLongSide' ? 600 : undefined)),
+    ).toEqual({ minShortSide: 90, maxLongSide: 600 })
   })
 
-  it('读不到 / 非法 → 回落 560×360', () => {
+  it('读不到 / 非法 → 回落默认（最短边 120、最长边 560）', () => {
     expect(resolveVideoFitLimits(() => undefined)).toEqual(DEFAULT_VIDEO_FIT_LIMITS)
-    expect(resolveVideoFitLimits((k) => (k === 'videoFitMaxWidth' ? 'x' : -1))).toEqual(DEFAULT_VIDEO_FIT_LIMITS)
+    expect(resolveVideoFitLimits((k) => (k === 'videoCardMinShortSide' ? 'x' : -1))).toEqual(DEFAULT_VIDEO_FIT_LIMITS)
   })
 
   it('没有 settings 服务（极简宿主/单测桩）→ 回落默认，不抛错', () => {
@@ -119,6 +115,16 @@ describe('missingVideoCardSizePatch：挂载时补算缺失的尺寸', () => {
   it('连视频尺寸都没有 → null（无中生有不了一个尺寸）', () => {
     expect(missingVideoCardSizePatch({})).toBeNull()
     expect(missingVideoCardSizePatch(undefined)).toBeNull()
+  })
+
+  it('裁过的视频按裁框比例算，不按整幅画面', () => {
+    expect(
+      missingVideoCardSizePatch({
+        videoWidth: 1920,
+        videoHeight: 1080,
+        cropRect: { x: 0, y: 0, width: 540, height: 960 },
+      }),
+    ).toEqual(videoCardSizePatch(540, 960))
   })
 })
 

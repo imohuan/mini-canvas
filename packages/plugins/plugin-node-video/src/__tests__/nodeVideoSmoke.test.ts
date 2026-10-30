@@ -186,7 +186,7 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('本包 Config 声明进 settings 单一数据源：预览上限（560×360）+ 最短剪辑时长', async () => {
+  it('本包 Config 声明进 settings 单一数据源：最短边 / 最长边 + 最短剪辑时长', async () => {
     const { ctx } = boot()
     await ctx.start()
     const settings = ctx.get<{
@@ -196,17 +196,18 @@ describe('node-video 装配 smoke', () => {
       set(key: string, value: number): boolean
     }>('settings')
     // 键名带本包前缀（内核 settings 全局同一张表、先声明者独占，通用名会跟别的插件打架）
-    expect(settings.has('videoFitMaxWidth')).toBe(true)
-    expect(settings.has('videoFitMaxHeight')).toBe(true)
+    expect(settings.has('videoCardMinShortSide')).toBe(true)
+    expect(settings.has('videoCardMaxLongSide')).toBe(true)
+    expect(settings.has('videoFitMaxWidth')).toBe(false)
     expect(settings.has('videoMinClipDuration')).toBe(true)
-    expect(settings.get('videoFitMaxWidth')).toBe(560)
-    expect(settings.get('videoFitMaxHeight')).toBe(360)
+    expect(settings.get('videoCardMinShortSide')).toBe(120)
+    expect(settings.get('videoCardMaxLongSide')).toBe(560)
     // 分组落在既有一级分类下（布局 / 节点），不新立无主分类
     expect(settings.groupOf('布局/视频节点尺寸').map((i) => i.key).sort()).toEqual([
+      'videoCardMaxLongSide',
+      'videoCardMinShortSide',
       'videoDefaultHeight',
       'videoDefaultWidth',
-      'videoFitMaxHeight',
-      'videoFitMaxWidth',
     ])
     expect(settings.groupOf('节点/视频剪辑').map((i) => i.key)).toEqual([
       'videoMinClipDuration',
@@ -214,6 +215,20 @@ describe('node-video 装配 smoke', () => {
       'videoClipSnapRadius',
       'videoClipLoop',
     ])
+    ctx.stop()
+  })
+
+  it('设置里的最短边 / 最长边一改，画布上已有视频节点立刻重算（实时生效）', async () => {
+    const { ctx, nodeStore } = boot()
+    await ctx.start()
+    const id = nodeStore.addNode(VIDEO_NODE_TYPE, { x: 0, y: 0 })
+    nodeStore.updateNode(id, { data: { videoWidth: 1920, videoHeight: 1080 }, size: { w: 560, h: 315 } })
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 560, h: 315 })
+    ctx.settings.set('videoCardMaxLongSide', 400)
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 400, h: 225 })
+    ctx.settings.set('videoCardMinShortSide', 300)
+    // 16:9 的短边撑到 300 → 533×300（最长边允许超 400）
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 533, h: 300 })
     ctx.stop()
   })
 

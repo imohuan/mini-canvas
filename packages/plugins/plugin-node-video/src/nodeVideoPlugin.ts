@@ -18,11 +18,14 @@
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层(canvas-render) + 默认皮的通用按钮，
  * 不反向依赖宿主/其它节点插件。
  */
-import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
+import {
+  Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize,
+  DEFAULT_VIDEO_CARD_LIMITS, VIDEO_CARD_LIMIT_KEYS, isMediaCardLimitKey,
+} from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { videoThumbTierFields, videoThumbTierKeys } from './videoThumbTier'
-import { DEFAULT_VIDEO_FIT_LIMITS } from './videoFit'
 import { videoTitleExtra } from './videoOps'
+import { followedVideoCardSizePatch, readVideoFitLimits } from './videoFit'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
 import VideoPreview from './VideoPreview.vue'
@@ -148,15 +151,16 @@ export const Config: ConfigSchema = {
     label: '默认高', group: '布局/视频节点尺寸',
     description: '视频节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
   },
-  videoFitMaxWidth: {
-    type: 'number', default: DEFAULT_VIDEO_FIT_LIMITS.maxWidth, min: 120, max: 2000, step: 10,
-    label: '视频预览上限宽', group: '布局/视频节点尺寸',
-    description: '拖入或上传视频后，视频节点卡片的最大宽度（px）。画面比这个宽就等比缩小，不会放大。',
+  // 与图片节点同一套「最短边 / 最长边」；不再保留两套宽/高上限。
+  [VIDEO_CARD_LIMIT_KEYS.minShortSide]: {
+    type: 'number', default: DEFAULT_VIDEO_CARD_LIMITS.minShortSide, min: 40, max: 2000, step: 10,
+    label: '最短边最小', group: '布局/视频节点尺寸',
+    description: '视频节点卡片最短的一条边至少这么长（px）。小视频会等比放大，细长视频按这条算。',
   },
-  videoFitMaxHeight: {
-    type: 'number', default: DEFAULT_VIDEO_FIT_LIMITS.maxHeight, min: 120, max: 2000, step: 10,
-    label: '视频预览上限高', group: '布局/视频节点尺寸',
-    description: '拖入或上传视频后，视频节点卡片的最大高度（px）。画面比这个高就等比缩小，不会放大。',
+  [VIDEO_CARD_LIMIT_KEYS.maxLongSide]: {
+    type: 'number', default: DEFAULT_VIDEO_CARD_LIMITS.maxLongSide, min: 120, max: 4000, step: 10,
+    label: '最长边最大', group: '布局/视频节点尺寸',
+    description: '视频节点卡片最长的一条边最多这么长（px）。特别细长的视频会超过它，以最短边为准。',
   },
   videoMinClipDuration: {
     type: 'number', default: 1, min: 0.1, max: 10, step: 0.1,
@@ -338,6 +342,31 @@ export function apply(ctx: Context) {
 
   // 默认尺寸接设置面板：改完**实时**生效（没 resize 过的视频节点立刻跟着变）
   bindTypeDefaultSize(ctx, 'video', { w: 480, h: 320 }, { widthKey: 'videoDefaultWidth', heightKey: 'videoDefaultHeight' })
+
+  // 最短边 / 最长边一改，画布上**已有**的视频节点也按新规则重算（用户要的实时效果）。
+  // 视频节点没有拖拽 resize，卡片尺寸一直由画面比例决定，所以这里可以安全地整体重算。
+  // 优先走 updateNodeRuntime：落盘但不占撤销栈 —— 改设置不该让用户按 Ctrl+Z 撤销。
+  const settingsForFit = ctx.tryGet<{
+    onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
+  }>('settings')
+  const offVideoFit = settingsForFit?.onChange((key) => {
+    if (!isMediaCardLimitKey(key, VIDEO_CARD_LIMIT_KEYS)) return
+    const doc = ctx.tryGet<{
+      getNodes(): Array<{ id: string; type: string; data?: Record<string, unknown> }>
+      updateNodeRuntime?(id: string, patch: { size: { w: number; h: number } }): void
+      updateNode?(id: string, patch: { size: { w: number; h: number } }): void
+    }>('doc')
+    if (!doc) return
+    const limits = readVideoFitLimits(ctx)
+    for (const node of doc.getNodes()) {
+      if (node.type !== VIDEO_NODE_TYPE) continue
+      const patch = followedVideoCardSizePatch(node.data, limits)
+      if (!patch) continue
+      if (doc.updateNodeRuntime) doc.updateNodeRuntime(node.id, { size: patch.size })
+      else doc.updateNode?.(node.id, { size: patch.size })
+    }
+  })
+  if (offVideoFit) ctx.effect(() => () => offVideoFit.dispose())
 
   // —— 命令：界面按钮与命令走**同一批实现**（cropVideo / clipVideo / captureFrameNode …）——
   //   按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
