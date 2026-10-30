@@ -47,8 +47,9 @@ describe('node-3d-preview 装配 smoke', () => {
     const { ctx, nodeStore } = boot()
     await ctx.start()
     const def = nodeStore.types.get('3d-preview')!
-    expect(def.defaultSize).toEqual({ w: 420, h: 280 })
-    expect(def.resizable).toBe(true)
+    expect(def.defaultSize).toEqual({ w: 480, h: 270 })
+    expect(def.resizable).toBe('aspect')
+    expect(def.resizeRatio?.({})).toBeCloseTo(16 / 9)
     expect(def.inputs).toEqual([{ port: 'target', acceptsTypes: ['image'], capacity: 1 }])
     expect(def.outputs).toEqual([])
     ctx.stop()

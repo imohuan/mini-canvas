@@ -23,7 +23,7 @@ import {
 } from './imageCompareEngine'
 // 初始/兜底高度与比较窗口里"宽度跟随"时用的兜底高度同源：
 // 两处各写一个数字，迟早会在"用户还没拖过高度"时对不上（同一份真相只留一处）
-import { DEFAULT_COMPARE_HEIGHT } from './compareFit'
+import { DEFAULT_COMPARE_HEIGHT, FOLLOW_RATIO_KEY } from './compareFit'
 
 /** 本插件注册的节点类型名 */
 export const IMAGE_COMPARE_NODE_TYPE = 'image-compare'
@@ -123,7 +123,14 @@ export function apply(ctx: Context) {
     // 两槽共用 refField：节点数据只保存 resourceId，不保存显示地址。
     // 左右两张图是同一个 image 槽的两个候选（按边序取第 0/1 个），不是两个独立的数据字段。
     consumes: { image: { kind: 'image', refField: 'resourceId' } },
-    resizable: true,
+    // 固定比例缩放（用户口径 2026-10-30）：按第一张图的比例等比拖拽。
+    // 比例由 content 组件在「尺寸跟随第一张图」时写进 data（FOLLOW_RATIO_KEY），
+    // 这里只读 —— 内容变了比例跟着变，类型注册处不需要知道图片什么时候换。
+    resizable: 'aspect',
+    resizeRatio: (data) => {
+      const v = Number(data?.[FOLLOW_RATIO_KEY])
+      return Number.isFinite(v) && v > 0 ? v : 0
+    },
     in: ImageCompareContent,
     create(position) {
       return service.addCompareNode(position)

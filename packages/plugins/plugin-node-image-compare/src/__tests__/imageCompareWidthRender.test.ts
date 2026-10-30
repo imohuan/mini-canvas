@@ -1,9 +1,9 @@
 /**
- * 图片对比节点的「宽度跟随第一条连线图片」——接线契约（SSR + 记录型假 graph）。
+ * 图片对比节点的「尺寸跟随第一条连线图片」——接线契约（SSR + 记录型假 graph）。
  *
  * 纯规则由 compareFit.test 锁住，这里锁的是**另一半**：组件有没有真的在"连上图之后"
  * 把宽度算出来写回节点。过去这类缺口常见于"逻辑写好了但 watch 没接上/接错了依赖"，
- * 只测纯函数是看不见的。
+ * 只测纯函数是看不见的。高度按第一张图的比例一起算（固定比例缩放，用户口径 2026-10-30）。
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
@@ -53,18 +53,19 @@ beforeEach(() => {
 })
 
 describe('对比节点宽度跟随第一条连线的图片', () => {
-  it('连上一张 420 宽的图 → 把对比节点宽度对齐成 420（data 与内核尺寸一起写）', async () => {
+  it('连上一张 420×280 的图 → 宽对齐 420、高按比例 280，比例存进 data', async () => {
     edges = [{ id: 'e1', source: 'imgA', target: 'cmp' }]
     await render('cmp', { cardWidth: 480, cardHeight: 260 })
     expect(writes).toHaveLength(1)
     expect(writes[0].id).toBe('cmp')
-    // 只写正式尺寸 size（卡片镜像 data.cardWidth/cardHeight 由 nodeStore 自动补齐）
-    expect(writes[0].patch.size).toEqual({ w: 420, h: 260 })
+    // size 与比例 data 一起写（卡片镜像 data.cardWidth/cardHeight 由 nodeStore 自动补齐）
+    expect(writes[0].patch.size).toEqual({ w: 420, h: 280 })
+    expect(writes[0].patch.data).toEqual({ followRatio: 420 / 280 })
   })
 
-  it('宽度已经一致 → 一个字都不写（幂等，避免自己触发自己）', async () => {
+  it('尺寸和比例都已一致 → 一个字都不写（幂等，避免自己触发自己）', async () => {
     edges = [{ id: 'e1', source: 'imgA', target: 'cmp' }]
-    await render('cmp', { cardWidth: 420, cardHeight: 280 })
+    await render('cmp', { cardWidth: 420, cardHeight: 280, followRatio: 420 / 280 })
     expect(writes).toHaveLength(0)
   })
 

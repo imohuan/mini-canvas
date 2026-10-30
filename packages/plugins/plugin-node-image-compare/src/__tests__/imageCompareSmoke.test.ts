@@ -69,7 +69,10 @@ describe('image-compare 装配 smoke', () => {
     await ctx.start()
     const def = nodeStore.types.get('image-compare')!
     expect(def.label).toBe('图片对比')
-    expect(def.resizable).toBe(true)
+    expect(def.resizable).toBe('aspect')
+    // 等比拖拽的比例来自 data.followRatio（content 组件跟随第一张图时写入），拿不到时退回卡片比例
+    expect(def.resizeRatio?.({ followRatio: 1.5 })).toBe(1.5)
+    expect(def.resizeRatio?.({})).toBe(0)
     expect(def.inputs).toEqual([{ port: 'target', acceptsTypes: ['image'], capacity: 2 }])
     expect(def.outputs).toEqual([])
     ctx.stop()

@@ -116,14 +116,17 @@ export function apply(ctx: Context) {
     nameTemplate: '3D 预览 {{ID}}',
     description: '在画布中添加一个 3D 全景节点',
     icon: NODE_ICON,
-    size: { w: 420, h: 280 },
+    size: { w: 480, h: 270 },
     inputs: [{ port: 'target', acceptsTypes: ['image'], capacity: 1 }],
     outputs: [],
     // 数据契约：本节点从上游读一张图片贴到球面。
     // 只声明“读哪个字段”，不声明地址 —— 显示地址由消费方按 resourceId resolve。
     consumes: { image: { kind: 'image', refField: 'resourceId' } },
-    // 全景窗口要能拉大拉小；渲染层按容器实测尺寸重建画布（ResizeObserver）
-    resizable: true,
+    // 全景窗口要能拉大拉小；渲染层按容器实测尺寸重建画布（ResizeObserver）。
+    // 固定 16:9（用户口径 2026-10-30）：等比例拖拽，比例不随内容变 —— 全景球体渲染本身
+    // 与容器比例无关，锁定比例是产品决定，不需要从图片读。
+    resizable: 'aspect',
+    resizeRatio: () => 16 / 9,
     in: PanoramaContent,
     create(position) {
       return service.addPreviewNode(position)

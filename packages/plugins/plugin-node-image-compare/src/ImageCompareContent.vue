@@ -8,8 +8,8 @@
  * 与老版的差异（v2 分层）：
  * - 上游图不再经 @vue-flow 的 useUpstreamImages，而是读渲染上下文的 renderEdges/renderNodes（v2 等价物）；
  * - 取图/FIFO/夹取等纯逻辑挪到 imageCompareEngine.ts（可单测）；
- * - **宽度跟随第一条连线的图片**（用户要求）：上游图片节点显示多宽，对比窗口就多宽 ——
- *   两边像素对齐了对照才有意义。规则与幂等在 compareFit.ts（纯函数、可单测）；
+ * - **尺寸跟随第一条连线的图片**（用户要求 2026-10-30）：对比节点按第一张图的比例做固定比例缩放 ——
+ *   宽对齐上游显示宽度、高按比例回算，比例存进 data 供等比拖拽读。规则与幂等在 compareFit.ts（纯函数、可单测）；
  *   老版是按图片原始像素 + 上限另算一套（会"一加载就写节点尺寸"），v2 直接跟随，不再自己发明尺寸。
  *   只跟宽度、不动高度：高度留给用户自己拖。
  *
@@ -20,7 +20,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, createUpstreamCapability, useUiComponent, type UpstreamCapability } from '@mini-canvas/canvas-render'
 import { clampDivider, resolveCompareEntries } from './imageCompareEngine'
-import { compareWidthPatch, DEFAULT_COMPARE_HEIGHT, resolveFollowWidth } from './compareFit'
+import { compareFollowPatch, resolveFollowSize } from './compareFit'
 import { resolveImageSrc } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -99,13 +99,14 @@ watch(() => sources.value.map((e) => e.sourceId + '|' + e.resourceId + '|' + e.u
 const hasAny = computed(() => !!leftImage.value || !!rightImage.value)
 const hasTwo = computed(() => !!leftImage.value && !!rightImage.value)
 
-// ==================== 宽度跟随第一条连线的图片 ====================
+// ==================== 尺寸跟随第一条连线的图片 ====================
 /**
- * 上游**图片节点的显示宽度**（data.cardWidth）—— 图片插件在上传/换图/裁剪/生成后都会写它，
- * 也就是用户在画布上实际看到的那个宽度。分屏对比要对齐的就是这个宽度，不是原始像素。
+ * 上游**图片节点的显示尺寸**（data.cardWidth/cardHeight）—— 图片插件在上传/换图/裁剪/生成后都会写它，
+ * 也就是用户在画布上实际看到的那个宽高。对比窗口对齐的就是这个显示尺寸，不是原始像素。
  */
-function upstreamCardWidth(nodeId: string): unknown {
-  return nodeData(nodeId)?.cardWidth
+function upstreamCardSize(nodeId: string): { w: unknown; h: unknown } {
+  const d = nodeData(nodeId)
+  return { w: d?.cardWidth, h: d?.cardHeight }
 }
 
 /**
@@ -115,23 +116,23 @@ function upstreamCardWidth(nodeId: string): unknown {
  * 靠 compareWidthPatch 里"算出来等于当前就不写"这条判断挡住（与 imageFit 同一套路），
  * 否则就是"自己触发自己"的死循环。
  */
-function syncFollowWidth(): void {
-  const target = resolveFollowWidth(sources.value, upstreamCardWidth)
-  const patch = compareWidthPatch(target, props.data, DEFAULT_COMPARE_HEIGHT)
+function syncFollowSize(): void {
+  const target = resolveFollowSize(sources.value, upstreamCardSize)
+  const patch = compareFollowPatch(target, props.data)
   if (!patch) return
   ctx
-    .get<{ updateNode(id: string, patch: { size?: { w: number; h: number } }): void }>(
+    .get<{ updateNode(id: string, patch: { size?: { w: number; h: number }; data?: Record<string, unknown> }): void }>(
       'doc',
     )
-    // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐
-    .updateNode(props.id, { size: patch.size })
+    // size 与比例 data 一起写；卡片镜像由 nodeStore 自动补齐
+    .updateNode(props.id, patch)
 }
 
-// 上游图变化（新连一张 / 换图 / 上游卡片宽度被 resize）→ 重新对齐宽度。
-// 依赖里带上上游的 cardWidth 本身，所以"上游被拖动改宽"也会跟随。
+// 上游图变化（新连一张 / 换图 / 上游尺寸被 resize）→ 重新对齐尺寸与比例。
+// 依赖里带上上游的 cardWidth/cardHeight 本身，所以"上游被拖动改宽"也会跟随。
 watch(
-  () => sources.value.map((e) => `${e.sourceId}:${String(upstreamCardWidth(e.sourceId))}`).join(','),
-  () => syncFollowWidth(),
+  () => sources.value.map((e) => `${e.sourceId}:${String(upstreamCardSize(e.sourceId).w)}x${String(upstreamCardSize(e.sourceId).h)}`).join(','),
+  () => syncFollowSize(),
   { immediate: true },
 )
 
