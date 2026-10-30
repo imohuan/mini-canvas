@@ -317,6 +317,12 @@ const measure = useNodeMeasure({
 onBeforeUnmount(() => {
   measure.stop()
   paneSize.stop()
+  // 平移「快速模式」的摘除定时器：组件没了还留着它，会让一个已卸载的 surface
+  // 在 300ms 后再去摸一次 DOM（同一次卸载里 rootEl 已是 null，纯属多余回调）
+  if (rapidOffTimer) {
+    clearTimeout(rapidOffTimer)
+    rapidOffTimer = null
+  }
   // 销毁 Flow 能力面：此后任何调用都抛 NotReady（不再指向已卸载的 VueFlow 实例）
   flow.dispose()
 })
