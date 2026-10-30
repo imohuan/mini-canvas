@@ -212,6 +212,7 @@ export {
   toPixelRect,
   isUsableRect,
   framedMediaStyle,
+  framedMediaBoxStyle,
   CORNER_DIRS,
   ALL_DIRS,
   MIN_FRAME_MEDIA,

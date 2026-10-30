@@ -78,6 +78,40 @@ describe('取景几何（裁剪框 → 放大与偏移）', () => {
     expect(framingStyle(undefined, 1600, 800)).toEqual({})
     expect(framingStyle({ x: 0, y: 0, width: 0, height: 0 }, 1600, 800)).toEqual({})
   })
+
+  /**
+   * 回归（2026-10-30 用户实测）：裁剪后的缩略图比例不对。
+   *
+   * 根因：取景块的高度也按「原宽 ÷ 框宽」放大，再用 object-fit: fill 填进去。
+   * 卡片与裁框比例只要差一点（手动拖过卡片 / 后台舍入 / 4:3 卡片装 16:9 画面），
+   * 画面就会被横向或纵向拉伸 —— 看起来就像「没有裁好」。
+   */
+  it('★ 取景块必须保持裁框比例（4:1 裁框不能按卡片比例拉伸）', () => {
+    expect(framingStyle({ x: 0, y: 0, width: 800, height: 200 }, 1600, 800)).toMatchObject({
+      width: '200%',
+      height: '400%',
+    })
+  })
+
+  /**
+   * 回归（2026-10-30 用户实测）：裁过的视频缩略图被"裁了两次"。
+   *
+   * 生成端已经按裁框抓好了图（帧图内容就是裁框内的画面），显示端再套一层
+   * `framingStyle` 就会把这块画面再放大、再偏移一次 —— 用户看到的是
+   * 「只剩中间一小块 / 比例不对」。帧图有裁剪时只需整块铺满（fill），
+   * 取景只应作用于原始视频。
+   */
+  it('★ 帧图（已按裁框生成）不再套取景几何', async () => {
+    // 生成端已经按裁框截好；显示端若再套 framingStyle，就会二次放大、二次偏移。
+    // 这条用源码断言：取景 CSS 只作用在 <video> 上，帧图不能被它命中。
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const src = await fs.readFile(path.resolve(__dirname, '../VideoContent.vue'), 'utf8')
+    const rule = /(\.video-stage\.is-framed\s+[^{]+\{[^}]*\})/.exec(src)
+    expect(rule).not.toBeNull()
+    expect(rule![1]).toContain('video.video-media')
+    expect(rule![1]).not.toMatch(/\.video-media\.is-poster/)
+  })
 })
 
 describe('播放控件与可达性', () => {

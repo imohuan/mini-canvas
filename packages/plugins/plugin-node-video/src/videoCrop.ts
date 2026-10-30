@@ -13,7 +13,7 @@
  * framingStyle 与通用件的 framedMediaStyle 是同一套算法（放大到「原宽÷框宽」倍、
  * 往左上推「框起点÷框宽」倍），这里重新导出成视频语汇，让节点侧读起来是「取景」而不是「位图裁剪」。
  */
-import { framedMediaStyle } from '@mini-canvas/canvas-render'
+import { framedMediaBoxStyle, framedMediaStyle } from '@mini-canvas/canvas-render'
 import type { Rect } from '@mini-canvas/canvas-render'
 
 /** 是否是一个可用的裁剪框（委托通用件的脏数据守卫） */
@@ -28,6 +28,16 @@ export function framingStyle(
   rect: Rect | undefined,
   sourceWidth: number,
   sourceHeight: number,
+  cardWidth?: number,
+  cardHeight?: number,
 ): Record<string, string> {
+  /**
+   * 卡片尺寸一起传时，取景块按裁框自己的宽高比算（见 framedMediaBoxStyle 的说明）。
+   * 卡片比例与裁框差一丝，旧的「宽高各自放大」就会把画面拉扁 —— 用户看到的正是
+   * 「缩略图没有裁剪」。不传卡片尺寸时保持旧算法，裁剪浮层/测试等老调用方行为不变。
+   */
+  if (cardWidth !== undefined && cardHeight !== undefined) {
+    return framedMediaBoxStyle(rect, sourceWidth, sourceHeight, cardWidth, cardHeight)
+  }
   return framedMediaStyle(rect, sourceWidth, sourceHeight)
 }

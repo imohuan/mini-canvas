@@ -21,6 +21,7 @@ import { captureFrame } from './videoTransform'
 import {
   FrameCache,
   grabFrameBlobFromElement,
+  grabTierFramesFromElement,
   grabTierFrames,
   type FrameResourcePort,
   type TierFrame,
@@ -161,6 +162,13 @@ const frameTiers = ref<Map<number, TierFrame>>(new Map())
  * 不带这个判断的话，改完"最大宽高"画面会一直停在按旧尺寸缩出来的那张。
  */
 const frozenCfgKey = ref('')
+/**
+ * 生成这份帧图时的**取景身份**（源画面尺寸 + 裁框）。
+ *
+ * 只比尺寸配置不够：用户改裁剪框后档位与质量都不变，旧帧图仍会被判成"能继续用"，
+ * 于是画面停在改之前的取景上（2026-10-30 用户实测）。裁框与源尺寸一变就重做。
+ */
+const frozenViewKey = ref('')
 
 /** 当前配置的指纹（尺寸 + 质量）——变了就必须重新生成 */
 function tierCfgKey(): string {
@@ -273,6 +281,9 @@ watch(
     frameGateOpen,
     () => videoWidth.value,
     () => videoHeight.value,
+    // ★ 裁框也要进依赖：改裁剪后档位/尺寸都没变，只盯那几项的话 watch 不重跑，
+    // 画面会一直停在改之前的取景上（2026-10-30 用户实测）。
+    () => currentViewKey(),
     cropping,
     showPoster,
     () => tierCfg.value.tier2Width,
@@ -292,8 +303,11 @@ watch(
      * （2026-10-15 用户实测：「重新设置了最大宽高……它依然使用的是之前的图片」）。
      */
     if (frameTiers.value.size > 0) {
-      if (frozenCfgKey.value === tierCfgKey()) return
+      if (frozenCfgKey.value === tierCfgKey() && frozenViewKey.value === currentViewKey()) return
       releaseFrameTiers()
+      // 裁框/尺寸变了的旧定格必须从缓存里作废；否则它仍会作为「已有定格」被优先显示，
+      // 画面会一直停在旧取景上。
+      frameCache.clearFrozen(src)
     }
     if (videoWidth.value <= 0 || videoHeight.value <= 0) return
     // 可视区闸门（外扩一屏，滚动时不用等）
@@ -305,7 +319,17 @@ watch(
     const frameH = videoHeight.value
     const box = videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH })
     // 名字里带**尺寸**：用户改"最大宽高"后名字跟着变，才会重新生成（只带档位会命中旧图）
-    const ref = makeFrameRef('vid', src, frameRefParamFor(wantTier, at, box.width, box.height, tierCfg.value.quality))
+    // 名字里必须同时带**取景身份**（裁框 + 源画面尺寸）：改裁剪后缩略图要重生成，
+    // 否则一直命中改之前那张整幅图（2026-10-30 用户实测）。
+    const ref = makeFrameRef(
+      'vid',
+      src,
+      frameRefParamFor(wantTier, at, box.width, box.height, tierCfg.value.quality, {
+        frameWidth: frameW,
+        frameHeight: frameH,
+        cropRect: cropRect.value ?? null,
+      }),
+    )
     // 内存缓存的键用同一份身份（ref），于是改尺寸后内存那一级也一起失效
     const variant = ref ?? wantTier + '@' + at.toFixed(2)
     // 固定引用名（源 + 档位 + 时刻）→ **资源库命中就零解码**：
@@ -363,6 +387,7 @@ watch(
         if (made && frameTiers.value.size === 0) {
           tierFrame.value = made
           frozenCfgKey.value = tierCfgKey()
+          frozenViewKey.value = currentViewKey()
         }
       })
   },
@@ -371,14 +396,31 @@ watch(
 
 /** 释放定格帧的三个档位（objectURL 不释放会一直占着内存） */
 function releaseFrameTiers(): void {
-  for (const frame of frameTiers.value.values()) {
-    try {
-      URL.revokeObjectURL(frame.url)
-    } catch {
-      /* 环境不支持 → 忽略 */
-    }
-  }
+  // objectURL 的所有权在 FrameCache（它知道哪些是自己造的、哪些是资源库共用的地址）。
+  // 这里直接 revoke 会把同一 ref 被别的节点共用的地址一起弄坏（本地 IndexedDB 就是共用）。
   frameTiers.value = new Map()
+}
+
+/**
+ * 定格帧在内存缓存里的变体前缀。
+ *
+ * 定格图与「默认帧图」都住同一个 FrameCache，用前缀把两类图分开：
+ * 默认帧图的键 = 资源库引用名（源 + 档位 + 时刻 + 尺寸 + 质量），
+ * 定格图的键 = `frz:<时刻>:<画面宽>x<画面高>:<裁框摘要>` —— 换时刻 / 换画面尺寸 / 换裁框
+ * 都是另一张图，不会被上一次定格的缓存命中（用户 2026-10-30 报的「移开鼠标预览没更新」）。
+ */
+function frozenVariantPrefix(at: number, frameW: number, frameH: number): string {
+  const r = cropRect.value
+  const crop = r ? `${r.x},${r.y},${r.width},${r.height}` : 'full'
+  const cropKey = crop.replace(/[^0-9a-z.,-]/gi, '')
+  return 'frz:' + Math.round(at * 100) + ':' + Math.round(frameW) + 'x' + Math.round(frameH) + ':' + cropKey
+}
+
+/** 当前取景身份（与冻结帧一起比对，裁框变了就重做） */
+function currentViewKey(): string {
+  const r = cropRect.value
+  const crop = r ? `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}` : 'full'
+  return videoWidth.value + 'x' + videoHeight.value + ':' + crop
 }
 
 /**
@@ -412,6 +454,12 @@ async function freezeFrame(): Promise<void> {
   if (!v.paused) v.pause()
   resumeTime.value = at
   const src = videoUrl.value
+  // 旧定格与当前取景对不上（用户刚改了裁框）→ 先丢掉，别让它继续挂在画面上
+  // （watch 里也会判，但抓帧结束前就有画面，这里提前清掉，闪错的时间更短）。
+  if (frameTiers.value.size > 0 && frozenViewKey.value !== currentViewKey()) {
+    releaseFrameTiers()
+    frameCache.clearFrozen(src)
+  }
   const boxes = [
     { tier: 1, box: videoThumbTargetFor(1, tierCfg.value, { width: frameW, height: frameH }) },
     { tier: 2, box: videoThumbTargetFor(2, tierCfg.value, { width: frameW, height: frameH }) },
@@ -429,30 +477,32 @@ async function freezeFrame(): Promise<void> {
    * 另起一个 video 去 seek 在几十个视频节点的画布上会卡在解码器排队里
    * （2026-10-15 实测：暂停了但画面迟迟切不过去）。抓不到才退回"另起解码"那条慢路。
    */
+  /**
+   * ★ 一次抓帧、缩出三档（不是三次独立抓帧）。
+   *
+   * 抓两次「当前帧」在播放器里可能落在相邻两帧上，缩放时画面就会跳；
+   * 这里从同一个视频元素**同一时刻**抓一份原图，再在内存里缩出 2/3 档。
+   * 同时把这份结果直接写进 FrameCache 的内存级 —— 下一个 watch 会立刻显示它。
+   */
+  const variant = frozenVariantPrefix(at, frameW, frameH)
   const wanted = [1, 2, 3] as const
   const results = await Promise.all(
     wanted.map(async (wantTier) => {
       const wantBox = boxes.find((b) => b.tier === wantTier)?.box ?? { width: frameW, height: frameH }
-      // 名字带**尺寸**：改了"最大宽高"后名字跟着变，才会重新抓一份（否则命中旧图）
-      const ref = makeFrameRef(
-        'vid',
+      return await frameCache.getOrCreate(
         src,
-        frameRefParamFor(wantTier, at, wantBox.width, wantBox.height, tierCfg.value.quality),
-      )
-      const resources = frameResources()
-      return await frameCache.resolveOrCreate({
-        src,
-        // 内存键与资源库名字同一份身份 → 改尺寸时两级缓存一起失效
-        variant: ref ?? wantTier + '@' + at.toFixed(2),
-        ...(ref ? { ref } : {}),
-        ...(resources ? { resources } : {}),
-        make: async () => {
-          const fromEl = await grabFrameBlobFromElement(v, {
+        variant + ':' + wantTier,
+        async () => {
+          // ★ 明确 seek 到 `at` 再抓：浏览器暂停后 drawImage 取的是"最后呈现帧"，
+          // 与 currentTime 之间可能差一帧；传 at 让 "停在第 5 秒就截第 5 秒" 成为事实。
+          const set = await grabTierFramesFromElement(v, {
             box: videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH }),
             tier: wantTier,
             cropRect: cropRect.value ?? null,
             quality: tierCfg.value.quality,
+            at,
           })
+          const fromEl = set?.tiers.get(wantTier)
           if (fromEl) return fromEl
           const slow = await grabTierFrames(src, {
             at,
@@ -465,12 +515,9 @@ async function freezeFrame(): Promise<void> {
           })
           const frame = slow?.tiers.get(wantTier)
           if (!frame) return null
-          // 慢路出的是 objectURL：这里只要字节（地址由资源库/内存缓存管）
-          const blob = await fetch(frame.url).then((r) => r.blob()).catch(() => null)
-          URL.revokeObjectURL(frame.url)
-          return blob
+          return frame
         },
-      })
+      )
     }),
   )// 期间用户又悬停回来播放 / 换了源 → 丢弃这次定格（不然会把旧画面挂上去）
   if (epoch !== freezeEpoch.value || videoUrl.value !== src) return
@@ -479,10 +526,12 @@ async function freezeFrame(): Promise<void> {
     if (frame) tiers.set(wanted[i], frame)
   })
   if (tiers.size === 0) return
-  releaseFrameTiers()
-  frameTiers.value = tiers
+  // 直接换成本次定格的三档：不再经过「资源库命中」那一级（定格图只在本次会话有效）。
+  frameCache.setFrozenFrames(src, variant, tiers)
+  frameTiers.value = new Map([...tiers].map(([t, f]) => [t, f]))
   // 记下"这份是用哪套配置生成的" —— 用户改尺寸后据此判定要重做
   frozenCfgKey.value = tierCfgKey()
+  frozenViewKey.value = currentViewKey()
   tierFrame.value = null
 }
 
@@ -505,13 +554,15 @@ function stopAndRestorePoster(): void {
     if (!v.paused) v.pause()
     if (Number.isFinite(v.currentTime)) resumeTime.value = v.currentTime
   }
-  // 以前定格过就直接切（用户看到的就是他停在哪）；没有才现抓一帧，
-  // 且**抓完再切** —— 顺序反了 video 元素已经卸载，抓不到画面。
-  if (frameTiers.value.size > 0) {
-    videoRequested.value = false
-    endedLatch.value = false
-    return
-  } void freezeFrame().then(() => {
+  /**
+   * ★ 每次离开都抓**当前这一帧**（用户 2026-10-30 口径：播到第 5 秒移开，就该把第 5 秒
+   * 定格成新的预览图）。旧实现在 `frameTiers.size > 0` 时直接复用上一次定格的帧 ——
+   * 于是第二次播放停在新位置，缩略图却还是上一次那张，看起来像「动态更新没生效」。
+   *
+   * 抓帧期间帧图先盖住（posterCovering 已在 onCardLeave 置真），抓完再撤 video。
+   * 同一时刻重复定格由 FrameCache 按「源 + 时刻」命中，不会重复解码。
+   */
+  void freezeFrame().then(() => {
     // 定格期间用户又 hover 回来（freezeEpoch 已变）→ 不要把 videoRequested 复位，
     // 否则会把刚要求播放的 video 元素卸掉，第二轮播放就此卡死（画面停回帧图、
     // 时间不动 —— 2026-10-16 真机复现的第二轮播放卡住）
@@ -605,9 +656,31 @@ const captureMenuOpen = ref(false)
 /** 裁剪中显示完整画面；平时按裁框取景（这是"裁剪"在视觉上落地的唯一一处） */
 const videoStyle = computed<Record<string, string>>(() => {
   if (cropping.value) return {}
-  return framingStyle(cropRect.value, videoWidth.value, videoHeight.value)
+  // 卡片尺寸一起传：取景块按**裁框自己的宽高比**铺满卡片。
+  // 只按「原宽÷框宽、原高÷框高」放大会在卡片比例与裁框不一致时把画面拉扁
+  // （用户 2026-10-30 实测报的「缩略图没有裁剪」）。没有卡片尺寸时退回旧算法。
+  const cardW = positiveNum(props.data?.cardWidth) ?? 0
+  const cardH = positiveNum(props.data?.cardHeight) ?? 0
+  return framingStyle(cropRect.value, videoWidth.value, videoHeight.value, cardW, cardH)
 })
 const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value).length > 0)
+
+/**
+ * 帧图（预览图）的显示方式。
+ *
+ * ★ 帧图**已经按裁剪框生成**（见 grabFrameBlobFromElement / grabTierFrames 的 cropRect），
+ * 它本身就是"裁框内的那块画面"。所以显示时只把它整块铺满卡片，**不能再套 framingStyle** ——
+ * 套上就是第二次放大、第二次偏移，用户看到的是「只剩中间一小块 / 比例不对」
+ * （2026-10-30 实测）。取景只属于原始 <video>：它没被裁过，靠 CSS 看框内那块。
+ *
+ * 用 object-fit: fill 而不是 contain：帧图与裁框同比例，卡片也是按裁框比例算的，
+ * 两者只有边框/舍入造成的亚像素差；fill 把这丝差别吸收掉，cover 还能裁掉一行像素，
+ * contain 会露出底色。
+ */
+const posterStyle = computed<Record<string, string>>((): Record<string, string> => {
+  if (!isFramed.value) return {}
+  return { width: '100%', height: '100%', left: '0', top: '0' }
+})
 
 /** 当前该用的 video 元素（全屏预览由 MediaViewer 自己管，不在这份状态里） */
 function activeVideo(): HTMLVideoElement | null {
@@ -993,7 +1066,7 @@ watch(videoUrl, (prev) => {
              首次 play 后 500ms 才把帧图藏掉（延迟关闭）；之后只要鼠标不离开，
              video 永不消失（暂停/拖进度条都保持视频画面）。 -->
         <img v-if="keepPosterOverVideo && posterDisplaySrc" class="video-media is-poster"
-          :class="{ 'is-framed': isFramed, 'is-cropping': cropping }" :style="videoStyle" :src="posterDisplaySrc"
+          :class="{ 'is-cropping': cropping }" :style="posterStyle" :src="posterDisplaySrc"
           alt="视频帧" draggable="false" />
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
         <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
@@ -1101,19 +1174,20 @@ watch(videoUrl, (prev) => {
 }
 
 /* 帧图（未播放时的画面）：与 <video> 完全同一套几何。
-   为什么用 cover 而不是 contain 一个 letterbox 里的小图：卡片尺寸本来就是按视频比例
-   算出来的（videoFit），所以 cover 与 contain 结果几乎一致，而 cover 不会在 1px 边框
-   造成的比例偏差下留出两条黑边（图片节点那条"横屏宽几像素/竖屏高几像素"的教训）。 */
+   ★ 必须 contain：卡片比例与画面比例差一点时，cover 会把多出去的那一边直接切掉，
+   用户看到的就是「缩略图没有裁好」（2026-10-30 实测）。正常比例下两者结果几乎一致，
+   差别只在比例不匹配时 —— 那种情况宁可留极窄的底色，也不能丢掉画面内容。 */
 .video-media.is-poster {
-  object-fit: cover;
+  object-fit: contain;
   /* 与 video 短暂共存时压在上面（hover 自动播放要等首帧解码完才撤帧图，防止闪黑） */
   z-index: 1;
   -webkit-user-drag: none;
 }
 
-/* 裁过的画面：由 croppedVideoStyle 给出放大比例与偏移，位置相对舞台左上角，
-   框外部分被 .video-stage 的 overflow:hidden 裁掉 —— 这就是"裁剪"的视觉实现。 */
-.video-stage.is-framed .video-media {
+/* 裁过的**视频**：由 framingStyle 给出放大比例与偏移，位置相对舞台左上角，
+   框外部分被 .video-stage 的 overflow:hidden 裁掉 —— 这就是"裁剪"的视觉实现。
+   ★ 只作用在 <video>：帧图在生成时已经按裁框截好，再套这层就是裁两次（见 posterStyle）。 */
+.video-stage.is-framed video.video-media {
   position: absolute;
   max-width: none;
   max-height: none;

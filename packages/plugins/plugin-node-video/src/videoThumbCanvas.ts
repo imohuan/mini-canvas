@@ -292,6 +292,13 @@ export class FrameCache {
   private store = new Map<string, Map<string, TierFrame>>()
   private pending = new Map<string, Promise<TierFrame | null>>()
   /**
+   * 本缓存**自己创建**的 objectURL。
+   *
+   * 只释放自己造的：resource 服务解析出来的地址可能被多个节点共用（尤其本地 IndexedDB
+   * 对同一个 ref 只建一个 objectURL），谁卸载谁 revoke 会把别人正在显示的图一起弄坏。
+   */
+  private readonly owned = new Set<string>()
+  /**
    * 已确认**不存在**的引用名。
    *
    * 为什么要记：判断"服务端有没有这张图"要发一次 HEAD，而每次定格都是**新的时刻**、
@@ -303,6 +310,45 @@ export class FrameCache {
 
   private key(src: string, variant: string): string {
     return variant + ':' + src
+  }
+
+  /** 记下一个 objectURL 的所有权（只有 blob: 才需要回收） */
+  private own(url: string): void {
+    if (url.startsWith('blob:')) this.owned.add(url)
+  }
+
+  /** 归还本缓存拥有的地址；不是自己造的一律不碰 */
+  private release(url: string): void {
+    if (!this.owned.delete(url)) return
+    try { URL.revokeObjectURL(url) } catch { /* 环境不支持 → 忽略 */ }
+  }
+
+  /**
+   * 一次性回填三档（定格用）：**只在本组件内存里换**，不复用资源库的那一级。
+   *
+   * 为什么不用 resolveOrCreate：定格抓的是「眼前这一帧」，它的尺寸 / 裁框都不进引用名，
+   * 仅凭「源 + 时刻」去查资源库会命中别处生成的图 —— 可能是别的裁框、别的像素尺寸、
+   * 甚至是更早一次播放时留下的帧。用户看到的就成了「移开鼠标后预览没更新 / 比例不对」。
+   * 定格帧只在本次会话有效（离开编辑器就回到默认帧图），所以内存这一级才是正确的落点。
+   */
+  setFrozenFrames(src: string, variantPrefix: string, frames: Map<number, TierFrame>): void {
+    const perTier = this.store.get(src) ?? new Map<string, TierFrame>()
+    // 同一时刻重复定格会拿回**同一批 URL**：先收集新图的地址，替换时绝不能把它们 revoke 掉。
+    const nextUrls = new Set([...frames.values()].map((f) => f.url))
+    // ★ 只换**定格项**：默认帧图也住在同一张表里，它是下一次回落的底图，
+    //   连它一起 revoke 会让正在显示的那张变破图（用户 2026-10-30 实测：移开后闪白）。
+    //   旧定格按前缀精确释放；新一帧刚生成、马上要显示，绝不能顺手 revoke。
+    for (const [key, f] of [...perTier.entries()]) {
+      if (!key.startsWith('frz:')) continue
+      perTier.delete(key)
+      if (!nextUrls.has(f.url)) this.release(f.url)
+    }
+    for (const [tier, frame] of frames) {
+      const key = variantPrefix + ':' + tier
+      perTier.set(key, frame)
+      this.own(frame.url)
+    }
+    this.store.set(src, perTier)
   }
 
   async getOrCreate(
@@ -318,10 +364,11 @@ export class FrameCache {
     const task = make()
       .then((made) => {
         if (!made) return null
+        this.own(made.url)
         const perTier = this.store.get(src) ?? new Map<string, TierFrame>()
         const existing = perTier.get(variant)
         if (existing) {
-          URL.revokeObjectURL(made.url)
+          this.release(made.url)
           return existing
         }
         perTier.set(variant, made)
@@ -394,13 +441,14 @@ export class FrameCache {
       const blob = await make()
       if (!blob) return null
       let url = URL.createObjectURL(blob)
+      this.own(url)
       // ③ 存回资源库（固定名 + derived）：下次命中①
       if (ref && resources) {
         try {
           const stored = await resources.put(blob, { kind: 'image', name: ref + '.webp', ref, derived: true })
           const resolved = await resources.resolve(stored)
           if (resolved) {
-            URL.revokeObjectURL(url)
+            this.release(url)
             url = resolved
           }
         } catch {
@@ -411,7 +459,7 @@ export class FrameCache {
       const per = this.store.get(src) ?? new Map<string, TierFrame>()
       const existing = per.get(variant)
       if (existing) {
-        if (url !== existing.url) URL.revokeObjectURL(url)
+        if (url !== existing.url) this.release(url)
         return existing
       }
       per.set(variant, made)
@@ -427,7 +475,7 @@ export class FrameCache {
 
   clearSource(src?: string): void {
     const drop = (source: string, map: Map<string, TierFrame>): void => {
-      for (const frame of map.values()) URL.revokeObjectURL(frame.url)
+      for (const frame of map.values()) this.release(frame.url)
       this.store.delete(source)
     }
     if (src === undefined) {
@@ -437,6 +485,23 @@ export class FrameCache {
     }
     const map = this.store.get(src)
     if (map) drop(src, map)
+  }
+
+  /**
+   * 只清某个源的**定格帧**，默认帧图保留。
+   *
+   * 用途：裁框变了 / 恢复整幅 / 尺寸配置变了 —— 旧定格已经与当前取景对不上，
+   * 继续用它会把画面挂在错误的位置；而默认帧图仍是有效底图，没必要一起丢。
+   */
+  clearFrozen(src: string): void {
+    const perTier = this.store.get(src)
+    if (perTier) {
+      for (const [key, f] of [...perTier.entries()]) {
+        if (!key.startsWith('frz:')) continue
+        perTier.delete(key)
+        this.release(f.url)
+      }
+    }
   }
 
   /**
@@ -490,12 +555,24 @@ export async function grabTierFramesFromElement(
     boxes: { tier: number; box: { width: number; height: number } }[]
     cropRect?: { x: number; y: number; width: number; height: number } | null
     quality?: number
+    /**
+     * 取帧时刻（秒）。给了就先 seek 到这一刻再抓；省略 = 抓元素当前画面。
+     *
+     * 为什么需要：暂停状态下抓帧读的是"解码器最后呈现的那一帧"，而视频仍在播放时
+     * drawImage 可能拿到正在解码的新帧。定格必须**精确对应**用户看到的时间点。
+     */
+    at?: number
   },
 ): Promise<TierFrameSet | null> {
   if (typeof document === 'undefined') return null
   const frameW = videoEl.videoWidth
   const frameH = videoEl.videoHeight
   if (!frameW || !frameH) return null
+  // 给了时刻 → 等 seek 到位再画（与 captureFrame 的 2 秒超时同口径：宁可抓接近的一帧也不卡死）。
+  if (typeof opts.at === 'number' && Number.isFinite(opts.at)) {
+    const ready = await seekVideoEl(videoEl, opts.at)
+    if (!ready) return null
+  }
   const quality = opts.quality ?? 0.8
   const { crop, view } = resolveFrameView(opts.cropRect, frameW, frameH)
   try {
@@ -530,6 +607,33 @@ export async function grabTierFramesFromElement(
   } catch {
     return null
   }
+}
+
+/** 把 video 元素 seek 到指定时刻并等画面就绪（最多等 2 秒）；失败返回 false */
+function seekVideoEl(videoEl: HTMLVideoElement, at: number): Promise<boolean> {
+  const target = Math.max(0, at)
+  if (Math.abs(videoEl.currentTime - target) < 0.03 && videoEl.readyState >= 2) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const done = (ok: boolean): void => {
+      if (settled) return
+      settled = true
+      videoEl.removeEventListener('seeked', onSeeked)
+      videoEl.removeEventListener('loadeddata', onSeeked)
+      if (timer !== null) clearTimeout(timer)
+      resolve(ok)
+    }
+    const onSeeked = (): void => done(true)
+    videoEl.addEventListener('seeked', onSeeked)
+    videoEl.addEventListener('loadeddata', onSeeked)
+    timer = setTimeout(() => done(false), 2000)
+    try {
+      videoEl.currentTime = target
+    } catch {
+      done(false)
+    }
+  })
 }
 
 

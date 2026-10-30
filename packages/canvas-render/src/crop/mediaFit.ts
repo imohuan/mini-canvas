@@ -361,3 +361,48 @@ export function framedMediaStyle(rect: Rect | undefined, sourceW: number, source
     top: pct(-rect.y / rect.height),
   }
 }
+
+/**
+ * 取景块的尺寸（CSS 百分比）：按**裁框自己的宽高比**铺满卡片。
+ *
+ * 与 framedMediaStyle 的差别（2026-10-30 用户实测报的「缩略图没裁好」）：
+ * framedMediaStyle 的 width/height 分别是「原宽÷框宽」「原高÷框高」，只有卡片比例与裁框
+ * 完全一致时画面才不变形。卡片被拖过、后台舍入、或 4:3 卡片里放 16:9 画面时，
+ * 两者比例不一样，`object-fit: fill` 就会把画面拉扁 —— 用户看到的是「裁剪没生效」。
+ *
+ * 这里用**同一个缩放倍数**把整幅画面放大，让裁框覆盖卡片（cover），再按卡片尺寸换算成百分比：
+ * scale = max(卡片宽 ÷ 框宽, 卡片高 ÷ 框高)。图片元素的宽高比因此始终等于原画面；
+ * 裁框与卡片比例不一致时，多出来的那一边被卡片 overflow:hidden 裁掉，画面本身不会拉扁。
+ * 参数缺卡片尺寸（老调用方）时退回原来那条，行为不变。
+ *
+ * @returns 空对象 = 不裁剪 / 脏数据（调用方显示整幅）
+ */
+export function framedMediaBoxStyle(
+  rect: Rect | undefined,
+  sourceW: number,
+  sourceH: number,
+  cardW?: number,
+  cardH?: number,
+): Record<string, string> {
+  const base = framedMediaStyle(rect, sourceW, sourceH)
+  if (Object.keys(base).length === 0) return base
+  const cw = positive(cardW ?? 0, 0)
+  const ch = positive(cardH ?? 0, 0)
+  if (cw <= 0 || ch <= 0) return base
+  const r = rect as Rect
+  const sw = positive(sourceW, 0)
+  const sh = positive(sourceH, 0)
+  if (sw <= 0 || sh <= 0) return base
+  const scale = Math.max(cw / r.width, ch / r.height)
+  if (!Number.isFinite(scale) || scale <= 0) return base
+  const widthPct = (sw * scale) / cw
+  const heightPct = (sh * scale) / ch
+  if (!Number.isFinite(widthPct) || widthPct <= 0 || !Number.isFinite(heightPct) || heightPct <= 0) return base
+  const pct = (n: number): string => String(n * 100) + '%'
+  return {
+    width: pct(widthPct),
+    height: pct(heightPct),
+    left: pct((-r.x * scale) / cw),
+    top: pct((-r.y * scale) / ch),
+  }
+}

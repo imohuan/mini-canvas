@@ -16,6 +16,7 @@ import {
   defaultExpandRect,
   DEFAULT_CROP_RATIO,
   framedMediaStyle,
+  framedMediaBoxStyle,
   isUsableRect,
   minFrameEdge,
   MIN_FRAME_DISPLAY_EDGE,
@@ -308,6 +309,43 @@ describe('framedMediaStyle：裁完画面正好填满卡片', () => {
   it('裁框/原画面尺寸非法 → 空样式（宁可显示整幅，也不给出会算出 NaN 的样式）', () => {
     expect(framedMediaStyle({ x: 0, y: 0, width: 0, height: 0 }, 1600, 800)).toEqual({})
     expect(framedMediaStyle({ x: 0, y: 0, width: 100, height: 100 }, 0, 0)).toEqual({})
+  })
+})
+
+describe('framedMediaBoxStyle：取景块保持原画面比例（卡片比例不一致也不拉伸）', () => {
+  it('16:9 卡片里裁 2:1 框：画面按同一倍数放大，多出的上下被卡片裁掉', () => {
+    // 1600×800 画面、800×400 框、1600×900 卡片：
+    // scale = max(1600/800, 900/400) = 2.25 → 画面 3600×1800 → 宽 225%、高 200%
+    expect(framedMediaBoxStyle({ x: 0, y: 0, width: 800, height: 400 }, 1600, 800, 1600, 900)).toEqual({
+      width: '225%',
+      height: '200%',
+      left: '0%',
+      top: '0%',
+    })
+  })
+
+  it('正方形卡片里裁 1:1 框：宽高都是 200%（与旧算法一致，不能被改坏）', () => {
+    expect(framedMediaBoxStyle({ x: 0, y: 0, width: 400, height: 400 }, 800, 800, 400, 400)).toEqual({
+      width: '200%',
+      height: '200%',
+      left: '0%',
+      top: '0%',
+    })
+  })
+
+  it('卡片比例与裁框一致 → 结果与旧算法完全相同（二分图 / 等比例卡片）', () => {
+    const old = framedMediaStyle({ x: 400, y: 200, width: 800, height: 400 }, 1600, 800)
+    expect(framedMediaBoxStyle({ x: 400, y: 200, width: 800, height: 400 }, 1600, 800, 800, 400)).toEqual(old)
+  })
+
+  it('卡片尺寸缺失 / 非法 → 退回旧算法（老调用方行为不变）', () => {
+    const old = framedMediaStyle({ x: 400, y: 200, width: 800, height: 400 }, 1600, 800)
+    expect(framedMediaBoxStyle({ x: 400, y: 200, width: 800, height: 400 }, 1600, 800)).toEqual(old)
+    expect(framedMediaBoxStyle({ x: 400, y: 200, width: 800, height: 400 }, 1600, 800, 0, 400)).toEqual(old)
+  })
+
+  it('没有裁框 → 空样式（显示整幅）', () => {
+    expect(framedMediaBoxStyle(undefined, 1600, 800, 1600, 900)).toEqual({})
   })
 })
 

@@ -107,6 +107,36 @@ describe('目标框：视频与图片的差别（第 1 档也要框）', () => {
     expect(fitFrameIntoBox(undefined, 100, { width: 512, height: 512 })).toBeNull()
   })
 
+  /**
+   * 回归（2026-10-30 用户实测）：帧图横向被压扁。
+   *
+   * 根因：横幅 16:9 视频的第二档目标框是 512×512，旧实现把**目标框的尺寸**直接当成了
+   * 输出画布的尺寸，再用拉伸式的 drawImage 填进去 —— 512×288 的画面被拉成 512×512。
+   * 正确规则：目标框只是**上限**，输出尺寸必须仍按画面等比算（512×288）。
+   */
+  it('★ 目标框是上限，不是输出尺寸：16:9 画面进 512×512 框 → 512×288（不拉伸）', () => {
+    expect(fitFrameIntoBox(1280, 720, { width: 512, height: 512 })).toEqual({ width: 512, height: 288 })
+    expect(fitFrameIntoBox(720, 1280, { width: 512, height: 512 })).toEqual({ width: 288, height: 512 })
+  })
+
+  /**
+   * 回归（2026-10-30 用户实测）：缩略图被裁成「只露中间一条」。
+   *
+   * 根因不在生成（生成的一直是整幅画面），而在显示：帧图用了 object-fit: cover。
+   * 卡片比例与画面比例差一点（1px 边框 / 卡片被手动拖过 / 4:3 卡片里放 16:9 视频）时，
+   * cover 会把多出去的那一边直接切掉 —— 用户看到的就是「没有裁剪好的缩略图」。
+   * 帧图必须完整显示（contain），画面内容一个像素都不许丢。
+   */
+  it('★ 帧图必须完整显示（contain），不能被 cover 切掉画面', async () => {
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const src = await fs.readFile(path.resolve(__dirname, '../VideoContent.vue'), 'utf8')
+    const posterRule = /(\.video-media\.is-poster\s*\{[^}]*\})/.exec(src)
+    expect(posterRule).not.toBeNull()
+    expect(posterRule![1]).toContain('object-fit: contain')
+    expect(posterRule![1]).not.toContain('object-fit: cover')
+  })
+
   // ★ 回归：帧图曾经变成"裁剪放大图"（用户实测报的「它已经变成了裁剪，而不是整个图片缩小」）
   describe('取景（裁剪）与缩放必须分开', () => {
     it('没裁过 → 抓帧不传 crop（null = 整幅），缩放按整幅算', () => {
@@ -128,6 +158,14 @@ describe('目标框：视频与图片的差别（第 1 档也要框）', () => {
       for (const bad of [undefined, { x: 0, y: 0, width: 0, height: 0 }, { x: 0, y: 0, width: -5, height: 10 }]) {
         expect(resolveFrameView(bad, 1280, 720).crop).toBeNull()
       }
+    })
+
+    it('★ 没裁过的帧图取景尺寸 = 整幅画面（不能拿目标框去凑）', () => {
+      // 输出画布必须是 480×270，而不是目标框的 512×512。
+      const { crop, view } = resolveFrameView(null, 480, 270)
+      expect(crop).toBeNull()
+      expect(view).toEqual({ width: 480, height: 270 })
+      expect(fitFrameIntoBox(view.width, view.height, { width: 512, height: 512 })).toEqual({ width: 480, height: 270 })
     })
 
     it('★ 目标框只影响缩放比例，绝不出现在 crop 里', () => {
@@ -167,6 +205,38 @@ describe('配置：视频与图片两套独立', () => {
       expect(frameRefParamFor(1, 1, 512, 512, 0.8)).not.toBe(frameRefParamFor(1, 5, 512, 512, 0.8))
     })
 
+    /**
+     * 回归（2026-10-30 用户实测）：裁剪后的缩略图还是整幅 / 位置不对。
+     * 根因：缓存名只带档位、时刻、尺寸，**没带裁剪框**；改裁框后名字不变，
+     * 一直在用第一次生成的整幅图。取景尺寸同理（缩放按它算）。
+     */
+    it('★ 裁剪框不同 → 名字不同（否则改完裁剪仍命中旧图）', () => {
+      const full = frameRefParamFor(2, 1, 512, 512, 0.8)
+      const a = frameRefParamFor(2, 1, 512, 512, 0.8, {
+        frameWidth: 1280,
+        frameHeight: 720,
+        cropRect: { x: 100, y: 50, width: 400, height: 300 },
+      })
+      const b = frameRefParamFor(2, 1, 512, 512, 0.8, {
+        frameWidth: 1280,
+        frameHeight: 720,
+        cropRect: { x: 200, y: 50, width: 400, height: 300 },
+      })
+      expect(a).not.toBe(full)
+      expect(a).not.toBe(b)
+    })
+
+    it('★ 源画面尺寸不同 → 名字不同', () => {
+      const a = frameRefParamFor(2, 1, 512, 512, 0.8, { frameWidth: 1280, frameHeight: 720 })
+      const b = frameRefParamFor(2, 1, 512, 512, 0.8, { frameWidth: 1920, frameHeight: 1080 })
+      expect(a).not.toBe(b)
+    })
+
+    it('★ 算法版本进名字：旧版（v1）生成的名字不会被继续命中', () => {
+      expect(frameRefParamFor(1, 1, 480, 270, 0.8)).toContain('v2')
+      expect(frameRefParamFor(1, 1, 480, 270, 0.8)).not.toBe('t1-a100w480h270q80')
+    })
+
     it('参数完全一样 → 名字一样（命中才可能发生）', () => {
       expect(frameRefParamFor(2, 1.5, 512, 512, 0.8)).toBe(frameRefParamFor(2, 1.5, 512, 512, 0.8))
     })
@@ -174,6 +244,19 @@ describe('配置：视频与图片两套独立', () => {
     it('名字仍在服务端允许的字符集内（只含字母数字与 _ -）', () => {
       const ref = makeFrameRef('vid', '/api/canvases/c1/resources/abcd1234.mp4', frameRefParamFor(2, 1.25, 512, 512, 0.8))!
       expect(ref).toMatch(/^[A-Za-z0-9_-]+$/)
+    })
+
+    /**
+     * 回归：云端槽位名上限 64。以前局部变量写的是 120，长源名会生成只有本地能存的名字，
+     * 云端每次都被拒 → 永远不命中。现在超长时改用短哈希，仍然要过 64。
+     */
+    it('★ 引用名不超过云端槽位上限 64（长源名改用短哈希）', () => {
+      const long = '/api/canvases/c1/resources/' + 'a'.repeat(80) + '.mp4'
+      const ref = makeFrameRef('vid', long, frameRefParamFor(1, 1, 480, 270, 0.8, { frameWidth: 480, frameHeight: 270 }))
+      expect(ref).toBeTruthy()
+      expect(ref!.length).toBeLessThanOrEqual(64)
+      // 确定性：同一源算出同一个名字（否则每次都会重新生成）
+      expect(makeFrameRef('vid', long, 'p')).toBe(makeFrameRef('vid', long, 'p'))
     })
   })
 
