@@ -32,6 +32,12 @@
   background: transparent;
   box-shadow: none;
   overflow: visible;
+  /*
+   * 默认面板有 180px 最小宽度（下拉菜单要够宽才好点）。
+   * 裸面板的宽度必须由内容决定，否则定位按 180px 算，
+   * 实际气泡只有几十像素，看起来就像「没有居中」。
+   */
+  min-width: 0;
 }
 .mck-dropdown__panel.is-bare.is-inner-scroll { overflow-y: hidden; }
 /*
