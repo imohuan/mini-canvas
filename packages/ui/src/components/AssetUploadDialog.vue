@@ -34,7 +34,11 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
-  save: [payload: { files: File[]; folderId?: string; tags: string[]; urls: { url: string; name: string }[] }]
+  /**
+   * `name` 只在**单文件**时给（多文件共用一个名字会互相覆盖，用户只会想让每个文件保留原名）。
+   * 宿主拿到它就按这个名字落库；没有就沿用文件名。
+   */
+  save: [payload: { files: File[]; folderId?: string; tags: string[]; urls: { url: string; name: string }[]; name?: string }]
 }>()
 
 // ui-style-guide §3.1：Esc 必须能关（挂 document，随组件回收）
@@ -109,6 +113,21 @@ function kindOfName(name: string): 'image' | 'video' | 'audio' | 'other' {
   return 'other'
 }
 const kindIcon = (k: string) => (k === 'video' ? VideoIcon : k === 'audio' ? AudioIcon : FileIcon)
+/**
+ * 换一个名字（保留字节与 MIME）：上传弹窗的「资产名称」改的是**登记名**，不是文件内容。
+ *
+ * 为什么不用 new File(...) 直接造：部分环境（老 Safari / 单测替身）的 File 构造器不完整，
+ * 这里已经拿到同一个 Blob，只需要把 name 换成新的。
+ */
+function renameFile(file: File, name: string): File {
+  if (file.name === name) return file
+  try {
+    return new File([file], name, { type: file.type, lastModified: file.lastModified })
+  } catch {
+    // 造不出来就退回原名（宁可名字不变，也不要上传失败）
+    return file
+  }
+}
 function chooseFiles(): void {
   fileInput.value?.click()
 }
@@ -147,7 +166,25 @@ function save(): void {
   const files = ok.map((i) => i.file).filter((f): f is File => Boolean(f))
   const urls = ok.filter((i) => i.url).map((i) => ({ url: i.url as string, name: i.name }))
   if (!files.length && !urls.length) return
-  emit('save', { files, folderId: targetFolderId.value || undefined, tags: [...pickedTags.value], urls })
+  /**
+   * 名称只在「恰好一个待保存项」时生效。
+   *
+   * 用户口径（上传弹窗的字段名就叫「资产名称」）：填了就该用填的。
+   * 多文件时输入框里那份名字没法均分给 N 个文件 —— 强行套用会把它们改成同一个名字
+   * （列表里分不清、同名又互相干扰按名对标签的逻辑），所以这时不传、各自保留原名。
+   */
+  const total = files.length + urls.length
+  const typed = assetName.value.trim()
+  const singleName = total === 1 && typed ? typed : undefined
+  if (singleName && files.length === 1) files[0] = renameFile(files[0], singleName)
+  if (singleName && urls.length === 1) urls[0] = { ...urls[0], name: singleName }
+  emit('save', {
+    files,
+    folderId: targetFolderId.value || undefined,
+    tags: [...pickedTags.value],
+    urls,
+    ...(singleName ? { name: singleName } : {}),
+  })
   for (const i of items.value) if (i.file && i.preview) URL.revokeObjectURL(i.preview)
   items.value = []
   pickedTags.value = []

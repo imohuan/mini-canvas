@@ -531,14 +531,23 @@ async function folderRemove(id: string, name: string): Promise<void> {
   await ui.removeAssetFolder(id)
   ui.showToast('已删除文件夹：' + name)
 }
-/** 上传弹窗保存：直传后台（带 folderId —— projectsApi.uploadAsset 支持），再补标签 */
-async function onUploadSave(payload: { files: File[]; folderId?: string; tags: string[] }): Promise<void> {
+/**
+ * 上传弹窗保存：本地文件直传；**画布媒体（urls）先取字节再直传**（与 AssetUploadHost 同一条口径）。
+ *
+ * 为什么必须处理 urls：节点右键「收藏到资产库」/多选「加入资产库」会把画布上的图、视频、
+ * 节点包作为预填项塞进这个弹窗（见 assetUploadBus）—— 它们只有 url、没有 File。
+ * 早先这里只读 files，预填项被静默丢掉，用户看到的就是「点保存什么都没发生」。
+ */
+async function onUploadSave(payload: { files: File[]; folderId?: string; tags: string[]; urls: { url: string; name: string }[] }): Promise<void> {
   uploadOpen.value = false
   await ui.uploadAssetsTo(payload.files, payload.folderId)
+  if (payload.urls.length) await ui.uploadAssetsFromUrls(payload.urls, payload.folderId)
   if (payload.tags.length) {
     await ui.loadAssets()
     // 刚传的这几条：按名字对回清单（同一批重名也能覆盖到）
+    // 两路都要收名字：只收 files 的话，urls 那条传上来的资产永远补不上标签
     const names = new Set(payload.files.map((f) => f.name))
+    for (const u of payload.urls) names.add(u.name)
     for (const a of ui.assetItems.value) if (names.has(a.name)) await ui.tagsForAsset(a.id, payload.tags)
   }
 }

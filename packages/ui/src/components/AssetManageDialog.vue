@@ -280,13 +280,20 @@ async function addFolderIn(parentId?: string): Promise<void> {
  * 上传弹窗保存：与左侧抽屉同一条口径（带 folderId 直传，再按文件名对回清单补标签）。
  * 弹窗内「保存位置」默认预选当前所在层（模板里 :initial-folder-id），用户仍可改。
  */
-async function onUploadSave(payload: { files: File[]; folderId?: string; tags: string[] }): Promise<void> {
+/**
+ * 上传弹窗保存：本地文件直传；**画布媒体（urls）先取字节再直传**（与 AssetUploadHost 同一口径）。
+ * 只读 files 的话，预填进来的画布图/视频会被静默丢掉（用户看到「点保存没反应」）。
+ */
+async function onUploadSave(payload: { files: File[]; folderId?: string; tags: string[]; urls: { url: string; name: string }[] }): Promise<void> {
   uploadOpen.value = false
   await ui.uploadAssetsTo(payload.files, payload.folderId)
+  if (payload.urls.length) await ui.uploadAssetsFromUrls(payload.urls, payload.folderId)
   if (payload.tags.length) {
     await ui.loadAssets()
     // 刚传的这几条：按名字对回清单（同一批重名也能覆盖到）
+    // 两路都要收名字：只收 files 的话，urls 那条传上来的资产永远补不上标签
     const names = new Set(payload.files.map((f) => f.name))
+    for (const u of payload.urls) names.add(u.name)
     for (const a of ui.assetItems.value) if (names.has(a.name)) await ui.tagsForAsset(a.id, payload.tags)
   }
 }
