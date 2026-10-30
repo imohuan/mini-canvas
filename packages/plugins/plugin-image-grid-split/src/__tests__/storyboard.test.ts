@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   readStoryboard, swapSlots, placeStoryboardAt, slotRects, slotIndexAt, decideSnap, removeFromSlots,
   resolveStoryboardLayout, readStoryboardLayout, DEFAULT_STORYBOARD_LAYOUT,
-  storyboardContentSize,
+  storyboardContentSize, normalizeSlots,
 } from '../storyboard'
 import { fitInsideSlot, centerInsideSlot } from '../storyboardDrag'
 
@@ -179,9 +179,12 @@ describe('storyboard 吸附决策', () => {
     expect(d.displacedNodeId).toBe('b')
   })
 
-  it('拖回自己的格：不动（避免无意义历史）', () => {
+  it('拖回自己的格：仍然重新吸附（松手必须归位，否则会叠在别的槽上）', () => {
     const d = decideSnap({ nodeId: 'a', center: centerOf(0), currentBoardId: 'board', boards: [board] })
-    expect(d.kind).toBe('none')
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.slotIndex).toBe(0)
+    expect(d.displacedNodeId).toBeNull()
   })
 
   it('原本在组里、拖出卡片：脱离', () => {
@@ -237,6 +240,21 @@ describe('storyboard 吸附决策', () => {
     expect(removeFromSlots(['a', 'b', null], 'a')).toEqual([null, 'b', null])
     const same = ['a', 'b']
     expect(removeFromSlots(same, 'zzz')).toBe(same)
+  })
+
+  it('normalizeSlots：同一节点重复占格只留第一处（一槽一图）', () => {
+    expect(normalizeSlots(['a', 'b', 'a', 'a'])).toEqual(['a', 'b', null, null])
+  })
+
+  it('normalizeSlots：指向已删节点的槽清空；空槽/非字符串归一为 null', () => {
+    const alive = new Set(['a', 'c'])
+    expect(normalizeSlots(['a', 'gone', 'c', null], (id) => alive.has(id))).toEqual(['a', null, 'c', null])
+    expect(normalizeSlots([null, 'a'])).toEqual([null, 'a'])
+  })
+
+  it('normalizeSlots：已经是干净表时返回原引用（避免无意义写库）', () => {
+    const clean = ['a', null, 'b']
+    expect(normalizeSlots(clean)).toBe(clean)
   })
 })
 

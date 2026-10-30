@@ -55,6 +55,16 @@ interface PublishDeps {
   createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string | null
   /** 写节点尺寸（uniformGridPositions 的行/列宽高要与实际卡片一致） */
   setNodeSize(id: string, size: { w: number; h: number }): void
+  /**
+   * 连一条边（源 → 新节点）。**每个新建的图片节点都要连**（用户口径 2026-10-30：
+   * "点击按钮后，不管创建了多少个新节点，都需要把它们连接到我当前的这个节点"）。
+   *
+   * 为什么单独开一条而不是只靠 addImageNodeFromResource 的 sourceNodeId：
+   * 那条只在**第一次建节点**时用来算落点，后续格子走的是相对偏移（origin + pos），
+   * 拿不到 sourceNodeId 就不会连边 —— 之前只有第一张图有连线正是这个原因。
+   * 重复连线由 connectEdge 自己幂等（status = duplicate），不必在这里判重。
+   */
+  connectEdge(sourceId: string, targetId: string): void
 }
 
 /** 从 ctx 组装发布依赖（服务缺失时各调用方自己兜底） */
@@ -63,6 +73,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     getNode(id: string): { data?: Record<string, unknown> } | undefined
     transaction<T>(reason: string, fn: (tx: { createNode(type: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
     updateNode?(id: string, patch: Record<string, unknown>): unknown
+    connectEdge?(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { status?: string } | undefined
   } | undefined>('doc')
   const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined } | undefined>('nodeLayout')
   const resources = ctx.tryGet<{ put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>; resolve(r: string): Promise<string | undefined> } | undefined>('resources')
@@ -144,6 +155,14 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
         doc.updateNode?.(id, { size: { w: size.w, h: size.h } })
       } catch {
         // 尺寸写不上（节点刚被并发删掉等）：布局仍按计划值走，不影响其它格子
+      }
+    },
+    connectEdge: (sourceId, targetId) => {
+      try {
+        // 走内核唯一加边入口：类型/容量/重复都在里面判，重复连线返回 duplicate 不算错
+        doc.connectEdge?.({ source: sourceId, target: targetId, sourceHandle: 'source', targetHandle: 'target' })
+      } catch {
+        // 连不上（类型不符/容量满）：图仍然保留，用户能手动拖线
       }
     },
   }
@@ -304,6 +323,9 @@ export async function publishCells(
         // uniformGridPositions 用的值不同 → 显式写 size 对齐（唯一写入口，进同一条历史路径）。
         const want = sizes.get(pos.index)
         if (want) deps.setNodeSize(id, want)
+        // 每一格都连回源节点（用户口径 2026-10-30）。第一格由 media 入口顺手连过，
+        // 这里再连一次是 duplicate，内核自己会忽略。
+        deps.connectEdge(nodeId, id)
         createdIds.push(id)
         if (!origin) {
           const first = deps.getNodeRect(id)
@@ -369,7 +391,11 @@ export async function publishCells(
       cell.ref,
       { name: '宫格图片 ' + (Math.floor(index / cols) + 1) + '-' + ((index % cols) + 1) + '.png', width: cell.width, height: cell.height },
     )
-    if (id) cellIds.set(index, id)
+    if (id) {
+      cellIds.set(index, id)
+      // 分镜组这条路径同样每张都连回源节点（以前完全没连，用户只看到一堆孤立图片）
+      deps.connectEdge(nodeId, id)
+    }
   }
   if (cellIds.size === 0) {
     return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }

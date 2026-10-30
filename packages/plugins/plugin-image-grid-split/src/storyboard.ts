@@ -341,8 +341,16 @@ export function decideSnap(input: {
     fromBoardId: string | null,
   ): SnapDecision {
     const current = board.slots[index] ?? null
-    // 已经在这一格：不动（同组拖回原格）
-    if (current === movingId) return { kind: 'none' }
+    /**
+     * 已经在这一格：**仍然重新吸附**（用户口径 2026-10-30）。
+     *
+     * 以前这里返回 none（"同组拖回原格不动"），结果拖动结束时节点已经停在拖动后的任意位置，
+     * 而 slots 还记着它原来的格 —— 于是既没有回位、又让别的节点以为这格是空的，
+     * 两个节点最终叠在同一个槽上（用户实测截图）。只要在分镜组上松手就必须回到槽位。
+     */
+    if (current === movingId) {
+      return { kind: 'snap', boardId: board.id, slotIndex: index, slots: board.slots, displacedNodeId: null }
+    }
     const slots = [...board.slots]
     const displaced = current
     // 目标格有别的节点 → 换位；被顶掉的节点回到移动节点原来的格（同组时）
@@ -379,6 +387,35 @@ function nearestSlot(rects: SlotRect[], localX: number, localY: number): number 
 export function removeFromSlots(slots: Array<string | null>, nodeId: string): Array<string | null> {
   if (!slots.includes(nodeId)) return slots
   return slots.map((s) => (s === nodeId ? null : s))
+}
+
+/**
+ * 清洗槽位表：**一个节点最多占一个槽**，且槽里不许留已删除/非法的 id。
+ *
+ * 为什么需要（用户实测 2026-10-30）：旧逻辑在"节点已在自己的格"时直接返回 none，
+ * 拖动结束又不回位，两个节点会先后写进同一个格 —— 数据层看起来只有一格有值，
+ * 但 DOM 上两张图叠在一起；更糟的是重复 id 会让"哪张图在哪个格"彻底不可信。
+ * 这里做一次幂等归一：重复的保留第一次出现的位置，其余置空；不存在的节点置空。
+ *
+ * @param exists 判断节点是否还存在（不给 = 不做存活过滤，纯逻辑场景）
+ */
+export function normalizeSlots(
+  slots: Array<string | null>,
+  exists?: (id: string) => boolean,
+): Array<string | null> {
+  const seen = new Set<string>()
+  let changed = false
+  const out = slots.map((s) => {
+    if (typeof s !== 'string' || s === '') {
+      if (s !== null) changed = true
+      return null
+    }
+    if (seen.has(s)) { changed = true; return null }
+    if (exists && !exists(s)) { changed = true; return null }
+    seen.add(s)
+    return s
+  })
+  return changed ? out : slots
 }
 
 /** placeAdjacent 只认这套形状：id + 左上角 + 宽高（flow 绝对坐标） */

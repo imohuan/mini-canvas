@@ -13,7 +13,7 @@
 import { reactive } from 'vue'
 import type { Context } from '@mini-canvas/canvas-base'
 import {
-  decideSnap, readStoryboard, readStoryboardLayout, removeFromSlots, slotRects,
+  decideSnap, normalizeSlots, readStoryboard, readStoryboardLayout, removeFromSlots, slotRects,
   slotIndexByOverlapOrCenter, type SlotRect,
 } from './storyboard'
 import { fitImageLimits } from './imageFitBridge'
@@ -213,6 +213,15 @@ export function applyStoryboardDrop(
   const slot = rects[decision.slotIndex]
   if (!slot) return false
 
+  /**
+   * 槽位唯一性（用户口径 2026-10-30：一个槽位禁止拖进多张图）。
+   *
+   * 写之前先归一槽位表：重复 id 只留第一处、指向已删节点的槽清空。
+   * 这样即便历史数据已经被弄脏（旧版松手不回位导致两图叠一格），
+   * 用户下一次拖动的落库就把整张表修干净 —— 不需要单独的修复脚本。
+   */
+  const slots = normalizeSlots(decision.slots, (id) => Boolean(doc.getNode(id)))
+
   const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspectOf(node), fitImageLimits(ctx))
   const inside = centerInsideSlot({ w: slot.w, h: slot.h }, fitted)
   // 记下进组前的尺寸，脱离时还原（只在第一次进组时记，避免被槽位尺寸覆盖）
@@ -234,14 +243,14 @@ export function applyStoryboardDrop(
   // 分镜组的 slots 与被顶下来的节点要一起写：一次事务里全写完，撤销才是一步
   const boardNode = doc.getNode(board.id)
   if (!boardNode) return false
-  doc.updateNode(board.id, { data: { slots: decision.slots } })
+  doc.updateNode(board.id, { data: { slots } })
   doc.updateNode(node.id, patch)
 
   // 被顶换位的节点：挪到移动节点原来的格（decideSnap 已把 slots 排好），位置也跟过去
   const displaced = decision.displacedNodeId
   if (displaced && displaced !== node.id) {
     const other = doc.getNode(displaced)
-    const newIndex = decision.slots.indexOf(displaced)
+    const newIndex = slots.indexOf(displaced)
     const target = newIndex >= 0 ? rects[newIndex] : undefined
     if (other && target) {
       // 常规换位：被顶的节点挪到移动节点原来的格
@@ -265,8 +274,52 @@ export function applyStoryboardDrop(
 
 let detachLayout: LayoutPort | undefined
 
-/** 拖动过程中标了半透明的节点 id（松手/移出时清掉；跨事件共享） */
+/** 当前被标成半透明的节点 id（松手/移出时清掉；跨事件共享） */
 let lastMarked = ''
+/** 已经打过半透明属性的节点（松手时统一清，防多选/漏事件残留） */
+const ghosted = new Set<string>()
+
+/**
+ * 拖动时让**整张卡片**真正透明（用户口径 2026-10-30：之前只是图片颜色变淡，
+ * 卡片底色/边框仍然不透明，所以看起来不像"透过去"）。
+ *
+ * 做法：给节点 DOM 外壳打一个属性，再由本插件注入的一条 CSS 把它整层降到 0.45。
+ * 为什么不在图片组件里调 opacity：那只让 <img> 变淡，卡片表面（--card-surface）
+ * 仍然盖在底下 —— 用户看到的就是"颜色变淡"而不是"看见下面"。
+ * 打在节点外壳上则连底色、边框、标题一起透，视觉上才是真的半透明。
+ *
+ * 样式只注入一次（按 id 判重），插件卸载时由 ctx.effect 移除。
+ */
+const GHOST_ATTR = 'data-sb-dragging'
+const GHOST_STYLE_ID = 'image-grid-split-ghost-style'
+
+function ensureGhostStyle(): void {
+  if (typeof document === 'undefined') return
+  if (document.getElementById(GHOST_STYLE_ID)) return
+  const el = document.createElement('style')
+  el.id = GHOST_STYLE_ID
+  el.textContent =
+    // 整张卡片（含底色/边框/标题）一起降到 45%：这才是"透过去看得见下面"的观感。
+    // 只调 <img> 的 opacity 只会让画面变淡，卡片表面仍然不透明（用户实测截图）。
+    '.vue-flow__node[' + GHOST_ATTR + ']{opacity:.45;transition:opacity 120ms ease;}' +
+    // 拖动期间不要拦指针：否则半透明卡片仍然挡住下面的槽位 hover 判定
+    '.vue-flow__node[' + GHOST_ATTR + '],.vue-flow__node[' + GHOST_ATTR + '] *{pointer-events:none !important;}'
+  document.head.appendChild(el)
+}
+
+function removeGhostStyle(): void {
+  if (typeof document === 'undefined') return
+  document.getElementById(GHOST_STYLE_ID)?.remove()
+}
+
+/** 打开/关闭某节点的拖动半透明（DOM 外壳级；拿不到元素就静默跳过） */
+function setGhost(ctx: Context, nodeId: string, on: boolean): void {
+  const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('viewport')
+  const el = vp?.queryNodeEl?.(nodeId)
+  if (!el) return
+  if (on) el.setAttribute(GHOST_ATTR, '')
+  else el.removeAttribute(GHOST_ATTR)
+}
 
 /** 脱离分镜组：清父级、**绝对坐标**、还原尺寸、从 slots 里摘掉。
  *
@@ -296,6 +349,7 @@ export function onStoryboardDragEnd(
   ctx: Context,
   cb: (handled: boolean, payload: { nodeId: string }) => void,
 ): { dispose(): void } {
+  ensureGhostStyle()
   return ctx.on(NODE_DRAG_END, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     const handled = applyStoryboardDrop(ctx, payload)
     // 松手必清半透明标记（无论吸附还是脱离）。
@@ -309,6 +363,9 @@ export function onStoryboardDragEnd(
         }
       }
     }
+    // DOM 层的半透明同样要清（数据字段只是驱动图片组件那一路的旧实现）
+    for (const id of ghosted) setGhost(ctx, id, false)
+    ghosted.clear()
     lastMarked = ''
     clearHover()
     cb(handled, payload)
@@ -322,12 +379,18 @@ export function onStoryboardDragEnd(
 export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
   const doc = ctx.tryGet<DocPort | undefined>('doc')
   const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  ensureGhostStyle()
   return ctx.on(NODE_DRAG, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     if (!doc) return
     const node = doc.getNode(payload.nodeId)
     if (!node || node.type !== 'image') {
       clearHover()
-      if (lastMarked) { doc.updateNode(lastMarked, { data: { _storyboardDragging: undefined } }); lastMarked = '' }
+      if (lastMarked) {
+        doc.updateNode(lastMarked, { data: { _storyboardDragging: undefined } })
+        setGhost(ctx, lastMarked, false)
+        ghosted.delete(lastMarked)
+        lastMarked = ''
+      }
       return
     }
     const boards = doc.getNodes()
@@ -349,7 +412,12 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
     }
     if (!hit) {
       clearHover()
-      if (lastMarked) { doc.updateNode(lastMarked, { data: { _storyboardDragging: undefined } }); lastMarked = '' }
+      if (lastMarked) {
+        doc.updateNode(lastMarked, { data: { _storyboardDragging: undefined } })
+        setGhost(ctx, lastMarked, false)
+        ghosted.delete(lastMarked)
+        lastMarked = ''
+      }
       return
     }
     const rects = slotRects(hit.rect.w, hit.rect.h, hit.board.rows, hit.board.cols, readStoryboardLayout(ctx))
@@ -360,6 +428,9 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
     // 拖动节点与分镜组交叉 → 半透明（用户口径 2026-10-30：别把槽位全挡住）
     if (lastMarked !== payload.nodeId) {
       doc.updateNode(payload.nodeId, { data: { _storyboardDragging: true } })
+      // 整张卡片透明（DOM 外壳级）：只调图片 opacity 只会"颜色变淡"，卡片底色还盖着
+      setGhost(ctx, payload.nodeId, true)
+      ghosted.add(payload.nodeId)
       lastMarked = payload.nodeId
     }
   })
