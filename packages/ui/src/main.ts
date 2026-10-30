@@ -3,14 +3,11 @@ import "./app.css";
 
 // ===== 性能探针（2026-10-15 卡死排查后留档：lt=长任务数 ms=总毫秒 wall=运行秒）=====
 // longtask 观察器 + 每 5 秒把最近任务统计写 localStorage（主线程卡死前的数据已落，
-// 同源任意标签页可读；下一个打开的页面把上一轮统计写进 document.title（PERF 前缀），
-// 供 CDP 不可用时取证。attribution 带容器名，尽量指认来源组件。
-(function () {
-  try {
-    const last = localStorage.getItem('mc-perf-probe-last');
-    if (last) document.title = 'PERF ' + last;
-  } catch { /* 忽略 */ }
-})();
+// 同源任意标签页可读，供 CDP 不可用时取证。attribution 带容器名，尽量指认来源组件。
+//
+// 为什么不写 document.title：早先会在下次打开页面时把上一轮统计写进标题（PERF 前缀），
+// 用户看到的是「PERF lt=12 ms=4300 wall=95s」这种调试串而不是画布标题（2026-10-30 扫描）。
+// 取证要的数据 localStorage 里都有。
 (function perfProbe() {
   try {
     const KEY = 'mc-perf-probe';
