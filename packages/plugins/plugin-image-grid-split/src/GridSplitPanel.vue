@@ -6,8 +6,8 @@
  * 外壳是主题的 `.ntp-root` 胶囊（与节点顶栏同一个 token 套装：白底、1px 线、10px 圆角、
  * 主题阴影、4px 内边距），里面一行按钮全部按名取主题件，不自绘圆角/颜色/高度。
  *
- * 按钮顺序照参考图（用户三张截图）：
- *   × 宫格切分 | 已选择 N 项 | 创建分镜组 | HD 高清放大 ▾ | 发送到画布
+ * 按钮顺序（用户口径 2026-10-30：删除高清放大）：
+ *   × 宫格切分 | 已选择 N 项 | 创建分镜组 | 发送到画布
  */
 import { computed } from 'vue'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
@@ -17,7 +17,6 @@ import { publishCells, publishDepsOf } from './publish'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 const Button = useUiComponent('toolbarButton')
-const Dropdown = useUiComponent('toolbarDropdown')
 
 const state = computed(() => splitState(props.id))
 const selectedCount = computed(() => state.value?.selected.size ?? 0)
@@ -27,16 +26,8 @@ const ICON_EXIT =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
 const ICON_STORYBOARD =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>'
-const ICON_HD =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M7 15V9M7 12h3M10 15V9"/><path d="M14 15V9h2a3 3 0 0 1 0 6z"/></svg>'
 const ICON_SEND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><path d="M18 4h2v16h-2"/></svg>'
-
-/** 高清放大的下拉项（暂未实现，只做入口与说明，点击给提示） */
-const hdItems = [
-  { key: 'hd:2x', label: '2× 放大（暂未实现）' },
-  { key: 'hd:4x', label: '4× 放大（暂未实现）' },
-]
 
 function notify(text: string): void {
   ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.(text)
@@ -45,10 +36,6 @@ function notify(text: string): void {
 function exit(): void {
   endSplit(props.id)
   ctx.tryGet<{ exit?(nodeId: string): void } | undefined>('nodeToolbar')?.exit?.(props.id)
-}
-
-function onHdPick(): void {
-  notify('高清放大暂未实现')
 }
 
 async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
@@ -99,18 +86,6 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
       aria-label="创建分镜组"
       @click="publish('storyboard')"
     >创建分镜组</component>
-
-    <!-- 高清放大（下拉，暂未实现） -->
-    <component
-      v-if="Dropdown"
-      :is="Dropdown"
-      :icon="ICON_HD"
-      title="高清放大"
-      aria-label="高清放大"
-      :items="hdItems"
-      @pick="onHdPick"
-    >高清放大</component>
-    <component v-else :is="Button || 'button'" type="button" :icon="ICON_HD" title="高清放大（暂未实现）" aria-label="高清放大" disabled>高清放大</component>
 
     <span class="gsp-sep" aria-hidden="true" />
 

@@ -11,9 +11,11 @@
  */
 import type { Context } from '@mini-canvas/canvas-base'
 import { mediaCapabilityOf } from '@mini-canvas/canvas-render'
-import { publishPositions, toPixelRect, unitCells } from './gridSplit'
-import { placeStoryboardAt, slotRects } from './storyboard'
+import { uniformGridPositions, toPixelRect, unitCells } from './gridSplit'
+import { DEFAULT_IMAGE_LIMITS, fitImageLimits, type ImageFitLimitsLike } from './imageFitBridge'
+import { placeStoryboardAt, readStoryboardLayout, slotRects } from './storyboard'
 import { centerInsideSlot, fitInsideSlot } from './storyboardDrag'
+import { fitImageLimits } from './imageFitBridge'
 
 /** 图片节点宽高比（先看原图分辨率，再看节点尺寸，最后 4:3） */
 function aspectOfNode(node: { size?: { w: number; h: number }; data?: Record<string, unknown> }): number {
@@ -52,6 +54,8 @@ interface PublishDeps {
   createGroup(ids: string[]): string | null
   /** 建任意类型节点（分镜组用）；失败返回 null */
   createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string | null
+  /** 写节点尺寸（uniformGridPositions 的行/列宽高要与实际卡片一致） */
+  setNodeSize(id: string, size: { w: number; h: number }): void
 }
 
 /** 从 ctx 组装发布依赖（服务缺失时各调用方自己兜底） */
@@ -133,6 +137,13 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
         return doc.transaction('grid-split-create-node', (tx) => tx.createNode(type, position, data)) || null
       } catch {
         return null
+      }
+    },
+    setNodeSize: (id, size) => {
+      try {
+        doc.updateNode(id, { size: { w: size.w, h: size.h } })
+      } catch {
+        // 尺寸写不上（节点刚被并发删掉等）：布局仍按计划值走，不影响其它格子
       }
     },
   }
@@ -258,9 +269,20 @@ export async function publishCells(
   }
 
   if (kind === 'canvas') {
-    // 建图节点：保持原行列位置，空格留空。第一格的位置交给 media 入口统一算（源图右侧空位），
-    // 后续格子以它为基点按行列偏移 —— 不再把第一格硬放在 (0,0)（大图会叠到别的节点、跑出视口）。
-    const positions = publishPositions(rows, cols, [...sliced.keys()], PUBLISH_CELL_W, PUBLISH_CELL_W, PUBLISH_GAP)
+    /**
+     * 均匀网格布局（用户口径 2026-10-30：图片不重叠、间隔均匀，行列可配）：
+     * 1. 每格节点的卡片尺寸走**图片节点自己的规则**（最短边最小/最长边最大，与设置里「最短边最小」一致）；
+     * 2. 行高 = 该行最大高、列宽 = 该列最大宽 → 均匀分布，互不重叠；
+     * 3. 第一格位置交给 media 入口统一算（源图右侧空位），后续以它为基点偏移。
+     */
+    const limits: ImageFitLimitsLike = fitImageLimits(deps.ctx) || DEFAULT_IMAGE_LIMITS
+    const sizes = new Map<number, { w: number; h: number }>()
+    for (const [index, cell] of sliced) {
+      const fit = fitCardSize(cell.width, cell.height, limits)
+      sizes.set(index, fit ?? { w: PUBLISH_CELL_W, h: PUBLISH_CELL_W })
+    }
+    const gap = Math.max(4, readStoryboardLayout(deps.ctx).rowGap)
+    const positions = uniformGridPositions(rows, cols, [...sliced.keys()], sizes, gap)
     const createdIds: string[] = []
     let origin: { x: number; y: number } | undefined
     for (const pos of positions) {
@@ -278,6 +300,10 @@ export async function publishCells(
         },
       )
       if (id) {
+        // 落槽位算好的尺寸：media 入口按 imageWidth/Height 自算（会走最短边规则），可能与
+        // uniformGridPositions 用的值不同 → 显式写 size 对齐（唯一写入口，进同一条历史路径）。
+        const want = sizes.get(pos.index)
+        if (want) deps.setNodeSize(id, want)
         createdIds.push(id)
         if (!origin) {
           const first = deps.getNodeRect(id)
@@ -361,7 +387,7 @@ function snapIntoBoard(
   const boardNode = doc.getNode(boardId)
   if (!boardNode) return false
   const size = boardNode.size ?? { w: 480, h: 360 }
-  const rects = slotRects(size.w, size.h, rows, cols)
+  const rects = slotRects(size.w, size.h, rows, cols, readStoryboardLayout(ctx))
   if (rects.length === 0) return false
 
   const slots: Array<string | null> = new Array(rows * cols).fill(null)
@@ -372,7 +398,7 @@ function snapIntoBoard(
     const node = doc.getNode(id)
     if (!node) continue
     const aspect = aspectOfNode(node)
-    const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspect)
+    const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspect, fitImageLimits(ctx))
     const inside = centerInsideSlot({ w: slot.w, h: slot.h }, fitted)
     doc.updateNode(id, {
       parentId: boardId,

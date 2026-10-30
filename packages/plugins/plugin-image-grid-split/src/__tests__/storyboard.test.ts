@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   readStoryboard, swapSlots, placeStoryboardAt, slotRects, slotIndexAt, decideSnap, removeFromSlots,
+  resolveStoryboardLayout, readStoryboardLayout, DEFAULT_STORYBOARD_LAYOUT,
 } from '../storyboard'
 import { fitInsideSlot, centerInsideSlot } from '../storyboardDrag'
 
@@ -59,7 +60,7 @@ describe('storyboard 落点', () => {
 
 describe('storyboard 槽位几何', () => {
   it('slotRects：3×3 等分，留内边距与间隙，行列不重叠', () => {
-    const rects = slotRects(480, 360, 3, 3, 10, 6)
+    const rects = slotRects(480, 360, 3, 3, { padding: 10, topPadding: 0, colGap: 6, rowGap: 6 })
     expect(rects).toHaveLength(9)
     const w = (480 - 20 - 12) / 3
     const h = (360 - 20 - 12) / 3
@@ -71,18 +72,28 @@ describe('storyboard 槽位几何', () => {
   })
 
   it('slotRects：尺寸不足以放下网格时返回空表（不产负尺寸）', () => {
-    expect(slotRects(10, 10, 3, 3, 10, 6)).toEqual([])
+    expect(slotRects(10, 10, 3, 3, { padding: 10, topPadding: 0, colGap: 6, rowGap: 6 })).toEqual([])
     expect(slotRects(0, 360, 3, 3)).toEqual([])
     expect(slotRects(480, 360, 0, 3)).toEqual([])
     expect(slotRects(Number.NaN, 360, 3, 3)).toEqual([])
   })
 
   it('slotIndexAt：命中各格 / 间隙与外部返回 -1', () => {
-    const rects = slotRects(480, 360, 3, 3, 10, 6)
+    const rects = slotRects(480, 360, 3, 3, { padding: 10, topPadding: 0, colGap: 6, rowGap: 6 })
     expect(slotIndexAt(rects, 15, 15)).toBe(0)
     expect(slotIndexAt(rects, 470, 350)).toBe(8)
     expect(slotIndexAt(rects, -5, 15)).toBe(-1)
     expect(slotIndexAt(rects, 15, 999)).toBe(-1)
+  })
+
+  it('slotRects：标题留白 → 顶行下移（topPadding 生效）', () => {
+    const withTop = slotRects(480, 360, 2, 2, { padding: 8, topPadding: 30, rowGap: 8, colGap: 8 })
+    const noTop = slotRects(480, 360, 2, 2, { padding: 8, topPadding: 0, rowGap: 8, colGap: 8 })
+    expect(withTop[0]!.y).toBe(38)
+    expect(noTop[0]!.y).toBe(8)
+    // 两行一行距 gap=8：noTop 高 = (360-16-8)/2=168，withTop 高 = (360-16-30-8)/2=153
+    expect(withTop[0]!.h).toBeCloseTo(153)
+    expect(noTop[0]!.h).toBeCloseTo(168)
   })
 })
 
@@ -93,7 +104,7 @@ describe('storyboard 吸附决策', () => {
   }
   /** 第 index 格的中心（画布绝对坐标） */
   const centerOf = (index: number) => {
-    const r = slotRects(board.w, board.h, board.rows, board.cols)[index]!
+    const r = slotRects(board.w, board.h, board.rows, board.cols, { padding: 8, topPadding: 34, rowGap: 10, colGap: 10 })[index]!
     return { x: board.x + r.x + r.w / 2, y: board.y + r.y + r.h / 2 }
   }
 
@@ -141,6 +152,21 @@ describe('storyboard 吸附决策', () => {
     expect(removeFromSlots(['a', 'b', null], 'a')).toEqual([null, 'b', null])
     const same = ['a', 'b']
     expect(removeFromSlots(same, 'zzz')).toBe(same)
+  })
+})
+
+describe('storyboard 布局配置', () => {
+  it('resolveStoryboardLayout：从配置读取；非法值单项回落默认', () => {
+    const l = resolveStoryboardLayout((k) => (k === 'storyboardRowGap' ? 24 : k === 'storyboardPadding' ? -3 : undefined))
+    expect(l.rowGap).toBe(24)
+    expect(l.colGap).toBe(DEFAULT_STORYBOARD_LAYOUT.colGap)
+    expect(l.padding).toBe(DEFAULT_STORYBOARD_LAYOUT.padding)
+    expect(l.topPadding).toBe(DEFAULT_STORYBOARD_LAYOUT.topPadding)
+  })
+
+  it('readStoryboardLayout：无 settings 服务时回落默认（不抛）', () => {
+    expect(readStoryboardLayout(undefined)).toEqual(DEFAULT_STORYBOARD_LAYOUT)
+    expect(readStoryboardLayout({ get: (n) => (n === 'doc' ? undefined : undefined) })).toEqual(DEFAULT_STORYBOARD_LAYOUT)
   })
 })
 

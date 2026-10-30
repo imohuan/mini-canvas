@@ -31,10 +31,59 @@ export function readStoryboard(data: Record<string, unknown> | undefined): Story
   return { rows, cols, slots: clean }
 }
 
-/** 分镜组内边距（卡片边框到槽位网格的距离，px） */
-export const STORYBOARD_PADDING = 10
-/** 槽位之间的间隙（px） */
-export const STORYBOARD_GAP = 6
+/**
+ * 分镜组的布局参数（全部可配置：设置面板「布局/分镜组」）。
+ *
+ * 默认值对齐图片节点的留白习惯；标题条占位用 topPadding 单独给
+ * （用户口径 2026-10-30：「隐藏标题的那些」特殊情况也要能配）。
+ */
+export interface StoryboardLayout {
+  /** 行间距（px） */
+  rowGap: number
+  /** 列间距（px） */
+  colGap: number
+  /** 内边距（卡片边框到槽位网格，px） */
+  padding: number
+  /** 顶部额外留白（给标题条；隐藏标题时可调小） */
+  topPadding: number
+}
+
+/** 设置面板键（带插件前缀防撞全局命名空间） */
+export const STORYBOARD_LAYOUT_KEYS = Object.freeze({
+  rowGap: 'storyboardRowGap',
+  colGap: 'storyboardColGap',
+  padding: 'storyboardPadding',
+  topPadding: 'storyboardTopPadding',
+})
+
+/** 读不到配置时的默认值 */
+export const DEFAULT_STORYBOARD_LAYOUT: StoryboardLayout = Object.freeze({
+  rowGap: 10,
+  colGap: 10,
+  padding: 8,
+  topPadding: 34,
+})
+
+/** 从配置读取器解析布局参数（单项独立回落，被改坏不影响其它项） */
+export function resolveStoryboardLayout(get: (key: string) => unknown): StoryboardLayout {
+  const num = (key: string, fallback: number): number => {
+    const v = get(key)
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback
+  }
+  return {
+    rowGap: num(STORYBOARD_LAYOUT_KEYS.rowGap, DEFAULT_STORYBOARD_LAYOUT.rowGap),
+    colGap: num(STORYBOARD_LAYOUT_KEYS.colGap, DEFAULT_STORYBOARD_LAYOUT.colGap),
+    padding: num(STORYBOARD_LAYOUT_KEYS.padding, DEFAULT_STORYBOARD_LAYOUT.padding),
+    topPadding: num(STORYBOARD_LAYOUT_KEYS.topPadding, DEFAULT_STORYBOARD_LAYOUT.topPadding),
+  }
+}
+
+/** 从宿主服务表读布局参数（无 settings 服务时整体回落默认） */
+export function readStoryboardLayout(ctx: { get?<T = unknown>(name: string): T } | undefined): StoryboardLayout {
+  const settings = ctx?.get<{ get(key: string): unknown } | undefined>('settings')
+  if (!settings || typeof settings.get !== 'function') return { ...DEFAULT_STORYBOARD_LAYOUT }
+  return resolveStoryboardLayout((key) => settings.get(key))
+}
 
 /** 槽位矩形（相对分镜组左上角，px） */
 export interface SlotRect {
@@ -56,14 +105,19 @@ export function slotRects(
   boardH: number,
   rows: number,
   cols: number,
-  padding = STORYBOARD_PADDING,
-  gap = STORYBOARD_GAP,
+  layout?: Partial<StoryboardLayout> | null,
 ): SlotRect[] {
-  if (!Number.isFinite(boardW) || !Number.isFinite(boardH)) return []
-  if (boardW <= 0 || boardH <= 0) return []
+  if (!Number.isFinite(boardW) || !Number.isFinite(boardH) || boardW <= 0 || boardH <= 0) return []
   if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return []
-  const innerW = boardW - padding * 2 - (cols - 1) * gap
-  const innerH = boardH - padding * 2 - (rows - 1) * gap
+  const d = { ...DEFAULT_STORYBOARD_LAYOUT, ...(layout ?? {}) }
+  const padLeft = d.padding
+  const padRight = d.padding
+  const padTop = d.padding + d.topPadding
+  const padBottom = d.padding
+  const rowGap = Math.max(0, d.rowGap)
+  const colGap = Math.max(0, d.colGap)
+  const innerW = boardW - padLeft - padRight - (cols - 1) * colGap
+  const innerH = boardH - padTop - padBottom - (rows - 1) * rowGap
   if (innerW <= 0 || innerH <= 0) return []
   const w = innerW / cols
   const h = innerH / rows
@@ -73,8 +127,8 @@ export function slotRects(
     for (let c = 0; c < cols; c++) {
       out.push({
         index: r * cols + c,
-        x: padding + c * (w + gap),
-        y: padding + r * (h + gap),
+        x: padLeft + c * (w + colGap),
+        y: padTop + r * (h + rowGap),
         w,
         h,
       })
@@ -89,6 +143,53 @@ export function slotIndexAt(rects: SlotRect[], localX: number, localY: number): 
     if (localX >= r.x && localX <= r.x + r.w && localY >= r.y && localY <= r.y + r.h) return r.index
   }
   return -1
+}
+
+/**
+ * 拖动悬停时的目标槽判定：**交叉面积最大者获胜**（用户口径 2026-10-30）。
+ *
+ * 与 decideSnap 的"中心点落格"不同，这是拖动过程（NodeDrag 事件）用的：
+ * 拖着一张大图滑过分镜组时，被盖住最多的是哪格，哪格就亮 —— 直觉、可预判。
+ *
+ * @param dragging 拖动节点的绝对矩形（NodeDrag 事件的 position 是左上角；尺寸来自调用方）
+ * @returns 获胜槽位 index；没有交叉返回 -1
+ */
+export function slotIndexByOverlap(
+  rects: SlotRect[],
+  boardAbs: { x: number; y: number },
+  dragging: { x: number; y: number; w: number; h: number },
+): number {
+  let best = -1
+  let bestArea = 0
+  for (const r of rects) {
+    const rx = boardAbs.x + r.x
+    const ry = boardAbs.y + r.y
+    const overlapW = Math.min(dragging.x + dragging.w, rx + r.w) - Math.max(dragging.x, rx)
+    const overlapH = Math.min(dragging.y + dragging.h, ry + r.h) - Math.max(dragging.y, ry)
+    if (overlapW <= 0 || overlapH <= 0) continue
+    const area = overlapW * overlapH
+    if (area > bestArea) { bestArea = area; best = r.index }
+  }
+  return best
+}
+
+/**
+ * 决策层同样改用交叉面积（松手判定与悬停判定必须一致，否则"亮的格子"和"落进的格子"会不同）。
+ * 中心点判定保留为兜底：矩形信息缺失时退化用它。
+ */
+export function slotIndexByOverlapOrCenter(
+  rects: SlotRect[],
+  boardAbs: { x: number; y: number },
+  dragging: { x: number; y: number; w: number; h: number } | null,
+  center: { x: number; y: number },
+): number {
+  if (dragging && dragging.w > 0 && dragging.h > 0) {
+    const hit = slotIndexByOverlap(rects, boardAbs, dragging)
+    if (hit >= 0) return hit
+    // 交叉为 0：交给 decideSnap 的卡片级判定（中心点在不在卡片里）处理，这里不猜
+    return -1
+  }
+  return slotIndexAt(rects, center.x - boardAbs.x, center.y - boardAbs.y)
 }
 
 /**
@@ -110,6 +211,15 @@ export type SnapDecision =
   | { kind: 'detach' }
   | { kind: 'snap'; boardId: string; slotIndex: number; slots: Array<string | null>; displacedNodeId: string | null }
 
+/** decideSnap 的 boards 项（decideSnap 内部用 slotRects 时需要布局参数） */
+export interface SnapBoard extends StoryboardData {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export function decideSnap(input: {
   /** 拖拽节点 id */
   nodeId: string
@@ -118,16 +228,11 @@ export function decideSnap(input: {
   /** 该节点原本所属的分镜组 id（不在组里 = null） */
   currentBoardId: string | null
   /** 画布上所有分镜组：id + 绝对矩形 + 行列 + 当前 slots */
-  boards: Array<{
-    id: string
-    x: number
-    y: number
-    w: number
-    h: number
-    rows: number
-    cols: number
-    slots: Array<string | null>
-  }>
+  boards: SnapBoard[]
+  /** 槽位布局（行/列间距、内边距）；缺省用默认值 */
+  layout?: Partial<StoryboardLayout> | null
+  /** 拖动节点矩形（绝对坐标；给了就用**交叉面积最大**判定，否则退中心点） */
+  dragRect?: { x: number; y: number; w: number; h: number } | null
 }): SnapDecision {
   const { nodeId, center, currentBoardId, boards } = input
   // 命中哪个分镜组：取中心点落在其矩形内的那个（多个重叠时取后画的 = 数组靠后）
@@ -142,8 +247,8 @@ export function decideSnap(input: {
     return currentBoardId ? { kind: 'detach' } : { kind: 'none' }
   }
 
-  const rects = slotRects(hit.w, hit.h, hit.rows, hit.cols)
-  const slotIndex = slotIndexAt(rects, center.x - hit.x, center.y - hit.y)
+  const rects = slotRects(hit.w, hit.h, hit.rows, hit.cols, input.layout)
+  const slotIndex = slotIndexByOverlapOrCenter(rects, { x: hit.x, y: hit.y }, input.dragRect ?? null, center)
   if (slotIndex < 0) {
     // 落在卡片内但不在任何格（内边距区域）：视为该组最近格 → 用中心距离找最近槽
     const nearest = nearestSlot(rects, center.x - hit.x, center.y - hit.y)

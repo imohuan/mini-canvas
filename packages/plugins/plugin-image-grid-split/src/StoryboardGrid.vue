@@ -12,14 +12,25 @@
  * 图片的显示/比例/居中由子节点自己负责（image 节点照常渲染）；
  * 本组件刻意 pointer-events: none —— 底板不吃事件，否则会把子节点的拖拽和点击全挡住。
  */
-import { computed } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { readStoryboard, slotRects } from './storyboard'
+import { computed, ref, watch } from 'vue'
+import { readStoryboard, readStoryboardLayout, slotRects } from './storyboard'
+import { storyboardHover } from './storyboardDrag'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 
 const board = computed(() => readStoryboard(props.data))
+/** 拖动悬停：本组某个槽获胜时高亮（用户口径：获胜交互类似 hover） */
+const hoverState = storyboardHover()
+const hoverSlot = ref(-1)
+watch(
+  () => [hoverState.boardId, hoverState.slotIndex] as const,
+  ([bid, idx]) => {
+    hoverSlot.value = bid === props.id ? idx : -1
+  },
+  { immediate: true },
+)
 
 /** 卡片实测尺寸（拿不到就按节点注册的默认 480×360 兜底） */
 const boardSize = computed(() => {
@@ -35,7 +46,8 @@ const cells = computed(() => {
   const b = board.value
   if (!b) return []
   const { w, h } = boardSize.value
-  return slotRects(w, h, b.rows, b.cols).map((r) => ({
+  const layout = readStoryboardLayout(ctx)
+  return slotRects(w, h, b.rows, b.cols, layout).map((r) => ({
     index: r.index,
     left: (r.x / w) * 100,
     top: (r.y / h) * 100,
@@ -52,7 +64,7 @@ const cells = computed(() => {
       v-for="cell in cells"
       :key="cell.index"
       class="sb-slot"
-      :class="{ 'is-occupied': cell.occupied }"
+      :class="{ 'is-occupied': cell.occupied, 'is-hover': hoverSlot === cell.index }"
       :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%' }"
       :data-slot-index="cell.index"
     >
@@ -87,6 +99,13 @@ const cells = computed(() => {
 .sb-slot.is-occupied {
   border-color: transparent;
   background: transparent;
+}
+
+/* 拖动悬停：获胜槽位高亮（青描边 + 淡青底），与勾选层同一套强调色 */
+.sb-slot.is-hover {
+  border: 2px solid var(--ui-accent, #0891b2);
+  border-radius: var(--radius-badge, 6px);
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 16%, transparent);
 }
 
 .sb-plus {

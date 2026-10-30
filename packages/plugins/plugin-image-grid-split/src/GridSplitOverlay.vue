@@ -12,7 +12,7 @@
  */
 import { computed } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { cellIndexAt } from './gridSplit'
+import { readStoryboardLayout, slotIndexAt, slotRects } from './storyboard'
 import { setHoverCell, splitState, toggleCell } from './splitSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -22,13 +22,22 @@ const state = computed(() => splitState(props.id))
 const cells = computed(() => {
   const s = state.value
   if (!s) return []
-  const w = 100 / s.cols
-  const h = 100 / s.rows
+  // 格子几何 = 分镜组同一套 slotRects（圆角卡片 + 间隔），按节点实测尺寸转百分比
+  const rect = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('nodeLayout')?.getNodeRect(props.id)
+  const boardW = rect?.w && rect.w > 0 ? rect.w : 480
+  const boardH = rect?.h && rect.h > 0 ? rect.h : 360
+  const layout = readStoryboardLayout(ctx)
+  const rects = slotRects(boardW, boardH, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 6, colGap: 6 })
   const out: Array<{ index: number; left: number; top: number; width: number; height: number; on: boolean }> = []
-  for (let i = 0; i < s.rows * s.cols; i++) {
-    const r = Math.floor(i / s.cols)
-    const c = i % s.cols
-    out.push({ index: i, left: c * w, top: r * h, width: w, height: h, on: s.selected.has(i) })
+  for (const r of rects) {
+    out.push({
+      index: r.index,
+      left: (r.x / boardW) * 100,
+      top: (r.y / boardH) * 100,
+      width: (r.w / boardW) * 100,
+      height: (r.h / boardH) * 100,
+      on: s.selected.has(r.index),
+    })
   }
   return out
 })
@@ -39,7 +48,11 @@ function cellFromEvent(ev: PointerEvent | MouseEvent): number {
   if (!el) return -1
   const r = el.getBoundingClientRect()
   if (r.width <= 0 || r.height <= 0) return -1
-  return cellIndexAt(state.value?.rows ?? 0, state.value?.cols ?? 0, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height)
+  const s = state.value
+  if (!s) return -1
+  const layout = readStoryboardLayout(ctx)
+  const rects = slotRects(r.width, r.height, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 6, colGap: 6 })
+  return slotIndexAt(rects, ev.clientX - r.left, ev.clientY - r.top)
 }
 
 function onMove(ev: MouseEvent): void {
@@ -84,26 +97,55 @@ function onClick(ev: MouseEvent): void {
   overflow: hidden;
   cursor: pointer;
 }
-/* 未选中格：细白线分隔，不挡图 */
+/* 未选中格：独立圆角卡片（参考图 1 左侧）：浅灰底 + 细边，之间有间隔 */
 .gso-cell {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--ui-overlay, rgb(255 255 255 / 0.88)) 63%, transparent);
-  box-shadow: 0 0 0 1px var(--ui-veil, rgb(0 0 0 / 0.04));
+  border: 1px solid color-mix(in srgb, var(--ui-overlay-solid, #fff) 62%, transparent);
+  border-radius: var(--radius-badge, 6px);
+  background: color-mix(in srgb, var(--ui-overlay-solid, #fff) 14%, transparent);
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
-/* 悬停：淡青底（跟随鼠标的行/列反馈） */
+/* 勾选角标（参考图 1：左上角小方框 + √） */
+.gso-cell::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-badge, 6px);
+  background: color-mix(in srgb, var(--ui-overlay-solid, #fff) 82%, transparent);
+  border: 1px solid var(--ui-line, #e2e5ea);
+  box-sizing: border-box;
+}
+.gso-cell::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  width: 8px;
+  height: 5px;
+  border-left: 2px solid var(--ui-accent, #0891b2);
+  border-bottom: 2px solid var(--ui-accent, #0891b2);
+  transform: rotate(-45deg) scale(0.6);
+  opacity: 0;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.gso-cell.is-on::after {
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
+}
+/* 悬停：淡青底 */
 .gso-cell.is-hover {
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 22%, transparent);
   border-color: var(--ui-accent, #0891b2);
 }
-/* 选中：青描边 + 微透明底 */
+/* 选中：整格淡青 + 青描边（比未选中格更明显） */
 .gso-cell.is-on {
   border-color: var(--ui-accent, #0891b2);
-  box-shadow: inset 0 0 0 1px var(--ui-accent, #0891b2);
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 14%, transparent);
 }
-/* 悬停 + 选中叠上时加深一档，让"当前格"清楚 */
 .gso-cell.is-on.is-hover {
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 30%, transparent);
 }

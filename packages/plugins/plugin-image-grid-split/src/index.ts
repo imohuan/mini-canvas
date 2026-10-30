@@ -11,13 +11,14 @@
  * 卸载本插件：插槽条目与模式注册自动回收；会话跟着包作用域一起清。
  */
 import { markRaw } from 'vue'
-import type { PluginModule, Context } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, PluginModule, Context } from '@mini-canvas/canvas-base'
 import GridSplitEntry from './GridSplitEntry.vue'
 import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'
 import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
-import { onStoryboardDragEnd } from './storyboardDrag'
+import { onStoryboardDragEnd, onStoryboardDragMove } from './storyboardDrag'
+import { STORYBOARD_LAYOUT_KEYS } from './storyboard'
 
 export const name = 'image-grid-split'
 /**
@@ -25,6 +26,34 @@ export const name = 'image-grid-split'
  * doc 也不是硬依赖：本插件现阶段只在 UI 上接线，写库由后续命令走 doc。
  */
 export const inject = [] as string[]
+
+/**
+ * 设置面板「布局/分镜组」：行/列间距、内边距、顶部标题留白都可配
+ * （用户口径 2026-10-30：间距写死应对不了隐藏标题等特殊情况）。
+ * 读取不落地缓存 —— 消费方每次现取 settings，改配置立刻生效（与分组留白同一条规矩）。
+ */
+export const Config = {
+  [STORYBOARD_LAYOUT_KEYS.rowGap]: {
+    type: 'number', default: 10, min: 0, max: 120, step: 2,
+    label: '行间距（px）', group: '布局/分镜组',
+    description: '分镜组里上下两行图片之间的间距。',
+  },
+  [STORYBOARD_LAYOUT_KEYS.colGap]: {
+    type: 'number', default: 10, min: 0, max: 120, step: 2,
+    label: '列间距（px）', group: '布局/分镜组',
+    description: '分镜组里左右两列图片之间的间距。',
+  },
+  [STORYBOARD_LAYOUT_KEYS.padding]: {
+    type: 'number', default: 8, min: 0, max: 120, step: 2,
+    label: '内边距（px）', group: '布局/分镜组',
+    description: '槽位网格到分镜组卡片边缘的距离（左/右/下；顶部另配）。',
+  },
+  [STORYBOARD_LAYOUT_KEYS.topPadding]: {
+    type: 'number', default: 34, min: 0, max: 120, step: 2,
+    label: '顶部留白（px）', group: '布局/分镜组',
+    description: '给标题条留的位置。隐藏标题的画布可以把这项调小。',
+  },
+} as const satisfies ConfigSchema
 
 export function apply(ctx: Context): void {
   // ⓪ 分镜组节点类型：**容器节点**（和分组同一族，但会把子节点锁进槽位）。
@@ -125,7 +154,10 @@ export function apply(ctx: Context): void {
     }
   })
   ctx.effect(() => () => offDrop.dispose())
+  // 拖动逐帧：获胜槽位高亮 + 拖动节点半透明（用户口径 2026-10-30）
+  const offMove = onStoryboardDragMove(ctx)
+  ctx.effect(() => () => offMove.dispose())
 }
 
-export const gridSplitPlugin: PluginModule = { name, inject, apply }
+export const gridSplitPlugin: PluginModule<{ [K in keyof typeof Config]: unknown }> = { name, inject, Config, apply }
 export default gridSplitPlugin

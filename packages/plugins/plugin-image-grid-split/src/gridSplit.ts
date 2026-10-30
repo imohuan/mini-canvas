@@ -118,3 +118,54 @@ export function publishPositions(
   }
   return out.sort((a, b) => a.index - b.index)
 }
+
+/**
+ * 均匀网格布局：每格宽高由**该格图片实际节点尺寸**决定（行内取最大），行列对齐。
+ *
+ * 用户口径 2026-10-30（带参考图）：「发送到画布」后的图片要均匀分布、不重叠；
+ * 之前用固定 cellW + max(cellW,cellH) 步长，竖图/横图混排就会互相压住。
+ *
+ * 算法：每行的行高 = 该行图片高度最大值；每列的列宽 = 该列图片宽度最大值；
+ * 第 (r,c) 格的 x = 前面各列列宽之和 + c*gap，y 同理 —— 这正是 CSS grid 的语义。
+ *
+ * @param sizes 每格图片的节点尺寸（index → {w,h}；缺格子跳过）
+ * @param gap 行/列间距（px，可用配置的同一值）
+ */
+export function uniformGridPositions(
+  rows: number,
+  cols: number,
+  selected: number[],
+  sizes: Map<number, { w: number; h: number }>,
+  gap = 12,
+): Array<{ index: number; x: number; y: number }> {
+  if (!validRowsCols(rows, cols)) return []
+  const sel = new Set(selected)
+  // 每行最大高、每列最大宽（只统计选中的格子）
+  const rowH = new Array<number>(rows).fill(0)
+  const colW = new Array<number>(cols).fill(0)
+  for (const index of selected) {
+    if (!sel.has(index) || index < 0 || index >= rows * cols) continue
+    const s = sizes.get(index)
+    if (!s || s.w <= 0 || s.h <= 0) continue
+    const r = Math.floor(index / cols)
+    const c = index % cols
+    if (s.h > rowH[r]!) rowH[r] = s.h
+    if (s.w > colW[c]!) colW[c] = s.w
+  }
+  // 缺尺寸的行列至少给最小可用值（避免 y 落负 / 间距塌 0）
+  for (let r = 0; r < rows; r++) if (rowH[r] === 0) rowH[r] = 1
+  for (let c = 0; c < cols; c++) if (colW[c] === 0) colW[c] = 1
+
+  const rowTop = new Array<number>(rows).fill(0)
+  for (let r = 1; r < rows; r++) rowTop[r] = rowTop[r - 1]! + rowH[r - 1]! + gap
+  const colLeft = new Array<number>(cols).fill(0)
+  for (let c = 1; c < cols; c++) colLeft[c] = colLeft[c - 1]! + colW[c - 1]! + gap
+
+  const out: Array<{ index: number; x: number; y: number }> = []
+  for (const index of selected) {
+    if (!sel.has(index) || index < 0 || index >= rows * cols) continue
+    if (!sizes.has(index)) continue
+    out.push({ index, x: colLeft[index % cols]!, y: rowTop[Math.floor(index / cols)]! })
+  }
+  return out.sort((a, b) => a.index - b.index)
+}

@@ -46,6 +46,13 @@ let resolveToken = 0
 /** 节点上的引用与旧地址（同步可读，供空态判断） */
 const sourceFields = computed(() => readImageSourceFields(props.data))
 
+/**
+ * 分镜组拖动中的半透明标记（plugin-image-grid-split 写入；用户口径 2026-10-30：
+ * 拖图进分镜组时别把槽位全挡住 —— 卡片半透明，底下的槽位可见）。
+ * 字段不存在 = 正常不透明，其它插件/旧数据零影响。
+ */
+const storyboardDragging = computed(() => props.data?._storyboardDragging === true)
+
 async function refreshResolvedUrl(): Promise<void> {
   const token = ++resolveToken
   // 先回到“当前已知可用地址”，避免解析期间继续显示上一张图
@@ -288,6 +295,7 @@ onBeforeUnmount(() => {
         alt="节点图片"
         class="img"
         :class="editing ? 'is-fill-contain' : 'is-fill-cover'"
+        :style="storyboardDragging ? { opacity: 0.45 } : undefined"
         draggable="false"
         @error="onImgError"
         @load="onImgLoad"
