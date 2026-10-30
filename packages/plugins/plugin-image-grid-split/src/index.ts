@@ -143,6 +143,51 @@ export function apply(ctx: Context): void {
     for (const id of splitNodeIds()) endSplit(id)
   })
 
+  // ③b 画布交互自动退出模式（用户口径 2026-10-30：点其他节点 / 拖其他节点 / 框选 / 点空白，
+  //     都视为"离开当前节点"，切分模式跟着退）。
+  //
+  // 信号源（canvas-render renderEvents 广播，本插件只消费不改宿主）：
+  //  - canvas:node:click    点了某个节点 —— nodeId 不是切分节点 → 退；
+  //  - canvas:pane:click    点了画布空白 → 退；
+  //  - canvas:selection:change  框选 / Ctrl+A / 拖拽顺手选中改变了选中集：
+  //    当前节点不在选中集 → 退。拖动当前节点也会先触发 selection（含它自己）→ 不误退。
+  //
+  // 为什么用 selection 而不是 drag-start：拖动**别的**节点同样会先 emit drag-start，
+  // 按事件名判断要再查"拖的是谁"，多一层状态；selection 一步到位且天然覆盖框选。
+  const toolbarOf = (): { exit?(nodeId: string): void } | undefined => ctx.tryGet('nodeToolbar')
+  /** 当前处于切分模式的节点（会话 ↔ 模式已双向同步，取会话即可） */
+  const activeSplitId = (): string => splitNodeIds()[0] ?? ''
+  const exitIfChanged = (selectedIds: ReadonlySet<string>): void => {
+    const id = activeSplitId()
+    if (!id) return
+    if (!selectedIds.has(id)) {
+      endSplit(id)
+      toolbarOf()?.exit?.(id)
+    }
+  }
+  const offNodeClick = ctx.on('canvas:node:click', (payload: { nodeId?: string }) => {
+    const id = activeSplitId()
+    if (id && payload.nodeId && payload.nodeId !== id) {
+      endSplit(id)
+      toolbarOf()?.exit?.(id)
+    }
+  })
+  const offPaneClick = ctx.on('canvas:pane:click', () => {
+    const id = activeSplitId()
+    if (id) {
+      endSplit(id)
+      toolbarOf()?.exit?.(id)
+    }
+  })
+  const offSelection = ctx.on('canvas:selection:change', (payload: { nodeIds?: string[] }) => {
+    exitIfChanged(new Set(payload.nodeIds ?? []))
+  })
+  ctx.effect(() => () => {
+    offNodeClick.dispose()
+    offPaneClick.dispose()
+    offSelection.dispose()
+  })
+
   // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原
   const offDrop = onStoryboardDragEnd(ctx, (handled, payload) => {
     // 非图片节点被拖到槽位上时不吸附，给一句提示（只在真的落在组范围里才提示）

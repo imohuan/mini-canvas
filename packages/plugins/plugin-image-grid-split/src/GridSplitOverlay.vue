@@ -27,7 +27,7 @@ const cells = computed(() => {
   const boardW = rect?.w && rect.w > 0 ? rect.w : 480
   const boardH = rect?.h && rect.h > 0 ? rect.h : 360
   const layout = readStoryboardLayout(ctx)
-  const rects = slotRects(boardW, boardH, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 6, colGap: 6 })
+  const rects = slotRects(boardW, boardH, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 3, colGap: 3 })
   const out: Array<{ index: number; left: number; top: number; width: number; height: number; on: boolean }> = []
   for (const r of rects) {
     out.push({
@@ -51,7 +51,7 @@ function cellFromEvent(ev: PointerEvent | MouseEvent): number {
   const s = state.value
   if (!s) return -1
   const layout = readStoryboardLayout(ctx)
-  const rects = slotRects(r.width, r.height, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 6, colGap: 6 })
+  const rects = slotRects(r.width, r.height, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 3, colGap: 3 })
   return slotIndexAt(rects, ev.clientX - r.left, ev.clientY - r.top)
 }
 
@@ -84,7 +84,11 @@ function onClick(ev: MouseEvent): void {
       class="gso-cell"
       :class="{ 'is-on': cell.on, 'is-hover': state.hover === cell.index }"
       :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%' }"
-    />
+    >
+      <span v-if="state.hover === cell.index" class="gso-hint">
+        {{ cell.on ? '取消选择' : '选择' }}
+      </span>
+    </div>
   </div>
 </template>
 
@@ -148,5 +152,23 @@ function onClick(ev: MouseEvent): void {
 }
 .gso-cell.is-on.is-hover {
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 30%, transparent);
+}
+/* 悬停提示（用户口径 2026-10-30：格子中央显示"选择 / 取消选择"胶囊）：
+   真实子元素（::after 已被勾选角标占用）：只在悬停格渲染（Vue 侧 state.hover 判断）。 */
+/* 胶囊本体（居中、小字、深底白字） */
+.gso-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-overlay-solid, #111827) 82%, transparent);
+  color: var(--ui-overlay-ink, #fff);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
 }
 </style>
