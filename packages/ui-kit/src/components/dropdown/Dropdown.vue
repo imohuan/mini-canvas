@@ -108,12 +108,6 @@ const triggerEvents = computed(() => {
       <slot name="trigger" :open="api.open.value" :toggle="api.toggle" :close="api.hide" />
     </div>
     <Teleport :to="appendTo" :disabled="!teleport">
-      <div
-        v-if="api.open.value && arrow"
-        class="mck-dropdown__arrow"
-        :style="api.arrowStyle.value"
-        aria-hidden="true"
-      />
       <Transition name="mck-dropdown-fade">
         <div
           v-if="api.open.value"
@@ -128,6 +122,16 @@ const triggerEvents = computed(() => {
           <slot :close="api.closeFromSlot" :open="api.open.value" />
         </div>
       </Transition>
+      <!--
+        箭头必须排在面板之后：旋转 45° 后内侧一半要压在面板边框上，
+        和面板连成一体。放前面会被面板盖住，只露出半截尖角。
+      -->
+      <div
+        v-if="api.open.value && arrow"
+        class="mck-dropdown__arrow"
+        :style="api.arrowStyle.value"
+        aria-hidden="true"
+      />
     </Teleport>
   </div>
 </template>

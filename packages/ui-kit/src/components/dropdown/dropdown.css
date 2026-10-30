@@ -19,8 +19,14 @@
 }
 .mck-dropdown__panel.is-inner-scroll { display: flex; flex-direction: column; overflow-y: hidden; min-height: 0; }
 .mck-dropdown__panel.is-inner-scroll > * { min-height: 0; }
-/* 箭头 fixed 贴在面板边缘；层级低一格，露出的尖角不会被面板自身盖住。 */
-.mck-dropdown__arrow { z-index: calc(var(--mck-z-dropdown, 94000) - 1); box-sizing: border-box; }
+/*
+ * 箭头 fixed 贴在面板边缘，与面板同层、且在 DOM 里排在面板之后。
+ *
+ * 为什么不能降一层：箭头旋转 45° 后，内侧那半块要和面板重叠。
+ * 层级比面板低的话，面板的 1px 边框会横穿箭头，看起来像箭头和面板之间多了一道缝。
+ * 同层 + 后渲染，箭头的不透明底色会盖住那截边框，两者就连成一体。
+ */
+.mck-dropdown__arrow { z-index: var(--mck-z-dropdown, 94000); box-sizing: border-box; }
 .mck-dropdown-fade-enter-active { transition: opacity 140ms ease-out, transform 140ms ease-out; }
 .mck-dropdown-fade-leave-active { transition: opacity 100ms ease-in, transform 100ms ease-in; }
 .mck-dropdown-fade-enter-from, .mck-dropdown-fade-leave-to { opacity: 0; transform: scale(0.97) translateY(-3px); }
