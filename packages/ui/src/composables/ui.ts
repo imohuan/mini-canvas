@@ -424,8 +424,13 @@ function createUi() {
       console.warn('[ui] 保存画布失败', err)
     }
   }
-  // 注册给路由守卫：离开画布前先 await 落盘（切画布丢改动的根治点）
-  registerPendingSave(flushCanvasSave)
+  /**
+   * 注销给路由守卫的落盘钩子（宿主卸载时调）。
+   *
+   * 注册**不在这里**做：单例只建一次，而 App 每次卸载都会注销 —— 注册若只在建单例时
+   * 做一次，第二次进画布就再也没人注册，路由守卫 await 到 undefined，切画布的落盘
+   * 静默失效。注册放在 onReady（每次宿主就绪都跑）。
+   */
   function releasePendingSave(): void {
     unregisterPendingSave(flushCanvasSave)
   }
@@ -1693,6 +1698,8 @@ function createUi() {
   }
 
   async function onReady(): Promise<void> {
+    // 每次宿主就绪都重新注册：上一次离开画布时 App.vue 已把它注销了（见 releasePendingSave）
+    registerPendingSave(flushCanvasSave)
     bindThemeSettings()
     bindThemeMode()
     bindSettingsClose()
