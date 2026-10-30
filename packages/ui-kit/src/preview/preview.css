@@ -903,3 +903,43 @@ body {
 .uk-config {
   overscroll-behavior: contain;
 }
+
+/*
+ * 预览区：内容宽度随配置变化，输入框、滑块、分栏这类需要吃满。
+ */
+.uk-preview-canvas.is-stretch {
+  align-items: stretch;
+  justify-content: center;
+}
+
+.uk-preview-canvas.is-stretch .uk-canvas-caption {
+  margin-top: 2px;
+}
+
+/* range 控件（试玩面板里的滑杆）。 */
+.uk-range {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--mck-ink, var(--ui-ink));
+  font-size: 11.5px;
+}
+
+.uk-range > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--mck-ink-muted, var(--ui-ink-dim));
+}
+
+.uk-range b {
+  color: var(--mck-ink, var(--ui-ink));
+  font-weight: 600;
+}
+
+.uk-range input[type="range"] {
+  width: 100%;
+  accent-color: var(--mck-accent, var(--ui-accent));
+  cursor: pointer;
+}

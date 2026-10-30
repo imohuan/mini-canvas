@@ -2,30 +2,22 @@
 /**
  * 组件库展示页。三栏：
  *   左  —— 组件列表（按分组，可搜索）
- *   中  —— 上：预览画布 / 下：Markdown 文档（可上下拖）
+ *   中  —— 上：预览 / 下：Markdown 文档（可上下拖）
  *   右  —— 当前组件的配置面板，改动实时反映到预览
  *
- * 顶部还有一层全局参数（尺寸/密度/圆角/主题色/深浅色），它驱动 UiKitProvider，
- * 作用到页面里所有 ui-kit 组件。
+ * 页面本身不认识任何具体组件：试玩配置全在 playgrounds/ 里，
+ * 按 catalog 注册表取；预览渲染在 PlaygroundPreview.vue 里按 id 分支。
  */
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { ChevronLeft, Moon, RotateCcw, Search, SlidersHorizontal, Sun } from 'lucide-vue-next'
 import { Button, UiKitProvider, type UiKitDensity, type UiKitSize } from '../index'
 import SplitPane from '../components/split-pane/SplitPane.vue'
 import UiKitDocView from './UiKitDocView.vue'
+import PlaygroundPreview from './PlaygroundPreview.vue'
 import { CATALOG, CATALOG_TOTAL, findCatalogItem } from './catalog'
 import { loadDocs, type UiKitDoc } from './docModules'
-import {
-  DEFAULT_PLAYGROUND,
-  PLAYGROUND_PRESETS,
-  SIZE_LABELS,
-  SIZE_ORDER,
-  VARIANT_LABELS,
-  VARIANT_ORDER,
-  summarize,
-  type PlaygroundState,
-  type PlaygroundVariant,
-} from './playground'
+import { findPlayground } from './playgrounds/catalog'
+import type { PlaygroundField, PlaygroundValue } from './playgrounds/types'
 import './preview.css'
 
 withDefaults(defineProps<{ showHome?: boolean }>(), { showHome: false })
@@ -59,50 +51,79 @@ const filtered = computed(() => {
   })).filter((group) => group.items.length > 0)
 })
 
-/* ---- 右侧配置面板 ---- */
+/* ---- 当前组件的试玩配置 ---- */
 
-const playground = ref<PlaygroundState>({ ...DEFAULT_PLAYGROUND })
-/** 只有能调参数的组件才显示右侧面板。 */
-const configurable = computed(() => activeId.value === 'button')
-const summary = computed(() => summarize(playground.value))
+/** 从 catalog 取当前组件的配置；没有配置的组件右侧只显示说明。 */
+const playground = computed(() => findPlayground(activeId.value))
+
+/** 当前参数。切换组件时整份重置成该组件的默认值。 */
+const state = ref<Record<string, PlaygroundValue>>({ ...(playground.value?.defaults ?? {}) })
+
+watch(
+  activeId,
+  () => {
+    state.value = { ...(playground.value?.defaults ?? {}) }
+    query.value = query.value.trim()
+  },
+  { immediate: true },
+)
+
+const fields = computed<PlaygroundField[]>(() => playground.value?.fields ?? [])
+const presets = computed(() => playground.value?.presets ?? [])
+const summary = computed(() => {
+  const config = playground.value
+  if (!config?.summary) return ''
+  return config.summary(state.value)
+})
+
+/* ---- 参数写入 ---- */
+
+function setValue(key: string, value: PlaygroundValue): void {
+  state.value = { ...state.value, [key]: value }
+}
+
+/** 输入框的 input 事件需要把字符串写回 state。 */
+function onTextInput(key: string, event: Event): void {
+  const target = event.target as HTMLInputElement | null
+  setValue(key, target?.value ?? '')
+}
+
+function onNumberInput(key: string, event: Event): void {
+  const target = event.target as HTMLInputElement | null
+  const raw = target?.value ?? ''
+  setValue(key, raw === '' ? null : Number(raw))
+}
+
+/** 只显示图标时必须有图标；关掉显示图标就把 iconOnly 一起关掉。 */
+function onToggle(key: string, event: Event): void {
+  const target = event.target as HTMLInputElement | null
+  const checked = target?.checked === true
+  if (key === 'showIcon' && !checked) {
+    state.value = { ...state.value, showIcon: false, iconOnly: false }
+    return
+  }
+  if (key === 'iconOnly' && checked) {
+    state.value = { ...state.value, iconOnly: true, showIcon: true }
+    return
+  }
+  setValue(key, checked)
+}
+
+function applyPreset(patch: Record<string, PlaygroundValue>): void {
+  state.value = { ...(playground.value?.defaults ?? {}), ...patch }
+}
 
 function resetPlayground(): void {
-  playground.value = { ...DEFAULT_PLAYGROUND }
+  state.value = { ...(playground.value?.defaults ?? {}) }
 }
 
-function applyPreset(patch: Partial<PlaygroundState>): void {
-  playground.value = { ...DEFAULT_PLAYGROUND, ...patch }
+/** range 的值可能是小数，按单位显示；百分比按 0-1 换算。 */
+function rangeLabel(field: Extract<PlaygroundField, { kind: 'range' }>): string {
+  const raw = state.value[field.key]
+  const value = typeof raw === 'number' ? raw : field.min
+  if (field.unit === '%') return Math.round(value * 100) + '%'
+  return value + (field.unit ?? '')
 }
-
-function selectVariant(variant: PlaygroundVariant): void {
-  playground.value = { ...playground.value, variant }
-}
-
-function selectSize(next: UiKitSize): void {
-  playground.value = { ...playground.value, size: next }
-}
-
-function toggle(key: 'block' | 'disabled' | 'loading' | 'round', value: boolean): void {
-  playground.value = { ...playground.value, [key]: value }
-}
-
-/** 只显示图标时必须有图标；关掉时把 iconOnly 一起关掉，避免出现空方按钮。 */
-function toggleShowIcon(value: boolean): void {
-  playground.value = {
-    ...playground.value,
-    showIcon: value,
-    iconOnly: value ? playground.value.iconOnly : false,
-  }
-}
-
-function toggleIconOnly(value: boolean): void {
-  playground.value = { ...playground.value, iconOnly: value, showIcon: value ? true : playground.value.showIcon }
-}
-
-/** 切到别的组件时收起搜索框里多余的空格。 */
-watch(activeId, () => {
-  query.value = query.value.trim();
-})
 
 function resetGlobal(): void {
   size.value = 'md'
@@ -203,7 +224,7 @@ function resetGlobal(): void {
 
       <template #right>
         <!-- 内层：中间（上预览 + 下文档）/ 右配置 -->
-        <SplitPane class="uk-workspace" :initial="configurable ? 0.7 : 1" :min-left="360" :min-right="248" :snap="42">
+        <SplitPane class="uk-workspace" :initial="playground ? 0.7 : 1" :min-left="360" :min-right="248" :snap="42">
           <template #left>
             <SplitPane class="uk-center" direction="vertical" :initial="0.58" :min-left="180" :min-right="140" :snap="38">
               <template #left>
@@ -217,28 +238,10 @@ function resetGlobal(): void {
                   </div>
 
                   <div class="uk-preview-stage">
-                    <div class="uk-preview-canvas">
+                    <div class="uk-preview-canvas" :class="{ 'is-stretch': playground?.stretch }">
                       <div class="uk-canvas-grid" aria-hidden="true"></div>
-                      <div v-if="activeId === 'button'" class="uk-demo-button" :class="{ 'is-block': playground.block }">
-                        <Button
-                          :variant="playground.variant"
-                          :size="playground.size"
-                          :block="playground.block"
-                          :disabled="playground.disabled"
-                          :loading="playground.loading"
-                          :round="playground.round"
-                          :aria-label="playground.iconOnly ? (playground.label || '按钮') : undefined"
-                        >
-                          <template v-if="playground.showIcon || playground.iconOnly" #icon>
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                              <path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
-                            </svg>
-                          </template>
-                          <template v-if="!playground.iconOnly">{{ playground.label || '按钮' }}</template>
-                        </Button>
-                      </div>
-                      <p v-else class="uk-empty-hint">这个组件的交互直接在下方文档里试。</p>
-                      <p class="uk-canvas-caption">{{ summary }}</p>
+                      <PlaygroundPreview :id="activeId" :state="state" />
+                      <p v-if="summary" class="uk-canvas-caption">{{ summary }}</p>
                     </div>
                   </div>
                 </section>
@@ -251,7 +254,7 @@ function resetGlobal(): void {
                       <span class="uk-eyebrow">文档介绍</span>
                       <h2>什么时候用它</h2>
                     </div>
-                    <Button v-if="configurable" variant="ghost" size="sm" @click="resetPlayground">
+                    <Button v-if="playground" variant="ghost" size="sm" @click="resetPlayground">
                       <template #icon><RotateCcw :size="14" /></template>
                       恢复默认
                     </Button>
@@ -281,78 +284,76 @@ function resetGlobal(): void {
                 <span class="uk-config-icon"><SlidersHorizontal :size="16" /></span>
               </div>
 
-              <template v-if="configurable">
-                <div class="uk-field">
-                  <label for="uk-button-label">按钮文字</label>
-                  <input id="uk-button-label" v-model="playground.label" maxlength="24" placeholder="例如：保存草稿" />
-                </div>
-
-                <fieldset class="uk-fieldset">
-                  <legend>外观</legend>
-                  <div class="uk-segment">
-                    <button
-                      v-for="variant in VARIANT_ORDER"
-                      :key="variant"
-                      type="button"
-                      :class="{ 'is-active': playground.variant === variant }"
-                      @click="selectVariant(variant)"
-                    >{{ VARIANT_LABELS[variant] }}</button>
+              <template v-if="playground">
+                <!-- 控件由 playgrounds/<id>.ts 的 fields 决定，页面不认识具体组件 -->
+                <template v-for="field in fields" :key="field.key">
+                  <div v-if="field.kind === 'text'" class="uk-field">
+                    <label :for="'uk-field-' + field.key">{{ field.label }}</label>
+                    <input
+                      :id="'uk-field-' + field.key"
+                      :value="state[field.key] ?? ''"
+                      :placeholder="field.placeholder"
+                      :maxlength="field.maxlength"
+                      @input="onTextInput(field.key, $event)"
+                    />
                   </div>
-                </fieldset>
 
-                <fieldset class="uk-fieldset">
-                  <legend>尺寸</legend>
-                  <div class="uk-segment">
-                    <button
-                      v-for="item in SIZE_ORDER"
-                      :key="item"
-                      type="button"
-                      :class="{ 'is-active': playground.size === item }"
-                      @click="selectSize(item)"
-                    >{{ SIZE_LABELS[item] }}</button>
+                  <div v-else-if="field.kind === 'number'" class="uk-field">
+                    <label :for="'uk-field-' + field.key">{{ field.label }}</label>
+                    <input
+                      :id="'uk-field-' + field.key"
+                      type="number"
+                      :value="state[field.key] ?? ''"
+                      :min="field.min"
+                      :max="field.max"
+                      :step="field.step"
+                      @input="onNumberInput(field.key, $event)"
+                    />
                   </div>
-                </fieldset>
 
-                <div class="uk-switch-list">
-                  <label class="uk-switch">
-                    <span>显示图标</span>
-                    <input type="checkbox" :checked="playground.showIcon" @change="toggleShowIcon(($event.target as HTMLInputElement).checked)" />
-                    <i aria-hidden="true"></i>
-                  </label>
-                  <label class="uk-switch">
-                    <span>只显示图标</span>
-                    <input type="checkbox" :checked="playground.iconOnly" @change="toggleIconOnly(($event.target as HTMLInputElement).checked)" />
-                    <i aria-hidden="true"></i>
-                  </label>
-                  <label class="uk-switch">
-                    <span>占满宽度</span>
-                    <input type="checkbox" :checked="playground.block" @change="toggle('block', ($event.target as HTMLInputElement).checked)" />
-                    <i aria-hidden="true"></i>
-                  </label>
-                  <label class="uk-switch">
-                    <span>圆角胶囊</span>
-                    <input type="checkbox" :checked="playground.round" @change="toggle('round', ($event.target as HTMLInputElement).checked)" />
-                    <i aria-hidden="true"></i>
-                  </label>
-                  <label class="uk-switch">
-                    <span>禁用</span>
-                    <input type="checkbox" :checked="playground.disabled" @change="toggle('disabled', ($event.target as HTMLInputElement).checked)" />
-                    <i aria-hidden="true"></i>
-                  </label>
-                  <label class="uk-switch">
-                    <span>加载中</span>
-                    <input type="checkbox" :checked="playground.loading" @change="toggle('loading', ($event.target as HTMLInputElement).checked)" />
-                    <i aria-hidden="true"></i>
-                  </label>
-                </div>
+                  <fieldset v-else-if="field.kind === 'segment'" class="uk-fieldset">
+                    <legend>{{ field.label }}</legend>
+                    <div class="uk-segment">
+                      <button
+                        v-for="option in field.options"
+                        :key="option.value"
+                        type="button"
+                        :class="{ 'is-active': String(state[field.key]) === option.value }"
+                        @click="setValue(field.key, option.value)"
+                      >{{ option.label }}</button>
+                    </div>
+                  </fieldset>
 
-                <div class="uk-presets">
+                  <label v-else-if="field.kind === 'toggle'" class="uk-switch">
+                    <span>{{ field.label }}</span>
+                    <input
+                      type="checkbox"
+                      :checked="state[field.key] === true"
+                      @change="onToggle(field.key, $event)"
+                    />
+                    <i aria-hidden="true"></i>
+                  </label>
+
+                  <label v-else-if="field.kind === 'range'" class="uk-range">
+                    <span>{{ field.label }} <b>{{ rangeLabel(field) }}</b></span>
+                    <input
+                      type="range"
+                      :min="field.min"
+                      :max="field.max"
+                      :step="field.step"
+                      :value="typeof state[field.key] === 'number' ? state[field.key] : field.min"
+                      @input="onNumberInput(field.key, $event)"
+                    />
+                  </label>
+                </template>
+
+                <div v-if="presets.length" class="uk-presets">
                   <div class="uk-presets-head">
                     <span class="uk-eyebrow">配置好的预设</span>
                     <span>一键套用</span>
                   </div>
                   <button
-                    v-for="preset in PLAYGROUND_PRESETS"
+                    v-for="preset in presets"
                     :key="preset.id"
                     type="button"
                     class="uk-preset"
