@@ -23,6 +23,16 @@ export function subscribeUiDebugEvents(l: Listener): () => void {
   return () => { listeners.delete(l) }
 }
 
+/**
+ * 当前订阅者个数（**只给测试**用来锁「卸载后不残留」）。
+ *
+ * 为什么必须能数：监听集合是模块级的，组件漏退订时界面看不出异常，
+ * 只会随开关次数慢慢变多。有计数才能写一条会在泄漏时变红的用例。
+ */
+export function uiDebugListenerCount(): number {
+  return listeners.size
+}
+
 /** 某节点的最近一次调试事件（新挂载的标签立即恢复显示，不等下一次事件） */
 let lastByNode = new Map<string, UiDebugEvent>()
 export function lastUiDebugEvent(nodeId: string): UiDebugEvent | undefined {

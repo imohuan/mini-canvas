@@ -7,17 +7,9 @@
  * 做成插槽组件（titleExtraSlot），以后在标题右侧显示别的数据也能复用同一机制。
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { lastUiDebugEvent, subscribeUiDebugEvents, type UiDebugEvent } from './debugEventBus'
+import { subscribeUiDebugEvents, type UiDebugEvent } from './debugEventBus'
 
 const props = defineProps<{ nodeId: string; data: Record<string, unknown> }>()
-
-const last = ref<UiDebugEvent | undefined>(lastUiDebugEvent(props.nodeId))
-const off = subscribeUiDebugEvents((e) => {
-  if (e.nodeId === props.nodeId) {
-    last.value = e
-    if (e.kind === 'connected') refreshDebugging()
-  }
-})
 
 /**
  * 是否仍在调试中。sessionStorage 不是响应式的 —— 真机验证 2026-10-16 抓到：
@@ -35,7 +27,6 @@ function refreshDebugging(): void {
 }
 refreshDebugging()
 const pollTimer = setInterval(refreshDebugging, 2000)
-onBeforeUnmount(() => clearInterval(pollTimer))
 
 /**
  * 徽标状态机（用户口径 2026-10-17）：
@@ -63,7 +54,6 @@ function ensureTicker(): void {
   }, 100)
 }
 ensureTicker()
-onBeforeUnmount(() => { if (ticker !== null) clearInterval(ticker) })
 
 function onDebugEvent(e: UiDebugEvent): void {
   switch (e.kind) {
@@ -85,8 +75,27 @@ function onDebugEvent(e: UiDebugEvent): void {
       break
   }
 }
-subscribeUiDebugEvents((e) => {
-  if (e.nodeId === props.nodeId) onDebugEvent(e)
+
+/**
+ * 只订**一次**总线，并保住退订句柄。
+ *
+ * 早先这里是两次独立的 subscribeUiDebugEvents 调用，两个退订函数都没人接 ——
+ * 标签每挂载一次，模块级监听集合就多留两条（画布上每个节点标题各一个标签）。
+ * 反复开关画布 / 切画布时只增不减，是纯内存泄漏；现在合成一条，卸载时退掉。
+ */
+const off = subscribeUiDebugEvents((e) => {
+  if (e.nodeId !== props.nodeId) return
+  onDebugEvent(e)
+  if (e.kind === 'connected') refreshDebugging()
+})
+
+onBeforeUnmount(() => {
+  clearInterval(pollTimer)
+  if (ticker !== null) {
+    clearInterval(ticker)
+    ticker = null
+  }
+  off()
 })
 
 const text = computed(() => {
