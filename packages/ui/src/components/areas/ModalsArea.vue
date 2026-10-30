@@ -14,7 +14,7 @@ import { MediaViewer } from '@mini-canvas/plugin-theme-default'
 import { useMasonry } from '../../composables/useMasonry'
 import { uiComponentOf, useUi } from '../../composables/ui'
 import { useAgentSettings } from '../../composables/agentSettings'
-import { createApp, h, type Component } from 'vue'
+import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
 const s = ui.state
@@ -195,6 +195,88 @@ const wallCache = new Map<string, WallSnapshot>()
 /** 当前挂在页面上的墙属于哪个签名（'' = 还没建） */
 let mountedWallKey = ''
 /**
+ * 墙里**仍然活着**的 Vue 应用（每张视频/音频卡一个）。
+ *
+ * 为什么必须记：瀑布流里挂插件预览件用的是 createApp().mount()，而墙的销毁路径
+ * （rebuildMasonry 的 innerHTML = ''、LRU 逐出、弹窗卸载）都只删 DOM。
+ * 不显式 unmount，应用实例、ResizeObserver、<video>/<audio> 解码器与网络请求
+ * 会一直留着 —— 用户实测「进视频/音频页一直闪烁、一直加载，把电脑干崩」就是这个。
+ *
+ * 按墙分组记：key 为墙缓存签名或 MOUNTED_WALL，这样「只丢弃某一面旧墙」时
+ * 能精确回收那一面的应用，不影响当前正在显示的墙。
+ */
+const appsByWall = new Map<string, Set<VueApp>>()
+/** 当前挂载中的那面墙的 key（与 mountedWallKey 同步；'' = 还没建） */
+const MOUNTED_WALL = 'mounted'
+/** 卡片元素 → 它自己的 Vue 应用：单张卡被摘掉（坏资源）时精确卸载，不牵连整墙 */
+const appOfCard = new WeakMap<HTMLElement, VueApp>()
+
+/** 卸载某张卡自己的 Vue 应用（没有就什么都不做） */
+function unmountCardApp(card: HTMLElement): void {
+  const app = appOfCard.get(card)
+  if (!app) return
+  appOfCard.delete(card)
+  try {
+    app.unmount()
+  } catch {
+    /* 已经卸过/宿主已失效：忽略 */
+  }
+}
+
+/** 取（或建）某一面墙的应用登记表 */
+function appsOfWall(key: string): Set<VueApp> {
+  let set = appsByWall.get(key)
+  if (!set) {
+    set = new Set<VueApp>()
+    appsByWall.set(key, set)
+  }
+  return set
+}
+
+/**
+ * 卸载一面墙里所有还活着的 Vue 应用，并把登记项删掉。
+ *
+ * 单个应用 unmount 抛错（典型：节点已被外部替换/删掉）不能中断整轮清理，
+ * 否则剩下几十张卡的视频解码器会一起泄漏 —— 这正是本函数存在的原因。
+ * key 省略时清「当前挂载中的墙」；传 'all' 之外的任意 key 就只清那一面。
+ */
+function unmountMountedApps(key: string = MOUNTED_WALL): void {
+  const keys = key === '*' ? [...appsByWall.keys()] : [key]
+  for (const k of keys) {
+    const set = appsByWall.get(k)
+    if (!set) continue
+    appsByWall.delete(k)
+    for (const app of set) {
+      try {
+        app.unmount()
+      } catch {
+        /* 单个应用卸载失败不阻断其余卡片回收 */
+      }
+    }
+    set.clear()
+  }
+}
+
+/** 只卸载某一面墙的应用（不传 = 当前挂载中的墙） */
+function unmountWallApps(key: string): void {
+  unmountMountedApps(key)
+}
+
+/**
+ * 把一面墙的应用登记换到另一个 key 上（收墙进缓存 / 从缓存挂回来时用）。
+ *
+ * 这两个动作**不销毁** DOM 与应用（那正是切页签不闪的原因），只是「这面墙现在算谁的」
+ * 变了。登记表跟着一起换名，逐出那一面时才能精确回收它自己的应用。
+ */
+function rekeyWallApps(from: string, to: string): void {
+  const set = appsByWall.get(from)
+  if (!set || from === to) return
+  appsByWall.delete(from)
+  const target = appsOfWall(to)
+  for (const app of set) target.add(app)
+  set.clear()
+}
+/**
  * 墙缓存上限（LRU 逐出）：每次切页签都会 stash 一整面墙（含 video/audio 实例），
  * 不设上限的话，多页签反复切换 + 大量媒体会让内存持续增长（扫描记录 2026-10-30 A6）。
  * 6 面 ≈ 6 个页签/筛选组合，够"来回切"的常用场景；超出的最旧墙直接丢弃（切回去重建）。
@@ -207,6 +289,9 @@ function trimWallCache(): void {
     const oldest = wallCache.keys().next().value
     if (oldest === undefined) break
     wallCache.delete(oldest)
+    // 逐出的墙再也不会挂回来：墙里那些 Vue 应用（视频/音频播放器）必须跟着卸载，
+    // 否则缓存有上限、泄漏却没有上限（用户实测切页签切到电脑崩）。
+    unmountWallApps(oldest)
   }
 }
 
@@ -638,6 +723,8 @@ function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): H
  */
 function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
   if (!s.histShowError) {
+    // 这张卡马上要被摘掉：先把它自己的播放器应用卸掉（否则视频还在后台解码/请求）。
+    unmountCardApp(card)
     // 登记成"已摘":补漏逻辑据此不再把它画回来（防 补画→失败→摘 的无限循环）
     if (item.id) droppedHistoryIds.add(item.id)
     // 连外层瀑布流格子一起摘掉：只删内层卡会留下一个空白的列位（视觉上空一格）
@@ -658,6 +745,8 @@ function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
   if (s.histBatchMode && item.id) fallback.appendChild(buildCheckOverlay(item.id))
   // 替换出来的占位卡同样要带 id（否则补漏把它当成漏画，反复重建）
   if (item.id) fallback.dataset.histId = item.id
+  // 卡片被替换掉：它自己的播放器应用必须先回收，否则视频还在后台跑（看不见但占 CPU/解码器）
+  unmountCardApp(card)
   card.replaceWith(fallback)
   masonry.layoutWhenReady()
 }
@@ -969,6 +1058,12 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
           ),
       })
       app.mount(mount)
+      // 登记：这张卡的 Vue 应用必须在墙被回收时 unmount（见 appsByWall 的说明）。
+      // 一律记在「当前挂载中的墙」名下：建卡可能发生在 rebuild / append / prepend 三条路径，
+      // 统一记一个桶，收墙时再整体换名到该墙的缓存 key，逐出时才能精确回收。
+      appsOfWall(MOUNTED_WALL).add(app)
+      // 单张卡被摘掉（坏资源 → 换占位卡）时也要能单独回收它，不牵连整墙
+      appOfCard.set(card, app)
       // 视频件自带的控制条自带 aria-label，不再额外补；这里只记录媒体元素，供加载失败与尺寸同步
       // 详情入口留在图上（右上角小圆钮）；信息行在图外，见 finishCard
       media.appendChild(buildDetailButton(item))
@@ -1165,6 +1260,9 @@ function rebuildMasonry(): void {
   if (!container || rebuilding) return
   rebuilding = true
   masonry.destroy()
+  // 整墙重建是唯一批量新建卡片的路径：先把旧墙的应用全部卸载，否则每次重建都多留一批
+  // 活着的 <video>/<audio>（用户实测「进视频/音频页一直闪烁、一直加载」的根因）。
+  unmountMountedApps()
 
   const containerWidth = container.clientWidth
   if (containerWidth === 0) { rebuilding = false; return }
@@ -1308,6 +1406,9 @@ function stashCurrentWall(): void {
     columnWidth: lastColumnWidth,
     scrollTop: historyScroller()?.scrollTop ?? 0,
   })
+  // DOM 搬进缓存快照了，但应用还活着（有意：切回来不用重建）。登记项跟着换名，
+  // 这样这面墙被 LRU 逐出时能精确卸载它自己的播放器。
+  rekeyWallApps(MOUNTED_WALL, key)
   mountedWallKey = ''
   masonry.destroy()
 }
@@ -1351,6 +1452,8 @@ function switchWall(): void {
     container.innerHTML = ''
     while (cached.wall.firstChild) container.appendChild(cached.wall.firstChild)
     wallCache.delete(key)
+    // 从缓存挂回来：应用一直是活的（那正是切页签不闪的原因），登记项跟着改回「挂载中」。
+    rekeyWallApps(key, MOUNTED_WALL)
     renderedCount.value = cached.count
     lastColumnWidth = cached.columnWidth
     mountedWallKey = key
@@ -1586,6 +1689,9 @@ watch(() => s.histShowError, () => {
      */
     wallCache.clear()
     renderedCount.value = Math.min(BATCH_SIZE, ui.histVisible.value.length)
+    // 缓存里的旧墙再也不会挂回来（key 已变）：连同它们的播放器一起回收。
+    // 当前正在显示的那面墙由紧接着的 rebuildMasonry 负责卸载。
+    unmountMountedApps('*')
     nextTick(() => {
       rebuildMasonry()
       // 过滤后卡片数可能不足一屏：哨兵还在，但瀑布流重建过；重新确认观察器仍然指向当前元素
@@ -1595,6 +1701,9 @@ watch(() => s.histShowError, () => {
 })
 onBeforeUnmount(() => {
   masonry.destroy()
+  // 弹窗卸载：墙缓存里和当前墙上的播放器应用一并回收（否则关掉面板后视频/音频仍在后台跑）。
+  unmountMountedApps('*')
+  wallCache.clear()
   sentinelObserver?.disconnect()
   teardownLoadSentinel()
   if (sentinelWatchdog) clearInterval(sentinelWatchdog)

@@ -269,7 +269,9 @@ function updateTexture(url: string): void {
   if (scn && scn.children[0]) scn.children[0].visible = false
   ldr.load(
     url,
-    (tex) => {
+    // three 的类型在本仓库里是本地 shim（any），回调参数不注解会触发 noImplicitAny。
+    // 标成 THREE.Texture 既消掉报错，也把「这里拿到的是贴图」这层意思写清楚。
+    (tex: THREE.Texture) => {
       // 加载完成前可能已切到别的图 / 已卸载：丢弃过期结果。
       // 仅判 material 存在不够 —— 连换两张图时，第一张若后到会把第二张盖掉，故用序号比对。
       if (!material.value || token !== textureToken) {
