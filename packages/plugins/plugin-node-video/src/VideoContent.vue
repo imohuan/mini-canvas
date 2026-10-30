@@ -466,66 +466,31 @@ async function freezeFrame(): Promise<void> {
     { tier: 3, box: videoThumbTargetFor(3, tierCfg.value, { width: frameW, height: frameH }) },
   ]
   /**
-   * 定格这一帧的**三个档位**都走"先查资源库、没有才抓"的路（见 FrameCache.resolveOrCreate）。
-   *
-   * 两个好处：
-   * - **同一时刻再次定格是零成本的**（名字里带档位与时刻，命中即取）；
-   * - 常态下**连抓帧都不需要** —— 打开画布时先把视频静音 seek 到默认时刻、抓一帧存库，
-   *   之后一直命中，于是"节点一多就每次卡几秒"的那件事根本不会发生。
-   * *
-   * 抓取一律**从眼前这个 video 元素直接抓**（零额外解码、零等待）：
-   * 另起一个 video 去 seek 在几十个视频节点的画布上会卡在解码器排队里
-   * （2026-10-15 实测：暂停了但画面迟迟切不过去）。抓不到才退回"另起解码"那条慢路。
-   */
-  /**
    * ★ 一次抓帧、缩出三档（不是三次独立抓帧）。
    *
    * 抓两次「当前帧」在播放器里可能落在相邻两帧上，缩放时画面就会跳；
    * 这里从同一个视频元素**同一时刻**抓一份原图，再在内存里缩出 2/3 档。
    * 同时把这份结果直接写进 FrameCache 的内存级 —— 下一个 watch 会立刻显示它。
+   *
+   * 抓取一律**从眼前这个 video 元素直接抓**（零额外解码、零等待）：
+   * 另起一个 video 去 seek 在几十个视频节点的画布上会卡在解码器排队里
+   * （2026-10-15 实测：暂停了但画面迟迟切不过去）。
    */
   const variant = frozenVariantPrefix(at, frameW, frameH)
-  const wanted = [1, 2, 3] as const
-  const results = await Promise.all(
-    wanted.map(async (wantTier) => {
-      const wantBox = boxes.find((b) => b.tier === wantTier)?.box ?? { width: frameW, height: frameH }
-      return await frameCache.getOrCreate(
-        src,
-        variant + ':' + wantTier,
-        async () => {
-          // ★ 明确 seek 到 `at` 再抓：浏览器暂停后 drawImage 取的是"最后呈现帧"，
-          // 与 currentTime 之间可能差一帧；传 at 让 "停在第 5 秒就截第 5 秒" 成为事实。
-          const set = await grabTierFramesFromElement(v, {
-            box: videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH }),
-            tier: wantTier,
-            cropRect: cropRect.value ?? null,
-            quality: tierCfg.value.quality,
-            at,
-          })
-          const fromEl = set?.tiers.get(wantTier)
-          if (fromEl) return fromEl
-          const slow = await grabTierFrames(src, {
-            at,
-            boxes: [{ tier: wantTier, box: videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH }) }],
-            cropRect: cropRect.value ?? null,
-            frameWidth: frameW,
-            frameHeight: frameH,
-            quality: tierCfg.value.quality,
-            grab: captureFrame,
-          })
-          const frame = slow?.tiers.get(wantTier)
-          if (!frame) return null
-          return frame
-        },
-      )
-    }),
-  )// 期间用户又悬停回来播放 / 换了源 → 丢弃这次定格（不然会把旧画面挂上去）
-  if (epoch !== freezeEpoch.value || videoUrl.value !== src) return
-  const tiers = new Map<number, TierFrame>()
-  results.forEach((frame, i) => {
-    if (frame) tiers.set(wanted[i], frame)
+  /**
+   * 从眼前这个元素**一次抓齐三档**：只 seek 一次、只 decode 一次，三档必然同一帧。
+   * 返回的 URL 属于本次定格，直接写进 FrameCache 的内存级（不经过资源库）。
+   */
+  const set = await grabTierFramesFromElement(v, {
+    boxes,
+    cropRect: cropRect.value ?? null,
+    quality: tierCfg.value.quality,
+    at,
   })
-  if (tiers.size === 0) return
+  // 期间用户又悬停回来播放 / 换了源 → 丢弃这次定格（不然会把旧画面挂上去）
+  if (epoch !== freezeEpoch.value || videoUrl.value !== src) return
+  if (!set || set.tiers.size === 0) return
+  const tiers = set.tiers
   // 直接换成本次定格的三档：不再经过「资源库命中」那一级（定格图只在本次会话有效）。
   frameCache.setFrozenFrames(src, variant, tiers)
   frameTiers.value = new Map([...tiers].map(([t, f]) => [t, f]))

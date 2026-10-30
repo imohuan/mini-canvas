@@ -127,7 +127,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--mck-ink, inherit);
+  color: inherit;
   font: inherit;
   font-size: 12px;
   text-align: left;
@@ -152,9 +152,9 @@
 
 .dd-menu__close {
   margin-top: 3px;
-  border-top: 1px solid var(--mck-line, #e2e5ea) !important;
-  border-radius: 0 !important;
-  color: var(--mck-ink-muted, #8c95a3) !important;
+  border-top: 1px solid var(--mck-line, #e2e5ea);
+  border-radius: 0;
+  color: var(--mck-ink-muted, #8c95a3);
 }
 
 /* ---- Teleport 到右栏的配置面板 ---- */

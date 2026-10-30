@@ -160,11 +160,82 @@ const open = ref(false)
 </style>
 @@ENDVUE@@
 
+## 调整容器尺寸
+
+`menu-width` / `menu-height` 控制浮层本身的大小；`menu-min-width`、`menu-max-width`、
+`menu-max-height` 负责边界。固定高度配合 `layout="inner-scroll"`，可以让标题固定、列表自己滚。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown, Button } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+</script>
+
+<template>
+  <Dropdown
+    v-model="open"
+    menu-width="280px"
+    menu-height="180px"
+    layout="inner-scroll"
+    arrow
+  >
+    <template #trigger="{ open: isOpen }">
+      <Button variant="secondary" :aria-expanded="isOpen">固定尺寸</Button>
+    </template>
+    <template #default>
+      <div class="sized-menu">
+        <strong>标题固定</strong>
+        <button v-for="i in 20" :key="i" type="button">选项 {{ i }}</button>
+      </div>
+    </template>
+  </Dropdown>
+</template>
+<style>
+.sized-menu { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.sized-menu strong { position: sticky; top: 0; padding: 4px 8px; background: var(--mck-panel); }
+.sized-menu button { padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.sized-menu button:hover { background: var(--mck-hover); }
+</style>
+@@ENDVUE@@
+
+## 显示箭头与对齐
+
+`arrow` 打开后，箭头会贴住靠近触发器的那条边；`align` 控制横向对齐，
+`start` 贴左缘、`center` 居中、`end` 贴右缘，`auto` 跟随 `placement` 后缀。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown, Button } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+</script>
+
+<template>
+  <Dropdown v-model="open" placement="bottom-start" align="center" arrow offset="12">
+    <template #trigger="{ open: isOpen }">
+      <Button variant="secondary" :aria-expanded="isOpen">居中对齐</Button>
+    </template>
+    <template #default>
+      <div style="min-width: 180px; padding: 4px">箭头朝上，指向按钮中心。</div>
+    </template>
+  </Dropdown>
+</template>
+@@ENDVUE@@
+
 | 属性 | 默认 | 说明 |
 | --- | --- | --- |
 | placement | bottom-start | 方位，空间不足自动翻转 |
 | offset | 6 | 与触发器的间距 |
 | matchWidth | false | 浮层与触发器同宽 |
+| arrow | false | 显示指向触发器的小箭头 |
+| align | auto | auto / start / center / end |
+| menuWidth | 无 | 浮层固定宽度 |
+| menuHeight | 无 | 浮层固定高度 |
+| menuMinWidth | 无 | 浮层最小宽度 |
+| menuMaxWidth | 无 | 浮层最大宽度 |
 | menuMaxHeight | 无 | 长列表内部滚动 |
 | trigger | click | click / hover / contextmenu |
 | layout | overlay-scroll | overlay-scroll / inner-scroll |

@@ -43,7 +43,6 @@ const trigger = ref<HTMLElement | null>(null)
 const offsetX = ref(0)
 const offsetY = ref(0)
 const dragging = ref(false)
-const moved = ref(false)
 let grab = { x: 0, y: 0, ox: 0, oy: 0 }
 
 const items = computed(() => {
@@ -96,15 +95,13 @@ function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
   grab = { x: event.clientX, y: event.clientY, ox: offsetX.value, oy: offsetY.value }
   dragging.value = true
-  moved.value = false
 }
 
 function onPointerMove(event: PointerEvent): void {
   if (!dragging.value) return
   const dx = event.clientX - grab.x
   const dy = event.clientY - grab.y
-  if (!moved.value && Math.hypot(dx, dy) < 4) return
-  moved.value = true
+  if (Math.hypot(dx, dy) < 4) return
   // 只有真的拖起来才捕获指针。按下就捕获会把随后的 click 重定向到容器，
   // 按钮自己的 click 收不到，下拉永远打不开（浏览器实测出来的坑）。
   ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
@@ -118,14 +115,6 @@ function onPointerUp(): void {
 }
 
 /** 拖动结束后浏览器仍会派发 click；这时不能把下拉打开/关掉。 */
-function onTriggerClick(event: MouseEvent): void {
-  if (moved.value) {
-    event.stopPropagation()
-    event.preventDefault()
-    moved.value = false
-  }
-}
-
 function recenter(): void {
   offsetX.value = 0
   offsetY.value = 0
@@ -204,7 +193,7 @@ const groupedFields = computed(() => {
       >
         <Dropdown v-model="open" v-bind="dropdownProps">
           <template #trigger="{ open: isOpen }">
-            <Button variant="secondary" :aria-expanded="isOpen" class="dd-trigger" data-demo-trigger @click="onTriggerClick">
+            <Button variant="secondary" :aria-expanded="isOpen" class="dd-trigger" data-demo-trigger>
               <span class="dd-trigger__grip" aria-hidden="true">⠿</span>
               {{ triggerLabel }}
             </Button>

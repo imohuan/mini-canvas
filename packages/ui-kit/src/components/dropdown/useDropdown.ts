@@ -78,6 +78,12 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   }
 
   function toggle(): void {
+    // 悬停模式由鼠标进出负责关闭；点击只负责打开。
+    // 否则鼠标明明还停在触发器上，点一下反而把刚悬停打开的菜单关掉。
+    if ((props.trigger ?? 'click') === 'hover') {
+      show()
+      return
+    }
     if (open.value) hide()
     else show()
   }
