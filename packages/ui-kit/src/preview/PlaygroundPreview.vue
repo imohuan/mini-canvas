@@ -434,7 +434,11 @@ function fireMessage(): void {
 
 .pg.is-stretch {
   flex-direction: column;
-  align-items: stretch;
+  /*
+   * 只让外层吃满预览区，里面的输入框/滑块本身保持固定宽度并居中。
+   * 用 stretch 会把 min(380px,100%) 的容器顶到左边，看起来像左对齐。
+   */
+  align-items: center;
 }
 
 .pg-field {
