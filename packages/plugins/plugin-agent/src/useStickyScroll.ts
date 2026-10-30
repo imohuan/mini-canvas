@@ -47,6 +47,8 @@ export function useStickyScroll(opts: StickyScrollOptions) {
    */
   const showScrollToBottom = ref(false)
   let raf = 0
+  /** 平滑滚动动画的定时器（0 = 没在跑） */
+  let animTimer = 0
   let ro: ResizeObserver | undefined
   /**
    * 我们**自己**刚写进去的 scrollTop。
@@ -159,15 +161,18 @@ export function useStickyScroll(opts: StickyScrollOptions) {
       programmaticTop = el.scrollTop
       syncStuck()
     }
-    const timer = window.setInterval(() => {
+    /** 记住这轮的定时器：卸载时能立刻停掉（否则组件没了还每 16ms 摸一次 DOM） */
+    animTimer = window.setInterval(() => {
       if (advance()) {
-        window.clearInterval(timer)
+        window.clearInterval(animTimer)
+        animTimer = 0
         finish()
       }
     }, 16)
     // 起手先推一帧，避免首帧前有 16ms 的静默
     if (advance()) {
-      window.clearInterval(timer)
+      window.clearInterval(animTimer)
+      animTimer = 0
       finish()
     }
   }
@@ -245,6 +250,11 @@ export function useStickyScroll(opts: StickyScrollOptions) {
   onBeforeUnmount(() => {
     cancelAnimationFrame(raf)
     raf = 0
+    // 平滑滚动动画的定时器：不停的话组件卸载后它还会每 16ms 写一次 scrollTop
+    if (animTimer) {
+      window.clearInterval(animTimer)
+      animTimer = 0
+    }
     ro?.disconnect()
     ro = undefined
     boundEl?.removeEventListener('scroll', onUserScroll)
