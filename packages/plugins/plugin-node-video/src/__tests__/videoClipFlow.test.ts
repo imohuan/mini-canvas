@@ -87,6 +87,41 @@ describe('videoClipFlow：真剪辑（时间切割）', () => {
     expect(created!.data.label).toBe('剪辑')
   })
 
+  it('后台还没返回时：占位节点 + 连线已经出现，节点上带着 running 进度态', async () => {
+    const env = boot()
+    const id = addVideo(env.nodeStore)
+    // 挂起后台响应：模拟 ffmpeg 正在转码
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((r) => { release = r })
+    stubFetch({
+      cut: async () => {
+        await gate
+        return new Response(JSON.stringify({ ok: true, url: CUT, duration: 2 }), { status: 200 })
+      },
+    })
+    const running = clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 2)
+    // 让「探针 → 建节点」这两步跑完（后台请求还挂在 gate 上）
+    await new Promise((r) => setTimeout(r, 0))
+    const pending = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
+    expect(pending).toBeTruthy()
+    // ① 节点先出现，且还没写视频地址（结果要等后台）
+    expect(pending!.data.videoUrl).toBeUndefined()
+    // ② 连线同时建好
+    expect(env.edgeStore.getEdges()).toHaveLength(1)
+    expect(env.edgeStore.getEdges()[0]).toMatchObject({ source: id, target: pending!.id })
+    // ③ 节点上带着 running 态 —— 底栏的任务覆盖层据此显示进度
+    const rs = pending!.data.runState as { status: string; message?: string }
+    expect(rs.status).toBe('running')
+    expect(rs.message).toContain('后台')
+    // ④ 后台返回后，同一个节点被回填成本次结果（不会另建一个）
+    release!()
+    expect(await running).toBe(true)
+    const nodes = env.nodeStore.getNodes().filter((n) => n.id !== id)
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]!.data.videoUrl).toBe(CUT)
+    expect((nodes[0]!.data.runState as { status: string }).status).toBe('done')
+  })
+
   it('后台没装插件（ping 失败）→ 返回 null、不建节点（调用方回落元数据式）', async () => {
     const env = boot()
     const id = addVideo(env.nodeStore)

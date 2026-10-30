@@ -101,6 +101,34 @@ describe('videoCropFlow：真裁剪', () => {
     expect(env.nodeStore.getNode(id)!.data.videoWidth).toBe(480)
   })
 
+  it('后台还没返回时：裁剪节点 + 连线已出现，带着 running 进度；返回后回填尺寸与时长', async () => {
+    const env = boot()
+    const id = addVideo(env.nodeStore)
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((r) => { release = r })
+    stubFetch({
+      crop: async () => {
+        await gate
+        return new Response(JSON.stringify({ ok: true, url: '/api/canvases/c1/resources/aabbccddeeff0011.mp4', width: 200, height: 150 }), { status: 200 })
+      },
+    })
+    const running = cropNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, { x: 4, y: 6, width: 200, height: 150 })
+    await new Promise((r) => setTimeout(r, 0))
+    const pending = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
+    expect(pending!.data.videoUrl).toBeUndefined()
+    expect(env.edgeStore.getEdges()[0]).toMatchObject({ source: id, target: pending!.id })
+    expect((pending!.data.runState as { status: string }).status).toBe('running')
+    release!()
+    expect(await running).toBe(true)
+    const done = env.nodeStore.getNode(pending!.id)!
+    expect(done.data.videoWidth).toBe(200)
+    expect(done.data.videoHeight).toBe(150)
+    expect(done.data.videoDuration).toBe(10)
+    expect((done.data.runState as { status: string }).status).toBe('done')
+    // 新节点被选中，底栏的进度盖层才看得见
+    expect([...(env.ctx.get<{ ids: ReadonlySet<string> }>('selection').ids)]).toEqual([pending!.id])
+  })
+
   it('「处理中」会话态可置位/复位（顶栏据此禁用按钮）', () => {
     expect(isCropPending('n')).toBe(false)
     setCropPending('n', true)
