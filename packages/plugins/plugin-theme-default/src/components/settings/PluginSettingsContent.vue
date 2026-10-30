@@ -93,6 +93,11 @@ const schemaOff = rawSettings?.onSchemaChange(() => { refreshTick.value += 1 })
 if (schemaOff) disposers.push(schemaOff)
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
+  /**
+   * 滚动锁的兜底定时器也要收：面板关掉后它还会在 1.2 秒时回调一次，
+   * 改一个已经没人看的 scrollLocked（并顺手 clearTimeout 自己）。
+   */
+  releaseScrollLock()
 })
 
 // —— 分组（schema）—— 
