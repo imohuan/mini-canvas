@@ -44,14 +44,14 @@ export const Config = {
     description: '分镜组里左右两列图片之间的间距。',
   },
   [STORYBOARD_LAYOUT_KEYS.padding]: {
-    type: 'number', default: 8, min: 0, max: 120, step: 2,
+    type: 'number', default: 24, min: 0, max: 120, step: 2,
     label: '内边距（px）', group: '布局/分镜组',
-    description: '槽位网格到分镜组卡片边缘的距离（左/右/下；顶部另配）。',
+    description: '槽位网格到卡片边缘的距离（左/右/下）。顶部 = 这一项 + 顶部留白。',
   },
   [STORYBOARD_LAYOUT_KEYS.topPadding]: {
-    type: 'number', default: 34, min: 0, max: 120, step: 2,
+    type: 'number', default: 0, min: 0, max: 120, step: 2,
     label: '顶部留白（px）', group: '布局/分镜组',
-    description: '给标题条留的位置。隐藏标题的画布可以把这项调小。',
+    description: '额外加在上内边距之上（默认 0 = 四边一致）。标题画在卡片外时不需要加。',
   },
 } as const satisfies ConfigSchema
 
@@ -185,59 +185,10 @@ export function apply(ctx: Context): void {
   const offSelection = ctx.on('canvas:selection:change', (payload: { nodeIds?: string[] }) => {
     exitIfChanged(new Set(payload.nodeIds ?? []))
   })
-  /**
-   * 画布平移 / 缩放 → 退出模式（用户口径 2026-10-30，第二次强调）。
-   *
-   * 为什么不再用 canvas:viewport:move-start：VueFlow 的 moveStart 带
-   * "if (!event.sourceEvent) return"，滚轮缩放没有 sourceEvent 时不发；
-   * 而且它只在指针按下起手时发一次，触摸板双指缩放也覆盖不全。
-   * 这里改成盯视口值本身：只要 x/y/zoom 变了就是视图在动，与手势来源无关。
-   *
-   * 轮询而不是订阅：viewport 服务只有读口（契约里没有 onChange），
-   * 低频 200ms 且只在切分模式期间跑，没有会话时第一行就返回，开销可忽略。
-   */
-  let viewportTimer: ReturnType<typeof setInterval> | undefined
-  let lastViewport = ''
-  const stopViewportWatch = (): void => {
-    if (viewportTimer !== undefined) {
-      clearInterval(viewportTimer)
-      viewportTimer = undefined
-    }
-    lastViewport = ''
-  }
-  const startViewportWatch = (): void => {
-    if (viewportTimer !== undefined) return
-    const vp = ctx.tryGet<{ getViewport?(): { x: number; y: number; zoom: number } } | undefined>('viewport')
-    if (!vp || typeof vp.getViewport !== 'function') return
-    const read = (): string => {
-      const v = vp.getViewport!()
-      return v.x.toFixed(1) + ',' + v.y.toFixed(1) + ',' + v.zoom.toFixed(3)
-    }
-    lastViewport = read()
-    viewportTimer = setInterval(() => {
-      if (!activeSplitId()) { stopViewportWatch(); return }
-      const now = read()
-      if (now === lastViewport) return
-      lastViewport = now
-      const id = activeSplitId()
-      if (id) {
-        endSplit(id)
-        toolbarOf()?.exit?.(id)
-      }
-      stopViewportWatch()
-    }, 200)
-  }
-  // 会话开始 → 起表；会话结束 → 停表（onSplitChange 已在 ③ 里订阅，这里挂同一份的副作用）
-  const offViewportSync = onSplitChange((nodeId, active) => {
-    if (active) startViewportWatch()
-    else if (splitNodeIds().length === 0) stopViewportWatch()
-  })
   ctx.effect(() => () => {
     offNodeClick.dispose()
     offPaneClick.dispose()
     offSelection.dispose()
-    offViewportSync()
-    stopViewportWatch()
   })
 
   // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原

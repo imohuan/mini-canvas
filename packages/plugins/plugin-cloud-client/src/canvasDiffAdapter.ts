@@ -42,6 +42,17 @@ export class CanvasDiffAdapter {
   /** 上次提交成功的节点 / 边（差的基准） */
   private submittedNodes: unknown[] | undefined
   private submittedEdges: unknown[] | undefined
+  /**
+   * 保存串行链。
+   *
+   * 为什么必须串行（2026-10-31 实测）：一次拖拽会连着触发两次提交 ——
+   * 宿主先写「拖动结束的相对坐标」，插件随后写「吸附后的槽位坐标」。
+   * 两次 set 各自 diff、各自发请求，若后一次先到服务器，先一次随后到达，
+   * 就会把已经吸附好的结果盖回拖动中间态（现象：拖出分镜组后刷新又回到组里、
+   * 画布偶尔被写回旧快照）。串行之后每次 diff 都基于上一次真正成功的结果，
+   * 请求先后顺序与用户操作顺序一致。
+   */
+  private saveChain: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly api: CloudApi,
@@ -70,6 +81,14 @@ export class CanvasDiffAdapter {
   }
 
   async set(key: string, value: unknown): Promise<void> {
+    const job = this.saveChain.then(() => this.writeNow(key, value))
+    // 一条失败不能卡死后续保存：链尾吞掉错误，错误仍抛给本次调用方。
+    this.saveChain = job.catch(() => undefined)
+    return job
+  }
+
+  /** 真正写一次（由 set 排进串行链后调用） */
+  private async writeNow(key: string, value: unknown): Promise<void> {
     const bare = bareKey(key)
     if (bare === VIEWPORT) {
       await this.api.putView(this.cid(), value)
@@ -85,6 +104,13 @@ export class CanvasDiffAdapter {
   }
 
   async remove(key: string): Promise<void> {
+    const job = this.saveChain.then(() => this.removeNow(key))
+    this.saveChain = job.catch(() => undefined)
+    return job
+  }
+
+  /** 真正删一次（由 remove 排进串行链后调用） */
+  private async removeNow(key: string): Promise<void> {
     const bare = bareKey(key)
     if (bare === GRAPH) {
       await this.api.patchNodes(this.cid(), { delete: collectIds(this.submittedNodes) })

@@ -222,6 +222,39 @@ export function applyStoryboardDrop(
    */
   const slots = normalizeSlots(decision.slots, (id) => Boolean(doc.getNode(id)))
 
+  /**
+   * 「一槽一图」兜底（用户口径 2026-10-31：松手后仍能看到两个节点叠在一格）。
+   *
+   * 归一只能清掉**表里重复的 id**，清不掉"表里没写、但物理上已经叠进来"的情况：
+   * 旧数据里节点 parentId 挂着本组、position 却停在某格上，slots 里没有它 ——
+   * 于是新图占同一格时，两张图在同一位置重叠，用户看到的就是"一个槽放了两张"。
+   * 这里按**每个子节点的实际位置**反推它占的格，谁不在这格就把它移出槽位表；
+   * slots 之外、又没有自己格位的子节点则解父成自由节点（它本来就不该锁在组里）。
+   */
+  const rectsForBoard = rects
+  const occupied = new Map<number, string>()
+  for (const child of doc.getNodes()) {
+    if (child.id === node.id || child.parentId !== board.id) continue
+    if (child.type !== 'image') continue
+    const local = { x: child.position?.x ?? 0, y: child.position?.y ?? 0 }
+    const idx = slotIndexByOverlapOrCenter(
+      rectsForBoard,
+      { x: 0, y: 0 },
+      { x: local.x, y: local.y, w: child.size?.w ?? 0, h: child.size?.h ?? 0 },
+      local,
+    )
+    if (idx >= 0) occupied.set(idx, child.id)
+  }
+  // 目标格外、物理上已压在新图要占的格上的节点：解父挪开（不能让它和新图叠着）
+  const stale = occupied.get(decision.slotIndex)
+  if (stale && stale !== node.id) {
+    const other = doc.getNode(stale)
+    if (other) {
+      detachLayout = layout
+      detachFromBoard(doc, other, board.id)
+    }
+  }
+
   const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspectOf(node), fitImageLimits(ctx))
   const inside = centerInsideSlot({ w: slot.w, h: slot.h }, fitted)
   // 记下进组前的尺寸，脱离时还原（只在第一次进组时记，避免被槽位尺寸覆盖）
@@ -321,6 +354,26 @@ function setGhost(ctx: Context, nodeId: string, on: boolean): void {
   else el.removeAttribute(GHOST_ATTR)
 }
 
+/**
+ * 清掉本轮所有半透明标记（松手 / 拖到组外 / 换了拖动对象都要清）。
+ *
+ * 只动 DOM 属性，不写 doc：见 onStoryboardDragEnd 里的长注释 —— 拖拽中的视觉状态
+ * 一旦写进作品数据，就会把「相对坐标 + 旧父级」的中间态一起存进画布。
+ */
+function releaseGhosts(ctx: Context): void {
+  for (const id of ghosted) setGhost(ctx, id, false)
+  ghosted.clear()
+  lastMarked = ''
+  // 兜底扫一遍 DOM：热更新 / 插件重载会把模块级 ghosted 清空，
+  // 但属性留在元素上 → 用户看到"拖完还是半透明"，且之后没有任何代码记得清它。
+  // 按属性扫全表是唯一不依赖内存状态的清法。
+  if (typeof document !== 'undefined') {
+    for (const el of document.querySelectorAll('.vue-flow__node[' + GHOST_ATTR + ']')) {
+      el.removeAttribute(GHOST_ATTR)
+    }
+  }
+}
+
 /** 脱离分镜组：清父级、**绝对坐标**、还原尺寸、从 slots 里摘掉。
  *
  * 用户口径 2026-10-30（参考分组节点）：脱离时 store 的 position 还是**相对父**的值，
@@ -351,23 +404,22 @@ export function onStoryboardDragEnd(
 ): { dispose(): void } {
   ensureGhostStyle()
   return ctx.on(NODE_DRAG_END, (payload: { nodeId: string; position: { x: number; y: number } }) => {
-    const handled = applyStoryboardDrop(ctx, payload)
-    // 松手必清半透明标记（无论吸附还是脱离）。
-    // 扫全表而不是只清 payload.nodeId：多选拖动 / drag-end 只报了主节点时，
-    // 其它成员的标记会残留（用户实测："有些时候节点透明度也没有恢复"）。
-    const doc = ctx.tryGet<DocPort | undefined>('doc')
-    if (doc) {
-      for (const n of doc.getNodes()) {
-        if (n.data?._storyboardDragging === true) {
-          doc.updateNode(n.id, { data: { _storyboardDragging: undefined } })
-        }
-      }
+    // 先无论成败都清半透明：applyStoryboardDrop 抛错时若跳过清理，
+    // 节点会永远停在 45% 透明（用户实测截图：松手后透明度没恢复）。
+    let handled = false
+    try {
+      handled = applyStoryboardDrop(ctx, payload)
+    } finally {
+      releaseGhosts(ctx)
+      clearHover()
     }
-    // DOM 层的半透明同样要清（数据字段只是驱动图片组件那一路的旧实现）
-    for (const id of ghosted) setGhost(ctx, id, false)
-    ghosted.clear()
-    lastMarked = ''
-    clearHover()
+    // 松手必清半透明标记（无论吸附还是脱离）。
+    //
+    // 只清 DOM 标记，**不写 data**：`_storyboardDragging` 曾经写在 doc.data 里，
+    // 而 doc 每次写都会触发整图落盘 —— 拖动逐帧打标就意味着「拖到一半的相对坐标 +
+    // 旧 parentId」被当成正式内容存了一版；松手后插件刚把 parentId 清掉，
+    // 那版中间态又随下一次保存把父级写回去（浏览器实测 2026-10-31：拖出分镜组后
+    // 刷新页面节点又回到组里）。视觉状态本来就不该进作品数据。
     cb(handled, payload)
   })
 }
@@ -386,10 +438,7 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
     if (!node || node.type !== 'image') {
       clearHover()
       if (lastMarked) {
-        doc.updateNode(lastMarked, { data: { _storyboardDragging: undefined } })
-        setGhost(ctx, lastMarked, false)
-        ghosted.delete(lastMarked)
-        lastMarked = ''
+        releaseGhosts(ctx)
       }
       return
     }
@@ -413,10 +462,7 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
     if (!hit) {
       clearHover()
       if (lastMarked) {
-        doc.updateNode(lastMarked, { data: { _storyboardDragging: undefined } })
-        setGhost(ctx, lastMarked, false)
-        ghosted.delete(lastMarked)
-        lastMarked = ''
+        releaseGhosts(ctx)
       }
       return
     }
@@ -427,7 +473,6 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
     hover.slotIndex = slotIndex
     // 拖动节点与分镜组交叉 → 半透明（用户口径 2026-10-30：别把槽位全挡住）
     if (lastMarked !== payload.nodeId) {
-      doc.updateNode(payload.nodeId, { data: { _storyboardDragging: true } })
       // 整张卡片透明（DOM 外壳级）：只调图片 opacity 只会"颜色变淡"，卡片底色还盖着
       setGhost(ctx, payload.nodeId, true)
       ghosted.add(payload.nodeId)

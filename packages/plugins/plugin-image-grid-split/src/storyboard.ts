@@ -60,7 +60,10 @@ export const STORYBOARD_LAYOUT_KEYS = Object.freeze({
 export const DEFAULT_STORYBOARD_LAYOUT: StoryboardLayout = Object.freeze({
   rowGap: 10,
   colGap: 10,
-  padding: 8,
+  // 用户口径 2026-10-31：分镜组的四边留白要和**分组**一致（分组默认四周 30、顶部 40），
+  // 不能出现"顶部一大块、左右贴边"。这里内边距四边同值，顶部留白默认 0，
+  // 需要给标题让位时再单独调大。
+  padding: 24,
   // 0：标题条画在卡片**外面**（BaseNode 的标题 bottom: 100% + offset），
   // 卡片内部不需要给它留位 —— 之前默认 34 会在标题下方留出一块空隙（用户口径 2026-10-30）。
   // 配置项保留：隐藏标题/特殊排版时可以手动调大。

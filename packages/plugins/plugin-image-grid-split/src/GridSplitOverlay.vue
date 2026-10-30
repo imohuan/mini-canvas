@@ -10,7 +10,7 @@
  * 选中格画青色描边 + 微透明底，未选中格画细白线。事件不外漏（nodrag/nopan），
  * 避免拖格子把节点拖走。
  */
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { readStoryboardLayout, slotIndexAt, slotRects } from './storyboard'
 import { setHoverCell, splitState, toggleCell } from './splitSession'
@@ -20,6 +20,78 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 
 const state = computed(() => splitState(props.id))
+
+/**
+ * 原图地址：格子要**自己画原图的一块**（用户口径 2026-10-31，参考 deepseek_html 示例）。
+ *
+ * 为什么不再只靠卡片遮罩：遮罩只能把卡片抠空，格子里看到的仍是底下那张完整图片，
+ * 缝隙两侧的像素还是连续的 —— 看起来只是"盖了几个方块"。示例的做法是每格铺同一张图、
+ * 按行列放大到 300%/N 并错位定位，格子自己就是那张图的一块，缝隙自然什么都不画。
+ *
+ * 解析顺序与图片节点一致：有 resourceId 先问资源服务，取不到再用旧 imageUrl 兜底。
+ * 只用于渲染，不写回 data。
+ */
+const imageSrc = ref('')
+let resolveToken = 0
+async function refreshImageSrc(): Promise<void> {
+  const token = ++resolveToken
+  const d = props.data ?? {}
+  const resourceId = typeof d.resourceId === 'string' ? d.resourceId : ''
+  const legacy = typeof d.imageUrl === 'string' ? d.imageUrl : ''
+  if (!resourceId) {
+    imageSrc.value = legacy
+    return
+  }
+  const res = ctx.tryGet<{ resolve?(ref: string): Promise<string | undefined> } | undefined>('resources')
+  let resolved = ''
+  try {
+    resolved = (res && typeof res.resolve === 'function' ? await res.resolve(resourceId) : '') || ''
+  } catch {
+    resolved = ''
+  }
+  // 资源服务可能只认「画布id/哈希」而不认裸哈希，且旧存档常常没有 resourceId。
+  // 兜底顺序与图片节点一致：resolve 出来的 > legacyUrl；两者都没有时退到节点上
+  // 由图片组件解析出的 <img src>（那是页面确定能显示的那一份，保证格子与卡片是同一张图）。
+  if (token !== resolveToken) return
+  imageSrc.value = resolved || legacy
+  if (!imageSrc.value) {
+    const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('viewport')
+    const img = vp?.queryNodeEl?.(props.id)?.querySelector('img')
+    imageSrc.value = img?.getAttribute('src') || ''
+  }
+}
+watch(
+  () => [props.data?.resourceId, props.data?.imageUrl],
+  () => { void refreshImageSrc() },
+  { immediate: true },
+)
+
+/**
+ * 进入切分时再补一次取图：卡片里的 <img> 是挂载后异步解析出来的，
+ * 会话刚开始那一帧往往还没有 src（用户口径 2026-10-31：格子全是空的/只有底色）。
+ * 轮询几帧，拿到就停 —— 只在切分期间跑，退出即停，开销可忽略。
+ */
+let fillTimer: ReturnType<typeof setInterval> | undefined
+function stopFillWatch(): void {
+  if (fillTimer !== undefined) {
+    clearInterval(fillTimer)
+    fillTimer = undefined
+  }
+}
+watch(
+  () => Boolean(state.value),
+  (on) => {
+    stopFillWatch()
+    if (!on) return
+    void refreshImageSrc()
+    fillTimer = setInterval(() => {
+      if (!state.value) { stopFillWatch(); return }
+      void refreshImageSrc()
+      if (imageSrc.value) stopFillWatch()
+    }, 250)
+  },
+  { immediate: true },
+)
 const cells = computed(() => {
   const s = state.value
   if (!s) return []
@@ -29,7 +101,17 @@ const cells = computed(() => {
   const boardH = rect?.h && rect.h > 0 ? rect.h : 360
   const layout = readStoryboardLayout(ctx)
   const rects = slotRects(boardW, boardH, s.rows, s.cols, { ...layout, topPadding: 0, padding: 4, rowGap: 3, colGap: 3 })
-  const out: Array<{ index: number; left: number; top: number; width: number; height: number; on: boolean }> = []
+  const out: Array<{
+    index: number
+    left: number
+    top: number
+    width: number
+    height: number
+    on: boolean
+    /** 该格在原图里占的列/行（背景图的错位定位用） */
+    col: number
+    row: number
+  }> = []
   for (const r of rects) {
     out.push({
       index: r.index,
@@ -38,10 +120,32 @@ const cells = computed(() => {
       width: (r.w / boardW) * 100,
       height: (r.h / boardH) * 100,
       on: s.selected.has(r.index),
+      col: r.index % s.cols,
+      row: Math.floor(r.index / s.cols),
     })
   }
   return out
 })
+
+/**
+ * 每格的背景样式（参考 deepseek_html 的写法）：
+ *   background-size: cols*100% rows*100%;
+ *   background-position: col/(cols-1)*100%  row/(rows-1)*100%
+ * 行列只有 1 时定位取 0（分母为 0 会算成 NaN，CSS 直接失效）。
+ */
+function cellImageStyle(cell: { col: number; row: number }): Record<string, string> {
+  const s = state.value
+  const src = imageSrc.value
+  if (!s || !src) return {}
+  const px = s.cols > 1 ? (cell.col / (s.cols - 1)) * 100 : 0
+  const py = s.rows > 1 ? (cell.row / (s.rows - 1)) * 100 : 0
+  return {
+    backgroundImage: 'url("' + src.replace(/"/g, '\\"') + '")',
+    backgroundSize: s.cols * 100 + '% ' + s.rows * 100 + '%',
+    backgroundPosition: px + '% ' + py + '%',
+    backgroundRepeat: 'no-repeat',
+  }
+}
 
 /**
  * 只有**四个外角**的格子带圆角（用户口径 2026-10-30，参考
@@ -148,7 +252,10 @@ watch(
   { flush: 'post' },
 )
 
-onBeforeUnmount(() => applyMask(''))
+onBeforeUnmount(() => {
+  stopFillWatch()
+  applyMask('')
+})
 
 /** 鼠标 → 归一化坐标（相对卡片内容区 0~1）→ 格子索引 */
 function cellFromEvent(ev: PointerEvent | MouseEvent): number {
@@ -193,7 +300,7 @@ function onClick(ev: MouseEvent): void {
       :key="cell.index"
       class="gso-cell"
       :class="[{ 'is-on': cell.on, 'is-hover': state.hover === cell.index }, cornerClass(cell.index, state.rows, state.cols)]"
-      :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%' }"
+      :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%', ...cellImageStyle(cell) }"
     >
       <span v-if="state.hover === cell.index" class="gso-hint">
         {{ cell.on ? '取消选择' : '选择' }}

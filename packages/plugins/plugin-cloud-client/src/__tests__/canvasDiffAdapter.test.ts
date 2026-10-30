@@ -262,6 +262,24 @@ describe('出组持久化：解除父子要发显式 parentId: null', () => {
     const upd = b.writes[0].body.update as Array<Record<string, unknown>>
     expect(upd[0].parentId).toBe('g2')
   })
+
+  it('连续两次保存必须按顺序生效：后一次不能拿旧基准把前一次盖回去', async () => {
+    // 真实时序（2026-10-31 实测）：宿主先写「拖动结束的相对坐标 + 还在组里」，
+    // 插件随后写「吸附后的槽位坐标」。两次 set 若并发，后到服务器的旧快照会把吸附结果盖掉。
+    const grouped = { id: 'img', type: 'image', position: { x: 8, y: 42 }, data: {}, parentId: 'board' }
+    const b = fakeBackend({ nodes: [grouped] })
+    const adapter = new CanvasDiffAdapter(b.api)
+    await adapter.primeFromServer()
+    const afterDrag = { id: 'img', type: 'image', position: { x: 300, y: 260 }, data: {}, parentId: 'board' }
+    const afterSnap = { id: 'img', type: 'image', position: { x: 12, y: 40 }, data: { _storyboardSlot: 2 }, parentId: 'board' }
+    await Promise.all([
+      adapter.set('canvas:graph', [afterDrag]),
+      adapter.set('canvas:graph', [afterSnap]),
+    ])
+    const final = (b.nodes as Array<{ id: string; position: { x: number; y: number }; data: Record<string, unknown> }>)[0]!
+    expect(final.position).toEqual({ x: 12, y: 40 })
+    expect(final.data._storyboardSlot).toBe(2)
+  })
 })
   it('getRaw 读回来的节点里，资源字段就是同源 URL', async () => {
     const b = fakeBackend({

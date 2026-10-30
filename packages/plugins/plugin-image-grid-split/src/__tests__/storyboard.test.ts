@@ -66,10 +66,10 @@ describe('storyboardContentSize：外框由内容反推', () => {
       [1, { w: 200, h: 120 }], // 横图
     ])
     // 1×2：列宽 [120, 200] 各归各列（CSS grid 语义），行高 = max(210, 120) = 210
-    // 默认布局：padding 8、topPadding 0（标题画在卡片外，内部不留位）、colGap 10
+    // 默认布局：padding 24（四边与分组一致）、topPadding 0（标题画在卡片外，内部不留位）、colGap 10
     const s = storyboardContentSize(1, 2, contents)
-    expect(s.w).toBe(120 + 200 + 10 + 16)
-    expect(s.h).toBe(210 + 16)
+    expect(s.w).toBe(120 + 200 + 10 + 48)
+    expect(s.h).toBe(210 + 48)
   })
 
   it('两行两列：行高列宽独立计算，间距计 (n-1) 次', () => {
@@ -79,8 +79,8 @@ describe('storyboardContentSize：外框由内容反推', () => {
     ])
     const s = storyboardContentSize(2, 2, contents)
     // 列宽 [100, 80]，行高 [60, 150]
-    expect(s.w).toBe(100 + 80 + 10 + 16)
-    expect(s.h).toBe(60 + 150 + 10 + 16)
+    expect(s.w).toBe(100 + 80 + 10 + 48)
+    expect(s.h).toBe(60 + 150 + 10 + 48)
   })
 
   it('全空内容回落最小可用尺寸；非法行列同样回落', () => {
@@ -96,10 +96,10 @@ describe('storyboardContentSize：外框由内容反推', () => {
 
   it('顶部留白默认 0：标题画在卡片外，卡片内部不再空一块', () => {
     const contents = new Map<number, { w: number; h: number }>([[0, { w: 200, h: 200 }]])
-    // padding 8 ×2 = 16，无标题留白 → 高 = 200 + 16（不会被 120 的最小值兜底截断）
-    expect(storyboardContentSize(1, 1, contents).h).toBe(216)
+    // 默认 padding 24 ×2 = 48，无标题留白 → 高 = 200 + 48（不会被 120 的最小值兜底截断）
+    expect(storyboardContentSize(1, 1, contents).h).toBe(248)
     // 显式调大仍生效（特殊排版）
-    expect(storyboardContentSize(1, 1, contents, { topPadding: 20 }).h).toBe(236)
+    expect(storyboardContentSize(1, 1, contents, { topPadding: 20 }).h).toBe(268)
   })
 
   it('placeStoryboardAt 接受目标尺寸参与避让', () => {
