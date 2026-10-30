@@ -47,7 +47,7 @@ function positiveNum(v: unknown): number | null {
 }
 import { createVideoOps } from './videoOps'
 import { endOverlay, isClipping, isCropping } from './videoSession'
-import { clearClipPrefs, publishDuration, publishPlayhead, resetPlayhead } from './videoClipStore'
+import { clearClipPrefs, publishDuration, publishPlayhead, resetDuration, resetPlayhead } from './videoClipStore'
 import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -946,6 +946,8 @@ onBeforeUnmount(() => {
   endOverlay(props.id)
   resetPlayhead(props.id)
   clearClipPrefs(props.id)
+  // 时长也是模块级共享态（剪辑面板读它铺胶片格）：不清就跟着 nodeId 一直留着
+  resetDuration(props.id)
 })
 
 // 视频地址一变：旧源的帧图全部作废（释放 objectURL）、回到"未播放"态
