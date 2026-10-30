@@ -554,8 +554,13 @@ watch(
 
 // 上游/自身图片变化 → 换贴图（画面容器由 textureUrl 同步决定，三处状态一起跟）
 watch(ownImageUrl, (url) => {
+  // 地址是空态判定的唯一真相，换图时必须同步它，再让 three 去加载。
+  // 过去这里只调 updateTexture(url)，textureUrl 永远停在挂载时的那份值上：
+  // 图片是异步解析的，挂载时它还是空串 → 球体早就贴上了图，空状态却一直盖在上面。
+  const previous = textureUrl.value
+  textureUrl.value = url
   // 地址被撤掉时主动清掉旧纹理（这是"上游断开但画面还留着图"的直接修法）。
-  if (shouldClearTexture(textureUrl.value, url)) textureLoaded.value = false
+  if (shouldClearTexture(previous, url)) textureLoaded.value = false
   if (renderer.value) updateTexture(url)
 })
 

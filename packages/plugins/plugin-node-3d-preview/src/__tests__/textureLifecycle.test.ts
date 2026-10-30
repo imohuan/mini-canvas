@@ -1,7 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import { shouldClearTexture, shouldShowTexture } from '../textureLifecycle'
+import { readFileSync } from 'node:fs'
+
+const contentSrc = readFileSync(new URL('../PanoramaContent.vue', import.meta.url), 'utf8')
 
 describe('shouldShowTexture：3D 画面什么时候该出现', () => {
+
+  it('换图时必须同步 textureUrl —— 否则球体贴上了图，空状态还盖在上面（用户实测 bug）', () => {
+    // 图片是异步解析的：挂载时 ownImageUrl 还是空串，解析完成后才 watch 到地址。
+    // 空状态读的是 textureUrl，只调 updateTexture 不改它 → 画面有了、空态永远不消失。
+    const at = contentSrc.indexOf('watch(ownImageUrl')
+    expect(at).toBeGreaterThan(0)
+    const block = contentSrc.slice(at, contentSrc.indexOf('\n})', at))
+    expect(block, '换图分支没有把 textureUrl 同步成新地址').toMatch(/textureUrl\.value\s*=\s*url/)
+  })
+
   it('有地址 + 已加载 → 显示', () => {
     expect(shouldShowTexture({ url: '/a.png', loaded: true, error: '' })).toBe(true)
   })
