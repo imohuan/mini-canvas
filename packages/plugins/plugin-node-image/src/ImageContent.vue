@@ -273,6 +273,9 @@ onBeforeUnmount(() => {
   // 本节点的小图全部释放（objectURL 不还回去就是内存泄漏，而这类泄漏从界面上看不出来）
   thumbCache.dispose()
   endEdit(props.id)
+  // 「图片已失效」也是模块级共享态：不清的话，同 id 节点重建（撤销删除 / 恢复）
+  // 会立刻顶着「图片已失效」的空态，哪怕新图完全正常。
+  clearImageBroken(props.id)
 })
 </script>
 
