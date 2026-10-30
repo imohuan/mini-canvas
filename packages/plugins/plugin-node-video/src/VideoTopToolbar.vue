@@ -43,7 +43,11 @@ const editing = computed(() => isCropping(props.id))
 /** 后台转码中：确认/取消都禁用（同名槽位重复提交会互相覆盖） */
 const pending = computed(() => isCropPending(props.id))
 const clipping = computed(() => isClipping(props.id))
-const visible = computed(() => selected.value && !clipping.value)
+/**
+ * 顶栏在剪辑会话里**也留着**（用户实测反馈：点「剪辑时长」后顶栏消失，看不出发生了什么）。
+ * 剪辑的胶片条在底栏，顶栏这一格显示「退出剪辑」+ 常用入口，位置稳定不跳。
+ */
+const visible = computed(() => selected.value)
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
@@ -169,6 +173,15 @@ function cancelEdit(): void {
 
     <!-- 平时：上传 / 剪辑 / 裁剪 / 扩展 / 截图 / 下载 / 恢复 -->
     <template v-else>
+      <!-- 剪辑会话：顶栏给一个明确的退出入口（底栏的胶片条也有，但顶部这格不能空着） -->
+      <NodeToolbarButton
+        v-if="clipping"
+        title="退出剪辑"
+        aria-label="退出剪辑"
+        variant="danger"
+        :icon="ICON_CANCEL"
+        @click="endOverlay(props.id)"
+      />
       <NodeToolbarButton title="上传视频" :icon="ICON_UPLOAD" :disabled="uploading" @click="openPicker" />
 
       <template v-if="hasVideo">

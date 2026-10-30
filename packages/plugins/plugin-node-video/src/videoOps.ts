@@ -41,6 +41,8 @@ export interface VideoOpsContext {
    *   必须走内核 dataUnset 才真的移除）
    */
   write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }, unset?: string[]): void
+  /** 写节点运行态（进度/失败原因）：落盘但不进撤销栈（进度帧不该吃掉撤销栈）。 */
+  writeRuntime?(nodeId: string, data: Record<string, unknown>): void
   /** 视频预览上限（配置 videoFitMaxWidth/videoFitMaxHeight）；不注入则回落 560×360 */
   fitLimits?(): VideoFitLimits
   /**
@@ -87,6 +89,7 @@ export interface VideoOpsContext {
     data: Record<string, unknown>,
     target: string,
     edgeDirection?: 'newToTarget' | 'targetToNew',
+    size?: { w: number; h: number },
   ): string | null
   /** 画布上的全部节点（取名累加、算摆放位置用）；未注入返回空数组 */
   listNodes?(): Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>; size?: { w: number; h: number } }>
@@ -241,10 +244,12 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     getNodes(): NodeLike[]
     types: ReadonlyMap<string, unknown>
     updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
+    updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
     transaction<T>(
       reason: string,
       fn: (tx: {
         createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string
+        updateNode(id: string, patch: { data?: Record<string, unknown>; size?: { w: number; h: number } }): void
         connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { edgeId: string; status: string }
       }) => T,
     ): T
@@ -303,6 +308,9 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
         ? { data, size: { w: size.w, h: size.h }, ...(unset ? { dataUnset: unset } : {}) }
         : { data, ...(unset ? { dataUnset: unset } : {}) },
     ),
+    // 运行态（进度/失败）单独走 updateNodeRuntime：落盘但**不进撤销栈** ——
+    // 进度帧要是一次一条撤销，用户按一次 Ctrl+Z 退的只是半格进度条。
+    writeRuntime: (nodeId, data) => doc()?.updateNodeRuntime(nodeId, { data }),
     // 上限解析只有一份实现（videoFit.readVideoFitLimits）：不在这里再抄一遍"读配置 + 回落"的兜底
     fitLimits: () => readVideoFitLimits(svc),
     hasType: (type) => (doc() ? doc()!.types.has(type) : true),
@@ -315,12 +323,14 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
       ...(n.size ? { size: { w: n.size.w, h: n.size.h } } : {}),
     })),
     // 建节点 + 连边一个事务：用户按一次撤销把"新节点 + 那条线"一起退掉
-    createNodeWithEdge: (type, position, data, target, edgeDirection = 'newToTarget') => {
+    createNodeWithEdge: (type, position, data, target, edgeDirection = 'newToTarget', size) => {
       const g = doc()
       if (!g) return null
       try {
         return g.transaction('video-crop-node', (tx) => {
           const created = tx.createNode(type, position, data)
+          // 卡片尺寸是独立字段（不是 data）：与建节点同一个事务，撤销一次退干净
+          if (size) tx.updateNode(created, { size: { w: size.w, h: size.h } })
           tx.connectEdge(
             edgeDirection === 'targetToNew'
               ? { source: target, target: created, sourceHandle: 'source', targetHandle: 'target' }
@@ -600,10 +610,9 @@ export function createRealCropNode(ctx: VideoOpsContext, nodeId: string, result:
     videoWidth: result.width,
     videoHeight: result.height,
     ...(result.resourceId ? { resourceId: result.resourceId } : {}),
-    ...(sizes ? { cardWidth: sizes.size.w, cardHeight: sizes.size.h } : {}),
   }
   // 原视频是上游、裁出来的是下游（用户拖线方向：从原节点拉到新节点）
-  return ctx.createNodeWithEdge('video', position, data, nodeId, 'targetToNew')
+  return ctx.createNodeWithEdge('video', position, data, nodeId, 'targetToNew', sizes?.size)
  }
 
 /**
@@ -706,10 +715,87 @@ export function createRealClipNode(ctx: VideoOpsContext, nodeId: string, result:
     ...(width > 0 && height > 0 ? { videoWidth: width, videoHeight: height } : {}),
     ...(cropRect ? { cropRect } : {}),
     ...(result.resourceId ? { resourceId: result.resourceId } : {}),
-    ...(sizes ? { cardWidth: sizes.size.w, cardHeight: sizes.size.h } : {}),
   }
   // 原视频是上游、切出来的是下游（与裁剪同方向：原节点 → 新节点）
-  return ctx.createNodeWithEdge('video', position, data, nodeId, 'targetToNew')
+  return ctx.createNodeWithEdge('video', position, data, nodeId, 'targetToNew', sizes?.size)
+}
+
+/**
+ * 先建「后台处理中」的占位下游节点（用户口径 2026-10-30：确认后立刻看到新节点 + 连线，
+ * 进度盖在新节点上，处理完才显示裁剪/剪辑结果）。
+ *
+ * 数据契约：占位节点只带名字、画面尺寸与运行态（runState: running），**不带视频地址** ——
+ * 内容组件对没有视频的节点渲染空态，任务覆盖层（bottom-bar 的 NodeTaskOverlay）读
+ * runState 显示整卡流光进度。结果等后台完成后由 writeVideoResult 一次写入。
+ *
+ * @returns 新节点 id；没有图服务 / 建失败 → null（调用方放弃本次后台路径）
+ */
+export function createPendingVideoNode(
+  ctx: VideoOpsContext,
+  opts: {
+    kind: 'crop' | 'clip'
+    sourceId: string
+    /** 画面尺寸（视频像素）：卡片比例与结果回填都用它 */
+    width: number
+    height: number
+    /** 源节点带着取景框时一起带过去（剪辑不改画面，取景框让它看起来与原来一致） */
+    cropRect?: Rect | null
+  },
+): string | null {
+  if (!ctx.read(opts.sourceId)) return null
+  if (!ctx.createNodeWithEdge) return null
+  const sizes = videoCardSizePatch(opts.width, opts.height, ctx.fitLimits?.())
+  const position = placeVideoNode(ctx, opts.sourceId, sizes?.size ?? { w: DEFAULT_NODE_WIDTH, h: 320 }, CROP_NODE_GAP)
+  const nodes = (ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data }))
+  const label = opts.kind === 'crop' ? nextVideoCropLabel(nodes) : nextVideoClipLabel(nodes)
+  const data: Record<string, unknown> = {
+    label,
+    videoName: label,
+    runState: {
+      status: 'running',
+      message: opts.kind === 'crop' ? '后台裁剪中…' : '后台剪辑中…',
+      startedAt: Date.now(),
+    },
+    ...(opts.width > 0 && opts.height > 0 ? { videoWidth: opts.width, videoHeight: opts.height } : {}),
+    ...(opts.cropRect ? { cropRect: opts.cropRect } : {}),
+  }
+  // 卡片尺寸走正式字段 size（与换视频/裁剪同一条：只写 size，cardWidth/cardHeight 由 nodeStore 镜像）
+  // 原视频是上游、占位节点是下游（与成品节点同方向：原节点 → 新节点）
+  return ctx.createNodeWithEdge('video', position, data, opts.sourceId, 'targetToNew', sizes?.size)
+}
+
+/**
+ * 后台完成：把产物一次写进占位节点（进历史），运行态换成 done。
+ *
+ * 为什么清成 done 而不是删键：覆盖层读 runState，done 渲染为空；节点删除/撤销都
+ * 不需要额外清理。写入失败（节点被用户删了）返回 false，调用方按失败处理。
+ */
+export function writeVideoResult(
+  ctx: VideoOpsContext,
+  nodeId: string,
+  data: Record<string, unknown>,
+  size?: { w: number; h: number },
+): boolean {
+  const current = ctx.read(nodeId)
+  if (!current) return false
+  // 尺寸跟着新画面比例走（与换视频同一条规则）；调用方给了就用给的
+  const fit = size ?? videoCardSizePatch(data.videoWidth, data.videoHeight, ctx.fitLimits?.())?.size
+  try {
+    ctx.write(nodeId, { ...current, ...data, runState: { status: 'done', progress: 100 } }, fit)
+  } catch {
+    return false
+  }
+  return true
+}
+
+/** 后台失败：占位节点换失败态（覆盖层显示原因；节点保留，用户可删除后重试）。 */
+export function failVideoNode(ctx: VideoOpsContext, nodeId: string, message: string): void {
+  if (!ctx.read(nodeId)) return
+  try {
+    ctx.writeRuntime?.(nodeId, { runState: { status: 'error', message } })
+  } catch {
+    /* 节点可能刚被删：进度没有落点，静默 */
+  }
 }
 
 /** 恢复整段：清掉剪辑范围 */

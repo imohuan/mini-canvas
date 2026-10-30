@@ -3,6 +3,7 @@
  *
  * 用户口径（2026-10-30）：时间切割也要真的换文件，并且确认后出新节点 + 连线。
  * 与裁剪的差别：画面尺寸不变，所以新节点抄源节点的宽高；不写 clipStart/clipEnd。
+ * 用户口径 2026-10-30（顺序）：确认后**先**建占位节点 + 连线（带进度盖层），后台完成再回填。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
@@ -86,29 +87,32 @@ describe('videoClipFlow：真剪辑（时间切割）', () => {
     expect(created!.data.label).toBe('剪辑')
   })
 
-  it('后台没装插件（ping 失败）→ 返回 null（调用方回落元数据式）', async () => {
+  it('后台没装插件（ping 失败）→ 返回 null、不建节点（调用方回落元数据式）', async () => {
     const env = boot()
     const id = addVideo(env.nodeStore)
     stubFetch({ ping: () => new Response('{}', { status: 404 }) })
     expect(await clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 1)).toBeNull()
     expect(env.nodeStore.getNodes()).toHaveLength(1)
+    expect(env.edgeStore.getEdges()).toHaveLength(0)
   })
 
-  it('后台报错 → 返回 null，不建节点、不动原视频', async () => {
+  it('后台报错 → 占位节点标失败，不动原视频', async () => {
     const env = boot()
     const id = addVideo(env.nodeStore)
     stubFetch({ cut: () => new Response(JSON.stringify({ ok: false, error: 'ffmpeg 退出码 1' }), { status: 500 }) })
-    expect(await clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 1)).toBeNull()
-    expect(env.nodeStore.getNodes()).toHaveLength(1)
+    expect(await clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 1)).toBe(false)
+    const pending = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
+    expect((pending!.data.runState as { status: string }).status).toBe('error')
     expect(env.nodeStore.getNode(id)!.data.videoUrl).toBe(SRC)
   })
 
-  it('后台说 ok 但没给时长 → 返回 null（不建只有地址的坏节点）', async () => {
+  it('后台说 ok 但没给时长 → 占位节点标失败（不回填只有地址的坏结果）', async () => {
     const env = boot()
     const id = addVideo(env.nodeStore)
     stubFetch({ cut: () => new Response(JSON.stringify({ ok: true, url: CUT }), { status: 200 }) })
-    expect(await clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 1)).toBeNull()
-    expect(env.nodeStore.getNodes()).toHaveLength(1)
+    expect(await clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 1)).toBe(false)
+    const pending = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
+    expect((pending!.data.runState as { status: string }).status).toBe('error')
   })
 
   it('「切段处理中」会话态可置位/复位', () => {

@@ -30,7 +30,7 @@ import VideoFullscreenOverlay from './VideoFullscreenOverlay.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
-import { registerBarAction, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
+import { publishToolActions } from '@mini-canvas/plugin-bottom-bar'
 import { beginOverlay, endOverlay, isClipPending, onOverlayModeChange, setClipPending, setCropPending } from './videoSession'
 import { clearClipPrefs } from './videoClipStore'
 import {
@@ -218,6 +218,16 @@ export function apply(ctx: Context) {
     // 用户口径 2026-10-29：裁剪会话接管顶栏（确认/取消/比例都在顶栏），底栏整格不显示
     // （bottomBar: null）—— 与图片节点的 image/crop 同一条写法（文档案例 9 的方式 C）。
     svc.registerMode({ id: 'video/crop', types: ['video'], title: '裁剪视频画面', bottomBar: null })
+    // 剪辑会话接管底栏：底栏整格换成 VideoClipPanel（胶片条）；顶栏沿用默认模式（'default'），
+    // 选中/关闭按钮还在 —— 用户不再需要"先去底栏下拉里找剪辑"。
+    svc.registerMode({
+      id: 'video/clip',
+      types: ['video'],
+      title: '剪辑视频时长',
+      topBar: 'default',
+      bottomBar: VideoClipPanel,
+      order: 100,
+    })
     return true
   }
   if (!registerToolbar()) {
@@ -236,6 +246,7 @@ export function apply(ctx: Context) {
     } | undefined>('nodeToolbar')
     if (!svc) return
     if (mode === 'crop') svc.enter?.(nodeId, 'video/crop')
+    else if (mode === 'clip') svc.enter?.(nodeId, 'video/clip')
     else svc.exit?.(nodeId)
   })
   ctx.effect(() => () => offOverlayMode())
@@ -279,14 +290,9 @@ export function apply(ctx: Context) {
     if (!ctx.tryGet('nodeBar')) return false
     // AI 生成视频：每个 produces:'video' 的工具一条动作（输入框是临时的，发送时组装）
     publishToolActions(ctx, { types: ['video'], produces: 'video', needsPrompt: true })
-    // 剪辑：选中动作 = 打开剪辑会话（面板显隐交给底栏，会话态由 onSelect/onDeselect 开合）
-    registerBarAction(ctx, {
-      id: 'video:clip', types: ['video'], title: '剪辑', panel: VideoClipPanel, needsPrompt: false, apply: 'self',
-      description: '裁掉首尾保留一段（后台 ffmpeg 切成新文件）',
-      onSelect: (id) => beginOverlay(id, 'clip'),
-      onDeselect: (id) => endOverlay(id),
-      run: () => ({ ok: true }),   // 实际提交由面板经命令 video.clipConfirm 完成
-    })
+    // 剪辑不再注册成底栏「动作」：它现在是 video/clip 模式，底栏整格换成胶片条。
+    // 从前注册成动作时，面板动作会被写进 data.barValues，退出剪辑后底栏按"上次的动作"
+    // 又把它选回来 → 立刻重新进入剪辑，用户永远退不出去（实测会形成循环）。
     return true
   }
   if (!registerBar()) {
@@ -368,6 +374,7 @@ export function apply(ctx: Context) {
       // 后台不可用（没装插件 / 外链源 / 转码失败）→ 回落取景式，行为与从前一致。
       // 转码期间置「处理中」：顶栏按钮禁用，防止连点重复提交同名槽位。
       setCropPending(nodeId, true)
+      beginOverlay(nodeId, 'crop')
       let real: boolean | null = null
       try {
         real = await cropNodeWithBackend(ctx, ops, nodeId, rect)

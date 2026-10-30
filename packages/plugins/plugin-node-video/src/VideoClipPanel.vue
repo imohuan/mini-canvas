@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * VideoClipPanel —— 视频剪辑胶片条（底栏「剪辑」动作的专属面板；单选时显示）。
+ * VideoClipPanel —— 视频剪辑胶片条（video/clip 功能模式的底栏；单选时显示）。
  *
  * 1:1 复刻 packages/ui/public/video-clip-demo.html 的暗色胶囊剪辑条（用户口径 2026-10-29）：
  *   关闭 | 键盘（配置入口） | 胶片格（蓝胶囊选区 + 播放头 + 时长 pill） | 磁吸 | 循环 | 白色确认圆钮。
@@ -13,6 +13,8 @@
  * - 最短时长优先级最高。
  *
  * 草稿归会话（不写库）：确认时经命令 video:clip-confirm 一次性提交。
+ * 面板由 nodeToolbar 的 video/clip 模式挂在底栏（不再是一条底栏动作），
+ * 所以顶栏「剪辑时长」点下去就能看到它 —— 不必先去下拉里手动选「剪辑」。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
@@ -53,7 +55,7 @@ const hasVideo = computed(() => {
   return resourceId !== '' || legacy !== ''
 })
 
-/** 正等后台切段：确认按钮显示转码中并禁用（与裁剪面板同一条交互） */
+/** 后台切段中：确认按钮禁用（真正的进度显示在新建的占位节点上）。 */
 const pending = computed(() => isClipPending(props.id))
 
 /** 视频总时长：等内容区 loadedmetadata 上报；没上报过退回节点里的 videoDuration */

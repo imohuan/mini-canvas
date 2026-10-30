@@ -11,7 +11,7 @@ import { NodeFactory, NodeRegistry, ThemeRegistry, resolveSegment } from '@mini-
 import { nodeVideoPlugin, VIDEO_NODE_TYPE } from '../nodeVideoPlugin'
 import { isClipping, isCropping } from '../videoSession'
 
-function boot() {
+function boot(toolbarStub?: { enter(nodeId: string, modeId: string): void; exit(nodeId: string): void }) {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   const edgeStore = new EdgeStore()
@@ -34,6 +34,14 @@ function boot() {
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
   ctx.inject('settings', { get: () => undefined })
+  // 可选的 nodeToolbar 桩：要在装插件**之前**上架（apply 里当场取用，晚注入就取不到）
+  if (toolbarStub) {
+    ctx.provide('nodeToolbar', {
+      registerMode: () => {},
+      enter: toolbarStub.enter,
+      exit: toolbarStub.exit,
+    })
+  }
   // 资源库（内存版）：上传命令要把字节存进来、并拿回可用地址 —— 与真实宿主同一条路
   const resourceBlobs = new Map<string, Blob>()
   let resSeq = 0
@@ -154,6 +162,27 @@ describe('node-video 装配 smoke', () => {
     expect(isCropping('n1')).toBe(false)
     expect(command.execute('video:clip-cancel', { nodeId: 'n1' })).toBe(true)
     expect(isClipping('n1')).toBe(false)
+    ctx.stop()
+  })
+
+  it('剪辑会话把底栏切到 video/clip 模式（顶栏点「剪辑时长」后能看到胶片条）', async () => {
+    const entered: Array<{ nodeId: string; modeId: string }> = []
+    const exited: string[] = []
+    const { ctx } = boot({
+      enter: (nodeId: string, modeId: string) => void entered.push({ nodeId, modeId }),
+      exit: (nodeId: string) => void exited.push(nodeId),
+    })
+    await ctx.start()
+    const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+    command.execute('video:clip', { nodeId: 'n1' })
+    // onOverlayModeChange 走 Vue 的 watch（默认 pre 刷新），等一拍微任务
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(entered.at(-1)).toEqual({ nodeId: 'n1', modeId: 'video/clip' })
+    command.execute('video:clip-cancel', { nodeId: 'n1' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(exited.at(-1)).toBe('n1')
     ctx.stop()
   })
 
