@@ -7,7 +7,7 @@
 // 用法：
 //   <AxTooltip content="生成历史"><button aria-label="生成历史">…</button></AxTooltip>
 //   需要自定义内容时用 #content 插槽。
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useFloating } from './hooks/useFloating'
 import { useTeleportTarget } from './hooks/useTeleportTarget'
 
@@ -84,6 +84,17 @@ function hide(): void {
   if (timer) { clearTimeout(timer); timer = null }
   visible.value = false
 }
+
+/**
+ * 卸载时清延迟定时器：悬停后 200ms 内组件被销毁（切画布 / 关面板）时，
+ * 那次回调还会把 visible 置真 —— 于是一个已经不在页面上的 tooltip 被标记成显示。
+ */
+onBeforeUnmount(() => {
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
+  }
+})
 </script>
 
 <template>
