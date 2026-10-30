@@ -17,7 +17,7 @@ import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'
 import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
-import { onStoryboardDragEnd, onStoryboardDragMove } from './storyboardDrag'
+import { onStoryboardDragEnd, onStoryboardDragMove, storyboardHitAt } from './storyboardDrag'
 import { STORYBOARD_LAYOUT_KEYS } from './storyboard'
 
 export const name = 'image-grid-split'
@@ -193,13 +193,19 @@ export function apply(ctx: Context): void {
 
   // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原
   const offDrop = onStoryboardDragEnd(ctx, (handled, payload) => {
-    // 非图片节点被拖到槽位上时不吸附，给一句提示（只在真的落在组范围里才提示）
+    /**
+     * 只有「非图片节点 + 松手时确实压在分镜组内部」才提示（用户口径 2026-10-31）。
+     *
+     * 以前只看 handled：任何非图片节点拖完都会走到这里，于是拖视频、拖文字、
+     * 甚至拖到画布空白处松手，都会弹「分镜组只收图片节点」—— 用户点两下就被打断。
+     * 现在先用 storyboardHitAt 做一次与吸附**同一套几何**的判定，没压到组就不出声。
+     */
     if (handled) return
     const doc = ctx.tryGet<{ getNode(id: string): { type?: string } | undefined } | undefined>('doc')
     const type = doc?.getNode(payload.nodeId)?.type
-    if (type && type !== 'image' && type !== 'storyboard') {
-      ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('分镜组只收图片节点')
-    }
+    if (!type || type === 'image' || type === 'storyboard') return
+    if (!storyboardHitAt(ctx, payload)) return
+    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('分镜组只收图片节点')
   })
   ctx.effect(() => () => offDrop.dispose())
   // 拖动逐帧：获胜槽位高亮 + 拖动节点半透明（用户口径 2026-10-30）

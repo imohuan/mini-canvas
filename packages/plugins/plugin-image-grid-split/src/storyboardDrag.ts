@@ -14,7 +14,7 @@ import { reactive } from 'vue'
 import type { Context } from '@mini-canvas/canvas-base'
 import {
   decideSnap, normalizeSlots, readStoryboard, readStoryboardLayout, removeFromSlots, slotRects,
-  slotIndexByOverlapOrCenter, type SlotRect,
+  slotIndexByOverlapOrCenter, type SlotRect, type SnapBoard,
 } from './storyboard'
 import { fitImageLimits } from './imageFitBridge'
 
@@ -139,23 +139,13 @@ function aspectOf(node: NodeLike): number {
 }
 
 /**
- * 处理一次拖拽结束。
- * @returns 是否真的动了数据（调用方据此决定要不要提示）
+ * 画布上所有可用分镜组（几何 + 行列 + 槽位表）。
+ *
+ * 提取成独立函数：拖拽落地与「是否该提示」必须用**同一套**几何，
+ * 两份各算一遍迟早会分叉（一个说相交、另一个说没相交）。
  */
-export function applyStoryboardDrop(
-  ctx: Context,
-  payload: { nodeId: string; position: { x: number; y: number } },
-): boolean {
-  const doc = ctx.tryGet<DocPort | undefined>('doc')
-  if (!doc) return false
-  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
-  const slotLayout = readStoryboardLayout(ctx)
-  const node = doc.getNode(payload.nodeId)
-  if (!node) return false
-  // 分镜组自己不参与（拖动分镜组时不该把自己吸进去）
-  if (node.type === 'storyboard') return false
-
-  const boards = doc.getNodes()
+function collectBoards(doc: DocPort, layout: LayoutPort | undefined): SnapBoard[] {
+  return doc.getNodes()
     .filter((n) => n.type === 'storyboard')
     .map((n) => {
       const rect = boardRectOf(layout, n)
@@ -172,7 +162,64 @@ export function applyStoryboardDrop(
         slots: board.slots,
       }
     })
-    .filter((b): b is NonNullable<typeof b> => b !== null)
+    .filter((b): b is SnapBoard => b !== null)
+}
+
+/**
+ * 这次拖拽落点是否真的压在某个分镜组上（只做判定，不改数据）。
+ *
+ * 用户口径 2026-10-31：拖视频/文字到画布空白处不该弹「分镜组只收图片节点」——
+ * 那句提示只有在**与分镜组内部交叉**时才有意义。
+ * 判定与 applyStoryboardDrop 完全同源（同一个 decideSnap），不会出现
+ * 「提示说相交、实际没吸」或反过来的割裂。
+ *
+ * @returns 命中的分镜组与目标槽位；没压在组上（或在组外松手）返回 null
+ */
+export function storyboardHitAt(
+  ctx: Context,
+  payload: { nodeId: string; position: { x: number; y: number } },
+): { boardId: string; slotIndex: number } | null {
+  const doc = ctx.tryGet<DocPort | undefined>('doc')
+  if (!doc) return null
+  const node = doc.getNode(payload.nodeId)
+  if (!node) return null
+  // 分镜组自己拖着走不算「拖进分镜组」
+  if (node.type === 'storyboard') return null
+  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  const boards = collectBoards(doc, layout)
+  if (boards.length === 0) return null
+  const currentBoardId = node.parentId && boards.some((b) => b.id === node.parentId) ? node.parentId : null
+  const dragRect = { x: payload.position.x, y: payload.position.y, w: node.size?.w ?? 0, h: node.size?.h ?? 0 }
+  const decision = decideSnap({
+    nodeId: node.id,
+    center: { x: payload.position.x, y: payload.position.y },
+    currentBoardId,
+    boards,
+    layout: readStoryboardLayout(ctx),
+    dragRect,
+  })
+  if (decision.kind !== 'snap') return null
+  return { boardId: decision.boardId, slotIndex: decision.slotIndex }
+}
+
+/**
+ * 处理一次拖拽结束。
+ * @returns 是否真的动了数据（调用方据此决定要不要提示）
+ */
+export function applyStoryboardDrop(
+  ctx: Context,
+  payload: { nodeId: string; position: { x: number; y: number } },
+): boolean {
+  const doc = ctx.tryGet<DocPort | undefined>('doc')
+  if (!doc) return false
+  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  const slotLayout = readStoryboardLayout(ctx)
+  const node = doc.getNode(payload.nodeId)
+  if (!node) return false
+  // 分镜组自己不参与（拖动分镜组时不该把自己吸进去）
+  if (node.type === 'storyboard') return false
+
+  const boards = collectBoards(doc, layout)
 
   const currentBoardId = node.parentId && boards.some((b) => b.id === node.parentId) ? node.parentId : null
   // 只有图片能进槽位（用户口径：只允许图片节点）
@@ -400,7 +447,9 @@ function detachFromBoard(doc: DocPort, node: NodeLike, boardId: string): void {
 /** 订阅拖拽结束（插件卸载时自动退订由调用方包 ctx.effect） */
 export function onStoryboardDragEnd(
   ctx: Context,
-  cb: (handled: boolean, payload: { nodeId: string }) => void,
+  // 回调要带落地坐标：调用方判断「有没有真的压在分镜组上」得用同一次落点，
+  // 只给 nodeId 就只能重新猜一次位置（猜不准就会像以前那样到处弹提示）。
+  cb: (handled: boolean, payload: { nodeId: string; position: { x: number; y: number } }) => void,
 ): { dispose(): void } {
   ensureGhostStyle()
   return ctx.on(NODE_DRAG_END, (payload: { nodeId: string; position: { x: number; y: number } }) => {

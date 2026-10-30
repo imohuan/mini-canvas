@@ -12,7 +12,7 @@ import { Context } from '@mini-canvas/canvas-data'
 import { createCanvasBasePlugin } from '@mini-canvas/canvas-data'
 import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import { NodeLayoutService } from '@mini-canvas/canvas-render'
-import { applyStoryboardDrop } from '../storyboardDrag'
+import { applyStoryboardDrop, storyboardHitAt } from '../storyboardDrag'
 
 interface Harness {
   ctx: Context
@@ -35,6 +35,7 @@ async function boot(): Promise<Harness> {
   // 分镜组 + 一张已在槽位里的图片（父级 = 分镜组，position 相对父）
   base.services.nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 480, h: 240 } })
   base.services.nodeStore.registerType({ type: 'storyboard', label: '分镜组', transparent: true, defaultSize: { w: 480, h: 360 } })
+  base.services.nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 270 } })
   base.services.nodeStore.addNodes([
     {
       id: 'board',
@@ -50,6 +51,13 @@ async function boot(): Promise<Harness> {
       position: { x: 8, y: 42 },
       size: { w: 280, h: 160 },
       data: { imageWidth: 16, imageHeight: 9, _storyboardSize: { w: 320, h: 240 } },
+    },
+    {
+      id: 'vid',
+      type: 'video',
+      position: { x: 100, y: 100 },
+      size: { w: 320, h: 180 },
+      data: { videoWidth: 16, videoHeight: 9 },
     },
   ])
   return {
@@ -87,5 +95,38 @@ describe('applyStoryboardDrop：拖出分镜组解父', () => {
     const img = h.doc.getNode('img')!
     expect(img.parentId).toBeUndefined()
     expect(img.position).toEqual(abs)
+  })
+})
+
+/**
+ * 「分镜组只收图片节点」这句提示的触发条件（用户口径 2026-10-31）。
+ *
+ * 以前只要拖的节点不是图片就会弹，拖视频去画布空白处、拖文字挪个位置都会被打断。
+ * 现在必须**真的压在分镜组内部**才提示 —— 判定与吸附同一套几何。
+ */
+describe('storyboardHitAt：只在真压到分镜组内部时才算命中', () => {
+  let h: Harness
+  beforeEach(async () => { h = await boot() })
+  afterEach(() => h.stop())
+
+  it('视频拖到画布空白处：不命中（不该弹提示）', () => {
+    expect(storyboardHitAt(h.ctx, { nodeId: 'vid', position: { x: 100, y: 100 } })).toBeNull()
+  })
+
+  it('视频拖进分镜组内部：命中，且报出目标槽位', () => {
+    // 卡片绝对矩形 1000..1600 / 1000..1400；落点压在第一格
+    const hit = storyboardHitAt(h.ctx, { nodeId: 'vid', position: { x: 1010, y: 1010 } })
+    expect(hit).not.toBeNull()
+    expect(hit!.boardId).toBe('board')
+    expect(hit!.slotIndex).toBe(0)
+  })
+
+  it('图片同样适用：拖出组外不命中，拖回组内命中', () => {
+    expect(storyboardHitAt(h.ctx, { nodeId: 'img', position: { x: 200, y: 200 } })).toBeNull()
+    expect(storyboardHitAt(h.ctx, { nodeId: 'img', position: { x: 1300, y: 1100 } })).not.toBeNull()
+  })
+
+  it('拖分镜组自己：永远不算命中（不能把自己吸进自己）', () => {
+    expect(storyboardHitAt(h.ctx, { nodeId: 'board', position: { x: 1010, y: 1010 } })).toBeNull()
   })
 })
