@@ -99,7 +99,12 @@ body {
 .uk-shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /*
+   * 用视口高度而不是 100%：单独跑 ui-kit 时 #app 有高度，
+   * 但嵌进主应用路由后父级没有高度，100% 会塌陷，三栏就滚不动。
+   */
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   background: var(--mck-panel-soft, var(--ui-panel-soft));
   color: var(--mck-ink, var(--ui-ink));
@@ -887,4 +892,14 @@ body {
 .uk-center > .mck-split__pane > .mck-split,
 .uk-workspace > .mck-split__pane > .mck-split {
   height: 100%;
+}
+
+/*
+ * 三个滚动区在滚动到边界时不要继续往外传递滚轮事件。
+ * 否则滚到列表底部后，滚轮会去滚外层，看起来像「滚不动」。
+ */
+.uk-nav,
+.uk-doc-panel .uk-doc-scroll,
+.uk-config {
+  overscroll-behavior: contain;
 }
