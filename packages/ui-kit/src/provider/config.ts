@@ -104,6 +104,17 @@ export function resolveConfig(props: UiKitProviderProps): UiKitContext {
     '--mck-pad-x-sm': sizes.sm.paddingX + 'px',
     '--mck-pad-x-md': sizes.md.paddingX + 'px',
     '--mck-pad-x-lg': sizes.lg.paddingX + 'px',
+    /**
+     * 浮层层级：四档都由 zIndexBase 派生。
+     *
+     * 为什么必须输出成变量：宿主常把组件库嵌进自己的层级体系（画布浮窗、侧栏、
+     * Agent 面板各有 z-index），只给一个 `zIndexBase` prop 而样式写死数字 = 参数完全无效。
+     * 浮层 CSS 一律 `z-index: var(--mck-z-xxx, <原来的数字>)`，脱离 Provider 单独用时行为不变。
+     */
+    '--mck-z-dropdown': String(z),
+    '--mck-z-popover': String(z + 10),
+    '--mck-z-modal': String(z + 100),
+    '--mck-z-toast': String(z + 200),
   }
   return {
     size,

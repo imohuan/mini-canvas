@@ -2,7 +2,8 @@
 .mck-tooltip-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--mck-accent) 60%, transparent); outline-offset: 2px; }
 .mck-tooltip {
   position: fixed;
-  z-index: 95000;
+  /* 提示与 popover 同一档：都要压在触发器之上 */
+  z-index: var(--mck-z-popover, 95000);
   box-sizing: border-box;
   width: max-content;
   padding: 6px 9px;

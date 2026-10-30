@@ -1,6 +1,7 @@
 .mck-context-menu__panel {
   position: fixed;
-  z-index: 96000;
+  /* 右键菜单与 dropdown 同族（原来写死 96000，比 popover 高一档） */
+  z-index: var(--mck-z-dropdown, 96000);
   box-sizing: border-box;
   padding: 6px;
   border: 1px solid var(--mck-line, #e2e5ea);

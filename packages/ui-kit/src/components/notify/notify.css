@@ -1,4 +1,4 @@
-.mck-notify-host { position: fixed; top: 16px; right: 16px; z-index: 99900; display: flex; width: min(360px, calc(100vw - 24px)); flex-direction: column; gap: 8px; pointer-events: none; }
+.mck-notify-host { position: fixed; top: 16px; right: 16px; z-index: var(--mck-z-toast, 99900); display: flex; width: min(360px, calc(100vw - 24px)); flex-direction: column; gap: 8px; pointer-events: none; }
 .mck-notify { display: flex; align-items: flex-start; gap: 9px; box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid var(--mck-line, #e2e5ea); border-radius: 12px; background: var(--mck-panel, #fff); color: var(--mck-ink); box-shadow: var(--mck-shadow); pointer-events: auto; }
 .mck-notify__dot { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 999px; background: var(--mck-info, #2563eb); }
 .mck-notify.is-success .mck-notify__dot { background: var(--mck-success, #16a34a); }

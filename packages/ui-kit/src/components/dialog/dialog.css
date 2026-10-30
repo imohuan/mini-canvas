@@ -1,4 +1,4 @@
-.mck-dialog { position: fixed; inset: 0; z-index: 99000; display: grid; place-items: center; padding: 16px; }
+.mck-dialog { position: fixed; inset: 0; z-index: var(--mck-z-modal, 99000); display: grid; place-items: center; padding: 16px; }
 .mck-dialog__overlay { position: absolute; inset: 0; background: rgb(15 23 42 / 0.38); backdrop-filter: blur(2px); }
 .mck-dialog__panel {
   position: relative;

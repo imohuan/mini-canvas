@@ -2,7 +2,8 @@
 .mck-popover__trigger { display: inline-flex; min-width: 0; }
 .mck-popover__panel {
   position: fixed;
-  z-index: 95000;
+  /* 层级读 Provider 的 --mck-z-popover（zIndexBase 派生） */
+  z-index: var(--mck-z-popover, 95000);
   box-sizing: border-box;
   border: 1px solid var(--mck-line, #e2e5ea);
   border-radius: var(--mck-radius-panel, 14px);
