@@ -240,20 +240,24 @@ export function applyStoryboardDrop(
   // 被顶换位的节点：挪到移动节点原来的格（decideSnap 已把 slots 排好），位置也跟过去
   const displaced = decision.displacedNodeId
   if (displaced && displaced !== node.id) {
+    const other = doc.getNode(displaced)
     const newIndex = decision.slots.indexOf(displaced)
-    const target = rects[newIndex]
-    if (target) {
-      const other = doc.getNode(displaced)
-      if (other) {
-        const f2 = fitInsideSlot({ w: target.w, h: target.h }, aspectOf(other), fitImageLimits(ctx))
-        const c2 = centerInsideSlot({ w: target.w, h: target.h }, f2)
-        doc.updateNode(displaced, {
-          parentId: board.id,
-          position: { x: target.x + c2.dx, y: target.y + c2.dy },
-          size: { w: f2.w, h: f2.h },
-          data: { _storyboardSlot: newIndex },
-        })
-      }
+    const target = newIndex >= 0 ? rects[newIndex] : undefined
+    if (other && target) {
+      // 常规换位：被顶的节点挪到移动节点原来的格
+      const f2 = fitInsideSlot({ w: target.w, h: target.h }, aspectOf(other), fitImageLimits(ctx))
+      const c2 = centerInsideSlot({ w: target.w, h: target.h }, f2)
+      doc.updateNode(displaced, {
+        parentId: board.id,
+        position: { x: target.x + c2.dx, y: target.y + c2.dy },
+        size: { w: f2.w, h: f2.h },
+        data: { _storyboardSlot: newIndex },
+      })
+    } else if (other && decision.displaceDetach) {
+      // 组外拖进来的节点顶掉了原住户：原住户没格可去 → 脱离成自由节点
+      // （否则它会既不在 slots 里又挂着 parentId，永远叠在槽位上，用户看到"两个节点共用一个槽"）
+      detachLayout = layout
+      detachFromBoard(doc, other, board.id)
     }
   }
   return true
@@ -294,8 +298,17 @@ export function onStoryboardDragEnd(
 ): { dispose(): void } {
   return ctx.on(NODE_DRAG_END, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     const handled = applyStoryboardDrop(ctx, payload)
-    // 松手必清半透明标记（无论吸附还是脱离）
-    ctx.tryGet<DocPort | undefined>('doc')?.updateNode(payload.nodeId, { data: { _storyboardDragging: undefined } })
+    // 松手必清半透明标记（无论吸附还是脱离）。
+    // 扫全表而不是只清 payload.nodeId：多选拖动 / drag-end 只报了主节点时，
+    // 其它成员的标记会残留（用户实测："有些时候节点透明度也没有恢复"）。
+    const doc = ctx.tryGet<DocPort | undefined>('doc')
+    if (doc) {
+      for (const n of doc.getNodes()) {
+        if (n.data?._storyboardDragging === true) {
+          doc.updateNode(n.id, { data: { _storyboardDragging: undefined } })
+        }
+      }
+    }
     lastMarked = ''
     clearHover()
     cb(handled, payload)

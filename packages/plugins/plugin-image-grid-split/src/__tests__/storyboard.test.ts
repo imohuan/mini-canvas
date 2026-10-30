@@ -66,10 +66,10 @@ describe('storyboardContentSize：外框由内容反推', () => {
       [1, { w: 200, h: 120 }], // 横图
     ])
     // 1×2：列宽 [120, 200] 各归各列（CSS grid 语义），行高 = max(210, 120) = 210
-    // 默认布局：padding 8、topPadding 34、colGap 10
+    // 默认布局：padding 8、topPadding 0（标题画在卡片外，内部不留位）、colGap 10
     const s = storyboardContentSize(1, 2, contents)
     expect(s.w).toBe(120 + 200 + 10 + 16)
-    expect(s.h).toBe(210 + 16 + 34)
+    expect(s.h).toBe(210 + 16)
   })
 
   it('两行两列：行高列宽独立计算，间距计 (n-1) 次', () => {
@@ -80,7 +80,7 @@ describe('storyboardContentSize：外框由内容反推', () => {
     const s = storyboardContentSize(2, 2, contents)
     // 列宽 [100, 80]，行高 [60, 150]
     expect(s.w).toBe(100 + 80 + 10 + 16)
-    expect(s.h).toBe(60 + 150 + 10 + 16 + 34)
+    expect(s.h).toBe(60 + 150 + 10 + 16)
   })
 
   it('全空内容回落最小可用尺寸；非法行列同样回落', () => {
@@ -88,10 +88,18 @@ describe('storyboardContentSize：外框由内容反推', () => {
     expect(storyboardContentSize(0, 2, new Map([[0, { w: 100, h: 100 }]]))).toEqual({ w: 120, h: 120 })
   })
 
-  it('自定义布局生效（隐藏标题：topPadding 调 0）', () => {
+  it('自定义布局生效（自定义内边距；topPadding 默认 0）', () => {
     const contents = new Map<number, { w: number; h: number }>([[0, { w: 320, h: 240 }]])
     const s = storyboardContentSize(1, 1, contents, { padding: 4, topPadding: 0 })
     expect(s).toEqual({ w: 328, h: 248 })
+  })
+
+  it('顶部留白默认 0：标题画在卡片外，卡片内部不再空一块', () => {
+    const contents = new Map<number, { w: number; h: number }>([[0, { w: 200, h: 200 }]])
+    // padding 8 ×2 = 16，无标题留白 → 高 = 200 + 16（不会被 120 的最小值兜底截断）
+    expect(storyboardContentSize(1, 1, contents).h).toBe(216)
+    // 显式调大仍生效（特殊排版）
+    expect(storyboardContentSize(1, 1, contents, { topPadding: 20 }).h).toBe(236)
   })
 
   it('placeStoryboardAt 接受目标尺寸参与避让', () => {
@@ -191,6 +199,38 @@ describe('storyboard 吸附决策', () => {
     expect(d.kind).toBe('snap')
     if (d.kind !== 'snap') return
     expect(d.slotIndex).toBe(0)
+  })
+
+  it('只有角交叉（中心在卡片外）也算命中：与悬停高亮同一套判定', () => {
+    // 拖动矩形右下角搭进卡片左上角，中心点远在卡片外
+    const dragRect = { x: board.x - 400, y: board.y - 300, w: 480, h: 360 }
+    const d = decideSnap({
+      nodeId: 'img',
+      center: { x: dragRect.x + 240, y: dragRect.y + 180 },
+      currentBoardId: null,
+      boards: [board],
+      dragRect,
+    })
+    expect(d.kind).toBe('snap')
+  })
+
+  it('组外节点顶掉已占用槽：被顶节点标 displaceDetach（调用方负责解父）', () => {
+    const d = decideSnap({ nodeId: 'new', center: centerOf(0), currentBoardId: null, boards: [board] })
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.slotIndex).toBe(0)
+    expect(d.slots[0]).toBe('new')
+    expect(d.slots).not.toContain('a')
+    expect(d.displacedNodeId).toBe('a')
+    expect(d.displaceDetach).toBe(true)
+  })
+
+  it('同组内换位不标 displaceDetach（两个节点各有各的格）', () => {
+    const d = decideSnap({ nodeId: 'a', center: centerOf(4), currentBoardId: 'board', boards: [board] })
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.displaceDetach).toBeFalsy()
+    expect(d.slots[0]).toBe('b')
   })
 
   it('removeFromSlots：清掉指定节点，其它原样；不存在时返回原表', () => {

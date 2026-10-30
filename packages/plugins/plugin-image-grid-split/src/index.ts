@@ -151,6 +151,9 @@ export function apply(ctx: Context): void {
   //  - canvas:pane:click    点了画布空白 → 退；
   //  - canvas:selection:change  框选 / Ctrl+A / 拖拽顺手选中改变了选中集：
   //    当前节点不在选中集 → 退。拖动当前节点也会先触发 selection（含它自己）→ 不误退。
+  //  - canvas:viewport:move-start  画布平移 / 滚轮缩放（用户口径 2026-10-30：
+  //    "画布的平移和缩放不会触发模式自动退出"）→ 退。两者在宿主里同源 emit，
+  //    一个订阅同时覆盖拖画布和缩放。
   //
   // 为什么用 selection 而不是 drag-start：拖动**别的**节点同样会先 emit drag-start，
   // 按事件名判断要再查"拖的是谁"，多一层状态；selection 一步到位且天然覆盖框选。
@@ -182,10 +185,18 @@ export function apply(ctx: Context): void {
   const offSelection = ctx.on('canvas:selection:change', (payload: { nodeIds?: string[] }) => {
     exitIfChanged(new Set(payload.nodeIds ?? []))
   })
+  const offViewport = ctx.on('canvas:viewport:move-start', () => {
+    const id = activeSplitId()
+    if (id) {
+      endSplit(id)
+      toolbarOf()?.exit?.(id)
+    }
+  })
   ctx.effect(() => () => {
     offNodeClick.dispose()
     offPaneClick.dispose()
     offSelection.dispose()
+    offViewport.dispose()
   })
 
   // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原

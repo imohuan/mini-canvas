@@ -61,7 +61,10 @@ export const DEFAULT_STORYBOARD_LAYOUT: StoryboardLayout = Object.freeze({
   rowGap: 10,
   colGap: 10,
   padding: 8,
-  topPadding: 34,
+  // 0：标题条画在卡片**外面**（BaseNode 的标题 bottom: 100% + offset），
+  // 卡片内部不需要给它留位 —— 之前默认 34 会在标题下方留出一块空隙（用户口径 2026-10-30）。
+  // 配置项保留：隐藏标题/特殊排版时可以手动调大。
+  topPadding: 0,
 })
 
 /** 从配置读取器解析布局参数（单项独立回落，被改坏不影响其它项） */
@@ -262,7 +265,18 @@ export function slotIndexByOverlapOrCenter(
 export type SnapDecision =
   | { kind: 'none' }
   | { kind: 'detach' }
-  | { kind: 'snap'; boardId: string; slotIndex: number; slots: Array<string | null>; displacedNodeId: string | null }
+  | {
+      kind: 'snap'
+      boardId: string
+      slotIndex: number
+      slots: Array<string | null>
+      displacedNodeId: string | null
+      /**
+       * true = 被顶掉的节点没有自己的格可回、已从 slots 摘掉，
+       * 调用方必须解它的父级（脱离成自由节点）。缺省/false = 常规换位。
+       */
+      displaceDetach?: boolean
+    }
 
 /** decideSnap 的 boards 项（decideSnap 内部用 slotRects 时需要布局参数） */
 export interface SnapBoard extends StoryboardData {
@@ -288,12 +302,22 @@ export function decideSnap(input: {
   dragRect?: { x: number; y: number; w: number; h: number } | null
 }): SnapDecision {
   const { nodeId, center, currentBoardId, boards } = input
-  // 命中哪个分镜组：取中心点落在其矩形内的那个（多个重叠时取后画的 = 数组靠后）
+  // 命中哪个分镜组：拖动矩形**交叉**就算命中（与悬停高亮同一套判定 ——
+  // 否则会出现"拖动时槽位亮着、松手却不放置"的割裂，用户口径 2026-10-30）。
+  // 多个组交叉时取交叉面积最大的；dragRect 缺失（旧调用方）退中心点。
+  const dragRect = input.dragRect ?? null
   let hit: (typeof boards)[number] | null = null
+  let hitArea = 0
   for (const b of boards) {
-    if (center.x < b.x || center.x > b.x + b.w) continue
-    if (center.y < b.y || center.y > b.y + b.h) continue
-    hit = b
+    let area = 0
+    if (dragRect && dragRect.w > 0 && dragRect.h > 0) {
+      const ox = Math.min(dragRect.x + dragRect.w, b.x + b.w) - Math.max(dragRect.x, b.x)
+      const oy = Math.min(dragRect.y + dragRect.h, b.y + b.h) - Math.max(dragRect.y, b.y)
+      if (ox > 0 && oy > 0) area = ox * oy
+    } else if (center.x >= b.x && center.x <= b.x + b.w && center.y >= b.y && center.y <= b.y + b.h) {
+      area = b.w * b.h
+    }
+    if (area > hitArea) { hitArea = area; hit = b }
   }
 
   if (!hit) {
@@ -303,7 +327,7 @@ export function decideSnap(input: {
   const rects = slotRects(hit.w, hit.h, hit.rows, hit.cols, input.layout)
   const slotIndex = slotIndexByOverlapOrCenter(rects, { x: hit.x, y: hit.y }, input.dragRect ?? null, center)
   if (slotIndex < 0) {
-    // 落在卡片内但不在任何格（内边距区域）：视为该组最近格 → 用中心距离找最近槽
+    // 与卡片交叉但没盖住任何槽（比如只搭在内边距上）：吸最近的槽，不让这次交叉白来
     const nearest = nearestSlot(rects, center.x - hit.x, center.y - hit.y)
     if (nearest < 0) return currentBoardId ? { kind: 'detach' } : { kind: 'none' }
     return snapTo(hit, nearest, nodeId, currentBoardId)
@@ -324,7 +348,14 @@ export function decideSnap(input: {
     // 目标格有别的节点 → 换位；被顶掉的节点回到移动节点原来的格（同组时）
     if (displaced) {
       const originIndex = fromBoardId === board.id ? board.slots.indexOf(movingId) : -1
-      if (originIndex >= 0) slots[originIndex] = displaced
+      if (originIndex >= 0) {
+        slots[originIndex] = displaced
+      } else {
+        // 被顶的节点是组外的（没有自己的格可回）：槽位一个萝卜一个坑，
+        // 没地方去就**脱离成自由节点**（displaceDetach 标出来，调用方负责解父）。
+        slots[index] = movingId
+        return { kind: 'snap', boardId: board.id, slotIndex: index, slots, displacedNodeId: displaced, displaceDetach: true }
+      }
     }
     slots[index] = movingId
     return { kind: 'snap', boardId: board.id, slotIndex: index, slots, displacedNodeId: displaced }

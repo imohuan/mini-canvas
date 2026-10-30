@@ -42,6 +42,41 @@ const cells = computed(() => {
   return out
 })
 
+/**
+ * 白色蒙版的裁剪路径（用户口径 2026-10-30：分割块当蒙版用、只显示重合区域，
+ * 且**不画分隔条** —— 用 CSS 裁剪实现）。
+ *
+ * 做法：铺一层盖满卡片的白色，用 clip-path: path() 把每个格子挖成洞 ——
+ * 白层只剩"格子之外"（内边距 + 行列缝隙），图片只在格子里透出来。
+ *
+ * 为什么是 path 而不是多个 polygon：polygon() 只能给一条闭合路径；path() 允许
+ * **外圈顺时针 + 内圈逆时针**，nonzero 填充规则下内圈自动成洞（镂空的标准写法）。
+ * path 不支持百分比，坐标用节点实测尺寸算，与格子几何同源。
+ */
+const clipPath = computed(() => {
+  const s = state.value
+  if (!s) return ''
+  const rect = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('nodeLayout')?.getNodeRect(props.id)
+  const boardW = rect?.w && rect.w > 0 ? rect.w : 480
+  const boardH = rect?.h && rect.h > 0 ? rect.h : 360
+  const rects = slotRects(boardW, boardH, s.rows, s.cols, {
+    ...readStoryboardLayout(ctx), topPadding: 0, padding: 4, rowGap: 3, colGap: 3,
+  })
+  if (rects.length === 0) return ''
+  const n = (v: number): string => String(Math.round(v * 100) / 100)
+  // 外圈：顺时针包住整张卡片
+  let d = 'M0 0 H' + n(boardW) + ' V' + n(boardH) + ' H0 Z'
+  // 内圈：逆时针画每一格（方向相反才会成为洞）
+  for (const r of rects) {
+    const x0 = n(r.x)
+    const y0 = n(r.y)
+    const x1 = n(r.x + r.w)
+    const y1 = n(r.y + r.h)
+    d += ' M' + x0 + ' ' + y0 + ' V' + y1 + ' H' + x1 + ' V' + y0 + ' H' + x0 + ' Z'
+  }
+  return "path('" + d + "')"
+})
+
 /** 鼠标 → 归一化坐标（相对卡片内容区 0~1）→ 格子索引 */
 function cellFromEvent(ev: PointerEvent | MouseEvent): number {
   const el = ev.currentTarget as HTMLElement | null
@@ -78,6 +113,9 @@ function onClick(ev: MouseEvent): void {
     @pointerleave="onLeave"
     @click="onClick"
   >
+    <!-- 白色蒙版：整卡铺白，clip-path 把格子挖空 —— 图片只在格子里透出来，
+         缝隙与内边距显示白色。pointer-events: none，不吃勾选点击。 -->
+    <div class="gso-mask" :style="clipPath ? { clipPath } : undefined" />
     <div
       v-for="cell in cells"
       :key="cell.index"
@@ -170,5 +208,15 @@ function onClick(ev: MouseEvent): void {
   white-space: nowrap;
   pointer-events: none;
   z-index: 1;
+}
+
+/* 白色蒙版层：整卡铺白，靠 clip-path 镂空出格子。
+   不吃指针事件 —— 点击要穿透到下面的格子判定层。 */
+.gso-mask {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-overlay-solid, #fff);
+  pointer-events: none;
+  z-index: 0;
 }
 </style>
