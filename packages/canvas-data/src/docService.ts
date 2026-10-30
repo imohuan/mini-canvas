@@ -111,6 +111,11 @@ export interface DocService {
    * 只影响没有显式尺寸（没被 resize 过）的节点 —— 有自己 size 的节点不受影响。
    */
   updateTypeSize(type: string, size: { w: number; h: number }): void
+  /**
+   * 改某类型的 **resizable 能力**（拖拽方式开关/方式）。设置面板改「允许拖拽调整尺寸 / 拖拽方式」时调用；
+   * 改完画布上该类型的节点立即生效（拖柄显隐与拖拽方式都读类型表）。未知类型 no-op。
+   */
+  updateTypeResizability(type: string, resizable: CanvasNodeType['resizable']): void
   /** 取该类型下一个默认名（"分组 2"）并推进该类型序号 —— 给存量补名用，避免与新建撞号。 */
   nextTypeName(type: string): string
   /** 当前全部边（只读快照；与 edgeStore 同源） */
@@ -234,6 +239,7 @@ export function createDocService(sources: DocSources | DocSourceResolver): DocSe
     registerType: (def) => need('nodeStore').registerType(def),
     unregisterType: (type) => need('nodeStore').unregisterType(type),
     updateTypeSize: (type, size) => need('nodeStore').updateTypeSize(type, size),
+    updateTypeResizability: (type, resizable) => need('nodeStore').updateTypeResizability(type, resizable),
     nextTypeName: (type) => need('nodeStore').nextTypeName(type),
     getEdges: () => need('edgeStore').getEdges(),
     getEdge: (id) => need('edgeStore').getEdge(id),

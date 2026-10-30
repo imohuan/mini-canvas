@@ -32,6 +32,16 @@ export function imageTitleExtra(data: Record<string, unknown> | undefined): stri
   return isPositive(w) && isPositive(h) ? `${w}×${h}` : ''
 }
 
+/**
+ * 等比例拖拽用的内容比例（宽/高）：读原图像素尺寸，框架不关心字段名 —— 类型自己报。
+ * 拿不到（未上传/尺寸缺失/非法）→ 返回 0，拖拽层退回当前卡片比例。
+ */
+export function imageAspectRatio(data: Record<string, unknown> | undefined): number {
+  const w = Number(data?.imageWidth)
+  const h = Number(data?.imageHeight)
+  return isPositive(w) && isPositive(h) ? w / h : 0
+}
+
 /** 字节数 → 人类可读（B/KB/MB/GB）；非法值返回空串（调用方据此决定不渲染这一段） */
 export function formatFileSize(bytes?: number): string {
   if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return ''

@@ -12,12 +12,12 @@
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
 import {
-  Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize,
+  Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize, bindTypeResizeMode,
   DEFAULT_IMAGE_CARD_LIMITS, IMAGE_CARD_LIMIT_KEYS, isMediaCardLimitKey,
 } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { thumbTierFields, thumbTierKeys } from './thumbTier'
-import { imageTitleExtra } from './imageNodeData'
+import { imageTitleExtra, imageAspectRatio } from './imageNodeData'
 import { followedCardSizePatch, readImageFitLimits } from './imageFit'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
@@ -152,6 +152,23 @@ export const Config: ConfigSchema = {
     label: '最长边最大', group: '布局/图片节点尺寸',
     description: '图片节点卡片最长的一条边最多这么长（px）。特别细长的图会超过它，以最短边为准。',
   },
+  // —— 「布局 / 图片节点尺寸」：右下角拖拽（用户口径 2026-10-30：可开关 + 限方向/等比）——
+  imageResizeEnabled: {
+    type: 'boolean', default: true,
+    label: '允许拖拽调整尺寸', group: '布局/图片节点尺寸',
+    description: '关掉后图片节点右下角的拖拽手柄消失（所有图片节点立刻生效）。',
+  },
+  imageResizeMode: {
+    type: 'select', default: 'aspect',
+    label: '拖拽方式', group: '布局/图片节点尺寸',
+    description: '拖右下角手柄时的尺寸规则：等比例 = 跟着图片比例走（推荐）；自由拖拽 = 宽高各算各的；只改宽度 / 只改高度 = 另一边锁定。',
+    options: [
+      { value: 'aspect', label: '等比例' },
+      { value: 'free', label: '自由拖拽' },
+      { value: 'width', label: '只改宽度' },
+      { value: 'height', label: '只改高度' },
+    ],
+  },
   // —— 「节点/缩略图」：三档显示（用户口径：三档全部可配；第 1 档是原图，不用配）——
   //
   // 第 2/3 档的**阈值 + 目标框 + 清晰度**都在这里。小图由**本插件用 canvas 现画**
@@ -267,6 +284,8 @@ export function apply(ctx: Context) {
     // 标题右侧显示原图分辨率（1920×1080）：派生值按 data 现算，不写进 data ——
     // 尺寸一变就写一次 data 会让每次裁剪/旋转多出一条撤销记录。
     titleExtra: imageTitleExtra,
+    // 等比例拖拽用原图比例（见 imageNodeData.imageAspectRatio）；拿不到时壳退回卡片比例。
+    resizeRatio: imageAspectRatio,
     size: { w: 320, h: 240 },
     // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考）。
     // 以前这里写 capacity:1 把它限成一条，用户实测报的「图片输入端口分明可以添加多条连接线」就是它。
@@ -322,6 +341,10 @@ export function apply(ctx: Context) {
 
   // 2b. 默认尺寸接设置面板：改完**实时**生效（没 resize 过的图片节点立刻跟着变）
   bindTypeDefaultSize(ctx, 'image', { w: 320, h: 240 }, { widthKey: 'imageDefaultWidth', heightKey: 'imageDefaultHeight' })
+
+  // 拖拽开关/方式接设置面板：改完**实时**生效（类型表响应式，画布上已有图片节点立刻跟着变）。
+  // 等比例的内容比例由类型注册时声明的 resizeRatio 提供（图片 = imageWidth/Height）。
+  bindTypeResizeMode(ctx, 'image', 'imageResizeMode', 'imageResizeEnabled', 'aspect')
 
   // 最短边 / 最长边一改，画布上**已有**的图片节点也按新规则重算（用户要的实时效果）。
   // 只碰有真实图片尺寸的节点；量不到尺寸的保持原样，不猜。

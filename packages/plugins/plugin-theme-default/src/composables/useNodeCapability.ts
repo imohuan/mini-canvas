@@ -40,8 +40,15 @@ export function useNodeCapability(type: string) {
     return s ? { w: s.w, h: s.h } : { w: 256, h: 128 };
   });
 
-  /** 该 type 是否声明支持 resize（类型级能力；缺省 false）。BaseNode 据此显示拖柄。 */
-  const resizable = computed(() => nodeDef.value?.resizable === true);
+  /** 该 type 是否声明支持 resize（含拖拽方式；缺省 false）。BaseNode 据此显示拖柄、useNodeCardSize 据此选拖拽方式。 */
+  const resizable = computed(() => nodeDef.value?.resizable === true || typeof nodeDef.value?.resizable === 'string');
+  /** 该 type 声明的拖拽方式：true/'free' 之外的三种字符串。没开 resize 时恒 'free'（不消费）。 */
+  const resizeMode = computed<'width' | 'height' | 'aspect' | 'free'>(() => {
+    const v = nodeDef.value?.resizable;
+    return v === 'width' || v === 'height' || v === 'aspect' ? v : 'free';
+  });
+  /** 该 type 声明的等比例内容比例函数（可选；见 CanvasNodeType.resizeRatio）。 */
+  const resizeRatio = computed(() => nodeDef.value?.resizeRatio);
 
   /**
    * 该 type 是否声明"不要卡片边框"（缺省 false = 用外壳的默认边框）。
@@ -85,5 +92,5 @@ export function useNodeCapability(type: string) {
    */
   const label = computed(() => nodeDef.value?.label);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon, titleExtra, titleExtraSlot, frameless, transparent, loadingDefaultSize, label };
+  return { hasTarget, hasSource, defaultSize, resizable, resizeMode, resizeRatio, icon, titleExtra, titleExtraSlot, frameless, transparent, loadingDefaultSize, label };
 }

@@ -81,6 +81,19 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
     expect(def?.loadingDefaultSize).toBe(true)
   })
 
+  /** resizeRatio（等比例拖拽的内容比例函数）与 titleExtra 同一条链：函数句柄必须原样活到类型表。 */
+  it('ctx.nodes.register 把 resizeRatio（等比例内容比例函数）透传进 nodeStore', async () => {
+    const ratio = (d: Record<string, unknown>): number => Number(d.imageWidth) / Number(d.imageHeight)
+    const { nodeStore } = await boot([
+      mk('ratio-plugin', (c) => {
+        c.nodes.register({ type: 'ratio', label: '比例', size: { w: 10, h: 10 }, resizable: 'aspect', resizeRatio: ratio })
+      }),
+    ])
+    const def = nodeStore.types.get('ratio')
+    expect(def?.resizable).toBe('aspect')
+    expect(def?.resizeRatio).toBe(ratio)
+  })
+
   /**
    * titleExtra 也走这条手写枚举路 —— 历史上 frameless 正是漏在这条路上（单测全绿、浏览器无变化），
    * 所以新字段必须补一条同形态的断言。

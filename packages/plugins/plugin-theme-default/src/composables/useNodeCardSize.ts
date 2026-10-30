@@ -13,7 +13,8 @@
  * 原实现绑元素 + 依赖 setPointerCapture，但捕获不总成立（实测 hasPointerCapture 恒 false），
  * 指针一离开手柄元素就收不到 move → "拖一半断掉"。会话逻辑见 resizeDragSession.ts（可单测）。
  *
- * 拖柄显示门：**类型级 resizable 能力**(useNodeCapability 读 nodeStore.types[type].resizable) **或** 节点实例 data.resizable === true。
+ * 拖柄显示门：**类型级 resizable 能力**(useNodeCapability 读 nodeStore.types[type].resizable；
+ * true = 自由拖拽，'width'/'height'/'aspect' = 限定方向) **或** 节点实例 data.resizable === true。
  * 类型声明支持 resize → 该类型所有节点(含存量)自动可拖；实例级 data.resizable 可单独覆盖/关闭。
  *
  * 用法（BaseNode）：
@@ -57,7 +58,7 @@ export interface NodeCardSizeOptions {
    */
   toFlow: (x: number, y: number) => { x: number; y: number };
   /**
-   * 类型级 resizable 能力取值器（useNodeCapability().resizable）。缺省返回 false。
+   * 类型级 resizable 能力取值器（useNodeCapability().resizable；true 或 'width'/'height'/'aspect'）。
    * 显示拖柄的门 = 类型声明支持 resize **或** 节点实例 data.resizable === true（后者可单独覆盖）。
    */
   typeResizable?: () => boolean;
@@ -171,6 +172,26 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     () => (opts.typeResizable ? opts.typeResizable() : capability.resizable.value) || data.value?.resizable === true,
   );
 
+  /**
+   * 拖拽方式（用户口径 2026-10-30）：true/未声明 = 自由拖拽；'width'/'height'/'aspect' = 限定方向。
+   * 实例级 data.resizable 只用于「开/关」覆盖（历史行为），不提供实例级方式覆盖 —— 方式是类型能力，
+   * 散到每个节点上会让同类节点行为不一致、设置面板也没法一次改全。
+   */
+  const resizeMode = computed<'width' | 'height' | 'aspect' | 'free'>(() => capability.resizeMode.value);
+
+  /**
+   * 等比例拖拽用的比例（宽/高，> 0）：**按下那一刻**算一次，拖拽全程不变。
+   * 优先类型声明的 resizeRatio(data)（内容比例：图片用 imageWidth/Height、视频用裁框/画面尺寸）；
+   * 类型没声明或算不出（非法值）→ 退回当前卡片的宽高比 —— 对任何节点都成立，不依赖字段名。
+   */
+  const aspectRatio = (): number => {
+    const fromType = capability.resizeRatio.value?.(data.value ?? {});
+    if (typeof fromType === 'number' && Number.isFinite(fromType) && fromType > 0) return fromType;
+    const w = cardWidth.value;
+    const h = cardHeight.value;
+    return w > 0 && h > 0 ? w / h : 1;
+  };
+
   // —— resize 拖拽会话（move/up 绑全局 document，不绑手柄元素）——
   // 关键修复：绑元素 + 依赖 setPointerCapture 时，捕获不成立（实测 hasPointerCapture 恒 false）
   // 就会"鼠标一离开手柄就断"；绑全局后指针走到哪都能继续拖。
@@ -178,6 +199,9 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     minW: CARD_MIN_WIDTH,
     minH: CARD_MIN_HEIGHT,
     toFlow: opts.toFlow,
+    // 拖拽方式在 start 时冻结成会话参数（见 resizeDragSession.mode）；onLive/onCommit 收到的已是约束后的尺寸
+    mode: () => resizeMode.value,
+    aspectRatio,
     onLive(w, h) {
       cardWidth.value = w;
       cardHeight.value = h;
@@ -216,6 +240,8 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     cardWidth,
     cardHeight,
     resizable,
+    /** 当前类型的拖拽方式（设置面板改「拖拽方式」后立即生效） */
+    resizeMode,
     isResizing,
     onResizePointerDown,
     /**

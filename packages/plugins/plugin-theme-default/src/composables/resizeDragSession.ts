@@ -54,6 +54,16 @@ export interface ResizeDragOptions {
   onVisualSize?: (w: number, h: number) => void
   /** 松手提交回调（落盘） */
   onCommit: (w: number, h: number) => void
+  /**
+   * 拖拽方式（可选；缺省 = 自由拖拽）：'width' 只改宽度、'height' 只改高度、'aspect' 等比例。
+   * 取值器在 **start 时调用一次**并冻结成会话参数 —— 拖拽途中改设置不影响本次拖拽，松手后下次生效。
+   */
+  mode?: () => 'width' | 'height' | 'aspect' | 'free'
+  /**
+   * 等比例用的比例（宽/高，> 0；mode='aspect' 时使用）：start 时调用一次并冻结。
+   * 拿不到（非法/≤0）→ 退回起手卡片的宽高比。
+   */
+  aspectRatio?: () => number
   /** 全局监听目标取值：浏览器返回 document；无 DOM 环境返回 null（此时拖拽不可用，安全降级） */
   eventTarget: () => PointerEventTargetLike | null
 }
@@ -96,6 +106,10 @@ interface DragState {
   mouseY: number
   w: number
   h: number
+  /** 本会话的拖拽方式（start 时冻结；拖拽途中改设置不影响） */
+  mode: 'width' | 'height' | 'aspect' | 'free'
+  /** 本会话的等比例（mode='aspect' 时用；free/width/height 恒 0 = 不用） */
+  aspect: number
 }
 
 /**
@@ -119,8 +133,30 @@ export function createResizeDragSession(opts: ResizeDragOptions): ResizeDragSess
     // 用**当前视口**把"指针 + 抓点偏移"换算成画布坐标；再与起手画布角点求差。
     // 平移项在差值里相消；缩放变化时这一步才给出正确位移（旧写法此处会偏）。
     const corner = opts.toFlow(state.mouseX + state.grabX, state.mouseY + state.grabY)
-    const w = Math.max(opts.minW, state.startW + (corner.x - state.corner0X))
-    const h = Math.max(opts.minH, state.startH + (corner.y - state.corner0Y))
+    let w = Math.max(opts.minW, state.startW + (corner.x - state.corner0X))
+    let h = Math.max(opts.minH, state.startH + (corner.y - state.corner0Y))
+    // —— 方式约束（2026-10-30 用户口径：resize 可限方向/等比）——
+    // width/height：只跟随一个方向的位移，另一边锁在起手值（仍受 min 下限兜底）。
+    // aspect：比例在 start 时冻结；按「哪个方向拉出的相对变化大」听谁 ——
+    //         横向拖 → 宽度驱动、高度按比例回算；纵向拖 → 高度驱动、宽度按比例回算。
+    //         任一方向的拖动都被「等比」吸收，而不是只认宽度（拖柄在右下角，双向都得自然）。
+    if (state.mode === 'width') {
+      h = Math.max(opts.minH, state.startH)
+    } else if (state.mode === 'height') {
+      w = Math.max(opts.minW, state.startW)
+    } else if (state.mode === 'aspect' && state.aspect > 0) {
+      const rawW = state.startW + (corner.x - state.corner0X)
+      const rawH = state.startH + (corner.y - state.corner0Y)
+      const byW = Math.abs(rawW - state.startW) / state.startW
+      const byH = Math.abs(rawH - state.startH) / state.startH
+      if (byW >= byH) {
+        w = Math.max(opts.minW, rawW)
+        h = Math.max(opts.minH, Math.round(w / state.aspect))
+      } else {
+        h = Math.max(opts.minH, rawH)
+        w = Math.max(opts.minW, Math.round(h * state.aspect))
+      }
+    }
     state.w = w
     state.h = h
     opts.onLive(w, h)
@@ -144,6 +180,12 @@ export function createResizeDragSession(opts: ResizeDragOptions): ResizeDragSess
       e.stopPropagation?.()
       const grabX = grabOffset?.x ?? 0
       const grabY = grabOffset?.y ?? 0
+      // 方式与比例在按下那一刻冻结：拖拽途中改设置不影响本次拖拽，松手后下次生效
+      const mode = opts.mode?.() ?? 'free'
+      const rawAspect = opts.aspectRatio?.()
+      const aspect = mode === 'aspect' && typeof rawAspect === 'number' && Number.isFinite(rawAspect) && rawAspect > 0
+        ? rawAspect
+        : (startW > 0 && startH > 0 ? startW / startH : 1)
       // 起手画布角点：用**起手视口**换算一次，作为后续所有差值的不动锚点
       const corner0 = opts.toFlow(e.clientX + grabX, e.clientY + grabY)
       state = {
@@ -159,6 +201,8 @@ export function createResizeDragSession(opts: ResizeDragOptions): ResizeDragSess
         mouseY: e.clientY,
         w: startW,
         h: startH,
+        mode,
+        aspect: mode === 'aspect' ? aspect : 0,
       }
       const target = opts.eventTarget()
       if (!target) return // 无全局目标（SSR/测试）：不绑监听，拖拽自然不可用

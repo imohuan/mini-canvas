@@ -408,3 +408,94 @@ describe('resizeDragSession：抓点偏移补偿（拖柄中心 ≠ 卡片角）
     session.dispose()
   })
 })
+
+/**
+ * 拖拽方式（用户口径 2026-10-30）：resize 可以限方向（只改宽/只改高）或等比例。
+ * 方式与比例都在 **start 时冻结** —— 拖拽途中改设置不影响本次拖拽，松手后下次生效。
+ * 等比例按「哪个方向拉出的相对变化大」听谁：横向拖宽度驱动、纵向拖高度驱动，
+ * 任一方向的拖动都被「等比」吸收（拖柄在右下角，双向都得自然）。
+ */
+describe('resizeDragSession：拖拽方式（只宽/只高/等比）', () => {
+  function makeModeSession(
+    target: ReturnType<typeof makeTarget>,
+    mode: 'width' | 'height' | 'aspect' | 'free',
+    aspect: number | undefined,
+    live = vi.fn(),
+    commit = vi.fn(),
+  ) {
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: (x, y) => ({ x, y }),
+      mode: () => mode,
+      aspectRatio: () => aspect ?? 0,
+      onLive: live,
+      onCommit: commit,
+      eventTarget: () => target,
+    })
+    return { session, live, commit }
+  }
+
+  it("mode='width'：高度锁在起手值，只有宽度跟指针", () => {
+    const target = makeTarget()
+    const { session, live, commit } = makeModeSession(target, 'width', undefined)
+    session.start({ clientX: 0, clientY: 0 }, 200, 100)
+    target.emit('pointermove', { clientX: 50, clientY: 40 })
+    expect(live).toHaveBeenLastCalledWith(250, 100)
+    target.emit('pointerup', {})
+    expect(commit).toHaveBeenCalledWith(250, 100)
+  })
+
+  it("mode='height'：宽度锁在起手值，只有高度跟指针", () => {
+    const target = makeTarget()
+    const { session, live, commit } = makeModeSession(target, 'height', undefined)
+    session.start({ clientX: 0, clientY: 0 }, 200, 100)
+    target.emit('pointermove', { clientX: 50, clientY: 40 })
+    expect(live).toHaveBeenLastCalledWith(200, 140)
+    target.emit('pointerup', {})
+    expect(commit).toHaveBeenCalledWith(200, 140)
+  })
+
+  it("mode='aspect'：横向拖 → 宽度驱动，高度按内容比例回算", () => {
+    const target = makeTarget()
+    const { session, live } = makeModeSession(target, 'aspect', 16 / 9)
+    session.start({ clientX: 0, clientY: 0 }, 160, 90)
+    // 横向拉 80（相对变化 0.5），纵向拉 10（相对变化 0.11）→ 听宽度：240×135
+    target.emit('pointermove', { clientX: 80, clientY: 10 })
+    expect(live).toHaveBeenLastCalledWith(240, 135)
+    session.dispose()
+  })
+
+  it("mode='aspect'：纵向拖 → 高度驱动，宽度按内容比例回算", () => {
+    const target = makeTarget()
+    const { session, live } = makeModeSession(target, 'aspect', 16 / 9)
+    session.start({ clientX: 0, clientY: 0 }, 160, 90)
+    // 横向拉 10（0.06），纵向拉 90（1.0）→ 听高度：180×16/9 = 320 → 320×180
+    target.emit('pointermove', { clientX: 10, clientY: 90 })
+    expect(live).toHaveBeenLastCalledWith(320, 180)
+    session.dispose()
+  })
+
+  it("mode='aspect' 且比例拿不到 → 退回起手卡片的宽高比（不猜字段）", () => {
+    const target = makeTarget()
+    const { session, live } = makeModeSession(target, 'aspect', undefined)
+    session.start({ clientX: 0, clientY: 0 }, 200, 100)
+    // 卡片比例 2:1：宽度驱动 → 300×150
+    target.emit('pointermove', { clientX: 100, clientY: 5 })
+    expect(live).toHaveBeenLastCalledWith(300, 150)
+    session.dispose()
+  })
+
+  it("mode='aspect'：等比下限兜底后仍保持比例（宽度撞 minW 时高度跟着算）", () => {
+    const target = makeTarget()
+    const { session, live, commit } = makeModeSession(target, 'aspect', 2)
+    session.start({ clientX: 0, clientY: 0 }, 300, 150)
+    target.emit('pointermove', { clientX: -500, clientY: -250 })
+    // rawW = -200 → 夹到 minW 120；比例回算 60 → 夹到 minH 80。
+    // 极端拖到负方向时下限兜底优先，比例让位（min 是硬约束）。
+    expect(live).toHaveBeenLastCalledWith(120, 80)
+    target.emit('pointerup', {})
+    expect(commit).toHaveBeenCalledWith(120, 80)
+    session.dispose()
+  })
+})

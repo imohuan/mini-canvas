@@ -65,3 +65,55 @@ export function bindTypeDefaultSize(
     ctx.effect(() => () => off.dispose())
   }
 }
+
+/**
+ * bindTypeResizeMode —— 把「允许拖拽调整尺寸 + 拖拽方式」的设置实时绑到某节点类型的 resizable 能力。
+ *
+ * 设置面板改「拖拽方式」（select：free/width/height/aspect）或「允许拖拽调整尺寸」（boolean 开关）时，
+ * 经 doc.updateTypeResizability 写回类型表 —— 类型表是响应式的，画布上已有节点立刻跟着变。
+ *
+ * @param ctx       插件 apply 的 ctx
+ * @param type      节点类型名（如 'image'）
+ * @param modeKey   拖拽方式的设置 key（select；值 'free'|'width'|'height'|'aspect'）
+ * @param enableKey 可选的布尔总开关 key：false = 关掉 resize（resizable=false），
+ *                  true/缺省 = 按方式生效。只声明方式、不要开关时省略。
+ * @param fallback  设置读不到时的回落值（注册时声明的那份）；缺省 'free'（true 的等价形式）
+ */
+export function bindTypeResizeMode(
+  ctx: Context,
+  type: string,
+  modeKey: string,
+  enableKey?: string,
+  fallback: 'width' | 'height' | 'aspect' | 'free' = 'free',
+): void {
+  const doc = ctx.tryGet<{
+    updateTypeResizability(type: string, resizable: boolean | 'width' | 'height' | 'aspect'): void
+  }>('doc')
+  if (!doc || typeof doc.updateTypeResizability !== 'function') return
+
+  const settings = ctx.tryGet<{
+    get(key: string): unknown
+    onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
+  }>('settings')
+
+  const MODES = ['free', 'width', 'height', 'aspect'] as const
+  const read = (): boolean | 'width' | 'height' | 'aspect' => {
+    if (enableKey && settings?.get(enableKey) === false) return false
+    const v = settings?.get(modeKey)
+    if (typeof v === 'string' && (MODES as readonly string[]).includes(v)) {
+      return v === 'free' ? true : (v as 'width' | 'height' | 'aspect')
+    }
+    return fallback === 'free' ? true : fallback
+  }
+
+  // 首次：把设置里的值写进类型表（覆盖作者注册时的字面量）
+  doc.updateTypeResizability(type, read())
+
+  if (settings) {
+    const off = settings.onChange((key) => {
+      if (key !== modeKey && key !== enableKey) return
+      doc.updateTypeResizability(type, read())
+    })
+    ctx.effect(() => () => off.dispose())
+  }
+}

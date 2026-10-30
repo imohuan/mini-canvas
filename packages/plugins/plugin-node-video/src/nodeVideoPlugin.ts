@@ -24,7 +24,7 @@ import {
 } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { videoThumbTierFields, videoThumbTierKeys } from './videoThumbTier'
-import { videoTitleExtra } from './videoOps'
+import { videoTitleExtra, videoAspectRatio } from './videoOps'
 import { followedVideoCardSizePatch, readVideoFitLimits } from './videoFit'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
@@ -316,6 +316,8 @@ export function apply(ctx: Context) {
     icon: NODE_ICON,
     // 标题右侧显示画面分辨率（1280×720；裁过就是裁框尺寸）——派生值按 data 现算，不写进 data。
     titleExtra: videoTitleExtra,
+    // 等比例拖拽用画面/裁框比例（videoOps.videoAspectRatio）；拿不到时壳退回卡片比例。
+    resizeRatio: videoAspectRatio,
     // 尺寸与 v1 NODE_SIZES.video 同：一点元数据都读不到时的兜底
     size: { w: 480, h: 320 },
     inputs: [{ port: 'target', acceptsTypes: ['text', 'audio', 'image', 'video'] }],

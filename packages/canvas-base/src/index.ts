@@ -69,6 +69,8 @@ export {
 } from './adminToken'
 /** 把一个「数值型设置」实时绑到某节点类型的默认尺寸（设置面板调它，未 resize 的节点立刻跟着变） */
 export { bindTypeDefaultSize, type TypeSizeConfigKeys } from './bindTypeDefaultSize'
+/** 把「允许拖拽调整尺寸 / 拖拽方式」的设置实时绑到某节点类型的 resizable 能力（设置面板改它，画布立即生效） */
+export { bindTypeResizeMode } from './bindTypeDefaultSize'
 /** 图片 / 视频节点的卡片尺寸规则（最短边 / 最长边；图片、视频、拖入、翻转共用一套） */
 export {
   fitMediaCard,

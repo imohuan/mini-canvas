@@ -186,9 +186,10 @@ describe('node-image 装配 smoke', () => {
 
     // 分组与 label 决定设置面板长在哪、叫什么
     const group = settings.groupOf('布局/图片节点尺寸')
-    // 「布局/图片节点尺寸」下现在有四项：默认宽/高（新建节点尺寸）+ 最短边/最长边（换图后缩放）
+    // 「布局/图片节点尺寸」下现在有六项：默认宽/高 + 最短边/最长边 + 拖拽开关/拖拽方式
     expect(group.map((i) => i.key).sort()).toEqual([
       'imageCardMaxLongSide', 'imageCardMinShortSide', 'imageDefaultHeight', 'imageDefaultWidth',
+      'imageResizeEnabled', 'imageResizeMode',
     ])
     expect(group.find((i) => i.key === 'imageCardMinShortSide')?.schema.label).toBe('最短边最小')
     expect(group.find((i) => i.key === 'imageCardMaxLongSide')?.schema.label).toBe('最长边最大')
@@ -220,6 +221,27 @@ describe('node-image 装配 smoke', () => {
     // 调到最短边 150 → 短边撑到 150，最长边跟着到 300（允许超上限）
     ctx.settings.set('imageCardMinShortSide', 150)
     expect(doc.getNode(id)!.size).toEqual({ w: 300, h: 150 })
+    ctx.stop()
+  })
+})
+
+describe('图片节点拖拽开关/方式（用户口径 2026-10-30）', () => {
+  it('设置一改，类型表的 resizable 立即变（真内核 + bindTypeResizeMode）', async () => {
+    const ctx = boot()
+    await ctx.start()
+    // boot() 用真宿主 → apply 里的 bindTypeResizeMode 已按配置默认值把类型表绑成 aspect；
+    // 后面再直接钉类型表这条链（updateTypeResizability → 响应式）在真内核上成立：
+    const nodeStore = ctx.get<DocService>('doc').types
+    expect(nodeStore.get('image')?.resizable).toBe('aspect') // 配置默认：等比例拖拽
+    ctx.get<DocService>('doc').updateTypeResizability('image', 'aspect')
+    expect(nodeStore.get('image')?.resizable).toBe('aspect')
+    ctx.get<DocService>('doc').updateTypeResizability('image', true)
+    expect(nodeStore.get('image')?.resizable).toBe(true)
+    ctx.get<DocService>('doc').updateTypeResizability('image', false)
+    expect(nodeStore.get('image')?.resizable).toBe(false)
+    // 未知类型 no-op（不抛错、不改别人）
+    ctx.get<DocService>('doc').updateTypeResizability('不存在的类型', 'width')
+    expect(nodeStore.get('image')?.resizable).toBe(false)
     ctx.stop()
   })
 })

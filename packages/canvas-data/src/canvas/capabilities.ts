@@ -298,6 +298,7 @@ export function buildCapabilities(
           inputs: def.inputs,
           outputs: def.outputs,
           resizable: def.resizable,
+          resizeRatio: def.resizeRatio,
           frameless: def.frameless,
           transparent: def.transparent,
           loadingDefaultSize: def.loadingDefaultSize,

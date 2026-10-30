@@ -445,6 +445,15 @@ export function videoTitleExtra(data: Record<string, unknown> | undefined): stri
 }
 
 /**
+ * 等比例拖拽用的内容比例（宽/高）：复用 displaySizeOf 的口径 —— 裁过按裁框，没裁按整幅画面。
+ * 拿不到（没元数据/非法）→ 返回 0，拖拽层退回当前卡片比例。
+ */
+export function videoAspectRatio(data: Record<string, unknown> | undefined): number {
+  const { width, height } = displaySizeOf(data)
+  return width > 0 && height > 0 ? width / height : 0
+}
+
+/**
  * 换视频后的统一写回：data + 卡片尺寸**一次写完**。
  *
  * 尺寸算不出（元数据没读出来/非法）时只写 data 并**清掉旧尺寸** —— 不能留着上一段视频的

@@ -63,8 +63,13 @@ export interface NodeTypeDef extends NodeDataTypeDef {
   titleExtraSlot?: import('vue').Component
   /** 一句话说明（可选）：菜单"新建节点"项 hover 小字；与 icon 同链，由类型自己声明 */
   description?: string
-  /** 是否支持 resize（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取。 */
-  resizable?: boolean
+  /** 是否支持 resize + 拖拽方式（类型级能力；缺省 false = 不可缩放）。透传进 nodeStore 供渲染层读取。 */
+  resizable?: boolean | 'width' | 'height' | 'aspect'
+  /**
+   * 等比例拖拽用的内容比例（宽/高，可选）：类型最清楚内容存在哪个字段，
+   * 框架只调函数、不猜字段名。见 CanvasNodeType.resizeRatio。
+   */
+  resizeRatio?: (data: Record<string, unknown>) => number
   /** 无边框（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 内容铺满整张卡的类型用它去掉多余的一圈缝。 */
   frameless?: boolean
   /** 表面透明（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 容器型类型（分组）用它让连接线透出卡片区域。 */
@@ -101,6 +106,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     inputs: def.inputs,
     outputs: def.outputs,
     resizable: def.resizable,
+    resizeRatio: def.resizeRatio,
     frameless: def.frameless,
     transparent: def.transparent,
     loadingDefaultSize: def.loadingDefaultSize,

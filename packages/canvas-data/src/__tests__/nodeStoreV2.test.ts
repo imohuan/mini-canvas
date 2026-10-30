@@ -41,6 +41,24 @@ describe('NodeStore v2 写 API', () => {
     expect(calls).toBe(1)
   })
 
+  /**
+   * resizable 现在支持 boolean | 'width' | 'height' | 'aspect'（用户口径 2026-10-30）：
+   * true = 自由拖拽，字符串 = 限定方向。updateTypeResizability 让设置面板能实时改它 ——
+   * 类型表是 shallowReactive 的，原地改顶层属性后依赖它的 computed 立刻重算。
+   */
+  it('updateTypeResizability 实时改拖拽方式；未知类型 no-op', () => {
+    const s = makeStore()
+    s.registerType({ type: 'img', label: '图', defaultSize: { w: 10, h: 10 }, resizable: true })
+    const mode = computed(() => s.types.get('img')!.resizable)
+    expect(mode.value).toBe(true)
+    s.updateTypeResizability('img', 'aspect')
+    expect(mode.value).toBe('aspect')
+    s.updateTypeResizability('img', false)
+    expect(mode.value).toBe(false)
+    s.updateTypeResizability('不存在的类型', 'width')
+    expect(mode.value).toBe(false)
+  })
+
   it('addNodes 批量插入：可指定 id/data/size/parentId；返回插入数量', () => {
     const s = makeStore()
     const n = s.addNodes([

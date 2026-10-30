@@ -180,8 +180,24 @@ export interface CanvasNodeType {
    * 菜单层维护"type 名字 → 文案"对照表（那种表每加一个节点类型都得回去补，必漏）。
    */
   description?: string
-  /** 是否支持 resize（类型级能力，缺省 false = 不可缩放）。渲染层据此显示拖柄；节点实例仍可经 data.resizable 单独覆盖。 */
-  resizable?: boolean
+  /**
+   * 是否支持 resize + 拖拽方式（类型级能力，缺省 false = 不可缩放）。
+   *
+   * - true = 自由拖拽（宽高各算各的，老语义不变）；
+   * - 'width'  = 只能改宽度，高度锁在起手值；
+   * - 'height' = 只能改高度，宽度锁在起手值；
+   * - 'aspect' = 等比例拖拽：比例在按下那一刻取 —— 类型声明了 resizeRatio(data) 就用内容比例，
+   *              没声明就用当前卡片的宽高比。框架不认识各节点的字段，内容比例由类型自己报。
+   *
+   * 渲染层据此显示拖柄与选拖拽方式；节点实例仍可经 data.resizable（同类型值）单独覆盖。
+   */
+  resizable?: boolean | 'width' | 'height' | 'aspect'
+  /**
+   * 等比例拖拽用的内容比例（宽/高，可选）：只在 resizable='aspect' 且拖拽起手时调用。
+   * 类型最清楚自己的内容存在哪个字段（图片 imageWidth/Height、视频裁框/画面宽高…），
+   * 框架只调函数、不猜字段名。返回非正数/非法值 = 「拿不到」→ 拖拽退回当前卡片比例。
+   */
+  resizeRatio?: (data: Record<string, unknown>) => number
   /**
    * 无边框（类型级能力，缺省 false = 由外壳画默认卡片边框）。
    *
@@ -234,6 +250,8 @@ export interface NodeStoreService {
    * 只影响没有显式尺寸（没被 resize 过）的节点。
    */
   updateTypeSize(type: string, size: { w: number; h: number }): void
+  /** 改某类型的 resizable 能力（设置面板开关/拖拽方式）。未知类型 no-op。 */
+  updateTypeResizability(type: string, resizable: CanvasNodeType['resizable']): void
   /**
    * 取该类型**下一个默认名**（"图片 3" / "分组 2"）并推进该类型的序号计数。
    *
@@ -344,6 +362,20 @@ export class NodeStore implements NodeStoreService {
     const t = this.types.get(type) as (CanvasNodeType & { defaultSize: { w: number; h: number } }) | undefined
     if (!t) return
     t.defaultSize = { w: size.w, h: size.h }
+    this.notify('update', type)
+  }
+
+  /**
+   * 改某类型的 resizable 能力（设置面板改「允许拖拽调整尺寸 / 拖拽方式」时调用）。
+   *
+   * 与 updateTypeSize 同一条链：类型表是 shallowReactive 的，原地改顶层属性 →
+   * 依赖它的拖柄显隐 computed 立刻重算，画布上已有节点不用刷新。
+   * 未知类型 no-op（与 updateTypeSize 同语义）。
+   */
+  updateTypeResizability(type: string, resizable: CanvasNodeType['resizable']): void {
+    const t = this.types.get(type)
+    if (!t) return
+    t.resizable = resizable
     this.notify('update', type)
   }
 
