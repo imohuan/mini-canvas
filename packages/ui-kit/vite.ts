@@ -144,7 +144,13 @@ export function uiKitDocsPlugin(docsDir: string): Plugin {
     },
     handleHotUpdate(ctx) {
       if (!ctx.file.startsWith(docsDir) || !ctx.file.endsWith('.md')) return
-      for (const mod of ctx.server.moduleGraph.moduleMap.values()) {
+      /**
+       * Vite 8 的 moduleGraph 上没有 `moduleMap`（那是 Vite 5 之前的字段名）。
+       * 用旧写法会在改文档时抛 `Cannot read properties of undefined (reading 'values')`，
+       * dev server 报错、页面不更新（构建与首屏不受影响，所以很容易被漏掉）。
+       * 按 id 找模块用官方保留的 `idToModuleMap`。
+       */
+      for (const mod of ctx.server.moduleGraph.idToModuleMap.values()) {
         if (mod.id?.startsWith(RESOLVED_DOC) || mod.id?.startsWith(RESOLVED_EXAMPLE)) {
           ctx.server.moduleGraph.invalidateModule(mod)
         }
