@@ -87,6 +87,12 @@
   pointer-events: auto;
 }
 
+.dd-hud__actions {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
 .dd-summary {
   margin: 0;
   color: var(--mck-ink-muted, #8c95a3);

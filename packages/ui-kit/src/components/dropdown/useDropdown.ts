@@ -25,6 +25,7 @@ export interface DropdownApi {
   toggle: () => void
   scheduleHide: () => void
   cancelHide: () => void
+  scheduleShow: () => void
   panelStyle: Ref<Record<string, string>>
   arrowStyle: ComputedRef<Record<string, string>>
   closeFromSlot: () => void
@@ -40,6 +41,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   const triggerRef = ref<HTMLElement | null>(null)
   const panelRef = ref<HTMLElement | null>(null)
   let hideTimer = 0
+  let showTimer = 0
 
   /**
    * 实际方向：anchorPlacement 是显式九宫格；没有它才用旧 placement/align 组合。
@@ -138,12 +140,33 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   function scheduleHide(): void {
     if ((props.trigger ?? 'click') !== 'hover') return
     cancelHide()
+    cancelShow()
     hideTimer = window.setTimeout(hide, Math.max(0, props.hoverCloseDelay ?? 150))
   }
 
   function cancelHide(): void {
     window.clearTimeout(hideTimer)
     hideTimer = 0
+  }
+
+  /** 悬停打开可以延迟：Tooltip 需要「停一下才出现」，Dropdown 本身是 0 延迟。 */
+  function scheduleShow(): void {
+    if ((props.trigger ?? 'click') !== 'hover') {
+      show()
+      return
+    }
+    const delay = Math.max(0, props.hoverOpenDelay ?? 0)
+    if (delay === 0) {
+      show()
+      return
+    }
+    cancelShow()
+    showTimer = window.setTimeout(show, delay)
+  }
+
+  function cancelShow(): void {
+    window.clearTimeout(showTimer)
+    showTimer = 0
   }
 
   /**
@@ -168,10 +191,17 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
 
   useOutsideClick(open, [triggerRef, panelRef, anchorEl], () => {
     if ((props.trigger ?? 'click') === 'always') return
+    if (props.closeOnOutside === false) return
     hide()
   })
-  useEscape(open, hide)
-  onBeforeUnmount(cancelHide)
+  useEscape(open, () => {
+    if (props.closeOnEscape === false) return
+    hide()
+  })
+  onBeforeUnmount(() => {
+    cancelHide()
+    cancelShow()
+  })
 
   const panelStyle = computed<Record<string, string>>(() => {
     const style: Record<string, string> = {
@@ -243,5 +273,5 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   }
 
 
-  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, panelStyle, arrowStyle, closeFromSlot }
+  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, scheduleShow, panelStyle, arrowStyle, closeFromSlot }
 }

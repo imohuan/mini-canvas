@@ -12,7 +12,8 @@ describe('Tooltip 组件行为', () => {
       props: { content: '提示文字', delay: 10 },
       slots: { default: '<button>触发</button>' },
     })
-    await wrapper.find('.mck-tooltip-trigger').trigger('mouseenter')
+    // 悬停由 Dropdown 的外层触发区接管；内层 span 上的 mouseenter 不冒泡。
+    await wrapper.find('.mck-dropdown__trigger').trigger('mouseenter')
     await new Promise((resolve) => setTimeout(resolve, 60))
     await wrapper.vm.$nextTick()
     expect(document.querySelector('.mck-tooltip')?.textContent).toContain('提示文字')
@@ -23,7 +24,7 @@ describe('Tooltip 组件行为', () => {
       props: { content: '提示文字', delay: 0, disabled: true },
       slots: { default: '<button>触发</button>' },
     })
-    await wrapper.find('.mck-tooltip-trigger').trigger('mouseenter')
+    await wrapper.find('.mck-dropdown__trigger').trigger('mouseenter')
     await new Promise((resolve) => setTimeout(resolve, 30))
     await wrapper.vm.$nextTick()
     expect(document.querySelector('.mck-tooltip')).toBeNull()

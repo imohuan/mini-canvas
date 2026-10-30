@@ -29,6 +29,8 @@ export interface DropdownProps {
   matchWidth?: boolean
   trigger?: DropdownTrigger
   hoverCloseDelay?: number
+  /** 悬停后延迟多久打开，默认 0（立即）。 */
+  hoverOpenDelay?: number
   menuWidth?: string
   /** 浮层固定高度；不填时由内容撑开 */
   menuHeight?: string
@@ -46,6 +48,18 @@ export interface DropdownProps {
   disabled?: boolean
   /** 浮层要挂到的容器，默认 body */
   appendTo?: string | HTMLElement
+  /**
+   * 裸面板：去掉默认面板的内边距、边框、圆角、底色和阴影，
+   * 只保留定位与滚动外壳。插槽内容自己就是完整的面板 UI。
+   *
+   * 给 Popover / Tooltip 这类「外壳由调用方决定」的组件复用；
+   * 普通下拉不要开，否则会丢掉库内统一的浮层外观。
+   */
+  bare?: boolean
+  /** 点面板/触发器以外的地方是否关闭，默认 true。 */
+  closeOnOutside?: boolean
+  /** 按 Esc 是否关闭，默认 true。 */
+  closeOnEscape?: boolean
 }
 
 /** 浮层控制接口：给外部“绑定 + 开关”用的服务对象。 */

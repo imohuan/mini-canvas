@@ -1,9 +1,9 @@
-.mck-popover { display: inline-flex; max-width: 100%; }
-.mck-popover__trigger { display: inline-flex; min-width: 0; }
+/*
+ * 定位、层级、滚动都由 Dropdown 的浮层外壳负责；
+ * 这里只画「卡片」本身，所以不再需要 position: fixed 和 z-index。
+ */
+.mck-popover { max-width: 100%; }
 .mck-popover__panel {
-  position: fixed;
-  /* 层级读 Provider 的 --mck-z-popover（zIndexBase 派生） */
-  z-index: var(--mck-z-popover, 95000);
   box-sizing: border-box;
   border: 1px solid var(--mck-line, #e2e5ea);
   border-radius: var(--mck-radius-panel, 14px);
@@ -11,6 +11,8 @@
   color: var(--mck-ink);
   box-shadow: var(--mck-shadow);
   overflow: hidden;
+  /* 层级仍读 Provider 变量：面板外壳由 Dropdown 负责，但卡片自身要保持同档。 */
+  z-index: var(--mck-z-popover, 95000);
 }
 .mck-popover__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; border-bottom: 1px solid var(--mck-line); }
 .mck-popover__title { font-size: 13px; font-weight: 700; }

@@ -269,8 +269,9 @@ function fireMessage(): void {
         :close-on-escape="readBool(state, 'closeOnEscape')"
         :disabled="readBool(state, 'disabled')"
       >
-        <template #trigger="{ toggle }">
-          <Button variant="secondary" @click="toggle()">打开 Popover</Button>
+        <template #trigger>
+          <!-- 点击由 Dropdown 的外层触发区接管；这里不能再调 toggle，否则会连开带关。 -->
+          <Button variant="secondary">打开 Popover</Button>
         </template>
         <template #default>
           <div class="pg-stack">

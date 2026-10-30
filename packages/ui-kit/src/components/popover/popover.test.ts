@@ -10,9 +10,10 @@ describe('Popover 组件行为', () => {
   it('toggle 后显示带标题的面板', async () => {
     const wrapper = mount(Popover, {
       props: { title: '确认信息', description: '内容说明' },
-      slots: { trigger: '<template #trigger="{ toggle }"><button data-trigger @click="toggle()">打开</button></template>' },
+      slots: { trigger: '<button data-trigger>打开</button>' },
     })
     await wrapper.find('[data-trigger]').trigger('click')
+    await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
     const panel = document.querySelector('.mck-popover__panel')
     if (!panel) throw new Error('popover panel missing')
@@ -23,9 +24,10 @@ describe('Popover 组件行为', () => {
   it('点击关闭按钮发出 false', async () => {
     const wrapper = mount(Popover, {
       props: { title: '面板' },
-      slots: { trigger: '<template #trigger="{ toggle }"><button data-trigger @click="toggle()">打开</button></template>' },
+      slots: { trigger: '<button data-trigger>打开</button>' },
     })
     await wrapper.find('[data-trigger]').trigger('click')
+    await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
     ;(document.querySelector('.mck-popover__close') as HTMLButtonElement).click()
     await wrapper.vm.$nextTick()

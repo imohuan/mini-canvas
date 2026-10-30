@@ -60,3 +60,19 @@ import { Tooltip, Button } from '@mini-canvas/ui-kit'
 
 悬停或键盘聚焦都会出现；Esc 关闭。
 
+## 复用 Dropdown 的配置
+
+Tooltip 建在 Dropdown 上，所以方向、箭头、外部锚点、挂载容器都能直接用：
+
+| 属性 | 默认 | 说明 |
+| --- | --- | --- |
+| placement | top | 九宫格方向，与 Dropdown 一致 |
+| delay | 180 | 悬停多久出现，毫秒 |
+| closeDelay | 0 | 移出后多久关闭 |
+| trigger | hover | 也能改成 click / contextmenu |
+| arrow | false | 显示指向触发器的小箭头 |
+| anchor | 无 | 外部 DOM / Ref / getter |
+| appendTo | body | 浮层挂载容器 |
+| bare | true | 默认原生模式：外壳不套卡片，气泡由 Tooltip 自己画 |
+
+传 `bare: false` 会套上 Dropdown 的默认面板外观，一般不需要。

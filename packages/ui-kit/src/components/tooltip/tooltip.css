@@ -1,11 +1,15 @@
 .mck-tooltip-trigger { display: inline-flex; max-width: 100%; }
 .mck-tooltip-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--mck-accent) 60%, transparent); outline-offset: 2px; }
-.mck-tooltip {
-  position: fixed;
-  /* 提示与 popover 同一档：都要压在触发器之上 */
-  z-index: var(--mck-z-popover, 95000);
+.mck-tooltip-root {
+  display: inline-flex;
+  max-width: 100%;
+}
+/* 外观画在内层：外壳由 Dropdown 负责定位与层级。 */
+.mck-tooltip__body {
+  display: block;
   box-sizing: border-box;
   width: max-content;
+  max-width: inherit;
   padding: 6px 9px;
   border-radius: 8px;
   background: var(--ui-tip, rgb(24 32 43 / 0.95));
@@ -16,7 +20,6 @@
   line-height: 1.5;
   pointer-events: none;
   overflow-wrap: anywhere;
+  z-index: var(--mck-z-popover, 95000);
 }
-.mck-tooltip-fade-enter-active, .mck-tooltip-fade-leave-active { transition: opacity 120ms ease; }
-.mck-tooltip-fade-enter-from, .mck-tooltip-fade-leave-to { opacity: 0; }
-@media (prefers-reduced-motion: reduce) { .mck-tooltip-fade-enter-active, .mck-tooltip-fade-leave-active { transition: none; } }
+.mck-tooltip__bare { display: block; width: max-content; max-width: inherit; pointer-events: none; }

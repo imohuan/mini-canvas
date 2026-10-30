@@ -242,6 +242,47 @@ const open = ref(false)
 | trigger | click | click / hover / contextmenu / always（always = 常显调试，v-model 失效） |
 | layout | overlay-scroll | overlay-scroll / inner-scroll |
 | teleport | true | 是否挂到 body |
+| bare | false | 原生模式：去掉面板的边框、圆角、底色、内边距和阴影，由插槽自己画面板 |
+| appendTo | body | 浮层挂载容器，可传选择器或 DOM |
+| closeOnOutside | true | 点外部是否关闭 |
+| closeOnEscape | true | 按 Esc 是否关闭 |
+
+## 原生模式：面板由你画
+
+`bare` 打开后，Dropdown 只负责定位、方向、箭头和开关，面板长什么样完全由插槽决定。
+Popover 和 Tooltip 就是这样搭出来的。
+
+@@VUE@@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Dropdown, Button } from '@mini-canvas/ui-kit'
+
+const open = ref(false)
+</script>
+
+<template>
+  <Dropdown v-model="open" bare arrow>
+    <template #trigger>
+      <Button variant="secondary">自定义面板</Button>
+    </template>
+    <div class="my-panel">
+      <strong>完全自定义</strong>
+      <p>圆角、底色、阴影都由这段内容自己决定。</p>
+    </div>
+  </Dropdown>
+</template>
+<style scoped>
+.my-panel {
+  padding: 14px;
+  border: 1px solid #3a3f46;
+  border-radius: 16px;
+  background: #212429;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+}
+.my-panel strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.my-panel p { margin: 0; color: #8c95a3; font-size: 12px; }
+</style>
+@@ENDVUE@@
 
 ## 绑定外部元素
 

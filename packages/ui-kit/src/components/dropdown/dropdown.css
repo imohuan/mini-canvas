@@ -19,6 +19,21 @@
 }
 .mck-dropdown__panel.is-inner-scroll { display: flex; flex-direction: column; overflow-y: hidden; min-height: 0; }
 .mck-dropdown__panel.is-inner-scroll > * { min-height: 0; }
+
+/*
+ * 裸面板：只留定位与滚动，外观完全交给插槽。
+ * Popover / Tooltip 用这个模式复用 Dropdown 的定位、方向、箭头和受控开关，
+ * 但面板长什么样由调用方决定。
+ */
+.mck-dropdown__panel.is-bare {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.mck-dropdown__panel.is-bare.is-inner-scroll { overflow-y: hidden; }
 /*
  * 箭头 fixed 贴在面板边缘，与面板同层、且在 DOM 里排在面板之后。
  *

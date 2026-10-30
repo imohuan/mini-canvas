@@ -5,7 +5,7 @@
  * 预览区：可拖动的触发器。拖拽时浮层跟着走，用来直观看方向、翻转和箭头。
  * 配置区：用 Teleport 渲染到预览页右栏；默认值、字段、预设仍读 playground.ts。
  */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Button from '../button/Button.vue'
 import Input from '../input/Input.vue'
 import NumberInput from '../number/NumberInput.vue'
@@ -38,6 +38,9 @@ const state = reactive<DemoState>({ ...config.defaults })
 const open = ref(false)
 const picked = ref('')
 const stage = ref<HTMLElement | null>(null)
+/** 预览区全屏（Fullscreen API）；全屏时下拉面板要 Teleport 进预览区，否则看不见。 */
+const fullscreen = ref(false)
+const dropdownHost = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLElement | null>(null)
 const offsetX = ref(0)
 const offsetY = ref(0)
@@ -81,6 +84,7 @@ const dropdownProps = computed(() => ({
   offset: numberValue('offset') ?? 6,
   matchWidth: state.matchWidth === true,
   arrow: state.arrow === true,
+  bare: state.bare === true,
   disabled: state.disabled === true,
   layout: (state.layout === 'inner-scroll' ? 'inner-scroll' : 'overlay-scroll') as DropdownLayout,
   menuWidth: typeof state.menuWidth === 'string' ? state.menuWidth : '',
@@ -133,6 +137,30 @@ function recenter(): void {
   offsetY.value = 0
   open.value = false
 }
+
+/** 进入 / 退出预览区全屏。退出后面板 Teleport 目标回到 body。 */
+async function toggleFullscreen(): Promise<void> {
+  const host = stage.value
+  if (!host) return
+  if (!fullscreen.value) {
+    await host.requestFullscreen?.()
+  } else {
+    await document.exitFullscreen?.()
+  }
+}
+
+watch(fullscreen, (on) => {
+  // 全屏元素是 stage 本身；面板挂进 stage 的直接子层，跟随缩放。
+  dropdownHost.value = on ? stage.value : null
+})
+
+// 用户按 Esc 退出全屏时，浏览器不会通知 Vue；监听事件同步状态。
+function onFullscreenChange(): void {
+  fullscreen.value = document.fullscreenElement === stage.value
+}
+
+onMounted(() => document.addEventListener('fullscreenchange', onFullscreenChange))
+onBeforeUnmount(() => document.removeEventListener('fullscreenchange', onFullscreenChange))
 
 function resetAll(): void {
   Object.assign(state, config.defaults)
@@ -204,7 +232,12 @@ const groupedFields = computed(() => {
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
       >
-        <Dropdown :model-value="openValue" @update:model-value="openValue = $event" v-bind="dropdownProps">
+        <Dropdown
+          :model-value="openValue"
+          :append-to="dropdownHost ?? 'body'"
+          @update:model-value="openValue = $event"
+          v-bind="dropdownProps"
+        >
           <template #trigger="{ open: isOpen }">
             <Button variant="secondary" :aria-expanded="isOpen" class="dd-trigger" data-demo-trigger>
               <span class="dd-trigger__grip" aria-hidden="true">⠿</span>
@@ -235,7 +268,10 @@ const groupedFields = computed(() => {
 
       <div class="dd-hud">
         <span>{{ dragging ? '拖动中，浮层跟着走' : '按住按钮拖动试试' }}</span>
-        <button type="button" @click="recenter">回到中心</button>
+        <div class="dd-hud__actions">
+          <button type="button" @click="recenter">回到中心</button>
+          <button type="button" @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '全屏' }}</button>
+        </div>
       </div>
     </div>
 

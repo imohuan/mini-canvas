@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { useFloating } from '../../shared/floating'
+/**
+ * Tooltip 是 Dropdown 的一层「悬停提示」预设。
+ *
+ * 方向、箭头、外部锚点、挂载容器都来自 Dropdown；
+ * 额外只保留提示特有的「悬停延迟」和「焦点可触发」。
+ * 传 bare 可以完全自定义提示外观。
+ */
+import { computed, ref } from 'vue'
+import Dropdown from '../dropdown/Dropdown.vue'
+import type { DropdownProps } from '../dropdown/types'
 import type { TooltipProps } from './types'
 import './tooltip.css'
 
@@ -13,61 +21,66 @@ const props = withDefaults(defineProps<TooltipProps>(), {
   disabled: false,
   focusable: true,
   maxWidth: '280px',
+  trigger: 'hover',
+  closeDelay: 0,
+  arrow: false,
+  appendTo: 'body',
+  anchor: null,
+  bare: true,
 })
 
-const visible = ref(false)
-const trigger = ref<HTMLElement | null>(null)
-const panel = ref<HTMLElement | null>(null)
-let timer = 0
+const dropdown = ref<InstanceType<typeof Dropdown> | null>(null)
 
-const options = computed(() => ({
-  placement: props.placement,
+const dropdownProps = computed<Partial<DropdownProps>>(() => ({
+  anchorPlacement: props.placement,
+  anchor: props.anchor,
   offset: 8,
-  maxWidth: props.maxWidth,
+  trigger: props.trigger,
+  hoverOpenDelay: props.delay,
+  hoverCloseDelay: props.closeDelay,
+  appendTo: props.appendTo,
+  arrow: props.arrow,
+  menuMaxWidth: props.maxWidth,
+  disabled: props.disabled || !props.content,
+  bare: props.bare,
+  menuRole: 'tooltip',
 }))
-const { position, positioned } = useFloating(trigger, panel, visible, options)
 
-function show(): void {
-  if (props.disabled || !props.content) return
-  window.clearTimeout(timer)
-  timer = window.setTimeout(() => { visible.value = true }, Math.max(0, props.delay))
+/** 键盘聚焦也显示提示：焦点进来时手动开，离开时关。 */
+function onFocusIn(): void {
+  if (!props.focusable) return
+  dropdown.value?.show()
 }
 
-function hide(): void {
-  window.clearTimeout(timer)
-  visible.value = false
+function onFocusOut(): void {
+  if (!props.focusable) return
+  dropdown.value?.hide()
 }
-
-onBeforeUnmount(() => window.clearTimeout(timer))
 </script>
 
 <template>
-  <span
-    ref="trigger"
-    class="mck-tooltip-trigger"
-    :tabindex="focusable ? 0 : undefined"
-    @mouseenter="show"
-    @mouseleave="hide"
-    @focusin="show"
-    @focusout="hide"
-    @keydown.esc="hide"
+  <Dropdown
+    ref="dropdown"
+    v-bind="dropdownProps"
+    class="mck-tooltip-root"
   >
-    <slot />
-  </span>
-  <Teleport to="body">
-    <Transition name="mck-tooltip-fade">
-      <div
-        v-if="visible && content"
-        ref="panel"
-        class="mck-tooltip"
-        role="tooltip"
-        :style="{
-          left: position.left + 'px',
-          top: position.top + 'px',
-          maxWidth,
-          opacity: positioned ? 1 : 0,
-        }"
-      >{{ content }}</div>
-    </Transition>
-  </Teleport>
+    <template #trigger>
+      <!--
+        触发器只负责「可聚焦」。悬停由 Dropdown 的外层触发区接管，
+        所以不要把 mouseenter/mouseleave 绑在这里 —— 会和外层重复。
+      -->
+      <span
+        class="mck-tooltip-trigger"
+        :tabindex="focusable ? 0 : undefined"
+        @focusin="onFocusIn"
+        @focusout="onFocusOut"
+        @keydown.esc="dropdown?.hide()"
+      >
+        <slot />
+      </span>
+    </template>
+    <template #default>
+      <span class="mck-tooltip mck-tooltip__body"><slot name="content">{{ content }}</slot></span>
+    </template>
+  </Dropdown>
 </template>

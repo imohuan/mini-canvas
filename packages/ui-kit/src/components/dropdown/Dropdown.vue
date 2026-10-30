@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<DropdownProps>(), {
   matchWidth: false,
   trigger: 'click',
   hoverCloseDelay: 150,
+  hoverOpenDelay: 0,
   menuWidth: '',
   menuHeight: '',
   menuMinWidth: '',
@@ -27,6 +28,9 @@ const props = withDefaults(defineProps<DropdownProps>(), {
   layout: 'overlay-scroll',
   disabled: false,
   appendTo: 'body',
+  bare: false,
+  closeOnOutside: true,
+  closeOnEscape: true,
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; open: []; close: [] }>()
@@ -47,7 +51,15 @@ const controller = computed(() => ({
   },
 }))
 
-defineExpose({ controller, open: api.open, show: api.show, hide: api.hide, toggle: api.toggle })
+defineExpose({
+  controller,
+  open: api.open,
+  show: api.show,
+  hide: api.hide,
+  toggle: api.toggle,
+  /** 浮层 DOM：父组件（如 Popover）需要把焦点送进去。 */
+  panelRef: api.panelRef,
+})
 /*
   slot 里拿到的 close 直接调用 hide；hide 内部会派发 update:modelValue=false，
   再由上面这里转成 open/close 事件。测试中通过 wrapper.emitted 校验。
@@ -61,7 +73,7 @@ const triggerEvents = computed(() => {
     return {
       onMouseenter: () => {
         api.cancelHide()
-        api.show()
+        api.scheduleShow()
       },
       onMouseleave: api.scheduleHide,
       onClick: api.toggle,
@@ -113,7 +125,7 @@ const triggerEvents = computed(() => {
           v-if="api.open.value"
           :ref="api.panelRef"
           class="mck-dropdown__panel"
-          :class="[menuClass, bodyClass, { 'is-inner-scroll': layout === 'inner-scroll' }]"
+          :class="[menuClass, bodyClass, { 'is-inner-scroll': layout === 'inner-scroll', 'is-bare': bare }]"
           :style="api.panelStyle.value"
           :role="menuRole"
           @mouseenter="trigger === 'hover' ? api.cancelHide() : undefined"
