@@ -26,7 +26,7 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
 const NodeToolbarButton = useUiComponent('toolbarButton')
-const Select = useUiComponent('select')
+const DropdownButton = useUiComponent('toolbarDropdown')
 const selected = useSoleNodeSelected(props.id)
 
 /** 有没有视频：没有就只留「上传」 */
@@ -52,10 +52,15 @@ const visible = computed(() => selected.value)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 
-/** 比例下拉的选项（value/label 即 UI 的选中值与显示名） */
-const ratioOptions = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label })))
+/** 比例下拉的选项（key/label 是 toolbarDropdown 的菜单形状，与图片裁剪顶栏同源） */
+const ratioOptions = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ key: o.value, label: o.label })))
 /** 当前比例（会话态：换比例只改草稿，确认时才落库） */
 const ratioValue = computed(() => (overlayDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
+/** 触发按钮上显示当前比例名（与图片裁剪同一条文案规则） */
+const ratioTitle = computed(() => {
+  const hit = CROP_RATIO_OPTIONS.find((o) => o.value === ratioValue.value)
+  return '比例：' + (hit?.label ?? '自由')
+})
 
 /**
  * 改比例：只把选择记进会话草稿，**框的调整交给浮层**。
@@ -65,8 +70,7 @@ const ratioValue = computed(() => (overlayDraft(props.id)._ratioValue as string)
  * - 浮层负责几何：它持有当前框（拖拽中是高频变化的内存态），收到比例变化就把框调对。
  * 两边只通过会话态通信，互不反向依赖。值也一起记进草稿，二次打开下拉能显示当前选择。
  */
-function onRatioChange(value: string | number): void {
-  const key = String(value)
+function onRatioChange(key: string): void {
   setOverlayDraft(props.id, { ...overlayDraft(props.id), _ratioValue: key })
 }
 
@@ -150,16 +154,14 @@ function cancelEdit(): void {
         @click="cancelEdit"
       />
       <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。
-           只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。 -->
-      <Select
+           只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。
+           用 toolbarDropdown 而不是 Select：与图片裁剪顶栏同一只件，菜单形状/对齐/主题跟随都不漂。 -->
+      <DropdownButton
         v-if="editing"
         class="vt-ratio"
-        :model-value="ratioValue"
-        :options="ratioOptions"
-        dropdown-width="match"
-        placeholder="自由"
-        input-id="video-crop-ratio"
-        @update:model-value="onRatioChange"
+        :title="ratioTitle"
+        :items="ratioOptions"
+        @pick="onRatioChange"
       />
       <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"） -->
       <NodeToolbarButton
@@ -210,9 +212,9 @@ function cancelEdit(): void {
   display: none;
 }
 
-/* 比例下拉：定一个固定宽度，免得"自由"与"16:9"切换时工具栏宽度跳动 */
+/* 比例下拉是文本按钮（与图片裁剪同款）：宽度由文案决定，不锁死 ——
+   锁 96px 时"比例：1:1"能显示、"比例：原始比例"会被截掉。 */
 .vt-ratio {
-  width: 96px;
   flex: none;
 }
 </style>

@@ -17,7 +17,7 @@
  * 所以顶栏「剪辑时长」点下去就能看到它 —— 不必先去下拉里手动选「剪辑」。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import {
   clampClipEnd,
   clampClipRange,
@@ -34,6 +34,8 @@ import { resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
+// 设计系统件按名取（与图片裁剪顶栏同一条约定），换主题时这里一行不改
+const NodeToolbarButton = useUiComponent('toolbarButton')
 const selected = useSoleNodeSelected(props.id)
 const visible = computed(() => selected.value && isClipping(props.id))
 
@@ -102,6 +104,29 @@ const startPct = computed(() => (duration.value > 0 ? (range.value.start / durat
 const endPct = computed(() => (duration.value > 0 ? (range.value.end / duration.value) * 100 : 100))
 const lengthLabel = computed(() => (range.value.end - range.value.start).toFixed(2) + ' s')
 
+/**
+ * 选区贴边：离胶片左右边缘 ≤ 12px 时就取消那一侧的圆角（demo 几何约定第 7 条）。
+ *
+ * 为什么用像素而不是百分比：圆角是固定的 12px，胶片变宽后 1% 会变成十几像素 ——
+ * 按百分比判断要么提前取消、要么永远取消不了。阈值必须和 CSS 的圆角半径同一个数。
+ */
+const FILM_RADIUS = 12
+/** 胶片实际宽度（ResizeObserver 上报；0 = 还没量到，只按物理边界判断） */
+const filmWidth = ref(0)
+
+const atLeft = computed(() => {
+  if (duration.value <= 0) return false
+  if (range.value.start <= 0.001) return true
+  return filmWidth.value > 0 && (range.value.start / duration.value) * filmWidth.value <= FILM_RADIUS
+})
+
+const atRight = computed(() => {
+  if (duration.value <= 0) return false
+  const left = duration.value - range.value.end
+  if (left <= 0.001) return true
+  return filmWidth.value > 0 && (left / duration.value) * filmWidth.value <= FILM_RADIUS
+})
+
 /** 播放头：跟随内容区 <video> 的 currentTime */
 const playheadPct = computed(() => {
   const t = readPlayhead(props.id)
@@ -120,11 +145,15 @@ let resizeObserver: ResizeObserver | null = null
 onMounted(() => {
   if (typeof ResizeObserver === 'function' && filmEl.value) {
     resizeObserver = new ResizeObserver(() => {
-      frameCount.value = frameCountFor(filmEl.value?.clientWidth ?? 560)
+      const width = filmEl.value?.clientWidth ?? 0
+      frameCount.value = frameCountFor(width || 560)
+      filmWidth.value = width
     })
     resizeObserver.observe(filmEl.value)
   }
-  frameCount.value = frameCountFor(filmEl.value?.clientWidth ?? 560)
+  const width = filmEl.value?.clientWidth ?? 0
+  frameCount.value = frameCountFor(width || 560)
+  filmWidth.value = width
 })
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
@@ -301,27 +330,32 @@ onBeforeUnmount(onDragUp)
 
 <template>
   <div v-if="visible" class="vclip nodrag nopan nowheel" @dblclick.stop>
-    <div v-if="!hasVideo" class="vclip-empty">这里还没有视频，先上传一段再剪辑</div>
+    <div v-if="!hasVideo" class="ntp-root vclip-empty">这里还没有视频，先上传一段再剪辑</div>
 
     <template v-else>
-      <div class="vclip-dock" @keydown="onKeyDown">
-        <button class="vclip-btn" type="button" title="退出剪辑" aria-label="退出剪辑" @click="onCancel">
-          <span class="vclip-ico" v-html="ICON_CLOSE" />
-        </button>
+      <!-- 外壳 = 主题胶囊 .ntp-root（与图片裁剪/绘制状态栏同一套 token）：
+           底色、边框、圆角、阴影都跟着亮/暗主题走；按钮一律用主题的 toolbarButton。 -->
+      <div class="ntp-root vclip-dock" @keydown="onKeyDown">
+        <NodeToolbarButton title="退出剪辑" aria-label="退出剪辑" variant="danger" :icon="ICON_CLOSE" @click="onCancel" />
 
-        <button class="vclip-btn" :class="{ 'is-on': configOpen }" type="button" :title="configOpen ? '收起配置' : '快捷键与吸附设置'" :aria-expanded="configOpen" aria-label="快捷键与吸附设置" @click="configOpen = !configOpen">
-          <span class="vclip-ico" v-html="ICON_KEYBOARD" />
-        </button>
+        <NodeToolbarButton
+          :title="configOpen ? '收起配置' : '快捷键与吸附设置'"
+          aria-label="快捷键与吸附设置"
+          :icon="ICON_KEYBOARD"
+          :active="configOpen"
+          @click="configOpen = !configOpen"
+        />
 
         <div ref="filmEl" class="vclip-film" role="group" aria-label="视频片段选择">
-          <div class="vclip-frames" aria-hidden="true">
+          <!-- 帧图底板：贴边时这一侧的圆角要取消，否则会露出黑色方角（demo 几何约定第 7 条） -->
+          <div class="vclip-frames" :class="{ 'is-at-left': atLeft, 'is-at-right': atRight }" aria-hidden="true">
             <div v-for="i in frameIndices" :key="i" class="vclip-frame" :style="frames.get(i) ? { backgroundImage: 'url(' + frames.get(i) + ')' } : undefined" />
           </div>
           <div class="vclip-shade is-left" :style="{ width: startPct + '%' }" />
           <div class="vclip-shade is-right" :style="{ left: endPct + '%', width: Math.max(0, 100 - endPct) + '%' }" />
           <div
             class="vclip-selection"
-            :class="{ 'is-dragging': isDragging, 'is-at-left': startPct <= 0.5, 'is-at-right': endPct >= 99.5 }"
+            :class="{ 'is-dragging': isDragging, 'is-at-left': atLeft, 'is-at-right': atRight }"
             :style="{ left: startPct + '%', width: Math.max(0, endPct - startPct) + '%' }"
             @pointerdown="onHandleDown($event, 'move')"
           >
@@ -332,20 +366,35 @@ onBeforeUnmount(onDragUp)
           <div v-if="playheadPct !== null && !isDragging" class="vclip-playhead" :style="{ left: playheadPct + '%' }" />
         </div>
 
-        <button class="vclip-btn" :class="{ 'is-on': prefs.snap }" type="button" :title="prefs.snap ? '关闭吸附' : '开启吸附'" :aria-pressed="prefs.snap" aria-label="吸附" @click="toggleSnap">
-          <span class="vclip-ico" v-html="ICON_MAGNET" />
-        </button>
+        <NodeToolbarButton
+          :title="prefs.snap ? '关闭吸附' : '开启吸附'"
+          aria-label="吸附"
+          :icon="ICON_MAGNET"
+          :active="prefs.snap"
+          @click="toggleSnap"
+        />
 
-        <button class="vclip-btn" :class="{ 'is-on': prefs.loop }" type="button" :title="prefs.loop ? '关闭区间循环' : '开启区间循环'" :aria-pressed="prefs.loop" aria-label="区间循环" @click="toggleLoop">
-          <span class="vclip-ico" v-html="ICON_LOOP" />
-        </button>
+        <NodeToolbarButton
+          :title="prefs.loop ? '关闭区间循环' : '开启区间循环'"
+          aria-label="区间循环"
+          :icon="ICON_LOOP"
+          :active="prefs.loop"
+          @click="toggleLoop"
+        />
 
-        <button class="vclip-confirm" type="button" :disabled="pending" :title="pending ? '剪辑中…' : '确认剪辑'" :aria-label="pending ? '剪辑中' : '确认剪辑'" @click="onConfirm">
-          <span class="vclip-ico" v-html="ICON_CONFIRM" />
-        </button>
+        <NodeToolbarButton
+          :title="pending ? '剪辑中…' : '确认剪辑'"
+          :aria-label="pending ? '剪辑中' : '确认剪辑'"
+          variant="primary"
+          :icon="ICON_CONFIRM"
+          :disabled="pending"
+          @click="onConfirm"
+        >
+          {{ pending ? '剪辑中…' : '确认' }}
+        </NodeToolbarButton>
       </div>
 
-      <div v-if="configOpen" class="vclip-config">
+      <div v-if="configOpen" class="ntp-root vclip-config">
         <div class="vclip-config-row">
           <span class="vclip-config-label">吸附间隔</span>
           <input v-model.number="prefs.snapStep" class="vclip-config-input" type="number" min="0.01" max="10" step="0.01" aria-label="吸附间隔（秒）" />
@@ -374,48 +423,26 @@ onBeforeUnmount(onDragUp)
 
 <style scoped>
 /**
- * 视觉 1:1 抄 demo 的 capsule 样式（56px 高、12px 圆角、黑底）。
- * 蓝色只出现在：左右两只实心把手 + 选区上下 2px 细线 + 按钮激活态（与 demo 同色 #3b82f6）。
- * 这里是**功能模式专属的深色工具条**，与 ui-style-guide 的浅色浮层并存（同图片裁剪浮层的先例）。
+ * 视觉与图片裁剪的状态栏同源（用户口径 2026-10-31）：
+ * - 外壳 = 主题的 `.ntp-root` 胶囊（白底/深底、发丝边、10px 圆角、阴影都随亮暗主题变）；
+ * - 按钮 = 主题登记件 toolbarButton（尺寸/圆角/hover/激活态由主题决定）；
+ * - 只有胶片条本身保持深色 —— 它压的是视频画面，浅色底会把抽出来的帧吃掉。
+ * 强调色一律取 --ui-accent，用户换主题色时选区和按钮一起变。
  */
 .vclip {
-  /**
-   * 组件私有色板（见 docs/代码开发/主题与配色.md §3.2）。
-   *
-   * 这是**功能模式专属的深色工具条**：它压在视频画面上，与图片裁剪浮层同一先例，
-   * 刻意不跟全局亮/暗主题走。颜色统一收在这里，不再散落在几十条声明里；
-   * 亮/暗两格取值相同（下面 html.dark 块只声明 color-scheme，形状与规范一致）。
-   */
-  --vclip-bg: #0e1014;
-  --vclip-ink: #c8ccd4;
-  --vclip-ink-strong: #fff;
-  --vclip-ink-dim: #9b9fa8;
-  --vclip-ink-faint: #6d727c;
-  --vclip-line: rgb(255 255 255 / 0.07);
-  --vclip-line-strong: rgb(255 255 255 / 0.14);
-  --vclip-hover: rgb(255 255 255 / 0.065);
-  --vclip-field: rgb(255 255 255 / 0.04);
-  --vclip-field-strong: rgb(255 255 255 / 0.07);
-  --vclip-accent: #3b82f6;
-  --vclip-accent-line: rgb(147 197 253 / 0.45);
-  --vclip-accent-ring: rgb(96 165 250 / 0.95);
-  --vclip-accent-ring-soft: rgb(96 165 250 / 0.5);
-  --vclip-accent-glow: rgb(59 130 246 / 0.15);
-  --vclip-accent-shadow: rgb(37 99 235 / 0.28);
+  /* 只保留胶片条这一块的私有色：它必须压黑，才看得清帧和蓝色选区 */
   --vclip-film: #000;
+  /* 胶片条恒定黑底，所以抽帧前的占位也固定用深灰：跟主题走会在暗色下闪出一排浅灰块 */
   --vclip-frame-bg: #181b20;
   --vclip-frame: #1d2128;
-  --vclip-divider: rgb(0 0 0 / 0.3);
+  --vclip-divider: rgb(255 255 255 / 0.12);
   --vclip-shade: rgb(0 0 0 / 0.5);
+  --vclip-ink-strong: #fff;
   --vclip-handle-line: rgb(255 255 255 / 0.9);
   --vclip-playhead-glow: rgb(255 255 255 / 0.45);
   --vclip-length-bg: rgb(23 24 27 / 0.94);
-  --vclip-dock-shadow: rgb(0 0 0 / 0.4);
-  --vclip-confirm-bg: #f5f6f8;
-  --vclip-confirm-ink: #101216;
-  --vclip-input-ink: #f4f5f7;
-  --vclip-kbd-ink: #e8ebf0;
-  color-scheme: dark;
+  --vclip-accent: var(--ui-accent, #0891b2);
+  --vclip-accent-ring: var(--ui-accent, #0891b2);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -424,60 +451,20 @@ onBeforeUnmount(onDragUp)
   max-width: calc(100vw - 48px);
 }
 
-/* 恒定深色：暗色主题下取值与上面一致，只补一条 color-scheme 让原生控件跟着变深 */
-html.dark .vclip {
-  color-scheme: dark;
-}
-
 .vclip-empty {
   padding: 14px 16px;
-  border: 1px solid var(--vclip-line);
-  border-radius: 12px;
-  background: var(--vclip-bg);
-  color: var(--vclip-ink-dim);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
 }
 
+/* 外框/底色/边框/圆角/阴影全部来自 .ntp-root；这里只排一行、定高、收紧内边距 */
 .vclip-dock {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
+  /* 66px = 胶片条 56px + 上下各 4px 内边距 + 1px 边框（用户 2026-10-31：帧图要看清，允许整条撑高） */
   height: 66px;
   width: 100%;
-  padding: 7px;
-  border: 1px solid var(--vclip-line);
-  border-radius: 12px;
-  background: var(--vclip-bg);
-  box-shadow: 0 18px 44px var(--vclip-dock-shadow);
+  box-sizing: border-box;
+  padding: 4px;
 }
-
-.vclip-btn {
-  flex: none;
-  align-self: center;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: var(--vclip-ink);
-  background: transparent;
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-}
-.vclip-btn:hover { color: var(--vclip-ink-strong); background: var(--vclip-hover); }
-.vclip-btn:active { transform: scale(0.96); }
-.vclip-btn.is-on {
-  color: var(--vclip-ink-strong);
-  background: var(--vclip-accent);
-  border-color: var(--vclip-accent-line);
-  box-shadow: 0 0 0 4px var(--vclip-accent-glow), 0 8px 20px var(--vclip-accent-shadow);
-}
-.vclip-btn:focus-visible { outline: 2px solid var(--vclip-accent-ring); outline-offset: 2px; }
-
-.vclip-ico { display: block; width: 18px; height: 18px; }
-.vclip-ico :deep(svg) { width: 18px; height: 18px; display: block; }
 
 /* 胶片条：黑底 12px 圆角；内部 flex 铺满 */
 .vclip-film {
@@ -485,9 +472,13 @@ html.dark .vclip {
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
+  /* 帧图高度下限（用户 2026-10-31）：外框再被压扁也不低于 55px */
+  min-height: 55px;
   overflow: visible;
   border-radius: 12px;
   background: var(--vclip-film);
+  /* 两侧留白（用户 2026-10-31 定的 16px）：选区把手要伸到胶片外面，留白是它们的落点 */
+  margin: 0 16px;
   touch-action: none;
   user-select: none;
 }
@@ -499,6 +490,10 @@ html.dark .vclip {
   border-radius: 12px;
   background: var(--vclip-frame-bg);
 }
+/* 选区贴到某一侧（≤12px）：那一侧帧图变直角，把胶片的圆角盖住 ——
+   否则圆角下方会露出黑色方角，看起来像选区被削掉一块（demo 几何约定第 7 条）。 */
+.vclip-frames.is-at-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.vclip-frames.is-at-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .vclip-frame {
   position: relative;
   flex: 1 1 0;
@@ -543,8 +538,7 @@ html.dark .vclip {
   border-bottom: 2px solid var(--vclip-accent);
   pointer-events: none;
 }
-.vclip-selection.is-at-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.vclip-selection.is-at-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* 选区本身是直角矩形（圆角只在帧图底板上），所以贴边只需要处理 .vclip-frames */
 
 /* 两只蓝色耳朵：绝对定位、不占布局宽度、可以越过胶片边界（demo capsule 同款） */
 .vclip-handle {
@@ -616,40 +610,16 @@ html.dark .vclip {
   transform: translate3d(-1px, 0, 0);
 }
 
-/* 白色确认圆钮 */
-.vclip-confirm {
-  flex: none;
-  align-self: center;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  color: var(--vclip-confirm-ink);
-  background: var(--vclip-confirm-bg);
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-.vclip-confirm:hover { background: var(--vclip-ink-strong); }
-.vclip-confirm:active { transform: scale(0.96); }
-.vclip-confirm:disabled { cursor: progress; opacity: 0.55; }
-.vclip-confirm:disabled:hover { background: var(--vclip-confirm-bg); }
-.vclip-confirm:focus-visible { outline: 2px solid var(--vclip-accent-ring); outline-offset: 2px; }
-.vclip-confirm .vclip-ico { color: var(--vclip-confirm-ink); }
-
-/* 向下展开的配置区（吸附参数 + 快捷键表） */
+/* 向下展开的配置区（吸附参数 + 快捷键表）：同一只主题胶囊，不再自带深色皮肤 */
 .vclip-config {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   width: 100%;
+  box-sizing: border-box;
   padding: 12px;
-  border: 1px solid var(--vclip-line);
-  border-radius: 12px;
-  background: var(--vclip-bg);
-  box-shadow: 0 14px 34px var(--vclip-dock-shadow);
+  white-space: normal;
 }
 .vclip-config-row {
   display: flex;
@@ -658,35 +628,35 @@ html.dark .vclip {
   gap: 8px;
 }
 .vclip-config-label {
-  color: var(--vclip-ink-dim);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
 }
 .vclip-config-input {
   width: 64px;
   padding: 4px 7px;
-  border: 1px solid var(--vclip-line);
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 7px;
-  color: var(--vclip-input-ink);
-  background: var(--vclip-field);
+  color: var(--ui-ink, #18202b);
+  background: var(--ui-overlay-solid, #fff);
   font: inherit;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   outline: none;
 }
-.vclip-config-input:focus { border-color: var(--vclip-accent-ring-soft); }
+.vclip-config-input:focus { border-color: var(--ui-accent, #0891b2); }
 .vclip-config-unit {
   margin-right: 8px;
-  color: var(--vclip-ink-faint);
+  color: var(--ui-ink-mute, #8c95a3);
   font-size: 11px;
 }
 .vclip-config-kbd {
   min-width: 22px;
   padding: 2px 6px;
-  border: 1px solid var(--vclip-line-strong);
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-bottom-width: 2px;
   border-radius: 6px;
-  color: var(--vclip-kbd-ink);
-  background: var(--vclip-field-strong);
+  color: var(--ui-ink, #18202b);
+  background: var(--ui-overlay-solid, #fff);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10px;
   font-weight: 700;
@@ -694,13 +664,11 @@ html.dark .vclip {
 }
 .vclip-config-desc {
   margin-right: 10px;
-  color: var(--vclip-ink-dim);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vclip-btn,
-  .vclip-confirm,
   .vclip-handle::after {
     transition: none !important;
   }
