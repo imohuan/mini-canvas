@@ -859,3 +859,32 @@ body {
   .uk-config { padding: 10px 10px 20px; }
   .uk-doc-panel .uk-doc-scroll { padding: 10px 12px 26px; }
 }
+
+/*
+ * 分栏嵌套时的尺寸约束。
+ * SplitPane 默认 flex: none，放进另一个分栏后会被内容反向撑高（页面上曾出现 3216px）。
+ * 这里让工作区与中栏显式撑满父级，再让内层分栏填满它们。
+ */
+.uk-workspace,
+.uk-center {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.uk-center {
+  flex-direction: column;
+}
+
+.uk-center > .mck-split__pane,
+.uk-workspace > .mck-split__pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.uk-center > .mck-split__pane > .mck-split,
+.uk-workspace > .mck-split__pane > .mck-split {
+  height: 100%;
+}
