@@ -515,6 +515,12 @@ function disposeThree(): void {
   resizeObserver = null
   renderer.value?.dispose()
   renderer.value?.domElement.remove()
+  /**
+   * 显式丢 WebGL 上下文：只 dispose() 不丢上下文时，浏览器要等 GC 才真正释放 ——
+   * 画布上几十个 3D 节点来回切（或反复进全屏）很容易撞上浏览器「同时存在的
+   * WebGL 上下文上限」，之后的画布会整块变黑。forceContextLoss 是 three 官方推荐配对调用。
+   */
+  renderer.value?.forceContextLoss?.()
   geometry.value?.dispose()
   material.value?.dispose()
   loadedTexture.value?.dispose()
