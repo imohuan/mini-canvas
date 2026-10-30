@@ -29,12 +29,39 @@ export interface HistoryService {
   get undoDepth(): number
 }
 
+export interface HistoryOptions {
+  /**
+   * 撤销栈上限（条）。超限时丢**最旧**的一条。
+   *
+   * 为什么必须有：每条记录都是「操作前的整图深拷贝」—— 200 节点的画布一张快照就几十 KB，
+   * 不设上限时连续拖拽几百次就是几十 MB 常驻内存，且每次 withRecord 还要序列化两遍整图。
+   * 用户报的「画布用久了越来越卡、最后崩」里有这一份。
+   */
+  limit?: number
+}
+
 export class History implements HistoryService {
+  /**
+   * 默认上限：100 条。
+   *
+   * 取值理由：普通用户一次会话里「想撤回去」的距离远小于 100 步；再往前翻靠刷新/重新打开
+   * 也基本不会（历史不落盘）。100 × 单张快照的体量对常见画布是可接受的上限，
+   * 同时足够覆盖「批量删除 + 连续拖拽」这类误操作。
+   */
+  static readonly DEFAULT_LIMIT = 100
+
   private undoStack: unknown[] = []
   private redoStack: unknown[] = []
   private capturing = false
+  private readonly limit: number
 
-  constructor(private store: HistorySnapshot) {}
+  constructor(private store: HistorySnapshot, options: HistoryOptions = {}) {
+    const raw = options.limit
+    // 非法值（0 / 负数 / NaN / 非数）回落默认：宁可多留几条，也不要把撤销功能整个关掉
+    this.limit = typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+      ? Math.floor(raw)
+      : History.DEFAULT_LIMIT
+  }
 
   undo(): void {
     const before = this.undoStack.pop()
@@ -61,6 +88,8 @@ export class History implements HistoryService {
       // 只有真变了才记（原子操作内部多次改，合并成一条历史）
       if (JSON.stringify(before) !== JSON.stringify(after)) {
         this.undoStack.push(before)
+        // 超限丢最旧：新记录永远留住（用户刚做的操作最可能需要撤）
+        while (this.undoStack.length > this.limit) this.undoStack.shift()
         this.redoStack = []
       }
       return out
