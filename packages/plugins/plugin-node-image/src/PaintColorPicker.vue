@@ -29,20 +29,11 @@ const ColorField = useUiComponent('color')
 const open = ref(false)
 
 /** 预置色：白/黑 + 常用标记色（擦除常用白色，重绘常用红/绿/蓝） */
-const PRESET_COLORS = [
-  '#ffffff',
-  '#000000',
-  '#ef4444',
-  '#f97316',
-  '#facc15',
-  '#22c55e',
-  '#06b6d4',
-  '#3b82f6',
-  '#8b5cf6',
-  '#ec4899',
-] as const
+// 主题色白名单: 这十项是「画笔颜色」这个用户可选的**内容**，不是界面配色
+const PRESET_COLORS = ['#ffffff', '#000000', '#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'] as const
 
 /** 当前色块（取色器回来可能是空串 = 跟随主题，这里回落白色） */
+/* 主题色白名单: 画笔默认颜色（内容），与主题无关 */
 const swatch = computed(() => props.modelValue || '#ffffff')
 
 function pick(value: string): void {
@@ -141,6 +132,7 @@ const ICON =
   height: 18px;
   border-radius: 50%;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.18));
+  /* 主题色白名单: 色块内描边要压在任意画笔色上都看得见，需恒定白 */
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 25%, transparent);
 }
 .pcp-panel {

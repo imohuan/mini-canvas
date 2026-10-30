@@ -4232,12 +4232,16 @@ function onGlobalLeave(el: Element): void {
    * 黑白基础色（用户 2026-10-30 图 1：暗色主题下边框发紫、底色发灰主题化）。
    * 菜单是画布上的中性浮层，不跟随主题：边框/底色/聚焦都固定黑白灰。
    */
+  /* 主题色白名单: 用户点名要「不跟随主题」的中性菜单，固定黑白色 */
   border: 1px solid #e2e5ea;
   border-radius: 10px;
+  /* 主题色白名单: 同上 */
   background: #fff;
+  /* 主题色白名单: 同上 */
   color: #8c95a3;
 }
 .nb-tagmenu-search:focus-within {
+  /* 主题色白名单: 同上，聚焦态用深黑 */
   border-color: #18202b;
 }
 .nb-tagmenu-search svg {
@@ -4252,12 +4256,14 @@ function onGlobalLeave(el: Element): void {
   padding: 0;
   border: 0;
   background: transparent;
+  /* 主题色白名单: 同上，输入文字固定深黑 */
   color: #18202b;
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 .nb-tagmenu-search input::placeholder {
+  /* 主题色白名单: 同上，占位文字固定灰 */
   color: #9ca3af;
 }
 .nb-tagmenu-list {

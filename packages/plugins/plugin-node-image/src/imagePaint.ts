@@ -44,11 +44,15 @@ export function paintStrokes(
     c2d.save()
     if (s.tool === 'erase') {
       c2d.globalCompositeOperation = "destination-out"
+      // 主题色白名单: 蒙版画布的透明擦除色，与主题无关（destination-out 只用到 alpha）
       c2d.strokeStyle = "#000000"
+      // 主题色白名单: 同上
       c2d.fillStyle = "#000000"
     } else if (mode === 'mask') {
       c2d.globalCompositeOperation = "source-over"
+      // 主题色白名单: 蒙版里「已标记」用纯白表示，是数据而非界面配色
       c2d.strokeStyle = "#ffffff"
+      // 主题色白名单: 同上
       c2d.fillStyle = "#ffffff"
     } else {
       c2d.globalCompositeOperation = "source-over"
@@ -124,6 +128,7 @@ function paintBlob(width: number, height: number, draw: (c2d: CanvasRenderingCon
 /** 生成蒙版 PNG：黑底 + 白标记（标记过 = 白；擦掉的区域回到黑） */
 export async function renderMaskBlob(strokes: PaintStroke[], width: number, height: number): Promise<Blob | null> {
   return paintBlob(width, height, (c2d) => {
+    // 主题色白名单: 蒙版底是纯黑，属图像数据（alpha 通道语义），不跟主题
     c2d.fillStyle = "#000000"
     c2d.fillRect(0, 0, width, height)
     paintStrokes(c2d, strokes, width, height, 'mask')

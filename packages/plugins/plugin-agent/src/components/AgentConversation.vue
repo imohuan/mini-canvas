@@ -6640,6 +6640,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border: 0;
   border-radius: 9px;
   background: var(--ui-accent, #0891b2);
+  /* 主题色白名单: 强调色实心按钮上的白字，任何强调色下都要最高对比 */
   color: #fff;
   font-size: 12px;
   font-weight: 700;

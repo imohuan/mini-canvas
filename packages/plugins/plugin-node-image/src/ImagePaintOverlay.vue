@@ -317,7 +317,9 @@ if (sizePreviewTimer !== null) clearTimeout(sizePreviewTimer)
 .ipo-cursor {
   position: absolute;
   border-radius: 50%;
+  /* 主题色白名单: 笔刷圈叠在用户图片像素上，需恒定白描边才在任何画面可见 */
   border: 1px solid rgb(255 255 255 / 0.9);
+  /* 主题色白名单: 同上，深色外描边保证浅色画面上也可见 */
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55);
   pointer-events: none;
   box-sizing: border-box;
@@ -325,7 +327,9 @@ if (sizePreviewTimer !== null) clearTimeout(sizePreviewTimer)
 /* 中心预览：同款圆圈，加一点填充让它在任何画面上都醒目，并带一圈强调描边 */
 .ipo-cursor--preview {
   border-width: 1.5px;
+  /* 主题色白名单: 压在图片像素上的半透明白填充 */
   background: rgb(255 255 255 / 0.22);
+  /* 主题色白名单: 同上，外描边+投影保证对比度 */
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5), 0 2px 10px rgb(0 0 0 / 0.25);
   transition: width 0.06s linear, height 0.06s linear, left 0.06s linear, top 0.06s linear;
 }

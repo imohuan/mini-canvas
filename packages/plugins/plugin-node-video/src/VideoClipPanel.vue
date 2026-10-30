@@ -379,6 +379,43 @@ onBeforeUnmount(onDragUp)
  * 这里是**功能模式专属的深色工具条**，与 ui-style-guide 的浅色浮层并存（同图片裁剪浮层的先例）。
  */
 .vclip {
+  /**
+   * 组件私有色板（见 docs/代码开发/主题与配色.md §3.2）。
+   *
+   * 这是**功能模式专属的深色工具条**：它压在视频画面上，与图片裁剪浮层同一先例，
+   * 刻意不跟全局亮/暗主题走。颜色统一收在这里，不再散落在几十条声明里；
+   * 亮/暗两格取值相同（下面 html.dark 块只声明 color-scheme，形状与规范一致）。
+   */
+  --vclip-bg: #0e1014;
+  --vclip-ink: #c8ccd4;
+  --vclip-ink-strong: #fff;
+  --vclip-ink-dim: #9b9fa8;
+  --vclip-ink-faint: #6d727c;
+  --vclip-line: rgb(255 255 255 / 0.07);
+  --vclip-line-strong: rgb(255 255 255 / 0.14);
+  --vclip-hover: rgb(255 255 255 / 0.065);
+  --vclip-field: rgb(255 255 255 / 0.04);
+  --vclip-field-strong: rgb(255 255 255 / 0.07);
+  --vclip-accent: #3b82f6;
+  --vclip-accent-line: rgb(147 197 253 / 0.45);
+  --vclip-accent-ring: rgb(96 165 250 / 0.95);
+  --vclip-accent-ring-soft: rgb(96 165 250 / 0.5);
+  --vclip-accent-glow: rgb(59 130 246 / 0.15);
+  --vclip-accent-shadow: rgb(37 99 235 / 0.28);
+  --vclip-film: #000;
+  --vclip-frame-bg: #181b20;
+  --vclip-frame: #1d2128;
+  --vclip-divider: rgb(0 0 0 / 0.3);
+  --vclip-shade: rgb(0 0 0 / 0.5);
+  --vclip-handle-line: rgb(255 255 255 / 0.9);
+  --vclip-playhead-glow: rgb(255 255 255 / 0.45);
+  --vclip-length-bg: rgb(23 24 27 / 0.94);
+  --vclip-dock-shadow: rgb(0 0 0 / 0.4);
+  --vclip-confirm-bg: #f5f6f8;
+  --vclip-confirm-ink: #101216;
+  --vclip-input-ink: #f4f5f7;
+  --vclip-kbd-ink: #e8ebf0;
+  color-scheme: dark;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -387,12 +424,17 @@ onBeforeUnmount(onDragUp)
   max-width: calc(100vw - 48px);
 }
 
+/* 恒定深色：暗色主题下取值与上面一致，只补一条 color-scheme 让原生控件跟着变深 */
+html.dark .vclip {
+  color-scheme: dark;
+}
+
 .vclip-empty {
   padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vclip-line);
   border-radius: 12px;
-  background: #0e1014;
-  color: #9b9fa8;
+  background: var(--vclip-bg);
+  color: var(--vclip-ink-dim);
   font-size: 12px;
 }
 
@@ -403,10 +445,10 @@ onBeforeUnmount(onDragUp)
   height: 66px;
   width: 100%;
   padding: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vclip-line);
   border-radius: 12px;
-  background: #0e1014;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  background: var(--vclip-bg);
+  box-shadow: 0 18px 44px var(--vclip-dock-shadow);
 }
 
 .vclip-btn {
@@ -419,20 +461,20 @@ onBeforeUnmount(onDragUp)
   padding: 0;
   border: 1px solid transparent;
   border-radius: 10px;
-  color: #c8ccd4;
+  color: var(--vclip-ink);
   background: transparent;
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
-.vclip-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.065); }
+.vclip-btn:hover { color: var(--vclip-ink-strong); background: var(--vclip-hover); }
 .vclip-btn:active { transform: scale(0.96); }
 .vclip-btn.is-on {
-  color: #fff;
-  background: #3b82f6;
-  border-color: rgba(147, 197, 253, 0.45);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), 0 8px 20px rgba(37, 99, 235, 0.28);
+  color: var(--vclip-ink-strong);
+  background: var(--vclip-accent);
+  border-color: var(--vclip-accent-line);
+  box-shadow: 0 0 0 4px var(--vclip-accent-glow), 0 8px 20px var(--vclip-accent-shadow);
 }
-.vclip-btn:focus-visible { outline: 2px solid rgba(96, 165, 250, 0.95); outline-offset: 2px; }
+.vclip-btn:focus-visible { outline: 2px solid var(--vclip-accent-ring); outline-offset: 2px; }
 
 .vclip-ico { display: block; width: 18px; height: 18px; }
 .vclip-ico :deep(svg) { width: 18px; height: 18px; display: block; }
@@ -445,7 +487,7 @@ onBeforeUnmount(onDragUp)
   height: 100%;
   overflow: visible;
   border-radius: 12px;
-  background: #000;
+  background: var(--vclip-film);
   touch-action: none;
   user-select: none;
 }
@@ -455,18 +497,18 @@ onBeforeUnmount(onDragUp)
   display: flex;
   overflow: hidden;
   border-radius: 12px;
-  background: #181b20;
+  background: var(--vclip-frame-bg);
 }
 .vclip-frame {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  background-color: #1d2128;
+  background-color: var(--vclip-frame);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
 }
-.vclip-frame + .vclip-frame { border-left: 1px solid rgba(0, 0, 0, 0.3); }
+.vclip-frame + .vclip-frame { border-left: 1px solid var(--vclip-divider); }
 
 /* 选区外遮罩（demo 同款半透明黑） */
 .vclip-shade {
@@ -474,7 +516,7 @@ onBeforeUnmount(onDragUp)
   top: 0;
   bottom: 0;
   z-index: 2;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--vclip-shade);
   pointer-events: none;
 }
 .vclip-shade.is-left { left: 0; }
@@ -497,8 +539,8 @@ onBeforeUnmount(onDragUp)
   position: absolute;
   inset: 0;
   z-index: 10;
-  border-top: 2px solid #3b82f6;
-  border-bottom: 2px solid #3b82f6;
+  border-top: 2px solid var(--vclip-accent);
+  border-bottom: 2px solid var(--vclip-accent);
   pointer-events: none;
 }
 .vclip-selection.is-at-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
@@ -512,7 +554,7 @@ onBeforeUnmount(onDragUp)
   z-index: 9;
   width: 16px;
   border: 0;
-  background: #3b82f6;
+  background: var(--vclip-accent);
   box-shadow: none;
   cursor: ew-resize;
   touch-action: none;
@@ -529,13 +571,13 @@ onBeforeUnmount(onDragUp)
   margin-top: -6.5px;
   margin-left: -0.5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--vclip-handle-line);
   opacity: 0.85;
   transition: opacity 0.14s ease;
 }
 .vclip-selection:hover .vclip-handle::after,
 .vclip-selection.is-dragging .vclip-handle::after { opacity: 1; }
-.vclip-handle:focus-visible { outline: 2px solid rgba(96, 165, 250, 0.95); outline-offset: 2px; }
+.vclip-handle:focus-visible { outline: 2px solid var(--vclip-accent-ring); outline-offset: 2px; }
 
 /* 时长 pill（3.36 s）：居中悬浮 */
 .vclip-length {
@@ -548,9 +590,9 @@ onBeforeUnmount(onDragUp)
   overflow: hidden;
   padding: 8px 12px;
   border-radius: 10px;
-  color: #fff;
-  background: rgba(23, 24, 27, 0.94);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  color: var(--vclip-ink-strong);
+  background: var(--vclip-length-bg);
+  box-shadow: 0 4px 14px var(--vclip-divider);
   font-size: 14px;
   font-weight: 700;
   line-height: 1;
@@ -568,8 +610,8 @@ onBeforeUnmount(onDragUp)
   bottom: 0;
   z-index: 7;
   width: 2px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 10px rgba(255, 255, 255, 0.45);
+  background: var(--vclip-ink-strong);
+  box-shadow: 0 0 0 1px var(--vclip-divider), 0 0 10px var(--vclip-playhead-glow);
   pointer-events: none;
   transform: translate3d(-1px, 0, 0);
 }
@@ -585,17 +627,17 @@ onBeforeUnmount(onDragUp)
   padding: 0;
   border: 0;
   border-radius: 999px;
-  color: #101216;
-  background: #f5f6f8;
+  color: var(--vclip-confirm-ink);
+  background: var(--vclip-confirm-bg);
   cursor: pointer;
   transition: background 0.15s ease, transform 0.15s ease;
 }
-.vclip-confirm:hover { background: #fff; }
+.vclip-confirm:hover { background: var(--vclip-ink-strong); }
 .vclip-confirm:active { transform: scale(0.96); }
 .vclip-confirm:disabled { cursor: progress; opacity: 0.55; }
-.vclip-confirm:disabled:hover { background: #f5f6f8; }
-.vclip-confirm:focus-visible { outline: 2px solid rgba(96, 165, 250, 0.95); outline-offset: 2px; }
-.vclip-confirm .vclip-ico { color: #101216; }
+.vclip-confirm:disabled:hover { background: var(--vclip-confirm-bg); }
+.vclip-confirm:focus-visible { outline: 2px solid var(--vclip-accent-ring); outline-offset: 2px; }
+.vclip-confirm .vclip-ico { color: var(--vclip-confirm-ink); }
 
 /* 向下展开的配置区（吸附参数 + 快捷键表） */
 .vclip-config {
@@ -604,10 +646,10 @@ onBeforeUnmount(onDragUp)
   gap: 8px;
   width: 100%;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vclip-line);
   border-radius: 12px;
-  background: #0e1014;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  background: var(--vclip-bg);
+  box-shadow: 0 14px 34px var(--vclip-dock-shadow);
 }
 .vclip-config-row {
   display: flex;
@@ -616,35 +658,35 @@ onBeforeUnmount(onDragUp)
   gap: 8px;
 }
 .vclip-config-label {
-  color: #9b9fa8;
+  color: var(--vclip-ink-dim);
   font-size: 11px;
 }
 .vclip-config-input {
   width: 64px;
   padding: 4px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--vclip-line);
   border-radius: 7px;
-  color: #f4f5f7;
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--vclip-input-ink);
+  background: var(--vclip-field);
   font: inherit;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   outline: none;
 }
-.vclip-config-input:focus { border-color: rgba(96, 165, 250, 0.5); }
+.vclip-config-input:focus { border-color: var(--vclip-accent-ring-soft); }
 .vclip-config-unit {
   margin-right: 8px;
-  color: #6d727c;
+  color: var(--vclip-ink-faint);
   font-size: 11px;
 }
 .vclip-config-kbd {
   min-width: 22px;
   padding: 2px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--vclip-line-strong);
   border-bottom-width: 2px;
   border-radius: 6px;
-  color: #e8ebf0;
-  background: rgba(255, 255, 255, 0.07);
+  color: var(--vclip-kbd-ink);
+  background: var(--vclip-field-strong);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10px;
   font-weight: 700;
@@ -652,7 +694,7 @@ onBeforeUnmount(onDragUp)
 }
 .vclip-config-desc {
   margin-right: 10px;
-  color: #9b9fa8;
+  color: var(--vclip-ink-dim);
   font-size: 11px;
 }
 

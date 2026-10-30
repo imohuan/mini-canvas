@@ -32,6 +32,7 @@ export interface PaintSessionState {
 const sessions = reactive(new Map<string, PaintSessionState>())
 
 function blank(): PaintSessionState {
+  // 主题色白名单: 画笔默认颜色是「画什么」的内容值，不是界面配色
   return { brushSize: 40, tool: 'brush', color: '#ffffff', strokes: [], redo: [] }
 }
 
