@@ -23,8 +23,16 @@
  * - 裁剪参数交给 ffmpeg 的 crop filter（w:h:x:y）；yuv420p 要求宽高/偏移为偶数，
  *   这里统一向下取偶（最多丢 1px，肉眼不可见）。
  *
- * 部署：本文件是「源码副本」。实际加载位置是 <数据根>/server-plugins/plugin-video-crop.js
- * （默认 packages/cloud-server/.mini-canvas/）。拷过去后**重启服务**生效（热装见 /api/server-plugins）。
+ * ## 部署（别手工拷源码副本了）
+ *
+ * 本插件现在是「前后台成对」的：包内 build 会把它打进 dist/server.js
+ * （见 scripts/build-server.mjs），清单据此给出可信 sha256；
+ * 再跑包内的 deploy:server 脚本，经 /api/server-plugins/install 热装到跑着的后台
+ * （默认 http://127.0.0.1:8865）。
+ *
+ * 为什么不能只拷源码：安装接口只认清单里的可信哈希，而清单读的是 dist/server.js；
+ * 手工拷的副本没有对应 hash，热装时还会因为「同名插件已在跑」失败。
+ * 旧版本手工副本（plugin-video-crop.js）要先经卸载接口摘掉，否则内存里占着 video-crop 这个名字。
  */
 import { spawn } from 'node:child_process'
 import { promises as fs, mkdtempSync } from 'node:fs'
@@ -37,17 +45,32 @@ export const name = 'video-crop'
 const CANVAS_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 /** 节点 id 白名单（同上口径：单段、无路径分隔符） */
 const NODE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
-/** 内容寻址资源名（16 位 hex + 可选扩展名）—— 源视频必须是画布资源 */
+/**
+ * 资源名白名单，与 cloud-server 的 isSafeResourceName **完全同口径**（两种形态）：
+ *   ① 内容寻址：16 位 hex + 可选扩展名（上传 / 生成产物 / 后台自己 save 出来的）
+ *   ② 覆盖槽位：slot-<槽位id> + 可选扩展名（可视化节点这类"原地更新同一份文件"的产物）
+ *
+ * 为什么必须认第 ②：画布里不少视频就是槽位产物（例如 slot-54.mp4）。只认哈希形态时，
+ * 这些节点点「剪辑」会被判成"源视频不是画布资源"，后台对真实存在的文件拒绝服务
+ * （用户 2026-10-30 实测报的正是这条）。判据只做**单段文件名白名单**，不放行路径分隔符，
+ * 真正的读盘仍由 canvasResources.read 再校验一次。
+ */
 const HASH_NAME_RE = /^[0-9a-f]{16}(\.[a-z0-9]+)?$/i
+const SLOT_NAME_RE = /^slot-[A-Za-z0-9_-]{1,64}(\.[a-z0-9]+)?$/
+
+/** 资源名是否合法（与 cloud-server 的 isSafeResourceName 同口径） */
+export function isSafeResourceName(name) {
+  return HASH_NAME_RE.test(name) || SLOT_NAME_RE.test(name)
+}
 
 /** 从节点存的同源 URL 里取资源名；非画布资源地址返回 undefined */
-function parseResourceName(url, canvasId) {
+export function parseResourceName(url, canvasId) {
   if (typeof url !== 'string') return undefined
   for (const marker of ['/api/canvases/' + canvasId + '/resources/', '/canvases/' + canvasId + '/resources/']) {
     const i = url.indexOf(marker)
     if (i < 0) continue
     const name = url.slice(i + marker.length).split('?')[0].split('#')[0]
-    if (HASH_NAME_RE.test(name)) return name
+    if (isSafeResourceName(name)) return name
   }
   return undefined
 }

@@ -138,6 +138,8 @@ describe('videoClipFlow：真剪辑（时间切割）', () => {
     expect(await clipNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, 0, 1)).toBe(false)
     const pending = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
     expect((pending!.data.runState as { status: string }).status).toBe('error')
+    // 失败原因用后台原文（不是前端编的笼统文案）—— 用户要能据此判断下一步
+    expect((pending!.data.runState as { message?: string }).message).toBe('ffmpeg 退出码 1')
     expect(env.nodeStore.getNode(id)!.data.videoUrl).toBe(SRC)
   })
 

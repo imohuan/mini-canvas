@@ -98,6 +98,8 @@ describe('videoCropFlow：真裁剪', () => {
     expect(await cropNodeWithBackend(env.ctx, createVideoOps(env.ctx), id, { x: 0, y: 0, width: 10, height: 10 })).toBe(false)
     const pending = env.nodeStore.getNodes().find((n) => n.id !== id && n.type === 'video')
     expect((pending!.data.runState as { status: string }).status).toBe('error')
+    // 后台原文原因写到节点上（不是笼统的"后台裁剪失败"）
+    expect((pending!.data.runState as { message?: string }).message).toBe('ffmpeg 退出码 1')
     expect(env.nodeStore.getNode(id)!.data.videoWidth).toBe(480)
   })
 

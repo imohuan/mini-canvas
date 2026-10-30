@@ -38,12 +38,21 @@ export async function clipNodeWithBackend(
   if (!pending) return null
   // 与裁剪同一条：新节点立刻选中，进度盖层才显示得出来
   ctx.tryGet<{ set(ids: Iterable<string>): void }>('selection')?.set([pending])
-  const failed = (message: string): boolean => {
+  // 后台的原文原因优先（如「源视频不存在」/「该节点已有任务在跑」），拿不到才用兜底文案
+  let backendReason = ''
+  const failed = (fallback: string): boolean => {
+    const message = backendReason.trim() || fallback
     failVideoNode(ops, pending, message)
     return false
   }
   // ② 后台转码。
-  const result = await cutVideoOnBackend({ nodeId, srcUrl, start, end })
+  const result = await cutVideoOnBackend({
+    nodeId,
+    srcUrl,
+    start,
+    end,
+    onFailure: (failure) => { backendReason = failure.message },
+  })
   if (!result) return failed('后台剪辑失败（源视频可能不是画布资源，或 ffmpeg 转码出错）')
   // ③ 完成后把成品一次写进占位节点；切时间不改画面尺寸，宽高沿用占位时抄的源节点。
   return writeVideoResult(ops, pending, {

@@ -51,6 +51,30 @@ export interface BackendCutResult {
   duration: number
 }
 
+/**
+ * 后台给的失败原因（给人看的一句话）。
+ *
+ * 为什么单独写回调用方：后台已经把「为什么不行」说得很具体
+ * （槽位名不认 / 源不是画布资源 / 文件不存在 / busy / ffmpeg 退出码），
+ * 前端截成一句笼统的"后台处理失败"，用户就失去了判断下一步的依据
+ * （本轮用户正是被那句笼统文案卡住，以为功能坏了）。
+ */
+export interface BackendFailure {
+  /** 后台原文（不是前端编的） */
+  message: string
+  /** HTTP 状态；网络层失败时为 0 */
+  status: number
+}
+
+/** 后台响应体里取错误文案（缺省给一句可读的兜底） */
+function backendErrorOf(body: { error?: unknown; message?: unknown } | null, status: number): BackendFailure {
+  const message =
+    (typeof body?.message === 'string' && body.message.trim()) ||
+    (typeof body?.error === 'string' && body.error.trim()) ||
+    '后台处理失败（HTTP ' + status + '）'
+  return { message, status }
+}
+
 /** 当前画布 id：URL `?canvas=` 优先，其次 hash 路由 `#/canvas/<id>`；都没有用 default（与全仓同一判据） */
 export function currentCanvasId(): string {
   if (typeof window === 'undefined') return 'default'
@@ -100,6 +124,8 @@ export async function cropVideoOnBackend(input: {
   nodeId: string
   srcUrl: string
   rect: Rect
+  /** 后台给了明确失败原因时回调（调用方据此把原因写到占位节点上） */
+  onFailure?: (failure: BackendFailure) => void
 }): Promise<BackendCropResult | undefined> {
   if (!input.nodeId || !input.srcUrl) return undefined
   if (!(await canCropOnBackend())) return undefined
@@ -126,16 +152,22 @@ export async function cropVideoOnBackend(input: {
     const body = (await res.json().catch(() => null)) as
       | { ok?: boolean; url?: string; resourceId?: string; width?: number; height?: number; error?: string }
       | null
-    if (!res.ok || !body?.ok || typeof body.url !== 'string') return undefined
-    if (typeof body.width !== 'number' || typeof body.height !== 'number') return undefined
-    if (body.width <= 0 || body.height <= 0) return undefined
+    if (!res.ok || !body?.ok || typeof body.url !== 'string') {
+      input.onFailure?.(backendErrorOf(body, res.status))
+      return undefined
+    }
+    if (typeof body.width !== 'number' || typeof body.height !== 'number' || body.width <= 0 || body.height <= 0) {
+      input.onFailure?.({ message: '后台没返回裁剪后的画面尺寸', status: res.status })
+      return undefined
+    }
     return {
       url: body.url,
       ...(typeof body.resourceId === 'string' && body.resourceId ? { resourceId: body.resourceId } : {}),
       width: body.width,
       height: body.height,
     }
-  } catch {
+  } catch (err) {
+    input.onFailure?.({ message: '连不上后台：' + (err instanceof Error ? err.message : String(err)), status: 0 })
     return undefined
   } finally {
     if (timer !== null) clearTimeout(timer)
@@ -159,6 +191,8 @@ export async function cutVideoOnBackend(input: {
   srcUrl: string
   start: number
   end: number
+  /** 后台给了明确失败原因时回调（调用方据此把原因写到占位节点上） */
+  onFailure?: (failure: BackendFailure) => void
 }): Promise<BackendCutResult | undefined> {
   if (!input.nodeId || !input.srcUrl) return undefined
   if (!(input.end > input.start)) return undefined
@@ -182,14 +216,21 @@ export async function cutVideoOnBackend(input: {
     const body = (await res.json().catch(() => null)) as
       | { ok?: boolean; url?: string; resourceId?: string; duration?: number; error?: string }
       | null
-    if (!res.ok || !body?.ok || typeof body.url !== 'string') return undefined
-    if (typeof body.duration !== 'number' || !(body.duration > 0)) return undefined
+    if (!res.ok || !body?.ok || typeof body.url !== 'string') {
+      input.onFailure?.(backendErrorOf(body, res.status))
+      return undefined
+    }
+    if (typeof body.duration !== 'number' || !(body.duration > 0)) {
+      input.onFailure?.({ message: '后台没返回剪辑后的时长', status: res.status })
+      return undefined
+    }
     return {
       url: body.url,
       ...(typeof body.resourceId === 'string' && body.resourceId ? { resourceId: body.resourceId } : {}),
       duration: body.duration,
     }
-  } catch {
+  } catch (err) {
+    input.onFailure?.({ message: '连不上后台：' + (err instanceof Error ? err.message : String(err)), status: 0 })
     return undefined
   } finally {
     if (timer !== null) clearTimeout(timer)
