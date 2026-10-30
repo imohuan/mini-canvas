@@ -222,6 +222,18 @@ const hideToolbars = computed(
 )
 
 /**
+ * 卡片覆盖层（over:inset）是否收起。
+ *
+ * 多选不应收起它：任务失败提示、加载进度、裁剪框都挂在这里，
+ * 收起会让用户看不到正在发生的事。框选与调整大小仍按原行为收起。
+ */
+const hideOverlays = computed(
+  () =>
+    interaction?.isSelecting?.value === true ||
+    interaction?.nodeResizeId?.value === props.id,
+)
+
+/**
  * 上/下控制栏（out:top / out:bottom）是否收起 = hideToolbars 之上再加一条"画布上有节点正在被拖"。
  *
  * 为什么是**画布级**、不比节点 id（用户要求："不管拖拽的是哪一个节点，都不应该显示这边的上下控制"；
@@ -229,8 +241,8 @@ const hideToolbars = computed(
  * 多选拖动时每张卡还会并排刷出一片 —— 所以拖任意一个节点，全画布的栏一起收，松手立刻恢复。
  * 直接读共享 activity 的 isNodeDragging（"有没有节点在拖"）就够，不需要判"被拖的是不是本节点"。
  *
- * 为什么不并进 hideToolbars：hideToolbars 同时管 `over:inset`（编辑浮层 + 生成任务的整卡加载态）。
- * 那些**不是控制栏**，是长在卡片上、该跟着卡片走的东西 —— 尤其任务进度，拖动节点时收掉进度显示是倒退。
+ * 为什么不并进 hideToolbars：hideToolbars 还管多选、框选与 resize；覆盖层的可见条件单独放在
+ * hideOverlays（多选时保留、框选/resize 时收起）。拖动节点时收掉任务进度显示是倒退，所以这里也不收它。
  * 所以拖动这条只收"浮在卡片外面的那两排栏"。
  *
  * 抓手工具（isHandTool）也并进这条（用户要求：抓手模式下不显示上下两排状态栏）：
@@ -988,7 +1000,7 @@ function clamp(value: number, min: number, max: number): number {
     <!-- 上/下控制栏：装了解层宿主就 Teleport 过去（压过置顶连线），否则原地渲染（行为与改动前逐字一致）。
          逻辑与能力实例都不搬 —— Teleport 只换 DOM 位置，provide/inject 沿组件树传递，共享关系不变。
          压制条件：框选中整排收起、多选收起、本节点 resize 中（hideToolbars），再加"画布上有节点在拖"
-         （hideSlotBars —— 拖动只收这两排栏，不减加载浮层，见该 computed 的说明）。 -->
+          （hideSlotBars —— 拖动只收这两排栏，不动卡片上的覆盖层，见该 computed 的说明）。 -->
     <Teleport v-if="toolbarHost" :to="toolbarHost">
       <!-- 与卡片同位置同尺寸的锚点盒：.v2-slot 的 calc(100% +/- offset) 才仍等于「离卡片这条边的距离」 -->
       <div class="v2-toolbar-anchor" :data-node-id="id" :style="toolbarAnchorStyle">
@@ -1161,7 +1173,7 @@ function clamp(value: number, min: number, max: number): number {
          尺寸与卡片严格一致（不反缩放）—— 浮层必须和底下的画面像素对齐，缩放会错位。
          z-index 高于卡片但低于上/下控制栏：编辑框盖住画面，但"确认/取消"按钮仍在最上层可点。 -->
     <div
-      v-if="overlaySlots.length > 0 && !hideToolbars && !culledReduced"
+      v-if="overlaySlots.length > 0 && !hideOverlays && !culledReduced"
       class="v2-overlay nodrag nopan"
       :style="overlayLayerStyle"
     >

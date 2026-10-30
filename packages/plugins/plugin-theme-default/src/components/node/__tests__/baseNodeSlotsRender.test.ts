@@ -208,11 +208,20 @@ describe('BaseNode over:inset 区域：编辑浮层画在卡片外面（用户�
     expect(html).not.toContain('v2-overlay')
   })
 
-  it('多选时（选中 >=2）浮层跟着收起，避免多个编辑框同时出现', async () => {
+  it('多选时（选中 >=2）浮层照常保留，不会让任务提示和编辑框一起消失', async () => {
     const r = new NodeRegistry()
     r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
-    expect(html).not.toContain('v2-overlay')
+    expect(html).toContain('v2-overlay')
+    expect(html).toContain('probe-overlay')
+  })
+
+  it('多选仍然收起上/下控制栏（覆盖层与控制栏不是同一个开关）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'over:inset': OverlayStub })
+    const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
+    expect(html).toContain('probe-overlay')
+    expect(html).not.toContain('probe-top-a')
   })
 })
 
