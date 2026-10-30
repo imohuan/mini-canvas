@@ -224,13 +224,11 @@ const hideToolbars = computed(
 /**
  * 卡片覆盖层（over:inset）是否收起。
  *
- * 多选不应收起它：任务失败提示、加载进度、裁剪框都挂在这里，
- * 收起会让用户看不到正在发生的事。框选与调整大小仍按原行为收起。
+ * 多选、框选都不收起它：任务失败提示、加载进度、裁剪框都挂在这里，
+ * 收起会让用户看不到正在发生的事。调整节点大小时仍按原行为收起。
  */
 const hideOverlays = computed(
-  () =>
-    interaction?.isSelecting?.value === true ||
-    interaction?.nodeResizeId?.value === props.id,
+  () => interaction?.nodeResizeId?.value === props.id,
 )
 
 /**
@@ -242,7 +240,7 @@ const hideOverlays = computed(
  * 直接读共享 activity 的 isNodeDragging（"有没有节点在拖"）就够，不需要判"被拖的是不是本节点"。
  *
  * 为什么不并进 hideToolbars：hideToolbars 还管多选、框选与 resize；覆盖层的可见条件单独放在
- * hideOverlays（多选时保留、框选/resize 时收起）。拖动节点时收掉任务进度显示是倒退，所以这里也不收它。
+ * hideOverlays（多选与框选时保留、resize 时收起）。拖动节点时收掉任务进度显示是倒退，所以这里也不收它。
  * 所以拖动这条只收"浮在卡片外面的那两排栏"。
  *
  * 抓手工具（isHandTool）也并进这条（用户要求：抓手模式下不显示上下两排状态栏）：

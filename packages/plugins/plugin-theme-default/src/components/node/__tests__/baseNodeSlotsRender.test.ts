@@ -223,6 +223,22 @@ describe('BaseNode over:inset 区域：编辑浮层画在卡片外面（用户�
     expect(html).toContain('probe-overlay')
     expect(html).not.toContain('probe-top-a')
   })
+
+  it('框选进行中（鼠标还没松开）浮层照常保留，不跟着选择框一起消失', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
+    const html = await renderNode(r, {}, {}, { selecting: true })
+    expect(html).toContain('v2-overlay')
+    expect(html).toContain('probe-overlay')
+  })
+
+  it('框选进行中仍然收起上/下控制栏（覆盖层不受框选影响）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'over:inset': OverlayStub })
+    const html = await renderNode(r, {}, {}, { selecting: true })
+    expect(html).toContain('probe-overlay')
+    expect(html).not.toContain('probe-top-a')
+  })
 })
 
 describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
