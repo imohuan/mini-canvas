@@ -475,24 +475,17 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     )
   })
 
-  it('音频底栏的播放按钮右侧有独立全屏按钮', () => {
+  it('音频底栏只有播放按钮，不再有全屏按钮', () => {
     const fn = modalsArea.slice(
       modalsArea.indexOf('function buildAudioControls'),
-      modalsArea.indexOf('/** 整张卡的最后一行'),
+      modalsArea.indexOf('function finishCard'),
     )
-    expect(fn, '缺少全屏按钮').toMatch(/hist-audio-expand/)
-    const playAt = fn.indexOf('right.appendChild(btn)')
-    const expandAt = fn.indexOf('right.appendChild(expand)')
-    expect(playAt, '播放按钮没有挂到右半区').toBeGreaterThan(-1)
-    expect(expandAt, '全屏按钮不在播放按钮右侧').toBeGreaterThan(playAt)
-    expect(fn, '全屏按钮没有打开预览').toMatch(
-      /expand\.addEventListener\('click'[\s\S]{0,200}openHistoryItem\(item\)/,
-    )
+    // 用户口径 2026-10-30：音频没必要全屏预览，播放键右边那个全屏按钮删掉。
+    expect(fn, '音频底栏还留着全屏按钮').not.toMatch(/hist-audio-expand/)
+    expect(fn, '音频底栏还留着打开全屏预览的点击').not.toMatch(/openHistoryItem/)
+    expect(fn, '播放按钮没有挂到右半区').toMatch(/right\.appendChild\(btn\)/)
     const style = modalsArea.slice(modalsArea.lastIndexOf('<style>'))
-    const rule = style.match(/\.hist-audio-expand\s*\{[^}]*\}/)?.[0] ?? ''
-    expect(rule, '全屏按钮带边框/圆角（应与播放按钮同一套无边框样式）').toMatch(
-      /border:\s*0;[^}]*border-radius:\s*0;/,
-    )
+    expect(style, '样式表里还留着 .hist-audio-expand').not.toMatch(/\.hist-audio-expand\b/)
   })
 
   it('历史卡的波形可点/可拖 seek（只在紧凑模式，不拦画布节点拖动）', () => {

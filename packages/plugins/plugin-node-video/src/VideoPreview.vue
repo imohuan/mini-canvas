@@ -22,6 +22,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import VideoPlayerBar from "./VideoPlayerBar.vue"
+import { fitPreviewBox } from "./videoPreviewFit"
 
 const props = withDefaults(
   defineProps<{
@@ -70,27 +71,32 @@ function markReady(): void { loading.value = false }
 const shouldAutoplay = computed(() => props.tall && !!props.url)
 
 /**
- * 大舞台（全屏预览）里**按视频自己的宽高比**显示（用户口径 2026-10-28：
- * 「你这里只需要根据视频的宽高进行显示不就行了？我感觉你的背景后面有一片黑色区域」）。
+ * 大舞台（全屏预览）里**按舞台尺寸等比放大**（用户口径 2026-10-30）。
  *
- * 做法：量到 videoWidth / videoHeight 后，把根容器的宽高比锁成它，并用 max-width/max-height
- * 收进可用空间 —— 画面外不再多出一圈黑底。小卡片（非 tall）保持原来的铺满行为。
+ * 用户原话：「不管横屏还是竖屏，让它们呆在一个宽 80%、高 80% 的容器里，保持宽高比，
+ * 居中显示，然后宽度或高度慢慢增大，直到一方 100%」。这就是标准的 contain。
+ *
+ * 上一版写的是 `width:auto + aspect-ratio + max-width/max-height`，浏览器会按视频的
+ * **原始像素**定尺寸 —— 1280×720 的视频在大舞台里只画成中间一小块（用户截图报的）。
+ * 现在量出舞台可用宽高、算成具体像素写进 style；画面外不再多一圈黑底，
+ * 小视频也能撑满一条边。小卡片（非 tall）保持原来的铺满行为。
  */
-const aspect = ref(0)
+const videoW = ref(0)
+const videoH = ref(0)
+/** 舞台可用尺寸（父级，即 .mv-video-transform / 卡片挂载层） */
+const stageW = ref(0)
+const stageH = ref(0)
 const rootFitStyle = computed<Record<string, string> | undefined>(() => {
-  if (!props.tall || !(aspect.value > 0)) return undefined
+  if (!props.tall) return undefined
+  const box = fitPreviewBox(videoW.value, videoH.value, stageW.value, stageH.value)
+  if (!box) return undefined
   return {
-    aspectRatio: String(aspect.value),
-    width: 'auto',
-    height: 'auto',
+    width: box.width + 'px',
+    height: box.height + 'px',
     maxWidth: '100%',
     maxHeight: '100%',
-    // 尺寸下限（2026-10-30 用户口径：小视频不能缩成一小块，最小也要占满屏 80%）。
-    // 横屏用 80% 宽当下限；竖屏（比例 < 1）换成高度 80%，否则 80% 宽会把竖屏撑出屏。
-    // undefined 不放进对象，保持 Record<string, string> 的类型（2026-10-30 typecheck）。
-    ...(aspect.value >= 1 ? { minWidth: '80%' } : { minHeight: '80%' }),
   }
-})
+}) 
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const playing = ref(false)
@@ -205,8 +211,12 @@ function toggleMute(): void {
 function onLoadedMetadata(): void {
   const el = videoRef.value
   if (el && Number.isFinite(el.duration) && el.duration > 0) duration.value = el.duration
-  // 记下真实宽高比（大舞台据此收掉多余黑底；量不到就维持原样）
-  if (el && el.videoWidth > 0 && el.videoHeight > 0) aspect.value = el.videoWidth / el.videoHeight
+  // 记下真实宽高（大舞台据此算「等比放大到贴边」；量不到就维持原样）
+  if (el && el.videoWidth > 0 && el.videoHeight > 0) {
+    videoW.value = el.videoWidth
+    videoH.value = el.videoHeight
+    measureStage()
+  }
   // 比例已量到 → 加载占位可以按真实画面尺寸铺了
   markReady()
   // 组件记着的设置，元数据就绪时同步给新 video（换 src 会重置元素状态）
@@ -275,6 +285,32 @@ onMounted(() => {
 onBeforeUnmount(() => {
   widthObserver?.disconnect()
   widthObserver = null
+  stageObserver?.disconnect()
+  stageObserver = null
+})
+
+/**
+ * 量**舞台**（根元素的父级）的可用尺寸：全屏预览里根元素自己是被算出来的那块，
+ * 不能拿它当基准（会越算越小）。父级是宿主给的容器（.mv-video-transform），
+ * 它撑满预览区，量它才是「80% 容器」的真实大小。
+ *
+ * 窗口缩放 / 旋转屏幕 / 侧栏展开都会改舞台尺寸，所以用 ResizeObserver 跟着重算。
+ */
+let stageObserver: ResizeObserver | null = null
+function measureStage(): void {
+  if (!props.tall) return
+  const el = rootEl.value?.parentElement
+  if (!el) return
+  stageW.value = el.clientWidth
+  stageH.value = el.clientHeight
+}
+onMounted(() => {
+  if (!props.tall) return
+  measureStage()
+  const el = rootEl.value?.parentElement
+  if (!el || typeof ResizeObserver !== 'function') return
+  stageObserver = new ResizeObserver(() => measureStage())
+  stageObserver.observe(el)
 })
 
 watch(
@@ -284,6 +320,8 @@ watch(
     currentTime.value = 0
     duration.value = 0
     broken.value = false
+    videoW.value = 0
+    videoH.value = 0
     markLoading()
     closePopoversNow()
   },

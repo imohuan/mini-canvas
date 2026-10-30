@@ -88,21 +88,28 @@ describe('全屏预览底部控制条', () => {
 })
 
 /**
- * 视频全屏的尺寸下限（2026-10-30 用户口径）：小竖屏视频按 max-width/max-height 收进
- * 舞台后可能只有一小块，看不清。用户口径：最小宽度也要占全屏的 80%（与最大宽度同）。
+ * 全屏视频的尺寸（2026-10-30 用户口径）。
+ *
+ * 用户原话：「把视频放进一个宽度 80%、高度 80% 的容器里，保持宽高比，居中显示，
+ * 然后慢慢增大，直到一方 100%」。也就是**等比 contain**：小视频也要撑到舞台的一条边。
+ * 上一版用 width/height:auto + aspect-ratio + min-width:80%，浏览器按原始像素渲染，
+ * 1280×720 的视频只画成中间一小块（用户截图）。
+ *
  * 音频全屏则删掉顶部标题行 —— 名称与插件件自带的名称重复、页码与底部条重复。
  */
-describe('全屏视频尺寸下限与音频标题', () => {
-  it('tall 模式的根容器有 min-width/min-height 下限（占满屏的 80%）', () => {
+describe('全屏视频按舞台 contain 与音频标题', () => {
+  it('tall 模式量舞台尺寸，输出具体像素宽高（不再 width:auto + 百分比下限）', () => {
     const preview = readFileSync(
       new URL('../../../plugins/plugin-node-video/src/VideoPreview.vue', import.meta.url),
       'utf-8',
     )
     const fit = preview.slice(preview.indexOf('const rootFitStyle'), preview.indexOf('const videoRef'))
     expect(fit, '找不到 rootFitStyle').not.toBe('')
-    expect(fit, '没有 min-width 下限（小视频会缩成一小块）').toMatch(/minWidth/)
-    expect(fit, '没有 min-height 下限').toMatch(/minHeight/)
-    expect(fit, '下限不是 80%').toMatch(/'80%'|"80%"|80%/)
+    expect(fit, '没有按舞台尺寸算像素宽高（小视频会按原始像素画成一小块）').toMatch(/fitPreviewBox\(/)
+    expect(fit, '还用 width:auto + aspect-ratio（浏览器按原始像素渲染）').not.toMatch(/width:\s*'auto'|aspectRatio:/)
+    expect(fit, '没有输出具体 width / height').toMatch(/width:/)
+    expect(fit, '没有输出具体 width / height').toMatch(/height:/)
+    expect(preview, '没有量舞台尺寸（ResizeObserver）').toMatch(/stageObserver|new ResizeObserver/)
   })
 
   it('音频全屏没有顶部标题行（名称与插件自带文案重复）', () => {

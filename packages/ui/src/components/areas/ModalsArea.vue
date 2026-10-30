@@ -956,19 +956,6 @@ function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLE
   btn.innerHTML = playIcon
   right.appendChild(duration)
   right.appendChild(btn)
-  /** 全屏预览按钮：单独一个，放在播放按钮右侧（用户口径 2026-10-28） */
-  const expand = document.createElement('button')
-  expand.type = 'button'
-  expand.className = 'hist-audio-expand'
-  expand.title = '全屏预览'
-  expand.setAttribute('aria-label', '全屏预览：' + item.title)
-  expand.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>'
-  expand.addEventListener('click', (ev) => {
-    ev.stopPropagation()
-    openHistoryItem(item)
-  })
-  right.appendChild(expand)
   const fmt = (sec: number): string => {
     if (!Number.isFinite(sec) || sec <= 0) return '0:00'
     const total = Math.round(sec)
@@ -2353,16 +2340,6 @@ onClickOutside(
 }
 .hist-audio-play:hover { color: var(--ui-accent, #0891b2); }
 .hist-audio-play svg { width: 11px; height: 11px; }
-/* 全屏预览：播放键右侧的独立图标按钮，同样是「无边框无圆角」（用户口径 2026-10-28） */
-.hist-audio-expand {
-  flex: none; display: inline-grid; place-items: center;
-  width: 18px; height: 18px; padding: 0; margin-left: 4px;
-  border: 0; border-radius: 0; background: transparent;
-  color: var(--ui-ink, #18202b); cursor: pointer;
-}
-.hist-audio-expand:hover { color: var(--ui-accent, #0891b2); }
-.hist-audio-expand svg { width: 11px; height: 11px; }
-.hist-audio-expand:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 2px; }
 /* 批量模式：只让波形层让位（点波形落到整卡勾选）；
    媒体框本身仍可点 —— 右上角「详情」钮是它的子元素，不能一起关掉。 */
 .hist-card--batch .hist-card-audio-plugin { pointer-events: none; }
