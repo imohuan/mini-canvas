@@ -245,9 +245,19 @@
 }
 
 .dd-field .mck-switch {
-  display: flex;
   width: 100%;
-  justify-content: space-between;
+}
+
+/* 九宫格方向：12 格分三行，每行 4 个，防止单行挤压。 */
+.dd-fieldset .mck-tabs {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+
+.dd-fieldset .mck-tabs .mck-tab {
+  flex: 1 1 calc(25% - 4px);
+  min-width: 84px;
 }
 
 .dd-presets {

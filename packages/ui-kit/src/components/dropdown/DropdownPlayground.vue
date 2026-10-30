@@ -5,7 +5,7 @@
  * 预览区：可拖动的触发器。拖拽时浮层跟着走，用来直观看方向、翻转和箭头。
  * 配置区：用 Teleport 渲染到预览页右栏；默认值、字段、预设仍读 playground.ts。
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import Button from '../button/Button.vue'
 import Input from '../input/Input.vue'
 import NumberInput from '../number/NumberInput.vue'
@@ -55,13 +55,27 @@ const items = computed(() => {
 
 const triggerLabel = computed(() => {
   if (state.disabled === true) return '已禁用'
+  if (state.trigger === 'always') return '常显菜单'
   if (state.trigger === 'hover') return '悬停打开'
   if (state.trigger === 'contextmenu') return '右键打开'
   return '打开菜单'
 })
 
+/** 常显模式强制 open 为 true；其他模式跟随用户点击。 */
+const openValue = computed({
+  get: () => state.trigger === 'always' ? true : open.value,
+  set: (value) => {
+    open.value = value
+  },
+})
+
+watch(open, (value) => {
+  // 常显时无论谁把 open 改成 false（外点、Esc、slot close），都立刻拉回 true。
+  if (state.trigger === 'always' && value === false) open.value = true
+})
+
 const dropdownProps = computed(() => ({
-  trigger: (state.trigger === 'hover' || state.trigger === 'contextmenu' ? state.trigger : 'click') as DropdownTrigger,
+  trigger: (state.trigger === 'hover' || state.trigger === 'contextmenu' || state.trigger === 'always' ? state.trigger : 'click') as DropdownTrigger,
   placement: (typeof state.placement === 'string' ? state.placement : 'bottom-start') as DropdownAnchor,
   align: (state.align === 'start' || state.align === 'center' || state.align === 'end' ? state.align : 'auto') as 'auto' | 'start' | 'center' | 'end',
   offset: numberValue('offset') ?? 6,
@@ -190,7 +204,7 @@ const groupedFields = computed(() => {
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
       >
-        <Dropdown v-model="open" v-bind="dropdownProps">
+        <Dropdown :model-value="state.trigger === 'always' ? true : openValue" @update:model-value="openValue = $event" v-bind="dropdownProps" :key="'dropdown-' + state.trigger">
           <template #trigger="{ open: isOpen }">
             <Button variant="secondary" :aria-expanded="isOpen" class="dd-trigger" data-demo-trigger>
               <span class="dd-trigger__grip" aria-hidden="true">⠿</span>

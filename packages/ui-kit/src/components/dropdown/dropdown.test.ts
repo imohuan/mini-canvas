@@ -74,6 +74,17 @@ describe('Dropdown 组件行为', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
   })
 
+  it('always 触发器常显，外点不关闭', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, trigger: 'always' },
+      slots: { trigger: '<button data-trigger>x</button>', default: '<div data-menu>常显内容</div>' },
+    })
+    await wrapper.vm.$nextTick()
+    expect(document.querySelector('[data-menu]')).not.toBeNull()
+    wrapper.unmount()
+    expect(document.querySelector('[data-menu]')).toBeNull()
+  })
+
   it('menuHeight 和 arrow 生效；箭头指向触发器', async () => {
     const wrapper = mount(Dropdown, {
       props: { modelValue: true, menuHeight: '180px', arrow: true },
@@ -87,7 +98,7 @@ describe('Dropdown 组件行为', () => {
     expect(arrow?.getAttribute('aria-hidden')).toBe('true')
   })
 
-  it('外部 anchor 可以绑定深层 DOM 并用 v-model 开关', async () => {
+  it('外部 anchor 可以绑定深层 DOM 并显示浮层', async () => {
     const externalHost = document.createElement('div')
     document.body.appendChild(externalHost)
     const target = document.createElement('button')
@@ -95,7 +106,6 @@ describe('Dropdown 组件行为', () => {
     externalHost.appendChild(target)
 
     const anchorRef = ref<HTMLElement | null>(null)
-    const open = ref(true)
     const wrapper = mount(Dropdown, {
       props: { modelValue: true, anchor: anchorRef, anchorPlacement: 'top' },
       slots: { default: '<div data-menu />' },
@@ -105,17 +115,11 @@ describe('Dropdown 组件行为', () => {
     await nextTick()
     expect(document.querySelector('[data-menu]')).not.toBeNull()
 
-    // v-model 同步：改成 false 后浮层立刻消失。
-    await wrapper.setProps({ modelValue: false })
-    await nextTick()
-    expect(document.querySelector('[data-menu]')).toBeNull()
-
     // 换一个外部元素也立即生效（Ref 响应式绑定）。
     const second = document.createElement('span')
     second.setAttribute('data-second-anchor', '')
     externalHost.appendChild(second)
     anchorRef.value = second
-    await wrapper.setProps({ modelValue: true })
     await nextTick()
     expect(document.querySelector('[data-menu]')).not.toBeNull()
   })

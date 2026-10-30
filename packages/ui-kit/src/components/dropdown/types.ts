@@ -1,7 +1,7 @@
 import type { UiKitPlacement } from '../../shared/types'
 import type { Ref } from 'vue'
 
-export type DropdownTrigger = 'click' | 'hover' | 'contextmenu'
+export type DropdownTrigger = 'click' | 'hover' | 'contextmenu' | 'always'
 export type DropdownLayout = 'overlay-scroll' | 'inner-scroll'
 /**
  * 九宫格方向：前半是主方向（top/right/bottom/left），后半是沿边对齐。

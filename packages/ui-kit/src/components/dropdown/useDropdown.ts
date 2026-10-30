@@ -33,7 +33,8 @@ export interface DropdownApi {
 /** 下拉浮层的开关、定位和互斥逻辑；模板只负责画。 */
 export function useDropdown(props: DropdownProps, emit: (value: boolean) => void): DropdownApi {
   const id = Symbol('dropdown')
-  const open = ref(props.modelValue ?? false)
+  /** always 模式是调试用的“常显”：忽略外部开关，一直保持 true。 */
+  const open = ref((props.trigger ?? 'click') === 'always' ? true : (props.modelValue ?? false))
   /** 真实定位锚点：外部 anchor 优先，否则用触发器插槽的 DOM。 */
   const anchorEl = ref<HTMLElement | null>(null)
   const triggerRef = ref<HTMLElement | null>(null)
@@ -66,7 +67,31 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   }))
   const { position, positioned, update } = useFloating(anchorEl, panelRef, open, options)
 
+  // 常显切换时，直接把 open 拉成 true；模式切走时回到外部传入值。
+  watch(() => props.modelValue, (value) => {
+    if ((props.trigger ?? 'click') === 'always') return
+    if (typeof value === 'boolean' && value !== open.value) {
+      open.value = value
+      if (!value && openInstance === id) openInstance = null
+      if (value) nextTick(update)
+    }
+  })
+
+  watch(() => (props.trigger ?? 'click') === 'always', (always) => {
+    if (always) {
+      open.value = true
+      return
+    }
+    open.value = props.modelValue ?? false
+  }, { immediate: true })
+
+  // 常显模式下外部传来的 false 也不关闭：直接拉回 true。
+  watch(open, (value) => {
+    if ((props.trigger ?? 'click') === 'always' && value === false) open.value = true
+  })
+
   function setOpen(value: boolean): void {
+    if ((props.trigger ?? 'click') === 'always' && !value) return
     if (open.value === value) return
     if (value && !props.disabled) {
       if (openInstance && openInstance !== id) closeInstance?.()
@@ -88,6 +113,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
 
   function hide(): void {
     cancelHide()
+    // always 模式不允许真的关闭，直接回到 true。
+    if ((props.trigger ?? 'click') === 'always') {
+      open.value = true
+      return
+    }
     if (openInstance === id) openInstance = null
     open.value = false
     emit(false)
@@ -115,14 +145,6 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     hideTimer = 0
   }
 
-  watch(() => props.modelValue, (value) => {
-    if (typeof value === 'boolean' && value !== open.value) {
-      open.value = value
-      if (!value && openInstance === id) openInstance = null
-      if (value) nextTick(update)
-    }
-  })
-
   /**
    * 锚点跟随：anchor 可以是 Ref，元素也可能晚挂载。
    * 只在 anchor 或触发器 DOM 变化时重算一次；写入前先比较，
@@ -140,7 +162,10 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   onBeforeUpdate(syncAnchor)
   syncAnchor()
 
-  useOutsideClick(open, [triggerRef, panelRef, anchorEl], hide)
+  useOutsideClick(open, [triggerRef, panelRef, anchorEl], () => {
+    if ((props.trigger ?? 'click') === 'always') return
+    hide()
+  })
   useEscape(open, hide)
   onBeforeUnmount(cancelHide)
 

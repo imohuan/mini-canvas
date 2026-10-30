@@ -30,7 +30,7 @@ const props = withDefaults(defineProps<DropdownProps>(), {
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; open: []; close: [] }>()
-const api = useDropdown(props, (value) => {
+const api = useDropdown({ ...props, trigger: props.trigger === 'always' ? 'always' : props.trigger }, (value) => {
   emit('update:modelValue', value)
   if (value) emit('open')
   else emit('close')
@@ -55,6 +55,7 @@ defineExpose({ controller, open: api.open, show: api.show, hide: api.hide, toggl
 const triggerEvents = computed(() => {
   // 绑定外部 anchor 后，默认不接管本地触发器事件；插槽里仍可用 api.toggle 控制。
   if (props.anchor) return {}
+  if (props.trigger === 'always') return {}
   if (props.trigger === 'hover') {
     return {
       onMouseenter: api.cancelHide,

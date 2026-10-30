@@ -43,10 +43,10 @@ function toggle(): void {
       :aria-label="label || undefined"
       @change="toggle"
     />
-    <span class="mck-switch__track" aria-hidden="true"><span class="mck-switch__thumb"></span></span>
     <span v-if="label || description" class="mck-switch__copy">
       <span v-if="label" class="mck-switch__label">{{ label }}</span>
       <span v-if="description" class="mck-switch__desc">{{ description }}</span>
     </span>
+    <span class="mck-switch__track" aria-hidden="true"><span class="mck-switch__thumb"></span></span>
   </label>
 </template>

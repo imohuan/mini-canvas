@@ -14,7 +14,7 @@ export const dropdownPlayground: ComponentPlayground = {
   id: 'dropdown',
   defaults: {
     trigger: 'click',
-  placement: 'bottom-start' as DropdownAnchor,
+    placement: 'bottom-start' as DropdownAnchor,
     align: 'auto',
     offset: 6,
     matchWidth: false,
@@ -30,12 +30,16 @@ export const dropdownPlayground: ComponentPlayground = {
     showShortcut: false,
   },
   fields: [
-    { kind: 'segment', key: 'trigger', label: '触发方式', group: '触发', hint: '右键模式在触发按钮上按鼠标右键。', options: [
+    { kind: 'segment', key: 'trigger', label: '触发方式', group: '触发', hint: 'always = 一直显示，用来调试面板布局。', options: [
       { value: 'click', label: '点击' },
       { value: 'hover', label: '悬停' },
       { value: 'contextmenu', label: '右键' },
+      { value: 'always', label: '常显' },
     ] },
-    { kind: 'segment', key: 'placement', label: '弹出方向', group: '位置', hint: '九宫格：上中下 × 左中右，中上/中下/左中/右中是贴边居中。', options: [
+    /* 弹出方向：真实九宫格，三行三列。
+       行 = 主方向（上/左/右/下），列 = 对齐（起点/中/终点）；
+       同名格是不同语义（如 top-start=菜单在上方贴左缘；left-start=菜单在左方贴上缘）。 */
+    { kind: 'segment', key: 'placement', label: '弹出方向', group: '位置', hint: '每行 = 一个主方向，列 = 起点/中/终点；同名格语义不同。', options: [
       { value: 'top-start', label: '左上' },
       { value: 'top', label: '中上' },
       { value: 'top-end', label: '右上' },
@@ -48,12 +52,6 @@ export const dropdownPlayground: ComponentPlayground = {
       { value: 'bottom-start', label: '左下' },
       { value: 'bottom', label: '中下' },
       { value: 'bottom-end', label: '右下' },
-    ] },
-    { kind: 'segment', key: 'align', label: '沿边对齐', group: '位置', hint: '只在老写法里用；九宫格已经包含对齐。', options: [
-      { value: 'auto', label: '自动' },
-      { value: 'start', label: '起点' },
-      { value: 'center', label: '居中' },
-      { value: 'end', label: '终点' },
     ] },
     { kind: 'number', key: 'offset', label: '与触发器间距', group: '位置', min: 0, max: 60, suffix: 'px' },
     { kind: 'toggle', key: 'arrow', label: '显示箭头', group: '外观', hint: '箭头会指向触发器中心；左右弹出时贴在左右边。' },
@@ -79,7 +77,7 @@ export const dropdownPlayground: ComponentPlayground = {
     { id: 'inner', name: '固定高 + 内部滚', description: '标题固定，列表滚动', patch: { trigger: 'click', placement: 'bottom-start', align: 'auto', offset: 6, matchWidth: false, arrow: true, menuWidth: '260px', menuHeight: '180px', menuMinWidth: '220px', menuMaxWidth: '', menuMaxHeight: '180px', layout: 'inner-scroll', disabled: false, itemCount: 20, showShortcut: false } },
   ],
   summary: (s) => {
-    const trigger = { click: '点击', hover: '悬停', contextmenu: '右键' }[readText(s, 'trigger')] ?? '点击'
+    const trigger = { click: '点击', hover: '悬停', contextmenu: '右键', always: '常显' }[readText(s, 'trigger')] ?? '点击'
     const placementMap: Record<string, string> = {
       'top-start': '左上', 'top': '中上', 'top-end': '右上',
       'left-start': '左上', 'left': '左中', 'left-end': '左下',
