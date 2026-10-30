@@ -9,6 +9,9 @@
  *     → { ok:true, url, resourceId, duration, fileName }
  *     （按时间切段：start/end 秒，只保留这一段重新编码；画面尺寸不变，
  *       所以宽高不回传 —— 前端从源节点抄，切不出新尺寸）
+ *   POST /api/video-audio  { canvasId, nodeId, srcUrl }
+ *     → { ok:true, url, resourceId, duration, fileName }
+ *     （抽出音轨存成 mp3；视频没有音轨 → 400 并说明原因）
  *   GET  /api/video-crop/ping
  *     → { ok:true, plugin:'video-crop' }（前端探针：判断后台是否具备真裁剪能力）
  *
@@ -129,6 +132,54 @@ export function apply(ctx) {
   ctx.routes.get('/api/video-crop/ping', (c) => c.json({ ok: true, plugin: 'video-crop' }))
 
   /**
+   * 抽音轨：视频 → mp3（用户口径 2026-10-30：视频节点上要有一个"转音频"的按钮）。
+   *
+   * 为什么在后台做：浏览器里没有"只取音轨、不重录"的能力（MediaRecorder 要实时播完整段），
+   * ffmpeg 一条命令就够。产物走内容寻址（save），与裁剪 / 切段同一条路径。
+   *
+   * 为什么是 mp3：画布资源扩展名白名单里音频只有 .mp3 / .wav，写 .m4a 会被抹成无扩展名，
+   * 播放器认不出类型。mp3 兼容面最广、体积也合理。
+   *
+   * 没有音轨的视频很常见（AI 生成的无声片段）：ffmpeg 会失败，这里翻译成一句能看懂的话，
+   * 而不是把编码器 stderr 丢给用户。
+   */
+  ctx.routes.post('/api/video-audio', async (c) => {
+    const body = await c.req.json().catch(() => null)
+    if (!body || typeof body !== 'object') return c.json({ ok: false, error: 'body 不是 JSON' }, 400)
+    const { canvasId, nodeId, srcUrl } = body
+    if (typeof canvasId !== 'string' || !CANVAS_ID_RE.test(canvasId)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    if (typeof nodeId !== 'string' || !NODE_ID_RE.test(nodeId)) return c.json({ ok: false, error: '非法节点 id' }, 400)
+    if (running.has(nodeId)) return c.json({ ok: false, error: 'busy', message: '该节点已有视频任务在跑' }, 409)
+    const name = parseResourceName(srcUrl, canvasId)
+    if (!name) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持转音频）' }, 400)
+
+    const src = await resources.read(canvasId, name)
+    if (!src) return c.json({ ok: false, error: '源视频不存在' }, 404)
+
+    const promise = runFfmpegAudio(Buffer.from(src))
+      .then(async (out) => {
+        const saved = await resources.save(canvasId, out, '.mp3')
+        // 时长以文件为准（mp3 编码器会在尾部补几毫秒静音）；拿不到就不写，让前端按需再读
+        const real = await probeDuration(out).catch(() => undefined)
+        return {
+          ok: true,
+          url: saved.url,
+          resourceId: canvasId + '/' + saved.hashName,
+          duration: round3(real && real > 0 ? real : 0),
+          fileName: 'audio-' + name,
+        }
+      })
+      .finally(() => running.delete(nodeId))
+    running.set(nodeId, promise)
+    try {
+      const result = await promise
+      return c.json(result, result.ok ? 200 : 500)
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500)
+    }
+  })
+
+  /**
    * 按时间切一段（真换文件）：start/end 秒，重编码成新 mp4。
    *
    * 与裁剪共用 running（同节点只允许一个 ffmpeg）；产物同样走内容寻址（save）。
@@ -246,6 +297,52 @@ function runFfmpegCut(bytes, start, length) {
         ff.on('error', (err) => { cleanup(); reject(new Error('ffmpeg 启动失败（后台没装 ffmpeg？）: ' + err.message)) })
         ff.on('close', async (code) => {
           if (code !== 0) { cleanup(); reject(new Error('ffmpeg 退出码 ' + code + ': ' + stderr.slice(-400))); return }
+          try {
+            const out = await fs.readFile(dst)
+            cleanup()
+            resolve(out)
+          } catch (err) { cleanup(); reject(err) }
+        })
+      })
+      .catch(reject)
+  })
+}
+
+/**
+ * 起 ffmpeg：只抽音轨，编码成 mp3（画面整条丢掉）。
+ *
+ * 三处刻意：
+ * - 明确不要视频流：不加也能出音轨，但加了之后 ffmpeg 不必解码画面，快得多；
+ * - mp3 用可变码率（质量档 2，约 190kbps）：人声与音乐都够，体积比固定码率小；
+ * - **没有音轨**时 ffmpeg 会以 "does not contain any stream" 失败 ——
+ *   这是用户能理解的情况（无声视频），翻译成中文提示，别把 stderr 原样扔出去。
+ */
+function runFfmpegAudio(bytes) {
+  return new Promise((resolve, reject) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'mc-audio-'))
+    const src = path.join(dir, 'src' + guessExt(bytes))
+    const dst = path.join(dir, 'out.mp3')
+    const cleanup = () => { void fs.rm(dir, { recursive: true, force: true }).catch(() => undefined) }
+    fs.writeFile(src, bytes)
+      .then(() => {
+        const ff = spawn('ffmpeg', [
+          '-y', '-hide_banner', '-loglevel', 'error',
+          '-i', src,
+          '-vn',
+          '-map', '0:a:0?',
+          '-c:a', 'libmp3lame', '-q:a', '2',
+          dst,
+        ], { windowsHide: true })
+        let stderr = ''
+        ff.stderr.on('data', (d) => { stderr += String(d) })
+        ff.on('error', (err) => { cleanup(); reject(new Error('ffmpeg 启动失败（后台没装 ffmpeg？）: ' + err.message)) })
+        ff.on('close', async (code) => {
+          if (code !== 0) {
+            cleanup()
+            const noAudio = /does not contain any stream|matches no streams/i.test(stderr)
+            reject(new Error(noAudio ? '这段视频没有音轨，转不出音频' : 'ffmpeg 退出码 ' + code + ': ' + stderr.slice(-400)))
+            return
+          }
           try {
             const out = await fs.readFile(dst)
             cleanup()

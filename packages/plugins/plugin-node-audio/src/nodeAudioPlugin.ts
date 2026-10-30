@@ -173,7 +173,10 @@ export function apply(ctx: Context) {
     produces: { audio: { kind: 'audio', refField: 'resourceId' } },
     icon: AUDIO_ICON,
     size: { w: 320, h: 120 },
-    inputs: [{ port: 'target', acceptsTypes: ['text', 'audio'] }],
+    // 输入口收 text（提示词/文稿，生成本身由 web2api 动作提供）、audio（音频进音频，接力/转存）
+    // 与 video（**视频转音频**：视频节点上的「转为音频」按钮产出一个音频节点并连过来）。
+    // 收 video 是数据契约层面的声明 —— 插件之间仍然只通过 content type 协作，互不 import。
+    inputs: [{ port: 'target', acceptsTypes: ['text', 'audio', 'video'] }],
     outputs: [{ port: 'source', contentType: 'audio' }],
     // 不支持拖拽改尺寸：波形是定长内容，拉伸只会变形（用户明确要求）
     resizable: false,

@@ -24,6 +24,8 @@ import type { Rect } from './videoCrop'
 const CROP_ENDPOINT = '/api/video-crop'
 /** 后台按时间切段接口（同一个插件提供） */
 const CUT_ENDPOINT = '/api/video-cut'
+/** 后台抽音轨接口（同一个插件提供） */
+const AUDIO_ENDPOINT = '/api/video-audio'
 /** 探测接口：判断后台有没有装真裁剪插件 */
 const PING_ENDPOINT = '/api/video-crop/ping'
 /** 单次请求的等待上限（大视频转码要时间；超过就放弃并回落） */
@@ -48,6 +50,16 @@ export interface BackendCutResult {
   /** 新视频的持久引用（写进节点 resourceId 用） */
   resourceId?: string
   /** 切出来的这一段有多长（秒） */
+  duration: number
+}
+
+/** 后台抽音轨的结果：一段 mp3 的地址与长度 */
+export interface BackendAudioResult {
+  /** 新音频的同源地址 */
+  url: string
+  /** 新音频的持久引用（写进音频节点的 resourceId） */
+  resourceId?: string
+  /** 音频有多长（秒）；量不到为 0（调用方按需再读） */
   duration: number
 }
 
@@ -228,6 +240,56 @@ export async function cutVideoOnBackend(input: {
       url: body.url,
       ...(typeof body.resourceId === 'string' && body.resourceId ? { resourceId: body.resourceId } : {}),
       duration: body.duration,
+    }
+  } catch (err) {
+    input.onFailure?.({ message: '连不上后台：' + (err instanceof Error ? err.message : String(err)), status: 0 })
+    return undefined
+  } finally {
+    if (timer !== null) clearTimeout(timer)
+  }
+}
+
+/**
+ * 请求后台把视频的音轨抽成 mp3（视频 → 音频）。
+ *
+ * 与裁剪 / 切段共用同一条探针与同一个「同节点只跑一个任务」的判重：
+ * 它们动的是同一份源文件的转码，两条同时跑只会互相拖慢（后台会回 409 busy）。
+ *
+ * @returns 成功给新地址与长度；后台不可用 / 源不是画布资源 / 没有音轨 → undefined（原因经 onFailure 回传）
+ */
+export async function extractAudioOnBackend(input: {
+  nodeId: string
+  srcUrl: string
+  /** 后台给了明确失败原因时回调（调用方据此把原因写到占位节点上） */
+  onFailure?: (failure: BackendFailure) => void
+}): Promise<BackendAudioResult | undefined> {
+  if (!input.nodeId || !input.srcUrl) return undefined
+  if (!(await canCropOnBackend())) return undefined
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), CROP_TIMEOUT_MS) : null
+  try {
+    const res = await fetch(AUDIO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        canvasId: currentCanvasId(),
+        nodeId: input.nodeId,
+        srcUrl: input.srcUrl,
+      }),
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; url?: string; resourceId?: string; duration?: number; error?: string; message?: string }
+      | null
+    if (!res.ok || !body?.ok || typeof body.url !== 'string') {
+      input.onFailure?.(backendErrorOf(body, res.status))
+      return undefined
+    }
+    return {
+      url: body.url,
+      ...(typeof body.resourceId === 'string' && body.resourceId ? { resourceId: body.resourceId } : {}),
+      duration: typeof body.duration === 'number' && body.duration > 0 ? body.duration : 0,
     }
   } catch (err) {
     input.onFailure?.({ message: '连不上后台：' + (err instanceof Error ? err.message : String(err)), status: 0 })

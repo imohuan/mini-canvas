@@ -153,6 +153,17 @@ describe('音频节点插件整装', () => {
     ctx.stop()
   })
 
+  it('输入口收 video：视频节点的「转为音频」要能把新音频节点连过来', async () => {
+    const { ctx, nodeStore } = await boot()
+    const def = nodeStore.types.get(AUDIO_NODE_TYPE)!
+    // 少写 video 的后果：连线被 connection 校验判成 type-not-accepted，
+    // 「转为音频」只能建出一个连不上线的空节点（实测踩过）。
+    expect(def.inputs?.[0]?.acceptsTypes).toEqual(
+      expect.arrayContaining(['text', 'audio', 'video']),
+    )
+    ctx.stop()
+  })
+
   it('卸载后类型 / 段 / 服务一起回收（不留僵尸）', async () => {
     const { ctx, nodeStore, nodeRegistry } = await boot()
     ctx.stop()

@@ -81,6 +81,9 @@ const ICON_FRAME =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'
 const ICON_DOWNLOAD =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+/** 转音频：音符 + 向右箭头（"声音被取出来"） */
+const ICON_AUDIO =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>'
 const ICON_RESET =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/></svg>'
 const ICON_CONFIRM =
@@ -188,6 +191,8 @@ function cancelEdit(): void {
         <NodeToolbarButton title="剪辑时长" :icon="ICON_CLIP" @click="beginOverlay(props.id, 'clip')" />
         <NodeToolbarButton title="裁剪画面" :icon="ICON_CROP" @click="beginOverlay(props.id, 'crop')" />
         <NodeToolbarButton title="截取当前帧" :icon="ICON_FRAME" @click="run('video:capture-frame')" />
+        <!-- 转音频：后台 ffmpeg 抽音轨，新建一个音频节点 + 连线（与裁剪/剪辑同一条顺序） -->
+        <NodeToolbarButton title="转为音频" :icon="ICON_AUDIO" @click="run('video:to-audio')" />
         <NodeToolbarButton title="下载视频" :icon="ICON_DOWNLOAD" @click="run('video:download')" />
         <NodeToolbarButton v-if="cropped" title="恢复整幅画面" :icon="ICON_RESET" @click="run('video:reset-crop')" />
         <NodeToolbarButton v-if="clipped" title="恢复整段时长" :icon="ICON_RESET" @click="run('video:reset-clip')" />

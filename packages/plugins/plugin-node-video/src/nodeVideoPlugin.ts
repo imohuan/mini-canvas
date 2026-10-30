@@ -46,6 +46,7 @@ import {
 import type { Rect } from './videoCrop'
 import { cropNodeWithBackend } from './videoCropFlow'
 import { clipNodeWithBackend } from './videoClipFlow'
+import { videoToAudio } from './videoAudioFlow'
 import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 import { captureVideoThumb } from './videoThumbService'
 
@@ -473,6 +474,16 @@ export function apply(ctx: Context) {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
       return downloadVideoNode(ops, nodeId)
+    },
+  })
+  ctx.commands.register({
+    id: 'video:to-audio',
+    title: '视频转音频',
+    run: async (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      // 真转：后台 ffmpeg 抽音轨成 mp3，新建一个音频节点 + 连线（与裁剪/剪辑同一条顺序）
+      return (await videoToAudio(ctx, nodeId)) === true
     },
   })
 }
