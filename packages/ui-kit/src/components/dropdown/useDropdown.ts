@@ -67,7 +67,10 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     minWidth: props.menuMinWidth,
     maxHeight: props.menuMaxHeight,
   }))
-  const { position, positioned, update } = useFloating(anchorEl, panelRef, open, options)
+  /** 坐标锚点（右键菜单）：非空时菜单钉在这个点上。 */
+  const point = ref(props.point ?? null)
+  watch(() => props.point, (value) => { point.value = value ?? null })
+  const { position, positioned, update } = useFloating(anchorEl, panelRef, open, options, point)
 
   // 常显切换时，直接把 open 拉成 true；模式切走时回到外部传入值。
   watch(() => props.modelValue, (value) => {
@@ -180,6 +183,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
    * 避免在 watcher 里更新 anchorEl 又引发组件更新，形成递归。
    */
   function syncAnchor(): void {
+    if (props.point) {
+      // 坐标锚点优先：不解析元素锚点，箭头也按坐标算。
+      if (anchorEl.value !== null) anchorEl.value = null
+      return
+    }
     const next = resolveAnchor(props.anchor) ?? triggerRef.value
     if (next !== anchorEl.value) anchorEl.value = next
   }
@@ -228,11 +236,15 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     const hidden: Record<string, string> = { display: 'none' }
     if (!props.arrow || !positioned.value) return hidden
     const panel = panelRef.value
-    const trigger = anchorEl.value
+    /** 箭头指向的参照：坐标锚点用点本身，元素锚点用元素矩形。 */
+    const triggerRect: DOMRect | null = props.point
+      ? ({ left: props.point.x, top: props.point.y, right: props.point.x, bottom: props.point.y, width: 0, height: 0, x: props.point.x, y: props.point.y, toJSON: () => ({}) } as DOMRect)
+      : (anchorEl.value?.getBoundingClientRect() ?? null)
+    const trigger = triggerRect
     if (!panel || !trigger) return hidden
     const pos = position.value
     const side = pos.placement.split('-')[0] as 'top' | 'bottom' | 'left' | 'right'
-    const tr = trigger.getBoundingClientRect()
+    const tr = triggerRect
     const half = ARROW_SIZE / 2
     const style: Record<string, string> = {
       position: 'fixed',

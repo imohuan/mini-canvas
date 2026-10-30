@@ -7,11 +7,11 @@
  */
 import { computed, ref } from 'vue'
 import {
-  Button, ButtonGroup, Confirm, ContextMenu, Dialog, Dropdown, Input,
-  MessagesHost, NotifyHost, NumberInput, Popover, Select, Slider, SplitPane,
+  Button, ButtonGroup, Confirm, Dialog, Dropdown, Input,
+  MessagesHost, NotifyHost, NumberInput, Select, Slider, SplitPane,
   Switch, Tabs, Tooltip, UiKitProvider, message, notify,
 } from '../index'
-import type { ContextMenuItem, SelectOption, TabItem, UiKitTone } from '../index'
+import type { SelectOption, TabItem, UiKitTone } from '../index'
 import { readBool, readNumber, readSize, readText } from './playground'
 import DropdownPlayground from '../components/dropdown/DropdownPlayground.vue'
 
@@ -40,7 +40,6 @@ const sliderValue = ref(40)
 const switchValue = ref(true)
 const tabValue = ref('preview')
 const selectValue = ref<string | number | null>('image')
-const popoverOpen = ref(false)
 const dialogOpen = ref(false)
 const confirmOpen = ref(false)
 const splitText = computed(() => readText(state.value, 'leftLabel') || '左边内容')
@@ -68,32 +67,6 @@ const tabItems = computed<TabItem[]>(() => {
   if (readBool(state.value, 'showDisabled')) items.push({ value: 'settings', label: '设置', disabled: true })
   return items
 })
-
-const contextItems = computed<ContextMenuItem[]>(() => {
-  const s = state.value
-  const icon = (name: string): string | undefined => readBool(s, 'showIcons') ? name : undefined
-  const shortcut = (key: string): string | undefined => readBool(s, 'showShortcut') ? key : undefined
-  const items: ContextMenuItem[] = [
-    { id: 'open', label: '打开', icon: icon('↗'), shortcut: shortcut('Enter'), group: 'main' },
-    { id: 'rename', label: '重命名', icon: icon('✎'), shortcut: shortcut('F2'), group: 'main' },
-  ]
-  if (readBool(s, 'showSubmenu')) {
-    items.push({ id: 'theme', label: '主题', icon: icon('🎨'), group: 'main', children: [
-      { id: 'theme-dark', label: '深色' },
-      { id: 'theme-light', label: '浅色' },
-    ] })
-  }
-  items.push({ id: 'copy', label: '复制', icon: icon('⧉'), shortcut: shortcut('Ctrl+C'), group: 'edit' })
-  if (readBool(s, 'showDisabled')) items.push({ id: 'paste', label: '粘贴', icon: icon('⎘'), shortcut: shortcut('Ctrl+V'), group: 'edit', disabled: true })
-  if (readBool(s, 'showDanger')) items.push({ id: 'delete', label: '删除', icon: icon('🗑'), shortcut: shortcut('Del'), group: 'danger', danger: true })
-  return items
-})
-
-const contextMenuRef = ref<InstanceType<typeof ContextMenu> | null>(null)
-
-function openContextMenu(event: MouseEvent): void {
-  contextMenuRef.value?.showAt(event.clientX, event.clientY)
-}
 
 function fireNotify(): void {
   const duration = readBool(state.value, 'sticky') ? 0 : readNumber(state.value, 'duration', 3600)
@@ -256,32 +229,6 @@ function fireMessage(): void {
       <DropdownPlayground :config-target="dropdownConfigTarget" />
     </template>
 
-    <!-- Popover -->
-    <template v-else-if="id === 'popover'">
-      <Popover
-        v-model="popoverOpen"
-        :title="readText(state, 'title')"
-        :description="readText(state, 'description')"
-        :placement="(readText(state, 'placement') || 'bottom-start') as 'bottom-start' | 'bottom-end' | 'top-start' | 'right-start'"
-        :offset="readNumber(state, 'offset', 8)"
-        :width="readText(state, 'width') || '340px'"
-        :close-on-outside="readBool(state, 'closeOnOutside')"
-        :close-on-escape="readBool(state, 'closeOnEscape')"
-        :disabled="readBool(state, 'disabled')"
-      >
-        <template #trigger>
-          <!-- 点击由 Dropdown 的外层触发区接管；这里不能再调 toggle，否则会连开带关。 -->
-          <Button variant="secondary">打开 Popover</Button>
-        </template>
-        <template #default>
-          <div class="pg-stack">
-            <Input placeholder="新名称" aria-label="新名称" />
-            <p class="pg-hint">点外部、Esc 或右上角 × 都能关闭。</p>
-          </div>
-        </template>
-      </Popover>
-    </template>
-
     <!-- Tooltip -->
     <template v-else-if="id === 'tooltip'">
       <Tooltip
@@ -294,14 +241,6 @@ function fireMessage(): void {
       >
         <Button variant="secondary">{{ readText(state, 'buttonLabel') || '悬停我' }}</Button>
       </Tooltip>
-    </template>
-
-    <!-- ContextMenu -->
-    <template v-else-if="id === 'context-menu'">
-      <div class="pg-ctx" @contextmenu.prevent="openContextMenu">
-        {{ readText(state, 'hint') || '在这块区域点右键' }}
-      </div>
-      <ContextMenu ref="contextMenuRef" :items="contextItems" @select="() => undefined" />
     </template>
 
     <!-- Dialog -->

@@ -16,9 +16,7 @@ import { switchPlayground } from '../../components/switch/playground'
 import { tabsPlayground } from '../../components/tabs/playground'
 import { selectPlayground } from '../../components/select/playground'
 import { dropdownPlayground } from '../../components/dropdown/playground'
-import { popoverPlayground } from '../../components/popover/playground'
 import { tooltipPlayground } from '../../components/tooltip/playground'
-import { contextMenuPlayground } from '../../components/context-menu/playground'
 import { dialogPlayground } from '../../components/dialog/playground'
 import { confirmPlayground } from '../../components/confirm/playground'
 import { notifyPlayground } from '../../components/notify/playground'
@@ -38,9 +36,7 @@ export const PLAYGROUND_CATALOG: Record<string, ComponentPlayground> = {
   tabs: tabsPlayground,
   select: selectPlayground,
   dropdown: dropdownPlayground,
-  popover: popoverPlayground,
   tooltip: tooltipPlayground,
-  'context-menu': contextMenuPlayground,
   dialog: dialogPlayground,
   confirm: confirmPlayground,
   notify: notifyPlayground,

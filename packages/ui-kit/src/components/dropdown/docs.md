@@ -250,7 +250,7 @@ const open = ref(false)
 ## 原生模式：面板由你画
 
 `bare` 打开后，Dropdown 只负责定位、方向、箭头和开关，面板长什么样完全由插槽决定。
-Popover 和 Tooltip 就是这样搭出来的。
+Tooltip 就是这样搭出来的。
 
 @@VUE@@
 <script setup lang="ts">

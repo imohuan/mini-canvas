@@ -22,8 +22,8 @@
 
 /*
  * 裸面板：只留定位与滚动，外观完全交给插槽。
- * Popover / Tooltip 用这个模式复用 Dropdown 的定位、方向、箭头和受控开关，
- * 但面板长什么样由调用方决定。
+ * Tooltip 等自定义外观的浮层用这个模式复用 Dropdown 的定位、方向、箭头和受控开关，
+ * 面板长什么样由调用方决定。
  */
 .mck-dropdown__panel.is-bare {
   padding: 0;

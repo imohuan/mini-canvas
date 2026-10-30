@@ -32,7 +32,7 @@ import { Tooltip, Button } from '@mini-canvas/ui-kit'
 </script>
 
 <template>
-  <Tooltip content="这是一段比较长的提示文字，用来检查换行和最大宽度。超过 max-width 会自动折行，不会撑破面板。" :max-width="220">
+  <Tooltip content="这是一段比较长的提示文字，用来检查换行和最大宽度。超过 max-width 会自动折行，不会撑破面板。" max-width="220px">
     <Button variant="ghost">长提示</Button>
   </Tooltip>
 </template>

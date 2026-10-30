@@ -39,9 +39,7 @@ export const CATALOG: CatalogGroup[] = [
     items: [
       { id: 'tabs', name: 'Tabs', label: '选项卡', description: '平级内容切换' },
       { id: 'dropdown', name: 'Dropdown', label: '下拉容器', description: '触发器 + 任意浮层' },
-      { id: 'popover', name: 'Popover', label: '气泡卡片', description: '带标题的内容浮层' },
       { id: 'tooltip', name: 'Tooltip', label: '文字提示', description: '悬停说明' },
-      { id: 'context-menu', name: 'ContextMenu', label: '右键菜单', description: '分组、子菜单、快捷键' },
     ],
   },
   {

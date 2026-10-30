@@ -65,16 +65,24 @@ export function useFloating(
   panel: Ref<HTMLElement | null>,
   active: Ref<boolean>,
   options: Ref<FloatingOptions>,
+  /** 坐标锚点：非空时面板贴到这个视口坐标，忽略 trigger。 */
+  point?: Ref<{ x: number; y: number } | null>,
 ) {
   const position = ref<FloatingPosition>({ ...DEFAULT_POSITION })
   const positioned = ref(false)
   let frame = 0
 
   function update(): void {
-    const triggerEl = trigger.value
     const panelEl = panel.value
-    if (!triggerEl || !panelEl) return
-    const rect = triggerEl.getBoundingClientRect()
+    if (!panelEl) return
+    let rect: DOMRect | null = null
+    if (point?.value) {
+      rect = { left: point.value.x, top: point.value.y, right: point.value.x, bottom: point.value.y, width: 0, height: 0, x: point.value.x, y: point.value.y, toJSON: () => ({}) }
+    } else {
+      const triggerEl = trigger.value
+      rect = triggerEl ? triggerEl.getBoundingClientRect() : null
+    }
+    if (!rect) return
     const padding = options.value.padding ?? 8
     const offset = options.value.offset ?? 6
     const vw = window.innerWidth

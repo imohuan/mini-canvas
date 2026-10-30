@@ -57,7 +57,7 @@ defineExpose({
   show: api.show,
   hide: api.hide,
   toggle: api.toggle,
-  /** 浮层 DOM：父组件（如 Popover）需要把焦点送进去。 */
+  /** 浮层 DOM：父组件（如 Tooltip）需要把焦点送进去。 */
   panelRef: api.panelRef,
 })
 /*

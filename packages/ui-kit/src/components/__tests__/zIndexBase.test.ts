@@ -29,9 +29,7 @@ describe('Provider 的 zIndexBase 落到浮层', () => {
   it('浮层样式读变量而不是写死数字', () => {
     const cases: Array<[string, string]> = [
       ['../dropdown/dropdown.css', 'dropdown'],
-      ['../popover/popover.css', 'popover'],
       ['../tooltip/tooltip.css', 'popover'],
-      ['../context-menu/context-menu.css', 'dropdown'],
       ['../dialog/dialog.css', 'modal'],
       ['../notify/notify.css', 'toast'],
       ['../messages/messages.css', 'toast'],
