@@ -18,9 +18,6 @@ import { jobsRoutes } from '../../routes/jobs.js'
 import { historyRoutes } from '../../routes/history.js'
 import { kvRoutes } from '../../routes/kv.js'
 import { canvasOpsRoutes } from '../../routes/canvasOps.js'
-import { agentRoutes } from '../../routes/agent.js'
-import { agentSessionRoutes } from '../../routes/agentSessions.js'
-import type { BranchStore } from '../../agent/branchStore.js'
 import { pluginRoutes } from '../../static.js'
 import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
 import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
@@ -33,7 +30,6 @@ import { healthPlugin } from './health.js'
 import { pluginWatchRoutes } from '../pluginWatch.js'
 import { createPluginPresenceRoutes } from '../../routes/pluginPresenceRoute.js'
 import { PluginPresence, PRESENCE_SWEEP_MS } from '../pluginPresence.js'
-import { runAgentMiddleware } from '../../serverFramework/agent.js'
 import type { KvStore } from '../../store/kvStore.js'
 import type { CanvasStore } from '../../store/canvasStore.js'
 import type { CanvasResourceStore } from '../../store/canvasResources.js'
@@ -42,16 +38,8 @@ import type { CanvasDocumentPool } from '../../mcp/canvasDocPool.js'
 import type { ProviderRegistry } from '../../providers/registry.js'
 import type { TaskManager } from '../../tasks/taskManager.js'
 import type { HistoryStore } from '../../tasks/history.js'
-import type { AgentConfigService } from '../../agent/config.js'
-import type { AgentSessionStore } from '../../agent/sessionStore.js'
-import type { AgentRuntime } from '../../agent/runtime.js'
-import type { SessionHub } from '../../agent/sessionHub.js'
-import type { QueueScheduler } from '../../agent/queueScheduler.js'
-import type { GoalRuntimePort } from '../../routes/agentSessions.js'
 import type { ProjectStore } from '../../store/projectStore.js'
 import type { AssetStore } from '../../store/assetStore.js'
-import { agentChatRoutes, type ChatRunner } from '../../routes/agentChat.js'
-import { createSdkChatRunner } from '../../agent/chatSdk.js'
 
 /** 服务名常量（与 server.ts 的 inject 一一对应，改名要一起改） */
 export const S = {
@@ -219,72 +207,6 @@ export const canvasOpsPlugin: PluginModule = {
   },
 }
 
-export const agentPluginRoutes: PluginModule = {
-  name: 'agent-routes',
-  inject: [S.agentConfig, S.agentRuntime],
-  apply(ctx) {
-    ctx.routes.adopt(
-      agentRoutes(need<AgentConfigService>(ctx, S.agentConfig), need<AgentRuntime>(ctx, S.agentRuntime)),
-    )
-  },
-}
-
-/**
- * agent-chat —— 单轮对话（`POST /api/agent/chat/completion`）。
- *
- * 与 agent-sessions（多轮）分开住，理由见 routes/agentChat.ts 文件头：
- * 这条**不建会话、不进列表、不留痕迹**，是"模型直连"，不是"跟 Agent 聊天"。
- */
-export const agentChatPlugin: PluginModule = {
-  name: 'agent-chat',
-  inject: [S.agentConfig, S.agentLoadSdk],
-  apply(ctx) {
-    const config = need<AgentConfigService>(ctx, S.agentConfig)
-    const loadSdk = need<() => Promise<never>>(ctx, S.agentLoadSdk)
-    // createSdkChatRunner 的返回值就是路由要的 runner 形状（单测可另注入假的）
-    const { run } = createSdkChatRunner({ config, loadSdk: loadSdk as never })
-    ctx.routes.adopt(agentChatRoutes({ config, run: run as unknown as ChatRunner }))
-  },
-}
-
-export const agentSessionPlugin: PluginModule = {
-  name: 'agent-sessions',
-  inject: [S.agentSessions, S.agentRuntime, S.agentConfig, S.agentBranches, 'agentHub', 'agentQueue', 'agentGoal'],
-  apply(ctx) {
-    ctx.routes.adopt(
-      agentSessionRoutes(
-        need<AgentSessionStore>(ctx, S.agentSessions),
-        need<AgentRuntime>(ctx, S.agentRuntime),
-        need<AgentConfigService>(ctx, S.agentConfig),
-        need<BranchStore>(ctx, S.agentBranches),
-        // ★ pre-turn 钩子：把 Agent 中间件链挂上去（用户点 2）。
-        //   用 ctx 自己即可 —— 中间件注册场（server/agent-mw）是**全插件共享的一张表**，
-        //   任何插件的 ctx.registryOf 读到的都是同一份，不必再找"根 ctx"。
-        (turn) => runAgentMiddleware(ctx, turn),
-        // 托管通道（设计 §3.2）：给了它 = 「后台对话」模式（一轮不绑连接）
-        need<SessionHub>(ctx, 'agentHub'),
-        // 队列变化后的调度机会（设计 §3.3.2）：路由只管落盘，发不发由调度器决定。
-        //
-        // **forced**：这条回调的全部触发点都是**用户明确操作**（加 / 删 / 改 / 暂停 /
-        // 恢复 / 引导）。调度器对「自动重试」有 30 秒冷却（防配置错误时刷日志），但那道闸
-        // 不该挡住用户 —— 不传 forced 的话，上一次派发失败后用户点「恢复队列」也会在 30 秒内
-        // 毫无反应（真机表现：点了没动静，只能等）。
-        (canvasId, sessionId) => need<QueueScheduler>(ctx, 'agentQueue').tick(canvasId, sessionId, { forced: true }),
-        // 会话删除 → 清掉**所有**按会话记账的内存表：
-        //  - 调度器（inflight / hadPending / lastFailureAt）：否则残留的冷却会污染后续会话；
-        //  - hub 的通道与 running（review 指出这里从前一直漏着）：不清则缓冲事件、订阅者
-        //    与「正在跑」标记会随每次删会话累积，进程长跑就是内存泄漏。
-        (canvasId, sessionId) => {
-          need<QueueScheduler>(ctx, 'agentQueue').forget(canvasId, sessionId)
-          need<SessionHub>(ctx, 'agentHub').forget(canvasId, sessionId)
-        },
-        // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动
-        need<GoalRuntimePort>(ctx, 'agentGoal'),
-      ),
-    )
-  },
-}
-
 /**
  * server-plugins 内置插件：后台插件的安装 / 卸载 / 清单（Task 7）。
  * 目录经服务注入（serverPluginsDir）。安全约束见 routes/serverPlugins.ts 文件头。
@@ -401,9 +323,6 @@ export const BUILTIN_PLUGINS: PluginModule[] = [
   historyPlugin,
   kvPlugin,
   canvasOpsPlugin,
-  agentPluginRoutes,
-  agentSessionPlugin,
-  agentChatPlugin,
   pluginCatalogPlugin,
   serverPluginsPlugin,
   npmPluginsPlugin,

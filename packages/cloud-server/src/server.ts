@@ -23,6 +23,7 @@ import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
+import { AGENT_PLUGINS } from './plugins/builtin/agentRoutes.js'
 import { PluginPresence } from './plugins/pluginPresence.js'
 import type { Context } from '@mini-canvas/kernel'
 import { loadServerPluginsFromDir, DEFAULT_SERVER_PLUGINS_DIR } from './serverFramework/pluginLoader.js'
@@ -40,21 +41,11 @@ import { TaskManager } from './tasks/taskManager.js'
 import { DEFAULT_CANVAS_ID } from './store/canvasPaths.js'
 import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
 import { makeFetchSelfBytes } from './tasks/selfFetch.js'
-import { AgentConfigService } from './agent/config.js'
-import { AgentSessionStore } from './agent/sessionStore.js'
 import { branchStore } from './agent/branchStore.js'
- import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from './agent/testModel.js'
-import { AgentRuntime } from './agent/runtime.js'
-import { AGENT_ID, AGENT_PROJECT_ID, agentRoot } from './agent/agentPaths.js'
-import { ensureGoalInstalled } from './agent/goal.js'
-import { SessionHub } from './agent/sessionHub.js'
-import { QueueScheduler } from './agent/queueScheduler.js'
-import { GoalRuntime, goalHooksDir, findSessionTrace } from './agent/goalRuntime.js'
-import { sessionScratchpadPath } from './agent/agentPaths.js'
-import { tracesDirOf } from './agent/traceFork.js'
+import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from './agent/testModel.js'
+import { assembleAgentServices, type AgentServices } from './agent/assembleAgent.js'
 import { buildRuntimeContext, runtimeContextSection } from './agent/runtimeContext.js'
 import { listAgentPromptSections } from './serverFramework/agent.js'
-import { runAgentMiddleware } from './serverFramework/agent.js'
 import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
 import { createDebugOrigin } from './debugOrigin.js'
 import { createAuditLog } from './audit.js'
@@ -215,154 +206,14 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 全局配置（模型 / 技能 / MCP / 审批规则）住 agent/；会话按画布住在 canvases/<id>/agent/。
   // SDK 只在真要跑一轮时才加载（懒 import），所以没配模型时启动照常成功。
   const agentEnabled = opts.agent !== false
-  const agentConfig = new AgentConfigService(dataDir, opts.agentSkillSources)
-  const agentSessions = new AgentSessionStore(dataDir)
-  let sdkPromise: Promise<typeof import('@prismshadow/penguin-core')> | undefined
-  const loadSdk = (): Promise<typeof import('@prismshadow/penguin-core')> =>
-    (sdkPromise ??= import('@prismshadow/penguin-core'))
-  // 「后台对话」的事件通道（设计 §3.2）：每会话一条常驻流，队列在空闲时自动起轮也靠它广播。
-  const agentHub = new SessionHub({ log: (m, extra) => console.log('[agent-hub] ' + m, extra ?? '') })
-  // 队列调度器（设计 §3.3）：唯一裁判，见 queueScheduler.ts 文件头。
-  // 先声明后赋值（agentRuntime 的 onRunFinished 要引用它，而它的 deps 又要 agentRuntime 的派生面）。
-  let queueScheduler: QueueScheduler
-  const agentRuntime = new AgentRuntime({
-    root: dataDir,
-    store: agentSessions,
-    hub: agentHub,
-    agent: async () => {
-      const sdk = await loadSdk()
-      return sdk.createAgent({
-        root: agentRoot(dataDir),
-        projectId: AGENT_PROJECT_ID,
-        agentId: AGENT_ID,
-      })
-    },
-    /**
-     * 插件加的系统提示词小节（见 serverFramework/agent.ts 的 AGENT_PROMPT_FIELD）。
-     *
-     * **每次建会话现读**：插件可热装热卸，运行期的地址 / 端口也在变，
-     * 快照一次就会把旧值冻进提示词。
-     */
-    promptSections: () =>
-      listAgentPromptSections(host.ctx).map((s) => ({ title: s.title, text: s.text })),
-    makeUserMessage: (text, images) => {
-      // 这里必须是同步的（运行时按需 await 不了），所以 SDK 的消息构造在首次 run 前
-      // 已经由 loadSdk 预热过；构造器本身是纯函数，不碰网络。
-      const sdk = sdkRef
-      if (!sdk) throw new Error('SDK 尚未就绪：请先配置模型后重试')
-      const messages: unknown[] = [sdk.userText(text)]
-      for (const url of images ?? []) messages.push(sdk.imageUrlMessage(url))
-      return messages
-    },
-    // 宿主注入的用户消息（目标协议文本）：必须走 sender:'harness' —— SDK 的 goal
-    // stop hook 靠这个戳划轮次边界，缺了它记账会退化成「整份 trace = 一轮」（真机实测）。
-    makeHarnessMessage: (text) => {
-      const sdk = sdkRef
-      if (!sdk) throw new Error('SDK 尚未就绪：请先配置模型后重试')
-      return sdk.userText(text, 'harness')
-    },
-    filterMcp: (names) => agentConfig.subsetMcp(names),
-    readSkill: (name) => agentConfig.readSkillFile(name),
-    withSystemPrompt: (text) => agentConfig.withSystemPrompt(text),
-    // 会话自动命名：走「会话标题模型」配置的模型（没配则回落会话默认模型）。
-    // 失败返回 null，runtime 回落「首句截断」—— 起名失败不该报错打扰对话。
-    generateTitle: (plainFirstText) => agentConfig.generateSessionTitle(plainFirstText),
-    // 一轮结束 → 队列调度（先结算 sending 的账，再看能不能发下一条）
-    //    目标还有**轮次边界**（一次 run 里 stop hook 连跑多轮）：见下面的 onGoalRound。
-    onGoalRound: (canvasId, sessionId) => {
-      /**
-       * 目标的一轮结束（stop hook 刚跑完）：立刻读一次 GOAL.json 推 goal_state。
-       * 为什么需要它（真机实测的滞后）：目标是在**一次 SDK run() 里连跑多轮**的，
-       * 只在 run 结束时读一次会让中间几轮全被跳过（用户看到「第 3 轮直接跳到第 7 轮」）。
-       */
-      void goalRuntime
-        .read(canvasId, sessionId)
-        .then((g) => {
-          if (g) agentHub.append(canvasId, sessionId, { type: 'goal_state', goal: g })
-        })
-        .catch(() => undefined)
-    },
-    onRunFinished: (canvasId, sessionId) => {
-      // 一轮结束的收尾顺序（设计 §3.4.4 的"守住缺席" + §3.3.2 的调度）：
-      // 1. 目标被暂停时守住 GOAL.json 的缺席（那一轮里模型可能把它写回来）；
-      // 2. 通知时机之一：这一轮结束（round_done）；
-      // 3. 交给队列调度器：结算 sending 的账、再看能不能发下一条。
-      void goalRuntime
-        .enforcePauseIfNeeded(canvasId, sessionId)
-        .catch((err) =>
-          console.warn('[agent-goal] 守住暂停失败', err instanceof Error ? err.message : String(err)),
-        )
-        .finally(() => {
-          agentHub.append(canvasId, sessionId, { type: 'round_done' })
-          /**
-           * 每轮结束都推一次 goal_state（用户口径 2026-10-09：目标行上的「第 N 轮 ·
-           * 已用/剩余预算」必须跟着跑）。GOAL.json 由 goal 插件的 stop.mjs 在轮末更新，
-           * 这时读它就是最新值；没有目标（读不到文件）就不推，界面保持原样。
-           * 不推的后果（真机实测）：数字永远停在发起那一刻（第 1 轮 · 剩余预算 100k）。
-           */
-          void goalRuntime
-            .read(canvasId, sessionId)
-            .then((g) => {
-              if (g) agentHub.append(canvasId, sessionId, { type: 'goal_state', goal: g })
-            })
-            .catch(() => undefined)
-          queueScheduler.onRunFinished(canvasId, sessionId)
-        })
-    },
-    log: (message, extra) => console.log('[agent] ' + message, extra ?? ''),
-  })
-  queueScheduler = new QueueScheduler({
-    store: agentSessions,
-    runtime: agentRuntime,
-    hub: agentHub,
-    // 起一轮的实现：与 HTTP 的"发消息"走同一条路（pre-turn 中间件由 HTTP 层跑；
-    // 队列发的是**已经在队列里核准过的**文本，不再过一遍中间件 —— 避免同一条消息被改写两次）
-    // 调度器给的是一个带 canvasId 的 StartRunInput；runtime.startRun 是 (canvasId, input) 两参
-    startRun: (input) => agentRuntime.startRun(input.canvasId, input),
-    // 带目标的条目：先把目标文件与第 1 轮的协议文本备好，再起一轮
-    startGoal: (canvasId, sessionId, objective, budget) =>
-      goalRuntime.beginGoal(canvasId, sessionId, objective, budget),
-    // 队列里的消息也要过 pre-turn 中间件：与 HTTP 的 /messages 同一套（见 deps.preTurn 说明）。
-    // 少了它，插件写的拦截 / 改写会被「排队发」绕过去 —— 同一条消息两种行为（真机查出来的洞）。
-    preTurn: (turn) => runAgentMiddleware(host.ctx, turn),
-    log: (message, extra) => console.log('[agent-queue] ' + message, extra ?? ''),
-  })
-  // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动。
-  const goalRuntime = new GoalRuntime({
-    scratchpadOf: (_canvasId, sessionId) => sessionScratchpadPath(agentRoot(dataDir), sessionId),
-    hooksDir: goalHooksDir(agentRoot(dataDir), AGENT_PROJECT_ID, AGENT_ID),
-    latestTraceOf: (sessionId) => findSessionTrace(tracesDirOf(agentRoot(dataDir)), sessionId),
-    startRun: async (canvasId, sessionId, text, harnessText) => {
-      const r = await agentRuntime.startRun(canvasId, {
-        canvasId,
-        sessionId,
-        text,
-        ...(harnessText ? { harnessText } : {}),
-      })
-      return { started: r.started }
-    },
-    isRunning: (canvasId, sessionId) => agentRuntime.isRunning(canvasId, sessionId),
-    // 经 SDK 会话跑官方 start.mjs（它注入 sessionId / scratchpadDir —— 会话才知道的）
-    runUserPromptHook: (canvasId, sessionId, name, prompt, extras) =>
-      agentRuntime.runUserPromptHook(canvasId, sessionId, name, prompt, extras),
-    emit: (canvasId, sessionId, ev) => agentHub.append(canvasId, sessionId, ev),
-    setPausedFlag: (canvasId, sessionId, paused) => agentSessions.setGoalPaused(canvasId, sessionId, paused),
-    isPausedFlag: async (canvasId, sessionId) => (await agentSessions.get(canvasId, sessionId))?.goalPaused === true,
-    log: (message, extra) => console.log('[agent-goal] ' + message, extra ?? ''),
-  })
-  // 同步引用：makeUserMessage 是同步签名，SDK 一旦加载就填进来
-  let sdkRef: typeof import('@prismshadow/penguin-core') | undefined
-  void loadSdk().then((sdk) => {
-    sdkRef = sdk
-  }).catch(() => undefined)
-
-  // 目标（goal）插件的 hook 包：装进 agent_state/hooks/goal/ 之后才有目标功能（设计 §3.4.1）。
-  // 恒幂等（已装且版本一致时一个字节都不写），且**永不抛错** —— 插件取不到只记一条日志，
-  // 没配模型时启动照常成功（它只读插件库、写本地文件，不碰网络）。
-  // 必须 await（与下面内置画布 MCP 同一条规矩）：不能留一条还在写的异步尾巴，
-  // 否则调用方（测试清理 / 进程退出）会在写完成前就把数据目录删掉（实测 ENOTEMPTY）。
-  if (agentEnabled) {
-    await ensureGoalInstalled(agentRoot(dataDir), AGENT_PROJECT_ID, AGENT_ID)
+  /**
+   * 非空别名：只在 `agentEnabled` 守卫内使用（见下方 host 建好后的装配）。
+   * 用访问器把“可能未装配”收成一处明确报错，而不是到处写 `?.` 把缺陷藏起来。
+   */
+  let agentServicesRef: AgentServices | undefined
+  const agentServices = (): AgentServices => {
+    if (!agentServicesRef) throw new Error('[cloud-server] Agent 已关闭，不能访问 Agent 服务')
+    return agentServicesRef
   }
 
   // ==================== 平台提供方（后台的「投递箱」）====================
@@ -400,8 +251,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       baseUrl: 'http://' + (opts.hostname ?? '127.0.0.1') + ':' + String(actualPort ?? port),
       dataRoot: dataDir,
     })
-  // 先灌一次（此刻用的是请求端口）：监听前读配置也能拿到目录与占位符清单
-  if (agentEnabled) agentConfig.setRuntimeContext(runtimeContext())
+  // 运行环境上下文的首次灌入在 Agent 服务装配完成之后（见下方 host 建好后的位置）——
+  // 放在这里会早于 assembleAgentServices，`agentServices()` 还没有可访问的对象。
   /**
    * 「服务器自己把画布里的地址取回来」（见 tasks/selfFetch 的说明）。
    *
@@ -491,9 +342,21 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // hotFallback：让运行期从 NPM 装进来的后台插件**无需重启**即可命中路由
   // （见 serverFramework/routes.ts ④）。真实服务开启；纯测试的 framework 默认不开。
   const host = createServerFramework({ root: dataDir, hotFallback: true })
+  /**
+   * Agent 关闭时**一个对象都不建**。
+   *
+   * 此前 Config / SessionStore / SDK 预热 / goal hook 都在开关判断之前执行，
+   * `agent: false` 只是少注册两条路由。现在整组服务由 assembleAgentServices 一次建成，
+   * 开关为假时它根本不会被调用 —— 没有 Config、没有 SessionStore、没有 SDK 懒加载。
+   */
+  if (agentEnabled) {
+    agentServicesRef = await assembleAgentServices({ dataDir, ctx: host.ctx, skillSources: opts.agentSkillSources })
+    // 先灌一次（此刻用的是请求端口）：监听前读配置也能拿到目录与占位符清单。
+    agentServicesRef.config.setRuntimeContext(runtimeContext())
+  }
   // 设置页要列「后台自动附加了哪些内容」——把注册场的读口子交给 config（它不认识插件系统）。
   // 必须**在 host 建好之后**：`host.ctx` 是 const，放前面会撞暂时性死区。
-  if (agentEnabled) agentConfig.setPromptSectionViews(() => listAgentPromptSections(host.ctx))
+  if (agentEnabled) agentServices().config.setPromptSectionViews(() => listAgentPromptSections(host.ctx))
   const app = host.app
 
   // ---- 装配阶段（顺序即匹配优先级；全部必须在 start() 之前完成，Hono 首次 fetch 后冻结）----
@@ -712,7 +575,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 单轮对话（/api/agent/chat/completion）按需加载 SDK 的入口。
   // 为什么给"函数"而不是直接给 SDK 对象：SDK 是懒加载的（没配模型时启动照常成功），
   // 而那条路由每次请求都要用它 —— 传函数就没有"启动时还没加载好"的时序问题。
-  host.ctx.inject('agentLoadSdk', () => loadSdk())
+  // **只在 Agent 开启时注入**：关闭时连这个入口都不该存在（见 agent:false 测试）。
+  if (agentEnabled) host.ctx.inject('agentLoadSdk', () => agentServices().loadSdk())
   host.ctx.inject('providerRegistry', registry)
   host.ctx.inject('taskManager', tasks)
   host.ctx.inject('history', history)
@@ -785,13 +649,13 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const debugOrigin = createDebugOrigin({ dataRoot: dataDir })
   host.ctx.inject('debugOrigin', debugOrigin)
   if (agentEnabled) {
-    host.ctx.inject('agentConfig', agentConfig)
-    host.ctx.inject('agentSessions', agentSessions)
-    host.ctx.inject('agentRuntime', agentRuntime)
+    host.ctx.inject('agentConfig', agentServices().config)
+    host.ctx.inject('agentSessions', agentServices().sessions)
+    host.ctx.inject('agentRuntime', agentServices().runtime)
     host.ctx.inject('agentBranches', branchStore(dataDir))
-    host.ctx.inject('agentHub', agentHub)
-    host.ctx.inject('agentQueue', queueScheduler)
-    host.ctx.inject('agentGoal', goalRuntime)
+    host.ctx.inject('agentHub', agentServices().hub)
+    host.ctx.inject('agentQueue', agentServices().queue)
+    host.ctx.inject('agentGoal', agentServices().goal)
   }
 
   // ③ 登记内置插件。**顺序即路由优先级**（Hono 先注册者优先）：
@@ -800,10 +664,13 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   //    BUILTIN_PLUGINS 的数组顺序就按这条排好，别乱调。
   for (const plugin of BUILTIN_PLUGINS) {
     // agent 相关的两组按开关决定装不装
-    if (!agentEnabled && (plugin.name === 'agent-routes' || plugin.name === 'agent-sessions')) continue
     // 调试在场通道：只对「监听本机回环」的服务存在（见上面 loopbackListen 的说明）
     if (plugin.name === 'plugin-presence' && !loopbackListen) continue
     host.ctx.plugin(plugin)
+  }
+  // Agent 三条路由插件单独一组：关闭时它们根本不进登记表，不靠“名字前缀跳过”。
+  if (agentEnabled) {
+    for (const plugin of AGENT_PLUGINS) host.ctx.plugin(plugin)
   }
 
   // ③.5 外挂后台插件：**丢一个 .js 进目录 = 多一个后台插件**（Task 4）。
@@ -954,7 +821,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
     // 必须 **await**：这是建服务的一部分，不能留一条还在写的异步尾巴 ——
     // 否则调用方（测试清理 / 进程退出）会在写完成前就把数据目录删掉（实测 ENOTEMPTY）。
-    await agentConfig
+    await agentServices().config
       .ensureBuiltinCanvasMcp(`http://${opts.hostname ?? '127.0.0.1'}:${port}/mcp`)
       .catch((err) => console.warn('[agent] 内置画布 MCP 写入失败：' + String(err)))
   }
@@ -985,7 +852,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * （port 传 0 / CLI 换端口时实际端口 ≠ 请求端口，与内置画布 MCP 同一套做法）。
    */
   const ensureTestModel = (origin: string): Promise<void> =>
-    agentConfig
+    agentServices().config
       .ensureTestModel({
         provider: TEST_PROVIDER,
         modelId: TEST_MODEL_ID,
@@ -1075,12 +942,12 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           releaseSelfOrigin = host.ctx.inject('selfOrigin', `http://${hostname}:${info.port}`)
           // 端口定了 → 把运行环境上下文刷新成**真实地址**（提示词里的 {{BACKEND_BASE_URL}}
           // 与常驻小节都读它）。下一次建会话就是对的，不必重启。
-          if (agentEnabled) agentConfig.setRuntimeContext(runtimeContext())
+          if (agentEnabled) agentServices().config.setRuntimeContext(runtimeContext())
           // 真实端口定了，纠正内置画布 MCP 的地址：
           //   · port 传 0（测试）时真实端口由系统分配 —— 不纠正就会把 `...:0/mcp` 写死；
           //   · CLI 换端口兜底时实际监听端口 ≠ 请求端口 —— 同理。
           if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
-            void agentConfig
+            void agentServices().config
               .ensureBuiltinCanvasMcp(`http://${hostname}:${info.port}/mcp`)
               .catch((err) => console.warn('[agent] 内置画布 MCP 地址纠正失败：' + String(err)))
           }
@@ -1102,8 +969,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     stop() {
       watcher?.stop()
       void debugOrigin.stop().catch(() => undefined)
-    agentRuntime.disposeAll()
-    agentHub.disposeAll()
+      agentServicesRef?.dispose()
       void tasks.dispose()
       // 回收插件作用域：jobs 的定时器、store 的命名空间清理都在插件的 ctx.effect 里，
       // 不调它永不 dispose（审查发现的泄漏）。
