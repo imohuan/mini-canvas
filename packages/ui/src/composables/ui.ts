@@ -1462,11 +1462,11 @@ function createUi() {
 
   // ===== 缩放（左下角「缩放选项」）=====
   //
-  // 唯一事实来源 = 真实画布视口（viewport 服务的 getViewport().zoom）。状态栏那个百分比只是**镜像值**：
+  // 唯一事实来源 = 真实画布视口（view 服务的 getViewport().zoom）。状态栏那个百分比只是**镜像值**：
   // 由宿主就绪时同步一次 + 每次视口移动/缩放结束（RenderEvents.MoveEnd）再同步，显示永远与画布一致。
-  // 菜单动作一律调 viewport 服务去改真实画布，不再只改一个数字（原先 s.zoom 是纯 UI 数字，
+  // 菜单动作一律调 view 服务去改真实画布，不再只改一个数字（原先 s.zoom 是纯 UI 数字，
   // 从没接到 viewport 上 —— 表现为"点缩放至 100% 画布纹丝不动"）。
-  /** viewport 服务的最小用面（契约见 canvas-data renderServiceContracts，宿主恒在注入） */
+  /** view 服务的最小用面（契约见 canvas-data renderServiceContracts，宿主恒在注入） */
   type ViewportLike = {
     getViewport(): { zoom: number }
     zoomIn(): void
@@ -1475,7 +1475,7 @@ function createUi() {
     fitView(padding?: number): void
   }
   function viewportSvc(): ViewportLike | undefined {
-    return hostCtx()?.get<ViewportLike>('viewport')
+    return hostCtx()?.get<ViewportLike>('view')
   }
   /** 把真实视口缩放同步到状态栏镜像值（未就绪 → 不动，保留上一次显示） */
   function syncZoomDisplay(): void {
@@ -2275,7 +2275,7 @@ function createUi() {
    * viewport 服务缺失（宿主未就绪）→ null，调用方退级联默认落点。
    */
   function screenToFlow(clientX: number, clientY: number): { x: number; y: number } | null {
-    const vp = hostCtx()?.get<{ screenToFlow?(x: number, y: number): { x: number; y: number } }>('viewport')
+    const vp = hostCtx()?.get<{ screenToFlow?(x: number, y: number): { x: number; y: number } }>('view')
     if (!vp?.screenToFlow) return null
     try {
       return vp.screenToFlow(clientX, clientY)
@@ -2294,7 +2294,7 @@ function createUi() {
   function viewportCenterFlow(): { x: number; y: number } | null {
     const vp = hostCtx()?.get<
       { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }
-    >('viewport')
+    >('view')
     const pane = vp?.getPaneEl?.()
     if (!pane || !vp?.screenToFlow) return null
     const r = pane.getBoundingClientRect()
@@ -2469,7 +2469,7 @@ function createUi() {
       return 0
     }
     // 视口中心（client 坐标）→ flow：pane 矩形的一半即屏幕中心；两者都拿不到就 null
-    const vp = hostCtx()?.get<ViewportLike & { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }>('viewport')
+    const vp = hostCtx()?.get<ViewportLike & { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }>('view')
     let atFlow: { x: number; y: number } | null = null
     const pane = vp?.getPaneEl?.()
     if (pane && vp?.screenToFlow) {
@@ -2679,7 +2679,7 @@ function createUi() {
   /**
    * 定位到某个节点：把它在画布上居中显示（左侧树点击时用）。
    *
-   * 为什么用 viewport.setCenter 而不是自己改视口：那是渲染层视口的唯一入口，
+   * 为什么用 view.fitTo 而不是自己改视口：那是渲染层取景的唯一入口，
    * 与缩放 / 适配屏幕走同一条路（缓存与边界面一致）。拿不到坐标（旧节点）就只选中、不移动。
    */
   function locateNode(id: string): void {
@@ -2699,35 +2699,14 @@ function createUi() {
         })
       | undefined
     if (!vp) return
-    // 优先「聚焦到该节点」：nodeLayout 有实测矩形就用它算居中 + 舒适缩放（与 F 聚焦同一算法），
-    // 比只 setCenter 到节点左上角准得多（那正是用户说的"效果极差"）。
-    const layout = ctx?.get<{ getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | undefined }>('nodeLayout')
-    const rect = layout?.getNodeRect?.(id)
-    const zoom = vp.getViewport().zoom
-    if (rect && rect.w > 0 && rect.h > 0 && typeof vp.setCenter === 'function') {
-      vp.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom)
-      return
-    }
-    // 退路：让 VueFlow 只对这一批节点取景（pane 级 fit，比逐帧 rAF 稳，不会出现 offset 漂移）
-    if (typeof vp.fitView === 'function') {
-      try {
-        vp.fitView(0.45, { nodes: [{ id }] })
-        return
-      } catch {
-        /* fitView 不支持 nodes 选项时继续走坐标退路 */
-      }
-    }
-    const pos = findTreeNode(tree, id)
-    if (pos && typeof vp.setCenter === 'function') vp.setCenter(pos.x ?? 0, pos.y ?? 0, zoom)
-  }
-
-  /** 在树里找某个节点（定位退路用） */
-  function findTreeNode(list: TreeNode[], id: string): TreeNode | undefined {
-    for (const n of list) {
-      if (n.id === id) return n
-      if (n.children) { const h = findTreeNode(n.children, id); if (h) return h }
-    }
-    return undefined
+    // 优先「保持当前缩放、只平移」到节点矩形（与搜索/Agent 同一套取景）。
+    const view = ctx?.get<{
+      fitTo(target: string[], opts?: { keepZoom?: boolean; select?: boolean; padding?: number }): boolean
+    }>('view')
+    if (!view) return
+    if (view.fitTo([id], { keepZoom: true, select: true })) return
+    // 退路：没有节点矩形时按整块取景（padding 0.45 与原实现一致）。
+    view.fitTo([id], { padding: 0.45 })
   }
 
   /**
