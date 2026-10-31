@@ -31,7 +31,6 @@ describe('Provider 的 zIndexBase 落到浮层', () => {
       ['../dropdown/dropdown.css', 'dropdown'],
       ['../tooltip/tooltip.css', 'popover'],
       ['../dialog/dialog.css', 'modal'],
-      ['../notify/notify.css', 'toast'],
       ['../messages/messages.css', 'toast'],
     ]
     for (const [rel, tier] of cases) {
@@ -40,5 +39,14 @@ describe('Provider 的 zIndexBase 落到浮层', () => {
         new RegExp('z-index:\\s*var\\(--mck-z-' + tier + '\\b'),
       )
     }
+  })
+
+  it('NotifyHost 把 toast 档位传给 vue-sonner', () => {
+    // 通知容器已经交给 sonner，z-index 由 <Toaster :style> 注入；
+    // 这里钉住它确实读 Provider 的 toast 档（而不是 sonner 自带的 999999999）
+    // 并且写在 computed 的 toasterStyle 里，传给 <Toaster>。
+    const host = read('../notify/NotifyHost.vue')
+    expect(host).toMatch(/toasterStyle[\s\S]{0,200}zIndex\.value\.toast/)
+    expect(host).toMatch(/:style="toasterStyle"/)
   })
 })

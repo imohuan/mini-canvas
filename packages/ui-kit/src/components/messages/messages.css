@@ -1,12 +1,101 @@
-.mck-messages-host { position: fixed; top: 16px; left: 50%; z-index: var(--mck-z-toast, 99900); display: flex; max-width: min(520px, calc(100vw - 24px)); flex-direction: column; align-items: center; gap: 6px; transform: translateX(-50%); pointer-events: none; }
-.mck-message { padding: 7px 13px; border: 1px solid var(--mck-line); border-radius: 8px; background: var(--mck-panel); color: var(--mck-ink); box-shadow: 0 8px 24px rgb(0 0 0 / 0.14); font-size: 12px; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
-.mck-message.is-success { border-color: color-mix(in srgb, var(--mck-success) 40%, var(--mck-line)); color: var(--mck-success); }
-.mck-message.is-warning { border-color: color-mix(in srgb, var(--mck-warning) 40%, var(--mck-line)); color: var(--mck-warning); }
-.mck-message.is-danger { border-color: color-mix(in srgb, var(--mck-danger) 40%, var(--mck-line)); color: var(--mck-danger); }
-/* info: 蓝色提示。docs 的示例用 tone: 'info'，缺这条时选 info 与默认没有视觉差别 */
-.mck-message.is-info { border-color: color-mix(in srgb, var(--mck-info) 40%, var(--mck-line)); color: var(--mck-info); }
-.mck-message.is-info { border-color: color-mix(in srgb, var(--mck-info) 40%, var(--mck-line)); color: var(--mck-info); }
-.mck-message-enter-active, .mck-message-leave-active { transition: opacity 160ms ease, transform 160ms ease; }
-.mck-message-enter-from, .mck-message-leave-to { opacity: 0; transform: translateY(-5px); }
-.mck-message-move { transition: transform 160ms ease; }
-@media (prefers-reduced-motion: reduce) { .mck-message-enter-active, .mck-message-leave-active, .mck-message-move { transition: none; } }
+/*
+ * 轻提示（顶部居中、短暂反馈）。
+ *
+ * 原来只是「白条 + 彩色边框」，在画布上容易被背景吃掉，也看不出是成功还是失败。
+ * 现在的结构：图标 + 文案 + 左侧色调点，整体是一张深色磨砂小条，任何时候都清楚。
+ * 数值仍取自 docs/design/ui-style-guide.md：圆角 10 / 字号 12 / 阴影 e2。
+ */
+
+.mck-messages-host {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: var(--mck-z-toast, 99900);
+  display: flex;
+  width: max-content;
+  max-width: min(520px, calc(100vw - 24px));
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* 卡片：深色半透明底，和画布内容天然分层。 */
+.mck-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 7px 12px 7px 10px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 10px;
+  background: rgb(24 32 43 / 0.9);
+  color: #f7f8fa;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.24);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+  /* 入场过渡期间没有定位，外壳又比内容宽，会被拉到左边；
+   * 让每条提示自己居中，外壳只负责垂直堆叠。 */
+  align-self: center;
+}
+
+/* 左侧语义点：一小截色条，替代整圈彩边。 */
+.mck-message::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--mck-message-tone, #9aa3ae);
+}
+
+.mck-message.is-neutral { --mck-message-tone: #9aa3ae; }
+.mck-message.is-primary { --mck-message-tone: #22b8d8; }
+.mck-message.is-success { --mck-message-tone: #4ade80; }
+.mck-message.is-warning { --mck-message-tone: #fbbf24; }
+.mck-message.is-danger { --mck-message-tone: #f87171; }
+.mck-message.is-info { --mck-message-tone: #60a5fa; }
+
+/* 图标：14px 线性，颜色跟语义点走。 */
+.mck-message__icon {
+  display: grid;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  color: var(--mck-message-tone, #9aa3ae);
+}
+
+.mck-message__icon svg { width: 14px; height: 14px; }
+
+.mck-message__text { min-width: 0; }
+
+/* 进出场：从上方 6px 落下，短、轻，不抢画布。 */
+.mck-message-enter-active { transition: opacity 180ms cubic-bezier(0.34, 1.56, 0.64, 1), transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.mck-message-leave-active { transition: opacity 140ms ease, transform 140ms ease; }
+.mck-message-enter-from,
+.mck-message-leave-to { opacity: 0; transform: translateY(-6px) scale(0.98); }
+.mck-message-move { transition: transform 180ms ease; }
+
+/* 移动端外壳贴着视口，长文案不能顶出屏幕。 */
+@media (max-width: 520px) {
+  .mck-messages-host { width: auto; right: 12px; left: 12px; transform: none; }
+  .mck-message { max-width: 100%; }
+}
+
+@media (max-width: 520px) {
+  .mck-messages-host { top: 10px; }
+  .mck-message { padding: 6px 10px 6px 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mck-message-enter-active,
+  .mck-message-leave-active,
+  .mck-message-move { transition: none; }
+}

@@ -21,7 +21,7 @@ export const notifyPlayground: ComponentPlayground = {
       { value: 'danger', label: '失败' },
       { value: 'info', label: '信息' },
     ] },
-    { kind: 'number', key: 'duration', label: '自动关闭', min: 0, max: 10000, step: 200, suffix: 'ms' },
+    { kind: 'number', key: 'duration', label: '停留时长（0 = 常驻）', min: 0, max: 10000, step: 200, suffix: 'ms' },
     { kind: 'toggle', key: 'withAction', label: '带操作按钮' },
     { kind: 'text', key: 'actionLabel', label: '操作按钮文字' },
     { kind: 'toggle', key: 'sticky', label: '常驻不自动关' },

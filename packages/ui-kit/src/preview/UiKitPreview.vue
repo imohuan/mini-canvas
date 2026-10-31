@@ -11,7 +11,7 @@
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { ChevronLeft, Moon, Plus, RotateCcw, Search, SlidersHorizontal, Sun } from 'lucide-vue-next'
 import {
-  Button, Input, NumberInput, Select, Slider, Switch, Tabs, Tooltip, UiKitProvider,
+  Button, Input, MessagesHost, NotifyHost, NumberInput, Select, Slider, Switch, Tabs, Tooltip, UiKitProvider,
   type SelectOption, type TabItem, type UiKitDensity, type UiKitSize,
 } from '../index'
 import SplitPane from '../components/split-pane/SplitPane.vue'
@@ -168,6 +168,10 @@ function resetGlobal(): void {
     :accent="accent"
     class="uk-shell"
   >
+    <!-- 通知与轻提示的宿主：整个预览页只挂一次。
+         每个示例再挂一份会得到互相独立的队列，一条通知只出现在某个示例框附近。 -->
+    <NotifyHost />
+    <MessagesHost />
     <header class="uk-topbar">
       <div class="uk-brand">
         <button v-if="showHome" type="button" class="uk-icon-button" title="返回首页" aria-label="返回首页" @click="emit('home')">
@@ -259,7 +263,6 @@ function resetGlobal(): void {
 
                   <div class="uk-preview-stage">
                     <div class="uk-preview-canvas" :class="{ 'is-stretch': playground?.stretch }">
-                      <div class="uk-canvas-grid" aria-hidden="true"></div>
                       <PlaygroundPreview
                         :id="activeId"
                         :state="state"

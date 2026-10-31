@@ -1,22 +1,181 @@
-.mck-notify-host { position: fixed; top: 16px; right: 16px; z-index: var(--mck-z-toast, 99900); display: flex; width: min(360px, calc(100vw - 24px)); flex-direction: column; gap: 8px; pointer-events: none; }
-.mck-notify { display: flex; align-items: flex-start; gap: 9px; box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid var(--mck-line, #e2e5ea); border-radius: 12px; background: var(--mck-panel, #fff); color: var(--mck-ink); box-shadow: var(--mck-shadow); pointer-events: auto; }
-.mck-notify__dot { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 999px; background: var(--mck-info, #2563eb); }
-.mck-notify.is-success .mck-notify__dot { background: var(--mck-success, #16a34a); }
-.mck-notify.is-warning .mck-notify__dot { background: var(--mck-warning, #d97706); }
-.mck-notify.is-danger .mck-notify__dot { background: var(--mck-danger, #ef4444); }
-.mck-notify.is-primary .mck-notify__dot { background: var(--mck-accent, #0891b2); }
-.mck-notify.is-info .mck-notify__dot { background: var(--mck-info, #60a5fa); }
-/* info：蓝点。默认值已经是 info 色，这条显式写出来是为了让 is-info 与「没传 tone」可区分 */
-.mck-notify.is-info .mck-notify__dot { background: var(--mck-info, #2563eb); }
-.mck-notify__copy { min-width: 0; flex: 1; }
-.mck-notify__title { display: block; font-size: 12px; font-weight: 700; line-height: 1.5; }
-.mck-notify__desc { margin: 3px 0 0; color: var(--mck-ink-muted); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
-.mck-notify__action { margin-top: 7px; padding: 0; border: 0; background: transparent; color: var(--mck-accent-hover); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
-.mck-notify__close { display: grid; flex: none; width: 20px; height: 20px; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--mck-ink-muted); font-size: 15px; cursor: pointer; }
-.mck-notify__close:hover { background: var(--mck-hover); color: var(--mck-ink); }
-.mck-notify-enter-active { transition: opacity 180ms ease, transform 180ms ease; }
-.mck-notify-leave-active { transition: opacity 150ms ease, transform 150ms ease; }
-.mck-notify-enter-from, .mck-notify-leave-to { opacity: 0; transform: translateY(-6px); }
-.mck-notify-move { transition: transform 180ms ease; }
-@media (max-width: 520px) { .mck-notify-host { top: 8px; right: 8px; } }
-@media (prefers-reduced-motion: reduce) { .mck-notify-enter-active, .mck-notify-leave-active, .mck-notify-move { transition: none; } }
+/*
+ * 通知卡片（vue-sonner 承载）。
+ *
+ * 规范来源：docs/design/ui-style-guide.md
+ *   - 颜色只用语义 token，不写死 hex；
+ *   - 圆角：面板 14 / 行 10 / 控件 8；
+ *   - 阴影走柔和浮层，配 1px 发丝边；
+ *   - 动效交给 sonner（它自带 reduced-motion 降级）。
+ */
+
+/* 容器：右上角，宽度和偏移由 sonner 管；这里只补库里的字体与宽度。 */
+[data-sonner-toaster] {
+  --width: 380px;
+  font-family: inherit;
+}
+
+/* 卡片：白底 + 左侧语义色条，靠留白和阴影分层。 */
+.mck-notify {
+  position: relative;
+  display: flex;
+  /* sonner 会再包一层 li；卡片自己吃掉宽度，不跟着内容忽宽忽窄。 */
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 12px 12px 13px;
+  overflow: hidden;
+  border: 1px solid var(--mck-line, #e2e5ea);
+  border-radius: var(--mck-radius-panel, 14px);
+  background: var(--mck-panel, #fff);
+  color: var(--mck-ink, #18202b);
+  box-shadow: 0 18px 44px rgb(15 23 42 / 0.16);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* sonner 的外层 li 只负责定位与动画；内边距/背景都由卡片自己画。 */
+[data-sonner-toast] {
+  width: 100%;
+  /* 外层是 <li>：去掉列表符号与缩进，只留定位。 */
+  display: block;
+  list-style: none;
+}
+
+/* 语义色条：一条 3px 竖线足够表达状态，不铺满整张卡。 */
+.mck-notify::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--mck-notify-tone, var(--mck-info, #2563eb));
+}
+
+.mck-notify.is-primary { --mck-notify-tone: var(--mck-accent, #0891b2); }
+.mck-notify.is-success { --mck-notify-tone: var(--mck-success, #16a34a); }
+.mck-notify.is-warning { --mck-notify-tone: var(--mck-warning, #d97706); }
+.mck-notify.is-danger { --mck-notify-tone: var(--mck-danger, #ef4444); }
+.mck-notify.is-info { --mck-notify-tone: var(--mck-info, #2563eb); }
+.mck-notify.is-neutral { --mck-notify-tone: var(--mck-ink-muted, #8c95a3); }
+
+/* 图标托：28×28、圆角 8、浅色底，和菜单行图标同一规格。 */
+.mck-notify__icon {
+  display: grid;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mck-notify-tone) 12%, transparent);
+  color: var(--mck-notify-tone);
+}
+
+.mck-notify__icon svg { width: 16px; height: 16px; }
+
+.mck-notify__copy { min-width: 0; flex: 1; padding-top: 1px; }
+
+.mck-notify__title {
+  display: block;
+  padding-right: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--mck-ink, #18202b);
+}
+
+.mck-notify__desc {
+  margin: 3px 0 0;
+  color: var(--mck-ink-muted, #6b7280);
+  font-size: 11.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* 操作：小号文字按钮，带浅底，和卡片拉开层次。 */
+.mck-notify__action {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-top: 8px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--mck-notify-tone) 28%, var(--mck-line, #e2e5ea));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--mck-notify-tone) 8%, transparent);
+  color: var(--mck-notify-tone);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.mck-notify__action:hover {
+  background: color-mix(in srgb, var(--mck-notify-tone) 15%, transparent);
+  border-color: color-mix(in srgb, var(--mck-notify-tone) 42%, var(--mck-line, #e2e5ea));
+}
+
+/* 关闭：24×24 图标按钮，hover 才完全显形，避免卡片第一眼太吵。 */
+.mck-notify__close {
+  display: grid;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  margin: -2px -2px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--mck-ink-muted, #8c95a3);
+  cursor: pointer;
+  opacity: 0.72;
+  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.mck-notify__close svg { width: 14px; height: 14px; }
+
+.mck-notify:hover .mck-notify__close,
+.mck-notify__close:focus-visible { opacity: 1; }
+
+.mck-notify__close:hover {
+  background: var(--mck-hover, rgb(0 0 0 / 0.05));
+  color: var(--mck-ink, #18202b);
+}
+
+/* 底部倒计时条：只做提示，不拦点击；悬停时暂停。 */
+.mck-notify__timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--mck-notify-tone) 60%, transparent);
+  transform-origin: left;
+  animation: mck-notify-countdown var(--mck-notify-duration, 3600ms) linear forwards;
+}
+
+.mck-notify.is-paused .mck-notify__timer { animation-play-state: paused; }
+
+@keyframes mck-notify-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* 深色主题：卡片跟随 --mck-*，这里只补阴影，避免纯黑阴影糊成一团。 */
+html.dark [data-sonner-toaster] .mck-notify,
+[data-ui-kit-dark='true'] [data-sonner-toaster] .mck-notify {
+  box-shadow: 0 20px 48px rgb(0 0 0 / 0.42);
+}
+
+/* 窄屏：卡片贴边，宽度由 sonner 的 mobileOffset 收。 */
+@media (max-width: 600px) {
+  [data-sonner-toaster] { --width: calc(100vw - 16px); }
+  .mck-notify { padding: 10px 10px 10px 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mck-notify__timer { animation: none; opacity: 0; }
+}

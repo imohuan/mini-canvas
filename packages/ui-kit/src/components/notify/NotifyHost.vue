@@ -1,34 +1,46 @@
 <script setup lang="ts">
-import { dismiss, notifyList } from './store'
+/**
+ * NotifyHost —— 通知的挂载点。
+ *
+ * 只负责把 vue-sonner 的 `<Toaster>` 放到页面里：位置固定在右上角，
+ * 层级从 Provider 的上下文读，卡片本身由 `NotifyCard.vue` 渲染。
+ *
+ * 整个应用**只需要挂一次**。挂在多层会得到两个互相独立的队列。
+ */
+import { computed, type CSSProperties } from 'vue'
+import { Toaster } from 'vue-sonner'
+// sonner 的定位、堆叠、进出场基础样式在这个文件里；不引入的话
+// 卡片会变成一条没有定位的普通 <li>，还会露出列表序号。
+import 'vue-sonner/style.css'
+import { useUiKit } from '../../provider/context'
 import './notify.css'
 
 defineOptions({ name: 'MckNotifyHost' })
 
-interface NotifyItemLike {
-  id: string
-  action?: { label: string; onClick: () => void }
-}
+const context = useUiKit()
+const zIndex = computed(() => context.value.zIndex)
 
-function handleAction(item: NotifyItemLike): void {
-  item.action?.onClick()
-  dismiss(item.id)
-}
+const toasterStyle = computed<CSSProperties>(() => ({
+  // sonner 自己写死 999999999；这里接上 Provider 的 toast 档位，
+  // 才能和对话框、下拉在同一套层级体系里。
+  zIndex: String(zIndex.value.toast),
+  // 默认位置固定在视口右上角。预览卡把它包在示例区里时要保持这个行为，
+  // 不能变成示例区内部的一条提示。
+  position: 'fixed',
+  top: '16px',
+  right: '16px',
+  bottom: 'auto',
+  left: 'auto',
+  transform: 'none',
+}))
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="mck-notify-host" aria-live="polite" aria-atomic="false">
-      <TransitionGroup name="mck-notify">
-        <div v-for="item in notifyList" :key="item.id" class="mck-notify" :class="'is-' + (item.tone ?? 'info')" role="status">
-          <span class="mck-notify__dot" aria-hidden="true"></span>
-          <div class="mck-notify__copy">
-            <strong class="mck-notify__title">{{ item.title }}</strong>
-            <p v-if="item.description" class="mck-notify__desc">{{ item.description }}</p>
-            <button v-if="item.action" type="button" class="mck-notify__action" @click="handleAction(item)">{{ item.action.label }}</button>
-          </div>
-          <button type="button" class="mck-notify__close" aria-label="关闭通知" title="关闭" @click="dismiss(item.id)">×</button>
-        </div>
-      </TransitionGroup>
-    </div>
-  </Teleport>
+  <Toaster
+    position="top-right"
+    close-button-position="top-right"
+    :toast-options="{ unstyled: true }"
+    :style="toasterStyle"
+    :visible-toasts="4"
+  />
 </template>

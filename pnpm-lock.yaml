@@ -1846,6 +1846,9 @@ importers:
       vue:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
+      vue-sonner:
+        specifier: ^2.0.9
+        version: 2.0.9
       vue-tsc:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
