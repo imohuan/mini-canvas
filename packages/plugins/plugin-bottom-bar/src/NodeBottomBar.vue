@@ -70,7 +70,6 @@ import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
 import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE } from './previewBoxSize'
-import { calculateFocusZoom } from './focusZoom'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
@@ -820,8 +819,7 @@ function onCardsClickCapture(ev: MouseEvent): void {
  * 为什么不是点击：单击只做「选中/无操作」，全屏预览只能走 hover 预览框里的「全屏」。
  * 双击是"我到那个节点去看看"的手势，与文件管理器的习惯一致。
  *
- * 定位优先取 nodeLayout 的 flow 矩形（与「返回节点」同一个口径与缩放规则），
- * 宿主没装 nodeLayout 时回落到「量节点 DOM 反算 flow 坐标」——量不到就什么都不做。
+ * 定位统一走 view.fitTo（与「返回节点」同一个口径与缩放规则），量不到就什么都不做。
  */
 
 /**
@@ -844,22 +842,16 @@ function onCardDblClick(tile: RefTile): void {
   try {
     if (commands?.execute('auto-layout:focus-node', nodeId) === true) return
   } catch { /* 命令异常：回落到下面的通用实现 */ }
-  const viewport = ctx.tryGet<{
-    getViewport(): { x: number; y: number; zoom: number }
-    setViewport(v: { x: number; y: number; zoom: number }): void
-    animateViewport?(v: { x: number; y: number; zoom: number }): void
-    getRootEl?(): HTMLElement | null
-  }>('viewport')
-  if (!viewport) return
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
-  const rect = layout?.getNodeRect(nodeId) ?? null
-  if (!rect) return
-  const root = viewport.getRootEl?.() ?? null
-  const vw = root?.clientWidth || (typeof window === 'undefined' ? 0 : window.innerWidth)
-  const vh = root?.clientHeight || (typeof window === 'undefined' ? 0 : window.innerHeight)
+  const view = ctx.tryGet<{
+    fitTo(
+      target: string[],
+      opts?: { heightRatio?: number; minZoom?: number; maxZoom?: number },
+    ): boolean
+  }>('view')
+  if (!view) return
   /**
    * 兜底路径也要是「F 键那套取景」，不能只挪中心（用户两轮都在追这个）：
-   * 按 auto-layout 的设置（聚焦高度占比 / 最小最大缩放）算百分比，再居中。
+   * 按 auto-layout 的设置（聚焦高度占比 / 最小最大缩放）走同一个 fitTo。
    * 设置服务缺失（单测 / 精简宿主）时用与插件 schema 相同的默认值，行为不跳。
    */
   const settings = ctx.tryGet<{ get(key: string): unknown }>('settings')
@@ -867,16 +859,11 @@ function onCardDblClick(tile: RefTile): void {
     const v = settings?.get(key)
     return typeof v === 'number' && Number.isFinite(v) ? v : fallback
   }
-  const zoom = calculateFocusZoom({
-    boundsHeight: rect.h,
-    viewportHeight: vh,
+  view.fitTo([nodeId], {
     heightRatio: readNum('focusHeightRatio', 0.5),
     minZoom: readNum('autoLayoutMinZoom', 0.1),
     maxZoom: readNum('autoLayoutMaxZoom', 4),
   })
-  const next = { x: vw / 2 - (rect.x + rect.w / 2) * zoom, y: vh / 2 - (rect.y + rect.h / 2) * zoom, zoom }
-  if (viewport.animateViewport) viewport.animateViewport(next)
-  else viewport.setViewport(next)
 }
 
 function onCardsKeydown(ev: KeyboardEvent): void {
