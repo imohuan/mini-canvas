@@ -12,6 +12,114 @@
  */
 import type { TreeNode } from './ui'
 
+/**
+ * 视频缩略图：**统一来自 video 服务**（用户 2026-10-30 定案）。
+ *
+ * 为什么不在这里自己截帧：一个视频只该有一张缩略图，视频节点 / 底栏卡片 / 标签 /
+ * 标签下拉 / 左侧栏 / 资产树全部复用同一张（服务里按源地址命名、存资源库，重启也在）。
+ * 本模块保持纯函数：取图能力由调用方以参数注入（见 prefetchVideoThumbs），
+ * 这里只做「地址 → 已就绪图片地址」的内存视图。
+ */
+const videoThumbView = new Map<string, string>()
+
+/** 查已就绪的视频缩略图（同步，渲染时直接用） */
+export function peekTreeVideoThumb(videoUrl: string | undefined): string | undefined {
+  if (!videoUrl) return undefined
+  return videoThumbView.get(videoUrl)
+}
+
+/**
+ * 预热视频缩略图：对还没就绪的视频地址调一次统一服务，结果记进内存视图。
+ *
+ * @param videoUrls 待预热的视频地址（重复地址自动去重；已就绪的跳过）
+ * @param thumb     统一取图能力（通常是 `ctx.get('video').thumb`）；缺省直接返回
+ * @returns 本次是否取到了新图（调用方据此触发一次重绘）
+ */
+export async function prefetchVideoThumbs(
+  videoUrls: Iterable<string | undefined>,
+  thumb: ((videoUrl: string) => Promise<string | null>) | undefined,
+): Promise<boolean> {
+  if (!thumb) return false
+  const todo = new Set<string>()
+  for (const u of videoUrls) {
+    if (typeof u === 'string' && u && !videoThumbView.has(u)) todo.add(u)
+  }
+  if (todo.size === 0) return false
+  let touched = false
+  await Promise.all(
+    [...todo].map(async (url) => {
+      try {
+        const got = await thumb(url)
+        if (got) {
+          videoThumbView.set(url, got)
+          touched = true
+        }
+      } catch {
+        /* 取不到就保持图标兜底，不抛给 UI */
+      }
+    }),
+  )
+  return touched
+}
+
+/** 测试用：清空内存视图 */
+export function __clearTreeVideoThumbs(): void {
+  videoThumbView.clear()
+}
+
+/**
+ * 资产（非画布节点）视频的缩略图视图。
+ *
+ * 与画布节点分开存：资产用**资产 id** 当键（资产地址可能被替换，id 稳定），
+ * 画布节点用视频地址当键（同一地址在多个节点间可复用）。
+ */
+const assetVideoThumbView = new Map<string, string>()
+
+/** 查已就绪的资产视频缩略图（同步，渲染时直接用） */
+export function peekAssetVideoThumb(assetId: string | undefined): string | undefined {
+  if (!assetId) return undefined
+  return assetVideoThumbView.get(assetId)
+}
+
+/**
+ * 预热资产视频缩略图。
+ *
+ * @param items 待预热的资产（id + 视频地址；非视频不传）
+ * @param thumb 统一取图能力（`ctx.get('video').thumb`）
+ * @returns 本次是否取到了新图
+ */
+export async function prefetchAssetVideoThumbs(
+  items: Iterable<{ id: string; url?: string }>,
+  thumb: ((videoUrl: string) => Promise<string | null>) | undefined,
+): Promise<boolean> {
+  if (!thumb) return false
+  const todo = new Map<string, string>()
+  for (const it of items) {
+    if (it.id && it.url && !assetVideoThumbView.has(it.id)) todo.set(it.id, it.url)
+  }
+  if (todo.size === 0) return false
+  let touched = false
+  await Promise.all(
+    [...todo].map(async ([id, url]) => {
+      try {
+        const got = await thumb(url)
+        if (got) {
+          assetVideoThumbView.set(id, got)
+          touched = true
+        }
+      } catch {
+        /* 取不到保持类型图标兜底 */
+      }
+    }),
+  )
+  return touched
+}
+
+/** 测试用：清空资产视频缩略图视图 */
+export function __clearAssetVideoThumbs(): void {
+  assetVideoThumbView.clear()
+}
+
 /** 抽屉能认的节点最小形状（画布节点 + 我们读得到的字段；不 import 数据层类型） */
 export interface CanvasNodeLike {
   id: string
@@ -87,6 +195,12 @@ export function nodeDisplayName(node: CanvasNodeLike): string {
 export function nodeThumbUrl(node: CanvasNodeLike): string | undefined {
   const d = (node.data ?? {}) as Record<string, unknown>
   const t = effectiveType(node)
+  // 视频：先看统一缩略图是否已就绪（同一张图全站复用）；没就绪才回落到 data 里的海报字段
+  if (t === 'video') {
+    const v = typeof d.videoUrl === 'string' && d.videoUrl.trim() ? d.videoUrl : ''
+    const ready = peekTreeVideoThumb(v)
+    if (ready) return ready
+  }
   const candidates = t === 'video' ? [d.posterUrl, d.thumbUrl] : [d.imageUrl, d.thumbUrl, d.panoUrl]
   for (const c of candidates) {
     if (typeof c === 'string' && c.trim()) return c

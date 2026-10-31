@@ -36,7 +36,7 @@ const PUBLISH_GAP = 12
 const PUBLISH_SOURCE_GAP = 100
 
 /** 宿主需要提供的服务形状（按名取，不 import 具体实现） */
-interface PublishDeps {
+export interface PublishDeps {
   /** 宿主上下文（分镜组落点用：doc / nodeLayout / viewport 按名取） */
   ctx: Context
   /** 读节点 data */
@@ -65,6 +65,20 @@ interface PublishDeps {
    * 重复连线由 connectEdge 自己幂等（status = duplicate），不必在这里判重。
    */
   connectEdge(sourceId: string, targetId: string): void
+  /**
+   * 把一段**同步**写入包成一条历史（用户口径 2026-10-31：一次发布只留一步撤销）。
+   *
+   * 建一张图 = 一个事务（media 入口自带）、写尺寸 = 一个、连边 = 一个、打组又是两个……
+   * 发 9 格就是二十多条历史，用户按 Ctrl+Z 要按二十多次才退得回切分前。
+   * 内核 history 对**嵌套** withRecord 只记最外层，所以外面再包一层 doc.transaction
+   * 就能合并成一条，同时不改变原来每一步的写入语义。
+   *
+   * 为什么只收同步函数：快照是同步拍的，await 之后再写就跑出事务了。
+   * 切片/存资源这些异步步骤必须在包外面先做完（见 publishCells 的顺序）。
+   */
+  transaction<T>(reason: string, fn: () => T): T
+  /** 临时诊断（发布卡住时打点；定位后删除） */
+  debug?(stage: string, detail?: unknown): void
 }
 
 /** 从 ctx 组装发布依赖（服务缺失时各调用方自己兜底） */
@@ -165,6 +179,8 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
         // 连不上（类型不符/容量满）：图仍然保留，用户能手动拖线
       }
     },
+    transaction: (reason, fn) => doc.transaction(reason, () => fn()),
+    debug: (stage, detail) => console.log('[grid-split:debug]', stage, JSON.stringify(detail)),
   }
 }
 
@@ -243,8 +259,10 @@ async function sliceAndUpload(
     const px = toPixelRect(cell, img.naturalWidth, img.naturalHeight)
     if (!px) continue
     const blob = await sliceCell(img, px.x, px.y, px.width, px.height, px.width, px.height)
+    deps.debug?.('slice-blob', { index, ok: Boolean(blob), bytes: blob ? blob.size : 0, px })
     if (!blob) continue
     const ref = await deps.putBlob(blob, '宫格-' + (index + 1) + '.png')
+    deps.debug?.('slice-ref', { index, ok: Boolean(ref), ref })
     if (!ref) continue
     out.set(index, { ref, width: px.width, height: px.height })
   }
@@ -280,9 +298,11 @@ export async function publishCells(
   if (!img || !img.naturalWidth) {
     return { ok: false, count: 0, reason: '原图加载失败' }
   }
+  deps.debug?.('image-loaded', { w: img.naturalWidth, h: img.naturalHeight, src })
 
   // 公共切片上传步骤
   const sliced = await sliceAndUpload(deps, img, rows, cols, selected)
+  deps.debug?.('sliced', { size: sliced.size, selected })
   if (sliced.size === 0) {
     return { ok: false, count: 0, reason: '切片没存上（资源库不可用？）' }
   }
@@ -304,43 +324,51 @@ export async function publishCells(
     const positions = uniformGridPositions(rows, cols, [...sliced.keys()], sizes, gap)
     const createdIds: string[] = []
     let origin: { x: number; y: number } | undefined
-    for (const pos of positions) {
-      const cell = sliced.get(pos.index)
-      if (!cell) continue
-      const at = origin ? { x: origin.x + pos.x, y: origin.y + pos.y } : { x: pos.x, y: pos.y }
-      const id = deps.addImageNodeFromResource(
-        at,
-        cell.ref,
-        {
-          name: '宫格-' + (pos.index + 1) + '.png',
-          width: cell.width,
-          height: cell.height,
-          ...(origin ? {} : { sourceNodeId: nodeId, gap: PUBLISH_SOURCE_GAP }),
-        },
-      )
-      if (id) {
-        // 落槽位算好的尺寸：media 入口按 imageWidth/Height 自算（会走最短边规则），可能与
-        // uniformGridPositions 用的值不同 → 显式写 size 对齐（唯一写入口，进同一条历史路径）。
-        const want = sizes.get(pos.index)
-        if (want) deps.setNodeSize(id, want)
-        // 每一格都连回源节点（用户口径 2026-10-30）。第一格由 media 入口顺手连过，
-        // 这里再连一次是 duplicate，内核自己会忽略。
-        deps.connectEdge(nodeId, id)
-        createdIds.push(id)
-        if (!origin) {
-          const first = deps.getNodeRect(id)
-          origin = first ? { x: first.x, y: first.y } : at
+    /**
+     * 整段同步写入包成一个事务（用户口径 2026-10-31：一次发布只留一步历史）。
+     *
+     * 里面建图、写尺寸、连线、打组各自都会 withRecord；内核只记最外层，
+     * 于是用户在画布上按一次撤销就整体退回，而不是一格一格往回退。
+     */
+    let groupId: string | undefined
+    deps.transaction('grid-split-publish', () => {
+      for (const pos of positions) {
+        const cell = sliced.get(pos.index)
+        if (!cell) continue
+        const at = origin ? { x: origin.x + pos.x, y: origin.y + pos.y } : { x: pos.x, y: pos.y }
+        const id = deps.addImageNodeFromResource(
+          at,
+          cell.ref,
+          {
+            name: '宫格-' + (pos.index + 1) + '.png',
+            width: cell.width,
+            height: cell.height,
+            ...(origin ? {} : { sourceNodeId: nodeId, gap: PUBLISH_SOURCE_GAP }),
+          },
+        )
+        if (id) {
+          // 落槽位算好的尺寸：media 入口按 imageWidth/Height 自算（会走最短边规则），可能与
+          // uniformGridPositions 用的值不同 → 显式写 size 对齐（唯一写入口，进同一条历史路径）。
+          const want = sizes.get(pos.index)
+          if (want) deps.setNodeSize(id, want)
+          // 每一格都连回源节点（用户口径 2026-10-30）。第一格由 media 入口顺手连过，
+          // 这里再连一次是 duplicate，内核自己会忽略。
+          deps.connectEdge(nodeId, id)
+          createdIds.push(id)
+          if (!origin) {
+            const first = deps.getNodeRect(id)
+            origin = first ? { x: first.x, y: first.y } : at
+          }
         }
       }
-    }
+      // 打组：失败不回滚（图已在画布上，用户能手动 Ctrl+G）
+      if (createdIds.length >= 2) {
+        const gid = deps.createGroup(createdIds)
+        if (gid) groupId = gid
+      }
+    })
     if (createdIds.length === 0) {
       return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }
-    }
-    // 打组：失败不回滚（图已在画布上，用户能手动 Ctrl+G）
-    let groupId: string | undefined
-    if (createdIds.length >= 2) {
-      const gid = deps.createGroup(createdIds)
-      if (gid) groupId = gid
     }
     return {
       ok: true,
@@ -376,33 +404,44 @@ export async function publishCells(
   const boardSize = storyboardContentSize(rows, cols, contentSizes, layout)
   const emptySlots: Array<string | null> = new Array(rows * cols).fill(null)
   const boardAt = placeStoryboardAt({ ctx: deps.ctx, sourceId: nodeId, size: boardSize })
-  const boardId = deps.createNode('storyboard', boardAt, { rows, cols, slots: emptySlots })
+  /**
+   * 建分镜组 + 建图 + 连线 + 吸附 + 写槽位表**全部**包成一个事务
+   * （用户口径 2026-10-31：一次「创建分镜组」在撤销栈里只占一步）。
+   *
+   * ⚠️ 分镜组节点自己也必须在这个事务里建：之前它在事务外建（deps.createNode 自带一层），
+   * 结果撤销只退掉里面的图片，留下一个空分镜组 —— 浏览器实测到的"撤不干净"。
+   */
+  const cellIds = new Map<number, string>()
+  let boardId = ''
+  let placed = false
+  deps.transaction('grid-split-publish-storyboard', () => {
+    boardId = deps.createNode('storyboard', boardAt, { rows, cols, slots: emptySlots }) || ''
+    if (!boardId) return
+    // 建节点入口不带 size → 显式写内容外框（槽位几何用 boardNode.size 反推，必须先写对）
+    deps.setNodeSize(boardId, boardSize)
+    // 1) 先建图片节点（落在分镜组内部附近，随后被吸附对齐；用户看不到中间态）
+    for (const [index, cell] of sliced) {
+      const id = deps.addImageNodeFromResource(
+        { x: boardAt.x, y: boardAt.y },
+        cell.ref,
+        { name: '宫格图片 ' + (Math.floor(index / cols) + 1) + '-' + ((index % cols) + 1) + '.png', width: cell.width, height: cell.height },
+      )
+      if (id) {
+        cellIds.set(index, id)
+        // 分镜组这条路径同样每张都连回源节点（以前完全没连，用户只看到一堆孤立图片）
+        deps.connectEdge(nodeId, id)
+      }
+    }
+    if (cellIds.size === 0) return
+    // 2) 吸附进槽位（与手动拖拽同一条计算：parentId + 槽位坐标 + 等比缩放）
+    placed = snapIntoBoard(deps.ctx, boardId, cellIds, rows, cols)
+  })
   if (!boardId) {
     return { ok: false, count: 0, reason: '建分镜组失败（插件未装或宿主不支持）' }
-  }
-  // 建节点入口不带 size → 显式写内容外框（槽位几何用 boardNode.size 反推，必须先写对）
-  deps.setNodeSize(boardId, boardSize)
-
-  // 1) 先建图片节点（落在分镜组内部附近，随后被吸附对齐；用户看不到中间态）
-  const cellIds = new Map<number, string>()
-  for (const [index, cell] of sliced) {
-    const id = deps.addImageNodeFromResource(
-      { x: boardAt.x, y: boardAt.y },
-      cell.ref,
-      { name: '宫格图片 ' + (Math.floor(index / cols) + 1) + '-' + ((index % cols) + 1) + '.png', width: cell.width, height: cell.height },
-    )
-    if (id) {
-      cellIds.set(index, id)
-      // 分镜组这条路径同样每张都连回源节点（以前完全没连，用户只看到一堆孤立图片）
-      deps.connectEdge(nodeId, id)
-    }
   }
   if (cellIds.size === 0) {
     return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }
   }
-
-  // 2) 吸附进槽位（与手动拖拽同一条计算：parentId + 槽位坐标 + 等比缩放）
-  const placed = snapIntoBoard(deps.ctx, boardId, cellIds, rows, cols)
   if (!placed) {
     return { ok: false, count: 0, reason: '分镜组吸附失败' }
   }

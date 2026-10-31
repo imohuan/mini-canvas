@@ -52,6 +52,7 @@ import { clipNodeWithBackend } from './videoClipFlow'
 import { videoToAudio } from './videoAudioFlow'
 import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 import { captureVideoThumb } from './videoThumbService'
+import { unifiedThumbOf, type ThumbIdentity, type ThumbResourcePort } from './videoThumbUnified'
 
 /** 本插件注册的节点类型名 */
 export const VIDEO_NODE_TYPE = 'video'
@@ -75,6 +76,20 @@ export interface VideoNodeService {
    * @returns dataURL；取不到（跨域/解码失败/无视频）返回 null
    */
   captureThumb(videoUrl: string, maxWidth?: number): Promise<string | null>
+
+  /**
+   * 取视频缩略图的**显示地址**（统一入口，用户 2026-10-30）。
+   *
+   * 命名沿用老的帧图规则（见 videoThumbUnified.ThumbIdentity 注释）：
+   *   vthumb-<源哈希>-v2t<档位>w<宽>h<高>q<质量>i<取景哈希>
+   *
+   * - 不传 identity → 整幅画面、默认档（消费方按 CSS 缩放显示即可）；
+   * - 传档位/尺寸/裁框 → 参与缓存身份，各存各的图；
+   * - 同一身份跨位置复用（视频节点 / 左侧栏 / 底栏 / 标签 / 下拉菜单）。
+   *
+   * @returns 显示地址（资源库 URL 或 dataURL）；取不到返回 null
+   */
+  thumb(videoUrl: string | undefined, identity?: ThumbIdentity): Promise<string | null>
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.video 直访时类型为本服务 */
@@ -122,6 +137,12 @@ export class VideoService extends Service implements VideoNodeService {
   /** 取视频缩略图（宽度上限 1080、跳过纯色片头）—— 供底栏参考卡/标签/hover 使用 */
   async captureThumb(videoUrl: string, maxWidth?: number): Promise<string | null> {
     return captureVideoThumb(videoUrl, maxWidth ? { maxWidth } : {})
+  }
+
+  /** 统一缩略图入口：见 VideoNodeService.thumb 的说明 */
+  async thumb(videoUrl: string | undefined, identity?: ThumbIdentity): Promise<string | null> {
+    const port = this.ctx.tryGet<ThumbResourcePort>('resources')
+    return await unifiedThumbOf(videoUrl, port, identity)
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * 视频缩略图缓存（用户 2026-10-28）：必须跨挂载复用，否则拖拽时反复截帧闪烁。
- * 第三轮口径：只存一张图（宽度上限 1080，保持原比例），卡片/标签/hover 共用。
+ * 2026-10-30 统一后：只存一张图，卡片/标签/hover/左侧栏/视频节点共用同一份。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { peekVideoThumb, ensureVideoThumb, __clearVideoThumbCache, VIDEO_THUMB_MAX_WIDTH } from '../videoThumbCache'
@@ -17,11 +17,19 @@ describe('videoThumbCache', () => {
     expect(capture).toHaveBeenCalledTimes(1)
   })
 
-  it('取帧时只请求宽度上限 1080（不再分小图/大图）', async () => {
+  /**
+   * 只传地址，**不传宽度**（用户 2026-10-30 统一口径）。
+   *
+   * 宽度由统一服务的第 1 档固定为「原生帧 + 1080 上限」。底栏这边若多传一个
+   * maxWidth，缓存名字里就会多一段尺寸，同一个视频会跟视频节点各存一张图。
+   */
+  it('★ 取帧时只传地址，不传宽度（否则与视频节点算成两张图）', async () => {
     const capture = vi.fn().mockResolvedValue('data:x')
     await ensureVideoThumb('v.mp4', capture)
     expect(capture).toHaveBeenCalledTimes(1)
-    expect(capture).toHaveBeenCalledWith('v.mp4', VIDEO_THUMB_MAX_WIDTH)
+    expect(capture).toHaveBeenCalledWith('v.mp4')
+    expect(capture.mock.calls[0]).toHaveLength(1)
+    // 常量仍然对外保留（其它地方按它做展示兜底），值不变
     expect(VIDEO_THUMB_MAX_WIDTH).toBe(1080)
   })
 

@@ -29,6 +29,7 @@ import folderImg from '../assets/folder.png'
 import AssetRowMenu from './AssetRowMenu.vue'
 import { isAssetUsable } from '../composables/assetModel'
 import { peekPack } from '../composables/nodePack'
+import { peekAssetVideoThumb } from '../composables/canvasTree'
 
 /** 树的一行（文件夹 / 资产混排，带层级深度）—— 与两处宿主原来的行结构逐字对齐 */
 export interface AssetTreeRow {
@@ -200,6 +201,11 @@ const dragOverId = ref<string | null>(null)
 
 const isCollapsed = (id: string): boolean => props.collapsedIds.includes(id)
 const isSelected = (id: string): boolean => props.selectedIds.includes(id)
+/**
+ * 视频行的统一缩略图（用户 2026-10-30）：一个视频一张图，由 video 服务生成并存在资源库，
+ * 左侧抽屉 / 资产管理 / 底栏 / 视频节点复用同一张。还没预热到 → 空串，模板回退 <video> 首帧。
+ */
+const videoThumbOf = (row: AssetTreeRow): string => peekAssetVideoThumb(row.id) ?? ''
 const assetIconOf = (kind: string) =>
   kind === 'video' ? VideoIcon : kind === 'audio' ? MusicIcon : ImageIcon
 /** 行缩进：起点 + 层级（两处宿主共用同一条口径）。
@@ -565,10 +571,17 @@ function registerAssetRow(row: AssetTreeRow, el: unknown): void {
           >
             <img v-if="(row.assetKind ?? 'other') === 'image' && row.url" :src="row.url" alt="" class="h-full w-full object-cover" />
             <!--
-              视频缩略图（用户口径 2026-10-28）：与上传弹窗 / 画布宫格同一条做法 ——
-              <video preload=metadata muted> 出首帧当画面，中央叠一个小播放圆点做装饰，
-              与图片一眼区分（这个是视频）。不自动播放、不发声，点击仍走整行的预览语义。
+              视频缩略图（用户 2026-10-30）：优先用**统一缩略图**（video 服务生成、
+              存资源库、全站复用同一张，重启也在）。还没就绪时回退 <video preload=metadata>
+              出首帧，保证任何时刻都有画面可看；两者都出不来才落到类型图标。
+              中央播放圆点照旧，用来与图片一眼区分。
             -->
+            <img
+              v-else-if="(row.assetKind ?? 'other') === 'video' && videoThumbOf(row)"
+              :src="videoThumbOf(row)"
+              alt=""
+              class="h-full w-full object-cover"
+            />
             <video
               v-else-if="(row.assetKind ?? 'other') === 'video' && row.url"
               :src="row.url"

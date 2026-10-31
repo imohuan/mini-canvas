@@ -55,11 +55,38 @@ export function thumbSizeFor(
  */
 export async function captureVideoThumb(
   videoUrl: string,
-  opts: { maxWidth?: number; seekPoints?: number[]; solidRatio?: number } = {},
+  opts: {
+    maxWidth?: number
+    seekPoints?: number[]
+    solidRatio?: number
+    /**
+     * 取景框（视频像素坐标）：用户裁过的节点只该看框内那块。
+     *
+     * 2026-10-30 用户实测报「缩略图没有裁剪」：裁框只进了缓存名字，
+     * 抓帧这一步一直画的是整幅画面。取景必须在这里落地 —— 缩略图是这张图，
+     * 显示端不会再套一次 CSS 取景（那会变成裁两次）。
+     */
+    cropRect?: { x: number; y: number; width: number; height: number } | null
+    /** 编码质量（0-1）；缺省 0.8 */
+    quality?: number
+  } = {},
 ): Promise<string | null> {
   if (typeof document === 'undefined' || !videoUrl) return null
   /** 宽度上限（缺省 1080）。原视频比它窄就用原宽 —— 不放大，放大只会糊。 */
   const maxWidth = typeof opts.maxWidth === 'number' && opts.maxWidth > 0 ? Math.round(opts.maxWidth) : VIDEO_THUMB_MAX_WIDTH
+  const quality = typeof opts.quality === 'number' && opts.quality > 0 ? Math.min(1, opts.quality) : 0.8
+  /**
+   * 取景框：只有宽高都大于 0 才认（脏数据按整幅处理）。
+   *
+   * 注意这里**不是**把目标尺寸当裁框传进来 —— 那是 2026-10-15 踩过的坑
+   * （帧图变成"从左上角挖一块"）。这里只认调用方明确给的节点裁框。
+   */
+  const crop =
+    opts.cropRect &&
+    Number.isFinite(opts.cropRect.x) && Number.isFinite(opts.cropRect.y) &&
+    opts.cropRect.width > 0 && opts.cropRect.height > 0
+      ? opts.cropRect
+      : null
   const points = opts.seekPoints ?? VIDEO_THUMB_SEEK_POINTS
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
@@ -122,12 +149,20 @@ export async function captureVideoThumb(
        * - 宽度取 min(原宽, 上限 1080)；原视频更窄就按原宽，不放大；
        * - 缩放后短边若小于 50，再按短边 50 放大一次（用户要求「最小的一条边 50px」）。
        *   仅对极细长的视频生效，常规 16:9 / 9:16 都不会触发。
+       *
+       * 裁过的节点按**裁框的尺寸**算比例：裁框是新的画面边界，用整幅尺寸算会算错比例。
        */
-      const { width: cw, height: ch } = thumbSizeFor(video.videoWidth, video.videoHeight, maxWidth)
+      const srcW = crop ? crop.width : video.videoWidth
+      const srcH = crop ? crop.height : video.videoHeight
+      const { width: cw, height: ch } = thumbSizeFor(srcW, srcH, maxWidth)
       if (canvas.width !== cw) canvas.width = cw
       if (canvas.height !== ch) canvas.height = ch
       c2d.clearRect(0, 0, cw, ch)
-      try { c2d.drawImage(video, 0, 0, cw, ch) } catch { continue }
+      try {
+        // 有裁框 → 只画框内那块（九参数 drawImage）；没裁框 → 整幅
+        if (crop) c2d.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, cw, ch)
+        else c2d.drawImage(video, 0, 0, cw, ch)
+      } catch { continue }
 
       // 纯色检测（用户要求：同色 > 50% 就跳过，找后面的帧）
       let solid = false
@@ -140,7 +175,7 @@ export async function captureVideoThumb(
       }
 
       let dataUrl: string | null = null
-      try { dataUrl = canvas.toDataURL('image/webp', 0.8) } catch { dataUrl = null }
+      try { dataUrl = canvas.toDataURL('image/webp', quality) } catch { dataUrl = null }
       if (!dataUrl) { try { dataUrl = canvas.toDataURL('image/png') } catch { dataUrl = null } }
       if (!dataUrl) continue
       lastDataUrl = dataUrl

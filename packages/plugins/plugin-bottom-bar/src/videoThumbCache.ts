@@ -1,22 +1,21 @@
 /**
- * videoThumbCache —— 视频缩略图的**模块级**缓存（用户 2026-10-28）。
+ * videoThumbCache —— 视频缩略图在**底栏渲染侧的同步视图**（用户 2026-10-30 统一后）。
  *
- * 为什么必须是模块级、不能放组件里：底栏在拖动节点时会卸载再挂载，
- * 组件内的 ref 随之清空 → 每次拖拽都重新截帧，画面在闪烁（用户实测报的）。
- * 放到模块作用域，跨挂载复用同一份结果，拖多少次都只截一次。
+ * 真正的取图与持久化只有一份：video 插件的 `ctx.get('video').thumb(url)`
+ * （见 plugin-node-video/src/videoThumbUnified.ts）。本文件只负责两件事：
+ * 1. **同步读**（`peekVideoThumb`）：Vue 模板/computed 渲染时必须同步拿到地址；
+ * 2. **地址规范化**：同一视频在不同地方写法不同（绝对 / 相对 / blob），
+ *    统一折成同一个键，避免"卡片有图、下拉没图"。
  *
- * **只存一张图**（用户 2026-10-28 第三轮口径）：按「宽度上限 1080、保持原比例」截一次，
- * 卡片 / 标签 / @ 下拉用 CSS 缩小显示，hover 预览直接用它。
- * 以前分 small(50) / full 两档 —— 同一段视频解两次码，hover 还要单独等，
- * 又慢又容易一处显示糊图、另一处空白。
+ * 持久化（重启后仍命中）由统一服务的资源库那层负责，这里不重复做。
  */
 
 /** 截图宽度上限（用户口径：不小于 1080；原视频更窄就按原宽，绝不放大） */
 export const VIDEO_THUMB_MAX_WIDTH = 1080
 
-/** 缓存键 = 视频地址 */
+/** 本会话已解析到的地址（统一服务返回什么就记什么；重启后由资源库重新 resolve） */
 const cache = new Map<string, string>()
-/** 正在取（同一视频只解一次码） */
+/** 正在取（同一视频只解一次码；与统一服务的单飞叠加也不会重复生成） */
 const pending = new Map<string, Promise<string | null>>()
 
 /**
@@ -52,11 +51,12 @@ export function peekVideoThumb(url: string | undefined): string | undefined {
 /**
  * 取视频缩略图（有缓存直接返回）。
  *
- * @param capture 由视频插件提供的取帧能力（经 ctx 拿到，不 import 插件代码）
+ * @param capture 由视频插件提供的**统一入口**（`ctx.get('video').thumb`）；
+ *   内部已含资源库持久缓存 + 纯色帧跳过 + 单飞，本函数只加一层同步视图缓存。
  */
 export function ensureVideoThumb(
   url: string,
-  capture: ((videoUrl: string, maxWidth?: number) => Promise<string | null>) | undefined,
+  capture: ((videoUrl: string) => Promise<string | null>) | undefined,
 ): Promise<string | null> {
   if (!url) return Promise.resolve(null)
   const hit = cache.get(keyOf(url))
@@ -66,8 +66,12 @@ export function ensureVideoThumb(
   if (!capture) return Promise.resolve(null)
   const p = (async () => {
     try {
-      // 一张图管全部用途：宽度上限 1080、保持原比例
-      const dataUrl = await capture(url, VIDEO_THUMB_MAX_WIDTH)
+      /**
+       * 只传地址、不传宽度：统一服务的第 1 档口径是固定的「原生帧 + 1080 上限」，
+       * 这样这里（拿不到源尺寸）与视频节点（知道源尺寸）命中**同一个名字、同一张图**。
+       * 从前这里多传一个 maxWidth，名字里就会多一段尺寸，同一视频各存一份。
+       */
+      const dataUrl = await capture(url)
       if (dataUrl) cache.set(keyOf(url), dataUrl)
       return dataUrl
     } catch {

@@ -569,9 +569,12 @@ export async function grabTierFramesFromElement(
   const frameH = videoEl.videoHeight
   if (!frameW || !frameH) return null
   // 给了时刻 → 等 seek 到位再画（与 captureFrame 的 2 秒超时同口径：宁可抓接近的一帧也不卡死）。
+  // 已经在目标时刻 → 快路径直接画，不触发多余的 seek（见 seekVideoEl 的 <0.03 判定）。
   if (typeof opts.at === 'number' && Number.isFinite(opts.at)) {
     const ready = await seekVideoEl(videoEl, opts.at)
     if (!ready) return null
+    // 非暂停状态等 seek 事件后会继续播，等一帧让解码器稳定（否则可能抓到新旧帧的混合）。
+    if (!videoEl.paused) await new Promise((r) => requestAnimationFrame(() => r(null)))
   }
   const quality = opts.quality ?? 0.8
   const { crop, view } = resolveFrameView(opts.cropRect, frameW, frameH)

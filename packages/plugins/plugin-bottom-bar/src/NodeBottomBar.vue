@@ -557,9 +557,21 @@ function markBrokenTile(key: string): void {
   brokenTiles.value = { ...brokenTiles.value, [key]: true }
 }
 
-function videoProvider(): ((videoUrl: string, maxWidth?: number) => Promise<string | null>) | undefined {
-  const svc = ctx.tryGet<{ captureThumb?(videoUrl: string, maxWidth?: number): Promise<string | null> }>('video')
-  return svc?.captureThumb ? svc.captureThumb.bind(svc) : undefined
+/**
+ * 统一缩略图入口（用户 2026-10-30）：一律走 video 服务的 `thumb`。
+ *
+ * 一个视频只有一张图（名字只跟源绑定、存在资源库），视频节点 / 左侧栏 /
+ * 底栏卡片 / 标签 / 标签下拉菜单全部复用同一张 —— 这里不再自带解码逻辑。
+ */
+/**
+ * 统一取图入口：只传地址（档位用默认的第 1 档）。
+ *
+ * 不传宽度是刻意的 —— 统一服务第 1 档的口径固定为「原生帧 + 1080 上限」，
+ * 视频节点 / 左侧栏 / 底栏卡片 / 标签全都命中同一个名字、同一张图。
+ */
+function videoProvider(): ((videoUrl: string) => Promise<string | null>) | undefined {
+  const svc = ctx.tryGet<{ thumb?(videoUrl: string | undefined): Promise<string | null> }>('video')
+  return svc?.thumb ? (url: string) => svc.thumb!(url) : undefined
 }
 
 async function ensureVideoThumbs(): Promise<void> {

@@ -10,7 +10,7 @@ import {
 import { createV2Logger, setUiCatalogHost } from '@mini-canvas/canvas-render'
 import { buildV2HelpList, groupV2HelpList, keyPartsToLabels } from '@mini-canvas/plugin-shortcut-manager'
 import { SAMPLE_IMAGE_URL } from '../assembly'
-import { buildCanvasTree, filterTree } from './canvasTree'
+import { buildCanvasTree, filterTree, prefetchVideoThumbs, prefetchAssetVideoThumbs } from './canvasTree'
 import { listCanvases as apiListCanvases, createCanvas as apiCreateCanvas, duplicateCanvas as apiDuplicateCanvas, deleteCanvas as apiDeleteCanvas, listAssets as apiListAssets, uploadAsset as apiUploadAsset, deleteAsset as apiDeleteAsset, renameAsset as apiRenameAsset, renameCanvas as apiRenameCanvas, renameProject as apiRenameProject, listAssetFolders as apiListAssetFolders, createAssetFolder as apiCreateAssetFolder, renameAssetFolder as apiRenameAssetFolder, moveAssetFolder as apiMoveAssetFolder, setAssetFolderIcon as apiSetAssetFolderIcon, deleteAssetFolder as apiDeleteAssetFolder, moveAssets as apiMoveAssets, setAssetTags as apiSetAssetTags, type CanvasSummary, type AssetFolderSummary } from './projectsApi'
 import { toAssetItems, assetKindOf, type AssetItem } from './assetModel'
 import { applyRowClick } from './assetSelection'
@@ -330,8 +330,29 @@ function createUi() {
 
   /** 从画布数据重建抽屉树（原地替换内容，绑定不换对象、不闪） */
   function refreshCanvasTree(): void {
-    const built = buildCanvasTree((docSvc()?.getNodes?.() ?? []) as never)
+    const nodes = (docSvc()?.getNodes?.() ?? []) as never
+    const built = buildCanvasTree(nodes)
     tree.splice(0, tree.length, ...built)
+    // 视频缩略图：统一走 video 服务（一个视频一张图，全站复用）。
+    // 这里只负责"预热 + 取到后重绘一次"；取不到就保持图标兜底，不阻塞渲染。
+    // 服务可能没装（没装 video 插件）→ get 会抛，用 try 兜住，静默保持图标兜底
+    let videoSvc: { thumb?(url: string | undefined): Promise<string | null> } | undefined
+    try {
+      videoSvc = hostCtx()?.get<{ thumb?(url: string | undefined): Promise<string | null> }>('video')
+    } catch {
+      videoSvc = undefined
+    }
+    if (videoSvc && typeof videoSvc.thumb === 'function') {
+      const thumb = videoSvc.thumb.bind(videoSvc)
+      const urls = (nodes as Array<{ type?: string; data?: Record<string, unknown> }>).map((n) => {
+        const d = n.data ?? {}
+        const v = d.videoUrl
+        return typeof v === 'string' && v.trim() ? v : undefined
+      })
+      void prefetchVideoThumbs(urls, thumb).then((touched) => {
+        if (touched) refreshCanvasTree()
+      })
+    }
   }
   /** 订阅画布变化（增删改节点都自动重画左侧树）；重复 onReady 先撤旧订阅 */
   function bindCanvasTree(): void {
@@ -634,6 +655,30 @@ function createUi() {
     } catch {
       assetItems.value = []
     }
+    void prefetchAssetThumbs()
+  }
+  /**
+   * 资产里的视频缩略图：统一走 video 服务（一个视频一张图、存资源库、全站复用）。
+   *
+   * 取到新图后把 assetItems 重新赋一次（同内容新数组）—— 依赖它的 assetRows /
+   * filteredAssets 会重算，行上的 <img> 就从 <video> 首帧换成统一缩略图。
+   * 取不到就保持 <video> 首帧兜底，不阻塞列表渲染。
+   */
+  async function prefetchAssetThumbs(): Promise<void> {
+    let videoSvc: { thumb?(url: string | undefined): Promise<string | null> } | undefined
+    try {
+      videoSvc = hostCtx()?.get<{ thumb?(url: string | undefined): Promise<string | null> }>('video')
+    } catch {
+      videoSvc = undefined
+    }
+    if (!videoSvc || typeof videoSvc.thumb !== 'function') return
+    const thumb = videoSvc.thumb.bind(videoSvc)
+    const items = assetItems.value
+      .filter((a) => a.kind === 'video' && a.url)
+      .map((a) => ({ id: a.id, url: a.url as string }))
+    if (items.length === 0) return
+    const touched = await prefetchAssetVideoThumbs(items, thumb)
+    if (touched) assetItems.value = [...assetItems.value]
   }
   /**
    * 资产 tab 的搜索 / 筛选（用户报的「点了没效果」）。
