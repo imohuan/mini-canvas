@@ -17,12 +17,13 @@ const cfgPlugin: PluginModule = {
 }
 
 describe('createMiniCanvasHost 配置持久化桥', () => {
-  it('默认开启：settingsPersist 注入 ctx；插件配置变更可跨 boot 恢复', async () => {
+  it('默认开启：save.settings 子对象可用；插件配置变更可跨 boot 恢复', async () => {
     const storage = new MemoryStorageAdapter()
     const mk = () => createMiniCanvasHost({ adapter: storage, coldPlugins: [cfgPlugin] })
     const { host } = await mk()
     expect(host.settingsPersist).toBeDefined()
-    expect(host.ctx.hasService('settingsPersist')).toBe(true)
+    expect(host.ctx.hasService('settingsPersist')).toBe(false)
+    expect(host.save.settings).toBeDefined()
     const settings = host.ctx.get<SettingsStore>('settings')
     settings.set('x', 42)
     await host.save.flush()
@@ -32,12 +33,13 @@ describe('createMiniCanvasHost 配置持久化桥', () => {
     expect(settings2.get('x')).toBe(42)
     h2.stop()
   })
-  it('persistSettings=false 时不注入桥、不持久化', async () => {
+  it('persistSettings=false 时不建桥、不持久化', async () => {
     const storage = new MemoryStorageAdapter()
     const mk = () => createMiniCanvasHost({ adapter: storage, coldPlugins: [cfgPlugin], persistSettings: false })
     const { host } = await mk()
     expect(host.settingsPersist).toBeUndefined()
     expect(host.ctx.hasService('settingsPersist')).toBe(false)
+    expect(host.save.settings).toBeUndefined()
     const settings = host.ctx.get<SettingsStore>('settings')
     settings.set('x', 7)
     await host.save.flush()

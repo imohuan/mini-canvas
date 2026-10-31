@@ -32,35 +32,32 @@ describe('plugin-history', () => {
     expect(historyPlugin.inject).toContain('doc')
   })
 
-  it('apply 注册 history:undo/redo 命令并上架 history-facade 服务', async () => {
+  it('apply 注册 history:undo/redo 命令（查询直接读 doc，不再上架 history-facade）', async () => {
     const ctx = new Context()
     const { history, set, get } = makeHistory()
     // 5c：撤销栈并进 doc（老名 history 已下线）。门面转发的 undo/redo 走 graph，故给全 graph。
     const selection = new Selection()
-    ctx.inject(
-      'doc',
-      createDocService({ history, graph: new GraphDocument({ getNodes: () => [], getNode: () => undefined, types: new Map() } as never, { getEdges: () => [], getEdge: () => undefined } as never, selection, history) }),
-    )
+    const doc = createDocService({ history, graph: new GraphDocument({ getNodes: () => [], getNode: () => undefined, types: new Map() } as never, { getEdges: () => [], getEdge: () => undefined } as never, selection, history) })
+    ctx.inject('doc', doc)
     const command = new CommandRegistry()
     ctx.inject('command', command)
     await ctx.start()
 
     ctx.installPlugin(historyPlugin)
 
-    const facade = ctx.get<{ canUndo(): boolean; canRedo(): boolean }>('history-facade')
-    expect(facade).toBeTruthy()
+    expect(ctx.hasService('history-facade')).toBe(false)
     expect(command.has('history:undo')).toBe(true)
     expect(command.has('history:redo')).toBe(true)
 
     // 先做一次可撤销变更 → canUndo true
     set('b')
-    expect(facade!.canUndo()).toBe(true)
+    expect(doc.canUndo()).toBe(true)
     expect(get()).toBe('b')
 
     // 执行 history:undo 命令 → 回到 a
     command.execute('history:undo')
     expect(get()).toBe('a')
-    expect(facade!.canRedo()).toBe(true)
+    expect(doc.canRedo()).toBe(true)
 
     // 执行 history:redo → 回到 b
     command.execute('history:redo')
@@ -69,7 +66,7 @@ describe('plugin-history', () => {
     await ctx.stop()
   })
 
-  it('热卸后命令与 facade 回收', async () => {
+  it('热卸后命令回收；history-facade 自始至终没有上架', async () => {
     const ctx = new Context()
     const { history } = makeHistory()
     ctx.inject('doc', createDocService({ history }))
@@ -77,10 +74,8 @@ describe('plugin-history', () => {
     ctx.inject('command', command)
     await ctx.start()
     ctx.installPlugin(historyPlugin)
-    expect(ctx.get('history-facade')).toBeTruthy()
-
     ctx.uninstallPlugin('history')
-    expect(ctx.get('history-facade')).toBeUndefined()
+    expect(ctx.hasService('history-facade')).toBe(false)
     expect(command.has('history:undo')).toBe(false)
     await ctx.stop()
   })

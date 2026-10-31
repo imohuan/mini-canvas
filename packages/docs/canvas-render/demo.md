@@ -266,7 +266,7 @@ const mod = {
 
 MiniCanvas.installPlugin(mod)      // ① 装上
 MiniCanvas.listPlugins()           // ② → ['theme-default', 'text', 'console-demo']
-MiniCanvas.getContext().get('command').execute('console-demo:add')   // ③ 跑一次
+MiniCanvas.getContext().get('canvas').runCommand('console-demo:add')   // ③ 跑一次
 MiniCanvas.uninstallPlugin('console-demo')   // ④ 卸掉：命令也一起消失
 ```
 
@@ -317,7 +317,7 @@ exposeToWindow('MiniCanvas')
 const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
 text.addTextNode({ x: 0, y: 0 })
 console.log(host.doc.getNodes())        // ① 数据层完全可用（建节点 / 撤销 / 落盘）
-console.log(host.ctx.get('viewport')?.getViewport())   // ② 视口服务在（但后端没挂，读的是默认值）
+console.log(host.ctx.get('view')?.getViewport())   // ② 视口服务在（但后端没挂，读的是默认值）
 await host.save.flush()
 host.stop()
 ```
@@ -329,4 +329,4 @@ host.stop()
 3. **`vite.config.ts` 没排除 workspace 源码包**。这些包是未编译的 `.ts` / `.vue` 源码，放着让 vite 预打包会出现「依赖解析怪问题 / 两份实例」。照抄 `optimizeDeps.exclude` 清单最省事。
 4. **`adapter` 每次渲染都重建**。`new LocalStorageAdapter()` 要放在 `setup` 里**只跑一次**的位置（或模块级），不能在模板 / `computed` 里建 —— 否则每次重建都会换一份存储，用户看到「刚存的没了」。
 5. **业务 UI 放错位置**。放进 `<template #ui>` 才在渲染子树里；放外面会导致里面的组件调 `useCanvasRender()` 时抛错。
-6. **Node 环境看不到画面不是坏了**。`createMiniCanvasHost` 在 Node 里能跑，但「渲染」这件事本身要浏览器：`viewport` 的后端只有 `<CanvasSurface>` 挂载后才接上，DOM 锚点也只有那时才有。
+6. **Node 环境看不到画面不是坏了**。`createMiniCanvasHost` 在 Node 里能跑，但「渲染」这件事本身要浏览器：`view` 的视口后端只有 `<CanvasSurface>` 挂载后才接上，DOM 锚点也只有那时才有。

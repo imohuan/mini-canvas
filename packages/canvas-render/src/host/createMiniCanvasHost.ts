@@ -38,10 +38,12 @@ import type {
   ThemeRegistry,
 } from '@mini-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
-import { tipService } from '../tip/tipService'
 import TipLayer from '../tip/TipLayer.vue'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
+import { ViewService } from '../view/viewService'
+import { CanvasService } from '../canvas/canvasService'
+import { NodeToolbarService } from '../toolbar/nodeToolbarService'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -89,6 +91,8 @@ export interface MiniCanvasOptions {
 /** 画布运行时句柄（宿主/Vue 消费：provide、渲染、读服务） */
 export interface CanvasHostHandle {
   ctx: Context
+  /** 统一安装句柄（装卸/重载/清单）；插件从 useCanvasRender().host.manager 取 */
+  manager: PluginManager
   save: SaveServiceImpl
   /**
    * 文档门面（§4.1）：节点 + 边 + 事务 + 撤销 + 快照 + 订阅合成的一个名字。
@@ -113,6 +117,8 @@ export interface CanvasHostHandle {
   nodeLayout: NodeLayoutService
   /** 视口服务（CanvasHost 挂载后 attach VueFlow backend；插件读/控制视图） */
   viewport: ViewportService
+  /** 几何 + 视口合并服务（新入口；nodeLayout/viewport 是同一组底层的兼容别名） */
+  view: ViewService
   /** 配置持久化桥（ctx.settings ↔ save(config)）；persistSettings=false 时 undefined */
   settingsPersist?: SettingsPersistService
   /** 资源生命周期服务（Blob/object URL 登记与回收；file-drop 等写入 object URL 的插件接入） */
@@ -182,11 +188,13 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // —— 宿主补渲染层两件（真需要 DOM / 后端 attach，数据层给不了）——
   // 节点布局服务：读 nodeStore + 承载渲染层 ResizeObserver 实测尺寸（内存态，不落盘）
   const nodeLayout = new NodeLayoutService(nodeStore)
-  ctx.inject('nodeLayout', nodeLayout)
 
   // 视口服务：工厂先建空壳，CanvasHost 拿到 VueFlow 实例后 attachBackend
   const viewport = new ViewportService()
-  ctx.inject('viewport', viewport)
+  // view：几何 + 视口的正式名字。构造时传入同一份 layout/viewport 实例，
+  // 保证量测写口、视口后端与别名读的是同一份状态。
+  const view = new ViewService({ nodeStore, layout: nodeLayout, viewport })
+  ctx.inject('view', view)
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
@@ -209,13 +217,15 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），
   // 从 manager.list()/diagnose() 隐去 —— 画布基础服务对应用层是"环境"，不是"清单项"。
   const manager: PluginManager = createPluginManager(ctx, { hiddenPlugins: [base.name] })
-  // 把统一安装句柄也上架成一个服务：插件（如「插件管理」）能在运行期按名取到它，
-  // 从而自己装卸别的插件（用户诉求：用一个插件去管理其他插件的装/卸/重装）。
-  // 放在冷启动之前注入：插件一 start 就能 ctx.get('pluginManager') 拿到。
-  ctx.inject('pluginManager', manager)
-  // 通用鼠标跟随提示（基础服务）：任何插件/渲染组件 ctx.get('tip').show('...') 即可显示。
-  // 放渲染层而不是主题：拖线非法提示属于渲染反馈，换主题也应可用（用户口径 2026-10-26）。
-  ctx.inject('tip', tipService)
+  // 画布动作门面（服务名 canvas）与提示队列。
+  // 提示跟随鼠标、可撤回、多持有者不互盖。
+  const canvas = new CanvasService(ctx)
+  ctx.inject('canvas', canvas)
+  // 节点上下状态栏的会话与模式注册：属于渲染层基础设施，**不能**住在主题插件里
+  // （否则卸载主题就丢模式，这是 Spec D4 要修的真实缺陷）。业务插件启动前注入。
+  const nodeToolbar = new NodeToolbarService()
+  nodeToolbar.docPeek = doc
+  ctx.inject('nodeToolbar', nodeToolbar)
   ctx.slots.register('overlay', {
     id: 'canvas-render/tip-layer',
     order: 95,
@@ -263,7 +273,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 宿主这里只负责"插件装载完成之后"的那一次 restore：插件 Config 已声明完成，
   // 注入的保存快照能在 define 时命中为初值（若宿主关掉 persistSettings，桥缺席 → 不 restore）。
   const settingsPersist: SettingsPersistService | undefined = base.services.settingsPersist
-  if (settingsPersist) await settingsPersist.restore()
+  // 新入口：save.settings（条件存在）。settingsPersist 服务与 handle 字段只作兼容别名。
+  if (settingsPersist) await save.settings!.restore()
 
   // 色板落值：把"用户改过的那些格"写进 <html> 内联 CSS 变量（没改过的不写，CSS 侧默认值生效）。
   // 这步必须在 restore() 之后 —— 否则用户上次存的配色要等下一次改动才可见。
@@ -308,6 +319,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   const host: CanvasHostHandle = {
     ctx,
+    manager,
     save,
     doc,
     nodeStore,
@@ -321,6 +333,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     graph,
     nodeLayout,
     viewport,
+    view,
     settingsPersist,
     resources,
     stop: () => {

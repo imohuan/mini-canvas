@@ -13,7 +13,7 @@ ctx.doc.createNode('text', { x: 0, y: 0 })   // 插件作用域里也能属性�
 ```ts
 export const inject = ['doc']        // 硬依赖：没有它，插件停在 PENDING（不启动）
 const doc = ctx.get('doc')          // 可选：缺了返回 undefined
-const layout = ctx.tryGet('nodeLayout')  // 显式可选：缺了返回 undefined
+const view = ctx.tryGet('view')          // 显式可选：缺了返回 undefined
 ```
 
 ## 服务分三档来源
@@ -21,8 +21,8 @@ const layout = ctx.tryGet('nodeLayout')  // 显式可选：缺了返回 undefine
 | 档 | 谁提供的 | 有哪些 | 装了画布就有？ |
 | --- | --- | --- | --- |
 | **内核内置** | 框架自己 | `tools`、`slots`、`settings` | 是（纯 `new Context()` 也有） |
-| **画布基础** | `canvas-base` 基础插件 | `doc`、`save`、`resources`、`nodeRegistry`、`themeRegistry`、`selection`、`command`、`nodeFactory`、`settingsPersist` | 装了基础插件才有 |
-| **渲染宿主** | `canvas-render` 宿主 | `nodeLayout`、`viewport`、`pluginManager` | 起了渲染宿主才有 |
+| **画布基础** | `canvas-base` 基础插件 | `doc`、`save`、`selection`、`resources` | 装了基础插件才有 |
+| **渲染宿主** | `canvas-render` 宿主 | `view`、`canvas` | 起了渲染宿主才有 |
 
 ## 全部服务（一句话 + 链接）
 
@@ -31,19 +31,18 @@ const layout = ctx.tryGet('nodeLayout')  // 显式可选：缺了返回 undefine
 | `doc` | 画布数据门面：节点 + 边 + 事务 + 撤销 + 快照 + 订阅 | [看](/services/doc) |
 | `save` | 键值持久化：换适配器就能换存储 | [看](/services/save) |
 | `selection` | 选中集：当前选中了哪些节点和边 | [看](/services/selection) |
-| `command` | 命令注册表：菜单/快捷键/按钮都指向它 | [看](/services/command) |
+| `canvas` | 画布动作门面：建节点/选中/取景/模式/提示/命令执行 | [看](/services/canvas) |
 | `slots` | 通用 UI 槽：往画布的固定位置叠 UI | [看](/services/slots) |
 | `settings` | 配置的单一数据源：所有可调项登记在这里 | [看](/services/settings) |
 | `resources` | 资源生命周期：object URL 的登记与回收 | [看](/services/resources) |
 | `upstream` / `media` | 能力包（不是服务名）：读上游、加媒体；用 `useCapability('upstream' / 'media')` 取 | [看](/canvas-data/upstream) |
-| `nodeRegistry` | 节点展示注册表：哪种节点用哪个组件 | [看](/services/node-registry) |
-| `themeRegistry` | 主题槽注册表：壳/边/背景的"当前赢家" | [看](/services/theme-registry) |
-| `nodeFactory` | 建节点工厂：统一"建一个节点"的入口 | [看](/services/node-factory) |
-| `settingsPersist` | 配置落盘桥：配置改动写进存储 | [看](/services/settings-persist) |
-| `nodeLayout` | 实测尺寸 / 绝对坐标（要量 DOM） | [看](/services/node-layout) |
-| `viewport` | 视口：缩放 / 定位 / 聚焦 | [看](/services/viewport) |
-| `pluginManager` | 插件管理器：装卸 / 重载 / 诊断 | [看](/services/plugin-manager) |
+| `view` | 实测尺寸 / 绝对坐标 / 视口 / 唯一取景 `fitTo` | [看](/services/view) |
+| `nodeToolbar` | 节点上下状态栏的会话与模式注册（辅助服务） | [看](/services/node-toolbar) |
 | `tools` | 外部能力注册表：文生图 / 图生文这类"生成工具" | [看](/services/tools) |
+
+> **旧名已下线**：`nodeLayout` / `viewport` / `command` / `nodeFactory` /
+> `nodeRegistry` / `themeRegistry` / `settingsPersist` / `auto-save` / `pluginManager`
+> 都不能再按名取。对照表见 [服务与注册场现状](/services/map)。
 
 > 想看**你这台画布上实际有哪些服务、谁提供的、方法名是什么** → [活快照](/plugins/live)（真数据）。
 > 后台（cloud-server）的服务走 **`ctx.routes` / `ctx.store` / `ctx.jobs` / `ctx.mcp` / `ctx.agent`**，

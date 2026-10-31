@@ -209,7 +209,8 @@ export const RETIRED_SEGMENT_NAMES = [
 
 ### 展示侧：`NodeRegistry`
 
-`NodeRegistry`（服务名 `'nodeRegistry'`）只存"**用哪个组件渲染某 type 的每个区域**"。
+`NodeRegistry` 只存"**用哪个组件渲染某 type 的每个区域**"。它由宿主句柄 `host.nodeRegistry`
+持有，不再按 `ctx.get('nodeRegistry')` 取服务名。
 组件句柄是 **opaque**（不透明引用）：数据层不 import Vue，宿主在浏览器侧喂 `.vue`，测试喂 stub。
 
 | 方法 | 一句话 | 什么时候用 |

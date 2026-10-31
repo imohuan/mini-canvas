@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import { createCanvasBasePlugin } from '@mini-canvas/canvas-data'
 import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { NodeLayoutService } from '@mini-canvas/canvas-render'
+import { ViewService } from '@mini-canvas/canvas-render'
 import { applyStoryboardDrop, storyboardHitAt } from '../storyboardDrag'
 
 interface Harness {
@@ -30,8 +30,8 @@ async function boot(): Promise<Harness> {
   const base = createCanvasBasePlugin({ adapter: new MemoryStorageAdapter() })
   ctx.plugin(base.plugin)
   await ctx.start()
-  const layout = new NodeLayoutService(base.services.nodeStore)
-  ctx.provide('nodeLayout', layout)
+  // 迁移后插件按新名取几何/视口；这里显式提供 view，与生产宿主的注入一致。
+  ctx.provide('view', new ViewService({ nodeStore: base.services.nodeStore }))
   // 分镜组 + 一张已在槽位里的图片（父级 = 分镜组，position 相对父）
   base.services.nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 480, h: 240 } })
   base.services.nodeStore.registerType({ type: 'storyboard', label: '分镜组', transparent: true, defaultSize: { w: 480, h: 360 } })

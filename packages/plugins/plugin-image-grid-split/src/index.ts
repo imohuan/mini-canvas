@@ -234,7 +234,7 @@ export function apply(ctx: Context): void {
     const type = doc?.getNode(payload.nodeId)?.type
     if (!type || type === 'image' || type === 'storyboard') return
     if (!storyboardHitAt(ctx, payload)) return
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('分镜组只收图片节点')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('分镜组只收图片节点', { followPointer: true, durationMs: 0 })
   })
   ctx.effect(() => () => offDrop.dispose())
   // 拖动逐帧：获胜槽位高亮 + 拖动节点半透明（用户口径 2026-10-30）

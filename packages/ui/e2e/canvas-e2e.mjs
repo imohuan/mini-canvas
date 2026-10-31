@@ -423,7 +423,7 @@ const resizeZoom = await page.evaluate(async () => {
   const api = window.MiniCanvasUI;
   const h = api.getHost();
   const doc = h.ctx.get('doc');
-  const vp = h.ctx.get('viewport');
+  const vp = h.view;
   const target = doc.getNodes().find((n) => doc.types.get(n.type)?.resizable === true);
   if (!target) return { skipped: true };
   doc.updateNode(target.id, { position: { x: 250, y: 200 } });
@@ -584,7 +584,7 @@ check(
   })();
   check('选中图片节点 → 默认底栏渲染出来', hasBar);
 
-  // 执行一条异步动作（服务层触发同一链路：nodeTask.run → runAction → updateNodeRuntime → 覆盖层）
+  // 执行一条异步动作（服务层触发同一链路：canvas.runBarAction → nodeBar 执行器 → updateNodeRuntime → 覆盖层）
   // 注意：这条动作是**测试现场注册**的（e2e 自己造一个假后台），不是成品装配里的插件 ——
   // 成品清单里不该混进"测试用假动作"（用户明确要求：测试就写清是测试，别塞进别的插件）。
   const ran = await (async () => {
@@ -615,7 +615,7 @@ check(
        const orig = doc.updateNodeRuntime.bind(doc);
        doc.updateNodeRuntime = (id, patch) => { calls.push({ id, keys: Object.keys(patch?.data ?? {}) }); return orig(id, patch); };
        window.__wrCalls = calls;
-      return ctx.get('nodeTask').run(node.id, 'e2e:fake-async', { prompt: 'e2e', values: {} })
+      return ctx.get('canvas').runBarAction(node.id, 'e2e:fake-async', { prompt: 'e2e', values: {} })
         .then((r) => ({ kind: 'returned', r }))
         .catch((e) => ({ kind: 'threw', error: e?.message || String(e) }));
     });
@@ -626,8 +626,9 @@ check(
       const node = doc.getNodes().find((n) => n.type === 'image');
     const host = window.MiniCanvasUI.getHost();
     const hostDoc = host.ctx.get('doc');
-     const appliers = ctx.registryOf('node/bar-applier');
-     return { viaDoc: node?.data?.runState ?? null, viaStore: (host.nodeStore.getNode(node.id)?.data?.runState) ?? null, id: node.id, sameDoc: hostDoc === doc, keys: Object.keys(node?.data ?? {}), applierKeys: appliers.keys(), applierIsFn: typeof appliers.get('image', 'image')?.value };
+     const field = ctx.registryOf('node/bar');
+     const applierKeys = field.keys().filter((k) => k.startsWith('appliers/'));
+     return { viaDoc: node?.data?.runState ?? null, viaStore: (host.nodeStore.getNode(node.id)?.data?.runState) ?? null, id: node.id, sameDoc: hostDoc === doc, keys: Object.keys(node?.data ?? {}), applierKeys, applierIsFn: typeof field.get('appliers/image', 'image')?.value };
    });
     let runResult = null;
     runPromise.then((v) => { runResult = v; }).catch((e) => { runResult = { kind: 'threw', error: String(e) } });

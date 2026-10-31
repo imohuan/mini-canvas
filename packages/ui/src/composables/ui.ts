@@ -256,7 +256,7 @@ function createUi() {
     histSortDesc: true,
     histZoom: 3,
     /**
-     * 生成历史 —— **数据来自后台**（gen-history 服务），不是写死的假数组。
+     * 生成历史 —— **数据来自后台**（cloud-client:history 服务），不是写死的假数组。
      * 由 loadHistory() 拉取并填充；历史弹窗只负责渲染。
      */
     historyItems: [] as Array<{
@@ -642,7 +642,7 @@ function createUi() {
 
   // ===== 资产：所有**生成了产物**的历史记录（图片 / 视频 / 音频）=====
   // 用户口径：资产 = 所有生成过的列表 + 自己上传的资源。生成记录后台本来就有全量账本
-  // （见 plugin-cloud-client 的 gen-history 服务），这里直接复用它，不必再起一套「资产库」。
+  // （见 plugin-cloud-client 的 cloud-client:history 服务），这里直接复用它，不必再起一套「资产库」。
   // 只留有产物地址（urls 非空）的条目 —— 失败/无产物的记录不算资产。
   /**
    * 资产清单：来自后台 `/api/assets`（生成产物 + 自己上传，统一登记）。
@@ -1098,7 +1098,7 @@ function createUi() {
   /**
    * 从后台拉一页历史。
    *
-   * 服务名是 `gen-history`（由 plugin-cloud-client 挂上）。没装那个插件
+   * 服务名是 `cloud-client:history`（由 plugin-cloud-client 挂上）。没装那个插件
    * （比如纯前端开着）时服务不存在 —— 给一句人话，而不是装作"没有历史"。
    */
   async function loadHistory(
@@ -1138,7 +1138,7 @@ function createUi() {
           pageSize: number
           summary: { total: number; byKind: Record<string, number> }
         }>
-      }>('gen-history')
+      }>('cloud-client:history')
       if (!svc) {
         state.historyReady = false
         return
@@ -1285,18 +1285,15 @@ function createUi() {
     return new Date(ts).toLocaleDateString()
   }
 
-  // ===== 小地图显隐（唯一事实来源 = mini-map 插件服务；状态栏按钮只是它的开关） =====
-  // host ctx.get('mini-map') 每次返回同一个 reactive 对象（插件 apply 里注入的），
-  // computed 追踪 .visible 属性即可实时反映开关状态。
-  const minimapOn = computed(() => (readyHost?.ctx?.get<{ visible: boolean }>('mini-map')?.visible) ?? false)
+  // ===== 小地图显隐（唯一事实来源 = 设置项 miniMapVisible；状态栏按钮只是它的开关） =====
+  // 插件浮层与命令订阅同一设置项（SettingsStore 是单一数据源），这里不再读私有服务。
+  // SettingsStore 不是响应式的：bindCanvasToggles 里订阅 onChange 同步到这个 ref。
+  const minimapVisible = ref(false)
+  const minimapOn = computed(() => minimapVisible.value)
   function toggleMinimap(): void {
-    const svc = readyHost?.ctx?.get<{ visible: boolean }>('mini-map')
-    const next = !minimapOn.value
-    // 优先写设置 miniMapVisible（插件订阅它同步服务，且会随配置持久化到下次启动）；
-    // 设置键缺席（未装 mini-map 插件）时退回直接翻服务位，至少当下这次切换是生效的。
     const store = readyHost?.ctx?.get<SettingsStore>('settings')
-    if (store?.has?.('miniMapVisible')) store.set('miniMapVisible', next)
-    else if (svc) svc.visible = next
+    if (!store?.has?.('miniMapVisible')) return
+    store.set('miniMapVisible', !minimapOn.value)
   }
 
   // ===== 画布开关（整理画布 / 连线显隐 / 网格吸附 / 移动工具）=====
@@ -1435,7 +1432,7 @@ function createUi() {
   // 原则：状态栏按钮**不自己保存一份状态、不直接碰画布**，只做两件事之一 ——
   //   ① 写内核设置（ctx.get('settings').set）：连线显隐 / 网格吸附 / 画布模式
   //      → 真正干活的是订阅这些 key 的消费方（渲染宿主 / 主题皮），与设置面板**同一条通道**；
-  //   ② 执行命令（ctx.get('command').execute）：整理画布 / 聚焦
+  //   ② 执行命令（canvas.runCommand）：整理画布 / 聚焦
   //      → 走插件已注册的命令，复用撤销栈与落盘，不另抄一份实现。
   //
   // 为什么用 settings 而不是各插件的服务：edgeVisible / snapToGrid 是"宿主级"键
@@ -1457,16 +1454,16 @@ function createUi() {
   }
   /** 执行一条已注册命令（未注册 → no-op，不报错） */
   function runCommand(id: string): void {
-    hostCtx()?.get<{ execute(id: string): unknown }>('command')?.execute(id)
+    hostCtx()?.get<{ runCommand(id: string): unknown }>('canvas')?.runCommand(id)
   }
 
   // ===== 缩放（左下角「缩放选项」）=====
   //
-  // 唯一事实来源 = 真实画布视口（viewport 服务的 getViewport().zoom）。状态栏那个百分比只是**镜像值**：
+  // 唯一事实来源 = 真实画布视口（view 服务的 getViewport().zoom）。状态栏那个百分比只是**镜像值**：
   // 由宿主就绪时同步一次 + 每次视口移动/缩放结束（RenderEvents.MoveEnd）再同步，显示永远与画布一致。
-  // 菜单动作一律调 viewport 服务去改真实画布，不再只改一个数字（原先 s.zoom 是纯 UI 数字，
+  // 菜单动作一律调 view 服务去改真实画布，不再只改一个数字（原先 s.zoom 是纯 UI 数字，
   // 从没接到 viewport 上 —— 表现为"点缩放至 100% 画布纹丝不动"）。
-  /** viewport 服务的最小用面（契约见 canvas-data renderServiceContracts，宿主恒在注入） */
+  /** view 服务的最小用面（契约见 canvas-data renderServiceContracts，宿主恒在注入） */
   type ViewportLike = {
     getViewport(): { zoom: number }
     zoomIn(): void
@@ -1475,7 +1472,7 @@ function createUi() {
     fitView(padding?: number): void
   }
   function viewportSvc(): ViewportLike | undefined {
-    return hostCtx()?.get<ViewportLike>('viewport')
+    return hostCtx()?.get<ViewportLike>('view')
   }
   /** 把真实视口缩放同步到状态栏镜像值（未就绪 → 不动，保留上一次显示） */
   function syncZoomDisplay(): void {
@@ -1608,6 +1605,9 @@ function createUi() {
     // 先按现值对齐一次（面板之前可能已经改过）
     state.edgesVisible = (store.get('edgeVisible') as boolean | undefined) ?? state.edgesVisible
     state.snapOn = (store.get('snapToGrid') as boolean | undefined) ?? state.snapOn
+    // 未赋值时 SettingsStore 返回 undefined（不是 schema 默认值）；旧实现读插件服务的
+    // 初始 visible（默认 true）。这里缺省按“显示”处理，避免状态栏图标与浮层不一致。
+    minimapVisible.value = store.get('miniMapVisible') !== false
     // 画布模式由 nodesDraggable 反推：关掉拖节点 = 抓手态（拖哪都平移画布），否则是移动态
     const draggable = store.get('nodesDraggable') as boolean | undefined
     if (typeof draggable === 'boolean') state.canvasMode = draggable ? 'move' : 'hand'
@@ -1615,6 +1615,7 @@ function createUi() {
       if (key === 'edgeVisible' && typeof value === 'boolean') state.edgesVisible = value
       else if (key === 'snapToGrid' && typeof value === 'boolean') state.snapOn = value
       else if (key === 'nodesDraggable' && typeof value === 'boolean') state.canvasMode = value ? 'move' : 'hand'
+      else if (key === 'miniMapVisible' && typeof value === 'boolean') minimapVisible.value = value
     }).dispose
   }
 
@@ -1763,7 +1764,7 @@ function createUi() {
     void loadAssetFolders()
     void loadProjectName()
     await installExternalPlugins()
-    // 外部插件装完（云插件会挂上 gen-history 服务）再拉历史；顺带订阅"有新生成"
+    // 外部插件装完（云插件会挂上 cloud-client:history 服务）再拉历史；顺带订阅"有新生成"
     void loadHistory()
     bindHistoryUpdates()
     bindHistoryFilters()
@@ -1801,7 +1802,7 @@ function createUi() {
   function bindHistoryUpdates(): void {
     disposeHistorySub?.()
     disposeHistorySub = undefined
-    const svc = readyHost?.ctx?.get<{ subscribe(fn: () => void): () => void }>('gen-history')
+    const svc = readyHost?.ctx?.get<{ subscribe(fn: () => void): () => void }>('cloud-client:history')
     if (!svc || typeof svc.subscribe !== 'function') return
     /**
      * 收到「有新任务」信号：只后台同步当前页签的第 1 页，新卡片插到最前面。
@@ -2156,7 +2157,7 @@ function createUi() {
     const selection = ctx?.get<{ set(ids: Iterable<string>): void }>('selection')
     selection?.set([newId])
     // 聚焦放在 nextTick：节点刚建出来，等一帧让渲染层拿到它的位置/尺寸再算 bounds。
-    void nextTick(() => ctx?.get<{ execute(id: string): unknown }>('command')?.execute('auto-layout:focus-selected'))
+    void nextTick(() => ctx?.get<{ runCommand(id: string): unknown }>('canvas')?.runCommand('auto-layout:focus-selected'))
   }
 
   /** 取画布宿主（hostEl 优先；没有就退到 window 上暴露的那份） */
@@ -2275,7 +2276,7 @@ function createUi() {
    * viewport 服务缺失（宿主未就绪）→ null，调用方退级联默认落点。
    */
   function screenToFlow(clientX: number, clientY: number): { x: number; y: number } | null {
-    const vp = hostCtx()?.get<{ screenToFlow?(x: number, y: number): { x: number; y: number } }>('viewport')
+    const vp = hostCtx()?.get<{ screenToFlow?(x: number, y: number): { x: number; y: number } }>('view')
     if (!vp?.screenToFlow) return null
     try {
       return vp.screenToFlow(clientX, clientY)
@@ -2294,7 +2295,7 @@ function createUi() {
   function viewportCenterFlow(): { x: number; y: number } | null {
     const vp = hostCtx()?.get<
       { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }
-    >('viewport')
+    >('view')
     const pane = vp?.getPaneEl?.()
     if (!pane || !vp?.screenToFlow) return null
     const r = pane.getBoundingClientRect()
@@ -2469,7 +2470,7 @@ function createUi() {
       return 0
     }
     // 视口中心（client 坐标）→ flow：pane 矩形的一半即屏幕中心；两者都拿不到就 null
-    const vp = hostCtx()?.get<ViewportLike & { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }>('viewport')
+    const vp = hostCtx()?.get<ViewportLike & { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }>('view')
     let atFlow: { x: number; y: number } | null = null
     const pane = vp?.getPaneEl?.()
     if (pane && vp?.screenToFlow) {
@@ -2679,7 +2680,7 @@ function createUi() {
   /**
    * 定位到某个节点：把它在画布上居中显示（左侧树点击时用）。
    *
-   * 为什么用 viewport.setCenter 而不是自己改视口：那是渲染层视口的唯一入口，
+   * 为什么用 view.fitTo 而不是自己改视口：那是渲染层取景的唯一入口，
    * 与缩放 / 适配屏幕走同一条路（缓存与边界面一致）。拿不到坐标（旧节点）就只选中、不移动。
    */
   function locateNode(id: string): void {
@@ -2699,35 +2700,17 @@ function createUi() {
         })
       | undefined
     if (!vp) return
-    // 优先「聚焦到该节点」：nodeLayout 有实测矩形就用它算居中 + 舒适缩放（与 F 聚焦同一算法），
-    // 比只 setCenter 到节点左上角准得多（那正是用户说的"效果极差"）。
-    const layout = ctx?.get<{ getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | undefined }>('nodeLayout')
-    const rect = layout?.getNodeRect?.(id)
-    const zoom = vp.getViewport().zoom
-    if (rect && rect.w > 0 && rect.h > 0 && typeof vp.setCenter === 'function') {
-      vp.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom)
-      return
-    }
-    // 退路：让 VueFlow 只对这一批节点取景（pane 级 fit，比逐帧 rAF 稳，不会出现 offset 漂移）
-    if (typeof vp.fitView === 'function') {
-      try {
-        vp.fitView(0.45, { nodes: [{ id }] })
-        return
-      } catch {
-        /* fitView 不支持 nodes 选项时继续走坐标退路 */
-      }
-    }
-    const pos = findTreeNode(tree, id)
-    if (pos && typeof vp.setCenter === 'function') vp.setCenter(pos.x ?? 0, pos.y ?? 0, zoom)
-  }
-
-  /** 在树里找某个节点（定位退路用） */
-  function findTreeNode(list: TreeNode[], id: string): TreeNode | undefined {
-    for (const n of list) {
-      if (n.id === id) return n
-      if (n.children) { const h = findTreeNode(n.children, id); if (h) return h }
-    }
-    return undefined
+    // 优先「保持当前缩放、只平移」到节点矩形（与搜索/Agent 同一套取景）。
+    const view = ctx?.get<{
+      fitTo(target: string[], opts?: { keepZoom?: boolean; select?: boolean; padding?: number }): boolean
+      getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | null
+    }>('view')
+    if (!view) return
+    const rect = view.getNodeRect?.(id)
+    if (view.fitTo([id], { keepZoom: true, select: true })) return
+    // 退路只在“没有节点矩形”时走（旧实现同款 padding 0.45）。
+    // fitTo 返回 false 也可能是“已经在视口中心、无需移动”；那种情况不能把 zoom 改掉。
+    if (!rect) view.fitTo([id], { padding: 0.45 })
   }
 
   /**
@@ -2764,7 +2747,7 @@ function createUi() {
    * 命令内部只记待插入的节点 id + 打开面板，标签由输入框组件现造 —— 这里不重复那套。
    */
   function referenceNodeToAgent(id: string): void {
-    hostCtx()?.get<{ execute(id: string, payload?: unknown): unknown }>('command')?.execute('agent:reference-node', { nodeId: id })
+    hostCtx()?.get<{ runCommand(id: string, payload?: unknown): unknown }>('canvas')?.runCommand('agent:reference-node', { nodeId: id })
   }
 
   /** 解散一个分组（左侧画布树的分组行菜单用）：走 group 服务（它自己包历史 + 还原子节点绝对坐标） */

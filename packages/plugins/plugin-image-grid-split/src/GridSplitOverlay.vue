@@ -55,7 +55,7 @@ async function refreshImageSrc(): Promise<void> {
   if (token !== resolveToken) return
   imageSrc.value = resolved || legacy
   if (!imageSrc.value) {
-    const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('viewport')
+    const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('view')
     const img = vp?.queryNodeEl?.(props.id)?.querySelector('img')
     imageSrc.value = img?.getAttribute('src') || ''
   }
@@ -96,7 +96,7 @@ const cells = computed(() => {
   const s = state.value
   if (!s) return []
   // 格子几何 = 分镜组同一套 slotRects（圆角卡片 + 间隔），按节点实测尺寸转百分比
-  const rect = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('nodeLayout')?.getNodeRect(props.id)
+  const rect = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('view')?.getNodeRect(props.id)
   const boardW = rect?.w && rect.w > 0 ? rect.w : 480
   const boardH = rect?.h && rect.h > 0 ? rect.h : 360
   const layout = readStoryboardLayout(ctx)
@@ -183,7 +183,7 @@ const MASK_RADIUS = 12
 const maskUri = computed(() => {
   const s = state.value
   if (!s) return ''
-  const rect = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('nodeLayout')?.getNodeRect(props.id)
+  const rect = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('view')?.getNodeRect(props.id)
   const boardW = rect?.w && rect.w > 0 ? rect.w : 480
   const boardH = rect?.h && rect.h > 0 ? rect.h : 360
   const rects = slotRects(boardW, boardH, s.rows, s.cols, {
@@ -218,7 +218,7 @@ const maskUri = computed(() => {
  * 取不到就什么都不做（极简宿主/单测），不报错。
  */
 function cardEl(): HTMLElement | null {
-  const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('viewport')
+  const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('view')
   const node = vp?.queryNodeEl?.(props.id)
   return (node?.querySelector('.v2-card') as HTMLElement | null) ?? null
 }
@@ -396,7 +396,9 @@ function onClick(ev: MouseEvent): void {
   padding: 3px 10px;
   border-radius: 999px;
   /* 提示固定黑底白字：亮色/暗色都一致，不跟主题翻成白底 */
+  /* 主题色白名单: 悬停胶囊压在图格上，固定深底白字保证任何图像上都可读 */
   background: rgb(24 32 43 / 0.88);
+  /* 主题色白名单: 同上，固定白字 */
   color: #ffffff;
   font-size: var(--text-xs, 12px);
   line-height: 1.4;

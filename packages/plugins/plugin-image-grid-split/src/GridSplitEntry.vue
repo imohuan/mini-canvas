@@ -55,7 +55,7 @@ const customRows = ref(3)
 const customCols = ref(3)
 
 function notify(text: string): void {
-  ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.(text)
+  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify(text, { followPointer: true, durationMs: 0 })
 }
 
 function enter(rows: number, cols: number): void {

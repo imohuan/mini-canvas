@@ -1,5 +1,5 @@
 /**
- * nodeFactory —— 统一节点创建工厂服务（ctx.get('nodeFactory')）。
+ * nodeFactory —— 统一节点创建工厂（画布内部容器；插件走 `canvas.createNode`）。
  *
  * 目的（api.md §3.4 的 createAt + runbook M3"一份节点创建"）：把"放一个 X 节点"收敛成
  * 每个 type 注册一个 creator，host/命令/菜单只调 `create(type,pos)`，别处不再各自抄建节点。

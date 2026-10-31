@@ -79,6 +79,10 @@ function makeCtx(opts: StubOptions = {}) {
     nodeTask: { cancel: () => {}, run: async () => ({ ok: true }) },
   }
   return {
+    host: {
+      nodeRegistry: { get: () => undefined },
+      themeRegistry: { winner: () => undefined, subscribe: () => () => {} },
+    },
     ctx: {
       get: (name: string) => services[name],
       tryGet: (name: string) => services[name],

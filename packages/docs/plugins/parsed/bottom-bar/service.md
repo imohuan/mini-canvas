@@ -8,9 +8,9 @@
 
 FJ => FJts
 // 组件里一律用 ctx.get（根 ctx 没有服务代理，别直访 ctx.nodeBar）
-const bar = ctx.get('nodeBar')
-bar.list({ type: 'image' })          // 这个节点类型有哪些动作
-ctx.get('nodeTask').run(nodeId, actionId, input)
+  const bar = ctx.get('nodeBar')
+  bar.list({ type: 'image' })          // 这个节点类型有哪些动作
+  ctx.get('canvas').runBarAction(nodeId, actionId, input) // 跑动作（公开入口）
 FJ => FJ
 
 > 插件 `apply` 内可直访 `ctx.nodeBar`（服务解析 Proxy 只存在于插件作用域）。
@@ -50,9 +50,9 @@ FJ => FJ
 
 FJ => FJts
 // 位置：底栏组件里 —— 用户点了某个动作
-const bar = ctx.get('nodeBar')
-const action = bar.get('image.rotate')
-await ctx.get('nodeTask').run(nodeId, 'image.rotate', {})
+  const bar = ctx.get('nodeBar')
+  const action = bar.get('image.rotate')
+  await ctx.get('canvas').runBarAction(nodeId, 'image.rotate', {})
 FJ => FJ
 
 ## 注意事项
@@ -60,4 +60,7 @@ FJ => FJ
 1. **`run` 返回的是"最终结果"**：调用方不必再去读节点 data。
 2. **`restoreAll` 的时机很讲究**（源码里有长注释）：`ctx:ready` 时画布数据**还没**从 storage 恢复进来，光靠它扫不到 running 节点。所以它订阅了 `doc` 变化、等"文档真有内容"再续查（扫到就锁死），另加 `ctx:ready` 与 `ctx:plugin-installed` 两条兜底（都幂等）。
 3. **续查出来的任务也要登记 `AbortController`**：不登记的话 `cancel` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈过）。
+
+> `nodeTask` 是 bottom-bar 插件自己上架的执行器，不算基础服务。别的插件跑动作统一走
+> `ctx.get('canvas').runBarAction(...)` / `cancelBarAction(...)`；底栏自己的组件仍可直接用内部服务名。
 

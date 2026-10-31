@@ -36,7 +36,6 @@ export const BOTTOM_BAR_SLOT_NAME = 'overlay'
 
 /** 跨插件共用的两张注册场 */
 export const BAR_FIELD = 'node/bar'
-export const BAR_APPLIER_FIELD = 'node/bar-applier'
 
 /** 类型 → 内容 kind（publishToolActions 用；与内核 ToolResourceKind 同词表） */
 export function kindOf(nodeType: string): ToolResourceKind | undefined {
@@ -57,6 +56,11 @@ export class NodeBarService extends Service {
     return this.ctx.registryOf<BarAction>(BAR_FIELD)
   }
 
+  /** 写入器与动作同住 node/bar：键前缀区分，卸载时随同一个场一起消失 */
+  private applierField() {
+    return this.ctx.registryOf<BarApplier>(BAR_FIELD)
+  }
+
   /**
    * 列出适用于某节点类型的动作。场的键就是 action.id（没有类型索引），
    * 所以要扫全键摊平 → 按 types 过滤 → 按 order 跨键升序；动作量级几十条，无性能问题。
@@ -65,6 +69,7 @@ export class NodeBarService extends Service {
     const field = this.field()
     const all: BarAction[] = []
     for (const key of field.keys()) {
+      if (!key.startsWith('actions/')) continue
       for (const entry of field.list(key)) all.push(entry.value)
     }
     const picked = filter?.type ? all.filter((a) => !a.types || a.types.includes(filter.type!)) : all
@@ -73,12 +78,12 @@ export class NodeBarService extends Service {
 
   /** 查一条动作（键=id），不走 list().find()（那等于每次洗全表） */
   get(id: string): BarAction | undefined {
-    return this.field().get(id, id)?.value
+    return this.field().get(`actions/${id}`, id)?.value
   }
 
   /** 查某类型的写入器（键=kind） */
   applierOf(kind: string): BarApplier | undefined {
-    return this.ctx.registryOf<BarApplier>(BAR_APPLIER_FIELD).get(kind, kind)?.value
+    return this.applierField().get(`appliers/${kind}`, kind)?.value
   }
 
   /** 读节点当前运行状态（不改写） */
@@ -160,6 +165,9 @@ export class NodeTaskService extends Service {
   ) {
     const action = this.lookup().get(actionId)
     if (!action) return { ok: false as const, error: '未找到动作 ' + actionId }
+    // 同一节点只能有一条在跑：否则旧任务的 finally 会删掉新任务的控制器，
+    // 之后 cancel(nodeId) 就取消不到真正在跑的那条（Spec 五·14）。
+    this.cancels.get(nodeId)?.abort()
     const ctrl = new AbortController()
     this.cancels.set(nodeId, ctrl)
     try {
@@ -175,7 +183,8 @@ export class NodeTaskService extends Service {
         this.deps(),
       )
     } finally {
-      this.cancels.delete(nodeId)
+      // 只清自己这一条：后起的任务可能已经换成新控制器，别把它删掉。
+      if (this.cancels.get(nodeId) === ctrl) this.cancels.delete(nodeId)
     }
   }
 
@@ -196,6 +205,8 @@ export class NodeTaskService extends Service {
       // ★ 必须登记 AbortController：续查出来的任务同样要能被「取消」按钮中断。
       //   不登记的话 `cancel()` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈）。
       const ctrl = new AbortController()
+      // 续查重复触发同一节点时，先取消上一条，避免两个轮询写同一张卡片。
+      this.cancels.get(node.id)?.abort()
       this.cancels.set(node.id, ctrl)
       void resumeAction(
         {
@@ -207,7 +218,9 @@ export class NodeTaskService extends Service {
           signal: ctrl.signal,
         },
         this.deps(),
-      ).finally(() => this.cancels.delete(node.id))
+      ).finally(() => {
+        if (this.cancels.get(node.id) === ctrl) this.cancels.delete(node.id)
+      })
     }
   }
 }
@@ -216,18 +229,19 @@ export class NodeTaskService extends Service {
 
 /** 注册一个底栏动作：条目归**调用方插件**（卸载自动摘除、同 id 替换） */
 export function registerBarAction(ctx: PluginScope, action: BarAction): void {
-  ctx.registryOf<BarAction>(BAR_FIELD).add(action.id, action, { id: action.id })
+  ctx.registryOf<BarAction>(BAR_FIELD).add(`actions/${action.id}`, action, { id: action.id })
 }
 
 /** 注册某节点类型的结果写入器（一个 kind 只允许一个，同 kind 重复抛错） */
 export function registerBarApplier(ctx: PluginScope, kind: string, fn: BarApplier): void {
-  const field = ctx.registryOf<BarApplier>(BAR_APPLIER_FIELD)
-  if (field.has(kind)) throw new Error('[bottom-bar] applier already registered: ' + kind)
-  field.add(kind, fn, { id: kind })
+  const field = ctx.registryOf<BarApplier>(BAR_FIELD)
+  const key = `appliers/${kind}`
+  if (field.has(key)) throw new Error('[bottom-bar] applier already registered: ' + kind)
+  field.add(key, fn, { id: kind })
 }
 
 export const name = 'bottom-bar'
-export const inject = ['doc', 'nodeRegistry', 'themeRegistry'] as string[]
+export const inject = ['doc'] as string[]
 
 /**
  * 插件可配置项（设置面板「常规/底栏」组）。

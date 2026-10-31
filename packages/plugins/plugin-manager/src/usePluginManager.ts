@@ -8,8 +8,11 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { PluginManagerService } from './pluginManagerService'
 
 export function usePluginManager(): PluginManagerService {
-  const { ctx } = useCanvasRender()
+  const { ctx, host } = useCanvasRender()
   const svc = ctx.get<PluginManagerService>('plugin-manager')
   if (!svc) throw new Error('[usePluginManager] 没找到 plugin-manager 服务：请确认装配里装了插件管理插件')
+  // 插件 apply 拿不到宿主句柄（内核只传 config），这里在渲染子树里完成正式接线。
+  // 重复绑定是幂等的；页面晚于插件 apply 挂载，也能把“宿主没有提供 manager”消掉。
+  void svc.bindManager(host.manager)
   return svc
 }

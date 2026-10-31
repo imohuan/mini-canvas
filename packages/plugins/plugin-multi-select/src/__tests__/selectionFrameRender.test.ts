@@ -51,7 +51,7 @@ const subscribedEvents: string[] = []
 
 /**
  * 最小渲染上下文：SelectionFrame 只用到
- * ctx.get('selection'/'nodeLayout'/'doc'/'viewport'/'settings') 与 viewport.value
+ * ctx.get('selection'/'view'/'doc'/'settings') 与 flow.viewport.value
  * （5c 起数据那一格只有 doc；老名 nodeStore/graph 已下线）。
  * 不 mock 几何服务 —— 用的是真实算法（与线上同一条路径）。
  */
@@ -69,7 +69,7 @@ function renderCtx(
       edgeIds: new Set<string>(),
       onChange: () => () => {},
     },
-    nodeLayout: { getNodeRect: (id: string) => RECTS.find((r) => r.id === id) ?? null },
+    view: { getNodeRect: (id: string) => RECTS.find((r) => r.id === id) ?? null },
     // doc 门面：SelectionFrame 读 getNodes/getNode/types/subscribe，写 updateNodes/transaction
     doc: {
       getNodes: () => [],
@@ -80,7 +80,6 @@ function renderCtx(
       transaction: (_reason: string, fn: (tx: unknown) => unknown) => fn({ connectEdge: () => ({ edgeId: '' }) }),
       getEdges: () => [],
     },
-    viewport: { setViewport: () => {} },
     settings: {
       get: (key: string) => key in settings ? settings[key] : DEFAULT_MULTI_SELECT_FRAME_VALUE[key],
       onChange: () => ({ dispose: () => {} }),

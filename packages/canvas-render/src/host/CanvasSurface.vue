@@ -39,6 +39,7 @@ import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 import { LAYERS } from '../contracts/layers'
 import { NODE_TOOLBAR_HOST_KEY } from '../contracts/nodeToolbarHost'
+import { queryNodeElIn } from './instanceDom'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -285,7 +286,7 @@ function collectVisibleNodes(margin = 0): LayoutRect[] {
   const vr = visibleRectRef.value
   if (!vr) return []
   const area = margin > 0 ? expandRect(vr, margin) : vr
-  const layout = hostCtx.get<NodeLayoutService>('nodeLayout')
+  const layout = hostCtx.get('view') as unknown as NodeLayoutService
   return layout.getAllRects().filter((r) => rectsOverlap(r, area))
 }
 
@@ -334,8 +335,8 @@ onMounted(() => {
   // 捕获 pane/renderer 的**统一入口**（见下方 refreshFlowDom 注释）：nodeEpoch 会让 VueFlow 整树重挂，
   // pane DOM 会被换成一个新元素 —— 必须跟着刷新，否则插件（如多选的 Shift 框选）会一直绑在旧元素上。
   refreshFlowDom()
-  // VueFlow 后端：一个适配对象，同时喂给旧 ViewportService（ctx.get('viewport')）与新的
-  // Flow 能力面（useCanvasRender().flow）——同一份实现，两处语义不再各写一遍。
+  // VueFlow 后端：一个适配对象，同时喂给宿主持有的 ViewportService（对外只暴露 `view`）
+  // 与 Flow 能力面（useCanvasRender().flow）——同一份实现，两处语义不再各写一遍。
   const backend: ViewportBackend = {
     getViewport: () => {
       const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
@@ -375,11 +376,10 @@ onMounted(() => {
     getRootEl: () => rootEl.value,
     getRendererEl: () => rendererEl.value,
     getPaneEl: () => paneEl.value,
-    queryNodeEl: (nodeId: string) =>
-      rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+    queryNodeEl: (nodeId: string) => queryNodeElIn(rootEl.value, nodeId),
   }
-  // 视口服务接线（旧入口保留）：把 VueFlow 能力 attach 到 host.viewport
-  props.host?.viewport.attachBackend(backend)
+  // 视口服务接线：view 是正式入口，内部与旧 viewport 别名共用同一份 ViewportService。
+  props.host?.view.attachBackend(backend)
   // Flow 能力面（T04）：实例就绪（flow-ready）→ DOM 锚点捕获（dom-ready）
   flow.attachFlow(backend)
   flow.attachNodeVisual(vfApi as unknown as NodeVisualSyncApi)
@@ -391,8 +391,7 @@ onMounted(() => {
     rootEl: () => rootEl.value,
     rendererEl: () => rendererEl.value,
     paneEl: () => paneEl.value,
-    queryNodeEl: (nodeId: string) =>
-      rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+    queryNodeEl: (nodeId: string) => queryNodeElIn(rootEl.value, nodeId),
   }, paneRectRef.value)
   // renderer DOM 就绪后启动节点尺寸观测（在 onMounted 内，容器已挂载）
   measure.start()
@@ -411,8 +410,7 @@ watch(
       rootEl: () => rootEl.value,
       rendererEl: () => rendererEl.value,
       paneEl: () => paneEl.value,
-      queryNodeEl: (nodeId: string) =>
-        rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+      queryNodeEl: (nodeId: string) => queryNodeElIn(rootEl.value, nodeId),
     }, paneRectRef.value)
     measure.start()
   },
@@ -423,8 +421,7 @@ watch(
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
 defineExpose({
   /** 在**本画布实例**内按 data-id 查节点 DOM（实例级，多宿主不串线；替代全局 document.querySelector） */
-  queryNodeEl: (nodeId: string): HTMLElement | null =>
-    rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+  queryNodeEl: (nodeId: string): HTMLElement | null => queryNodeElIn(rootEl.value, nodeId),
   getViewport: () => {
     const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
     return vp

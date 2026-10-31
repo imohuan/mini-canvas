@@ -95,8 +95,8 @@ await clickNode(seed.target)
 // 把目标节点摆到屏幕中上部：底栏完整可见，后面所有卡片坐标才可靠
 await page.evaluate((id) => {
   const ctx = window.MiniCanvasUI?.getHost?.()?.ctx
-  const vp = ctx?.tryGet?.('viewport')
-  const rect = ctx?.tryGet?.('nodeLayout')?.getNodeRect?.(id)
+  const vp = ctx?.tryGet?.('view')
+  const rect = ctx?.tryGet?.('view')?.getNodeRect?.(id)
   if (vp && rect) vp.setViewport({ x: 700 - (rect.x + rect.w / 2), y: 300 - (rect.y + rect.h / 2), zoom: 1 })
 }, seed.target)
 await page.waitForTimeout(900)
@@ -237,10 +237,10 @@ const focus = await page.evaluate((id) => {
   const t = document.querySelector('.vue-flow__transformationpane')?.style.transform ?? ''
   const n = document.querySelector('.vue-flow__node[data-id="' + id + '"]')
   const r = n?.getBoundingClientRect()
-  const vp = window.MiniCanvasUI?.getHost?.()?.ctx?.tryGet?.('viewport')
+  const vp = window.MiniCanvasUI?.getHost?.()?.view
   return {
     transform: t,
-    // 缩放从 viewport 服务读（DOM 上的 transform 可能是 matrix(...) 形式，正则不可靠）
+    // 缩放从 view 服务读（DOM 上的 transform 可能是 matrix(...) 形式，正则不可靠）
     zoom: vp?.getViewport?.().zoom ?? null,
     node: r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null,
     vw: window.innerWidth,

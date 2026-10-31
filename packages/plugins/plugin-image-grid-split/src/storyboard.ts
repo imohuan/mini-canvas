@@ -473,13 +473,13 @@ function docPortOf(ctx: StoryboardPlacementCtx | undefined): StoryboardDocPort |
 
 function layoutPortOf(ctx: StoryboardPlacementCtx | undefined): StoryboardLayoutPort | undefined {
   if (!ctx) return undefined
-  const port = (typeof ctx.tryGet === 'function' ? ctx.tryGet('nodeLayout') : typeof ctx.get === 'function' ? ctx.get('nodeLayout') : undefined) as StoryboardLayoutPort | undefined
+  const port = (typeof ctx.tryGet === 'function' ? ctx.tryGet('view') : typeof ctx.get === 'function' ? ctx.get('view') : undefined) as StoryboardLayoutPort | undefined
   return port && typeof port.getAllRects === 'function' ? port : undefined
 }
 
 function viewportPortOf(ctx: StoryboardPlacementCtx | undefined): StoryboardViewportPort | undefined {
   if (!ctx) return undefined
-  const port = (typeof ctx.tryGet === 'function' ? ctx.tryGet('viewport') : typeof ctx.get === 'function' ? ctx.get('viewport') : undefined) as StoryboardViewportPort | undefined
+  const port = (typeof ctx.tryGet === 'function' ? ctx.tryGet('view') : typeof ctx.get === 'function' ? ctx.get('view') : undefined) as StoryboardViewportPort | undefined
   return port && typeof port.getViewport === 'function' ? port : undefined
 }
 

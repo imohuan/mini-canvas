@@ -6,13 +6,13 @@ import { onBeforeUnmount, ref } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
-const command = ctx.get('command')
+const canvas = ctx.get('canvas')
 
 const GROUP = 'command-demo'
 
 // ① 从命令表里挑出本插件分组的命令（不自己抄一份按钮清单）
 function listMine() {
-  return command.list().filter((c) => c.group === GROUP)
+  return canvas.listCommands().filter((c) => c.group === GROUP)
 }
 const items = ref(listMine())
 
@@ -26,7 +26,7 @@ onBeforeUnmount(() => {
 
 // ③ 点击 = 按 id 执行；可用性也问命令表（when 由 execute 自己再判一次）
 function fire(id: string): void {
-  command.execute(id)
+  canvas.runCommand(id)
 }
 </script>
 

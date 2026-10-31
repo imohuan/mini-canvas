@@ -5,7 +5,7 @@
   "type": "module",
   "miniCanvas": {
     "title": "演示：便利贴节点",
-    "description": "跟着 nodeFactory 学：登记一个节点类型与建造师傅（creator），并按类型建节点",
+    "description": "跟着 canvas 学：登记一个节点类型与建造师傅（creator），并按类型建节点",
     "pluginName": "sticky-demo",
     "installable": true
   },

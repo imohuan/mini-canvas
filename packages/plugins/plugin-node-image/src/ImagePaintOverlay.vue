@@ -243,7 +243,7 @@ watch(pixelRatio, () => repaint())
 function onKeydown(ev: KeyboardEvent): void {
   if (ev.key !== "Escape") return
   ev.stopPropagation()
-  ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command').execute('image:paint-cancel', { nodeId: props.id })
+  ctx.get<{ runCommand(id: string, payload?: unknown): unknown }>('canvas').runCommand('image:paint-cancel', { nodeId: props.id })
 }
 
 let resizeObserver: ResizeObserver | null = null

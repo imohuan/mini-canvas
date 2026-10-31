@@ -6,7 +6,7 @@
 
 | 端 | 服务/能力 | 页面 |
 | --- | --- | --- |
-| **前端** | `doc` / `save` / `selection` / `command` / `slots` / `settings` / `resources` / `nodeRegistry` / `themeRegistry` / `nodeFactory` / `settingsPersist` / `nodeLayout` / `viewport` / `pluginManager` / `tools` | [内置服务](/services/)（每个一篇：方法签名 + 用法 + 注意事项） |
+| **前端** | `doc` / `save` / `selection` / `slots` / `settings` / `resources` / `view` / `canvas` / `nodeToolbar` / `tools` | [内置服务](/services/)（每个一篇：方法签名 + 用法 + 注意事项） |
 | **前端** | `ctx` 本体方法、注册场 `ctx.registryOf`、语法糖 | [上下文 ctx](/api/ctx) · [注册场](/api/registry) |
 | **前端** | 自省 `ctx.surface()`（看这台画布装了什么） | [自省](/core/self-inspect) |
 | **后端** | `ctx.routes` / `ctx.store` / `ctx.jobs` / `ctx.mcp` / `ctx.agent` | [后端总览](/api/server) |
@@ -23,11 +23,11 @@
 | 注册节点类型全字段 | [`ctx.nodes.register`](/canvas-data/node-types) |
 | 存取键值、换存储后端 | [`save`](/services/save) |
 | 选中了哪些节点 | [`selection`](/services/selection) |
-| 注册/执行命令、快捷键 | [`command`](/services/command) |
+| 注册/执行命令、快捷键 | [`canvas`](/services/canvas) |
 | 往画布叠浮层 UI | [`slots`](/services/slots) |
 | 配置读写与订阅 | [`settings`](/services/settings) |
 | 注册生成工具（AI 可调） | [`tools`](/services/tools) |
-| 实测节点尺寸 / 控制视口 | [`nodeLayout`](/services/node-layout) · [`viewport`](/services/viewport) |
+| 实测节点尺寸 / 控制视口 / 取景 | [`view`](/services/view) |
 | 上下文全部方法 | [`ctx`](/api/ctx) |
 | 注册场全部方法 | [注册场](/api/registry) |
 

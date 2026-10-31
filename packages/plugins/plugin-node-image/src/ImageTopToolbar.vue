@@ -99,8 +99,8 @@ function confirmEdit(): void {
     | undefined
   if (!rect) return
   ctx
-    .get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
-    .execute(expanding.value ? 'image:expand-confirm' : 'image:crop-confirm', { nodeId: props.id, rect })
+      .get<{ runCommand(id: string, ...payload: unknown[]): unknown }>('canvas')
+    .runCommand(expanding.value ? 'image:expand-confirm' : 'image:crop-confirm', { nodeId: props.id, rect })
 }
 
 function cancelEdit(): void {

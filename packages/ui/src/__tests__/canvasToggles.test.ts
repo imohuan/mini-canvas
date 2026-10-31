@@ -11,7 +11,7 @@
  *
  * 放在 ui 包：只有装配层能同时拿到宿主（createMiniCanvasHost）+ 插件 + useUi 单例。
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, type Context } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
@@ -109,6 +109,19 @@ describe('画布开关按钮接上内核（状态栏 / 底栏）', () => {
     expect(ui.minimapOn.value).toBe(true)
   })
 
+  it('小地图按钮初始值跟设置一致：设置读不到时按显示处理（与插件默认 true 对齐）', () => {
+    // 模拟“声明了但值没写进去”：SettingsStore.get 返回 undefined。
+    // 旧实现 === true 会把按钮判成“关”，与浮层（默认显示）相反。
+    const store = host.ctx.get<{ get(k: string): unknown }>('settings')
+    const spy = vi.spyOn(store, 'get').mockReturnValue(undefined)
+    ui.unbindCanvasToggles()
+    ui.onReady()
+    expect(ui.minimapOn.value).toBe(true)
+    spy.mockRestore()
+    ui.unbindCanvasToggles()
+    ui.onReady()
+  })
+
   it('整理画布：真的执行自动布局命令（节点位置被写回 doc）', () => {
     const doc = host.ctx.get<{
       addNodes(n: unknown[]): void
@@ -180,8 +193,8 @@ describe('缩放选项接上真实画布（状态栏）', () => {
     setReadyHost(host)
     await ui.onReady()
     // 给真实 viewport 服务换上假后端（真后端要挂载 VueFlow，node 环境给不了）；
-    // 服务实例本身仍是宿主注入的那个，兑现"ui 走 ctx.get('viewport')"这条真实路径。
-    ;(host.ctx.get('viewport') as unknown as { attachBackend(b: unknown): void }).attachBackend(fake)
+    // 服务实例本身仍是宿主注入的那个，兑现"ui 走 ctx.get('view')"这条真实路径。
+    ;(host.ctx.get('view') as unknown as { attachBackend(b: unknown): void }).attachBackend(fake)
   })
 
   afterEach(() => {

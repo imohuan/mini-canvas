@@ -74,7 +74,7 @@ const storeRect = computed(() => {
   void dataTick.value // 依赖数据变化：拖动落盘后 store 位置变了，这里必须重读
   const id = groupNode.value?.id
   if (!id) return null
-  return ctx.tryGet('nodeLayout')?.getNodeRect(id) ?? null
+  return ctx.tryGet('view')?.getNodeRect(id) ?? null
 })
 
 /**

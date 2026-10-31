@@ -20,7 +20,7 @@ import { createApp, nextTick, reactive, type Component } from 'vue'
 import type { ConfigSchema, Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 import type { CommandService } from '@mini-canvas/kernel'
-import type { NodeFactoryService } from '@mini-canvas/canvas-data'
+import type { CanvasActions } from '@mini-canvas/canvas-data'
 import { typeConnectionDef } from '@mini-canvas/canvas-data'
 import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
@@ -45,7 +45,7 @@ import {
 } from './connectionMenu'
 
 export const name = 'context-menu'
-export const inject = ['doc', 'selection', 'nodeFactory'] as string[]
+export const inject = ['doc', 'selection', 'canvas'] as string[]
 
 /**
  * 本插件可配置项（模块级 Config：内核装配时校验 + 补默认 + 登记进 ⚙ 设置面板）。
@@ -148,7 +148,7 @@ export function apply(ctx: Context): void {
   function openMenu(mode: ContextMenuMode, x: number, y: number, flowPosition: { x: number; y: number }, nodeId?: string, edgeId?: string): void {
     current = { nodeId, edgeId, flowPosition }
     // 新建节点候选 = nodeFactory 可创建类型（只列有 creator 的，避免建出无内容节点）
-    const creatable = new Set(ctx.get('nodeFactory').creatableTypes())
+    const creatable = new Set(ctx.get('canvas').creatableTypes())
     const nodeTypes = [...doc.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
@@ -157,7 +157,7 @@ export function apply(ctx: Context): void {
     // 命令表（现取，注册即生效）+ 节点类型表。areas 语义 = 开放注册：命令声明 areas 含当前
     // mode 即自动出现在右键；未声明 areas 的命令（纯快捷键）不进菜单 —— 无需本插件白名单。
     // 命令表经服务取（能力段 ctx.commands 只有 register/has；list 在 CommandService 上）
-    const raw = buildMenuItems(mode, ctx.get('command').list(), nodeTypes)
+    const raw = buildMenuItems(mode, ctx.get<CanvasActions>('canvas').listCommands(), nodeTypes)
     // UI 增强：补图标 + hover 描述（与快捷键面板同款 item 视觉）
     state.items = enrichMenuItems(raw)
     state.mode = mode
@@ -184,7 +184,7 @@ export function apply(ctx: Context): void {
 
   /** 可建类型候选 = nodeFactory.creatableTypes() ∩ doc.types（只列真能建出内容的） */
   function creatableNodeTypes(): Array<{ type: string; label: string; icon?: unknown; description?: string }> {
-    const creatable = new Set(ctx.get('nodeFactory').creatableTypes())
+    const creatable = new Set(ctx.get('canvas').creatableTypes())
     return [...doc.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
@@ -196,7 +196,7 @@ export function apply(ctx: Context): void {
    * nodeLayout 由渲染层注入（ResizeObserver 实测）；拿不到服务时退化为"只等一帧"。
    */
   function isNodeMeasured(nodeId: string): boolean {
-    const layout = ctx.tryGet('nodeLayout')
+    const layout = ctx.tryGet('view')
     if (!layout?.nodeSize) return true
     const s = layout.nodeSize(nodeId)
     return s.w > 0 && s.h > 0
@@ -324,7 +324,10 @@ export function apply(ctx: Context): void {
     const position = placeByPortAnchor(fact.flowPosition, defaultSize, portSideOf(fact))
     // 建节点走 nodeFactory（而不是 tx.createNode）：各节点插件注册的 creator 才知道自己的默认内容
     // （text 的"双击编辑"等）。
-    const nodeId = ctx.get('nodeFactory').create(nodeType, position)
+    const nodeId = ctx.get<CanvasActions>('canvas').createNode(nodeType, position)
+    // createNode 的类型面允许 undefined（类型未注册/缺工厂）；这里刚查过 doc.types，
+    // 真拿不到就直接放弃，不把 undefined 传进选中与连边。
+    if (!nodeId) return
     // 菜单建出的真节点也直接选中它（用户要求）
     selection.clearEdges()
     selection.set([nodeId])
@@ -351,9 +354,9 @@ export function apply(ctx: Context): void {
   /** 菜单项点击：建节点 → command:create-node；命令 → execute(commandId, 上下文 payload) */
   function onSelect(item: ContextMenuItem): void {
     closeMenu()
-    const command = ctx.get('command')
+    const command = ctx.get<CanvasActions>('canvas')
     if (item.kind === 'create-node' && item.nodeType) {
-      command.execute('command:create-node', {
+      command.runCommand('command:create-node', {
         type: item.nodeType,
         position: current.flowPosition,
       })
@@ -366,7 +369,7 @@ export function apply(ctx: Context): void {
       // 落点也带上：有些命令是"在右键处放点东西"（如从资源库导入一个节点包），
       // 没有它就只能落到默认位置 —— 明明右键点了这里、东西却出现在别处，很别扭。
       payload.flowPosition = current.flowPosition
-      command.execute(item.commandId, payload)
+      command.runCommand(item.commandId, payload)
     }
   }
 

@@ -46,9 +46,16 @@ export type {
 // 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型
 import './serviceTypes'
 
-// 渲染层两个内置服务（nodeLayout/viewport）的纯结构契约（作者 SDK 类型面，零 Vue/零 VueFlow）
+// 渲染层内置服务（view / canvas 及迁移期别名）的纯结构契约（作者 SDK 类型面，零 Vue/零 VueFlow）
 export type {
+  CanvasActions,
+  CanvasCreateNodeOptions,
+  CanvasSelectMode,
+  FitToOptions,
+  FocusTarget,
+  NotifyOptions,
   NodeLayoutContract,
+  ViewContract,
   ViewportContract,
   LayoutRect,
   ViewportState,
@@ -133,6 +140,11 @@ export type {
 
 // 画布通用命令（建节点/删选中/撤销/重做）——宿主 boot 时经 registerCanvasCommands 注册
 export { registerCanvasCommands, CANVAS_COMMAND } from './canvasCommands'
+// 命令运行时句柄（基础插件绑定；canvas 门面 / 宿主键盘分发用，不占服务名）
+export { commandRuntime, commandService, setCommandRuntime, clearCommandRuntime } from './commandRuntime'
+export type { CommandRuntime } from './commandRuntime'
+export { canvasRuntime, setCanvasRuntime } from './canvasRuntime'
+export type { CanvasRuntime } from './canvasRuntime'
 export type { CanvasCommandServices } from './canvasCommands'
 
 // 画布基础装配插件（步骤 4：把 15 行 ctx.inject 收进一个 core 插件；宿主只负责"建 ctx → 装它 → 装业务插件"）

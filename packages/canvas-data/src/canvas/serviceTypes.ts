@@ -8,23 +8,33 @@
  * 这里只做**一处**集中声明：服务名 → 类型。运行时一行不改（服务名与实例照旧由宿主注入）；
  * 扩展服务仍可各自 declare module 补充。
  *
- * 登记数据层与画布语义这几个基础服务，外加渲染层两个内置服务（nodeLayout/viewport）的
- * **纯结构契约**（renderServiceContracts.ts，零 Vue / 零 VueFlow / 零实现细节）。
+ * 登记 7 个基础服务（tools 由内核内置，其余六个在这里）+ 渲染层辅助服务 nodeToolbar。
+ * 渲染层契约是**纯结构**（renderServiceContracts.ts，零 Vue / 零 VueFlow / 零实现细节）。
  *
  * 为什么渲染服务的类型也在这里登记：服务名 → 类型必须能被任何只依赖 canvas-base 的逻辑插件
- * 看到。canvas-render 是 canvas-data 的下游，把类型留在那边，纯逻辑插件就得为了两个名字
+ * 看到。canvas-render 是 canvas-data 的下游，把类型留在那边，纯逻辑插件就得为了服务名
  * import 整个渲染包（或手写窄端口，类型对错全靠人抄）。契约是结构类型，故放上游不引入反向依赖。
  */
-import type { CommandService, SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@mini-canvas/kernel'
 import type { DocService } from '../docService'
 import type { SelectionService } from '../selection'
 import type { ResourceService } from '../resourceService'
-import type { SettingsPersistService } from '../settingsPersist'
 import type { SaveService } from '../storage/types'
-import type { NodeFactoryService } from './nodeFactory'
-import type { NodeRegistry } from './registry/nodeRegistry'
-import type { ThemeRegistry } from './registry/themeRegistry'
-import type { NodeLayoutContract, ViewportContract } from './renderServiceContracts'
+import type {
+  CanvasActions,
+  FocusTarget,
+  FitToOptions,
+  ViewContract,
+} from './renderServiceContracts'
+
+/** 节点上下状态栏服务（渲染层辅助服务；Spec D4 保留，不算基础 7 个）。 */
+export interface NodeToolbarContract {
+  registerMode(mode: unknown): void
+  unregisterMode(id: string): void
+  enter(nodeId: string, modeId: string): void
+  exit(nodeId?: string): void
+  activeModeId(nodeId: string): string
+}
 
 declare module '@mini-canvas/kernel' {
   interface Services {
@@ -36,22 +46,14 @@ declare module '@mini-canvas/kernel' {
     resources: ResourceService
     /** 存储适配器（本地 / 云端可插拔） */
     save: SaveService
-    /** 命令注册表 */
-    command: CommandService
-    /** 节点创建工厂 */
-    nodeFactory: NodeFactoryService
-    /** 节点展示注册表（type → 区域组件） */
-    nodeRegistry: NodeRegistry
-    /** 主题 / 外观注册表（slot → 组件） */
-    themeRegistry: ThemeRegistry
     /** 分组配置单一数据源 */
     settings: SettingsStore
-    /** 配置持久化桥（宿主关掉持久化时缺席，取用侧用 tryGet 或自行判空） */
-    settingsPersist: SettingsPersistService
-    /** 节点布局只读服务（渲染层注入；契约见 renderServiceContracts） */
-    nodeLayout: NodeLayoutContract
-    /** 视口服务（渲染层注入；契约见 renderServiceContracts） */
-    viewport: ViewportContract
+    /** 几何 + 视口合并服务（渲染层注入）；Spec 3.1 的唯一取景服务 */
+    view: ViewContract
+    /** 画布动作门面（建/选/聚焦/进模式/打组/提示/跑底栏动作）；不存数据 */
+    canvas: CanvasActions
+    /** 节点上下状态栏的会话与模式注册（渲染层辅助服务，Spec D4） */
+    nodeToolbar: NodeToolbarContract
   }
 }
 
@@ -66,9 +68,8 @@ declare module '@mini-canvas/kernel' {
  * Proxy，ctx.doc 运行时等价于 ctx.get('doc')）。此前只登记了 Services，于是 6 个插件各自
  * declare module ... interface Context { doc: DocService } 把同一件事抄了一遍（T03 要消除的重复）。
  *
- * 渲染层注入的 nodeLayout / viewport 也在本文件登记（用 renderServiceContracts 的纯结构契约），
- * 与 Services 那批同源。插件自己提供的服务（text/image/group/clipboard/…）仍由各自 declare，
- * 那是它们的私有契约。
+ * 渲染层注入的 view / nodeToolbar 也在本文件登记；插件自己提供的服务（text/image/group/
+ * clipboard/…）仍由各自 declare，那是它们的私有契约。
  */
 declare module '@mini-canvas/canvas-data' {
   interface Context {
@@ -80,17 +81,13 @@ declare module '@mini-canvas/canvas-data' {
     resources: ResourceService
     /** 存储适配器 */
     save: SaveService
-    /** 命令注册表 */
-    command: CommandService
-    /** 节点创建工厂 */
-    nodeFactory: NodeFactoryService
-    /** 节点展示注册表 */
-    nodeRegistry: NodeRegistry
-    /** 主题 / 外观注册表 */
-    themeRegistry: ThemeRegistry
-    /** 节点布局只读服务（渲染层注入；契约见 renderServiceContracts） */
-    nodeLayout: NodeLayoutContract
-    /** 视口服务（渲染层注入；契约见 renderServiceContracts） */
-    viewport: ViewportContract
+    /** 几何 + 视口合并服务（渲染层注入） */
+    view: ViewContract
+    /** 画布动作门面（建/选/聚焦/进模式/打组/提示/跑底栏动作）；不存数据 */
+    canvas: CanvasActions
+    /** 节点上下状态栏服务（渲染层辅助服务，Spec D4） */
+    nodeToolbar: NodeToolbarContract
   }
 }
+
+export type { CanvasActions, FocusTarget, FitToOptions, ViewContract }

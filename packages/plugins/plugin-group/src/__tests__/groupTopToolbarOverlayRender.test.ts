@@ -33,7 +33,7 @@ const StubDropdown = defineComponent({
 })
 
 /**
- * 最小渲染上下文：只桩出本组件真正读到的几项（selection / doc / nodeLayout / flow / interaction）。
+ * 最小渲染上下文：只桩出本组件真正读到的几项（selection / doc / view / flow / interaction）。
  * 刻意给"恰好选中一个分组节点"的常态；本文件测的是 resize 维度的显隐，不是选中语义。
  */
 function renderCtx(opts: { resizingId?: string | null; nodesDraggable?: boolean } = {}): CanvasRenderContext {
@@ -52,7 +52,7 @@ function renderCtx(opts: { resizingId?: string | null; nodesDraggable?: boolean 
       getNode: (id: string) => (id === 'g1' ? groupNode : undefined),
       subscribe: () => () => {},
     },
-    nodeLayout: { getNodeRect: () => ({ x: 0, y: 0, w: 200, h: 100 }) },
+    view: { getNodeRect: () => ({ x: 0, y: 0, w: 200, h: 100 }) },
     // 抓手工具判据读它（真机恒有；不传 = 未声明，按"可拖"默认）
     settings: {
       get: (key: string) => (key === 'nodesDraggable' ? opts.nodesDraggable : undefined),

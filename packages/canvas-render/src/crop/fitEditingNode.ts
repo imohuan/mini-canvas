@@ -25,15 +25,11 @@ export interface ServiceGetter {
   get<T = unknown>(name: string): T
 }
 
-/** 视口服务的必要能力（plugin-node-* 消费的最小面） */
-interface ViewportLike {
+/** view 服务的必要能力（plugin-node-* 消费的最小面） */
+interface ViewLike {
   getViewport(): { x: number; y: number; zoom: number }
   setCenter(x: number, y: number, zoom?: number): void
   getPaneEl?(): HTMLElement | null
-}
-
-/** 节点布局服务的必要能力 */
-interface NodeLayoutLike {
   getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null
 }
 
@@ -42,18 +38,19 @@ interface NodeLayoutLike {
  * @returns 是否真的调了 setCenter（供测试断言"该动才动"）
  */
 export function fitEditingNodeIntoView(ctx: ServiceGetter, nodeId: string): boolean {
-  const layout = ctx.get<NodeLayoutLike | undefined>('nodeLayout')
-  const viewport = ctx.get<ViewportLike | undefined>('viewport')
-  const rect = layout?.getNodeRect(nodeId)
-  if (!rect || !viewport) return false
+  // Spec 五.16：这里保留 pane 真实尺寸 + 编辑余量的特殊语义，只把取服务的方式换成 view，
+  // 不硬并进 fitTo（硬合并会丢「已可见不动 + 编辑余量 + pane 尺寸」三点）。
+  const view = ctx.get<ViewLike | undefined>('view')
+  const rect = view?.getNodeRect(nodeId)
+  if (!rect || !view) return false
 
   // 可视区尺寸：优先量真实 pane（最准）；量不到再退回窗口尺寸
-  const paneEl = viewport.getPaneEl?.() ?? null
+  const paneEl = view.getPaneEl?.() ?? null
   const paneW = paneEl?.clientWidth ?? (typeof window !== 'undefined' ? window.innerWidth : 0)
   const paneH = paneEl?.clientHeight ?? (typeof window !== 'undefined' ? window.innerHeight : 0)
   if (!(paneW > 0) || !(paneH > 0)) return false
 
-  const vp = viewport.getViewport()
+  const vp = view.getViewport()
   const zoom = vp.zoom > 0 && Number.isFinite(vp.zoom) ? vp.zoom : 1
 
   // 屏幕 → flow：可视区左上角 = -t/zoom，大小 = paneSize/zoom
@@ -65,7 +62,7 @@ export function fitEditingNodeIntoView(ctx: ServiceGetter, nodeId: string): bool
   if (!shouldFitEditingViewport(input)) return false
   const plan = resolveEditingViewport(input)
   if (!plan) return false
-  viewport.setCenter(plan.centerX, plan.centerY, plan.zoom)
+  view.setCenter(plan.centerX, plan.centerY, plan.zoom)
   return true
 }
 

@@ -58,12 +58,15 @@ const sensitivityX = computed(() => cfg.value.miniMapSensitivityX)
 const sensitivityY = computed(() => cfg.value.miniMapSensitivityY)
 const PADDING = 8
 
-// —— 显隐状态：mini-map 服务（命令切换与组件读同一对象）——
-interface MiniMapServiceState {
-  visible: boolean
+// —— 显隐状态：设置项 miniMapVisible（命令与面板读写同一份；不再占 mini-map 服务名）——
+const visibility = ref<boolean>(miniMapConfigFrom(ctx).miniMapVisible)
+if (settings) {
+  const off = settings.onChange((key, value) => {
+    if (key === 'miniMapVisible' && typeof value === 'boolean') visibility.value = value
+  })
+  onBeforeUnmount(() => off.dispose())
 }
-const service = ctx.get<MiniMapServiceState>('mini-map')
-const visible = computed(() => !!service && service.visible)
+const visible = computed(() => visibility.value)
 
 /** pane 可视尺寸（px）：优先 host paneRect；退化为自量所在全幅 overlay 层；窗口 resize 刷新 */
 const paneSize = shallowRef<{ w: number; h: number }>({ w: 800, h: 600 })
@@ -87,7 +90,7 @@ function measurePane(): void {
 
 /** 收内容节点矩形（过滤 group 容器节点；等价老版 renderNodes 过滤 hidden/group） */
 function collectContentRects(): MiniMapRect[] {
-  const layout = ctx.tryGet('nodeLayout')
+  const layout = ctx.tryGet('view')
   if (!layout) return []
   const list = renderNodes.value
   const out: MiniMapRect[] = []
@@ -233,7 +236,7 @@ let pendingViewport: ViewportState | null = null
 function flushPan(): void {
   panRaf = 0
   if (!pendingViewport) return
-  const vp = ctx.get('viewport')
+  const vp = ctx.get('view')
   const next = pendingViewport
   pendingViewport = null
   if (vp) vp.setViewport(next)
@@ -255,7 +258,7 @@ function nextViewport(clientX: number, clientY: number): ViewportState {
 
 function onPointerDown(e: PointerEvent): void {
   if (e.button !== 0) return
-  const vpService = ctx.get('viewport')
+  const vpService = ctx.get('view')
   if (!vpService || !mapState.value) return
   const target = e.target as HTMLElement | null
   downOnViewer = !!target?.classList.contains('mini-viewer')
@@ -292,7 +295,7 @@ function endPointer(e: PointerEvent, jumped: boolean): void {
     panRaf = 0
   }
   pendingViewport = null
-  const vp = ctx.get('viewport')
+  const vp = ctx.get('view')
   if (jumped && session && !session.moved && vp) {
     // 点击（无拖动）且不是点在视口框/缩略节点上 → 跳到该 flow 点（保留 zoom）
     const target = e.target as HTMLElement | null

@@ -5,7 +5,7 @@
   "type": "module",
   "miniCanvas": {
     "title": "演示：视角记忆",
-    "description": "跟着 viewport 学：读视口、缩放到 100% 聚焦节点、存/取镜头位置",
+    "description": "跟着 view 学：读视口、缩放到 100% 聚焦节点、存/取镜头位置",
     "pluginName": "camera-demo",
     "installable": true
   },

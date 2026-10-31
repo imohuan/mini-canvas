@@ -77,7 +77,7 @@ const before = await page.locator('.nb-shell [data-tile-key]').count()
 // 先把底栏挪进视口（节点在画布下方时按钮落在屏幕外，真实鼠标点不到）
 await page.evaluate(() => {
   const host = window.MiniCanvasUI?.getHost?.()
-  const vp = host?.ctx?.tryGet?.('viewport') ?? host?.ctx?.get?.('viewport')
+  const vp = host?.view
   const box = document.querySelector('.nb-shell .nb-root')?.getBoundingClientRect()
   if (!vp?.setViewport || !box) return
   const overflow = box.bottom - (window.innerHeight - 30)

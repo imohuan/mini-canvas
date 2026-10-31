@@ -120,13 +120,13 @@ export async function flipImageNode(
   const data = node.data ?? {}
   const sourceUrl = await displayUrlOf(ctx, data)
   if (!sourceUrl) {
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('翻转失败：取不到图片地址')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('翻转失败：取不到图片地址', { followPointer: true, durationMs: 0 })
     return false
   }
   const loaded = await io.load(sourceUrl)
   if (!loaded || !(loaded.width > 0) || !(loaded.height > 0)) {
     if (loaded) io.release(loaded.source)
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('翻转失败：图片读不出来')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('翻转失败：图片读不出来', { followPointer: true, durationMs: 0 })
     return false
   }
   let blob: Blob | null = null
@@ -138,18 +138,18 @@ export async function flipImageNode(
   if (!blob) return false
   const resources = resourcesOf(ctx)
   if (!resources?.put) {
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('翻转失败：资源库不可用')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('翻转失败：资源库不可用', { followPointer: true, durationMs: 0 })
     return false
   }
   let resourceId = ''
   try {
     resourceId = await resources.put(blob, { kind: 'image' })
   } catch {
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('翻转失败：资源库写入出错')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('翻转失败：资源库写入出错', { followPointer: true, durationMs: 0 })
     return false
   }
   if (!resourceId) {
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('翻转失败：资源库没有返回引用')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('翻转失败：资源库没有返回引用', { followPointer: true, durationMs: 0 })
     return false
   }
   let displayUrl: string | undefined
@@ -159,7 +159,7 @@ export async function flipImageNode(
     displayUrl = undefined
   }
   if (!displayUrl) {
-    ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.('翻转失败：新地址解析不出来')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('翻转失败：新地址解析不出来', { followPointer: true, durationMs: 0 })
     return false
   }
   // 翻转不换宽高，但卡片尺寸仍按上限重算（原节点可能是按旧上限/手工调过的尺寸）

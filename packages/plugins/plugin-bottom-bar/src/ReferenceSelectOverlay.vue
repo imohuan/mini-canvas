@@ -24,7 +24,6 @@ import { useCanvasRender, RenderEvents } from '@mini-canvas/canvas-render'
 import type { DocService } from '@mini-canvas/canvas-data'
 import {
   exitSelection,
-  focusViewportFor,
   readSelectionSnapshot,
   referenceNodeState,
   referenceOwner,
@@ -216,35 +215,15 @@ function focusOwner(): void {
   const d = doc()
   const owner = referenceOwner()
   if (!d || !owner) return
-  // 优先用 nodeLayout 的 flow 绝对矩形；宿主没装它时回落「量卡片 DOM + 反算 flow 坐标」，
-  // 保证「返回节点」在任何宿主里都真的会动（量不到就什么都不做，不报错）。
-  const layout = ctx.tryGet<
-    { getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined
-  >('nodeLayout')
-  let rect = layout?.getNodeRect(owner) ?? null
-  if (!rect) {
-    const el = flow.queryNodeEl(owner)
-    const card = (el?.querySelector('.v2-card') as HTMLElement | null) ?? el
-    const b = card?.getBoundingClientRect()
-    const vp = flow.viewport.value
-    if (b && vp && vp.zoom > 0) {
-      rect = {
-        x: (b.left - (flow.paneRect.value?.left ?? 0) - vp.x) / vp.zoom,
-        y: (b.top - (flow.paneRect.value?.top ?? 0) - vp.y) / vp.zoom,
-        w: b.width / vp.zoom,
-        h: b.height / vp.zoom,
-      }
-    }
-  }
-  if (!rect) return
-  const viewport = ctx.tryGet<{
-    getViewport(): { x: number; y: number; zoom: number }
-    setCenter(x: number, y: number, zoom?: number): void
-  } | undefined>('viewport')
-  if (!viewport) return
-  const target = focusViewportFor(rect, viewport.getViewport().zoom)
-  // setCenter 用 flow 坐标（与 nodeLayout 的绝对坐标同一坐标系），屏幕中心 = 平移补偿直接归零
-  viewport.setCenter(target.x, target.y, target.zoom)
+  // 取景统一走 view.fitTo：低于 0.6 抬到 1，否则保持当前缩放（ReferenceSelectOverlay 的原语义）。
+  // 节点矩形由 view 内部按实测/声明尺寸解析；量不到时返回 false，不报错。
+  const view = ctx.tryGet<{
+    getViewport(): { zoom: number }
+    fitTo(target: string[], opts?: { zoom?: number }): boolean
+  }>('view')
+  if (!view) return
+  const currentZoom = view.getViewport().zoom
+  view.fitTo([owner], { zoom: currentZoom < 0.6 ? 1 : currentZoom })
 }
 
 /**

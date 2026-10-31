@@ -13,7 +13,7 @@
 - **先声明再干活**：如果「没有那把工具我就干不了」，要提前在门口写一行「我需要它」（模块级 `export const inject = [...]`）——
   没挂出来之前，我就在门口等着，不进去。
 
-按「数据 / 展示 / 能力 / 配置」分，服务管的是**能力**：一个有状态、有方法的对象（`doc`、`selection`、`viewport`……）。
+按「数据 / 展示 / 能力 / 配置」分，服务管的是**能力**：一个有状态、有方法的对象（`doc`、`selection`、`view`……）。
 
 它和**注册场**是两件事，记这条判据就行：
 
@@ -190,11 +190,9 @@ abstract class Service {
 宿主侧的真实用法（`packages/canvas-render/src/host/createMiniCanvasHost.ts`）：
 
 ```ts
-const nodeLayout = new NodeLayoutService(nodeStore)
-ctx.inject('nodeLayout', nodeLayout)   // 根 ctx：注入渲染层服务
-const viewport = new ViewportService()
-ctx.inject('viewport', viewport)       // 先建空壳，CanvasHost 挂载后再 attach 后端
-// ……这两个服务跨整个生命周期，宿主不主动撤销；ctx.stop() 时服务表随生命周期清空
+const view = new ViewService({ nodeStore })
+ctx.inject('view', view)               // 根 ctx：注入几何 + 视口服务
+// ……它跨整个生命周期，宿主不主动撤销；ctx.stop() 时服务表随生命周期清空
 ```
 
 ### 七、属性直读：`ctx.greeter`（插件专属的糖）
@@ -215,8 +213,8 @@ export function apply(ctx: Context) {
 
 | 文件 | 它在干什么 |
 | --- | --- |
-| `packages/canvas-data/src/canvas/canvasBasePlugin.ts` | 基础插件一次性 `ctx.inject(...)` 上架 `doc` / `save` / `selection` 等九个服务 |
-| `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 宿主用根 `ctx.inject` 注入 `nodeLayout` / `viewport`（渲染层专属两件） |
+| `packages/canvas-data/src/canvas/canvasBasePlugin.ts` | 基础插件一次性 `ctx.inject(...)` 上架 `doc` / `save` / `selection` / `resources` |
+| `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 宿主用根 `ctx.inject` 注入 `view` / `canvas` / `nodeToolbar` |
 | `packages/kernel/src/Context.ts` | 服务表本体：`inject` / `provide` / `get` / `tryGet` / `hasService` / `depSatisfied` / `wakePending` |
 | `packages/kernel/src/service.ts` | `Service` 基类（`super(ctx, name)` → `provide`） |
 | `packages/kernel/src/__tests__/service.test.ts` | 锁住三条实测行为：上架可取、卸载即消失、重名抛错 |

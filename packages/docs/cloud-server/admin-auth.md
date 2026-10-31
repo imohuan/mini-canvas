@@ -168,7 +168,7 @@ await CanvasUI.api('/api/canvas/nodes', {
 
 - `POST /api/canvases/<本画布>/resources?slot=<本节点>` —— 放行；
 - `POST /api/canvases/<本画布>/nodes`，body **只能**是
-  `{ update: [{ id: <本节点>, data: {…} }] }`，而 `data` 里的键只能是产物字段：
+  `{ update: [{ id: '<本节点>', data: {…} }] }`，而 `data` 里的键只能是产物字段：
   `uiOutputUrl` / `imageUrl` / `videoUrl` / `audioUrl` / `text`；
 - 写别的槽位、别的画布、改 `uiHtml` / `uiScripts`、`add` / `delete` 节点、
   调用其它受保护接口 —— 全部 403。
@@ -189,7 +189,7 @@ await CanvasUI.api('/api/canvas/nodes', {
 流程：
 
 1. 画布点「调试」→ POST /api/canvases/:id/debug-docs（**带管理令牌**），
-   后台把 debug-*.html / context-*.js / sdk-*.js 写进 canvases/<id>/resources/debug/；
+   后台把 `debug-*.html` / `context-*.js` / `sdk-*.js` 写进 `canvases/<id>/resources/debug/`；
 2. 返回的 urls.html 指向调试源（启动日志里的 127.0.0.1:<另一个端口>），窗口导航过去；
 3. 页面里调 CanvasUI.save(...) 时，用的是**绑定本画布本节点、10 分钟**的短令牌（x-task-token），
    只能写自己那个资源槽位。管理令牌从不进这个页面；

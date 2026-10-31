@@ -50,18 +50,18 @@ describe('卡片单击：不进全屏预览', () => {
 })
 
 describe('双击卡片：聚焦到节点', () => {
-  it('聚焦实现读 nodeLayout 的真实矩形（与 F 键同源）', () => {
+  it('聚焦实现走 view.fitTo 的矩形取景（与 F 键同源）', () => {
     const body = SCRIPT.slice(SCRIPT.indexOf('function onCardDblClick'), SCRIPT.indexOf('function onCardsKeydown'))
-    expect(body).toMatch(/getNodeRect\(/)
+    expect(body).toMatch(/fitTo\(\[nodeId\]/)
   })
 
   it('优先复用 auto-layout 的聚焦命令（与 F 键同一套取景 + 动画）', () => {
     const body = SCRIPT.slice(SCRIPT.indexOf('function onCardDblClick'), SCRIPT.indexOf('function onCardsKeydown'))
     // F 键那条命令只认当前选中；这里要的是「按 id 聚焦」，所以走同一个插件的另一条命令。
     expect(body).toMatch(/auto-layout:focus-node/)
-    expect(body).toMatch(/animateViewport/)
-    // 兜底（宿主没装 auto-layout）也必须按占比算缩放，不能只挪中心
-    expect(body).toMatch(/calculateFocusZoom\(/)
+    // 过渡由 view.fitTo 统一提供，底栏不再自己碰视口写口。
+    expect(body).toMatch(/fitTo\(/)
+    expect(body).toMatch(/heightRatio/)
     expect(body).toMatch(/focusHeightRatio/)
   })
 

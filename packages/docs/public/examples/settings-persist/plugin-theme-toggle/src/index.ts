@@ -40,7 +40,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => off.dispose())
 
   // ③ 程序化改值：写的是 settings（单一数据源）。
-  //    落盘由 settingsPersist 桥自动完成——本插件**不需要 import 桥**，也不需要知道存哪。
+  //    落盘由 save.settings 桥自动完成——本插件**不需要 import 桥**，也不需要知道存哪。
   const changed = settings.set('gridOpacity', 0.6)
   console.log('[theme-toggle] 透明度过 0.6 是否写入成功：', changed)
 
@@ -49,8 +49,8 @@ export function apply(ctx: Context): void {
     id: 'theme-toggle:reset-opacity',
     title: '恢复网格透明度默认',
     run() {
-      // 想"连保存的旧值一起忘掉"时走桥的 resetKey；只想临时改值就直接 settings.set
-      const persist = ctx.tryGet('settingsPersist')
+      // 想"连保存的旧值一起忘掉"时走 save.settings.resetKey；只想临时改值就直接 settings.set
+      const persist = ctx.tryGet('save')?.settings
       return persist ? persist.resetKey('gridOpacity') : settings.set('gridOpacity', 0.2)
     },
   })

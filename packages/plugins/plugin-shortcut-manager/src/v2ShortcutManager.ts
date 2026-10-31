@@ -4,11 +4,11 @@
  * v1 帮助面板/重映射面板依赖 ShortcutManager 单例（getHelpList/getConflicts/remap/checkRemapConflict/
  * getDefaultKey/resetToDefault/resetDefaults/exportKeymap/loadKeymap）。v2 铁律：无独立 shortcut 注册表，
  * 命令 keys 是唯一数据源（宿主 CanvasHost 统一分发）。本适配器把 v1 API 面映射到：
- *   - 帮助列表/冲突：从 ctx.get('command').list() 现算（带 keys 的命令即帮助条目）；
+ *   - 帮助列表/冲突：从命令场与 canvas.listCommands() 现算（带 keys 的命令即帮助条目）；
  *   - remap/reset：走内核 CommandRegistry.remapKeys/resetKeys（keyComboMatches 立即生效）；
  *   - 持久化：委托 shortcutRemapEngine（save type='shortcut' 的 remap 表）。
  *
- * 纯逻辑、零 Vue（.vue 面板经 ctx.get('shortcut-manager') 拿到本实例调用）；可单测。
+ * 纯逻辑、零 Vue（.vue 面板经同包 shortcutState.getShortcutManager() 拿到本实例调用）；可单测。
  */
 import type { CommandService } from '@mini-canvas/kernel'
 
@@ -156,6 +156,12 @@ export function createV2ShortcutManager(
     return buildV2HelpList(command.list())
   }
 
+  /** 某命令的注册默认键（未经 remap 的声明值）；无记录返回 undefined */
+  function defaultKeysOf(commandId: string): string[] | undefined {
+    const keys = defaults.get(commandId)
+    return keys ? [...keys] : undefined
+  }
+
   function groupItemsOf(id: string, combo: string): V2ShortcutHelpItem | undefined {
     return itemsNow().find((it) => it.commandId === id && normalizeCombo(it.keys) === normalizeCombo(combo))
   }
@@ -179,6 +185,7 @@ export function createV2ShortcutManager(
     getHelpList() {
       return groupV2HelpList(itemsNow())
     },
+    defaultKeysOf,
     /** 全部冲突 */
     getConflicts(): V2ShortcutConflict[] {
       return findV2Conflicts(itemsNow())

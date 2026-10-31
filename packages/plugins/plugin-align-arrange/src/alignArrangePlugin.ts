@@ -82,8 +82,8 @@ export type AlignArrangeConfigFromSchema = InferConfig<typeof Config>
 export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSchema>) {
   const doc = ctx.get('doc')
   const selection = ctx.get('selection')
-  // nodeLayout 由渲染层宿主注入；服务名 → 类型已在 canvas-data 集中登记（作者 SDK），故按名推导即可
-  const layout = ctx.tryGet('nodeLayout')
+  // 几何与视口已合并到 view（Spec 3.1）；旧 nodeLayout 不再上是服务名。
+  const layout = ctx.tryGet('view')
 
   // ⚙ 设置面板单一数据源（内置恒在）。每次执行命令**实时**读它 —— 面板改过立刻生效，
   // 不能把 apply 时的 config 冻结成闭包常量（那样改了间距/日志开关都不生效）。

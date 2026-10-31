@@ -14,12 +14,12 @@
 
 > 三条都是"**落场用调用方 ctx**" —— 条目归你，插件卸载时自动摘除。
 
-## 两条注册场
+## 一条注册场，两种键
 
 | 场名 | 键 | 值 |
 | --- | --- | --- |
-| `node/bar` | 动作 id | `BarAction` |
-| `node/bar-applier` | 节点 kind | `BarApplier` |
+| `node/bar` | `actions/<动作 id>` | `BarAction` |
+| `node/bar` | `appliers/<节点 kind>` | `BarApplier` |
 
 ## `BarAction` 常用字段
 

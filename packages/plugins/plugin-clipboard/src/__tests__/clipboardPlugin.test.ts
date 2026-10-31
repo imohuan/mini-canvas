@@ -258,7 +258,7 @@ describe('clipboard 实例隔离（P2-4）', () => {
  * 复制的偏移只能作用在父（绝对坐标）上，子的相对坐标必须原样保留。
  */
 describe('复制带子节点的分组（父子坐标系，用户 2026-10-09 缺陷）', () => {
-  /** 注入一个最小 nodeLayout：absolutePosition 沿 parentId 链累加（与渲染层实现同语义） */
+  /** 注入一个最小 view（几何部分）：absolutePosition 沿 parentId 链累加（与渲染层同语义） */
   function injectLayout(ctx: { inject: (n: string, s: unknown) => void }, nodeStore: NodeStore) {
     const abs = (id: string) => {
       let n = nodeStore.getNode(id)
@@ -276,7 +276,7 @@ describe('复制带子节点的分组（父子坐标系，用户 2026-10-09 缺�
       }
       return { x, y }
     }
-    ctx.inject('nodeLayout', {
+    ctx.inject('view', {
       nodeSize: (id: string) => nodeStore.getNode(id)?.size ?? { w: 0, h: 0 },
       absolutePosition: abs,
       getNodeRect: (id: string) => {

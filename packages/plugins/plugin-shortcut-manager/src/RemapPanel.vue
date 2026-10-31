@@ -9,19 +9,18 @@
  * - 「重置默认」把默认键设成候选，随「完成」一并提交。
  *
  * 数据源差异（v2）：老版走 ShortcutManager 单例按 id remap；v2 命令 keys 是唯一数据源，
- * 本面板经 ctx.get('shortcut-manager') 适配器把「命令某条键位」remap 到 CommandRegistry
- * （remapKeys/resetKeys，宿主统一分发立即生效；持久化经 shortcut-remap 引擎 save 落盘）。
+ * 本面板用同包共享的适配器把「命令某条键位」remap 到 CommandRegistry
+ * （remapKeys/resetKeys，宿主统一分发立即生效；持久化由本包引擎 save 落盘）。
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { V2ShortcutHelpItem, V2ShortcutManager } from './v2ShortcutManager'
+import { getShortcutManager } from './shortcutState'
 import ShortcutKeys from './ShortcutKeys.vue'
 
 const props = defineProps<{ item: V2ShortcutHelpItem }>()
 const emit = defineEmits<{ close: [] }>()
 
-const { ctx } = useCanvasRender()
-const manager = ctx.get<V2ShortcutManager>('shortcut-manager')
+const manager = getShortcutManager()
 
 /** 录制出的候选键位（尚未写入，须点"完成"才生效） */
 const newKeys = ref('')
@@ -191,8 +190,8 @@ function resetToDefault() {
   clearModifierTimer()
   if (!manager) return
   // 默认键位：优先取 remapEngine 里记录的原始 keys 中同 combo 的一项；否则命令 originalKeys 当前匹配项
-  const command = ctx.tryGet('command')
-  const orig = command?.originalKeys(props.item.commandId) ?? []
+  // 默认键位：优先取管理器缓存的原始键（remap 之前的值）；没有缓存 = 当前键即默认。
+  const orig = manager.defaultKeysOf(props.item.commandId) ?? []
   const target = orig.find((k) => k.toLowerCase().replace(/\s+/g, '') === props.item.keys.toLowerCase().replace(/\s+/g, ''))
   if (target !== undefined) {
     resetRecordingState()

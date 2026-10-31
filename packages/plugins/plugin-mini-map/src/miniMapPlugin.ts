@@ -6,24 +6,26 @@
  *   缩略节点 + 视口矩形 + 拖拽平移 / 点击跳转（组件 MiniMapOverlay.vue，纯 UI 与手势）。
  * - Ctrl/Cmd+M 切换显隐：老版 context.registerShortcut('ctrl+m') → v2 走命令 keys（mod+m），
  *   渲染层 CanvasHost 统一分发键盘，插件不自己绑 window。
- * - 显隐状态 = 本插件注入的 mini-map 服务（{ visible } 响应式）：命令切换、设置面板与
- *   宿主（如把浮层装进自己的壳）读取同一个对象 —— 显隐只有一个事实来源。
+ * - 显隐状态 = 设置项 miniMapVisible（SettingsStore 单一数据源）：命令切换、面板开关与
+ *   浮层读取同一个值 —— 不再占一个 mini-map 服务名。
  *
- * 依赖方向：只依赖内核服务（doc/nodeLayout/viewport 宿主恒在注入）+ canvas-render 只读上下文；
+ * 依赖方向：只依赖内核服务（doc/view 宿主恒在注入）+ canvas-render 只读上下文；
  * 不反向依赖宿主 demo / 其它插件。数据/几何纯逻辑在 miniMapEngine.ts（零 Vue 可单测）。
  */
-import { reactive } from 'vue'
+import { computed } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import MiniMapOverlay from './MiniMapOverlay.vue'
 import { Config, miniMapConfigFrom } from './miniMapConfig'
 
 export const name = 'mini-map'
-export const inject = ['doc', 'nodeLayout', 'viewport'] as string[]
+export const inject = ['doc', 'view'] as string[]
 
-/** mini-map 服务状态（命令、设置面板与宿主壳共享同一响应式对象；热卸随服务注入自动回收） */
-export interface MiniMapServiceState {
-  /** 小地图是否可见（Ctrl/Cmd+M 切换；默认显示） */
-  visible: boolean
+/** 小地图显隐状态（模块级：命令与浮层共享同一份；不占服务名） */
+const visibility = { visible: true }
+
+/** 供同包组件读取的响应式显隐（不入 ctx 服务表） */
+export function useMiniMapVisible(): { readonly value: boolean } {
+  return computed(() => visibility.visible)
 }
 
 /** mini-map 可配置项（v2 Config schema；默认值/分组对齐老版 panel 设置，登记 ⚙ 设置面板） */
@@ -31,17 +33,16 @@ export { Config }
 export type { MiniMapConfig } from './miniMapConfig'
 
 export function apply(ctx: Context) {
-  // 1. 上架 mini-map 服务（响应式显隐状态；命令与 MiniMapOverlay 共享）
+  // 1. 显隐的唯一事实来源 = 设置项 miniMapVisible（可持久化、面板可改）。
   const initial = miniMapConfigFrom(ctx)
-  const state: MiniMapServiceState = reactive({ visible: initial.miniMapVisible })
-  ctx.inject('mini-map', state)
+  visibility.visible = initial.miniMapVisible
 
   // 1b. settings 面板「显示小地图」开关 ↔ 服务状态双向同步（老版 store.toRef 语义：
   //     面板改 → 浮层即时变；命令 Ctrl/Cmd+M 改 → 面板开关跟着变）。
   const settings = ctx.tryGet('settings')
   if (settings) {
     const off = settings.onChange((key, v) => {
-      if (key === 'miniMapVisible' && typeof v === 'boolean') state.visible = v
+        if (key === 'miniMapVisible' && typeof v === 'boolean') visibility.visible = v
     })
     ctx.effect(() => () => off.dispose())
   }
@@ -67,8 +68,8 @@ export function apply(ctx: Context) {
     order: 80,
     icon: 'minimap',
     run: () => {
-      state.visible = !state.visible
-      syncVisibleToSettings(state.visible)
+      visibility.visible = !visibility.visible
+      syncVisibleToSettings(visibility.visible)
     },
   })
 }

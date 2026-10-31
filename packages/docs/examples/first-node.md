@@ -67,7 +67,7 @@ import type { NoteService } from './notePlugin'
 //    data 的类型按自己节点的字段写（我们只有 text 一个业务字段）。
 const props = defineProps<{ id: string; data: { text?: string } }>()
 
-// ② 拿到 ctx 和 viewport。注意：拿服务一律走 ctx.get('服务名')。
+// ② 拿到 ctx。注意：拿服务一律走 ctx.get('服务名')。
 const { ctx } = useCanvasRender()
 
 function noteService(): NoteService | undefined {

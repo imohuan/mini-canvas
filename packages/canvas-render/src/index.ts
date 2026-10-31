@@ -356,6 +356,22 @@ export { NodeLayoutService } from './layout/nodeLayout'
 // 视口服务（CanvasHost attach VueFlow backend 后可用；插件读/控视图）
 export { ViewportService } from './viewport/viewportService'
 export type { ViewportBackend, ViewportState, FlowPoint as ViewportFlowPoint } from './viewport/viewportService'
+// 几何 + 视口合并服务（服务名 view）：插件/渲染层统一从这里取视口与节点矩形，取景走 fitTo
+export { ViewService } from './view/viewService'
+export type { FocusTarget, ViewServiceDeps } from './view/viewService'
+export { computeFitTo } from './view/fitTo'
+export type { FitToInput, FitToOptions, FitToResult } from './view/fitTo'
+// 画布动作门面（服务名 canvas）：建/选/聚焦/进模式/打组/提示/跑底栏动作
+export { CanvasService } from './canvas/canvasService'
+export { createNotifyService } from './canvas/notifyService'
+export type { NotifyItem, NotifyOptions, NotifyService } from './canvas/notifyService'
+// 节点上下状态栏的注册表 + 会话（服务名 nodeToolbar）：模式注册不随主题卸载而丢
+export { NodeToolbarService } from './toolbar/nodeToolbarService'
+export type {
+  NodeToolbarBar,
+  NodeToolbarMode,
+  ResolvedBar,
+} from './toolbar/nodeToolbarService'
 // 可视区纯几何：视口变换 → flow 可视矩形 + 相交判定（align-guide/mini-map 等按可视区裁剪节点）
 export { viewportRectInFlow, rectsOverlap, expandRect } from './geometry/visibleArea'
 export type { FlowRect } from './geometry/visibleArea'
@@ -421,7 +437,7 @@ export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
 
-// nodeLayout / viewport 的服务名 → 类型登记已上移到 canvas-data（作者 SDK 上游）：
+// 渲染层服务名 `view` 的类型登记已上移到 canvas-data（作者 SDK 上游）：
 // 见 canvas-data/src/canvas/renderServiceContracts.ts 的 ViewportContract / NodeLayoutContract
-// 与 serviceTypes.ts。这样只依赖 canvas-base 的逻辑插件也能 ctx.get('viewport') 拿到类型，
-// 不必为两个服务名 import 整个渲染包，也不必手写窄端口。渲染包不再重复 declare（事实源唯一）。
+// 与 serviceTypes.ts。这样只依赖 canvas-base 的逻辑插件也能 ctx.get<ViewContract>('view') 拿到类型，
+// 不必为服务类型 import 整个渲染包，也不必手写窄端口。渲染包不再重复 declare（事实源唯一）。

@@ -19,7 +19,8 @@ class FakeRO {
 class FakeMO {
   static instances: FakeMO[] = []
   observed: Array<{ root: unknown; opts?: unknown }> = []
-  constructor(_cb: () => void) { FakeMO.instances.push(this) }
+  cb: () => void
+  constructor(cb: () => void) { this.cb = cb; FakeMO.instances.push(this) }
   observe(root: unknown, opts?: unknown) { this.observed.push({ root, opts }) }
   disconnect() {}
 }
@@ -68,6 +69,30 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
     expect(() => m.start()).not.toThrow()
     expect(FakeMO.instances[0].observed.length).toBe(0)
     expect(FakeRO.instances[0].observed.length).toBe(0)
+    m.stop()
+  })
+
+  it('可见剔除：DOM 消失但 store 里还在 → 保留实测尺寸', () => {
+    const store = makeStore()
+    store.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: 'a' }])
+    const layout = new NodeLayoutService(store)
+    const nodeA = fakeNode('a', 320, 180)
+    let nodes: unknown[] = [nodeA]
+    const root = { querySelectorAll: () => nodes } as unknown as HTMLElement
+
+    const m = useNodeMeasure({ nodeLayout: layout, container: () => root, scheduleImmediate: (fn) => fn() })
+    m.start()
+    expect(layout.nodeSize('a')).toEqual({ w: 320, h: 180 })
+
+    // 模拟可见剔除：DOM 被移除，但 nodeStore 仍有该节点
+    nodes = []
+    FakeMO.instances[0].cb()
+    expect(layout.nodeSize('a'), '剔除期间不能丢掉实测尺寸').toEqual({ w: 320, h: 180 })
+
+    // 真删除：store 里也没有了 → 清实测，回落默认值
+    store.removeNodes(['a'])
+    FakeMO.instances[0].cb()
+    expect(layout.nodeSize('a')).toEqual({ w: 0, h: 0 })
     m.stop()
   })
 })

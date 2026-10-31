@@ -39,6 +39,7 @@ import {
   LAYERS,
 } from '@mini-canvas/canvas-render'
 import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ViewContract } from '@mini-canvas/canvas-base'
 import type { BarAction } from './barTypes'
 import {
   collectUpstreamMaterials,
@@ -70,7 +71,6 @@ import { openPreview } from './mediaPreview'
 import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
 import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE } from './previewBoxSize'
-import { calculateFocusZoom } from './focusZoom'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
@@ -124,7 +124,7 @@ import {
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx, renderEdges, renderNodes } = useCanvasRender()
+const { ctx, host, renderEdges, renderNodes } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改
 const Select = useUiComponent('select')
 const ToolParamField = useUiComponent('toolParamField')
@@ -216,7 +216,7 @@ const actionOptions = computed(() =>
  */
 function iconOfType(type: string | undefined): unknown {
   if (!type) return undefined
-  const reg = ctx.tryGet<{ get(t: string): { icon?: unknown } | undefined }>('nodeRegistry')
+  const reg = host.nodeRegistry as { get(t: string): { icon?: unknown } | undefined } | undefined
   const fromRegistry = reg?.get(type)?.icon
   if (fromRegistry) return fromRegistry
   return FALLBACK_TYPE_ICONS[type]
@@ -820,8 +820,7 @@ function onCardsClickCapture(ev: MouseEvent): void {
  * 为什么不是点击：单击只做「选中/无操作」，全屏预览只能走 hover 预览框里的「全屏」。
  * 双击是"我到那个节点去看看"的手势，与文件管理器的习惯一致。
  *
- * 定位优先取 nodeLayout 的 flow 矩形（与「返回节点」同一个口径与缩放规则），
- * 宿主没装 nodeLayout 时回落到「量节点 DOM 反算 flow 坐标」——量不到就什么都不做。
+ * 定位统一走 view.fitTo（与「返回节点」同一个口径与缩放规则），量不到就什么都不做。
  */
 
 /**
@@ -840,26 +839,17 @@ function onCardDblClick(tile: RefTile): void {
    * 为什么用命令而不是把 auto-layout 当硬依赖：底栏也能在没有 auto-layout 的宿主里工作，
    * 命令未注册时 execute 是 no-op，再回落到下面的通用实现。
    */
-  const commands = ctx.tryGet<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+    const commands = ctx.tryGet<{ runCommand(id: string, ...payload: unknown[]): unknown }>('canvas')
   try {
-    if (commands?.execute('auto-layout:focus-node', nodeId) === true) return
+    if (commands?.runCommand('auto-layout:focus-node', nodeId) === true) return
   } catch { /* 命令异常：回落到下面的通用实现 */ }
-  const viewport = ctx.tryGet<{
-    getViewport(): { x: number; y: number; zoom: number }
-    setViewport(v: { x: number; y: number; zoom: number }): void
-    animateViewport?(v: { x: number; y: number; zoom: number }): void
-    getRootEl?(): HTMLElement | null
-  }>('viewport')
-  if (!viewport) return
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
-  const rect = layout?.getNodeRect(nodeId) ?? null
-  if (!rect) return
-  const root = viewport.getRootEl?.() ?? null
-  const vw = root?.clientWidth || (typeof window === 'undefined' ? 0 : window.innerWidth)
-  const vh = root?.clientHeight || (typeof window === 'undefined' ? 0 : window.innerHeight)
+  // 用服务契约而不是手写窄端口：窄端口漏掉 durationMs/keepZoom 等合法参数，
+  // 调用方明明传了，类型检查却报「不认识这个字段」（用户实测的 UI typecheck 失败）。
+  const view = ctx.tryGet<ViewContract>('view')
+  if (!view) return
   /**
    * 兜底路径也要是「F 键那套取景」，不能只挪中心（用户两轮都在追这个）：
-   * 按 auto-layout 的设置（聚焦高度占比 / 最小最大缩放）算百分比，再居中。
+   * 按 auto-layout 的设置（聚焦高度占比 / 最小最大缩放）走同一个 fitTo。
    * 设置服务缺失（单测 / 精简宿主）时用与插件 schema 相同的默认值，行为不跳。
    */
   const settings = ctx.tryGet<{ get(key: string): unknown }>('settings')
@@ -867,16 +857,13 @@ function onCardDblClick(tile: RefTile): void {
     const v = settings?.get(key)
     return typeof v === 'number' && Number.isFinite(v) ? v : fallback
   }
-  const zoom = calculateFocusZoom({
-    boundsHeight: rect.h,
-    viewportHeight: vh,
+  view.fitTo([nodeId], {
     heightRatio: readNum('focusHeightRatio', 0.5),
     minZoom: readNum('autoLayoutMinZoom', 0.1),
     maxZoom: readNum('autoLayoutMaxZoom', 4),
+    // 兜底路径沿用旧实现的 200ms 动画；默认 320ms 会让双击聚焦变慢半拍。
+    durationMs: 200,
   })
-  const next = { x: vw / 2 - (rect.x + rect.w / 2) * zoom, y: vh / 2 - (rect.y + rect.h / 2) * zoom, zoom }
-  if (viewport.animateViewport) viewport.animateViewport(next)
-  else viewport.setViewport(next)
 }
 
 function onCardsKeydown(ev: KeyboardEvent): void {
@@ -1614,7 +1601,8 @@ function insertTileChip(tile: RefTile): void {
      * 直接静默失败会让用户以为按钮坏了（用户 2026-10-29 报「点不动」正是这种观感），
      * 所以给一句明确的提示。
      */
-    ctx.tryGet<{ show(m: string): void }>('tip')?.show('当前动作没有输入框，先选一个生成类动作再 @')
+    ctx.tryGet<{ notify(m: string, opts?: { source?: string; followPointer?: boolean; durationMs?: number }): unknown }>('canvas')
+      ?.notify('当前动作没有输入框，先选一个生成类动作再 @', { source: 'bottom-bar', followPointer: true, durationMs: 0 })
     return
   }
   editorComponentRef.value.insertResource(item)
@@ -2423,8 +2411,9 @@ function onCtrlDragPointerMove(ev: PointerEvent): void {
     const tile = refTiles.value.find((t) => t.key === key)
     const slotKind = (tile?.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: ctrlDrag.mediaType })
-    if (!verdict.ok) ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
-    else ctx.tryGet<{ hide(): void }>('tip')?.hide()
+    // once：同一句提示只留一条（旧 tip.show 是覆盖式，不能变成每帧追加）
+    if (!verdict.ok) ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0, once: true })
+    else ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('', { source: 'bottom-bar' })
   }
   if (ctrlDrag.targetTileKey && ctrlDrag.targetTileKey !== key) {
     document.querySelector('.nb-card[data-tile-key="' + ctrlDrag.targetTileKey + '"]')?.classList.remove('is-target')
@@ -2494,7 +2483,8 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
     const slotKind = (tile.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind, media: drag.mediaType })
     if (!verdict.ok) {
-      ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
+      // once：松手失败提示同样只留一条
+      ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0, once: true })
       return
     }
   }
@@ -2538,7 +2528,7 @@ onBeforeUnmount(() => {
   unifiedExitCtrlDragMode()
   exitReference()
   // 顺带收掉可能残留的鼠标提示（与覆盖层同寿命）
-  ctx.tryGet<{ hide(): void }>('tip')?.hide()
+  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('', { source: 'bottom-bar' })
   window.removeEventListener('pointermove', onCtrlDragPointerMove, true)
   window.removeEventListener('pointerup', onCtrlDragPointerUp, true)
   window.removeEventListener('dragover', onCtrlDragOver, true)

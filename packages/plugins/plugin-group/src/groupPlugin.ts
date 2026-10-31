@@ -121,7 +121,7 @@ declare module '@mini-canvas/canvas-data' {
 
 /**
  * 分组服务。方法内惰性取现时服务，不缓存（cordis 规范）。
- * 布局/尺寸经 ctx.get('nodeLayout')：渲染层注入（读 nodeStore + ResizeObserver 实测），
+ * 布局/尺寸经 ctx.get('view')：渲染层注入（读 nodeStore + ResizeObserver 实测），
  * node 测试环境由测试注入等价 stub（提供 getAllRects/nodeSize/absolutePosition）。
  */
 export class GroupService extends Service implements GroupServiceAPI {
@@ -136,7 +136,7 @@ export class GroupService extends Service implements GroupServiceAPI {
     return this.ctx.get('doc')
   }
   private get layout() {
-    return this.ctx.get('nodeLayout')
+    return this.ctx.get('view')
   }
 
   /** 组嵌套深度（不支持嵌套的画布上恒 0；B 方案允许一层 → 最大 1） */
@@ -481,7 +481,7 @@ export class GroupService extends Service implements GroupServiceAPI {
 }
 
 export const name = 'group'
-export const inject = ['doc', 'selection', 'nodeLayout'] as string[]
+export const inject = ['doc', 'selection', 'view'] as string[]
 
 /** 插件主体：注册 group 节点类型 + 上架 group 服务 + 命令。
  *  config（padding 等）不落地缓存 —— 服务每次操作惰性读 settings 单一数据源，天然实时生效。 */

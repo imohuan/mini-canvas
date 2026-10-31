@@ -196,7 +196,7 @@ const settings = ctx.tryGet<{ get(k: string): unknown; set(k: string, v: string 
 const lastAt = ref((settings?.get('myCountLastAt') as string) ?? '')
 // get 对未登记的键返回 undefined（不抛错），?? 兜成空串
 
-// ⑩ 面板写值：set 同步写回 store，随 settingsPersist 自动持久化。
+// ⑩ 面板写值：set 同步写回 store，随 save.settings 自动持久化。
 //    注意：未登记键 set 会抛错（get 只返回 undefined），所以 set 要 try/catch 兜底
 function saveTime(): void {
   const now = new Date().toLocaleTimeString()

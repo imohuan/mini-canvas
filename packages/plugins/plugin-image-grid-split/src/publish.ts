@@ -89,7 +89,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     updateNode?(id: string, patch: Record<string, unknown>): unknown
     connectEdge?(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { status?: string } | undefined
   } | undefined>('doc')
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined } | undefined>('nodeLayout')
+  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined } | undefined>('view')
   const resources = ctx.tryGet<{ put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>; resolve(r: string): Promise<string | undefined> } | undefined>('resources')
   if (!doc) return null
 

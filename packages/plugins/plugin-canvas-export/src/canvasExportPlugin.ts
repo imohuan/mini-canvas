@@ -157,7 +157,7 @@ type ExportType = 'full' | 'selected'
 /** 取当前画布视口 DOM（VueFlow 渲染约定：整张画布内容在 .vue-flow__viewport 内）。 */
 function getFlowEl(ctx: Context): HTMLElement | null {
   // 内置服务名已集中登记类型（T03）：ctx.tryGet 按名推导，不必手写端口结构
-  const vp = ctx.tryGet('viewport')
+  const vp = ctx.tryGet('view')
   const root = vp?.getRootEl() ?? null
   const renderer = vp?.getRendererEl() ?? null
   const flowViewport = root?.querySelector<HTMLElement>('.vue-flow__viewport') ?? null
@@ -428,7 +428,7 @@ export function apply(ctx: Context) {
 
   /** 收集可导出的节点矩形：丢掉中间态节点（拖线落空白的临时菜单卡不是用户作品，不该进导出图） */
   function collectNodeRects(): NodeRect[] {
-    const layout = ctx.tryGet('nodeLayout')
+    const layout = ctx.tryGet('view')
     const doc = ctx.tryGet('doc')
     const rects = layout?.getAllRects() ?? []
     if (!doc) return rects
@@ -452,7 +452,7 @@ export function apply(ctx: Context) {
       console.warn('[canvas-export] 没有选中节点')
       return
     }
-    const vp = ctx.tryGet('viewport')
+    const vp = ctx.tryGet('view')
     const el = getFlowEl(ctx)
     if (!el || !vp) {
       console.warn('[canvas-export] 未找到画布元素 (.vue-flow__viewport)')

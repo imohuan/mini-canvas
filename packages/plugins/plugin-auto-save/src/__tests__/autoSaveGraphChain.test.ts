@@ -3,8 +3,8 @@
  * auto-save 周期性 flush → 数据落盘（P0-1 修复后链路完整，本测试补证据）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter, createDocService } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, createDocService } from '@mini-canvas/canvas-data'
 import { autoSavePlugin } from '../autoSavePlugin'
 import type { AutoSaveService } from '../autoSavePlugin'
 
@@ -53,6 +53,30 @@ describe('auto-save + graph 链路（P0-1 完整闭环）', () => {
     const svc = ctx.get<AutoSaveService>('auto-save')
     nodeStore.addNode('text', { x: 0, y: 0 })
     expect(svc.isDirty()).toBe(true)
+    ctx.stop()
+  })
+})
+import { describe, expect, it } from 'vitest'
+import { Context } from '@mini-canvas/canvas-data'
+import { createCanvasBasePlugin } from '@mini-canvas/canvas-data'
+import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { autoSavePlugin } from '../autoSavePlugin'
+
+/**
+ * 新入口：引擎挂到 save.autoSave（插件仍 inject 自己的旧名做兼容）。
+ * 这里只钉"挂上了、是同一个实例"，周期语义由 canvas-data 的引擎单测覆盖。
+ */
+describe('auto-save 并入 save', () => {
+  it('装插件后 save.autoSave 可用，旧 auto-save 服务指向同一实例', async () => {
+    const ctx = new Context()
+    const base = createCanvasBasePlugin({ adapter: new MemoryStorageAdapter() })
+    ctx.plugin(base.plugin)
+    ctx.plugin(autoSavePlugin)
+    await ctx.start()
+    const save = ctx.get<{ autoSave?: { isEnabled(): boolean } }>('save')
+    expect(save.autoSave).toBeDefined()
+    expect(save.autoSave).toBe(ctx.get('auto-save'))
+    expect(save.autoSave?.isEnabled()).toBe(true)
     ctx.stop()
   })
 })

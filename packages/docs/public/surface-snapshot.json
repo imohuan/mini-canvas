@@ -1,38 +1,33 @@
 {
-  "capturedAt": "2026-10-09T12:59:35.043Z",
+    "capturedAt": "2026-10-31T13:15:54.985Z",
   "source": "window.MiniCanvasUI.getContext().surface()",
   "state": "started",
   "services": [
     {
-      "name": "nodeLayout",
+      "name": "view",
       "source": "<host>",
       "methods": [
         "absolutePosition",
-        "childrenOf",
-        "clearMeasuredSize",
-        "getAllRects",
-        "getNodeRect",
-        "nodeSize",
-        "reset",
-        "setMeasuredSize"
-      ]
-    },
-    {
-      "name": "viewport",
-      "source": "<host>",
-      "methods": [
         "animateViewport",
         "attachBackend",
+        "childrenOf",
+        "clearMeasuredSize",
+        "fitTo",
         "fitView",
         "flowToScreen",
+        "getAllRects",
+        "getNodeRect",
         "getPaneEl",
         "getRendererEl",
         "getRootEl",
         "getViewport",
+        "nodeSize",
         "queryNodeEl",
-        "requireBackend",
+        "resetMeasured",
+        "resolveTargets",
         "screenToFlow",
         "setCenter",
+        "setMeasuredSize",
         "setViewport",
         "zoomIn",
         "zoomOut",
@@ -40,16 +35,47 @@
       ]
     },
     {
-      "name": "pluginManager",
+      "name": "canvas",
       "source": "<host>",
       "methods": [
-        "applyManifest",
-        "diagnose",
-        "install",
-        "list",
-        "manifestReport",
-        "reload",
-        "uninstall"
+        "activeMode",
+        "cancelBarAction",
+        "creatableTypes",
+        "createNode",
+        "enterMode",
+        "exitMode",
+        "focus",
+        "group",
+        "hasCommand",
+        "isCommandRemapped",
+        "listCommands",
+        "notify",
+        "originalCommandKeys",
+        "remapCommandKeys",
+        "resetCommandKeys",
+        "runBarAction",
+        "runCommand",
+        "select",
+        "ungroup"
+      ]
+    },
+    {
+      "name": "nodeToolbar",
+      "source": "<host>",
+      "methods": [
+        "activeModeId",
+        "declaredOf",
+        "enter",
+        "exit",
+        "follow",
+        "inMode",
+        "listModes",
+        "modeOf",
+        "pickAny",
+        "registerMode",
+        "resolveBar",
+        "typeOf",
+        "unregisterMode"
       ]
     },
     {
@@ -109,6 +135,7 @@
         "updateNodeData",
         "updateNodeRuntime",
         "updateNodes",
+        "updateTypeResizability",
         "updateTypeSize"
       ]
     },
@@ -135,44 +162,6 @@
       ]
     },
     {
-      "name": "nodeRegistry",
-      "source": "canvas-base",
-      "methods": [
-        "contributionIds",
-        "contributionOccupants",
-        "get",
-        "has",
-        "notify",
-        "register",
-        "registerContribution",
-        "set",
-        "subscribe",
-        "types",
-        "unregister",
-        "unregisterContribution",
-        "unsubContributions"
-      ]
-    },
-    {
-      "name": "themeRegistry",
-      "source": "canvas-base",
-      "methods": [
-        "addOccupant",
-        "get",
-        "has",
-        "hasOccupant",
-        "occupantIds",
-        "occupants",
-        "register",
-        "removeOccupant",
-        "set",
-        "slots",
-        "subscribe",
-        "unregister",
-        "winner"
-      ]
-    },
-    {
       "name": "selection",
       "source": "canvas-base",
       "methods": [
@@ -192,59 +181,32 @@
       ]
     },
     {
-      "name": "command",
-      "source": "canvas-base",
+      "name": "text",
+      "source": "text",
       "methods": [
-        "execute",
-        "get",
-        "has",
-        "isRemapped",
-        "list",
-        "originalKeys",
-        "register",
-        "remapKeys",
-        "resetKeys",
-        "setContext",
-        "unregister"
+        "addTextNode",
+        "doc",
+        "duplicateTextNode",
+        "editText"
       ]
     },
     {
-      "name": "nodeFactory",
-      "source": "canvas-base",
+      "name": "uiNode",
+      "source": "node-ui",
       "methods": [
-        "creatableTypes",
-        "create",
-        "register",
-        "unregister"
-      ]
-    },
-    {
-      "name": "settingsPersist",
-      "source": "canvas-base",
-      "methods": [
-        "dispose",
-        "persistNow",
-        "resetKey",
-        "restore"
-      ]
-    },
-    {
-      "name": "hot-reload",
-      "source": "ui-hot-reload",
-      "methods": [
-        "addSource",
-        "clearLogs",
-        "reconnect",
-        "reload",
-        "removeSource",
-        "stopAll",
-        "updateSource"
+        "addNode",
+        "clear",
+        "doc",
+        "htmlOf",
+        "inputsOf",
+        "setHtml"
       ]
     },
     {
       "name": "nodeBar",
       "source": "bottom-bar",
       "methods": [
+        "applierField",
         "applierOf",
         "field",
         "get",
@@ -268,13 +230,105 @@
       ]
     },
     {
-      "name": "text",
-      "source": "text",
+      "name": "panorama3d",
+      "source": "3d-preview",
       "methods": [
-        "addTextNode",
+        "addPreviewNode",
         "doc",
-        "duplicateTextNode",
-        "editText"
+        "removeNode",
+        "setImageUrl"
+      ]
+    },
+    {
+      "name": "plugin-manager",
+      "source": "plugin-manager",
+      "methods": [
+        "bindManager",
+        "browseNpmPlugins",
+        "checkNpmUpdates",
+        "install",
+        "installAll",
+        "installFromNpm",
+        "listNpmInstalled",
+        "refresh",
+        "reinstall",
+        "searchNpmPlugins",
+        "uninstall",
+        "uninstallFromNpm",
+        "updateFromNpm"
+      ]
+    },
+    {
+      "name": "clipboard",
+      "source": "clipboard",
+      "methods": [
+        "absProvider",
+        "copy",
+        "cut",
+        "duplicate",
+        "flowAnchor",
+        "isOwnSnapshot",
+        "markSystemClipboard",
+        "paste",
+        "pasteExternal",
+        "pasteFromCommand",
+        "pasteFromSystemClipboard",
+        "pasteSnapshot",
+        "pasteWithFreshMedia",
+        "prepareSnapshotMedia",
+        "selectedNodes",
+        "textPayloadOf",
+        "trackClientPoint"
+      ]
+    },
+    {
+      "name": "multi-select",
+      "source": "multi-select",
+      "methods": [
+        "clearSelection",
+        "getSelectedNodeIds",
+        "getSelectedNodes",
+        "hasSelectedEdges",
+        "hasSelection",
+        "selectAll"
+      ]
+    },
+    {
+      "name": "group",
+      "source": "group",
+      "methods": [
+        "allRects",
+        "applyDragMembership",
+        "createGroup",
+        "currentPaddingOf",
+        "getGroupBounds",
+        "getGroupDepth",
+        "getGroupNodeIds",
+        "groupRects",
+        "groupSizePatch",
+        "groupSubtreeDepth",
+        "recalculateBounds",
+        "rectOf",
+        "ungroup"
+      ]
+    },
+    {
+      "name": "file-drop",
+      "source": "file-drop",
+      "methods": [
+        "addFiles",
+        "addPastedText",
+        "canHandle",
+        "claimsMediaPaste",
+        "claimsTextPaste",
+        "commitPayloads",
+        "flowAnchor",
+        "pasteMedia",
+        "pasteTextAsync",
+        "storeAndResolve",
+        "toFlow",
+        "trackClientPoint",
+        "typeRegistered"
       ]
     },
     {
@@ -282,6 +336,7 @@
       "source": "image",
       "methods": [
         "addImageNode",
+        "addImageNodeFromResource",
         "removeNode"
       ]
     },
@@ -290,26 +345,20 @@
       "source": "video",
       "methods": [
         "addVideoNode",
+        "addVideoNodeFromResource",
+        "captureThumb",
         "doc",
         "removeNode",
-        "setVideoUrl"
+        "setVideoUrl",
+        "thumb"
       ]
     },
     {
       "name": "audio",
       "source": "audio",
       "methods": [
-        "addAudioNode"
-      ]
-    },
-    {
-      "name": "panorama3d",
-      "source": "3d-preview",
-      "methods": [
-        "addPreviewNode",
-        "doc",
-        "removeNode",
-        "setImageUrl"
+        "addAudioNode",
+        "addAudioNodeFromResource"
       ]
     },
     {
@@ -329,6 +378,7 @@
         "clearPendingResource",
         "clearPendingResources",
         "closeQueueItem",
+        "compact",
         "decide",
         "deleteModel",
         "deleteSession",
@@ -337,6 +387,7 @@
         "hide",
         "importSkill",
         "listSessions",
+        "loadEarlierTurns",
         "loadPrompts",
         "loadSkillCandidates",
         "loadTitleModel",
@@ -354,7 +405,9 @@
         "removeQueueItem",
         "removeSkill",
         "renameSession",
+        "reorderQueue",
         "requestNodeRefs",
+        "restoreTemplate",
         "resumeGoal",
         "resumeQueue",
         "retry",
@@ -382,25 +435,25 @@
       ]
     },
     {
-      "name": "plugin-manager",
-      "source": "plugin-manager",
+      "name": "hot-reload",
+      "source": "hot-reload",
       "methods": [
-        "browseNpmPlugins",
-        "checkNpmUpdates",
-        "install",
-        "installAll",
-        "installFromNpm",
-        "listNpmInstalled",
-        "refresh",
-        "reinstall",
-        "searchNpmPlugins",
-        "uninstall",
-        "uninstallFromNpm",
-        "updateFromNpm"
+        "addSource",
+        "clearLogs",
+        "listDebugPlugins",
+        "reconnect",
+        "reinstallDebugPlugin",
+        "reload",
+        "removeSource",
+        "stopAll",
+        "uninstallDebugPlugin",
+        "updateSource",
+        "watchDebugPresence",
+        "watchPluginChanges"
       ]
     },
     {
-      "name": "gen-history",
+      "name": "cloud-client:history",
       "source": "cloud-client",
       "methods": [
         "query",
@@ -424,66 +477,13 @@
       ]
     },
     {
-      "name": "clipboard",
-      "source": "clipboard",
+      "name": "cloud-client/edit-guard",
+      "source": "<host>",
       "methods": [
-        "absProvider",
-        "copy",
-        "cut",
-        "duplicate",
-        "flowAnchor",
-        "paste",
-        "selectedNodes",
-        "trackClientPoint"
-      ]
-    },
-    {
-      "name": "file-drop",
-      "source": "file-drop",
-      "methods": [
-        "addFiles",
-        "addPastedText",
-        "canHandle",
-        "commitPayloads",
-        "flowAnchor",
-        "toFlow",
-        "trackClientPoint",
-        "typeRegistered"
-      ]
-    },
-    {
-      "name": "mini-map",
-      "source": "mini-map"
-    },
-    {
-      "name": "group",
-      "source": "group",
-      "methods": [
-        "allRects",
-        "applyDragMembership",
-        "createGroup",
-        "currentPaddingOf",
-        "getGroupBounds",
-        "getGroupDepth",
-        "getGroupNodeIds",
-        "groupRects",
-        "groupSizePatch",
-        "groupSubtreeDepth",
-        "recalculateBounds",
-        "rectOf",
-        "ungroup"
-      ]
-    },
-    {
-      "name": "multi-select",
-      "source": "multi-select",
-      "methods": [
-        "clearSelection",
-        "getSelectedNodeIds",
-        "getSelectedNodes",
-        "hasSelectedEdges",
-        "hasSelection",
-        "selectAll"
+        "apply",
+        "bind",
+        "call",
+        "toString"
       ]
     },
     {
@@ -551,6 +551,7 @@
         "ids",
         "list",
         "notify",
+        "ordered",
         "remove",
         "slots",
         "subscribe"
@@ -573,6 +574,7 @@
         "notifySchema",
         "onChange",
         "onSchemaChange",
+        "orderGroups",
         "removeByScope",
         "set",
         "setDefault",
@@ -597,6 +599,10 @@
       "kind": "capability",
       "keys": [
         {
+          "key": "media",
+          "count": 1
+        },
+        {
           "key": "node",
           "count": 1
         },
@@ -613,175 +619,12 @@
           "count": 1
         },
         {
+          "key": "upstream",
+          "count": 1
+        },
+        {
           "key": "zoom",
           "count": 1
-        }
-      ]
-    },
-    {
-      "kind": "theme",
-      "keys": [
-        {
-          "key": "background",
-          "count": 1
-        },
-        {
-          "key": "bottomBar",
-          "count": 1
-        },
-        {
-          "key": "connectionLine",
-          "count": 1
-        },
-        {
-          "key": "edge",
-          "count": 1
-        },
-        {
-          "key": "edgeDefaultType",
-          "count": 1
-        },
-        {
-          "key": "nodeShell",
-          "count": 1
-        },
-        {
-          "key": "nodeShell:connection-menu",
-          "count": 1
-        },
-        {
-          "key": "settingsPanel",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "kind": "ui",
-      "keys": [
-        {
-          "key": "audioPreview",
-          "count": 1
-        },
-        {
-          "key": "button",
-          "count": 1
-        },
-        {
-          "key": "color",
-          "count": 1
-        },
-        {
-          "key": "connectionLine",
-          "count": 1
-        },
-        {
-          "key": "dropdown",
-          "count": 2
-        },
-        {
-          "key": "effectLibraryOverlay",
-          "count": 1
-        },
-        {
-          "key": "mediaViewer",
-          "count": 1
-        },
-        {
-          "key": "movingHandle",
-          "count": 1
-        },
-        {
-          "key": "select",
-          "count": 1
-        },
-        {
-          "key": "slider",
-          "count": 1
-        },
-        {
-          "key": "styleLibraryCard",
-          "count": 1
-        },
-        {
-          "key": "styleLibraryDetail",
-          "count": 1
-        },
-        {
-          "key": "styleLibraryGallery",
-          "count": 1
-        },
-        {
-          "key": "styleLibraryOverlay",
-          "count": 1
-        },
-        {
-          "key": "textPreview",
-          "count": 1
-        },
-        {
-          "key": "toolParamField",
-          "count": 1
-        },
-        {
-          "key": "toolParamGrid",
-          "count": 1
-        },
-        {
-          "key": "toolParamGroup",
-          "count": 1
-        },
-        {
-          "key": "toolParamRatio",
-          "count": 1
-        },
-        {
-          "key": "toolParamSlider",
-          "count": 1
-        },
-        {
-          "key": "tooltip",
-          "count": 1
-        },
-        {
-          "key": "videoPreview",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "kind": "slot",
-      "keys": [
-        {
-          "key": "agent-conversation",
-          "count": 1
-        },
-        {
-          "key": "mini-map",
-          "count": 1
-        },
-        {
-          "key": "overlay",
-          "count": 10
-        },
-        {
-          "key": "settingsGroup/Agent",
-          "count": 1
-        },
-        {
-          "key": "settingsGroup/光标",
-          "count": 1
-        },
-        {
-          "key": "settingsGroup/插件",
-          "count": 1
-        },
-        {
-          "key": "settingsGroup/热重载",
-          "count": 1
-        },
-        {
-          "key": "settingsNav",
-          "count": 4
         }
       ]
     },
@@ -845,19 +688,23 @@
           "count": 1
         },
         {
-          "key": "audio.download",
+          "key": "audio:download",
           "count": 1
         },
         {
-          "key": "audio.reanalyze",
+          "key": "audio:reanalyze",
           "count": 1
         },
         {
-          "key": "audio.upload",
+          "key": "audio:upload",
           "count": 1
         },
         {
           "key": "auto-layout:fit-view",
+          "count": 1
+        },
+        {
+          "key": "auto-layout:focus-node",
           "count": 1
         },
         {
@@ -893,6 +740,22 @@
           "count": 1
         },
         {
+          "key": "command:create-node",
+          "count": 1
+        },
+        {
+          "key": "command:delete",
+          "count": 1
+        },
+        {
+          "key": "command:redo",
+          "count": 1
+        },
+        {
+          "key": "command:undo",
+          "count": 1
+        },
+        {
           "key": "context-menu:delete-edge",
           "count": 1
         },
@@ -913,39 +776,59 @@
           "count": 1
         },
         {
-          "key": "image.crop",
+          "key": "image:crop",
           "count": 1
         },
         {
-          "key": "image.cropCancel",
+          "key": "image:crop-cancel",
           "count": 1
         },
         {
-          "key": "image.cropConfirm",
+          "key": "image:crop-confirm",
           "count": 1
         },
         {
-          "key": "image.download",
+          "key": "image:download",
           "count": 1
         },
         {
-          "key": "image.expand",
+          "key": "image:expand",
           "count": 1
         },
         {
-          "key": "image.expandCancel",
+          "key": "image:expand-cancel",
           "count": 1
         },
         {
-          "key": "image.expandConfirm",
+          "key": "image:expand-confirm",
           "count": 1
         },
         {
-          "key": "image.rotate",
+          "key": "image:paint-cancel",
           "count": 1
         },
         {
-          "key": "image.upload",
+          "key": "image:paint-clear",
+          "count": 1
+        },
+        {
+          "key": "image:paint-confirm",
+          "count": 1
+        },
+        {
+          "key": "image:paint-redo",
+          "count": 1
+        },
+        {
+          "key": "image:paint-undo",
+          "count": 1
+        },
+        {
+          "key": "image:rotate",
+          "count": 1
+        },
+        {
+          "key": "image:upload",
           "count": 1
         },
         {
@@ -965,15 +848,59 @@
           "count": 1
         },
         {
+          "key": "node-ui:clear",
+          "count": 1
+        },
+        {
+          "key": "node-ui:get-context",
+          "count": 1
+        },
+        {
+          "key": "node-ui:set-html",
+          "count": 1
+        },
+        {
+          "key": "shell:open-drawer",
+          "count": 1
+        },
+        {
+          "key": "shell:open-drawer-tab",
+          "count": 1
+        },
+        {
+          "key": "shell:toggle-drawer",
+          "count": 1
+        },
+        {
           "key": "style-library:open",
           "count": 1
         },
         {
-          "key": "text.delete",
+          "key": "text:delete",
           "count": 1
         },
         {
-          "key": "text.duplicate",
+          "key": "text:duplicate",
+          "count": 1
+        },
+        {
+          "key": "ui:import-pack:0304fc6e-6eb5-44ab-8209-fc1999817424",
+          "count": 1
+        },
+        {
+          "key": "ui:import-pack:62fc2277-4e8d-4563-8e83-37006ac75e8f",
+          "count": 1
+        },
+        {
+          "key": "ui:import-pack:b0ae037b-f9e9-4b17-99af-0e82d5406318",
+          "count": 1
+        },
+        {
+          "key": "ui:import-pack:e1d2e5aa-d34e-427b-8ad8-7ee8b0038066",
+          "count": 1
+        },
+        {
+          "key": "ui:node-export-pack",
           "count": 1
         },
         {
@@ -981,44 +908,281 @@
           "count": 1
         },
         {
-          "key": "video.captureFrame",
+          "key": "video:capture-frame",
           "count": 1
         },
         {
-          "key": "video.clip",
+          "key": "video:clip",
           "count": 1
         },
         {
-          "key": "video.clipCancel",
+          "key": "video:clip-cancel",
           "count": 1
         },
         {
-          "key": "video.clipConfirm",
+          "key": "video:clip-confirm",
           "count": 1
         },
         {
-          "key": "video.crop",
+          "key": "video:crop",
           "count": 1
         },
         {
-          "key": "video.cropCancel",
+          "key": "video:crop-cancel",
           "count": 1
         },
         {
-          "key": "video.cropConfirm",
+          "key": "video:crop-confirm",
           "count": 1
         },
         {
-          "key": "video.download",
+          "key": "video:download",
           "count": 1
         },
         {
-          "key": "video.resetClip",
+          "key": "video:reset-clip",
           "count": 1
         },
         {
-          "key": "video.resetCrop",
+          "key": "video:reset-crop",
           "count": 1
+        },
+        {
+          "key": "video:to-audio",
+          "count": 1
+        },
+        {
+          "key": "video:upload",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/region",
+      "keys": [
+        {
+          "key": "*/out:bottom",
+          "count": 1
+        },
+        {
+          "key": "*/out:top",
+          "count": 1
+        },
+        {
+          "key": "*/over:inset",
+          "count": 2
+        },
+        {
+          "key": "image/over:inset",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "ui",
+      "keys": [
+        {
+          "key": "audioPreview",
+          "count": 1
+        },
+        {
+          "key": "button",
+          "count": 1
+        },
+        {
+          "key": "color",
+          "count": 1
+        },
+        {
+          "key": "connectionLine",
+          "count": 1
+        },
+        {
+          "key": "dropdown",
+          "count": 2
+        },
+        {
+          "key": "effectLibraryOverlay",
+          "count": 1
+        },
+        {
+          "key": "mediaViewer",
+          "count": 1
+        },
+        {
+          "key": "movingHandle",
+          "count": 1
+        },
+        {
+          "key": "nodeEmptyState",
+          "count": 1
+        },
+        {
+          "key": "nodeModeBottomBar",
+          "count": 1
+        },
+        {
+          "key": "nodeModeTopBar",
+          "count": 1
+        },
+        {
+          "key": "select",
+          "count": 1
+        },
+        {
+          "key": "slider",
+          "count": 1
+        },
+        {
+          "key": "slotDebugPopover",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryCard",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryDetail",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryGallery",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryOverlay",
+          "count": 1
+        },
+        {
+          "key": "textPreview",
+          "count": 1
+        },
+        {
+          "key": "toolParamField",
+          "count": 1
+        },
+        {
+          "key": "toolParamGrid",
+          "count": 1
+        },
+        {
+          "key": "toolParamGroup",
+          "count": 1
+        },
+        {
+          "key": "toolParamRatio",
+          "count": 1
+        },
+        {
+          "key": "toolParamSlider",
+          "count": 1
+        },
+        {
+          "key": "toolbarButton",
+          "count": 1
+        },
+        {
+          "key": "toolbarDropdown",
+          "count": 1
+        },
+        {
+          "key": "tooltip",
+          "count": 1
+        },
+        {
+          "key": "videoPreview",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "keys": [
+        {
+          "key": "actions/text:delete",
+          "count": 1
+        },
+        {
+          "key": "actions/text:duplicate",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:apimart-image",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:chatgpt-image",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:dola-image-seedream50pro",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:dola-video-seedance25",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:doubao-image-seedream45",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:doubao-image-seedream50lite",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:doubao-tts",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:doubao-video-api-mini",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:doubao-video-fast",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:seedance-video-fast",
+          "count": 1
+        },
+        {
+          "key": "actions/web2api:volcengine-audio",
+          "count": 1
+        },
+        {
+          "key": "appliers/audio",
+          "count": 1
+        },
+        {
+          "key": "appliers/text",
+          "count": 1
+        },
+        {
+          "key": "appliers/video",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "clipboard/copy",
+      "keys": [
+        {
+          "key": "copy",
+          "count": 1
+        },
+        {
+          "key": "cut",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "clipboard/paste",
+      "keys": [
+        {
+          "key": "paste",
+          "count": 3
         }
       ]
     },
@@ -1032,113 +1196,7 @@
       ]
     },
     {
-      "kind": "node/region",
-      "keys": [
-        {
-          "key": "*/over:inset",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "keys": [
-        {
-          "key": "image.download",
-          "count": 1
-        },
-        {
-          "key": "image.rotate",
-          "count": 1
-        },
-        {
-          "key": "text.delete",
-          "count": 1
-        },
-        {
-          "key": "text.duplicate",
-          "count": 1
-        },
-        {
-          "key": "video.clip",
-          "count": 1
-        },
-        {
-          "key": "web2api:apimart-image",
-          "count": 1
-        },
-        {
-          "key": "web2api:chatgpt-image",
-          "count": 1
-        },
-        {
-          "key": "web2api:dola-image-seedream45",
-          "count": 1
-        },
-        {
-          "key": "web2api:dola-image-seedream50pro",
-          "count": 1
-        },
-        {
-          "key": "web2api:dola-video-seedance10",
-          "count": 1
-        },
-        {
-          "key": "web2api:dola-video-seedance20",
-          "count": 1
-        },
-        {
-          "key": "web2api:dola-video-seedance25",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-image-seedream40",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-image-seedream45",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-image-seedream50lite",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-tts",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-video-api-fast",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-video-api-mini",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-video-fast",
-          "count": 1
-        },
-        {
-          "key": "web2api:doubao-video-mini",
-          "count": 1
-        },
-        {
-          "key": "web2api:seedance-video-20",
-          "count": 1
-        },
-        {
-          "key": "web2api:seedance-video-fast",
-          "count": 1
-        },
-        {
-          "key": "web2api:volcengine-audio",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "kind": "node/bar-applier",
+      "kind": "media/creator",
       "keys": [
         {
           "key": "audio",
@@ -1146,76 +1204,6 @@
         },
         {
           "key": "image",
-          "count": 1
-        },
-        {
-          "key": "text",
-          "count": 1
-        },
-        {
-          "key": "video",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "kind": "node/type",
-      "keys": [
-        {
-          "key": "3d-preview",
-          "count": 1
-        },
-        {
-          "key": "audio",
-          "count": 1
-        },
-        {
-          "key": "connection-menu",
-          "count": 1
-        },
-        {
-          "key": "group",
-          "count": 1
-        },
-        {
-          "key": "image",
-          "count": 1
-        },
-        {
-          "key": "image-compare",
-          "count": 1
-        },
-        {
-          "key": "text",
-          "count": 1
-        },
-        {
-          "key": "video",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "kind": "node/creator",
-      "keys": [
-        {
-          "key": "3d-preview",
-          "count": 1
-        },
-        {
-          "key": "audio",
-          "count": 1
-        },
-        {
-          "key": "image",
-          "count": 1
-        },
-        {
-          "key": "image-compare",
-          "count": 1
-        },
-        {
-          "key": "text",
           "count": 1
         },
         {
@@ -1230,6 +1218,13 @@
     }
   ],
   "registryEntries": [
+    {
+      "kind": "capability",
+      "key": "media",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
+    },
     {
       "kind": "capability",
       "key": "node",
@@ -1260,374 +1255,17 @@
     },
     {
       "kind": "capability",
-      "key": "zoom",
+      "key": "upstream",
       "id": "host:standard",
       "order": 100,
       "source": "<host>"
     },
     {
-      "kind": "theme",
-      "key": "background",
-      "id": "theme-default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "theme",
-      "key": "bottomBar",
-      "id": "bottom-bar",
-      "order": 0,
-      "source": "bottom-bar"
-    },
-    {
-      "kind": "theme",
-      "key": "connectionLine",
-      "id": "theme-default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "theme",
-      "key": "edge",
-      "id": "theme-default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "theme",
-      "key": "edgeDefaultType",
-      "id": "theme-default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "theme",
-      "key": "nodeShell",
-      "id": "theme-default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "theme",
-      "key": "nodeShell:connection-menu",
-      "id": "context-menu",
-      "order": 0,
-      "source": "context-menu"
-    },
-    {
-      "kind": "theme",
-      "key": "settingsPanel",
-      "id": "ui-settings-panel",
-      "order": -1,
-      "source": "ui-settings-panel"
-    },
-    {
-      "kind": "theme",
-      "key": "settingsPanel",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "audioPreview",
-      "id": "node-audio",
-      "order": 0,
-      "source": "audio"
-    },
-    {
-      "kind": "ui",
-      "key": "button",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "color",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "connectionLine",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "dropdown",
-      "id": "ui-dropdown",
-      "order": -1,
-      "source": "ui-dropdown"
-    },
-    {
-      "kind": "ui",
-      "key": "dropdown",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "effectLibraryOverlay",
-      "id": "default",
-      "order": 0,
-      "source": "style-library"
-    },
-    {
-      "kind": "ui",
-      "key": "mediaViewer",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "movingHandle",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "select",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "slider",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "styleLibraryCard",
-      "id": "default",
-      "order": 0,
-      "source": "style-library"
-    },
-    {
-      "kind": "ui",
-      "key": "styleLibraryDetail",
-      "id": "default",
-      "order": 0,
-      "source": "style-library"
-    },
-    {
-      "kind": "ui",
-      "key": "styleLibraryGallery",
-      "id": "default",
-      "order": 0,
-      "source": "style-library"
-    },
-    {
-      "kind": "ui",
-      "key": "styleLibraryOverlay",
-      "id": "default",
-      "order": 0,
-      "source": "style-library"
-    },
-    {
-      "kind": "ui",
-      "key": "textPreview",
-      "id": "node-text",
-      "order": 0,
-      "source": "text"
-    },
-    {
-      "kind": "ui",
-      "key": "toolParamField",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "toolParamGrid",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "toolParamGroup",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "toolParamRatio",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "toolParamSlider",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "tooltip",
-      "id": "default",
-      "order": 0,
-      "source": "theme-default"
-    },
-    {
-      "kind": "ui",
-      "key": "videoPreview",
-      "id": "node-video",
-      "order": 0,
-      "source": "video"
-    },
-    {
-      "kind": "slot",
-      "key": "agent-conversation",
-      "id": "agent-conversation",
-      "order": 60,
-      "source": "agent"
-    },
-    {
-      "kind": "slot",
-      "key": "mini-map",
-      "id": "mini-map",
-      "order": 80,
-      "source": "mini-map"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "multi-select-box",
-      "order": 30,
-      "source": "multi-select"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "group-top-toolbar",
-      "order": 35,
-      "source": "group"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "bottom-bar/host",
-      "order": 40,
-      "source": "bottom-bar"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "multi-select-frame",
-      "order": 40,
-      "source": "multi-select"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "bottom-bar/reference-select",
-      "order": 41,
-      "source": "bottom-bar"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "bottom-bar/media-preview",
-      "order": 42,
-      "source": "bottom-bar"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "cursor-effect-overlay",
-      "order": 45,
-      "source": "cursor-effect"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "style-library/overlay",
-      "order": 46,
-      "source": "style-library"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "effect-library/overlay",
-      "order": 47,
-      "source": "style-library"
-    },
-    {
-      "kind": "slot",
-      "key": "overlay",
-      "id": "align-guide",
-      "order": 60,
-      "source": "align-guide"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsGroup/Agent",
-      "id": "agent-page",
-      "order": 5,
-      "source": "agent"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsGroup/光标",
-      "id": "cursor-effect-page",
-      "order": 7,
-      "source": "cursor-effect"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsGroup/插件",
-      "id": "plugin-manager-page",
-      "order": 6,
-      "source": "plugin-manager"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsGroup/热重载",
-      "id": "ui-hot-reload-page",
-      "order": 90,
-      "source": "ui-hot-reload"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsNav",
-      "id": "Agent",
-      "order": 5,
-      "source": "agent"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsNav",
-      "id": "插件",
-      "order": 6,
-      "source": "plugin-manager"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsNav",
-      "id": "光标",
-      "order": 7,
-      "source": "cursor-effect"
-    },
-    {
-      "kind": "slot",
-      "key": "settingsNav",
-      "id": "热重载",
-      "order": 90,
-      "source": "ui-hot-reload"
+      "kind": "capability",
+      "key": "zoom",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
     },
     {
       "kind": "command",
@@ -1771,8 +1409,8 @@
     },
     {
       "kind": "command",
-      "key": "audio.download",
-      "id": "audio.download#0",
+      "key": "audio:download",
+      "id": "audio:download#0",
       "order": 0,
       "source": "audio",
       "fields": [
@@ -1781,8 +1419,8 @@
     },
     {
       "kind": "command",
-      "key": "audio.reanalyze",
-      "id": "audio.reanalyze#0",
+      "key": "audio:reanalyze",
+      "id": "audio:reanalyze#0",
       "order": 0,
       "source": "audio",
       "fields": [
@@ -1791,8 +1429,8 @@
     },
     {
       "kind": "command",
-      "key": "audio.upload",
-      "id": "audio.upload#0",
+      "key": "audio:upload",
+      "id": "audio:upload#0",
       "order": 0,
       "source": "audio",
       "fields": [
@@ -1803,6 +1441,16 @@
       "kind": "command",
       "key": "auto-layout:fit-view",
       "id": "auto-layout:fit-view#0",
+      "order": 0,
+      "source": "auto-layout",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "auto-layout:focus-node",
+      "id": "auto-layout:focus-node#0",
       "order": 0,
       "source": "auto-layout",
       "fields": [
@@ -1891,6 +1539,46 @@
     },
     {
       "kind": "command",
+      "key": "command:create-node",
+      "id": "command:create-node#0",
+      "order": 0,
+      "source": "canvas-base",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "command:delete",
+      "id": "command:delete#0",
+      "order": 0,
+      "source": "canvas-base",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "command:redo",
+      "id": "command:redo#0",
+      "order": 0,
+      "source": "canvas-base",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "command:undo",
+      "id": "command:undo#0",
+      "order": 0,
+      "source": "canvas-base",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
       "key": "context-menu:delete-edge",
       "id": "context-menu:delete-edge#0",
       "order": 0,
@@ -1941,8 +1629,8 @@
     },
     {
       "kind": "command",
-      "key": "image.crop",
-      "id": "image.crop#0",
+      "key": "image:crop",
+      "id": "image:crop#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -1951,8 +1639,8 @@
     },
     {
       "kind": "command",
-      "key": "image.cropCancel",
-      "id": "image.cropCancel#0",
+      "key": "image:crop-cancel",
+      "id": "image:crop-cancel#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -1961,8 +1649,8 @@
     },
     {
       "kind": "command",
-      "key": "image.cropConfirm",
-      "id": "image.cropConfirm#0",
+      "key": "image:crop-confirm",
+      "id": "image:crop-confirm#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -1971,8 +1659,8 @@
     },
     {
       "kind": "command",
-      "key": "image.download",
-      "id": "image.download#0",
+      "key": "image:download",
+      "id": "image:download#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -1981,8 +1669,8 @@
     },
     {
       "kind": "command",
-      "key": "image.expand",
-      "id": "image.expand#0",
+      "key": "image:expand",
+      "id": "image:expand#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -1991,8 +1679,8 @@
     },
     {
       "kind": "command",
-      "key": "image.expandCancel",
-      "id": "image.expandCancel#0",
+      "key": "image:expand-cancel",
+      "id": "image:expand-cancel#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -2001,8 +1689,8 @@
     },
     {
       "kind": "command",
-      "key": "image.expandConfirm",
-      "id": "image.expandConfirm#0",
+      "key": "image:expand-confirm",
+      "id": "image:expand-confirm#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -2011,8 +1699,8 @@
     },
     {
       "kind": "command",
-      "key": "image.rotate",
-      "id": "image.rotate#0",
+      "key": "image:paint-cancel",
+      "id": "image:paint-cancel#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -2021,8 +1709,58 @@
     },
     {
       "kind": "command",
-      "key": "image.upload",
-      "id": "image.upload#0",
+      "key": "image:paint-clear",
+      "id": "image:paint-clear#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image:paint-confirm",
+      "id": "image:paint-confirm#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image:paint-redo",
+      "id": "image:paint-redo#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image:paint-undo",
+      "id": "image:paint-undo#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image:rotate",
+      "id": "image:rotate#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image:upload",
+      "id": "image:upload#0",
       "order": 0,
       "source": "image",
       "fields": [
@@ -2071,6 +1809,66 @@
     },
     {
       "kind": "command",
+      "key": "node-ui:clear",
+      "id": "node-ui:clear#0",
+      "order": 0,
+      "source": "node-ui",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "node-ui:get-context",
+      "id": "node-ui:get-context#0",
+      "order": 0,
+      "source": "node-ui",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "node-ui:set-html",
+      "id": "node-ui:set-html#0",
+      "order": 0,
+      "source": "node-ui",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "shell:open-drawer",
+      "id": "shell:open-drawer#0",
+      "order": 0,
+      "source": "<host>",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "shell:open-drawer-tab",
+      "id": "shell:open-drawer-tab#0",
+      "order": 0,
+      "source": "<host>",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "shell:toggle-drawer",
+      "id": "shell:toggle-drawer#0",
+      "order": 0,
+      "source": "<host>",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
       "key": "style-library:open",
       "id": "style-library:open#0",
       "order": 0,
@@ -2081,8 +1879,8 @@
     },
     {
       "kind": "command",
-      "key": "text.delete",
-      "id": "text.delete#0",
+      "key": "text:delete",
+      "id": "text:delete#0",
       "order": 0,
       "source": "text",
       "fields": [
@@ -2091,10 +1889,60 @@
     },
     {
       "kind": "command",
-      "key": "text.duplicate",
-      "id": "text.duplicate#0",
+      "key": "text:duplicate",
+      "id": "text:duplicate#0",
       "order": 0,
       "source": "text",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "ui:import-pack:0304fc6e-6eb5-44ab-8209-fc1999817424",
+      "id": "ui:import-pack:0304fc6e-6eb5-44ab-8209-fc1999817424#0",
+      "order": 0,
+      "source": "ui-asset-upload",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "ui:import-pack:62fc2277-4e8d-4563-8e83-37006ac75e8f",
+      "id": "ui:import-pack:62fc2277-4e8d-4563-8e83-37006ac75e8f#0",
+      "order": 0,
+      "source": "ui-asset-upload",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "ui:import-pack:b0ae037b-f9e9-4b17-99af-0e82d5406318",
+      "id": "ui:import-pack:b0ae037b-f9e9-4b17-99af-0e82d5406318#0",
+      "order": 0,
+      "source": "ui-asset-upload",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "ui:import-pack:e1d2e5aa-d34e-427b-8ad8-7ee8b0038066",
+      "id": "ui:import-pack:e1d2e5aa-d34e-427b-8ad8-7ee8b0038066#0",
+      "order": 0,
+      "source": "ui-asset-upload",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "ui:node-export-pack",
+      "id": "ui:node-export-pack#0",
+      "order": 0,
+      "source": "ui-asset-upload",
       "fields": [
         "def"
       ]
@@ -2111,8 +1959,8 @@
     },
     {
       "kind": "command",
-      "key": "video.captureFrame",
-      "id": "video.captureFrame#0",
+      "key": "video:capture-frame",
+      "id": "video:capture-frame#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2121,8 +1969,8 @@
     },
     {
       "kind": "command",
-      "key": "video.clip",
-      "id": "video.clip#0",
+      "key": "video:clip",
+      "id": "video:clip#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2131,8 +1979,8 @@
     },
     {
       "kind": "command",
-      "key": "video.clipCancel",
-      "id": "video.clipCancel#0",
+      "key": "video:clip-cancel",
+      "id": "video:clip-cancel#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2141,8 +1989,8 @@
     },
     {
       "kind": "command",
-      "key": "video.clipConfirm",
-      "id": "video.clipConfirm#0",
+      "key": "video:clip-confirm",
+      "id": "video:clip-confirm#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2151,8 +1999,8 @@
     },
     {
       "kind": "command",
-      "key": "video.crop",
-      "id": "video.crop#0",
+      "key": "video:crop",
+      "id": "video:crop#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2161,8 +2009,8 @@
     },
     {
       "kind": "command",
-      "key": "video.cropCancel",
-      "id": "video.cropCancel#0",
+      "key": "video:crop-cancel",
+      "id": "video:crop-cancel#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2171,8 +2019,8 @@
     },
     {
       "kind": "command",
-      "key": "video.cropConfirm",
-      "id": "video.cropConfirm#0",
+      "key": "video:crop-confirm",
+      "id": "video:crop-confirm#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2181,8 +2029,8 @@
     },
     {
       "kind": "command",
-      "key": "video.download",
-      "id": "video.download#0",
+      "key": "video:download",
+      "id": "video:download#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2191,8 +2039,8 @@
     },
     {
       "kind": "command",
-      "key": "video.resetClip",
-      "id": "video.resetClip#0",
+      "key": "video:reset-clip",
+      "id": "video:reset-clip#0",
       "order": 0,
       "source": "video",
       "fields": [
@@ -2201,13 +2049,632 @@
     },
     {
       "kind": "command",
-      "key": "video.resetCrop",
-      "id": "video.resetCrop#0",
+      "key": "video:reset-crop",
+      "id": "video:reset-crop#0",
       "order": 0,
       "source": "video",
       "fields": [
         "def"
       ]
+    },
+    {
+      "kind": "command",
+      "key": "video:to-audio",
+      "id": "video:to-audio#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video:upload",
+      "id": "video:upload#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "node/region",
+      "key": "*/out:bottom",
+      "id": "theme-default/node-bottom-slot",
+      "order": 0,
+      "source": "theme-default",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "node/region",
+      "key": "*/out:top",
+      "id": "theme-default/node-top-slot",
+      "order": 0,
+      "source": "theme-default",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "node/region",
+      "key": "*/over:inset",
+      "id": "bottom-bar/overlay",
+      "order": 0,
+      "source": "bottom-bar",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "node/region",
+      "key": "*/over:inset",
+      "id": "bottom-bar/select-node",
+      "order": 0,
+      "source": "bottom-bar",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "node/region",
+      "key": "image/over:inset",
+      "id": "image-grid-split/overlay",
+      "order": 10,
+      "source": "image-grid-split"
+    },
+    {
+      "kind": "ui",
+      "key": "audioPreview",
+      "id": "node-audio",
+      "order": 0,
+      "source": "audio"
+    },
+    {
+      "kind": "ui",
+      "key": "button",
+      "id": "legacy-button-alias",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "color",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "connectionLine",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "dropdown",
+      "id": "ui-dropdown",
+      "order": -1,
+      "source": "ui-dropdown"
+    },
+    {
+      "kind": "ui",
+      "key": "dropdown",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "effectLibraryOverlay",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "mediaViewer",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "movingHandle",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "nodeEmptyState",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "nodeModeBottomBar",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "nodeModeTopBar",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "select",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "slider",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "slotDebugPopover",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryCard",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryDetail",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryGallery",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryOverlay",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "textPreview",
+      "id": "node-text",
+      "order": 0,
+      "source": "text"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamField",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamGrid",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamGroup",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamRatio",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamSlider",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolbarButton",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolbarDropdown",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "tooltip",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "videoPreview",
+      "id": "node-video",
+      "order": 0,
+      "source": "video"
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/text:delete",
+      "id": "text:delete",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "apply",
+        "order",
+        "description",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/text:duplicate",
+      "id": "text:duplicate",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "apply",
+        "order",
+        "description",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:apimart-image",
+      "id": "web2api:apimart-image",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:chatgpt-image",
+      "id": "web2api:chatgpt-image",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:dola-image-seedream50pro",
+      "id": "web2api:dola-image-seedream50pro",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:dola-video-seedance25",
+      "id": "web2api:dola-video-seedance25",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:doubao-image-seedream45",
+      "id": "web2api:doubao-image-seedream45",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:doubao-image-seedream50lite",
+      "id": "web2api:doubao-image-seedream50lite",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:doubao-tts",
+      "id": "web2api:doubao-tts",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:doubao-video-api-mini",
+      "id": "web2api:doubao-video-api-mini",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:doubao-video-fast",
+      "id": "web2api:doubao-video-fast",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:seedance-video-fast",
+      "id": "web2api:seedance-video-fast",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "actions/web2api:volcengine-audio",
+      "id": "web2api:volcengine-audio",
+      "order": 0,
+      "source": "cloud-client",
+      "fields": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "order",
+        "needsPrompt",
+        "fields",
+        "types",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel",
+        "externalRunState"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "appliers/audio",
+      "id": "audio",
+      "order": 0,
+      "source": "cloud-client"
+    },
+    {
+      "kind": "node/bar",
+      "key": "appliers/text",
+      "id": "text",
+      "order": 0,
+      "source": "text"
+    },
+    {
+      "kind": "node/bar",
+      "key": "appliers/video",
+      "id": "video",
+      "order": 0,
+      "source": "cloud-client"
+    },
+    {
+      "kind": "clipboard/copy",
+      "key": "copy",
+      "id": "clipboard",
+      "order": 10,
+      "source": "clipboard"
+    },
+    {
+      "kind": "clipboard/copy",
+      "key": "cut",
+      "id": "clipboard",
+      "order": 10,
+      "source": "clipboard"
+    },
+    {
+      "kind": "clipboard/paste",
+      "key": "paste",
+      "id": "clipboard",
+      "order": 10,
+      "source": "clipboard"
+    },
+    {
+      "kind": "clipboard/paste",
+      "key": "paste",
+      "id": "file-drop:media",
+      "order": 20,
+      "source": "file-drop"
+    },
+    {
+      "kind": "clipboard/paste",
+      "key": "paste",
+      "id": "file-drop:text",
+      "order": 30,
+      "source": "file-drop"
     },
     {
       "kind": "selection/region",
@@ -2246,809 +2713,102 @@
       ]
     },
     {
-      "kind": "node/region",
-      "key": "*/over:inset",
-      "id": "bottom-bar/overlay",
-      "order": 0,
-      "source": "bottom-bar",
-      "fields": [
-        "component",
-        "needs",
-        "props"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "image.download",
-      "id": "image.download",
-      "order": 0,
-      "source": "image",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "apply",
-        "order",
-        "description",
-        "run"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "image.rotate",
-      "id": "image.rotate",
-      "order": 0,
-      "source": "image",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "apply",
-        "order",
-        "description",
-        "run"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "text.delete",
-      "id": "text.delete",
-      "order": 0,
-      "source": "text",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "apply",
-        "order",
-        "description",
-        "run"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "text.duplicate",
-      "id": "text.duplicate",
-      "order": 0,
-      "source": "text",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "apply",
-        "order",
-        "description",
-        "run"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "video.clip",
-      "id": "video.clip",
-      "order": 0,
-      "source": "video",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "panel",
-        "needsPrompt",
-        "apply",
-        "description",
-        "onSelect",
-        "onDeselect",
-        "run"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:apimart-image",
-      "id": "web2api:apimart-image",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:chatgpt-image",
-      "id": "web2api:chatgpt-image",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:dola-image-seedream45",
-      "id": "web2api:dola-image-seedream45",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:dola-image-seedream50pro",
-      "id": "web2api:dola-image-seedream50pro",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:dola-video-seedance10",
-      "id": "web2api:dola-video-seedance10",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:dola-video-seedance20",
-      "id": "web2api:dola-video-seedance20",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:dola-video-seedance25",
-      "id": "web2api:dola-video-seedance25",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-image-seedream40",
-      "id": "web2api:doubao-image-seedream40",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-image-seedream45",
-      "id": "web2api:doubao-image-seedream45",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-image-seedream50lite",
-      "id": "web2api:doubao-image-seedream50lite",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-tts",
-      "id": "web2api:doubao-tts",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-video-api-fast",
-      "id": "web2api:doubao-video-api-fast",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-video-api-mini",
-      "id": "web2api:doubao-video-api-mini",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-video-fast",
-      "id": "web2api:doubao-video-fast",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:doubao-video-mini",
-      "id": "web2api:doubao-video-mini",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:seedance-video-20",
-      "id": "web2api:seedance-video-20",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:seedance-video-fast",
-      "id": "web2api:seedance-video-fast",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar",
-      "key": "web2api:volcengine-audio",
-      "id": "web2api:volcengine-audio",
-      "order": 0,
-      "source": "web2api-tools",
-      "fields": [
-        "id",
-        "types",
-        "title",
-        "description",
-        "group",
-        "needsPrompt",
-        "fields",
-        "order",
-        "pollIntervalMs",
-        "pollTimeoutMs",
-        "run",
-        "resume",
-        "onCancel"
-      ]
-    },
-    {
-      "kind": "node/bar-applier",
+      "kind": "media/creator",
       "key": "audio",
-      "id": "audio",
-      "order": 0,
-      "source": "cloud-client"
-    },
-    {
-      "kind": "node/bar-applier",
-      "key": "image",
-      "id": "image",
-      "order": 0,
-      "source": "image"
-    },
-    {
-      "kind": "node/bar-applier",
-      "key": "text",
-      "id": "text",
-      "order": 0,
-      "source": "text"
-    },
-    {
-      "kind": "node/bar-applier",
-      "key": "video",
-      "id": "video",
-      "order": 0,
-      "source": "cloud-client"
-    },
-    {
-      "kind": "node/type",
-      "key": "3d-preview",
-      "id": "3d-preview#0",
-      "order": 0,
-      "source": "3d-preview",
-      "fields": [
-        "type",
-        "label"
-      ]
-    },
-    {
-      "kind": "node/type",
-      "key": "audio",
-      "id": "audio#0",
+      "id": "node-audio",
       "order": 0,
       "source": "audio",
       "fields": [
-        "type",
-        "label"
+        "addNode",
+        "applyToNode"
       ]
     },
     {
-      "kind": "node/type",
-      "key": "connection-menu",
-      "id": "connection-menu#0",
-      "order": 0,
-      "source": "context-menu",
-      "fields": [
-        "type",
-        "label"
-      ]
-    },
-    {
-      "kind": "node/type",
-      "key": "group",
-      "id": "group#0",
-      "order": 0,
-      "source": "group",
-      "fields": [
-        "type",
-        "label"
-      ]
-    },
-    {
-      "kind": "node/type",
+      "kind": "media/creator",
       "key": "image",
-      "id": "image#0",
+      "id": "node-image",
       "order": 0,
       "source": "image",
       "fields": [
-        "type",
-        "label"
+        "addNode",
+        "applyToNode"
       ]
     },
     {
-      "kind": "node/type",
-      "key": "image-compare",
-      "id": "image-compare#0",
-      "order": 0,
-      "source": "image-compare",
-      "fields": [
-        "type",
-        "label"
-      ]
-    },
-    {
-      "kind": "node/type",
-      "key": "text",
-      "id": "text#0",
-      "order": 0,
-      "source": "text",
-      "fields": [
-        "type",
-        "label"
-      ]
-    },
-    {
-      "kind": "node/type",
+      "kind": "media/creator",
       "key": "video",
-      "id": "video#0",
+      "id": "node-video",
       "order": 0,
       "source": "video",
       "fields": [
-        "type",
-        "label"
+        "addNode",
+        "applyToNode"
       ]
-    },
-    {
-      "kind": "node/creator",
-      "key": "3d-preview",
-      "id": "3d-preview#0",
-      "order": 0,
-      "source": "3d-preview"
-    },
-    {
-      "kind": "node/creator",
-      "key": "audio",
-      "id": "audio#0",
-      "order": 0,
-      "source": "audio"
-    },
-    {
-      "kind": "node/creator",
-      "key": "image",
-      "id": "image#0",
-      "order": 0,
-      "source": "image"
-    },
-    {
-      "kind": "node/creator",
-      "key": "image-compare",
-      "id": "image-compare#0",
-      "order": 0,
-      "source": "image-compare"
-    },
-    {
-      "kind": "node/creator",
-      "key": "text",
-      "id": "text#0",
-      "order": 0,
-      "source": "text"
-    },
-    {
-      "kind": "node/creator",
-      "key": "video",
-      "id": "video#0",
-      "order": 0,
-      "source": "video"
     }
   ],
   "commands": [
     {
-      "id": "ui:node-save-to-assets",
-      "title": "加入资产库",
-      "areas": [
-        "node"
+      "id": "command:delete",
+      "title": "删除选中",
+      "keys": [
+        "Delete",
+        "Backspace"
       ],
-      "group": "节点",
-      "order": 21,
-      "source": "ui-asset-upload",
+      "source": "canvas-base",
       "origin": "field"
     },
     {
-      "id": "text.duplicate",
+      "id": "command:create-node",
+      "title": "创建节点",
+      "source": "canvas-base",
+      "origin": "field"
+    },
+    {
+      "id": "command:undo",
+      "title": "撤销",
+      "keys": [
+        "mod+z"
+      ],
+      "source": "canvas-base",
+      "origin": "field"
+    },
+    {
+      "id": "command:redo",
+      "title": "重做",
+      "keys": [
+        "mod+shift+z"
+      ],
+      "source": "canvas-base",
+      "origin": "field"
+    },
+    {
+      "id": "text:duplicate",
       "title": "复制文本节点",
       "source": "text",
       "origin": "field"
     },
     {
-      "id": "text.delete",
+      "id": "text:delete",
       "title": "删除文本节点",
       "source": "text",
       "origin": "field"
     },
     {
-      "id": "image.upload",
-      "title": "上传图片",
-      "source": "image",
+      "id": "node-ui:get-context",
+      "title": "读取可视化节点的上下文",
+      "source": "node-ui",
       "origin": "field"
     },
     {
-      "id": "image.crop",
-      "title": "裁剪图片",
-      "source": "image",
+      "id": "node-ui:set-html",
+      "title": "写入可视化 HTML",
+      "source": "node-ui",
       "origin": "field"
     },
     {
-      "id": "image.cropConfirm",
-      "title": "确认裁剪",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "image.cropCancel",
-      "title": "取消裁剪",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "image.expand",
-      "title": "扩展图片",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "image.expandConfirm",
-      "title": "确认扩展",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "image.expandCancel",
-      "title": "取消扩展",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "image.rotate",
-      "title": "旋转图片",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "image.download",
-      "title": "下载图片",
-      "source": "image",
-      "origin": "field"
-    },
-    {
-      "id": "video.crop",
-      "title": "裁剪视频画面",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.cropConfirm",
-      "title": "确认裁剪",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.cropCancel",
-      "title": "取消裁剪",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.resetCrop",
-      "title": "恢复整幅画面",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.clip",
-      "title": "剪辑视频",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.clipConfirm",
-      "title": "确认剪辑",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.clipCancel",
-      "title": "取消剪辑",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.resetClip",
-      "title": "恢复整段时长",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.captureFrame",
-      "title": "截取当前帧为图片节点",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "video.download",
-      "title": "下载视频",
-      "source": "video",
-      "origin": "field"
-    },
-    {
-      "id": "audio.upload",
-      "title": "上传音频",
-      "source": "audio",
-      "origin": "field"
-    },
-    {
-      "id": "audio.download",
-      "title": "下载音频",
-      "source": "audio",
-      "origin": "field"
-    },
-    {
-      "id": "audio.reanalyze",
-      "title": "刷新波形与时长",
-      "source": "audio",
+      "id": "node-ui:clear",
+      "title": "清空可视化节点",
+      "source": "node-ui",
       "origin": "field"
     },
     {
@@ -3074,6 +2834,293 @@
       "origin": "field"
     },
     {
+      "id": "context-menu:delete-node",
+      "title": "删除节点",
+      "areas": [
+        "node"
+      ],
+      "group": "节点",
+      "order": 10,
+      "source": "context-menu",
+      "origin": "field"
+    },
+    {
+      "id": "context-menu:delete-edge",
+      "title": "删除连线",
+      "areas": [
+        "edge"
+      ],
+      "group": "连线",
+      "order": 10,
+      "source": "context-menu",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:copy",
+      "title": "复制选中节点",
+      "keys": [
+        "mod+c"
+      ],
+      "areas": [
+        "node"
+      ],
+      "group": "clipboard",
+      "order": 10,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:paste",
+      "title": "粘贴",
+      "keys": [
+        "mod+v"
+      ],
+      "areas": [
+        "pane"
+      ],
+      "group": "clipboard",
+      "order": 20,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:cut",
+      "title": "剪切选中节点",
+      "keys": [
+        "mod+x"
+      ],
+      "group": "clipboard",
+      "order": 30,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:duplicate",
+      "title": "复制一份选中节点",
+      "keys": [
+        "mod+d"
+      ],
+      "areas": [
+        "node"
+      ],
+      "group": "clipboard",
+      "order": 40,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "multi-select:select-all",
+      "title": "全选节点",
+      "keys": [
+        "mod+a"
+      ],
+      "order": 10,
+      "source": "multi-select",
+      "origin": "field"
+    },
+    {
+      "id": "multi-select:clear",
+      "title": "清除选中",
+      "keys": [
+        "Escape"
+      ],
+      "order": 20,
+      "source": "multi-select",
+      "origin": "field"
+    },
+    {
+      "id": "group:create",
+      "title": "创建分组",
+      "keys": [
+        "ctrl+g"
+      ],
+      "source": "group",
+      "origin": "field"
+    },
+    {
+      "id": "group:ungroup",
+      "title": "解散分组",
+      "keys": [
+        "ctrl+shift+g"
+      ],
+      "source": "group",
+      "origin": "field"
+    },
+    {
+      "id": "image:upload",
+      "title": "上传图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:crop",
+      "title": "裁剪图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:crop-confirm",
+      "title": "确认裁剪",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:crop-cancel",
+      "title": "取消裁剪",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:expand",
+      "title": "扩展图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:expand-confirm",
+      "title": "确认扩展",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:expand-cancel",
+      "title": "取消扩展",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:paint-confirm",
+      "title": "保存绘制",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:paint-cancel",
+      "title": "取消绘制",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:paint-undo",
+      "title": "撤销绘制笔迹",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:paint-redo",
+      "title": "重做绘制笔迹",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:paint-clear",
+      "title": "清空绘制笔迹",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:rotate",
+      "title": "旋转图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image:download",
+      "title": "下载图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "video:upload",
+      "title": "上传视频",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:crop",
+      "title": "裁剪视频画面",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:crop-confirm",
+      "title": "确认裁剪",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:crop-cancel",
+      "title": "取消裁剪",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:reset-crop",
+      "title": "恢复整幅画面",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:clip",
+      "title": "剪辑视频",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:clip-confirm",
+      "title": "确认剪辑",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:clip-cancel",
+      "title": "取消剪辑",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:reset-clip",
+      "title": "恢复整段时长",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:capture-frame",
+      "title": "截取当前帧为图片节点",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:download",
+      "title": "下载视频",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video:to-audio",
+      "title": "视频转音频",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "audio:upload",
+      "title": "上传音频",
+      "source": "audio",
+      "origin": "field"
+    },
+    {
+      "id": "audio:download",
+      "title": "下载音频",
+      "source": "audio",
+      "origin": "field"
+    },
+    {
+      "id": "audio:reanalyze",
+      "title": "刷新波形与时长",
+      "source": "audio",
+      "origin": "field"
+    },
+    {
       "id": "agent:toggle",
       "title": "切换 Agent 面板",
       "keys": [
@@ -3092,6 +3139,188 @@
       "group": "节点",
       "order": 20,
       "source": "agent",
+      "origin": "field"
+    },
+    {
+      "id": "ui:node-save-to-assets",
+      "title": "收藏到资产库",
+      "areas": [
+        "node"
+      ],
+      "group": "节点",
+      "order": 21,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "ui:node-export-pack",
+      "title": "导出节点包",
+      "areas": [
+        "node"
+      ],
+      "group": "节点",
+      "order": 23,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "ui:import-pack:0304fc6e-6eb5-44ab-8209-fc1999817424",
+      "title": "可视化 1",
+      "areas": [
+        "pane"
+      ],
+      "group": "资源库/节点包",
+      "order": 10,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "ui:import-pack:e1d2e5aa-d34e-427b-8ad8-7ee8b0038066",
+      "title": "文本输入",
+      "areas": [
+        "pane"
+      ],
+      "group": "资源库/节点包",
+      "order": 10,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "ui:import-pack:62fc2277-4e8d-4563-8e83-37006ac75e8f",
+      "title": "文本预览",
+      "areas": [
+        "pane"
+      ],
+      "group": "资源库/节点包",
+      "order": 10,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "ui:import-pack:b0ae037b-f9e9-4b17-99af-0e82d5406318",
+      "title": "视频宫格图",
+      "areas": [
+        "pane"
+      ],
+      "group": "资源库/节点包",
+      "order": 10,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "shell:open-drawer",
+      "title": "打开左侧抽屉",
+      "source": "<host>",
+      "origin": "field"
+    },
+    {
+      "id": "shell:open-drawer-tab",
+      "title": "打开左侧抽屉页签",
+      "source": "<host>",
+      "origin": "field"
+    },
+    {
+      "id": "shell:toggle-drawer",
+      "title": "收起或展开左侧抽屉",
+      "source": "<host>",
+      "origin": "field"
+    },
+    {
+      "id": "canvas-export:full",
+      "title": "导出画布",
+      "keys": [
+        "mod+e"
+      ],
+      "group": "export",
+      "order": 10,
+      "source": "canvas-export",
+      "origin": "field"
+    },
+    {
+      "id": "canvas-export:selected",
+      "title": "导出选中节点",
+      "keys": [
+        "mod+shift+e"
+      ],
+      "group": "export",
+      "order": 20,
+      "source": "canvas-export",
+      "origin": "field"
+    },
+    {
+      "id": "mini-map:toggle",
+      "title": "切换小地图",
+      "keys": [
+        "mod+m"
+      ],
+      "order": 80,
+      "icon": "minimap",
+      "source": "mini-map",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:run",
+      "title": "自动布局",
+      "keys": [
+        "mod+l"
+      ],
+      "group": "auto-layout",
+      "order": 10,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:focus-selected",
+      "title": "聚焦选中节点",
+      "keys": [
+        "f"
+      ],
+      "group": "auto-layout",
+      "order": 20,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:fit-view",
+      "title": "适应视图",
+      "keys": [
+        "r"
+      ],
+      "group": "auto-layout",
+      "order": 30,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:focus-node",
+      "title": "聚焦指定节点",
+      "group": "auto-layout",
+      "order": 21,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "node-find:open",
+      "title": "搜索节点",
+      "keys": [
+        "mod+f"
+      ],
+      "order": 30,
+      "source": "node-find",
+      "origin": "field"
+    },
+    {
+      "id": "style-library:open",
+      "title": "打开风格库",
+      "order": 46,
+      "source": "style-library",
+      "origin": "field"
+    },
+    {
+      "id": "effect-library:open",
+      "title": "打开特效库",
+      "order": 47,
+      "source": "style-library",
       "origin": "field"
     },
     {
@@ -3197,243 +3426,6 @@
       "order": 33,
       "source": "align-arrange",
       "origin": "field"
-    },
-    {
-      "id": "auto-layout:run",
-      "title": "自动布局",
-      "keys": [
-        "mod+l"
-      ],
-      "group": "auto-layout",
-      "order": 10,
-      "source": "auto-layout",
-      "origin": "field"
-    },
-    {
-      "id": "auto-layout:focus-selected",
-      "title": "聚焦选中节点",
-      "keys": [
-        "f"
-      ],
-      "group": "auto-layout",
-      "order": 20,
-      "source": "auto-layout",
-      "origin": "field"
-    },
-    {
-      "id": "auto-layout:fit-view",
-      "title": "适应视图",
-      "keys": [
-        "r"
-      ],
-      "group": "auto-layout",
-      "order": 30,
-      "source": "auto-layout",
-      "origin": "field"
-    },
-    {
-      "id": "clipboard:copy",
-      "title": "复制选中节点",
-      "keys": [
-        "mod+c"
-      ],
-      "areas": [
-        "node"
-      ],
-      "group": "clipboard",
-      "order": 10,
-      "source": "clipboard",
-      "origin": "field"
-    },
-    {
-      "id": "clipboard:paste",
-      "title": "粘贴",
-      "keys": [
-        "mod+v"
-      ],
-      "areas": [
-        "pane"
-      ],
-      "group": "clipboard",
-      "order": 20,
-      "source": "clipboard",
-      "origin": "field"
-    },
-    {
-      "id": "clipboard:cut",
-      "title": "剪切选中节点",
-      "keys": [
-        "mod+x"
-      ],
-      "group": "clipboard",
-      "order": 30,
-      "source": "clipboard",
-      "origin": "field"
-    },
-    {
-      "id": "clipboard:duplicate",
-      "title": "复制一份选中节点",
-      "keys": [
-        "mod+d"
-      ],
-      "areas": [
-        "node"
-      ],
-      "group": "clipboard",
-      "order": 40,
-      "source": "clipboard",
-      "origin": "field"
-    },
-    {
-      "id": "canvas-export:full",
-      "title": "导出画布",
-      "keys": [
-        "mod+e"
-      ],
-      "group": "export",
-      "order": 10,
-      "source": "canvas-export",
-      "origin": "field"
-    },
-    {
-      "id": "canvas-export:selected",
-      "title": "导出选中节点",
-      "keys": [
-        "mod+shift+e"
-      ],
-      "group": "export",
-      "order": 20,
-      "source": "canvas-export",
-      "origin": "field"
-    },
-    {
-      "id": "context-menu:delete-node",
-      "title": "删除节点",
-      "areas": [
-        "node"
-      ],
-      "group": "节点",
-      "order": 10,
-      "source": "context-menu",
-      "origin": "field"
-    },
-    {
-      "id": "context-menu:delete-edge",
-      "title": "删除连线",
-      "areas": [
-        "edge"
-      ],
-      "group": "连线",
-      "order": 10,
-      "source": "context-menu",
-      "origin": "field"
-    },
-    {
-      "id": "mini-map:toggle",
-      "title": "切换小地图",
-      "keys": [
-        "mod+m"
-      ],
-      "order": 80,
-      "icon": "minimap",
-      "source": "mini-map",
-      "origin": "field"
-    },
-    {
-      "id": "group:create",
-      "title": "创建分组",
-      "keys": [
-        "ctrl+g"
-      ],
-      "source": "group",
-      "origin": "field"
-    },
-    {
-      "id": "group:ungroup",
-      "title": "解散分组",
-      "keys": [
-        "ctrl+shift+g"
-      ],
-      "source": "group",
-      "origin": "field"
-    },
-    {
-      "id": "multi-select:select-all",
-      "title": "全选节点",
-      "keys": [
-        "mod+a"
-      ],
-      "order": 10,
-      "source": "multi-select",
-      "origin": "field"
-    },
-    {
-      "id": "multi-select:clear",
-      "title": "清除选中",
-      "keys": [
-        "Escape"
-      ],
-      "order": 20,
-      "source": "multi-select",
-      "origin": "field"
-    },
-    {
-      "id": "node-find:open",
-      "title": "搜索节点",
-      "keys": [
-        "mod+f"
-      ],
-      "order": 30,
-      "source": "node-find",
-      "origin": "field"
-    },
-    {
-      "id": "style-library:open",
-      "title": "打开风格库",
-      "order": 46,
-      "source": "style-library",
-      "origin": "field"
-    },
-    {
-      "id": "effect-library:open",
-      "title": "打开特效库",
-      "order": 47,
-      "source": "style-library",
-      "origin": "field"
-    },
-    {
-      "id": "command:delete",
-      "title": "删除选中",
-      "keys": [
-        "Delete",
-        "Backspace"
-      ],
-      "source": "<service>",
-      "origin": "service"
-    },
-    {
-      "id": "command:create-node",
-      "title": "创建节点",
-      "source": "<service>",
-      "origin": "service"
-    },
-    {
-      "id": "command:undo",
-      "title": "撤销",
-      "keys": [
-        "mod+z"
-      ],
-      "source": "<service>",
-      "origin": "service"
-    },
-    {
-      "id": "command:redo",
-      "title": "重做",
-      "keys": [
-        "mod+shift+z"
-      ],
-      "source": "<service>",
-      "origin": "service"
     }
   ],
   "tools": [
@@ -4037,14 +4029,15 @@
     "canvas:context-menu:node",
     "canvas:context-menu:edge",
     "settings:ui-close",
-    "agent:ref-click",
+    "bottom-bar:ai-actions-changed",
     "clipboard:copy",
     "clipboard:cut",
     "clipboard:paste",
-    "canvas-export:exported",
     "canvas:connection-menu:pick",
     "canvas:connection-menu:cancel",
-    "edge-cutting:cut"
+    "edge-cutting:cut",
+    "agent:ref-click",
+    "canvas-export:exported"
   ],
   "plugins": [
     {

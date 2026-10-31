@@ -101,7 +101,7 @@ import { registerNodeType, validateConnection } from '@mini-canvas/canvas-data/c
 const base = createCanvasBasePlugin({ adapter })
 base.name      // 'canvas-base'
 base.plugin    // PluginModule，交给 ctx.plugin(...)；core: true（拒绝动态热卸）
-base.services  // 已建好的 12 件实例（外加条件注入的 settingsPersist）
+base.services  // 已建好的 12 件实例（外加条件持有的 settingsPersist）
 ~~~
 
 | `ctx.get('名字')` | 是什么 | 谁在消费 | 专页 |
@@ -109,16 +109,12 @@ base.services  // 已建好的 12 件实例（外加条件注入的 settingsPers
 | `'save'` | 键值持久化（可插拔后端） | 宿主、配置桥、云插件 | [save](/services/save) · [本组 storage](/canvas-data/storage) |
 | `'doc'` | **数据那一格唯一的名字**：节点 + 边 + 事务 + 撤销 + 快照 + 订阅 | 几乎每个插件 | [doc](/services/doc) |
 | `'resources'` | 资源生命周期（object URL 的登记与回收） | 图片 / 视频 / 音频节点 | [resources](/services/resources) |
-| `'nodeRegistry'` | 节点展示注册表（哪个 type 的哪个区域用哪个组件） | 节点插件、渲染宿主 | [nodeRegistry](/services/node-registry) |
-| `'themeRegistry'` | 主题槽注册表（壳 / 边 / 背景的当前赢家） | 主题插件、渲染宿主 | [themeRegistry](/services/theme-registry) |
 | `'selection'` | 选中集（节点 + 边两桶） | 右键菜单、群组框、删除 | [selection](/services/selection) |
-| `'command'` | 命令注册表（菜单 / 快捷键 / 按钮都指向它） | 全部插件 | [command](/services/command) |
-| `'nodeFactory'` | 建节点工厂（放一个 X 节点的唯一入口） | 菜单、右键、AI 工具 | [nodeFactory](/services/node-factory) |
-| `'settingsPersist'` | 配置落盘桥（**条件注入**：`persistSettings` 为真且 ctx 有 `settings` 才有） | 宿主启动时 `restore()` | [settingsPersist](/services/settings-persist) |
 
-只有 `services` 上才有、**不再是服务名**的四个实例：
-`nodeStore`（节点表）、`edgeStore`（边表）、`graph`（图写入口）、`history`（撤销栈）。
-渲染层要 `subscribe`、要按 id 反查，才直接拿它们；插件一律走 `doc`。
+只有 `services` 上才有、**不再是服务名**的实例：
+`nodeStore`（节点表）、`edgeStore`（边表）、`graph`（图写入口）、`history`（撤销栈）、
+`nodeRegistry`（展示容器）、`themeRegistry`（主题容器）、`command`（命令运行表）、`nodeFactory`（建节点工厂）、
+条件持有的 `settingsPersist`。渲染层要 `subscribe`、要按 id 反查，才直接拿它们；插件一律走 `doc` / `ctx.nodes` / `ctx.theme` / `ctx.commands` / `canvas` / `save.settings`。
 
 另有三件不在本包，但画布上一定有，别找错门：
 
@@ -126,7 +122,7 @@ base.services  // 已建好的 12 件实例（外加条件注入的 settingsPers
 | --- | --- | --- |
 | `'tools'` | **内核自带**（`new Context()` 就有） | [tools](/services/tools) |
 | `'slots'` / `'settings'` | **画布能力层内置**（连 `new Context()` 也有） | [slots](/services/slots) · [settings](/services/settings) |
-| `'nodeLayout'` / `'viewport'` / `'pluginManager'` | **渲染宿主**（要量 DOM、要拿 VueFlow 实例） | [nodeLayout](/services/node-layout) · [viewport](/services/viewport) · [pluginManager](/services/plugin-manager) |
+| `'view'` / `'canvas'` | **渲染宿主**（要量 DOM、要拿 VueFlow 实例） | [view](/services/view) · [canvas](/services/canvas) |
 
 ### 装配骨架：四步
 
@@ -177,8 +173,8 @@ const { host, api, manager } = await createMiniCanvasHost({
 })
 ~~~
 
-**顺序上只有一条硬规矩**：`nodeLayout` / `viewport` 这两个渲染层服务要在 `ctx.plugin(base.plugin)` **之前**
-`ctx.inject` 进去。理由很实际 —— 基础插件之后装的业务插件一 `start` 就会 `ctx.get('viewport')`，
+**顺序上只有一条硬规矩**：`view` / `canvas` 这两个渲染层服务要在 `ctx.plugin(base.plugin)` **之前**
+`ctx.inject` 进去。理由很实际 —— 基础插件之后装的业务插件一 `start` 就会 `ctx.get('view')`，
 晚注入的话它们只能拿到 `undefined`。细节见 [createMiniCanvasHost](/canvas-render/create-host)。
 
 ### 基础插件顺手做掉的三件事
@@ -189,16 +185,16 @@ const { host, api, manager } = await createMiniCanvasHost({
    （命令 id 常量是 `CANVAS_COMMAND`）。所以你不必再装一个"命令插件"才有 Delete 和 Ctrl+Z。
 2. **接好落盘** —— `GraphDocument` 的提交回调把节点写 `GRAPH_KEY`、边写 `GRAPH_EDGES_KEY`，两个都在 `'canvas'` 域；
    中间态元素（拖线占位）被滤掉，刷新后不复活。
-3. **条件装上配置落盘桥** —— `persistSettings !== false` 且 ctx 有 `settings` 时注入 `settingsPersist`；
+3. **条件装上配置落盘桥** —— `persistSettings !== false` 且 ctx 有 `settings` 时挂上 `save.settings`；
    要不要恢复由宿主决定（`await base.services.settingsPersist?.restore()`）。
 
 ## 会在哪里用到
 
 | 谁 | 在哪 | 用它干什么 |
 | --- | --- | --- |
-| 渲染宿主门面 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 调 `createCanvasBasePlugin`、注入 `nodeLayout`/`viewport`、装业务插件、恢复存档 |
+| 渲染宿主门面 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 调 `createCanvasBasePlugin`、注入 `view`/`canvas`、装业务插件、恢复存档 |
 | 渲染宿主组件 | `packages/canvas-render/src/host/CanvasHost.vue` | `host.graph.connectEdge(...)` 落边、写 `GRAPH_VIEWPORT_KEY` |
-| 渲染装配核心 | `packages/canvas-render/src/host/canvasHostCore.ts` | 从 `nodeRegistry` / `themeRegistry` 读整幅画布的外观装配 |
+| 渲染装配核心 | `packages/canvas-render/src/host/canvasHostCore.ts` | 从 `host.nodeRegistry` / `host.themeRegistry` 读整幅画布的外观装配 |
 | 文本节点插件 | `packages/plugins/plugin-node-text/src/nodeTextPlugin.ts` | `ctx.nodes.register` 注册类型、`doc` 事务建节点 |
 | 云客户端插件 | `packages/plugins/plugin-cloud-client/src/plugin.ts` | `save.useAdapter('canvas' \| 'resource' \| 'config' \| 'shortcut', …)` 整包切云端 |
 | 自动保存插件 | `packages/plugins/plugin-auto-save/src/autoSavePlugin.ts` | `doc.subscribe` 置脏 + 周期 `save.flush()` |
@@ -439,7 +435,7 @@ pnpm -C packages/docs/public/examples/canvas-data/index/plugin-ledger-demo test
 ~~~ts
 const s = ctx.surface()
 s.services.filter((x) => x.source === 'canvas-base').map((x) => x.name)
-// → ['save', 'doc', 'resources', 'nodeRegistry', 'themeRegistry', 'selection', 'command', 'nodeFactory', ...]
+// → ['save', 'doc', 'resources', 'selection', ...]
 ~~~
 
 ## 常见坑
@@ -451,10 +447,10 @@ s.services.filter((x) => x.source === 'canvas-base').map((x) => x.name)
    硬依赖请一律写成模块顶层的 `export const inject = ['doc']`。
 
 2. **`createCanvasBasePlugin` 的零件在"调用时"就建好，不是 start 时。**
-   所以渲染层可以先拿 `base.services.nodeStore` 去建 `nodeLayout`，再 `ctx.plugin(base.plugin)`。
+   所以渲染层可以先拿 `base.services.nodeStore` 去建 `view`，再 `ctx.plugin(base.plugin)`。
    反过来（先 start 再找实例）也行，但**服务**必须在上架之后才能 `ctx.get` —— 早了插件会停在 PENDING。
 
-3. **数据层不认识渲染，别在这里找 `nodeLayout` / `viewport`。**
+3. **数据层不认识渲染，别在这里找 `view` / `canvas`。**
    这两个要量 DOM、要拿 VueFlow 实例，只有渲染宿主才有。数据层能告诉你"节点在哪"（`getNode(id).position`），
    但给不了"这个节点在屏幕上有多宽"。
 

@@ -36,7 +36,7 @@ const enabled = computed(() => count.value >= 1)
 
 /** 命令服务（缺宿主/单测桩时拿不到 → 点了不做事，不炸） */
 const command = computed(() =>
-  ctx.tryGet<{ execute(id: string, ...payload: unknown[]): unknown }>('command'),
+    ctx.tryGet<{ runCommand(id: string, ...payload: unknown[]): unknown }>('canvas'),
 )
 
 /**
@@ -48,7 +48,7 @@ const command = computed(() =>
 function onReference(): void {
   if (!enabled.value) return
   const ids: string[] = selection?.ids() ?? []
-  command.value?.execute(AGENT_REFERENCE_COMMAND_ID, { nodeIds: ids })
+  command.value?.runCommand(AGENT_REFERENCE_COMMAND_ID, { nodeIds: ids })
 }
 </script>
 

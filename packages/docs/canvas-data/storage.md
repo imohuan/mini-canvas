@@ -241,7 +241,7 @@ export function isResourceAdapter(a: unknown): a is ResourceAdapter
 | `canvas-base` 的图提交回调 | 节点图（滤掉中间态元素） | `GRAPH_KEY` / `'canvas'` | `packages/canvas-data/src/canvas/canvasBasePlugin.ts` |
 | 同上 | 边集（滤掉中间态元素） | `GRAPH_EDGES_KEY` / `'canvas'` | 同上 |
 | 渲染宿主 `CanvasHost.vue` | 视口 `{ x, y, zoom }` | `GRAPH_VIEWPORT_KEY` / `'canvas'` | `packages/canvas-render/src/host/CanvasHost.vue` |
-| 配置持久化桥 `settingsPersist` | 整份配置值快照 | `'settings'` / `'config'` | `packages/canvas-data/src/settingsPersist.ts` |
+| 配置持久化桥（`save.settings`） | 整份配置值快照 | `'settings'` / `'config'` | `packages/canvas-data/src/settingsPersist.ts` |
 | 快捷键插件 | 重映射表 | `SHORTCUT_SAVE_KEY` / `'shortcut'` | `packages/plugins/plugin-shortcut-manager/src/shortcutRemapEngine.ts` |
 | 资源服务 `resources` | 二进制字节（经资源适配器） | `'resource'` 抽屉 | `packages/canvas-data/src/resourceService.ts` |
 
@@ -274,7 +274,7 @@ export function isResourceAdapter(a: unknown): a is ResourceAdapter
 4. **装载以云端为准**：服务器上有存档就用服务器的（否则用户看到的是本地那份而不是真身）；
    服务器上什么都没有就反过来，把本地这份推上去（首次上云）。
 
-而"配置切了云端要重读"这件事，由 `settingsPersist` 的 `save.onAdapterChange` 订阅兜住：
+而"配置切了云端要重读"这件事，由配置桥的 `save.onAdapterChange` 订阅兜住：
 新后端有存档就以它为准注入 store；没有存档就把当前值整份推上去（别把云端当空覆盖本地）。
 
 ## 会在哪里用到
@@ -284,7 +284,7 @@ export function isResourceAdapter(a: unknown): a is ResourceAdapter
 | 基础插件 | `packages/canvas-data/src/canvas/canvasBasePlugin.ts` | 建 `SaveServiceImpl`、`useAdapterForAll(host adapter)`、接图提交回调、装本地资源后端 |
 | 渲染宿主门面 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 从存档恢复画布（`save.get(GRAPH_KEY, 'canvas')`）、`persistSettings` 桥 |
 | 渲染宿主组件 | `packages/canvas-render/src/host/CanvasHost.vue` | 读写视口键、在 hidden / pagehide 时 flush |
-| 配置持久化桥 | `packages/canvas-data/src/settingsPersist.ts` | 整份配置快照存 `'config'`、订阅 `onAdapterChange` 重读 |
+| 配置持久化桥 | `packages/canvas-data/src/settingsPersist.ts` | 整份配置快照存 `'config'`、订阅 `onAdapterChange` 重读（入口是 `save.settings`） |
 | 资源服务 | `packages/canvas-data/src/resourceService.ts` | 现取 `save.adapterOf('resource')` —— 不自己攥后端 |
 | 自动保存插件 | `packages/plugins/plugin-auto-save/src/autoSavePlugin.ts` | 周期调 `save.flush()` 兜底 |
 | 云客户端插件 | `packages/plugins/plugin-cloud-client/src/plugin.ts` | 四个抽屉整体切云端 + 首次上云迁移 |
@@ -548,7 +548,7 @@ pnpm -C packages/docs/public/examples/canvas-data/storage/plugin-draft-note test
 
 5. **换了后端要重读，否则看到的是旧值。** `useAdapter` **不是**"迁移工具"（它不做双写、也不搬数据），
    它只是换了落点。谁在换之前读过旧后端，就得靠 `onAdapterChange` 重读一次 ——
-   云插件 + settingsPersist 就是这么接的。
+   云插件 + 配置桥就是这么接的。
 
 6. **资源里只存引用，绝不存 URL。** 本地的 `blob:` 地址每次刷新都是新的，存进去下次就失效；
    正确做法是存 `putResource` 返回的持久引用，显示时用 `resolveResource(ref)` 现算。

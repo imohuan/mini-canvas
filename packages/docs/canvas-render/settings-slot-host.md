@@ -109,7 +109,7 @@ defineProps<{
 它做四件小事：
 
 1. 用 `useCanvasRender()` 拿 `ctx`，再经 `settingsSourceFrom(ctx)` 拿到面板数据源（**稳定引用**，渲染时现取）；
-2. 读 `ctx.get('themeRegistry').winner('settingsPanel')` 得到当前赢家组件；
+2. 读 `host.themeRegistry.winner('settingsPanel')` 得到当前赢家组件；
 3. 订阅 `ctx:plugin-installed` / `ctx:plugin-uninstalled` 与 `themeRegistry.subscribe` —— 插件装卸 / 运行期换 occupant 时重读赢家；
 4. 渲染 `<SettingsShell>` 包住赢家：`<component :is="winner" :settings="source" />`。外壳的关闭事件 → `ctx.emit('settings:ui-close')` → 宿主自己收起面板（`<SettingsHost v-if>` 卸载本组件）。
 
@@ -322,7 +322,7 @@ const noteSize = computed(() => {
 })
 
 function setDemoText(v: string) {
-  props.settings.set('demoText', v)   // ③ 写回内核配置（持久化由 settingsPersist 桥负责）
+  props.settings.set('demoText', v)   // ③ 写回内核配置（持久化由 save.settings 负责）
 }
 </script>
 

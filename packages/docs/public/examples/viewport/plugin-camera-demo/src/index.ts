@@ -5,12 +5,11 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 
 export const name = 'camera-demo'
 
-// ① 硬依赖：没有视口服务这个插件没意义（框架会让它等渲染宿主就绪）
-export const inject = ['viewport', 'nodeLayout', 'selection'] as string[]
+// ① 硬依赖：没有 view 服务（几何 + 视口）这个插件没意义（框架会让它等渲染宿主就绪）
+export const inject = ['view', 'selection'] as string[]
 
 export function apply(ctx: Context): void {
-  const viewport = ctx.get('viewport')
-  const layout = ctx.get('nodeLayout')
+  const view = ctx.get('view')
   const selection = ctx.get('selection')
 
   // ② 记忆槽：本插件自己存"上次保存的镜头位置"
@@ -24,10 +23,10 @@ export function apply(ctx: Context): void {
     when: () => selection.ids.size > 0,
     run() {
       const id = [...selection.ids][0]
-      const rect = layout.getNodeRect(id)     // ③ 实测矩形（见 nodeLayout 那篇）
+      const rect = view.getNodeRect(id)       // ③ 实测矩形（见 view 那篇）
       if (!rect) return false
       // ④ 把节点中心放到视野中心，并强制缩放到 100%
-      viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, 1)
+      view.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, 1)
       return true
     },
   })
@@ -38,7 +37,7 @@ export function apply(ctx: Context): void {
     group: 'camera-demo',
     run() {
       // ⑤ 读当前视口，自己留一份（这只是演示用的内存记忆；要跨刷新就存进 save）
-      savedView = viewport.getViewport()
+      savedView = view.getViewport()
       return savedView
     },
   })
@@ -51,7 +50,7 @@ export function apply(ctx: Context): void {
     run() {
       if (!savedView) return false
       // ⑥ 一次性取景动作 → 用带过渡的那条（后端不支持动画时自动退回即时）
-      viewport.animateViewport(savedView, 320)
+      view.animateViewport(savedView, 320)
       return true
     },
   })
@@ -62,11 +61,11 @@ export function apply(ctx: Context): void {
     title: '打印屏幕左上角对应的画布坐标',
     group: 'camera-demo',
     run() {
-      const pane = viewport.getPaneEl()
+      const pane = view.getPaneEl()
       if (!pane) return false
       const box = pane.getBoundingClientRect()
-      const pt = viewport.screenToFlow(box.left, box.top)
-      console.log('[camera-demo] 视口', viewport.getViewport(), 'pane 左上角在画布坐标', pt)
+      const pt = view.screenToFlow(box.left, box.top)
+      console.log('[camera-demo] 视口', view.getViewport(), 'pane 左上角在画布坐标', pt)
       return pt
     },
   })

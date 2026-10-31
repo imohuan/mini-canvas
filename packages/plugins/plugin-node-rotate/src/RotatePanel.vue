@@ -33,8 +33,8 @@ async function rotate90(): Promise<void> {
   busy.value = true
   try {
     const ok = await Promise.resolve(
-      ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command')
-        .execute('image:rotate', { nodeId: props.id }),
+      ctx.get<{ runCommand(id: string, payload?: unknown): unknown }>('canvas')
+        .runCommand('image:rotate', { nodeId: props.id }),
     )
     if (ok) bumpRotateAngle()
   } finally {

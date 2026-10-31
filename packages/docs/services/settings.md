@@ -120,4 +120,4 @@ interface SettingSchema {
 3. **`set` 对未声明的 key 抛错**，不是静默忽略：`[settings] setting "xxx" is not defined. Define it first via settings.define.`。热卸载之后再 `set` 旧 key 就会踩这条（`removeByScope` 已经把声明清掉了）。改值之前用 `has` 确认，或者把 `set` 包进 `try` 里。
 4. **数字越界是"静默夹取"，不是报错**。`set('demoHaloSize', 99999)` 不会抛，实际存进去的是 `max`（640）。所以回读 `get` 拿到的值可能与你写入的不同 —— 想确认到底存了多少，看 `set` 的返回值（它只告诉你"变没变"，值还得再 `get`）。
 5. **`ctx.settings.onChange` 的 scope 参数是必填的（语法糖）**，而底层 `store.onChange(cb, { scope })` 的 scope 是可选。写 `ctx.settings.onChange(cb)` 会把它当成 scope 用一个函数值，结果订阅永远收不到东西。插件里照抄例子里的 `ctx.settings.onChange(name, cb)` 即可；要"全局订阅"就用 `ctx.get('settings').onChange(cb)`。
-6. **配置是内存里的（本页只管读写真值）**。刷新后要不要还在，归持久化桥 `settingsPersist` 管 —— 它把值的快照写进 `save(config)`，启动时用 `setSavedSnapshot` 注入回来。所以"改了没保存"和"没生效"是两回事，排查时先看桥在不在（`ctx.tryGet('settingsPersist')`）。
+6. **配置是内存里的（本页只管读写真值）**。刷新后要不要还在，归持久化桥 `save.settings` 管 —— 它把值的快照写进 `save(config)`，启动时用 `setSavedSnapshot` 注入回来。所以"改了没保存"和"没生效"是两回事，排查时先看桥在不在（`ctx.get('save').settings`）。

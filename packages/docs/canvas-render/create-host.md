@@ -11,12 +11,12 @@
 
 ```
 ① new Context({ dev })                       建插件框架上下文
-② createCanvasBasePlugin({ adapter, … })     建画布数据层的整套服务（save/doc/selection/command/…）
-③ ctx.inject('nodeLayout', …)                注入渲染层第 1 件（要量 DOM）
-④ ctx.inject('viewport', …)                  注入渲染层第 2 件（要挂 VueFlow 后端）
+② createCanvasBasePlugin({ adapter, … })     建画布数据层的整套服务（save/doc/selection/…）
+③ 建 view（几何 + 视口）并注入                渲染层第 1 件
+④ 建 canvas（动作门面）并注入                 渲染层第 2 件
 ⑤ ctx.plugin(base.plugin)                    装基础插件（core: true，拒绝热卸）
 ⑥ registryOf('capability').add(…)            宿主那一份能力默认实现（order 100）
-⑦ ctx.inject('pluginManager', manager)       注入插件安装句柄（渲染层第 3 件）
+⑦ manager 留在返回值与 host 句柄上             插件从 host.manager 取，不占服务名
 ⑧ 冷启动插件（manifest 或 coldPlugins）        你给的那批业务插件
 ⑨ ctx.start() + restore 画布 + seedDefault     启动、恢复上次数据、首次空图才播种
 ```
@@ -27,11 +27,11 @@
 
 不提供这个工厂，每个宿主都要自己写一遍上面九步。会踩的坑很具体：
 
-**坑一：忘了注入 `nodeLayout` / `viewport`。** 这两个服务**必须由渲染层注入**，数据层的 `canvasBasePlugin` 给不了。忘了注入，插件里 `ctx.get('viewport')` 就是 `undefined`，用户看到的症状是「缩放的按钮点了没反应」。
+**坑一：忘了注入 `view`。** 几何与视口**必须由渲染层注入**，数据层的 `canvasBasePlugin` 给不了。忘了注入，插件里 `ctx.get('view')` 就是 `undefined`，用户看到的症状是「缩放的按钮点了没反应」。
 
 **坑二：恢复与播种的顺序搞反。** 「存储里有一条保存过的空图」和「从来没保存过」是两回事：前者要**原样恢复成空画布**，后者才该跑 `seedDefault` 播默认内容。判定写错，用户把节点删光了刷新一下，默认节点又长回来了。
 
-**坑三：配置恢复跑在插件声明之前。** 用户保存过的设置要能命中为「初值」，就必须在插件把配置项 `define` 完**之后**再 `settingsPersist.restore()`。反了，用户上次改的配色要等下次再动一下才生效。
+**坑三：配置恢复跑在插件声明之前。** 用户保存过的设置要能命中为「初值」，就必须在插件把配置项 `define` 完**之后**再 `save.settings.restore()`。反了，用户上次改的配色要等下次再动一下才生效。
 
 这些坑全在工厂里处理好了，所以你用它就行。
 
@@ -59,9 +59,9 @@ const { host, api, manager, exposeToWindow } = await createMiniCanvasHost(opts)
 | `doc` | **数据唯一门面**：节点 + 边 + 事务 + 撤销 + 快照 + 订阅合成的一个名字 |
 | `nodeStore` / `edgeStore` | 节点表 / 边表的**实例**（渲染层要 `subscribe` 重灌、要量尺寸；插件请走 `doc`） |
 | `nodeRegistry` / `themeRegistry` | 展示注册表 / 主题槽注册表（供 Vue 层装配） |
-| `selection` / `command` / `history` / `nodeFactory` / `graph` | 选中 / 命令 / 撤销栈 / 建节点工厂 / 图唯一写入口（都是**实例**） |
-| `nodeLayout` / `viewport` | 渲染层注入的两件服务（也是**实例**，方便宿主直接调） |
-| `settingsPersist?` | 配置落盘桥；`persistSettings: false` 时是 `undefined` |
+| `selection` / `command` / `history` / `nodeFactory` / `graph` | 选中 / 命令 / 撤销栈 / 建节点工厂 / 图唯一写入口（都是**实例**，不是服务名） |
+| `view` | 渲染层注入的几何 + 视口服务（也是实例，方便宿主直接调）；`canvas` 是服务名，用 `ctx.get('canvas')` 取 |
+| `settingsPersist?` | 配置落盘桥（兼容字段）；`persistSettings: false` 时是 `undefined`（插件请用 `save.settings`） |
 | `resources` | 资源生命周期（Blob / objectURL 登记与回收） |
 | `stop()` | **停用并回收**：先 `save.flush()` 保住脏数据，再解色板订阅、停插件、清 window 挂载 |
 
@@ -225,7 +225,7 @@ manager.manifestReport(manifest)   // ⑤ 只读分析：谁将装 / 谁被覆�
 | 外部 URL | `{ url: '/plugins/x.js' }` | `'url'` |
 | 单文件插件 js 文本 | `{ text: 'export const name = …' }` | `'text'` |
 
-后三种由 `pluginManager.ts` 里的 `resolveSource` / `loadPluginFromUrl` / `loadPluginFromText` 负责取回（`text` 走 ESM data-URL，不用 `eval`）。**信任策略由宿主自己定**：`sourceKind` 只分类、不决策，因为它不知道你的白名单。
+后三种由 `host/pluginManager.ts` 里的 `resolveSource` / `loadPluginFromUrl` / `loadPluginFromText` 负责取回（`text` 走 ESM data-URL，不用 `eval`）。**信任策略由宿主自己定**：`sourceKind` 只分类、不决策，因为它不知道你的白名单。
 
 ### 热装 / 热卸 / 热重载 / 外部来源
 
@@ -400,8 +400,8 @@ pnpm -C canvas-render-host-demo start      # → tsx src/main.ts，控制台打�
 ## 常见坑
 
 1. **`coldPlugins` 不传就一个业务插件都不装**。工厂**刻意不 import 任何具体插件**（不然它就把示例绑死了）。画布上什么都没有不等于坏了，先看清单是不是空的。
-2. **`stop()` 不是可选的**。它负责 `save.flush()`、色板 / 主题订阅解绑、`settingsPersist.dispose()`、`resources.dispose()`、清 window 挂载，最后 `ctx.stop()`。热更新、切换画布、单页应用里的路由离开都该调它；不调就是内存与订阅泄漏。
+2. **`stop()` 不是可选的**。它负责 `save.flush()`、色板 / 主题订阅解绑、配置桥 `dispose()`、`resources.dispose()`、清 window 挂载，最后 `ctx.stop()`。热更新、切换画布、单页应用里的路由离开都该调它；不调就是内存与订阅泄漏。
 3. **恢复与播种的判定看 `saved === undefined`，不看「数组是否为空」**。想把「用户清空后刷新」改成「又长回默认节点」，得自己改判定 —— 现在的行为是**尊重用户删光这件事**。
-4. **`persistSettings: false` 会让 `host.settingsPersist` 变成 `undefined`**，并且启动时**不做那次 restore**（宿主代码里是 `if (settingsPersist) await settingsPersist.restore()`）。同一页面开两张画布、共用一个存储时通常要关掉它，不然两边抢同一份配置。
+4. **`persistSettings: false` 会让配置桥缺席**（`host.settingsPersist` 与 `save.settings` 都是 `undefined`），启动时**不做那次 restore**。同一页面开两张画布、共用一个存储时通常要关掉它，不然两边抢同一份配置。
 5. **`dev` 必须由调用方显式传**。原因是实测踩过的坑：`canvas-render` 是独立 workspace 包，在它自己的 `.vue` / `.ts` 里读 `import.meta.env.DEV` 拿到的是 `undefined`（打包器的替换只作用于应用包自己的源码），于是 dev 判定会静默失效。所以 `CanvasHost` 在应用层传 `:dev="import.meta.env.DEV"`，库侧缺省 = 生产语义。
 6. **`api.listPlugins()` 看不见 `canvas-base`**。宿主自有装配（画布基础服务）对应用层是「环境」不是「清单项」，被 manager 显式藏掉了；内核里它照常是一个插件（`ctx.listPlugins()` 看得见）。

@@ -82,6 +82,8 @@ import {
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
+  FIRST_RUN_FIT_PADDING,
+  FIRST_RUN_FIT_RETRY_DELAYS,
 } from './canvasHostCore'
 import { LAYERS } from '../contracts/layers'
 import { computeVisibleIds, type VisibleCullConfig } from './visibleCull'
@@ -658,7 +660,7 @@ function fitViewFirstRun(): void {
   const h = hostRef.value
   if (!h) return
   // 每次 fitView 的间隔：先紧后松，覆盖 text/image 自适应节点量测(ResizeObserver)完成前的空档。
-  const delays = [80, 150, 300, 600, 1000]
+  const delays = FIRST_RUN_FIT_RETRY_DELAYS
   let k = 0
   // VueFlow fitView 是 200ms 动画，调用后视口并不会立即落到目标值；故每次调用后等动画跑完再对比
   // 调用前/后的视口，判断这轮 fitView 是否真的把视口移向"包住全部节点"的居中位。以「本轮调用前」为基准
@@ -668,7 +670,7 @@ function fitViewFirstRun(): void {
     const hh = hostRef.value
     if (!hh) return
     const before = hh.viewport.getViewport()
-    hh.viewport.fitView(0.15)
+    hh.viewport.fitView(FIRST_RUN_FIT_PADDING)
     viewportTimers.push(
       setTimeout(() => {
         const h2 = hostRef.value
@@ -1246,14 +1248,16 @@ function onKeydown(e: KeyboardEvent): void {
   // 通用快捷键：扫描已注册命令的 keys，命中即 execute（Delete/Ctrl+Z 等命令的 keys 由插件声明）
   // 传内核 ctx 作为执行上下文：命令的 when 不满足时**让位**给同键的其它命令（如选中 3D 节点时
   // f/r 归节点用，没选中时仍走画布的聚焦/适应视图），同键多个可用命令按 order 定优先级。
-  const hit = findCommandByKeys(h.command.list(), e, h.ctx)
+  const commands = h.ctx.tryGet<{ listCommands(): Array<{ id: string }>; runCommand(id: string): unknown }>('canvas')
+  if (!commands) return
+  const hit = findCommandByKeys(commands.listCommands() as never, e, h.ctx)
   if (hit) {
     // deferToNative：该键交给平台原生事件（如 Ctrl/Cmd+V → paste）。
     // 不 preventDefault、不 execute —— preventDefault 会让浏览器不再派发原生 paste
     // （真机实测），而剪贴板内容只有原生事件读得到。真正的工由下面的 onPaste 仲裁场派发。
     if ((hit as { deferToNative?: boolean }).deferToNative) return
     e.preventDefault()
-    h.command.execute(hit.id)
+    commands.runCommand(hit.id)
     syncFromStore()
   }
 }

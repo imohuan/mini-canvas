@@ -9,16 +9,16 @@
  *   取矩形中心（实测尺寸，更准）。
  * - UI 自管：命令执行时 createApp 挂 body（Teleport 在组件内），onClose 卸载；插件热卸经 ctx.effect 自动回收。
  *
- * 依赖方向：只依赖内核服务（doc/viewport/nodeLayout，宿主恒在注入）。不依赖宿主 demo / 其它插件。
+ * 依赖方向：只依赖内核服务（doc/view，宿主恒在注入）。不依赖宿主 demo / 其它插件。
  */
 import { createApp, h } from 'vue'
 import type { PluginModule, Context } from '@mini-canvas/canvas-base'
 import NodeFindOverlay from './NodeFindOverlay.vue'
 
-// viewport / nodeLayout 的直访类型（ctx.viewport / ctx.nodeLayout）由 canvas-data 集中声明
+// view 的直访类型（ctx.view）由 canvas-data 集中声明
 // （作者 SDK 上游，见 renderServiceContracts），本包不必再就地 declare。
 export const name = 'node-find'
-export const inject = ['doc', 'viewport', 'nodeLayout'] as string[]
+export const inject = ['doc', 'view'] as string[]
 
 export function apply(ctx: Context) {
   let appInstance: ReturnType<typeof createApp> | null = null
@@ -64,18 +64,10 @@ export function apply(ctx: Context) {
     }
   }
 
-  /** 聚焦某节点：取实测矩形中心 setCenter（保留当前缩放级别，不打断用户视野） */
+  /** 聚焦某节点：统一走 view.fitTo，保持当前缩放、只平移（不打断用户视野） */
   function focusNode(nodeId: string): void {
-    const rect = ctx.nodeLayout.getNodeRect(nodeId)
-    if (rect) {
-      ctx.viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, ctx.viewport.getViewport().zoom)
-      return
-    }
-    // 无实测矩形（节点不存在/无尺寸）回退内核 position（拿不到尺寸就把节点左上角放中心，尽力聚焦）
-    const node = ctx.doc.getNode(nodeId)
-    if (node) {
-      ctx.viewport.setCenter(node.position.x, node.position.y, ctx.viewport.getViewport().zoom)
-    }
+    // fitTo 内部按实测矩形算中心；节点不存在时返回 false，不抛。
+    ctx.view.fitTo([nodeId], { keepZoom: true })
   }
 
   // —— 注册打开命令（keys 由渲染层统一分发；热卸时命令随 scope 自动回收）——

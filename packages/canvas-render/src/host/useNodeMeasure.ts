@@ -102,6 +102,9 @@ export function useNodeMeasure(opts: {
   function sync(): void {
     const root = container()
     if (!root) return
+    // 真删除的兜底：剔除先把 DOM 拿掉，之后用户删节点时元素早不在 observed 里，
+    // 只靠“元素消失”那一次回调会留下永久实测值。按 store 现况清一次（O(实测数)）。
+    nodeLayout.pruneMissing?.()
     const current = new Set<HTMLElement>()
     for (const el of root.querySelectorAll<HTMLElement>('.vue-flow__node')) {
       current.add(el)

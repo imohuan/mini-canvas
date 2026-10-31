@@ -15,11 +15,13 @@ import { History } from '../../history'
 import { GraphDocument } from '../../graphDocument'
 import { NodeFactory } from '../nodeFactory'
 import { registerCanvasCommands, CANVAS_COMMAND } from '../canvasCommands'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry, RegistryImpl } from '@mini-canvas/kernel'
+import type { CommandDef } from '@mini-canvas/kernel'
+import { commandRuntime, clearCommandRuntime, setCommandRuntime } from '../commandRuntime'
 import { createDocService } from '../../docService'
 
 /** 真内核服务最小装配（与宿主 boot 一致：command/graph/selection/nodeFactory 齐全） */
-function boot() {
+function boot(opts: { field?: RegistryImpl<{ def: CommandDef }> } = {}) {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 100, h: 40 } })
@@ -45,7 +47,7 @@ function boot() {
   // 与真实插件（plugin-node-text）同款：creator 内部走 graph，于是建节点自动进历史 + 提交落盘
   nodeFactory.register('text', (position: { x: number; y: number }) => graph.createNode('text', position))
   ctx.inject('nodeFactory', nodeFactory)
-  const dispose = registerCanvasCommands({ command, graph, selection, nodeFactory })
+  const dispose = registerCanvasCommands({ command, graph, selection, nodeFactory, ...(opts.field ? { field: opts.field } : {}) })
   return { ctx, command, graph, nodeStore, edgeStore, selection, nodeFactory, dispose }
 }
 
@@ -163,5 +165,59 @@ describe('command:undo / command:redo', () => {
     expect(nodeStore.getNode(a)).toBeTruthy()
     command.execute(CANVAS_COMMAND.redo)
     expect(nodeStore.getNode(a)).toBeUndefined()
+  })
+})
+
+describe('画布命令的自省（服务名 command 已下线）', () => {
+  it('四条命令同时落进 command 场；dispose 后场与运行表一起清空', () => {
+    const field = new RegistryImpl<{ def: CommandDef }>()
+    const { command, dispose } = boot({ field })
+    expect(field.keys().sort()).toEqual(
+      [CANVAS_COMMAND.createNode, CANVAS_COMMAND.delete, CANVAS_COMMAND.redo, CANVAS_COMMAND.undo].sort(),
+    )
+    dispose()
+    expect(field.keys()).toEqual([])
+    expect(command.list()).toEqual([])
+  })
+
+  it('命令运行时能列出基础插件直注册的四条命令（不靠 command 服务名）', () => {
+    const { command } = boot()
+    const runtime = {
+      execute: command.execute.bind(command),
+      list: () => command.list(),
+      has: command.has.bind(command),
+      register: command.register.bind(command),
+      remapKeys: command.remapKeys.bind(command),
+      resetKeys: command.resetKeys.bind(command),
+      originalKeys: command.originalKeys.bind(command),
+      isRemapped: command.isRemapped.bind(command),
+    }
+    setCommandRuntime(runtime, command)
+    try {
+      expect(commandRuntime()?.list().map((c) => c.id).sort()).toEqual([
+        CANVAS_COMMAND.createNode,
+        CANVAS_COMMAND.delete,
+        CANVAS_COMMAND.redo,
+        CANVAS_COMMAND.undo,
+      ])
+    } finally {
+      clearCommandRuntime()
+    }
+  })
+
+  it('运行表拒绝重复 id 时，命令场里的同名条目也要撤回（不留看得见点不动的命令）', () => {
+    const field = new RegistryImpl<{ def: CommandDef }>()
+    const command = new CommandRegistry()
+    command.register({ id: CANVAS_COMMAND.undo, run: () => {} })
+    expect(() =>
+      registerCanvasCommands({
+        command,
+        graph: {} as never,
+        selection: {} as never,
+        nodeFactory: {} as never,
+        field,
+      }),
+    ).toThrow()
+    expect(field.keys(), '重复 id 那一格不能留在场里').not.toContain(CANVAS_COMMAND.undo)
   })
 })

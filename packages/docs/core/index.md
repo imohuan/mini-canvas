@@ -26,41 +26,35 @@
 | `doc` | 数据那一格只有它：节点 + 边 + 事务 + 撤销 + 快照 + 订阅 | [看](/services/doc) |
 | `save` | 键值持久化（适配器可插拔：内存 / localStorage / 云端） | [看](/services/save) |
 | `selection` | 选中集（节点 + 边两桶） | [看](/services/selection) |
-| `command` | 命令注册表 | [看](/services/command) |
 | `resources` | 资源生命周期（object URL 的登记与回收） | [看](/services/resources) |
-| `nodeRegistry` | 节点展示注册表（哪种节点的哪个区域用哪个组件） | [看](/services/node-registry) |
-| `themeRegistry` | 主题 / 外观槽注册表 | [看](/services/theme-registry) |
-| `nodeFactory` | 统一建节点工厂 | [看](/services/node-factory) |
-| `settingsPersist` | 配置落盘桥（条件注入） | [看](/services/settings-persist) |
 
 ### 渲染宿主注入（要 DOM / 要后端才能做）
 
 | 名字 | 干什么 | 文档 |
 | --- | --- | --- |
-| `nodeLayout` | 实测尺寸 / 绝对坐标（要量 DOM） | [看](/services/node-layout) |
-| `viewport` | 视口（缩放 / 定位 / 聚焦） | [看](/services/viewport) |
-| `pluginManager` | 插件管理器：装卸 / 重载 / 诊断 | [看](/services/plugin-manager) |
+| `view` | 实测尺寸 / 绝对坐标 / 视口 / 唯一取景 `fitTo` | [看](/services/view) |
+| `canvas` | 画布动作门面：建节点/选中/取景/模式/提示/命令执行 | [看](/services/canvas) |
+| `nodeToolbar` | 节点上下状态栏（辅助服务，不算基础七名） | [看](/services/node-toolbar) |
 
-> **旧名字已下线**：`nodeStore` / `edgeStore` / `graph` / `history` 四个服务名 `ctx.get` 取不到，
-> 合并成了 `doc`。写 `inject: ['nodeStore']` 会让插件永远停在 PENDING。
+> **旧名字已下线**：`nodeStore` / `edgeStore` / `graph` / `history` 合并成了 `doc`；
+> `nodeLayout` / `viewport` / `command` / `nodeFactory` / `nodeRegistry` / `themeRegistry` /
+> `settingsPersist` / `pluginManager` 也都不再是服务名。写进 `inject` 会让插件永远停在 PENDING。
+> 对照表见 [服务与注册场现状](/services/map)。
 
 ## 注册场清单（`ctx.registryOf` 能放到哪）
 
 | 种类 | 装什么 | 谁在放（真实例子） |
 | --- | --- | --- |
-| `node/type` | 节点类型的声明摘要 | 文本 / 图片 / 视频节点 |
-| `node/region` | 往某节点某区域挂组件 | 状态栏覆盖层 |
-| `selection/region` | 往多选框挂组件 | 加入资产库、引用到 Agent |
-| `node/bar` | 节点状态栏的动作 | 下载 / 旋转 / 删除 |
-| `node/bar-applier` | 动作的执行体 | 图片类动作怎么跑 |
-| `node/creator` | "建一个该类型节点" | 各节点插件 |
 | `command` | 命令 | 删除 / 对齐 / 复制 |
-| `theme` | 主题槽（壳 / 边 / 背景 / UI 件） | 默认主题、状态栏 |
-| `slot` | 通用 UI 槽 | 小地图、设置页签 |
+| `node/shell` | 节点壳组件 | 主题装配 |
+| `node/region` | 往某节点某区域挂组件 | 状态栏覆盖层 |
+| `node/bar` | 底栏动作与结果写入器（`appliers/<kind>`） | 下载 / 旋转 / 删除 |
+| `selection/region` | 往多选框挂组件 | 加入资产库、引用到 Agent |
 | `ui` | 设计系统组件目录 | 按钮 / 下拉 / 滑块 |
 | `capability` | 组件能力包 | `node` / `zoom` / `selection` |
-| `setting` | 配置项声明 | 各插件自己的配置 |
 | `tool` | 模型可调用工具（function calling） | AI 工具插件 |
+| `clipboard/copy` / `clipboard/paste` | 剪贴板处理器 | 复制 / 粘贴 |
+| `media/creator` | 媒体创建器 | 图片 / 视频 / 音频 |
 
 注册场的完整方法（add / list / top / wrap / resolve / subscribe…）见 [注册场](/api/registry)。
 
@@ -68,13 +62,13 @@
 
 | 短写法 | 落点种类 | 干什么 |
 | --- | --- | --- |
-| `ctx.nodes.register(def)` | `node/type` + `node/region` + `node/creator` | 注册一个节点类型（数据 + 展示 + 建节点，一次搞定） |
+| `ctx.nodes.register(def)` | 真实容器（`doc` 类型表 + 展示容器；不写已删的 `node/type` / `node/creator`） | 注册一个节点类型（数据 + 展示 + 建节点，一次搞定） |
 | `ctx.nodes.attach(type, req)` | `node/region` | 往某节点的某区域挂组件 |
 | `ctx.selectionRegion.attach(req)` | `selection/region` | 往多选框挂组件 |
-| `ctx.theme.register(slot, comp)` | `theme` | 往主题槽叠组件 |
+| `ctx.theme.register(slot, comp)` | 真实容器 `ThemeRegistry`（`theme` 场已删） | 往主题槽叠组件 |
 | `ctx.commands.register(def)` | `command` | 注册命令 |
-| `ctx.slots.register(slot, req)` | `slot` | 往通用 UI 槽叠组件 |
-| `ctx.settings` | `setting` | 读 / 订阅配置 |
+| `ctx.slots.register(slot, req)` | 真实容器 `SlotRegistry`（`slot` 场已删） | 往通用 UI 槽叠组件 |
+| `ctx.settings` | 真实容器 `SettingsStore`（`setting` 场已删） | 读 / 订阅配置 |
 | `ctx.tools` | （`tools` 服务） | 注册 / 调用外部能力 |
 
 节点类型的完整字段见 [注册节点类型](/canvas-data/node-types)。
@@ -92,7 +86,7 @@ ctx.commands.register({
 })
 ```
 
-字段与分发规则见 [`command`](/services/command)。菜单项、快捷键、按钮最后都指向这条命令。
+执行与枚举走 `ctx.get('canvas').runCommand / listCommands`。菜单项、快捷键、按钮最后都指向这条命令。
 
 ## 想看真实数据
 

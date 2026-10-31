@@ -85,7 +85,7 @@ ctx.nodes.register({ type: 'text', /* ... */ segments: { 'out:top': MyToolbar } 
 - 它把**能力包** provide 给区域条目子树（见 `packages/canvas-render/src/contracts/capabilities.ts`）。
 
 > 想从外面"操作某个节点"，不要去戳这个组件：用 `ctx.get('doc')` 改数据、
-> 用 `ctx.commands` 调命令、用 `ctx.get('nodeLayout')` 量尺寸。
+> 用 `ctx.commands` 注册命令、用 `ctx.get('view')` 量尺寸。
 
 ## 使用方式与示例
 

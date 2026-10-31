@@ -24,7 +24,7 @@ const props = defineProps<{
   emptyHint?: string
 }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, host } = useCanvasRender()
 
 // —— settings 数据源：渲染时现取 ctx.get('settings') 适配成面板消费的最小接口，稳定引用传给赢家 ——
 const source: SettingsPanelSource = settingsSourceFrom(ctx)
@@ -34,7 +34,7 @@ const source: SettingsPanelSource = settingsSourceFrom(ctx)
 const winner = ref<any>(undefined)
 
 function reload(): void {
-  const theme = ctx.get<{ winner(slot: string): unknown }>('themeRegistry')
+  const theme = host.themeRegistry
   const w = theme?.winner('settingsPanel')
   winner.value = w ? markRaw(w as object) : undefined
 }
@@ -48,7 +48,7 @@ disposers.push(
   ctx.on('ctx:plugin-uninstalled', reload),
 )
 // 运行期 theme occupant 替换（不经过插件装卸）也会改变赢家 → 直接订阅 themeRegistry。
-const themeRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('themeRegistry')
+const themeRegistry = host.themeRegistry as { subscribe(cb: () => void): () => void } | undefined
 if (themeRegistry && typeof themeRegistry.subscribe === 'function') {
   disposers.push({ dispose: themeRegistry.subscribe(reload) })
 }

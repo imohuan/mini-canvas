@@ -13,8 +13,8 @@ export const name = 'stamp-node'
 // 类型图标（opaque 句柄）：仓库里的节点插件都传 SVG 字符串，主题按 currentColor 上色
 const STAMP_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 10h8M8 14h5"/></svg>'
-// 硬依赖：doc（数据那半边）与 nodeRegistry（展示那半边）
-export const inject = ['doc', 'nodeRegistry'] as string[]
+// 硬依赖 doc：注册节点一次落数据与展示两处
+export const inject = ['doc'] as string[]
 
 export function apply(ctx: Context) {
   // ① 注册一种新节点：数据 + 展示 + 建法，一次给全。
@@ -33,7 +33,7 @@ export function apply(ctx: Context) {
     // 只接文本上游；不声明 capacity = 不限条数
     inputs: [{ port: 'target', acceptsTypes: ['text'] }],
     outputs: [{ port: 'source', contentType: 'stamp' }],
-    // ② create：给“从菜单 / 命令建一个邮票”提供实现，自动挂进 nodeFactory
+    // ② create：给“从菜单 / 命令建一个邮票”提供实现，自动挂进 canvas 背后的工厂
     create(position) {
       return ctx.get('doc').createNode('stamp', position, { rank: 1, note: '' })
     },
@@ -68,17 +68,15 @@ export function apply(ctx: Context) {
     order: 20,
   })
 
-  // ⑥ 诊断命令：把展示注册表里登记了什么念出来（读操作，不改任何东西）
+  // ⑥ 诊断命令：把节点类型的真实数据念出来（读操作，不改任何东西）
   ctx.commands.register({
     id: 'stamp-node:inspect',
-    title: '邮票：看看展示注册表',
+    title: '邮票：看看节点类型表',
     run: () => {
-      const reg = ctx.get<{
-        types(): string[]
-        get(type: string): { segments: Record<string, unknown> } | undefined
-      }>('nodeRegistry')
-      console.log('[stamp-node] 已登记展示的类型：' + reg.types().join(' / '))
-      console.log('[stamp-node] stamp 的区域：' + Object.keys(reg.get('stamp')?.segments ?? {}).join(' / '))
+      const doc = ctx.get('doc')
+      console.log('[stamp-node] 已登记类型：' + [...doc.types.keys()].join(' / '))
+      const stamp = doc.types.get('stamp')
+      console.log('[stamp-node] stamp 的声明尺寸：' + JSON.stringify(stamp?.defaultSize ?? null))
       return true
     },
   })

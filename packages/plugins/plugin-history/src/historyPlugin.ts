@@ -11,7 +11,7 @@
  *   渲染层统一分发 → 本包**不再注册带 keys 的撤销/重做命令**，避免键位/命令冲突。
  *
  * 本包存在的价值：给「只想要老版 history 命令名、不想依赖 canvas-commands 的宿主」一个
- * 独立可装配的撤销/重做命令入口 + 只读查询服务，并把内核缺口显式列出。
+ * 独立可装配的撤销/重做命令入口，并把内核缺口显式列出。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
@@ -21,7 +21,7 @@ export const name = 'history'
 // 本包存在的价值不变：给「只想要老版 history 命令名、并自带只读查询服务」的宿主一个独立入口。
 export const inject = ['doc'] as string[]
 
-/** history 兼容服务（老版 HistoryAPI 里 v2 有意义的只读子集；状态查询 + 命令执行） */
+/** 老版 HistoryAPI 里 v2 有意义的只读子集（仅类型：直接读 doc，不再上架 history-facade 服务） */
 export interface HistoryFacadeService {
   canUndo(): boolean
   canRedo(): boolean
@@ -46,18 +46,6 @@ export function apply(ctx: Context): void {
     order: 6,
     run: () => doc.redo(),
   })
-
-  // —— 只读查询服务（菜单/按钮使能态用；独立名不撞宿主 history） ——
-  const facade: HistoryFacadeService = {
-    canUndo: () => doc.canUndo(),
-    canRedo: () => doc.canRedo(),
-    get undoCount() {
-      return doc.undoDepth
-    },
-    undo: () => doc.undo(),
-    redo: () => doc.redo(),
-  }
-  ctx.inject('history-facade', facade)
 
   // —— 内核 History 缺口（本薄包不越权补内核；如需要列给主 agent 补 API） ——
   // 1. 无 clear()/清空历史：老版有 history:clear 事件 + clear() API。

@@ -25,11 +25,11 @@ import { requestStartDrag } from './ctrlDragMode'
 import { readSelectionSnapshot, selectionMode } from './selectionMode'
 const { ctx } = useCanvasRender()
 /**
- * 提示走**默认主题提供的全局服务** ctx.get('tip')（与节点同级的基础设施，用户口径 2026-10-26）。
- * 本插件不再自绘气泡 —— 位置/观感由主题统一（鼠标右下角、无间隔）。
+ * 提示走画布动作门面的 canvas.notify（followPointer = 跟随鼠标）。
+ * 本插件不再自绘气泡 —— 位置/观感由渲染层统一（鼠标右下角、无间隔）。
  */
-function tipService(): { show(m: string): void; hide(): void } | undefined {
-  return ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')
+function tipService(): { notify(m: string, o?: object): unknown } | undefined {
+  return ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')
 }
 
 const props = defineProps<{
@@ -116,10 +116,12 @@ const hintText = computed(() => {
 
 /** 悬停：显示通用鼠标提示（用户口径：底部文字标签不要，改成跟随鼠标的提示） */
 function onEnter(): void {
-  if (hintText.value) tipService()?.show(hintText.value)
+  if (hintText.value) {
+    tipService()?.notify(hintText.value, { source: 'bottom-bar', followPointer: true, durationMs: 0 })
+  }
 }
 function onLeave(): void {
-  tipService()?.hide()
+  tipService()?.notify('', { source: 'bottom-bar' })
 }
 
 /** 点击行为（仅 reference 模式）：连上/取消；ctrl-drag 模式点击不动作（操作是拖拽） */

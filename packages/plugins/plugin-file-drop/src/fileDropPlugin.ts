@@ -15,8 +15,8 @@
  *
  * 事件挂载：window 级 dragover/drop 监听，ctx.effect 绑定 → 随插件 scope 自动回收；
  * 浏览器环境守卫(typeof window !== 'undefined')，node 测试/装配安全跳过。
- * 坐标：drop/paste 的 clientX/Y 经 ctx.get('viewport').screenToFlow 转 flow 坐标作节点 position
- * （对齐老版"放到鼠标处"）；无 viewport 服务/无鼠标锚点退级联默认。
+ * 坐标：drop/paste 的 clientX/Y 经 ctx.get('view').screenToFlow 转 flow 坐标作节点 position
+ * （对齐老版"放到鼠标处"）；无 view 服务/无鼠标锚点退级联默认。
  * 粘贴：不再自绑 window paste（宿主 keydown 对 mod+v preventDefault 会掐掉原生 paste）。
  * 改为向宿主统一仲裁场 registryOf('clipboard/paste') 注册处理器，按 order 抢这次粘贴
  * （媒体 20 > 纯文本 30；若剪贴板带"来自画布"标记则让位给 clipboard 插件）。
@@ -201,7 +201,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     return this.ctx.get('doc')
 }
   private get viewport() {
-    return this.ctx.tryGet('viewport') ?? undefined
+    return this.ctx.tryGet('view') ?? undefined
   }
 
   /** 类型是否已注册（node-image / node-video / node-text 插件装配才 true；缺则跳过该类文件） */

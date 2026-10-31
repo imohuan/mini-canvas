@@ -49,6 +49,10 @@ function makeCtx(data: Record<string, unknown> = {}): CanvasRenderContext {
     nodeTask: { cancel: () => {}, run: async () => ({ ok: true }) },
   }
   return {
+    host: {
+      nodeRegistry: { get: () => undefined },
+      themeRegistry: { winner: () => undefined, subscribe: () => () => {} },
+    },
     ctx: {
       get: (n: string) => services[n],
       tryGet: (n: string) => services[n],

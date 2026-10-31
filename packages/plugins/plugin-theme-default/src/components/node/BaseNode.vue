@@ -418,19 +418,20 @@ function startTitleEdit() {
 }
 
 /**
- * 编辑前确保节点可见：不在视野内才 setCenter 挪过去（保留当前缩放，不打断用户视野）。
- * 拿不到 nodeLayout/visibleRect（未挂载/无 DOM 的测试环境）时静默跳过，不影响编辑本身。
+ * 编辑前确保节点可见：不在视野内才让视口挪过去（保留当前缩放，不打断用户视野）。
+ * 拿不到 view/visibleRect（未挂载/无 DOM 的测试环境）时静默跳过，不影响编辑本身。
  */
 function focusNodeIfNeeded(): void {
-  const layout = ctx?.tryGet('nodeLayout')
-  const rect = layout?.getNodeRect(props.id)
+  const viewService = ctx?.tryGet('view')
+  const rect = viewService?.getNodeRect(props.id)
   const view = visibleRect?.value
-  if (!rect || !view) return
+  if (!rect || !view || !viewService) return
   // 标题条在卡片上方：把判定范围向上扩 PAD，避免"节点刚好看得见、标题却被裁掉"
   const withTitle = { x: rect.x, y: rect.y - TITLE_FOCUS_PAD, w: rect.w, h: rect.h + TITLE_FOCUS_PAD }
   if (isRectFullyVisible(withTitle, view)) return
-  // T05：viewport 由渲染层登记类型（T03），不必手写 setCenter 结构断言
-  ctx?.get('viewport')?.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom.value)
+  // 取景统一走 view.fitTo：保留缩放 + 已可见不动；margin 让标题也在安全区内。
+  // 标题额外 32px 的判定仍由上面的 withTitle 先做（fitTo 的矩形不含标题）。
+  viewService.fitTo([props.id], { keepZoom: true, onlyIfOutOfView: true, margin: TITLE_FOCUS_PAD })
 }
 
 /** 标题空间余量（flow 坐标）：判定聚焦时向上多留这么多，保证标题不被视口裁掉 */
@@ -693,17 +694,17 @@ let tipOwner = false
 watch(
   () => [isConnectionInvalidTarget.value, isWillEvictTarget.value, connectionHover.value?.reason] as const,
   ([invalid, evict, reason]) => {
-    const tip = ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')
-    if (!tip) return
+    const canvas = ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')
+    if (!canvas) return
     if (invalid) {
       tipOwner = true
-      tip.show(reason || '无法连接')
+      canvas.notify(reason || '无法连接', { source: `node:${props.id}`, followPointer: true, durationMs: 0 })
     } else if (evict) {
       tipOwner = true
-      tip.show('将替换已有连接')
+      canvas.notify('将替换已有连接', { source: `node:${props.id}`, followPointer: true, durationMs: 0 })
     } else if (tipOwner) {
       tipOwner = false
-      tip.hide()
+      canvas.notify('', { source: `node:${props.id}` })
     }
   },
   { immediate: true },

@@ -137,16 +137,16 @@ export function installThemeMode(
 宿主那边（`packages/canvas-render/src/host/createMiniCanvasHost.ts`）的时序是：
 
 ~~~ts
-// 三条 declare/define 都在 settingsPersist.restore() 之前，用户的旧值才能在 define 时命中为初值
+// 三条 declare/define 都在 save.settings.restore() 之前，用户的旧值才能在 define 时命中为初值
 defineThemePaletteSettings(interactionSettings)   // 声明色板（见「可配置主题色板」那篇）
 defineThemeModeSetting(interactionSettings)       // 声明亮 / 暗开关
-await settingsPersist.restore()                  // 恢复用户上次存的值
+await save.settings.restore()                    // 恢复用户上次存的值
 const disposeThemePalette = installThemePalette(interactionSettings)  // 落色板内联变量
 const disposeThemeMode = installThemeMode(interactionSettings)        // 落 <html class="dark">
 ~~~
 
 **为什么"主题模式"要收进 `settings`**（而不是应用里随便一个变量）：
-这样它就有三件事免费拿到 —— 设置面板自动长出一项、`settingsPersist` 自动持久化、任一宿主自带。
+这样它就有三件事免费拿到 —— 设置面板自动长出一项、`save.settings` 自动持久化、任一宿主自带。
 否则用户点了切换、刷新又回到默认（这正是改造前的实际表现）。
 
 ### 组件 / 插件写 CSS 的标准姿势

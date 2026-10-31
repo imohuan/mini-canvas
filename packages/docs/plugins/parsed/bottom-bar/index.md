@@ -13,9 +13,9 @@
 | 种类 | 键 / 名字 | 放的是什么 | 详情 |
 | --- | --- | --- | --- |
 | 服务 | `nodeBar` | `NodeBarService`：读动作 / 读写入器 / 读节点态；写走注册糖 | [服务](/plugins/parsed/bottom-bar/service) |
-| 服务 | `nodeTask` | `NodeTaskService`：跑任务 / 取消 / 刷新续查 | 同上 |
+| 服务 | `nodeTask` | `NodeTaskService`（插件内部）：跑任务 / 取消 / 刷新续查；外部走 `canvas.runBarAction` | 同上 |
 | 注册糖 | `registerBarAction` / `registerBarApplier` / `publishToolActions` | 别的插件的**作者入口** | [注册糖](/plugins/parsed/bottom-bar/registry) |
-| 注册场 | `node/bar` / `node/bar-applier` | 动作表 / 写入器表 | 同上 |
+| 注册场 | `node/bar` | 动作表（`actions/*`）+ 写入器表（`appliers/*`） | 同上 |
 | UI 槽 | `overlay` × 3 | 底栏宿主 / 参考选择态 / 全屏媒体预览 | [UI 插槽](/plugins/parsed/bottom-bar/slots) |
 | 节点区域 | `*/over:inset` | 任务进度覆盖层（通配所有节点类型） | 同上 |
 | 主题槽 | `bottomBar` | 默认底栏皮 `NodeBottomBar` | [主题槽](/plugins/parsed/bottom-bar/slots) |

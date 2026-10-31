@@ -5,10 +5,18 @@ import { createShortcutRemapEngine, SHORTCUT_SAVE_KEY } from '../shortcutRemapEn
 /** 内存 save mock（只实现 get/set；set 同步入内存供 get 读） */
 function mockSave() {
   const store = new Map<string, unknown>()
+  const calls: Array<{ op: 'get' | 'set'; key: string; type?: string }> = []
   return {
     store,
-    async get<T>(key: string) { return store.get(key) as T | undefined },
-    set(key: string, value: unknown) { store.set(key, value) },
+    calls,
+    async get<T>(key: string, type?: string) {
+      calls.push({ op: 'get', key, type })
+      return store.get(key) as T | undefined
+    },
+    set(key: string, value: unknown, type?: string) {
+      calls.push({ op: 'set', key, type })
+      store.set(key, value)
+    },
   }
 }
 
@@ -27,6 +35,10 @@ describe('shortcutRemapEngine（G 项 remap 持久化）', () => {
     expect(c.get('copy')?.keys).toEqual(['mod+shift+c'])
     expect(save.store.get(SHORTCUT_SAVE_KEY)).toEqual({ copy: ['mod+shift+c'] })
     expect(engine.snapshot()).toEqual({ copy: ['mod+shift+c'] })
+    // 重映射只写 shortcut 域，不能污染 canvas/config 那些域
+    expect(save.calls.filter((c) => c.op === 'set')).toEqual([
+      { op: 'set', key: SHORTCUT_SAVE_KEY, type: 'shortcut' },
+    ])
   })
   it('restore 从 save 读回并对现网命令应用（刷新后 remap 保持）', async () => {
     const save = mockSave()
@@ -35,6 +47,9 @@ describe('shortcutRemapEngine（G 项 remap 持久化）', () => {
     const engine = createShortcutRemapEngine(c, save)
     await engine.restore()
     expect(c.get('copy')?.keys).toEqual(['mod+shift+c'])
+    expect(save.calls.filter((c) => c.op === 'get')).toEqual([
+      { op: 'get', key: SHORTCUT_SAVE_KEY, type: 'shortcut' },
+    ])
     // 持久化表里不存在的命令（delete1）restore 时跳过（has 检查）
     expect(engine.isRemapped('copy')).toBe(true)
   })

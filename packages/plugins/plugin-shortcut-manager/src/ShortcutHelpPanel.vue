@@ -8,12 +8,12 @@
  * - 头部：导出配置 / 导入配置 / 恢复默认 / 关闭；
  * - 搜索（命令/键位/ID）+ 无结果提示 + 顶部冲突计数徽章。
  *
- * 数据源差异（v2）：老版读 ShortcutManager 单例；v2 经 ctx.get('shortcut-manager') 适配器，
+ * 数据源差异（v2）：老版读 ShortcutManager 单例；v2 用同包共享的适配器（不占服务名），
  * 从命令注册表 keys（宿主统一分发的唯一数据源）现算帮助列表/冲突/重映射，逻辑零 Vue 可单测。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { V2ShortcutHelpItem, V2ShortcutManager } from './v2ShortcutManager'
+import { shortcutHelpState } from './shortcutState'
 import RemapPanel from './RemapPanel.vue'
 import ShortcutKeys from './ShortcutKeys.vue'
 import { normalizeKeyForPlatform } from './keyLabels'
@@ -28,9 +28,8 @@ defineOptions({ inheritAttrs: false })
 
 const emit = defineEmits<{ close: [] }>()
 
-const { ctx } = useCanvasRender()
-const manager = ctx.get<V2ShortcutManager>('shortcut-manager')
-const service = ctx.get<{ visible: boolean }>('shortcut-manager')
+const manager = shortcutHelpState as V2ShortcutManager
+const service = shortcutHelpState
 
 const searchQuery = ref('')
 const conflicts = ref(manager?.getConflicts() ?? [])

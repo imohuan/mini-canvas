@@ -13,25 +13,13 @@
  * 依赖：save（内核）、nodeStore/edgeStore（内核；订阅数据变化置脏）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { SaveService, DocService } from '@mini-canvas/canvas-data'
-import { createAutoSaveEngine, type AutoSaveEngine } from './autoSaveEngine'
+import type { SaveService, DocService, AutoSaveService } from '@mini-canvas/canvas-data'
+import { createAutoSaveEngine, type AutoSaveEngine } from '@mini-canvas/canvas-data'
 
 export const name = 'auto-save'
 export const inject = ['save', 'doc'] as string[]
 
-/** auto-save 服务 API（对齐老版 AutoSaveAPI 里 v2 有意义的子集） */
-export interface AutoSaveService {
-  /** 当前是否启用定时保存 */
-  isEnabled(): boolean
-  /** 是否有未落盘的脏数据 */
-  isDirty(): boolean
-  /** 立即落盘（无论脏否） */
-  saveNow(): Promise<void>
-  /** 启用/停用定时保存 */
-  setEnabled(v: boolean): void
-  /** 周期(ms) */
-  readonly interval: number
-}
+export type { AutoSaveService }
 
 export function apply(ctx: Context): void {
   const save = ctx.get('save')
@@ -49,7 +37,7 @@ export function apply(ctx: Context): void {
   // doc.subscribe 一次订阅覆盖节点 + 边两桶（与分别订 nodeStore/edgeStore 等价）
   const offDirty = doc.subscribe(() => engine.markDirty())
 
-  // 上架服务（插件 ctx.effect 自动回收；独立名不撞宿主 save）
+  // 挂到 save 子对象（新入口），并保留旧服务名做兼容别名。
   const service: AutoSaveService = {
     isEnabled: () => engine.isEnabled(),
     isDirty: () => engine.isDirty(),
@@ -59,6 +47,7 @@ export function apply(ctx: Context): void {
       return interval
     },
   }
+  ;(save as SaveService & { autoSave?: AutoSaveService }).autoSave = service
   ctx.inject('auto-save', service)
 
   // 卸载清理：effect 的 fn 立即执行、返回值才是清理函数（此前误把清理写进 fn 导致订阅一建即退）

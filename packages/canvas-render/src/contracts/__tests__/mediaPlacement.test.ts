@@ -48,7 +48,7 @@ function boot() {
   const doc = createDocService({ nodeStore, edgeStore, graph, history })
   ctx.inject('doc', doc)
   const layout = new NodeLayoutService(nodeStore)
-  ctx.inject('nodeLayout', layout)
+  ctx.inject('view', layout)
 
   const field = ctx.registryOf<MediaKindCreator>(MEDIA_CREATOR_FIELD)
   const created: Array<{ position: { x: number; y: number }; resourceId: string }> = []

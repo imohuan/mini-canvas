@@ -1,15 +1,15 @@
 /**
- * renderServiceContracts —— 渲染层两个内置服务的**纯结构契约**（作者 SDK 的类型面）。
+ * renderServiceContracts —— 渲染层服务的**纯结构契约**（作者 SDK 的类型面）。
  *
  * 为什么放在 canvas-data 而不是 canvas-render：
  * - 服务名 → 类型的唯一事实源必须能被任何只依赖 canvas-base 的插件看到。canvas-base 依赖
  *   canvas-data，而 canvas-render 是它的下游（canvas-render 依赖 canvas-data）；契约留在这里，
- *   逻辑插件就**不必 import 渲染包**也能按名推导 ctx.get('nodeLayout') / ctx.get('viewport')。
+ *   逻辑插件就**不必 import 渲染包**也能按名推导 ctx.get<ViewContract>('view') 等类型。
  * - 这两个契约是纯数据/纯结构（矩形、视口三元组、方法签名），不含 Vue、不含 VueFlow、不含
  *   实现细节（setMeasuredSize / attachBackend 这类写口与装配口都**不在**契约里）。
  *
- * canvas-render 的 NodeLayoutService / ViewportService 实现这些契约（implements），
- * 并由本文件（经 canvas-data 的 Services 登记）提供按名类型；canvas-render 不再各自 declare。
+ * canvas-render 的 ViewService（以及它内部持有的布局/视口实例）实现这些契约，
+ * 对外服务名只有 `view`；canvas-render 不再各自 declare 服务名。
  */
 
 /** 视口变换状态（pan 的 x/y + 缩放），与 VueFlow viewport 同形 */
@@ -67,6 +67,114 @@ export interface LayoutRect {
   y: number
   w: number
   h: number
+}
+
+/**
+ * 取景参数（服务名 view 的 fitTo）。九个聚焦实现的所有差异都收在这里：
+ * 是否改缩放、是否只在该内容不可见时动、可视区要不要扣掉状态栏。
+ */
+export interface FitToOptions {
+  /** 留白比例（0..0.49，与 VueFlow fitView 同义）；不写 heightRatio 时用它适配整块内容 */
+  padding?: number
+  /** 目标内容高度占视口高度的比例（auto-layout / 底栏用 0.5）；写了它就不看 padding */
+  heightRatio?: number
+  minZoom?: number
+  maxZoom?: number
+  /** true = 保持当前 zoom，只平移 */
+  keepZoom?: boolean
+  /** 指定固定 zoom */
+  zoom?: number
+  /** 是否顺手选中目标；由 canvas.focus 消费，view.fitTo 自己不碰选中 */
+  select?: boolean
+  /** 只在该内容不可见时移动 */
+  onlyIfOutOfView?: boolean
+  /** 不可见判定的额外边距（屏幕像素） */
+  margin?: number
+  /** 把上/下状态栏高度算进包围盒：缺省 'none' */
+  includeBars?: 'none' | 'bottom' | 'both'
+  /** 是否播放过渡；缺省 true */
+  animate?: boolean
+  durationMs?: number
+}
+
+/** 取景目标：一组节点 id / 当前选中集 / 全部节点 */
+export type FocusTarget = string[] | 'selection' | 'all'
+
+/**
+ * 视口与几何合并后的插件契约（服务名 view）。
+ *
+ * 不含量测写口（setMeasuredSize 等）与后端装配口（attachBackend）：那两件是渲染层内部面。
+ */
+export interface ViewContract extends NodeLayoutContract, ViewportContract {
+  /** 唯一取景算法；返回是否真的移动了视图（已可见时 false） */
+  fitTo(target: FocusTarget, opts?: FitToOptions): boolean
+}
+
+/** 通知选项（服务名 canvas 的 notify / 旧 tip 转发共用） */
+export interface NotifyOptions {
+  source?: string
+  priority?: number
+  once?: boolean
+  /** 0 = 常驻 */
+  durationMs?: number
+  /** 跟随鼠标渲染（tip 语义） */
+  followPointer?: boolean
+}
+
+/** canvas 建节点的附加参数（透传给节点插件 creator） */
+export interface CanvasCreateNodeOptions {
+  data?: Record<string, unknown>
+  sourceNodeId?: string
+  gap?: number
+}
+
+export type CanvasSelectMode = 'replace' | 'add' | 'toggle'
+
+/**
+ * 画布动作门面契约（服务名 canvas）。
+ *
+ * 只转发、不存数据；可选业务服务（group / nodeToolbar / nodeTask）缺失时
+ * 返回 undefined / false / null，只有 runBarAction 缺执行器时明确 reject。
+ */
+export interface CanvasActions {
+  createNode(
+    type: string,
+    at: { x: number; y: number },
+    opts?: CanvasCreateNodeOptions,
+  ): string | undefined
+  creatableTypes(): string[]
+  select(ids: string[], mode?: CanvasSelectMode): void
+  focus(target: FocusTarget, opts?: FitToOptions): boolean
+  enterMode(nodeId: string, modeId: string): boolean
+  exitMode(nodeId?: string): void
+  activeMode(nodeId: string): string | undefined
+  group(nodeIds: string[]): string | null
+  ungroup(groupId: string): void
+  notify(message: string, opts?: NotifyOptions): () => void
+  runBarAction(nodeId: string, actionId: string, input?: unknown): Promise<unknown>
+  cancelBarAction(nodeId: string): void
+  /** 执行命令（未注册 → no-op，与 CommandRegistry.execute 同义） */
+  runCommand(id: string, ...payload: unknown[]): unknown
+  /** 枚举命令（菜单/快捷键面板用） */
+  listCommands(): Array<{
+    id: string
+    title?: string
+    keys?: string[]
+    areas?: string[]
+    group?: string
+    order?: number
+    icon?: string
+  }>
+  /** 判断命令是否已注册 */
+  hasCommand(id: string): boolean
+  /** 运行期改键（快捷键管理器用）；返回改后的 keys */
+  remapCommandKeys(id: string, keys: string[]): string[]
+  /** 恢复某命令注册时的 keys（未 remap 过 → 当前 keys） */
+  resetCommandKeys(id: string): string[] | undefined
+  /** 只读：某命令注册时的原始 keys */
+  originalCommandKeys(id: string): string[] | undefined
+  /** 某命令 keys 是否被 remap 过 */
+  isCommandRemapped(id: string): boolean
 }
 
 /**

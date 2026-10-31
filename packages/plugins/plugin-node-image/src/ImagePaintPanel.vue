@@ -88,7 +88,7 @@ async function save(): Promise<void> {
   if (busy.value || !hasStrokes.value) return
   busy.value = true
   try {
-    await ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command').execute('image:paint-confirm', { nodeId: props.id })
+    await ctx.get<{ runCommand(id: string, payload?: unknown): unknown }>('canvas').runCommand('image:paint-confirm', { nodeId: props.id })
   } finally {
     busy.value = false
   }

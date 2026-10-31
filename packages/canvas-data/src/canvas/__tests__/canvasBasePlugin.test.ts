@@ -3,7 +3,7 @@
  *
  * 锁三件事：
  * 1. **它声明了核心身份**：core: true，且真被内核记下（uninstallPlugin 返回 false、服务仍可用）；
- * 2. **它注入的服务件件到位**，且宿主不再需要手写 ctx.inject；
+ * 2. **基础服务件件到位**，容器/工厂/命令收在内部运行时；
  * 3. **换一个宿主（headless）能跑通建节点 / 撤销 / 落盘全链** —— 不依赖浏览器，
  *    这就是"步骤 4 完成标准③"的证据：画布能力不再绑死在 createMiniCanvasHost 里。
  */
@@ -13,6 +13,7 @@ import { createCanvasBasePlugin, CANVAS_BASE_PLUGIN_NAME } from '../canvasBasePl
 import { MemoryStorageAdapter } from '../../storage/memoryAdapter'
 import { GRAPH_EDGES_KEY, GRAPH_KEY } from '../../storage/keys'
 import { NodeRegistry } from '../registry/nodeRegistry'
+import { canvasRuntime } from '../canvasRuntime'
 import type { CanvasNode } from '../../nodeStore'
 import type { CanvasEdge } from '../../edgeStore'
 
@@ -38,24 +39,14 @@ async function bootHeadless(adapter?: MemoryStorageAdapter) {
 }
 
 describe('canvasBasePlugin —— 建出来的基础服务', () => {
-  it('每件服务都经基础插件注入内核，ctx.get 全部取得到', async () => {
+  it('基础服务只上架 save/doc/resources/selection；其余实例进内部运行时', async () => {
     const { ctx, services } = await bootHeadless()
-    // 步骤 5c：数据那一格只有一个名字 doc（nodeStore/edgeStore/graph/history 四个老名已下线）
-    const names = [
-      'save',
-      'doc',
-      'resources',
-      'nodeRegistry',
-      'themeRegistry',
-      'selection',
-      'command',
-      'nodeFactory',
-    ] as const
+    const names = ['save', 'doc', 'resources', 'selection'] as const
     for (const n of names) {
       expect(ctx.get(n), n + ' 未注入').toBe(services[n as keyof typeof services])
     }
-    // 四个老服务名确已下线（这正是 5c 的目标）
-    for (const legacy of ['nodeStore', 'edgeStore', 'graph', 'history']) {
+    // 数据四老名 + 容器/工厂/命令/配置桥退出服务表（Spec 3.1 / D8）
+    for (const legacy of ['nodeStore', 'edgeStore', 'graph', 'history', 'nodeRegistry', 'themeRegistry', 'nodeFactory', 'command', 'settingsPersist']) {
       expect(ctx.get(legacy), legacy + ' 不该再是服务名').toBeUndefined()
     }
     // 底层四个实例本身仍在 base.services 上（宿主/渲染层直接持有）
@@ -65,8 +56,13 @@ describe('canvasBasePlugin —— 建出来的基础服务', () => {
     expect(services.history).toBeDefined()
     // doc 是同一批数据的视图（指向同一实例）
     expect(services.doc.getNodes()).toEqual(services.nodeStore.getNodes())
+    // 同一批实例在内部运行时里（宿主持有的字段也指向它）
+    expect(canvasRuntime()?.nodeRegistry).toBe(services.nodeRegistry)
+    expect(canvasRuntime()?.themeRegistry).toBe(services.themeRegistry)
+    expect(canvasRuntime()?.nodeFactory).toBe(services.nodeFactory)
+    expect(canvasRuntime()?.command).toBe(services.command)
     // 配置持久化桥（缺省开启）
-    expect(ctx.get('settingsPersist')).toBe(services.settingsPersist)
+    expect(canvasRuntime()?.settingsPersist).toBe(services.settingsPersist)
     ctx.stop()
   })
 
@@ -78,12 +74,13 @@ describe('canvasBasePlugin —— 建出来的基础服务', () => {
     ctx.stop()
   })
 
-  it('persistSettings: false → 不注入桥（宿主能关掉配置持久化）', async () => {
+  it('persistSettings: false → 不建桥（宿主能关掉配置持久化）', async () => {
     const ctx = new Context()
     const base = createCanvasBasePlugin({ persistSettings: false })
     ctx.plugin(base.plugin)
     await ctx.start()
     expect(ctx.hasService('settingsPersist')).toBe(false)
+    expect(canvasRuntime()?.settingsPersist).toBeUndefined()
     expect(base.services.settingsPersist).toBeUndefined()
     ctx.stop()
   })
@@ -94,7 +91,7 @@ describe('canvasBasePlugin —— 建出来的基础服务', () => {
     const base = createCanvasBasePlugin({ nodeRegistry: ownRegistry })
     ctx.plugin(base.plugin)
     await ctx.start()
-    expect(ctx.get('nodeRegistry')).toBe(ownRegistry)
+    expect(canvasRuntime()?.nodeRegistry).toBe(ownRegistry)
     ctx.stop()
   })
 })
@@ -110,7 +107,7 @@ describe('canvasBasePlugin —— 核心身份（决策 1）', () => {
     expect(ctx.uninstallPlugin('canvas-base')).toBe(false)
     // 画布功能不受影响：服务实例仍可取到，仍能用
     expect(ctx.get('doc')).toBe(services.doc)
-    expect(ctx.get('nodeFactory')).toBe(services.nodeFactory)
+    expect(canvasRuntime()?.nodeFactory).toBe(services.nodeFactory)
     expect(ctx.fiber('canvas-base')?.stateName).toBe('active')
     ctx.stop()
   })

@@ -140,3 +140,5 @@ describe('会话进出与回退', () => {
     expect(svc.inMode('n1')).toBe(false)
   })
 })
+
+

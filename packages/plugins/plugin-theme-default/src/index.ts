@@ -23,7 +23,7 @@ import BaseNode from "./components/node/BaseNode.vue";
 import {
   NodeToolbarService,
   type NodeToolbarMode,
-} from "./components/node/nodeToolbarService";
+} from "@mini-canvas/canvas-render";
 import NodeModeTopBar from "./components/node/NodeModeTopBar.vue";
 import NodeModeBottomBar from "./components/node/NodeModeBottomBar.vue";
 import {
@@ -712,8 +712,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 
   // ===== 节点上下状态栏基础设施（用户口径 2026-10-29 重构）=====
   //
-  // nodeToolbar 服务 = 注册表 + 会话。归属**主题**：一根栏长什么样是默认皮的一部分，
-  // 换主题时整套跟着换。bottom-bar 降级为「默认底栏的内容贡献者」，与裁剪模式完全平等。
+  // nodeToolbar 服务 = 注册表 + 会话。归属**渲染层**（Spec D4）：模式注册与会话不能随主题
+  // 卸载而丢；主题只负责画那一格。bottom-bar 降级为「默认底栏的内容贡献者」，与裁剪模式完全平等。
   //
   // 用法（任意插件，按服务名取，不 import 别的插件）：
   //   const svc = ctx.tryGet<NodeToolbarService>('nodeToolbar')
@@ -725,9 +725,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // - 上栏：NodeModeTopBar 挂在节点壳的 out:top 锚点（带主题的偏移配置 + 居中 + 反缩放）；
   // - 下栏：NodeModeBottomBar 挂在节点壳的 out:bottom 锚点（与上栏同一套定位）。
   // 两者都只做「问服务 → 渲染那一格」，模式/默认没有第二套渲染路径。
-  const toolbarSvc = new NodeToolbarService();
-  toolbarSvc.docPeek = ctx.get("doc") as unknown as NodeToolbarService["docPeek"];
-  ctx.provide("nodeToolbar", toolbarSvc);
+  // 服务由宿主 createMiniCanvasHost 在装业务插件前注入；这里只挂两个解析面板。
+  const toolbarSvc = ctx.tryGet<NodeToolbarService>("nodeToolbar");
   void toolbarSvc;
 
   // 上/下两根栏各一个解析面板，都挂节点壳的锚点（同一套定位：偏移/居中/反缩放）。
@@ -819,8 +818,8 @@ export type { DropdownTrigger, SelectOption } from "./components/ui";
  *   插件内用 ctx.get('nodeToolbar')；这里导出类型供 declare module 增强用）。
  * - NodeModeTopBar / NodeModeBottomBar：默认渲染器（BaseNode 的上/下段经它们透传或替换）。
  */
-export { NodeToolbarService } from "./components/node/nodeToolbarService";
-export type { NodeToolbarMode } from "./components/node/nodeToolbarService";
+export { NodeToolbarService } from "@mini-canvas/canvas-render";
+export type { NodeToolbarMode } from "@mini-canvas/canvas-render";
 export { default as NodeModeTopBar } from "./components/node/NodeModeTopBar.vue";
 export { default as NodeModeBottomBar } from "./components/node/NodeModeBottomBar.vue";
 

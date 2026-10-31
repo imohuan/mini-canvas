@@ -36,6 +36,18 @@ export class NodeLayoutService implements NodeLayoutContract {
     this.measured.clear()
   }
 
+  /**
+   * 清掉 store 里已经不存在的实测值。
+   *
+   * 为什么需要：可见剔除会先把 DOM 拿掉（元素从 observed 里移除），之后用户真删节点时，
+   * DOM 早已不在，量测层收不到“元素消失”那一次回调。只靠 DOM 生命周期会留下永久实测值。
+   */
+  pruneMissing(): void {
+    for (const id of [...this.measured.keys()]) {
+      if (!this.store.getNode(id)) this.measured.delete(id)
+    }
+  }
+
   /** 取某节点的实际尺寸：实测 > node.size > type.defaultSize。 */
   nodeSize(id: string): { w: number; h: number } {
     const m = this.measured.get(id)

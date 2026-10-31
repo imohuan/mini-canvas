@@ -6,8 +6,8 @@ import StickyContent from './StickyContent.vue'
 
 export const name = 'sticky-demo'
 
-// ① doc 是硬依赖：creator 内部经它写数据（唯一写入口：自动进历史 + 落盘）
-export const inject = ['doc'] as string[]
+// ① doc 是硬依赖：creator 内部经它写数据；canvas 是建节点门面
+export const inject = ['doc', 'canvas'] as string[]
 
 const STICKY_TYPE = 'sticky'
 const DEFAULT_TEXT = '点两下改字'
@@ -20,7 +20,9 @@ export function apply(ctx: Context): void {
    *    extra 是调用方给的附加材料——这里约定 { text } 作为初始文字。
    */
   function createSticky(position: { x: number; y: number }, extra?: unknown): string {
-    const text = (extra as { text?: unknown } | undefined)?.text
+    // canvas.createNode 会把附加字段包成 { data }；键位那份调用方可能传 { text }。
+    const raw = extra as { text?: unknown; data?: { text?: unknown } } | undefined
+    const text = raw?.data?.text ?? raw?.text
     // ③ 建节点走 doc.transaction（一次原子写），不是直接改 store
     return doc.transaction('create-sticky', (tx) =>
       tx.createNode(STICKY_TYPE, position, { text: typeof text === 'string' ? text : DEFAULT_TEXT }),
@@ -35,7 +37,7 @@ export function apply(ctx: Context): void {
     description: '贴一张可写字的便签',
     size: { w: 220, h: 160 },
     in: StickyContent,               // 内容组件住在卡片内部的 in 区域
-    create: createSticky,            // ⑤ 就是这一行让 nodeFactory.creatableTypes() 多出 'sticky'
+    create: createSticky,            // ⑤ 就是这一行让 canvas.creatableTypes() 多出 'sticky'
   })
 
   // ⑥ 自己再加一条命令：在画布固定落点贴一张（演示"按类型名建节点"的另一条消费路径）
@@ -46,7 +48,7 @@ export function apply(ctx: Context): void {
     areas: ['pane'],                 // 声明了 areas → 右键空白处会出现这一项
     order: 5,
     run() {
-      const fromExtra = ctx.get('nodeFactory').create(STICKY_TYPE, { x: 120, y: 120 }, { text: '从命令建的' })
+      const fromExtra = ctx.get('canvas').createNode(STICKY_TYPE, { x: 120, y: 120 }, { data: { text: '从命令建的' } })
       // ⑦ 建完顺手选中它（用户期望"新建的就是选中的"）
       const selection = ctx.get('selection')
       if (selection) {
@@ -58,7 +60,7 @@ export function apply(ctx: Context): void {
   })
 
   // ⑧ 自检输出：确认工厂真的认识这个类型（真实插件里一般不写）
-  console.log('[sticky-demo] 现在能建的类型：', ctx.get('nodeFactory').creatableTypes())
+  console.log('[sticky-demo] 现在能建的类型：', ctx.get('canvas').creatableTypes())
 }
 
 /** 兼容旧装配的 PluginModule 出口 */

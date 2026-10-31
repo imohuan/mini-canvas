@@ -37,14 +37,14 @@ describe('looksLikeUrl（判入参是不是 js 地址）', () => {
 describe('createPluginReloader', () => {
   it('按 id 查清单 → 加载 → 卸旧装新；装完可执行 then 命令', async () => {
     const reloadPlugin = vi.fn()
-    const execute = vi.fn()
+    const runCommand = vi.fn()
     const loadUmd = vi.fn(async () => ({ name: 'style-library', apply() {} }))
     const fetcher = vi.fn(async () => ENTRIES)
 
     const r = createPluginReloader({
       fetchCatalog: fetcher,
       loadUmd,
-      facade: () => ({ reloadPlugin, getContext: () => ({ get: () => ({ execute }) }) }),
+      facade: () => ({ reloadPlugin, getContext: () => ({ get: () => ({ runCommand }) }) }),
     })
 
     const res = await r.reload('style-library', { then: 'style-library:open' })
@@ -53,7 +53,7 @@ describe('createPluginReloader', () => {
     expect(loadUmd).toHaveBeenCalledWith('/plugins/plugin-style-library/plugin-style-library.js', 'MiniCanvasPluginStyleLibrary')
     // 先卸后装交给 reloadPlugin（它内部做这两步）
     expect(reloadPlugin).toHaveBeenCalledWith('style-library', expect.objectContaining({ name: 'style-library' }))
-    expect(execute).toHaveBeenCalledWith('style-library:open')
+    expect(runCommand).toHaveBeenCalledWith('style-library:open')
   })
 
   it('opts.url 给了就不查清单', async () => {
@@ -159,19 +159,21 @@ describe('createPluginReloader', () => {
     await expect(r.reload('style-library')).rejects.toThrow(/宿主还没就绪/)
   })
 
-  it('已装判定来自 pluginManager.list()（list() 用）', async () => {
+  it('已装判定只来自 host.manager.list()：旧 ctx 里同名条目不算', async () => {
     const r = createPluginReloader({
       fetchCatalog: async () => ENTRIES,
       loadUmd: async () => ({ name: 'style-library', apply() {} }),
       facade: () => ({
         reloadPlugin: () => {},
+        // 旧 ctx 故意列一条：如果实现回退到 ctx.get('pluginManager')，这里会让断言变红。
         getContext: () => ({ get: () => ({ list: () => [{ name: 'mini-map' }] }) }),
+        getHost: () => ({ manager: { list: () => [{ name: 'style-library' }] } }),
       }),
     })
     const rows = await r.list()
-    // 自带件（url 为空）不列；已装的标 installed
-    expect(rows.find((x) => x.name === 'mini-map')?.installed).toBe(true)
-    expect(rows.find((x) => x.name === 'style-library')?.installed).toBe(false)
+    // 只认 manager：style-library 已装，mini-map 未装（旧 ctx 那条不能“救活”它）
+    expect(rows.find((x) => x.name === 'style-library')?.installed).toBe(true)
+    expect(rows.find((x) => x.name === 'mini-map')?.installed).toBe(false)
     expect(rows.some((x) => x.name === 'builtin-x')).toBe(false)
   })
 })

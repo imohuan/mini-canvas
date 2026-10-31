@@ -60,12 +60,9 @@ export function stylePlacementOf(input: PlacementInput): { x: number; y: number 
 /** focusStyleNode 用到的服务（都可选：极简宿主可能只装了其中一部分） */
 export interface FocusDeps {
   selection?: { set(ids: string[]): void; clearEdges?(): void } | null
-  nodeLayout?: { getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }
-  viewport?: {
-    getViewport(): { zoom: number }
-    setCenter(x: number, y: number, zoom?: number): void
+  view?: {
+    fitTo(target: string[], opts?: { keepZoom?: boolean; select?: boolean }): boolean
   } | null
-  doc?: { getNode(id: string): { position: { x: number; y: number } } | undefined }
 }
 
 /**
@@ -83,24 +80,11 @@ export function focusStyleNode(deps: FocusDeps, nodeId: string): void {
     /* 选中失败不影响节点本身 */
   }
 
-  const viewport = deps.viewport
-  if (!viewport) return
-  let zoom: number | undefined
+  // ② 聚焦：统一走 view.fitTo（保持当前缩放，只平移）
+  const view = deps.view
+  if (!view) return
   try {
-    zoom = viewport.getViewport().zoom
-  } catch {
-    zoom = undefined
-  }
-
-  // ② 聚焦：优先用实测矩形中心（节点尺寸由节点类型决定）
-  try {
-    const rect = deps.nodeLayout?.getNodeRect(nodeId)
-    if (rect) {
-      viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom)
-      return
-    }
-    const node = deps.doc?.getNode(nodeId)
-    if (node) viewport.setCenter(node.position.x, node.position.y, zoom)
+    view.fitTo([nodeId], { keepZoom: true, select: true })
   } catch {
     /* 聚焦失败不影响节点本身 */
   }

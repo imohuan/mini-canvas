@@ -64,6 +64,8 @@ export interface PluginFacadeLike {
   reloadPlugin(name: string, nextMod?: unknown): void
   /** 取宿主 ctx；get 用**非泛型**签名 —— 泛型方法会让注入假依赖的测试类型不兼容 */
   getContext(): { get(name: string): unknown }
+  /** 宿主统一安装句柄（已装判定从这里取，旧 pluginManager 服务名已下线） */
+  getHost?(): { manager?: { list(): Array<{ name: string }> } }
 }
 
 export interface ReloadOptions {
@@ -319,8 +321,8 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
 
     // ④ 可选：装完顺手跑一条命令（如打开该插件的面板）
     if (opts.then) {
-      const cmd = facade.getContext().get('command') as { execute(id: string): unknown } | undefined
-      cmd?.execute(opts.then)
+      const cmd = facade.getContext().get('canvas') as { runCommand(id: string): unknown } | undefined
+      cmd?.runCommand(opts.then)
     }
     return { name: mod.name, url }
   }
@@ -330,8 +332,7 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
     const installed = new Set<string>(
       (() => {
         const facade = facadeOf()
-        const ctx = facade?.getContext()
-        const svc = ctx?.get('pluginManager') as { list(): Array<{ name: string }> } | undefined
+        const svc = facade?.getHost?.()?.manager
         return svc?.list?.().map((p: { name: string }) => p.name) ?? []
       })(),
     )
