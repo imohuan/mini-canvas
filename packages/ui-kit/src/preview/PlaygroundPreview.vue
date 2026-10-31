@@ -8,7 +8,7 @@
 import { computed, ref } from 'vue'
 import {
   Button, ButtonGroup, Confirm, Dialog, Dropdown, Input,
-  MessagesHost, NotifyHost, NumberInput, Select, Slider, SplitPane,
+  NumberInput, Select, Slider, SplitPane,
   Switch, Tabs, Tooltip, UiKitProvider, message, notify,
 } from '../index'
 import type { SelectOption, TabItem, UiKitTone } from '../index'
@@ -292,13 +292,11 @@ function fireMessage(): void {
 
     <!-- Notify -->
     <template v-else-if="id === 'notify'">
-      <NotifyHost />
       <Button variant="secondary" @click="fireNotify">发一条通知</Button>
     </template>
 
     <!-- Messages -->
     <template v-else-if="id === 'messages'">
-      <MessagesHost />
       <Button variant="secondary" @click="fireMessage">显示轻提示</Button>
     </template>
 
