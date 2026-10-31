@@ -81,6 +81,14 @@ const cells = computed(() => {
   pointer-events: none;
   overflow: hidden;
   border-radius: var(--radius-panel, 16px);
+  /**
+   * 容器实底（用户口径 2026-10-31）：分镜组不再是透明节点。
+   *
+   * 之前 transparent:true 让卡片表面透明，亮色主题下空槽直接透出画布点阵，
+   * 看着像没加载完。这里铺一层跟随主题的面板色（亮色白、暗色深灰），
+   * 子节点（图片）照常画在它上面 —— 视觉上和分组一样是"有底的容器"。
+   */
+  background: var(--ui-panel, #ffffff);
 }
 
 /* 空槽：虚线框 + 居中加号，提示"可以往这里放图" */

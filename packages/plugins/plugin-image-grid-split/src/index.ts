@@ -17,7 +17,7 @@ import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'
 import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
-import { onStoryboardDragEnd, onStoryboardDragMove, storyboardHitAt } from './storyboardDrag'
+import { disposeGhostSweep, onStoryboardDragEnd, onStoryboardDragMove, storyboardHitAt } from './storyboardDrag'
 import { STORYBOARD_LAYOUT_KEYS } from './storyboard'
 
 export const name = 'image-grid-split'
@@ -72,8 +72,12 @@ export function apply(ctx: Context): void {
       in: StoryboardGrid,
       inputs: [],
       outputs: [],
-      // 容器语义：透明底（子节点在上面），可缩放（行列固定、格子跟着变大）
-      transparent: true,
+      // 容器语义：可缩放（行列固定、格子跟着变大）。
+      //
+      // 2026-10-31 用户口径：**不要透明**。透明让亮色主题下卡片直接透出画布，
+      // 空槽看起来像一大片灰白/深灰的洞（参考图 2），和分组那种"实底容器"观感不一致。
+      // 现在底板由 StoryboardGrid 自己铺一层跟随主题的面板色；子节点仍画在卡片上层。
+      transparent: false,
       resizable: true,
     })
   } catch {
@@ -213,6 +217,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => offMove.dispose())
   // 拖动半透明的注入样式随插件回收（否则热卸后样式留在页面里）
   ctx.effect(() => () => {
+    disposeGhostSweep()
     document.getElementById('image-grid-split-ghost-style')?.remove()
   })
 }

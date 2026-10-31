@@ -59,6 +59,13 @@ async function boot(): Promise<Harness> {
       size: { w: 320, h: 180 },
       data: { videoWidth: 16, videoHeight: 9 },
     },
+    {
+      id: 'vid2',
+      type: 'image',
+      position: { x: 200, y: 200 },
+      size: { w: 320, h: 180 },
+      data: { imageWidth: 16, imageHeight: 9 },
+    },
   ])
   return {
     ctx,
@@ -128,5 +135,42 @@ describe('storyboardHitAt：只在真压到分镜组内部时才算命中', () =
 
   it('拖分镜组自己：永远不算命中（不能把自己吸进自己）', () => {
     expect(storyboardHitAt(h.ctx, { nodeId: 'board', position: { x: 1010, y: 1010 } })).toBeNull()
+  })
+})
+
+/**
+ * 一槽一图：外部拖进来的图把原住户挤走，且**不会**留下“同一格两个 parentId”。
+ *
+ * 用户实测 2026-10-31：外部拖入时宿主已经先给节点写了 parentId，slots 里还没有它，
+ * 于是两张图挂在同一格上重叠。这里直接跑 applyStoryboardDrop 的写入路径来钉住。
+ */
+describe('applyStoryboardDrop：一槽一图（外部拖入）', () => {
+  let h: Harness
+  beforeEach(async () => { h = await boot() })
+  afterEach(() => h.stop())
+
+  it('拖进已被占用的格：原住户被挤出该格，槽位表不出现两个 id', () => {
+    // board 的卡片矩形 1000..1600 / 1000..1400；第 0 格左上区域
+    const handled = applyStoryboardDrop(h.ctx, { nodeId: 'vid2', position: { x: 1010, y: 1010 } })
+    expect(handled).toBe(true)
+    const board = h.doc.getNode('board')!
+    const slots = board.data!.slots as Array<string | null>
+    // 第 0 格只剩一个 id
+    expect(slots[0]).toBe('vid2')
+    expect(slots.filter((s) => s === 'vid2')).toHaveLength(1)
+    // 原来占第 0 格的 img 不能再挂在组里（它是被顶掉的那张）
+    const img = h.doc.getNode('img')!
+    expect(img.parentId).toBeUndefined()
+    // 新来的图落在组里
+    expect(h.doc.getNode('vid2')!.parentId).toBe('board')
+  })
+
+  it('组内每个槽位最多一个节点：脏数据里的“多出来那张”会被解父', () => {
+    // 制造脏数据：再挂一张图到组里，但 slots 里没有它
+    h.ctx.tryGet<{ addNodes(inputs: unknown[]): unknown }>('doc')!.addNodes([
+      { id: 'extra', type: 'image', parentId: 'board', position: { x: 10, y: 40 }, size: { w: 100, h: 60 }, data: {} },
+    ])
+    applyStoryboardDrop(h.ctx, { nodeId: 'vid2', position: { x: 1300, y: 1300 } })
+    expect(h.doc.getNode('extra')!.parentId).toBeUndefined()
   })
 })

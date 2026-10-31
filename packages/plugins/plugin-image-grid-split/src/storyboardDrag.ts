@@ -270,36 +270,24 @@ export function applyStoryboardDrop(
   const slots = normalizeSlots(decision.slots, (id) => Boolean(doc.getNode(id)))
 
   /**
-   * 「一槽一图」兜底（用户口径 2026-10-31：松手后仍能看到两个节点叠在一格）。
+   * 组内每个槽位只允许一个节点（用户口径 2026-10-31：外部拖进来仍会两张叠一格）。
    *
-   * 归一只能清掉**表里重复的 id**，清不掉"表里没写、但物理上已经叠进来"的情况：
-   * 旧数据里节点 parentId 挂着本组、position 却停在某格上，slots 里没有它 ——
-   * 于是新图占同一格时，两张图在同一位置重叠，用户看到的就是"一个槽放了两张"。
-   * 这里按**每个子节点的实际位置**反推它占的格，谁不在这格就把它移出槽位表；
-   * slots 之外、又没有自己格位的子节点则解父成自由节点（它本来就不该锁在组里）。
+   * slots 是"谁占哪格"的唯一真相，但**光看它不够**：外部拖进来时宿主可能已经给节点
+   * 写了 parentId，而 slots 里还没有它 —— 于是两张图挂在同一格，用户看到的就是重叠。
+   * 这里以 slots 为准逐个清点组内子节点：不在 slots 里的一律解父成自由节点。
+   * 它们本来就不是这个组的成员，留在组里只会继续叠着别人。
    */
-  const rectsForBoard = rects
-  const occupied = new Map<number, string>()
+  const evict = new Set<string>()
   for (const child of doc.getNodes()) {
     if (child.id === node.id || child.parentId !== board.id) continue
     if (child.type !== 'image') continue
-    const local = { x: child.position?.x ?? 0, y: child.position?.y ?? 0 }
-    const idx = slotIndexByOverlapOrCenter(
-      rectsForBoard,
-      { x: 0, y: 0 },
-      { x: local.x, y: local.y, w: child.size?.w ?? 0, h: child.size?.h ?? 0 },
-      local,
-    )
-    if (idx >= 0) occupied.set(idx, child.id)
+    if (!slots.includes(child.id)) evict.add(child.id)
   }
-  // 目标格外、物理上已压在新图要占的格上的节点：解父挪开（不能让它和新图叠着）
-  const stale = occupied.get(decision.slotIndex)
-  if (stale && stale !== node.id) {
-    const other = doc.getNode(stale)
-    if (other) {
-      detachLayout = layout
-      detachFromBoard(doc, other, board.id)
-    }
+  for (const id of evict) {
+    const other = doc.getNode(id)
+    if (!other) continue
+    detachLayout = layout
+    detachFromBoard(doc, other, board.id)
   }
 
   const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspectOf(node), fitImageLimits(ctx))
@@ -421,6 +409,65 @@ function releaseGhosts(ctx: Context): void {
   }
 }
 
+/**
+ * 松手后的**延迟兜底清理**（用户口径 2026-10-31）。
+ *
+ * 为什么光靠事件不够：拖拽结束这一步会被很多边缘情况打断 ——
+ * 松手落在 iframe/画布外、浏览器失焦、宿主重挂载渲染态、热更新换了模块实例……
+ * 任何一种都会让 drag-end 没跑到（或跑到的不是同一份 ghosted），属性就留在 DOM 上，
+ * 用户看到一张永远 45% 透明的卡片，只能刷新才好。
+ *
+ * 所以除了即时清理，再在松手后多扫几次（60ms / 200ms / 600ms）：
+ * 只按 DOM 属性扫，不依赖任何内存状态，扫到就抹掉。多次是为了避开
+ * 「松手瞬间宿主还在重灌渲染态、清完又被贴回去」的窗口。
+ */
+const sweepTimers: Array<ReturnType<typeof setTimeout>> = []
+function scheduleGhostSweep(ctx: Context, delays: number[] = [60, 200, 600]): void {
+  for (const t of sweepTimers) clearTimeout(t)
+  sweepTimers.length = 0
+  for (const delay of delays) {
+    sweepTimers.push(setTimeout(() => releaseGhosts(ctx), delay))
+  }
+}
+
+/**
+ * 全局「指针抬起 / 窗口失焦」兜底（用户口径 2026-10-31：边缘情况下透明度清不掉）。
+ *
+ * 为什么不能只挂在 drag-end 上：那个事件由宿主在拖拽结束时发，一旦这次手势被
+ * 打断（松手落在画布外、模式中途退出、渲染态重灌…）它就不来了，属性永远留在 DOM 上。
+ * 指针抬起是**浏览器级**事件，只要用户松了手就一定有；拿它兜底最可靠。
+ * 主动时不做判断、直接扫属性抹掉 —— 半透明只可能是拖拽中的临时态，松手后就不该存在。
+ */
+let globalSweepBound = false
+function bindGlobalGhostSweep(ctx: Context): void {
+  if (globalSweepBound || typeof window === 'undefined') return
+  globalSweepBound = true
+  const onUp = (): void => {
+    // 立刻清一次，再补两轮（宿主可能在这之后重灌渲染态把属性贴回来）
+    releaseGhosts(ctx)
+    scheduleGhostSweep(ctx, [120, 400])
+  }
+  window.addEventListener('pointerup', onUp, true)
+  window.addEventListener('mouseup', onUp, true)
+  window.addEventListener('blur', onUp, true)
+  sweepListeners.push(() => {
+    window.removeEventListener('pointerup', onUp, true)
+    window.removeEventListener('mouseup', onUp, true)
+    window.removeEventListener('blur', onUp, true)
+  })
+}
+
+/** 全局兜底监听器的解绑函数（插件卸载时执行） */
+const sweepListeners: Array<() => void> = []
+
+/** 插件卸载时把还没跑的兜底清单一并取消（否则定时器会在回收后再动 DOM） */
+export function disposeGhostSweep(): void {
+  for (const t of sweepTimers) clearTimeout(t)
+  sweepTimers.length = 0
+  for (const off of sweepListeners.splice(0)) off()
+  globalSweepBound = false
+}
+
 /** 脱离分镜组：清父级、**绝对坐标**、还原尺寸、从 slots 里摘掉。
  *
  * 用户口径 2026-10-30（参考分组节点）：脱离时 store 的 position 还是**相对父**的值，
@@ -452,6 +499,7 @@ export function onStoryboardDragEnd(
   cb: (handled: boolean, payload: { nodeId: string; position: { x: number; y: number } }) => void,
 ): { dispose(): void } {
   ensureGhostStyle()
+  bindGlobalGhostSweep(ctx)
   return ctx.on(NODE_DRAG_END, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     // 先无论成败都清半透明：applyStoryboardDrop 抛错时若跳过清理，
     // 节点会永远停在 45% 透明（用户实测截图：松手后透明度没恢复）。
@@ -460,6 +508,8 @@ export function onStoryboardDragEnd(
       handled = applyStoryboardDrop(ctx, payload)
     } finally {
       releaseGhosts(ctx)
+      // 再补几轮延迟清理：宿主重灌渲染态 / 事件被打断时，即时那次会被冲掉。
+      scheduleGhostSweep(ctx)
       clearHover()
     }
     // 松手必清半透明标记（无论吸附还是脱离）。
