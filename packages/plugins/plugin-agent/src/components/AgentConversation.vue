@@ -67,7 +67,7 @@ import ToolViewBody from './ToolViewBody.vue'
 const agent = useAgent()
 const s = agent.state
 
-/** 画布上下文：节点 @ 引用与「点标签聚焦节点」都要它（doc / viewport / nodeLayout） */
+/** 画布上下文：节点 @ 引用与「点标签聚焦节点」都要它（doc / view） */
 const { ctx } = useCanvasRender()
 
 /**
@@ -634,17 +634,9 @@ onBeforeUnmount(() => nodeSub?.dispose?.())
 
 /** 点节点标签 = 让画布聚焦到该节点（用户要的「点标签跳到节点」） */
 function focusNode(nodeId: string): void {
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
-  const viewport = ctx.tryGet<{ setCenter(x: number, y: number, zoom?: number): void; getViewport(): { zoom: number } }>('viewport')
-  if (!viewport) return
-  const rect = layout?.getNodeRect(nodeId)
-  if (rect) {
-    viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, viewport.getViewport().zoom)
-    return
-  }
-  const doc = ctx.tryGet<{ getNode(id: string): { position: { x: number; y: number } } | undefined }>('doc')
-  const node = doc?.getNode(nodeId)
-  if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
+  // 保留当前缩放、只平移；节点不存在时 fitTo 返回 false，不抛。
+  ctx.tryGet<{ fitTo(target: string[], opts?: { keepZoom?: boolean }): boolean }>('view')
+    ?.fitTo([nodeId], { keepZoom: true })
 }
 
 /**
