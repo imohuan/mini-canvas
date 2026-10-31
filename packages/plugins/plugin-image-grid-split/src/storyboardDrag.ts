@@ -238,6 +238,75 @@ export function applyStoryboardDrop(
   ctx: Context,
   payload: { nodeId: string; position: { x: number; y: number } },
 ): boolean {
+  /** 本次被顶掉、需要我们帮忙选中的节点（用户口径 2026-10-31） */
+  let displacedForSelection: string | null = null
+  const handled = dropInto(ctx, payload, (id) => { displacedForSelection = id })
+  /**
+   * 被挤出的图默认会落在分镜组卡片下面（卡片 z 更低、图在卡片内层），
+   * 用户"根本看不到它"。所以挤出后**把它设为当前选中**：
+   * 选中节点会被抬到选中层并画高亮描边，一眼就能捡回来。
+   * 拖进来的那张不抢选中——用户的手还在原位，抢走反而像是"操作失败"。
+   *
+   * 选中走内核 selection（单源），渲染层会跟着重灌出高亮，不是只改一次 DOM。
+   */
+  if (handled && displacedForSelection) {
+    const id = displacedForSelection
+    ctx.tryGet<{ set(ids: Iterable<string>): void } | undefined>('selection')?.set([id])
+    ensureNodeVisible(ctx, id)
+  }
+  return handled
+}
+
+/**
+ * 把被挤出的节点"摆到看得见的地方"（用户口径 2026-10-31）。
+ *
+ * 只选中还不够：它经常正好落在分镜组卡片范围内，或是被用户当前的面板/视口边缘压住，
+ * 用户仍然找不到它。这里**保持缩放不变**，只平移视口，让这个节点整块进到可视区内；
+ * 已经完全可见时什么都不做，避免无意义地晃一下画布。
+ */
+function ensureNodeVisible(ctx: Context, nodeId: string): void {
+  const viewport = ctx.tryGet<{
+    getViewport?(): { x: number; y: number; zoom: number }
+    setViewport?(v: { x: number; y: number; zoom: number }): void
+    animateViewport?(v: { x: number; y: number; zoom: number }, durationMs?: number): void
+    getRootEl?(): HTMLElement | null
+  } | undefined>('viewport')
+  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  if (!viewport?.getViewport || !viewport.setViewport) return
+  const rect = layout?.getNodeRect(nodeId)
+  if (!rect || rect.w <= 0 || rect.h <= 0) return
+  const vp = viewport.getViewport()
+  if (!Number.isFinite(vp.zoom) || vp.zoom <= 0) return
+  const root = viewport.getRootEl?.()
+  const vw = root?.clientWidth ?? 0
+  const vh = root?.clientHeight ?? 0
+  if (vw <= 0 || vh <= 0) return
+
+  /** 屏幕坐标（与 toast / 侧栏重叠区无关，只保证"在画布可视区内"） */
+  const margin = 24
+  const left = rect.x * vp.zoom + vp.x
+  const top = rect.y * vp.zoom + vp.y
+  const right = left + rect.w * vp.zoom
+  const bottom = top + rect.h * vp.zoom
+  let dx = 0
+  let dy = 0
+  if (left < margin) dx = margin - left
+  else if (right > vw - margin) dx = vw - margin - right
+  if (top < margin) dy = margin - top
+  else if (bottom > vh - margin) dy = vh - margin - bottom
+  if (dx === 0 && dy === 0) return
+
+  const next = { x: Math.round(vp.x + dx), y: Math.round(vp.y + dy), zoom: vp.zoom }
+  if (viewport.animateViewport) viewport.animateViewport(next)
+  else viewport.setViewport(next)
+}
+
+function dropInto(
+  ctx: Context,
+  payload: { nodeId: string; position: { x: number; y: number } },
+  /** 通知调用方"这张图被顶掉了"，好让外层决定高亮/选中 */
+  onDisplaced: (nodeId: string) => void,
+): boolean {
   const doc = ctx.tryGet<DocPort | undefined>('doc')
   if (!doc) return false
   const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
@@ -337,6 +406,7 @@ export function applyStoryboardDrop(
         x: Math.round(abs.x + DISPLACED_OFFSET),
         y: Math.round(abs.y + DISPLACED_OFFSET),
       })
+      onDisplaced(other.id)
       continue
     }
     // 挪到分镜组外面：只解父、位置不动的话它会继续趴在某个槽位上，
@@ -417,6 +487,7 @@ export function applyStoryboardDrop(
         x: Math.round(otherAbs.x + DISPLACED_OFFSET),
         y: Math.round(otherAbs.y + DISPLACED_OFFSET),
       })
+      onDisplaced(other.id)
     }
   }
   return true

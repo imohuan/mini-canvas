@@ -169,6 +169,18 @@ describe('applyStoryboardDrop：一槽一图（外部拖入）', () => {
     expect(h.doc.getNode('vid2')!.parentId).toBe('board')
   })
 
+  /**
+   * 用户口径 2026-10-31：被挤出的图落在分镜组卡片下面，画面上看不见。
+   * 所以挤出后要**自动选中它**（选中层会把节点抬高并描边），用户一眼能找到。
+   */
+  it('被挤出的图自动成为当前选中（拖进来的那张不抢选中）', () => {
+    const selection = h.ctx.tryGet<{ ids: ReadonlySet<string>; set(ids: Iterable<string>): void }>('selection')
+    expect(selection).toBeTruthy()
+    selection!.set(['vid2'])
+    applyStoryboardDrop(h.ctx, { nodeId: 'vid2', position: { x: 1010, y: 1010 } })
+    expect([...selection!.ids]).toEqual(['img'])
+  })
+
   it('组内每个槽位最多一个节点：脏数据里的“多出来那张”会被解父', () => {
     // 制造脏数据：再挂一张图到组里，但 slots 里没有它
     h.ctx.tryGet<{ addNodes(inputs: unknown[]): unknown }>('doc')!.addNodes([
