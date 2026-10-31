@@ -85,6 +85,55 @@ export function normalizePath(path: string): string {
 }
 
 /**
+ * 路径模板 → 正则（只认 Hono/Express 风格的 `:name` 段）。
+ *
+ * 运行期热装的兜底路由没有 Hono 的代理，只能自己比对。此前用
+ * `field.list(method + ' ' + pathname)` 精确查表，于是 `/api/agent/canvases/:canvasId/...`
+ * 这类带参数的路径在热装后永远查不到，表现为 404（见 debugDocsRouteWiring 的注释）。
+ *
+ * 只做**分层匹配**：`/a/:id/b` 匹配 `/a/9/b`，不匹配 `/a/9/9/b`；
+ * 不解析通配符 `*` —— 那种路径启动期已经由 Hono 自己挂了代理。
+ */
+export function pathPatternToRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .split('/')
+    .map((segment) => (segment.startsWith(':') ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('/')
+  return new RegExp('^' + escaped + '$')
+}
+
+/** 在候选模板里找第一条 `method + path` 命中的（保持注册场顺序 = 先注册者优先）。 */
+export function findRouteByPath(
+  routes: RouteEntry[],
+  method: string,
+  pathname: string,
+): RouteEntry | undefined {
+  for (const entry of routes) {
+    if (entry.method !== method && entry.method !== 'ALL') continue
+    if (entry.path === pathname || pathPatternToRegExp(entry.path).test(pathname)) return entry
+  }
+  return undefined
+}
+
+/**
+ * 按**模板**执行一个热装路由的处理器。
+ *
+ * 为什么不能直接 `handler(c, next)`：`c.req.param('canvasId')` 的解析由 Hono 的
+ * 路由层在匹配时写入（取的是那条 route 的 path 参数）。直接调 handler 时匹配层没跑，
+ * `param()` 全是 undefined —— 实测表现为「路由命中了、响应是 {}」。
+ * 这里用一次性子应用按原模板挂同一条 handler，再 fetch 原始请求，让 Hono 自己解析参数。
+ */
+export function runRouteWithParams(
+  entry: RouteEntry,
+  request: Request,
+): Response | Promise<Response> {
+  const sub = new Hono()
+  const method = (entry.method === 'ALL' ? 'ALL' : entry.method) as 'GET'
+  sub.on(method, entry.path, entry.handler as never)
+  return sub.fetch(request)
+}
+
+/**
  * 建一个绑定到某插件作用域的路由注册器。
  *
  * 同一个 kind 的注册场是全插件共享的一张表；这里用**插件名当条目 id**，
@@ -100,7 +149,12 @@ export function createRouteRegistrar(ctx: PluginScope, scopeName: string): Route
 
   function add(method: string, path: string, handler: Handler): void {
     const p = normalizePath(path)
-    field.add(method + ' ' + p, { method, path: p, handler }, { id: scopeName })
+    /*
+     * ⚠️ 键上的 method 必须统一大写：`a.req.method` 给的是大写，但 adopt(app) 里
+     * Hono 的 `r.method` 可能是小写/`ALL`。热装兜底按 method 做模板匹配时，
+     * 大小写不一致会让「启动期代理命中、热装期 404」这种最难查的差异出现。
+     */
+    field.add(method.toUpperCase() + ' ' + p, { method: method.toUpperCase(), path: p, handler }, { id: scopeName })
   }
 
   return {
@@ -182,15 +236,6 @@ export function flushRoutes(app: Hono, ctx: Context, opts: { hotFallback?: boole
   // 它排在 ② 之后 → 只接管 ② 没覆盖的 path，不改变既有路由优先级。
   // 只在"服务可能运行期装插件"时开（cloud-server）；测试里的纯 framework 默认不开，
   // 避免改变既有断言语义。
-  if (opts.hotFallback) {
-    app.all('*', ((c: Parameters<Handler>[0], next: () => Promise<void>) => {
-      const key = c.req.method + ' ' + new URL(c.req.url).pathname
-      const e = field.list(key)[0]
-      if (e) return (e.value.handler as (c: unknown, n: unknown) => unknown)(c, next)
-      return next()
-    }) as never)
-  }
-
   /**
    * ⑤ `/api/*` 的 404 兜底 —— 必须在所有代理与挂载**之后**。
    *
@@ -200,6 +245,32 @@ export function flushRoutes(app: Hono, ctx: Context, opts: { hotFallback?: boole
    *
    * 只拦 `/api/`：页面路由（刷新画布 / 深链）仍要落到外层 SPA。
    */
+  app.all('/api/*', ((c: Parameters<Handler>[0], next: () => Promise<void>) => {
+    /*
+     * 运行期热装兜底（原来是一条 `all('*')`，实测被这条更具体的 `/api/*` 抢先命中，
+     * 热装路由永远到不了 —— 见 agentHotRoute 的回归测试）。
+     * 挪到这里：它本来就是“启动期代理都没命中时”的分支，顺序天然正确。
+     */
+    if (opts.hotFallback) {
+      const pathname = new URL(c.req.url).pathname
+      // 先按精确 key 查（快路径，语义与启动期代理逐字一致），
+      // 再按模板匹配（运行期热装的动态路由）。两步都保持注册场的先后序。
+      const exact = field.list(c.req.method + ' ' + pathname)[0]
+      if (exact) return (exact.value.handler as (c: unknown, n: unknown) => unknown)(c, next)
+      // 注册场给的是 Entry（{ id, value, order, source }）—— 匹配必须拿 value 里的 RouteEntry，
+      // 直接拿 Entry 会得到一堆 undefined（实测：这就是“热装路由永远 404”的真因之一）。
+      const routes = field
+        .keys()
+        .filter((k) => !k.startsWith('USE '))
+        .flatMap((k) => field.list(k).map((e) => e.value))
+      const matched = findRouteByPath(routes, c.req.method, pathname)
+      // 用子应用按模板执行：让 Hono 自己解析 :canvasId / :sessionId，直接调 handler 会拿到空 param。
+      if (matched) return runRouteWithParams(matched, c.req.raw)
+    }
+    return next()
+  }) as never)
+
+  /** 真 404：上面所有代理与热装兜底都跑过仍无人接手时，回 JSON（不是 SPA 的 index.html）。 */
   app.all('/api/*', ((c: Parameters<Handler>[0]) =>
     c.json({ ok: false, error: '接口不存在: ' + c.req.path }, 404)) as never)
 }
