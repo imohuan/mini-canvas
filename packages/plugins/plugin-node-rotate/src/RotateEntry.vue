@@ -34,7 +34,7 @@ function enter(): void {
   const copyId = duplicateImageForRotate(ctx, props.nodeId)
   if (!copyId) {
     busy.value = false
-    ctx.tryGet<{ show?(text: string): void }>('tip')?.show?.('旋转与镜像：请先选中一张图片')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('旋转与镜像：请先选中一张图片', { followPointer: true, durationMs: 0 })
     return
   }
   // 模式在 300ms 后进入；留一点余量再放开按钮

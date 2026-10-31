@@ -1,5 +1,6 @@
 /**
- * Command —— 命令服务（ctx.get('command')）。菜单/工具栏/快捷键/删除都走统一 execute。
+ * Command —— 命令运行时。插件不按 `command` 服务名取；执行走 `canvas.runCommand`，
+ * 命令自省/快捷键读 `command` 场（ctx.registryOf('command')）。
  *
  * 契约见 api.md §3.2：快捷键 = 命令上一个可选 keys 字段（宿主负责绑键）；
  * 内核 pre-register 'command:delete'。本服务纯逻辑、无 DOM，可独立单测。

@@ -37,7 +37,7 @@
 1. **位置是数出来的，不是开放出来的** —— 给节点加东西只有 5 个写死的位置（内容/标题/上栏/下栏/覆盖层），加进度条必须改 `BaseNode.vue`。
 2. **新功能只能靠加服务** —— 手上没有通用"放东西"的机制，所以每要放一类新东西，只能再 `ctx.inject('xxx', 一张表)`。菜单就是这么来的。
 
-本文给出终态设计：**三根轴、七个原语、七条规则**，以及一张"现存 18 个基础服务各自归哪"的对照表。
+本文给出终态设计：**三根轴、七个原语、七条规则**，以及一张"每个服务各自归哪"的对照表。
 
 **目标：以后加新功能（节点按钮、进度条、工具栏、组件目录、主题换皮）不需要改核心，也不需要新增服务。**
 
@@ -218,11 +218,11 @@ node/shell                    默认：兜底
 
 ---
 
-## 四、服务归属表（现存 18 个基础服务各自归哪）
+## 四、服务归属表现状（2026-10-31 已落地）
 
 按规则 4 + 规则 5 重算。
 
-### 4.1 终态应有的 7 个基础服务
+### 4.1 现在的 7 个基础服务
 
 | 服务 | 归谁 | 为什么是服务（不是场） |
 |---|---|---|
@@ -236,72 +236,83 @@ node/shell                    默认：兜底
 | `selection` | canvas-data | 选中态（将来可能换协同版） |
 | `save` | canvas-data | 存储适配器（本地/云端可插拔） |
 | `resources` | canvas-data | Blob / objectURL 生命周期 |
-| `nodeLayout` | canvas-render | 要量 DOM 尺寸（ResizeObserver） |
-| `viewport` | canvas-render | 要抓 vue-flow 实例 |
+| `view` | canvas-render | 合并节点几何与视口；要量 DOM、抓 vue-flow 实例，并提供唯一 `fitTo` |
+| `canvas` | canvas-render | 动作门面：建/选/聚焦/进模式/打组/提示/跑底栏动作 |
 
-### 4.2 今天多出来的那些，各自去哪
+另有一个**渲染层辅助服务** `nodeToolbar`（Spec D4）：节点上下状态栏的会话与模式注册。
+它不属于基础七名，但仍是宿主必装、插件可按名取的服务；主题只负责画，卸载主题不再丢模式。
+
+### 4.2 已从服务名单退出的那些
 
 | 今天的 | 终态 | 处理 |
 |---|---|---|
 | `nodeStore` / `edgeStore` / `graph` / `history` | `doc` 一个服务 | **合并**（4 → 1） |
 | `command` | 场 `ctx.registryOf('command')` | 变场 |
-| `nodeFactory` | 场 `ctx.registryOf('node/creator')` | 变场 |
-| `nodeRegistry` | 场 `ctx.registryOf('node/shell')` 等 | 变场（今天已是 SlotRegistry 套壳） |
-| `themeRegistry` | 场 `ctx.registryOf('theme')` | 变场（同上） |
-| `slots` | **就是注册场本身** | 消解（不用再立名字） |
-| `settings` | 场 `ctx.registryOf('setting')` | 变场 |
-| `settingsPersist` | `save` 的一个用法 | **收回内部**，不占服务名 |
+| `nodeFactory` | `canvas.createNode` / `canvas.creatableTypes` | 容器留在内部运行时，插件不再按名取 |
+| `nodeRegistry` | 渲染层内部容器（`host.nodeRegistry` / `ctx.nodes` 糖） | 不再按名取 |
+| `themeRegistry` | 渲染层内部容器（`host.themeRegistry` / `ctx.theme` 糖） | 不再按名取 |
+| `settings` | 能力层内置容器（`ctx.settings` 糖） | 不占基础服务名 |
+| `settingsPersist` | `save.settings` 子对象 | **收回内部**，不占服务名 |
+| `nodeLayout` / `viewport` | `view` | 合并；旧名已删 |
+| `pluginManager` | `host.manager` | 宿主句柄，旧名已删 |
+| `tip` | `canvas.notify` | 通知队列与撤回语义不变 |
+| `nodeTask` | `canvas.runBarAction` / `cancelBarAction` | 动作执行门面 |
 | `menu` | 删掉 | 只服务右键菜单一个插件，是个局部函数，直接 import |
 
-### 4.3 插件自己提供的 16 个（不是基础服务，但有两类要清）
+### 4.3 插件自己提供的服务（不是基础服务，但有两类要清）
 
 该留的（真有别人跨插件用）：`text`、`image`、`video`、`panorama3d`、`imageCompare`、`clipboard`、`group`、`multi-select`、`file-drop`、`cloud-save`。
 
 该收回去的：
 
-实测插件提供的服务共 **16 个**：`text, image, video, panorama3d, imageCompare, clipboard, group, multi-select, file-drop, cloud-save, shortcut-manager, shortcut-remap, mini-map, auto-save, history-facade, image-meta`。分三类：
+实测插件提供的服务共 **16 个**：`text, image, video, panorama3d, imageCompare, clipboard, group, multi-select, file-drop, cloud-save, shortcut-manager, shortcut-remap, mini-map, auto-save, history-facade, image-meta`。
+
+2026-10-31 已全部收口：`shortcut-manager` 也收回插件内部（面板由同包组件读取），不再占服务名。
 
 | 分类 | 名单 | 处理 |
 |---|---|---|
-| **留下**（真有别人跨插件用） | `text, image, video, panorama3d, imageCompare, clipboard, group, multi-select, file-drop, cloud-save, shortcut-manager`（**11 个**） | 不动 |
-| **收回插件内部** | `shortcut-remap`、`history-facade`、`mini-map`、`auto-save`（**4 个**） | 用 `ctx.state` 替代，不再占服务名 |
+| **留下**（真有别人跨插件用） | `text, image, video, panorama3d, imageCompare, clipboard, group, multi-select, file-drop, cloud-save`（**10 个**） | 不动 |
+| **收回插件内部** | `shortcut-remap`、`history-facade`、`mini-map`、`auto-save`（**4 个**） | 已收回插件内部/设置项，不再占服务名 |
 | **删** | `image-meta`（值 = `{ v: 1 }`，纯 HMR 探针）（**1 个**） | 删 |
 
-11 + 4 + 1 = 16。
+> 注：`shortcut-manager` 同样已收回，当前生产插件服务为 10 个；上表的 16 是重构前的实测总数。
 
 **判据：真的有别的插件要用它吗？没有就收回去。**
 
-### 4.4 数字对照
+### 4.4 数字对照（2026-10-31 实测）
 
-| | 现在 | 终态 |
+| | 重构前 | 现在 |
 |---|---|---|
 | kernel 认的服务 | 1（`tools`） | 1 |
-| 画布基础服务 | **17**（2 能力层 `slots`/`settings` + 15 render 手写） | **6**（`doc`/`selection`/`save`/`resources`/`nodeLayout`/`viewport`） |
-| 其中"其实是一张表"的 | **6 个**：`command`、`nodeFactory`、`nodeRegistry`、`themeRegistry`、`slots`、`settings`（外加 `menu` 独立处理） | 0（全塌成场） |
-| 插件自己的服务 | 16 | 11 留 + 4 收回 + 1 删 |
-| **基础服务合计** | 1 + 17 = **18** | 1 + 6 = **7** |
+| 画布基础服务 | **14**（另有条件服务 `settingsPersist`） | **6**（`doc`/`selection`/`save`/`resources`/`view`/`canvas`） |
+| 其中"其实是一张表"的 | **4 个**：`command`、`nodeFactory`、`nodeRegistry`、`themeRegistry` | 0（退出服务名，容器留在内部） |
+| 插件自己的服务 | 16 | 10 留 + 5 收回 + 1 删 |
+| **基础服务合计** | 1 + 14（+1 条件）= **15–16** | 1 + 6 = **7**（另有渲染层辅助 `nodeToolbar`） |
 
-**基础服务从 18 个塌成 7 个。** 减少的机制不是"删功能"，是**把被误当成服务的表还原成场**。
+**基础服务从 14 个（外加 1 个条件服务）收敛到 7 个。** 减少的机制不是"删功能"，
+是**把被误当成服务的表还原成场，把同源的两套合成一个入口**。
 
-### 4.5 注册场种类总表（唯一的种类清单，别处只引用本表）
+### 4.5 注册场种类总表（生产 11 个，2026-10-31 实测）
 
 初稿把 `node/*` 的种类散在 §4.2、§8.2 等处各写一半，实现者要猜。集中如下（**这张表就是全部种类的权威来源**）：
 
 | 场（kind） | 键（key） | 值（value） | 消费者 |
 |---|---|---|---|
 | `command` | 命令 id | `CommandDef` | 菜单/工具栏/快捷键分发（`CanvasHost`） |
-| `node/type` | 节点 type | `NodeTypeDef`（数据/尺寸/连接声明） | `nodeStore.types` 投影 |
 | `node/shell` | 节点 type 或 `*` | 壳组件（`BaseNode` 等） | `BaseNode` 装配 |
-| `node/creator` | 节点 type | `NodeCreator`（建该类型节点） | `ctx.nodeFactory.create` |
 | `node/region` | `<type>/<region>` | `{ component, props, needs?, order }` | `BaseNode` 按区域渲染 |
-| `theme` | 主题槽名（`edge`/`background`/`settingsPanel`/…） | 组件 | `CanvasHost` 读 winner |
-| `slot` | 槽名（`overlay` 等） | `{ component, meta }` | `SlotHost` 渲染 |
-| `setting` | 配置 key | `SettingSchema` + 当前值 | 设置面板 |
 | `ui` | 组件名（`button`/`dropdown`/…） | 设计系统组件 | 其它插件按名取 |
 | `capability` | 能力名（`node`/`zoom`/`tools`/…） | 工厂 `(nodeId) => Capability` | `useCapabilities()` |
 | `tool` | 工具名 | `ToolDef`（function calling 形态） | 模型/外部调用方 |
-| `node/bar` | 动作 id | 底栏动作（`BarAction`，含 fields/panel/run/resume） | 默认底栏/换皮底栏按节点类型渲染 |
-| `node/bar-applier` | 节点类型（kind） | 结果写入器 `BarApplier` | `nodeTask` 动作终态写回节点 |
+| `node/bar` | `actions/<id>`、`appliers/<kind>` | 底栏动作 / 结果写入器 | 默认底栏、`nodeTask` 写回节点 |
+| `selection/region` | 区域词 | `{ component, props, needs?, order }` | 多选框区域渲染 |
+| `clipboard/copy` | `copy`、`cut` | 写剪贴板处理器 | `CanvasHost` 原生 copy/cut |
+| `clipboard/paste` | `paste` | 粘贴处理器 | `CanvasHost` 原生 paste |
+| `media/creator` | 媒体 kind | `MediaKindCreator` | media 能力 |
+
+**已删除**：`node/type`、`node/creator`、`setting`、`theme`、`slot`（生产零读取，真相分别在
+`doc` 的类型表、内部 `nodeFactory`、`SettingsStore`、`ThemeRegistry`、`SlotRegistry`）。`node/bar-applier`
+已并进 `node/bar` 的 `appliers/<kind>` 键。
 
 ---
 
@@ -424,7 +435,7 @@ export function apply(ctx) {
   // (c) 想拿某个插件注册的壳？列表给你（含 source）
   const 全部 = ctx.registryOf('node/shell').list('image')
   // [{ id:'my-theme', source:'my-theme', value: MyShell }, …]
-  // （theme 槽那份默认壳不在场里，要它用 ctx.get('themeRegistry').winner('nodeShell')）
+// （theme 槽那份默认壳不在场里，要它用 host.themeRegistry.winner('nodeShell')）
 }
 ```
 
@@ -603,12 +614,12 @@ export function apply(ctx) {
 
 | 老写法 | 糖落到哪个场 | **必须保留的行为**（否则既有测试红） |
 |---|---|---|
-| `ctx.nodes.register(def)` | `node/type/<type>` + `node/creator/<type>` | 返回 `void`；`create` 会挂进 `nodeFactory`；卸载自动回收。（⚠️ 2026-09-19：不再往 `node/shell` 写"展示定义摘要" —— §4.5 定义这张场的值是**壳组件**、消费者是节点壳装配；写摘要会被装配端当成组件渲染而整图崩。摘要本就在 nodeRegistry / node/region 里。） |
+| `ctx.nodes.register(def)` | 只写真实容器（`doc` 类型表 + `nodeRegistry`；`node/type` / `node/creator` 场已删） | 返回 `void`；`create` 会挂进内部工厂；卸载自动回收。（⚠️ 2026-09-19：不再往 `node/shell` 写"展示定义摘要" —— §4.5 定义这张场的值是**壳组件**、消费者是节点壳装配；写摘要会被装配端当成组件渲染而整图崩。摘要本就在 nodeRegistry / node/region 里。） |
 | `ctx.nodes.contribute(type, seg, comp, opts)` | `node/region/<type>/<seg>` | **返回 occupant id（string）**；缺省 order = "已有最大 + 1"（`nodeRegistry.ts:137`） |
-| `ctx.theme.register(slot, comp, opts)` | `theme/<slot>` | **同槽重复 register 抛错**（`already registered`，`themeRegistry.ts:102`，测试断言此行为）；`winner` = order 最小者 |
+| `ctx.theme.register(slot, comp, opts)` | 只写 `ThemeRegistry`（`theme` 场已删） | **同槽重复 register 抛错**（`already registered`，`themeRegistry.ts:102`，测试断言此行为）；`winner` = order 最小者 |
 | `ctx.commands.register(def)` | `command/<id>` | 重复 id 抛错；返回可 dispose 的句柄 |
-| `ctx.slots.register(slot, req)` | `slot/<slot>` | **返回 id（string）**——`plugin-align-guide` 等据此 `remove` |
-| `ctx.settings.*` | `setting` | `define/set/get/onChange/groups` 现有语义不变 |
+| `ctx.slots.register(slot, req)` | 只写 `SlotRegistry`（`slot` 场已删，且场会丢 `meta`） | **返回 id（string）**——`plugin-align-guide` 等据此 `remove` |
+| `ctx.settings.*` | 只写 `SettingsStore`（`setting` 场已删） | `define/set/get/onChange/groups` 现有语义不变 |
 | `ctx.tools.register(def)` | **保持服务**（见 §7.3） | 不动 |
 
 **关键裁决（初稿没说清，会直接撞既有测试）**：注册场的 `add` 是"同 id 替换"，而 `ctx.theme.register` **同槽重复抛错**。两者语义不同，所以**糖不是薄转发**——糖要在转发前做自己的校验（`theme` 糖先查 `has` 再 `add`，命中则抛错）。这条必须写进实现，否则 `themeRegistry.test.ts` 的两条断言会红。

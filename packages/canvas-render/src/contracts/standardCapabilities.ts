@@ -592,8 +592,9 @@ export function createMediaCapability(ctx: Context): MediaCapability {
       const source = doc?.getNode(sourceId)
       if (!doc || !source) return creator.addNode(request)
 
-      const layout = tryService<PlacementLayout>(ctx, 'nodeLayout')
-      const viewport = tryService<PlacementViewport>(ctx, 'viewport')
+      // Spec 3.1：nodeLayout/viewport 已合并到 view；旧名只留给降级/旧宿主。
+      const layout = tryService<PlacementLayout>(ctx, 'view') ?? tryService<PlacementLayout>(ctx, 'nodeLayout')
+      const viewport = tryService<PlacementViewport>(ctx, 'view') ?? tryService<PlacementViewport>(ctx, 'viewport')
       const targetType = opts.nodeType ?? kind
       const typeSize = doc.types?.get(targetType)?.defaultSize
       const sourceRect = layout?.getNodeRect(sourceId) ?? {
@@ -702,7 +703,7 @@ export function createStandardCapabilities(ctx: Context): Record<string, Capabil
           setCenter(x: number, y: number, zoom?: number): void
         }
       | undefined
-    >('viewport')
+    >('view')
   const toolsOf = () =>
     ctx.get<
       | {

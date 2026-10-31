@@ -267,7 +267,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
   // 服务器上什么都没有时反过来：把本地这份推上去（首次上云）。
   const ready = (async () => {
     try {
-      const viewport = ctx.tryGet<ViewportLike>('viewport')
+      const viewport = ctx.tryGet<ViewportLike>('view')
       let startupSnapshot: { nodes: unknown[]; edges: unknown[]; revision?: number } | undefined
       const r = await restoreOrSeed({
         readServer: () => adapter.getRaw(),
@@ -421,9 +421,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
     },
   }
   // 服务名带插件前缀（Spec 3.4）：避免与别的插件的历史服务撞名。
-  // 旧名 gen-history 迁移期保留为只读别名，Task 9 删除。
   ctx.inject('cloud-client:history', genHistory)
-  ctx.inject('gen-history', genHistory)
 
   const service: CloudClientService = {
     status: () => ({ ...status }),

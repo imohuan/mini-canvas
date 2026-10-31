@@ -29,7 +29,7 @@ await page.waitForTimeout(2000)
 // 把目标节点摆到屏幕中上（底栏完整可见，坐标都可靠 —— 与主 e2e 同一套）
 await page.evaluate((id) => {
   const ctx = window.MiniCanvasUI.getHost().ctx
-  const vp = ctx.tryGet('viewport'); const rect = ctx.tryGet('nodeLayout').getNodeRect(id)
+  const vp = ctx.tryGet('view'); const rect = ctx.tryGet('view').getNodeRect(id)
   vp.setViewport({ x: 700 - (rect.x + rect.w/2), y: 300 - (rect.y + rect.h/2), zoom: 1 })
 }, seed.target)
 await page.waitForTimeout(900)

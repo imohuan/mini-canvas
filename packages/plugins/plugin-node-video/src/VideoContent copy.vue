@@ -591,8 +591,8 @@ async function onCaptureFrame(): Promise<void> {
 }
 
 async function captureFrameNode(at: number): Promise<void> {
-  const command = ctx.get('command')
-  command.execute('video:capture-frame', { nodeId: props.id, at })
+  const canvas = ctx.get('canvas')
+  canvas.runCommand('video:capture-frame', { nodeId: props.id, at })
 }
 
 // ==================== 全屏 ====================

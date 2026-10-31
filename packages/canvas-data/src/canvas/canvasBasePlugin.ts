@@ -14,13 +14,14 @@
  * nodeLayout（渲染层服务）要拿 nodeStore 实例，而 nodeStore 现在由本插件创建；宿主必须在 start()
  * 之前就把 nodeLayout 注入（否则插件在 apply 里 ctx.get(nodeLayout) 会拿到 undefined —— 行为变化）。
  * 所以这些零件在**工厂调用时**就建好（它们都不依赖 ctx），宿主可以先拿到实例、再装插件。
- * 唯一依赖 ctx 的是 settingsPersist（要 ctx.get(settings)），它在 apply 里建。
+ * 唯一依赖 ctx 的是 settingsPersist（要 ctx.get(settings)），它在 apply 里建，
+ * 并挂到 save.settings / 内部运行时上，不再占服务名。
  *
  * 归属：src/canvas（画布语义层）。零件全在 canvas-data 内，本文件只做「建 + 注入」；
  * 它不认识 Vue、不认识渲染层 —— nodeLayout / viewport 由宿主注入（那两个要量 DOM / attach 后端）。
  */
 import { CommandRegistry } from '@mini-canvas/kernel'
-import type { CommandService, PluginModule, PluginScope, SettingsStore } from '@mini-canvas/kernel'
+import type { CommandDef, CommandService, PluginModule, PluginScope, SettingsStore } from '@mini-canvas/kernel'
 import { NodeStore } from '../nodeStore'
 import type { CanvasNode } from '../nodeStore'
 import { EdgeStore } from '../edgeStore'
@@ -44,6 +45,8 @@ import { NodeRegistry } from './registry/nodeRegistry'
 import { ThemeRegistry } from './registry/themeRegistry'
 import { NodeFactory } from './nodeFactory'
 import { registerCanvasCommands } from './canvasCommands'
+import { clearCommandRuntime, setCommandRuntime, type CommandRuntime } from './commandRuntime'
+import { setCanvasRuntime, type CanvasRuntime } from './canvasRuntime'
 
 /** 基础插件名（宿主门面据此识别「这是宿主自己的装配，不是业务插件」） */
 export const CANVAS_BASE_PLUGIN_NAME = 'canvas-base'
@@ -66,11 +69,13 @@ export interface CanvasBaseOptions {
 
 /**
  * 基础插件建出来的零件（宿主 CanvasHostHandle 的字段来源）共 12 件：
- * - 进 ctx 服务表的 8 件：save / doc / resources / nodeRegistry / themeRegistry /
- *   selection / command / nodeFactory；
+ * - 进 ctx 服务表的基础件：save / doc / resources / selection；
+ * - command / nodeFactory / nodeRegistry / themeRegistry 收进内部运行时，
+ *   不再作为独立服务名（Spec 3.1）；
  * - 仅由 services 直接持有、**不再是服务名**的 4 件（5c 下线）：nodeStore / edgeStore /
  *   graph / history（数据统一经 doc 取用）；
- * - 另有 settingsPersist 条件注入（persistSettings 为真且 ctx 有 settings 时才上架）。
+ * - 另有 settingsPersist 条件存在（persistSettings 为真且 ctx 有 settings 时），
+ *   经 save.settings 与内部运行时提供。
  *
  * 类型给的是具体类（不是接口）—— 宿主需要类上的额外方法（如 SaveServiceImpl.flush、ResourceStore.dispose）。
  */
@@ -91,6 +96,7 @@ export interface CanvasBaseServices {
   /** 配置持久化桥；persistSettings: false（或 ctx 无 settings 段）时缺席 */
   settingsPersist?: SettingsPersistService
 }
+
 
 /** 工厂返回：可装载的插件模块 + 已建好的服务实例（宿主在 start 前就要用） */
 export interface CanvasBaseAssembly {
@@ -212,15 +218,42 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
       // 四个实例仍在 base.services 上（宿主/渲染层拿它们订阅、量尺寸），但**不再是按名可取的服务**。
       ctx.inject('doc', doc)
       ctx.inject('resources', resources)
-      ctx.inject('nodeRegistry', nodeRegistry)
-      ctx.inject('themeRegistry', themeRegistry)
       ctx.inject('selection', selection)
-      ctx.inject('command', command)
-      ctx.inject('nodeFactory', nodeFactory)
+      // 容器与工厂不再上架服务名：能力糖 / 画布命令 / 宿主经内部运行时读同一批实例。
+      const canvasRuntime: CanvasRuntime = {
+        command,
+        nodeFactory,
+        nodeRegistry,
+        themeRegistry,
+      }
+      setCanvasRuntime(canvasRuntime)
+      ctx.effect(() => () => setCanvasRuntime(undefined))
+      // 命令运行时：`command` 服务名迁移期保留；新入口是 ctx.commands 糖与 canvas.runCommand。
+      const runtime: CommandRuntime = {
+        execute: (id, ...payload) => command.execute(id, ...payload),
+        list: () => command.list(),
+        has: (id) => command.has(id),
+        register: (def) => command.register(def),
+        remapKeys: (id, keys) => command.remapKeys(id, keys),
+        resetKeys: (id) => command.resetKeys(id),
+        originalKeys: (id) => command.originalKeys(id),
+        isRemapped: (id) => command.isRemapped(id),
+      }
+      setCommandRuntime(runtime, command)
+      ctx.effect(() => () => clearCommandRuntime())
 
       // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）由数据层自带，基础插件默认注册 ——
       // 不必再装一个插件才有 Delete / Ctrl+Z。ctx.effect 登记：随本插件 fiber 回收（restart 不重复注册）。
-      ctx.effect(() => registerCanvasCommands({ command, graph, selection, nodeFactory }))
+      ctx.effect(() =>
+        registerCanvasCommands({
+          command,
+          graph,
+          selection,
+          nodeFactory,
+          // 命令场是插件侧的自省入口；运行表仍是 command，场里只放同一份定义。
+          field: ctx.registryOf<{ def: CommandDef }>('command'),
+        }),
+      )
 
       // 配置持久化桥：ctx.settings 是分组配置单一数据源；桥把用户改动经 save(config) 持久化，
       // 启动时 restore 注入（**由宿主在插件装载完成后 await restore()**，保证插件 Config 已声明完成）。
@@ -230,14 +263,13 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
         const store = ctx.get<SettingsStore | undefined>('settings')
         if (store) {
           services.settingsPersist = createSettingsPersist(store, save)
-          // 配置持久化并入 save 子对象：新代码只认 save.settings；
-          // settingsPersist 服务名保留到旧调用方迁完。
+          // 配置持久化并入 save 子对象：插件只认 save.settings；不再占服务名。
           ;(save as SaveServiceImpl & { settings?: SettingsPersistFacade }).settings = {
             restore: () => services.settingsPersist!.restore(),
             persistNow: () => services.settingsPersist!.persistNow(),
             resetKey: (k) => services.settingsPersist!.resetKey(k),
           }
-          ctx.inject('settingsPersist', services.settingsPersist)
+          canvasRuntime.settingsPersist = services.settingsPersist
         }
       }
     },

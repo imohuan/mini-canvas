@@ -68,11 +68,12 @@ export function roundedRectPath(c: MaskCell): string {
 export function gridMaskUri(cells: MaskCell[], boardW: number, boardH: number): string {
   if (cells.length === 0) return ''
   if (!Number.isFinite(boardW) || !Number.isFinite(boardH) || boardW <= 0 || boardH <= 0) return ''
-  const shapes = cells.map((c) => '<path d="' + roundedRectPath(c) + '" fill="#fff"/>').join('')
+  // 遮罩亮度是几何语义（白=保留、黑=抠除），不是界面主题色。
+  const shapes = cells.map((c) => '<path d="' + roundedRectPath(c) + '" fill="#fff"/>').join('') // 主题色白名单: 遮罩极性
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="' + n(boardW) + '" height="' + n(boardH) +
     '" viewBox="0 0 ' + n(boardW) + ' ' + n(boardH) + '" preserveAspectRatio="none">' +
-    '<rect width="' + n(boardW) + '" height="' + n(boardH) + '" fill="#000"/>' +
+    '<rect width="' + n(boardW) + '" height="' + n(boardH) + '" fill="#000"/>' + // 主题色白名单: 遮罩极性
     shapes +
     '</svg>'
   // encodeURIComponent 处理 # 和引号；外层用双引号包住 data URI（CSS 要求）

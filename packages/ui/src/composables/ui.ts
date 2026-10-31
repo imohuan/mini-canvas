@@ -256,7 +256,7 @@ function createUi() {
     histSortDesc: true,
     histZoom: 3,
     /**
-     * 生成历史 —— **数据来自后台**（gen-history 服务），不是写死的假数组。
+     * 生成历史 —— **数据来自后台**（cloud-client:history 服务），不是写死的假数组。
      * 由 loadHistory() 拉取并填充；历史弹窗只负责渲染。
      */
     historyItems: [] as Array<{
@@ -642,7 +642,7 @@ function createUi() {
 
   // ===== 资产：所有**生成了产物**的历史记录（图片 / 视频 / 音频）=====
   // 用户口径：资产 = 所有生成过的列表 + 自己上传的资源。生成记录后台本来就有全量账本
-  // （见 plugin-cloud-client 的 gen-history 服务），这里直接复用它，不必再起一套「资产库」。
+  // （见 plugin-cloud-client 的 cloud-client:history 服务），这里直接复用它，不必再起一套「资产库」。
   // 只留有产物地址（urls 非空）的条目 —— 失败/无产物的记录不算资产。
   /**
    * 资产清单：来自后台 `/api/assets`（生成产物 + 自己上传，统一登记）。
@@ -1432,7 +1432,7 @@ function createUi() {
   // 原则：状态栏按钮**不自己保存一份状态、不直接碰画布**，只做两件事之一 ——
   //   ① 写内核设置（ctx.get('settings').set）：连线显隐 / 网格吸附 / 画布模式
   //      → 真正干活的是订阅这些 key 的消费方（渲染宿主 / 主题皮），与设置面板**同一条通道**；
-  //   ② 执行命令（ctx.get('command').execute）：整理画布 / 聚焦
+  //   ② 执行命令（canvas.runCommand）：整理画布 / 聚焦
   //      → 走插件已注册的命令，复用撤销栈与落盘，不另抄一份实现。
   //
   // 为什么用 settings 而不是各插件的服务：edgeVisible / snapToGrid 是"宿主级"键
@@ -1454,7 +1454,7 @@ function createUi() {
   }
   /** 执行一条已注册命令（未注册 → no-op，不报错） */
   function runCommand(id: string): void {
-    hostCtx()?.get<{ execute(id: string): unknown }>('command')?.execute(id)
+    hostCtx()?.get<{ runCommand(id: string): unknown }>('canvas')?.runCommand(id)
   }
 
   // ===== 缩放（左下角「缩放选项」）=====
@@ -1762,7 +1762,7 @@ function createUi() {
     void loadAssetFolders()
     void loadProjectName()
     await installExternalPlugins()
-    // 外部插件装完（云插件会挂上 gen-history 服务）再拉历史；顺带订阅"有新生成"
+    // 外部插件装完（云插件会挂上 cloud-client:history 服务）再拉历史；顺带订阅"有新生成"
     void loadHistory()
     bindHistoryUpdates()
     bindHistoryFilters()
@@ -2155,7 +2155,7 @@ function createUi() {
     const selection = ctx?.get<{ set(ids: Iterable<string>): void }>('selection')
     selection?.set([newId])
     // 聚焦放在 nextTick：节点刚建出来，等一帧让渲染层拿到它的位置/尺寸再算 bounds。
-    void nextTick(() => ctx?.get<{ execute(id: string): unknown }>('command')?.execute('auto-layout:focus-selected'))
+    void nextTick(() => ctx?.get<{ runCommand(id: string): unknown }>('canvas')?.runCommand('auto-layout:focus-selected'))
   }
 
   /** 取画布宿主（hostEl 优先；没有就退到 window 上暴露的那份） */
@@ -2742,7 +2742,7 @@ function createUi() {
    * 命令内部只记待插入的节点 id + 打开面板，标签由输入框组件现造 —— 这里不重复那套。
    */
   function referenceNodeToAgent(id: string): void {
-    hostCtx()?.get<{ execute(id: string, payload?: unknown): unknown }>('command')?.execute('agent:reference-node', { nodeId: id })
+    hostCtx()?.get<{ runCommand(id: string, payload?: unknown): unknown }>('canvas')?.runCommand('agent:reference-node', { nodeId: id })
   }
 
   /** 解散一个分组（左侧画布树的分组行菜单用）：走 group 服务（它自己包历史 + 还原子节点绝对坐标） */

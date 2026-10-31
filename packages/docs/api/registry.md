@@ -56,19 +56,17 @@ interface Entry<T> {
 
 | 种类 | 装什么 |
 | --- | --- |
-| `node/type` | 节点类型的声明摘要 |
 | `node/region` | 往某节点某区域挂组件（键 = `type/region`） |
 | `selection/region` | 往多选框挂组件 |
-| `node/bar` | 节点底栏的动作 |
-| `node/bar-applier` | 动作的执行体 |
-| `node/creator` | "建一个该类型节点" |
+| `node/bar` | 节点底栏的动作（`actions/<id>`）与写入器（`appliers/<kind>`） |
 | `command` | 命令 |
-| `theme` | 主题槽（壳 / 边 / 背景 / UI 件） |
-| `slot` | 通用 UI 槽 |
 | `ui` | 设计系统组件目录 |
 | `capability` | 组件能力包 |
-| `setting` | 配置项声明 |
 | `tool` | 模型可调用工具 |
+| `node/shell` | 节点外壳覆盖 |
+| `clipboard/copy` | 复制内容提供者 |
+| `clipboard/paste` | 粘贴内容处理器 |
+| `media/creator` | 媒体创建入口 |
 
 真实种类名可从 [活快照](/plugins/live) 或 `ctx.surface()` 读到。
 

@@ -75,7 +75,7 @@ const hScreen = computed(() => (hGuide.value !== null ? hGuide.value * viewport.
 function parentOriginOf(nodeId: string): { x: number; y: number } | null {
   const parentId = ctx.tryGet('doc')?.getNode(nodeId)?.parentId
   if (!parentId) return null
-  return ctx.get('nodeLayout').absolutePosition(parentId)
+  return ctx.get('view').absolutePosition(parentId)
 }
 
 function handleDragFrame(nodeId: string, position: { x: number; y: number }): void {
@@ -84,7 +84,7 @@ function handleDragFrame(nodeId: string, position: { x: number; y: number }): vo
     hideGuides()
     return
   }
-  const layout = ctx.get('nodeLayout')
+  const layout = ctx.get('view')
   if (!layout) return
   const size = layout.nodeSize(nodeId)
   if (size.w <= 0 || size.h <= 0) return

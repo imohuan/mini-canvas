@@ -207,7 +207,7 @@ import { createCoalescer, RenderEvents } from '@mini-canvas/canvas-render'
 import ZoomReadout from './ZoomReadout.vue'
 
 export const name = 'zoom-logger'
-export const inject = ['viewport', 'settings'] as string[]   // ① 硬依赖：视口服务 + 配置源
+export const inject = ['view', 'settings'] as string[]   // ① 硬依赖：几何/视口 + 配置源
 
 export function apply(ctx: Context): void {
   // ② 声明一项配置，用来存「最后一次记录的缩放」
@@ -243,7 +243,7 @@ export function apply(ctx: Context): void {
     id: 'zoom-logger:commit',
     title: '立刻记录当前缩放',
     run() {
-      const vp = ctx.get<{ getViewport(): { zoom: number } }>('viewport')
+      const vp = ctx.get<{ getViewport(): { zoom: number } }>('view')
       flushZoom.push('zoomLoggerLast', vp.getViewport().zoom)
       flushZoom.flush()   // 不等帧尾，马上落地
       return true
@@ -301,7 +301,7 @@ const live = computed(() => flow.viewport.value?.zoom ?? 1)   // ② 实时视�
 1. 装配后画布右下角出现小角标，形如「记录 100% · 实时 100%」。
 2. 滚轮缩放画布：**实时**数字立刻跟手；**记录**数字在移动结束后更新（合帧 + 事件驱动）。
 3. 打开设置面板的「缩放记录器」分组：`zoomLoggerLast` 应该就是记录值。
-4. 执行命令 `zoom-logger:commit`（控制台：`MiniCanvas.getContext().get('command').execute('zoom-logger:commit')`）：记录值**立刻**变成实时值（这条走 `flush()`，不等帧尾）。
+4. 执行命令 `zoom-logger:commit`（控制台：`MiniCanvas.getContext().get('canvas').runCommand('zoom-logger:commit')`）：记录值**立刻**变成实时值（这条走 `flush()`，不等帧尾）。
 
 ## 常见坑
 

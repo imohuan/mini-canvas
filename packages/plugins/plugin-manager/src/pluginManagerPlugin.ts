@@ -5,7 +5,7 @@
  * - **槽位**装 UI：左导航项注册进 `settingsNav`，正文注册进 `settingsGroup/插件`
  *   （设置面板据此把「插件」当成一个一级分类渲染）；
  * - **服务**持状态：`ctx.inject('plugin-manager', reactive(服务))`，页面读它、调它；
- *   安装句柄优先取宿主的 `host.manager`（ctx.get('pluginManager') 只是兼容别名）；
+ *   安装句柄只从宿主 `host.manager` 取（旧 `pluginManager` 服务名已下线）；
  * - **配置**声明一个**扁平分组** `插件`，设置面板才会长出这一页的入口。
  *
  * 数据来源（用户口径）：请求一个 JSON 清单拿到每个插件的 js 地址，再按地址加载 ——
@@ -19,7 +19,7 @@ import PluginManagerNav from './components/settings/PluginManagerNav.vue'
 import PluginManagerPage from './components/settings/PluginManagerPage.vue'
 
 export const name = 'plugin-manager'
-/** 不写死依赖：宿主服务（pluginManager / save）都做**可选探测** —— 缺了给清晰错误，不静默装死 */
+/** 不写死依赖：宿主服务（manager / save）都做**可选探测** —— 缺了给清晰错误，不静默装死 */
 export const inject = [] as string[]
 
 export interface PluginManagerConfig {
@@ -47,13 +47,14 @@ export const Config = {
 /** 设置面板左导航插槽的 id（= 一级名，命中即顶替默认项；这里没有同名分组导航，故为新增项） */
 export const MANAGER_NAV_ID = '插件'
 
-export function apply(ctx: Context, config?: PluginManagerConfig): void {
-  // 宿主统一安装句柄：优先渲染上下文（CanvasRenderContext）里的 host.manager。
-  // 插件 apply 阶段（业务插件启动时）宿主已建好 handle，故这里能取到。
-  const manager = ctx.tryGet<import('./pluginManagerService').HostPluginManager>('pluginManager')
+export function apply(
+  ctx: Context,
+  config?: PluginManagerConfig,
+): void {
+  // 宿主统一安装句柄由页面在渲染子树里经 `usePluginManager()` 绑定（host.manager）。
+  // 内核只向 apply 传 config，拿不到 host；绑定前操作会给出清晰错误，而不是静默装死。
   const service = createPluginManagerService(ctx, {
     ...(config?.catalogUrl ? { catalogUrl: config.catalogUrl } : {}),
-    ...(manager ? { manager } : {}),
   })
   // 服务本身包成响应式：页面经它读 state，装卸变化能驱动重渲染（与 plugin-agent 同款）
   ctx.inject('plugin-manager', reactive(service))

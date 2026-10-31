@@ -197,7 +197,7 @@ interface MountOpts {
   /** 选中集：缺省 = 选中两个节点（多选框的典型场景） */
   selectedIds?: string[]
   /** 命令服务：缺省给一个记录器；传 null = 宿主没这个服务 */
-  command?: { execute(id: string, ...payload: unknown[]): unknown } | null
+  command?: { runCommand(id: string, ...payload: unknown[]): unknown } | null
   /** ui 目录里登记 button 件？false = 走「回退原生按钮」的降级路径 */
   withCatalog?: boolean
 }
@@ -207,14 +207,14 @@ function mount(opts: MountOpts = {}) {
   const ids = opts.selectedIds ?? ['n1', 'n2']
   const calls: Array<{ id: string; payload: unknown[] }> = []
   const command = opts.command === undefined
-    ? { execute: (id: string, ...payload: unknown[]) => void calls.push({ id, payload }) }
+    ? { runCommand: (id: string, ...payload: unknown[]) => void calls.push({ id, payload }) }
     : opts.command
   const bag = {
     selection: { ids: () => [...ids], nodes: () => ids.map((id) => ({ id, type: 'image' })) },
   }
   const ctx = {
     get: () => undefined,
-    tryGet: (name: string): unknown => (name === 'command' ? command ?? undefined : undefined),
+    tryGet: (name: string): unknown => (name === 'canvas' ? command ?? undefined : undefined),
     registryOf: () => ({
       top: (name: string) => (opts.withCatalog !== false && name === 'button' ? { value: StubButton } : undefined),
       list: () => [],
@@ -305,9 +305,9 @@ const componentCode = read('../components/AgentRefToolbar.vue')
   .replace(/^\s*\/\/.*$/gm, ' ')
 
 describe('源码守卫', () => {
-  it('取服务走 tryGet（ctx.command 直属性在根 Context 上是 undefined → 会静默 no-op）', () => {
+  it('取服务走 tryGet canvas（直属性在根 Context 上是 undefined → 会静默 no-op）', () => {
     expect(componentCode).not.toMatch(/ctx\.command\b/)
-    expect(componentCode).toContain("ctx.tryGet<{ execute")
+    expect(componentCode).toContain("ctx.tryGet<{ runCommand")
   })
 
   it('两个入口共用同一个命令 id 常量（不在组件里写字符串字面量）', () => {

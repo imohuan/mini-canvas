@@ -437,7 +437,7 @@ export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
 
-// nodeLayout / viewport 的服务名 → 类型登记已上移到 canvas-data（作者 SDK 上游）：
+// 渲染层服务名 `view` 的类型登记已上移到 canvas-data（作者 SDK 上游）：
 // 见 canvas-data/src/canvas/renderServiceContracts.ts 的 ViewportContract / NodeLayoutContract
-// 与 serviceTypes.ts。这样只依赖 canvas-base 的逻辑插件也能 ctx.get('viewport') 拿到类型，
-// 不必为两个服务名 import 整个渲染包，也不必手写窄端口。渲染包不再重复 declare（事实源唯一）。
+// 与 serviceTypes.ts。这样只依赖 canvas-base 的逻辑插件也能 ctx.get<ViewContract>('view') 拿到类型，
+// 不必为服务类型 import 整个渲染包，也不必手写窄端口。渲染包不再重复 declare（事实源唯一）。

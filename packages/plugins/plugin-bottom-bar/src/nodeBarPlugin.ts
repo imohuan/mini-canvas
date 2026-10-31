@@ -233,7 +233,7 @@ export function registerBarApplier(ctx: PluginScope, kind: string, fn: BarApplie
 }
 
 export const name = 'bottom-bar'
-export const inject = ['doc', 'nodeRegistry', 'themeRegistry'] as string[]
+export const inject = ['doc'] as string[]
 
 /**
  * 插件可配置项（设置面板「常规/底栏」组）。

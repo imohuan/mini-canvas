@@ -811,8 +811,10 @@ export class Context implements PluginScope {
         }
       }
     }
-    // ② command 服务：数据层自带的建节点/删除/撤销/重做走服务直注册、不进注册场。
-    //    只读场会漏掉这批最常被问到的核心命令（严格审查 C1）。
+    // ② command 服务：兼容仍按服务名提供命令的独立宿主/嵌入方。
+    //    画布层已把命令收进内部运行时（基础服务只剩 7 名），此处取不到是预期的；
+    //    画布命令由 ctx.commands 糖落进 command 场，数据层自带的四条在 base 插件里直注册，
+    //    由 canvas 门面的 listCommands 负责执行侧枚举。
     const commandService = this.get<{ list?: () => Array<{ id: string }> } | undefined>('command');
     if (typeof commandService?.list === 'function') {
       for (const def of commandService.list()) {

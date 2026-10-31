@@ -6,10 +6,10 @@ import { onBeforeUnmount, ref } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { demoTargetPlugin } from './demoTarget'
 
-// ① 槽位组件不接收自定义 props：自己经 useCanvasRender() 拿 ctx，
-//    再按名取宿主注入的 pluginManager 服务（与真实插件同款做法）
-const { ctx } = useCanvasRender()
-const manager = ctx.get('pluginManager')
+// ① 槽位组件不接收自定义 props：自己经 useCanvasRender() 拿宿主句柄，
+//    安装/卸载都走 host.manager（旧 pluginManager 服务名已下线）。
+const { ctx, host } = useCanvasRender()
+const manager = host.manager
 
 const rows = ref(manager.list())
 /** 最近一次操作的提示语（成功/报错都显示在这里） */

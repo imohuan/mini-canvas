@@ -30,7 +30,7 @@ const ICON_SEND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><path d="M18 4h2v16h-2"/></svg>'
 
 function notify(text: string): void {
-  ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.(text)
+  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify(text, { followPointer: true, durationMs: 0 })
 }
 
 function exit(): void {

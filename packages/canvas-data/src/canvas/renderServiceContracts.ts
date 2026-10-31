@@ -1,15 +1,15 @@
 /**
- * renderServiceContracts —— 渲染层两个内置服务的**纯结构契约**（作者 SDK 的类型面）。
+ * renderServiceContracts —— 渲染层服务的**纯结构契约**（作者 SDK 的类型面）。
  *
  * 为什么放在 canvas-data 而不是 canvas-render：
  * - 服务名 → 类型的唯一事实源必须能被任何只依赖 canvas-base 的插件看到。canvas-base 依赖
  *   canvas-data，而 canvas-render 是它的下游（canvas-render 依赖 canvas-data）；契约留在这里，
- *   逻辑插件就**不必 import 渲染包**也能按名推导 ctx.get('nodeLayout') / ctx.get('viewport')。
+ *   逻辑插件就**不必 import 渲染包**也能按名推导 ctx.get<ViewContract>('view') 等类型。
  * - 这两个契约是纯数据/纯结构（矩形、视口三元组、方法签名），不含 Vue、不含 VueFlow、不含
  *   实现细节（setMeasuredSize / attachBackend 这类写口与装配口都**不在**契约里）。
  *
- * canvas-render 的 NodeLayoutService / ViewportService 实现这些契约（implements），
- * 并由本文件（经 canvas-data 的 Services 登记）提供按名类型；canvas-render 不再各自 declare。
+ * canvas-render 的 ViewService（以及它内部持有的布局/视口实例）实现这些契约，
+ * 对外服务名只有 `view`；canvas-render 不再各自 declare 服务名。
  */
 
 /** 视口变换状态（pan 的 x/y + 缩放），与 VueFlow viewport 同形 */
@@ -153,6 +153,28 @@ export interface CanvasActions {
   notify(message: string, opts?: NotifyOptions): () => void
   runBarAction(nodeId: string, actionId: string, input?: unknown): Promise<unknown>
   cancelBarAction(nodeId: string): void
+  /** 执行命令（未注册 → no-op，与 CommandRegistry.execute 同义） */
+  runCommand(id: string, ...payload: unknown[]): unknown
+  /** 枚举命令（菜单/快捷键面板用） */
+  listCommands(): Array<{
+    id: string
+    title?: string
+    keys?: string[]
+    areas?: string[]
+    group?: string
+    order?: number
+    icon?: string
+  }>
+  /** 判断命令是否已注册 */
+  hasCommand(id: string): boolean
+  /** 运行期改键（快捷键管理器用）；返回改后的 keys */
+  remapCommandKeys(id: string, keys: string[]): string[]
+  /** 恢复某命令注册时的 keys（未 remap 过 → 当前 keys） */
+  resetCommandKeys(id: string): string[] | undefined
+  /** 只读：某命令注册时的原始 keys */
+  originalCommandKeys(id: string): string[] | undefined
+  /** 某命令 keys 是否被 remap 过 */
+  isCommandRemapped(id: string): boolean
 }
 
 /**

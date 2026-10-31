@@ -27,6 +27,7 @@ import type { NodeSegment } from './nodeRegistry'
 import type { NodeRegistry } from './nodeRegistry'
 import type { NodeDataTypeDef } from '../dataPorts'
 import { assertDataPorts } from '../dataPorts'
+import { canvasRuntime } from '../canvasRuntime'
 
 /**
  * doc 门面里"节点类型表写口"的那一小块（本助手只用得到它）。
@@ -116,9 +117,9 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
   const revokers: Array<() => void> = [() => doc.unregisterType(def.type)]
 
   // ② 展示侧：各区域组件（opaque 句柄；区域词见 canvas/region.ts）
-  //    宿主经 createMiniCanvasHost 注入 'nodeRegistry'；纯 Node 单测若未注入则只落数据、跳过展示。
+  //    宿主的基础插件把注册表放进内部运行时；纯 Node 单测若两处都没有则只落数据、跳过展示。
   const segs = def.segments ?? {}
-  const nodeRegistry = safeGet<NodeRegistry>(ctx, 'nodeRegistry')
+  const nodeRegistry = canvasRuntime()?.nodeRegistry ?? safeGet<NodeRegistry>(ctx, 'nodeRegistry')
   if (nodeRegistry && Object.keys(segs).length > 0) {
     try {
       nodeRegistry.register(def.type, segs)

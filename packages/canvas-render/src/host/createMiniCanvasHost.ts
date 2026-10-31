@@ -188,7 +188,6 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // —— 宿主补渲染层两件（真需要 DOM / 后端 attach，数据层给不了）——
   // 节点布局服务：读 nodeStore + 承载渲染层 ResizeObserver 实测尺寸（内存态，不落盘）
   const nodeLayout = new NodeLayoutService(nodeStore)
-  ctx.inject('nodeLayout', nodeLayout)
 
   // 视口服务：工厂先建空壳，CanvasHost 拿到 VueFlow 实例后 attachBackend
   const viewport = new ViewportService()
@@ -196,8 +195,6 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 保证量测写口、视口后端与别名读的是同一份状态。
   const view = new ViewService({ nodeStore, layout: nodeLayout, viewport })
   ctx.inject('view', view)
-  // 兼容别名：迁移期保留，Task 9 删除。
-  ctx.inject('viewport', viewport)
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
@@ -220,22 +217,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），
   // 从 manager.list()/diagnose() 隐去 —— 画布基础服务对应用层是"环境"，不是"清单项"。
   const manager: PluginManager = createPluginManager(ctx, { hiddenPlugins: [base.name] })
-  // 把统一安装句柄也上架成一个服务：插件（如「插件管理」）能在运行期按名取到它，
-  // 从而自己装卸别的插件（用户诉求：用一个插件去管理其他插件的装/卸/重装）。
-  // 放在冷启动之前注入：插件一 start 就能 ctx.get('pluginManager') 拿到。
-  // @deprecated 新代码从 useCanvasRender().host.manager 取；这个服务名只作兼容别名，Task 9 删除。
-  ctx.inject('pluginManager', manager)
   // 画布动作门面（服务名 canvas）与提示队列。
-  // 提示跟随鼠标、可撤回、多持有者不互盖；旧 tip 服务保留为兼容转发（Task 9 删除）。
+  // 提示跟随鼠标、可撤回、多持有者不互盖。
   const canvas = new CanvasService(ctx)
   ctx.inject('canvas', canvas)
-  ctx.inject('notify', canvas.notifications)
-  ctx.inject('tip', {
-    show: (m: string) => {
-      canvas.notify(m, { source: 'tip', followPointer: true, durationMs: 0 })
-    },
-    hide: () => canvas.notifications.hide('tip'),
-  })
   // 节点上下状态栏的会话与模式注册：属于渲染层基础设施，**不能**住在主题插件里
   // （否则卸载主题就丢模式，这是 Spec D4 要修的真实缺陷）。业务插件启动前注入。
   const nodeToolbar = new NodeToolbarService()

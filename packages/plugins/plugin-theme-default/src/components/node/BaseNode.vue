@@ -694,17 +694,17 @@ let tipOwner = false
 watch(
   () => [isConnectionInvalidTarget.value, isWillEvictTarget.value, connectionHover.value?.reason] as const,
   ([invalid, evict, reason]) => {
-    const tip = ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')
-    if (!tip) return
+    const canvas = ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')
+    if (!canvas) return
     if (invalid) {
       tipOwner = true
-      tip.show(reason || '无法连接')
+      canvas.notify(reason || '无法连接', { source: `node:${props.id}`, followPointer: true, durationMs: 0 })
     } else if (evict) {
       tipOwner = true
-      tip.show('将替换已有连接')
+      canvas.notify('将替换已有连接', { source: `node:${props.id}`, followPointer: true, durationMs: 0 })
     } else if (tipOwner) {
       tipOwner = false
-      tip.hide()
+      canvas.notify('', { source: `node:${props.id}` })
     }
   },
   { immediate: true },

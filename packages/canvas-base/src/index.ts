@@ -46,8 +46,8 @@ export { runPlugin, depsOf, Service, asPluginModule, F, resolveConfig, ConfigErr
 // Context：画布消费方要的是"带画布能力段的 ctx"，故取画布层那份（它继承 kernel 的 Context 并默认装画布能力层）。
 export type { Context } from '@mini-canvas/canvas-data'
 export type { NodeRegisterDef } from '@mini-canvas/canvas-data'
-// 渲染层两个内置服务（nodeLayout/viewport）的**纯结构契约**：逻辑插件只引本包即可按名推导
-// （ctx.get('viewport') / ctx.tryGet('nodeLayout')），不必为了两个服务名 import 整个渲染包，
+// 渲染层内置服务 `view` 的**纯结构契约**：逻辑插件只引本包即可按名推导
+// （ctx.get<ViewContract>('view')），不必为了服务类型 import 整个渲染包，
 // 也不必手写窄端口。契约零 Vue / 零 VueFlow，故放在 canvas-data（本包的上游）。
 export type {
   NodeLayoutContract,

@@ -3,7 +3,7 @@
  * shell-slots-demo-check —— 演示插件（plugin-shell-slots-demo）的真实浏览器回归。
  *
  * 与 shell-slots-check（window 手动注册）不同：这条走**真插件装载链路**——
- * 用 dev server 的 catalog 找到 dist 产物 → ctx.get('pluginManager').install({ url })
+ * 用 dev server 的 catalog 找到 dist 产物 → host.manager.install({ url })
  * → 断言三类外壳槽（状态条 / 底栏 / 左抽屉页签）都渲染出来 → 卸载 → 全部消失。
  */
 import { chromium } from 'playwright-core'
@@ -39,14 +39,14 @@ await page.waitForTimeout(800)
 // 1) 经统一安装句柄装演示插件（自包含 ESM 产物，走 fetch → data:URL import）
 const installed = await page.evaluate(async () => {
   const ctx = window.MiniCanvasUI.getContext()
-  const manager = ctx.get('pluginManager')
-  if (!manager) return { ok: false, why: 'no pluginManager' }
+  const manager = window.MiniCanvasUI.getHost()?.manager
+  if (!manager) return { ok: false, why: 'no host.manager' }
   // 组件内取 ctx 优先 Provider inject；自包含包与宿主是两份模块实例、inject 命中不了，
   // 此时兜底 window.MiniCanvasUI.getContext()（与 Provider provide 的是同一个 ctx 对象）。
   await manager.install({ url: '/plugins/plugin-shell-slots-demo/plugin-shell-slots-demo.esm.js' })
   return { ok: ctx.listPlugins().includes('shell-slots-demo') }
 })
-check('经 pluginManager 安装 shell-slots-demo（ESM 产物）', installed.ok === true, JSON.stringify(installed))
+check('经 host.manager 安装 shell-slots-demo（ESM 产物）', installed.ok === true, JSON.stringify(installed))
 
 // 2) 三处外壳 UI 出现
 await page.waitForSelector('[data-testid="ssd-status"]', { timeout: 10000 })
@@ -87,8 +87,7 @@ check('底栏演示按钮经命令打开抽屉', (await page.locator('.left-draw
 
 // 6) 卸载插件 → 三处演示 UI 全部消失；若当前页签是它则回画布
 await page.evaluate(async () => {
-  const ctx = window.MiniCanvasUI.getContext()
-  const manager = ctx.get('pluginManager')
+  const manager = window.MiniCanvasUI.getHost()?.manager
   await manager.uninstall('shell-slots-demo')
 })
 await page.waitForTimeout(500)

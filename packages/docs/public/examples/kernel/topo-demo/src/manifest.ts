@@ -12,5 +12,5 @@ export const manifest: Array<Pick<PluginModule, 'name' | 'inject'>> = [
 ]
 
 /** 宿主已经注入的外部服务名（不是插件；排序时应当忽略它们） */
-export const KNOWN_SERVICES = new Set(['tools', 'settings', 'slots', 'nodeLayout', 'viewport'])
+export const KNOWN_SERVICES = new Set(['tools', 'settings', 'slots', 'view', 'canvas'])
 

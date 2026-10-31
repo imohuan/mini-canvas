@@ -3,13 +3,12 @@
 // 位置：一个可安装插件包的源码入口
 
 import type { Context } from '@mini-canvas/canvas-base'
-import type { NodeRegistry } from '@mini-canvas/canvas-data'
 import CounterContent from './CounterContent.vue'
 import BadgeLabel from './BadgeLabel.vue'
 
 export const name = 'counter-badge'
-// 硬依赖 nodeRegistry：本插件做的事就是往这本说明书里写东西
-export const inject = ['nodeRegistry'] as string[]
+// 硬依赖 doc：节点注册一次落数据与展示两处
+export const inject = ['doc'] as string[]
 
 export function apply(ctx: Context) {
   // ① 注册一个新节点类型。ctx.nodes.register 一次落两处：
@@ -26,7 +25,7 @@ export function apply(ctx: Context) {
 
   // ② 给**所有**节点的标题位叠一个角标（type 传 '*' = 通配所有类型）。
   //    落点是 node/region 注册场（场键 = 类型名 + '/' + 区域词，这里就是 '*' + '/' + 'title'），
-  //    外壳渲染时把它与 nodeRegistry 的基座合成同一摞。
+  //    外壳渲染时把它与展示容器里的基座合成同一摞。
   //    随本插件卸载自动摘除，不用手写取消。
   ctx.nodes.attach('*', {
     region: 'title',
@@ -34,19 +33,14 @@ export function apply(ctx: Context) {
     component: BadgeLabel,
   })
 
-  // ③ 一条命令：读这本说明书（诊断用）—— 看看当前登记了哪些类型、counter 型登记了什么。
+  // ③ 一条命令：从注册场读（诊断用）—— 看看 node/region 当前有哪些键。
   ctx.commands.register({
     id: 'counter-badge:inspect',
     title: '计数器：看看展示注册表里有什么',
     run: () => {
-      const registry = ctx.get<NodeRegistry>('nodeRegistry')
-      const all = registry.types()
-      const counter = registry.get('counter')
-      console.log('[counter-badge] 已登记展示的类型：' + all.join(' / '))
-      console.log('[counter-badge] counter 的展示定义：' + JSON.stringify(Object.keys(counter?.segments ?? {})))
-      // 取某位置当前叠了哪些 occupant（按 order 升序，第一条在最外）
-      const stacked = registry.contributionOccupants('counter', 'title')
-      console.log('[counter-badge] counter 的 title 位叠加层：' + stacked.map((e) => e.id + '@' + e.order).join(' / '))
+      const field = ctx.surface().registries.find((r) => r.kind === 'node/region')
+      if (!field) return false
+      console.log('[counter-badge] node/region 场的键：' + field.keys.map((k) => k.key).join(' / '))
       return true
     },
   })

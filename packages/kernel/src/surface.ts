@@ -69,8 +69,9 @@ export interface CommandSurface {
   /**
    * 这条命令从哪读到的：
    * - 'field'：注册场（`ctx.commands.register` 糖的落点，含插件注册的命令）；
-   * - 'service'：command 服务直注册（数据层自带的建节点/删除/撤销/重做走这条）。
-   * 两处都要读才完整 —— 只读场会漏掉核心命令。
+   * - 'service'：`services` 里名为 `command` 的服务直注册。画布层已不再上架这个名字；
+   *   保留这条读口，供仍按服务名提供命令的独立宿主/嵌入方自省。
+   * 两处都要读才完整 —— 只读场会漏掉服务直注册的命令。
    */
   origin: 'field' | 'service'
 }

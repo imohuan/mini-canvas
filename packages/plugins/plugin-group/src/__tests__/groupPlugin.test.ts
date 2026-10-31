@@ -54,7 +54,7 @@ function makeCtx() {
       return r ? { x: r.x, y: r.y } : { x: 0, y: 0 }
     },
   }
-  ctx.inject('nodeLayout', layout as never)
+  ctx.inject('view', layout as never)
 
   ctx.plugin(groupPlugin)
   return { ctx, nodeStore, selection, history, command, layout }

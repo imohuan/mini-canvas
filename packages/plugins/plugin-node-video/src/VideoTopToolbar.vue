@@ -102,7 +102,7 @@ const cropped = computed(() => Boolean(props.data?.cropRect))
 const clipped = computed(() => props.data?.clipStart !== undefined || props.data?.clipEnd !== undefined)
 
 function run(id: string, payload: Record<string, unknown> = {}): void {
-  ctx.get('command').execute(id, { nodeId: props.id, ...payload })
+  ctx.get('canvas').runCommand(id, { nodeId: props.id, ...payload })
 }
 
 function openPicker(): void {

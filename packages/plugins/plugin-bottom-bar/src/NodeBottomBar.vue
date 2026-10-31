@@ -123,7 +123,7 @@ import {
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx, renderEdges, renderNodes } = useCanvasRender()
+const { ctx, host, renderEdges, renderNodes } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改
 const Select = useUiComponent('select')
 const ToolParamField = useUiComponent('toolParamField')
@@ -215,7 +215,7 @@ const actionOptions = computed(() =>
  */
 function iconOfType(type: string | undefined): unknown {
   if (!type) return undefined
-  const reg = ctx.tryGet<{ get(t: string): { icon?: unknown } | undefined }>('nodeRegistry')
+  const reg = host.nodeRegistry as { get(t: string): { icon?: unknown } | undefined } | undefined
   const fromRegistry = reg?.get(type)?.icon
   if (fromRegistry) return fromRegistry
   return FALLBACK_TYPE_ICONS[type]
@@ -838,9 +838,9 @@ function onCardDblClick(tile: RefTile): void {
    * 为什么用命令而不是把 auto-layout 当硬依赖：底栏也能在没有 auto-layout 的宿主里工作，
    * 命令未注册时 execute 是 no-op，再回落到下面的通用实现。
    */
-  const commands = ctx.tryGet<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+    const commands = ctx.tryGet<{ runCommand(id: string, ...payload: unknown[]): unknown }>('canvas')
   try {
-    if (commands?.execute('auto-layout:focus-node', nodeId) === true) return
+    if (commands?.runCommand('auto-layout:focus-node', nodeId) === true) return
   } catch { /* 命令异常：回落到下面的通用实现 */ }
   const view = ctx.tryGet<{
     fitTo(
@@ -1601,7 +1601,8 @@ function insertTileChip(tile: RefTile): void {
      * 直接静默失败会让用户以为按钮坏了（用户 2026-10-29 报「点不动」正是这种观感），
      * 所以给一句明确的提示。
      */
-    ctx.tryGet<{ show(m: string): void }>('tip')?.show('当前动作没有输入框，先选一个生成类动作再 @')
+    ctx.tryGet<{ notify(m: string, opts?: { source?: string; followPointer?: boolean; durationMs?: number }): unknown }>('canvas')
+      ?.notify('当前动作没有输入框，先选一个生成类动作再 @', { source: 'bottom-bar', followPointer: true, durationMs: 0 })
     return
   }
   editorComponentRef.value.insertResource(item)
@@ -2410,8 +2411,8 @@ function onCtrlDragPointerMove(ev: PointerEvent): void {
     const tile = refTiles.value.find((t) => t.key === key)
     const slotKind = (tile?.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: ctrlDrag.mediaType })
-    if (!verdict.ok) ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
-    else ctx.tryGet<{ hide(): void }>('tip')?.hide()
+    if (!verdict.ok) ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0 })
+    else ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('', { source: 'bottom-bar' })
   }
   if (ctrlDrag.targetTileKey && ctrlDrag.targetTileKey !== key) {
     document.querySelector('.nb-card[data-tile-key="' + ctrlDrag.targetTileKey + '"]')?.classList.remove('is-target')
@@ -2481,7 +2482,7 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
     const slotKind = (tile.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind, media: drag.mediaType })
     if (!verdict.ok) {
-      ctx.get<{ show(m: string): void; hide(): void }>('tip').show(verdict.hint)
+      ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0 })
       return
     }
   }
@@ -2525,7 +2526,7 @@ onBeforeUnmount(() => {
   unifiedExitCtrlDragMode()
   exitReference()
   // 顺带收掉可能残留的鼠标提示（与覆盖层同寿命）
-  ctx.tryGet<{ hide(): void }>('tip')?.hide()
+  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('', { source: 'bottom-bar' })
   window.removeEventListener('pointermove', onCtrlDragPointerMove, true)
   window.removeEventListener('pointerup', onCtrlDragPointerUp, true)
   window.removeEventListener('dragover', onCtrlDragOver, true)

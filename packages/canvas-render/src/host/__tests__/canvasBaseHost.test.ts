@@ -2,8 +2,8 @@
  * 步骤 4 宿主侧验收 —— canvas-base 是核心插件（决策 1）+ 15 行装配已搬走。
  *
  * 锁三件事：
- * 1. **搬窝真搬走了**：createMiniCanvasHost.ts 里的 `ctx.inject` 从 15 处降到 ≤2
- *    （只留 nodeLayout/viewport 这两个真属于渲染层、必须挂载时注入的）；
+ * 1. **搬窝真搬走了**：createMiniCanvasHost.ts 里的 `ctx.inject` 只剩 view / canvas /
+ *    nodeToolbar 三个真属于渲染层的服务；
  * 2. **对外契约一个没变**：CanvasHostHandle 字段、api 面、默认清单、持久化恢复行为照旧；
  * 3. **四条 manager 路径各自处理"被拦"**（决策 1 表格逐条）。
  */
@@ -15,8 +15,8 @@ import { MemoryStorageAdapter, CANVAS_BASE_PLUGIN_NAME } from '@mini-canvas/canv
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import type { PluginModule } from '@mini-canvas/kernel'
 
-describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤7', () => {
-  it('createMiniCanvasHost.ts 只剩 view / canvas / notify / pluginManager / tip 与三个兼容别名', () => {
+describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () => {
+  it('createMiniCanvasHost.ts 只剩 view / canvas / nodeToolbar', () => {
     const src = readFileSync(fileURLToPath(new URL('../createMiniCanvasHost.ts', import.meta.url)), 'utf8')
     // 只看代码行（注释里的说明文字不算"装配点"）
     const code = src
@@ -24,23 +24,15 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤7', () 
       .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//'))
       .join('\n')
     const hits = code.match(/ctx\.inject\(/g) ?? []
-    // 五处：视口与几何合体后的 view + 两个兼容别名（nodeLayout/viewport）
-    // +「统一安装句柄 pluginManager」+「通用鼠标提示 tip」。别名在收敛任务最后一步删除。
-    // pluginManager：插件管理插件要能按名装卸别的插件（2026-10-02 用户诉求）。
-    // tip：全局鼠标跟随提示属于渲染反馈的基础设施（2026-10-26 用户口径：拖线非法提示、
-    // 选择态提示等统一走它），与主题无关，故由渲染宿主上架。
-    expect(hits.length).toBeLessThanOrEqual(8)
+    // 三处：几何+视口合并的 view、动作门面 canvas、Spec D4 保留的 nodeToolbar。
+    // 旧的 nodeLayout/viewport/pluginManager/tip 兼容别名已删除。
+    expect(hits.length).toBe(3)
     expect(src).toContain("ctx.inject('view'")
     expect(src).toContain("ctx.inject('canvas'")
-    expect(src).toContain("ctx.inject('notify'")
     expect(src).toContain("ctx.inject('nodeToolbar'")
-    expect(src).toContain("ctx.inject('nodeLayout'")
-    expect(src).toContain("ctx.inject('viewport'")
-    expect(src).toContain("ctx.inject('pluginManager'")
-    expect(src).toContain("ctx.inject('tip'")
   })
 
-  it('其余服务由基础插件的 apply 注入（业务插件 ctx.get 照样取得到）', async () => {
+  it('基础七名与渲染层辅助服务都取得到（业务插件照样可用）', async () => {
     const { host } = await createMiniCanvasHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [nodeTextPlugin],
@@ -50,15 +42,11 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤7', () 
       // 5c：数据那一格只有 doc（nodeStore/edgeStore/graph/history 四个老名已下线）
       'doc',
       'resources',
-      'nodeRegistry',
-      'themeRegistry',
       'selection',
-      'command',
-      'nodeFactory',
-      'settingsPersist',
-      // 宿主自己补的两件
-      'nodeLayout',
-      'viewport',
+      // 宿主自己补的三件
+      'view',
+      'canvas',
+      'nodeToolbar',
     ]) {
       expect(host.ctx.hasService(name), name + ' 未注入').toBe(true)
     }

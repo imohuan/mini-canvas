@@ -7,7 +7,7 @@ import { themeTogglePlugin } from './index'
 
 /**
  * 起一个最小宿主（无头）：
- *   ctx → 装基础插件（它建 settingsPersist 桥）→ 装业务插件 → start → restore 配置。
+ *   ctx → 装基础插件（它建 save.settings 桥）→ 装业务插件 → start → restore 配置。
  * 顺序为什么是这个顺序：宿主必须在**插件全部装载完成之后**才 restore ——
  * 那时插件的 Config 已声明完，快照里的用户值才有地方命中。
  */

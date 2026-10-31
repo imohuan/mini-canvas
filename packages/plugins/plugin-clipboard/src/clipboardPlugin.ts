@@ -120,7 +120,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
   }
   /** 可选：canvas-render 宿主注入的视口服务；无则 null（粘贴退级联偏移） */
   private get viewport() {
-    return this.ctx.tryGet('viewport') ?? undefined
+    return this.ctx.tryGet('view') ?? undefined
   }
 
   /**
@@ -131,7 +131,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
    * 必须回到整张画布的父链上问。缺服务时返回 undefined，引擎退化为"把自身 position 当绝对坐标"。
    */
   private absProvider(): ClipboardAbsProvider | undefined {
-    const layout = this.ctx.tryGet('nodeLayout') as
+    const layout = this.ctx.tryGet('view') as
       | { absolutePosition?(id: string): { x: number; y: number } }
       | undefined
     if (!layout || typeof layout.absolutePosition !== 'function') return undefined

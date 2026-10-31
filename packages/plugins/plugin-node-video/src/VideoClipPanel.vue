@@ -500,11 +500,11 @@ const configOpen = ref(false)
 function onConfirm(): void {
   // 后台转码中再点一次会重复提交（后台对同节点返回 busy），本地先拦住
   if (pending.value) return
-  ctx.get('command').execute('video:clip-confirm', { nodeId: props.id, start: range.value.start, end: range.value.end })
+  ctx.get('canvas').runCommand('video:clip-confirm', { nodeId: props.id, start: range.value.start, end: range.value.end })
 }
 
 function onCancel(): void {
-  ctx.get('command').execute('video:clip-cancel', { nodeId: props.id })
+  ctx.get('canvas').runCommand('video:clip-cancel', { nodeId: props.id })
 }
 
 onBeforeUnmount(onDragUp)
@@ -668,15 +668,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
  */
 .vclip {
   /* 只保留胶片条这一块的私有色：它必须压黑，才看得清帧和蓝色选区 */
+  /* 主题色白名单: 胶片条压视频画面，必须保持黑底才能看清抽帧 */
   --vclip-film: #000;
   /* 胶片条恒定黑底，所以抽帧前的占位也固定用深灰：跟主题走会在暗色下闪出一排浅灰块 */
+  /* 主题色白名单: 抽帧前的占位保持深灰，避免暗色主题下闪出浅灰块 */
   --vclip-frame-bg: #181b20;
+  /* 主题色白名单: 胶片条内的帧底色同为固定深色 */
   --vclip-frame: #1d2128;
+  /* 主题色白名单: 深色胶片条上的分隔线 */
   --vclip-divider: rgb(255 255 255 / 0.12);
+  /* 主题色白名单: 选区外的遮罩 */
   --vclip-shade: rgb(0 0 0 / 0.5);
+  /* 主题色白名单: 深色胶片条上的强对比文字 */
   --vclip-ink-strong: #fff;
+  /* 主题色白名单: 深色胶片条上的手柄线 */
   --vclip-handle-line: rgb(255 255 255 / 0.9);
+  /* 主题色白名单: 深色胶片条上的播放头光晕 */
   --vclip-playhead-glow: rgb(255 255 255 / 0.45);
+  /* 主题色白名单: 深色胶片条上的时长胶囊底色 */
   --vclip-length-bg: rgb(23 24 27 / 0.94);
   --vclip-accent: var(--ui-accent, #0891b2);
   --vclip-accent-ring: var(--ui-accent, #0891b2);

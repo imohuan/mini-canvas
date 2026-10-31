@@ -10,6 +10,7 @@
  */
 import type { Context } from '@mini-canvas/kernel'
 import type {
+  CanvasActions,
   DocService,
   FitToOptions,
   FocusTarget,
@@ -18,6 +19,7 @@ import type {
   ViewContract,
 } from '@mini-canvas/canvas-data'
 import { createNotifyService, type NotifyOptions, type NotifyService } from './notifyService'
+import { canvasRuntime, commandRuntime, type CommandRuntime } from '@mini-canvas/canvas-data'
 
 export type SelectMode = 'replace' | 'add' | 'toggle'
 
@@ -69,7 +71,7 @@ export class CanvasService {
    * sourceNodeId + gap 透传给插件 creator（媒体插件据此放在源节点旁边）。
    */
   createNode(type: string, at: { x: number; y: number }, opts?: CreateNodeOptions): string | undefined {
-    const factory = this.ctx.tryGet<NodeFactoryService>('nodeFactory')
+    const factory = canvasRuntime()?.nodeFactory ?? this.ctx.tryGet<NodeFactoryService>('nodeFactory')
     if (!factory) return undefined
     if (!factory.creatableTypes().includes(type)) return undefined
     const extra = opts ? { ...opts } : undefined
@@ -82,7 +84,7 @@ export class CanvasService {
 
   /** 可建节点类型清单（菜单枚举用）；缺工厂返回空数组 */
   creatableTypes(): string[] {
-    return this.ctx.tryGet<NodeFactoryService>('nodeFactory')?.creatableTypes() ?? []
+    return (canvasRuntime()?.nodeFactory ?? this.ctx.tryGet<NodeFactoryService>('nodeFactory'))?.creatableTypes() ?? []
   }
 
   /** 选中节点；replace = 整体替换，add = 追加，toggle = 已选则移除 */
@@ -162,5 +164,39 @@ export class CanvasService {
   /** 取消某节点正在跑的动作；缺执行器安静返回 */
   cancelBarAction(nodeId: string): void {
     this.ctx.tryGet<NodeTaskLike>('nodeTask')?.cancel(nodeId)
+  }
+
+  // —— 命令（执行入口并入 canvas；command 服务名迁移期保留，Task 9 删） ——
+
+  private get command(): CommandRuntime | undefined {
+    return commandRuntime() ?? (canvasRuntime()?.command as CommandRuntime | undefined)
+  }
+
+  runCommand(id: string, ...payload: unknown[]): unknown {
+    return this.command?.execute(id, ...payload)
+  }
+
+  listCommands(): ReturnType<CanvasActions['listCommands']> {
+    return this.command?.list() ?? []
+  }
+
+  hasCommand(id: string): boolean {
+    return this.command?.has(id) ?? false
+  }
+
+  remapCommandKeys(id: string, keys: string[]): string[] {
+    return this.command?.remapKeys(id, keys) ?? keys
+  }
+
+  resetCommandKeys(id: string): string[] | undefined {
+    return this.command?.resetKeys(id)
+  }
+
+  originalCommandKeys(id: string): string[] | undefined {
+    return this.command?.originalKeys(id)
+  }
+
+  isCommandRemapped(id: string): boolean {
+    return this.command?.isRemapped(id) ?? false
   }
 }

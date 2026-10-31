@@ -5,9 +5,9 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 
 export const name = 'measure-demo'
 
-// ① 硬依赖写 nodeLayout：这个插件的全部意义就是"按实测尺寸排列"，
+// ① 硬依赖写 view：这个插件的全部意义就是"按实测尺寸排列"，
 //    没有渲染层（拿不到服务）它就不该启动 —— 框架会让它停在 PENDING 等依赖。
-export const inject = ['doc', 'selection', 'nodeLayout'] as string[]
+export const inject = ['doc', 'selection', 'view'] as string[]
 
 /** 排列时的间距（px） */
 const GAP = 24
@@ -15,8 +15,7 @@ const GAP = 24
 export function apply(ctx: Context): void {
   const doc = ctx.get('doc')
   const selection = ctx.get('selection')
-  const layout = ctx.get('nodeLayout')
-  const viewport = ctx.tryGet('viewport')   // ② 可选：负责把结果滚进视野
+  const view = ctx.tryGet('view')           // ② 几何与视口合并在这一个服务里
 
   ctx.commands.register({
     id: 'measure-demo:row',
@@ -28,7 +27,7 @@ export function apply(ctx: Context): void {
 
       // ④ 每个节点的实测矩形：绝对坐标 + 真实尺寸
       const rects = ids
-        .map((id) => layout.getNodeRect(id))
+        .map((id) => view?.getNodeRect(id) ?? null)
         .filter((r): r is NonNullable<typeof r> => r !== null)
         .sort((a, b) => a.x - b.x)          // 按当前从左到右的顺序排，避免"跳位"
 
@@ -46,7 +45,7 @@ export function apply(ctx: Context): void {
         //    有父（组内）时存的是相对父的局部坐标，要减掉父的绝对坐标。
         const abs = { x: cursorX, y: baselineY }
         const parentAbs = current.parentId
-          ? layout.absolutePosition(current.parentId)
+          ? view?.absolutePosition(current.parentId) ?? { x: 0, y: 0 }
           : { x: 0, y: 0 }
         moves.push({ id: rect.id, position: { x: abs.x - parentAbs.x, y: abs.y - parentAbs.y } })
         cursorX += rect.w + GAP              // ⑦ 步进用的是**实测宽度**，不是声明宽度
@@ -58,9 +57,9 @@ export function apply(ctx: Context): void {
       })
 
       // ⑨ 可选：把排好的这一行带回视野中心
-      if (viewport) {
+      if (view) {
         const totalW = rects.reduce((sum, r) => sum + r.w, 0) + GAP * (rects.length - 1)
-        viewport.setCenter(cursorX - totalW / 2, baselineY, viewport.getViewport().zoom)
+        view.setCenter(cursorX - totalW / 2, baselineY, view.getViewport().zoom)
       }
       return moves.length
     },

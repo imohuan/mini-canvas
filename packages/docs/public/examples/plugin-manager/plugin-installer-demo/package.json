@@ -5,7 +5,7 @@
   "type": "module",
   "miniCanvas": {
     "title": "演示：插件装卸",
-    "description": "跟着 pluginManager 学：列出已装插件、按来源装卸、看诊断状态",
+    "description": "跟着 host.manager 学：列出已装插件、按来源装卸、看诊断状态",
     "pluginName": "installer-demo",
     "installable": true
   },

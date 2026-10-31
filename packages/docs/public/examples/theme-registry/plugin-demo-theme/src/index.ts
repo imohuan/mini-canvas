@@ -8,7 +8,7 @@ import GridBackground from './GridBackground.vue'
 export const name = 'demo-theme'
 
 /**
- * 不需要 inject：ctx.theme 自己会去找 themeRegistry（找不到就跳过容器写入），
+ * 不需要 inject：ctx.theme 自己会去找主题容器（找不到就跳过容器写入），
  * 装载期也不会因为缺服务而停在 PENDING。
  */
 export const inject = [] as string[]

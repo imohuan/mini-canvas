@@ -211,7 +211,7 @@ type CanUninstallResult =
 | `packages/kernel/src/Context.ts` | `fiber()` / `inspectPlugins()` / `registry`；`tryActivate` / `retractUnsatisfiedActives` / `stop` 里的状态推进 |
 | `packages/kernel/src/__tests__/fiber.test.ts` | 锁住 settle / 幂等 / 异步 disposer / 单错不阻断等行为 |
 | `packages/canvas-render/src/host/pluginManager.ts` | 画布插件管理器：把 `inspectPlugins()` 的 `missingDeps` / `error` 并进 `list()` / `diagnose()`（真实诊断消费点） |
-| `packages/docs/services/plugin-manager.md` | 服务文档：插件管理器怎么用这些诊断数据 |
+| `packages/docs/canvas-render/create-host.md` | 宿主安装句柄 `host.manager` 怎么用这些诊断数据 |
 | `packages/docs/.vitepress/theme/components/SurfaceReport.vue` | 文档站「活快照」页：把每个插件的 state / missingDeps 直接画成表 |
 
 ## 完整例子

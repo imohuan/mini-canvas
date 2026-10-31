@@ -5,7 +5,7 @@
   "type": "module",
   "miniCanvas": {
     "title": "演示：按实测尺寸排列",
-    "description": "跟着 nodeLayout 学：用真实 DOM 尺寸把选中节点排成一行",
+    "description": "跟着 view 学：用真实 DOM 尺寸把选中节点排成一行",
     "pluginName": "measure-demo",
     "installable": true
   },

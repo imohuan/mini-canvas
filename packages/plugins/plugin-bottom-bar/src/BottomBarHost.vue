@@ -11,14 +11,14 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, host } = useCanvasRender()
 
 // —— 当前赢家组件：读 themeRegistry.winner('bottomBar')，插件装卸时整体替换以触发 Vue 更新 ——
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const winner = ref<any>(undefined)
 
 function reload(): void {
-  const theme = ctx.get<{ winner(slot: string): unknown }>('themeRegistry')
+  const theme = host.themeRegistry
   const w = theme?.winner('bottomBar')
   winner.value = w ? markRaw(w as object) : undefined
 }
@@ -33,7 +33,7 @@ disposers.push(
 // 注意：ThemeRegistry.subscribe 返回的是 **() => void**（不是 Disposable）——
 // 这里收窄成直接 push，之前包了一层 { dispose: () => sub.dispose() } 会在卸载时把
 // 函数当 Disposable 再调一次 dispose，抛 "sub.dispose is not a function"。
-const themeRegistry = ctx.get<{ subscribe(cb: () => void): () => void } | undefined>('themeRegistry')
+const themeRegistry = host.themeRegistry as { subscribe(cb: () => void): () => void } | undefined
 if (themeRegistry && typeof themeRegistry.subscribe === 'function') {
   const sub = themeRegistry.subscribe(reload)
   disposers.push({ dispose: () => sub() })

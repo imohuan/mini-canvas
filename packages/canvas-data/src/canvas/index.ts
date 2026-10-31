@@ -140,6 +140,11 @@ export type {
 
 // 画布通用命令（建节点/删选中/撤销/重做）——宿主 boot 时经 registerCanvasCommands 注册
 export { registerCanvasCommands, CANVAS_COMMAND } from './canvasCommands'
+// 命令运行时句柄（基础插件绑定；canvas 门面 / 宿主键盘分发用，不占服务名）
+export { commandRuntime, commandService, setCommandRuntime, clearCommandRuntime } from './commandRuntime'
+export type { CommandRuntime } from './commandRuntime'
+export { canvasRuntime, setCanvasRuntime } from './canvasRuntime'
+export type { CanvasRuntime } from './canvasRuntime'
 export type { CanvasCommandServices } from './canvasCommands'
 
 // 画布基础装配插件（步骤 4：把 15 行 ctx.inject 收进一个 core 插件；宿主只负责"建 ctx → 装它 → 装业务插件"）

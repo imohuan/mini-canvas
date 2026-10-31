@@ -142,7 +142,7 @@ function onPointerMove(e: PointerEvent): void {
   const br = flow.screenToFlow(Math.max(startX, e.clientX), Math.max(startY, e.clientY))
   const box = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y }
 
-  const layout = ctx.get('nodeLayout')
+  const layout = ctx.get('view')
   const rects = layout ? layout.getAllRects() : []
   const hitIds = hitTestRects(rects, box)
 

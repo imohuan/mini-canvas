@@ -10,7 +10,6 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
-import type { CommandService } from '@mini-canvas/kernel'
 
 describe('T03 · 按服务名推导类型', () => {
   it('已知服务名：get 返回集中声明的类型（编译期断言 + 运行期取值）', async () => {
@@ -18,7 +17,10 @@ describe('T03 · 按服务名推导类型', () => {
     let doc: DocService | undefined
     let selection: SelectionService | undefined
     let resources: ResourceService | undefined
-    let command: CommandService | undefined
+    const injectedCanvas = {
+      listCommands: () => [] as Array<{ id: string }>,
+    }
+    ctx.inject('canvas', injectedCanvas)
 
     ctx.plugin({
       name: 'type-probe',
@@ -27,7 +29,8 @@ describe('T03 · 按服务名推导类型', () => {
         doc = c.get('doc')
         selection = c.get('selection')
         resources = c.get('resources')
-        command = c.get('command')
+        // command 服务名已并入 canvas；这里验证新入口在类型上可按名取。
+        expect(typeof c.get('canvas').listCommands).toBe('function')
       },
     })
     await ctx.start()
@@ -36,7 +39,7 @@ describe('T03 · 按服务名推导类型', () => {
     expect(doc).toBe(ctx.get('doc'))
     expect(selection).toBe(ctx.get('selection'))
     expect(resources).toBe(ctx.get('resources'))
-    expect(command).toBe(ctx.get('command'))
+    expect(Array.isArray(ctx.get('canvas').listCommands())).toBe(true)
   })
 
   it('tryGet 同样按名推导，缺服务返回 undefined', async () => {

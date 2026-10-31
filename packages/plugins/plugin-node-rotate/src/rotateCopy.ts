@@ -87,7 +87,7 @@ function enterRotateMode(ctx: Context, nodeId: string): void {
   openRotateMode(nodeId)
   const toolbar = ctx.tryGet<NodeToolbarPort>('nodeToolbar')
   if (!toolbar?.enter) {
-    ctx.tryGet<{ show?(text: string): void }>('tip')?.show?.('旋转与镜像：主题状态栏服务不可用')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('旋转与镜像：主题状态栏服务不可用', { followPointer: true, durationMs: 0 })
     return
   }
   toolbar.enter(nodeId, ROTATE_MODE_ID)
@@ -145,7 +145,7 @@ export function duplicateImageForRotate(
       })
     })
   } catch {
-    ctx.tryGet<{ show?(text: string): void }>('tip')?.show?.('旋转与镜像：复制节点失败')
+    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('旋转与镜像：复制节点失败', { followPointer: true, durationMs: 0 })
     return null
   }
 

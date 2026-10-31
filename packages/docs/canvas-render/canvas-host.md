@@ -186,7 +186,7 @@ CanvasSurface 是 CanvasHost 的**内层**组件，它只做四件事：**接住
 它挂载时还会做三件接后端的事（都在 onMounted 里）：
 
 1. 捕获本实例的 DOM 锚点（pane / renderer / 根元素）—— **在本实例根内查询**，多画布页面不串线；
-2. 把 VueFlow 能力 attachBackend 给 viewport 服务（ctx.get('viewport') 从此真正能动）；
+2. 把 VueFlow 能力 attachBackend 给 view 服务（ctx.get('view') 的视口部分从此真正能动）；
 3. 把同一份能力 attachFlow / attachDom 给 flow 能力面（useCanvasRender().flow）。
 
 ### canvasHostCore.ts 的纯函数

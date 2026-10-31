@@ -164,7 +164,7 @@ registerBarAction(ctx, {
   形状 `{ status, progress, message, taskId, actionId, startedAt }`；覆盖层挂 `over:inset`，
   按 `status === 'running'` 显隐。
 - **消费入口**（组件里用 `ctx.get`，根 ctx 没有服务代理）：
-  `ctx.get('nodeBar').list({ type })` / `ctx.get('nodeTask').run(nodeId, actionId, input)`。
+  `ctx.get('nodeBar').list({ type })` 读动作；执行走 `ctx.get('canvas').runBarAction(nodeId, actionId, input)`。
 
 **整体换皮**（像主题那样换掉整个底栏 UI）：
 

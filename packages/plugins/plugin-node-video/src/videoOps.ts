@@ -256,7 +256,7 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
   }
   /** doc 门面（5c 起数据唯一来源）；缺 doc 则安全降级（读 undefined、写 no-op） */
   const doc = (): VideoDocPort | undefined => svc.get<VideoDocPort | undefined>('doc')
-  const layout = () => svc.tryGet('nodeLayout')
+  const layout = () => svc.tryGet('view')
 
   /**
    * 媒体能力：它是 **capability**（registryOf('capability')），不是服务。

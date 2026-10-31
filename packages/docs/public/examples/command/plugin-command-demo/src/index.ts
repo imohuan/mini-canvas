@@ -6,8 +6,8 @@ import CommandBar from './CommandBar.vue'
 
 export const name = 'command-demo'
 
-// ① 硬依赖：没有 doc/selection/command 本插件没意义，写进 inject 等它们就绪
-export const inject = ['doc', 'selection', 'command'] as string[]
+// ① 硬依赖：没有 doc/selection 本插件没意义；命令用 canvas 门面执行
+export const inject = ['doc', 'selection', 'canvas'] as string[]
 
 /** 本插件命令的分组名（工具条按它筛选；也是菜单里的分组名） */
 export const DEMO_COMMAND_GROUP = 'command-demo'

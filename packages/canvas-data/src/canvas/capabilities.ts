@@ -5,7 +5,7 @@
  * `ctx.nodes / theme / commands / tools` 全是画布概念（节点/连线/命令/外部工具），
  * 与"插件框架不认识画布"的边界冲突，故实现迁到本层；旧路径留一行转发垫片。
  *
- * 目的：把散装注册函数(registerNodeType/registerThemeSlot/ctx.get('command')/…)收口成
+ * 目的：把散装注册函数(registerNodeType/registerThemeSlot/命令场/…)收口成
  * 作者一眼能用的 `ctx.nodes / ctx.theme / ctx.commands / ctx.slots`，注册一律自动回收
  * （revoke 经当前插件 scope 的 effect 登记，插件卸载/热卸即清，作者不手写 unregister）。
  *
@@ -22,6 +22,7 @@ import type { NodeStoreService } from '../nodeStore'
 import type { NodeFactoryService, NodeCreator } from './nodeFactory'
 import type { CommandDef } from '@mini-canvas/kernel'
 import type { NodeRegion, NodeRegionAttachment } from './region'
+import { canvasRuntime } from './canvasRuntime'
 
 import { assertRegion, RETIRED_CONTENT_FIELD } from './region'
 
@@ -187,7 +188,7 @@ export function buildCapabilities(
 } {
   const theme = () => {
     try {
-      return ctx.get<{
+      return canvasRuntime()?.themeRegistry ?? ctx.get<{
         addOccupant(s: string, r: { id?: string; order?: number; value: unknown }): string
         removeOccupant(s: string, id: string): boolean
         occupantIds(s: string): string[]
@@ -216,11 +217,17 @@ export function buildCapabilities(
   // 取 nodeRegistry（缺服务不抛，纯数据 ctx 不装它）：contribute 的基座判断要用
   const nodeRegistry = (): { get(t: string): { segments?: Partial<Record<NodeSegment, unknown>> } | undefined } | undefined => {
     try {
-      return ctx.get<{ get(t: string): { segments?: Partial<Record<NodeSegment, unknown>> } | undefined }>('nodeRegistry')
+      return canvasRuntime()?.nodeRegistry ?? ctx.get<{ get(t: string): { segments?: Partial<Record<NodeSegment, unknown>> } | undefined }>('nodeRegistry')
     } catch {
       return undefined
     }
   }
+
+  /** 命令表：基础插件绑定的运行时优先；最小测试上下文仍可注入旧名做迁移回退。 */
+  const commandTable = () => canvasRuntime()?.command ?? ctx.tryGet<{
+    register(d: CommandDef): { dispose(): void }
+    has(id: string): boolean
+  }>('command')
 
   /**
    * ctx.theme.register / add 共享的落位逻辑：只写 ThemeRegistry（真实容器，渲染层取赢家）。
@@ -300,7 +307,7 @@ export function buildCapabilities(
         })
         // ② 可选建节点实现 → nodeFactory.register + effect 回收
         if (def.create) {
-          const factory = ctx.get<NodeFactoryService>('nodeFactory')
+          const factory = canvasRuntime()?.nodeFactory ?? ctx.get<NodeFactoryService>('nodeFactory')
           factory.register(def.type, def.create)
           ctx.effect(() => () => {
             factory.unregister(def.type)
@@ -342,7 +349,7 @@ export function buildCapabilities(
         }
         // 场缺席（最小 ctx）时 order 保持 opts.order（可为 undefined），由 NodeRegistry 按自己
         // 的缺省规则解析 —— 与改动前一致。
-        const registry = ctx.get<{
+        const registry = canvasRuntime()?.nodeRegistry ?? ctx.get<{
           registerContribution(
             t: string,
             seg: NodeSegment,
@@ -434,7 +441,8 @@ export function buildCapabilities(
           throw new Error(`[command] command "${def.id}" already registered`)
         }
         try {
-          const cmd = ctx.get<{ register(d: CommandDef): { dispose(): void }; has(id: string): boolean }>('command')
+          const cmd = commandTable()
+          if (!cmd) throw new Error('[command] 命令运行时未绑定：请先装载 canvas-base 插件')
           const handle = cmd.register(def)
           const placed = commandField?.add(def.id, { def })
           ctx.effect(() => () => {
@@ -454,11 +462,7 @@ export function buildCapabilities(
         }
       },
       has(id: string): boolean {
-        try {
-          return ctx.get<{ has(id: string): boolean }>('command').has(id)
-        } catch {
-          return false
-        }
+        return commandTable()?.has(id) ?? false
       },
     },
 

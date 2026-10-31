@@ -90,12 +90,12 @@ topoSort([{ name: 'c', inject: ['b'] }, { name: 'b', inject: ['a'] }, { name: 'a
 
 ### 四、`knownServices`：把「外部服务名」排除在排序之外
 
-插件常常依赖一些**不是插件提供**的名字 —— 宿主注入的服务（如 `nodeLayout` / `viewport`），或者内核内置的 `tools`。
+插件常常依赖一些**不是插件提供**的名字 —— 宿主注入的服务（如 `view` / `canvas`），或者内核内置的 `tools`。
 这些名字不在插件列表里，如果不告诉 `topoSort`，它就会报 `depends on "xxx" which is not registered`。
 
 ```ts
-const known = new Set(['tools', 'settings', 'slots', 'nodeLayout', 'viewport'])
-topoSort([{ name: 'a', inject: ['nodeLayout'] }], known)   // → ['a']（nodeLayout 被忽略，不参与排序）
+const known = new Set(['tools', 'settings', 'slots', 'view', 'canvas'])
+topoSort([{ name: 'a', inject: ['view'] }], known)   // → ['a']（view 被忽略，不参与排序）
 ```
 
 ### 五、和 `start()` 多轮激活的关系（**最要紧的一段**）
@@ -172,7 +172,7 @@ export const manifest: Array<Pick<PluginModule, 'name' | 'inject'>> = [
 ]
 
 /** 宿主已经注入的外部服务名（不是插件；排序时应当忽略它们） */
-export const KNOWN_SERVICES = new Set(['tools', 'settings', 'slots', 'nodeLayout', 'viewport'])
+export const KNOWN_SERVICES = new Set(['tools', 'settings', 'slots', 'view', 'canvas'])
 ```
 
 ### 文件二：预检脚本
@@ -232,7 +232,7 @@ try {
 ## 常见坑
 
 1. **参数是「插件对象数组」不是「名字数组」**。旧文档与直觉容易写成 `topoSort(['a','b'])` —— 实际要 `topoSort([{ name: 'a' }, { name: 'b' }])`。
-2. **不传 `knownServices` 就会把外部服务名当「缺失依赖」抛错**。清单里只要出现 `nodeLayout` / `viewport` / `tools` 这类宿主或内核提供的名字，就得把白名单传上。
+2. **不传 `knownServices` 就会把外部服务名当「缺失依赖」抛错**。清单里只要出现 `view` / `canvas` / `tools` 这类宿主或内核提供的名字，就得把白名单传上。
 3. **`inject` 优先于 `deps`，两者都给时 `deps` 被忽略**（不是合并）。混写老字段时要小心这一点。
 4. **`topoSort` 不接受「等一等」**：缺依赖直接抛。要「等提供方出现」是 `start()` / `drain` 的语义 —— 两者别用错场景。
 5. **成环时 `start()` 不会报错指出环** —— 环里每个插件都安静停在 `pending`。想提前发现环，就用 `topoSort` 预检一遍。

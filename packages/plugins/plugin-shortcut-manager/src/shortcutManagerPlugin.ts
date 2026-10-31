@@ -20,6 +20,7 @@ import { createShortcutRemapEngine } from './shortcutRemapEngine'
 import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
 import { shortcutHelpState, setShortcutManager } from './shortcutState'
+import { commandRuntime } from '@mini-canvas/canvas-data'
 
 export const name = 'shortcut-manager'
 
@@ -28,7 +29,9 @@ export type { ShortcutManagerState } from './shortcutState'
 
 export function apply(ctx: Context): void {
   const save = ctx.tryGet('save')
-  const command = ctx.get('command')
+  // 命令注册表经渲染层运行时句柄取（command 服务名已并入 canvas；本插件不依赖它）。
+  const command = commandRuntime()
+  if (!command) return
 
   // 持久化 remap 引擎：装配时读回上次 remap 表并批量应用
   const remapEngine = createShortcutRemapEngine(command, save)

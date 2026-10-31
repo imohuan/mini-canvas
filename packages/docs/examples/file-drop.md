@@ -49,8 +49,8 @@ import type { Context } from '@mini-canvas/canvas-base'
 export const name = 'drop-image'
 
 /**
- * ① 硬依赖 doc（建节点的门）；viewport 不进 inject —— 它是渲染层服务，
- *    纯数据宿主（无头测试、后台）没有它。缺 viewport 时退化为「按原样建节点」，
+ * ① 硬依赖 doc（建节点的门）；view 不进 inject —— 它是渲染层服务，
+ *    纯数据宿主（无头测试、后台）没有它。缺 view 时退化为「按原样建节点」，
  *    插件照常工作，所以用 tryGet 软探测。
  */
 export const inject = ['doc'] as string[]
@@ -70,9 +70,9 @@ export function apply(ctx: Context): void {
 
   /** 屏幕坐标（鼠标在窗口里的位置）→ 画布坐标（节点用的 x/y）。 */
   function toFlow(x: number, y: number): { x: number; y: number } {
-    // ③ viewport 服务的 screenToFlow 负责把「屏幕位置」换算成「画布上的位置」——
+    // ③ view 服务的 screenToFlow 负责把「屏幕位置」换算成「画布上的位置」——
     //    画布平移/缩放之后，同一屏幕点对应的画布坐标完全不同，必须换算。
-    const vp = ctx.tryGet('viewport')
+    const vp = ctx.tryGet('view')
     return vp ? vp.screenToFlow(x, y) : { x, y }
   }
 
@@ -183,7 +183,7 @@ export function apply(ctx: Context): void {
 
 **② 类型探测（`doc.types.has('image')`）**：file-drop 自己不注册任何节点类型 —— 它只负责「把文件变成节点」，节点长什么样是 node-image 插件的事。所以建之前先问一句「image 类型在场吗」。这条解耦让两个插件可以各装各的：没装 node-image 时拖文件安静忽略（控制台提示），装上后立即生效，谁也不用改代码。
 
-**③ 坐标换算（`viewport.screenToFlow`）**：事件给的是**屏幕坐标**（相对窗口），节点存的是**画布坐标**（世界系）。用户把画布缩小后拖文件，鼠标的屏幕位置和落点差得很远，不换算的话节点会出现在「错位」的地方。viewport 是渲染层服务，纯数据环境没有它 —— 所以这里用 `tryGet` 而不是 `inject`，拿不到时退回原样坐标（无头环境本来也不真的拖文件）。
+**③ 坐标换算（`view.screenToFlow`）**：事件给的是**屏幕坐标**（相对窗口），节点存的是**画布坐标**（世界系）。用户把画布缩小后拖文件，鼠标的屏幕位置和落点差得很远，不换算的话节点会出现在「错位」的地方。view 是渲染层服务，纯数据环境没有它 —— 所以这里用 `tryGet` 而不是 `inject`，拿不到时退回原样坐标（无头环境本来也不真的拖文件）。
 
 **④ 资源登记（`resources.put`）**：`URL.createObjectURL` 生成的地址只在本次会话有效，刷新就变成死链接。`resources.put(file, …)` 把文件字节存进资源库（本地进 IndexedDB，云端上传到画布文件夹），返回持久引用；写进 `data.resourceId` 后，删除节点时资源库能按引用回收、云端画布能带着文件同步。节点数据长期只认这一个 ID；显示地址由内容组件按当前环境现取，刷新后照样能重建。
 
@@ -245,7 +245,7 @@ function fitImageSize(dims: { width: number; height: number }): { w: number; h: 
 | --- | --- | --- |
 | ctx.effect 包 window 监听 + 返回清理函数 | `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts`（apply 内三段 effect） | dragover/drop/paste/pointermove 四组监听，每组 effect 返回对应的 removeEventListener |
 | 建节点前探测类型（`doc.types.has(...)`） | 同上 `typeRegistered(type)` | `this.doc.types.has(type)`，缺类型时跳过该类文件并 console.warn |
-| screenToFlow 坐标换算 + 无 viewport 退级 | 同上 `toFlow(client)` | `ctx.tryGet('viewport')` 拿不到返回 null，调用方退默认位置 |
+| screenToFlow 坐标换算 + 无 view 退级 | 同上 `toFlow(client)` | `ctx.tryGet('view')` 拿不到返回 null，调用方退默认位置 |
 | resources.put 登记资源 + data.resourceId | 同上 `addFiles` 内 | `resources.put(file, { kind: 'image', name })` → `payload.data.resourceId = resourceId` |
 | 资源引用 + 显示字段的迁移期形态 | 同上 + `fileDropEngine.ts` 的 `buildImagePayload` | 载荷仍带一份显示地址（旧字段），同时写 `resourceId`；长期字段以 `resourceId` 为准 |
 | 事务批量建节点 + 选中新节点 | 同上 `commitPayloads` | `doc.transaction('file-drop-add', tx => tx.addNodes(…))`，建完 `selection.set(ids)` |
@@ -256,6 +256,6 @@ function fitImageSize(dims: { width: number; height: number }): { w: number; h: 
 
 1. **监听不包 effect**。插件卸载后监听还在：画布上「删掉的插件」继续建节点、继续弹警告。所有 window/document 监听一律 `ctx.effect(() => { … ; return 清理函数 })`，让卸载自动拆干净。
 2. **忘写 dragover 的 preventDefault**。表现为「拖文件进窗口，浏览器直接把图打开了，drop 一次没触发」。必须监听 dragover 并 preventDefault（真实插件成对写 dragover + drop 就是这个原因）。
-3. **把屏幕坐标直接当画布坐标**。画布一旦平移/缩放，节点就落在鼠标点的「远房亲戚」位置。落点必须经 `viewport.screenToFlow` 换算；viewport 拿不到时再退默认值，别跳过换算。
+3. **把屏幕坐标直接当画布坐标**。画布一旦平移/缩放，节点就落在鼠标点的「远房亲戚」位置。落点必须经 `view.screenToFlow` 换算；view 拿不到时再退默认值，别跳过换算。
 4. **只用 objectURL、不登记资源**。图片当场能看，刷新后全是死链。正确做法：`resources.put` 拿持久引用写进 `data.resourceId` —— 资源库负责「长期不丢」和「删节点后回收」；显示地址在渲染时现取。
 5. **拖进不可处理的文件时抢默认行为**。只有确认「这批文件我能建节点」才 `preventDefault`；不能处理时别拦 —— 用户可能就是想把文件拖到浏览器的下载栏/书签栏。真实插件在 drop 回调里先查 `files` 与类型注册情况，全部命中才阻止默认行为。

@@ -5,7 +5,7 @@
   "type": "module",
   "miniCanvas": {
     "title": "演示：可持久化配置",
-    "description": "跟着 settingsPersist 学：插件只声明 Config 与改值，落盘与恢复由桥负责",
+    "description": "跟着 save.settings 学：插件只声明 Config 与改值，落盘与恢复由桥负责",
     "pluginName": "theme-toggle",
     "installable": true
   },

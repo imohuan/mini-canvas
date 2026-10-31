@@ -8,7 +8,8 @@
  *
  * 消费入口（组件里用 ctx.get，不要直访 ctx.nodeBar —— 根 ctx 没有服务代理）：
  *   ctx.get('nodeBar').list({ type }) / get(id) / state(nodeId)
- *   ctx.get('nodeTask').run(nodeId, actionId, input) / cancel(nodeId)
+ *   ctx.get('canvas').runBarAction(nodeId, actionId, input) / cancelBarAction(nodeId)
+ * 底栏自己的组件要取消任务时，仍可用内部执行器 `nodeTask.cancel`（它不是基础服务）。
  *
  * 整体换皮（像主题那样）：ctx.theme.add('bottomBar', MyBar, { order: -1 })
  */

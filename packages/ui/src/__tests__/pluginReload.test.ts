@@ -37,14 +37,14 @@ describe('looksLikeUrl（判入参是不是 js 地址）', () => {
 describe('createPluginReloader', () => {
   it('按 id 查清单 → 加载 → 卸旧装新；装完可执行 then 命令', async () => {
     const reloadPlugin = vi.fn()
-    const execute = vi.fn()
+    const runCommand = vi.fn()
     const loadUmd = vi.fn(async () => ({ name: 'style-library', apply() {} }))
     const fetcher = vi.fn(async () => ENTRIES)
 
     const r = createPluginReloader({
       fetchCatalog: fetcher,
       loadUmd,
-      facade: () => ({ reloadPlugin, getContext: () => ({ get: () => ({ execute }) }) }),
+      facade: () => ({ reloadPlugin, getContext: () => ({ get: () => ({ runCommand }) }) }),
     })
 
     const res = await r.reload('style-library', { then: 'style-library:open' })
@@ -53,7 +53,7 @@ describe('createPluginReloader', () => {
     expect(loadUmd).toHaveBeenCalledWith('/plugins/plugin-style-library/plugin-style-library.js', 'MiniCanvasPluginStyleLibrary')
     // 先卸后装交给 reloadPlugin（它内部做这两步）
     expect(reloadPlugin).toHaveBeenCalledWith('style-library', expect.objectContaining({ name: 'style-library' }))
-    expect(execute).toHaveBeenCalledWith('style-library:open')
+    expect(runCommand).toHaveBeenCalledWith('style-library:open')
   })
 
   it('opts.url 给了就不查清单', async () => {
@@ -166,6 +166,7 @@ describe('createPluginReloader', () => {
       facade: () => ({
         reloadPlugin: () => {},
         getContext: () => ({ get: () => ({ list: () => [{ name: 'mini-map' }] }) }),
+        getHost: () => ({ manager: { list: () => [{ name: 'mini-map' }] } }),
       }),
     })
     const rows = await r.list()

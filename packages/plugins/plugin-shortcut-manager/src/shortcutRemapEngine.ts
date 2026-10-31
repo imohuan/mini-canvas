@@ -39,7 +39,7 @@ export interface RemapSaveService {
 
 /**
  * 建重映射持久化引擎。
- * @param registry 命令注册表（ctx.get('command')）
+ * @param registry 命令注册表（宿主持有的 CommandRegistry 实例）
  * @param save SaveService（ctx.get('save')；可选——无 save 时仅内存 remap 不持久化）
  */
 export function createShortcutRemapEngine(

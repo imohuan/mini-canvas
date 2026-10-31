@@ -2,8 +2,8 @@
 /**
  * TipLayer —— 全局鼠标跟随提示层（渲染层提供，全站唯一一个）。
  *
- * 消费方：canvas.notify(msg, { followPointer: true }) —— 服务端的通知队列是唯一事实源，
- * 本组件只按 followPointer 过滤渲染。旧 tip 服务已转发进同一队列。
+ * 消费方：canvas.notify(msg, { followPointer: true }) —— canvas 的通知队列是唯一事实源，
+ * 本组件只按 followPointer 过滤渲染。
  * 位置：左上角对齐指针（右下角显示）、无间隔。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
@@ -22,7 +22,7 @@ const pos = ref({ x: 0, y: 0 })
  */
 const ctx = useCanvasContextOrRender().ctx
 const tips = computed<NotifyItem[]>(
-  () => ctx.tryGet<{ list(): NotifyItem[] }>('notify')?.list().filter((x) => x.followPointer) ?? [],
+  () => ctx.tryGet<{ notifications: { list(): NotifyItem[] } }>('canvas')?.notifications.list().filter((x) => x.followPointer) ?? [],
 )
 const message = computed(() => tips.value.map((x) => x.message).join(' · '))
 function onMove(e: PointerEvent): void {

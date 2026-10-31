@@ -40,28 +40,25 @@ window.MiniCanvasUI.listPlugins()           // 已装插件
 window.MiniCanvasUI.installPlugin(mod)      // 热装
 ```
 
-## 它注入的三件服务
+## 它注入的两个服务
 
 这是渲染层最核心的贡献。数据层给不了这几样，因为它们要量 DOM、要抓绘图后端、要管插件装卸：
 
 | 服务 | 为什么必须由它提供 | 插件拿它能干什么 |
 | --- | --- | --- |
-| `nodeLayout` | 节点的**实际**渲染尺寸只能量 DOM | 拿节点真实宽高、绝对坐标、兄弟节点 |
-| `viewport` | 视口要 attach VueFlow 后端才能动 | 缩放、定位、聚焦某节点、屏幕坐标↔画布坐标 |
-| `pluginManager` | 装卸插件要经统一句柄（带来源与清单） | 装/卸/重载插件、按清单装配、诊断 |
+| `view` | 几何与视口，要量 DOM、要 attach VueFlow 后端 | 取矩形、缩放、定位、`fitTo`、坐标换算 |
+| `canvas` | 画布动作要统一入口（只转发、不存数据） | 建节点、选中、取景、模式、提示、命令执行 |
 
 ```ts
-const layout = ctx.get('nodeLayout')
-layout.nodeSize(nodeId)            // 实测尺寸（数据层只知道声明尺寸）
-layout.absolutePosition(nodeId)    // 绝对坐标
-
-const vp = ctx.get('viewport')
-vp.setViewport({ x: 0, y: 0, zoom: 1 })   // 直接控制视口
-vp.fitView()
+const view = ctx.get('view')
+view.nodeSize(nodeId)                      // 实测尺寸（数据层只知道声明尺寸）
+view.absolutePosition(nodeId)              // 绝对坐标
+view.setViewport({ x: 0, y: 0, zoom: 1 })  // 直接控制视口
+view.fitTo('selection', { keepZoom: true }) // 统一取景
 ```
 
 > **对比一下**：`doc`（数据层）里的 `size` 是"我声明我多大"；
-> `nodeLayout` 里的是"我**实际**被渲染成多大"。这两个数常常不一样
+> `view.nodeSize` 里的是"我**实际**被渲染成多大"。这两个数常常不一样
 > （比如图片按原图比例撑开了），所以必须分开、由不同层提供。
 
 ## 它还注册了"标准能力包"

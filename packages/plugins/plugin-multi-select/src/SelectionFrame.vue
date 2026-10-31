@@ -140,7 +140,7 @@ function sel(): SelectionService {
   return ctx.get('selection')
 }
 function layout() {
-  return ctx.get('nodeLayout')
+  return ctx.get('view')
 }
 /**
  * 数据读写统一走 doc 门面（5c 起唯一来源：老名已下线）。
@@ -178,7 +178,7 @@ function graph(): BatchWriter {
   return doc;
 }
 function viewportSvc() {
-  return ctx.get('viewport')
+  return ctx.get('view')
 }
 function edgeStore(): { getEdges(): Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }> } | undefined {
   return ctx.get('doc')

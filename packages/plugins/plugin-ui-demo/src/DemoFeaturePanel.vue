@@ -23,7 +23,7 @@ const kind = computed(() => {
 })
 
 function notify(text: string): void {
-  ctx.tryGet<{ show?(t: string): void }>('tip')?.show?.(text)
+  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify(text, { followPointer: true, durationMs: 0 })
 }
 
 function exit(): void {

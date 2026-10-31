@@ -115,7 +115,7 @@ function registerToggleCommand(ctx: Context, state: ZoomServiceState): void {
     order: 80,                   // 同键冲突时 order 小的赢；不是抢手键可以不写
     run: () => {
       state.zoomed = !state.zoomed  // ⑤ 只改服务状态，不直接改 UI —— UI 自己会跟着变
-      // 双向同步的另一半：把新值推回 settings（面板开关跟着变；随 settingsPersist 持久化）
+      // 双向同步的另一半：把新值推回 settings（面板开关跟着变；随 save.settings 持久化）
       ;(state as { _sync?: (v: boolean) => void })._sync?.(state.zoomed)
     },
   })
@@ -185,7 +185,7 @@ const label = computed(() => (state?.zoomed ? '已放大' : '已缩小'))
 **⑥ apply 顺序：先服务、再同步、后命令。** 语义上"先有状态、再有同步、后有动作"。内核不强求
 顺序，但保持这个习惯，读代码的人不用猜。
 
-**想手动触发命令？** `ctx.get('command').execute('my-zoom:toggle')` —— 快捷键、菜单、右键、
+**想手动触发命令？** `ctx.get('canvas').runCommand('my-zoom:toggle')` —— 快捷键、菜单、右键、
 宿主按钮都走这一条路。内核预注册了 `command:delete`（数据层），渲染层分发的也是这套；你自己
 的命令注册后自动进入同一个列表，快捷键帮助面板会把它列出来。
 

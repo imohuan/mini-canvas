@@ -114,7 +114,7 @@ export function apply(ctx: Context): void {
 
 ## 每一步在干什么
 
-**底栏的协作模型**：bottom-bar 上架两个服务 —— `nodeBar`（读：列出动作、查写入器）和 `nodeTask`（跑：执行动作、写进度）。它还在内核里开了两张「注册场」：`node/bar`（动作表）和 `node/bar-applier`（结果写入器表）。别的插件往这两张场里放条目，底栏渲染时按节点类型筛出来画成按钮。**协作全靠场，谁也不 import 谁的内部代码。**
+**底栏的协作模型**：bottom-bar 上架 `nodeBar`（读：列出动作、查写入器）与内部执行器 `nodeTask`（跑：执行动作、写进度）。跨插件只开**一张**「注册场」`node/bar`：动作放 `actions/<id>`，结果写入器放 `appliers/<kind>`。别的插件往场里放条目，底栏渲染时按节点类型筛出来画成按钮；执行动作走 `canvas.runBarAction`。**协作全靠场，谁也不 import 谁的内部代码。**
 
 **① 为什么不硬依赖**：仓库把插件协作分成两种 —— `inject` 是硬依赖（缺了就不启动，用于「没它我没意义」），`tryGet` 是软探测（缺了返回 `undefined`，各自照常活着）。往底栏放按钮属于后者：bottom-bar 不装，你的节点功能一个不少。真实插件注释里专门写了这条规矩：「nodeBar 是插件服务，不是宿主恒在服务，故不进 inject」。
 

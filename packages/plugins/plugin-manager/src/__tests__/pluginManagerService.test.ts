@@ -1,6 +1,12 @@
 import { afterEach, describe, it, expect } from 'vitest'
 import { Context, SaveServiceImpl, MemoryStorageAdapter, LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { createPluginManagerService, INSTALLED_KEY, absolutize, baseOfCatalogUrl } from '../pluginManagerService'
+import {
+  createPluginManagerService as createService,
+  INSTALLED_KEY,
+  absolutize,
+  baseOfCatalogUrl,
+  type CreateServiceOptions,
+} from '../pluginManagerService'
 import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@mini-canvas/canvas-base'
 
 /** 最小的 localStorage 替身（Node 里没有 DOM；令牌读写走全局 localStorage） */
@@ -12,6 +18,18 @@ class MemoryStorage {
 }
 
 afterEach(() => { delete (globalThis as { localStorage?: unknown }).localStorage })
+
+/**
+ * 测试装配兼容：多数既有用例把假 manager 按旧名注入 ctx；生产链已只认宿主传入的
+ * `opts.manager`。这个包装只在本测试文件里把两者接上，不改变被测实现。
+ */
+function createPluginManagerService(ctx: Context, opts: CreateServiceOptions = {}) {
+  return createService(ctx, {
+    ...opts,
+    manager:
+      opts.manager ?? ctx.tryGet<import('../pluginManagerService').HostPluginManager>('pluginManager'),
+  })
+}
 
 /** 假宿主：记着装过哪些插件，支持 install/uninstall/reload/list（与 canvas-render 的 PluginManager 同子集） */
 function fakeHost() {
@@ -81,7 +99,6 @@ function boot(opts: { catalog: unknown; failUrls?: string[]; savedInstalled?: st
   const host = fakeHost()
   const { kv, save } = fakeSave()
   if (opts.savedInstalled !== undefined) kv.set(INSTALLED_KEY, opts.savedInstalled)
-  ctx.inject('pluginManager', host.manager)
   ctx.inject('save', save)
   const win: Record<string, unknown> = {}
   const fetchImpl = (async () => ({ ok: true, status: 200, json: async () => opts.catalog })) as unknown as typeof fetch
@@ -90,6 +107,7 @@ function boot(opts: { catalog: unknown; failUrls?: string[]; savedInstalled?: st
     fetchImpl,
     document: fakeDom(win, { failUrls: opts.failUrls ?? [] }),
     win,
+    manager: host.manager,
   })
   return { ctx, svc, host, kv }
 }
@@ -193,19 +211,19 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认策略', () => {
 
   it('拉清单失败 → state.error 有说明、ready=false（界面能显示，不静默）', async () => {
     const ctx = new Context()
-    ctx.inject('pluginManager', fakeHost().manager)
     ctx.inject('save', fakeSave().save)
     const svc = createPluginManagerService(ctx, {
       fetchImpl: (async () => ({ ok: false, status: 500, json: async () => ({}) })) as unknown as typeof fetch,
       document: fakeDom({}, {}),
       win: {},
+      manager: fakeHost().manager,
     })
     await svc.refresh()
     expect(svc.state.ready).toBe(false)
     expect(svc.state.error).toContain('500')
   })
 
-  it('宿主没有 pluginManager 服务 → 行上给出清晰错误（不静默装死）', async () => {
+  it('宿主没有绑定 manager → 行上给出清晰错误（不静默装死）', async () => {
     const ctx = new Context()
     ctx.inject('save', fakeSave().save)
     const svc = createPluginManagerService(ctx, {
@@ -217,7 +235,73 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认策略', () => {
     // 新策略下首次不自动装 → 必须显式点安装才会去要宿主句柄，故这里手动触发一次
     await svc.install('plugin-a')
     const row = svc.state.rows.find((r) => r.entry.id === 'plugin-a')
-    expect(row?.error).toContain('pluginManager')
+    expect(row?.error).toContain('host.manager')
+  })
+
+  it('延迟绑定 host.manager 后可以真正安装（页面接线路径）', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    ctx.inject('save', fakeSave().save)
+    const win: Record<string, unknown> = {}
+    const svc = createService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    await svc.bindManager(host.manager)
+    await svc.install('plugin-a')
+    expect(host.installed.has('plugin-a')).toBe(true)
+    expect(svc.state.rows.find((r) => r.entry.id === 'plugin-a')?.error).toBeUndefined()
+  })
+
+  it('启动时无 manager、refresh 已就绪 → 之后 bindManager 自动补装存档缺口', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save, kv } = fakeSave()
+    // 用户上次装过 plugin-a；这次页面启动时 manager 还没绑上。
+    kv.set(INSTALLED_KEY, ['plugin-a'])
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const svc = createService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    expect(host.installed.has('plugin-a'), '绑定前装不上').toBe(false)
+    expect(svc.state.rows.find((r) => r.entry.id === 'plugin-a')?.error).toContain('host.manager')
+
+    await svc.bindManager(host.manager)
+
+    expect(host.installed.has('plugin-a'), '绑定后要自动补上').toBe(true)
+    expect(svc.state.rows.find((r) => r.entry.id === 'plugin-a')?.error).toBeUndefined()
+    expect(svc.state.intent).toEqual(['plugin-a'])
+  })
+
+  it('绑定前留下的「宿主没有提供 manager」红字，在插件已实际装上后自动清掉', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save, kv } = fakeSave()
+    kv.set(INSTALLED_KEY, ['plugin-a'])
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const svc = createService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl: (async () => ({ ok: true, status: 200, json: async () => CATALOG })) as unknown as typeof fetch,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    const row = svc.state.rows.find((r) => r.entry.id === 'plugin-a')!
+    expect(row.error).toContain('host.manager')
+    // 另一条路（调试入口 / 冷启动清单）已把同名插件装进内核，只是管理器还没绑。
+    await host.manager.install({ name: 'a', apply() {} } as PluginModule)
+    await svc.bindManager(host.manager)
+    expect(row.installed).toBe(true)
+    expect(row.error).toBeUndefined()
   })
 
   it('并发 refresh 只跑一趟（后一次复用前一次的 Promise，不把 rows 换成孤儿）', async () => {

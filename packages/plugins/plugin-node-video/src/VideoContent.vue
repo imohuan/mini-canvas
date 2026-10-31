@@ -788,8 +788,7 @@ watch(captureMenuOpen, (open) => {
 })
 
 async function captureFrameNode(at: number): Promise<void> {
-  const command = ctx.get('command')
-  command.execute('video:capture-frame', { nodeId: props.id, at })
+  ctx.get('canvas').runCommand('video:capture-frame', { nodeId: props.id, at })
 }
 
 // ==================== 卡片尺寸兜底 ====================

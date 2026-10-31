@@ -16,7 +16,7 @@ const noteSize = computed(() => {
 })
 
 function setDemoText(v: string) {
-  props.settings.set('demoText', v)   // ③ 写回内核配置（持久化由 settingsPersist 桥负责）
+  props.settings.set('demoText', v)   // ③ 写回内核配置（持久化由 save.settings 负责）
 }
 </script>
 

@@ -30,8 +30,7 @@
 
 **第三件：提供数据层给不了的两样东西。** 有两个服务**只有摸 DOM 才做得出来**：
 
-- `nodeLayout`：节点在屏幕上的**真实尺寸**（要把 DOM 量出来）。数据层只知道「我声明我 300×200」。
-- `viewport`：画布的缩放与平移（要挂上 VueFlow 的绘图后端才能动）。
+- `view`：节点的**真实尺寸**与画布的缩放平移（要量 DOM、要挂 VueFlow 后端）。
 
 所以这一层的手艺就四样：**建宿主 → 翻译数据 → 发放上下文 → 装配插件**。
 
@@ -93,25 +92,24 @@ host.stop()                        // ⑥ 回收全部插件副作用 + 清掉 w
 
 `createMiniCanvasHost` 的装配顺序是：**建 Context → 装基础插件（canvas-data 的画布服务）→ 注入渲染层三件 → 冷启动业务插件 → start**。
 
-渲染层独有的三件（**内核与数据层都拿不到**，因为都要 DOM、或要管插件装卸）：
+渲染层独有的两个服务（**内核与数据层都拿不到**，因为都要 DOM、或要管画布动作）：
 
 | ctx 服务名 | 谁建 | 为什么必须由渲染层给 | 插件拿它能干什么 |
 | --- | --- | --- | --- |
-| `nodeLayout` | `new NodeLayoutService(nodeStore)` | 节点**实测**尺寸只能量 DOM（ResizeObserver 上报） | 拿节点真实宽高、绝对坐标、父/子矩形 |
-| `viewport` | `new ViewportService()` | 视口要等 VueFlow 实例就绪后 `attachBackend` 才能动 | 缩放、平移、把镜头对准某点、屏幕坐标 ↔ 画布坐标 |
-| `pluginManager` | `createPluginManager(ctx, …)` | 热装/热卸/换版本要经统一句柄（带来源与装配清单） | 运行期装卸插件、按清单装配、诊断缺依赖 |
+| `view` | `new ViewService({ nodeStore })` | 实测尺寸只能量 DOM；视口要等 VueFlow 后端 | 几何、缩放、平移、`fitTo` 取景、坐标换算 |
+| `canvas` | `new CanvasService(ctx)` | 建节点、选中、模式、提示、命令执行要统一门面 | 建节点、取景、打组、提示、跑命令 |
 
 ```ts
 // 片段：插件里怎么硬依赖这三件（真实装配见 packages/canvas-render/src/host/createMiniCanvasHost.ts）
-export const inject = ['nodeLayout', 'viewport'] as string[]   // ① 硬依赖：没有就不启动（停在 pending 等）
-const layout = ctx.get('nodeLayout')                            // ② 拿到的是渲染层注入的那个实例
-const rect = layout.getNodeRect(nodeId)                         // ③ { id, x, y, w, h }，flow 绝对坐标
+export const inject = ['view'] as string[]      // ① 硬依赖：没有就不启动（停在 pending 等）
+const view = ctx.get('view')                     // ② 拿到的是渲染层注入的那个实例
+const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flow 绝对坐标
 ```
 
-三件里有**两件是「先给空壳，之后再接后端」**的结构，这点很重要：
+`view` 是「先给空壳，之后再接后端」的结构，这点很重要：
 
-- `viewport`：宿主先建空壳注入 ctx，等 `CanvasSurface` 挂载、拿到 VueFlow 实例之后才 `attachBackend`。在此之前**读的是默认值、写的是空操作**（详见 [viewport 服务](/services/viewport)）。
-- `nodeLayout`：对象一建好就能读 store 里**声明**的尺寸，但「实测尺寸」要等节点 DOM 挂上、ResizeObserver 跑起来才有 —— 在那之前 `nodeSize` 返回的是「实测 > node.size > 类型默认」这条回退链上的后两项。
+- 视口：宿主先建空壳注入 ctx，等 `CanvasSurface` 挂载、拿到 VueFlow 实例之后才 `attachBackend`。在此之前**读的是默认值、写的是空操作**（详见 [view 服务](/services/view)）。
+- 几何：对象一建好就能读 store 里**声明**的尺寸，但「实测尺寸」要等节点 DOM 挂上、ResizeObserver 跑起来才有 —— 在那之前 `nodeSize` 返回的是「实测 > node.size > 类型默认」这条回退链上的后两项。
 
 ## index.ts 导出了什么（按功能分组清点）
 
@@ -126,7 +124,7 @@ const rect = layout.getNodeRect(nodeId)                         // ③ { id, x, 
 | store→flow 纯逻辑 | `nodesFromStore`、`edgesFromStore`、`pruneDanglingEdges`、`assembleTheme`、`nodeShellSlot`、`FlowNode`、`FlowEdge`、`ThemeAssembly` | 数据 → VueFlow 数组；主题槽 → 组件表 |
 | 默认外观 | `DEFAULT_EDGE_VISUAL`、`DEFAULT_HANDLE_VISUAL`、`DEFAULT_DEBUG_VISUAL` | 宿主没传外观参数时的回落值 |
 | 点选语义 | `clickNode`、`clickEdge`、`clickPane` | 单选 / Shift 加选 / 点空白清空（纯函数） |
-| 渲染层服务 | `NodeLayoutService`、`ViewportService`、`ViewportBackend`、`ViewportState` | 三件里的两件（`pluginManager` 从 `createPluginManager` 出） |
+| 渲染层服务 | `ViewService`、`CanvasService`、`ViewportBackend`、`ViewportState`、`fitTo` | 几何 + 视口 + 画布动作门面 |
 | Flow/DOM 能力面 | `createCanvasFlowController`、`CanvasFlowNotReadyError`、`CanvasFlowApi` | 有就绪状态的视口/DOM 面：没就绪**抛错**，不静默降级 |
 | VueFlow 精选出口 | `Handle`、`Position`、`getBezierPath`、`useVueFlow`、`useConnection`、`NodeProps`、`EdgeProps` | 渲染类插件统一从本包 import（见 [vueFlowBridge 与 coalesce](/canvas-render/vueflow-bridge)） |
 | 拖线反馈 | `createConnectionState`、`beginConnection`、`endConnection`、`isConnectionSource`、`hoverWriter`、`getSourceHandle` | 「悬停到谁 / 合法不合法 / 压端口 / 我是不是本次的源」 |
@@ -158,13 +156,13 @@ const rect = layout.getNodeRect(nodeId)                         // ③ { id, x, 
   └─ <CanvasHost :plugins="[皮肤, 业务节点…]" />
        │ ① onMounted 里 await createMiniCanvasHost() 建宿主 host（ctx 已 start）
        │ ② host.ctx 里服务齐了：doc/save/selection/command/…（数据层给的）
-       │                            + nodeLayout/viewport/pluginManager（本包给的）
+       │                            + view/canvas（本包给的）
        │ ③ boot 完成后才挂载内层 <CanvasSurface>
        │       ├─ provide RENDER_CONTEXT_KEY（裸 ctx + host + flow + 外观 + 只读数据源）
        │       └─ 渲染一个 <VueFlow>
        │             ├─ node-types：assembleTheme 解析出的每个 type 的节点壳
-       │             ├─ edge-types：themeRegistry 里 edge 槽的赢家（如 CustomEdge）
-       │             └─ 背景 / 拖线临时线也从 themeRegistry 取
+       │             ├─ edge-types：host.themeRegistry 里 edge 槽的赢家（如 CustomEdge）
+       │             └─ 背景 / 拖线临时线也从 host.themeRegistry 取
        └─ CanvasHost 订阅 nodeStore / edgeStore / selection → 数据一变就重灌渲染态
 ```
 
@@ -195,8 +193,8 @@ const rect = layout.getNodeRect(nodeId)                         // ③ { id, x, 
 ## 常见坑
 
 1. **它不是「业务插件」，是包**。`packages/plugins/*` 里找不到 canvas-render；它和 kernel / canvas-data 一样是基础包：被插件依赖，不依赖插件。
-2. **`nodeLayout` / `viewport` 在纯数据层拿不到（返回 `undefined`，不抛）**。Node 环境里用纯内核 `new Context()` 跑数据逻辑时这两个名字取不到东西；要用它们就得先建渲染宿主。
-3. **`viewport` 在 CanvasSurface 挂载前是「假可用」**：读得到默认值 `{x:0,y:0,zoom:1}`、写什么都不发生。插件 `apply` 里立刻读视口就会踩这个 —— 详见 [viewport 服务](/services/viewport) 的坑 2；要「没就绪就报错」的严格语义，用 `useCanvasRender().flow`（`CanvasFlowNotReadyError`）。
+2. **`view` 在纯数据层拿不到（返回 `undefined`，不抛）**。Node 环境里用纯内核 `new Context()` 跑数据逻辑时取不到它；要用就得先建渲染宿主。
+3. **`view` 的视口部分在 CanvasSurface 挂载前是「假可用」**：读得到默认值 `{x:0,y:0,zoom:1}`、写什么都不发生。插件 `apply` 里立刻读视口就会踩这个 —— 详见 [view 服务](/services/view)；要「没就绪就报错」的严格语义，用 `useCanvasRender().flow`（`CanvasFlowNotReadyError`）。
 4. **渲染组件必须在 `CanvasHost` 的渲染子树里**。`useCanvasRender()` 在子树外会**抛错**（这是故意的：这些组件本来就依赖宿主能力）。宿主自己的业务 UI 要放进 `<template #ui>`。
 5. **组件句柄要 markRaw**。往 VueFlow 的 node-types/edge-types 塞 `.vue` 组件时必须包一层 `markRaw`（或整表放 `shallowRef`），否则 Vue 会深代理组件对象，控制台刷「组件被 reactive 化」警告。CanvasHost 已处理，你手写渲染时才要注意。
 6. **theme-default 不是必需品**。不装它，画布里节点是「裸内容」（没有卡片壳、端口、背景）—— 架构上允许，「一行渲染出好看的画布」才是它的活。

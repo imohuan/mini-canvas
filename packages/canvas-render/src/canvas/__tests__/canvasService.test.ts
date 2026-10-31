@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CanvasService } from '../canvasService'
+import { clearCommandRuntime, setCommandRuntime } from '@mini-canvas/canvas-data'
 
 function fakeCtx(overrides: Record<string, unknown> = {}) {
   const services: Record<string, unknown> = {
@@ -108,5 +109,32 @@ describe('canvas 动作门面', () => {
     expect(nodeTask.run).toHaveBeenCalledWith('n1', 'a1', { prompt: 'x' })
     c.cancelBarAction('n1')
     expect(nodeTask.cancel).toHaveBeenCalledWith('n1')
+  })
+
+  it('命令入口走内部运行时：list / run / remap 都能用，不依赖 command 服务名', () => {
+    const command = {
+      execute: vi.fn(() => 'ran'),
+      list: vi.fn(() => [{ id: 'command:delete', keys: ['Delete'], run: () => undefined }]),
+      has: vi.fn(() => true),
+      register: vi.fn(() => ({ dispose() {} })),
+      remapKeys: vi.fn(() => ['Backspace']),
+      resetKeys: vi.fn(() => ['Delete']),
+      originalKeys: vi.fn(() => ['Delete']),
+      isRemapped: vi.fn(() => true),
+    }
+    setCommandRuntime(command)
+    try {
+      const c = new CanvasService(fakeCtx())
+      expect(c.listCommands().map((d) => d.id)).toEqual(['command:delete'])
+      expect(c.runCommand('command:delete')).toBe('ran')
+      expect(command.execute).toHaveBeenCalledWith('command:delete')
+      expect(c.hasCommand('command:delete')).toBe(true)
+      expect(c.remapCommandKeys('command:delete', ['Backspace'])).toEqual(['Backspace'])
+      expect(c.resetCommandKeys('command:delete')).toEqual(['Delete'])
+      expect(c.originalCommandKeys('command:delete')).toEqual(['Delete'])
+      expect(c.isCommandRemapped('command:delete')).toBe(true)
+    } finally {
+      clearCommandRuntime()
+    }
   })
 })

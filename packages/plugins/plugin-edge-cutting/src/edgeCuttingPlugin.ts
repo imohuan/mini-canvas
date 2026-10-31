@@ -184,7 +184,7 @@ class EdgeCuttingController {
   /** 取当前存活边里"已渲染且与视口重叠"的路径采样条目 */
   private visibleEdgeSamples(): Array<{ id: string; points: ScreenPoint[] }> {
     // F 项：取本画布实例根（viewport.getRootEl），多宿主不串线；退回全局 .vue-flow
-    const vp = this.ctx.tryGet('viewport')
+    const vp = this.ctx.tryGet('view')
     const scopeRoot = vp?.getRootEl() ?? null
     const canvasEl = scopeRoot ?? document.querySelector('.vue-flow')
     const viewportRect = canvasEl?.getBoundingClientRect()

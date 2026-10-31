@@ -13,16 +13,17 @@
  */
 import type { PluginScope } from '@mini-canvas/kernel'
 import type { ThemeRegistry, ThemeSlot } from './themeRegistry'
+import { canvasRuntime } from '../canvasRuntime'
 
 /**
  * 注册一个主题槽位组件/值。
- * @param ctx 插件 setup 拿到的 ctx（真会 ctx.get('themeRegistry')）
+ * @param ctx 插件 setup 拿到的 ctx（容器从基础插件运行时取）
  * @param slot 槽位名
  * @param value 组件句柄(opaque) 或 edgeDefaultType 的字面值
  * @returns revoke
  */
 export function registerThemeSlot(ctx: PluginScope, slot: ThemeSlot, value: unknown): () => void {
-  const theme = safeGet<ThemeRegistry>(ctx, 'themeRegistry')
+  const theme = canvasRuntime()?.themeRegistry ?? safeGet<ThemeRegistry>(ctx, 'themeRegistry')
   if (theme) theme.register(slot, value)
   const revoke = () => theme?.unregister(slot)
   ctx.effect(() => revoke)

@@ -113,7 +113,7 @@ async function dragGroupAndSample(grab, totalDx, totalDy) {
       const node = document.querySelector('.vue-flow__node[data-id="grp1"]');
       if (!outer || !node) return null;
       const r = node.getBoundingClientRect();
-      const v = window.MiniCanvasUI.getHost().viewport.getViewport();
+      const v = window.MiniCanvasUI.getHost().view.getViewport();
       // 把节点屏幕位置换算回 flow 坐标：flow = (screen - vp.xy) / zoom
       const flowNode = { x: (r.x - v.x) / v.zoom, y: (r.y - v.y) / v.zoom };
       const s = outer.style;
@@ -600,8 +600,11 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(300);
 const hIds = await page.evaluate(() => {
-  const f = window.MiniCanvasUI.getHost().ctx.get('nodeFactory');
-  return [f.create('text', { x: 300, y: 320 }), f.create('text', { x: 480, y: 420 })];
+  const canvas = window.MiniCanvasUI.getHost().ctx.get('canvas');
+  return [
+    canvas.createNode('text', { x: 300, y: 320 }),
+    canvas.createNode('text', { x: 480, y: 420 }),
+  ];
 });
 await page.waitForTimeout(500);
 const hErrsBefore = errors.length;

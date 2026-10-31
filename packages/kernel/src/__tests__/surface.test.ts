@@ -146,7 +146,7 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     expect(s.registries).toEqual([])
   })
 
-  it('命令轴兼读 command 服务：服务直注册的命令也能列出（审查 C1）', async () => {
+  it('命令轴兼读 command 服务：独立宿主仍可按服务名提供命令（兼容读口）', async () => {
     const ctx = new Context()
     const command = new CommandRegistry()
     ctx.inject('command', command)

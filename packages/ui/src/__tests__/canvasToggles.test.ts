@@ -180,8 +180,8 @@ describe('缩放选项接上真实画布（状态栏）', () => {
     setReadyHost(host)
     await ui.onReady()
     // 给真实 viewport 服务换上假后端（真后端要挂载 VueFlow，node 环境给不了）；
-    // 服务实例本身仍是宿主注入的那个，兑现"ui 走 ctx.get('viewport')"这条真实路径。
-    ;(host.ctx.get('viewport') as unknown as { attachBackend(b: unknown): void }).attachBackend(fake)
+    // 服务实例本身仍是宿主注入的那个，兑现"ui 走 ctx.get('view')"这条真实路径。
+    ;(host.ctx.get('view') as unknown as { attachBackend(b: unknown): void }).attachBackend(fake)
   })
 
   afterEach(() => {

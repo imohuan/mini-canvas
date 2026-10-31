@@ -34,7 +34,7 @@ watch(
 
 /** 卡片实测尺寸（拿不到就按节点注册的默认 480×360 兜底） */
 const boardSize = computed(() => {
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('nodeLayout')
+  const layout = ctx.tryGet<{ getNodeRect(id: string): { w: number; h: number } | null | undefined } | undefined>('view')
   const rect = layout?.getNodeRect(props.id)
   const w = rect?.w && rect.w > 0 ? rect.w : 480
   const h = rect?.h && rect.h > 0 ? rect.h : 360

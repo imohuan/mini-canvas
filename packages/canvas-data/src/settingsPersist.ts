@@ -20,7 +20,7 @@ import type { Disposable } from '@mini-canvas/kernel'
 /** 配置持久化的裸 key（type='config' 下的物理 key 由 SaveService 加前缀） */
 export const SETTINGS_SAVE_KEY = 'settings'
 
-/** 桥的只读接口（宿主 ctx.get('settingsPersist') 可拿；插件一般不需要） */
+/** 桥的只读接口（宿主经 handle.save.settings 暴露；不再有 settingsPersist 服务名） */
 export interface SettingsPersistService {
   /** 从 save 读上次保存值并注入 SettingsStore（启动恢复；未保存过则 no-op） */
   restore(): Promise<void>

@@ -3,7 +3,7 @@
  *
  * 三件事：
  * 1. **拉清单**：从「中转后台」请求 /catalog.json（地址可配），归一成可渲染的列表；
- * 2. **装 / 卸 / 重装**：经宿主的统一安装句柄（优先 `host.manager`，缺省兼容 `ctx.get('pluginManager')`）把插件装进画布；
+ * 2. **装 / 卸 / 重装**：经宿主传入的统一安装句柄（`host.manager`）把插件装进画布；
  * 3. **记住选择**：把「已装/已卸」存进 save(config) 域，刷新后照旧；**首次没有存档 → 默认全装**。
  *
  * 边界：本服务不认识具体插件，只认清单行的「地址 + 全局名」。装什么、从哪装由清单决定。
@@ -99,6 +99,19 @@ export interface PluginManagerService {
   }
   /** 重新拉清单 + 对齐已装状态（用户点刷新，或改完地址后调） */
   refresh(): Promise<void>
+  /**
+   * 绑定宿主的统一安装句柄（`host.manager`）。
+   *
+   * 为什么要延迟绑定：内核只向插件 `apply` 传 `config`，插件拿不到宿主句柄；
+   * 页面在渲染子树里能读到 `useCanvasRender().host.manager`，由它调用这里完成接线。
+   * 重复绑定同一句柄是幂等的；换句柄会刷新已装状态。
+   *
+   * 返回的 Promise 在「绑定后补装存档缺口」完成后 resolve；调用方不需要等它也能用界面。
+   * 为什么绑定后要补装：插件 apply 里先 refresh；那时页面还没挂载，宿主句柄没绑上，
+   * 存档里该装的插件会装失败。只在 row 上留 error 不够 —— 页面挂载时若 ready 已为 true，
+   * 不会再 refresh，缺口就永远补不上。
+   */
+  bindManager(manager: HostPluginManager): Promise<void>
   /** 装一个（id = 清单项的 id） */
   /**
    * 装一个插件（前端装载 + 后台那一半若清单声明了 server）。
@@ -180,7 +193,7 @@ export interface CreateServiceOptions {
   /** 注入 document/window（默认取全局；测试注入假实现） */
   document?: Document
   win?: Record<string, unknown>
-  /** 宿主统一安装句柄（新入口 host.manager）；缺省退回 ctx.tryGet('pluginManager') 兼容别名 */
+  /** 宿主统一安装句柄（`host.manager`）。旧 `pluginManager` 服务名已下线。 */
   manager?: HostPluginManager
 }
 
@@ -221,7 +234,11 @@ export function createPluginManagerService(
   const doFetch = opts.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init))
   const win = opts.win ?? (globalThis as unknown as Record<string, unknown>)
   const doc = opts.document ?? (win.document as Document)
-  const injectedManager = opts.manager
+  /**
+   * 宿主统一安装句柄。构造时可直接给（测试/嵌入方），也可由页面经 `bindManager` 延迟绑定
+   * —— 插件 apply 只拿得到 config，拿不到 host。
+   */
+  let boundManager: HostPluginManager | undefined = opts.manager
 
   const state = reactive<PluginManagerService['state']>({
     catalogUrl,
@@ -246,7 +263,27 @@ export function createPluginManagerService(
 
   /** 宿主统一安装句柄（可选探测：没有就给出清晰错误，而不是静默不动） */
   function hostManager(): HostPluginManager | undefined {
-    return injectedManager ?? ctx.tryGet<HostPluginManager>('pluginManager')
+    return boundManager
+  }
+
+  async function bindManager(manager: HostPluginManager): Promise<void> {
+    if (boundManager !== manager) boundManager = manager
+    // 页面可能在清单已拉完之后才绑定（热装插件）：把已装状态补一遍，别让界面继续显示旧值。
+    if (!state.ready) return
+    // 若启动时那趟 refresh 还在跑（ready 已置 true，后面还在补装），等它结束再算缺口：
+    // 否则会把正在安装（busy）的行当成缺口，而 install 对 busy 行直接返回，缺口就漏掉了。
+    await inFlight
+    syncRuntimeState()
+    // 列表已就绪但绑定前装不上的行（典型的启动顺序）：现在有宿主句柄了，把缺口补上。
+    const missing = state.intent.filter((id) => {
+      const row = state.rows.find((r) => r.entry.id === id)
+      return row !== undefined && row.entry.builtin !== true && !row.installed
+    })
+    if (missing.length === 0) return
+    await installMany(missing).catch((err) => {
+      // 单条失败已经写进各自 row.error；这里只兜住意外，避免调用方拿到未处理的 rejection。
+      state.error = err instanceof Error ? err.message : String(err)
+    })
   }
 
   /**
@@ -440,6 +477,9 @@ export function createPluginManagerService(
       // 调试插件先装过同一个名字时，这里也必须显示「已安装」，否则再点安装就会重复装载。
       // （真正的去重由内核按名字保证；这里只是让界面不撒谎。）
       row.installed = !!info
+      // 绑定前失败留下的「宿主没有提供 manager」已不成立：插件此刻确实在内核里。
+      // 不清掉的话，页面会一直挂着一条假红字，看起来像装失败了。
+      if (info && row.error?.includes('宿主没有提供')) row.error = undefined
     }
   }
 
@@ -664,7 +704,7 @@ export function createPluginManagerService(
     row.serverConfirm = opts?.serverConfirm === true
     try {
       const m = hostManager()
-      if (!m) throw new Error('宿主没有提供 pluginManager 服务（插件管理需要一个能装插件的宿主）')
+      if (!m) throw new Error('宿主没有提供 host.manager（插件管理需要一个能装插件的宿主）')
       if (!doc || typeof doc.createElement !== 'function') throw new Error('当前环境没有 document，无法用 <script> 加载插件')
       row.realName = await installEntryModule(row, { document: doc, win }, { bust: false, manager: m })
       row.installed = true
@@ -693,7 +733,7 @@ export function createPluginManagerService(
     if (!row) return
     if (row.entry.builtin === true) return // 自带插件不可卸（页面上不给按钮，这里兜底）
     if (!hostManager()) {
-      row.error = '宿主没有提供 pluginManager 服务'
+      row.error = '宿主没有提供 manager'
       return
     }
     row.busy = true
@@ -725,7 +765,7 @@ export function createPluginManagerService(
     if (opts?.serverConfirm === true) row.serverConfirm = true
     const m = hostManager()
     if (!m) {
-      row.error = '宿主没有提供 pluginManager 服务'
+      row.error = '宿主没有提供 manager'
       return
     }
     row.busy = true
@@ -952,7 +992,7 @@ export function createPluginManagerService(
   }
 
   return {
-    state, refresh, install, uninstall, reinstall, installAll,
+    state, refresh, bindManager, install, uninstall, reinstall, installAll,
     searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
   }
 }

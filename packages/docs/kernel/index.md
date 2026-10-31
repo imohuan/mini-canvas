@@ -35,7 +35,7 @@ kernel  ←  canvas-data  ←  canvas-render  ←  plugins
 | --- | --- | --- |
 | `@mini-canvas/kernel` | 插件框架（本文这一组） | `ctx.tools` + 六个原语，**不认识画布** |
 | `@mini-canvas/canvas-data` | 数据层 + 画布语义 | 上面那些 + `ctx.nodes` / `ctx.theme` / `ctx.commands` / `ctx.slots` / `ctx.settings` |
-| `@mini-canvas/canvas-render` | 渲染层（Vue / VueFlow / DOM） | 画布服务里再多 `nodeLayout` / `viewport` / `pluginManager` |
+| `@mini-canvas/canvas-render` | 渲染层（Vue / VueFlow / DOM） | 画布服务里再多 `view` / `canvas` |
 | `@mini-canvas/canvas-base` | 插件作者的薄入口（重导出 kernel + canvas-data） | 与 canvas-data 一样 |
 | `@mini-canvas/ui` | 成品应用出口（一行 `CanvasHost` 出画布） | 与 canvas-render 一样 |
 
@@ -244,8 +244,8 @@ ctx.on('ctx:ready', ({ plugins }) => console.log('就绪，本批激活：', plu
 | --- | --- | --- |
 | `tools` | **内核自带，恒在** | 外部能力注册表（文生图 / 图生文这类「生成工具」，按名调用） |
 
-`slots` / `settings` 由画布能力层提供；`doc` / `save` / `selection` / `command` 等由基础插件注入；
-`nodeLayout` / `viewport` / `pluginManager` 由渲染宿主注入。**完整清单和每个服务的用法，看 [内置服务总览](/services/)。**
+`slots` / `settings` 由画布能力层提供；`doc` / `save` / `selection` / `resources` 由基础插件注入；
+`view` / `canvas` 由渲染宿主注入。**完整清单和每个服务的用法，看 [内置服务总览](/services/)。**
 
 ```ts
 // 想看这台内核上「有什么能取」：一次读全（只读、零副作用）

@@ -285,7 +285,7 @@ function collectVisibleNodes(margin = 0): LayoutRect[] {
   const vr = visibleRectRef.value
   if (!vr) return []
   const area = margin > 0 ? expandRect(vr, margin) : vr
-  const layout = hostCtx.get<NodeLayoutService>('nodeLayout')
+  const layout = hostCtx.get('view') as unknown as NodeLayoutService
   return layout.getAllRects().filter((r) => rectsOverlap(r, area))
 }
 
@@ -334,8 +334,8 @@ onMounted(() => {
   // 捕获 pane/renderer 的**统一入口**（见下方 refreshFlowDom 注释）：nodeEpoch 会让 VueFlow 整树重挂，
   // pane DOM 会被换成一个新元素 —— 必须跟着刷新，否则插件（如多选的 Shift 框选）会一直绑在旧元素上。
   refreshFlowDom()
-  // VueFlow 后端：一个适配对象，同时喂给旧 ViewportService（ctx.get('viewport')）与新的
-  // Flow 能力面（useCanvasRender().flow）——同一份实现，两处语义不再各写一遍。
+  // VueFlow 后端：一个适配对象，同时喂给宿主持有的 ViewportService（对外只暴露 `view`）
+  // 与 Flow 能力面（useCanvasRender().flow）——同一份实现，两处语义不再各写一遍。
   const backend: ViewportBackend = {
     getViewport: () => {
       const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
