@@ -4,8 +4,9 @@ import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocServi
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { autoLayoutPlugin } from '../autoLayoutPlugin'
 
-/** 最小 nodeLayout stub（render 层服务的只读子集：绝对矩形 + 实测尺寸） */
-function makeLayout(nodeStore: NodeStore) {
+/** 最小 view stub（render 层服务的只读子集 + 取景；node 测试无 DOM） */
+function makeView(nodeStore: NodeStore) {
+  const state = { x: 0, y: 0, zoom: 1 }
   return {
     getNodeRect(id: string) {
       const n = nodeStore.getNode(id)
@@ -16,16 +17,10 @@ function makeLayout(nodeStore: NodeStore) {
       const n = nodeStore.getNode(id)
       return { w: n?.size?.w ?? 200, h: n?.size?.h ?? 100 }
     },
-  }
-}
-
-/** 最小 viewport stub（node 测试无 DOM） */
-function makeViewport() {
-  const state = { x: 0, y: 0, zoom: 1 }
-  return {
     getViewport: () => ({ ...state }),
     setViewport: (v: { x: number; y: number; zoom: number }) => Object.assign(state, v),
     fitView: () => undefined,
+    fitTo: () => true,
     getRootEl: () => null,
   }
 }
@@ -45,8 +40,7 @@ function makeCtx() {
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   const command = new CommandRegistry()
   ctx.inject('command', command)
-  ctx.inject('nodeLayout', makeLayout(nodeStore) as never)
-  ctx.inject('viewport', makeViewport() as never)
+  ctx.inject('view', makeView(nodeStore) as never)
   ctx.plugin(autoLayoutPlugin)
   return { ctx, nodeStore, edgeStore, command }
 }

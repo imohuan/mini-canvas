@@ -25,13 +25,12 @@ import { resolveConfig } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import { layoutHierarchy } from './groupHierarchy'
 import type { LayoutNode, LayoutDirection, AutoLayoutConfig } from './types'
-import { calculateFocusZoom, centerViewportOnBounds, type Bounds } from './focusViewport'
 
 /** 组节点类型名（与 plugin-group 约定一致） */
 export const GROUP_NODE_TYPE = 'group'
 
 export const name = 'auto-layout'
-export const inject = ['doc', 'selection', 'nodeLayout', 'viewport'] as string[]
+export const inject = ['doc', 'selection', 'view'] as string[]
 
 /**
  * Config schema（标量字段登记 settings 面板；apply 收到的 config 已校验 + 补默认）。
@@ -115,8 +114,7 @@ function toEngineConfig(c: AutoLayoutConfigFromSchema): AutoLayoutConfig {
 export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   const doc = ctx.get('doc')
   const selection = ctx.get('selection')
-  const nodeLayout = ctx.get('nodeLayout')
-  const viewport = ctx.get('viewport')
+  const view = ctx.get('view')
   // 装配 config 缺省（冷启动没给配置）时用 schema 默认补齐——与内核 resolveConfig 行为一致
   const effectiveConfig = (rawConfig ?? resolveConfig(Config)) as AutoLayoutConfigFromSchema
 
@@ -149,7 +147,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
 
   /** 节点绝对矩形快照（nodeLayout 实测/绝对；无服务退化为声明数据兜底） */
   function absoluteRectOf(n: CanvasNode): { x: number; y: number; w: number; h: number } {
-    const rect = nodeLayout?.getNodeRect?.(n.id)
+    const rect = view.getNodeRect(n.id)
     if (rect && rect.w > 0 && rect.h > 0) return rect
     return {
       x: n.position.x,
@@ -162,45 +160,14 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   /** 组：{ groupNode, 直接子节点(仅第一层、非 group) } */
   function focusBounds(nodes: CanvasNode[], opts: { keepZoom: boolean }): void {
     if (nodes.length === 0) return
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const n of nodes) {
-      const abs = absoluteRectOf(n)
-      minX = Math.min(minX, abs.x)
-      minY = Math.min(minY, abs.y)
-      maxX = Math.max(maxX, abs.x + abs.w)
-      maxY = Math.max(maxY, abs.y + abs.h)
-    }
-    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return
     const cfg = currentConfig()
-    const bounds: Bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-    const cur = viewport.getViewport()
-    // 视口尺寸：优先取本画布实例根（viewport.getRootEl，多宿主不串线）；无 DOM 环境(node 测试)退化为 1:1
-    const scopeRoot = viewport.getRootEl?.() ?? (typeof document !== 'undefined' ? document.querySelector('.vue-flow') : null)
-    const vw = scopeRoot?.clientWidth || 1
-    const vh = scopeRoot?.clientHeight || 1
-    const zoom = opts.keepZoom
-      ? cur.zoom
-      : calculateFocusZoom({
-          boundsHeight: bounds.height,
-          viewportHeight: vh,
-          heightRatio: cfg.focusHeightRatio,
-          minZoom: cfg.minZoom,
-          maxZoom: cfg.maxZoom,
-        })
-    /**
-     * 聚焦取景**带动画**（用户口径：「聚焦太快了，没有动画效果。希望可以添加动画效果」）。
-     *
-     * 早先这里走 setViewport（即时、无过渡）—— 那条路是给"跟手"场景用的
-     * （小地图拖拽/逐帧写视口，加动画会每帧重启补间而卡顿），聚焦是一次性动作，
-     * 该走带过渡的那条。宿主没实现 animateViewport（假后端/老装配）时服务内部自动退回即时，
-     * 行为不退化、只是没动画。
-     */
-    const next = centerViewportOnBounds({ bounds, viewportWidth: vw, viewportHeight: vh, zoom })
-    if (viewport.animateViewport) viewport.animateViewport(next)
-    else viewport.setViewport(next)
+    // 取景统一走 view.fitTo：缩放仍按「内容高度占比」算，min/max 夹取与过渡由服务负责。
+    view.fitTo(
+      nodes.map((n) => n.id),
+      opts.keepZoom
+        ? { keepZoom: true }
+        : { heightRatio: cfg.focusHeightRatio, minZoom: cfg.minZoom, maxZoom: cfg.maxZoom },
+    )
   }
 
   function focusSelected(): boolean {
@@ -320,7 +287,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     keys: ['r'],
     group: 'auto-layout',
     order: 30,
-    run: () => viewport.fitView(),
+    run: () => view.fitView(),
   })
 
   /**
