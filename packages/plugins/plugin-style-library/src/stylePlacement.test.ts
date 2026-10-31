@@ -44,28 +44,22 @@ describe('stylePlacementOf：按视口中心算落点', () => {
 })
 
 describe('focusStyleNode：选中 + 聚焦', () => {
-  it('先选中、再用节点实测矩形中心 setCenter（保留缩放）', () => {
+  it('先选中、再走 view.fitTo（保留缩放）', () => {
     const selection = { set: vi.fn(), clearEdges: vi.fn() }
-    const nodeLayout = { getNodeRect: vi.fn(() => ({ x: 100, y: 200, w: 320, h: 240 })) }
-    const viewport = { getViewport: vi.fn(() => ({ zoom: 1.5 })), setCenter: vi.fn() }
-    const doc = { getNode: vi.fn(() => ({ id: 'n1', position: { x: 90, y: 190 } })) }
+    const view = { fitTo: vi.fn(() => true) }
 
-    focusStyleNode({ selection, nodeLayout, viewport, doc } as never, 'n1')
+    focusStyleNode({ selection, view } as never, 'n1')
 
     expect(selection.set).toHaveBeenCalledWith(['n1'])
     expect(selection.clearEdges).toHaveBeenCalled()
-    // 实测矩形中心 = (260, 320)，缩放沿用当前 1.5
-    expect(viewport.setCenter).toHaveBeenCalledWith(260, 320, 1.5)
+    expect(view.fitTo).toHaveBeenCalledWith(['n1'], { keepZoom: true, select: true })
   })
 
-  it('拿不到实测矩形 → 用节点坐标聚焦（尽力而为）', () => {
+  it('fitTo 返回 false（节点不存在）→ 不抛错，选中照旧', () => {
     const selection = { set: vi.fn(), clearEdges: vi.fn() }
-    const nodeLayout = { getNodeRect: vi.fn(() => null) }
-    const viewport = { getViewport: () => ({ zoom: 1 }), setCenter: vi.fn() }
-    const doc = { getNode: () => ({ id: 'n1', position: { x: 10, y: 20 } }) }
-
-    focusStyleNode({ selection, nodeLayout, viewport, doc } as never, 'n1')
-    expect(viewport.setCenter).toHaveBeenCalledWith(10, 20, 1)
+    const view = { fitTo: vi.fn(() => false) }
+    expect(() => focusStyleNode({ selection, view } as never, 'n1')).not.toThrow()
+    expect(selection.set).toHaveBeenCalledWith(['n1'])
   })
 
   it('服务缺失（极简宿主）→ 不抛错，能做的照做', () => {

@@ -105,8 +105,7 @@ async function onUse(item: StyleCard): Promise<void> {
     focusStyleNode(
       {
         selection: ctx.tryGet('selection'),
-        nodeLayout: ctx.tryGet('nodeLayout'),
-        viewport: ctx.tryGet('viewport'),
+        view: ctx.tryGet('view'),
         doc: ctx.tryGet('doc'),
       },
       result.nodeId,
