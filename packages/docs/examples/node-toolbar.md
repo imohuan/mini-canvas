@@ -348,6 +348,9 @@ svc.exit(nodeId)
     { key: 'sub', label: '自定义', children: [          <!-- children = 二级菜单 -->
       { key: 'a1', label: '格子一' },
     ] },
+    { key: 'panel', label: '色板', panel: {            <!-- panel = 右侧自定义面板 -->
+      render: ({ close }) => h(MyColorPicker, { onPick: close }),
+    } },
   ]"
   placement="bottom"        <!-- 方向 + 对齐：bottom / bottom-start / bottom-end -->
   :arrow="false"            <!-- 菜单上方的小箭头，默认关 -->
@@ -357,6 +360,11 @@ svc.exit(nodeId)
 
 默认：箭头隐藏、底部左对齐（`placement: 'bottom-start'`）。菜单与二级菜单都是独立浮层，
 卡片间隔固定 12px。
+
+想把一块自绘面板挂进某一项（宫格选择器、色板这类），就给那一项加 `panel`：
+`component` 直接给组件、`render` 自己组内容（能拿到 `close` / `pick`），`children` 仍是文字二级菜单。
+宫格切分就是「滑到几乘几、点一下直接切」——面板里不需要再放一个确定按钮。
+完整说明见 [工具栏下拉按钮](/plugins/theme-components/toolbar-dropdown-button)。
 
 ## 注意事项
 

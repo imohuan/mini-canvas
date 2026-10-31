@@ -2,8 +2,9 @@
 /**
  * GridSizePicker —— 自定义行列选择面板（下拉里的二级内容）。
  *
- * 用户口径：鼠标滑过网格时哪块亮哪块，行列跟随鼠标；顶部显示当前行列；
- * 点「确定」进入切分。滑出网格保持最后一次的行列（不闪空）。
+ * 用户口径 2026-10-31：不要「确定」按钮，直接点网格就算确认。
+ * 鼠标滑过网格时哪块亮哪块，行列跟随鼠标；点一下立即进入切分。
+ * 滑出网格保持最后一次的行列（不闪空）。
  */
 import { computed, ref } from 'vue'
 import { pickerRowsColsAt } from './gridSplit'
@@ -13,8 +14,10 @@ const props = withDefaults(
     /** 初始行列（打开时回显上次的选择） */
     initialRows?: number
     initialCols?: number
+    /** 子面板自动传入的上下文：点完网格后用它收起整个下拉 */
+    panel?: { close?: () => void } | null
   }>(),
-  { initialRows: 3, initialCols: 3 },
+  { initialRows: 3, initialCols: 3, panel: null },
 )
 
 const emit = defineEmits<{
@@ -44,24 +47,30 @@ const cells = computed(() => {
   return out
 })
 
-function onMove(ev: MouseEvent): void {
+/** 鼠标位置 → 行列（超出网格返回 null） */
+function hitAt(ev: MouseEvent): { rows: number; cols: number } | null {
   const el = ev.currentTarget as HTMLElement | null
-  if (!el) return
+  if (!el) return null
   const rect = el.getBoundingClientRect()
-  if (rect.width <= 0 || rect.height <= 0) return
-  const hit = pickerRowsColsAt((ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height, PREVIEW)
+  if (rect.width <= 0 || rect.height <= 0) return null
+  return pickerRowsColsAt((ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height, PREVIEW)
+}
+
+function onMove(ev: MouseEvent): void {
+  const hit = hitAt(ev)
   if (!hit) return
   rows.value = hit.rows
   cols.value = hit.cols
 }
 
-/** 点一下网格只"定住"当前行列（与悬停同值），真正的进入靠下方「确定」按钮 */
+/** 点一下网格 = 确认：按点击位置定行列，立即进入切分并收起下拉 */
 function onPick(ev: MouseEvent): void {
-  onMove(ev)
-}
-
-function confirm(): void {
-  emit('confirm', rows.value, cols.value)
+  const hit = hitAt(ev)
+  if (!hit) return
+  rows.value = hit.rows
+  cols.value = hit.cols
+  emit('confirm', hit.rows, hit.cols)
+  props.panel?.close?.()
 }
 </script>
 
@@ -69,6 +78,7 @@ function confirm(): void {
   <div class="gsp-picker" data-testid="grid-size-picker">
     <div class="gsp-picker-head">
       <span class="gsp-picker-dim">{{ rows }} 行 × {{ cols }} 列</span>
+      <span class="gsp-picker-tip">点格子即切分</span>
     </div>
     <div
       class="gsp-picker-grid"
@@ -83,14 +93,14 @@ function confirm(): void {
         :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%' }"
       />
     </div>
-    <button type="button" class="gsp-picker-confirm" @click.stop="confirm">确定</button>
   </div>
 </template>
 
 <style scoped>
 .gsp-picker { display: flex; flex-direction: column; gap: 8px; padding: 4px; width: 180px; }
-.gsp-picker-head { display: flex; align-items: center; }
+.gsp-picker-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .gsp-picker-dim { font-size: var(--text-base, 13px); font-weight: 600; color: var(--ui-ink, #18202b); }
+.gsp-picker-tip { font-size: var(--text-xs, 11px); color: var(--ui-ink-mute, #8c95a3); white-space: nowrap; }
 .gsp-picker-grid {
   position: relative;
   width: 100%;
@@ -112,14 +122,4 @@ function confirm(): void {
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent);
   border-color: var(--ui-accent, #0891b2);
 }
-.gsp-picker-confirm {
-  padding: 6px 0;
-  border: 0;
-  border-radius: var(--radius-badge, 6px);
-  background: var(--ui-primary-bg, #1f2937);
-  color: var(--ui-primary-ink, #fff);
-  font-size: var(--text-base, 13px);
-  cursor: pointer;
-}
-.gsp-picker-confirm:hover { background: var(--ui-primary-bg-hover, #111827); }
 </style>

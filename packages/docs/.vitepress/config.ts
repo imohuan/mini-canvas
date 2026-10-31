@@ -216,6 +216,7 @@ const pluginsSidebar = [
       { text: '画布背景', link: '/plugins/theme-components/default-background' },
       { text: '设置面板', link: '/plugins/theme-components/plugin-settings-content' },
       { text: '按钮', link: '/plugins/theme-components/node-toolbar-button' },
+      { text: '下拉按钮', link: '/plugins/theme-components/toolbar-dropdown-button' },
       { text: '下拉浮层', link: '/plugins/theme-components/dropdown' },
       { text: '气泡提示', link: '/plugins/theme-components/tooltip' },
       { text: '下拉选择器', link: '/plugins/theme-components/select' },

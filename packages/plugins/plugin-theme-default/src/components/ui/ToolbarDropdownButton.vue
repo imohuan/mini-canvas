@@ -16,7 +16,10 @@
  *   <DropdownButton title="宫格切分" :icon="ICON" :items="items" @pick="onPick" />
  *   <DropdownButton title="对齐演示" align="start" :items="items" />
  *
- * items 形状见 ToolbarMenuNode，children 非空 = 二级菜单（悬停或点击展开独立浮层）。
+ * items 形状见 ToolbarMenuNode：
+ * - children 非空 = 二级文字菜单（悬停或点击展开独立浮层）；
+ * - panel 非空   = 右侧展开**自定义面板**（宫格选择器、色板这类），同样走独立浮层。
+ *   两种都给了时 panel 优先。
  *
  * 对齐（用户口径 2026-10-29：「当前是居中底部显示，我想可以通过配置来修改，比如底部左对齐」）：
  * - placement 管**方向 + 对齐**：bottom（默认，底部居中）/ bottom-start（底部左对齐）/ bottom-end（底部右对齐）；
@@ -26,11 +29,15 @@
  * AxDropdown 只认 align（它把 -start/-end 后缀当噪音丢弃，默认居中）。只传一个的话，
  * 「换主题 / 换实现」后对齐会悄悄变形 —— 这类「同一个 prop 两套语义」最容易被当成品格问题。
  */
-import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
+import { computed, ref, shallowRef, onBeforeUnmount, onMounted } from 'vue'
 import type { Component } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
-import { floatingChainOf } from './floatingChain'
-import type { ToolbarMenuNode } from './types'
+import { childChainFor } from './floatingChain'
+import { fitSubPanel } from './subPanelLayout'
+import type { ToolbarMenuNode, ToolbarMenuPanelContext } from './types'
+import ToolbarDropdownSubPanel from './ToolbarDropdownSubPanel.vue'
+import NodeToolbarButton from './NodeToolbarButton.vue'
+import DefaultDropdown from './Dropdown.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -76,11 +83,28 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (e: 'pick', key: string, path: string[]): void
+  /**
+   * 选中一项。第三个参数是关闭整个下拉的方法：自定义面板里「确定」时
+   * 既能处理业务，也能把菜单收起（不必再想办法拿 Dropdown 的 close）。
+   */
+  (e: 'pick', key: string, path: string[], close: () => void): void
 }>()
 
-const Button = useUiComponent('toolbarButton')
-const Dropdown = useUiComponent('dropdown')
+/**
+ * 画布内按名取主题件（换主题零改动）；画布外（文档页、组件展厅的静态预览）
+ * 没有 Provider，退回同一份默认实现，组件本身仍可单独渲染。
+ */
+function useCatalogOrFallback(name: string, fallback: Component) {
+  try {
+    return useUiComponent(name)
+  } catch {
+    // 组件句柄不能进深层响应式（Vue 会警告并拖慢渲染）
+    return shallowRef(fallback)
+  }
+}
+
+const Button = useCatalogOrFallback('toolbarButton', NodeToolbarButton)
+const Dropdown = useCatalogOrFallback('dropdown', DefaultDropdown)
 
 const open = ref(false)
 const openSubKey = ref<string | null>(null)
@@ -123,6 +147,10 @@ const subPos = ref({ left: 0, top: 0 })
  * 链直接从主面板元素的同名属性读（它就是父链），再追加自己的 id。
  */
 const subChain = ref('')
+/** 二级浮层的原始锚点（这一行的顶部），重排时始终以它为准 */
+let subAnchorTop = 0
+/** 打开时算出的最大高度：内容再多也在面板内滚动 */
+const subMaxHeight = ref<number | null>(null)
 let subTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearSubTimer(): void {
@@ -134,7 +162,9 @@ function openSub(key: string, ev: MouseEvent): void {
   const row = ev.currentTarget as HTMLElement | null
   if (!row) return
   const r = row.getBoundingClientRect()
-  const width = Number.parseInt(props.menuWidth, 10) || 220
+  const item = props.items.find((i) => i.key === key)
+  /** 自定义面板可能比主菜单宽（宫格选择器是正方形）；翻边判定要按它自己的宽度算 */
+  const width = Number.parseInt(item?.panel?.width || props.menuWidth, 10) || 220
   const vw = typeof window === 'undefined' ? 1280 : window.innerWidth
   /**
    * 锚点必须是**主菜单卡片**的右边，而不是这一行的右边：
@@ -143,14 +173,18 @@ function openSub(key: string, ev: MouseEvent): void {
    */
   const main = row.closest('[data-toolbar-dropdown-menu="1"]') as HTMLElement | null
   const mainRect = main?.getBoundingClientRect() ?? null
-  const parentChain = main?.dataset?.floatingChain ?? ''
-  subChain.value = parentChain ? parentChain + ' tdb-sub' : 'tdb-sub'
+  /** 子浮层的链 = 这一行所在的父链 + 自己（父链由 childChainFor 沿 DOM 往上读） */
+  subChain.value = childChainFor(row, 'tdb-sub')
   const rightEdge = mainRect ? mainRect.right : r.right
   const leftEdge = mainRect ? mainRect.left : r.left
   const left = rightEdge + SUB_GAP + width > vw - 8
     ? Math.max(8, leftEdge - SUB_GAP - width)
     : rightEdge + SUB_GAP
-  subPos.value = { left, top: r.top }
+  /** 打开时就算好：贴这一行；下方不够就整体上移，限高在面板内滚 */
+  subAnchorTop = r.top
+  const box = fitSubPanel(r.top, typeof window === 'undefined' ? 720 : window.innerHeight)
+  subPos.value = { left, top: box.top }
+  subMaxHeight.value = box.maxHeight
   openSubKey.value = key
 }
 
@@ -159,17 +193,66 @@ function scheduleCloseSub(): void {
   subTimer = setTimeout(() => { openSubKey.value = null }, 220)
 }
 
+/**
+ * 面板被鼠标划出时要有足够时间移进去：主菜单卡片与右侧面板之间有 12px 空气，
+ * 220ms 对自绘面板（要拖选格子）偏短。面板这一档给 400ms，鼠标真的进去就取消关闭。
+ */
+function scheduleClosePanel(): void {
+  clearSubTimer()
+  subTimer = setTimeout(() => { openSubKey.value = null }, 400)
+}
+
 const openSubItem = computed(() => props.items.find((i) => i.key === openSubKey.value) ?? null)
+/** 当前展开项是不是自定义面板（不是文字二级菜单） */
+const openSubPanel = computed(() => openSubItem.value?.panel ?? null)
+/** 自定义面板的上下文：直接传组件时也能拿到关闭/选择方法 */
+const openSubContext = computed<ToolbarMenuPanelContext | null>(() => {
+  const node = openSubItem.value
+  if (!node || !node.panel) return null
+  return {
+    key: node.key,
+    label: node.label,
+    path: [node.key],
+    node,
+    state: node.panel.state,
+    closePanel: () => { openSubKey.value = null },
+    close: closeAll,
+    pick: (key?: string, path?: string[]) => {
+      if (!node.disabled) emit('pick', key ?? node.key, path ?? [node.key], closeAll)
+      closeAll()
+    },
+  }
+})
+/** 二级里选中一个子项：沿「父 key → 子 key」的路径 emit，并关闭整张卡 */
+function pickSub(key: string, path: string[]): void {
+  const parent = openSubItem.value
+  const child = parent?.children?.find((c) => c.key === key)
+  if (!child) return
+  pickLeaf(child, path)
+}
+
+/** 窗口尺寸变了就按原锚点重算（内容不用重新量） */
+function onWindowResize(): void {
+  if (!openSubKey.value) return
+  const box = fitSubPanel(subAnchorTop, window.innerHeight)
+  subPos.value = { ...subPos.value, top: box.top }
+  subMaxHeight.value = box.maxHeight
+}
+
+/** 滚轮滚主菜单时子浮层的位置会旧：收起，等用户重新指向（同右键菜单的处置） */
+function onMenuScroll(): void {
+  if (openSubKey.value) openSubKey.value = null
+}
 
 function pickLeaf(node: ToolbarMenuNode, path: string[]): void {
   if (node.disabled) return
-  emit('pick', node.key, path)
+  emit('pick', node.key, path, closeAll)
   open.value = false
   openSubKey.value = null
 }
 
 function onRowClick(node: ToolbarMenuNode, path: string[], ev: MouseEvent): void {
-  if (node.children?.length) { openSub(node.key, ev); return }
+  if (node.panel || node.children?.length) { openSub(node.key, ev); return }
   pickLeaf(node, path)
 }
 
@@ -196,14 +279,15 @@ function onKeydown(ev: KeyboardEvent): void {
 onMounted(() => {
   document.addEventListener('pointerdown', onDocPointerDown)
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('resize', onWindowResize)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocPointerDown)
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', onWindowResize)
   clearSubTimer()
 })
 
-void floatingChainOf
 void (Button as Component | undefined)
 </script>
 
@@ -226,7 +310,7 @@ void (Button as Component | undefined)
       </span>
     </template>
     <template #default="{ close }">
-      <div class="tdb-menu" role="menu" :aria-label="title" data-toolbar-dropdown-menu="1">
+      <div class="tdb-menu" role="menu" :aria-label="title" data-toolbar-dropdown-menu="1" @scroll="onMenuScroll">
         <button
           v-for="node in items"
           :key="node.key"
@@ -234,41 +318,40 @@ void (Button as Component | undefined)
           :class="{ 'is-danger': node.danger, 'is-active': openSubKey === node.key || node.key === openSubKey }"
           type="button"
           role="menuitem"
-          :aria-haspopup="node.children?.length ? 'menu' : undefined"
-          :aria-expanded="node.children?.length ? openSubKey === node.key : undefined"
+          :aria-haspopup="node.panel || node.children?.length ? 'menu' : undefined"
+          :aria-expanded="node.panel || node.children?.length ? openSubKey === node.key : undefined"
           :disabled="node.disabled"
-          @mouseenter="node.children?.length ? openSub(node.key, $event) : scheduleCloseSub()"
-          @click.stop="node.children?.length ? openSub(node.key, $event) : (pickLeaf(node, [node.key]), close())"
+          @mouseenter="node.panel || node.children?.length ? openSub(node.key, $event) : scheduleCloseSub()"
+          @click.stop="node.panel || node.children?.length ? openSub(node.key, $event) : (pickLeaf(node, [node.key]), close())"
         >
           <span class="tdb-label">{{ node.label }}</span>
-          <span v-if="node.children?.length" class="tdb-chev" aria-hidden="true">›</span>
+          <span v-if="node.panel || node.children?.length" class="tdb-chev" aria-hidden="true">›</span>
         </button>
       </div>
     </template>
   </component>
 
-  <!-- 二级菜单：独立浮层（不在主面板内部叠块） -->
+  <!-- 二级浮层：文字二级菜单与自定义面板复用同一套定位 / 浮层链 / 鼠标进出逻辑 -->
   <Teleport to="body">
     <div
-      v-if="open && openSubItem?.children?.length"
+      v-if="open && openSubItem && (openSubPanel || openSubItem.children?.length)"
       class="tdb-menu tdb-sub"
+      :class="{ 'tdb-sub--panel': openSubPanel }"
       data-toolbar-dropdown-sub="1"
       :data-floating-chain="subChain"
       role="menu"
       :aria-label="openSubItem.label"
-      :style="{ left: subPos.left + 'px', top: subPos.top + 'px', minWidth: menuWidth }"
+      :style="{ left: subPos.left + 'px', top: subPos.top + 'px', minWidth: openSubPanel?.width || menuWidth, maxHeight: subMaxHeight == null ? undefined : subMaxHeight + 'px' }"
       @mouseenter="clearSubTimer"
-      @mouseleave="scheduleCloseSub"
+      @mouseleave="openSubPanel ? scheduleClosePanel() : scheduleCloseSub()"
     >
-      <button
-        v-for="child in openSubItem.children"
-        :key="child.key"
-        class="tdb-row"
-        type="button"
-        role="menuitem"
-        :disabled="child.disabled"
-        @click.stop="pickLeaf(child, [openSubItem.key, child.key])"
-      >{{ child.label }}</button>
+      <!-- 内容（自定义组件 / render / 文字子项）由子面板统一渲染 -->
+      <ToolbarDropdownSubPanel
+        v-if="openSubContext"
+        :node="openSubItem"
+        :context="openSubContext"
+        @pick="pickSub"
+      />
     </div>
   </Teleport>
 </template>
@@ -290,7 +373,12 @@ void (Button as Component | undefined)
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--radius-panel, 16px);
   box-shadow: var(--ui-shadow-md, 0 20px 40px rgb(0 0 0 / 0.08));
+  /* 兜底：即使还没量到，也绝不超出视口；内容超高就在面板里滚 */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
+/* 自定义面板是内容块，点击它内部不该被当成「点外」；内边距交给面板自己控制 */
+.tdb-sub--panel { padding: var(--tdb-panel-padding, 10px); }
 .tdb-row {
   display: flex;
   align-items: center;
@@ -312,4 +400,7 @@ void (Button as Component | undefined)
 .tdb-row:disabled { opacity: 0.38; cursor: not-allowed; }
 .tdb-row.is-danger { color: var(--ui-danger, #ef4444); }
 .tdb-chev { color: var(--ui-ink-mute, #8c95a3); font-size: 14px; line-height: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .tdb-row { transition: none !important; }
+}
 </style>

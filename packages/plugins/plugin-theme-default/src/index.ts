@@ -808,8 +808,9 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
  * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
  * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
  */
-export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, NodeEmptyState } from "./components/ui";
+export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, NodeEmptyState, ToolbarDropdownButton } from "./components/ui";
 export { MediaViewer } from "./components/ui";
+export type { ToolbarMenuNode, ToolbarMenuPanel, ToolbarMenuPanelContext, ToolbarMenuPick } from "./components/ui";
 export type { DropdownTrigger, SelectOption } from "./components/ui";
 
 /**

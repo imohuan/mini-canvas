@@ -15,6 +15,15 @@ interface ToolbarMenuNode {
   key: string
   label: string
   children?: ToolbarMenuNode[]
+  /** 主题包 toolbarDropdown 的自定义面板（本插件只用到 component + props） */
+  panel?: ToolbarMenuPanel
+}
+
+/** 与主题包 ToolbarMenuPanel 同构的最小形状（插件不反向依赖主题包） */
+interface ToolbarMenuPanel {
+  component?: unknown
+  props?: Record<string, unknown>
+  width?: string
 }
 
 const props = defineProps<{
@@ -41,13 +50,6 @@ const hasImage = computed(() => {
 /** 已经在切分中：按钮让位（功能模式的顶栏会整排替换，这里只兜一层防双开） */
 const splitting = computed(() => Boolean(props.nodeId && isSplitting(props.nodeId)))
 
-/** 预设（2/3/4/5 等分）+ 自定义行列的二级菜单 */
-const items: ToolbarMenuNode[] = [
-  { key: 'grid:2:2', label: '4 宫格（2×2）' },
-  { key: 'grid:3:3', label: '9 宫格（3×3）' },
-  { key: 'grid:4:4', label: '16 宫格（4×4）' },
-  { key: 'grid:5:5', label: '25 宫格（5×5）' },
-]
 /** 自定义行列面板的行列（默认 3×3；确认后保留回显） */
 const customRows = ref(3)
 const customCols = ref(3)
@@ -73,17 +75,33 @@ function onPick(key: string): void {
   enter(Number(m[1]), Number(m[2]))
 }
 
+/** 面板里点格子就算确认（选择器自己收起下拉），这里只处理切分 */
 function onCustomConfirm(rows: number, cols: number): void {
   customRows.value = rows
   customCols.value = cols
   enter(rows, cols)
 }
 
-/** 确定后收起自定义面板（下拉/兜底浮层都传 close 进来） */
-function confirmCustom(rows: number, cols: number, close: () => void): void {
-  onCustomConfirm(rows, cols)
-  close()
-}
+/** 预设（2/3/4/5 等分）+ 自定义宫格面板：同一个下拉，自定义在右侧展开 */
+const items = computed<ToolbarMenuNode[]>(() => [
+  { key: 'grid:2:2', label: '4 宫格（2×2）' },
+  { key: 'grid:3:3', label: '9 宫格（3×3）' },
+  { key: 'grid:4:4', label: '16 宫格（4×4）' },
+  { key: 'grid:5:5', label: '25 宫格（5×5）' },
+  {
+    key: 'grid:custom',
+    label: '自定义',
+    panel: {
+      width: '200px',
+      component: GridSizePicker,
+      props: {
+        initialRows: customRows.value,
+        initialCols: customCols.value,
+        onConfirm: onCustomConfirm,
+      },
+    },
+  },
+])
 </script>
 
 <template>
@@ -95,27 +113,6 @@ function confirmCustom(rows: number, cols: number, close: () => void): void {
     :items="items"
     @pick="onPick"
   />
-  <!-- 自定义行列：独立入口（toolbarDropdown 的 children 只收字符串 label，
-       悬停式网格选择器需要自己的浮层 —— 与预设下拉并排，互不干扰） -->
-  <component
-    v-if="hasImage && !splitting && DropdownButton && Dropdown"
-    :is="Dropdown"
-    placement="bottom-start"
-    :offset="6"
-  >
-    <template #trigger>
-      <span class="gse-custom-trigger">
-        <component :is="Button || 'button'" type="button" :title="'自定义行列'" aria-label="自定义行列">自定义</component>
-      </span>
-    </template>
-    <template #default="{ close }">
-      <GridSizePicker
-        :initial-rows="customRows"
-        :initial-cols="customCols"
-        @confirm="(rows: number, cols: number) => confirmCustom(rows, cols, close)"
-      />
-    </template>
-  </component>
   <component
     v-if="hasImage && !splitting && !DropdownButton && Dropdown"
     :is="Dropdown"
@@ -138,7 +135,7 @@ function confirmCustom(rows: number, cols: number, close: () => void): void {
         <GridSizePicker
           :initial-rows="customRows"
           :initial-cols="customCols"
-          @confirm="(rows: number, cols: number) => confirmCustom(rows, cols, close)"
+          @confirm="(rows: number, cols: number) => (onCustomConfirm(rows, cols), close())"
         />
       </div>
     </template>
@@ -148,7 +145,6 @@ function confirmCustom(rows: number, cols: number, close: () => void): void {
 <style scoped>
 /* 主题 dropdown 缺席时的兜底触发器（正常走 toolbarDropdown 时这段不渲染） */
 .gse-trigger { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.gse-custom-trigger { display: inline-flex; }
 .gse-icon { display: inline-flex; width: 16px; height: 16px; }
 .gse-icon :deep(svg) { width: 100%; height: 100%; }
 .gse-menu { display: flex; flex-direction: column; gap: 2px; }
