@@ -7,39 +7,35 @@ export const DEFAULT_SIZES: Record<UiKitSize, UiKitSizeToken> = {
   lg: { height: 42, fontSize: 14, paddingX: 16, icon: 18 },
 }
 
-export const LIGHT_THEME: UiKitTheme = {
-  accent: '#0891b2',
-  accentHover: '#0e7490',
-  danger: '#ef4444',
-  success: '#16a34a',
-  warning: '#d97706',
-  info: '#2563eb',
-  ink: '#18202b',
-  inkMuted: '#8c95a3',
-  panel: '#ffffff',
-  panelSoft: '#f7f8fa',
-  line: '#e2e5ea',
-  hover: 'rgb(0 0 0 / 0.05)',
-  chip: 'rgb(0 0 0 / 0.07)',
-  shadow: '0 18px 44px rgb(15 23 42 / 0.16)',
+/**
+ * 颜色主题**只描述当前项目主题的语义名字**，不再提供第二套色值。
+ *
+ * 为什么：项目已经有一份真源（`canvas-render/src/styles/ui-theme.css` 的 `--ui-*`，
+ * 亮/暗各一条规则）。组件库若自己算一套颜色，宿主就必须把两套对齐，
+ * 任何一次主题改动都会漏一半。现在组件的 CSS 直接读 `--ui-*`，
+ * 这里的 `theme` 字段只为兼容已有的 `useUiKit().theme.accent` 读法而保留，
+ * 值是同名的 CSS 变量表达式，不是颜色字面量。
+ */
+const themeVars: UiKitTheme = {
+  accent: 'var(--ui-accent)',
+  accentHover: 'var(--ui-accent-hover)',
+  danger: 'var(--ui-danger)',
+  success: 'var(--ui-success, #16a34a)',
+  warning: 'var(--ui-warn)',
+  info: 'var(--ui-info, #2563eb)',
+  ink: 'var(--ui-ink)',
+  inkMuted: 'var(--ui-ink-dim)',
+  panel: 'var(--ui-panel)',
+  panelSoft: 'var(--ui-panel-soft)',
+  line: 'var(--ui-line)',
+  hover: 'var(--ui-hover)',
+  chip: 'var(--ui-chip)',
+  shadow: 'var(--ui-shadow-md)',
 }
 
-export const DARK_THEME: UiKitTheme = {
-  accent: '#22b8d8',
-  accentHover: '#3cc9e6',
-  danger: '#f87171',
-  success: '#4ade80',
-  warning: '#fbbf24',
-  info: '#60a5fa',
-  ink: '#f4f5f7',
-  inkMuted: '#9aa3ae',
-  panel: '#212429',
-  panelSoft: '#191b1f',
-  line: '#3a3f46',
-  hover: 'rgb(255 255 255 / 0.08)',
-  chip: 'rgb(255 255 255 / 0.1)',
-  shadow: '0 20px 48px rgb(0 0 0 / 0.42)',
-}
+/** 兼容旧出口：颜色已改为读项目主题，两个名字指向同一份变量表。 */
+export const LIGHT_THEME: UiKitTheme = themeVars
+export const DARK_THEME: UiKitTheme = themeVars
 
 const DENSITY_GAP: Record<UiKitDensity, number> = {
   compact: 4,
@@ -55,16 +51,15 @@ const DENSITY_PAD: Record<UiKitDensity, number> = {
 
 /** 把 props 收成组件统一消费的上下文与 CSS 变量。 */
 export function resolveConfig(props: UiKitProviderProps): UiKitContext {
-  const base = props.dark ? DARK_THEME : LIGHT_THEME
-  const theme: UiKitTheme = {
-    ...base,
-    accent: props.accent?.trim() || base.accent,
-    accentHover: props.accentHover?.trim() || props.accent?.trim() || base.accentHover,
-    danger: props.danger?.trim() || base.danger,
-    success: props.success?.trim() || base.success,
-    warning: props.warning?.trim() || base.warning,
-    info: props.info?.trim() || base.info,
-  }
+  /**
+   * 颜色 props 只用于**独立预览/组件展厅**覆盖节选颜色；Provider 自身不把它们写进 `:root`。
+   *
+   * 为什么：`UiKitProvider` 在画布里可能被嵌在别的主题面上（侧栏、Agent 面板、节点浮层），
+   * 一写 `:root` 就会把整个应用的主色改掉。需要局部改色的场景由调用方在容器上覆盖 `--ui-*`，
+   * 作用域更小、不会泄露到画布其它区域。
+   */
+  const overrides: Record<string, string> = {}
+  const theme: UiKitTheme = { ...themeVars }
   const size = props.size ?? 'md'
   const density = props.density ?? 'comfortable'
   const radius = Number.isFinite(props.radius) ? Math.min(Math.max(props.radius ?? 8, 0), 32) : 8
@@ -74,20 +69,7 @@ export function resolveConfig(props: UiKitProviderProps): UiKitContext {
   }
   const z = props.zIndexBase ?? 90000
   const cssVars: Record<string, string> = {
-    '--mck-accent': theme.accent,
-    '--mck-accent-hover': theme.accentHover,
-    '--mck-danger': theme.danger,
-    '--mck-success': theme.success,
-    '--mck-warning': theme.warning,
-    '--mck-info': theme.info,
-    '--mck-ink': theme.ink,
-    '--mck-ink-muted': theme.inkMuted,
-    '--mck-panel': theme.panel,
-    '--mck-panel-soft': theme.panelSoft,
-    '--mck-line': theme.line,
-    '--mck-hover': theme.hover,
-    '--mck-chip': theme.chip,
-    '--mck-shadow': theme.shadow,
+    ...overrides,
     '--mck-radius-control': radius + 'px',
     '--mck-radius-panel': Math.max(radius + 6, 12) + 'px',
     '--mck-gap': DENSITY_GAP[density] + 'px',

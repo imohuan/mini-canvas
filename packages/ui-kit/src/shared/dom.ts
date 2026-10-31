@@ -12,7 +12,7 @@ export function focusableIn(root: HTMLElement | null): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => {
     if (el.hasAttribute('disabled')) return false
     if (el.getAttribute('aria-hidden') === 'true') return false
-    return el.offsetParent !== null || el === document.activeElement
+    return el.offsetParent !== null || (typeof document !== 'undefined' && el === document.activeElement)
   })
 }
 
@@ -23,6 +23,11 @@ export function focusFirst(root: HTMLElement | null): void {
 }
 
 export function nextTickFrame(callback: () => void): number {
+  if (typeof requestAnimationFrame !== 'function') {
+    // 无浏览器：交给微任务，调用方仍能拿到“稍后执行”的兜底。
+    void Promise.resolve().then(callback)
+    return 0
+  }
   return requestAnimationFrame(() => requestAnimationFrame(callback))
 }
 

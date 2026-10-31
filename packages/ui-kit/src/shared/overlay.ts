@@ -5,6 +5,7 @@ let lockCount = 0
 let previousOverflow = ''
 
 function lockBody(): void {
+  if (typeof document === 'undefined') return
   if (lockCount === 0) {
     previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -14,7 +15,7 @@ function lockBody(): void {
 
 function unlockBody(): void {
   lockCount = Math.max(0, lockCount - 1)
-  if (lockCount === 0) document.body.style.overflow = previousOverflow
+  if (typeof document !== 'undefined' && lockCount === 0) document.body.style.overflow = previousOverflow
 }
 
 /** 点击浮层/触发器以外的区域时关闭。用捕获阶段，嵌套浮层不会互相吞事件。 */
@@ -22,24 +23,39 @@ export function useOutsideClick(
   active: Ref<boolean>,
   containers: Array<Ref<HTMLElement | null>>,
   handler: () => void,
+  /**
+   * 额外判定“这次点击算不算内部”。用于嵌套浮层：内层面板 teleport 到 body，
+   * DOM 上不在外层容器里，只看容器会把它误判成外部点击，父菜单先关、内层链接失效。
+   */
+  isInside?: (target: Node) => boolean,
 ): void {
   function onPointerDown(event: PointerEvent): void {
+    if (typeof document === 'undefined') return
     if (!active.value) return
     const target = event.target as Node | null
     if (!target) return
+    if (isInside?.(target)) return
     const inside = containers.some((ref) => ref.value?.contains(target))
     if (!inside) handler()
   }
-  onMounted(() => document.addEventListener('pointerdown', onPointerDown, true))
-  onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown, true))
+  onMounted(() => {
+    if (typeof document !== 'undefined') document.addEventListener('pointerdown', onPointerDown, true)
+  })
+  onBeforeUnmount(() => {
+    if (typeof document !== 'undefined') document.removeEventListener('pointerdown', onPointerDown, true)
+  })
 }
 
 export function useEscape(active: Ref<boolean>, handler: (event: KeyboardEvent) => void): void {
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape' && active.value) handler(event)
   }
-  onMounted(() => document.addEventListener('keydown', onKeydown))
-  onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+  onMounted(() => {
+    if (typeof document !== 'undefined') document.addEventListener('keydown', onKeydown)
+  })
+  onBeforeUnmount(() => {
+    if (typeof document !== 'undefined') document.removeEventListener('keydown', onKeydown)
+  })
 }
 
 export interface FocusTrapOptions {
@@ -74,7 +90,7 @@ export function useFocusTrap(
       panel.value?.focus()
       return
     }
-    const current = document.activeElement as HTMLElement | null
+    const current = typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null)
     const index = current ? items.indexOf(current) : -1
     event.preventDefault()
     const next = event.shiftKey
@@ -85,19 +101,21 @@ export function useFocusTrap(
 
   watch(active, (open) => {
     if (open) {
-      previous = document.activeElement as HTMLElement | null
-      document.addEventListener('keydown', onKeydown)
+      previous = typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null)
+      if (typeof document !== 'undefined') document.addEventListener('keydown', onKeydown)
       if (options.lockScroll) {
         lockBody()
         locked = true
       }
-      requestAnimationFrame(() => {
+      const focus = (): void => {
         if (options.initialFocus === 'none') return
         if (options.initialFocus === 'panel') panel.value?.focus()
         else focusFirst(panel.value)
-      })
+      }
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focus)
+      else void Promise.resolve().then(focus)
     } else {
-      document.removeEventListener('keydown', onKeydown)
+      if (typeof document !== 'undefined') document.removeEventListener('keydown', onKeydown)
       if (locked) {
         unlockBody()
         locked = false
@@ -107,7 +125,7 @@ export function useFocusTrap(
   }, { immediate: true })
 
   onBeforeUnmount(() => {
-    document.removeEventListener('keydown', onKeydown)
+    if (typeof document !== 'undefined') document.removeEventListener('keydown', onKeydown)
     if (locked) unlockBody()
   })
 }
@@ -123,7 +141,7 @@ export function moveFocus(
   const items = Array.from(panel.querySelectorAll<HTMLElement>(selector))
     .filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-disabled') !== 'true')
   if (items.length === 0) return false
-  const active = current ?? (document.activeElement as HTMLElement | null)
+  const active = current ?? (typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null))
   const index = active ? items.indexOf(active) : -1
   const next = direction > 0
     ? items[index < 0 || index === items.length - 1 ? 0 : index + 1]

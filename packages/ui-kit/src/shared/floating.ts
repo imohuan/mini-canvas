@@ -29,6 +29,11 @@ export interface FloatingPosition {
 
 const DEFAULT_POSITION: FloatingPosition = { left: 0, top: 0, placement: 'bottom-start' }
 
+/** 服务端渲染/无 DOM 测试环境：没有动画帧也要能安全调用。 */
+function hasFrame(): boolean {
+  return typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function'
+}
+
 function numeric(value: string | undefined): number | undefined {
   if (!value) return undefined
   const match = /^(\d+(?:\.\d+)?)px$/.exec(value.trim())
@@ -75,6 +80,8 @@ export function useFloating(
   function update(): void {
     const panelEl = panel.value
     if (!panelEl) return
+    // SSR / happy-dom 的极简环境可能没有 viewport 尺寸；没有就停在默认位置。
+    if (typeof window === 'undefined') return
     let rect: DOMRect | null = null
     if (point?.value) {
       rect = { left: point.value.x, top: point.value.y, right: point.value.x, bottom: point.value.y, width: 0, height: 0, x: point.value.x, y: point.value.y, toJSON: () => ({}) }
@@ -138,16 +145,20 @@ export function useFloating(
 
   function loop(): void {
     update()
-    if (active.value) frame = requestAnimationFrame(loop)
+    if (active.value && hasFrame()) frame = requestAnimationFrame(loop)
   }
 
   function start(): void {
+    if (!hasFrame()) {
+      update()
+      return
+    }
     cancelAnimationFrame(frame)
     frame = requestAnimationFrame(loop)
   }
 
   function stop(): void {
-    cancelAnimationFrame(frame)
+    if (hasFrame()) cancelAnimationFrame(frame)
     frame = 0
   }
 

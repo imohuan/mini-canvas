@@ -1,9 +1,8 @@
 import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useFloating } from '../../shared/floating'
 import { useEscape, useOutsideClick } from '../../shared/overlay'
+import { claimFloating, floatingChainOf, isInsideChain, releaseFloating } from './registry'
 import type { DropdownAnchor, DropdownProps } from './types'
-
-let openInstance: symbol | null = null
 
 /** 把 DOM / Ref / getter 统一读成一个元素；拿不到就返回 null。 */
 function resolveAnchor(anchor: DropdownProps['anchor']): HTMLElement | null {
@@ -29,11 +28,15 @@ export interface DropdownApi {
   panelStyle: Ref<Record<string, string>>
   arrowStyle: ComputedRef<Record<string, string>>
   closeFromSlot: () => void
+  /** 自己的浮层链 id（写进面板 attr，供内层识别祖先）。 */
+  chainId: string
+  /** 祖先链 + 自己。 */
+  chain: ComputedRef<string[]>
 }
 
 /** 下拉浮层的开关、定位和互斥逻辑；模板只负责画。 */
 export function useDropdown(props: DropdownProps, emit: (value: boolean) => void): DropdownApi {
-  const id = Symbol('dropdown')
+  const chainId = props.chainId?.trim() || 'mck-dd-' + Math.random().toString(36).slice(2)
   /** always 模式是调试用的“常显”：忽略外部开关，一直保持 true。 */
   const open = ref((props.trigger ?? 'click') === 'always' ? true : (props.modelValue ?? false))
   /** 真实定位锚点：外部 anchor 优先，否则用触发器插槽的 DOM。 */
@@ -42,6 +45,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   const panelRef = ref<HTMLElement | null>(null)
   let hideTimer = 0
   let showTimer = 0
+  /** 祖先链 + 自己；祖先从触发器所在 DOM 读取。 */
+  const chain = computed<string[]>(() => [...floatingChainOf(triggerRef.value), chainId])
 
   /**
    * 实际方向：anchorPlacement 是显式九宫格；没有它才用旧 placement/align 组合。
@@ -77,7 +82,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if ((props.trigger ?? 'click') === 'always') return
     if (typeof value === 'boolean' && value !== open.value) {
       open.value = value
-      if (!value && openInstance === id) openInstance = null
+      if (!value) releaseFloating(closeInstance)
       if (value) nextTick(update)
     }
   })
@@ -96,20 +101,18 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if ((props.trigger ?? 'click') === 'always' && value === false) open.value = true
   }, { flush: 'sync' })
 
+  function closeInstance(): void {
+    setOpen(false)
+  }
+
   function setOpen(value: boolean): void {
     if ((props.trigger ?? 'click') === 'always' && !value) return
     if (open.value === value) return
-    if (value && !props.disabled) {
-      if (openInstance && openInstance !== id) closeInstance?.()
-      openInstance = id
-    }
+    if (value && !props.disabled) claimFloating(closeInstance, () => chain.value)
     open.value = value
     emit(value)
     if (value) nextTick(update)
   }
-
-  let closeInstance: (() => void) | undefined
-  closeInstance = () => setOpen(false)
 
   function show(): void {
     if (props.disabled) return
@@ -124,7 +127,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       open.value = true
       return
     }
-    if (openInstance === id) openInstance = null
+    releaseFloating(closeInstance)
     open.value = false
     emit(false)
   }
@@ -144,11 +147,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if ((props.trigger ?? 'click') !== 'hover') return
     cancelHide()
     cancelShow()
-    hideTimer = window.setTimeout(hide, Math.max(0, props.hoverCloseDelay ?? 150))
+    hideTimer = globalThis.setTimeout(hide, Math.max(0, props.hoverCloseDelay ?? 150)) as unknown as number
   }
 
   function cancelHide(): void {
-    window.clearTimeout(hideTimer)
+    globalThis.clearTimeout(hideTimer)
     hideTimer = 0
   }
 
@@ -164,11 +167,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       return
     }
     cancelShow()
-    showTimer = window.setTimeout(show, delay)
+    showTimer = globalThis.setTimeout(show, delay) as unknown as number
   }
 
   function cancelShow(): void {
-    window.clearTimeout(showTimer)
+    globalThis.clearTimeout(showTimer)
     showTimer = 0
   }
 
@@ -201,10 +204,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if ((props.trigger ?? 'click') === 'always') return
     if (props.closeOnOutside === false) return
     hide()
-  })
+  }, (target) => isInsideChain(target, chainId))
   useEscape(open, () => {
     if (props.closeOnEscape === false) return
     hide()
+    if (props.restoreFocus !== false) triggerRef.value?.focus?.()
   })
   onBeforeUnmount(() => {
     cancelHide()
@@ -250,8 +254,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       position: 'fixed',
       width: ARROW_SIZE + 'px',
       height: ARROW_SIZE + 'px',
-      background: 'var(--mck-panel, #fff)',
-      border: '0 solid var(--mck-line, #e2e5ea)',
+      background: 'var(--ui-panel, #fff)',
+      border: '0 solid var(--ui-line, #e2e5ea)',
       transform: 'rotate(45deg)',
       pointerEvents: 'none',
     }
@@ -280,10 +284,10 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     // 常显 = 不允许从 slot 关闭。
     if ((props.trigger ?? 'click') === 'always') return
     open.value = false
-    if (openInstance === id) openInstance = null
+    releaseFloating(closeInstance)
     emit(false)
+    if (props.restoreFocus !== false) triggerRef.value?.focus?.()
   }
 
-
-  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, scheduleShow, panelStyle, arrowStyle, closeFromSlot }
+  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, scheduleShow, panelStyle, arrowStyle, closeFromSlot, chainId, chain }
 }

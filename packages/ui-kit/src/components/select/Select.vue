@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, ref, watch, type Component } from 'vue'
 import { Dropdown } from '../dropdown'
 import { useUiKit } from '../../provider/context'
 import type { SelectOption, SelectProps } from './types'
@@ -14,6 +14,11 @@ const props = withDefaults(defineProps<SelectProps>(), {
   placeholder: '请选择',
   searchable: false,
   searchPlaceholder: '搜索…',
+  placement: 'bottom-start',
+  dropdownWidth: 'auto',
+  dropdownMaxWidth: '320px',
+  dropdownMaxHeight: '320px',
+  dropdownMinWidth: '200px',
   disabled: false,
   invalid: false,
   error: '',
@@ -21,6 +26,7 @@ const props = withDefaults(defineProps<SelectProps>(), {
   emptyText: '没有匹配的选项',
   ariaLabel: '选择',
   menuMinWidth: '200px',
+  inputId: '',
 })
 
 const emit = defineEmits<{
@@ -37,6 +43,29 @@ const searchRef = ref<HTMLInputElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 
 const selected = computed(() => props.options.find((x) => x.value === props.modelValue))
+
+/** 选项图标：字符串当 SVG/HTML，其余当 Vue 组件（与项目里 icon 句柄同一套写法）。 */
+function iconHtml(icon: SelectOption['icon']): string {
+  return typeof icon === 'string' ? icon : ''
+}
+function iconComponent(icon: SelectOption['icon']): Component | null {
+  // 组件句柄不能进响应式代理：Vue 会警告并拖慢渲染。
+  return typeof icon === 'string' || icon == null ? null : markRaw(icon as Component)
+}
+
+/**
+ * 浮层宽度：`dropdownWidth:'match'` 走 Dropdown 的 matchWidth；
+ * 主题旧实现把「非 auto」的值当 minWidth 用，这里保持同一语义，避免已有菜单被改成固定窄宽。
+ */
+const resolvedMenuMinWidth = computed(() => {
+  if (props.dropdownWidth && props.dropdownWidth !== 'auto' && props.dropdownWidth !== 'match') {
+    return props.dropdownWidth
+  }
+  return props.menuMinWidth || props.dropdownMinWidth
+})
+const matchTriggerWidth = computed(() => props.dropdownWidth === 'match')
+const resolvedMenuMaxWidth = computed(() => props.dropdownMaxWidth || undefined)
+const resolvedMenuMaxHeight = computed(() => props.dropdownMaxHeight || 'min(320px, 60vh)')
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return props.options
@@ -110,14 +139,18 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
     <Dropdown
       :model-value="open"
       :disabled="disabled"
-      :match-width="true"
-      :menu-min-width="menuMinWidth"
+      :placement="placement"
+      :offset="4"
+      :match-width="matchTriggerWidth"
+      :menu-min-width="resolvedMenuMinWidth"
+      :menu-max-width="resolvedMenuMaxWidth"
       menu-role="listbox"
-      menu-max-height="min(320px, 60vh)"
+      :menu-max-height="resolvedMenuMaxHeight"
       @update:model-value="onOpenChange"
     >
       <template #trigger="{ open: isOpen }">
         <button
+          :id="inputId || undefined"
           type="button"
           class="mck-select"
           :class="{ 'is-open': isOpen, 'is-invalid': invalid || !!error, 'is-placeholder': !selected }"
@@ -169,7 +202,10 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
               @click="select(item)"
               @mouseenter="highlight = filtered.indexOf(item)"
             >
-              <span v-if="item.icon" class="mck-select__icon" aria-hidden="true">{{ item.icon }}</span>
+              <span v-if="item.icon" class="mck-select__icon" aria-hidden="true">
+                <span v-if="iconHtml(item.icon)" class="mck-select__icon-raw" v-html="iconHtml(item.icon)" />
+                <component v-else :is="iconComponent(item.icon)" class="mck-select__icon-raw" />
+              </span>
               <span class="mck-select__copy">
                 <span class="mck-select__option-label">{{ item.label }}</span>
                 <span v-if="item.description" class="mck-select__option-desc">{{ item.description }}</span>

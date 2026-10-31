@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
 import type { DropdownProps } from './types'
 import { useDropdown } from './useDropdown'
 import './dropdown.css'
 
 defineOptions({ name: 'MckDropdown' })
+
+/** 兼容主题旧实现的 `dd` 外壳类：调用方若已传，不重复补。 */
+const attrs = useAttrs()
+const rootClass = computed(() => {
+  const external = String(attrs.class ?? '').split(/\s+/).filter(Boolean)
+  return external.includes('dd') ? external : ['dd', ...external]
+})
 
 const props = withDefaults(defineProps<DropdownProps>(), {
   modelValue: false,
@@ -106,11 +113,12 @@ const triggerEvents = computed(() => {
 </script>
 
 <template>
-  <div class="mck-dropdown" :class="{ 'is-disabled': disabled }">
+  <!-- 兼容主题旧实现的 dd / dd-trigger 类名：调用方与测试按它们取外壳，换底层不该改外观契约。 -->
+  <div class="mck-dropdown" :class="[rootClass, { 'is-disabled': disabled }]">
     <div
       v-if="!anchor"
       :ref="api.triggerRef"
-      class="mck-dropdown__trigger"
+      class="mck-dropdown__trigger dd-trigger"
       :aria-expanded="api.open.value"
       aria-haspopup="menu"
       v-bind="triggerEvents"
@@ -128,6 +136,7 @@ const triggerEvents = computed(() => {
           :class="[menuClass, bodyClass, { 'is-inner-scroll': layout === 'inner-scroll', 'is-bare': bare }]"
           :style="api.panelStyle.value"
           :role="menuRole"
+          :data-mck-floating-chain="api.chain.value.join(' ')"
           @mouseenter="trigger === 'hover' ? api.cancelHide() : undefined"
           @mouseleave="trigger === 'hover' ? api.scheduleHide() : undefined"
         >
@@ -140,7 +149,7 @@ const triggerEvents = computed(() => {
       -->
       <div
         v-if="api.open.value && arrow"
-        class="mck-dropdown__arrow"
+        class="mck-dropdown__arrow dd-arrow"
         :style="api.arrowStyle.value"
         aria-hidden="true"
       />

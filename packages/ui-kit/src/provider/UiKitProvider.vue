@@ -60,7 +60,7 @@ onBeforeUnmount(() => { styleEl?.remove(); styleEl = undefined })
 
 <style scoped>
 .mck-provider {
-  color: var(--mck-ink);
+  color: var(--ui-ink);
   font-family: inherit;
 }
 </style>

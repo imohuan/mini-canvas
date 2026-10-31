@@ -390,7 +390,7 @@ function fireMessage(): void {
 
 .pg-hint {
   margin: 0;
-  color: var(--mck-ink-muted, #6b7280);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -400,9 +400,9 @@ function fireMessage(): void {
   width: min(420px, 100%);
   min-height: 120px;
   place-items: center;
-  border: 1px dashed var(--mck-line);
+  border: 1px dashed var(--ui-line);
   border-radius: 10px;
-  color: var(--mck-ink-muted, #6b7280);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
 }
 
@@ -410,9 +410,9 @@ function fireMessage(): void {
   width: min(640px, 100%);
   height: 240px;
   overflow: hidden;
-  border: 1px solid var(--mck-line);
+  border: 1px solid var(--ui-line);
   border-radius: 10px;
-  background: var(--mck-panel, #fff);
+  background: var(--ui-panel, #fff);
 }
 
 /* SplitPane 默认按内容高度自适应；演示框有固定高度，让它填满才看得清拖动效果。 */
@@ -431,11 +431,11 @@ function fireMessage(): void {
 }
 
 .pg-split-pane--side {
-  background: var(--mck-panel-soft, rgb(0 0 0 / 0.03));
+  background: var(--ui-panel-soft, rgb(0 0 0 / 0.03));
 }
 
 .pg-split-pane__eyebrow {
-  color: var(--mck-ink-muted, #6b7280);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -447,7 +447,7 @@ function fireMessage(): void {
 }
 
 .pg-split-pane__hint {
-  color: var(--mck-ink-muted, #6b7280);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   line-height: 1.6;
 }
@@ -456,12 +456,12 @@ function fireMessage(): void {
   width: min(520px, 100%);
   padding: 18px;
   border-radius: 12px;
-  background: var(--mck-panel, #fff);
+  background: var(--ui-panel, #fff);
 }
 
 .pg-fallback {
   margin: 0;
-  color: var(--mck-ink-muted, #6b7280);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
 }
 </style>

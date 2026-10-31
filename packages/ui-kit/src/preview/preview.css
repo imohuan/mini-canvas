@@ -1,11 +1,12 @@
 /*
  * 独立预览页的基础主题。主应用里这些 token 由 canvas-render 提供。
  *
- * ui-kit 自己的组件一律用 --mck-*（来自 UiKitProvider）。
- * 这里的 --ui-* 只是 preview.css 壳层的兜底，不跟着 Provider 变；
- * 文档区、示例框、代码块必须写 var(--mck-xxx)，否则切主题时不会跟着变。
+ * 作用域限定在预览根容器 `.uk-shell`：组件库嵌进主应用路由时，
+ * 这里绝不能把 --ui-* 写到 :root 上，否则会盖掉画布真正的主题色。
+ * 暗色跟随宿主 html.dark，与画布主题同一套切换机制。
  */
-:root {
+.uk-shell,
+.mck-preview-scope {
   --ui-canvas-bg: #f5f6f8;
   --ui-panel: #ffffff;
   --ui-panel-soft: #ffffff;
@@ -29,7 +30,10 @@
   --ui-scroll-thumb-hover: rgb(0 0 0 / 0.32);
 }
 
-html.dark {
+html.dark .uk-shell,
+html.dark .mck-preview-scope,
+.uk-shell[data-ui-kit-dark='true'],
+.mck-preview-scope[data-ui-kit-dark='true'] {
   --ui-canvas-bg: #141414;
   --ui-panel: #262626;
   --ui-panel-soft: #171717;
@@ -61,8 +65,8 @@ body,
 
 body {
   overflow: hidden;
-  background: var(--ui-canvas-bg);
-  color: var(--ui-ink);
+  background: var(--ui-canvas-bg, #f5f6f8);
+  color: var(--ui-ink, #18202b);
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
@@ -112,8 +116,8 @@ body {
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
-  color: var(--mck-ink, var(--ui-ink));
+  background: var(--ui-panel-soft, #f5f6f8);
+  color: var(--ui-ink, #18202b);
   font-size: 13px;
 }
 
@@ -126,8 +130,8 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--mck-line, var(--ui-line));
-  background: var(--mck-panel, var(--ui-panel));
+  border-bottom: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-panel, #ffffff);
 }
 
 .uk-brand {
@@ -144,7 +148,7 @@ body {
   height: 26px;
   place-items: center;
   border-radius: 8px;
-  background: var(--mck-accent, var(--ui-accent));
+  background: var(--ui-accent, #0891b2);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -159,13 +163,13 @@ body {
 
 .uk-brand span {
   display: block;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10.5px;
   line-height: 1.4;
 }
 
 .uk-brand > div > span {
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
 }
 
 /* 全局参数控件 */
@@ -179,7 +183,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -187,10 +191,10 @@ body {
 .uk-control select {
   height: 26px;
   padding: 0 6px;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--mck-radius-control, 8px);
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
-  color: var(--mck-ink, var(--ui-ink));
+  background: var(--ui-panel-soft, #f5f6f8);
+  color: var(--ui-ink, #18202b);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -198,7 +202,7 @@ body {
 
 .uk-control--range input[type="range"] {
   width: 96px;
-  accent-color: var(--mck-accent, var(--ui-accent));
+  accent-color: var(--ui-accent, #0891b2);
   cursor: pointer;
 }
 
@@ -230,7 +234,7 @@ body {
   width: 30px;
   height: 24px;
   padding: 0;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
@@ -242,20 +246,20 @@ body {
   height: 26px;
   place-items: center;
   padding: 0;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 7px;
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
-  color: var(--mck-ink, var(--ui-ink));
+  background: var(--ui-panel-soft, #f5f6f8);
+  color: var(--ui-ink, #18202b);
   cursor: pointer;
   transition: background-color 150ms ease, border-color 150ms ease;
 }
 
 .uk-icon-button:hover {
-  background: var(--mck-hover, var(--ui-hover));
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
 
 .uk-icon-button:focus-visible {
-  outline: 2px solid var(--mck-accent, var(--ui-accent));
+  outline: 2px solid var(--ui-accent, #0891b2);
   outline-offset: 1px;
 }
 
@@ -271,8 +275,8 @@ body {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  border-right: 1px solid var(--mck-line, var(--ui-line));
-  background: var(--mck-panel, var(--ui-panel));
+  border-right: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-panel, #ffffff);
 }
 
 .uk-search {
@@ -282,10 +286,10 @@ body {
   gap: 6px;
   margin: 10px 10px 6px;
   padding: 0 8px;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--mck-radius-control, 8px);
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  background: var(--ui-panel-soft, #f5f6f8);
+  color: var(--ui-ink-dim, #6b7280);
 }
 
 .uk-search input {
@@ -295,13 +299,13 @@ body {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--mck-ink, var(--ui-ink));
+  color: var(--ui-ink, #18202b);
   font: inherit;
   font-size: 12px;
 }
 
 .uk-search input::placeholder {
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
 }
 
 .uk-nav {
@@ -318,7 +322,7 @@ body {
 .uk-nav-group h2 {
   margin: 0 0 4px;
   padding: 0 6px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -336,7 +340,7 @@ body {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--mck-ink, var(--ui-ink));
+  color: var(--ui-ink, #18202b);
   font: inherit;
   font-size: 12px;
   text-align: left;
@@ -345,12 +349,12 @@ body {
 }
 
 .uk-nav-item:hover {
-  background: var(--mck-hover, var(--ui-hover));
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
 
 .uk-nav-item.is-active {
-  background: color-mix(in srgb, var(--mck-accent, var(--ui-accent)) 16%, transparent);
-  color: var(--mck-accent, var(--ui-accent));
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 16%, transparent);
+  color: var(--ui-accent, #0891b2);
 }
 
 .uk-nav-item strong {
@@ -363,7 +367,7 @@ body {
 .uk-nav-item small {
   display: block;
   overflow: hidden;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10.5px;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -372,7 +376,7 @@ body {
 
 .uk-nav-item em {
   flex: 0 0 auto;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10px;
   font-style: normal;
 }
@@ -385,15 +389,15 @@ body {
 
 .uk-nav-empty {
   margin: 16px 8px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11.5px;
 }
 
 .uk-sidebar-foot {
   flex: 0 0 auto;
   padding: 8px 14px;
-  border-top: 1px solid var(--mck-line, var(--ui-line));
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  border-top: 1px solid var(--ui-line, #e2e5ea);
+  color: var(--ui-ink-dim, #6b7280);
   font-family: var(--mck-font-mono);
   font-size: 10px;
 }
@@ -405,7 +409,7 @@ body {
   height: 100%;
   min-height: 0;
   min-width: 0;
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
+  background: var(--ui-panel-soft, #f5f6f8);
 }
 
 .uk-page-head {
@@ -415,14 +419,14 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 16px 26px 12px;
-  border-bottom: 1px solid var(--mck-line, var(--ui-line));
-  background: var(--mck-panel, var(--ui-panel));
+  border-bottom: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-panel, #ffffff);
 }
 
 .uk-eyebrow {
   display: block;
   margin-bottom: 3px;
-  color: var(--mck-accent, var(--ui-accent));
+  color: var(--ui-accent, #0891b2);
   font-family: var(--mck-font-mono);
   font-size: 10.5px;
   letter-spacing: 0.04em;
@@ -437,16 +441,16 @@ body {
 
 .uk-page-head p {
   margin: 4px 0 0;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
 }
 
 .uk-page-head code {
   flex: 0 0 auto;
   padding: 3px 7px;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 6px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-family: var(--mck-font-mono);
   font-size: 10px;
 }
@@ -460,7 +464,7 @@ body {
 
 .uk-doc-loading {
   margin: 24px 0;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
 }
 
@@ -503,11 +507,11 @@ body {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--mck-panel-soft, var(--ui-panel-soft));
+  background: var(--ui-panel-soft, #f5f6f8);
 }
 
 .uk-preview-panel {
-  border-bottom: 1px solid var(--mck-line, var(--ui-line));
+  border-bottom: 1px solid var(--ui-line, #e2e5ea);
 }
 
 .uk-panel-head {
@@ -517,8 +521,8 @@ body {
   justify-content: space-between;
   gap: 10px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--mck-line, var(--ui-line));
-  background: var(--mck-panel, var(--ui-panel));
+  border-bottom: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-panel, #ffffff);
 }
 
 .uk-panel-title {
@@ -539,9 +543,9 @@ body {
 .uk-panel-head code {
   flex: 0 0 auto;
   padding: 2px 6px;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 5px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-family: var(--mck-font-mono);
   font-size: 9.5px;
 }
@@ -565,9 +569,9 @@ body {
   gap: 12px;
   min-height: 120px;
   padding: 22px 18px;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--mck-radius-panel, 14px);
-  background: var(--mck-panel-soft, var(--ui-panel));
+  background: var(--ui-panel-soft, var(--ui-panel));
   overflow: hidden;
 }
 
@@ -588,7 +592,7 @@ body {
   position: relative;
   z-index: 1;
   margin: 0;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   text-align: center;
 }
@@ -597,7 +601,7 @@ body {
   position: relative;
   z-index: 1;
   margin: 0;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11.5px;
   text-align: center;
 }
@@ -610,8 +614,8 @@ body {
   justify-content: space-between;
   gap: 10px;
   padding: 9px 16px 7px;
-  border-bottom: 1px solid var(--mck-line, var(--ui-line));
-  background: var(--mck-panel, var(--ui-panel));
+  border-bottom: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-panel, #ffffff);
 }
 
 .uk-doc-heading h2 {
@@ -636,8 +640,8 @@ body {
   min-height: 0;
   padding: 12px 14px 24px;
   overflow-y: auto;
-  border-left: 1px solid var(--mck-line, var(--ui-line));
-  background: var(--mck-panel, var(--ui-panel));
+  border-left: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-panel, #ffffff);
 }
 
 .uk-config-head {
@@ -658,14 +662,14 @@ body {
   width: 26px;
   height: 26px;
   place-items: center;
-  border: 1px solid var(--mck-line, var(--ui-line));
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 7px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
 }
 
 .uk-config-empty {
   margin: 8px 0 0;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11.5px;
   line-height: 1.7;
 }
@@ -700,7 +704,7 @@ body {
 
 .uk-field label,
 .uk-fieldset legend {
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
 }
 
@@ -716,12 +720,12 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 6px;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
 }
 
 .uk-field-label b {
-  color: var(--mck-ink, var(--ui-ink));
+  color: var(--ui-ink, #18202b);
   font-weight: 600;
 }
 
@@ -776,7 +780,7 @@ body {
 }
 
 .uk-presets-head > span:last-child {
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10px;
 }
 
@@ -789,7 +793,7 @@ body {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--mck-ink, var(--ui-ink));
+  color: var(--ui-ink, #18202b);
   font: inherit;
   font-size: 11.5px;
   text-align: left;
@@ -798,8 +802,8 @@ body {
 }
 
 .uk-preset:hover {
-  border-color: var(--mck-line, var(--ui-line));
-  background: var(--mck-hover, var(--ui-hover));
+  border-color: var(--ui-line, #e2e5ea);
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
 
 .uk-preset-copy {
@@ -817,7 +821,7 @@ body {
 
 .uk-preset small {
   overflow: hidden;
-  color: var(--mck-ink-muted, var(--ui-ink-dim));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -828,13 +832,13 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 3px;
-  background: var(--mck-chip, var(--ui-chip));
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
 }
 
-.uk-preset-swatch.is-primary { background: var(--mck-accent, var(--ui-accent)); }
-.uk-preset-swatch.is-ghost { background: var(--mck-line, var(--ui-line)); }
-.uk-preset-swatch.is-danger { background: var(--mck-danger, var(--ui-danger)); }
-.uk-preset-swatch.is-secondary { background: var(--mck-ink-muted, var(--ui-ink-dim)); }
+.uk-preset-swatch.is-primary { background: var(--ui-accent, #0891b2); }
+.uk-preset-swatch.is-ghost { background: var(--ui-line, #e2e5ea); }
+.uk-preset-swatch.is-danger { background: var(--ui-danger, #ef4444); }
+.uk-preset-swatch.is-secondary { background: var(--ui-ink-dim, #6b7280); }
 
 @media (max-width: 1100px) {
   .uk-config { padding: 10px 10px 20px; }

@@ -71,6 +71,13 @@ export interface DropdownProps {
   closeOnOutside?: boolean
   /** 按 Esc 是否关闭，默认 true。 */
   closeOnEscape?: boolean
+  /**
+   * 本浮层的稳定链标识；嵌套下拉用，父面板会带上 attr。
+   * 默认自动生成，调用方一般不用传。
+   */
+  chainId?: string
+  /** 聚焦回触发器：Esc/选择关闭后把键盘焦点还给按钮，默认 true。 */
+  restoreFocus?: boolean
 }
 
 /** 浮层控制接口：给外部“绑定 + 开关”用的服务对象。 */

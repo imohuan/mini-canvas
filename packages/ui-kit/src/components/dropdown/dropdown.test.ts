@@ -125,4 +125,50 @@ describe('Dropdown 组件行为', () => {
     await nextTick()
     expect(document.querySelector('[data-menu]')).not.toBeNull()
   })
+
+  it('Esc 关闭后焦点回到触发器', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: false },
+      slots: { trigger: '<button type="button" data-trigger>打开</button>', default: '<div data-menu />' },
+      attachTo: document.body,
+    })
+    const trigger = wrapper.find<HTMLButtonElement>('[data-trigger]')
+    trigger.element.focus()
+    await trigger.trigger('click')
+    await wrapper.vm.$nextTick()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+  })
+
+  it('嵌套浮层不会把父菜单误判成“点外”', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true },
+      slots: { trigger: '<button type="button" data-trigger>打开</button>', default: '<div data-parent-menu />' },
+      attachTo: document.body,
+    })
+    await wrapper.vm.$nextTick()
+    const parentPanel = document.querySelector<HTMLElement>('.mck-dropdown__panel')
+    if (!parentPanel) throw new Error('parent panel missing')
+    const chain = parentPanel.getAttribute('data-mck-floating-chain')
+    expect(chain).toBeTruthy()
+
+    // 子面板模拟一个 teleport 到 body 的独立浮层，链里含父链 + 自己。
+    const child = document.createElement('div')
+    child.setAttribute('data-mck-floating-chain', chain + ' child')
+    const item = document.createElement('button')
+    item.textContent = '二级项'
+    child.appendChild(item)
+    document.body.appendChild(child)
+
+    item.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    // 没有误关：父面板仍在，且没有发出 false。
+    expect(document.querySelector('.mck-dropdown__panel')).not.toBeNull()
+    expect(wrapper.emitted('update:modelValue')?.some((call) => call[0] === false)).not.toBe(true)
+    child.remove()
+    wrapper.unmount()
+  })
 })

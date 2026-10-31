@@ -26,24 +26,24 @@
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: var(--mck-chip, rgb(0 0 0 / 0.1));
+  background: var(--ui-chip, rgb(0 0 0 / 0.1));
   overflow: hidden;
 }
 .mck-slider__fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 999px;
-  background: var(--mck-accent, #0891b2);
+  background: var(--ui-accent, #0891b2);
 }
 .mck-slider__thumb {
   position: absolute;
   top: 50%;
   width: var(--mck-slider-thumb);
   height: var(--mck-slider-thumb);
-  border: 2px solid var(--mck-panel, #fff);
+  border: 2px solid var(--ui-panel, #fff);
   border-radius: 999px;
-  background: var(--mck-accent, #0891b2);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--mck-accent) 40%, transparent);
+  background: var(--ui-accent, #0891b2);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ui-accent) 40%, transparent);
   transform: translate(-50%, -50%);
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
@@ -51,12 +51,12 @@
 .mck-slider:focus-visible .mck-slider__thumb,
 .mck-slider.is-dragging .mck-slider__thumb {
   transform: translate(-50%, -50%) scale(1.12);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mck-accent) 18%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-accent) 18%, transparent);
 }
 .mck-slider__value {
   flex: none;
   min-width: 40px;
-  color: var(--mck-ink-muted);
+  color: var(--ui-ink-dim);
   font-family: var(--mck-font-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;

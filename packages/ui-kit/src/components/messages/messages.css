@@ -29,11 +29,11 @@
   box-sizing: border-box;
   max-width: 100%;
   padding: 7px 12px 7px 10px;
-  border: 1px solid rgb(255 255 255 / 0.12);
+  border: 1px solid var(--ui-line, rgb(255 255 255 / 0.12));
   border-radius: 10px;
-  background: rgb(24 32 43 / 0.9);
-  color: #f7f8fa;
-  box-shadow: 0 12px 32px rgb(15 23 42 / 0.24);
+  background: var(--ui-tip, rgb(24 32 43 / 0.9));
+  color: var(--ui-tip-ink, #f7f8fa);
+  box-shadow: var(--ui-shadow-md, 0 12px 32px rgb(15 23 42 / 0.24));
   backdrop-filter: blur(10px);
   font-size: 12px;
   font-weight: 500;
@@ -52,15 +52,15 @@
   width: 3px;
   height: 12px;
   border-radius: 999px;
-  background: var(--mck-message-tone, #9aa3ae);
+  background: var(--message-tone, #9aa3ae);
 }
 
-.mck-message.is-neutral { --mck-message-tone: #9aa3ae; }
-.mck-message.is-primary { --mck-message-tone: #22b8d8; }
-.mck-message.is-success { --mck-message-tone: #4ade80; }
-.mck-message.is-warning { --mck-message-tone: #fbbf24; }
-.mck-message.is-danger { --mck-message-tone: #f87171; }
-.mck-message.is-info { --mck-message-tone: #60a5fa; }
+.mck-message.is-neutral { --message-tone: var(--ui-ink-dim, #9aa3ae); }
+.mck-message.is-primary { --message-tone: var(--ui-accent, #22b8d8); }
+.mck-message.is-success { --message-tone: var(--ui-success, #4ade80); }
+.mck-message.is-warning { --message-tone: var(--ui-warn, #fbbf24); }
+.mck-message.is-danger { --message-tone: var(--ui-danger, #f87171); }
+.mck-message.is-info { --message-tone: var(--ui-info, #60a5fa); }
 
 /* 图标：14px 线性，颜色跟语义点走。 */
 .mck-message__icon {
@@ -69,7 +69,7 @@
   width: 16px;
   height: 16px;
   place-items: center;
-  color: var(--mck-message-tone, #9aa3ae);
+  color: var(--message-tone, #9aa3ae);
 }
 
 .mck-message__icon svg { width: 14px; height: 14px; }

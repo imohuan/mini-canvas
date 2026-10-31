@@ -93,14 +93,16 @@ onMounted(async () => {
   if (size > 0) {
     ratio.value = Math.min(Math.max(ratio.value, props.minLeft / size), maxFirst.value / size)
   }
-  observer = new ResizeObserver(onResize)
-  if (rootRef.value) observer.observe(rootRef.value)
-  window.addEventListener('resize', measure)
+  if (typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(onResize)
+    if (rootRef.value) observer.observe(rootRef.value)
+  }
+  if (typeof window !== 'undefined') window.addEventListener('resize', measure)
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
-  window.removeEventListener('resize', measure)
+  if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
   endDrag()
 })
 
@@ -127,11 +129,15 @@ function onPointerDown(event: PointerEvent): void {
   containerStart = isVertical.value ? rect.top : rect.left
   grabOffset = axisOf(event) - (containerStart + firstSize.value)
   dragging.value = true
-  window.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
-  window.addEventListener('pointercancel', onPointerUp)
-  document.body.style.cursor = isVertical.value ? 'row-resize' : 'col-resize'
-  document.body.style.userSelect = 'none'
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
+  }
+  if (typeof document !== 'undefined') {
+    document.body.style.cursor = isVertical.value ? 'row-resize' : 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
   event.preventDefault()
 }
 
@@ -155,11 +161,15 @@ function onPointerMove(event: PointerEvent): void {
 function endDrag(): void {
   if (!dragging.value) return
   dragging.value = false
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
-  window.removeEventListener('pointercancel', onPointerUp)
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointercancel', onPointerUp)
+  }
+  if (typeof document !== 'undefined') {
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
 }
 
 function onPointerUp(): void {
@@ -289,7 +299,7 @@ function onKeydown(event: KeyboardEvent): void {
   inset: 0 auto 0 50%;
   width: 1px;
   height: 100%;
-  background: var(--mck-line);
+  background: var(--ui-line);
   transform: translateX(-50%);
   transition: background-color 150ms ease;
 }
@@ -307,7 +317,7 @@ function onKeydown(event: KeyboardEvent): void {
   width: 4px;
   height: 32px;
   border-radius: 999px;
-  background: var(--mck-line);
+  background: var(--ui-line);
   transition: background-color 150ms ease;
 }
 
@@ -319,13 +329,13 @@ function onKeydown(event: KeyboardEvent): void {
 .mck-split__divider:hover .mck-split__line,
 .mck-split__divider.is-focused .mck-split__line,
 .mck-split__divider.is-dragging .mck-split__line {
-  background: color-mix(in srgb, var(--mck-accent) 62%, var(--mck-line));
+  background: color-mix(in srgb, var(--ui-accent) 62%, var(--ui-line));
 }
 
 .mck-split__divider:hover .mck-split__grip,
 .mck-split__divider.is-focused .mck-split__grip,
 .mck-split__divider.is-dragging .mck-split__grip {
-  background: var(--mck-accent);
+  background: var(--ui-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {

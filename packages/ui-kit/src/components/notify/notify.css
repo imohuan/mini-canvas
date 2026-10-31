@@ -26,10 +26,10 @@
   width: 100%;
   padding: 12px 12px 12px 13px;
   overflow: hidden;
-  border: 1px solid var(--mck-line, #e2e5ea);
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--mck-radius-panel, 14px);
-  background: var(--mck-panel, #fff);
-  color: var(--mck-ink, #18202b);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #18202b);
   box-shadow: 0 18px 44px rgb(15 23 42 / 0.16);
   font-size: 12px;
   line-height: 1.55;
@@ -51,15 +51,15 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: var(--mck-notify-tone, var(--mck-info, #2563eb));
+  background: var(--notify-tone, var(--ui-info, #2563eb));
 }
 
-.mck-notify.is-primary { --mck-notify-tone: var(--mck-accent, #0891b2); }
-.mck-notify.is-success { --mck-notify-tone: var(--mck-success, #16a34a); }
-.mck-notify.is-warning { --mck-notify-tone: var(--mck-warning, #d97706); }
-.mck-notify.is-danger { --mck-notify-tone: var(--mck-danger, #ef4444); }
-.mck-notify.is-info { --mck-notify-tone: var(--mck-info, #2563eb); }
-.mck-notify.is-neutral { --mck-notify-tone: var(--mck-ink-muted, #8c95a3); }
+.mck-notify.is-primary { --notify-tone: var(--ui-accent, #0891b2); }
+.mck-notify.is-success { --notify-tone: var(--ui-success, #16a34a); }
+.mck-notify.is-warning { --notify-tone: var(--ui-warn, #d97706); }
+.mck-notify.is-danger { --notify-tone: var(--ui-danger, #ef4444); }
+.mck-notify.is-info { --notify-tone: var(--ui-info, #2563eb); }
+.mck-notify.is-neutral { --notify-tone: var(--ui-ink-dim, #8c95a3); }
 
 /* 图标托：28×28、圆角 8、浅色底，和菜单行图标同一规格。 */
 .mck-notify__icon {
@@ -69,8 +69,8 @@
   height: 28px;
   place-items: center;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--mck-notify-tone) 12%, transparent);
-  color: var(--mck-notify-tone);
+  background: color-mix(in srgb, var(--notify-tone) 12%, transparent);
+  color: var(--notify-tone);
 }
 
 .mck-notify__icon svg { width: 16px; height: 16px; }
@@ -83,12 +83,12 @@
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1.45;
-  color: var(--mck-ink, #18202b);
+  color: var(--ui-ink, #18202b);
 }
 
 .mck-notify__desc {
   margin: 3px 0 0;
-  color: var(--mck-ink-muted, #6b7280);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 11.5px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -101,10 +101,10 @@
   height: 24px;
   margin-top: 8px;
   padding: 0 9px;
-  border: 1px solid color-mix(in srgb, var(--mck-notify-tone) 28%, var(--mck-line, #e2e5ea));
+  border: 1px solid color-mix(in srgb, var(--notify-tone) 28%, var(--ui-line, #e2e5ea));
   border-radius: 7px;
-  background: color-mix(in srgb, var(--mck-notify-tone) 8%, transparent);
-  color: var(--mck-notify-tone);
+  background: color-mix(in srgb, var(--notify-tone) 8%, transparent);
+  color: var(--notify-tone);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -113,8 +113,8 @@
 }
 
 .mck-notify__action:hover {
-  background: color-mix(in srgb, var(--mck-notify-tone) 15%, transparent);
-  border-color: color-mix(in srgb, var(--mck-notify-tone) 42%, var(--mck-line, #e2e5ea));
+  background: color-mix(in srgb, var(--notify-tone) 15%, transparent);
+  border-color: color-mix(in srgb, var(--notify-tone) 42%, var(--ui-line, #e2e5ea));
 }
 
 /* 关闭：24×24 图标按钮，hover 才完全显形，避免卡片第一眼太吵。 */
@@ -129,7 +129,7 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   cursor: pointer;
   opacity: 0.72;
   transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
@@ -141,8 +141,8 @@
 .mck-notify__close:focus-visible { opacity: 1; }
 
 .mck-notify__close:hover {
-  background: var(--mck-hover, rgb(0 0 0 / 0.05));
-  color: var(--mck-ink, #18202b);
+  background: var(--ui-hover, rgb(0 0 0 / 0.05));
+  color: var(--ui-ink, #18202b);
 }
 
 /* 底部倒计时条：只做提示，不拦点击；悬停时暂停。 */
@@ -152,7 +152,7 @@
   bottom: 0;
   left: 0;
   height: 2px;
-  background: color-mix(in srgb, var(--mck-notify-tone) 60%, transparent);
+  background: color-mix(in srgb, var(--notify-tone) 60%, transparent);
   transform-origin: left;
   animation: mck-notify-countdown var(--mck-notify-duration, 3600ms) linear forwards;
 }

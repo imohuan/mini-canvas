@@ -9,15 +9,15 @@
   width: 100%;
   height: var(--mck-num-height);
   padding: 0 4px;
-  border: 1px solid var(--mck-line, #e2e5ea);
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--mck-radius-control, 8px);
-  background: var(--mck-panel, #fff);
-  color: var(--mck-ink);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.mck-number:focus-within { border-color: var(--mck-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mck-accent) 16%, transparent); }
-.mck-number.is-invalid { border-color: var(--mck-danger); }
-.mck-number.is-disabled { opacity: 0.55; background: var(--mck-panel-soft); }
+.mck-number:focus-within { border-color: var(--ui-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 16%, transparent); }
+.mck-number.is-invalid { border-color: var(--ui-danger); }
+.mck-number.is-disabled { opacity: 0.55; background: var(--ui-panel-soft); }
 .mck-number--sm { --mck-num-height: var(--mck-size-sm, 28px); }
 .mck-number--lg { --mck-num-height: var(--mck-size-lg, 42px); }
 .mck-number__input {
@@ -44,14 +44,14 @@
   border: 0;
   border-radius: calc(var(--mck-radius-control, 8px) - 3px);
   background: transparent;
-  color: var(--mck-ink-muted);
+  color: var(--ui-ink-dim);
   font: inherit;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
-.mck-number__step:hover:not(:disabled) { background: var(--mck-hover); color: var(--mck-ink); }
+.mck-number__step:hover:not(:disabled) { background: var(--ui-hover); color: var(--ui-ink); }
 .mck-number__step:disabled { opacity: 0.35; cursor: not-allowed; }
-.mck-number__suffix { flex: none; color: var(--mck-ink-muted); font-size: 11px; padding-right: 4px; }
-.mck-number__error { margin: 5px 2px 0; color: var(--mck-danger); font-size: 11px; }
+.mck-number__suffix { flex: none; color: var(--ui-ink-dim); font-size: 11px; padding-right: 4px; }
+.mck-number__error { margin: 5px 2px 0; color: var(--ui-danger); font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { .mck-number { transition: none; } }

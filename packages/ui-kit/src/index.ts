@@ -29,3 +29,5 @@ export { SplitPane } from './components/split-pane'
 export { UiKitProvider, useUiKit, DEFAULT_CONTEXT, DEFAULT_SIZES, LIGHT_THEME, DARK_THEME, resolveConfig } from './provider'
 export type { UiKitProviderProps } from './provider'
 export type { UiKitSize, UiKitTone, UiKitPlacement, UiKitDensity, UiKitTheme, UiKitSizeToken, UiKitContext } from './shared/types'
+/** 组件库基础令牌：使用方必须加载一次，控件尺寸/圆角/动效才完整。 */
+import './styles/ui-kit.css'

@@ -7,12 +7,13 @@
   z-index: var(--mck-z-dropdown, 94000);
   box-sizing: border-box;
   min-width: 180px;
-  padding: 6px;
-  border: 1px solid var(--mck-line, #e2e5ea);
-  border-radius: var(--mck-radius-panel, 14px);
-  background: var(--mck-panel, #fff);
-  color: var(--mck-ink);
-  box-shadow: var(--mck-shadow);
+  /* 兜底 = 右键菜单那一档；调用方可用 --dd-padding 覆盖（主题旧实现透传同名变量）。 */
+  padding: var(--dd-padding, 6px);
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--dd-radius, var(--mck-radius-panel, 14px));
+  background: var(--dd-bg, var(--ui-panel, #fff));
+  color: var(--ui-ink);
+  box-shadow: var(--ui-shadow-md);
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;

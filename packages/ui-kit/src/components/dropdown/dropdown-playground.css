@@ -14,9 +14,9 @@
   min-height: 300px;
   place-items: center;
   overflow: hidden;
-  border: 1px solid var(--mck-line, #e2e5ea);
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--mck-radius-panel, 14px);
-  background: var(--mck-panel-soft, #f7f8fa);
+  background: var(--ui-panel-soft, #f7f8fa);
   touch-action: none;
 }
 
@@ -37,7 +37,7 @@
 
 .dd-trigger__grip {
   margin-right: 6px;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 14px;
   letter-spacing: -2px;
 }
@@ -51,17 +51,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 10.5px;
   pointer-events: none;
 }
 
 .dd-hud button {
   padding: 3px 6px;
-  border: 1px solid var(--mck-line, #e2e5ea);
+  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 6px;
-  background: var(--mck-panel, #fff);
-  color: var(--mck-ink-muted, #8c95a3);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink-dim, #8c95a3);
   font: inherit;
   font-size: 10px;
   cursor: pointer;
@@ -76,7 +76,7 @@
 
 .dd-summary {
   margin: 0;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 11px;
   text-align: center;
 }
@@ -95,7 +95,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 3px 7px 6px;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 10.5px;
 }
 
@@ -122,7 +122,7 @@
 }
 
 .dd-menu button:hover:not(:disabled) {
-  background: var(--mck-hover, rgb(0 0 0 / 0.06));
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
 
 .dd-menu button:disabled {
@@ -132,16 +132,16 @@
 
 .dd-menu kbd {
   flex: none;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-family: var(--mck-font-mono, monospace);
   font-size: 9.5px;
 }
 
 .dd-menu__close {
   margin-top: 3px;
-  border-top: 1px solid var(--mck-line, #e2e5ea);
+  border-top: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 0;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
 }
 
 /* ---- Teleport 到右栏的配置面板 ---- */
@@ -150,7 +150,7 @@
   flex-direction: column;
   gap: 14px;
   padding: 0;
-  color: var(--mck-ink, #18202b);
+  color: var(--ui-ink, #18202b);
 }
 
 .dd-panel__head {
@@ -168,7 +168,7 @@
 
 .dd-panel__eyebrow {
   display: block;
-  color: var(--mck-accent, #0891b2);
+  color: var(--ui-accent, #0891b2);
   font-family: var(--mck-font-mono, monospace);
   font-size: 10px;
   letter-spacing: 0.04em;
@@ -183,8 +183,8 @@
 .dd-group__title {
   margin: 0;
   padding-top: 4px;
-  border-top: 1px solid var(--mck-line, #e2e5ea);
-  color: var(--mck-ink-muted, #8c95a3);
+  border-top: 1px solid var(--ui-line, #e2e5ea);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -210,7 +210,7 @@
 .dd-field > label,
 .dd-fieldset legend,
 .dd-field__label {
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 11px;
 }
 
@@ -221,12 +221,12 @@
 }
 
 .dd-field__label b {
-  color: var(--mck-ink, #18202b);
+  color: var(--ui-ink, #18202b);
 }
 
 .dd-hint {
   margin: 0;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -265,7 +265,7 @@
 }
 
 .dd-presets__head > span:last-child {
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 9.5px;
 }
 
@@ -285,8 +285,8 @@
 }
 
 .dd-preset:hover {
-  border-color: var(--mck-line, #e2e5ea);
-  background: var(--mck-hover, rgb(0 0 0 / 0.04));
+  border-color: var(--ui-line, #e2e5ea);
+  background: var(--ui-hover, rgb(0 0 0 / 0.04));
 }
 
 .dd-preset__dot {
@@ -294,11 +294,11 @@
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  background: var(--mck-accent, #0891b2);
+  background: var(--ui-accent, #0891b2);
 }
 
 .dd-preset:nth-of-type(2n) .dd-preset__dot {
-  background: var(--mck-ink-muted, #8c95a3);
+  background: var(--ui-ink-dim, #8c95a3);
 }
 
 .dd-preset__copy {
@@ -316,7 +316,7 @@
 
 .dd-preset__copy small {
   overflow: hidden;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 9.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -324,7 +324,7 @@
 
 .dd-preset__add {
   flex: none;
-  color: var(--mck-ink-muted, #8c95a3);
+  color: var(--ui-ink-dim, #8c95a3);
   font-size: 14px;
 }
 

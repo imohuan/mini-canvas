@@ -4,9 +4,13 @@
   --mck-button-font-size: var(--mck-font-md, 13px);
   --mck-button-icon: var(--mck-icon-md, 16px);
   --mck-button-bg: transparent;
-  --mck-button-bg-hover: var(--mck-hover);
-  --mck-button-fg: var(--mck-ink);
+  --mck-button-bg-hover: var(--ui-hover);
+  --mck-button-bg-active: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+  --mck-button-fg: var(--ui-ink);
+  --mck-button-fg-hover: var(--ui-ink);
   --mck-button-border: transparent;
+  --mck-button-ring: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
+  --mck-button-lift: 0px;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -26,20 +30,30 @@
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  transform: translateY(var(--mck-button-lift));
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
     color 150ms ease,
     opacity 150ms ease,
+    box-shadow 150ms ease,
     transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.mck-button:hover:not(:disabled),
-.mck-button:focus-visible:not(:disabled) {
+.mck-button:hover:not(:disabled) {
   background: var(--mck-button-bg-hover);
+  color: var(--mck-button-fg-hover);
 }
 
-.mck-button:not(:disabled):active { transform: scale(0.97); }
+.mck-button:focus-visible:not(:disabled) {
+  outline: 2px solid var(--mck-button-ring);
+  outline-offset: 1px;
+}
+
+.mck-button:not(:disabled):active {
+  background: var(--mck-button-bg-active);
+  transform: translateY(0) scale(0.97);
+}
 .mck-button:disabled { opacity: 0.4; cursor: not-allowed; }
 .mck-button.is-loading:disabled { opacity: 0.72; cursor: progress; }
 .mck-button.is-block { display: flex; width: 100%; }
@@ -68,23 +82,35 @@
 }
 
 .mck-button--primary {
-  --mck-button-bg: var(--mck-accent, #0891b2);
-  --mck-button-bg-hover: var(--mck-accent-hover, #0e7490);
-  --mck-button-fg: #fff;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mck-accent, #0891b2) 22%, transparent);
+  --mck-button-bg: var(--ui-accent, #0891b2);
+  --mck-button-bg-hover: var(--ui-accent-hover, #0e7490);
+  --mck-button-bg-active: var(--ui-accent-hover, #0e7490);
+  --mck-button-fg: var(--ui-primary-ink, #fff);
+  --mck-button-fg-hover: var(--ui-primary-ink, #fff);
+  --mck-button-lift: -1px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ui-accent, #0891b2) 22%, transparent);
+}
+
+.mck-button--primary:hover:not(:disabled) {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--ui-accent, #0891b2) 30%, transparent);
 }
 
 .mck-button--secondary {
-  --mck-button-bg: var(--mck-chip, rgb(0 0 0 / 0.07));
-  --mck-button-bg-hover: color-mix(in srgb, var(--mck-chip, rgb(0 0 0 / 0.07)) 150%, transparent);
+  --mck-button-bg: var(--ui-chip, rgb(0 0 0 / 0.07));
+  --mck-button-bg-hover: color-mix(in srgb, var(--ui-chip, rgb(0 0 0 / 0.07)) 150%, transparent);
+  --mck-button-bg-active: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
 }
 
 .mck-button--ghost { --mck-button-bg: transparent; }
+.mck-button--ghost:hover:not(:disabled) { color: var(--ui-ink); }
 
 .mck-button--danger {
-  --mck-button-bg: color-mix(in srgb, var(--mck-danger, #ef4444) 14%, transparent);
-  --mck-button-bg-hover: color-mix(in srgb, var(--mck-danger, #ef4444) 22%, transparent);
-  --mck-button-fg: var(--mck-danger, #ef4444);
+  --mck-button-bg: color-mix(in srgb, var(--ui-danger, #ef4444) 14%, transparent);
+  --mck-button-bg-hover: color-mix(in srgb, var(--ui-danger, #ef4444) 22%, transparent);
+  --mck-button-bg-active: color-mix(in srgb, var(--ui-danger, #ef4444) 28%, transparent);
+  --mck-button-fg: var(--ui-danger, #ef4444);
+  --mck-button-fg-hover: var(--ui-danger, #ef4444);
+  --mck-button-ring: color-mix(in srgb, var(--ui-danger, #ef4444) 55%, transparent);
 }
 
 .mck-button__icon {

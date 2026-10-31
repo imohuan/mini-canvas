@@ -8,7 +8,7 @@ export function message(options: MessageOptions | string): string {
   const opts: MessageOptions = typeof options === 'string' ? { text: options } : options
   const id = 'message-' + (++seq)
   messageList.push({ id, text: opts.text, tone: opts.tone ?? 'neutral' })
-  window.setTimeout(() => removeMessage(id), opts.duration ?? 2400)
+  globalThis.setTimeout(() => removeMessage(id), opts.duration ?? 2400)
   return id
 }
 

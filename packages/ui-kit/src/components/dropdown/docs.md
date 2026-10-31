@@ -40,7 +40,7 @@ const open = ref(false)
   text-align: left;
   cursor: pointer;
 }
-.menu button:hover:not(:disabled) { background: var(--mck-hover); }
+.menu button:hover:not(:disabled) { background: var(--ui-hover); }
 .menu button:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 @@ENDVUE@@
@@ -68,7 +68,7 @@ const open = ref(false)
   </Dropdown>
 </template>
 <style>
-.tip { min-width: 200px; padding: 4px; color: var(--mck-ink-muted); font-size: 12px; }
+.tip { min-width: 200px; padding: 4px; color: var(--ui-ink-dim); font-size: 12px; }
 </style>
 @@ENDVUE@@
 
@@ -110,7 +110,7 @@ const open = ref(false)
   text-align: left;
   cursor: pointer;
 }
-.menu button:hover { background: var(--mck-hover); }
+.menu button:hover { background: var(--ui-hover); }
 </style>
 @@ENDVUE@@
 
@@ -156,7 +156,7 @@ const open = ref(false)
   text-align: left;
   cursor: pointer;
 }
-.menu button:hover { background: var(--mck-hover); }
+.menu button:hover { background: var(--ui-hover); }
 </style>
 @@ENDVUE@@
 
@@ -194,9 +194,9 @@ const open = ref(false)
 </template>
 <style>
 .sized-menu { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
-.sized-menu strong { position: sticky; top: 0; padding: 4px 8px; background: var(--mck-panel); }
+.sized-menu strong { position: sticky; top: 0; padding: 4px 8px; background: var(--ui-panel); }
 .sized-menu button { padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
-.sized-menu button:hover { background: var(--mck-hover); }
+.sized-menu button:hover { background: var(--ui-hover); }
 </style>
 @@ENDVUE@@
 
