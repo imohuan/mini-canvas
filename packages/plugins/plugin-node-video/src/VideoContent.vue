@@ -344,14 +344,21 @@ const clipRange = computed(() => {
   return readClipRange(props.data)
 })
 const clipped = computed(() => props.data?.clipStart !== undefined || props.data?.clipEnd !== undefined)
-/** 可播放时长：剪辑过就只算那一段 */
+/**
+ * 播放条显示的时间轴 = **整段原片**，不是剪辑出来的那一段（用户口径 2026-10-31）。
+ *
+ * 为什么改：剪辑条只是"从哪一秒开始、到哪一秒结束"的选区，节点承载的仍是整段视频。
+ * 从前把段长当总时长传下去，一拖端点，播放条上的 0:02 就跟着变 —— 看起来像在改视频本身。
+ * 现在进度条始终按 duration 画，剪辑只体现为"播到 end 就停/回 start 循环"。
+ */
 const playableLength = computed(() => {
-  const r = clipRange.value
-  const len = r.end - r.start
-  return len > 0 ? len : duration.value
+  if (duration.value > 0) return duration.value
+  // 元数据还没到手（首帧 / SSR）时先信节点 data 里记的总时长，播放条上就不会出现 0:00
+  const fallback = Number(props.data?.videoDuration)
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : 0
 })
-/** 进度按"剪辑段内已播多久"显示（用户看到的就该是自己剪出来的那段时间轴） */
-const playedInClip = computed(() => Math.max(0, Math.min(currentTime.value - clipRange.value.start, playableLength.value)))
+/** 进度条上的当前位置 = 视频当前时间（整段坐标系） */
+const playedInClip = computed(() => Math.max(0, Math.min(currentTime.value, playableLength.value)))
 const progressPct = computed(() => (playableLength.value > 0 ? (playedInClip.value / playableLength.value) * 100 : 0))
 /** 左右分开显示（参考 liblib 控件）：进度条左边已播、右边总长 */
 const playedTimeLabel = computed(() => formatTime(playedInClip.value))
@@ -612,23 +619,21 @@ function onTimeUpdate(e: Event): void {
   }
 }
 
-/** 拖动进度条：值按"段内偏移"给，落回真实时间要加回段首 */
+/** 拖动进度条：现在是整段原片的时间轴，值直接就是真实时间 */
 function onSeek(e: Event): void {
   const v = activeVideo()
   if (!v) return
-  const offset = Number((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(offset)) return
-  const target = clipRange.value.start + offset
+  const target = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(target)) return
   v.currentTime = Math.min(Math.max(target, 0), duration.value || target)
   currentTime.value = v.currentTime
 }
 
-/** 共用条回传数值版 seek（值 = 剪辑段内偏移，与 onSeek 同语义） */
-function onBarSeek(offset: number): void {
+/** 共用条回传数值版 seek（值 = 整段原片里的真实秒数，与 onSeek 同语义） */
+function onBarSeek(seconds: number): void {
   const v = activeVideo()
-  if (!v || !Number.isFinite(offset)) return
-  const target = clipRange.value.start + offset
-  v.currentTime = Math.min(Math.max(target, 0), duration.value || target)
+  if (!v || !Number.isFinite(seconds)) return
+  v.currentTime = Math.min(Math.max(seconds, 0), duration.value || seconds)
   currentTime.value = v.currentTime
 }
 

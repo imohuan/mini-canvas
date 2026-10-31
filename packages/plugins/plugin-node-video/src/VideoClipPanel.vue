@@ -298,6 +298,16 @@ function onHandleDown(ev: PointerEvent, kind: 'start' | 'end' | 'move'): void {
   const box = filmEl.value?.getBoundingClientRect()
   drag = { kind, startX: ev.clientX, width: box && box.width > 0 ? box.width : 1, from: { ...range.value } }
   isDragging.value = true
+  /**
+   * 先暂停再拖（demo beginDrag 同款）。
+   *
+   * 为什么必须：内容区在「悬停 / 单选」时会自动播放，拖拽时它常常正播着。
+   * 播放中的 video 不接 seek 预览（见 previewAtBoundary 的 paused 判断），
+   * 于是画面继续从自己的时间线往前跑 —— 用户看到的就是「拖了起点，视频没跟着走」。
+   */
+  contentVideo()?.pause()
+  // 按下就先把画面摆到被拖的那一端（demo 同款：拖起来立刻有参照）
+  previewAtBoundary(kind === 'end' ? 'end' : 'start', true)
   window.addEventListener('pointermove', onDragMove)
   window.addEventListener('pointerup', onDragUp)
   window.addEventListener('pointercancel', onDragUp)
@@ -319,11 +329,46 @@ function onDragMove(ev: PointerEvent): void {
   } else {
     commit(moveClipRange({ ...drag.from, nextStart: drag.from.start + delta, ...opts }))
   }
+  previewAtBoundary(drag.kind === 'end' ? 'end' : 'start', false)
+}
+
+/**
+ * 拖动时让视频跟着时间线走（demo 的 previewBoundary，用户口径 2026-10-31）。
+ *
+ * 拖哪一端就把画面 seek 到那一端：内容区上报 currentTime → 白色时间线自然跟着动，
+ * 用户能在拖的过程中直接看到这一帧。限制与 demo 相同：
+ * - 距离上一帧不到 90ms 就跳过（拖动会一次发几十个 pointermove，逐个 seek 会卡）；
+ * - 拖起点时取 start + 0.01（避开边界那半帧）；拖终点取 end - 0.03（留一点余量）；
+ * - 不在播放时才做（正在播时用户看的是播放，不该被拖拽打断）。
+ */
+let lastPreviewAt = 0
+/** 当前这次拖拽拖的是哪一端（松手时按它再对一次画面） */
+let previewEdge: 'start' | 'end' = 'start'
+function previewAtBoundary(edge: 'start' | 'end', force: boolean): void {
+  if (duration.value <= 0) return
+  previewEdge = edge
+  const v = contentVideo()
+  if (!v || !v.paused) return
+  const now = Date.now()
+  if (!force && now - lastPreviewAt < 90) return
+  lastPreviewAt = now
+  const { start, end } = range.value
+  const target = edge === 'end'
+    ? Math.max(start, end - 0.03)
+    : Math.min(end - 0.01, start + 0.01)
+  const safe = Math.min(Math.max(target, 0), Math.max(0, duration.value - 0.001))
+  try {
+    v.currentTime = safe
+  } catch {
+    // 元数据还没就绪时浏览器会抛：拖拽下一帧再试即可，不必打断
+  }
 }
 
 function onDragUp(): void {
   drag = null
   isDragging.value = false
+  // 松手再对一次（拖动中每 90ms 才 seek 一次，最后一帧要保证停在被拖的端点）
+  previewAtBoundary(previewEdge, true)
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragUp)
   window.removeEventListener('pointercancel', onDragUp)
@@ -460,7 +505,9 @@ onBeforeUnmount(onDragUp)
             <!-- 装得下就居中显示；装不下改到下方那一条（见 labelBelow） -->
             <span v-if="!labelBelow" class="vclip-length">{{ lengthLabel }}</span>
           </div>
-          <div v-if="playheadPct !== null && !isDragging" class="vclip-playhead" :style="{ left: playheadPct + '%' }" />
+          <!-- 时间线：拖拽时也常显（用户口径 2026-10-31）——
+               拖动端点会把画面 seek 到那一端，白线据此跟到新位置，用户能一路看着走。 -->
+          <div v-if="playheadPct !== null" class="vclip-playhead" :style="{ left: playheadPct + '%' }" />
           <!-- 隐藏量尺：只用来量同一串文字的像素宽度，不参与视觉（visibility 保留布局，能读出 offsetWidth） -->
           <span ref="rulerEl" class="vclip-ruler" aria-hidden="true">{{ lengthLabel }}</span>
         </div>
@@ -703,7 +750,7 @@ onBeforeUnmount(onDragUp)
   pointer-events: none;
 }
 
-/* 播放头：白色 2px 竖线；拖拽时隐藏（模板 v-if） */
+/* 时间线（白线）：视频当前时间，拖拽时也常显（用户口径 2026-10-31） */
 .vclip-playhead {
   position: absolute;
   top: 0;
