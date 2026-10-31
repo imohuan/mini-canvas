@@ -1,7 +1,7 @@
 // useUi —— 画布外壳的共享 UI 状态（单例）。
 // 所有区域组件从这里读写状态，避免 App.vue 承担几十个 prop 的透传。
 // 只有纯 UI / 虚拟数据；画布本体仍由 CanvasHost 负责。
-import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch, type Ref } from 'vue'
 import type { SettingsStore } from '@mini-canvas/kernel'
 import {
   DEFAULT_THEME_EDGE, DEFAULT_THEME_HANDLE, DEFAULT_THEME_DEBUG, DEFAULT_THEME_SNAP_ZONE,
@@ -31,7 +31,10 @@ interface HostApi {
     get<T>(key: string): T
     on(evt: string, cb: () => void): { dispose(): void }
     /** 运行时是完整内核 Context：树外读 ui 目录用（类型窄声明即可） */
-    registryOf?<T>(name: string): { top(key: string): { value: T } | undefined }
+    registryOf?<T>(name: string): {
+      top(key: string): { value: T } | undefined
+      subscribe(fn: () => void): { dispose(): void }
+    }
   }
   command?: { execute(id: string, payload?: unknown): void }
   nodeStore?: { getNodes(): unknown[] }
@@ -63,6 +66,40 @@ export const readyHost: { readonly ctx?: HostApi['ctx'] } = {
  */
 export function uiComponentOf(name: string): unknown {
   return readyHost?.ctx?.registryOf?.<unknown>('ui')?.top(name)?.value
+}
+
+/**
+ * 宿主组件取件的响应式版本：目录里的赢家变了（换主题 / 插件热装）就自动换。
+ *
+ * 树外区域（资产预览、生成历史、设置面板、调试覆盖层）没有 `useCanvasRender` 的 provide，
+ * 只能走宿主 ctx；但读取点同样发生在渲染里，所以目录值必须是 ref。
+ * 用 shallowRef 存组件句柄：深代理会让 Vue 警告并拖慢渲染。
+ */
+export function useUiComponentOutside(name: string): Ref<unknown> {
+  const current = shallowRef<unknown>(uiComponentOf(name))
+  /**
+   * 订阅 ui 目录本身，而不是只监听“插件安装”这一个时刻。
+   *
+   * 目录的赢家可能因为：装/卸插件、同 id 热替换、主题包重载、order 变化而改变；
+   * 只挂 plugin-installed 会漏掉热替换（组件还在，但换成了另一份实现）。
+   * `registryOf('ui').subscribe()` 是注册场给出的标准变化通知，覆盖全部路径。
+   *
+   * 为什么不用 watchEffect 反复读 `uiComponentOf`：那只能感知宿主 ctx 赋值，
+   * 目录表内部的替换不会触发任何 ref。
+   */
+  let sub: { dispose(): void } | undefined
+  function sync(): void {
+    const next = uiComponentOf(name)
+    if (next !== current.value) current.value = next
+  }
+  onMounted(() => {
+    const field = readyHost.ctx?.registryOf?.<unknown>('ui')
+    if (!field) return
+    sub = field.subscribe(sync)
+    sync()
+  })
+  onBeforeUnmount(() => sub?.dispose())
+  return current
 }
 export function setReadyHost(h: unknown): void {
   hostRef.value = h as HostApi | undefined

@@ -113,6 +113,7 @@ describe('Dropdown：滚动布局', () => {
 
   it('传 arrow=true 才渲染箭头', async () => {
     const html = await renderDropdown({ arrow: true })
-    expect(html).toContain('dd-arrow')
+    // 箭头本体是 ui-kit 的 mck-dropdown__arrow（外观与定位都归它），不再由主题自绘
+    expect(html).toContain('mck-dropdown__arrow')
   })
 })

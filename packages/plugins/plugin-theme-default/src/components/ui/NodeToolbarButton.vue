@@ -22,8 +22,9 @@
  * ≥32px，给个 size 等于给一条违规的捷径（此前各面板的 28px 就是这么来的）。
  */
 import { computed } from 'vue'
-import type { Component } from 'vue'
-import { iconRenderMode } from '@mini-canvas/kernel'
+import { Button } from '@mini-canvas/ui-kit'
+import { useIconHandle } from './useIconHandle'
+import './node-toolbar-button.css'
 
 const props = withDefaults(
   defineProps<{
@@ -54,18 +55,23 @@ const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 const label = computed(() => props.ariaLabel || props.title)
 
 /** 图标形态：'html' 走 v-html、'component' 走 <component :is>、'none' 不渲染图标位 */
-const iconMode = computed(() => iconRenderMode(props.icon))
-const htmlIcon = computed(() => (iconMode.value === 'html' ? String(props.icon) : ''))
-const componentIcon = computed<Component | null>(() =>
-  iconMode.value === 'component' ? (props.icon as Component) : null,
-)
+const iconParts = useIconHandle(() => props.icon)
 
 </script>
 
 <template>
-  <button
+  <Button
     class="ntb-btn"
-    :class="['ntb-btn--' + variant, { 'is-active': active === true, 'is-icon-only': !$slots.default }]"
+    :class="[
+      'ntb-btn--' + variant,
+      {
+        'is-active': active === true,
+        'is-icon-only': !$slots.default,
+      },
+    ]"
+    :variant="variant === 'ghost' ? 'ghost' : variant"
+    :icon-only="!$slots.default"
+    size="sm"
     type="button"
     :title="title"
     :aria-label="label"
@@ -73,133 +79,12 @@ const componentIcon = computed<Component | null>(() =>
     :disabled="disabled"
     @click="emit('click', $event)"
   >
-    <span v-if="iconMode !== 'none'" class="ntb-icon" aria-hidden="true">
-      <span v-if="iconMode === 'html'" v-html="htmlIcon" />
-      <component v-else :is="componentIcon" />
-    </span>
-    <span v-if="$slots.default" class="ntb-label"><slot /></span>
-  </button>
+    <template v-if="iconParts.mode !== 'none'" #icon>
+      <span class="ntb-icon">
+        <span v-if="iconParts.mode === 'html'" class="ntb-icon-raw" v-html="iconParts.html" />
+        <component v-else :is="iconParts.component" class="ntb-icon-raw" />
+      </span>
+    </template>
+    <template v-if="$slots.default" #default><span class="ntb-label"><slot /></span></template>
+  </Button>
 </template>
-
-<style scoped>
-/* 尺寸/圆角/色值全部来自 ui-style-guide §2.1 灰阶与 §3.3 按钮规范。 */
-.ntb-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  flex: none;
-  box-sizing: border-box;
-  /* 图标按钮档：32×32 / 圆角 8（§3.3），同时满足 §5 第 4 条"交互目标 ≥32px" */
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: var(--ntb-fill, transparent);
-  color: var(--ntb-text, #6b7280);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-    color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 带文案 → 走规范里的"文本按钮"：透明底 + 圆角 6 + padding 6px 10px，hover 才出 --fill-hover */
-.ntb-btn:not(.is-icon-only) {
-  width: auto;
-  padding: 0 12px;
-  border-radius: 6px;
-  background: transparent;
-}
-.ntb-btn:not(.is-icon-only) .ntb-icon :deep(svg),
-.ntb-btn:not(.is-icon-only) .ntb-icon > svg {
-  /* 文本按钮内的图标按规范用 12px 档 */
-  width: 12px;
-  height: 12px;
-}
-
-.ntb-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-}
-/* 图标尺寸按规范只允许 12 / 14 / 16：32 档用 16、更小的档位回落到 14（微元件） */
-.ntb-icon :deep(svg),
-.ntb-icon > svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-
-.ntb-btn:hover:not(:disabled) {
-  background: var(--ntb-fill-hover, rgb(0 0 0 / 0.06));
-  color: var(--ntb-text-strong, #111827);
-}
-/* 文本按钮的 hover 是更浅的一档（规范 §3.3） */
-.ntb-btn:not(.is-icon-only):hover:not(:disabled) {
-  background: var(--ntb-fill-quiet, rgb(0 0 0 / 0.05));
-}
-
-/*
- * 按下**不做缩放**（用户口径 2026-10-29：「删除这个缩放动画」）。
- *
- * 为什么删掉而不是调大：同一个 scale(0.97)，112px 的按钮缩 3.4px 看得见，
- * 32px 的图标按钮只缩 0.96px 几乎看不出 —— 同一套规则给出「两种手感」。
- * 要嘛都明显、要嘛都没有；这里选「都没有」，按压反馈交给 hover 底色与 :active 的默认表现。
- */
-
-/* 焦点环：去掉默认 outline 就必须补上（规范 §5 第 1 条） */
-.ntb-btn:focus-visible {
-  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
-  outline-offset: 1px;
-}
-
-.ntb-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* —— 主按钮档：同一时刻全界面只允许一个实心主按钮（§2.1），primary 要谨慎使用 ——
-   选择器写成 .ntb-btn.ntb-btn--primary（而不是单个 .ntb-btn--primary）是有原因的（实测缺陷）：
-   带文案的按钮会命中上面的 `.ntb-btn:not(.is-icon-only)`（特异度 0,2,0）把它设成透明底，
-   而单类选择器 `.ntb-btn--primary`（0,1,0）特异度更低 —— 于是"确认"变成白字透明底，
-   放在白色工具栏上完全看不见。抬到同等特异度、且排在后面，才能稳定压住那条通用规则。 */
-.ntb-btn.ntb-btn--primary {
-  width: auto;
-  padding: 0 14px;
-  border-radius: 8px;
-  background: var(--ui-accent, #0891b2);
-  color: var(--ui-primary-ink, #fff);
-}
-.ntb-btn.ntb-btn--primary:hover:not(:disabled) {
-  background: var(--ui-accent-hover, #0e7490);
-  color: var(--ui-primary-ink, #fff);
-}
-
-/* 危险档：平时与 ghost 同，悬停才转红。同上抬特异度，保证带文案时也能压住通用规则。 */
-.ntb-btn.ntb-btn--danger:hover:not(:disabled) {
-  background: var(--ui-danger-veil, rgb(239 68 68 / 0.1));
-  color: var(--ui-danger, #ef4444);
-}
-
-/* 激活（开关打开）：浅青底 + 青字，表示"当前生效" */
-.ntb-btn.is-active {
-  background: var(--ntb-active-bg, rgb(8 145 178 / 0.12));
-  color: var(--ntb-active-ink, #0e7490);
-}
-.ntb-btn.is-active:hover:not(:disabled) {
-  background: var(--ntb-active-bg-hover, rgb(8 145 178 / 0.2));
-  color: var(--ntb-active-ink, #0e7490);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ntb-btn {
-    transition: none !important;
-  }
-}
-</style>

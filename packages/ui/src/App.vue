@@ -24,14 +24,18 @@ import ModalsArea from './components/areas/ModalsArea.vue'
 import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
 // 插槽调试覆盖层由默认主题提供（与主题的 Dropdown 同一套浮层与定位）
-import SlotDebugOverlay from '@mini-canvas/plugin-theme-default/components/ui/SlotDebugOverlay.vue'
-import { setReadyHost, useUi } from './composables/ui'
+import DefaultSlotDebugOverlay from '@mini-canvas/plugin-theme-default/components/ui/SlotDebugOverlay.vue'
+import { setReadyHost, useUi, useUiComponentOutside } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
 
 const ui = useUi()
+/** 插槽调试覆盖层按 ui 目录取；没装主题/没登记时回落默认皮。 */
+const SlotDebugOverlay = useUiComponentOutside('slotDebugOverlay')
+/** 模板 :is 用；目录没登记时回落默认皮。 */
+const DebugOverlay = computed(() => SlotDebugOverlay.value ?? DefaultSlotDebugOverlay)
 const s = ui.state
 // 装载清单 = 静态装配 + 按运行环境追加的自带件（cloud-server 托管时含云端连接，见 assembly）
 const plugins = resolveAppPlugins()
@@ -220,7 +224,7 @@ onBeforeUnmount(() => {
       <AssetUploadHost />
       <!-- 插槽调试覆盖层：默认主题提供，全应用只挂一次。
            它读 <html data-slot-debug="on"> 与 data-slot / data-slot-id，不需要各区域传参。 -->
-      <SlotDebugOverlay />
+      <component :is="DebugOverlay" />
 
     </CanvasShell>
   </CanvasProvider>

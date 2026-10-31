@@ -17,6 +17,9 @@ import type {
 } from "@mini-canvas/canvas-base";
 import type { PluginModule } from "@mini-canvas/canvas-base";
 import { markRaw } from "vue";
+// 通用控件底座的样式入口：组件按名登记后由本主题包提供，样式必须随包加载，
+// 不能指望某个业务件碰巧先 import 了 ui-kit 的 SplitPane。
+import "@mini-canvas/ui-kit/styles.css";
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import "./styles/node-theme.css";
 import BaseNode from "./components/node/BaseNode.vue";

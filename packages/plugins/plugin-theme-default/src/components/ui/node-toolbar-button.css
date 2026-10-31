@@ -1,0 +1,97 @@
+/*
+ * NodeToolbarButton 的「工具栏尺寸与状态」外观。
+ *
+ * 按钮底座、键盘焦点、按下/禁用/加载态由 @mini-canvas/ui-kit 的 Button 负责；
+ * 这里只补工具栏特有的 32px 方形尺寸、文字档与 active 状态。
+ * 色值一律读宿主主题的 --ui-*，不再维护第二套配色。
+ */
+.ntb-btn {
+  --mck-button-height: 32px;
+  --mck-button-padding: 0;
+  --mck-button-icon: 16px;
+  --mck-button-font-size: 12px;
+  --mck-button-bg: var(--ntb-fill, transparent);
+  --mck-button-bg-hover: var(--ntb-fill-hover, var(--ui-hover));
+  --mck-button-fg: var(--ntb-text, var(--ui-ink-dim));
+  --mck-button-border: transparent;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.ntb-btn:not(.is-icon-only) {
+  --mck-button-padding: 0 12px;
+  width: auto;
+  min-width: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.ntb-btn:not(.is-icon-only):hover:not(:disabled) {
+  --mck-button-bg-hover: var(--ntb-fill-quiet, var(--ui-hover-soft));
+}
+
+.ntb-btn:not(.is-icon-only) :deep(.mck-button__icon) {
+  width: 12px;
+  height: 12px;
+}
+
+.ntb-icon-raw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ntb-icon-raw :deep(svg),
+.ntb-icon-raw > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.ntb-btn:not(.is-icon-only) .ntb-icon-raw :deep(svg),
+.ntb-btn:not(.is-icon-only) .ntb-icon-raw > svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ntb-btn.ntb-btn--primary {
+  --mck-button-bg: var(--ui-accent);
+  --mck-button-bg-hover: var(--ui-accent-hover);
+  --mck-button-fg: var(--ui-primary-ink, #fff);
+  width: auto;
+  min-width: 0;
+  padding: 0 14px;
+  border-radius: 8px;
+}
+
+.ntb-btn.ntb-btn--danger {
+  --mck-button-fg: var(--ntb-text, var(--ui-ink-dim));
+}
+
+.ntb-btn.ntb-btn--danger:hover:not(:disabled) {
+  --mck-button-bg-hover: var(--ui-danger-veil);
+  --mck-button-fg: var(--ui-danger);
+}
+
+.ntb-btn.is-active {
+  --mck-button-bg: var(--ntb-active-bg, var(--ui-accent-soft));
+  --mck-button-bg-hover: var(--ntb-active-bg-hover, var(--ui-accent-soft));
+  --mck-button-fg: var(--ntb-active-ink, var(--ui-accent-hover));
+}
+
+.ntb-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.ntb-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

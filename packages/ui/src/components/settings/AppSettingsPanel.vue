@@ -24,18 +24,35 @@
  * 窗口外壳不在这里：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗 / 悬浮球由渲染层 <SettingsShell> 提供
  *（见 canvas-render/components/SettingsHost.vue），这里只画外壳里那一格。
  */
-import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch, type Component } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
-import SettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
+import DefaultSettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
+import { useUiComponentOutside } from '../../composables/ui'
 
 const props = defineProps<{ settings: SettingsPanelSource }>()
 
 const { ctx } = useCanvasRender()
 
-// 把标准字段渲染器下发给子树：settingsGroup/<key> 的内容插槽组件可 inject 后直接渲染某个字段控件。
-provide(SETTINGS_FIELD_RENDERER, SettingsSchemaField as never)
+/** 字段渲染器按 ui 目录取；主题没登记时回落默认皮。 */
+const SettingsSchemaField = useUiComponentOutside('settingsField')
+/** 模板 :is 用；目录没登记时回落默认皮。 */
+const FieldRenderer = computed(() => SettingsSchemaField.value ?? DefaultSettingsSchemaField)
+/**
+ * 下发给子树的是**组件对象本身**（provide 的值不参与响应式解包）。
+ * 直接把 computed 传进去，下游 `<component :is>` 会拿到一个 ComputedRef 而不是组件 ——
+ * 页面不报错但没有内容。
+ *
+ * 目录赢家在面板生命周期内可能被热替换（换主题）。这里用 getter 派生：
+ * provide 时读一次当前值，之后由 FieldRenderer 再渲染时取最新值。
+ * 子组件若直接 inject 组件对象，拿到的仍是 provide 时的快照；这是 Vue 的 provide 语义，
+ * 不额外造一层响应式上下文。
+ */
+provide(SETTINGS_FIELD_RENDERER, computed<Component | undefined>(() => {
+  void SettingsSchemaField.value
+  return (SettingsSchemaField.value as Component | undefined) ?? DefaultSettingsSchemaField
+}) as never)
 
 const SEP = '/'
 /** 一级名：分组名的第一个分段（扁平分组 = 它自己） */
@@ -422,7 +439,7 @@ function blocksOf(groupKey: string): ContentBlock[] {
               <h4 class="asp-section-title" :data-nav="nav">{{ nav }}</h4>
               <div class="asp-section-body">
                 <template v-for="b in blocksOf(soloLeafOf(nav))" :key="b.kind === 'field' ? 'f-' + b.key : 's-' + b.occ.id">
-                  <SettingsSchemaField v-if="b.kind === 'field'" :group="soloLeafOf(nav)" :field-key="b.key"
+                  <component v-if="b.kind === 'field'" :is="FieldRenderer" :group="soloLeafOf(nav)" :field-key="b.key"
                     :settings="props.settings" />
                   <component v-else :is="b.occ.component" :group="soloLeafOf(nav)" :settings="props.settings" />
                 </template>
@@ -441,7 +458,7 @@ function blocksOf(groupKey: string): ContentBlock[] {
               <h4 class="asp-section-title">{{ leafLabelOf(leaf) }}</h4>
               <div class="asp-section-body">
                 <template v-for="b in blocksOf(leaf)" :key="b.kind === 'field' ? 'f-' + b.key : 's-' + b.occ.id">
-                  <SettingsSchemaField v-if="b.kind === 'field'" :group="leaf" :field-key="b.key"
+                  <component v-if="b.kind === 'field'" :is="FieldRenderer" :group="leaf" :field-key="b.key"
                     :settings="props.settings" />
                   <component v-else :is="b.occ.component" :group="leaf" :settings="props.settings" />
                 </template>
@@ -476,13 +493,15 @@ function blocksOf(groupKey: string): ContentBlock[] {
 
 .asp-row:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
 
-/* 当前项（定位锚点选中态）：一层**主题色浅底** + 主题色文字，与 hover 的中性灰明确区分。
-   为什么不用中性灰：暗色面板上灰 10% 几乎看不见，跟 hover 的灰又几乎一样 —— 用户实测报过
-   「只有 hover 有背景、没有选择效果」（2026-10-09）。这也正是默认皮 .psd-nav-item.active 的做法。
+/* 当前项（定位锚点选中态）：**中性面板底 + 正常文字色**，只靠底色深浅区分。
+   为什么不染强调色：这是普通导航，不是主操作；强调色一旦被用户改成很亮的颜色，
+   整列导航文字都会跟着变色（实测：强调色改成浅红后，选中的「画布」变成粉红字）。
+   用 --ui-panel-active / --ui-hover-strong 这类中性档，亮暗两套都由主题自己给值。
    一级 / 二级 / 合并项共用同一条规则；**不要边框**（border/outline 皆 0）。
    is-current 规则写在 :hover 之后 → 同特异性下选中态赢，鼠标停在选中项上不会把它压回灰。 */
-.asp-row.is-current { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
-.asp-row.is-current .asp-label { color: var(--ui-accent-hover, #0e7490); }
+.asp-row.is-current { background: var(--ui-panel-active, var(--ui-hover-strong, rgb(0 0 0 / 0.08))); }
+.asp-row.is-current .asp-label { color: var(--ui-ink, #111827); }
+.asp-row.is-current .asp-label--l2 { color: var(--ui-ink, #111827); }
 
 .asp-caret {
   flex: 0 0 auto;

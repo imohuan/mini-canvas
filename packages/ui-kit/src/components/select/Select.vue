@@ -89,6 +89,19 @@ function select(item: SelectOption): void {
   open.value = false
 }
 
+/**
+ * 分组分隔线：相邻两项的 group 名不同时，在这一行上方画一条线（与右键菜单的分块同款）。
+ * 无分组列表返回 false —— 一条线都不画，既有调用方观感不变。
+ */
+function isGroupStart(index: number): boolean {
+  if (index <= 0) return false
+  const list = filtered.value
+  const prev = list[index - 1]
+  const cur = list[index]
+  if (!prev || !cur) return false
+  return Boolean(cur.group) && prev.group !== cur.group
+}
+
 function clear(): void {
   emit('update:modelValue', null)
   emit('change', null)
@@ -135,7 +148,9 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
 </script>
 
 <template>
-  <div class="mck-select-wrap" :class="'mck-select--' + size">
+  <!-- `sel-*` 是默认主题旧版 Select 的公开外观类（第三方样式与主题适配层按它们取件）。
+       结构仍由 ui-kit 统一提供，这里只挂兼容类名，不复制一套实现。 -->
+  <div class="mck-select-wrap sel-trigger-wrap" :class="'mck-select--' + size">
     <Dropdown
       :model-value="open"
       :disabled="disabled"
@@ -152,7 +167,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
         <button
           :id="inputId || undefined"
           type="button"
-          class="mck-select"
+          class="mck-select sel-trigger"
           :class="{ 'is-open': isOpen, 'is-invalid': invalid || !!error, 'is-placeholder': !selected }"
           :aria-label="ariaLabel"
           :aria-expanded="isOpen"
@@ -169,7 +184,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
             @click.stop
             @keydown.stop="onKeydown"
           />
-          <span v-else class="mck-select__label">{{ selected?.label || placeholder }}</span>
+          <span v-else class="mck-select__label sel-label" :class="{ 'is-placeholder': !selected }">{{ selected?.label || placeholder }}</span>
           <span
             v-if="clearable && selected && !disabled"
             class="mck-select__clear"
@@ -178,23 +193,26 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
             aria-label="清空选择"
             @click.stop.prevent="clear"
           >×</span>
-          <span class="mck-select__arrow" :class="{ 'is-open': isOpen }" aria-hidden="true">▾</span>
+          <span class="mck-select__arrow sel-arrow" :class="{ 'is-open': isOpen }" aria-hidden="true">▾</span>
         </button>
       </template>
       <template #default>
-        <div ref="listRef" class="mck-select__list" @keydown="onKeydown">
+        <div ref="listRef" class="mck-select__list sel-list" @keydown="onKeydown">
           <template v-for="(group, gi) in groups" :key="group.name + gi">
             <div v-if="group.name" class="mck-select__group">{{ group.name }}</div>
             <button
-              v-for="item in group.items"
+              v-for="(item, index) in group.items"
               :key="item.value"
               type="button"
               role="option"
-              class="mck-select__option"
+              class="mck-select__option sel-option"
               :class="{
                 'is-selected': item.value === modelValue,
                 'is-highlight': item === filtered[highlight],
+                'is-active': item.value === modelValue,
                 'is-disabled': item.disabled,
+                'hasDescription': !!item.description,
+                'is-group-start': isGroupStart(index),
               }"
               :data-highlight="item === filtered[highlight] ? 'true' : 'false'"
               :aria-selected="item.value === modelValue"
@@ -202,15 +220,15 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
               @click="select(item)"
               @mouseenter="highlight = filtered.indexOf(item)"
             >
-              <span v-if="item.icon" class="mck-select__icon" aria-hidden="true">
+              <span v-if="item.icon" class="mck-select__icon sel-option-icon" aria-hidden="true">
                 <span v-if="iconHtml(item.icon)" class="mck-select__icon-raw" v-html="iconHtml(item.icon)" />
                 <component v-else :is="iconComponent(item.icon)" class="mck-select__icon-raw" />
               </span>
-              <span class="mck-select__copy">
-                <span class="mck-select__option-label">{{ item.label }}</span>
-                <span v-if="item.description" class="mck-select__option-desc">{{ item.description }}</span>
+              <span class="mck-select__copy sel-option-copy">
+                <span class="mck-select__option-label sel-option-label">{{ item.label }}</span>
+                <span v-if="item.description" class="mck-select__option-desc sel-option-description">{{ item.description }}</span>
               </span>
-              <span v-if="item.value === modelValue" class="mck-select__check" aria-hidden="true">✓</span>
+              <span v-if="item.value === modelValue" class="mck-select__check sel-check" aria-hidden="true">✓</span>
             </button>
           </template>
           <p v-if="filtered.length === 0" class="mck-select__empty">{{ emptyText }}</p>

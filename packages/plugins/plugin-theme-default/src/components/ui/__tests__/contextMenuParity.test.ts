@@ -19,6 +19,15 @@ import { readFileSync } from 'node:fs'
 
 const SELECT = readFileSync(new URL('../Select.vue', import.meta.url), 'utf-8')
 const DROPDOWN = readFileSync(new URL('../Dropdown.vue', import.meta.url), 'utf-8')
+/**
+ * Dropdown 的浮层外观已迁到 ui-kit；主题这一层只负责映射旧 props。
+ * 因此外观契约的“消费方”从主题 Dropdown.vue 改成 ui-kit 的 dropdown.css，
+ * 否则测试会因为读不到已删除的局部样式块而假失败。
+ */
+const UIKIT_DROPDOWN_CSS = readFileSync(
+  new URL('../../../../../../ui-kit/src/components/dropdown/dropdown.css', import.meta.url),
+  'utf-8',
+)
 const CATALOG_HOOK = readFileSync(new URL('../useCatalogDropdown.ts', import.meta.url), 'utf-8')
 const THEME_CSS = readFileSync(new URL('../../../../../../canvas-render/src/styles/ui-theme.css', import.meta.url), 'utf-8')
 const TOOL_RATIO = readFileSync(new URL('../ToolRatioGrid.vue', import.meta.url), 'utf-8')
@@ -47,8 +56,8 @@ describe('下拉浮层 = 右键菜单那一档（不透明白底 + 16 圆角 + 6
     const body = rule(SELECT, '.sel-menu-body')
     expect(body).toMatch(/--dd-radius:\s*16px/)
     expect(body).toMatch(/--dd-padding:\s*6px/)
-    // Dropdown 那边必须真读这两个变量（写了没人用等于没写）
-    const menu = rule(DROPDOWN, '.dd-menu')
+    // 外观由 ui-kit 的浮层规则消费；主题适配层只透传 --dd-* 变量。
+    const menu = rule(UIKIT_DROPDOWN_CSS, '.mck-dropdown__panel')
     expect(menu).toMatch(/padding:\s*var\(--dd-padding/)
     expect(menu).toMatch(/border-radius:\s*var\(--dd-radius/)
   })
@@ -114,14 +123,13 @@ describe('名称/描述不重合（line-height 必须钉在 1）', () => {
  * 顶替了 dropdown（ui 包的 AxDropdown），这两处却仍跑主题包这份，注册等于没生效。
  */
 describe('下拉容器取注册场里那一份（取不到才回落自带）', () => {
-  it('Select 与 ToolParamGroup 都通过 useCatalogDropdown 取件，不再直接 import', () => {
-    for (const [name, src] of [
-      ['Select.vue', SELECT],
-      ['ToolParamGroup.vue', TOOL_GROUP],
-    ] as const) {
-      expect(src, name + ' 应改用目录取件').toContain("useCatalogDropdown")
-      expect(src, name + ' 不该再直接 import 自家 Dropdown').not.toMatch(/import\s+Dropdown\s+from\s+'\.\/Dropdown\.vue'/)
-    }
+  it('Select 走 ui-kit 的统一 Select，ToolParamGroup 仍走目录取件', () => {
+    // Select 已成为 ui-kit 的薄适配层：它内部用的就是同一个 Dropdown，
+    // 再在主题包内取一次注册件会变成第二层取件，反而绕。
+    expect(SELECT).toContain("from '@mini-canvas/ui-kit'")
+    expect(SELECT).not.toMatch(/import\s+Dropdown\s+from\s+'\.\/Dropdown\.vue'/)
+    expect(TOOL_GROUP, 'ToolParamGroup.vue 应改用目录取件').toContain("useCatalogDropdown")
+    expect(TOOL_GROUP, 'ToolParamGroup.vue 不该再直接 import 自家 Dropdown').not.toMatch(/import\s+Dropdown\s+from\s+'\.\/Dropdown\.vue'/)
   })
 
   it('取件钩子：树内走 useUiComponent，树外回落 uiComponentOutside，最后才回落自带件', () => {
@@ -140,7 +148,7 @@ describe('浮层外观 token 收在 ui-theme（两处实现共用同一档数值
   })
 
   it('主题自带件与注册件都读这组 token（加消费方变量也不会漂移）', () => {
-    expect(rule(DROPDOWN, '.dd-menu')).toMatch(/var\(--dd-bg/)
+    expect(rule(UIKIT_DROPDOWN_CSS, '.mck-dropdown__panel')).toMatch(/var\(--dd-bg/)
     const consumers = [SELECT, TOOL_GROUP]
     for (const src of consumers) {
       expect(src).toMatch(/--dd-padding:\s*6px/)
@@ -234,9 +242,10 @@ describe('下拉框有最大高度（超出在浮层内滚动）', () => {
   })
 
   it('两套 Dropdown 都真的消费 menuMaxHeight 并夹在视口内（内联 maxHeight + overflow）', () => {
-    // 主题默认件
-    expect(rule(DROPDOWN, '.dd-menu')).toMatch(/overflow-y:\s*auto/)
-    expect(DROPDOWN).toMatch(/min\(.*calc\(100vh - 16px\)\)/)
+    // 主题默认件 → ui-kit 浮层（由 useDropdown 计算 maxHeight，CSS 负责滚动）
+    const kitPanel = rule(UIKIT_DROPDOWN_CSS, '.mck-dropdown__panel')
+    expect(kitPanel).toMatch(/overflow-y:\s*auto/)
+    expect(DROPDOWN).toMatch(/menu-max-height/)
     // 应用注册件
     const ax = readFileSync(new URL('../../../../../../ui/src/components/AxDropdown.vue', import.meta.url), 'utf-8')
     expect(ax).toMatch(/min\(.*calc\(100vh - 16px\)\)/)

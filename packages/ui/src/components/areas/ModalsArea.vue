@@ -10,14 +10,18 @@ import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AxScrollArea from '../AxScrollArea.vue'
 import AxButton from '../AxButton.vue'
-import { MediaViewer } from '@mini-canvas/plugin-theme-default'
+import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/MediaViewer.vue'
 import { useMasonry } from '../../composables/useMasonry'
-import { uiComponentOf, useUi } from '../../composables/ui'
+import { uiComponentOf, useUi, useUiComponentOutside } from '../../composables/ui'
 import { useAgentSettings } from '../../composables/agentSettings'
 import { historySignatureOf } from '../../composables/historySignature'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
+/** 全屏预览走 ui 目录；没登记时回落默认皮。历史预览只在打开时渲染，取件晚到也不会丢。 */
+const MediaViewer = useUiComponentOutside('mediaViewer')
+/** 模板 :is 用；目录没登记时回落默认皮。 */
+const PreviewViewer = computed(() => MediaViewer.value ?? DefaultMediaViewer)
 const s = ui.state
 
 /**
@@ -1988,7 +1992,7 @@ onClickOutside(
 
   <!-- 历史预览：与资产面板同一只 MediaViewer（Esc / 点遮罩 / 右上角关闭；历史不可删 → 不传 onDelete）。
        视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
-  <MediaViewer :item="previewItem" @close="previewItem = null" />
+  <component :is="PreviewViewer" v-if="previewItem" :item="previewItem" @close="previewItem = null" />
 
   <!-- 生成详情：一条历史的完整参数（提示词 / 参数 / 参考素材 / 产物信息）。
        用户口径 2026-10-27：卡片上要有入口，能复盘"当时到底用了什么"。 -->
