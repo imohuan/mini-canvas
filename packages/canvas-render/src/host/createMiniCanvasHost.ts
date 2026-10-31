@@ -43,6 +43,7 @@ import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
 import { ViewService } from '../view/viewService'
 import { CanvasService } from '../canvas/canvasService'
+import { NodeToolbarService } from '../toolbar/nodeToolbarService'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -232,6 +233,11 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     },
     hide: () => canvas.notifications.hide('tip'),
   })
+  // 节点上下状态栏的会话与模式注册：属于渲染层基础设施，**不能**住在主题插件里
+  // （否则卸载主题就丢模式，这是 Spec D4 要修的真实缺陷）。业务插件启动前注入。
+  const nodeToolbar = new NodeToolbarService()
+  nodeToolbar.docPeek = doc
+  ctx.inject('nodeToolbar', nodeToolbar)
   ctx.slots.register('overlay', {
     id: 'canvas-render/tip-layer',
     order: 95,

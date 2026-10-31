@@ -365,6 +365,13 @@ export type { FitToInput, FitToOptions, FitToResult } from './view/fitTo'
 export { CanvasService } from './canvas/canvasService'
 export { createNotifyService } from './canvas/notifyService'
 export type { NotifyItem, NotifyOptions, NotifyService } from './canvas/notifyService'
+// 节点上下状态栏的注册表 + 会话（服务名 nodeToolbar）：模式注册不随主题卸载而丢
+export { NodeToolbarService } from './toolbar/nodeToolbarService'
+export type {
+  NodeToolbarBar,
+  NodeToolbarMode,
+  ResolvedBar,
+} from './toolbar/nodeToolbarService'
 // 可视区纯几何：视口变换 → flow 可视矩形 + 相交判定（align-guide/mini-map 等按可视区裁剪节点）
 export { viewportRectInFlow, rectsOverlap, expandRect } from './geometry/visibleArea'
 export type { FlowRect } from './geometry/visibleArea'

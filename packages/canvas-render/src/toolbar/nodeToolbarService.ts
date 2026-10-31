@@ -1,5 +1,5 @@
 /**
- * nodeToolbarService —— 节点上下两根状态栏的「注册表 + 会话」（主题插件的基础设施服务）。
+ * nodeToolbarService —— 节点上下两根状态栏的「注册表 + 会话」（渲染层基础设施服务）。
  *
  * 用户口径（2026-10-29）：
  * 「这里分为默认模式和一些特殊模式，你注册按钮或者自定义实现这个槽位都可以。
@@ -239,3 +239,5 @@ function sameTypes(a?: string[], b?: string[]): boolean {
   if (!a || !b || a.length !== b.length) return false
   return a.every((t, i) => t === b[i])
 }
+
+
