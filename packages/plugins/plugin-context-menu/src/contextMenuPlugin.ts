@@ -20,7 +20,7 @@ import { createApp, nextTick, reactive, type Component } from 'vue'
 import type { ConfigSchema, Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 import type { CommandService } from '@mini-canvas/kernel'
-import type { NodeFactoryService } from '@mini-canvas/canvas-data'
+import type { CanvasActions } from '@mini-canvas/canvas-data'
 import { typeConnectionDef } from '@mini-canvas/canvas-data'
 import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
@@ -45,7 +45,7 @@ import {
 } from './connectionMenu'
 
 export const name = 'context-menu'
-export const inject = ['doc', 'selection', 'nodeFactory'] as string[]
+export const inject = ['doc', 'selection', 'canvas'] as string[]
 
 /**
  * 本插件可配置项（模块级 Config：内核装配时校验 + 补默认 + 登记进 ⚙ 设置面板）。
@@ -148,7 +148,7 @@ export function apply(ctx: Context): void {
   function openMenu(mode: ContextMenuMode, x: number, y: number, flowPosition: { x: number; y: number }, nodeId?: string, edgeId?: string): void {
     current = { nodeId, edgeId, flowPosition }
     // 新建节点候选 = nodeFactory 可创建类型（只列有 creator 的，避免建出无内容节点）
-    const creatable = new Set(ctx.get('nodeFactory').creatableTypes())
+    const creatable = new Set(ctx.get('canvas').creatableTypes())
     const nodeTypes = [...doc.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
@@ -184,7 +184,7 @@ export function apply(ctx: Context): void {
 
   /** 可建类型候选 = nodeFactory.creatableTypes() ∩ doc.types（只列真能建出内容的） */
   function creatableNodeTypes(): Array<{ type: string; label: string; icon?: unknown; description?: string }> {
-    const creatable = new Set(ctx.get('nodeFactory').creatableTypes())
+    const creatable = new Set(ctx.get('canvas').creatableTypes())
     return [...doc.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
@@ -324,7 +324,10 @@ export function apply(ctx: Context): void {
     const position = placeByPortAnchor(fact.flowPosition, defaultSize, portSideOf(fact))
     // 建节点走 nodeFactory（而不是 tx.createNode）：各节点插件注册的 creator 才知道自己的默认内容
     // （text 的"双击编辑"等）。
-    const nodeId = ctx.get('nodeFactory').create(nodeType, position)
+    const nodeId = ctx.get<CanvasActions>('canvas').createNode(nodeType, position)
+    // createNode 的类型面允许 undefined（类型未注册/缺工厂）；这里刚查过 doc.types，
+    // 真拿不到就直接放弃，不把 undefined 传进选中与连边。
+    if (!nodeId) return
     // 菜单建出的真节点也直接选中它（用户要求）
     selection.clearEdges()
     selection.set([nodeId])

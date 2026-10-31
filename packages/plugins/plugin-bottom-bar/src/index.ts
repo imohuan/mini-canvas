@@ -17,7 +17,6 @@ export {
   BOTTOM_BAR_SLOT,
   BOTTOM_BAR_SLOT_NAME,
   BAR_FIELD,
-  BAR_APPLIER_FIELD,
   NodeBarService,
   NodeTaskService,
   registerBarAction,
