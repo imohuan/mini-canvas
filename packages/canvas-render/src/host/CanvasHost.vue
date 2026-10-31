@@ -82,6 +82,8 @@ import {
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
+  FIRST_RUN_FIT_PADDING,
+  FIRST_RUN_FIT_RETRY_DELAYS,
 } from './canvasHostCore'
 import { LAYERS } from '../contracts/layers'
 import { computeVisibleIds, type VisibleCullConfig } from './visibleCull'
@@ -658,7 +660,7 @@ function fitViewFirstRun(): void {
   const h = hostRef.value
   if (!h) return
   // 每次 fitView 的间隔：先紧后松，覆盖 text/image 自适应节点量测(ResizeObserver)完成前的空档。
-  const delays = [80, 150, 300, 600, 1000]
+  const delays = FIRST_RUN_FIT_RETRY_DELAYS
   let k = 0
   // VueFlow fitView 是 200ms 动画，调用后视口并不会立即落到目标值；故每次调用后等动画跑完再对比
   // 调用前/后的视口，判断这轮 fitView 是否真的把视口移向"包住全部节点"的居中位。以「本轮调用前」为基准
@@ -668,7 +670,7 @@ function fitViewFirstRun(): void {
     const hh = hostRef.value
     if (!hh) return
     const before = hh.viewport.getViewport()
-    hh.viewport.fitView(0.15)
+    hh.viewport.fitView(FIRST_RUN_FIT_PADDING)
     viewportTimers.push(
       setTimeout(() => {
         const h2 = hostRef.value

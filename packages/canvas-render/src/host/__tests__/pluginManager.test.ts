@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { Context } from '@mini-canvas/canvas-data'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
 import { loadPluginFromText, createPluginManager, sourceKind } from '../pluginManager'
 import type { PluginModule } from '@mini-canvas/kernel'
@@ -151,6 +152,49 @@ describe('P5：manager.list/diagnose 暴露 fiber state + PENDING 缺依赖诊�
     // 诊断 FAILED 走 ctx 只读查询(它保留 FAILED fiber 供诊断)
     const st = host.ctx.inspectPlugins().find((x) => x.name === 'boom')
     expect(st).toMatchObject({ state: 'failed', error: 'bad-plugin' })
+  })
+})
+
+describe('hiddenPlugins：只从应用清单隐去，内核诊断仍可见', () => {
+  it('隐藏插件不出现在 list/diagnose，但 ctx.listPlugins 仍能看到', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.installPlugin({ name: 'env', apply(c) { c.inject('envSvc', { ok: 1 }) } })
+    // 一个卡住等依赖的隐藏插件：diagnose 最容易把它漏出来
+    ctx.installPlugin({ name: 'env-waiting', inject: ['ghost-svc'], apply() {} })
+    ctx.installPlugin({ name: 'biz', apply() {} })
+
+    const manager = createPluginManager(ctx, { hiddenPlugins: ['env', 'env-waiting'] })
+    expect(manager.list().map((p) => p.name)).toEqual(['biz'])
+    expect(manager.diagnose()).toEqual([])
+    // 内核里照样看得见：隐藏只是应用层门面的展示策略
+    expect(ctx.listPlugins()).toEqual(['env', 'env-waiting', 'biz'])
+    ctx.stop()
+  })
+})
+
+describe('核心插件操作被拦后，装配 config 仍在', () => {
+  it('卸载/换版本失败不改配置快照，仍能在 list 里读到', async () => {
+    const { host, manager } = await createMiniCanvasHost()
+    const core: PluginModule = {
+      name: 'cfg-core',
+      core: true,
+      apply(c, cfg) { c.inject('cfgSvc', cfg) },
+    }
+    await manager.install(core, { config: { flag: 'a' } })
+    const before = manager.list().find((p) => p.name === 'cfg-core')
+    expect(before?.config).toEqual({ flag: 'a' })
+
+    expect(() => manager.uninstall('cfg-core')).toThrow(/\(core\) during uninstall/)
+    expect(manager.list().find((p) => p.name === 'cfg-core')?.config).toEqual({ flag: 'a' })
+
+    await expect(
+      manager.reload('cfg-core', { name: 'cfg-core', apply() {} }),
+    ).rejects.toThrow(/\(core\) during reload/)
+    // 旧实现先删 config 再尝试卸：被拦后配置已丢。这里必须原样保留。
+    expect(manager.list().find((p) => p.name === 'cfg-core')?.config).toEqual({ flag: 'a' })
+    expect(host.ctx.get('cfgSvc')).toEqual({ flag: 'a' })
+    host.stop()
   })
 })
 

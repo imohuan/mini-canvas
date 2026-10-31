@@ -39,6 +39,7 @@ import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 import { LAYERS } from '../contracts/layers'
 import { NODE_TOOLBAR_HOST_KEY } from '../contracts/nodeToolbarHost'
+import { queryNodeElIn } from './instanceDom'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -375,8 +376,7 @@ onMounted(() => {
     getRootEl: () => rootEl.value,
     getRendererEl: () => rendererEl.value,
     getPaneEl: () => paneEl.value,
-    queryNodeEl: (nodeId: string) =>
-      rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+    queryNodeEl: (nodeId: string) => queryNodeElIn(rootEl.value, nodeId),
   }
   // 视口服务接线：view 是正式入口，内部与旧 viewport 别名共用同一份 ViewportService。
   props.host?.view.attachBackend(backend)
@@ -391,8 +391,7 @@ onMounted(() => {
     rootEl: () => rootEl.value,
     rendererEl: () => rendererEl.value,
     paneEl: () => paneEl.value,
-    queryNodeEl: (nodeId: string) =>
-      rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+    queryNodeEl: (nodeId: string) => queryNodeElIn(rootEl.value, nodeId),
   }, paneRectRef.value)
   // renderer DOM 就绪后启动节点尺寸观测（在 onMounted 内，容器已挂载）
   measure.start()
@@ -411,8 +410,7 @@ watch(
       rootEl: () => rootEl.value,
       rendererEl: () => rendererEl.value,
       paneEl: () => paneEl.value,
-      queryNodeEl: (nodeId: string) =>
-        rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+      queryNodeEl: (nodeId: string) => queryNodeElIn(rootEl.value, nodeId),
     }, paneRectRef.value)
     measure.start()
   },
@@ -423,8 +421,7 @@ watch(
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
 defineExpose({
   /** 在**本画布实例**内按 data-id 查节点 DOM（实例级，多宿主不串线；替代全局 document.querySelector） */
-  queryNodeEl: (nodeId: string): HTMLElement | null =>
-    rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+  queryNodeEl: (nodeId: string): HTMLElement | null => queryNodeElIn(rootEl.value, nodeId),
   getViewport: () => {
     const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
     return vp

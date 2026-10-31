@@ -17,6 +17,8 @@ import {
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
+  FIRST_RUN_FIT_PADDING,
+  FIRST_RUN_FIT_RETRY_DELAYS,
 } from '../canvasHostCore'
 import { LAYERS } from '../../contracts/layers'
 
@@ -28,6 +30,12 @@ function makeStore(): NodeStore {
 }
 
 describe('nodesFromStore', () => {
+  it('首屏取景留白固定为 0.15，重试间隔先紧后松', () => {
+    // 用户可见行为：第一次打开空白画布/无存档视口时，节点四周留一圈空白，不贴边
+    expect(FIRST_RUN_FIT_PADDING).toBe(0.15)
+    expect(FIRST_RUN_FIT_RETRY_DELAYS).toEqual([80, 150, 300, 600, 1000])
+  })
+
   it('把 store 节点灌成 flow 节点，data 浅拷贝不共享引用', () => {
     const s = makeStore()
     const id = s.addNode('text', { x: 10, y: 20 })
