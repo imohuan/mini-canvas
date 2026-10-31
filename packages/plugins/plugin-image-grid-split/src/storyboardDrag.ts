@@ -40,6 +40,7 @@ interface DocPort {
   updateNodes?(entries: Array<{ id: string; patch: Record<string, unknown> }>): unknown
 }
 
+/** view 服务里本插件用到的几何/视口读口（迁移期兼容别名 nodeLayout 同形） */
 interface LayoutPort {
   getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null | undefined
   absolutePosition?(id: string): { x: number; y: number }
@@ -213,7 +214,7 @@ export function storyboardHitAt(
   if (!node) return null
   // 分镜组自己拖着走不算「拖进分镜组」
   if (node.type === 'storyboard') return null
-  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  const layout = ctx.tryGet<LayoutPort | undefined>('view')
   const boards = collectBoards(doc, layout)
   if (boards.length === 0) return null
   const currentBoardId = node.parentId && boards.some((b) => b.id === node.parentId) ? node.parentId : null
@@ -265,40 +266,10 @@ export function applyStoryboardDrop(
  * 已经完全可见时什么都不做，避免无意义地晃一下画布。
  */
 function ensureNodeVisible(ctx: Context, nodeId: string): void {
-  const viewport = ctx.tryGet<{
-    getViewport?(): { x: number; y: number; zoom: number }
-    setViewport?(v: { x: number; y: number; zoom: number }): void
-    animateViewport?(v: { x: number; y: number; zoom: number }, durationMs?: number): void
-    getRootEl?(): HTMLElement | null
-  } | undefined>('viewport')
-  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
-  if (!viewport?.getViewport || !viewport.setViewport) return
-  const rect = layout?.getNodeRect(nodeId)
-  if (!rect || rect.w <= 0 || rect.h <= 0) return
-  const vp = viewport.getViewport()
-  if (!Number.isFinite(vp.zoom) || vp.zoom <= 0) return
-  const root = viewport.getRootEl?.()
-  const vw = root?.clientWidth ?? 0
-  const vh = root?.clientHeight ?? 0
-  if (vw <= 0 || vh <= 0) return
-
-  /** 屏幕坐标（与 toast / 侧栏重叠区无关，只保证"在画布可视区内"） */
-  const margin = 24
-  const left = rect.x * vp.zoom + vp.x
-  const top = rect.y * vp.zoom + vp.y
-  const right = left + rect.w * vp.zoom
-  const bottom = top + rect.h * vp.zoom
-  let dx = 0
-  let dy = 0
-  if (left < margin) dx = margin - left
-  else if (right > vw - margin) dx = vw - margin - right
-  if (top < margin) dy = margin - top
-  else if (bottom > vh - margin) dy = vh - margin - bottom
-  if (dx === 0 && dy === 0) return
-
-  const next = { x: Math.round(vp.x + dx), y: Math.round(vp.y + dy), zoom: vp.zoom }
-  if (viewport.animateViewport) viewport.animateViewport(next)
-  else viewport.setViewport(next)
+  // 保持缩放、只平移，且已完全可见时不动（margin 24 与原实现一致）。
+  ctx.tryGet<{
+    fitTo(target: string[], opts?: { keepZoom?: boolean; onlyIfOutOfView?: boolean; margin?: number }): boolean
+  } | undefined>('view')?.fitTo([nodeId], { keepZoom: true, onlyIfOutOfView: true, margin: 24 })
 }
 
 function dropInto(
@@ -309,7 +280,7 @@ function dropInto(
 ): boolean {
   const doc = ctx.tryGet<DocPort | undefined>('doc')
   if (!doc) return false
-  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  const layout = ctx.tryGet<LayoutPort | undefined>('view')
   const slotLayout = readStoryboardLayout(ctx)
   const node = doc.getNode(payload.nodeId)
   if (!node) return false
@@ -538,7 +509,7 @@ function removeGhostStyle(): void {
 
 /** 打开/关闭某节点的拖动半透明（DOM 外壳级；拿不到元素就静默跳过） */
 function setGhost(ctx: Context, nodeId: string, on: boolean): void {
-  const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('viewport')
+  const vp = ctx.tryGet<{ queryNodeEl?(id: string): HTMLElement | null } | undefined>('view')
   const el = vp?.queryNodeEl?.(nodeId)
   if (!el) return
   if (on) el.setAttribute(GHOST_ATTR, '')
@@ -628,7 +599,7 @@ export function disposeGhostSweep(): void {
  *
  * 用户口径 2026-10-30（参考分组节点）：脱离时 store 的 position 还是**相对父**的值，
  * 直接清父级会让节点瞬移（相对值被当成绝对值用）。必须先取"当前真实绝对位置"
- * （nodeLayout.absolutePosition 会沿父链累加），再解父。 */
+ * （view.absolutePosition 会沿父链累加），再解父。 */
 function detachFromBoard(
   doc: DocPort,
   node: NodeLike,
@@ -643,7 +614,7 @@ function detachFromBoard(
     doc.updateNode(boardId, { data: { slots: removeFromSlots(board.slots, node.id) } })
   }
   const prev = node.data?._storyboardSize as { w: number; h: number } | undefined
-  // 绝对位置：父链完整累加（分组同款）。nodeLayout 缺席时退回当前值（不猜）
+  // 绝对位置：父链完整累加（分组同款）。view 缺席时退回当前值（不猜）
   const detachAbs = targetAbs ?? layout?.absolutePosition?.(node.id)
   doc.updateNode(node.id, {
     parentId: undefined,
@@ -691,7 +662,7 @@ export function onStoryboardDragEnd(
  */
 export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
   const doc = ctx.tryGet<DocPort | undefined>('doc')
-  const layout = ctx.tryGet<LayoutPort | undefined>('nodeLayout')
+  const layout = ctx.tryGet<LayoutPort | undefined>('view')
   ensureGhostStyle()
   return ctx.on(NODE_DRAG, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     if (!doc) return
