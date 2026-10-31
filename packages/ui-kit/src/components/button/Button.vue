@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { Comment, Fragment, Text, computed, useSlots, type VNode } from 'vue'
 import { useUiKit } from '../../provider/context'
 import type { ButtonProps } from './types'
 import './button.css'
@@ -23,10 +23,24 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>()
 const slots = useSlots()
 const kit = useUiKit()
 const size = computed(() => props.size ?? kit.value.size)
-const hasIcon = computed(() => Boolean(slots.icon))
-const hasLabel = computed(() => Boolean(slots.default))
+/**
+ * 插槽存在不等于有内容：`v-if` 没成立时插槽函数仍在，只会产出空片段或注释。
+ * 递归检查文本和元素，空白文字不算标签。
+ */
+function hasSlotContent(nodes: VNode[] | undefined): boolean {
+  if (!nodes?.length) return false
+  return nodes.some((node) => {
+    if (node.type === Comment) return false
+    if (node.type === Text) return typeof node.children === 'string' && node.children.trim().length > 0
+    if (node.type === Fragment) return hasSlotContent(Array.isArray(node.children) ? node.children as VNode[] : undefined)
+    return true
+  })
+}
+
+const hasLabel = computed(() => hasSlotContent(slots.default?.()))
+
 /** 图标按钮：显式指定优先，否则只有 icon 插槽、没有文字。 */
-const onlyIcon = computed(() => props.iconOnly ?? (hasIcon.value && !hasLabel.value))
+const onlyIcon = computed(() => props.iconOnly ?? (Boolean(slots.icon) && !hasLabel.value))
 
 function onClick(event: MouseEvent): void {
   if (props.disabled || props.loading) return
@@ -59,6 +73,6 @@ function onClick(event: MouseEvent): void {
     <span v-else-if="$slots.icon" class="mck-button__icon" aria-hidden="true">
       <slot name="icon" />
     </span>
-    <span v-if="$slots.default && !onlyIcon" class="mck-button__label"><slot /></span>
+    <span v-if="hasLabel && !onlyIcon" class="mck-button__label"><slot /></span>
   </button>
 </template>

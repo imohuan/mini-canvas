@@ -101,6 +101,7 @@ function fireMessage(): void {
         :round="readBool(state, 'round')"
         :disabled="readBool(state, 'disabled')"
         :loading="readBool(state, 'loading')"
+        :icon-only="readBool(state, 'iconOnly') ? true : undefined"
         :aria-label="readBool(state, 'iconOnly') ? readText(state, 'label') || '按钮' : undefined"
       >
         <template v-if="readBool(state, 'showIcon') || readBool(state, 'iconOnly')" #icon>
@@ -108,7 +109,7 @@ function fireMessage(): void {
             <path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
           </svg>
         </template>
-        <template v-if="!readBool(state, 'iconOnly')">{{ readText(state, 'label') || '按钮' }}</template>
+        <template v-if="!readBool(state, 'iconOnly')">{{ readText(state, 'label') }}</template>
       </Button>
     </template>
 

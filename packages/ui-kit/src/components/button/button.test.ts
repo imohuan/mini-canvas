@@ -15,6 +15,16 @@ describe('Button 组件行为', () => {
     expect(button.text()).not.toContain('新增')
   })
 
+  it('只有图标时，不渲染空的文字块和多余间距', () => {
+    const wrapper = mount(Button, {
+      props: { ariaLabel: '新增' },
+      slots: { icon: '<svg data-icon="plus"></svg>', default: '  ' },
+    })
+    const button = wrapper.find('button')
+    expect(button.classes()).toContain('is-icon-only')
+    expect(button.find('.mck-button__label').exists()).toBe(false)
+  })
+
   it('loading 时禁用并显示 spinner，不会触发 click', async () => {
     const wrapper = mount(Button, { props: { loading: true }, slots: { default: '保存中' } })
     const button = wrapper.find('button')
