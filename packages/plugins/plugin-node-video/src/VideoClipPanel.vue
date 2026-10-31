@@ -4,7 +4,7 @@
  *
  * 1:1 复刻 packages/ui/public/video-clip-demo.html 的暗色胶囊剪辑条（用户口径 2026-10-29）：
  *   关闭 | 键盘（配置入口） | 胶片格（蓝胶囊选区 + 播放头 + 时长 pill） | 磁吸 | 循环 | 白色确认圆钮。
- * 点键盘图标向下展开配置区：吸附间隔/范围 + 快捷键表（对应截图右侧面板）。
+ * 点键盘图标在按钮上方弹出快捷键说明（用上下文里的 dropdown 件）。
  *
  * 几何与 demo 同一套（重点抄 demo 文件头「吸附行为」5 条铁律）：
  * - 磁吸作用对象是「选区时长」，不是背景位置；进入吸附点 ± 范围才吸，平时跟手；
@@ -41,6 +41,8 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
 // 设计系统件按名取（与图片裁剪顶栏同一条约定），换主题时这里一行不改
 const NodeToolbarButton = useUiComponent('toolbarButton')
+// 快捷键面板挂在主题登记的下拉件上（上下文里那一份；成品应用会顶替成 AxDropdown）
+const Dropdown = useUiComponent('dropdown')
 const selected = useSoleNodeSelected(props.id)
 const visible = computed(() => selected.value && isClipping(props.id))
 
@@ -196,8 +198,15 @@ function measureLabel(): void {
 /** 选区在屏幕上的像素宽度 */
 const selectionPx = computed(() => (filmWidth.value * Math.max(0, endPct.value - startPct.value)) / 100)
 
-/** 选区装不下标签（留 4px 余量）→ 标签改到下方 */
-const labelBelow = computed(() => labelWidth.value > 0 && selectionPx.value < labelWidth.value + 4)
+/**
+ * 选区装不下标签 → 标签改到下方。
+ *
+ * 余量要留够（用户口径 2026-10-31：判定不够，得加大宽度）：
+ * pill 是居中悬浮的，两侧各留一点空气才不显得"贴着耳朵"；只留 4px 时，
+ * 视觉上已经挤在一起，却还判定为"装得下"。这里给 28px（实测 1.00s 的选区已在下沿更耐看）。
+ */
+const LABEL_GUTTER = 28
+const labelBelow = computed(() => labelWidth.value > 0 && selectionPx.value < labelWidth.value + LABEL_GUTTER)
 
 /** 胶片左缘相对底栏左缘的像素偏移（胶片有 16px 外边距，不能按 0 算） */
 const filmOffsetLeft = ref(0)
@@ -387,33 +396,65 @@ function setOutPoint(): void {
   commit(clampClipEnd({ start: range.value.start, end: t, duration: duration.value, minDuration: minClip.value }))
 }
 
+/**
+ * 剪辑会话的键盘处理。
+ *
+ * ★ 必须挂在 window 上（用户实测 2026-10-31 报「除了方向键其它都没反应」）：
+ * 从前写在 .vclip-dock 的 @keydown 上，只有焦点正好落在这一条的某个子元素里才收得到。
+ * 剪辑时用户大多点过视频画面（焦点在 video / 画布 / body），于是 I/O/Space/Esc/Enter
+ * 全都收不到 —— 方向键"能用"只是因为点过手柄、焦点刚好留在手柄里。
+ * demo 也是直接 window.addEventListener('keydown')，这里对齐同一做法。
+ */
 function onKeyDown(ev: KeyboardEvent): void {
   if (!visible.value || isTypingTarget(ev.target)) return
-  const action = clipKeyAction({ key: ev.key, shift: ev.shiftKey, ctrl: ev.ctrlKey, meta: ev.metaKey })
+  /**
+   * 快捷键面板开着时，Esc 先关面板，再按一次才退出剪辑。
+   *
+   * 这里必须自己 stopPropagation：只 return 让下拉件去关，事件还会继续走到画布，
+   * 画布的 Esc 会取消选中 —— 剪辑条随选中消失，看起来就是「按 Esc 直接退出了」。
+   */
+  if (configOpen.value && ev.key === 'Escape') {
+    configOpen.value = false
+    ev.preventDefault()
+    ev.stopPropagation()
+    return
+  }
+  // 下拉面板 / 菜单打开时把键盘让给它（否则 Esc 会退出剪辑、Enter 会确认）
+  if (ev.target instanceof Element && ev.target.closest('[role="dialog"], [role="menu"], [role="listbox"]')) return
+  const action = clipKeyAction({ key: ev.key, code: ev.code, shift: ev.shiftKey, ctrl: ev.ctrlKey, meta: ev.metaKey })
+  if (action.kind === 'none') return
   const step = 'seconds' in action ? action.seconds : 0
   const opts = { duration: duration.value, minDuration: minClip.value }
   switch (action.kind) {
     case 'move':
       commit(moveClipRange({ ...range.value, nextStart: range.value.start + step, ...opts }))
-      ev.preventDefault()
       break
-    case 'nudge-edge':
-      if (action.edge === 'start') {
-        const len = Math.max(minClip.value, range.value.end - (range.value.start + step))
-        commit(clampClipStart({ start: range.value.end - len, end: range.value.end, ...opts }))
-      } else {
-        const len = Math.max(minClip.value, range.value.end + step - range.value.start)
-        commit(clampClipEnd({ start: range.value.start, end: range.value.start + len, ...opts }))
-      }
-      ev.preventDefault()
+    /**
+     * ↑ / ↓ = 扩展 / 收缩选区（demo 语义：起点不动，只动终点）。
+     *
+     * 从前实现成"动起点"（↑ 收缩起点、↓ 扩终点），按键表和实际效果对不上 ——
+     * 用户看到的是「扩展/收缩选区」，按下去选区却在平移。这里按长度改终点。
+     */
+    case 'resize': {
+      const current = range.value.end - range.value.start
+      const len = Math.max(minClip.value, current + step)
+      commit(clampClipEnd({ start: range.value.start, end: range.value.start + len, ...opts }))
       break
-    case 'set-in': setInPoint(); ev.preventDefault(); break
-    case 'set-out': setOutPoint(); ev.preventDefault(); break
-    case 'toggle-play': togglePlay(); ev.preventDefault(); break
-    case 'exit': onCancel(); ev.preventDefault(); break
-    case 'confirm': onConfirm(); ev.preventDefault(); break
-    default: break
+    }
+    case 'set-in': setInPoint(); break
+    case 'set-out': setOutPoint(); break
+    case 'toggle-play': togglePlay(); break
+    case 'exit': onCancel(); break
+    case 'confirm': onConfirm(); break
   }
+  /**
+   * 拦在捕获阶段并停止继续传播（用户实测 2026-10-31）：
+   * 画布节点自己监听方向键（↑ 会「Moved selected node up」），事件在冒泡到 window 之前
+   * 就被它处理掉了 —— 剪辑条收不到，看起来就是「方向键在动节点，不在动选区」。
+   * 捕获阶段先拿键 + stopPropagation，画布就不会再动节点。
+   */
+  ev.preventDefault()
+  ev.stopPropagation()
 }
 
 /** 播放/暂停：直接操作内容区的 video（剪辑会话中它永不卸载）。
@@ -467,6 +508,13 @@ function onCancel(): void {
 }
 
 onBeforeUnmount(onDragUp)
+
+/**
+ * 键盘监听挂在 window 上：剪辑会话里用户点过画面/画布，焦点多半不在这一条上。
+ * 只在会话可见时收键（visible 为假时 onKeyDown 自己就会返回），不打扰其它界面。
+ */
+onMounted(() => window.addEventListener('keydown', onKeyDown, true))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
 </script>
 
 <template>
@@ -476,16 +524,75 @@ onBeforeUnmount(onDragUp)
     <template v-else>
       <!-- 外壳 = 主题胶囊 .ntp-root（与图片裁剪/绘制状态栏同一套 token）：
            底色、边框、圆角、阴影都跟着亮/暗主题走；按钮一律用主题的 toolbarButton。 -->
-      <div class="ntp-root vclip-dock" @keydown="onKeyDown">
+      <div class="ntp-root vclip-dock">
         <NodeToolbarButton title="退出剪辑" aria-label="退出剪辑" variant="danger" :icon="ICON_CLOSE" @click="onCancel" />
 
-        <NodeToolbarButton
-          :title="configOpen ? '收起配置' : '快捷键与吸附设置'"
-          aria-label="快捷键与吸附设置"
-          :icon="ICON_KEYBOARD"
-          :active="configOpen"
-          @click="configOpen = !configOpen"
-        />
+        <!--
+          快捷键说明 = 主题登记的下拉件（上下文里的 dropdown；成品应用会顶替成 AxDropdown）。
+          为什么用下拉而不是在底栏下方展开一块：用户口径 2026-10-31「下拉菜单显示在它上面」——
+          底栏在节点下方，向下展开会压住画布/节点；向上弹才是贴着按钮的说明卡。
+          吸附间隔/范围不在这里配置：那是设置面板里的项（节点/视频剪辑），这里只给快捷键说明。
+        -->
+        <Dropdown
+          v-model="configOpen"
+          class="vclip-help"
+          placement="top-start"
+          align="start"
+          :offset="8"
+          :arrow="false"
+          :menu-width="'336px'"
+        >
+          <template #trigger>
+            <NodeToolbarButton
+              title="快捷键"
+              aria-label="快捷键"
+              :icon="ICON_KEYBOARD"
+              :active="configOpen"
+            />
+          </template>
+          <div class="vclip-help-body" role="dialog" aria-label="剪辑快捷键">
+            <header class="vclip-help-head">
+              <span class="vclip-help-title">快捷键</span>
+              <button class="vclip-help-close" type="button" aria-label="关闭快捷键" title="关闭" @click="configOpen = false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </header>
+            <div class="vclip-help-grid">
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">移动选区</span>
+                <span class="vclip-help-keys"><kbd>←</kbd><kbd>→</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">精确模式</span>
+                <span class="vclip-help-keys"><span class="vclip-help-hint">按住</span><kbd>Shift</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">扩展/收缩选区</span>
+                <span class="vclip-help-keys"><kbd>↑</kbd><kbd>↓</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">快速调整</span>
+                <span class="vclip-help-keys"><kbd>⌘/Ctrl</kbd><span class="vclip-help-hint">+</span><kbd>↑</kbd><kbd>↓</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">设置出点入点</span>
+                <span class="vclip-help-keys"><kbd>I</kbd><kbd>O</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">播放/暂停</span>
+                <span class="vclip-help-keys"><kbd>Space</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">退出</span>
+                <span class="vclip-help-keys"><kbd>Esc</kbd></span>
+              </div>
+              <div class="vclip-help-item">
+                <span class="vclip-help-label">确认剪辑</span>
+                <span class="vclip-help-keys"><kbd>Enter</kbd></span>
+              </div>
+            </div>
+          </div>
+        </Dropdown>
 
         <div ref="filmEl" class="vclip-film" role="group" aria-label="视频片段选择">
           <!-- 帧图底板：贴边时这一侧的圆角要取消，否则会露出黑色方角（demo 几何约定第 7 条） -->
@@ -547,29 +654,6 @@ onBeforeUnmount(onDragUp)
         <span v-show="labelBelow" class="vclip-caption-text" :style="{ left: captionLeftPx + 'px' }">{{ lengthLabel }}</span>
       </div>
 
-      <div v-if="configOpen" class="ntp-root vclip-config">
-        <div class="vclip-config-row">
-          <span class="vclip-config-label">吸附间隔</span>
-          <input v-model.number="prefs.snapStep" class="vclip-config-input" type="number" min="0.01" max="10" step="0.01" aria-label="吸附间隔（秒）" />
-          <span class="vclip-config-unit">秒</span>
-          <span class="vclip-config-label">吸附范围</span>
-          <input v-model.number="prefs.snapRadius" class="vclip-config-input" type="number" min="0.01" max="5" step="0.01" aria-label="吸附范围（秒）" />
-          <span class="vclip-config-unit">秒</span>
-        </div>
-        <div class="vclip-config-row">
-          <span class="vclip-config-kbd">← →</span><span class="vclip-config-desc">移动选区</span>
-          <span class="vclip-config-kbd">↑ ↓</span><span class="vclip-config-desc">扩展/收缩选区</span>
-          <span class="vclip-config-kbd">I</span><span class="vclip-config-desc">设入点</span>
-          <span class="vclip-config-kbd">O</span><span class="vclip-config-desc">设出点</span>
-        </div>
-        <div class="vclip-config-row">
-          <span class="vclip-config-kbd">Shift</span><span class="vclip-config-desc">精确模式 0.1s</span>
-          <span class="vclip-config-kbd">Ctrl</span><span class="vclip-config-desc">快速调整 1s</span>
-          <span class="vclip-config-kbd">Space</span><span class="vclip-config-desc">播放/暂停</span>
-          <span class="vclip-config-kbd">Esc</span><span class="vclip-config-desc">退出</span>
-          <span class="vclip-config-kbd">Enter</span><span class="vclip-config-desc">确认</span>
-        </div>
-      </div>
     </template>
   </div>
 </template>
@@ -814,62 +898,117 @@ onBeforeUnmount(onDragUp)
   pointer-events: none;
 }
 
-/* 向下展开的配置区（吸附参数 + 快捷键表）：同一只主题胶囊，不再自带深色皮肤 */
-.vclip-config {
+/* 快捷键下拉触发器只占内容宽 */
+.vclip-help {
+  flex: none;
+  display: inline-flex;
+}
+
+/**
+ * 快捷键面板（参考图 2：标题行 + 两列键位表）。
+ *
+ * 结构照参考图：左边四条「动作 + 键帽」，右边四条把「按住 Shift / 快速调整 / Space / Enter」
+ * 放在同一列；中间一条竖分隔线。键帽数值照 ui-style-guide §3.5（22px 高、圆角 6、
+ * 2px 底边、等宽字），与参考图里那排灰键帽同一形态。
+ */
+.vclip-help-body {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 12px;
+  gap: 12px;
+  padding: 4px 6px 6px;
   white-space: normal;
 }
-.vclip-config-row {
+.vclip-help-head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
 }
-.vclip-config-label {
-  color: var(--ui-ink-dim, #6b7280);
-  font-size: 11px;
-}
-.vclip-config-input {
-  width: 64px;
-  padding: 4px 7px;
-  border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: 7px;
+.vclip-help-title {
   color: var(--ui-ink, #18202b);
-  background: var(--ui-overlay-solid, #fff);
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  outline: none;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
 }
-.vclip-config-input:focus { border-color: var(--ui-accent, #0891b2); }
-.vclip-config-unit {
-  margin-right: 8px;
+.vclip-help-close {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ui-ink-dim, #6b7280);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.vclip-help-close:hover {
+  color: var(--ui-ink, #18202b);
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+}
+.vclip-help-close svg {
+  width: 14px;
+  height: 14px;
+}
+.vclip-help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 18px;
+  row-gap: 4px;
+}
+/* 左右两列各自由一条竖线分开（参考图中间那条细线） */
+.vclip-help-grid > .vclip-help-item:nth-child(even) {
+  position: relative;
+  padding-left: 18px;
+}
+.vclip-help-grid > .vclip-help-item:nth-child(even)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--ui-line, #e2e5ea);
+}
+.vclip-help-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+}
+.vclip-help-label {
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.vclip-help-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.vclip-help-hint {
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 11px;
 }
-.vclip-config-kbd {
+.vclip-help-keys kbd {
+  display: inline-grid;
+  place-items: center;
   min-width: 22px;
-  padding: 2px 6px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-bottom-width: 2px;
   border-radius: 6px;
   color: var(--ui-ink, #18202b);
   background: var(--ui-overlay-solid, #fff);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-}
-.vclip-config-desc {
-  margin-right: 10px;
-  color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

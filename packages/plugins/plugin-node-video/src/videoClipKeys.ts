@@ -12,13 +12,20 @@ export interface ClipKeyInput {
   shift: boolean
   ctrl: boolean
   meta: boolean
+  /**
+   * KeyboardEvent.code（可选）。空格键最需要它：
+   * 多数浏览器 ev.key 是 ' '，但个别输入法/布局会给 'Spacebar'，
+   * 用 code === 'Space' 兜底才不会"空格没反应"。
+   */
+  code?: string
 }
 
 /** 判定结果：kind 是「要做的动作」，seconds 是方向键的微调量（非方向键为 0） */
 export type ClipKeyAction =
   | { kind: 'none' }
-  | { kind: 'nudge-edge'; edge: 'start' | 'end'; seconds: number }
   | { kind: 'move'; seconds: number }
+  /** 只改长度：seconds>0 扩展、<0 收缩（起点不动，对应 ↑ / ↓） */
+  | { kind: 'resize'; seconds: number }
   | { kind: 'set-in' }
   | { kind: 'set-out' }
   | { kind: 'toggle-play' }
@@ -48,9 +55,9 @@ export function clipKeyAction(input: ClipKeyInput): ClipKeyAction {
     case 'ArrowRight':
       return { kind: 'move', seconds: step }
     case 'ArrowUp':
-      return { kind: 'nudge-edge', edge: 'start', seconds: -step }
+      return { kind: 'resize', seconds: step }
     case 'ArrowDown':
-      return { kind: 'nudge-edge', edge: 'end', seconds: step }
+      return { kind: 'resize', seconds: -step }
     case 'i':
     case 'I':
       return { kind: 'set-in' }
@@ -58,12 +65,15 @@ export function clipKeyAction(input: ClipKeyInput): ClipKeyAction {
     case 'O':
       return { kind: 'set-out' }
     case ' ':
+    case 'Spacebar':
       return { kind: 'toggle-play' }
     case 'Escape':
       return { kind: 'exit' }
     case 'Enter':
       return { kind: 'confirm' }
     default:
+      // 个别输入法/布局下 ev.key 不是空格字符，但 code 一定是 'Space'
+      if (input.code === 'Space') return { kind: 'toggle-play' }
       return { kind: 'none' }
   }
 }
