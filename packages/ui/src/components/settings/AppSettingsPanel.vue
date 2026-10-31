@@ -24,12 +24,13 @@
  * 窗口外壳不在这里：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗 / 悬浮球由渲染层 <SettingsShell> 提供
  *（见 canvas-render/components/SettingsHost.vue），这里只画外壳里那一格。
  */
-import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch, type Component } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import DefaultSettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
 import { useUiComponentOutside } from '../../composables/ui'
+import { createSettingsFieldBridge } from './settingsFieldBridge'
 
 const props = defineProps<{ settings: SettingsPanelSource }>()
 
@@ -42,17 +43,16 @@ const FieldRenderer = computed(() => SettingsSchemaField.value ?? DefaultSetting
 /**
  * 下发给子树的是**组件对象本身**（provide 的值不参与响应式解包）。
  * 直接把 computed 传进去，下游 `<component :is>` 会拿到一个 ComputedRef 而不是组件 ——
- * 页面不报错但没有内容。
+ * 页面不报错，但字段区是空的。
  *
- * 目录赢家在面板生命周期内可能被热替换（换主题）。这里用 getter 派生：
- * provide 时读一次当前值，之后由 FieldRenderer 再渲染时取最新值。
- * 子组件若直接 inject 组件对象，拿到的仍是 provide 时的快照；这是 Vue 的 provide 语义，
- * 不额外造一层响应式上下文。
+ * 这里给一个稳定的桥组件：provide 的永远是同一个对象，桥内部每次渲染现读目录赢家，
+ * 所以主题热替换字段控件时，插件自绘的 settingsGroup 页也会跟着换，不会锁在 provide 那一刻的快照。
  */
-provide(SETTINGS_FIELD_RENDERER, computed<Component | undefined>(() => {
-  void SettingsSchemaField.value
-  return (SettingsSchemaField.value as Component | undefined) ?? DefaultSettingsSchemaField
-}) as never)
+const SettingsFieldBridge = createSettingsFieldBridge(
+  () => SettingsSchemaField.value as never,
+  DefaultSettingsSchemaField,
+)
+provide(SETTINGS_FIELD_RENDERER, markRaw(SettingsFieldBridge))
 
 const SEP = '/'
 /** 一级名：分组名的第一个分段（扁平分组 = 它自己） */

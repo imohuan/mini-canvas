@@ -19,6 +19,10 @@ export interface TooltipProps {
   arrowClass?: string
   /** 气泡与触发器之间的间距（px）。 */
   offset?: number
+  /** 触发器包一层的类名（宿主按自己的类名取件时用）。 */
+  triggerClass?: string
+  /** 气泡本体的类名（宿主沿用旧 `.axt-bubble` 这类外观钩子时用）。 */
+  bodyClass?: string
   /** 浮层挂载容器，默认 body。 */
   appendTo?: string | HTMLElement
   /** 外部锚点：DOM / Ref / getter。 */

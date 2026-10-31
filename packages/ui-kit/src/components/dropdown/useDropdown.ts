@@ -20,6 +20,7 @@ export interface DropdownApi {
   position: ReturnType<typeof useFloating>['position']
   positioned: ReturnType<typeof useFloating>['positioned']
   show: () => void
+  showAtPoint: (x: number, y: number) => void
   hide: () => void
   toggle: () => void
   scheduleHide: () => void
@@ -45,8 +46,19 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   const panelRef = ref<HTMLElement | null>(null)
   let hideTimer = 0
   let showTimer = 0
-  /** 祖先链 + 自己；祖先从触发器所在 DOM 读取。 */
-  const chain = computed<string[]>(() => [...floatingChainOf(triggerRef.value), chainId])
+  /**
+   * 祖先链 + 自己。
+   *
+   * 两条来源，先显式后 DOM：
+   *   ① `parentChain`（调用方传入）：锚点不在父面板里时只能显式告知，
+   *      如行右键菜单按鼠标坐标弹出，触发器根本不在父列表的 DOM 子树内；
+   *   ② 触发器所在 DOM 的链：触发器就长在父浮层面板里的常见情况（参数面板里的下拉）。
+   */
+  const chain = computed<string[]>(() => {
+    const explicit = props.parentChain?.trim()
+    const ancestors = explicit ? explicit.split(/\s+/).filter(Boolean) : floatingChainOf(triggerRef.value)
+    return [...ancestors, chainId]
+  })
 
   /**
    * 实际方向：anchorPlacement 是显式九宫格；没有它才用旧 placement/align 组合。
@@ -76,6 +88,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   const point = ref(props.point ?? null)
   watch(() => props.point, (value) => { point.value = value ?? null })
   const { position, positioned, update } = useFloating(anchorEl, panelRef, open, options, point)
+  /** 坐标锚点换位置（从这一行换到另一行）时要立刻重算，不能只等下一帧。 */
+  watch(point, () => { if (open.value) nextTick(update) }, { deep: true })
 
   // 常显切换时，直接把 open 拉成 true；模式切走时回到外部传入值。
   watch(() => props.modelValue, (value) => {
@@ -117,7 +131,21 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   function show(): void {
     if (props.disabled) return
     cancelHide()
+    // 普通打开不沿用上一次的坐标锚点（右键开过之后再点触发器，菜单要回到触发器身边）。
+    point.value = props.point ?? null
+    syncAnchor()
     setOpen(true)
+  }
+
+  /** 在视口坐标打开（行右键 / 行尾按钮）：与普通打开共用同一套定位、翻转与互斥。 */
+  function showAtPoint(x: number, y: number): void {
+    if (props.disabled) return
+    cancelHide()
+    point.value = { x, y }
+    // 坐标锚点不需要元素锚点，清掉避免读到旧触发器位置。
+    anchorEl.value = null
+    setOpen(true)
+    nextTick(update)
   }
 
   function hide(): void {
@@ -186,7 +214,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
    * 避免在 watcher 里更新 anchorEl 又引发组件更新，形成递归。
    */
   function syncAnchor(): void {
-    if (props.point) {
+    if (point.value) {
       // 坐标锚点优先：不解析元素锚点，箭头也按坐标算。
       if (anchorEl.value !== null) anchorEl.value = null
       return
@@ -215,6 +243,21 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     cancelShow()
   })
 
+  // 宿主「都关了吧」广播：实现不必被宿主 import，谁开着谁自己收。
+  function onCloseAll(): void {
+    if (open.value) hide()
+  }
+  watch(() => props.closeAllEvent, (eventName, _old, onCleanup) => {
+    if (!eventName || typeof window === 'undefined') return
+    window.addEventListener(eventName, onCloseAll)
+    onCleanup(() => window.removeEventListener(eventName, onCloseAll))
+  }, { immediate: true })
+
+  // 显式父链的子浮层：父菜单关掉（点外 / Esc / 选择）时跟着收。
+  watch(() => props.parentOpen?.(), (parentOpen) => {
+    if (parentOpen === false && open.value) hide()
+  })
+
   const panelStyle = computed<Record<string, string>>(() => {
     const style: Record<string, string> = {
       left: position.value.left + 'px',
@@ -227,6 +270,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if (props.menuHeight?.trim()) style.height = props.menuHeight
     if (props.menuMinWidth?.trim()) style.minWidth = props.menuMinWidth
     if (props.menuMaxWidth?.trim()) style.maxWidth = props.menuMaxWidth
+    if (props.zIndex !== undefined && props.zIndex !== '') style.zIndex = String(props.zIndex)
     return style
   })
 
@@ -238,11 +282,13 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   const ARROW_PAD = 12
   const arrowStyle = computed<Record<string, string>>(() => {
     const hidden: Record<string, string> = { display: 'none' }
+    // 还没定位好时箭头先藏起来，但层级仍要带上：一旦显示，不能掉到别的浮层下面。
+    if (props.zIndex !== undefined && props.zIndex !== '') hidden.zIndex = String(props.zIndex)
     if (!props.arrow || !positioned.value) return hidden
     const panel = panelRef.value
     /** 箭头指向的参照：坐标锚点用点本身，元素锚点用元素矩形。 */
-    const triggerRect: DOMRect | null = props.point
-      ? ({ left: props.point.x, top: props.point.y, right: props.point.x, bottom: props.point.y, width: 0, height: 0, x: props.point.x, y: props.point.y, toJSON: () => ({}) } as DOMRect)
+    const triggerRect: DOMRect | null = point.value
+      ? ({ left: point.value.x, top: point.value.y, right: point.value.x, bottom: point.value.y, width: 0, height: 0, x: point.value.x, y: point.value.y, toJSON: () => ({}) } as DOMRect)
       : (anchorEl.value?.getBoundingClientRect() ?? null)
     const trigger = triggerRect
     if (!panel || !trigger) return hidden
@@ -261,6 +307,7 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       transform: 'rotate(45deg)',
       pointerEvents: 'none',
     }
+    if (props.zIndex !== undefined && props.zIndex !== '') style.zIndex = String(props.zIndex)
     const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), Math.max(min, max))
     if (side === 'top' || side === 'bottom') {
       const center = tr.left + tr.width / 2
@@ -291,5 +338,5 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
     if (props.restoreFocus !== false) triggerRef.value?.focus?.()
   }
 
-  return { open, triggerRef, panelRef, position, positioned, show, hide, toggle, scheduleHide, cancelHide, scheduleShow, panelStyle, arrowStyle, closeFromSlot, chainId, chain }
+  return { open, triggerRef, panelRef, position, positioned, show, showAtPoint, hide, toggle, scheduleHide, cancelHide, scheduleShow, panelStyle, arrowStyle, closeFromSlot, chainId, chain }
 }

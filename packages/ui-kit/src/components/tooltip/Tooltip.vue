@@ -6,7 +6,7 @@
  * 额外只保留提示特有的「悬停延迟」和「焦点可触发」。
  * 传 bare 可以完全自定义提示外观。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useSlots } from 'vue'
 import Dropdown from '../dropdown/Dropdown.vue'
 import type { DropdownProps } from '../dropdown/types'
 import type { TooltipProps } from './types'
@@ -26,12 +26,15 @@ const props = withDefaults(defineProps<TooltipProps>(), {
   arrow: false,
   arrowClass: '',
   offset: 8,
+  triggerClass: '',
+  bodyClass: '',
   appendTo: 'body',
   anchor: null,
   bare: true,
 })
 
 const dropdown = ref<InstanceType<typeof Dropdown> | null>(null)
+const slots = useSlots()
 
 const dropdownProps = computed<Partial<DropdownProps>>(() => ({
   anchorPlacement: props.placement,
@@ -44,9 +47,11 @@ const dropdownProps = computed<Partial<DropdownProps>>(() => ({
   arrow: props.arrow,
   arrowClass: props.arrowClass,
   menuMaxWidth: props.maxWidth,
-  disabled: props.disabled || !props.content,
+  // 只给 #content 插槽、不传 content 也是合法用法（宿主气泡就是这样）。
+  disabled: props.disabled || (!props.content && !slots.content),
   bare: props.bare,
   menuRole: 'tooltip',
+  bodyClass: props.bodyClass,
 }))
 
 /** 键盘聚焦也显示提示：焦点进来时手动开，离开时关。 */
@@ -74,6 +79,7 @@ function onFocusOut(): void {
       -->
       <span
         class="mck-tooltip-trigger"
+        :class="triggerClass"
         :tabindex="focusable ? 0 : undefined"
         @focusin="onFocusIn"
         @focusout="onFocusOut"
@@ -83,7 +89,7 @@ function onFocusOut(): void {
       </span>
     </template>
     <template #default>
-      <span class="mck-tooltip mck-tooltip__body"><slot name="content">{{ content }}</slot></span>
+      <span class="mck-tooltip mck-tooltip__body" :class="bodyClass"><slot name="content">{{ content }}</slot></span>
     </template>
   </Dropdown>
 </template>

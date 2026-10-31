@@ -4,7 +4,14 @@
 .mck-dropdown__panel {
   position: fixed;
   /* 层级读 Provider 的 --mck-z-dropdown（zIndexBase 派生）；脱离 Provider 时用原值 */
-  z-index: var(--mck-z-dropdown, 94000);
+  /*
+   * 层级三层取值，顺序不能反：
+   *   ① --mck-z-dropdown：宿主把组件库嵌进自己的层级体系时用 Provider 显式给的档；
+   *   ② --layer-modal：画布应用的「菜单/弹窗」档（100000）。缺这层的话，弹窗
+   *      （.axdlg-root 也是 100000）里展开的下拉只到 94000，会被弹窗自己的面板盖住；
+   *   ③ 94000：完全脱离应用、单独用 ui-kit 时的兜底。
+   */
+  z-index: var(--mck-z-dropdown, var(--layer-modal, 94000));
   box-sizing: border-box;
   min-width: 180px;
   /* 兜底 = 右键菜单那一档；调用方可用 --dd-padding 覆盖（主题旧实现透传同名变量）。 */
@@ -48,7 +55,7 @@
  * 层级比面板低的话，面板的 1px 边框会横穿箭头，看起来像箭头和面板之间多了一道缝。
  * 同层 + 后渲染，箭头的不透明底色会盖住那截边框，两者就连成一体。
  */
-.mck-dropdown__arrow { z-index: var(--mck-z-dropdown, 94000); box-sizing: border-box; }
+.mck-dropdown__arrow { z-index: var(--mck-z-dropdown, var(--layer-modal, 94000)); box-sizing: border-box; }
 .mck-dropdown-fade-enter-active { transition: opacity 140ms ease-out, transform 140ms ease-out; }
 .mck-dropdown-fade-leave-active { transition: opacity 100ms ease-in, transform 100ms ease-in; }
 .mck-dropdown-fade-enter-from, .mck-dropdown-fade-leave-to { opacity: 0; transform: scale(0.97) translateY(-3px); }

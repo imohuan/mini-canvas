@@ -246,9 +246,14 @@ describe('下拉框有最大高度（超出在浮层内滚动）', () => {
     const kitPanel = rule(UIKIT_DROPDOWN_CSS, '.mck-dropdown__panel')
     expect(kitPanel).toMatch(/overflow-y:\s*auto/)
     expect(DROPDOWN).toMatch(/menu-max-height/)
-    // 应用注册件
+    // 应用注册件：同样是 ui-kit 的薄适配层，只把旧 props 交过去。
+    // 「限高与视口取小」在 ui-kit 里做（useDropdown 的 maxHeight → 内联 maxHeight +
+    // shared/floating 的 Math.min(调用方上限, 视口可用高度)），宿主不再自己算一份 CSS。
     const ax = readFileSync(new URL('../../../../../../ui/src/components/AxDropdown.vue', import.meta.url), 'utf-8')
-    expect(ax).toMatch(/min\(.*calc\(100vh - 16px\)\)/)
+    expect(ax, '宿主下拉必须走 ui-kit 实现').toMatch(/from '@mini-canvas\/ui-kit'/)
+    expect(ax).toMatch(/:menu-max-height="menuMaxHeight"/)
+    const kitHook = readFileSync(new URL('../../../../../../ui-kit/src/shared/floating.ts', import.meta.url), 'utf-8')
+    expect(kitHook, '限高要和视口可用高度取小').toMatch(/Math\.min\([\s\S]{0,80}vh - padding \* 2/)
   })
 })
 

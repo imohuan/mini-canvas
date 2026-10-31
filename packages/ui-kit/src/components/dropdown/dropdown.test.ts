@@ -171,4 +171,48 @@ describe('Dropdown 组件行为', () => {
     child.remove()
     wrapper.unmount()
   })
+
+  it('showAtPoint：按视口坐标打开，旧锚点不会把它拉回触发器', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: false, teleport: false },
+      slots: { trigger: '<button type="button" data-trigger>打开</button>', default: '<div data-point-menu />' },
+      attachTo: document.body,
+    })
+    await wrapper.vm.$nextTick()
+    ;(wrapper.vm as unknown as { showAtPoint: (x: number, y: number) => void }).showAtPoint(120, 80)
+    await wrapper.vm.$nextTick()
+    await nextTick()
+    const panel = document.querySelector<HTMLElement>('.mck-dropdown__panel')
+    expect(panel).not.toBeNull()
+    // SSR 下 offsetWidth 为 0；内联位置仍必须是传入的坐标，不能是触发器位置。
+    // top 再加默认 offset 6：菜单要离开鼠标点一点，别把第一项压在指针下面。
+    expect(panel?.style.left).toBe('120px')
+    expect(panel?.style.top).toBe('86px')
+    wrapper.unmount()
+  })
+
+  it('parentChain：触发器不在父面板 DOM 里，也能把自己算作父浮层的子层', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, teleport: false, parentChain: 'outer parent', chainId: 'self' },
+      slots: { trigger: '<button type="button">打开</button>', default: '<div data-child-menu />' },
+      attachTo: document.body,
+    })
+    await wrapper.vm.$nextTick()
+    const panel = document.querySelector<HTMLElement>('.mck-dropdown__panel')
+    // parentChain 是显式父链；组件自己再追加 chainId，所以属性里是“父 + 自己”。
+    expect(panel?.getAttribute('data-mck-floating-chain')).toBe('outer parent self')
+    wrapper.unmount()
+  })
+
+  it('zIndex：只覆盖本层浮层与箭头的层级，不写死到全局样式', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, teleport: false, zIndex: 12345, arrow: true },
+      slots: { trigger: '<button type="button">打开</button>', default: '<div data-z-menu />' },
+      attachTo: document.body,
+    })
+    await wrapper.vm.$nextTick()
+    expect(document.querySelector<HTMLElement>('.mck-dropdown__panel')?.style.zIndex).toBe('12345')
+    expect(document.querySelector<HTMLElement>('.mck-dropdown__arrow')?.style.zIndex).toBe('12345')
+    wrapper.unmount()
+  })
 })

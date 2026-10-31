@@ -86,41 +86,44 @@ describe('下拉互斥登记表：本包自带一份', () => {
  */
 describe('子浮层（nestedIn）：两个菜单并存', () => {
   const src = readFileSync(new URL('../components/AxDropdown.vue', import.meta.url), 'utf-8')
+  const kit = readFileSync(new URL('../../../ui-kit/src/components/dropdown/useDropdown.ts', import.meta.url), 'utf-8')
+  const kitVue = readFileSync(new URL('../../../ui-kit/src/components/dropdown/Dropdown.vue', import.meta.url), 'utf-8')
 
-  it('声明了 nestedIn 开关（不传 = 普通下拉，行为完全不变）', () => {
+  it('适配层保留 nestedIn 开关，并转成库的 parentChain（不传 = 普通下拉）', () => {
     expect(src).toMatch(/nestedIn\?: \(\) => \{ chain: string; open: boolean \} \| undefined/)
     expect(src).toMatch(/nestedIn: undefined,/)
+    expect(src).toMatch(/:parent-chain="parentChain"/)
   })
 
-  it('① 打开时把**自己的组链**交给互斥登记表（登记表据它放过祖先）', () => {
-    // 关键：claim 必须带上组链，否则内层一开就把外层（它自己的父面板）关掉
-    expect(src).toMatch(/claimDropdownExclusive\(close, \(\) => panelChainIds\.value\)/)
+  it('① 库打开时把**自己的组链**交给互斥登记表（登记表据它放过祖先）', () => {
+    // 唯一实现：ui-kit 的 useDropdown。适配层不再自己维护登记表。
+    expect(kit).toMatch(/claimFloating\(closeInstance, \(\) => chain\.value\)/)
+    expect(src).not.toMatch(/claimDropdownExclusive/)
   })
 
-  it('② 面板组链 = 父链 + 自己（父菜单借它认出「点的是自己人」）', () => {
-    expect(src).toMatch(/const panelChainIds = computed<string\[\]>\(\(\) => \[\.\.\.parentChainIds\.value, chainId\]\)/)
-    // 链要真写进面板
-    expect(src).toMatch(/:data-floating-chain="panelChain"/)
+  it('② 库算出的组链 = 父链 + 自己，并写进面板（父菜单借它认出「点的是自己人」）', () => {
+    expect(kit).toMatch(/const ancestors = explicit \? explicit\.split/)
+    expect(kit).toMatch(/return \[\.\.\.ancestors, chainId\]/)
+    // 新旧两份属性都写：宿主与库互相识别父子关系
+    expect(kitVue).toMatch(/:data-mck-floating-chain="api\.chain\.value\.join\(' '\)"/)
+    expect(kitVue).toMatch(/:data-floating-chain="api\.chain\.value\.join\(' '\)"/)
   })
 
-  it('②b 父链有**两条来源**：显式 nestedIn 优先，其次读自己的 DOM 祖先', () => {
+  it('②b 父链有**两条来源**：显式 parentChain 优先，其次读自己的 DOM 祖先', () => {
     // 显式声明（锚点不在父面板里，如画布行尾的操作菜单）
-    expect(src).toMatch(/const explicit = nestedCtx\.value\?\.chain/)
+    expect(kit).toMatch(/const explicit = props\.parentChain\?\.trim\(\)/)
     // DOM 祖先（触发器就长在父浮层面板里 —— 用户报的「点内部下拉关掉外部」正是这条）
-    expect(src).toMatch(/return floatingChainOf\(containerRef\.value\)/)
-  })
-
-  it('③ 自己判点外只认自己的 id（点父列表才关得掉子菜单）', () => {
-    expect(src).toMatch(/const mine = isNested\.value \? chainId : panelChain\.value/)
-    expect(src).toMatch(/isInFloatingGroup\(node, mine\)/)
+    expect(kit).toMatch(/floatingChainOf\(triggerRef\.value\)/)
   })
 
   it('父浮层关掉时子浮层跟着收（不留没有爹的孤儿菜单）', () => {
-    expect(src).toMatch(/isNested\.value && nestedCtx\.value\?\.open === false/)
+    expect(kit).toMatch(/props\.parentOpen\?\.\(\)/)
   })
 
-  it('把开关与组链交给子浮层（defineExpose）', () => {
-    expect(src).toMatch(/defineExpose\(\{ openAtPoint, isOpen, chainId \}\)/)
+  it('适配层交出 openAtPoint 与链 id（子浮层要拿父的链）', () => {
+    expect(src).toMatch(/function openAtPoint/)
+    expect(src).toMatch(/defineExpose\(\{ openAtPoint/)
+    expect(src).toMatch(/chainId: computed\(\(\) => kit\.value\?\.chainId\)/)
   })
 })
 
@@ -139,33 +142,29 @@ describe('子浮层（nestedIn）：两个菜单并存', () => {
  * 于是把结构钉住，浏览器回归（agent-e2e）负责量效果。
  */
 describe('箭头的位置契约（结构层）', () => {
-  const src = readFileSync(new URL('../components/AxDropdown.vue', import.meta.url), 'utf-8')
+  // 箭头已经收进 ui-kit：契约改为直接读库里的唯一实现。
+  const kitVue = readFileSync(new URL('../../../ui-kit/src/components/dropdown/Dropdown.vue', import.meta.url), 'utf-8')
+  const kitCss = readFileSync(new URL('../../../ui-kit/src/components/dropdown/dropdown.css', import.meta.url), 'utf-8')
+  const kit = readFileSync(new URL('../../../ui-kit/src/components/dropdown/useDropdown.ts', import.meta.url), 'utf-8')
+  const adapter = readFileSync(new URL('../components/AxDropdown.vue', import.meta.url), 'utf-8')
 
   it('箭头是浮层的**兄弟节点**（子节点会把探出量算进浮层可滚溢出）', () => {
     // 判据：箭头标签出现在 </Transition> **之后**（与浮层平级）。若它挪进浮层 div 内部，
     // 就会落在 </Transition> 之前 —— 这条会红。
-    const transitionClose = src.indexOf('</Transition>')
-    const at = src.indexOf('class="axd-arrow"')
-    expect(at, '模板里没找到 axd-arrow').toBeGreaterThan(-1)
+    const transitionClose = kitVue.indexOf('</Transition>')
+    const at = kitVue.indexOf('class="mck-dropdown__arrow dd-arrow"')
+    expect(at, '模板里没找到箭头').toBeGreaterThan(-1)
     expect(at, '箭头必须在 </Transition> 之后（浮层外，做兄弟节点）').toBeGreaterThan(transitionClose)
   })
 
-  it('箭头 z-index 与浮层同层（--layer-modal / 100000），否则会被画布图层盖住', () => {
-    // 层叠带改造后两者都走 --layer-modal 变量（唯一事实源见 canvas-render/contracts/layers.ts）：
-    // 断言改成「两边用同一个值」。变量与兜底值都认，但**两边必须一致** —— 这才是本条的契约。
-    const zIndexOf = (rule: RegExpMatchArray): string => {
-      const m = /z-index:\s*([^;]+);/.exec(rule[1])
-      expect(m, '规则里没有 z-index').toBeTruthy()
-      return m![1].trim()
-    }
-    const arrowRule = /\.axd-arrow\s*\{([^}]*)\}/.exec(src)
-    expect(arrowRule, '没找到 .axd-arrow 规则').toBeTruthy()
-    const menuRule = /\.dd-menu\s*\{([^}]*)\}/.exec(src)
-    expect(menuRule, '没找到 .dd-menu 规则').toBeTruthy()
-    // 浮层这一层是「模态/菜单」档：写死或走变量都要落在这一档上
-    expect(zIndexOf(menuRule!)).toMatch(/100000/)
-    // 箭头必须与浮层**同一个值**（同层）——低了会被画布图层盖住（菜单看得见、箭头看不见）
-    expect(zIndexOf(arrowRule!)).toBe(zIndexOf(menuRule!))
+  it('箭头与浮层用同一个层级（适配层统一传 --layer-modal），否则箭头会被画布图层盖住', () => {
+    // 层级由同一个 prop 同时写给面板与箭头：两边必须一致，这才是本条的契约。
+    expect(adapter).toContain(":z-index=\"'var(--layer-modal, 100000)'\"")
+    expect(kit).toMatch(/if \(props\.zIndex !== undefined[\s\S]{0,80}style\.zIndex = String\(props\.zIndex\)/)
+    // 面板与箭头各写一次，缺一处就会“菜单看得见、箭头看不见”
+    expect((kit.match(/style\.zIndex = String\(props\.zIndex\)/g) ?? []).length).toBe(2)
+    // 库自身仍保留 Provider 派生的档位（独立使用时不必依赖宿主层叠带）
+    expect(kitCss).toMatch(/z-index:\s*var\(--mck-z-dropdown/)
   })
 
 
@@ -177,22 +176,26 @@ describe('箭头的位置契约（结构层）', () => {
    * 现在：取触发器中心，只夹进菜单范围内。菜单怎么变宽、怎么被推，箭头都还在按钮正上方。
    */
   it('箭头横向跟触发器中心走（再夹进菜单）', () => {
-    const at = src.indexOf('const arrowStyle = computed')
-    const body = src.slice(at, src.indexOf('function clearCloseTimer'))
+    const at = kit.indexOf('const arrowStyle = computed')
+    const body = kit.slice(at, kit.indexOf('/**\n   * slot 里的 close'))
     // 必须读触发器中心，并夹进菜单范围
-    expect(body, '箭头横向要读触发器中心').toMatch(/triggerCenter\('x'\)/)
-    expect(body, '横向要夹进菜单范围').toMatch(/clampTrigger\(triggerCenter\('x'\)/)
+    expect(body, '箭头横向要读触发器中心').toMatch(/center = tr\.left \+ tr\.width \/ 2/)
+    expect(body, '横向要夹进菜单范围').toMatch(/clamp\(center - half/)
     // 纵向换边时也要跟触发器中心（left/right 方位）
-    expect(body, '纵向要读触发器中心').toMatch(/triggerCenter\('y'\)/)
+    expect(body, '纵向要读触发器中心').toMatch(/const center = tr\.top \+ tr\.height \/ 2/)
     // 不能再按菜单边缘取点，否则菜单一宽箭头就飞走
     const code = body
       .split('\n')
       .filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
       .join('\n')
     expect(code).not.toMatch(/effectiveAlign\.value/)
-    expect(code).not.toMatch(/ml \+ mw \/ 2/)
     // 也不能读 floating-ui 的 arrow 中间件输出（按打开那一刻的尺寸算，菜单被内容撑宽后就失准）
     expect(code).not.toMatch(/middlewareData/)
     expect(code).not.toMatch(/d\?\.(x|y)/)
+  })
+
+  it('适配层只给箭头挂类名，不再自己算位置', () => {
+    expect(adapter).toContain("arrow-class=\"'axd-arrow'\"")
+    expect(adapter).not.toMatch(/arrowStyle|triggerCenter/)
   })
 })

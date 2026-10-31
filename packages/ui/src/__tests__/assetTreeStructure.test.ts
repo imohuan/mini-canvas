@@ -236,12 +236,14 @@ describe('画布树行菜单（右键 + ⋯ 同源，外壳与资产共用）', 
   it('右键入口转交给浮层的「鼠标点锚点」，不另绘浮层', () => {
     expect(rowMenu).toContain('openAtPoint')
     expect(dropdown).toContain('openAtPoint')
-    expect(dropdown).toContain('contextAnchor')
+    // 坐标锚点已收进 ui-kit（showAtPoint）；适配层只转交，不再自己造固定锚点元素。
+    expect(dropdown).toContain('showAtPoint')
   })
 
-  it('二级菜单写「父链 + 自己」的组标记（点外判定不误伤子菜单）', () => {
-    expect(subMenu).toContain('data-floating-chain')
-    expect(dropdown).toContain('data-floating-chain')
+  it('二级菜单把父链交给库，库把「父链 + 自己」写进面板（点外判定不误伤子菜单）', () => {
+    expect(subMenu).toContain('parentChain')
+    expect(subMenu).toContain('floatingChainOf')
+    expect(dropdown).toContain('parent-chain')
   })
 
   /**
@@ -257,21 +259,14 @@ describe('画布树行菜单（右键 + ⋯ 同源，外壳与资产共用）', 
    * 判据是**结构**：锚点必须待在 `<Teleport>` 内（与菜单同在 body 下，没有带 transform 的祖先）。
    * 移回 .axd-root 立刻红 —— 不依赖任何具体渲染环境。
    */
-  it('右键锚点与菜单同处 Teleport 内（否则带 translate 的行会把它顶偏）', () => {
-    const teleportOpen = dropdown.indexOf('<Teleport')
-    const teleportClose = dropdown.indexOf('</Teleport>')
-    const anchorAt = dropdown.indexOf('ref="contextAnchor"')
-    expect(teleportOpen).toBeGreaterThan(-1)
-    expect(teleportClose).toBeGreaterThan(teleportOpen)
-    expect(anchorAt).toBeGreaterThan(teleportOpen)
-    expect(anchorAt).toBeLessThan(teleportClose)
-    // 触发器仍留在 Teleport 外（它是行内元素，锚在它身上时本就该按行内文档流走）
-    const triggerAt = dropdown.indexOf('ref="triggerRef"')
-    expect(triggerAt).toBeLessThan(teleportOpen)
-  })
-
-  it('锚点用 fixed 表达视口坐标（这条一旦改成 absolute，上面的包含块论证就不成立了）', () => {
-    expect(dropdown).toMatch(/contextAnchorStyle[\s\S]{0,400}position: 'fixed'/)
+  it('坐标锚点走库的视口坐标接口（不依赖 DOM 祖先，不会被 translate 顶偏）', () => {
+    const kit = readFileSync(new URL('../../../ui-kit/src/components/dropdown/useDropdown.ts', import.meta.url), 'utf-8')
+    const kitVue = readFileSync(new URL('../../../ui-kit/src/components/dropdown/Dropdown.vue', import.meta.url), 'utf-8')
+    expect(kit).toMatch(/function showAtPoint\(x: number, y: number\)/)
+    expect(kit).toMatch(/point\.value = \{ x, y \}/)
+    expect(kitVue).toMatch(/showAtPoint: api\.showAtPoint/)
+    // 适配层只转交，不再自己造锚点元素
+    expect(dropdown).not.toContain('contextAnchor')
   })
 })
 

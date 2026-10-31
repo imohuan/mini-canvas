@@ -11,12 +11,27 @@
 
 export const FLOATING_CHAIN_ATTR = 'data-mck-floating-chain'
 
+/**
+ * 宿主与默认主题的旧属性名。同一个浮层链**两份都写、两份都读**，
+ * 否则 ui-kit 下拉和主题二级菜单混在同屏时互相看不见对方的父子关系，
+ * 一点子菜单就被父级判成「点了外面」。
+ */
+export const LEGACY_FLOATING_CHAIN_ATTR = 'data-floating-chain'
+
+const CHAIN_SELECTOR =
+  '[' + FLOATING_CHAIN_ATTR + '], [' + LEGACY_FLOATING_CHAIN_ATTR + ']'
+
+/** 读最近的浮层链；两个属性都认，优先新名。 */
+export function floatingChainRaw(el: Element | null | undefined): string {
+  const panel = el?.closest(CHAIN_SELECTOR)
+  if (!panel) return ''
+  return panel.getAttribute(FLOATING_CHAIN_ATTR) ?? panel.getAttribute(LEGACY_FLOATING_CHAIN_ATTR) ?? ''
+}
+
 /** 点击目标是否落在本实例的浮层链里（含内层 teleport 出去的面板）。 */
 export function isInsideChain(target: Node | null, chainId: string): boolean {
   if (!target || !(target instanceof Element)) return false
-  const panel = target.closest('[' + FLOATING_CHAIN_ATTR + ']')
-  if (!panel) return false
-  const raw = panel.getAttribute(FLOATING_CHAIN_ATTR) ?? ''
+  const raw = floatingChainRaw(target)
   return raw.split(/\s+/).includes(chainId)
 }
 
@@ -55,7 +70,5 @@ export function openFloatingCount(): number {
 
 /** 把一个浮层链的祖先读出来（供内层构造自己的链）。 */
 export function floatingChainOf(el: Element | null | undefined): string[] {
-  if (!el) return []
-  const raw = el.closest('[' + FLOATING_CHAIN_ATTR + ']')?.getAttribute(FLOATING_CHAIN_ATTR) ?? ''
-  return raw.split(/\s+/).filter(Boolean)
+  return floatingChainRaw(el).split(/\s+/).filter(Boolean)
 }

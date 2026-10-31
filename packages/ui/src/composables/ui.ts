@@ -20,6 +20,7 @@ import { uniqueLabel } from './nodeLabel'
 import { queueUploads, type PendingUpload } from './assetUploadBus'
 import { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
 import { historySignatureOf, trimMapToLimit, HIST_DATA_CACHE_LIMIT } from './historySignature'
+import { createOutsideComponentTracker } from './uiCatalogOutside'
 
 // 抽屉保留页签：画布 / 资产。插件页签不得占用这两个 id。
 export { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'
@@ -76,7 +77,7 @@ export function uiComponentOf(name: string): unknown {
  * 用 shallowRef 存组件句柄：深代理会让 Vue 警告并拖慢渲染。
  */
 export function useUiComponentOutside(name: string): Ref<unknown> {
-  const current = shallowRef<unknown>(uiComponentOf(name))
+  const tracker = createOutsideComponentTracker(name, () => readyHost.ctx?.registryOf?.<unknown>('ui'))
   /**
    * 订阅 ui 目录本身，而不是只监听“插件安装”这一个时刻。
    *
@@ -87,19 +88,11 @@ export function useUiComponentOutside(name: string): Ref<unknown> {
    * 为什么不用 watchEffect 反复读 `uiComponentOf`：那只能感知宿主 ctx 赋值，
    * 目录表内部的替换不会触发任何 ref。
    */
-  let sub: { dispose(): void } | undefined
-  function sync(): void {
-    const next = uiComponentOf(name)
-    if (next !== current.value) current.value = next
-  }
-  onMounted(() => {
-    const field = readyHost.ctx?.registryOf?.<unknown>('ui')
-    if (!field) return
-    sub = field.subscribe(sync)
-    sync()
-  })
-  onBeforeUnmount(() => sub?.dispose())
-  return current
+  onMounted(tracker.bind)
+  // hostRef 是模块级 shallowRef：宿主晚到、重连、销毁都会在这里收到。
+  watch(hostRef, tracker.bind)
+  onBeforeUnmount(tracker.dispose)
+  return tracker.current
 }
 export function setReadyHost(h: unknown): void {
   hostRef.value = h as HostApi | undefined

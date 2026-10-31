@@ -102,11 +102,13 @@ describe('AppSettingsPanel 交互：点左侧滚到对应位置', () => {
     expect(CODE).toMatch(/scrollIntoView\(\{ block: 'nearest' \}\)/)
   })
 
-  it('当前项是"定位锚点"选中态：主题色浅底 + 主题色文字、无边框', () => {
-    // 选中态走主题强调色浅底（与 hover 的中性灰区分，暗色下也看得见）
-    expect(SRC).toMatch(/\.asp-row\.is-current \{[^}]*background: var\(--ui-accent-soft/)
-    // 选中项文字也染主题色
-    expect(SRC).toMatch(/\.asp-row\.is-current \.asp-label \{[^}]*color: var\(--ui-accent/)
+  it('当前项是"定位锚点"选中态：中性浅底 + 正常文字色、无边框', () => {
+    // 普通导航的选中态不该染强调色（用户口径：强调色只给主操作 / 品牌状态）。
+    expect(SRC).toMatch(/\.asp-row\.is-current \{[^}]*background: var\(--ui-panel-active/)
+    expect(SRC).toMatch(/\.asp-row\.is-current \.asp-label \{[^}]*color: var\(--ui-ink/)
+    // 整条规则里不再出现强调色（浅红强调色会把「画布」这类普通导航文字染粉）
+    const currentRules = SRC.slice(SRC.indexOf('.asp-row.is-current'), SRC.indexOf('.asp-caret'))
+    expect(currentRules).not.toMatch(/--ui-accent/)
     // 高亮只靠背景+文字色，不能有边框
     const rule = /\.asp-row\.is-current \{([^}]*)\}/.exec(SRC)?.[1] ?? ''
     expect(rule, '当前项不应有边框').not.toMatch(/border/)

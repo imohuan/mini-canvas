@@ -57,6 +57,8 @@ export interface DropdownProps {
   align?: 'start' | 'center' | 'end' | 'auto'
   /** 浮层 role，默认 menu；选项列表用 listbox */
   menuRole?: string
+  /** 浮层层级：不填走 Provider 的 --mck-z-dropdown；宿主已有层叠带时传同一个值。 */
+  zIndex?: number | string
   layout?: DropdownLayout
   disabled?: boolean
   /** 浮层要挂到的容器，默认 body */
@@ -78,8 +80,24 @@ export interface DropdownProps {
    * 默认自动生成，调用方一般不用传。
    */
   chainId?: string
+  /**
+   * 显式父浮层链（空格分隔）。用于触发器不在父面板 DOM 里的子浮层
+   * （行尾按钮在列表外，但菜单应算列表的子浮层）；不传则读自己的 DOM 祖先。
+   */
+  parentChain?: string
+  /**
+   * 父浮层是否还开着（仅显式父链时用）。父关 → 自己跟着收，避免留下孤儿菜单。
+   * 不传 = 不跟随（等价于独立浮层）。
+   */
+  parentOpen?: () => boolean | undefined
   /** 聚焦回触发器：Esc/选择关闭后把键盘焦点还给按钮，默认 true。 */
   restoreFocus?: boolean
+  /**
+   * 宿主「全部关闭」广播的事件名（window CustomEvent，无载荷）。
+   * 拖拽/缩放这类环境变化时，宿主不必知道浮层是谁实现的，广播一句即可。
+   * 留空 = 不监听（独立使用组件库时没有宿主广播）。
+   */
+  closeAllEvent?: string
 }
 
 /** 浮层控制接口：给外部“绑定 + 开关”用的服务对象。 */

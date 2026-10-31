@@ -33,12 +33,14 @@ const props = withDefaults(defineProps<DropdownProps>(), {
   arrowClass: '',
   align: 'auto',
   menuRole: 'menu',
+  zIndex: undefined,
   layout: 'overlay-scroll',
   disabled: false,
   appendTo: 'body',
   bare: false,
   closeOnOutside: true,
   closeOnEscape: true,
+  closeAllEvent: '',
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; open: []; close: [] }>()
@@ -63,7 +65,11 @@ defineExpose({
   controller,
   open: api.open,
   show: api.show,
+  /** 在视口坐标打开（右键 / 行尾按钮），与普通打开共用定位与互斥。 */
+  showAtPoint: api.showAtPoint,
   hide: api.hide,
+  /** 本浮层的链 id：父浮层交给子浮层，用来区分「自己人」与「点外面」。 */
+  chainId: api.chainId,
   toggle: api.toggle,
   /** 浮层 DOM：父组件（如 Tooltip）需要把焦点送进去。 */
   panelRef: api.panelRef,
@@ -138,6 +144,7 @@ const triggerEvents = computed(() => {
           :style="api.panelStyle.value"
           :role="menuRole"
           :data-mck-floating-chain="api.chain.value.join(' ')"
+          :data-floating-chain="api.chain.value.join(' ')"
           @mouseenter="trigger === 'hover' ? api.cancelHide() : undefined"
           @mouseleave="trigger === 'hover' ? api.scheduleHide() : undefined"
         >
@@ -151,7 +158,7 @@ const triggerEvents = computed(() => {
       <div
         v-if="api.open.value && arrow"
         class="mck-dropdown__arrow dd-arrow"
-          :class="arrowClass"
+        :class="arrowClass"
         :style="api.arrowStyle.value"
         aria-hidden="true"
       />
