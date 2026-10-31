@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
+  clipBoundaryAction,
   clampClipEnd,
   clampClipRange,
   clampClipStart,
@@ -13,6 +14,35 @@ import {
   moveClipRange,
   readClipRange,
 } from '../videoClip'
+
+describe('clipBoundaryAction：播放器越出选区该怎么处理', () => {
+  const base = { start: 2, end: 5 }
+
+  it('在选区里 → 继续播', () => {
+    expect(clipBoundaryAction({ ...base, current: 3, loop: false })).toBe('continue')
+    expect(clipBoundaryAction({ ...base, current: 2, loop: true })).toBe('continue')
+  })
+
+  it('越过段尾：循环开回卷、循环关停在段尾（用户截图里播到区域外的那条）', () => {
+    expect(clipBoundaryAction({ ...base, current: 6, loop: true })).toBe('rewind')
+    expect(clipBoundaryAction({ ...base, current: 6, loop: false })).toBe('stop')
+    // 正好落在段尾也算越过（停在 end 是停下来那一刻的正常状态）
+    expect(clipBoundaryAction({ ...base, current: 5, loop: true })).toBe('rewind')
+    expect(clipBoundaryAction({ ...base, current: 5, loop: false })).toBe('stop')
+  })
+
+  it('跑到段首之前 → 拉回段首', () => {
+    expect(clipBoundaryAction({ ...base, current: 0.5, loop: false })).toBe('clamp-start')
+  })
+
+  it('没剪辑（区间退化）→ 整段都能播，不做任何拦截', () => {
+    expect(clipBoundaryAction({ start: 0, end: 0, current: 3, loop: true })).toBe('continue')
+  })
+
+  it('非法数值 → 不拦（宁可照原样播，也不要拿到 NaN 位置）', () => {
+    expect(clipBoundaryAction({ ...base, current: Number.NaN, loop: true })).toBe('continue')
+  })
+})
 
 describe('clampClipRange：把范围收进 [0,时长] 且保住最短长度', () => {
   it('合法范围原样通过（只做 3 位小数收敛）', () => {

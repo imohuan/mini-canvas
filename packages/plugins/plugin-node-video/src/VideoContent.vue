@@ -28,7 +28,7 @@ import {
 } from './videoThumbTier'
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
 import { unifiedThumbOf } from './videoThumbUnified'
-import { readClipRange } from './videoClip'
+import { clipBoundaryAction, readClipRange } from './videoClip'
 import { formatTime } from './videoNodeData'
 import VideoPlayerBar from './VideoPlayerBar.vue'
 import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
@@ -363,6 +363,20 @@ const progressPct = computed(() => (playableLength.value > 0 ? (playedInClip.val
 /** 左右分开显示（参考 liblib 控件）：进度条左边已播、右边总长 */
 const playedTimeLabel = computed(() => formatTime(playedInClip.value))
 const totalTimeLabel = computed(() => formatTime(playableLength.value))
+
+/**
+ * 剪辑选区的末尾一变，就重新武装段尾判定。
+ *
+ * 为什么监听「末尾」而不是把判断塞进剪辑面板：内容区自己在播，任何一次末尾变化
+ * （拖端点、改起点让末尾跟着变、换节点）都必须让它重新开始看「有没有播过段尾」，
+ * 否则上一轮留下的闩锁会把之后所有循环都吞掉（用户 2026-10-31 实测报的越界播放）。
+ */
+watch(
+  () => clipRange.value.end,
+  () => {
+    endedLatch.value = false
+  },
+)
 /** 静音开关（liblib 控件里的喇叭按钮；默认有声，点一下静音） */
 const muted = ref(false)
 /** 音量（0~1）：hover 喇叭弹出竖向滑块可调；音量为 0 视同静音 */
@@ -467,6 +481,14 @@ async function togglePlay(): Promise<void> {
     } else if (resumeTime.value > 0 && v.currentTime <= 0.01) {
       v.currentTime = Math.min(resumeTime.value, end > start ? end : Number.POSITIVE_INFINITY)
     }
+    /**
+     * 每次「从暂停开始播」都重新武装段尾判定（用户实测 2026-10-31）。
+     *
+     * 不这么做的话：上一轮停在段尾让闩锁留成 true，改完选区再按播放，
+     * 段尾判断整段失效 —— 视频一路播到片尾，看起来就是「循环没生效 / 播到区域外」。
+     * onTimeUpdate 里还有一道「回到选区内部自动解锁」的兜底，这里只是把正常路径写明确。
+     */
+    endedLatch.value = false
     // 自动播放可能被浏览器策略拦下（无用户手势时不许有声播放）—— 降级为静音播
     // 一把；真实用户点过一次页面后通常不会再进这条路。播放态由事件驱动同步。
     await v.play().catch(() => {
@@ -598,24 +620,55 @@ function onTimeUpdate(e: Event): void {
   publishPlayhead(props.id, v.currentTime)
   playing.value = !v.paused
   const { start, end } = clipRange.value
-  // 播到剪辑段末尾：停了，并把画面停在结尾（不要让用户看到被剪掉的画面）。
-  // endedLatch：一轮只停一次 —— seek/暂停期间 timeupdate 还会来，没有闩锁的话
-  // "暂停→拉回末尾"会被重复触发，第二轮开始时进度条在段尾和当前进度之间来回跳
-  if (end > start && !endedLatch.value && v.currentTime >= end) {
-    endedLatch.value = true
-    // 区间循环（剪辑面板「区间循环」按钮 / 设置项）：开 = 回段首接着放，关 = 停在段尾。
-    // ★ 必须读剪辑偏好，不能读 v.loop：video 元素的 loop 只能循环**整段视频**，
-    //   而且它不会在「剪辑段尾」触发 —— 面板里那段选区它根本不知道（用户实测报的没效果）。
-    if (readClipPrefs(props.id).loop) {
-      endedLatch.value = false
-      v.currentTime = start
-      void v.play().catch(() => {})
-    } else {
-      v.pause()
-      v.currentTime = end
-      currentTime.value = end
-      resumeTime.value = start
-    }
+  /**
+   * 回到选区内部 → 重新武装「播到段尾」的判定（用户实测 2026-10-31 报的「开着循环还播到区域外」）。
+   *
+   * 这条**必须写在段尾判断之前**。endedLatch 是一轮只停一次的闩锁，但从前只有两种情况会清它：
+   * ① 整段元素卸载（stopPlayback），② 循环自己跳回段首。
+   * 于是这些路径会让闩锁一直卡在 true，段尾判断整段失效，视频顺顺当当播到片尾：
+   * - 上一轮播到段尾停下（闩锁 = true），用户把选区往后拖 / 改起点，再按播放；
+   * - 同一轮里中途打开「区间循环」；
+   * - 拖剪辑端点时预览 seek 回到选区里。
+   * 判据用「确实在选区内部」而不是「小于 end」：停在段尾那一刻 currentTime == end，
+   * 不能在这一帧把自己解锁，否则 timeupdate 会反复停下。
+   */
+  if (endedLatch.value && v.currentTime < end - 0.001) endedLatch.value = false
+  /**
+   * 越界处理统一交给纯函数（videoClip.clipBoundaryAction），组件只负责执行动作。
+   *
+   * 两条边界都要管，这是用户截图里「开了循环还能播到区域外」的根因：
+   * - 拖到段尾之后：循环开就回段首接着播，循环关就停在段尾；
+   * - 拖到段首之前：正在播就拉回段首（暂停中允许停在原处预览）。
+   * 判断**不受 endedLatch 限制**：从暂停状态拖到段外再点播放时，闩锁可能还是上一轮的 true，
+   * 只靠「一轮停一次」的判断会漏掉，视频就会继续往外播。
+   */
+  const action = clipBoundaryAction({
+    current: v.currentTime,
+    start,
+    end,
+    loop: readClipPrefs(props.id).loop,
+  })
+  if (action === 'continue') {
+    if (endedLatch.value && v.currentTime < end - 0.001) endedLatch.value = false
+    return
+  }
+  if (action === 'clamp-start') {
+    if (v.paused) return
+    v.currentTime = start
+    currentTime.value = start
+    return
+  }
+  endedLatch.value = true
+  if (action === 'rewind') {
+    endedLatch.value = false
+    v.currentTime = start
+    currentTime.value = start
+    void v.play().catch(() => {})
+  } else {
+    v.pause()
+    v.currentTime = end
+    currentTime.value = end
+    resumeTime.value = start
   }
 }
 

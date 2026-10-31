@@ -106,3 +106,33 @@ export function readClipRange(
     minDuration,
   })
 }
+
+/**
+ * 播放器把当前时间推到了选区之外时该怎么处理（纯函数，组件只管照着执行）。
+ *
+ * 背景（用户口径 2026-10-31）：剪辑条只圈「播这一段」，节点承载的仍是整段视频。
+ * 但播放条的进度轴是整段原片，用户完全可以把进度球拖到选区之外 ——
+ * 从前那种情况没有任何处理，视频就从选区外接着播，看起来就是「开了循环还播到区域外」。
+ *
+ * @returns
+ * - 'continue'：在选区里，正常播；
+ * - 'rewind'  ：越过段尾且循环开 → 回段首接着播；
+ * - 'stop'    ：越过段尾且循环关 → 停在段尾；
+ * - 'clamp-start'：跑到段首之前 → 拉回段首（往后没有可播的部分）。
+ */
+export type ClipBoundaryAction = 'continue' | 'rewind' | 'stop' | 'clamp-start'
+
+export function clipBoundaryAction(input: {
+  current: number
+  start: number
+  end: number
+  loop: boolean
+}): ClipBoundaryAction {
+  const { current, start, end, loop } = input
+  if (!Number.isFinite(current) || !Number.isFinite(start) || !Number.isFinite(end)) return 'continue'
+  // 没剪辑（或区间退化）：整段都能播，不需要任何边界处理
+  if (!(end > start)) return 'continue'
+  if (current >= end) return loop ? 'rewind' : 'stop'
+  if (current < start - 1e-3) return 'clamp-start'
+  return 'continue'
+}
