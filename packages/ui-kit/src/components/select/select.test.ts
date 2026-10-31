@@ -91,4 +91,24 @@ describe('Select 组件行为', () => {
     wrapper.unmount()
     host.remove()
   })
+
+  it('分组起始行按过滤后的全局位置判定（第二组也能画分隔线）', async () => {
+    const wrapper = mount(Select, {
+      props: {
+        options: [
+          { label: 'A1', value: 'a1', group: 'A' },
+          { label: 'A2', value: 'a2', group: 'A' },
+          { label: 'B1', value: 'b1', group: 'B' },
+        ],
+      },
+    })
+    await wrapper.find('.mck-select').trigger('click')
+    await wrapper.vm.$nextTick()
+    const panel = document.querySelector('.mck-dropdown__panel')
+    if (!panel) throw new Error('dropdown panel missing')
+    const starts = panel.querySelectorAll('.sel-option.is-group-start')
+    expect(starts.length).toBe(1)
+    expect(starts[0]?.textContent).toContain('B1')
+    wrapper.unmount()
+  })
 })

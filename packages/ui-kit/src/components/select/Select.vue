@@ -93,13 +93,13 @@ function select(item: SelectOption): void {
  * 分组分隔线：相邻两项的 group 名不同时，在这一行上方画一条线（与右键菜单的分块同款）。
  * 无分组列表返回 false —— 一条线都不画，既有调用方观感不变。
  */
-function isGroupStart(index: number): boolean {
+function isGroupStart(item: SelectOption): boolean {
+  // 必须看过滤后的**全局位置**：模板按 group 拆成多段，每段 index 都从 0 重来，
+  // 第二组第一项会拿到 0，分隔线永远画不出来。
+  const index = filtered.value.indexOf(item)
   if (index <= 0) return false
-  const list = filtered.value
-  const prev = list[index - 1]
-  const cur = list[index]
-  if (!prev || !cur) return false
-  return Boolean(cur.group) && prev.group !== cur.group
+  const prev = filtered.value[index - 1]
+  return Boolean(item.group) && prev?.group !== item.group
 }
 
 function clear(): void {
@@ -201,7 +201,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
           <template v-for="(group, gi) in groups" :key="group.name + gi">
             <div v-if="group.name" class="mck-select__group">{{ group.name }}</div>
             <button
-              v-for="(item, index) in group.items"
+            v-for="item in group.items"
               :key="item.value"
               type="button"
               role="option"
@@ -212,7 +212,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
                 'is-active': item.value === modelValue,
                 'is-disabled': item.disabled,
                 'hasDescription': !!item.description,
-                'is-group-start': isGroupStart(index),
+                'is-group-start': isGroupStart(item),
               }"
               :data-highlight="item === filtered[highlight] ? 'true' : 'false'"
               :aria-selected="item.value === modelValue"
