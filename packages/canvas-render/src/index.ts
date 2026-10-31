@@ -356,6 +356,11 @@ export { NodeLayoutService } from './layout/nodeLayout'
 // 视口服务（CanvasHost attach VueFlow backend 后可用；插件读/控视图）
 export { ViewportService } from './viewport/viewportService'
 export type { ViewportBackend, ViewportState, FlowPoint as ViewportFlowPoint } from './viewport/viewportService'
+// 几何 + 视口合并服务（服务名 view）：插件/渲染层统一从这里取视口与节点矩形，取景走 fitTo
+export { ViewService } from './view/viewService'
+export type { FocusTarget, ViewServiceDeps } from './view/viewService'
+export { computeFitTo } from './view/fitTo'
+export type { FitToInput, FitToOptions, FitToResult } from './view/fitTo'
 // 可视区纯几何：视口变换 → flow 可视矩形 + 相交判定（align-guide/mini-map 等按可视区裁剪节点）
 export { viewportRectInFlow, rectsOverlap, expandRect } from './geometry/visibleArea'
 export type { FlowRect } from './geometry/visibleArea'

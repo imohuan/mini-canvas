@@ -378,8 +378,8 @@ onMounted(() => {
     queryNodeEl: (nodeId: string) =>
       rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
   }
-  // 视口服务接线（旧入口保留）：把 VueFlow 能力 attach 到 host.viewport
-  props.host?.viewport.attachBackend(backend)
+  // 视口服务接线：view 是正式入口，内部与旧 viewport 别名共用同一份 ViewportService。
+  props.host?.view.attachBackend(backend)
   // Flow 能力面（T04）：实例就绪（flow-ready）→ DOM 锚点捕获（dom-ready）
   flow.attachFlow(backend)
   flow.attachNodeVisual(vfApi as unknown as NodeVisualSyncApi)

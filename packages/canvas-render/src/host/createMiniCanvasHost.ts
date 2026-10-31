@@ -42,6 +42,7 @@ import { tipService } from '../tip/tipService'
 import TipLayer from '../tip/TipLayer.vue'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
+import { ViewService } from '../view/viewService'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -113,6 +114,8 @@ export interface CanvasHostHandle {
   nodeLayout: NodeLayoutService
   /** 视口服务（CanvasHost 挂载后 attach VueFlow backend；插件读/控制视图） */
   viewport: ViewportService
+  /** 几何 + 视口合并服务（新入口；nodeLayout/viewport 是同一组底层的兼容别名） */
+  view: ViewService
   /** 配置持久化桥（ctx.settings ↔ save(config)）；persistSettings=false 时 undefined */
   settingsPersist?: SettingsPersistService
   /** 资源生命周期服务（Blob/object URL 登记与回收；file-drop 等写入 object URL 的插件接入） */
@@ -186,6 +189,11 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   // 视口服务：工厂先建空壳，CanvasHost 拿到 VueFlow 实例后 attachBackend
   const viewport = new ViewportService()
+  // view：几何 + 视口的正式名字。构造时传入同一份 layout/viewport 实例，
+  // 保证量测写口、视口后端与别名读的是同一份状态。
+  const view = new ViewService({ nodeStore, layout: nodeLayout, viewport })
+  ctx.inject('view', view)
+  // 兼容别名：迁移期保留，Task 9 删除。
   ctx.inject('viewport', viewport)
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
@@ -321,6 +329,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     graph,
     nodeLayout,
     viewport,
+    view,
     settingsPersist,
     resources,
     stop: () => {

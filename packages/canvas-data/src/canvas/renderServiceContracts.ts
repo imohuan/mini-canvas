@@ -70,6 +70,47 @@ export interface LayoutRect {
 }
 
 /**
+ * 取景参数（服务名 view 的 fitTo）。九个聚焦实现的所有差异都收在这里：
+ * 是否改缩放、是否只在该内容不可见时动、可视区要不要扣掉状态栏。
+ */
+export interface FitToOptions {
+  /** 留白比例（0..0.49，与 VueFlow fitView 同义）；不写 heightRatio 时用它适配整块内容 */
+  padding?: number
+  /** 目标内容高度占视口高度的比例（auto-layout / 底栏用 0.5）；写了它就不看 padding */
+  heightRatio?: number
+  minZoom?: number
+  maxZoom?: number
+  /** true = 保持当前 zoom，只平移 */
+  keepZoom?: boolean
+  /** 指定固定 zoom */
+  zoom?: number
+  /** 是否顺手选中目标；由 canvas.focus 消费，view.fitTo 自己不碰选中 */
+  select?: boolean
+  /** 只在该内容不可见时移动 */
+  onlyIfOutOfView?: boolean
+  /** 不可见判定的额外边距（屏幕像素） */
+  margin?: number
+  /** 把上/下状态栏高度算进包围盒：缺省 'none' */
+  includeBars?: 'none' | 'bottom' | 'both'
+  /** 是否播放过渡；缺省 true */
+  animate?: boolean
+  durationMs?: number
+}
+
+/** 取景目标：一组节点 id / 当前选中集 / 全部节点 */
+export type FocusTarget = string[] | 'selection' | 'all'
+
+/**
+ * 视口与几何合并后的插件契约（服务名 view）。
+ *
+ * 不含量测写口（setMeasuredSize 等）与后端装配口（attachBackend）：那两件是渲染层内部面。
+ */
+export interface ViewContract extends NodeLayoutContract, ViewportContract {
+  /** 唯一取景算法；返回是否真的移动了视图（已可见时 false） */
+  fitTo(target: FocusTarget, opts?: FitToOptions): boolean
+}
+
+/**
  * 节点布局只读契约（服务名 nodeLayout；渲染层注入）。
  *
  * 只含读口：实测尺寸 / 绝对坐标 / 矩形。渲染层内部写口（setMeasuredSize / clearMeasuredSize /

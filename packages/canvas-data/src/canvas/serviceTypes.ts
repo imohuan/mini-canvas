@@ -24,7 +24,13 @@ import type { SaveService } from '../storage/types'
 import type { NodeFactoryService } from './nodeFactory'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { ThemeRegistry } from './registry/themeRegistry'
-import type { NodeLayoutContract, ViewportContract } from './renderServiceContracts'
+import type {
+  FocusTarget,
+  FitToOptions,
+  NodeLayoutContract,
+  ViewContract,
+  ViewportContract,
+} from './renderServiceContracts'
 
 declare module '@mini-canvas/kernel' {
   interface Services {
@@ -52,6 +58,8 @@ declare module '@mini-canvas/kernel' {
     nodeLayout: NodeLayoutContract
     /** 视口服务（渲染层注入；契约见 renderServiceContracts） */
     viewport: ViewportContract
+    /** 几何 + 视口合并服务（渲染层注入）；新代码用它，nodeLayout/viewport 仅为兼容别名 */
+    view: ViewContract
   }
 }
 
@@ -92,5 +100,9 @@ declare module '@mini-canvas/canvas-data' {
     nodeLayout: NodeLayoutContract
     /** 视口服务（渲染层注入；契约见 renderServiceContracts） */
     viewport: ViewportContract
+    /** 几何 + 视口合并服务（渲染层注入）；新代码用它，nodeLayout/viewport 仅为兼容别名 */
+    view: ViewContract
   }
 }
+
+export type { FocusTarget, FitToOptions, ViewContract }
