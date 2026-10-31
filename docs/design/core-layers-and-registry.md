@@ -1,6 +1,9 @@
 # 画布核心分层与注册场 —— 设计文档
 
-日期：2026-09-17 · 状态：**待评审（未开始实现）** · 类型：架构设计 · 版本：**v2（已过一轮独立审核）**
+日期：2026-09-17 · 状态：**已实现（2026-10-31 合入 main）** · 类型：架构设计 · 版本：**v2（已过一轮独立审核）**
+
+> **实现结果**：本文的三根轴、七个原语与注册场设计已落地。当前有哪些服务、哪些场，
+> 以 [service-map.md](./service-map.md) 为准（那是随代码更新的现状表）；本文保留设计依据与取舍。
 依据：`docs/tmp/architecture-layer-audit/report.md`（只读调查）+ 与作者的多轮澄清
 参考：`deepseek-harness/docs/cordis-tutorial/03-services.zh.md`（服务）、`07-into-the-harness.zh.md`（工具）
 

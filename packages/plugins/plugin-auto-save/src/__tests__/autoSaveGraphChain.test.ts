@@ -39,7 +39,7 @@ describe('auto-save + graph 链路（P0-1 完整闭环）', () => {
     doc.createNode('text', { x: 3, y: 4 })
     // graph commit 已把节点写进 save 脏队列（不依赖 auto-save 自己 set 图）
     expect(save.isDirty()).toBe(true)
-    const svc = ctx.get<AutoSaveService>('auto-save')
+    const svc = ctx.get<{ autoSave: AutoSaveService }>('save').autoSave
     expect(svc.isDirty()).toBe(true)
     await svc.saveNow()
     const saved = await save.get<unknown[]>('graph', 'canvas')
@@ -50,24 +50,19 @@ describe('auto-save + graph 链路（P0-1 完整闭环）', () => {
   it('nodeStore 变化经订阅置脏（auto-save 直接订阅内核事件源）', async () => {
     const { ctx, save, nodeStore } = boot()
     await ctx.start()
-    const svc = ctx.get<AutoSaveService>('auto-save')
+    const svc = ctx.get<{ autoSave: AutoSaveService }>('save').autoSave
     nodeStore.addNode('text', { x: 0, y: 0 })
     expect(svc.isDirty()).toBe(true)
     ctx.stop()
   })
 })
-import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { createCanvasBasePlugin } from '@mini-canvas/canvas-data'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { autoSavePlugin } from '../autoSavePlugin'
 
 /**
- * 新入口：引擎挂到 save.autoSave（插件仍 inject 自己的旧名做兼容）。
- * 这里只钉"挂上了、是同一个实例"，周期语义由 canvas-data 的引擎单测覆盖。
+ * 新入口：引擎挂到 save.autoSave，旧服务名 `auto-save` 不再存在。
+ * 这里只钉"挂上了、旧名取不到"，周期语义由 canvas-data 的引擎单测覆盖。
  */
 describe('auto-save 并入 save', () => {
-  it('装插件后 save.autoSave 可用，旧 auto-save 服务指向同一实例', async () => {
+  it('装插件后 save.autoSave 可用，旧 auto-save 服务名取不到', async () => {
     const ctx = new Context()
     const base = createCanvasBasePlugin({ adapter: new MemoryStorageAdapter() })
     ctx.plugin(base.plugin)
@@ -75,8 +70,9 @@ describe('auto-save 并入 save', () => {
     await ctx.start()
     const save = ctx.get<{ autoSave?: { isEnabled(): boolean } }>('save')
     expect(save.autoSave).toBeDefined()
-    expect(save.autoSave).toBe(ctx.get('auto-save'))
     expect(save.autoSave?.isEnabled()).toBe(true)
+    // 旧名已删：插件服务不再占一个「看起来可换实现」的名字
+    expect(ctx.hasService('auto-save')).toBe(false)
     ctx.stop()
   })
 })

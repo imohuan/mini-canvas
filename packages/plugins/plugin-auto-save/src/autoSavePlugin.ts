@@ -7,8 +7,8 @@
  * v2 分工（不重复造、零耦合）：
  * - 落盘本体：内核 SaveService（ctx.save.set → 防抖 flush；CanvasHost 已做 hidden/pagehide 即时 flush）。
  * - 本包只补老版独有的「周期性兜底保存」：interval 轮询脏位 → ctx.save.flush()。
- * - 上架 auto-save 服务（独立名，不撞宿主已注入的 save）暴露老版同名 API 面；
- *   宿主/store 变化经渲染层事件/订阅置脏位。
+ * - 引擎挂到 `save.autoSave` 子对象（不再占用独立服务名）；
+ *   宿主/store 变化经 doc 订阅置脏位。
  *
  * 依赖：save（内核）、nodeStore/edgeStore（内核；订阅数据变化置脏）。
  */
@@ -37,7 +37,8 @@ export function apply(ctx: Context): void {
   // doc.subscribe 一次订阅覆盖节点 + 边两桶（与分别订 nodeStore/edgeStore 等价）
   const offDirty = doc.subscribe(() => engine.markDirty())
 
-  // 挂到 save 子对象（新入口），并保留旧服务名做兼容别名。
+  // 挂到 save 子对象：这是唯一入口。旧服务名 `auto-save` 已删除——留第二份只会
+  // 让人以为它还是可换实现的扩展点，而它实际只是这个插件的私有状态。
   const service: AutoSaveService = {
     isEnabled: () => engine.isEnabled(),
     isDirty: () => engine.isDirty(),
@@ -48,7 +49,6 @@ export function apply(ctx: Context): void {
     },
   }
   ;(save as SaveService & { autoSave?: AutoSaveService }).autoSave = service
-  ctx.inject('auto-save', service)
 
   // 卸载清理：effect 的 fn 立即执行、返回值才是清理函数（此前误把清理写进 fn 导致订阅一建即退）
   ctx.effect(() => () => {
