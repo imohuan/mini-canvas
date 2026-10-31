@@ -19,6 +19,7 @@ import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
 import { disposeGhostSweep, onStoryboardDragEnd, onStoryboardDragMove, storyboardHitAt } from './storyboardDrag'
 import { STORYBOARD_LAYOUT_KEYS } from './storyboard'
+import { isTapGesture } from './gestureClick'
 
 export const name = 'image-grid-split'
 /**
@@ -152,12 +153,11 @@ export function apply(ctx: Context): void {
   //
   // 信号源（canvas-render renderEvents 广播，本插件只消费不改宿主）：
   //  - canvas:node:click    点了某个节点 —— nodeId 不是切分节点 → 退；
-  //  - canvas:pane:click    点了画布空白 → 退；
+  //  - canvas:pane:click    点了画布空白 → 退；但**拖画布平移**不算点（见下）；
   //  - canvas:selection:change  框选 / Ctrl+A / 拖拽顺手选中改变了选中集：
   //    当前节点不在选中集 → 退。拖动当前节点也会先触发 selection（含它自己）→ 不误退。
-  //  - canvas:viewport:move-start  画布平移 / 滚轮缩放（用户口径 2026-10-30：
-  //    "画布的平移和缩放不会触发模式自动退出"）→ 退。两者在宿主里同源 emit，
-  //    一个订阅同时覆盖拖画布和缩放。
+  //  - 画布平移 / 缩放（用户口径 2026-10-31：**不退出**）。宿主在平移松手后
+  //    仍会 emit pane-click，所以这里记录按下点、按位移区分"点"与"拖"。
   //
   // 为什么用 selection 而不是 drag-start：拖动**别的**节点同样会先 emit drag-start，
   // 按事件名判断要再查"拖的是谁"，多一层状态；selection 一步到位且天然覆盖框选。
@@ -179,7 +179,28 @@ export function apply(ctx: Context): void {
       toolbarOf()?.exit?.(id)
     }
   })
+  /**
+   * 画布按下点：平移手势结束后宿主还会 emit pane-click，
+   * 只有按下→抬起几乎没有位移时才算"点空白"（用户口径 2026-10-31）。
+   */
+  let paneDown: { x: number; y: number } | null = null
+  let paneUp: { x: number; y: number } | null = null
+  const onPointerDown = (ev: PointerEvent | MouseEvent): void => {
+    paneDown = { x: ev.clientX, y: ev.clientY }
+  }
+  const onPointerUp = (ev: PointerEvent | MouseEvent): void => {
+    // 抬手后保留这次坐标，等紧随其后的 pane-click 判定用完再清
+    paneUp = { x: ev.clientX, y: ev.clientY }
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('pointerup', onPointerUp, true)
+  }
   const offPaneClick = ctx.on('canvas:pane:click', () => {
+    const tapped = isTapGesture(paneDown, paneUp)
+    paneDown = null
+    paneUp = null
+    if (!tapped) return
     const id = activeSplitId()
     if (id) {
       endSplit(id)
@@ -193,6 +214,10 @@ export function apply(ctx: Context): void {
     offNodeClick.dispose()
     offPaneClick.dispose()
     offSelection.dispose()
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('pointerup', onPointerUp, true)
+    }
   })
 
   // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原

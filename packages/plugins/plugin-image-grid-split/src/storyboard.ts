@@ -356,9 +356,17 @@ export function decideSnap(input: {
     }
     const slots = [...board.slots]
     const displaced = current
+    /**
+     * 移动节点原本占的格（只在同一块分镜组里才算）。
+     *
+     * 用户实测 2026-10-31「一槽两图」：同组内把图从旧格拖到**空**格时，
+     * 旧实现只写新格、不清旧格 —— 同一个 id 在表里出现两次。之后别的图拖进旧格，
+     * 看上去就是两张图叠在一格（而且旧格永远“假占用”）。
+     * 所以只要目标格是空的，必须顺手把旧格清空。
+     */
+    const originIndex = fromBoardId === board.id ? board.slots.indexOf(movingId) : -1
     // 目标格有别的节点 → 换位；被顶掉的节点回到移动节点原来的格（同组时）
     if (displaced) {
-      const originIndex = fromBoardId === board.id ? board.slots.indexOf(movingId) : -1
       if (originIndex >= 0) {
         slots[originIndex] = displaced
       } else {
@@ -367,6 +375,9 @@ export function decideSnap(input: {
         slots[index] = movingId
         return { kind: 'snap', boardId: board.id, slotIndex: index, slots, displacedNodeId: displaced, displaceDetach: true }
       }
+    } else if (originIndex >= 0) {
+      // 目标格是空的：旧格归还，一个节点只留一个新格
+      slots[originIndex] = null
     }
     slots[index] = movingId
     return { kind: 'snap', boardId: board.id, slotIndex: index, slots, displacedNodeId: displaced }
@@ -529,6 +540,47 @@ export function placeStoryboardAt(input: {
   const size = input.size && input.size.w > 0 && input.size.h > 0 ? input.size : STORYBOARD_DEFAULT_SIZE
   const at = placeAdjacent({ size, source, obstacles: rects, visible })
   return { x: at.x, y: at.y }
+}
+
+/**
+ * 被挤出槽位的节点放哪：**分镜组外面**的空位（右侧优先，自动避开已有节点）。
+ *
+ * 用户实测 2026-10-31「一槽两图」：外部图片顶掉原住户时，原住户只是解父、位置留在槽位上，
+ * 画面上和新来的图完全重叠 —— 看起来就是一个槽里塞了两张图。
+ * 所以被挤出的节点要挪到组外，槽位里只留新来的那一张。
+ */
+export function placeDetachedFromBoard(input: {
+  ctx: StoryboardPlacementCtx | undefined
+  board: { id?: string; x: number; y: number; w: number; h: number }
+  /** 节点恢复后的尺寸（用进组前记录的 _storyboardSize） */
+  size: { w: number; h: number }
+  /** 不参与避让的节点（被移动的这个自己） */
+  excludeIds?: string[]
+  /** 额外障碍（同一次里先放好的节点：它们还没量测，layout 里拿不到） */
+  extraObstacles?: StoryboardPlacementRect[]
+  /** 要放下的节点 id（不在障碍里算自己；给了就按它排除） */
+  nodeId?: string
+}): { x: number; y: number } {
+  const layout = layoutPortOf(input.ctx)
+  const viewport = viewportPortOf(input.ctx)
+  const exclude = new Set([...(input.excludeIds ?? []), ...(input.nodeId ? [input.nodeId] : [])])
+  const obstacles = (layout?.getAllRects?.() ?? [])
+    .filter((r) => r.id !== input.board.id && !exclude.has(r.id ?? ''))
+    .concat(input.extraObstacles ?? [])
+  /**
+   * 分镜组本身也是一块“占位”。
+   *
+   * 只把它当 source 不够：placeAdjacent 的第一优先点是“源节点右边”，
+   * 但右边被屏幕外的旧节点占住时会退到 **下方/上方**，那些点仍与卡片相交。
+   * 明确把卡片矩形加进障碍，保证选出来的点一定在组外。
+   */
+  obstacles.push({ id: '__board__', x: input.board.x, y: input.board.y, w: input.board.w, h: input.board.h })
+  const vp = viewport?.getViewport?.()
+  const visible = vp && (vp.width ?? 0) > 0 && (vp.height ?? 0) > 0
+    ? { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom, w: vp.width! / vp.zoom, h: vp.height! / vp.zoom }
+    : undefined
+  const at = placeAdjacent({ size: input.size, source: input.board, obstacles, visible })
+  return { x: Math.round(at.x), y: Math.round(at.y) }
 }
 
 /** 交换两格（返回新数组；同格/越界返回原表）。纯函数：调用方拿新数组走 doc.updateNode。 */

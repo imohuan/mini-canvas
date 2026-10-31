@@ -312,6 +312,29 @@ describe('group 插件集成（真实内核服务）', () => {
     expect(nb.position).toEqual({ x: g.position.x + 2000, y: g.position.y + 2000 })
   })
 
+  /**
+   * 分镜组槽位成员不能被分组抢走（用户实测 2026-10-31：一槽两图）。
+   *
+   * 时间线：拖拽结束事件 → 分镜组吸附（parentId=分镜组）→ 本服务也被同一事件叫醒，
+   * 见节点落在某个分组范围内就又改 parentId。两套容器各认一半，槽位里就出现两张图。
+   */
+  it('已在分镜组里的节点：分组归组直接跳过（不改 parentId）', async () => {
+    const { ctx, nodeStore } = makeCtx()
+    nodeStore.registerType({ type: 'storyboard', label: '分镜组', defaultSize: { w: 400, h: 300 } })
+    const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+    const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+    await ctx.start()
+    const svc = ctx.get<GroupService>('group')
+    const gid = svc.createGroup([a, b])!
+    // 分镜组卡片盖在分组范围内；图挂在分镜组下
+    const sb = addNode(nodeStore, 'storyboard', 120, 120, { w: 300, h: 220 })
+    const img = addNode(nodeStore, 'image', 130, 130, { w: 120, h: 80 })
+    nodeStore.updateNode(img, { parentId: sb, position: { x: 10, y: 10 } })
+    svc.applyDragMembership(img)
+    // 仍然属于分镜组，没有被分组抢走
+    expect(nodeStore.getNode(img)?.parentId).toBe(sb)
+  })
+
   it('命令注册：group:create / group:ungroup', async () => {
     const { ctx, command } = makeCtx()
     await ctx.start()

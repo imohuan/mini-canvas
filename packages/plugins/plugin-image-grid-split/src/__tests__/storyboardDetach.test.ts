@@ -36,6 +36,7 @@ async function boot(): Promise<Harness> {
   base.services.nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 480, h: 240 } })
   base.services.nodeStore.registerType({ type: 'storyboard', label: '分镜组', transparent: true, defaultSize: { w: 480, h: 360 } })
   base.services.nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 270 } })
+  base.services.nodeStore.registerType({ type: 'group', label: '分组', defaultSize: { w: 600, h: 400 } })
   base.services.nodeStore.addNodes([
     {
       id: 'board',
@@ -161,6 +162,12 @@ describe('applyStoryboardDrop：一槽一图（外部拖入）', () => {
     // 原来占第 0 格的 img 不能再挂在组里（它是被顶掉的那张）
     const img = h.doc.getNode('img')!
     expect(img.parentId).toBeUndefined()
+    // 也不能留在槽位上和新图重叠（用户实测 2026-10-31「一槽两图」）：
+    // 被挤出的节点要挪到分镜组外面，槽位里只留新来的那一张。
+    const card = { x: 1000, y: 1000, w: 600, h: 400 }
+    const overlaps = img.position.x < card.x + card.w && img.position.x + img.size!.w > card.x
+      && img.position.y < card.y + card.h && img.position.y + img.size!.h > card.y
+    expect(overlaps).toBe(false)
     // 新来的图落在组里
     expect(h.doc.getNode('vid2')!.parentId).toBe('board')
   })
@@ -172,5 +179,23 @@ describe('applyStoryboardDrop：一槽一图（外部拖入）', () => {
     ])
     applyStoryboardDrop(h.ctx, { nodeId: 'vid2', position: { x: 1300, y: 1300 } })
     expect(h.doc.getNode('extra')!.parentId).toBeUndefined()
+  })
+
+  /**
+   * 用户实测 2026-10-31：普通分组里的图片被登记进了分镜组 slots（285 那次）。
+   * 它的 parentId 指向分组，槽位表却记着它 —— 看上去就是“一槽两图”（登记的那张 + 真正拖进来的那张）。
+   */
+  it('槽位表里混进普通分组的图片：清理登记，不占格', async () => {
+    h.doc.updateNode('board', { data: { rows: 2, cols: 2, slots: ['foreign', null, null, null] } })
+    h.ctx.tryGet<{ addNodes(inputs: unknown[]): unknown }>('doc')!.addNodes([
+      { id: 'grp', type: 'group', position: { x: 0, y: 0 }, size: { w: 800, h: 600 }, data: {} },
+      { id: 'foreign', type: 'image', parentId: 'grp', position: { x: 20, y: 20 }, size: { w: 100, h: 60 }, data: {} },
+    ])
+    applyStoryboardDrop(h.ctx, { nodeId: 'vid2', position: { x: 1010, y: 1010 } })
+    const slots = h.doc.getNode('board')!.data!.slots as Array<string | null>
+    expect(slots).not.toContain('foreign')
+    expect(slots[0]).toBe('vid2')
+    // 分组里的图仍归分组，没有被分镜组抢走
+    expect(h.doc.getNode('foreign')!.parentId).toBe('grp')
   })
 })

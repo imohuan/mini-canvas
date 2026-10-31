@@ -14,7 +14,7 @@ import { reactive } from 'vue'
 import type { Context } from '@mini-canvas/canvas-base'
 import {
   decideSnap, normalizeSlots, readStoryboard, readStoryboardLayout, removeFromSlots, slotRects,
-  slotIndexByOverlapOrCenter, type SlotRect, type SnapBoard,
+  slotIndexByOverlapOrCenter, placeDetachedFromBoard, type SlotRect, type SnapBoard,
 } from './storyboard'
 import { fitImageLimits } from './imageFitBridge'
 
@@ -166,6 +166,34 @@ function collectBoards(doc: DocPort, layout: LayoutPort | undefined): SnapBoard[
 }
 
 /**
+ * 清掉槽位表里"不属于本分镜组"的登记。
+ *
+ * 用户实测 2026-10-31：普通分组里的图片 285 被写进了分镜组的 slots，
+ * 而它的 parentId 指向分组 —— 槽位表说有图，画面上却只有底下那张渲染图，
+ * 于是同一个格子里看着像两张图。归属只认一个：**parentId 必须指向本分镜组**。
+ *
+ * @returns 清洗后的槽位表；本来就干净时返回原引用
+ */
+function pruneForeignSlots(
+  doc: DocPort,
+  boardId: string,
+  slots: Array<string | null>,
+  /** 本次正在拖进来的节点：它还没写完 parentId，不能按旧归属清掉 */
+  keepId?: string,
+): Array<string | null> {
+  let changed = false
+  const out = slots.map((id) => {
+    if (typeof id !== 'string' || id === '') return null
+    if (keepId && id === keepId) return id
+    const owner = doc.getNode(id)?.parentId
+    if (owner === boardId) return id
+    changed = true
+    return null
+  })
+  return changed ? out : slots
+}
+
+/**
  * 这次拖拽落点是否真的压在某个分镜组上（只做判定，不改数据）。
  *
  * 用户口径 2026-10-31：拖视频/文字到画布空白处不该弹「分镜组只收图片节点」——
@@ -267,7 +295,17 @@ export function applyStoryboardDrop(
    * 这样即便历史数据已经被弄脏（旧版松手不回位导致两图叠一格），
    * 用户下一次拖动的落库就把整张表修干净 —— 不需要单独的修复脚本。
    */
-  const slots = normalizeSlots(decision.slots, (id) => Boolean(doc.getNode(id)))
+  /**
+   * 槽位表现在只登记**本分镜组的直接子节点**（用户实测 2026-10-31）。
+   * 先把不属于本组的登记清出去，再让「一槽一图」只针对真正的成员生效 ——
+   * 否则分组里的图 285 会被当成组内住户，和拖进来的图叠在同一格。
+   */
+  const slots = pruneForeignSlots(
+    doc,
+    board.id,
+    normalizeSlots(decision.slots, (id) => Boolean(doc.getNode(id))),
+    node.id,
+  )
 
   /**
    * 组内每个槽位只允许一个节点（用户口径 2026-10-31：外部拖进来仍会两张叠一格）。
@@ -287,7 +325,20 @@ export function applyStoryboardDrop(
     const other = doc.getNode(id)
     if (!other) continue
     detachLayout = layout
-    detachFromBoard(doc, other, board.id)
+    // 挪到分镜组外面：只解父、位置不动的话它会继续趴在某个槽位上，
+    // 和新拖进来的图叠在一起（用户实测 2026-10-31「一槽两图」）。
+    const prevOther = other.data?._storyboardSize as { w: number; h: number } | undefined
+    const otherSize = prevOther && prevOther.w > 0 && prevOther.h > 0
+      ? prevOther
+      : { w: other.size?.w ?? 320, h: other.size?.h ?? 240 }
+    const outside = placeDetachedFromBoard({
+      ctx,
+      board,
+      size: otherSize,
+      nodeId: other.id,
+      excludeIds: [node.id],
+    })
+    detachFromBoard(doc, other, board.id, outside)
   }
 
   const fitted = fitInsideSlot({ w: slot.w, h: slot.h }, aspectOf(node), fitImageLimits(ctx))
@@ -296,6 +347,8 @@ export function applyStoryboardDrop(
   const prevSize = node.data?._storyboardSize as { w: number; h: number } | undefined
   const restore = prevSize && prevSize.w > 0 && prevSize.h > 0
     ? prevSize
+    // 之前挂在**普通分组**里时，node.size 是分组内的显示尺寸；脱离时还要还原成它，
+    // 所以这里要把当前尺寸记下来（否则出组后图片会变成槽位尺寸）。
     : { w: node.size?.w ?? 320, h: node.size?.h ?? 240 }
 
   const patch = {
@@ -320,7 +373,14 @@ export function applyStoryboardDrop(
     const other = doc.getNode(displaced)
     const newIndex = slots.indexOf(displaced)
     const target = newIndex >= 0 ? rects[newIndex] : undefined
-    if (other && target) {
+    /**
+     * 被“顶掉”的节点必须真的是本分镜组的成员。
+     *
+     * 用户实测 2026-10-31：槽位表里混进过普通分组的图片，它被判成“原住户”后，
+     * 这里直接解父/挪位，把别人分组里的节点拆了出来。归属不成立的，一律不碰。
+     */
+    const belongs = Boolean(other && other.parentId === board.id)
+    if (other && belongs && target) {
       // 常规换位：被顶的节点挪到移动节点原来的格
       const f2 = fitInsideSlot({ w: target.w, h: target.h }, aspectOf(other), fitImageLimits(ctx))
       const c2 = centerInsideSlot({ w: target.w, h: target.h }, f2)
@@ -330,11 +390,32 @@ export function applyStoryboardDrop(
         size: { w: f2.w, h: f2.h },
         data: { _storyboardSlot: newIndex },
       })
-    } else if (other && decision.displaceDetach) {
+    } else if (other && belongs && decision.displaceDetach) {
       // 组外拖进来的节点顶掉了原住户：原住户没格可去 → 脱离成自由节点
       // （否则它会既不在 slots 里又挂着 parentId，永远叠在槽位上，用户看到"两个节点共用一个槽"）
       detachLayout = layout
-      detachFromBoard(doc, other, board.id)
+      // 位置也要挪到组外：只解父、位置不动的话，原住户仍趴在槽位上，
+      // 画面上和新来的图完全重叠（用户实测 2026-10-31「一槽两图」就是这个）。
+      const prevOther = other.data?._storyboardSize as { w: number; h: number } | undefined
+      const otherSize = prevOther && prevOther.w > 0 && prevOther.h > 0
+        ? prevOther
+        : { w: other.size?.w ?? 320, h: other.size?.h ?? 240 }
+      const outside = placeDetachedFromBoard({
+        ctx,
+        board,
+        size: otherSize,
+        nodeId: other.id,
+        excludeIds: [node.id],
+        // 新来的这张也占地方：它还没写完 parentId，layout 里量不到它
+        extraObstacles: [{
+          id: node.id,
+          x: board.x + slot.x + inside.dx,
+          y: board.y + slot.y + inside.dy,
+          w: fitted.w,
+          h: fitted.h,
+        }],
+      })
+      detachFromBoard(doc, other, board.id, outside)
     }
   }
   return true
@@ -473,7 +554,13 @@ export function disposeGhostSweep(): void {
  * 用户口径 2026-10-30（参考分组节点）：脱离时 store 的 position 还是**相对父**的值，
  * 直接清父级会让节点瞬移（相对值被当成绝对值用）。必须先取"当前真实绝对位置"
  * （nodeLayout.absolutePosition 会沿父链累加），再解父。 */
-function detachFromBoard(doc: DocPort, node: NodeLike, boardId: string): void {
+function detachFromBoard(
+  doc: DocPort,
+  node: NodeLike,
+  boardId: string,
+  /** 指定脱离后的绝对位置（不给 = 用节点当前真实绝对位置，即“拖到哪就在哪”） */
+  targetAbs?: { x: number; y: number },
+): void {
   const layout = detachLayout
   const boardNode = doc.getNode(boardId)
   const board = readStoryboard(boardNode?.data)
@@ -482,7 +569,7 @@ function detachFromBoard(doc: DocPort, node: NodeLike, boardId: string): void {
   }
   const prev = node.data?._storyboardSize as { w: number; h: number } | undefined
   // 绝对位置：父链完整累加（分组同款）。nodeLayout 缺席时退回当前值（不猜）
-  const detachAbs = layout?.absolutePosition?.(node.id)
+  const detachAbs = targetAbs ?? layout?.absolutePosition?.(node.id)
   doc.updateNode(node.id, {
     parentId: undefined,
     position: detachAbs ?? node.position ?? { x: 0, y: 0 },

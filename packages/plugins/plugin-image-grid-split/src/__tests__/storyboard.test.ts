@@ -179,6 +179,27 @@ describe('storyboard 吸附决策', () => {
     expect(d.displacedNodeId).toBe('b')
   })
 
+  it('同组内换位：两个 id 各占一格，没有重复项', () => {
+    const d = decideSnap({ nodeId: 'a', center: centerOf(4), currentBoardId: 'board', boards: [board] })
+    if (d.kind !== 'snap') throw new Error('expected snap')
+    expect(new Set(d.slots.filter(Boolean)).size).toBe(d.slots.filter(Boolean).length)
+    expect(d.slots.filter((s) => s === 'a')).toHaveLength(1)
+    expect(d.slots.filter((s) => s === 'b')).toHaveLength(1)
+  })
+
+  it('同组内拖到空格：旧格必须清空，同一个 id 不能占两格', () => {
+    // 用户实测 2026-10-31「一槽两图」：把 a 从第 0 格拖到第 3 格（空格）时，
+    // 旧实现只写新格、不清旧格，槽位表里 a 出现两次；下一次别的图拖进第 0 格，
+    // 就会和这个“幽灵占位”叠在一起。
+    const d = decideSnap({ nodeId: 'a', center: centerOf(3), currentBoardId: 'board', boards: [board] })
+    expect(d.kind).toBe('snap')
+    if (d.kind !== 'snap') return
+    expect(d.slotIndex).toBe(3)
+    expect(d.slots[3]).toBe('a')
+    expect(d.slots.filter((s) => s === 'a')).toHaveLength(1)
+    expect(d.slots[0]).toBeNull()
+  })
+
   it('拖回自己的格：仍然重新吸附（松手必须归位，否则会叠在别的槽上）', () => {
     const d = decideSnap({ nodeId: 'a', center: centerOf(0), currentBoardId: 'board', boards: [board] })
     expect(d.kind).toBe('snap')

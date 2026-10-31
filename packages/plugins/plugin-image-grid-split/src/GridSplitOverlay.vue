@@ -285,15 +285,23 @@ function onClick(ev: MouseEvent): void {
 </script>
 
 <template>
-  <div v-if="state" class="gso-root nodrag nopan" data-testid="grid-split-overlay" @pointermove="onMove"
-    @pointerleave="onLeave" @click="onClick">
+  <div
+    v-if="state"
+    class="gso-root nodrag nopan"
+    data-testid="grid-split-overlay"
+    @pointermove="onMove"
+    @pointerleave="onLeave"
+    @click="onClick"
+  >
     <!-- 交互层（格子 + 勾选角标）。抠除效果不在这里画：
          真正的遮罩已经贴到卡片本身（见 applyMask），缝隙直接露出画布背景。 -->
-    <div v-for="cell in cells" :key="cell.index" class="gso-cell"
+    <div
+      v-for="cell in cells"
+      :key="cell.index"
+      class="gso-cell"
       :class="[{ 'is-on': cell.on, 'is-hover': state.hover === cell.index }, cornerClass(cell.index, state.rows, state.cols)]"
-      :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%', ...cellImageStyle(cell) }">
-      <!-- 勾选角标：始终渲染（未勾选时符号透明），形状由 .gso-check 画 -->
-      <span class="gso-check" aria-hidden="true" />
+      :style="{ left: cell.left + '%', top: cell.top + '%', width: cell.width + '%', height: cell.height + '%', ...cellImageStyle(cell) }"
+    >
       <span v-if="state.hover === cell.index" class="gso-hint">
         {{ cell.on ? '取消选择' : '选择' }}
       </span>
@@ -310,49 +318,24 @@ function onClick(ev: MouseEvent): void {
   overflow: hidden;
   cursor: pointer;
 }
-
-
 /* 未选中格：独立圆角卡片（参考图 1 左侧）：浅灰底 + 细边，之间有间隔 */
 .gso-cell {
   position: absolute;
   box-sizing: border-box;
-  /**
-   * 底色必须**不透明**（用户口径 2026-10-31，参考图 1 下半张）：
-   * 之前用的是 14% 半透明白，卡片原来的整张图会从格子里透出来 ——
-   * 缝隙两侧的像素依旧连着，看上去只是盖了几个方块，分割就白做了。
-   *
-   * 颜色跟随主题：亮色用面板白、暗色用 --ui-panel-soft 的深灰，
-   * 由主题变量给值，本插件不写死白/黑。`margin: 1px` 让相邻格子之间留一条极细缝，
-   * 与 mask 抠掉的 gap 叠在一起，缝隙才不会因为抗锯齿糊成一片。
-   */
-  margin: 1px;
+  border: 1px solid color-mix(in srgb, var(--ui-overlay-solid, #fff) 62%, transparent);
+  /* 格子底色：不透明的主题面板色，盖住原图（否则缝隙两侧的图还是连着的） */
   background: var(--ui-panel, #ffffff);
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--ui-overlay-solid, #fff) 62%, transparent);
-  /* 默认直角：只有四个外角单独圆（参考 deepseek_html 的 radius-tl/tr/bl/br 写法） */
+  margin: 1px;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
-
 /* 四个外角：各只圆一个角（用户口径 2026-10-30） */
-.gso-cell.is-corner-tl {
-  border-top-left-radius: var(--radius-panel, 12px);
-}
-
-.gso-cell.is-corner-tr {
-  border-top-right-radius: var(--radius-panel, 12px);
-}
-
-.gso-cell.is-corner-bl {
-  border-bottom-left-radius: var(--radius-panel, 12px);
-}
-
-.gso-cell.is-corner-br {
-  border-bottom-right-radius: var(--radius-panel, 12px);
-}
-
-/* 勾选角标（参考图 1：左上角小方框 + √）—— 用内层 span 画，
-   因为格子自己的两个伪元素要留给"选中叠加层"和"提示"。 */
-.gso-check {
+.gso-cell.is-corner-tl { border-top-left-radius: var(--radius-panel, 12px); }
+.gso-cell.is-corner-tr { border-top-right-radius: var(--radius-panel, 12px); }
+.gso-cell.is-corner-bl { border-bottom-left-radius: var(--radius-panel, 12px); }
+.gso-cell.is-corner-br { border-bottom-right-radius: var(--radius-panel, 12px); }
+/* 勾选角标（参考图 1：左上角小方框 + √） */
+.gso-cell::before {
   content: '';
   position: absolute;
   top: 6px;
@@ -363,14 +346,12 @@ function onClick(ev: MouseEvent): void {
   background: color-mix(in srgb, var(--ui-overlay-solid, #fff) 82%, transparent);
   border: 1px solid var(--ui-line, #e2e5ea);
   box-sizing: border-box;
-  z-index: 2;
 }
-
-.gso-check::after {
+.gso-cell::after {
   content: '';
   position: absolute;
-  top: 5px;
-  left: 5px;
+  top: 11px;
+  left: 11px;
   width: 8px;
   height: 5px;
   border-left: 2px solid var(--ui-accent, #0891b2);
@@ -379,51 +360,26 @@ function onClick(ev: MouseEvent): void {
   opacity: 0;
   transition: opacity 0.1s ease, transform 0.1s ease;
 }
-
-.gso-cell.is-on .gso-check::after {
+.gso-cell.is-on::after {
   opacity: 1;
   transform: rotate(-45deg) scale(1);
 }
-
-/**
- * 悬停/选中：只改**描边**，强调色另用 ::after 一层覆盖 —— 不能碰 background。
- *
- * 两个坑都踩过（用户口径 2026-10-31 的截图）：
- *  1. 直接 `background: color-mix(..., transparent)` 会把实底盖掉，格子里又透出原图；
- *  2. 用 background-image 叠渐变也不行 —— 那层正是格子画原图切片用的，会被覆盖。
- * 所以底色永远是实底，强调色走独立伪元素（::before 已被勾选框占用，用 ::after 的内层）。
- */
+/* 悬停：淡青底 */
 .gso-cell.is-hover {
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 22%, transparent);
   border-color: var(--ui-accent, #0891b2);
 }
-
-.gso-cell.is-hover::after,
-.gso-cell.is-on::after {
-  /* 叠加层：铺满整格、不吃事件、不盖住勾选角标（z-index 低于它） */
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
+/* 选中：整格淡青 + 青描边（比未选中格更明显） */
+.gso-cell.is-on {
+  border-color: var(--ui-accent, #0891b2);
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 14%, transparent);
 }
-
-.gso-cell.is-hover::after {
-  background: color-mix(in srgb, var(--ui-accent, #0891b2) 22%, transparent);
-}
-
-.gso-cell.is-on.is-hover::after {
+.gso-cell.is-on.is-hover {
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 30%, transparent);
 }
-
 /* 悬停提示（用户口径 2026-10-30：格子中央显示"选择 / 取消选择"胶囊）：
    真实子元素（::after 已被勾选角标占用）：只在悬停格渲染（Vue 侧 state.hover 判断）。 */
-/**
- * 胶囊本体（居中、小字、深底白字）。
- *
- * 用户口径 2026-10-31：亮色/暗色主题下都保持**黑底白字**，不要跟着主题翻成白底黑字。
- * 所以这里不读 --ui-overlay-solid（它亮色是白），直接给一组固定深底 + 白字。
- */
+/* 胶囊本体（居中、小字、深底白字） */
 .gso-hint {
   position: absolute;
   left: 50%;
@@ -431,6 +387,7 @@ function onClick(ev: MouseEvent): void {
   transform: translate(-50%, -50%);
   padding: 3px 10px;
   border-radius: 999px;
+  /* 提示固定黑底白字：亮色/暗色都一致，不跟主题翻成白底 */
   background: rgb(24 32 43 / 0.88);
   color: #ffffff;
   font-size: var(--text-xs, 12px);
@@ -439,4 +396,5 @@ function onClick(ev: MouseEvent): void {
   pointer-events: none;
   z-index: 1;
 }
+
 </style>

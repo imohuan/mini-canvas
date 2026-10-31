@@ -431,6 +431,19 @@ export class GroupService extends Service implements GroupServiceAPI {
     const node = this.doc.getNode(nodeId)
     // 组节点参与归组（B 方案：允许嵌套一层）。组内子节点（含拖到其它组范围）正常 join/leave。
     if (!node) return
+    /**
+     * 分镜组的槽位成员不参与分组归组（用户实测 2026-10-31：一槽两图）。
+     *
+     * 分镜组是**另一种容器**：它的子节点由 slots 锁定在槽位上，位置是相对分镜组的。
+     * 而分镜组卡片本身可能正落在一个普通分组里（或压在分组范围内），于是同一个拖拽结束
+     * 事件会先被分镜组吸附、再被本服务判成"落进了分组"→ 给节点改 parentId 到分组，
+     * 两套容器各认一半：slots 还写着它、parentId 却指向分组，视觉上就是两张图叠一格。
+     * 归属只认一个：已经在分镜组里的，分组这边一律不碰。
+     *
+     * 判据直接读 parentId 指向的节点类型，不 import 分镜组插件（两个插件互不依赖）。
+     */
+    const parentType = node.parentId ? this.doc.getNode(node.parentId)?.type : undefined
+    if (parentType === 'storyboard') return
     const rect = this.rectOf(nodeId)
     if (!rect || rect.w <= 0 || rect.h <= 0) return
     const changes = resolveGroupChanges(
