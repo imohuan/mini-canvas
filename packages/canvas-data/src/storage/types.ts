@@ -7,6 +7,9 @@
 
 export type SaveType = 'config' | 'canvas' | 'resource' | 'shortcut'
 
+import type { AutoSaveService } from '../autoSave'
+import type { SettingsPersistFacade } from '../settingsPersist'
+
 /** 存储后端能力声明（云端/本地差异暴露给上层可感知） */
 export interface StorageAdapterCapability {
   /** 是否支持列出全部 key */
@@ -123,4 +126,14 @@ export interface SaveService {
    * 资源就跟画布走同一个开关（与最初的设计一致：一个 adapter 管文本 + 资源两种形式）。
    */
   adapterOf(type: SaveType): StorageAdapter | ResourceAdapter
+
+  /**
+   * 配置持久化子对象（persistSettings=false 或缺 settings 时为 undefined）。
+   * 合并进 save 是为了让「配置保存」只有一个入口。
+   */
+  settings?: SettingsPersistFacade
+  /**
+   * 自动保存子对象（由 plugin-auto-save 挂上；未装插件时不执行周期落盘）。
+   */
+  autoSave?: AutoSaveService
 }

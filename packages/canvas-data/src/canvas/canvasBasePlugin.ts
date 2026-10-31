@@ -33,7 +33,7 @@ import { ResourceStore, sanitizeTransientResourceUrls } from '../resourceService
 import { createIndexedDbResourceAdapter } from '../storage/indexedDbResourceAdapter'
 import { isResourceAdapter } from '../storage/types'
 import { createSettingsPersist } from '../settingsPersist'
-import type { SettingsPersistService } from '../settingsPersist'
+import type { SettingsPersistFacade, SettingsPersistService } from '../settingsPersist'
 import { isTransient } from '../transient'
 import { SaveServiceImpl } from '../storage/SaveService'
 import { GRAPH_EDGES_KEY, GRAPH_KEY } from '../storage/keys'
@@ -230,6 +230,13 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
         const store = ctx.get<SettingsStore | undefined>('settings')
         if (store) {
           services.settingsPersist = createSettingsPersist(store, save)
+          // 配置持久化并入 save 子对象：新代码只认 save.settings；
+          // settingsPersist 服务名保留到旧调用方迁完。
+          ;(save as SaveServiceImpl & { settings?: SettingsPersistFacade }).settings = {
+            restore: () => services.settingsPersist!.restore(),
+            persistNow: () => services.settingsPersist!.persistNow(),
+            resetKey: (k) => services.settingsPersist!.resetKey(k),
+          }
           ctx.inject('settingsPersist', services.settingsPersist)
         }
       }

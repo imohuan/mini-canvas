@@ -1,3 +1,5 @@
+import type { AutoSaveService } from '../autoSave'
+import type { SettingsPersistFacade } from '../settingsPersist'
 import type { SaveService, SaveType, StorageAdapter, ResourceAdapter } from './types'
 import { isResourceAdapter } from './types'
 import { MemoryStorageAdapter } from './memoryAdapter'
@@ -13,6 +15,11 @@ import { scopedKey, SAVE_TYPES } from './keys'
  * 4. 绝不"卸载才存/手动才存"：业务只负责 set，落盘时机由 flush 统一(空闲/hidden/pagehide/切项目)。
  */
 export class SaveServiceImpl implements SaveService {
+  /** 配置持久化子对象（基础插件 apply 时条件挂上） */
+  settings?: SettingsPersistFacade
+  /** 自动保存子对象（auto-save 插件 apply 时挂上） */
+  autoSave?: AutoSaveService
+
   /**
    * 每个 type 的激活 adapter。
    *

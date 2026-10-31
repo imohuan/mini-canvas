@@ -33,6 +33,15 @@ export interface SettingsPersistService {
 }
 
 /**
+ * save.settings 的公开面：只给宿主/应用用的三件事。
+ * 订阅与 dispose 留在内部（宿主 stop 时仍走原服务实例的 dispose）。
+ */
+export type SettingsPersistFacade = Pick<
+  SettingsPersistService,
+  'restore' | 'persistNow' | 'resetKey'
+>
+
+/**
  * 建一个配置持久化桥。
  * @param store SettingsStore 实例（ctx.get('settings')）
  * @param save SaveService 实例（ctx.get('save')）

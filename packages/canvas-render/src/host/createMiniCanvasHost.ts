@@ -279,7 +279,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 宿主这里只负责"插件装载完成之后"的那一次 restore：插件 Config 已声明完成，
   // 注入的保存快照能在 define 时命中为初值（若宿主关掉 persistSettings，桥缺席 → 不 restore）。
   const settingsPersist: SettingsPersistService | undefined = base.services.settingsPersist
-  if (settingsPersist) await settingsPersist.restore()
+  // 新入口：save.settings（条件存在）。settingsPersist 服务与 handle 字段只作兼容别名。
+  if (settingsPersist) await save.settings!.restore()
 
   // 色板落值：把"用户改过的那些格"写进 <html> 内联 CSS 变量（没改过的不写，CSS 侧默认值生效）。
   // 这步必须在 restore() 之后 —— 否则用户上次存的配色要等下一次改动才可见。
