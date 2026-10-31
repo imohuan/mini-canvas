@@ -46,9 +46,16 @@ export type {
 // 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型
 import './serviceTypes'
 
-// 渲染层两个内置服务（nodeLayout/viewport）的纯结构契约（作者 SDK 类型面，零 Vue/零 VueFlow）
+// 渲染层内置服务（view / canvas 及迁移期别名）的纯结构契约（作者 SDK 类型面，零 Vue/零 VueFlow）
 export type {
+  CanvasActions,
+  CanvasCreateNodeOptions,
+  CanvasSelectMode,
+  FitToOptions,
+  FocusTarget,
+  NotifyOptions,
   NodeLayoutContract,
+  ViewContract,
   ViewportContract,
   LayoutRect,
   ViewportState,

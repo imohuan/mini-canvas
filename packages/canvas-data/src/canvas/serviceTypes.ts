@@ -25,6 +25,7 @@ import type { NodeFactoryService } from './nodeFactory'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { ThemeRegistry } from './registry/themeRegistry'
 import type {
+  CanvasActions,
   FocusTarget,
   FitToOptions,
   NodeLayoutContract,
@@ -60,6 +61,8 @@ declare module '@mini-canvas/kernel' {
     viewport: ViewportContract
     /** 几何 + 视口合并服务（渲染层注入）；新代码用它，nodeLayout/viewport 仅为兼容别名 */
     view: ViewContract
+    /** 画布动作门面（建/选/聚焦/进模式/打组/提示/跑底栏动作）；不存数据 */
+    canvas: CanvasActions
   }
 }
 
@@ -102,7 +105,9 @@ declare module '@mini-canvas/canvas-data' {
     viewport: ViewportContract
     /** 几何 + 视口合并服务（渲染层注入）；新代码用它，nodeLayout/viewport 仅为兼容别名 */
     view: ViewContract
+    /** 画布动作门面（建/选/聚焦/进模式/打组/提示/跑底栏动作）；不存数据 */
+    canvas: CanvasActions
   }
 }
 
-export type { FocusTarget, FitToOptions, ViewContract }
+export type { CanvasActions, FocusTarget, FitToOptions, ViewContract }

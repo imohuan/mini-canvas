@@ -38,11 +38,11 @@ import type {
   ThemeRegistry,
 } from '@mini-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
-import { tipService } from '../tip/tipService'
 import TipLayer from '../tip/TipLayer.vue'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
 import { ViewService } from '../view/viewService'
+import { CanvasService } from '../canvas/canvasService'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -221,9 +221,17 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 从而自己装卸别的插件（用户诉求：用一个插件去管理其他插件的装/卸/重装）。
   // 放在冷启动之前注入：插件一 start 就能 ctx.get('pluginManager') 拿到。
   ctx.inject('pluginManager', manager)
-  // 通用鼠标跟随提示（基础服务）：任何插件/渲染组件 ctx.get('tip').show('...') 即可显示。
-  // 放渲染层而不是主题：拖线非法提示属于渲染反馈，换主题也应可用（用户口径 2026-10-26）。
-  ctx.inject('tip', tipService)
+  // 画布动作门面（服务名 canvas）与提示队列。
+  // 提示跟随鼠标、可撤回、多持有者不互盖；旧 tip 服务保留为兼容转发（Task 9 删除）。
+  const canvas = new CanvasService(ctx)
+  ctx.inject('canvas', canvas)
+  ctx.inject('notify', canvas.notifications)
+  ctx.inject('tip', {
+    show: (m: string) => {
+      canvas.notify(m, { source: 'tip', followPointer: true, durationMs: 0 })
+    },
+    hide: () => canvas.notifications.hide('tip'),
+  })
   ctx.slots.register('overlay', {
     id: 'canvas-render/tip-layer',
     order: 95,

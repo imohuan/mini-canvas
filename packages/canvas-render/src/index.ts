@@ -361,6 +361,10 @@ export { ViewService } from './view/viewService'
 export type { FocusTarget, ViewServiceDeps } from './view/viewService'
 export { computeFitTo } from './view/fitTo'
 export type { FitToInput, FitToOptions, FitToResult } from './view/fitTo'
+// 画布动作门面（服务名 canvas）：建/选/聚焦/进模式/打组/提示/跑底栏动作
+export { CanvasService } from './canvas/canvasService'
+export { createNotifyService } from './canvas/notifyService'
+export type { NotifyItem, NotifyOptions, NotifyService } from './canvas/notifyService'
 // 可视区纯几何：视口变换 → flow 可视矩形 + 相交判定（align-guide/mini-map 等按可视区裁剪节点）
 export { viewportRectInFlow, rectsOverlap, expandRect } from './geometry/visibleArea'
 export type { FlowRect } from './geometry/visibleArea'

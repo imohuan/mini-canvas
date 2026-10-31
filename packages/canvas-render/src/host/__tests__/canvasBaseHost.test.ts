@@ -15,8 +15,8 @@ import { MemoryStorageAdapter, CANVAS_BASE_PLUGIN_NAME } from '@mini-canvas/canv
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import type { PluginModule } from '@mini-canvas/kernel'
 
-describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤5', () => {
-  it('createMiniCanvasHost.ts 只剩 view / pluginManager / tip 三处正式注入与两个兼容别名', () => {
+describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤7', () => {
+  it('createMiniCanvasHost.ts 只剩 view / canvas / notify / pluginManager / tip 与三个兼容别名', () => {
     const src = readFileSync(fileURLToPath(new URL('../createMiniCanvasHost.ts', import.meta.url)), 'utf8')
     // 只看代码行（注释里的说明文字不算"装配点"）
     const code = src
@@ -29,8 +29,10 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤5', () 
     // pluginManager：插件管理插件要能按名装卸别的插件（2026-10-02 用户诉求）。
     // tip：全局鼠标跟随提示属于渲染反馈的基础设施（2026-10-26 用户口径：拖线非法提示、
     // 选择态提示等统一走它），与主题无关，故由渲染宿主上架。
-    expect(hits.length).toBeLessThanOrEqual(5)
+    expect(hits.length).toBeLessThanOrEqual(7)
     expect(src).toContain("ctx.inject('view'")
+    expect(src).toContain("ctx.inject('canvas'")
+    expect(src).toContain("ctx.inject('notify'")
     expect(src).toContain("ctx.inject('nodeLayout'")
     expect(src).toContain("ctx.inject('viewport'")
     expect(src).toContain("ctx.inject('pluginManager'")

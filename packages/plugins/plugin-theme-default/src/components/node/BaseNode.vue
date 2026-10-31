@@ -425,7 +425,7 @@ function focusNodeIfNeeded(): void {
   const viewService = ctx?.tryGet('view')
   const rect = viewService?.getNodeRect(props.id)
   const view = visibleRect?.value
-  if (!rect || !view) return
+  if (!rect || !view || !viewService) return
   // 标题条在卡片上方：把判定范围向上扩 PAD，避免"节点刚好看得见、标题却被裁掉"
   const withTitle = { x: rect.x, y: rect.y - TITLE_FOCUS_PAD, w: rect.w, h: rect.h + TITLE_FOCUS_PAD }
   if (isRectFullyVisible(withTitle, view)) return

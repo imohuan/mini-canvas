@@ -110,6 +110,51 @@ export interface ViewContract extends NodeLayoutContract, ViewportContract {
   fitTo(target: FocusTarget, opts?: FitToOptions): boolean
 }
 
+/** 通知选项（服务名 canvas 的 notify / 旧 tip 转发共用） */
+export interface NotifyOptions {
+  source?: string
+  priority?: number
+  once?: boolean
+  /** 0 = 常驻 */
+  durationMs?: number
+  /** 跟随鼠标渲染（tip 语义） */
+  followPointer?: boolean
+}
+
+/** canvas 建节点的附加参数（透传给节点插件 creator） */
+export interface CanvasCreateNodeOptions {
+  data?: Record<string, unknown>
+  sourceNodeId?: string
+  gap?: number
+}
+
+export type CanvasSelectMode = 'replace' | 'add' | 'toggle'
+
+/**
+ * 画布动作门面契约（服务名 canvas）。
+ *
+ * 只转发、不存数据；可选业务服务（group / nodeToolbar / nodeTask）缺失时
+ * 返回 undefined / false / null，只有 runBarAction 缺执行器时明确 reject。
+ */
+export interface CanvasActions {
+  createNode(
+    type: string,
+    at: { x: number; y: number },
+    opts?: CanvasCreateNodeOptions,
+  ): string | undefined
+  creatableTypes(): string[]
+  select(ids: string[], mode?: CanvasSelectMode): void
+  focus(target: FocusTarget, opts?: FitToOptions): boolean
+  enterMode(nodeId: string, modeId: string): boolean
+  exitMode(nodeId?: string): void
+  activeMode(nodeId: string): string | undefined
+  group(nodeIds: string[]): string | null
+  ungroup(groupId: string): void
+  notify(message: string, opts?: NotifyOptions): () => void
+  runBarAction(nodeId: string, actionId: string, input?: unknown): Promise<unknown>
+  cancelBarAction(nodeId: string): void
+}
+
 /**
  * 节点布局只读契约（服务名 nodeLayout；渲染层注入）。
  *
