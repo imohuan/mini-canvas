@@ -90,6 +90,24 @@ describe('createV2ShortcutManager 重映射', () => {
     // 未 remap 的命令不受影响
     expect(c.get('command:redo')?.keys).toEqual(['mod+shift+z'])
   })
+  it('改键后默认键快照不被当前键位覆盖', () => {
+    const c = makeCommands()
+    const mgr = createV2ShortcutManager(c)
+    mgr.remapCombo('command:undo', 'mod+z', 'mod+u')
+    expect(mgr.defaultKeysOf('command:undo')).toEqual(['mod+z'])
+    mgr.remapCombo('command:undo', 'mod+u', 'mod+j')
+    expect(mgr.defaultKeysOf('command:undo'), '第二次改键也不能把默认值变成中间态').toEqual(['mod+z'])
+  })
+  it('导入时冲突项跳过、其它项照常导入', () => {
+    const c = makeCommands()
+    const mgr = createV2ShortcutManager(c)
+    mgr.loadKeymap({
+      'command:undo': 'mod+f', // 与 node-find:open 冲突 → 跳过
+      'command:redo': 'mod+y',
+    })
+    expect(c.get('command:undo')?.keys).toEqual(['mod+z'])
+    expect(c.get('command:redo')?.keys).toEqual(['mod+y'])
+  })
   it('exportKeymap 只导脏映射；loadKeymap 还原', () => {
     const c = makeCommands()
     const mgr = createV2ShortcutManager(c)

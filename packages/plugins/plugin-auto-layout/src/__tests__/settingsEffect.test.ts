@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type CanvasNode } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
@@ -40,9 +40,10 @@ function makeCtx() {
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   const command = new CommandRegistry()
   ctx.inject('command', command)
-  ctx.inject('view', makeView(nodeStore) as never)
+  const view = makeView(nodeStore)
+  ctx.inject('view', view as never)
   ctx.plugin(autoLayoutPlugin)
-  return { ctx, nodeStore, edgeStore, command }
+  return { ctx, nodeStore, edgeStore, command, view }
 }
 
 function addNode(ns: NodeStore, x: number, y: number, w = 200, h = 100): string {
@@ -65,6 +66,22 @@ describe('auto-layout 配置分组（二级分类）', () => {
 })
 
 describe('auto-layout 配置改动实时生效', () => {
+  it('聚焦指定节点：传对目标与缩放参数，并跟着面板配置变', async () => {
+    const { ctx, nodeStore, command, view } = makeCtx()
+    const id = addNode(nodeStore, 40, 60)
+    const fitTo = vi.spyOn(view, 'fitTo')
+    await ctx.start()
+
+    command.execute('auto-layout:focus-node', id)
+    expect(fitTo).toHaveBeenLastCalledWith([id], { heightRatio: 0.5, minZoom: 0.1, maxZoom: 4 })
+
+    const settings = ctx.get<{ set(k: string, v: string | number | boolean): boolean }>('settings')
+    settings.set('focusHeightRatio', 0.8)
+    settings.set('autoLayoutMaxZoom', 2)
+    command.execute('auto-layout:focus-node', id)
+    expect(fitTo).toHaveBeenLastCalledWith([id], { heightRatio: 0.8, minZoom: 0.1, maxZoom: 2 })
+  })
+
   it('面板改 direction=TB 后执行布局，节点垂直排布（而非仍按 LR）', async () => {
     const { ctx, nodeStore, edgeStore, command } = makeCtx()
     const a = addNode(nodeStore, 0, 0)

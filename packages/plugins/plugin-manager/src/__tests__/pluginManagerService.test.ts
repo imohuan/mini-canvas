@@ -324,6 +324,19 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认策略', () => {
     expect(svc.state.rows.find((r) => r.entry.id === 'plugin-b')?.error).toBeTruthy()
   })
 
+  it('失败过的条目在下一次 refresh 补装成功 → 存档照旧，不再报错', async () => {
+    // 第一轮：b 的脚本加载失败；第二轮同一份存档，b 能正常加载 → 应补上
+    const first = boot({ catalog: CATALOG, failUrls: ['plugin-b'], savedInstalled: ['plugin-a', 'plugin-b'] })
+    await first.svc.refresh()
+    expect(first.host.installed.has('plugin-b')).toBe(false)
+
+    const second = boot({ catalog: CATALOG, savedInstalled: first.kv.get(INSTALLED_KEY) as string[] })
+    await second.svc.refresh()
+    expect(second.host.installed.has('plugin-b'), '下次启动应把上次失败的补上').toBe(true)
+    expect(second.svc.state.rows.find((r) => r.entry.id === 'plugin-b')?.error).toBeUndefined()
+    expect(second.kv.get(INSTALLED_KEY)).toEqual(['plugin-a', 'plugin-b'])
+  })
+
   it('配置后端从本地切云端后自动重读安装名单（否则刷新后插件全掉、配置跟着丢）', async () => {
     // 真实 save：本地后端里存着一份**过期的**名单（空）；云端存着真正的名单。
     // 这正是用户场景：插件管理的"读"发生在云插件把 config 切到云端之前。
