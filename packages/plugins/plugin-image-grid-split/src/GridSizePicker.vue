@@ -27,6 +27,13 @@ const emit = defineEmits<{
 /** 网格最大 8×8（与 gridSplit.MAX_ROWS/COLS 同口径） */
 const PREVIEW = 8
 
+/**
+ * 每格四周留出的空隙（占整个网格宽度的百分比）。
+ * 用户口径 2026-10-31（参考图 2）：格子要一块一块分开，不能连成一片。
+ * 8×8 下约 2.7px 的缝，面板变宽时按比例跟着变。
+ */
+const GAP = 0.8
+
 const rows = ref(props.initialRows)
 const cols = ref(props.initialCols)
 
@@ -36,10 +43,10 @@ const cells = computed(() => {
     for (let c = 0; c < PREVIEW; c++) {
       out.push({
         index: r * PREVIEW + c,
-        left: c * (100 / PREVIEW),
-        top: r * (100 / PREVIEW),
-        width: 100 / PREVIEW,
-        height: 100 / PREVIEW,
+        left: c * (100 / PREVIEW) + GAP,
+        top: r * (100 / PREVIEW) + GAP,
+        width: 100 / PREVIEW - GAP * 2,
+        height: 100 / PREVIEW - GAP * 2,
         on: r < rows.value && c < cols.value,
       })
     }
@@ -106,20 +113,21 @@ function onPick(ev: MouseEvent): void {
   width: 100%;
   aspect-ratio: 1;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
-  border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: var(--radius-badge, 6px);
-  overflow: hidden;
+  padding: 1px;
+  box-sizing: border-box;
   cursor: pointer;
 }
 .gsp-picker-cell {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid var(--ui-line, #e2e5ea);
-  background: transparent;
-  transition: background-color 0.1s ease;
+  /* 未选中的格子也有自己的底色与圆角：缝里露出网格底色，才看得出一块一块 */
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 7%, transparent);
+  transition: background-color 0.1s ease, border-color 0.1s ease;
 }
 .gsp-picker-cell.is-on {
   background: color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent);
-  border-color: var(--ui-accent, #0891b2);
+  box-shadow: inset 0 0 0 1px var(--ui-accent, #0891b2);
 }
 </style>
