@@ -16,16 +16,13 @@ function makeCtx(opts: {
   tx?: number
   ty?: number
   pane?: { w: number; h: number } | null
-  withLayout?: boolean
-  withViewport?: boolean
+  withView?: boolean
 } = {}) {
   const calls: Array<{ x: number; y: number; zoom?: number }> = []
   const services: Record<string, unknown> = {}
-  if (opts.withLayout !== false) {
-    services.nodeLayout = { getNodeRect: () => opts.rect ?? null }
-  }
-  if (opts.withViewport !== false) {
-    services.viewport = {
+  if (opts.withView !== false) {
+    services.view = {
+      getNodeRect: () => opts.rect ?? null,
       getViewport: () => ({ x: opts.tx ?? 0, y: opts.ty ?? 0, zoom: opts.zoom ?? 1 }),
       setCenter: (x: number, y: number, zoom?: number) => calls.push({ x, y, zoom }),
       getPaneEl: () =>
@@ -55,9 +52,8 @@ describe('fitEditingNodeIntoView', () => {
     expect(calls).toHaveLength(0)
   })
 
-  it('缺 nodeLayout / 缺 viewport / 节点不存在 → 安静跳过，不抛', () => {
-    expect(fitEditingNodeIntoView(makeCtx({ withLayout: false }).ctx, 'n1')).toBe(false)
-    expect(fitEditingNodeIntoView(makeCtx({ withViewport: false }).ctx, 'n1')).toBe(false)
+  it('缺 view / 节点不存在 → 安静跳过，不抛', () => {
+    expect(fitEditingNodeIntoView(makeCtx({ withView: false }).ctx, 'n1')).toBe(false)
     expect(fitEditingNodeIntoView(makeCtx({ rect: null }).ctx, 'n1')).toBe(false)
     expect(fitEditingNodeIntoView({ get: (() => undefined) as <T>() => T }, 'n1')).toBe(false)
   })
