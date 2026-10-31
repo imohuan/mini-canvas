@@ -12,7 +12,6 @@ import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { uiDemoPlugin } from '@mini-canvas/plugin-ui-demo'
 import { gridSplitPlugin } from '@mini-canvas/plugin-image-grid-split'
 import { nodeRotatePlugin } from '@mini-canvas/plugin-node-rotate'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
@@ -100,7 +99,6 @@ export const APP_PLUGINS = [
   edgeCuttingPlugin,
   fileDropPlugin,
   nodeImagePlugin,
-  uiDemoPlugin,
   gridSplitPlugin,
   nodeRotatePlugin,
   nodeVideoPlugin,

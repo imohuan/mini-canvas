@@ -55,4 +55,37 @@ describe('nodeToolbar 归属渲染层', () => {
     a.host.stop()
     b.host.stop()
   })
+
+  it('registerMode 返回的注销函数只摘掉自己那一份，并清掉指向它的会话', async () => {
+    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const svc = host.ctx.get<{
+      registerMode(m: { id: string; topBar?: unknown; order?: number }): () => void
+      resolveBar(nodeId: string, side: 'top' | 'bottom', type?: string): { kind: string }
+      listModes(): Array<{ id: string }>
+      enter(nodeId: string, modeId: string): void
+      activeModeId(nodeId: string): string
+    }>('nodeToolbar')
+
+    // 默认模式：同一根顶栏有两份注册，独立注销后另一份仍生效。
+    const DefaultTop = { name: 'DefaultTop' }
+    const OtherTop = { name: 'OtherTop' }
+    const offDefault = svc.registerMode({ id: 'default', topBar: DefaultTop, order: 100 })
+    const offOther = svc.registerMode({ id: 'default', topBar: OtherTop, order: 10 })
+    expect(svc.resolveBar('n1', 'top', 'image').kind).toBe('component')
+    offOther()
+    expect(svc.resolveBar('n1', 'top', 'image').kind).toBe('component')
+    offDefault()
+    expect(svc.resolveBar('n1', 'top', 'image').kind).toBe('inherit')
+    // 幂等：重复调用不影响其它注册，也不抛
+    offDefault()
+
+    // 会话指向的模式被注销 → 退回默认，不保留悬空模式 id。
+    const offMode = svc.registerMode({ id: 'tmp/mode', topBar: { name: 'TmpTop' } })
+    svc.enter('n2', 'tmp/mode')
+    expect(svc.activeModeId('n2')).toBe('tmp/mode')
+    offMode()
+    expect(svc.activeModeId('n2')).toBe('')
+    expect(svc.listModes().map((m) => m.id)).not.toContain('tmp/mode')
+    host.stop()
+  })
 })

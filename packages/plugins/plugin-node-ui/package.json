@@ -32,7 +32,6 @@
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/plugin-bottom-bar": "workspace:*",
     "@mini-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {

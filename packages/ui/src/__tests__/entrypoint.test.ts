@@ -65,7 +65,9 @@ describe('@mini-canvas/ui 出口契约', () => {
     //   改由「插件管理」从云服务清单装卸（见 assembly.ts 对应注释）。
     // +2（2026-10-29）：node-rotate（图片节点的「旋转与镜像」模式：顶栏入口 + 功能模式）
     //   与 image-grid-split（宫格切分：顶栏入口 + 底栏切分面板）。
-    expect(APP_PLUGINS).toHaveLength(23)
+    // -1（2026-11-01）：demo-ui-slots（原 ui-demo）移出冷启动清单。
+    //   它是**开发演示**，不该混进真实产品；改由「设置 → 插件」从清单安装。
+    expect(APP_PLUGINS).toHaveLength(22)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查

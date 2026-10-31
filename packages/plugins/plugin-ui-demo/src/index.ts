@@ -1,6 +1,11 @@
 /**
  * plugin-ui-demo —— UI 扩展能力演示插件（不做业务，只演示接线）。
  *
+ * 身份：`demo-ui-slots`（清单里统一带 `示例 ·` 标题、`demo-` 运行时名）。
+ * 它**不是**产品自带能力：默认不随 `packages/ui/src/assembly.ts` 冷启动，
+ * 而是作为可安装示例由「设置 → 插件」装进来（与 theme-gallery 同一个入口）。
+ * 这样演示不会混进真实产品，同时清单、运行时名和面板标题三处能对上。
+ *
  * 演示三件事：
  * ① 图片顶栏按钮组内部插一条：ctx.slots.register('image.topToolbar', …)
  *    —— 与上传/裁剪/扩展排在同一排（不会在组外另起一块面板）；
@@ -19,7 +24,7 @@ import DemoTopEntry from './DemoTopEntry.vue'
 import DemoFeaturePanel from './DemoFeaturePanel.vue'
 import { closeDemoMode } from './demoMode'
 
-export const name = 'ui-demo'
+export const name = 'demo-ui-slots'
 /**
  * nodeToolbar 是主题插件的服务（模式注册表 + 会话）：没装主题时本插件照常工作
  * （顶栏按钮仍在），只是 enter 拿不到 —— 所以不进 inject（可选依赖用 tryGet）。
@@ -29,7 +34,7 @@ export const inject = [] as string[]
 export function apply(ctx: Context): void {
   // ① 顶栏：图片按钮组内部的一条（与 host/upload、host/crop、host/expand 一起排）
   ctx.slots.register('image.topToolbar', {
-    id: 'ui-demo/top-entry',
+    id: 'demo-ui-slots/top-entry',
     order: 400,
     component: markRaw(DemoTopEntry),
   })
@@ -37,11 +42,11 @@ export function apply(ctx: Context): void {
   // ② 功能模式：注册到 nodeToolbar（主题件）。进入后下栏整格换成 DemoFeaturePanel。
   const registerMode = (): boolean => {
     const svc = ctx.tryGet<{
-      registerMode?(mode: unknown): void
+      registerMode?(mode: unknown): (() => void) | void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
-      id: 'ui-demo/feature',
+    const offMode = svc.registerMode({
+      id: 'demo-ui-slots/feature',
       types: ['image'],
       title: '功能演示',
       description: '演示：下栏换成该功能的 UI（同一格，不叠加）',
@@ -49,6 +54,7 @@ export function apply(ctx: Context): void {
       order: 500,
       bottomBar: markRaw(DemoFeaturePanel),
     })
+    if (offMode) ctx.effect(() => offMode)
     return true
   }
   if (!registerMode()) {

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "miniCanvas": {
-    "title": "UI 扩展演示",
-    "description": "演示图片顶栏插槽、下拉按钮、二级菜单与功能模式（顶栏/底栏专属）",
-    "pluginName": "ui-demo",
-    "builtin": true
+    "title": "示例 · 插槽与工具栏",
+    "description": "开发演示：图片顶栏插槽、下拉按钮与二级菜单、功能模式的顶栏/底栏切换",
+    "pluginName": "demo-ui-slots",
+    "installable": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -16,6 +16,7 @@
     "./*": "./src/*"
   },
   "scripts": {
+    "build": "vite build",
     "test": "vitest run",
     "typecheck": "vue-tsc --noEmit"
   },
@@ -30,6 +31,8 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
     "vue-tsc": "^3.2.8"

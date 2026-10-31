@@ -107,7 +107,7 @@ function onPick(key: string): void {
     openDemoMode(nodeId, key === 'mode-a' ? 'alpha' : 'beta')
     // 底栏同时切到该功能（nodeToolbar 会话：主题件，底栏与顶栏共用同一份）
     ctx.tryGet<{ enter?(nodeId: string, modeId: string): void } | undefined>('nodeToolbar')
-      ?.enter?.(nodeId, 'ui-demo/feature')
+      ?.enter?.(nodeId, 'demo-ui-slots/feature')
     return
   }
   notify('演示：点了「' + key + '」（不做业务）')
@@ -174,6 +174,6 @@ function pickFeature(label: string): void {
 
 <style scoped>
 /* 与默认工具栏同一条横排、同一套间距与文字样式（不另起面板） */
-.dte-feature-name { padding: 0 4px; font-size: var(--text-base, 13px); font-weight: 600; color: var(--ui-ink, #18202b); white-space: nowrap; }
+.dte-feature-name { padding: 0 4px; font-size: 13px; font-weight: 600; color: var(--ui-ink, #18202b); white-space: nowrap; }
 .dte-feature-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--ui-line, #e2e5ea); }
 </style>

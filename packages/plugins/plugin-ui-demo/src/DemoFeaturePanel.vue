@@ -52,8 +52,8 @@ function exit(): void {
 /* 只排内容：外框（.nb-root 的圆角/阴影/宽度）由默认底栏提供，这里不另画面板。 */
 .dfp-root { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .dfp-head { display: flex; align-items: baseline; gap: 8px; }
-.dfp-name { font-size: var(--text-base, 13px); font-weight: 600; color: var(--ui-ink, #18202b); }
-.dfp-hint { font-size: var(--text-sm, 11px); color: var(--ui-ink-mute, #8c95a3); }
+.dfp-name { font-size: 13px; font-weight: 600; color: var(--ui-ink, #18202b); }
+.dfp-hint { font-size: 11px; color: var(--ui-ink-mute, #8c95a3); }
 .dfp-actions { display: flex; align-items: center; gap: 6px; }
 .dfp-grow { flex: 1 1 auto; }
 </style>
