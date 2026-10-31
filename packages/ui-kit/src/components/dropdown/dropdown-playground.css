@@ -20,25 +20,6 @@
   touch-action: none;
 }
 
-.dd-grid {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, var(--mck-line, rgb(0 0 0 / 0.1)) 1px, transparent 1px);
-  background-size: 16px 16px;
-  opacity: 0.55;
-  pointer-events: none;
-}
-
-.dd-center-dot {
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--mck-accent, #0891b2);
-  opacity: 0.4;
-  pointer-events: none;
-}
-
 .dd-anchor {
   position: relative;
   z-index: 1;

@@ -219,8 +219,6 @@ const groupedFields = computed(() => {
 <template>
   <div class="dd-demo">
     <div ref="stage" class="dd-stage">
-      <div class="dd-grid" aria-hidden="true"></div>
-      <div class="dd-center-dot" aria-hidden="true"></div>
 
       <div
         ref="trigger"

@@ -106,7 +106,8 @@ function fireMessage(): void {
       >
         <template v-if="readBool(state, 'showIcon') || readBool(state, 'iconOnly')" #icon>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
+            <!-- 星形在 24 的画布里只占 y=3~17，整体下移 2 才落在视觉中心。 -->
+            <path d="M12 5 L13.9 10.1 L19 12 L13.9 13.9 L12 19 L10.1 13.9 L5 12 L10.1 10.1 Z" />
           </svg>
         </template>
         <template v-if="!readBool(state, 'iconOnly')">{{ readText(state, 'label') }}</template>

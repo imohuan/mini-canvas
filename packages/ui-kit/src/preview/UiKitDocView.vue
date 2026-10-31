@@ -262,9 +262,7 @@ async function copyCode(index: number, source: string): Promise<void> {
   align-items: center;
   justify-content: center;
   padding: 18px;
-  background:
-    radial-gradient(circle, var(--mck-line, rgb(0 0 0 / 0.08)) 1px, transparent 1px) 0 0 / 16px 16px,
-    var(--mck-panel, #fff);
+  background: var(--mck-panel, #fff);
 }
 
 .mck-doc-code-block {
