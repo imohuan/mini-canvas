@@ -84,21 +84,33 @@ const minClip = computed(() => {
 const prefs = readClipPrefs(props.id)
 
 /**
- * 把 settings 里的值同步进会话偏好。
+ * 从 settings 取某一个偏好键的当前值。只取**改动的那一项**：
+ * 改吸附间隔时不该把面板上手动切换过的循环开关一起重置（那是两回事）。
+ */
+function settingsValue(key: 'videoClipSnapStep' | 'videoClipSnapRadius' | 'videoClipLoop'): unknown {
+  const settings = ctx.tryGet<{ get(key: string): unknown }>('settings')
+  return settings ? settings.get(key) : undefined
+}
+
+/**
+ * 把 settings 里的值同步进会话偏好（不传 key = 三项全同步，用于挂载时的种子）。
  *
  * ★ 为什么不能只在 onMounted 播一次种子（用户 2026-10-31 报「配置改了不生效」）：
  * 剪辑面板是常驻组件，设置面板改值时不重新挂载 —— 只读一次就永远是打开那一刻的旧值。
- * 这里既能当挂载时的种子，也能当设置变更时的回调。
  */
-function syncPrefsFromSettings(): void {
-  const settings = ctx.tryGet<{ get(key: string): unknown }>('settings')
-  if (!settings) return
-  const step = settings.get('videoClipSnapStep')
-  if (typeof step === 'number' && Number.isFinite(step) && step > 0) prefs.snapStep = step
-  const radius = settings.get('videoClipSnapRadius')
-  if (typeof radius === 'number' && Number.isFinite(radius) && radius > 0) prefs.snapRadius = radius
-  const loop = settings.get('videoClipLoop')
-  if (typeof loop === 'boolean') prefs.loop = loop
+function syncPrefsFromSettings(key?: 'videoClipSnapStep' | 'videoClipSnapRadius' | 'videoClipLoop'): void {
+  if (key === undefined || key === 'videoClipSnapStep') {
+    const step = settingsValue('videoClipSnapStep')
+    if (typeof step === 'number' && Number.isFinite(step) && step > 0) prefs.snapStep = step
+  }
+  if (key === undefined || key === 'videoClipSnapRadius') {
+    const radius = settingsValue('videoClipSnapRadius')
+    if (typeof radius === 'number' && Number.isFinite(radius) && radius > 0) prefs.snapRadius = radius
+  }
+  if (key === undefined || key === 'videoClipLoop') {
+    const loop = settingsValue('videoClipLoop')
+    if (typeof loop === 'boolean') prefs.loop = loop
+  }
 }
 
 syncPrefsFromSettings()
@@ -113,7 +125,8 @@ const offPrefs = ctx
   }>('settings')
   ?.onChange((key) => {
     if (key !== 'videoClipSnapStep' && key !== 'videoClipSnapRadius' && key !== 'videoClipLoop') return
-    syncPrefsFromSettings()
+    // 只同步改动的那一项，不碰另一项
+    syncPrefsFromSettings(key)
   })
 onBeforeUnmount(() => offPrefs?.dispose())
 
