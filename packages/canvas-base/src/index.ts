@@ -52,6 +52,9 @@ export type { NodeRegisterDef } from '@mini-canvas/canvas-data'
 export type {
   NodeLayoutContract,
   ViewportContract,
+  ViewContract,
+  FitToOptions,
+  FocusTarget,
   LayoutRect,
   ViewportState,
   FlowPoint,

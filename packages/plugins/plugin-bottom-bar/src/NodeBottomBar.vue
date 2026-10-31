@@ -39,6 +39,7 @@ import {
   LAYERS,
 } from '@mini-canvas/canvas-render'
 import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ViewContract } from '@mini-canvas/canvas-base'
 import type { BarAction } from './barTypes'
 import {
   collectUpstreamMaterials,
@@ -842,12 +843,9 @@ function onCardDblClick(tile: RefTile): void {
   try {
     if (commands?.runCommand('auto-layout:focus-node', nodeId) === true) return
   } catch { /* 命令异常：回落到下面的通用实现 */ }
-  const view = ctx.tryGet<{
-    fitTo(
-      target: string[],
-      opts?: { heightRatio?: number; minZoom?: number; maxZoom?: number },
-    ): boolean
-  }>('view')
+  // 用服务契约而不是手写窄端口：窄端口漏掉 durationMs/keepZoom 等合法参数，
+  // 调用方明明传了，类型检查却报「不认识这个字段」（用户实测的 UI typecheck 失败）。
+  const view = ctx.tryGet<ViewContract>('view')
   if (!view) return
   /**
    * 兜底路径也要是「F 键那套取景」，不能只挪中心（用户两轮都在追这个）：

@@ -10,8 +10,18 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
+import type { ViewContract, FitToOptions } from '../index'
 
 describe('T03 · 按服务名推导类型', () => {
+  it('canvas-base 导出完整取景契约（含 durationMs 等合法参数）', () => {
+    // 编译期断言：插件作者只引 canvas-base 也要拿到完整选项。
+    // 底栏曾手写窄端口，结果传入 durationMs 时 UI typecheck 报「不认识该字段」。
+    const opts: FitToOptions = { heightRatio: 0.5, minZoom: 0.1, maxZoom: 4, durationMs: 200 }
+    expect(opts.durationMs).toBe(200)
+    const probe: Pick<ViewContract, 'fitTo'> | undefined = undefined
+    expect(probe).toBeUndefined()
+  })
+
   it('已知服务名：get 返回集中声明的类型（编译期断言 + 运行期取值）', async () => {
     const ctx = new Context()
     let doc: DocService | undefined
