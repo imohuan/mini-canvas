@@ -71,4 +71,33 @@ describe('热装后台插件的动态参数路由', () => {
       host.ctx.stop()
     }
   })
+
+  it('静态路由与模板冲突时，静态仍先命中（热装兜底不能抢启动期代理）', async () => {
+    const host = createServerFramework({ hotFallback: true })
+    await host.start()
+    try {
+      // 启动前就存在的静态路由：Hono 自己有代理，热装兜底必须让位。
+      host.ctx.installPlugin({
+        name: 'static-before-template',
+        apply: (c: { routes: { get: (p: string, h: Handler) => void } }) => {
+          c.routes.get('/api/collision/events', (h: Parameters<Handler>[0]) => h.text('static'))
+        },
+      } as never)
+      // 运行期才装上的模板：只有 catch-all 能接管。
+      host.ctx.installPlugin({
+        name: 'template-after-static',
+        apply: (c: { routes: { get: (p: string, h: Handler) => void } }) => {
+          c.routes.get('/api/collision/:type', (h: Parameters<Handler>[0]) => h.text('template:' + h.req.param('type')))
+        },
+      } as never)
+      const staticRes = await host.app.fetch(new Request('http://x/api/collision/events'))
+      expect(staticRes.status).toBe(200)
+      expect(await staticRes.text()).toBe('static')
+      const dynamicRes = await host.app.fetch(new Request('http://x/api/collision/other'))
+      expect(dynamicRes.status).toBe(200)
+      expect(await dynamicRes.text()).toBe('template:other')
+    } finally {
+      host.ctx.stop()
+    }
+  })
 })

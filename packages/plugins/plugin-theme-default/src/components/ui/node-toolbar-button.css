@@ -32,7 +32,7 @@
   --mck-button-bg-hover: var(--ntb-fill-quiet, var(--ui-hover-soft));
 }
 
-.ntb-btn:not(.is-icon-only) :deep(.mck-button__icon) {
+.ntb-btn:not(.is-icon-only) .mck-button__icon {
   width: 12px;
   height: 12px;
 }
@@ -43,14 +43,12 @@
   justify-content: center;
 }
 
-.ntb-icon-raw :deep(svg),
 .ntb-icon-raw > svg {
   display: block;
   width: 16px;
   height: 16px;
 }
 
-.ntb-btn:not(.is-icon-only) .ntb-icon-raw :deep(svg),
 .ntb-btn:not(.is-icon-only) .ntb-icon-raw > svg {
   width: 12px;
   height: 12px;
@@ -67,6 +65,9 @@
 }
 
 .ntb-btn.ntb-btn--danger {
+  /* 旧规范：危险按钮平时是普通工具按钮，只有悬停才转红。 */
+  --mck-button-bg: transparent;
+  --mck-button-bg-hover: var(--ui-danger-veil);
   --mck-button-fg: var(--ntb-text, var(--ui-ink-dim));
 }
 

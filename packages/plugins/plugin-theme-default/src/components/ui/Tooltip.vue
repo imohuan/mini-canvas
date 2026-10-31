@@ -9,7 +9,6 @@
  *   <Tooltip content="上下文剩余 96%"><span class="ring" /></Tooltip>
  *   需要自由内容时用 #content 插槽。
  */
-import { computed } from 'vue'
 import { Tooltip as UiKitTooltip } from '@mini-canvas/ui-kit'
 
 const props = withDefaults(
@@ -29,11 +28,6 @@ const props = withDefaults(
   { content: '', placement: 'top', offset: 8, arrow: true, delay: 120, disabled: false },
 )
 
-/**
- * ui-kit 的 Tooltip 使用固定 8px 间距；调用方显式传其他值时补一层外边距，
- * 避免“参数被默默忽略”。默认值 8 时零副作用。
- */
-const extraGap = computed(() => Math.max(0, props.offset - 8))
 </script>
 
 <template>
@@ -43,14 +37,15 @@ const extraGap = computed(() => Math.max(0, props.offset - 8))
     :placement="placement"
     :delay="delay"
     :disabled="disabled"
-    :arrow="false"
+    :offset="offset"
+    :arrow="arrow"
+    arrow-class="tlt-arrow"
     :max-width="'min(560px, calc(100vw - 16px))'"
   >
-    <span class="tlt-trigger" :style="extraGap ? { margin: extraGap + 'px' } : undefined"><slot /></span>
+    <span class="tlt-trigger"><slot /></span>
     <template #content>
       <span class="tlt-bubble">
         <slot name="content">{{ content }}</slot>
-        <span v-if="arrow" class="tlt-arrow" aria-hidden="true" />
       </span>
     </template>
   </UiKitTooltip>
@@ -77,14 +72,9 @@ const extraGap = computed(() => Math.max(0, props.offset - 8))
   overflow-wrap: anywhere;
   pointer-events: none;
 }
-.tlt-arrow {
-  position: absolute;
-  left: 50%;
-  bottom: -4px;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  background: var(--ui-tip, rgb(0 0 0 / 0.9));
-  transform: rotate(45deg);
+/* 箭头由 ui-kit 按真实弹出方向画（贴哪条边、翻到哪一侧都跟定位走）；这里只把它染成气泡色。 */
+.mck-dropdown__arrow.tlt-arrow {
+  --mck-dropdown-arrow-bg: var(--ui-tip, rgb(0 0 0 / 0.9));
+  --mck-dropdown-arrow-line: transparent;
 }
 </style>

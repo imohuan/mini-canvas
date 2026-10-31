@@ -52,6 +52,8 @@ export interface DropdownProps {
   bodyClass?: string
   teleport?: boolean
   arrow?: boolean
+  /** 箭头额外的类名：调用方要给箭头换色/换形状时用（箭头由库定位，类名由调用方提供）。 */
+  arrowClass?: string
   align?: 'start' | 'center' | 'end' | 'auto'
   /** 浮层 role，默认 menu；选项列表用 listbox */
   menuRole?: string

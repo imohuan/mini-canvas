@@ -15,6 +15,10 @@ export interface TooltipProps {
   closeDelay?: number
   /** 显示指向触发器的小箭头。 */
   arrow?: boolean
+  /** 箭头额外的类名：给箭头换色时用。 */
+  arrowClass?: string
+  /** 气泡与触发器之间的间距（px）。 */
+  offset?: number
   /** 浮层挂载容器，默认 body。 */
   appendTo?: string | HTMLElement
   /** 外部锚点：DOM / Ref / getter。 */

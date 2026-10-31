@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<DropdownProps>(), {
   bodyClass: '',
   teleport: true,
   arrow: false,
+  arrowClass: '',
   align: 'auto',
   menuRole: 'menu',
   layout: 'overlay-scroll',
@@ -150,6 +151,7 @@ const triggerEvents = computed(() => {
       <div
         v-if="api.open.value && arrow"
         class="mck-dropdown__arrow dd-arrow"
+          :class="arrowClass"
         :style="api.arrowStyle.value"
         aria-hidden="true"
       />

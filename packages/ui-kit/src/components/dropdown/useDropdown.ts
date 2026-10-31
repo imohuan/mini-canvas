@@ -254,8 +254,10 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       position: 'fixed',
       width: ARROW_SIZE + 'px',
       height: ARROW_SIZE + 'px',
-      background: 'var(--ui-panel, #fff)',
-      border: '0 solid var(--ui-line, #e2e5ea)',
+      // 用变量而不是写死底色：调用方（如 Tooltip 的深色气泡）能只换箭头颜色，
+      // 定位、贴边、翻转仍由库负责。
+      background: 'var(--mck-dropdown-arrow-bg, var(--ui-panel, #fff))',
+      border: '0 solid var(--mck-dropdown-arrow-line, var(--ui-line, #e2e5ea))',
       transform: 'rotate(45deg)',
       pointerEvents: 'none',
     }
