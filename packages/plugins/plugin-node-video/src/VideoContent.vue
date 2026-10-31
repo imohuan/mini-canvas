@@ -16,17 +16,9 @@
  * 这也意味着**裁剪中必须显示完整画面**（否则用户看不到自己框外的内容没法调框）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RenderEvents, useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { RenderEvents, useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import { captureFrame } from './videoTransform'
-import {
-  FrameCache,
-  grabFrameBlobFromElement,
-  grabTierFramesFromElement,
-  grabTierFrames,
-  type FrameResourcePort,
-  type TierFrame,
-} from './videoThumbCanvas'
-import { frameRefParamFor, makeFrameRef } from './videoThumbKey'
+import type { FrameResourcePort } from './videoThumbCanvas'
 import {
   readVideoThumbTiers,
   resolveVideoThumbTier,
@@ -35,6 +27,7 @@ import {
   type VideoThumbTierConfig,
 } from './videoThumbTier'
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
+import { unifiedThumbOf } from './videoThumbUnified'
 import { readClipRange } from './videoClip'
 import { formatTime } from './videoNodeData'
 import VideoPlayerBar from './VideoPlayerBar.vue'
@@ -48,14 +41,23 @@ function positiveNum(v: unknown): number | null {
 }
 import { createVideoOps } from './videoOps'
 import { endOverlay, isClipping, isCropping } from './videoSession'
-import { clearClipPrefs, publishDuration, publishPlayhead, resetDuration, resetPlayhead } from './videoClipStore'
+import {
+  clearClipPrefs,
+  clearDraftRange,
+  publishDuration,
+  publishPlayhead,
+  readClipPrefs,
+  readDraftRange,
+  resetDuration,
+  resetPlayhead,
+} from './videoClipStore'
 import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
 
-const { ctx, flow, visibleNodes } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
@@ -105,8 +107,23 @@ const cropRect = computed<Rect | undefined>(() => {
   return isCroppedRect(r) ? r : undefined
 })
 const cropping = computed(() => isCropping(props.id))
-/** 鼠标是否停在卡片上：卡内播放控件只在此时显形（不常驻遮画面） */
+/** 鼠标是否停在卡片上 */
 const hovering = ref(false)
+/**
+ * 本节点是否被**单独选中**（多选时为 false）。
+ *
+ * 用户口径 2026-10-31：「只有 hover 能触发播放和控件显示，选中（单选）时效果要和 hover 一致」。
+ * 复用渲染层的判定，与图片/文本节点的操作栏同源 —— 多选时不进入这个状态，
+ * 否则框选三个视频就会三个一起播。
+ */
+const soleSelected = useSoleNodeSelected(props.id)
+/**
+ * 「激活态」：鼠标悬停 **或** 单选选中，两者完全等价。
+ *
+ * 这是视频节点唯一的"该不该播、该不该露控件"判据 —— 下面所有显隐与播放
+ * 都只看它，不再各自判断 hover，避免两条路径慢慢走偏。
+ */
+const active = computed(() => hovering.value || soleSelected.value)
 
 // ==================== 帧图（海报）与分档显示 ====================
 /**
@@ -147,70 +164,103 @@ const tier = computed(() => resolveVideoThumbTier(zoom.value, tierCfg.value, can
  * ① 播放中缩放画布，节点仍挂着 video 在播；② 鼠标移开后 element 还留着。
  */
 const videoRequested = ref(false)
-/**
- * 定格那一帧的**三个档位**（第 1 档 = 当前时刻的原始尺寸截图，2/3 档 = 它的缩略图）。
- *
- * 用户口径：从视频切回帧图时要"直接生成 3 个档次的图片"，三档必须是**同一时刻的同一画面**
- * （否则缩放时画面会跳到别的时刻）—— 所以是**一次抓帧、缩出三档**（见 grabTierFrames），
- * 而不是三个档位各自去 seek 一次。
- */
-const frameTiers = ref<Map<number, TierFrame>>(new Map())
-/**
- * "生成这份帧图时用的配置指纹"（尺寸 + 质量）。
- *
- * 用来判断"用户改过配置之后，手上这份还能不能继续用"：改了就丢掉重做。
- * 不带这个判断的话，改完"最大宽高"画面会一直停在按旧尺寸缩出来的那张。
- */
-const frozenCfgKey = ref('')
-/**
- * 生成这份帧图时的**取景身份**（源画面尺寸 + 裁框）。
- *
- * 只比尺寸配置不够：用户改裁剪框后档位与质量都不变，旧帧图仍会被判成"能继续用"，
- * 于是画面停在改之前的取景上（2026-10-30 用户实测）。裁框与源尺寸一变就重做。
- */
-const frozenViewKey = ref('')
-
-/** 当前配置的指纹（尺寸 + 质量）——变了就必须重新生成 */
-function tierCfgKey(): string {
-  const c = tierCfg.value
-  return c.tier2Width + 'x' + c.tier2Height + '/' + c.tier3Width + 'x' + c.tier3Height + '/q' + Math.round(c.quality * 100)
-}
 /** 离开时的播放位置：下次再点播放从这里接着放 */
 const resumeTime = ref(0)
-/** 定格操作的代次：用户又悬停回来（要求播放）时 +1，用来作废还在进行中的那次定格 */
-const freezeEpoch = ref(0)
 
-/** 帧图缓存（按 源+档位+取帧时刻 缓存；命中即取，不多次解码） */
-const frameCache = new FrameCache()
-/** 当前该显示的帧图（生成是异步的，没好之前先显示已有的那张） */
-const tierFrame = ref<TierFrame | null>(null)
+/**
+ * 统一缩略图（用户 2026-10-30）：一个视频只有一张图，和左侧栏 / 底栏卡片 /
+ * 标签 / 标签下拉菜单共用同一份 —— 先查资源库持久缓存，没有才生成一次。
+ *
+ * 它取代了原来"每个节点自己抓一档帧图"的初始预览路径：那条路每个节点都要
+ * 起一次视频解码，节点一多就慢、还容易抓到黑帧。
+ */
+const unifiedThumb = ref<string>('')
+/** 统一缩略图的加载态：还没拿到地址时显示占位（避免白屏） */
+const thumbLoading = ref(true)
+watch(
+  [
+    videoUrl,
+    () => videoWidth.value,
+    () => videoHeight.value,
+    // 档位随画布缩放变化（第 1/2/3 档），改了要重新取对应分辨率的图
+    tier,
+    // 三档配置（尺寸/质量）变了要重新生成 —— 老规则的"名字带尺寸与质量"就在防这个
+    () => tierCfg.value.tier2Width,
+    () => tierCfg.value.tier2Height,
+    () => tierCfg.value.tier3Width,
+    () => tierCfg.value.tier3Height,
+    () => tierCfg.value.quality,
+  ],
+  async () => {
+    const src = videoUrl.value
+    if (!src) { unifiedThumb.value = ''; thumbLoading.value = false; return }
+    thumbLoading.value = true
+    try {
+      /**
+       * 直接调本插件的统一实现（不走 ctx.get('video') —— 那是自己，绕一圈没意义）。
+       * 资源库端口从 ctx 拿：跨会话命中靠的就是它。
+       *
+       * ★ 裁框**不参与**（用户 2026-10-31）：缩略图是全站共用的那一张，永远是整幅原片。
+       * 节点上看起来是裁过的那块，由下面的 posterStyle 用 CSS 取景实现 ——
+       * 跟播放时的 video 走同一套几何，两边画面一致。
+       */
+      const wantTier = tier.value
+      const box = videoThumbTargetFor(wantTier, tierCfg.value, {
+        width: videoWidth.value,
+        height: videoHeight.value,
+      })
+      const url = await unifiedThumbOf(src, frameResources(), {
+        tier: wantTier,
+        width: box.width,
+        height: box.height,
+        quality: tierCfg.value.quality,
+        frameWidth: videoWidth.value,
+        frameHeight: videoHeight.value,
+      })
+      unifiedThumb.value = url ?? ''
+    } catch {
+      unifiedThumb.value = ''
+    } finally {
+      thumbLoading.value = false
+    }
+  },
+  { immediate: true },
+)
 
 
 
 /**
  * 现在画静帧还是 video 元素。
  *
- * 规则（用户口径）：**要播 + 鼠标还在节点上** 才显示 video；其余一律显示静帧 ——
- * - 鼠标悬停上来 → 自动播放（不需要先点按钮）；
- * - 鼠标移开 → 暂停、定格成"当前这一帧"的图片（video 元素直接隐藏掉）；
- * - 播放中途缩放画布、或鼠标离开 → 同样回到静帧。
+ * 规则（用户口径 2026-10-30 简化后）：**要播 + 鼠标还在节点上** 才显示 video；
+ * 其余一律显示那张常驻的统一缩略图。
+ * - 鼠标悬停上来 → 从头自动播放（不需要先点按钮）；
+ * - 鼠标移开 → 暂停、直接露出预览图（不再抓帧，零等待）；
+ * - 播放中途缩放画布 → 同样回到静帧。
  *
- * ★ 那个 `frameTiers.size > 0` 是**必要的时序保护**：抓帧需要 video 元素还在 DOM 里。
- * 如果鼠标一移开就立刻卸载 video，抓帧只能抓到空 —— 所以"还没定格过"时让 video 多留一会儿
- * （此时它已暂停、画面是静止的，用户看不出区别），抓完再切。
- *
- * 全屏是独立的另一个 UI（用户口径），有自己的 video 元素，所以这里不涉及它。
+ * 预览图是资源库里的持久缩略图（全站共用一张），所以移开立刻就有图可显示，
+ * 不需要再"让 video 多留一会儿等抓帧"。
  */
 /**
  * 显隐状态机（用户口径 2026-10-17，三条硬规则）：
  * ① 触发显示：鼠标落在节点上 → 立刻挂 video 并自动播放；
  * ② 延迟关闭：video 开始播放 500ms 后才把帧图藏掉（黑帧由帧图盖住）；
  * ③ 保持显示：鼠标不离开，video 元素**永不消失**——暂停、拖进度条、seek 都不回图片，
- *    回图片只由「鼠标真正离开节点」触发（那时先定格抓帧、抓完再撤 video）。
+ *    回图片只由「鼠标真正离开节点」触发。
  */
 const posterHideTimer: { value: number | null } = { value: null }
 /** true = 帧图还盖着；video 首次 play 后 500ms 翻 false */
 const posterCovering = ref(true)
+/**
+ * video 元素**是否真的解出了画面**（readyState >= HAVE_CURRENT_DATA）。
+ *
+ * 为什么必须有这一位（用户 2026-10-30 报「悬停时全黑 / 全白，要等 1-3 秒」）：
+ * 从前是"play 事件后固定 500ms 撤帧图"。但 play 事件只表示"开始播放"，
+ * 这时解码器常常还没吐出第一帧 —— 帧图一撤，露出来的就是 video 元素的**黑底**。
+ * 网络慢时黑屏能持续一两秒，用户看到的就是"全黑 → 突然有画面"。
+ * 现在改成"看到真实画面才撤"，黑帧根本没有露脸的机会。
+ */
+const videoHasFrame = ref(false)
 function schedulePosterHide(): void {
   if (posterHideTimer.value !== null) window.clearTimeout(posterHideTimer.value)
   posterHideTimer.value = window.setTimeout(() => {
@@ -218,7 +268,13 @@ function schedulePosterHide(): void {
     posterCovering.value = false
   }, 500)
 }
-const keepPosterOverVideo = computed(() => posterCovering.value)
+/**
+ * 帧图是否盖在 video 上。
+ *
+ * 两个条件都要满足才撤：① 已经过了 500ms 的"防抖窗口"（避免刚挂上就闪）；
+ * ② video 真的解出了画面。少 ② 就是黑屏，少 ① 就是切换抖动。
+ */
+const keepPosterOverVideo = computed(() => posterCovering.value || !videoHasFrame.value)
 /**
  * 剪辑会话期间绝不能卸载 video 元素：底部剪辑条的播放头跟的就是这个元素的
  * currentTime，元素一卸（回帧图）播放头就永远停住。所以三处「回帧图」的口
@@ -226,202 +282,16 @@ const keepPosterOverVideo = computed(() => posterCovering.value)
  * 都要先看 isClipping —— 剪辑中一律保持 video 挂载。
  */
 const showPoster = computed(
-  () => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0 && !isClipping(props.id)),
+  () => !videoRequested.value || (!active.value && !isClipping(props.id)),
 )
 
 /**
- * 取帧时刻：第 0 帧常是黑场 / 片头，取第 1 秒更有代表性；
- * 比 1 秒还短的片子退到 0（否则取不到帧）。
- */
-const frameAt = computed(() => {
-  const d = duration.value
-  return d > 0 && d <= 1 ? 0 : Math.min(1, d > 0 ? d * 0.1 : 1)
-})
-
-/**
- * 当前该显示的帧图地址：**定格那一帧优先**（用户停在哪就显示哪一帧的画面），
- * 否则用"默认时刻"的档位帧图（还没生成好时为空，模板里会先不渲染）。
+ * 当前该显示的预览图地址。
  *
- * 三档都是从**同一张定格帧**缩出来的，所以这里换档只是换分辨率，画面不跳。
+ * 用户 2026-10-30 统一后：**只有一张**统一缩略图（资源库持久化、全站复用）。
+ * 定格帧已移除 —— 移开鼠标不再重新截图，直接回到这张常驻的图。
  */
-const posterDisplaySrc = computed(
-  () => frameTiers.value.get(tier.value)?.url || tierFrame.value?.url || '',
-)
-
-/**
- * 按当前档位取（或生成）"默认时刻"的帧图 —— 只在**没定格过**时兜底（首次显示、换视频后）。
- *
- * 提前 return 的两种情况（都保持"不生成"）：
- * - 已经定格过（frameTiers 有货）：用定格帧，不再生成别的时刻的图，免得画面跳；
- * - 正在裁剪 / 源尺寸未知 / 正在播放：等下一次 watch。
- *
- * ★ **只在节点进入可视区时才生成**：抓帧要起临时 video 解码，一块画布上几十个视频节点
- * 同时排队的代价是"打开画布要等十几秒才看到画面"（2026-10-15 实测：32 个视频节点时
- * 默认帧图 10 秒才出来）。可视区外的节点先留空，等滚进来再生成。
- */
-
-/**
- * 帧图解析错峰门闩（2026-10-15 卡死修复）：组件挂载后 2 秒才允许帧图解析。
- * 几十个视频节点同时挂载时全部并发解析帧图（解码/抓帧/资源请求），多核打满、
- * 页面长时间无响应（用户实测「打开画布就卡死」）。挂载后错峰自然把请求摊开。
- */
-const frameGateOpen = ref(false)
-onMounted(() => {
-  // 2000ms 只挡"重活"（起解码器抓帧）—— 纯缓存读取（资源库探测 / 内存命中）不解码、
-  // 不占 CPU，不在这 2 秒里干等，否则刷新后节点白屏 2-3 秒才出图（2026-10-17 用户实测）。
-  setTimeout(() => { frameGateOpen.value = true }, 2000)
-})
-
-watch(
-  // ★ 尺寸/质量也要进依赖：改"最大宽高"时档位不变，只盯档位就不会重跑
-  // （2026-10-15 用户实测："重新设置了最大宽高……依然使用的是之前的图片"）。
-  [
-    tier,
-    videoUrl,
-    frameGateOpen,
-    () => videoWidth.value,
-    () => videoHeight.value,
-    // ★ 裁框也要进依赖：改裁剪后档位/尺寸都没变，只盯那几项的话 watch 不重跑，
-    // 画面会一直停在改之前的取景上（2026-10-30 用户实测）。
-    () => currentViewKey(),
-    cropping,
-    showPoster,
-    () => tierCfg.value.tier2Width,
-    () => tierCfg.value.tier2Height,
-    () => tierCfg.value.tier3Width,
-    () => tierCfg.value.tier3Height,
-    () => tierCfg.value.quality,
-  ],
-  () => {
-    const src = videoUrl.value
-    if (!src || cropping.value || !showPoster.value) return
-    /**
-     * 已经定格过 → 只有在**配置没变**的情况下才直接沿用。
-     *
-     * 改过尺寸/质量（folded 进 `tierCfgKey`）就必须丢掉旧定格重做 ——
-     * 否则用户改了"最大宽高"，画面会一直停在按旧尺寸缩出来的那张
-     * （2026-10-15 用户实测：「重新设置了最大宽高……它依然使用的是之前的图片」）。
-     */
-    if (frameTiers.value.size > 0) {
-      if (frozenCfgKey.value === tierCfgKey() && frozenViewKey.value === currentViewKey()) return
-      releaseFrameTiers()
-      // 裁框/尺寸变了的旧定格必须从缓存里作废；否则它仍会作为「已有定格」被优先显示，
-      // 画面会一直停在旧取景上。
-      frameCache.clearFrozen(src)
-    }
-    if (videoWidth.value <= 0 || videoHeight.value <= 0) return
-    // 可视区闸门（外扩一屏，滚动时不用等）
-    const inView = visibleNodes(800).some((r) => r.id === props.id)
-    if (!inView) return
-    const wantTier = tier.value
-    const at = frameAt.value
-    const frameW = videoWidth.value
-    const frameH = videoHeight.value
-    const box = videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH })
-    // 名字里带**尺寸**：用户改"最大宽高"后名字跟着变，才会重新生成（只带档位会命中旧图）
-    // 名字里必须同时带**取景身份**（裁框 + 源画面尺寸）：改裁剪后缩略图要重生成，
-    // 否则一直命中改之前那张整幅图（2026-10-30 用户实测）。
-    const ref = makeFrameRef(
-      'vid',
-      src,
-      frameRefParamFor(wantTier, at, box.width, box.height, tierCfg.value.quality, {
-        frameWidth: frameW,
-        frameHeight: frameH,
-        cropRect: cropRect.value ?? null,
-      }),
-    )
-    // 内存缓存的键用同一份身份（ref），于是改尺寸后内存那一级也一起失效
-    const variant = ref ?? wantTier + '@' + at.toFixed(2)
-    // 固定引用名（源 + 档位 + 时刻）→ **资源库命中就零解码**：
-    // 第二次打开画布、换设备打开、刷新之后，都直接取已存的那张，
-    // 不再为每个视频节点重跑一次"起解码器 + seek"（那正是"节点一多每次卡几秒"的根）。
-    const resources = frameResources()
-    // 轻路先行：还没过门闩时也允许"纯读缓存"。缓存键先按当前档位算一份；
-    // 门闩后重跑时键一致 → 命中内存直接复用，不会重复生成。
-    const cacheOnly = !frameGateOpen.value
-    void frameCache
-      .resolveOrCreate({
-        src,
-        variant,
-        ...(ref ? { ref } : {}),
-        ...(resources ? { resources } : {}),
-        ...(cacheOnly ? { cacheOnly: true } : {}),
-        make: async () => {
-          // cacheOnly 模式下不应走到 make（门闩内才允许解码重活），保险直接拒绝
-          if (cacheOnly) return null
-          // 元素在（正在播/刚暂停）就从它身上直接抓，零额外解码
-          const el = videoRef.value
-          if (el && el.videoWidth) {
-            const fast = await grabFrameBlobFromElement(el, {
-              box: videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH }),
-              tier: wantTier,
-              cropRect: cropRect.value ?? null,
-              quality: tierCfg.value.quality,
-            })
-            if (fast) return fast
-          }
-          // 元素不在（常态：还没播过）→ 起一次解码拿这一帧（每个源每种档位只做一次，
-          // 做完就进资源库，之后永远命中）
-          const slow = await grabTierFrames(src, {
-            at,
-            boxes: [
-              { tier: wantTier, box: videoThumbTargetFor(wantTier, tierCfg.value, { width: frameW, height: frameH }) },
-            ],
-            cropRect: cropRect.value ?? null,
-            frameWidth: frameW,
-            frameHeight: frameH,
-            quality: tierCfg.value.quality,
-            grab: captureFrame,
-          })
-          const frame = slow?.tiers.get(wantTier)
-          if (!frame) return null
-          const blob = await fetch(frame.url)
-            .then((r) => r.blob())
-            .catch(() => null)
-          URL.revokeObjectURL(frame.url)
-          return blob
-        },
-      })
-      .then((made) => {
-        if (tier.value !== wantTier || videoUrl.value !== src) return
-        if (made && frameTiers.value.size === 0) {
-          tierFrame.value = made
-          frozenCfgKey.value = tierCfgKey()
-          frozenViewKey.value = currentViewKey()
-        }
-      })
-  },
-  { immediate: true },
-)
-
-/** 释放定格帧的三个档位（objectURL 不释放会一直占着内存） */
-function releaseFrameTiers(): void {
-  // objectURL 的所有权在 FrameCache（它知道哪些是自己造的、哪些是资源库共用的地址）。
-  // 这里直接 revoke 会把同一 ref 被别的节点共用的地址一起弄坏（本地 IndexedDB 就是共用）。
-  frameTiers.value = new Map()
-}
-
-/**
- * 定格帧在内存缓存里的变体前缀。
- *
- * 定格图与「默认帧图」都住同一个 FrameCache，用前缀把两类图分开：
- * 默认帧图的键 = 资源库引用名（源 + 档位 + 时刻 + 尺寸 + 质量），
- * 定格图的键 = `frz:<时刻>:<画面宽>x<画面高>:<裁框摘要>` —— 换时刻 / 换画面尺寸 / 换裁框
- * 都是另一张图，不会被上一次定格的缓存命中（用户 2026-10-30 报的「移开鼠标预览没更新」）。
- */
-function frozenVariantPrefix(at: number, frameW: number, frameH: number): string {
-  const r = cropRect.value
-  const crop = r ? `${r.x},${r.y},${r.width},${r.height}` : 'full'
-  const cropKey = crop.replace(/[^0-9a-z.,-]/gi, '')
-  return 'frz:' + Math.round(at * 100) + ':' + Math.round(frameW) + 'x' + Math.round(frameH) + ':' + cropKey
-}
-
-/** 当前取景身份（与冻结帧一起比对，裁框变了就重做） */
-function currentViewKey(): string {
-  const r = cropRect.value
-  const crop = r ? `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}` : 'full'
-  return videoWidth.value + 'x' + videoHeight.value + ':' + crop
-}
+const posterDisplaySrc = computed(() => unifiedThumb.value)
 
 /**
  * 资源库端口（ctx 上的 'resources'）：帧图存这儿，换会话/换设备才有得复用。
@@ -433,79 +303,13 @@ function frameResources(): FrameResourcePort | undefined {
 }
 
 /**
- * 定格：暂停 → 抓住**当前这一帧** → 一次缩出三个档位 → 收掉 video 元素。
- *
- * 顺序不能反：**先抓帧再卸 video** —— 卸掉之后 videoRef 就没了，抓不到最后看到的画面。
- * 抓帧用同源资源 + 普通 video 元素，canvas 不会被标记为 tainted。
- *
- * ★ 为什么用 `freezeEpoch` 而不是看 `videoRequested` 来判断"要不要丢弃这次定格"：
- * `videoRequested` 要到抓帧**结束之后**才置 false（在那之前 video 元素必须留着给抓帧用），
- * 所以抓帧期间它一直是 true —— 拿它当取消判据会把每一次定格都自己丢掉
- * （2026-10-15 实测踩到：鼠标移开后视频暂停了，但画面一直是 video、永不切帧图）。
- */
-async function freezeFrame(): Promise<void> {
-  if (typeof document === 'undefined') return
-  const v = videoRef.value
-  if (!v || !v.videoWidth || !v.videoHeight) return
-  const epoch = freezeEpoch.value
-  const at = Number.isFinite(v.currentTime) ? v.currentTime : 0
-  const frameW = v.videoWidth
-  const frameH = v.videoHeight
-  if (!v.paused) v.pause()
-  resumeTime.value = at
-  const src = videoUrl.value
-  // 旧定格与当前取景对不上（用户刚改了裁框）→ 先丢掉，别让它继续挂在画面上
-  // （watch 里也会判，但抓帧结束前就有画面，这里提前清掉，闪错的时间更短）。
-  if (frameTiers.value.size > 0 && frozenViewKey.value !== currentViewKey()) {
-    releaseFrameTiers()
-    frameCache.clearFrozen(src)
-  }
-  const boxes = [
-    { tier: 1, box: videoThumbTargetFor(1, tierCfg.value, { width: frameW, height: frameH }) },
-    { tier: 2, box: videoThumbTargetFor(2, tierCfg.value, { width: frameW, height: frameH }) },
-    { tier: 3, box: videoThumbTargetFor(3, tierCfg.value, { width: frameW, height: frameH }) },
-  ]
-  /**
-   * ★ 一次抓帧、缩出三档（不是三次独立抓帧）。
-   *
-   * 抓两次「当前帧」在播放器里可能落在相邻两帧上，缩放时画面就会跳；
-   * 这里从同一个视频元素**同一时刻**抓一份原图，再在内存里缩出 2/3 档。
-   * 同时把这份结果直接写进 FrameCache 的内存级 —— 下一个 watch 会立刻显示它。
-   *
-   * 抓取一律**从眼前这个 video 元素直接抓**（零额外解码、零等待）：
-   * 另起一个 video 去 seek 在几十个视频节点的画布上会卡在解码器排队里
-   * （2026-10-15 实测：暂停了但画面迟迟切不过去）。
-   */
-  const variant = frozenVariantPrefix(at, frameW, frameH)
-  /**
-   * 从眼前这个元素**一次抓齐三档**：只 seek 一次、只 decode 一次，三档必然同一帧。
-   * 返回的 URL 属于本次定格，直接写进 FrameCache 的内存级（不经过资源库）。
-   */
-  const set = await grabTierFramesFromElement(v, {
-    boxes,
-    cropRect: cropRect.value ?? null,
-    quality: tierCfg.value.quality,
-    at,
-  })
-  // 期间用户又悬停回来播放 / 换了源 → 丢弃这次定格（不然会把旧画面挂上去）
-  if (epoch !== freezeEpoch.value || videoUrl.value !== src) return
-  if (!set || set.tiers.size === 0) return
-  const tiers = set.tiers
-  // 直接换成本次定格的三档：不再经过「资源库命中」那一级（定格图只在本次会话有效）。
-  frameCache.setFrozenFrames(src, variant, tiers)
-  frameTiers.value = new Map([...tiers].map(([t, f]) => [t, f]))
-  // 记下"这份是用哪套配置生成的" —— 用户改尺寸后据此判定要重做
-  frozenCfgKey.value = tierCfgKey()
-  frozenViewKey.value = currentViewKey()
-  tierFrame.value = null
-}
-
-/**
- * 停止播放并回到静帧。**只在真的需要时**抓帧（否则每次进出节点都白抓一次）。
+ * 停止播放并回到常驻预览图（**不再抓帧**，用户 2026-10-30）。
  *
  * 触发点：鼠标离开节点、点画布空白、播放按钮暂停。
+ * 预览图是资源库里那张统一缩略图，已经常驻 DOM —— 这里只负责停播 + 卸载 video，
+ * 移开瞬间就是一张现成的图，没有解码、没有空窗。
  */
-function stopAndRestorePoster(): void {
+function stopPlayback(): void {
   if (!videoRequested.value) return
   // 剪辑会话中离开节点：video 必须留着（播放头还指着它），只记下时间
   if (isClipping(props.id)) {
@@ -513,35 +317,32 @@ function stopAndRestorePoster(): void {
     if (v && Number.isFinite(v.currentTime)) resumeTime.value = v.currentTime
     return
   }
-  const epochAtLeave = freezeEpoch.value
   const v = videoRef.value
-  if (v) {
-    if (!v.paused) v.pause()
-    if (Number.isFinite(v.currentTime)) resumeTime.value = v.currentTime
-  }
-  /**
-   * ★ 每次离开都抓**当前这一帧**（用户 2026-10-30 口径：播到第 5 秒移开，就该把第 5 秒
-   * 定格成新的预览图）。旧实现在 `frameTiers.size > 0` 时直接复用上一次定格的帧 ——
-   * 于是第二次播放停在新位置，缩略图却还是上一次那张，看起来像「动态更新没生效」。
-   *
-   * 抓帧期间帧图先盖住（posterCovering 已在 onCardLeave 置真），抓完再撤 video。
-   * 同一时刻重复定格由 FrameCache 按「源 + 时刻」命中，不会重复解码。
-   */
-  void freezeFrame().then(() => {
-    // 定格期间用户又 hover 回来（freezeEpoch 已变）→ 不要把 videoRequested 复位，
-    // 否则会把刚要求播放的 video 元素卸掉，第二轮播放就此卡死（画面停回帧图、
-    // 时间不动 —— 2026-10-16 真机复现的第二轮播放卡住）
-    if (epochAtLeave !== freezeEpoch.value) return
-    videoRequested.value = false
-    endedLatch.value = false
-  })
+  if (v && !v.paused) v.pause()
+  if (v && Number.isFinite(v.currentTime)) resumeTime.value = v.currentTime
+  videoRequested.value = false
+  endedLatch.value = false
+  // 元素要卸了：这一位跟着复位，下次悬停重新等真实画面
+  videoHasFrame.value = false
 }
 
 /** 读写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createVideoOps(ctx)
 
-/** 剪辑范围（缺省 = 整段；脏数据已被收敛） */
-const clipRange = computed(() => readClipRange(props.data))
+/**
+ * 当前播放范围（缺省 = 整段；脏数据已被收敛）。
+ *
+ * 剪辑会话里优先用面板正在拖的**草稿区间**：用户拖完还没点确认就点播放，
+ * 逻辑必须跟着新选区走 —— 否则"播到段尾停 / 区间循环"用的还是上一次确认的范围。
+ * 退出剪辑后草稿清掉，自然退回节点 data。
+ */
+const clipRange = computed(() => {
+  if (isClipping(props.id)) {
+    const draft = readDraftRange(props.id)
+    if (draft && draft.end > draft.start) return draft
+  }
+  return readClipRange(props.data)
+})
 const clipped = computed(() => props.data?.clipStart !== undefined || props.data?.clipEnd !== undefined)
 /** 可播放时长：剪辑过就只算那一段 */
 const playableLength = computed(() => {
@@ -631,21 +432,15 @@ const videoStyle = computed<Record<string, string>>(() => {
 const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value).length > 0)
 
 /**
- * 帧图（预览图）的显示方式。
+ * 预览图的显示方式。
  *
- * ★ 帧图**已经按裁剪框生成**（见 grabFrameBlobFromElement / grabTierFrames 的 cropRect），
- * 它本身就是"裁框内的那块画面"。所以显示时只把它整块铺满卡片，**不能再套 framingStyle** ——
- * 套上就是第二次放大、第二次偏移，用户看到的是「只剩中间一小块 / 比例不对」
- * （2026-10-30 实测）。取景只属于原始 <video>：它没被裁过，靠 CSS 看框内那块。
+ * 预览图现在是**整幅原片**（用户 2026-10-31：默认缩略图不携带裁剪），
+ * 所以它和 video 一样要按裁框做 CSS 取景 —— 两边复用**同一套** videoStyle。
  *
- * 用 object-fit: fill 而不是 contain：帧图与裁框同比例，卡片也是按裁框比例算的，
- * 两者只有边框/舍入造成的亚像素差；fill 把这丝差别吸收掉，cover 还能裁掉一行像素，
- * contain 会露出底色。
+ * 从前的做法是"生成时就裁好、显示端不再取景"，代价是每换一种裁法就多存一张图，
+ * 而左侧栏 / 底栏拿不到裁框、必然对不上。现在一张图走天下。
  */
-const posterStyle = computed<Record<string, string>>((): Record<string, string> => {
-  if (!isFramed.value) return {}
-  return { width: '100%', height: '100%', left: '0', top: '0' }
-})
+const posterStyle = computed<Record<string, string>>(() => videoStyle.value)
 
 /** 当前该用的 video 元素（全屏预览由 MediaViewer 自己管，不在这份状态里） */
 function activeVideo(): HTMLVideoElement | null {
@@ -665,12 +460,17 @@ async function togglePlay(): Promise<void> {
     } else if (resumeTime.value > 0 && v.currentTime <= 0.01) {
       v.currentTime = Math.min(resumeTime.value, end > start ? end : Number.POSITIVE_INFINITY)
     }
-    await v.play().catch(() => { })
+    // 自动播放可能被浏览器策略拦下（无用户手势时不许有声播放）—— 降级为静音播
+    // 一把；真实用户点过一次页面后通常不会再进这条路。播放态由事件驱动同步。
+    await v.play().catch(() => {
+      v.muted = true
+      return v.play().catch(() => { })
+    })
   } else {
     v.pause()
-    // 单击暂停：画面**停在当前帧**（用户口径 2026-10-16：点画面=播放/暂停）。
-    // 不再立刻回帧图 —— 那会让"暂停"看起来像"消失"；只有鼠标真正离开节点
-    // （onCardLeave → stopAndRestorePoster）才定格回帧图。
+    // 暂停：画面**停在当前帧**（用户 2026-10-31：播放/暂停只由左下角按钮触发）。
+    // 不立刻回预览图 —— 那会让"暂停"看起来像"消失"；只有激活态消失
+    // （鼠标离开且未选中 → leaveActive → stopPlayback）才回预览图。
   }
 }
 
@@ -680,60 +480,72 @@ async function togglePlay(): Promise<void> {
  * 这正是用户要的"只有点击播放的时候才真正加载视频"：点之前页面里没有任何视频请求，
  * 点之后才发出 —— 而不是"先加载好等着被点"。
  */
-async function onPlayButton(): Promise<void> {
+async function onPlayButton(restart = false): Promise<void> {
   if (!videoRequested.value) {
     videoRequested.value = true
     currentTime.value = clipRange.value.start
+    if (restart) resumeTime.value = 0
     await nextTick()
   }
   await togglePlay()
 }
 
 /**
- * 
- *  * 悬停到节点上 → 自动开始播放（用户口径：不用先点按钮）。
+ * 激活态成立 → 自动开始播放（用户口径：不用先点按钮）。
  *
- * 与播放按钮走同一条路（先挂 video 元素、再 play），所以"点播"与"悬停播"行为一致。
+ * 与播放按钮走同一条路（先挂 video 元素、再 play），所以"点播"与"自动播"行为一致。
  * 已经播着就什么都不做（鼠标在卡内移动会反复触发 enter/leave，不能每次都重播）。
  */
-async function onCardEnter(): Promise<void> {
-  hovering.value = true
-  // 作废还在进行中的定格 + 清掉挂着的帧图隐藏定时器（规则①：进来就播）
-  freezeEpoch.value += 1
+async function enterActive(): Promise<void> {
   if (posterHideTimer.value !== null) { window.clearTimeout(posterHideTimer.value); posterHideTimer.value = null }
-  // 重新把帧图盖上（上次离开定格时它已撤掉），等这次 play 后再延迟关闭
+  // 重新把帧图盖上，等这次 play 后再延迟关闭
   posterCovering.value = true
   if (cropping.value || broken.value || !videoUrl.value) return
   // 已经播着 → 只重排帧图延迟关闭，不打断播放
   if (videoRequested.value && playing.value) { schedulePosterHide(); return }
-  await onPlayButton()
+  /**
+   * 每次都从头播（用户 2026-10-30 口径）。
+   *
+   * 旧行为是"从上次停下的位置接着播"，但配合定格帧会让人以为预览图变了；
+   * 现在定格功能已经移除，统一从头开始更符合直觉。
+   */
+  resumeTime.value = 0
+  await onPlayButton(true)
 }
 
 /**
- * 鼠标离开节点 → 暂停并定格成当前这一帧（用户口径：video 元素直接隐藏掉）。
+ * 激活态消失 → 暂停并回到常驻预览图。
+ *
+ * 用户 2026-10-30：**不再抓定格帧**。以前每次离开都要现场解码一帧，
+ * 慢、会闪白、还可能截到黑场；现在预览图是资源库里那张统一缩略图，
+ * 移开就是直接露出来（零等待）。
  */
-function onCardLeave(): void {
-  hovering.value = false
-  // 离开 = 唯一允许 video 消失的时机（规则③）：取消挂着的定时器、帧图顶上，
-  // 由 stopAndRestorePoster 定格抓帧后撤 video
+function leaveActive(): void {
   if (posterHideTimer.value !== null) { window.clearTimeout(posterHideTimer.value); posterHideTimer.value = null }
   posterCovering.value = true
-  stopAndRestorePoster()
+  stopPlayback()
 }
 
 /**
- * 单击画面任意处 = 播放/暂停（2026-10-16 用户口径：整块节点区域都能点，不只左下角按钮）。
- * 250ms 延迟缓冲：双击全屏会先来两次 click，等一下确认没有第二击再执行单击动作，
- * 否则双击全屏前会先误触发一次暂停。
+ * 同步「激活态 → 播放/停播」。
+ *
+ * 为什么用 watch 而不是在 enter/leave 里各写一遍：激活态有两个来源
+ * （鼠标悬停、单选选中），任何一方变化都要走**同一条**处理路径。
+ * 各写一遍迟早会漂移 —— 比如"选中进入不播、取消选中才停"这种半截行为。
  */
-let stageClickTimer: number | null = null
-function onStageClick(): void {
-  if (cropping.value || broken.value || !videoUrl.value) return
-  if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
-  stageClickTimer = window.setTimeout(() => {
-    stageClickTimer = null
-    void onPlayButton()
-  }, 250)
+watch(active, (on) => {
+  if (on) void enterActive()
+  else leaveActive()
+})
+
+/** 悬停进入：只翻标志位，真正的播放交给上面那个 watch */
+function onCardEnter(): void {
+  hovering.value = true
+}
+
+/** 悬停离开：同上，停播交给 watch */
+function onCardLeave(): void {
+  hovering.value = false
 }
 
 function onLoadedMetadata(e: Event): void {
@@ -784,10 +596,13 @@ function onTimeUpdate(e: Event): void {
   // "暂停→拉回末尾"会被重复触发，第二轮开始时进度条在段尾和当前进度之间来回跳
   if (end > start && !endedLatch.value && v.currentTime >= end) {
     endedLatch.value = true
-    // 循环偏好（剪辑面板的「区间循环」按钮）：开 = 回段首接着放；关 = 停在段尾（原有行为）。
-    if (v.loop) {
+    // 区间循环（剪辑面板「区间循环」按钮 / 设置项）：开 = 回段首接着放，关 = 停在段尾。
+    // ★ 必须读剪辑偏好，不能读 v.loop：video 元素的 loop 只能循环**整段视频**，
+    //   而且它不会在「剪辑段尾」触发 —— 面板里那段选区它根本不知道（用户实测报的没效果）。
+    if (readClipPrefs(props.id).loop) {
       endedLatch.value = false
       v.currentTime = start
+      void v.play().catch(() => {})
     } else {
       v.pause()
       v.currentTime = end
@@ -858,6 +673,18 @@ function onVideoError(): void {
 function onVideoPlay(): void {
   playing.value = true
   schedulePosterHide()
+}
+
+/**
+ * video 解出可绘制画面（loadeddata / canplay / seeked 都会发）。
+ *
+ * 这就是"可以撤帧图"的真实信号 —— 见 keepPosterOverVideo 的说明。
+ * 用事件而不是轮询 readyState：事件由浏览器在解码完成那一刻发出，最省事也最准。
+ */
+function onVideoReady(): void {
+  const v = videoRef.value
+  // HAVE_CURRENT_DATA(2)：当前位置已经有帧可画。低于它说明还没解出来。
+  if (v && v.readyState >= 2) videoHasFrame.value = true
 }
 
 // ==================== 截图 ====================
@@ -943,22 +770,21 @@ watch(
     syncCardSize(followedVideoCardSizePatch(props.data, ops.fitLimits?.()))
   },
 )
-// 点画布空白退出裁剪（与图片节点一致：宿主已把"点空白"归一成内核事件，不必自己监听 document）
+/**
+ * 点画布空白：只负责退出裁剪。
+ *
+ * 这里不再停播（用户 2026-10-31）：停播只由"激活态消失"驱动
+ * （鼠标离开且未单选 → leaveActive）。再多一条"点空白就停"的路，
+ * 两条判据各走各的，行为就看谁先触发 —— 用户看到的就是随机。
+ */
 const paneClickSub = ctx.on(RenderEvents.PaneClick, () => {
   if (cropping.value) endOverlay(props.id)
-  // 点空白 = 用户视线离开了这个节点 → 停止播放并回到帧图（同 pointerleave 的理由）
-  stopAndRestorePoster()
 })
 
 // 双击画面 = 进全屏（与 v1 同手势；裁剪中不接管，免得抢了裁剪框的双击）
 function onStageDblClick(e: MouseEvent): void {
   if (cropping.value) return
   e.stopPropagation()
-  // 双击优先于单击：取消还没执行的单击播放/暂停
-  if (stageClickTimer !== null) {
-    window.clearTimeout(stageClickTimer)
-    stageClickTimer = null
-  }
   // 全屏改用全局预览组件（用户口径 2026-10-17：不要自己实现预览，
   // 生成历史 / 底栏素材卡都是主题注册的 MediaViewer）——把当前视频交给总线，
   // 由 overlay 槽的 VideoFullscreenOverlay 渲染；本节点内先暂停，预览层自己播
@@ -972,29 +798,27 @@ function onStageDblClick(e: MouseEvent): void {
 
 onBeforeUnmount(() => {
   tierSettingOff?.dispose()
-  // 帧图的 objectURL 全还回去（不还就是内存泄漏，从界面上看不出来）
-  frameCache.dispose()
-  if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
   if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
   if (captureCloseTimer !== null) window.clearTimeout(captureCloseTimer)
   if (posterHideTimer.value !== null) window.clearTimeout(posterHideTimer.value)
   document.removeEventListener('pointerdown', onCaptureMenuOutside, true)
-  releaseFrameTiers()
   paneClickSub.dispose()
   endOverlay(props.id)
   resetPlayhead(props.id)
   clearClipPrefs(props.id)
+  clearDraftRange(props.id)
   // 时长也是模块级共享态（剪辑面板读它铺胶片格）：不清就跟着 nodeId 一直留着
   resetDuration(props.id)
 })
 
 // 视频地址一变：旧源的帧图全部作废（释放 objectURL）、回到"未播放"态
 watch(videoUrl, (prev) => {
-  if (prev) frameCache.clearSource(prev)
-  tierFrame.value = null
+  if (prev) {
+    // 旧源的缩略图缓存不必手工清：统一服务的缓存键带源哈希，换视频就是换键，
+    // 旧条目留着也不会被误命中（且它存的是资源库地址，不占解码器）。
+  }
   videoRequested.value = false
   resumeTime.value = 0
-  releaseFrameTiers()
 })
 
 </script>
@@ -1010,10 +834,10 @@ watch(videoUrl, (prev) => {
     <!-- 底部渐变衬底：只给"悬停时露出的播放控件"当背景。
          没有视频（或视频失效、正在裁剪）时不渲染；鼠标离开卡片时淡出 ——
          空节点必须保持卡片本身的底色，否则底部会挂着一条没来由的灰带（用户实测报的）。 -->
-    <div v-if="videoUrl && !broken && !cropping" class="vc-scrim" :class="{ 'is-hidden': !hovering }"
+    <div v-if="videoUrl && !broken && !cropping" class="vc-scrim" :class="{ 'is-hidden': !active }"
       aria-hidden="true"></div>
     <div ref="stageRef" class="video-stage" :class="{ 'is-framed': isFramed, 'is-cropping': cropping }"
-      @click="onStageClick" @dblclick="onStageDblClick">
+      @dblclick="onStageDblClick">
       <template v-if="videoUrl && !broken">
         <!--
           帧图态（默认）：只画一张静态帧图 —— 页面里没有指向视频字节的 video 元素，
@@ -1030,13 +854,27 @@ watch(videoUrl, (prev) => {
         <!-- 帧图与 video 是"叠放"：鼠标进节点 → video 立刻挂载并自动播放，
              首次 play 后 500ms 才把帧图藏掉（延迟关闭）；之后只要鼠标不离开，
              video 永不消失（暂停/拖进度条都保持视频画面）。 -->
-        <img v-if="keepPosterOverVideo && posterDisplaySrc" class="video-media is-poster"
+        <!-- 预览图**一旦有了就常驻 DOM**（用户 2026-10-30）：v-if 只负责"有没有图"，
+             v-show 负责"盖不盖住视频"。鼠标移开时元素还在，只是重新显示出来 ——
+             没有 blob 重建空窗，不会白屏一闪。 -->
+        <img v-if="posterDisplaySrc" v-show="keepPosterOverVideo" class="video-media is-poster"
           :class="{ 'is-cropping': cropping }" :style="posterStyle" :src="posterDisplaySrc"
           alt="视频帧" draggable="false" />
+        <!--
+          加载态（用户 2026-10-30 要求）：缩略图还没拿到时不能只留一块空底色 ——
+          用户分不清"在加载"和"坏了"。这里给一个轻微的呼吸占位 + 转圈。
+          **帧图已经有了就不显示**：那时候屏幕上有真画面，再叠一层转圈是噪音。
+        -->
+        <div v-if="thumbLoading && !posterDisplaySrc && showPoster" class="video-loading" aria-live="polite">
+          <span class="video-loading-spinner" aria-hidden="true"></span>
+          <span class="video-loading-text">加载预览…</span>
+        </div>
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
-        <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
+        <video v-if="!showPoster" ref="videoRef" class="video-media" :class="{ 'has-frame': videoHasFrame }"
+          :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
           :muted="volumeEffectiveMuted" :volume="volume"
+          @loadeddata="onVideoReady" @canplay="onVideoReady" @seeked="onVideoReady"
           @play="onVideoPlay" @pause="playing = false" @error="onVideoError"
         />
 
@@ -1056,7 +894,7 @@ watch(videoUrl, (prev) => {
     <!-- 播放控件：本地态的显隐规则是"有视频且不在裁剪中"，再叠加卡片 hover（不常驻，免得遮画面）。
          三个 VueFlow 保留类名把画布手势挡在外面：nodrag 不拖节点、nopan 不拖画布、nowheel 不缩放画布。 -->
     <div v-if="videoUrl && !broken && !cropping" class="video-controls nodrag nopan nowheel"
-      :class="{ 'is-hidden': !hovering }" @dblclick.stop>
+      :class="{ 'is-hidden': !active }" @dblclick.stop>
       <!-- 控件条 = 共用组件 VideoPlayerBar（视觉标准在节点这一侧，2026-10-29 用户拍板）。
            节点形态的差异只有截图按钮（插槽传入，含三帧菜单）——其余与全屏预览完全一致。 -->
       <VideoPlayerBar
@@ -1133,14 +971,20 @@ watch(videoUrl, (prev) => {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #050505; /* 主题色白名单: 视频信箱黑边随画面内容恒定，与主题无关 */
+  /* 主题色白名单: 视频信箱黑边随画面内容恒定，与主题无关。
+     ★ 只在"真的解出了画面"之后才铺黑：没画面时铺黑，卡片上就是一块纯黑 ——
+     用户 2026-10-30 报的「全黑状态」有一半是这个底色造成的。 */
+  background: transparent;
   /* 卡片选中/拖动时不让浏览器原生手势打断 */
   user-select: none;
 }
+.video-media.has-frame {
+  background: #050505; /* 主题色白名单: 有画面时的信箱黑边 */
+}
 
-/* 帧图（未播放时的画面）：与 <video> 完全同一套几何。
+/* 预览图（未播放时的画面）：与 <video> 完全同一套几何。
    ★ 必须 contain：卡片比例与画面比例差一点时，cover 会把多出去的那一边直接切掉，
-   用户看到的就是「缩略图没有裁好」（2026-10-30 实测）。正常比例下两者结果几乎一致，
+   用户看到的就是「缩略图没有裁好」。正常比例下两者结果几乎一致，
    差别只在比例不匹配时 —— 那种情况宁可留极窄的底色，也不能丢掉画面内容。 */
 .video-media.is-poster {
   object-fit: contain;
@@ -1149,10 +993,12 @@ watch(videoUrl, (prev) => {
   -webkit-user-drag: none;
 }
 
-/* 裁过的**视频**：由 framingStyle 给出放大比例与偏移，位置相对舞台左上角，
+/* 裁过的画面：由 framingStyle 给出放大比例与偏移，位置相对舞台左上角，
    框外部分被 .video-stage 的 overflow:hidden 裁掉 —— 这就是"裁剪"的视觉实现。
-   ★ 只作用在 <video>：帧图在生成时已经按裁框截好，再套这层就是裁两次（见 posterStyle）。 */
-.video-stage.is-framed video.video-media {
+   ★ 视频与预览图**都要**套（用户 2026-10-31）：预览图是整幅原片，
+   不套取景就会把裁掉的区域又显示出来。 */
+.video-stage.is-framed video.video-media,
+.video-stage.is-framed img.video-media {
   position: absolute;
   max-width: none;
   max-height: none;
@@ -1421,6 +1267,37 @@ watch(videoUrl, (prev) => {
   /* 中文正文最低 12px（§2.3） */
   font-size: 12px;
   text-align: center;
+}
+/*
+ * 加载态（用户 2026-10-30 要求）：缩略图还没拿到时的占位。
+ *
+ * 站在卡片自己的底色上（不是黑底），所以用节点文字色 —— 与空态同一套。
+ * 转圈用边框做，不需要额外图标；prefers-reduced-motion 下停转（只看文字）。
+ */
+.video-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--canvas-node-text-muted, #9ca3af);
+  font-size: 12px;
+  pointer-events: none;
+}
+.video-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: video-loading-spin 800ms linear infinite;
+}
+@keyframes video-loading-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .video-loading-spinner { animation: none; }
 }
 .video-empty.is-broken {
   color: var(--ui-warn, #b45309);

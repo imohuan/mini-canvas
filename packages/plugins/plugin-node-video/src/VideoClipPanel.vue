@@ -16,7 +16,7 @@
  * 面板由 nodeToolbar 的 video/clip 模式挂在底栏（不再是一条底栏动作），
  * 所以顶栏「剪辑时长」点下去就能看到它 —— 不必先去下拉里手动选「剪辑」。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import {
   clampClipEnd,
@@ -27,7 +27,12 @@ import {
   readClipRange,
 } from './videoClip'
 import { isClipPending, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
-import { readClipPrefs, readDuration, readPlayhead } from './videoClipStore'
+import {
+  publishDraftRange,
+  readClipPrefs,
+  readDuration,
+  readPlayhead,
+} from './videoClipStore'
 import { frameCountFor, grabStrip, type FilmstripFrame } from './videoFilmstrip'
 import { clipKeyAction, isTypingTarget } from './videoClipKeys'
 import { resolveVideoSrc } from './videoRefs'
@@ -75,10 +80,18 @@ const minClip = computed(() => {
   return duration.value > 0 ? Math.min(n, duration.value) : n
 })
 
-/** 会话偏好（吸附/循环）。挂载时从 settings 播一次已保存值当种子 */
+/** 会话偏好（吸附/循环）。面板上的按钮直接改这份；设置面板改的是它下面的默认值 */
 const prefs = readClipPrefs(props.id)
-onMounted(() => {
-  const settings = ctx.tryGet('settings')
+
+/**
+ * 把 settings 里的值同步进会话偏好。
+ *
+ * ★ 为什么不能只在 onMounted 播一次种子（用户 2026-10-31 报「配置改了不生效」）：
+ * 剪辑面板是常驻组件，设置面板改值时不重新挂载 —— 只读一次就永远是打开那一刻的旧值。
+ * 这里既能当挂载时的种子，也能当设置变更时的回调。
+ */
+function syncPrefsFromSettings(): void {
+  const settings = ctx.tryGet<{ get(key: string): unknown }>('settings')
   if (!settings) return
   const step = settings.get('videoClipSnapStep')
   if (typeof step === 'number' && Number.isFinite(step) && step > 0) prefs.snapStep = step
@@ -86,7 +99,23 @@ onMounted(() => {
   if (typeof radius === 'number' && Number.isFinite(radius) && radius > 0) prefs.snapRadius = radius
   const loop = settings.get('videoClipLoop')
   if (typeof loop === 'boolean') prefs.loop = loop
-})
+}
+
+syncPrefsFromSettings()
+
+/**
+ * 订阅设置变更（用户口径：设置页里的吸附间隔/范围/区间循环要**实时**生效）。
+ * 只要动的是这三个键就重新同步；别的设置不打扰。
+ */
+const offPrefs = ctx
+  .tryGet<{
+    onChange(cb: (key: string, value: unknown) => void, opts?: { scope?: string }): { dispose(): void }
+  }>('settings')
+  ?.onChange((key) => {
+    if (key !== 'videoClipSnapStep' && key !== 'videoClipSnapRadius' && key !== 'videoClipLoop') return
+    syncPrefsFromSettings()
+  })
+onBeforeUnmount(() => offPrefs?.dispose())
 
 /** 吸附范围夹取：不能超过间隔的一半（demo 铁律 3） */
 const effectiveRadius = computed(() => Math.min(prefs.snapRadius, prefs.snapStep / 2))
@@ -127,6 +156,47 @@ const atRight = computed(() => {
   return filmWidth.value > 0 && (left / duration.value) * filmWidth.value <= FILM_RADIUS
 })
 
+/* ── 时长文字：选区太窄时改在胶片条下方常驻显示（用户口径 2026-10-31）──
+ *
+ * 为什么不能继续放在选区里：选区只有几像素宽时，pill 会被 max-width + ellipsis 吃掉，
+ * 用户只能看到 "1…"。demo 的做法是窄了就把标签挪到选区上方；这里按用户要求挪到**下方**，
+ * 并且始终显示，不依赖 hover 也不套 Tooltip 组件。
+ *
+ * 判断必须用「真实像素」：选区宽度 = 百分比 × 胶片宽度，标签宽度用一只隐藏的量尺量，
+ * 两者比较才可靠（按字数估宽在字体/缩放变化时会漂）。
+ */
+const rulerEl = ref<HTMLElement | null>(null)
+const labelWidth = ref(0)
+
+function measureLabel(): void {
+  const w = rulerEl.value?.offsetWidth ?? 0
+  if (w !== labelWidth.value) labelWidth.value = w
+  // 胶片左偏移也在这里量一次：两者都在「宽度/文字可能变了」时失效
+  const film = filmEl.value
+  const dock = film?.parentElement
+  if (film && dock) {
+    const offset = film.getBoundingClientRect().left - dock.getBoundingClientRect().left
+    if (Math.abs(offset - filmOffsetLeft.value) > 0.5) filmOffsetLeft.value = offset
+  }
+}
+
+/** 选区在屏幕上的像素宽度 */
+const selectionPx = computed(() => (filmWidth.value * Math.max(0, endPct.value - startPct.value)) / 100)
+
+/** 选区装不下标签（留 4px 余量）→ 标签改到下方 */
+const labelBelow = computed(() => labelWidth.value > 0 && selectionPx.value < labelWidth.value + 4)
+
+/** 胶片左缘相对底栏左缘的像素偏移（胶片有 16px 外边距，不能按 0 算） */
+const filmOffsetLeft = ref(0)
+
+/**
+ * 标签在下方时的横向锚点（px，相对底栏左缘）= 胶片左偏移 + 选区中心。
+ * 用像素而不是百分比：下方那条铺满整个底栏，而选区只在胶片范围内，两者宽度不同。
+ */
+const captionLeftPx = computed(
+  () => filmOffsetLeft.value + (filmWidth.value * (startPct.value + endPct.value)) / 200,
+)
+
 /** 播放头：跟随内容区 <video> 的 currentTime */
 const playheadPct = computed(() => {
   const t = readPlayhead(props.id)
@@ -148,13 +218,18 @@ onMounted(() => {
       const width = filmEl.value?.clientWidth ?? 0
       frameCount.value = frameCountFor(width || 560)
       filmWidth.value = width
+      nextTick(measureLabel)
     })
     resizeObserver.observe(filmEl.value)
   }
   const width = filmEl.value?.clientWidth ?? 0
   frameCount.value = frameCountFor(width || 560)
   filmWidth.value = width
+  nextTick(measureLabel)
 })
+
+// 时长文字变化（或胶片宽度变化）后重新量一次：标签宽度跟着数字位数变
+watch([lengthLabel, filmWidth, () => frameCount.value], () => nextTick(measureLabel))
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -194,6 +269,14 @@ function snapLength(length: number): number {
 function commit(next: { start: number; end: number }): void {
   setOverlayDraft(props.id, { ...overlayDraft(props.id), _clipRange: next })
 }
+
+/**
+ * 把当前区间同步给内容区（它据此判断「播到段尾停 / 区间循环」）。
+ *
+ * 面板与内容区是兄弟组件，只共享会话态：拖拽改的是草稿，节点 data 还没落，
+ * 内容区要是只读 data，就永远按上一次确认的范围播（用户实测报的循环没效果）。
+ */
+watch(range, (r) => publishDraftRange(props.id, { start: r.start, end: r.end }), { immediate: true })
 
 function onHandleDown(ev: PointerEvent, kind: 'start' | 'end' | 'move'): void {
   if (ev.button !== 0 || duration.value <= 0) return
@@ -308,8 +391,8 @@ function toggleSnap(): void {
 function toggleLoop(): void {
   prefs.loop = !prefs.loop
   // 循环是内容区的行为：关掉时立刻清 loop（开着不影响确认后的回放起始）
-  const v = contentVideo()
-  if (v) v.loop = prefs.loop && range.value.end - range.value.start < duration.value
+  // ★ 不再动 video 元素的 loop：它只能循环整段视频，管不到剪辑段尾。
+  //   真正的区间循环由内容区的 timeupdate 按会话偏好处理（见 VideoContent.onTimeUpdate）。
 }
 
 /** 配置展开区 */
@@ -329,7 +412,7 @@ onBeforeUnmount(onDragUp)
 </script>
 
 <template>
-  <div v-if="visible" class="vclip nodrag nopan nowheel" @dblclick.stop>
+  <div v-if="visible" ref="rootEl" class="vclip nodrag nopan nowheel" @dblclick.stop>
     <div v-if="!hasVideo" class="ntp-root vclip-empty">这里还没有视频，先上传一段再剪辑</div>
 
     <template v-else>
@@ -361,9 +444,12 @@ onBeforeUnmount(onDragUp)
           >
             <div class="vclip-handle is-start" role="slider" aria-label="片段起点" :aria-valuemin="0" :aria-valuemax="duration" :aria-valuenow="range.start" tabindex="0" @pointerdown.stop="onHandleDown($event, 'start')" />
             <div class="vclip-handle is-end" role="slider" aria-label="片段终点" :aria-valuemin="0" :aria-valuemax="duration" :aria-valuenow="range.end" tabindex="0" @pointerdown.stop="onHandleDown($event, 'end')" />
-            <span class="vclip-length">{{ lengthLabel }}</span>
+            <!-- 装得下就居中显示；装不下改到下方那一条（见 labelBelow） -->
+            <span v-if="!labelBelow" class="vclip-length">{{ lengthLabel }}</span>
           </div>
           <div v-if="playheadPct !== null && !isDragging" class="vclip-playhead" :style="{ left: playheadPct + '%' }" />
+          <!-- 隐藏量尺：只用来量同一串文字的像素宽度，不参与视觉（visibility 保留布局，能读出 offsetWidth） -->
+          <span ref="rulerEl" class="vclip-ruler" aria-hidden="true">{{ lengthLabel }}</span>
         </div>
 
         <NodeToolbarButton
@@ -392,6 +478,13 @@ onBeforeUnmount(onDragUp)
         >
           {{ pending ? '剪辑中…' : '确认' }}
         </NodeToolbarButton>
+      </div>
+
+      <!-- 时长文字的下方常驻位（用户口径 2026-10-31）：选区窄到装不下时显示在这里。
+           不套 Tooltip 组件、不靠 hover —— 一直看得见，横向锚点跟着选区中心走。
+           始终占一行（v-show 而非 v-if）：拖到能被装下/装不下的临界点时，下面的配置区不会跳。 -->
+      <div class="vclip-caption" role="status" aria-live="off">
+        <span v-show="labelBelow" class="vclip-caption-text" :style="{ left: captionLeftPx + 'px' }">{{ lengthLabel }}</span>
       </div>
 
       <div v-if="configOpen" class="ntp-root vclip-config">
@@ -608,6 +701,57 @@ onBeforeUnmount(onDragUp)
   box-shadow: 0 0 0 1px var(--vclip-divider), 0 0 10px var(--vclip-playhead-glow);
   pointer-events: none;
   transform: translate3d(-1px, 0, 0);
+}
+
+/**
+ * 时长文字的「下方常驻位」（用户口径 2026-10-31）。
+ *
+ * 选区窄到装不下时（labelBelow），pill 不再挤在选区里被省略，而是挂到胶片条下沿：
+ * 常驻可见、不靠 hover、不套 Tooltip 组件。挂在 .vclip-film 里是为了让 left% 直接以
+ * 胶片宽度为基准，位置正好对齐选区中心。
+ */
+.vclip-caption {
+  /* 常驻一行（不浮层）：一直占位，拖拽时不会因为显隐把下面的配置区顶来顶去 */
+  position: relative;
+  width: 100%;
+  height: 20px;
+  margin-top: -4px;
+  z-index: 11;
+  pointer-events: none;
+}
+.vclip-caption-text {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--vclip-ink-strong);
+  background: var(--vclip-length-bg);
+  box-shadow: 0 4px 14px var(--vclip-divider);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 隐藏量尺：与 pill 同一套字体/内边距，量出来的宽度才和真实标签一致。
+   visibility:hidden 而不是 display:none —— 后者量不到 offsetWidth。 */
+.vclip-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  visibility: hidden;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* 向下展开的配置区（吸附参数 + 快捷键表）：同一只主题胶囊，不再自带深色皮肤 */

@@ -38,6 +38,35 @@ export function clearClipPrefs(nodeId: string): void {
   prefs.delete(nodeId)
 }
 
+/**
+ * 节点 id → 剪辑面板上**正在拖的**区间（草稿）。
+ *
+ * 为什么内容区也要读它：剪辑会话里用户拖的是草稿，节点 data 还没落库。
+ * 只读 data 的话，播放到头时用的还是「上一次确认的范围」—— 拖出新选区再点播放，
+ * 播放器根本不知道这段在哪，区间循环也就无从谈起。
+ * 面板在每次区间变化时上报，退出会话时清掉（内容区据此退回 data）。
+ */
+const draftRanges = reactive(new Map<string, { start: number; end: number }>())
+
+/** 面板上报草稿区间（夹过界的合法值） */
+export function publishDraftRange(nodeId: string, range: { start: number; end: number }): void {
+  if (!nodeId) return
+  if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) return
+  const prev = draftRanges.get(nodeId)
+  if (prev && prev.start === range.start && prev.end === range.end) return
+  draftRanges.set(nodeId, { start: range.start, end: range.end })
+}
+
+/** 内容区读草稿区间（没有 = 不在剪辑会话 / 还没上报） */
+export function readDraftRange(nodeId: string): { start: number; end: number } | null {
+  return draftRanges.get(nodeId) ?? null
+}
+
+/** 退出剪辑会话或节点卸载时清掉 */
+export function clearDraftRange(nodeId: string): void {
+  draftRanges.delete(nodeId)
+}
+
 /** 节点 id → 当前播放位置（秒） */
 const playheads = reactive(new Map<string, number>())
 

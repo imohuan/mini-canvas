@@ -11,6 +11,7 @@ import { clipNodeWithBackend } from '../videoClipFlow'
 import { createVideoOps } from '../videoOps'
 import { resetCropBackendProbe } from '../videoCropService'
 import { isClipPending, setClipPending } from '../videoSession'
+import { clearClipPrefs, clearDraftRange, publishDraftRange, readClipPrefs, readDraftRange } from '../videoClipStore'
 
 function boot() {
   const ctx = new Context()
@@ -158,6 +159,32 @@ describe('videoClipFlow：真剪辑（时间切割）', () => {
     expect(isClipPending('n')).toBe(true)
     setClipPending('n', false)
     expect(isClipPending('n')).toBe(false)
+  })
+
+  /**
+   * 用户口径 2026-10-31：面板上拖的是草稿区间，节点 data 还没落；
+   * 内容区（播放器）必须能读到这份草稿，否则「区间循环」按上一次确认的范围播 —— 看起来就是没效果。
+   */
+  it('剪辑草稿区间能被内容区读到（循环与段尾判断用当前选区，不是上次确认的）', () => {
+    expect(readDraftRange('d1')).toBeNull()
+    publishDraftRange('d1', { start: 2, end: 4 })
+    expect(readDraftRange('d1')).toEqual({ start: 2, end: 4 })
+    // 拖动中反复上报：值变了就更新
+    publishDraftRange('d1', { start: 2.5, end: 5 })
+    expect(readDraftRange('d1')).toEqual({ start: 2.5, end: 5 })
+    clearDraftRange('d1')
+    expect(readDraftRange('d1')).toBeNull()
+    // 非法值（NaN / Infinity）不许写进去，否则播放段会算出 NaN 时间
+    publishDraftRange('d2', { start: Number.NaN, end: 3 })
+    expect(readDraftRange('d2')).toBeNull()
+  })
+
+  it('区间循环偏好与会话偏好同一份：面板按钮改的就是播放器读的那份', () => {
+    const prefs = readClipPrefs('loop-node')
+    prefs.loop = true
+    expect(readClipPrefs('loop-node').loop).toBe(true)
+    clearClipPrefs('loop-node')
+    expect(readClipPrefs('loop-node').loop).toBe(false)
   })
 })
 
