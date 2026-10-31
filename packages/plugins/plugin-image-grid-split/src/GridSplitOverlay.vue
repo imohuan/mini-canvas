@@ -317,16 +317,24 @@ function onClick(ev: MouseEvent): void {
   pointer-events: auto;
   overflow: hidden;
   cursor: pointer;
+  /**
+   * 覆盖层底色（用户口径 2026-10-31，就是 .v2-overlay 里这一层）：
+   * 格子之间有间隔，间隔必须被这层盖住 —— 否则透出底下那张完整原图，
+   * 看上去只是盖了几个方块，分割就白做了。
+   * 亮色 = 纯白；暗色跟随主题面板色。
+   */
+  background: var(--ui-panel, #ffffff);
+  border-radius: 8px;
+  margin: 1px;
 }
 /* 未选中格：独立圆角卡片（参考图 1 左侧）：浅灰底 + 细边，之间有间隔 */
 .gso-cell {
   position: absolute;
   box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--ui-overlay-solid, #fff) 62%, transparent);
-  /* 格子底色：不透明的主题面板色，盖住原图（否则缝隙两侧的图还是连着的） */
-  background: var(--ui-panel, #ffffff);
-  border-radius: 8px;
-  margin: 1px;
+  /* 默认直角：只有四个外角单独圆（参考 deepseek_html 的 radius-tl/tr/bl/br 写法） */
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ui-overlay-solid, #fff) 14%, transparent);
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 /* 四个外角：各只圆一个角（用户口径 2026-10-30） */
