@@ -156,6 +156,12 @@ export function createV2ShortcutManager(
     return buildV2HelpList(command.list())
   }
 
+  /** 某命令的注册默认键（未经 remap 的声明值）；无记录返回 undefined */
+  function defaultKeysOf(commandId: string): string[] | undefined {
+    const keys = defaults.get(commandId)
+    return keys ? [...keys] : undefined
+  }
+
   function groupItemsOf(id: string, combo: string): V2ShortcutHelpItem | undefined {
     return itemsNow().find((it) => it.commandId === id && normalizeCombo(it.keys) === normalizeCombo(combo))
   }
@@ -179,6 +185,7 @@ export function createV2ShortcutManager(
     getHelpList() {
       return groupV2HelpList(itemsNow())
     },
+    defaultKeysOf,
     /** 全部冲突 */
     getConflicts(): V2ShortcutConflict[] {
       return findV2Conflicts(itemsNow())

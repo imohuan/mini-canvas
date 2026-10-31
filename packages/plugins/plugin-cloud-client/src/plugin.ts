@@ -420,6 +420,9 @@ const adapter = new CanvasDiffAdapter(api, CID)
       return () => historyListeners.delete(fn)
     },
   }
+  // 服务名带插件前缀（Spec 3.4）：避免与别的插件的历史服务撞名。
+  // 旧名 gen-history 迁移期保留为只读别名，Task 9 删除。
+  ctx.inject('cloud-client:history', genHistory)
   ctx.inject('gen-history', genHistory)
 
   const service: CloudClientService = {

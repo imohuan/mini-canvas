@@ -5,6 +5,7 @@
  * - **槽位**装 UI：左导航项注册进 `settingsNav`，正文注册进 `settingsGroup/插件`
  *   （设置面板据此把「插件」当成一个一级分类渲染）；
  * - **服务**持状态：`ctx.inject('plugin-manager', reactive(服务))`，页面读它、调它；
+ *   安装句柄优先取宿主的 `host.manager`（ctx.get('pluginManager') 只是兼容别名）；
  * - **配置**声明一个**扁平分组** `插件`，设置面板才会长出这一页的入口。
  *
  * 数据来源（用户口径）：请求一个 JSON 清单拿到每个插件的 js 地址，再按地址加载 ——
@@ -47,8 +48,12 @@ export const Config = {
 export const MANAGER_NAV_ID = '插件'
 
 export function apply(ctx: Context, config?: PluginManagerConfig): void {
+  // 宿主统一安装句柄：优先渲染上下文（CanvasRenderContext）里的 host.manager。
+  // 插件 apply 阶段（业务插件启动时）宿主已建好 handle，故这里能取到。
+  const manager = ctx.tryGet<import('./pluginManagerService').HostPluginManager>('pluginManager')
   const service = createPluginManagerService(ctx, {
     ...(config?.catalogUrl ? { catalogUrl: config.catalogUrl } : {}),
+    ...(manager ? { manager } : {}),
   })
   // 服务本身包成响应式：页面经它读 state，装卸变化能驱动重渲染（与 plugin-agent 同款）
   ctx.inject('plugin-manager', reactive(service))

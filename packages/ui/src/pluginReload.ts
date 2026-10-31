@@ -331,7 +331,9 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
       (() => {
         const facade = facadeOf()
         const ctx = facade?.getContext()
-        const svc = ctx?.get('pluginManager') as { list(): Array<{ name: string }> } | undefined
+        const svc = ctx?.get('pluginManager') as
+          | { list(): Array<{ name: string }> }
+          | undefined
         return svc?.list?.().map((p: { name: string }) => p.name) ?? []
       })(),
     )

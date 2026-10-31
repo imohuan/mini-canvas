@@ -58,12 +58,15 @@ const sensitivityX = computed(() => cfg.value.miniMapSensitivityX)
 const sensitivityY = computed(() => cfg.value.miniMapSensitivityY)
 const PADDING = 8
 
-// —— 显隐状态：mini-map 服务（命令切换与组件读同一对象）——
-interface MiniMapServiceState {
-  visible: boolean
+// —— 显隐状态：设置项 miniMapVisible（命令与面板读写同一份；不再占 mini-map 服务名）——
+const visibility = ref<boolean>(miniMapConfigFrom(ctx).miniMapVisible)
+if (settings) {
+  const off = settings.onChange((key, value) => {
+    if (key === 'miniMapVisible' && typeof value === 'boolean') visibility.value = value
+  })
+  onBeforeUnmount(() => off.dispose())
 }
-const service = ctx.get<MiniMapServiceState>('mini-map')
-const visible = computed(() => !!service && service.visible)
+const visible = computed(() => visibility.value)
 
 /** pane 可视尺寸（px）：优先 host paneRect；退化为自量所在全幅 overlay 层；窗口 resize 刷新 */
 const paneSize = shallowRef<{ w: number; h: number }>({ w: 800, h: 600 })

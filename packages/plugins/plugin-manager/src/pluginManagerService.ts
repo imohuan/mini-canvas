@@ -3,7 +3,7 @@
  *
  * 三件事：
  * 1. **拉清单**：从「中转后台」请求 /catalog.json（地址可配），归一成可渲染的列表；
- * 2. **装 / 卸 / 重装**：经宿主的统一安装句柄（`ctx.get('pluginManager')`）把插件装进画布；
+ * 2. **装 / 卸 / 重装**：经宿主的统一安装句柄（优先 `host.manager`，缺省兼容 `ctx.get('pluginManager')`）把插件装进画布；
  * 3. **记住选择**：把「已装/已卸」存进 save(config) 域，刷新后照旧；**首次没有存档 → 默认全装**。
  *
  * 边界：本服务不认识具体插件，只认清单行的「地址 + 全局名」。装什么、从哪装由清单决定。
@@ -180,6 +180,8 @@ export interface CreateServiceOptions {
   /** 注入 document/window（默认取全局；测试注入假实现） */
   document?: Document
   win?: Record<string, unknown>
+  /** 宿主统一安装句柄（新入口 host.manager）；缺省退回 ctx.tryGet('pluginManager') 兼容别名 */
+  manager?: HostPluginManager
 }
 
 /**
@@ -219,6 +221,7 @@ export function createPluginManagerService(
   const doFetch = opts.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init))
   const win = opts.win ?? (globalThis as unknown as Record<string, unknown>)
   const doc = opts.document ?? (win.document as Document)
+  const injectedManager = opts.manager
 
   const state = reactive<PluginManagerService['state']>({
     catalogUrl,
@@ -243,7 +246,7 @@ export function createPluginManagerService(
 
   /** 宿主统一安装句柄（可选探测：没有就给出清晰错误，而不是静默不动） */
   function hostManager(): HostPluginManager | undefined {
-    return ctx.tryGet<HostPluginManager>('pluginManager')
+    return injectedManager ?? ctx.tryGet<HostPluginManager>('pluginManager')
   }
 
   /**

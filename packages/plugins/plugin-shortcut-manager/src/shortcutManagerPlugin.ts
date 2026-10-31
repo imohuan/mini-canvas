@@ -12,21 +12,19 @@
  * - Ctrl+/ 帮助面板 → 命令 shortcut-manager:help（keys: ['mod+/']）+ overlay 槽 occupant；
  *   浮层 = 复刻老版 ShortcutHelpPanel.vue / RemapPanel.vue / ShortcutKeys.vue。
  *
- * UI 方式：overlay 槽 occupant（宿主已渲染 overlay 槽），面板显隐由本插件注入的响应式服务
- * 状态控制（命令切换同一对象）。面板经 ctx.get('shortcut-manager') 拿「服务状态 + 管理器方法」。
+ * UI 方式：overlay 槽 occupant（宿主已渲染 overlay 槽），面板显隐由同包模块级状态控制
+ * （命令切换同一对象）。面板与本插件同包 import，不再占 shortcut-manager / shortcut-remap 服务名。
  */
-import { reactive } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { createShortcutRemapEngine } from './shortcutRemapEngine'
 import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
+import { shortcutHelpState, setShortcutManager } from './shortcutState'
 
 export const name = 'shortcut-manager'
 
 /** 帮助面板共享状态 + 管理器方法（命令/组件/重映射面板读同一注入对象） */
-export interface ShortcutManagerState extends V2ShortcutManager {
-  visible: boolean
-}
+export type { ShortcutManagerState } from './shortcutState'
 
 export function apply(ctx: Context): void {
   const save = ctx.tryGet('save')
@@ -45,10 +43,9 @@ export function apply(ctx: Context): void {
     snapshot: () => remapEngine.snapshot(),
   })
 
-  // 单一注入对象：reactive visible + 管理器方法（组件同时拿显隐与功能）
-  const state: ShortcutManagerState = reactive({ visible: false }) as ShortcutManagerState
-  Object.assign(state, manager)
-  ctx.inject('shortcut-manager', state)
+  // 同包共享状态（不再上架服务）：面板直接 import 同一对象
+  Object.assign(shortcutHelpState, manager)
+  setShortcutManager(manager)
 
   // 浮层：overlay 槽 occupant（宿主已渲染该槽）。显隐由 state.visible 控制。
   ctx.slots.register('overlay', {
@@ -66,12 +63,10 @@ export function apply(ctx: Context): void {
     order: 5,
     icon: 'keyboard',
     run: () => {
-      state.visible = !state.visible
+      shortcutHelpState.visible = !shortcutHelpState.visible
     },
   })
 
-  // 兼容旧装配的 shortcut-remap 服务（程序化改键仍可调用）
-  ctx.inject('shortcut-remap', remapEngine)
 }
 
 /** 兼容旧装配的 PluginModule 出口 */

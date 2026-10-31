@@ -91,6 +91,8 @@ export interface MiniCanvasOptions {
 /** 画布运行时句柄（宿主/Vue 消费：provide、渲染、读服务） */
 export interface CanvasHostHandle {
   ctx: Context
+  /** 统一安装句柄（装卸/重载/清单）；插件从 useCanvasRender().host.manager 取 */
+  manager: PluginManager
   save: SaveServiceImpl
   /**
    * 文档门面（§4.1）：节点 + 边 + 事务 + 撤销 + 快照 + 订阅合成的一个名字。
@@ -221,6 +223,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 把统一安装句柄也上架成一个服务：插件（如「插件管理」）能在运行期按名取到它，
   // 从而自己装卸别的插件（用户诉求：用一个插件去管理其他插件的装/卸/重装）。
   // 放在冷启动之前注入：插件一 start 就能 ctx.get('pluginManager') 拿到。
+  // @deprecated 新代码从 useCanvasRender().host.manager 取；这个服务名只作兼容别名，Task 9 删除。
   ctx.inject('pluginManager', manager)
   // 画布动作门面（服务名 canvas）与提示队列。
   // 提示跟随鼠标、可撤回、多持有者不互盖；旧 tip 服务保留为兼容转发（Task 9 删除）。
@@ -331,6 +334,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   const host: CanvasHostHandle = {
     ctx,
+    manager,
     save,
     doc,
     nodeStore,

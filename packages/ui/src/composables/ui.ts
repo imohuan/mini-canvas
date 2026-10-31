@@ -1098,7 +1098,7 @@ function createUi() {
   /**
    * 从后台拉一页历史。
    *
-   * 服务名是 `gen-history`（由 plugin-cloud-client 挂上）。没装那个插件
+   * 服务名是 `cloud-client:history`（由 plugin-cloud-client 挂上）。没装那个插件
    * （比如纯前端开着）时服务不存在 —— 给一句人话，而不是装作"没有历史"。
    */
   async function loadHistory(
@@ -1138,7 +1138,7 @@ function createUi() {
           pageSize: number
           summary: { total: number; byKind: Record<string, number> }
         }>
-      }>('gen-history')
+      }>('cloud-client:history')
       if (!svc) {
         state.historyReady = false
         return
@@ -1285,18 +1285,15 @@ function createUi() {
     return new Date(ts).toLocaleDateString()
   }
 
-  // ===== 小地图显隐（唯一事实来源 = mini-map 插件服务；状态栏按钮只是它的开关） =====
-  // host ctx.get('mini-map') 每次返回同一个 reactive 对象（插件 apply 里注入的），
-  // computed 追踪 .visible 属性即可实时反映开关状态。
-  const minimapOn = computed(() => (readyHost?.ctx?.get<{ visible: boolean }>('mini-map')?.visible) ?? false)
+  // ===== 小地图显隐（唯一事实来源 = 设置项 miniMapVisible；状态栏按钮只是它的开关） =====
+  // 插件浮层与命令订阅同一设置项（SettingsStore 是单一数据源），这里不再读私有服务。
+  // SettingsStore 不是响应式的：bindCanvasToggles 里订阅 onChange 同步到这个 ref。
+  const minimapVisible = ref(false)
+  const minimapOn = computed(() => minimapVisible.value)
   function toggleMinimap(): void {
-    const svc = readyHost?.ctx?.get<{ visible: boolean }>('mini-map')
-    const next = !minimapOn.value
-    // 优先写设置 miniMapVisible（插件订阅它同步服务，且会随配置持久化到下次启动）；
-    // 设置键缺席（未装 mini-map 插件）时退回直接翻服务位，至少当下这次切换是生效的。
     const store = readyHost?.ctx?.get<SettingsStore>('settings')
-    if (store?.has?.('miniMapVisible')) store.set('miniMapVisible', next)
-    else if (svc) svc.visible = next
+    if (!store?.has?.('miniMapVisible')) return
+    store.set('miniMapVisible', !minimapOn.value)
   }
 
   // ===== 画布开关（整理画布 / 连线显隐 / 网格吸附 / 移动工具）=====
@@ -1608,6 +1605,7 @@ function createUi() {
     // 先按现值对齐一次（面板之前可能已经改过）
     state.edgesVisible = (store.get('edgeVisible') as boolean | undefined) ?? state.edgesVisible
     state.snapOn = (store.get('snapToGrid') as boolean | undefined) ?? state.snapOn
+    minimapVisible.value = store.get('miniMapVisible') === true
     // 画布模式由 nodesDraggable 反推：关掉拖节点 = 抓手态（拖哪都平移画布），否则是移动态
     const draggable = store.get('nodesDraggable') as boolean | undefined
     if (typeof draggable === 'boolean') state.canvasMode = draggable ? 'move' : 'hand'
@@ -1615,6 +1613,7 @@ function createUi() {
       if (key === 'edgeVisible' && typeof value === 'boolean') state.edgesVisible = value
       else if (key === 'snapToGrid' && typeof value === 'boolean') state.snapOn = value
       else if (key === 'nodesDraggable' && typeof value === 'boolean') state.canvasMode = value ? 'move' : 'hand'
+      else if (key === 'miniMapVisible' && typeof value === 'boolean') minimapVisible.value = value
     }).dispose
   }
 
@@ -1801,7 +1800,7 @@ function createUi() {
   function bindHistoryUpdates(): void {
     disposeHistorySub?.()
     disposeHistorySub = undefined
-    const svc = readyHost?.ctx?.get<{ subscribe(fn: () => void): () => void }>('gen-history')
+    const svc = readyHost?.ctx?.get<{ subscribe(fn: () => void): () => void }>('cloud-client:history')
     if (!svc || typeof svc.subscribe !== 'function') return
     /**
      * 收到「有新任务」信号：只后台同步当前页签的第 1 页，新卡片插到最前面。
