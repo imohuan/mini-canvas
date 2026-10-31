@@ -26,6 +26,7 @@ import {
 } from "@mini-canvas/canvas-render";
 import NodeModeTopBar from "./components/node/NodeModeTopBar.vue";
 import NodeModeBottomBar from "./components/node/NodeModeBottomBar.vue";
+import SettingsSchemaField from "./components/settings/SettingsSchemaField.vue";
 import {
   MULTI_RADIO_KEYS,
   MULTI_RADIO_SIZE_MAX,
@@ -788,6 +789,11 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 换主题时一起被顶掉；业务插件不必认识它们，只认 nodeToolbar 服务。
   ui.add("nodeModeTopBar", NodeModeTopBar, { id: "default" });
   ui.add("nodeModeBottomBar", NodeModeBottomBar, { id: "default" });
+  // 设置字段渲染器：设置面板的正文与插件自绘页都按名取，换主题时字段控件一起换。
+  // 宿主此前直接 import 本包的这个 .vue，换主题后仍会显示默认皮 —— 从这里登记后走目录。
+  ui.add("settingsField", SettingsSchemaField, { id: "default" });
+  // 插槽调试说明层：外壳按名取，换主题时一起换（它只读 DOM 上的 data-slot*，不需要 props）。
+  ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" });
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
   ctx.theme.register("settingsPanel", PluginSettingsContent, {
