@@ -162,12 +162,9 @@ describe('applyStoryboardDrop：一槽一图（外部拖入）', () => {
     // 原来占第 0 格的 img 不能再挂在组里（它是被顶掉的那张）
     const img = h.doc.getNode('img')!
     expect(img.parentId).toBeUndefined()
-    // 也不能留在槽位上和新图重叠（用户实测 2026-10-31「一槽两图」）：
-    // 被挤出的节点要挪到分镜组外面，槽位里只留新来的那一张。
-    const card = { x: 1000, y: 1000, w: 600, h: 400 }
-    const overlaps = img.position.x < card.x + card.w && img.position.x + img.size!.w > card.x
-      && img.position.y < card.y + card.h && img.position.y + img.size!.h > card.y
-    expect(overlaps).toBe(false)
+    // 用户口径 2026-10-31（参考图 3）：被顶掉的图**原地错开**——
+    // 保持它在槽位上的位置，向右下偏移 20px 后脱离，而不是甩到组外。
+    expect(img.position).toEqual({ x: 1008 + 20, y: 1042 + 20 })
     // 新来的图落在组里
     expect(h.doc.getNode('vid2')!.parentId).toBe('board')
   })

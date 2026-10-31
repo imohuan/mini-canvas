@@ -325,6 +325,20 @@ export function applyStoryboardDrop(
     const other = doc.getNode(id)
     if (!other) continue
     detachLayout = layout
+    /**
+     * 这次被顶掉的那张图走"原地错开"，不参与"找组外空位"。
+     * 顺序上这里先跑（slots 已经不含它），如果在这里按旧逻辑甩到组外，
+     * 后面 displaced 分支就找不到父级、判断不成立，用户看到的就是"跳到右上角"。
+     */
+    if (id === decision.displacedNodeId) {
+      const abs = layout?.absolutePosition?.(other.id)
+        ?? { x: board.x + (other.position?.x ?? 0), y: board.y + (other.position?.y ?? 0) }
+      detachFromBoard(doc, other, board.id, {
+        x: Math.round(abs.x + DISPLACED_OFFSET),
+        y: Math.round(abs.y + DISPLACED_OFFSET),
+      })
+      continue
+    }
     // 挪到分镜组外面：只解父、位置不动的话它会继续趴在某个槽位上，
     // 和新拖进来的图叠在一起（用户实测 2026-10-31「一槽两图」）。
     const prevOther = other.data?._storyboardSize as { w: number; h: number } | undefined
@@ -391,35 +405,25 @@ export function applyStoryboardDrop(
         data: { _storyboardSlot: newIndex },
       })
     } else if (other && belongs && decision.displaceDetach) {
-      // 组外拖进来的节点顶掉了原住户：原住户没格可去 → 脱离成自由节点
-      // （否则它会既不在 slots 里又挂着 parentId，永远叠在槽位上，用户看到"两个节点共用一个槽"）
+      /**
+       * 兜底：正常情况下被顶掉的节点在上面的 evict 循环里就已经"原地错开"处理完，
+       * 走到这里说明它没有出现在组内子节点清单里（数据边界）。
+       * 仍按同一规则放下，保证任何路径都不会甩到组外远处。
+       */
       detachLayout = layout
-      // 位置也要挪到组外：只解父、位置不动的话，原住户仍趴在槽位上，
-      // 画面上和新来的图完全重叠（用户实测 2026-10-31「一槽两图」就是这个）。
-      const prevOther = other.data?._storyboardSize as { w: number; h: number } | undefined
-      const otherSize = prevOther && prevOther.w > 0 && prevOther.h > 0
-        ? prevOther
-        : { w: other.size?.w ?? 320, h: other.size?.h ?? 240 }
-      const outside = placeDetachedFromBoard({
-        ctx,
-        board,
-        size: otherSize,
-        nodeId: other.id,
-        excludeIds: [node.id],
-        // 新来的这张也占地方：它还没写完 parentId，layout 里量不到它
-        extraObstacles: [{
-          id: node.id,
-          x: board.x + slot.x + inside.dx,
-          y: board.y + slot.y + inside.dy,
-          w: fitted.w,
-          h: fitted.h,
-        }],
+      const otherAbs = layout?.absolutePosition?.(other.id)
+        ?? { x: board.x + (other.position?.x ?? 0), y: board.y + (other.position?.y ?? 0) }
+      detachFromBoard(doc, other, board.id, {
+        x: Math.round(otherAbs.x + DISPLACED_OFFSET),
+        y: Math.round(otherAbs.y + DISPLACED_OFFSET),
       })
-      detachFromBoard(doc, other, board.id, outside)
     }
   }
   return true
 }
+
+/** 被顶掉的节点相对原槽位的右下偏移量（px，用户口径 2026-10-31） */
+const DISPLACED_OFFSET = 20
 
 let detachLayout: LayoutPort | undefined
 
