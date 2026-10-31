@@ -36,7 +36,7 @@ async function boot(plugins: PluginModule[]): Promise<Context> {
 const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
 
 describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
-  it('ctx.nodes.register 落 node/type/<type>、node/creator/<type>', async () => {
+  it('ctx.nodes.register 只写真实容器（node/type、node/creator 场按 D1 不再落）', async () => {
     const ctx = await boot([
       mk('text-plugin', (c) => {
         c.nodes.register({
@@ -48,8 +48,11 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
         })
       }),
     ])
-    expect(ctx.registryOf('node/type').top('text')?.value).toEqual({ type: 'text', label: '文本' })
-    expect(typeof ctx.registryOf('node/creator').top('text')?.value).toBe('function')
+    expect(ctx.registryOf('node/type').top('text')).toBeUndefined()
+    expect(ctx.registryOf('node/creator').top('text')).toBeUndefined()
+    // 真实容器仍收到：nodeRegistry 有展示定义、nodeFactory 有 creator
+    expect(ctx.get<{ get(t: string): unknown }>('nodeRegistry').get('text')).toBeDefined()
+    expect(ctx.get<{ creatableTypes(): string[] }>('nodeFactory').creatableTypes()).toContain('text')
     // node/shell 不再由 ctx.nodes.register 写"展示定义摘要"：§4.5 定义它的值是**壳组件**、
     // 消费者是节点壳装配。写摘要会让装配端拿到非组件对象（渲染即崩），且那份摘要在
     // nodeRegistry / node/region 里已有等价物。这里锁"糖不往这张场写东西"。
@@ -75,7 +78,7 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
     expect(entries[1].order).toBe(entries[0].order + 1)
   })
 
-  it('ctx.theme.register 落 theme/<slot>；同 id 顶替（main 语义，审查 H3 回退）；winner = order 最小者', async () => {
+  it('ctx.theme.register 只写 ThemeRegistry；同 id 顶替；winner = order 最小者', async () => {
    const ctx = await boot([
      mk('theme-a', (c) => c.theme.register('edge', MyEdge)),
      mk('theme-b', (c) => {
@@ -86,15 +89,10 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
        // 不同 id 的 occupant 各自独立共存（theme-a 与 theme-b 的两条都在，可回退）
       }),
     ])
-  const entries = ctx.registryOf('theme').list('edge')
-    // 落点：两个插件各一条 —— 默认 id = 插件名（theme-a），显式 id = 'neon'（theme-b）。
-    expect(ctx.registryOf('theme').ids('edge').sort()).toEqual(['neon', 'theme-a'])
-    // 同 id 顶替：neon 注册两次仍只有一条（同 id 替换，不叠加）—— 与 main 的 addOccupant 同义。
-    expect(ctx.registryOf('theme').ids('edge').filter((x) => x === 'neon')).toHaveLength(1)
-    // 栈序 = order 升序从外到里；重复 register 未带 order → 该条回到缺省 0，
-    // 与同为 0 的 theme-a 按插入序稳定排列（第一版断言写成 neon 恒在最前，是错的）。
-    expect(entries.map((e) => e.order)).toEqual([0, 0])
-    expect(entries.map((e) => e.id)).toEqual(['theme-a', 'neon'])
+  const registry = ctx.get<ThemeRegistry>('themeRegistry')
+  // 真实容器：两个插件各一条 —— 默认 id = 插件名（theme-a），显式 id = 'neon'（theme-b）。
+  expect(registry.occupantIds('edge').sort()).toEqual(['neon', 'theme-a'])
+  expect(registry.winner('edge')).toBe(MyEdge)
   })
 
   it('ctx.commands.register 落 command/<id>，重复 id 抛错，返回可 dispose 句柄', async () => {
@@ -113,17 +111,18 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
     ])
   })
 
-  it('ctx.slots.register 落 slot/<slot>，返回 id（string）', async () => {
+  it('ctx.slots.register 只写 SlotRegistry，返回 id（string）', async () => {
     const ctx = await boot([
       mk('ui-plugin', (c) => {
         const id = c.slots.register('canvas.dock', { id: 'bar', order: 1, component: DockBar })
         expect(typeof id).toBe('string')
       }),
     ])
-    expect(ctx.registryOf('slot').top('canvas.dock')?.value).toBe(DockBar)
+    expect(ctx.registryOf('slot').top('canvas.dock')).toBeUndefined()
+    expect(ctx.get<{ ordered(s: string): Array<{ value: unknown }> }>('slots').ordered('canvas.dock')[0]?.value).toBe(DockBar)
   })
 
-  it('ctx.settings.* 落 setting 场：define/set/get/onChange/groups 语义不变', async () => {
+  it('ctx.settings.* 只写 SettingsStore：define/set/get/onChange/groups 语义不变', async () => {
     const ctx = await boot([
       mk('set-a', (c) => {
         c.settings.define('bg', { accent: { type: 'color', default: '#fff' } })
@@ -133,9 +132,7 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
         expect(c.settings.get('accent')).toBe('#0af')
       }),
     ])
-    const entries = ctx.registryOf('setting').list('accent')
-    expect(entries).toHaveLength(1)
-    // 落点是 setting 场；current 摘要是"define 时点"的值（set 是 store 值变化，不重落场）
-    expect((entries[0].value as { current: string }).current).toBe('#fff')
+    expect(ctx.registryOf('setting').keys()).toEqual([])
+    expect(ctx.get<{ get(k: string): unknown }>('settings').get('accent')).toBe('#0af')
   })
 })

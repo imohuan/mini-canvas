@@ -38,20 +38,19 @@ async function boot(plugins: PluginModule[]) {
 
 const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
 
-describe('T01 · 主题注册两处读数一致 + 卸载不留幽灵条目', () => {
-  it('ctx.theme.register：卸载后 ThemeRegistry 与 registryOf("theme") 同时清空', async () => {
+describe('D1 · 主题只留 ThemeRegistry 一处事实源', () => {
+  it('ctx.theme.register：ThemeRegistry 生效、theme 场不再重复写、卸载后清空', async () => {
     const { ctx, theme } = await boot([
       mk('theme-a', (c) => c.theme.register('edge', MyEdge)),
     ])
-    // 装载后两处都看得到
+    // 装载后只有真实容器有；theme 场按 D1 删除写入
     expect(theme.winner('edge')).toBe(MyEdge)
-    expect(ctx.registryOf('theme').top('edge')?.value).toBe(MyEdge)
+    expect(ctx.registryOf('theme').top('edge')).toBeUndefined()
 
     ctx.uninstallPlugin('theme-a')
 
-    // 卸载后两处都必须清空（当前实现：场里留下幽灵条目）
+    // 卸载后容器必须清空
     expect(theme.winner('edge')).toBeUndefined()
-    expect(ctx.registryOf('theme').top('edge')).toBeUndefined()
   })
 
   it('ctx.theme.add 与 register 落在同一处事实源（卸载同样清空，不残留）', async () => {
@@ -59,41 +58,33 @@ describe('T01 · 主题注册两处读数一致 + 卸载不留幽灵条目', () 
       mk('theme-b', (c) => c.theme.add('background', MyShell, { id: 'b', order: 3 })),
     ])
     expect(theme.winner('background')).toBe(MyShell)
-    expect(ctx.registryOf('theme').top('background')?.value).toBe(MyShell)
-    // id / order 两处一致
-    expect(ctx.registryOf('theme').get('background', 'b')?.order).toBe(3)
+    expect(ctx.registryOf('theme').top('background')).toBeUndefined()
     expect(theme.occupantIds('background')).toEqual(['b'])
 
     ctx.uninstallPlugin('theme-b')
     expect(theme.winner('background')).toBeUndefined()
-    expect(ctx.registryOf('theme').top('background')).toBeUndefined()
   })
 
-  it('ctx.theme.remove：两处同时移除', async () => {
-    let fieldAfterRegister: unknown
-    const { ctx, theme } = await boot([
+  it('ctx.theme.remove：从真实容器移除', async () => {
+    const { theme } = await boot([
       mk('theme-c', (c) => {
         c.theme.register('nodeShell', MyShell, { id: 'shell' })
-        fieldAfterRegister = c.registryOf('theme').get('nodeShell', 'shell')?.value
+        expect((c.get('themeRegistry') as ThemeRegistry).winner('nodeShell')).toBe(MyShell)
         c.theme.remove('nodeShell', 'shell')
       }),
     ])
-    // remove 之前场里确实有这条（证明 remove 不是因为"本来就没写场"才看起来干净）
-    expect(fieldAfterRegister).toBe(MyShell)
     expect(theme.winner('nodeShell')).toBeUndefined()
-    expect(ctx.registryOf('theme').get('nodeShell', 'shell')).toBeUndefined()
   })
 
-  it('同 id 顶替后两处都只剩当前所有者', async () => {
-    const { ctx } = await boot([
+  it('同 id 顶替后容器只剩当前所有者', async () => {
+    const { theme } = await boot([
       mk('theme-d', (c) => {
         c.theme.register('edge', MyEdge, { id: 'same' })
         c.theme.register('edge', MyShell, { id: 'same' })
       }),
     ])
-    const entries = ctx.registryOf('theme').list('edge')
-    expect(entries).toHaveLength(1)
-    expect(entries[0].value).toBe(MyShell)
+    expect(theme.winner('edge')).toBe(MyShell)
+    expect(theme.occupantIds('edge')).toEqual(['same'])
   })
 })
 
