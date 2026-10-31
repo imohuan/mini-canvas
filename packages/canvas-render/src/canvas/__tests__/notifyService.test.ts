@@ -47,4 +47,12 @@ describe('notify', () => {
     n.notify('高', { source: 'y', priority: 1, durationMs: 0 })
     expect(n.list().map((x) => x.message)).toEqual(['高', '低'])
   })
+
+  it('followPointer 缺省为 true（tip 语义：提示跟着鼠标；Spec 五·13）', () => {
+    const n = createNotifyService()
+    n.notify('提示', { durationMs: 0 })
+    expect(n.list()[0].followPointer).toBe(true)
+    n.notify('角落', { durationMs: 0, followPointer: false })
+    expect(n.list()[1].followPointer).toBe(false)
+  })
 })

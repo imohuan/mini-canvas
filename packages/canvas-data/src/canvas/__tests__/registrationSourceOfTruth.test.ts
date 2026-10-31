@@ -60,6 +60,8 @@ describe('D1 · 主题只留 ThemeRegistry 一处事实源', () => {
     expect(theme.winner('background')).toBe(MyShell)
     expect(ctx.registryOf('theme').top('background')).toBeUndefined()
     expect(theme.occupantIds('background')).toEqual(['b'])
+    // order 必须原样透传（不是默认值 0/100）；否则多 occupant 的赢家会被悄悄改写。
+    expect(theme.occupants('background')[0].order).toBe(3)
 
     ctx.uninstallPlugin('theme-b')
     expect(theme.winner('background')).toBeUndefined()

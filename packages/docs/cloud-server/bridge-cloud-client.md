@@ -115,7 +115,7 @@ export function apply(ctx: Context): void {
 4. **`ctx.effect` 包 EventSource**：插件卸载自动断流。不包的话热卸一次就漏一条连接。
 5. **换 save 的 adapter**：这是「上云」的本质 —— 存档/资源两种数据的后端从本地（localStorage/IndexedDB）
    换成云端 HTTP。真实版在换之前会抓住本地资源后端（`adapterOf`），首次上云迁移要用它取回字节。
-6. **对外只给状态与刷新**：界面弹窗读 `gen-history` 服务（分页查账本），底栏按钮由动作清单 diff 出来。
+6. **对外只给状态与刷新**：界面弹窗读 `cloud-client:history` 服务（分页查账本），底栏按钮由动作清单 diff 出来。
 
 ## 它调的后台接口（真实枚举）
 
@@ -135,7 +135,7 @@ export function apply(ctx: Context): void {
 | 服务名 | 形状 | 谁在用 |
 | --- | --- | --- |
 | `cloud-client` | `status()` / `refreshActions()` | ui 的设置页与诊断 |
-| `gen-history` | `query(分页筛选)` / `subscribe(fn)` | ui 的生成历史弹窗 |
+| `cloud-client:history` | `query(分页筛选)` / `subscribe(fn)` | ui 的生成历史弹窗 |
 | `cloud-save` | `status()` / `sync()` | 自动保存/云端保存的显示 |
 
 ## 与后台插件系统的握手点
@@ -154,7 +154,7 @@ export function apply(ctx: Context): void {
 | SSE 跟随与合并 | `src/remoteSync.ts`、`src/applyMerge.ts` | 事件 → doc 增量合并（进历史） |
 | 换存储后端 | `src/cloudResourceAdapter.ts`、`cloudKvAdapter.ts` | `save.useAdapter(...)` 指向云端 |
 | 动作 → 底栏按钮 | `src/actions.ts`（toBarAction/diffActions） | diff 出新增/失效动作，注册进 node/bar |
-| 三个服务注入 | `src/plugin.ts:346-354` | `gen-history` / `cloud-client` / `cloud-save` |
+| 三个服务注入 | `src/plugin.ts:346-354` | `cloud-client:history` / `cloud-client` / `cloud-save` |
 | 插件管理页（同包另一入口） | `src/manager/pluginManagerPlugin.ts` | 设置面板「插件」页，读 `/plugin-catalog.json` |
 
 ## 常见坑

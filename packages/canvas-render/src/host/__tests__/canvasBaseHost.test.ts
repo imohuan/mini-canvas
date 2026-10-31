@@ -90,11 +90,13 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
     host.stop()
   })
 
-  it('CanvasHostHandle 的字段一个不少（含基础服务与渲染层两件）', async () => {
+  it('CanvasHostHandle 的字段一个不少（新入口 view / canvas / manager / doc 全在）', async () => {
     const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
     for (const key of [
       'ctx',
+      'manager',
       'save',
+      'doc',
       'nodeStore',
       'edgeStore',
       'nodeRegistry',
@@ -104,6 +106,7 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
       'history',
       'nodeFactory',
       'graph',
+      'view',
       'nodeLayout',
       'viewport',
       'resources',
@@ -111,6 +114,10 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
     ]) {
       expect(host[key as keyof typeof host], key + ' 缺失').toBeDefined()
     }
+    // 新入口是真实服务表里的名字；旧字段只是兼容实例，不是服务名。
+    // canvas 是服务名（插件 ctx.get('canvas')），不是宿主句柄字段。
+    expect(host.ctx.hasService('view')).toBe(true)
+    expect(host.ctx.hasService('canvas')).toBe(true)
     host.stop()
   })
 

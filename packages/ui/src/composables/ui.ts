@@ -1605,7 +1605,9 @@ function createUi() {
     // 先按现值对齐一次（面板之前可能已经改过）
     state.edgesVisible = (store.get('edgeVisible') as boolean | undefined) ?? state.edgesVisible
     state.snapOn = (store.get('snapToGrid') as boolean | undefined) ?? state.snapOn
-    minimapVisible.value = store.get('miniMapVisible') === true
+    // 未赋值时 SettingsStore 返回 undefined（不是 schema 默认值）；旧实现读插件服务的
+    // 初始 visible（默认 true）。这里缺省按“显示”处理，避免状态栏图标与浮层不一致。
+    minimapVisible.value = store.get('miniMapVisible') !== false
     // 画布模式由 nodesDraggable 反推：关掉拖节点 = 抓手态（拖哪都平移画布），否则是移动态
     const draggable = store.get('nodesDraggable') as boolean | undefined
     if (typeof draggable === 'boolean') state.canvasMode = draggable ? 'move' : 'hand'
@@ -2701,11 +2703,14 @@ function createUi() {
     // 优先「保持当前缩放、只平移」到节点矩形（与搜索/Agent 同一套取景）。
     const view = ctx?.get<{
       fitTo(target: string[], opts?: { keepZoom?: boolean; select?: boolean; padding?: number }): boolean
+      getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | null
     }>('view')
     if (!view) return
+    const rect = view.getNodeRect?.(id)
     if (view.fitTo([id], { keepZoom: true, select: true })) return
-    // 退路：没有节点矩形时按整块取景（padding 0.45 与原实现一致）。
-    view.fitTo([id], { padding: 0.45 })
+    // 退路只在“没有节点矩形”时走（旧实现同款 padding 0.45）。
+    // fitTo 返回 false 也可能是“已经在视口中心、无需移动”；那种情况不能把 zoom 改掉。
+    if (!rect) view.fitTo([id], { padding: 0.45 })
   }
 
   /**

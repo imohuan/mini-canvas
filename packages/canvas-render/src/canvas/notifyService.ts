@@ -16,7 +16,7 @@ export interface NotifyOptions {
   once?: boolean
   /** 0 = 常驻；缺省 2600ms */
   durationMs?: number
-  /** 跟随鼠标渲染（tip 语义）；缺省 false */
+  /** 跟随鼠标渲染（tip 语义）；缺省 true */
   followPointer?: boolean
 }
 
@@ -67,7 +67,7 @@ export function createNotifyService(): NotifyService {
         source,
         priority: opts.priority ?? 0,
         durationMs: opts.durationMs ?? 2600,
-        followPointer: opts.followPointer ?? false,
+        followPointer: opts.followPointer ?? true,
       }
       items.push(item)
       if (item.durationMs > 0) {

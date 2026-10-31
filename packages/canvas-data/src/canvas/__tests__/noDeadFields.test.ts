@@ -6,6 +6,9 @@ import { NodeRegistry } from '../registry/nodeRegistry'
 import { ThemeRegistry } from '../registry/themeRegistry'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
+import { createCanvasBasePlugin } from '../canvasBasePlugin'
+import { MemoryStorageAdapter } from '../../storage/memoryAdapter'
+import { canvasRuntime } from '../canvasRuntime'
 
 /**
  * 决策 D1：这五个场在生产代码里零读取，值却要每次多写一遍 —— 删掉写入，
@@ -24,6 +27,22 @@ async function bootHeadless() {
 }
 
 describe('五个零读取场不再被写', () => {
+  it('真实基础插件（无旧服务名）下，糖仍写进真实容器', async () => {
+    // 手工 bootHeadless 注入的是旧容器名；生产宿主没有这些名字，只靠内部 canvasRuntime。
+    // 这条用例走生产装配，防止“只测回退分支”。
+    const ctx = new Context()
+    ctx.plugin(createCanvasBasePlugin({ adapter: new MemoryStorageAdapter() }).plugin)
+    await ctx.start()
+    ctx.nodes.register({ type: 'prod', label: 'P', size: { w: 10, h: 10 }, create: () => 'p1' })
+    ctx.theme.register('edge', { name: 'prod-edge' }, { id: 'p' })
+    const runtime = canvasRuntime()
+    expect(runtime).toBeDefined()
+    expect(runtime!.nodeFactory.creatableTypes()).toContain('prod')
+    expect(runtime!.themeRegistry.winner('edge')).toEqual({ name: 'prod-edge' })
+    expect(ctx.get<{ creatableTypes(): string[] }>('nodeFactory')).toBeUndefined()
+    ctx.stop()
+  })
+
   it('注册节点类型 / 主题槽 / 槽位 / 设置项后，五个死场仍为空', async () => {
     const { ctx } = await bootHeadless()
     ctx.nodes.register({ type: 'x', label: 'X', size: { w: 100, h: 100 }, create: () => 'n1' })

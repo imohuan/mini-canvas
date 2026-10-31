@@ -165,6 +165,9 @@ export class NodeTaskService extends Service {
   ) {
     const action = this.lookup().get(actionId)
     if (!action) return { ok: false as const, error: '未找到动作 ' + actionId }
+    // 同一节点只能有一条在跑：否则旧任务的 finally 会删掉新任务的控制器，
+    // 之后 cancel(nodeId) 就取消不到真正在跑的那条（Spec 五·14）。
+    this.cancels.get(nodeId)?.abort()
     const ctrl = new AbortController()
     this.cancels.set(nodeId, ctrl)
     try {
@@ -180,7 +183,8 @@ export class NodeTaskService extends Service {
         this.deps(),
       )
     } finally {
-      this.cancels.delete(nodeId)
+      // 只清自己这一条：后起的任务可能已经换成新控制器，别把它删掉。
+      if (this.cancels.get(nodeId) === ctrl) this.cancels.delete(nodeId)
     }
   }
 
@@ -201,6 +205,8 @@ export class NodeTaskService extends Service {
       // ★ 必须登记 AbortController：续查出来的任务同样要能被「取消」按钮中断。
       //   不登记的话 `cancel()` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈）。
       const ctrl = new AbortController()
+      // 续查重复触发同一节点时，先取消上一条，避免两个轮询写同一张卡片。
+      this.cancels.get(node.id)?.abort()
       this.cancels.set(node.id, ctrl)
       void resumeAction(
         {
@@ -212,7 +218,9 @@ export class NodeTaskService extends Service {
           signal: ctrl.signal,
         },
         this.deps(),
-      ).finally(() => this.cancels.delete(node.id))
+      ).finally(() => {
+        if (this.cancels.get(node.id) === ctrl) this.cancels.delete(node.id)
+      })
     }
   }
 }

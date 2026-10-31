@@ -55,6 +55,16 @@ describe('focusStyleNode：选中 + 聚焦', () => {
     expect(view.fitTo).toHaveBeenCalledWith(['n1'], { keepZoom: true, select: true })
   })
 
+  it('直接点选时由 fitTo 负责居中（不自己算坐标）', () => {
+    // 旧实现自己 setCenter(260,320,1.5)；现在只传目标与保留缩放，
+    // 居中/夹取/过渡全在 fitTo 内，避免两套坐标算法漂移。
+    const selection = { set: vi.fn(), clearEdges: vi.fn() }
+    const view = { fitTo: vi.fn(() => true) }
+    focusStyleNode({ selection, view } as never, 'n1')
+    expect(view.fitTo).toHaveBeenCalledTimes(1)
+    expect(view.fitTo.mock.calls[0][1]).toEqual({ keepZoom: true, select: true })
+  })
+
   it('fitTo 返回 false（节点不存在）→ 不抛错，选中照旧', () => {
     const selection = { set: vi.fn(), clearEdges: vi.fn() }
     const view = { fitTo: vi.fn(() => false) }

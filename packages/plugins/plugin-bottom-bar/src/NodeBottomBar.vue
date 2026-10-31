@@ -863,6 +863,8 @@ function onCardDblClick(tile: RefTile): void {
     heightRatio: readNum('focusHeightRatio', 0.5),
     minZoom: readNum('autoLayoutMinZoom', 0.1),
     maxZoom: readNum('autoLayoutMaxZoom', 4),
+    // 兜底路径沿用旧实现的 200ms 动画；默认 320ms 会让双击聚焦变慢半拍。
+    durationMs: 200,
   })
 }
 
@@ -2411,7 +2413,8 @@ function onCtrlDragPointerMove(ev: PointerEvent): void {
     const tile = refTiles.value.find((t) => t.key === key)
     const slotKind = (tile?.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind ?? 'image', media: ctrlDrag.mediaType })
-    if (!verdict.ok) ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0 })
+    // once：同一句提示只留一条（旧 tip.show 是覆盖式，不能变成每帧追加）
+    if (!verdict.ok) ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0, once: true })
     else ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('', { source: 'bottom-bar' })
   }
   if (ctrlDrag.targetTileKey && ctrlDrag.targetTileKey !== key) {
@@ -2482,7 +2485,8 @@ function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
     const slotKind = (tile.kind ?? 'any') as RefSlotKind
     const verdict = judgeSlotHover({ kind: slotKind, media: drag.mediaType })
     if (!verdict.ok) {
-      ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0 })
+      // once：松手失败提示同样只留一条
+      ctx.get<{ notify(m: string, o?: object): unknown }>('canvas').notify(verdict.hint, { source: 'bottom-bar', followPointer: true, durationMs: 0, once: true })
       return
     }
   }

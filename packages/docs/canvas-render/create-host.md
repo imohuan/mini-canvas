@@ -60,7 +60,7 @@ const { host, api, manager, exposeToWindow } = await createMiniCanvasHost(opts)
 | `nodeStore` / `edgeStore` | 节点表 / 边表的**实例**（渲染层要 `subscribe` 重灌、要量尺寸；插件请走 `doc`） |
 | `nodeRegistry` / `themeRegistry` | 展示注册表 / 主题槽注册表（供 Vue 层装配） |
 | `selection` / `command` / `history` / `nodeFactory` / `graph` | 选中 / 命令 / 撤销栈 / 建节点工厂 / 图唯一写入口（都是**实例**，不是服务名） |
-| `view` / `canvas` | 渲染层注入的两个服务（也是**实例**，方便宿主直接调） |
+| `view` | 渲染层注入的几何 + 视口服务（也是实例，方便宿主直接调）；`canvas` 是服务名，用 `ctx.get('canvas')` 取 |
 | `settingsPersist?` | 配置落盘桥（兼容字段）；`persistSettings: false` 时是 `undefined`（插件请用 `save.settings`） |
 | `resources` | 资源生命周期（Blob / objectURL 登记与回收） |
 | `stop()` | **停用并回收**：先 `save.flush()` 保住脏数据，再解色板订阅、停插件、清 window 挂载 |

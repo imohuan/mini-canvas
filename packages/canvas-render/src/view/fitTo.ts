@@ -72,8 +72,10 @@ export function computeFitTo(input: FitToInput): FitToResult {
 
   // 已完整可见 → 不动（ensureVisible / BaseNode 语义）
   if (opts.onlyIfOutOfView) {
-    const margin = Math.max(opts.margin ?? 0, 0)
+    // margin 是**屏幕像素**（见 renderServiceContracts）：flow 坐标要除以 zoom。
+    // 旧 ensureNodeVisible 是 rect*zoom 后与像素 margin 比较，同一语义。
     const zoom = state.zoom || 1
+    const margin = Math.max(opts.margin ?? 0, 0) / zoom
     const left = -state.x / zoom
     const top = -state.y / zoom
     const right = left + vw / zoom
