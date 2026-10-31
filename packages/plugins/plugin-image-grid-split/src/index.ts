@@ -108,10 +108,10 @@ export function apply(ctx: Context): void {
   // ② 功能模式：进入后底栏整格换成 GridSplitPanel（顶栏不动，图片默认栏照常）
   const registerMode = (): boolean => {
     const svc = ctx.tryGet<{
-      registerMode?(mode: unknown): void
+      registerMode?(mode: unknown): (() => void) | void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
+    const offMode = svc.registerMode({
       id: 'image-grid-split/workbench',
       types: ['image'],
       title: '宫格切分',
@@ -123,6 +123,7 @@ export function apply(ctx: Context): void {
       topBar: null,
       bottomBar: markRaw(GridSplitPanel),
     })
+    if (offMode) ctx.effect(() => offMode)
     return true
   }
   if (!registerMode()) {

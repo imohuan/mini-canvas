@@ -57,6 +57,20 @@
   --ui-code-bg: rgb(0 0 0 / 0.05);
   --ui-scroll-thumb: rgb(0 0 0 / 0.2);
   --ui-scroll-thumb-hover: rgb(0 0 0 / 0.32);
+  /* 形状与字号阶梯（ui-style-guide §2.2 / §2.3 的 CSS 出口）。
+     规范里一直写着这些名字，但此前没有定义，组件只能写 var(--radius-panel, 16px) 的兜底 ——
+     名字写错也照常“能用”，样式却不再受一处控制。定义在这里之后，组件改这一处即可。 */
+  --radius-badge: 6px;
+  --radius-control: 8px;
+  --radius-row: 10px;
+  --radius-open: 12px;
+  --radius-panel: 16px;
+  --radius-pill: 999px;
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-label: 12px;
+  --text-base: 13px;
+  --text-title: 15px;
   /* UI 规范强调色（青）——全界面唯一强调色，见 docs/design/ui-style-guide.md §2 */
   /* 品牌色**两格制**：亮/暗各一个有独立名字的内联变量，由本文件按主题挑一个。
      用户没改过 → 内联不存在，用这里的默认值；改过 → 内联优先（`<html>` 内联压制本文件）。
@@ -66,12 +80,22 @@
   /* soft 档由强调色现算（color-mix）：用户改强调色后，选中底/聚焦环等半透明变体自动跟随，
      不会出现"主色改了、半透明底还是青的"这种漂移。 */
   --ui-accent-soft: color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  /* 强调色的派生档：描边 / 聚焦环。由主题色现算，改主色时一起变，
+     不再在各组件里写死“青色的 28% / 60%”。 */
+  --ui-accent-line: color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  --ui-accent-ring: color-mix(in srgb, var(--ui-accent) 60%, transparent);
+  --ui-accent-contrast: #ffffff;
   /* 语义色：危险（删除 / 断开连接等破坏性操作） */
   --ui-danger: var(--uic-danger-color-light, #ef4444);
   --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 14%, transparent);
   --ui-danger-veil: color-mix(in srgb, var(--ui-danger) 8%, transparent);
   /* 语义色：警示（限时折扣 / 注意事项等提示文案） */
   --ui-warn: var(--uic-warn-color-light, #e3a25f);
+  --ui-warn-soft: color-mix(in srgb, var(--ui-warn) 16%, transparent);
+  /* 通用语义色：成功 / 信息。主题色板只开放用户会改的品牌色与警示色，
+     这两档是固定的语义档，组件用它们表达“完成 / 说明”，不要拿强调色顶替。 */
+  --ui-success: #16a34a;
+  --ui-info: #2563eb;
   /* 连线（rail = 静态导轨 / flow = 选中时的流动光斑）：两格制同上。
      这两个是**画布内容**颜色，不走 --ce-* 内联通道，而是由 CustomEdge 读本变量。 */
   --ui-edge-rail: var(--uic-edge-rail-color-light, #1f2937);
@@ -189,6 +213,7 @@ html[data-canvas-theme='dark'] {
   --ui-thumb-soft: #2a2a2a;
   --ui-overlay: rgb(31 31 31 / 0.75);
   --ui-overlay-solid: rgb(33 33 33);
+  --ui-on-accent: #ffffff;
   /* 浮窗边框（暗色）：照 LiBTV 实测的 #525252 —— 比 --ui-line(#363636) 亮一档，
      在半透明毛玻璃底上仍然看得见轮廓。 */
   --ui-shell-line: #525252;
@@ -207,10 +232,15 @@ html[data-canvas-theme='dark'] {
   --ui-accent: var(--uic-accent-color-dark, #0891b2);
   --ui-accent-hover: var(--uic-accent-hover-color-dark, #0e7490);
   --ui-accent-soft: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+  --ui-accent-line: color-mix(in srgb, var(--ui-accent) 34%, transparent);
+  --ui-accent-ring: color-mix(in srgb, var(--ui-accent) 70%, transparent);
   --ui-danger: var(--uic-danger-color-dark, #f87171);
   --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 18%, transparent);
   --ui-danger-veil: color-mix(in srgb, var(--ui-danger) 10%, transparent);
   --ui-warn: var(--uic-warn-color-dark, #e3a25f);
+  --ui-warn-soft: color-mix(in srgb, var(--ui-warn) 22%, transparent);
+  --ui-success: #4ade80;
+  --ui-info: #60a5fa;
   /* 连线两格制（暗色）：默认给浅灰/亮青 —— 深灰导轨在暗画布上几乎看不见（对比度约 1.3:1） */
   --ui-edge-rail: var(--uic-edge-rail-color-dark, #9ca3af);
   --ui-edge-flow: var(--uic-edge-flow-color-dark, var(--ui-accent, #22d3ee));

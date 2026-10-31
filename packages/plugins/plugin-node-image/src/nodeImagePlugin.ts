@@ -211,27 +211,34 @@ export function apply(ctx: Context) {
   // import 是硬规则；服务名与 ui 目录名才是跨插件公共契约。
   const registerToolbar = (): boolean => {
     const svc = ctx.tryGet<{
-      registerMode?(mode: unknown): void
+      registerMode?(mode: unknown): (() => void) | void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
+    /**
+     * 每条注册的注销函数都要交还宿主。
+     * 服务由渲染层长期持有，插件卸载不会自动清 Map —— 不收就会在热重载后留下旧组件引用。
+     */
+    const offs: Array<() => void> = []
+    const own = (off: (() => void) | void): void => { if (off) offs.push(off) }
+    own(svc.registerMode({
       id: 'default',
       types: ['image'],
       title: '图片默认状态栏',
       topBar: ImageTopToolbar,
       order: 100,
-    })
+    }))
     // 用户口径 2026-10-29（截图）：裁剪/扩展只显示**顶栏**（确认/取消/比例都在顶栏），
     // 底栏整格不显示（bottomBar: null）—— 不在底部重复一套控制栏。
-    svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: null })
-    svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: null })
-    svc.registerMode({
+    own(svc.registerMode({ id: 'image/crop', types: ['image'], title: '裁剪图片', bottomBar: null }))
+    own(svc.registerMode({ id: 'image/expand', types: ['image'], title: '扩展图片', bottomBar: null }))
+    own(svc.registerMode({
       id: 'image/paint',
       types: ['image'],
       title: '绘制图片',
       topBar: ImagePaintPanel,
       bottomBar: null,
-    })
+    }))
+    ctx.effect(() => () => { for (const off of offs) off() })
     return true
   }
   if (!registerToolbar()) {

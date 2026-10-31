@@ -84,17 +84,38 @@ export class NodeToolbarService {
    * 刻意**不做同 id 去重**：两个不同插件可能都注册 'default'、order 也相同，
    * 它们各自只声明了自己那一根栏（一个只给 topBar、一个只给 bottomBar），
    * 去重会误把其中一份吞掉。顶栏底栏本来就分开裁决（见 declaredOf）。
+   *
+   * 返回**这一份注册**的注销函数。服务由渲染层长期持有，注册方插件卸载后必须调用它，
+   * 否则热重载会让模式和组件引用越积越多。推荐写法：
+   *
+   * ```ts
+   * const off = svc.registerMode(mode)
+   * ctx.effect(() => off)
+   * ```
+   *
+   * 返回值保持幂等；同一份被移除两次不会影响其它注册。
    */
-  registerMode(mode: NodeToolbarMode): void {
+  registerMode(mode: NodeToolbarMode): () => void {
     const list = this.modes.get(mode.id)
-    if (!list) {
-      this.modes.set(mode.id, [mode])
-      return
+    if (list) list.push(mode)
+    else this.modes.set(mode.id, [mode])
+
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      const current = this.modes.get(mode.id)
+      if (!current) return
+      const at = current.indexOf(mode)
+      if (at === -1) return
+      current.splice(at, 1)
+      if (current.length === 0) this.modes.delete(mode.id)
+      // 会话还指着已经没人注册的模式：退回默认，别留一个永远解析不到的悬空 id。
+      if (this.session.modeId === mode.id && !this.modes.has(mode.id)) this.exit(this.session.nodeId)
     }
-    list.push(mode)
   }
 
-  /** 移除某个 id 的全部注册（插件卸载时由 scope 清理；一般不用手调） */
+  /** 移除某个 id 的全部注册（批量清理；单份注册优先用 registerMode 返回的函数） */
   unregisterMode(id: string): void {
     this.modes.delete(id)
     if (this.session.modeId === id) this.exit(this.session.nodeId)

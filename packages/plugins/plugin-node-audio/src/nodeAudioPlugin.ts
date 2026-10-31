@@ -121,16 +121,17 @@ export function apply(ctx: Context) {
   // 与其它节点同一条解析链路，节点类型不再声明 out:top 段。
   const registerToolbar = (): boolean => {
     const svc = ctx.tryGet<{
-      registerMode?(mode: unknown): void
+      registerMode?(mode: unknown): (() => void) | void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
+    const offMode = svc.registerMode({
       id: 'default',
       types: ['audio'],
       title: '音频默认状态栏',
       topBar: AudioTopToolbar,
       order: 100,
     })
+    if (offMode) ctx.effect(() => offMode)
     return true
   }
   if (!registerToolbar()) {

@@ -231,29 +231,32 @@ export function apply(ctx: Context) {
   // 不 import 主题/底栏插件 —— 跨插件只认服务名。
   const registerToolbar = (): boolean => {
     const svc = ctx.tryGet<{
-      registerMode?(mode: unknown): void
+      registerMode?(mode: unknown): (() => void) | void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
+    const offs: Array<() => void> = []
+    const own = (off: (() => void) | void): void => { if (off) offs.push(off) }
+    own(svc.registerMode({
       id: 'default',
       types: ['video'],
       title: '视频默认状态栏',
       topBar: VideoTopToolbar,
       order: 100,
-    })
+    }))
     // 用户口径 2026-10-29：裁剪会话接管顶栏（确认/取消/比例都在顶栏），底栏整格不显示
     // （bottomBar: null）—— 与图片节点的 image/crop 同一条写法（文档案例 9 的方式 C）。
-    svc.registerMode({ id: 'video/crop', types: ['video'], title: '裁剪视频画面', bottomBar: null })
+    own(svc.registerMode({ id: 'video/crop', types: ['video'], title: '裁剪视频画面', bottomBar: null }))
     // 剪辑会话接管底栏：底栏整格换成 VideoClipPanel（胶片条）；顶栏沿用默认模式（'default'），
     // 选中/关闭按钮还在 —— 用户不再需要"先去底栏下拉里找剪辑"。
-    svc.registerMode({
+    own(svc.registerMode({
       id: 'video/clip',
       types: ['video'],
       title: '剪辑视频时长',
       topBar: 'default',
       bottomBar: VideoClipPanel,
       order: 100,
-    })
+    }))
+    ctx.effect(() => () => { for (const off of offs) off() })
     return true
   }
   if (!registerToolbar()) {

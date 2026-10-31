@@ -300,16 +300,19 @@ export function apply(ctx: Context) {
   // 所以这里注册不上就等 ctx:plugin-installed 再试一次，成功后解绑。
   const registerDefaultBar = (): boolean => {
     const svc = ctx.tryGet<{
-      registerMode?(mode: unknown): void
+      registerMode?(mode: unknown): (() => void) | void
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
+    const offMode = svc.registerMode({
       id: 'default',
       types: ['text', 'image', 'video', 'audio'],
       title: '默认底栏',
       bottomBar: NodeBottomBar,
       order: 100,
     })
+    // 服务归渲染层、活得比本插件久：注册方必须自己交还这一条，
+    // 否则每次热重载都会多留一份旧组件引用。返回值可选，兼容没有清理能力的旧服务桩。
+    if (offMode) ctx.effect(() => offMode)
     return true
   }
   if (!registerDefaultBar()) {

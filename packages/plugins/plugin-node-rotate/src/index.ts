@@ -35,9 +35,9 @@ export function apply(ctx: Context): void {
 
   // ② 功能模式：顶栏整格换成旋转面板（topBar: RotatePanel）
   const registerMode = (): boolean => {
-    const svc = ctx.tryGet<{ registerMode?(mode: unknown): void } | undefined>('nodeToolbar')
+    const svc = ctx.tryGet<{ registerMode?(mode: unknown): (() => void) | void } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
-    svc.registerMode({
+    const offMode = svc.registerMode({
       id: ROTATE_MODE_ID,
       types: ['image'],
       title: '旋转与镜像',
@@ -46,6 +46,7 @@ export function apply(ctx: Context): void {
       bottomBar: null,
       order: MODE_ORDER,
     })
+    if (offMode) ctx.effect(() => offMode)
     return true
   }
   if (!registerMode()) {
