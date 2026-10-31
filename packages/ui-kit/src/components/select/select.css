@@ -52,7 +52,6 @@
 .mck-select__option.is-disabled { opacity: 0.38; cursor: not-allowed; }
 .mck-select__icon { display: grid; flex: none; width: 24px; height: 24px; place-items: center; border-radius: 7px; background: var(--ui-chip); font-size: 12px; }
 .mck-select__icon-raw { display: inline-flex; align-items: center; justify-content: center; }
-.mck-select__icon-raw :deep(svg),
 .mck-select__icon-raw > svg { width: 14px; height: 14px; }
 .mck-select__copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
 .mck-select__option-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
