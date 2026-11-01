@@ -5502,7 +5502,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   height: 28px;
   border-radius: 8px;
   background: var(--ui-panel, #fff);
-  box-shadow: 0 1px 3px var(--ui-shadow-soft, rgba(0, 0, 0, 0.08));
+  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
   transition: transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
   pointer-events: none;
 }
@@ -5980,7 +5980,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   background: var(--ui-panel, #fff);
   color: var(--ui-ink, #111827);
   font-weight: 600;
-  box-shadow: 0 1px 3px var(--ui-shadow-soft, rgba(0, 0, 0, 0.06));
+  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
 }
 
 .ac-rail-icon {
