@@ -76,6 +76,30 @@ describe('Dropdown 组件行为', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
   })
 
+  it('悬停打开排队中又被关闭，计时器不会再把浮层拉起来', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(Dropdown, {
+        props: { modelValue: false, trigger: 'hover', hoverOpenDelay: 30 },
+        slots: { trigger: '<button data-trigger>x</button>', default: '<div data-menu />' },
+      })
+      const trigger = wrapper.find('.mck-dropdown__trigger')
+      await trigger.trigger('mouseenter')
+      // 用户等不及气泡出现就点了：立刻显示并作废排队中的那一次。
+      await trigger.trigger('click')
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+      // 别的浮层（例如刚点开的菜单）把提示顶掉。
+      ;(wrapper.vm as unknown as { hide: () => void }).hide()
+      const callsBefore = (wrapper.emitted('update:modelValue') ?? []).length
+      await vi.advanceTimersByTimeAsync(60)
+      const calls = wrapper.emitted('update:modelValue') ?? []
+      expect(calls.length).toBe(callsBefore)
+      expect(calls.at(-1)).toEqual([false])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('always 触发器常显，外点不关闭', async () => {
     const wrapper = mount(Dropdown, {
       props: { modelValue: true, trigger: 'always' },
