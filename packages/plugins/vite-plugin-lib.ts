@@ -71,7 +71,13 @@ export function pluginLibBuild(importMetaUrl: string, opts: PluginLibOptions) {
     },
     rollupOptions: {
       external: HOST_EXTERNALS,
-      output: { globals: HOST_GLOBALS },
+      output: {
+        globals: HOST_GLOBALS,
+        // 插件包同时导出具名（name/apply/inject）与 default —— UMD 必须显式 named，
+        // 否则 rollup 把整个全局变成 `{ default: … }`，宿主按 name 取会取不到（清单里就会出现
+        // 「脚本加载了但没找到插件模块」）。这条对所有插件共用。
+        exports: 'named' as const,
+      },
     },
     cssCodeSplit: false,
     sourcemap: opts.sourcemap ?? true,
