@@ -23,7 +23,7 @@ import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
-import { AGENT_PLUGINS } from './plugins/builtin/agentRoutes.js'
+import { createAgentPlugins } from './plugins/builtin/agentRoutes.js'
 import { PluginPresence } from './plugins/pluginPresence.js'
 import type { Context } from '@mini-canvas/kernel'
 import { loadServerPluginsFromDir, DEFAULT_SERVER_PLUGINS_DIR } from './serverFramework/pluginLoader.js'
@@ -38,14 +38,14 @@ import { createWeb2ApiProvider } from './providers/web2api/index.js'
 import { watchProviders, type ProviderWatcher } from './providers/watch.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
-import { DEFAULT_CANVAS_ID } from './store/canvasPaths.js'
+import { DEFAULT_CANVAS_ID, canvasDir } from './store/canvasPaths.js'
 import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
 import { makeFetchSelfBytes } from './tasks/selfFetch.js'
 import { branchStore } from './agent/branchStore.js'
 import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from './agent/testModel.js'
 import { assembleAgentServices, type AgentServices } from './agent/assembleAgent.js'
 import { buildRuntimeContext, runtimeContextSection } from './agent/runtimeContext.js'
-import { listAgentPromptSections } from './serverFramework/agent.js'
+import { listAgentPromptSections, runAgentMiddleware } from './serverFramework/agent.js'
 import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
 import { createDebugOrigin } from './debugOrigin.js'
 import { createAuditLog } from './audit.js'
@@ -350,7 +350,19 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * 开关为假时它根本不会被调用 —— 没有 Config、没有 SessionStore、没有 SDK 懒加载。
    */
   if (agentEnabled) {
-    agentServicesRef = await assembleAgentServices({ dataDir, ctx: host.ctx, skillSources: opts.agentSkillSources })
+    // Agent 后台的实现已经住在 plugin-agent 里（本文件只做一次装配与端口注入）。
+    // 端口一律**显式注入**：插件不 import 宿主的 store / serverFramework，
+    // 这样它的后台半才能打成自包含单文件（data: URL 加载器要求）。
+    agentServicesRef = await assembleAgentServices({
+      ports: {
+        dataDir,
+        canvasDirOf: (canvasId) => canvasDir(dataDir, canvasId),
+        kv: kvStore,
+        promptSections: () => listAgentPromptSections(host.ctx),
+        runMiddleware: (turn) => runAgentMiddleware(host.ctx, turn),
+        skillSources: opts.agentSkillSources,
+      },
+    })
     // 先灌一次（此刻用的是请求端口）：监听前读配置也能拿到目录与占位符清单。
     agentServicesRef.config.setRuntimeContext(runtimeContext())
   }
@@ -670,7 +682,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   }
   // Agent 三条路由插件单独一组：关闭时它们根本不进登记表，不靠“名字前缀跳过”。
   if (agentEnabled) {
-    for (const plugin of AGENT_PLUGINS) host.ctx.plugin(plugin)
+    // 三条路由插件由 plugin-agent 提供；这里只把「跑中间件」的那一个函数指针交给它。
+    for (const plugin of createAgentPlugins(host.ctx)) host.ctx.plugin(plugin)
   }
 
   // ③.5 外挂后台插件：**丢一个 .js 进目录 = 多一个后台插件**（Task 4）。

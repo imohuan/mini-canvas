@@ -15,7 +15,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer } from '../server.js'
 import { BUILTIN_PLUGINS } from '../plugins/builtin/routes.js'
-import { AGENT_PLUGINS } from '../plugins/builtin/agentRoutes.js'
+import { agentPlugins } from '@mini-canvas/plugin-agent/server/routes/plugin.js'
+
+/**
+ * 清单校验用的「Agent 三条」：走插件包的工厂造一份占位中间件即可。
+ *
+ * 生产装配（server.ts）传的是真链；这里只关心**名字与 inject**，不关心中间件做什么。
+ */
+const AGENT_PLUGINS = agentPlugins(async () => ({}))
 
 let dir: string
 beforeEach(async () => {

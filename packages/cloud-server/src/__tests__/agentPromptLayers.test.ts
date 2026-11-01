@@ -20,13 +20,15 @@ import path from 'node:path'
 import { assembleSystemPrompt, loadAgentState } from '@prismshadow/penguin-core'
 import { AgentConfigService } from '../agent/config'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot } from '../agent/agentPaths'
+import { KvStore } from '../store/kvStore'
 
 let dir: string
 let svc: AgentConfigService
 
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-three-layers-'))
-  svc = new AgentConfigService(dir)
+  // 提示词清单落在宿主的 KV（settings.json），装配时由宿主注入 —— 测试里直接给真的那份。
+  svc = new AgentConfigService(dir, { kv: new KvStore(dir) })
 })
 
 afterEach(async () => {

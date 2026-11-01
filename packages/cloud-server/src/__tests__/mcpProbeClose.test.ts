@@ -11,7 +11,14 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync(new URL('../agent/config.ts', import.meta.url), 'utf-8')
+// 实现已搬进 plugin-agent（cloud-server 只留兼容导出）：守卫跟着实现走，
+// 否则这里读到的是一行 `export *`，测试永远找不到 probeMcp。
+// 路径：本文件在 packages/cloud-server/src/__tests__/，
+// ../../../ = src → cloud-server → packages，再进 plugins/plugin-agent。
+const src = readFileSync(
+  new URL('../../../plugins/plugin-agent/src/server/agent/config.ts', import.meta.url),
+  'utf-8',
+)
 
 describe('probeMcp 收尾', () => {
   it('用 closeQuietly，而不是没人接的 close()', () => {

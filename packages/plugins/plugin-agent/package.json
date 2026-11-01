@@ -10,17 +10,26 @@
     "builtin": true,
     "serverBuiltin": true
   },
+  "files": [
+    "dist",
+    "vendor-plugins"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./server/*": { "types": "./src/server/*", "default": "./src/server/*" },
     "./*": "./src/*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:server": "node scripts/build-server.mjs"
   },
   "dependencies": {
+    "@prismshadow/penguin-core": "0.2.13",
+    "hono": "^4.6.0",
+    "yaml": "^2.9.1",
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
@@ -30,6 +39,8 @@
   },
   "peerDependencies": { "vue": "^3.5.34" },
   "devDependencies": {
+    "@types/node": "^24.12.3",
+    "esbuild": "^0.28.2",
     "@mini-canvas/canvas-data": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",

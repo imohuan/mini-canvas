@@ -90,6 +90,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.1
         version: 2.1.1(hono@4.13.5)
+      '@mini-canvas/plugin-agent':
+        specifier: workspace:*
+        version: link:../plugins/plugin-agent
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.30.0(zod@3.25.76)
@@ -184,6 +187,12 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@prismshadow/penguin-core':
+        specifier: 0.2.13
+        version: 0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+      hono:
+        specifier: ^4.6.0
+        version: 4.13.5
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
@@ -193,13 +202,22 @@ importers:
       vue-draggable-plus:
         specifier: ^0.6.1
         version: 0.6.1(@types/sortablejs@1.15.9)
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
     devDependencies:
       '@mini-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
+      '@types/node':
+        specifier: ^24.12.3
+        version: 24.13.2
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
