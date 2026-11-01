@@ -1948,9 +1948,9 @@ const tagMenuChip = ref<ResourceItem | null>(null)
 /**
  * 菜单锚点（屏幕坐标，1×1 的小方块，落在被点图标的下沿）。
  *
- * 为什么不用内部 1px 的 fixed 占位元素：主题 Dropdown 量的是**触发器外壳 .dd-trigger**
+ * 为什么不用内部 1px 的 fixed 占位元素：主题 Dropdown 量的是**触发器外壳 .mck-dropdown__trigger**
  * 的矩形，fixed 子元素不参与父盒布局 → 量到 0×0，菜单跑到左上角（真机踩过：
- * 菜单出现在屏幕左上、还被画布裁掉一截）。现在直接把触发器根（.dd）本身 fixed 到锚点，
+ * 菜单出现在屏幕左上、还被画布裁掉一截）。现在直接把触发器根（.mck-dropdown）本身 fixed 到锚点，
  * 尺寸给 1×1 —— Dropdown 量到的就是这里，且不会挡住下面的标签。
  */
 const tagMenuAnchorEl = ref<HTMLElement | null>(null)

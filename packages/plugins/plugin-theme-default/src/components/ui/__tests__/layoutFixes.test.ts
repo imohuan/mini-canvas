@@ -96,7 +96,7 @@ describe('Dropdown：滚动布局', () => {
     expect(html).toContain('dd-menu')
     expect(html).not.toContain('dd-scrim')
     expect(html).not.toContain('dd-menu--modal')
-    expect(html).toContain('dd-trigger')
+    expect(html).toContain('mck-dropdown__trigger')
   })
 
   /**

@@ -19,8 +19,8 @@ describe('SlotDebugPopover', () => {
         ),
     })
     const html = await renderToString(app)
-    expect(html).toMatch(/<div class="mck-dropdown[^"]*\bdd\b/)
-    expect(html).toContain('class="dd-trigger"')
+    expect(html).toContain('class="mck-dropdown"')
+    expect(html).toContain('class="mck-dropdown__trigger"')
     expect(html).toContain('data-dot="1"')
   })
 
