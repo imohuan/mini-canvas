@@ -13,7 +13,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createServer, type Server } from 'node:http'
 import { createCloudServer, type CloudServer } from '../server'
-import { maskSecret, isSecretMask } from '../agent/config'
+import { maskSecret, isSecretMask } from '@mini-canvas/plugin-agent/server/agent/config.js'
 
 let dir: string
 let srv: CloudServer

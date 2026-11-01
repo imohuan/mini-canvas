@@ -15,7 +15,7 @@ import {
   expandAgentContext,
   renderRuntimeContext,
   runtimeContextSection,
-} from '../agent/runtimeContext'
+} from '@mini-canvas/plugin-agent/server/agent/runtimeContext.js'
 
 const DATA = path.join('D:', 'data', '.mini-canvas')
 const ctx = buildRuntimeContext({ baseUrl: 'http://127.0.0.1:8865/', dataRoot: DATA })

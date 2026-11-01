@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { seedForkTrace, tracesDirOf } from '../agent/traceFork'
-import { AgentSessionStore } from '../agent/sessionStore'
+import { seedForkTrace, tracesDirOf } from '@mini-canvas/plugin-agent/server/agent/traceFork.js'
+import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
 
 let dir: string
 
@@ -131,7 +131,7 @@ describe('seedForkTrace', () => {
 
 describe('seedForkTrace 的回合结构（resumeTrace 可读）', () => {
   it('user 开回合、request_begin/end 包裹 assistant 输出 —— 与 penguin-core 的 Trace 格式一致', async () => {
-    const { resumeTrace } = await import('../agent/traceFork.probe')
+    const { resumeTrace } = await import('@mini-canvas/plugin-agent/server/agent/traceFork.probe.js')
     const parent = 'session-2026-10-06-10-00-00-gggg0004'
     const fork = 'session-2026-10-06-11-00-00-hhhh0004'
     const store = new AgentSessionStore(dir)

@@ -12,8 +12,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { GoalFiles } from '../agent/goal.js'
-import { GOAL_FILE } from '../agent/goalState.js'
+import { GoalFiles } from '@mini-canvas/plugin-agent/server/agent/goal.js'
+import { GOAL_FILE } from '@mini-canvas/plugin-agent/server/agent/goalState.js'
 
 let dir: string
 

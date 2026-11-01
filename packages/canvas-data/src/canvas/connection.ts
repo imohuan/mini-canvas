@@ -31,7 +31,7 @@ export interface ExistingEdge {
   sourceHandle?: string | null
   target: string
   targetHandle?: string | null
-  data?: { isTemp?: boolean }
+  data?: Record<string, unknown>
 }
 
 /** 规范化后的连接（两端 handle 已归一，非空） */

@@ -12,8 +12,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentSessionStore, type QueueItem } from '../agent/sessionStore.js'
-import { QueueScheduler } from '../agent/queueScheduler.js'
+import { AgentSessionStore, type QueueItem } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { QueueScheduler } from '@mini-canvas/plugin-agent/server/agent/queueScheduler.js'
 
 let root: string
 let store: AgentSessionStore

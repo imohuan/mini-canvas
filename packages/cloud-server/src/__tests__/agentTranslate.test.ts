@@ -1,6 +1,6 @@
 /** SDK 消息 → 前端事件：重点是「成功不误报」与「用量能算出剩余百分比」 */
 import { describe, it, expect } from 'vitest'
-import { createTranslateState, translateMessage, contextLeftPercent, normalizeContextWindow } from '../agent/translate'
+import { createTranslateState, translateMessage, contextLeftPercent, normalizeContextWindow } from '@mini-canvas/plugin-agent/server/agent/translate.js'
 
 const model = (payload: Record<string, unknown>) => ({ type: 'model_msg', payload })
 const event = (payload: Record<string, unknown>) => ({ type: 'event_msg', payload })

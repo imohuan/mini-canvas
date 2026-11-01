@@ -13,7 +13,7 @@ import {
   buildReply,
   planStream,
   DEFAULT_GAP_MS,
-} from '../agent/testModel'
+} from '@mini-canvas/plugin-agent/server/agent/testModel.js'
 
 describe('parseTimeToken：时间词 → 毫秒', () => {
   it('无单位按秒', () => {

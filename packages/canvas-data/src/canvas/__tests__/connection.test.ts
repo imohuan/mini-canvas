@@ -82,8 +82,8 @@ describe('M5 连接内核 —— 纯函数（v1 原样吸收）', () => {
     expect(wouldCreateCycle('a', 'b', [{ source: 'b', target: 'a' }])).toBe(true)
     // 自连成环
     expect(wouldCreateCycle('a', 'a', [])).toBe(true)
-    // isTemp 边不算
-    expect(wouldCreateCycle('a', 'b', [{ source: 'b', target: 'a', data: { isTemp: true } }])).toBe(false)
+    // transient 边不算
+    expect(wouldCreateCycle('a', 'b', [{ source: 'b', target: 'a', data: { transient: true } }])).toBe(false)
   })
 
   it('findDuplicate：同一条 canonical 连接只算一条，跨 handle 反接也算重复', () => {
@@ -95,8 +95,8 @@ describe('M5 连接内核 —— 纯函数（v1 原样吸收）', () => {
         { source: 'b', sourceHandle: 'target', target: 'a', targetHandle: 'source' },
       ]),
     ).toBeTruthy()
-    // isTemp 不算重复
-    expect(findDuplicate({ source: 'a', target: 'b' }, [{ source: 'a', target: 'b', data: { isTemp: true } }])).toBeUndefined()
+    // transient 不算重复
+    expect(findDuplicate({ source: 'a', target: 'b' }, [{ source: 'a', target: 'b', data: { transient: true } }])).toBeUndefined()
   })
 })
 

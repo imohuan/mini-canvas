@@ -4,7 +4,7 @@
  * 为什么需要它：编辑浮层画在 overlay 段（BaseNode 卡片外面），而入口按钮在 top-toolbar 段——
  * 两者是 BaseNode 渲染出来的**兄弟组件**，只共享 nodeId。内核 data 是唯一跨组件通道，
  * 但把「正在裁剪」写进 data 有两个坏处：
- *   1. 会落盘。内核保存只过滤 data.transient/isTemp，_overlay 这类临时字段会被存下来，刷新后
+ *   1. 会落盘。内核保存只过滤 data.transient，_overlay 这类临时字段会被存下来，刷新后
  *      画布一开就停在裁剪模式（v1 靠宿主手动 strip，v2 没有这层）；
  *   2. 会进历史。进/退裁剪变成一个可撤销操作，撤销栈里会混进纯 UI 状态。
  *

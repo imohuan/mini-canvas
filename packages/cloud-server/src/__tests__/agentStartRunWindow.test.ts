@@ -14,9 +14,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentRuntime } from '../agent/runtime.js'
-import { AgentSessionStore } from '../agent/sessionStore.js'
-import { SessionHub } from '../agent/sessionHub.js'
+import { AgentRuntime } from '@mini-canvas/plugin-agent/server/agent/runtime.js'
+import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { SessionHub } from '@mini-canvas/plugin-agent/server/agent/sessionHub.js'
 
 let root: string
 let store: AgentSessionStore

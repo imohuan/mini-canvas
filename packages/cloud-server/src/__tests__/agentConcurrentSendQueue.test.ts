@@ -13,8 +13,8 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Hono } from 'hono'
-import { AgentSessionStore } from '../agent/sessionStore.js'
-import { agentSessionRoutes } from '../routes/agentSessions.js'
+import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { agentSessionRoutes } from '@mini-canvas/plugin-agent/server/routes/agentSessions.js'
 
 it('已经在跑时再发普通消息 ⇒ 进队列（不静默丢）', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'concurrent-send-'))

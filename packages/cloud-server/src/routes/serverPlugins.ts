@@ -24,7 +24,7 @@ import { Hono } from 'hono'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { safeJson } from './agent.js'
+import { safeJson } from '@mini-canvas/plugin-agent/server/routes/agent.js'
 import { withAudit, type AuditBase } from '../auditPair.js'
 import type { AuditAppendInput } from '../audit.js'
 

@@ -1,6 +1,6 @@
 /** saveNow 的失败也不能变成 unhandled rejection（脏位同样要恢复） */
 import { describe, it, expect, vi } from 'vitest'
-import { createAutoSaveEngine } from '../autoSaveEngine'
+import { createAutoSaveEngine } from '@mini-canvas/canvas-data'
 
 describe('autoSaveEngine.saveNow 失败', () => {
   it('抛错时脏位回到「脏」，并在下个周期重试', async () => {

@@ -8,8 +8,8 @@
  *   ④ 凭据从**已配好的 provider** 来（没配好就说清怎么配）。
  */
 import { describe, it, expect } from 'vitest'
-import { normalizeChatRequest, flattenTurn, backoffMs, deltaOfMessage, finalTextOfMessage, usageOfMessage, completeOnce, type BareLLM } from '../agent/chatCompletion'
-import { agentChatRoutes } from '../routes/agentChat'
+import { normalizeChatRequest, flattenTurn, backoffMs, deltaOfMessage, finalTextOfMessage, usageOfMessage, completeOnce, type BareLLM } from '@mini-canvas/plugin-agent/server/agent/chatCompletion.js'
+import { agentChatRoutes } from '@mini-canvas/plugin-agent/server/routes/agentChat.js'
 
 /**
  * 造一个假模型。**帧形状照着真 SDK 打出来的抄**（不是我想当然的形状）：

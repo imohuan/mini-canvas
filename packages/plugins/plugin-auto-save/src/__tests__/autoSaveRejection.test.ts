@@ -7,7 +7,7 @@
  * 而且脏位已被清掉，这次改动悄悄丢了。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { createAutoSaveEngine } from '../autoSaveEngine'
+import { createAutoSaveEngine } from '@mini-canvas/canvas-data'
 
 describe('autoSaveEngine 落盘失败', () => {
   it('flush 抛错不会产生未处理 rejection，且下次仍会重试', async () => {

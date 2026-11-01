@@ -11,7 +11,7 @@ import {
   parseReferenceMarkups,
   stripMarkupToPlain,
   REFERENCE_MARKUP_GUIDE,
-} from '../agent/referenceMarkup'
+} from '@mini-canvas/plugin-agent/server/agent/referenceMarkup.js'
 
 describe('XML 标记解析（后端）', () => {
   it('四种标记，字段还原', () => {

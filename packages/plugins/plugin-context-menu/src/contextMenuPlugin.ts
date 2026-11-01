@@ -21,7 +21,7 @@ import type { ConfigSchema, Context, PluginModule } from '@mini-canvas/canvas-ba
 import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 import type { CommandService } from '@mini-canvas/kernel'
 import type { CanvasActions } from '@mini-canvas/canvas-data'
-import { typeConnectionDef } from '@mini-canvas/canvas-data'
+import { isTransient, typeConnectionDef } from '@mini-canvas/canvas-data'
 import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
@@ -37,7 +37,6 @@ import {
   connectionMenuCardSize,
   DEFAULT_DRAG_THRESHOLD,
   filterConnectableTypes,
-  isTempEdge,
   placeByPortAnchor,
   portSideOf,
   resolveEdgeEndpoints,
@@ -256,7 +255,7 @@ export function apply(ctx: Context): void {
       sourceNodeType,
       types: creatableNodeTypes(),
       // 容量/重复判定只看正式边：中间态边（占位连线）不参与，否则自己的占位边会把候选全滤掉
-      edges: doc.getEdges().filter((e) => !isTempEdge(e)),
+      edges: doc.getEdges().filter((e) => !isTransient(e)),
       getTypeConn: (type) => typeConnectionDef(doc.types.get(type)),
     })
     const items = enrichMenuItems(buildConnectionMenuItems(candidates))

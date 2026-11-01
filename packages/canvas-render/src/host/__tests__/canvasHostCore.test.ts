@@ -161,11 +161,11 @@ describe('nodesFromStore', () => {
     expect(LAYERS.nodeSelected).toBeLessThan(LAYERS.edgeTop)
     void g2
   })
-  it('data.isTemp 节点：在 VueFlow DTO 上关掉 draggable/selectable/deletable/focusable（防 pane click removeSelectedElements 误删）', () => {
+  it('data.transient 节点：在 VueFlow DTO 上关掉 draggable/selectable/deletable/focusable（防 pane click removeSelectedElements 误删）', () => {
     const s = new NodeStore()
     s.registerType({ type: 'connection-menu', label: 'ConnectionMenu', defaultSize: { w: 264, h: 100 } })
     s.addNode('connection-menu', { x: 0, y: 0 })
-    s.updateNodeData(s.getNodes()[0]!.id, { isTemp: true })
+    s.updateNodeData(s.getNodes()[0]!.id, { transient: true })
     const flow = nodesFromStore(s)
     expect(flow[0]).toMatchObject({
       type: 'connection-menu',
@@ -576,9 +576,9 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
       sourceHandle: undefined, targetHandle: undefined, zIndex: LAYERS.edge,
     })
   })
-  it('data.isTemp 边：在渲染 DTO 上关掉 selectable/focusable/deletable 并置顶', () => {
+  it('data.transient 边：在渲染 DTO 上关掉 selectable/focusable/deletable 并置顶', () => {
     const out = edgesFromStore(
-      [{ id: 'temp', source: 'a', target: 'b', type: 'custom', data: { isTemp: true } }],
+      [{ id: 'temp', source: 'a', target: 'b', type: 'custom', data: { transient: true } }],
       new Set(['a', 'b']),
     )
     expect(out[0]).toEqual({
@@ -588,7 +588,7 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
       target: 'b',
       sourceHandle: undefined,
       targetHandle: undefined,
-      data: { isTemp: true },
+      data: { transient: true },
       selectable: false,
       focusable: false,
       deletable: false,
@@ -613,7 +613,7 @@ describe('edgesFromStore：选中节点连线的层级（选中节点 > 其连�
 
   it('临时边仍置顶（tempEdge 优先，选中判定只管普通边）', () => {
     const out = edgesFromStore(
-      [{ id: 'temp', source: 'a', target: 'b', type: 'custom', data: { isTemp: true } }],
+      [{ id: 'temp', source: 'a', target: 'b', type: 'custom', data: { transient: true } }],
       new Set(['a', 'b']),
       new Set(['a']),
     )

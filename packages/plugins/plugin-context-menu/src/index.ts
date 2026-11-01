@@ -36,8 +36,6 @@ export {
   buildConnectionMenuItems,
   connectionMenuCardSize,
   filterConnectableTypes,
-  isTempEdge,
-  isTempNode,
   placeByPortAnchor,
   portSideOf,
   resolveEdgeEndpoints,

@@ -20,7 +20,7 @@ import {
   updateGoalFile,
   GOAL_FILE_BROKEN,
   GOAL_FILE_PAUSED,
-} from '../agent/goalState.js'
+} from '@mini-canvas/plugin-agent/server/agent/goalState.js'
 
 let scratch: string
 

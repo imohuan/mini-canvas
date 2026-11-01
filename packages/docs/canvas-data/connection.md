@@ -58,7 +58,7 @@ interface ExistingEdge {
   sourceHandle?: string | null
   target: string
   targetHandle?: string | null
-  data?: { isTemp?: boolean }
+  data?: Record<string, unknown>
 }
 
 /** 校验上下文：调用方负责把"现有节点 / 现有边 / 类型声明"喂进来 */
@@ -244,7 +244,7 @@ outputs: [{ port: 'source', contentType: 'video' }],
 
 "中间态" = 为了完成一次交互而临时出现在画布上的节点/边（典型：拖线落空白时那张"待选择"菜单卡 + 占位连线）。
 判定收在一处：`packages/canvas-data/src/transient.ts` 的 `isTransient(el)` —— 读 `data.transient === true`，
-缺省回退老标记 `data.isTemp === true`。
+只认 `data.transient === true`，其它标记一律不算中间态。
 
 **环检测、重复检测、容量统计全部忽略中间态边。** 否则拖线过程中的占位线会被算成"已存在一条"，
 落下时就变成"已存在同一条连线"。

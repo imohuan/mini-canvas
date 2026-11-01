@@ -14,9 +14,9 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Hono } from 'hono'
-import { AgentSessionStore } from '../agent/sessionStore.js'
-import { SessionHub } from '../agent/sessionHub.js'
-import { agentSessionRoutes } from '../routes/agentSessions.js'
+import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { SessionHub } from '@mini-canvas/plugin-agent/server/agent/sessionHub.js'
+import { agentSessionRoutes } from '@mini-canvas/plugin-agent/server/routes/agentSessions.js'
 
 /** 订阅通道里已经有历史事件时，send 响应不该把它们重放给本次调用方 */
 it('send 响应只收这一轮的事件（不重放通道缓冲里的历史）', async () => {

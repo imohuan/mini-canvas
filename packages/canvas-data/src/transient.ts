@@ -13,29 +13,20 @@
  *
  * 标记位置：元素的 `data` 扩展包（与 v1 `data._overlay` 同一惯用法），因为 `data` 是唯一能同时被
  * 内核读到、又被节点/边组件通过 props 读到的通道。
- *
- * 兼容：内核 M5 起沿用的 `data.isTemp` 仍被认作中间态（存量持久化数据与既有测试依赖它）。
  */
 
 /** 中间态标记键（放在元素的 `data` 里） */
 export const TRANSIENT_KEY = 'transient'
-
-/** 历史遗留的中间态标记键（内核 M5 起沿用，保留兼容） */
-export const TRANSIENT_LEGACY_KEY = 'isTemp'
 
 /** 可判定"是否中间态"的最小形状：任何带 data 的节点/边 */
 export interface TransientLike {
   data?: unknown
 }
 
-/**
- * 该元素是否中间态。
- *
- * 读 `data.transient`；缺省时回退历史遗留的 `data.isTemp`，保证新旧两种标记行为一致。
- */
+/** 该元素是否中间态：只认 `data.transient === true`。 */
 export function isTransient(el: TransientLike | undefined | null): boolean {
   const d = el?.data as Record<string, unknown> | undefined | null
   if (!d) return false
-  return d[TRANSIENT_KEY] === true || d[TRANSIENT_LEGACY_KEY] === true
+  return d[TRANSIENT_KEY] === true
 }
 

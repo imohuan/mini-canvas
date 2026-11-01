@@ -9,8 +9,6 @@ import {
   buildConnectionMenuItems,
   connectionMenuCardSize,
   filterConnectableTypes,
-  isTempEdge,
-  isTempNode,
   placeByPortAnchor,
   portSideOf,
   resolveEdgeEndpoints,
@@ -23,17 +21,6 @@ const newId = 'node-new'
 function fact(sourceHandle: 'source' | 'target'): ConnectionDropFact {
   return { sourceNodeId: src, sourceHandle, flowPosition: { x: 300, y: 200 } }
 }
-
-describe('临时态标记', () => {
-  it('isTempNode / isTempEdge 只认 data.isTemp', () => {
-    expect(isTempNode({ data: { isTemp: true } })).toBe(true)
-    expect(isTempNode({ data: {} })).toBe(false)
-    expect(isTempNode(undefined)).toBe(false)
-    expect(isTempEdge({ data: { isTemp: true } })).toBe(true)
-    expect(isTempEdge({ data: {} })).toBe(false)
-    expect(isTempEdge(undefined)).toBe(false)
-  })
-})
 
 describe('portSideOf', () => {
   it('从输出口拖出 → 新节点输入口在左缘', () => {

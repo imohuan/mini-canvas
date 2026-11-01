@@ -18,8 +18,8 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { assembleSystemPrompt, loadAgentState } from '@prismshadow/penguin-core'
-import { AgentConfigService } from '../agent/config'
-import { AGENT_ID, AGENT_PROJECT_ID, agentRoot } from '../agent/agentPaths'
+import { AgentConfigService } from '@mini-canvas/plugin-agent/server/agent/config.js'
+import { AGENT_ID, AGENT_PROJECT_ID, agentRoot } from '@mini-canvas/plugin-agent/server/agent/agentPaths.js'
 import { KvStore } from '../store/kvStore'
 
 let dir: string

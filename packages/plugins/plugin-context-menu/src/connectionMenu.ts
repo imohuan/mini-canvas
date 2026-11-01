@@ -69,20 +69,6 @@ export interface EdgeEndpoints {
   targetHandle: string
 }
 
-/**
- * 是否临时脚手架节点（拖线落空白的菜单节点）。
- *
- * 判定走内核通用契约 `isTransient`（不落盘/不进历史/不可交互），本插件不自己发明标记。
- */
-export function isTempNode(node: { data?: Record<string, unknown> } | undefined): boolean {
-  return isTransient(node)
-}
-
-/** 是否临时脚手架边（占位连线）。判定同上，走内核通用契约。 */
-export function isTempEdge(edge: { data?: Record<string, unknown> } | undefined): boolean {
-  return isTransient(edge)
-}
-
 /** 屏幕点 */
 export interface ScreenPoint {
   x: number

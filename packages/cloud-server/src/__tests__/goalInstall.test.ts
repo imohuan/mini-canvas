@@ -17,7 +17,7 @@ import {
   ensureGoalInstalled,
   GOAL_HOOK_NAME,
   type GoalInstallDeps,
-} from '../agent/goal'
+} from '@mini-canvas/plugin-agent/server/agent/goal.js'
 
 /** SDK 口径：hooks 目录挂在 <root>/<projectId>/agents/<agentId>/agent_state/hooks */
 const PROJECT_ID = 'mini-canvas'
