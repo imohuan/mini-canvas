@@ -138,7 +138,10 @@ function render(data: Record<string, unknown>): Promise<string> {
 
 /** 下拉触发器上显示的动作名（没有底栏时返回空串） */
 function triggerLabel(html: string): string {
-  const m = html.match(/class="sel-label[^"]*"[^>]*>([^<]*)</)
+  // ui-kit Select 的触发器标签是 `mck-select__label sel-label`：
+  // 兼容类不再排在 class 属性开头，所以这里按「class 里含 sel-label」取，
+  // 不能用 `class="sel-label` 这种前缀匹配（迁移后它会永远取不到文字）。
+  const m = html.match(/class="[^"]*\bsel-label\b[^"]*"[^>]*>([^<]*)</)
   return (m?.[1] ?? '').trim()
 }
 

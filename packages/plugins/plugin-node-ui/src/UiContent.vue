@@ -1429,7 +1429,7 @@ const hint = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ui-overlay-scrim, rgba(0, 0, 0, 0.32));
+  background: var(--ui-scrim, rgba(0, 0, 0, 0.32));
   border-radius: inherit;
 }
 .debug-prompt-card {
@@ -1438,9 +1438,9 @@ const hint = computed(() => {
   padding: 16px;
   border-radius: 16px;
   border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
-  background: var(--ui-surface-glass, rgba(255, 255, 255, 0.92));
+  background: var(--ui-overlay-solid, #ffffff);
   backdrop-filter: blur(20px);
-  box-shadow: var(--ui-shadow-panel, 0 20px 40px rgba(0, 0, 0, 0.08));
+  box-shadow: var(--ui-shadow-e2, 0 20px 40px rgba(0, 0, 0, 0.08));
 }
 .debug-prompt-title {
   font-size: 15px;
@@ -1477,7 +1477,7 @@ const hint = computed(() => {
   border-radius: 8px;
   border: 0;
   background: var(--ui-accent, #0891b2);
-  color: var(--ui-accent-contrast, #fff);
+  color: var(--ui-on-accent, #fff);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;

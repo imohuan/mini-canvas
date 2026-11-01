@@ -4092,7 +4092,7 @@ function onGlobalLeave(el: Element): void {
    */
   width: 200px;
   border-radius: 10px;
-  border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
+  border: 1px solid var(--line-hair, rgb(0 0 0 / 0.08));
   background: var(--ui-panel, #fff);
   box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
   overflow: hidden;
@@ -4174,7 +4174,7 @@ function onGlobalLeave(el: Element): void {
   box-sizing: border-box;
   overflow: hidden;
   border-radius: 12px;
-  border: 1px solid var(--ui-line-hair, rgb(0 0 0 / 0.08));
+  border: 1px solid var(--line-hair, rgb(0 0 0 / 0.08));
   background: var(--ui-panel, #fff);
   box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
   display: flex;
@@ -4288,7 +4288,7 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-tagmenu-group-label {
   padding: 6px 8px 2px;
-  color: var(--ui-ink-faint, #9ca3af);
+  color: var(--text-faint, #9ca3af);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4979,7 +4979,7 @@ function onGlobalLeave(el: Element): void {
   height: auto;
   flex: none;
   display: block;
-  background: var(--ui-video-stage, #000);
+  background: var(--ui-code-bg, #000);
 }
 .nb-drag-ghost .nb-drag-ghost-icon {
   width: 88px;

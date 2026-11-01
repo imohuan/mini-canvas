@@ -240,7 +240,7 @@ onMounted(() => {
 .hrp-badge.is-err { color: var(--ui-danger, #ef4444); background: var(--ui-danger-soft, rgb(239 68 68 / 0.1)); }
 .hrp-badge.is-info { color: var(--ui-accent, #0891b2); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
 .hrp-warn { margin-left: 5px; padding: 1px 6px; border-radius: var(--radius-badge, 6px); background: var(--ui-warn-soft, rgb(245 158 11 / 0.16)); color: var(--ui-warn, #b45309); font-size: 10px; font-weight: 700; }
-.hrp-age { margin-top: 2px; font-size: 10px; color: var(--ui-ink-faint, #9ca3af); }
+.hrp-age { margin-top: 2px; font-size: 10px; color: var(--text-faint, #9ca3af); }
 .hrp-row-err { margin-top: 2px; font-size: 11px; color: var(--ui-danger, #ef4444); }
 .hrp-mini { display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 9px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: var(--radius-control, 8px); background: transparent; color: var(--ui-ink, #18202b); font-size: 11px; cursor: pointer; white-space: nowrap; }
 .hrp-mini:hover:not(:disabled) { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }

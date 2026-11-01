@@ -659,7 +659,7 @@ watch(item, (v) => {
   gap: 4px;
   padding: 6px 10px;
   border-radius: 12px;
-  background: var(--ui-veil-strong, rgb(30 30 30 / 0.82));
+  background: var(--ui-overlay-solid, #ffffff);
   color: var(--ui-tip-ink, #fff);
   backdrop-filter: blur(12px);
 }

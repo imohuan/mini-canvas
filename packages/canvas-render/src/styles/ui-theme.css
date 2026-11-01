@@ -54,6 +54,11 @@
   --ui-scrim-soft: rgb(15 23 42 / 0.16);
   --ui-shadow-md: 0 18px 44px rgb(15 23 42 / 0.16);
   --ui-shadow-lg: 0 24px 64px rgb(15 23 42 / 0.20);
+  /* 规范 §2.5 的 e0/e1/e2 三档：此前只在文档里，组件各自写兜底值。
+     e1 是面板内展开的白卡，e2 是菜单/模态浮层。 */
+  --ui-shadow-sm: 0 1px 4px rgb(15 23 42 / 0.12);
+  --ui-shadow-e1: 0 2px 10px rgb(0 0 0 / 0.04);
+  --ui-shadow-e2: 0 20px 40px rgb(0 0 0 / 0.08);
   --ui-code-bg: rgb(0 0 0 / 0.05);
   --ui-scroll-thumb: rgb(0 0 0 / 0.2);
   --ui-scroll-thumb-hover: rgb(0 0 0 / 0.32);
@@ -71,6 +76,35 @@
   --text-label: 12px;
   --text-base: 13px;
   --text-title: 15px;
+  /* ===== 规范里的另一组阶梯：文字灰阶 / 中性填充 / 发丝线 / 动效 =====
+     这些名字在 docs/design/ui-style-guide.md §2.1、§2.7 里一直是规范的一部分，
+     但此前没有任何一处定义。组件于是只能写 var(--text-faint, #9ca3af) —— 暗色下
+     仍然掉进浅色兜底，规则写了等于没写。这里给出真实值；暗色那一份在下面 html.dark。 */
+  --text-strong: #111827;
+  --text-body: #374151;
+  --text-muted: #6b7280;
+  --text-faint: #9ca3af;
+  --fill-quiet: rgb(0 0 0 / 0.03);
+  --fill-subtle: rgb(0 0 0 / 0.04);
+  --fill-hover: rgb(0 0 0 / 0.05);
+  --fill-active: rgb(0 0 0 / 0.06);
+  --fill-divider: rgb(0 0 0 / 0.06);
+  /* 发丝线：与 --ui-line 同族，但更浅一档（内嵌卡片/浮层内分隔用） */
+  --line-hair: rgb(0 0 0 / 0.08);
+  --line-dashed: rgb(0 0 0 / 0.18);
+  --scrollbar: rgb(0 0 0 / 0.12);
+  --scrollbar-hover: rgb(0 0 0 / 0.2);
+  --dur-press: 0.15s;
+  --dur-hover: 0.18s;
+  --dur-item: 0.2s;
+  --dur-card: 0.22s;
+  --dur-panel: 0.24s;
+  --dur-reveal: 0.3s;
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: ease-out;
+  /* 文本选区底色：标签选中与文字选中共用同一个变量（用户口径 2026-10-26）。
+     亮色用灰、暗色换成更深一档，避免亮色灰块糊在暗底上看不见。 */
+  --ui-selection-bg: rgb(0 0 0 / 0.18);
   /* UI 规范强调色（青）——全界面唯一强调色，见 docs/design/ui-style-guide.md §2 */
   /* 品牌色**两格制**：亮/暗各一个有独立名字的内联变量，由本文件按主题挑一个。
      用户没改过 → 内联不存在，用这里的默认值；改过 → 内联优先（`<html>` 内联压制本文件）。
@@ -192,6 +226,22 @@
    用 `html.dark` 而不是 `.dark`：拿到 0,1,1 特异性，避免被任何后加载的 `:root` 规则盖掉。===== */
 html.dark,
 html[data-canvas-theme='dark'] {
+  /* 规范灰阶 / 中性填充 / 发丝线（暗色那份；亮色见文件上半部分） */
+  --text-strong: #f5f5f5;
+  --text-body: #d4d4d4;
+  --text-muted: #a3a3a3;
+  --text-faint: #737373;
+  --fill-quiet: rgb(255 255 255 / 0.03);
+  --fill-subtle: rgb(255 255 255 / 0.05);
+  --fill-hover: rgb(255 255 255 / 0.07);
+  --fill-active: rgb(255 255 255 / 0.1);
+  --fill-divider: rgb(255 255 255 / 0.08);
+  --line-hair: rgb(255 255 255 / 0.1);
+  --line-dashed: rgb(255 255 255 / 0.2);
+  --scrollbar: rgb(255 255 255 / 0.16);
+  --scrollbar-hover: rgb(255 255 255 / 0.26);
+  /* 暗色文字选区不能沿用亮色的黑灰（在深底上看不见） */
+  --ui-selection-bg: rgb(255 255 255 / 0.22);
   --ui-canvas-bg: #141414;
   --ui-panel: #262626;
   --ui-panel-soft: #171717;
@@ -226,6 +276,9 @@ html[data-canvas-theme='dark'] {
   --ui-scrim-soft: rgb(0 0 0 / 0.28);
   --ui-shadow-md: 0 18px 44px rgb(0 0 0 / 0.45);
   --ui-shadow-lg: 0 24px 64px rgb(0 0 0 / 0.55);
+  --ui-shadow-sm: 0 1px 4px rgb(0 0 0 / 0.5);
+  --ui-shadow-e1: 0 2px 10px rgb(0 0 0 / 0.28);
+  --ui-shadow-e2: 0 20px 40px rgb(0 0 0 / 0.42);
   --ui-code-bg: rgb(255 255 255 / 0.06);
   --ui-scroll-thumb: rgb(255 255 255 / 0.4);
   --ui-scroll-thumb-hover: rgb(255 255 255 / 0.55);

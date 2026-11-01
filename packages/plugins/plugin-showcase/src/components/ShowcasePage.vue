@@ -336,7 +336,7 @@ const groupIcon = (id: string): string => {
 .sc-lamp { font-size: 12px; color: var(--ui-danger, #e24444); }
 .sc-lamp.ok { color: var(--ui-accent, #0891b2); }
 .sc-meta { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-.sc-dim { color: var(--ui-dim, #8a8a8a); font-size: 12px; }
+.sc-dim { color: var(--text-faint, #9ca3af); font-size: 12px; }
 .sc-error { color: var(--ui-danger, #e24444); font-size: 12px; }
 .sc-group { border-top: 1px dashed var(--ui-line, rgba(128,128,128,.2)); padding-top: 10px; margin-top: 10px; }
 .sc-group-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
@@ -353,7 +353,7 @@ const groupIcon = (id: string): string => {
 .sc-badge.ok { color: var(--ui-accent, #0891b2); background: color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent); }
 .sc-badge.fail { color: var(--ui-danger, #e24444); background: color-mix(in srgb, var(--ui-danger, #e24444) 12%, transparent); }
 .sc-json { margin: 2px 0 0; padding: 8px; border-radius: 6px; background: var(--ui-code-bg, rgba(128,128,128,.1)); font-size: 11px; max-height: 180px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
-.sc-doc summary { font-size: 12px; color: var(--ui-dim, #8a8a8a); cursor: pointer; margin-top: 4px; }
+.sc-doc summary { font-size: 12px; color: var(--text-faint, #9ca3af); cursor: pointer; margin-top: 4px; }
 .sc-notes { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.9; }
 .sc-demo-btns { display: flex; gap: 6px; }
 .sc-demo-btns .sc-btn { margin-left: 0; }
