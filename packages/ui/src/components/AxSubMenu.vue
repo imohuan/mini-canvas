@@ -6,7 +6,7 @@
 //
 // 用法（放在 AxMenu 里的一行）：
 //   <AxSubMenu label="移动到" :items="[{ key: '', label: '个人资产库' }, ...]" @pick="onPick" />
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
 import { Dropdown } from '@mini-canvas/ui-kit'
 import { floatingChainOf } from './hooks/floatingGroup'
@@ -40,10 +40,23 @@ const rowRef = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 /** 父链在打开时现读：行必须先挂进父面板，才读得到它的链。 */
 const parentChain = ref('')
+/** 行与面板之间有一小段空隙：离开行后等一会儿再关，给鼠标穿过去的时间。 */
+let closeTimer = 0
 
 function open(): void {
+  cancelClose()
   parentChain.value = floatingChainOf(rowRef.value).join(' ')
   isOpen.value = true
+}
+
+function scheduleClose(): void {
+  cancelClose()
+  closeTimer = globalThis.setTimeout(() => { isOpen.value = false }, 260) as unknown as number
+}
+
+function cancelClose(): void {
+  globalThis.clearTimeout(closeTimer)
+  closeTimer = 0
 }
 
 /** 选中某一项：交给调用方处理，然后收起面板。 */
@@ -55,6 +68,8 @@ function pick(key: string): void {
 const placement = computed(() => (props.side === 'left' ? 'left-start' : 'right-start'))
 
 defineExpose({ open, close: () => { isOpen.value = false }, pick })
+
+onBeforeUnmount(cancelClose)
 </script>
 
 <template>
@@ -63,8 +78,7 @@ defineExpose({ open, close: () => { isOpen.value = false }, pick })
     :anchor="rowRef"
     :anchor-placement="placement"
     :offset="4"
-    trigger="hover"
-    :hover-close-delay="400"
+    trigger="always"
     close-all-event="mini-canvas:dropdown-close-all"
     :menu-min-width="menuWidth"
     :menu-max-height="menuMaxHeight"
@@ -77,7 +91,7 @@ defineExpose({ open, close: () => { isOpen.value = false }, pick })
         ref="rowRef"
         class="ax-sub-row"
         @mouseenter="open"
-        @mouseleave="isOpen = false"
+        @mouseleave="scheduleClose"
         @click="open"
       >
         <div class="ax-menu-item" role="menuitem" aria-haspopup="menu" :aria-expanded="isOpen">
@@ -87,7 +101,7 @@ defineExpose({ open, close: () => { isOpen.value = false }, pick })
       </div>
     </template>
     <template #default="{ close }">
-      <div @mouseleave="close()">
+      <div @mouseenter="cancelClose" @mouseleave="scheduleClose">
         <slot :pick="pick" :close="close">
           <button
             v-for="it in items"
