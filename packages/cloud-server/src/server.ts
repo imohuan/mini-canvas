@@ -956,20 +956,29 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           // 端口定了 → 把运行环境上下文刷新成**真实地址**（提示词里的 {{BACKEND_BASE_URL}}
           // 与常驻小节都读它）。下一次建会话就是对的，不必重启。
           if (agentEnabled) agentServices().config.setRuntimeContext(runtimeContext())
-          // 真实端口定了，纠正内置画布 MCP 的地址：
+          // 真实端口定了，纠正内置画布 MCP 与 test 模型的地址：
           //   · port 传 0（测试）时真实端口由系统分配 —— 不纠正就会把 `...:0/mcp` 写死；
           //   · CLI 换端口兜底时实际监听端口 ≠ 请求端口 —— 同理。
-          if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
-            void agentServices().config
-              .ensureBuiltinCanvasMcp(`http://${hostname}:${info.port}/mcp`)
-              .catch((err) => console.warn('[agent] 内置画布 MCP 地址纠正失败：' + String(err)))
+          //
+          // 两条**串行，且等写完再返回**：它们改的是同一批配置文件（读整份 → 改 → 写回），
+          // 并发会互相覆盖；以前这里是两条 void，start() 返回时写还在飞 —— 测试清理
+          // 紧接着删数据目录，就会撞出 ENOENT / ENOTEMPTY（实测碰到）。
+          // 写入本身幂等（地址没变就一个字节都不写），等它只花几毫秒。
+          const settleAgentAddresses = async (): Promise<void> => {
+            if (!agentEnabled) return
+            if (mcpEnabled && opts.builtinCanvasMcp !== false) {
+              await agentServices().config
+                .ensureBuiltinCanvasMcp(`http://${hostname}:${info.port}/mcp`)
+                .catch((err) => console.warn('[agent] 内置画布 MCP 地址纠正失败：' + String(err)))
+            }
+            await ensureTestModel(`http://${hostname}:${info.port}`)
           }
-          // test 模型同理：真实端口定了，纠正它的 base_url（否则会指向 ...:0）
-          if (agentEnabled) {
-            void ensureTestModel(`http://${hostname}:${info.port}`)
-          }
-          // 端口传 0 时真实端口由系统分配，以 info.port 为准
-          resolve({ port: info.port, url: `http://${hostname}:${info.port}` })
+          // 端口传 0 时真实端口由系统分配，以 info.port 为准。
+          // 写配置失败也照样 resolve：地址纠正不成功不该让整个服务「启动不起来」
+          // （上面两条各自已吞错，这里再兜一层防意外 reject 把 start() 永远挂住）。
+          void settleAgentAddresses()
+            .catch((err) => console.warn('[agent] 启动时写地址失败：' + String(err)))
+            .then(() => resolve({ port: info.port, url: `http://${hostname}:${info.port}` }))
         })
         // 端口被占用/无权限：把错误交给调用方（CLI 可换端口重试），而不是静默挂着
         s.on('error', (err: NodeJS.ErrnoException) => {

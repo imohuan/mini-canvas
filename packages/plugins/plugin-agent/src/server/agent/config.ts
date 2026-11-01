@@ -265,9 +265,16 @@ export class AgentConfigService {
   /** 写入系统提示词（空串也允许 —— 那就是「没有额外指令」） */
   async setSystemPrompt(text: string): Promise<void> {
     await this.ensureInit()
-    const target = sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID)
-    await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(target, text, 'utf8')
+    // 与「建会话时临时替换 AGENTS.md」排同一条队：否则一次保存可能落在
+    // withSystemPrompt 的「读旧值 → 还原」中间，用户刚写的提示词会被旧值盖回去。
+    const release = await this.acquirePromptLock()
+    try {
+      const target = sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID)
+      await fs.mkdir(path.dirname(target), { recursive: true })
+      await fs.writeFile(target, text, 'utf8')
+    } finally {
+      release()
+    }
   }
 
   /**
@@ -332,14 +339,43 @@ export class AgentConfigService {
    */
   private promptLock: Promise<void> = Promise.resolve()
 
+  /**
+   * 配置落盘（模型表 / MCP 表）的**互斥队列**。
+   *
+   * 为什么必须有：这两份配置的每次写都是「读整份 → 改 → 写回」。并发时各自读到同一份
+   * 旧内容，后写的把先写的整条盖掉；Windows 上两次 rename 打同一个目标还会 EPERM。
+   * 真出事的场景有两个：服务启动时 `ensureBuiltinCanvasMcp` 与 `ensureTestModel` 是并发
+   * 发出的（server.ts 监听回调里两条 void），以及用户在设置页连点保存。
+   *
+   * 与 promptLock 分开：它们写的是不同文件（AGENTS.md / system_config.yaml / project_config.toml），
+   * 互不相干；合成一把会让「建会话」把设置页的保存也堵住。
+   */
+  private configLock: Promise<void> = Promise.resolve()
+
   /** 排队取锁；返回释放函数 */
   private async acquirePromptLock(): Promise<() => void> {
-    let release!: () => void
-    const mine = new Promise<void>((r) => (release = r))
-    const prior = this.promptLock
-    this.promptLock = prior.then(() => mine)
-    await prior
-    return release
+    return acquireQueue(
+      () => this.promptLock,
+      (p) => (this.promptLock = p),
+    )
+  }
+
+  /** 排队取配置写锁；返回释放函数 */
+  private async acquireConfigLock(): Promise<() => void> {
+    return acquireQueue(
+      () => this.configLock,
+      (p) => (this.configLock = p),
+    )
+  }
+
+  /** 把一段「读 → 改 → 写」整体排进配置写队列 */
+  private async withConfigLock<T>(run: () => Promise<T>): Promise<T> {
+    const release = await this.acquireConfigLock()
+    try {
+      return await run()
+    } finally {
+      release()
+    }
   }
 
   /**
@@ -451,9 +487,11 @@ export class AgentConfigService {
    */
   async restoreTemplate(): Promise<{ ok: boolean; missing: string[] }> {
     await this.ensureInit()
-    const cfg = await loadSystemConfig(this.sdkRoot)
-    const next = { ...cfg, system_prompt: defaultSystemConfig().system_prompt }
-    await writeSystemConfig(this.sdkRoot, next)
+    await this.withConfigLock(async () => {
+      const cfg = await loadSystemConfig(this.sdkRoot)
+      const next = { ...cfg, system_prompt: defaultSystemConfig().system_prompt }
+      await writeSystemConfig(this.sdkRoot, next)
+    })
     return { ok: true, missing: [] }
   }
 
@@ -593,6 +631,11 @@ export class AgentConfigService {
   }
 
   async upsertModel(input: UpsertModelInput): Promise<void> {
+    await this.withConfigLock(() => this.writeModel(input))
+  }
+
+  /** upsertModel 的实现（调用方已持配置写锁） */
+  private async writeModel(input: UpsertModelInput): Promise<void> {
     const provider = input.provider.trim()
     const modelId = input.modelId.trim()
     if (!provider) throw new Error('provider 不能为空')
@@ -629,6 +672,11 @@ export class AgentConfigService {
   }
 
   async deleteModel(provider: string, modelId: string): Promise<void> {
+    await this.withConfigLock(() => this.writeDeleteModel(provider, modelId))
+  }
+
+  /** deleteModel 的实现（调用方已持配置写锁） */
+  private async writeDeleteModel(provider: string, modelId: string): Promise<void> {
     await removeModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: modelId })
   }
 
@@ -642,6 +690,11 @@ export class AgentConfigService {
    * （密钥不回传、base_url 校验那两条口径都在这里），散出去必然漂移。
    */
   async ensureTestModel(input: { provider: string; modelId: string; baseUrl: string; apiKey: string }): Promise<void> {
+    await this.withConfigLock(() => this.writeEnsureTestModel(input))
+  }
+
+  /** ensureTestModel 的实现（调用方已持配置写锁） */
+  private async writeEnsureTestModel(input: { provider: string; modelId: string; baseUrl: string; apiKey: string }): Promise<void> {
     const provider = input.provider.trim()
     const modelId = input.modelId.trim()
     const baseUrl = assertHttpUrl(input.baseUrl)
@@ -681,6 +734,21 @@ export class AgentConfigService {
     /** 是否删掉该 provider 下没被勾选的旧模型（编辑已有渠道时传 true） */
     removeMissing?: boolean
   }): Promise<{ added: string[]; removed: string[] }> {
+    // 整批一次持锁：中途让别的写插进来，就会出现「新增了一半」「删旧时又读到旧表」。
+    return this.withConfigLock(() => this.writeModels(input))
+  }
+
+  /** upsertModels 的实现（调用方已持配置写锁） */
+  private async writeModels(input: {
+    provider: string
+    modelIds: string[]
+    apiKey?: string
+    baseUrl?: string
+    clientType?: string
+    vision?: boolean
+    makeDefault?: string
+    removeMissing?: boolean
+  }): Promise<{ added: string[]; removed: string[] }> {
     const provider = input.provider.trim()
     if (!provider) throw new Error('provider 不能为空')
     const modelIds = [...new Set(input.modelIds.map((m) => m.trim()).filter((m) => !!m))]
@@ -697,7 +765,7 @@ export class AgentConfigService {
     const clientType = input.clientType?.trim() || sibling?.client_type
 
     for (const modelId of modelIds) {
-      await this.upsertModel({
+      await this.writeModel({
         provider,
         modelId,
         ...(apiKey ? { apiKey } : {}),
@@ -714,7 +782,7 @@ export class AgentConfigService {
       for (const m of cfgAfter.models) {
         if (m.provider !== provider) continue
         if (modelIds.includes(m.model_id)) continue
-        await removeModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: m.model_id })
+        await this.writeDeleteModel(provider, m.model_id)
         removed.push(m.model_id)
       }
     }
@@ -729,11 +797,15 @@ export class AgentConfigService {
   }
 
   async setDefaultModel(provider: string, modelId: string): Promise<void> {
-    await setDefaultModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: modelId })
+    await this.withConfigLock(() =>
+      setDefaultModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: modelId }),
+    )
   }
 
   async setVisionModel(provider: string, modelId: string): Promise<void> {
-    await setVisionModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: modelId })
+    await this.withConfigLock(() =>
+      setVisionModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: modelId }),
+    )
   }
 
   /** 用哪个模型跑：没指定就用项目默认（会话创建时用） */
@@ -967,6 +1039,12 @@ export class AgentConfigService {
 
   async addMcpServer(input: AddMcpInput): Promise<AgentMcpView[]> {
     await this.ensureInit()
+    await this.withConfigLock(() => this.writeAddMcpServer(input))
+    return this.mcpServers()
+  }
+
+  /** addMcpServer 的落盘部分（调用方已持配置写锁） */
+  private async writeAddMcpServer(input: AddMcpInput): Promise<void> {
     const name = input.name.trim()
     // 名字只是标签，端点路径里的 $smart 照旧写在 url 里。SDK 只认这几个字符，
     // 所以在这里就拦住 —— 否则坏名字要到连接时才以「跳过」的形式暴露，用户看不到原因。
@@ -990,11 +1068,16 @@ export class AgentConfigService {
     const existing = cfg.tools?.mcpServers ?? []
     const next = [...existing.filter((e) => e.name !== name), entry]
     await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
-    return this.mcpServers()
   }
 
   async removeMcpServer(name: string): Promise<AgentMcpView[]> {
     await this.ensureInit()
+    await this.withConfigLock(() => this.writeRemoveMcpServer(name))
+    return this.mcpServers()
+  }
+
+  /** removeMcpServer 的落盘部分（调用方已持配置写锁） */
+  private async writeRemoveMcpServer(name: string): Promise<void> {
     // 自带画布 MCP **不许删**（用户口径 2026-10-05）：界面已经不给删除按钮，
     // 这里再拦一道 —— 界面是提示，接口才是真拦截（手搓一个请求也删不掉）。
     if (name === this.BUILTIN_CANVAS_MCP && this.builtinCanvasUrl) {
@@ -1005,7 +1088,6 @@ export class AgentConfigService {
     const next = existing.filter((e) => e.name !== name)
     if (next.length === existing.length) throw new Error('没有名为「' + name + '」的 MCP 服务')
     await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
-    return this.mcpServers()
   }
 
   /** 内置画布 MCP 的服务名（system_config.yaml 里的条目名） */
@@ -1033,16 +1115,18 @@ export class AgentConfigService {
     const trimmed = (url ?? '').trim()
     if (!trimmed) return
     this.builtinCanvasUrl = trimmed
-    const cfg = await loadSystemConfig(this.sdkRoot)
-    const existing = cfg.tools?.mcpServers ?? []
-    const current = existing.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
-    if (current && (current.config as { url?: unknown }).url === trimmed && (current.config as { type?: unknown }).type === 'http') {
-      return // 已经是它，别白写一次（写会触发 kv 变更广播）
-    }
-    const entry = { name: this.BUILTIN_CANVAS_MCP, config: { type: 'http' as const, url: trimmed } }
-    resolveMCPServer(entry as never)
-    const next = [...existing.filter((e) => e.name !== this.BUILTIN_CANVAS_MCP), entry]
-    await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
+    await this.withConfigLock(async () => {
+      const cfg = await loadSystemConfig(this.sdkRoot)
+      const existing = cfg.tools?.mcpServers ?? []
+      const current = existing.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
+      if (current && (current.config as { url?: unknown }).url === trimmed && (current.config as { type?: unknown }).type === 'http') {
+        return // 已经是它，别白写一次（写会触发 kv 变更广播）
+      }
+      const entry = { name: this.BUILTIN_CANVAS_MCP, config: { type: 'http' as const, url: trimmed } }
+      resolveMCPServer(entry as never)
+      const next = [...existing.filter((e) => e.name !== this.BUILTIN_CANVAS_MCP), entry]
+      await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
+    })
   }
 
   /**
@@ -1058,17 +1142,25 @@ export class AgentConfigService {
     const existing = cfg.tools?.mcpServers ?? []
     const current = existing.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
     if (current && (current.config as { url?: unknown }).url === url) return cfg
-    // 补这一条时保持**原有顺序**：已有就原地纠正地址，没有才追加在末尾
-    const entry = { name: this.BUILTIN_CANVAS_MCP, config: { type: 'http' as const, url } }
-    const next = current
-      ? existing.map((e) => (e.name === this.BUILTIN_CANVAS_MCP ? entry : e))
-      : [...existing, entry]
-    const healed = { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } }
-    // 写回磁盘（幂等、尽力而为）：下次启动也在；写失败不拦读，仍把补好的这份返回给界面
-    await writeSystemConfig(this.sdkRoot, healed).catch((err) =>
-      console.warn('[agent] 自动补回画布 MCP 落盘失败：' + String(err)),
-    )
-    return healed
+    // 落盘要排队：这段是「读整份 → 改 → 写回」，与设置页保存并发时会把刚存的条目盖掉。
+    // 排在队里之后**重新读一次**再改，用的就不是外面这份可能已过期的快照。
+    return this.withConfigLock(async () => {
+      const fresh = await loadSystemConfig(this.sdkRoot)
+      const list = fresh.tools?.mcpServers ?? []
+      const now = list.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
+      if (now && (now.config as { url?: unknown }).url === url) return fresh
+      // 补这一条时保持**原有顺序**：已有就原地纠正地址，没有才追加在末尾
+      const entry = { name: this.BUILTIN_CANVAS_MCP, config: { type: 'http' as const, url } }
+      const next = now
+        ? list.map((e) => (e.name === this.BUILTIN_CANVAS_MCP ? entry : e))
+        : [...list, entry]
+      const healed = { ...fresh, tools: { ...(fresh.tools ?? {}), mcpServers: next } }
+      // 写回磁盘（幂等、尽力而为）：下次启动也在；写失败不拦读，仍把补好的这份返回给界面
+      await writeSystemConfig(this.sdkRoot, healed).catch((err) =>
+        console.warn('[agent] 自动补回画布 MCP 落盘失败：' + String(err)),
+      )
+      return healed
+    })
   }
 
   /**
@@ -1256,12 +1348,17 @@ export class AgentConfigService {
    */
   async subsetMcp(names: string[]): Promise<() => Promise<void>> {
     await this.ensureInit()
-    const cfg = await loadSystemConfig(this.sdkRoot)
-    const all = cfg.tools?.mcpServers ?? []
-    const kept = all.filter((e) => names.includes(e.name))
-    await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: kept } })
+    // 记住**收窄前的整份配置**：还原时写回的就是它。这段在锁里取，避免取到别的写中间态。
+    const cfg = await this.withConfigLock(async () => {
+      const current = await loadSystemConfig(this.sdkRoot)
+      const all = current.tools?.mcpServers ?? []
+      const kept = all.filter((e) => names.includes(e.name))
+      await writeSystemConfig(this.sdkRoot, { ...current, tools: { ...(current.tools ?? {}), mcpServers: kept } })
+      return current
+    })
     return async () => {
-      await writeSystemConfig(this.sdkRoot, cfg)
+      // 还原也走同一条队列：可能与另一次写同时落盘（否则 Windows 上又是一次 rename 撞车）
+      await this.withConfigLock(() => writeSystemConfig(this.sdkRoot, cfg))
     }
   }
 
@@ -1352,6 +1449,22 @@ async function writeSystemConfig(root: string, cfg: unknown): Promise<void> {
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * 通用「排队取锁」：拿当前队列尾，把自己的放行信号接在后面，等前一个放行。
+ * 返回的 release 只应调用一次（调用方都在 finally 里调）。
+ */
+async function acquireQueue(
+  read: () => Promise<void>,
+  write: (next: Promise<void>) => void,
+): Promise<() => void> {
+  let release!: () => void
+  const mine = new Promise<void>((r) => (release = r))
+  const prior = read()
+  write(prior.then(() => mine))
+  await prior
+  return release
 }
 
 /**
