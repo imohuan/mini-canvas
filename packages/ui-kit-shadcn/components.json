@@ -1,0 +1,28 @@
+{
+  "$schema": "https://shadcn-vue.com/schema.json",
+  "style": "reka-luma",
+  "font": "montserrat",
+  "typescript": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/assets/index.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "rtl": false,
+  "pointer": true,
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "composables": "@/composables"
+  },
+  "menuColor": "default-translucent",
+  "menuAccent": "bold",
+  "registries": {
+    "@vuelor": "https://vuelor.dev/r/{name}.json"
+  }
+}

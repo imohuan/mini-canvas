@@ -1,0 +1,58 @@
+/**
+ * 宿主接入用的 shadcn 样式。
+ *
+ * 使用方在自己的 Tailwind 入口里引入一次：
+ *   @import "@mini-canvas/ui-kit-shadcn/styles.css";
+ *   @source "../../ui-kit-shadcn/src";
+ *
+ * 颜色直接映射到项目现有的 `--ui-*` 变量，所以亮暗主题跟着 `<html class="dark">` 走，
+ * 不需要再写第二套色板。`dark` 变体由宿主 Tailwind 入口声明（本项目在 app.css）。
+ */
+@import "shadcn-vue/tailwind.css";
+@import "@vuelor/picker/tailwind.css";
+
+@theme inline {
+  --color-background: var(--ui-overlay-solid, #fff);
+  --color-foreground: var(--ui-ink, #18202b);
+
+  --color-card: var(--ui-panel, #fff);
+  --color-card-foreground: var(--ui-ink, #18202b);
+  --color-popover: var(--ui-overlay-solid, #fff);
+  --color-popover-foreground: var(--ui-ink, #18202b);
+
+  --color-primary: var(--ui-primary-bg, #1f2937);
+  --color-primary-foreground: var(--ui-primary-ink, #fff);
+  --color-secondary: var(--ui-chip, rgb(0 0 0 / 0.07));
+  --color-secondary-foreground: var(--ui-ink, #18202b);
+  --color-muted: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  --color-muted-foreground: var(--ui-ink-dim, #6b7280);
+  --color-accent: var(--ui-hover, rgb(0 0 0 / 0.06));
+  --color-accent-foreground: var(--ui-ink, #18202b);
+  --color-destructive: var(--ui-danger, #ef4444);
+
+  --color-border: var(--ui-line, #e2e5ea);
+  --color-input: var(--ui-chip, rgb(0 0 0 / 0.07));
+  --color-ring: var(--ui-accent-ring, rgb(8 145 178 / 0.6));
+
+  /* Vuelor 取色器自带的一套局部色（只在取色器内部用） */
+  --color-vuelor-input: var(--vuelor-input);
+  --color-vuelor-border: var(--vuelor-border);
+  --color-vuelor-surface: var(--vuelor-surface);
+  --color-vuelor-primary: var(--vuelor-primary);
+
+  --color-sidebar: var(--ui-panel, #fff);
+  --color-sidebar-foreground: var(--ui-ink, #18202b);
+  --color-sidebar-primary: var(--ui-primary-bg, #1f2937);
+  --color-sidebar-primary-foreground: var(--ui-primary-ink, #fff);
+  --color-sidebar-accent: var(--ui-hover, rgb(0 0 0 / 0.06));
+  --color-sidebar-accent-foreground: var(--ui-ink, #18202b);
+  --color-sidebar-border: var(--ui-line, #e2e5ea);
+  --color-sidebar-ring: var(--ui-accent-ring, rgb(8 145 178 / 0.6));
+}
+
+:root {
+  --vuelor-primary: #0d99ff;
+  --vuelor-surface: var(--ui-overlay-solid, #ffffff);
+  --vuelor-border: var(--ui-line, #e6e6e6);
+  --vuelor-input: var(--ui-chip, #f5f5f5);
+}
