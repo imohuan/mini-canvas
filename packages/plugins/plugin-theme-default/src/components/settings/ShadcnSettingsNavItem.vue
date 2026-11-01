@@ -52,7 +52,10 @@ const iconComponent = computed<Component | undefined>(() => {
   align-items: center;
   gap: 9px;
   width: 100%;
-  min-height: 34px;
+  /* 行级交互目标 ≥ 44px（docs/design/ui-style-guide.md §1 原则 4 / §5 第 4 条）。
+     之前 34px 是按「紧凑列表」的直觉给的，但左侧导航是真正要点的一列行，
+     按规范给到 44；行距仍靠 2px gap 保持紧凑感。 */
+  min-height: 44px;
   box-sizing: border-box;
   padding: 0 10px;
   border: 0;

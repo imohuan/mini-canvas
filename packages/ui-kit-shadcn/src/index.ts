@@ -34,6 +34,15 @@ export { SettingsRow, SettingsSection } from './components/settings'
 
 export { SHADCN_COMPONENTS, SHADCN_COMPONENT_NAMES } from './registry'
 
+/**
+ * 外观选项表（字体 / 圆角）：**组件库是唯一真源**，主题插件引用它、不另抄一份。
+ * 预览页与真实应用的选项因此永远同步（此前两边各写一份，已经漂移）。
+ */
+export { FONT_OPTIONS, HEADING_OPTIONS, RADIUS_OPTIONS, findFont, loadFont } from './theme/fonts'
+export type { FontOption, RadiusOption } from './theme/fonts'
+export { BASE_COLORS, THEME_COLORS, CHART_COLORS, resolveThemeVars, previewColor } from './theme/colors'
+export type { BaseColor, ThemeColor, ChartColor, ThemeSelection, ThemePalette } from './theme/colors'
+
 /** 组件库使用标记的读取工具（只读 DOM 属性，不改变组件） */
 export {
   UI_KIT_DEBUG_ATTR,

@@ -16,72 +16,45 @@
  * 为什么是 `--mct-*` 而不是直接改 `--radius`：`--radius` 是 shadcn 自己的变量名，
  * 组件库里只有个别文件用；直接占用它会让「以后组件库升级」与「主题包」抢同一个名字。
  * 用带前缀的变量，谁消费谁声明，边界清楚。
+ *
+ * **选项表（字体 / 圆角）不在本文件重复**：直接引用组件库导出的 `FONT_OPTIONS` /
+ * `RADIUS_OPTIONS`，否则预览页加一种字体、真实应用不跟着加，两份必然漂移。
  */
+import { FONT_OPTIONS, RADIUS_OPTIONS, type FontOption, type RadiusOption } from '@mini-canvas/ui-kit-shadcn'
 
-/** 组件库可选字体（与 ui-kit-shadcn 的 FONT_OPTIONS 同名；这里只存 id，不复制字体表） */
+/** 字体选项：`inherit`（跟随宿主）在最前，其余原样取自组件库 */
+export const THEME_FONT_OPTIONS: readonly FontOption[] = FONT_OPTIONS
+
+/** 圆角选项：原样取自组件库 */
+export const THEME_RADIUS_OPTIONS: readonly RadiusOption[] = RADIUS_OPTIONS
+
+/** 组件库可选字体 id（新增 `inherit`） */
 export const THEME_FONT_CHOICES = [
   'inherit',
-  'inter',
-  'geist-sans',
-  'noto-sans',
-  'nunito-sans',
-  'figtree',
-  'roboto',
-  'raleway',
-  'dm-sans',
-  'public-sans',
-  'outfit',
-  'manrope',
-  'space-grotesk',
-  'montserrat',
-  'ibm-plex-sans',
-  'source-sans-3',
-  'instrument-sans',
+  ...FONT_OPTIONS.map((f) => f.id),
 ] as const
 
 export type ThemeFontChoice = (typeof THEME_FONT_CHOICES)[number]
 
-/** 字体 id → 设置面板里显示的短名字（与组件库预览页的选项一致） */
-export const THEME_FONT_LABELS: Readonly<Record<ThemeFontChoice, string>> = {
+/** 字体 id → 设置面板里显示的短名字（取自组件库，`inherit` 是本层新增的「跟随宿主」） */
+export const THEME_FONT_LABELS: Readonly<Record<string, string>> = {
   inherit: '跟随宿主',
-  inter: 'Inter',
-  'geist-sans': 'Geist Sans',
-  'noto-sans': 'Noto Sans',
-  'nunito-sans': 'Nunito Sans',
-  figtree: 'Figtree',
-  roboto: 'Roboto',
-  raleway: 'Raleway',
-  'dm-sans': 'DM Sans',
-  'public-sans': 'Public Sans',
-  outfit: 'Outfit',
-  manrope: 'Manrope',
-  'space-grotesk': 'Space Grotesk',
-  montserrat: 'Montserrat',
-  'ibm-plex-sans': 'IBM Plex Sans',
-  'source-sans-3': 'Source Sans 3',
-  'instrument-sans': 'Instrument Sans',
+  ...Object.fromEntries(FONT_OPTIONS.map((f) => [f.id, f.label])),
 }
 
-/** 圆角档位（值与 ui-kit-shadcn 的 RADIUS_OPTIONS 对齐） */
-export const THEME_RADIUS_CHOICES = ['default', 'none', 'small', 'medium', 'large'] as const
+/** 圆角档位：`inherit` 是主题包新增的「跟随项目」，其余取自组件库 */
+export const THEME_RADIUS_CHOICES = ['inherit', ...RADIUS_OPTIONS.map((r) => r.id)] as const
 export type ThemeRadiusChoice = (typeof THEME_RADIUS_CHOICES)[number]
 
-/** 圆角档位 → 实际像素值（唯一派生表，设置面板与落值共用） */
-export const THEME_RADIUS_VALUES: Readonly<Record<ThemeRadiusChoice, string>> = {
-  default: '0.625rem',
-  none: '0rem',
-  small: '0.45rem',
-  medium: '0.625rem',
-  large: '0.875rem',
-}
+/** 圆角档位 → 实际像素值（取自组件库；`inherit` 不写值 = 跟随项目 token） */
+export const THEME_RADIUS_VALUES: Readonly<Record<string, string>> = Object.fromEntries(
+  RADIUS_OPTIONS.map((r) => [r.id, r.value]),
+)
 
 /** 圆角档位 → 设置面板文字 */
-export const THEME_RADIUS_LABELS: Readonly<Record<ThemeRadiusChoice, string>> = {
-  default: '跟随项目（8px）',
-  none: '无圆角',
-  small: '小（0.45rem）',
-  medium: '中（0.625rem）',
-  large: '大（0.875rem）',
+export const THEME_RADIUS_LABELS: Readonly<Record<string, string>> = {
+  inherit: '跟随项目（8px）',
+  ...Object.fromEntries(RADIUS_OPTIONS.map((r) => [r.id, r.label])),
 }
 
 /**
@@ -108,6 +81,15 @@ export const THEME_FONT_STACKS: Readonly<Record<ThemeFontChoice, string>> = {
   'ibm-plex-sans': "'IBM Plex Sans', system-ui, sans-serif",
   'source-sans-3': "'Source Sans 3', system-ui, sans-serif",
   'instrument-sans': "'Instrument Sans', system-ui, sans-serif",
+  // 等宽 / 衬线：组件库 FONT_OPTIONS 里也有这几项，漏了会造成「选了点不动」
+  'jetbrains-mono': "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  'geist-mono': "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  'playfair-display': "'Playfair Display', Georgia, serif",
+  'noto-serif': "'Noto Serif', 'Noto Serif SC', Georgia, serif",
+  'roboto-slab': "'Roboto Slab', Georgia, serif",
+  merriweather: "'Merriweather', Georgia, serif",
+  lora: "'Lora', Georgia, serif",
+  oxanium: "'Oxanium', system-ui, sans-serif",
 }
 
 /** 桥接要写进 `<html>` 的变量名（只在有自定义值时写，缺省一律清掉） */
@@ -118,7 +100,7 @@ export const THEME_BRIDGE_VARS = {
 } as const
 
 export interface ThemeBridgeInput {
-  /** 圆角档位；default 表示跟随项目原有 `--radius-control` */
+  /** 圆角档位；inherit 表示跟随项目原有 `--radius-control` */
   radius: ThemeRadiusChoice
   /** 正文字体；inherit 表示跟随宿主 */
   font: ThemeFontChoice
@@ -134,7 +116,7 @@ export function toThemeBridgeInput(raw: {
 }): ThemeBridgeInput {
   const radius = THEME_RADIUS_CHOICES.includes(raw.themeRadius as ThemeRadiusChoice)
     ? (raw.themeRadius as ThemeRadiusChoice)
-    : 'default'
+    : 'inherit'
   const font = THEME_FONT_CHOICES.includes(raw.themeFont as ThemeFontChoice)
     ? (raw.themeFont as ThemeFontChoice)
     : 'inherit'
@@ -153,7 +135,7 @@ export function toThemeBridgeInput(raw: {
 export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, string> {
   const out: Record<string, string> = {}
   // 默认档不写：组件库回落到 --radius-control（项目原有 8px），保持历史观感
-  if (input.radius !== 'default') out[THEME_BRIDGE_VARS.radius] = THEME_RADIUS_VALUES[input.radius]
+  if (input.radius !== 'inherit') out[THEME_BRIDGE_VARS.radius] = THEME_RADIUS_VALUES[input.radius] ?? ''
   const body = THEME_FONT_STACKS[input.font] ?? ''
   if (body) out[THEME_BRIDGE_VARS.fontBody] = body
   // 标题：inherit = 跟随正文（写 var 引用，正文变了标题一起变）

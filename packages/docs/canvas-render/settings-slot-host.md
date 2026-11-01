@@ -80,7 +80,7 @@ defineProps<{
 | `overlay` | `plugin-align-guide`（对齐线）、`plugin-multi-select`（框选层 + 选择框）、`plugin-group`（分组控制栏）、`plugin-shortcut-manager`（快捷键面板）、`plugin-style-library`（样式库）、`plugin-cursor-effect`（光标特效）、`plugin-bottom-bar`（节点底栏浮层 + 预览浮层 + 任务浮层） | **`CanvasSurface.vue`** 里固定一行 `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` |
 | `mini-map` | `plugin-mini-map` | 宿主自选：`packages/ui/src/App.vue` 里 `<SlotHost slot="mini-map" />` |
 | `agent-conversation` | `plugin-agent`（消息流 + 输入区） | `packages/ui/src/components/areas/AgentPanel.vue` |
-| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload` | 设置面板皮：默认皮 `plugin-theme-default` 的 `PluginSettingsContent.vue`（`packages/ui/src/components/settings/AppSettingsPanel.vue` 明确不消费它） |
+| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload` | 设置面板皮：默认皮 `plugin-theme-default` 的 `PluginSettingsContent.vue` 与成品皮 `packages/ui/src/components/settings/AppSettingsPanel.vue` 都消费它（`meta.title` / `meta.category` / `meta.icon` 参与导航合并与归类） |
 | `settings.tab` | 当前生产代码里没有插件注册它（保留给「自定义二级页签」） | 默认设置皮按「一级名匹配 id 首段」归并渲染 |
 | `settingsGroup/<分组名>` | 同上那批插件（每个整页内容一条，如 `settingsGroup/Agent`、`settingsGroup/光标`） | 默认设置皮 / `AppSettingsPanel.vue` 按当前分组读 `occupants('settingsGroup/' + groupKey)` |
 
@@ -222,7 +222,7 @@ const Field = injectSettingsFieldRenderer()   // ① 不在设置面板子树内
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/ui/src/App.vue` | `<SettingsHost v-if="s.settingsOpen" />` 与 `<SlotHost slot="mini-map" />` 都放在 `#ui` 插槽里 |
-| `packages/ui/src/components/settings/AppSettingsPanel.vue` | 成品应用自己的设置皮（`order -1` 顶替默认皮）：消费 `settingsGroup/<key>`，**不消费** `settings.nav` / `settings.tab` |
+| `packages/ui/src/components/settings/AppSettingsPanel.vue` | 成品应用自己的设置皮（`order -1` 顶替默认皮）：消费 `settingsGroup/<key>`，并消费 `settings.nav` / `settings.tab` |
 | `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 默认设置皮：读 `settings.nav` / `settings.tab` / `settingsGroup/<key>` 三种槽 |
 | `packages/plugins/plugin-theme-default/src/index.ts` | `ctx.theme.register("settingsPanel", PluginSettingsContent, …)` 注册默认赢家 |
 | `packages/ui/src/settingsPanelPlugin.ts` | 换皮插件：`ctx.theme.register('settingsPanel', AppSettingsPanel, { id: name, order: -1 })` |

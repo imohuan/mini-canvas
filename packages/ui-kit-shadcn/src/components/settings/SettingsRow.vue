@@ -33,7 +33,9 @@ defineProps<{
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 42px;
+  /* 行级交互目标 ≥ 44px（docs/design/ui-style-guide.md §1 原则 4 / §5 第 4 条）。
+     10px 上下 padding + 内容行高本身已接近 44，这里用 min-height 兜住最矮的一行。 */
+  min-height: 44px;
   padding: 10px 0;
 }
 

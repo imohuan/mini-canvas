@@ -31,7 +31,7 @@ function fakeRoot() {
 
 describe('外观交接：默认档不改观感', () => {
   it('全默认 → 一个变量都不写（CSS 回落到项目原有值）', () => {
-    expect(resolveThemeBridgeVars({ radius: 'default', font: 'inherit', heading: 'inherit' })).toEqual({})
+    expect(resolveThemeBridgeVars({ radius: 'inherit', font: 'inherit', heading: 'inherit' })).toEqual({})
   })
 
   it('只改圆角 → 只写圆角变量', () => {
@@ -41,13 +41,13 @@ describe('外观交接：默认档不改观感', () => {
   })
 
   it('标题「跟随正文」→ 写 var 引用，正文变了标题一起变', () => {
-    const vars = resolveThemeBridgeVars({ radius: 'default', font: 'inter', heading: 'inherit' })
+    const vars = resolveThemeBridgeVars({ radius: 'inherit', font: 'inter', heading: 'inherit' })
     expect(vars[THEME_BRIDGE_VARS.fontBody]).toContain('Inter')
     expect(vars[THEME_BRIDGE_VARS.fontHeading]).toBe('var(--mct-font-body, inherit)')
   })
 
   it('正文跟随宿主、标题单独选 → 只写标题，不写正文', () => {
-    const vars = resolveThemeBridgeVars({ radius: 'default', font: 'inherit', heading: 'roboto' })
+    const vars = resolveThemeBridgeVars({ radius: 'inherit', font: 'inherit', heading: 'roboto' })
     expect(vars[THEME_BRIDGE_VARS.fontBody]).toBeUndefined()
     expect(vars[THEME_BRIDGE_VARS.fontHeading]).toContain('Roboto')
   })
@@ -60,7 +60,7 @@ describe('外观交接：落值与清理', () => {
     expect(map.get(THEME_BRIDGE_VARS.radius)).toBe('0.875rem')
     expect(map.has(THEME_BRIDGE_VARS.fontBody)).toBe(true)
 
-    applyThemeBridge({ radius: 'default', font: 'inherit', heading: 'inherit' }, el)
+    applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit' }, el)
     expect(map.size).toBe(0)
   })
 
@@ -73,7 +73,7 @@ describe('外观交接：落值与清理', () => {
 
   it('设置里读到不认识的档位 → 回落默认，不抛错', () => {
     expect(toThemeBridgeInput({ themeRadius: 'huge', themeFont: 'comic-sans' })).toEqual({
-      radius: 'default',
+      radius: 'inherit',
       font: 'inherit',
       heading: 'inherit',
     })
@@ -90,10 +90,10 @@ describe('外观交接：选项表', () => {
   it('圆角与字体的每个档位都有对应值（漏一个 = 选了点不动）', () => {
     for (const radius of THEME_RADIUS_CHOICES) {
       const value = resolveThemeBridgeVars({ radius, font: 'inherit', heading: 'inherit' })[THEME_BRIDGE_VARS.radius]
-      expect(typeof value).toBe(radius === 'default' ? 'undefined' : 'string')
+      expect(typeof value).toBe(radius === 'inherit' ? 'undefined' : 'string')
     }
     for (const font of THEME_FONT_CHOICES) {
-      const vars = resolveThemeBridgeVars({ radius: 'default', font, heading: 'inherit' })
+      const vars = resolveThemeBridgeVars({ radius: 'inherit', font, heading: 'inherit' })
       expect(Boolean(vars[THEME_BRIDGE_VARS.fontBody])).toBe(font !== 'inherit')
     }
   })

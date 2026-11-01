@@ -15,6 +15,8 @@
  */
 import { computed, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
+// 设置界面的控件统一用组件库（用户口径：只要是设置界面全部走 @mini-canvas/ui-kit-shadcn）
+import { Button, Input, Switch, Textarea } from '@mini-canvas/ui-kit-shadcn'
 import {
   loadAiActions,
   saveAiActions,
@@ -183,8 +185,8 @@ async function save(): Promise<void> {
         <h4>底栏 AI 按钮</h4>
         <span class="pas-quick">
           <span class="pas-count">{{ draft.length }} 个</span>
-          <button class="pas-mini" :disabled="syncing" @click="addAction">新增</button>
-          <button class="pas-mini" :disabled="syncing" @click="restoreDefaults">恢复默认</button>
+          <Button variant="outline" size="xs" :disabled="syncing" @click="addAction">新增</Button>
+          <Button variant="ghost" size="xs" :disabled="syncing" @click="restoreDefaults">恢复默认</Button>
         </span>
       </header>
 
@@ -195,14 +197,12 @@ async function save(): Promise<void> {
           <span class="pas-name">{{ a.name }}<small v-if="a.builtin" class="pas-builtin">内置</small></span>
           <span class="pas-desc">{{ a.description }}</span>
           <span class="pas-acts">
-            <button class="pas-mini" :aria-pressed="a.id === selectedId" @click="pick(a.id)">编辑</button>
-            <button class="pas-mini" :disabled="i === 0" aria-label="上移" @click="move(a.id, -1)">↑</button>
-            <button class="pas-mini" :disabled="i === draft.length - 1" aria-label="下移" @click="move(a.id, 1)">↓</button>
-            <label class="pas-toggle" :title="a.enabled ? '点击隐藏' : '点击显示'">
-              <input type="checkbox" :checked="a.enabled" @change="a.enabled = !a.enabled; touch()" />
-              <span>{{ a.enabled ? '显示' : '隐藏' }}</span>
-            </label>
-            <button class="pas-mini danger" aria-label="删除" @click="removeAction(a.id)">删除</button>
+            <Button variant="ghost" size="xs" :aria-pressed="a.id === selectedId" @click="pick(a.id)">编辑</Button>
+            <Button variant="ghost" size="icon-xs" :disabled="i === 0" aria-label="上移" @click="move(a.id, -1)">↑</Button>
+            <Button variant="ghost" size="icon-xs" :disabled="i === draft.length - 1" aria-label="下移" @click="move(a.id, 1)">↓</Button>
+            <Switch :model-value="a.enabled" :aria-label="a.name + '：显示或隐藏'"
+              @update:model-value="a.enabled = $event; touch()" />
+            <Button variant="destructive" size="xs" aria-label="删除" @click="removeAction(a.id)">删除</Button>
           </span>
         </div>
         <p v-if="!draft.length" class="pas-hint">还没有按钮，点「新增」或「恢复默认」。</p>
@@ -210,10 +210,10 @@ async function save(): Promise<void> {
 
       <div v-if="active" class="pas-edit">
         <label class="pas-field">名称
-          <input v-model="active.name" class="pas-input" @input="touch()" />
+          <Input v-model="active.name" class="pas-input" @input="touch()" />
         </label>
         <label class="pas-field">描述（悬停提示）
-          <input v-model="active.description" class="pas-input" @input="touch()" />
+          <Input v-model="active.description" class="pas-input" @input="touch()" />
         </label>
 
         <div class="pas-field">
@@ -246,7 +246,7 @@ async function save(): Promise<void> {
               <span aria-hidden="true" v-html="p.svg" />
             </button>
           </div>
-          <textarea
+          <Textarea
             v-model="active.icon"
             class="pas-textarea pas-svg-input"
             rows="2"
@@ -254,7 +254,7 @@ async function save(): Promise<void> {
             aria-label="自定义图标 SVG"
             placeholder="也可以贴自己的 SVG（viewBox 0 0 24 24，stroke=currentColor）。留空 = 用默认星星。"
             @input="touch()"
-          ></textarea>
+          />
           <div class="pas-svg-preview">
             <span class="pas-label">当前预览</span>
             <span class="pas-icon pas-icon--preview" aria-hidden="true" v-html="active.icon || DEFAULT_AI_ICON" />
@@ -266,8 +266,8 @@ async function save(): Promise<void> {
             <span class="pas-label">提示词模板</span>
             <span class="pas-count">{{ active.template.length }} 字</span>
           </div>
-          <textarea ref="textarea" v-model="active.template" class="pas-textarea" rows="8"
-            placeholder="写这条按钮的系统提示词…可用 {{prompt}} 等变量" @input="touch()"></textarea>
+          <Textarea ref="textarea" v-model="active.template" class="pas-textarea" rows="8"
+            placeholder="写这条按钮的系统提示词…可用 {{prompt}} 等变量" @input="touch()" />
           <div class="pas-chips">
             <button v-for="v in TEMPLATE_VARS" :key="v.token" class="pas-chip" :title="v.description"
               @click="insertToken(v.token)">
@@ -282,9 +282,9 @@ async function save(): Promise<void> {
         <span v-if="saved" class="pas-ok">已保存 · 底栏按钮即时生效</span>
         <span v-else-if="dirty" class="pas-hint">有未保存的修改</span>
         <span v-else class="pas-hint">与云端一致</span>
-        <button class="pas-submit" :disabled="busy || !dirty" @click="save">
+        <Button :disabled="busy || !dirty" @click="save">
           {{ busy ? '保存中…' : '保存' }}
-        </button>
+        </Button>
       </div>
     </section>
   </div>
