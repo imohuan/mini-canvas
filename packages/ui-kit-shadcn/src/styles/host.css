@@ -85,3 +85,71 @@
 [data-slot='combobox-content'].settings-floating-layer {
   z-index: var(--layer-modal-top, 100001);
 }
+
+/*
+ * 主题插件交接：圆角 / 字体 / 语义色全部从「主题插件写的变量」取，组件库自己不留第二份。
+ *
+ * 背景：组件库预览页（src/App.vue）里那套「base color / theme / chart / font / heading / radius」
+ * 原本只在预览页临时写 `<html>` 内联变量，真实应用里读不到。现在改成：
+ *   - 主题插件把选择落成 `--mct-*` 变量（见 plugin-theme-default 的 themeBridge）；
+ *   - 这里把组件库要用的形状 / 字体接过去，值缺省时回到项目原有 token。
+ * 这样换主题插件、改设置面板，组件库跟着变，业务插件仍然只 import 组件、不 import 主题。
+ */
+/*
+ * 圆角档位：直接按 `data-slot` 覆盖，不依赖 Tailwind 的 rounded-* 工具类。
+ *
+ * 实测（2026-11-02）：写 `@theme inline { --radius-4xl: … }` 不会让已编译的
+ * `rounded-4xl` 读这个值 —— 工具类在构建期就把 rem 写死了，主题里改变量对它是空气。
+ * 所以这里对组件本体写 `border-radius: var(--mct-radius, <原兜底>)`，
+ * 默认档回落各自原来的观感（Button 32px 胶囊、Input 24px、卡片 16px）。
+ */
+/*
+ * `!important` 在这里是必要的：组件模板里写的是 Tailwind 工具类（rounded-4xl 等），
+ * 它们和这里同为「单类 / 属性选择器」权重，靠源序才能压过去；而工具类的注入顺序
+ * 随构建变化，靠顺序等于靠运气（实测被压回去了）。用 important 明确定义
+ * 「主题配置 > 组件默认」这一条优先级，调用方仍可用行内 style 覆盖单个实例。
+ */
+/*
+ * 注意选择器用 `[data-variant]` 而不是 `[data-slot='button']`：
+ * TooltipTrigger / DropdownMenuTrigger 这类 `as-child` 包装会把**自己的** data-slot
+ * 写到同一个根元素上（实测按钮上是 `data-slot="tooltip-trigger"`），
+ * 而 `data-variant` 只有 Button 自己会写，正好用来定位按钮本体。
+ */
+[data-variant][data-size],
+[data-slot='button'] {
+  /* 默认档不写 --mct-radius：这里回落到 Button 自己的 rounded-4xl，保持原有观感。
+     写死一个 999px 兜底会把按钮从「模板里的圆角」偷偷改成胶囊，用户没配置却变了样子。 */
+  border-radius: var(--mct-radius, revert-layer) !important;
+}
+
+[data-slot='input'],
+[data-slot='select-trigger'],
+[data-slot='textarea'] {
+  border-radius: var(--mct-radius, revert-layer) !important;
+}
+
+[data-slot='card'],
+[data-slot='dialog-content'],
+[data-slot='popover-content'],
+[data-slot='dropdown-menu-content'],
+[data-slot='select-content'] {
+  border-radius: var(--mct-radius, revert-layer) !important;
+}
+
+/* 组件库自己的文字：跟主题插件选的正文 / 标题字体走（没选就用宿主字体栈） */
+[data-slot='button'],
+[data-slot='input'],
+[data-slot='textarea'],
+[data-slot='select-trigger'],
+[data-slot='dropdown-menu-content'],
+[data-slot='popover-content'],
+[data-slot='dialog-content'],
+[data-slot='switch'] {
+  font-family: var(--mct-font-body, inherit);
+}
+
+/* 设置页的二级小标题走标题字体 */
+.shadcn-settings-section__title,
+[data-slot='dialog-title'] {
+  font-family: var(--mct-font-heading, inherit);
+}

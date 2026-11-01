@@ -203,11 +203,16 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
-  it('一级分类沿用既有四个（布局 / 常规 / 节点 / 边），不冒出无主分类', async () => {
+  /**
+   * 一级分类 = 左侧导航顶层。`外观` 是 2026-11-02 新增的：它装「圆角 / 字体」这类
+   * 交接给组件库的外观项，不该并进「常规」（那是功能开关的集合）。
+   * 这条仍要守住「不冒出无主分类」—— 新加分类必须是有意为之，不能是某插件随手写的组名。
+   */
+  it('一级分类只有约定的五个（外观 / 布局 / 常规 / 节点 / 边），不冒出无主分类', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     const navs = [...new Set(settings.groups().map((g) => g.split('/')[0]))].sort()
-    expect(navs).toEqual(['布局', '常规', '节点', '边'])
+    expect(navs).toEqual(['外观', '布局', '常规', '节点', '边'])
     ctx.stop()
   })
 

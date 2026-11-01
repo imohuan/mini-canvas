@@ -65,6 +65,16 @@ import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
 import { SHADCN_COMPONENTS } from "@mini-canvas/ui-kit-shadcn";
 import { SETTINGS_NAV_ICON_NAMES } from "./components/settings/navIcon";
+import {
+  applyThemeBridge,
+  clearThemeBridge,
+  THEME_FONT_CHOICES,
+  THEME_FONT_LABELS,
+  THEME_RADIUS_CHOICES,
+  THEME_RADIUS_LABELS,
+  type ThemeBridgeInput,
+  toThemeBridgeInput,
+} from "./themeBridge";
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 // 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
@@ -131,6 +141,16 @@ export const DEFAULT_THEME_DEBUG = {
   connectionSnapDebugVisible: false,
   slotDebug: false,
   uiKitDebug: false,
+} as const;
+
+/**
+ * 外观默认值：交接给组件库的形状 / 字体。
+ * 全部取「跟随项目原有值」，装上新版本看不出变化，只有用户主动改才生效。
+ */
+export const DEFAULT_THEME_APPEARANCE = {
+  themeRadius: "default",
+  themeFont: "inherit",
+  themeHeadingFont: "inherit",
 } as const;
 
 /**
@@ -718,6 +738,36 @@ export const Config: ConfigSchema = {
     description:
       "打开后，每个来自组件库（shadcn）的组件右上角显示一个小圆点。鼠标移上去可看到使用了它的文件与行号；关掉后不渲染、不监听。",
   },
+  // —— 外观：交接给组件库的形状 / 字体（颜色仍走 canvas-render 的 --ui-* 色板）——
+  themeRadius: {
+    type: "select",
+    default: DEFAULT_THEME_APPEARANCE.themeRadius,
+    label: "圆角",
+    group: "外观/外观",
+    description:
+      "组件库（按钮 / 输入框 / 卡片 / 弹层）的圆角档位。默认跟随项目原有的 8px 控件圆角。",
+    options: THEME_RADIUS_CHOICES.map((id) => ({
+      value: id,
+      label: THEME_RADIUS_LABELS[id],
+    })),
+  },
+  themeFont: {
+    type: "select",
+    default: DEFAULT_THEME_APPEARANCE.themeFont,
+    label: "正文字体",
+    group: "外观/外观",
+    description:
+      "组件库组件的字体。选「跟随宿主」时用项目原有字体栈；这里不往页面里塞外部字体链接。",
+    options: THEME_FONT_CHOICES.map((id) => ({ value: id, label: THEME_FONT_LABELS[id] })),
+  },
+  themeHeadingFont: {
+    type: "select",
+    default: DEFAULT_THEME_APPEARANCE.themeHeadingFont,
+    label: "标题字体",
+    group: "外观/外观",
+    description: "设置页小标题、弹窗标题用的字体。「跟随正文」= 与上面正文保持一致。",
+    options: THEME_FONT_CHOICES.map((id) => ({ value: id, label: THEME_FONT_LABELS[id] })),
+  },
 };
 
 /** apply 收到的 config TS 类型（与 schema 对齐） */
@@ -726,7 +776,32 @@ export interface ThemeConfig extends InferConfig<typeof Config> {}
 export function apply(ctx: Context, config?: ThemeConfig) {
   // P4：config 已经内核经 Config schema 校验 + 补默认；这里无需再手写 settings.define（声明即 Config 导出）。
   // 如需在插件内"就地订阅自己 config 的变化并窄更新"，可 ctx.settings.onChange(name, ...)（demo 侧已演示该链路）。
-  void config;
+  // ===== 外观交接：圆角 / 字体 → 组件库消费的 --mct-* 变量 =====
+  // 颜色不走这里：项目统一用 --ui-* 语义色，组件库 host.css 已经映射过去；
+  // 在这里再写一份色板，会让「设置 → 主题配色」改了颜色而组件库不跟着变。
+  let appearance: ThemeBridgeInput = toThemeBridgeInput({
+    themeRadius: config?.themeRadius ?? DEFAULT_THEME_APPEARANCE.themeRadius,
+    themeFont: config?.themeFont ?? DEFAULT_THEME_APPEARANCE.themeFont,
+    themeHeadingFont: config?.themeHeadingFont ?? DEFAULT_THEME_APPEARANCE.themeHeadingFont,
+  });
+  applyThemeBridge(appearance);
+  // 设置面板改了就重写：订阅整表 onChange，只认这三个 key，别的变化不做事
+  const appearanceOff = ctx
+    .tryGet<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
+    ?.onChange((key, value) => {
+      if (key !== 'themeRadius' && key !== 'themeFont' && key !== 'themeHeadingFont') return
+      appearance = toThemeBridgeInput({
+        themeRadius: key === 'themeRadius' ? value : appearance.radius,
+        themeFont: key === 'themeFont' ? value : appearance.font,
+        themeHeadingFont: key === 'themeHeadingFont' ? value : appearance.heading,
+      })
+      applyThemeBridge(appearance)
+    });
+  // 订阅与内联变量都随插件 fiber 回收：卸载时清掉，否则会挡住下一套主题
+  ctx.effect(() => () => {
+    appearanceOff?.dispose();
+    clearThemeBridge();
+  });
 
   // ===== 节点上下状态栏基础设施（用户口径 2026-10-29 重构）=====
   //
