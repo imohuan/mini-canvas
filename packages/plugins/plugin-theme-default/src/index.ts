@@ -130,6 +130,7 @@ export const DEFAULT_THEME_DEBUG = {
   handleDebug: false,
   connectionSnapDebugVisible: false,
   slotDebug: false,
+  uiKitDebug: false,
 } as const;
 
 /**
@@ -708,6 +709,14 @@ export const Config: ConfigSchema = {
     group: "常规/调试",
     description:
       "打开后，给所有插槽容器和槽内条目描边并显示插槽名/条目 id，便于确认有哪些插槽、该把按钮排到哪个 id 前后。",
+  },
+  uiKitDebug: {
+    type: "boolean",
+    default: DEFAULT_THEME_DEBUG.uiKitDebug,
+    label: "组件库使用标记",
+    group: "常规/调试",
+    description:
+      "打开后，每个来自组件库（shadcn）的组件右上角显示一个小圆点。鼠标移上去可看到使用了它的文件与行号；关掉后不渲染、不监听。",
   },
 };
 

@@ -12,6 +12,7 @@
  * 理由之一是技术上的：停靠要把画布挤窄，用的是 CanvasShell 的 right-width，插件够不到那个绑定。
  */
 import { markRaw, reactive } from 'vue'
+import { Bot } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { createAgentService, type AgentService } from './agentService.js'
 import AgentConversation from './components/AgentConversation.vue'
@@ -62,7 +63,8 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     id: 'agent/nav',
     order: 5,
     component: markRaw(AgentSettingsNav),
-    meta: { title: 'Agent' },
+    // 只提供数据：外观由设置面板统一渲染，整页走 page，避免再自绘一套导航
+    meta: { title: 'Agent', category: '集成', icon: Bot, page: markRaw(AgentSettingsPage) },
   })
   // 内容：段的正文来自 settingsGroup/<完整分组 key>。整页只注册这一处，
   // 页签切换由页面自己负责（用户口径：上面一排页签切换 provider / 技能 / MCP / 系统提示词…）。

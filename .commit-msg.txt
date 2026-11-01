@@ -1,0 +1,9 @@
+feat(settings): category nav, card layout and shadcn settings pages
+
+- 设置左导航加「第 0 级」分类（个人 / 集成 / 画布 / 开发），默认归入个人，支持 meta.category 与 settings/navCategory 覆盖
+- 右侧改为「一级标题 + 二级小标题 + 卡片 + 分割线行」，顶部页签默认隐藏
+- 设置里的数字字段统一为「滑块 + 数字框」，去掉纯数字输入分支
+- 修复设置下拉浮层被压在对话框内（浮层 z-index 抬到遮罩之上）
+- Agent / 插件管理 / 光标 / 热重载 / 展示页 / TV Director 的设置控件统一到 @mini-canvas/ui-kit-shadcn
+- 插件管理页改为两列卡片网格，窄屏退成一列
+- 新增「组件库使用标记」调试开关：组件右上角圆点 + 悬停显示使用点文件与行列

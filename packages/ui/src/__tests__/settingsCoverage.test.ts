@@ -193,6 +193,16 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
+  it('组件库使用标记出现在「常规/调试」且默认关闭', async () => {
+    const ctx = await bootWithSettings()
+    const settings = ctx.get<SettingsLike>('settings')
+    expect(settings.groups()).toContain('常规/调试')
+    expect(settings.get('uiKitDebug')).toBe(false)
+    ctx.settings.set('uiKitDebug', true)
+    expect(settings.get('uiKitDebug')).toBe(true)
+    ctx.stop()
+  })
+
   it('一级分类沿用既有四个（布局 / 常规 / 节点 / 边），不冒出无主分类', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')

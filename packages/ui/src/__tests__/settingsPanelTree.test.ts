@@ -9,6 +9,8 @@
  * ③ 内容：右侧只显示当前分类；配置项一行一个（标题 + 描述 + 右侧控件）；
  * ④ 兼容：settingsGroup 内容插槽、settings.nav / settings.tab 两个注册场域都继续消费；
  *    卸载时释放滚动锁。
+ * ⑤ 用户口径 2026-11-02 追加：第 0 级分类默认「个人」、右侧卡片小节、顶部页签默认隐藏、
+ *    所有 number 字段统一「滑块 + 数字框」。
  *
  * 为什么仍读源码：ui 包没有 @vue/server-renderer，而"导航由哪个场域取图标"这类
  * 接线事实在源码里可读，配合 chrome 实测已足够。
@@ -31,6 +33,12 @@ const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, ''
 const NAV_ITEM = read(
   '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsNavItem.vue',
 )
+const NAV = read(
+  '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsNav.vue',
+)
+const CATEGORY = read(
+  '../../../plugins/plugin-theme-default/src/components/settings/navCategory.ts',
+)
 const FIELD = read(
   '../../../plugins/plugin-theme-default/src/components/settings/SettingsSchemaField.vue',
 )
@@ -49,7 +57,7 @@ describe('ui-settings-panel 注册：顶替主题默认皮成为设置面板赢�
   })
 })
 
-describe('AppSettingsPanel 左导航：分组标题 + 图标菜单', () => {
+describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
   it('一级 = 第一个 / 分段；二级 = 后段（扁平分组取它自己）', () => {
     expect(CODE).toMatch(/function navOf\(key: string\): string/)
     expect(CODE).toMatch(/function leafLabelOf\(key: string\): string/)
@@ -62,11 +70,35 @@ describe('AppSettingsPanel 左导航：分组标题 + 图标菜单', () => {
     expect(NAV_ITEM).toMatch(/<component :is="iconComponent"/)
     expect(NAV_ITEM).toMatch(/\{\{ label \}\}/)
     expect(NAV_ITEM).toMatch(/:class="\{ 'is-active': active \}"/)
-    // 分组标题：左栏顶部有一行“设置”
-    expect(SRC).toMatch(/class="asp-nav-caption">设置</)
     // 右侧不再有旧的两级树
     expect(SRC).not.toMatch(/asp-row/)
     expect(SRC).not.toMatch(/asp-caret/)
+  })
+
+  it('左侧按第 0 级分类分组：分类标题 + 该分类下的一级菜单', () => {
+    // 两套皮共用同一个导航组件，插件不再自绘
+    expect(SRC).toMatch(/<ShadcnSettingsNav/)
+    expect(NAV).toMatch(/class="ssn-caption"/)
+    expect(NAV).toMatch(/v-for="group in groups"/)
+    expect(NAV).toMatch(/v-for="item in group.items"/)
+    // 分类顺序固定：个人 → 集成 → 画布 → 开发
+    expect(CATEGORY).toMatch(/SETTINGS_CATEGORY_ORDER[^=]*=\s*\[\s*'个人'\s*,\s*'集成'\s*,\s*'画布'\s*,\s*'开发'\s*\]/)
+  })
+
+  it('没有显式分类时默认落在「个人」', () => {
+    expect(CATEGORY).toMatch(/DEFAULT_SETTINGS_CATEGORY\s*=\s*'个人'/)
+    expect(CATEGORY).toMatch(/return DEFAULT_NAV_CATEGORY\[nav\] \?\? DEFAULT_SETTINGS_CATEGORY/)
+  })
+
+  it('分类可配置：meta.category 优先，其次置 navCategory 场域，再回默认表', () => {
+    expect(CATEGORY).toMatch(/metaCategory\?\.trim\(\) \|\| registryCategory\?\.trim\(\)/)
+    expect(CATEGORY).toMatch(/SETTINGS_NAV_CATEGORY_FIELD\s*=\s*'settings\/navCategory'/)
+    // 两套皮都从同一个注册场读取
+    expect(CODE).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
+    const THEME_SETTINGS = read(
+      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+    )
+    expect(THEME_SETTINGS).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
   })
 
   it('图标走独立场域 settings/navIcon，命中顺序由场域 order 决定', () => {
@@ -81,23 +113,24 @@ describe('AppSettingsPanel 左导航：分组标题 + 图标菜单', () => {
     expect(THEME_SETTINGS).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
   })
 
-  it('只有一个二级分组时合并成一项，不显示多余的一级层', () => {
+  it('二级小节依次排开；顶部页签条保留但默认隐藏', () => {
     // 左导航项只由一级名生成，不再为二级单独出项
-    expect(SRC).toMatch(/v-for="item in navEntries"/)
+    expect(SRC).toMatch(/:items="navItems"/)
     expect(SRC).not.toMatch(/v-for="leaf in leavesOf/)
-    // 只有一个段时页签条不出现（阈值是“多于一个”）
-    expect(SRC).toMatch(/const showTabs = computed<boolean>\(\(\) => sections\.value\.length > 1\)/)
+    // 页签条是开关：默认 false；宿主显式打开且多于一个段时才出现
+    expect(SRC).toMatch(/showSectionTabs\?: boolean/)
+    expect(SRC).toMatch(/showSectionTabs: false/)
+    expect(SRC).toMatch(/const showTabs = computed<boolean>\(\(\) => props\.showSectionTabs && sections\.value\.length > 1\)/)
     expect(SRC).toMatch(/v-if="showTabs"/)
     expect(SRC).toMatch(/class="asp-tabbar"/)
   })
 })
 
-describe('AppSettingsPanel 右内容：只显示当前分类，配置项一行一个', () => {
-  it('选中一级后只画当前段（不是全部分组叠成长列表）', () => {
-    expect(SRC).toMatch(/v-show="index === activeSectionIndex"/)
+describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行', () => {
+  it('每个二级小节一张卡片；默认模式不按页签只显示当前段', () => {
+    expect(SRC).toMatch(/v-for="section in sections"/)
+    expect(SRC).toMatch(/<ShadcnSettingsSection :title="section.label">/)
     expect(CODE).toMatch(/const activeEntry = computed<NavEntry \| undefined>/)
-    // 旧的长列表滚动定位/scroll-spy 入口已经移除
-    expect(CODE).not.toMatch(/scrollToEl\(/)
   })
 
   it('字段用 SettingsSchemaField，行由标题 + 描述 + 控件构成', () => {
@@ -113,22 +146,31 @@ describe('AppSettingsPanel 右内容：只显示当前分类，配置项一行�
     // 取色器要浮在正文之上，滚动时不被裁切
     expect(FIELD).toMatch(/<PopoverContent/)
     // 配置项左边标题、右边控件：行组件用左右两栏
-    const ROW = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsRow.vue',
-    )
+    const ROW = read('../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue')
     expect(ROW).toMatch(/justify-content: space-between/)
     expect(ROW).toMatch(/shadcn-settings-row__label/)
     expect(ROW).toMatch(/shadcn-settings-row__desc/)
   })
 
-  it('不套卡片：段与大节只有分隔线，没有圆角卡片底', () => {
-    const section = /(^|\n)\.asp-section \{([^}]*)\}/.exec(SRC)?.[2] ?? ''
-    expect(section, '段容器不应有卡片样式').not.toMatch(/border|border-radius|background/)
+  it('所有 number 字段只有「滑块 + 数字框」一种形式（没有纯输入分支）', () => {
+    expect(FIELD).not.toMatch(/useStepInput/)
+    expect(FIELD).toMatch(/entry\.schema\.type === 'number'[\s\S]*?<Slider/)
+    expect(FIELD).toMatch(/entry\.schema\.type === 'number'[\s\S]*?<NumberField/)
+    expect(FIELD).toMatch(/entry\.schema\.type === 'number'[\s\S]*?NumberFieldDecrement/)
+    expect(FIELD).toMatch(/entry\.schema\.type === 'number'[\s\S]*?NumberFieldIncrement/)
+  })
+
+  it('小标题下是卡片；卡片里的行之间是分割线', () => {
     const SECTION = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsSection.vue',
+      '../../../ui-kit-shadcn/src/components/settings/SettingsSection.vue',
     )
-    expect(SECTION).toMatch(/border-top: 1px solid var\(--ui-line-soft/)
-    expect(SECTION).not.toMatch(/border-radius:\s*(1[0-9]|[2-9])/)
+    expect(SECTION).toMatch(/shadcn-settings-section__title/)
+    expect(SECTION).toMatch(/border: 1px solid var\(--ui-line/)
+    expect(SECTION).toMatch(/border-radius: var\(--radius-panel/)
+    const ROW = read(
+      '../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue',
+    )
+    expect(ROW).toMatch(/\.shadcn-settings-row \+ \.shadcn-settings-row \{[^}]*border-top: 1px solid/s)
   })
 })
 
@@ -164,11 +206,14 @@ describe('AppSettingsPanel 硬性保留：插槽、滚动锁、关闭通道', ()
 })
 
 describe('AppSettingsPanel 导航选中态', () => {
-  it('选中项用中性浅底 + 正常文字色，不用强调色染整行', () => {
+  it('未选中统一弱化色；选中用中性浅底 + 正常文字色', () => {
     expect(NAV_ITEM).toMatch(/\.shadcn-nav-item\.is-active \{/)
     expect(NAV_ITEM).toMatch(/background: var\(--ui-panel-active/)
     expect(NAV_ITEM).toMatch(/color: var\(--ui-ink/)
     const active = /\.shadcn-nav-item\.is-active \{([^}]*)\}/.exec(NAV_ITEM)?.[1] ?? ''
     expect(active).not.toMatch(/--ui-accent/)
+    const base = /\.shadcn-nav-item \{([^}]*)\}/.exec(NAV_ITEM)?.[1] ?? ''
+    expect(base).toMatch(/color: var\(--ui-ink-dim/)
+    expect(base).not.toMatch(/opacity:/)
   })
 })

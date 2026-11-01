@@ -16,6 +16,7 @@
  * 自绘页直接以 Config 为唯一默认来源，改动写回 settings（随 settingsPersist 自动持久化、实时生效）。
  */
 import { markRaw } from 'vue'
+import { MousePointer2 } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { Config, CURSOR_NAV_ID } from './catalog'
 import CursorEffectOverlay from './CursorEffectOverlay.vue'
@@ -49,7 +50,8 @@ export function apply(ctx: Context): void {
     id: 'cursor-effect/nav',
     order: 7,
     component: markRaw(CursorSettingsNav),
-    meta: { title: '光标' },
+    // 只提供数据：外观由设置面板统一渲染，整页走 page
+    meta: { title: '光标', category: '画布', icon: MousePointer2, page: markRaw(CursorSettingsPage) },
   })
   ctx.slots.register('settingsGroup/' + CURSOR_NAV_ID, {
     id: 'cursor-effect/page',

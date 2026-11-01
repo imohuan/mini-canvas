@@ -11,6 +11,10 @@
       "default": "./src/index.ts"
     },
     "./styles.css": "./src/styles/host.css",
+    "./vite-plugin-debug-loc": {
+      "types": "./src/vite-plugin-debug-loc.ts",
+      "default": "./src/vite-plugin-debug-loc.ts"
+    },
     "./*": "./src/*"
   },
   "scripts": {

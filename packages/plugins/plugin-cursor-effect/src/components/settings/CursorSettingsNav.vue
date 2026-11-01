@@ -1,20 +1,17 @@
 <script setup lang="ts">
-// 设置面板左侧一级导航项（settingsNav occupant）。面板注入 { group, active, onSelect }。
-import { MousePointer2 } from 'lucide-vue-next'
-
+/**
+ * CursorSettingsNav —— 光标设置入口的数据占位。
+ *
+ * 真正的导航按钮由设置面板按 settings.nav 的 meta（title / category / icon / page）统一渲染，
+ * 插件不再自绘一套样式。保留文件是为了兼容旧的注册写法。
+ */
 defineProps<{ group: string; active?: boolean; onSelect?: (key: string) => void }>()
 </script>
 
 <template>
-  <button class="csn" :class="{ active }" @click="onSelect && onSelect(group)">
-    <MousePointer2 :size="15" />
-    <span>光标</span>
-  </button>
+  <span class="cursor-nav-anchor" aria-hidden="true" />
 </template>
 
 <style scoped>
-.csn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--ui-ink, #374151); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
-.csn:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
-.csn.active { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); }
+.cursor-nav-anchor { display: none; }
 </style>
-

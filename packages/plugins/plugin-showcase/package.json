@@ -29,7 +29,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/ui-kit-shadcn": "workspace:*",
+    "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",

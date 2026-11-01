@@ -15,14 +15,21 @@
  *      （支持 全选 / 反选 / 清空 + 单个点选）→ 保存。
  *
  * 密钥只写不回读：服务端只给 hasKey；编辑时留空 = 不改动已存的。
+ * UI 全部来自 @mini-canvas/ui-kit-shadcn；下拉不再经 useUiComponent 转接。
  */
 import { computed, onMounted, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@mini-canvas/ui-kit-shadcn'
 import { useAgent } from '../../useAgent.js'
+import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
-
-/** 通用下拉取主题登记件（与画布里的下拉同一套）；主题缺席时回落到原生 select。 */
-const ThemedSelect = useUiComponent('select')
 
 const agent = useAgent()
 const s = agent.state
@@ -39,7 +46,7 @@ const clientOptions = computed(() => {
   const list = s.clientTypes.length ? s.clientTypes : ['openai-chat', 'deepseek-v4']
   return [DEFAULT_CLIENT, ...list.filter((c) => c !== DEFAULT_CLIENT)]
 })
-/** 给通用下拉的选项形状（label = value，协议名本身就是给人看的）。 */
+/** 给下拉的选项形状（label = value，协议名本身就是给人看的）。 */
 const clientChoices = computed(() => clientOptions.value.map((c) => ({ label: c, value: c })))
 
 /** 编辑区表单。provider 一旦落定就是这一批模型的归属渠道名。 */
@@ -223,100 +230,114 @@ async function save(): Promise<void> {
     <p v-if="s.error" class="ap-error">{{ s.error }}</p>
 
     <!-- ① 已配置的渠道（一行 = 一个 provider） -->
-    <section class="ap-block">
-      <header class="ap-block-head">
-        <h4>渠道（Provider）</h4>
-        <span class="ap-count">{{ groups.length }} 个渠道 · {{ s.models.filter((m) => m.hasKey).length }} 个模型</span>
-      </header>
-      <div class="ap-table ap-scroll">
-        <div class="ap-tr is-head">
-          <span>渠道</span><span>Base URL / 模型</span><span></span>
-        </div>
-        <div v-for="g in groups" :key="g.provider" class="ap-tr">
-          <span class="ap-td" :title="g.provider">{{ g.provider }}</span>
-          <span class="ap-td ap-td-meta" :title="g.baseUrl">
-            <template v-if="g.baseUrl">{{ g.baseUrl }} · </template>
-            {{ g.models.length }} 个模型<template v-if="g.defaultModel"> · 默认 {{ g.defaultModel }}</template>
-          </span>
-          <span class="ap-td-act">
-            <button class="ap-mini" @click="editGroup(g)">编辑</button>
-          </span>
-        </div>
-        <p v-if="!groups.length" class="ap-empty">还没有配置渠道 —— 用下面的表单拉取并勾选模型</p>
-      </div>
-    </section>
+    <ShadcnSettingsSection
+      title="渠道（Provider）"
+      :description="groups.length + ' 个渠道 · ' + s.models.filter((m) => m.hasKey).length + ' 个模型'"
+    >
+      <ShadcnSettingsRow
+        v-for="g in groups"
+        :key="g.provider"
+        :label="g.provider"
+        :description="(g.baseUrl ? g.baseUrl + ' · ' : '') + g.models.length + ' 个模型' + (g.defaultModel ? ' · 默认 ' + g.defaultModel : '')"
+      >
+        <Button variant="outline" size="sm" type="button" @click="editGroup(g)">编辑</Button>
+      </ShadcnSettingsRow>
+      <p v-if="!groups.length" class="ap-empty">还没有配置渠道 —— 用下面的表单拉取并勾选模型</p>
+    </ShadcnSettingsSection>
 
     <!-- ② 编辑区：拉取 → tag 选择 → 保存 -->
-    <section class="ap-block">
-      <header class="ap-block-head">
-        <h4>{{ editingExisting ? '编辑渠道' : '添加渠道' }}</h4>
-        <button class="ap-mini" @click="newProvider">新建渠道</button>
-      </header>
-      <div class="ap-block-body">
-        <form class="ap-fields" @submit.prevent="save">
-          <label class="ap-field">渠道名（provider）<input v-model="form.provider" placeholder="local" /></label>
-          <label class="ap-field">Base URL<input v-model="form.baseUrl" placeholder="http://127.0.0.1:3000/v1" /></label>
-          <!-- 钥匙：编辑已有渠道时回显**掩码**（不是明文），所以这里是 text 而不是 password ——
-               用 password 会把掩码也打成一排圆点，用户还是看不出「已配置」。
-               掩码原样回传 = 不改；清空 = 也不改；只有输入别的内容才会覆盖。 -->
-          <label class="ap-field">API Key
-            <input v-model="form.apiKey" type="text" spellcheck="false" autocomplete="off"
-              :placeholder="editingExisting ? '已配置（' + (savedKeyMask || '已保存') + '）· 改就输入新密钥，留空 = 不变' : '粘贴密钥'" />
-            <small v-if="editingExisting && savedKeyMask" class="ap-hint">已存密钥：{{ savedKeyMask }}（回显的是掩码，明文不会下发）</small>
-          </label>
-          <label class="ap-field">客户端协议
-            <component
-              :is="ThemedSelect"
-              v-if="ThemedSelect"
-              v-model="form.clientType"
-              :options="clientChoices"
-              match-width
-              aria-label="客户端协议"
-            />
-            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
-            <small class="ap-hint">默认 openai-chat（稳）。deepseek-v4 会出「思考」但实测会让服务崩溃，谨慎切换。</small>
-          </label>
+    <ShadcnSettingsSection :title="editingExisting ? '编辑渠道' : '添加渠道'">
+      <div class="ap-model-toolbar">
+        <Button variant="outline" size="sm" type="button" @click="newProvider">新建渠道</Button>
+      </div>
+      <form class="ap-form-stack ap-model-form" @submit.prevent="save">
+        <ShadcnSettingsRow label="渠道名（provider）">
+          <Input v-model="form.provider" class="ap-input" aria-label="渠道名" placeholder="local" />
+        </ShadcnSettingsRow>
+        <ShadcnSettingsRow label="Base URL">
+          <Input v-model="form.baseUrl" class="ap-input" aria-label="Base URL" placeholder="http://127.0.0.1:3000/v1" />
+        </ShadcnSettingsRow>
+        <!-- 钥匙：编辑已有渠道时回显**掩码**（不是明文），所以这里是 text 而不是 password ——
+             用 password 会把掩码也打成一排圆点，用户还是看不出「已配置」。
+             掩码原样回传 = 不改；清空 = 也不改；只有输入别的内容才会覆盖。 -->
+        <ShadcnSettingsRow
+          label="API Key"
+          :description="editingExisting && savedKeyMask ? '已存密钥：' + savedKeyMask + '（回显的是掩码，明文不会下发）' : undefined"
+        >
+          <Input
+            v-model="form.apiKey"
+            class="ap-input"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            aria-label="API Key"
+            :placeholder="editingExisting ? '已配置（' + (savedKeyMask || '已保存') + '）· 改就输入新密钥，留空 = 不变' : '粘贴密钥'"
+          />
+        </ShadcnSettingsRow>
+        <ShadcnSettingsRow
+          label="客户端协议"
+          description="默认 openai-chat（稳）。deepseek-v4 会出「思考」但实测会让服务崩溃，谨慎切换。"
+        >
+          <Select v-model="form.clientType">
+            <SelectTrigger class="ap-select" size="sm" aria-label="客户端协议">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
+              <SelectItem v-for="c in clientChoices" :key="c.value" :value="c.value">{{ c.label }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </ShadcnSettingsRow>
 
-          <!-- 拉取 + tag 选择器 -->
-          <div class="ap-field">
-            <span class="ap-field-row">
-              <button type="button" class="ap-mini" @click="pullUpstream">拉取模型清单</button>
-              <span class="ap-hint">{{ upstreamHint || '点「拉取」向上游要模型清单（V1/models）' }}</span>
+        <!-- 拉取 + tag 选择器 -->
+        <div class="ap-model-pull">
+          <Button variant="outline" size="sm" type="button" @click="pullUpstream">拉取模型清单</Button>
+          <span class="ap-hint">{{ upstreamHint || '点「拉取」向上游要模型清单（V1/models）' }}</span>
+        </div>
+
+        <div v-if="candidates.length" class="ap-picker">
+          <div class="ap-picker-head">
+            <span class="ap-hint">已选 {{ picked.size }} / {{ candidates.length }}</span>
+            <span class="ap-quick">
+              <Button variant="outline" size="xs" type="button" @click="pickAll">全选</Button>
+              <Button variant="outline" size="xs" type="button" @click="invertPick">反选</Button>
+              <Button variant="outline" size="xs" type="button" @click="clearPick">清空</Button>
             </span>
           </div>
-
-          <div v-if="candidates.length" class="ap-picker">
-            <div class="ap-picker-head">
-              <span class="ap-hint">已选 {{ picked.size }} / {{ candidates.length }}</span>
-              <span class="ap-quick">
-                <button type="button" class="ap-mini" @click="pickAll">全选</button>
-                <button type="button" class="ap-mini" @click="invertPick">反选</button>
-                <button type="button" class="ap-mini" @click="clearPick">清空</button>
-              </span>
-            </div>
-            <!-- tag 自动布局：flex-wrap，点一下即切换选中 -->
-            <div class="ap-tagpool" role="listbox" aria-multiselectable="true" aria-label="选择模型">
-              <button
-                v-for="m in candidates"
-                :key="m"
-                type="button"
-                class="ap-tagchip"
-                :class="{ 'is-on': picked.has(m) }"
-                role="option"
-                :aria-selected="picked.has(m)"
-                :title="m"
-                @click="togglePick(m)"
-              >{{ m }}</button>
-            </div>
+          <!-- tag 自动布局：flex-wrap，点一下即切换选中 -->
+          <div class="ap-tagpool" role="listbox" aria-multiselectable="true" aria-label="选择模型">
+            <Button
+              v-for="m in candidates"
+              :key="m"
+              :variant="picked.has(m) ? 'default' : 'outline'"
+              size="xs"
+              type="button"
+              class="ap-tagchip"
+              role="option"
+              :aria-selected="picked.has(m)"
+              :title="m"
+              @click="togglePick(m)"
+            >{{ m }}</Button>
           </div>
-          <p v-else class="ap-hint">还没有候选模型 —— 点上面的「拉取模型清单」。</p>
+        </div>
+        <p v-else class="ap-hint">还没有候选模型 —— 点上面的「拉取模型清单」。</p>
 
-          <small v-if="notice" class="ap-hint">{{ notice }}</small>
-          <button class="ap-submit" type="submit" :disabled="busy">
+        <small v-if="notice" class="ap-hint">{{ notice }}</small>
+        <div class="ap-form-actions">
+          <Button type="submit" size="sm" :disabled="busy">
             {{ busy ? '保存中…' : editingExisting ? '保存修改' : '添加渠道' }}
-          </button>
-        </form>
-      </div>
-    </section>
+          </Button>
+        </div>
+      </form>
+    </ShadcnSettingsSection>
   </div>
 </template>
+
+<style scoped>
+.ap-model-toolbar { display: flex; justify-content: flex-end; padding: 6px 0 2px; }
+.ap-model-form { padding-bottom: 10px; }
+.ap-model-pull { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; }
+.ap-input { width: 100%; max-width: 320px; }
+.ap-select { width: 200px; }
+.ap-form-actions { display: flex; justify-content: flex-end; padding-top: 10px; }
+.ap-tagchip { height: 24px; max-width: 100%; padding: 0 8px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; }
+</style>

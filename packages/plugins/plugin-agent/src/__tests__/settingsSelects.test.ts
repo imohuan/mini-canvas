@@ -16,10 +16,21 @@ function sourceOf(name: string): string {
 
 describe('Agent 设置页的下拉', () => {
   for (const page of PAGES) {
-    it(page + ' 用 useUiComponent(\'select\') 取件', () => {
-      expect(sourceOf(page)).toMatch(/useUiComponent\('select'\)/)
+    it(page + ' 直接 import @mini-canvas/ui-kit-shadcn 的 Select', () => {
+      const src = sourceOf(page)
+      expect(src).toMatch(/from '@mini-canvas\/ui-kit-shadcn'/)
+      expect(src).toMatch(/\bSelect\b/)
+      expect(src).not.toMatch(/useUiComponent\('select'\)/)
     })
   }
+
+  it('设置里的下拉浮层带 settings-floating-layer，且用 popper 定位', () => {
+    for (const page of PAGES) {
+      const src = sourceOf(page)
+      expect(src, page + ' 缺浮层抬层类').toMatch(/<SelectContent[^>]*class="settings-floating-layer"/s)
+      expect(src, page + ' 缺 popper 定位').toMatch(/position="popper"/)
+    }
+  })
 
   it('一个原生 <select> 都没有（主题缺席时明说，不偷偷换控件）', () => {
     for (const page of PAGES) {

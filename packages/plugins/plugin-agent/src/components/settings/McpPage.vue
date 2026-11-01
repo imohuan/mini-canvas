@@ -1,24 +1,28 @@
 <script setup lang="ts">
-// MCP 页：上面是「已配置」列表（表头在上、内容在下），下面是添加表单（一行一个字段）。
-// kind 三选一，选中后只显示该类型需要的字段 —— 这正是「不用 schema 自动渲染」的原因。
+// MCP 页：已配置列表 + 添加表单。控件全部来自 @mini-canvas/ui-kit-shadcn。
 import { computed, onMounted, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import {
+  Badge,
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@mini-canvas/ui-kit-shadcn'
+import { PlugZap, Plus, Trash2 } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
 import type { McpProbeResult } from '../../agentService.js'
+import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
 
 const agent = useAgent()
 const s = agent.state
-/**
- * 通用下拉取主题登记件。
- *
- * 不再回落到原生下拉控件：它的浮层由浏览器画，样式与本项目的下拉完全不是一档
- * （用户口径：所有下拉都用同一套）。取不到就把按钮禁用，并说明是主题没装 —— 比悄悄
- * 换成一个长得不一样的控件更好查。
- */
-const ThemedSelect = useUiComponent('select')
+
+type Kind = 'stdio' | 'http' | 'sse'
 /** MCP 传输类型（原生值 = 后台认的 kind）。 */
-const KIND_CHOICES = [
+const KIND_CHOICES: Array<{ label: string; value: Kind }> = [
   { label: 'http', value: 'http' },
   { label: 'sse', value: 'sse' },
   { label: 'stdio', value: 'stdio' },
@@ -26,7 +30,7 @@ const KIND_CHOICES = [
 const busy = ref(false)
 const form = ref({
   name: '',
-  kind: 'http' as 'stdio' | 'http' | 'sse',
+  kind: 'http' as Kind,
   url: 'http://127.0.0.1:3000/mcp/$smart',
   command: 'node',
   args: '',
@@ -36,8 +40,8 @@ const isStdio = computed(() => form.value.kind === 'stdio')
 /**
  * 「检查连接」的结果。
  *
- * 为什么要这个按钮：SDK 的 MCP 是**懒连接**的，不主动探一次就只能靠「先发一句话」
- * 看那句「已连接 MCP：…」的提示。用户想确认自己配得对不对，不该被迫先花一轮对话。
+ * SDK 的 MCP 是懒连接的，不主动探一次就只能靠「先发一句话」看提示；
+ * 这个按钮让用户不必花一轮对话就能确认配置对不对。
  */
 const probing = ref(false)
 const probe = ref<McpProbeResult | null>(null)
@@ -89,82 +93,107 @@ async function save(): Promise<void> {
   <div class="ap ap-mcp">
     <p v-if="s.error" class="ap-error">{{ s.error }}</p>
 
-    <section class="ap-block">
-      <header class="ap-block-head">
-        <h4>MCP 服务</h4>
-        <span class="ap-quick">
-          <span class="ap-count">{{ s.mcpServers.length }} 个</span>
-          <button class="ap-mini" :disabled="probing || !s.mcpServers.length" @click="checkConnection">
-            {{ probing ? '连接中…' : '检查连接' }}
-          </button>
-        </span>
-      </header>
-      <div class="ap-table ap-scroll">
-        <div class="ap-tr is-head"><span>名称</span><span>地址 / 命令</span><span></span></div>
-        <div v-for="m in s.mcpServers" :key="m.name" class="ap-tr">
-          <span class="ap-td" :title="m.name">{{ m.name }}<span v-if="m.builtin" class="ap-tag"> 自带</span></span>
-          <span class="ap-td ap-td-meta" :title="String(m.config.url || m.config.command || '')">
-            {{ String(m.config.url || m.config.command || '') }}{{ m.invalid ? ' · 解析失败' : '' }}
-          </span>
-          <!-- 自带画布 MCP **不给删除按钮**（用户口径 2026-10-05）：它是随 Agent 内置的，
-               删了 Agent 就查不了当前画布。后端也拦同名删除请求 —— 这里只是第一道提示。 -->
-          <span class="ap-td-act">
-            <button v-if="!m.builtin" class="ap-mini danger" @click="agent.removeMcp(m.name)">删除</button>
-            <span v-else class="ap-hint">自带 · 不可删除</span>
-          </span>
-        </div>
+    <ShadcnSettingsSection
+      title="MCP 服务"
+      :description="s.mcpServers.length + ' 个已配置'"
+    >
+      <template>
+        <ShadcnSettingsRow
+          v-for="m in s.mcpServers"
+          :key="m.name"
+          :label="m.name"
+          :description="String(m.config.url || m.config.command || '')"
+        >
+          <Badge v-if="m.builtin" variant="secondary">自带</Badge>
+          <Button
+            v-else
+            variant="destructive"
+            size="icon-sm"
+            type="button"
+            :aria-label="'删除 MCP ' + m.name"
+            @click="agent.removeMcp(m.name)"
+          >
+            <Trash2 :size="13" aria-hidden="true" />
+          </Button>
+        </ShadcnSettingsRow>
         <p v-if="!s.mcpServers.length" class="ap-empty">还没有配置 MCP 服务</p>
-      </div>
+        <div class="ap-mcp-probe">
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            :disabled="probing || !s.mcpServers.length"
+            @click="checkConnection"
+          >
+            <PlugZap :size="13" aria-hidden="true" /> {{ probing ? '连接中…' : '检查连接' }}
+          </Button>
+        </div>
 
-      <!-- 检查连接的结果：每个服务连没连上 + 真正拿到了哪些工具 -->
-      <div v-if="probe" class="ap-block-body ap-probe">
-        <p v-if="probe.error" class="ap-error">{{ probe.error }}</p>
-        <template v-else>
-          <p class="ap-hint">
-            {{ probe.ok ? '连接成功' : '有服务连不上' }}：
-            <span v-for="(sv, i) in probe.servers" :key="sv.name">
-              {{ i ? '、' : '' }}{{ sv.name }}(<span :class="sv.status === 'completed' ? '' : 'is-bad'">{{ sv.tools }} 个工具</span><template
-                v-if="sv.status !== 'completed'">· {{ sv.status }}<template v-if="sv.error"> {{ sv.error }}</template></template>)
-            </span>
-            <template v-if="!probe.servers.length">没有任何服务返回结果</template>
-          </p>
-          <p v-for="w in probe.warnings" :key="w" class="ap-hint is-bad">{{ w }}</p>
-
-          <div v-for="[server, list] in toolsByServer" :key="server" class="ap-toolgroup">
-            <strong class="ap-toolgroup-name">{{ server }}</strong>
-            <div class="ap-tagpool">
-              <span v-for="t in list" :key="t.fullName" class="ap-tagchip is-on" :title="t.description">{{ t.name }}</span>
-            </div>
-          </div>
-          <p v-if="probe.ok && !probe.tools.length" class="ap-hint">连上了，但没发现任何工具。</p>
-        </template>
-      </div>
-    </section>
-
-    <section class="ap-block">
-      <header class="ap-block-head"><h4>添加 MCP 服务</h4></header>
-      <div class="ap-block-body">
-        <form class="ap-fields" @submit.prevent="save">
-          <label class="ap-field">名称<input v-model="form.name" placeholder="smart" /></label>
-          <label class="ap-field">类型
-            <component
-              :is="ThemedSelect"
-              v-if="ThemedSelect"
-              v-model="form.kind"
-              :options="KIND_CHOICES"
-              match-width
-              aria-label="MCP 传输类型"
-            />
-            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
-          </label>
-          <label v-if="!isStdio" class="ap-field">URL<input v-model="form.url" placeholder="http://127.0.0.1:3000/mcp/$smart" /></label>
+        <div v-if="probe" class="ap-probe">
+          <p v-if="probe.error" class="ap-error">{{ probe.error }}</p>
           <template v-else>
-            <label class="ap-field">命令<input v-model="form.command" /></label>
-            <label class="ap-field">参数<input v-model="form.args" placeholder="用空格分隔" /></label>
+            <p class="ap-hint">
+              {{ probe.ok ? '连接成功' : '有服务连不上' }}：
+              <span v-for="(sv, i) in probe.servers" :key="sv.name">
+                {{ i ? '、' : '' }}{{ sv.name }}(<span :class="sv.status === 'completed' ? '' : 'is-bad'">{{ sv.tools }} 个工具</span><template
+                  v-if="sv.status !== 'completed'">· {{ sv.status }}<template v-if="sv.error"> {{ sv.error }}</template></template>)
+              </span>
+              <template v-if="!probe.servers.length">没有任何服务返回结果</template>
+            </p>
+            <p v-for="w in probe.warnings" :key="w" class="ap-hint is-bad">{{ w }}</p>
+
+            <div v-for="[server, list] in toolsByServer" :key="server" class="ap-toolgroup">
+              <strong class="ap-toolgroup-name">{{ server }}</strong>
+              <div class="ap-tagpool">
+                <Badge v-for="t in list" :key="t.fullName" variant="secondary" :title="t.description">{{ t.name }}</Badge>
+              </div>
+            </div>
+            <p v-if="probe.ok && !probe.tools.length" class="ap-hint">连上了，但没发现任何工具。</p>
           </template>
-          <button class="ap-submit" type="submit" :disabled="busy || !form.name.trim()">保存</button>
-        </form>
-      </div>
-    </section>
+        </div>
+      </template>
+    </ShadcnSettingsSection>
+
+    <ShadcnSettingsSection title="添加 MCP 服务">
+      <form class="ap-form-stack ap-mcp-form" @submit.prevent="save">
+        <ShadcnSettingsRow label="名称">
+          <Input v-model="form.name" class="ap-input" aria-label="MCP 名称" placeholder="smart" />
+        </ShadcnSettingsRow>
+        <ShadcnSettingsRow label="类型">
+          <Select v-model="form.kind">
+            <SelectTrigger class="ap-select" size="sm" aria-label="MCP 传输类型">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
+              <SelectItem v-for="c in KIND_CHOICES" :key="c.value" :value="c.value">{{ c.label }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </ShadcnSettingsRow>
+        <ShadcnSettingsRow v-if="!isStdio" label="URL">
+          <Input v-model="form.url" class="ap-input" aria-label="MCP URL" placeholder="http://127.0.0.1:3000/mcp/$smart" />
+        </ShadcnSettingsRow>
+        <template v-else>
+          <ShadcnSettingsRow label="命令">
+            <Input v-model="form.command" class="ap-input" aria-label="MCP 命令" />
+          </ShadcnSettingsRow>
+          <ShadcnSettingsRow label="参数">
+            <Input v-model="form.args" class="ap-input" aria-label="MCP 参数" placeholder="用空格分隔" />
+          </ShadcnSettingsRow>
+        </template>
+        <div class="ap-form-actions">
+          <Button type="submit" size="sm" :disabled="busy || !form.name.trim()">
+            <Plus :size="13" aria-hidden="true" /> 保存
+          </Button>
+        </div>
+      </form>
+    </ShadcnSettingsSection>
   </div>
 </template>
+
+<style scoped>
+.ap-mcp-form { padding: 8px 0; }
+.ap-mcp-probe { padding: 10px 0 4px; }
+.ap-form-actions { display: flex; justify-content: flex-end; padding: 8px 0 10px; }
+.ap-input { width: 100%; }
+.ap-select { width: 160px; }
+</style>

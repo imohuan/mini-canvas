@@ -10,6 +10,7 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RefreshCw, RotateCcw, Trash2, Bug } from 'lucide-vue-next'
+import { Badge, Button } from '@mini-canvas/ui-kit-shadcn'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { presenceStatusOf, type DebugPluginRow, type DebugPresenceStatus, type HotReload } from '../../data/hotReload'
 
@@ -139,66 +140,46 @@ onMounted(() => {
 
 <template>
   <div class="hrp">
-    <div class="hrp-toolbar">
-      <p class="hrp-hint">
-        这里是 <strong>watch 上报</strong>过的调试插件。「已安装」只看内核里有没有同名插件；
-        「监听」看 watch 是否还在发心跳 —— 两件事分开看，与「插件」页是两套独立入口。
-      </p>
-      <button class="hrp-btn" :disabled="loading" @click="refresh">
-        <RefreshCw :size="14" :class="{ spin: loading }" /> 刷新
-      </button>
-      <span class="hrp-count">{{ installedCount }} / {{ rows.length }} 已装</span>
-      <span class="hrp-count">{{ watchingCount }} 个监听中</span>
-    </div>
-
+    <section class="hrp-section">
+      <header class="hrp-section-head">
+        <h3>调试插件</h3>
+        <p>{{ installedCount }} / {{ rows.length }} 已装 · {{ watchingCount }} 个监听中</p>
+      </header>
+      <div class="hrp-toolbar">
+        <p class="hrp-hint">
+          这里是 <strong>watch 上报</strong>过的调试插件。「已安装」只看内核里有没有同名插件；
+          「监听」看 watch 是否还在发心跳 —— 两件事分开看，与「插件」页是两套独立入口。
+        </p>
+        <Button variant="outline" size="sm" type="button" :disabled="loading" @click="refresh">
+          <RefreshCw :size="13" :class="{ spin: loading }" aria-hidden="true" /> 刷新
+        </Button>
+      </div>
     <p v-if="error" class="hrp-error" role="alert">{{ error }}</p>
 
-    <div class="hrp-table-wrap">
-      <table class="hrp-table">
-        <thead>
-          <tr><th>插件</th><th>已安装</th><th>监听</th><th>上报地址</th><th>最后心跳</th><th class="hrp-th-act">操作</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in rows" :key="r.name">
-            <td>
-              <strong class="hrp-name"><Bug :size="12" /> {{ r.name }}</strong>
-              <div v-if="r.server" class="hrp-desc" :title="r.server">后台：{{ r.server }}</div>
-            </td>
-            <td class="hrp-nowrap">
-              <span class="hrp-badge" :class="'is-' + badgeOf(r).tone">{{ badgeOf(r).text }}</span>
-            </td>
-            <td class="hrp-nowrap">
-              <span class="hrp-badge" :class="'is-' + presenceBadge(r).tone" :title="r.presenceMessage || ''">
-                {{ presenceBadge(r).text }}
-              </span>
-              <span v-if="r.presenceInstances && r.presenceInstances > 1" class="hrp-warn"
-                :title="'同一插件有 ' + r.presenceInstances + ' 个 watch 实例在跑，可能互相抢构建'">
-                多实例 {{ r.presenceInstances }}
-              </span>
-              <div v-if="r.presenceMessage" class="hrp-row-err">{{ r.presenceMessage }}</div>
-            </td>
-            <td class="hrp-desc hrp-url" :title="r.front">{{ r.front || '—' }}</td>
-            <td class="hrp-nowrap hrp-desc">
-              {{ timeOf(r.at) }}
-              <div v-if="r.presenceAgeMs !== undefined" class="hrp-age">心跳 {{ ageText(r.presenceAgeMs) }}</div>
-            </td>
-            <td class="hrp-nowrap hrp-act">
-              <button class="hrp-mini" :disabled="busy === r.name || !r.front" @click="onReinstall(r)">
-                <RotateCcw :size="13" /> 重装
-              </button>
-              <button class="hrp-mini danger" :disabled="busy === r.name" @click="onUninstall(r)">
-                <Trash2 :size="13" /> 卸载
-              </button>
-            </td>
-          </tr>
-          <tr v-if="!rows.length">
-            <td colspan="6" class="hrp-empty">
-              还没有调试插件。在插件包里跑 <code>pnpm watch</code>，构建一次后会自动出现在这里。
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <div
+        v-for="r in rows"
+        :key="r.name"
+        class="hrp-row-item"
+      >
+        <div class="hrp-row-main">
+          <strong>{{ r.name }}</strong>
+          <span>{{ (r.front || '—') + (r.presenceAgeMs !== undefined ? ' · 心跳 ' + ageText(r.presenceAgeMs) : '') }}</span>
+        </div>
+        <div class="hrp-row">
+          <Badge :variant="badgeOf(r).tone === 'err' ? 'destructive' : badgeOf(r).tone === 'off' ? 'outline' : 'secondary'">{{ badgeOf(r).text }}</Badge>
+          <Badge :variant="presenceBadge(r).tone === 'err' ? 'destructive' : presenceBadge(r).tone === 'off' ? 'outline' : 'secondary'" :title="r.presenceMessage || ''">{{ presenceBadge(r).text }}</Badge>
+          <Button variant="outline" size="sm" type="button" :disabled="busy === r.name || !r.front" @click="onReinstall(r)">
+            <RotateCcw :size="13" aria-hidden="true" /> 重装
+          </Button>
+          <Button variant="destructive" size="sm" type="button" :disabled="busy === r.name" @click="onUninstall(r)">
+            <Trash2 :size="13" aria-hidden="true" /> 卸载
+          </Button>
+        </div>
+      </div>
+      <p v-if="!rows.length" class="hrp-empty">
+        还没有调试插件。在插件包里跑 <code>pnpm watch</code>，构建一次后会自动出现在这里。
+      </p>
+    </section>
   </div>
 </template>
 
@@ -249,4 +230,14 @@ onMounted(() => {
 .spin { animation: hrp-spin 0.9s linear infinite; }
 @keyframes hrp-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.hrp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.hrp-empty code { padding: 1px 5px; border-radius: var(--radius-badge, 6px); background: var(--ui-veil, rgb(0 0 0 / 0.04)); }
+.hrp-section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hrp-section-head { display: flex; align-items: baseline; gap: 8px; }
+.hrp-section-head h3 { margin: 0; font-size: 12px; font-weight: 700; color: var(--ui-ink, #18202b); }
+.hrp-section-head p { margin: 0; font-size: 11px; color: var(--ui-ink-mute, #8c95a3); }
+.hrp-row-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
+.hrp-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hrp-row-main strong { font-size: 12px; color: var(--ui-ink, #18202b); }
+.hrp-row-main span { font-size: 11px; color: var(--ui-ink-dim, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

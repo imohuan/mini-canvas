@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "preserve",
-    "types": ["node"],
+    "types": [],
     "rootDir": "src"
   },
   "include": ["src"]

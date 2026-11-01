@@ -1,35 +1,49 @@
 <script setup lang="ts">
 /**
- * PluginSettingsContent —— 默认主题的设置内容区（左侧图标导航 + 右侧当前分类）。
+ * PluginSettingsContent —— 默认主题的设置内容区（左分类导航 + 右侧卡片小节）。
  *
  * 只画外壳里面那一格：遮罩、标题栏、✕、Esc、浮动窗都在渲染层 SettingsShell 里。
  *
- * 布局：
- * - 左：分组标题 + 一级菜单项；每项一个图标（场域 settings/navIcon，取不到就用兜底图标）。
- * - 右：当前分类的配置项，一行一个（左侧标题 + 描述，右侧控件）。
- * - 一级下只有一个二级分组时合并成一项；有多个时用页签切换，避免长列表。
+ * 布局（用户口径 2026-11-01）：
+ * - 左：第 0 级分类（个人 / 集成 / 画布 / 开发）+ 一级图标菜单，外观统一由 ShadcnSettingsNav 画。
+ * - 右：一级标题 → 二级小标题 + 卡片（卡片内每行一条分割线）。
+ * - 顶部页签条保留代码，默认隐藏；显式传 show-section-tabs 才出现。
  *
  * 三套插槽都保留：
- * - settings.nav：插件的一级导航项，按 id 或 meta.title 命中默认项时顶替，否则追加。
+ * - settings.nav：插件一级导航项，按 id 或 meta.title 命中默认项时顶替，否则追加。
+ *   插件只提供数据（title / category / icon / page），不再自绘导航外观。
  * - settings.tab：二级页签，只对当前一级生效。
  * - settingsGroup/<完整分组 key>：整组正文，支持 prepend / append / replace。
  *
  * 关闭通道与滚动锁都不变：关闭仍由外壳广播 settings:ui-close；程序化滚动时锁住高亮。
  */
 import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import type { Component } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
-import ShadcnSettingsNavItem from './ShadcnSettingsNavItem.vue'
+import ShadcnSettingsNav from './ShadcnSettingsNav.vue'
 import ShadcnSettingsSection from './ShadcnSettingsSection.vue'
 import SettingsSchemaField from './SettingsSchemaField.vue'
 import { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'
+import {
+  categoryOf,
+  metaIcon,
+  metaPage,
+  metaText,
+  SETTINGS_NAV_CATEGORY_FIELD,
+} from './navCategory'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SlotOcc = { id: string; order: number; component: any; meta?: any }
 
-const props = defineProps<{
-  settings: SettingsPanelSource
-}>()
+const props = withDefaults(
+  defineProps<{
+    settings: SettingsPanelSource
+    /** 顶部二级页签条：默认关掉；需要按页签切换的宿主可以显式打开 */
+    showSectionTabs?: boolean
+  }>(),
+  { showSectionTabs: false },
+)
 
 const { ctx } = useCanvasRender()
 
@@ -118,46 +132,77 @@ interface NavEntry {
   kind: 'section' | 'nav'
   /** 该一级下的完整分组 key */
   leaves: string[]
-  /** 插件导航组件 */
-  component?: unknown
+  /** 插件导航组件（兼容旧插件；外观不再渲染它） */
+  component?: Component
+  /** 插件自绘整页（meta.page，优先于 settingsGroup） */
+  page?: Component
   /** 显示名 */
   title: string
+  /** 第 0 级分类 */
+  category: string
+  /** 图标 */
+  icon?: unknown
   /** 保留给插件排序的原始 order */
   order: number
+}
+
+/** 第 0 级分类场域：按一级名登记，插件可覆盖默认归类 */
+const navCategories = ctx.registryOf<string>(SETTINGS_NAV_CATEGORY_FIELD)
+const categoryTick = ref(0)
+if (navCategories && typeof navCategories.subscribe === 'function') {
+  disposers.push(navCategories.subscribe(() => void (categoryTick.value += 1)))
+}
+
+function categoryFor(nav: string, meta?: unknown): string {
+  void categoryTick.value
+  const registered = navCategories?.top(nav)?.value
+  return categoryOf(nav, metaText(meta, 'category'), typeof registered === 'string' ? registered : '')
 }
 
 /**
  * 合并“由分组推导的一级项”和“插件注册的导航项”。
  *
- * 插件的 id 与一级名相同，或 meta.title 与一级名相同，就算命中默认项（顶替外观）；
+ * 插件的 id 与一级名相同，或 meta.title 与一级名相同，就算命中默认项（顶替数据）；
  * 没命中的作为自定义入口追加在后面。命中项不重复渲染，避免出现两个同名导航。
  */
 const navEntries = computed<NavEntry[]>(() => {
   const out: NavEntry[] = []
   // 用 entries + 数字下标：Map.forEach 的第二个参数是 key（字符串），不是序号
   ;[...sectionMap.value.entries()].forEach(([nav, leaves], index) => {
-    const groupKey = leaves[0] ?? ''
-    const title = navOf(groupKey) || nav
-    out.push({ key: nav, kind: 'section', leaves, order: 100 + index, title })
+    out.push({
+      key: nav,
+      kind: 'section',
+      leaves,
+      order: 100 + index,
+      title: nav,
+      category: categoryFor(nav),
+    })
   })
   const byKey = new Map(out.map((entry) => [entry.key, entry]))
   const byTitle = new Map(out.map((entry) => [entry.title, entry]))
   const extras: NavEntry[] = []
   const sorted = [...navList.value].sort((a, b) => a.order - b.order)
   for (const occ of sorted) {
-    const title = typeof occ.meta?.title === 'string' ? occ.meta.title : ''
+    const title = metaText(occ.meta, 'title')
     const hit = byKey.get(occ.id) ?? (title ? byTitle.get(title) : undefined)
     if (hit) {
       hit.kind = 'nav'
-      hit.component = occ.component
+      hit.component = occ.component as Component
+      hit.page = metaPage(occ.meta) as Component | undefined
+      hit.icon = metaIcon(occ.meta)
+      const metaCategory = metaText(occ.meta, 'category')
+      if (metaCategory) hit.category = metaCategory
       continue
     }
     extras.push({
       key: occ.id,
       kind: 'nav',
       leaves: [],
-      component: occ.component,
+      component: occ.component as Component,
+      page: metaPage(occ.meta) as Component | undefined,
       title: title || leafLabelOf(occ.id),
+      category: categoryFor(title || leafLabelOf(occ.id), occ.meta),
+      icon: metaIcon(occ.meta),
       order: occ.order,
     })
   }
@@ -177,8 +222,7 @@ interface Section {
   key: string
   label: string
   kind: 'leaf' | 'tab'
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  component?: any
+  component?: Component
 }
 
 const sections = computed<Section[]>(() => {
@@ -196,15 +240,15 @@ const sections = computed<Section[]>(() => {
   const out: Section[] = leaves.map((leaf) => {
     const occ = byLeaf.get(leaf)
     return occ
-      ? { key: leaf, label: leafLabelOf(leaf), kind: 'tab', component: occ.component }
+      ? { key: leaf, label: leafLabelOf(leaf), kind: 'tab', component: occ.component as Component }
       : { key: leaf, label: leafLabelOf(leaf), kind: 'leaf' }
   })
   for (const occ of customs) {
     out.push({
       key: occ.id,
-      label: typeof occ.meta?.title === 'string' ? occ.meta.title : leafLabelOf(occ.id),
+      label: metaText(occ.meta, 'title') || leafLabelOf(occ.id),
       kind: 'tab',
-      component: occ.component,
+      component: occ.component as Component,
     })
   }
   return out
@@ -217,8 +261,8 @@ const activeSectionIndex = computed<number>(() =>
   Math.max(0, sections.value.findIndex((section) => section.key === activeSection.value)),
 )
 
-/** 只有一个二级时直接展示，页签条不出现 */
-const showTabs = computed<boolean>(() => sections.value.length > 1)
+/** 顶部页签条默认隐藏；宿主显式打开且确实有多个段时才出现 */
+const showTabs = computed<boolean>(() => props.showSectionTabs && sections.value.length > 1)
 
 function selectNav(key: string): void {
   if (activeNav.value === key) return
@@ -334,6 +378,17 @@ function iconOf(name: string): unknown {
   return navIcons?.top(name)?.value ?? SETTINGS_NAV_ICON_FALLBACK
 }
 
+/** 左侧统一导航只吃数据：外观由 ShadcnSettingsNav 画，插件不再自绘 */
+const navItems = computed(() =>
+  navEntries.value.map((entry) => ({
+    key: entry.key,
+    label: entry.title,
+    category: entry.category,
+    icon: entry.icon ?? iconOf(entry.key),
+    page: entry.page,
+  })),
+)
+
 // 切换一级时回到顶部（插件热装只重算分组，不重置滚动位置）
 watch(activeNav, () => {
   activeSection.value = sections.value[0]?.key ?? ''
@@ -343,33 +398,15 @@ watch(activeNav, () => {
 
 <template>
   <div class="psd-content-root">
-    <!-- 左：分组标题 + 图标菜单 -->
-    <aside class="psd-nav">
-      <p class="psd-nav-caption">设置</p>
-      <p v-if="!navEntries.length" class="psd-nav-empty">暂无分组</p>
-      <div v-for="item in navEntries" :key="item.key" class="psd-nav-cell">
-        <ShadcnSettingsNavItem
-          v-if="item.kind === 'section'"
-          :icon="iconOf(item.key)"
-          :label="item.title"
-          :active="activeNav === item.key"
-          @select="selectNav(item.key)"
-        />
-        <!-- 插件自己的导航组件：告诉它当前激活态，并把点击交回面板 -->
-        <!-- 插件导航沿用自己的组件；面板只收口行高/圆角，让整列对齐 -->
-        <div v-else class="psd-nav-plugin">
-          <component
-            :is="item.component"
-            v-if="item.component"
-            :group="item.key"
-            :active="activeNav === item.key"
-            :on-select="selectNav"
-          />
-        </div>
-      </div>
-    </aside>
+    <!-- 左：第 0 级分类 + 一级图标菜单（统一外观） -->
+    <ShadcnSettingsNav
+      class="psd-nav"
+      :items="navItems"
+      :active="activeNav"
+      @select="selectNav"
+    />
 
-    <!-- 右：当前分类 -->
+    <!-- 右：一级标题 → 二级小标题 + 卡片 -->
     <div class="psd-panel">
       <header class="psd-panel-head">
         <h3 class="psd-panel-title">{{ activeEntry?.title || '设置' }}</h3>
@@ -378,7 +415,7 @@ watch(activeNav, () => {
         </p>
       </header>
 
-      <!-- 二级页签：只有一个段时整条不出现 -->
+      <!-- 二级页签：保留代码，默认关掉（showSectionTabs） -->
       <div v-if="showTabs" class="psd-tabbar" role="tablist" :aria-label="(activeEntry?.title || '设置') + '分类'">
         <template v-for="section in sections" :key="section.key">
           <component
@@ -404,59 +441,76 @@ watch(activeNav, () => {
         </template>
       </div>
 
-      <!-- 只滚当前页；滚动不反向改页签，避免刚点中的页被滚走 -->
       <div ref="scrollEl" class="psd-body">
-        <div v-if="!sections.length" class="psd-empty">暂无分组</div>
+        <!-- 插件自绘整页：只换外层标题，内部内容仍归插件（业务逻辑不动） -->
+        <div v-if="activeEntry?.page" class="psd-page">
+          <component :is="activeEntry.page" :group="activeEntry.key" :settings="props.settings" />
+        </div>
 
-        <!-- 当前段：只有当前页签的正文上屏，不再把所有分组叠成长列表 -->
-        <section
-          v-for="(section, index) in sections"
-          v-show="index === activeSectionIndex"
-          :key="section.key"
-          class="psd-section"
-          :data-sec="section.key"
-        >
-          <ShadcnSettingsSection
-            v-if="!showTabs"
-            :title="section.label"
-            :description="'这里集中放置「' + (activeEntry?.title || section.label) + '」相关选项。'"
+        <div v-else-if="!sections.length" class="psd-empty">暂无分组</div>
+
+        <!-- 卡片模式：所有二级小节依次排开，每节一张卡片 -->
+        <template v-else-if="!showTabs">
+          <section
+            v-for="section in sections"
+            :key="section.key"
+            class="psd-section"
+            :data-sec="section.key"
           >
-            <template v-for="block in blocksOf(section.key)" :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id">
-              <SettingsSchemaField
-                v-if="block.kind === 'field'"
-                :group="section.key"
-                :field-key="block.key"
-                :settings="props.settings"
-              />
-              <component
-                v-else
-                :is="block.occ.component"
-                :group="section.key"
-                :settings="props.settings"
-              />
-            </template>
-            <p v-if="!blocksOf(section.key).length" class="psd-empty-line">这个分组还没有可配置项</p>
-          </ShadcnSettingsSection>
+            <ShadcnSettingsSection :title="section.label">
+              <template
+                v-for="block in blocksOf(section.key)"
+                :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id"
+              >
+                <SettingsSchemaField
+                  v-if="block.kind === 'field'"
+                  :group="section.key"
+                  :field-key="block.key"
+                  :settings="props.settings"
+                />
+                <component
+                  v-else
+                  :is="block.occ.component"
+                  :group="section.key"
+                  :settings="props.settings"
+                />
+              </template>
+              <p v-if="!blocksOf(section.key).length" class="psd-empty-line">这个分组还没有可配置项</p>
+            </ShadcnSettingsSection>
+          </section>
+        </template>
 
-          <!-- 多个段时，页签已经写了标题，正文不再重复标题 -->
-          <template v-else>
-            <template v-for="block in blocksOf(section.key)" :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id">
-              <SettingsSchemaField
-                v-if="block.kind === 'field'"
-                :group="section.key"
-                :field-key="block.key"
-                :settings="props.settings"
-              />
-              <component
-                v-else
-                :is="block.occ.component"
-                :group="section.key"
-                :settings="props.settings"
-              />
-            </template>
-            <p v-if="!blocksOf(section.key).length" class="psd-empty-line">这个分组还没有可配置项</p>
-          </template>
-        </section>
+        <!-- 页签模式：只显示当前段 -->
+        <template v-else>
+          <section
+            v-for="(section, index) in sections"
+            v-show="index === activeSectionIndex"
+            :key="section.key"
+            class="psd-section"
+            :data-sec="section.key"
+          >
+            <ShadcnSettingsSection :title="section.label">
+              <template
+                v-for="block in blocksOf(section.key)"
+                :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id"
+              >
+                <SettingsSchemaField
+                  v-if="block.kind === 'field'"
+                  :group="section.key"
+                  :field-key="block.key"
+                  :settings="props.settings"
+                />
+                <component
+                  v-else
+                  :is="block.occ.component"
+                  :group="section.key"
+                  :settings="props.settings"
+                />
+              </template>
+              <p v-if="!blocksOf(section.key).length" class="psd-empty-line">这个分组还没有可配置项</p>
+            </ShadcnSettingsSection>
+          </section>
+        </template>
       </div>
     </div>
   </div>
@@ -472,44 +526,9 @@ watch(activeNav, () => {
   gap: 0;
 }
 
+/* 导航外观在 ShadcnSettingsNav 里；这里只让它在弹性行里占固定宽度 */
 .psd-nav {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  gap: 2px;
   width: 192px;
-  min-height: 0;
-  padding: 4px 10px 12px 2px;
-  overflow-y: auto;
-  border-right: 1px solid var(--ui-line-soft, #eef0f4);
-}
-
-.psd-nav-caption {
-  margin: 6px 0 6px 10px;
-  padding: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--ui-ink-mute, #8c95a3);
-}
-
-.psd-nav-cell + .psd-nav-cell {
-  margin-top: 1px;
-}
-
-/* 插件导航项统一收进 34px 行高：不同插件自带 44px 会把整列撑得忽高忽低 */
-.psd-nav-plugin :deep(button) {
-  min-height: 34px;
-  padding-top: 0;
-  padding-bottom: 0;
-  border-radius: var(--radius-control, 8px);
-}
-
-.psd-nav-empty {
-  margin: 0;
-  padding: 18px 10px;
-  font-size: 12px;
-  color: var(--ui-ink-mute, #8c95a3);
 }
 
 .psd-panel {
@@ -525,7 +544,7 @@ watch(activeNav, () => {
   flex: none;
   align-items: baseline;
   gap: 8px;
-  padding: 2px 22px 8px;
+  padding: 2px 22px 12px;
 }
 
 .psd-panel-title {
@@ -534,6 +553,7 @@ watch(activeNav, () => {
   font-weight: 700;
   line-height: 1.35;
   color: var(--ui-ink, #18202b);
+  text-align: left;
 }
 
 .psd-panel-meta {
@@ -595,12 +615,17 @@ watch(activeNav, () => {
 .psd-body {
   flex: 1;
   min-height: 0;
-  padding: 4px 22px 24px;
+  padding: 0 22px 24px;
   overflow-y: auto;
 }
 
 .psd-section {
   max-width: 760px;
+}
+
+.psd-page {
+  max-width: 760px;
+  padding: 4px 0 8px;
 }
 
 .psd-empty {

@@ -10,6 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { apiUrl, resolveApiBase, showcaseHeaders } from '../apiBase'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { Badge, Button } from '@mini-canvas/ui-kit-shadcn'
 
 interface Endpoint {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -260,27 +261,27 @@ const groupIcon = (id: string): string => {
     <section class="sc-section">
       <div class="sc-h3row">
         <h3>在线测试台</h3>
-        <button class="sc-btn" :disabled="fetchingIndex" @click="loadIndex()">刷新索引</button>
+        <Button variant="outline" size="xs" type="button" :disabled="fetchingIndex" @click="loadIndex()">刷新索引</Button>
       </div>
       <div v-if="indexError" class="sc-error">{{ indexError }}</div>
       <div v-for="g in groups" :key="g.id" class="sc-group">
         <div class="sc-group-head">
           <b>{{ groupIcon(g.id) }} {{ g.label }}</b>
           <span class="sc-dim">{{ g.description }}</span>
-          <button class="sc-btn" :disabled="running" @click="runGroup(g)">运行整组</button>
+          <Button variant="outline" size="xs" type="button" :disabled="running" @click="runGroup(g)">运行整组</Button>
         </div>
         <div v-for="e in g.endpoints" :key="keyOf(e)" class="sc-endpoint">
           <div class="sc-endpoint-head">
             <code class="sc-method" :class="e.method.toLowerCase()">{{ e.method }}</code>
             <code class="sc-path">{{ e.path }}</code>
-            <button class="sc-btn" :disabled="results[keyOf(e)]?.state === 'running'" @click="runOne(e)">运行</button>
+            <Button variant="outline" size="xs" type="button" :disabled="results[keyOf(e)]?.state === 'running'" @click="runOne(e)">运行</Button>
           </div>
           <div v-if="results[keyOf(e)]" class="sc-result" :class="results[keyOf(e)]!.state">
             <div v-if="results[keyOf(e)]!.error" class="sc-error">网络错误：{{ results[keyOf(e)]!.error }}</div>
             <template v-else>
-              <span class="sc-badge" :class="results[keyOf(e)]!.state">
+              <Badge :variant="results[keyOf(e)]!.state === 'ok' ? 'secondary' : 'destructive'" class="sc-badge" :class="results[keyOf(e)]!.state">
                 {{ results[keyOf(e)]!.state === 'ok' ? '生效' : '失败' }} · HTTP {{ results[keyOf(e)]!.httpStatus }}
-              </span>
+              </Badge>
               <span class="sc-dim">{{ results[keyOf(e)]!.at }}</span>
               <pre v-if="results[keyOf(e)]!.requestBody" class="sc-json">{{ results[keyOf(e)]!.requestBody }}</pre>
               <pre class="sc-json">{{ results[keyOf(e)]!.responseBody }}</pre>
@@ -300,9 +301,9 @@ const groupIcon = (id: string): string => {
       <div class="sc-h3row">
         <h3>在线注册演示</h3>
         <div class="sc-demo-btns">
-          <button class="sc-btn" :disabled="!demoReg" @click="addDemoItem">注册一条</button>
-          <button class="sc-btn" :disabled="!demoReg || !demoItems.length" @click="removeLastDemoItem">撤销最后一条</button>
-          <button class="sc-btn" @click="refreshDemo">刷新</button>
+          <Button variant="outline" size="xs" type="button" :disabled="!demoReg" @click="addDemoItem">注册一条</Button>
+          <Button variant="outline" size="xs" type="button" :disabled="!demoReg || !demoItems.length" @click="removeLastDemoItem">撤销最后一条</Button>
+          <Button variant="outline" size="xs" type="button" @click="refreshDemo">刷新</Button>
         </div>
       </div>
       <p class="sc-dim">
@@ -332,6 +333,7 @@ const groupIcon = (id: string): string => {
 .sc-section { border: 1px solid var(--ui-line, rgba(128,128,128,.25)); border-radius: 10px; padding: 14px 16px; }
 .sc-section h3 { margin: 0 0 10px; font-size: 14px; }
 .sc-h3row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.sc-h3row > :not(h3) { flex: none; }
 .sc-lamps { display: flex; gap: 16px; flex-wrap: wrap; }
 .sc-lamp { font-size: 12px; color: var(--ui-danger, #e24444); }
 .sc-lamp.ok { color: var(--ui-accent, #0891b2); }
@@ -346,15 +348,12 @@ const groupIcon = (id: string): string => {
 .sc-method.get { color: var(--ui-accent, #0891b2); }
 .sc-method.post, .sc-method.put, .sc-method.delete { color: var(--ui-warn, #e3a25f); }
 .sc-path { font-size: 12px; opacity: .9; }
-.sc-btn { font-size: 12px; padding: 2px 10px; border-radius: 6px; border: 1px solid var(--ui-line, rgba(128,128,128,.3)); background: transparent; color: inherit; cursor: pointer; margin-left: auto; }
-.sc-btn:disabled { opacity: .5; cursor: default; }
 .sc-result { margin-top: 6px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
-.sc-badge { align-self: flex-start; font-size: 11px; padding: 1px 8px; border-radius: 10px; }
+.sc-badge { align-self: flex-start; font-size: 11px; }
 .sc-badge.ok { color: var(--ui-accent, #0891b2); background: color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent); }
 .sc-badge.fail { color: var(--ui-danger, #e24444); background: color-mix(in srgb, var(--ui-danger, #e24444) 12%, transparent); }
 .sc-json { margin: 2px 0 0; padding: 8px; border-radius: 6px; background: var(--ui-code-bg, rgba(128,128,128,.1)); font-size: 11px; max-height: 180px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
 .sc-doc summary { font-size: 12px; color: var(--text-faint, #9ca3af); cursor: pointer; margin-top: 4px; }
 .sc-notes { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.9; }
 .sc-demo-btns { display: flex; gap: 6px; }
-.sc-demo-btns .sc-btn { margin-left: 0; }
 </style>

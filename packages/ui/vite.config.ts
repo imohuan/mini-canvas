@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { catalogPlugin } from './catalogPlugin.mjs'
 import { uiKitDocsPlugin } from '@mini-canvas/ui-kit/vite'
 import { fileURLToPath } from 'node:url'
+import { uiKitDebugLocPlugin } from '@mini-canvas/ui-kit-shadcn/vite-plugin-debug-loc'
 
 // @mini-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
 // 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
@@ -16,6 +17,9 @@ export default defineConfig({
     // 开发期在本 dev server 就地提供插件清单与产物（/plugin-catalog.json + /plugins/**），
     // 这样单开 ui dev 也能用插件管理；生产形态由 cloud-server 提供同两条路由。
     catalogPlugin({ pluginsDir: '../../packages/plugins' }),
+    // 放在最后：enforce:'pre' 的 transform 仍会先于 vue 插件跑，改的是原始 SFC。
+    // 只在 vite serve 生效（插件内部 apply:'serve'）；生产构建不会打标。
+    uiKitDebugLocPlugin({ root: fileURLToPath(new URL('../..', import.meta.url)) }),
   ],
   server: {
     port: 5288, // 独立端口，避开其它应用/demo 的端口

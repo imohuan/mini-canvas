@@ -1751,10 +1751,19 @@ function createUi() {
       else root.removeAttribute('data-slot-debug')
     }
     syncSlotDebug()
+    // 组件库使用标记：外壳只负责把开关同步成 <html> 属性；调试层是否挂载由 App.vue 决定。
+    const syncUiKitDebug = (): void => {
+      if (typeof document === 'undefined') return
+      const root = document.documentElement
+      if (store.get('uiKitDebug') === true) root.setAttribute('data-ui-kit-debug', 'on')
+      else root.removeAttribute('data-ui-kit-debug')
+    }
+    syncUiKitDebug()
     disposeSettingsBind = store.onChange((key, value) => {
       const t = targetOf(key)
       if (t) t[key] = value
       if (key === 'slotDebug') syncSlotDebug()
+      if (key === 'uiKitDebug') syncUiKitDebug()
     }).dispose
   }
 

@@ -6,7 +6,9 @@
  * 控件统一用 @mini-canvas/ui-kit-shadcn 的原始组件：
  * Switch / Select / Input / Slider / NumberField / ColorPicker。
  *
- * 数字项：范围正常时用滑块；范围过大时换成步进输入框，免得细调拖不准。
+ * 数字项统一「滑块 + 数字框（带 - / +）」：没有退化成纯输入的例外分支。
+ * 超大范围 / 非整数步进也照样用滑块 —— 数字框可以直接键入精确值，
+ * 滑块只负责快速粗调；两者共用同一套 min / max / step 吸附逻辑。
  * 滑块拖动时先更新本地值，松手再补一次 flush，画面跟手、落库也不迟到。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -133,16 +135,6 @@ function onNumberInput(value: number | undefined): void {
   set(entry.value.key, snapNumber(next, entry.value.schema))
 }
 
-/** 数字项用步进框：范围过宽时滑块一小格就是几十，改用输入框 */
-const useStepInput = computed<boolean>(() => {
-  const schema = entry.value?.schema
-  if (!schema) return false
-  if ((schema as { input?: string }).input === 'number') return true
-  const min = Number(schema.min ?? 0)
-  const max = Number(schema.max ?? 100)
-  return max - min > 1000
-})
-
 const fieldId = 'sf-' + props.fieldKey
 
 /** 取色器展开态 */
@@ -208,7 +200,13 @@ function onColor(value: string | { toString(): string } | null): void {
         >
           <SelectValue placeholder="请选择" />
         </SelectTrigger>
-        <SelectContent>
+        <!-- position=popper：避免 item-aligned 把选项层叠在触发器上；抬高到设置遮罩之上 -->
+        <SelectContent
+          class="settings-floating-layer"
+          position="popper"
+          side="bottom"
+          :side-offset="4"
+        >
           <SelectItem
             v-for="option in entry.schema.options ?? []"
             :key="option.value"
@@ -220,14 +218,14 @@ function onColor(value: string | { toString(): string } | null): void {
       </Select>
     </ShadcnSettingsRow>
 
-    <!-- 数字：滑块 + 数值框，或单独的步进框 -->
+    <!-- 数字：滑块 + 数值框（带 - / +）。所有 number 字段只有这一种形式。 -->
     <ShadcnSettingsRow
       v-else-if="entry.schema.type === 'number'"
       :label="entry.schema.label ?? entry.key"
       :description="entry.schema.description"
       stacked
     >
-      <div v-if="!useStepInput" class="sf-number">
+      <div class="sf-number">
         <Slider
           class="sf-slider"
           :model-value="[localNumber]"
@@ -261,29 +259,6 @@ function onColor(value: string | { toString(): string } | null): void {
           </NumberFieldContent>
         </NumberField>
       </div>
-      <NumberField
-        v-else
-        class="sf-number-field sf-number-field--wide"
-        :model-value="numberValue(entry.value, entry.schema)"
-        :min="entry.schema.min ?? 0"
-        :max="entry.schema.max ?? 100"
-        :step="entry.schema.step ?? 1"
-        :format-options="{ useGrouping: false }"
-        @update:model-value="onNumberInput"
-      >
-        <NumberFieldContent>
-          <NumberFieldDecrement class="sf-number-btn">
-            <Minus :size="12" />
-          </NumberFieldDecrement>
-          <NumberFieldInput
-            class="sf-number-input"
-            :aria-label="entry.schema.label ?? entry.key"
-          />
-          <NumberFieldIncrement class="sf-number-btn">
-            <Plus :size="12" />
-          </NumberFieldIncrement>
-        </NumberFieldContent>
-      </NumberField>
     </ShadcnSettingsRow>
 
     <!-- 颜色：色块 + 可折叠的取色器 -->
@@ -316,8 +291,8 @@ function onColor(value: string | { toString(): string } | null): void {
             清除
           </button>
         </div>
-        <!-- 浮层挂在 body 上：滚动正文时不会被容器裁掉 -->
-        <PopoverContent class="sf-color-pop" align="start" :side-offset="8">
+        <!-- 浮层挂在 body 上：滚动正文时不会被容器裁掉；抬到设置遮罩之上 -->
+        <PopoverContent class="sf-color-pop settings-floating-layer" align="start" :side-offset="8">
           <ColorPicker
             :model-value="colorValue || pickerSeed"
             @update:model-value="onColor"
@@ -344,9 +319,9 @@ function onColor(value: string | { toString(): string } | null): void {
 </template>
 
 <style scoped>
-/* 相邻字段之间用一条很浅的线分开，不再给每项套卡片 */
 .sf-field + .sf-field {
-  border-top: 1px solid var(--ui-line-soft, #eef0f4);
+  /* 分割线由 ShadcnSettingsRow 的相邻兄弟规则提供；这里不再重复画一条 */
+  border-top: 0;
 }
 
 .sf-select-trigger {
@@ -377,10 +352,6 @@ function onColor(value: string | { toString(): string } | null): void {
 .sf-number-field {
   flex: 0 0 auto;
   width: 104px;
-}
-
-.sf-number-field--wide {
-  width: 140px;
 }
 
 .sf-number-input {

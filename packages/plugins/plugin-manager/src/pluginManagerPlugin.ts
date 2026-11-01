@@ -13,6 +13,7 @@
  * 真正的后台还没定放哪；将来只要发同形状清单，本插件一行不用改。
  */
 import { markRaw, reactive } from 'vue'
+import { Puzzle } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { DEFAULT_CATALOG_URL, createPluginManagerService } from './pluginManagerService'
 import PluginManagerNav from './components/settings/PluginManagerNav.vue'
@@ -64,7 +65,8 @@ export function apply(
     id: 'plugin-manager/nav',
     order: 6,
     component: markRaw(PluginManagerNav),
-    meta: { title: '插件' },
+    // 只提供数据：外观由设置面板统一渲染，整页走 page（settingsGroup 仍保留给老皮）
+    meta: { title: '插件', category: '集成', icon: Puzzle, page: markRaw(PluginManagerPage) },
   })
   // ② 设置面板正文（一级分类「插件」的整页由本组件负责）
   ctx.slots.register('settingsGroup/' + MANAGER_NAV_ID, {

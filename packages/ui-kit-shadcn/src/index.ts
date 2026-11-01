@@ -30,5 +30,15 @@ export * from './components/ui/tabs'
 export * from './components/ui/textarea'
 export * from './components/ui/tooltip'
 export * from './components/color-picker'
+export { SettingsRow, SettingsSection } from './components/settings'
 
 export { SHADCN_COMPONENTS, SHADCN_COMPONENT_NAMES } from './registry'
+
+/** 组件库使用标记的读取工具（只读 DOM 属性，不改变组件） */
+export {
+  UI_KIT_DEBUG_ATTR,
+  UI_KIT_DEBUG_COMPONENT_ATTR,
+  parseDebugLoc,
+  usageLocOf,
+} from './debugLoc'
+export type { UiKitUsageLoc } from './debugLoc'

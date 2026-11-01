@@ -2,8 +2,8 @@
 /**
  * ShadcnSettingsNavItem —— 设置左导航的一项（图标 + 名称）。
  *
- * 图标从 settings/navIcon 场域取，调用方只传组件本身；这里不查注册表。
- * 用按钮而不是链接：点一下只切换右侧内容，不跳地址。
+ * 两套设置皮、所有插件共用这一个外观：文字左对齐、未选中的颜色统一、选中只加浅底。
+ * 插件不再自绘导航项；它们只提供标题/分类/图标（见 navCategory.ts）。
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
@@ -58,9 +58,8 @@ const iconComponent = computed<Component | undefined>(() => {
   border: 0;
   border-radius: var(--radius-control, 8px);
   background: transparent;
-  /* 未选中也要读得清：用常规文字色的一档灰，不用最淡的 muted */
-  color: var(--ui-ink, #18202b);
-  opacity: 0.72;
+  /* 未选中统一用弱化的文字色；不靠 opacity，避免和插件自带样式叠加后深浅不一 */
+  color: var(--ui-ink-dim, #6b7280);
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -73,7 +72,6 @@ const iconComponent = computed<Component | undefined>(() => {
 .shadcn-nav-item:hover {
   background: var(--ui-hover, rgb(0 0 0 / 0.05));
   color: var(--ui-ink, #18202b);
-  opacity: 1;
 }
 
 /* 选中：中性浅底 + 正常文字色，不用强调色染整行 */
@@ -81,7 +79,11 @@ const iconComponent = computed<Component | undefined>(() => {
   background: var(--ui-panel-active, #e8eaf0);
   color: var(--ui-ink, #18202b);
   font-weight: 600;
-  opacity: 1;
+}
+
+.shadcn-nav-item:focus-visible {
+  outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6));
+  outline-offset: -1px;
 }
 
 .shadcn-nav-item__icon {
@@ -101,9 +103,11 @@ const iconComponent = computed<Component | undefined>(() => {
 }
 
 .shadcn-nav-item__label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 </style>

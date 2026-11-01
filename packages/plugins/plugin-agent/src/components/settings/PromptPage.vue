@@ -8,20 +8,22 @@
  * 3. 内置的两条（我给的两个默认提示词）**不允许删除**；
  * 4. 自建的那些可以增删改。
  *
- * 交互：左边列表点一条 = 右边编辑它；「新增」建一条空白；「保存」整包写回后台。
+ * 交互：列表点一条 = 右边编辑它；「新增」建一条空白；「保存」整包写回后台。
  * 整包写回而不是逐条接口：清单不长，一次事务写完，不会出现写一半的半个列表。
  *
  * 用户口径（2026-10-14）追加两件：
  * 5. 编辑框旁边要能看到**这台后台的地址与目录**（有些时候要用到）；
  * 6. 能**点一下就插**这些值（见「可用占位符」），不用手抄路径。
  *
- * 另加一条体检提示：模板坏了的时候「写什么提示词都没用」，那种情况必须当面说清楚。
+ * UI 全部来自 @mini-canvas/ui-kit-shadcn；业务调用与草稿逻辑保持不变。
  */
 import { computed, onMounted, ref } from 'vue'
-import { Plus, Trash2, Check, AlertTriangle, Wrench } from 'lucide-vue-next'
+import { AlertTriangle, Check, Plus, Save, Trash2, Wrench } from 'lucide-vue-next'
+import { Button, Input, Textarea } from '@mini-canvas/ui-kit-shadcn'
 import { useAgent } from '../../useAgent.js'
 import type { PromptPreset } from '../../agentService.js'
 import type { ContextPlaceholderView } from '../../agentApi.js'
+import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
 
 const agent = useAgent()
@@ -35,8 +37,13 @@ const saved = ref(false)
 const restoring = ref(false)
 let seq = 0
 
-/** 正文框；「插入占位符」要往光标处插，所以拿 DOM 引用 */
-const textarea = ref<HTMLTextAreaElement | null>(null)
+/** 正文框；「插入占位符」要往光标处插，所以拿组件实例再取真实 DOM */
+const textarea = ref<InstanceType<typeof Textarea> | null>(null)
+
+function textareaElement(): HTMLTextAreaElement | null {
+  const el = textarea.value?.$el
+  return el instanceof HTMLTextAreaElement ? el : null
+}
 
 function clone(list: PromptPreset[]): PromptPreset[] {
   return list.map((p) => ({ ...p }))
@@ -80,14 +87,12 @@ function removePreset(p: PromptPreset): void {
 
 /**
  * 把占位符插到**光标处**（没聚焦就追加到末尾）。
- *
- * 为什么按光标而不是一律追加：用户多半是在句子中间想插一个路径，追加到末尾还要自己
- * 再剪过去；插在光标处才是他要的那一下（与编辑器里的常规手感一致）。
+ * 用户多半是在句子中间想插一个路径，插在光标处才顺手。
  */
 function insertToken(token: string): void {
   const cur = active.value
   if (!cur) return
-  const el = textarea.value
+  const el = textareaElement()
   if (!el) {
     cur.text = cur.text + token
     saved.value = false
@@ -140,58 +145,74 @@ const harnessPlaceholders = computed<ContextPlaceholderView[]>(() =>
     <p v-if="s.error" class="ap-error">{{ s.error }}</p>
 
     <!-- 模板坏了的时候，「编辑提示词」这件事本身就是无效的 —— 必须先说清楚 -->
-    <section v-if="templateBroken" class="ap-block ap-warnblock">
-      <div class="ap-block-body ap-warnbody">
-        <p class="ap-warnline">
-          <AlertTriangle :size="13" />
-          <span>提示词模板坏了：缺 <code>{{ s.templateHealth.missing.join('、') }}</code>，
-            这会让你写的提示词一个字都进不到模型。</span>
-        </p>
-        <p class="ap-hint">恢复出厂模板后即刻生效（不影响上面这份清单，也不动 MCP）。</p>
-        <button class="ap-submit ap-restore" :disabled="restoring" @click="restore">
-          <Wrench :size="12" /> {{ restoring ? '恢复中…' : '恢复出厂模板' }}
-        </button>
-      </div>
-    </section>
+    <div v-if="templateBroken" class="ap-warnblock">
+      <p class="ap-warnline">
+        <AlertTriangle :size="13" />
+        <span>提示词模板坏了：缺 <code>{{ s.templateHealth.missing.join('、') }}</code>，
+          这会让你写的提示词一个字都进不到模型。</span>
+      </p>
+      <p class="ap-hint">恢复出厂模板后即刻生效（不影响上面这份清单，也不动 MCP）。</p>
+      <Button variant="outline" size="sm" type="button" :disabled="restoring" @click="restore">
+        <Wrench :size="13" aria-hidden="true" /> {{ restoring ? '恢复中…' : '恢复出厂模板' }}
+      </Button>
+    </div>
 
-    <section class="ap-block">
-      <header class="ap-block-head">
-        <h4>模式提示词</h4>
-        <span class="ap-quick">
-          <span class="ap-count">{{ draft.length }} 套</span>
-          <button class="ap-mini" @click="addPreset"><Plus :size="12" /> 新增</button>
-        </span>
-      </header>
+    <ShadcnSettingsSection title="模式提示词" :description="draft.length + ' 套 · 选中一套即可编辑它的名字与正文'">
+      <div class="ap-prompt-toolbar">
+        <Button variant="outline" size="sm" type="button" @click="addPreset">
+          <Plus :size="13" aria-hidden="true" /> 新增
+        </Button>
+      </div>
 
       <!-- 行列表：**role=listitem + 行内一个真 button**（规范 §5 第 2 条：不要在 role=button
            容器里再嵌真实 button —— 读屏会冲突）。选中动作放在那个 button 上。 -->
-      <div class="ap-table ap-scroll" role="list">
-        <div v-for="p in draft" :key="p.id" class="ap-tr pp-row" role="listitem"
-          :class="{ 'is-active': p.id === selectedId }">
-          <span class="ap-td">{{ p.name }}</span>
-          <span class="ap-td ap-td-meta">{{ p.builtin ? '内置 · 不可删除' : '自建' }}</span>
-          <span class="ap-td-act">
-            <button class="ap-mini" :aria-pressed="p.id === selectedId"
-              :aria-label="'编辑 ' + p.name" @click="selectedId = p.id">编辑</button>
-            <!-- 内置项不显示删除按钮（用户口径：我给的两个默认提示词不允许删除） -->
-            <button v-if="!p.builtin" class="ap-mini danger" aria-label="删除" @click.stop="removePreset(p)">
-              <Trash2 :size="12" />
-            </button>
-          </span>
-        </div>
+      <div role="list">
+        <ShadcnSettingsRow
+          v-for="p in draft"
+          :key="p.id"
+          :label="p.name"
+          :description="p.builtin ? '内置 · 不可删除' : '自建'"
+        >
+          <div class="pp-actions">
+            <Button
+              :variant="p.id === selectedId ? 'default' : 'outline'"
+              size="sm"
+              type="button"
+              :aria-pressed="p.id === selectedId"
+              :aria-label="'编辑 ' + p.name"
+              @click="selectedId = p.id"
+            >编辑</Button>
+            <Button
+              v-if="!p.builtin"
+              variant="destructive"
+              size="icon-sm"
+              type="button"
+              :aria-label="'删除 ' + p.name"
+              @click.stop="removePreset(p)"
+            >
+              <Trash2 :size="13" aria-hidden="true" />
+            </Button>
+          </div>
+        </ShadcnSettingsRow>
         <p v-if="!draft.length" class="ap-empty">还没有提示词</p>
       </div>
 
-      <div v-if="active" class="ap-block-body pp-edit">
-        <label class="ap-field">名称
-          <input v-model="active.name" class="ap-input" placeholder="模式名（显示在下拉里）" @input="saved = false" />
-        </label>
+      <div v-if="active" class="ap-prompt-edit">
+        <ShadcnSettingsRow label="名称">
+          <Input v-model="active.name" class="ap-input" aria-label="模式名称" placeholder="模式名（显示在下拉里）" @input="saved = false" />
+        </ShadcnSettingsRow>
         <div class="pp-text-head">
           <span class="ap-hint">选中这个模式时，追加到「Agent 提示词」后面</span>
           <span class="ap-count">{{ active.text.length }} 字</span>
         </div>
-        <textarea ref="textarea" v-model="active.text" class="pp-textarea" rows="14"
-          aria-label="模式提示词正文" placeholder="写这个模式的追加指令…" @input="saved = false"></textarea>
+        <Textarea
+          ref="textarea"
+          v-model="active.text"
+          class="pp-textarea"
+          aria-label="模式提示词正文"
+          placeholder="写这个模式的追加指令…"
+          @input="saved = false"
+        />
 
         <!-- 可用占位符：点一下插到光标处（用户口径：有些时候要用到后台地址与目录） -->
         <details class="pp-ph" :open="!!s.agentContext">
@@ -200,27 +221,35 @@ const harnessPlaceholders = computed<ContextPlaceholderView[]>(() =>
             <span class="ap-count">{{ ownPlaceholders.length + harnessPlaceholders.length }} 个</span>
           </summary>
           <div class="pp-ph-body">
-            <p class="ap-hint">
-              这些记号会在建会话时换成当时的值 —— 端口换了、目录挪了，下一句就跟着变，
-              不用回来改。
-            </p>
+            <p class="ap-hint">这些记号会在建会话时换成当时的值 —— 端口换了、目录挪了，下一句就跟着变。</p>
             <div class="pp-ph-group">
               <span class="pp-ph-title">这台后台（本站提供）</span>
               <div class="pp-chips">
-                <button v-for="p in ownPlaceholders" :key="p.token" class="ap-tagchip pp-chip"
+                <Button
+                  v-for="p in ownPlaceholders"
+                  :key="p.token"
+                  variant="outline"
+                  size="xs"
+                  type="button"
+                  class="pp-chip"
                   :title="p.description + (p.value ? '（当前：' + p.value + '）' : '')"
-                  @click="insertToken(p.token)">
-                  <code>{{ p.token }}</code>
-                </button>
+                  @click="insertToken(p.token)"
+                ><code>{{ p.token }}</code></Button>
               </div>
             </div>
             <div class="pp-ph-group">
               <span class="pp-ph-title">运行时环境（SDK 提供，无需本站展开）</span>
               <div class="pp-chips">
-                <button v-for="p in harnessPlaceholders" :key="p.token" class="ap-tagchip pp-chip"
-                  :title="p.description" @click="insertToken(p.token)">
-                  <code>{{ p.token }}</code>
-                </button>
+                <Button
+                  v-for="p in harnessPlaceholders"
+                  :key="p.token"
+                  variant="outline"
+                  size="xs"
+                  type="button"
+                  class="pp-chip"
+                  :title="p.description"
+                  @click="insertToken(p.token)"
+                ><code>{{ p.token }}</code></Button>
               </div>
             </div>
           </div>
@@ -230,46 +259,42 @@ const harnessPlaceholders = computed<ContextPlaceholderView[]>(() =>
           <span v-if="saved" class="ap-hint pp-ok"><Check :size="12" /> 已保存</span>
           <span v-else-if="dirty" class="ap-hint">有未保存的修改</span>
           <span v-else class="ap-hint">存在后台，换台机器也在</span>
-          <button class="ap-submit" :disabled="busy || !dirty" @click="save">保存</button>
+          <Button type="button" size="sm" :disabled="busy || !dirty" @click="save">
+            <Save :size="13" aria-hidden="true" /> 保存
+          </Button>
         </div>
       </div>
-    </section>
+    </ShadcnSettingsSection>
 
     <!-- 后台地址与目录：摆在这页，用户写提示词时一眼能看到 -->
-    <section v-if="s.agentContext" class="ap-block">
-      <header class="ap-block-head">
-        <h4>运行环境</h4>
-        <span class="ap-count">{{ s.agentContext.baseUrl || '未监听' }}</span>
-      </header>
-      <div class="ap-block-body pp-env">
-        <div v-for="d in s.agentContext.dirs" :key="d.label" class="pp-envrow">
-          <span class="pp-envlabel">{{ d.label }}</span>
-          <code class="pp-envpath">{{ d.path }}</code>
-        </div>
-      </div>
-    </section>
+    <ShadcnSettingsSection
+      v-if="s.agentContext"
+      title="运行环境"
+      :description="s.agentContext.baseUrl || '未监听'"
+    >
+      <ShadcnSettingsRow
+        v-for="d in s.agentContext.dirs"
+        :key="d.label"
+        :label="d.label"
+        :description="d.path"
+      />
+    </ShadcnSettingsSection>
   </div>
 </template>
 
 <style scoped>
-.pp-row { cursor: default; }
-.pp-row.is-active { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
-.pp-edit { display: flex; flex-direction: column; gap: 8px; }
+.ap-prompt-toolbar { display: flex; justify-content: flex-end; padding: 6px 0 2px; }
+.pp-actions { display: flex; align-items: center; gap: 6px; }
+.ap-prompt-edit { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 4px; }
 .pp-text-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.pp-textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b); font-size: 12px; line-height: 1.6; resize: vertical; outline: none; font-family: inherit; }
+.ap-input { width: 100%; }
+.pp-textarea { height: 180px; min-height: 140px; overflow-y: auto; field-sizing: fixed; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; line-height: 1.6; }
 .pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-/* 不用新彩色：规范 §2.1「颜色只表语义（青/琥珀/红），不引入新彩色」—— 用强调色表示「已保存」。 */
 .pp-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-accent, #0891b2); }
-
-/* —— 模板坏了：琥珀提醒（规范 §2.1：琥珀 = 警告） —— */
-.ap-warnblock { border-color: var(--ui-warn, #b45309); }
-.ap-warnbody { display: flex; flex-direction: column; gap: 6px; }
+.ap-warnblock { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 10px; border: 1px solid var(--ui-warn, #b45309); border-radius: var(--radius-control, 8px); }
 .ap-warnline { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-warn, #b45309); }
 .ap-warnline code { font-family: var(--font-mono, ui-monospace, monospace); }
-.ap-restore { display: inline-flex; align-items: center; justify-content: center; gap: 5px; align-self: flex-start; padding: 0 12px; }
-
-/* —— 可用占位符 —— */
-.pp-ph { border: 1px solid var(--ui-line-soft, #eef0f4); border-radius: 8px; }
+.pp-ph { border: 1px solid var(--ui-line-soft, #eef0f4); border-radius: var(--radius-control, 8px); }
 .pp-ph > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; font-size: 11px; color: var(--ui-ink-dim, #6b7280); cursor: pointer; list-style: none; }
 .pp-ph > summary::-webkit-details-marker { display: none; }
 .pp-ph-body { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; }
@@ -278,10 +303,4 @@ const harnessPlaceholders = computed<ContextPlaceholderView[]>(() =>
 .pp-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .pp-chip { height: 22px; padding: 0 8px; font-family: var(--font-mono, ui-monospace, monospace); }
 .pp-chip code { font-size: 10px; }
-
-/* —— 运行环境（地址 + 目录） —— */
-.pp-env { display: flex; flex-direction: column; gap: 4px; }
-.pp-envrow { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: baseline; gap: 8px; }
-.pp-envlabel { font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
-.pp-envpath { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; color: var(--ui-ink, #18202b); overflow-wrap: anywhere; }
 </style>

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
- * 规则列表页 —— 监听并设置「哪些工具需要经过审批」。
+ * RulesPage —— 审批规则页。
  *
- * 用户点名的第三件事：审批不是针对所有工具，而是按规则来；规则要能在界面上看与改，
- * 并且支持点击操作。所以每行一个开关（点了立刻生效，不用按保存）。
- * 布局：表头在上、内容在下。
+ * 每行一个开关（点了立刻生效），全部控件来自 @mini-canvas/ui-kit-shadcn。
+ * 业务规则（哪些工具需要确认）仍由 agent 服务负责，这里只改展示与提交入口。
  */
 import { onMounted, ref } from 'vue'
+import { Button, Input, Switch } from '@mini-canvas/ui-kit-shadcn'
+import { Plus, Trash2 } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
 import type { ApprovalRuleRow } from '../../agentService.js'
+import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
 
 const agent = useAgent()
@@ -50,53 +52,69 @@ function quickAdd(pattern: string, label?: string): void {
   <div class="ap ap-rules">
     <p v-if="s.error" class="ap-error">{{ s.error }}</p>
 
-    <section class="ap-block">
-      <div class="ap-block-body">
-        <div class="ap-switch-row">
-          <div>
-            <!-- 文案与输入框左下角那个「授权方式」下拉**逐字对齐**：同一条通道的两个入口，
-                 措辞不一致会让人以为是两件事（之前这里叫「启用审批规则」，与下拉读起来对不上）。 -->
-            <strong>接受审核</strong>
-            <small>打开 = 命中下面规则的工具先问你；关掉 = 完全自动授权，全部放行</small>
-          </div>
-          <button class="ap-switch" :class="{ on: s.policy.enabled }" role="switch"
-            :aria-checked="s.policy.enabled" aria-label="接受审核" @click="toggleEnabled"></button>
-        </div>
-      </div>
-    </section>
+    <ShadcnSettingsSection title="总开关">
+      <ShadcnSettingsRow
+        label="接受审核"
+        description="打开 = 命中下面规则的工具先问你；关掉 = 完全自动授权，全部放行"
+      >
+        <Switch
+          :model-value="s.policy.enabled"
+          aria-label="接受审核"
+          @update:model-value="toggleEnabled"
+        />
+      </ShadcnSettingsRow>
+    </ShadcnSettingsSection>
 
-    <section class="ap-block">
-      <header class="ap-block-head"><h4>需要审批的工具</h4><span class="ap-count">{{ s.policy.rules.length }} 条</span></header>
-      <div class="ap-table ap-scroll">
-        <div class="ap-tr is-head"><span>匹配模式</span><span>说明</span><span>处理</span></div>
-        <div v-for="r in s.policy.rules" :key="r.id" class="ap-tr">
-          <span class="ap-td" :title="r.pattern">{{ r.pattern }}</span>
-          <span class="ap-td ap-td-meta">{{ r.label || '命中即询问' }}</span>
-          <span class="ap-td-act">
-            <button class="ap-mini" :class="{ 'is-on': r.ask }" @click="toggleRule(r)">{{ r.ask ? '需要审批' : '直接放行' }}</button>
-            <button class="ap-mini danger" @click="removeRule(r)">删除</button>
-          </span>
+    <ShadcnSettingsSection title="需要审批的工具" :description="s.policy.rules.length + ' 条规则'">
+      <ShadcnSettingsRow
+        v-for="r in s.policy.rules"
+        :key="r.id"
+        :label="r.pattern"
+        :description="r.label || (r.ask ? '命中即询问' : '直接放行')"
+      >
+        <div class="ap-rule-actions">
+          <Switch
+            :model-value="r.ask"
+            :aria-label="'切换 ' + r.pattern + ' 是否需要审批'"
+            @update:model-value="toggleRule(r)"
+          />
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            type="button"
+            :aria-label="'删除规则 ' + r.pattern"
+            :disabled="busy"
+            @click="removeRule(r)"
+          >
+            <Trash2 :size="13" aria-hidden="true" />
+          </Button>
         </div>
-        <p v-if="!s.policy.rules.length" class="ap-empty">没有任何规则 —— 一切都会被放行</p>
-      </div>
-    </section>
+      </ShadcnSettingsRow>
+      <p v-if="!s.policy.rules.length" class="ap-empty">没有任何规则 —— 一切都会被放行</p>
+    </ShadcnSettingsSection>
 
-    <section class="ap-block">
-      <header class="ap-block-head"><h4>添加规则</h4></header>
-      <div class="ap-block-body">
-        <form class="ap-fields" @submit.prevent="addRule">
-          <label class="ap-field">匹配模式（支持 * 通配，例如 mcp__smart__* 或 exec_command）
-            <input v-model="draft" placeholder="mcp__smart__*" />
-          </label>
-          <button class="ap-submit" type="submit" :disabled="busy || !draft.trim()">添加</button>
-        </form>
-        <div class="ap-quick" style="margin-top:8px">
+    <ShadcnSettingsSection title="添加规则" description="匹配模式支持 * 通配，例如 mcp__smart__* 或 exec_command">
+      <form class="ap-form-stack ap-rule-form" @submit.prevent="addRule">
+        <div class="ap-form-actions">
+          <Input v-model="draft" aria-label="匹配模式" placeholder="mcp__smart__*" />
+          <Button type="submit" size="sm" :disabled="busy || !draft.trim()">
+            <Plus :size="13" aria-hidden="true" /> 添加
+          </Button>
+        </div>
+        <div class="ap-quick">
           <span class="ap-tag">快加：</span>
-          <button class="ap-mini" @click="quickAdd('mcp__smart__*', 'smart MCP 全部工具')">smart MCP</button>
-          <button class="ap-mini" @click="quickAdd('exec_command', '执行命令')">执行命令</button>
-          <button class="ap-mini" @click="quickAdd('write_file', '写文件')">写文件</button>
+          <Button variant="outline" size="xs" type="button" @click="quickAdd('mcp__smart__*', 'smart MCP 全部工具')">smart MCP</Button>
+          <Button variant="outline" size="xs" type="button" @click="quickAdd('exec_command', '执行命令')">执行命令</Button>
+          <Button variant="outline" size="xs" type="button" @click="quickAdd('write_file', '写文件')">写文件</Button>
         </div>
-      </div>
-    </section>
+      </form>
+    </ShadcnSettingsSection>
   </div>
 </template>
+
+<style scoped>
+.ap-rule-form { padding: 10px 0; }
+.ap-form-actions { display: flex; align-items: center; gap: 8px; }
+.ap-form-actions :deep(input) { flex: 1; }
+.ap-rule-actions { display: flex; align-items: center; gap: 8px; }
+</style>

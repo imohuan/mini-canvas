@@ -28,7 +28,7 @@ import DefaultSlotDebugOverlay from '@mini-canvas/plugin-theme-default/component
 import { setReadyHost, useUi, useUiComponentOutside } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
 
 const ui = useUi()
@@ -36,6 +36,10 @@ const ui = useUi()
 const SlotDebugOverlay = useUiComponentOutside('slotDebugOverlay')
 /** 模板 :is 用；目录没登记时回落默认皮。 */
 const DebugOverlay = computed(() => SlotDebugOverlay.value ?? DefaultSlotDebugOverlay)
+/** 组件库使用标记：只在开发环境按需加载；生产构建不会加载这段代码。 */
+const UiKitDebugOverlay = import.meta.env.DEV
+  ? defineAsyncComponent(() => import('@mini-canvas/plugin-theme-default/components/ui/UiKitDebugOverlay.vue'))
+  : null
 const s = ui.state
 // 装载清单 = 静态装配 + 按运行环境追加的自带件（cloud-server 托管时含云端连接，见 assembly）
 const plugins = resolveAppPlugins()
@@ -225,6 +229,8 @@ onBeforeUnmount(() => {
       <!-- 插槽调试覆盖层：默认主题提供，全应用只挂一次。
            它读 <html data-slot-debug="on"> 与 data-slot / data-slot-id，不需要各区域传参。 -->
       <component :is="DebugOverlay" />
+      <!-- 组件库使用标记：默认关闭；关闭时组件不挂载，监听与扫描都不存在。 -->
+      <component :is="UiKitDebugOverlay" v-if="UiKitDebugOverlay && s.cfg.debug.uiKitDebug" />
 
     </CanvasShell>
   </CanvasProvider>

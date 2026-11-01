@@ -20,6 +20,7 @@ import { createHotReload, type HotReload } from './data/hotReload'
 import type { Context } from '@mini-canvas/canvas-data'
 import type { PluginModule } from '@mini-canvas/kernel'
 import { markRaw } from 'vue'
+import { Bug } from 'lucide-vue-next'
 import HotReloadNav from './components/settings/HotReloadNav.vue'
 import HotReloadPage from './components/settings/HotReloadPage.vue'
 
@@ -96,7 +97,8 @@ export const hotReloadPlugin: PluginModule = {
     id: 'hot-reload/nav',
       order: 7,
       component: markRaw(HotReloadNav),
-      meta: { title: HOT_RELOAD_NAV_ID },
+      // 只提供数据：外观由设置面板统一渲染，整页走 page
+      meta: { title: HOT_RELOAD_NAV_ID, category: '开发', icon: Bug, page: markRaw(HotReloadPage) },
     })
     ctx.slots.register('settingsGroup/' + HOT_RELOAD_NAV_ID, {
     id: 'hot-reload/page',

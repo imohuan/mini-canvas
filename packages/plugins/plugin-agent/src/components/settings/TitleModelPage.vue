@@ -1,21 +1,28 @@
 <script setup lang="ts">
 /**
- * TitleModelPage —— 「会话标题模型」：配置**自动给会话起名**用哪个模型。
+ * TitleModelPage —— 「会话标题模型」：配置自动给会话起名用哪个模型。
  *
  * 用户口径（2026-10-06）：「标题应该是 AI 来生成的，在配置页面里配置这个生成标题的模型」。
+ * 两个下拉 + 保存；两个都留空 = 用会话默认模型。保存后立即生效。
  *
- * 交互：两个下拉（Provider / 模型）+ 保存。两个都留空 = 用会话默认模型（默认状态）。
- * 保存后立即生效 —— 下一轮新会话的标题就由这个模型生成。
+ * 下拉直接用 ui-kit-shadcn（不再经 useUiComponent 转接）。
  */
 import { computed, onMounted, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@mini-canvas/ui-kit-shadcn'
+import { Save } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
+import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
 
 const agent = useAgent()
 const s = agent.state
-/** 通用下拉取主题登记件（不回落原生控件：浮层外观会与本项目其它下拉不一致）。 */
-const ThemedSelect = useUiComponent('select')
 
 const provider = ref('')
 const modelId = ref('')
@@ -41,20 +48,28 @@ const usableProviders = computed(() => {
   return [...seen.entries()].map(([p, models]) => ({ provider: p, models }))
 })
 const modelsOf = computed(() => usableProviders.value.find((p) => p.provider === provider.value)?.models ?? [])
-/** 两个下拉的选项：空值 = 用会话默认模型（后台的既有语义）。 */
+/** 空值 = 用会话默认模型（后台的既有语义）。 */
+const DEFAULT_VALUE = '__default__'
 const providerChoices = computed(() => [
-  { label: '（用会话默认模型）', value: '' },
+  { label: '（用会话默认模型）', value: DEFAULT_VALUE },
   ...usableProviders.value.map((p) => ({ label: p.provider, value: p.provider })),
 ])
 const modelChoices = computed(() => [
-  { label: '（用会话默认模型）', value: '' },
+  { label: '（用会话默认模型）', value: DEFAULT_VALUE },
   ...modelsOf.value.map((m) => ({ label: m, value: m })),
 ])
 
-function pickProvider(p: string): void {
+function pickProvider(value: string): void {
+  const p = value === DEFAULT_VALUE ? '' : value
   provider.value = p
   // 换渠道时把模型选到该渠道的第一个（不硬留上一个渠道的模型 id）
-  modelId.value = modelsOf.value[0] ?? ''; saved.value = false
+  modelId.value = modelsOf.value[0] ?? ''
+  saved.value = false
+}
+
+function pickModel(value: string): void {
+  modelId.value = value === DEFAULT_VALUE ? '' : value
+  saved.value = false
 }
 
 async function save(): Promise<void> {
@@ -74,49 +89,47 @@ async function save(): Promise<void> {
   <div class="ap ap-title-model">
     <p v-if="s.error" class="ap-error">{{ s.error }}</p>
 
-    <section class="ap-block">
-      <header class="ap-block-head">
-        <h4>会话标题模型</h4>
-        <span class="ap-quick"><span class="ap-count">自动命名</span></span>
-      </header>
-      <div class="ap-block-body">
-        <p class="ap-hint">
-          新会话第一轮结束后，用这个模型总结对话内容生成标题（替代「首句截断」）。
-          两个都留空 = 用会话默认模型；起名失败时仍回落首句截断，不影响对话。
-        </p>
-        <form class="ap-fields" @submit.prevent="save">
-          <label class="ap-field">Provider
-            <component
-              :is="ThemedSelect"
-              v-if="ThemedSelect"
-              :model-value="provider"
-              :options="providerChoices"
-              match-width
-              aria-label="会话标题 Provider"
-              @update:model-value="pickProvider(String($event ?? ''))"
-            />
-            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
-          </label>
-          <label class="ap-field">模型
-            <component
-              :is="ThemedSelect"
-              v-if="ThemedSelect"
-              v-model="modelId"
-              :options="modelChoices"
-              :disabled="!provider"
-              match-width
-              aria-label="会话标题模型"
-            />
-            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
-          </label>
-          <div class="ap-field-row">
-            <button class="ap-submit" type="submit" :disabled="busy || (!provider && !modelId)">保存</button>
-            <span v-if="saved" class="ap-hint">已保存 · 下一个新会话生效</span>
-            <span v-else-if="!provider && !modelId" class="ap-hint">当前用会话默认模型</span>
-          </div>
-        </form>
-      </div>
-    </section>
+    <ShadcnSettingsSection
+      title="会话标题模型"
+      description="新会话第一轮结束后，用这个模型总结对话内容生成标题（替代「首句截断」）。两个都留空 = 用会话默认模型；起名失败时仍回落首句截断，不影响对话。"
+    >
+      <ShadcnSettingsRow label="Provider" description="只有配了密钥的渠道能选">
+        <Select :model-value="provider || DEFAULT_VALUE" @update:model-value="pickProvider(String($event))">
+          <SelectTrigger class="ap-select" size="sm" aria-label="会话标题 Provider">
+            <SelectValue placeholder="选择渠道" />
+          </SelectTrigger>
+          <!-- 设置弹窗里的浮层：popper + 抬高到遮罩之上 -->
+          <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
+            <SelectItem v-for="c in providerChoices" :key="c.value" :value="c.value">{{ c.label }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </ShadcnSettingsRow>
+
+      <ShadcnSettingsRow label="模型" description="留空 = 跟随会话默认模型">
+        <Select :model-value="modelId || DEFAULT_VALUE" :disabled="!provider" @update:model-value="pickModel(String($event))">
+          <SelectTrigger class="ap-select" size="sm" aria-label="会话标题模型">
+            <SelectValue placeholder="选择模型" />
+          </SelectTrigger>
+          <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
+            <SelectItem v-for="c in modelChoices" :key="c.value" :value="c.value">{{ c.label }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </ShadcnSettingsRow>
+
+      <ShadcnSettingsRow label="保存" description="保存后下一个新会话生效">
+        <div class="ap-form-actions">
+          <Button type="button" size="sm" :disabled="busy || (!provider && !modelId)" @click="save">
+            <Save :size="13" aria-hidden="true" /> {{ busy ? '保存中…' : '保存' }}
+          </Button>
+          <span v-if="saved" class="ap-hint">已保存</span>
+          <span v-else-if="!provider && !modelId" class="ap-hint">当前用会话默认模型</span>
+        </div>
+      </ShadcnSettingsRow>
+    </ShadcnSettingsSection>
   </div>
 </template>
 
+<style scoped>
+.ap-select { width: 200px; }
+.ap-form-actions { display: flex; align-items: center; gap: 8px; }
+</style>

@@ -8,6 +8,7 @@
  * 铁律：**不写死任何端点** —— 分组与端点全部来自 GET /api/showcase/endpoints。
  */
 import { markRaw } from 'vue'
+import { Sparkles } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { ConfigSchema } from '@mini-canvas/kernel'
 import ShowcaseNav from './components/ShowcaseNav.vue'
@@ -40,7 +41,8 @@ export function apply(ctx: Context): void {
     id: 'showcase/nav',
     order: 8,
     component: markRaw(ShowcaseNav),
-    meta: { title: '插件展示' },
+    // 只提供数据：外观由设置面板统一渲染，整页走 page
+    meta: { title: '插件展示', category: '开发', icon: Sparkles, page: markRaw(ShowcasePage) },
   })
   ctx.slots.register('settingsGroup/' + NAV_ID, {
     id: 'showcase/page',

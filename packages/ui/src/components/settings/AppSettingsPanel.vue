@@ -1,39 +1,50 @@
 <script setup lang="ts">
 /**
- * AppSettingsPanel —— 成品应用的设置内容区（左侧图标导航 + 右侧当前分类）。
+ * AppSettingsPanel —— 成品应用的设置内容区（左分类导航 + 右侧卡片小节）。
  *
  * 只画 SettingsShell 里面那一格：遮罩、标题栏、关闭按钮、Esc、浮动窗都由外壳统一提供。
- * 因此这里不再重复画关闭按钮；关闭仍走外壳的 settings:ui-close 事件。
+ * 关闭仍走外壳的 settings:ui-close 事件。
  *
- * 结构：
- * - 左：分组标题 + 一级菜单；每项一个图标，图标来自独立场域 settings/navIcon。
- * - 右：当前分类的配置项，一行一个：左边标题与说明，右边 shadcn 控件。
- * - 一级下只有一个二级分组时合并成一项；有多个时用页签切换。
+ * 结构（用户口径 2026-11-01）：
+ * - 左：第 0 级分类（个人 / 集成 / 画布 / 开发）+ 分类下的一级图标菜单。
+ * - 右：一级标题 → 二级小标题 + 卡片（卡片内每行之间一条分割线）。
+ * - 顶部页签条保留代码，但默认隐藏；宿主显式传 show-section-tabs 才出现。
  *
  * 兼容：
  * - settings.nav：插件导航项按 id / meta.title 命中默认一级项时顶替，否则追加。
- * - settings.tab：只对当前一级生效，可顶替或追加页签。
+ *   外观一律由本面板统一渲染；插件只给 meta.title / meta.category / meta.icon / meta.page。
+ * - settings.tab：只对当前一级生效，可顶替或追加二级页签（仅页签模式显示）。
  * - settingsGroup/<完整 key>：内容插槽继续消费，prepend / append / replace 原样支持。
- *
- * 数据来自宿主的 props.settings；字段控件按 ui 目录取，主题没登记时回落默认皮。
  */
 import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import DefaultSettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
-// 导航图标是设置面板自己的兜底，不依赖主题包的内部文件：
-// 场域里没有该分组时，画一个通用圆点，保证每一行都有图标。
 import { Circle } from 'lucide-vue-next'
-import ShadcnSettingsNavItem from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsNavItem.vue'
+import ShadcnSettingsNav from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsNav.vue'
 import ShadcnSettingsSection from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsSection.vue'
+import {
+  categoryOf,
+  metaIcon,
+  metaPage,
+  metaText,
+  SETTINGS_NAV_CATEGORY_FIELD,
+} from './navCategory'
 import { useUiComponentOutside } from '../../composables/ui'
 import { createSettingsFieldBridge } from './settingsFieldBridge'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SlotOcc = { id: string; order: number; component: any; meta?: any }
 
-const props = defineProps<{ settings: SettingsPanelSource }>()
+const props = withDefaults(
+  defineProps<{
+    settings: SettingsPanelSource
+    /** 顶部二级页签条：默认关掉；需要按页签切换的宿主可以显式打开 */
+    showSectionTabs?: boolean
+  }>(),
+  { showSectionTabs: false },
+)
 
 const { ctx } = useCanvasRender()
 
@@ -123,8 +134,25 @@ interface NavEntry {
   kind: 'section' | 'nav'
   leaves: string[]
   component?: Component
+  /** 插件自绘整页（优先于 settingsGroup） */
+  page?: Component
   title: string
+  category: string
+  icon?: unknown
   order: number
+}
+
+/** 第 0 级分类场域：按一级名登记，插件可覆盖默认归类 */
+const navCategories = ctx.registryOf<string>(SETTINGS_NAV_CATEGORY_FIELD)
+const categoryTick = ref(0)
+if (navCategories && typeof navCategories.subscribe === 'function') {
+  disposers.push(navCategories.subscribe(() => void (categoryTick.value += 1)))
+}
+
+function categoryFor(nav: string, meta?: unknown): string {
+  void categoryTick.value
+  const registered = navCategories?.top(nav)?.value
+  return categoryOf(nav, metaText(meta, 'category'), typeof registered === 'string' ? registered : '')
 }
 
 /** 分组推导的一级项 + 插件导航项（命中默认项就顶替外观，否则追加） */
@@ -132,18 +160,30 @@ const navEntries = computed<NavEntry[]>(() => {
   const out: NavEntry[] = []
   let index = 0
   for (const [nav, leaves] of sectionMap.value) {
-    out.push({ key: nav, kind: 'section', leaves, title: nav, order: 100 + index })
+    out.push({
+      key: nav,
+      kind: 'section',
+      leaves,
+      title: nav,
+      category: categoryFor(nav),
+      order: 100 + index,
+    })
     index += 1
   }
   const byKey = new Map(out.map((entry) => [entry.key, entry]))
   const byTitle = new Map(out.map((entry) => [entry.title, entry]))
   const extras: NavEntry[] = []
   for (const occ of [...navList.value].sort((a, b) => a.order - b.order)) {
-    const title = typeof occ.meta?.title === 'string' ? occ.meta.title : ''
+    const title = metaText(occ.meta, 'title')
     const hit = byKey.get(occ.id) ?? (title ? byTitle.get(title) : undefined)
     if (hit) {
       hit.kind = 'nav'
       hit.component = occ.component as Component
+      hit.page = metaPage(occ.meta) as Component | undefined
+      hit.icon = metaIcon(occ.meta)
+      // 命中默认项时，导航项 meta 里的分类优先；没写就沿用默认归类
+      const metaCategory = metaText(occ.meta, 'category')
+      if (metaCategory) hit.category = metaCategory
       continue
     }
     extras.push({
@@ -151,13 +191,27 @@ const navEntries = computed<NavEntry[]>(() => {
       kind: 'nav',
       leaves: [],
       component: occ.component as Component,
+      page: metaPage(occ.meta) as Component | undefined,
       title: title || leafLabelOf(occ.id),
+      category: categoryFor(title || leafLabelOf(occ.id), occ.meta),
+      icon: metaIcon(occ.meta),
       order: occ.order,
     })
   }
   out.push(...extras)
   return out
 })
+
+/** 左侧统一导航只吃数据：外观由 ShadcnSettingsNav 画，插件不再自绘 */
+const navItems = computed(() =>
+  navEntries.value.map((entry) => ({
+    key: entry.key,
+    label: entry.title,
+    category: entry.category,
+    icon: entry.icon ?? iconOf(entry.key),
+    page: entry.page,
+  })),
+)
 
 const activeNav = ref<string>('')
 const activeEntry = computed<NavEntry | undefined>(() =>
@@ -193,7 +247,7 @@ const sections = computed<Section[]>(() => {
   for (const occ of customs) {
     out.push({
       key: occ.id,
-      label: typeof occ.meta?.title === 'string' ? occ.meta.title : leafLabelOf(occ.id),
+      label: metaText(occ.meta, 'title') || leafLabelOf(occ.id),
       kind: 'tab',
       component: occ.component as Component,
     })
@@ -205,7 +259,8 @@ const activeSection = ref<string>('')
 const activeSectionIndex = computed<number>(() =>
   Math.max(0, sections.value.findIndex((section) => section.key === activeSection.value)),
 )
-const showTabs = computed<boolean>(() => sections.value.length > 1)
+/** 顶部页签条默认隐藏；宿主显式打开且确实有多个段时才出现 */
+const showTabs = computed<boolean>(() => props.showSectionTabs && sections.value.length > 1)
 
 // 分组变化后保证高亮仍指向存在的项
 watch(
@@ -383,32 +438,15 @@ function selectTab(key: string): void {
 
 <template>
   <div class="asp-root">
-    <!-- 左：分组标题 + 图标导航 -->
-    <aside class="asp-nav">
-      <p class="asp-nav-caption">设置</p>
-      <p v-if="!navEntries.length" class="asp-nav-empty">暂无设置分组</p>
-      <div v-for="item in navEntries" :key="item.key" class="asp-nav-cell">
-        <ShadcnSettingsNavItem
-          v-if="item.kind === 'section'"
-          :icon="iconOf(item.key)"
-          :label="item.title"
-          :active="activeNav === item.key"
-          @select="selectNav(item.key)"
-        />
-        <!-- 插件导航沿用自己的组件；面板只收口行高/圆角，让整列对齐 -->
-        <div v-else class="asp-nav-plugin">
-          <component
-            :is="item.component"
-            v-if="item.component"
-            :group="item.key"
-            :active="activeNav === item.key"
-            :on-select="selectNav"
-          />
-        </div>
-      </div>
-    </aside>
+    <!-- 左：第 0 级分类 + 一级图标菜单（统一外观） -->
+    <ShadcnSettingsNav
+      class="asp-nav"
+      :items="navItems"
+      :active="activeNav"
+      @select="selectNav"
+    />
 
-    <!-- 右：当前分类 -->
+    <!-- 右：一级标题 → 二级小标题 + 卡片 -->
     <div class="asp-panel">
       <header class="asp-panel-head">
         <h3 class="asp-panel-title">{{ activeEntry?.title || '设置' }}</h3>
@@ -417,6 +455,7 @@ function selectTab(key: string): void {
         </p>
       </header>
 
+      <!-- 顶部页签条：保留代码，默认关掉（showSectionTabs） -->
       <div
         v-if="showTabs"
         class="asp-tabbar"
@@ -447,59 +486,78 @@ function selectTab(key: string): void {
         </template>
       </div>
 
-      <!-- 不用滚动反向切页：点在页签上的选择必须稳定，滚动只滚当前页 -->
       <div ref="scrollEl" class="asp-body">
-        <div v-if="!sections.length" class="asp-empty">暂无设置项</div>
+        <!-- 插件自绘整页：只换外层标题，内部内容仍归插件（业务逻辑不动） -->
+        <div v-if="activeEntry?.page" class="asp-page">
+          <component :is="activeEntry.page" :group="activeEntry.key" :settings="props.settings" />
+        </div>
 
-        <section
-          v-for="(section, index) in sections"
-          v-show="index === activeSectionIndex"
-          :key="section.key"
-          class="asp-section"
-          :data-sec="section.key"
-        >
-          <ShadcnSettingsSection
-            v-if="!showTabs"
-            :title="section.label"
-            :description="'这里集中放置「' + (activeEntry?.title || section.label) + '」相关选项。'"
+        <div v-else-if="!sections.length" class="asp-empty">暂无设置项</div>
+
+        <!-- 卡片模式：所有二级小节依次排开，每节一张卡片 -->
+        <template v-else-if="!showTabs">
+          <section
+            v-for="section in sections"
+            :key="section.key"
+            class="asp-section"
+            :data-sec="section.key"
           >
-            <template v-for="block in blocksOf(section.key)" :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id">
-              <component
-                :is="FieldRenderer"
-                v-if="block.kind === 'field'"
-                :group="section.key"
-                :field-key="block.key"
-                :settings="props.settings"
-              />
-              <component
-                v-else
-                :is="block.occ.component"
-                :group="section.key"
-                :settings="props.settings"
-              />
-            </template>
-            <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
-          </ShadcnSettingsSection>
+            <ShadcnSettingsSection :title="section.label">
+              <template
+                v-for="block in blocksOf(section.key)"
+                :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id"
+              >
+                <component
+                  :is="FieldRenderer"
+                  v-if="block.kind === 'field'"
+                  :group="section.key"
+                  :field-key="block.key"
+                  :settings="props.settings"
+                />
+                <component
+                  v-else
+                  :is="block.occ.component"
+                  :group="section.key"
+                  :settings="props.settings"
+                />
+              </template>
+              <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
+            </ShadcnSettingsSection>
+          </section>
+        </template>
 
-          <template v-else>
-            <template v-for="block in blocksOf(section.key)" :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id">
-              <component
-                :is="FieldRenderer"
-                v-if="block.kind === 'field'"
-                :group="section.key"
-                :field-key="block.key"
-                :settings="props.settings"
-              />
-              <component
-                v-else
-                :is="block.occ.component"
-                :group="section.key"
-                :settings="props.settings"
-              />
-            </template>
-            <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
-          </template>
-        </section>
+        <!-- 页签模式：只显示当前段，保留原有切换能力 -->
+        <template v-else>
+          <section
+            v-for="(section, index) in sections"
+            v-show="index === activeSectionIndex"
+            :key="section.key"
+            class="asp-section"
+            :data-sec="section.key"
+          >
+            <ShadcnSettingsSection :title="section.label">
+              <template
+                v-for="block in blocksOf(section.key)"
+                :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id"
+              >
+                <component
+                  :is="FieldRenderer"
+                  v-if="block.kind === 'field'"
+                  :group="section.key"
+                  :field-key="block.key"
+                  :settings="props.settings"
+                />
+                <component
+                  v-else
+                  :is="block.occ.component"
+                  :group="section.key"
+                  :settings="props.settings"
+                />
+              </template>
+              <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
+            </ShadcnSettingsSection>
+          </section>
+        </template>
       </div>
     </div>
   </div>
@@ -514,44 +572,9 @@ function selectTab(key: string): void {
   min-height: 0;
 }
 
+/* 导航外观在 ShadcnSettingsNav 里；这里只让它在弹性行里占固定宽度 */
 .asp-nav {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  gap: 2px;
   width: 192px;
-  min-height: 0;
-  padding: 4px 10px 12px 2px;
-  overflow-y: auto;
-  border-right: 1px solid var(--ui-line-soft, #eef0f4);
-}
-
-.asp-nav-caption {
-  margin: 6px 0 6px 10px;
-  padding: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--ui-ink-mute, #8c95a3);
-}
-
-.asp-nav-cell + .asp-nav-cell {
-  margin-top: 1px;
-}
-
-/* 插件导航项统一收进 34px 行高：不同插件自带 44px 会把整列撑得忽高忽低 */
-.asp-nav-plugin :deep(button) {
-  min-height: 34px;
-  padding-top: 0;
-  padding-bottom: 0;
-  border-radius: var(--radius-control, 8px);
-}
-
-.asp-nav-empty {
-  margin: 0;
-  padding: 18px 10px;
-  font-size: 12px;
-  color: var(--ui-ink-mute, #8c95a3);
 }
 
 .asp-panel {
@@ -567,7 +590,7 @@ function selectTab(key: string): void {
   flex: none;
   align-items: baseline;
   gap: 8px;
-  padding: 2px 22px 8px;
+  padding: 2px 22px 12px;
 }
 
 .asp-panel-title {
@@ -576,6 +599,7 @@ function selectTab(key: string): void {
   font-weight: 700;
   line-height: 1.35;
   color: var(--ui-ink, #18202b);
+  text-align: left;
 }
 
 .asp-panel-meta {
@@ -637,12 +661,17 @@ function selectTab(key: string): void {
 .asp-body {
   flex: 1;
   min-height: 0;
-  padding: 4px 22px 24px;
+  padding: 0 22px 24px;
   overflow-y: auto;
 }
 
 .asp-section {
   max-width: 760px;
+}
+
+.asp-page {
+  max-width: 760px;
+  padding: 4px 0 8px;
 }
 
 .asp-empty {

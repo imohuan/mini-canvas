@@ -10,6 +10,16 @@ import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AxScrollArea from '../AxScrollArea.vue'
 import AxButton from '../AxButton.vue'
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+} from '@mini-canvas/ui-kit-shadcn'
 import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/MediaViewer.vue'
 import { useMasonry } from '../../composables/useMasonry'
 import { uiComponentOf, useUi, useUiComponentOutside } from '../../composables/ui'
@@ -45,7 +55,6 @@ const agent = useAgentSettings()
  * 文案与 hint 都放常量里 —— 判定在 plugin-agent 的 composerKeys，展示顺序在设置页，
  * 两边共用同一组 value，改一处不会静默漂移。
  */
-const sendKeyOpen = ref(false)
 const SUBMIT_KEY_MODE_OPTIONS = [
   { value: 'ctrl-enter' as const, label: 'Ctrl + 回车', hint: '单独回车换行（默认）' },
   { value: 'shift-enter' as const, label: 'Shift + 回车', hint: '单独回车换行' },
@@ -2087,42 +2096,41 @@ onClickOutside(
               Director 可直接消耗积分，提交生成任务，无需逐次确认</small><em
               class="block text-[10px] not-italic text-ink-dim">新建会话默认生效，当前会话请前往输入框底部切换</em>
           </div>
-          <button
-            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': s.director.collab }" role="switch"
-            :aria-checked="s.director.collab" aria-label="协作模式"
-            @click="s.director.collab = !s.director.collab"></button>
+          <Switch
+            :model-value="s.director.collab"
+            aria-label="协作模式"
+            @update:model-value="s.director.collab = $event"
+          />
         </div>
         <!-- 后台对话：开=连接断了这一轮也跑完（config/agentRunMode = 'background'）；关=旧行为（'followTab'） -->
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">后台对话</strong>
             <p class="text-xs text-ink-dim">开启后，对话在后台继续跑：离开或关闭浏览器也会进行，刷新后重新进入该对话能继续之前的对话流</p>
           </div>
-          <button
-            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': agent.state.runMode === 'background' }" role="switch"
-            :aria-checked="agent.state.runMode === 'background'" aria-label="后台对话"
-            @click="agent.setRunMode(agent.state.runMode === 'background' ? 'followTab' : 'background')"></button>
+          <Switch
+            :model-value="agent.state.runMode === 'background'"
+            aria-label="后台对话"
+            @update:model-value="agent.setRunMode($event ? 'background' : 'followTab')"
+          />
         </div>
         <!-- 发送中显示队列（config/agentQueuePrefs）：队列里「发送中」条目要不要画出来（用户口径 2026-10-15） -->
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">发送中显示队列</strong>
             <p class="text-xs text-ink-dim">开启后，排队消息在真实发送期间仍显示「发送中」状态；关闭则发送后立即从列表消失</p>
           </div>
-          <button
-            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': agent.state.queueShowSending }" role="switch"
-            :aria-checked="agent.state.queueShowSending" aria-label="发送中显示队列"
-            @click="agent.setQueueShowSending(!agent.state.queueShowSending)"></button>
+          <Switch
+            :model-value="agent.state.queueShowSending"
+            aria-label="发送中显示队列"
+            @update:model-value="agent.setQueueShowSending($event)"
+          />
         </div>
         <!-- 目标设置的默认预算（config/agentGoalDefaults）：点 + 选目标时取这里的值，0 = 不限 -->
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">目标设置</strong>
             <p class="text-xs text-ink-dim">点 + 选目标时用这里的默认预算；之后可以点目标标签单独改</p>
           </div>
-          <input :value="agent.state.goalBudget" type="number" min="0" step="1000" placeholder="0 = 不限"
-            class="h-8 w-28 rounded-lg border border-line bg-veil px-2 text-xs text-ink outline-none"
-            aria-label="目标默认预算" @change="agentBudgetOnChange" />
+          <Input :value="agent.state.goalBudget" type="number" min="0" step="1000" placeholder="0 = 不限"
+            class="h-8 w-28 text-xs" aria-label="目标默认预算" @change="agentBudgetOnChange" />
         </div>
         <!-- 发送键（用户口径 2026-10-25）：目标设置下面配「哪一种回车提交」。
              为什么用下拉而不是开关：三种取值互斥，开关只能表达两态。 -->
@@ -2130,21 +2138,19 @@ onClickOutside(
           <div><strong class="text-[13px] text-ink">发送键</strong>
             <p class="text-xs text-ink-dim">选哪一种回车发送消息；@ 下拉打开时回车始终用于选择菜单项</p>
           </div>
-          <AxDropdown v-model="sendKeyOpen" placement="bottom-end" menu-width="180px">
-            <template #trigger><button
-                class="flex h-8 items-center gap-1 rounded-lg border border-line bg-veil px-2 text-xs text-ink transition-colors hover:bg-hover"
-                aria-label="发送键">{{ sendKeyLabel }}
-                <ChevronDown :size="13" />
-              </button></template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem v-for="m in SUBMIT_KEY_MODE_OPTIONS" :key="m.value"
-                  :active="agent.state.submitKeyMode === m.value" :hint="m.hint"
-                  @click="agent.setSubmitKeyMode(m.value); close()">{{ m.label }}
-                </AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+          <Select
+            :model-value="agent.state.submitKeyMode"
+            @update:model-value="agent.setSubmitKeyMode($event as typeof agent.state.submitKeyMode)"
+          >
+            <SelectTrigger size="sm" class="w-[150px]" aria-label="发送键">
+              <SelectValue>{{ sendKeyLabel }}</SelectValue>
+            </SelectTrigger>
+            <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
+              <SelectItem v-for="m in SUBMIT_KEY_MODE_OPTIONS" :key="m.value" :value="m.value">
+                {{ m.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <!-- <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">积分预算管理</strong>
@@ -2158,9 +2164,8 @@ onClickOutside(
         </div> -->
         <div v-if="s.director.budget" class="flex items-center justify-between gap-3 border-t border-line pt-2">
           <span class="text-xs text-ink-dim">提醒阈值设置</span>
-          <input v-model.number="s.director.budgetLimit" type="number" min="100" step="100"
-            class="h-8 w-28 rounded-lg border border-line bg-veil px-2 text-xs text-ink outline-none"
-            aria-label="提醒阈值设置" />
+          <Input v-model.number="s.director.budgetLimit" type="number" min="100" step="100"
+            class="h-8 w-28 text-xs" aria-label="提醒阈值设置" />
         </div>
       </div>
       <div class="rounded-xl border border-line p-3">
@@ -2168,28 +2173,26 @@ onClickOutside(
           <div><strong class="text-[13px] text-ink">浏览器通知</strong>
             <p class="text-xs text-ink-dim">TV Director 回复完成后，会在系统通知提醒</p>
           </div>
-          <button
-            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': agent.state.notify.browser }" role="switch"
-            :aria-checked="agent.state.notify.browser" aria-label="浏览器通知"
-            @click="agent.setNotify({ browser: !agent.state.notify.browser })"></button>
+          <Switch
+            :model-value="agent.state.notify.browser"
+            aria-label="浏览器通知"
+            @update:model-value="agent.setNotify({ browser: $event })"
+          />
         </div>
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">通知声音</strong>
             <p class="text-xs text-ink-dim">开启后，收到通知时播放提示音</p>
           </div>
-          <button
-            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': agent.state.notify.sound }" role="switch"
-            :aria-checked="agent.state.notify.sound" aria-label="通知声音"
-            @click="agent.setNotify({ sound: !agent.state.notify.sound })"></button>
+          <Switch
+            :model-value="agent.state.notify.sound"
+            aria-label="通知声音"
+            @update:model-value="agent.setNotify({ sound: $event })"
+          />
         </div>
       </div>
     </div>
     <div class="flex flex-none justify-end border-t border-line p-3">
-      <button
-        class="rounded-lg border border-line px-3 py-1.5 text-xs text-ink transition-colors hover:bg-hover hover:text-ink"
-        @click="s.directorOpen = false; ui.showToast('设置已保存')">完成</button>
+      <Button variant="outline" size="sm" type="button" @click="s.directorOpen = false; ui.showToast('设置已保存')">完成</Button>
     </div>
   </AxDialog>
 
