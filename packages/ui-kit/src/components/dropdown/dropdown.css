@@ -49,6 +49,11 @@
 }
 .mck-dropdown__panel.is-bare.is-inner-scroll { overflow-y: hidden; }
 /*
+ * 提示气泡只是「看」的，不该拦截鼠标：外壳与气泡一起透过点击。
+ * 不这样写的话，气泡正好压在按钮上时，用户第一次点击会落在提示上、按钮收不到 click。
+ */
+.mck-dropdown__panel.is-tooltip { pointer-events: none !important; }
+/*
  * 箭头 fixed 贴在面板边缘，与面板同层、且在 DOM 里排在面板之后。
  *
  * 为什么不能降一层：箭头旋转 45° 后，内侧那半块要和面板重叠。

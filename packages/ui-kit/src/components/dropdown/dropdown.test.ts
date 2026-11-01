@@ -126,6 +126,31 @@ describe('Dropdown 组件行为', () => {
     expect(document.querySelector('[data-menu]')).not.toBeNull()
   })
 
+  it('传 anchor 时触发器插槽仍渲染，且不接管本地触发语义', async () => {
+    const anchorEl = document.createElement('button')
+    document.body.appendChild(anchorEl)
+    const anchorRef = ref<HTMLElement | null>(anchorEl)
+
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, anchor: anchorRef },
+      slots: { trigger: '<span data-inline-trigger>菜单行</span>', default: '<div data-menu />' },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    // anchor 只负责定位：这一行内容仍要显示，否则子菜单的父行会消失。
+    expect(document.querySelector('[data-inline-trigger]')).not.toBeNull()
+    const trigger = document.querySelector<HTMLElement>('.mck-dropdown__trigger')
+    expect(trigger?.hasAttribute('aria-haspopup')).toBe(false)
+    expect(trigger?.hasAttribute('aria-expanded')).toBe(false)
+
+    // 也不接管本地点击：点击这一行不改变打开状态（由行自身 / 使用方控制）。
+    trigger?.click()
+    await nextTick()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('Esc 关闭后焦点回到触发器', async () => {
     const wrapper = mount(Dropdown, {
       props: { modelValue: false },
@@ -213,6 +238,17 @@ describe('Dropdown 组件行为', () => {
     await wrapper.vm.$nextTick()
     expect(document.querySelector<HTMLElement>('.mck-dropdown__panel')?.style.zIndex).toBe('12345')
     expect(document.querySelector<HTMLElement>('.mck-dropdown__arrow')?.style.zIndex).toBe('12345')
+    wrapper.unmount()
+  })
+
+  it('提示气泡外壳不拦截点击（tooltip 档 pointer-events 关闭）', async () => {
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: true, menuRole: 'tooltip', bare: true },
+      slots: { trigger: '<button data-trigger>x</button>', default: '<span data-tip>提示</span>' },
+    })
+    await wrapper.vm.$nextTick()
+    const panel = document.querySelector('.mck-dropdown__panel')
+    expect(panel?.classList.contains('is-tooltip')).toBe(true)
     wrapper.unmount()
   })
 })

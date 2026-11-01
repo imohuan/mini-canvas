@@ -122,12 +122,17 @@ const triggerEvents = computed(() => {
 <template>
   <!-- 兼容主题旧实现的 dd / dd-trigger 类名：调用方与测试按它们取外壳，换底层不该改外观契约。 -->
   <div class="mck-dropdown" :class="[rootClass, { 'is-disabled': disabled }]">
+    <!--
+      触发器插槽**始终渲染**：外部 anchor 只表示“浮层贴在哪个元素旁边”，
+      不等于“这行内容不要显示”。此前 anchor 存在时整块触发器被藏掉，
+      子菜单那一行（挂外部 anchor 的菜单行）会凭空消失。
+      绑定 anchor 时不接管本地触发事件（见 triggerEvents）。
+    -->
     <div
-      v-if="!anchor"
       :ref="api.triggerRef"
       class="mck-dropdown__trigger dd-trigger"
-      :aria-expanded="api.open.value"
-      aria-haspopup="menu"
+      :aria-expanded="anchor ? undefined : api.open.value"
+      :aria-haspopup="anchor ? undefined : 'menu'"
       v-bind="triggerEvents"
       @mouseenter="trigger === 'hover' ? api.cancelHide() : undefined"
       @mouseleave="trigger === 'hover' ? api.scheduleHide() : undefined"
@@ -140,7 +145,7 @@ const triggerEvents = computed(() => {
           v-if="api.open.value"
           :ref="api.panelRef"
           class="mck-dropdown__panel"
-          :class="[menuClass, bodyClass, { 'is-inner-scroll': layout === 'inner-scroll', 'is-bare': bare }]"
+          :class="[menuClass, bodyClass, { 'is-inner-scroll': layout === 'inner-scroll', 'is-bare': bare, 'is-tooltip': menuRole === 'tooltip' }]"
           :style="api.panelStyle.value"
           :role="menuRole"
           :data-mck-floating-chain="api.chain.value.join(' ')"
