@@ -41,6 +41,8 @@ const props = withDefaults(defineProps<DropdownProps>(), {
   closeOnOutside: true,
   closeOnEscape: true,
   closeAllEvent: '',
+  /** Boolean prop 缺省会被 Vue 转成 false，这里显式给 true；只有调用方写 false 才退出互斥。 */
+  exclusive: true,
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; open: []; close: [] }>()

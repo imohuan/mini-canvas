@@ -52,6 +52,8 @@ const dropdownProps = computed<Partial<DropdownProps>>(() => ({
   bare: props.bare,
   menuRole: 'tooltip',
   bodyClass: props.bodyClass,
+  // 提示不参与「同屏只留一个浮层」：悬停提示刚弹出就把用户点开的下拉关掉，是实际踩过的体验问题。
+  exclusive: false,
 }))
 
 /** 键盘聚焦也显示提示：焦点进来时手动开，离开时关。 */

@@ -11,9 +11,11 @@ import { readFileSync } from 'node:fs'
 const src = readFileSync(new URL('../components/AxSubMenu.vue', import.meta.url), 'utf-8')
 
 describe('AxSubMenu 悬停延时', () => {
-  it('不用 Dropdown 的 hover 触发器，改由行自己延时开关', () => {
-    expect(src).toMatch(/trigger="always"/)
+  it('不用 always 常显，改由行自己延时开关', () => {
+    // always 会强制 open 永远为 true：二级菜单会关不掉、也不会互斥。
+    expect(src).not.toMatch(/trigger="always"/)
     expect(src).not.toMatch(/trigger="hover"/)
+    expect(src).toMatch(/trigger="click"/)
     expect(src).toMatch(/@mouseenter="open"/)
     expect(src).toMatch(/@mouseleave="scheduleClose"/)
   })

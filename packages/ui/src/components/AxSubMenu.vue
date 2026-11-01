@@ -78,7 +78,7 @@ onBeforeUnmount(cancelClose)
     :anchor="rowRef"
     :anchor-placement="placement"
     :offset="4"
-    trigger="always"
+    trigger="click"
     close-all-event="mini-canvas:dropdown-close-all"
     :menu-min-width="menuWidth"
     :menu-max-height="menuMaxHeight"
@@ -92,7 +92,6 @@ onBeforeUnmount(cancelClose)
         class="ax-sub-row"
         @mouseenter="open"
         @mouseleave="scheduleClose"
-        @click="open"
       >
         <div class="ax-menu-item" role="menuitem" aria-haspopup="menu" :aria-expanded="isOpen">
           <slot name="label">{{ label }}</slot>

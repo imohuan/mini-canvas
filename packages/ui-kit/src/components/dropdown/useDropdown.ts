@@ -95,9 +95,9 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   watch(() => props.modelValue, (value) => {
     if ((props.trigger ?? 'click') === 'always') return
     if (typeof value === 'boolean' && value !== open.value) {
-      open.value = value
-      if (!value) releaseFloating(closeInstance)
-      if (value) nextTick(update)
+      // 必须走 setOpen：外部 v-model 打开也要登记进全局互斥表，
+      // 否则同屏两个受控下拉（如菜单里的两个二级菜单）会同时开着。
+      setOpen(value)
     }
   })
 
@@ -127,9 +127,14 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   function setOpen(value: boolean): void {
     if ((props.trigger ?? 'click') === 'always' && !value) return
     if (open.value === value) return
-    if (value && !props.disabled) claimFloating(closeInstance, () => chain.value)
     open.value = value
     emit(value)
+    // 互斥登记集中在这里做：所有开关路径（触发器/外点/Esc/外部 v-model）都经过它。
+    if (value && !props.disabled && props.exclusive !== false) {
+      claimFloating(closeInstance, () => chain.value)
+    } else if (!value) {
+      releaseFloating(closeInstance)
+    }
     if (value) nextTick(update)
   }
 
@@ -251,7 +256,14 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   onBeforeUpdate(syncAnchor)
   // 常显模式在首次挂载时面板就渲染；onBeforeUpdate 不会触发，
   // 必须在 mounted 后补一次锚点同步，否则浮层停在默认的 0,0。
-  onMounted(syncAnchor)
+  onMounted(() => {
+    syncAnchor()
+    // 挂载时就已经是打开状态（v-model=true 或 always）也要登记互斥，
+    // 否则后开的浮层看不到它，两个菜单会同时留在屏幕上。
+    if (open.value && !props.disabled && props.exclusive !== false) {
+      claimFloating(closeInstance, () => chain.value)
+    }
+  })
   syncAnchor()
 
   useOutsideClick(open, [triggerRef, panelRef, anchorEl], () => {
@@ -267,6 +279,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   onBeforeUnmount(() => {
     cancelHide()
     cancelShow()
+    // 卸载后必须从互斥表摘掉：否则后续浮层打开时还会去调一个已销毁实例的 close。
+    releaseFloating(closeInstance)
   })
 
   // 宿主「都关了吧」广播：实现不必被宿主 import，谁开着谁自己收。

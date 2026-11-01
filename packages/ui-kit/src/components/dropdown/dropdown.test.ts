@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import Dropdown from './Dropdown.vue'
+import { openFloatingCount } from './registry'
 
 describe('Dropdown 组件行为', () => {
   enableAutoUnmount(afterEach)
@@ -266,6 +267,80 @@ describe('Dropdown 组件行为', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[data-row]').exists()).toBe(true)
     wrapper.unmount()
+  })
+
+  it('外部 v-model 打开也参与互斥：后开的会把先开的关掉', async () => {
+    // 诊断：确认挂载阶段到底有没有登记
+    // a 先打开并登记，b 后打开应该把 a 关掉。
+    // 注意：两个实例不能同时以 modelValue:true 挂载 —— 挂载顺序会让「先开的」变成后登记的那个。
+    const a = mount(Dropdown, {
+      props: { modelValue: false, teleport: false },
+      slots: { trigger: '<button data-a>a</button>', default: '<div data-menu-a />' },
+      attachTo: document.body,
+    })
+    const b = mount(Dropdown, {
+      props: { modelValue: false, teleport: false },
+      slots: { trigger: '<button data-b>b</button>', default: '<div data-menu-b />' },
+      attachTo: document.body,
+    })
+    await nextTick()
+    await a.setProps({ modelValue: true })
+    await nextTick()
+    expect(openFloatingCount()).toBe(1)
+    await b.setProps({ modelValue: true })
+    await nextTick()
+    expect(a.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    a.unmount()
+    b.unmount()
+  })
+
+  it('卸载后从互斥表摘除，不会影响后续浮层', async () => {
+    const a = mount(Dropdown, {
+      props: { modelValue: true, teleport: false },
+      slots: { trigger: '<button data-a>a</button>', default: '<div data-menu-a />' },
+      attachTo: document.body,
+    })
+    await nextTick()
+    a.unmount()
+    const b = mount(Dropdown, {
+      props: { modelValue: false, teleport: false },
+      slots: { trigger: '<button data-b>b</button>', default: '<div data-menu-b />' },
+      attachTo: document.body,
+    })
+    await nextTick()
+    await b.setProps({ modelValue: true })
+    await nextTick()
+    expect(document.querySelector('[data-menu-b]')).not.toBeNull()
+    expect(document.querySelector('[data-menu-a]')).toBeNull()
+    b.unmount()
+  })
+
+  /**
+   * 提示（Tooltip）不参与互斥。
+   *
+   * 实际踩过：鼠标停在工具栏按钮上弹出提示，用户这时点开的下拉被提示的 claim 关掉；
+   * 反过来点开下拉，提示也被顺带关掉。两者本来就不是同类浮层，不该共用一张登记表。
+   */
+  it('exclusive:false 的浮层不参与互斥，不会关掉已打开的下拉', async () => {
+    const a = mount(Dropdown, {
+      props: { modelValue: true, teleport: false },
+      slots: { trigger: '<button data-a>a</button>', default: '<div data-menu-a />' },
+      attachTo: document.body,
+    })
+    const tip = mount(Dropdown, {
+      props: { modelValue: false, teleport: false, exclusive: false, menuRole: 'tooltip' },
+      slots: { trigger: '<button data-tip>tip</button>', default: '<div data-tip-panel />' },
+      attachTo: document.body,
+    })
+    await nextTick()
+    // 先让「提示自己」进入互斥表的观察范围，再确认它不会把下拉顶掉。
+    // 提示是不参与互斥的，所以这里直接推动它的开关也不会触发 claim。
+    await tip.setProps({ modelValue: true })
+    await nextTick()
+    // 提示打开不该把下拉关掉
+    expect(a.emitted('update:modelValue')?.some((call) => call[0] === false)).not.toBe(true)
+    a.unmount()
+    tip.unmount()
   })
 
   it('zIndex：只覆盖本层浮层与箭头的层级，不写死到全局样式', async () => {
