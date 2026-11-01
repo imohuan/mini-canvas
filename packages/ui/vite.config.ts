@@ -46,6 +46,7 @@ export default defineConfig({
     '@mini-canvas/kernel',
     '@mini-canvas/canvas-base',
     '@mini-canvas/ui-kit',
+    '@mini-canvas/ui-kit-shadcn',
     '@mini-canvas/plugin-theme-default',
     '@mini-canvas/plugin-node-text',
     '@mini-canvas/plugin-node-ui',

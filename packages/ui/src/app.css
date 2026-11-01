@@ -1,5 +1,10 @@
 /* 画布应用全局样式：Tailwind v4 入口 + 主题 token（暗色优先，亮色可切换） */
 @import "tailwindcss";
+/* shadcn 组件库（@mini-canvas/ui-kit-shadcn）：语义色映射到本项目 --ui-* token。
+   必须写在 Tailwind 入口里，@theme / @custom-variant 才会被编译。 */
+@import "@mini-canvas/ui-kit-shadcn/styles.css";
+/* Tailwind v4 不自动扫描 workspace 包源码：显式登记，否则组件类名会被裁掉。 */
+@source "../../ui-kit-shadcn/src";
 
 /* Tailwind v4：把 dark 变体绑到 `<html class="dark">`（默认按系统 prefers-color-scheme，
    shadcn/ui 与绝大多数应用都改成认 class —— 用户手动切换要能覆盖系统设置）。

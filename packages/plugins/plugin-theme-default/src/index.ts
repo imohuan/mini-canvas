@@ -20,6 +20,9 @@ import { markRaw } from "vue";
 // 通用控件底座的样式入口：组件按名登记后由本主题包提供，样式必须随包加载，
 // 不能指望某个业务件碰巧先 import 了 ui-kit 的 SplitPane。
 import "@mini-canvas/ui-kit/styles.css";
+// shadcn 组件库的样式入口：把 shadcn 语义色映射到本项目 --ui-* token。
+// Tailwind 的 @source 在主应用入口（packages/ui/src/app.css）里登记。
+import "@mini-canvas/ui-kit-shadcn/styles.css";
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import "./styles/node-theme.css";
 import BaseNode from "./components/node/BaseNode.vue";
@@ -60,6 +63,8 @@ import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
+import { SHADCN_COMPONENTS } from "@mini-canvas/ui-kit-shadcn";
+import { SETTINGS_NAV_ICON_NAMES } from "./components/settings/navIcon";
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 // 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
@@ -794,6 +799,17 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("settingsField", SettingsSchemaField, { id: "default" });
   // 插槽调试说明层：外壳按名取，换主题时一起换（它只读 DOM 上的 data-slot*，不需要 props）。
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" });
+  // ===== shadcn-vue 原始组件：全部登记进 ui 场，供业务插件按名取用 =====
+  // 名字统一 `shadcn` 前缀（shadcnButton / shadcnDropdownMenuContent …），避免和上面的旧目录名撞车。
+  // 值就是 shadcn-vue 生成的那个组件，不做任何适配层。
+  for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
+    ui.add(uiName, component, { id: "shadcn" });
+  }
+  // 设置导航图标：独立场域，按一级分组名登记。优先级高（order 小）的赢。
+  const navIcons = ctx.registryOf<unknown>("settings/navIcon");
+  for (const [group, icon] of SETTINGS_NAV_ICON_NAMES) {
+    navIcons.add(group, icon, { id: "default" });
+  }
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
   ctx.theme.register("settingsPanel", PluginSettingsContent, {

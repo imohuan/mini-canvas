@@ -1,9 +1,6 @@
 packages:
   - 'packages/*'
   - 'packages/plugins/*'
-  # shadcn/vue 的试搭目录，不属于产品工作区。
-  # 不排除的话，它会带进第二份 Vue，vue-sonner 和测试就会拿到不同的 Vue 实例。
-  - '!packages/ui-kit-shadcn'
 allowBuilds:
   # cloud-server 的 esbuild 打包需要它的平台二进制（postinstall 装），否则 bundle 跑不起来
   esbuild: true

@@ -22,7 +22,10 @@
  * ≥32px，给个 size 等于给一条违规的捷径（此前各面板的 28px 就是这么来的）。
  */
 import { computed } from 'vue'
-import { Button } from '@mini-canvas/ui-kit'
+// 节点上下控制栏按钮改用 shadcn 组件库的 Button（原始件，不做适配层）。
+// 工具栏特有的 32px 方形尺寸 / active 配色仍由 node-toolbar-button.css 提供，
+// 所以外观与行为（title / aria-pressed / disabled）和换库前一致。
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { useIconHandle } from './useIconHandle'
 import './node-toolbar-button.css'
 
@@ -69,8 +72,7 @@ const iconParts = useIconHandle(() => props.icon)
         'is-icon-only': !$slots.default,
       },
     ]"
-    :variant="variant === 'ghost' ? 'ghost' : variant"
-    :icon-only="!$slots.default"
+    :variant="variant === 'ghost' ? 'ghost' : variant === 'primary' ? 'default' : 'destructive'"
     size="sm"
     type="button"
     :title="title"
@@ -79,12 +81,10 @@ const iconParts = useIconHandle(() => props.icon)
     :disabled="disabled"
     @click="emit('click', $event)"
   >
-    <template v-if="iconParts.mode !== 'none'" #icon>
-      <span class="ntb-icon">
-        <span v-if="iconParts.mode === 'html'" class="ntb-icon-raw" v-html="iconParts.html" />
-        <component v-else :is="iconParts.component" class="ntb-icon-raw" />
-      </span>
-    </template>
-    <template v-if="$slots.default" #default><span class="ntb-label"><slot /></span></template>
+    <span v-if="iconParts.mode !== 'none'" class="ntb-icon">
+      <span v-if="iconParts.mode === 'html'" class="ntb-icon-raw" v-html="iconParts.html" />
+      <component v-else :is="iconParts.component" class="ntb-icon-raw" />
+    </span>
+    <span v-if="$slots.default" class="ntb-label"><slot /></span>
   </Button>
 </template>
