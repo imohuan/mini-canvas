@@ -107,7 +107,7 @@ function onPick(key: string): void {
     openDemoMode(nodeId, key === 'mode-a' ? 'alpha' : 'beta')
     // 底栏同时切到该功能（nodeToolbar 会话：主题件，底栏与顶栏共用同一份）
     ctx.tryGet<{ enter?(nodeId: string, modeId: string): void } | undefined>('nodeToolbar')
-      ?.enter?.(nodeId, 'demo-ui-slots/feature')
+      ?.enter?.(nodeId, 'demo-kit/feature-mode')
     return
   }
   notify('演示：点了「' + key + '」（不做业务）')

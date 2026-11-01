@@ -151,5 +151,5 @@ function onPick(key: string, _path: string[], close: () => void): void {
 | --- | --- |
 | 「预设行 + 自定义宫格面板」的完整接法 | `packages/plugins/plugin-image-grid-split/src/GridSplitEntry.vue` |
 | 面板本体（滑选行列、点一下即确认） | `packages/plugins/plugin-image-grid-split/src/GridSizePicker.vue` |
-| 普通下拉与二级文字菜单的用法 | `packages/plugins/plugin-ui-demo/src/DemoTopEntry.vue` |
+| 普通下拉与二级文字菜单的用法 | `packages/plugins/plugin-demo-kit/src/ui-slots/DemoTopEntry.vue` |
 | 下拉的定位与浮层链 | `packages/plugins/plugin-theme-default/src/components/ui/Dropdown.vue`、`floatingChain.ts` |

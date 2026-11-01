@@ -49,7 +49,7 @@ const BTN =
 const ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>'
 
-export const name = 'theme-gallery-demo-nodes'
+export const name = 'demo-kit-demo-nodes'
 export const inject = ['doc'] as string[]
 
 export function apply(ctx: Context): void {

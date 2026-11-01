@@ -11,7 +11,7 @@
 - 功能模式：顶部整条只剩你的按钮 + 「退出」；底部状态栏此期间保持原样（想让它也换，见下文）。
 
 这一页讲清三件事：**往哪里装**（三种方式）、**怎么装**（完整代码）、**为什么这样设计**（原理）。
-仓库里 `plugin-ui-demo`（往按钮组里插一条）和 `plugin-node-image`（注册默认顶栏 + 功能模式）用的就是这套机制。
+仓库里 `plugin-demo-kit`（往按钮组里插一条）和 `plugin-node-image`（注册默认顶栏 + 功能模式）用的就是这套机制。
 
 ## 先弄懂：卡片上下有哪两根栏
 
@@ -383,7 +383,7 @@ svc.exit(nodeId)
 
 | 想抄什么 | 看哪里 |
 | --- | --- |
-| 往按钮组插一条 + 下拉二级菜单 | `packages/plugins/plugin-ui-demo`（DemoTopEntry） |
+| 往按钮组插一条 + 下拉二级菜单 | `packages/plugins/plugin-demo-kit/src/ui-slots/DemoTopEntry.vue` |
 | 注册默认顶栏 + 功能模式（裁剪/扩展，bottomBar: null） | `packages/plugins/plugin-node-image/src/nodeImagePlugin.ts` |
 | 默认底栏的注册者（与节点插件平等） | `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts` |
 | 服务本体（裁决规则全在这一个文件） | `packages/plugins/plugin-theme-default/src/components/node/nodeToolbarService.ts` |

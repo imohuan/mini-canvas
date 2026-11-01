@@ -1,5 +1,5 @@
 /**
- * plugin-hot-reload-demo —— 热重载试验台（开发用）。
+ * 热重载靶子（demo-kit 的一间试验台，开发用）。
  *
  * 目的只有一个：给热重载链路当**靶子**。它往画布右上角挂一块显眼卡片（overlay 槽），
  * 卡片上有版本徽标与文案。验证方法：改 src/index.ts 或 DemoCard.vue 里的显眼内容 →
@@ -11,21 +11,15 @@
 import { markRaw } from 'vue'
 import DemoCard from './DemoCard.vue'
 
-export const name = 'hot-reload-demo'
-export const inject = [] as string[]
-
 export function apply(ctx: {
   slots: { register(slot: string, req: { id: string; order?: number; component: unknown; meta?: unknown }): string }
 }): void {
   // overlay 槽：宿主会把它画在画布上层（与多选框、任务进度覆盖层同一层）。
   // order 拉大排最后，免得跟真插件的功能浮层抢位置 —— 它只是块"靶子"。
   ctx.slots.register('overlay', {
-    id: 'hot-reload-demo/card',
+    id: 'demo-kit/hot-reload-card',
     order: 9999,
     component: markRaw(DemoCard),
     meta: { style: 'position:fixed; top:64px; right:16px; z-index:50; pointer-events:none;' },
   })
 }
-
-export const hotReloadDemoPlugin = { name, inject, apply }
-export default hotReloadDemoPlugin

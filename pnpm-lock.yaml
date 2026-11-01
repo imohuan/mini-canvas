@@ -568,6 +568,52 @@ importers:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
 
+  packages/plugins/plugin-demo-kit:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../canvas-data
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
+      '@mini-canvas/plugin-theme-default':
+        specifier: workspace:*
+        version: link:../plugin-theme-default
+    devDependencies:
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue-flow/core':
+        specifier: ^1.48.2
+        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
   packages/plugins/plugin-edge-cutting:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -719,40 +765,6 @@ importers:
       vue-tsc:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-hot-reload-demo:
-    dependencies:
-      '@mini-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      chokidar:
-        specifier: ^5.0.0
-        version: 5.0.0
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
 
   packages/plugins/plugin-image-grid-split:
     dependencies:
@@ -1232,40 +1244,6 @@ importers:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
 
-  packages/plugins/plugin-shell-slots-demo:
-    dependencies:
-      '@mini-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
   packages/plugins/plugin-shortcut-manager:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -1426,52 +1404,6 @@ importers:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
 
-  packages/plugins/plugin-theme-gallery:
-    dependencies:
-      '@mini-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@mini-canvas/plugin-theme-default':
-        specifier: workspace:*
-        version: link:../plugin-theme-default
-    devDependencies:
-      '@mini-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue-flow/core':
-        specifier: ^1.48.2
-        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
   packages/plugins/plugin-tool-image-generation:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -1530,40 +1462,6 @@ importers:
       vue:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-ui-demo:
-    dependencies:
-      '@mini-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
 
   packages/plugins/plugin-web2api-tools:
     dependencies:
@@ -1695,6 +1593,9 @@ importers:
       '@mini-canvas/plugin-context-menu':
         specifier: workspace:*
         version: link:../plugins/plugin-context-menu
+      '@mini-canvas/plugin-demo-kit':
+        specifier: workspace:*
+        version: link:../plugins/plugin-demo-kit
       '@mini-canvas/plugin-edge-cutting':
         specifier: workspace:*
         version: link:../plugins/plugin-edge-cutting
@@ -1752,18 +1653,12 @@ importers:
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
         version: link:../plugins/plugin-theme-default
-      '@mini-canvas/plugin-theme-gallery':
-        specifier: workspace:*
-        version: link:../plugins/plugin-theme-gallery
       '@mini-canvas/plugin-tool-image-generation':
         specifier: workspace:*
         version: link:../plugins/plugin-tool-image-generation
       '@mini-canvas/plugin-tool-text-generation':
         specifier: workspace:*
         version: link:../plugins/plugin-tool-text-generation
-      '@mini-canvas/plugin-ui-demo':
-        specifier: workspace:*
-        version: link:../plugins/plugin-ui-demo
       '@mini-canvas/plugin-web2api-tools':
         specifier: workspace:*
         version: link:../plugins/plugin-web2api-tools
@@ -3857,10 +3752,6 @@ packages:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
     engines: {node: '>= 16'}
 
-  chokidar@5.0.0:
-    resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
-    engines: {node: '>= 20.19.0'}
-
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
 
@@ -4994,10 +4885,6 @@ packages:
   raw-body@3.0.2:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
-
-  readdirp@5.1.1:
-    resolution: {integrity: sha512-Kko+Y5XQ6fM+Ce3dq3m9YGxnacYZYl9cA1wZjaF3Vbry2L3i1qVg8+CAgNPsXRArPMUMCaOR7oa9Nqntc43JKA==}
-    engines: {node: '>= 20.19.0'}
 
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
@@ -7695,10 +7582,6 @@ snapshots:
 
   check-error@2.1.3: {}
 
-  chokidar@5.0.0:
-    dependencies:
-      readdirp: 5.1.1
-
   comma-separated-tokens@2.0.3: {}
 
   commander@14.0.3: {}
@@ -8939,8 +8822,6 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       unpipe: 1.0.0
-
-  readdirp@5.1.1: {}
 
   regex-recursion@6.0.2:
     dependencies:

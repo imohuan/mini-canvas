@@ -12,13 +12,13 @@ const HINT = '面板已删，KV 监听照常工作'
 </script>
 
 <template>
-  <div class="hrdemo" data-testid="hot-reload-demo-card">
+  <div class="hrdemo" data-testid="demo-kit-hot-reload-card">
     <div class="hrdemo-badge">{{ VERSION }}</div>
     <div class="hrdemo-main">
       <strong class="hrdemo-title">{{ TITLE }}</strong>
       <span class="hrdemo-hint">{{ HINT }}</span>
 
-       12312123
+
     </div>
   </div>
 </template>

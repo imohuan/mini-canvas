@@ -1,10 +1,8 @@
 /**
- * plugin-ui-demo —— UI 扩展能力演示插件（不做业务，只演示接线）。
+ * 插槽与工具栏演示（demo-kit 的一间展台，不做业务，只演示接线）。
  *
- * 身份：`demo-ui-slots`（清单里统一带 `示例 ·` 标题、`demo-` 运行时名）。
  * 它**不是**产品自带能力：默认不随 `packages/ui/src/assembly.ts` 冷启动，
- * 而是作为可安装示例由「设置 → 插件」装进来（与 theme-gallery 同一个入口）。
- * 这样演示不会混进真实产品，同时清单、运行时名和面板标题三处能对上。
+ * 而是随 demo-kit 由「设置 → 插件」装进来。
  *
  * 演示三件事：
  * ① 图片顶栏按钮组内部插一条：ctx.slots.register('image.topToolbar', …)
@@ -16,25 +14,18 @@
  *    - 底栏：nodeToolbar 服务的模式 bottomBar —— 进入模式后下栏整格替换；
  *    两边共享 nodeToolbar 服务（主题件）上的会话（enter / exit），同步开合。
  *
- * 卸载本插件：条目自动回收，画布回原样。
+ * 卸载 demo-kit：条目自动回收，画布回原样。
  */
 import { markRaw } from 'vue'
-import type { PluginModule, Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@mini-canvas/canvas-base'
 import DemoTopEntry from './DemoTopEntry.vue'
 import DemoFeaturePanel from './DemoFeaturePanel.vue'
 import { closeDemoMode } from './demoMode'
 
-export const name = 'demo-ui-slots'
-/**
- * nodeToolbar 是主题插件的服务（模式注册表 + 会话）：没装主题时本插件照常工作
- * （顶栏按钮仍在），只是 enter 拿不到 —— 所以不进 inject（可选依赖用 tryGet）。
- */
-export const inject = [] as string[]
-
 export function apply(ctx: Context): void {
   // ① 顶栏：图片按钮组内部的一条（与 host/upload、host/crop、host/expand 一起排）
   ctx.slots.register('image.topToolbar', {
-    id: 'demo-ui-slots/top-entry',
+    id: 'demo-kit/ui-slots-entry',
     order: 400,
     component: markRaw(DemoTopEntry),
   })
@@ -46,7 +37,7 @@ export function apply(ctx: Context): void {
     } | undefined>('nodeToolbar')
     if (!svc?.registerMode) return false
     const offMode = svc.registerMode({
-      id: 'demo-ui-slots/feature',
+      id: 'demo-kit/feature-mode',
       types: ['image'],
       title: '功能演示',
       description: '演示：下栏换成该功能的 UI（同一格，不叠加）',
@@ -64,6 +55,3 @@ export function apply(ctx: Context): void {
     })
   }
 }
-
-export const uiDemoPlugin: PluginModule = { name, inject, apply }
-export default uiDemoPlugin

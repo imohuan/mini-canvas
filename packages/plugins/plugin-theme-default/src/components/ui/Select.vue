@@ -300,7 +300,6 @@ function onChange(value: string | number | null): void {
   background: var(--ui-veil);
 }
 
-.sel-root .sel-option-icon :deep(svg),
 .sel-root .sel-option-icon svg {
   width: 16px;
   height: 16px;

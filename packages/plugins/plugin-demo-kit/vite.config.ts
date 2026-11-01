@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
 import { pluginLibBuild } from '../vite-plugin-lib'
 
-// plugin-theme-gallery —— lib 打包（UMD）供「插件管理」从云服务清单加载。
+// plugin-demo-kit —— 四套开发演示合并后的**唯一**产物（UMD），供「插件管理」按需安装。
 //
 // external / globals 走共享表（../vite-plugin-lib）——唯一事实源，与其它可装卸插件同一份。
 //
@@ -17,6 +17,6 @@ import { pluginLibBuild } from '../vite-plugin-lib'
 // vue / @vue-flow/core / 内核那批仍然 external：它们是块内小画布与展厅共享的真运行时。
 export default defineConfig({
   plugins: [vue(), cssInjectedByJs()],
-  build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginThemeGallery' }),
+  build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginDemoKit' }),
 })
 

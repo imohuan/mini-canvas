@@ -1,14 +1,17 @@
 {
-  "name": "@mini-canvas/plugin-ui-demo",
+  "name": "@mini-canvas/plugin-demo-kit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "miniCanvas": {
-    "title": "示例 · 插槽与工具栏",
-    "description": "开发演示：图片顶栏插槽、下拉按钮与二级菜单、功能模式的顶栏/底栏切换",
-    "pluginName": "demo-ui-slots",
+    "title": "示例 · 插件演练场",
+    "description": "开发演示合集：组件展厅、插槽与工具栏、外壳插槽、热重载靶子。装一个就够，不混进产品冷启动",
+    "pluginName": "demo-kit",
     "installable": true
   },
+  "files": [
+    "dist"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -23,13 +26,18 @@
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@mini-canvas/plugin-theme-default": "workspace:*"
   },
   "peerDependencies": {
+    "@vue-flow/core": "^1.48.2",
+    "@mini-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {
+    "@mini-canvas/kernel": "workspace:*",
+    "@vue-flow/core": "^1.48.2",
     "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/server-renderer": "3.5.38",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-css-injected-by-js": "^3.5.2",
@@ -38,3 +46,4 @@
     "vue-tsc": "^3.2.8"
   }
 }
+
