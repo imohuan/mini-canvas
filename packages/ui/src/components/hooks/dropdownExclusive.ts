@@ -8,7 +8,7 @@
  * 与「祖先豁免」，但谁都不该去改核心层，于是各留一份自己的实现（主题包那份见它的
  * `components/ui/dropdownRegistry.ts`）。
  *
- * 两份实现的**共同语言只有一条**：浮层根的 `data-floating-chain` 属性（见 floatingGroup.ts）。
+ * 两份实现的**共同语言只有一条**：浮层根的 `data-mck-floating-chain` 属性（见 floatingGroup.ts）。
  * 靠它，两套浮层混在一起时也能认出父子关系 —— 共享的是 DOM 契约，不是代码。
  * 互斥本身只在各自实现内部生效（跨库互斥不是这里的目标）。
  *

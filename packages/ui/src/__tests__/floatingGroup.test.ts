@@ -7,12 +7,12 @@
  *   → 父菜单先关、二级面板随父卸载 → click 派发时目标已脱离文档，Vue 的 click 回调不再执行。
  *   用户看到的现象：嵌套菜单能展开，但点下去什么也不发生。
  *
- * 契约：每个浮层根写 data-floating-chain = 「父链 + 自己 id」；
+ * 契约：每个浮层根写 data-mck-floating-chain = 「父链 + 自己 id」；
  * 「这一点算不算我这一组」= 命中的链里有没有我的 id。
  *
  * 本文件测的是 **`@mini-canvas/ui` 自己那一份实现**（用户口径 2026-10-15：插件各自独立，
  * 不跨包共享、更不动核心层）。主题默认件里另有一份等价的实现，两边只共享
- * `data-floating-chain` 这个 DOM 契约。
+ * `data-mck-floating-chain` 这个 DOM 契约。
  */
 import { describe, it, expect } from 'vitest'
 import { floatingChainOf, isInFloatingGroup, childChainFor, isChainAncestorOf } from '../components/hooks/floatingGroup'
@@ -39,8 +39,8 @@ function el(tag: string, chain?: string): FakeEl {
       return chain ? { floatingChain: chain } : undefined
     },
     closest(selector: string) {
-      // 只支持这一种选择器：找最近的「带 data-floating-chain 的祖先（含自己）」
-      if (selector !== '[data-floating-chain]') return null
+      // 只支持这一种选择器：找最近的「带 data-mck-floating-chain 的祖先（含自己）」
+      if (selector !== '[data-mck-floating-chain]') return null
       let cur: FakeEl | null = node
       while (cur) {
         if (cur.chain) return { dataset: { floatingChain: cur.chain } }

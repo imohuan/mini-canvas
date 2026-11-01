@@ -7,7 +7,7 @@
  * Select 共用这一份，互斥在本插件内部照旧生效。
  *
  * 与 `@mini-canvas/ui` 那份（它的 `hooks/dropdownExclusive.ts`）**只共享 DOM 契约**：
- * 浮层根的 `data-floating-chain` 属性（见 floatingChain.ts）。共享的是契约，不是代码。
+ * 浮层根的 `data-mck-floating-chain` 属性（见 floatingChain.ts）。共享的是契约，不是代码。
  *
  * 为什么必须是独立模块（不写在 Dropdown.vue 的 <script setup> 里）：
  * `<script setup>` 的顶层代码会被编译进 **setup() 函数体**，于是每个组件实例各拿一份

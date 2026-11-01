@@ -151,7 +151,6 @@ const triggerEvents = computed(() => {
           :style="api.panelStyle.value"
           :role="menuRole"
           :data-mck-floating-chain="api.chain.value.join(' ')"
-          :data-floating-chain="api.chain.value.join(' ')"
           @mouseenter="trigger === 'hover' ? api.cancelHide() : undefined"
           @mouseleave="trigger === 'hover' ? api.scheduleHide() : undefined"
         >

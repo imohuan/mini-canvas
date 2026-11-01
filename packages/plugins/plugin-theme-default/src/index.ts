@@ -756,9 +756,6 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 节点上/下控制栏里那一条按钮 —— 只给图标（纯图标钮）或图标 + 文字，观感由主题决定。
   // **不是**通用表单按钮（提交/取消那种）—— 那类走各面板自己的排布，不进这个目录。
   ui.add("toolbarButton", NodeToolbarButton, { id: "default" });
-  // 兼容旧名：'button' 在 2026-10-29 之前是这个名字，仓库里第三方插件与文档可能还在用。
-  // 同一个组件登记两次（id 不同）→ 老代码照常取到件，新代码统一用 toolbarButton。
-  ui.add("button", NodeToolbarButton, { id: "legacy-button-alias" });
   // 工具栏下拉按钮：触发器 = 上面的 toolbarButton，菜单与二级菜单都是独立浮层。
   // 插件按名取（useUiComponent('toolbarDropdown')），不必再自己拼 button + dropdown。
   ui.add("toolbarDropdown", ToolbarDropdownButton, { id: "default" });

@@ -28,9 +28,9 @@ describe('实现住在本插件里（不动核心层）', () => {
     expect(REGISTRY_SRC).not.toMatch(/from '@mini-canvas\/canvas-render'/)
   })
 
-  it('共享的只有 DOM 契约（data-floating-chain），两处实现都读它', () => {
-    expect(FLOATING_CHAIN_ATTR).toBe('data-floating-chain')
-    expect(CHAIN_SRC).toMatch(/data-floating-chain|FLOATING_CHAIN_ATTR/)
+  it('共享的只有 DOM 契约（data-mck-floating-chain），两处实现都读它', () => {
+    expect(FLOATING_CHAIN_ATTR).toBe('data-mck-floating-chain')
+    expect(CHAIN_SRC).toMatch(/data-mck-floating-chain|FLOATING_CHAIN_ATTR/)
   })
 })
 

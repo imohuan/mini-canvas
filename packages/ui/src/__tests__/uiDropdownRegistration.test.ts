@@ -7,7 +7,7 @@
  *    用户移除本插件即可回退；
  * 2. `top('dropdown')` 是**包 UI 这一份**（order -1 比默认件 0 小，谁小谁赢）；
  * 3. 本包下拉的互斥登记表是**本包自己那一份**（用户口径 2026-10-15：插件各自独立，
- *    不跨包共享、不动核心层）；与主题默认件那份只共享 `data-floating-chain` DOM 契约。
+ *    不跨包共享、不动核心层）；与主题默认件那份只共享 `data-mck-floating-chain` DOM 契约。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -104,9 +104,8 @@ describe('子浮层（nestedIn）：两个菜单并存', () => {
   it('② 库算出的组链 = 父链 + 自己，并写进面板（父菜单借它认出「点的是自己人」）', () => {
     expect(kit).toMatch(/const ancestors = explicit \? explicit\.split/)
     expect(kit).toMatch(/return \[\.\.\.ancestors, chainId\]/)
-    // 新旧两份属性都写：宿主与库互相识别父子关系
+    // 浮层链只写一个属性名
     expect(kitVue).toMatch(/:data-mck-floating-chain="api\.chain\.value\.join\(' '\)"/)
-    expect(kitVue).toMatch(/:data-floating-chain="api\.chain\.value\.join\(' '\)"/)
   })
 
   it('②b 父链有**两条来源**：显式 parentChain 优先，其次读自己的 DOM 祖先', () => {

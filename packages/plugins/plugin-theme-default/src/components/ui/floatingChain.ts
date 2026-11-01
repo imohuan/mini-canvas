@@ -6,7 +6,7 @@
  * 所以本插件不做跨包转发，自己留一份实现；`@mini-canvas/ui` 里另有一份等价的
  * （它的 `components/hooks/floatingGroup.ts`）。
  *
- * 两份实现**共享的只有 DOM 契约**（不是代码）：每个浮层根写 `data-floating-chain`，
+ * 两份实现**共享的只有 DOM 契约**（不是代码）：每个浮层根写 `data-mck-floating-chain`，
  * 值为「从最初的一级面板到自己」的 id 链（空格分隔）。子浮层打开时把自己的链
  * 写成「父链 + 自己 id」。于是两套下拉的浮层混在同屏时，也认得出谁是父、谁是子。
  *
@@ -17,7 +17,7 @@
  */
 
 /** 浮层链属性名（写入 / 读取都用它，避免两处各写一遍字符串） */
-export const FLOATING_CHAIN_ATTR = 'data-floating-chain'
+export const FLOATING_CHAIN_ATTR = 'data-mck-floating-chain'
 
 /**
  * 只要能「往上找最近的浮层根」就够（鸭子类型）：真实 DOM 元素天然满足，

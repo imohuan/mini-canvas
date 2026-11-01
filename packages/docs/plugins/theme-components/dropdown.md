@@ -103,6 +103,6 @@ function pick(label: string, close: () => void): void {
 4. **`teleport` 默认开**：浮层挂在 body 上，样式与裁剪上下文（如祖先的 `overflow: hidden`）不再影响它；关掉要自己保证不被裁。
 5. **按名取到的都是同一份实现**：主题这份适配层和成品应用的 `AxDropdown` 最终都落到 ui-kit 的
    Dropdown 上。改定位、互斥、键盘行为只需要改 ui-kit 一处，不会再出现"两套实现各自漂移"。
-6. **嵌在另一个浮层里不用额外声明**：浮层根带 `data-mck-floating-chain`（同时兼容旧名
-   `data-floating-chain`），里层的下拉读一下自己的祖先就知道「我是谁的儿子」，
+6. **嵌在另一个浮层里不用额外声明**：浮层根带 `data-mck-floating-chain`，
+   里层的下拉读一下自己的祖先就知道「我是谁的儿子」，
    打开时不会把外层面板顶掉。

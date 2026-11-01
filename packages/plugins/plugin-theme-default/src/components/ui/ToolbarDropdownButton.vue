@@ -142,7 +142,7 @@ const SUB_GAP = 12
 const subPos = ref({ left: 0, top: 0 })
 /**
  * 二级浮层的组链（父链 + 自己）。
- * 为什么必须有：主下拉的「点外关闭」只认 data-floating-chain —— 二级菜单是 teleport 到 body
+ * 为什么必须有：主下拉的「点外关闭」只认 data-mck-floating-chain —— 二级菜单是 teleport 到 body
  * 的独立元素，不写链就会被判成「点了外面」，点它的条目时父菜单先关、条目点击丢失。
  * 链直接从主面板元素的同名属性读（它就是父链），再追加自己的 id。
  */
@@ -338,7 +338,7 @@ void (Button as Component | undefined)
       class="tdb-menu tdb-sub"
       :class="{ 'tdb-sub--panel': openSubPanel }"
       data-toolbar-dropdown-sub="1"
-      :data-floating-chain="subChain"
+      :data-mck-floating-chain="subChain"
       role="menu"
       :aria-label="openSubItem.label"
       :style="{ left: subPos.left + 'px', top: subPos.top + 'px', minWidth: openSubPanel?.width || menuWidth, maxHeight: subMaxHeight == null ? undefined : subMaxHeight + 'px' }"
