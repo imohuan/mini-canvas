@@ -1,0 +1,679 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>队列 + 目标 · 聚合方案（可调试 v3）</title>
+<style>
+  :root {
+    --ui-canvas-bg:#f5f6f8; --ui-panel:#fff; --ui-line:#e2e5ea; --ui-line-soft:#eef0f4;
+    --ui-ink:#18202b; --ui-ink-dim:#6b7280; --ui-ink-mute:#8c95a3;
+    --ui-hover:rgb(0 0 0/.06); --ui-veil:rgb(0 0 0/.04); --ui-chip:rgb(0 0 0/.07);
+    --ui-hover-strong:rgb(0 0 0/.10);
+    --ui-overlay-solid:#fff; --ui-shadow-md:0 18px 44px rgb(15 23 42/.16);
+    --ui-accent:#0891b2; --ui-accent-hover:#0e7490;
+    --ui-accent-soft:color-mix(in srgb,var(--ui-accent) 12%,transparent);
+    --ui-accent-faint:color-mix(in srgb,var(--ui-accent) 7%,transparent);
+    --ui-danger:#ef4444; --ui-danger-veil:color-mix(in srgb,var(--ui-danger) 8%,transparent);
+    --ui-warn:#e3a25f; --ui-warn-faint:color-mix(in srgb,var(--ui-warn) 10%,transparent);
+  }
+  html.dark {
+    --ui-canvas-bg:#141414; --ui-panel:#262626; --ui-line:#363636; --ui-line-soft:#2a2a2a;
+    --ui-ink:#f7f7f7; --ui-ink-dim:#919191; --ui-ink-mute:#a8a8a8;
+    --ui-hover:rgb(255 255 255/.10); --ui-veil:rgb(255 255 255/.06); --ui-chip:rgb(255 255 255/.10);
+    --ui-hover-strong:rgb(255 255 255/.15);
+    --ui-overlay-solid:rgb(33 33 33); --ui-shadow-md:0 18px 44px rgb(0 0 0/.45);
+    --ui-accent:#0891b2; --ui-accent-hover:#22b8d6;
+    --ui-accent-soft:color-mix(in srgb,var(--ui-accent) 20%,transparent);
+    --ui-accent-faint:color-mix(in srgb,var(--ui-accent) 12%,transparent);
+    --ui-danger:#f87171; --ui-danger-veil:color-mix(in srgb,var(--ui-danger) 10%,transparent);
+    --ui-warn:#e3a25f; --ui-warn-faint:color-mix(in srgb,var(--ui-warn) 14%,transparent);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--ui-canvas-bg);color:var(--ui-ink);
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+
+  .app{display:flex;min-height:100vh}
+  .stage{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:24px}
+  .controls{width:308px;flex:none;border-left:1px solid var(--ui-line);background:var(--ui-panel);
+    padding:16px 14px;overflow-y:auto;height:100vh;position:sticky;top:0}
+
+  .panel{position:relative;display:flex;flex-direction:column;width:520px;max-width:100%;height:620px;
+    padding:10px 10px 0;background:var(--ui-panel);border:1px solid var(--ui-line);border-radius:16px;overflow:hidden}
+  .panel-head{display:flex;align-items:center;gap:6px;padding:2px 6px 10px;font-size:13px;font-weight:600;flex:none}
+  .panel-head .dot{width:8px;height:8px;border-radius:999px;background:var(--ui-accent)}
+  .panel-head .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .scroll-wrap{position:relative;flex:1;min-height:0}
+  .scroll{height:100%;overflow-y:auto;padding:4px 6px 14px}
+  .msg{max-width:78%;margin:0 0 10px;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.5}
+  .msg.user{margin-left:auto;background:var(--ui-accent-soft);color:var(--ui-ink)}
+  .msg.ai{background:var(--ui-veil);color:var(--ui-ink)}
+  .scroll::-webkit-scrollbar{width:8px}
+  .scroll::-webkit-scrollbar-thumb{background:rgb(0 0 0/.12);border-radius:4px}
+  html.dark .scroll::-webkit-scrollbar-thumb{background:rgb(255 255 255/.18)}
+
+  /* 回到底部：**对话区内部**底部居中 */
+  .to-bottom{position:absolute;z-index:6;display:grid;place-items:center;width:32px;height:32px;padding:0;
+    border:1px solid var(--ui-line);border-radius:999px;background:var(--ui-overlay-solid);
+    color:var(--ui-ink-dim);cursor:pointer;box-shadow:var(--ui-shadow-md);
+    transition:color .15s ease,transform .15s ease}
+  .to-bottom:hover{color:var(--ui-ink);transform:translateY(-1px)}
+  .to-bottom[hidden]{display:none}
+  .tb-chat{left:50%;transform:translateX(-50%);bottom:12px}
+  .tb-chat:hover{transform:translateX(-50%) translateY(-1px)}
+  .tb-input-left{left:50%;transform:translateX(-50%);bottom:7px}
+  .tb-input-right{right:52px;left:auto;bottom:7px}
+
+  /* 聚合容器（队列 + **已发送**的目标）：紧贴输入框，无间隔；宽 90% */
+  .pending{width:90%;flex:none;align-self:center;margin:0;border:1px solid var(--ui-line);
+    border-radius:14px;background:var(--ui-veil);overflow:hidden}
+  .pending[hidden]{display:none}
+  .pending.merge{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:-1px}
+
+  /* 队列暂停 / 恢复：骑在「队列容器」与「输入框」的分界线上，水平居中
+     （一半压在队列上、一半压在输入框上）。图标 + 文字 + 队列条数。 */
+  .pause-slot{position:absolute;top:0;left:50%;transform:translate(-50%,-50%);z-index:8;display:flex}
+  .q-pause{
+    display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 9px;
+    border:1px solid var(--ui-line);border-radius:999px;background:var(--ui-overlay-solid);
+    color:var(--ui-ink-dim);font:inherit;font-size:11px;font-weight:600;white-space:nowrap;
+    box-shadow:var(--ui-shadow-md);cursor:pointer;transition:color .15s ease,background .15s ease}
+  /* hover：叠一层半透明，而不是把不透明底整个换掉 —— 暗色下换成浅色会「发白」 */
+  .q-pause:hover{color:var(--ui-ink);background:linear-gradient(var(--ui-hover-strong),var(--ui-hover-strong)),var(--ui-overlay-solid)}
+  .q-pause svg{flex:none}
+  .q-pause .q-pause-cnt{min-width:16px;height:16px;padding:0 5px;border-radius:999px;
+    background:var(--ui-chip);display:grid;place-items:center;font-size:10px;color:var(--ui-ink-dim)}
+  .q-pause.is-paused{border-color:transparent;background:var(--ui-warn);color:#fff}
+  .q-pause.is-paused .q-pause-cnt{background:rgb(255 255 255/.28);color:#fff}
+  .q-pause:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+
+  .prow{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 8px 0 10px}
+  .prow + .prow{border-top:1px solid var(--ui-line-soft)}
+  .prow:hover{background:var(--ui-hover)}
+  .prow .lead{flex:none;display:grid;place-items:center;color:var(--ui-ink-mute)}
+
+  /* ---- 目标行（已发送后在列表里；UI 与队列行不同）---- */
+  .grow{background:var(--ui-accent-faint)}
+  .grow:hover{background:var(--ui-accent-soft)}
+  .grow .lead{color:var(--ui-accent-hover)}
+  .grow .gtext{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:12px;font-weight:600;color:var(--ui-ink)}
+  /* 极端防护：次要信息（进度条 / 轮次）允许被压缩、必要时隐藏；按钮区永不被挤走 */
+  .grow .gbar{flex:0 1 60px;min-width:0;height:4px;border-radius:999px;background:var(--ui-chip);overflow:hidden}
+  .grow .gbar i{display:block;height:100%;background:var(--ui-accent)}
+  /* 右侧只显示「第 N 轮」；进度条自己承载已用/预算（title 悬停看） */
+  /* 「第 N 轮 · 已用 / 剩余」：可点开关（点一下切换口径），hover 有下划线提示可点 */
+  .grow .ground{flex:none;padding:0 2px;border:0;border-radius:4px;background:transparent;
+    font:inherit;font-size:12px;color:var(--ui-ink-dim);white-space:nowrap;cursor:pointer}
+  .grow .ground:hover{background:var(--ui-hover);color:var(--ui-ink)}
+  .grow .ground:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+  /* 口径开关（已用 / 剩余）：样式与「结束目标」的关闭按钮一致（同尺寸、同 hover） */
+  .gbtn{display:grid;place-items:center;width:24px;height:24px;flex:none;padding:0;border:0;
+    border-radius:6px;background:transparent;color:var(--ui-ink-dim);cursor:pointer}
+  .gbtn:hover{background:var(--ui-hover);color:var(--ui-ink)}
+  .gbtn:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+  .grow .gbar{flex:0 1 56px}
+  /* 面板很窄：进度条也可以收掉，只留「第 N 轮」 */
+  .panel.is-narrow .grow .gbar{display:none}
+  .gflag{flex:none;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;line-height:14px;
+    background:var(--ui-accent-soft);color:var(--ui-accent-hover)}
+  .gflag.paused{background:var(--ui-warn-faint);color:var(--ui-warn)}
+  .gflag.done{background:var(--ui-chip);color:var(--ui-ink-dim)}
+
+  /* 预算下拉触发器（方案 2 那种形式：标签 + ⌄） */
+  /* 预算 / token 数字：**前缀 + 可编辑数值**。数值下面是一条真正的 CSS 下划线
+     （text-decoration，不是边框），编辑时宽度跟着文字走（contenteditable 天然自适应）。 */
+  .gbudget{flex:none;display:inline-flex;align-items:center;gap:4px;height:20px;
+    font-size:12px;font-weight:600;color:var(--ui-accent-hover);white-space:nowrap}
+  .gbudget-prefix{flex:none;color:var(--ui-ink-dim);font-weight:600}
+  .gbudget-val{flex:none;min-width:2.2ch;padding:0;color:inherit;font:inherit;font-size:12px;
+    font-weight:600;line-height:16px;text-align:left;outline:none;cursor:text;white-space:pre;
+    text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;
+    text-decoration-color:color-mix(in srgb,var(--ui-accent) 45%,transparent)}
+  .gbudget-val:hover{text-decoration-color:var(--ui-accent)}
+  .gbudget-val:focus{text-decoration-style:solid;text-decoration-color:var(--ui-accent)}
+  /* 面板很窄时：进度条与轮次让位（只保留名字 + 状态 + 预算 + 按钮） */
+  .panel.is-micro .grow .gbar, .panel.is-micro .grow .ground, .panel.is-micro .grow .gflag{display:none}
+  .prow{min-width:0}
+
+  /* ---- 队列行 ---- */
+  .qtext{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--ui-ink)}
+  .prow.editing{background:var(--ui-warn-faint)}
+  .prow.editing .qtext{color:var(--ui-ink-dim)}
+  .thumb{flex:none;width:16px;height:16px;border-radius:4px;object-fit:cover;background:var(--ui-chip)}
+  .pflag{flex:none;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;line-height:14px;
+    background:var(--ui-warn-faint);color:var(--ui-warn);white-space:nowrap}
+  .pflag.sending{background:var(--ui-chip);color:var(--ui-ink-dim)}
+  .srow{opacity:.6}
+  .rowactions{display:flex;align-items:center;gap:2px;flex:none}
+  .qbtn{display:grid;place-items:center;width:24px;height:24px;flex:none;padding:0;border:0;border-radius:6px;
+    background:transparent;color:var(--ui-ink-dim);cursor:pointer}
+  .qbtn:hover{background:var(--ui-hover);color:var(--ui-ink)}
+  .qbtn.danger:hover{background:var(--ui-danger-veil);color:var(--ui-danger)}
+
+  /* ===== 输入框：紧贴上面的容器 ===== */
+  .inputbox{position:relative;flex:none;display:flex;flex-direction:column;gap:8px;padding:8px;
+    border:1px solid var(--ui-line);border-radius:16px;background:var(--ui-overlay-solid);margin:0 0 10px}
+  /* 未发送的目标：**输入框内侧顶部**（图 2 效果） */
+  .goalmark{display:flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 8px;border-radius:8px;
+    background:var(--ui-accent-soft);color:var(--ui-accent-hover)}
+  .goalmark .lead{flex:none;display:grid;place-items:center}
+  .goalmark .gtext{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:12px;font-weight:600}
+  /* 预算紧跟「目标」二字之后（不是被推到最右）：文字按内容宽、预算紧随，末尾用 spacer 顶开 */
+  /* 「目标」与「预算」两段文字：字号 / 行高 / 盒高 / 内边距完全一致 —— 这样基线才会齐 */
+  .goalmark .gtext{
+    font-size:12px;font-weight:600;line-height:20px;height:20px;padding:0;margin:0;display:inline-flex;
+    align-items:center}
+  .goalmark .gtext{flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .goalmark .spacer{flex:1}
+  /* 预算：**不要背景 / 不要边框**，只有前缀 + 带下划线的数值 */
+  .goalmark .gbudget{flex:none;margin-left:0;background:transparent}
+
+  .editor{min-height:38px;padding:4px 4px 0;color:var(--ui-ink-mute);font-size:14px}
+  .editor.filled{color:var(--ui-ink)}
+  .toolbar{display:flex;align-items:center;gap:6px}
+  .icobtn{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:8px;background:transparent;
+    color:var(--ui-ink-dim);cursor:pointer}
+  .icobtn:hover{background:var(--ui-hover);color:var(--ui-ink)}
+  .pill{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 10px;border-radius:999px;
+    color:var(--ui-ink);font-size:13px}
+  .spacer{flex:1}
+  .send{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:12px;
+    background:var(--ui-ink);color:var(--ui-panel);cursor:pointer}
+  .send.stop{background:var(--ui-danger);color:#fff}
+  .send .sq{width:11px;height:11px;border-radius:2px;background:currentColor}
+
+
+  /* ===== 控制台 ===== */
+  .controls h3{margin:0 0 12px;font-size:13px;font-weight:700}
+  .ctl{margin-bottom:15px}
+  .ctl .lbl{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ui-ink-mute);margin:0 0 6px 2px}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{border:1px solid var(--ui-line);background:transparent;color:var(--ui-ink-dim);
+    padding:6px 10px;border-radius:8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .seg button:hover{background:var(--ui-hover);color:var(--ui-ink)}
+  .seg button.on{background:var(--ui-accent-soft);color:var(--ui-accent-hover);border-color:transparent}
+  .ctl .hint{font-size:11px;color:var(--ui-ink-mute);margin:6px 2px 0}
+  .divider{height:1px;background:var(--ui-line);margin:14px 0}
+  /* 规则清单（写在页面上，便日后回归对照） */
+  .rules{margin:0 0 8px;font-size:12px;color:var(--ui-ink-dim)}
+  .rules summary{cursor:pointer;font-weight:700;color:var(--ui-ink);padding:4px 2px;font-size:12px}
+  .rules-list{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px;line-height:1.5}
+  .rules-list li{color:var(--ui-ink-dim)}
+  .rules-list b{color:var(--ui-ink)}
+  .rules-list code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;
+    padding:0 4px;border-radius:4px;background:var(--ui-chip)}
+  .rules-note{margin:8px 0 0;font-size:11px;color:var(--ui-ink-mute)}
+  .rules-note code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+  <div class="app">
+    <main class="stage">
+      <div class="panel">
+        <div class="panel-head"><span class="dot"></span><span class="title">Agent 对话 · 目标与队列调试</span></div>
+
+        <div class="scroll-wrap">
+          <div class="scroll" id="scroll"></div>
+          <button class="to-bottom" id="toBottom" title="回到底部" aria-label="回到底部">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          </button>
+        </div>
+
+        <div class="pending" id="pending"></div>
+
+        <div class="inputbox" id="inputbox">
+          <div class="pause-slot" id="pauseSlot"></div>
+          <div id="goalMarkSlot"></div>
+          <div class="editor" id="editor">开始你的创作，或者 @ 引用技能 / MCP</div>
+          <div class="toolbar">
+            <button class="icobtn" aria-label="添加">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+              <span class="pill panel-title-slot" title="全能创作">全能创作</span>
+            <span class="spacer"></span>
+            <button class="send" id="send" aria-label="发送">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="controls">
+      <h3>可调试控制台</h3>
+
+      <div class="ctl">
+        <p class="lbl">消息内容</p>
+        <div class="seg" id="segMsgs"></div>
+        <p class="hint">「很多」= 消息区出现滚动条，可测「回到底部」按钮的显隐。</p>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">目标状态</p>
+        <div class="seg" id="segGoal"></div>
+        <p class="hint">**未发送** = 输入框内侧顶部（图 2 效果）；**发送中 / 运行中 / 已暂停 / 已完成** = 列表里的一行。</p>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">极端：Token 预算的数字</p>
+        <div class="seg" id="segBudget"></div>
+        <p class="hint">预算也按单位显示（不再是 1,048,576,000 那种长串）。</p>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">极端：第几轮 / 已用 token</p>
+        <div class="seg" id="segRound"></div>
+        <div class="seg" id="segUsed" style="margin-top:6px"></div>
+        <p class="hint">轮次 / 已用才是常变的大头；很大的数字不该撑破行。</p>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">数字单位</p>
+        <div class="seg" id="segUnit"></div>
+        <p class="hint">按量级换算：k / M / B / T，或 万 / 亿 / 万亿。避免甩一长串数字。</p>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">极端：目标文案长度</p>
+        <div class="seg" id="segGoalLen"></div>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">极端：面板宽度</p>
+        <div class="seg" id="segWidth"></div>
+        <p class="hint">面板被拉窄时，整体会不会溢出、行会不会挤成一团。</p>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">队列状态</p>
+        <div class="seg" id="segQueue"></div>
+      </div>
+
+      <div class="ctl">
+        <p class="lbl">队列容器与输入框</p>
+        <div class="seg" id="segMerge"></div>
+        <p class="hint">与输入框都是**零间隔**；区别只在容器底部是否保留圆角。</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="ctl">
+        <p class="lbl">主题</p>
+        <div class="seg" id="segTheme"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- 把反复纠错提炼出的规则**写进页面**：换人接手/日后回归，照这里对 -->
+      <details class="rules" open>
+        <summary>踩过的坑 · 规则清单（错 → 对）</summary>
+        <ol class="rules-list">
+          <li><b>队列与输入框零间隔</b>：容器 margin:0，与输入框边框重叠 1px；宽 <b>90%</b> 居中。</li>
+          <li><b>只有外层圆角</b>：容器 14px，内部行 <code>border-radius:0</code>；容器四边 1px 描边。</li>
+          <li><b>目标两阶段</b>：未发送=输入框内侧顶部（只写「目标」二字）；已发送=聚合容器里的一行。<b>两处都要有口径开关</b>。</li>
+          <li><b>预算紧跟「目标」之后</b>，<b>无背景、无边框</b>；行内 <code>contenteditable</code> 编辑，宽度自适应。</li>
+          <li><b>下划线用 text-decoration</b>（非 border-bottom）——边框会把文字压偏。</li>
+          <li><b>口径只有两态</b>：「已用预算」⇄「剩余预算」，都叫预算；开关在关闭按钮左侧、样式与它一致，点击换图标。</li>
+          <li><b>token 单位换算</b>：国际 k/M/B/T，中文 万/亿/万亿；不甩长数字串。</li>
+          <li><b>队列暂停键</b>：骑在队列与输入框分界线上、水平居中，图标+文字+条数，文字带「队列」前缀。</li>
+          <li><b>引导是纯图标按钮</b>（带文字会被挤成竖排折行）。</li>
+          <li><b>回到底部</b>：放在消息区内部、底部居中。</li>
+          <li><b>同一行相邻文字</b>：字号/行高/盒高/内边距必须一致（对齐的根因就是字号不同）。</li>
+          <li><b>极端防护</b>：次要信息可压缩/隐藏，按钮永不被挤走；超长文本单行省略号；行高稳定。</li>
+          <li><b>暗色下的 hover</b>：用叠加半透明，不要替换不透明底色（否则发白）；<code>--ui-*</code> 亮暗两套都要有值。</li>
+        </ol>
+        <p class="rules-note">完整版：<code>docs/tmp/queue-ui-demo/RULES.md</code></p>
+      </details>
+    </aside>
+  </div>
+
+<script>
+(function () {
+  var state = { msgs:'many', goal:'draft', queue:'three', merge:true, theme:'light', unit:'si' };
+  // 预算 / 已用：**存原始数字**，显示时按量级换算（避免甩一串长数字）
+  var BUDGET_RAW = { b5w:50000, b50w:500000, b100w:1000000, b250w:2500000, b10y:1000000000, bnone:-1, babsurd:1e18 };
+  var USED_RAW   = { u0:0, u3700:3700, u5w:50000, u999k:999000, u1m:1048576, u10y:1048576000 };
+  state.budget = 'b5w';
+  state.used = 'u3700';
+  state.round = 5;
+  state.goalLong = false;
+  state.width = 'normal';
+  // 口径只有两个状态：used(已用预算) ⇄ left(剩余预算)。未发送 / 已发送两处共用。
+  state.tokMode = 'left';
+  var ROUNDS = { '1':'1', '5':'5', '42':'42', '999':'999', '12345':'12345', huge:'1000000' };
+
+  /**
+   * token 数字 → 带单位的短文案。
+   * 国际：k(1e3) / M(1e6) / B(1e9) / T(1e12)；中文：万(1e4) / 亿(1e8) / 万亿(1e12)。
+   * 小于 1000 原样；一位小数，去掉尾随 .0。
+   */
+  function fmtNum(n, mode){
+    var v = Number(n);
+    if (!isFinite(v)) return String(n);
+    var neg = v < 0; v = Math.abs(v);
+    var units = mode === 'cn'
+      ? [[1e12,'万亿'],[1e8,'亿'],[1e4,'万']]
+      : [[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'k']];
+    for (var i = 0; i < units.length; i++){
+      if (v >= units[i][0]){
+        var x = v / units[i][0];
+        var s = x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10).replace(/\.0$/, '');
+        return (neg ? '-' : '') + s + units[i][1];
+      }
+    }
+    return (neg ? '-' : '') + String(Math.round(v));
+  }
+  /** 预算：<=0 表示不限 */
+  function fmtBudget(n, mode){ var v = Number(n); return (!isFinite(v) || v <= 0) ? '不限' : fmtNum(v, mode); }
+  /** 已用：负数按 0 */
+  function fmtUsed(n, mode){ var v = Number(n); if (!isFinite(v) || v < 0) v = 0; return fmtNum(v, mode); }
+
+  var QUEUES = {
+    none: [],
+    one: [{ t:'a' }],
+    three: [{ t:'a' }, { t:'asdfasdfasdfasd' }, { t:'阿斯帝芬阿萨德' }],
+    editing: [{ t:'a' }, { t:'这条正在编辑（改完发送，位置不变）', editing:true }, { t:'阿斯帝芬阿萨德' }],
+    paused: [{ t:'a' }, { t:'asdfasdfasdfasd' }],
+    sending: [{ t:'a', sending:true }, { t:'asdfasdfasdfasd' }, { t:'刚发出去的一条', sent:true }]
+  };
+  // 极端：超长队列文本（含无空格长串）/ 很多行
+  QUEUES.veryLong = [
+    { t: '这是一条超级长的排队消息，用来测试极端情况：它应该被单行省略号截断，绝不能把整行撑高、也不能把后面的按钮挤出容器。再补一些字确保足够长。' },
+    { t: '短的一条' },
+    { t: 'https://example.com/a/very/long/path/with/no/spaces/that/should/still/be/truncated/1234567890' }
+  ];
+  QUEUES.manyRows = [
+    { t:'第 1 条' }, { t:'第 2 条' }, { t:'第 3 条' }, { t:'第 4 条' },
+    { t:'第 5 条' }, { t:'第 6 条' }, { t:'第 7 条' }, { t:'第 8 条' }
+  ];
+  var GOAL_TEXT = '把这批素材整理成一套分镜脚本';
+  // 极端：超长目标文案（无空格，专测省略号）
+  var GOAL_LONG = '把这一整批共计三百二十七张素材按照分镜脚本的镜头顺序逐条整理成一份可直接交给制作团队开机的完整分镜表并附上每个镜头的参考图编号与时长建议';
+  var IN_LIST = { sending:1, running:1, paused:1, done:1 };  // 这些状态在列表里显示
+
+  var ICON = {
+    goal:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>',
+    queue:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
+    steer:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v.5"/></svg>',
+    trash:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>',
+    more:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>',
+    x:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+    pause:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5v14M15 5v14"/></svg>',
+    play:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l12 8-12 8z"/></svg>',
+    chevron:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+    // 口径开关的两枚图标：已用（实心漏斗）= 消耗口径；剩余（空心漏斗）= 余量口径
+    tokUsed:'<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v7l-4 2v-9z"/></svg>',
+    tokLeft:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v7l-4 2v-9z"/></svg>',
+    down:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>',
+    up:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
+  };
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function goalText(){ return state.goalLong ? GOAL_LONG : GOAL_TEXT; }
+  function qbtn(aria, cls, inner){ return '<button class="qbtn'+(cls?' '+cls:'')+'" title="'+aria+'" aria-label="'+aria+'">'+inner+'</button>'; }
+  /**
+   * 预算：前缀（预算 / 已用 / 剩余）+ **可编辑数值**。
+   * 数值用 contenteditable 的 span：宽度天然跟着文字走，下面一条 CSS 下划线（非边框）。
+   */
+  function budgetCtl(prefix, val){
+    return '<span class="gbudget">'
+      + '<span class="gbudget-prefix">' + esc(prefix) + '</span>'
+      + '<span class="gbudget-val" id="budgetVal" contenteditable="true" spellcheck="false"'
+      + ' role="textbox" aria-label="'+esc(prefix)+'，点击编辑">' + esc(val) + '</span>'
+    + '</span>';
+  }
+  /**
+   * 口径开关：**只有两个状态** —— 「已用预算」⇄「剩余预算」。
+   * 它决定你编辑/看到的那个数字算「已用」还是「剩余」。未发送、已发送两处共用。
+   */
+  function tokenToggleBtn(){
+    var used = state.tokMode === 'used';
+    var aria = used ? '切换为剩余预算' : '切换为已用预算';
+    return '<button class="gbtn'+(used?' is-used':'')+'" id="tokenToggle" type="button"'
+      + ' title="'+aria+'" aria-label="'+aria+'">'+(used?ICON.tokUsed:ICON.tokLeft)+'</button>';
+  }
+  /** 解析用户输入的预算：支持 50000 / 50k / 1M / 1B / 5万 / 1亿；空 = 不限 */
+  function parseToken(text){
+    var s = String(text||'').trim();
+    if (!s) return -1;
+    var m = /^(\d+(?:\.\d+)?)\s*(k|m|b|t|万|亿|万亿)?$/i.exec(s.replace(/,/g,''));
+    if (!m) return NaN;
+    var n = Number(m[1]);
+    var u = (m[2]||'').toLowerCase();
+    var mul = u==='k'?1e3 : u==='m'?1e6 : u==='b'?1e9 : u==='t'?1e12
+      : u==='万'?1e4 : u==='亿'?1e8 : u==='万亿'?1e12 : 1;
+    return Math.round(n*mul);
+  }
+
+  // 未发送的目标：输入框内侧顶部
+  function draftMark(){
+    // 未发送：口径由开关决定 —— 只有「已用预算 / 剩余预算」两态
+    var bn = BUDGET_RAW[state.budget];
+    var useLeft = state.tokMode === 'left';
+    var draftPrefix = useLeft ? '剩余预算' : '已用预算';
+    var draftVal = useLeft
+      ? ((isFinite(bn) && bn > 0) ? fmtUsed(Math.max(0, bn - USED_RAW[state.used]), state.unit) : '不限')
+      : fmtUsed(USED_RAW[state.used], state.unit);
+    return '<div class="goalmark">' +
+      '<span class="lead">'+ICON.goal+'</span>' +
+      // 标签本身只写「目标」两个字；目标正文在下面的输入框里，不重复显示
+      '<span class="gtext">目标</span>' +
+      budgetCtl(draftPrefix, draftVal) +
+      '<span class="spacer"></span>' +
+      tokenToggleBtn() +
+      qbtn('取消目标','',ICON.x) +
+    '</div>';
+  }
+
+  // 已发送的目标：列表里的一行（UI 与队列行不同）
+  function goalRow(){
+    var st = state.goal;
+    var flag = st==='sending' ? '<span class="gflag">发送中</span>'
+      : (st==='paused' ? '<span class="gflag paused">已暂停</span>'
+      : (st==='done' ? '<span class="gflag done">已完成</span>' : '<span class="gflag">运行中</span>'));
+    var showProgress = st!=='sending';
+    var pct = st==='done'?100:37;
+    var mode = state.unit;
+    var round = ROUNDS[state.round] || state.round;
+    var used = fmtUsed(USED_RAW[state.used], mode);
+    var budgetVal = fmtBudget(BUDGET_RAW[state.budget], mode);
+    var budgetNum = BUDGET_RAW[state.budget];
+    var usedNum = USED_RAW[state.used];
+    var unbounded = !isFinite(budgetNum) || budgetNum <= 0;
+    var m = (state.tokMode === 'left' && unbounded) ? 'used' : state.tokMode;
+    // 只有两态：已用预算 ⇄ 剩余预算（预算不限时只能看已用）
+    var prefix = m === 'used' ? '已用预算' : '剩余预算';
+    var tokenVal = m === 'used' ? used : fmtUsed(Math.max(0, budgetNum - usedNum), mode);
+    var cycle = (st==='running'||st==='paused')
+      ? qbtn(st==='paused'?'启动目标':'暂停目标','', st==='paused'?ICON.play:ICON.pause) : '';
+    // 右侧：进度条 → 「第 N 轮」→ 「口径 + 数值」→ 口径开关 → 暂停/结束
+    var budget = budgetCtl(prefix, tokenVal);
+    var toggle = tokenToggleBtn();
+    return '<div class="prow grow">' +
+      '<span class="lead">'+ICON.goal+'</span>' +
+      '<span class="gtext">'+esc(goalText())+'</span>' + flag +
+      (showProgress ? '<span class="gbar" title="已用 '+esc(used)+' / '+esc(budgetVal)+'"><i style="width:'+pct+'%"></i></span>' : '') +
+      '<span class="ground">第 '+esc(round)+' 轮</span>' +
+      budget +
+      '<span class="rowactions">'+toggle+cycle+qbtn('结束目标','',ICON.x)+'</span>' +
+    '</div>';
+  }
+
+  function queueRow(q){
+    var cls='prow'+(q.editing?' editing':'')+(q.sent?' srow':'');
+    var badge = q.editing ? '<span class="pflag">编辑中</span>'
+      : (q.sending ? '<span class="pflag sending">发送中</span>'
+      : (q.sent ? '<span class="pflag sending">已发送</span>' : ''));
+    var thumb = q.img ? '<img class="thumb" src="'+ICON.thumb+'" alt="" />' : '';
+    var actions = q.editing
+      ? '<span class="rowactions">'+qbtn('取消编辑','',ICON.x)+qbtn('删除','danger',ICON.trash)+'</span>'
+      : '<span class="rowactions">'
+          + qbtn('引导（插队发送）','',ICON.steer)
+          + qbtn('删除','danger',ICON.trash)+qbtn('更多操作','',ICON.more)+'</span>';
+    return '<div class="'+cls+'"><span class="lead">'+ICON.queue+'</span>'+thumb+
+      '<span class="qtext" title="'+esc(q.t)+'">'+esc(q.t)+'</span>'+badge+actions+'</div>';
+  }
+
+  function renderMsgs(){
+    var el = document.getElementById('scroll');
+    var n = state.msgs==='many'?14:(state.msgs==='few'?3:0);
+    var out=[];
+    if(n===0) out.push('<div class="msg ai">（还没有对话内容）</div>');
+    else for(var i=1;i<=n;i++){
+      out.push('<div class="msg user">第 '+i+' 条：帮我看一下这个节点。</div>');
+      out.push('<div class="msg ai">好的，这是第 '+i+' 条的回复。内容会占一些高度，用来让消息区产生滚动。</div>');
+    }
+    el.innerHTML = out.join('');
+  }
+
+  function render(){
+    // 列表容器：暂停提示（可选）+ 已发送的目标行 + 队列行
+    var rows = QUEUES[state.queue] || [];
+    var html = '';
+    if (IN_LIST[state.goal]) html += goalRow();
+    html += rows.map(queueRow).join('');
+    var p = document.getElementById('pending');
+    p.innerHTML = html;
+    p.hidden = html==='';
+    p.classList.toggle('merge', !!state.merge);
+
+    // 队列暂停 / 恢复：**骑在队列与输入框的分界线上**（一半压队列、一半压输入框），水平居中。
+    // 只在有队列消息时出现；文本 + 图标 + 队列条数。
+    var paused = state.queue === 'paused';
+    var pauseSlot = document.getElementById('pauseSlot');
+    pauseSlot.innerHTML = rows.length > 0
+      ? '<button class="q-pause'+(paused?' is-paused':'')+'" id="queueToggle" title="'
+          + (paused?'恢复队列':'暂停队列自动发送')+'" aria-label="'+(paused?'恢复队列':'暂停队列自动发送')+'">'
+          + (paused?ICON.play:ICON.pause)
+          + '<span>'+'队列'+(paused?'恢复':'暂停')+'</span>'
+          + '<span class="q-pause-cnt">'+rows.length+'</span>'
+        + '</button>'
+      : '';
+    document.getElementById('inputbox').classList.toggle('has-pause', rows.length > 0);
+
+    // 输入框内侧顶部的草稿目标
+    document.getElementById('goalMarkSlot').innerHTML = state.goal==='draft' ? draftMark() : '';
+
+    // 回到底部
+    var tb = document.getElementById('toBottom');
+    // 注意：必须带上定位 class（tb-chat）—— 只写 innerHTML 的话按钮没有 left，会贴到左边
+    tb.className = 'to-bottom tb-chat';
+    tb.innerHTML = ICON.down;
+
+    // 输入框正文：草稿目标时把正文预填
+    var ed = document.getElementById('editor');
+    if (state.goal==='draft'){ ed.textContent = goalText(); ed.classList.add('filled'); }
+    else { ed.textContent='开始你的创作，或者 @ 引用技能 / MCP'; ed.classList.remove('filled'); }
+
+    // 发送键：有目标在跑 = 终止态
+    var running = state.goal==='running' || state.goal==='paused';
+    var send = document.getElementById('send');
+    send.className = 'send' + (running?' stop':'');
+    send.innerHTML = running ? '<span class="sq"></span>' : ICON.up;
+
+    syncScrollBtn();
+    highlight();
+  }
+
+  var scrollEl = document.getElementById('scroll');
+  function nearBottom(){ return scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 40; }
+  function hasScroll(){ return scrollEl.scrollHeight > scrollEl.clientHeight + 1; }
+  function syncScrollBtn(){ document.getElementById('toBottom').hidden = !(hasScroll() && !nearBottom()); }
+  scrollEl.addEventListener('scroll', syncScrollBtn, { passive:true });
+  document.getElementById('toBottom').addEventListener('click', function(){
+    scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior:'smooth' });
+  });
+
+  // 预算值：**contenteditable 就地编辑**（宽度跟着文字走，底下是 CSS 下划线）。
+  // 点进去直接改；回车 / 失焦提交，Esc 还原。不重建 DOM，所以光标不会跳。
+  document.addEventListener('keydown', function(e){
+    var val = e.target.closest && e.target.closest('#budgetVal');
+    if (!val) return;
+    if (e.key === 'Enter') { e.preventDefault(); commitBudgetVal(val); }
+    else if (e.key === 'Escape') { e.preventDefault(); val.textContent = val.dataset.raw || val.textContent; val.blur(); }
+  });
+  document.addEventListener('focusout', function(e){
+    var val = e.target.closest && e.target.closest('#budgetVal');
+    if (val) commitBudgetVal(val);
+  });
+  function commitBudgetVal(val){
+    var n = parseToken(val.textContent);
+    if (!isNaN(n)) BUDGET_RAW[state.budget] = n;  // 写回当前档位（演示用）
+    render();
+  }
+  // 暂停键现在挂在输入框那条分界线上（#pauseSlot），不在 #pending 里了 —— 挂到面板上代理
+  document.querySelector('.panel').addEventListener('click', function(e){
+    if (e.target.closest('#queueToggle')){
+      state.queue = state.queue === 'paused' ? 'three' : 'paused';
+      render();
+      return;
+    }
+    // 目标行上的「第 N 轮 · 已用 / 剩余」= 口径开关
+    if (e.target.closest('#tokenToggle')){
+      state.tokMode = state.tokMode === 'used' ? 'left' : 'used';
+      render();
+    }
+  });
+
+  // 控制台
+  var GROUPS = {
+    segMsgs:  { key:'msgs',  opts:[['many','很多'],['few','少'],['none','空']] },
+    segGoal:  { key:'goal',  opts:[['none','无'],['draft','未发送'],['sending','发送中'],['running','运行中'],['paused','已暂停'],['done','已完成']] },
+    segQueue: { key:'queue', opts:[['none','空'],['one','1 条'],['three','3 条'],['editing','编辑中'],['paused','暂停'],['sending','发送中']] },
+    segMerge: { key:'merge', opts:[[true,'贴合（去底部圆角）'],[false,'保留圆角']] },
+    segTheme: { key:'theme', opts:[['light','亮色'],['dark','暗色']] }
+  };
+  GROUPS.segQueue.opts = [['none','空'],['one','1 条'],['three','3 条'],['editing','编辑中'],['paused','暂停'],['sending','发送中'],['veryLong','超长文本'],['manyRows','8 条']];
+  GROUPS.segBudget = { key:'budget', opts:[['b5w','5万'],['b50w','50万'],['b100w','100万'],['b250w','250万'],['b10y','10亿'],['bnone','不限'],['babsurd','1e18（极端）']] };
+  GROUPS.segGoalLen = { key:'goalLong', opts:[[false,'普通目标'],[true,'超长目标']] };
+  GROUPS.segRound = { key:'round', opts:[['1','第 1 轮'],['5','第 5 轮'],['42','第 42 轮'],['999','第 999 轮'],['12345','第 12345 轮'],['huge','第 1000000 轮']] };
+  GROUPS.segUsed = { key:'used', opts:[['u0','0'],['u3700','3700'],['u5w','5万'],['u999k','99.9万'],['u1m','1,048,576'],['u10y','10.5亿']] };
+  GROUPS.segUnit = { key:'unit', opts:[['si','k / M / B（国际）'],['cn','万 / 亿（中文）']] };
+  GROUPS.segWidth = { key:'width', opts:[['normal','标准 520'],['narrow','窄 360'],['micro','极窄 300']] };
+  function vOf(raw){ return raw==='true'?true:(raw==='false'?false:raw); }
+  function buildControls(){
+    Object.keys(GROUPS).forEach(function(id){
+      var g = GROUPS[id], box = document.getElementById(id);
+      box.innerHTML = g.opts.map(function(o){ return '<button data-v="'+String(o[0])+'">'+o[1]+'</button>'; }).join('');
+      box.addEventListener('click', function(e){
+        var b = e.target.closest('button'); if(!b) return;
+        state[g.key] = vOf(b.dataset.v);
+        if (g.key==='theme') document.documentElement.classList.toggle('dark', state.theme==='dark');
+        if (g.key==='msgs') renderMsgs();
+        if (g.key==='width') applyWidth();
+        render();
+      });
+    });
+  }
+  function highlight(){
+    Object.keys(GROUPS).forEach(function(id){
+      var g = GROUPS[id], cur = state[g.key];
+      Array.prototype.forEach.call(document.getElementById(id).children, function(b){
+        b.classList.toggle('on', vOf(b.dataset.v) === cur);
+      });
+    });
+  }
+
+  buildControls();
+  function applyWidth(){
+    var w = state.width==='narrow' ? 360 : (state.width==='micro' ? 300 : 520);
+    var panel = document.querySelector('.panel');
+    panel.style.width = w + 'px';
+    panel.classList.toggle('is-narrow', state.width==='narrow');
+    panel.classList.toggle('is-micro', state.width==='micro');
+    document.querySelector('.stage').style.setProperty('--panel-w', w + 'px');
+  }
+  renderMsgs();
+  render();
+  applyWidth();
+  window.addEventListener('resize', syncScrollBtn);
+})();
+</script>
+</body>
+</html>

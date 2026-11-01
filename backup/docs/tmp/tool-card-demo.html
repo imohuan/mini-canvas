@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent 工具卡 · 样式候选（demo）</title>
+<!--
+  工具卡样式候选 demo（2026-10-08，用户口径：卡片别太高；最想知道工具在干什么 + 看效果；
+  列表类不要铺图片）。四个方案对照，数值复刻真机面板：宽 400px、底色 #212121、
+  圆角 28px、边框 #525252、内容区左右 16px、卡片底色 rgba(255,255,255,.04)、线 #363636。
+  看中哪套告诉我，我照着改真组件。
+-->
+<style>
+  :root {
+    --ink: #f7f7f7;
+    --dim: #919191;
+    --line: #363636;
+    --veil: rgba(255, 255, 255, 0.04);
+    --veil2: rgba(255, 255, 255, 0.06);
+    --chip: rgba(255, 255, 255, 0.1);
+    --accent: #0891b2;
+    --accent-soft: rgba(8, 145, 178, 0.12);
+    --code-bg: rgba(0, 0, 0, 0.25);
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 32px 60px;
+    background: #0e0f10;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  h1 { margin: 0 0 6px; font-size: 20px; }
+  .page-head p { margin: 0 0 6px; font-size: 13px; line-height: 1.7; color: var(--dim); max-width: 980px; }
+  .page-head b { color: var(--ink); }
+  .row { display: flex; gap: 28px; align-items: flex-start; margin-top: 26px; flex-wrap: wrap; }
+  .variant { width: 400px; }
+  .variant > header { margin-bottom: 10px; }
+  .variant h2 { margin: 0 0 4px; font-size: 15px; }
+  .variant h2 .tagrec { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: #22b8d8; font-size: 11px; font-weight: 600; }
+  .variant > header p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dim); }
+
+  /* —— 真机面板壳 —— */
+  .panel {
+    width: 400px; height: 620px; display: flex; flex-direction: column;
+    background: #212121; border: 1px solid #525252; border-radius: 28px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45); overflow: hidden;
+  }
+  .panel-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .panel-head .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
+  .panel-head .ttl { font-size: 13px; font-weight: 600; }
+  .panel-head .sub { margin-left: auto; font-size: 11px; color: var(--dim); }
+  .panel-body { flex: 1; overflow: auto; padding: 12px 16px 16px; }
+  .composer { flex: none; margin: 0 12px 12px; height: 46px; border: 1px solid var(--line); border-radius: 16px; display: flex; align-items: center; padding: 0 12px; color: var(--dim); font-size: 12px; }
+
+  /* —— 组壳（四套共用）：折叠标题 + 左线内容区 —— */
+  .tg-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--dim); font-size: 12px; cursor: pointer; }
+  .tg-body { margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+  .icon { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .chev { transition: transform .18s ease; }
+  .chev.open { transform: rotate(90deg); }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .ai-text { margin: 12px 0 14px; font-size: 14px; line-height: 24px; }
+  .ai-text .muted { color: var(--dim); }
+
+  /* ============================================================
+     A · 单行极简
+     ============================================================ */
+  .a-row { display: flex; align-items: center; gap: 6px; height: 26px; padding: 2px 4px; border-radius: 6px; font-size: 12px; color: var(--dim); cursor: pointer; }
+  .a-row:hover { background: var(--veil2); color: var(--ink); }
+  .a-row code { padding: 2px 6px; border-radius: 6px; background: var(--veil2); font-size: 12px; color: var(--ink); }
+  .a-sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .9; }
+  .a-tail { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+  .a-thumb { width: 20px; height: 20px; border-radius: 5px; object-fit: cover; border: 1px solid var(--line); }
+  .a-bar { width: 56px; height: 4px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .a-bar > i { display: block; height: 100%; width: 10%; background: var(--accent); border-radius: 999px; }
+  .a-ok { color: var(--accent); }
+  .a-details { margin: 2px 0 6px 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--veil); display: flex; flex-direction: column; gap: 8px; }
+  .a-details img { width: 160px; border-radius: 8px; border: 1px solid var(--line); display: block; }
+
+  /* ============================================================
+     B · 紧凑两行（推荐）
+     ============================================================ */
+  .b-card { background: var(--veil); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+  .b-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+  .b-head .ttl { font-weight: 600; }
+  .b-head .badge { margin-left: auto; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: #22b8d8; font-size: 11px; }
+  .b-head .dim { color: var(--dim); font-size: 11px; }
+  .b-content { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .b-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid var(--line); flex: none; }
+  .b-text { min-width: 0; font-size: 12px; }
+  .b-text .sub { display: block; font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .b-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--chip); font-size: 11px; line-height: 17px; }
+  .b-chip b { font-variant-numeric: tabular-nums; }
+  .b-progress { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .b-progress .bar { flex: 1; height: 4px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .b-progress .bar > i { display: block; height: 100%; width: 10%; background: var(--accent); border-radius: 999px; }
+  .b-progress .txt { flex: none; font-size: 11px; color: var(--dim); }
+  .b-note { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-details-toggle { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--dim); font-size: 11px; cursor: pointer; }
+  .b-details { display: flex; flex-direction: column; gap: 6px; }
+  .b-details .lbl { font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--dim); }
+  .pre { margin: 0; padding: 8px; border-radius: 8px; background: var(--code-bg); font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-all; color: var(--dim); font-family: ui-monospace, Menlo, Consolas, monospace; max-height: 180px; overflow: auto; }
+
+  /* ============================================================
+     C · 媒体条
+     ============================================================ */
+  .c-strip { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+  .c-strip img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid var(--line); flex: none; }
+  .c-more { flex: none; width: 40px; height: 40px; border-radius: 8px; border: 1px dashed var(--line); display: grid; place-items: center; font-size: 11px; color: var(--dim); }
+  .c-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .c-lines .l1 { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-lines .l2 { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ============================================================
+     D · 当前线上（对照）
+     ============================================================ */
+  .d-card { background: var(--veil); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .d-head { display: flex; align-items: center; gap: 6px; }
+  .d-title { font-size: 12px; font-weight: 600; }
+  .d-badge { padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: #22b8d8; font-size: 11px; line-height: 16px; }
+  .d-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .d-stat { display: flex; flex-direction: column; gap: 1px; min-width: 72px; padding: 8px 12px; border-radius: 10px; background: var(--veil); border: 1px solid var(--line); }
+  .d-stat .v { font-size: 18px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .d-stat .l { font-size: 11px; color: var(--dim); }
+  .d-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; }
+  .d-row .ricon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--chip); color: var(--dim); }
+  .d-row .rtxt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+  .d-row .t { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-row .s { font-size: 11px; color: var(--dim); font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-row .tag { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--chip); font-size: 11px; line-height: 16px; color: var(--dim); }
+  .d-imgs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .d-img { margin: 0; }
+  .d-img img { display: block; width: 88px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--veil); }
+  .d-img figcaption { max-width: 88px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--dim); }
+  .d-toggle { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--dim); font-size: 11px; cursor: pointer; }
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
+
+<header class="page-head">
+  <h1>Agent 工具卡 · 样式候选</h1>
+  <p>同一批工具调用（<b>6 个</b>）在四种方案下的样子。面板宽度、底色、圆角、边框都按真机复刻（400px 宽、#212121 底、28px 圆角），工具是真实数据（exec_command / read_file / canvas_get / resource_list / generation_status / canvas_batch_nodes）。</p>
+  <p><b>我的建议：B（紧凑两行）</b> —— 画布卡片压到 2 行以内，需要“看效果”的地方只留一枚 40px 缩略图，列表类（resource_list）不再铺图、只给计数；普通工具（exec_command 这类）维持现在的单行折叠行不动。A 最省空间、C 适合图多的流程、D 是当前线上样式作对照。看中哪套告诉我编号即可。</p>
+</header>
+
+<main class="row">
+  <!-- ================= A ================= -->
+  <section class="variant">
+    <header>
+      <h2>A · 单行极简</h2>
+      <p>每个工具就一行（26px）：图标 + 名字 + 一句人话。媒体只留 20px 小图，列表只报数字。点行展开详情。</p>
+    </header>
+    <div class="panel">
+      <div class="panel-head"><span class="dot"></span><span class="ttl">图片内容介绍请求</span><span class="sub">deepseek-auto</span></div>
+      <div class="panel-body">
+        <div class="ai-text">I'll take a look at that image node. <span class="muted">然后按需求生成 4 张。</span></div>
+        <button class="tg-toggle"><svg class="icon chev open"><use href="#i-chev"/></svg>6 个工具调用</button>
+        <div class="tg-body">
+          <div class="a-row">
+            <svg class="icon chev"><use href="#i-chev"/></svg>
+            <code>exec_command</code>
+            <span class="a-sum">等待 45 秒</span>
+            <span class="a-tail mono" style="font-size:11px">waited</span>
+          </div>
+          <div class="a-row">
+            <svg class="icon chev open"><use href="#i-chev"/></svg>
+            <code>read_file</code>
+            <span class="a-sum">ec96ba4464cbf531.jpeg · 3.3 MB</span>
+            <span class="a-tail"><img class="a-thumb" src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" /></span>
+          </div>
+          <div class="a-details">
+            <img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" />
+            <span class="mono" style="font-size:11px;color:var(--dim)">image/jpeg · 3.3 MB</span>
+          </div>
+          <div class="a-row">
+            <svg class="icon chev"><use href="#i-chev"/></svg>
+            <code>canvas_get</code>
+            <span class="a-sum">图片 21 · #50</span>
+            <span class="a-tail"><img class="a-thumb" src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/1df2f21b3eaf7bc6" alt="" /></span>
+          </div>
+          <div class="a-row">
+            <svg class="icon chev"><use href="#i-chev"/></svg>
+            <code>resource_list</code>
+            <span class="a-sum">41 个资源（27 图 / 12 音频 / 2 视频）</span>
+          </div>
+          <div class="a-row">
+            <svg class="icon chev"><use href="#i-chev"/></svg>
+            <code>generation_status</code>
+            <span class="a-sum">正在上传 1 张图片…</span>
+            <span class="a-tail"><span class="a-bar"><i></i></span><span class="mono" style="font-size:11px">10%</span></span>
+          </div>
+          <div class="a-row">
+            <svg class="icon chev"><use href="#i-chev"/></svg>
+            <code>canvas_batch_nodes</code>
+            <span class="a-sum">建 4 个节点</span>
+            <span class="a-tail a-ok"><svg class="icon"><use href="#i-check"/></svg></span>
+          </div>
+        </div>
+      </div>
+      <div class="composer">给 Agent 发送消息…</div>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="variant">
+    <header>
+      <h2>B · 紧凑两行 <span class="tagrec">推荐</span></h2>
+      <p>画布卡片：灰底小卡，最多 2 行 —— 头行（图标 + 标题 + 标记）+ 一行内容（一枚 40px 缩略图 / 计数胶囊 / 进度条 / 单行摘要）。普通工具保持单行折叠行。列表类不铺图。</p>
+    </header>
+    <div class="panel">
+      <div class="panel-head"><span class="dot"></span><span class="ttl">图片内容介绍请求</span><span class="sub">deepseek-auto</span></div>
+      <div class="panel-body">
+        <div class="ai-text">I'll take a look at that image node. <span class="muted">然后按需求生成 4 张。</span></div>
+        <button class="tg-toggle"><svg class="icon chev open"><use href="#i-chev"/></svg>6 个工具调用</button>
+        <div class="tg-body">
+          <div class="a-row">
+            <svg class="icon chev"><use href="#i-chev"/></svg>
+            <code>exec_command</code>
+            <span class="a-sum">等待 45 秒</span>
+            <span class="a-tail a-ok"><svg class="icon"><use href="#i-check"/></svg></span>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-image"/></svg><span class="ttl">文件预览</span><span class="badge">3.3 MB</span></div>
+            <div class="b-content">
+              <img class="b-thumb" src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" />
+              <span class="b-text">ec96ba4464cbf531.jpeg<span class="sub">image/jpeg · 2048×1152</span></span>
+            </div>
+            <button class="b-details-toggle"><svg class="icon chev"><use href="#i-chev"/></svg>详情</button>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-image"/></svg><span class="ttl">节点详情</span><span class="badge">图片 21 · #50</span></div>
+            <div class="b-content">
+              <img class="b-thumb" src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/1df2f21b3eaf7bc6" alt="" />
+              <span class="b-text">2048×1152 · (1835, 597)<span class="sub">相邻节点 1 个</span></span>
+            </div>
+            <button class="b-details-toggle"><svg class="icon chev open"><use href="#i-chev"/></svg>详情</button>
+            <div class="b-details">
+              <span class="lbl">输入</span>
+              <pre class="pre">{"canvasId":"430c8f1f00bd4aba","nodeId":"50"}</pre>
+              <span class="lbl">输出</span>
+              <pre class="pre">{"ok":true,"node":{"id":"50","type":"image",…}}</pre>
+            </div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-list"/></svg><span class="ttl">资源列表</span><span class="badge">41 个</span></div>
+            <div class="b-content">
+              <span class="b-chips">
+                <span class="b-chip"><b>27</b> 图片</span>
+                <span class="b-chip"><b>12</b> 音频</span>
+                <span class="b-chip"><b>2</b> 视频</span>
+              </span>
+            </div>
+            <button class="b-details-toggle"><svg class="icon chev"><use href="#i-chev"/></svg>详情</button>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-activity"/></svg><span class="ttl">生成任务</span><span class="badge">running</span></div>
+            <div class="b-content">
+              <span class="b-progress"><span class="bar"><i></i></span><span class="txt">正在上传 1 张图片…</span><span class="txt mono">10%</span></span>
+            </div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-layers"/></svg><span class="ttl">节点批量操作</span><span class="badge">+4</span></div>
+            <div class="b-content"><span class="b-chips"><span class="b-chip"><b>4</b> 新增</span><span class="b-chip"><b>0</b> 更新</span><span class="b-chip"><b>0</b> 删除</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="composer">给 Agent 发送消息…</div>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="variant">
+    <header>
+      <h2>C · 媒体条</h2>
+      <p>比 B 多一行横向缩略图条（最多 5 张 40px + 「+N」），适合图多的流程；列表类同样只给计数。</p>
+    </header>
+    <div class="panel">
+      <div class="panel-head"><span class="dot"></span><span class="ttl">图片内容介绍请求</span><span class="sub">deepseek-auto</span></div>
+      <div class="panel-body">
+        <div class="ai-text">I'll take a look at that image node. <span class="muted">然后按需求生成 4 张。</span></div>
+        <button class="tg-toggle"><svg class="icon chev open"><use href="#i-chev"/></svg>6 个工具调用</button>
+        <div class="tg-body">
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-terminal"/></svg><span class="ttl">执行命令</span><span class="badge">完成</span></div>
+            <div class="c-lines"><span class="l1 mono">waited</span><span class="l2">等待 45 秒</span></div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-image"/></svg><span class="ttl">文件预览</span><span class="badge">3.3 MB</span></div>
+            <div class="c-strip">
+              <img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" />
+              <span class="c-lines"><span class="l1">ec96ba4464cbf531.jpeg</span><span class="l2">image/jpeg · 2048×1152</span></span>
+            </div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-image"/></svg><span class="ttl">节点详情</span><span class="badge">图片 21</span></div>
+            <div class="c-strip">
+              <img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/1df2f21b3eaf7bc6" alt="" />
+              <span class="c-lines"><span class="l1">2048×1152 · #50</span><span class="l2">(1835, 597) · 相邻 1</span></span>
+            </div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-list"/></svg><span class="ttl">资源列表</span><span class="badge">41 个</span></div>
+            <div class="c-strip">
+              <img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" />
+              <img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/1df2f21b3eaf7bc6" alt="" />
+              <img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/b88c8d0236b0e086" alt="" />
+              <span class="c-more">+38</span>
+              <span class="c-lines"><span class="l2">27 图 · 12 音频 · 2 视频</span></span>
+            </div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-activity"/></svg><span class="ttl">生成任务</span><span class="badge">running</span></div>
+            <div class="b-content"><span class="b-progress"><span class="bar"><i></i></span><span class="txt">正在上传 1 张图片…</span><span class="txt mono">10%</span></span></div>
+          </div>
+          <div class="b-card">
+            <div class="b-head"><svg class="icon"><use href="#i-layers"/></svg><span class="ttl">节点批量操作</span><span class="badge">+4</span></div>
+            <div class="b-content"><span class="b-chips"><span class="b-chip"><b>4</b> 新增</span><span class="b-chip"><b>0</b> 更新</span><span class="b-chip"><b>0</b> 删除</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="composer">给 Agent 发送消息…</div>
+    </div>
+  </section>
+
+  <!-- ================= D ================= -->
+  <section class="variant">
+    <header>
+      <h2>D · 当前线上（对照）</h2>
+      <p>现在的样式：88px 缩略图网格 + 大数字瓦片 + 行列表 —— 占空间的主要就是它。</p>
+    </header>
+    <div class="panel">
+      <div class="panel-head"><span class="dot"></span><span class="ttl">图片内容介绍请求</span><span class="sub">deepseek-auto</span></div>
+      <div class="panel-body">
+        <div class="ai-text">I'll take a look at that image node. <span class="muted">然后按需求生成 4 张。</span></div>
+        <button class="tg-toggle"><svg class="icon chev open"><use href="#i-chev"/></svg>6 个工具调用</button>
+        <div class="tg-body">
+          <div class="d-card">
+            <div class="d-head"><svg class="icon"><use href="#i-image"/></svg><span class="d-title">文件预览</span></div>
+            <div class="d-imgs">
+              <figure class="d-img"><img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" /><figcaption>3.3 MB</figcaption></figure>
+            </div>
+            <button class="d-toggle"><svg class="icon chev"><use href="#i-chev"/></svg>详情</button>
+          </div>
+          <div class="d-card">
+            <div class="d-head"><svg class="icon"><use href="#i-image"/></svg><span class="d-title">节点详情</span></div>
+            <div class="d-row"><span class="ricon"><svg class="icon"><use href="#i-image"/></svg></span><span class="rtxt"><span class="t">图片 21</span><span class="s">#50 · (1835.4, 597.8)</span></span><span class="tag">image</span></div>
+            <div class="d-imgs">
+              <figure class="d-img"><img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/1df2f21b3eaf7bc6" alt="" /><figcaption>图片 21</figcaption></figure>
+            </div>
+            <button class="d-toggle"><svg class="icon chev"><use href="#i-chev"/></svg>详情</button>
+          </div>
+          <div class="d-card">
+            <div class="d-head"><span class="d-title">资源列表</span><span class="d-badge">41 个</span></div>
+            <div class="d-imgs">
+              <figure class="d-img"><img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" /><figcaption>24dfa010b7…</figcaption></figure>
+              <figure class="d-img"><img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/1df2f21b3eaf7bc6" alt="" /><figcaption>1df2f21b3e…</figcaption></figure>
+              <figure class="d-img"><img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/b88c8d0236b0e086" alt="" /><figcaption>b88c8d0236…</figcaption></figure>
+              <figure class="d-img"><img src="http://127.0.0.1:8865/api/canvases/430c8f1f00bd4aba/resources/24dfa010b73afb08" alt="" /><figcaption>…共 41 个</figcaption></figure>
+            </div>
+            <button class="d-toggle"><svg class="icon chev"><use href="#i-chev"/></svg>详情</button>
+          </div>
+          <div class="d-card">
+            <div class="d-head"><span class="d-title">生成任务状态</span></div>
+            <div class="d-row"><span class="ricon"><svg class="icon"><use href="#i-activity"/></svg></span><span class="rtxt"><span class="t">任务 f4bc3844-1ff5-4259-a839</span></span><span class="tag">running</span></div>
+            <button class="d-toggle"><svg class="icon chev"><use href="#i-chev"/></svg>详情</button>
+          </div>
+        </div>
+      </div>
+      <div class="composer">给 Agent 发送消息…</div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // 点「详情」折叠 / 展开（demo 交互最小化，只演示折叠）
+  document.querySelectorAll('.b-details-toggle, .d-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var card = btn.closest('.b-card, .d-card');
+      if (!card) return;
+      var details = card.querySelector('.b-details');
+      if (details) {
+        details.style.display = details.style.display === 'none' ? '' : 'none';
+        return;
+      }
+      // D 列没有真详情块，展开时补一段（示意用）
+      var pre = card.querySelector('.pre');
+      if (pre) { pre.remove(); return; }
+      var p = document.createElement('pre');
+      p.className = 'pre';
+      p.textContent = '{"ok":true, "hint":"展开后是 输入 / 输出 原文"}';
+      card.appendChild(p);
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+# 1 · 第一个插件
+
+> 目标：写一个最小插件，加进画布宿主，跑起来看到效果。全程约 3 分钟。
+> 建立在入口《index》"先备好环境"跑通 demo 的基础上。
+
+## 先想清楚：插件到底是什么
+
+一句话：**一个带 `name` 的模块（或对象），里面有个 `apply(ctx)` 函数**。宿主把它交给内核，
+内核用一个叫 `ctx` 的"能力台"调用你的 `apply`；你在这个 `ctx` 上注册任何东西，宿主就照做。
+
+不用写启动框架、不用手动 import 一堆内核函数——插件只描述"我贡献什么"，
+把注册收进 `ctx`，卸载时内核自动回收。
+
+## 做
+
+### 第 1 步：认识一个现成的最小插件
+
+仓库里 `packages/plugins/plugin-mini-map/src/miniMapPlugin.ts` 就是最标准的样子
+（它注册了一条命令 `mini-map:toggle`：Ctrl/Cmd+M 切换小地图显隐）。它长这样，**三个散开的命名导出**：
+
+```ts
+import type { Context } from '@mini-canvas/canvas-base'
+
+export const name = 'mini-map'                    // 插件唯一名
+export const inject = ['doc', 'nodeLayout', 'viewport'] as string[]  // 依赖的服务
+
+export function apply(ctx: Context) {
+  // ctx.commands.register 注册一条命令；注册随插件卸载自动回收
+  ctx.commands.register({
+    id: 'mini-map:toggle',
+    title: '切换小地图',
+    keys: ['mod+m'],                              // 快捷键：宿主统一分发，插件不自己绑 window
+    run() {
+      /* … 切换小地图显隐 … */
+    },
+  })
+}
+```
+
+> 画布级通用命令（`command:delete` / `command:create-node` / `command:undo` / `command:redo`）
+> 由数据层自带（`@mini-canvas/canvas-data` 的 `registerCanvasCommands`），宿主 boot 时默认注册，
+> **不是插件**，写自己的插件时不必关心它们。
+
+### 第 2 步：你自己写一个最小插件（只加一条命令）
+
+新建 `packages/ui/src/helloPlugin.ts`，照抄成这段（先把 `@mini-canvas/canvas-base` 加进该包依赖，
+或把文件放进 `packages/plugins/` 下的插件包——见入口《index》"先备好环境"）
+（和上面的真实插件同一个写法，只是命令更简单）：
+
+```ts
+import type { Context } from '@mini-canvas/canvas-base'
+
+export const name = 'hello'            // 插件唯一名
+export const inject = [] as string[]   // 没依赖别的服务/插件
+
+export function apply(ctx: Context) {
+  // 注册一条命令，点它就在控制台打一行 + 弹个提示
+  ctx.commands.register({
+    id: 'hello.say',
+    title: 'hello 插件加载了 ✓',
+    run() {
+      console.log('[hello] 我是 hello 插件加的命令')
+      alert('hello —— 这是 hello 插件注册的命令')
+    },
+  })
+}
+
+/** 给宿主装配用的模块对象（把上面几样收成一份，方便一处引用） */
+export const helloPlugin = { name, inject, apply }
+```
+
+### 第 3 步：把它装进宿主（两种方式任选其一）
+
+**方式 A · 冷启动装配进宿主**（推荐，最直观）：打开成品应用的装配清单
+`packages/ui/src/assembly.ts`，在顶部 import 你的插件，并把它加进 `APP_PLUGINS` 数组开头：
+
+```ts
+import { helloPlugin } from './helloPlugin'          // ← 加这行
+// …
+export const APP_PLUGINS = [
+  helloPlugin,            // ← 加进数组开头
+  themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin,
+]
+```
+
+**方式 B · 运行中热装**：`packages/ui` 把宿主 API 挂到了 **`window.MiniCanvasUI`**，
+不用改任何源文件，直接开浏览器控制台粘贴：
+
+```js
+window.MiniCanvasUI.installPlugin({
+  name: 'hello',
+  inject: [],
+  apply(ctx) {
+    ctx.commands.register({
+      id: 'hello.say',
+      title: 'hello 插件加载了 ✓',
+      run() { console.log('[hello] 我是 hello 插件加的命令') },
+    })
+  },
+})
+```
+
+> `window.MiniCanvasUI` 的 API 面：`installPlugin(模块, 配置?)` / `uninstallPlugin(名)` /
+> `reloadPlugin(名, 新模块?)` / `listPlugins()` / `inspectPlugins()` / `getContext()` / `getHost()`。
+> 想用 `.ts` 新建文件 + 方式 A 那种"改装配数组"的正式做法，就按第 2 步写文件、第 3 步方式 A 装配。
+> 想最快看到"热装"效果就方式 B。两条路结果一样：命令被注册、可被工具栏执行。
+
+## 你会看到
+
+- 方式 A：保存后 vite 热更自动刷新，hello 插件随宿主一起装载，控制台无报错。
+- 方式 B：粘贴回车即装好，插件**没刷新页面**就生效了（热装）。
+- 想验证命令真在？模仿宿主工具栏那样执行它：控制台
+  `window.MiniCanvasUI.getHost().command.execute('hello.say')`，或
+  `window.MiniCanvasUI.getContext().commands.has('hello.say')` 看是否已注册。
+
+## 这背后发生了什么（一句话）
+
+宿主把插件经内核装载：`apply(ctx)` 拿到能力台 `ctx`，`ctx.commands.register` 在**内核的命令表**
+里落了一条命令。因为这条注册是"可逆 effect"，以后卸载这个插件（第 6 篇会讲怎么卸），
+这条命令会**自动被清掉**——你不用写清理代码。
+
+## 其他两种插件形态
+
+函数形态（上面的 `apply` 导出）最常见，但内核认三种形态。第 3 篇会细讲"类形态"（Service），
+这里先知道有这么回事即可：
+
+```ts
+// 1. 函数形态：直接导出 apply（你刚写的这种）
+export function apply(ctx: Context) {}
+
+// 2. 对象形态：一个带 apply 方法的对象（helloPlugin 就是这种）
+export const objectPlugin = { name: 'obj-plugin', apply(ctx: Context) {} }
+
+// 3. 类形态：一个 Service 子类（第 3 篇介绍）
+export class MyService extends Service {
+  constructor(ctx: Context) { super(ctx, 'myTutorialService') }
+}
+```
+
+> 注意第 3 种"类形态"：`Service` 子类不是直接传给 `ctx.plugin` 的插件模块——它是**一项服务**，
+> 激活方式是在某个函数/对象形态插件的 `apply(ctx)` 里 `new MyService(ctx)`，构造时即上架。
+> 第 3 篇会把这个写清楚。
+
+在需要公开服务之前，一直用函数形态就好。
+
+## 附：照 cordis 原文"类形态直接装载"（能力①）
+
+cordis 教程 03 里，`Service` 子类**本身就是一种插件形态**，可以直接 `ctx.plugin(GreeterService)` 装载、
+无需外面再包一层 `apply`。内核已支持这种"照抄 cordis"写法（上面那段"别直接传 ctx.plugin"是更早的内核限制，
+现已被能力①放开）：
+
+```ts
+import { Service, type Context } from '@mini-canvas/canvas-base'
+
+declare module '@mini-canvas/canvas-data' {
+  interface Context { greeter: GreeterService }   // 可选：给 ctx.greeter 补类型(声明合并)
+}
+
+export class GreeterService extends Service {
+  static inject = [] as string[]
+  static Config = { greeting: { type: 'string', default: 'Hi' } }
+  constructor(ctx: Context) { super(ctx, 'greeter') }  // 构造即把实例上架为服务 'greeter'
+  greet(who: string) { return `Hello, ${who}!` }
+}
+```
+
+装配处两种都行：
+- 冷启动：把 `GreeterService` 直接加进宿主 `plugins: [...]`（内核自动归一，构造时上架服务）。
+- 热装：`manager.install(GreeterService)` 或 `ctx.installPlugin(GreeterService)`。
+
+> 要点：内核把"类"归一成 `{ name: 静态provide ?? 类名, inject: 静态inject, Config: 静态Config, apply: () => new 类(ctx, config) }`。
+> 依赖 PENDING、config 校验、卸载回收与对象插件一致。旧写法"在 apply 里 new MyService(ctx)"仍可继续用。
+
+## 下一步
+
+你的插件"装上并跑起来"了。下一步弄懂它**什么时候被卸掉、注册为什么自动回收**，
+以及怎么用 `ctx.effect` 管住没被托管的东西 → [第 2 篇 · 生命周期与 effect](./02-lifecycle-effect-fiber.md)。

@@ -1,0 +1,655 @@
+定价 — 按量付费的 AI 模型 API | EvoLink
+GPT Image 2.5 Flare 与 Sunburst 已上线 EvoLink
+立即体验
+EvoLink.AI
+模型
+定价
+Smart Router
+NEW
+文档
+AI 工具
+AI 视频生成器
+Seedance
+Hailuo
+资源
+博客
+Prompt 示例库
+模型精选
+API 更新
+正在加载用户认证状态...
+Open menu
+模型
+定价
+Smart Router
+NEW
+文档
+AI 工具
+资源
+EN
+FR
+DE
+中
+JA
+KO
+ES
+定价
+用多少，付多少。
+EvoLink 上的每一个模型都是按量付费。无订阅、无席位费、无最低消费——充值积分后，通过一个 API 调用 75+ 个生产级模型。
+无月费——预付积分制
+创建 API Key 无需信用卡
+$10 起充，充值积分永不过期
+生成失败不计费
+查看模型价格 ↓
+企业价格咨询
+计费方式
+一个余额，所有模型。用量按次计量，控制台实时可见。
+01
+充值积分
+支持银行卡、支付宝/微信、公对公打款充值。自动充值保障生产业务不断档。
+1 积分 ≈ $0.0147 · 最低充值 $10
+02
+调用任意模型
+视频和音频按秒计费，图像按张，大模型按 token。单价写在每个模型页上——没有隐藏倍率。
+一个 API → 75+ 个模型
+03
+每一分钱可追溯
+按 Key 的用量分析、按模型的成本拆分、消费记录清晰可查，发票自助开具、支持公司抬头。
+控制台 → 用量 → 逐笔记录
+模型价格
+实时目录——下方每个价格都是你实际支付的价格。
+·
+目录更新于
+2026-09-25
+视频
+32
+文本
+57
+图像
+24
+音频
+7
+模型
+EvoLink 价格
+官方 API
+节省
+▸
+Seedance 2.5
+BytePlus
+seedance-2.5-reference-to-video
+视频生成 · 480p · with video input
+低至
+$0.084
+/input + output sec
+—
+—
+▸
+Seedance 2.0
+BytePlus
+seedance-2.0-reference-to-video
+视频生成 · 480p · with video input
+低至
+$0.057
+/input + output sec
+—
+—
+▸
+Seedance 2.0 Fast
+BytePlus
+seedance-2.0-fast-reference-to-video
+视频生成 · 480p · with video input
+低至
+$0.034
+/input + output sec
+—
+−
+25
+%
+▸
+Seedance 2.0 Mini
+BytePlus
+seedance-2.0-mini-reference-to-video
+视频生成 · 480p · with video input
+低至
+$0.012
+/input + output sec
+—
+−
+60
+%
+▸
+MiniMax H3 Max Turbo
+MiniMax
+minimax-h3-max-turbo-text-to-video
+视频生成 · 480p
+低至
+$0.024
+/output sec
+视频生成 · 480p
+$0.025
+/output sec
+−
+5
+%
+▸
+MiniMax H3 Max
+MiniMax
+minimax-h3-max-text-to-video
+视频生成 · 480p
+低至
+$0.048
+/output sec
+视频生成 · 480p
+$0.050
+/output sec
+−
+5
+%
+▸
+Gemini Omni 1.1 Flash
+Google
+gemini-omni-1.1-flash-text-to-video
+视频输出
+低至
+$0.015
+/1K tokens
+视频输出
+$0.018
+/1K tokens
+−
+15
+%
+▸
+Wan 3.0
+Alibaba
+wan3.0-text-to-video
+视频生成 · 480p
+低至
+$0.038
+/output sec
+视频生成 · 480p
+$0.050
+/output sec
+−
+25
+%
+▸
+Wan 3.0 Prime
+Alibaba
+wan3.0-prime-text-to-video
+视频生成 · 480p
+低至
+$0.058
+/output sec
+视频生成 · 480p
+$0.068
+/output sec
+−
+15
+%
+▸
+MiniMax H3
+MiniMax
+minimax-h3-text-to-video
+视频生成 · 768p
+低至
+$0.076
+/output sec
+视频生成 · 768p
+$0.080
+/output sec
+−
+5
+%
+▸
+Grok Imagine Video 1.5
+xAI
+grok-imagine-video-1.5-preview
+视频生成 · 480p
+低至
+$0.056
+/output sec
+视频生成 · 480p
+$0.080
+/output sec
+−
+30
+%
+▸
+Gemini Omni Flash
+Google
+gemini-omni-flash-text-to-video
+视频输出
+低至
+$0.015
+/1K tokens
+视频输出
+$0.018
+/1K tokens
+−
+15
+%
+▸
+Kling 3.0 Turbo
+Kling
+kling-v3-turbo-text-to-video
+视频生成 · 720p
+低至
+$0.106
+/output sec
+视频生成 · 720p
+$0.118
+/output sec
+−
+10
+%
+▸
+Happy Horse 1.1
+Alibaba
+happyhorse-1.1-text-to-video
+视频生成 · 720p
+低至
+$0.124
+/output sec
+视频生成 · 720p
+$0.155
+/output sec
+−
+20
+%
+▸
+Wan 2.7
+Alibaba
+wan2.7-text-to-video
+视频生成 · 720p
+低至
+$0.087
+/output sec
+视频生成 · 720p
+$0.108
+/output sec
+−
+20
+%
+▸
+Happy Horse 1.0
+Alibaba
+happyhorse-1.0-text-to-video
+视频生成 · 720p
+低至
+$0.124
+/output sec
+视频生成 · 720p
+$0.155
+/output sec
+−
+20
+%
+▸
+Topaz Video Upscale
+Topaz
+topaz-video-upscale
+Video upscale · 1×
+低至
+$0.055
+/input sec
+—
+—
+▸
+Seedance 1.5 Pro
+BytePlus
+seedance-1.5-pro
+视频生成 · 480p · no audio
+低至
+$0.013
+/output sec
+视频生成 · 480p · no audio
+$0.013
+/output sec
+−
+5
+%
+▸
+Kling 3.0 Motion Control
+Kling
+kling-v3-motion-control
+Motion control · 720p
+低至
+$0.121
+/input sec
+Motion control · 720p
+$0.134
+/input sec
+−
+10
+%
+▸
+Kling O3
+Kling
+kling-o3-text-to-video
+视频生成 · 720p · no sound
+低至
+$0.080
+/output sec
+视频生成 · 720p · no sound
+$0.089
+/output sec
+−
+10
+%
+▸
+Kling 3.0
+Kling
+kling-v3-text-to-video
+视频生成 · 720p · no sound
+低至
+$0.080
+/output sec
+视频生成 · 720p · no sound
+$0.089
+/output sec
+−
+10
+%
+▸
+Wan 2.6
+Alibaba
+wan2.6-text-to-video
+视频生成 · 720p
+低至
+$0.075
+/output sec
+视频生成 · 720p
+$0.108
+/output sec
+−
+30
+%
+▸
+Veo 3.1 Fast
+Google
+veo3.1-fast-beta
+视频生成 · 720p · 8s
+低至
+$0.318
+/video
+视频生成 · 720p · 8s
+$0.800
+/video
+−
+60
+%
+▸
+Veo 3.1 Pro
+Google
+veo3.1-pro-beta
+视频生成 · 720p · 8s
+低至
+$2.383
+/video
+视频生成 · 720p · 8s
+$3.200
+/video
+−
+26
+%
+▸
+Sora 2
+OpenAI
+sora-2-preview
+视频生成
+低至
+$0.085
+/output sec
+视频生成
+$0.100
+/output sec
+−
+15
+%
+▸
+Grok Imagine Video 1.0
+xAI
+grok-imagine-text-to-video-beta
+视频生成 · 480p
+低至
+$0.020
+/output sec
+视频生成 · 480p
+$0.050
+/output sec
+−
+60
+%
+▸
+Wan 2.5
+Alibaba
+wan2.5-image-to-video
+视频生成 · 480p
+低至
+$0.038
+/output sec
+视频生成 · 480p
+$0.054
+/output sec
+−
+30
+%
+▸
+Hailuo 2.3
+MiniMax
+MiniMax-Hailuo-2.3-Fast
+视频生成 · 768p · 6s
+低至
+$0.177
+/video
+视频生成 · 768p · 6s
+$0.190
+/video
+−
+7
+%
+▸
+Hailuo 02
+MiniMax
+MiniMax-Hailuo-02
+视频生成 · 512p · 6s
+低至
+$0.080
+/video
+视频生成 · 512p · 6s
+$0.100
+/video
+−
+21
+%
+▸
+Kling O1
+Kling
+kling-o1-video-edit-fast
+Video edit · Fast
+低至
+$0.100
+/input sec
+—
+—
+▸
+Seedance 1.0 Pro Fast
+BytePlus
+doubao-seedance-1.0-pro-fast
+视频生成 · 480p
+低至
+$0.0060
+/output sec
+视频生成 · 480p
+$0.011
+/output sec
+−
+45
+%
+▸
+OmniHuman 1.5
+BytePlus
+omnihuman-1.5
+Digital human generation
+低至
+$0.177
+/input audio sec
+—
+—
+点击任意一行查看完整费率卡——变体、分辨率、缓存价格与费用估算器。
+查看价格对比方式 →
+价格更具竞争力，对比依据公开。
+EvoLink 上的许多模型价格低于官方 API。相关对比基于公开价格信息，并随价格变化持续更新。
+了解价格对比
+用量上规模了？
+每天生成数千条视频、图像或 agent 任务的团队，可获得批量价格与直接支持——一行代码都不用改。
+承诺消费享批量折扣
+发票自助开具，支持公司抬头与电子签章
+按 Key 限流、每日配额与 IP 白名单
+优先路由与专属支持通道
+批量与企业
+告诉我们你的用量
+把预计的月度用量发给我们，1 个工作日内回复报价。
+联系销售 →
+支付方式
+银行卡（Stripe）
+支付宝 / 微信支付
+公对公打款
+发票
+定价常见问题
+计费到底怎么运作？
++
+−
+EvoLink 是完全预付费、按量计费的。你充值积分余额（1 积分 ≈ $0.0147），每次 API 调用精确扣除该次调用的费用——视频/音频按秒、图像按张、大模型按 token。没有订阅、没有席位费、没有最低月消费。
+积分会过期吗？
++
+−
+充值积分永不过期。活动赠送的积分可能带有效期，领取前会在计费控制台明确展示。
+为什么你们的价格比官方 API 低？
++
+−
+我们以批量价格采购算力，并把大部分折扣让给你。每个 SKU 的供给通道——官方或 beta——直接标注在模型 ID 里，两条通道的价格并排公示。
+视频生成怎么计费？
++
+−
+按生成视频的秒数计费，分辨率和模型档位有对应倍率。上方表格展示的是最低可用费率；每个模型页有完整的分辨率 × 时长矩阵。
+支持哪些支付方式？
++
+−
+银行卡（Stripe，支持保存卡片与自动充值）、支付宝和微信支付、以及企业公对公打款。活动兑换码可在计费控制台使用。
+可以开公司发票吗？
++
+−
+可以——发票在控制台自助开具。设置一次公司抬头后，任意充值都可以生成、下载或邮件发送带签章的发票。
+有免费试用的方式吗？
++
+−
+创建账户和 API Key 不需要信用卡。每个模型页的在线试玩可以让你在充值前预览输出质量。
+有批量或企业折扣吗？
++
+−
+有。如果团队月消费超过约 $5,000，把预计用量发给我们——承诺消费可获得批量价格、更高限流与专属支持通道。
+生成失败会扣钱吗？
++
+−
+不会。无论是上游报错、超时还是容量不足，失败的请求不会进入你的账单，也无需任何申诉流程——失败就是不收费。
+从 $10 开始，扩展到百万次调用。
+一个 API Key，75+ 个模型。价格截图为证，随时对账。
+获取 API Key →
+EvoLink.AI
+一个 API 接入全球顶级 AI 图像、视频与聊天模型。
+[email&#160;protected]
+Discord 社群
+GitHub
+X (Twitter)
+AI 视频生成器
+AI 视频生成器
+Seedance
+Hailuo
+Image API
+Nano Banana
+Nano Banana Pro
+Seedream 5.0 Pro
+Seedream 5.0 Flash
+Grok Imagine Image 2.0
+Seedream 4.5
+Seedream 5.0 Lite
+Qwen Image Edit
+GPT Image 2
+Z Image Turbo
+Krea 2 Turbo
+Midjourney V8.1
+Wan Image
+Video API
+Seedance 2.5
+Sora 2
+Kling O3
+Seedance 2.0
+Happy Horse
+Gemini Omni 1.1 Flash
+Gemini Omni
+Veo 3.1
+Seedance Pro
+Wan 2.7
+LLM API
+Grok 4.6
+Grok 4.5
+Kimi K3
+GLM-5.3
+GLM-5.3 Flash
+GLM-5.3 FlashX
+GPT-6
+GPT-5.6
+Claude Opus 5.5
+Claude Fable 5.1
+Claude Opus 5
+Claude Fable 5
+Claude Opus 4.8
+Claude Sonnet 4.5
+Claude Haiku 4.5
+Gemini 3 Pro
+Gemini 3 Flash
+DeepSeek V4
+Other API
+Suno
+OmniHuman
+模型家族
+GPT API 家族
+Claude API 家族
+Gemini API 家族
+GPT Image API 家族
+Seedance API 家族
+Kling API 家族
+Nano Banana API 家族
+Seedream API 家族
+Wan API 家族
+产品
+模型
+定价
+文档
+博客
+资源
+Prompt 示例库
+Cookbook
+模型精选
+关于我们
+API 更新
+服务条款
+隐私政策
+© 2026 EvoLink。保留所有权利。
+为全球开发者精心打造
+中
+EN
+English
+FR
+Français
+DE
+Deutsch
+中
+中文
+JA
+日本語
+KO
+한국어
+ES
+Español

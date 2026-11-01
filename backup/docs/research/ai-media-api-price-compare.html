@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片 / 视频生成 API 比价台</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a22; --panel2:#1c212b; --line:#262c38;
+    --txt:#e6e9ef; --dim:#99a1b3; --acc:#5b9dff; --ok:#3ecf8e; --warn:#ffb224; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 20px 80px}
+  h1{font-size:26px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:14px;margin-bottom:22px}
+  .rate{display:inline-block;background:var(--panel2);border:1px solid var(--line);
+        border-radius:8px;padding:6px 12px;font-size:13px;color:var(--dim);margin-bottom:20px}
+  .rate b{color:var(--txt)}
+  /* tabs level 1 */
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:0}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);
+       padding:11px 16px;font-size:15px;cursor:pointer;font-family:inherit;transition:.15s}
+  .tab:hover{color:var(--txt)}
+  .tab.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+  /* tabs level 2 */
+  .subtabs{display:flex;gap:8px;flex-wrap:wrap;padding:16px 0 14px}
+  .stab{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+        padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}
+  .stab:hover{border-color:var(--acc);color:var(--txt)}
+  .stab.on{background:var(--acc);border-color:var(--acc);color:#0b1220;font-weight:600}
+  .pane{display:none}
+  .pane.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:20px;margin-bottom:18px;overflow-x:auto}
+  .card h3{margin:0 0 4px;font-size:17px}
+  .card .note{color:var(--dim);font-size:13px;margin:0 0 14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.3px;
+     text-transform:uppercase;background:var(--panel2);position:sticky;top:0}
+  tbody tr:hover{background:#1a1f29}
+  td.num{white-space:nowrap;font-variant-numeric:tabular-nums}
+  .price{font-weight:700;color:var(--ok);font-size:15px}
+  .price.mid{color:var(--warn)}
+  .price.high{color:var(--bad)}
+  a{color:var(--acc);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .tag{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11.5px;
+       border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  .tag.off{background:#1d3a2a;border-color:#2c5a41;color:#7ee0b0}
+  .tag.third{background:#3a2f1d;border-color:#5a472c;color:#ffcc7e}
+  .tag.warn{background:#3a1d1d;border-color:#5a2c2c;color:#ff9b9b}
+  .star{color:var(--warn);letter-spacing:1px;white-space:nowrap}
+  .callout{border-left:3px solid var(--acc);background:#141b28;padding:12px 16px;
+           border-radius:0 8px 8px 0;margin:14px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--warn);background:#241f12}
+  .callout.bad{border-left-color:var(--bad);background:#26161a}
+  .callout.ok{border-left-color:var(--ok);background:#13241c}
+  ul{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  .foot{color:var(--dim);font-size:12.5px;margin-top:36px;
+        border-top:1px solid var(--line);padding-top:16px}
+  .kv{color:var(--dim);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>图片 / 视频生成 API 比价台</h1>
+<div class="sub">Z-Image · GPT Image 2.5 · MiniMax H3 · Seedance 2.5 —— 官方与第三方渠道全量套餐对比</div>
+<div class="rate">
+  汇率基准：<b>1 USD ≈ ¥6.73</b>　·　<b>1 EUR ≈ ¥7.66</b>　·　抓取日期 <b>2026-09-27</b>
+</div>
+
+<div class="callout ok">
+<b>先看这条，能省你 80% 的时间：</b>本次调研最反直觉的发现是——<b>最便宜的图和视频，全都在大厂官方平台上，没有一个在第三方中转站</b>。
+中转站的真实价值是「能用上国外模型 + 人民币支付」，<b>不是便宜</b>。302.ai 的 Seedance 2.5 与官价完全一致，API易 明码写着「站内扣费约上浮 10%」。
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab on" data-t="zimage">Z-Image（图片）</button>
+  <button class="tab" data-t="gptimage">GPT Image 2.5（图片）</button>
+  <button class="tab" data-t="minimax">MiniMax H3 / image-01</button>
+  <button class="tab" data-t="seedance">Seedance 2.5（视频）</button>
+  <button class="tab" data-t="video-all">视频横向对比</button>
+  <button class="tab" data-t="risk">风险与坑</button>
+</div>
+
+<!-- ============ Z-IMAGE ============ -->
+<div class="pane on" id="p-zimage">
+  <div class="callout warn">
+  <b>版本纠错：不存在「Z-Image 2.1」。</b>官方仓库 Tongyi-MAI/Z-Image（11,979★）实际变体为：
+  <b>Z-Image-Turbo</b>（2025-11-26）、<b>Z-Image Base</b>（2026-01-27）、Z-Image-Omni-Base、Z-Image-Edit（后两个标 To be released）。
+  网传「Z-Image v2 / 2 亿参数」与官方 6B 矛盾，<b>不建议采信</b>。你口中的「2.1」很可能是把 Base 版误记成 2.x。
+  </div>
+
+  <div class="subtabs" data-g="z">
+    <button class="stab on" data-s="payg">按量付费（用一次扣一次）</button>
+    <button class="stab" data-s="plan">套餐 / 订阅 / 免费额度</button>
+    <button class="stab" data-s="review">真实评价</button>
+  </div>
+
+  <div class="spane on" data-g="z" data-s="payg">
+    <div class="card">
+      <h3>按量付费 · 一张 1024×1024 图</h3>
+      <p class="note">价格均为原币种与人民币双标。★ 越多越推荐。</p>
+      <table>
+        <thead><tr>
+          <th>渠道</th><th>性质</th><th>模型</th><th>单价</th><th>折人民币</th>
+          <th>OpenAI 兼容</th><th>推荐</th><th>官方入口</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><b>硅基流动 SiliconFlow</b></td><td><span class="tag third">第三方托管</span></td>
+            <td>Z-Image-Turbo</td><td class="num">$0.005</td>
+            <td class="num price">¥0.10</td><td>✅ 是</td><td class="star">★★★★★</td>
+            <td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td>
+          </tr>
+          <tr>
+            <td><b>阿里云百炼</b></td><td><span class="tag off">官方</span></td>
+            <td>z-image-turbo（标准）</td><td class="num">¥0.10</td>
+            <td class="num price">¥0.10</td><td>❌ 自有 API</td><td class="star">★★★★★</td>
+            <td><a href="https://help.aliyun.com/zh/model-studio/z-image-turbo" target="_blank">模型页</a></td>
+          </tr>
+          <tr>
+            <td>阿里云百炼</td><td><span class="tag off">官方</span></td>
+            <td>z-image-turbo（思考 / prompt_extend=true）</td><td class="num">¥0.20</td>
+            <td class="num price mid">¥0.20</td><td>❌</td><td class="star">★★★</td>
+            <td><a href="https://help.aliyun.com/zh/model-studio/z-image-turbo" target="_blank">模型页</a></td>
+          </tr>
+          <tr>
+            <td>阿里云百炼（新加坡）</td><td><span class="tag off">官方</span></td>
+            <td>z-image-turbo</td><td class="num">¥0.110089</td>
+            <td class="num price mid">¥0.110</td><td>❌</td><td class="star">★★★</td>
+            <td><a href="https://help.aliyun.com/zh/model-studio/z-image-turbo" target="_blank">模型页</a></td>
+          </tr>
+          <tr>
+            <td><b>fal.ai</b></td><td><span class="tag third">第三方托管</span></td>
+            <td>Z-Image-Turbo</td><td class="num">$0.005 / 百万像素</td>
+            <td class="num price">¥0.036 / MP<br><span class="kv">1024² 约 ¥0.037</span></td><td>❌ 自有 API</td><td class="star">★★★★</td>
+            <td><a href="https://fal.ai/docs/model-api-reference/image-generation-api/z-image-turbo" target="_blank">文档</a></td>
+          </tr>
+          <tr>
+            <td>硅基流动</td><td><span class="tag third">第三方托管</span></td>
+            <td>Z-Image（Base 版）</td><td class="num">¥0.30</td>
+            <td class="num price mid">¥0.30</td><td>✅</td><td class="star">★★★</td>
+            <td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td>
+          </tr>
+          <tr>
+            <td>302.ai</td><td><span class="tag third">第三方中转</span></td>
+            <td>Z-Image-Turbo</td><td class="num">$0.05 / 次</td>
+            <td class="num price high">¥0.34 <span class="kv">（贵 3.5 倍）</span></td><td>❌</td><td class="star">★</td>
+            <td><a href="https://302.ai/product/detail/z-image-turbo" target="_blank">产品页</a></td>
+          </tr>
+          <tr>
+            <td>AIHubMix</td><td><span class="tag third">第三方中转</span></td>
+            <td>bailian/z-image-turbo</td><td class="num">未公示</td>
+            <td class="num">需登录查询</td><td>✅</td><td class="star">★★</td>
+            <td><a href="https://aihubmix.mintlify.app/cn/api/Image-Gen" target="_blank">文档</a></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+      <b>fal.ai 的隐藏加价项：</b>Prompt expansion（提示词扩写）每张额外 $0.0025。单次可批量 1–4 张，最高 4 MP，
+      推理步数 1–8 可配（1 步出缩略图、8 步出成品）——<b>步数不影响价格</b>，所以直接拉满 8 步更划算。
+      </div>
+    </div>
+  </div>
+
+  <div class="spane" data-g="z" data-s="plan">
+    <div class="card">
+      <h3>套餐 / 订阅 / 免费额度</h3>
+      <p class="note">按平台分组，含免费额度和订阅制。</p>
+      <table>
+        <thead><tr><th>平台</th><th>类型</th><th>套餐内容</th><th>价格</th><th>说明</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td><b>硅基流动</b></td><td><span class="tag">免费额度</span></td>
+            <td>注册送额度</td><td class="num">¥14</td>
+            <td>约 140 张图（按 ¥0.10/张）</td>
+            <td><a href="https://docs.siliconflow.com/cn/faqs/billing-rules" target="_blank">计费说明</a></td></tr>
+          <tr><td>硅基流动</td><td><span class="tag">邀请奖励</span></td>
+            <td>推荐官计划</td><td class="num">¥16 / 人</td>
+            <td>实名认证领 16 元券，每邀请一人双方各得 16 元，上不封顶</td>
+            <td><a href="https://www.siliconflow.cn/developer-talk/od7wj9rr23p95uhihmhrombp" target="_blank">活动页</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag">免费额度</span></td>
+            <td>新用户模型额度</td><td class="num">100 万 token</td>
+            <td>有效期 90 天。<b class="kv">⚠️ Z-Image 按「张」计费，免费额度是否覆盖存疑</b></td>
+            <td><a href="https://help.aliyun.com/zh/model-studio/new-free-quota" target="_blank">规则</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag">订阅制</span></td>
+            <td>Token Plan 个人版 Lite</td><td class="num">¥39 / 月</td><td>按 token 抵扣</td>
+            <td><a href="https://developer.aliyun.com/article/1759935" target="_blank">来源</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag">订阅制</span></td>
+            <td>Token Plan Standard</td><td class="num">¥139 / 月</td><td>—</td>
+            <td><a href="https://developer.aliyun.com/article/1759935" target="_blank">来源</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag">订阅制</span></td>
+            <td>Token Plan Pro</td><td class="num">¥499 / 月</td><td>—</td>
+            <td><a href="https://developer.aliyun.com/article/1759935" target="_blank">来源</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag">资源包</span></td>
+            <td>节省计划「万相-视觉生成旗舰模型」</td><td class="num">¥20 / 3 月 起</td>
+            <td>阶梯折扣最低 9 折</td><td><a href="https://developer.aliyun.com/article/1759935" target="_blank">来源</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag">资源包</span></td>
+            <td>资源包（Qwen-Image 系列，20 元抵 80 张）</td><td class="num">¥20 / 3 月</td>
+            <td><b class="kv">⚠️ 是否覆盖 z-image 存疑</b></td>
+            <td><a href="https://developer.aliyun.com/article/1759935" target="_blank">来源</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="spane" data-g="z" data-s="review">
+    <div class="card">
+      <h3>真实评价（带原帖链接）</h3>
+      <p class="note">正负面都列，避免只看好评。</p>
+      <h4 style="margin:16px 0 6px;color:var(--ok)">👍 正面</h4>
+      <ul>
+        <li>Artificial Analysis 文生图榜<b>总榜第 8、开源模型第 1</b>（2025-12-08，官方 GitHub News）</li>
+        <li><a href="https://www.v2ex.com/t/1183650" target="_blank">V2EX t/1183650</a>：用户 MIUIOS「这么小的模型直接比肩那些大尺寸模型，生成出来的图也很难看出塑料感」</li>
+        <li>同帖用户 monk66601：「出图速度是真的快，5080，7 秒一张 1024 图」</li>
+        <li><a href="https://www.v2ex.com/t/1177881" target="_blank">V2EX t/1177881</a>：作者「速度快得有点惊到我」</li>
+        <li><a href="https://www.v2ex.com/t/1180289" target="_blank">V2EX t/1180289</a>：实测「z-image-turbo 基本 20 秒出结果，生成的图片完全没有水印」</li>
+      </ul>
+      <h4 style="margin:16px 0 6px;color:var(--bad)">👎 负面（实测短板）</h4>
+      <ul>
+        <li><b>复杂空间构图指令遵循不稳</b>：V2EX 用户实测「窗帘怎么调都露个缝」</li>
+        <li><b>长文字渲染退化</b>——需要图内大量文字的场景慎用</li>
+        <li><b>不支持 SD 式 negative prompt</b>，习惯用反向提示词调图的会不适应</li>
+      </ul>
+      <div class="callout">
+      <b>定位建议：</b>适合<b>批量出图和草稿迭代</b>（便宜、快、无水印），
+      不适合<b>一次成图的高价值商稿</b>（构图稳定性不足）。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GPT IMAGE ============ -->
+<div class="pane" id="p-gptimage">
+  <div class="callout ok">
+  <b>版本确认：你说对了，「GPT Image 2.5」真实存在</b>，2026-09-08 发布，距今仅 19 天。
+  API 侧有两个模型：<b>gpt-image-2.5-flare</b>（日常均衡款，快，默认选择）和
+  <b>gpt-image-2.5-sunburst</b>（专业精细款，慢，定位精确编辑）。
+  </div>
+  <div class="callout warn">
+  <b>一个常见误解：</b>OpenRouter 上架的 <code>gpt-5.4-image-2</code> / <code>gpt-5-image</code> / <code>gpt-5-image-mini</code>
+  是 <b>GPT-5.x 多模态主模型</b>（另一条产品线），<b>不是</b> gpt-image 纯图像线。
+  OpenRouter 目前只上架了老款 gpt-image-1-mini，<b>2.5 因发版太新尚未上架</b>。
+  <b>OpenRouter 没上架 ≠ 官方不存在</b>，判断命名请以 developers.openai.com 为准。
+  </div>
+
+  <div class="subtabs" data-g="g">
+    <button class="stab on" data-s="payg">按量付费</button>
+    <button class="stab" data-s="plan">套餐 / 订阅</button>
+    <button class="stab" data-s="review">真实评价</button>
+  </div>
+
+  <div class="spane on" data-g="g" data-s="payg">
+    <div class="card">
+      <h3>按量付费 · OpenAI 官方直连</h3>
+      <p class="note">图片按质量档计价，档位直接决定价格。<b>low 档和 Z-Image 同价但质量更好。</b></p>
+      <table>
+        <thead><tr><th>模型</th><th>质量档</th><th>单价</th><th>折人民币</th><th>说明</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td><b>gpt-image-1-mini</b></td><td>low</td><td class="num">$0.005</td>
+            <td class="num price">¥0.034</td><td><b>性价比之王</b>，与 Z-Image 同价但质量更好</td>
+            <td><a href="https://platform.openai.com/docs/pricing" target="_blank">定价页</a></td></tr>
+          <tr><td>gpt-image-1-mini</td><td>medium</td><td class="num">$0.011</td>
+            <td class="num price">¥0.074</td><td>—</td>
+            <td><a href="https://platform.openai.com/docs/pricing" target="_blank">定价页</a></td></tr>
+          <tr><td>gpt-image-1-mini</td><td>high</td><td class="num">$0.036</td>
+            <td class="num price mid">¥0.242</td><td>—</td>
+            <td><a href="https://platform.openai.com/docs/pricing" target="_blank">定价页</a></td></tr>
+          <tr><td><b>gpt-image-2.5-flare</b></td><td>low</td><td class="num">$0.006</td>
+            <td class="num price">¥0.040</td><td>最新款最低档</td>
+            <td><a href="https://developers.openai.com/api/docs/models/gpt-image-2.5-flare" target="_blank">文档</a></td></tr>
+          <tr><td>gpt-image-2.5-flare</td><td>medium</td><td class="num">≈ $0.053 <span class="kv">（推算）</span></td>
+            <td class="num price mid">≈ ¥0.357</td><td><b class="kv">⚠️ 官方未提供 2.5 计算器，按 2.0 推算</b></td>
+            <td><a href="https://developers.openai.com/api/docs/models/gpt-image-2.5-flare" target="_blank">文档</a></td></tr>
+          <tr><td>gpt-image-2.5-flare</td><td>high</td><td class="num">≈ $0.211 <span class="kv">（推算）</span></td>
+            <td class="num price high">≈ ¥1.42</td><td>2.5 新增 xhigh / max 档，<b>可能显著超过此数</b></td>
+            <td><a href="https://developers.openai.com/api/docs/models/gpt-image-2.5-flare" target="_blank">文档</a></td></tr>
+          <tr><td>gpt-image-2.5-sunburst</td><td>—</td><td class="num">同 flare 档位</td>
+            <td class="num">—</td><td>专业精细款，生成更慢，定位<b>精确编辑</b></td>
+            <td><a href="https://openai.com/zh-Hans-CN/index/introducing-chatgpt-images-2-5/" target="_blank">公告</a></td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+      <b>「一张图到底多少 token」算清了：</b>按 gpt-image-2 medium 档 $0.053 ÷ $30/百万 image token ≈
+      <b>1,767 个 output image token</b>；high 档 $0.211 ≈ <b>7,033 个</b>；low 档约 200 个。
+      <b>Batch API 可再打 5 折</b>——不着急的批量任务务必走 Batch。
+      </div>
+    </div>
+    <div class="card">
+      <h3>第三方中转渠道</h3>
+      <p class="note">这里能看清「中转到底省不省钱」。</p>
+      <table>
+        <thead><tr><th>渠道</th><th>模型</th><th>价格</th><th>与官价对比</th><th>OpenAI 兼容</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>API易 apiyi.com</td><td>gpt-image-2</td><td class="num">与官方同价</td>
+            <td><b>持平</b>，靠充值送 10%–20%（充 $100 送 10%，最高送 20%）给实惠</td><td>✅</td>
+            <td><a href="https://apiyi.com" target="_blank">官网</a></td></tr>
+          <tr><td>OpenRouter</td><td>openai/gpt-5-image-mini</td><td class="num">$8 / 百万 image token</td>
+            <td><b>分毫不差</b>，与官方 gpt-image-1-mini 完全一致</td><td>✅</td>
+            <td><a href="https://openrouter.ai/openai/gpt-5-image-mini" target="_blank">模型页</a></td></tr>
+          <tr><td>OpenRouter</td><td>openai/gpt-5.4-image-2</td><td class="num">$30 / 百万 image token</td>
+            <td>—</td><td>✅</td>
+            <td><a href="https://openrouter.ai/openai/gpt-5.4-image-2" target="_blank">模型页</a></td></tr>
+          <tr><td>VectorEngine</td><td>gpt-image-2</td><td class="num">¥3.0/M input、¥18/M completion</td>
+            <td>按 token 计价，需自算</td><td>✅</td>
+            <td><a href="https://vectorengine.ai" target="_blank">官网</a></td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+      <b>关键结论：真正省钱的是换模型，不是换渠道。</b>中转站对 OpenAI 图像模型基本是<b>平价转售</b>，
+      API易 与官方完全同价、OpenRouter 的 image token 单价分毫不差。
+      <b>没有任何中转大幅加价或减价</b>——想省钱就降质量档或改用 Z-Image。
+      </div>
+    </div>
+  </div>
+
+  <div class="spane" data-g="g" data-s="plan">
+    <div class="card">
+      <h3>套餐 / 订阅 / 省钱手段</h3>
+      <table>
+        <thead><tr><th>渠道</th><th>类型</th><th>内容</th><th>力度</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>OpenAI 官方</td><td><span class="tag">折扣</span></td><td>Batch API</td>
+            <td class="num price">5 折</td><td><a href="https://platform.openai.com/docs/pricing" target="_blank">定价页</a></td></tr>
+          <tr><td>API易</td><td><span class="tag">充值返赠</span></td><td>充 $100 送 10%</td>
+            <td class="num price">最高送 20%</td><td><a href="https://apiyi.com" target="_blank">官网</a></td></tr>
+          <tr><td>ChatGPT 产品侧</td><td><span class="tag">订阅</span></td><td>ChatGPT Images 2.5（面向终端用户）</td>
+            <td class="num">含在 ChatGPT 订阅内</td>
+            <td><a href="https://openai.com/zh-Hans-CN/index/introducing-chatgpt-images-2-5/" target="_blank">公告</a></td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+      <b>⚠️ 省钱陷阱：</b>有实测发现<b>升 quality 档会重新生成一张不同的图</b>——
+      也就是说「先用 Low 定稿、再用 High 出图」这条省钱路子<b>走不通</b>，升档等于重新抽卡。
+      </div>
+    </div>
+  </div>
+
+  <div class="spane" data-g="g" data-s="review">
+    <div class="card">
+      <h3>真实评价（带链接）</h3>
+      <div class="callout bad">
+      <b>gpt-image-2.5 刚发布就有质量争议。</b>TechRadar 2026-09-10 报道 Reddit 吐槽
+      <b>「The noise patterns are awful」</b>，最狠一条是
+      <b>「It makes it mostly useless for production」</b>，记者自己实测后<b>站队吐槽方</b>。
+      </div>
+      <ul>
+        <li>噪点模式被批「awful」，produciton 可用性受质疑</li>
+        <li>升 quality 档会重新生成不同的图（省钱路子被堵）</li>
+        <li>2.5 新增 xhigh / max 两档，成本可能显著超过推算的 $0.211</li>
+      </ul>
+      <div class="callout">
+      <b>建议：</b>如果你要的是稳定产能，<b>gpt-image-1-mini low 档（$0.005）比 2.5 更稳</b>，
+      价格一样但口碑已经过时间验证。2.5 可以等社区反馈稳定后再切。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MINIMAX ============ -->
+<div class="pane" id="p-minimax">
+  <div class="callout warn">
+  <b>命名澄清（这条最重要）：</b>你说的「minimax 3」有歧义，三个候选里<b>只有两个跟图/视频有关</b>：
+  <ul style="margin:8px 0 0">
+    <li><b>MiniMax-M3</b> ✅ 存在，但它是<b>纯文本 LLM</b>（1M 上下文，Agent/Coding 向），
+        <b>不能生图也不能生视频</b>——独立抓 OpenRouter 全量 458 个模型交叉验证：MiniMax 系 8 个条目<b>全部 output_modalities=text</b></li>
+    <li><b>MiniMax-H3</b> ✅ 存在，<b>这才是做视频的</b>（2026-07-31 发布，08-03 开源权重）</li>
+    <li><b>Hailuo 3 / Hailuo-03</b> ⚠️ 是 H3 的民间叫法，不是独立模型</li>
+  </ul>
+  <b>图片线没有「3」这个版本号</b>——只有 <code>image-01</code> 和画风增强版 <code>image-01-live</code>，<b>不存在 image-03</b>。
+  </div>
+
+  <div class="subtabs" data-g="m">
+    <button class="stab on" data-s="payg">按量付费</button>
+    <button class="stab" data-s="plan">套餐 / 订阅</button>
+    <button class="stab" data-s="review">风险与坑</button>
+  </div>
+
+  <div class="spane on" data-g="m" data-s="payg">
+    <div class="card">
+      <h3>视频生成 · MiniMax-H3（按秒计费）</h3>
+      <p class="note">视频按「输出秒数」计费。fal.ai 比官方便宜，且 H3-Max 就是 fal 后训练的。</p>
+      <table>
+        <thead><tr><th>渠道</th><th>性质</th><th>模型 / 分辨率</th><th>单价</th><th>折人民币</th>
+          <th>5 秒成本</th><th>推荐</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td><b>fal.ai</b></td><td><span class="tag third">第三方托管</span></td>
+            <td>H3-Max Turbo / 480P</td><td class="num">$0.025 / 秒</td>
+            <td class="num price">¥0.168 / 秒</td><td class="num price">¥0.84</td><td class="star">★★★★★</td>
+            <td><a href="https://fal.ai/models/minimax/hailuo-3-max" target="_blank">模型页</a></td></tr>
+          <tr><td>fal.ai</td><td><span class="tag third">第三方托管</span></td>
+            <td>H3-Max Turbo / 768P</td><td class="num">$0.04 / 秒</td>
+            <td class="num price">¥0.269 / 秒</td><td class="num price">¥1.35</td><td class="star">★★★★★</td>
+            <td><a href="https://fal.ai/models/minimax/hailuo-3-max" target="_blank">模型页</a></td></tr>
+          <tr><td>fal.ai</td><td><span class="tag third">第三方托管</span></td>
+            <td>H3 / 480P</td><td class="num">$0.05 / 秒</td>
+            <td class="num price mid">¥0.337 / 秒</td><td class="num">¥1.68</td><td class="star">★★★★</td>
+            <td><a href="https://fal.ai/models/minimax/hailuo-3" target="_blank">模型页</a></td></tr>
+          <tr><td><b>fal.ai</b></td><td><span class="tag third">第三方托管</span></td>
+            <td>H3 / 768P</td><td class="num">$0.06 / 秒</td>
+            <td class="num price">¥0.404 / 秒</td><td class="num price">¥2.02</td><td class="star">★★★★★</td>
+            <td><a href="https://fal.ai/models/minimax/hailuo-3" target="_blank">模型页</a></td></tr>
+          <tr><td>MiniMax 官方（国际版）</td><td><span class="tag off">官方</span></td>
+            <td>H3 / 768P</td><td class="num">$0.08 / 秒</td>
+            <td class="num price mid">¥0.538 / 秒</td><td class="num">¥2.69</td><td class="star">★★★★</td>
+            <td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+          <tr><td>MiniMax 官方（国际版）</td><td><span class="tag off">官方</span></td>
+            <td>H3 / 2K</td><td class="num">$0.13 / 秒</td>
+            <td class="num price high">¥0.875 / 秒</td><td class="num">¥4.37</td><td class="star">★★★</td>
+            <td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+          <tr><td>MiniMax 官方（国内版）</td><td><span class="tag off">官方</span></td>
+            <td>H3 / 768P</td><td class="num">¥0.50 / 秒</td>
+            <td class="num price mid">¥0.50 / 秒</td><td class="num">¥2.50</td><td class="star">★★★★</td>
+            <td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+          <tr><td>MiniMax 官方（国内版）</td><td><span class="tag off">官方</span></td>
+            <td>H3 / 2K</td><td class="num">¥0.80 / 秒</td>
+            <td class="num price high">¥0.80 / 秒</td><td class="num">¥4.00</td><td class="star">★★★</td>
+            <td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag off">官方</span></td>
+            <td>MiniMax-H3 / 768P</td><td class="num">¥0.50 / 秒</td>
+            <td class="num price mid">¥0.50 / 秒</td><td class="num">¥2.50</td>
+            <td class="star">★★★★ <span class="kv">可开发票</span></td>
+            <td><a href="https://bailian.console.aliyun.com" target="_blank">百炼控制台</a></td></tr>
+          <tr><td>阿里云百炼</td><td><span class="tag off">官方</span></td>
+            <td>MiniMax-H3 / 2K</td><td class="num">¥0.80 / 秒</td>
+            <td class="num price high">¥0.80 / 秒</td><td class="num">¥4.00</td><td class="star">★★★</td>
+            <td><a href="https://bailian.console.aliyun.com" target="_blank">百炼控制台</a></td></tr>
+          <tr><td>EvoLink</td><td><span class="tag third">第三方中转</span></td>
+            <td>H3 / 768P</td><td class="num">$0.076 / 秒</td>
+            <td class="num">¥0.512 / 秒</td><td class="num">¥2.56</td>
+            <td class="star">★★ <span class="kv">只省 5%</span></td>
+            <td><a href="https://evolink.ai" target="_blank">官网</a></td></tr>
+          <tr><td>302.ai</td><td><span class="tag third">第三方中转</span></td>
+            <td>H3</td><td class="num">$0.0858 / 秒</td>
+            <td class="num price high">¥0.577 / 秒</td><td class="num">¥2.89</td>
+            <td class="star">★ <span class="kv">比官方还贵</span></td>
+            <td><a href="https://302.ai" target="_blank">官网</a></td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+      <b>fal.ai 不是普通倒爷</b>——H3-Max 就是 fal 后训练的，官方文档点名，算半个官方渠道。
+      比官方国际版便宜 <b>25%</b>，5 秒 768P：fal ¥2.02 vs 官方 ¥2.69。
+      </div>
+      <div class="callout warn">
+      <b>⚠️ fal 价格存疑：</b>同一页面出现过 $0.0125 / $0.025 / $0.05 三个 480P 数字，促销与常规价混杂，
+      且 <b>75% 首发折扣已于 2026-09-14 结束</b>。下单前请以 fal 控制台实际报价为准。
+      </div>
+      <h4 style="margin:18px 0 8px">老款视频模型（Legacy，仍可调用）</h4>
+      <table>
+        <thead><tr><th>模型</th><th>规格</th><th>单价</th><th>折人民币</th></tr></thead>
+        <tbody>
+          <tr><td>MiniMax-Hailuo-2.3-Fast</td><td>768P / 6s</td><td class="num">$0.19</td><td class="num price">¥1.28</td></tr>
+          <tr><td>MiniMax-Hailuo-2.3-Fast</td><td>768P / 10s</td><td class="num">$0.32</td><td class="num price">¥2.15</td></tr>
+          <tr><td>MiniMax-Hailuo-2.3-Fast</td><td>1080P / 6s</td><td class="num">$0.33</td><td class="num price">¥2.22</td></tr>
+          <tr><td>MiniMax-Hailuo-2.3</td><td>768P / 6s</td><td class="num">$0.28</td><td class="num price mid">¥1.88</td></tr>
+          <tr><td>MiniMax-Hailuo-2.3</td><td>768P / 10s</td><td class="num">$0.56</td><td class="num price mid">¥3.77</td></tr>
+          <tr><td>MiniMax-Hailuo-2.3</td><td>1080P / 6s</td><td class="num">$0.49</td><td class="num price mid">¥3.30</td></tr>
+          <tr><td>MiniMax-Hailuo-02</td><td>512P / 6s</td><td class="num">$0.10</td><td class="num price">¥0.67</td></tr>
+          <tr><td>MiniMax-Hailuo-02</td><td>512P / 10s</td><td class="num">$0.15</td><td class="num price">¥1.01</td></tr>
+          <tr><td>MiniMax-Hailuo-02</td><td>768P / 6s</td><td class="num">$0.28</td><td class="num price mid">¥1.88</td></tr>
+          <tr><td>MiniMax-Hailuo-02</td><td>768P / 10s</td><td class="num">$0.56</td><td class="num price mid">¥3.77</td></tr>
+          <tr><td>MiniMax-Hailuo-02</td><td>1080P / 6s</td><td class="num">$0.49</td><td class="num price mid">¥3.30</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>图片生成 · image-01</h3>
+      <p class="note">全市场最低一档，官方直连就够，不需要中转。</p>
+      <table>
+        <thead><tr><th>渠道</th><th>模型</th><th>单价</th><th>折人民币</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>MiniMax 官方（国际版）</td><td>image-01</td><td class="num">$0.0035 / 张</td>
+            <td class="num price">¥0.024</td>
+            <td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+          <tr><td>MiniMax 官方（国内版）</td><td>image-01</td><td class="num">¥0.025 / 张</td>
+            <td class="num price">¥0.025</td>
+            <td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+        </tbody>
+      </table>
+      <div class="callout ok">
+      <b>对比：</b>DALL·E $0.04–0.08/张、SiliconFlow FLUX.1-dev ¥0.10/张。
+      <b>image-01 是全市场最低一档，没有任何中转能明显更便宜，直接官方买。</b>
+      </div>
+      <p class="note" style="margin-top:12px">接口：<code>POST https://api.minimax.io/v1/image_generation</code>，
+      <code>model: "image-01"</code>，支持文生图和图生图（<code>subject_reference</code> 保持角色一致性）。</p>
+    </div>
+  </div>
+
+  <div class="spane" data-g="m" data-s="plan">
+    <div class="card">
+      <h3>套餐 / 订阅（Token Plan）</h3>
+      <p class="note">三档月订阅 + Credits 充值包。</p>
+      <table>
+        <thead><tr><th>档位</th><th>价格</th><th>折人民币</th><th>定位</th><th>配额窗口</th><th>可用模型</th></tr></thead>
+        <tbody>
+          <tr><td><b>Plus</b></td><td class="num">$20 / 月</td><td class="num price">¥134.6 / 月</td>
+            <td>个人项目、原型验证</td><td>5 小时滚动 + 周窗口</td>
+            <td rowspan="3">全 MiniMax 阵容<br>（M3 / M2.7 / image / speech / music）<br>
+              <b class="kv">⚠️ 不含 MiniMax H3（视频）</b></td></tr>
+          <tr><td><b>Max</b></td><td class="num">$50 / 月</td><td class="num price">¥336.5 / 月</td>
+            <td>日常 Agent 与多模态工作</td><td>5 小时滚动 + 周窗口</td></tr>
+          <tr><td><b>Ultra</b></td><td class="num">$120 / 月</td><td class="num price">¥807.5 / 月</td>
+            <td>重度 Agent 工作流</td><td>5 小时滚动 + 周窗口</td></tr>
+        </tbody>
+      </table>
+      <div class="callout bad">
+      <b>⚠️ 这个坑很关键：Token Plan 订阅包跑不了 H3 视频。</b>官方明说
+      「A small number of special models (MiniMax H3, voice design, rapid voice cloning, etc.) are not currently supported」。
+      <b>要跑 H3 必须按量付费</b>，Plus 档完全没有视频能力。旧 Hailuo 点数包也不 cover H3。
+      </div>
+      <h4 style="margin:18px 0 8px">Credits 充值包（预付费，1,000 credits = $1）</h4>
+      <table>
+        <thead><tr><th>价格</th><th>获得 Credits</th><th>折人民币</th><th>有效期</th></tr></thead>
+        <tbody>
+          <tr><td class="num">$5</td><td class="num">5,000</td><td class="num price">¥33.6</td><td rowspan="3">自购买日起 365 天</td></tr>
+          <tr><td class="num">$25</td><td class="num">25,000</td><td class="num price">¥168.2</td></tr>
+          <tr><td class="num">$100</td><td class="num">100,000</td><td class="num price">¥672.9</td></tr>
+        </tbody>
+      </table>
+      <p class="note">按量付费（Pay-as-you-go）用标准 API Key 扣账户余额；Credits 是独立的预付费余额，走 Subscription Key。
+      两者覆盖资源相同，同时可用时<b>先扣 Token Plan 配额，再用 Credits 兜底</b>。</p>
+    </div>
+    <div class="card">
+      <h3>文本模型 MiniMax-M3（顺带列出，供对比）</h3>
+      <table>
+        <thead><tr><th>档位</th><th>输入</th><th>输出</th><th>Cache 读</th><th>折人民币（输入 / 输出，每百万）</th></tr></thead>
+        <tbody>
+          <tr><td>Standard（≤512k，永久 5 折）</td><td class="num">$0.30 / M</td><td class="num">$1.20 / M</td><td class="num">$0.06 / M</td>
+            <td class="num price">¥2.02 / ¥8.07</td></tr>
+          <tr><td>Standard（&gt;512k）</td><td class="num">$0.60 / M</td><td class="num">$2.40 / M</td><td class="num">$0.12 / M</td>
+            <td class="num price">¥4.04 / ¥16.15</td></tr>
+          <tr><td>Priority（≤512k，1.5 倍价）</td><td class="num">$0.45 / M</td><td class="num">$1.80 / M</td><td class="num">$0.09 / M</td>
+            <td class="num price">¥3.03 / ¥12.11</td></tr>
+          <tr><td>Priority（&gt;512k）</td><td class="num">$0.90 / M</td><td class="num">$3.60 / M</td><td class="num">$0.18 / M</td>
+            <td class="num price">¥6.06 / ¥24.22</td></tr>
+        </tbody>
+      </table>
+      <p class="note">M3 是 1M 上下文的多模态<b>理解</b>模型（文本+图像+视频输入 → 文本输出），
+      Artificial Analysis 智能指数 29.2 / 编码 58.6。<b>它不做生图也不做生视频。</b></p>
+    </div>
+  </div>
+
+  <div class="spane" data-g="m" data-s="review">
+    <div class="card">
+      <h3>必须知道的坑（6 条）</h3>
+      <div class="callout bad">
+      <b>1. 超时必须设 ≥600 秒。</b>H3 平均生成耗时 <b>264 秒</b>，默认 30/60 秒超时会误杀本来会成功的请求。
+      这个坑很隐蔽——你会以为是接口挂了，其实是自己超时杀掉的。
+      </div>
+      <div class="callout warn">
+      <b>2. 审核双向且静默。</b>返回 HTTP 200 但响应体为空，或响应头带 <code>X-Content-Filtered: true</code>。
+      排查时加 <code>X-Debug-Filter: true</code>。对「996」「35岁」等数字组合和医疗/金融词异常敏感。
+      </div>
+      <ul>
+        <li><b>3. 并发天花板：</b>H3 免费 2 并行 / 充值 15 并行，图片 RPM 只有 10</li>
+        <li><b>4. 参考视频秒数会加进计费：</b>5 秒输出 + 3 秒参考视频 = 按 <b>8 秒</b>计费</li>
+        <li><b>5. 图片 URL 24 小时过期</b>，别直接存数据库，必须及时下载转存</li>
+        <li><b>6. Token Plan 不 cover H3</b>——见上方套餐页红框</li>
+      </ul>
+      <div class="callout">
+      <b>其他渠道筛查结果：</b>
+      <ul style="margin:6px 0 0">
+        <li>❌ <b>OpenRouter / 硅基流动</b>：只有 MiniMax <b>文本</b>模型，不做图/视频</li>
+        <li>❌ <b>AIHubMix / vectorengine / closeai / Gitee AI</b>：<b>未找到</b>可信的 MiniMax 图/视频上架证据</li>
+        <li>🔧 <b>自建转发</b>：new-api（48.9k★）有 <code>hailuo-video</code> 渠道，H3 V2 支持见 issue #6815</li>
+        <li>🆓 <b>本地部署</b>：H3 权重已开源（HF 9,250★，ComfyUI 原生支持）。
+            <b>但 2K 管线未开源，本地只能到 768P，商用需单独授权</b></li>
+      </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SEEDANCE ============ -->
+<div class="pane" id="p-seedance">
+  <div class="callout ok">
+  <b>版本确认：Seedance 2.5 真实存在</b>，2026-07-31 发布，是当前旗舰版本（不是 1.x pro/lite）。
+  模型 ID <code>doubao-seedance-2.5</code>（中转站上叫 <code>doubao-seedance-2-5-260628</code>）。
+  谱系：1.0(2025-11) → 1.5 pro → 2.0(2026-02) → <b>2.5(2026-07-31)</b>。
+  </div>
+
+  <div class="subtabs" data-g="s">
+    <button class="stab on" data-s="payg">按量付费</button>
+    <button class="stab" data-s="plan">套餐 / 免费额度</button>
+    <button class="stab" data-s="review">真实评价</button>
+  </div>
+
+  <div class="spane on" data-g="s" data-s="payg">
+    <div class="card">
+      <h3>火山方舟官方单价（中国区，在线推理）</h3>
+      <p class="note">视频按 token 计费，公式见下方。注意「输入包含视频」单价更低但不代表更便宜。</p>
+      <table>
+        <thead><tr><th>模型</th><th>分辨率</th><th>输入不含视频</th><th>输入包含视频</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr><td><b>doubao-seedance-2.5</b></td><td>480p / 720p</td><td class="num price">¥70 / 百万 token</td>
+            <td class="num price">¥42 / 百万 token</td><td>—</td></tr>
+          <tr><td><b>doubao-seedance-2.5</b></td><td><b>1080p</b></td><td class="num price">¥77 / 百万 token</td>
+            <td class="num price">¥46 / 百万 token</td><td>1080p 于 2026-08-17 上线</td></tr>
+          <tr><td>doubao-seedance-2.0</td><td>480p / 720p</td><td class="num">¥46</td><td class="num">¥28</td><td>—</td></tr>
+          <tr><td>doubao-seedance-2.0</td><td>1080p</td><td class="num">¥51</td><td class="num">¥31</td><td>—</td></tr>
+          <tr><td>doubao-seedance-2.0</td><td>4K</td><td class="num">¥26</td><td class="num">¥16</td><td>—</td></tr>
+          <tr><td>doubao-seedance-2.0-fast</td><td>480p / 720p</td><td class="num">¥37 <span class="tag">限时75折</span></td>
+            <td class="num">¥22 <span class="tag">限时75折</span></td><td>2026-08-07 起</td></tr>
+          <tr><td>doubao-seedance-2.0-mini</td><td>480p / 720p</td><td class="num">¥23 <span class="tag">限时4折</span></td>
+            <td class="num">¥14 <span class="tag">限时4折</span></td><td>至 2026-10-07，720p 最低 ≈¥0.2/秒</td></tr>
+          <tr><td>doubao-seedance-1.0-pro</td><td>—</td><td class="num">¥15（离线 ¥7.5）</td><td class="num">—</td><td>—</td></tr>
+          <tr><td>doubao-seedance-1.0-pro-fast</td><td>—</td><td class="num">¥4.2（离线 ¥2.1）</td><td class="num">—</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+      <b>计费公式（官方原文）：</b>
+      <code>Token 用量 = (输入视频时长 + 输出视频时长) × 输出宽 × 输出高 × 帧率 ÷ 1024</code><br>
+      <code>视频费用 = Token 单价 × Token 用量</code>　（无视频输入时「输入视频时长」按 0 处理）
+      </div>
+      <div class="callout warn">
+      <b>注意陷阱：</b>「输入包含视频」单价更低（42 vs 70）但<b>不代表便宜 40%</b>——
+      输入视频时长也会计入 token 用量，且有最低 token 用量下限。官方明确提醒不要据此判断。
+      </div>
+    </div>
+    <div class="card">
+      <h3>换算成人话：生成一条视频多少钱</h3>
+      <p class="note">16:9，输出 5 秒，官方典型价格表。</p>
+      <table>
+        <thead><tr><th>分辨率</th><th>5 秒单价</th><th>折合每秒</th><th>30 秒估算</th></tr></thead>
+        <tbody>
+          <tr><td>480p</td><td class="num price">¥3.36</td><td class="num">¥0.67</td><td class="num">≈ ¥20.16</td></tr>
+          <tr><td>720p</td><td class="num price mid">¥7.56</td><td class="num">¥1.51</td><td class="num">≈ ¥45.36</td></tr>
+          <tr><td><b>1080p</b></td><td class="num price high">¥18.71</td><td class="num">¥3.74</td><td class="num">≈ ¥112.26</td></tr>
+        </tbody>
+      </table>
+      <div class="callout bad">
+      <b>抽卡才是最大的隐性成本。</b>上表是「一次成功生成」的价，不是「一条可用成片」的价。
+      一条最终采用的 30 秒 720p 成片，若平均要成功生成 <b>3 次</b>才挑中，实际成本 <b>≈ ¥136</b>。
+      <br><span style="color:var(--ok)">好消息：</span>官方只对<b>成功生成</b>计费，审核失败不收费——这点比较良心。
+      </div>
+      <div class="callout warn">
+      <b>⚠️ 1080p 72 折活动日期存疑：</b>官方文档写「2026-08-14 至 <b>10-17</b>」，
+      但方舟文档与多家媒体（财闻网/格隆汇 2026-08-17）写「即日起至 <b>9-17</b>」。
+      <b>今天是 2026-09-27，若按 9-17 口径则活动已结束。</b>请以控制台实际扣费为准。
+      折后价：1080p 图生视频 ¥3.7/秒 → 约 ¥2.7/秒（5 秒 ≈ ¥13.5）。
+      </div>
+    </div>
+    <div class="card">
+      <h3>第三方渠道上的 Seedance 价格</h3>
+      <table>
+        <thead><tr><th>渠道</th><th>性质</th><th>模型</th><th>价格</th><th>与官价对比</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>302.ai</td><td><span class="tag third">第三方聚合</span></td>
+            <td>doubao-seedance-2.5-260628</td><td class="num">10/6 PTC per M（1 PTC ≈ ¥7）</td>
+            <td><b>与官价完全一致</b></td><td><a href="https://302.ai" target="_blank">官网</a></td></tr>
+          <tr><td>API易 apiyi</td><td><span class="tag third">第三方聚合</span></td>
+            <td>Seedance 2.0 系（<b>无 2.5</b>）</td><td class="num">官价 × 1.1</td>
+            <td><b class="kv">贵 10%</b>，充值返赠后才持平</td><td><a href="https://apiyi.com" target="_blank">官网</a></td></tr>
+          <tr><td>AIHubMix</td><td><span class="tag third">第三方聚合</span></td>
+            <td>Seedance 2.0 系（无 2.5）</td><td class="num">未公示</td><td>—</td>
+            <td><a href="https://aihubmix.com" target="_blank">官网</a></td></tr>
+          <tr><td>OpenRouter</td><td><span class="tag third">国际聚合</span></td>
+            <td>Seedance 2.5</td><td class="num">$0.1028 / 秒 起</td>
+            <td><b class="kv">⚠️ 存疑</b>：网页详情页存在，但公开 API 列表（458 模型）中查无此模型；
+                该页显示可用率仅 82.35%、延迟 4 分钟</td>
+            <td><a href="https://openrouter.ai" target="_blank">官网</a></td></tr>
+          <tr><td>硅基流动</td><td><span class="tag off">平台</span></td>
+            <td><b>无 Seedance</b>，仅 Wan2.2</td><td class="num price">¥2.00 / 条</td>
+            <td>替代方案</td><td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+      <b>必须用 Seedance 就走火山方舟官方</b>——第三方都拿不到折扣。
+      硅基流动根本没有 Seedance（已抓 pricing 页 HTML 全文检索确认）。
+      </div>
+    </div>
+  </div>
+
+  <div class="spane" data-g="s" data-s="plan">
+    <div class="card">
+      <h3>免费额度</h3>
+      <table>
+        <thead><tr><th>渠道</th><th>类型</th><th>内容</th><th>说明</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>火山引擎 AI 体验中心</td><td><span class="tag">免费额度</span></td>
+            <td>新用户 50 万 token / 月</td><td>当月清零</td>
+            <td><a href="https://www.volcengine.com/docs/ark/model-pricing" target="_blank">定价页</a></td></tr>
+          <tr><td>豆包 App / 网页端</td><td><span class="tag">免费额度</span></td>
+            <td>每日 10 次免费生成</td><td>5 秒扣 1 次、10 秒扣 2 次</td>
+            <td><a href="https://www.doubao.com" target="_blank">豆包</a></td></tr>
+          <tr><td>小云雀</td><td><span class="tag">免费额度</span></td>
+            <td>每日登录送 60–95 积分</td><td>1 秒视频消耗 8 积分</td>
+            <td>—</td></tr>
+        </tbody>
+      </table>
+      <div class="callout bad">
+      <b>⚠️ 别信这条：</b>「新注册企业用户领 100 万 token」的说法来自
+      <a href="https://www.volcengine.com/article/2706856" target="_blank">volcengine.com/article/2706856</a>（2026-09-16），
+      这是平台上<b>第三方作者发布的营销分析文，非官方公告</b>，文中还有大量「预估转化率」「预测阿里云将跟进」式推测，<b>可信度低</b>。
+      </div>
+    </div>
+    <div class="card">
+      <h3>即梦 AI（C 端应用，非 API 渠道）</h3>
+      <p class="note">即梦面向创作者，开发者调 API 应走火山方舟。但即梦有独立积分体系，可作「便宜程度」参照。</p>
+      <table>
+        <thead><tr><th>项目</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>定位</td><td>C 端创作应用，<b>不是 API 渠道</b></td></tr>
+          <tr><td>视频生成 3.0 / 1080P</td><td class="num price">≈ ¥3.15（5 秒）</td></tr>
+          <tr><td>入口</td><td><a href="https://jimeng.jianying.com" target="_blank">jimeng.jianying.com</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="spane" data-g="s" data-s="review">
+    <div class="card">
+      <h3>Seedance 2.5 能力参数</h3>
+      <table>
+        <thead><tr><th>能力项</th><th>参数</th></tr></thead>
+        <tbody>
+          <tr><td>最长时长</td><td class="num"><b>30 秒</b>直出（2.0 只有 15 秒）</td></tr>
+          <tr><td>分辨率</td><td class="num">480p / 720p / <b>1080p</b>（1080p 于 2026-08-17 上线）</td></tr>
+          <tr><td>首尾帧控制</td><td class="num">✅ 支持</td></tr>
+          <tr><td>原生音画同生</td><td class="num">✅ <code>generate_audio</code> 默认 true</td></tr>
+          <tr><td>多模态参考</td><td class="num">最多 <b>50 个</b>参考</td></tr>
+          <tr><td>发布时间</td><td class="num">2026-07-31</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+      <b>选型建议：要便宜的视频，别盯着 Seedance。</b>同规格 5 秒 1080p：
+      腾讯混元 ≈¥3.6、阿里百炼 wan2.6 ≈¥5.0，只有 Seedance 2.5 的 <b>1/4 ~ 1/5</b>。
+      Seedance 的溢价买的是 30 秒直出、音画同生、50 参考这些<b>别家没有的能力</b>。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VIDEO ALL ============ -->
+<div class="pane" id="p-video-all">
+  <div class="card">
+    <h3>视频生成横向对比 · 一条 5 秒 1080p 视频要多少钱</h3>
+    <p class="note">统一口径对比。这是全篇最有价值的一张表。</p>
+    <table>
+      <thead><tr><th>渠道</th><th>性质</th><th>模型</th><th>5 秒 1080p</th><th>相对 Seedance 2.5</th>
+        <th>风险</th><th>推荐</th><th>入口</th></tr></thead>
+      <tbody>
+        <tr><td>百度千帆</td><td><span class="tag off">官方</span></td><td>VQ3-Turbo</td>
+          <td class="num price">≈ ¥2.2 <span class="kv">（存疑）</span></td><td class="num">-88%</td><td>低</td>
+          <td class="star">★★★☆</td><td><a href="https://cloud.baidu.com/product/wenxinworkshop.html" target="_blank">千帆</a></td></tr>
+        <tr><td>即梦开放平台</td><td><span class="tag off">官方</span></td><td>视频生成 3.0 1080P</td>
+          <td class="num price">≈ ¥3.15</td><td class="num">-83%</td><td>低</td>
+          <td class="star">★★★★</td><td><a href="https://jimeng.jianying.com" target="_blank">即梦</a></td></tr>
+        <tr><td><b>腾讯混元</b></td><td><span class="tag off">官方</span></td><td>混元生视频</td>
+          <td class="num price">≈ ¥3.6</td><td class="num">-81%</td><td>低</td>
+          <td class="star">★★★★★</td><td><a href="https://cloud.tencent.com/product/hunyuan" target="_blank">腾讯云</a></td></tr>
+        <tr><td>百度千帆</td><td><span class="tag off">官方</span></td><td>VQ3-Pro</td>
+          <td class="num price">≈ ¥4.7 <span class="kv">（存疑）</span></td><td class="num">-75%</td><td>低</td>
+          <td class="star">★★★☆</td><td><a href="https://cloud.baidu.com/product/wenxinworkshop.html" target="_blank">千帆</a></td></tr>
+        <tr><td><b>阿里百炼</b></td><td><span class="tag off">官方</span></td><td>wan2.6-t2v</td>
+          <td class="num price">≈ ¥5.0</td><td class="num">-73%</td><td>低</td>
+          <td class="star">★★★★★</td><td><a href="https://bailian.console.aliyun.com" target="_blank">百炼</a></td></tr>
+        <tr><td>火山方舟（<b>限时 72 折</b>）</td><td><span class="tag off">官方</span></td><td>doubao-seedance-2.5</td>
+          <td class="num price mid">≈ ¥13.5</td><td class="num">-28%</td><td>低</td>
+          <td class="star">★★★★</td><td><a href="https://www.volcengine.com/docs/ark/model-pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>火山方舟（刊例价）</td><td><span class="tag off">官方</span></td><td>doubao-seedance-2.5</td>
+          <td class="num price high">¥18.71</td><td class="num">基准</td><td>低</td>
+          <td class="star">★★★</td><td><a href="https://www.volcengine.com/docs/ark/model-pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>302.ai</td><td><span class="tag third">第三方聚合</span></td><td>doubao-seedance-2.5-260628</td>
+          <td class="num">≈ ¥17.0</td><td class="num">持平</td><td>中低</td>
+          <td class="star">★★</td><td><a href="https://302.ai" target="_blank">官网</a></td></tr>
+        <tr><td>OpenRouter</td><td><span class="tag third">国际聚合</span></td><td>Seedance 2.5</td>
+          <td class="num">≈ ¥8.1 <span class="kv">（存疑）</span></td><td class="num">-57%</td><td>中</td>
+          <td class="star">★★</td><td><a href="https://openrouter.ai" target="_blank">官网</a></td></tr>
+        <tr><td>硅基流动</td><td><span class="tag off">平台</span></td><td>Wan2.2（<b>无 Seedance</b>）</td>
+          <td class="num price">¥2.00 / 条</td><td class="num">-89%</td><td>低</td>
+          <td class="star">★★★★</td><td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td></tr>
+      </tbody>
+    </table>
+    <div class="callout ok">
+    <b>最便宜的视频方案：腾讯混元 ≈¥3.6 / 阿里百炼 wan2.6 ≈¥5.0</b>，只有 Seedance 2.5 的 1/4 ~ 1/5。
+    <b>必须用 Seedance 就走火山方舟官方</b>，第三方拿不到折扣。
+    </div>
+  </div>
+  <div class="card">
+    <h3>图像生成横向对比 · 一张 1024×1024 图</h3>
+    <table>
+      <thead><tr><th>渠道</th><th>模型</th><th>单价</th><th>OpenAI 兼容</th><th>推荐</th><th>入口</th></tr></thead>
+      <tbody>
+        <tr><td>Replicate</td><td>flux-schnell</td><td class="num price">≈ ¥0.021</td><td>否</td>
+          <td class="star">★★★★</td><td><a href="https://replicate.com" target="_blank">官网</a></td></tr>
+        <tr><td><b>百度千帆</b></td><td>musesteamer-air-image</td><td class="num price">¥0.05</td><td>否</td>
+          <td class="star">★★★★★</td><td><a href="https://cloud.baidu.com/product/wenxinworkshop.html" target="_blank">千帆</a></td></tr>
+        <tr><td><b>硅基流动</b></td><td>Z-Image-Turbo</td><td class="num price">¥0.10</td><td>✅ 是</td>
+          <td class="star">★★★★★</td><td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>硅基流动</td><td>ERNIE-Image-Turbo</td><td class="num price">¥0.11</td><td>✅ 是</td>
+          <td class="star">★★★★</td><td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>Replicate</td><td>flux-dev</td><td class="num price mid">≈ ¥0.175</td><td>否</td>
+          <td class="star">★★★★</td><td><a href="https://replicate.com" target="_blank">官网</a></td></tr>
+        <tr><td>fal.ai</td><td>Seedream V4</td><td class="num price mid">≈ ¥0.21（$0.03）</td><td>否</td>
+          <td class="star">★★★★</td><td><a href="https://fal.ai" target="_blank">官网</a></td></tr>
+        <tr><td>火山方舟</td><td>Doubao-Seedream-5.0-lite</td><td class="num price mid">¥0.22</td><td>部分</td>
+          <td class="star">★★★★</td><td><a href="https://www.volcengine.com/docs/ark/model-pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>百度千帆</td><td>qwen-image</td><td class="num price mid">¥0.25</td><td>否</td>
+          <td class="star">★★★</td><td><a href="https://cloud.baidu.com/product/wenxinworkshop.html" target="_blank">千帆</a></td></tr>
+        <tr><td>硅基流动 / 阿里</td><td>Z-Image / Qwen-Image</td><td class="num price mid">¥0.30</td><td>✅ 是</td>
+          <td class="star">★★★</td><td><a href="https://siliconflow.cn/pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>火山方舟</td><td>Doubao-Seedream-5.0-pro</td><td class="num price mid">¥0.30 起</td><td>部分</td>
+          <td class="star">★★★</td><td><a href="https://www.volcengine.com/docs/ark/model-pricing" target="_blank">定价页</a></td></tr>
+        <tr><td>MiniMax 官方</td><td>image-01</td><td class="num price">¥0.024</td><td>否</td>
+          <td class="star">★★★★★</td><td><a href="https://platform.minimax.io/docs/guides/pricing-paygo" target="_blank">定价页</a></td></tr>
+        <tr><td>OpenAI 官方</td><td>gpt-image-1-mini (low)</td><td class="num price">¥0.034</td><td>✅ 原生</td>
+          <td class="star">★★★★</td><td><a href="https://platform.openai.com/docs/pricing" target="_blank">定价页</a></td></tr>
+      </tbody>
+    </table>
+    <div class="callout ok">
+    <b>最便宜的图：</b>纯价格最低是百度千帆 ¥0.05/张；
+    <b>综合最优是硅基流动 Z-Image-Turbo ¥0.10/张</b>（OpenAI 兼容、人民币、注册送 ¥14）；
+    MiniMax image-01 ¥0.024 更便宜但生态较窄。
+    </div>
+  </div>
+</div>
+
+<!-- ============ RISK ============ -->
+<div class="pane" id="p-risk">
+  <div class="card">
+    <h3>中转站行业黑幕（V2EX 高热帖，强烈建议读原文）</h3>
+    <div class="callout bad">
+    <b><a href="https://v2ex.com/t/1200135" target="_blank">V2EX t/1200135</a>（22,871 浏览）：</b>
+    产业链拆解 + CISPA 论文 <b>arxiv:2603.01919</b>。
+    实测 <b>24 个第三方 API 端点中超半数后台换了模型</b>，
+    假模型每花 1 美元的错误数是官方的 <b>2–4 倍</b>。
+    ——你以为在调用 GPT-4，后台可能给你返回的是小模型。
+    </div>
+    <div class="callout warn">
+    <b><a href="https://v2ex.com/t/1234306" target="_blank">V2EX t/1234306</a>：</b>
+    点名 <code>opusrelay.com</code>（掺水后拉黑）、<code>cun.ai</code>（后已全额退款）。
+    血泪经验：<b>100 元起充的别碰，先 10 元试水，充值后先试探能否退款</b>。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>自建开源中转 · 项目活跃度实测</h3>
+    <p class="note">用 GitHub API 实测，看最近推送时间，别被 star 数骗了。</p>
+    <table>
+      <thead><tr><th>项目</th><th>Star</th><th>最近推送</th><th>状态</th><th>说明</th><th>入口</th></tr></thead>
+      <tbody>
+        <tr><td><b>QuantumNous/new-api</b></td><td class="num">48,949</td><td class="num">2026-09-26</td>
+          <td><span class="tag off">活跃</span></td><td><b>首选</b>，有 <code>hailuo-video</code> 渠道</td>
+          <td><a href="https://github.com/QuantumNous/new-api" target="_blank">GitHub</a></td></tr>
+        <tr><td>qixing-jk/all-api-hub</td><td class="num">4,893</td><td class="num">2026-09-26</td>
+          <td><span class="tag off">活跃</span></td><td>—</td>
+          <td><a href="https://github.com/qixing-jk/all-api-hub" target="_blank">GitHub</a></td></tr>
+        <tr><td>cita-777/metapi</td><td class="num">3,293</td><td class="num">2026-09-06</td>
+          <td><span class="tag off">活跃</span></td><td>—</td>
+          <td><a href="https://github.com/cita-777/metapi" target="_blank">GitHub</a></td></tr>
+        <tr><td>modelbus/one-api-pro</td><td class="num">996</td><td class="num">2026-09-26</td>
+          <td><span class="tag off">活跃</span></td><td>—</td>
+          <td><a href="https://github.com/modelbus/one-api-pro" target="_blank">GitHub</a></td></tr>
+        <tr><td>VoAPI/VoAPI</td><td class="num">1,088</td><td class="num">2026-01-27</td>
+          <td><span class="tag">停更</span></td><td>已 8 个月未推送</td>
+          <td><a href="https://github.com/VoAPI/VoAPI" target="_blank">GitHub</a></td></tr>
+        <tr><td><b>songquanpeng/one-api</b></td><td class="num">37,022</td><td class="num">2026-01-09</td>
+          <td><span class="tag warn">高 star 僵尸</span></td>
+          <td><b>最后真实 commit 停在 2025-02-21</b>，1,037 个 open issue 积压。<b>别用</b></td>
+          <td><a href="https://github.com/songquanpeng/one-api" target="_blank">GitHub</a></td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+    <b>教训：</b>star 数高 ≠ 项目活着。<code>one-api</code> 有 37k star，
+    但已经<b>停更 8 个月</b>、1,037 个 issue 没人管。选项目要看 <code>pushed_at</code>，不是 star 数。
+    另外 <code>Calcium-Ion/new-api</code> 路径已 404（仓库已迁移到 QuantumNous）。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>踩坑清单（可直接执行）</h3>
+    <ul>
+      <li><b>超时设置：</b>MiniMax H3 平均 264 秒，超时必须设 ≥600 秒，否则误杀成功请求</li>
+      <li><b>审核静默失败：</b>H3 返回 HTTP 200 但响应体为空，加 <code>X-Debug-Filter: true</code> 排查</li>
+      <li><b>URL 有效期：</b>MiniMax 图片 URL 24 小时过期，阿里百炼图片 URL 同样 24 小时——必须及时转存</li>
+      <li><b>抽卡成本：</b>视频生成按成功次数计费，一条成片平均要 3 次，预算要乘 3</li>
+      <li><b>参考素材计入计费：</b>H3 的参考视频秒数会加进输出计费；Seedance 的输入视频时长也计入 token</li>
+      <li><b>升档会重新抽卡：</b>gpt-image 升 quality 档会生成不同的图，「Low 定稿 + High 出图」走不通</li>
+      <li><b>订阅包不 cover 视频：</b>MiniMax Token Plan 明确不含 H3，要跑视频必须按量付费</li>
+      <li><b>先小额试水：</b>第三方中转先充 10 元，并先试探能否退款</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>本次调研的存疑项（诚实交代）</h3>
+    <p class="note">这些没能确证，下单前请自行复核。我们没有编造数字。</p>
+    <table>
+      <thead><tr><th>存疑项</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td>火山方舟 1080p 72 折截止日期（9-17 vs 10-17）</td>
+          <td><span class="tag warn">冲突</span> 官方两页说法不一，今天 09-27 可能已结束</td></tr>
+        <tr><td>OpenRouter 的 Seedance 2.5</td>
+          <td><span class="tag warn">存疑</span> 网页详情页存在，公开 API 列表查无此模型；可用率 82.35%、延迟 4 分钟</td></tr>
+        <tr><td>gpt-image-2.5 的每张成本</td>
+          <td><span class="tag warn">推算</span> 官方明说 2.5 计算器未就绪，按 2.0 推算；新增 xhigh/max 档可能显著更贵</td></tr>
+        <tr><td>fal.ai H3 Max 当前实价</td>
+          <td><span class="tag warn">存疑</span> 同页出现 $0.0125/$0.025/$0.05 三个 480P 数字；75% 首发折扣 2026-09-14 已结束</td></tr>
+        <tr><td>百度千帆视频价口径（每秒 vs 每条）</td><td><span class="tag warn">存疑</span></td></tr>
+        <tr><td>阿里云百炼免费额度是否覆盖 Z-Image</td>
+          <td><span class="tag warn">存疑</span> Z-Image 按「张」计费，价格页未标注独立额度</td></tr>
+        <tr><td>H3 并发数（15 还是 30）</td>
+          <td><span class="tag warn">冲突</span> 国际版文档写 30，国内版写 15，第三方写 2/15</td></tr>
+        <tr><td>H3 平均 264 秒</td><td><span class="tag warn">二手</span> 来自 Segmind 博客，非官方</td></tr>
+        <tr><td>Replicate / Together / 火山方舟是否上架 Z-Image</td><td><span class="tag warn">未核实</span></td></tr>
+        <tr><td>「聚光 / 灵枢 / FastGPTPlus」中转站</td>
+          <td><span class="tag warn">未找到</span> 命中的分别是小红书聚光广告平台、FastGPT 的 AI Proxy 文档，疑似名字有误或已停运</td></tr>
+        <tr><td>「失败也扣钱」</td>
+          <td><span class="tag warn">未证实</span> 官方未明说；EvoLink 拿「失败全额退款」当卖点反向暗示官方可能不退</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="foot">
+  <b>数据说明：</b>所有价格于 <b>2026-09-27</b> 通过官方定价页与公开 API 抓取，汇率 1 USD ≈ ¥6.73、1 EUR ≈ ¥7.66。
+  价格随时可能变动，<b>下单前请以各平台控制台实际报价为准</b>。
+  带「存疑」「推算」「未核实」标记的项目未能交叉验证，已在对应表格中标注。
+  <br><br>
+  详细调研报告：
+  <a href="./image-api-research-zimage-gptimage.md">Z-Image / GPT Image 组</a> ·
+  <a href="./image-api-research-minimax3.md">MiniMax 组</a> ·
+  <a href="./image-api-research-seedance-aggregators.md">Seedance / 中转横评组</a>
+</div>
+
+</div>
+
+<script>
+  // 一级标签页
+  document.querySelectorAll('#tabs .tab').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      document.querySelectorAll('#tabs .tab').forEach(function(t){ t.classList.remove('on'); });
+      document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('on'); });
+      tab.classList.add('on');
+      document.getElementById('p-' + tab.dataset.t).classList.add('on');
+    });
+  });
+  // 二级标签页（按 data-g 分组）
+  document.querySelectorAll('.subtabs .stab').forEach(function(stab){
+    stab.addEventListener('click', function(){
+      var g = stab.dataset.g, s = stab.dataset.s;
+      document.querySelectorAll('.subtabs[data-g="' + g + '"] .stab')
+        .forEach(function(x){ x.classList.remove('on'); });
+      stab.classList.add('on');
+      document.querySelectorAll('.spane[data-g="' + g + '"]')
+        .forEach(function(p){ p.classList.remove('on'); });
+      var target = document.querySelector('.spane[data-g="' + g + '"][data-s="' + s + '"]');
+      if (target) target.classList.add('on');
+    });
+  });
+</script>
+</body>
+</html>
