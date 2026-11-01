@@ -104,8 +104,18 @@ pnpm -C packages/ui typecheck
 
 ## 六、写文档规范（packages/docs）
 
-用户可读的功能文档统一写在 `packages/docs`（VitePress 文档站，:5290）。
-写之前先读一篇同类文档（案例看 `examples/`，组件看 `plugins/theme-components/`），照着它的结构和口吻写。
+文档分两种，不要混：
+
+| 文档 | 写在哪里 | 写什么 |
+| --- | --- | --- |
+| 正式文档 | `packages/docs/`（VitePress 文档站，:5290） | 给用户看的最新功能、完整用法、案例教程、组件说明。功能开发完、行为更新后，用户需要知道的新用法写到这里。 |
+| 开发过程文档 | 仓库根目录 `docs/` | 计划、调研、方案比较、排障记录、迁移说明、临时笔记和历史记录。只给开发者查，不挂进 VitePress。 |
+
+正式文档讲「现在怎么用」，开发过程文档讲「当时怎么想、怎么做的」。
+功能改了，先更新 `packages/docs` 里的正式文档；需要留过程记录，再写到 `docs/`。
+不要把临时计划写进 `packages/docs`，也不要只把新功能写在 `docs/` 里却不更新正式文档。
+
+写正式文档前，先读一篇同类文档（案例看 `examples/`，组件看 `plugins/theme-components/`），照着它的结构和口吻写。
 
 ### 放哪里、怎么挂进导航
 
@@ -116,6 +126,7 @@ pnpm -C packages/ui typecheck
 | 组件说明 | `packages/docs/plugins/theme-components/<组件名>.md` | `config.ts` 的 `pluginsSidebar` 对应分组加一行 |
 | 插件能力解析 | `packages/docs/plugins/parsed/<插件>/index.md` + 子页 | **不用改**：构建时扫目录自动生成 |
 | 速查表入口 | `packages/docs/examples/recipe-map.md` 的表加一行 | — |
+| 开发过程文档（计划、调研、排障） | 仓库根目录 `docs/` | 不挂：只给开发者查 |
 
 侧边栏显示名 = 页面 H1（插件解析页）。其它分组改标题只改页面，不改 config；
 侧边栏条目名 2～10 个字，不换行。
@@ -217,6 +228,8 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 
 ## 十、找文档
 
+- 正式文档（最新功能与用法）：`packages/docs/`
+- 开发过程文档（计划、调研、排障、历史）：仓库根目录 `docs/`
 - 项目历史与排障记录：`docs/STATUS.md`（只查阅，不通读）
 - 架构与注册场设计：`docs/design/core-layers-and-registry.md`
 - 插件作者教程：`docs/plugin-dev/index.md`
