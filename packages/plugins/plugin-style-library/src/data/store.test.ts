@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { createStyleLibraryService, createLibraryService, PAGE_SIZE } from './store'
+import { createLibraryService, PAGE_SIZE } from './store'
 
 /** 造一个假的 /items 响应 */
 function page(offset: number, limit: number, total = 200) {
@@ -41,7 +41,7 @@ describe('style-library 数据服务', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('refresh 拉首屏、loadMore 追加下一页', async () => {
-    const svc = createStyleLibraryService({ pageSize: 40 })
+    const svc = createLibraryService('style', { pageSize: 40 })
     await svc.refresh()
     expect(svc.state.items.length).toBe(40)
     expect(svc.state.total).toBe(200)
@@ -53,7 +53,7 @@ describe('style-library 数据服务', () => {
   })
 
   it('并发 loadMore 被闸门挡住（只发一次请求）', async () => {
-    const svc = createStyleLibraryService({ pageSize: 40 })
+    const svc = createLibraryService('style', { pageSize: 40 })
     await svc.refresh()
     const before = calls.length
     await Promise.all([svc.loadMore(), svc.loadMore(), svc.loadMore()])
@@ -62,7 +62,7 @@ describe('style-library 数据服务', () => {
   })
 
   it('setPageSize 立即生效（重置分页按新粒度重拉）', async () => {
-    const svc = createStyleLibraryService({ pageSize: 40 })
+    const svc = createLibraryService('style', { pageSize: 40 })
     await svc.refresh()
     expect(svc.state.items.length).toBe(40)
     await svc.setPageSize(12)
@@ -74,7 +74,7 @@ describe('style-library 数据服务', () => {
   })
 
   it('setCategory / setQuery 重置分页并带上参数', async () => {
-    const svc = createStyleLibraryService({ pageSize: 40 })
+    const svc = createLibraryService('style', { pageSize: 40 })
     await svc.refresh()
     await svc.loadMore()
     expect(svc.state.items.length).toBe(80)
@@ -87,12 +87,12 @@ describe('style-library 数据服务', () => {
 
   it('state 是响应式的（服务注入后改动能被 Vue 追踪）', async () => {
     const { isReactive } = await import('vue')
-    const svc = createStyleLibraryService({ pageSize: 40 })
+    const svc = createLibraryService('style', { pageSize: 40 })
     expect(isReactive(svc.state)).toBe(true)
   })
 
   it('loadMore 失败不清空已有列表', async () => {
-    const svc = createStyleLibraryService({ pageSize: 40 })
+    const svc = createLibraryService('style', { pageSize: 40 })
     await svc.refresh()
     vi.stubGlobal('fetch', () => Promise.reject(new Error('网络断了')))
     await svc.loadMore()

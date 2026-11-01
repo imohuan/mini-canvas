@@ -307,5 +307,5 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const autoLayoutPlugin: PluginModule = { name, inject, Config, apply }

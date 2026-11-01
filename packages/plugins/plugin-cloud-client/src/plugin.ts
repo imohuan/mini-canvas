@@ -428,16 +428,9 @@ const adapter = new CanvasDiffAdapter(api, CID)
     refreshActions: reloadActions,
   }
   ctx.inject('cloud-client', service)
-  // 沿用老服务名：装配层 / 既有代码按 'cloud-save' 拿同步状态
-  ctx.inject('cloud-save', { status: () => ({ ...status }), sync: async () => ({ ...status }) })
 
   // ==================== 5. 实时跟随（一条 SSE 带三件事）====================
   const sync = createRemoteSync({
-    readCloud: async (type, key) => {
-      // 画布那三个 key 直接问 adapter（它从服务器读）；其余从 save 读
-      if (type === 'canvas') return adapter.get(key)
-      return save ? save.get(key, type) : undefined
-    },
     // 一次完整快照：nodes/edges/revision 同一次读取，避免撕裂快照。
     readSnapshot: async () => {
       const snap = await api.readCanvas(CID)

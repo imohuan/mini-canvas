@@ -30,15 +30,10 @@ function memoryResourceAdapter(): ResourceAdapter & { blobs: Map<string, Blob> }
   }
 }
 
-/** 记录 create/revoke 调用的假 backend */
+/** 记录 revoke 调用的假 backend */
 function fakeBackend() {
-  const calls = { created: [] as string[], revoked: [] as string[] }
+  const calls = { revoked: [] as string[] }
   const backend: ResourceUrlBackend = {
-    createUrl(resource) {
-      const url = 'blob:mock-' + String(calls.created.length)
-      calls.created.push(String((resource as { name?: string })?.name ?? ''))
-      return url
-    },
     revokeUrl(url) { calls.revoked.push(url) },
   }
   return { backend, calls }
@@ -103,68 +98,52 @@ describe('ResourceStore 资源生命周期', () => {
     const large = sanitizeTransientResourceUrls([{ id: '2', data: { imageUrl: 'data:image/png;base64,' + 'A'.repeat(70000) } }])
     expect(large[0].data.imageUrl).toBe('data:image/png;base64,' + 'A'.repeat(70000))
   })
-  it('register 自动生成 URL 并返回稳定 id；url/alive/get 可读', () => {
+  it('put 返回持久引用，之后 url/alive/get 可读', async () => {
     const { backend } = fakeBackend()
-    const rs = new ResourceStore(backend)
-    const id = rs.register({ kind: 'image', resource: { name: 'a.png' } })
-    expect(id).toMatch(/^res-/)
-    expect(rs.url(id)).toMatch(/^blob:mock-/)
+    const adapter = memoryResourceAdapter()
+    const rs = new ResourceStore(() => adapter, backend)
+    const id = await rs.put(new Blob([new Uint8Array([1])]), { kind: 'image', ref: 'res-1' })
+    expect(id).toBe('res-1')
     expect(rs.alive(id)).toBe(true)
     expect(rs.get(id)?.kind).toBe('image')
     expect(rs.ids()).toEqual([id])
+    expect(await rs.resolve(id)).toBe('blob:resolved-res-1')
   })
-  it('显式 url 绕过 createUrl；无 url 且无 createUrl 的 backend 抛错', () => {
-    const rs = new ResourceStore({ revokeUrl() {} })
-    const id = rs.register({ url: 'blob:explicit' })
-    expect(rs.url(id)).toBe('blob:explicit')
-    expect(() => rs.register({ resource: {} })).toThrow(/createUrl/)
-  })
-  it('revoke 回收 URL 并移除；不存在返回 false', () => {
+  it('revoke 回收 URL 并移除；不存在返回 false', async () => {
     const { backend, calls } = fakeBackend()
-    const rs = new ResourceStore(backend)
-    const id = rs.register({ resource: { name: 'x' } })
+    const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+    const id = await rs.put(new Blob([new Uint8Array([1])]), { kind: 'image', ref: 'res-x' })
+    await rs.resolve(id)
     expect(rs.revoke(id)).toBe(true)
     expect(rs.alive(id)).toBe(false)
     expect(calls.revoked).toHaveLength(1)
     expect(rs.revoke(id)).toBe(false)
   })
-  it('revokeByResource / revokeByKind 批量回收', () => {
+  it('disposeUnreferenced 只回收未被引用集合覆盖的资源', async () => {
     const { backend, calls } = fakeBackend()
-    const rs = new ResourceStore(backend)
-    const blob = { name: 'same' }
-    rs.register({ kind: 'image', resource: blob })
-    rs.register({ kind: 'image', resource: blob })
-    rs.register({ kind: 'text', resource: { name: 't' } })
-    expect(rs.revokeByResource(blob)).toBe(2)
-    expect(calls.revoked).toHaveLength(2)
-    expect(rs.revokeByKind('text')).toBe(1)
-    expect(rs.ids()).toHaveLength(0)
-  })
-  it('disposeUnreferenced 只回收未被引用集合覆盖的资源', () => {
-    const { backend, calls } = fakeBackend()
-    const rs = new ResourceStore(backend)
-    const alive = rs.register({ resource: { name: 'keep' } })
-    rs.register({ resource: { name: 'drop1' } })
-    rs.register({ resource: { name: 'drop2' } })
+    const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+    const alive = await rs.put(new Blob([new Uint8Array([1])]), { ref: 'res-keep' })
+    await rs.put(new Blob([new Uint8Array([2])]), { ref: 'res-drop1' })
+    await rs.put(new Blob([new Uint8Array([3])]), { ref: 'res-drop2' })
     const n = rs.disposeUnreferenced(new Set([alive]))
     expect(n).toBe(2)
     expect(calls.revoked).toHaveLength(2)
     expect(rs.ids()).toEqual([alive])
   })
-  it('disposeUnreferenced 空集合 = 全量回收', () => {
+  it('disposeUnreferenced 空集合 = 全量回收', async () => {
     const { backend, calls } = fakeBackend()
-    const rs = new ResourceStore(backend)
-    rs.register({ resource: { name: 'a' } })
-    rs.register({ resource: { name: 'b' } })
+    const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+    await rs.put(new Blob([new Uint8Array([1])]), { ref: 'res-a' })
+    await rs.put(new Blob([new Uint8Array([2])]), { ref: 'res-b' })
     rs.disposeUnreferenced(new Set())
     expect(calls.revoked).toHaveLength(2)
     expect(rs.ids()).toHaveLength(0)
   })
-  it('dispose 全量回收并清空', () => {
+  it('dispose 全量回收并清空', async () => {
     const { backend, calls } = fakeBackend()
-    const rs = new ResourceStore(backend)
-    rs.register({ resource: { name: '1' } })
-    rs.register({ resource: { name: '2' } })
+    const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+    await rs.put(new Blob([new Uint8Array([1])]), { ref: 'res-1' })
+    await rs.put(new Blob([new Uint8Array([2])]), { ref: 'res-2' })
     rs.dispose()
     expect(calls.revoked).toHaveLength(2)
     expect(rs.ids()).toHaveLength(0)
@@ -175,7 +154,7 @@ describe('ResourceStore 资源生命周期', () => {
       const { backend, calls } = fakeBackend()
       // put 走的是**资源适配器**（不是 URL 后端）→ 这里用内存适配器
       const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
-      const keep = rs.register({ resource: { name: 'node' } })
+      const keep = await rs.put(new Blob([new Uint8Array([4])]), { ref: 'res-node' })
       // 派生资源不写进节点 resourceId → 回收时不应被算作"没人引用"
       await rs.put(new Blob([new Uint8Array([1])]), { kind: 'image', ref: 'img-a-t2', derived: true })
       const n = rs.disposeUnreferenced(new Set([keep]))

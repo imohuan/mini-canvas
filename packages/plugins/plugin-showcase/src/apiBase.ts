@@ -12,7 +12,7 @@
  *
  * 1. **cloud-client 插件的服务地址配置**（`cloudClientBaseUrl`，设置面板里那一项）——
  *    用户把界面接自己的 cloud-server 时填的就是它，最权威；
- * 2. cloud-client 暴露的运行时服务（`cloud-client` / `cloud-save`）读 baseUrl；
+ * 2. cloud-client 暴露的运行时服务（`cloud-client`）读 baseUrl；
  * 3. 都没有 → 空串 = 同源（界面由 cloud-server 托管时的正常情况）。
  *
  * 这样"同源托管"和"跨源独立界面"两种部署都不用手填地址。
@@ -27,11 +27,9 @@ export function resolveApiBase(ctx: { tryGet<T>(name: string): T | undefined }):
   if (typeof fromSettings === 'string' && fromSettings.trim()) return stripSlash(fromSettings.trim())
 
   // ② cloud-client 运行时服务（万一 settings 还没就绪，服务已经给出了地址）
-  for (const name of ['cloud-client', 'cloud-save']) {
-    const svc = ctx.tryGet<{ status?: () => { baseUrl?: string } }>(name)
-    const base = svc?.status?.()?.baseUrl
-    if (typeof base === 'string' && base.trim()) return stripSlash(base.trim())
-  }
+  const svc = ctx.tryGet<{ status?: () => { baseUrl?: string } }>('cloud-client')
+  const base = svc?.status?.()?.baseUrl
+  if (typeof base === 'string' && base.trim()) return stripSlash(base.trim())
 
   // ③ 同源
   return ''

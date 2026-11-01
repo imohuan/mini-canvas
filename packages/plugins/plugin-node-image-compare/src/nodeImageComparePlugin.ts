@@ -159,5 +159,5 @@ export function apply(ctx: Context) {
   ctx.effect(() => () => off())
 }
 
-/** 兼容旧装配的 PluginModule 出口（name='image-compare' 供 HMR reload） */
+/** 插件模块出口（name='image-compare' 供 HMR reload） */
 export const nodeImageComparePlugin: PluginModule = { name, inject, apply }

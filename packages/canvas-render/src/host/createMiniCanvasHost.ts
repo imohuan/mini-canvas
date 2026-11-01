@@ -25,7 +25,6 @@ import type {
   DocService,
   EdgeStoreService,
   GraphDocumentService,
-  GraphEnvelope,
   HistoryService,
   NodeFactoryService,
   NodeRegistry,
@@ -121,8 +120,6 @@ export interface CanvasHostHandle {
   stop(): void
 }
 
-/** 图数据存储信封：节点 + 边（持久化与 history 快照共用）。类型由 core-v2 graphDocument 提供。 */
-export type { GraphEnvelope } from '@mini-canvas/canvas-data'
 
 /** 暴露给 window.MiniCanvas 的插件/运行时 API 面 */
 export interface MiniCanvasApi {
@@ -279,23 +276,14 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   // 恢复上次画布；从未保存过才跑 seedDefault（若有）。已保存的空图([])也必须原样恢复，
   // 否则用户删光节点后刷新会重新长出默认 seed。
-  // 节点存 GRAPH_KEY(历史遗留为 CanvasNode[]，边下沉后可能为 {nodes,edges})；边独立存 GRAPH_EDGES_KEY(CanvasEdge[])。
-  const saved = await save.get<CanvasNode[] | GraphEnvelope>(GRAPH_KEY, 'canvas')
+  // 节点存 GRAPH_KEY(CanvasNode[])，边独立存 GRAPH_EDGES_KEY(CanvasEdge[])。
+  const saved = await save.get<CanvasNode[]>(GRAPH_KEY, 'canvas')
   const savedEdges = await save.get<CanvasEdge[]>(GRAPH_EDGES_KEY, 'canvas')
-  // 兼容三种形态：旧数组(仅节点) / 新信封(含 edges) / 空；边独立存的 graph-edges 一律并入恢复。
   // 关键判定：saved === undefined 才是"从未保存"，不应与"保存了空数组"混为一谈。
   const hasStoredGraph = saved !== undefined
-  let restoreNodes: CanvasNode[] | null = null
-  let restoreEdges: CanvasEdge[] | null = savedEdges ?? []
-  if (Array.isArray(saved)) {
-    restoreNodes = saved
-  } else if (hasStoredGraph && Array.isArray(saved.nodes)) {
-    restoreNodes = saved.nodes
-    // 信封内若自带 edges(未来单 key)且未单独存，则以信封内为准
-    restoreEdges = (saved.edges ?? []) as CanvasEdge[]
-  }
+  const restoreEdges: CanvasEdge[] = savedEdges ?? []
   if (hasStoredGraph) {
-    const nodes = restoreNodes ?? []
+    const nodes = saved ?? []
     // 资源 URL 只在当前页面有效。先按持久化的 resourceId 重建各媒体字段的可用地址；
     // 找不到资源时删掉失效地址，避免挂载媒体元素后触发控制台 ERR_FILE_NOT_FOUND。
     // 判定收在 canvas-data 的 restoreNodeMediaUrls（视频/图片/全景各写哪个字段有单一来源）。

@@ -82,7 +82,7 @@ export type AlignArrangeConfigFromSchema = InferConfig<typeof Config>
 export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSchema>) {
   const doc = ctx.get('doc')
   const selection = ctx.get('selection')
-  // 几何与视口已合并到 view（Spec 3.1）；旧 nodeLayout 不再上是服务名。
+  // 几何与视口统一由 view 服务给出。
   const layout = ctx.tryGet('view')
 
   // ⚙ 设置面板单一数据源（内置恒在）。每次执行命令**实时**读它 —— 面板改过立刻生效，
@@ -257,5 +257,5 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口（Config 随模块声明：内核装配时校验 + 补默认 + 登记设置面板） */
+/** 插件模块出口（Config 随模块声明：内核装配时校验 + 补默认 + 登记设置面板） */
 export const alignArrangePlugin: PluginModule = { name, inject, Config, apply }

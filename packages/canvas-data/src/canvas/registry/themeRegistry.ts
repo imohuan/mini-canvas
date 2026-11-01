@@ -1,8 +1,8 @@
 /**
  * themeRegistry —— 画布"外观/UI"注册表（画布领域，纯逻辑零 Vue，Node 可单测）。
  *
- * 归属：画布能力层（src/canvas）。原先住在 core/registry，因内容全是画布概念（节点壳/连线/背景槽），
- * 与"插件框架不认识画布"的边界冲突，故迁出；旧路径保留一行转发垫片。
+ * 归属：画布能力层（src/canvas）。内容全是画布概念（节点壳/连线/背景槽），
+ * 与"插件框架不认识画布"的边界分开。
  *
  * 定位：宿主把画布的"看得见的部分"抽成可被插件替换的槽位，插件(主题插件)经 registerThemeSlot
  * 把自写 vue 组件填进来顶替默认实现。本表只存 opaque 组件句柄，不 import Vue。
@@ -16,9 +16,8 @@
  *   后装的更高优先级(order 更小)组件可一键顶替；默认实现被顶后热卸回退到下一个。
  * - 插件可声明新槽：槽名不限于内置 ThemeSlot 枚举，字符串即可（宿主按需渲染）。
  *
- * 兼容旧单值 API（register/get/unregister/set/has/slots）：
- * 它们读写"默认 occupant(id='default', order=0)"这一格，语义与旧版单格完全一致
- * （register 重复抛错防覆盖、set 覆盖式重设），存量插件/宿主/测试零改动可用。
+ * 单值入口（register/get/unregister/set/has/slots）读写"默认 occupant(id='default', order=0)"这一格
+ * （register 重复抛错防覆盖、set 覆盖式重设）；多 occupant 用 addOccupant。
  */
 import { SlotRegistry } from '@mini-canvas/kernel'
 import type { SlotEntry } from '@mini-canvas/kernel'
@@ -91,7 +90,7 @@ export class ThemeRegistry {
     return this.reg.has(slot)
   }
 
-  // ==================== 兼容单值 API（读写 default occupant） ====================
+  // ==================== 单值入口（读写 default occupant） ====================
 
   /**
    * 注册某槽位的默认组件（occupant id='default'，order=0）。

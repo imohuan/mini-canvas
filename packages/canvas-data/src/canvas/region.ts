@@ -125,7 +125,7 @@ interface RegionFieldEntry {
  * @param registry   节点展示注册表（基座 + 区域级贡献；缺省 = 不读它）
  * @param regionField node/region 注册场（attach 落点；缺省 = 只读 NodeRegistry）
  * @param type       节点类型
- * @param region     区域词（十个之一；老段名传进来当场抛错）
+ * @param region     区域词（NODE_REGIONS 之一；非法名当场抛错）
  */
 export function nodeRegionStackEntries(
   registry: NodeRegistry | undefined,

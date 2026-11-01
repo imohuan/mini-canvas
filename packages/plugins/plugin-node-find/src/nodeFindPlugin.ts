@@ -83,5 +83,5 @@ export function apply(ctx: Context) {
   ctx.effect(() => () => closeOverlay())
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const nodeFindPlugin: PluginModule = { name, inject, apply }

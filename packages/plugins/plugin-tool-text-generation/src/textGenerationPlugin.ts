@@ -91,5 +91,5 @@ export function apply(ctx: Context, config?: TextGenerationPluginConfig): void {
   })()
 }
 
-/** 兼容旧装配的 PluginModule 出口（宿主一行装载：plugins: [pluginTextGenerationTools]） */
+/** 插件模块出口（宿主一行装载：plugins: [pluginTextGenerationTools]） */
 export const pluginTextGenerationTools: PluginModule = { name, inject, Config, apply }

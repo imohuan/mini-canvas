@@ -143,7 +143,7 @@ export class NodeToolbarService {
    * 规则（用户确认的顺序）：
    * 1. 会话里指定的模式若**声明了这一格**（组件 / null / 字符串引用）→ 用它；
    * 2. 没声明（undefined）或根本没进模式 → 回退到 'default' 注册里、同样**声明了这一格**的那份；
-   * 3. 还是没有 → inherit（渲染宿主自己的默认内容，兼容老的段注册）。
+   * 3. 还是没有 → inherit（由宿主渲染插槽里的默认内容）。
    */
   resolveBar(nodeId: string, side: Side, type?: string): ResolvedBar {
     const nodeType = type ?? this.typeOf(nodeId)

@@ -211,5 +211,5 @@ export function apply(ctx: Context) {
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口（host 用 :plugins=[...]，与裸 export 等价；name='text' 供 HMR reload） */
+/** 插件模块出口（host 用 :plugins=[...]，与裸 export 等价；name='text' 供 HMR reload） */
 export const nodeTextPlugin: PluginModule = { name, inject, apply }

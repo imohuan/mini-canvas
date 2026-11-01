@@ -19,7 +19,6 @@ export {
   rectIntersectsGroup,
   resolveGroupChanges,
   selectDownloadableGroupChildren,
-  getNodeType,
   resolveGroupBackgroundColor,
   GROUP_COLOR_SWATCHES,
   DEFAULT_GROUP_BACKGROUND_COLOR,

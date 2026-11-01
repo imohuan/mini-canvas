@@ -469,14 +469,6 @@
       ]
     },
     {
-      "name": "cloud-save",
-      "source": "cloud-client",
-      "methods": [
-        "status",
-        "sync"
-      ]
-    },
-    {
       "name": "cloud-client/edit-guard",
       "source": "<host>",
       "methods": [
@@ -2138,13 +2130,6 @@
       "id": "node-audio",
       "order": 0,
       "source": "audio"
-    },
-    {
-      "kind": "ui",
-      "key": "button",
-      "id": "legacy-button-alias",
-      "order": 0,
-      "source": "theme-default"
     },
     {
       "kind": "ui",

@@ -6,7 +6,7 @@
  *
  * 这条链路之前是断的（AI 改的是服务器文件，网页端只在装插件那一次读过云端），
  * 所以必须用「真浏览器 + 真 MCP 客户端」来验，而不是单测里喂假事件：
- *   1. 真浏览器打开画布（装上 cloud-save 插件，连上 SSE）；
+ *   1. 真浏览器打开画布（装上 plugin-cloud-client，连上 SSE）；
  *   2. 用官方 MCP 客户端往画布加节点 —— **全程不碰浏览器**；
  *   3. 等一小会儿，在浏览器里查画布：节点应该自己出现了，且页面**没有刷新过**；
  *   4. 再验反向的一条：AI 删掉节点，浏览器里的节点也跟着消失；
@@ -42,7 +42,7 @@ function check(label: string, ok: boolean, extra?: unknown): void {
 const PROBE = `(() => {
   const api = window.MiniCanvasUI
   const host = api && api.getHost()
-  const st = host ? host.ctx.get("cloud-save").status() : null
+  const st = host ? host.ctx.get("cloud-client").status() : null
   return {
     hasHost: !!host,
     // 新版状态字段（realtime / appliedRounds 已不存在，读旧字段会永远是 undefined）

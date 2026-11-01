@@ -59,13 +59,11 @@ export interface LocalGraphHandlers {
 }
 
 export interface RemoteSyncOptions {
-  /** 读云端某个 key（没保存过返回 undefined） */
-  readCloud: (type: string, key: string) => Promise<unknown>
   /**
-   * 一次读取完整画布快照（可选；给了就不会再用 readCloud 分两次读节点/边）。
+   * 一次读取完整画布快照（nodes/edges/revision 来自同一次服务端读取）。
    * 返回里的 revision 必须与 nodes/edges 来自同一次服务端读取。
    */
-  readSnapshot?: () => Promise<{ nodes: unknown; edges: unknown; revision?: number }>
+  readSnapshot: () => Promise<{ nodes: unknown; edges: unknown; revision?: number }>
   /** 只读画布图版本（定时 ping）。无这个接口的旧服务端返回 undefined，降级为完整快照核对。 */
   readRevision?: () => Promise<number | undefined>
   /** 画布过滤：SSE 会送来所有画布的事件，不能拿别的画布版本推进当前书签 */
@@ -193,19 +191,11 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
   let hasDeferredUpdates = false
 
   async function readCloudSnapshot(): Promise<{ graph: CanvasGraphSnapshot; revision?: number }> {
-    if (opts.readSnapshot) {
-      const snap = await opts.readSnapshot()
-      return {
-        graph: toSnapshot(snap.nodes, snap.edges),
-        ...(typeof snap.revision === 'number' ? { revision: snap.revision } : {}),
-      }
+    const snap = await opts.readSnapshot()
+    return {
+      graph: toSnapshot(snap.nodes, snap.edges),
+      ...(typeof snap.revision === 'number' ? { revision: snap.revision } : {}),
     }
-    // 兼容旧调用方：两次读取仍可能拼出撕裂快照；新接线一律走 readSnapshot。
-    const [nodes, edges] = await Promise.all([
-      opts.readCloud(CANVAS, GRAPH_KEY),
-      opts.readCloud(CANVAS, GRAPH_EDGES_KEY),
-    ])
-    return { graph: toSnapshot(nodes, edges) }
   }
 
   /** 跑一轮：读云端 → 三方合并 → 落地 → 刷新基准 */

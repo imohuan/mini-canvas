@@ -4,7 +4,7 @@
  *
  * 逐条对应计划的完成判据（§五 M3/M5）：
  *   1. 打开服务地址 → 看到真画布（VueFlow 挂载）
- *   2. 外部插件清单被读到，cloud-save 真的装上（ctx 服务在）
+ *   2. 外部插件清单被读到，plugin-cloud-client 真的装上（ctx 服务在）
  *   3. 建节点/连线 → **服务器磁盘上的 json 随之变化**
  *   4. 换一个全新浏览器 profile（= 换一台机器）打开 → **画布完整恢复**  ← 云端保存的核心证据
  *   5. 大图搬上服务器 → 节点换成同源 URL（/api/canvases/<id>/resources/<hash>）→ 刷新后仍能取回真字节
@@ -98,11 +98,10 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
        const m = await fetch('/plugin-manifest.json').then((r) => r.json())
        const api = window.MiniCanvasUI
        const ctx = api && api.getContext()
-       return { manifest: m.plugins.map((p) => p.id), hasService: !!ctx?.get?.('cloud-save'), status: ctx?.get?.('cloud-save')?.status?.() ?? null }
+       return { manifest: m.plugins.map((p) => p.id), hasService: !!ctx?.get?.('cloud-client'), status: ctx?.get?.('cloud-client')?.status?.() ?? null }
      })()`,
     true,
   )
-  // 插件改过名：插件包是 plugin-cloud-client，但它沿用 'cloud-save' 这个**服务名**（装配层按服务名判断）
   check('清单里有云端保存插件', pluginInfo.manifest.some((id) => id.includes('cloud-')), pluginInfo.manifest)
   check('插件真的装上了（ctx 服务在）', pluginInfo.hasService, pluginInfo.status)
 
@@ -162,7 +161,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
     `(() => {
        const host = window.MiniCanvasUI.getHost()
        const n = host.nodeStore.getNode(${JSON.stringify(placed.id)})
-       return { imageUrl: n.data.imageUrl, status: host.ctx.get('cloud-save').status() }
+       return { imageUrl: n.data.imageUrl, status: host.ctx.get('cloud-client').status() }
      })()`,
   )
   check('本地节点里是可直接渲染的真地址（画布资源 URL）', String(uploaded.imageUrl).includes('/resources/'), uploaded)
@@ -215,7 +214,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
     `(() => {
        const api = window.MiniCanvasUI
        const host = api && api.getHost()
-       return { nodes: host ? host.nodeStore.getNodes().map((n) => n.id) : [], edges: host ? host.graph.getEdges().length : -1, status: api?.getContext()?.get?.('cloud-save')?.status?.() ?? null }
+       return { nodes: host ? host.nodeStore.getNodes().map((n) => n.id) : [], edges: host ? host.graph.getEdges().length : -1, status: api?.getContext()?.get?.('cloud-client')?.status?.() ?? null }
      })()`,
   )
   const idsOnB = (restored.nodes ?? []).map((n) => Number(n)).sort((a, b) => a - b)

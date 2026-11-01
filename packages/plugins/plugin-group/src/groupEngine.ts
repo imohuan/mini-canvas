@@ -247,16 +247,11 @@ export function selectDownloadableGroupChildren<T extends { id: string; parentId
 ): Array<{ node: T; commandId: string }> {
   return nodes.flatMap((node) => {
     if (node.parentId !== groupId) return []
-    const type = node.data?.nodeType || node.type || ''
+    const type = node.type || ''
     // 命令 id 统一为 插件名:动作（与 node-image / node-text / node-video 等一致）
     const commandId = type + ':download'
     return type && hasCommand(commandId) ? [{ node, commandId }] : []
   })
-}
-
-/** 取一个节点的展示类型（兼容 data.nodeType 与 type 字段） */
-export function getNodeType(node: { type?: string; data?: { nodeType?: string } }): string {
-  return node.data?.nodeType || node.type || ''
 }
 
 /** 分组服务在**组件侧**需要的那一小块（只要 ungroup；不 import 服务实现，避免组件↔插件成环） */

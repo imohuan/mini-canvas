@@ -40,7 +40,7 @@ interface DocPort {
   updateNodes?(entries: Array<{ id: string; patch: Record<string, unknown> }>): unknown
 }
 
-/** view 服务里本插件用到的几何/视口读口（迁移期兼容别名 nodeLayout 同形） */
+/** view 服务里本插件用到的几何读口 */
 interface LayoutPort {
   getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null | undefined
   absolutePosition?(id: string): { x: number; y: number }

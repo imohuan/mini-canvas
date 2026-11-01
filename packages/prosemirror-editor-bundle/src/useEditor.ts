@@ -1318,34 +1318,6 @@ export function slotIdFromName(name: string | null | undefined): string | null {
 }
 
 /**
- * 把老存档里「按上游节点 id 存」的素材标签就地改成 `ref-slot:<kind>:<N>`。
- *
- * 递归重建（ProseMirror 节点不可变，不能直接改 attrs）；没命中的节点**原样返回**，
- * 于是内容没变时 `=== doc`，调用方可以据此跳过事务。
- */
-export function migrateLegacyChipIds(doc: PMNode): PMNode {
-  const walk = (node: PMNode): PMNode => {
-    if (node.type.name === 'resource') {
-      const id = String(node.attrs.id ?? '')
-      if (id.startsWith('ref-slot:')) return node
-      const canonical = slotIdFromName(String(node.attrs.name ?? ''))
-      if (!canonical) return node
-      return node.type.create({ ...node.attrs, id: canonical }, null, node.marks)
-    }
-    if (node.childCount === 0) return node
-    let changed = false
-    const kids: PMNode[] = []
-    node.forEach((child) => {
-      const next = walk(child)
-      if (next !== child) changed = true
-      kids.push(next)
-    })
-    return changed ? node.type.create(node.attrs, kids, node.marks) : node
-  }
-  return walk(doc)
-}
-
-/**
  * 这颗标签需要改文档吗？（url / 名字真的变了才需要）
  *
  * 为什么单独抽出来（用户 2026-10-27 报「点标签后光标先跳到前面再跳回来」）：

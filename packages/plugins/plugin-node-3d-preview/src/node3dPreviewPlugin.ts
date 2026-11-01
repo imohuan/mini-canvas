@@ -175,5 +175,5 @@ export function apply(ctx: Context) {
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口（name='3d-preview' 供 HMR reload） */
+/** 插件模块出口（name='3d-preview' 供 HMR reload） */
 export const node3dPreviewPlugin: PluginModule = { name, inject, Config, apply }

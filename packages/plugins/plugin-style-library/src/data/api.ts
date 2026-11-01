@@ -5,7 +5,7 @@
  * cloud-server 不同源（ui 单独 dev），写死相对路径会打到界面自己的服务器上、
  * 收到 SPA 的 HTML，前端 res.json() 报 "Unexpected token '<'"。三级回落：
  *   ① 设置里的「服务地址」（cloudClientBaseUrl，与 cloud-client 共用）；
- *   ② cloud-client / cloud-save 运行时服务给的 baseUrl；
+ *   ② cloud-client 运行时服务给的 baseUrl；
  *   ③ 空串 = 同源（界面由 cloud-server 托管时的正常情况）。
  */
 import type { StyleMeta, StylePage, StyleSort } from './types'
@@ -42,11 +42,9 @@ export function resolveApiBase(ctx: CtxLike | undefined): string {
   const fromSettings = settings?.get('cloudClientBaseUrl')
   if (typeof fromSettings === 'string' && fromSettings.trim()) return stripSlash(fromSettings.trim())
 
-  for (const name of ['cloud-client', 'cloud-save']) {
-    const svc = ctx?.tryGet(name) as { status?: () => { baseUrl?: string } } | undefined
-    const base = svc?.status?.()?.baseUrl
-    if (typeof base === 'string' && base.trim()) return stripSlash(base.trim())
-  }
+  const svc = ctx?.tryGet('cloud-client') as { status?: () => { baseUrl?: string } } | undefined
+  const base = svc?.status?.()?.baseUrl
+  if (typeof base === 'string' && base.trim()) return stripSlash(base.trim())
   return ''
 }
 

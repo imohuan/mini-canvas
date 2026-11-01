@@ -218,8 +218,8 @@ async function queryTask(
     return { ok: false, error: '查询生成任务失败：后台返回的不是合法 JSON' }
   }
   if (!data?.ok) return { ok: false, error: data?.error || '查询生成任务失败' }
-  // 兼容后台直接返回 task / 包一层 { task } 两种形态
-  return { ok: true, task: data.task ?? (data as unknown as BackendTask) }
+  if (!data.task) return { ok: false, error: '查询生成任务失败：后台没有返回 task' }
+  return { ok: true, task: data.task }
 }
 
 /** 把 fetch/超时异常翻成人能看懂的一句话（区分"超时"与"连不上"） */

@@ -102,8 +102,6 @@ export interface PortDef {
   port?: string
   /** 该端口接受的源节点类型列表；缺省/空 = 来者不拒 */
   accepts?: string[]
-  /** 'single' = 该端口只允许一条连接；缺省 = 多条 */
-  limit?: 'single' | 'multi'
   /** 输出口产出/输入口接收的内容类型；目标输入声明 acceptsTypes 时源产出必须 ∈ 它 */
   contentType?: string
   /** 输入口接受的内容类型列表 */

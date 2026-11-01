@@ -352,6 +352,6 @@ export function buildNodeContext(ctx: Context, nodeId: string): {
   }
 }
 
-/** 兼容旧装配的 PluginModule 出口（name='node-ui' 供 HMR reload） */
+/** 插件模块出口（name='node-ui' 供 HMR reload） */
 export const nodeUiPlugin: PluginModule = { name, inject, Config, apply }
 

@@ -362,15 +362,6 @@ describe('边下沉内核：edgeStore 增删 + 撤销 + 持久化往返', () => 
     }
   })
 
-  it('兼容旧存储：graph 只有节点数组(无边)也能正常 boot，edgeStore 为空', async () => {
-    const storage = new MemoryStorageAdapter()
-    // 预写旧格式：graph = CanvasNode[](历史遗留无边信封)
-    await storage.set('canvas:graph', [{ id: '1', type: 'text', position: { x: 0, y: 0 }, data: { text: '旧' } }])
-    const host = await boot({ adapter: storage })
-    expect(host.nodeStore.getNode('1')).toBeDefined()
-    expect(host.edgeStore.getEdges()).toHaveLength(0)
-    host.stop()
-  })
 })
 
 describe('边撤销：拉边(加边)记进历史可 undo/redo（对应 Must-1 修复）', () => {

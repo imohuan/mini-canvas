@@ -592,9 +592,9 @@ export function createMediaCapability(ctx: Context): MediaCapability {
       const source = doc?.getNode(sourceId)
       if (!doc || !source) return creator.addNode(request)
 
-      // Spec 3.1：nodeLayout/viewport 已合并到 view；旧名只留给降级/旧宿主。
-      const layout = tryService<PlacementLayout>(ctx, 'view') ?? tryService<PlacementLayout>(ctx, 'nodeLayout')
-      const viewport = tryService<PlacementViewport>(ctx, 'view') ?? tryService<PlacementViewport>(ctx, 'viewport')
+      // 几何与视口统一由 view 服务给出。
+      const layout = tryService<PlacementLayout>(ctx, 'view')
+      const viewport = tryService<PlacementViewport>(ctx, 'view')
       const targetType = opts.nodeType ?? kind
       const typeSize = doc.types?.get(targetType)?.defaultSize
       const sourceRect = layout?.getNodeRect(sourceId) ?? {

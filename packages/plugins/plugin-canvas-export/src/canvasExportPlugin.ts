@@ -654,5 +654,5 @@ export function apply(ctx: Context) {
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const canvasExportPlugin: PluginModule = { name, inject, Config, apply }

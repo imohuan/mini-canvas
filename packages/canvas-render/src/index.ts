@@ -351,7 +351,7 @@ export {
 export type { FlowNode, FlowEdge, ThemeAssembly } from './host/canvasHostCore'
 // 点选/清空选中语义纯函数（宿主与插件共用；Shift 加选/普通单选/点空白清空）
 export { clickNode, clickEdge, clickPane } from './host/selectionInteractions'
-// 节点布局只读服务（实测尺寸 + 绝对坐标；插件/工具读，宿主注入'nodeLayout'服务）
+// 节点布局服务（实测尺寸 + 绝对坐标；对外由 view 服务统一暴露）
 export { NodeLayoutService } from './layout/nodeLayout'
 // 视口服务（CanvasHost attach VueFlow backend 后可用；插件读/控视图）
 export { ViewportService } from './viewport/viewportService'

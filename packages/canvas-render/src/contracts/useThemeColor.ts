@@ -34,7 +34,6 @@ import {
  * @param root 主题 class 所在元素，默认 `document.documentElement`（测试可传假元素）
  */
 export function useThemeColor(tokenKey: string, root?: Element | null): Ref<string> {
-  // 读配置的 helper：Provider 优先，旧单测只 provide 渲染上下文时回退。
   const { ctx } = useCanvasContextOrRender()
   const settings = ctx.get<ThemePaletteSettingsLike | undefined>('settings')
 

@@ -37,6 +37,6 @@ const soleSelected = useSoleNodeSelected(props.id)
   <component :is="BarComponent" v-if="BarComponent && soleSelected" :id="props.id" :data="props.data" />
   <!-- 解析出「不显示」：这一格留空 -->
   <template v-else-if="bar.kind === 'none'" />
-  <!-- 没注册：透传宿主默认内容（老的自占 out:bottom 段照常工作） -->
+  <!-- 没注册：透传宿主默认内容（自占 out:bottom 段的组件照常工作） -->
   <slot v-else />
 </template>

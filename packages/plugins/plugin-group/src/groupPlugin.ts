@@ -589,5 +589,5 @@ export function apply(ctx: Context) {
   ctx.effect(() => () => offBackfill())
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const groupPlugin: PluginModule<GroupPluginConfig> = { name, inject, Config, apply }

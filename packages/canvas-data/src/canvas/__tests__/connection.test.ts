@@ -25,9 +25,9 @@ function ctx(
     getTypeConn: (t) => typeConnectionDef(typeConn[t]),
   }
 }
-/** 便捷构造带 limit 的 inputs（PortDef 强类型）；evictOnFull 可指定，缺省 = 挤 */
+/** 便捷构造容量为 1 的 inputs；evictOnFull 可指定，缺省 = 挤 */
 function singleInput(accepts: string[], evictOnFull?: boolean): { inputs?: PortDef[] } {
-  return { inputs: [{ accepts, limit: 'single' as const, evictOnFull }] }
+  return { inputs: [{ accepts, capacity: 1, evictOnFull }] }
 }
 function anyInput(accepts: string[]): { inputs?: PortDef[] } {
   return { inputs: [{ accepts }] }
@@ -142,7 +142,7 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
     expect(validateConnection(conn('a', 'b'), ctx({ a: 'image', b: 't' })).ok).toBe(true)
   })
 
-  it('limit:"single" 满额时：默认挤老边（放行），显式 evictOnFull:false 才拒', () => {
+  it('capacity=1 满额时：默认挤老边（放行），显式 evictOnFull:false 才拒', () => {
     const edges = [{ source: 'a', target: 'b' }]
     const nodes = { a: 't', b: 't', c: 't' }
     // 默认（挤）：b 已有一条入边，再连 c->b 仍放行 —— 由渲染层在 commit 时挤掉最老那条
@@ -151,15 +151,6 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
     // 明确不挤：满额直接拒
     const hard = ctx(nodes, edges, { t: singleInput(['t'], false) })
     expect(validateConnection(conn('c', 'b'), hard).reason).toBe('limit-reached')
-  })
-
-  it('capacity=1 与 limit:"single" 等效：满额默认挤（放行），false 才拒', () => {
-    const edges = [{ source: 'a', target: 'b' }]
-    const nodes = { a: 't', b: 't', c: 't' }
-    expect(validateConnection(conn('c', 'b'), ctx(nodes, edges, { t: capacityInput(1) })).ok).toBe(true)
-    expect(
-      validateConnection(conn('c', 'b'), ctx(nodes, edges, { t: capacityInputWithPolicy(1, false) })).reason,
-    ).toBe('limit-reached')
   })
 
   it('capacity=2：未满放行；满额默认放行（挤）；evictOnFull:false 时拒', () => {

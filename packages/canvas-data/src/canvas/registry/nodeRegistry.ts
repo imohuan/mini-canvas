@@ -2,7 +2,7 @@
  * nodeRegistry —— 节点"展示"注册表（画布领域，纯逻辑零 Vue，Node 可单测）。
  *
  * 归属：画布能力层（src/canvas）。插件框架（src/core）不认识"节点/展示段"这些画布概念，
- * 故本文件从 core/registry 迁到 canvas/registry；旧路径保留一行转发垫片给存量测试。
+ * 所以本文件住在 canvas/registry。
  *
  * 职责边界（对齐 docs/plan/canvas-data-api.md §四 + runbook M2）：
  * - 一个业务 type 的**数据形状/尺寸**由 nodeStore.registerType 管（services/nodeStore）。
@@ -15,7 +15,7 @@
  *   与该段的基座组件一起、按 order 同屏渲染（content/装饰层/徽标等多插件叠加）。
  * - 热卸某插件只抽走它贡献的 occupant，基座与其它贡献原位保留。
  *
- * 兼容旧单值 API（register/get/set/unregister/has/types）：语义不变（读 base segments），存量零改动。
+ * 单值入口（register/get/set/unregister/has/types）读写基座 segments；叠加层走 registerContribution。
  */
 import { SlotRegistry } from '@mini-canvas/kernel'
 import { assertRegion } from '../region'

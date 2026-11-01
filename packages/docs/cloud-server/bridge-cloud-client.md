@@ -136,7 +136,6 @@ export function apply(ctx: Context): void {
 | --- | --- | --- |
 | `cloud-client` | `status()` / `refreshActions()` | ui 的设置页与诊断 |
 | `cloud-client:history` | `query(分页筛选)` / `subscribe(fn)` | ui 的生成历史弹窗 |
-| `cloud-save` | `status()` / `sync()` | 自动保存/云端保存的显示 |
 
 ## 与后台插件系统的握手点
 
@@ -154,7 +153,7 @@ export function apply(ctx: Context): void {
 | SSE 跟随与合并 | `src/remoteSync.ts`、`src/applyMerge.ts` | 事件 → doc 增量合并（进历史） |
 | 换存储后端 | `src/cloudResourceAdapter.ts`、`cloudKvAdapter.ts` | `save.useAdapter(...)` 指向云端 |
 | 动作 → 底栏按钮 | `src/actions.ts`（toBarAction/diffActions） | diff 出新增/失效动作，注册进 node/bar |
-| 三个服务注入 | `src/plugin.ts:346-354` | `cloud-client:history` / `cloud-client` / `cloud-save` |
+| 两个服务注入 | `src/plugin.ts` | `cloud-client:history` / `cloud-client` |
 | 插件管理页（同包另一入口） | `src/manager/pluginManagerPlugin.ts` | 设置面板「插件」页，读 `/plugin-catalog.json` |
 
 ## 常见坑

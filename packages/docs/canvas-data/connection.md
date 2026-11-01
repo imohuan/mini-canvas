@@ -173,7 +173,7 @@ export type InvalidReason =
 四条语义，记牢（每一条都是被真实 bug 逼出来的）：
 
 - **不声明 `capacity` = 不限条数。** 想限制才写。
-- **`limit: 'single'` 是 `capacity = 1` 的等价写法**（保留兼容）。
+- **只接一条就写 `capacity: 1`**，没有别的写法。
 - **声明了且已满 → 默认"挤掉最老一条"**（`evictOnFull` 缺省 `true`）：校验这里**放行**，
   "挤哪条"交给 `pickOverflowEvict`。内核只做纯判定，不替调用方决定删哪条。
 - **只有显式 `evictOnFull: false`** 才满额直接拒 → `limit-reached`。
@@ -196,8 +196,6 @@ export interface PortDef {
   port?: string
   /** 该端口接受的**源节点类型**列表；缺省 / 空 = 来者不拒 */
   accepts?: string[]
-  /** 'single' = 该端口只允许一条连接；缺省 = 多条 */
-  limit?: 'single' | 'multi'
   /** 输出口产出 / 输入口接收的**内容类型** */
   contentType?: string
   /** 输入口接受的内容类型列表 */

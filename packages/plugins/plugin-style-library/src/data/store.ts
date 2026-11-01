@@ -234,11 +234,3 @@ export function createLibraryService(kind: LibraryKind, opts: CreateServiceOptio
   return { state, open, close, toggle, refresh, loadMore, setCategory, setQuery, setSort, setZoom, setPageSize, loadRoot, saveRoot, rescan }
 }
 
-/**
- * 兼容旧名：以前只有风格库，函数叫 createStyleLibraryService。
- * 现在两库共用，保留这个名字做转发（免得到处改 import）。
- */
-export function createStyleLibraryService(opts: CreateServiceOptions = {}): LibraryService {
-  return createLibraryService('style', opts)
-}
-

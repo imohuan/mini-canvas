@@ -7,7 +7,7 @@
  *
  * 所以这里比出差集、只发差异（复用 graphDiff）。谁都不覆盖谁。
  *
- * 与老 cloud-save 的 HttpAdapter 的差别：那份打的是 /api/kv/canvas/*（按 key 存），
+ * 与老的按 key 存适配器的差别：那份打的是 /api/kv/canvas/*，
  * 现在画布是"一个画布一个文件夹"，读写都走 /api/canvases/*。
  */
 import { diffGraph, isEmptyOps, type GraphOps } from './graphDiff.js'

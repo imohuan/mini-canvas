@@ -175,7 +175,7 @@ export interface ManifestPluginEntry {
  * 为什么第 2 条必须卡住：画布那边的加载路径是 fetch 文本 → `import(data:text/javascript,...)`。
  * 仓库里多数插件打的是 UMD（给 `<script>` 用，靠全局 Vue/VueFlow 注入），这种产物走 data: URL
  * 会**在加载时直接抛错**。把它们列进清单只会让画布每次开都在 console 里刷一串告警，
- * 却什么也没装上——不如不列。想被外部装载，就把该插件改成 `formats: ['es']`（参考 plugin-cloud-save）。
+ * 却什么也没装上——不如不列。想被外部装载，就把该插件改成 `formats: ['es']`（参考 plugin-cloud-client）。
  */
 export async function buildManifest(pluginsDir: string | undefined): Promise<ManifestPluginEntry[]> {
   if (!pluginsDir) return []

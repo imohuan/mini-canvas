@@ -187,6 +187,6 @@ export function apply(ctx: Context, config?: StyleLibraryConfig): void {
 export const styleLibraryPlugin: PluginModule = { name, inject, Config, apply }
 
 export type { StyleCard, StyleMeta, StylePage, StyleSort } from './data/types'
-export { createLibraryService, createStyleLibraryService, PAGE_SIZE, DEFAULT_ROOT, DEFAULT_EFFECT_ROOT } from './data/store'
+export { createLibraryService, PAGE_SIZE, DEFAULT_ROOT, DEFAULT_EFFECT_ROOT } from './data/store'
 export type { LibraryKind } from './data/api'
 export { StyleLibraryOverlay, EffectLibraryOverlay, StyleGalleryView, StyleCardView, StyleDetailView }

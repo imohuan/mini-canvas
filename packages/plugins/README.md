@@ -38,7 +38,7 @@ export const nodeTextPlugin: PluginModule = {
       label: '文本',
       defaultSize: { w: 300, h: 200 },
       segments: { in: TextContent },       // in 是 .vue 组件句柄(opaque)，落在卡片内部
-      // inputs: [{ accepts: ['image'], limit: 'single' }],   // 声明式连接约束(可选)
+      // inputs: [{ accepts: ['image'], capacity: 1 }],   // 声明式连接约束(可选)
     })
     // ……其余插件逻辑：ctx.get('doc')/ctx.inject('text', service) 等
   },

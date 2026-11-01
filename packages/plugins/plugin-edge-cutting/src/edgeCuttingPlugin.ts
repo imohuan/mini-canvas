@@ -248,5 +248,5 @@ export function apply(ctx: Context): void {
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口（Config 随模块声明，内核装配时校验 + 登记设置面板） */
+/** 插件模块出口（Config 随模块声明，内核装配时校验 + 登记设置面板） */
 export const edgeCuttingPlugin: PluginModule = { name, Config, apply }

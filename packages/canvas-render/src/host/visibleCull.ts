@@ -34,7 +34,7 @@ export interface CullLayoutSource {
 
 /** 剔除配置（设置面板「常规/画布」分组，用户可调） */
 export interface VisibleCullConfig {
-  /** 总开关：false 时所有节点 hidden=false（现状行为） */
+  /** 总开关：false 时不做剔除（节点全部常驻渲染） */
   enabled: boolean
   /** 缓冲距离（flow 像素）：视口外扩这么远内的节点仍渲染，防拖动闪白 + 兜住滚回窗口 */
   buffer: number

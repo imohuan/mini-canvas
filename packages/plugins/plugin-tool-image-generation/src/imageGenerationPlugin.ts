@@ -91,5 +91,5 @@ export function apply(ctx: Context, config?: ImageGenerationPluginConfig): void 
   })()
 }
 
-/** 兼容旧装配的 PluginModule 出口（宿主一行装载：plugins: [pluginImageGenerationTools]） */
+/** 插件模块出口（宿主一行装载：plugins: [pluginImageGenerationTools]） */
 export const pluginImageGenerationTools: PluginModule = { name, inject, Config, apply }

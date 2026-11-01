@@ -68,7 +68,10 @@ export interface FlowNode {
    * 通过 data._cullState 下发（'visible' | 'culled' | 'culled-linked'；transient 不下发），
    * 壳按状态自选绘制深度。hidden 只用于压缩档的纯 culled 节点（见 compactShells 参数注释）。
    */
-  /** 兼容保留：hidden 路线已退役，恒 false（显式写以清除 VueFlow 合并语义的旧残留） */
+  /**
+   * 压缩档的纯 culled 节点为 true（VueFlow 不产出 DOM）。其它情况恒写 false ——
+   * VueFlow 对节点更新是合并语义，必须显式清除上一次的 true。
+   */
   hidden?: boolean
   /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 父子嵌套字段名是 parentNode，
    *  子 position 视为相对父的局部坐标，渲染层级自动排在父之上） */

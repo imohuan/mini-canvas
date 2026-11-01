@@ -16,10 +16,8 @@
 
 import type { ResourcePutOptions, ResourceAdapter } from './storage/types'
 
-/** URL 生成/回收后端（浏览器实现包一层 URL.createObjectURL / revokeObjectURL；测试用假实现） */
+/** URL 回收后端（浏览器实现包一层 URL.revokeObjectURL；测试用假实现） */
 export interface ResourceUrlBackend {
-  /** 为资源生成一个 URL（缺省实现直通调用方给的 url 时可不实现） */
-  createUrl?(resource: unknown): string
   /** 回收一个此前生成的 URL（必须实现；dispose/revoke 时调用） */
   revokeUrl(url: string): void
 }
@@ -48,24 +46,10 @@ export interface ResourceEntry<T = unknown> {
   derived?: boolean
 }
 
-/** 登记请求 */
-export interface RegisterResourceInput<T = unknown> {
-  kind?: string
-  /** 原样保存的资源句柄 */
-  resource?: T
-  /** 显式给 URL（绕过 urlFactory；适合调用方已生成 URL 的场景） */
-  url?: string
-}
-
 /** 资源服务接口（ctx.get('resources')） */
 export interface ResourceService {
   /** 等待资源字节写入持久化存储。 */
   flush?(id: string): Promise<void>
-  /**
-   * 登记一个资源。优先用传入 url；否则用 backend.createUrl(resource) 生成（backend 未实现且无 url → 抛错）。
-   * @returns 资源 id（格式 res-{n}，可写进节点 data 作引用）
-   */
-  register(input: RegisterResourceInput): string
   /**
    * 存一份资源字节，返回**持久引用**（写进节点 data 的 `resourceId`）。
    *
@@ -207,19 +191,15 @@ export async function restoreNodeMediaUrls<T extends { type?: string; data?: Rec
   return restored
 }
 
-/** no-op URL 后端（backend 未给时的占位：register 显式给 url 可用，revoke no-op） */
+/** no-op URL 后端（backend 未给时的占位：只在回收时被调用，什么都不做） */
 const noopBackend: ResourceUrlBackend = {
   revokeUrl(): void { /* no-op */ },
 }
-
-/** 默认生成 id 的前缀 */
-const ID_PREFIX = 'res-'
 
 export class ResourceStore implements ResourceService {
   private entries = new Map<string, ResourceEntry>()
   private backend: ResourceUrlBackend
   private pending = new Map<string, Promise<void>>()
-  private seq = 0
 
   /** 资源后端解析器（每次现取；构造未给 = 没有资源后端） */
   private readonly backendResolver: () => ResourceAdapter | undefined = () => undefined
@@ -300,32 +280,6 @@ export class ResourceStore implements ResourceService {
     return url
   }
 
-
-  /**
-   * 【旧接口，保留兼容】登记一个**已拿到的显示地址**（不落字节）。
-   *
-   * 新代码请用 `put`（存字节 → 拿持久引用）。这个方法存在的唯一理由是：
-   * 调用方手里已经有 url、只想登记进表以便统一回收（早期 file-drop 的用法）。
-   *
-   * ⚠️ **它不写后端**：返回的 id 只在本会话的表里有效，刷新即失效。
-   * 想“刷新不丢”必须走 `put` —— 旧实现会在这里偷偷 `put` 一次，
-   * 结果**返回的 id 与实际落库的引用不是同一个**：调用方拿着 id 什么也查不到，
-   * 还留下一份无法回收的孤儿字节。现在不再那样做。
-   */
-  register(input: RegisterResourceInput): string {
-    const kind = input.kind ?? 'blob'
-    let url = input.url
-    if (url === undefined) {
-      if (!this.backend.createUrl) {
-        throw new Error('[resources] 需显式传 url，或给 backend.createUrl 以自动生成')
-      }
-      url = this.backend.createUrl(input.resource)
-    }
-    this.seq += 1
-    const id = `${ID_PREFIX}${this.seq}-${randomSuffix()}`
-    this.entries.set(id, { id, kind, url, ...(input.resource !== undefined ? { resource: input.resource } : {}) })
-    return id
-  }
 
   get(id: string): ResourceEntry | undefined {
     return this.entries.get(id)
@@ -414,7 +368,3 @@ export class ResourceStore implements ResourceService {
   }
 }
 
-function randomSuffix(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID()
-  return String(Date.now()) + "-" + String(Math.random()).slice(2)
-}

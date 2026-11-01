@@ -471,9 +471,8 @@ const selectedCount = computed(() => {
 })
 
 // ============ 段组件路由 → 区域遍历（步骤 3：十个区域词见 canvas-data canvas/region.ts）============
-// 老五段（content/title/top-toolbar/bottom-toolbar/overlay）改经区域映射层读：NodeRegistry 兼容层
-// （基座 + 段级贡献）与 node/region 注册场（ctx.nodes.attach 落点，含 type='*' 通配）合成同一摞，
-// 渲染结果与老路径等价（条目按 order 升序、同 id 去重、基座 id 固定 'base'）。
+// 区域内容经区域映射层读：NodeRegistry 的基座与区域贡献，和 node/region 注册场
+// （ctx.nodes.attach 落点，含 type='*' 通配）合成同一摞（条目按 order 升序、同 id 去重、基座 id 固定 'base'）。
 // 列表 key 用注册 id，插件热装卸时不会错位复用组件实例（契约 §1.4-20）。
 const regionField = (() => {
   try {

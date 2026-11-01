@@ -492,5 +492,5 @@ export function apply(ctx: Context, options: FileDropOptions = {}): void {
   }
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const fileDropPlugin: PluginModule = { name, inject, apply }

@@ -143,7 +143,6 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
     },
     typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
       ? {
-          createUrl: (r) => URL.createObjectURL(r as Blob),
           revokeUrl: (u) => URL.revokeObjectURL(u),
         }
       : undefined,

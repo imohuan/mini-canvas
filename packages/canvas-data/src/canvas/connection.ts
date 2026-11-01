@@ -7,8 +7,8 @@
  * - toCanonicalConnection：只允许 source→target 或 target→source(反向自动翻正)，其它朝向非法
  * - wouldCreateCycle：DFS 环检测（忽略中间态边）
  * - 重复边检测（同一条 canonical 连接只允许一条，忽略中间态边）
- * - 声明式 inputs/accepts/limit（api.md §四）：target 的 inputs[].accepts 限定能接哪些源类型；
- *   limit:'single' 限定某输入端口只接一条
+ * - 声明式 inputs/accepts/capacity（api.md §四）：target 的 inputs[].accepts 限定能接哪些源类型；
+ *   capacity 限定某输入端口最多接几条
  *
  * 注意：canonical 语义 = 输出端 handle 'source' 在 source 节点、输入端 handle 'target' 在 target 节点。
  */
@@ -243,9 +243,7 @@ export function validateConnection(
   // 它落边时顺手挤出即可；内核多吐一个标记反而要多一条状态路径。
   if (inputDef) {
     const cap = inputDef.capacity
-    // limit:'single' 是 capacity=1 的等价写法（保留兼容）
-    const isSingle = inputDef.limit === 'single'
-    const capacity = isSingle ? 1 : cap && cap > 0 ? cap : undefined
+    const capacity = cap && cap > 0 ? cap : undefined
     if (capacity !== undefined) {
       // 本次连接实际占用的输入口名：具名 handle 用它；默认 handle（含缺省）用 resolveTargetInputPort
       // 落到的口的 port（缺省口可能为 undefined = 传统默认 target 口）。
@@ -356,7 +354,7 @@ export function pickOverflowEvict(input: {
   if (!inputDef) return null
   // 明确要求"不挤"的口不在这里处理（validateConnection 会直接拒）
   if (inputDef.evictOnFull === false) return null
-  const capacity = inputDef.limit === 'single' ? 1 : inputDef.capacity
+  const capacity = inputDef.capacity
   if (!capacity || capacity <= 0) return null
   // 传统默认口(无具名)归一为 "target"；具名声明的 "target" 与"默认 target 口"是**同一个口**。
   // 真实拖拽建出的边 targetHandle 是 null（edgeStore 不存默认 handle）→ 归一为 "target"。

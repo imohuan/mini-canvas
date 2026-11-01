@@ -72,5 +72,5 @@ export function apply(ctx: Context): void {
 
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const shortcutManagerPlugin: PluginModule = { name, apply }

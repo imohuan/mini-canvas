@@ -66,7 +66,6 @@ function makeSync(
 ) {
   const onError = vi.fn()
   const sync = createRemoteSync({
-    readCloud: async () => undefined,
     graph: graph.handlers,
     knownType: () => true,
     subscribe: () => () => {},
@@ -139,7 +138,6 @@ describe('多画布 / 防叠加', () => {
     const graph = localGraph([node('a')])
     let deliver: ((e: { type: string; key: string; canvasId?: string; revision?: number }) => void) | undefined
     const sync = createRemoteSync({
-      readCloud: async () => undefined,
       readSnapshot: () => server.readSnapshot(),
       readRevision: () => server.readRevision(),
       graph: graph.handlers,
@@ -261,7 +259,6 @@ describe('本地保存成功、合并基准还没推进的窗口', () => {
     ;(graph.handlers as { wasSubmitted?: (id: string) => boolean }).wasSubmitted = (id) => id === '1'
     ;(graph.handlers as { submittedSnapshot?: () => CanvasGraphSnapshot }).submittedSnapshot = () => submitted
     const sync = createRemoteSync({
-      readCloud: async () => undefined,
       readSnapshot: () => server.readSnapshot(),
       readRevision: () => server.readRevision(),
       graph: graph.handlers,
@@ -314,7 +311,6 @@ describe('落地失败后的版本重试', () => {
     }
     const errors: string[] = []
     const sync = createRemoteSync({
-      readCloud: async () => undefined,
       readSnapshot: () => server.readSnapshot(),
       readRevision: () => server.readRevision(),
       graph: graph.handlers,

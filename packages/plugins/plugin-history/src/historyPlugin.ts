@@ -55,5 +55,5 @@ export function apply(ctx: Context): void {
   // 若未来需要 clear/状态事件，应补内核 History 服务而非本插件绕过。
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
+/** 插件模块出口 */
 export const historyPlugin: PluginModule = { name, inject, apply }

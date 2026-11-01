@@ -228,5 +228,5 @@ export function apply(ctx: Context) {
   }
 }
 
-/** 兼容装配清单的 PluginModule 出口 */
+/** 插件模块出口 */
 export const web2apiToolsPlugin: PluginModule = { name, inject, Config, apply }

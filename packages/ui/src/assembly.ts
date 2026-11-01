@@ -81,7 +81,7 @@ import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
  * 想把某个恢复成冷启动：取消它 import 与下方对应行的注释即可。
  *
  * 另有 3 个插件是**按运行环境选装**，一直不在清单里：
- * `plugin-auto-save` / `plugin-cloud-save` / `plugin-history` —— 它们是「按运行环境选装」的
+ * `plugin-auto-save` / `plugin-cloud-client` / `plugin-history` —— 它们是「按运行环境选装」的
  * （云端保存要有人提供后台；history 与宿主自带的撤销栈职责重叠）。
  * 云端保存那条路走的是运行期外部清单（cloud-server 的 `/plugin-manifest.json`），见 App.vue。
  */
