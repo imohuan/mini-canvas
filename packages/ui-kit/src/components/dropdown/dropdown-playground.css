@@ -104,7 +104,13 @@
   opacity: 0.75;
 }
 
-.dd-menu button {
+/*
+ * 只作用于试玩区自己的菜单。
+ * 这条选择器原先没有作用域，落进全局样式后会命中真实应用里所有 `dd-menu` 下的
+ * 按钮（底栏「添加节点」菜单就带这个类），把每行撑成两端对齐、行间距也改掉 ——
+ * 表现就是「菜单文字跑到最右边」。试玩区加 `.dd-demo` 根类，选择器收进去。
+ */
+.dd-demo .dd-menu button {
   display: flex;
   width: 100%;
   align-items: center;
@@ -121,11 +127,11 @@
   cursor: pointer;
 }
 
-.dd-menu button:hover:not(:disabled) {
+.dd-demo .dd-menu button:hover:not(:disabled) {
   background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
 
-.dd-menu button:disabled {
+.dd-demo .dd-menu button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
