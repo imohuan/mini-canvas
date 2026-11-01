@@ -594,7 +594,7 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
          * 只改一条，另一半标签就没有 hover 换图、也点不动（真机踩过）。
          */
         + ((self.onIconClick || self.onReplaceClick) && !self.invalid
-          ? ' resource-chip--editable resource-chip--replaceable'
+          ? ' resource-chip--editable'
           : ''),
       'data-id': self.id,
       'data-url': self.url || '',

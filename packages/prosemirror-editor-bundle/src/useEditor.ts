@@ -388,7 +388,6 @@ const mySchema = new Schema({
              */
             if (item.onIconClick || item.onReplaceClick) {
               result.classList.add('resource-chip--editable')
-              result.classList.add('resource-chip--replaceable')
             }
             result.setAttribute("data-id", node.attrs.id)
             result.setAttribute("data-url", node.attrs.url || "")
@@ -700,12 +699,9 @@ function renderRefChip(item: ResourceItem): HTMLElement {
   /**
    * 左侧图标可编辑（用户 2026-10-29 定稿）：hover 时把缩略图/类型图标换成**铅笔**，
    * 表示「点它换一个节点」。用 CSS ::after 盖一层，不插额外 DOM（保住加载结构）。
-   *
-   * 旧类名 resource-chip--replaceable 保留为兼容别名（别的插件/主题可能还在用）。
    */
   if (item.onIconClick || item.onReplaceClick) {
     span.classList.add('resource-chip--editable')
-    span.classList.add('resource-chip--replaceable')
   }
   if (kind) span.dataset.kind = kind
   if (invalid) span.dataset.invalid = '1'

@@ -15,7 +15,6 @@ export {
   exitCtrlDragMode,
   ctrlDragActive,
   ctrlDragOwner,
-  ctrlDragEpoch,
 } from './selectionMode'
 
 /** 节点在 Ctrl 拖选择态里的面孔（复用参考选择的状态语义） */

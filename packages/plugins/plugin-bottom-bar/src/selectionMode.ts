@@ -89,22 +89,12 @@ export function referenceOwner(): string | null {
   return refOwner.value
 }
 
-/** 兼容旧入口：参考与拖拽共用一个 epoch */
-export function referenceEpoch(): number {
-  return epoch.value
-}
-
 export function ctrlDragActive(): boolean {
   return dragActive.value
 }
 
 export function ctrlDragOwner(): string {
   return dragActive.value ? dragOwner.value : ''
-}
-
-/** 兼容旧入口：参考与拖拽共用一个 epoch */
-export function ctrlDragEpoch(): number {
-  return epoch.value
 }
 
 function snapshot(): SelectionSnapshot {
@@ -123,19 +113,7 @@ function snapshot(): SelectionSnapshot {
 function publish(): void {
   const s = snapshot()
   ;(globalThis as { __miniCanvasSelection?: SelectionSnapshot }).__miniCanvasSelection = s
-  // 兼容旧拷贝/旧热重载模块：它们可能还在读这两个键
-  ;(globalThis as { __miniCanvasRefSel?: { active: boolean; owner: string } }).__miniCanvasRefSel = {
-    active: s.reference,
-    owner: s.reference ? (refOwner.value ?? '') : '',
-  }
-  ;(globalThis as { __miniCanvasCtrlDrag?: { active: boolean; owner: string } }).__miniCanvasCtrlDrag = {
-    active: s.dragging,
-    owner: s.dragging ? dragOwner.value : '',
-  }
   globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:selection-mode'))
-  // 旧事件名继续发：其它已编译的拷贝仍能收到（新代码只监听 selection-mode）
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:reference-mode'))
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:ctrl-drag-mode'))
 }
 
 /** 节点盖层用：优先读 globalThis 快照，拿不到才读本模块 ref */

@@ -61,8 +61,8 @@ import { initialPromptDoc, initialPromptText, promptDocPersistFields, promptPers
 import {
   exitReference,
   referenceActive,
-  referenceEpoch,
   referenceOwner,
+  selectionEpoch,
   toggleReference as toggleReferenceMode,
 } from './referenceMode'
 import { resolveBottomBarShown } from './bottomBarOverlay'
@@ -891,7 +891,7 @@ function syncReference(): void {
 }
 syncReference()
 // 会话状态是 module 级 ref：这里不需要订阅，跟住 epoch 变化即可（同一次选择态进入即高亮）
-watch(referenceEpoch, syncReference)
+watch(selectionEpoch, syncReference)
 
 /**
  * 点「参考」：两态开关 —— 正在为本节点选参考 → 再点一次退出；否则进入。

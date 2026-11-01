@@ -19,15 +19,13 @@
  */
 import type { SelectionMode } from './selectionMode'
 
-// 会话状态已并到 selectionMode（参考与 Ctrl 拖拽共用一套）；这里保留同名导出，
-// 现有组件和测试不用一次性改调用点。
+// 会话状态住在 selectionMode（参考与 Ctrl 拖拽共用一套）；这里只做这一层的重导出。
 export {
   enterReference,
   exitReference,
   toggleReference,
   referenceOwner,
   referenceActive,
-  referenceEpoch,
   selectionMode,
   selectionActive,
   selectionOwner,
