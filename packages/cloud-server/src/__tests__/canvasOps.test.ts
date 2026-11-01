@@ -303,7 +303,9 @@ describe('POST /api/canvas/nodes —— 形状校验（这个口对浏览器开�
 })
 
 describe('同一批里既要删又要加同一个 id → 明确报错（不是 500 崩掉）', () => {
-  it('预校验报出人话，而不是让内部 find 落空后抛 TypeError', async () => {
+  // 这条要真起服务、真落盘两次；全量并发跑时 5s 默认上限会被其它用例挤爆（单跑 ~0.2s）。
+  // 放宽的只是等待上限，断言与行为一字未改。
+  it('预校验报出人话，而不是让内部 find 落空后抛 TypeError', { timeout: 30000 }, async () => {
     await boot()
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a' }] })
     const r = await post('/api/canvas/nodes', { delete: ['a'], add: [{ type: 'text', id: 'a' }] })
