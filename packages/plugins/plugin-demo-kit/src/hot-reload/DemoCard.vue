@@ -2,13 +2,13 @@
 /**
  * DemoCard —— 试验台的"靶子"：一块足够显眼的卡片。
  *
- * 热重载验证方法（给用户的一句话）：改下面 TEMPLATE_VERSION 或文字 → pnpm build:watch（或手动 build）
+ * 热重载验证方法（给用户的一句话）：改下面 VERSION / TITLE 或文字 → pnpm build --watch（或手动 build）
  * → 几秒内这块卡片应自己变样，右上角还会弹一条「热重载完成」的通知。
  */
 // 版本号：改这里 = 最省事的"显眼变化"（卡片上的大字直接变）
-const VERSION = 'v15'
-const TITLE = '无 UI 版最终验证 v15'
-const HINT = '面板已删，KV 监听照常工作'
+const VERSION = 'v1'
+const TITLE = '热重载靶子'
+const HINT = '改版本号再构建，这张卡片应自己变样'
 </script>
 
 <template>
@@ -17,8 +17,6 @@ const HINT = '面板已删，KV 监听照常工作'
     <div class="hrdemo-main">
       <strong class="hrdemo-title">{{ TITLE }}</strong>
       <span class="hrdemo-hint">{{ HINT }}</span>
-
-
     </div>
   </div>
 </template>
