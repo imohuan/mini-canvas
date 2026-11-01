@@ -93,4 +93,5 @@ function onChange(key: string, value: string | number | boolean): void {
 2b. **只有一个普通下拉时它会"消失"**：那时组件本身不画摘要按钮，直接把那个下拉铺出来
     （DOM 上是 `.tpg-inline`）。想让参数始终留在面板里，就再给它配一个参数（≥2 个即收面板）。
 3. **它不存状态**：`values` 是受控的，改完你得自己回写，否则摘要行不会变。
-4. **下拉实现可能不是主题包那份**：成品应用里会取到 `AxDropdown`；这是刻意的（全应用只剩一份下拉实现）。
+4. **下拉实现只有一份**：主题包这份与成品应用的 `AxDropdown` 都是 `@mini-canvas/ui-kit` Dropdown 的薄适配层，
+   行为（定位、互斥、键盘）以 ui-kit 为准。

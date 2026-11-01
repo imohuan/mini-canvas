@@ -135,6 +135,7 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
 4. **成品应用会顶替其中两个名字**：`packages/ui` 里有两个应用层插件用 `order: -1` 注册了
    `dropdown`（`AxDropdown`）与 `settingsPanel`（`AppSettingsPanel`），
    所以按名取到的是成品应用那一份。**这不是冲突，是设计**：目录的用途正是"让顶层替换掉底层实现"。
+   （`dropdown` 与主题包那份最终都落到 `@mini-canvas/ui-kit` 的同一个实现上，差别只在默认皮。）
 5. **`edgeDefaultType` 存的是字符串不是组件**：它是"默认边类型"这个取值
    （`ctx.theme.register('edgeDefaultType', 'custom')`），不是渲染件。
 

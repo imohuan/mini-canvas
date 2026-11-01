@@ -23,7 +23,7 @@ mini-canvas 是一个可扩展的画布应用。画布本身只负责节点、�
 | `packages/canvas-base` | 给插件作者的薄入口，重导出 kernel 和 canvas-data 的类型与常用 API。 |
 | `packages/ui` | 成品应用：装配插件、路由、外壳和设置面板，开发时用 `pnpm dev` 打开画布。 |
 | `packages/plugins/*` | 插件库，当前 38 个插件包，包含主题、节点、工具、Agent、插件管理等。 |
-| `packages/cloud-server` | 自托管云端：画布与资源存储、静态页面托管、MCP 接口、Agent 后台。 |
+| `packages/cloud-server` | 自托管云端：画布与资源存储、静态页面托管、MCP 接口。Agent 后台实现住在 `plugin-agent`，这里只做装配与端口注入。 |
 | `packages/docs` | VitePress 文档站，默认端口 5290。 |
 | `packages/prosemirror-editor-bundle` | 富文本编辑器组件包，供文本节点使用。 |
 
