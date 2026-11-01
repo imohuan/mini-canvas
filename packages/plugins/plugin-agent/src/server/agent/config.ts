@@ -296,15 +296,22 @@ export class AgentConfigService {
     // 取互斥锁：一次只容一个「换 → 建会话 → 还原」走完（见 acquirePromptLock 的说明）。
     // 锁一直握到还原（返回的 restore 里释放），所以并发建会话不会互相覆盖 AGENTS.md。
     const release = await this.acquirePromptLock()
+    let previous = ''
     const target = sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID)
-    const previous = await fs.readFile(target, 'utf8').catch(() => '')
-    await fs.mkdir(path.dirname(target), { recursive: true })
-    // 展开自定义占位符（{{BACKEND_BASE_URL}} 等）——**卡在建会话这一刻**：
-    // 端口/目录是运行期才定下来的，写盘时就展开会把值冻死（换了端口还发旧地址）。
-    // 注意只展开本服务这套记号：SDK 自带的 {{CWD}} 等留给 SDK 自己展开。
-    // **用户自己的 AGENTS.md 排在最前**：模式提示词 / 插件小节都加在它后面，谁都不顶掉谁。
-    const combined = [previous.trim(), text].filter(Boolean).join('\n\n')
-    await fs.writeFile(target, this.expandContext(combined), 'utf8')
+    try {
+      previous = await fs.readFile(target, 'utf8').catch(() => '')
+      await fs.mkdir(path.dirname(target), { recursive: true })
+      // 展开自定义占位符（{{BACKEND_BASE_URL}} 等）——**卡在建会话这一刻**：
+      // 端口/目录是运行期才定下来的，写盘时就展开会把值冻死（换了端口还发旧地址）。
+      // 注意只展开本服务这套记号：SDK 自带的 {{CWD}} 等留给 SDK 自己展开。
+      // **用户自己的 AGENTS.md 排在最前**：模式提示词 / 插件小节都加在它后面，谁都不顶掉谁。
+      const combined = [previous.trim(), text].filter(Boolean).join('\n\n')
+      await fs.writeFile(target, this.expandContext(combined), 'utf8')
+    } catch (err) {
+      // 写不进去就把锁还回去：否则这一条失败会把它后面的建会话全卡死。
+      release()
+      throw err
+    }
     return async () => {
       try {
         await fs.writeFile(target, previous, 'utf8')
