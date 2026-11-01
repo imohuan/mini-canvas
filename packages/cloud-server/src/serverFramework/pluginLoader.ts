@@ -35,12 +35,12 @@ export interface ServerPluginLoadResult {
   failures: Array<{ file: string; error: string }>
 }
 
-/** 判一个来源不明的模块是不是合法后台插件（最少要有 name 与 apply/setup） */
+/** 判一个来源不明的模块是不是合法后台插件（最少要有 name 与 apply） */
 export function isValidServerPlugin(v: unknown): v is PluginModule {
   if (!v || typeof v !== 'object') return false
   const m = v as Partial<PluginModule>
   if (typeof m.name !== 'string' || m.name === '') return false
-  return typeof m.apply === 'function' || typeof m.setup === 'function'
+  return typeof m.apply === 'function'
 }
 
 /**
@@ -81,7 +81,7 @@ export async function loadServerPluginsFromDir(dir: string): Promise<ServerPlugi
           file: entry.name,
           error: looksLikeProvider
             ? '这看起来是「平台提供方(provider)」：它要放到 providers 目录（不是 server-plugins）。见 providers/load.ts'
-            : '不是合法后台插件（需导出 name 与 apply/setup）',
+            : '不是合法后台插件（需导出 name 与 apply）',
         })
         continue
       }

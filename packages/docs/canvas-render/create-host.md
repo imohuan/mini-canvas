@@ -61,7 +61,7 @@ const { host, api, manager, exposeToWindow } = await createMiniCanvasHost(opts)
 | `nodeRegistry` / `themeRegistry` | 展示注册表 / 主题槽注册表（供 Vue 层装配） |
 | `selection` / `command` / `history` / `nodeFactory` / `graph` | 选中 / 命令 / 撤销栈 / 建节点工厂 / 图唯一写入口（都是**实例**，不是服务名） |
 | `view` | 渲染层注入的几何 + 视口服务（也是实例，方便宿主直接调）；`canvas` 是服务名，用 `ctx.get('canvas')` 取 |
-| `settingsPersist?` | 配置落盘桥（兼容字段）；`persistSettings: false` 时是 `undefined`（插件请用 `save.settings`） |
+| `save.settings` | 配置落盘桥；`persistSettings: false` 时是 `undefined`（插件唯一入口） |
 | `resources` | 资源生命周期（Blob / objectURL 登记与回收） |
 | `stop()` | **停用并回收**：先 `save.flush()` 保住脏数据，再解色板订阅、停插件、清 window 挂载 |
 
@@ -76,7 +76,7 @@ const { host, api, manager, exposeToWindow } = await createMiniCanvasHost(opts)
 | `inspectPlugins` | `inspectPlugins(): PluginRuntimeStatus[]` | 只读诊断：每个插件的运行时态 + 卡住时缺哪个依赖 |
 | `getContext` | `getContext(): Context` | 拿 ctx |
 | `getRegistry` | `getRegistry(): NodeRegistry` | 拿节点展示注册表 |
-| `getNodeStore` / `getEdgeStore` | 返回两个 store 实例 | 兼容老代码；新代码走 `getContext().get('doc')` |
+| `getNodeStore` / `getEdgeStore` | 返回两个 store 实例 | 渲染层与外部脚本读原始表；插件走 `getContext().get('doc')` |
 | `getGraph` | `getGraph(): GraphDocumentService` | 拿图唯一写入口 |
 | `getHost` | `getHost(): CanvasHostHandle` | 拿整个宿主句柄（`api` 上能做的事它都能做） |
 
@@ -402,6 +402,6 @@ pnpm -C canvas-render-host-demo start      # → tsx src/main.ts，控制台打�
 1. **`coldPlugins` 不传就一个业务插件都不装**。工厂**刻意不 import 任何具体插件**（不然它就把示例绑死了）。画布上什么都没有不等于坏了，先看清单是不是空的。
 2. **`stop()` 不是可选的**。它负责 `save.flush()`、色板 / 主题订阅解绑、配置桥 `dispose()`、`resources.dispose()`、清 window 挂载，最后 `ctx.stop()`。热更新、切换画布、单页应用里的路由离开都该调它；不调就是内存与订阅泄漏。
 3. **恢复与播种的判定看 `saved === undefined`，不看「数组是否为空」**。想把「用户清空后刷新」改成「又长回默认节点」，得自己改判定 —— 现在的行为是**尊重用户删光这件事**。
-4. **`persistSettings: false` 会让配置桥缺席**（`host.settingsPersist` 与 `save.settings` 都是 `undefined`），启动时**不做那次 restore**。同一页面开两张画布、共用一个存储时通常要关掉它，不然两边抢同一份配置。
+4. **`persistSettings: false` 会让配置桥缺席**（`save.settings` 是 `undefined`），启动时**不做那次 restore**。同一页面开两张画布、共用一个存储时通常要关掉它，不然两边抢同一份配置。
 5. **`dev` 必须由调用方显式传**。原因是实测踩过的坑：`canvas-render` 是独立 workspace 包，在它自己的 `.vue` / `.ts` 里读 `import.meta.env.DEV` 拿到的是 `undefined`（打包器的替换只作用于应用包自己的源码），于是 dev 判定会静默失效。所以 `CanvasHost` 在应用层传 `:dev="import.meta.env.DEV"`，库侧缺省 = 生产语义。
 6. **`api.listPlugins()` 看不见 `canvas-base`**。宿主自有装配（画布基础服务）对应用层是「环境」不是「清单项」，被 manager 显式藏掉了；内核里它照常是一个插件（`ctx.listPlugins()` 看得见）。

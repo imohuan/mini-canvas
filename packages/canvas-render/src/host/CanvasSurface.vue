@@ -312,7 +312,7 @@ provide(RENDER_CONTEXT_KEY, renderCtx)
 
 // 节点实测尺寸注入 nodeLayout（ResizeObserver + MutationObserver）；start 在 onMounted 内（renderer DOM 就绪后）
 const measure = useNodeMeasure({
-  nodeLayout: host.nodeLayout,
+  nodeLayout: host.view,
   container: () => rendererEl.value,
 })
 onBeforeUnmount(() => {

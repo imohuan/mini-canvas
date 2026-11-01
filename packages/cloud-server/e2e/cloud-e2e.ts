@@ -271,7 +271,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
   // 这不是"作弊"：真用户面对一个视野外的节点也是先挪视图再操作。而鼠标手势测的是
   // "能不能拖/连/删"，不是"能不能盲操屏幕外的东西"——节点若大半在视野外，
   // elementFromPoint 根本找不到落点，测出来只会是假失败（上一版就是这么误报的）。
-  await page.ev(`(() => window.MiniCanvasUI.getHost().viewport.fitView(0.25))()`)
+  await page.ev(`(() => window.MiniCanvasUI.getHost().view.fitView(0.25))()`)
   await sleep(1200)
 
   /** 某节点某端口锚点的屏幕坐标（锚点本身 0×0，真正接住鼠标的是外层跟随区） */

@@ -335,7 +335,7 @@ function applyCullProtection(): void {
   }
   const liveIds = dragProtectedIds && dragProtectedIds.size > 0 ? dragProtectedIds : undefined
   if (rect) {
-    cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings(), liveIds)
+    cullIds.value = computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds)
     return
   }
   if (typeof window === 'undefined') {
@@ -343,7 +343,7 @@ function applyCullProtection(): void {
     return
   }
   const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-  cullIds.value = computeVisibleIds(h.nodeLayout, approx, cullConfigFromSettings(), liveIds)
+    cullIds.value = computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds)
 }
 function refreshCull(): void {
   const h = hostRef.value
@@ -364,7 +364,7 @@ function refreshCull(): void {
   const surface = surfaceRef.value
   const rect = surface?.getVisibleRect?.() ?? null
   if (rect) {
-    cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings(), liveIds)
+    cullIds.value = computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds)
     return
   }
   // 视口还量不到（初始挂载窗口）：用**近似视口**先算一版剔除，别全量挂 160 个节点再剔。
@@ -376,7 +376,7 @@ function refreshCull(): void {
     return
   }
   const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-  cullIds.value = computeVisibleIds(h.nodeLayout, approx, cullConfigFromSettings(), liveIds)
+    cullIds.value = computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds)
 }
 /** 视口帧回调（CanvasSurface 每次可视矩形变化都会调；rAF 节流防同一帧多次重灌） */
 function onVisibleRectFrame(): void {
@@ -669,13 +669,13 @@ function fitViewFirstRun(): void {
   const attempt = (): void => {
     const hh = hostRef.value
     if (!hh) return
-    const before = hh.viewport.getViewport()
-    hh.viewport.fitView(FIRST_RUN_FIT_PADDING)
+    const before = hh.view.getViewport()
+    hh.view.fitView(FIRST_RUN_FIT_PADDING)
     viewportTimers.push(
       setTimeout(() => {
         const h2 = hostRef.value
         if (!h2) return
-        const after = h2.viewport.getViewport()
+        const after = h2.view.getViewport()
         const moved =
           Math.abs(after.x - before.x) > 0.5 ||
           Math.abs(after.y - before.y) > 0.5 ||
@@ -698,14 +698,14 @@ function fitViewFirstRun(): void {
 function persistViewport(): void {
   const h = hostRef.value
   if (!h) return
-  h.save.set(GRAPH_VIEWPORT_KEY, h.viewport.getViewport(), 'canvas')
+  h.save.set(GRAPH_VIEWPORT_KEY, h.view.getViewport(), 'canvas')
 }
 
 stopViewportRestore = watch(surfaceRef, (surface) => {
   // 空 surface(未挂载)/未启持久化 → 本次不恢复；但都提前自我停止，避免 watch 长期空转(只靠 unmount 兜底不干净)
   if (surface && hostRef.value && props.persistViewport) {
     const saved = savedViewport.value
-    if (saved) hostRef.value.viewport.setViewport(saved)
+    if (saved) hostRef.value.view.setViewport(saved)
     else fitViewFirstRun()
   }
   // 只需首帧执行一次；后续 VueFlow 重挂(epoch bump)不应再动视口
@@ -761,7 +761,7 @@ function onNodeDragStop(e: NodeDragEvent): void {
     // 上面写回 store 用的是 VueFlow 的 position —— 分组子节点那是**相对父**的（store 语义就是相对，必须这么写）；
     // 但事件契约是绝对坐标（消费方按绝对理解：多选包围盒、对齐吸附都用 nodeLayout 的绝对矩形）。
     // 直接广播 m.x/m.y 会让子节点场景下消费方拿到相对值 —— 多选框据此算包围盒时高度会炸（实测 240 → 600）。
-    h.ctx.emit(RenderEvents.NodeDragEnd, { nodeId: m.id, position: h.nodeLayout.absolutePosition(m.id) })
+    h.ctx.emit(RenderEvents.NodeDragEnd, { nodeId: m.id, position: h.view.absolutePosition(m.id) })
   }
 }
 
@@ -1054,7 +1054,7 @@ function clientToFlow(clientX: number, clientY: number): { x: number; y: number 
 function liveNodeRects(): NodeRect[] {
   const h = hostRef.value
   if (!h) return []
-  const layout = h.nodeLayout
+  const layout = h.view
   return h.nodeStore.getNodes().map((n) => {
     const abs = layout?.absolutePosition ? layout.absolutePosition(n.id) : (n.position ?? { x: 0, y: 0 })
     const size = layout?.nodeSize ? layout.nodeSize(n.id) : { w: n.size?.w ?? 256, h: n.size?.h ?? 128 }

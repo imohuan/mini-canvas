@@ -25,7 +25,12 @@
  */
 import type { FlowRect } from '../geometry/visibleArea'
 import { expandRect, rectsOverlap } from '../geometry/visibleArea'
-import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
+import type { LayoutRect } from '../layout/nodeLayout'
+
+/** 剔除只需要读矩形；ViewService 与 NodeLayoutService 都满足。 */
+export interface CullLayoutSource {
+  getAllRects(): LayoutRect[]
+}
 
 /** 剔除配置（设置面板「常规/画布」分组，用户可调） */
 export interface VisibleCullConfig {
@@ -54,7 +59,7 @@ export function makeVisiblePredicate(
 
 /**
  * 批量判定哪些节点可见：返回可见 id 集合。
- * layout = host.nodeLayout（getAllRects 数据层全量、绝对坐标）。
+ * layout = host.view（getAllRects 数据层全量、绝对坐标）。
  * viewportRect 为 null（未挂载/量不到 pane）→ 返回 null 表示"全量渲染"（安全兜底）。
  *
  * @param protectedIds 正在拖拽/被临时移动的节点 id。这些节点**一律保留在可见集**：
@@ -63,7 +68,7 @@ export function makeVisiblePredicate(
  *   空/未传 = 没有这种节点（零开销，行为与之前一致）。
  */
 export function computeVisibleIds(
-  layout: NodeLayoutService,
+  layout: CullLayoutSource,
   viewportRect: FlowRect | null,
   config: VisibleCullConfig,
   protectedIds?: ReadonlySet<string>,

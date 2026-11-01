@@ -85,7 +85,7 @@ export async function hotInstallServerPlugin(
     const text = await fs.readFile(file, 'utf8')
     const mod = (await import(/* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(text))) as Record<string, unknown>
     const candidate = (mod.default ?? mod) as unknown
-    if (!isValidServerPlugin(candidate)) return { ok: false, error: "不是合法后台插件（需导出 name 与 apply/setup）" }
+    if (!isValidServerPlugin(candidate)) return { ok: false, error: "不是合法后台插件（需导出 name 与 apply）" }
     runtime.install(candidate)
     installedNames.set(id, candidate.name)
     hotLoaded.set(id, candidate.name)

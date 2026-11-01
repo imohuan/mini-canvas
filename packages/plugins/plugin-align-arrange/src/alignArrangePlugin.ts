@@ -2,7 +2,7 @@
  * plugin-align-arrange —— 选中节点对齐/等距排列（独立插件，v2 API）。
  *
  * 复刻老版 canvas-core/src/plugins/align-arrange，但遵循 v2 铁律：
- * - 不直碰 VueFlow/宿主内部：数据经 ctx.get('doc')，选中经 ctx.selection，尺寸经 ctx.nodeLayout
+ * - 不直碰 VueFlow/宿主内部：数据经 ctx.get('doc')，选中经 ctx.selection，尺寸经 ctx.view
  *   （宿主恒在注入），写回 doc.updateNodes 一次原子（历史 + 提交落盘由唯一写入口负责）。
  * - 快捷键用命令 keys（渲染层 CanvasHost 统一分发），不自绑 window。
  * - 纯算法在 arrangeEngine.ts，可独立单测。

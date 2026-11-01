@@ -4,7 +4,7 @@
  * 为什么合体：聚焦实现过去各拿一半，节点矩形从一个服务取、视口变换从另一个服务取，
  * 两边的“可视区”语义容易漂。合体后 fitTo 能拿到同一份实例的矩形与视口。
  *
- * 量测写口（setMeasuredSize / clearMeasuredSize / resetMeasured）是渲染层内部面，
+ * 量测写口（setMeasuredSize / clearMeasuredSize / reset）是渲染层内部面，
  * 不进插件契约；插件只看 ViewContract。
  */
 import type { NodeStore, LayoutRect, ViewportState, FlowPoint } from '@mini-canvas/canvas-data'
@@ -38,8 +38,12 @@ export class ViewService {
     this.layout.clearMeasuredSize(id)
   }
 
-  resetMeasured(): void {
+  reset(): void {
     this.layout.reset()
+  }
+
+  pruneMissing(): void {
+    this.layout.pruneMissing()
   }
 
   nodeSize(id: string): { w: number; h: number } {

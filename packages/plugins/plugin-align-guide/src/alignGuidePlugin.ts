@@ -2,7 +2,7 @@
  * plugin-align-guide —— 对齐辅助线插件（独立包，v2 API）。
  *
  * 复刻老版 canvas-core/src/plugins/align-guide，但遵循 v2 铁律：
- * - 不直碰 VueFlow/宿主内部：拖拽事件从渲染层 RenderEvents 订阅，参考几何经 ctx.nodeLayout，
+ * - 不直碰 VueFlow/宿主内部：拖拽事件从渲染层 RenderEvents 订阅，参考几何经 ctx.view，
  *   吸附写回经渲染层 updateNodeVisual（拖拽中视觉写，不落盘、不整组重灌）。
  * - UI（参考线浮层）自管：AlignGuideOverlay.vue 注册进 overlay 槽（宿主 CanvasSurface 已渲染该槽），
  *   组件内 useCanvasRender 拿 viewport/updateNodeVisual 并订阅事件。

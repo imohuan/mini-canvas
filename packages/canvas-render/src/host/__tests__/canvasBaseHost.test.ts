@@ -107,14 +107,12 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
       'nodeFactory',
       'graph',
       'view',
-      'nodeLayout',
-      'viewport',
       'resources',
       'stop',
     ]) {
       expect(host[key as keyof typeof host], key + ' 缺失').toBeDefined()
     }
-    // 新入口是真实服务表里的名字；旧字段只是兼容实例，不是服务名。
+    // 真实服务表里的名字；几何与视口只挂在 view 上。
     // canvas 是服务名（插件 ctx.get('canvas')），不是宿主句柄字段。
     expect(host.ctx.hasService('view')).toBe(true)
     expect(host.ctx.hasService('canvas')).toBe(true)

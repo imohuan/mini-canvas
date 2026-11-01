@@ -4,7 +4,7 @@
  * 定位：
  * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 12 件画布基础服务 = 8 个 ctx 服务名
  *   + 4 个仅由 services 直接持有的内部实例）→ 注入渲染层两件
- *   （nodeLayout / viewport）→ 冷启动业务插件 → start。
+ *   （view）→ 冷启动业务插件 → start。
  * - **不 import 任何具体插件**：冷启动要装哪些由调用方(宿主/demo)经 `coldPlugins` 传入，
  *   顺序即装载顺序。这样本模块可被真宿主复用，不绑 demo、不绑任何 node 插件。
  * - 暴露给 window 的 API 面：installPlugin / uninstallPlugin / reloadPlugin / listPlugins /
@@ -113,14 +113,8 @@ export interface CanvasHostHandle {
   nodeFactory: NodeFactoryService
   /** 图唯一写入口：节点/边变更统一走它（含级联、历史、选中维护、提交落盘） */
   graph: GraphDocumentService
-  /** 节点布局只读服务（实测尺寸/绝对坐标；渲染层量测注入，插件读） */
-  nodeLayout: NodeLayoutService
-  /** 视口服务（CanvasHost 挂载后 attach VueFlow backend；插件读/控制视图） */
-  viewport: ViewportService
-  /** 几何 + 视口合并服务（新入口；nodeLayout/viewport 是同一组底层的兼容别名） */
+  /** 几何 + 视口合并服务（节点尺寸/坐标与视野控制的唯一入口） */
   view: ViewService
-  /** 配置持久化桥（ctx.settings ↔ save(config)）；persistSettings=false 时 undefined */
-  settingsPersist?: SettingsPersistService
   /** 资源生命周期服务（Blob/object URL 登记与回收；file-drop 等写入 object URL 的插件接入） */
   resources: ResourceService
   /** 停止并回收全部插件副作用 */
@@ -157,10 +151,10 @@ export interface MiniCanvasApi {
  *
  * 装配形状（步骤 4「搬窝」后）：**建 ctx → 装基础插件 → 装业务插件 → start**。
  * 原来写在这里的 15 行 `ctx.inject(...)` 已收进 `canvasBasePlugin`（core: true，拒绝热卸）；
- * 宿主这里只剩两处 `ctx.inject`，留给**真属于渲染层、必须由宿主在挂载时注入**的两个：
- * `nodeLayout`（要 ResizeObserver 量 DOM）与 `viewport`（要 attach VueFlow 后端）。
- * 注意时序：这两个在 `ctx.plugin(basePlugin)` **之前**注入 —— 基础插件之后装的业务插件一 start 就能
- * `ctx.get('nodeLayout'/'viewport')` 拿到（否则从「注入即可达」退化成「PENDING」，属行为变化）。
+ * 宿主这里只留一处 `ctx.inject`，留给**真属于渲染层、必须由宿主在挂载时注入**的 `view`
+ * （要 ResizeObserver 量 DOM、也要 attach VueFlow 后端）。
+ * 注意时序：它在 `ctx.plugin(basePlugin)` **之前**注入 —— 基础插件之后装的业务插件一 start 就能
+ * `ctx.get('view')` 拿到（否则从「注入即可达」退化成「PENDING」，属行为变化）。
  */
 export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promise<{
   host: CanvasHostHandle
@@ -175,7 +169,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // nodeFactory 八个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、
   // 已不再是 ctx 服务名（5c 下线），数据统一经 doc）
   // + 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入（§4.1：数据那一格只有 doc）。
-  // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建 nodeLayout。 ——
+  // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建视口。 ——
   const base = createCanvasBasePlugin({
     adapter: opts.adapter,
     nodeRegistry: opts.nodeRegistry,
@@ -273,7 +267,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 宿主这里只负责"插件装载完成之后"的那一次 restore：插件 Config 已声明完成，
   // 注入的保存快照能在 define 时命中为初值（若宿主关掉 persistSettings，桥缺席 → 不 restore）。
   const settingsPersist: SettingsPersistService | undefined = base.services.settingsPersist
-  // 新入口：save.settings（条件存在）。settingsPersist 服务与 handle 字段只作兼容别名。
+  // 配置持久化桥只从 save.settings 取；handle 不再另挂一份。
   if (settingsPersist) await save.settings!.restore()
 
   // 色板落值：把"用户改过的那些格"写进 <html> 内联 CSS 变量（没改过的不写，CSS 侧默认值生效）。
@@ -331,10 +325,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     history,
     nodeFactory,
     graph,
-    nodeLayout,
-    viewport,
     view,
-    settingsPersist,
     resources,
     stop: () => {
       // 停用前先把脏队列捕获进 flush 的批量快照（同步完成），再停内核，避免最后未落盘的写入丢失。

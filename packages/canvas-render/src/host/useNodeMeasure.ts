@@ -1,8 +1,8 @@
 /**
- * useNodeMeasure —— 节点 DOM 尺寸实测注入（3A 完整落地：动态尺寸不入存储，渲染层量测后注入 nodeLayout）。
+ * useNodeMeasure —— 节点 DOM 尺寸实测注入（3A 完整落地：动态尺寸不入存储，渲染层量测后注入 view）。
  *
  * 浏览器端接线：ResizeObserver 观测每个 .vue-flow__node 元素，把内容区实测宽高经
- * host.nodeLayout.setMeasuredSize(id, w, h) 写入内存态服务；节点被移除时 clearMeasuredSize。
+ * host.view.setMeasuredSize(id, w, h) 写入内存态服务；节点被移除时 clearMeasuredSize。
  * MutationObserver 监听渲染容器，节点 DOM 增删时动态挂/卸观测，避免陈旧引用。
  *
  * 使用：在 CanvasSurface onMounted 后 start()，onBeforeUnmount stop()。
@@ -10,7 +10,14 @@
  * 注意：实测宽高取节点卡片内容尺寸（不含 VueFlow 包裹），VueFlow 的 .vue-flow__node 直接包自定义
  * 节点组件，offsetWidth/offsetHeight 即卡片渲染尺寸。
  */
-import type { NodeLayoutService } from '../layout/nodeLayout'
+/** 量测只需要这几件事；ViewService 与 NodeLayoutService 都满足。 */
+export interface MeasureLayoutTarget {
+  setMeasuredSize(id: string, w: number, h: number): void
+  clearMeasuredSize(id: string): void
+  pruneMissing(): void
+  reset(): void
+  getNodeRect(id: string): unknown
+}
 
 export interface NodeMeasureHandle {
   start(): void
@@ -42,7 +49,7 @@ export function resolveMeasureContainer(root: HTMLElement | null | undefined): H
 }
 
 export function useNodeMeasure(opts: {
-  nodeLayout: NodeLayoutService
+  nodeLayout: MeasureLayoutTarget
   /** 容器元素（VueFlow renderer 内层；应包含 .vue-flow__node 子元素） */
   container: () => HTMLElement | null
   /** 立即量测的调度器（默认 rAF；测试可传同步执行以保持「立即注入」契约） */
