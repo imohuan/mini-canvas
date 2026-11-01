@@ -33,6 +33,28 @@ import { AGENT_REFERENCE_COMMAND_ID } from '../agentCommands'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
+/** Button 替身：真组件从 ui-kit-shadcn 取件，测试只关心它渲染成一个可点按钮。 */
+const ShadcnButtonStub = vue.defineComponent({
+  name: 'ShadcnButton',
+  props: { class: { type: String, default: '' }, disabled: { type: Boolean, default: false } },
+  setup(props, { slots }) {
+    return () => vue.h('button', { class: props.class, disabled: props.disabled }, [
+      slots.default?.(),
+      // 真 Button 里 ToolbarIcon 走插槽；替身也要让插槽内容渲染出来
+      slots.icons?.(),
+    ])
+  },
+})
+
+/** ToolbarIcon 替身：只占图标位，避免内存渲染器去初始化它的 setup */
+const ToolbarIconStub = vue.defineComponent({
+  name: 'ToolbarIcon',
+  props: { icon: { type: [String, Object], default: undefined } },
+  setup() {
+    return () => vue.h('span', { class: 'mck-toolbar-icon' })
+  },
+})
+
 /* —————————————————— ① 接线：真内核装载真插件 —————————————————— */
 
 async function bootPlugin(): Promise<Context> {
@@ -182,7 +204,8 @@ function loadComponent(): unknown {
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
-    if (id === '@mini-canvas/canvas-render') return renderPkg
+    if (id === '@mini-canvas/canvas-render') return { ...renderPkg, ToolbarIcon: ToolbarIconStub }
+    if (id === '@mini-canvas/ui-kit-shadcn') return { Button: ShadcnButtonStub }
     if (id.startsWith('../agentCommands')) return commandsMod
     if (id.startsWith('../agentResources')) return resourcesMod
     throw new Error('不认识这个依赖（测试的 require 只放已知几项）：' + id)

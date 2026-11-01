@@ -23,6 +23,15 @@ import { sendButtonMode } from '../queueModel'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
 
+/** shadcn Button 替身：只负责把 class / disabled / click 透传到真按钮 */
+const ShadcnButtonStub = vue.defineComponent({
+  name: 'ShadcnButton',
+  props: { class: { type: String, default: '' }, disabled: { type: Boolean, default: false } },
+  setup(props, { slots, attrs }) {
+    return () => vue.h('button', { ...attrs, class: props.class, disabled: props.disabled }, slots.default?.())
+  },
+})
+
 describe('队列分流口径（用户 2026-10-16）', () => {
   it('队列里已有排队任务时，新消息一律入队（不再因"没在跑"直发对话）', () => {
     // 分流顺序：编辑队列项 → 编辑目标 → 目标标记 → running → **队列有排队条目** → 空闲直发
@@ -102,18 +111,20 @@ function findAll(n: HNode, out: HNode[] = []): HNode[] {
 }
 
 /**
- * 发送键的那段模板（从 label 那一行到 </button>）。
- *
- * 为什么不整只组件挂：见文件头。这段模板用到的三样东西（lucide 图标 / sendMode /
- * submit / agent.stop）在测试里给真值，渲染出来就是**真的那颗按钮**。
+ * 发送键的那段模板。外壳已从手写 <button> 换成 shadcn Button，
+ * 这里同时兼容两种起始标签，断言仍盯真渲染出来的那两颗按钮。
  */
 function sendButtonTemplate(): string {
   const at = host.indexOf('class="ac-send"')
   if (at < 0) throw new Error('AgentConversation.vue 里找不到 .ac-send 按钮')
-  const start = host.lastIndexOf('<button', at)
-  const end = host.indexOf('</button>', at)
-  if (start < 0 || end < 0) throw new Error('.ac-send 按钮的模板不完整')
-  return host.slice(start, end + '</button>'.length)
+  const lower = host.lastIndexOf('<button', at)
+  const upper = host.lastIndexOf('<Button', at)
+  const start = Math.max(lower, upper)
+  if (start < 0) throw new Error('.ac-send 按钮的模板不完整')
+  const close = host.startsWith('<Button', start) ? '</Button>' : '</button>'
+  const end = host.indexOf(close, at)
+  if (end < 0) throw new Error('.ac-send 按钮的模板不完整')
+  return host.slice(start, end + close.length)
 }
 
 /**
@@ -139,6 +150,7 @@ function loadSendButton(): { render: (ctx: unknown, cache: unknown[]) => unknown
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
+    if (id === '@mini-canvas/ui-kit-shadcn') return { Button: ShadcnButtonStub }
     throw new Error('不认识这个依赖（测试的 require 只放 vue）：' + id)
   }
   new Function('module', 'exports', 'require', js)(mod, mod.exports, requireShim)
@@ -164,7 +176,10 @@ function mountSendButton(mode: 'send' | 'stop' | 'disabled'): SendMount {
   }
   // <ArrowUp> 走 _resolveComponent —— 得在宿主组件的 components 里登记（真组件用的就是它）
   createApp({
-    components: { ArrowUp: (lucide as unknown as Record<string, vue.Component>).ArrowUp },
+    components: {
+      ArrowUp: (lucide as unknown as Record<string, vue.Component>).ArrowUp,
+      Button: ShadcnButtonStub,
+    },
     render: () => compiled.render(ctx, []),
   }).mount(root)
   return { root, stopped, submitted }

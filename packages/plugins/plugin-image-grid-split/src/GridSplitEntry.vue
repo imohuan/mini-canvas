@@ -2,11 +2,12 @@
 /**
  * GridSplitEntry —— 图片顶栏按钮组里的一条（方式 A：image.topToolbar 插槽）。
  *
- * 按钮必须按名取主题件（toolbarButton / toolbarDropdown），不自绘 ——
- * 否则同一排出现两种圆角/高度。显隐自己判：有图才出现，编辑态由壳切换。
+ * 下拉按名取主题件（toolbarDropdown）；按钮本体直接用 shadcn Button ——
+ * 同一排只有一套圆角/高度。显隐自己判：有图才出现，编辑态由壳切换。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { beginSplit, isSplitting } from './splitSession'
 import { validRowsCols } from './gridSplit'
 import GridSizePicker from './GridSizePicker.vue'
@@ -34,8 +35,6 @@ const props = defineProps<{
 const { ctx } = useCanvasRender()
 const DropdownButton = useUiComponent('toolbarDropdown')
 const Dropdown = useUiComponent('dropdown')
-const Button = useUiComponent('toolbarButton')
-
 const ICON_GRID =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
 
@@ -121,10 +120,10 @@ const items = computed<ToolbarMenuNode[]>(() => [
     menu-width="200px"
   >
     <template #trigger>
-      <span class="gse-trigger">
-        <span class="gse-icon" v-html="ICON_GRID" />
-        <span>宫格切分</span>
-      </span>
+      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="宫格切分" aria-label="宫格切分" aria-haspopup="menu">
+        <ToolbarIcon :icon="ICON_GRID" />
+        <span class="mck-toolbar-label">宫格切分</span>
+      </Button>
     </template>
     <template #default="{ close }">
       <div class="gse-menu" data-testid="grid-split-entry-menu">
@@ -143,10 +142,7 @@ const items = computed<ToolbarMenuNode[]>(() => [
 </template>
 
 <style scoped>
-/* 主题 dropdown 缺席时的兜底触发器（正常走 toolbarDropdown 时这段不渲染） */
-.gse-trigger { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.gse-icon { display: inline-flex; width: 16px; height: 16px; }
-.gse-icon :deep(svg) { width: 100%; height: 100%; }
+/* 主题 dropdown 缺席时的兜底路径（触发器已换成 shadcn Button，只留菜单样式） */
 .gse-menu { display: flex; flex-direction: column; gap: 2px; }
 .gse-row {
   padding: 0 10px;

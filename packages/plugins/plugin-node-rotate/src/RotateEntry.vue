@@ -7,15 +7,14 @@
  * 显隐自己判断（恰好选中本节点），有图才出现。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { readImageSourceFields } from './imageRefs'
 import { duplicateImageForRotate } from './rotateCopy'
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-const Button = useUiComponent('toolbarButton')
-
 /** 复制请求进行中：挡住连点，避免一次点击复制出两份 */
 const busy = ref(false)
 
@@ -45,5 +44,8 @@ function enter(): void {
 </script>
 
 <template>
-  <Button v-if="selected && hasImage" title="旋转与镜像（复制并编辑副本）" :icon="ICON" :disabled="busy" @click="enter" />
+  <Button v-if="selected && hasImage" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    title="旋转与镜像（复制并编辑副本）" aria-label="旋转与镜像（复制并编辑副本）" :disabled="busy" @click="enter">
+    <ToolbarIcon :icon="ICON" />
+  </Button>
 </template>

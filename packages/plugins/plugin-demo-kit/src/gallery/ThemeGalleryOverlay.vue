@@ -16,14 +16,14 @@ defineOptions({ inheritAttrs: false })
  *   3. **默认收起**：只在左下角留一个小按钮，不打扰画布使用。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import GalleryCanvasStage from './GalleryCanvasStage.vue'
 
 const open = ref(false)
 
-// —— 设计系统件：全部按名取（这就是"全局可用"的实证）——
-const NodeToolbarButton = useUiComponent('toolbarButton')
+// —— 设计系统件：按名取（这就是"全局可用"的实证）——
 const Dropdown = useUiComponent('dropdown')
 const Tooltip = useUiComponent('tooltip')
 const Select = useUiComponent('select')
@@ -107,17 +107,18 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
     <div class="tg-body">
       <!-- ① 按钮 -->
       <section class="tg-sec">
-        <h4>按钮 button / NodeToolbarButton</h4>
+        <h4>按钮 button / shadcn Button</h4>
         <div class="tg-row">
-          <component :is="NodeToolbarButton" title="下载" variant="primary">下载</component>
-          <component :is="NodeToolbarButton" title="删除" variant="danger">删除</component>
-          <component
-            :is="NodeToolbarButton"
-            title="收藏（开关态）"
-            icon="★"
-            :active="starred"
-            @click="starred = !starred"
-          />
+          <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="下载">
+            <span class="mck-toolbar-label">下载</span>
+          </Button>
+          <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button" title="删除">
+            <span class="mck-toolbar-label">删除</span>
+          </Button>
+          <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': starred }" variant="ghost" size="sm" type="button"
+            title="收藏（开关态）" aria-label="收藏（开关态）" :aria-pressed="starred ? 'true' : 'false'" @click="starred = !starred">
+            <ToolbarIcon icon="★" />
+          </Button>
         </div>
       </section>
 
@@ -126,7 +127,9 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
         <h4>气泡 tooltip / Tooltip</h4>
         <div class="tg-row">
           <component :is="Tooltip" content="悬停或键盘聚焦都会出现">
-            <component :is="NodeToolbarButton" title="悬停我" icon="?" />
+            <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="悬停我" aria-label="悬停我">
+              <ToolbarIcon icon="?" />
+            </Button>
           </component>
         </div>
       </section>

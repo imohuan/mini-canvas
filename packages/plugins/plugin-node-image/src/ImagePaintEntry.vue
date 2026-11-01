@@ -6,14 +6,14 @@
  * 顶栏整排换成 ImagePaintPanel（绘制模式的 topBar）。
  */
 import { computed } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { readImageSourceFields } from './imageRefs'
 import { beginPaint, isPainting } from './paintSession'
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-const Button = useUiComponent("toolbarButton")
 const selected = useSoleNodeSelected(props.nodeId ?? "")
 
 const ICON_PAINT =
@@ -36,5 +36,8 @@ function enter(): void {
 </script>
 
 <template>
-  <Button v-if="selected && hasImage && !painting" title="绘制" :icon="ICON_PAINT" @click="enter" />
+  <Button v-if="selected && hasImage && !painting" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    title="绘制" aria-label="绘制" @click="enter">
+    <ToolbarIcon :icon="ICON_PAINT" />
+  </Button>
 </template>

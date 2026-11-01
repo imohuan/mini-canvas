@@ -154,14 +154,14 @@ export function apply(ctx: Context): void {
 
 ```vue
 <!-- 文件：my-stamp-button/src/StampEntry.vue -->
-<!-- 往默认顶栏按钮组里插的一条：必须按名取主题按钮，不许自绘 -->
+<!-- 往默认顶栏按钮组里插的一条：按钮直接用 shadcn Button + 全局工具栏样式 -->
 <script setup lang="ts">
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { openStampMode } from './stampSession'   // 你自己的会话状态（纯内存，不写节点 data）
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const Button = useUiComponent('toolbarButton')       // 普通按钮（图标 / 图标+文字）
 const DropdownButton = useUiComponent('toolbarDropdown') // 下拉按钮（菜单是独立浮层）
 
 const selected = useSoleNodeSelected(props.nodeId ?? '')
@@ -177,7 +177,10 @@ function enter(): void {
 
 <template>
   <!-- 显隐自己判断：恰好选中本节点才出现 -->
-  <Button v-if="selected" title="盖章" :icon="STAMP_ICON" @click="enter" />
+  <Button v-if="selected" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    title="盖章" aria-label="盖章" @click="enter">
+    <ToolbarIcon :icon="STAMP_ICON" />
+  </Button>
 </template>
 ```
 
@@ -187,12 +190,12 @@ function enter(): void {
 <!-- 文件：my-stamp-button/src/StampPanel.vue -->
 <!-- 功能模式的顶栏内容：整格替换默认按钮组 -->
 <script setup lang="ts">
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { closeStampMode } from './stampSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const Button = useUiComponent('toolbarButton')
 const DropdownButton = useUiComponent('toolbarDropdown')
 
 const STAMP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>'
@@ -215,8 +218,11 @@ function exit(): void {
     ]"
     @pick="(key) => $emit('pick', key)"
   />
-  <Button title="应用" variant="primary">应用</Button>
-  <Button title="退出盖章" variant="danger" @click="exit">退出</Button>
+  <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="应用">
+    <span class="mck-toolbar-label">应用</span>
+  </Button>
+  <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
+    title="退出盖章" @click="exit"><span class="mck-toolbar-label">退出</span></Button>
 </template>
 ```
 
@@ -237,8 +243,8 @@ ctx.slots.register('image.topToolbar', {
 
 两条硬规矩：
 
-1. **组件必须按名取主题按钮**（`useUiComponent('toolbarButton')`），不许自绘 ——
-   否则同一排出现两种圆角/高度，就是用户报过很多次的「按钮在外面」问题；
+1. **按钮直接 import shadcn `Button`，再挂全局 `.mck-toolbar-btn` 类**（`is-icon-only` = 纯图标钮），
+   不许自己画一套圆角/高度 —— 否则同一排出现两种外观，就是用户报过很多次的「按钮在外面」问题；
 2. **显隐自己判断**（`useSoleNodeSelected`）：宿主只管位置，每个条目自己决定「我该不该出现」。
 
 限制：目前只有图片顶栏开了这个插槽。视频/音频的默认栏是普通组件，想插按钮就用方式 B/C。
@@ -323,18 +329,23 @@ svc.exit(nodeId)
    顶栏底栏分开算，谁也不覆盖谁。字符串取值会顺着引用链走（深度上限 8 层，防写错死循环）。
 
 5. **渲染**：`component :is` 挂上你的组件，props 是 `{ id, data }`。
-   你的按钮内部用 `useUiComponent` 按名取主题件（`toolbarButton` / `toolbarDropdown`），
-   换主题时整套跟着换，你的代码零改动。
+   按钮直接用 `@mini-canvas/ui-kit-shadcn` 的 `Button` + 全局 `.mck-toolbar-btn`；
+   下拉仍按名取主题件（`toolbarDropdown`）。
 
 ## 两个按钮件的速查
 
-### toolbarButton（普通按钮）
+### 工具栏按钮（shadcn Button）
 
 ```vue
-<Button title="上传图片" :icon="ICON_UPLOAD" />              <!-- 纯图标 -->
-<Button title="确认" variant="primary">确认</Button>          <!-- 图标/文字 -->
-<Button title="取消" variant="danger">取消</Button>           <!-- 危险动作 -->
-<Button title="收藏" :icon="ICON" :active="on" />            <!-- 开关态 -->
+<Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+  title="上传图片" aria-label="上传图片"><ToolbarIcon :icon="ICON_UPLOAD" /></Button>
+<Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+  title="确认"><ToolbarIcon :icon="ICON_OK" /><span class="mck-toolbar-label">确认</span></Button>
+<Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
+  title="取消"><span class="mck-toolbar-label">取消</span></Button>
+<!-- 开关态：给了 active 才加 is-active + aria-pressed -->
+<Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': on }" variant="ghost" size="sm" type="button"
+  title="收藏" aria-label="收藏" :aria-pressed="on ? 'true' : 'false'"><ToolbarIcon :icon="ICON" /></Button>
 ```
 
 ### toolbarDropdown（下拉按钮）

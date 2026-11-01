@@ -17,6 +17,8 @@
 //   读屏会把两件事说成一件事，也是 ui-style-guide §5 第 2 条明令禁止的嵌套交互。
 import { Check, ChevronDown, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
+// 外壳按钮改用 shadcn 原始 Button；下拉菜单内容与行内交互保持不变。
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import AxDropdown from './AxDropdown.vue'
 import AxMenu from './AxMenu.vue'
 import AxMenuItem from './AxMenuItem.vue'
@@ -110,10 +112,11 @@ function pickAction(
 
 <template>
   <div class="project-cluster">
-    <button class="logo-button" aria-label="项目菜单" aria-haspopup="dialog" @click="emit('open-menu')">
-      <svg viewBox="0 0 25 14.5" width="25" height="14.5" fill="none" aria-hidden="true"><path fill="currentColor" d="M5.258 10.803h12.458l-1.064 3.742H0L3.099 3.726h4.194zm14.493-7.061H7.293L8.357 0h16.668L21.91 10.82h-4.194z"/></svg>
-      <ChevronDown :size="12" class="logo-chevron" />
-    </button>
+    <Button variant="ghost" class="logo-button h-8 w-[57px] gap-[3px] rounded-lg px-2 font-normal"
+      aria-label="项目菜单" aria-haspopup="dialog" @click="emit('open-menu')">
+      <svg viewBox="0 0 25 14.5" width="25" height="14.5" class="size-[25px_14.5px] shrink-0" fill="none" aria-hidden="true"><path fill="currentColor" d="M5.258 10.803h12.458l-1.064 3.742H0L3.099 3.726h4.194zm14.493-7.061H7.293L8.357 0h16.668L21.91 10.82h-4.194z"/></svg>
+      <ChevronDown :size="12" class="logo-chevron size-3 shrink-0" />
+    </Button>
     <input
       class="project-name"
       aria-label="画布名称"
@@ -131,15 +134,17 @@ function pickAction(
       @update:model-value="emit('update:menuOpen', $event)"
     >
       <template #trigger>
-        <button class="canvas-chip" aria-label="当前画布" :aria-expanded="menuOpen">
-          <span>画布 {{ canvasIndex }}</span><ChevronDown :size="12" />
-        </button>
+        <Button variant="ghost" class="canvas-chip h-8 gap-1 rounded-lg px-2 font-normal"
+          aria-label="当前画布" :aria-expanded="menuOpen">
+          <span>画布 {{ canvasIndex }}</span><ChevronDown :size="12" class="size-3 shrink-0" />
+        </Button>
       </template>
       <template #default="{ close }">
         <AxMenu>
           <div class="canvas-menu-head">
             <span>画布</span>
-            <button class="canvas-new" aria-label="新建画布" @click="emit('new-canvas'); close()"><Plus :size="13" /></button>
+            <Button variant="ghost" size="icon-xs" class="canvas-new size-[22px] rounded-md" aria-label="新建画布"
+              @click="emit('new-canvas'); close()"><Plus :size="13" class="size-[13px]" /></Button>
           </div>
           <!-- 一行 = 主按钮（切画布）+ 行尾按钮（开操作菜单）。两个动作，两个真按钮。 -->
           <div
@@ -210,16 +215,16 @@ function pickAction(
 .project-cluster { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-panel); }
 /* 只借「鼠标点锚点」能力的空壳（没有触发器），不占胶囊里的位置 */
 .canvas-action-host { display: none; }
-.logo-button { width: 57px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 8px; color: var(--ui-ink); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.logo-button { color: var(--ui-ink); background: transparent; cursor: pointer; }
 .logo-chevron { color: var(--ui-ink-dim); }
 .project-name { width: 86px; height: 22px; padding: 0 4px; color: inherit; border: 0; border-bottom: 1px dashed transparent; outline: 0; background: transparent; font-family: inherit; font-size: 13px; }
 .project-name:hover { border-bottom-color: var(--ui-line); }
 .divider { width: 1px; height: 21px; margin: 0; background: var(--ui-line); }
-.canvas-chip { height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 8px; color: inherit; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: 13px; }
-.logo-button:hover, .canvas-chip:hover { background: var(--ui-hover); }
+.canvas-chip { color: inherit; background: transparent; cursor: pointer; font-size: 13px; }
+.logo-button:hover, .canvas-chip:hover { background: var(--ui-hover) !important; }
 .canvas-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px; font-size: 12px; }
-.canvas-new { width: 22px; height: 22px; display: grid; place-items: center; color: var(--ui-ink); border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
-.canvas-new:hover { background: var(--ui-hover); }
+.canvas-new { color: var(--ui-ink); background: transparent; cursor: pointer; }
+.canvas-new:hover { background: var(--ui-hover) !important; }
 /* ===== 画布列表行 =====
    行 = 主按钮（切画布）+ 行尾按钮（操作菜单）。两者都要是 32px 的可点目标（ui-style-guide §5 第 4 条）。 */
 .canvas-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }

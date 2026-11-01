@@ -4,7 +4,10 @@
 登记在 `ui` 目录名 `button`。
 
 源码：`packages/plugins/plugin-theme-default/src/components/ui/NodeToolbarButton.vue`。
-**插件放按钮不必再自绘一套 32×32 / 圆角 / hover / focus** —— 这是默认主题给全画布的公共件。
+
+> **新代码请直接用 shadcn 的 `Button`。** 节点上/下控制栏的按钮已改成
+> `import { Button } from '@mini-canvas/ui-kit-shadcn'` + 全局类 `.mck-toolbar-btn`，
+> 不再经 `toolbarButton` 这层转接。这个按名取的名字仍保留登记，供旧插件和 `toolbarDropdown` 用。
 
 ## 功能说明
 
@@ -57,9 +60,8 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 位置：节点上/下控制栏里的一条控件 —— 用默认主题的按钮 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
-
-const NodeToolbarButton = useUiComponent('toolbarButton')
+import { ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 
 const starred = ref(false)
 // 图标句柄：SVG 字符串（也可以是 Vue 组件）
@@ -68,20 +70,27 @@ const STAR_ICON =
 </script>
 
 <template>
-  <!-- 1 纯图标 + 开关态 -->
-  <NodeToolbarButton title="收藏" :icon="STAR_ICON" :active="starred" @click="starred = !starred" />
+  <!-- 1 纯图标 + 开关态（给了 active 才报 aria-pressed） -->
+  <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': starred }" variant="ghost" size="sm" type="button"
+    title="收藏" aria-label="收藏" :aria-pressed="starred ? 'true' : 'false'" @click="starred = !starred">
+    <ToolbarIcon :icon="STAR_ICON" />
+  </Button>
 
   <!-- 2 带文案的按钮 -->
-  <NodeToolbarButton title="下载" variant="primary">下载</NodeToolbarButton>
+  <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="下载">
+    <span class="mck-toolbar-label">下载</span>
+  </Button>
 
   <!-- 3 危险动作 -->
-  <NodeToolbarButton title="删除" variant="danger">删除</NodeToolbarButton>
+  <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button" title="删除">
+    <span class="mck-toolbar-label">删除</span>
+  </Button>
 </template>
 ```
 
 ## 注意事项
 
-1. **纯图标按钮必须给 `title`**：它是 `aria-label` 的回落值，缺了读屏软件念不出来。
-2. **`active` 传 `undefined` 不等于传 `false`**：前者不当开关（不报 `aria-pressed`），后者是"开关关着"。这个区别是刻意留的。
-3. **点击事件是重新 emit 的**：想拿原生事件用参数 `ev`。
+1. **纯图标按钮同时给 `title` 与 `aria-label`**：缺了读屏软件念不出来。
+2. **开关按钮才写 `aria-pressed`**：普通按钮不写，否则读屏会当成开关。
+3. **`is-icon-only` 要手写**：全局样式靠它区分 32×32 图标钮与文字钮。
 4. **它只是"长得对"**：按钮不帮你做任何业务（不禁用重复点击、不管权限）—— 那些是调用方的事。

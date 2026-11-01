@@ -1,233 +1,264 @@
 <script setup lang="ts">
 /**
- * AppSettingsPanel —— @mini-canvas/ui 的成品设置**内容区**（左侧两级树 + 右侧全量配置）。
+ * AppSettingsPanel —— 成品应用的设置内容区（左侧图标导航 + 右侧当前分类）。
  *
- * 布局与交互（用户口径 2026-10-09）：
- *   · 左：**两级树**。一级 = 分组名的第一个 / 分段（扁平分组就是它自己）；展开后二级缩进显示
- *     （只有两层，没有第三层）。**折叠箭头只画在"真的能折叠"的一级行上**；二级是叶子、不可再折叠，
- *     不画箭头（用户口径：没有折叠块时不要显示折叠按钮）。
- *   · 右：**全部配置**不分页地叠成一个长列表（一级小标题 → 二级小标题 → 字段 / 插槽内容），整块滚动浏览。
- *     **字段直接铺在最外层、不套卡片**（用户口径：不要卡片包裹）。
- *   · 点左侧任一项 → 右侧平滑滚到对应位置；右侧滚动时左侧高亮跟着走（scroll-spy）。
+ * 只画 SettingsShell 里面那一格：遮罩、标题栏、关闭按钮、Esc、浮动窗都由外壳统一提供。
+ * 因此这里不再重复画关闭按钮；关闭仍走外壳的 settings:ui-close 事件。
  *
- * 数据与插槽：
- *   · 数据仍是宿主喂进来的 props.settings（内核 settings 单一数据源）；字段控件复用默认皮的
- *     SettingsSchemaField（color / number 精度滑块 / boolean 开关 / select），不自造第二套。
- *   · **内容插槽** settingsGroup/<完整分组 key> 仍被消费 —— 插件自绘页（Agent / 插件 / 热重载 /
- *     光标 / 插件展示）靠它接管正文；没有这一层，那些页就只剩一个占位项。
- *   · **左导航**：树的层级完全由 settings.groups() 的分组名推导。本面板**不渲染插件注册的
- *     settings.nav 自定义导航组件**（用户口径：这里不需要插件定制外观）；插件靠声明同名
- *     分组占位，一级项一个都不会丢。
- *   · **可排序**：每个一级分组包成 SlotAnchor，经 SlotComposer 与插件条目一起排序；
- *     插件可用 meta.group 把自己排在某个一级分组前后，且不会被重复渲染成第二个导航项。
+ * 结构：
+ * - 左：分组标题 + 一级菜单；每项一个图标，图标来自独立场域 settings/navIcon。
+ * - 右：当前分类的配置项，一行一个：左边标题与说明，右边 shadcn 控件。
+ * - 一级下只有一个二级分组时合并成一项；有多个时用页签切换。
  *
- * 窗口外壳不在这里：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗 / 悬浮球由渲染层 <SettingsShell> 提供
- *（见 canvas-render/components/SettingsHost.vue），这里只画外壳里那一格。
+ * 兼容：
+ * - settings.nav：插件导航项按 id / meta.title 命中默认一级项时顶替，否则追加。
+ * - settings.tab：只对当前一级生效，可顶替或追加页签。
+ * - settingsGroup/<完整 key>：内容插槽继续消费，prepend / append / replace 原样支持。
+ *
+ * 数据来自宿主的 props.settings；字段控件按 ui 目录取，主题没登记时回落默认皮。
  */
 import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import type { Component } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
-import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
 import DefaultSettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
+// 导航图标是设置面板自己的兜底，不依赖主题包的内部文件：
+// 场域里没有该分组时，画一个通用圆点，保证每一行都有图标。
+import { Circle } from 'lucide-vue-next'
+import ShadcnSettingsNavItem from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsNavItem.vue'
+import ShadcnSettingsSection from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsSection.vue'
 import { useUiComponentOutside } from '../../composables/ui'
 import { createSettingsFieldBridge } from './settingsFieldBridge'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SlotOcc = { id: string; order: number; component: any; meta?: any }
 
 const props = defineProps<{ settings: SettingsPanelSource }>()
 
 const { ctx } = useCanvasRender()
 
-/** 字段渲染器按 ui 目录取；主题没登记时回落默认皮。 */
+/** 字段控件按 ui 目录取；没登记时用默认皮的 */
 const SettingsSchemaField = useUiComponentOutside('settingsField')
-/** 模板 :is 用；目录没登记时回落默认皮。 */
-const FieldRenderer = computed(() => SettingsSchemaField.value ?? DefaultSettingsSchemaField)
+const FieldRenderer = computed(() => (SettingsSchemaField.value ?? DefaultSettingsSchemaField) as Component)
+
 /**
- * 下发给子树的是**组件对象本身**（provide 的值不参与响应式解包）。
- * 直接把 computed 传进去，下游 `<component :is>` 会拿到一个 ComputedRef 而不是组件 ——
- * 页面不报错，但字段区是空的。
- *
- * 这里给一个稳定的桥组件：provide 的永远是同一个对象，桥内部每次渲染现读目录赢家，
- * 所以主题热替换字段控件时，插件自绘的 settingsGroup 页也会跟着换，不会锁在 provide 那一刻的快照。
+ * 给子树一个稳定的桥组件：目录热替换时，已挂载的插件自绘页也能跟着换。
+ * provide 的值不参与响应式解包，所以不能直接传 computed。
  */
 const SettingsFieldBridge = createSettingsFieldBridge(
-  () => SettingsSchemaField.value as never,
+  () => SettingsSchemaField.value as Component | undefined,
   DefaultSettingsSchemaField,
 )
 provide(SETTINGS_FIELD_RENDERER, markRaw(SettingsFieldBridge))
 
 const SEP = '/'
-/** 一级名：分组名的第一个分段（扁平分组 = 它自己） */
-const navOf = (key: string): string => key.split(SEP)[0]
-/** 二级名（展示名）：带 / 的取后段，扁平分组取它自己 */
-const leafLabelOf = (key: string): string => {
+
+/** 一级名：第一个 / 分段 */
+function navOf(key: string): string {
+  return key.split(SEP)[0]
+}
+
+/** 二级展示名：/ 之后的段 */
+function leafLabelOf(key: string): string {
   const segs = key.split(SEP)
   return segs.slice(1).join(SEP) || segs[0]
 }
 
-// ———— 插件装卸 → 重算树与内容（热装卸登记的新分组立刻可见）————
+// —— 插件装卸：重读导航、页签、内容插槽 ——
 const occTick = ref(0)
-function bumpOcc(): void {
-  occTick.value += 1
+const navList = ref<SlotOcc[]>([])
+const tabList = ref<SlotOcc[]>([])
+
+function reloadSlots(): void {
+  navList.value = ctx.slots.occupants('settings.nav').map((entry) => ({
+    id: entry.id,
+    order: entry.order,
+    component: markRaw(entry.component as object),
+    meta: entry.meta,
+  }))
+  tabList.value = ctx.slots.occupants('settings.tab').map((entry) => ({
+    id: entry.id,
+    order: entry.order,
+    component: markRaw(entry.component as object),
+    meta: entry.meta,
+  }))
 }
+reloadSlots()
+
 const disposers: Array<{ dispose(): void }> = [
-  ctx.on('ctx:plugin-installed', bumpOcc),
-  ctx.on('ctx:plugin-uninstalled', bumpOcc),
+  ctx.on('ctx:plugin-installed', () => {
+    reloadSlots()
+    occTick.value += 1
+  }),
+  ctx.on('ctx:plugin-uninstalled', () => {
+    reloadSlots()
+    occTick.value += 1
+  }),
 ]
+
 onBeforeUnmount(() => {
-  for (const d of disposers) d.dispose()
+  for (const disposer of disposers) disposer.dispose()
   cancelScrollAnimation()
-  // 卸载时释放滚动锁：清兜底定时器 + 摘 scrollend 监听（否则会留一个悬空回调，
-  // 在「关面板后立刻重开」时把新面板的锁提前放掉）。
   releaseScrollLock()
 })
 
-// ———— 树：一级 → 该一级下的完整分组 key 列表（保持 groups() 的原序）————
+// —— 分组 ——
 const groups = computed<string[]>(() => {
   void occTick.value
   return props.settings.groups()
 })
-const tree = computed<Map<string, string[]>>(() => {
-  const m = new Map<string, string[]>()
-  for (const g of groups.value) {
-    const nav = navOf(g)
-    if (!m.has(nav)) m.set(nav, [])
-    m.get(nav)!.push(g)
+
+const sectionMap = computed<Map<string, string[]>>(() => {
+  const map = new Map<string, string[]>()
+  for (const group of groups.value) {
+    const nav = navOf(group)
+    if (!map.has(nav)) map.set(nav, [])
+    map.get(nav)!.push(group)
   }
-  return m
+  return map
 })
-const navs = computed<string[]>(() => [...tree.value.keys()])
-/**
- * 一级导航的可排序槽名：宿主把每个一级分组包成 SlotAnchor，
- * 插件可用 ctx.slots.register('settings.nav', { id: 'my-plugin/nav', before: 'host/nodes' }) 插到指定一级项前后。
- */
-const SETTINGS_NAV_SLOT = 'settings.nav'
 
-/**
- * 排序用的入口：插件条目只提供排序信息，**不渲染自己的组件**。
- *
- * 为什么返回 undefined：本面板的一级导航完全由分组名推导（用户口径 2026-10-09：
- * 这里不需要插件定制导航外观）。早先直接把 settings.nav 的组件渲染出来，
- * 结果是顶部多出「Agent / 插件 / 调试插件」三个点不动、又和下面自动分组重复的项。
- * 返回 undefined = SlotComposer 跳过渲染，但它的 before/after/order 仍参与排序。
- */
-function settingsNavProps(): undefined {
-  return undefined
-}
-function leavesOf(nav: string): string[] {
-  return tree.value.get(nav) ?? []
-}
-/**
- * 一级下只有一个二级：**合并成一条平级项**（用户口径 2026-10-09：只有一个子节点的就不要拆成两级，
- * 一级菜单也就没必要做折叠）。左右都按"一个菜单"处理：左树一条、右侧一个小标题。
- */
-function isSolo(nav: string): boolean {
-  return leavesOf(nav).length === 1
-}
-/** 合并项对应的唯一二级 key（= 段锚点） */
-function soloLeafOf(nav: string): string {
-  return leavesOf(nav)[0] ?? ''
+interface NavEntry {
+  key: string
+  kind: 'section' | 'nav'
+  leaves: string[]
+  component?: Component
+  title: string
+  order: number
 }
 
-// ———— 折叠：一级收起/展开自己的二级 ————
-const collapsed = ref<Set<string>>(new Set())
-const isCollapsed = (nav: string): boolean => collapsed.value.has(nav)
-function toggleNav(nav: string): void {
-  const next = new Set(collapsed.value)
-  if (next.has(nav)) next.delete(nav)
-  else next.add(nav)
-  collapsed.value = next
-}
-function expandNav(nav: string): void {
-  if (!collapsed.value.has(nav)) return
-  const next = new Set(collapsed.value)
-  next.delete(nav)
-  collapsed.value = next
+/** 分组推导的一级项 + 插件导航项（命中默认项就顶替外观，否则追加） */
+const navEntries = computed<NavEntry[]>(() => {
+  const out: NavEntry[] = []
+  let index = 0
+  for (const [nav, leaves] of sectionMap.value) {
+    out.push({ key: nav, kind: 'section', leaves, title: nav, order: 100 + index })
+    index += 1
+  }
+  const byKey = new Map(out.map((entry) => [entry.key, entry]))
+  const byTitle = new Map(out.map((entry) => [entry.title, entry]))
+  const extras: NavEntry[] = []
+  for (const occ of [...navList.value].sort((a, b) => a.order - b.order)) {
+    const title = typeof occ.meta?.title === 'string' ? occ.meta.title : ''
+    const hit = byKey.get(occ.id) ?? (title ? byTitle.get(title) : undefined)
+    if (hit) {
+      hit.kind = 'nav'
+      hit.component = occ.component as Component
+      continue
+    }
+    extras.push({
+      key: occ.id,
+      kind: 'nav',
+      leaves: [],
+      component: occ.component as Component,
+      title: title || leafLabelOf(occ.id),
+      order: occ.order,
+    })
+  }
+  out.push(...extras)
+  return out
+})
+
+const activeNav = ref<string>('')
+const activeEntry = computed<NavEntry | undefined>(() =>
+  navEntries.value.find((entry) => entry.key === activeNav.value),
+)
+
+interface Section {
+  key: string
+  label: string
+  kind: 'leaf' | 'tab'
+  component?: Component
 }
 
-// ———— 高亮态：当前"正在视口顶部"的段（完整分组 key）与它所属的一级 ————
+/** 当前一级下的段：默认分组 + 插件页签 */
+const sections = computed<Section[]>(() => {
+  const nav = activeNav.value
+  const leaves = sectionMap.value.get(nav) ?? []
+  const occs = tabList.value
+    .filter((occ) => occ.id === nav || occ.id.startsWith(nav + SEP))
+    .sort((a, b) => a.order - b.order)
+  const byLeaf = new Map<string, SlotOcc>()
+  const customs: SlotOcc[] = []
+  for (const occ of occs) {
+    if (leaves.includes(occ.id)) byLeaf.set(occ.id, occ)
+    else customs.push(occ)
+  }
+  const out: Section[] = leaves.map((leaf) => {
+    const occ = byLeaf.get(leaf)
+    return occ
+      ? { key: leaf, label: leafLabelOf(leaf), kind: 'tab', component: occ.component as Component }
+      : { key: leaf, label: leafLabelOf(leaf), kind: 'leaf' }
+  })
+  for (const occ of customs) {
+    out.push({
+      key: occ.id,
+      label: typeof occ.meta?.title === 'string' ? occ.meta.title : leafLabelOf(occ.id),
+      kind: 'tab',
+      component: occ.component as Component,
+    })
+  }
+  return out
+})
+
+const activeSection = ref<string>('')
+const activeSectionIndex = computed<number>(() =>
+  Math.max(0, sections.value.findIndex((section) => section.key === activeSection.value)),
+)
+const showTabs = computed<boolean>(() => sections.value.length > 1)
+
+// 分组变化后保证高亮仍指向存在的项
+watch(
+  navEntries,
+  (entries) => {
+    if (!entries.length) {
+      activeNav.value = ''
+      return
+    }
+    if (!entries.some((entry) => entry.key === activeNav.value)) activeNav.value = entries[0].key
+  },
+  { immediate: true },
+)
+
+watch(
+  sections,
+  (list) => {
+    if (!list.length) {
+      activeSection.value = ''
+      return
+    }
+    if (!list.some((section) => section.key === activeSection.value)) activeSection.value = list[0].key
+  },
+  { immediate: true },
+)
+
+function selectNav(key: string): void {
+  if (activeNav.value === key) return
+  activeNav.value = key
+}
+
+function selectSection(key: string): void {
+  if (activeSection.value === key) return
+  activeSection.value = key
+  scrollBodyToTop()
+}
+
+// —— 滚动锁：与旧面板同一套目的，避免切换时被滚动回调打断 ——
 const scrollEl = ref<HTMLElement | null>(null)
-const treeEl = ref<HTMLElement | null>(null)
-const currentKey = ref<string>('')
-const currentNav = ref<string>('')
-
-/** 选择器转义：分组名含 /、中文等字符时，用 CSS.escape；没有它就只去掉引号字符 */
-function cssEscape(v: string): string {
-  const es = (globalThis as { CSS?: { escape?: (s: string) => string } }).CSS?.escape
-  return typeof es === 'function' ? es(v) : v.split('"').join('')
-}
-function navElOf(nav: string): HTMLElement | null {
-  const cont = scrollEl.value
-  return cont ? cont.querySelector<HTMLElement>('[data-nav="' + cssEscape(nav) + '"]') : null
-}
-function sectionElOf(key: string): HTMLElement | null {
-  const cont = scrollEl.value
-  return cont ? cont.querySelector<HTMLElement>('[data-sec="' + cssEscape(key) + '"]') : null
-}
-
-/**
- * 程序化滚动的时长（毫秒）。
- *
- * **为什么不用原生 `behavior: 'smooth'`**：那条路的时长由浏览器自己定，且大致随距离增长 ——
- * 点一个远一点的分类，动画能拖到一秒上下，用户实测「太慢」。这里自己补间，时长收成常量，
- * 近跳远跳同一个节奏。240ms = 设计 token 的动效上限（ui-style-guide §2.7）。
- */
+let scrollLocked = false
+let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
+/** 当前挂着 scrollend 的容器与回调：释放时要精确摘掉，否则旧回调会放掉下一次的锁 */
+let scrollLockEl: HTMLElement | null = null
+let scrollLockOnEnd: (() => void) | null = null
 const SCROLL_DURATION_MS = 240
-
+const SCROLL_LOCK_MAX_MS = SCROLL_DURATION_MS + 200
 let scrollRaf = 0
 
-/** 掐掉上一段滚动补间（连点两个分类时，后一次点击立刻接管，不与前一次抢 scrollTop） */
 function cancelScrollAnimation(): void {
   if (scrollRaf === 0) return
   cancelAnimationFrame(scrollRaf)
   scrollRaf = 0
 }
-
-/** 用户要求少动效时直接落位（与样式层的 prefers-reduced-motion 降级同一口径） */
-function prefersReducedMotion(): boolean {
-  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia
-  return typeof mm === 'function' ? mm('(prefers-reduced-motion: reduce)').matches : false
-}
-
-const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3)
-
-/** 从当前位置逐帧补间到 top（速度由 SCROLL_DURATION_MS 决定，与距离无关） */
-function animateScrollTop(cont: HTMLElement, top: number): void {
-  cancelScrollAnimation()
-  const from = cont.scrollTop
-  const delta = top - from
-  if (!delta) return
-  if (prefersReducedMotion()) {
-    cont.scrollTop = top
-    return
-  }
-  const start = performance.now()
-  const step = (now: number): void => {
-    const t = Math.min(1, (now - start) / SCROLL_DURATION_MS)
-    cont.scrollTop = from + delta * easeOutCubic(t)
-    scrollRaf = t < 1 ? requestAnimationFrame(step) : 0
-  }
-  scrollRaf = requestAnimationFrame(step)
-}
-
-function scrollToEl(el: HTMLElement): void {
-  const cont = scrollEl.value
-  if (!cont) return
-  const top = el.getBoundingClientRect().top - cont.getBoundingClientRect().top + cont.scrollTop
-  const max = cont.scrollHeight - cont.clientHeight
-  lockScrollUntilSettles(cont)
-  animateScrollTop(cont, Math.max(0, Math.min(max, top)))
-}
-
-/**
- * 程序化滚动锁：滚动期间 scroll 事件会连续触发，若任由 scroll-spy 覆盖，
- * 高亮会在途经的段之间闪来闪去。锁未解前不重算高亮，保证落点即所选。
- * 解锁时机：容器 scrollend（动画真正结束），或兜底超时。
- */
-let scrollLocked = false
-let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
-/** 当前挂着 scrollend 监听的容器（释放锁时要摘掉，否则监听会跟着悬空） */
-let scrollLockEl: HTMLElement | null = null
-let scrollLockOnEnd: (() => void) | null = null
-const SCROLL_LOCK_MAX_MS = SCROLL_DURATION_MS + 200
 
 function releaseScrollLock(): void {
   scrollLocked = false
@@ -235,377 +266,408 @@ function releaseScrollLock(): void {
     clearTimeout(scrollLockTimer)
     scrollLockTimer = null
   }
-  // 摘监听：不摘的话，同一个容器每次程序化滚动都会再挂一个 scrollend 回调，
-  // 而旧回调会去放掉**后来**那次滚动的锁（重启面板后高亮闪一下，正是这个锁要防的）。
-  if (scrollLockEl && scrollLockOnEnd) scrollLockEl.removeEventListener('scrollend', scrollLockOnEnd)
+  if (scrollLockEl && scrollLockOnEnd) {
+    scrollLockEl.removeEventListener('scrollend', scrollLockOnEnd)
+  }
   scrollLockEl = null
   scrollLockOnEnd = null
 }
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3)
+}
+
+function prefersReducedMotion(): boolean {
+  const match = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia
+  return typeof match === 'function' ? match('(prefers-reduced-motion: reduce)').matches : false
+}
+
+/** 内容回顶：短补间 + scrollend 锁，避免切页瞬间的高亮抖动 */
+function animateScrollTop(el: HTMLElement, top: number): void {
+  cancelScrollAnimation()
+  const from = el.scrollTop
+  const delta = top - from
+  if (!delta) return
+  if (prefersReducedMotion()) {
+    el.scrollTop = top
+    return
+  }
+  const start = performance.now()
+  const step = (now: number): void => {
+    const t = Math.min(1, (now - start) / SCROLL_DURATION_MS)
+    el.scrollTop = from + delta * easeOutCubic(t)
+    scrollRaf = t < 1 ? requestAnimationFrame(step) : 0
+  }
+  scrollRaf = requestAnimationFrame(step)
+}
+
 function lockScrollUntilSettles(el: HTMLElement): void {
   scrollLocked = true
   if (scrollLockTimer !== null) clearTimeout(scrollLockTimer)
   scrollLockTimer = setTimeout(releaseScrollLock, SCROLL_LOCK_MAX_MS)
+  if (scrollLockEl && scrollLockOnEnd && scrollLockEl !== el) {
+    scrollLockEl.removeEventListener('scrollend', scrollLockOnEnd)
+  }
   const onEnd = (): void => {
     el.removeEventListener('scrollend', onEnd)
     releaseScrollLock()
-  }
-  // 记下这次挂在哪、用的是哪个回调：releaseScrollLock 要靠它精确摘掉。
-  // 先释放上一次的（同一时刻只该有一个锁），再挂新的。
-  if (scrollLockEl && scrollLockOnEnd && scrollLockEl !== el) {
-    scrollLockEl.removeEventListener('scrollend', scrollLockOnEnd)
   }
   scrollLockEl = el
   scrollLockOnEnd = onEnd
   el.addEventListener('scrollend', onEnd)
 }
 
-/** 点一级：展开它、滚到该一级的标题锚点（没标题时退到它第一段） */
-function selectNav(nav: string): void {
-  expandNav(nav)
-  currentNav.value = nav
-  const leaves = leavesOf(nav)
-  currentKey.value = leaves[0] ?? ''
-  void nextTick(() => {
-    const el = navElOf(nav) ?? (leaves[0] ? sectionElOf(leaves[0]) : null)
-    if (el) scrollToEl(el)
-  })
+function scrollBodyToTop(): void {
+  const el = scrollEl.value
+  if (!el) return
+  lockScrollUntilSettles(el)
+  animateScrollTop(el, 0)
 }
 
-/** 点二级：展开所属一级、滚到该段 */
-function selectLeaf(key: string): void {
-  const nav = navOf(key)
-  expandNav(nav)
-  currentNav.value = nav
-  currentKey.value = key
-  void nextTick(() => {
-    const el = sectionElOf(key)
-    if (el) scrollToEl(el)
-  })
-}
-
-/** scroll-spy：内容区滚动 → 取"最后一个贴到顶部"的段作为当前段 */
-function onBodyScroll(): void {
-  if (scrollLocked) return
-  const cont = scrollEl.value
-  if (!cont) return
-  const ctop = cont.getBoundingClientRect().top
-  let best = ''
-  for (const nav of navs.value) {
-    for (const leaf of leavesOf(nav)) {
-      const el = sectionElOf(leaf)
-      if (el && el.getBoundingClientRect().top <= ctop + 8) best = leaf
-    }
-  }
-  if (!best) return
-  currentKey.value = best
-  currentNav.value = navOf(best)
-}
-
-/** 高亮段变化 → 左树里对应那行若被裁在可视区外，滚到"刚好露出"（block:nearest 不惊动外层） */
-watch(currentKey, (key) => {
-  if (!key) return
-  void nextTick(() => {
-    treeEl.value?.querySelector<HTMLElement>('[data-item="' + cssEscape(key) + '"]')?.scrollIntoView({ block: 'nearest' })
-  })
+watch(activeNav, () => {
+  activeSection.value = sections.value[0]?.key ?? ''
+  void nextTick(scrollBodyToTop)
 })
 
-// 分组变化（含插件热装卸）后，保证高亮仍指向存在的项（默认第一个一级的第一段）
-watch(
-  navs,
-  (list) => {
-    if (!list.length) {
-      currentNav.value = ''
-      currentKey.value = ''
-      return
-    }
-    if (!list.includes(currentNav.value)) {
-      currentNav.value = list[0]
-      currentKey.value = leavesOf(list[0])[0] ?? ''
-    }
-  },
-  { immediate: true },
-)
-
-// ———— 段正文：内容插槽 settingsGroup/<key> 优先，否则按 schema 平铺字段 ————
-// 插槽可经 meta.mode 声明摆放：prepend / append / replace（缺省 = 接管整组）。
-interface SlotOcc {
-  id: string
-  order: number
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  component: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  meta?: any
+// —— 图标：独立场域 settings/navIcon，order 小者胜；取不到用兜底 ——
+const navIcons = ctx.registryOf<unknown>('settings/navIcon')
+const iconTick = ref(0)
+if (navIcons && typeof navIcons.subscribe === 'function') {
+  const off = navIcons.subscribe(() => void (iconTick.value += 1))
+  // Registry.subscribe 返回 Disposable
+  disposers.push(off)
 }
-type ContentBlock = { kind: 'field'; key: string } | { kind: 'slot'; occ: SlotOcc }
 
-function slotMode(oc: SlotOcc): 'replace' | 'prepend' | 'append' {
-  const m = (oc.meta as { mode?: string } | undefined)?.mode
-  return m === 'prepend' ? 'prepend' : m === 'append' ? 'append' : 'replace'
+function iconOf(name: string): unknown {
+  void iconTick.value
+  return navIcons?.top(name)?.value ?? Circle
 }
+
+// —— 段落正文：内容插槽优先，否则按 schema 平铺 ——
+function slotMode(occ: SlotOcc): 'replace' | 'prepend' | 'append' {
+  const mode = (occ.meta as { mode?: string } | undefined)?.mode
+  return mode === 'prepend' ? 'prepend' : mode === 'append' ? 'append' : 'replace'
+}
+
+type ContentBlock =
+  | { kind: 'field'; key: string }
+  | { kind: 'slot'; occ: SlotOcc }
 
 function blocksOf(groupKey: string): ContentBlock[] {
   void occTick.value
-  const occs: SlotOcc[] = ctx.slots.occupants('settingsGroup/' + groupKey).map((e) => ({
-    id: e.id,
-    order: e.order,
-    component: markRaw(e.component as object),
-    meta: e.meta,
+  const occs = ctx.slots.occupants('settingsGroup/' + groupKey).map((entry) => ({
+    id: entry.id,
+    order: entry.order,
+    component: markRaw(entry.component as object),
+    meta: entry.meta,
   }))
   const fields = props.settings.groupOf(groupKey)
-  if (!occs.length) return fields.map((e) => ({ kind: 'field' as const, key: e.key }))
-  const coexist = occs.some((o) => slotMode(o) !== 'replace')
-  const sorted = (m: string): SlotOcc[] => occs.filter((o) => slotMode(o) === m).sort((a, b) => a.order - b.order)
+  if (!occs.length) return fields.map((item) => ({ kind: 'field' as const, key: item.key }))
+  const coexist = occs.some((occ) => slotMode(occ) !== 'replace')
+  const sorted = (mode: string): SlotOcc[] =>
+    occs.filter((occ) => slotMode(occ) === mode).sort((a, b) => a.order - b.order)
   const blocks: ContentBlock[] = []
-  blocks.push(...sorted('prepend').map((o) => ({ kind: 'slot' as const, occ: o })))
-  if (coexist) blocks.push(...fields.map((e) => ({ kind: 'field' as const, key: e.key })))
-  blocks.push(...sorted('replace').map((o) => ({ kind: 'slot' as const, occ: o })))
-  blocks.push(...sorted('append').map((o) => ({ kind: 'slot' as const, occ: o })))
+  blocks.push(...sorted('prepend').map((occ) => ({ kind: 'slot' as const, occ })))
+  if (coexist) blocks.push(...fields.map((item) => ({ kind: 'field' as const, key: item.key })))
+  blocks.push(...sorted('replace').map((occ) => ({ kind: 'slot' as const, occ })))
+  blocks.push(...sorted('append').map((occ) => ({ kind: 'slot' as const, occ })))
   return blocks
+}
+
+/** 点击页签：只切内容；同一页里的长内容回到顶部 */
+function selectTab(key: string): void {
+  activeSection.value = key
+  scrollBodyToTop()
 }
 </script>
 
 <template>
-  <!-- 中间层根：左树 + 右侧内容都归本面板，外壳只给最外层窗口（框 / 标题栏 / ✕ / Esc）。
-       本层直接作为 .psd-dialog 的弹性子项占满标题栏以下的高度。 -->
-  <div class="flex min-h-0 w-full min-w-0 flex-1">
-    <!-- 左：两级树（紧凑内边距） -->
-    <aside class="flex min-h-0 w-[192px] flex-none flex-col border-r border-line bg-panel-soft p-1.5">
-      <nav ref="treeEl" class="flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="设置导航">
-        <div v-if="!navs.length" class="py-6 text-center text-[12px] text-ink-dim">暂无设置分组</div>
-
-        <!-- 可排序导航：宿主把每个一级分组包成一个 SlotAnchor；插件条目只参与排序、不渲染
-             （本面板不展示插件自定义导航外观，避免重复项与点不动的死行）。 -->
-        <SlotComposer :slot="SETTINGS_NAV_SLOT" class="flex flex-col" :item-props="settingsNavProps"
-          >
-        <template v-for="nav in navs" :key="nav">
-          <SlotAnchor
-            :id="'host/settings-' + nav"
-            :order="100 + navs.indexOf(nav)"
-          >
-          <!-- 只有一个子节点：合并成一条平级项（不拆两级、不折叠、无箭头） -->
-          <div v-if="isSolo(nav)" class="asp-row asp-row--solo"
-            :class="{ 'is-current': currentKey === soloLeafOf(nav) }">
-            <button class="asp-label" :data-item="soloLeafOf(nav)" @click="selectLeaf(soloLeafOf(nav))">{{ nav }}</button>
-          </div>
-
-          <!-- 有多个子节点：一级 + 可折叠的二级 -->
-          <template v-else>
-            <!-- 一级行：画折叠箭头。**它自己不参与高亮**（用户口径 2026-10-09：二级亮的时候一级不要亮）——
-                 高亮只落在"当前那一段"，有子节点的分组里当前段永远是某个二级。 -->
-            <div class="asp-row asp-row--l1">
-              <button
-                class="asp-caret"
-                :aria-expanded="!isCollapsed(nav)"
-                :aria-label="(isCollapsed(nav) ? '展开' : '收起') + nav"
-                :title="(isCollapsed(nav) ? '展开' : '收起') + nav"
-                @click="toggleNav(nav)"
-              >
-                <svg class="asp-chevron" :class="{ 'is-open': !isCollapsed(nav) }" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M9 6l6 6-6 6" />
-                </svg>
-              </button>
-              <button class="asp-label" :data-item="nav" @click="selectNav(nav)">{{ nav }}</button>
-            </div>
-
-            <!-- 二级行（缩进、无折叠箭头：叶子不可再折叠） -->
-            <div v-show="!isCollapsed(nav)" class="flex flex-col">
-              <div v-for="leaf in leavesOf(nav)" :key="leaf" class="asp-row asp-row--l2"
-                :class="{ 'is-current': currentKey === leaf }">
-                <button class="asp-label asp-label--l2" :data-item="leaf" @click="selectLeaf(leaf)">{{ leafLabelOf(leaf) }}</button>
-              </div>
-            </div>
-          </template>
-          </SlotAnchor>
-        </template>
-        </SlotComposer>
-      </nav>
+  <div class="asp-root">
+    <!-- 左：分组标题 + 图标导航 -->
+    <aside class="asp-nav">
+      <p class="asp-nav-caption">设置</p>
+      <p v-if="!navEntries.length" class="asp-nav-empty">暂无设置分组</p>
+      <div v-for="item in navEntries" :key="item.key" class="asp-nav-cell">
+        <ShadcnSettingsNavItem
+          v-if="item.kind === 'section'"
+          :icon="iconOf(item.key)"
+          :label="item.title"
+          :active="activeNav === item.key"
+          @select="selectNav(item.key)"
+        />
+        <!-- 插件导航沿用自己的组件；面板只收口行高/圆角，让整列对齐 -->
+        <div v-else class="asp-nav-plugin">
+          <component
+            :is="item.component"
+            v-if="item.component"
+            :group="item.key"
+            :active="activeNav === item.key"
+            :on-select="selectNav"
+          />
+        </div>
+      </div>
     </aside>
 
-    <!-- 右：全部配置叠成一个长列表（字段不套卡片，直接铺在最外层），点左树滚过来 -->
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header class="flex h-11 flex-none items-center gap-3 border-b border-line px-5">
-        <h3 class="truncate text-[13px] font-semibold">{{ currentNav || '设置' }}</h3>
-        <p class="truncate text-[11px] text-ink-dim">共 {{ navs.length }} 个分类 · {{ groups.length }} 个分组</p>
+    <!-- 右：当前分类 -->
+    <div class="asp-panel">
+      <header class="asp-panel-head">
+        <h3 class="asp-panel-title">{{ activeEntry?.title || '设置' }}</h3>
+        <p v-if="activeEntry?.leaves.length" class="asp-panel-meta">
+          {{ activeEntry.leaves.length }} 个分组
+        </p>
       </header>
 
-      <div ref="scrollEl" class="min-h-0 flex-1 overflow-y-auto bg-canvas-bg px-5 pb-10 pt-1" @scroll="onBodyScroll">
-        <div v-if="!groups.length" class="grid h-full place-items-center text-xs text-ink-dim">暂无设置项</div>
-
-        <template v-for="nav in navs" :key="nav">
-          <!-- 只有一个子节点：合并成一段（小标题 = 一级名，锚点 = 那个二级 key） -->
-          <template v-if="isSolo(nav)">
-            <section :data-sec="soloLeafOf(nav)" class="asp-section">
-              <h4 class="asp-section-title" :data-nav="nav">{{ nav }}</h4>
-              <div class="asp-section-body">
-                <template v-for="b in blocksOf(soloLeafOf(nav))" :key="b.kind === 'field' ? 'f-' + b.key : 's-' + b.occ.id">
-                  <component v-if="b.kind === 'field'" :is="FieldRenderer" :group="soloLeafOf(nav)" :field-key="b.key"
-                    :settings="props.settings" />
-                  <component v-else :is="b.occ.component" :group="soloLeafOf(nav)" :settings="props.settings" />
-                </template>
-                <p v-if="!blocksOf(soloLeafOf(nav)).length" class="asp-empty">这个分组还没有可配置项</p>
-              </div>
-            </section>
-          </template>
-
-          <!-- 多个子节点：一级小标题 + 各二级段 -->
-          <template v-else>
-            <!-- 一级小标题：既是视觉分界，也是"点一级"的滚动锚点 -->
-            <h3 class="asp-group-title" :data-nav="nav">{{ nav }}</h3>
-
-            <section v-for="leaf in leavesOf(nav)" :key="leaf" :data-sec="leaf" class="asp-section">
-              <!-- 二级小标题：细线条分隔，无卡片包裹 -->
-              <h4 class="asp-section-title">{{ leafLabelOf(leaf) }}</h4>
-              <div class="asp-section-body">
-                <template v-for="b in blocksOf(leaf)" :key="b.kind === 'field' ? 'f-' + b.key : 's-' + b.occ.id">
-                  <component v-if="b.kind === 'field'" :is="FieldRenderer" :group="leaf" :field-key="b.key"
-                    :settings="props.settings" />
-                  <component v-else :is="b.occ.component" :group="leaf" :settings="props.settings" />
-                </template>
-                <p v-if="!blocksOf(leaf).length" class="asp-empty">这个分组还没有可配置项</p>
-              </div>
-            </section>
-          </template>
+      <div
+        v-if="showTabs"
+        class="asp-tabbar"
+        role="tablist"
+        :aria-label="(activeEntry?.title || '设置') + '分类'"
+      >
+        <template v-for="section in sections" :key="section.key">
+          <component
+            :is="section.component"
+            v-if="section.kind === 'tab' && section.component"
+            :group="section.key"
+            :active="activeSection === section.key"
+            :on-select="selectTab"
+            class="asp-tab-item"
+            :data-tab="section.key"
+          />
+          <button
+            v-else
+            class="asp-tab-item"
+            role="tab"
+            :class="{ 'is-active': activeSection === section.key }"
+            :aria-selected="activeSection === section.key"
+            :data-tab="section.key"
+            @click="selectTab(section.key)"
+          >
+            {{ section.label }}
+          </button>
         </template>
+      </div>
+
+      <!-- 不用滚动反向切页：点在页签上的选择必须稳定，滚动只滚当前页 -->
+      <div ref="scrollEl" class="asp-body">
+        <div v-if="!sections.length" class="asp-empty">暂无设置项</div>
+
+        <section
+          v-for="(section, index) in sections"
+          v-show="index === activeSectionIndex"
+          :key="section.key"
+          class="asp-section"
+          :data-sec="section.key"
+        >
+          <ShadcnSettingsSection
+            v-if="!showTabs"
+            :title="section.label"
+            :description="'这里集中放置「' + (activeEntry?.title || section.label) + '」相关选项。'"
+          >
+            <template v-for="block in blocksOf(section.key)" :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id">
+              <component
+                :is="FieldRenderer"
+                v-if="block.kind === 'field'"
+                :group="section.key"
+                :field-key="block.key"
+                :settings="props.settings"
+              />
+              <component
+                v-else
+                :is="block.occ.component"
+                :group="section.key"
+                :settings="props.settings"
+              />
+            </template>
+            <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
+          </ShadcnSettingsSection>
+
+          <template v-else>
+            <template v-for="block in blocksOf(section.key)" :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id">
+              <component
+                :is="FieldRenderer"
+                v-if="block.kind === 'field'"
+                :group="section.key"
+                :field-key="block.key"
+                :settings="props.settings"
+              />
+              <component
+                v-else
+                :is="block.occ.component"
+                :group="section.key"
+                :settings="props.settings"
+              />
+            </template>
+            <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
+          </template>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 窗口级样式（遮罩 / 居中 / 标题栏 / 浮动）在外壳 SettingsShell 里，这里只剩内容区自己的东西。
-   配色全部走主题 token（--ui-*），不写死 hex。 */
-
-/* ===== 左树行（紧凑：一级 30px / 二级 26px）===== */
-.asp-row {
+/* 外框与标题栏由 SettingsShell 提供，这里只画左导航 + 右侧内容 */
+.asp-root {
   display: flex;
-  align-items: center;
-  border-radius: 8px;
-  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.asp-row--l1 { min-height: 30px; }
-.asp-row--l2 { min-height: 26px; }
-
-/* 合并项（一级下只有一个二级）：与一级同样高，文字与一级文字对齐（24px），无箭头 */
-.asp-row--solo { min-height: 30px; }
-.asp-row--solo .asp-label { padding-left: 24px; }
-
-.asp-row:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
-
-/* 当前项（定位锚点选中态）：**中性面板底 + 正常文字色**，只靠底色深浅区分。
-   为什么不染强调色：这是普通导航，不是主操作；强调色一旦被用户改成很亮的颜色，
-   整列导航文字都会跟着变色（实测：强调色改成浅红后，选中的「画布」变成粉红字）。
-   用 --ui-panel-active / --ui-hover-strong 这类中性档，亮暗两套都由主题自己给值。
-   一级 / 二级 / 合并项共用同一条规则；**不要边框**（border/outline 皆 0）。
-   is-current 规则写在 :hover 之后 → 同特异性下选中态赢，鼠标停在选中项上不会把它压回灰。 */
-.asp-row.is-current { background: var(--ui-panel-active, var(--ui-hover-strong, rgb(0 0 0 / 0.08))); }
-.asp-row.is-current .asp-label { color: var(--ui-ink, #111827); }
-.asp-row.is-current .asp-label--l2 { color: var(--ui-ink, #111827); }
-
-.asp-caret {
-  flex: 0 0 auto;
-  /* 点击区域放大到 24×24（用户口径：按钮区域太小） */
-  width: 24px;
-  height: 24px;
-}
-
-.asp-caret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ui-ink-mute, #9ca3af);
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-/* 不给背景：hover 只把箭头颜色变深（用户口径） */
-.asp-caret:hover {
-  color: var(--ui-ink, #111827);
-}
-
-.asp-chevron {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.18s ease;
-}
-
-/* 展开态 = 箭头转正向下；收起态保持指向右 */
-.asp-chevron.is-open { transform: rotate(90deg); }
-
-.asp-label {
   flex: 1;
   min-width: 0;
-  display: block;
-  /* 一级文字起点 = 箭头 24px（这里不再额外留左边距） */
-  padding: 0 8px 0 0;
-  border: 0;
-  background: transparent;
-  color: var(--ui-ink, #374151);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
+  min-height: 0;
 }
 
-/* 二级（叶子）：**相对一级文字再缩进**（一级 24px → 二级 44px，差 20px 一眼看出层级）+ 小一号字 */
-.asp-label--l2 {
-  padding-left: 44px;
-  font-size: 12px;
-  color: var(--ui-ink-dim, #6b7280);
+.asp-nav {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  width: 192px;
+  min-height: 0;
+  padding: 4px 10px 12px 2px;
+  overflow-y: auto;
+  border-right: 1px solid var(--ui-line-soft, #eef0f4);
 }
 
-.asp-label:focus-visible,
-.asp-caret:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
-  outline-offset: -2px;
-  border-radius: 6px;
-}
-
-/* ===== 右侧内容（无卡片：小标题 + 字段直接铺开）===== */
-.asp-group-title {
-  margin: 12px 0 2px;
+.asp-nav-caption {
+  margin: 6px 0 6px 10px;
+  padding: 0;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--ui-ink-mute, #9ca3af);
+  letter-spacing: 0.06em;
+  color: var(--ui-ink-mute, #8c95a3);
 }
 
-.asp-group-title:first-child { margin-top: 4px; }
+.asp-nav-cell + .asp-nav-cell {
+  margin-top: 1px;
+}
 
-.asp-section { padding: 0; }
+/* 插件导航项统一收进 34px 行高：不同插件自带 44px 会把整列撑得忽高忽低 */
+.asp-nav-plugin :deep(button) {
+  min-height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: var(--radius-control, 8px);
+}
 
-.asp-section-title {
-  margin: 6px 0 0;
-  padding: 8px 0 8px;
-  border-bottom: 1px solid var(--ui-line-soft, rgb(0 0 0 / 0.05));
-  font-size: 13px;
+.asp-nav-empty {
+  margin: 0;
+  padding: 18px 10px;
+  font-size: 12px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.asp-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.asp-panel-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 22px 8px;
+}
+
+.asp-panel-title {
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--ui-ink, #111827);
+  line-height: 1.35;
+  color: var(--ui-ink, #18202b);
 }
 
-.asp-section-body { padding-bottom: 4px; }
+.asp-panel-meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.asp-tabbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 18px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
+  scrollbar-width: none;
+}
+
+.asp-tabbar::-webkit-scrollbar {
+  display: none;
+}
+
+.asp-tab-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-hover, 0.18s) ease;
+}
+
+.asp-tab-item:hover {
+  color: var(--ui-ink, #18202b);
+}
+
+.asp-tab-item.is-active {
+  color: var(--ui-accent, #0891b2);
+}
+
+.asp-tab-item.is-active::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  left: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ui-accent, #0891b2);
+}
+
+.asp-body {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 22px 24px;
+  overflow-y: auto;
+}
+
+.asp-section {
+  max-width: 760px;
+}
 
 .asp-empty {
+  padding: 36px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.asp-empty-line {
   margin: 0;
   padding: 12px 0;
   font-size: 12px;
-  color: var(--ui-ink-mute, #9ca3af);
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+@media (max-width: 560px) {
+  .asp-nav {
+    width: 150px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .asp-row,
-  .asp-caret,
-  .asp-chevron {
-    transition: none !important;
+  .asp-tab-item {
+    transition: none;
   }
 }
 </style>

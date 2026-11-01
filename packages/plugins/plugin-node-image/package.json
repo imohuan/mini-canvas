@@ -28,6 +28,7 @@
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
+    "@mini-canvas/ui-kit-shadcn": "workspace:*",
     "prosemirror-editor-bundle": "workspace:*"
   },
   "peerDependencies": {

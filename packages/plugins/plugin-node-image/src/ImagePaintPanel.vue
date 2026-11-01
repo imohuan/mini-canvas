@@ -11,7 +11,8 @@
  *   3. 粗细滑块前要有图标。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { paintState, endPaint, isPainting, undoStroke, redoStroke, clearStrokes } from './paintSession'
 import ImageToolbarShell from './ImageToolbarShell.vue'
 import PaintColorPicker from './PaintColorPicker.vue'
@@ -19,7 +20,6 @@ import PaintColorPicker from './PaintColorPicker.vue'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-const NodeToolbarButton = useUiComponent('toolbarButton')
 const Slider = useUiComponent('slider')
 
 /** 会话（响应式；浮层读同一份） */
@@ -98,12 +98,24 @@ async function save(): Promise<void> {
 <template>
   <ImageToolbarShell slot-name="image.paintToolbar" :node-id="props.id" :data="props.data">
     <!-- 1) 退出（最左） -->
-    <NodeToolbarButton title="退出绘制" variant="danger" :icon="ICON_EXIT" @click="exit" />
+    <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+      title="退出绘制" aria-label="退出绘制" @click="exit">
+      <ToolbarIcon :icon="ICON_EXIT" />
+    </Button>
 
     <!-- 2) 三种工具（互斥，用户口径：画笔 / 矩形填充 / 橡皮擦） -->
-    <NodeToolbarButton title="画笔" :icon="ICON_BRUSH" :active="session.tool === 'brush'" @click="setTool('brush')" />
-    <NodeToolbarButton title="矩形填充" :icon="ICON_RECT" :active="session.tool === 'rect'" @click="setTool('rect')" />
-    <NodeToolbarButton title="橡皮擦" :icon="ICON_ERASER" :active="session.tool === 'erase'" @click="setTool('erase')" />
+    <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': session.tool === 'brush' }" variant="ghost" size="sm" type="button"
+      title="画笔" aria-label="画笔" :aria-pressed="session.tool === 'brush' ? 'true' : 'false'" @click="setTool('brush')">
+      <ToolbarIcon :icon="ICON_BRUSH" />
+    </Button>
+    <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': session.tool === 'rect' }" variant="ghost" size="sm" type="button"
+      title="矩形填充" aria-label="矩形填充" :aria-pressed="session.tool === 'rect' ? 'true' : 'false'" @click="setTool('rect')">
+      <ToolbarIcon :icon="ICON_RECT" />
+    </Button>
+    <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': session.tool === 'erase' }" variant="ghost" size="sm" type="button"
+      title="橡皮擦" aria-label="橡皮擦" :aria-pressed="session.tool === 'erase' ? 'true' : 'false'" @click="setTool('erase')">
+      <ToolbarIcon :icon="ICON_ERASER" />
+    </Button>
 
     <!-- 3) 标记颜色（预置色 + 主题注册的取色器） -->
     <PaintColorPicker :model-value="session.color" @update:model-value="setColor" />
@@ -122,12 +134,26 @@ async function save(): Promise<void> {
     />
 
     <!-- 5) 历史：撤销 + 重做（不是只有一个按钮） -->
-    <NodeToolbarButton title="撤销" :icon="ICON_UNDO" :disabled="!canUndo" @click="onUndo" />
-    <NodeToolbarButton title="重做" :icon="ICON_REDO" :disabled="!canRedo" @click="onRedo" />
-    <NodeToolbarButton title="清空全部笔迹" :icon="ICON_TRASH" :disabled="!hasStrokes" @click="onClear" />
+    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="撤销" aria-label="撤销"
+      :disabled="!canUndo" @click="onUndo">
+      <ToolbarIcon :icon="ICON_UNDO" />
+    </Button>
+    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="重做" aria-label="重做"
+      :disabled="!canRedo" @click="onRedo">
+      <ToolbarIcon :icon="ICON_REDO" />
+    </Button>
+    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="清空全部笔迹" aria-label="清空全部笔迹"
+      :disabled="!hasStrokes" @click="onClear">
+      <ToolbarIcon :icon="ICON_TRASH" />
+    </Button>
 
     <!-- 6) 保存 -->
-    <NodeToolbarButton title="保存（生成蒙版和结果两个图片节点）" variant="primary" :icon="ICON_SAVE" :disabled="!hasStrokes" @click="save">保存</NodeToolbarButton>
+    <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+      title="保存（生成蒙版和结果两个图片节点）" aria-label="保存（生成蒙版和结果两个图片节点）"
+      :disabled="!hasStrokes" @click="save">
+      <ToolbarIcon :icon="ICON_SAVE" />
+      <span class="mck-toolbar-label">保存</span>
+    </Button>
   </ImageToolbarShell>
 </template>
 

@@ -16,15 +16,13 @@
  * 选中态也不在这里：上插槽整体由壳按"框选中/多选收起、否则各段自己看选中态"的规则显隐。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { createAudioOps, defaultTransform, uploadAudio } from './audioOps'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改，按钮整体换成新主题的。
-// 缺目录（宿主没装登记 ui 的主题）时 undefined + warn（见 useUiComponent）。
-const NodeToolbarButton = useUiComponent('toolbarButton')
 // 显隐归本段自己判断（"恰好选中一个且是我"）：壳负责位置，插件负责"我该不该出现"。
 const selected = useSoleNodeSelected(props.id)
 
@@ -64,7 +62,10 @@ async function onFileChange(e: Event): Promise<void> {
   <div v-if="visible" class="ntp-root at-root nodrag nopan">
     <input ref="fileInput" class="at-file" type="file" accept="audio/*" @change="onFileChange" />
 
-    <NodeToolbarButton title="上传音频" :icon="ICON_UPLOAD" :disabled="uploading" @click="openPicker" />
+    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+      title="上传音频" aria-label="上传音频" :disabled="uploading" @click="openPicker">
+      <ToolbarIcon :icon="ICON_UPLOAD" />
+    </Button>
   </div>
 </template>
 

@@ -35,7 +35,7 @@
 
 | 目录名（按名取用就传这个字符串） | 组件 | 一句话 | 详情 |
 | --- | --- | --- | --- |
-| `button` | `NodeToolbarButton` | 节点上/下控制栏里的通用按钮 | [按钮](/plugins/theme-components/node-toolbar-button) |
+| `button` | `NodeToolbarButton` | 兼容保留的旧名；节点控制栏现在直接用 shadcn `Button` | [按钮](/plugins/theme-components/node-toolbar-button) |
 | `dropdown` | `Dropdown` | 下拉浮层外壳（只管浮层，不管选项逻辑） | [下拉浮层](/plugins/theme-components/dropdown) |
 | `tooltip` | `Tooltip` | 悬浮气泡提示 | [气泡提示](/plugins/theme-components/tooltip) |
 | `select` | `Select` | 带搜索的下拉选择器 | [下拉选择器](/plugins/theme-components/select) |

@@ -336,6 +336,8 @@ export { default as SlotHost } from './components/SlotHost.vue'
 // 可排序槽：内置 UI（SlotAnchor）与插件条目（ctx.slots）一起按 order + before/after 排
 export { default as SlotComposer } from './components/SlotComposer.vue'
 export { default as SlotAnchor } from './components/SlotAnchor.vue'
+// 控制栏按钮的图标位：SVG 字符串 / Vue 组件两种句柄都认（按钮本体直接用 shadcn Button）
+export { default as ToolbarIcon } from './components/ToolbarIcon.vue'
 export { isSlotItemId, isSlotName, mergeSlotEntries } from './components/slotComposer'
 export type { SlotComposerEntry } from './components/slotComposer'
 export {

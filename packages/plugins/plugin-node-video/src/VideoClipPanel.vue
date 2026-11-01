@@ -17,7 +17,8 @@
  * 所以顶栏「剪辑时长」点下去就能看到它 —— 不必先去下拉里手动选「剪辑」。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import {
   clampClipEnd,
   clampClipRange,
@@ -39,8 +40,6 @@ import { resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-// 设计系统件按名取（与图片裁剪顶栏同一条约定），换主题时这里一行不改
-const NodeToolbarButton = useUiComponent('toolbarButton')
 // 快捷键面板挂在主题登记的下拉件上（上下文里那一份；成品应用会顶替成 AxDropdown）
 const Dropdown = useUiComponent('dropdown')
 const selected = useSoleNodeSelected(props.id)
@@ -523,9 +522,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
 
     <template v-else>
       <!-- 外壳 = 主题胶囊 .ntp-root（与图片裁剪/绘制状态栏同一套 token）：
-           底色、边框、圆角、阴影都跟着亮/暗主题走；按钮一律用主题的 toolbarButton。 -->
+           底色、边框、圆角、阴影都跟着亮/暗主题走；按钮直接用 shadcn Button + 全局 .mck-toolbar-btn。 -->
       <div class="ntp-root vclip-dock">
-        <NodeToolbarButton title="退出剪辑" aria-label="退出剪辑" variant="danger" :icon="ICON_CLOSE" @click="onCancel" />
+        <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+          title="退出剪辑" aria-label="退出剪辑" @click="onCancel">
+          <ToolbarIcon :icon="ICON_CLOSE" />
+        </Button>
 
         <!--
           快捷键说明 = 主题登记的下拉件（上下文里的 dropdown；成品应用会顶替成 AxDropdown）。
@@ -543,12 +545,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
           :menu-width="'336px'"
         >
           <template #trigger>
-            <NodeToolbarButton
-              title="快捷键"
-              aria-label="快捷键"
-              :icon="ICON_KEYBOARD"
-              :active="configOpen"
-            />
+            <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': configOpen }" variant="ghost" size="sm" type="button"
+              title="快捷键" aria-label="快捷键" :aria-pressed="configOpen ? 'true' : 'false'">
+              <ToolbarIcon :icon="ICON_KEYBOARD" />
+            </Button>
           </template>
           <div class="vclip-help-body" role="dialog" aria-label="剪辑快捷键">
             <header class="vclip-help-head">
@@ -619,32 +619,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
           <span ref="rulerEl" class="vclip-ruler" aria-hidden="true">{{ lengthLabel }}</span>
         </div>
 
-        <NodeToolbarButton
-          :title="prefs.snap ? '关闭吸附' : '开启吸附'"
-          aria-label="吸附"
-          :icon="ICON_MAGNET"
-          :active="prefs.snap"
-          @click="toggleSnap"
-        />
+        <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': prefs.snap }" variant="ghost" size="sm" type="button"
+          :title="prefs.snap ? '关闭吸附' : '开启吸附'" aria-label="吸附" :aria-pressed="prefs.snap ? 'true' : 'false'"
+          @click="toggleSnap">
+          <ToolbarIcon :icon="ICON_MAGNET" />
+        </Button>
 
-        <NodeToolbarButton
-          :title="prefs.loop ? '关闭区间循环' : '开启区间循环'"
-          aria-label="区间循环"
-          :icon="ICON_LOOP"
-          :active="prefs.loop"
-          @click="toggleLoop"
-        />
+        <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': prefs.loop }" variant="ghost" size="sm" type="button"
+          :title="prefs.loop ? '关闭区间循环' : '开启区间循环'" aria-label="区间循环" :aria-pressed="prefs.loop ? 'true' : 'false'"
+          @click="toggleLoop">
+          <ToolbarIcon :icon="ICON_LOOP" />
+        </Button>
 
-        <NodeToolbarButton
+        <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
           :title="pending ? '剪辑中…' : '确认剪辑'"
-          :aria-label="pending ? '剪辑中' : '确认剪辑'"
-          variant="primary"
-          :icon="ICON_CONFIRM"
-          :disabled="pending"
-          @click="onConfirm"
-        >
-          {{ pending ? '剪辑中…' : '确认' }}
-        </NodeToolbarButton>
+          :aria-label="pending ? '剪辑中' : '确认剪辑'" :disabled="pending" @click="onConfirm">
+          <ToolbarIcon :icon="ICON_CONFIRM" />
+          <span class="mck-toolbar-label">{{ pending ? '剪辑中…' : '确认' }}</span>
+        </Button>
       </div>
 
       <!-- 时长文字的下方常驻位（用户口径 2026-10-31）：选区窄到装不下时显示在这里。
@@ -662,7 +654,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
 /**
  * 视觉与图片裁剪的状态栏同源（用户口径 2026-10-31）：
  * - 外壳 = 主题的 `.ntp-root` 胶囊（白底/深底、发丝边、10px 圆角、阴影都随亮暗主题变）；
- * - 按钮 = 主题登记件 toolbarButton（尺寸/圆角/hover/激活态由主题决定）；
+ * - 按钮 = shadcn Button + 全局 .mck-toolbar-btn（尺寸/圆角/hover/激活态由全局样式定）；
  * - 只有胶片条本身保持深色 —— 它压的是视频画面，浅色底会把抽出来的帧吃掉。
  * 强调色一律取 --ui-accent，用户换主题色时选区和按钮一起变。
  */

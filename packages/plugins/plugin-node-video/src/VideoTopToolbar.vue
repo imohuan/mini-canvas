@@ -16,7 +16,8 @@
 import { computed, ref } from 'vue'
 import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { createVideoOps, uploadVideo } from './videoOps'
 import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'
@@ -24,8 +25,7 @@ import type { Rect } from './videoCrop'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
-const NodeToolbarButton = useUiComponent('toolbarButton')
+// 下拉仍按名取（主题可换）；按钮本体直接用 shadcn Button。
 const DropdownButton = useUiComponent('toolbarDropdown')
 const selected = useSoleNodeSelected(props.id)
 
@@ -145,14 +145,10 @@ function cancelEdit(): void {
     <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
          布局对齐 liblib 的 `× | 原比例 | 确认`：取消在最左、比例下拉居中、确认在最右。 -->
     <template v-if="editing">
-      <NodeToolbarButton
-        title="取消编辑"
-        aria-label="取消编辑"
-        variant="danger"
-        :icon="ICON_CANCEL"
-        :disabled="pending"
-        @click="cancelEdit"
-      />
+      <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+        title="取消编辑" aria-label="取消编辑" :disabled="pending" @click="cancelEdit">
+        <ToolbarIcon :icon="ICON_CANCEL" />
+      </Button>
       <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。
            只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。
            用 toolbarDropdown 而不是 Select：与图片裁剪顶栏同一只件，菜单形状/对齐/主题跟随都不漂。 -->
@@ -164,40 +160,56 @@ function cancelEdit(): void {
         @pick="onRatioChange"
       />
       <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"） -->
-      <NodeToolbarButton
+      <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
         :title="pending ? '正在裁剪…' : '确认编辑'"
-        :aria-label="pending ? '正在裁剪' : '确认编辑'"
-        variant="primary"
-        :icon="ICON_CONFIRM"
-        :disabled="pending"
-        @click="confirmEdit"
-      >
-        {{ pending ? '裁剪中…' : '确认' }}
-      </NodeToolbarButton>
+        :aria-label="pending ? '正在裁剪' : '确认编辑'" :disabled="pending" @click="confirmEdit">
+        <ToolbarIcon :icon="ICON_CONFIRM" />
+        <span class="mck-toolbar-label">{{ pending ? '裁剪中…' : '确认' }}</span>
+      </Button>
     </template>
 
     <!-- 平时：上传 / 剪辑 / 裁剪 / 扩展 / 截图 / 下载 / 恢复 -->
     <template v-else>
       <!-- 剪辑会话：顶栏给一个明确的退出入口（底栏的胶片条也有，但顶部这格不能空着） -->
-      <NodeToolbarButton
-        v-if="clipping"
-        title="退出剪辑"
-        aria-label="退出剪辑"
-        variant="danger"
-        :icon="ICON_CANCEL"
-        @click="endOverlay(props.id)"
-      />
-      <NodeToolbarButton title="上传视频" :icon="ICON_UPLOAD" :disabled="uploading" @click="openPicker" />
+      <Button v-if="clipping" class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+        title="退出剪辑" aria-label="退出剪辑" @click="endOverlay(props.id)">
+        <ToolbarIcon :icon="ICON_CANCEL" />
+      </Button>
+      <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+        title="上传视频" aria-label="上传视频" :disabled="uploading" @click="openPicker">
+        <ToolbarIcon :icon="ICON_UPLOAD" />
+      </Button>
 
       <template v-if="hasVideo">
-        <NodeToolbarButton title="剪辑时长" :icon="ICON_CLIP" @click="beginOverlay(props.id, 'clip')" />
-        <NodeToolbarButton title="裁剪画面" :icon="ICON_CROP" @click="beginOverlay(props.id, 'crop')" />
-        <NodeToolbarButton title="截取当前帧" :icon="ICON_FRAME" @click="run('video:capture-frame')" />
+        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="剪辑时长" aria-label="剪辑时长"
+          @click="beginOverlay(props.id, 'clip')">
+          <ToolbarIcon :icon="ICON_CLIP" />
+        </Button>
+        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="裁剪画面" aria-label="裁剪画面"
+          @click="beginOverlay(props.id, 'crop')">
+          <ToolbarIcon :icon="ICON_CROP" />
+        </Button>
+        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="截取当前帧" aria-label="截取当前帧"
+          @click="run('video:capture-frame')">
+          <ToolbarIcon :icon="ICON_FRAME" />
+        </Button>
         <!-- 转音频：后台 ffmpeg 抽音轨，新建一个音频节点 + 连线（与裁剪/剪辑同一条顺序） -->
-        <NodeToolbarButton title="转为音频" :icon="ICON_AUDIO" @click="run('video:to-audio')" />
-        <NodeToolbarButton title="下载视频" :icon="ICON_DOWNLOAD" @click="run('video:download')" />
-        <NodeToolbarButton v-if="cropped" title="恢复整幅画面" :icon="ICON_RESET" @click="run('video:reset-crop')" />
-        <NodeToolbarButton v-if="clipped" title="恢复整段时长" :icon="ICON_RESET" @click="run('video:reset-clip')" />
+        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="转为音频" aria-label="转为音频"
+          @click="run('video:to-audio')">
+          <ToolbarIcon :icon="ICON_AUDIO" />
+        </Button>
+        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="下载视频" aria-label="下载视频"
+          @click="run('video:download')">
+          <ToolbarIcon :icon="ICON_DOWNLOAD" />
+        </Button>
+        <Button v-if="cropped" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+          title="恢复整幅画面" aria-label="恢复整幅画面" @click="run('video:reset-crop')">
+          <ToolbarIcon :icon="ICON_RESET" />
+        </Button>
+        <Button v-if="clipped" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+          title="恢复整段时长" aria-label="恢复整段时长" @click="run('video:reset-clip')">
+          <ToolbarIcon :icon="ICON_RESET" />
+        </Button>
       </template>
     </template>
   </div>

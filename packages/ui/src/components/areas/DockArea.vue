@@ -22,8 +22,15 @@ import {
   Search,
   Move,
 } from "lucide-vue-next";
+// 底栏按钮/提示用 shadcn 原始组件；下拉菜单内部内容仍沿用现有 AxMenu 一套（用户要求内容 UI 不变）。
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@mini-canvas/ui-kit-shadcn";
 import AxDropdown from "../AxDropdown.vue";
-import AxTooltip from "../AxTooltip.vue";
 import AxMenu from "../AxMenu.vue";
 import AxMenuItem from "../AxMenuItem.vue";
 import AgentOrb from "../AgentOrb.vue";
@@ -71,6 +78,7 @@ function onUploadPick(e: Event): void {
 </script>
 
 <template>
+  <TooltipProvider :delay-duration="200">
   <div class="flex items-center justify-center gap-2">
     <div class="flex h-[50px] items-center gap-2 rounded-xl border border-line bg-panel px-2" aria-label="画布工具栏"
       @pointerdown.stop>
@@ -90,13 +98,15 @@ function onUploadPick(e: Event): void {
         -->
           <AxDropdown v-model="s.addMenuOpen" placement="top" align="center" :offset="10" menu-width="240px">
             <template #trigger>
-              <AxTooltip content="添加节点" placement="top">
-                <button
-                  class="grid size-8 place-items-center rounded-lg bg-primary-bg text-primary-ink transition-colors hover:brightness-110"
-                  :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点">
-                  <Plus :size="17" />
-                </button>
-              </AxTooltip>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
+                    :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点">
+                    <Plus :size="17" class="size-[17px]" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">添加节点</TooltipContent>
+              </Tooltip>
             </template>
             <template #default="{ close }">
               <div class="mb-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-veil px-2.5 text-ink-dim">
@@ -173,10 +183,10 @@ function onUploadPick(e: Event): void {
           <!-- 移动：中轴对齐的下拉（菜单中心 = 按钮中心，箭头居中指按钮），V/H 切换 -->
           <AxDropdown v-model="s.moveMenuOpen" placement="top" align="center" :offset="10" menu-width="200px">
             <template #trigger>
-              <button class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
                 :class="{ 'bg-chip': s.moveMenuOpen }" aria-label="移动" :aria-expanded="s.moveMenuOpen">
-                <component :is="s.canvasMode === 'move' ? Move : Hand" :size="16" />
-              </button>
+                <component :is="s.canvasMode === 'move' ? Move : Hand" :size="16" class="size-4" />
+              </Button>
             </template>
             <template #default="{ close }">
               <AxMenu>
@@ -202,11 +212,11 @@ function onUploadPick(e: Event): void {
           <!-- 素材库：**点击触发**（与移动一致；方向键/素材库都点开才展开，不再 hover 弹出） -->
           <AxDropdown v-model="s.libraryMenuOpen" placement="top" align="center" :offset="10" menu-width="228px">
             <template #trigger>
-              <button class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
                 :class="{ 'bg-chip': s.libraryMenuOpen || s.drawer === 'left' }" aria-label="素材库"
                 :aria-expanded="s.libraryMenuOpen">
-                <FolderOpen :size="16" />
-              </button>
+                <FolderOpen :size="16" class="size-4" />
+              </Button>
             </template>
             <template #default="{ close }">
               <AxMenu>
@@ -239,46 +249,72 @@ function onUploadPick(e: Event): void {
           </AxDropdown>
         </SlotAnchor>
         <SlotAnchor id="host/roles" :order="400">
-          <AxTooltip content="角色造型室" placement="top"><button
-              class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
-              aria-label="角色造型室" @click="ui.openDrawer('roles')">
-              <Shapes :size="16" />
-            </button></AxTooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg" aria-label="角色造型室"
+                @click="ui.openDrawer('roles')">
+                <Shapes :size="16" class="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">角色造型室</TooltipContent>
+          </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/history" :order="500">
-          <AxTooltip content="生成历史" placement="top"><button
-              class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
-              :class="{ 'bg-chip': s.historyOpen }" aria-label="生成历史" @click="ui.toggleHistory()">
-              <History :size="16" />
-            </button></AxTooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
+                :class="{ 'bg-chip': s.historyOpen }" aria-label="生成历史" @click="ui.toggleHistory()">
+                <History :size="16" class="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">生成历史</TooltipContent>
+          </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/separator" :order="600"><span class="h-6 w-px bg-line"></span></SlotAnchor>
         <SlotAnchor id="host/shortcuts" :order="700">
-          <AxTooltip content="快捷键" placement="top"><button
-              class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover"
-              :class="{ 'bg-chip': s.shortcutsOpen }" aria-label="快捷键" @click="ui.toggleShortcuts()">
-              <Keyboard :size="16" />
-            </button></AxTooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
+                :class="{ 'bg-chip': s.shortcutsOpen }" aria-label="快捷键" @click="ui.toggleShortcuts()">
+                <Keyboard :size="16" class="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">快捷键</TooltipContent>
+          </Tooltip>
         </SlotAnchor>
-        <!-- 
-      <AxTooltip content="教程" placement="top"><button
+        <!--
+      <Tooltip><TooltipTrigger as-child><button
         class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover" aria-label="教程"
         @click="ui.showToast('教程')">
         <CircleQuestionMark :size="16" />
-      </button></AxTooltip>
+      </button></TooltipTrigger><TooltipContent side="top">教程</TooltipContent></Tooltip>
     -->
       </SlotComposer>
     </div>
 
     <!-- Agent 圆球：**独立按钮**，不属于插槽排序容器（用户口径 2026-10-28）。
          不使用 SlotAnchor，也不参与 before/after 排序。 -->
-    <AxTooltip content="Agent 对话" placement="left"><button
-        class="grid size-12 place-items-center rounded-full border border-line bg-panel text-ink"
-        aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }"
-        @click="ui.toggleAgent()">
-        <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
-             按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
-        <AgentOrb :open="ui.agent.open" />
-      </button></AxTooltip>
+    <Tooltip>
+      <TooltipTrigger as-child>
+        <Button variant="outline" size="icon-lg" class="agent-orb-button size-12 rounded-full border-line text-ink"
+          :class="ui.agent.open ? 'is-open bg-panel-active' : ''" aria-label="Agent 对话"
+          @click="ui.toggleAgent()">
+          <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
+               按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
+          <AgentOrb :open="ui.agent.open" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="left">Agent 对话</TooltipContent>
+    </Tooltip>
   </div>
+  </TooltipProvider>
 </template>
+
+<style scoped>
+/* 圆球按钮自己画底：shadcn 的 outline 变体在暗色下带 dark:bg-transparent，
+   会盖住 bg-panel（实测暗色主题里球身透出画布网格）。这里用组件类固定面板色；
+   打开态换 --ui-panel-active，和原来的 bg-panel-active 是同一个语义。 */
+.agent-orb-button { background: var(--ui-panel, #fff) !important; }
+.agent-orb-button:hover { background: var(--ui-panel, #fff) !important; }
+.agent-orb-button.is-open { background: var(--ui-panel-active, #e8eaf0) !important; }
+</style>

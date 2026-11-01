@@ -56,3 +56,16 @@
   --vuelor-border: var(--ui-line, #e6e6e6);
   --vuelor-input: var(--ui-chip, #f5f5f5);
 }
+
+/*
+ * 本项目的外壳按钮沿用自己的交互色：ghost/outline 的悬停底是 --ui-hover（6%/10% 一档），
+ * 不用 shadcn 的 --muted（3.5%），否则 32px 小图标按钮悬停几乎看不出变化。
+ * 只调默认值，具体调用方仍可用 class 覆盖。
+ */
+[data-slot='button'][data-variant='ghost']:hover {
+  background-color: var(--ui-hover, rgb(0 0 0 / 0.06));
+}
+
+[data-slot='button'][data-variant='outline']:hover {
+  background-color: var(--ui-hover, rgb(0 0 0 / 0.06));
+}

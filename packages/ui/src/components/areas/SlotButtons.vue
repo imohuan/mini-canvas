@@ -11,7 +11,9 @@
  * - status ：28×28 / 圆角 8（状态条图标按钮）
  * - tab    ：28 高 / 圆角 10 / 13px（抽屉页签）
  */
-import { computed, type Component, type PropType } from 'vue'
+import { computed, type Component } from 'vue'
+// 外壳默认按钮统一用 shadcn 原始 Button；尺寸档位仍由下面的 TONE 覆盖住。
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import AxTooltip from '../AxTooltip.vue'
 
 const props = withDefaults(
@@ -44,23 +46,43 @@ const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 
 const label = computed(() => props.ariaLabel || props.title)
 const isText = computed(() => props.variant === 'text')
+// 图标档用固定方形；文字档 / tab 档用 sm，宽度随文字与 TONE 的 px-3 走（tab 不能锁成 32px）。
+const buttonSize = computed(() => (isText.value || props.tone === 'tab' ? 'sm' : 'icon-sm'))
 const iconHtml = computed(() => (typeof props.icon === 'string' ? props.icon : ''))
 const iconComp = computed<Component | null>(() =>
   props.icon && typeof props.icon !== 'string' ? (props.icon as Component) : null,
 )
 
+/**
+ * `active` 透传：用 `:aria-pressed` 与可见高亮表达开关态。
+ * 不给时保留 undefined（普通按钮不被读屏当成开关）。
+ */
+const pressed = computed<string | undefined>(() =>
+  props.active === undefined ? undefined : props.active ? 'true' : 'false',
+)
+
 const TONE = {
-  dock: 'size-8 rounded-lg',
-  status: 'size-7 rounded-lg',
+  dock: 'size-8 min-w-8 rounded-lg',
+  status: 'size-7 min-w-7 rounded-lg',
   tab: 'h-7 rounded-[10px] px-3 text-[13px]',
+} as const
+
+// shadcn 会把未声明尺寸的 svg 压成 16px：插件传进来的是 24×24 的字符串图标，
+// 这里显式给 16px，保证「外壳默认按钮」和插件自绘时代一样大。
+const ICON_CLASS = {
+  dock: 'size-4',
+  status: 'size-3.5',
+  tab: 'size-4',
 } as const
 </script>
 
 <template>
   <!-- 提示用 AxTooltip：内置按钮那种主题气泡；不再用浏览器原生 title 的小黑框。 -->
   <AxTooltip :content="title" placement="top" trigger-class="flex-none">
-    <button
-      class="inline-flex flex-none items-center justify-center gap-1 text-ink transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+    <Button
+      variant="ghost"
+      :size="buttonSize"
+      class="inline-flex flex-none items-center justify-center gap-1 text-ink disabled:cursor-not-allowed disabled:opacity-40"
       :class="[
         TONE[props.tone],
         isText ? 'font-medium' : '',
@@ -68,13 +90,13 @@ const TONE = {
       ]"
       type="button"
       :aria-label="label"
-      :aria-pressed="active === undefined ? undefined : active ? 'true' : 'false'"
+      :aria-pressed="pressed"
       :disabled="disabled"
       @click="emit('click', $event)"
     >
-      <span v-if="iconHtml" class="inline-flex" aria-hidden="true" v-html="iconHtml" />
-      <component :is="iconComp" v-else-if="iconComp" aria-hidden="true" />
+      <span v-if="iconHtml" class="inline-flex shrink-0" :class="ICON_CLASS[props.tone]" aria-hidden="true" v-html="iconHtml" />
+      <component :is="iconComp" v-else-if="iconComp" class="shrink-0" :class="ICON_CLASS[props.tone]" aria-hidden="true" />
       <span v-if="$slots.default"><slot /></span>
-    </button>
+    </Button>
   </AxTooltip>
 </template>

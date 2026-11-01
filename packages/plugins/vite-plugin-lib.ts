@@ -38,6 +38,9 @@ export const HOST_GLOBALS: Record<string, string> = {
   '@mini-canvas/canvas-base': 'MiniCanvasBase',
   '@mini-canvas/canvas-data': 'MiniCanvasCore',
   '@mini-canvas/canvas-render': 'MiniCanvasRender',
+  // 组件库（shadcn-vue 原始件）：插件直接 import Button，靠宿主这一份实例渲染。
+  // 打进插件会变成两份组件定义 + 两份样式，主题与 Tailwind 类都对不上。
+  '@mini-canvas/ui-kit-shadcn': 'MiniCanvasUiKit',
 }
 /**
  * 生成 build 段（纯数据）。各插件的 vite.config.ts：

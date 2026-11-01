@@ -27,6 +27,8 @@ import {
 } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
+// 输入框工具行与发送键使用 shadcn 原始 Button；两个下拉的**内容 UI 不改**，只换触发按钮。
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { useAgent } from '../useAgent.js'
@@ -2599,9 +2601,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                只有点那个标签本身才弹目标编辑框。 -->
           <ThemedDropdown v-model="plusOpen" placement="top-start" :offset="8" menu-width="210px" menu-role="menu">
             <template #trigger>
-              <button class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加">
-                <Plus :size="17" />
-              </button>
+              <Button variant="ghost" size="icon-sm" class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加">
+                <Plus :size="17" class="size-[17px]" />
+              </Button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="menu" aria-label="添加">
@@ -2645,10 +2647,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
           <ThemedDropdown v-model="modeOpen" placement="top-start" :offset="8" menu-width="220px" menu-role="listbox">
             <template #trigger>
-              <button class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
+              <Button variant="ghost" size="sm" class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
                 <span class="ac-pill-text">{{ modeLabel }}</span>
                 <ChevronDown :size="13" class="ac-pill-caret" />
-              </button>
+              </Button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择创作模式">
@@ -2671,10 +2673,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
           <ThemedDropdown v-model="authOpen" placement="top-end" :offset="8" menu-width="360px" menu-role="listbox">
             <template #trigger>
-              <button class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
-                <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" />
-              </button>
+                <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
+              </Button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu ac-review-panel" role="listbox" aria-label="选择授权方式">
@@ -2716,9 +2718,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             :menu-width="modelView === 'split' ? '586px' : '320px'"
             menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
-              <button class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
-                <Box :size="16" />
-              </button>
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
+                <Box :size="16" class="size-4" />
+              </Button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen, 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
@@ -2843,9 +2845,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
-              <button class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能">
-                <WandSparkles :size="16" />
-              </button>
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能">
+                <WandSparkles :size="16" class="size-4" />
+              </Button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-split': skillView === 'split' }"
@@ -2973,9 +2975,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             menu-width="320px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
-              <button class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
-                <Plug :size="16" />
-              </button>
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
+                <Plug :size="16" class="size-4" />
+              </Button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu ac-panel ac-mcp-panel" :class="{ 'is-search-open': mcpSearchOpen }" role="listbox" aria-label="选择 MCP">
@@ -3097,15 +3099,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </span>
             </component>
           </span>
-          <button class="ac-send" :class="{ 'is-running': sendMode === 'stop' }"
+          <Button size="icon" class="ac-send" :class="{ 'is-running': sendMode === 'stop' }"
             :aria-label="sendMode === 'stop' ? '停止' : '发送'" :disabled="sendMode === 'disabled'"
             @click="sendMode === 'stop' ? agent.stop() : submit()">
             <!-- 三态（设计 G1）：有内容 ⇒ 发送（**跑着也是发送**，点了进队列）；
                  空 + 跑着 ⇒ 红方块「终止」；空 + 空闲 ⇒ 禁用（灰色箭头）。
                  方块用 CSS 画（不受 lucide 线性图标 stroke 影响），颜色随 currentColor。 -->
             <span v-if="sendMode === 'stop'" class="ac-stop-square" aria-hidden="true"></span>
-            <ArrowUp v-else :size="17" />
-          </button>
+            <ArrowUp v-else :size="17" class="size-[17px]" />
+          </Button>
         </div>
       </div>
     </div>
@@ -4858,6 +4860,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
   flex: none;
   border: 0;
   border-radius: 8px;
@@ -4881,6 +4884,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -4912,11 +4916,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   flex: 0 1 auto;
   min-width: 0;
   max-width: 160px;
+  /* 文字档按钮：shadcn 默认 px-3 会把胶囊撑宽，这里收回原来的 8/4 内边距 */
   padding: 0 4px 0 8px;
   border: 0;
   border-radius: 9999px;
   background: transparent;
   color: var(--ui-ink, #f7f7f7);
+  font-weight: 400;
   font-size: 13px;
   cursor: pointer;
 }
@@ -5047,6 +5053,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
   flex: none;
   border: 0;
   border-radius: 12px;

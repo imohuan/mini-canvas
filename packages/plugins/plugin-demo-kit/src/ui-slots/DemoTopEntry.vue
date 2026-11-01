@@ -12,7 +12,8 @@
  * 功能模式必须是替换，不是叠加。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { closeDemoMode, demoMode, openDemoMode } from './demoMode'
 
 interface ToolbarMenuNode {
@@ -28,7 +29,6 @@ const props = defineProps<{
 
 const { ctx } = useCanvasRender()
 const DropdownButton = useUiComponent('toolbarDropdown')
-const ThemedButton = useUiComponent('toolbarButton')
 
 const ICON_DEMO =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>'
@@ -162,13 +162,13 @@ function pickFeature(label: string): void {
   <template v-else-if="kind">
     <span class="dte-feature-name">{{ LABEL[kind] }}</span>
     <span class="dte-feature-sep" aria-hidden="true" />
-    <component :is="ThemedButton || 'button'" type="button" title="功能动作一" aria-label="功能动作一"
-      @click="pickFeature('动作一')">动作一</component>
-    <component :is="ThemedButton || 'button'" type="button" title="功能动作二" aria-label="功能动作二"
-      @click="pickFeature('动作二')">动作二</component>
+    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能动作一" aria-label="功能动作一"
+      @click="pickFeature('动作一')"><span class="mck-toolbar-label">动作一</span></Button>
+    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能动作二" aria-label="功能动作二"
+      @click="pickFeature('动作二')"><span class="mck-toolbar-label">动作二</span></Button>
     <span class="dte-feature-sep" aria-hidden="true" />
-    <component :is="ThemedButton || 'button'" type="button" variant="danger" title="退出功能模式"
-      aria-label="退出功能模式" @click="exit">退出</component>
+    <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
+      title="退出功能模式" aria-label="退出功能模式" @click="exit"><span class="mck-toolbar-label">退出</span></Button>
   </template>
 </template>
 

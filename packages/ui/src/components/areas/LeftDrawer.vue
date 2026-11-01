@@ -17,6 +17,8 @@ import AssetUploadDialog from '../AssetUploadDialog.vue'
 import AssetTree, { type AssetTreeRow } from '../AssetTree.vue'
 import CanvasRowMenu from '../CanvasRowMenu.vue'
 import AxDialog from '../AxDialog.vue'
+// 抽屉的页签 / 工具按钮 / 搜索框改用 shadcn 原始组件；各下拉菜单的内容 UI 保持不变。
+import { Button, Input } from '@mini-canvas/ui-kit-shadcn'
 import { useUi, type TreeNode } from '../../composables/ui'
 import { checkedRowIds } from '../../composables/assetSelection'
 import { canvasTreeBlocks } from '../../composables/canvasTree'
@@ -128,12 +130,19 @@ onBeforeUnmount(() => {
 /** 展示模式：list（树行）/ grid（宫格卡片），照目标「展示设置」下拉 */
 const viewMode = ref<'list' | 'grid'>('grid')
 const menuOpen = ref(false)
+/** 搜索框模板引用：可能是原生 input，也可能是 shadcn Input 组件实例（原生元素在 $el 上） */
+type InputRef = HTMLInputElement & { $el?: HTMLInputElement }
+/** 统一取聚焦：组件实例没有 focus()，要走它包住的那个原生 input */
+function focusInput(el: InputRef | null): void {
+  const target = el?.$el ?? el
+  if (typeof target?.focus === 'function') target.focus()
+}
 /** 搜索框 DOM 引用：进入搜索态后自动聚焦 */
-const searchInput = ref<HTMLInputElement | null>(null)
+const searchInput = ref<InputRef | null>(null)
 async function openSearch(): Promise<void> {
   s.searchOpen = true
   await nextTick()
-  searchInput.value?.focus()
+  focusInput(searchInput.value)
 }
 function closeSearch(): void {
   s.searchOpen = false
@@ -149,12 +158,12 @@ const lucideOf = (icon: string) =>
 
 // ===== 资产 tab 交互（用户报「搜索/筛选/添加都没反应」——这里逐个接上真实行为）=====
 /** 搜索框引用：点放大镜进入搜索态后自动聚焦（与画布 tab 的搜索同款交互） */
-const assetSearchInput = ref<HTMLInputElement | null>(null)
+const assetSearchInput = ref<InputRef | null>(null)
 async function openAssetSearch(): Promise<void> {
   assetSearchActive.value = true
   s.assetSearchQuery = ''
   await nextTick()
-  assetSearchInput.value?.focus()
+  focusInput(assetSearchInput.value)
 }
 function closeAssetSearch(): void {
   assetSearchActive.value = false
@@ -700,16 +709,16 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
         :item-props="drawerTabProps" :shared-props="slotShared"
         >
         <SlotAnchor id="host/canvas-tab" :order="100">
-          <button class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
+          <Button variant="ghost" size="sm" class="h-7 rounded-[10px] px-3 text-[13px] font-normal"
             :class="s.leftTab === DRAWER_TAB_CANVAS ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"
             role="tab" :aria-selected="s.leftTab === DRAWER_TAB_CANVAS"
-            @click="ui.openDrawerTab(DRAWER_TAB_CANVAS)">画布</button>
+            @click="ui.openDrawerTab(DRAWER_TAB_CANVAS)">画布</Button>
         </SlotAnchor>
         <SlotAnchor id="host/assets-tab" :order="200">
-          <button class="h-7 rounded-[10px] px-3 text-[13px] transition-colors"
+          <Button variant="ghost" size="sm" class="h-7 rounded-[10px] px-3 text-[13px] font-normal"
             :class="s.leftTab === DRAWER_TAB_ASSETS ? 'bg-hover-strong text-ink' : 'text-ink/90 hover:bg-hover'"
             role="tab" :aria-selected="s.leftTab === DRAWER_TAB_ASSETS"
-            @click="ui.openDrawerTab(DRAWER_TAB_ASSETS)">资产</button>
+            @click="ui.openDrawerTab(DRAWER_TAB_ASSETS)">资产</Button>
         </SlotAnchor>
       </SlotComposer>
 
@@ -728,18 +737,17 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
                     d="M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5"
                     fill="currentColor" fill-rule="evenodd" />
                 </svg>
-                <input ref="searchInput" :value="s.searchQuery"
-                  class="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-dim focus:outline-none"
-                  placeholder="搜索节点" aria-label="搜索节点"
-                  @input="s.searchQuery = ($event.target as HTMLInputElement).value" @keydown.esc="closeSearch()" />
+                <Input ref="searchInput" v-model="s.searchQuery"
+                  class="h-full w-auto min-w-0 flex-1 rounded-lg border-0 bg-transparent px-0 md:text-[13px] leading-normal shadow-none focus-visible:border-transparent focus-visible:ring-0"
+                  placeholder="搜索节点" aria-label="搜索节点" @keydown.esc="closeSearch()" />
               </div>
               <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
-                <template #trigger><button
-                    class="grid size-8 flex-none place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+                <template #trigger><Button variant="ghost" size="icon-sm"
+                    class="flex-none rounded-lg text-ink/85"
                     aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8"
                         stroke-linecap="round" />
-                    </svg></button></template>
+                    </svg></Button></template>
                 <template #default="{ close }">
                   <AxMenu>
                     <AxMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
@@ -747,33 +755,33 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
                   </AxMenu>
                 </template>
               </AxDropdown>
-              <button
-                class="grid size-8 flex-none place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm"
+                class="flex-none rounded-lg text-ink/85"
                 aria-label="关闭搜索" @click="closeSearch()">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M3.5 3.5l9 9m0-9-9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
                 </svg>
-              </button>
+              </Button>
             </motion.div>
           </AnimatePresence>
         </div>
 
         <!-- 普通态 -->
         <template v-if="!s.searchOpen">
-          <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+          <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
             aria-label="搜索节点" @click="openSearch">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
               <path
                 :d="'M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5'"
                 fill="currentColor" fill-rule="evenodd" />
             </svg>
-          </button>
+          </Button>
           <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
-            <template #trigger><button
-                class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+            <template #trigger><Button variant="ghost" size="icon-sm"
+                class="rounded-lg text-ink/85"
                 aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                </svg></button></template>
+                </svg></Button></template>
             <template #default="{ close }">
               <AxMenu>
                 <AxMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
@@ -786,10 +794,10 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           <!-- 展示设置：列表/宫格/展开/收起（照图 2，带勾选态） -->
           <AxDropdown v-model="menuOpen" placement="bottom-end" :offset="4" menu-width="180px">
             <template #trigger>
-              <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
                 aria-label="展示设置" :aria-expanded="menuOpen">
-                <LibIcon name="display-grid" :size="16" />
-              </button>
+                <LibIcon name="display-grid" :size="16" class="size-4 shrink-0" />
+              </Button>
             </template>
             <template #default="{ close }">
               <AxMenu>
@@ -837,30 +845,29 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
                     d="M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5"
                     fill="currentColor" fill-rule="evenodd" />
                 </svg>
-                <input ref="assetSearchInput" v-model="s.assetSearchQuery"
-                  class="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-dim focus:outline-none"
+                <Input ref="assetSearchInput" v-model="s.assetSearchQuery"
+                  class="h-full w-auto min-w-0 flex-1 rounded-lg border-0 bg-transparent px-0 md:text-[13px] leading-normal shadow-none focus-visible:border-transparent focus-visible:ring-0"
                   placeholder="搜索资产" aria-label="搜索资产" @keydown.esc.stop="closeAssetSearch()" />
               </div>
-              <button
-                class="grid size-8 flex-none place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm" class="flex-none rounded-lg text-ink/85"
                 aria-label="关闭搜索" @click="closeAssetSearch()">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M3.5 3.5l9 9m0-9-9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
                 </svg>
-              </button>
+              </Button>
             </motion.div>
           </AnimatePresence>
         </div>
         <!-- 普通态：搜索 / 批量 / 类型筛选 / 上传 -->
         <template v-if="!assetSearchActive">
-          <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+          <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
             aria-label="搜索" @click="openAssetSearch()"><svg width="16" height="16" viewBox="0 0 20 20" fill="none"
               aria-hidden="true">
               <path
                 d="M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5"
                 fill="currentColor" fill-rule="evenodd" />
-            </svg></button>
-          <button class="grid size-8 place-items-center rounded-lg transition-colors hover:bg-hover"
+            </svg></Button>
+          <Button variant="ghost" size="icon-sm" class="rounded-lg"
             :class="s.assetBatchOn ? 'bg-brand/15 text-brand' : 'text-ink/85'" aria-label="批量操作"
             :aria-pressed="s.assetBatchOn" @click="ui.toggleAssetBatch()"><svg width="15" height="15"
               viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -868,14 +875,14 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
               <rect x="11.5" y="11.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" />
               <path d="M5.5 11.5v3a2 2 0 0 0 2 2h1M14.5 8.5v-3a2 2 0 0 0-2-2h-1" stroke="currentColor"
                 stroke-width="1.5" stroke-linecap="round" />
-            </svg></button>
+            </svg></Button>
           <AxDropdown placement="bottom-start" :offset="4">
             <template #trigger>
-              <button class="grid size-8 place-items-center rounded-lg transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm" class="rounded-lg"
                 :class="s.assetFilterKind !== '全部' ? 'text-brand' : 'text-ink/85'" aria-label="筛选"><svg width="15"
                   height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                </svg></button>
+                </svg></Button>
             </template>
             <template #default="{ close }">
               <AxMenu>
@@ -888,10 +895,10 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           <!-- 加号下拉：新建文件夹 / 上传资产（照图 4） -->
           <AxDropdown v-model="plusOpen" placement="bottom-end" :offset="4">
             <template #trigger>
-              <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+              <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
                 aria-label="新建或上传" :aria-expanded="plusOpen">
                 <PlusIcon :size="16" />
-              </button>
+              </Button>
             </template>
             <template #default="{ close }">
               <AxMenu>
@@ -904,8 +911,8 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
               </AxMenu>
             </template>
           </AxDropdown>
-          <button class="h-8 rounded-lg bg-chip px-2.5 text-[13px] text-ink transition-colors hover:bg-hover-strong"
-            aria-label="资产管理" @click="openAssetManager(undefined, { fromRef: false })">资产管理</button>
+          <Button variant="secondary" size="sm" class="h-8 rounded-lg px-2.5 text-[13px] font-normal hover:bg-hover-strong"
+            aria-label="资产管理" @click="openAssetManager(undefined, { fromRef: false })">资产管理</Button>
         </template>
         <!-- 隐藏的文件选择器：上传入口（支持多选） -->
         <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true" @change="onUploadChange" />
@@ -922,9 +929,8 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           <p class="max-w-[220px] mb-1 text-center text-xs leading-relaxed text-ink-mute">还没有资产。生成图片 / 视频 /
             音频之后，产物会自动出现在这里。
           </p>
-          <button
-            class="flex h-8 min-w-[176px] items-center justify-center gap-1.5 rounded-lg border border-line bg-veil text-xs text-ink transition-colors hover:bg-hover"
-            aria-label="打开生成历史" @click="ui.toggleHistory()">查看生成历史</button>
+          <Button variant="outline" size="sm" class="h-8 min-w-[176px] gap-1.5 rounded-lg text-xs"
+            aria-label="打开生成历史" @click="ui.toggleHistory()">查看生成历史</Button>
         </div>
 
         <!-- 拖拽：行内拖到文件夹行 = 放进去；拖到列表空白 = 放到根目录（共用组件 AssetTree 内自管） -->
@@ -960,12 +966,10 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
             一次全部添加可能会卡顿。确定要继续吗？
           </p>
           <div class="flex items-center justify-end gap-2">
-            <button
-              class="h-8 rounded-lg border border-line px-3.5 text-[13px] text-ink transition-colors hover:bg-hover"
-              aria-label="取消添加" @click="onFolderConfirmCancel">取消</button>
-            <button
-              class="h-8 rounded-lg bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand/85"
-              aria-label="确认添加" @click="onFolderConfirmOk">继续添加</button>
+            <Button variant="outline" size="sm" class="h-8 rounded-lg px-3.5 text-[13px]"
+              aria-label="取消添加" @click="onFolderConfirmCancel">取消</Button>
+            <Button size="sm" class="h-8 rounded-lg bg-brand px-4 text-[13px] text-white hover:bg-brand/85"
+              aria-label="确认添加" @click="onFolderConfirmOk">继续添加</Button>
           </div>
         </div>
       </AxDialog>
@@ -978,16 +982,16 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           <div v-if="block.kind === 'group'"
             class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover"
             :style="{ paddingLeft: block.depth * 24 + 'px' }" @contextmenu="openCanvasMenu('group', block.id, $event)">
-            <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85"
+            <Button variant="ghost" size="icon-xs" class="flex-none rounded-lg text-ink/85"
               :aria-label="(block.collapsed ? '展开 ' : '折叠 ') + block.name" :aria-expanded="!block.collapsed"
               @click="ui.collapsed[block.id] = !ui.collapsed[block.id]">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" :class="block.collapsed ? '-rotate-90' : ''"
-                class="transition-transform" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"
+                :class="[block.collapsed ? '-rotate-90' : '', 'h-3.5 w-3.5 shrink-0 transition-transform']">
                 <path
                   d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z"
                   fill="currentColor" transform="translate(3.4 5.8)" />
               </svg>
-            </button>
+            </Button>
             <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left"
               :aria-label="(block.collapsed ? '展开 ' : '折叠 ') + block.name" :aria-expanded="!block.collapsed"
               @click="ui.collapsed[block.id] = !ui.collapsed[block.id]">
@@ -1005,11 +1009,10 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
               <CanvasRowMenu :ref="(el: unknown) => bindCanvasMenu(block.id, el)" kind="group" :name="block.name"
                 @rename="startRenameNode(block.id, block.name)" @locate="ui.locateNode(block.id)"
                 @ungroup="ui.ungroupNode(block.id)" @remove="ui.removeNode(block.id)" />
-              <button
-                class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink"
+              <Button variant="ghost" size="icon-xs" class="rounded-lg text-ink-dim hover:text-ink"
                 :aria-label="'定位到分组 ' + block.name" @click="ui.locateNode(block.id)">
-                <LibIcon name="locate" :size="14" />
-              </button>
+                <LibIcon name="locate" :size="14" class="size-3.5 shrink-0" />
+              </Button>
             </span>
           </div>
 
@@ -1049,11 +1052,10 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
                     @rename="startRenameNode(child.id, child.name)" @locate="ui.locateNode(child.id)"
                     @duplicate="ui.duplicateNode(child.id)" @add-agent="ui.referenceNodeToAgent(child.id)"
                     @remove="ui.removeNode(child.id)" />
-                  <button
-                    class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink"
+                  <Button variant="ghost" size="icon-xs" class="rounded-lg text-ink-dim hover:text-ink"
                     :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)">
-                    <LibIcon name="locate" :size="14" />
-                  </button>
+                    <LibIcon name="locate" :size="14" class="size-3.5 shrink-0" />
+                  </Button>
                 </span>
               </div>
             </template>
@@ -1115,10 +1117,10 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
 
       <!-- 底部状态条 -->
       <div class="flex h-[53px] flex-none items-center justify-between border-t border-line px-3 pb-3 pt-2">
-        <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
+        <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
           :aria-label="s.leftCollapsed ? '展开节点侧栏' : '收起节点侧栏'" @click="ui.toggleLeftCollapsed()">
-          <ArrowLeftToLineIcon :size="16" />
-        </button>
+          <ArrowLeftToLineIcon :size="16" class="size-4" />
+        </Button>
         <span class="text-xs text-ink-dim">共 {{ ui.treeTotal }} 节点</span>
       </div>
       <AxResizeHandle class="left-drawer-resize" edge="right" label="调整侧栏宽度"

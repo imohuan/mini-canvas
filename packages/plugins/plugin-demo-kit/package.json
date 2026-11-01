@@ -26,7 +26,8 @@
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*"
+    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/ui-kit-shadcn": "workspace:*"
   },
   "peerDependencies": {
     "@vue-flow/core": "^1.48.2",

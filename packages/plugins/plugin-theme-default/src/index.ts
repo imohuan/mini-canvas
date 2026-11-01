@@ -757,9 +757,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 通用件按名字登记进 ui 场 —— 别的插件按名取用，换一套主题时它们一起变、业务插件零改动。
   // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
   const ui = ctx.registryOf<unknown>("ui");
-  // 工具栏按钮（用户口径 2026-10-29：「应该叫 toolbarButton，这样和普通按钮做一个区分」）：
-  // 节点上/下控制栏里那一条按钮 —— 只给图标（纯图标钮）或图标 + 文字，观感由主题决定。
-  // **不是**通用表单按钮（提交/取消那种）—— 那类走各面板自己的排布，不进这个目录。
+  // 工具栏按钮：老名字保留（其它机制可能还在按名取）。节点上/下控制栏的调用点
+  // 已改成直接用 shadcn Button + 全局 .mck-toolbar-btn，不再经这一层转接。
   ui.add("toolbarButton", NodeToolbarButton, { id: "default" });
   // 工具栏下拉按钮：触发器 = 上面的 toolbarButton，菜单与二级菜单都是独立浮层。
   // 插件按名取（useUiComponent('toolbarDropdown')），不必再自己拼 button + dropdown。

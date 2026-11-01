@@ -28,6 +28,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
+// 面板头部动作按钮改用 shadcn 原始 Button；历史下拉的外壳与内容 UI 都保持不变。
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { SlotHost, useUiComponent, broadcastCloseAllDropdowns } from '@mini-canvas/canvas-render'
 import AxResizeHandle from '../AxResizeHandle.vue'
 import { useUi } from '../../composables/ui'
@@ -35,15 +37,7 @@ import { useUi } from '../../composables/ui'
 const ui = useUi()
 const s = ui.state
 
-/**
- * 历史对话用**主题目录里的 dropdown**，不自己画浮层。
- *
- * 用户口径（2026-10-03）：「历史记录应该是个下拉菜单，点击其他区域时它会自动折叠。
- * 请参考底部菜单按钮，Skill 和 MCP 使用了下拉组件，你这边的历史记录也应该使用它」。
- *
- * 好处不只是省代码：定位/翻边/出屏收进/点外关闭/Esc/浮层互斥，全部由它统一负责 ——
- * 自绘那版就是漏了「点外关闭」（只有 toggle、选中、Esc 三条路径），所以浮层会一直挂着。
- */
+/** 历史对话仍用主题目录里的 dropdown：外壳、定位、点外关闭都由它负责。 */
 const ThemedDropdown = useUiComponent('dropdown')
 
 /**
@@ -234,19 +228,18 @@ function startCornerResize(e: PointerEvent): void {
     <header class="agent-head draggable" @pointerdown="startDrag">
       <span class="agent-title" :title="ui.agent.title">{{ ui.agent.title }}</span>
       <div class="agent-actions">
-        <button class="agent-icon" aria-label="新建对话" @click="ui.newAgentChat()"><MessageSquarePlus :size="16" /></button>
+        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="新建对话"
+          @click="ui.newAgentChat()"><MessageSquarePlus :size="16" class="size-4" /></Button>
         <!-- 历史对话：就是**普通的 dropdown**，居中靠它自己的 placement。
              触发器是这个「历史」按钮，所以居中也是相对**它**（placement="bottom" = 菜单中轴对触发器中轴）。
-             之前我加过一个 center-on 去对面板中线，那是错的 —— 覆盖掉了组件自带的"对触发器居中"，
-             于是菜单相对按钮偏了一大截（用户点名）。 -->
+             只有触发器按钮换成了 shadcn Button；菜单外壳与列表 UI 原样保留。 -->
         <component :is="ThemedDropdown || 'div'" v-model="s.agentHistoryOpen" placement="bottom"
           :offset="10" layout="inner-scroll"
           menu-width="320px" menu-max-width="min(320px, calc(100vw - 40px))" menu-max-height="min(60vh, 460px)" menu-role="menu">
-          <!-- 触发器**不要**自己写 @click：dropdown 的触发层已经绑了 toggle，
-               再写一遍会变成「开→立刻关」（实测点不开，一轮都不谈）。
-               这与技能/MCP 那几个触发器的写法一致。 -->
+          <!-- 触发器**不要**自己写 @click：dropdown 的触发层已经绑了 toggle。 -->
           <template #trigger="{ open }">
-            <button class="agent-icon" aria-label="历史对话" :aria-expanded="open"><History :size="16" /></button>
+            <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="历史对话"
+              :aria-expanded="open"><History :size="16" class="size-4" /></Button>
           </template>
           <template #default="{ close }">
             <div class="agent-history" role="menu" aria-label="历史对话">
@@ -273,21 +266,24 @@ function startCornerResize(e: PointerEvent): void {
             </div>
           </template>
         </component>
-        <button class="agent-icon" aria-label="Agent 设置" @click="s.settingsOpen = true"><Settings2 :size="16" /></button>
+        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="Agent 设置"
+          @click="s.settingsOpen = true"><Settings2 :size="16" class="size-4" /></Button>
         <!-- TV Director 全局设置：从旧 ChatPanel 的「Agent 偏好」齿轮搬过来。
              那个组件在这次迁移里被删掉了，如果不在新外壳上补一个入口，
              ModalsArea 里那块 600×532 的全局设置弹窗就**永远打不开**（实测：页面上找不到任何按钮）。 -->
-        <button class="agent-icon" aria-label="Agent 偏好" title="Agent 偏好" @click="s.directorOpen = true"><SlidersHorizontal :size="16" /></button>
+        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="Agent 偏好" title="Agent 偏好"
+          @click="s.directorOpen = true"><SlidersHorizontal :size="16" class="size-4" /></Button>
         <!-- 停靠/浮窗切换：**图标要说明点下去会发生什么**，与 aria-label 同向。
              停靠态 → 这枚按钮做的事是「变成浮窗」，所以画悬浮框（PictureInPicture2）；
              浮窗态 → 做的事是「停靠到右缘」，所以画右侧分栏（PanelRight）。
              以前两种状态都画 PanelRight：停靠时图标指的是右下角那块，和「变浮窗」正好相反（用户点名）。 -->
-        <button class="agent-icon" :aria-label="ui.agent.docked ? '切换为浮窗' : '停靠到右侧'"
+        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" :aria-label="ui.agent.docked ? '切换为浮窗' : '停靠到右侧'"
           :title="ui.agent.docked ? '切换为浮窗' : '停靠到右侧'" @click="ui.agent.docked = !ui.agent.docked">
-          <PictureInPicture2 v-if="ui.agent.docked" :size="16" />
-          <PanelRight v-else :size="16" />
-        </button>
-        <button class="agent-icon" aria-label="关闭对话" @click="ui.agent.open = false"><X :size="16" /></button>
+          <PictureInPicture2 v-if="ui.agent.docked" :size="16" class="size-4" />
+          <PanelRight v-else :size="16" class="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="关闭对话"
+          @click="ui.agent.open = false"><X :size="16" class="size-4" /></Button>
       </div>
     </header>
 
@@ -320,7 +316,7 @@ function startCornerResize(e: PointerEvent): void {
 .agent-head.draggable { cursor: grab; user-select: none; }
 .agent-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }
 .agent-actions { display: flex; flex: none; align-items: center; gap: 2px; }
-.agent-icon { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink, #18202b); cursor: pointer; transition: background 0.16s ease; }
+.agent-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-width: 28px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink, #18202b); cursor: pointer; transition: background 0.16s ease; }
 .agent-icon:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
 .agent-content { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* 只剩下**内容**样式：外层浮层（定位/边框/底色/圆角/阴影/滚动/点外关闭）由

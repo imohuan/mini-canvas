@@ -11,17 +11,15 @@
  * 上下文怎么拿：走能力包（needs:['selection']），不是自己 ctx.get 拼 —— 与节点按钮
  * "needs:['node']" 同一套规则。设置面板/主题换皮时，能力实现可以整体被换掉。
  *
- * 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。目录里没有 button 时
- * 回退一个原生按钮 —— 缺件该降级成"还能点"，不该白屏（与 useUiComponent 的缺名策略同调）。
+ * 按钮直接用 shadcn Button + 全局 .mck-toolbar-btn（与其它控制栏同一套外观）。
  */
 import { computed } from 'vue'
-import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import type { SelectionCapability } from '@mini-canvas/canvas-render'
 import { useCapability } from '@mini-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
-const ThemedButton = useUiComponent('toolbarButton')
-
 /** 当前选中集（能力包；needs 里声明了才拿得到 —— 见本文件挂载处） */
 const selection = useCapability<SelectionCapability>('selection')
 
@@ -46,18 +44,11 @@ function onGroup(): void {
 <template>
   <!-- 定位由宿主给（selection-frame-slot--top）；这里只声明"这是上控制栏里的一排内容" -->
   <div class="ntp-root selection-group-toolbar">
-    <component
-      :is="ThemedButton || 'button'"
-      class="selection-group-toolbar__btn"
-      type="button"
-      title="创建分组"
-      aria-label="创建分组"
-      :icon="ICON_GROUP"
-      :disabled="!canGroup"
-      @click="onGroup"
-    >
-      打组
-    </component>
+    <Button class="mck-toolbar-btn selection-group-toolbar__btn" variant="ghost" size="sm" type="button"
+      title="创建分组" aria-label="创建分组" :disabled="!canGroup" @click="onGroup">
+      <ToolbarIcon :icon="ICON_GROUP" />
+      <span class="mck-toolbar-label">打组</span>
+    </Button>
   </div>
 </template>
 

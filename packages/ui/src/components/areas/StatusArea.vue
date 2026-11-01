@@ -8,9 +8,10 @@
 // 「缩放选项」同理：百分比是**真实视口的镜像值**（ui.state.zoom），菜单动作调 viewport 服务
 // 真正改画布（详见 composables/ui.ts 的「缩放」段）。
 import { PanelLeft, LayoutGrid, Map, Link2Off, Link2, Magnet, Grid2x2X } from 'lucide-vue-next'
+// 状态栏按钮用 shadcn 原始组件；缩放菜单内容仍走现有 AxMenuItem（用户要求内容 UI 不变）。
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@mini-canvas/ui-kit-shadcn'
 import AxDropdown from '../AxDropdown.vue'
 import AxMenuItem from '../AxMenuItem.vue'
-import AxTooltip from '../AxTooltip.vue'
 import { useUi } from '../../composables/ui'
 import { computed } from 'vue'
 import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
@@ -43,66 +44,87 @@ const miniMapDock = useMiniMapDockTarget()
 </script>
 
 <template>
+  <TooltipProvider :delay-duration="200">
   <div class="flex items-end" aria-label="画布状态栏" style="overflow: visible">
     <div class="flex h-10 items-center gap-1 rounded-xl bg-panel p-1.5">
       <SlotComposer slot="shell.status" item-class="flex-none" class="flex items-center gap-1" :shared-props="slotShared"
         >
         <SlotAnchor id="host/assets" :order="100">
-      <AxTooltip v-if="s.drawer !== 'left'" content="资产管理" placement="top">
-        <button
-          class="flex h-7 items-center gap-1 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
-          aria-label="资产管理" @click="ui.openDrawer('left')"
-        ><PanelLeft :size="14" /> 资产管理</button>
-      </AxTooltip>
+      <Tooltip v-if="s.drawer !== 'left'">
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="sm" class="h-7 gap-1 rounded-lg px-3 text-[13px] font-normal hover:bg-hover"
+            aria-label="资产管理" @click="ui.openDrawer('left')">
+            <PanelLeft :size="14" class="size-3.5 shrink-0" /> 资产管理
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">资产管理</TooltipContent>
+      </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/organize" :order="200">
-      <AxTooltip content="整理画布，Ctrl/Cmd+L" placement="top">
-        <button class="grid size-7 place-items-center rounded-lg text-ink transition-colors hover:bg-hover" aria-label="整理画布，Ctrl/Cmd+L" @click="ui.organizeCanvas()"><LayoutGrid :size="14" /></button>
-      </AxTooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" class="size-7 rounded-lg" aria-label="整理画布，Ctrl/Cmd+L"
+            @click="ui.organizeCanvas()"><LayoutGrid :size="14" class="size-3.5" /></Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">整理画布，Ctrl/Cmd+L</TooltipContent>
+      </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/minimap" :order="300">
       <!-- 外层只负责定位：地图挂点和按钮共享同一个 relative 起点。
            挂点必须放在 AxTooltip 外面，否则鼠标移到地图上会触发「切换小地图」气泡。 -->
       <span class="relative flex-none" style="overflow: visible">
-        <AxTooltip content="切换小地图" placement="top">
-          <button
-            class="grid size-7 place-items-center rounded-lg transition-colors hover:bg-hover"
-            :class="ui.minimapOn ? 'text-ink' : 'text-ink-dim'" aria-label="切换小地图" :aria-pressed="ui.minimapOn ? 'true' : 'false'"
-            @click="ui.toggleMinimap()"
-          ><Map :size="14" /></button>
-        </AxTooltip>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button variant="ghost" size="icon-sm" class="size-7 rounded-lg"
+              :class="ui.minimapOn ? 'text-ink' : 'text-ink-dim'" aria-label="切换小地图"
+              :aria-pressed="ui.minimapOn ? 'true' : 'false'" @click="ui.toggleMinimap()">
+              <Map :size="14" class="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">切换小地图</TooltipContent>
+        </Tooltip>
         <!-- 地图挂点：零尺寸、不拦截点击；地图 absolute 浮在按钮上方 -->
         <span ref="miniMapDock" class="mini-map-dock" aria-hidden="true" />
       </span>
         </SlotAnchor>
         <SlotAnchor id="host/edges" :order="400">
       <!-- 隐藏节点连线：关闭态 = Link2Off（自带斜线），照图 2 -->
-      <AxTooltip :content="s.edgesVisible ? '隐藏节点连线' : '显示节点连线'" placement="top">
-        <button
-          class="grid size-7 place-items-center rounded-lg transition-colors hover:bg-hover"
-          :class="s.edgesVisible ? 'text-ink' : 'text-ink-dim'"
-          :aria-label="s.edgesVisible ? '隐藏节点连线' : '显示节点连线'" :aria-pressed="!s.edgesVisible"
-          @click="ui.toggleEdges()"
-        ><Link2Off v-if="!s.edgesVisible" :size="14" /><Link2 v-else :size="14" /></button>
-      </AxTooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" class="size-7 rounded-lg"
+            :class="s.edgesVisible ? 'text-ink' : 'text-ink-dim'"
+            :aria-label="s.edgesVisible ? '隐藏节点连线' : '显示节点连线'" :aria-pressed="!s.edgesVisible"
+            @click="ui.toggleEdges()">
+            <Link2Off v-if="!s.edgesVisible" :size="14" class="size-3.5" /><Link2 v-else :size="14" class="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ s.edgesVisible ? '隐藏节点连线' : '显示节点连线' }}</TooltipContent>
+      </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/snap" :order="500">
       <!-- 网格吸附：关闭态 = MagnetOff（自带斜线） -->
-      <AxTooltip :content="s.snapOn ? '关闭网格吸附' : '开启网格吸附'" placement="top">
-        <button
-          class="grid size-7 place-items-center rounded-lg transition-colors hover:bg-hover"
-          :class="s.snapOn ? 'text-ink' : 'text-ink-dim'"
-          :aria-label="s.snapOn ? '关闭网格吸附' : '开启网格吸附'" :aria-pressed="s.snapOn"
-          @click="ui.toggleSnap()"
-        ><Grid2x2X v-if="!s.snapOn" :size="14" /><Magnet v-else :size="14" /></button>
-      </AxTooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" class="size-7 rounded-lg"
+            :class="s.snapOn ? 'text-ink' : 'text-ink-dim'"
+            :aria-label="s.snapOn ? '关闭网格吸附' : '开启网格吸附'" :aria-pressed="s.snapOn"
+            @click="ui.toggleSnap()">
+            <Grid2x2X v-if="!s.snapOn" :size="14" class="size-3.5" /><Magnet v-else :size="14" class="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{{ s.snapOn ? '关闭网格吸附' : '开启网格吸附' }}</TooltipContent>
+      </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/zoom" :order="600">
       <AxDropdown v-model="s.zoomMenuOpen" placement="top" align="center" menu-width="215px">
         <template #trigger>
-          <AxTooltip content="缩放选项" placement="top">
-            <button class="h-7 whitespace-nowrap rounded-lg px-1 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="缩放选项">{{ s.zoom }}%</button>
-          </AxTooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+          <Button variant="ghost" size="sm" class="h-7 rounded-lg whitespace-nowrap px-1 text-[13px] font-normal hover:bg-hover"
+                aria-label="缩放选项">{{ s.zoom }}%</Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">缩放选项</TooltipContent>
+          </Tooltip>
         </template>
         <template #default="{ close }">
           <AxMenuItem @click="ui.zoomInStep(); close()">放大 <span class="ax-menu-hint">Ctrl +</span></AxMenuItem>
@@ -119,4 +141,5 @@ const miniMapDock = useMiniMapDockTarget()
       </SlotComposer>
     </div>
   </div>
+  </TooltipProvider>
 </template>

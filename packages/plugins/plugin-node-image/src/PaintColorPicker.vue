@@ -9,7 +9,8 @@
  * 结构：触发器 = 工具栏按钮（色块图标）；菜单 = 预置色网格 + 注册的颜色组件。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   /** 当前颜色（#rrggbb / #rrggbbaa） */
@@ -21,7 +22,6 @@ const emit = defineEmits<{
   (e: "update:modelValue", value: string): void
 }>()
 
-const Button = useUiComponent('toolbarButton')
 const Dropdown = useUiComponent('dropdown')
 const ColorField = useUiComponent('color')
 
@@ -102,7 +102,10 @@ const ICON =
     </div>
   </component>
   <!-- 主题没注册 dropdown 时：退化成只有色块的静态按钮（不静默消失） -->
-  <component :is="Button || 'button'" v-else :title="'标记颜色 ' + swatch" :icon="ICON" />
+  <Button v-else class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    :title="'标记颜色 ' + swatch" aria-label="标记颜色">
+    <ToolbarIcon :icon="ICON" />
+  </Button>
 </template>
 
 <style scoped>

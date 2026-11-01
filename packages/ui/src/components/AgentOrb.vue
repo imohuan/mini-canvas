@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
     <!-- viewBox 从 y=10 起：球身圆心在用户坐标 cy=60（不是 50），照抄参考文件的
          "0 0 100 100" 会让包子在按钮里往下坠（下方留白明显少于上方）。
          把视口上边界下移 10，球身圆心正好落在 50% —— 真正居中。 -->
-    <svg class="ao-svg" viewBox="0 10 100 100" xmlns="http://www.w3.org/2000/svg">
+    <svg class="ao-svg size-full" viewBox="0 10 100 100" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <!-- 球身：面板色 → 面板激活色 → 分隔线色。亮暗两套由令牌自己切，无需 JS。 -->
         <radialGradient :id="skinId" cx="50%" cy="30%" r="75%">

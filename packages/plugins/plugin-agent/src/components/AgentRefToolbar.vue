@@ -18,15 +18,13 @@
  * （与节点控制栏同一个 resolveNodeSlotStyle），本组件只放内容。
  */
 import { computed } from 'vue'
-import { useCapability, useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCapability, useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
 import type { SelectionCapability } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { AGENT_REFERENCE_COMMAND_ID } from '../agentCommands.js'
 import { ICON_NODE } from '../agentResources.js'
 
 const { ctx } = useCanvasRender()
-// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。缺件回退原生按钮（降级成「还能点」）。
-const ThemedButton = useUiComponent('toolbarButton')
-
 /** 当前选中集（能力包；needs:['selection'] 在 agentPlugin 的 attach 里声明） */
 const selection = useCapability<SelectionCapability>('selection')
 
@@ -59,18 +57,11 @@ function onReference(): void {
     与「加入资产库」按钮逐字同形：这里只放按钮本身，不再自套一层 .ntp-root
     （再套一层会画出第二个背景块，用户报过「两个背景」）。
   -->
-  <component
-    :is="ThemedButton || 'button'"
-    class="agent-ref-toolbar__btn"
-    type="button"
-    title="引用到 Agent"
-    aria-label="引用到 Agent"
-    :icon="ICON_NODE"
-    :disabled="!enabled"
-    @click="onReference"
-  >
-    引用到 Agent
-  </component>
+  <Button class="mck-toolbar-btn agent-ref-toolbar__btn" variant="ghost" size="sm" type="button"
+    title="引用到 Agent" aria-label="引用到 Agent" :disabled="!enabled" @click="onReference">
+    <ToolbarIcon :icon="ICON_NODE" />
+    <span class="mck-toolbar-label">引用到 Agent</span>
+  </Button>
 </template>
 
 <style scoped>

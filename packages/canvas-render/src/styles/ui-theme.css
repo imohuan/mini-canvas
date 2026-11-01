@@ -354,3 +354,112 @@ html.dark {
   box-shadow: var(--ui-shadow-md, 0 20px 40px rgb(0 0 0 / 0.08));
   white-space: nowrap;
 }
+
+/* ===== 节点上/下控制栏按钮（全局唯一一套外观）=====
+ *
+ * 控制栏按钮直接使用 shadcn 的 Button（@mini-canvas/ui-kit-shadcn），这里只补
+ * 「工具栏尺寸与语义色」：32×32 图标钮、透明底、hover 上色、primary 强调色、
+ * danger 悬停转红、active 高亮。色值全部读 --ntb-* / --ui-*，亮暗主题自动跟随。
+ *
+ * 为什么放全局（而不是某个插件）：18 个调用点跨 9 个包，样式只能有一份；
+ * 之前写在 plugin-theme-default 的 .ntb-btn 里，插件要拿这套外观就得套一层转接件。
+ * shadcn Button 自带 h-8 / px-3 / bg-primary 等工具类；这里用更高的选择器权重
+ * 覆盖它们。文字钮的 `:not(.is-icon-only)` 会比单个类名多一层权重，所以 primary
+ * 再重复一次类名，保证强调色底不被文字钮的透明底盖掉（实测：保存按钮青底白字）。
+ */
+.mck-toolbar-btn.mck-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border-color: transparent;
+  background: var(--ntb-fill, transparent);
+  color: var(--ntb-text, var(--ui-ink-dim));
+  font-size: 12px;
+  box-shadow: none;
+}
+
+/* 带文字的按钮：宽度跟内容走，hover 只上更浅的一层底 */
+.mck-toolbar-btn.mck-toolbar-btn:not(.is-icon-only) {
+  width: auto;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.mck-toolbar-btn.mck-toolbar-btn:not(.is-icon-only):hover:not(:disabled) {
+  background: var(--ntb-fill-quiet, var(--ui-hover-soft));
+}
+
+.mck-toolbar-btn.mck-toolbar-btn:hover:not(:disabled) {
+  background: var(--ntb-fill-hover, var(--ui-hover));
+  color: var(--ntb-text-strong, var(--ui-ink));
+}
+
+.mck-toolbar-btn .mck-toolbar-icon,
+.mck-toolbar-btn .mck-toolbar-icon-raw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.mck-toolbar-btn .mck-toolbar-icon-raw > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.mck-toolbar-btn:not(.is-icon-only) .mck-toolbar-icon-raw > svg {
+  width: 12px;
+  height: 12px;
+}
+
+.mck-toolbar-btn.mck-toolbar-btn.mck-toolbar-btn--primary {
+  width: auto;
+  min-width: 0;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--ui-accent);
+  color: var(--ui-primary-ink, #fff);
+}
+
+.mck-toolbar-btn.mck-toolbar-btn.mck-toolbar-btn--primary:hover:not(:disabled) {
+  background: var(--ui-accent-hover);
+  color: var(--ui-primary-ink, #fff);
+}
+
+/* 危险按钮平时仍是普通工具按钮，只有悬停才转红（旧规范） */
+.mck-toolbar-btn.mck-toolbar-btn--danger {
+  background: transparent;
+  color: var(--ntb-text, var(--ui-ink-dim));
+}
+
+.mck-toolbar-btn.mck-toolbar-btn--danger:hover:not(:disabled) {
+  background: var(--ui-danger-veil);
+  color: var(--ui-danger);
+}
+
+.mck-toolbar-btn.is-active {
+  background: var(--ntb-active-bg, var(--ui-accent-soft));
+  color: var(--ntb-active-ink, var(--ui-accent-hover));
+}
+
+.mck-toolbar-btn.is-active:hover:not(:disabled) {
+  background: var(--ntb-active-bg-hover, var(--ui-accent-soft));
+  color: var(--ntb-active-ink, var(--ui-accent-hover));
+}
+
+.mck-toolbar-btn .mck-toolbar-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

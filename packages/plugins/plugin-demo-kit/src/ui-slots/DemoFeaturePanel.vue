@@ -3,18 +3,17 @@
  * DemoFeaturePanel —— 功能模式下的底栏内容（渲染在**同一根默认底栏内部**）。
  *
  * 外观完全沿用默认底栏：容器/圆角/阴影是 NodeBottomBar 的 .nb-root，本组件只排内容；
- * 按钮一律按名取主题 button，与其它默认件同款。不做业务，只演示形态。
+ * 按钮直接用 shadcn Button + 全局 .mck-toolbar-btn，与其它控制栏同款。不做业务，只演示形态。
  *
  * 关闭：nodeBar.exitMode（顶栏的「退出」也调同一句，两边永远同步）。
  */
 import { computed } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { closeDemoMode, demoMode } from './demoMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const ThemedButton = useUiComponent('toolbarButton')
-
 const LABEL = { alpha: '演示功能 A', beta: '演示功能 B' } as const
 
 const kind = computed(() => {
@@ -39,11 +38,17 @@ function exit(): void {
       <span class="dfp-hint">该功能的专属底栏内容（替换默认生成 UI）</span>
     </div>
     <div class="dfp-actions">
-      <component :is="ThemedButton || 'button'" type="button" @click="notify('演示：操作一')">操作一</component>
-      <component :is="ThemedButton || 'button'" type="button" @click="notify('演示：操作二')">操作二</component>
-      <component :is="ThemedButton || 'button'" type="button" variant="primary" @click="notify('演示：确认')">确认</component>
+      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" @click="notify('演示：操作一')">
+        <span class="mck-toolbar-label">操作一</span>
+      </Button>
+      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" @click="notify('演示：操作二')">
+        <span class="mck-toolbar-label">操作二</span>
+      </Button>
+      <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+        @click="notify('演示：确认')"><span class="mck-toolbar-label">确认</span></Button>
       <span class="dfp-grow" aria-hidden="true" />
-      <component :is="ThemedButton || 'button'" type="button" variant="danger" @click="exit">退出功能</component>
+      <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
+        @click="exit"><span class="mck-toolbar-label">退出功能</span></Button>
     </div>
   </div>
 </template>

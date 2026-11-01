@@ -187,6 +187,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
       '@prismshadow/penguin-core':
         specifier: 0.2.13
         version: 0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
@@ -582,6 +585,9 @@ importers:
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
         version: link:../plugin-theme-default
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
     devDependencies:
       '@mini-canvas/kernel':
         specifier: workspace:*
@@ -690,6 +696,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
@@ -777,6 +786,9 @@ importers:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
@@ -864,6 +876,9 @@ importers:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
       vue:
         specifier: ^3.5.0
         version: 3.5.38(typescript@6.0.3)
@@ -944,6 +959,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
     devDependencies:
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
@@ -1012,6 +1030,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
@@ -1089,6 +1110,9 @@ importers:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
@@ -1212,6 +1236,9 @@ importers:
       '@mini-canvas/plugin-bottom-bar':
         specifier: workspace:*
         version: link:../plugin-bottom-bar
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))

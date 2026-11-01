@@ -13,7 +13,8 @@
  * 与图片节点的 ImageTopToolbar 逐字同形：**定位不在这里**，选中态也不在这里。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor, groupServiceOf } from './groupEngine'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -26,8 +27,7 @@ const { ctx } = useCanvasRender()
  * 少了这一句，未选中或选中别人时这条栏也会一直挂在那儿（用户实测报的就是这个）。
  */
 const visible = useSoleNodeSelected(props.id)
-/** 设计系统件按名取（§4.5 目录）：换主题时这里一行不改 */
-const ThemedButton = useUiComponent('toolbarButton')
+/** 下拉仍按名取（主题可换）；按钮本体直接用 shadcn Button */
 const ThemedDropdown = useUiComponent('dropdown')
 
 /** 解组图标（与 GroupContent 里那枚同源写法：内联 SVG 字符串） */
@@ -81,13 +81,13 @@ function pickColor(color: string): void {
           同一个坑在别处也出现过：凡是 span 画色块，display 与尺寸要成对写。
           文字与 aria-label 同名（无障碍硬性要求：可见标签要能被读屏念出来）。
         -->
-        <component :is="ThemedButton || 'button'" class="group-color-trigger" title="背景颜色" aria-label="背景颜色"
-          aria-haspopup="listbox" :aria-expanded="colorOpen">
+        <Button class="mck-toolbar-btn group-color-trigger" variant="ghost" size="sm" type="button"
+          title="背景颜色" aria-label="背景颜色" aria-haspopup="listbox" :aria-expanded="colorOpen">
           <div class="group-color-trigger__content">
             <span class="group-color-trigger__dot" :style="{ backgroundColor: currentColor }" aria-hidden="true" />
-            <span>背景颜色</span>
+            <span class="mck-toolbar-label">背景颜色</span>
           </div>
-        </component>
+        </Button>
       </template>
       <template #default="{ close }">
         <div class="group-color-grid" role="listbox" aria-label="分组背景颜色" @click.stop>
@@ -100,10 +100,11 @@ function pickColor(color: string): void {
       </template>
     </component>
 
-    <component :is="ThemedButton || 'button'" class="group-top-toolbar__btn" type="button" title="解散分组"
-      aria-label="解散分组" :icon="ICON_UNGROUP" variant="danger" @click="onUngroup">
-      解散分组
-    </component>
+    <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
+      title="解散分组" aria-label="解散分组" @click="onUngroup">
+      <ToolbarIcon :icon="ICON_UNGROUP" />
+      <span class="mck-toolbar-label">解散分组</span>
+    </Button>
   </div>
 </template>
 

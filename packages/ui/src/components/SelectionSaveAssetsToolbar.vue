@@ -16,14 +16,13 @@
  * 上下文走能力包（needs:['selection']），与打组按钮同一条规矩。
  */
 import { computed } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { ToolbarIcon } from '@mini-canvas/canvas-render'
 import type { SelectionCapability } from '@mini-canvas/canvas-render'
 import { useCapability, useCanvasRender } from '@mini-canvas/canvas-render'
 import { queueUploadsFromNodeIds } from '../composables/assetUploadBus'
 
 const { ctx } = useCanvasRender()
-const ThemedButton = useUiComponent('toolbarButton')
-
 /** 当前选中集（能力包；needs 里声明了才拿得到 —— 见 uiAssetUploadPlugin 的 attach） */
 const selection = useCapability<SelectionCapability>('selection')
 
@@ -56,15 +55,9 @@ function onSaveAssets(): void {
     再套一层会画出第二个背景块（用户看到的"两个背景"正是这么来的），
     和打组按钮（SelectionGroupToolbar）的写法也就对不上了。
   -->
-  <component
-    :is="ThemedButton || 'button'"
-    type="button"
-    title="加入资产库"
-    aria-label="加入资产库"
-    :icon="ICON_SAVE_ASSET"
-    :disabled="!enabled"
-    @click="onSaveAssets"
-  >
-    加入资产库
-  </component>
+  <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button"
+    title="加入资产库" aria-label="加入资产库" :disabled="!enabled" @click="onSaveAssets">
+    <ToolbarIcon :icon="ICON_SAVE_ASSET" />
+    <span class="mck-toolbar-label">加入资产库</span>
+  </Button>
 </template>

@@ -9,8 +9,9 @@
  */
 import { computed, ref } from 'vue'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { createImageOps, uploadImage } from './imageOps'
 import { readImageSourceFields } from './imageRefs'
 import ImagePaintEntry from './ImagePaintEntry.vue'
@@ -19,7 +20,6 @@ import ImageToolbarShell from './ImageToolbarShell.vue'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-const NodeToolbarButton = useUiComponent('toolbarButton')
 const DropdownButton = useUiComponent('toolbarDropdown')
 const selected = useSoleNodeSelected(props.id)
 
@@ -114,7 +114,10 @@ function cancelEdit(): void {
 
     <!-- 编辑态：只剩确认 / 取消（布局对齐 liblib：取消在最左、比例下拉居中、确认在最右） -->
     <div v-if="editing" class="ntp-root it-root">
-      <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
+      <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+        title="取消编辑" aria-label="取消编辑" @click="cancelEdit">
+        <ToolbarIcon :icon="ICON_CANCEL" />
+      </Button>
       <DropdownButton
         v-if="cropping"
         class="it-ratio"
@@ -122,9 +125,11 @@ function cancelEdit(): void {
         :items="ratioItems"
         @pick="onRatioChange"
       />
-      <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
-        确认
-      </NodeToolbarButton>
+      <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+        title="确认编辑" aria-label="确认编辑" @click="confirmEdit">
+        <ToolbarIcon :icon="ICON_CONFIRM" />
+        <span class="mck-toolbar-label">确认</span>
+      </Button>
     </div>
 
     <!--
@@ -138,13 +143,22 @@ function cancelEdit(): void {
       :data="props.data"
     >
       <SlotAnchor id="host/upload" :order="100">
-        <NodeToolbarButton v-if="!featureMode" title="上传图片" :icon="ICON_UPLOAD" :disabled="busy" @click="openPicker" />
+        <Button v-if="!featureMode" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+          title="上传图片" aria-label="上传图片" :disabled="busy" @click="openPicker">
+          <ToolbarIcon :icon="ICON_UPLOAD" />
+        </Button>
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/crop" :order="200">
-        <NodeToolbarButton v-if="!featureMode" title="裁剪图片" :icon="ICON_CROP" @click="onCrop" />
+        <Button v-if="!featureMode" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+          title="裁剪图片" aria-label="裁剪图片" @click="onCrop">
+          <ToolbarIcon :icon="ICON_CROP" />
+        </Button>
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/expand" :order="300">
-        <NodeToolbarButton v-if="!featureMode" title="扩展图片" :icon="ICON_EXPAND" @click="onExpand" />
+        <Button v-if="!featureMode" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+          title="扩展图片" aria-label="扩展图片" @click="onExpand">
+          <ToolbarIcon :icon="ICON_EXPAND" />
+        </Button>
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/paint" :order="400">
         <ImagePaintEntry :node-id="props.id" :data="props.data" />

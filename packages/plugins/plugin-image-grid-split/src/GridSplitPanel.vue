@@ -10,14 +10,13 @@
  *   × 宫格切分 | 已选择 N 项 | 创建分镜组 | 发送到画布
  */
 import { computed } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { endSplit, splitState } from './splitSession'
 import { publishCells, publishDepsOf } from './publish'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const Button = useUiComponent('toolbarButton')
-
 const state = computed(() => splitState(props.id))
 const selectedCount = computed(() => state.value?.selected.size ?? 0)
 const publishing = computed(() => state.value?.publishing ?? false)
@@ -66,7 +65,10 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
   <!-- ntp-root = 主题胶囊（与图片顶栏/绘制模式同一个壳），不另画面板 -->
   <div v-if="state" class="ntp-root gsp-root nodrag nopan" data-testid="grid-split-panel">
     <!-- 退出 + 名称 -->
-    <component :is="Button || 'button'" type="button" variant="danger" :icon="ICON_EXIT" title="退出宫格切分" aria-label="退出宫格切分" @click="exit" />
+    <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+      title="退出宫格切分" aria-label="退出宫格切分" @click="exit">
+      <ToolbarIcon :icon="ICON_EXIT" />
+    </Button>
     <span class="gsp-title">宫格切分</span>
 
     <span class="gsp-sep" aria-hidden="true" />
@@ -77,29 +79,26 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
     <span class="gsp-sep" aria-hidden="true" />
 
     <!-- 创建分镜组 -->
-    <component
-      :is="Button || 'button'"
-      type="button"
-      :icon="ICON_STORYBOARD"
+    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button"
       :disabled="publishing"
       title="对选中的格子创建分镜组（组内可拖拽排序）"
       aria-label="创建分镜组"
-      @click="publish('storyboard')"
-    >创建分镜组</component>
+      @click="publish('storyboard')">
+      <ToolbarIcon :icon="ICON_STORYBOARD" />
+      <span class="mck-toolbar-label">创建分镜组</span>
+    </Button>
 
     <span class="gsp-sep" aria-hidden="true" />
 
     <!-- 发送到画布（主按钮，最右） -->
-    <component
-      :is="Button || 'button'"
-      type="button"
-      variant="primary"
-      :icon="ICON_SEND"
+    <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
       :disabled="publishing"
       title="把选中格子的图片发送到画布，并放进一个分组节点里"
       aria-label="发送到画布"
-      @click="publish('canvas')"
-    >发送到画布</component>
+      @click="publish('canvas')">
+      <ToolbarIcon :icon="ICON_SEND" />
+      <span class="mck-toolbar-label">发送到画布</span>
+    </Button>
   </div>
 </template>
 
