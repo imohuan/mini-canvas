@@ -91,7 +91,7 @@ async function save(): Promise<void> {
               v-if="ThemedSelect"
               :model-value="provider"
               :options="providerChoices"
-              dropdown-width="match"
+              match-width
               aria-label="会话标题 Provider"
               @update:model-value="pickProvider(String($event ?? ''))"
             />
@@ -104,7 +104,7 @@ async function save(): Promise<void> {
               v-model="modelId"
               :options="modelChoices"
               :disabled="!provider"
-              dropdown-width="match"
+              match-width
               aria-label="会话标题模型"
             />
             <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>

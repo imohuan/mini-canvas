@@ -151,7 +151,7 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
       <section class="tg-sec">
         <h4>下拉选择器 select / Select</h4>
         <div class="tg-row">
-          <component :is="Select" v-model="model" :options="selectOptions" searchable dropdown-width="match" />
+          <component :is="Select" v-model="model" :options="selectOptions" searchable match-width />
           <span class="tg-val">当前值：{{ model }}</span>
         </div>
       </section>

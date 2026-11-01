@@ -46,14 +46,14 @@ function rule(css: string, selector: string): string {
 
 describe('下拉浮层 = 右键菜单那一档（不透明白底 + 16 圆角 + 6 内边距）', () => {
   it('浮层底色走 --ui-overlay-solid（不是毛玻璃 --ui-glass），且不写 backdrop-filter', () => {
-    const body = rule(SELECT, '.sel-menu-body')
+    const body = rule(SELECT, '.mck-select-menu')
     expect(body).toMatch(/--dd-bg:\s*var\(--ui-overlay-solid/)
     expect(body).not.toMatch(/--ui-glass/)
     expect(body).not.toMatch(/backdrop-filter/)
   })
 
   it('圆角 16、内边距 6 由 --dd-radius / --dd-padding 交给 Dropdown 消费', () => {
-    const body = rule(SELECT, '.sel-menu-body')
+    const body = rule(SELECT, '.mck-select-menu')
     expect(body).toMatch(/--dd-radius:\s*16px/)
     expect(body).toMatch(/--dd-padding:\s*6px/)
     // 外观由 ui-kit 的浮层规则消费；主题适配层只透传 --dd-* 变量。
@@ -64,7 +64,7 @@ describe('下拉浮层 = 右键菜单那一档（不透明白底 + 16 圆角 + 6
 })
 
 describe('下拉行 = 右键菜单行（44 高 / 6 内边距 / 10 圆角 / 行内 10）', () => {
-  const row = rule(SELECT, '.sel-option')
+  const row = rule(SELECT, '.mck-select__option')
 
   it('行高 44、内边距 6、圆角 10、行内 gap 10', () => {
     expect(row).toMatch(/min-height:\s*44px/)
@@ -79,15 +79,15 @@ describe('下拉行 = 右键菜单行（44 高 / 6 内边距 / 10 圆角 / 行�
   })
 
   it('逐项入场：由 --item-index 驱动的 18ms 交错（与右键菜单同款）', () => {
-    expect(row).toMatch(/animation:\s*sel-item-in/)
+    expect(row).toMatch(/animation:\s*mck-select-item-in/)
     expect(row).toMatch(/animation-delay:\s*calc\(var\(--item-index,\s*0\)\s*\*\s*18ms\)/)
-    expect(SELECT).toMatch(/@keyframes sel-item-in/)
+    expect(SELECT).toMatch(/@keyframes mck-select-item-in/)
   })
 
   it('分组分隔线：相邻选项 group 不同才画一条线（照右键菜单的分块）', () => {
     expect(SELECT).toMatch(/is-group-start/)
-    expect(rule(SELECT, '.sel-option.is-group-start')).toMatch(/position:\s*relative/)
-    const line = rule(SELECT, ".sel-option.is-group-start::before")
+    expect(rule(SELECT, '.mck-select__option.is-group-start')).toMatch(/position:\s*relative/)
+    const line = rule(SELECT, ".mck-select__option.is-group-start::before")
     expect(line).toMatch(/height:\s*1px/)
     expect(line).toMatch(/background:\s*var\(--ui-line/)
   })
@@ -97,7 +97,7 @@ describe('下拉行 = 右键菜单行（44 高 / 6 内边距 / 10 圆角 / 行�
  * 名称与描述**不许重合**（用户实测反馈 2026-10-12：「你的下拉菜单中标题和描述都重合了，
  * 没有间隔，这需要你修复」）。
  *
- * 根因：.sel-option-label 是 .sel-option-copy 的**绝对定位**子元素，行高若走继承，
+ * 根因：.mck-select__option-label 是 .mck-select__copy 的**绝对定位**子元素，行高若走继承，
  * 13px 正文在 1.5 行高下生成 19.5px 行盒（实测 label 下缘 521 压到描述上缘 519），
  * hover 时「名称上移 + 描述浮出」两行就叠在一起。右键菜单那本（.ctx-menu-label）
  * 本来就写着 line-height: 1，这里补齐同一档。
@@ -106,12 +106,12 @@ describe('下拉行 = 右键菜单行（44 高 / 6 内边距 / 10 圆角 / 行�
  */
 describe('名称/描述不重合（line-height 必须钉在 1）', () => {
   it('名称的行高写死 1（继承宿主行高会让两行叠在一起）', () => {
-    const label = rule(SELECT, '.sel-option-label')
-    expect(label, '没找到 .sel-option-label 规则').toMatch(/line-height:\s*1\b/)
+    const label = rule(SELECT, '.mck-select__option-label')
+    expect(label, '没找到 .mck-select__option-label 规则').toMatch(/line-height:\s*1\b/)
   })
 
   it('描述那行同样是 1（两行的行盒都收在自己那一行里）', () => {
-    expect(rule(SELECT, '.sel-option-description')).toMatch(/line-height:\s*1\b/)
+    expect(rule(SELECT, '.mck-select__option-desc')).toMatch(/line-height:\s*1\b/)
   })
 })
 
@@ -160,9 +160,9 @@ describe('浮层外观 token 收在 ui-theme（两处实现共用同一档数值
 
 describe('不用主题色（黑白两套主题即可）', () => {
   it('下拉：选中行不铺强调色底、勾与箭头都不是强调色', () => {
-    const active = rule(SELECT, '.sel-option.is-active')
+    const active = rule(SELECT, '.mck-select__option.is-active')
     expect(active, '选中态不该有背景').not.toMatch(/background/)
-    expect(rule(SELECT, '.sel-check')).not.toMatch(/--ui-accent/)
+    expect(rule(SELECT, '.mck-select__check')).not.toMatch(/--ui-accent/)
   })
 
   it('参数网格：选中 = 深色描边 + 浅灰底（描边走 --ui-ink，暗色下自动变近白）', () => {

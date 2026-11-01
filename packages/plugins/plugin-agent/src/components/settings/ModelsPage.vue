@@ -270,7 +270,7 @@ async function save(): Promise<void> {
               v-if="ThemedSelect"
               v-model="form.clientType"
               :options="clientChoices"
-              dropdown-width="match"
+              match-width
               aria-label="客户端协议"
             />
             <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>

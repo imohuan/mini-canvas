@@ -38,7 +38,7 @@ describe('内置控件按 type 渲染', () => {
       },
       'medium',
     )
-    expect(html).toContain('sel-trigger')
+    expect(html).toContain('mck-select')
     expect(html).not.toContain('<select')
     // 当前值作为标签显示在触发器上
     expect(html).toContain('中')
@@ -93,7 +93,7 @@ describe('自定义组件渲染（用户明确要求的能力）', () => {
     )
     expect(html).toContain('data-custom-param="hit"')
     // 内置控件不该同时出现（否则用户会看到两套 UI）
-    expect(html).not.toContain('sel-trigger')
+    expect(html).not.toContain('mck-select')
     expect(html).not.toContain('<select')
   })
 

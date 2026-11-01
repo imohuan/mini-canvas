@@ -16,7 +16,7 @@ export interface SelectOption {
   disabled?: boolean
   /**
    * 可选一句话说明（悬停/聚焦该行时从名称下方浮现）。
-   * 视觉与右键菜单的 hover 描述同一套动效（Select 的样式的 .sel-option-copy）。
+   * 视觉与右键菜单的 hover 描述同一套动效（Select 的样式的 .mck-select__copy）。
    */
   description?: string
   /**

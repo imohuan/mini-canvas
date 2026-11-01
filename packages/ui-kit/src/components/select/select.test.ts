@@ -64,7 +64,7 @@ describe('Select 组件行为', () => {
     wrapper.unmount()
   })
 
-  it('兼容旧主题的 dropdownWidth / dropdownMaxWidth / inputId', async () => {
+  it('浮层宽度、最大宽高与 inputId', async () => {
     // 独立挂载点：避免上一个用例遗留的 Teleport 目标在卸载后仍被复用。
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -73,9 +73,9 @@ describe('Select 组件行为', () => {
         modelValue: 'a',
         options: [{ label: 'A', value: 'a' }],
         inputId: 'theme-select',
-        dropdownWidth: '260px',
-        dropdownMaxWidth: '300px',
-        dropdownMaxHeight: '180px',
+        menuMinWidth: '260px',
+        menuMaxWidth: '300px',
+        menuMaxHeight: '180px',
       },
       attachTo: host,
     })
@@ -83,7 +83,7 @@ describe('Select 组件行为', () => {
     await wrapper.find('.mck-select').trigger('click')
     await wrapper.vm.$nextTick()
     const panel = document.querySelector<HTMLElement>('.mck-dropdown__panel')
-    // 旧语义：非 auto/match 的值是 minWidth，不是固定 width（否则参数下拉会被压窄）。
+    // 浮动宽度按最小宽度交给 Dropdown，内容仍可继续撑开。
     expect(panel?.style.minWidth).toBe('260px')
     expect(panel?.style.width).toBe('')
     expect(panel?.style.maxWidth).toBe('300px')
@@ -106,7 +106,7 @@ describe('Select 组件行为', () => {
     await wrapper.vm.$nextTick()
     const panel = document.querySelector('.mck-dropdown__panel')
     if (!panel) throw new Error('dropdown panel missing')
-    const starts = panel.querySelectorAll('.sel-option.is-group-start')
+    const starts = panel.querySelectorAll('.mck-select__option.is-group-start')
     expect(starts.length).toBe(1)
     expect(starts[0]?.textContent).toContain('B1')
     wrapper.unmount()

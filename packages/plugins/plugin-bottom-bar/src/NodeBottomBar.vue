@@ -3147,7 +3147,7 @@ function onGlobalLeave(el: Element): void {
             :model-value="currentId"
             :options="actionOptions"
             :disabled="running"
-            dropdown-width="match"
+            match-width
             dropdown-min-width="300px"
             :input-id="'nb-action-' + props.id"
             title="选择动作 / 模型"
@@ -4733,7 +4733,7 @@ function onGlobalLeave(el: Element): void {
   max-width: 200px;
 }
 /* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
-.nb-field :deep(.sel-trigger) {
+.nb-field :deep(.mck-select) {
   gap: 4px;
   padding: 4px 8px;
   border-color: transparent;
@@ -4744,17 +4744,17 @@ function onGlobalLeave(el: Element): void {
   /* 圆角 8（不是胶囊）：照参考站的模型按钮 */
   border-radius: 8px;
 }
-.nb-field :deep(.sel-trigger:hover:not(.is-open)) {
+.nb-field :deep(.mck-select:hover:not(.is-open)) {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   color: var(--ui-ink, #18202b);
 }
-.nb-field :deep(.sel-trigger.is-open) {
+.nb-field :deep(.mck-select.is-open) {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   border-color: transparent;
   box-shadow: none;
   color: var(--ui-ink, #18202b);
 }
-.nb-field :deep(.sel-arrow) {
+.nb-field :deep(.mck-select__arrow) {
   width: 14px;
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);

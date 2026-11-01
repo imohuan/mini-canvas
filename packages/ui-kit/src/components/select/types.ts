@@ -20,17 +20,8 @@ export interface SelectProps {
   searchPlaceholder?: string
   /** 浮层方向：与 Dropdown 的 placement 同一套语义。 */
   placement?: UiKitPlacement
-  /**
-   * 旧主题调用面兼容：'match' 与触发器同宽、'auto' 由内容决定、其它值当 CSS 宽度。
-   * 内部仍交给同一个 Dropdown，不另做浮层。
-   */
-  dropdownWidth?: string
-  /** 浮层最大宽度（CSS 值）。 */
-  dropdownMaxWidth?: string
-  /** 浮层最大高度（CSS 值）；超出在面板内滚动。 */
-  dropdownMaxHeight?: string
-  /** 浮层最小宽度（CSS 值）。 */
-  dropdownMinWidth?: string
+  /** 是否让浮层与触发器同宽（优先于 menuMinWidth）。 */
+  matchWidth?: boolean
   disabled?: boolean
   invalid?: boolean
   error?: string
@@ -40,6 +31,10 @@ export interface SelectProps {
   ariaLabel?: string
   /** 下拉最小宽度 */
   menuMinWidth?: string
+  /** 下拉最大宽度（CSS 值）。 */
+  menuMaxWidth?: string
+  /** 下拉最大高度（CSS 值）；超出在面板内滚动。 */
+  menuMaxHeight?: string
   /** 触发器 id，供外部 <label for> 关联。 */
   inputId?: string
 }

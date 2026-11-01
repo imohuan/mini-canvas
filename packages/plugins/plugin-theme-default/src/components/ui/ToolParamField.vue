@@ -149,7 +149,7 @@ const numberValue = computed(() => {
     :options="options"
     :disabled="disabled"
     :placeholder="param.label || param.key"
-    dropdown-width="match"
+    match-width
     :input-id="inputId"
     @update:model-value="onSelect"
   />

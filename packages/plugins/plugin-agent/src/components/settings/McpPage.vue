@@ -152,7 +152,7 @@ async function save(): Promise<void> {
               v-if="ThemedSelect"
               v-model="form.kind"
               :options="KIND_CHOICES"
-              dropdown-width="match"
+              match-width
               aria-label="MCP 传输类型"
             />
             <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>

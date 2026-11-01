@@ -161,7 +161,7 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
     expect(html).toContain('trg-grid')
     expect(html).toContain('trg-shape') // 按真实比例画的矩形
     expect(html).toContain('16:9')
-    expect(html).not.toContain('sel-trigger') // 不是下拉
+    expect(html).not.toContain('mck-select') // 不是下拉
   })
 
   it('比例矩形按真实宽高比缩放：16:9 的宽 > 高，9:16 的高 > 宽', async () => {
@@ -203,7 +203,7 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
     expect(html).toContain('repeat(3, 1fr)') // 3 列
     expect(html).toContain('高画质')
     expect(html).toContain('is-active')
-    expect(html).not.toContain('sel-trigger')
+    expect(html).not.toContain('mck-select')
   })
 
   /**
@@ -231,7 +231,7 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
     expect(html).toContain('MP3')
     expect(html).toContain('OGG Opus')
     expect(html).toContain('is-active') // 当前档位高亮
-    expect(html).not.toContain('sel-trigger') // 不再是下拉
+    expect(html).not.toContain('mck-select') // 不再是下拉
   })
 
   it('kind:format 但选项很多 → 仍是下拉（铺开太长）', async () => {
@@ -242,7 +242,7 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
       options: ['a', 'b', 'c', 'd', 'e', 'f'].map((v) => ({ label: v.toUpperCase(), value: v })),
     }
     const html = await render(much, 'a')
-    expect(html).toContain('sel-trigger')
+    expect(html).toContain('mck-select')
     expect(html).not.toContain('tog-grid')
   })
 
@@ -307,7 +307,7 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
       },
       'Seedream 4.5',
     )
-    expect(html).toContain('sel-trigger')
+    expect(html).toContain('mck-select')
     expect(html).not.toContain('tog-grid')
   })
 

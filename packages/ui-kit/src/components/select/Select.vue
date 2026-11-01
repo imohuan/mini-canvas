@@ -15,10 +15,7 @@ const props = withDefaults(defineProps<SelectProps>(), {
   searchable: false,
   searchPlaceholder: '搜索…',
   placement: 'bottom-start',
-  dropdownWidth: 'auto',
-  dropdownMaxWidth: '320px',
-  dropdownMaxHeight: '320px',
-  dropdownMinWidth: '200px',
+  matchWidth: false,
   disabled: false,
   invalid: false,
   error: '',
@@ -53,19 +50,11 @@ function iconComponent(icon: SelectOption['icon']): Component | null {
   return typeof icon === 'string' || icon == null ? null : markRaw(icon as Component)
 }
 
-/**
- * 浮层宽度：`dropdownWidth:'match'` 走 Dropdown 的 matchWidth；
- * 主题旧实现把「非 auto」的值当 minWidth 用，这里保持同一语义，避免已有菜单被改成固定窄宽。
- */
-const resolvedMenuMinWidth = computed(() => {
-  if (props.dropdownWidth && props.dropdownWidth !== 'auto' && props.dropdownWidth !== 'match') {
-    return props.dropdownWidth
-  }
-  return props.menuMinWidth || props.dropdownMinWidth
-})
-const matchTriggerWidth = computed(() => props.dropdownWidth === 'match')
-const resolvedMenuMaxWidth = computed(() => props.dropdownMaxWidth || undefined)
-const resolvedMenuMaxHeight = computed(() => props.dropdownMaxHeight || 'min(320px, 60vh)')
+/** 浮层宽度直接读正式参数；不再把任意字符串当 minWidth 的旧语义。 */
+const resolvedMenuMinWidth = computed(() => props.menuMinWidth)
+const matchTriggerWidth = computed(() => props.matchWidth)
+const resolvedMenuMaxWidth = computed(() => props.menuMaxWidth || undefined)
+const resolvedMenuMaxHeight = computed(() => props.menuMaxHeight || 'min(320px, 60vh)')
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return props.options
@@ -148,9 +137,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
 </script>
 
 <template>
-  <!-- `sel-*` 是默认主题旧版 Select 的公开外观类（第三方样式与主题适配层按它们取件）。
-       结构仍由 ui-kit 统一提供，这里只挂兼容类名，不复制一套实现。 -->
-  <div class="mck-select-wrap sel-trigger-wrap" :class="'mck-select--' + size">
+  <div class="mck-select-wrap" :class="'mck-select--' + size">
     <Dropdown
       :model-value="open"
       :disabled="disabled"
@@ -167,7 +154,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
         <button
           :id="inputId || undefined"
           type="button"
-          class="mck-select sel-trigger"
+          class="mck-select"
           :class="{ 'is-open': isOpen, 'is-invalid': invalid || !!error, 'is-placeholder': !selected }"
           :aria-label="ariaLabel"
           :aria-expanded="isOpen"
@@ -184,7 +171,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
             @click.stop
             @keydown.stop="onKeydown"
           />
-          <span v-else class="mck-select__label sel-label" :class="{ 'is-placeholder': !selected }">{{ selected?.label || placeholder }}</span>
+          <span v-else class="mck-select__label" :class="{ 'is-placeholder': !selected }">{{ selected?.label || placeholder }}</span>
           <span
             v-if="clearable && selected && !disabled"
             class="mck-select__clear"
@@ -193,11 +180,11 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
             aria-label="清空选择"
             @click.stop.prevent="clear"
           >×</span>
-          <span class="mck-select__arrow sel-arrow" :class="{ 'is-open': isOpen }" aria-hidden="true">▾</span>
+          <span class="mck-select__arrow" :class="{ 'is-open': isOpen }" aria-hidden="true">▾</span>
         </button>
       </template>
       <template #default>
-        <div ref="listRef" class="mck-select__list sel-list" @keydown="onKeydown">
+        <div ref="listRef" class="mck-select__list" @keydown="onKeydown">
           <template v-for="(group, gi) in groups" :key="group.name + gi">
             <div v-if="group.name" class="mck-select__group">{{ group.name }}</div>
             <button
@@ -205,7 +192,7 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
               :key="item.value"
               type="button"
               role="option"
-              class="mck-select__option sel-option"
+              class="mck-select__option"
               :class="{
                 'is-selected': item.value === modelValue,
                 'is-highlight': item === filtered[highlight],
@@ -220,15 +207,15 @@ watch(filtered, () => { if (highlight.value >= filtered.value.length) highlight.
               @click="select(item)"
               @mouseenter="highlight = filtered.indexOf(item)"
             >
-              <span v-if="item.icon" class="mck-select__icon sel-option-icon" aria-hidden="true">
+              <span v-if="item.icon" class="mck-select__icon" aria-hidden="true">
                 <span v-if="iconHtml(item.icon)" class="mck-select__icon-raw" v-html="iconHtml(item.icon)" />
                 <component v-else :is="iconComponent(item.icon)" class="mck-select__icon-raw" />
               </span>
-              <span class="mck-select__copy sel-option-copy">
-                <span class="mck-select__option-label sel-option-label">{{ item.label }}</span>
-                <span v-if="item.description" class="mck-select__option-desc sel-option-description">{{ item.description }}</span>
+              <span class="mck-select__copy">
+                <span class="mck-select__option-label">{{ item.label }}</span>
+                <span v-if="item.description" class="mck-select__option-desc">{{ item.description }}</span>
               </span>
-              <span v-if="item.value === modelValue" class="mck-select__check sel-check" aria-hidden="true">✓</span>
+              <span v-if="item.value === modelValue" class="mck-select__check" aria-hidden="true">✓</span>
             </button>
           </template>
           <p v-if="filtered.length === 0" class="mck-select__empty">{{ emptyText }}</p>
