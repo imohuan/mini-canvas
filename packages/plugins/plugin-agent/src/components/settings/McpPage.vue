@@ -2,12 +2,21 @@
 // MCP 页：上面是「已配置」列表（表头在上、内容在下），下面是添加表单（一行一个字段）。
 // kind 三选一，选中后只显示该类型需要的字段 —— 这正是「不用 schema 自动渲染」的原因。
 import { computed, onMounted, ref } from 'vue'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
 import type { McpProbeResult } from '../../agentService.js'
 import '../../components/settings/settings.css'
 
 const agent = useAgent()
 const s = agent.state
+/** 通用下拉取主题登记件；主题缺席时回落到原生 select。 */
+const ThemedSelect = useUiComponent('select')
+/** MCP 传输类型（原生值 = 后台认的 kind）。 */
+const KIND_CHOICES = [
+  { label: 'http', value: 'http' },
+  { label: 'sse', value: 'sse' },
+  { label: 'stdio', value: 'stdio' },
+]
 const busy = ref(false)
 const form = ref({
   name: '',
@@ -132,7 +141,15 @@ async function save(): Promise<void> {
         <form class="ap-fields" @submit.prevent="save">
           <label class="ap-field">名称<input v-model="form.name" placeholder="smart" /></label>
           <label class="ap-field">类型
-            <select v-model="form.kind"><option value="http">http</option><option value="sse">sse</option><option value="stdio">stdio</option></select>
+            <component
+              :is="ThemedSelect"
+              v-if="ThemedSelect"
+              v-model="form.kind"
+              :options="KIND_CHOICES"
+              dropdown-width="match"
+              aria-label="MCP 传输类型"
+            />
+            <select v-else v-model="form.kind"><option value="http">http</option><option value="sse">sse</option><option value="stdio">stdio</option></select>
           </label>
           <label v-if="!isStdio" class="ap-field">URL<input v-model="form.url" placeholder="http://127.0.0.1:3000/mcp/$smart" /></label>
           <template v-else>

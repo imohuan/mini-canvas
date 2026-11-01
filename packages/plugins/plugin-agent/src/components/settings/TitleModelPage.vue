@@ -8,11 +8,14 @@
  * 保存后立即生效 —— 下一轮新会话的标题就由这个模型生成。
  */
 import { computed, onMounted, ref } from 'vue'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
 import '../../components/settings/settings.css'
 
 const agent = useAgent()
 const s = agent.state
+/** 通用下拉取主题登记件；主题缺席时回落到原生 select。 */
+const ThemedSelect = useUiComponent('select')
 
 const provider = ref('')
 const modelId = ref('')
@@ -38,6 +41,15 @@ const usableProviders = computed(() => {
   return [...seen.entries()].map(([p, models]) => ({ provider: p, models }))
 })
 const modelsOf = computed(() => usableProviders.value.find((p) => p.provider === provider.value)?.models ?? [])
+/** 两个下拉的选项：空值 = 用会话默认模型（后台的既有语义）。 */
+const providerChoices = computed(() => [
+  { label: '（用会话默认模型）', value: '' },
+  ...usableProviders.value.map((p) => ({ label: p.provider, value: p.provider })),
+])
+const modelChoices = computed(() => [
+  { label: '（用会话默认模型）', value: '' },
+  ...modelsOf.value.map((m) => ({ label: m, value: m })),
+])
 
 function pickProvider(p: string): void {
   provider.value = p
@@ -74,13 +86,31 @@ async function save(): Promise<void> {
         </p>
         <form class="ap-fields" @submit.prevent="save">
           <label class="ap-field">Provider
-            <select v-model="provider" @change="pickProvider(provider)">
+            <component
+              :is="ThemedSelect"
+              v-if="ThemedSelect"
+              :model-value="provider"
+              :options="providerChoices"
+              dropdown-width="match"
+              aria-label="会话标题 Provider"
+              @update:model-value="pickProvider(String($event ?? ''))"
+            />
+            <select v-else v-model="provider" @change="pickProvider(provider)">
               <option value="">（用会话默认模型）</option>
               <option v-for="p in usableProviders" :key="p.provider" :value="p.provider">{{ p.provider }}</option>
             </select>
           </label>
           <label class="ap-field">模型
-            <select v-model="modelId" :disabled="!provider">
+            <component
+              :is="ThemedSelect"
+              v-if="ThemedSelect"
+              v-model="modelId"
+              :options="modelChoices"
+              :disabled="!provider"
+              dropdown-width="match"
+              aria-label="会话标题模型"
+            />
+            <select v-else v-model="modelId" :disabled="!provider">
               <option value="">（用会话默认模型）</option>
               <option v-for="m in modelsOf" :key="m" :value="m">{{ m }}</option>
             </select>

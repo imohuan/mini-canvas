@@ -17,8 +17,12 @@
  * 密钥只写不回读：服务端只给 hasKey；编辑时留空 = 不改动已存的。
  */
 import { computed, onMounted, ref } from 'vue'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
 import '../../components/settings/settings.css'
+
+/** 通用下拉取主题登记件（与画布里的下拉同一套）；主题缺席时回落到原生 select。 */
+const ThemedSelect = useUiComponent('select')
 
 const agent = useAgent()
 const s = agent.state
@@ -35,6 +39,8 @@ const clientOptions = computed(() => {
   const list = s.clientTypes.length ? s.clientTypes : ['openai-chat', 'deepseek-v4']
   return [DEFAULT_CLIENT, ...list.filter((c) => c !== DEFAULT_CLIENT)]
 })
+/** 给通用下拉的选项形状（label = value，协议名本身就是给人看的）。 */
+const clientChoices = computed(() => clientOptions.value.map((c) => ({ label: c, value: c })))
 
 /** 编辑区表单。provider 一旦落定就是这一批模型的归属渠道名。 */
 const form = ref({
@@ -259,7 +265,15 @@ async function save(): Promise<void> {
             <small v-if="editingExisting && savedKeyMask" class="ap-hint">已存密钥：{{ savedKeyMask }}（回显的是掩码，明文不会下发）</small>
           </label>
           <label class="ap-field">客户端协议
-            <select v-model="form.clientType">
+            <component
+              :is="ThemedSelect"
+              v-if="ThemedSelect"
+              v-model="form.clientType"
+              :options="clientChoices"
+              dropdown-width="match"
+              aria-label="客户端协议"
+            />
+            <select v-else v-model="form.clientType">
               <option v-for="c in clientOptions" :key="c" :value="c">{{ c }}</option>
             </select>
             <small class="ap-hint">默认 openai-chat（稳）。deepseek-v4 会出「思考」但实测会让服务崩溃，谨慎切换。</small>
