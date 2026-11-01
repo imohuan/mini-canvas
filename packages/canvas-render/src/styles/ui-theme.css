@@ -11,7 +11,7 @@
  *
  * 切换机制（**纯 CSS，不需要任何配置项 / JS 监听**）：
  *   宿主在 `<html>` 上增删 `dark` class —— Tailwind v4 / shadcn 的通行做法。
- *   兼容旧写法：`html[data-canvas-theme='dark']` 与 `.dark` 写在同一条规则里，值完全共享，无重复。
+ *   只用 `html.dark`；不再读取旧的属性写法。
  *   注：`dark:` 这个 Tailwind **变体**的声明（@custom-variant）必须写在带 `@import "tailwindcss"`
  *   的入口里，见 packages/ui/src/app.css —— 本文件不是 Tailwind 入口，写了也不生效。
  *
@@ -222,10 +222,9 @@
   --layer-modal-top: 100001;
 }
 
-/* ===== 暗色：`<html class="dark">`（兼容 data-canvas-theme='dark' 旧写法，同规则共享值）
+/* ===== 暗色：`<html class="dark">`
    用 `html.dark` 而不是 `.dark`：拿到 0,1,1 特异性，避免被任何后加载的 `:root` 规则盖掉。===== */
-html.dark,
-html[data-canvas-theme='dark'] {
+html.dark {
   /* 规范灰阶 / 中性填充 / 发丝线（暗色那份；亮色见文件上半部分） */
   --text-strong: #f5f5f5;
   --text-body: #d4d4d4;

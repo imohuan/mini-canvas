@@ -81,7 +81,7 @@ onMounted(async () => {
 
 <style scoped>
 /* ============ 外层浮层 ============ */
-/* 配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换；值见
+/* 配色全部走通用 UI token（--ui-*，由 <html class="dark"> 切换；值见
    @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
 .node-find-overlay {
   position: fixed;

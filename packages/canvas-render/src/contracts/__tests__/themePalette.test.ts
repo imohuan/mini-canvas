@@ -182,7 +182,7 @@ describe('token 表 ↔ ui-theme.css 不漂移', () => {
   const css = readFileSync(fileURLToPath(new URL('../../styles/ui-theme.css', import.meta.url)), 'utf-8')
   const lightBlock = css.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
   const darkBlock =
-    css.match(/html\.dark,\s*\nhtml\[data-canvas-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+    css.match(/html\.dark\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
 
   it('两侧都能解析出变量块（解析失败会让下面的断言变成空断言）', () => {
     expect(lightBlock).toContain('--ui-accent')

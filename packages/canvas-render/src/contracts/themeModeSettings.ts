@@ -52,8 +52,7 @@ export function resolveThemeMode(get: (key: string) => unknown): ThemeMode {
 }
 
 /**
- * 把主题模式落到 DOM：增删 `<html>` 的 `dark` class（Tailwind v4 / shadcn 通行做法），
- * 并同步保留 `data-canvas-theme` 属性（兼容仍按属性写的旧样式 / 外部宿主）。
+ * 把主题模式落到 DOM：增删 `<html>` 的 `dark` class（Tailwind v4 / shadcn 通行做法）。
  *
  * 纯副作用、无状态；无 DOM 环境（Node 单测）自动 no-op。返回是否真的写了（便于测试断言）。
  */
@@ -62,7 +61,6 @@ export function applyThemeMode(mode: ThemeMode, root?: HTMLElement): boolean {
     root ?? (typeof document === 'undefined' ? undefined : (document.documentElement as HTMLElement | undefined))
   if (!el) return false
   el.classList.toggle('dark', mode === 'dark')
-  el.dataset.canvasTheme = mode
   return true
 }
 

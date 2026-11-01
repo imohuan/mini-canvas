@@ -125,7 +125,7 @@ describe('首页主题读同一份配置（config/settings）', () => {
       root as unknown as HTMLElement,
     )
 
-    // 主题模式：亮色 → 摘掉 dark class（不再是首页自己那套 data-canvas-theme）
+    // 主题模式：亮色 → 摘掉 dark class
     expect(root._classes.has('dark')).toBe(false)
     // 配色：用户改过的那一格以最高优先级的**内联变量**写进去（与画布页完全同源）
     expect(root._inline.get('--uic-accent-color-dark')).toBe('#7c3aed')

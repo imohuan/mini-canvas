@@ -356,7 +356,7 @@ function sharedThemeWatch(el: Element): SharedThemeWatch {
           }
         }
       })
-      observer.observe(el, { attributes: true, attributeFilter: ['class', 'data-canvas-theme'] })
+      observer.observe(el, { attributes: true, attributeFilter: ['class'] })
     },
     releaseIfIdle(): void {
       if (subscribers.size > 0) return

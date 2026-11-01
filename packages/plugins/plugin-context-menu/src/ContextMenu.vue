@@ -390,7 +390,7 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
 </template>
 
 <style scoped>
-/* 配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换；值见
+/* 配色全部走通用 UI token（--ui-*，由 <html class="dark"> 切换；值见
    @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。
    背景用**不透光档** --ui-overlay-solid（与节点控制栏同一档）：菜单压在画布节点/图片上，
    半透明毛玻璃会让底下的内容透出来、字读不清（用户口径 2026-10-04：把这个透明度删掉）。 */

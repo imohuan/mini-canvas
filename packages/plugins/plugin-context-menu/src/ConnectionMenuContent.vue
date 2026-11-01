@@ -72,7 +72,7 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
 
 <style scoped>
 /* 卡片本体：数值对齐右键菜单 .ctx-menu（位置/尺寸由节点框决定，这里只管外观）。
-   配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换），本组件不带主题配置项。
+   配色全部走通用 UI token（--ui-*，由 <html class="dark"> 切换），本组件不带主题配置项。
    背景与 .ctx-menu 一样用**不透光档**（见那边注释），避免底下的节点内容透进菜单里。 */
 .conn-menu {
   box-sizing: border-box;

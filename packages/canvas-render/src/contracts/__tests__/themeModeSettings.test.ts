@@ -43,15 +43,13 @@ describe('resolveThemeMode', () => {
 })
 
 describe('applyThemeMode', () => {
-  it('暗色加 dark class + data-canvas-theme；亮色去掉 class', () => {
+  it('暗色加 dark class；亮色去掉 class', () => {
     const el = fakeRoot()
     expect(applyThemeMode('dark', el)).toBe(true)
     expect(el.classList.contains('dark')).toBe(true)
-    expect(el.dataset.canvasTheme).toBe('dark')
 
     applyThemeMode('light', el)
     expect(el.classList.contains('dark')).toBe(false)
-    expect(el.dataset.canvasTheme).toBe('light')
   })
 })
 
@@ -89,11 +87,10 @@ describe('installThemeMode', () => {
 
     s.set(THEME_MODE_KEY, 'light')
     expect(el.classList.contains('dark')).toBe(false)
-    expect(el.dataset.canvasTheme).toBe('light')
 
     // 别的键变化不误触（el 状态保持）
     s.set('other', true)
-    expect(el.dataset.canvasTheme).toBe('light')
+    expect(el.classList.contains('dark')).toBe(false)
     dispose()
   })
 

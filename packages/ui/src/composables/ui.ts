@@ -2594,7 +2594,6 @@ function createUi() {
   // ===== 主题 =====
   /**
    * 把主题写到 <html class="dark">（Tailwind v4 / shadcn 通行做法）。
-   * 同步保留 data-canvas-theme 属性，兼容仍按属性写的旧样式/外部宿主。
    *
    * 注：权威落值点其实是渲染宿主的 installThemeMode（订阅 settings 的 themeMode），
    * 这里保留同名动作是为了"宿主还没就绪 / 无宿主"时也能立即生效（幂等，重复写无害）。
@@ -2602,7 +2601,6 @@ function createUi() {
   function applyTheme(v: 'dark' | 'light'): void {
     if (typeof document === 'undefined') return // Node 单测环境无 DOM：跳过副作用（设置仍照常写入）
     document.documentElement.classList.toggle('dark', v === 'dark')
-    document.documentElement.dataset.canvasTheme = v
   }
   /**
    * 订阅主题模式（渲染层配置 themeMode）→ 同步到本地镜像值。

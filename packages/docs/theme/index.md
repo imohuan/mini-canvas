@@ -89,18 +89,16 @@
   /* …约 70 个 --ui-* / --ntb-* / --sf-* / --ps-* / --dd-* 变量… */
 }
 
-/* ===== 暗色：<html class="dark">（兼容 data-canvas-theme='dark' 旧写法，同规则共享值）
+/* ===== 暗色：<html class="dark">
    用 html.dark 而不是 .dark：拿到 0,1,1 特异性，避免被任何后加载的 :root 规则盖掉。===== */
-html.dark,
-html[data-canvas-theme='dark'] {
+html.dark {
   --ui-canvas-bg: #141414;
   --ui-panel: #262626;
   /* …同一批变量，换一套值… */
 }
 ~~~
 
-**为什么两个选择器写在同一条规则里**：`data-canvas-theme` 是旧写法（首页与外部宿主还在用），
-`.dark` 是 Tailwind v4 / shadcn 的通行做法。写在一起 = 值完全共享、没有第二份要维护。
+**为什么只认 `.dark`**：这是 Tailwind v4 / shadcn 的通行做法，换主题只有一个入口（改 class）。
 
 谁把 class 加上去的？渲染层的 `themeModeSettings`：
 
@@ -118,7 +116,7 @@ export const THEME_MODE_DEFAULT: ThemeMode = 'dark'
 
 export type ThemeMode = 'light' | 'dark'
 
-/** 把主题模式落到 DOM：增删 <html> 的 dark class，并同步保留 data-canvas-theme 属性 */
+/** 把主题模式落到 DOM：增删 <html> 的 dark class */
 export function applyThemeMode(mode: ThemeMode, root?: HTMLElement): boolean
 
 /** 声明主题模式进 settings（幂等：已声明过就跳过，供多宿主 / 多次 boot） */
