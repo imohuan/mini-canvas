@@ -229,6 +229,21 @@ describe('Dropdown 组件行为', () => {
     wrapper.unmount()
   })
 
+  it('挂外部 anchor 时触发器插槽照常显示（子菜单行不能凭空消失）', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const anchor = document.createElement('button')
+    host.appendChild(anchor)
+    const wrapper = mount(Dropdown, {
+      props: { modelValue: false, teleport: false, anchor, trigger: 'always' },
+      slots: { trigger: '<div data-row>移动到…</div>', default: '<div data-menu />' },
+      attachTo: document.body,
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-row]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('zIndex：只覆盖本层浮层与箭头的层级，不写死到全局样式', async () => {
     const wrapper = mount(Dropdown, {
       props: { modelValue: true, teleport: false, zIndex: 12345, arrow: true },
