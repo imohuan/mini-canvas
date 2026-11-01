@@ -116,6 +116,11 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   }, { flush: 'sync' })
 
   function closeInstance(): void {
+    // 被别的浮层顶掉时，也要取消还没触发的悬停打开：
+    // 否则「悬停 → 立刻点击」时，提示气泡的延迟计时会在菜单打开后又把自己弹出来，
+    // 顺手把刚开的菜单 claim 掉（表现为菜单闪一下就没了）。
+    cancelShow()
+    cancelHide()
     setOpen(false)
   }
 
@@ -130,6 +135,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
 
   function show(): void {
     if (props.disabled) return
+    // 已经在显示了，之前排队的悬停打开就作废。
+    cancelShow()
     cancelHide()
     // 普通打开不沿用上一次的坐标锚点（右键开过之后再点触发器，菜单要回到触发器身边）。
     point.value = props.point ?? null
@@ -149,6 +156,8 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
   }
 
   function hide(): void {
+    // 主动关闭同样作废排队中的悬停打开，避免关掉之后又被计时器拉起来。
+    cancelShow()
     cancelHide()
     // always 模式不允许真的关闭，直接回到 true。
     if ((props.trigger ?? 'click') === 'always') {
@@ -195,12 +204,29 @@ export function useDropdown(props: DropdownProps, emit: (value: boolean) => void
       return
     }
     cancelShow()
-    showTimer = globalThis.setTimeout(show, delay) as unknown as number
+    showTimer = globalThis.setTimeout(runScheduledShow, delay) as unknown as number
   }
 
   function cancelShow(): void {
     globalThis.clearTimeout(showTimer)
     showTimer = 0
+  }
+
+  /**
+   * 真正执行「排队中的悬停打开」。
+   *
+   * 为什么不直接复用 show()：show() 第一句就是 cancelShow()。回调已经触发、
+   * 计时器应当归零，再走一遍取消逻辑虽然当前无害，但把「排队中」与「已经到点」
+   * 两种状态混在一起，后面的关闭路径就很难判断该取消什么。分开写，语义清楚。
+   * 关闭时必须先 cancelShow：否则「悬停→立刻点外面」时，排队里的那次打开会把
+   * 刚刚关掉的浮层重新拉起来（dropdown.test.ts 的回归项）。
+   */
+  function runScheduledShow(): void {
+    showTimer = 0
+    if (props.disabled) return
+    cancelHide()
+    point.value = props.point ?? null
+    setOpen(true)
   }
 
   /**
