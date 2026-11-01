@@ -21,13 +21,13 @@ describe('Agent 设置页的下拉', () => {
     })
   }
 
-  it('原生 <select> 只作为主题缺席时的回落，且每个都用 v-else 与之配对', () => {
+  it('一个原生 <select> 都没有（主题缺席时明说，不偷偷换控件）', () => {
     for (const page of PAGES) {
       const src = sourceOf(page)
       const natives = (src.match(/<select\b/g) ?? []).length
-      const fallbacks = (src.match(/<select v-else/g) ?? []).length
-      // 有任何原生 select，就必须全部写在回落分支里（否则主题在的时候仍会出现系统控件）。
-      expect(fallbacks).toBe(natives)
+      // 原生控件的浮层由浏览器画，样式与本项目下拉完全不是一档。
+      // 取不到登记件时显示一句提示，比换成一个长得不一样的控件更好查。
+      expect(natives, page + ' 里不该再有原生 select').toBe(0)
     }
   })
 })

@@ -14,7 +14,7 @@ import '../../components/settings/settings.css'
 
 const agent = useAgent()
 const s = agent.state
-/** 通用下拉取主题登记件；主题缺席时回落到原生 select。 */
+/** 通用下拉取主题登记件（不回落原生控件：浮层外观会与本项目其它下拉不一致）。 */
 const ThemedSelect = useUiComponent('select')
 
 const provider = ref('')
@@ -95,10 +95,7 @@ async function save(): Promise<void> {
               aria-label="会话标题 Provider"
               @update:model-value="pickProvider(String($event ?? ''))"
             />
-            <select v-else v-model="provider" @change="pickProvider(provider)">
-              <option value="">（用会话默认模型）</option>
-              <option v-for="p in usableProviders" :key="p.provider" :value="p.provider">{{ p.provider }}</option>
-            </select>
+            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
           </label>
           <label class="ap-field">模型
             <component
@@ -110,10 +107,7 @@ async function save(): Promise<void> {
               dropdown-width="match"
               aria-label="会话标题模型"
             />
-            <select v-else v-model="modelId" :disabled="!provider">
-              <option value="">（用会话默认模型）</option>
-              <option v-for="m in modelsOf" :key="m" :value="m">{{ m }}</option>
-            </select>
+            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
           </label>
           <div class="ap-field-row">
             <button class="ap-submit" type="submit" :disabled="busy || (!provider && !modelId)">保存</button>

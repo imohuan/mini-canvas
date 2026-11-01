@@ -82,22 +82,19 @@ function onChange(value: string | number | null): void {
 
 <style>
 /*
- * 旧主题 Select 的菜单外观变量：浮层由 ui-kit 的 Dropdown 渲染，
- * 这里通过 bodyClass 把 --dd-* 交给它，避免再写一份面板样式。
+ * 默认主题给 ui-kit Select 上的“皮”：结构、定位、键盘交互都在 ui-kit，这里只写外观。
+ * 浮层会被 Teleport 到 body（外点关闭靠这一点），所以菜单相关的规则一律挂在
+ * `.sel-menu-body` 上，不能写成 `.sel-root ...` —— 那种写法根本匹配不到浮层。
  */
+
+/** 浮层容器：与右键菜单同档（不透明白底 / 16 圆角 / 6 内边距） */
 .sel-menu-body {
   --dd-padding: 6px;
   --dd-radius: 16px;
-  --dd-bg: var(--ui-overlay-solid, #fff);
+  --dd-bg: var(--ui-overlay-solid);
 }
 
-/*
- * 默认皮的触发器/选项外观钩子。
- *
- * ui-kit Select 自带 .mck-select 结构与状态；这里只把默认皮原有的输入框观感
- * （表单里比工具栏更轻的底色与描边）贴到同一批元素上，避免两套结构。
- * 浮层外观由 ui-kit 的 Dropdown 负责，不在本文件重复。
- */
+/** 触发器：表单里比工具栏更轻的一档底色 */
 .sel-root .sel-trigger {
   width: 100%;
 }
@@ -108,7 +105,6 @@ function onChange(value: string | number | null): void {
   color: var(--sf-label, var(--ui-ink));
 }
 
-/* 旧调用方面向“触发器”的可见类名：ui-kit Select 的触发器就是那个 button。 */
 .sel-root .mck-select.sel-trigger {
   display: flex;
   align-items: center;
@@ -132,21 +128,12 @@ function onChange(value: string | number | null): void {
   box-shadow: 0 0 0 3px var(--ui-accent-soft);
 }
 
-.sel-root .mck-select__option.is-selected {
-  color: var(--ui-ink);
-}
-
-/* 旧调用方按这组 token 检查“菜单与右键菜单同档”；ui-kit 浮层直接消费它们。 */
-.sel-menu-body {
-  --dd-padding: 6px;
-  --dd-radius: 16px;
-  --dd-bg: var(--ui-overlay-solid);
-}
-
-/* ==== 右键菜单同款行（用户口径 2026-10-12：下拉完全参考右键菜单）====
- * 结构仍由 ui-kit Select 提供，这里只把默认皮的 .sel-* 行外观贴上去。
+/**
+ * 菜单行：44 高 / 6 内边距 / 10 圆角 / 行内 10，数值照右键菜单。
+ * ui-kit 默认行是紧凑档（38）；设置面板和参数面板需要更大的点击区，由主题这一层加规格。
+ * 选中不铺色，靠字重与勾 —— 与右键菜单一致。
  */
-.sel-menu-body .mck-select__option {
+.sel-menu-body .sel-option {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -157,7 +144,7 @@ function onChange(value: string | number | null): void {
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: var(--ui-ink-dim, #374151);
+  color: var(--ui-ink-dim);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -168,35 +155,36 @@ function onChange(value: string | number | null): void {
   animation-delay: calc(var(--item-index, 0) * 18ms);
 }
 
-/* 旧调用方按这组 token 检查“菜单与右键菜单同档”；ui-kit 浮层直接消费它们。 */
-.sel-menu-body {
-  --dd-padding: 6px;
-  --dd-radius: 16px;
-  --dd-bg: var(--ui-overlay-solid);
-}
-
-.sel-menu-body .mck-select__option:hover,
-.sel-menu-body .mck-select__option.is-highlight {
+.sel-menu-body .sel-option:hover,
+.sel-menu-body .sel-option.is-highlight {
   background: var(--ui-hover);
 }
 
-.sel-menu-body .mck-select__option.is-group-start {
-  position: relative;
-  margin-top: 11px;
+.sel-menu-body .sel-option.is-active {
+  color: var(--ui-ink);
+  font-weight: 600;
 }
 
-.sel-menu-body .mck-select__option.is-group-start::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  top: -6px;
-  height: 1px;
-  background: var(--ui-line);
+.sel-menu-body .sel-option.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.sel-menu-body .sel-option-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--ui-ink-dim);
+  background: var(--ui-veil);
+}
+
+.sel-menu-body .sel-option-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 名称/描述绝对定位两行：行高必须钉在 1，否则父级行高会让两行叠住。 */
-.sel-menu-body .mck-select__copy {
+.sel-menu-body .sel-option-copy {
   position: relative;
   display: block;
   flex: 1;
@@ -206,7 +194,7 @@ function onChange(value: string | number | null): void {
   overflow: hidden;
 }
 
-.sel-menu-body .mck-select__option-label {
+.sel-menu-body .sel-option-label {
   position: absolute;
   top: 50%;
   left: 0;
@@ -215,158 +203,51 @@ function onChange(value: string | number | null): void {
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transform: translateY(-50%);
-}
-
-.sel-menu-body .mck-select__option-label {
-  line-height: 1;
-}
-
-.sel-menu-body .mck-select__option-desc {
-  position: absolute;
-  left: 0;
-  bottom: 3px;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--ui-ink-dim, #9ca3af);
-  font-size: 11px;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
-}
-
-.sel-menu-body .mck-select__option:hover .mck-select__option-label,
-.sel-menu-body .mck-select__option:focus-within .mck-select__option-label {
-  top: 3px;
-  transform: translateY(0);
-}
-
-.sel-menu-body .mck-select__option:hover .mck-select__option-desc,
-.sel-menu-body .mck-select__option:focus-within .mck-select__option-desc {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@keyframes sel-item-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/*
- * 旧版 Select 的行外观（44 高 / 6 内边距 / 10 圆角 / 行内 10），数值照右键菜单。
- * ui-kit 的默认行是紧凑档（38 高）；默认皮在设置面板 / 参数面板里需要更大的点击区，
- * 因此仍由主题这一层加规格，而不是把两处行高统一成一种。
- */
-.sel-root .sel-option {
-  min-height: 44px;
-  gap: 10px;
-  padding: 6px;
-  border-radius: 10px;
-  color: var(--dd-ink, var(--ui-ink-dim));
-  font-weight: 500;
-  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-  animation: sel-item-in 0.2s ease both;
-  animation-delay: calc(var(--item-index, 0) * 18ms);
-}
-
-.sel-root .sel-option:hover,
-.sel-root .sel-option.is-highlight {
-  background: var(--ui-hover);
-}
-
-.sel-root .sel-option.is-active {
-  color: var(--ui-ink);
-  font-weight: 600;
-}
-
-.sel-root .sel-option.is-disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-.sel-root .sel-option:focus-visible {
-  outline: 2px solid var(--ui-accent-ring);
-  outline-offset: -1px;
-}
-
-.sel-root .sel-option-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  color: var(--ui-ink-dim);
-  background: var(--ui-veil);
-}
-
-.sel-root .sel-option-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.sel-root .sel-option-label {
-  line-height: 1;
-}
-
-.sel-root .sel-option-description {
-  line-height: 1;
-}
-
-.sel-root .sel-option-copy {
-  min-height: 32px;
-  position: relative;
-  overflow: hidden;
-}
-
-.sel-root .sel-option-label {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  max-width: 100%;
   transform: translateY(-50%);
   transition: top 0.3s ease-out, transform 0.3s ease-out;
 }
 
-.sel-root .sel-option.hasDescription:hover .sel-option-label,
-.sel-root .sel-option.hasDescription:focus-within .sel-option-label {
-  top: 3px;
-  transform: translateY(0);
-}
-
-.sel-root .sel-option-description {
+.sel-menu-body .sel-option-description {
   position: absolute;
   left: 0;
   bottom: 3px;
   max-width: 100%;
+  overflow: hidden;
   color: var(--ui-ink-dim);
   font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
+  line-height: 1;
   text-overflow: ellipsis;
+  white-space: nowrap;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
 }
 
-.sel-root .sel-option.hasDescription:hover .sel-option-description,
-.sel-root .sel-option.hasDescription:focus-within .sel-option-description {
+.sel-menu-body .sel-option.hasDescription:hover .sel-option-label,
+.sel-menu-body .sel-option.hasDescription:focus-within .sel-option-label {
+  top: 3px;
+  transform: translateY(0);
+}
+
+.sel-menu-body .sel-option.hasDescription:hover .sel-option-description,
+.sel-menu-body .sel-option.hasDescription:focus-within .sel-option-description {
   opacity: 1;
   transform: translateY(0);
 }
 
-.sel-root .sel-check {
+.sel-menu-body .sel-check {
   width: 16px;
   height: 16px;
   color: var(--ui-ink-dim);
 }
 
-.sel-root .sel-option.is-group-start {
+/* 分组分隔线：相邻选项 group 不同才画一条，与右键菜单的分块一致 */
+.sel-menu-body .sel-option.is-group-start {
   margin-top: 11px;
   position: relative;
 }
 
-.sel-root .sel-option.is-group-start::before {
+.sel-menu-body .sel-option.is-group-start::before {
   content: '';
   position: absolute;
   left: 6px;
@@ -376,14 +257,16 @@ function onChange(value: string | number | null): void {
   background: var(--ui-line);
 }
 
-.sel-root .sel-list::-webkit-scrollbar {
+.sel-menu-body .sel-list::-webkit-scrollbar {
   width: 8px;
 }
-.sel-root .sel-list::-webkit-scrollbar-thumb {
+
+.sel-menu-body .sel-list::-webkit-scrollbar-thumb {
   border-radius: 4px;
   background: var(--ui-scroll-thumb);
 }
-.sel-root .sel-list::-webkit-scrollbar-thumb:hover {
+
+.sel-menu-body .sel-list::-webkit-scrollbar-thumb:hover {
   background: var(--ui-scroll-thumb-hover);
 }
 
@@ -395,18 +278,11 @@ function onChange(value: string | number | null): void {
 @media (prefers-reduced-motion: reduce) {
   .sel-root .sel-trigger,
   .sel-root .sel-arrow,
-  .sel-root .sel-option,
-  .sel-root .sel-option-label,
-  .sel-root .sel-option-description {
+  .sel-menu-body .sel-option,
+  .sel-menu-body .sel-option-label,
+  .sel-menu-body .sel-option-description {
     animation: none !important;
     transition: none !important;
   }
-}
-
-/* 旧调用方/测视按这组 token 检查“菜单与右键菜单同档”；ui-kit 浮层直接消费它们。 */
-.sel-menu-body {
-  --dd-padding: 6px;
-  --dd-radius: 16px;
-  --dd-bg: var(--ui-overlay-solid);
 }
 </style>

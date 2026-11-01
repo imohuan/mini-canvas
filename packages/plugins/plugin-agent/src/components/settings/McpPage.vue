@@ -9,7 +9,13 @@ import '../../components/settings/settings.css'
 
 const agent = useAgent()
 const s = agent.state
-/** 通用下拉取主题登记件；主题缺席时回落到原生 select。 */
+/**
+ * 通用下拉取主题登记件。
+ *
+ * 不再回落到原生下拉控件：它的浮层由浏览器画，样式与本项目的下拉完全不是一档
+ * （用户口径：所有下拉都用同一套）。取不到就把按钮禁用，并说明是主题没装 —— 比悄悄
+ * 换成一个长得不一样的控件更好查。
+ */
 const ThemedSelect = useUiComponent('select')
 /** MCP 传输类型（原生值 = 后台认的 kind）。 */
 const KIND_CHOICES = [
@@ -149,7 +155,7 @@ async function save(): Promise<void> {
               dropdown-width="match"
               aria-label="MCP 传输类型"
             />
-            <select v-else v-model="form.kind"><option value="http">http</option><option value="sse">sse</option><option value="stdio">stdio</option></select>
+            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
           </label>
           <label v-if="!isStdio" class="ap-field">URL<input v-model="form.url" placeholder="http://127.0.0.1:3000/mcp/$smart" /></label>
           <template v-else>

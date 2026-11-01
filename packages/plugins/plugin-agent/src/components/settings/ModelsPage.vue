@@ -273,9 +273,7 @@ async function save(): Promise<void> {
               dropdown-width="match"
               aria-label="客户端协议"
             />
-            <select v-else v-model="form.clientType">
-              <option v-for="c in clientOptions" :key="c" :value="c">{{ c }}</option>
-            </select>
+            <span v-else class="ap-hint is-bad">下拉组件未注册（默认主题没装）</span>
             <small class="ap-hint">默认 openai-chat（稳）。deepseek-v4 会出「思考」但实测会让服务崩溃，谨慎切换。</small>
           </label>
 
