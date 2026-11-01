@@ -1,5 +1,5 @@
 /**
- * build-server —— 把 `src/server/index.ts` 打成**单文件** `dist/server.js`（esbuild）。
+ * build-server —— 把 `src/server/index.ts` 打成**单文件** `dist/agent-server.js`（esbuild）。
  *
  * 为什么必须单文件、零 external：宿主的 server-plugins 加载器按「目录里一个 .js = 一个插件」
  * 扫描，用 `import(data:text/javascript)` 加载 —— data: URL 里**解析不了裸模块名**。
@@ -11,6 +11,9 @@
  * 产物是**宿主可 import 的库**，不是一个能直接丢进 server-plugins 的自注册插件：
  * Agent 装配要找数据根、宿主 KV、插件的提示词小节与中间件链 —— 这些只有宿主知道。
  * 所以装载方式仍是「宿主 import 本包并注入端口」（见 src/server/ports.ts）。
+ *
+ * 文件名刻意**不叫 server.js / plugin-server.js**：插件清单把这两个名字当成「可安装的后台半」，
+ * 装进去会被 server-plugins 加载器要求导出 `{ name, apply }` —— 本产物是库，不是那种插件。
  */
 import { build } from 'esbuild'
 import { cp, rm } from 'node:fs/promises'
@@ -25,7 +28,7 @@ await rm(DIST, { recursive: true, force: true })
 
 await build({
   entryPoints: [path.join(PKG, 'src/server/index.ts')],
-  outfile: path.join(DIST, 'server.js'),
+  outfile: path.join(DIST, 'agent-server.js'),
   bundle: true,
   format: 'esm',
   platform: 'node',
@@ -37,4 +40,4 @@ await build({
 // goal hook 脚本是**独立资源**（SDK 会拿它们当子进程跑），不能内联进 JS，只能跟着复制。
 await cp(path.join(PKG, 'vendor-plugins'), path.join(DIST, 'vendor-plugins'), { recursive: true })
 
-console.log('[plugin-agent] dist/server.js + dist/vendor-plugins 完成')
+console.log('[plugin-agent] dist/agent-server.js + dist/vendor-plugins 完成')
