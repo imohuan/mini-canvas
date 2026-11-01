@@ -151,7 +151,7 @@ describe('箭头的位置契约（结构层）', () => {
     // 判据：箭头标签出现在 </Transition> **之后**（与浮层平级）。若它挪进浮层 div 内部，
     // 就会落在 </Transition> 之前 —— 这条会红。
     const transitionClose = kitVue.indexOf('</Transition>')
-    const at = kitVue.indexOf('class="mck-dropdown__arrow dd-arrow"')
+    const at = kitVue.indexOf('class="mck-dropdown__arrow"')
     expect(at, '模板里没找到箭头').toBeGreaterThan(-1)
     expect(at, '箭头必须在 </Transition> 之后（浮层外，做兄弟节点）').toBeGreaterThan(transitionClose)
   })

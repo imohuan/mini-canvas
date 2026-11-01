@@ -1,17 +1,10 @@
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue'
+import { computed } from 'vue'
 import type { DropdownProps } from './types'
 import { useDropdown } from './useDropdown'
 import './dropdown.css'
 
 defineOptions({ name: 'MckDropdown' })
-
-/** 兼容主题旧实现的 `dd` 外壳类：调用方若已传，不重复补。 */
-const attrs = useAttrs()
-const rootClass = computed(() => {
-  const external = String(attrs.class ?? '').split(/\s+/).filter(Boolean)
-  return external.includes('dd') ? external : ['dd', ...external]
-})
 
 const props = withDefaults(defineProps<DropdownProps>(), {
   modelValue: false,
@@ -122,8 +115,7 @@ const triggerEvents = computed(() => {
 </script>
 
 <template>
-  <!-- 兼容主题旧实现的 dd / dd-trigger 类名：调用方与测试按它们取外壳，换底层不该改外观契约。 -->
-  <div class="mck-dropdown" :class="[rootClass, { 'is-disabled': disabled }]">
+  <div class="mck-dropdown" :class="{ 'is-disabled': disabled }">
     <!--
       触发器插槽**始终渲染**：外部 anchor 只表示“浮层贴在哪个元素旁边”，
       不等于“这行内容不要显示”。此前 anchor 存在时整块触发器被藏掉，
@@ -132,7 +124,7 @@ const triggerEvents = computed(() => {
     -->
     <div
       :ref="api.triggerRef"
-      class="mck-dropdown__trigger dd-trigger"
+      class="mck-dropdown__trigger"
       :aria-expanded="anchor ? undefined : api.open.value"
       :aria-haspopup="anchor ? undefined : 'menu'"
       v-bind="triggerEvents"
@@ -163,7 +155,7 @@ const triggerEvents = computed(() => {
       -->
       <div
         v-if="api.open.value && arrow"
-        class="mck-dropdown__arrow dd-arrow"
+        class="mck-dropdown__arrow"
         :class="arrowClass"
         :style="api.arrowStyle.value"
         aria-hidden="true"
