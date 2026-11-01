@@ -8,7 +8,7 @@ import type { PluginManifest } from '../pluginManager'
 function demoPlugin(flag: string): PluginModule {
   return {
     name: 'demo',
-    setup(ctx) {
+    apply(ctx) {
       ctx.inject('demoSvc', { flag })
       // 手动在 doc 上注册类型演示热卸回收（5c：节点类型表随 doc 提供，nodeStore 不再是服务名）
       ctx.get<{ registerType(d: unknown): void }>('doc').registerType({

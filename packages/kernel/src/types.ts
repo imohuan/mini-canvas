@@ -277,7 +277,7 @@ export interface PluginScope extends PluginCapabilities {
 }
 
 /**
- * 插件模块形状（对齐 docs/goal/plugin-system-goal.md 2.1b 的 Cordis 式写法，兼容旧 setup/deps）。
+ * 插件模块形状（对齐 docs/goal/plugin-system-goal.md 2.1b 的 Cordis 式写法）。
  *
  * Cordis 式（推荐，教程主推）：`.ts` 裸导出四样 `name / inject / Config / apply`——
  * - `name`：插件唯一名
@@ -286,8 +286,8 @@ export interface PluginScope extends PluginCapabilities {
  *   默认补齐后，内核以第二个实参 `apply(ctx, config)` 传入；校验失败 → fiber FAILED + 响亮报错。
  * - `apply(ctx, config)`：注册函数，ctx 是能力台(ctx.nodes/theme/commands/slots/settings)，注册自动回收
  *
- * 旧式（向后兼容）：`setup(ctx)` 同 apply，`deps` 同 inject。二者可混用，apply 优先于 setup、inject 优先于 deps。
- * setup/apply 的返回值（cleanup）或经 ctx 登记的副作用都自动归入本插件的 scope，卸载即清。
+ * 只认这四个字段；旧式的 `setup` / `deps` 不再接受。
+ * apply 的返回值（cleanup）或经 ctx 登记的副作用都自动归入本插件的 scope，卸载即清。
  */
 export interface PluginModule<TConfig extends object = object> {
   /** 插件唯一名 */
@@ -307,17 +307,14 @@ export interface PluginModule<TConfig extends object = object> {
   core?: boolean
   /**
    * 依赖的服务/插件名（**硬依赖**）：缺失则该插件停在 PENDING、不加载。
-   * 首选写法是模块顶层 `export const inject = ['tools']`（框架保证 apply 时就绪）。
+   * 写法是模块顶层 `export const inject = ['tools']`（框架保证 apply 时就绪）。
    * 可选依赖不要写这里 —— 在使用处用 `ctx.get(name)` 探测。
-   * （旧式字段名 `deps` 等价；两者都给时以 inject 为准。）
    */
-  deps?: string[]
   inject?: string[]
   /** 本插件的 config schema（cordis ch5）。装配 config 经它校验+补默认；apply(ctx,config) 收结果。 */
   Config?: ConfigSchema
-  /** 注册函数：ctx 是能力台。Cordis 用 apply(收校验后 config)，旧式用 setup，二者至少给一个。 */
-  setup?(ctx: PluginScope): void | (() => void) | Disposable
-  apply?(ctx: PluginScope, config?: TConfig): void | (() => void) | Disposable
+  /** 注册函数：ctx 是能力台，config 是校验并补默认后的配置。 */
+  apply(ctx: PluginScope, config?: TConfig): void | (() => void) | Disposable
 }
 
 /**

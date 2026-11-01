@@ -14,11 +14,10 @@
 /** 从一个全局取值：找不到就 undefined（不抛，调用方给清晰错误） */
 type GlobalBag = Record<string, unknown>
 
-/** 一个可装载的插件模块：至少要有 name 与 apply/setup（与内核 PluginModule 同形） */
+/** 一个可装载的插件模块：至少要有 name 与 apply（与内核 PluginModule 同形） */
 export interface LoadedPluginModule {
   name: string
   apply?: (...args: unknown[]) => unknown
-  setup?: (...args: unknown[]) => unknown
   [k: string]: unknown
 }
 
@@ -30,15 +29,15 @@ export const PLUGIN_GLOBAL_PREFIX = 'MiniCanvasPlugin'
  *
  * UMD 产物是一个「命名空间对象」（`{ name, nodeImageComparePlugin, IMAGE_COMPARE_NODE_TYPE, … }`），
  * 插件本体可能是对象里的**某个属性**（且命名不固定）。所以按这个顺序找：
- * 1. 全局值自己就长得像插件（有 name + apply/setup）；
- * 2. 全局值里任何带 name + apply/setup 的自有属性；
+ * 1. 全局值自己就长得像插件（有 name + apply）；
+ * 2. 全局值里任何带 name + apply 的自有属性；
  * 找不到返回 undefined（调用方给清晰错误）。
  */
 export function pickPluginModule(globalValue: unknown): LoadedPluginModule | undefined {
   if (!globalValue || typeof globalValue !== 'object') return undefined
   const looksLikePlugin = (v: unknown): v is LoadedPluginModule =>
     !!v && typeof v === 'object' && typeof (v as LoadedPluginModule).name === 'string' &&
-    (typeof (v as LoadedPluginModule).apply === 'function' || typeof (v as LoadedPluginModule).setup === 'function')
+    typeof (v as LoadedPluginModule).apply === 'function'
   if (looksLikePlugin(globalValue)) return globalValue
   for (const value of Object.values(globalValue as GlobalBag)) {
     if (looksLikePlugin(value)) return value

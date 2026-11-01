@@ -121,7 +121,7 @@ function describeMethods(target: unknown): string[] | undefined {
 }
 
 /**
- * 跑一个插件的注册函数：Cordis 式用 apply(收校验后 config)，旧式用 setup，apply 优先。
+ * 跑一个插件的注册函数：apply(收校验后 config)。
  * 返回值（cleanup/Disposable）由调用方登记进插件 fiber，卸载即清。
  */
 export function runPlugin(
@@ -129,9 +129,7 @@ export function runPlugin(
   ctx: PluginScope,
   config?: unknown,
 ): void | (() => void) | Disposable {
-  if (mod.apply) return mod.apply(ctx, config as never)
-  if (mod.setup) return mod.setup(ctx)
-  return undefined
+  return mod.apply(ctx, config as never)
 }
 
 /**
@@ -344,9 +342,9 @@ export class Context implements PluginScope {
   }
 
   /**
-   * 尝试激活一个插件：依赖满足则 setup 并置 ACTIVE，返回 true；依赖不满足则保持 PENDING 返回 false。
+   * 尝试激活一个插件：依赖满足则 apply 并置 ACTIVE，返回 true；依赖不满足则保持 PENDING 返回 false。
    * 装配 config 经其 `Config` schema 校验（缺默认补齐），失败 → fiber FAILED 并抛出（响亮报错）。
-   * setup 抛错：置 FAILED 并抛出（半成品副作用已回收）。
+   * apply 抛错：置 FAILED 并抛出（半成品副作用已回收）。
    */
   private tryActivate(name: string): boolean {
     const mod = this.plugins.get(name)!
@@ -472,7 +470,7 @@ export class Context implements PluginScope {
    * 等价于冷启动时 plugin()。支持类形态（Service 子类）与 PluginModule 对象。
    *
    * @param config 装配 config（可选）：激活时经插件 `Config` schema 校验+补默认再传 apply；校验失败 → fiber FAILED + 抛错。
-   * @throws 未 start / 插件名重复 / config 校验失败 / setup 抛错（半成品副作用已回收）
+   * @throws 未 start / 插件名重复 / config 校验失败 / apply 抛错（半成品副作用已回收）
    * @returns 插件名
    */
   installPlugin(mod: PluginModule, config?: unknown): string
@@ -492,7 +490,7 @@ export class Context implements PluginScope {
     } catch (err) {
       this.plugins.delete(m.name)
       this.configs.delete(m.name)
-      // 装载失败（config 校验/setup 抛错）：核心身份一并撤销——它已不在 runtime，
+      // 装载失败（config 校验/apply 抛错）：核心身份一并撤销——它已不在 runtime，
       // 不该再以"核心"身份占着 canUninstall 的 core 判定（否则重装成普通插件会被误拦）。
       this.corePlugins.delete(m.name)
       throw err
@@ -614,7 +612,7 @@ export class Context implements PluginScope {
    *
    * 覆盖两类条目：
    * - `plugins` 表里的插件（ACTIVE / PENDING…）；
-   * - 已从 `plugins` 表移出但 fiber 仍保留的 **FAILED** 插件（config/setup 抛错后保留供诊断，可重装复用）。
+   * - 已从 `plugins` 表移出但 fiber 仍保留的 **FAILED** 插件（config/apply 抛错后保留供诊断，可重装复用）。
    * `missingDeps` = 该插件 deps 中此刻未满足的项（判定对齐私有 depSatisfied：既非内置 slots/settings、也非已注入
    * 服务名、也非"已登记且 ACTIVE"的插件名）。state!=='active' 时据此回答"到底缺哪个依赖"。
    * 纯只读，不改动装载/编排/激活逻辑。
@@ -811,17 +809,6 @@ export class Context implements PluginScope {
         }
       }
     }
-    // ② command 服务：兼容仍按服务名提供命令的独立宿主/嵌入方。
-    //    画布层已把命令收进内部运行时（基础服务只剩 7 名），此处取不到是预期的；
-    //    画布命令由 ctx.commands 糖落进 command 场，数据层自带的四条在 base 插件里直注册，
-    //    由 canvas 门面的 listCommands 负责执行侧枚举。
-    const commandService = this.get<{ list?: () => Array<{ id: string }> } | undefined>('command');
-    if (typeof commandService?.list === 'function') {
-      for (const def of commandService.list()) {
-        pushCommand(def as never, '<service>', 'service');
-      }
-    }
-
     // —— 语义视图：生成工具（ctx.tools）——
     const tools: ToolSurface[] = this.builtinTools.list().map((def) => ({
       name: def.name,
@@ -1085,7 +1072,7 @@ export class Context implements PluginScope {
   private attachFiber(name: string, mod: PluginModule): Fiber {
     let fiber = this.fibers.get(name)
     if (fiber) return fiber
-    fiber = new Fiber({ name, deps: mod.inject ?? mod.deps ?? [] })
+    fiber = new Fiber({ name, deps: mod.inject ?? [] })
     this.fibers.set(name, fiber)
     return fiber
   }

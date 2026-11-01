@@ -4,17 +4,17 @@ import type { PluginModule } from './types'
  * topoSort —— 依赖拓扑排序（纯函数，从 v1 PluginManager.resolveOrder 吸收）。
  *
  * 规则（与 v1 一致）：
- * - A 的依赖(inject/deps) 含 B ⇒ B 必须先于 A（Kahn，B 的入度先清）。
+ * - A 的依赖(inject) 含 B ⇒ B 必须先于 A（Kahn，B 的入度先清）。
  * - 重复名 / 自依赖 / 缺失依赖 / 循环依赖均抛错，循环给出可读路径。
  *
- * 依赖字段兼容：Cordis 用 `inject`、旧式用 `deps`，inject 优先。
+ * 依赖字段只有 `inject`。
  *
- * @param plugins 插件列表（含 name + deps/inject）
+ * @param plugins 插件列表（含 name + inject）
  * @returns 按依赖顺序排列的 name 数组（依赖在前）
  * @throws 非法依赖关系时抛 Error
  */
 export function topoSort(
-  plugins: Array<Pick<PluginModule, 'name' | 'deps' | 'inject'>>,
+  plugins: Array<Pick<PluginModule, 'name' | 'inject'>>,
   knownServices?: ReadonlySet<string>,
 ): string[] {
   const svc = knownServices ?? new Set<string>()
@@ -81,14 +81,14 @@ export function topoSort(
   return sorted
 }
 
-/** 插件依赖字段：inject 优先于 deps。 */
-export function depsOf(mod: Pick<PluginModule, 'deps' | 'inject'>): string[] {
-  return mod.inject ?? mod.deps ?? []
+/** 插件依赖字段：只有 inject。 */
+export function depsOf(mod: Pick<PluginModule, 'inject'>): string[] {
+  return mod.inject ?? []
 }
 
 /** 构建循环依赖的可读路径（吸收 v1 buildCyclePath）。A 依赖 B ⇒ A → B。 */
 function buildCyclePath(
-  plugins: Array<Pick<PluginModule, 'name' | 'deps' | 'inject'>>,
+  plugins: Array<Pick<PluginModule, 'name' | 'inject'>>,
   remaining: Set<string>,
 ): string {
   const dependsOn = new Map<string, string[]>()

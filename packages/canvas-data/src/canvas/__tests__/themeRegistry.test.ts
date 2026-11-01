@@ -9,12 +9,12 @@ const MyEdge = { name: 'MyEdge' }
 const MyBg = { name: 'MyBg' }
 const MyShell = { name: 'MyShell' }
 
-/** 造一个能跑插件 setup 的最小 ctx：注入 themeRegistry，start 触发 setup */
-async function bootWithSetup(setup: (ctx: PluginScope) => void): Promise<{ ctx: Context; theme: ThemeRegistry }> {
+/** 造一个能跑插件 apply 的最小 ctx：注入 themeRegistry，start 触发 apply */
+async function bootWithApply(apply: (ctx: PluginScope) => void): Promise<{ ctx: Context; theme: ThemeRegistry }> {
   const ctx = new Context()
   const theme = new ThemeRegistry()
   ctx.inject('themeRegistry', theme)
-  ctx.plugin({ name: 'under-test', setup })
+  ctx.plugin({ name: 'under-test', apply })
   await ctx.start()
   return { ctx, theme }
 }
@@ -97,7 +97,7 @@ describe('ThemeRegistry（基于 SlotRegistry 的多 occupant 开放槽）', () 
 
 describe('registerThemeSlot（主题插件"替换一块 UI"接缝）', () => {
   it('setup 里注册 edge/background/nodeShell 进 themeRegistry', async () => {
-    const { theme } = await bootWithSetup((ctx) => {
+    const { theme } = await bootWithApply((ctx) => {
       registerThemeSlot(ctx, 'edge', MyEdge)
       registerThemeSlot(ctx, 'background', MyBg)
       registerThemeSlot(ctx, 'nodeShell', MyShell)
@@ -110,7 +110,7 @@ describe('registerThemeSlot（主题插件"替换一块 UI"接缝）', () => {
   })
 
   it('插件卸载(stop)时槽位自动注销回退默认', async () => {
-    const { ctx, theme } = await bootWithSetup((ctx) => {
+    const { ctx, theme } = await bootWithApply((ctx) => {
       registerThemeSlot(ctx, 'edge', MyEdge)
       registerThemeSlot(ctx, 'background', MyBg)
     })
@@ -124,7 +124,7 @@ describe('registerThemeSlot（主题插件"替换一块 UI"接缝）', () => {
     const ctx = new Context()
     ctx.plugin({
       name: 'p',
-      setup(c) {
+      apply(c) {
         registerThemeSlot(c, 'edge', MyEdge)
       },
     })

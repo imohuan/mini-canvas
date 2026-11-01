@@ -12,11 +12,6 @@ describe('pickPluginModule —— 从 UMD 命名空间里挑出插件本体', ()
     expect(pickPluginModule({ name: 'ns', nodeImageComparePlugin: inner })).toBe(inner)
   })
 
-  it('只有 setup 没有 apply 也算（旧式插件）', () => {
-    const p = { name: 'legacy', setup() {} }
-    expect(pickPluginModule({ legacy: p })).toBe(p)
-  })
-
   it('找不到合格模块 → undefined（调用方给清晰错误，不静默）', () => {
     expect(pickPluginModule({ IMAGE_COMPARE_NODE_TYPE: 'x' })).toBeUndefined()
     expect(pickPluginModule('str')).toBeUndefined()

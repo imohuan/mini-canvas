@@ -36,7 +36,7 @@ async function boot(plugins: PluginModule[]): Promise<{ ctx: Context; nodeStore:
   return { ctx, nodeStore }
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('ctx.nodes.setSize', () => {
   it('设尺寸 → node.size 与 data 镜像都更新', async () => {

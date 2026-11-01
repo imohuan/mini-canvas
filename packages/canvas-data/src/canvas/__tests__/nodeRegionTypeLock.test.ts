@@ -32,7 +32,7 @@ async function boot(plugins: PluginModule[]): Promise<Context> {
   return ctx
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('步骤 9 类型锁：老段名不再是合法入参', () => {
   it('NodeRegistry.register 的展示段只收区域词', () => {

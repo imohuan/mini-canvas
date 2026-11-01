@@ -209,7 +209,7 @@ describe('决策 1 边界：core 不挡整体生命周期终结，也不挡"重�
     ctx.stop()
   })
 
-  it('core 插件装载失败（setup 抛错）不留核心身份：不被当成 core 拦下（可清理 FAILED fiber）', async () => {
+  it('core 插件装载失败（apply 抛错）不留核心身份：不被当成 core 拦下（可清理 FAILED fiber）', async () => {
     const ctx = new Context()
     await ctx.start()
     await expect(

@@ -34,7 +34,7 @@ describe('T03 · 按服务名推导类型', () => {
 
     ctx.plugin({
       name: 'type-probe',
-      setup(c) {
+      apply(c) {
         // 编译期：不写泛型也必须推出正确类型（写错会编译报错）
         doc = c.get('doc')
         selection = c.get('selection')
@@ -58,7 +58,7 @@ describe('T03 · 按服务名推导类型', () => {
     let present: DocService | undefined
     ctx.plugin({
       name: 'probe',
-      setup(c) {
+      apply(c) {
         missing = c.tryGet('resources')
         present = c.tryGet('doc')
       },
@@ -69,7 +69,7 @@ describe('T03 · 按服务名推导类型', () => {
     expect(present).toBeUndefined()
   })
 
-  it('旧写法（显式泛型 / 扩展服务名）不被新重载破坏', async () => {
+  it('显式泛型 / 扩展服务名仍可读', async () => {
     const ctx = new Context()
     interface MyThing { value: number }
     ctx.inject('my-thing', { value: 42 } as MyThing)
@@ -77,8 +77,8 @@ describe('T03 · 按服务名推导类型', () => {
     let explicit: MyThing | undefined
     let unknownName: unknown
     ctx.plugin({
-      name: 'legacy-probe',
-      setup(c) {
+      name: 'typed-probe',
+      apply(c) {
         // 扩展服务：服务名不在 Services 里 → 走显式泛型重载
         explicit = c.get<MyThing>('my-thing')
         // 不写泛型的未知服务名 → 回落到宽松重载（不报错）

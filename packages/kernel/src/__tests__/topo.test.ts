@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { topoSort } from '../topo'
 
-const P = (name: string, deps?: string[]) => ({ name, deps })
+const P = (name: string, inject?: string[]) => ({ name, inject })
 
 describe('topoSort（吸收 v1 Kahn 拓扑）', () => {
   it('无依赖时按原顺序返回', () => {

@@ -8,14 +8,14 @@
 
 排课表：每门课都写了「先修课」，`topoSort` 给你排出一个「先修课一定排在前面」的顺序。
 
-- **输入**：插件对象数组（`Pick<PluginModule, 'name' | 'deps' | 'inject'>`，也就是只要有名字和依赖字段就行），外加可选的「已知服务名集合」。
+- **输入**：插件对象数组（`Pick<PluginModule, 'name' | 'inject'>`，也就是只要有名字和依赖字段就行），外加可选的「已知服务名集合」。
 - **输出**：`string[]` —— 插件名数组，**依赖在前**。
 - **出错**：抛 `Error`（四种情况，见下）。
 
 按「数据 / 展示 / 能力 / 配置」分，它属于**工具函数**那一格：无状态、无副作用、纯计算，能单独拿去用（预检清单、外部工具、测试）。
 
 > ⚠️ 一个容易记错的点：**`topoSort` 收的是「插件对象数组」，不是「名字数组」**。
-> 名字在对象的 `name` 字段里，依赖在 `inject` / `deps` 字段里。
+> 名字在对象的 `name` 字段里，依赖在 `inject` 字段里。
 
 ## 为什么需要它
 
@@ -32,7 +32,7 @@
 
 ```ts
 export function topoSort(
-  plugins: Array<Pick<PluginModule, 'name' | 'deps' | 'inject'>>,
+  plugins: Array<Pick<PluginModule, 'name' | 'inject'>>,
   knownServices?: ReadonlySet<string>,
 ): string[]
 ```
@@ -43,21 +43,18 @@ export function topoSort(
 - 返回：按依赖顺序排好的**名字数组**，依赖在前。
 - 抛错：非法依赖关系时抛 `Error`。
 
-### 二、`depsOf`：依赖字段的归一
+### 二、`depsOf`：读依赖字段
 
 ```ts
-export function depsOf(mod: Pick<PluginModule, 'deps' | 'inject'>): string[]
+export function depsOf(mod: Pick<PluginModule, 'inject'>): string[]
 ```
 
-一行实现：`return mod.inject ?? mod.deps ?? []` —— 也就是说：
+一行实现：`return mod.inject ?? []`。
 
-> **`inject` 优先于 `deps`；两者都给时，`deps` 被完全忽略。**
-
-`inject` 是新写法（Cordis 风格），`deps` 是老写法（向后兼容）。内核里所有读依赖的地方都走 `depsOf`（`Context.attachFiber`、`depSatisfied`、`tryActivate` 都调它），所以这个优先级是**全局一致**的。
+插件的依赖写在 `inject`，旧字段 `deps` 已删除，不再读取。内核里所有读依赖的地方都走 `depsOf`（`Context.attachFiber`、`depSatisfied`、`tryActivate` 都调它）。
 
 ```ts
-depsOf({ name: 'a', inject: ['x'], deps: ['y'] })   // → ['x']（inject 优先）
-depsOf({ name: 'a', deps: ['y'] })                   // → ['y']（只有老字段）
+depsOf({ name: 'a', inject: ['x'] })                 // → ['x']
 depsOf({ name: 'a' })                                // → []
 ```
 
@@ -75,7 +72,7 @@ import { topoSort } from '@mini-canvas/kernel'
 
 topoSort([{ name: 'a' }, { name: 'a' }])            // ✗ Duplicate plugin name: "a"
 topoSort([{ name: 'a', inject: ['a'] }])            // ✗ cannot depend on itself
-topoSort([{ name: 'a', deps: ['ghost'] }])          // ✗ depends on "ghost" which is not registered
+topoSort([{ name: 'a', inject: ['ghost'] }])        // ✗ depends on "ghost" which is not registered
 topoSort([{ name: 'a', inject: ['b'] }, { name: 'b', inject: ['a'] }])  // ✗ Circular dependency detected
 ```
 
@@ -122,7 +119,7 @@ topoSort([{ name: 'a', inject: ['view'] }], known)   // → ['a']（view 被忽�
 | 缺依赖怎么办 | **抛错**（不接受「等一等」） | 停下等（PENDING），提供方出现后自动唤醒 |
 | 成环怎么办 | **抛错**并画出环路径 | 环里每个插件都等别人 → 全都停 PENDING（不会死循环，但也不会报错指出环） |
 | 典型用途 | 装配清单**预检**、外部工具/脚本、单测 | 真正的装载执行 |
-| 依赖来源 | 只看静态字段 `inject` / `deps` | 还看运行时的服务表、插件 fiber 状态 |
+| 依赖来源 | 只看静态字段 `inject` | 还看运行时的服务表、插件 fiber 状态 |
 
 一句话记法：**`topoSort` 是「先检查这张清单合不合法、顺带排好序」；`start()` 是「按当下的实际情况一步步跑起来（可以边跑边长）」。**
 清单预检用前者，实际执行靠后者；两者都读同一份 `depsOf`，所以口径一致。
@@ -189,8 +186,8 @@ const order = topoSort(manifest, KNOWN_SERVICES)
 console.log('[topo] 合法顺序：', order)
 // ['canvas-base', 'tool-registry', 'theme-default', 'agent']（同级保持登记序）
 
-// ② depsOf 的优先级：inject 优先于 deps
-console.log('[topo] depsOf 优先级：', depsOf({ name: 'x', inject: ['a'], deps: ['b'] }))  // ['a']
+// ② depsOf 只读 inject
+console.log('[topo] depsOf：', depsOf({ name: 'x', inject: ['a'] }))  // ['a']
 
 // ③ 环：把 agent 也变成 tool-registry 的依赖 → 成环，报出可读路径
 try {
@@ -233,7 +230,7 @@ try {
 
 1. **参数是「插件对象数组」不是「名字数组」**。旧文档与直觉容易写成 `topoSort(['a','b'])` —— 实际要 `topoSort([{ name: 'a' }, { name: 'b' }])`。
 2. **不传 `knownServices` 就会把外部服务名当「缺失依赖」抛错**。清单里只要出现 `view` / `canvas` / `tools` 这类宿主或内核提供的名字，就得把白名单传上。
-3. **`inject` 优先于 `deps`，两者都给时 `deps` 被忽略**（不是合并）。混写老字段时要小心这一点。
+3. **依赖只写 `inject`**。旧的 `deps` 字段已删除，写了也不会生效。
 4. **`topoSort` 不接受「等一等」**：缺依赖直接抛。要「等提供方出现」是 `start()` / `drain` 的语义 —— 两者别用错场景。
 5. **成环时 `start()` 不会报错指出环** —— 环里每个插件都安静停在 `pending`。想提前发现环，就用 `topoSort` 预检一遍。
 6. **返回的是名字数组，不是对象**。要拿回对象请自己按名字建索引（`new Map(plugins.map(p => [p.name, p]))`）。

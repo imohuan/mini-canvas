@@ -26,7 +26,7 @@ async function boot(plugins: PluginModule[]): Promise<Context> {
   return ctx
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('ctx.selectionRegion.attach', () => {
   it('落到 selection/region 场，键 = 区域词（多选框没有"类型"，位置进键）', async () => {

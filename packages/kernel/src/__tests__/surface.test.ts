@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '../Context'
-import { CommandRegistry } from '../command'
 import { registerEventName } from '../EventBus'
 import type { PluginModule, PluginScope } from '../types'
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('ctx.surface() 自省快照（列出注册了什么、支持什么）', () => {
   it('服务轴：services 列出全部按名可取的服务并带 source（谁注入的）', async () => {
@@ -144,23 +143,6 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     expect(s.services.some((x) => x.source === 'reg')).toBe(false);
     expect(s.services.every((x) => x.source === '<builtin>')).toBe(true);
     expect(s.registries).toEqual([])
-  })
-
-  it('命令轴兼读 command 服务：独立宿主仍可按服务名提供命令（兼容读口）', async () => {
-    const ctx = new Context()
-    const command = new CommandRegistry()
-    ctx.inject('command', command)
-    await ctx.start()
-    // 模拟数据层自带命令的注册路径（不经 ctx.commands.register 糖 → 不进注册场）
-    command.register({ id: 'command:delete', title: '删除', keys: ['Delete'], run: () => 1 })
-    command.register({ id: 'command:undo', title: '撤销', keys: ['mod+z'], run: () => 1 })
-    const s = ctx.surface()
-    const del = s.commands.find((c) => c.id === 'command:delete')!;
-    expect(del).toBeDefined();
-    expect(del.origin).toBe('service');
-    expect(del.keys).toEqual(['Delete']);
-    expect(s.commands.some((c) => c.id === 'command:undo')).toBe(true);
-    ctx.stop()
   })
 
   it('params 逐字段透传、无虚构 required 字段、options 是副本（审查 B/C4）', async () => {

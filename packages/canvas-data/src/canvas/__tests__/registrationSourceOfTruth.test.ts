@@ -36,7 +36,7 @@ async function boot(plugins: PluginModule[]) {
   return { ctx, nodeStore, theme, nodeRegistry }
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('D1 · 主题只留 ThemeRegistry 一处事实源', () => {
   it('ctx.theme.register：ThemeRegistry 生效、theme 场不再重复写、卸载后清空', async () => {

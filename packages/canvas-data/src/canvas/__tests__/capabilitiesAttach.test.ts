@@ -25,7 +25,7 @@ async function boot(plugins: PluginModule[]): Promise<Context> {
   return ctx
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('ctx.nodes.attach（§8.3 一等 API）', () => {
   it('落到 node/region 场，键 = type/region（位置进键）', async () => {

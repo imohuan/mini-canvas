@@ -8,7 +8,7 @@ import type { PluginModule } from '@mini-canvas/kernel'
 function demoPlugin(flag: string): PluginModule {
   return {
     name: 'demo',
-    setup(ctx) {
+    apply(ctx) {
       ctx.inject('demoSvc', { flag })
       // 5c：节点类型表随 doc 提供（nodeStore 不再是服务名）
       ctx.get<{ registerType(d: unknown): void }>('doc').registerType({

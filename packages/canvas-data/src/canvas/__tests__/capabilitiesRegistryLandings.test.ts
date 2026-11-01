@@ -33,7 +33,7 @@ async function boot(plugins: PluginModule[]): Promise<Context> {
   return ctx
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
   it('ctx.nodes.register 只写真实容器（node/type、node/creator 场按 D1 不再落）', async () => {

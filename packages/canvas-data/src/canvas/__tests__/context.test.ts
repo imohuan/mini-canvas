@@ -12,9 +12,9 @@ declare module '@mini-canvas/kernel' {
 
 const mkPlugin = (
   name: string,
-  deps: string[] = [],
-  setup: (ctx: any) => void | (() => void) = () => {},
-): PluginModule => ({ name, deps, setup })
+  inject: string[] = [],
+  apply: (ctx: any) => void | (() => void) = () => {},
+): PluginModule => ({ name, inject, apply })
 
 describe('Context（Cordis 式内核主类）', () => {
   it('plugin 重复名在装载时报错', () => {
@@ -23,7 +23,7 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(() => ctx.plugin(mkPlugin('a'))).toThrow(/Duplicate plugin name/)
   })
 
-  it('start 按拓扑顺序跑 setup', async () => {
+  it('start 按拓扑顺序跑 apply', async () => {
     const ctx = new Context()
     const order: string[] = []
     // provider 依赖 storage；consumer 依赖 provider
@@ -98,7 +98,7 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(() => ctx.plugin(mkPlugin('x'))).toThrow()
   })
 
-  it('start 时 setup 抛错会把该插件 scope 置 ERROR 并传播', async () => {
+  it('start 时 apply 抛错会把该插件 scope 置 ERROR 并传播', async () => {
     const ctx = new Context()
     ctx.plugin(
       mkPlugin('bad', [], () => {
@@ -121,7 +121,7 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(seen).toEqual(['ctx'])
   })
 
-  it('setup 返回 cleanup 函数会被登记进 scope', async () => {
+  it('apply 返回 cleanup 函数会被登记进 scope', async () => {
     const ctx = new Context()
     const cleanup = vi.fn()
     ctx.plugin(mkPlugin('p', [], () => cleanup))
@@ -219,7 +219,7 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(ctx.fiber('child')?.stateName).toBe('active')
   })
 
-  it('installPlugin setup 抛错 → 半成品副作用回收 + 不残留 + 抛错', async () => {
+  it('installPlugin apply 抛错 → 半成品副作用回收 + 不残留 + 抛错', async () => {
     const ctx = new Context()
     await ctx.start()
     expect(() =>
@@ -275,7 +275,7 @@ describe('Context（Cordis 式内核主类）', () => {
 })
 
 describe('PluginModule Cordis 形态（name/inject/apply）', () => {
-  it('apply 优先于 setup；apply(ctx) 里可注册并自动回收', async () => {
+  it('apply(ctx) 里可注册并自动回收', async () => {
     const ctx = new Context()
     const order: string[] = []
     const cleanup = vi.fn()
@@ -285,9 +285,6 @@ describe('PluginModule Cordis 形态（name/inject/apply）', () => {
         order.push('apply-ran')
         c.effect(() => cleanup)
       },
-      setup() {
-        order.push('setup-ran') // 不该被调(apply 优先)
-      },
     })
     await ctx.start()
     expect(order).toEqual(['apply-ran'])
@@ -295,11 +292,11 @@ describe('PluginModule Cordis 形态（name/inject/apply）', () => {
     expect(cleanup).toHaveBeenCalledTimes(1)
   })
 
-  it('inject 依赖字段参与拓扑排序（inject 优先于 deps）', async () => {
+  it('inject 依赖字段参与拓扑排序', async () => {
     const ctx = new Context()
     const order: string[] = []
     ctx.plugin({ name: 'b', inject: ['a'], apply: () => void order.push('b') })
-    ctx.plugin({ name: 'a', deps: [], apply: () => void order.push('a') })
+    ctx.plugin({ name: 'a', apply: () => void order.push('a') })
     await ctx.start()
     expect(order).toEqual(['a', 'b'])
   })
@@ -347,7 +344,7 @@ describe('P1 fiber 集成（ctx.fiber 句柄 + 生命周期状态推进）', () 
     expect(ctx.fiber('hot')?.stateName).toBe('active')
   })
 
-  it('setup 抛错 → fiber 置 FAILED（保留供诊断，可重装复用）', async () => {
+  it('apply 抛错 → fiber 置 FAILED（保留供诊断，可重装复用）', async () => {
     const ctx = new Context()
     ctx.plugin({
       name: 'bad',

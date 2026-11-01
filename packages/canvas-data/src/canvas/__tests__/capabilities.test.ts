@@ -47,7 +47,7 @@ async function boot(plugins: PluginModule[]): Promise<{
   return { ctx, nodeStore, nodeRegistry, theme, command, factory }
 }
 
-const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
+const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () => {
   it('ctx.nodes.register 一次注册节点(数据+展示)，setup 期间可用', async () => {

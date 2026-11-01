@@ -10,8 +10,8 @@ import type { PluginScope } from '@mini-canvas/kernel'
 /** 测试 content stub（内核不 import Vue，opaque 句柄即可） */
 const TextContentStub = { name: 'TextContent' }
 
-/** 造一个"能跑插件 setup"的最小 ctx：注入 nodeStore + nodeRegistry，start 触发 setup */
-async function bootWithSetup(setup: (ctx: PluginScope) => void): Promise<{
+/** 造一个"能跑插件 apply"的最小 ctx：注入 nodeStore + nodeRegistry，start 触发 apply */
+async function bootWithApply(apply: (ctx: PluginScope) => void): Promise<{
   ctx: Context
   nodeStore: NodeStore
   registry: NodeRegistry
@@ -22,14 +22,14 @@ async function bootWithSetup(setup: (ctx: PluginScope) => void): Promise<{
   // 5c：节点类型表由 doc 承载（registerNodeType 经 ctx.get('doc') 落数据侧）
   ctx.inject('doc', createDocService({ nodeStore }))
   ctx.inject('nodeRegistry', registry)
-  ctx.plugin({ name: 'under-test', setup })
+  ctx.plugin({ name: 'under-test', apply })
   await ctx.start()
   return { ctx, nodeStore, registry }
 }
 
 describe('registerNodeType（插件"一次自描述"节点注册接缝）', () => {
   it('一次调用同时落 nodeStore(数据) + nodeRegistry(展示 in 区域)', async () => {
-    const { nodeStore, registry } = await bootWithSetup((ctx) => {
+    const { nodeStore, registry } = await bootWithApply((ctx) => {
       registerNodeType(ctx, {
         type: 'text',
         label: '文本',
@@ -49,7 +49,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   })
 
   it('只给 segments 为空时仍注册数据侧，跳过展示（纯数据场景可用）', async () => {
-    const { nodeStore, registry } = await bootWithSetup((ctx) => {
+    const { nodeStore, registry } = await bootWithApply((ctx) => {
       registerNodeType(ctx, { type: 'meta', label: 'M', defaultSize: { w: 1, h: 1 } })
     })
     expect(nodeStore.types.has('meta')).toBe(true)
@@ -62,7 +62,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
     ctx.inject('doc', createDocService({ nodeStore }))
     ctx.plugin({
       name: 'no-registry',
-      setup: (c) =>
+      apply: (c) =>
         registerNodeType(c, { type: 'x', label: 'X', defaultSize: { w: 1, h: 1 }, segments: { in: TextContentStub } }),
     })
     await ctx.start()
@@ -71,7 +71,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
 
   it('同 type 重复注册抛错（防覆盖，与 registerType 语义一致）', async () => {
     await expect(
-      bootWithSetup((ctx) => {
+      bootWithApply((ctx) => {
         registerNodeType(ctx, { type: 'text', label: 'a', defaultSize: { w: 1, h: 1 }, segments: { in: TextContentStub } })
         registerNodeType(ctx, { type: 'text', label: 'b', defaultSize: { w: 1, h: 1 } })
       }),
@@ -81,7 +81,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   it('icon 随类型注册落入 nodeStore（字符串与组件句柄原样透传）', async () => {
     const SvgIcon = '<svg viewBox="0 0 24 24"><path d="M4 7h16"/></svg>'
     const CompIcon = { name: 'FakeIcon', render: () => null }
-    const { nodeStore } = await bootWithSetup((ctx) => {
+    const { nodeStore } = await bootWithApply((ctx) => {
       registerNodeType(ctx, {
         type: 'with-icon',
         label: '带图标',
@@ -101,7 +101,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   })
 
   it('未声明 icon 时字段为 undefined（标题侧据此不渲染图标）', async () => {
-    const { nodeStore } = await bootWithSetup((ctx) => {
+    const { nodeStore } = await bootWithApply((ctx) => {
       registerNodeType(ctx, { type: 'no-icon', label: '无图标', defaultSize: { w: 1, h: 1 } })
     })
     expect(nodeStore.types.get('no-icon')?.icon).toBeUndefined()
@@ -113,7 +113,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
    */
   it('titleExtra 随类型注册落入 nodeStore（字符串与函数句柄原样透传）', async () => {
     const compute = (d: Record<string, unknown>): string => `${d.imageWidth}×${d.imageHeight}`
-    const { nodeStore } = await bootWithSetup((ctx) => {
+    const { nodeStore } = await bootWithApply((ctx) => {
       registerNodeType(ctx, { type: 'with-extra', label: '带附加文本', defaultSize: { w: 10, h: 10 }, titleExtra: '预览' })
       registerNodeType(ctx, { type: 'fn-extra', label: '现算', defaultSize: { w: 10, h: 10 }, titleExtra: compute })
     })
@@ -122,7 +122,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   })
 
   it('未声明 titleExtra 时字段为 undefined（标题右侧那一格据此不渲染）', async () => {
-    const { nodeStore } = await bootWithSetup((ctx) => {
+    const { nodeStore } = await bootWithApply((ctx) => {
       registerNodeType(ctx, { type: 'no-extra', label: '无', defaultSize: { w: 1, h: 1 } })
     })
     expect(nodeStore.types.get('no-extra')?.titleExtra).toBeUndefined()
@@ -138,7 +138,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
    * 渲染层读它，而不是让外壳去猜节点类型。
    */
   it('声明 frameless 的类型：原样透传进 nodeStore（渲染层据此不画卡片边框）', async () => {
-    const { nodeStore } = await bootWithSetup((ctx) => {
+    const { nodeStore } = await bootWithApply((ctx) => {
       registerNodeType(ctx, { type: 'edge-to-edge', label: '贴满', defaultSize: { w: 10, h: 10 }, frameless: true })
       registerNodeType(ctx, { type: 'normal', label: '普通', defaultSize: { w: 10, h: 10 } })
     })
@@ -158,7 +158,7 @@ describe('registerNodeType 原子性（P2-9）', () => {
     registry.register('dup', { in: TextContentStub })
     ctx.plugin({
       name: 'atomic-test',
-      setup: (c) =>
+      apply: (c) =>
         registerNodeType(c, { type: 'dup', label: 'D', defaultSize: { w: 1, h: 1 }, segments: { in: TextContentStub } }),
     })
     // registerNodeType: nodeStore.registerType 成功 → nodeRegistry.register 抛"already" → 回滚 nodeStore
