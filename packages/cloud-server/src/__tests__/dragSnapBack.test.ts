@@ -44,7 +44,9 @@ const writePosition = (doc: BatchDoc, x: number, y: number) =>
   doc.batchNodes({ update: [{ id: NODE, position: { x, y } }] })
 
 describe('拖拽后被弹回原位', () => {
-  it('★ 进度帧与位置保存并发：位置必须留住（同一把写锁）', async () => {
+  // 这条要做 30 轮真磁盘并发：单跑约 2.7s，全量并发时很容易撞上默认 5s 上限。
+  // 超时调高只是给真实运行留余量，断言本身没放松。
+  it('★ 进度帧与位置保存并发：位置必须留住（同一把写锁）', { timeout: 30000 }, async () => {
     const { dir, store, resources } = await setup()
     const pool = new CanvasDocumentPool(store, resources)
     // 反复几十轮：每轮都是「进度帧 + 位置写」同时发。
