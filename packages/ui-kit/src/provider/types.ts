@@ -1,4 +1,4 @@
-import type { UiKitDensity, UiKitSize, UiKitSizeToken, UiKitTheme } from '../shared/types'
+import type { UiKitDensity, UiKitSize, UiKitSizeToken } from '../shared/types'
 
 export interface UiKitProviderProps {
   /** 默认尺寸，单个组件可以用 size 覆盖 */
@@ -24,4 +24,3 @@ export interface UiKitProviderProps {
   zIndexBase?: number
 }
 
-export interface ResolvedUiKitTheme extends UiKitTheme {}

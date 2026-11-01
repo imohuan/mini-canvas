@@ -30,23 +30,6 @@ export type UiKitPlacement =
 /** 空间密度：只影响间距和留白，不改变控件可点面积。 */
 export type UiKitDensity = 'compact' | 'comfortable' | 'spacious'
 
-export interface UiKitTheme {
-  accent: string
-  accentHover: string
-  danger: string
-  success: string
-  warning: string
-  info: string
-  ink: string
-  inkMuted: string
-  panel: string
-  panelSoft: string
-  line: string
-  hover: string
-  chip: string
-  shadow: string
-}
-
 export interface UiKitSizeToken {
   height: number
   fontSize: number
@@ -58,7 +41,6 @@ export interface UiKitContext {
   size: UiKitSize
   density: UiKitDensity
   radius: number
-  theme: UiKitTheme
   sizes: Record<UiKitSize, UiKitSizeToken>
   cssVars: Record<string, string>
   zIndex: { dropdown: number; popover: number; modal: number; toast: number }

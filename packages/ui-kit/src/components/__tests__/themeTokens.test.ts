@@ -44,7 +44,8 @@ describe('ui-kit 主题色单一来源', () => {
     const config = readFileSync(join(src, 'provider/config.ts'), 'utf-8')
     expect(provider).not.toMatch(/setVar\('--ui-/)
     expect(config).not.toMatch(/setVar\('--ui-/)
-    expect(config).toMatch(/themeVars/)
+    // 颜色直接读项目主题变量，Provider 上下文里不再保留第二份颜色表
+    expect(config).not.toMatch(/UiKitTheme|themeVars/)
   })
 
   it('预览页兜底只作用于预览容器', () => {

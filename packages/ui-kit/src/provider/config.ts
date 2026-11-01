@@ -1,4 +1,4 @@
-import type { UiKitContext, UiKitDensity, UiKitSize, UiKitSizeToken, UiKitTheme } from '../shared/types'
+import type { UiKitContext, UiKitDensity, UiKitSize, UiKitSizeToken } from '../shared/types'
 import type { UiKitProviderProps } from './types'
 
 export const DEFAULT_SIZES: Record<UiKitSize, UiKitSizeToken> = {
@@ -6,36 +6,6 @@ export const DEFAULT_SIZES: Record<UiKitSize, UiKitSizeToken> = {
   md: { height: 34, fontSize: 13, paddingX: 12, icon: 16 },
   lg: { height: 42, fontSize: 14, paddingX: 16, icon: 18 },
 }
-
-/**
- * 颜色主题**只描述当前项目主题的语义名字**，不再提供第二套色值。
- *
- * 为什么：项目已经有一份真源（`canvas-render/src/styles/ui-theme.css` 的 `--ui-*`，
- * 亮/暗各一条规则）。组件库若自己算一套颜色，宿主就必须把两套对齐，
- * 任何一次主题改动都会漏一半。现在组件的 CSS 直接读 `--ui-*`，
- * 这里的 `theme` 字段只为兼容已有的 `useUiKit().theme.accent` 读法而保留，
- * 值是同名的 CSS 变量表达式，不是颜色字面量。
- */
-const themeVars: UiKitTheme = {
-  accent: 'var(--ui-accent)',
-  accentHover: 'var(--ui-accent-hover)',
-  danger: 'var(--ui-danger)',
-  success: 'var(--ui-success, #16a34a)',
-  warning: 'var(--ui-warn)',
-  info: 'var(--ui-info, #2563eb)',
-  ink: 'var(--ui-ink)',
-  inkMuted: 'var(--ui-ink-dim)',
-  panel: 'var(--ui-panel)',
-  panelSoft: 'var(--ui-panel-soft)',
-  line: 'var(--ui-line)',
-  hover: 'var(--ui-hover)',
-  chip: 'var(--ui-chip)',
-  shadow: 'var(--ui-shadow-md)',
-}
-
-/** 兼容旧出口：颜色已改为读项目主题，两个名字指向同一份变量表。 */
-export const LIGHT_THEME: UiKitTheme = themeVars
-export const DARK_THEME: UiKitTheme = themeVars
 
 const DENSITY_GAP: Record<UiKitDensity, number> = {
   compact: 4,
@@ -59,7 +29,6 @@ export function resolveConfig(props: UiKitProviderProps): UiKitContext {
    * 作用域更小、不会泄露到画布其它区域。
    */
   const overrides: Record<string, string> = {}
-  const theme: UiKitTheme = { ...themeVars }
   const size = props.size ?? 'md'
   const density = props.density ?? 'comfortable'
   const radius = Number.isFinite(props.radius) ? Math.min(Math.max(props.radius ?? 8, 0), 32) : 8
@@ -102,7 +71,6 @@ export function resolveConfig(props: UiKitProviderProps): UiKitContext {
     size,
     density,
     radius,
-    theme,
     sizes,
     cssVars,
     zIndex: {
