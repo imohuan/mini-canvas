@@ -27,6 +27,10 @@ const historyZoom = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryZoom.ts'),
   'utf-8',
 )
+const historyPreview = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryPreview.ts'),
+  'utf-8',
+)
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
 const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
@@ -607,15 +611,12 @@ describe('批量勾选钮样式对动态卡片生效', () => {
  *      （同 2026-10-28「切到节点包被当成视频」那类问题，这里提前钉死）。
  */
 describe('生成历史卡片预览带同页签清单', () => {
-  const fnBody = modalsArea.slice(
-    modalsArea.indexOf('function historyPreviewGroup'),
-    modalsArea.indexOf('/** 点开「详情」的那一条历史'),
-  )
+  const fnBody = historyPreview
 
   it('openHistoryItem 把清单交给 previewItem（单张退回不带 list）', () => {
-    const open = modalsArea.slice(
-      modalsArea.indexOf('function openHistoryItem'),
-      modalsArea.indexOf('/** 箭头水平偏移'),
+    const open = historyPreview.slice(
+      historyPreview.indexOf('function openHistoryItem'),
+      historyPreview.indexOf('return { thumbOf'),
     )
     expect(open, '没有调 historyPreviewGroup（清单没算出来）').toMatch(/historyPreviewGroup\(item\)/)
     expect(open, '清单没有展开进 previewItem（list 传不进 MediaViewer）').toMatch(/\.\.\.\(group && group\.list\.length > 1 \? group : \{\}\)/)
@@ -627,8 +628,8 @@ describe('生成历史卡片预览带同页签清单', () => {
 
   it('只收「给得出可预览地址」的记录（无产物 / 跨端地址都跳过）', () => {
     expect(fnBody, '没有按 previewableUrl 过滤（左右键会切到打不开的地址上）').toMatch(/!!previewableUrl\(e\)/)
-    expect(modalsArea, '缺少 previewableUrl 判定（跨端 8033 地址会被当成可预览）').toMatch(
-      /function previewableUrl\(item: HistItem\)[\s\S]{0,300}url\.startsWith\('\/'\)/,
+    expect(historyPreview, '缺少 previewableUrl 判定（跨端 8033 地址会被当成可预览）').toMatch(
+      /function previewableUrl\(item: HistoryPreviewItem\)[\s\S]{0,300}url\.startsWith\('\/'\)/,
     )
   })
 
