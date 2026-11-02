@@ -2665,7 +2665,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                  留 10 会压住提示条底边（2026-11-02 实测 7px 重叠）；
                  6 + 8（箭头高度）= 14px，菜单刚好落在提示条下方。
                  内边距压到 4px，是为了让只有两条的菜单再矮 4px、彻底让开提示条。 -->
-            <DropdownMenuContent arrow align="start" side="top" :side-offset="6" class="ac-ddmenu" :style="{ minWidth: '220px', padding: '4px' }">
+            <DropdownMenuContent arrow align="start" side="top" :side-offset="18" class="ac-ddmenu" :style="{ minWidth: '220px', padding: '4px' }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择创作模式">
                 <Button v-for="m in promptPresets" :key="m.id" variant="ghost" size="sm" class="ac-menu-item" role="option"
                   :aria-selected="s.activePromptId === m.id" @click="pickMode(m.id, () => (modeOpen = false))">
@@ -5707,6 +5707,22 @@ html[data-mct-size] .ac-split .ac-rail-item {
   transition: background 0.18s ease, color 0.18s ease;
 }
 
+/**
+ * 两项式菜单行（创作模式 / 授权方式）：**高度随两行文字长**。
+ *
+ * 2026-11-02 用户截图：标题与说明叠在一起。原因有两层：
+ *   ① Button 本体是横向 flex（已改 column）；
+ *   ② Button 的 size="sm" 被组件库 size.css 钉死 32px 高，两行文字塞不进 32px，
+ *      第二行直接压在第一行上。
+ * 这里显式给 height:auto + min-height，并把选择器写到比 size.css 更具体
+ * （html[data-mct-size] [data-slot='button'][data-size='sm'] 是 0,3,1），否则压不住它。
+ */
+html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
+  height: auto;
+  min-height: 46px;
+  padding-block: 6px;
+}
+
 .ac-rail-item:hover {
   background: var(--ui-hover, rgba(0, 0, 0, 0.05));
   color: var(--ui-ink, #374151);
@@ -6631,7 +6647,16 @@ html[data-mct-size] .ac-split .ac-rail-item {
 
 /* 简单两项式下拉（创作模式 / 授权方式）：标题一行 + 说明一行 */
 .ac-menu-item {
-  align-items: flex-start;
+  /*
+   * 必须是纵向。
+   *
+   * 2026-11-02 用户截图：下拉里「全能创作」和「内置提示词」挤在同一行，
+   * 两段文字之间只剩 2px。根因是 Button 本体是 `display:flex; flex-direction:row`，
+   * 这里只写了 align-items，没有改方向，两个 span 就并排了。
+   * 改成 column 后才是注释里说的「标题一行 + 说明一行」。
+   */
+  flex-direction: column;
+  align-items: stretch;
   gap: 2px;
   width: 100%;
   text-align: left;
