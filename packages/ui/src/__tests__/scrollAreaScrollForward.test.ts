@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs'
 const scrollPane = readFileSync(new URL('../components/ScrollPane.vue', import.meta.url), 'utf-8')
 const scrollPaneUtil = readFileSync(new URL('../components/scrollPane.ts', import.meta.url), 'utf-8')
 const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
+const historyLoadMore = readFileSync(new URL('../components/areas/modals-area/useHistoryLoadMore.ts', import.meta.url), 'utf-8')
 
 describe('ScrollPane 转发内部滚动层的 scroll 事件', () => {
   it('声明 scroll 自定义事件（否则写在组件上的 @scroll 会被吞掉）', () => {
@@ -48,12 +49,12 @@ describe('生成历史的「加载更多」改走哨兵元素（用户口径 202
 
   it('滚动内容最底部放哨兵元素，进入可视区才拉下一页', () => {
     expect(modalsArea, '找不到哨兵元素').toMatch(/ref="loadSentinelEl"/)
-    expect(modalsArea, '哨兵没有挂 IntersectionObserver').toMatch(/loadMoreObserver\.observe\(sentinel\)/)
-    expect(modalsArea, '哨兵观察没有接到 ui.loadMoreHistory()').toMatch(/ui\.loadMoreHistory\(\)/)
+    expect(historyLoadMore, '哨兵没有挂 IntersectionObserver').toMatch(/loadMoreObserver\.observe\(sentinel\)/)
+    expect(historyLoadMore, '哨兵观察没有接到 ui.loadMoreHistory()').toMatch(/ui\.loadMoreHistory\(\)/)
   })
 
   it('两次拉页之间至少隔 1 秒（哨兵常驻可视区也不会连发请求）', () => {
-    expect(modalsArea, '找不到最小拉页间隔').toMatch(/LOAD_MORE_INTERVAL_MS = 1000/)
-    expect(modalsArea, '没有按间隔节流').toMatch(/elapsed < LOAD_MORE_INTERVAL_MS/)
+    expect(historyLoadMore, '找不到最小拉页间隔').toMatch(/LOAD_MORE_INTERVAL_MS = 1000/)
+    expect(historyLoadMore, '没有按间隔节流').toMatch(/elapsed < LOAD_MORE_INTERVAL_MS/)
   })
 })

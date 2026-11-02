@@ -31,6 +31,10 @@ const historyPreview = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryPreview.ts'),
   'utf-8',
 )
+const historyLoadMore = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryLoadMore.ts'),
+  'utf-8',
+)
 const historyDetail = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/HistoryDetailDialog.vue'),
   'utf-8',
@@ -196,14 +200,14 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const rebuild = modalsArea.slice(modalsArea.indexOf('function rebuildMasonry'), modalsArea.indexOf('/** 只把新增一批'))
     expect(rebuild, '整墙重建后没有补挂哨兵观察器').toMatch(/setupLoadSentinel\(\)/)
 
-    const setup = modalsArea.slice(modalsArea.indexOf('function setupLoadSentinel'), modalsArea.indexOf('function teardownLoadSentinel'))
+    const setup = historyLoadMore.slice(historyLoadMore.indexOf('function setupLoadSentinel'), historyLoadMore.indexOf('function teardownLoadSentinel'))
     expect(setup, '同一哨兵重复 setup 会重复观察').toMatch(/observedSentinel/)
   })
 
   it('列表不足一屏时主动补拉下一页（不再只等 observer 回调）', () => {
     // 根因：首屏大量记录被过滤后列表比弹窗还短，哨兵一直可见 → observer 不再回调
-    expect(modalsArea, '缺少"哨兵是否在视口内"的主动测量').toMatch(/function isSentinelInView/)
-    expect(modalsArea, '缺少主动补拉入口').toMatch(/function fillViewportIfNeeded/)
+    expect(historyLoadMore, '缺少"哨兵是否在视口内"的主动测量').toMatch(/function isSentinelInView/)
+    expect(historyLoadMore, '缺少主动补拉入口').toMatch(/function fillViewportIfNeeded/)
 
     const rebuild = modalsArea.slice(modalsArea.indexOf('function rebuildMasonry'), modalsArea.indexOf('/** 只把新增一批'))
     expect(rebuild, '整墙重建后没有补拉（列表仍不足一屏就停住）').toMatch(/fillViewportIfNeeded\(\)/)
@@ -211,7 +215,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const append = modalsArea.slice(modalsArea.indexOf('function appendMasonryItems'), modalsArea.indexOf('/** 滑杆 / 容器宽度变化'))
     expect(append, '追加一批后没有补拉（还是短列表）').toMatch(/fillViewportIfNeeded\(\)/)
 
-    const setup = modalsArea.slice(modalsArea.indexOf('function setupLoadSentinel'), modalsArea.indexOf('function teardownLoadSentinel'))
+    const setup = historyLoadMore.slice(historyLoadMore.indexOf('function setupLoadSentinel'), historyLoadMore.indexOf('function teardownLoadSentinel'))
     expect(setup, '哨兵挂载时没有主动测量（初始即相交时无回调）').toMatch(/fillViewportIfNeeded\(\)/)
   })
 
@@ -227,14 +231,14 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('切页签后不必靠拖缩放滑杆才会继续加载（哨兵失效能自愈）', () => {
-    expect(modalsArea, '缺少哨兵自愈巡检').toMatch(/function ensureLoadSentinelAlive/)
-    const fn = modalsArea.slice(
-      modalsArea.indexOf('function ensureLoadSentinelAlive'),
-      modalsArea.indexOf('onBeforeUnmount\(\(\) =>'),
+    expect(historyLoadMore, '缺少哨兵自愈巡检').toMatch(/function ensureLoadSentinelAlive/)
+    const fn = historyLoadMore.slice(
+      historyLoadMore.indexOf('function ensureLoadSentinelAlive'),
+      historyLoadMore.indexOf('function observeLastItem'),
     )
     expect(fn, '哨兵还在却没人观察时不重挂').toMatch(/setupLoadSentinel\(\)/)
     expect(fn, '哨兵在视口里时没有主动补拉').toMatch(/fillViewportIfNeeded\(\)/)
-    expect(modalsArea, '没有周期性巡检（切页签后没人再触发）').toMatch(/setInterval\([\s\S]{0,120}ensureLoadSentinelAlive/)
+    expect(historyLoadMore, '没有周期性巡检（切页签后没人再触发）').toMatch(/setInterval\([\s\S]{0,120}ensureLoadSentinelAlive/)
   })
 
   it('切页签后回填已加载的页数，不把之前翻的页丢掉', () => {
@@ -327,13 +331,13 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   it('批量模式只增删勾选层，不重建整面墙（视频不会黑一下）', () => {
     const fn = modalsArea.slice(
       modalsArea.indexOf('function toggleBatchMode'),
-      modalsArea.indexOf('/** 监听最后一张卡'),
+      modalsArea.indexOf('/** 按当前批量状态'),
     )
     expect(fn, '批量模式仍整墙重建（视频黑屏 / 音频波形重建）').not.toMatch(/rebuildMasonry/)
     expect(fn, '批量模式没有就地增删勾选层').toMatch(/syncBatchOverlays\(\)/)
     const sync = modalsArea.slice(
       modalsArea.indexOf('function syncBatchOverlays'),
-      modalsArea.indexOf('/** 监听最后一张卡'),
+      modalsArea.indexOf('/** 无产物（失败）的异常卡'),
     )
     expect(sync, '勾选层没有加到卡片上').toMatch(/appendChild\(buildCheckOverlay/)
     expect(sync, '退出批量模式没有摘掉勾选层').toMatch(/\.remove\(\)/)
@@ -342,7 +346,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   it('批量态标记随开关同步（先开面板再点批量操作也要生效）', () => {
     const sync = modalsArea.slice(
       modalsArea.indexOf('function syncBatchOverlays'),
-      modalsArea.indexOf('/** 监听最后一张卡'),
+      modalsArea.indexOf('/** 无产物（失败）的异常卡'),
     )
     expect(sync, 'syncBatchOverlays 没有同步 hist-card--batch（进入批量模式后波形仍吃指针）').toMatch(
       /card\.classList\.toggle\('hist-card--batch', s\.histBatchMode\)/,
@@ -390,7 +394,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     // 批量模式下的勾选层：卡片本身带 hist-card-check 的不许再走"重建"
     const batchFn = modalsArea.slice(
       modalsArea.indexOf('function toggleBatchMode'),
-      modalsArea.indexOf('/** 监听最后一张卡'),
+      modalsArea.indexOf('/** 按当前批量状态'),
     )
     expect(batchFn, '批量操作仍在下一帧重建整墙').not.toMatch(/rebuildMasonry/)
   })
@@ -418,14 +422,14 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     const tpl = modalsArea.slice(modalsArea.indexOf('ref="loadSentinelEl"') - 900, modalsArea.indexOf('ref="loadSentinelEl"'))
     expect(tpl, '哨兵仍只看 histHasMore').not.toMatch(/v-if="ui\.histVisible\.value\.length && s\.histHasMore"/)
     expect(tpl, '哨兵没有用"还能继续加载"的条件').toMatch(/canLoadMore/)
-    expect(modalsArea, '缺少 canLoadMore 计算（未渲染完也应保留哨兵）').toMatch(/const canLoadMore = computed/)
+    expect(historyLoadMore, '缺少 canLoadMore 计算（未渲染完也应保留哨兵）').toMatch(/const canLoadMore = computed/)
     // 渲染维度以 DOM 实际画过的 id 为准（renderedCount 可能与墙脱节，2026-10-30 实测）：
     // fillViewport 先对账（计数对齐墙），再按 missing 补画。
-    expect(modalsArea, '对账前没有以 DOM 为准对齐计数').toMatch(/function syncRenderedCountWithWall/)
-    expect(modalsArea, 'fillViewportIfNeeded 没有先对账').toMatch(
+    expect(historyLoadMore, '对账前没有以 DOM 为准对齐计数').toMatch(/function syncRenderedCountWithWall/)
+    expect(historyLoadMore, 'fillViewportIfNeeded 没有先对账').toMatch(
       /function fillViewportIfNeeded[\s\S]{0,400}syncRenderedCountWithWall\(\)/,
     )
-    expect(modalsArea, '漏画兜底没有按墙上 id 过滤').toMatch(/const missing = ui\.histVisible\.value\.filter\(/)
+    expect(historyLoadMore, '漏画兜底没有按墙上 id 过滤').toMatch(/const missing = ui\.histVisible\.value\.filter\(/)
   })
 
   it('切页签后不会被旧的补页请求挤掉第 1 页（点音频却还是图片）', () => {
@@ -661,9 +665,9 @@ describe('生成历史卡片预览带同页签清单', () => {
  */
 describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重建）', () => {
   it('漏画判定排除已摘掉的 id', () => {
-    const fn = modalsArea.slice(
-      modalsArea.indexOf('if (!s.histHasMore) {'),
-      modalsArea.indexOf('const elapsed = Date.now() - lastLoadMoreAt'),
+    const fn = historyLoadMore.slice(
+      historyLoadMore.indexOf('if (!s.histHasMore) {'),
+      historyLoadMore.indexOf('const elapsed = Date.now() - lastLoadMoreAt'),
     )
     expect(fn, '找不到补漏分支').not.toBe('')
     // 要么按"未摘除"集合过滤，要么根本不按数据- DOM 差集补画
@@ -672,9 +676,9 @@ describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重�
   })
 
   it('canLoadMore 也不再拿"数据里有、DOM 里没有"当还能加载的唯一依据', () => {
-    const fn = modalsArea.slice(
-      modalsArea.indexOf('const canLoadMore = computed'),
-      modalsArea.indexOf('function readLoadState'),
+    const fn = historyLoadMore.slice(
+      historyLoadMore.indexOf('const canLoadMore = computed'),
+      historyLoadMore.indexOf('function readLoadState'),
     )
     expect(fn, 'canLoadMore 里没有排除已摘掉的卡（watchdog 会每 800ms 推一次重建）').toMatch(
       /droppedHistoryIds|skippedHistoryIds/,
@@ -703,9 +707,9 @@ describe('历史墙的补漏不会和坏资源摘卡互相触发（防无限重�
   })
 
   it('诊断快照里能看到已摘数量（排障时不再被误判成漏画）', () => {
-    const fn = modalsArea.slice(
-      modalsArea.indexOf('function readLoadState'),
-      modalsArea.indexOf('function setupLoadSentinel'),
+    const fn = historyLoadMore.slice(
+      historyLoadMore.indexOf('function readLoadState'),
+      historyLoadMore.indexOf('function setupLoadSentinel'),
     )
     expect(fn, 'readLoadState 没有 dropped 字段').toMatch(/dropped: droppedHistoryIds\.size/)
   })
