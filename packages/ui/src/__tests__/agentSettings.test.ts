@@ -432,18 +432,25 @@ describe('跨标签页同步：订阅 /api/kv/events，只认这三个键', () =
  * 刷新即丢、后台永远读不到。这条把"必须经过 agentSettings"钉住。
  */
 describe('设置弹窗必须绑 agentSettings（死开关不许复活）', () => {
-  it('ModalsArea.vue 里没有 s.director.notify / s.director.sound，且三个新项都在', () => {
-    const src = readFileSync(path.join(PKG_ROOT, 'src/components/areas/ModalsArea.vue'), 'utf-8')
+  it('全局设置弹窗里没有 s.director.notify / s.director.sound，且三个新项都在', () => {
+    const src = readFileSync(
+      path.join(PKG_ROOT, 'src/components/areas/modals-area/DirectorSettingsDialog.vue'),
+      'utf-8',
+    )
+    const hook = readFileSync(
+      path.join(PKG_ROOT, 'src/components/areas/modals-area/useDirectorSettings.ts'),
+      'utf-8',
+    )
 
     expect(src).not.toContain('s.director.notify')
     expect(src).not.toContain('s.director.sound')
-    expect(src).toContain('useAgentSettings')
+    expect(hook).toContain('useAgentSettings')
     expect(src).toContain('agent.state.runMode')
     expect(src).toContain('agent.state.notify.browser')
     expect(src).toContain('agent.state.notify.sound')
     expect(src).toContain('agent.state.goalBudget')
     // 目标预算落在 KV 里而不是组件内（输入框提交走 agent.setGoalBudget）
-    expect(src).toContain('agent.setGoalBudget')
+    expect(hook).toContain('agent.setGoalBudget')
     // 用户口径的说明文字（设计 §3.6.3 的两行说明）
     expect(src).toContain('离开或关闭浏览器也会进行')
     expect(src).toContain('点 + 选目标时用这里的默认预算')

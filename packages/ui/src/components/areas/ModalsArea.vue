@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // 浮层区：快捷键 / 生成历史（masonry 瀑布流）/ TV Director 设置 / Toast。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onClickOutside } from '@vueuse/core'
 import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare, Download } from 'lucide-vue-next'
-import { motion } from 'motion-v'
 import AppDialog from '../AppDialog.vue'
+import ShortcutModal from './modals-area/ShortcutModal.vue'
+import DirectorSettingsDialog from './modals-area/DirectorSettingsDialog.vue'
 import ScrollPane from '../ScrollPane.vue'
 import { scrollViewportOf } from '../scrollPane'
 // 浮层里的控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记）。
@@ -12,28 +12,15 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/MediaViewer.vue'
 import { useMasonry } from '../../composables/useMasonry'
 import { uiComponentOf, useUi, useUiComponentOutside } from '../../composables/ui'
-import { useAgentSettings } from '../../composables/agentSettings'
 import { historySignatureOf } from '../../composables/historySignature'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
 const Button = useUiComponent('Button')
-const Input = useUiComponent('Input')
-const NumberField = useUiComponent('NumberField')
-const NumberFieldContent = useUiComponent('NumberFieldContent')
-const NumberFieldDecrement = useUiComponent('NumberFieldDecrement')
-const NumberFieldIncrement = useUiComponent('NumberFieldIncrement')
-const NumberFieldInput = useUiComponent('NumberFieldInput')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
-const Select = useUiComponent('Select')
-const SelectContent = useUiComponent('SelectContent')
-const SelectItem = useUiComponent('SelectItem')
-const SelectTrigger = useUiComponent('SelectTrigger')
-const SelectValue = useUiComponent('SelectValue')
-const Switch = useUiComponent('Switch')
 /** 全屏预览走 ui 目录；没登记时回落默认皮。历史预览只在打开时渲染，取件晚到也不会丢。 */
 const MediaViewer = useUiComponentOutside('mediaViewer')
 /** 模板 :is 用；目录没登记时回落默认皮。 */
@@ -54,30 +41,6 @@ const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? Audio
  * 「后台对话 / 通知 / 目标预算」的真源在后台 KV（composables/agentSettings，键与路径照着设计定死）。
  * 组件只做绑定与提交：读它给的响应式快照，改它给的写入口 —— 组件里不放第二份本地状态。
  */
-const agent = useAgentSettings()
-
-/**
- * 「发送键」下拉：三种取值互斥（Ctrl+回车 / Shift+回车 / 回车），默认 Ctrl+回车。
- * 文案与 hint 都放常量里 —— 判定在 plugin-agent 的 composerKeys，展示顺序在设置页，
- * 两边共用同一组 value，改一处不会静默漂移。
- */
-const SUBMIT_KEY_MODE_OPTIONS = [
-  { value: 'ctrl-enter' as const, label: 'Ctrl + 回车', hint: '单独回车换行（默认）' },
-  { value: 'shift-enter' as const, label: 'Shift + 回车', hint: '单独回车换行' },
-  { value: 'enter' as const, label: '回车', hint: 'Shift + 回车换行' },
-]
-const sendKeyLabel = computed(
-  () => SUBMIT_KEY_MODE_OPTIONS.find((m) => m.value === agent.state.submitKeyMode)?.label ?? 'Ctrl + 回车',
-)
-
-/**
- * 目标默认预算输入框：改完（失焦 / 回车）归一化再落 KV，并把归一化结果写回输入框
- * （0 / 空 / 负数都收成 0 = 不限）。不用 v-model：默认预算的真源在后台，本地再绑一个变量就是第三份状态。
- */
-function agentBudgetOnChange(value: number | undefined): void {
-  void agent.setGoalBudget(value === undefined ? '' : String(value))
-}
-
 /**
  * 历史条目的缩略图地址。
  *
@@ -1770,91 +1733,10 @@ function openHistoryItem(item: HistItem): void {
   }
 }
 
-
-/** 箭头水平偏移：dock 可能被左右抽屉挤偏，视口正中≠快捷键按钮中心，打开时实测对准 */
-const arrowShift = ref(0)
-watch(() => s.shortcutsOpen, async (open) => {
-  if (!open) { arrowShift.value = 0; return }
-  await nextTick()
-  const btn = document.querySelector('[aria-label="快捷键"]')
-  if (!btn) return
-  arrowShift.value = btn.getBoundingClientRect().left + btn.getBoundingClientRect().width / 2 - window.innerWidth / 2
-})
-
-function closeShortcutPanel(): void {
-  s.shortcutsOpen = false
-}
-
-/**
- * 点面板外面就关（用户口径 2026-10-28：「就和 AxDropdown 一样」）。
- *
- * 判定用和 AxDropdown 同一个 hook（@vueuse/core 的 onClickOutside），它把监听挂在
- * document 的捕获阶段，所以外壳顶栏 / 底栏 / 状态条即使层级更高、即使写了
- * `@pointerdown.stop`，也照样能判出「点到面板外面了」。
- *
- * 只把「快捷键」按钮排除在外：它有自己的 toggle，不排除会「先关再开」，看着像没反应。
- */
-const shortcutPanelRef = ref(null)
-onClickOutside(
-  shortcutPanelRef,
-  (e) => {
-    if (!s.shortcutsOpen) return
-    /**
-     * 触发器自己不算「外面」。
-     *
-     * 不能只靠 onClickOutside 的 `ignore`：它把 ignore 判定放在 pointerdown 上，
-     * 而底栏容器写了 `@pointerdown.stop`（见 DockArea），那个 pointerdown 到不了 window，
-     * ignore 就白写了；随后 click 先关面板、按钮自己的 toggle 再打开 —— 看着像没反应。
-     * 这里在回调里再挡一次，两种事件顺序下都稳。
-     */
-    const target = e.target
-    if (target instanceof Element && target.closest('[aria-label="快捷键"]')) return
-    closeShortcutPanel()
-  },
-  { ignore: ['[aria-label="快捷键"]'] },
-)
-
 </script>
 
 <template>
-  <!-- 快捷键：毛玻璃，相对**整个视口**居中；底部箭头指向 dock 的「快捷键」按钮（中轴对齐） -->
-  <div v-if="s.shortcutsOpen" class="fixed inset-0 z-[90] flex flex-col items-center justify-end overflow-y-auto pb-[74px] pt-6">
-    <motion.section
-      ref="shortcutPanelRef"
-      class="shortcut-modal relative flex max-h-[calc(100vh-110px)] w-[min(1152px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-glass text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.4]"
-      role="dialog" aria-modal="true" aria-label="快捷键" :initial="{ opacity: 0, scale: 0.96, y: 8 }"
-      :animate="{ opacity: 1, scale: 1, y: 0 }" :transition="{ duration: 0.22, ease: [0.34, 1.56, 0.64, 1] }"
-      @pointerdown.stop>
-      <!-- 顶部条：四个蓝色分组标题（编辑/画布/视图/更多）与关闭按钮同行。
-           网格参数与内容区严格一致（pl-5 + pr-[42px] + mr-[10px] + gap-x-6 + grid-cols-4），组头才能逐列对齐。
-           顶栏 min-h-10(40px) ≥ 按钮(6+32=38px 占位) → 下方滚动条的轨道从按钮下面才开始，不再重叠。 -->
-      <div class="grid min-h-10 grid-cols-4 items-center gap-x-6 pl-5 pr-[42px] mr-[10px]">
-        <h4 v-for="col in ui.shortcuts" :key="col.group" class="text-xs font-bold text-brand">{{ col.group }}</h4>
-        <button
-          class="absolute right-1.5 top-1.5 grid size-8 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink"
-          aria-label="关闭快捷键面板" @click="closeShortcutPanel">
-          <X :size="15" />
-        </button>
-      </div>
-      <!-- 内容区：与顶栏同参数的网格；每组自己的 h4 移除（组头已上移到顶栏） -->
-      <div
-        class="grid min-h-0 flex-1 content-start grid-cols-4 gap-x-6 gap-y-1 overflow-y-auto pb-5 pl-5 pr-[42px] mr-[10px]">
-        <div v-for="col in ui.shortcuts" :key="col.group" class="shortcut-col">
-          <div v-for="row in col.items" :key="row[0]"
-            class="flex min-h-[34px] items-center justify-between gap-2.5 text-xs text-ink">
-            <span>{{ row[0] }}</span>
-            <span class="flex items-center gap-1"><template v-for="(k, i) in row[1]" :key="k + i"><kbd
-                  class="rounded-md border border-line bg-veil px-1.5 py-0.5 text-[10px] text-ink">{{ k }}</kbd><em
-                  v-if="i < row[1].length - 1" class="not-italic text-ink-dim">+</em></template></span>
-          </div>
-        </div>
-      </div>
-    </motion.section>
-    <!-- 箭头：面板底部中央，向下指向 dock 的「快捷键」按钮（实测按钮位置对准；translate+rotate 必须同写一个 transform，否则位移会落到旋转坐标系里） -->
-    <span
-      class="relative z-[1] -mt-[7px] size-[14px] rounded-[3px] border-b border-r border-line bg-arrow backdrop-blur-[28px] backdrop-saturate-[1.4]"
-      :style="{ transform: `translateX(${arrowShift}px) rotate(45deg)` }" aria-hidden="true"></span>
-  </div>
+  <ShortcutModal @close="s.shortcutsOpen = false" />
 
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
   <AppDialog :model-value="s.historyOpen" :close-on-overlay="false" :with-overlay="false" width="min(90vw, 1600px)" height="calc(100vh - 160px)"
@@ -2080,140 +1962,7 @@ onClickOutside(
     </div>
   </AppDialog>
 
-  <!-- TV Director 全局设置：独立全局弹窗（不在 Agent 面板内） -->
-  <AppDialog :model-value="s.directorOpen" width="600px" height="532px" radius="12px"
-    @update:model-value="!$event && (s.directorOpen = false)">
-    <div class="flex items-center justify-between px-4 pb-2.5 pt-4">
-      <div><span class="block text-[9px] font-extrabold tracking-[0.12em] text-ink-dim">TV DIRECTOR</span><strong
-          class="text-[15px]">全局设置</strong></div>
-      <Button variant="ghost" size="icon" aria-label="关闭全局设置" @click="s.directorOpen = false">
-        <X :size="15" />
-      </Button>
-    </div>
-    <!-- <div class="mx-4 mb-3 rounded-lg bg-veil px-3 py-2 text-xs text-gold">非会员每天免费对话 3 轮，即刻体验！</div> -->
-    <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-      <div class="mb-4 rounded-xl border border-line p-3">
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">协作模式</strong>
-            <p class="text-xs text-ink-dim">自动生成图片/视频/音频/剧本</p><small class="block text-[11px] text-ink-mute">开启后，TV
-              Director 可直接消耗积分，提交生成任务，无需逐次确认</small><em
-              class="block text-[10px] not-italic text-ink-dim">新建会话默认生效，当前会话请前往输入框底部切换</em>
-          </div>
-          <Switch
-            :model-value="s.director.collab"
-            aria-label="协作模式"
-            @update:model-value="s.director.collab = $event"
-          />
-        </div>
-        <!-- 后台对话：开=连接断了这一轮也跑完（config/agentRunMode = 'background'）；关=旧行为（'followTab'） -->
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">后台对话</strong>
-            <p class="text-xs text-ink-dim">开启后，对话在后台继续跑：离开或关闭浏览器也会进行，刷新后重新进入该对话能继续之前的对话流</p>
-          </div>
-          <Switch
-            :model-value="agent.state.runMode === 'background'"
-            aria-label="后台对话"
-            @update:model-value="agent.setRunMode($event ? 'background' : 'followTab')"
-          />
-        </div>
-        <!-- 发送中显示队列（config/agentQueuePrefs）：队列里「发送中」条目要不要画出来（用户口径 2026-10-15） -->
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">发送中显示队列</strong>
-            <p class="text-xs text-ink-dim">开启后，排队消息在真实发送期间仍显示「发送中」状态；关闭则发送后立即从列表消失</p>
-          </div>
-          <Switch
-            :model-value="agent.state.queueShowSending"
-            aria-label="发送中显示队列"
-            @update:model-value="agent.setQueueShowSending($event)"
-          />
-        </div>
-        <!-- 目标设置的默认预算（config/agentGoalDefaults）：点 + 选目标时取这里的值，0 = 不限 -->
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">目标设置</strong>
-            <p class="text-xs text-ink-dim">点 + 选目标时用这里的默认预算；之后可以点目标标签单独改</p>
-          </div>
-          <!-- 数字输入统一用组件库的 NumberField（减号 + 输入框 + 加号），
-               与设置面板里的数字项同一套外观；此前的原生 input 只有一根光秃秃的框，
-               连步进按钮都没有（用户口径 2026-11-02）。 -->
-          <NumberField
-            :model-value="agent.state.goalBudget"
-            :min="0"
-            :step="1000"
-            class="w-28 flex-none"
-            aria-label="目标默认预算"
-            @update:model-value="agentBudgetOnChange"
-          >
-            <NumberFieldContent>
-              <NumberFieldDecrement aria-label="减少目标预算" />
-              <NumberFieldInput placeholder="0 = 不限" />
-              <NumberFieldIncrement aria-label="增加目标预算" />
-            </NumberFieldContent>
-          </NumberField>
-        </div>
-        <!-- 发送键（用户口径 2026-10-25）：目标设置下面配「哪一种回车提交」。
-             为什么用下拉而不是开关：三种取值互斥，开关只能表达两态。 -->
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">发送键</strong>
-            <p class="text-xs text-ink-dim">选哪一种回车发送消息；@ 下拉打开时回车始终用于选择菜单项</p>
-          </div>
-          <Select
-            :model-value="agent.state.submitKeyMode"
-            @update:model-value="agent.setSubmitKeyMode($event as typeof agent.state.submitKeyMode)"
-          >
-            <SelectTrigger size="sm" class="w-[150px]" aria-label="发送键">
-              <SelectValue>{{ sendKeyLabel }}</SelectValue>
-            </SelectTrigger>
-            <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
-              <SelectItem v-for="m in SUBMIT_KEY_MODE_OPTIONS" :key="m.value" :value="m.value">
-                {{ m.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <!-- <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">积分预算管理</strong>
-            <p class="text-xs text-ink-dim">开启后，当本项目累计消耗积分达到设置阈值时，会提醒你留意用量</p>
-          </div>
-          <button
-            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': s.director.budget }" role="switch"
-            :aria-checked="s.director.budget" aria-label="积分预算管理"
-            @click="s.director.budget = !s.director.budget"></button>
-        </div> -->
-        <div v-if="s.director.budget" class="flex items-center justify-between gap-3 border-t border-line pt-2">
-          <span class="text-xs text-ink-dim">提醒阈值设置</span>
-          <Input v-model.number="s.director.budgetLimit" type="number" min="100" step="100"
-            class="h-8 w-28 text-xs" aria-label="提醒阈值设置" />
-        </div>
-      </div>
-      <div class="rounded-xl border border-line p-3">
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">浏览器通知</strong>
-            <p class="text-xs text-ink-dim">TV Director 回复完成后，会在系统通知提醒</p>
-          </div>
-          <Switch
-            :model-value="agent.state.notify.browser"
-            aria-label="浏览器通知"
-            @update:model-value="agent.setNotify({ browser: $event })"
-          />
-        </div>
-        <div class="flex items-center justify-between gap-3 py-2">
-          <div><strong class="text-[13px] text-ink">通知声音</strong>
-            <p class="text-xs text-ink-dim">开启后，收到通知时播放提示音</p>
-          </div>
-          <Switch
-            :model-value="agent.state.notify.sound"
-            aria-label="通知声音"
-            @update:model-value="agent.setNotify({ sound: $event })"
-          />
-        </div>
-      </div>
-    </div>
-    <div class="flex flex-none justify-end border-t border-line p-3">
-      <Button variant="outline" size="sm" type="button" @click="s.directorOpen = false; ui.showToast('设置已保存')">完成</Button>
-    </div>
-  </AppDialog>
-
+  <DirectorSettingsDialog />
 </template>
 
 <style scoped>

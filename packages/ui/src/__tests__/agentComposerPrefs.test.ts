@@ -125,7 +125,10 @@ describe('store：设置页改完立刻进快照，并广播给 Agent 面板', (
 })
 
 describe('设置页 UI：目标设置下面那一行', () => {
-  const src = readFileSync(path.resolve(PKG_ROOT, 'src/components/areas/ModalsArea.vue'), 'utf8')
+  const src = readFileSync(
+    path.resolve(PKG_ROOT, 'src/components/areas/modals-area/DirectorSettingsDialog.vue'),
+    'utf8',
+  )
 
   it('放在「目标设置」之后（用户指的就是这个位置）', () => {
     // 取真实控件的位置（注释里也会出现这两个词，所以要取最后一次 / 带 UI 标记的那处）
@@ -137,13 +140,21 @@ describe('设置页 UI：目标设置下面那一行', () => {
   })
 
   it('三个选项的文案都在（Ctrl + 回车 / Shift + 回车 / 回车）', () => {
+    const hook = readFileSync(
+      path.resolve(PKG_ROOT, 'src/components/areas/modals-area/useDirectorSettings.ts'),
+      'utf8',
+    )
     for (const label of ['Ctrl + 回车', 'Shift + 回车', '回车']) {
-      expect(src, '缺少选项：' + label).toContain(label)
+      expect(hook, '缺少选项：' + label).toContain(label)
     }
   })
 
   it('控件接的是 store 的 submitKeyMode / setSubmitKeyMode', () => {
-    expect(src).toContain('agent.state.submitKeyMode')
+    const hook = readFileSync(
+      path.resolve(PKG_ROOT, 'src/components/areas/modals-area/useDirectorSettings.ts'),
+      'utf8',
+    )
+    expect(hook).toContain('agent.state.submitKeyMode')
     expect(src).toContain('agent.setSubmitKeyMode')
   })
 })
