@@ -87,6 +87,7 @@ docs/tmp/agent-coordination/*.json
 # 本轮协调的临时扫描脚本与 vitest JSON 输出
 docs/tmp/scan-*.cjs
 packages/ui/ui-test.json
+*.tsbuildinfo
 
 # vitepress 缓存：参数被误当成目录名时生成（只在本地）
 packages/docs/--port/
