@@ -19,29 +19,35 @@ export type UiComponentHandle = unknown;
 /**
  * 目录里常用的名字（**约定俗成，不是封闭枚举**——主题可登记自定名字）。
  *
- * toolbarButton：工具栏里那条按钮（纯图标 / 图标 + 文字），与 toolbarDropdown 成对。
- * 旧名 'button' 仍由默认主题登记为别名，但新代码一律用 toolbarButton ——
- * 「button」在别处会被读成通用表单按钮，两者不是一回事。
- *
  * movingHandle / connectionLine：节点端口与拖线临时线的"外观件"。业务插件（如多选）
  * 也要画同款端口与临时线，但它们不该依赖某个具体主题包 —— 从目录按名取即可（T06）。
+ *
+ * 通用按钮 / 下拉 / 选择器 / 气泡不在名单里：它们直接用 `@mini-canvas/ui-kit-shadcn`
+ * 的 Button / DropdownMenu / Select / Tooltip 分离件，主题不再维护第二套实现。
  */
 export const UI_NAMES = [
-  'toolbarButton',
-  'dropdown',
-  'tooltip',
-  'select',
+  'nodeEmptyState',
+  'slotDebugPopover',
+  'mediaViewer',
   'slider',
   'toolParamField',
+  'toolParamGroup',
+  'toolParamGrid',
+  'toolParamRatio',
+  'toolParamSlider',
   'color',
   'movingHandle',
   'connectionLine',
+  'nodeModeTopBar',
+  'nodeModeBottomBar',
+  'settingsField',
+  'slotDebugOverlay',
 ] as const;
 
 /**
- * 下拉选项的最小形状（**主题无关**）：与 theme-default 的 SelectOption 同构，
- * 但住在这里 —— 业务插件描述选项时不必 import 任何主题包。
- * 主题自己的 Select 组件按结构兼容消费（props 类型由主题侧声明）。
+ * 下拉选项的最小形状（**主题无关**）：业务插件描述选项时不必 import 任何主题包。
+ * 真正的选择器由 `@mini-canvas/ui-kit-shadcn` 的 Select 分离件渲染；
+ * 这里只保留“值 + 显示名 + 禁用态”这一层与实现无关的数据形状。
  */
 export interface UiSelectOption {
   label: string
@@ -62,7 +68,7 @@ export function uiComponent(ctx: Context | undefined, name: string): UiComponent
 /**
  * 组件里按名取设计系统组件的便捷入口（首选写法）：
  * ```ts
- * const Button = useUiComponent('toolbarButton')   // 模板里 <Button /> 即可（ref 自动解包）
+ * const Slider = useUiComponent('slider')   // 模板里 <Slider /> 即可（ref 自动解包）
  * ```
  * 必须在 CanvasProvider 内调用（走 useCanvasContext 拿 ctx）；树外抛清晰错误。
  *

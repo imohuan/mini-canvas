@@ -13,7 +13,6 @@ import { renderToString } from 'vue/server-renderer'
 import PrecisionSlider from '../PrecisionSlider.vue'
 import ToolParamSlider from '../ToolParamSlider.vue'
 import ToolParamGroup from '../ToolParamGroup.vue'
-import Dropdown from '../Dropdown.vue'
 
 function render(comp: Component, props: Record<string, unknown> = {}): Promise<string> {
   const app = createSSRApp({ render: () => h(comp, props) })
@@ -57,63 +56,3 @@ describe('ToolParamGroup：触发器给出参数摘要', () => {
   })
 })
 
-/**
- * Dropdown 的两种滚动布局。
- *
- * 用户口径（2026-10-03）：「顶部标题和底部内容滚动是区分开的，上下是 flex 布局，
- * 只有下面内容滚动的地方才会显示滚动条」——需要「标题固定 + 列表滚」的调用方
- * 必须能选到 inner-scroll，而不是让整个浮层滚（那样只能靠 sticky 去补，是绕）。
- */
-describe('Dropdown：滚动布局', () => {
-  const renderDropdown = (props: Record<string, unknown>): Promise<string> =>
-    renderToString(
-      createSSRApp({
-        render: () =>
-          h(Dropdown, { modelValue: true, teleport: false, ...props }, { default: () => '内容' }),
-      }),
-    )
-
-  it('默认 overlay-scroll：不加 inner-scroll 类（短菜单 / 单选列表用，整个浮层滚）', async () => {
-    const html = await renderDropdown({})
-    expect(html).toContain('dd-menu')
-    expect(html).not.toContain('dd-menu--inner-scroll')
-  })
-
-  it('inner-scroll：浮层只当外框，自身不滚（内容区自己滚）', async () => {
-    const html = await renderDropdown({ layout: 'inner-scroll' })
-    expect(html).toContain('dd-menu--inner-scroll')
-  })
-
-  /**
-   * 居中一律**相对触发器**，不引入额外的"对别的元素居中"参数。
-   *
-   * 用户口径（2026-10-03）：「触发是通过历史记录这个按钮来进行的，也就是它的 drop down
-   * 绑定在这个按钮上面，那么居中肯定也是根据它来呀」——曾经加过一个 center-on 去对面板中线，
-   * 那会盖掉组件自带的"对触发器居中"，菜单相对按钮偏一大截。所以这里钉住它**不长出**那个参数。
-   */
-  it('没有"对别的元素居中"的旁路参数（居中只认触发器）', async () => {
-    const html = await renderDropdown({ placement: 'bottom' })
-    expect(html).toContain('dd-menu')
-    expect(html).not.toContain('dd-scrim')
-    expect(html).not.toContain('dd-menu--modal')
-    expect(html).toContain('mck-dropdown__trigger')
-  })
-
-  /**
-   * 箭头开关（用户口径 2026-10-29：「支持显示隐藏 dropdown 的箭头」）。
-   *
-   * 主题这件是**基础件**，被右键菜单 / 选择器 / 参数面板共用 —— 默认必须还是"没有箭头"
-   * （那些场景本来就不画），只有显式传 arrow 才加，不能因为新增开关改变既有观感。
-   * 箭头本体是 Teleport 到 body 的独立节点，SSR 里靠类名判断。
-   */
-  it('默认不带箭头（既有调用方观感不变）', async () => {
-    const html = await renderDropdown({})
-    expect(html).not.toContain('dd-arrow')
-  })
-
-  it('传 arrow=true 才渲染箭头', async () => {
-    const html = await renderDropdown({ arrow: true })
-    // 箭头本体是 ui-kit 的 mck-dropdown__arrow（外观与定位都归它），不再由主题自绘
-    expect(html).toContain('mck-dropdown__arrow')
-  })
-})

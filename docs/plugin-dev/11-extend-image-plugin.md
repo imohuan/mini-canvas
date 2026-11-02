@@ -29,9 +29,8 @@
    `ctx.get('nodeBar')`（底栏动作表）、`ctx.get('group')`（打组/解组）……可选依赖用 `ctx.tryGet`。
 2. **放 UI 用注册**：`ctx.slots.register(槽名, 条目)`、`ctx.nodes.attach(类型, { region, component })`、
    `ctx.theme.add(槽, 组件)`。插件卸载时这些条目**自动消失**，不用手写清理。
-3. **通用件按名取**：按钮、下拉、提示气泡这些设计系统件，不要 import 主题包，
-   用 `useUiComponent('button')` / `useUiComponent('dropdown')` 从 ui 目录取（§3）。
-   这样换主题时你的按钮跟着换，你一行不用改。
+3. **通用件直接用组件库**：按钮、下拉菜单、选择器、气泡从 `@mini-canvas/ui-kit-shadcn`
+   引入 `Button` / `DropdownMenu` / `Select` / `Tooltip` 及其子件（§3）；滑块、取色器等设计系统件再按名取。
 4. **UI 状态不写进节点 data**：会落盘、会污染撤销栈。用本插件内的模块级响应式会话
    （先例：`plugin-node-image/src/cropSession.ts`、`plugin-node-video/src/videoSession.ts`、
    `plugin-bottom-bar/src/mediaPreview.ts`）。
@@ -105,88 +104,59 @@ ctx.slots.register('image.topToolbar', {
 
 ## 3. 下拉菜单与二级菜单
 
-### 3.1 两个基础组件（主题库提供，插件直接用）
+### 3.1 基础件：直接用 shadcn 分离件
 
-按你的口径，这类工具栏 UI 由主题库（`plugin-theme-default`）做成**默认件**注册进 ui 目录，
-其他插件按名取，不自己实现：
-
-| 组件 | ui 目录名 | 状态 |
-|---|---|---|
-| 普通按钮 | `button` | **已有**（`NodeToolbarButton`：`title` / `icon` / `variant: ghost\|primary\|danger` / `disabled` / `active`，插槽放文字） |
-| 下拉按钮 | `toolbarDropdown` | **本方案新增**（§7 清单第 2 项）：触发按钮 + 菜单面板二合一 |
-
-`toolbarDropdown` 的建议契约（实现组合目录里已有的 `button` + `dropdown`，观感自动跟主题走）：
-
-```ts
-interface ToolbarMenuItem {
-  key: string
-  label: string
-  icon?: unknown            // svg 字符串或组件
-  description?: string      // hover 小字说明
-  danger?: boolean
-  disabled?: boolean
-  children?: ToolbarMenuItem[]   // 有 children = 二级菜单
-}
-// props: title, icon?, items: ToolbarMenuItem[], placement?, menuWidth?
-// emits: pick(key)
-```
-
-业务插件里：
-
-```ts
-const DropdownBtn = useUiComponent('toolbarDropdown')
-const Btn = useUiComponent('button')
-```
-
-### 3.2 自己组合目录 dropdown（自定义面板类下拉）
-
-「宫格切分」里的**自定义宫格**不是菜单行，是自定义面板（鼠标划过高亮、点确定才收）。
-这类需求不要等组件支持，直接用目录里的 `dropdown` 自绘面板：
+按钮、下拉菜单、选择器、气泡都从 `@mini-canvas/ui-kit-shadcn` 引入。组件是分离件，
+想放菜单行、自定义面板、二级菜单都行：
 
 ```vue
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import {
+  Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
+</script>
 
-const Drop = useUiComponent('dropdown')
-const Btn = useUiComponent('button')
-const open = ref(false)
-const rows = ref(3)
-const cols = ref(4)
-```
-
-```vue
 <template>
-  <component :is="Drop" v-model="open" placement="bottom-start" menu-width="260px">
-    <template #trigger>
-      <component :is="Btn" title="宫格切分" :icon="ICON_GRID" :active="open" />
-    </template>
-    <template #default="{ close }">
-      <!-- 菜单行：点了就执行 -->
-      <button class="my-row" @click="pick('2x2'); close()">4 宫格 (2×2)</button>
-      <button class="my-row" @click="pick('3x3'); close()">9 宫格 (3×3)</button>
-      <!-- 自定义面板：不自动关，等用户点「确定」才 close() -->
-      <GridHoverPicker v-model:rows="rows" v-model:cols="cols" @confirm="confirm(); close()" />
-    </template>
-  </component>
+  <DropdownMenu>
+    <DropdownMenuTrigger as-child>
+      <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" title="宫格切分" aria-label="宫格切分">
+        <!-- 自己的 SVG -->
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start">
+      <DropdownMenuItem @select="pick('2x2')">4 宫格 (2×2)</DropdownMenuItem>
+      <DropdownMenuItem @select="pick('3x3')">9 宫格 (3×3)</DropdownMenuItem>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>自定义宫格</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <GridHoverPicker @confirm="confirm" />
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </DropdownMenuContent>
+  </DropdownMenu>
 </template>
 ```
 
-主题的 `dropdown` 自带：Teleport 到 body、同屏互斥（开一个关其他）、点外部 / Esc 关闭、
-视口翻转防溢出。你只管往插槽里放内容。
+完整实例见 `packages/plugins/plugin-image-grid-split/src/GridSplitEntry.vue`。
 
-### 3.3 二级菜单的三条现成参考
+### 3.2 菜单里放自定义面板
+
+「宫格切分」里的**自定义宫格**不是菜单行，是自定义面板（鼠标划过高亮、点一下才确认）。
+把它放进 `DropdownMenuSubContent`（或 `DropdownMenuContent`）即可；宽高、内边距自己控制，
+不过菜单容器已带主题的内边距/圆角，不要再套一层带边框的卡片。
+
+### 3.3 二级菜单的参考
 
 | 参考 | 文件 | 学什么 |
 |---|---|---|
-| ui 包二级菜单组件 | `packages/ui/src/components/AxSubMenu.vue` | hover 展开 / 延迟收起 / Teleport / 浮层链（`data-floating-chain`），避免「嵌套菜单点不动」 |
+| **shadcn 二级菜单（首选）** | `packages/plugins/plugin-image-grid-split/src/GridSplitEntry.vue` | `DropdownMenuSub` / `DropdownMenuSubTrigger` / `DropdownMenuSubContent` 的写法 |
 | **右键菜单（重点参考）** | `packages/plugins/plugin-context-menu/`：`menuBuilder.ts`（数据）、`ContextMenu.vue`（渲染）、`menuPlacement.ts`（定位） | 数据上**斜杠路径即层级**（`group: '宫格切分/自定义'` → 二级）；定位是纯函数（实测尺寸 + 距边 8px 夹紧，二级右侧放不下翻左侧）；Teleport + `role="menu"` + Esc/点外关闭 |
-| 成品应用的下拉 | `packages/ui/src/components/AxDropdown.vue`（注册时顶替了主题默认 dropdown） | `nestedIn` + 浮层链：子面板打开时**父面板不关** |
 
 取舍：
 
-- 固定的几级菜单 → 喂 `toolbarDropdown` 的 `items` 树，组件内部处理二级展开与浮层链（§7 落地项）。
-- 自定义交互面板（宫格 hover、色板、滑杆组）→ 目录 `dropdown` 的 default 插槽自绘（§3.2）。
+- 固定的菜单/二级菜单 → 直接用 `DropdownMenu` + `DropdownMenuSub`。
 - 右键菜单里加功能 → 注册命令并声明 `areas`（`menuBuilder` 自动收进菜单），路径写斜杠产生层级：
 
 ```ts
@@ -310,7 +280,7 @@ registerBarAction(ctx, {
 | 打组 / 解组 | `ctx.get('group').createGroup(ids)` / `.ungroup(id)` | plugin-group 提供 |
 | 底栏动作 | `registerBarAction(ctx, action)` / `registerBarApplier(ctx, kind, fn)` | 从 `@mini-canvas/plugin-bottom-bar` 导出；条目落**调用方** scope |
 | 往插槽放 UI | `ctx.slots.register(槽名, { id, order?, before?, after?, component: markRaw(X) })` | 卸载自动回收；`before/after` 指同槽条目 id |
-| 取设计系统件 | `useUiComponent('button' / 'dropdown' / 'toolbarDropdown' / …)` | 不 import 主题包；缺件时降级可见 |
+| 取设计系统件 | `useUiComponent('slider' / 'color' / 'mediaViewer' / …)` | 按钮/下拉/选择/气泡直接用 `@mini-canvas/ui-kit-shadcn`；缺件时降级可见 |
 | 注册命令 | `ctx.commands.register({ id: '插件名:动作', title, run })` | 按钮 / 快捷键 / 右键菜单共用同一实现 |
 | 监听事件 / 自建清理 | `ctx.on(事件名, fn)` / `ctx.effect(() => 清理函数)` | 自建定时器、window 监听必须包 effect |
 | 可配置项 | 模块级导出 `Config`（schema） | 自动登记进设置面板；key 带插件前缀 |
@@ -326,12 +296,9 @@ registerBarAction(ctx, {
    （`host/upload` / `host/crop` / `host/expand` 三个锚点），共享 props 下发 `nodeId` / `data`；
    编辑态隐藏插件条目。验收：底栏 / 状态条同款排序能力（`order` + `before/after`），
    插件注册即出现、卸载即消失，裁剪中不出现。
-2. **主题库 `toolbarDropdown` 组件**：新增
-   `packages/plugins/plugin-theme-default/src/components/ui/ToolbarDropdownButton.vue`，
-   在 `src/index.ts` 的 ui 目录登记处（`ui.add("button", …)` 那一批，约 717–743 行）加
-   `ui.add("toolbarDropdown", ToolbarDropdownButton, { id: "default" })`。
-   内部组合目录 `button` + `dropdown`；支持 `items` 树（children = 二级，浮层链参考 AxDropdown /
-   AxSubMenu / 右键菜单）。验收：宫格切分菜单（预设行 + 自定义面板）零自绘浮层。
+2. **下拉/二级菜单基础件**：已经就用 shadcn 的 `DropdownMenu` 分离件（
+   `DropdownMenuTrigger` / `DropdownMenuContent` / `DropdownMenuItem` / `DropdownMenuSub` …），
+   不再需要主题包另做一层工具按钮包装。验收：宫格切分菜单（预设行 + 自定义面板）零自绘浮层。
 3. **nodeBar 选中动作窄接口**（可选，顶栏驱动底栏面板时需要）：
    `NodeBarService` 加 `select(nodeId, actionId)` / `deselect(nodeId)`，`NodeBottomBar` 的
    `currentAction` 改为读服务态。验收：顶栏按钮与底栏 pill 点同一动作，面板开合同步。
@@ -360,7 +327,7 @@ registerBarAction(ctx, {
 ```bash
 pnpm -C packages/plugins/<你的插件> test        # 新插件自己的单测
 pnpm -C packages/plugins/plugin-node-image test  # 改了 ImageTopToolbar 后
-pnpm -C packages/plugins/plugin-theme-default test  # 加了 toolbarDropdown 后
+pnpm -C packages/plugins/plugin-theme-default test  # 改了主题登记后
 pnpm -C packages/plugins/plugin-bottom-bar test  # 动了 nodeBar 服务后
 pnpm -C packages/ui typecheck                    # vue-tsc
 pnpm -C packages/ui build
@@ -383,9 +350,8 @@ pnpm -C packages/ui dev                          # 真机：http://localhost:528
 | 图片顶栏（本方案改造对象） | `packages/plugins/plugin-node-image/src/ImageTopToolbar.vue`、`nodeImagePlugin.ts`（`segments['out:top']`） |
 | 插槽顺序组件 | `packages/canvas-render/src/components/SlotComposer.vue`、`SlotAnchor.vue`；外壳用例 `plugin-shell-slots-demo` |
 | 主题组件目录注册 | `packages/plugins/plugin-theme-default/src/index.ts`（`ui.add(…)` 一批）；取件 `packages/canvas-render/src/contracts/uiCatalog.ts` |
-| 通用按钮 | `plugin-theme-default/src/components/ui/NodeToolbarButton.vue`（ui 目录名 `button`） |
-| 下拉容器 | `plugin-theme-default/src/components/ui/Dropdown.vue`（目录名 `dropdown`；成品应用被 `packages/ui/src/components/AxDropdown.vue` 顶替） |
-| 二级菜单 | `packages/ui/src/components/AxSubMenu.vue`；右键菜单三件套 `plugin-context-menu`（menuBuilder / ContextMenu / menuPlacement） |
+| 通用按钮 | `@mini-canvas/ui-kit-shadcn` 的 `Button` + 全局类 `.mck-toolbar-btn`（`canvas-render/src/styles/ui-theme.css`） |
+| 下拉容器 / 二级菜单 | `@mini-canvas/ui-kit-shadcn` 的 `DropdownMenu` 分离件；右键菜单三件套 `plugin-context-menu`（menuBuilder / ContextMenu / menuPlacement） |
 | 底栏动作契约 | `plugin-bottom-bar/src/barTypes.ts`（`BarAction.panel`）、`nodeBarPlugin.ts`（`registerBarAction`）、`NodeBottomBar.vue`（渲染 `currentAction.panel`） |
 | 底栏面板样例 | `plugin-node-video/src/VideoClipPanel.vue` + `nodeVideoPlugin.ts` 的 `video:clip` 动作 |
 | 全屏浮层样例 | `plugin-node-image/src/cropSession.ts`（会话）+ `ImageFrameOverlay.vue`（over:inset）；画布级 `plugin-bottom-bar/src/NodeBottomBarOverlay.vue` |

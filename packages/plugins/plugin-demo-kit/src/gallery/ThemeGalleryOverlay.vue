@@ -9,24 +9,35 @@ defineOptions({ inheritAttrs: false })
  * 挂在画布 UI 上随时可看 —— 点得动、拉得开、能输文字，和插件里用的是同一份实现。
  *
  * 为什么这么写（三点）：
- *   1. **按名取而不是 import**：展厅看到的正是"插件按名取到的那一份"，成品应用顶替过的
- *      dropdown 也一并体现出来 —— 展览的就是真实运行时的样子。
+ *   1. **主题件按名取，shadcn 原始件直接 import**：展厅看到的就是插件真正会拿到的组件。
  *   2. **画布件另有区块**：节点壳 / 连线 / 背景 / 浮动端口要 VueFlow 的节点上下文，
  *      直接塞进浮层渲染不出来。那个区块里嵌一块**真的小画布**，它们就在真正的环境里跑。
  *   3. **默认收起**：只在左下角留一个小按钮，不打扰画布使用。
  */
 import { computed, ref } from 'vue'
 import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import GalleryCanvasStage from './GalleryCanvasStage.vue'
 
 const open = ref(false)
 
 // —— 设计系统件：按名取（这就是"全局可用"的实证）——
-const Dropdown = useUiComponent('dropdown')
-const Tooltip = useUiComponent('tooltip')
-const Select = useUiComponent('select')
 const PrecisionSlider = useUiComponent('slider')
 const ColorField = useUiComponent('color')
 const ToolParamField = useUiComponent('toolParamField')
@@ -126,11 +137,16 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
       <section class="tg-sec">
         <h4>气泡 tooltip / Tooltip</h4>
         <div class="tg-row">
-          <component :is="Tooltip" content="悬停或键盘聚焦都会出现">
-            <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="悬停我" aria-label="悬停我">
-              <ToolbarIcon icon="?" />
-            </Button>
-          </component>
+          <TooltipProvider :delay-duration="120">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="悬停我" aria-label="悬停我">
+                  <ToolbarIcon icon="?" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">悬停或键盘聚焦都会出现</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </section>
 
@@ -138,23 +154,30 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
       <section class="tg-sec">
         <h4>下拉 dropdown / Dropdown</h4>
         <div class="tg-row">
-          <component :is="Dropdown" v-model="menuOpen" :match-width="true">
-            <template #trigger="{ open: isOpen, toggle }">
-              <button class="tg-btn" type="button" @click="toggle">更多 {{ isOpen ? '▲' : '▼' }}</button>
-            </template>
-            <template #default="{ close }">
-              <button class="tg-item" type="button" @click="close">重命名</button>
-              <button class="tg-item" type="button" @click="close">复制</button>
-              <button class="tg-item" type="button" @click="close">删除</button>
-            </template>
-          </component>
+          <DropdownMenu v-model:open="menuOpen">
+            <DropdownMenuTrigger as-child>
+              <button class="tg-btn" type="button">更多 {{ menuOpen ? '▲' : '▼' }}</button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" :side-offset="4">
+              <DropdownMenuItem @select="menuOpen = false">重命名</DropdownMenuItem>
+              <DropdownMenuItem @select="menuOpen = false">复制</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" @select="menuOpen = false">删除</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </section>
 
       <section class="tg-sec">
         <h4>下拉选择器 select / Select</h4>
         <div class="tg-row">
-          <component :is="Select" v-model="model" :options="selectOptions" searchable match-width />
+          <Select v-model="model">
+            <SelectTrigger class="tg-select" size="sm" aria-label="选择器演示">
+              <SelectValue placeholder="请选择" />
+            </SelectTrigger>
+            <SelectContent position="popper" side="bottom" :side-offset="4">
+              <SelectItem v-for="o in selectOptions" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+            </SelectContent>
+          </Select>
           <span class="tg-val">当前值：{{ model }}</span>
         </div>
       </section>

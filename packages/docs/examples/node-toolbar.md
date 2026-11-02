@@ -156,14 +156,12 @@ export function apply(ctx: Context): void {
 <!-- 文件：my-stamp-button/src/StampEntry.vue -->
 <!-- 往默认顶栏按钮组里插的一条：按钮直接用 shadcn Button + 全局工具栏样式 -->
 <script setup lang="ts">
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { openStampMode } from './stampSession'   // 你自己的会话状态（纯内存，不写节点 data）
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const DropdownButton = useUiComponent('toolbarDropdown') // 下拉按钮（菜单是独立浮层）
-
 const selected = useSoleNodeSelected(props.nodeId ?? '')
 const STAMP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>'
 
@@ -190,13 +188,21 @@ function enter(): void {
 <!-- 文件：my-stamp-button/src/StampPanel.vue -->
 <!-- 功能模式的顶栏内容：整格替换默认按钮组 -->
 <script setup lang="ts">
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import { closeStampMode } from './stampSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-const DropdownButton = useUiComponent('toolbarDropdown')
 
 const STAMP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>'
 
@@ -207,17 +213,24 @@ function exit(): void {
 </script>
 
 <template>
-  <!-- 菜单 + 二级菜单都是 toolbarDropdown 的能力（独立浮层，不嵌进面板） -->
-  <DropdownButton
-    title="盖章形状"
-    :icon="STAMP_ICON"
-    :items="[
-      { key: 'round', label: '圆形' },
-      { key: 'square', label: '方形' },
-      { key: 'more', label: '更多', children: [{ key: 'star', label: '星形' }] },
-    ]"
-    @pick="(key) => $emit('pick', key)"
-  />
+  <!-- 菜单 + 二级菜单直接用 shadcn DropdownMenu（独立浮层，不嵌进面板） -->
+  <DropdownMenu>
+    <DropdownMenuTrigger as-child>
+      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="盖章形状">
+        <ToolbarIcon :icon="STAMP_ICON" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start">
+      <DropdownMenuItem @select="$emit('pick', 'round')">圆形</DropdownMenuItem>
+      <DropdownMenuItem @select="$emit('pick', 'square')">方形</DropdownMenuItem>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>更多</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuItem @select="$emit('pick', 'star')">星形</DropdownMenuItem>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </DropdownMenuContent>
+  </DropdownMenu>
   <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="应用">
     <span class="mck-toolbar-label">应用</span>
   </Button>
@@ -330,9 +343,9 @@ svc.exit(nodeId)
 
 5. **渲染**：`component :is` 挂上你的组件，props 是 `{ id, data }`。
    按钮直接用 `@mini-canvas/ui-kit-shadcn` 的 `Button` + 全局 `.mck-toolbar-btn`；
-   下拉仍按名取主题件（`toolbarDropdown`）。
+   下拉直接用同包的 `DropdownMenu` 分离件。
 
-## 两个按钮件的速查
+## 按钮与下拉的速查
 
 ### 工具栏按钮（shadcn Button）
 
@@ -348,34 +361,29 @@ svc.exit(nodeId)
   title="收藏" aria-label="收藏" :aria-pressed="on ? 'true' : 'false'"><ToolbarIcon :icon="ICON" /></Button>
 ```
 
-### toolbarDropdown（下拉按钮）
+### DropdownMenu（下拉按钮）
 
 ```vue
-<DropdownButton
-  title="宫格切分"
-  :icon="ICON"
-  :items="[
-    { key: 'a', label: '动作一' },
-    { key: 'sub', label: '自定义', children: [          <!-- children = 二级菜单 -->
-      { key: 'a1', label: '格子一' },
-    ] },
-    { key: 'panel', label: '色板', panel: {            <!-- panel = 右侧自定义面板 -->
-      render: ({ close }) => h(MyColorPicker, { onPick: close }),
-    } },
-  ]"
-  placement="bottom"        <!-- 方向 + 对齐：bottom / bottom-start / bottom-end -->
-  :arrow="false"            <!-- 菜单上方的小箭头，默认关 -->
-  @pick="(key, path) => …"
-/>
+<DropdownMenu>
+  <DropdownMenuTrigger as-child>
+    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="宫格切分">
+      <ToolbarIcon :icon="ICON" />
+      <span class="mck-toolbar-label">宫格切分</span>
+    </Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="start" :side-offset="6">
+    <DropdownMenuItem @select="pick('a')">动作一</DropdownMenuItem>
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>自定义</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent><!-- 自己的面板或子项 --></DropdownMenuSubContent>
+    </DropdownMenuSub>
+  </DropdownMenuContent>
+</DropdownMenu>
 ```
 
-默认：箭头隐藏、底部左对齐（`placement: 'bottom-start'`）。菜单与二级菜单都是独立浮层，
-卡片间隔固定 12px。
-
-想把一块自绘面板挂进某一项（宫格选择器、色板这类），就给那一项加 `panel`：
-`component` 直接给组件、`render` 自己组内容（能拿到 `close` / `pick`），`children` 仍是文字二级菜单。
-宫格切分就是「滑到几乘几、点一下直接切」——面板里不需要再放一个确定按钮。
-完整说明见 [工具栏下拉按钮](/plugins/theme-components/toolbar-dropdown-button)。
+默认：底部左对齐（`align="start"`）。菜单与二级菜单都是独立浮层。
+想把一块自绘面板挂进二级菜单（宫格选择器、色板这类），直接写进
+`DropdownMenuSubContent` 的默认插槽。完整说明见 [下拉菜单](/plugins/theme-components/dropdown)。
 
 ## 注意事项
 

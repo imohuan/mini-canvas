@@ -9,9 +9,9 @@
  */
 import { computed, ref } from 'vue'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, SlotAnchor, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@mini-canvas/ui-kit-shadcn'
 import { createImageOps, uploadImage } from './imageOps'
 import { readImageSourceFields } from './imageRefs'
 import ImagePaintEntry from './ImagePaintEntry.vue'
@@ -20,7 +20,6 @@ import ImageToolbarShell from './ImageToolbarShell.vue'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-const DropdownButton = useUiComponent('toolbarDropdown')
 const selected = useSoleNodeSelected(props.id)
 
 const hasImage = computed(() => {
@@ -48,6 +47,7 @@ const busy = ref(false)
 
 const ratioItems = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ key: o.value, label: o.label })))
 const ratioValue = computed(() => (editDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
+const ratioLabel = computed(() => ratioItems.value.find((o) => o.key === ratioValue.value)?.label ?? '自由')
 
 function onRatioChange(key: string): void {
   setEditDraft(props.id, { ...editDraft(props.id), _ratioValue: key })
@@ -118,13 +118,19 @@ function cancelEdit(): void {
         title="取消编辑" aria-label="取消编辑" @click="cancelEdit">
         <ToolbarIcon :icon="ICON_CANCEL" />
       </Button>
-      <DropdownButton
-        v-if="cropping"
-        class="it-ratio"
-        :title="'比例：' + (ratioItems.find((o) => o.key === ratioValue)?.label ?? '自由')"
-        :items="ratioItems"
-        @pick="onRatioChange"
-      />
+      <DropdownMenu v-if="cropping">
+        <DropdownMenuTrigger as-child>
+          <Button class="mck-toolbar-btn it-ratio" variant="ghost" size="sm" type="button"
+            :title="'比例：' + ratioLabel" :aria-label="'比例：' + ratioLabel">
+            <span class="mck-toolbar-label">比例：{{ ratioLabel }}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '160px' }">
+          <DropdownMenuItem v-for="o in ratioItems" :key="o.key" @select="onRatioChange(o.key)">
+            {{ o.label }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
         title="确认编辑" aria-label="确认编辑" @click="confirmEdit">
         <ToolbarIcon :icon="ICON_CONFIRM" />
@@ -170,5 +176,10 @@ function cancelEdit(): void {
 <style scoped>
 .it-file {
   display: none;
+}
+
+/* 比例下拉是文本按钮：宽度跟文案走，长比例名不截断 */
+.it-ratio {
+  flex: none;
 }
 </style>

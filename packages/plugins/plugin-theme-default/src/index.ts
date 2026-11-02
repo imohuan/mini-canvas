@@ -17,9 +17,6 @@ import type {
 } from "@mini-canvas/canvas-base";
 import type { PluginModule } from "@mini-canvas/canvas-base";
 import { markRaw } from "vue";
-// 通用控件底座的样式入口：组件按名登记后由本主题包提供，样式必须随包加载，
-// 不能指望某个业务件碰巧先 import 了 ui-kit 的 SplitPane。
-import "@mini-canvas/ui-kit/styles.css";
 // shadcn 组件库的样式入口：把 shadcn 语义色映射到本项目 --ui-* token。
 // Tailwind 的 @source 在主应用入口（packages/ui/src/app.css）里登记。
 import "@mini-canvas/ui-kit-shadcn/styles.css";
@@ -44,20 +41,16 @@ import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import MovingHandle from "./components/node/MovingHandle.vue";
 import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue";
+import { registerDefaultSettingsMenu } from "./components/settings/defaultMenu";
 import { registerEventName } from "@mini-canvas/canvas-base";
 import {
-  Dropdown,
-  Select,
   PrecisionSlider,
   ToolParamField,
-  NodeToolbarButton,
   ColorField,
   NodeEmptyState,
   SlotDebugPopover,
-  ToolbarDropdownButton,
 } from "./components/ui";
 import MediaViewer from "./components/ui/MediaViewer.vue";
-import Tooltip from "./components/ui/Tooltip.vue";
 import ToolParamGroup from "./components/ui/ToolParamGroup.vue";
 import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
@@ -790,6 +783,10 @@ export const Config: ConfigSchema = {
 export interface ThemeConfig extends InferConfig<typeof Config> {}
 
 export function apply(ctx: Context, config?: ThemeConfig) {
+  // 设置菜单的默认 0/1/2 级定义。插件可注册同 id 覆盖，也可注册自己的 id；
+  // 这里不是“总表”，不要求其它插件改它。
+  registerDefaultSettingsMenu(ctx.settingsMenu)
+
   // P4：config 已经内核经 Config schema 校验 + 补默认；这里无需再手写 settings.define（声明即 Config 导出）。
   // 如需在插件内"就地订阅自己 config 的变化并窄更新"，可 ctx.settings.onChange(name, ...)（demo 侧已演示该链路）。
   // ===== 外观交接：圆角 / 字体 → 组件库消费的 --mct-* 变量 =====
@@ -865,21 +862,12 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 通用件按名字登记进 ui 场 —— 别的插件按名取用，换一套主题时它们一起变、业务插件零改动。
   // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
   const ui = ctx.registryOf<unknown>("ui");
-  // 工具栏按钮：老名字保留（其它机制可能还在按名取）。节点上/下控制栏的调用点
-  // 已改成直接用 shadcn Button + 全局 .mck-toolbar-btn，不再经这一层转接。
-  ui.add("toolbarButton", NodeToolbarButton, { id: "default" });
-  // 工具栏下拉按钮：触发器 = 上面的 toolbarButton，菜单与二级菜单都是独立浮层。
-  // 插件按名取（useUiComponent('toolbarDropdown')），不必再自己拼 button + dropdown。
-  ui.add("toolbarDropdown", ToolbarDropdownButton, { id: "default" });
+  // 工具栏按钮 / 下拉不再按名登记：调用点直接用 shadcn Button + 全局
+  // .mck-toolbar-btn / DropdownMenu 分离件（用户口径 2026-11-02）。
   // 统一空状态：节点插件按名取用（图片/视频/音频/3D 共用同一套图标/文案/动作布局）。
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" });
-  ui.add("dropdown", Dropdown, { id: "default" });
-  // 悬浮提示（设计系统件）：插件按名取用，气泡观感随主题一起换。
-  // 放在这里而不是各插件自绘，理由与 dropdown 完全相同 —— 见 components/ui/Tooltip.vue 顶部注释。
-  ui.add("tooltip", Tooltip, { id: "default" });
   // 插槽调试小点的悬停说明面板：外壳（底栏/状态条/抽屉/设置导航）按名取
   ui.add("slotDebugPopover", SlotDebugPopover, { id: "default" });
-  ui.add("select", Select, { id: "default" });
   // 全屏媒体预览（文本/图片/视频/音频内置；#stage 插槽可扩展新资源类型）。
   // 底栏插件的素材预览浮层与成品应用（生成历史/资产面板）都用它；换主题时一起换。
   ui.add("mediaViewer", MediaViewer, { id: "default" });
@@ -940,16 +928,13 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
 
 /**
- * 通用 UI 组件出口（供其它插件复用，避免各节点面板自绘一套近似的下拉/浮层）。
+ * 通用 UI 组件出口（供其它插件复用，避免各节点面板自绘一套近似的参数控件）。
  *
- * 为什么由本插件提供：Select/Dropdown 是"默认皮"的一部分，视觉与交互都按项目 UI 规范实现，
- * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
- * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
+ * 下拉 / 选择 / 提示不再从这里提供：它们统一使用 `@mini-canvas/ui-kit-shadcn` 的
+ * 分离件（DropdownMenu / Select / Tooltip），本主题不再维护第二套实现。
  */
-export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, NodeEmptyState, ToolbarDropdownButton } from "./components/ui";
+export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState } from "./components/ui";
 export { MediaViewer } from "./components/ui";
-export type { ToolbarMenuNode, ToolbarMenuPanel, ToolbarMenuPanelContext, ToolbarMenuPick } from "./components/ui";
-export type { DropdownTrigger, SelectOption } from "./components/ui";
 
 /**
  * 节点工具栏基础设施出口（用户口径 2026-10-29 重构）：

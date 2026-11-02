@@ -76,24 +76,31 @@ theme-default 把这几件登记进 `ui` 场（id `default`）：
 
 | 名字 | 是什么 |
 |---|---|
-| `button` | `NodeToolbarButton` —— 节点上/下控制栏里的通用按钮 |
-| `dropdown` | `Dropdown` —— 下拉浮层外壳 |
-| `select` | `Select` —— 带搜索的下拉选择 |
 | `slider` | `PrecisionSlider` —— 精细数值滑块 |
 | `toolParamField` | `ToolParamField` —— 工具声明式参数控件 |
+| `toolParamGroup` | `ToolParamGroup` —— 多参数收成一个下拉 |
+| `toolParamGrid` / `toolParamRatio` / `toolParamSlider` | 参数预设件（按钮网格 / 比例网格 / 滑块） |
+| `color` | `ColorField` —— 取色器 |
+| `mediaViewer` | `MediaViewer` —— 全屏媒体预览 |
+| `nodeEmptyState` | `NodeEmptyState` —— 节点空状态 |
+| `movingHandle` / `connectionLine` | 浮动端口 / 拖线临时线 |
+
+> 按钮、下拉菜单、选择器、气泡**不在**这个目录里：业务插件直接从
+> `@mini-canvas/ui-kit-shadcn` 引入 `Button` / `DropdownMenu` / `Select` / `Tooltip` 分离件。
+> 主题另外把全部 shadcn 原始组件以 `shadcn` 前缀登记（如 `shadcnButton`），供按名替换主题皮。
 
 消费方按名取（见 `canvas-render/src/contracts/uiCatalog.ts`）：
 
 ```ts
 import { useUiComponent } from '@mini-canvas/canvas-render'
-const NodeToolbarButton = useUiComponent('button')   // 返回响应式 Ref；模板里自动解包
+const PrecisionSlider = useUiComponent('slider')   // 返回响应式 Ref；模板里自动解包
 ```
 
 换一套主题时，新主题往同一个名字上叠一条 `order` 更小的即可，**业务插件零改动**。
 仓库现状：`plugin-node-image` / `plugin-node-text` / `plugin-node-video` 已改为按名取，
 不再 import theme-default（例外见 §六 坑 1）。
 
-> 这几个组件本插件也**直接导出**（`export { Dropdown, Select, PrecisionSlider, ToolParamField, NodeToolbarButton }`），
+> 这几个组件本插件也**直接导出**（`export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState }`），
 > 供同包内或确需具体实现的场景使用；**新代码优先按名取**。
 > 边界（设计文档决策 4）：目录只收「希望被主题整体换掉」的设计系统件；插件内部自用的小组件照旧 import。
 

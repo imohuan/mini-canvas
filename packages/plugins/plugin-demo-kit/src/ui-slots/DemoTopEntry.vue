@@ -3,8 +3,8 @@
  * DemoTopEntry —— 图片顶栏插槽里的一条（同一个按钮组内部）。
  *
  * 两种状态，**同一根顶栏**：
- * - 普通：显示「功能演示」下拉按钮（主题 toolbarDropdown，二级菜单是独立浮层）
- *   + 「对齐」下拉（演示 toolbarDropdown 的 align / placement 配置）；
+ * - 普通：显示「功能演示」下拉按钮（shadcn DropdownMenu，二级菜单是独立浮层）
+ *   + 「对齐」下拉（演示 DropdownMenuContent 的 align / side 配置）；
  * - 功能模式：这根顶栏的内容整体换成该功能自己的按钮（名称 / 动作 / 退出）。
  *
  * 为什么用「同一根栏换内容」而不是再加一条 on:top：
@@ -12,8 +12,17 @@
  * 功能模式必须是替换，不是叠加。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import { closeDemoMode, demoMode, openDemoMode } from './demoMode'
 
 interface ToolbarMenuNode {
@@ -28,7 +37,8 @@ const props = defineProps<{
 }>()
 
 const { ctx } = useCanvasRender()
-const DropdownButton = useUiComponent('toolbarDropdown')
+const demoOpen = ref(false)
+const alignOpen = ref(false)
 
 const ICON_DEMO =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>'
@@ -54,8 +64,8 @@ const LABEL = { alpha: '演示功能 A', beta: '演示功能 B' } as const
 
 /**
  * 对齐演示：菜单横向贴在按钮的哪条边。
- * 三种取值分别对应 align=center / start / end —— 这就是 toolbarDropdown 的对齐配置。
- * 默认跟组件一致：**左对齐**（中心/右对齐靠菜单里切换）。
+ * 三种取值分别对应 DropdownMenuContent 的 align=center / start / end。
+ * 默认 **左对齐**（中心/右对齐靠菜单里切换）。
  */
 const align = ref<'center' | 'start' | 'end'>('start')
 const ALIGN_LABEL = { center: '居中', start: '左对齐', end: '右对齐' } as const
@@ -64,23 +74,6 @@ const alignItems: ToolbarMenuNode[] = [
   { key: 'start', label: '底部左对齐' },
   { key: 'end', label: '底部右对齐' },
 ]
-
-/**
- * 箭头演示：菜单上那条指向按钮的小尖角（toolbarDropdown 的 arrow 属性）。
- * 默认开；关掉后菜单只剩圆角卡片。
- */
-const arrowOn = ref(false)
-const arrowItems: ToolbarMenuNode[] = [
-  { key: 'arrow-on', label: '显示箭头' },
-  { key: 'arrow-off', label: '隐藏箭头（默认）' },
-]
-
-function pickArrow(key: string): void {
-  if (key === 'arrow-on' || key === 'arrow-off') {
-    arrowOn.value = key === 'arrow-on'
-    notify('演示：箭头已' + (arrowOn.value ? '显示' : '隐藏'))
-  }
-}
 
 function pickAlign(key: string): void {
   if (key === 'center' || key === 'start' || key === 'end') {
@@ -101,6 +94,7 @@ function notify(text: string): void {
 }
 
 function onPick(key: string): void {
+  demoOpen.value = false
   if (key === 'mode-a' || key === 'mode-b') {
     const nodeId = props.nodeId
     if (!nodeId) return
@@ -125,41 +119,49 @@ function pickFeature(label: string): void {
 </script>
 
 <template>
+  <template v-if="!kind">
   <!-- 普通态：下拉按钮（插在图片按钮组内部） -->
-  <component
-    v-if="!kind && DropdownButton"
-    :is="DropdownButton"
-    title="功能演示"
-    :icon="ICON_DEMO"
-    :items="items"
-    @pick="onPick"
-  />
+  <DropdownMenu v-model:open="demoOpen">
+    <DropdownMenuTrigger as-child>
+      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能演示" aria-label="功能演示">
+        <ToolbarIcon :icon="ICON_DEMO" />
+        <span class="mck-toolbar-label">功能演示</span>
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '200px' }">
+      <DropdownMenuItem v-for="item in items.filter((i) => !i.children)" :key="item.key" @select="onPick(item.key)">
+        {{ item.label }}
+      </DropdownMenuItem>
+      <DropdownMenuSub v-for="item in items.filter((i) => i.children?.length)" :key="item.key">
+        <DropdownMenuSubTrigger>{{ item.label }}</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent :style="{ minWidth: '160px' }">
+          <DropdownMenuItem v-for="child in item.children" :key="child.key" @select="onPick(child.key)">
+            {{ child.label }}
+          </DropdownMenuItem>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </DropdownMenuContent>
+  </DropdownMenu>
 
-  <!-- 对齐演示：同一件 toolbarDropdown，只改 align；菜单里切换，立刻能看出差别。
-       放在「功能演示」**前面**：它要是排在最右，菜单会被屏幕右边缘夹住，
-       三种对齐看起来都差不多，演示就白搭了（回到根因：这是插件顺序，不是组件问题）。 -->
-  <component
-    v-if="!kind && DropdownButton"
-    :is="DropdownButton"
-    :title="'对齐：' + ALIGN_LABEL[align]"
-    :icon="ICON_ALIGN"
-    :items="alignItems"
-    :align="align"
-    @pick="pickAlign"
-  />
-
-  <!-- 箭头演示：同一件 toolbarDropdown，只改 arrow -->
-  <component
-    v-if="!kind && DropdownButton"
-    :is="DropdownButton"
-    :title="'箭头：' + (arrowOn ? '开' : '关')"
-    :items="arrowItems"
-    :arrow="arrowOn"
-    @pick="pickArrow"
-  />
+  <!-- 对齐演示：同一件 DropdownMenu，只改 align；菜单里切换，立刻能看出差别。 -->
+  <DropdownMenu v-model:open="alignOpen">
+    <DropdownMenuTrigger as-child>
+      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button"
+        :title="'对齐：' + ALIGN_LABEL[align]" :aria-label="'对齐：' + ALIGN_LABEL[align]">
+        <ToolbarIcon :icon="ICON_ALIGN" />
+        <span class="mck-toolbar-label">对齐：{{ ALIGN_LABEL[align] }}</span>
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent :align="align" :side-offset="6" :style="{ minWidth: '160px' }">
+      <DropdownMenuItem v-for="item in alignItems" :key="item.key" @select="(key: string) => (pickAlign(key), (alignOpen = false))">
+        {{ item.label }}
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+  </template>
 
   <!-- 功能模式：同一根顶栏，内容换成该功能自己的按钮 -->
-  <template v-else-if="kind">
+  <template v-else>
     <span class="dte-feature-name">{{ LABEL[kind] }}</span>
     <span class="dte-feature-sep" aria-hidden="true" />
     <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能动作一" aria-label="功能动作一"

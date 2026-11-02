@@ -16,8 +16,8 @@
 import { computed, ref } from 'vue'
 import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@mini-canvas/ui-kit-shadcn'
 import { createVideoOps, uploadVideo } from './videoOps'
 import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'
@@ -25,8 +25,6 @@ import type { Rect } from './videoCrop'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
-// 下拉仍按名取（主题可换）；按钮本体直接用 shadcn Button。
-const DropdownButton = useUiComponent('toolbarDropdown')
 const selected = useSoleNodeSelected(props.id)
 
 /** 有没有视频：没有就只留「上传」 */
@@ -52,7 +50,7 @@ const visible = computed(() => selected.value)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 
-/** 比例下拉的选项（key/label 是 toolbarDropdown 的菜单形状，与图片裁剪顶栏同源） */
+/** 比例下拉的选项（key/label 直接喂 DropdownMenuItem，与图片裁剪顶栏同源） */
 const ratioOptions = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ key: o.value, label: o.label })))
 /** 当前比例（会话态：换比例只改草稿，确认时才落库） */
 const ratioValue = computed(() => (overlayDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
@@ -150,15 +148,20 @@ function cancelEdit(): void {
         <ToolbarIcon :icon="ICON_CANCEL" />
       </Button>
       <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。
-           只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。
-           用 toolbarDropdown 而不是 Select：与图片裁剪顶栏同一只件，菜单形状/对齐/主题跟随都不漂。 -->
-      <DropdownButton
-        v-if="editing"
-        class="vt-ratio"
-        :title="ratioTitle"
-        :items="ratioOptions"
-        @pick="onRatioChange"
-      />
+           只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。 -->
+      <DropdownMenu v-if="editing">
+        <DropdownMenuTrigger as-child>
+          <Button class="mck-toolbar-btn vt-ratio" variant="ghost" size="sm" type="button"
+            :title="ratioTitle" :aria-label="ratioTitle">
+            <span class="mck-toolbar-label">{{ ratioTitle }}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '160px' }">
+          <DropdownMenuItem v-for="o in ratioOptions" :key="o.key" @select="onRatioChange(o.key)">
+            {{ o.label }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"） -->
       <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
         :title="pending ? '正在裁剪…' : '确认编辑'"

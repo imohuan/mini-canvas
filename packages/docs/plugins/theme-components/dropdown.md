@@ -30,8 +30,8 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 - **分离件**：触发器、内容层、每一行、二级菜单都各写各的，想加图标、说明、快捷方式直接写。
 - **定位与翻边**由 reka-ui 负责：点外面关闭、Esc 关闭、键盘导航、出屏翻转都已内置。
 - **二级菜单**：`DropdownMenuSub` + `DropdownMenuSubTrigger` + `DropdownMenuSubContent`。
-- **自定义面板**：`DropdownMenuContent` 里可以直接放任意 DOM；工具栏那类「按钮 + 自定义面板」
-  见 [工具栏下拉按钮](/plugins/theme-components/toolbar-dropdown-button)。
+- **自定义面板**：`DropdownMenuContent` / `DropdownMenuSubContent` 里可以直接放任意 DOM；
+  工具栏那类「按钮 + 二级自定义面板」见下方示例。
 
 ## Props
 

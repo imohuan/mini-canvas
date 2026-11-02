@@ -35,8 +35,6 @@
 
 | 目录名（按名取用就传这个字符串） | 组件 | 一句话 | 详情 |
 | --- | --- | --- | --- |
-| `toolbarButton` | `NodeToolbarButton` | 工具栏按钮（节点控制栏仍可直接用 shadcn `Button`） | [按钮](/plugins/theme-components/node-toolbar-button) |
-| `toolbarDropdown` | `ToolbarDropdownButton` | 工具栏「按钮 + 菜单 / 二级菜单 / 自定义面板」 | [工具栏下拉按钮](/plugins/theme-components/toolbar-dropdown-button) |
 | `mediaViewer` | `MediaViewer` | 全屏媒体查看器（文本/图片/视频/音频） | [全屏媒体预览](/plugins/theme-components/media-viewer) |
 | `slider` | `PrecisionSlider` | 精细数值滑块（Ctrl 细调 / Shift 粗调） | [精细滑块](/plugins/theme-components/precision-slider) |
 | `toolParamField` | `ToolParamField` | 工具声明式参数控件（按 `kind` 自动选预设件） | [参数控件](/plugins/theme-components/tool-param-field) |
@@ -48,8 +46,8 @@
 | `movingHandle` | `MovingHandle` | 节点浮动端口（拖拽时看到的小圆球） | [浮动端口](/plugins/theme-components/moving-handle) |
 | `connectionLine` | `ConnectionLine` | 拖线临时线（与 `theme.connectionLine` 是同一个组件） | [拖线临时线](/plugins/theme-components/connection-line) |
 
-> 通用下拉、选择器、气泡不再登记旧的 `dropdown / select / tooltip` 名字：业务插件直接从
-> `@mini-canvas/ui-kit-shadcn` 引入 `DropdownMenu` / `Select` / `Tooltip` 分离件。
+> 通用按钮、下拉、选择器、气泡都不再登记：业务插件直接从 `@mini-canvas/ui-kit-shadcn`
+> 引入 `Button` / `DropdownMenu` / `Select` / `Tooltip` 分离件。
 > 主题在 `ui` 场里另外登记了全部 shadcn 原始组件（名字带 `shadcn` 前缀，例如 `shadcnButton`），
 > 需要按名替换主题皮时取它们。
 >
@@ -86,18 +84,18 @@
 ```vue
 <!-- 文件：packages/my-plugin/src/components/MyPanel.vue -->
 <!-- 格式：Vue 单文件组件（script setup lang="ts"） -->
-<!-- 位置：插件包里的一个面板组件 —— 它要用默认主题的按钮 -->
+<!-- 位置：插件包里的一个面板组件 —— 它要用默认主题的精细滑块 -->
 <script setup lang="ts">
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
-// ① 按名取，拿到的是 Ref；模板里直接写 <NodeToolbarButton ... /> 即可（Vue 自动解包）
-const NodeToolbarButton = useUiComponent('toolbarButton')
+// ① 按名取，拿到的是 Ref；模板里直接写 <PrecisionSlider ... /> 即可（Vue 自动解包）
+const PrecisionSlider = useUiComponent('slider')
 
 function refresh() { /* ... */ }
 </script>
 
 <template>
-  <NodeToolbarButton title="刷新" @click="refresh" />
+  <PrecisionSlider :model-value="48" :min="0" :max="100" @update:model-value="refresh" />
 </template>
 ```
 
@@ -109,7 +107,7 @@ function refresh() { /* ... */ }
 // 文件：packages/my-plugin/src/SomePanel.vue
 // 格式：Vue 单文件组件
 // 位置：插件包里的面板 —— 它明确就要默认主题的这一份具体实现
-import { PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-default'
+import { PrecisionSlider, ToolParamField, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-default'
 // 渲染件也导出了
 import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-theme-default'
 ```
@@ -170,7 +168,6 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
 
 设计系统组件：
 
-- [按钮 NodeToolbarButton](/plugins/theme-components/node-toolbar-button)
 - [下拉菜单 DropdownMenu](/plugins/theme-components/dropdown)
 - [气泡提示 Tooltip](/plugins/theme-components/tooltip)
 - [下拉选择器 Select](/plugins/theme-components/select)

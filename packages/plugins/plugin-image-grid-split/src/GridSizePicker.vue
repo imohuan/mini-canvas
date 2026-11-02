@@ -14,10 +14,8 @@ const props = withDefaults(
     /** 初始行列（打开时回显上次的选择） */
     initialRows?: number
     initialCols?: number
-    /** 子面板自动传入的上下文：点完网格后用它收起整个下拉 */
-    panel?: { close?: () => void } | null
   }>(),
-  { initialRows: 3, initialCols: 3, panel: null },
+  { initialRows: 3, initialCols: 3 },
 )
 
 const emit = defineEmits<{
@@ -77,7 +75,6 @@ function onPick(ev: MouseEvent): void {
   rows.value = hit.rows
   cols.value = hit.cols
   emit('confirm', hit.rows, hit.cols)
-  props.panel?.close?.()
 }
 </script>
 

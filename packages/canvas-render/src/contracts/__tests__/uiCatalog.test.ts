@@ -14,13 +14,13 @@ import type { PluginManager } from '../../host/pluginManager'
  * 主题把设计系统件登记进 registryOf('ui')，业务插件按名取 —— 换主题零改动。
  */
 describe('ui 组件目录（按名取设计系统件）', () => {
-  it('主题登记后，消费方按名取到组件（uiComponent；推荐名 toolbarButton）', async () => {
+  it('主题登记后，消费方按名取到组件（uiComponent；以 slider 为例）', async () => {
     const ctx = new Context()
-    const ThemeButton = { name: 'ThemeButton' };
-    ctx.registryOf<unknown>('ui').add('toolbarButton', ThemeButton, { id: 'default' });
+    const ThemeSlider = { name: 'ThemeSlider' };
+    ctx.registryOf<unknown>('ui').add('slider', ThemeSlider, { id: 'default' });
     await ctx.start();
-    expect(uiComponent(ctx, 'toolbarButton')).toBe(ThemeButton);
-    expect(uiNames(ctx)).toContain('toolbarButton');
+    expect(uiComponent(ctx, 'slider')).toBe(ThemeSlider);
+    expect(uiNames(ctx)).toContain('slider');
     ctx.stop();
   })
 
@@ -28,11 +28,11 @@ describe('ui 组件目录（按名取设计系统件）', () => {
     const ctx = new Context();
     const BaseBtn = { name: 'Base' };
     const NeonBtn = { name: 'Neon' };
-    ctx.registryOf<unknown>('ui').add('button', BaseBtn, { id: 'default', order: 0 });
-    ctx.registryOf<unknown>('ui').add('button', NeonBtn, { id: 'neon', order: -1 });
+    ctx.registryOf<unknown>('ui').add('slider', BaseBtn, { id: 'default', order: 0 });
+    ctx.registryOf<unknown>('ui').add('slider', NeonBtn, { id: 'neon', order: -1 });
     await ctx.start();
-    expect(uiComponent(ctx, 'button')).toBe(NeonBtn); // order 最小者在最外
-    const all = ctx.registryOf<unknown>('ui').list('button');
+    expect(uiComponent(ctx, 'slider')).toBe(NeonBtn); // order 最小者在最外
+    const all = ctx.registryOf<unknown>('ui').list('slider');
     expect(all.map((e) => e.value)).toEqual([NeonBtn, BaseBtn]); // 原值没丢
     ctx.stop();
   })
@@ -45,7 +45,7 @@ describe('ui 组件目录（按名取设计系统件）', () => {
   })
 
   it('无 ctx 时返回 undefined / 空数组（组件树外调用安全）', () => {
-    expect(uiComponent(undefined, 'button')).toBeUndefined();
+    expect(uiComponent(undefined, 'slider')).toBeUndefined();
     expect(uiNames(undefined)).toEqual([]);
   })
 })
@@ -60,7 +60,7 @@ describe('useUiComponent：目录变了，消费组件跟着换', () => {
     const Consumer = defineComponent({
       name: 'UiConsumer',
       setup() {
-        const Button = useUiComponent('button')
+        const Button = useUiComponent('slider')
         return () => {
           // ref 在 setup 返回的 render 里要手动解包（模板里 Vue 会自动解）
           const C = Button.value as { render?: () => unknown } | undefined
@@ -82,10 +82,10 @@ describe('useUiComponent：目录变了，消费组件跟着换', () => {
     const field = new RegistryImpl<unknown>()
     const Base = defineComponent({ name: 'Base', render: () => h('span', { class: 'base-btn' }) })
     const Neon = defineComponent({ name: 'Neon', render: () => h('span', { class: 'neon-btn' }) })
-    field.add('button', Base, { id: 'default' })
+    field.add('slider', Base, { id: 'default' })
     expect(await renderWithCatalog(field)).toContain('base-btn')
     // 换主题 = 叠一个 order 更小的条目
-    field.add('button', Neon, { id: 'neon', order: -1 })
+    field.add('slider', Neon, { id: 'neon', order: -1 })
     expect(await renderWithCatalog(field)).toContain('neon-btn')
   })
 

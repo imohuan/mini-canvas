@@ -2,12 +2,22 @@
 /**
  * GridSplitEntry —— 图片顶栏按钮组里的一条（方式 A：image.topToolbar 插槽）。
  *
- * 下拉按名取主题件（toolbarDropdown）；按钮本体直接用 shadcn Button ——
- * 同一排只有一套圆角/高度。显隐自己判：有图才出现，编辑态由壳切换。
+ * 下拉、二级菜单和自定义宫格面板都用 shadcn DropdownMenu 分离件；
+ * 按钮本体直接用 shadcn Button —— 同一排只有一套圆角/高度。
+ * 显隐自己判：有图才出现，编辑态由壳切换。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import { beginSplit, isSplitting } from './splitSession'
 import { validRowsCols } from './gridSplit'
 import GridSizePicker from './GridSizePicker.vue'
@@ -16,15 +26,7 @@ interface ToolbarMenuNode {
   key: string
   label: string
   children?: ToolbarMenuNode[]
-  /** 主题包 toolbarDropdown 的自定义面板（本插件只用到 component + props） */
-  panel?: ToolbarMenuPanel
-}
-
-/** 与主题包 ToolbarMenuPanel 同构的最小形状（插件不反向依赖主题包） */
-interface ToolbarMenuPanel {
-  component?: unknown
-  props?: Record<string, unknown>
-  width?: string
+  custom?: boolean
 }
 
 const props = defineProps<{
@@ -33,8 +35,6 @@ const props = defineProps<{
 }>()
 
 const { ctx } = useCanvasRender()
-const DropdownButton = useUiComponent('toolbarDropdown')
-const Dropdown = useUiComponent('dropdown')
 const ICON_GRID =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
 
@@ -52,10 +52,8 @@ const splitting = computed(() => Boolean(props.nodeId && isSplitting(props.nodeI
 /** 自定义行列面板的行列（默认 3×3；确认后保留回显） */
 const customRows = ref(3)
 const customCols = ref(3)
-
-function notify(text: string): void {
-  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify(text, { followPointer: true, durationMs: 0 })
-}
+const menuOpen = ref(false)
+const customOpen = ref(false)
 
 function enter(rows: number, cols: number): void {
   const nodeId = props.nodeId
@@ -65,7 +63,6 @@ function enter(rows: number, cols: number): void {
   // 底栏同步换成切分面板（nodeToolbar 会话：主题件，顶栏与底栏共用同一份）
   ctx.tryGet<{ enter?(nodeId: string, modeId: string): void } | undefined>('nodeToolbar')
     ?.enter?.(nodeId, 'image-grid-split/workbench')
-  notify('宫格切分：' + rows + ' 行 × ' + cols + ' 列，勾选后点底部按钮')
 }
 
 function onPick(key: string): void {
@@ -90,60 +87,48 @@ const items = computed<ToolbarMenuNode[]>(() => [
   {
     key: 'grid:custom',
     label: '自定义',
-    panel: {
-      width: '200px',
-      component: GridSizePicker,
-      props: {
-        initialRows: customRows.value,
-        initialCols: customCols.value,
-        onConfirm: onCustomConfirm,
-      },
-    },
+    custom: true,
   },
 ])
+
+function pickItem(key: string): void {
+  if (key === 'grid:custom') return
+  onPick(key)
+  menuOpen.value = false
+}
 </script>
 
 <template>
-  <component
-    v-if="hasImage && !splitting && DropdownButton"
-    :is="DropdownButton"
-    title="宫格切分"
-    :icon="ICON_GRID"
-    :items="items"
-    @pick="onPick"
-  />
-  <component
-    v-if="hasImage && !splitting && !DropdownButton && Dropdown"
-    :is="Dropdown"
-    placement="bottom-start"
-    :offset="6"
-    menu-width="200px"
-  >
-    <template #trigger>
+  <DropdownMenu v-if="hasImage && !splitting" v-model:open="menuOpen">
+    <DropdownMenuTrigger as-child>
       <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="宫格切分" aria-label="宫格切分" aria-haspopup="menu">
         <ToolbarIcon :icon="ICON_GRID" />
         <span class="mck-toolbar-label">宫格切分</span>
       </Button>
-    </template>
-    <template #default="{ close }">
-      <div class="gse-menu" data-testid="grid-split-entry-menu">
-        <button v-for="item in items" :key="item.key" type="button" class="gse-row" @click.stop="onPick(item.key), close()">
-          {{ item.label }}
-        </button>
-        <div class="gse-sep" />
-        <GridSizePicker
-          :initial-rows="customRows"
-          :initial-cols="customCols"
-          @confirm="(rows: number, cols: number) => (onCustomConfirm(rows, cols), close())"
-        />
-      </div>
-    </template>
-  </component>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" :side-offset="6" class="gse-menu" data-testid="grid-split-entry-menu">
+      <DropdownMenuItem v-for="item in items.filter((i) => !i.custom)" :key="item.key" class="gse-row"
+        @select="pickItem(item.key)">
+        {{ item.label }}
+      </DropdownMenuItem>
+      <DropdownMenuSub v-model:open="customOpen">
+        <DropdownMenuSubTrigger class="gse-row">自定义</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="gse-custom-panel" :style="{ minWidth: '200px' }">
+          <GridSizePicker
+            :initial-rows="customRows"
+            :initial-cols="customCols"
+            @confirm="(rows: number, cols: number) => (onCustomConfirm(rows, cols), (menuOpen = false), (customOpen = false))"
+          />
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </DropdownMenuContent>
+  </DropdownMenu>
 </template>
 
 <style scoped>
-/* 主题 dropdown 缺席时的兜底路径（触发器已换成 shadcn Button，只留菜单样式） */
-.gse-menu { display: flex; flex-direction: column; gap: 2px; }
+/* 菜单与右侧自定义面板的排版（外框/定位由 shadcn 提供） */
+.gse-menu { display: flex; flex-direction: column; gap: 2px; width: 200px; padding: 4px; }
+.gse-custom-panel { padding: 10px; }
 .gse-row {
   padding: 0 10px;
   min-height: 32px;
@@ -156,5 +141,4 @@ const items = computed<ToolbarMenuNode[]>(() => [
   cursor: pointer;
 }
 .gse-row:hover { background: var(--ui-hover, rgb(0 0 0 / 0.06)); }
-.gse-sep { height: 1px; background: var(--ui-line, #e2e5ea); margin: 2px 0; }
 </style>
