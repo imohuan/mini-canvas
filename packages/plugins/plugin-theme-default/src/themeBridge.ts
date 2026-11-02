@@ -105,6 +105,15 @@ export const THEME_BRIDGE_VARS = {
   radius: '--mct-radius',
   fontBody: '--mct-font-body',
   fontHeading: '--mct-font-heading',
+  /**
+   * 项目自带的三档圆角 token（ui-theme.css）。设置面板里的字段控件
+   * （SettingsSchemaField / 导航项）直接读它们，且带 scoped 的 data-v 属性，
+   * 优先级高于组件库的 [data-slot]；不一起写的话，用户选了大圆角，
+   * 设置面板里的下拉/输入框仍是 8px（2026-11-02 真机验证）。
+   */
+  radiusControl: '--radius-control',
+  radiusOpen: '--radius-open',
+  radiusPanel: '--radius-panel',
 } as const
 
 export interface ThemeBridgeInput {
@@ -143,7 +152,14 @@ export function toThemeBridgeInput(raw: {
 export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, string> {
   const out: Record<string, string> = {}
   // 默认档不写：组件库回落到 --radius-control（项目原有 8px），保持历史观感
-  if (input.radius !== 'inherit') out[THEME_BRIDGE_VARS.radius] = THEME_RADIUS_VALUES[input.radius] ?? ''
+  if (input.radius !== 'inherit') {
+    const value = THEME_RADIUS_VALUES[input.radius] ?? ''
+    out[THEME_BRIDGE_VARS.radius] = value
+    // 项目自身的控件 / 浮层 / 面板三档一起跟随：只改组件库会让设置面板里外两套圆角
+    out[THEME_BRIDGE_VARS.radiusControl] = value
+    out[THEME_BRIDGE_VARS.radiusOpen] = 'calc(' + value + ' * 1.5)'
+    out[THEME_BRIDGE_VARS.radiusPanel] = 'calc(' + value + ' * 2)'
+  }
   const body = THEME_FONT_STACKS[input.font] ?? ''
   if (body) out[THEME_BRIDGE_VARS.fontBody] = body
   // 标题：inherit = 跟随正文（写 var 引用，正文变了标题一起变）

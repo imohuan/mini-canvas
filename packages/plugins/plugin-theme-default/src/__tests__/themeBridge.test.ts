@@ -34,10 +34,14 @@ describe('外观交接：默认档不改观感', () => {
     expect(resolveThemeBridgeVars({ radius: 'inherit', font: 'inherit', heading: 'inherit' })).toEqual({})
   })
 
-  it('只改圆角 → 只写圆角变量', () => {
+  it('只改圆角 → 组件库与项目自身的三档圆角一起写（设置面板里外一致）', () => {
     const vars = resolveThemeBridgeVars({ radius: 'large', font: 'inherit', heading: 'inherit' })
     expect(vars[THEME_BRIDGE_VARS.radius]).toBe('0.875rem')
-    expect(Object.keys(vars)).toHaveLength(1)
+    expect(vars[THEME_BRIDGE_VARS.radiusControl]).toBe('0.875rem')
+    expect(vars[THEME_BRIDGE_VARS.radiusOpen]).toBe('calc(0.875rem * 1.5)')
+    expect(vars[THEME_BRIDGE_VARS.radiusPanel]).toBe('calc(0.875rem * 2)')
+    // 字体没选，就不该写字体变量
+    expect(vars[THEME_BRIDGE_VARS.fontBody]).toBeUndefined()
   })
 
   it('标题「跟随正文」→ 写 var 引用，正文变了标题一起变', () => {
