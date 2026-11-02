@@ -16,6 +16,7 @@ import { useHistoryZoom } from './useHistoryZoom'
 import { useHistoryPreview, type HistoryDetailItem } from './useHistoryPreview'
 import HistoryDetailDialog from './HistoryDetailDialog.vue'
 import { useHistoryLoadMore } from './useHistoryLoadMore'
+import { createHistoryCardDom } from './historyCardDom'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
@@ -90,6 +91,25 @@ const {
   droppedHistoryIds,
   lastColumnWidth: () => lastColumnWidth,
   appendMasonryItems: (from, to) => appendMasonryItems(from, to),
+})
+
+const {
+  buildCheckOverlay,
+  buildFactsLine,
+  finishCard,
+  buildErrorCard,
+  buildDetailButton,
+} = createHistoryCardDom({
+  isBatchMode: () => s.histBatchMode,
+  selectedIds: () => s.histSelectedIds,
+  onCardClick,
+  onAudioCardClick,
+  onToggleSelected: toggleHistSelected,
+  onDetail: (item) => { detailItem.value = item as HistItem },
+  onBroken: showBrokenResourceCard,
+  onRelayout: scheduleImageRelayout,
+  previewComponent: (name) => uiComponentOf(name) as Component | undefined,
+  registerCardApp: (card, app) => { appOfCard.set(card, app) },
 })
 
 /**
@@ -312,28 +332,6 @@ function syncBatchOverlays(): void {
   }
 }
 
-/** 无产物（失败）的异常卡 / 有地址但资源打不开的中性卡：警示图标 + 标题（没数据 = 异常，不装作正常素材） */
-function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): HTMLElement {
-  const wrap = document.createElement('div')
-  wrap.className = 'hist-card-fallback' + (opts?.missingResource ? '' : ' is-error')
-  /**
-   * 占位卡也必须带 data-hist-id（2026-10-30 复测）：补漏逻辑按"数据里有、DOM 里没有"
-   * 判断漏画，占位卡不带 id 就会被当成漏画 → 反复重建整墙 → 无限加载。
-   */
-  if (item.id) wrap.dataset.histId = item.id
-  wrap.innerHTML =
-    '<span class="hist-card-fallback-icon">!</span>' +
-    '<strong>' + esc(item.title) + '</strong>' +
-    (opts?.missingResource
-      ? '<span class="hist-card-meta">资源走丢 · 无法预览</span>'
-      : '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>') +
-    '<span class="hist-card-meta">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
-  wrap.addEventListener('click', () => onCardClick(item))
-  wrap.appendChild(buildDetailButton(item))
-  // 勾选层由外层卡片统一挂载（这里再挂一次会出现两个叠加的勾选钮）
-  return wrap
-}
-
 /**
  * 有产物地址、但图片实际打不开（文件被清理 / 换地址）：这也算异常。
  *
@@ -411,18 +409,6 @@ interface HistItem {
   error?: string
 }
 
-/** 批量模式下的勾选覆盖层（点它切换选中；不在批量模式不出现） */
-function buildCheckOverlay(id: string): HTMLElement {
-  const el = document.createElement('span')
-  el.className = 'hist-card-check' + (s.histSelectedIds.includes(id) ? ' is-on' : '')
-  el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-  el.addEventListener('click', (ev) => {
-    ev.stopPropagation()
-    toggleHistSelected(id)
-  })
-  return el
-}
-
 /** 勾选/取消一条 */
 function toggleHistSelected(id: string): void {
   const i = s.histSelectedIds.indexOf(id)
@@ -437,30 +423,6 @@ function toggleHistSelected(id: string): void {
  * 音频/视频卡：封面 + 播放圆钮（点卡片直接开 MediaViewer 预览/播放）。
  * 音频没有画面 —— 给柔和渐变底 + 波形点阵装饰；视频有封面帧。
  */
-/**
- * 卡外信息行（方案 5 定稿，用户口径 2026-10-27）：
- *
- *   类型标签 | 宽高 · 时长 · 文件大小
- *
- * 标签在**文字最左侧**、整行都在图片**下方**，图片上不放任何文字。
- * 音频没有画面 → 不显示宽高，只显示时长与大小；图片没有时长。
- * 不显示标题（资源本来就没有名称）。
- */
-function buildFactsLine(item: HistItem): HTMLElement {
-  const row = document.createElement('div')
-  row.className = 'hist-card-facts'
-  const parts: string[] = []
-  if (item.media?.width && item.media?.height) parts.push(item.media.width + '×' + item.media.height)
-  const dur = formatDuration(item.media?.durationMs)
-  if (dur) parts.push(dur)
-  const size = formatBytes(item.media?.bytes)
-  if (size) parts.push(size)
-  row.innerHTML =
-    '<span class="hist-card-kind">' + esc(item.kind) + '</span>' +
-    '<span class="hist-card-fact-text">' + esc(parts.join(' · ')) + '</span>'
-  return row
-}
-
 /**
  * 音频的「卡外控制行」：播放键 + 时间在左，尺寸/时长/大小在右。
  *
@@ -526,38 +488,6 @@ function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLE
   row.appendChild(left)
   row.appendChild(right)
   return row
-}
-
-/**
- * 整张卡的最后一行：图 + 卡外信息行。所有卡片（图片/视频/音频/异常）都走这一个出口。
- * 异常卡自己已经带"生成异常 · 无产物"与类型/时间，这里**只给正常卡**补信息行，
- * 避免同一张卡出现两行重复说明。
- */
-function finishCard(card: HTMLElement, item: HistItem): HTMLElement {
-  card.classList.add('hist-card--facts-out')
-  if (!card.querySelector('.hist-card-fallback')) card.appendChild(buildFactsLine(item))
-  return card
-}
-
-/**
- * 卡片右上角的「详情」小按钮：打开该条历史的生成参数弹窗。
- *
- * 用户口径 2026-10-27：历史里要能看到当时的提示词、参考图/视频/音频与参数，
- * 所以卡片上得有一个明确入口（点卡片本身仍是预览 / 批量勾选，不做第二语义）。
- */
-function buildDetailButton(item: HistItem): HTMLElement {
-  const btn = document.createElement('button')
-  btn.className = 'hist-card-detail'
-  btn.type = 'button'
-  btn.title = '查看生成参数'
-  btn.setAttribute('aria-label', '查看生成参数：' + item.title)
-  btn.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>'
-  btn.addEventListener('click', (ev) => {
-    ev.stopPropagation()
-    detailItem.value = item
-  })
-  return btn
 }
 
 function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): HTMLElement {
@@ -1069,7 +999,6 @@ onMounted(() => {
 watch(() => s.historyOpen, (open) => {
   if (!open) {
     stashCurrentWall()
-    sentinelObserver?.disconnect()
     teardownLoadSentinel()
     if (resizeObserver && masonryEl.value) resizeObserver.unobserve(masonryEl.value)
     return

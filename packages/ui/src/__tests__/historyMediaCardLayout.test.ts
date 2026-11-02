@@ -35,6 +35,10 @@ const historyLoadMore = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryLoadMore.ts'),
   'utf-8',
 )
+const historyCardDom = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/historyCardDom.ts'),
+  'utf-8',
+)
 const historyDetail = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/HistoryDetailDialog.vue'),
   'utf-8',
@@ -157,9 +161,9 @@ describe('批量勾选钮样式对动态卡片生效', () => {
 
   it('勾选层只由外层卡片挂一次（异常卡自己不再复制一份）', () => {
     // 只取 buildErrorCard 这一个函数体（后面的 showBrokenResourceCard 才负责挂勾选层）
-    const errFn = modalsArea.slice(
-      modalsArea.indexOf('function buildErrorCard'),
-      modalsArea.indexOf('function showBrokenResourceCard'),
+    const errFn = historyCardDom.slice(
+      historyCardDom.indexOf('function buildErrorCard'),
+      historyCardDom.indexOf('function buildDetailButton'),
     )
     expect(errFn, 'buildErrorCard 里又挂了一次勾选层 → 同一张卡出现两个勾选钮').not.toMatch(/buildCheckOverlay/)
   })
@@ -181,7 +185,9 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     // 三条卡片路径（媒体卡 / 图片卡 / 无产物卡）都必须走同一个 onCardClick
     // 卡片本体（异常卡 / 媒体卡 / 图片卡 / 裂图重建）都必须走 onCardClick；
     // 左上角圆钮是唯一允许自己处理 click 的（它要 stopPropagation 防止重复切换）。
-    const viaHandler = modalsArea.match(/addEventListener\('click', \(\) => onCardClick\(item\)\)/g)?.length ?? 0
+    const viaHandler =
+      (modalsArea.match(/addEventListener\('click', \(\) => onCardClick\(item\)\)/g)?.length ?? 0) +
+      (historyCardDom.match(/addEventListener\('click', \(\) => callbacks\.onCardClick\(item\)\)/g)?.length ?? 0)
     expect(viaHandler, '非音频卡片点击没全部接 onCardClick（批量模式下点卡片不会选中）').toBe(4)
     expect(modalsArea, '音频卡点击没有接专用处理（批量模式下点音频卡不会选中）').toMatch(
       /onAudioCardClick/,
@@ -500,7 +506,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   it('音频底栏只有播放按钮，不再有全屏按钮', () => {
     const fn = modalsArea.slice(
       modalsArea.indexOf('function buildAudioControls'),
-      modalsArea.indexOf('function finishCard'),
+      modalsArea.indexOf('function buildMediaCard'),
     )
     // 用户口径 2026-10-30：音频没必要全屏预览，播放键右边那个全屏按钮删掉。
     expect(fn, '音频底栏还留着全屏按钮').not.toMatch(/hist-audio-expand/)
@@ -536,7 +542,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('方案 5：信息全部在图片外，一行 = 类型标签 + 宽高 · 时长 · 大小', () => {
-    const fn = modalsArea.slice(modalsArea.indexOf('function buildFactsLine'), modalsArea.indexOf('/** 整张卡的最后一行'))
+    const fn = historyCardDom.slice(historyCardDom.indexOf('function buildFactsLine'), historyCardDom.indexOf('function finishCard'))
     expect(fn, '信息行没有类型标签').toMatch(/hist-card-kind/)
     expect(fn, '信息行没显示宽高').toMatch(/item\.media\.width\s*\+\s*'×'\s*\+\s*item\.media\.height/)
     expect(fn, '信息行没显示时长').toMatch(/formatDuration\(item\.media\?\.durationMs\)/)
@@ -550,7 +556,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('音频没有宽高：信息行不显示尺寸；视频/图片才显示', () => {
-    const fn = modalsArea.slice(modalsArea.indexOf('function buildFactsLine'), modalsArea.indexOf('/** 整张卡的最后一行'))
+    const fn = historyCardDom.slice(historyCardDom.indexOf('function buildFactsLine'), historyCardDom.indexOf('function finishCard'))
     // 音频不推送宽高（媒体没有可视尺寸），只推送时长与大小
     expect(fn, '音频被塞了宽高').toMatch(/item\.media\?\.width\s*&&\s*item\.media\?\.height/)
     expect(modalsArea, '音频没有画面，不该补 videoWidth/videoHeight').toMatch(/const w = !isAudio \? v\.videoWidth/)
@@ -571,8 +577,8 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('卡片有「详情」入口，弹窗展示提示词/参数/参考素材/产物信息', () => {
-    expect(modalsArea, '卡片上没有详情按钮构建函数').toMatch(/function buildDetailButton/)
-    expect(modalsArea, '详情入口没有挂到卡片上').toMatch(/appendChild\(buildDetailButton\(item\)\)/)
+    expect(historyCardDom, '卡片上没有详情按钮构建函数').toMatch(/function buildDetailButton/)
+    expect(historyCardDom, '详情入口没有挂到卡片上').toMatch(/appendChild\(buildDetailButton\(item\)\)/)
     expect(historyDetail, '详情弹窗没有提示词').toMatch(/item\.prompt/)
     expect(historyDetail, '详情弹窗没有生成参数').toMatch(/item\.values/)
     expect(historyDetail, '详情弹窗没有参考素材').toMatch(/item\.resources/)
@@ -765,9 +771,9 @@ describe('不可预览的媒体不会挂成 video/audio（防浏览器重试刷�
  */
 describe('占位卡也带 data-hist-id（否则补漏会无限重建）', () => {
   it('buildErrorCard 写入 dataset.histId', () => {
-    const fn = modalsArea.slice(
-      modalsArea.indexOf('function buildErrorCard'),
-      modalsArea.indexOf('function showBrokenResourceCard'),
+    const fn = historyCardDom.slice(
+      historyCardDom.indexOf('function buildErrorCard'),
+      historyCardDom.indexOf('function buildDetailButton'),
     )
     expect(fn, '占位卡没有 data-hist-id（补漏会把它当成漏画）').toMatch(/wrap\.dataset\.histId = item\.id|dataset\.histId/)
   })
