@@ -36,10 +36,16 @@ const ui = useUi()
 const SlotDebugOverlay = useUiComponentOutside('slotDebugOverlay')
 /** 模板 :is 用；目录没登记时回落默认皮。 */
 const DebugOverlay = computed(() => SlotDebugOverlay.value ?? DefaultSlotDebugOverlay)
-/** 组件库使用标记：只在开发环境按需加载；生产构建不会加载这段代码。 */
-const UiKitDebugOverlay = import.meta.env.DEV
-  ? defineAsyncComponent(() => import('@mini-canvas/plugin-theme-default/components/ui/UiKitDebugOverlay.vue'))
-  : null
+/**
+ * 组件库使用标记：按需异步加载。
+ *
+ * 构建版也要能用（2026-11-02 用户反馈）：以前这里是 import.meta.env.DEV ? … : null，
+ * cloud-server 托管的构建版永远是 null，开关打开了也看不到任何圆点。
+ * 现在两种构建都保留这段代码；是否挂载仍由开关决定，关着时零开销。
+ */
+const UiKitDebugOverlay = defineAsyncComponent(
+  () => import('@mini-canvas/plugin-theme-default/components/ui/UiKitDebugOverlay.vue'),
+)
 const s = ui.state
 // 装载清单 = 静态装配 + 按运行环境追加的自带件（cloud-server 托管时含云端连接，见 assembly）
 const plugins = resolveAppPlugins()

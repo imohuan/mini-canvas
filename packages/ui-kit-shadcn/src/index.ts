@@ -33,6 +33,8 @@ export * from './components/color-picker'
 export { SettingsRow, SettingsSection } from './components/settings'
 
 export { SHADCN_COMPONENTS, SHADCN_COMPONENT_NAMES } from './registry'
+/** 家族名单：组件库使用标记只认这些 shadcn 生成组件（详见文件头注释） */
+export { SHADCN_FAMILY_NAMES, isShadcnPrimitive } from './shadcnFamilies'
 
 /**
  * 外观选项表（字体 / 圆角）：**组件库是唯一真源**，主题插件引用它、不另抄一份。

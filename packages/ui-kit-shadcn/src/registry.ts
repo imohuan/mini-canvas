@@ -32,6 +32,7 @@ import * as SwitchModule from './components/ui/switch'
 import * as TabsModule from './components/ui/tabs'
 import * as TextareaModule from './components/ui/textarea'
 import * as TooltipModule from './components/ui/tooltip'
+import { SHADCN_FAMILY_NAMES } from './shadcnFamilies'
 
 const FAMILIES: Record<string, Record<string, unknown>> = {
   AlertDialog: AlertDialogModule,
@@ -69,6 +70,8 @@ function buildManifest(): Record<string, Component> {
       // 只收组件：变体常量（buttonVariants）和 useCommand 这类 helper 都是小写开头。
       if (!name.startsWith(family) || name[0] !== name[0]?.toUpperCase()) continue
       if (typeof value !== 'object' && typeof value !== 'function') continue
+      // 名单是唯一真源：FAMILIES 里混进本项目自造件时，这里也一起挡住
+      if (!SHADCN_FAMILY_NAMES.includes(family as (typeof SHADCN_FAMILY_NAMES)[number])) continue
       manifest[`shadcn${name}`] = value as Component
     }
   }

@@ -1,16 +1,20 @@
 /**
- * 组件库使用标记：开发期给「模板里用到 shadcn 组件」的标签加定位属性。
+ * 组件库使用标记：给「模板里用到 shadcn 组件」的标签加定位属性。
  *
- * 值来自 Vue 编译器的模板节点位置（原文件 + 行号 + 列号），所以 Tooltip 显示的是
- * 真实使用点。插件带 apply:'serve'，生产构建不加属性、不增加体积。
+ * 值来自 Vue 编译器的模板节点位置（原文件 + 行号 + 列号），所以气泡显示的是真实使用点。
+ *
+ * **构建版也要有**（2026-11-02 用户反馈）：以前只挂在 dev server 上，
+ * 于是打开 cloud-server 托管的构建版时，设置里那个开关永远没有效果。
+ * 现在 dev 与 build 都注入；属性只是两个字符串，代价可忽略，
+ * 调试层本身仍由开关控制（关着就不挂载、不监听）。
  */
 import { parse } from 'vue/compiler-sfc'
 // Vite 加载插件配置时走 Node 的 ESM 解析（不做扩展名补全），所以这里要带 .ts。
 import { UI_KIT_DEBUG_ATTR, UI_KIT_DEBUG_COMPONENT_ATTR } from './debugLoc.ts'
+import { isShadcnPrimitive } from './shadcnFamilies.ts'
 
 interface VitePluginLike {
   name: string
-  apply: 'serve'
   enforce: 'pre'
   transform(code: string, id: string): { code: string; map: null } | null
 }
@@ -23,11 +27,10 @@ interface ElementLike {
   loc: { start: { line: number; column: number; offset: number } }
 }
 
-/** 只在 dev server 挂载 */
+/** dev 与 build 都挂载（构建版打开开关后同样能看到标记） */
 export function uiKitDebugLocPlugin(options: { root: string }): VitePluginLike {
   return {
     name: 'mini-canvas:ui-kit-debug-loc',
-    apply: 'serve',
     enforce: 'pre',
     transform(code, id) {
       const file = id.replace(/\\/g, '/').split('?')[0] ?? ''
@@ -105,8 +108,11 @@ function uiKitImports(script: string, setup: string): Map<string, string> {
         const clean = part.replace(/^type\s+/, '').trim()
         if (!clean) continue
         const [exported, local] = clean.split(/\s+as\s+/)
-        if (local) out.set(local.trim(), exported.trim())
-        else if (exported) out.set(exported.trim(), exported.trim())
+      // 只认 shadcn 生成的原始组件：SettingsRow / SettingsSection 这类
+      // 本项目在组件库里补的布局件不算，标了也会被用户当成噪音（2026-11-02 反馈）。
+      if (!exported || !isShadcnPrimitive(exported.trim())) continue
+      if (local) out.set(local.trim(), exported.trim())
+      else out.set(exported.trim(), exported.trim())
       }
     }
   }

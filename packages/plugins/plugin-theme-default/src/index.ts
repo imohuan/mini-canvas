@@ -884,25 +884,19 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" });
   // ===== shadcn-vue 原始组件：全部登记进 ui 场，供业务插件按名取用 =====
   // 名字统一 `shadcn` 前缀（shadcnButton / shadcnDropdownMenuContent …），避免和上面的旧目录名撞车。
-  // 值就是 shadcn-vue 生成的那个组件，不做功能适配层；只在**开发期**包一层透明标记，
+  // 值就是 shadcn-vue 生成的那个组件，不做功能适配层；只包一层透明标记，
   // 让「按名取用」的组件也能在组件库使用标记里显示登记点（模板直写的那种由 Vite 插件注入）。
-  // 生产构建里 import.meta.env.DEV 为 false，登记值就是原始组件本身。
-  // tsconfig 的 types 是空数组（不引 vite/client）：用结构化断言读，避免为一个开关引入全局类型。
-  const isDev = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
-  const shadcnComponents = isDev
-    ? Object.fromEntries(
-        Object.entries(SHADCN_COMPONENTS).map(([uiName, component]) => [
-          uiName,
-          withUiKitDebugMark(
-            component,
-            "packages/plugins/plugin-theme-default/src/index.ts",
-            uiName.replace(/^shadcn/, ""),
-          ),
-        ]),
-      )
-    : SHADCN_COMPONENTS;
-  for (const [uiName, component] of Object.entries(shadcnComponents)) {
-    ui.add(uiName, component, { id: "shadcn" });
+  //
+  // 构建版同样要包（2026-11-02 用户反馈）：以前只在 DEV 下包，cloud-server 托管的
+  // 构建版里按名取的组件没有任何标记。这一层不产生 DOM、不改 props/slots/事件，
+  // 调试层关闭时连读属性的人都没有，所以两种构建保持同一份实现。
+  for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
+    const marked = withUiKitDebugMark(
+      component,
+      "packages/plugins/plugin-theme-default/src/index.ts",
+      uiName.replace(/^shadcn/, ""),
+    );
+    ui.add(uiName, marked, { id: "shadcn" });
   }
   // 设置导航图标：独立场域，按一级分组名登记。优先级高（order 小）的赢。
   const navIcons = ctx.registryOf<unknown>("settings/navIcon");

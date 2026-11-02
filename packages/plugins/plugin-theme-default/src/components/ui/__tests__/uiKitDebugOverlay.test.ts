@@ -50,4 +50,25 @@ describe('组件库使用标记', () => {
   it('有设置面板打开时仍然显示标记（不整层让位）', () => {
     expect(CODE).not.toContain('[role="dialog"]')
   })
+
+  /**
+   * 2026-11-02 用户反馈：鼠标移到组件本体上就弹气泡，满屏都在弹，遮住正在看的控件。
+   * 要的是「只有鼠标落在右上角圆点上才弹」。命中判定里不能再出现 inside 分支。
+   */
+  it('只有落在圆点上才弹气泡（组件本体不响应悬停）', () => {
+    const pick = CODE.slice(CODE.indexOf('function pick('))
+    expect(pick).toContain('onDot')
+    expect(pick).not.toMatch(/const inside\s*=/)
+    expect(pick).not.toMatch(/x >= r\.left/)
+  })
+
+  /**
+   * 2026-11-02 控制台实测：`Uncaught TypeError: el.closest is not a function`。
+   * pointerover 的目标可能是文本节点 / document，不能假定它一定有 closest。
+   */
+  it('pointerover 目标先判类型再调 closest（不假定一定是 Element）', () => {
+    const fn = CODE.slice(CODE.indexOf('function onDocOver('))
+    expect(fn).toMatch(/typeof target\?\.closest === 'function'/)
+    expect(fn).not.toMatch(/const el = e\.target as HTMLElement/)
+  })
 })

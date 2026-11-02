@@ -2,10 +2,10 @@
 /**
  * UiKitDebugOverlay —— 组件库使用标记的调试层（全局只挂一次）。
  *
- * 只读开发期注入的 data-ui-kit-debug / data-ui-kit-component：
+ * 只读编译期注入的 data-ui-kit-debug / data-ui-kit-component：
  * - 开关关闭：组件被 v-if 卸载，不监听、不查询、零开销；
  * - 打开：给每个带标记的元素右上角画 7px 圆点；鼠标靠近圆点/组件时浮出定位信息。
- * - 只在开发构建里由 App.vue 挂载；生产构建里这段组件代码不会进主包。
+ * - 由 App.vue 按需异步加载；dev 与 cloud-server 托管的构建版都能用（2026-11-02）。
  *
  * 气泡不用伪元素：伪元素会落进业务组件的层叠/overflow，节点被裁时点也跟着消失。
  * 这里用一个 fixed 覆盖层画，位置每帧按元素矩形算，不改变业务 DOM 与布局。
@@ -20,9 +20,15 @@ import {
 
 /** 圆点直径（px）；命中区略大，方便鼠标找 */
 const DOT = 7
-const HIT = 12
 const GAP = 8
 const CLOSE_DELAY = 260
+/**
+ * 气泡只在鼠标**真正落在圆点上**时出现。
+ *
+ * 用户口径（2026-11-02）：把鼠标移到组件本体上就弹气泡，等于满屏都在弹说明，
+ * 反而挡住了要在设置里看的控件。圆点是唯一的入口，组件本体只负责画点、不响应悬停。
+ */
+const DOT_HIT = 10
 
 interface Target {
   el: HTMLElement
@@ -129,16 +135,15 @@ function sameMarkers(a: Marker[], b: Marker[]): boolean {
   return true
 }
 
-/** 鼠标是否落在右上角圆点或组件自身内 */
+/** 鼠标是否落在右上角圆点上（组件本体不响应，见 DOT_HIT 的说明） */
 function pick(x: number, y: number): Target | null {
   // 小元素优先：嵌套的 SelectValue 比 SelectTrigger 更具体
   let best: Target | null = null
   let bestArea = Infinity
   for (const marker of markers.value) {
     const r = marker.rect
-    const onDot = Math.abs(x - r.right) <= HIT && Math.abs(y - r.top) <= HIT
-    const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
-    if (!onDot && !inside) continue
+    const onDot = Math.abs(x - r.right) <= DOT_HIT && Math.abs(y - r.top) <= DOT_HIT
+    if (!onDot) continue
     const area = (r.right - r.left) * (r.bottom - r.top)
     if (area >= bestArea) continue
     bestArea = area
@@ -202,9 +207,15 @@ function tick(now: number): void {
 }
 
 function onDocOver(e: PointerEvent): void {
-  const el = e.target as HTMLElement | null
   const was = overPanel
-  overPanel = !!el?.closest?.('.ukdo-body')
+  /**
+   * pointerover 的目标不一定是 Element：可能是文本节点、SVG 里的子节点，
+   * 也可能是 document 本身。直接调 .closest 会抛
+   * "el.closest is not a function"（2026-11-02 控制台实测）。
+   * 这里先确认它真有这个方法，再判断是不是气泡内部。
+   */
+  const target = e.target as { closest?: (sel: string) => unknown } | null
+  overPanel = typeof target?.closest === 'function' ? !!target.closest('.ukdo-body') : false
   if (overPanel && !was) cancelClose()
   if (!overPanel && was) scheduleClose()
 }
