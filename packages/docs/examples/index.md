@@ -37,7 +37,7 @@ export function apply(ctx) { /* 在这里注册你的东西 */ }
 | --- | --- | --- |
 | [案例速查](/examples/recipe-map) | 「我想做 X 该抄哪个」对照表 + 装配顺序 | — |
 | [1 · 最小节点插件](/examples/first-node) | `ctx.nodes.register` 全字段 + content 组件 | ⭐⭐ |
-| [2 · 往画布叠 UI](/examples/ui-slot) | `ctx.slots.register`：overlay / settingsNav / 专用槽 | ⭐ |
+| [2 · 往画布叠 UI](/examples/ui-slot) | `ctx.slots.register`：overlay / settingsGroup / 专用槽 | ⭐ |
 | [3 · 命令与快捷键](/examples/command-shortcut) | `ctx.commands.register` + `keys`，服务状态做单一事实源 | ⭐ |
 | [4 · 配置与设置面板](/examples/config-panel) | 模块级 `Config` schema，改配置实时生效 | ⭐ |
 | [5 · 提供服务给别人用](/examples/provide-service) | `ctx.inject` + 类型增强，别人怎么消费你 | ⭐⭐ |

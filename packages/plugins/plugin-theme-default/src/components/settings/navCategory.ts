@@ -101,6 +101,18 @@ export function metaPage(meta: unknown): unknown {
 }
 
 /**
+ * 旧 settings.nav 的整页归属分组。
+ *
+ * 插件还没迁到菜单、但它的整页其实只对应一个 Config.group 时，写这个字段：
+ * 设置面板会把 meta.page 挂到收纳该 group 的二级 section 上，而不是再追加一个一级入口。
+ */
+export function metaPageGroup(meta: unknown): string {
+  if (!meta || typeof meta !== 'object') return ''
+  const value = (meta as Record<string, unknown>).pageGroup
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
  * 解析一个一级菜单属于哪个分类。
  *
  * @param nav 一级菜单名（分组第一个 / 前那段）
@@ -125,6 +137,28 @@ export function categoryRank(category: string, extraOrder: readonly string[]): n
   if (builtin >= 0) return builtin
   const extra = extraOrder.indexOf(category)
   return SETTINGS_CATEGORY_ORDER.length + (extra >= 0 ? extra : 999)
+}
+
+/** 一个分类的排序依据：菜单解析后的 position 优先，没有就按内置顺序。 */
+export interface SettingsCategorySortKey {
+  category: string
+  /** 菜单树给的最终位置（0 起）；没有 = 旧装配，走内置顺序 */
+  position?: number
+}
+
+/**
+ * 分类排序：菜单 position 小者在前；都没有 position 时按内置顺序，
+ * 新造的分类按首次出现顺序排最后。
+ */
+export function compareSettingsCategory(
+  a: SettingsCategorySortKey,
+  b: SettingsCategorySortKey,
+  extras: readonly string[] = [],
+): number {
+  const ap = a.position ?? Number.POSITIVE_INFINITY
+  const bp = b.position ?? Number.POSITIVE_INFINITY
+  if (ap !== bp) return ap - bp
+  return categoryRank(a.category, extras) - categoryRank(b.category, extras)
 }
 
 /** 设置导航图标兜底（与 navIcon.ts 的导出保持一致，避免两处各写一个组件） */

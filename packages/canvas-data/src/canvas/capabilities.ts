@@ -23,8 +23,21 @@ import type { NodeFactoryService, NodeCreator } from './nodeFactory'
 import type { CommandDef } from '@mini-canvas/kernel'
 import type { NodeRegion, NodeRegionAttachment } from './region'
 import { canvasRuntime } from './canvasRuntime'
+import type { SettingsMenuScope } from './settingsMenu'
+import type { SettingsMenuRegistry } from './settingsMenu'
 
 import { assertRegion, RETIRED_CONTENT_FIELD } from './region'
+
+/**
+ * 每张注册场各给一个独立的菜单表；键固定，避免插件名变化影响 id。
+ *
+ * 放在 ctx.get 里，而不是模块级单例：两张画布不能共享菜单。
+ */
+function settingsMenuFrom(ctx: PluginScope): SettingsMenuRegistry {
+  const existing = ctx.tryGet<SettingsMenuRegistry>('settingsMenu')
+  if (existing) return existing
+  throw new Error('[settingsMenu] 缺少 settingsMenu 内置服务：请使用画布能力层（createCanvasCapabilityLayer）创建 Context')
+}
 
 /**
  * ctx.nodes.register 一次给全的定义（数据 + 展示 + 可选建节点实现）。
@@ -185,6 +198,8 @@ export function buildCapabilities(
     onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
     groups(): string[]
   }
+  /** 设置面板的 0/1/2 级菜单注册（与组件场域同一套 order / 叠层规则） */
+  settingsMenu: SettingsMenuScope
 } {
   const theme = () => {
     try {
@@ -528,5 +543,11 @@ export function buildCapabilities(
         return settingsStore().groups()
       },
     },
+
+    // ---------- ctx.settingsMenu：0/1/2 级菜单注册（随本插件 scope 自动回收） ----------
+    settingsMenu: settingsMenuFrom(ctx).forPlugin(pluginName, (fn) => {
+      // 与 nodes/theme/slots 同一套回收：句柄登记进本插件 fiber，卸载即撤销
+      ctx.effect(() => fn)
+    }),
   }
 }

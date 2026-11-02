@@ -2,14 +2,17 @@
  * 设置面板覆盖度测试 —— 用户要求："你这些配置应该也要写到我的设置页面中"。
  *
  * 这条测试用**真实内核 + 真实插件**跑一遍，把"哪些配置项真的会出现在设置页面里"钉死：
- * 设置面板的左导航/二级块完全由 ctx.settings.groups() 与各 key 的 group 驱动
- * （见 PluginSettingsContent 的 sectionMap/navOf），所以断言 groups() 与关键 key 的分组，
- * 就等于断言"用户在设置里看得到"。
+ * 设置面板的左导航/二级块由 ctx.settingsMenu 的 0/1/2 级菜单决定，
+ * ctx.settings.groups() 与各 key 的 group 负责把字段挂进对应小节
+ * （见 PluginSettingsContent 的 menuView/sectionMap），所以断言 groups()、关键 key 的分组
+ * 以及菜单树，就等于断言"用户在设置里看得到"。
  *
  * 价值：以后新增配置项却忘了给 group（或 group 名写错、冒出一个没有归属的一级分类），
  * 这里会立刻拦住 —— 那种错误在界面上表现为"配置项凭空消失"，靠肉眼看很难发现。
  */
 import { describe, it, expect } from 'vitest'
+import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
+import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
@@ -21,6 +24,7 @@ import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
+import { resolveAppPlugins } from '../assembly'
 
 /** 起一个与宿主同形的内核（真服务），装载声明了 Config 的几个插件 */
 async function bootWithSettings() {
@@ -182,7 +186,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
    * 把 Config 漏在对象之外 —— 内核读 mod.Config 读不到，整组配置**静默消失**，
    * 设置面板里一行都没有、也不报错。只测「模块上导出了 Config」不够，必须跑真内核。
    */
-  it('底栏注册进「常规/底栏」，但**不再**自己存一份后台地址（直接用 Agent 的）', async () => {
+  it('底栏配置进「常规/底栏」，但**不再**自己存一份后台地址（直接用 Agent 的）', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     expect(settings.groups()).toContain('常规/底栏')
@@ -204,15 +208,27 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
   })
 
   /**
-   * 一级分类 = 左侧导航顶层。`外观` 是 2026-11-02 新增的：它装「圆角 / 字体」这类
-   * 交接给组件库的外观项，不该并进「常规」（那是功能开关的集合）。
-   * 这条仍要守住「不冒出无主分类」—— 新加分类必须是有意为之，不能是某插件随手写的组名。
+   * 一级分组名必须能归到默认菜单已经登记的分组里，不能随手造一个无主名字。
+   * 菜单顶层现在由 ctx.settingsMenu 注册（category/nav/section），不再由 group 第一段决定；
+   * 这里只锁“旧 group 仍能安全迁移”，完整 0/1/2 顺序在 settingsMenu.test.ts。
    */
-  it('一级分类只有约定的五个（外观 / 布局 / 常规 / 节点 / 边），不冒出无主分类', async () => {
+  it('启动套件的每个 group 都被某个显式 section 收编（auto 兜底不算）', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
-    const navs = [...new Set(settings.groups().map((g) => g.split('/')[0]))].sort()
-    expect(navs).toEqual(['外观', '布局', '常规', '节点', '边'])
+    const menu = ctx.get('settingsMenu')
+    // resolve() 会把没登记的 group 自动补成 auto section —— 那不算“已归好类”。
+    // 只认显式注册的 section.groups（一个 section 可合并多个 Config.group）。
+    const registered = new Set(
+      menu
+        .resolve(settings.groups())
+        .navs.flatMap((n) => n.sections.filter((s) => !s.auto).flatMap((s) => s.groups)),
+    )
+    const unregistered = settings.groups().filter((g) => !registered.has(g))
+    expect(unregistered).toEqual([])
+    // 兜底机制仍在：未登记的 group 不会消失，但会挂成 auto 并报告 issue。
+    const fake = menu.resolve(['没登记的/分组'])
+    expect(fake.navs.flatMap((n) => n.sections).some((s) => s.auto)).toBe(true)
+    expect(fake.issues.some((i) => i.kind === 'unregistered-nav')).toBe(true)
     ctx.stop()
   })
 
@@ -222,5 +238,51 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     const flat = settings.groups().filter((g) => !g.includes('/'))
     expect(flat).toEqual([])
     ctx.stop()
+  })
+
+  /**
+   * 真实启动套件的菜单树必须“零兜底”：
+   * - 每个 group 都被显式 section 收编（不是 auto 补出来的）；
+   * - 没有重复的一级菜单；
+   * - 内容不会因为菜单合并而丢（每个 group 至少出现在一个 section 里）。
+   */
+  it('真实 APP_PLUGINS：菜单零兜底、一级不重复、全部 group 可见', async () => {
+    const { host } = await createMiniCanvasHost({
+      adapter: new MemoryStorageAdapter(),
+      coldPlugins: resolveAppPlugins(),
+    })
+    const settings = host.ctx.get<SettingsLike>('settings')
+    const menu = host.ctx.get<{
+      resolve(groups: readonly string[]): {
+        navs: Array<{ id: string; title: string; sections: Array<{ group: string; groups: string[]; auto?: boolean }> }>
+        issues: Array<{ kind: string; group?: string }>
+      }
+    }>('settingsMenu')
+    const groups = settings.groups()
+    const view = menu.resolve(groups)
+
+    // ① 没有被 auto 兜底的 group（显式注册才算归好类）
+    const autoGroups = view.navs.flatMap((n) => n.sections.filter((s) => s.auto)).flatMap((s) => s.groups)
+    expect(autoGroups).toEqual([])
+
+    // ② 一级菜单 id / 标题都不重复
+    const ids = view.navs.map((n) => n.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const titles = view.navs.map((n) => n.title)
+    expect(new Set(titles).size).toBe(titles.length)
+
+    // 旧 settings.nav 的整页已经被菜单收编：不能再冒第二条“主题工作台 / 插件 / Agent”。
+    // 「主题工作台」是 demo-kit 的二级整页，冷启动没有 demo-kit → 一级里应当一条都没有；
+    // 另两个是真实一级项，必须恰好一条。
+    expect(titles.filter((t) => t === '主题工作台')).toHaveLength(0)
+    for (const title of ['插件', 'Agent']) {
+      expect(titles.filter((t) => t === title), title + ' 出现了重复一级入口').toHaveLength(1)
+    }
+
+    // ③ 每个真实 group 至少出现在一个 section 里（合并展示不算丢）
+    const visible = new Set(view.navs.flatMap((n) => n.sections.flatMap((s) => s.groups)))
+    expect(groups.filter((g) => !visible.has(g))).toEqual([])
+
+    host.stop()
   })
 })

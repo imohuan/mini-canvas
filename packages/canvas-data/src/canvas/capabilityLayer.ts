@@ -13,6 +13,7 @@ import type { CapabilityLayer } from '@mini-canvas/kernel'
 import { SettingsStore, SlotRegistry, isScalarField, optionValues, selectOptionEntry } from '@mini-canvas/kernel'
 import type { ConfigField, ConfigSchema, PluginScope, SettingSchema } from '@mini-canvas/kernel'
 import { buildCapabilities } from './capabilities'
+import { SettingsMenuRegistry } from './settingsMenu'
 
 /** 把 config schema 的标量字段映射成 SettingsStore 的 SettingSchema（string→text），供面板长控件。 */
 function toSettingSchema(field: ConfigField): SettingSchema {
@@ -51,7 +52,8 @@ function toSettingSchema(field: ConfigField): SettingSchema {
 export function createCanvasCapabilityLayer(): CapabilityLayer {
   const slots = new SlotRegistry()
   let settings = new SettingsStore()
-  const builtins: Record<string, unknown> = { slots, settings }
+  let settingsMenu = new SettingsMenuRegistry()
+  const builtins: Record<string, unknown> = { slots, settings, settingsMenu }
 
   /**
    * 注：`doc`（§4.1 的"画布数据那一格"）**不在本层**（步骤 5c 起）。
@@ -79,7 +81,9 @@ export function createCanvasCapabilityLayer(): CapabilityLayer {
     /** 生命周期重置：分组配置随 stop 重建（重启可重新声明）；slots 跨 stop 保留（宿主容器） */
     reset(): void {
       settings = new SettingsStore()
+      settingsMenu = new SettingsMenuRegistry()
       builtins.settings = settings
+      builtins.settingsMenu = settingsMenu
     },
     /**
      * 把插件 Config schema 的标量字段登记进 settings 单一数据源（供设置面板长控件）。

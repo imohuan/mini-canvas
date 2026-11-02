@@ -9,6 +9,7 @@
  */
 import type { CommandDef, Disposable } from '@mini-canvas/kernel'
 import type { NodeRegisterDef, SettingDefineItem, NodeAttachReq, SelectionAttachReq } from './capabilities'
+import type { SettingsMenuScope } from './settingsMenu'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
 
@@ -112,5 +113,7 @@ declare module '@mini-canvas/kernel' {
         after?: string
       }>): void
     }
+    /** 设置面板 0/1/2 级菜单注册（order / before / after / 同 id 叠层） */
+    settingsMenu: SettingsMenuScope
   }
 }

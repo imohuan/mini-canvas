@@ -8,7 +8,8 @@
 | 节点卡片里面长这样 | 案例 1 | `ctx.nodes.register` 的 `in:` 字段 | `plugin-node-text` |
 | 节点外面挂个按钮/徽标 | 案例 1 + [案例 7](/examples/bottom-bar) | `ctx.nodes.attach` | `plugin-bottom-bar` |
 | 画布上叠一层浮层 UI | [案例 2](/examples/ui-slot) | `ctx.slots.register('overlay')` | `plugin-cursor-effect` |
-| 设置面板多一页（自绘） | 案例 2 | `settingsNav` + `settingsGroup/<id>` | `plugin-cursor-effect` |
+| 设置面板多一页（自绘） | 案例 2 | `ctx.settingsMenu.nav/section` + `settingsGroup/<id>` | `plugin-cursor-effect` |
+| 设置菜单分几个 0/1/2 级、调前后顺序 | [设置面板](/plugins/theme-components/plugin-settings-content) | `ctx.settingsMenu` + `order` / `before` / `after` | `plugin-theme-default` |
 | 快捷键触发动作 | [案例 3](/examples/command-shortcut) | `ctx.commands.register({ keys })` | `plugin-mini-map` |
 | 设置面板多几个配置项 | [案例 4](/examples/config-panel) | 模块级 `Config` schema | `plugin-mini-map` |
 | 配置一改画布立刻变 | 案例 4 | `Config` + `bindTypeDefaultSize` / `onChange` | `plugin-node-text` |

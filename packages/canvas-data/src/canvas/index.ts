@@ -64,6 +64,21 @@ export type {
 
 export { Context, canvasCapabilityLayer } from './context'
 
+// 设置菜单：0/1/2 级由插件各自注册；order 小者赢并排前面，before/after 只改位置
+export { SettingsMenuRegistry } from './settingsMenu'
+export type {
+  SettingsCategoryDef,
+  SettingsNavDef,
+  SettingsSectionDef,
+  SettingsMenuCategory,
+  SettingsMenuNav,
+  SettingsMenuSection,
+  SettingsMenuIssue,
+  SettingsMenuIssueKind,
+  SettingsMenuView,
+  SettingsMenuScope,
+} from './settingsMenu'
+
 export { NodeRegistry } from './registry/nodeRegistry'
 export type { NodePresentation, NodeSegment, NodeSegmentContribution } from './registry/nodeRegistry'
 export {

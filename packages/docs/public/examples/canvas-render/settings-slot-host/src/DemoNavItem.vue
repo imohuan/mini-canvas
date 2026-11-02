@@ -1,6 +1,6 @@
 <!-- 文件：packages/docs/public/examples/canvas-render/settings-slot-host/src/DemoNavItem.vue -->
-     格式：Vue 单文件组件（挂在 settingsNav 槽，被设置面板的左导航渲染）
-     位置：插件包内部；它声明 props.settings 就能拿到统一设置数据源 -->
+     兼容示例：旧 settings.nav 槽的自绘导航项；新插件优先用 ctx.settingsMenu
+     位置：插件包内部；仍由设置面板渲染，但外观要自己画 -->
 <script setup lang="ts">
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 

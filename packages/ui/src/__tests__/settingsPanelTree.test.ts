@@ -129,7 +129,9 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
 describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行', () => {
   it('每个二级小节一张卡片；默认模式不按页签只显示当前段', () => {
     expect(SRC).toMatch(/v-for="section in sections"/)
-    expect(SRC).toMatch(/<ShadcnSettingsSection :title="section.label">/)
+    // 自绘整页（pageGroup 归到二级节）走 .asp-section-page；普通小节仍是一张卡片
+    expect(SRC).toMatch(/<ShadcnSettingsSection v-else :title="section.label">/)
+    expect(SRC).toMatch(/class="asp-section-page"/)
     expect(CODE).toMatch(/const activeEntry = computed<NavEntry \| undefined>/)
   })
 

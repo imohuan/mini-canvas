@@ -6,7 +6,7 @@
  * 关闭仍走外壳的 settings:ui-close 事件。
  *
  * 结构（用户口径 2026-11-01）：
- * - 左：第 0 级分类（个人 / 集成 / 画布 / 开发）+ 分类下的一级图标菜单。
+ * - 左：第 0 级分类（菜单注册；默认 个人 / 外观 / 集成 / 画布 / 开发）+ 分类下的一级图标菜单。
  * - 右：一级标题 → 二级小标题 + 卡片（卡片内每行之间一条分割线）。
  * - 顶部页签条保留代码，但默认隐藏；宿主显式传 show-section-tabs 才出现。
  *
@@ -18,6 +18,7 @@
  */
 import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { Component } from 'vue'
+import type { SettingsMenuView } from '@mini-canvas/canvas-data'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import DefaultSettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
@@ -28,11 +29,15 @@ import {
   categoryOf,
   metaIcon,
   metaPage,
+  metaPageGroup,
   metaText,
   SETTINGS_NAV_CATEGORY_FIELD,
 } from './navCategory'
 import { useUiComponentOutside } from '../../composables/ui'
 import { createSettingsFieldBridge } from './settingsFieldBridge'
+
+/** 主题工作台是两栏工作区，需要比普通设置页更宽的正文（仍是设置外壳内的同一页）。 */
+const THEME_STUDIO_NAV = '主题工作台'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SlotOcc = { id: string; order: number; component: any; meta?: any }
@@ -132,14 +137,26 @@ const sectionMap = computed<Map<string, string[]>>(() => {
 interface NavEntry {
   key: string
   kind: 'section' | 'nav'
+  /** 该一级下的二级段（菜单注册顺序优先；旧分组按原顺序兜底） */
+  sections: MenuSection[]
   leaves: string[]
   component?: Component
   /** 插件自绘整页（优先于 settingsGroup） */
   page?: Component
   title: string
   category: string
+  /** 第 0 级分类在菜单里的最终位置（缺省按内置顺序） */
+  categoryPosition?: number
   icon?: unknown
-  order: number
+}
+
+/** 一个二级段：显示名 + 它收拢的配置分组（一个段可合并多个 group） */
+interface MenuSection {
+  key: string
+  label: string
+  groups: string[]
+  /** 插件自绘整页（旧 settings.nav 的 meta.page，按 pageGroup 归到这一节） */
+  page?: Component
 }
 
 /** 第 0 级分类场域：按一级名登记，插件可覆盖默认归类 */
@@ -155,25 +172,114 @@ function categoryFor(nav: string, meta?: unknown): string {
   return categoryOf(nav, metaText(meta, 'category'), typeof registered === 'string' ? registered : '')
 }
 
+/** 0/1/2 级菜单：以插件注册的新菜单为准，旧分组只补未注册项 */
+const settingsMenu = ctx.tryGet<{
+  resolve(groups: readonly string[]): SettingsMenuView
+  subscribe?(fn: () => void): { dispose(): void }
+}>('settingsMenu')
+const menuTick = ref(0)
+if (settingsMenu?.subscribe) {
+  disposers.push(settingsMenu.subscribe(() => void (menuTick.value += 1)))
+}
+
+const menuView = computed<SettingsMenuView>(() => {
+  void menuTick.value
+  return settingsMenu?.resolve(groups.value) ?? { categories: [], navs: [], issues: [] }
+})
+
 /** 分组推导的一级项 + 插件导航项（命中默认项就顶替外观，否则追加） */
 const navEntries = computed<NavEntry[]>(() => {
   const out: NavEntry[] = []
-  let index = 0
+  const used = new Set<string>()
+  const sorted = [...navList.value].sort((a, b) => a.order - b.order)
+  /** 哪些 key 来自菜单树：它们的标题 / 分类由菜单决定，旧槽只补 page 与 component */
+  const menuKeys = new Set(menuView.value.navs.map((nav) => nav.id))
+  /** 分类名 → 菜单位置：旧入口也按所在分类的最终位置排，不因没有菜单项而掉到最后 */
+  const categoryPositions = new Map(menuView.value.categories.map((c) => [c.title, c.position]))
+
+  // 新菜单：order / before / after 已由设置菜单注册场排好
+  for (const nav of menuView.value.navs) {
+    const occ =
+      sorted.find((o) => o.id === nav.id) ??
+      sorted.find((o) => !used.has(o.id) && metaText(o.meta, 'title') === nav.title)
+    if (occ) used.add(occ.id)
+    const navSections: MenuSection[] = []
+    for (const section of nav.sections) {
+      const hit = section.groups.filter((group) => sectionMap.value.has(group))
+      if (!hit.length) continue
+      navSections.push({
+        key: section.id,
+        label: section.title,
+        groups: hit,
+      })
+    }
+    // 旧 settings.nav 的 pageGroup：整页归到对应二级节，不再额外长出一级入口
+    for (const item of sorted) {
+      if (used.has(item.id)) continue
+      const group = metaPageGroup(item.meta)
+      if (!group) continue
+      const section = navSections.find((s) => s.groups.includes(group))
+      const page = metaPage(item.meta) as Component | undefined
+      if (!section || !page) continue
+      section.page = page
+      used.add(item.id)
+    }
+    const leaves = navSections.flatMap((section) => section.groups)
+    const page = (nav.page ?? metaPage(occ?.meta)) as Component | undefined
+    if (!leaves.length && !page && !occ) continue
+    const category = menuView.value.categories.find((c) => c.id === nav.category)
+    out.push({
+      key: nav.id,
+      kind: page || occ ? 'nav' : 'section',
+      sections: navSections,
+      leaves,
+      component: occ?.component as Component | undefined,
+      page,
+      title: nav.title,
+      category: category?.title ?? categoryFor(nav.title, occ?.meta),
+      ...(category ? { categoryPosition: category.position } : {}),
+      icon: nav.icon ?? metaIcon(occ?.meta) ?? iconOf(nav.title),
+    })
+  }
+
+  // 旧分组兜底：没有菜单注册的配置仍按第一个 / 分段聚合，绝不隐藏
+  const covered = new Set(
+    out.flatMap((entry) => entry.sections.flatMap((section) => section.groups)),
+  )
   for (const [nav, leaves] of sectionMap.value) {
+    const uncovered = leaves.filter((g) => !covered.has(g))
+    if (!uncovered.length) continue
+    const category = categoryFor(nav)
     out.push({
       key: nav,
       kind: 'section',
-      leaves,
+      sections: uncovered.map((group) => ({
+        key: group,
+        label: leafLabelOf(group),
+        groups: [group],
+      })),
+      leaves: uncovered,
       title: nav,
-      category: categoryFor(nav),
-      order: 100 + index,
+      category,
+      ...(categoryPositions.has(category) ? { categoryPosition: categoryPositions.get(category) } : {}),
     })
-    index += 1
   }
+
   const byKey = new Map(out.map((entry) => [entry.key, entry]))
   const byTitle = new Map(out.map((entry) => [entry.title, entry]))
   const extras: NavEntry[] = []
-  for (const occ of [...navList.value].sort((a, b) => a.order - b.order)) {
+  for (const occ of sorted) {
+    if (used.has(occ.id)) continue
+    const pageGroup = metaPageGroup(occ.meta)
+    if (pageGroup && covered.has(pageGroup)) {
+      const host = out.find((entry) =>
+        entry.sections.some((section) => section.groups.includes(pageGroup) && section.page),
+      )
+      if (host) {
+        used.add(occ.id)
+        continue
+      }
+    }
     const title = metaText(occ.meta, 'title')
     const hit = byKey.get(occ.id) ?? (title ? byTitle.get(title) : undefined)
     if (hit) {
@@ -181,24 +287,32 @@ const navEntries = computed<NavEntry[]>(() => {
       hit.component = occ.component as Component
       hit.page = metaPage(occ.meta) as Component | undefined
       hit.icon = metaIcon(occ.meta)
-      // 命中默认项时，导航项 meta 里的分类优先；没写就沿用默认归类
+      // 旧入口命中旧分组项时，导航项 meta 里的分类优先；菜单项的分类仍由菜单决定
+      if (menuKeys.has(hit.key)) continue
       const metaCategory = metaText(occ.meta, 'category')
-      if (metaCategory) hit.category = metaCategory
+      if (metaCategory) {
+        hit.category = metaCategory
+        const position = categoryPositions.get(metaCategory)
+        if (position !== undefined) hit.categoryPosition = position
+      }
       continue
     }
+    const category = categoryFor(title || leafLabelOf(occ.id), occ.meta)
     extras.push({
       key: occ.id,
       kind: 'nav',
+      sections: [],
       leaves: [],
       component: occ.component as Component,
       page: metaPage(occ.meta) as Component | undefined,
       title: title || leafLabelOf(occ.id),
-      category: categoryFor(title || leafLabelOf(occ.id), occ.meta),
+      category,
+      ...(categoryPositions.has(category) ? { categoryPosition: categoryPositions.get(category) } : {}),
       icon: metaIcon(occ.meta),
-      order: occ.order,
     })
   }
   out.push(...extras)
+  // 菜单树已经按 order + before / after 排好；这里保持该顺序，不再按原始 order 重排。
   return out
 })
 
@@ -208,6 +322,7 @@ const navItems = computed(() =>
     key: entry.key,
     label: entry.title,
     category: entry.category,
+    ...(entry.categoryPosition !== undefined ? { categoryPosition: entry.categoryPosition } : {}),
     icon: entry.icon ?? iconOf(entry.key),
     page: entry.page,
   })),
@@ -222,13 +337,18 @@ interface Section {
   key: string
   label: string
   kind: 'leaf' | 'tab'
+  /** 这一段收拢的 Config.group（合并段可能有多个） */
+  groups: string[]
+  /** 插件自绘整页（pageGroup 归到这一节时使用） */
+  page?: Component
   component?: Component
 }
 
-/** 当前一级下的段：默认分组 + 插件页签 */
+/** 当前一级下的段：菜单 section 优先；未注册的旧分组按原顺序兜底 */
 const sections = computed<Section[]>(() => {
   const nav = activeNav.value
-  const leaves = sectionMap.value.get(nav) ?? []
+  const entry = activeEntry.value
+  const leaves = entry?.leaves ?? sectionMap.value.get(nav) ?? []
   const occs = tabList.value
     .filter((occ) => occ.id === nav || occ.id.startsWith(nav + SEP))
     .sort((a, b) => a.order - b.order)
@@ -238,17 +358,38 @@ const sections = computed<Section[]>(() => {
     if (leaves.includes(occ.id)) byLeaf.set(occ.id, occ)
     else customs.push(occ)
   }
-  const out: Section[] = leaves.map((leaf) => {
-    const occ = byLeaf.get(leaf)
-    return occ
-      ? { key: leaf, label: leafLabelOf(leaf), kind: 'tab', component: occ.component as Component }
-      : { key: leaf, label: leafLabelOf(leaf), kind: 'leaf' }
+  // 菜单注册的 section 顺序（含合并组）；旧分组没被收拢时再按 sectionMap 原顺序补
+  const merged = new Set((entry?.sections ?? []).flatMap((section) => section.groups))
+  const menuSections: Section[] = (entry?.sections ?? []).map((section) => {
+    const occ = section.groups.length === 1 ? byLeaf.get(section.groups[0]!) : undefined
+    return {
+      key: section.key,
+      label: section.label,
+      kind: occ ? 'tab' : 'leaf',
+      groups: section.groups,
+      ...(section.page ? { page: section.page } : {}),
+      ...(occ ? { component: occ.component as Component } : {}),
+    }
   })
+  const legacy: Section[] = leaves
+    .filter((leaf) => !merged.has(leaf))
+    .map((leaf) => {
+      const occ = byLeaf.get(leaf)
+      return {
+        key: leaf,
+        label: leafLabelOf(leaf),
+        kind: occ ? ('tab' as const) : ('leaf' as const),
+        groups: [leaf],
+        ...(occ ? { component: occ.component as Component } : {}),
+      }
+    })
+  const out: Section[] = [...menuSections, ...legacy]
   for (const occ of customs) {
     out.push({
       key: occ.id,
       label: metaText(occ.meta, 'title') || leafLabelOf(occ.id),
       kind: 'tab',
+      groups: [],
       component: occ.component as Component,
     })
   }
@@ -405,8 +546,8 @@ function slotMode(occ: SlotOcc): 'replace' | 'prepend' | 'append' {
 }
 
 type ContentBlock =
-  | { kind: 'field'; key: string }
-  | { kind: 'slot'; occ: SlotOcc }
+  | { kind: 'field'; key: string; group: string }
+  | { kind: 'slot'; occ: SlotOcc; group: string }
 
 function blocksOf(groupKey: string): ContentBlock[] {
   void occTick.value
@@ -417,16 +558,25 @@ function blocksOf(groupKey: string): ContentBlock[] {
     meta: entry.meta,
   }))
   const fields = props.settings.groupOf(groupKey)
-  if (!occs.length) return fields.map((item) => ({ kind: 'field' as const, key: item.key }))
+  if (!occs.length) {
+    return fields.map((item) => ({ kind: 'field' as const, key: item.key, group: groupKey }))
+  }
   const coexist = occs.some((occ) => slotMode(occ) !== 'replace')
   const sorted = (mode: string): SlotOcc[] =>
     occs.filter((occ) => slotMode(occ) === mode).sort((a, b) => a.order - b.order)
   const blocks: ContentBlock[] = []
-  blocks.push(...sorted('prepend').map((occ) => ({ kind: 'slot' as const, occ })))
-  if (coexist) blocks.push(...fields.map((item) => ({ kind: 'field' as const, key: item.key })))
-  blocks.push(...sorted('replace').map((occ) => ({ kind: 'slot' as const, occ })))
-  blocks.push(...sorted('append').map((occ) => ({ kind: 'slot' as const, occ })))
+  blocks.push(...sorted('prepend').map((occ) => ({ kind: 'slot' as const, occ, group: groupKey })))
+  if (coexist) {
+    blocks.push(...fields.map((item) => ({ kind: 'field' as const, key: item.key, group: groupKey })))
+  }
+  blocks.push(...sorted('replace').map((occ) => ({ kind: 'slot' as const, occ, group: groupKey })))
+  blocks.push(...sorted('append').map((occ) => ({ kind: 'slot' as const, occ, group: groupKey })))
   return blocks
+}
+
+/** 一个二级段可能合并多个 Config.group；字段与内容槽按段的 group 顺序串起来。 */
+function sectionBlocks(section: Section): ContentBlock[] {
+  return section.groups.flatMap((group) => blocksOf(group))
 }
 
 /** 点击页签：只切内容；同一页里的长内容回到顶部 */
@@ -488,7 +638,11 @@ function selectTab(key: string): void {
 
       <div ref="scrollEl" class="asp-body">
         <!-- 插件自绘整页：只换外层标题，内部内容仍归插件（业务逻辑不动） -->
-        <div v-if="activeEntry?.page" class="asp-page">
+        <div
+          v-if="activeEntry?.page"
+          class="asp-page"
+          :class="{ 'is-wide': activeEntry.key === THEME_STUDIO_NAV || activeEntry.leaves.includes(THEME_STUDIO_NAV) }"
+        >
           <component :is="activeEntry.page" :group="activeEntry.key" :settings="props.settings" />
         </div>
 
@@ -502,26 +656,33 @@ function selectTab(key: string): void {
             class="asp-section"
             :data-sec="section.key"
           >
-            <ShadcnSettingsSection :title="section.label">
+            <div
+              v-if="section.page"
+              class="asp-section-page"
+              :class="{ 'is-wide': section.groups.includes(THEME_STUDIO_NAV) }"
+            >
+              <component :is="section.page" :group="section.groups[0]" :settings="props.settings" />
+            </div>
+            <ShadcnSettingsSection v-else :title="section.label">
               <template
-                v-for="block in blocksOf(section.key)"
-                :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id"
+                v-for="block in sectionBlocks(section)"
+                :key="block.kind === 'field' ? 'f-' + block.group + '-' + block.key : 's-' + block.occ.id"
               >
                 <component
                   :is="FieldRenderer"
                   v-if="block.kind === 'field'"
-                  :group="section.key"
+                  :group="block.group"
                   :field-key="block.key"
                   :settings="props.settings"
                 />
                 <component
                   v-else
                   :is="block.occ.component"
-                  :group="section.key"
+                  :group="block.group"
                   :settings="props.settings"
                 />
               </template>
-              <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
+              <p v-if="!sectionBlocks(section).length" class="asp-empty-line">这个分组还没有可配置项</p>
             </ShadcnSettingsSection>
           </section>
         </template>
@@ -535,26 +696,33 @@ function selectTab(key: string): void {
             class="asp-section"
             :data-sec="section.key"
           >
-            <ShadcnSettingsSection :title="section.label">
+            <div
+              v-if="section.page"
+              class="asp-section-page"
+              :class="{ 'is-wide': section.groups.includes(THEME_STUDIO_NAV) }"
+            >
+              <component :is="section.page" :group="section.groups[0]" :settings="props.settings" />
+            </div>
+            <ShadcnSettingsSection v-else :title="section.label">
               <template
-                v-for="block in blocksOf(section.key)"
-                :key="block.kind === 'field' ? 'f-' + block.key : 's-' + block.occ.id"
+                v-for="block in sectionBlocks(section)"
+                :key="block.kind === 'field' ? 'f-' + block.group + '-' + block.key : 's-' + block.occ.id"
               >
                 <component
                   :is="FieldRenderer"
                   v-if="block.kind === 'field'"
-                  :group="section.key"
+                  :group="block.group"
                   :field-key="block.key"
                   :settings="props.settings"
                 />
                 <component
                   v-else
                   :is="block.occ.component"
-                  :group="section.key"
+                  :group="block.group"
                   :settings="props.settings"
                 />
               </template>
-              <p v-if="!blocksOf(section.key).length" class="asp-empty-line">这个分组还没有可配置项</p>
+              <p v-if="!sectionBlocks(section).length" class="asp-empty-line">这个分组还没有可配置项</p>
             </ShadcnSettingsSection>
           </section>
         </template>
@@ -667,11 +835,30 @@ function selectTab(key: string): void {
 
 .asp-section {
   max-width: 760px;
+  margin-bottom: 18px;
 }
 
 .asp-page {
   max-width: 760px;
   padding: 4px 0 8px;
+}
+
+/* pageGroup 归到二级节的自绘整页（如主题工作台）：与一级整页同一套宽版规则 */
+.asp-section-page {
+  max-width: 760px;
+  padding: 4px 0 8px;
+}
+
+.asp-section-page.is-wide {
+  max-width: none;
+  margin-right: -22px;
+}
+
+/* 自绘整页（如主题工作台）用两栏工作区：太窄会把预览挤成一条，正文也放不下四列颜色。
+   贴齐正文左缘、不压掉 22px 阅读留白。 */
+.asp-page.is-wide {
+  max-width: none;
+  margin-right: -22px;
 }
 
 .asp-empty {

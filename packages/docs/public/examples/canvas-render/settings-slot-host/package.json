@@ -5,7 +5,7 @@
   "type": "module",
   "miniCanvas": {
     "title": "面板演示",
-    "description": "演示 overlay 浮层 + 设置页导航/正文三处槽位",
+    "description": "演示 overlay 浮层 + 设置菜单/正文",
     "pluginName": "panel-demo",
     "installable": true
   },

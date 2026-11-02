@@ -3,7 +3,6 @@
 // 位置：一个可安装插件包的源码入口
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import DemoOverlay from './DemoOverlay.vue'
-import DemoNavItem from './DemoNavItem.vue'
 import DemoSettingsPage from './DemoSettingsPage.vue'
 
 export const name = 'panel-demo'
@@ -18,11 +17,12 @@ export function apply(ctx: Context): void {
     meta: { title: '缩放角标' },
   })
 
-  // ③ 设置面板左导航：一条导航项（默认设置皮读 settingsNav 槽）
-  ctx.slots.register('settingsNav', {
-    id: 'panel-demo/nav',
-    order: 50,
-    component: DemoNavItem,
+  // ③ 设置菜单：声明「个人 → 我的演示」；左导航外观由面板统一画
+  ctx.settingsMenu.nav({
+    id: 'nav/personal/demo', category: 'category/personal', title: '我的演示', order: 60,
+  })
+  ctx.settingsMenu.section({
+    id: 'section/personal/demo', nav: 'nav/personal/demo', title: '我的演示', group: '我的演示', order: 10,
   })
 
   // ④ 设置页正文：进键形如 settingsGroup/<一级名>，与③的名称一致

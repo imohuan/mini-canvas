@@ -38,7 +38,7 @@ export const Config = {
     type: 'string' as const,
     default: '',
     label: '后端地址',
-    group: 'Agent',
+    group: '集成/Agent',
     description: 'cloud-server 的根地址。留空 = 与画布同源（cloud-server 托管界面时就是这样）。
   },
 }
@@ -69,12 +69,20 @@ export function apply(ctx: Context): void {
     component: markRaw(AgentConversation),
   })
 
-  // ④ 设置面板：「Agent」一级导航 + 整页正文。分组名必须与 Config 的 group 同名，
-  //    面板才会把这一页接上（有导航没分组 → 右侧空白）。
-  ctx.slots.register('settings.nav', {
-    id: 'agent/nav', order: 5, component: markRaw(AgentNav), meta: { group: 'Agent' },
+  // ④ 设置面板：注册「集成 → Agent」菜单项，并给出整页正文。
+  //    ctx.settingsMenu 只声明层级；整页可由 nav.page 提供，也可继续用 settingsGroup 挂。
+  ctx.settingsMenu.nav({
+    id: 'nav/integration/agent',
+    category: 'category/integration',
+    title: 'Agent',
+    order: 10,
+    page: markRaw(AgentPage),
   })
-  ctx.slots.register('settingsGroup/Agent', { id: 'agent/page', order: 5, component: markRaw(AgentPage) })
+  ctx.slots.register('settings.nav', {
+    id: 'agent/nav', order: 5, component: markRaw(AgentNav),
+    meta: { title: 'Agent', category: '集成', page: markRaw(AgentPage) },
+  })
+  ctx.slots.register('settingsGroup/集成/Agent', { id: 'agent/page', order: 5, component: markRaw(AgentPage) })
 
   // ⑤ 多选框的上控制栏挂「引用到 Agent」：与「加入资产库」同一条接缝（selection/region 场）。
   //    needs: ['selection'] → 组件按名取选中集，多选插件零改动。
@@ -166,7 +174,7 @@ HTTP 路由收到 `{canvasId, text}` → 先跑中间件链（可改写 text / �
 | 这篇里的做法 | 真实文件 | 真实行为 |
 | --- | --- | --- |
 | 服务包 reactive 再上架 | `packages/plugins/plugin-agent/src/agentPlugin.ts` | `ctx.inject('agent', reactive(service))`，注释记了不包的后果 |
-| 内容槽 + 设置页两个槽 | 同上 | `agent-conversation` / `settingsNav` / `settingsGroup/Agent` 三处注册 |
+| 内容槽 + 设置页 | 同上 | `agent-conversation` / `ctx.settingsMenu.nav` / `settingsGroup/集成/Agent` |
 | 引用按钮挂多选框 | 同上 | `ctx.selectionRegion.attach({ region:'out:top', needs:['selection'] })` |
 | `mod+j` 与 `areas:['node']` 命令 | 同上 | `agent:toggle` 与 `AGENT_REFERENCE_COMMAND_ID` |
 | 与后台的唯一对话通道 | `packages/plugins/plugin-agent/src/agentApi.ts` | AgentApi 类，SSE 流式收 ChatEvent |
@@ -175,6 +183,7 @@ HTTP 路由收到 `{canvasId, text}` → 先跑中间件链（可改写 text / �
 ## 常见坑
 
 1. **服务不包 reactive**：宿主读状态不重算（实测踩过，真实插件注释里写了）。
-2. **设置页只注册 settingsNav 不声明同名 group**：右侧内容区空白 —— 导航 id 必须与一个 Config 分组名一致。
+2. **设置页只注册菜单、不声明真实分组**：右侧内容区空白。菜单的 section 要么给真实
+   `Config.group`，要么 nav 直接给 `page`；旧 `settings.nav` 入口仍要命中一个分组首段。
 3. **把外壳做进插件**：停靠要挤画布宽度，插件够不到宿主绑定；内容归插件、外壳归宿主。
 4. **自己绑 window 键盘事件**：快捷键一律走 `commands.register({ keys })`，渲染层统一分发 —— 自己绑会和别的插件抢。

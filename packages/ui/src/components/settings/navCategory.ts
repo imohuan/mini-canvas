@@ -11,7 +11,9 @@ export {
   SETTINGS_NAV_CATEGORY_FIELD,
   categoryOf,
   categoryRank,
+  compareSettingsCategory,
   metaIcon,
   metaPage,
+  metaPageGroup,
   metaText,
 } from '@mini-canvas/plugin-theme-default/components/settings/navCategory.js'

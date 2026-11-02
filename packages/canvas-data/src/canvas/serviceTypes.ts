@@ -16,6 +16,7 @@
  * import 整个渲染包（或手写窄端口，类型对错全靠人抄）。契约是结构类型，故放上游不引入反向依赖。
  */
 import type { SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsMenuRegistry } from './settingsMenu'
 import type { DocService } from '../docService'
 import type { SelectionService } from '../selection'
 import type { ResourceService } from '../resourceService'
@@ -38,6 +39,8 @@ export interface NodeToolbarContract {
 
 declare module '@mini-canvas/kernel' {
   interface Services {
+    /** 设置菜单注册表：0/1/2 级菜单 + order / before / after 解析 */
+    settingsMenu: SettingsMenuRegistry
     /** 文档门面：节点 + 边 + 事务 + 撤销 + 快照 + 订阅（5c 起四个老名合并成这一个） */
     doc: DocService
     /** 选中态 */
