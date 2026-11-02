@@ -12,8 +12,8 @@
 import { computed } from 'vue'
 import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { Button } from '@mini-canvas/ui-kit-shadcn'
-import { endSplit, splitState } from './splitSession'
-import { publishCells, publishDepsOf } from './publish'
+import { beginPublish, endPublish, endSplit, splitState } from './splitSession'
+import { finishSplitPublish, publishCells, publishDepsOf } from './publish'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
@@ -28,10 +28,6 @@ const ICON_STORYBOARD =
 const ICON_SEND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/><path d="M18 4h2v16h-2"/></svg>'
 
-function notify(text: string): void {
-  ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify(text, { followPointer: true, durationMs: 0 })
-}
-
 function exit(): void {
   endSplit(props.id)
   ctx.tryGet<{ exit?(nodeId: string): void } | undefined>('nodeToolbar')?.exit?.(props.id)
@@ -40,24 +36,37 @@ function exit(): void {
 async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
   const s = state.value
   if (!s || publishing.value) return
+  // 防双击：真正置 publishing 锁（以前只读 state.publishing，却没人写它）。
+  if (!beginPublish(props.id)) return
   const deps = publishDepsOf(ctx)
   if (!deps) {
-    notify('发布不可用：当前宿主缺少数据层服务')
+    endPublish(props.id)
     return
   }
   const ids = [...s.selected].sort((a, b) => a - b)
   if (ids.length === 0) {
-    notify('先勾选要发送的格子（点图片上的格子）')
+    endPublish(props.id)
     return
   }
-  const result = await publishCells(deps, props.id, s.rows, s.cols, ids, kind)
+  let result: Awaited<ReturnType<typeof publishCells>>
+  try {
+    result = await publishCells(deps, props.id, s.rows, s.cols, ids, kind)
+  } catch {
+    endPublish(props.id)
+    return
+  }
   if (!result.ok) {
-    notify(result.reason || '发送失败')
+    endPublish(props.id)
     return
   }
-  notify(kind === 'storyboard'
-    ? (result.containerId ? '分镜组已创建（' + result.count + ' 格）' : '已发送 ' + result.count + ' 格，打组失败')
-    : '已发送 ' + result.count + ' 格到画布')
+  // 用户口径 2026-11-02：建节点成功就退出切分，恢复默认状态栏。
+  // 先解发布锁再退出：退出会清会话，锁要跟着一起消失，不能把“正在发布”带到下一次。
+  endPublish(props.id)
+  finishSplitPublish(
+    { endSplit, toolbar: ctx.tryGet<{ exit?(nodeId: string): void } | undefined>('nodeToolbar') },
+    props.id,
+    true,
+  )
 }
 </script>
 

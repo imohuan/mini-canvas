@@ -54,9 +54,14 @@ interface HoverState {
   slotIndex: number
   /** 获胜分镜组 id */
   boardId: string
+  /**
+   * 类型不合法（拖的不是图片）：此时只高亮分镜组背景，不进入槽位高亮。
+   * 用户口径 2026-11-02：类型检查没过，下一步的插槽高亮就不该出现。
+   */
+  invalid: boolean
 }
 /** 分镜组底板（StoryboardGrid.vue）订阅这份状态做高亮 */
-const hover = reactive<HoverState>({ nodeId: '', slotIndex: -1, boardId: '' })
+const hover = reactive<HoverState>({ nodeId: '', slotIndex: -1, boardId: '', invalid: false })
 
 /** 组件读当前悬停（只读） */
 export function storyboardHover(): Readonly<HoverState> {
@@ -68,6 +73,41 @@ function clearHover(): void {
   hover.nodeId = ''
   hover.slotIndex = -1
   hover.boardId = ''
+  hover.invalid = false
+}
+
+/** 拖拽提示的 source：只撤自己这条，不碰其它插件的 tip */
+const REJECT_TIP_SOURCE = 'image-grid-split/storyboard-reject'
+/** 当前 tip 的撤回函数（null = 没显示） */
+let rejectTipOff: (() => void) | null = null
+/** 是否已显示（服务没返回撤回函数时也能防重复入队） */
+let rejectTipShown = false
+
+/**
+ * 显示“分镜组只收图片节点”的跟随鼠标 tip。
+ *
+ * 用户口径 2026-11-02：拖拽时类型不对要**立即提醒**，并且提示跟着鼠标走；
+ * 移开分镜组或松手时由 hideRejectTip 立即撤掉。durationMs = 0 表示常驻，
+ * 不靠 2.6 秒自动过期（否则用户还停在组上提示就没了）。
+ */
+function showRejectTip(ctx: Context): void {
+  if (rejectTipShown) return
+  rejectTipShown = true
+  const canvas = ctx.tryGet<{ notify?(m: string, o?: object): (() => void) | void } | undefined>('canvas')
+  const off = canvas?.notify?.('分镜组只收图片节点', {
+    source: REJECT_TIP_SOURCE,
+    followPointer: true,
+    durationMs: 0,
+    once: true,
+  })
+  rejectTipOff = typeof off === 'function' ? off : null
+}
+
+/** 撤掉拖拽提示（移出分镜组 / 松手 / 插件卸载时都要调） */
+function hideRejectTip(): void {
+  rejectTipShown = false
+  rejectTipOff?.()
+  rejectTipOff = null
 }
 
 /** 分镜组节点在画布上的矩形（绝对坐标） */
@@ -80,6 +120,26 @@ function boardRectOf(layout: LayoutPort | undefined, node: NodeLike): { x: numbe
     w: node.size?.w ?? 480,
     h: node.size?.h ?? 360,
   }
+}
+
+/**
+ * 拖动矩形的尺寸：先用节点自己的 size，没有再取画布实测矩形。
+ *
+ * 为什么要兜底（用户实测 2026-11-02）：文字节点的 data 里没有尺寸，
+ * store 也不写 size，卡片大小是类型默认值（300×200）。
+ * 以前 `node.size ?? 0` 会得到 0×0 的矩形，和分镜组永远不相交 ——
+ * 于是拖文字进分镜组时既不提示、也不标记拒绝态。
+ */
+function dragSizeOf(
+  node: NodeLike,
+  layout: LayoutPort | undefined,
+): { w: number; h: number } {
+  const sw = node.size?.w ?? 0
+  const sh = node.size?.h ?? 0
+  if (sw > 0 && sh > 0) return { w: sw, h: sh }
+  const rect = layout?.getNodeRect?.(node.id)
+  if (rect && rect.w > 0 && rect.h > 0) return { w: rect.w, h: rect.h }
+  return { w: sw, h: sh }
 }
 
 /** 把「槽位矩形（相对分镜组）」换算成子节点应写的位置（相对父） */
@@ -218,7 +278,8 @@ export function storyboardHitAt(
   const boards = collectBoards(doc, layout)
   if (boards.length === 0) return null
   const currentBoardId = node.parentId && boards.some((b) => b.id === node.parentId) ? node.parentId : null
-  const dragRect = { x: payload.position.x, y: payload.position.y, w: node.size?.w ?? 0, h: node.size?.h ?? 0 }
+  const size = dragSizeOf(node, layout)
+  const dragRect = { x: payload.position.x, y: payload.position.y, w: size.w, h: size.h }
   const decision = decideSnap({
     nodeId: node.id,
     center: { x: payload.position.x, y: payload.position.y },
@@ -297,7 +358,8 @@ function dropInto(
    * 目标槽判定：**交叉面积最大者获胜**（用户口径 2026-10-30）。
    * 拖动矩形 = NodeDrag/NodeDragEnd 事件给的左上角 + 节点尺寸；缺尺寸退化中心点。
    */
-  const dragRect = { x: payload.position.x, y: payload.position.y, w: node.size?.w ?? 0, h: node.size?.h ?? 0 }
+  const dragSize = dragSizeOf(node, layout)
+  const dragRect = { x: payload.position.x, y: payload.position.y, w: dragSize.w, h: dragSize.h }
   const decision = decideSnap({
     nodeId: node.id,
     center: { x: payload.position.x, y: payload.position.y },
@@ -558,6 +620,31 @@ function scheduleGhostSweep(ctx: Context, delays: number[] = [60, 200, 600]): vo
 }
 
 /**
+ * 提示的同一套兜底：拖拽被浏览器/宿主动作打断时，drag-end 可能不来，
+ * 只靠事件清 tip 会留下一条跟随鼠标的常驻提醒（用户实测问题）。
+ *
+ * 指针抬起 / 窗口失焦 / 取消拖拽都是浏览器级信号，出现就说明这次拖动已经结束，
+ * 无条件收掉本插件的 tip。只清自己的 source，不影响其它插件正在显示的提示。
+ */
+let tipSweepBound = false
+const tipSweepListeners: Array<() => void> = []
+function bindGlobalTipSweep(): void {
+  if (tipSweepBound || typeof window === 'undefined') return
+  tipSweepBound = true
+  const onUp = (): void => hideRejectTip()
+  window.addEventListener('pointerup', onUp, true)
+  window.addEventListener('mouseup', onUp, true)
+  window.addEventListener('blur', onUp, true)
+  window.addEventListener('dragend', onUp, true)
+  tipSweepListeners.push(() => {
+    window.removeEventListener('pointerup', onUp, true)
+    window.removeEventListener('mouseup', onUp, true)
+    window.removeEventListener('blur', onUp, true)
+    window.removeEventListener('dragend', onUp, true)
+  })
+}
+
+/**
  * 全局「指针抬起 / 窗口失焦」兜底（用户口径 2026-10-31：边缘情况下透明度清不掉）。
  *
  * 为什么不能只挂在 drag-end 上：那个事件由宿主在拖拽结束时发，一旦这次手势被
@@ -593,6 +680,9 @@ export function disposeGhostSweep(): void {
   sweepTimers.length = 0
   for (const off of sweepListeners.splice(0)) off()
   globalSweepBound = false
+  for (const off of tipSweepListeners.splice(0)) off()
+  tipSweepBound = false
+  hideRejectTip()
 }
 
 /** 脱离分镜组：清父级、**绝对坐标**、还原尺寸、从 slots 里摘掉。
@@ -629,10 +719,11 @@ export function onStoryboardDragEnd(
   ctx: Context,
   // 回调要带落地坐标：调用方判断「有没有真的压在分镜组上」得用同一次落点，
   // 只给 nodeId 就只能重新猜一次位置（猜不准就会像以前那样到处弹提示）。
-  cb: (handled: boolean, payload: { nodeId: string; position: { x: number; y: number } }) => void,
+  cb?: (handled: boolean, payload: { nodeId: string; position: { x: number; y: number } }) => void,
 ): { dispose(): void } {
   ensureGhostStyle()
   bindGlobalGhostSweep(ctx)
+  bindGlobalTipSweep()
   return ctx.on(NODE_DRAG_END, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     // 先无论成败都清半透明：applyStoryboardDrop 抛错时若跳过清理，
     // 节点会永远停在 45% 透明（用户实测截图：松手后透明度没恢复）。
@@ -643,6 +734,8 @@ export function onStoryboardDragEnd(
       releaseGhosts(ctx)
       // 再补几轮延迟清理：宿主重灌渲染态 / 事件被打断时，即时那次会被冲掉。
       scheduleGhostSweep(ctx)
+      // 用户口径 2026-11-02：松手时提示必须消失（不再留到下一次拖动）。
+      hideRejectTip()
       clearHover()
     }
     // 松手必清半透明标记（无论吸附还是脱离）。
@@ -652,7 +745,7 @@ export function onStoryboardDragEnd(
     // 旧 parentId」被当成正式内容存了一版；松手后插件刚把 parentId 清掉，
     // 那版中间态又随下一次保存把父级写回去（浏览器实测 2026-10-31：拖出分镜组后
     // 刷新页面节点又回到组里）。视觉状态本来就不该进作品数据。
-    cb(handled, payload)
+    cb?.(handled, payload)
   })
 }
 
@@ -664,26 +757,31 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
   const doc = ctx.tryGet<DocPort | undefined>('doc')
   const layout = ctx.tryGet<LayoutPort | undefined>('view')
   ensureGhostStyle()
+  bindGlobalTipSweep()
   return ctx.on(NODE_DRAG, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     if (!doc) return
     const node = doc.getNode(payload.nodeId)
-    if (!node || node.type !== 'image') {
+    // 分镜组自己拖着走：不参与自己的高亮/提示
+    if (!node || node.type === 'storyboard') {
+      hideRejectTip()
       clearHover()
       if (lastMarked) {
         releaseGhosts(ctx)
       }
       return
     }
+    const isImage = node.type === 'image'
     const boards = doc.getNodes()
       .filter((n) => n.type === 'storyboard')
       .map((n) => ({ n, rect: boardRectOf(layout, n), board: readStoryboard(n.data) }))
       .filter((x): x is { n: NodeLike; rect: { x: number; y: number; w: number; h: number }; board: NonNullable<ReturnType<typeof readStoryboard>> } => x.board !== null)
     // 命中卡片：矩形交叉（大图滑过时"盖住最多"的槽获胜）
+    const dragSize = dragSizeOf(node, layout)
     const dragRect = {
       x: payload.position.x,
       y: payload.position.y,
-      w: node.size?.w ?? 0,
-      h: node.size?.h ?? 0,
+      w: dragSize.w,
+      h: dragSize.h,
     }
     let hit: { n: NodeLike; rect: { x: number; y: number; w: number; h: number }; board: NonNullable<ReturnType<typeof readStoryboard>> } | null = null
     for (const b of boards) {
@@ -692,17 +790,39 @@ export function onStoryboardDragMove(ctx: Context): { dispose(): void } {
       if (overlapW > 0 && overlapH > 0) { hit = b; break }
     }
     if (!hit) {
+      hideRejectTip()
       clearHover()
       if (lastMarked) {
         releaseGhosts(ctx)
       }
       return
     }
+    /**
+     * 类型检查在槽位之前（用户口径 2026-11-02）：
+     * 非图片与本组交叉 → 立刻弹跟随鼠标的提醒，只高亮分镜组背景；
+     * 不再算“获胜槽位”，因为这一步根本没通过。
+     */
+    if (!isImage) {
+      hover.nodeId = payload.nodeId
+      hover.boardId = hit.n.id
+      hover.slotIndex = -1
+      hover.invalid = true
+      showRejectTip(ctx)
+      if (lastMarked !== payload.nodeId) {
+        setGhost(ctx, payload.nodeId, true)
+        ghosted.add(payload.nodeId)
+        lastMarked = payload.nodeId
+      }
+      return
+    }
+    // 图片：类型通过，才进入槽位高亮
+    hideRejectTip()
     const rects = slotRects(hit.rect.w, hit.rect.h, hit.board.rows, hit.board.cols, readStoryboardLayout(ctx))
     const slotIndex = slotIndexByOverlapOrCenter(rects, { x: hit.rect.x, y: hit.rect.y }, dragRect, payload.position)
     hover.nodeId = payload.nodeId
     hover.boardId = hit.n.id
     hover.slotIndex = slotIndex
+    hover.invalid = false
     // 拖动节点与分镜组交叉 → 半透明（用户口径 2026-10-30：别把槽位全挡住）
     if (lastMarked !== payload.nodeId) {
       // 整张卡片透明（DOM 外壳级）：只调图片 opacity 只会"颜色变淡"，卡片底色还盖着

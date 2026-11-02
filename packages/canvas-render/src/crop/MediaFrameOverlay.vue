@@ -6,7 +6,7 @@
  * 在媒体画面坐标系里框一块区域，确认后由各自的插件去执行（图片走 canvas 重绘、视频只记元数据）。
  * 差异只有两点，都做成 props：
  *   mode: 'crop' 框必须在画面内 ／ 'expand' 框必须包住画面（往外扩图）；
- *   手柄：裁剪给 4 个角（边没意义），扩展给 8 个（要能只往一侧扩）。
+ *   手柄：裁剪与扩展都给 8 个（4 角 + 4 边中点），裁剪的边手柄只调整一侧。
  * 其余（几何、遮罩、三分线、四角方块控制点、拖拽会话、量测）两个场景完全共用一份，不再各写一遍。
  *
  * 三个关键设计（都来自实测踩坑，别改回去）：
@@ -25,7 +25,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   ALL_DIRS,
-  CORNER_DIRS,
   clampCropRect,
   clampExpandRect,
   computeMediaFit,
@@ -113,7 +112,8 @@ const fit = computed(() => computeMediaFit(boxW.value, boxH.value, mediaW.value,
 const minEdge = computed(() => minFrameEdge(fit.value.scale))
 
 const isExpand = computed(() => props.mode === 'expand')
-const dirs = computed<HandleDir[]>(() => (isExpand.value ? ALL_DIRS : CORNER_DIRS))
+/** 8 个方向：4 角 + 4 边中点。两种模式同一套控制点，新手感一致（用户 2026-11-02）。 */
+const dirs: HandleDir[] = ALL_DIRS
 
 /** 当前框（媒体像素坐标） */
 const rect = ref<Rect>({ x: 0, y: 0, width: 0, height: 0 })
@@ -427,16 +427,20 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   pointer-events: none;
 }
 
-/* 框：只有描边，没有阴影（用户口径 2026-10-29：去掉框内投影）。
-   描边用灰色调（与控制点描边同色）—— 亮色主题下白描边会糊进底色里。 */
+/* 框：只有描边，没有框内投影。
+   描边必须恒定白：它压在**图片/视频画面**上，不是铺在界面面板上；用半透明黑时遇到暗背景
+   （深色照片、黑底插画、暗色画布）就完全看不见（用户 2026-11-02 截图）。
+   下面再垫一层半透明深色阴影，保证白线落在浅色画面上也仍有轮廓。 */
 .mfo-frame {
   position: absolute;
   box-sizing: border-box;
   pointer-events: auto;
   cursor: move;
-  /* 描边压在**图片像素**上：必须恒定 → 有意不跟随主题。
-     写成一行是为了让豁免标记与色值同行（CSS 里 `//` 不是注释，不能写在行尾）。 */
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); /* 主题色白名单: 裁剪/扩展框描边压在图上看，与控制点描边同色 */
+  /* 白描边 + 深色外衬：深浅画面上都能看见。压在图片像素上，有意不跟随主题。 */
+  /* 主题色白名单: 裁剪/扩展框描边压在图上看，需恒定白色 */
+  border: 1px solid #fff;
+  /* 主题色白名单: 白描边外侧的对比衬线，压在图上看，需恒定深色 */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
 }
 
 /* 尺寸小标：贴在框左上角外侧一点，不挡画面 */
@@ -462,8 +466,10 @@ function handleStyle(dir: HandleDir): Record<string, string> {
 
 .mfo-grid-line {
   position: absolute;
-  /* 三等分参考线压在图片像素上：灰色调（与控制点描边同色）—— 亮色图上白色看不见 */
-  background: rgba(0, 0, 0, 0.5); /* 主题色白名单: 压在图上的三等分参考线，与控制点描边同色 */
+  /* 三等分参考线压在图片像素上：恒定白，深色画面里也看得见。
+     用 drop-shadow 给浅色画面留一层深色衬边（只作用在线本身，不会把整块网格变暗）。 */
+  background: #fff; /* 主题色白名单: 压在图上的三等分参考线，需恒定白色 */
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.65)); /* 主题色白名单: 白色参考线的深色衬边，压在图上看 */
 }
 .mfo-grid-line--h {
   left: 0;
@@ -476,17 +482,21 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   width: 1px;
 }
 
-/* 控制点：**方形**（用户要求：控制端口是方形而不是圆形）、白底发丝边，10px 视觉 + ::before 外扩命中区 */
+/* 控制点：**方形**（用户要求：控制端口是方形而不是圆形）、白底发丝边，10px 视觉 + ::before 外扩命中区。
+   底必须恒为白：它压在图片/视频画面上，不属界面底色；暗色主题的 --ui-panel 会把它变成深灰，
+   在暗部画面里就看不见了（用户 2026-11-02 截图）。 */
 .mfo-handle {
   position: absolute;
   width: 10px;
   height: 10px;
   padding: 0;
   box-sizing: border-box;
-  background: var(--ui-panel, #fff);
-  /* 描边压在**图片像素**上而不是界面底色上：必须恒为半透黑才有对比 → 有意不跟随主题 */
-  /* 主题色白名单: 裁剪框控制点压在图上看，需恒定半透黑描边 */
-  border: 1.5px solid rgba(0, 0, 0, 0.5);
+  background: #fff; /* 主题色白名单: 裁剪框控制点压在图上看，需恒定白底 */
+  /* 描边压在**图片像素**上而不是界面底色上：恒定白底 + 半透黑外圈。
+     只写深色描边时，控制点落在深色画面里会只剩白块、边界融进背景；
+     只写白描边时，落在亮画面上又会糊成一片。两层一起才在深浅画面都清楚。 */
+  /* 主题色白名单: 裁剪框控制点压在图上看，需恒定半透黑外圈 */
+  border: 1.5px solid rgba(0, 0, 0, 0.65);
   border-radius: 2px;
   pointer-events: auto;
   touch-action: none;

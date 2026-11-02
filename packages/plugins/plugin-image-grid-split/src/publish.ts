@@ -89,7 +89,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     updateNode?(id: string, patch: Record<string, unknown>): unknown
     connectEdge?(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { status?: string } | undefined
   } | undefined>('doc')
-  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | undefined } | undefined>('view')
+  const layout = ctx.tryGet<{ getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | undefined; absolutePosition?(id: string): { x: number; y: number } } | undefined>('view')
   const resources = ctx.tryGet<{ put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>; resolve(r: string): Promise<string | undefined> } | undefined>('resources')
   if (!doc) return null
 
@@ -109,7 +109,7 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     ctx: ctx as Context,
     getNodeData: (id) => doc.getNode(id)?.data,
     getNodeRect: (id) => {
-      const rect = layout?.getNodeRect(id)
+      const rect = layout?.getNodeRect?.(id)
       if (rect && rect.w > 0 && rect.h > 0) return rect
       return undefined
     },
@@ -229,6 +229,26 @@ export interface PublishResult {
   containerId?: string
   /** 失败原因（用户可读；给 tip 用） */
   reason?: string
+}
+
+/** 发布收尾的最小依赖（单测可直接给桩，不必搭整套 canvas） */
+export interface FinishPublishDeps {
+  endSplit(nodeId: string): void
+  toolbar?: { exit?(nodeId: string): void } | undefined
+}
+
+/**
+ * 发布收尾：**成功才退出**切分模式（用户口径 2026-11-02）。
+ *
+ * 用户要的是「建完节点就回到默认状态栏」，而不是把宫格切分的工作台继续挂着：
+ * 成功时清会话（格子遮罩/勾选层随之消失）+ 通知 nodeToolbar 退出；
+ * 失败时保留会话，用户还能改勾选重试，不用重新选行列。
+ */
+export function finishSplitPublish(deps: FinishPublishDeps, nodeId: string, ok: boolean): void {
+  if (!ok) return
+  deps.endSplit(nodeId)
+  // 会话 watch 的退出同步是异步的一拍；这里显式再 exit 一次，保证底栏立刻换回默认。
+  if (deps.toolbar?.exit) deps.toolbar.exit(nodeId)
 }
 
 /** 解析原图地址：resourceId → resources.resolve，迁移期回退 imageUrl */

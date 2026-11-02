@@ -17,7 +17,7 @@ import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'
 import StoryboardGrid from './StoryboardGrid.vue'
 import { endSplit, onSplitChange, splitNodeIds } from './splitSession'
-import { disposeGhostSweep, onStoryboardDragEnd, onStoryboardDragMove, storyboardHitAt } from './storyboardDrag'
+import { disposeGhostSweep, onStoryboardDragEnd, onStoryboardDragMove } from './storyboardDrag'
 import { STORYBOARD_LAYOUT_KEYS } from './storyboard'
 import { isTapGesture } from './gestureClick'
 
@@ -75,10 +75,12 @@ export function apply(ctx: Context): void {
       outputs: [],
       // 容器语义：可缩放（行列固定、格子跟着变大）。
       //
-      // 2026-10-31 用户口径：**不要透明**。透明让亮色主题下卡片直接透出画布，
-      // 空槽看起来像一大片灰白/深灰的洞（参考图 2），和分组那种"实底容器"观感不一致。
-      // 现在底板由 StoryboardGrid 自己铺一层跟随主题的面板色；子节点仍画在卡片上层。
-      transparent: false,
+      // 2026-10-31 用户口径：**不要透明**，但子节点必须能透出容器。
+      // 壳默认会给所有卡片铺一层实底（--canvas-node-surface），子图是 VueFlow 子节点，
+      // 层级只比父容器高 1 层，父卡片一旦有实底就会把子图整片盖住（用户截图：分镜图看不见）。
+      // transparent: true 只关掉壳的实底/投影；空槽的实底由 StoryboardGrid 自己画，
+      // 于是既有"白底容器"观感，又不会遮住子节点。
+      transparent: true,
       resizable: true,
     })
   } catch {
@@ -222,21 +224,9 @@ export function apply(ctx: Context): void {
   })
 
   // ④ 拖拽归属：图片拖进分镜组 → 吸附到槽位/换位；拖出 → 脱离还原
-  const offDrop = onStoryboardDragEnd(ctx, (handled, payload) => {
-    /**
-     * 只有「非图片节点 + 松手时确实压在分镜组内部」才提示（用户口径 2026-10-31）。
-     *
-     * 以前只看 handled：任何非图片节点拖完都会走到这里，于是拖视频、拖文字、
-     * 甚至拖到画布空白处松手，都会弹「分镜组只收图片节点」—— 用户点两下就被打断。
-     * 现在先用 storyboardHitAt 做一次与吸附**同一套几何**的判定，没压到组就不出声。
-     */
-    if (handled) return
-    const doc = ctx.tryGet<{ getNode(id: string): { type?: string } | undefined } | undefined>('doc')
-    const type = doc?.getNode(payload.nodeId)?.type
-    if (!type || type === 'image' || type === 'storyboard') return
-    if (!storyboardHitAt(ctx, payload)) return
-    ctx.tryGet<{ notify(m: string, o?: object): unknown }>('canvas')?.notify('分镜组只收图片节点', { followPointer: true, durationMs: 0 })
-  })
+  // 提示改在拖动过程中判定（用户口径 2026-11-02）：交叉即提示，移开/松手即消失。
+  // 松手这里只负责落库（吸附/脱离）；类型不符的拒绝提示由 onStoryboardDragMove 负责。
+  const offDrop = onStoryboardDragEnd(ctx)
   ctx.effect(() => () => offDrop.dispose())
   // 拖动逐帧：获胜槽位高亮 + 拖动节点半透明（用户口径 2026-10-30）
   const offMove = onStoryboardDragMove(ctx)

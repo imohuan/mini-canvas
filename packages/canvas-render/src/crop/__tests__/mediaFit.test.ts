@@ -190,7 +190,7 @@ describe('缩放裁剪框：只动该方向影响的边，翻不过对角', () =
     expect(r.height).toBe(100)
   })
 
-  it('裁剪只用 4 个角（边没有意义，只能缩小）', () => {
+  it('保留 4 个角常量（浮层实际给 8 个，见 mediaFrameOverlayChrome 测试）', () => {
     expect(CORNER_DIRS).toEqual(['nw', 'ne', 'sw', 'se'])
   })
 })
@@ -212,7 +212,7 @@ describe('缩放扩展框：不许拉进画面之内', () => {
     expect(r.x + r.width).toBe(1000)
   })
 
-  it('扩展给 8 个方向（要能只往一侧扩）', () => {
+  it('全部方向是 8 个（4 角 + 4 边中点）', () => {
     expect(ALL_DIRS).toHaveLength(8)
   })
 })
