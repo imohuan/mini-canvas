@@ -16,7 +16,7 @@
 | `.vue-flow`（画布根） | 自带 `z-index: 0`（见 `@vue-flow/core/dist/style.css`） | 画布**里面**的 z 再大，也压不过画布**外面**的兄弟（`.csurface-overlay`、应用外壳的底栏…） |
 | `.vue-flow__node`（每个节点） | 带 `transform`（VueFlow 用它定位节点） | 节点**内部**的 z 再大，也压不过节点**外面**的兄弟（连线、别的节点） |
 
-**所以结论只有一句**：想让「节点里的某个东西」压过「节点外的东西」→ **加数字没用，必须把它挪出那层上下文**（挪到画布级浮层）。真实例子：节点底栏、分组控制栏、多选框都是这么改的 —— 见 `plugin-bottom-bar/src/NodeBottomBarOverlay.vue` 与 `plugin-group/src/GroupTopToolbarOverlay.vue` 的文件头注释（那里写明了踩过的现象与原因）。
+**所以结论只有一句**：想让「节点里的某个东西」压过「节点外的东西」→ **加数字没用，必须把它挪出那层上下文**（挪到画布级浮层）。真实例子：节点底栏、分组控制栏、多选框都是这么改的 —— 见 `plugin-group/src/GroupTopToolbarOverlay.vue`，以及节点壳的 `out:bottom` 锚点（底栏现在由它摆位，`plugin-bottom-bar/src/nodeBarPlugin.ts` 里有注释）。
 
 ## 它是什么：四本账
 
@@ -102,7 +102,7 @@ edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
 | 应用顶栏 | `60` | 同上 |
 | 设置面板外壳 | `100000`（悬浮球 `100001`） | `canvas-render/src/components/SettingsShell.vue` |
 | 全应用统一的模态 / 菜单 | `100000` | 各浮层（设计规范见 `docs/design/ui-style-guide.md` §2.8） |
-| 工具提示 | `100001` | 主题皮的 `Tooltip.vue` |
+| 工具提示 | `100001` | shadcn `TooltipContent`（`ui-kit-shadcn` 的 host 样式） |
 | 媒体查看器（要盖过设置面板） | `100200` | 主题皮的 `MediaViewer.vue` |
 | 光标特效（要盖过一切） | `2147483000` | `plugin-cursor-effect/src/CursorEffectOverlay.vue` |
 
@@ -138,7 +138,7 @@ edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
 | `packages/canvas-render/src/host/__tests__/canvasHostCore.test.ts` | 层级断言（改常量后这里会先红） |
 | `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` | 节点内部那一组小数字 |
 | `packages/plugins/plugin-group/src/GroupTopToolbarOverlay.vue` | 文件头写了「为什么分组控制栏必须搬到画布浮层」的完整推理 |
-| `packages/plugins/plugin-bottom-bar/src/NodeBottomBarOverlay.vue` | 同上（底栏为什么不能住在节点里） |
+| `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts` | 同上（底栏为什么不能住在节点里，以及 out:bottom 锚点重构） |
 | `packages/ui/src/components/CanvasShell.vue` | 外壳三块（顶栏 / 状态条 / 底栏）的值 |
 | `docs/design/ui-style-guide.md` §2.8 | 全仓浮层 z-index 的统一约定（`100000`） |
 

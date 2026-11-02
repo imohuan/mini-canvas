@@ -1,8 +1,18 @@
 # 气泡提示 Tooltip
 
-**一句话**：鼠标悬停或键盘聚焦时浮出的小气泡提示。登记在 `ui` 目录名 `tooltip`。
+**一句话**：鼠标悬停或键盘聚焦时浮出的小气泡。项目统一使用 shadcn-vue 的
+`Tooltip / TooltipTrigger / TooltipContent` 分离件。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/Tooltip.vue`。
+```ts
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
+```
+
+源码在 `packages/ui-kit-shadcn/src/components/ui/tooltip/`。
 
 ## 功能说明
 
@@ -14,73 +24,54 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 
 <ThemeKitDemo name="tooltip" />
 
-> 悬停或键盘聚焦（Tab 到按钮）都会出现气泡。
-
-- **悬停与聚焦都触发**（`mouseenter` / `focusin`），所以键盘用户也看得到。
-- **延迟出现**：默认 120ms —— 太灵敏会让鼠标扫过时到处闪。
-- **四向定位加自动收边**：气泡不让贴边，箭头也不会顶出屏幕。
-- **窗口滚动与尺寸变化自动重定位**（订了 `resize` 与捕获阶段的 `scroll`）。
-- **可用 `#content` 插槽放富内容**（不止一行文字）。
+- **悬停与键盘聚焦都触发**，键盘用户也能看到提示。
+- **四向定位**：`side` 取 `top / bottom / left / right`，`sideOffset` 控制间距。
+- **富内容**：`TooltipContent` 的默认插槽可以放多行文字、图标或任意小布局。
+- **同组只显示一个**：外层 `TooltipProvider` 统一管理延迟与互斥。
 
 ## Props
 
-| 字段 | 类型 | 缺省 | 说明 |
-| --- | --- | --- | --- |
-| `content` | `string?` | `''` | 提示文字；用 `#content` 插槽时可省略 |
-| `placement` | `top / bottom / left / right` | `'top'` | 气泡贴着触发器哪一侧 |
-| `offset` | `number` | `8` | 与触发器之间的间距（px） |
-| `arrow` | `boolean` | `true` | 是否画指向触发器的小三角 |
-| `delay` | `number` | `120` | 悬停多久才出现（ms） |
-| `disabled` | `boolean` | `false` | 关掉气泡（条件性不提示时用它） |
+| 组件 | 字段 | 说明 |
+| --- | --- | --- |
+| `Tooltip` | `defaultOpen` / `delayDuration` | 默认开合与延迟 |
+| `TooltipTrigger` | `as-child` | 让子元素成为触发器（常用） |
+| `TooltipContent` | `side` / `sideOffset` / `align` | 气泡方向、间距与对齐 |
 
 ## Slots / 插槽
 
-| 插槽 | 说明 |
-| --- | --- |
-| 默认插槽 | **触发器**（被包在一个 `span class="tlt-trigger"` 里） |
-| `content` | 气泡内容；给了就优先于 `content` 属性（可放图标与多行） |
+| 组件 | 插槽 | 说明 |
+| --- | --- | --- |
+| `TooltipTrigger` | 默认 | 触发器；常配 `as-child` 包一个按钮 |
+| `TooltipContent` | 默认 | 气泡内容 |
 
 ## 事件、方法或暴露能力
 
-**不 emit、不 defineExpose。** 显隐完全由它自己根据悬停与聚焦决定。
+**不 emit、不 defineExpose。** 显隐与定位由 reka-ui 负责。
 
 ## 使用方式与示例
 
 ```vue
-<!-- 文件：packages/my-plugin/src/MyToolbar.vue -->
-<!-- 格式：Vue 单文件组件（script setup lang="ts"） -->
-<!-- 位置：窄版工具栏 —— 只有图标、需要气泡补上文字说明 -->
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
-
-const Tooltip = useUiComponent('tooltip')
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@mini-canvas/ui-kit-shadcn'
 </script>
 
 <template>
-  <!-- 1 简单：一行文字 -->
-  <Tooltip content="下载">
-    <button type="button" aria-label="下载">下载</button>
-  </Tooltip>
-
-  <!-- 2 富内容：两行说明 -->
-  <Tooltip placement="right">
-    <button type="button" aria-label="帮助">?</button>
-    <template #content>
-      <strong>快捷键说明</strong>
-      <div>选中节点后按 Delete 删除</div>
-    </template>
-  </Tooltip>
-
-  <!-- 3 条件性不提示 -->
-  <Tooltip content="已禁用" :disabled="enabled">
-    <button type="button" :disabled="!enabled">动作</button>
-  </Tooltip>
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger as-child>
+        <Button variant="ghost" size="icon-sm" aria-label="下载">↓</Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">下载</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 </template>
 ```
 
 ## 注意事项
 
-1. **触发区是额外包的 span**：默认插槽里的元素是它的**子元素**，不是兄弟；布局受影响时要自己调样式。
-2. **它是纯视觉提示，不是无障碍名称**：读屏软件念的是元素的 `aria-label` 与文案。只给 `Tooltip` 不给 `aria-label`，读屏用户仍然不知道那个图标钮是干什么的。
-3. **`disabled` 是"不显示"而不是"删掉"**：切换它不会重挂触发器，状态保留。
-4. **窄版才挂气泡是常见用法**：宽版本来就有文字文案，再挂气泡是重复信息。
+1. **触发器只包一个元素**：`as-child` 要求子节点是单个组件或元素，
+   多段并列内容请先包一层容器。
+2. **`TooltipProvider` 只在外层写一次**：同一块 UI 里的多个 Tooltip 共用一个 Provider 即可。
+3. **不再有 `content` 属性与 `#content` 插槽**：旧主题 Tooltip 的写法已移除，
+   改成 `TooltipContent` 的默认插槽。
+

@@ -4,7 +4,7 @@
 左右键翻页、Esc 关闭。登记在 `ui` 目录名 `mediaViewer`。
 
 源码：`packages/plugins/plugin-theme-default/src/components/ui/MediaViewer.vue`。
-交互照 ax-ui-kit 的 AxImageViewer 复刻；底栏插件的素材预览浮层与成品应用的生成历史/资产面板都用它。
+底栏插件的素材预览浮层与成品应用的生成历史/资产面板都用它。
 
 ## 功能说明
 

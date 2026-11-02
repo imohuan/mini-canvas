@@ -11,7 +11,7 @@
 | 类别 | 落在哪 | 是什么 | 能不能被换掉 |
 | --- | --- | --- | --- |
 | **渲染皮**（6 条） | 主题槽 `ctx.theme` | 节点壳 / 连线 / 背景 / 拖线临时线 / 默认边类型 / 设置面板 | 能。装一个 order 更小的插件占同一槽即顶替 |
-| **设计系统组件目录**（14 条） | 注册场 `ctx.registryOf('ui')` | 按钮 / 下拉 / 气泡 / 选择器 / 全屏预览 / 滑块 / 参数控件族 / 取色器 / 浮动端口 / 临时连线 | 能。同一个名字上叠一条 order 更小的即顶替 |
+| **设计系统组件目录** | 注册场 `ctx.registryOf('ui')` | 工具栏件 / 全屏预览 / 滑块 / 参数控件族 / 取色器 / 浮动端口 / 临时连线，以及全部 shadcn 原始组件 | 能。同一个名字上叠一条 order 更小的即顶替 |
 
 ## 二、渲染皮（主题槽）—— 画布"长什么样"由它们决定
 
@@ -29,16 +29,14 @@
 这六条都是**单赢家槽**：同一槽名上 `order` 最小者赢（`order` 越小越靠外）。
 想换其中一块，注册一个 `order` 更小的插件即可；默认件不会被删，只是排到后面。
 
-## 三、设计系统组件目录（`ui` 场）—— 一共 14 个名字
+## 三、设计系统组件目录（`ui` 场）
 
 来源同上：`apply` 里逐条 `ui.add(名字, 组件, { id: 'default' })`。
 
 | 目录名（按名取用就传这个字符串） | 组件 | 一句话 | 详情 |
 | --- | --- | --- | --- |
-| `button` | `NodeToolbarButton` | 兼容保留的旧名；节点控制栏现在直接用 shadcn `Button` | [按钮](/plugins/theme-components/node-toolbar-button) |
-| `dropdown` | `Dropdown` | 下拉浮层外壳（只管浮层，不管选项逻辑） | [下拉浮层](/plugins/theme-components/dropdown) |
-| `tooltip` | `Tooltip` | 悬浮气泡提示 | [气泡提示](/plugins/theme-components/tooltip) |
-| `select` | `Select` | 带搜索的下拉选择器 | [下拉选择器](/plugins/theme-components/select) |
+| `toolbarButton` | `NodeToolbarButton` | 工具栏按钮（节点控制栏仍可直接用 shadcn `Button`） | [按钮](/plugins/theme-components/node-toolbar-button) |
+| `toolbarDropdown` | `ToolbarDropdownButton` | 工具栏「按钮 + 菜单 / 二级菜单 / 自定义面板」 | [工具栏下拉按钮](/plugins/theme-components/toolbar-dropdown-button) |
 | `mediaViewer` | `MediaViewer` | 全屏媒体查看器（文本/图片/视频/音频） | [全屏媒体预览](/plugins/theme-components/media-viewer) |
 | `slider` | `PrecisionSlider` | 精细数值滑块（Ctrl 细调 / Shift 粗调） | [精细滑块](/plugins/theme-components/precision-slider) |
 | `toolParamField` | `ToolParamField` | 工具声明式参数控件（按 `kind` 自动选预设件） | [参数控件](/plugins/theme-components/tool-param-field) |
@@ -50,6 +48,11 @@
 | `movingHandle` | `MovingHandle` | 节点浮动端口（拖拽时看到的小圆球） | [浮动端口](/plugins/theme-components/moving-handle) |
 | `connectionLine` | `ConnectionLine` | 拖线临时线（与 `theme.connectionLine` 是同一个组件） | [拖线临时线](/plugins/theme-components/connection-line) |
 
+> 通用下拉、选择器、气泡不再登记旧的 `dropdown / select / tooltip` 名字：业务插件直接从
+> `@mini-canvas/ui-kit-shadcn` 引入 `DropdownMenu` / `Select` / `Tooltip` 分离件。
+> 主题在 `ui` 场里另外登记了全部 shadcn 原始组件（名字带 `shadcn` 前缀，例如 `shadcnButton`），
+> 需要按名替换主题皮时取它们。
+>
 > 名字只是字符串，**不是封闭枚举**：主题可以登记自定名字，插件也可以往目录里加自己的件。
 > `UI_NAMES`（在 `@mini-canvas/canvas-render`）里列的是"约定俗成的常用名"，不必背。
 
@@ -106,7 +109,7 @@ function refresh() { /* ... */ }
 // 文件：packages/my-plugin/src/SomePanel.vue
 // 格式：Vue 单文件组件
 // 位置：插件包里的面板 —— 它明确就要默认主题的这一份具体实现
-import { Dropdown, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-default'
+import { PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-default'
 // 渲染件也导出了
 import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-theme-default'
 ```
@@ -147,12 +150,11 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
    表现为"组件没渲染"，**先查名字拼写**。
 2. **`useUiComponent` 必须在画布渲染子树内调用**（它内部走 `useCanvasRender()` 拿 ctx）。
    在画布外调用会抛错 —— 树外请用 `uiComponentOutside`。
-3. **"默认主题装了才有"**：这 14 个名字是 theme-default 登记的。只装业务插件、不装主题插件，目录就是空的。
+3. **"默认主题装了才有"**：这些目录名是 theme-default 登记的。只装业务插件、不装主题插件，目录就是空的。
    成品应用一定装了它（`packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 第一条）。
-4. **成品应用会顶替其中两个名字**：`packages/ui` 里有两个应用层插件用 `order: -1` 注册了
-   `dropdown`（`AxDropdown`）与 `settingsPanel`（`AppSettingsPanel`），
-   所以按名取到的是成品应用那一份。**这不是冲突，是设计**：目录的用途正是"让顶层替换掉底层实现"。
-   （`dropdown` 与主题包那份最终都落到 `@mini-canvas/ui-kit` 的同一个实现上，差别只在默认皮。）
+4. **成品应用只顶替 `settingsPanel`**：`packages/ui` 用 `order: -1` 注册了
+   `settingsPanel`（`AppSettingsPanel`），所以按名取到的是成品应用那一份。
+   **这不是冲突，是设计**：目录的用途正是"让顶层替换掉底层实现"。
 5. **`edgeDefaultType` 存的是字符串不是组件**：它是"默认边类型"这个取值
    （`ctx.theme.register('edgeDefaultType', 'custom')`），不是渲染件。
 
@@ -169,7 +171,7 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
 设计系统组件：
 
 - [按钮 NodeToolbarButton](/plugins/theme-components/node-toolbar-button)
-- [下拉浮层 Dropdown](/plugins/theme-components/dropdown)
+- [下拉菜单 DropdownMenu](/plugins/theme-components/dropdown)
 - [气泡提示 Tooltip](/plugins/theme-components/tooltip)
 - [下拉选择器 Select](/plugins/theme-components/select)
 - [全屏媒体预览 MediaViewer](/plugins/theme-components/media-viewer)

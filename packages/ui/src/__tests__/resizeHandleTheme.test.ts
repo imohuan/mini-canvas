@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
-const handleSfc = read('../components/AxResizeHandle.vue')
+const handleSfc = read('../components/PanelResizeHandle.vue')
 /** 只看样式段（script 里的泛型 `{ … }` 会把简单的花括号扫描带歪），并去掉注释 */
 const handle = (/<style[^>]*>([\s\S]*?)<\/style>/.exec(handleSfc)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '')
 const agent = read('../components/areas/AgentPanel.vue')
@@ -39,40 +39,40 @@ function ruleOf(css: string, selector: string): string {
 }
 
 describe('面板拖拽手柄：两处同一套外观、跟随主题色', () => {
-  it('左侧抽屉与右侧 Agent 面板都复用 AxResizeHandle（不再各画一套）', () => {
-    expect(agent).toMatch(/import AxResizeHandle from '\.\.\/AxResizeHandle\.vue'/)
-    expect(drawer).toMatch(/import AxResizeHandle from '\.\.\/AxResizeHandle\.vue'/)
-    expect(agent).toContain('<AxResizeHandle')
-    expect(drawer).toContain('<AxResizeHandle')
+  it('左侧抽屉与右侧 Agent 面板都复用 PanelResizeHandle（不再各画一套）', () => {
+    expect(agent).toMatch(/import PanelResizeHandle from '\.\.\/PanelResizeHandle\.vue'/)
+    expect(drawer).toMatch(/import PanelResizeHandle from '\.\.\/PanelResizeHandle\.vue'/)
+    expect(agent).toContain('<PanelResizeHandle')
+    expect(drawer).toContain('<PanelResizeHandle')
     // 旧的白色 hover 渐变必须去掉（亮色主题下几乎看不见）
     expect(agent).not.toContain('rgba(255, 255, 255, 0.14)')
     expect(drawer).not.toContain('hover:to-white/[0.14]')
   })
 
   it('线贴面板各自那条边：Agent 在左缘、抽屉在右缘', () => {
-    expect(agent).toMatch(/<AxResizeHandle[\s\S]{0,160}?edge="left"/)
-    expect(drawer).toMatch(/<AxResizeHandle[\s\S]{0,160}?edge="right"/)
-    expect(ruleOf(handle, '.ax-rh--left .ax-rh-line')).toContain('left: 0')
-    expect(ruleOf(handle, '.ax-rh--right .ax-rh-line')).toContain('right: 0')
+    expect(agent).toMatch(/<PanelResizeHandle[\s\S]{0,160}?edge="left"/)
+    expect(drawer).toMatch(/<PanelResizeHandle[\s\S]{0,160}?edge="right"/)
+    expect(ruleOf(handle, '.panel-rh--left .panel-rh-line')).toContain('left: 0')
+    expect(ruleOf(handle, '.panel-rh--right .panel-rh-line')).toContain('right: 0')
   })
 
   it('颜色全部走主题强调色，不写死白/黑', () => {
     expect(handleSfc).toContain('var(--ui-accent-soft')
     expect(handleSfc).toContain('var(--ui-accent,')
     // 12px 热区保留，方便抓取；真正画出来的线是 2px
-    expect(ruleOf(handle, '.ax-rh')).toContain('width: 12px')
-    expect(ruleOf(handle, '.ax-rh-line')).toContain('width: 2px')
+    expect(ruleOf(handle, '.panel-rh')).toContain('width: 12px')
+    expect(ruleOf(handle, '.panel-rh-line')).toContain('width: 2px')
   })
 
   it('拖拽时线加粗、底色按主题色铺开', () => {
     // 悬停态与拖拽态各一条规则：先取后者（源码里在最后）
-    const rules = rulesOf(handle, '.ax-rh.is-dragging .ax-rh-line')
+    const rules = rulesOf(handle, '.panel-rh.is-dragging .panel-rh-line')
     const dragging = rules[rules.length - 1] ?? ''
     expect(dragging).toMatch(/width:\s*4px/)
     expect(dragging).toContain('var(--ui-accent,')
     // 拖拽态的底色：默认透明，按住才显出来
-    expect(ruleOf(handle, '.ax-rh::before')).toMatch(/opacity:\s*0/)
-    expect(ruleOf(handle, '.ax-rh.is-dragging::before')).toMatch(/opacity:\s*1/)
+    expect(ruleOf(handle, '.panel-rh::before')).toMatch(/opacity:\s*0/)
+    expect(ruleOf(handle, '.panel-rh.is-dragging::before')).toMatch(/opacity:\s*1/)
   })
 
   it('松手就收掉拖拽态（窗口 pointerup 收尾，拖出热区也不会一直亮）', () => {

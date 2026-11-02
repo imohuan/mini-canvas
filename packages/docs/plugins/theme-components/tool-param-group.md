@@ -28,7 +28,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
     "先开面板、再开下拉"那一次点击（用户口径 2026-10-14：「如果里面只有唯一的一项，
     并且它是下拉的话，就直接把它做成外部的形式」）。判定在 `paramKind.ts` 的
     `resolveInlineSoleSelect`（纯函数，可单测）。
-- **下拉容器走目录**：优先用 `ui.dropdown` 里登记的那一份（成品应用顶替了就用它），取不到回落本包自带。
+- **浮层用 shadcn `Popover`**：触发器、内容层与定位各司其职；摘要行点开后在浮层里逐项改。
 
 ## Props
 
@@ -93,5 +93,6 @@ function onChange(key: string, value: string | number | boolean): void {
 2b. **只有一个普通下拉时它会"消失"**：那时组件本身不画摘要按钮，直接把那个下拉铺出来
     （DOM 上是 `.tpg-inline`）。想让参数始终留在面板里，就再给它配一个参数（≥2 个即收面板）。
 3. **它不存状态**：`values` 是受控的，改完你得自己回写，否则摘要行不会变。
-4. **下拉实现只有一份**：主题包这份与成品应用的 `AxDropdown` 都是 `@mini-canvas/ui-kit` Dropdown 的薄适配层，
-   行为（定位、互斥、键盘）以 ui-kit 为准。
+4. **浮层实现只有一份**：面板外框用 `@mini-canvas/ui-kit-shadcn` 的 `Popover`，
+   单个参数仍旧由 [ToolParamField](/plugins/theme-components/tool-param-field) 走 shadcn `Select`。
+   定位、点外关闭、键盘导航都以组件库为准。

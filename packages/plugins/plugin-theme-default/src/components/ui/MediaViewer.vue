@@ -17,6 +17,7 @@
  * （底栏=断开连线，资产面板=调后台接口），本组件不猜。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from "vue"
+import { Button } from "@mini-canvas/ui-kit-shadcn"
 import { useUiComponent, uiComponentOutside } from "@mini-canvas/canvas-render"
 
 /**
@@ -298,8 +299,10 @@ watch(item, (v) => {
     >
       <!-- 右上角：删除（悬停显示）+ 常驻关闭 -->
       <span class="mv-actions">
-        <button
+        <Button
           v-if="canRemove"
+          variant="ghost"
+          size="icon-sm"
           class="mv-corner-btn mv-remove"
           type="button"
           title="删除该素材"
@@ -307,10 +310,10 @@ watch(item, (v) => {
           @click.stop="remove"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-        </button>
-        <button class="mv-corner-btn" type="button" title="关闭 (Esc)" aria-label="关闭预览" @click.stop="close">
+        </Button>
+        <Button variant="ghost" size="icon-sm" class="mv-corner-btn" type="button" title="关闭 (Esc)" aria-label="关闭预览" @click.stop="close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
+        </Button>
       </span>
 
       <!-- 左上角悬浮标题 -->
@@ -318,9 +321,9 @@ watch(item, (v) => {
 
       <!-- 主内容：上一张 · 舞台 · 下一张 -->
       <div class="mv-container">
-        <button v-if="isMultiple" class="mv-nav" type="button" title="上一张 (←)" aria-label="上一张" @click.stop="prevImage">
+        <Button v-if="isMultiple" variant="ghost" size="icon-sm" class="mv-nav" type="button" title="上一张 (←)" aria-label="上一张" @click.stop="prevImage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
+        </Button>
 
         <div class="mv-stage" @click.self="close">
           <img
@@ -377,9 +380,9 @@ watch(item, (v) => {
           <slot v-else name="stage" :item="item" />
         </div>
 
-        <button v-if="isMultiple" class="mv-nav" type="button" title="下一张 (→)" aria-label="下一张" @click.stop="nextImage">
+        <Button v-if="isMultiple" variant="ghost" size="icon-sm" class="mv-nav" type="button" title="下一张 (→)" aria-label="下一张" @click.stop="nextImage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
+        </Button>
       </div>
 
       <!-- 底部浮动控制条（用户口径 2026-10-29：常驻）——
@@ -391,29 +394,29 @@ watch(item, (v) => {
           <span class="mv-divider" />
         </template>
         <template v-if="canZoom">
-          <button class="mv-btn" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
+          <Button variant="ghost" size="icon-xs" class="mv-btn" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
-          </button>
+          </Button>
         <span class="mv-zoom-label">{{ Math.round(scale * 100) }}%</span>
-          <button class="mv-btn" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
+          <Button variant="ghost" size="icon-xs" class="mv-btn" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /><line x1="11" y1="8" x2="11" y2="14" /></svg>
-          </button>
+          </Button>
           <span class="mv-divider" />
         </template>
-        <button v-if="hasTools" class="mv-btn" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
+        <Button v-if="hasTools" variant="ghost" size="icon-xs" class="mv-btn" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
-        </button>
-        <button v-if="hasTools" class="mv-btn" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
+        </Button>
+        <Button v-if="hasTools" variant="ghost" size="icon-xs" class="mv-btn" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" /><path d="M8 7 4 12l4 5" /><path d="m16 7 4 5-4 5" /></svg>
-        </button>
-        <button v-if="canZoom" class="mv-btn" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
+        </Button>
+        <Button v-if="canZoom" variant="ghost" size="icon-xs" class="mv-btn" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
-        </button>
+        </Button>
         <!-- 分隔线只属于工具按钮：没有旋转/镜像的媒体（音频/文本）不再多出第二条线 -->
         <span v-if="hasTools" class="mv-divider" />
-        <button class="mv-btn" type="button" title="下载" aria-label="下载" @click="download">
+        <Button variant="ghost" size="icon-xs" class="mv-btn" type="button" title="下载" aria-label="下载" @click="download">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-        </button>
+        </Button>
       </div>
     </div>
   </Teleport>
