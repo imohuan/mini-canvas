@@ -83,3 +83,9 @@ packages/cloud-server/.repro/
 # 多代理协调：说明文档入库，测试日志与快照留在本地
 docs/tmp/agent-coordination/*.log
 docs/tmp/agent-coordination/*.json
+
+# 本轮协调的临时扫描脚本与 vitest JSON 输出
+docs/tmp/scan-*.cjs
+packages/ui/ui-test.json
+
+packages/docs/.vitepress/data/plugins.data.ts.timestamp-*.mjs
