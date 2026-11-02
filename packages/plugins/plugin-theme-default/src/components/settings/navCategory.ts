@@ -22,8 +22,10 @@
  * ctx.registryOf<string>('settings/navCategory').add('我的分组', '集成', { id: 'my-plugin' })
  * ```
  *
- * 这个模块只放纯函数，不依赖 Vue，两套设置皮共用同一份规则。
+ * 这个模块只放纯函数，两套设置皮共用同一份规则。
  */
+
+import type { Component } from 'vue'
 
 /** 没写分类时落在这里 */
 export const DEFAULT_SETTINGS_CATEGORY = '个人'
@@ -57,6 +59,7 @@ export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
   // 集成：接外部能力的入口
   插件: '集成',
   Agent: '集成',
+  连接: '集成',
   模型: '集成',
   电脑操控: '集成',
   应用快照: '集成',
@@ -67,6 +70,8 @@ export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
   边: '画布',
   布局: '画布',
   画布: '画布',
+  交互: '画布',
+  工具: '画布',
   资源库: '画布',
   素材: '画布',
   光标: '画布',
@@ -91,6 +96,20 @@ export function metaIcon(meta: unknown): unknown {
   if (!meta || typeof meta !== 'object') return undefined
   const value = (meta as Record<string, unknown>).icon
   return typeof value === 'function' || (value && typeof value === 'object') ? value : undefined
+}
+
+/**
+ * 把 unknown 收窄成「能交给 <component :is> 的图标」。
+ *
+ * 只认函数/对象：字符串会被 Vue 当成原生标签名（'minimap' 渲染成空标签，
+ * 或把 '-' 当文本画出来），这正是截图里出现破折号/空图标的原因。
+ * 取不到就回落兜底图标，绝不留空位。
+ */
+export function asSettingsIcon(value: unknown): Component {
+  if (typeof value === 'function' || (value && typeof value === 'object')) {
+    return value as Component
+  }
+  return SETTINGS_NAV_ICON_FALLBACK
 }
 
 /** 从 unknown meta 里取自定义页面组件 */
@@ -163,3 +182,5 @@ export function compareSettingsCategory(
 
 /** 设置导航图标兜底（与 navIcon.ts 的导出保持一致，避免两处各写一个组件） */
 export { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'
+// 本模块要用它做非法值回落；放在文件尾，避免与 re-export 顺序打架
+import { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'

@@ -41,8 +41,11 @@ describe('设置面板打开不白屏', () => {
     })
     app.provide(RENDER_CONTEXT_KEY, renderCtx(ctx))
     const html = await renderToString(app)
-    expect(html).toContain('个人')
+    // 只装主题皮时没有「个人」下的配置项（菜单项无内容会被过滤），
+    // 所以这里断言真实存在的分类 / 菜单 / 二级节，而不是写死空分类。
     expect(html).toContain('外观')
+    expect(html).toContain('主题')
+    expect(html).toContain('形状')
     expect(html).toContain('设置')
     ctx.stop()
   })

@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@mini-canvas/kernel": "workspace:*",
+    "@mini-canvas/ui-kit-shadcn": "workspace:*"
   },
   "devDependencies": {
     "@mini-canvas/plugin-multi-select": "workspace:*",

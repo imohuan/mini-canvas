@@ -27,6 +27,7 @@ import ShadcnSettingsSection from './ShadcnSettingsSection.vue'
 import SettingsSchemaField from './SettingsSchemaField.vue'
 import { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'
 import {
+  asSettingsIcon,
   categoryOf,
   metaIcon,
   metaPage,
@@ -131,6 +132,9 @@ const sectionMap = computed<Map<string, string[]>>(() => {
   return map
 })
 
+/** 完整分组名集合：section 登记的是 '外观/形状' 这种全名，不能拿首段 Map 去查 */
+const groupSet = computed(() => new Set(groups.value))
+
 interface NavEntry {
   /** 一级名，也是导航项的稳定 key */
   key: string
@@ -229,7 +233,7 @@ const navEntries = computed<NavEntry[]>(() => {
     if (occ) used.add(occ.id)
     const navSections: MenuSection[] = []
     for (const section of nav.sections) {
-      const hit = section.groups.filter((group) => sectionMap.value.has(group))
+      const hit = section.groups.filter((group) => groupSet.value.has(group))
       if (!hit.length) continue
       navSections.push({
         key: section.id,
@@ -535,7 +539,7 @@ const navItems = computed(() =>
     label: entry.title,
     category: entry.category,
     ...(entry.categoryPosition !== undefined ? { categoryPosition: entry.categoryPosition } : {}),
-    icon: entry.icon ?? iconOf(entry.key),
+    icon: asSettingsIcon(entry.icon ?? iconOf(entry.title)),
     page: entry.page,
   })),
 )

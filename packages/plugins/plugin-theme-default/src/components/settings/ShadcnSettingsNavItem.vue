@@ -7,6 +7,8 @@
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { asSettingsIcon } from './navCategory'
 
 const props = defineProps<{
   /** 图标组件（lucide-vue-next 或任意 Vue 组件） */
@@ -21,41 +23,36 @@ const emit = defineEmits<{
   (e: 'select'): void
 }>()
 
-/** 把 unknown 收窄成组件类型，模板里的 :is 才不会拿到脏值 */
-const iconComponent = computed<Component | undefined>(() => {
-  const value = props.icon
-  if (typeof value === 'function' || (value && typeof value === 'object')) {
-    return value as Component
-  }
-  return undefined
-})
+/** 把 unknown 收窄成组件；字符串等脏值回落到兜底图标（Circle） */
+const iconComponent = computed<Component>(() => asSettingsIcon(props.icon))
 </script>
 
 <template>
-  <button
-    type="button"
+  <Button
+    variant="ghost"
+    size="sm"
     class="shadcn-nav-item"
     :class="{ 'is-active': active }"
     :aria-current="active ? 'page' : undefined"
     @click="emit('select')"
   >
     <span class="shadcn-nav-item__icon" aria-hidden="true">
-      <component :is="iconComponent" v-if="iconComponent" :size="15" :stroke-width="1.8" />
+      <component :is="iconComponent" :size="15" :stroke-width="1.8" />
     </span>
     <span class="shadcn-nav-item__label">{{ label }}</span>
-  </button>
+  </Button>
 </template>
 
 <style scoped>
 .shadcn-nav-item {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 9px;
   width: 100%;
-  /* 行级交互目标 ≥ 44px（docs/design/ui-style-guide.md §1 原则 4 / §5 第 4 条）。
-     之前 34px 是按「紧凑列表」的直觉给的，但左侧导航是真正要点的一列行，
-     按规范给到 44；行距仍靠 2px gap 保持紧凑感。 */
-  min-height: 44px;
+  /* 行高跟组件库尺寸档走：默认 32px，主题选「紧凑」变 24px、选「大」跟着放大。
+     设置侧栏是列表行，图标按钮（32px）才是规范里的 44px 级行级目标。 */
+  min-height: var(--mct-size-control-h-sm, 2rem);
   box-sizing: border-box;
   padding: 0 10px;
   border: 0;

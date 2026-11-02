@@ -26,6 +26,7 @@ import { Circle } from 'lucide-vue-next'
 import ShadcnSettingsNav from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsNav.vue'
 import ShadcnSettingsSection from '@mini-canvas/plugin-theme-default/components/settings/ShadcnSettingsSection.vue'
 import {
+  asSettingsIcon,
   categoryOf,
   metaIcon,
   metaPage,
@@ -134,6 +135,9 @@ const sectionMap = computed<Map<string, string[]>>(() => {
   return map
 })
 
+/** 完整分组名集合：section 登记的是 '外观/形状' 这种全名，不能拿首段 Map 去查 */
+const groupSet = computed(() => new Set(groups.value))
+
 interface NavEntry {
   key: string
   kind: 'section' | 'nav'
@@ -221,7 +225,7 @@ const navEntries = computed<NavEntry[]>(() => {
     if (occ) used.add(occ.id)
     const navSections: MenuSection[] = []
     for (const section of nav.sections) {
-      const hit = section.groups.filter((group) => sectionMap.value.has(group))
+      const hit = section.groups.filter((group) => groupSet.value.has(group))
       if (!hit.length) continue
       navSections.push({
         key: section.id,
@@ -339,7 +343,7 @@ const navItems = computed(() =>
     label: entry.title,
     category: entry.category,
     ...(entry.categoryPosition !== undefined ? { categoryPosition: entry.categoryPosition } : {}),
-    icon: entry.icon ?? iconOf(entry.key),
+    icon: asSettingsIcon(entry.icon ?? iconOf(entry.title)),
     page: entry.page,
   })),
 )
@@ -419,7 +423,8 @@ const activeSectionIndex = computed<number>(() =>
 /** 顶部页签条默认隐藏；宿主显式打开且确实有多个段时才出现 */
 const showTabs = computed<boolean>(() => props.showSectionTabs && sections.value.length > 1)
 
-// 分组变化后保证高亮仍指向存在的项
+// 分组变化后保证高亮仍指向存在的项。注意：这里只读 entries（不读 activeNav），
+// SSR 首帧才不会因为「先取 activeNav 再回填 entries」把首项吞掉。
 watch(
   navEntries,
   (entries) => {
@@ -447,6 +452,7 @@ watch(
 function selectNav(key: string): void {
   if (activeNav.value === key) return
   activeNav.value = key
+  activeSection.value = ''
 }
 
 function selectSection(key: string): void {

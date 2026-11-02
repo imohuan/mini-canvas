@@ -88,6 +88,11 @@ export function apply(ctx: Context): void {
 没有登记的 `Config.group` 不会消失：注册场会把它补成 `auto` 小节并给出 issue，
 方便开发期发现“配置写了、菜单忘了挂”。
 
+左侧导航、分类标题与右上角的窗口按钮全部用 `@mini-canvas/ui-kit-shadcn` 渲染：
+导航项是 `Button`（`ghost` + `sm`），滚动条是 `ScrollArea`，窗口按钮是 `Button`
+（`ghost` + `icon-sm`）。尺寸跟主题的「控件尺寸」档位一起变，默认导航行高 32px。
+图标取不到组件时回落到 `Circle`，不会留下空位。
+
 ## Slots / 插槽
 
 没有 Vue 插槽。它读的是**内核通用 UI 槽**（`ctx.slots.occupants(...)`），随插件装卸自动回收：

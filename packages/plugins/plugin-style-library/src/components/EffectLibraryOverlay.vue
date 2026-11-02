@@ -106,7 +106,6 @@ async function onUse(item: StyleCard): Promise<void> {
       {
         selection: ctx.tryGet('selection'),
         view: ctx.tryGet('view'),
-        doc: ctx.tryGet('doc'),
       },
       result.nodeId,
     )

@@ -15,6 +15,7 @@
  * 关闭通道：外壳 emit('close') → SettingsHost → ctx.emit('settings:ui-close') → 宿主收起面板。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{
@@ -136,6 +137,11 @@ function ballAtCorner(g: WinGeom): { left: number; top: number } {
   return { left: g.left - BALL_SIZE / 2, top: g.top - BALL_SIZE / 2 }
 }
 
+/**
+ * 最小化成悬浮球。2026-11-02 起标题栏不再放最小化按钮（用户口径：这枚按钮
+ * 语义和「转悬浮窗口」太近、又只有一个入口），但悬浮球本身保留：
+ * 调试工具 / 宿主想要“缩成球”时仍可调用。
+ */
 function minimizeToBall(): void {
   if (minimized.value || ballAnimating.value) return
   if (!floating.value) enterFloating() // 弹窗态点最小化：先转浮动窗口再压缩
@@ -487,39 +493,27 @@ onBeforeUnmount(() => {
             <h2 class="psd-title">{{ title }}</h2>
           </div>
           <div class="psd-head-actions">
-            <!-- 头部三枚按钮：外观对齐 Agent 悬浮面板（用户口径 2026-11-02）。
-                 尺寸 / 圆角读全局 token，跟组件库一起变；图标用统一的线性描边。 -->
-            <button
-              class="psd-icon-btn"
-              aria-label="最小化为悬浮球"
-              title="最小化为悬浮球"
-              @click="minimizeToBall"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12h14"/>
-              </svg>
-            </button>
-            <button
-              class="psd-icon-btn"
+            <!-- 头部按钮 = shadcn Button（ghost + icon-sm）：最小化入口隐藏（用户口径
+                 2026-11-02：最小化走悬浮球动画容易找不到，先撤掉这个按钮），
+                 浮动按钮用 picture-in-picture 语义（屏幕里还有一块小屏）。 -->
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="psd-head-btn"
               :aria-label="floating ? '回到弹窗' : '转为悬浮窗口'"
               :title="floating ? '回到弹窗' : '转为悬浮窗口'"
               @click="toggleFloating"
             >
-              <!-- 浮动模式：显示"收回"图标；弹窗模式：显示"外向箭头"图标 -->
-              <svg v-if="floating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 3v6H3"/><path d="M3 9l6-6"/>
-                <path d="M15 21v-6h6"/><path d="M21 15l-6 6"/>
-              </svg>
-              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M15 3h6v6"/><path d="M9 21H3v-6"/>
-                <path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
-              </svg>
-            </button>
-            <button class="psd-close" aria-label="关闭" title="关闭" @click="close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
+                <rect x="12" y="13" width="8" height="7" rx="1.5" />
+                <path d="M19 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4" />
               </svg>
-            </button>
+            </Button>
+            <Button variant="ghost" size="icon-sm" class="psd-head-btn" aria-label="关闭" title="关闭" @click="close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 6l12 12" /><path d="M18 6L6 18" />
+              </svg>
+            </Button>
           </div>
         </div>
 
@@ -745,6 +739,16 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
+/* 标题栏按钮：视觉上只要图标，不画组件库默认的圆角胶囊底 */
+.psd-head-btn {
+  border-radius: var(--radius-control, 8px);
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.psd-head-btn:hover {
+  color: var(--ui-ink, #111827);
+}
+
 .psd-title-block {
   display: flex;
   flex-direction: column;
@@ -765,26 +769,6 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
-}
-
-/*
- * 头部按钮尺寸：宽高与圆角读全局 token，与组件库 Button（icon-sm）同源。
- * 设置外壳属于渲染层，不能 import 业务组件库；这里只共享同两个变量：
- *   --mct-size-control-h-sm  组件库的 sm 高度（默认 2rem）
- *   --mct-radius           主题选的圆角
- * 主题换了尺寸 / 圆角，设置窗口右上角这排按钮跟着变，不会和面板里的按钮对不上。
- */
-.psd-close,
-.psd-icon-btn {
-  width: var(--mct-size-control-h-sm, 32px);
-  height: var(--mct-size-control-h-sm, 32px);
-  border-radius: var(--mct-radius, 8px);
-}
-
-.psd-close svg,
-.psd-icon-btn svg {
-  width: var(--mct-size-icon, 16px);
-  height: var(--mct-size-icon, 16px);
 }
 
 /* 右下角 resize 把手：贴角放一个 16x16 图标 + 隐形放大命中区 */

@@ -10,6 +10,7 @@
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
+import { ScrollArea } from '@mini-canvas/ui-kit-shadcn'
 import ShadcnSettingsNavItem from './ShadcnSettingsNavItem.vue'
 import { compareSettingsCategory, SETTINGS_CATEGORY_ORDER } from './navCategory'
 
@@ -66,7 +67,7 @@ const groups = computed<NavGroup[]>(() => {
 </script>
 
 <template>
-  <aside class="ssn">
+  <ScrollArea class="ssn">
     <p v-if="!items.length" class="ssn-empty">暂无分组</p>
     <section v-for="group in groups" :key="group.category" class="ssn-group">
       <p class="ssn-caption">{{ group.category }}</p>
@@ -79,7 +80,7 @@ const groups = computed<NavGroup[]>(() => {
         @select="emit('select', item.key)"
       />
     </section>
-  </aside>
+  </ScrollArea>
 </template>
 
 <style scoped>
@@ -92,7 +93,7 @@ const groups = computed<NavGroup[]>(() => {
   min-height: 0;
   /* 底部留白取 8px：内容多 12px 时正好不多出那 2px 的滚动条 */
   padding: 4px 10px 8px 2px;
-  overflow-y: auto;
+  /* 滚动改由 shadcn ScrollArea 负责（深色细条跟组件库一致） */
   border-right: 1px solid var(--ui-line-soft, #eef0f4);
 }
 

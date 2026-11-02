@@ -17,6 +17,7 @@ import {
   Bot,
   Brush,
   Bug,
+  Cable,
   Circle,
   Database,
   Download,
@@ -25,6 +26,7 @@ import {
   Keyboard,
   LayoutGrid,
   Moon,
+  MousePointer2,
   Palette,
   Pipette,
   Puzzle,
@@ -35,6 +37,7 @@ import {
   SquareStack,
   SunMoon,
   Upload,
+  Wrench,
 } from 'lucide-vue-next'
 
 /** 设置面板的一级分组 → 默认图标（未登记的设置项不会空着）。 */
@@ -52,10 +55,12 @@ export const SETTINGS_NAV_ICON_NAMES: ReadonlyArray<readonly [string, Component]
   ['配置', SlidersHorizontal],
   ['个性化', Sparkles],
   ['键盘快捷键', Keyboard],
+  ['快捷键', Keyboard],
   // —— 集成 ——
   ['插件', Puzzle],
   ['Agent', Bot],
   ['模型', Bot],
+  ['连接', Cable],
   ['电脑操控', LayoutGrid],
   ['应用快照', SquareStack],
   ['浏览器', LayoutGrid],
@@ -64,6 +69,8 @@ export const SETTINGS_NAV_ICON_NAMES: ReadonlyArray<readonly [string, Component]
   ['边', Shapes],
   ['布局', Grid2x2],
   ['画布', LayoutGrid],
+  ['交互', MousePointer2],
+  ['工具', Wrench],
   ['资源库', FolderTree],
   ['素材', FolderTree],
   // —— 开发 ——
@@ -72,6 +79,7 @@ export const SETTINGS_NAV_ICON_NAMES: ReadonlyArray<readonly [string, Component]
   ['光标', Pipette],
   ['上传', Upload],
   ['展示', Sparkles],
+  ['演示', Sparkles],
 ]
 
 /** 兜底图标：没登记的一级分组用它。 */

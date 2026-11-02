@@ -53,6 +53,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../ui-kit-shadcn
     devDependencies:
       '@mini-canvas/plugin-multi-select':
         specifier: workspace:*

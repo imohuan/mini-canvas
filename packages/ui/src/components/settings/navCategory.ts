@@ -5,6 +5,7 @@
  * 否则换皮后同一个一级菜单会跑到不同分类下。这里只做类型安全的转出。
  */
 export {
+  asSettingsIcon,
   DEFAULT_NAV_CATEGORY,
   DEFAULT_SETTINGS_CATEGORY,
   SETTINGS_CATEGORY_ORDER,

@@ -65,7 +65,10 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
   })
 
   it('每项是图标 + 名称，选中项高亮', () => {
-    // 导航项组件同时画图标和文字，选中态绑在按钮上
+    // 导航项组件同时画图标和文字，选中态绑在按钮上；外表用 shadcn Button
+    // （ghost + sm），但只保留图标 + 文字，不画组件库默认胶囊底。
+    expect(NAV_ITEM).toMatch(/<Button[\s\S]*variant="ghost"/)
+    expect(NAV_ITEM).toMatch(/size="sm"/)
     expect(NAV_ITEM).toMatch(/class="shadcn-nav-item"/)
     expect(NAV_ITEM).toMatch(/<component :is="iconComponent"/)
     expect(NAV_ITEM).toMatch(/\{\{ label \}\}/)
