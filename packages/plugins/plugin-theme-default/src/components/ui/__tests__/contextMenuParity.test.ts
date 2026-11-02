@@ -52,9 +52,11 @@ describe('下拉浮层 = 右键菜单那一档（不透明白底 + 16 圆角 + 6
     expect(body).not.toMatch(/backdrop-filter/)
   })
 
-  it('圆角 16、内边距 6 由 --dd-radius / --dd-padding 交给 Dropdown 消费', () => {
+  it('内边距 6 由 --dd-padding 交给 Dropdown 消费；圆角跟随主题档位（默认仍是 16）', () => {
     const body = rule(SELECT, '.mck-select-menu')
-    expect(body).toMatch(/--dd-radius:\s*16px/)
+    // 2026-11-02：圆角改由主题统一控制。没选档位时保持原来的 16px，
+    // 选了档位则跟 --mct-radius 一起变 —— 固定 16px 会让「全局圆角」只生效一半。
+    expect(body).toMatch(/--dd-radius:\s*var\(--mct-radius,\s*16px\)/)
     expect(body).toMatch(/--dd-padding:\s*6px/)
     // 外观由 ui-kit 的浮层规则消费；主题适配层只透传 --dd-* 变量。
     const menu = rule(UIKIT_DROPDOWN_CSS, '.mck-dropdown__panel')
@@ -143,7 +145,7 @@ describe('浮层外观 token 收在 ui-theme（两处实现共用同一档数值
   it('--dd-padding / --dd-radius / --dd-bg 定义在 ui-theme.css，值与右键菜单一致', () => {
     const vars = rule(THEME_CSS, ':root')
     expect(vars).toMatch(/--dd-padding:\s*6px/)
-    expect(vars).toMatch(/--dd-radius:\s*16px/)
+    expect(vars).toMatch(/--dd-radius:\s*var\(--mct-radius,\s*16px\)/)
     expect(vars).toMatch(/--dd-bg:\s*var\(--ui-overlay-solid\)/)
   })
 
@@ -152,7 +154,7 @@ describe('浮层外观 token 收在 ui-theme（两处实现共用同一档数值
     const consumers = [SELECT, TOOL_GROUP]
     for (const src of consumers) {
       expect(src).toMatch(/--dd-padding:\s*6px/)
-      expect(src).toMatch(/--dd-radius:\s*16px/)
+      expect(src).toMatch(/--dd-radius:\s*var\(--mct-radius,\s*16px\)/)
       expect(src).toMatch(/--dd-bg:\s*var\(--ui-overlay-solid/)
     }
   })
@@ -188,7 +190,7 @@ describe('参数面板 = 右键菜单那一档', () => {
   it('容器同样是不透明白底 + 16 圆角；内边距 16（参考稿 p-4）', () => {
     const body = rule(TOOL_GROUP, '.tpg-menu-body')
     expect(body).toMatch(/--dd-bg:\s*var\(--ui-overlay-solid/)
-    expect(body).toMatch(/--dd-radius:\s*16px/)
+    expect(body).toMatch(/--dd-radius:\s*var\(--mct-radius,\s*16px\)/)
     expect(rule(TOOL_GROUP, '.tpg-menu-body--blocks')).toMatch(/--dd-padding:\s*16px/)
   })
 

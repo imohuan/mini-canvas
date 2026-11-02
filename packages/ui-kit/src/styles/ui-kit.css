@@ -8,8 +8,22 @@
  * 本文件只放与颜色无关的组件配置：圆角、动效、字体。尺寸与层级由 UiKitProvider 写变量。
  */
 :root {
-  --mck-radius-control: 8px;
-  --mck-radius-panel: 14px;
+  /*
+   * 圆角：优先跟主题插件的全局档位（--mct-radius），没选时回落到组件库自己的 8 / 14px。
+   * 这一条是「同一个圆角配置要在所有组件上生效」的关键：旧 ui-kit 的 Select / Dropdown /
+   * Button / Input / Number / Tabs / Notify 都读这两个变量，此前它们和 shadcn 的一套
+   * （--mct-radius）各走各的，用户改了圆角后「有的控件变了、有的没变」（2026-11-02 反馈）。
+   * 没有 mct 变量时行为完全不变。
+   */
+  --mck-radius-control: var(--mct-radius, 8px);
+  --mck-radius-panel: var(--mct-radius, 14px);
+  /*
+   * dd-radius 是 Dropdown 浮层自己的覆盖口（右键菜单 / 参数面板 / 旧 Select 都写它）。
+   * 它们此前硬写 16px，主题改圆角时浮层不跟。这里给一个默认值：
+   * 主题选了档位 → 用选的值；没选 → 保持原来的 16px。
+   * 调用方仍可显式覆盖（优先级更高的 scoped 规则），不会被这条吃掉。
+   */
+  --dd-radius: var(--mct-radius, 16px);
   --mck-duration: 150ms;
   --mck-ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* 和 Tailwind 的 font-mono 同一套字体，不引入 Tailwind。 */
