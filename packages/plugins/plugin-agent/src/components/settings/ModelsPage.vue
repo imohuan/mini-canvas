@@ -18,18 +18,19 @@
  * UI 全部来自 @mini-canvas/ui-kit-shadcn；下拉不再经 useUiComponent 转接。
  */
 import { computed, onMounted, ref } from 'vue'
-import {
-  Button,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state

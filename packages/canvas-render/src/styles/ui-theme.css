@@ -368,7 +368,7 @@ html.dark {
 
 /* ===== 节点上/下控制栏按钮（全局唯一一套外观）=====
  *
- * 控制栏按钮直接使用 shadcn 的 Button（@mini-canvas/ui-kit-shadcn），这里只补
+ * 控制栏按钮使用主题登记到 ui 目录的 Button，这里只补
  * 「工具栏尺寸与语义色」：32×32 图标钮、透明底、hover 上色、primary 强调色、
  * danger 悬停转红、active 高亮。色值全部读 --ntb-* / --ui-*，亮暗主题自动跟随。
  *

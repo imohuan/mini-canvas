@@ -13,12 +13,12 @@ import {
   X as XIcon, ChevronRight as ChevronIcon, Library as LibIcon,
   FileImage as FileImageIcon, Film as FilmIcon, Music as MusicIcon, Check as CheckIcon,
 } from 'lucide-vue-next'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 import folderImg from '../assets/folder.png'
 import AssetBatchBar from './AssetBatchBar.vue'
 import AssetTree, { type AssetTreeRow } from './AssetTree.vue'

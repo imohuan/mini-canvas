@@ -9,7 +9,6 @@
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
 import { CanvasHost, CanvasProvider, SettingsHost } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { SlotHost } from '@mini-canvas/canvas-render'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
@@ -33,6 +32,8 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } fro
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
 
 const ui = useUi()
+/** App 自己是 Provider 的父组件，不能走注入；按钮在 Provider ready 后才渲染，用宿主单例取件。 */
+const Button = useUiComponentOutside('Button')
 /** 插槽调试覆盖层按 ui 目录取；没装主题/没登记时回落默认皮。 */
 const SlotDebugOverlay = useUiComponentOutside('slotDebugOverlay')
 /** 模板 :is 用；目录没登记时回落默认皮。 */

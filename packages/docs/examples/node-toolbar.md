@@ -154,11 +154,12 @@ export function apply(ctx: Context): void {
 
 ```vue
 <!-- 文件：my-stamp-button/src/StampEntry.vue -->
-<!-- 往默认顶栏按钮组里插的一条：按钮直接用 shadcn Button + 全局工具栏样式 -->
+<!-- 往默认顶栏按钮组里插的一条：按钮从 ui 目录取，配全局工具栏样式 -->
 <script setup lang="ts">
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { openStampMode } from './stampSession'   // 你自己的会话状态（纯内存，不写节点 data）
+
+const Button = useUiComponent('Button')
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
@@ -188,18 +189,17 @@ function enter(): void {
 <!-- 文件：my-stamp-button/src/StampPanel.vue -->
 <!-- 功能模式的顶栏内容：整格替换默认按钮组 -->
 <script setup lang="ts">
-import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { closeStampMode } from './stampSession'
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
@@ -256,8 +256,9 @@ ctx.slots.register('image.topToolbar', {
 
 两条硬规矩：
 
-1. **按钮直接 import shadcn `Button`，再挂全局 `.mck-toolbar-btn` 类**（`is-icon-only` = 纯图标钮），
-   不许自己画一套圆角/高度 —— 否则同一排出现两种外观，就是用户报过很多次的「按钮在外面」问题；
+1. **按钮从 ui 目录取 `Button`（`useUiComponent('Button')`），再挂全局 `.mck-toolbar-btn` 类**
+   （`is-icon-only` = 纯图标钮），不许自己画一套圆角/高度 —— 否则同一排出现两种外观，
+   就是用户报过很多次的「按钮在外面」问题；
 2. **显隐自己判断**（`useSoleNodeSelected`）：宿主只管位置，每个条目自己决定「我该不该出现」。
 
 限制：目前只有图片顶栏开了这个插槽。视频/音频的默认栏是普通组件，想插按钮就用方式 B/C。
@@ -342,8 +343,8 @@ svc.exit(nodeId)
    顶栏底栏分开算，谁也不覆盖谁。字符串取值会顺着引用链走（深度上限 8 层，防写错死循环）。
 
 5. **渲染**：`component :is` 挂上你的组件，props 是 `{ id, data }`。
-   按钮直接用 `@mini-canvas/ui-kit-shadcn` 的 `Button` + 全局 `.mck-toolbar-btn`；
-   下拉直接用同包的 `DropdownMenu` 分离件。
+   按钮用 `useUiComponent('Button')` + 全局 `.mck-toolbar-btn`；
+   下拉用 `useUiComponent('DropdownMenu')` 及对应的分离件。
 
 ## 按钮与下拉的速查
 

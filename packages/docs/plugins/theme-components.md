@@ -46,10 +46,10 @@
 | `movingHandle` | `MovingHandle` | 节点浮动端口（拖拽时看到的小圆球） | [浮动端口](/plugins/theme-components/moving-handle) |
 | `connectionLine` | `ConnectionLine` | 拖线临时线（与 `theme.connectionLine` 是同一个组件） | [拖线临时线](/plugins/theme-components/connection-line) |
 
-> 通用按钮、下拉、选择器、气泡都不再登记：业务插件直接从 `@mini-canvas/ui-kit-shadcn`
-> 引入 `Button` / `DropdownMenu` / `Select` / `Tooltip` 分离件。
-> 主题在 `ui` 场里另外登记了全部 shadcn 原始组件（名字带 `shadcn` 前缀，例如 `shadcnButton`），
-> 需要按名替换主题皮时取它们。
+> 通用按钮、下拉、选择器、气泡也在这张目录里：默认主题把 shadcn 原始组件按**导出名**登记，
+> 业务插件写 `const Button = useUiComponent('Button')` 或
+> `const { DropdownMenu, DropdownMenuContent } = useUiComponent()` 取件。
+> 只有默认主题插件可以直接 import `@mini-canvas/ui-kit-shadcn`，其它地方都走注册表。
 >
 > 名字只是字符串，**不是封闭枚举**：主题可以登记自定名字，插件也可以往目录里加自己的件。
 > `UI_NAMES`（在 `@mini-canvas/canvas-render`）里列的是"约定俗成的常用名"，不必背。

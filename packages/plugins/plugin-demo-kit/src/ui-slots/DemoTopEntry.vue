@@ -12,17 +12,7 @@
  * 功能模式必须是替换，不是叠加。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { closeDemoMode, demoMode, openDemoMode } from './demoMode'
 
 interface ToolbarMenuNode {
@@ -37,6 +27,14 @@ const props = defineProps<{
 }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const demoOpen = ref(false)
 const alignOpen = ref(false)
 

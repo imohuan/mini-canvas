@@ -11,15 +11,16 @@
  * 上下文怎么拿：走能力包（needs:['selection']），不是自己 ctx.get 拼 —— 与节点按钮
  * "needs:['node']" 同一套规则。设置面板/主题换皮时，能力实现可以整体被换掉。
  *
- * 按钮直接用 shadcn Button + 全局 .mck-toolbar-btn（与其它控制栏同一套外观）。
+ * 按钮从 ui 目录按名取（默认主题登记的 shadcn Button），再配全局 .mck-toolbar-btn，
+ * 与其它控制栏同一套外观。
  */
 import { computed } from 'vue'
-import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import type { SelectionCapability } from '@mini-canvas/canvas-render'
 import { useCapability } from '@mini-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 /** 当前选中集（能力包；needs 里声明了才拿得到 —— 见本文件挂载处） */
 const selection = useCapability<SelectionCapability>('selection')
 

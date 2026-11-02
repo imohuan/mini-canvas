@@ -32,6 +32,7 @@ export * from './components/ui/textarea'
 export * from './components/ui/tooltip'
 export * from './components/color-picker'
 export { SettingsRow, SettingsSection } from './components/settings'
+export { UiToaster } from './components/notification'
 
 export { SHADCN_COMPONENTS, SHADCN_COMPONENT_NAMES } from './registry'
 /** 家族名单：组件库使用标记只认这些 shadcn 生成组件（详见文件头注释） */

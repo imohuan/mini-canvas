@@ -4,6 +4,9 @@
  * 与设置页拿到的是同一类数据：真实 SettingsStore 里已声明的 `type: 'color'` 字段。
  * 独立页没有主应用设置外壳，所以在这里把内核 SettingsStore 适配上 SettingsPanelSource，
  * 让 ThemeStudio 走同一条真实读写链路，而不是为了预览另造一套假颜色。
+ *
+ * 预览图层同一条原则：建一个真实内核 ctx，让四个插件按各自 apply 里的同名函数
+ * 往 `theme-preview` 槽注册；页面用 SlotHost 读注册结果，不认识任何具体插件。
  */
 import { SettingsStore } from '@mini-canvas/kernel'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
@@ -12,8 +15,26 @@ import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { Context } from '@mini-canvas/canvas-data'
 import type { ConfigField, ConfigSchema } from '@mini-canvas/canvas-base'
 import type { SettingSchema } from '@mini-canvas/kernel'
+import { registerThemePreview as registerThemeDefaultPreview } from '@mini-canvas/plugin-theme-default'
+import { registerThemePreview as registerMultiSelectPreview } from '@mini-canvas/plugin-multi-select'
+import { registerThemePreview as registerAlignGuidePreview } from '@mini-canvas/plugin-align-guide'
+import { registerThemePreview as registerEdgeCuttingPreview } from '@mini-canvas/plugin-edge-cutting'
+
+/**
+ * 独立验收页的预览上下文：一个真实的内核 ctx + 四个插件的预览注册。
+ * 工作台与设置页走同一条 SlotHost 链路，页面本身不认识任何具体插件。
+ */
+export function createStudioPreviewContext(): Context {
+  const ctx = new Context()
+  registerThemeDefaultPreview(ctx as never)
+  registerMultiSelectPreview(ctx as never)
+  registerAlignGuidePreview(ctx as never)
+  registerEdgeCuttingPreview(ctx as never)
+  return ctx
+}
 
 /** 内核 SettingsStore → 设置面板消费的最小接口。 */
 export function settingsPanelSourceOf(store: SettingsStore): SettingsPanelSource {

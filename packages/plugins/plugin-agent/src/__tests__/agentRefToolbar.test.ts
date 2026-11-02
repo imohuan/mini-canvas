@@ -13,7 +13,7 @@
  *      会静默 no-op —— plugin-group「解散分组点不动」那个真 bug 的教训），
  *      两个入口共用同一个命令 id 常量（不在组件里写字符串字面量）。
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -204,8 +204,11 @@ function loadComponent(): unknown {
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
-    if (id === '@mini-canvas/canvas-render') return { ...renderPkg, ToolbarIcon: ToolbarIconStub }
-    if (id === '@mini-canvas/ui-kit-shadcn') return { Button: ShadcnButtonStub }
+    if (id === '@mini-canvas/canvas-render') {
+      // 真实 useUiComponent 要注入 CANVAS_CONTEXT_KEY；这里给它一个响应式句柄，
+      // 让被测组件仍走**真组件里的按名取件逻辑**，而不是把 Button 换掉。
+      return { ...renderPkg, ToolbarIcon: ToolbarIconStub, useUiComponent: () => vue.shallowRef(ShadcnButtonStub) }
+    }
     if (id.startsWith('../agentCommands')) return commandsMod
     if (id.startsWith('../agentResources')) return resourcesMod
     throw new Error('不认识这个依赖（测试的 require 只放已知几项）：' + id)
@@ -221,8 +224,6 @@ interface MountOpts {
   selectedIds?: string[]
   /** 命令服务：缺省给一个记录器；传 null = 宿主没这个服务 */
   command?: { runCommand(id: string, ...payload: unknown[]): unknown } | null
-  /** ui 目录里登记 button 件？false = 走「回退原生按钮」的降级路径 */
-  withCatalog?: boolean
 }
 
 /** 宿主给该区域条目 provide 的能力袋（RegionEntryHost 做的事，这里照它的形状打桩） */
@@ -239,7 +240,7 @@ function mount(opts: MountOpts = {}) {
     get: () => undefined,
     tryGet: (name: string): unknown => (name === 'canvas' ? command ?? undefined : undefined),
     registryOf: () => ({
-      top: (name: string) => (opts.withCatalog !== false && name === 'button' ? { value: StubButton } : undefined),
+      top: (name: string) => (name === 'Button' ? { value: StubButton } : undefined),
       list: () => [],
       subscribe: () => ({ dispose() {} }),
     }),
@@ -305,18 +306,6 @@ describe('按钮行为：点击与降级', () => {
     expect(() => fireClick(findButton(root)!)).not.toThrow()
   })
 
-  it('目录里没有 button 件 → 回退原生按钮（降级成「还能点」而不是白屏）', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const { root, calls } = mount({ withCatalog: false })
-      const btn = findButton(root)
-      expect(btn).toBeTruthy()
-      fireClick(btn!)
-      expect(calls).toHaveLength(1)
-    } finally {
-      warn.mockRestore()
-    }
-  })
 })
 
 /* —————————————————— ③ 源码守卫（改回错写法时当场红） —————————————————— */

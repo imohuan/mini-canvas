@@ -4,15 +4,15 @@
 项目统一使用 shadcn-vue 的 DropdownMenu 分离件。
 
 ```ts
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 ```
 
 源码在 `packages/ui-kit-shadcn/src/components/ui/dropdown-menu/`。
@@ -63,13 +63,13 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 文件：packages/my-plugin/src/MyMenu.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const open = ref(false)
 const items = ['重命名', '复制', '删除']
@@ -94,7 +94,7 @@ function pick(label: string): void {
 
 ## 注意事项
 
-1. **不要再按 `useUiComponent('dropdown')` 取**：旧浮层外壳已删除，直接 import shadcn 分离件。
+1. **按导出名取件**：`useUiComponent('DropdownMenu')`，不要用旧的 `dropdown` 小写名。
 2. **二级菜单用 Sub 系列**：不必自己画浮层或处理悬停展开。
 3. **内容层的内边距归 `DropdownMenuContent`**：需要贴边面板时在内容层写 `p-0`，
    不要再靠负 margin 抵消旧实现的 6px。

@@ -27,6 +27,7 @@ import type {
   FitToOptions,
   ViewContract,
 } from './renderServiceContracts'
+import type { NotifyContract } from './notifyContract'
 
 /** 节点上下状态栏服务（渲染层辅助服务；Spec D4 保留，不算基础 7 个）。 */
 export interface NodeToolbarContract {
@@ -57,6 +58,8 @@ declare module '@mini-canvas/kernel' {
     canvas: CanvasActions
     /** 节点上下状态栏的会话与模式注册（渲染层辅助服务，Spec D4） */
     nodeToolbar: NodeToolbarContract
+    /** 全局通知服务（默认主题提供；底层 vue-sonner，业务插件不直接 import 通知库） */
+    notify: NotifyContract
   }
 }
 
@@ -90,6 +93,8 @@ declare module '@mini-canvas/canvas-data' {
     canvas: CanvasActions
     /** 节点上下状态栏服务（渲染层辅助服务，Spec D4） */
     nodeToolbar: NodeToolbarContract
+    /** 全局通知服务（默认主题提供） */
+    notify: NotifyContract
   }
 }
 

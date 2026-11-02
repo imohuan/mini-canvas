@@ -8,7 +8,8 @@
  *   本插件：    监听该前缀 → HEAD 对比产物 → 变了才拉新重装 → 弹通知
  *
  * 没有可登记的 SSE 链接、没有 UI 面板 —— 监听是自动的（复用宿主共享 KV 通道，零新连接），
- * 提示走右下角 vue-sonner 通知。装载即生效，宿主 APP_PLUGINS 放 hotReloadPlugin 一个即可。
+ * 提示走上下文里的 notify 服务（默认主题提供；本插件不 import 任何通知库）。
+ * 装载即生效，宿主 APP_PLUGINS 放 hotReloadPlugin 一个即可。
  *
  * ## 导出面
  *
@@ -17,7 +18,7 @@
  * - PLUGIN_WATCH_PREFIX：watch 工具 PUT 的 key 前缀约定
  */
 import { createHotReload, type HotReload } from './data/hotReload'
-import type { Context } from '@mini-canvas/canvas-data'
+import type { Context, NotifyContract } from '@mini-canvas/canvas-data'
 import type { PluginModule } from '@mini-canvas/kernel'
 import { markRaw } from 'vue'
 import { Bug } from 'lucide-vue-next'
@@ -81,7 +82,18 @@ export const hotReloadPlugin: PluginModule = {
     const manager =
       (w[HOT_RELOAD_WINDOW_KEY] as ReturnType<typeof createHotReload> | undefined) ??
       createHotReload({
-        // 视觉反馈：自动重装成功 → 右下角 vue-sonner 通知（缺省实现，见 data/hotReload.ts）。
+        // 视觉反馈：走默认主题的全局 notify 服务（业务插件不直接依赖通知库）。
+        // 用 tryGet 现取：主题可能比本插件晚装载，取不到就安静跳过。
+        onReloaded: ({ plugin, sourceLabel }) => {
+          ctx.tryGet<NotifyContract>('notify')?.success('热重载完成：' + plugin, {
+            description: '来源：' + (sourceLabel || '未知来源'),
+          })
+        },
+        onReloadFailed: ({ plugin, error }) => {
+          ctx.tryGet<NotifyContract>('notify')?.error('热重载失败：' + plugin, {
+            description: error.slice(0, 200),
+          })
+        },
         ...(config?.watchBackend ? { backendUrl: config.watchBackend } : {}),
       })
     if (w[HOT_RELOAD_WINDOW_KEY] === undefined) w[HOT_RELOAD_WINDOW_KEY] = manager

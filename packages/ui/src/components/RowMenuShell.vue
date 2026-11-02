@@ -5,11 +5,11 @@
 // 调用方管：菜单里有哪些条目（默认插槽，自己摆 shadcn 的 Item / Sub）。
 // 右键与「⋯」两个入口共用同一个菜单实例与同一份条目，避免两套定位逻辑漂移。
 import { computed, ref, watch } from 'vue'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const props = withDefaults(
   defineProps<{

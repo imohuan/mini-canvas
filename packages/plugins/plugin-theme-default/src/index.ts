@@ -60,6 +60,7 @@ import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
 import { SHADCN_COMPONENTS, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn";
 import { SettingsRow, SettingsSection } from "@mini-canvas/ui-kit-shadcn";
 import { UiToaster } from "@mini-canvas/ui-kit-shadcn";
+import { setStaticUiCatalog } from "@mini-canvas/canvas-render";
 import { createNotifyService } from "./notifyService";
 import { SETTINGS_NAV_ICON_NAMES } from "./components/settings/navIcon";
 import {
@@ -90,6 +91,20 @@ export const name = "theme-default";
 // 代价是包级循环——theme-default devDeps→node-text，node-text→theme-default（复用本插件 MovingHandle/Select），
 // 双向即成环。删除后本插件不依赖任何节点插件，环消失且无行为损失（皮肤不再因缺 text 插件而 PENDING）。
 export const inject = [] as string[];
+
+/**
+ * Provider 外的静态组件目录：模块加载就发布一份导出名 → 组件。
+ *
+ * 项目列表页 / 根通知宿主在 CanvasProvider 之外，首次打开时还没有内核 ctx；
+ * 只靠 @ready 会整块不渲染（真机截图）。主题包仍是唯一 import 组件库的地方，
+ * 这里只是把同一批句柄主动交给渲染层，宿主目录就绪后仍以 host ctx 为准。
+ */
+setStaticUiCatalog({
+  ...SHADCN_COMPONENTS,
+  settingsRow: SettingsRow,
+  settingsSection: SettingsSection,
+  Toaster: UiToaster,
+});
 
 // 默认皮对应的连线外观默认值（作为本插件 config schema 的默认/单一数据源初始值）。
 // 视觉语言（参考 docs/reference/bezier-glow-flow-line）：导轨细线 + 青色渐变光斑沿连线流动。
@@ -869,13 +884,13 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 
   // 设计系统组件目录（设计文档 §4.5 / 案例 4 / 决策 4）：把"希望被主题整体换掉"的
   // 通用件按名字登记进 ui 场 —— 别的插件按名取用，换一套主题时它们一起变、业务插件零改动。
-  // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
+  // 其它插件一律从这里按名取，不再直接 import 组件库（用户口径 2026-11-03）。
   const ui = ctx.registryOf<unknown>("ui");
   // 全局通知服务：底层 vue-sonner，宿主只挂一个 Toaster（从 ui 目录取）。
   ctx.provide("notify", createNotifyService());
   ui.add("Toaster", UiToaster, { id: "default" });
-  // 工具栏按钮 / 下拉不再按名登记：调用点直接用 shadcn Button + 全局
-  // .mck-toolbar-btn / DropdownMenu 分离件（用户口径 2026-11-02）。
+  // 工具栏按钮 / 下拉按导出名登记（Button / DropdownMenu / …），调用点从 ui 目录取，
+  // 再配全局 .mck-toolbar-btn 样式。
   // 统一空状态：节点插件按名取用（图片/视频/音频/3D 共用同一套图标/文案/动作布局）。
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" });
   // 插槽调试小点的悬停说明面板：外壳（底栏/状态条/抽屉/设置导航）按名取
@@ -908,7 +923,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" });
   // ===== shadcn-vue 原始组件：全部登记进 ui 场，供业务插件按名取用 =====
   // 注册名 = 源码导出名（Button / DropdownMenuContent …），与 shadcn-vue 的 import 名对齐。
-  // 与上面的旧目录名（slider / color …）是两套语义：这些是"组件库原子件"，名字不大写就撞不上。
+  // 与上面的语义件（slider / color / mediaViewer …）是两层：上面是主题自造的复合件，
+  // 这里是"组件库原子件"，名字按导出名大写，两层不会撞名。
   // 值就是 shadcn-vue 生成的那个组件，不做功能适配层；只包一层透明标记，
   // 让「按名取用」的组件也能在组件库使用标记里显示登记点（模板直写的那种由 Vite 插件注入）。
   //
@@ -947,7 +963,7 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
 /**
  * 通用 UI 组件出口（供其它插件复用，避免各节点面板自绘一套近似的参数控件）。
  *
- * 下拉 / 选择 / 提示不再从这里提供：它们统一使用 `@mini-canvas/ui-kit-shadcn` 的
+ * 下拉 / 选择 / 提示不再从这里提供：它们统一使用 ui 目录里登记的
  * 分离件（DropdownMenu / Select / Tooltip），本主题不再维护第二套实现。
  */
 export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState } from "./components/ui";

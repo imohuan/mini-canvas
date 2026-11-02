@@ -26,9 +26,7 @@
   "dependencies": {
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/ui-kit-shadcn": "workspace:*",
-    "lucide-vue-next": "^1.0.0",
-    "vue-sonner": "^2.0.9"
+    "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",

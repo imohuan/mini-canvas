@@ -2,7 +2,8 @@
  * shadcn 组件清单：默认主题按这份表把**原始组件**登记进 `registryOf('ui')`。
  *
  * 这里不做任何包装：值就是各目录 index.ts 导出的那个 Vue 组件。
- * 统一加 `shadcn` 前缀，避免和现有目录名（dropdown / select / slider 等）撞车。
+ * 注册名 = 源码导出名（Button / DropdownMenuContent …），不再加 `shadcn` 前缀。
+ * 消费方直接 "有什么组件就用什么名字"，与 shadcn-vue 的 import 名一致。
  */
 import type { Component } from 'vue'
 
@@ -24,6 +25,7 @@ import * as MenubarModule from './components/ui/menubar'
 import * as NumberFieldModule from './components/ui/number-field'
 import * as PopoverModule from './components/ui/popover'
 import * as RadioGroupModule from './components/ui/radio-group'
+import * as ScrollAreaModule from './components/ui/scroll-area'
 import * as SelectModule from './components/ui/select'
 import * as SeparatorModule from './components/ui/separator'
 import * as SheetModule from './components/ui/sheet'
@@ -53,6 +55,9 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   NumberField: NumberFieldModule,
   Popover: PopoverModule,
   RadioGroup: RadioGroupModule,
+  ScrollArea: ScrollAreaModule,
+  // ScrollBar 与 ScrollArea 同目录、不同名前缀；单列一项才能被 buildManifest 收进来。
+  ScrollBar: ScrollAreaModule,
   Select: SelectModule,
   Separator: SeparatorModule,
   Sheet: SheetModule,
@@ -72,13 +77,13 @@ function buildManifest(): Record<string, Component> {
       if (typeof value !== 'object' && typeof value !== 'function') continue
       // 名单是唯一真源：FAMILIES 里混进本项目自造件时，这里也一起挡住
       if (!SHADCN_FAMILY_NAMES.includes(family as (typeof SHADCN_FAMILY_NAMES)[number])) continue
-      manifest[`shadcn${name}`] = value as Component
+      manifest[name] = value as Component
     }
   }
   return manifest
 }
 
-/** 组件名 → 原始 shadcn 组件。名字形如 `shadcnDropdownMenuItem`。 */
+/** 组件名 → 原始 shadcn 组件。名字就是源码导出名，如 `DropdownMenuItem`。 */
 export const SHADCN_COMPONENTS: Record<string, Component> = buildManifest()
 
 /** 已登记的组件名（诊断 / 文档用）。 */

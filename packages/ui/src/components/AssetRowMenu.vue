@@ -5,13 +5,13 @@
 //       （分隔）/ 下载 / 重命名 / 删除。
 // 二级菜单全部用 shadcn 的 DropdownMenuSub（组件嵌套，不手写浮层）。
 import { computed, ref } from 'vue'
-import {
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
 import { FOLDER_ICON_NAMES, folderIconComponent } from '../composables/folderIcons'
 import RowMenuShell from './RowMenuShell.vue'
 

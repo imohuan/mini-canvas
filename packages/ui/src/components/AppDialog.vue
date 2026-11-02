@@ -15,11 +15,12 @@
  */
 import type { HTMLAttributes } from 'vue'
 import { computed } from 'vue'
-import {
-  Dialog,
-  DialogContent,
-  DialogOverlay,
-} from '@mini-canvas/ui-kit-shadcn'
+// 弹窗件从画布 ctx 的 ui 注册表按名取（默认主题插件登记），不直接 import 组件库。
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Dialog = useUiComponent('Dialog')
+const DialogContent = useUiComponent('DialogContent')
+const DialogOverlay = useUiComponent('DialogOverlay')
 
 const props = withDefaults(
   defineProps<{

@@ -22,33 +22,30 @@ import { GROUP_COLOR_SWATCHES, groupServiceOf } from '../groupEngine'
  * shadcn 的菜单内容在真实运行时走 Teleport，SSR 的 renderToString 返回值里看不到。
  * 这里只把菜单容器换成「按开关渲染插槽」的薄壳，色板网格、色块、选中态与宽度
  * 仍然是 GroupTopToolbar 的真实模板/CSS 在渲染，断言没有降级。
+ *
+ * 组件本身不再 import 组件库，而是从 ui 目录按名取；这里给以下三件最小替身：
+ * Button（摊平成 <button>）、DropdownMenu / Trigger / Content（按开关渲染插槽）。
  */
 const mockMenuState = vi.hoisted(() => ({ open: false }))
-vi.mock('@mini-canvas/ui-kit-shadcn', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mini-canvas/ui-kit-shadcn')>()
-  return {
-    ...actual,
-    DropdownMenu: defineComponent({
-      name: 'StubDropdownMenu',
-      setup(_props, { slots }) {
-        return () => h('div', { class: 'stub-dropdown' }, slots.default?.())
-      },
-    }),
-    DropdownMenuTrigger: defineComponent({
-      name: 'StubDropdownMenuTrigger',
-      inheritAttrs: false,
-      setup(_props, { slots }) {
-        return () => slots.default?.()
-      },
-    }),
-    DropdownMenuContent: defineComponent({
-      name: 'StubDropdownMenuContent',
-      inheritAttrs: false,
-      setup(_props, { slots, attrs }) {
-        return () => (mockMenuState.open ? h('div', attrs, slots.default?.()) : null)
-      },
-    }),
-  }
+const StubDropdownMenu = defineComponent({
+  name: 'StubDropdownMenu',
+  setup(_props, { slots }) {
+    return () => h('div', { class: 'stub-dropdown' }, slots.default?.())
+  },
+})
+const StubDropdownMenuTrigger = defineComponent({
+  name: 'StubDropdownMenuTrigger',
+  inheritAttrs: false,
+  setup(_props, { slots }) {
+    return () => slots.default?.()
+  },
+})
+const StubDropdownMenuContent = defineComponent({
+  name: 'StubDropdownMenuContent',
+  inheritAttrs: false,
+  setup(_props, { slots, attrs }) {
+    return () => (mockMenuState.open ? h('div', attrs, slots.default?.()) : null)
+  },
 })
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -73,9 +70,25 @@ function renderCtx(openMenu = false, selectedIds: string[] = []) {
       return undefined
     },
     tryGet: (name: string) => (ctx as { get(n: string): unknown }).get(name),
-    // 按钮直接来自 shadcn，不再有旧 ui 目录的 dropdown 条目
+    // 目录里要有组件按名取的那几件；菜单三件给 SSR 可渲染的薄壳。
     registryOf: () => ({
-      top: () => undefined,
+      top: (name: string) => {
+        if (name === 'Button') {
+          return {
+            value: defineComponent({
+              name: 'StubButton',
+              inheritAttrs: false,
+              setup(_props, { slots, attrs }) {
+                return () => h('button', attrs, slots.default?.())
+              },
+            }),
+          }
+        }
+        if (name === 'DropdownMenu') return { value: StubDropdownMenu }
+        if (name === 'DropdownMenuTrigger') return { value: StubDropdownMenuTrigger }
+        if (name === 'DropdownMenuContent') return { value: StubDropdownMenuContent }
+        return undefined
+      },
       list: () => [],
       subscribe: () => ({ dispose() {} }),
     }),

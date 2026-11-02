@@ -47,7 +47,7 @@ function loadComponent(rel: string): unknown {
   }).outputText
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   /**
-   * ToolViewBody 现在用组件库的 Button（公共渲染层，与其它插件一致）。
+   * ToolViewBody 现在从画布 ui 目录按名取 Button（业务插件不直接 import 组件库）。
    * 这里的 require 是同步的语法转译环境，不能直接 import 那个 ESM 包；
    * 用**最小的 Button 替身**保持 node 测试可加载：只认组件库 Button 的公开 props，
    * 渲染成真 <button> 并把 attrs（含 onClick / aria-*）原样落下。
@@ -70,8 +70,8 @@ function loadComponent(rel: string): unknown {
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
     if (id === 'lucide-vue-next') return lucide
-    if (id === '@mini-canvas/ui-kit-shadcn') return { Button: ButtonStub }
-    throw new Error('不认识这个依赖（测试的 require 只放 vue / lucide / ui-kit-shadcn）：' + id)
+    if (id === '@mini-canvas/canvas-render') return { useUiComponent: () => vue.shallowRef(ButtonStub) }
+    throw new Error('不认识这个依赖（测试的 require 只放 vue / lucide / canvas-render）：' + id)
   }
   new Function('module', 'exports', 'require', js)(mod, mod.exports, requireShim)
   return mod.exports.default

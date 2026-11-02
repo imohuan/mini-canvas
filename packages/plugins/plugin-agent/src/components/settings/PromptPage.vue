@@ -17,14 +17,19 @@
  *
  * UI 全部来自 @mini-canvas/ui-kit-shadcn；业务调用与草稿逻辑保持不变。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, type ComponentPublicInstance } from 'vue'
 import { AlertTriangle, Check, Plus, Save, Trash2, Wrench } from 'lucide-vue-next'
-import { Button, Input, Textarea } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
 import type { PromptPreset } from '../../agentService.js'
 import type { ContextPlaceholderView } from '../../agentApi.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Textarea = useUiComponent('Textarea')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state
@@ -38,7 +43,7 @@ const restoring = ref(false)
 let seq = 0
 
 /** 正文框；「插入占位符」要往光标处插，所以拿组件实例再取真实 DOM */
-const textarea = ref<InstanceType<typeof Textarea> | null>(null)
+const textarea = ref<ComponentPublicInstance | null>(null)
 
 function textareaElement(): HTMLTextAreaElement | null {
   const el = textarea.value?.$el

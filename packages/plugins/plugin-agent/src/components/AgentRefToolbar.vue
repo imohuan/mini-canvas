@@ -18,13 +18,13 @@
  * （与节点控制栏同一个 resolveNodeSlotStyle），本组件只放内容。
  */
 import { computed } from 'vue'
-import { useCapability, useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCapability, useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import type { SelectionCapability } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { AGENT_REFERENCE_COMMAND_ID } from '../agentCommands.js'
 import { ICON_NODE } from '../agentResources.js'
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 /** 当前选中集（能力包；needs:['selection'] 在 agentPlugin 的 attach 里声明） */
 const selection = useCapability<SelectionCapability>('selection')
 

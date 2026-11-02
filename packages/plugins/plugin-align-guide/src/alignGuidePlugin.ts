@@ -16,6 +16,7 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import AlignGuideOverlay from './AlignGuideOverlay.vue'
 import { Config, ALIGN_GUIDE_COLOR_KEYS } from './alignGuideConfig'
 import { bindAlignGuideToggle } from './alignGuideToggle'
+import { registerThemePreview } from './themePreview'
 
 export const name = 'align-guide'
 
@@ -72,6 +73,8 @@ function bindGuideColorVars(ctx: Context): () => void {
 }
 
 export function apply(ctx: Context) {
+  // 主题工作台预览：参考线由本插件自己画（与真实拖拽时同一条 CSS 变量）。
+  registerThemePreview(ctx)
   // 总开关（alignGuideEnabled）关闭 → 连浮层都不装：不吸附、不画线、不订阅拖拽事件。
   // 重开 → 现装（浮层组件重新挂载并重新订阅），无需重载画布。
   // config 已由内核经 Config schema 校验 + 补默认并登记 settings；订阅见 bindAlignGuideToggle。

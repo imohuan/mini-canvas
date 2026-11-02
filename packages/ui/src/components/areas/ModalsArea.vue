@@ -7,25 +7,8 @@ import { motion } from 'motion-v'
 import AppDialog from '../AppDialog.vue'
 import ScrollPane from '../ScrollPane.vue'
 import { scrollViewportOf } from '../scrollPane'
-import {
-  Button,
-  Input,
-  NumberField,
-  NumberFieldContent,
-  NumberFieldDecrement,
-  NumberFieldIncrement,
-  NumberFieldInput,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Switch,
-} from '@mini-canvas/ui-kit-shadcn'
+// 浮层里的控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记）。
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/MediaViewer.vue'
 import { useMasonry } from '../../composables/useMasonry'
 import { uiComponentOf, useUi, useUiComponentOutside } from '../../composables/ui'
@@ -34,6 +17,23 @@ import { historySignatureOf } from '../../composables/historySignature'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const NumberField = useUiComponent('NumberField')
+const NumberFieldContent = useUiComponent('NumberFieldContent')
+const NumberFieldDecrement = useUiComponent('NumberFieldDecrement')
+const NumberFieldIncrement = useUiComponent('NumberFieldIncrement')
+const NumberFieldInput = useUiComponent('NumberFieldInput')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
+const Switch = useUiComponent('Switch')
 /** 全屏预览走 ui 目录；没登记时回落默认皮。历史预览只在打开时渲染，取件晚到也不会丢。 */
 const MediaViewer = useUiComponentOutside('mediaViewer')
 /** 模板 :is 用；目录没登记时回落默认皮。 */

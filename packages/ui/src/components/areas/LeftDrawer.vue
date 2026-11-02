@@ -14,16 +14,8 @@ import AssetUploadDialog from '../AssetUploadDialog.vue'
 import AssetTree, { type AssetTreeRow } from '../AssetTree.vue'
 import CanvasRowMenu from '../CanvasRowMenu.vue'
 import AppDialog from '../AppDialog.vue'
-// 抽屉的页签 / 工具按钮 / 搜索框改用 shadcn 原始组件；各下拉菜单的内容 UI 保持不变。
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Input,
-} from '@mini-canvas/ui-kit-shadcn'
+// 抽屉的页签 / 工具按钮 / 搜索框从画布 ctx 的 ui 注册表按名取（默认主题插件登记），
+// 外壳不直接 import 组件库（用户口径 2026-11-03）。
 import { useUi, type TreeNode } from '../../composables/ui'
 import { checkedRowIds } from '../../composables/assetSelection'
 import { canvasTreeBlocks } from '../../composables/canvasTree'
@@ -31,8 +23,7 @@ import { assetKindOf } from '../../composables/assetModel'
 import { folderIconComponent } from '../../composables/folderIcons'
 import { openAssetManager, openAssetPreviewFromAsset } from '../../composables/assetUiBus'
 import { siblingPreview } from '../../composables/assetSiblings'
-import { useCanvasContext, SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
-import SlotButton from './SlotButtons.vue'
+import { useCanvasContext, SlotAnchor, SlotComposer, useUiComponent } from '@mini-canvas/canvas-render'
 import {
   DRAWER_TAB_ASSETS,
   DRAWER_TAB_CANVAS,
@@ -43,6 +34,14 @@ import {
 
 const ui = useUi()
 const s = ui.state
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const Input = useUiComponent('Input')
 /** 插槽调试提示：主题插件登记的默认件 */
 
 // ===== 插件页签（第三个及之后的页签）=====
@@ -95,10 +94,8 @@ const drawerHost: DrawerHost = {
   toggleCollapsed: () => ui.toggleLeftCollapsed(),
 }
 
-/** 下发给插件页签的共享 props：默认页签按钮 + 抽屉函数 */
+/** 下发给插件页签的共享 props：抽屉函数（按钮由插件从 ui 注册表取） */
 const slotShared = {
-  coreButton: SlotButton,
-  buttonTone: 'tab',
   openDrawerTab: (id: string) => ui.openDrawerTab(id),
   closeDrawer: () => { s.drawer = null },
 }

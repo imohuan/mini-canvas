@@ -17,13 +17,7 @@
  * 所以顶栏「剪辑时长」点下去就能看到它 —— 不必先去下拉里手动选「剪辑」。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import {
-  Button,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import {
   clampClipEnd,
   clampClipRange,
@@ -45,6 +39,10 @@ import { resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const Popover = useUiComponent('Popover')
+const PopoverContent = useUiComponent('PopoverContent')
+const PopoverTrigger = useUiComponent('PopoverTrigger')
 const selected = useSoleNodeSelected(props.id)
 const visible = computed(() => selected.value && isClipping(props.id))
 

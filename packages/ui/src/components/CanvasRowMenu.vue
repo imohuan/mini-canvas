@@ -5,8 +5,11 @@
 // 画布节点有「定位 / 解散分组」，资产那侧另有「移动到 / 图标 / 标签」。
 // 本组件只发事件、不做动作，动作由宿主（LeftDrawer）执行。
 import { ref } from 'vue'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import RowMenuShell from './RowMenuShell.vue'
+
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
 
 withDefaults(
   defineProps<{

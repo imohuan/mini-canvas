@@ -8,12 +8,12 @@
  * 关闭：nodeBar.exitMode（顶栏的「退出」也调同一句，两边永远同步）。
  */
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { closeDemoMode, demoMode } from './demoMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 const LABEL = { alpha: '演示功能 A', beta: '演示功能 B' } as const
 
 const kind = computed(() => {

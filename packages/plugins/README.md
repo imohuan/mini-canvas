@@ -112,7 +112,7 @@ ctx.nodes.register({
    插件组件写成普通流式内容（只排自己的内部布局 + 自己的材质/宽度）。
 2. **同一区域可以叠多个**。别的插件可以往任意 type 的任意区域挂东西，不必改那个插件：
    `ctx.nodes.contribute('image', 'out:top', MyButton)`（带 `id`/`order`，卸载自动摘除）。
-3. **按钮用 shadcn 的 `Button` + 全局工具栏样式**。从 `@mini-canvas/ui-kit-shadcn` 引入，
+3. **按钮从 ui 目录取**。`const Button = useUiComponent('Button')`，不要直接 import 组件库；
    配上 `mck-toolbar-btn`（纯图标再加 `is-icon-only`），尺寸/hover/focus/禁用/激活态就绪；
    纯图标时 `title` 与 `aria-label` 都要给。数值见 `docs/design/ui-style-guide.md` §3.3。
 

@@ -22,33 +22,29 @@ import {
   Search,
   Move,
 } from "lucide-vue-next";
-// 底栏按钮 / 提示 / 下拉菜单全部用 shadcn 原始组件（分离件，内容随意定制）。
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@mini-canvas/ui-kit-shadcn";
+// 底栏按钮 / 提示 / 下拉全部从画布 ctx 的 ui 注册表按名取（默认主题插件登记），
+// 业务外壳不直接 import 组件库（用户口径 2026-11-03）。
 import AgentOrb from "../AgentOrb.vue";
 import { useUi } from "../../composables/ui";
 import { openUploadDialog } from "../../composables/assetUploadBus";
 import { computed, ref } from "vue";
-import { SlotAnchor, SlotComposer } from "@mini-canvas/canvas-render";
-import SlotButton from "./SlotButtons.vue";
+import { SlotAnchor, SlotComposer, useUiComponent } from "@mini-canvas/canvas-render";
+
+const Button = useUiComponent("Button")
+const DropdownMenu = useUiComponent("DropdownMenu")
+const DropdownMenuContent = useUiComponent("DropdownMenuContent")
+const DropdownMenuItem = useUiComponent("DropdownMenuItem")
+const DropdownMenuTrigger = useUiComponent("DropdownMenuTrigger")
+const Tooltip = useUiComponent("Tooltip")
+const TooltipContent = useUiComponent("TooltipContent")
+const TooltipProvider = useUiComponent("TooltipProvider")
+const TooltipTrigger = useUiComponent("TooltipTrigger")
 
 const ui = useUi();
 const s = ui.state;
 
 /** 下发给插件条目的共享 props：默认按钮 + 常用函数（插件不必再抄一份样式） */
 const slotShared = {
-  coreButton: SlotButton,
-  buttonTone: "dock",
   openDrawer: () => ui.openDrawer("left"),
   openHistory: () => ui.toggleHistory(),
   openShortcuts: () => ui.toggleShortcuts(),
@@ -271,7 +267,7 @@ function onUploadPick(e: Event): void {
          圆角走全局 --mct-radius —— 它是圆角按钮，不是圆形球（用户口径）。 -->
     <Tooltip>
       <TooltipTrigger as-child>
-        <Button variant="outline" size="icon-lg" class="agent-orb-button size-10 border-line text-ink"
+        <Button variant="outline" size="icon-lg" class="agent-orb-button size-10 rounded-full border-line text-ink"
           :class="ui.agent.open ? 'is-open bg-panel-active' : ''" aria-label="Agent 对话"
           @click="ui.toggleAgent()">
           <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。

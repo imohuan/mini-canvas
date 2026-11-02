@@ -9,9 +9,8 @@
  */
 import { computed, ref } from 'vue'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { useCanvasRender, useSoleNodeSelected, SlotAnchor, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@mini-canvas/ui-kit-shadcn'
 import { createImageOps, uploadImage } from './imageOps'
 import { readImageSourceFields } from './imageRefs'
 import ImagePaintEntry from './ImagePaintEntry.vue'
@@ -20,6 +19,11 @@ import ImageToolbarShell from './ImageToolbarShell.vue'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const selected = useSoleNodeSelected(props.id)
 
 const hasImage = computed(() => {

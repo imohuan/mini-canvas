@@ -5,17 +5,17 @@
 import { computed, ref } from 'vue'
 import { X as XIcon, FolderPlus as AddIcon, FolderInput as MoveIcon,
   Tags as TagIcon, Download as DownloadIcon, Trash2 as TrashIcon } from 'lucide-vue-next'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
 
 const props = defineProps<{
   count: number

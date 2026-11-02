@@ -27,4 +27,18 @@ describe('弹窗外层内边距归零', () => {
     expect(rule, '外层 padding 没归零，会和面板内部的 px/pt 叠加').toMatch(/padding:\s*0\s*!important/)
     expect(rule, '外层 gap 没归零，标题栏与内容之间会多一段').toMatch(/gap:\s*0\s*!important/)
   })
+
+  it('弹窗外层不能是网格，否则会把整块面板按行拉开', () => {
+    expect(rule, '缺 display 规则').not.toBe('')
+    expect(rule, 'display:grid 会把高面板切成几行，块之间冒出大空白')
+      .not.toMatch(/display:\s*grid/)
+    expect(rule, '整块面板要按竖向排列撑满')
+      .toMatch(/display:\s*flex\s*!important/)
+    expect(rule).toMatch(/flex-direction:\s*column\s*!important/)
+  })
+
+  it('弹窗外层要裁掉子元素，批量底栏不能盖住面板圆角', () => {
+    expect(rule, '缺 overflow 规则，贴底的底栏会把面板下方圆角盖成直角')
+      .toMatch(/overflow:\s*hidden\s*!important/)
+  })
 })

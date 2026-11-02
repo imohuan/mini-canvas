@@ -17,18 +17,18 @@
 //   读屏会把两件事说成一件事，也是 ui-style-guide §5 第 2 条明令禁止的嵌套交互。
 import { Check, ChevronDown, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
-// 外壳按钮与下拉菜单全部使用 shadcn 原始组件；行内交互保持不变。
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+// 外壳按钮与下拉菜单从画布 ctx 的 ui 注册表按名取；行内交互保持不变。
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 /** 下拉里的一项：画布 id + 显示名 */
 export interface CanvasOption {

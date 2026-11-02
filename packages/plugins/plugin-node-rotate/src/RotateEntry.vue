@@ -7,14 +7,14 @@
  * 显隐自己判断（恰好选中本节点），有图才出现。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { readImageSourceFields } from './imageRefs'
 import { duplicateImageForRotate } from './rotateCopy'
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 /** 复制请求进行中：挡住连点，避免一次点击复制出两份 */
 const busy = ref(false)
 

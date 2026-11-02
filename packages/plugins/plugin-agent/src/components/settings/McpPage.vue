@@ -1,21 +1,22 @@
 <script setup lang="ts">
 // MCP 页：已配置列表 + 添加表单。控件全部来自 @mini-canvas/ui-kit-shadcn。
 import { computed, onMounted, ref } from 'vue'
-import {
-  Badge,
-  Button,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { PlugZap, Plus, Trash2 } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
 import type { McpProbeResult } from '../../agentService.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Badge = useUiComponent('Badge')
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state

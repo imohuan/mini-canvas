@@ -8,32 +8,28 @@
 // 「缩放选项」同理：百分比是**真实视口的镜像值**（ui.state.zoom），菜单动作调 viewport 服务
 // 真正改画布（详见 composables/ui.ts 的「缩放」段）。
 import { PanelLeft, LayoutGrid, Map, Link2Off, Link2, Magnet, Grid2x2X } from 'lucide-vue-next'
-// 状态栏按钮、提示、缩放菜单全部用 shadcn 原始组件。
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+// 状态栏控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记），不直接 import 组件库。
+import { SlotAnchor, SlotComposer, useUiComponent } from '@mini-canvas/canvas-render'
 import { useUi } from '../../composables/ui'
 import { computed } from 'vue'
-import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
-import SlotButton from './SlotButtons.vue'
 import { useMiniMapDockTarget } from '../../composables/miniMapDock'
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
 
 const ui = useUi()
 const s = ui.state
 
-/** 下发给插件条目的共享 props：状态条默认按钮 + 常用函数 */
+/** 下发给插件条目的共享 props：常用函数（按钮由插件自己从 ui 注册表取） */
 const slotShared = {
-  coreButton: SlotButton,
-  buttonTone: 'status',
   openDrawer: () => ui.openDrawer('left'),
   showToast: (msg: string) => ui.showToast(msg),
 }

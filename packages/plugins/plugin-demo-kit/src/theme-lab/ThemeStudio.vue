@@ -2,22 +2,27 @@
 /**
  * ThemeStudio —— 设置页「外观 → 主题工作台」正文。
  *
- * 结构照参考图：主题模板 → 颜色配方 → 右侧完整画布卡片。
+ * 结构：主题模板 → 颜色配方 → 右侧实时画布。
  * - 色签由各插件已声明的 `type: 'color'` 字段生成，插件没装就不出现；
  * - 每格直接读写真实 settings，亮/暗各一份值；
- * - 预览只用默认主题的真实组件，并在卡片里画一条“从色签到画布元素”的短指示线，
- *   指示线不跨卡片边界，也不冒充真实 SVG DOM。
+ * - 预览不在这里画：插件各自往 `theme-preview` 槽注册图层（theme-default 画节点与连线，
+ *   多选 / 参考线 / 切割各画自己的那层）。这里只负责提供画板、模式与自动取景。
  */
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { ColorField, NodeEmptyState } from '@mini-canvas/plugin-theme-default'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { ColorField } from '@mini-canvas/plugin-theme-default'
+import {
+  CANVAS_CONTEXT_KEY,
+  SlotHost,
+  THEME_PREVIEW_SLOT,
+  createThemePreviewScene,
+  provideThemePreviewScene,
+} from '@mini-canvas/canvas-render'
 import {
   BookmarkPlus,
   Check,
   Copy,
   Frame,
-  Hand,
   Link2,
   Moon,
   Palette,
@@ -29,8 +34,8 @@ import {
   Sparkles,
   SquareDashed,
   Sun,
-  Trash2,
   TriangleAlert,
+  Trash2,
   Waypoints,
   Zap,
 } from 'lucide-vue-next'
@@ -46,7 +51,9 @@ import {
 import { LAB_THEMES, cloneThemes, readLabState, writeLabState, type LabTheme } from './storage'
 import type { LabSettingsStore } from './types'
 
-const props = defineProps<{ settingsSource: SettingsPanelSource }>()
+const props = defineProps<{
+  settingsSource: SettingsPanelSource
+}>()
 
 const source = props.settingsSource as SettingsPanelSource & Partial<LabSettingsStore>
 const MODES: ThemeLabMode[] = ['light', 'dark']
@@ -54,6 +61,7 @@ const stored = readLabState()
 const themes = ref<LabTheme[]>(cloneThemes(stored.themes.length ? stored.themes : LAB_THEMES))
 const activeId = ref(stored.themes.some((theme) => theme.id === stored.themeId) ? stored.themeId : themes.value[0]?.id ?? 'mist')
 const mode = ref<ThemeLabMode>(initialMode())
+const previewRevision = ref(0)
 const fields = ref<DeclaredColorField[]>([])
 const tick = ref(0)
 const toast = ref('')
@@ -121,6 +129,51 @@ const GROUP_HINTS: Record<ThemeLabGroup, string> = {
 function entryOf(base: string): ThemeLabColorEntry | undefined {
   return entries.value.find((entry) => entry.id === base)
 }
+
+// —— 预览场景：插件图层共用同一块画板、同一套节点坐标与当前模式 —— //
+const canvasContext = inject(CANVAS_CONTEXT_KEY, null)
+const hasCanvasContext = computed(() => Boolean(canvasContext?.ctx?.slots))
+const scene = createThemePreviewScene({
+  mode,
+  revision: previewRevision,
+  settings: {
+    get: (key: string) => rawGet(key),
+  },
+})
+provideThemePreviewScene(scene)
+
+/** 预览画板尺寸（flow 坐标）；所有插件图层都按这套坐标画 */
+const ARTBOARD_W = 640
+const ARTBOARD_H = 400
+const PREVIEW_PAD = 26
+
+const previewBox = ref<HTMLElement | null>(null)
+const previewSize = ref({ w: 0, h: 0 })
+let previewObserver: ResizeObserver | null = null
+
+/** 量一次画布可见尺寸（ResizeObserver 不可用时用窗口 resize 兜底） */
+function measurePreview(): void {
+  const box = previewBox.value
+  if (!box) return
+  const rect = box.getBoundingClientRect()
+  if (rect.width > 0 && rect.height > 0) previewSize.value = { w: rect.width, h: rect.height }
+}
+
+const fittedStageStyle = computed(() => {
+  const bounds = scene.bounds.value
+  const w = bounds.w + PREVIEW_PAD * 2
+  const h = bounds.h + PREVIEW_PAD * 2
+  const viewW = previewSize.value.w || 620
+  const viewH = previewSize.value.h || 340
+  const scale = Math.min(viewW / w, viewH / h, 1.5)
+  const offsetX = (viewW - w * scale) / 2 - (bounds.x - PREVIEW_PAD) * scale
+  const offsetY = (viewH - h * scale) / 2 - (bounds.y - PREVIEW_PAD) * scale
+  return {
+    width: ARTBOARD_W + 'px',
+    height: ARTBOARD_H + 'px',
+    transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
+  }
+})
 
 function isHex(value: string): boolean {
   return /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)
@@ -231,6 +284,7 @@ function applyTheme(theme: LabTheme): void {
   }
   fields.value = readFields()
   tick.value += 1
+  previewRevision.value += 1
 }
 
 function selectTheme(theme: LabTheme): void {
@@ -281,6 +335,7 @@ function setValue(entry: ThemeLabColorEntry, next: string): void {
   else delete theme.overrides[key]
   fields.value = readFields()
   tick.value += 1
+  previewRevision.value += 1
   persist()
 }
 
@@ -333,9 +388,9 @@ const previewColors = computed(() => {
   out['--ui-select-box'] = fallback('multiSelectBoxColor', accent)
   out['--ui-select-outer'] = fallback('multiSelectFrameOuterColor', accent)
   out['--ui-select-inner'] = fallback('multiSelectFrameInnerColor', accent)
-  out['--pv-guide'] = fallback('alignGuideColor', accent)
-  out['--pv-cut'] = fallback('pathColor', accent)
-  out['--pv-blade'] = fallback('bladeColor', accent)
+  out['--ui-guide'] = fallback('alignGuideColor', accent)
+  out['--edge-cutting-path-color'] = fallback('pathColor', out['--ui-accent-hover'])
+  out['--edge-cutting-blade-color'] = fallback('bladeColor', accent)
   return out
 })
 
@@ -345,30 +400,40 @@ const previewSwatches = computed(() =>
     .filter(Boolean),
 )
 
-const hasSelection = computed(() => Boolean(entryOf('multiSelectFrameOuterColor') || entryOf('multiSelectFrameInnerColor')))
-const hasGuide = computed(() => Boolean(entryOf('alignGuideColor')))
-const hasCut = computed(() => Boolean(entryOf('pathColor') || entryOf('bladeColor')))
 const activeIsPreset = computed(() => LAB_THEMES.some((theme) => theme.id === activeId.value))
 
 onMounted(() => {
   fields.value = readFields()
+  previewRevision.value += 1
+  measurePreview()
+  window.addEventListener('resize', measurePreview)
+  const box = previewBox.value
+  if (box && typeof ResizeObserver !== 'undefined') {
+    previewObserver = new ResizeObserver(measurePreview)
+    previewObserver.observe(box)
+  }
   const current = rawGet('themeMode')
   if (current === 'light' || current === 'dark') mode.value = current
   disposers.push(
     source.onChange((key, value) => {
       fields.value = readFields()
       tick.value += 1
+      previewRevision.value += 1
       if (key === 'themeMode' && (value === 'light' || value === 'dark')) mode.value = value
     }),
   )
   const off = source.onSchemaChange?.(() => {
     fields.value = readFields()
     tick.value += 1
+    previewRevision.value += 1
   })
   if (off) disposers.push(off)
 })
 
 onBeforeUnmount(() => {
+  previewObserver?.disconnect()
+  previewObserver = null
+  window.removeEventListener('resize', measurePreview)
   for (const disposer of disposers) disposer.dispose()
   clearTimeout(toastTimer)
   clearTimeout(saveTimer)
@@ -413,27 +478,15 @@ function shortLabel(entry: ThemeLabColorEntry): string {
   return entry.label
 }
 
-/** 色签 → 画布元素的真实归属，用来决定卡片里那根短指示线的走向。 */
-function previewTarget(entry: ThemeLabColorEntry): 'button' | 'warn' | 'danger' | 'edge' | 'selection' | 'guide' | 'cut' {
-  if (entry.group === '连线') return 'edge'
-  if (entry.id === 'alignGuideColor') return 'guide'
-  if (entry.group === '切割') return 'cut'
-  if (entry.group === '选择') return 'selection'
-  if (entry.id === 'warnColor') return 'warn'
-  if (entry.id === 'dangerColor') return 'danger'
-  return 'button'
-}
-
-/** 只在配色色签上显示细线；不伪造“从页面跨到画布”的长线。 */
+/** 色签下面的短提示：说清它会在预览的哪一层生效。 */
 function targetHint(entry: ThemeLabColorEntry): string {
-  const target = previewTarget(entry)
-  if (target === 'button') return '主按钮'
-  if (target === 'warn') return '待确认状态'
-  if (target === 'danger') return '失效状态'
-  if (target === 'edge') return entry.id === 'edgeFlowColor' ? '流光' : '连线'
-  if (target === 'selection') return '选框'
-  if (target === 'guide') return '参考线'
-  return entry.id === 'bladeColor' ? '刀锋' : '轨迹'
+  if (entry.group === '连线') return entry.id === 'edgeFlowColor' ? '流光' : '连线'
+  if (entry.id === 'alignGuideColor') return '参考线'
+  if (entry.group === '切割') return entry.id === 'bladeColor' ? '刀锋' : '轨迹'
+  if (entry.group === '选择') return entry.id === 'multiSelectBoxColor' ? '绘制框' : '多选框'
+  if (entry.id === 'warnColor') return '警示状态'
+  if (entry.id === 'dangerColor') return '危险状态'
+  return '主按钮'
 }
 </script>
 
@@ -443,7 +496,7 @@ function targetHint(entry: ThemeLabColorEntry): string {
       <div class="studio-intro-copy">
         <p class="studio-eyebrow">外观 · 主题配色</p>
         <h2>颜色配方</h2>
-        <p>挑一套模板，再点色签单独调。右侧画布会立刻跟着变。</p>
+        <p>挑一套模板，再点色签单独调。上方画布会立刻跟着变。</p>
       </div>
       <span class="studio-saved"><Check aria-hidden="true" />自动保存</span>
     </header>
@@ -576,49 +629,22 @@ function targetHint(entry: ThemeLabColorEntry): string {
           </div>
         </div>
 
-        <div class="studio-preview-canvas" :class="mode === 'dark' ? 'is-dark' : 'is-light'" :style="previewColors" inert aria-hidden="true">
+        <div
+          ref="previewBox"
+          class="studio-preview-canvas"
+          :class="mode === 'dark' ? 'is-dark' : 'is-light'"
+          :style="previewColors"
+          inert
+          aria-hidden="true"
+        >
           <div class="studio-preview-glint" aria-hidden="true"></div>
-          <div class="studio-preview-toolbar">
-            <Button class="mck-toolbar-btn is-icon-only is-active" variant="ghost" size="sm" type="button" title="移动" aria-label="移动" aria-pressed="true"><Hand /></Button>
-            <span class="studio-tool-divider"></span>
-            <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="框选" aria-label="框选"><Frame /></Button>
-            <Button v-if="hasSelection" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="多选" aria-label="多选"><SquareDashed /></Button>
-            <Button v-if="hasCut" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="切割" aria-label="切割"><Scissors /></Button>
+          <!-- 画板：所有内容都由插件图层自己画；这里只给统一坐标与自动取景。 -->
+          <div class="studio-stage" :style="fittedStageStyle">
+            <SlotHost v-if="hasCanvasContext" :slot="THEME_PREVIEW_SLOT" />
           </div>
-
-          <svg class="studio-wire" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <path class="studio-wire-base" d="M 42 28 C 53 28 49 47 56 47" />
-            <path class="studio-wire-flow" d="M 42 28 C 53 28 49 47 56 47" />
-            <line v-if="hasGuide" class="studio-guide" x1="84" y1="16" x2="84" y2="45" />
-            <path v-if="hasCut" class="studio-cut" d="M 14 80 C 32 74 55 76 82 68" />
-            <circle v-if="hasCut" class="studio-blade" cx="82" cy="68" r="1.4" />
-            <circle v-if="hasCut" class="studio-blade-glow" cx="82" cy="68" r="2.6" />
-          </svg>
-
-          <div class="studio-node studio-node-a">
-            <div class="studio-node-title"><i></i><span>灵感速记</span><em>AI</em></div>
-            <p>把碎片想法收进来</p>
-            <Button class="mck-toolbar-btn mck-toolbar-btn--primary studio-confirm" variant="default" size="sm" type="button" title="确认" aria-label="确认">确认</Button>
-            <span class="studio-port is-left"></span>
-            <span class="studio-port is-right"></span>
-          </div>
-
-          <div class="studio-node studio-node-b">
-            <div class="studio-node-title"><span>海边房间</span><em>图片</em></div>
-            <span class="studio-thumb"></span>
-            <span class="studio-port is-left"></span>
-            <span class="studio-port is-right"></span>
-          </div>
-
-          <div v-if="hasSelection" class="studio-selection" aria-hidden="true">
-            <span class="studio-selection-outer"></span>
-            <span class="studio-selection-inner"></span>
-          </div>
-
-          <div class="studio-states">
-            <span class="studio-state"><NodeEmptyState layout="row" size="sm" tone="warning" text="待确认" /></span>
-            <span class="studio-state"><NodeEmptyState layout="row" size="sm" tone="danger" text="素材失效" /></span>
-          </div>
+          <p v-if="!hasCanvasContext" class="studio-preview-empty">
+            没有预览图层。装上默认主题后，这里会出现节点与连线。
+          </p>
         </div>
 
         <div class="studio-preview-meta">
@@ -897,10 +923,9 @@ function targetHint(entry: ThemeLabColorEntry): string {
 }
 
 .studio-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 286px;
+  display: flex;
+  flex-direction: column;
   gap: var(--studio-gap);
-  align-items: start;
 }
 
 .studio-colors {
@@ -992,9 +1017,16 @@ function targetHint(entry: ThemeLabColorEntry): string {
   box-shadow: var(--ui-shadow-e1, 0 2px 10px rgb(0 0 0 / 0.04));
 }
 
+/* 色块：40 × 40 的正方形；名字 / 用途在下方，不再拉成长条 */
+.studio-token-picker {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+}
+
 .studio-group {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   padding: 12px 0;
@@ -1039,17 +1071,19 @@ function targetHint(entry: ThemeLabColorEntry): string {
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 9px;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .studio-token-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 10px;
   min-width: 0;
 }
 
 .studio-token {
   display: flex;
+  width: 64px;
   min-width: 0;
   flex-direction: column;
   gap: 3px;
@@ -1057,8 +1091,6 @@ function targetHint(entry: ThemeLabColorEntry): string {
 
 .studio-token-picker {
   position: relative;
-  width: 100%;
-  border-radius: var(--radius-row, 10px);
   transition: box-shadow var(--dur-hover, 0.18s) ease;
 }
 
@@ -1074,12 +1106,12 @@ function targetHint(entry: ThemeLabColorEntry): string {
 .studio-token-picker :deep(.cf-trigger) {
   display: flex;
   align-items: center;
-  width: 100%;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   min-height: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-row, 10px);
+  border-radius: 9px;
   background: transparent;
   box-shadow: none;
 }
@@ -1098,12 +1130,12 @@ function targetHint(entry: ThemeLabColorEntry): string {
   width: 100%;
   height: 100%;
   border: 0;
-  border-radius: var(--radius-row, 10px);
+  border-radius: 9px;
   box-shadow: inset 0 0 0 1px var(--ui-line, #e2e5ea);
 }
 
 .studio-token-picker :deep(.cf-swatch-color) {
-  border-radius: calc(var(--radius-row, 10px) - 1px);
+  border-radius: 8px;
 }
 
 .studio-token-picker :deep(.cf-value),
@@ -1132,7 +1164,7 @@ function targetHint(entry: ThemeLabColorEntry): string {
 
 .studio-token > strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1171,8 +1203,6 @@ function targetHint(entry: ThemeLabColorEntry): string {
 }
 
 .studio-preview {
-  position: sticky;
-  top: 0;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -1182,6 +1212,8 @@ function targetHint(entry: ThemeLabColorEntry): string {
   border-radius: var(--radius-panel, 16px);
   background: var(--ui-panel, #fff);
   box-shadow: var(--ui-shadow-e1, 0 2px 10px rgb(0 0 0 / 0.04));
+  /* 实时预览是主角：整行一张卡片，颜色清单排在它下面 */
+  order: -1;
 }
 
 .studio-preview-head {
@@ -1219,7 +1251,7 @@ function targetHint(entry: ThemeLabColorEntry): string {
 
 .studio-preview-canvas {
   position: relative;
-  height: 296px;
+  height: 440px;
   overflow: hidden;
   border: 1px solid var(--pv-line);
   border-radius: var(--radius-open, 12px);
@@ -1230,14 +1262,34 @@ function targetHint(entry: ThemeLabColorEntry): string {
 }
 
 .studio-preview-canvas.is-light {
-  --pv-canvas: var(--ui-canvas-bg, #f5f6f8);
-  --pv-surface: var(--ui-panel, #fff);
-  --pv-surface-soft: var(--ui-panel-soft, #fff);
-  --pv-line: var(--ui-line, #e2e5ea);
-  --pv-dot: var(--ui-line, #e2e5ea);
-  --pv-text: var(--ui-ink, #18202b);
-  --pv-text-dim: var(--ui-ink-dim, #6b7280);
-  --pv-text-mute: var(--ui-ink-mute, #8c95a3);
+  /* 不跟整站主题走：`html.dark` 时 --ui-canvas-bg 也是深色，亮色样张必须自己给值 */
+  --pv-canvas: #f5f6f8;
+  --pv-surface: #ffffff;
+  --pv-surface-soft: #ffffff;
+  --pv-line: #e2e5ea;
+  --pv-dot: #dfe3e8;
+  --pv-text: #18202b;
+  --pv-text-dim: #6b7280;
+  --pv-text-mute: #8c95a3;
+  /* 预览容器自己带一套完整变量：亮暗切换只影响这张画，不跟整站主题打架 */
+  --ui-panel: #ffffff;
+  --ui-panel-soft: #ffffff;
+  --ui-line: #e2e5ea;
+  --ui-line-soft: #eef0f4;
+  --ui-ink: #18202b;
+  --ui-ink-dim: #6b7280;
+  --ui-ink-mute: #8c95a3;
+  --ui-hover-soft: rgb(0 0 0 / 0.035);
+  --ui-shadow-sm: 0 1px 4px rgb(15 23 42 / 0.12);
+  --canvas-node-surface: #f9fafb;
+  --canvas-node-panel-surface: #ffffff;
+  --canvas-node-border: #e5e7eb;
+  --canvas-node-border-subtle: #e5e7eb;
+  --canvas-node-text-body: #374151;
+  --canvas-node-text-strong: #111827;
+  --canvas-node-text-muted: #64748b;
+  --canvas-node-text-faint: #9ca3af;
+  --canvas-node-shadow-soft: rgb(17 24 39 / 0.12);
 }
 
 .studio-preview-canvas.is-dark {
@@ -1249,6 +1301,15 @@ function targetHint(entry: ThemeLabColorEntry): string {
   --pv-text: #f2f2f2;
   --pv-text-dim: #c4c4c4;
   --pv-text-mute: #9a9a9a;
+  --ui-panel: #252525;
+  --ui-panel-soft: #1e1e1e;
+  --ui-line: #3a3a3a;
+  --ui-line-soft: #2a2a2a;
+  --ui-ink: #f2f2f2;
+  --ui-ink-dim: #c4c4c4;
+  --ui-ink-mute: #9a9a9a;
+  --ui-hover-soft: rgb(255 255 255 / 0.05);
+  --ui-shadow-sm: 0 1px 4px rgb(0 0 0 / 0.5);
   --canvas-node-surface: #252525;
   --canvas-node-panel-surface: #2c2c2c;
   --canvas-node-border: #3a3a3a;
@@ -1257,21 +1318,7 @@ function targetHint(entry: ThemeLabColorEntry): string {
   --canvas-node-text-strong: #f2f2f2;
   --canvas-node-text-muted: #9c9c9c;
   --canvas-node-text-faint: #7a7a7a;
-}
-
-.studio-preview-toolbar {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  padding: 2px;
-  border: 1px solid var(--pv-line);
-  border-radius: var(--radius-control, 8px);
-  background: var(--pv-surface);
-  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
+  --canvas-node-shadow-soft: rgb(0 0 0 / 0.4);
 }
 
 /* 画布卡片的一层极淡光晕：让预览看起来像一块正在被讲述的画布，而不是白底表格。 */
@@ -1285,246 +1332,24 @@ function targetHint(entry: ThemeLabColorEntry): string {
   pointer-events: none;
 }
 
-.studio-tool-divider {
-  width: 1px;
-  height: 14px;
-  margin: 0 2px;
-  background: var(--pv-line);
-}
-
-.studio-preview-toolbar :deep(.mck-toolbar-btn) {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  border-radius: 5px;
-  color: var(--pv-text-dim);
-}
-
-.studio-preview-toolbar :deep(.mck-toolbar-btn svg) {
-  width: 12px;
-  height: 12px;
-}
-
-.studio-wire {
+.studio-stage {
   position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
   overflow: visible;
-  pointer-events: none;
 }
 
-.studio-wire-base,
-.studio-wire-flow {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-}
-
-.studio-wire-base {
-  stroke: var(--ui-edge-rail);
-  stroke-width: 1.4;
-  opacity: 0.75;
-}
-
-.studio-wire-flow {
-  stroke: var(--ui-edge-flow);
-  stroke-width: 1.8;
-  stroke-dasharray: 2 6;
-  opacity: 0.95;
-}
-
-.studio-guide {
-  stroke: var(--pv-guide);
-  stroke-width: 1;
-  stroke-dasharray: 2 2;
-  opacity: 0.8;
-  vector-effect: non-scaling-stroke;
-}
-
-.studio-cut {
-  fill: none;
-  stroke: var(--pv-cut);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  opacity: 0.95;
-  vector-effect: non-scaling-stroke;
-}
-
-.studio-blade {
-  fill: var(--pv-blade);
-}
-
-.studio-blade-glow {
-  fill: var(--pv-blade);
-  opacity: 0.26;
-}
-
-.studio-node {
-  position: absolute;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 7px 8px;
-  border: 1px solid var(--pv-line);
-  border-radius: 6px;
-  background: var(--pv-surface);
-  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
-}
-
-.studio-node-a {
-  top: 8%;
-  left: 7%;
-  width: 35%;
-  height: 31%;
-}
-
-.studio-node-b {
-  top: 35%;
-  right: 8%;
-  width: 33%;
-  height: 31%;
-}
-
-.studio-node-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  color: var(--pv-text);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.studio-node-title i {
-  width: 4px;
-  height: 4px;
-  border-radius: 99px;
-  background: var(--ui-accent);
-}
-
-.studio-node-title span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-node-title em {
-  margin-left: auto;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent);
-  font-size: 8px;
-  font-style: normal;
-}
-
-.studio-node-a p {
-  margin: 0;
-  color: var(--pv-text-dim);
-  font-size: 9px;
-  line-height: 1.35;
-}
-
-.studio-node-a :deep(.studio-confirm) {
-  align-self: flex-start;
-  height: 22px;
-  padding: 0 8px;
-  font-size: 9px;
-}
-
-.studio-thumb {
-  flex: 1;
-  min-height: 0;
-  border-radius: 4px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--ui-accent) 88%, transparent), color-mix(in srgb, var(--ui-edge-flow) 60%, transparent));
-}
-
-.studio-port {
-  position: absolute;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border: 1px solid var(--ui-accent);
-  border-radius: 99px;
-  background: var(--pv-surface);
-  transform: translateY(-50%);
-}
-
-.studio-port.is-left {
-  left: -3px;
-}
-
-.studio-port.is-right {
-  right: -3px;
-}
-
-.studio-selection {
-  position: absolute;
-  top: calc(35% - 5px);
-  right: calc(8% - 5px);
-  z-index: 3;
-  width: calc(33% + 10px);
-  height: calc(31% + 10px);
-  pointer-events: none;
-}
-
-.studio-selection-outer,
-.studio-selection-inner {
+.studio-preview-empty {
   position: absolute;
   inset: 0;
-  border-radius: 7px;
-}
-
-.studio-selection-outer {
-  border: 1px dashed var(--ui-select-outer);
-  opacity: 0.75;
-}
-
-.studio-selection-inner {
-  inset: 4px;
-  border: 1px solid var(--ui-select-inner);
-  border-radius: 4px;
-}
-
-.studio-states {
-  position: absolute;
-  right: 7%;
-  bottom: 5%;
-  left: 7%;
-  z-index: 2;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-  height: 14%;
-}
-
-.studio-state {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--pv-line);
-  border-radius: 5px;
-  background: var(--pv-surface-soft);
-}
-
-.studio-state :deep(.nes-root) {
-  gap: 3px;
-  padding: 4px 5px;
-  text-align: left;
-}
-
-.studio-state :deep(.nes-icon) {
-  width: 13px;
-  height: 13px;
-}
-
-.studio-state :deep(.nes-text) {
-  font-size: 8px;
-}
-
-.studio-state :deep(.nes-description) {
-  font-size: 7px;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  color: var(--pv-text-mute);
+  font-size: 11px;
+  text-align: center;
 }
 
 .studio-preview-meta {
@@ -1673,17 +1498,8 @@ function targetHint(entry: ThemeLabColorEntry): string {
 }
 
 @container (max-width: 700px) {
-  .studio-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .studio-preview {
-    position: static;
-    order: -1;
-  }
-
   .studio-preview-canvas {
-    height: 260px;
+    height: 300px;
   }
 }
 
@@ -1697,9 +1513,6 @@ function targetHint(entry: ThemeLabColorEntry): string {
     gap: 6px;
   }
 
-  .studio-token-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

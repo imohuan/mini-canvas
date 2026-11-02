@@ -7,17 +7,7 @@
  * 显隐自己判：有图才出现，编辑态由壳切换。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { beginSplit, isSplitting } from './splitSession'
 import { validRowsCols } from './gridSplit'
 import GridSizePicker from './GridSizePicker.vue'
@@ -35,6 +25,14 @@ const props = defineProps<{
 }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const ICON_GRID =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
 

@@ -21,7 +21,6 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useCanvasRender, useUiComponent } from "@mini-canvas/canvas-render"
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { formatClock } from "./audioPlayback"
 import { isValidWaveform } from "./waveform"
 import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio } from "./audioOps"
@@ -31,6 +30,7 @@ import { readAudioSourceFields, resolveAudioSrc } from "./audioRefs"
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
 

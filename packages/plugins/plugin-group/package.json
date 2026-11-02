@@ -27,8 +27,7 @@
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/ui-kit-shadcn": "workspace:*"
+    "@mini-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

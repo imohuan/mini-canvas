@@ -22,7 +22,7 @@ import { computed, ref } from 'vue'
 import {
   ChevronRight, LayoutGrid, CircleDot, Image as ImageIcon, ImageOff, Video, Music, Type, Folder, Briefcase, Wand2, FileText,
 } from 'lucide-vue-next'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { CardBlock, CardIcon, ToolView } from '../toolViews.js'
 
 const props = defineProps<{ view: ToolView; args: string; output?: string; name?: string }>()
@@ -35,6 +35,7 @@ const props = defineProps<{ view: ToolView; args: string; output?: string; name?
  * 只给一个地址的话，视频会被当图片打开。省略时按 image 处理（老调用点行为不变）。
  */
 const emit = defineEmits<{ preview: [src: string, kind?: 'image' | 'video' | 'audio'] }>()
+const Button = useUiComponent('Button')
 
 /** 卡内「详情」折叠：展开 = 执行工具名 + 输入 + 输出 */
 const showDetails = ref(false)

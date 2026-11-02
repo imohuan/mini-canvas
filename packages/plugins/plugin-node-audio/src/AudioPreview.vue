@@ -10,7 +10,7 @@
  * 都能 useUiComponent 按名取用；换主题/换实现时一起换。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { formatClock } from "./audioPlayback"
 import AudioWavePlayer from "./AudioWavePlayer.vue"
 
@@ -27,6 +27,8 @@ const props = withDefaults(
   }>(),
   { url: "", name: "", waveform: undefined, compact: false },
 )
+
+const Button = useUiComponent('Button')
 
 const player = ref<InstanceType<typeof AudioWavePlayer> | null>(null)
 const playerPlaying = computed(() => player.value?.playing ?? false)

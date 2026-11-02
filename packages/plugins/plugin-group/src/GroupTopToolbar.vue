@@ -13,17 +13,15 @@
  * 与图片节点的 ImageTopToolbar 逐字同形：**定位不在这里**，选中态也不在这里。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor, groupServiceOf } from './groupEngine'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 /**
  * 显隐门：**恰好单独选中我**时才出现（与图片/文本节点的上控制栏同一判据）。
  *

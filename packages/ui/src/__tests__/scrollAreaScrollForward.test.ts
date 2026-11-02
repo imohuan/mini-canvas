@@ -31,6 +31,13 @@ describe('ScrollPane 转发内部滚动层的 scroll 事件', () => {
     expect(scrollPaneUtil, 'SCROLL_VIEWPORT_SELECTOR 丢了').toMatch(/SCROLL_VIEWPORT_SELECTOR/)
     expect(scrollPaneUtil, '查找函数丢了').toMatch(/export function scrollViewportOf/)
   })
+
+  it('根 ref 挂在原生 div 上（组件实例没有 querySelector）', () => {
+    // 真实 bug（2026-11-03）：ref 放在 ScrollArea 组件上，open Agent 面板时
+    // `rootRef.value?.querySelector` 抛 "querySelector is not a function"。
+    expect(scrollPane, 'rootRef 不能挂在组件上').not.toMatch(/<ScrollArea[^>]*ref="rootRef"/)
+    expect(scrollPane, '找不到原生 root div').toMatch(/<div ref="rootRef"/)
+  })
 })
 
 describe('生成历史的「加载更多」改走哨兵元素（用户口径 2026-10-15：禁止滚动触发）', () => {

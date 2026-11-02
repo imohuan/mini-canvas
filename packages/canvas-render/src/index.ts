@@ -192,6 +192,25 @@ export {
 export type { ThemeMode, ThemeModeSettingsLike } from './contracts/themeModeSettings'
 // 取色板当前值（JS 通道）：SVG 表现属性/canvas 2D 这类吃不到 var() 的地方用它
 export { useThemeColor } from './contracts/useThemeColor'
+// 主题工作台预览契约：插件各自往 theme-preview 槽注册图层，工作台只负责取景。
+export {
+  THEME_PREVIEW_SLOT,
+  THEME_PREVIEW_ARTBOARD,
+  THEME_PREVIEW_NODES,
+  THEME_PREVIEW_KEY,
+  createThemePreviewScene,
+  provideThemePreviewScene,
+  useThemePreviewScene,
+  useThemePreviewColor,
+  useThemePreviewPluginColor,
+} from './contracts/themePreview'
+export type {
+  ThemePreviewRect,
+  ThemePreviewNode,
+  ThemePreviewMode,
+  ThemePreviewScene,
+  ThemePreviewSettings,
+} from './contracts/themePreview'
 // 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
 export { useSoleNodeSelected, isSoleSelected } from './contracts/nodeSelection'
 // 媒体编辑浮层（裁剪 / 扩展）：图片与视频节点共用的通用件
@@ -260,14 +279,19 @@ export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contract
 // 设计系统组件目录（§4.5 / 案例 4）：按名取"希望被主题整体换掉"的通用件
 export {
   useUiComponent,
+  useUiComponentRefs,
+  uiComponentRefs,
   uiComponent,
   uiNames,
   UI_NAMES,
   // 树外按名取件（uiCatalog.ts 内的宿主单例版；生成历史/资产抽屉这类树外消费方用）
   uiComponentOutside,
   setUiCatalogHost,
+  setStaticUiCatalog,
+  uiComponentStatic,
+  uiStaticNames,
 } from './contracts/uiCatalog'
-export type { UiComponentHandle, UiSelectOption } from './contracts/uiCatalog'
+export type { UiComponentHandle, UiComponentRefs, UiSelectOption } from './contracts/uiCatalog'
 // 下拉浮层互斥登记表（所有下拉实现共用这一份：成品应用的全局下拉 + 主题默认件 + 它的 Select）
 export {
   claimDropdownExclusive,

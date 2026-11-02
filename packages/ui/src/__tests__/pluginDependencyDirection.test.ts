@@ -107,3 +107,43 @@ describe('T08 · canvas-base 保持纯作者入口', () => {
     }
   })
 })
+
+describe('T08 · 组件库只由默认主题登记', () => {
+  it('业务插件生产源码不直接 import @mini-canvas/ui-kit-shadcn', () => {
+    const offenders: string[] = []
+    // 展厅的 theme-lab 是组件库自己的独立工作台：它负责演示主题和组件库，
+    // 不是业务插件。除它之外，业务插件只能从 ctx 的 ui 目录按名取件。
+    const GALLERY_PKG = '@mini-canvas/plugin-demo-kit'
+    for (const dir of pluginDirs()) {
+      const pkg = readPkg(dir)
+      if (pkg.name === '@mini-canvas/plugin-theme-default') continue
+      if (pkg.name === GALLERY_PKG) continue
+      const root = join(dir, 'src')
+      if (!existsSync(root)) continue
+      for (const file of collectSources(root)) {
+        for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+          if (/^\s*import\b/.test(line) && line.includes('@mini-canvas/ui-kit-shadcn')) {
+            offenders.push(file.replace(packagesDir, '') + ' :: ' + line.trim())
+          }
+        }
+      }
+    }
+    expect(offenders, '这些插件绕过了 ui 目录：\n' + offenders.join('\n')).toEqual([])
+  })
+
+  it('外壳生产源码不直接 import @mini-canvas/ui-kit-shadcn', () => {
+    const offenders: string[] = []
+    // sharedGlobals.ts 是 UMD 插件的共享运行时出口：它必须把整个组件库挂到 window，
+    // 这是基础设施，不是业务 UI 消费。样式入口 app.css 不扫（只看 .ts/.vue）。
+    const ALLOW = new Set([join(here, '..', 'sharedGlobals.ts')])
+    for (const file of collectSources(join(here, '..'))) {
+      if (ALLOW.has(file)) continue
+      for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+        if (/^\s*import\b/.test(line) && line.includes('@mini-canvas/ui-kit-shadcn')) {
+          offenders.push(file.replace(packagesDir, '') + ' :: ' + line.trim())
+        }
+      }
+    }
+    expect(offenders, '外壳绕过了 ui 目录：\n' + offenders.join('\n')).toEqual([])
+  })
+})

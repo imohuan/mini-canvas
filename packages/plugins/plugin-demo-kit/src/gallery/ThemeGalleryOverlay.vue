@@ -9,33 +9,31 @@ defineOptions({ inheritAttrs: false })
  * 挂在画布 UI 上随时可看 —— 点得动、拉得开、能输文字，和插件里用的是同一份实现。
  *
  * 为什么这么写（三点）：
- *   1. **主题件按名取，shadcn 原始件直接 import**：展厅看到的就是插件真正会拿到的组件。
+ *   1. **全部按名从 ui 注册表取**：展厅看到的就是插件真正会拿到的组件。
  *   2. **画布件另有区块**：节点壳 / 连线 / 背景 / 浮动端口要 VueFlow 的节点上下文，
  *      直接塞进浮层渲染不出来。那个区块里嵌一块**真的小画布**，它们就在真正的环境里跑。
  *   3. **默认收起**：只在左下角留一个小按钮，不打扰画布使用。
  */
 import { computed, ref } from 'vue'
 import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import GalleryCanvasStage from './GalleryCanvasStage.vue'
 
 const open = ref(false)
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
 
 // —— 设计系统件：按名取（这就是"全局可用"的实证）——
 const PrecisionSlider = useUiComponent('slider')

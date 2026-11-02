@@ -16,11 +16,11 @@ function sourceOf(name: string): string {
 
 describe('Agent 设置页的下拉', () => {
   for (const page of PAGES) {
-    it(page + ' 直接 import @mini-canvas/ui-kit-shadcn 的 Select', () => {
+    it(page + ' 从画布 ui 目录取 shadcn Select（业务插件不直接 import 组件库）', () => {
       const src = sourceOf(page)
-      expect(src).toMatch(/from '@mini-canvas\/ui-kit-shadcn'/)
-      expect(src).toMatch(/\bSelect\b/)
-      expect(src).not.toMatch(/useUiComponent\('select'\)/)
+      expect(src).not.toMatch(/from '@mini-canvas\/ui-kit-shadcn'/)
+      expect(src).toContain("useUiComponent('Select')")
+      expect(src).toContain("useUiComponent('SelectTrigger')")
     })
   }
 

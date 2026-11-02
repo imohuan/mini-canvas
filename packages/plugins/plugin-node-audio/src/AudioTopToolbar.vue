@@ -16,13 +16,13 @@
  * 选中态也不在这里：上插槽整体由壳按"框选中/多选收起、否则各段自己看选中态"的规则显隐。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { createAudioOps, defaultTransform, uploadAudio } from './audioOps'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 // 显隐归本段自己判断（"恰好选中一个且是我"）：壳负责位置，插件负责"我该不该出现"。
 const selected = useSoleNodeSelected(props.id)
 

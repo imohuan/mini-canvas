@@ -4,7 +4,8 @@ import { renderToString } from 'vue/server-renderer'
 import { createSSRApp } from 'vue'
 import { Context } from '@mini-canvas/canvas-data'
 import { RegistryImpl } from '@mini-canvas/kernel'
-import { uiComponent, uiNames, useUiComponent } from '../uiCatalog'
+import { effectScope } from 'vue'
+import { uiComponent, uiComponentRefs, uiNames, useUiComponent } from '../uiCatalog'
 import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../canvasContext'
 import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
 import type { PluginManager } from '../../host/pluginManager'
@@ -91,5 +92,93 @@ describe('useUiComponent：目录变了，消费组件跟着换', () => {
 
   it('目录里没有这个名字 → 渲染 NONE（undefined + warn，不炸）', async () => {
     expect(await renderWithCatalog(new RegistryImpl<unknown>())).toContain('NONE')
+  })
+})
+
+/**
+ * 解构写法：`const { DropdownMenu, DropdownMenuContent } = useUiComponent()`。
+ *
+ * 用户口径（2026-11-03）：一个组件常有多个子件，取件不能逼着人写十几行单名调用；
+ * 解构出来的每个键必须是响应式 Ref，主题替换时模板自动跟着换。
+ */
+describe('useUiComponent() 无参：按目录名解构整组组件', () => {
+  function renderGroup(field: RegistryImpl<unknown>): Promise<string> {
+    const Consumer = defineComponent({
+      name: 'UiGroupConsumer',
+      setup() {
+        const refs = useUiComponent()
+        return () =>
+          h('div', [
+            h('span', { class: 'has-menu' }, refs.DropdownMenu?.value ? 'yes' : 'no'),
+            h('span', { class: 'has-content' }, refs.DropdownMenuContent?.value ? 'yes' : 'no'),
+            h('span', { class: 'has-missing' }, refs.Missing ? 'yes' : 'no'),
+          ])
+      },
+    })
+    const app = createSSRApp({ render: () => h(Consumer) })
+    app.provide(CANVAS_CONTEXT_KEY, {
+      ctx: { registryOf: () => field } as unknown as CanvasContext['ctx'],
+      host: {} as CanvasHostHandle,
+      api: {} as MiniCanvasApi,
+      manager: {} as PluginManager,
+    })
+    return renderToString(app)
+  }
+
+  it('解构得到同一个目录里的多个子件；未登记的名字是 undefined', async () => {
+    const field = new RegistryImpl<unknown>()
+    field.add('DropdownMenu', defineComponent({ name: 'DM' }), { id: 'default' })
+    field.add('DropdownMenuContent', defineComponent({ name: 'DMC' }), { id: 'default' })
+    const html = await renderGroup(field)
+    expect(html).toContain('has-menu">yes')
+    expect(html).toContain('has-content">yes')
+    expect(html).toContain('has-missing">no')
+  })
+
+  it('目录替换后，解构出来的 Ref 原地更新（不需重新调用 useUiComponent）', () => {
+    const field = new RegistryImpl<unknown>()
+    const Base = defineComponent({ name: 'Base' })
+    const Replaced = defineComponent({ name: 'Replaced' })
+    field.add('Button', Base, { id: 'default' })
+    const scope = effectScope()
+    const refs = scope.run(() =>
+      uiComponentRefs({ registryOf: () => field } as unknown as CanvasContext['ctx']),
+    )!
+    expect(refs.Button?.value).toBe(Base)
+    field.add('Button', Replaced, { id: 'next', order: -1 })
+    expect(refs.Button?.value).toBe(Replaced)
+    scope.stop()
+  })
+
+  it('模板解构写法可编译：const { Button, DropdownMenuContent } = useUiComponent()', async () => {
+    const Consumer = defineComponent({
+      name: 'DestructuredComponentsConsumer',
+      template: `
+        <div>
+          <Button>保存</Button>
+          <DropdownMenuContent>菜单内容</DropdownMenuContent>
+        </div>
+      `,
+      setup() {
+        const { Button: Btn, DropdownMenuContent: Content } = useUiComponent()
+        return { Button: Btn, DropdownMenuContent: Content }
+      },
+    })
+    const app = createSSRApp(Consumer)
+    app.component('Button', defineComponent({ name: 'Button', template: '<button><slot /></button>' }))
+    app.component('DropdownMenuContent', defineComponent({ name: 'DropdownMenuContent', template: '<div><slot /></div>' }))
+    app.provide(CANVAS_CONTEXT_KEY, {
+      ctx: {
+        registryOf: () => ({
+          keys: () => ['Button', 'DropdownMenuContent'],
+          top: (name: string) => ({ value: app.component(name) }),
+          subscribe: () => ({ dispose: () => undefined }),
+        }),
+      } as unknown as CanvasContext['ctx'],
+      host: {} as CanvasHostHandle,
+      api: {} as MiniCanvasApi,
+      manager: {} as PluginManager,
+    })
+    expect(await renderToString(app)).toContain('保存')
   })
 })

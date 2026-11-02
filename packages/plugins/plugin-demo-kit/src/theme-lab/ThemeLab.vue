@@ -18,6 +18,7 @@ import {
   currentThemeMode,
   type CanvasContext,
   type CanvasHostHandle,
+  type UiComponentHandle,
 } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@mini-canvas/canvas-data'
 import {
@@ -28,7 +29,6 @@ import {
   DEFAULT_THEME_HANDLE,
   DEFAULT_THEME_DEBUG,
 } from '@mini-canvas/plugin-theme-default'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
@@ -65,7 +65,10 @@ const props = withDefaults(
  * 嵌入模式下：颜色读写走**主应用**的 settings，预览画布只负责显示效果。
  */
 const hostCanvas = inject<CanvasContext | null>(CANVAS_CONTEXT_KEY, null)
-
+/**
+ * 工作台自己的头部按钮：独立页在预览画布的 CanvasProvider 里，嵌入页在主应用的 Provider 里。
+ * 两条路径都从画布 ctx 的 ui 目录取件（不直接 import 组件库）。
+ */
 const MODES: ThemeLabMode[] = ['light', 'dark']
 const saved = readLabState()
 const themes = ref<LabTheme[]>(cloneThemes(saved.themes.length ? saved.themes : LAB_THEMES))
@@ -86,6 +89,15 @@ const lines = ref<Array<{ id: string; color: string; d: string; start: { x: numb
 const available = reactive(new Map<string, boolean>())
 const chipEls = reactive(new Map<string, HTMLElement>())
 const connectedPlugins = ref<string[]>(['theme-default', 'demo-theme-lab', ...OPTIONAL_PLUGINS])
+
+/**
+ * 工作台自己的头部按钮：独立页在预览画布的 CanvasProvider 里，嵌入页在主应用的 Provider 里。
+ * 两条路径都从画布 ctx 的 ui 目录取件（不直接 import 组件库）。
+ */
+const Button = computed<UiComponentHandle>(() => {
+  const ctx = host.value?.ctx ?? hostCanvas?.ctx
+  return ctx?.registryOf<UiComponentHandle>('ui').top('Button')?.value
+})
 
 /** 预览里装了哪些可选插件（默认主题是整个画布的前提，始终在） */
 const enabledPlugins = ref<string[]>([...OPTIONAL_PLUGINS])

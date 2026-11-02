@@ -27,8 +27,7 @@
  * 结论：图片/视频的编辑浮层（基座）恒在下、本覆盖层（注册场）恒在上。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 
 // over:inset 条目会被 SlotHost/壳下发 class/data-*；fragment 根继承不了，显式关掉防 warn。
 defineOptions({ inheritAttrs: false })
@@ -38,6 +37,7 @@ import { readRunState } from './runState'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 
 /**
  * 跟随卡片圆角。

@@ -16,8 +16,7 @@
 import { computed, ref } from 'vue'
 import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { createVideoOps, uploadVideo } from './videoOps'
 import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'
@@ -25,6 +24,11 @@ import type { Rect } from './videoCrop'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const selected = useSoleNodeSelected(props.id)
 
 /** 有没有视频：没有就只留「上传」 */

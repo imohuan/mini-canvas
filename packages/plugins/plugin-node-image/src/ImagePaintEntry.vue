@@ -6,14 +6,14 @@
  * 顶栏整排换成 ImagePaintPanel（绘制模式的 topBar）。
  */
 import { computed } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { readImageSourceFields } from './imageRefs'
 import { beginPaint, isPainting } from './paintSession'
 
 const props = defineProps<{ nodeId?: string; data?: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 const selected = useSoleNodeSelected(props.nodeId ?? "")
 
 const ICON_PAINT =

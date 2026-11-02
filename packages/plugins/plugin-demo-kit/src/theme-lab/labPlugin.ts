@@ -11,10 +11,10 @@
  * 本文件只提供两块内容：文本节点内容 + 两个语义状态节点（危险/警示）。
  * 它们都通过默认主题的真实组件渲染，颜色仍由主题变量控制。
  */
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type Component } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { NodeEmptyState } from '@mini-canvas/plugin-theme-default'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 
 const NODE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>'
@@ -64,14 +64,16 @@ const SemanticContent = defineComponent({
   },
 })
 
-/** 顶部操作条：shadcn Button（强调色的真实消费方） */
+/** 顶部操作条：从插件 ctx 的 ui 目录取 Button（强调色的真实消费方） */
 const LabTopBar = defineComponent({
   name: 'ThemeLabTopBar',
   setup() {
+    // 这段内容渲染在真实画布子树里：按名取主题登记的 Button，主题热换时跟着换。
+    const Button = useUiComponent('Button')
     return () =>
       h('div', { class: 'lab-topbar' }, [
         h(
-          Button,
+          Button.value as Component,
           {
             title: '确认',
             variant: 'default',

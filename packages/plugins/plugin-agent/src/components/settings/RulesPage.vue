@@ -6,12 +6,17 @@
  * 业务规则（哪些工具需要确认）仍由 agent 服务负责，这里只改展示与提交入口。
  */
 import { onMounted, ref } from 'vue'
-import { Button, Input, Switch } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
 import type { ApprovalRuleRow } from '../../agentService.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Switch = useUiComponent('Switch')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state

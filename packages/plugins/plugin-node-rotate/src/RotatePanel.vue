@@ -7,14 +7,14 @@
  * 按钮直接用 shadcn Button + 全局 .mck-toolbar-btn，不自绘。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { bumpRotateAngle, closeRotateMode, isRotateModeActive, rotateAngle } from './rotateSession'
 import { flipImageNode } from './flipImage'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 const busy = ref(false)
 
 /** 面板只在本节点处于旋转模式时渲染（退出后旧 UI 立刻消失） */

@@ -28,7 +28,6 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, useUiComponent, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { buildPalette, buildSrcdoc, normalizeUpstream, toCloneableState, type PaletteToken, type UpstreamItem } from './uiData'
 import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
@@ -61,6 +60,7 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, flow } = useCanvasRender()
 /** 统一空状态（默认主题提供；极简宿主回落本组件原来的「标题 + 提示」两行） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
+const Button = useUiComponent('Button')
 
 /**
  * 本插件的配置（后台地址 / 允不允许联网）。

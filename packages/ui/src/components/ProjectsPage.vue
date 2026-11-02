@@ -7,15 +7,19 @@
  * + 项目卡片网格 + 「没有更多了」）。
  *
  * 数据全部来自 cloud-server（`/api/projects`），不写死；点项目 → 打开它的画布（没有就先建一张）。
+ *
+ * 通知宿主由 Root 统一挂载（全应用一只），本页不再重复挂。
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponentOutside } from '../composables/ui'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 
 const router = useRouter()
+// 项目页在 CanvasProvider 之外（独立路由）：走宿主单例取件，树内/树外都能拿到同一个组件。
+const Button = useUiComponentOutside('Button')
 const projects = ref<ProjectSummary[]>([])
 const loading = ref(true)
 const error = ref('')

@@ -28,14 +28,13 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
-// 面板头部动作按钮与历史下拉都直接用 shadcn 原始组件。
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
-import { SlotHost, broadcastCloseAllDropdowns } from '@mini-canvas/canvas-render'
+// 面板头部动作按钮与历史下拉从画布 ctx 的 ui 注册表按名取。
+import { SlotHost, broadcastCloseAllDropdowns, useUiComponent } from '@mini-canvas/canvas-render'
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 import PanelResizeHandle from '../PanelResizeHandle.vue'
 import { useUi } from '../../composables/ui'
 

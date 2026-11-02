@@ -8,18 +8,19 @@
  * 下拉直接用 ui-kit-shadcn（不再经 useUiComponent 转接）。
  */
 import { computed, onMounted, ref } from 'vue'
-import {
-  Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { Save } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state

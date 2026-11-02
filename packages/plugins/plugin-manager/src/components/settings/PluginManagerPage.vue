@@ -12,15 +12,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { Download, Loader2, PackageSearch, RefreshCw, Search } from 'lucide-vue-next'
-import {
-  Badge,
-  Button,
-  Input,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { getAdminToken, setAdminToken } from '@mini-canvas/canvas-base'
 import { usePluginManager } from '../../usePluginManager'
 import PluginCard from './PluginCard.vue'
@@ -36,6 +28,13 @@ type TabId = 'market' | 'installed' | 'local' | 'builtin'
 
 const svc = usePluginManager()
 const s = svc.state
+const Badge = useUiComponent('Badge')
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Tabs = useUiComponent('Tabs')
+const TabsContent = useUiComponent('TabsContent')
+const TabsList = useUiComponent('TabsList')
+const TabsTrigger = useUiComponent('TabsTrigger')
 
 /** 地址输入框先写草稿，点「刷新」再写回服务。 */
 const urlDraft = ref(s.catalogUrl)

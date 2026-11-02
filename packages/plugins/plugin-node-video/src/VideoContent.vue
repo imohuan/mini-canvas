@@ -33,7 +33,6 @@ import { formatTime } from './videoNodeData'
 import VideoPlayerBar from './VideoPlayerBar.vue'
 import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
 import { Play, Pause, Volume2, VolumeX, Camera, Maximize2 } from 'lucide-vue-next'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { openPreview } from './mediaPreviewBus'
 
 /** 正有限数才算有值（与 videoFit 内同口径） */
@@ -57,6 +56,7 @@ import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
+const Button = useUiComponent('Button')
 
 const { ctx, flow } = useCanvasRender()
 

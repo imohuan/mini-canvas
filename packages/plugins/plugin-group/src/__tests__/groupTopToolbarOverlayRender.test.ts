@@ -65,9 +65,21 @@ function renderCtx(opts: { resizingId?: string | null; nodesDraggable?: boolean 
       tryGet: (name: string) => services[name],
       on: () => ({ dispose: () => {} }),
       // ui 目录（GroupTopToolbar 经 useUiComponent 取按钮/下拉）：本文件不测外观。
-      // 按钮缺名时组件会回退到原生标签；dropdown 给一个最小替身（缺名会被渲染成注释，SSR 直接炸）。
+      // 给按钮与下拉各一个最小替身，避免缺名组件在 SSR 里渲染成注释。
       registryOf: () => ({
-        top: (name: string) => (name === 'dropdown' ? { value: StubDropdown } : undefined),
+        top: (name: string) => {
+          if (name === 'Button') {
+            return { value: defineComponent({ name: 'StubButton', setup(_p, { slots }) { return () => h('button', slots.default?.()) } }) }
+          }
+          if (name === 'DropdownMenu') return { value: StubDropdown }
+          if (name === 'DropdownMenuTrigger') {
+            return { value: defineComponent({ name: 'StubDropdownTrigger', setup(_p, { slots }) { return () => slots.default?.() } }) }
+          }
+          if (name === 'DropdownMenuContent') {
+            return { value: defineComponent({ name: 'StubDropdownContent', setup() { return () => null } }) }
+          }
+          return undefined
+        },
         list: () => [],
         subscribe: () => ({ dispose() {} }),
       }),

@@ -5,7 +5,7 @@
  * 只锁用户真正依赖的三条链路：
  * 1. 颜色目录来自真实 settings：插件装了就有、卸了就没有；
  * 2. 独立验收页与设置页共用同一条 settings 适配，颜色写回同一个 key；
- * 3. 页面仍保留参考图的四块结构：模板、分组色签、完整画布预览、另存/复制动作。
+ * 3. 预览不再由工作台画：插件各自注册到 theme-preview 槽；页面只留 SlotHost + 取景。
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { buildColorEntries, GROUP_ORDER, type DeclaredColorField } from './catalog'
 import { createStudioPreviewSource } from './themeStudioPreview'
+import { THEME_PREVIEW_SLOT } from '@mini-canvas/canvas-render'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const STUDIO = readFileSync(path.join(HERE, 'ThemeStudio.vue'), 'utf8')
@@ -68,5 +69,42 @@ describe('主题工作台契约', () => {
     // 窄窗口：预览提前且单列
     expect(STUDIO).toContain('@container (max-width: 700px)')
     expect(STUDIO).toContain('container-type: inline-size')
+  })
+
+  it('预览由插件图层组成，工作台不再画死节点 / 连线 / 刀光', () => {
+    // 读插件注册结果：主题页只认槽名，不认识具体插件
+    expect(STUDIO).toContain('SlotHost')
+    expect(STUDIO).toContain('THEME_PREVIEW_SLOT')
+    expect(STUDIO).not.toContain('studio-wire-base')
+    expect(STUDIO).not.toContain('studio-node-a')
+    expect(STUDIO).not.toContain('studio-blade')
+    expect(STUDIO).not.toContain('studio-state')
+  })
+
+  it('色块是 40px 正方形，不是拉长的色带', () => {
+    expect(STUDIO).toMatch(/\.studio-token-picker \{[^}]*width: 40px[^}]*height: 40px/s)
+    expect(STUDIO).toMatch(/\.studio-token-picker :deep\(\.cf-trigger\) \{[^}]*width: 40px[^}]*height: 40px/s)
+  })
+
+  it('四个已装插件都注册自己的预览层，主题页不认识具体插件', async () => {
+    const { Context } = await import('@mini-canvas/canvas-data')
+    const ctx = new Context()
+    const { registerThemePreview: registerTheme } = await import('@mini-canvas/plugin-theme-default')
+    const { registerThemePreview: registerMulti } = await import('@mini-canvas/plugin-multi-select')
+    const { registerThemePreview: registerGuide } = await import('@mini-canvas/plugin-align-guide')
+    const { registerThemePreview: registerCut } = await import('@mini-canvas/plugin-edge-cutting')
+    registerTheme(ctx as never)
+    registerMulti(ctx as never)
+    registerGuide(ctx as never)
+    registerCut(ctx as never)
+    const ids = ctx.slots.occupants(THEME_PREVIEW_SLOT).map((item) => item.id)
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'theme-default/preview',
+        'multi-select/preview-frame',
+        'align-guide/preview',
+        'edge-cutting/preview',
+      ]),
+    )
   })
 })

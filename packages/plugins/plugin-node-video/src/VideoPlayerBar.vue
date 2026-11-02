@@ -13,7 +13,9 @@
  */
 import { computed, ref } from 'vue'
 import { Play, Pause, Volume2, VolumeX } from 'lucide-vue-next'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Button = useUiComponent('Button')
 
 const props = withDefaults(
   defineProps<{

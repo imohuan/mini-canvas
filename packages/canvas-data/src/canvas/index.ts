@@ -53,7 +53,6 @@ export type {
   CanvasSelectMode,
   FitToOptions,
   FocusTarget,
-  NotifyOptions,
   NodeLayoutContract,
   ViewContract,
   ViewportContract,
@@ -61,6 +60,12 @@ export type {
   ViewportState,
   FlowPoint,
 } from './renderServiceContracts'
+export type {
+  NotifyContract,
+  NotifyKind,
+  NotifyMessage,
+  NotifyOptions,
+} from './notifyContract'
 
 export { Context, canvasCapabilityLayer } from './context'
 

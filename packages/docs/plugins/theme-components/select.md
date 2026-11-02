@@ -4,13 +4,13 @@
 触发器、内容层、选项各写各的，想加图标、分组或自定义行都直接改模板。
 
 ```ts
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
 ```
 
 源码在 `packages/ui-kit-shadcn/src/components/ui/select/`。
@@ -66,13 +66,13 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 文件：packages/my-plugin/src/ModelPicker.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
 
 const model = ref('fast')
 
@@ -97,8 +97,7 @@ const options = [
 
 ## 注意事项
 
-1. **别再按 `useUiComponent('select')` 取**：主题包不再登记旧 Select，业务插件直接
-   `import ... from '@mini-canvas/ui-kit-shadcn'`。
+1. **按导出名取件**：`useUiComponent('Select')` 及其分离件，不要用旧的 `select` 小写名。
 2. **首屏文案**：reka-ui 的 `SelectValue` 在浮层首次挂载前可能拿不到选项文字；
    需要稳定显示时用当前值自己算 label，或直接写进默认插槽。
 3. **需要搜索、图标、描述或分组**时，直接把那些 DOM 放进 `SelectItem` 或自定义

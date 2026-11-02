@@ -38,20 +38,6 @@ import {
   RenderEvents,
   LAYERS,
 } from '@mini-canvas/canvas-render'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { ViewContract } from '@mini-canvas/canvas-base'
 import type { BarAction } from './barTypes'
@@ -86,7 +72,6 @@ import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
 import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE } from './previewBoxSize'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
   loadAiActions,
@@ -143,6 +128,24 @@ const { ctx, host, renderEdges, renderNodes } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改
 const ToolParamField = useUiComponent('toolParamField')
 const ToolParamGroup = useUiComponent('toolParamGroup')
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
+
+/** 动作 / 模型下拉的取值：Select 给的是 string | number，统一按字符串交给现有逻辑 */
+function onActionPicked(value: string | number): void {
+  selectAction(String(value))
+}
 
 // 单选才显示（与既有三份面板同语义）
 const visible = useSoleNodeSelected(props.id)
@@ -3153,7 +3156,7 @@ function onGlobalLeave(el: Element): void {
     <div class="nb-bottom">
       <div class="nb-selects">
         <div class="nb-field nb-field--action">
-          <Select :model-value="currentId" :disabled="running" @update:model-value="(v) => selectAction(String(v))">
+          <Select :model-value="currentId" :disabled="running" @update:model-value="onActionPicked">
             <SelectTrigger :id="'nb-action-' + props.id" size="sm" class="nb-action-select"
               title="选择动作 / 模型" aria-label="选择动作 / 模型">
               <SelectValue placeholder="选择动作">{{ currentActionLabel }}</SelectValue>

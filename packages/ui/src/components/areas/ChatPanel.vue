@@ -1,17 +1,17 @@
 <script setup lang="ts">
 // AI 对话面板：浮动(可拖) ⇄ 停靠(右缘, 带左缘拖宽手柄)，被外壳计入 right-width。
-// 下拉菜单全部使用 shadcn 的分离件（DropdownMenu / Trigger / Content / Item）。
+// 下拉菜单从画布 ctx 的 ui 注册表按名取（默认主题插件登记的 shadcn 分离件）。
 import {
   MessageSquarePlus, History, Share2, Settings2, Puzzle, PanelRight, X,
   Video, Paperclip, Cpu, WandSparkles, ArrowUp, Hand, Search, Pencil, Trash2,
 } from 'lucide-vue-next'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useUi } from '../../composables/ui'
+
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const ui = useUi()
 const s = ui.state

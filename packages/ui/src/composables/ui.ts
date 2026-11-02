@@ -7,7 +7,7 @@ import {
   DEFAULT_THEME_EDGE, DEFAULT_THEME_HANDLE, DEFAULT_THEME_DEBUG, DEFAULT_THEME_SNAP_ZONE,
   EDGE_SETTING_KEYS, HANDLE_SETTING_KEYS, DEBUG_SETTING_KEYS, SNAP_ZONE_SETTING_KEYS,
 } from '@mini-canvas/plugin-theme-default'
-import { createV2Logger, setUiCatalogHost } from '@mini-canvas/canvas-render'
+import { createV2Logger, setUiCatalogHost, uiComponentStatic } from '@mini-canvas/canvas-render'
 import { buildV2HelpList, groupV2HelpList, keyPartsToLabels } from '@mini-canvas/plugin-shortcut-manager'
 import { SAMPLE_IMAGE_URL } from '../assembly'
 import { buildCanvasTree, filterTree, prefetchVideoThumbs, prefetchAssetVideoThumbs } from './canvasTree'
@@ -30,6 +30,7 @@ const log = createV2Logger('config')
 interface HostApi {
   ctx?: {
     get<T>(key: string): T
+    tryGet?<T>(key: string): T | undefined
     on(evt: string, cb: () => void): { dispose(): void }
     /** 运行时是完整内核 Context：树外读 ui 目录用（类型窄声明即可） */
     registryOf?<T>(name: string): {
@@ -66,7 +67,7 @@ export const readyHost: { readonly ctx?: HostApi['ctx'] } = {
  * 宿主 ctx 就绪后从 registryOf('ui') 读一份即可。没就绪/没登记 → undefined。
  */
 export function uiComponentOf(name: string): unknown {
-  return readyHost?.ctx?.registryOf?.<unknown>('ui')?.top(name)?.value
+  return readyHost?.ctx?.registryOf?.<unknown>('ui')?.top(name)?.value ?? uiComponentStatic(name)
 }
 
 /**
@@ -77,7 +78,11 @@ export function uiComponentOf(name: string): unknown {
  * 用 shallowRef 存组件句柄：深代理会让 Vue 警告并拖慢渲染。
  */
 export function useUiComponentOutside(name: string): Ref<unknown> {
-  const tracker = createOutsideComponentTracker(name, () => readyHost.ctx?.registryOf?.<unknown>('ui'))
+  const tracker = createOutsideComponentTracker(
+    name,
+    () => readyHost.ctx?.registryOf?.<unknown>('ui'),
+    () => uiComponentStatic(name),
+  )
   /**
    * 订阅 ui 目录本身，而不是只监听“插件安装”这一个时刻。
    *
@@ -1716,11 +1721,16 @@ function createUi() {
   /** 设置面板里的「动作项」（如快捷键）广播；与关闭通道同处订阅，换皮不影响 */
   let disposeSettingsAction: (() => void) | undefined
   /**
-   * 轻提示：按需求**已停用**（原本右下角会浮一个 "message" 气泡，容易和 Agent 面板重叠）。
-   * 保留函数签名，调用点无需改动；要恢复提示只需重新实现这里。
+   * 外壳自己的轻提示：走默认主题的全局 notify 服务（vue-sonner）。
+   *
+   * 插件与画布页面一律使用同一个服务；这里保留 showToast 的名字，是为了让外壳里
+   * 几十个既有调用点不用同时改。要换通知样式/位置，只改 Toaster 那一处。
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function showToast(_message: string): void { /* 已停用：不渲染任何提示 */ }
+  function showToast(message: string): void {
+    const notify = readyHost.ctx?.tryGet?.<{ success?: (m: string) => void }>('notify')
+    if (notify?.success) notify.success(message)
+    else console.info('[notify]', message)
+  }
 
   /**
    * 外部插件**不再自动装载**（用户要求 2026-10-11：全部由我在「设置 → 插件」面板里自己挑）。

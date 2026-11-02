@@ -6,11 +6,15 @@
  * 行结构 = 左侧名称与说明、右侧动作（ShadcnSettingsRow 在同一张卡片里带分割线）。
  */
 import { onMounted, ref } from 'vue'
-import { Button, Input } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { Trash2, Upload } from 'lucide-vue-next'
 import { useAgent } from '../../useAgent.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state

@@ -10,9 +10,11 @@
  *
  * 它不含任何业务样式：尺寸 / padding 仍由调用方的 class 与 body-class 决定。
  */
-import { onBeforeUnmount, ref, watch } from 'vue'
-import { ScrollArea, ScrollBar } from '@mini-canvas/ui-kit-shadcn'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { SCROLL_VIEWPORT_SELECTOR } from './scrollPane'
+
+const ScrollArea = useUiComponent('ScrollArea')
 
 withDefaults(
   defineProps<{
@@ -26,6 +28,7 @@ withDefaults(
 
 const emit = defineEmits<{ (e: 'scroll', payload: Event): void }>()
 
+/** 外层普通 div：ScrollArea 组件挂在里面，DOM 查询从这层向下找，不碰组件实例。 */
 const rootRef = ref<HTMLElement | null>(null)
 /** 真正的滚动层（shadcn ScrollArea 的 viewport） */
 const viewport = ref<HTMLElement | null>(null)
@@ -51,7 +54,8 @@ onBeforeUnmount(() => {
 // ScrollArea 的内容是插槽里动态挂的：viewport 首帧就有，但热更新 / 重新挂载后要重接一次。
 watch(rootRef, (el) => {
   if (el) syncViewport()
-}, { flush: 'post', immediate: true })
+}, { flush: 'post' })
+onMounted(syncViewport)
 
 /**
  * 给调用方一个稳定的滚动元素入口。
@@ -65,13 +69,18 @@ defineExpose({ scrollElement })
 </script>
 
 <template>
-  <ScrollArea ref="rootRef" class="scroll-pane" :class="'scroll-pane--' + direction">
-    <div :class="bodyClass" data-scroll-pane-body>
-      <slot />
-    </div>
-    <!-- ScrollArea 自带一条竖条；横向 / 双向再补一条横条，否则 x 内容拖不到底。 -->
-    <ScrollBar v-if="direction === 'x' || direction === 'both'" orientation="horizontal" />
-  </ScrollArea>
+  <!--
+    外层 div 只用来拿真实 DOM。以前 ref 放在 ScrollArea 组件上，拿到的是组件实例，
+    实例没有 querySelector，于是打开 Agent 面板就抛 `querySelector is not a function`。
+    横向滚动条由 ScrollArea 自己按 overflow 方向显示，不再单独取 ScrollBar。
+  -->
+  <div ref="rootRef" class="scroll-pane" :class="'scroll-pane--' + direction">
+    <ScrollArea class="size-full">
+      <div :class="bodyClass" data-scroll-pane-body>
+        <slot />
+      </div>
+    </ScrollArea>
+  </div>
 </template>
 
 <style scoped>
@@ -79,6 +88,10 @@ defineExpose({ scrollElement })
 .scroll-pane {
   min-height: 0;
   overflow: hidden;
+}
+
+.scroll-pane :deep([data-slot='scroll-area']) {
+  height: 100%;
 }
 
 .scroll-pane--x :deep([data-slot='scroll-area-viewport']) {

@@ -15,7 +15,10 @@
  * 关闭通道：外壳 emit('close') → SettingsHost → ctx.emit('settings:ui-close') → 宿主收起面板。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '../contracts/uiCatalog'
+
+/** 头部按钮从画布 ui 目录取件：主题插件登记的是组件库原始 Button，渲染层不直接依赖组件库。 */
+const Button = useUiComponent('Button')
 
 const props = withDefaults(
   defineProps<{

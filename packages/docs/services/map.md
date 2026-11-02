@@ -22,19 +22,28 @@
 
 ### 不再按名可取
 
-`nodeLayout`、`viewport`、`tip`、`notify`、`pluginManager`、`nodeFactory`、
+`nodeLayout`、`viewport`、`tip`、`pluginManager`、`nodeFactory`、
 `command`、`settingsPersist`、`auto-save`、`nodeRegistry`、`themeRegistry`。
 
 | 旧名 | 现在怎么用 |
 | --- | --- |
 | `nodeLayout` / `viewport` | `ctx.get('view')` |
-| `tip` / `notify` | `ctx.get('canvas').notify(...)` |
+| `tip` | `ctx.get('canvas').notify(...)` |
 | `nodeFactory` | `ctx.get('canvas').createNode(...)` / `creatableTypes()` |
 | `command` | `ctx.commands.register` 注册；`canvas.runCommand / listCommands` 执行与枚举 |
 | `nodeRegistry` / `themeRegistry` | 宿主句柄 `host.nodeRegistry` / `host.themeRegistry`，插件用 `ctx.nodes` / `ctx.theme` 糖 |
 | `settingsPersist` | `ctx.get('save').settings` |
 | `auto-save` | `ctx.get('save').autoSave` |
 | `pluginManager` | `useCanvasRender().host.manager` |
+
+### 由默认主题额外提供的服务
+
+| 服务 | 归谁 | 一句话 |
+| --- | --- | --- |
+| `notify` | 默认主题 | 右下角通知（底层 `vue-sonner`）：`ctx.get('notify').success('已保存')` |
+
+`notify` 随主题插件装卸，不是每个宿主都有；可选使用请走 `ctx.tryGet('notify')`。
+它和 `canvas.notify`（跟随鼠标的画布浮字）是两件事，别混用。
 
 ## 二、生产注册场共 11 个
 

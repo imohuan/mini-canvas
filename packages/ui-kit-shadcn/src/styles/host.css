@@ -218,6 +218,22 @@
    */
   padding: 0 !important;
   gap: 0 !important;
+  /*
+   * 弹窗内部是「标题栏 / 分隔线 / 内容区」整块排下来的，不按行均分。
+   *
+   * shadcn 的 DialogContent 默认是 grid；给面板写死高度时，grid 会把多出来的高度
+   * 均分给每一行 —— 生成历史只有少量卡片时，标题栏和分隔线上下会出现两块大空白
+   * （2026-11-03 用户截图 + 真机实测）。改成竖向 flex 后，标题栏保持自身高度，
+   * 内容区靠 flex-1 吃满剩余空间。所有 AppDialog 都是这种整块面板，统一在宿主层修正。
+   */
+  display: flex !important;
+  flex-direction: column !important;
+  /*
+   * 贴着面板底边的子元素（如生成历史的批量操作栏、滚动区的最后一行）
+   * 如果不裁掉，会用直角把面板下方的圆角盖住（2026-11-03 用户截图）。
+   * 所有弹窗都是整块面板，统一裁边；面板内部需要滚动的区域自己带 overflow。
+   */
+  overflow: hidden !important;
 }
 
 /*

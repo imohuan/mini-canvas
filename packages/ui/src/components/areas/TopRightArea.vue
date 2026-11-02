@@ -1,15 +1,15 @@
 <script setup lang="ts">
 // 右上角：积分余额 / 主题切换 / 设置（照用户标注只保留这三个）
-// 按钮与提示气泡改用 @mini-canvas/ui-kit-shadcn 的原始组件；交互与 aria 语义不变。
+// 按钮与提示气泡从画布 ctx 的 ui 注册表按名取；交互与 aria 语义不变。
 import { Zap, Palette, Settings } from 'lucide-vue-next'
-import {
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useUi } from '../../composables/ui'
+
+const Button = useUiComponent('Button')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
 
 const ui = useUi()
 const s = ui.state

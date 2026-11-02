@@ -9,8 +9,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { apiUrl, resolveApiBase, showcaseHeaders } from '../apiBase'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { Badge, Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 
 interface Endpoint {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -43,6 +42,8 @@ let jobsPollTimer: ReturnType<typeof setInterval> | undefined
 
 // 后台半在哪：同源托管时为空串；独立界面（跨源）时读"服务地址"配置。见 apiBase.ts 的说明。
 const ctx = useCanvasRender().ctx
+const Badge = useUiComponent('Badge')
+const Button = useUiComponent('Button')
 const apiBase = resolveApiBase(ctx)
 
 /** 把"后台返回了 HTML（多半是地址不对或后台半没生效）"翻成人话 */

@@ -20,8 +20,7 @@ defineOptions({ inheritAttrs: false })
  * 本文件只管「量矩形、摆位置、转交点击」。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, RenderEvents } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, RenderEvents } from '@mini-canvas/canvas-render'
 import type { DocService } from '@mini-canvas/canvas-data'
 import {
   exitSelection,
@@ -46,6 +45,7 @@ import { exitCtrlDragMode } from './ctrlDragMode'
 const HINT_OFFSET = { x: 14, y: 18 }
 
 const { ctx, flow } = useCanvasRender()
+const Button = useUiComponent('Button')
 
 /** 一个节点在选择态里的渲染项（矩形是屏幕坐标，fixed 定位用） */
 interface NodeLayer {

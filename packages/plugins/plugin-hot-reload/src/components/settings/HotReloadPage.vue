@@ -10,12 +10,13 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RefreshCw, RotateCcw, Trash2, Bug } from 'lucide-vue-next'
-import { Badge, Button } from '@mini-canvas/ui-kit-shadcn'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import { presenceStatusOf, type DebugPluginRow, type DebugPresenceStatus, type HotReload } from '../../data/hotReload'
 
 /** 从内核取热重载服务（本插件自己上架的，与插件管理无关） */
 const { ctx } = useCanvasRender()
+const Badge = useUiComponent('Badge')
+const Button = useUiComponent('Button')
 const hr = ctx.get<HotReload>('hot-reload')
 if (!hr) throw new Error('[HotReloadPage] 没找到 hot-reload 服务')
 

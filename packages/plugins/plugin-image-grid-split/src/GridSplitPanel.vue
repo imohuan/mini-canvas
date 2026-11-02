@@ -10,13 +10,13 @@
  *   × 宫格切分 | 已选择 N 项 | 创建分镜组 | 发送到画布
  */
 import { computed } from 'vue'
-import { useCanvasRender, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
 import { beginPublish, endPublish, endSplit, splitState } from './splitSession'
 import { finishSplitPublish, publishCells, publishDepsOf } from './publish'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 const state = computed(() => splitState(props.id))
 const selectedCount = computed(() => state.value?.selected.size ?? 0)
 const publishing = computed(() => state.value?.publishing ?? false)

@@ -5,18 +5,11 @@
  * 结构：总开关 → 光标指针（分类页签）→ 跟随特效 → 点击特效 → 参数 → 恢复默认。
  * 数据全经 useCursorSettings 读写内核 settings（改动实时生效、随 settingsPersist 持久化）。
  *
- * UI 全部来自 @mini-canvas/ui-kit-shadcn：Switch / Button / Slider / Tabs / Card。
+ * UI 全部来自画布 ui 注册表登记的 shadcn 原始件（默认主题插件负责登记）。
  * 导航项不再自绘，实际入口由设置面板统一渲染。
  */
 import { ref } from 'vue'
-import {
-  Button,
-  Slider,
-  Switch,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { RotateCcw, Upload } from 'lucide-vue-next'
 import { CURSOR_GROUPS, CUSTOM_CURSOR_ID, FOLLOWS, EFFECTS, cursorById, type CursorItem, type CursorSrc } from '../../catalog'
 import { svgIcon } from '../../engine'
@@ -24,8 +17,16 @@ import { useCursorSettings } from '../../useCursorSettings'
 import {
   loadCustomCursors, addCustomCursor, removeCustomCursor, updateCustomCursor, normalizeUpload, isPersistent, type CustomCursor,
 } from '../../customCursors'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import './settings.css'
+
+const Button = useUiComponent('Button')
+const Slider = useUiComponent('Slider')
+const Switch = useUiComponent('Switch')
+const Tabs = useUiComponent('Tabs')
+const TabsList = useUiComponent('TabsList')
+const TabsTrigger = useUiComponent('TabsTrigger')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const { get, set, reset } = useCursorSettings()
 
@@ -101,6 +102,25 @@ function firstOf(value: number | number[] | undefined): number {
 function setRange(key: 'cursorFxSize' | 'cursorFxTrailSize' | 'cursorFxPower' | 'cursorFxParticleCap', value: number | number[] | undefined): void {
   set(key, firstOf(value))
 }
+
+/** Slider 的 v-model 回调：帧率滑杆只改当前自定义素材 */
+function setCustomFpsFrom(value: number | number[] | undefined): void {
+  const current = activeCustom()
+  if (current) setCustomFps(current, firstOf(value))
+}
+
+function setSizeFrom(value: number | number[] | undefined): void {
+  setRange('cursorFxSize', value)
+}
+function setTrailSizeFrom(value: number | number[] | undefined): void {
+  setRange('cursorFxTrailSize', value)
+}
+function setPowerFrom(value: number | number[] | undefined): void {
+  setRange('cursorFxPower', value)
+}
+function setParticleCapFrom(value: number | number[] | undefined): void {
+  setRange('cursorFxParticleCap', value)
+}
 </script>
 
 <template>
@@ -166,7 +186,7 @@ function setRange(key: 'cursorFxSize' | 'cursorFxTrailSize' | 'cursorFxPower' | 
             :max="30"
             :step="1"
             aria-label="帧率"
-            @update:model-value="(v) => setCustomFps(activeCustom()!, firstOf(v))"
+            @update:model-value="setCustomFpsFrom"
           />
           <span class="ce-bubble">{{ activeCustom()!.fps }} 帧/秒</span>
         </div>
@@ -206,28 +226,28 @@ function setRange(key: 'cursorFxSize' | 'cursorFxTrailSize' | 'cursorFxPower' | 
       <ShadcnSettingsRow label="指针大小" stacked>
         <div class="ce-range-row">
           <Slider class="ce-range" :model-value="[Number(get('cursorFxSize'))]" :min="14" :max="96" :step="1"
-            aria-label="指针大小" @update:model-value="(v) => setRange('cursorFxSize', v)" />
+            aria-label="指针大小" @update:model-value="setSizeFrom" />
           <span class="ce-bubble">{{ get('cursorFxSize') }}</span>
         </div>
       </ShadcnSettingsRow>
       <ShadcnSettingsRow label="特效大小" stacked>
         <div class="ce-range-row">
           <Slider class="ce-range" :model-value="[Number(get('cursorFxTrailSize'))]" :min="8" :max="64" :step="1"
-            aria-label="特效大小" @update:model-value="(v) => setRange('cursorFxTrailSize', v)" />
+            aria-label="特效大小" @update:model-value="setTrailSizeFrom" />
           <span class="ce-bubble">{{ get('cursorFxTrailSize') }}</span>
         </div>
       </ShadcnSettingsRow>
       <ShadcnSettingsRow label="特效强度" stacked>
         <div class="ce-range-row">
           <Slider class="ce-range" :model-value="[Number(get('cursorFxPower'))]" :min="20" :max="200" :step="5"
-            aria-label="特效强度" @update:model-value="(v) => setRange('cursorFxPower', v)" />
+            aria-label="特效强度" @update:model-value="setPowerFrom" />
           <span class="ce-bubble">{{ get('cursorFxPower') }}</span>
         </div>
       </ShadcnSettingsRow>
       <ShadcnSettingsRow label="粒子上限" description="护帧率" stacked>
         <div class="ce-range-row">
           <Slider class="ce-range" :model-value="[Number(get('cursorFxParticleCap'))]" :min="200" :max="1600" :step="100"
-            aria-label="粒子上限" @update:model-value="(v) => setRange('cursorFxParticleCap', v)" />
+            aria-label="粒子上限" @update:model-value="setParticleCapFrom" />
           <span class="ce-bubble">{{ get('cursorFxParticleCap') }}</span>
         </div>
       </ShadcnSettingsRow>

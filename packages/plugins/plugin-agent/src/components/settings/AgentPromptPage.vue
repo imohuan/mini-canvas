@@ -5,13 +5,18 @@
  * 落在 agent_state/AGENTS.md；SDK 建会话时把它灌进系统提示词模板的 {{AGENTS_MD}} 位置。
  * 只换 UI：控件全部来自 @mini-canvas/ui-kit-shadcn，读写仍走 agent 服务。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, type ComponentPublicInstance } from 'vue'
 import { AlertTriangle, Check, Save } from 'lucide-vue-next'
-import { Button, Input, Textarea } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
 import type { ContextPlaceholderView } from '../../agentApi.js'
-import { SettingsRow as ShadcnSettingsRow, SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Textarea = useUiComponent('Textarea')
+const ShadcnSettingsRow = useUiComponent('settingsRow')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state
@@ -19,7 +24,7 @@ const s = agent.state
 const draft = ref('')
 const busy = ref(false)
 const saved = ref(false)
-const textarea = ref<InstanceType<typeof Textarea> | null>(null)
+const textarea = ref<ComponentPublicInstance | null>(null)
 const search = ref('')
 
 /** Textarea 是组件库组件；插入占位符要拿它内部真实的 textarea DOM */

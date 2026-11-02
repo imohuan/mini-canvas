@@ -26,12 +26,14 @@ export interface OutsideComponentTracker<T> {
 export function createOutsideComponentTracker<T>(
   name: string,
   getField: () => UiCatalogFieldLike<T> | undefined,
+  /** 主题在 Provider 外发布的静态目录（可选的兜底；宿主就绪后以宿主目录优先） */
+  getStatic?: () => T | undefined,
 ): OutsideComponentTracker<T> {
   const current = shallowRef<T | undefined>(undefined)
   let sub: { dispose(): void } | undefined
 
   function read(): T | undefined {
-    return getField()?.top(name)?.value
+    return getField()?.top(name)?.value ?? getStatic?.()
   }
   function sync(): void {
     const next = read()
@@ -45,8 +47,8 @@ export function createOutsideComponentTracker<T>(
     dispose()
     const field = getField()
     if (!field) {
-      // 宿主被撤掉：回到 fallback，别继续显示上一个宿主的组件。
-      if (current.value !== undefined) current.value = undefined
+      // 宿主被撤掉：回到主题的静态件或 fallback，别继续显示上一个宿主的组件。
+      sync()
       return
     }
     sub = field.subscribe(sync)

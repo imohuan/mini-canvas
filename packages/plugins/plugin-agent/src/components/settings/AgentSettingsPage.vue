@@ -10,7 +10,7 @@
  * 本文件只换 UI 层，不改任何数据与调用。
  */
 import { onMounted, ref } from 'vue'
-import { Tabs, TabsList, TabsTrigger } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
 import '../../components/settings/settings.css'
 import ModelsPage from './ModelsPage.vue'
@@ -21,6 +21,10 @@ import PromptPage from './PromptPage.vue'
 import TitleModelPage from './TitleModelPage.vue'
 import AgentPromptPage from './AgentPromptPage.vue'
 import TemplatePage from './TemplatePage.vue'
+
+const Tabs = useUiComponent('Tabs')
+const TabsList = useUiComponent('TabsList')
+const TabsTrigger = useUiComponent('TabsTrigger')
 
 const agent = useAgent()
 const s = agent.state

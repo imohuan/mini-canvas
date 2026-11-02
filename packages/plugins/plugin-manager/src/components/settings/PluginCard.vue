@@ -6,17 +6,7 @@
  * 卡片底部的真实按钮始终可单独操作（卸载这类动作不会被整卡点击误触）。
  */
 import { computed } from 'vue'
-import {
-  Badge,
-  Button,
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { Download, Loader2, Lock, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import type {
   PluginCardTone,
@@ -26,6 +16,16 @@ import type {
 
 const props = defineProps<{ card: PluginManagerCardView }>()
 const emit = defineEmits<{ (e: 'action', key: string): void }>()
+
+const Badge = useUiComponent('Badge')
+const Button = useUiComponent('Button')
+const Card = useUiComponent('Card')
+const CardAction = useUiComponent('CardAction')
+const CardContent = useUiComponent('CardContent')
+const CardDescription = useUiComponent('CardDescription')
+const CardFooter = useUiComponent('CardFooter')
+const CardHeader = useUiComponent('CardHeader')
+const CardTitle = useUiComponent('CardTitle')
 
 const clickable = computed(() => Boolean(props.card.primaryAction) && props.card.busy !== true)
 

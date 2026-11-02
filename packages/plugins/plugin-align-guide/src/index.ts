@@ -2,6 +2,7 @@ export { alignGuidePlugin, name, apply, Config } from './alignGuidePlugin'
 export type { AlignGuideConfig } from './alignGuideConfig'
 export { alignGuideConfigFrom } from './alignGuideConfig'
 export { bindAlignGuideToggle } from './alignGuideToggle'
+export { ThemePreviewGuide, registerThemePreview } from './themePreview'
 export {
   computeAlignGuides,
   shouldAlignOnDrag,

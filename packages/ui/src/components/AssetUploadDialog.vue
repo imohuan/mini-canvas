@@ -8,12 +8,12 @@ import {
   Plus as PlusIcon, X as XIcon, FileImage as FileIcon, Film as VideoIcon, Music as AudioIcon,
   CircleAlert as AlertIcon, Check as CheckIcon, RefreshCw as RetryIcon,
 } from 'lucide-vue-next'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const props = defineProps<{
   folders: { id: string; name: string; depth: number }[]

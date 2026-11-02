@@ -12,7 +12,6 @@
  */
 import { computed, ref } from 'vue'
 import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { paintState, endPaint, isPainting, undoStroke, redoStroke, clearStrokes } from './paintSession'
 import ImageToolbarShell from './ImageToolbarShell.vue'
 import PaintColorPicker from './PaintColorPicker.vue'
@@ -20,6 +19,7 @@ import PaintColorPicker from './PaintColorPicker.vue'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
 const Slider = useUiComponent('slider')
 
 /** 会话（响应式；浮层读同一份） */

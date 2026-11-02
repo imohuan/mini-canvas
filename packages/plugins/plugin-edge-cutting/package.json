@@ -25,7 +25,8 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*"
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

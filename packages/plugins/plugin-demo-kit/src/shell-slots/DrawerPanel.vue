@@ -1,22 +1,17 @@
 <script setup lang="ts">
 /**
- * 抽屉插件页签正文：host 与默认按钮来自宿主 props；节点数由组件自己从上下文取。
+ * 抽屉插件页签正文：host 来自宿主 props；按钮从 ui 注册表取，节点数自己从上下文取。
  */
-import { onBeforeUnmount, shallowRef, type Component } from 'vue'
-import { useCanvasContext } from '@mini-canvas/canvas-render'
+import { onBeforeUnmount, shallowRef } from 'vue'
+import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
 import type { DrawerHost } from './types'
 
 const props = defineProps<{
   host: DrawerHost
-  /** 宿主下发的默认按钮组件（SlotComposer sharedProps） */
-  coreButton?: unknown
-  /** 宿主下发的按钮档位（dock / status / tab） */
-  buttonTone?: 'dock' | 'status' | 'tab'
 }>()
 const { ctx } = useCanvasContext()
 
-/** 宿主下发的按钮组件本身就是组件，直接当标签用（不包适配组件） */
-const CoreButton = props.coreButton as Component | undefined
+const Button = useUiComponent('Button')
 
 const doc = ctx.tryGet<{ getNodes(): unknown[]; subscribe(fn: () => void): () => void }>('doc')
 const nodeCount = shallowRef(doc ? doc.getNodes().length : 0)
@@ -40,8 +35,8 @@ onBeforeUnmount(() => {
     </ul>
 
     <div class="ssd-actions">
-      <CoreButton v-if="CoreButton" :tone="props.buttonTone ?? 'dock'" variant="text" title="关闭抽屉" @click="props.host.close()">关闭抽屉</CoreButton>
-      <CoreButton v-if="CoreButton" :tone="props.buttonTone ?? 'dock'" variant="text" title="收起或展开抽屉" @click="props.host.toggleCollapsed()">收起/展开</CoreButton>
+      <Button v-if="Button" class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="关闭抽屉" @click="props.host.close()">关闭抽屉</Button>
+      <Button v-if="Button" class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="收起或展开抽屉" @click="props.host.toggleCollapsed()">收起/展开</Button>
     </div>
   </div>
 </template>

@@ -10,7 +10,6 @@
  */
 import { computed, ref } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
-import { Button, Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   /** 当前颜色（#rrggbb / #rrggbbaa） */
@@ -23,6 +22,10 @@ const emit = defineEmits<{
 }>()
 
 const ColorField = useUiComponent('color')
+const Button = useUiComponent('Button')
+const Popover = useUiComponent('Popover')
+const PopoverContent = useUiComponent('PopoverContent')
+const PopoverTrigger = useUiComponent('PopoverTrigger')
 
 /** 面板开关（受控给 Dropdown） */
 const open = ref(false)

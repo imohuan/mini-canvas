@@ -7,10 +7,13 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { AlertTriangle, Check, Wrench } from 'lucide-vue-next'
-import { Button, Textarea } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../useAgent.js'
-import { SettingsSection as ShadcnSettingsSection } from '@mini-canvas/ui-kit-shadcn'
 import '../../components/settings/settings.css'
+
+const Button = useUiComponent('Button')
+const Textarea = useUiComponent('Textarea')
+const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state

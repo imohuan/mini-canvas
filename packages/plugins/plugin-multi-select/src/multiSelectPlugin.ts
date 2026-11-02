@@ -22,6 +22,7 @@ import BoxSelectLayer from './BoxSelectLayer.vue'
 import SelectionFrame from './SelectionFrame.vue'
 import SelectionGroupToolbar from './SelectionGroupToolbar.vue'
 import { Config } from './multiSelectConfig'
+import { registerThemePreview } from './themePreview'
 
 /** multi-select 暴露给外部插件的服务形状 */
 export interface MultiSelectService {
@@ -107,6 +108,8 @@ class MultiSelectServiceImpl extends Service implements MultiSelectService {
 }
 
 export function apply(ctx: Context) {
+  // 主题工作台预览：多选框由本插件自己画（主题页不认识它，卸载即消失）。
+  registerThemePreview(ctx)
   // 1. 上架服务（构造即 super(ctx,'multi-select') 上架）
   const svc = new MultiSelectServiceImpl(ctx)
 

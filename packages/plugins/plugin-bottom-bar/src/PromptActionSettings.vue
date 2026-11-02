@@ -14,9 +14,8 @@
  * - 「恢复默认」= 把内置两条放回编辑副本（保存后才生效）。
  */
 import { computed, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
-// 设置界面的控件统一用组件库（用户口径：只要是设置界面全部走 @mini-canvas/ui-kit-shadcn）
-import { Button, Input, Switch, Textarea } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+// 设置界面的控件统一从画布 ui 注册表取（由默认主题登记组件库里的原始件）
 import {
   loadAiActions,
   saveAiActions,
@@ -32,6 +31,10 @@ import {
 } from './aiActions'
 
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const Input = useUiComponent('Input')
+const Switch = useUiComponent('Switch')
+const Textarea = useUiComponent('Textarea')
 
 /** 本地编辑副本（保存前不动云端） */
 /**

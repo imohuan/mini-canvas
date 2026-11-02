@@ -29,6 +29,7 @@ import {
 } from './edgeCuttingCore'
 import { EdgeCuttingOverlay } from './edgeCuttingOverlay'
 import { Config, edgeCuttingConfigFrom, type EdgeCuttingConfig } from './edgeCuttingConfig'
+import { registerThemePreview } from './themePreview'
 
 /** 插件可配置项（P4：模块级 Config schema，随插件导出；默认值/分组见 edgeCuttingConfig.ts） */
 export { Config }
@@ -227,6 +228,8 @@ export const name = 'edge-cutting'
 registerEventName('edge-cutting:cut')
 
 export function apply(ctx: Context): void {
+  // 主题工作台预览：刀光由本插件自己画（主题页不认识它，卸载即消失）。
+  registerThemePreview(ctx)
   const controller = new EdgeCuttingController(ctx)
   // 默认装配监听；总开关(enabled)关闭 → 卸载 DOM 绑定与 overlay；重开 → 重装（overlay 惰性重建）。
   // config 已由内核经 Config schema 校验 + 补默认并登记 settings；这里订阅 onChange 让开关即时生效。

@@ -29,6 +29,8 @@ export const SHADCN_FAMILY_NAMES = [
   'NumberField',
   'Popover',
   'RadioGroup',
+  'ScrollArea',
+  'ScrollBar',
   'Select',
   'Separator',
   'Sheet',

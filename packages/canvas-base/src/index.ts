@@ -66,6 +66,9 @@ export type {
   ViewportState,
   FlowPoint,
 } from '@mini-canvas/canvas-data'
+// 全局通知服务的纯结构契约：插件逻辑层只引本包即可给 `ctx.get('notify')` 标类型，
+// 不必为此 import 默认主题或 vue-sonner。
+export type { NotifyContract, NotifyKind, NotifyMessage, NotifyOptions } from '@mini-canvas/canvas-data'
 
 export * from './define'
 /** 管理令牌的本机存取（面板 / 对话 / 云端连接 / 视觉节点代发共用一处键名） */

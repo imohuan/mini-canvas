@@ -76,6 +76,7 @@ const guideSidebar = [
     items: [
       { text: '主题总览', link: '/theme/' },
       { text: '主题色板', link: '/theme/palette' },
+      { text: '颜色与预览', link: '/theme/preview' },
     ],
   },
   {
@@ -200,6 +201,7 @@ const pluginsSidebar = [
       { text: '活快照', link: '/plugins/live' },
       { text: '默认主题', link: '/plugins/theme-default' },
       { text: '默认组件库', link: '/plugins/theme-components' },
+      { text: 'UI 开发', link: '/plugins/ui-development' },
       { text: '插件解析', link: '/plugins/parsed/' },
       { text: '渲染宿主', link: '/plugins/canvas-render' },
       { text: 'Agent 插件', link: '/cloud-server/bridge-agent' },
