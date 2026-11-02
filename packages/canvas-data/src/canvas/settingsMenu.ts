@@ -30,6 +30,11 @@ export interface SettingsNavDef {
   /** 所属 0 级分类 id */
   category: string
   title: string
+  /**
+   * 这一项不是配置分组，而是一个动作（如「快捷键」打开帮助浮层）。
+   * 设置面板据此渲染成可点项；解析时也不会为它自动造空 section。
+   */
+  action?: string
   /** 图标组件句柄（opaque；本层不 import Vue） */
   icon?: unknown
   /** 插件自绘整页；有就优先于二级分组 */
@@ -145,6 +150,17 @@ export class SettingsMenuRegistry {
   subscribe(fn: () => void): Disposable {
     this.listeners.add(fn)
     return { dispose: () => this.listeners.delete(fn) }
+  }
+
+  /**
+   * 动作项是「点击执行」而不是「配置分组」：解析树里必须原样保留，
+   * 否则 UI 只能看到 sections 为空的一级项，会把它当空壳丢掉或显示空页。
+   *
+   * sortedNavs() 已经返回完整 def；这里只补一层显式类型收窄，避免以后
+   * 有人给 SettingsNavDef 加字段时漏传。
+   */
+  private resolveNavAction(nav: SettingsNavDef): string | undefined {
+    return typeof nav.action === 'string' && nav.action.trim() ? nav.action.trim() : undefined
   }
 
   private notify(): void {
@@ -305,11 +321,15 @@ export class SettingsMenuRegistry {
       position: 0,
       navs: navs
         .filter((nav) => nav.category === category.id)
-        .map((nav) => ({
-          ...nav,
-          position: 0,
-          sections: byNav.get(nav.id) ?? [],
-        })),
+        .map((nav) => {
+          const action = this.resolveNavAction(nav)
+          return {
+            ...nav,
+            position: 0,
+            sections: byNav.get(nav.id) ?? [],
+            ...(action ? { action } : {}),
+          }
+        }),
     }))
 
     // 一级没有挂到任何分类的：临时补到「个人」，配置不消失
@@ -323,7 +343,13 @@ export class SettingsMenuRegistry {
       }
       for (const nav of loose) {
         issues.push({ kind: 'unregistered-nav', title: nav.title, nav: nav.id })
-        personal.navs.push({ ...nav, position: 0, sections: byNav.get(nav.id) ?? [] })
+        const action = this.resolveNavAction(nav)
+        personal.navs.push({
+          ...nav,
+          position: 0,
+          sections: byNav.get(nav.id) ?? [],
+          ...(action ? { action } : {}),
+        })
       }
     }
 

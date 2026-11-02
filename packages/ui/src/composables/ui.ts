@@ -1704,6 +1704,8 @@ function createUi() {
    * 这里是那次广播的落点（把 settingsOpen 置 false → <SettingsHost v-if> 卸载面板）。
    */
   let disposeSettingsClose: (() => void) | undefined
+  /** 设置面板里的「动作项」（如快捷键）广播；与关闭通道同处订阅，换皮不影响 */
+  let disposeSettingsAction: (() => void) | undefined
   /**
    * 轻提示：按需求**已停用**（原本右下角会浮一个 "message" 气泡，容易和 Agent 面板重叠）。
    * 保留函数签名，调用点无需改动；要恢复提示只需重新实现这里。
@@ -1779,9 +1781,21 @@ function createUi() {
   function bindSettingsClose(): void {
     disposeSettingsClose?.()
     disposeSettingsClose = undefined
+    disposeSettingsAction?.()
+    disposeSettingsAction = undefined
     const ctx = hostEl.value?.host?.ctx
     if (!ctx) return
     disposeSettingsClose = ctx.on('settings:ui-close', closeSettings).dispose
+    // ctx.on 的类型签名只声明无参回调；payload 由事件总线原样转发，这里显式收窄。
+    const onSettingsAction = (payload?: { action?: string }): void => {
+      if (payload?.action === 'shortcuts') {
+        // 「快捷键」不是配置页：关掉设置，打开画布已有的快捷键帮助浮层
+        closeSettings()
+        refreshShortcuts()
+        state.shortcutsOpen = true
+      }
+    }
+    disposeSettingsAction = ctx.on('settings:ui-action', onSettingsAction as unknown as () => void).dispose
   }
 
   async function onReady(): Promise<void> {
@@ -2140,6 +2154,8 @@ function createUi() {
   function unbindSettingsClose(): void {
     disposeSettingsClose?.()
     disposeSettingsClose = undefined
+    disposeSettingsAction?.()
+    disposeSettingsAction = undefined
   }
 
   /** 撤掉画布开关的设置订阅（宿主销毁时调用，与 unbindSettingsClose 同处） */

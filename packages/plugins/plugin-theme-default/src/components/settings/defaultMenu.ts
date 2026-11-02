@@ -25,7 +25,11 @@ const categories: SettingsCategoryDef[] = [
 
 const navs: SettingsNavDef[] = [
   { id: 'nav/personal/general', category: C.personal, title: '通用', order: 10 },
-  { id: 'nav/personal/shortcuts', category: C.personal, title: '快捷键', order: 20 },
+  /**
+   * 快捷键没有 Config 字段：它是一个动作页（点开宿主已有的帮助浮层），
+   * 不是配置分组。`action` 让设置面板渲染成可点项，而不是一条点了没内容的空壳。
+   */
+  { id: 'nav/personal/shortcuts', category: C.personal, title: '快捷键', order: 20, action: 'shortcuts' },
   { id: 'nav/appearance/theme', category: C.appearance, title: '主题', order: 10, icon: Brush },
   { id: 'nav/integration/agent', category: C.integration, title: 'Agent', order: 10 },
   { id: 'nav/integration/plugins', category: C.integration, title: '插件', order: 20, icon: Puzzle },

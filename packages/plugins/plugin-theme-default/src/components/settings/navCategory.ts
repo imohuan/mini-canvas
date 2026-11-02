@@ -83,6 +83,9 @@ export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
   上传: '开发',
   展示: '开发',
   插件展示: '开发',
+  // 主题工作台：开发期预览工具，不是普通用户的外观设置。
+  // 放到「开发」下，和「调试 / 演示」并列，避免撑大「外观」页。
+  主题工作台: '开发',
 }
 
 /** 从 unknown meta 里安全取字符串 */

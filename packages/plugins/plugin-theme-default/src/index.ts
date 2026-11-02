@@ -22,6 +22,7 @@ import { markRaw } from "vue";
 import "@mini-canvas/ui-kit-shadcn/styles.css";
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import "./styles/node-theme.css";
+import { registerThemePreview } from "./themePreview";
 import BaseNode from "./components/node/BaseNode.vue";
 import {
   NodeToolbarService,
@@ -75,6 +76,8 @@ import {
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 // 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
 registerEventName('settings:ui-close')
+// 设置面板的「动作项」（如快捷键打开帮助浮层）：面板广播，宿主执行
+registerEventName('settings:ui-action')
 
 export const name = "theme-default";
 // 本插件不声明任何 inject：apply 里只做 ctx.theme.register（主题槽 + 设置面板），不消费任何服务。
@@ -783,6 +786,9 @@ export const Config: ConfigSchema = {
 export interface ThemeConfig extends InferConfig<typeof Config> {}
 
 export function apply(ctx: Context, config?: ThemeConfig) {
+  // 主题工作台的预览由主题插件自己画：两个节点 + 一条连线 + 基础状态色。
+  // 其它插件把各自的浮层注册进同一个预览槽，主题页不需要认识它们。
+  registerThemePreview(ctx);
   // 设置菜单的默认 0/1/2 级定义。插件可注册同 id 覆盖，也可注册自己的 id；
   // 这里不是“总表”，不要求其它插件改它。
   registerDefaultSettingsMenu(ctx.settingsMenu)
@@ -958,3 +964,4 @@ export { default as NodeModeBottomBar } from "./components/node/NodeModeBottomBa
 export { default as MovingHandle } from "./components/node/MovingHandle.vue";
 export { default as ConnectionLine } from "./components/edge/ConnectionLine.vue";
 export { default as CustomEdge } from "./components/edge/CustomEdge.vue";
+export { ThemePreviewBase, registerThemePreview } from "./themePreview";

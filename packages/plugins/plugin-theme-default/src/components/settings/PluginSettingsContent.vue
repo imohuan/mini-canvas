@@ -156,6 +156,8 @@ interface NavEntry {
   categoryPosition?: number
   /** 图标 */
   icon?: unknown
+  /** 非配置动作 id（如「快捷键」）；有值时点击执行动作，不切内容页 */
+  action?: string
 }
 
 /** 一个二级段：显示名 + 它收拢的配置分组（一个段可合并多个 group） */
@@ -255,7 +257,9 @@ const navEntries = computed<NavEntry[]>(() => {
     }
     const leaves = navSections.flatMap((section) => section.groups)
     const page = (nav.page ?? metaPage(occ?.meta)) as Component | undefined
-    if (!leaves.length && !page && !occ) continue
+    // 动作项（如「快捷键」）没有配置分组：保留它，点击执行动作而不是点开空页
+    const action = typeof nav.action === 'string' ? nav.action : ''
+    if (!leaves.length && !page && !occ && !action) continue
     const category = view.categories.find((c) => c.id === nav.category)
     menuEntries.push({
       key: nav.id,
@@ -268,6 +272,7 @@ const navEntries = computed<NavEntry[]>(() => {
       category: category?.title ?? categoryFor(nav.title, occ?.meta),
       ...(category ? { categoryPosition: category.position } : {}),
       icon: nav.icon ?? metaIcon(occ?.meta) ?? iconOf(nav.title),
+      ...(action ? { action } : {}),
     })
   }
 
@@ -419,6 +424,12 @@ const activeSectionIndex = computed<number>(() =>
 const showTabs = computed<boolean>(() => props.showSectionTabs && sections.value.length > 1)
 
 function selectNav(key: string): void {
+  const entry = navEntries.value.find((e) => e.key === key)
+  // 动作项要先执行：它可能一打开就是默认选中态，不能因为“key 没变”直接 return
+  if (entry?.action) {
+    ctx.emit('settings:ui-action', { action: entry.action })
+    return
+  }
   if (activeNav.value === key) return
   activeNav.value = key
 }
@@ -437,7 +448,11 @@ watch(
       activeNav.value = ''
       return
     }
-    if (!entries.some((entry) => entry.key === activeNav.value)) activeNav.value = entries[0].key
+    // 动作项（如快捷键）不占默认位置：打开设置应该落在第一个真正的配置页
+    const first = entries.find((entry) => !entry.action) ?? entries[0]!
+    if (!entries.some((entry) => entry.key === activeNav.value && !entry.action)) {
+      activeNav.value = first.key
+    }
   },
   { immediate: true },
 )
