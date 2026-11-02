@@ -43,7 +43,7 @@ describe('全屏预览底部控制条', () => {
   })
 
   it('下载按钮没有任何类型条件（所有媒体都有）', () => {
-    const btn = template.match(/<button[^>]*aria-label="下载"[^>]*>/)?.[0] ?? ''
+    const btn = template.match(/<Button[^>]*aria-label="下载"[^>]*>/)?.[0] ?? ''
     expect(btn, '找不到下载按钮').not.toBe('')
     expect(btn, '下载按钮带了 v-if 条件（音频/视频就没了）').not.toMatch(/v-if=/)
   })
@@ -51,7 +51,7 @@ describe('全屏预览底部控制条', () => {
   it('缩放（缩小/百分比/放大/重置）只在图片出现', () => {
     // 缩小 / 放大 / 重置都被 canZoom 包着；百分比标签也在 canZoom 的 template 里
     for (const label of ['缩小', '放大', '重置']) {
-      const re = new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`)
+      const re = new RegExp(`<Button[^>]*aria-label="${label}"[^>]*>`)
       expect(template, `找不到「${label}」按钮`).toMatch(re)
     }
     const zoomAt = template.indexOf('aria-label="缩小"')
@@ -64,7 +64,7 @@ describe('全屏预览底部控制条', () => {
 
   it('旋转 / 镜像对图片与视频都出现（hasTools）', () => {
     for (const label of ['旋转', '镜像']) {
-      const btn = template.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? ''
+      const btn = template.match(new RegExp(`<Button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? ''
       expect(btn, `找不到「${label}」按钮`).not.toBe('')
       expect(btn, `「${label}」仍只在图片时出现（视频缺这两个功能）`).toMatch(/v-if="hasTools"/)
     }

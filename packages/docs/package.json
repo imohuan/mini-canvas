@@ -16,6 +16,7 @@
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
     "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/ui-kit-shadcn": "workspace:*",
     "@vue-flow/core": "^1.48.2",
     "@vue/server-renderer": "3.5.38",
     "mermaid": "^11.17.2",
