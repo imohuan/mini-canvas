@@ -11,17 +11,10 @@ import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/
 import { useMasonry } from '../../../composables/useMasonry'
 import { uiComponentOf, useUi, useUiComponentOutside } from '../../../composables/ui'
 import { historySignatureOf } from '../../../composables/historySignature'
-import {
-  esc,
-  formatBytes,
-  formatDuration,
-  formatDurationLong,
-  formatExactTime,
-  mediaAspect,
-  ratioLabel,
-} from './historyCardText'
+import { esc, formatBytes, formatDuration, mediaAspect } from './historyCardText'
 import { useHistoryZoom } from './useHistoryZoom'
-import { useHistoryPreview } from './useHistoryPreview'
+import { useHistoryPreview, type HistoryDetailItem } from './useHistoryPreview'
+import HistoryDetailDialog from './HistoryDetailDialog.vue'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
@@ -49,7 +42,7 @@ const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? Audio
 const { thumbOf, previewableUrl, historyPreviewGroup, previewItem, openHistoryItem } = useHistoryPreview(ui)
 
 /** 点开「详情」的那一条历史（生成参数弹窗的数据源） */
-const detailItem = ref<HistItem | null>(null)
+const detailItem = ref<HistoryDetailItem | null>(null)
 
 // ==================== Masonry 瀑布流（照 web2api TaskResultGalleryView 搬入） ====================
 const masonry = useMasonry()
@@ -1688,79 +1681,7 @@ onBeforeUnmount(() => {
        视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
   <component :is="PreviewViewer" v-if="previewItem" :item="previewItem" @close="previewItem = null" />
 
-  <!-- 生成详情：一条历史的完整参数（提示词 / 参数 / 参考素材 / 产物信息）。
-       用户口径 2026-10-27：卡片上要有入口，能复盘"当时到底用了什么"。 -->
-  <AppDialog :model-value="!!detailItem" width="640px" height="auto" max-height="80vh" radius="16px"
-    @update:model-value="!$event && (detailItem = null)">
-    <div v-if="detailItem" class="hist-detail">
-      <header class="hist-detail-head">
-        <div class="min-w-0">
-          <strong class="hist-detail-title">{{ detailItem.title }}</strong>
-          <span class="hist-detail-sub">{{ detailItem.kind }} · {{ detailItem.time }}</span>
-        </div>
-        <Button variant="ghost" size="icon" aria-label="关闭生成详情" @click="detailItem = null">
-          <X :size="15" />
-        </Button>
-      </header>
-
-      <ScrollPane class="min-h-0 flex-1" direction="y" body-class="px-4 pb-4">
-        <div class="hist-detail-body">
-          <!-- 产物信息：图片给宽高比，视频/音频额外给时长，所有类型都给文件大小 -->
-          <section class="hist-detail-sec">
-            <h4 class="hist-detail-h">产物</h4>
-            <dl class="hist-detail-kv">
-              <template v-if="detailItem.media?.width && detailItem.media?.height">
-                <dt>宽高</dt>
-                <dd>{{ detailItem.media.width }}×{{ detailItem.media.height }}
-                  <span class="hist-detail-dim">（{{ ratioLabel(detailItem.media.width, detailItem.media.height) }}）</span>
-                </dd>
-              </template>
-              <template v-if="detailItem.media?.durationMs">
-                <dt>时长</dt><dd>{{ formatDurationLong(detailItem.media.durationMs) }}</dd>
-              </template>
-              <template v-if="detailItem.media?.bytes">
-                <dt>文件大小</dt><dd>{{ formatBytes(detailItem.media.bytes) }}</dd>
-              </template>
-              <template v-if="detailItem.finishedAt">
-                <dt>完成时间</dt><dd>{{ formatExactTime(detailItem.finishedAt) }}</dd>
-              </template>
-              <template v-if="detailItem.error">
-                <dt>失败原因</dt><dd class="hist-detail-danger">{{ detailItem.error }}</dd>
-              </template>
-            </dl>
-          </section>
-
-          <section class="hist-detail-sec">
-            <h4 class="hist-detail-h">提示词</h4>
-            <p v-if="detailItem.prompt" class="hist-detail-prompt">{{ detailItem.prompt }}</p>
-            <p v-else class="hist-detail-empty">这条记录没有保存提示词（早期记录没有这一项）</p>
-          </section>
-
-          <section v-if="detailItem.values && Object.keys(detailItem.values).length" class="hist-detail-sec">
-            <h4 class="hist-detail-h">生成参数</h4>
-            <dl class="hist-detail-kv">
-              <template v-for="(v, k) in detailItem.values" :key="k">
-                <dt>{{ k }}</dt><dd>{{ String(v) }}</dd>
-              </template>
-            </dl>
-          </section>
-
-          <section class="hist-detail-sec">
-            <h4 class="hist-detail-h">参考素材</h4>
-            <div v-if="detailItem.resources?.length" class="hist-detail-refs">
-              <div v-for="(r, i) in detailItem.resources" :key="i" class="hist-detail-ref">
-                <span class="hist-detail-ref-kind">{{ r.kind }}</span>
-                <img v-if="r.url && r.kind !== 'video' && r.kind !== 'audio'" :src="r.url" alt="" loading="lazy" />
-                <span v-else-if="r.url" class="hist-detail-ref-url">{{ r.url }}</span>
-                <span v-else class="hist-detail-ref-value">{{ r.value }}</span>
-              </div>
-            </div>
-            <p v-else class="hist-detail-empty">这条记录没有参考素材（早期记录没有这一项）</p>
-          </section>
-        </div>
-      </ScrollPane>
-    </div>
-  </AppDialog>
+  <HistoryDetailDialog :item="detailItem" @close="detailItem = null" />
 
   <DirectorSettingsDialog />
 </template>
@@ -1778,28 +1699,6 @@ onBeforeUnmount(() => {
 .hist-error-toggle:checked::after { content: ""; width: 8px; height: 8px; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E"); }
 /* 批量操作栏 */
 .hist-batch-bar { background: var(--ui-panel, #fff); }
-
-/* 详情弹窗：与历史面板同一套中性灰阶；只有失败原因用语义红 */
-.hist-detail { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.hist-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 12px 8px 16px; }
-.hist-detail-title { display: block; font-size: 15px; font-weight: 700; color: var(--ui-ink, inherit); }
-.hist-detail-sub { display: block; margin-top: 2px; font-size: 11px; color: var(--ui-ink-mute, #888); }
-.hist-detail-body { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
-.hist-detail-sec { display: flex; flex-direction: column; gap: 6px; }
-.hist-detail-h { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ui-ink-mute, #888); }
-.hist-detail-kv { display: grid; grid-template-columns: 68px 1fr; gap: 4px 10px; margin: 0; font-size: 12px; }
-.hist-detail-kv dt { color: var(--ui-ink-mute, #888); }
-.hist-detail-kv dd { margin: 0; color: var(--ui-ink, inherit); word-break: break-word; }
-.hist-detail-dim { color: var(--ui-ink-mute, #888); }
-.hist-detail-danger { color: var(--ui-danger, #ef4444); }
-.hist-detail-prompt { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--ui-veil, rgb(127 127 127 / .08)); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--ui-ink, inherit); }
-.hist-detail-empty { margin: 0; font-size: 12px; color: var(--ui-ink-mute, #888); }
-.hist-detail-refs { display: flex; flex-wrap: wrap; gap: 8px; }
-.hist-detail-ref { display: flex; flex-direction: column; gap: 4px; width: 104px; padding: 6px; border-radius: 8px; border: 1px solid var(--ui-line, rgb(128 128 128 / .2)); background: var(--ui-veil, rgb(127 127 127 / .06)); }
-.hist-detail-ref img { width: 100%; height: 68px; object-fit: cover; border-radius: 6px; display: block; }
-.hist-detail-ref-kind { font-size: 10px; color: var(--ui-ink-mute, #888); text-transform: uppercase; }
-.hist-detail-ref-value { font-size: 11px; line-height: 1.4; color: var(--ui-ink, inherit); max-height: 68px; overflow: auto; }
-.hist-detail-ref-url { font-size: 10px; line-height: 1.35; color: var(--ui-ink-mute, #888); word-break: break-all; max-height: 68px; overflow: auto; }
 
 /* 加载更多指示（用户口径 2026-10-28：显示 1 秒、要更清楚）。
    中性灰阶：转圈 + 文案，居中放在列表底部；不用主题色。 */

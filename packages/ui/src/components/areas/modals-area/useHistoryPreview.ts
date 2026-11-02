@@ -13,6 +13,15 @@ export interface HistoryPreviewItem {
   media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
 }
 
+/** 生成详情弹窗需要的完整记录字段。 */
+export interface HistoryDetailItem extends HistoryPreviewItem {
+  prompt?: string
+  values?: Record<string, unknown>
+  resources?: Array<{ kind: string; url?: string; value?: string }>
+  finishedAt?: number
+  error?: string
+}
+
 interface PreviewSelection {
   name: string
   kind: string

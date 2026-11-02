@@ -31,6 +31,10 @@ const historyPreview = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryPreview.ts'),
   'utf-8',
 )
+const historyDetail = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/HistoryDetailDialog.vue'),
+  'utf-8',
+)
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
 const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
@@ -565,9 +569,9 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   it('卡片有「详情」入口，弹窗展示提示词/参数/参考素材/产物信息', () => {
     expect(modalsArea, '卡片上没有详情按钮构建函数').toMatch(/function buildDetailButton/)
     expect(modalsArea, '详情入口没有挂到卡片上').toMatch(/appendChild\(buildDetailButton\(item\)\)/)
-    expect(modalsArea, '详情弹窗没有提示词').toMatch(/detailItem\.prompt/)
-    expect(modalsArea, '详情弹窗没有生成参数').toMatch(/detailItem\.values/)
-    expect(modalsArea, '详情弹窗没有参考素材').toMatch(/detailItem\.resources/)
+    expect(historyDetail, '详情弹窗没有提示词').toMatch(/item\.prompt/)
+    expect(historyDetail, '详情弹窗没有生成参数').toMatch(/item\.values/)
+    expect(historyDetail, '详情弹窗没有参考素材').toMatch(/item\.resources/)
   })
 
   it('评级相关 UI 隐藏（逻辑保留，只收起入口）', () => {
