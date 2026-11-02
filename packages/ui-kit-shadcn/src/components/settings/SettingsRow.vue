@@ -33,9 +33,9 @@ defineProps<{
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  /* 行级交互目标 ≥ 44px（docs/design/ui-style-guide.md §1 原则 4 / §5 第 4 条）。
-     10px 上下 padding + 内容行高本身已接近 44，这里用 min-height 兜住最矮的一行。 */
-  min-height: 44px;
+  /* 行高跟主题尺寸档走（10px 上下 padding + 内容行高本身已达标）。
+     默认档 36px；用户在主题里选「紧凑」时跟着变小，选「大」时一起放大。 */
+  min-height: calc(var(--mct-size-control-h, 2.25rem) - 4px);
   padding: 10px 0;
 }
 

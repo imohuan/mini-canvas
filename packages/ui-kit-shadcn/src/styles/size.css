@@ -13,7 +13,12 @@
  * 个别调用点自己的 h-8 / size-6 也不会被盖掉，观感与升级前完全相同。
  */
 
-/* —— 按钮：按 size 分档；图标档保持正方形 —— */
+/* —— 按钮：按 size 分档；图标档保持正方形 ——
+ *
+ * 显式 size（sm / xs / lg / icon-*）是**相对档位**：基准都取全局档的
+ * `--mct-size-control-h`，再按原档差偏移。这样用户选「紧凑」时，
+ * size="icon-sm" 的按钮也一起从 32 降到 24；选「大」时一起升。
+ */
 html[data-mct-size] [data-slot='button'][data-size='default'],
 html[data-mct-size] [data-slot='button']:not([data-size]),
 html[data-mct-size] button[data-variant][data-size='default'],
@@ -52,14 +57,14 @@ html[data-mct-size] button[data-variant][data-size='icon'] {
 
 html[data-mct-size] [data-slot='button'][data-size='icon-sm'],
 html[data-mct-size] button[data-variant][data-size='icon-sm'] {
-  width: var(--mct-size-control-h-sm, 2rem);
-  height: var(--mct-size-control-h-sm, 2rem);
+  width: calc(var(--mct-size-control-h, 2.25rem) - 0.25rem);
+  height: calc(var(--mct-size-control-h, 2.25rem) - 0.25rem);
 }
 
 html[data-mct-size] [data-slot='button'][data-size='icon-xs'],
 html[data-mct-size] button[data-variant][data-size='icon-xs'] {
-  width: var(--mct-size-control-h-xs, 1.5rem);
-  height: var(--mct-size-control-h-xs, 1.5rem);
+  width: calc(var(--mct-size-control-h, 2.25rem) - 0.75rem);
+  height: calc(var(--mct-size-control-h, 2.25rem) - 0.75rem);
 }
 
 html[data-mct-size] [data-slot='button'][data-size='icon-lg'],
@@ -109,6 +114,13 @@ html[data-mct-size] [data-slot='input-group'] {
   height: var(--mct-size-control-h, 2.25rem);
 }
 
+/* —— 数字输入（NumberFieldInput 也写 data-slot='input'，已由上面覆盖）；
+      步进按钮跟图标档一样按全局档偏移 —— */
+html[data-mct-size] [data-slot='increment'],
+html[data-mct-size] [data-slot='decrement'] {
+  width: calc(var(--mct-size-control-h, 2.25rem) - 0.25rem);
+}
+
 /* —— 下拉 / 选择：触发器高度 + 菜单行高 —— */
 html[data-mct-size] [data-slot='select-trigger'][data-size='default'],
 html[data-mct-size] [data-slot='select-trigger']:not([data-size]) {
@@ -118,7 +130,7 @@ html[data-mct-size] [data-slot='select-trigger']:not([data-size]) {
 }
 
 html[data-mct-size] [data-slot='select-trigger'][data-size='sm'] {
-  height: var(--mct-size-control-h-sm, 2rem);
+  height: calc(var(--mct-size-control-h, 2.25rem) - 0.25rem);
   padding-inline: var(--mct-size-control-px-sm, 0.75rem);
   font-size: var(--mct-size-control-fs-sm, 0.875rem);
 }
@@ -132,9 +144,17 @@ html[data-mct-size] [data-slot='menubar-item'] {
   font-size: var(--mct-size-control-fs, 0.875rem);
 }
 
+/* 命令面板 / Combobox 的行：同一套行高与字号 */
+html[data-mct-size] [data-slot='command-item'],
+html[data-mct-size] [data-slot='combobox-item'] {
+  padding-block: var(--mct-size-row-py, 0.5rem);
+  padding-inline: var(--mct-size-row-px, 0.75rem);
+  font-size: var(--mct-size-control-fs, 0.875rem);
+}
+
 /* —— 页签：整条高度 + 每项文字 —— */
 html[data-mct-size] [data-slot='tabs-list'] {
-  height: var(--mct-size-tab-h, 2.25rem);
+  height: var(--mct-size-tab-h, 2.25rem) !important;
 }
 
 html[data-mct-size] [data-slot='tabs-trigger'] {
@@ -169,6 +189,7 @@ html[data-mct-size] [data-slot='switch'][data-size='sm'] [data-slot='switch-thum
   height: calc(var(--mct-size-switch-thumb-h, 1rem) - 0.25rem);
   width: calc(var(--mct-size-switch-thumb-w, 1.5rem) - 0.5rem);
 }
+
 
 /* —— 勾选 / 单选 —— */
 html[data-mct-size] [data-slot='checkbox'],

@@ -73,6 +73,40 @@
 }
 
 /*
+ * 菜单行 / 选项行的高亮态：底 = 实色强调色，字 = --ui-on-accent。
+ *
+ * 用户口径（2026-11-02）：截图里选中行是「青底黑字」，主题背景调暗后看不清。
+ * 原因：shadcn 默认 focus:text-accent-foreground（= --ui-ink），在实色强调底上
+ * 亮色主题是深字 —— 对比度只有 2~3:1；主题把背景改暗后更糟。
+ * 这里把底/字收紧成一对，跟项目自己的「实色强调色必须配 --ui-on-accent」规则一致。
+ * 半透明底（hover-soft）那几条不受影响：它们保留各自的 ink 文字。
+ */
+[data-slot='select-item'][data-highlighted],
+[data-slot='dropdown-menu-item'][data-highlighted],
+[data-slot='context-menu-item'][data-highlighted],
+[data-slot='menubar-item'][data-highlighted],
+[data-slot='combobox-item'][data-highlighted] {
+  background-color: var(--ui-accent);
+  color: var(--ui-on-accent, #ffffff);
+}
+
+/* 高亮行内部的图标 / 次级文字一起跟白字，避免残留深色小字 */
+[data-slot='select-item'][data-highlighted] *,
+[data-slot='dropdown-menu-item'][data-highlighted] *,
+[data-slot='context-menu-item'][data-highlighted] *,
+[data-slot='menubar-item'][data-highlighted] *,
+[data-slot='combobox-item'][data-highlighted] * {
+  color: inherit;
+}
+
+/* 破坏性行保持红字：只有非 destructive 的行才吃白字对 */
+[data-slot='select-item'][data-highlighted][data-variant='destructive'],
+[data-slot='dropdown-menu-item'][data-highlighted][data-variant='destructive'] {
+  background-color: var(--ui-danger-soft, rgb(239 68 68 / 0.1));
+  color: var(--ui-danger, #ef4444);
+}
+
+/*
  * 设置弹窗里的浮层：Select / Popover / DropdownMenu 都 Teleport 到 body。
  * reka-ui 会把内容自身的 z-index 复制到定位外层，而组件默认只有 z-50；
  * 设置遮罩是 --layer-modal(100000)，所以浮层会被整块盖住（2026-11-01 实测）。
