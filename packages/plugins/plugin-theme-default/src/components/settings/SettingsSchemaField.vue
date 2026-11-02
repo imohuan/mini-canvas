@@ -266,39 +266,54 @@ function onColor(value: string | { toString(): string } | null): void {
       v-else-if="entry.schema.type === 'color'"
       :label="entry.schema.label ?? entry.key"
       :description="entry.schema.description"
-      stacked
     >
-      <Popover v-model:open="colorOpen">
-        <div class="sf-color">
+      <!--
+        结构要点：清除角标和触发器必须是**同一个定位容器**的直接子元素。
+        PopoverTrigger(as-child) 自己会渲染成一个占据整行的层，若把它和角标
+        放在 .sf-color 里，角标只会挂在这个外壳的左上角、落不到色块上。
+        所以把 Popover 放在 .sf-color 内层，角标挂到触发器旁边。
+      -->
+      <div class="sf-color">
+        <Popover v-model:open="colorOpen">
           <PopoverTrigger as-child>
             <button
               class="sf-color-trigger"
               type="button"
               :aria-label="'选择' + (entry.schema.label ?? entry.key)"
+              @keydown.delete.prevent="onColor('')"
+              @keydown.backspace.prevent="onColor('')"
             >
               <span class="sf-color-swatch" :style="{ background: colorValue || 'transparent' }"></span>
               <span class="sf-color-hex">{{ colorValue || '跟随主题' }}</span>
             </button>
           </PopoverTrigger>
+          <!--
+            清除：**悬停触发器时**才在右上角浮出的小叉（用户口径 2026-11-02）。
+            以前这里是常驻的「清除」文字按钮，占着右侧一整块，颜色行被迫改成上下布局。
+            现在只占 16px 的角标，鼠标离开即隐藏，行内也不需要再多一个按钮位。
+            键盘用户：Tab 到触发器后按 Delete / Backspace 同样可清空（见模板上的 keydown）。
+          -->
           <button
-            v-if="(entry.schema as { optional?: boolean }).optional"
+            v-if="(entry.schema as { optional?: boolean }).optional && colorValue"
             class="sf-color-clear"
             type="button"
-            title="清空（跟随主题强调色）"
-            aria-label="清空颜色"
+            title="清除自定义颜色，改用主题色"
+            aria-label="清除自定义颜色，改用主题色"
             @click="onColor('')"
           >
-            清除
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
-        </div>
-        <!-- 浮层挂在 body 上：滚动正文时不会被容器裁掉；抬到设置遮罩之上 -->
-        <PopoverContent class="sf-color-pop settings-floating-layer" align="start" :side-offset="8">
-          <ColorPicker
-            :model-value="colorValue || pickerSeed"
-            @update:model-value="onColor"
-          />
-        </PopoverContent>
-      </Popover>
+          <!-- 浮层挂在 body 上：滚动正文时不会被容器裁掉；抬到设置遮罩之上 -->
+          <PopoverContent class="sf-color-pop settings-floating-layer" align="start" :side-offset="8">
+            <ColorPicker
+              :model-value="colorValue || pickerSeed"
+              @update:model-value="onColor"
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
     </ShadcnSettingsRow>
 
     <!-- 文本（默认兜底） -->
@@ -327,14 +342,12 @@ function onColor(value: string | { toString(): string } | null): void {
 .sf-select-trigger {
   width: 200px;
   max-width: 100%;
-  border-radius: var(--radius-control, 8px);
 }
 
 .sf-input {
   width: 260px;
   max-width: 100%;
   height: 32px;
-  border-radius: var(--radius-control, 8px);
 }
 
 .sf-number {
@@ -357,7 +370,6 @@ function onColor(value: string | { toString(): string } | null): void {
 .sf-number-input {
   height: 30px;
   padding: 0 18px;
-  border-radius: var(--radius-control, 8px);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -372,19 +384,29 @@ function onColor(value: string | { toString(): string } | null): void {
 }
 
 .sf-color {
+  /*
+   * 清除角标相对于 **触发器外壳** 定位。之前挂在 .sf-color 上，
+   * 而 PopoverTrigger(as-child) 会把触发器变成一个独立层，
+   * 角标反而跑到行外去了（实测坐标 x=88 / y=-6）。
+   * 现在 .sf-color-trigger 自己是 position: relative，角标就贴在它右上角。
+   */
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
 .sf-color-trigger {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* 给角标留出右侧空间：清除按钮压在色块内侧，不再盖住 hex 文本 */
+  position: relative;
   height: 32px;
   padding: 0 10px 0 5px;
   border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: var(--radius-control, 8px);
+  /* 圆角交给组件库：全局圆角档位改的是 [data-slot] 本体，
+     这里写死 var(--radius-control) 会把它盖住（用户 2026-11-02 反馈「圆角没生效」）。 */
+  border-radius: var(--mct-radius, var(--radius-control, 8px));
   background: transparent;
   color: var(--ui-ink, #18202b);
   font-size: 12px;
@@ -407,26 +429,67 @@ function onColor(value: string | { toString(): string } | null): void {
   letter-spacing: 0.01em;
 }
 
+/*
+ * 清除角标：放在触发器右上角，只在鼠标进入（或键盘聚焦）这一行时出现。
+ * 用 absolute 让它不占布局宽度 —— 颜色行才能保持「标题在左、控件在右」。
+ * opacity + visibility 过渡，而不是 display:none，出现时不会跳一下。
+ */
 .sf-color-clear {
-  height: 26px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-badge, 6px);
-  background: transparent;
+  position: absolute;
+  /*
+   * 贴在触发器右上角轮廓上：一半在控件内、一半在外，鼠标悬停时一眼能看见，
+   * 又不遮住色块与右侧 hex。卡片右侧有 16px 内衬，不会被裁掉。
+   */
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, var(--ui-panel, #fff));
   color: var(--ui-ink-dim, #6b7280);
-  font-size: 11px;
+  box-shadow: 0 1px 2px var(--ui-scrim, rgb(15 23 42 / 0.18));
   cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  /* 不可见时不参与点击，避免它盖在色块上方挡住「打开取色器」 */
+  pointer-events: none;
+  transition: opacity 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.sf-color-clear svg {
+  width: 8px;
+  height: 8px;
+}
+
+/*
+ * 只认「鼠标在触发器上」或「键盘焦距在触发器 / 角标上」。
+ * 不能写 .sf-color:hover —— 角标本身是 .sf-color 的后代，鼠标移到角标上时它也算 hover，
+ * 结果移开控件后小叉一直亮着（实测）。
+ */
+.sf-color-trigger:hover + .sf-color-clear,
+.sf-color-trigger:focus-visible + .sf-color-clear,
+.sf-color-clear:hover,
+.sf-color-clear:focus-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .sf-color-clear:hover {
-  background: var(--ui-hover, rgb(0 0 0 / 0.05));
-  color: var(--ui-ink, #18202b);
+  border-color: var(--ui-danger, #ef4444);
+  color: var(--ui-danger, #ef4444);
 }
 
 .sf-color-pop {
-  width: auto;
-  padding: 12px;
+  width: 272px;
+  padding: 16px;
   border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: var(--radius-open, 12px);
+  border-radius: var(--mct-radius, var(--radius-open, 12px));
 }
 </style>

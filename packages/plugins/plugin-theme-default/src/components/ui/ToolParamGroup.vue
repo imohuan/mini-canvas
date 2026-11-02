@@ -253,7 +253,8 @@ const summary = computed(() => {
    直接写属性盖不住），取值照右键菜单 .ctx-menu：16 圆角 + 不透明白底。 */
 .tpg-menu-body {
   --dd-padding: 6px;
-  --dd-radius: 16px;
+  /* 与右键菜单同档，但跟着主题圆角走；没选时仍是 16px。 */
+  --dd-radius: var(--mct-radius, 16px);
   --dd-bg: var(--ui-overlay-solid, #fff);
 }
 /* 整块版式（有预设块时）：面板宽 288（参考稿 w-72）、内边距 16（p-4）、块间 gap 12（gap-3） */

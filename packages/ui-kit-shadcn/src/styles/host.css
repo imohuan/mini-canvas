@@ -102,8 +102,12 @@
  *
  * 实测（2026-11-02）：写 `@theme inline { --radius-4xl: … }` 不会让已编译的
  * `rounded-4xl` 读这个值 —— 工具类在构建期就把 rem 写死了，主题里改变量对它是空气。
- * 所以这里对组件本体写 `border-radius: var(--mct-radius, <原兜底>)`，
- * 默认档回落各自原来的观感（Button 32px 胶囊、Input 24px、卡片 16px）。
+ * 所以这里对组件本体写 `border-radius: var(--mct-radius, <项目 token>)`。
+ *
+ * **不能写 revert-layer**：这几条是无层样式，revert-layer 会一路退到浏览器默认，
+ * 把组件自己的 rounded-3xl（下拉 24px）也丢掉 —— 实测下拉变成近乎方角，
+ * 正是用户 2026-11-02 报的「圆角没生效」。这里回落到项目自身的圆角 token，
+ * 既不依赖工具类，也保证「跟随项目」真的是项目那套 8 / 12 / 16px。
  */
 /*
  * 这里不用 important。
@@ -121,23 +125,39 @@
  */
 [data-variant][data-size],
 [data-slot='button'] {
-  /* 默认档不写 --mct-radius：这里回落到 Button 自己的 rounded-4xl，保持原有观感。
-     写死一个 999px 兜底会把按钮从「模板里的圆角」偷偷改成胶囊，用户没配置却变了样子。 */
-  border-radius: var(--mct-radius, revert-layer);
+  /* 默认档 = 项目控件圆角（8px）；选了档位则全站统一成那个值 */
+  border-radius: var(--mct-radius, var(--radius-control, 8px));
 }
 
 [data-slot='input'],
 [data-slot='select-trigger'],
-[data-slot='textarea'] {
-  border-radius: var(--mct-radius, revert-layer);
+[data-slot='textarea'],
+[data-slot='input-group'] {
+  border-radius: var(--mct-radius, var(--radius-control, 8px));
 }
 
-[data-slot='card'],
+[data-slot='card'] {
+  border-radius: var(--mct-radius, var(--radius-panel, 16px));
+}
+
 [data-slot='dialog-content'],
 [data-slot='popover-content'],
 [data-slot='dropdown-menu-content'],
 [data-slot='select-content'] {
-  border-radius: var(--mct-radius, revert-layer);
+  border-radius: var(--mct-radius, var(--radius-open, 12px));
+}
+
+/*
+ * 菜单行 / 提示语块：跟着同一档圆角走，但最多到行高的一半。
+ * 用户把圆角调到 14px 时，行高 32px 的菜单项若直接吃 14px 会变成胶囊，
+ * 一列条目看起来像一排药丸；min() 让它在「跟主题」和「仍是行」之间取平衡。
+ */
+[data-slot='dropdown-menu-item'],
+[data-slot='select-item'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='context-menu-content'],
+[data-slot='menubar-content'] {
+  border-radius: min(var(--mct-radius, var(--radius-row, 10px)), 8px);
 }
 
 /*

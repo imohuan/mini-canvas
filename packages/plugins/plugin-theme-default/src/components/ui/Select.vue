@@ -88,7 +88,8 @@ function onChange(value: string | number | null): void {
 /** 浮层容器：与右键菜单同档（不透明白底 / 16 圆角 / 6 内边距） */
 .mck-select-menu {
   --dd-padding: 6px;
-  --dd-radius: 16px;
+  /* 圆角跟主题档位走；没选时保留原来的 16px（菜单与右键菜单同档）。 */
+  --dd-radius: var(--mct-radius, 16px);
   --dd-bg: var(--ui-overlay-solid);
 }
 

@@ -59,7 +59,9 @@ const iconComponent = computed<Component | undefined>(() => {
   box-sizing: border-box;
   padding: 0 10px;
   border: 0;
-  border-radius: var(--radius-control, 8px);
+  /* 跟随全局圆角档位（--mct-radius），没选时用项目 8px。
+     只写 --radius-control 会绕开主题设置，改圆角后左导航还是老样子。 */
+  border-radius: var(--mct-radius, var(--radius-control, 8px));
   background: transparent;
   /* 未选中统一用弱化的文字色；不靠 opacity，避免和插件自带样式叠加后深浅不一 */
   color: var(--ui-ink-dim, #6b7280);
