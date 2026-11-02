@@ -71,11 +71,20 @@
   --radius-open: 12px;
   --radius-panel: 16px;
   --radius-pill: 999px;
-  --text-xs: 10px;
-  --text-sm: 11px;
-  --text-label: 12px;
-  --text-base: 13px;
-  --text-title: 15px;
+  /*
+   * 注意：不要用 --text-xs / --text-sm 这两个名字。
+   *
+   * Tailwind v4 的 `text-xs` / `text-sm` 工具类编译出来就是
+   * `font-size: var(--text-xs)` / `var(--text-sm)`。以前这里把它们定义成 10/11px，
+   * 组件库所有 `text-sm` 的菜单行、对话框正文、按钮文字都被一起压小，
+   * 而下拉菜单恰恰全是 text-sm —— 用户看到的就是“只有下拉不对”。
+   * UI 规范里的这几档字号改用 `--ui-text-*`，与 Tailwind 的命名空间分开。
+   */
+  --ui-text-xs: 10px;
+  --ui-text-sm: 11px;
+  --ui-text-label: 12px;
+  --ui-text-base: 13px;
+  --ui-text-title: 15px;
   /* ===== 规范里的另一组阶梯：文字灰阶 / 中性填充 / 发丝线 / 动效 =====
      这些名字在 docs/design/ui-style-guide.md §2.1、§2.7 里一直是规范的一部分，
      但此前没有任何一处定义。组件于是只能写 var(--text-faint, #9ca3af) —— 暗色下

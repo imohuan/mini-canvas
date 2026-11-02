@@ -120,7 +120,7 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
 
 /* 名称：与按钮同高，字号/颜色走 token */
 .gsp-title {
-  font-size: var(--text-base, 13px);
+  font-size: var(--ui-text-base, 13px);
   font-weight: 600;
   color: var(--ui-ink, #18202b);
   line-height: 1;
@@ -138,7 +138,7 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
 
 /* 计数：弱化色，不抢主按钮 */
 .gsp-count {
-  font-size: var(--text-sm, 12px);
+  font-size: var(--ui-text-sm, 12px);
   color: var(--ui-ink-dim, #6b7280);
   line-height: 1;
   white-space: nowrap;

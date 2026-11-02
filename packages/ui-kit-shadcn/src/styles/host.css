@@ -73,35 +73,53 @@
 }
 
 /*
- * 菜单行 / 选项行的高亮态：底 = 实色强调色，字 = --ui-on-accent。
+ * 菜单行 / 选项行的状态色，**分为两种语义**：
  *
- * 用户口径（2026-11-02）：截图里选中行是「青底黑字」，主题背景调暗后看不清。
- * 原因：shadcn 默认 focus:text-accent-foreground（= --ui-ink），在实色强调底上
- * 亮色主题是深字 —— 对比度只有 2~3:1；主题把背景改暗后更糟。
- * 这里把底/字收紧成一对，跟项目自己的「实色强调色必须配 --ui-on-accent」规则一致。
- * 半透明底（hover-soft）那几条不受影响：它们保留各自的 ink 文字。
+ * 1. 键盘/鼠标高亮（reka 的 data-highlighted）= 与普通 hover 同一档：
+ *    半透明底 + 正常文字色。下拉菜单一打开第一项就带 data-highlighted，
+ *    以前这里用实色强调底，等于“菜单刚打开就有一行青底”，用户读成选中态。
+ *
+ * 2. 真正的选中项 = 调用方显式加 bg-accent（见各菜单的 :class）：
+ *    实色强调底 + --ui-on-accent。这条必须成对，否则暗色主题下会出现青底深字。
+ *
+ * 之前把 1 和 2 混用，才会出现“下拉一打开就变色、暗色下还看不清”的反复问题。
  */
 [data-slot='select-item'][data-highlighted],
 [data-slot='dropdown-menu-item'][data-highlighted],
 [data-slot='context-menu-item'][data-highlighted],
 [data-slot='menubar-item'][data-highlighted],
 [data-slot='combobox-item'][data-highlighted] {
-  background-color: var(--ui-accent);
+  background-color: var(--ui-hover, rgb(0 0 0 / 0.06));
+  color: var(--ui-ink, #18202b);
+}
+
+/* 真正的选中项：底色是实色强调色时，文字必须换成 on-accent */
+[data-slot='select-item'].bg-accent,
+[data-slot='dropdown-menu-item'].bg-accent,
+[data-slot='context-menu-item'].bg-accent,
+[data-slot='menubar-item'].bg-accent,
+[data-slot='combobox-item'].bg-accent {
   color: var(--ui-on-accent, #ffffff);
 }
 
 /* 高亮行内部的图标 / 次级文字一起跟白字，避免残留深色小字 */
+/* 行内图标 / 次级文字跟随行本身，避免残留一套深色 */
 [data-slot='select-item'][data-highlighted] *,
 [data-slot='dropdown-menu-item'][data-highlighted] *,
 [data-slot='context-menu-item'][data-highlighted] *,
 [data-slot='menubar-item'][data-highlighted] *,
-[data-slot='combobox-item'][data-highlighted] * {
+[data-slot='combobox-item'][data-highlighted] *,
+[data-slot='select-item'].bg-accent *,
+[data-slot='dropdown-menu-item'].bg-accent *,
+[data-slot='context-menu-item'].bg-accent *,
+[data-slot='menubar-item'].bg-accent *,
+[data-slot='combobox-item'].bg-accent * {
   color: inherit;
 }
 
 /* 破坏性行保持红字：只有非 destructive 的行才吃白字对 */
-[data-slot='select-item'][data-highlighted][data-variant='destructive'],
-[data-slot='dropdown-menu-item'][data-highlighted][data-variant='destructive'] {
+[data-slot='select-item'][data-variant='destructive'],
+[data-slot='dropdown-menu-item'][data-variant='destructive'] {
   background-color: var(--ui-danger-soft, rgb(239 68 68 / 0.1));
   color: var(--ui-danger, #ef4444);
 }
@@ -174,11 +192,19 @@
   border-radius: var(--mct-radius, var(--radius-panel, 16px));
 }
 
-[data-slot='dialog-content'],
 [data-slot='popover-content'],
 [data-slot='dropdown-menu-content'],
 [data-slot='select-content'] {
   border-radius: var(--mct-radius, var(--radius-open, 12px));
+}
+
+/*
+ * 弹窗 / 弹出面板的圆角：默认跟随全局档位。
+ * DialogContent 自带的 rounded-4xl 会把 32px 级别的圆角带进生成历史这类大面板，
+ * 即使设置了 --mct-radius 也不生效。这里只覆盖需要统一的那一档。
+ */
+[data-slot='dialog-content'] {
+  border-radius: var(--mct-radius, var(--radius-panel, 16px));
 }
 
 /*

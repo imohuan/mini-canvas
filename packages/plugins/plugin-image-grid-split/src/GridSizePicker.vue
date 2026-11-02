@@ -103,8 +103,8 @@ function onPick(ev: MouseEvent): void {
 <style scoped>
 .gsp-picker { display: flex; flex-direction: column; gap: 8px; padding: 4px; width: 180px; }
 .gsp-picker-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.gsp-picker-dim { font-size: var(--text-base, 13px); font-weight: 600; color: var(--ui-ink, #18202b); }
-.gsp-picker-tip { font-size: var(--text-xs, 11px); color: var(--ui-ink-mute, #8c95a3); white-space: nowrap; }
+.gsp-picker-dim { font-size: var(--ui-text-base, 13px); font-weight: 600; color: var(--ui-ink, #18202b); }
+.gsp-picker-tip { font-size: var(--ui-text-xs, 11px); color: var(--ui-ink-mute, #8c95a3); white-space: nowrap; }
 .gsp-picker-grid {
   position: relative;
   width: 100%;

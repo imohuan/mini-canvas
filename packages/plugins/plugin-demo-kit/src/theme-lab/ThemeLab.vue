@@ -1270,7 +1270,7 @@ function newAdapter(): MSAdapter {
 .lab-embed-preview-head h2 {
   margin: 2px 0 0;
   color: var(--ui-ink, #18202b);
-  font-size: var(--text-title, 15px);
+  font-size: var(--ui-text-title, 15px);
   letter-spacing: -0.02em;
 }
 

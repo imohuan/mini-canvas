@@ -136,7 +136,7 @@ function pickItem(key: string): void {
   border-radius: var(--radius-badge, 6px);
   background: transparent;
   color: var(--ui-ink, #18202b);
-  font-size: var(--text-base, 13px);
+  font-size: var(--ui-text-base, 13px);
   text-align: left;
   cursor: pointer;
 }

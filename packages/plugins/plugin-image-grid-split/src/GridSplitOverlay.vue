@@ -400,7 +400,7 @@ function onClick(ev: MouseEvent): void {
   background: rgb(24 32 43 / 0.88);
   /* 主题色白名单: 同上，固定白字 */
   color: #ffffff;
-  font-size: var(--text-xs, 12px);
+  font-size: var(--ui-text-xs, 12px);
   line-height: 1.4;
   white-space: nowrap;
   pointer-events: none;

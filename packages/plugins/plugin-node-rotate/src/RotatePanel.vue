@@ -106,7 +106,7 @@ const ICON_ANGLE =
 /* 标题与分隔线：对齐图片编辑态「取消 | 比例 | 确认」的排法（同一根栏里加名称段） */
 .nr-title {
   padding: 0 4px;
-  font-size: var(--text-base, 13px);
+  font-size: var(--ui-text-base, 13px);
   font-weight: 600;
   color: var(--ui-ink, #18202b);
   white-space: nowrap;

@@ -258,10 +258,12 @@ function onUploadPick(e: Event): void {
     </div>
 
     <!-- Agent 圆球：**独立按钮**，不属于插槽排序容器（用户口径 2026-10-28）。
-         不使用 SlotAnchor，也不参与 before/after 排序。 -->
+         不使用 SlotAnchor，也不参与 before/after 排序。
+         2026-11-02：高度与同一行的「画布工具栏」「画布状态栏」一致（40px），
+         圆角走全局 --mct-radius —— 它是圆角按钮，不是圆形球（用户口径）。 -->
     <Tooltip>
       <TooltipTrigger as-child>
-        <Button variant="outline" size="icon-lg" class="agent-orb-button size-12 border-line text-ink"
+        <Button variant="outline" size="icon-lg" class="agent-orb-button size-10 border-line text-ink"
           :class="ui.agent.open ? 'is-open bg-panel-active' : ''" aria-label="Agent 对话"
           @click="ui.toggleAgent()">
           <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
@@ -279,7 +281,14 @@ function onUploadPick(e: Event): void {
 /* 圆球按钮自己画底：shadcn 的 outline 变体在暗色下带 dark:bg-transparent，
    会盖住 bg-panel（实测暗色主题里球身透出画布网格）。这里用组件类固定面板色；
    打开态换 --ui-panel-active，和原来的 bg-panel-active 是同一个语义。 */
-.agent-orb-button { background: var(--ui-panel, #fff) !important; }
+/*
+ * 圆角与状态栏 / 工具栏的 40px 方块一致：读全局圆角档位，不写死。
+ * Button 自己带的 rounded-4xl 会把球切成 36px 大圆角，这里必须覆盖一次。
+ */
+.agent-orb-button {
+  background: var(--ui-panel, #fff) !important;
+  border-radius: var(--mct-radius, var(--radius-control, 8px));
+}
 .agent-orb-button:hover { background: var(--ui-panel, #fff) !important; }
 .agent-orb-button.is-open { background: var(--ui-panel-active, #e8eaf0) !important; }
 </style>
