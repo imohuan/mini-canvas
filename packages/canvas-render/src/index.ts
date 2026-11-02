@@ -276,7 +276,7 @@ export {
   closeAllDropdowns,
   broadcastCloseAllDropdowns,
   DROPDOWN_CLOSE_ALL_EVENT,
-  // 子菜单（AxSubMenu 的二级浮层）与主下拉同一套互斥登记表：子菜单开 = 通知主下拉让位
+  // 子菜单（DropdownMenuSub 的二级浮层）与主下拉同一套互斥登记表：子菜单开 = 通知主下拉让位
   SUB_MENU_CLOSE_EVENT,
   closeAllSubMenus,
   broadcastSubMenuOpen,

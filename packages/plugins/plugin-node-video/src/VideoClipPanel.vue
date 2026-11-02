@@ -4,7 +4,7 @@
  *
  * 1:1 复刻 packages/ui/public/video-clip-demo.html 的暗色胶囊剪辑条（用户口径 2026-10-29）：
  *   关闭 | 键盘（配置入口） | 胶片格（蓝胶囊选区 + 播放头 + 时长 pill） | 磁吸 | 循环 | 白色确认圆钮。
- * 点键盘图标在按钮上方弹出快捷键说明（用上下文里的 dropdown 件）。
+ * 点键盘图标在按钮上方弹出快捷键说明（shadcn Popover）。
  *
  * 几何与 demo 同一套（重点抄 demo 文件头「吸附行为」5 条铁律）：
  * - 磁吸作用对象是「选区时长」，不是背景位置；进入吸附点 ± 范围才吸，平时跟手；
@@ -17,8 +17,13 @@
  * 所以顶栏「剪辑时长」点下去就能看到它 —— 不必先去下拉里手动选「剪辑」。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import {
   clampClipEnd,
   clampClipRange,
@@ -40,8 +45,6 @@ import { resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
-// 快捷键面板挂在主题登记的下拉件上（上下文里那一份；成品应用会顶替成 AxDropdown）
-const Dropdown = useUiComponent('dropdown')
 const selected = useSoleNodeSelected(props.id)
 const visible = computed(() => selected.value && isClipping(props.id))
 
@@ -530,26 +533,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
         </Button>
 
         <!--
-          快捷键说明 = 主题登记的下拉件（上下文里的 dropdown；成品应用会顶替成 AxDropdown）。
+          快捷键说明 = shadcn 的 Popover 分离件（向上弹，贴着按钮）。
           为什么用下拉而不是在底栏下方展开一块：用户口径 2026-10-31「下拉菜单显示在它上面」——
           底栏在节点下方，向下展开会压住画布/节点；向上弹才是贴着按钮的说明卡。
           吸附间隔/范围不在这里配置：那是设置面板里的项（节点/视频剪辑），这里只给快捷键说明。
         -->
-        <Dropdown
-          v-model="configOpen"
-          class="vclip-help"
-          placement="top-start"
-          align="start"
-          :offset="8"
-          :arrow="false"
-          :menu-width="'336px'"
-        >
-          <template #trigger>
+        <Popover v-model:open="configOpen">
+          <PopoverTrigger as-child>
             <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': configOpen }" variant="ghost" size="sm" type="button"
               title="快捷键" aria-label="快捷键" :aria-pressed="configOpen ? 'true' : 'false'">
               <ToolbarIcon :icon="ICON_KEYBOARD" />
             </Button>
-          </template>
+          </PopoverTrigger>
+          <PopoverContent align="start" side="top" :side-offset="8" class="vclip-help-popover">
           <div class="vclip-help-body" role="dialog" aria-label="剪辑快捷键">
             <header class="vclip-help-head">
               <span class="vclip-help-title">快捷键</span>
@@ -592,7 +588,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown, true))
               </div>
             </div>
           </div>
-        </Dropdown>
+          </PopoverContent>
+        </Popover>
 
         <div ref="filmEl" class="vclip-film" role="group" aria-label="视频片段选择">
           <!-- 帧图底板：贴边时这一侧的圆角要取消，否则会露出黑色方角（demo 几何约定第 7 条） -->

@@ -193,11 +193,13 @@
   --dd-ink: var(--ui-ink);
   /* 浮层外观：**数值与右键菜单 .ctx-menu 逐条对齐**（用户口径 2026-10-12
      「下拉完全参考右键菜单」）——16 圆角、6px 内边距。
-     两处实现在这里共用同一份：主题默认件（plugin-theme-default 的 Dropdown，scoped 规则）
-     与注册件（ui 包的 AxDropdown，全局规则）。消费方要改只改这一个 token，
-     不必再去两个文件里对数值（此前每个消费方各自写 bodyClass 变量，已经开始重复）。 */
+     shadcn 的 DropdownMenuContent / PopoverContent 共用这一份 token；
+     消费方要改只改这里，不必再去各组件里对数值。 */
   --dd-padding: 6px;
-  --dd-radius: 16px;
+  /* 浮层圆角：优先跟随主题全局档位；没选时保持原来的 16px。
+     下拉 / 选择 / 参数面板全走 --dd-radius，
+     如果这里硬写 16px，用户把圆角调大时这些浮层不会变（2026-11-02 反馈）。 */
+  --dd-radius: var(--mct-radius, 16px);
   /* ===== 画布层叠带（z-index 唯一事实源的 CSS 出口）=====
      数值与 packages/canvas-render/src/contracts/layers.ts 的 LAYERS **逐项一致**，
      由 src/contracts/__tests__/layerTokens.test.ts 扫描本文件比对，漂移即报错。
@@ -362,7 +364,7 @@ html.dark {
  * danger 悬停转红、active 高亮。色值全部读 --ntb-* / --ui-*，亮暗主题自动跟随。
  *
  * 为什么放全局（而不是某个插件）：18 个调用点跨 9 个包，样式只能有一份；
- * 之前写在 plugin-theme-default 的 .ntb-btn 里，插件要拿这套外观就得套一层转接件。
+ * 以前写在各插件自己的按钮类里（.ntb-btn / .it-btn / .ig-icon-btn 等），现在只此一份。
  * shadcn Button 自带 h-8 / px-3 / bg-primary 等工具类；这里用更高的选择器权重
  * 覆盖它们。文字钮的 `:not(.is-icon-only)` 会比单个类名多一层权重，所以 primary
  * 再重复一次类名，保证强调色底不被文字钮的透明底盖掉（实测：保存按钮青底白字）。
@@ -427,12 +429,12 @@ html.dark {
   padding: 0 14px;
   border-radius: 8px;
   background: var(--ui-accent);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
 }
 
 .mck-toolbar-btn.mck-toolbar-btn.mck-toolbar-btn--primary:hover:not(:disabled) {
   background: var(--ui-accent-hover);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
 }
 
 /* 危险按钮平时仍是普通工具按钮，只有悬停才转红（旧规范） */
