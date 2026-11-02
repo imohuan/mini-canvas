@@ -192,6 +192,22 @@ const menuView = computed<SettingsMenuView>(() => {
   return settingsMenu?.resolve(groups.value) ?? { categories: [], navs: [], issues: [] }
 })
 
+// —— 图标：独立场域 settings/navIcon，按一级名取，取不到用兜底 ——
+// 必须声明在 navEntries 之前：下面的 watch(navEntries, { immediate: true })
+// 会在 setup 阶段就求值，iconOf 若晚于它声明会撞上暂时性死区（打开设置白屏）。
+const navIcons = ctx.registryOf<unknown>('settings/navIcon')
+const iconTick = ref(0)
+if (navIcons && typeof navIcons.subscribe === 'function') {
+  const off = navIcons.subscribe(() => void (iconTick.value += 1))
+  // 注册场的 subscribe 直接返回 Disposable，和下面的监听一起释放
+  disposers.push(off)
+}
+
+function iconOf(name: string): unknown {
+  void iconTick.value
+  return navIcons?.top(name)?.value ?? SETTINGS_NAV_ICON_FALLBACK
+}
+
 /**
  * 合并「0/1/2 级菜单」与旧 settings.nav：
  * - 菜单决定标题 / 分类 / 顺序；旧插槽只补 page、component、icon。
@@ -511,20 +527,6 @@ disposers.push(
   ctx.on('ctx:plugin-installed', () => void (occTick.value += 1)),
   ctx.on('ctx:plugin-uninstalled', () => void (occTick.value += 1)),
 )
-
-// —— 图标：独立场域 settings/navIcon，按一级名取，取不到用兜底 ——
-const navIcons = ctx.registryOf<unknown>('settings/navIcon')
-const iconTick = ref(0)
-if (navIcons && typeof navIcons.subscribe === 'function') {
-  const off = navIcons.subscribe(() => void (iconTick.value += 1))
-  // 注册场的 subscribe 直接返回 Disposable，和下面的监听一起释放
-  disposers.push(off)
-}
-
-function iconOf(name: string): unknown {
-  void iconTick.value
-  return navIcons?.top(name)?.value ?? SETTINGS_NAV_ICON_FALLBACK
-}
 
 /** 左侧统一导航只吃数据：外观由 ShadcnSettingsNav 画，插件不再自绘 */
 const navItems = computed(() =>

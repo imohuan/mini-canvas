@@ -113,6 +113,23 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     expect(THEME_SETTINGS).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
   })
 
+  it('图标注册表声明在 navEntries 之前（否则 immediate watch 撞暂时性死区）', () => {
+    // 2026-11-02 真机：打开设置只看到空白面板，控制台
+    // ReferenceError: Cannot access 'ue' before initialization。
+    // watch(navEntries, { immediate: true }) 在 setup 阶段就会求值；
+    // iconOf 若在它之后声明，读 navIcons 会撞 TDZ。
+    const THEME_SETTINGS = read(
+      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+    )
+    for (const src of [CODE, THEME_SETTINGS]) {
+      const iconsAt = src.indexOf("registryOf<unknown>('settings/navIcon')")
+      const entriesAt = src.indexOf('const navEntries = computed')
+      expect(iconsAt, '找不到图标注册表声明').toBeGreaterThan(-1)
+      expect(entriesAt, '找不到 navEntries 声明').toBeGreaterThan(-1)
+      expect(iconsAt, '图标注册表必须在 navEntries 之前声明').toBeLessThan(entriesAt)
+    }
+  })
+
   it('二级小节依次排开；顶部页签条保留但默认隐藏', () => {
     // 左导航项只由一级名生成，不再为二级单独出项
     expect(SRC).toMatch(/:items="navItems"/)

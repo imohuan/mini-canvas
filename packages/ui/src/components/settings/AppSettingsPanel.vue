@@ -187,6 +187,22 @@ const menuView = computed<SettingsMenuView>(() => {
   return settingsMenu?.resolve(groups.value) ?? { categories: [], navs: [], issues: [] }
 })
 
+// —— 图标：独立场域 settings/navIcon，order 小者胜；取不到用兜底 ——
+// 必须声明在 navEntries 之前：下面的 watch(navEntries, { immediate: true })
+// 会在 setup 阶段就求值，iconOf 若晚于它声明会撞上暂时性死区（打开设置白屏）。
+const navIcons = ctx.registryOf<unknown>('settings/navIcon')
+const iconTick = ref(0)
+if (navIcons && typeof navIcons.subscribe === 'function') {
+  const off = navIcons.subscribe(() => void (iconTick.value += 1))
+  // Registry.subscribe 返回 Disposable
+  disposers.push(off)
+}
+
+function iconOf(name: string): unknown {
+  void iconTick.value
+  return navIcons?.top(name)?.value ?? Circle
+}
+
 /** 分组推导的一级项 + 插件导航项（命中默认项就顶替外观，否则追加） */
 const navEntries = computed<NavEntry[]>(() => {
   const out: NavEntry[] = []
@@ -524,20 +540,6 @@ watch(activeNav, () => {
   activeSection.value = sections.value[0]?.key ?? ''
   void nextTick(scrollBodyToTop)
 })
-
-// —— 图标：独立场域 settings/navIcon，order 小者胜；取不到用兜底 ——
-const navIcons = ctx.registryOf<unknown>('settings/navIcon')
-const iconTick = ref(0)
-if (navIcons && typeof navIcons.subscribe === 'function') {
-  const off = navIcons.subscribe(() => void (iconTick.value += 1))
-  // Registry.subscribe 返回 Disposable
-  disposers.push(off)
-}
-
-function iconOf(name: string): unknown {
-  void iconTick.value
-  return navIcons?.top(name)?.value ?? Circle
-}
 
 // —— 段落正文：内容插槽优先，否则按 schema 平铺 ——
 function slotMode(occ: SlotOcc): 'replace' | 'prepend' | 'append' {

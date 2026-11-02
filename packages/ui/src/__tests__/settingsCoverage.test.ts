@@ -285,4 +285,27 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
 
     host.stop()
   })
+
+  it('安装本地清单后，所有分组仍被菜单收编，不冒出重复的一级入口', async () => {
+    const { host } = await createMiniCanvasHost({
+      adapter: new MemoryStorageAdapter(),
+      coldPlugins: resolveAppPlugins(),
+    })
+    const settings = host.ctx.get<SettingsLike>('settings')
+    const menu = host.ctx.get<{
+      resolve(groups: readonly string[]): {
+        navs: Array<{ id: string; title: string; sections: Array<{ group: string; groups: string[]; auto?: boolean }> }>
+        issues: Array<{ kind: string; group?: string; title?: string }>
+      }
+    }>('settingsMenu')
+
+    // 用户实测：装完插件后左侧多出「个人 → 集成」，和真正的「集成」分类重名。
+    // 根因是这些分组只有 Config.group、没有菜单 section；resolve() 补成 auto 后
+    // 面板只能按第一段当一级名。这里把“每个 group 都必须有显式 section”钉死。
+    const view = menu.resolve(settings.groups())
+    const auto = view.navs.flatMap((n) => n.sections.filter((s) => s.auto)).flatMap((s) => s.groups)
+    expect(auto).toEqual([])
+    expect(view.issues).toEqual([])
+    host.stop()
+  })
 })
