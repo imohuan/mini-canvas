@@ -146,17 +146,6 @@ describe('真实全插件装配：设置菜单', () => {
     for (const group of groups) {
       expect(seen.filter((g) => g === group), group + ' 出现了多次').toHaveLength(1)
     }
-    // 诊断输出：新增插件时先跑这条，直接看真实分组
-    console.log('GROUPS=' + JSON.stringify(groups))
-    console.log(
-      'NAVS=' +
-        JSON.stringify(
-          view.categories.map((c) => ({
-            category: c.title,
-            navs: c.navs.map((n) => ({ title: n.title, sections: n.sections.map((s) => s.title) })),
-          })),
-        ),
-    )
     host.stop()
   })
 })

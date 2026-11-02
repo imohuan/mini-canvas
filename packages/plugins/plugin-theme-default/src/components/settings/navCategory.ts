@@ -26,6 +26,7 @@
  */
 
 import type { Component } from 'vue'
+import { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'
 
 /** 没写分类时落在这里 */
 export const DEFAULT_SETTINGS_CATEGORY = '个人'
@@ -181,6 +182,4 @@ export function compareSettingsCategory(
 }
 
 /** 设置导航图标兜底（与 navIcon.ts 的导出保持一致，避免两处各写一个组件） */
-export { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'
-// 本模块要用它做非法值回落；放在文件尾，避免与 re-export 顺序打架
-import { SETTINGS_NAV_ICON_FALLBACK } from './navIcon'
+export { SETTINGS_NAV_ICON_FALLBACK }
