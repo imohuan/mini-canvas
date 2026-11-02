@@ -88,4 +88,7 @@ docs/tmp/agent-coordination/*.json
 docs/tmp/scan-*.cjs
 packages/ui/ui-test.json
 
+# vitepress 缓存：参数被误当成目录名时生成（只在本地）
+packages/docs/--port/
+
 packages/docs/.vitepress/data/plugins.data.ts.timestamp-*.mjs
