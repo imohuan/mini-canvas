@@ -2906,8 +2906,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <div class="ac-panel-body">
                   <div v-if="skillView === 'card'" class="ac-panel-scroll">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
-                      <Button v-for="item in filteredSkills" :key="item.id" variant="ghost" size="sm" class="ac-skill-card" role="option"
-                        :aria-pressed="false" :title="item.value" @click="insertRef(item, () => (skillOpen = false))">
+                      <!-- 卡片外壳用 div：shadcn Button 的 size="sm" 会强制 32px 高 + 左右内边距，
+                           把带封面的卡片压成一条细线（用户截图 2026-11-02）。
+                           这里只有「整卡点击」一件事，用 role=option + 键盘 Enter/Space 即可。 -->
+                      <div v-for="item in filteredSkills" :key="item.id" class="ac-skill-card" role="option" tabindex="0"
+                        :aria-pressed="false" :title="item.value"
+                        @click="insertRef(item, () => (skillOpen = false))"
+                        @keydown.enter.prevent="insertRef(item, () => (skillOpen = false))"
+                        @keydown.space.prevent="insertRef(item, () => (skillOpen = false))">
                         <span class="ac-skill-thumb" :style="skillCoverStyle(item.name)" aria-hidden="true">
                           <span class="ac-skill-icon" v-html="ICON_SKILL"></span>
                         </span>
@@ -2924,7 +2930,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             <span>{{ skillFileCount(item.name) }} 文件</span>
                           </span>
                         </span>
-                      </Button>
+                      </div>
                     </div>
                     <div v-else class="ac-empty-state">
                       <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -2949,8 +2955,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     <div class="ac-split-main">
                       <div class="ac-split-scroll">
                         <div v-if="filteredSkills.length" class="ac-skill-grid ac-skill-grid--split">
-                          <Button v-for="item in filteredSkills" :key="item.id" variant="ghost" size="sm" class="ac-skill-tile" role="option"
-                            :aria-pressed="false" :title="item.value" @click="insertRef(item, () => (skillOpen = false))">
+                          <div v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option" tabindex="0"
+                            :aria-pressed="false" :title="item.value"
+                            @click="insertRef(item, () => (skillOpen = false))"
+                            @keydown.enter.prevent="insertRef(item, () => (skillOpen = false))"
+                            @keydown.space.prevent="insertRef(item, () => (skillOpen = false))">
                             <span class="ac-skill-cover" :style="skillCoverStyle(item.name)" aria-hidden="true">
                               <span class="ac-skill-icon" v-html="ICON_SKILL"></span>
                             </span>
@@ -2968,7 +2977,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                                 <span>{{ skillSize(item.name) }}</span>
                               </span>
                             </span>
-                          </Button>
+                          </div>
                         </div>
                         <div v-else class="ac-empty-state">
                           <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -5479,16 +5488,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-skill-card {
+  display: flex;
+  align-items: center;
   gap: 9px;
   width: 100%;
+  /* 卡片是 div（不是 Button）：自己给回 72px 最小高度与 8px 内边距，
+     否则 shadcn 的按钮尺寸规则会把它压扁。 */
+  height: auto;
   min-width: 0;
   min-height: 72px;
   padding: 8px;
+  cursor: pointer;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.ac-skill-card:focus-visible, .ac-skill-tile:focus-visible {
+  outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6));
+  outline-offset: 2px;
 }
 
 .ac-skill-card:hover {
@@ -5744,9 +5764,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 /* 分栏封面瓦片（DEMO 的 .skill-tile / .skill-cover） */
 .ac-skill-tile {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  height: auto;
+  min-height: 188px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;

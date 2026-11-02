@@ -1355,8 +1355,17 @@ function createUi() {
       meta: { id: string; title: string; preview?: string; updatedAt: number }
     }>
   }
-  const agentSvc = (): { state: AgentShellView } | undefined =>
-    readyHost?.ctx?.get<{ state: AgentShellView }>('agent')
+  /**
+   * agent 服务本身也要在**取回时**建立响应式依赖。
+   *
+   * 为什么不能只靠 readyHost.ctx 的 getter：host 就绪 ≠ 服务已上架。
+   * agent 插件的 apply 在画布首帧之后才 run，首次渲染读到的 ctx 里还没有 'agent'，
+   * get 返回 undefined；此后 ctx 不再变化，`v-show="ui.agent.open"` 就**永远**是 false，
+   * 面板 DOM 一直带 display:none（用户 2026-11-02 报「Agent 点开没反应」）。
+   * 用 computed 把 ctx 与服务一起收进依赖：服务一上架，所有 agent 面板的绑定立刻重算。
+   */
+  const agentSvcRef = computed(() => readyHost.ctx?.get<{ state: AgentShellView }>('agent'))
+  const agentSvc = (): { state: AgentShellView } | undefined => agentSvcRef.value
   /** 外壳要用的那几项（服务还没上架时给一份安全的空壳，界面照常渲染） */
   const agent = {
     get open(): boolean {

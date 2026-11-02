@@ -99,17 +99,20 @@ function onUploadPick(e: Event): void {
           关掉菜单会把 input 一起卸载，用户选完文件时 change 已经没人接了。
         -->
           <DropdownMenu v-model:open="s.addMenuOpen">
-            <DropdownMenuTrigger as-child>
-              <Tooltip>
-                <TooltipTrigger as-child>
+            <!-- Tooltip 必须在 DropdownMenuTrigger **外面**：两层 as-child 叠在同一个
+                 按钮上时，菜单的触发属性会落在 Tooltip 组件上，按钮只拿到 tooltip-trigger，
+                 点下去只有提示、不弹菜单（用户 2026-11-02 报「加号点不动」的根因）。 -->
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <DropdownMenuTrigger as-child>
                   <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
                     :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点">
                     <Plus :size="17" class="size-[17px]" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">添加节点</TooltipContent>
-              </Tooltip>
-            </DropdownMenuTrigger>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top">添加节点</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ width: '240px' }">
               <div class="mb-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-veil px-2.5 text-ink-dim">
                 <Search :size="13" /><input class="w-full bg-transparent text-xs text-ink outline-none"

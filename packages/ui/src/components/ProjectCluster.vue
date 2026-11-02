@@ -72,8 +72,24 @@ const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) =
 // 画布操作菜单与画布列表都使用 shadcn 的 DropdownMenu：
 // 行尾「⋯」的菜单是列表的**子菜单**（DropdownMenuSub），列表留着、子菜单并排展开；
 // 选中项后一起收起，定位/翻转/点外关闭交给 reka-ui。
-const actionOpen = ref(false)
+/**
+ * 哪一行的操作子菜单开着（存画布 id，不是布尔）。
+ *
+ * 这里以前是一个共享的 boolean，v-for 里每一行都绑同一个值 —— 点开一行，
+ * 14 行的 SubContent 会同时变 open，全部叠在同一个位置，看起来就是
+ * 「在新窗口打开」重复了十几条（用户截图 2026-11-02）。
+ */
+const actionOpenId = ref<string | null>(null)
 const actionTarget = ref<CanvasOption | null>(null)
+
+function setActionOpen(item: CanvasOption, open: boolean): void {
+  if (open) {
+    actionOpenId.value = item.id
+    openActions(item)
+  } else if (actionOpenId.value === item.id) {
+    actionOpenId.value = null
+  }
+}
 
 /** 点行尾的「⋯」/「勾」：记下是哪张画布（子菜单的条目据此派发） */
 function openActions(item: CanvasOption): void {
@@ -149,18 +165,18 @@ function pickAction(
               <span class="canvas-open">{{ item.label }}</span>
             </button>
             <!-- 悬停/聚焦才显形；选中行的「勾」也靠 hover 让位给「⋯」（一组 hover 场景切换，故写在本行里） -->
-            <DropdownMenuSub v-model:open="actionOpen" @update:open="(v: boolean) => { if (v) openActions(item) }">
+            <DropdownMenuSub :open="actionOpenId === item.id" @update:open="(v: boolean) => setActionOpen(item, v)">
               <DropdownMenuSubTrigger class="canvas-row-more" :class="{ 'is-pinned': item.id === canvasId }"
                 :aria-label="'画布操作 ' + item.label">
                 <Check v-if="item.id === canvasId" class="canvas-row-check" :size="14" aria-hidden="true" />
                 <MoreHorizontal class="canvas-row-dots" :size="14" aria-hidden="true" />
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent :style="{ minWidth: '176px' }">
-                <DropdownMenuItem @select="pickAction('open-canvas-window', () => (actionOpen = false))">在新窗口打开</DropdownMenuItem>
-                <DropdownMenuItem @select="pickAction('rename-canvas-item', () => (actionOpen = false))">重命名画布</DropdownMenuItem>
-                <DropdownMenuItem @select="pickAction('duplicate-canvas', () => (actionOpen = false))">复制画布</DropdownMenuItem>
+                <DropdownMenuItem @select="pickAction('open-canvas-window', () => (actionOpenId = null))">在新窗口打开</DropdownMenuItem>
+                <DropdownMenuItem @select="pickAction('rename-canvas-item', () => (actionOpenId = null))">重命名画布</DropdownMenuItem>
+                <DropdownMenuItem @select="pickAction('duplicate-canvas', () => (actionOpenId = null))">复制画布</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" @select="pickAction('delete-canvas', () => (actionOpen = false))">删除画布</DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" @select="pickAction('delete-canvas', () => (actionOpenId = null))">删除画布</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </div>
@@ -195,11 +211,11 @@ function pickAction(
 .canvas-row-main:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: -1px; }
 .canvas-open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 行尾：默认 32×32 占位（行内不跳动的锚），勾/三个点叠在同一格里换显 */
-.canvas-row-more { position: relative; display: grid; flex: none; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--ui-ink-dim); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
-/* 这个「⋯」本身就是子菜单触发器，ui-kit 会再塞一个 › 箭头，两个图标在 32px 里会叠在一起。
-   行尾只留勾/三个点，箭头去掉（用户口径 2026-11-02）。 */
-.canvas-row-more :deep(svg.ml-auto) { display: none; }
-.canvas-row-check, .canvas-row-dots { grid-area: 1 / 1; transition: opacity .14s ease; }
+.canvas-row-more { position: relative; display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 4px; width: 44px; height: 32px; padding: 0 7px; color: var(--ui-ink-dim); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+/* 行尾是「勾/⋯ + shadcn 自带的子菜单箭头」两格：32px 时两个图标会挤在一起，
+   撑到 44px、左格放状态图标、右格放箭头（用户口径 2026-11-02）。 */
+.canvas-row-more :deep(svg.ml-auto) { flex: none; width: 12px; height: 12px; margin: 0; opacity: .7; }
+.canvas-row-check, .canvas-row-dots { position: absolute; left: 8px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); transition: opacity .14s ease; }
 /* 选中行的勾：常显。鼠标进这一行 → 勾让位给三个点（用户口径：hover 时图标变成三个点）。 */
 .canvas-row-more.is-pinned .canvas-row-check { opacity: 1; }
 .canvas-row-more.is-pinned .canvas-row-dots { opacity: 0; }

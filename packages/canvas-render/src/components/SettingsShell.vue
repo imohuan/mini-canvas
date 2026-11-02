@@ -736,16 +736,23 @@ onBeforeUnmount(() => {
 .psd-head-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  /* 两枚头部按钮之间要留空档：贴在一起时 hover 底色会连成一片，看着像一个按钮 */
+  gap: 8px;
+  padding-right: 2px;
 }
 
-/* 标题栏按钮：视觉上只要图标，不画组件库默认的圆角胶囊底 */
+/* 标题栏按钮：静止时只要图标，鼠标移上去必须给可见的底 ——
+   否则用户不知道这里能点（截图 2026-11-02 里那枚「转悬浮」完全看不出是按钮）。 */
 .psd-head-btn {
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-control, 8px);
   color: var(--ui-ink-mute, #9ca3af);
+  transition: background-color .14s ease, color .14s ease;
 }
 
 .psd-head-btn:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.08));
   color: var(--ui-ink, #111827);
 }
 

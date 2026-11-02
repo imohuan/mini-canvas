@@ -62,7 +62,10 @@ describe('画布下拉行：勾 ⇄ 三个点', () => {
     const block = cluster.slice(cluster.indexOf('.canvas-row-check, .canvas-row-dots'))
     const rule = block.slice(0, block.indexOf('}'))
     expect(rule).toContain('transition: opacity')
-    expect(rule).not.toMatch(/(width|height|top|left)\s*:/)
+    // 只检查 transition 列表里没有几何属性：定位（position/left/top）与固定尺寸不参与动画。
+    // 勾/点在 44px 行尾里绝对定位是为了给 shadcn 的子菜单箭头留出右格。
+    const transition = rule.slice(rule.indexOf('transition'))
+    expect(transition).not.toMatch(/(width|height|top|left)\s*:/)
   })
 
   /**
@@ -109,10 +112,21 @@ describe('行尾菜单：条目与真实现', () => {
 
   /** 两个浮层并存：清单是父菜单、行尾操作是子菜单，父菜单不因开子菜单而关闭。 */
   it('操作菜单是列表的**子菜单**（列表留着不消失，两个菜单并排）', () => {
-    expect(cluster).toContain('<DropdownMenuSub v-model:open="actionOpen"')
+    expect(cluster).toContain('<DropdownMenuSub :open="actionOpenId === item.id"')
     expect(cluster).toContain('<DropdownMenuSubContent')
     // 子菜单打开时不主动关闭列表（列表只在「切画布 / 新建」这类完成动作后才收）
     expect(cluster).not.toMatch(/openActions[\s\S]{0,200}update:menuOpen', false/)
+  })
+
+  /**
+   * 回归：每行必须有自己的开关（存画布 id），不能共用一个 boolean。
+   * 共用时点开一行，v-for 里所有行的 SubContent 会同时展开，叠成十几份
+   * 「在新窗口打开」（用户截图 2026-11-02）。
+   */
+  it('行尾子菜单按画布 id 分行开关，不共用同一个布尔值', () => {
+    expect(cluster).toContain('const actionOpenId = ref<string | null>(null)')
+    expect(cluster).not.toMatch(/const actionOpen = ref\(false\)/)
+    expect(cluster).toMatch(/setActionOpen\(item, v\)/)
   })
 
   it('两个宿主都把行数据换成 id + 名字（只传名字没法按 id 操作）', () => {
