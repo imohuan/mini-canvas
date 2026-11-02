@@ -2459,7 +2459,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <MoreHorizontal :size="12" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" side="top" :side-offset="6" class="ac-ddmenu" :style="{ minWidth: '180px' }">
+                  <DropdownMenuContent arrow align="end" side="top" :side-offset="8" class="ac-ddmenu" :style="{ minWidth: '180px' }">
                     <div class="ac-ddmenu" role="menu" aria-label="排队消息操作">
                       <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="beginEditQueue(row.id); rowMenuId = null">
                         <span class="ac-menu-name">编辑消息</span>
@@ -2613,7 +2613,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <Plus :size="17" class="size-[17px]" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" :side-offset="8" class="ac-ddmenu" :style="{ minWidth: '210px' }">
+            <DropdownMenuContent arrow align="start" side="top" :side-offset="10" class="ac-ddmenu" :style="{ minWidth: '210px' }">
               <div class="ac-ddmenu" role="menu" aria-label="添加">
                 <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="addGoalMark(); plusOpen = false">
                   <span class="ac-menu-title-row">
@@ -2660,7 +2660,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <ChevronDown :size="13" class="ac-pill-caret" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" :side-offset="8" class="ac-ddmenu" :style="{ minWidth: '220px' }">
+            <!-- 位置：菜单紧贴输入框上沿，箭头指向「全能创作」。
+                 为什么 sideOffset 只有 6：上面还有一条 40px 的浏览器通知提示，
+                 留 10 会压住提示条底边（2026-11-02 实测 7px 重叠）；
+                 6 + 8（箭头高度）= 14px，菜单刚好落在提示条下方。
+                 内边距压到 4px，是为了让只有两条的菜单再矮 4px、彻底让开提示条。 -->
+            <DropdownMenuContent arrow align="start" side="top" :side-offset="6" class="ac-ddmenu" :style="{ minWidth: '220px', padding: '4px' }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择创作模式">
                 <Button v-for="m in promptPresets" :key="m.id" variant="ghost" size="sm" class="ac-menu-item" role="option"
                   :aria-selected="s.activePromptId === m.id" @click="pickMode(m.id, () => (modeOpen = false))">
@@ -2686,7 +2691,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu" :style="{ width: '360px' }">
+            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu" :style="{ width: '360px' }">
               <div class="ac-ddmenu ac-review-panel" role="listbox" aria-label="选择授权方式">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top ac-panel-head-top--review">
@@ -2728,7 +2733,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <Box :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu"
+            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu"
               :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen, 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
@@ -2861,7 +2866,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <WandSparkles :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu"
+            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu"
               :style="{ width: skillView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-split': skillView === 'split' }"
                 role="listbox" aria-label="选择技能">
@@ -3004,7 +3009,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <Plug :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu"
+            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu"
               :style="{ width: '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-mcp-panel" :class="{ 'is-search-open': mcpSearchOpen }" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
@@ -5032,11 +5037,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
    颜色一律映射到 --ui-* token，兜底值就是 DEMO 的原色值。
    响应式用容器查询（DEMO 的 @container 阈值原样保留），以面板自身宽度为准。 */
 
-/* 面板本体：抵消 dropdown 外框的 6px 内边距，让头部/底栏的 12px 从面板边沿算起
-   （DEMO 的 .panel 没有第二层内边距）。外框（圆角 16 / 描边 / 阴影）由 dropdown 提供。 */
+/* 面板本体：铺满 dropdown 的滚动区。外框（圆角 / 描边 / 阴影 / 6px 内边距）由 dropdown 提供。
+   以前这里写 margin:-6px + width:calc(100% + 12px) 去抵消外框内边距；
+   但 2026-11-02 把滚动区移进 dropdown 内部后，负边距会被滚动容器的 overflow 裁掉，
+   左侧少 6px、右侧多 6px。去掉这段，面板自然铺满，左右留白重新对称。 */
 .ac-ddmenu.ac-panel {
-  margin: -6px;
-  width: calc(100% + 12px);
+  width: 100%;
   /* 最小高度（用户口径 2026-10-30：「分栏 / 卡片两种模式都要有最小高度」）。
      卡片模式只有两三条时别塌成一条窄缝。
      为什么这么小：卡片模式本来就该贴着内容长，托底只为挡住「一条窄缝」；
@@ -5680,10 +5686,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
 }
 
-.ac-rail-item {
+/*
+ * 必须带上 html[data-mct-size]，否则会被组件库 size.css 的
+ * `html[data-mct-size] [data-slot='button'][data-size='sm'] { padding-inline: 12px }`
+ * 压回去（特异性 0,3,1 > 0,3,0），实测 padding 仍是 12px、名字仍被截断。
+ */
+html[data-mct-size] .ac-split .ac-rail-item {
   gap: 6px;
   width: 100%;
   flex: none;
+  /*
+   * 左栏只有 152px，Button 自带的左右 12px 内边距一占，名字只剩 67px，
+   * 「DeepSeek」被截成「DeepSe…」（用户 2026-11-02 截图）。
+   * 这里压到 6px，名字能完整放下；图标 14 + 间距 6 + 名字 82 + 计数 12 正好 152。
+   */
+  padding-inline: 6px;
   color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
   text-align: left;
@@ -6518,7 +6535,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     padding: 7px 10px;
   }
 
-  .ac-rail-item {
+  /* 窄容器是横向滚动的胶囊条：这里保留 8px 内边距，不要被竖排那档的 6px 覆盖。 */
+  html[data-mct-size] .ac-split .ac-rail-item {
     width: auto;
     height: 30px;
     flex: none;

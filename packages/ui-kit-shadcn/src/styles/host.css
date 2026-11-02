@@ -221,6 +221,69 @@
 }
 
 /*
+ * 菜单滚动条（用户口径 2026-11-02：「下拉菜单里那个滚动条效果我不太喜欢」）。
+
+ * 截图里的滚动条又宽又亮：菜单自身的滚动容器按浏览器默认画（Chrome 实测 10px），
+ * 全局 `*::-webkit-scrollbar { width: 6px }` 被 Tailwind 的层叠顺序盖住，只剩
+ * `scrollbar-color` 在生效，于是滑块是 40% 白的粗条。
+ *
+ * 这里只针对菜单这一处：4px、细、低对比，静止时几乎看不见，悬停才变亮；
+ * 同时给 `scrollbar-gutter: stable`，列表长短变化时不会左右跳一格。
+ * 不改全局，画布 / 资产树这些滚动区的观感保持原样。
+ */
+[data-slot='dropdown-menu-scroll'],
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-menu-scroll,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-panel-scroll,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-split-scroll,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-rail-scroll {
+  /*
+   * 用 thin，不要试图用 `::-webkit-scrollbar { width: 4px }`。
+   *
+   * Chrome 实测（2026-11-02）：只要元素上写了 scrollbar-width，浏览器就改用
+   * 标准滚动条并忽略 webkit 伪元素的宽度 —— thin 固定 10px、auto 固定 15px，
+   * 写 4px 完全无效。所以这里只能接受 10px，把「不好看」的部分（颜色）压下去：
+   * 静止 14% 墨色、悬停 26%，暗色主题下几乎融进背景。
+   */
+  scrollbar-width: thin;
+  scrollbar-gutter: auto;
+  scrollbar-color: color-mix(in srgb, var(--ui-ink, #18202b) 14%, transparent) transparent;
+}
+
+[data-slot='dropdown-menu-scroll']::-webkit-scrollbar,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-menu-scroll::-webkit-scrollbar,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-panel-scroll::-webkit-scrollbar,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-split-scroll::-webkit-scrollbar,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-rail-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+[data-slot='dropdown-menu-scroll']::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-menu-scroll::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-panel-scroll::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-split-scroll::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-rail-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 14%, transparent);
+}
+
+[data-slot='dropdown-menu-scroll']:hover::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-menu-scroll:hover::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-panel-scroll:hover::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-split-scroll:hover::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-rail-scroll:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 26%, transparent);
+}
+
+[data-slot='dropdown-menu-scroll']::-webkit-scrollbar-track,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-menu-scroll::-webkit-scrollbar-track,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-panel-scroll::-webkit-scrollbar-track,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-split-scroll::-webkit-scrollbar-track,
+[data-slot='dropdown-menu-content'][data-state='open'] .ac-ddmenu .ac-rail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
  * 字体：主题插件把选中的字体写到 --mct-font-*，这里让**全站**跟随，
  * 不只组件库这几类元素。用户口径（2026-11-02）：改字体只变组件库、页面其它地方没变。
  *

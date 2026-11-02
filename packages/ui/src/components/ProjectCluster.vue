@@ -141,7 +141,7 @@ function pickAction(
           <span>画布 {{ canvasIndex }}</span><ChevronDown :size="12" class="size-3 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '232px' }">
+      <DropdownMenuContent arrow align="start" :side-offset="8" :style="{ minWidth: '232px' }">
           <div class="canvas-menu-head">
             <span>画布</span>
             <Button variant="ghost" size="icon-xs" class="canvas-new size-[22px] rounded-md" aria-label="新建画布"

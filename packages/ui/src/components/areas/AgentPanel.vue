@@ -240,7 +240,7 @@ function startCornerResize(e: PointerEvent): void {
             <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="历史对话"
               :aria-expanded="s.agentHistoryOpen"><History :size="16" class="size-4" /></Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" side="bottom" :side-offset="10" class="agent-history-menu"
+          <DropdownMenuContent arrow align="center" side="bottom" :side-offset="10" class="agent-history-menu"
             :style="{ width: '320px', maxWidth: 'min(320px, calc(100vw - 40px))', maxHeight: 'min(60vh, 460px)' }">
             <div class="agent-history" role="menu" aria-label="历史对话">
               <!-- 分组头：与其它下拉同一套结构（标题 + 计数，固定不滚） -->

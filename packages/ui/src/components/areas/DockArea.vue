@@ -99,21 +99,24 @@ function onUploadPick(e: Event): void {
           关掉菜单会把 input 一起卸载，用户选完文件时 change 已经没人接了。
         -->
           <DropdownMenu v-model:open="s.addMenuOpen">
-            <!-- Tooltip 必须在 DropdownMenuTrigger **外面**：两层 as-child 叠在同一个
-                 按钮上时，菜单的触发属性会落在 Tooltip 组件上，按钮只拿到 tooltip-trigger，
-                 点下去只有提示、不弹菜单（用户 2026-11-02 报「加号点不动」的根因）。 -->
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <DropdownMenuTrigger as-child>
-                  <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
-                    :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点">
-                    <Plus :size="17" class="size-[17px]" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top">添加节点</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ width: '240px' }">
+            <!--
+              这个按钮只挂 DropdownMenu，不再套 Tooltip。
+
+              2026-11-02 实测两轮：
+                · Tooltip 在 DropdownMenuTrigger 里层 → 按钮只拿到 tooltip-trigger，
+                  点下去只弹提示、菜单不出现（用户报「加号点不动」）；
+                · Tooltip 在外层 → 菜单能开，但 popper 锚点被 tooltip 气泡接管，
+                  整块菜单被挪到 translate(0, -200%)（屏幕外，用户仍看不到菜单）。
+              原因是两个浮层共用同一个 <button> 作为 reference，reka 只有一个触发上下文。
+              这里改用原生 title：悬停仍显示「添加节点」，菜单定位只认按钮本身。
+            -->
+            <DropdownMenuTrigger as-child>
+              <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
+                :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点" title="添加节点">
+                <Plus :size="17" class="size-[17px]" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent arrow side="top" align="center" :side-offset="24" :style="{ width: '240px' }">
               <div class="mb-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-veil px-2.5 text-ink-dim">
                 <Search :size="13" /><input class="w-full bg-transparent text-xs text-ink outline-none"
                   aria-label="搜索画布节点" placeholder="搜索画布节点" />
@@ -177,7 +180,7 @@ function onUploadPick(e: Event): void {
             </DropdownMenuTrigger>
             <!-- 向上弹时留 24px：sideOffset 从触发按钮算起，按钮又在 50px 托盘里下沉约 9px，
                  留 24px 后菜单底边与托盘顶部才有 14px 左右的视觉缝隙（用户口径 2026-11-02）。 -->
-            <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ minWidth: '200px' }">
+            <DropdownMenuContent arrow side="top" align="center" :side-offset="24" :style="{ minWidth: '200px' }">
                 <DropdownMenuItem :class="{ 'bg-accent': s.canvasMode === 'move' }" @select="ui.setCanvasMode('move'); s.moveMenuOpen = false; ui.showToast('已切换到移动工具')">
                   <Move :size="15" /> 移动
                   <span class="ml-auto text-[10px] text-ink-dim">V</span>
@@ -199,7 +202,7 @@ function onUploadPick(e: Event): void {
                 <FolderOpen :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ minWidth: '228px' }">
+            <DropdownMenuContent arrow side="top" align="center" :side-offset="24" :style="{ minWidth: '228px' }">
                 <!-- 「风格库」由 plugin-style-library 提供：这里执行它注册的命令（未装该插件则 no-op，不报错） -->
                 <DropdownMenuItem @select="s.libraryMenuOpen = false; ui.runCommand('style-library:open')">
                   <Shapes :size="15" /> 风格库
