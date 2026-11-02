@@ -6491,6 +6491,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   }
 }
 
+/* 竖排布局只在面板真的被缩窄到 460 以下时启用。
+   分栏是 586px 宽的两栏工作区，若在这里改成 column 会把左侧分类栏挤成
+   一条横向滚动带（用户截图 2026-11-02）。 */
 @container (max-width: 460px) {
   .ac-split {
     flex-direction: column;
