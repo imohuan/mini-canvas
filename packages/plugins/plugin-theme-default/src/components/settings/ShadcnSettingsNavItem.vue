@@ -50,9 +50,9 @@ const iconComponent = computed<Component>(() => asSettingsIcon(props.icon))
   justify-content: flex-start;
   gap: 9px;
   width: 100%;
-  /* 行高跟组件库尺寸档走：默认 32px，主题选「紧凑」变 24px、选「大」跟着放大。
-     设置侧栏是列表行，图标按钮（32px）才是规范里的 44px 级行级目标。 */
-  min-height: var(--mct-size-control-h-sm, 2rem);
+  /* 行高跟组件库尺寸档走：默认 32px，紧凑档 28px，大档跟着放大。
+     设置侧栏每行是一个可点条目，留出比普通 sm 按钮更松的呼吸感。 */
+  min-height: var(--mct-size-control-h, 2.25rem);
   box-sizing: border-box;
   padding: 0 10px;
   border: 0;
