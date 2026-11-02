@@ -81,6 +81,13 @@ describe('选中勾：普通 Check，不是青色实心圆', () => {
 })
 
 describe('头尾间距', () => {
+  it('默认 / 精选标签用组件库 Badge，不再自绘胶囊', () => {
+    expect(SRC).toMatch(/<Badge[^>]*variant="secondary"[^>]*class="ac-badge"/)
+    const block = SRC.slice(SRC.indexOf('.ac-badge {'), SRC.indexOf('\n}', SRC.indexOf('.ac-badge {')))
+    expect(block).not.toContain('border-radius')
+    expect(block).not.toContain('height')
+  })
+
   it('底栏不再固定 54px 高', () => {
     const foot = SRC.slice(SRC.indexOf('.ac-panel-foot {'), SRC.indexOf('\n}', SRC.indexOf('.ac-panel-foot {')))
     expect(foot).not.toContain('54px')

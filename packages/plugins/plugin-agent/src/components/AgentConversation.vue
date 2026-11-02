@@ -71,6 +71,7 @@ const s = agent.state
 /** 画布上下文：节点 @ 引用与「点标签聚焦节点」都要它（doc / view） */
 const { ctx } = useCanvasRender()
 const Button = useUiComponent('Button')
+const Badge = useUiComponent('Badge')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
@@ -2809,7 +2810,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                         <span class="ac-model-copy">
                           <span class="ac-model-card-top">
                             <span class="ac-model-id">{{ m.modelId }}</span>
-                            <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
+                            <Badge v-if="m.isDefault" variant="secondary" class="ac-badge">默认</Badge>
                             <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                           </span>
                           <span class="ac-model-meta">
@@ -2854,7 +2855,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             </span>
                           </span>
                           <span class="ac-model-badges">
-                            <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
+                            <Badge v-if="m.isDefault" variant="secondary" class="ac-badge">默认</Badge>
                           </span>
                           <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                         </Button>
@@ -2929,7 +2930,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                         <span class="ac-skill-copy">
                           <span class="ac-skill-name-row">
                             <span class="ac-skill-name">{{ item.name }}</span>
-                            <span v-if="skillMetaOf(item.name).featured" class="ac-badge is-accent">精选</span>
+                            <Badge v-if="skillMetaOf(item.name).featured" variant="secondary" class="ac-badge">精选</Badge>
                           </span>
                           <span class="ac-skill-desc">{{ item.value }}</span>
                           <span class="ac-skill-meta">
@@ -5329,17 +5330,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-  color: var(--ui-ink-dim, #6b7280);
+  /* 尺寸 / 圆角 / 底色都由组件库 Badge 决定，这里只留面板内的一点紧凑度。 */
+  flex: none;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 .ac-badge.is-accent {
