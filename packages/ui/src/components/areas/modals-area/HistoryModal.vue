@@ -20,6 +20,7 @@ import {
   mediaAspect,
   ratioLabel,
 } from './historyCardText'
+import { useHistoryZoom } from './useHistoryZoom'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
@@ -290,40 +291,8 @@ function trimWallCache(): void {
  */
 const minCardSize = computed(() => ({ 1: 340, 2: 280, 3: 220, 4: 170 }[s.histZoom] ?? 220))
 
-/**
- * 缩放滑块（自绘，替代原生 input[type=range]）：
- * 原生 range 只有 thumb（14px）附近才能按下拖拽，点轨道只跳值不跟手 —— 用户实测"拖不动"。
- * 这里整条轨道自己接管 pointerdown/move/up：按下任意位置即跳档并进入拖拽，
- * 移动实时换算档位，松手结束。thumb 位置按 (value-1)/(max-1) 居中定位。
- */
-const ZOOM_MIN = 1
-// 用户口径 2026-10-28：删掉最小的那一档（原第 5 档只有 120px，效果太小）
-const ZOOM_MAX = 4
-const zoomPct = computed(() => ((s.histZoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)) * 100)
-let zoomDragging = false
-
-function zoomApply(clientX: number, track: HTMLElement): void {
-  const rect = track.getBoundingClientRect()
-  if (rect.width <= 0) return
-  const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-  s.histZoom = Math.round(ZOOM_MIN + f * (ZOOM_MAX - ZOOM_MIN))
-}
-
-function onZoomPointerDown(e: PointerEvent): void {
-  const track = e.currentTarget as HTMLElement | null
-  if (!track) return
-  zoomDragging = true
-  track.setPointerCapture(e.pointerId)
-  zoomApply(e.clientX, track)
-}
-function onZoomPointerMove(e: PointerEvent): void {
-  if (!zoomDragging) return
-  zoomApply(e.clientX, e.currentTarget as HTMLElement)
-}
-function onZoomPointerUp(e: PointerEvent): void {
-  zoomDragging = false
-  ;(e.currentTarget as HTMLElement | null)?.releasePointerCapture?.(e.pointerId)
-}
+const { ZOOM_MIN, ZOOM_MAX, zoomPct, onZoomPointerDown, onZoomPointerMove, onZoomPointerUp } =
+  useHistoryZoom(s)
 
 /** 容器宽 + 最小列宽 → 实际列数与列宽（列宽均分撑满容器） */
 function calcColumns(containerWidth: number): { cols: number; columnWidth: number } {

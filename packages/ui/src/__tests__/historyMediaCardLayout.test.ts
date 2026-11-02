@@ -23,6 +23,10 @@ const historyCardText = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/historyCardText.ts'),
   'utf-8',
 )
+const historyZoom = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/useHistoryZoom.ts'),
+  'utf-8',
+)
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
 const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
@@ -255,7 +259,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('缩放滑杆只有 4 档（删掉最小的一档，用户口径 2026-10-28）', () => {
-    expect(modalsArea, 'ZOOM_MAX 仍是 5').toMatch(/const ZOOM_MAX = 4/)
+    expect(historyZoom, 'ZOOM_MAX 仍是 5').toMatch(/const ZOOM_MAX = 4/)
     expect(modalsArea, '最小档位映射还留着第 5 档').not.toMatch(/5: 120/)
     expect(modalsArea, '第 4 档的宽度没有保留').toMatch(/4: 170/)
   })
