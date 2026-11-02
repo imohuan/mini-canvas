@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
-const drawer = read('../components/areas/LeftDrawer.vue')
+const drawer = read('../components/areas/left-drawer/useAssetTreeActions.ts')
+const drawerPanel = read('../components/areas/left-drawer/AssetTreePanel.vue')
 const dialog = read('../components/AssetManageDialog.vue')
 const tree = read('../components/AssetTree.vue')
 const batchBar = read('../components/AssetBatchBar.vue')
@@ -41,7 +42,7 @@ describe('批量勾选：两处宿主同一份判定', () => {
   it('「哪些行显示为勾上」走 checkedRowIds（文件夹勾选态由内容推导）', () => {
     expect(drawer).toContain('checkedRowIds(')
     expect(dialog).toContain('checkedRowIds(')
-    expect(drawer).toContain(':selected-ids="checkedIds"')
+    expect(drawerPanel).toContain(':selected-ids="checkedIds"')
     expect(dialog).toContain(':selected-ids="checkedIds"')
     // 直接把「已选 id 表」当勾选态喂给树是错的（文件夹永远亮不起来）
     expect(drawer).not.toContain(':selected-ids="s.assetSelectedIds"')

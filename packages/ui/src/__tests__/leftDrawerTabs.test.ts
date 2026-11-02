@@ -12,6 +12,10 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const src = readFileSync(
+  fileURLToPath(new URL('../components/areas/left-drawer/useDrawerTabs.ts', import.meta.url)),
+  'utf8',
+)
+const entry = readFileSync(
   fileURLToPath(new URL('../components/areas/LeftDrawer.vue', import.meta.url)),
   'utf8',
 )
@@ -24,9 +28,9 @@ describe('LeftDrawer 插件页签', () => {
 
   it('按钮收到 active / onSelect / host', () => {
     // 行本身是可排序槽；插件按钮的宿主数据由 drawerTabProps 下发
-    expect(src).toContain('<SlotComposer')
-    expect(src).toContain('slot="shell.drawer.tabs"')
-    expect(src).toContain(':item-props="drawerTabProps"')
+    expect(entry).toContain('<SlotComposer')
+    expect(entry).toContain('slot="shell.drawer.tabs"')
+    expect(entry).toContain(':item-props="drawerTabProps"')
     expect(src).toContain('function drawerTabProps')
     expect(src).toContain('active: s.leftTab === entry.id')
     expect(src).toContain('onSelect: () => ui.openDrawerTab(entry.id)')
@@ -34,8 +38,8 @@ describe('LeftDrawer 插件页签', () => {
   })
 
   it('面板只在当前页签时渲染', () => {
-    expect(src).toContain('activePluginTab')
-    expect(src).toContain(':is="activePluginTab.panel"')
+    expect(entry).toContain('activePluginTab')
+    expect(entry).toContain(':is="activePluginTab.panel"')
   })
 
   it('当前页签消失时回退到画布', () => {

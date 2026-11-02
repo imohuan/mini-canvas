@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
 const hosts = [
-  ['components/areas/LeftDrawer.vue', '../components/areas/LeftDrawer.vue'],
+  ['components/areas/left-drawer/useAssetTreeActions.ts', '../components/areas/left-drawer/useAssetTreeActions.ts'],
   ['components/AssetManageDialog.vue', '../components/AssetManageDialog.vue'],
   ['components/AssetUploadHost.vue', '../components/AssetUploadHost.vue'],
 ] as const

@@ -19,7 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
 const ui = read('../composables/ui.ts')
-const drawer = read('../components/areas/LeftDrawer.vue')
+const drawer = read('../components/areas/left-drawer/useAssetCanvasDrop.ts')
 
 /** 取出一个函数的函数体（从声明到下一个顶层 function 之前） */
 function bodyOf(src: string, signature: string): string {
