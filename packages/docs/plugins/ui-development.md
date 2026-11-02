@@ -66,8 +66,8 @@ function save(): void {
 解构出来的每一项是 Ref，模板里自动解包；主题热替换时它们原地更新。
 只想取一个时可以写 `const Button = useUiComponent('Button')`。
 
-`packages/ui` 的根组件 `App.vue` 在 `CanvasProvider` 外面，用
-`useUiComponentOutside('Button')`；普通组件不要用它。
+应用最外层是 `packages/ui/src/Root.vue`，它在 `CanvasProvider` 外面，用
+`useUiComponentOutside('Toaster')`（`App.vue` 才是 Provider 的宿主）。普通组件不要用它。
 
 ## 补一个新组件
 
