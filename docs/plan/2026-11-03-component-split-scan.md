@@ -1,5 +1,9 @@
 # 组件拆分扫描（2026-11-03）
 
+> 执行记录（同日）：ModalsArea 已拆为 shortcut / history / director 入口组合；LeftDrawer、
+> UiContent、VideoContent 已按本文件的目录约定拆出子组件与 hooks。后续优化项集中记录在
+> `docs/plan/2026-11-03-split-optimizations.md`。
+
 扫描范围：packages/** 的 .vue / .ts / .js，排除 node_modules、dist、backup、vendor、packages/docs、根 src、测试与 e2e。
 
 统计口径：文件总行数；Vue 另列 script / template / style 三段。行数只用来找候选，是否拆分看职责是否混在一起。
