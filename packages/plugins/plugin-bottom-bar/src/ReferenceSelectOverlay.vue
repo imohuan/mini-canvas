@@ -21,6 +21,7 @@ defineOptions({ inheritAttrs: false })
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import type { DocService } from '@mini-canvas/canvas-data'
 import {
   exitSelection,
@@ -297,7 +298,7 @@ const ICON_CLOSE =
       <div class="rs-top" @pointerdown.stop>
         <span class="rs-top-icon" aria-hidden="true" v-html="ICON_TARGET" />
         <span class="rs-top-text">{{ topText }}</span>
-        <button
+        <Button variant="ghost" size="sm"
           class="rs-top-btn"
           type="button"
           :title="isDrag ? '聚焦回当前节点（参考仍开着）' : '聚焦回当前节点并退出选择'"
@@ -305,8 +306,8 @@ const ICON_CLOSE =
         >
           <span class="rs-top-btn-icon" aria-hidden="true" v-html="ICON_BACK" />
           <span>返回节点</span>
-        </button>
-        <button
+        </Button>
+        <Button variant="ghost" size="icon-sm"
           class="rs-top-close"
           type="button"
           title="退出选择（Esc）"
@@ -314,7 +315,7 @@ const ICON_CLOSE =
           @click.stop="exitSelection"
         >
           <span aria-hidden="true" v-html="ICON_CLOSE" />
-        </button>
+        </Button>
       </div>
 
       <!-- 节点高亮/点击由 NodeSelectOverlay（长在节点里的盖层）承担 -->
@@ -384,12 +385,7 @@ const ICON_CLOSE =
   white-space: nowrap;
 }
 .rs-top-btn {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
-  height: 32px;
-  padding: 0 12px;
-  border: 0;
   border-radius: 10px;
   /* 主题色白名单: 蓝底上的白色半透明按钮，白与蓝成对 */
   background: rgb(255 255 255 / 0.16);
@@ -397,7 +393,6 @@ const ICON_CLOSE =
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
   transition: background-color 0.15s ease-out;
 }
 .rs-top-btn:hover {
@@ -414,18 +409,10 @@ const ICON_CLOSE =
   height: 14px;
 }
 .rs-top-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
   border-radius: 10px;
   background: transparent;
   /* 主题色白名单: 蓝底上的白色图标 */
   color: #ffffff;
-  cursor: pointer;
   transition: background-color 0.15s ease-out;
 }
 .rs-top-close:hover {
@@ -436,13 +423,6 @@ const ICON_CLOSE =
   width: 16px;
   height: 16px;
 }
-.rs-top-btn:focus-visible,
-.rs-top-close:focus-visible {
-  /* 主题色白名单: 蓝底上的白色焦点环 */
-  outline: 2px solid rgb(255 255 255 / 0.8);
-  outline-offset: 1px;
-}
-
 /* —— 节点盖层 —— */
 .rs-layer {
   position: fixed;
@@ -490,7 +470,7 @@ const ICON_CLOSE =
   height: 18px;
   border-radius: 999px;
   background: var(--ui-accent);
-  color: var(--ui-primary-ink, #ffffff);
+  color: var(--ui-on-accent, #fff);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -498,7 +478,7 @@ const ICON_CLOSE =
 .rs-layer.is-connected .rs-badge {
   /* 已连与可选靠"填充强度 + 角标符号"区分，不引入第二个品牌色（规范 §1：强调色唯一） */
   background: var(--ui-accent);
-  color: var(--ui-primary-ink, #ffffff);
+  color: var(--ui-on-accent, #fff);
 }
 .rs-layer.is-blocked .rs-badge {
   display: none;

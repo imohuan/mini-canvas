@@ -5,10 +5,17 @@
 import { computed, ref } from 'vue'
 import { X as XIcon, FolderPlus as AddIcon, FolderInput as MoveIcon,
   Tags as TagIcon, Download as DownloadIcon, Trash2 as TrashIcon } from 'lucide-vue-next'
-import AxDropdown from './AxDropdown.vue'
-import AxMenu from './AxMenu.vue'
-import AxMenuItem from './AxMenuItem.vue'
-import AxTooltip from './AxTooltip.vue'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   count: number
@@ -54,9 +61,14 @@ function applyTag(t: string, close: () => void): void {
       「在左侧面板时，这些按钮都没有文字说明；弹出框时因为宽度足够，所以有文字」，给抽屉这侧补提示）。
       宽版（弹窗）本来就有文字，不再挂提示 —— 同一个按钮既有文字又有气泡是噪音。
     -->
-    <AxTooltip content="退出批量操作" :disabled="!compact">
-      <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="退出批量操作" @click="emit('exit')"><XIcon :size="15" /></button>
-    </AxTooltip>
+    <TooltipProvider :delay-duration="120">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" class="size-7 text-ink-dim hover:text-ink" aria-label="退出批量操作" @click="emit('exit')"><XIcon :size="15" /></Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">退出批量操作</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
     <!--
       这里原先还有一颗对勾方块（青底白勾 → 后来改的中性色）。用户口径 2026-10-13：
       「我觉得你这个图标没有留下的必要，可以改为『已选多少项』」—— 抽屉窄，方块白占地方，
@@ -65,36 +77,46 @@ function applyTag(t: string, close: () => void): void {
     <span class="ml-1 flex flex-none items-center gap-1.5 text-[12px] text-ink" :class="compact ? 'mr-1' : 'mr-2'">
       <span class="whitespace-nowrap">{{ compact ? '已选 ' + count + ' 项' : '已选择 ' + count + ' 项' }}</span>
     </span>
-    <AxDropdown v-model="addOpen" placement="top-end" :offset="8">
-      <template #trigger><AxTooltip content="添加到" :disabled="!compact"><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="addOpen" aria-label="添加到"><AddIcon :size="13" /><span v-if="!compact">添加到</span></button></AxTooltip></template>
-      <template #default="{ close }">
-        <AxMenu>
-          <AxMenuItem v-for="f in folderRows" :key="f.id" :style="f.pad" @click="emit('addTo', f.id); close()">{{ f.name }}</AxMenuItem>
-        </AxMenu>
-      </template>
-    </AxDropdown>
-    <AxDropdown v-model="moveOpen" placement="top-end" :offset="8">
-      <template #trigger><AxTooltip content="移动到" :disabled="!compact"><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="moveOpen" aria-label="移动到"><MoveIcon :size="13" /><span v-if="!compact">移动到</span></button></AxTooltip></template>
-      <template #default="{ close }">
-        <AxMenu>
-          <AxMenuItem v-for="f in folderRows" :key="f.id" :style="f.pad" @click="emit('moveTo', f.id); close()">{{ f.name }}</AxMenuItem>
-          <AxMenuItem v-if="folders.length" @click="emit('moveTo', ''); close()"><span class="text-ink-dim">（根目录）</span></AxMenuItem>
-        </AxMenu>
-      </template>
-    </AxDropdown>
-    <AxDropdown v-model="tagOpen" placement="top-end" :offset="8" menu-width="200px">
-      <template #trigger><AxTooltip content="修改标签" :disabled="!compact"><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="tagOpen" aria-label="修改标签"><TagIcon :size="13" /><span v-if="!compact">修改标签</span></button></AxTooltip></template>
-      <template #default="{ close }">
-        <AxMenu>
-          <AxMenuItem v-for="t in tagOptions" :key="t" @click="applyTag(t, close)">{{ t }}</AxMenuItem>
-        </AxMenu>
-      </template>
-    </AxDropdown>
-    <AxTooltip content="下载" :disabled="!compact">
-      <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="下载选中资产" @click="emit('download')"><DownloadIcon :size="14" /></button>
-    </AxTooltip>
-    <AxTooltip content="删除" :disabled="!compact">
-      <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-danger-soft hover:text-danger" aria-label="删除选中资产" @click="emit('remove')"><TrashIcon :size="14" /></button>
-    </AxTooltip>
+    <DropdownMenu v-model:open="addOpen">
+      <DropdownMenuTrigger as-child>
+        <Button variant="ghost" size="xs" class="h-7 flex-none text-[12px] text-ink" :aria-expanded="addOpen" aria-label="添加到"><AddIcon :size="13" /><span v-if="!compact">添加到</span></Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" :side-offset="8">
+        <DropdownMenuItem v-for="f in folderRows" :key="f.id" :style="f.pad" @select="emit('addTo', f.id)">{{ f.name }}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <DropdownMenu v-model:open="moveOpen">
+      <DropdownMenuTrigger as-child>
+        <Button variant="ghost" size="xs" class="h-7 flex-none text-[12px] text-ink" :aria-expanded="moveOpen" aria-label="移动到"><MoveIcon :size="13" /><span v-if="!compact">移动到</span></Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" :side-offset="8">
+        <DropdownMenuItem v-for="f in folderRows" :key="f.id" :style="f.pad" @select="emit('moveTo', f.id)">{{ f.name }}</DropdownMenuItem>
+        <DropdownMenuItem v-if="folders.length" @select="emit('moveTo', '')"><span class="text-ink-dim">（根目录）</span></DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <DropdownMenu v-model:open="tagOpen">
+      <DropdownMenuTrigger as-child>
+        <Button variant="ghost" size="xs" class="h-7 flex-none text-[12px] text-ink" :aria-expanded="tagOpen" aria-label="修改标签"><TagIcon :size="13" /><span v-if="!compact">修改标签</span></Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" :side-offset="8" :style="{ minWidth: '200px' }">
+        <DropdownMenuItem v-for="t in tagOptions" :key="t" @select="applyTag(t, () => (tagOpen = false))">{{ t }}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <TooltipProvider :delay-duration="120">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" class="size-7 text-ink-dim hover:text-ink" aria-label="下载选中资产" @click="emit('download')"><DownloadIcon :size="14" /></Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">下载</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+    <TooltipProvider :delay-duration="120">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" class="size-7 text-ink-dim hover:bg-danger-soft hover:text-danger" aria-label="删除选中资产" @click="emit('remove')"><TrashIcon :size="14" /></Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">删除</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   </div>
 </template>

@@ -46,10 +46,32 @@ function loadComponent(rel: string): unknown {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText
   const mod: { exports: Record<string, unknown> } = { exports: {} }
+  /**
+   * ToolViewBody 现在用组件库的 Button（公共渲染层，与其它插件一致）。
+   * 这里的 require 是同步的语法转译环境，不能直接 import 那个 ESM 包；
+   * 用**最小的 Button 替身**保持 node 测试可加载：只认组件库 Button 的公开 props，
+   * 渲染成真 <button> 并把 attrs（含 onClick / aria-*）原样落下。
+   * 被测逻辑（图片点击 → emit preview）仍在真实 ToolViewBody 里跑，没有 mock 业务。
+   */
+  const ButtonStub = {
+    name: 'Button',
+    props: {
+      variant: { type: String, default: undefined },
+      size: { type: String, default: undefined },
+      as: { type: [String, Object], default: 'button' },
+      asChild: { type: Boolean, default: false },
+      class: { type: [String, Array, Object], default: undefined },
+    },
+    setup(props: { class?: unknown }, { slots, attrs }: { slots: Record<string, () => unknown>; attrs: Record<string, unknown> }) {
+      // 组件的 class 是 props（测试按 class 找按钮），其余 attrs（aria-* / onClick）照落
+      return () => vue.h('button', { ...attrs, class: props.class }, slots.default ? (slots.default() as never) : [])
+    },
+  }
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
     if (id === 'lucide-vue-next') return lucide
-    throw new Error('不认识这个依赖（测试的 require 只放 vue / lucide）：' + id)
+    if (id === '@mini-canvas/ui-kit-shadcn') return { Button: ButtonStub }
+    throw new Error('不认识这个依赖（测试的 require 只放 vue / lucide / ui-kit-shadcn）：' + id)
   }
   new Function('module', 'exports', 'require', js)(mod, mod.exports, requireShim)
   return mod.exports.default

@@ -8,7 +8,12 @@ import {
   Plus as PlusIcon, X as XIcon, FileImage as FileIcon, Film as VideoIcon, Music as AudioIcon,
   CircleAlert as AlertIcon, Check as CheckIcon, RefreshCw as RetryIcon,
 } from 'lucide-vue-next'
-import AxDropdown from './AxDropdown.vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   folders: { id: string; name: string; depth: number }[]
@@ -275,38 +280,35 @@ function save(): void {
           </div>
           <div>
             <p class="mb-1.5 text-[12px] text-ink">保存位置<span class="ml-0.5 text-danger">*</span></p>
-            <AxDropdown placement="bottom" align="start" match-width menu-width="250px">
-              <template #trigger>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
                 <button class="flex h-9 w-full items-center justify-between rounded-lg border border-line bg-chip px-3 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="选择保存位置">
                   <span class="truncate">{{ targetLabel }}</span>
                   <span class="text-ink-dim">▾</span>
                 </button>
-              </template>
-              <template #default="{ close }">
-                <div class="ax-menu">
-                  <div class="ax-menu-item" role="menuitem" :class="{ 'is-active': !targetFolderId }" @click="targetFolderId = ''; close()">个人资产库</div>
-                  <div
-                    v-for="f in folderRows" :key="f.id"
-                    class="ax-menu-item" role="menuitem"
-                    :class="{ 'is-active': targetFolderId === f.id }"
-                    :style="f.pad"
-                    @click="targetFolderId = f.id; close()"
-                  >{{ f.name }}</div>
-                </div>
-              </template>
-            </AxDropdown>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" :style="{ width: '250px' }">
+                <DropdownMenuItem :class="{ 'bg-accent': !targetFolderId }" @select="targetFolderId = ''">个人资产库</DropdownMenuItem>
+                <DropdownMenuItem
+                  v-for="f in folderRows" :key="f.id"
+                  :class="{ 'bg-accent': targetFolderId === f.id }"
+                  :style="f.pad"
+                  @select="targetFolderId = f.id"
+                >{{ f.name }}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div>
             <p class="mb-1.5 text-[12px] text-ink">设置标签</p>
-            <AxDropdown v-model="tagsOpen" placement="bottom" align="start" match-width menu-width="250px" menu-max-height="320px">
-              <template #trigger>
+            <DropdownMenu v-model:open="tagsOpen">
+              <DropdownMenuTrigger as-child>
                 <button class="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-line bg-chip px-3 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="选择标签">
                   <span class="truncate text-ink-dim">{{ pickedTags.length ? pickedTags.join('、') : '请选择标签' }}</span>
                   <span class="flex-none text-ink-dim">▾</span>
                 </button>
-              </template>
+              </DropdownMenuTrigger>
               <!-- 照图 1：标题行「标签 + 新建」 + 每行右侧对勾；点行即选，外点关闭 -->
-              <template #default>
+              <DropdownMenuContent align="start" :style="{ width: '250px', maxHeight: '320px' }">
                 <div role="listbox" aria-label="标签清单">
                   <div class="flex items-center justify-between px-2 py-1.5 text-[12px] text-ink-dim">
                     <span>标签</span>
@@ -322,8 +324,8 @@ function save(): void {
                     <CheckIcon v-if="pickedTags.includes(t)" :size="14" class="text-ink" />
                   </button>
                 </div>
-              </template>
-            </AxDropdown>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

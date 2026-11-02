@@ -412,7 +412,7 @@ function human(n: number): string {
   flex: 1.4;
   border-color: var(--ui-accent, #0891b2);
   background: var(--ui-accent, #0891b2);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
 }
 .sd-btn--primary:hover { background: var(--ui-accent-hover, #0e7490); }
 .sd-btn:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: 1px; }

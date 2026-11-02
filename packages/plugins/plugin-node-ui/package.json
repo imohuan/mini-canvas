@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mini-canvas/ui-kit-shadcn": "workspace:*",
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",

@@ -215,7 +215,7 @@ const canDragNode = computed(() => {
    blocked 仍然接指针：用户 2026-10-28 要求红色禁用节点 hover 也要有提示；
    动作本身由 pointerdown / click 里的 state 判断拦住（blocked 一律不响应）。 */
 .nso-layer.is-blocked { border-color: var(--ui-danger); background: color-mix(in srgb, var(--ui-danger) 16%, transparent); cursor: help; }
-.nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-primary-ink, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
+.nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-on-accent, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
 .nso-layer.is-blocked .nso-badge { background: var(--ui-danger); }
 /* 拖拽模式下可拖节点的右下角小圆点（不引入第二种强调色） */
 .nso-drag-dot {

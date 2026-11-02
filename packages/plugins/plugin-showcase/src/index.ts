@@ -42,7 +42,14 @@ export function apply(ctx: Context): void {
     order: 8,
     component: markRaw(ShowcaseNav),
     // 只提供数据：外观由设置面板统一渲染，整页走 page
-    meta: { title: '插件展示', category: '开发', icon: Sparkles, page: markRaw(ShowcasePage) },
+    // pageGroup：整页属于 Config.group「插件展示」，由设置菜单挂到「开发 → 演示 → 展示台」。
+    meta: {
+      title: '插件展示',
+      category: '开发',
+      icon: Sparkles,
+      page: markRaw(ShowcasePage),
+      pageGroup: NAV_ID,
+    },
   })
   ctx.slots.register('settingsGroup/' + NAV_ID, {
     id: 'showcase/page',

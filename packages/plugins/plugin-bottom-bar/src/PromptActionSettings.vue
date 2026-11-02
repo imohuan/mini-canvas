@@ -4,7 +4,7 @@
  *
  * 为什么不用 schema 平铺字段：清单（增删改 + 模板文本域 + 图标选择）是**结构化编辑**，
  * 标量控件铺不出这个形状。设置面板对「有内容插槽的分组」直接渲染插槽内容（同 Agent 页），
- * 所以这里注册进 settingsGroup/常规/底栏（左树：常规 → 底栏），并声明 mode:'append'
+ * 所以这里注册进 settingsGroup/常规/底栏（菜单里归「画布 → 布局 → 控制栏」），并声明 mode:'append'
  * 追加在 Config 的标量字段之后 —— 否则同组的「AI 后台地址」会被整组顶掉。
  *
  * 数据源：云端 KV config/bottomBarAiActions（loadAiActions / saveAiActions）。
@@ -336,6 +336,6 @@ async function save(): Promise<void> {
 .pas-ok { font-size: 10px; color: var(--ui-accent, #0891b2); }
 .pas-hint { margin: 0; font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
 .pas-error { margin: 0; padding: 8px 10px; border: 1px solid var(--ui-danger, #ef4444); border-radius: 8px; font-size: 12px; color: var(--ui-danger, #ef4444); }
-.pas-submit { height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--ui-accent, #0891b2); color: var(--ui-primary-ink, #fff); font-size: 12px; cursor: pointer; }
+.pas-submit { height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--ui-accent, #0891b2); color: var(--ui-on-accent, #fff); font-size: 12px; cursor: pointer; }
 .pas-submit:disabled { opacity: 0.5; cursor: default; }
 </style>

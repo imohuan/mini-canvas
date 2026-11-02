@@ -17,7 +17,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
 
 function rule(selector: string): string {
-  const at = host.indexOf(selector + ' {')
+  // 调用方可传「.ac-pill」或「.ac-pill {」：统一成一个选择器再找规则块。
+  const normalized = selector.replace(/\s*\{\s*$/, '')
+  const at = host.indexOf(normalized + ' {')
   expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
   const end = host.indexOf('}', at)
   return host.slice(at, end + 1)
@@ -35,6 +37,7 @@ describe('Agent 面板：极端长文字不撑破容器', () => {
 
   it('创作模式胶囊：长提示词名可缩、单行省略，不把工具条按钮挤走', () => {
     expect(host).toContain('class="ac-pill-text"')
+    // 约束看基础规则 .ac-pill（可缩 / 省略）；高度与圆角已由组件库 Button 的 size 决定。
     const pill = rule('.ac-pill')
     expect(pill).toContain('min-width: 0')
     expect(pill).toContain('max-width')

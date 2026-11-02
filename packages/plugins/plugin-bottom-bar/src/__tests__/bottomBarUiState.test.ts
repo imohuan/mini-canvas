@@ -119,8 +119,12 @@ async function renderWithTeleport(comp: Component, ctx: CanvasRenderContext): Pr
 describe('底栏顶行三枚 pill 的状态', () => {
   it('参考可点；标记可点（点它才把 @图片N 文字转标签）；风格已移除', async () => {
     const html = await render(NodeBottomBar as Component, { id: 'n2', data: {} }, makeCtx())
-    const labels = [...html.matchAll(/<button[^>]*class="nb-pill([^"]*)"[^>]*>([\s\S]*?)<\/button>/g)]
-    const pills = labels.map((m) => ({ cls: m[1], text: m[2].replace(/<[^>]+>/g, '').trim() }))
+    // shadcn Button 的 attrs 顺序不固定（data-slot 在前、class 在后），
+    // 不能再用「class 紧贴 <button」的旧匹配。
+    const labels = [...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
+    const pills = labels
+      .map((m) => ({ cls: /class="([^"]*)"/.exec(m[1])?.[1] ?? '', text: m[2].replace(/<[^>]+>/g, '').trim() }))
+      .filter((p) => p.cls.split(/\s+/).includes('nb-pill'))
     const ref = pills.find((p) => p.text.startsWith('参考'))
     const mark = pills.find((p) => p.text.startsWith('标记'))
     const style = pills.find((p) => p.text.startsWith('风格'))
@@ -328,7 +332,9 @@ describe('展开按钮：变成 dialog（用户要求）', () => {
   it('展开按钮存在、默认收起（aria-expanded=false）、外壳是 .nb-shell', async () => {
     const html = await render(NodeBottomBar as Component, { id: 'n2', data: {} }, makeCtx())
     expect(html).toContain('nb-shell')
-    const expandBtn = html.match(/<button[^>]*class="nb-expand[^"]*"[^>]*>/)?.[0] ?? ''
+    const expandBtn = [...html.matchAll(/<button\b[^>]*>/g)]
+      .map((m) => m[0])
+      .find((tag) => (tag.match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/).includes('nb-expand')) ?? ''
     expect(expandBtn).toContain('nb-expand')
     expect(expandBtn).toContain('aria-expanded="false"')
     expect(html).toContain('nb-root')

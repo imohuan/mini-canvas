@@ -22,17 +22,19 @@ import {
   Search,
   Move,
 } from "lucide-vue-next";
-// 底栏按钮/提示用 shadcn 原始组件；下拉菜单内部内容仍沿用现有 AxMenu 一套（用户要求内容 UI 不变）。
+// 底栏按钮 / 提示 / 下拉菜单全部用 shadcn 原始组件（分离件，内容随意定制）。
 import {
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@mini-canvas/ui-kit-shadcn";
-import AxDropdown from "../AxDropdown.vue";
-import AxMenu from "../AxMenu.vue";
-import AxMenuItem from "../AxMenuItem.vue";
 import AgentOrb from "../AgentOrb.vue";
 import { useUi } from "../../composables/ui";
 import { openUploadDialog } from "../../composables/assetUploadBus";
@@ -96,8 +98,8 @@ function onUploadPick(e: Event): void {
           放在**下拉之外**（菜单会被 Teleport 且点完就关）—— 若放进菜单里，
           关掉菜单会把 input 一起卸载，用户选完文件时 change 已经没人接了。
         -->
-          <AxDropdown v-model="s.addMenuOpen" placement="top" align="center" :offset="10" menu-width="240px">
-            <template #trigger>
+          <DropdownMenu v-model:open="s.addMenuOpen">
+            <DropdownMenuTrigger as-child>
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
@@ -107,146 +109,109 @@ function onUploadPick(e: Event): void {
                 </TooltipTrigger>
                 <TooltipContent side="top">添加节点</TooltipContent>
               </Tooltip>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="center" :side-offset="10" :style="{ width: '240px' }">
               <div class="mb-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-veil px-2.5 text-ink-dim">
                 <Search :size="13" /><input class="w-full bg-transparent text-xs text-ink outline-none"
                   aria-label="搜索画布节点" placeholder="搜索画布节点" />
               </div>
-              <AxMenuItem @click="
-                ui.createNode('text');
-              close();
-              ">
+              <DropdownMenuItem @select="ui.createNode('text'); s.addMenuOpen = false">
                 <Type :size="15" /> 文本
-              </AxMenuItem>
-              <AxMenuItem @click="
-                ui.createNode('image');
-              close();
-              ">
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="ui.createNode('image'); s.addMenuOpen = false">
                 <ImageIcon :size="15" /> 图片
-              </AxMenuItem>
-              <AxMenuItem @click="
-                ui.createNode('video');
-              close();
-              "><Video :size="15" /> 视频</AxMenuItem>
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="ui.createNode('video'); s.addMenuOpen = false"><Video :size="15" /> 视频</DropdownMenuItem>
               <!--
           以下四项（智能剪辑 / 导演台 / 逐帧拉片 / 脚本）按用户口径（2026-10-11）暂时先注释掉，
           恢复时删掉这一对注释标记即可（对应的图标导入也一并注释在 script 里）。
-        <AxMenuItem @click="ui.createNode('text'); close()">
+        <DropdownMenuItem @select="ui.createNode('text')">
           <Film :size="15" /> 智能剪辑 <em
             class="ml-auto rounded border border-gold/40 px-1.5 py-px text-[9px] not-italic text-gold">Beta</em>
-        </AxMenuItem>
-        <AxMenuItem @click="ui.createNode('image'); close()">
+        </DropdownMenuItem>
+        <DropdownMenuItem @select="ui.createNode('image')">
           <Box :size="15" /> 导演台 <em
             class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em>
-        </AxMenuItem>
-        <AxMenuItem @click="ui.createNode('image'); close()">
+        </DropdownMenuItem>
+        <DropdownMenuItem @select="ui.createNode('image')">
           <Images :size="15" /> 逐帧拉片 <em
             class="ml-auto rounded border border-line px-1.5 py-px text-[9px] not-italic text-ink-dim">SD 2.5</em>
-        </AxMenuItem>
+        </DropdownMenuItem>
         -->
-              <AxMenuItem @click="
-                ui.showToast('音频节点即将支持');
-              close();
-              ">
+              <DropdownMenuItem @select="ui.showToast('音频节点即将支持'); s.addMenuOpen = false">
                 <AudioLines :size="15" /> 音频
-              </AxMenuItem>
+              </DropdownMenuItem>
               <!-- 脚本（同样暂时隐藏）
-        <AxMenuItem @click="ui.showToast('脚本节点即将支持'); close()">
+        <DropdownMenuItem @select="ui.showToast('脚本节点即将支持')">
           <ScrollText :size="15" /> 脚本
-        </AxMenuItem>
+        </DropdownMenuItem>
         -->
               <div class="px-2 py-1.5 text-[10px] font-bold tracking-wider text-ink-dim">
                 素材库
               </div>
               <!-- 「添加资源」= 打开上传资产弹窗（改名 / 选保存位置 / 打标签 → 存进资产库）。
              与「上传」（选完直接落画布成节点）是两件事，别再互相顶替。 -->
-              <AxMenuItem @click="
-                openUploadDialog();
-              close();
-              ">
+              <DropdownMenuItem @select="openUploadDialog(); s.addMenuOpen = false">
                 <FolderOpen :size="15" /> 添加资源
-              </AxMenuItem>
-              <AxMenuItem @click="
-                pickUploadFiles();
-              close();
-              ">
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="pickUploadFiles(); s.addMenuOpen = false">
                 <Upload :size="15" /> 上传
-              </AxMenuItem>
-              <AxMenuItem @click="ui.toggleHistory()">
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="ui.toggleHistory()">
                 <History :size="15" /> 从生成历史选择
-              </AxMenuItem>
-            </template>
-          </AxDropdown>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </SlotAnchor>
         <SlotAnchor id="host/move" :order="200">
           <!-- 移动：中轴对齐的下拉（菜单中心 = 按钮中心，箭头居中指按钮），V/H 切换 -->
-          <AxDropdown v-model="s.moveMenuOpen" placement="top" align="center" :offset="10" menu-width="200px">
-            <template #trigger>
+          <DropdownMenu v-model:open="s.moveMenuOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
                 :class="{ 'bg-chip': s.moveMenuOpen }" aria-label="移动" :aria-expanded="s.moveMenuOpen">
                 <component :is="s.canvasMode === 'move' ? Move : Hand" :size="16" class="size-4" />
               </Button>
-            </template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem :active="s.canvasMode === 'move'" hint="V" @click="
-                  ui.setCanvasMode('move');
-                close();
-                ui.showToast('已切换到移动工具');
-                ">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="center" :side-offset="10" :style="{ minWidth: '200px' }">
+                <DropdownMenuItem :class="{ 'bg-accent': s.canvasMode === 'move' }" @select="ui.setCanvasMode('move'); s.moveMenuOpen = false; ui.showToast('已切换到移动工具')">
                   <Move :size="15" /> 移动
-                </AxMenuItem>
-                <AxMenuItem :active="s.canvasMode === 'hand'" hint="H" @click="
-                  ui.setCanvasMode('hand');
-                close();
-                ui.showToast('已切换到抓手工具');
-                ">
+                  <span class="ml-auto text-[10px] text-ink-dim">V</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem :class="{ 'bg-accent': s.canvasMode === 'hand' }" @select="ui.setCanvasMode('hand'); s.moveMenuOpen = false; ui.showToast('已切换到抓手工具')">
                   <Hand :size="15" /> 抓手工具
-                </AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+                  <span class="ml-auto text-[10px] text-ink-dim">H</span>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </SlotAnchor>
         <SlotAnchor id="host/library" :order="300">
           <!-- 素材库：**点击触发**（与移动一致；方向键/素材库都点开才展开，不再 hover 弹出） -->
-          <AxDropdown v-model="s.libraryMenuOpen" placement="top" align="center" :offset="10" menu-width="228px">
-            <template #trigger>
+          <DropdownMenu v-model:open="s.libraryMenuOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
                 :class="{ 'bg-chip': s.libraryMenuOpen || s.drawer === 'left' }" aria-label="素材库"
                 :aria-expanded="s.libraryMenuOpen">
                 <FolderOpen :size="16" class="size-4" />
               </Button>
-            </template>
-            <template #default="{ close }">
-              <AxMenu>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="center" :side-offset="10" :style="{ minWidth: '228px' }">
                 <!-- 「风格库」由 plugin-style-library 提供：这里执行它注册的命令（未装该插件则 no-op，不报错） -->
-                <AxMenuItem @click="
-                  close();
-                ui.runCommand('style-library:open');
-                ">
+                <DropdownMenuItem @select="s.libraryMenuOpen = false; ui.runCommand('style-library:open')">
                   <Shapes :size="15" /> 风格库
                   <em
                     class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em>
-                </AxMenuItem>
+                </DropdownMenuItem>
                 <!-- 「特效库」由 plugin-style-library 提供（与风格库同一插件、两套数据）：执行它注册的命令 -->
-                <AxMenuItem @click="
-                  close();
-                ui.runCommand('effect-library:open');
-                ">
+                <DropdownMenuItem @select="s.libraryMenuOpen = false; ui.runCommand('effect-library:open')">
                   <Sparkles :size="15" /> 特效库
                   <em
                     class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em>
-                </AxMenuItem>
-                <AxMenuItem @click="
-                  close();
-                ui.openDrawer('left');
-                ">
+                </DropdownMenuItem>
+                <DropdownMenuItem @select="s.libraryMenuOpen = false; ui.openDrawer('left')">
                   <FolderOpen :size="15" /> 打开工具箱
-                </AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </SlotAnchor>
         <SlotAnchor id="host/roles" :order="400">
           <Tooltip>

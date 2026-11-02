@@ -34,7 +34,9 @@ describe('用户气泡高度夹层与展开按钮', () => {
   })
 
   it('按钮只在「超出」时出现，带展开/收起图标，位于气泡左下角', () => {
-    expect(host).toContain('<button v-if="overflowingUser[t.id]" class="ac-user-toggle"')
+    // 按钮换成组件库 Button，但渲染出来的 DOM 仍是 <button>、显隐条件与 aria 不变
+    expect(host).toContain('<Button v-if="overflowingUser[t.id]"')
+    expect(host).toContain('class="ac-user-toggle"')
     expect(host).toContain(':aria-expanded="!!openUserBubbles[t.id]"')
     // 图标：收起态朝下（还有内容），展开态朝上
     expect(host).toContain('<ChevronDown v-if="!openUserBubbles[t.id]" :size="13" />')

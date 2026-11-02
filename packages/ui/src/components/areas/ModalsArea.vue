@@ -4,12 +4,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare, Download } from 'lucide-vue-next'
 import { motion } from 'motion-v'
-import AxDialog from '../AxDialog.vue'
-import AxDropdown from '../AxDropdown.vue'
-import AxMenu from '../AxMenu.vue'
-import AxMenuItem from '../AxMenuItem.vue'
-import AxScrollArea from '../AxScrollArea.vue'
-import AxButton from '../AxButton.vue'
+import AppDialog from '../AppDialog.vue'
+import ScrollPane from '../ScrollPane.vue'
+import { scrollViewportOf } from '../scrollPane'
 import {
   Button,
   Input,
@@ -18,6 +15,10 @@ import {
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Select,
   SelectContent,
   SelectItem,
@@ -493,7 +494,7 @@ function maybeLoadMorePage(): void {
  */
 function isSentinelInView(): boolean {
   const sentinel = loadSentinelEl.value
-  const view = sentinel?.closest('.ax-sa-view') as HTMLElement | null
+  const view = scrollViewportOf(sentinel)
   if (!sentinel || !view) return false
   const s = sentinel.getBoundingClientRect()
   const v = view.getBoundingClientRect()
@@ -557,7 +558,7 @@ const canLoadMore = computed(() => {
  */
 function readLoadState(): Record<string, unknown> {
   const sentinel = loadSentinelEl.value
-  const view = sentinel?.closest('.ax-sa-view') as HTMLElement | null
+  const view = scrollViewportOf(sentinel)
   // ⚠️ 不要用 s 命名：s 是 ui.state（被下面的 hasMore / loading 读取）。
   // 之前这里用 const s = rect 遮蔽了它，模板渲染时直接抛
   // "Cannot read properties of undefined (reading 'histHasMore')"，整个瀑布流不渲染。
@@ -581,8 +582,8 @@ function readLoadState(): Record<string, unknown> {
 }
 
 /**
- * 监听底部哨兵。真正的滚动层是 AxScrollArea 内部的 .ax-sa-view（根元素本身不滚），
- * root 必须指到它 —— 否则哨兵相对 viewport 永远"在视口外"（弹窗内容超出视口），一次都不会触发。
+ * 监听底部哨兵。真正的滚动层是 ScrollArea 内部的 viewport（根元素本身不滚），
+ * root 必须指到它 —— 否则哨兵相对浏览器 viewport 永远"在视口外"（弹窗内容超出视口），一次都不会触发。
  */
 function setupLoadSentinel(): void {
   const sentinel = loadSentinelEl.value
@@ -604,7 +605,7 @@ function setupLoadSentinel(): void {
         nextTick(fillViewportIfNeeded)
       }
     },
-    { root: sentinel.closest('.ax-sa-view') ?? null, rootMargin: '0px 0px 600px 0px' },
+    { root: scrollViewportOf(sentinel), rootMargin: '0px 0px 600px 0px' },
   )
   loadMoreObserver.observe(sentinel)
   // 首次挂上时也主动量一次：哨兵一开始就在视口里（列表不足一屏）时，
@@ -1389,7 +1390,7 @@ function prependMasonryItems(count: number): void {
 
 /** 卡片墙的滚动容器（AxScrollArea 内部真正滚的那一层） */
 function historyScroller(): HTMLElement | null {
-  return (masonryEl.value?.closest('.ax-sa-view') as HTMLElement | null) ?? null
+  return scrollViewportOf(masonryEl.value)
 }
 
 /**
@@ -1856,8 +1857,8 @@ onClickOutside(
   </div>
 
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
-  <AxDialog :model-value="s.historyOpen" :with-overlay="true" width="min(90vw, 1600px)" height="calc(100vh - 160px)"
-    radius="24px" overlay-class="axdlg-overlay--soft" @update:model-value="!$event && (s.historyOpen = false)">
+  <AppDialog :model-value="s.historyOpen" :close-on-overlay="false" width="min(90vw, 1600px)" height="calc(100vh - 160px)"
+    radius="24px" @update:model-value="!$event && (s.historyOpen = false)">
     <div class="flex flex-none items-center justify-between gap-4 px-6 pb-5 pt-6">
       <span class="text-lg font-medium leading-[26px] text-ink">生成历史</span>
       <div class="flex items-center gap-4">
@@ -1875,9 +1876,9 @@ onClickOutside(
           </div>
           <LayoutGrid :size="16" class="text-ink" />
         </div>
-        <AxButton variant="ghost" size="icon" aria-label="关闭生成历史" @click="s.historyOpen = false">
+        <Button variant="ghost" size="icon" aria-label="关闭生成历史" @click="s.historyOpen = false">
           <X :size="16" />
-        </AxButton>
+        </Button>
       </div>
     </div>
     <div class="h-px flex-none bg-line"></div>
@@ -1915,19 +1916,17 @@ onClickOutside(
           <!-- 评级筛选：UI 已隐藏（用户口径 2026-10-27：评级功能还没做，别摆一个假控件）。
                逻辑与样式保留，要恢复时把 v-if 改成 true 即可。 -->
           <template v-if="SHOW_RATING_UI">
-            <AxDropdown v-model="s.histRatingOpen" placement="bottom-end" menu-width="140px">
-              <template #trigger><button
+            <DropdownMenu v-model:open="s.histRatingOpen">
+              <DropdownMenuTrigger as-child><button
                   class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
                   aria-label="所有评级">{{ s.histRating }}
                   <ChevronDown :size="14" />
-                </button></template>
-              <template #default="{ close }">
-                <AxMenu>
-                  <AxMenuItem v-for="r in ['所有评级', '已通过', '待审核', '已拒绝']" :key="r" @click="s.histRating = r; close()">{{ r }}
-                  </AxMenuItem>
-                </AxMenu>
-              </template>
-            </AxDropdown>
+                </button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" :style="{ minWidth: '140px' }">
+                <DropdownMenuItem v-for="r in ['所有评级', '已通过', '待审核', '已拒绝']" :key="r"
+                  @select="s.histRating = r">{{ r }}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </template>
           <span class="h-4 w-px bg-line"></span>
           <button
@@ -1943,7 +1942,7 @@ onClickOutside(
           </button>
         </div>
       </div>
-      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
+      <ScrollPane class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
         <!-- masonry 瀑布流：卡片按图片原始宽高比展示，列数随容器宽自适应（照 TaskResultGalleryView）。
              卡片 DOM 由 createMasonryElement 手工构建（骨架屏/裂图回退/底部信息栏都在那里）。 -->
         <!-- 卡片墙：容器**永远在**（不随数据 v-if 挂载/卸载）。切页签只是把旧墙整块
@@ -1983,7 +1982,7 @@ onClickOutside(
           <span class="text-[11px] text-ink-mute">用 <code>npx mini-canvas-cloud serve</code> 起服务后即可看到</span>
         </p>
         <p v-else-if="!ui.histVisible.value.length" class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
-      </AxScrollArea>
+      </ScrollPane>
       <!-- 批量操作栏（图2 参考效果）：进入批量模式才出现 -->
       <div v-if="s.histBatchMode" class="hist-batch-bar flex flex-none items-center justify-between border-t border-line px-6 py-3">
         <span class="text-[13px] text-ink">已选择 {{ s.histSelectedIds.length }} 项</span>
@@ -2001,7 +2000,7 @@ onClickOutside(
         </div>
       </div>
     </div>
-  </AxDialog>
+  </AppDialog>
 
   <!-- 历史预览：与资产面板同一只 MediaViewer（Esc / 点遮罩 / 右上角关闭；历史不可删 → 不传 onDelete）。
        视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
@@ -2009,7 +2008,7 @@ onClickOutside(
 
   <!-- 生成详情：一条历史的完整参数（提示词 / 参数 / 参考素材 / 产物信息）。
        用户口径 2026-10-27：卡片上要有入口，能复盘"当时到底用了什么"。 -->
-  <AxDialog :model-value="!!detailItem" width="640px" height="auto" max-height="80vh" radius="16px"
+  <AppDialog :model-value="!!detailItem" width="640px" height="auto" max-height="80vh" radius="16px"
     @update:model-value="!$event && (detailItem = null)">
     <div v-if="detailItem" class="hist-detail">
       <header class="hist-detail-head">
@@ -2017,12 +2016,12 @@ onClickOutside(
           <strong class="hist-detail-title">{{ detailItem.title }}</strong>
           <span class="hist-detail-sub">{{ detailItem.kind }} · {{ detailItem.time }}</span>
         </div>
-        <AxButton variant="ghost" size="icon" aria-label="关闭生成详情" @click="detailItem = null">
+        <Button variant="ghost" size="icon" aria-label="关闭生成详情" @click="detailItem = null">
           <X :size="15" />
-        </AxButton>
+        </Button>
       </header>
 
-      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-4 pb-4">
+      <ScrollPane class="min-h-0 flex-1" direction="y" body-class="px-4 pb-4">
         <div class="hist-detail-body">
           <!-- 产物信息：图片给宽高比，视频/音频额外给时长，所有类型都给文件大小 -->
           <section class="hist-detail-sec">
@@ -2077,19 +2076,19 @@ onClickOutside(
             <p v-else class="hist-detail-empty">这条记录没有参考素材（早期记录没有这一项）</p>
           </section>
         </div>
-      </AxScrollArea>
+      </ScrollPane>
     </div>
-  </AxDialog>
+  </AppDialog>
 
   <!-- TV Director 全局设置：独立全局弹窗（不在 Agent 面板内） -->
-  <AxDialog :model-value="s.directorOpen" width="600px" height="532px" radius="12px"
+  <AppDialog :model-value="s.directorOpen" width="600px" height="532px" radius="12px"
     @update:model-value="!$event && (s.directorOpen = false)">
     <div class="flex items-center justify-between px-4 pb-2.5 pt-4">
       <div><span class="block text-[9px] font-extrabold tracking-[0.12em] text-ink-dim">TV DIRECTOR</span><strong
           class="text-[15px]">全局设置</strong></div>
-      <AxButton variant="ghost" size="icon" aria-label="关闭全局设置" @click="s.directorOpen = false">
+      <Button variant="ghost" size="icon" aria-label="关闭全局设置" @click="s.directorOpen = false">
         <X :size="15" />
-      </AxButton>
+      </Button>
     </div>
     <!-- <div class="mx-4 mb-3 rounded-lg bg-veil px-3 py-2 text-xs text-gold">非会员每天免费对话 3 轮，即刻体验！</div> -->
     <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
@@ -2213,7 +2212,7 @@ onClickOutside(
     <div class="flex flex-none justify-end border-t border-line p-3">
       <Button variant="outline" size="sm" type="button" @click="s.directorOpen = false; ui.showToast('设置已保存')">完成</Button>
     </div>
-  </AxDialog>
+  </AppDialog>
 
 </template>
 

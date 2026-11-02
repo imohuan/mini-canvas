@@ -8,10 +8,19 @@
 // 「缩放选项」同理：百分比是**真实视口的镜像值**（ui.state.zoom），菜单动作调 viewport 服务
 // 真正改画布（详见 composables/ui.ts 的「缩放」段）。
 import { PanelLeft, LayoutGrid, Map, Link2Off, Link2, Magnet, Grid2x2X } from 'lucide-vue-next'
-// 状态栏按钮用 shadcn 原始组件；缩放菜单内容仍走现有 AxMenuItem（用户要求内容 UI 不变）。
-import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@mini-canvas/ui-kit-shadcn'
-import AxDropdown from '../AxDropdown.vue'
-import AxMenuItem from '../AxMenuItem.vue'
+// 状态栏按钮、提示、缩放菜单全部用 shadcn 原始组件。
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import { useUi } from '../../composables/ui'
 import { computed } from 'vue'
 import { SlotAnchor, SlotComposer } from '@mini-canvas/canvas-render'
@@ -116,8 +125,8 @@ const miniMapDock = useMiniMapDockTarget()
       </Tooltip>
         </SlotAnchor>
         <SlotAnchor id="host/zoom" :order="600">
-      <AxDropdown v-model="s.zoomMenuOpen" placement="top" align="center" menu-width="215px">
-        <template #trigger>
+      <DropdownMenu v-model:open="s.zoomMenuOpen">
+        <DropdownMenuTrigger as-child>
           <Tooltip>
             <TooltipTrigger as-child>
           <Button variant="ghost" size="sm" class="h-7 rounded-lg whitespace-nowrap px-1 text-[13px] font-normal hover:bg-hover"
@@ -125,18 +134,18 @@ const miniMapDock = useMiniMapDockTarget()
             </TooltipTrigger>
             <TooltipContent side="top">缩放选项</TooltipContent>
           </Tooltip>
-        </template>
-        <template #default="{ close }">
-          <AxMenuItem @click="ui.zoomInStep(); close()">放大 <span class="ax-menu-hint">Ctrl +</span></AxMenuItem>
-          <AxMenuItem @click="ui.zoomOutStep(); close()">缩小 <span class="ax-menu-hint">Ctrl −</span></AxMenuItem>
-          <AxMenuItem @click="ui.zoomFit(); close()">适合屏幕 <span class="ax-menu-hint">Ctrl 0</span></AxMenuItem>
-          <div class="ax-menu-sep"></div>
-          <AxMenuItem :active="Math.abs(s.zoom - 50) <= 1" @click="ui.zoomToPercent(50); close()">缩放至 50%</AxMenuItem>
-          <AxMenuItem :active="Math.abs(s.zoom - 100) <= 1" @click="ui.zoomToPercent(100); close()">缩放至 100%</AxMenuItem>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="center" :style="{ minWidth: '215px' }">
+          <DropdownMenuItem @select="ui.zoomInStep(); s.zoomMenuOpen = false">放大 <span class="ax-menu-hint ml-auto">Ctrl +</span></DropdownMenuItem>
+          <DropdownMenuItem @select="ui.zoomOutStep(); s.zoomMenuOpen = false">缩小 <span class="ax-menu-hint ml-auto">Ctrl −</span></DropdownMenuItem>
+          <DropdownMenuItem @select="ui.zoomFit(); s.zoomMenuOpen = false">适合屏幕 <span class="ax-menu-hint ml-auto">Ctrl 0</span></DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem :class="{ 'bg-accent': Math.abs(s.zoom - 50) <= 1 }" @select="ui.zoomToPercent(50); s.zoomMenuOpen = false">缩放至 50%</DropdownMenuItem>
+          <DropdownMenuItem :class="{ 'bg-accent': Math.abs(s.zoom - 100) <= 1 }" @select="ui.zoomToPercent(100); s.zoomMenuOpen = false">缩放至 100%</DropdownMenuItem>
           <!-- 最大倍率取自设置 maxZoom（默认 200%），不写死 800%（那样默认上限下点不到） -->
-          <AxMenuItem @click="ui.zoomToMax(); close()">缩放到最大</AxMenuItem>
-        </template>
-      </AxDropdown>
+          <DropdownMenuItem @select="ui.zoomToMax(); s.zoomMenuOpen = false">缩放到最大</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
         </SlotAnchor>
       </SlotComposer>
     </div>

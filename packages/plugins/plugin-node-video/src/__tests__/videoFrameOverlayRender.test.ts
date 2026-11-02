@@ -54,10 +54,10 @@ describe('裁剪态才渲染浮层', () => {
     const html = await render('v1', { videoUrl: 'blob:v', videoWidth: 1600, videoHeight: 800 })
     expect(html).not.toContain('确认')
     expect(html).not.toContain('取消')
-    // 浮层里唯一的按钮是四个方形控制点（它们本来就该是可聚焦的按钮，见无障碍要求）。
-    // 这里数一下数量：只有 4 个控制点，没有多出来的操作按钮。
+    // 浮层里唯一的按钮是方形控制点（4 角 + 4 边中点，用户 2026-11-02 要求与图片一致）。
+    // 这里数一下数量：只有 8 个控制点，没有多出来的操作按钮。
     const handleButtons = html.match(/class="mfo-handle"/g) ?? []
-    expect(handleButtons).toHaveLength(4)
+    expect(handleButtons).toHaveLength(8)
     endOverlay('v1')
   })
 

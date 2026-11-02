@@ -13,6 +13,7 @@
  */
 import { computed, ref } from 'vue'
 import { Play, Pause, Volume2, VolumeX } from 'lucide-vue-next'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{
@@ -134,11 +135,11 @@ function onVolumeTrackUp(e: PointerEvent): void {
 <template>
   <!-- 外观契约：与 VideoContent 旧版 .video-controls 逐条同源（无底、贴底、26px 圆钮） -->
   <div class="vcb-bar" @click.stop @mousedown.stop @dblclick.stop>
-    <button class="vcb-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'"
+    <Button class="vcb-btn" variant="ghost" size="icon-xs" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'"
       @click.stop="emit('play')">
       <Pause v-if="playing" class="vcb-ico" aria-hidden="true" />
       <Play v-else class="vcb-ico" aria-hidden="true" />
-    </button>
+    </Button>
 
     <span class="vcb-time">{{ timeLabel }}</span>
 
@@ -152,16 +153,16 @@ function onVolumeTrackUp(e: PointerEvent): void {
 
     <!-- 倍速：点按钮弹小菜单，当前档高亮（两条宿主共用） -->
     <div class="vcb-rate">
-      <button class="vcb-btn vcb-rate-btn" type="button" :class="{ 'is-on': rate !== 1 }"
+      <Button class="vcb-btn vcb-rate-btn" variant="ghost" size="icon-xs" type="button" :class="{ 'is-on': rate !== 1 }"
         :title="'播放速度 ' + rateLabel" :aria-label="'播放速度 ' + rateLabel" :aria-expanded="rateMenuOpen"
         @click.stop="emit('rateToggle')">
         <span class="vcb-rate-label">{{ rateLabel }}</span>
-      </button>
+      </Button>
       <div v-if="rateMenuOpen" class="vcb-menu" role="menu" aria-label="播放速度">
-        <button v-for="r in RATES" :key="r" class="vcb-menu-item" :class="{ 'is-active': rate === r }" type="button"
+        <Button v-for="r in RATES" :key="r" class="vcb-menu-item" variant="ghost" size="sm" :class="{ 'is-active': rate === r }" type="button"
           role="menuitemradio" :aria-checked="rate === r" @click.stop="emit('ratePick', r)">
           {{ r }}x
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -169,7 +170,7 @@ function onVolumeTrackUp(e: PointerEvent): void {
     <slot name="capture" />
 
     <!-- 循环：只在全屏形态出现（loop 给值 = 显示；节点不传） -->
-    <button v-if="loop !== undefined" class="vcb-btn" type="button" :class="{ 'is-on': loop }"
+    <Button v-if="loop !== undefined" class="vcb-btn" variant="ghost" size="icon-xs" type="button" :class="{ 'is-on': loop }"
       :title="loop ? '循环播放：开' : '循环播放：关'" :aria-label="'循环播放'" :aria-pressed="loop"
       @click.stop="emit('loopToggle')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -177,16 +178,16 @@ function onVolumeTrackUp(e: PointerEvent): void {
         <path d="M17 2l4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" />
         <path d="M7 22l-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" />
       </svg>
-    </button>
+    </Button>
 
     <!-- 音量：喇叭 + 向上弹的竖直滑杆（数值/显隐都在宿主） -->
     <!-- 拖动中忽略 mouseleave：手一抖滑出弹层就收起的话，拖到一半弹层没了（用户报的"拖不动"体感） -->
     <div class="vcb-volume" @mouseenter="emit('volumeOpen')"
       @mouseleave="volumeDragging || emit('volumeClose')">
-      <button class="vcb-btn" type="button" :title="muted ? '取消静音' : '静音'"
+      <Button class="vcb-btn" variant="ghost" size="icon-xs" type="button" :title="muted ? '取消静音' : '静音'"
         :aria-label="muted ? '取消静音' : '静音'" @click.stop="emit('muteToggle')">
         <component :is="volumeIcon" class="vcb-ico" aria-hidden="true" />
-      </button>
+      </Button>
       <div v-if="volumeMenuOpen" class="vcb-volume-pop">
         <span class="vcb-volume-value">{{ Math.round(volume * 100) }}</span>
         <div class="vcb-volume-track" role="slider" :aria-label="'音量 ' + Math.round(volume * 100) + '%'"
@@ -231,18 +232,12 @@ function onVolumeTrackUp(e: PointerEvent): void {
   padding: 0 6px;
 }
 .vcb-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 0;
   border-radius: 50%;
-  background: transparent;
   color: color-mix(in srgb, var(--ui-tip-ink, #fff) 88%, transparent);
-  cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s ease, background 0.18s ease;
 }
 .vcb-btn:hover:not(:disabled) {
@@ -253,7 +248,7 @@ function onVolumeTrackUp(e: PointerEvent): void {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
-.vcb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.vcb-btn:disabled { opacity: 0.4; }
 .vcb-btn.is-on { background: rgba(255, 255, 255, 0.22); /* 主题色白名单: 同上 */ }
 .vcb-btn svg { width: 15px; height: 15px; }
 .vcb-ico { width: 15px; height: 15px; stroke-width: 1.75; }
@@ -333,14 +328,12 @@ function onVolumeTrackUp(e: PointerEvent): void {
   flex-direction: column;
 }
 .vcb-menu-item {
+  height: auto;
   padding: 6px 12px;
-  border: 0;
   border-radius: 6px;
-  background: transparent;
   color: rgba(255, 255, 255, 0.92); /* 主题色白名单: 同上 */
   font-size: 12px;
   text-align: center;
-  cursor: pointer;
   white-space: nowrap;
 }
 .vcb-menu-item:hover { background: rgba(255, 255, 255, 0.12); /* 主题色白名单: 同上 */ }

@@ -21,6 +21,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useCanvasRender, useUiComponent } from "@mini-canvas/canvas-render"
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { formatClock } from "./audioPlayback"
 import { isValidWaveform } from "./waveform"
 import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio } from "./audioOps"
@@ -152,8 +153,10 @@ watch(
 
     <!-- 播放控件：只有按钮才拦画布手势 —— 整条都拦的话，时间/文件名也拖不动节点 -->
     <div v-if="audioUrl" class="aw-bar">
-      <button
+      <Button
         class="aw-btn nodrag nopan nowheel"
+        variant="ghost"
+        size="icon-xs"
         type="button"
         :title="playerPlaying ? '暂停' : '播放'"
         :aria-label="playerPlaying ? '暂停' : '播放'"
@@ -166,11 +169,13 @@ watch(
           <rect x="6" y="5" width="4" height="14" rx="1" />
           <rect x="14" y="5" width="4" height="14" rx="1" />
         </svg>
-      </button>
+      </Button>
       <span class="aw-time">{{ formatClock(playerCurrent) }} / {{ formatClock(playerDuration || audioDuration) }}</span>
       <span v-if="audioName" class="aw-name" :title="audioName">{{ audioName }}</span>
-      <button
+      <Button
         class="aw-btn aw-btn-ghost nodrag nopan nowheel"
+        variant="ghost"
+        size="icon-xs"
         type="button"
         title="刷新波形与时长"
         aria-label="刷新"
@@ -181,7 +186,7 @@ watch(
           <path d="M3 12a9 9 0 1 0 3-6.7" />
           <polyline points="3 4 3 10 9 10" />
         </svg>
-      </button>
+      </Button>
     </div>
 
     <!-- 空态：只说"没有音频"。上传入口在上控制栏（AudioTopToolbar），与图片/视频节点一致 ——
@@ -231,18 +236,13 @@ watch(
   flex: none;
 }
 .aw-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
   width: 28px;
   height: 28px;
   padding: 0;
-  border: 0;
   border-radius: 8px;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
   color: var(--canvas-node-text-body, #374151);
-  cursor: pointer;
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease;
 }
 .aw-btn:hover {

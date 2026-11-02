@@ -1,31 +1,15 @@
 <script setup lang="ts">
 // RowMenuShell —— 树行的「⋯」操作菜单**外壳**（资产树与画布树共用）。
 //
-// ## 为什么要有这个组件（用户口径 2026-10-08）
-//
-// 「当前在左侧边栏的资产面板中，这些文件夹和资源都支持右键菜单。现在，希望画布这边也支持右键菜单 ——
-//  因为当前这里只有在 hover 点击后面的按钮时，显示的那个按钮才可以触发。」
-//
-// 而资产侧那套「⋯ 按钮 + 行右键打开**同一份**菜单」的机制，此前是写死在 AssetTree.vue 里的
-// （行 ref 登记表 + contextMenuFor + openAt 转交）。画布树要再抄一遍就会长成第二份实现 ——
-// 这正是本项目反复吃过的亏（历史上缩略图 / 预览 / 菜单动作都各漂移过）。
-//
-// ## 职责边界（只做外壳，不做内容）
-// - **本组件管**：菜单浮层（AxDropdown）+ 行内「⋯」触发器 + 「行右键也开同一份菜单」的 openAt；
-// - **调用方管**：菜单里有哪些条目（默认插槽，自己摆 AxMenuItem / AxSubMenu）。
-//   两棵树的条目本就不同（资产有「移动到 / 更改图标 / 设置标签」，画布节点有「定位 / 解散分组」），
-//   硬塞成一份要么靠一堆 if，要么把两边都阉掉 —— 所以内容留给调用方，机制收在这里。
-//
-// ## 用法
-// ```vue
-// <RowMenuShell :ref="(el) => bindRowMenu(row.id, el)" :name="row.name">
-//   <AxMenuItem @click="...">重命名</AxMenuItem>
-// </RowMenuShell>
-// ```
-// 行上：`@contextmenu="openMenuAt(row.id, $event)"` —— 宿主把每个 shell 的 openAt 收进一张表。
-import { ref } from 'vue'
-import AxDropdown from './AxDropdown.vue'
-import AxMenu from './AxMenu.vue'
+// 本组件管：DropdownMenu 浮层 + 行内「⋯」触发器 + 行右键 openAt；
+// 调用方管：菜单里有哪些条目（默认插槽，自己摆 shadcn 的 Item / Sub）。
+// 右键与「⋯」两个入口共用同一个菜单实例与同一份条目，避免两套定位逻辑漂移。
+import { computed, ref, watch } from 'vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{
@@ -33,43 +17,104 @@ const props = withDefaults(
     name: string
     /** 菜单最小宽度 */
     menuWidth?: string
-    /** 触发器的浮层方位（宫格卡片与列表行的可用空间不同，可换） */
+    /** 触发器的浮层方位文字（只用来决定横向对齐：end = 贴右缘） */
     placement?: string
   }>(),
   { menuWidth: '180px', placement: 'bottom-end' },
 )
 
 const open = ref(false)
-/** 浮层实例：行右键唤出时借它的「鼠标点锚点」能力（翻转 / 防溢出 / 互斥 / 关闭规则全照旧） */
-const dropdownRef = ref<{ openAtPoint: (x: number, y: number) => void } | null>(null)
+
+const align = computed<'start' | 'center' | 'end'>(() => {
+  const suffix = props.placement.split('-')[1]
+  return suffix === 'start' || suffix === 'center' ? suffix : 'end'
+})
 
 /**
  * 在鼠标点处打开（行右键用）。
  *
- * 为什么转交 AxDropdown 而不是自己定位一个 div：同一份菜单要能从两个入口打开
- * （「⋯」按钮 / 行右键），位置锚、翻转、防溢出、浮层互斥、点外关闭这些规则只有一套实现，
- * 转交才能保证两个入口行为完全一致（复制一份定位逻辑必然漂移）。
+ * 用 reka 的 **虚拟锚点**（`reference`）表达"鼠标点"，而不是把真实触发器挪过去：
+ * 挪触发器会带来两个真实 bug —— 关闭后坐标残留（下一次点「⋯」仍出现在旧位置）、
+ * 以及 1×1 触发器挡住鼠标下的元素。虚拟锚点只在这次打开期间生效，关闭即失效。
+ *
+ * 右键与「⋯」共用同一个 DropdownMenu 实例与同一份条目，只是锚点来源不同。
  */
+const point = ref<{ x: number; y: number } | null>(null)
+
+/** reka 的 reference 取一个"有尺寸的矩形"：用鼠标点当作左上角，宽高 1px */
+const virtualRef = computed(() => {
+  const p = point.value
+  if (!p) return undefined
+  return {
+    getBoundingClientRect: () => ({
+      x: p.x,
+      y: p.y,
+      left: p.x,
+      top: p.y,
+      right: p.x,
+      bottom: p.y,
+      width: 1,
+      height: 1,
+      toJSON: () => ({}),
+    }),
+  } as unknown as HTMLElement
+})
+
 function openAt(x: number, y: number): void {
-  dropdownRef.value?.openAtPoint(x, y)
+  point.value = { x, y }
+  open.value = true
 }
+
+/** 关闭（任何来源：选条目 / Esc / 点外）都要清掉鼠标点，否则下一次「⋯」会沿用旧坐标 */
+watch(open, (value) => {
+  if (!value) point.value = null
+})
 defineExpose({ openAt })
 </script>
 
 <template>
-  <AxDropdown ref="dropdownRef" v-model="open" :placement="placement" :offset="4" :menu-width="menuWidth">
-    <template #trigger>
-      <!-- 触发器与资产树行尾那颗逐字同款（size-6 / 圆角 lg / hover 才可见）。
-           显隐靠父行的 group/row —— 两棵树的行都已经是这个 class，不额外加开关。 -->
-      <button
-        class="grid size-6 flex-none place-items-center rounded-lg text-ink-dim opacity-0 transition-opacity hover:bg-hover hover:text-ink group-hover/row:opacity-100 focus-visible:opacity-100"
-        :aria-label="'更多操作 ' + name"
-        :aria-expanded="open"
-      ><slot name="trigger"><span class="text-[13px] leading-none">⋯</span></slot></button>
-    </template>
-    <template #default="{ close }">
-      <!-- @click.stop：点在菜单里不该冒泡去触发行自身的点击（比如画布行的「定位」） -->
-      <AxMenu @click.stop><slot :close="close" /></AxMenu>
-    </template>
-  </AxDropdown>
+  <DropdownMenu v-model:open="open" :modal="false">
+    <DropdownMenuTrigger as-child>
+      <span class="rms-trigger" :class="{ 'is-at-point': !!point }">
+        <button
+          class="grid size-6 flex-none place-items-center rounded-lg text-ink-dim opacity-0 transition-opacity hover:bg-hover hover:text-ink group-hover/row:opacity-100 focus-visible:opacity-100"
+          :aria-label="'更多操作 ' + name"
+          :aria-expanded="open"
+        ><slot name="trigger"><span class="text-[13px] leading-none">⋯</span></slot></button>
+      </span>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent
+      :align="align"
+      side="bottom"
+      :side-offset="4"
+      :reference="virtualRef"
+      class="rms-menu"
+      :style="{ minWidth: menuWidth }"
+    >
+      <slot :close="() => (open = false)" />
+    </DropdownMenuContent>
+  </DropdownMenu>
 </template>
+
+<style scoped>
+.rms-trigger { display: inline-flex; }
+/*
+ * 右键入口：菜单用虚拟锚点定位到鼠标点，这里只把原来的⋯触发器临时收成 1×1 藏在
+ * 指针下方，避免它在右键位置闪一下；关闭后恢复成正常按钮（point 已清空）。
+ */
+.rms-trigger.is-at-point {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.rms-menu {
+  padding: 4px;
+  border-radius: var(--mct-radius, 16px);
+  background: var(--ui-overlay-solid, #fff);
+}
+</style>

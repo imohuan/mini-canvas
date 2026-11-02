@@ -38,6 +38,20 @@ import {
   RenderEvents,
   LAYERS,
 } from '@mini-canvas/canvas-render'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { ViewContract } from '@mini-canvas/canvas-base'
 import type { BarAction } from './barTypes'
@@ -72,6 +86,7 @@ import { peekVideoThumb, ensureVideoThumb } from './videoThumbCache'
 import { placeHoverPreview } from './hoverPreviewPlacement'
 import { fitPreviewBox, HOVER_PREVIEW_MAX_SIDE } from './previewBoxSize'
 import { buildTagMenuGroups, buildTagMenuSections, type TagMenuEntry, type TagMenuKind } from './tagMenu'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import {
   loadAiActions,
@@ -126,12 +141,8 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, host, renderEdges, renderNodes } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改
-const Select = useUiComponent('select')
 const ToolParamField = useUiComponent('toolParamField')
 const ToolParamGroup = useUiComponent('toolParamGroup')
-const Tooltip = useUiComponent('tooltip')
-/** 默认主题注册的通用下拉浮层（用户 2026-10-29：替换菜单必须用它，别自绘浮层） */
-const Dropdown = useUiComponent('dropdown')
 
 // 单选才显示（与既有三份面板同语义）
 const visible = useSoleNodeSelected(props.id)
@@ -225,6 +236,11 @@ function iconOfType(type: string | undefined): unknown {
 // —— 当前动作与参数 ——
 const currentId = ref('')
 const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
+
+/** 触发器上显示的当前动作名（reka-ui 的 SelectValue 在浮层未挂载前拿不到选项文本） */
+const currentActionLabel = computed(
+  () => actionOptions.value.find((o) => o.value === currentId.value)?.label ?? '',
+)
 
 
 /**
@@ -1210,7 +1226,7 @@ async function runAiAction(action: AiActionConfig): Promise<void> {
   if (!source.trim()) return
   // 地址取 Agent 插件那份（同源时为空串），模型也由 Agent 的默认渠道决定
   const base = resolveAgentBaseUrl(ctx)
-  // 重试轮数：设置面板「常规/底栏」可调（默认 3；坏值回落 3，aiActions 里兜底）
+  // 重试轮数：设置面板「画布 → 布局 → 控制栏」可调（默认 3；坏值回落 3，aiActions 里兜底）
   const retriesRaw = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')?.get('bottomBarAiRetries')
   const retryRounds = typeof retriesRaw === 'number' && retriesRaw >= 1 ? Math.floor(retriesRaw) : undefined
   aiRunningId.value = action.id
@@ -2671,7 +2687,7 @@ function onGlobalLeave(el: Element): void {
          force-fallback 会在拖拽后给根元素写内联样式，展开切换时残留的 inline 样式把
          行高塌成 2px、按钮点不到 —— 真机踩过）。全屏按钮独立钉在面板右上角。 -->
     <div v-if="!expanded" class="nb-pills">
-      <button
+      <Button variant="ghost" size="sm"
         v-if="!expanded"
         class="nb-pill"
         :class="{ 'is-active': referencing }"
@@ -2682,8 +2698,8 @@ function onGlobalLeave(el: Element): void {
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_PLUS" />
         <span>参考</span>
         <span v-if="cards.length > 0" class="nb-pill-badge">{{ cards.length }}</span>
-      </button>
-      <button
+      </Button>
+      <Button variant="ghost" size="sm"
         v-if="!expanded"
         class="nb-pill"
         type="button"
@@ -2693,12 +2709,12 @@ function onGlobalLeave(el: Element): void {
       >
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>
-      </button>
+      </Button>
       <!--
         「清理失效」（用户 2026-10-29）：唯一会动**提示词**的批量操作。
         只在真有失效卡片时出现；点之前二次确认（删的是用户写下的引用文字）。
       -->
-      <button
+      <Button variant="ghost" size="sm"
         v-if="!expanded && invalidTiles.length > 0"
         class="nb-pill nb-pill--danger"
         type="button"
@@ -2707,11 +2723,11 @@ function onGlobalLeave(el: Element): void {
       >
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>清理失效</span>
-      </button>
+      </Button>
     </div>
 
     <!-- 全屏按钮：钉在面板右上角（不依赖 pills 行） -->
-    <button
+    <Button variant="ghost" size="icon-sm"
       class="nb-expand nb-icon-btn"
       type="button"
       :title="expanded ? '收起为浮动底栏' : '展开为大窗口'"
@@ -2720,7 +2736,7 @@ function onGlobalLeave(el: Element): void {
       @click.stop="expanded = !expanded"
     >
       <span aria-hidden="true" v-html="expanded ? ICON_COLLAPSE : ICON_EXPAND" />
-    </button>
+    </Button>
 
     <!--
       参考素材 = **一行**（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。
@@ -2771,14 +2787,9 @@ function onGlobalLeave(el: Element): void {
         @dragleave.stop="onSlotDragLeave($event)"
         @drop.stop.prevent="onSlotDrop($event, undefined)"
       >
-        <Tooltip
-          :content="cardTooltip(tile)"
-          placement="bottom"
-          :delay="220"
-          :disabled="dragging || !!ctrlDrag"
-          arrow
-          class="nb-card-tip"
-        >
+        <TooltipProvider :delay-duration="220" :disabled="dragging || !!ctrlDrag">
+          <Tooltip>
+            <TooltipTrigger as-child>
         <span class="nb-card-clip">
           <img
             v-if="cardImageOf(tile) && !tile.pending"
@@ -2850,7 +2861,7 @@ function onGlobalLeave(el: Element): void {
         -->
         <span v-if="!tile.pending && !tile.invalid" class="nb-card-actions" aria-hidden="false">
           <!-- 音频：中间播放键（点击播放/停止） -->
-          <button
+          <Button variant="ghost" size="icon-sm"
             v-if="tile.kind === 'audio'"
             class="nb-card-act nb-card-play-act"
             type="button"
@@ -2859,7 +2870,7 @@ function onGlobalLeave(el: Element): void {
             @click.stop="toggleAudioPlay(tile)"
           >
             <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
-          </button>
+          </Button>
           <!--
             右下角 @：把当前标签插进输入框。
             用 pointerdown 触发（用户 2026-10-29 报「点不动」）：
@@ -2867,23 +2878,23 @@ function onGlobalLeave(el: Element): void {
             · 拖拽库（Sortable fallback）也会吞掉紧随其后的 click。
             pointerdown 两者都不受影响，和右上角删除按钮走同一条稳妥路径。
           -->
-          <button
+          <Button variant="ghost" size="icon-sm"
             class="nb-card-act nb-card-at"
             type="button"
             :aria-label="'插入标签 @' + tile.label"
             @pointerdown.stop="onAtPointerDown(tile)"
             @click.stop="onAtClick(tile)"
-          >@</button>
+          >@</Button>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
         <!-- 键盘排序（无障碍 + 自动化可测）：聚焦卡片后 Ctrl+←/→ 移动 -->
-        <button
+        <Button variant="ghost" size="icon-sm"
           v-if="!tile.pending"
           class="nb-card-hit"
           type="button"
           :aria-label="'聚焦节点 ' + tile.label + '（双击）'"
         />
-        <button
+        <Button variant="ghost" size="icon-sm"
           v-if="!tile.pending"
           class="nb-remove"
           type="button"
@@ -2892,8 +2903,11 @@ function onGlobalLeave(el: Element): void {
           @pointerdown.stop.prevent="onRemovePointerDown(tile)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-        </Tooltip>
+        </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{{ cardTooltip(tile) }}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </VueDraggable>
 
@@ -2942,12 +2956,12 @@ function onGlobalLeave(el: Element): void {
           @load="(ev: Event) => onPreviewMediaReady(livePreviewTile!.key, (ev.target as HTMLImageElement).naturalWidth, (ev.target as HTMLImageElement).naturalHeight)"
         />
         <span v-else class="nb-hover-preview-empty">（无预览）</span>
-        <button
+        <Button variant="ghost" size="sm"
           class="nb-hover-preview-open"
           type="button"
           :aria-label="'全屏预览 ' + livePreviewTile.label"
           @click.stop="openFullscreenFromPreview(livePreviewTile)"
-        >全屏</button>
+        >全屏</Button>
       </div>
     </Teleport>
 
@@ -2980,21 +2994,17 @@ function onGlobalLeave(el: Element): void {
         编辑器只发「点了左侧图标」事件，菜单在这里（底栏外部）用主题 Dropdown 展示；
         数据源 = 整个画布，分组 = 已引用 / 图片 / 视频 / 音频 / 文本，带搜索。
       -->
-      <Dropdown
-        v-model="tagMenuOpen"
-        placement="bottom-start"
-        align="start"
-        :offset="6"
-        :teleport="true"
-        body-class="nb-tagmenu-body"
-        :menu-width="tagMenuFlat ? '268px' : '452px'"
-        menu-max-height="420px"
-        :style="tagMenuRootStyle"
-      >
-        <template #trigger>
-          <span ref="tagMenuAnchorEl" class="nb-tagmenu-anchor" aria-hidden="true" />
-        </template>
-        <template #default>
+      <DropdownMenu v-model:open="tagMenuOpen">
+        <DropdownMenuTrigger as-child>
+          <span ref="tagMenuAnchorEl" class="nb-tagmenu-anchor" aria-hidden="true" :style="tagMenuRootStyle" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          side="bottom"
+          :side-offset="6"
+          class="nb-tagmenu-body"
+          :style="{ width: tagMenuFlat ? '268px' : '452px', maxHeight: '420px' }"
+        >
           <label class="nb-tagmenu-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
@@ -3011,7 +3021,7 @@ function onGlobalLeave(el: Element): void {
 
           <!-- 搜索中：平铺命中结果（搜了就直接看结果，不再多一次点类别） -->
           <div v-if="tagMenuFlat" class="nb-tagmenu-list" role="menu" aria-label="搜索结果">
-            <button
+            <Button variant="ghost" size="sm"
               v-for="e in tagMenuFlatItems"
               :key="e.id"
               class="nb-tagmenu-row"
@@ -3030,7 +3040,7 @@ function onGlobalLeave(el: Element): void {
               <svg v-if="e.referenced" class="nb-tagmenu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="m5 12 4 4L19 6" />
               </svg>
-            </button>
+            </Button>
             <div v-if="tagMenuFlatItems.length === 0" class="nb-tagmenu-empty">没有匹配的节点</div>
           </div>
 
@@ -3039,7 +3049,7 @@ function onGlobalLeave(el: Element): void {
             <div class="nb-tagmenu-pane nb-tagmenu-pane--nav" role="menu" aria-label="节点类别">
               <template v-if="tagMenuSections.referenced.length > 0">
                 <div class="nb-tagmenu-group-label">已引用</div>
-                <button
+                <Button variant="ghost" size="sm"
                   v-for="e in tagMenuSections.referenced"
                   :key="e.id"
                   class="nb-tagmenu-row"
@@ -3055,10 +3065,10 @@ function onGlobalLeave(el: Element): void {
                     <img v-if="tagMenuThumbOf(e)" :src="tagMenuThumbOf(e)" alt="" draggable="false" />
                   </span>
                   <span class="nb-tagmenu-name">{{ e.name }}</span>
-                </button>
+                </Button>
               </template>
               <div v-if="tagMenuSections.kinds.length > 0" class="nb-tagmenu-group-label">素材引用</div>
-              <button
+              <Button variant="ghost" size="sm"
                 v-for="k in tagMenuSections.kinds"
                 :key="k.kind"
                 class="nb-tagmenu-row nb-tagmenu-kind"
@@ -3075,10 +3085,10 @@ function onGlobalLeave(el: Element): void {
                   <path d="m9 6 6 6-6 6" />
                 </svg>
                 <span class="nb-tagmenu-count">{{ k.items.length }}</span>
-              </button>
+              </Button>
             </div>
             <div class="nb-tagmenu-pane nb-tagmenu-pane--items" role="menu" :aria-label="'选择节点'">
-              <button
+              <Button variant="ghost" size="sm"
                 v-for="e in tagMenuActiveItems"
                 :key="e.id"
                 class="nb-tagmenu-row"
@@ -3094,12 +3104,12 @@ function onGlobalLeave(el: Element): void {
                   <img v-if="tagMenuThumbOf(e)" :src="tagMenuThumbOf(e)" alt="" draggable="false" />
                 </span>
                 <span class="nb-tagmenu-name">{{ e.name }}</span>
-              </button>
+              </Button>
               <div v-if="tagMenuActiveItems.length === 0" class="nb-tagmenu-empty">画布上没有可用的节点</div>
             </div>
           </div>
-        </template>
-      </Dropdown>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
     <!--
       节点行 hover 预览（用户 2026-10-29 第 3.2 点）：**独立浮层**，Teleport 到 body，
@@ -3143,16 +3153,15 @@ function onGlobalLeave(el: Element): void {
     <div class="nb-bottom">
       <div class="nb-selects">
         <div class="nb-field nb-field--action">
-          <Select
-            :model-value="currentId"
-            :options="actionOptions"
-            :disabled="running"
-            match-width
-            dropdown-min-width="300px"
-            :input-id="'nb-action-' + props.id"
-            title="选择动作 / 模型"
-            @update:model-value="(v: string | number) => selectAction(String(v))"
-          />
+          <Select :model-value="currentId" :disabled="running" @update:model-value="(v) => selectAction(String(v))">
+            <SelectTrigger :id="'nb-action-' + props.id" size="sm" class="nb-action-select"
+              title="选择动作 / 模型" aria-label="选择动作 / 模型">
+              <SelectValue placeholder="选择动作">{{ currentActionLabel }}</SelectValue>
+            </SelectTrigger>
+            <SelectContent position="popper" side="bottom" :side-offset="4" class="nb-action-menu">
+              <SelectItem v-for="o in actionOptions" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <span class="nb-divider" aria-hidden="true" />
         <!-- 比例等参数：**自己一个下拉**（不塞进模型下拉里，也不藏进"设置"面板）。
@@ -3173,7 +3182,7 @@ function onGlobalLeave(el: Element): void {
         <span v-if="infoText" class="nb-info">{{ infoText }}</span>
         <!-- AI 按钮（可配置）：翻译 / 提示词优化等，清单来自云端 KV；
              点击请求后台 AI，流式结果直接写进输入框（历史 500ms 一批落） -->
-        <button
+        <Button variant="ghost" size="icon-sm"
           v-for="ai in aiButtons"
           :key="ai.id"
           class="nb-icon-btn"
@@ -3186,7 +3195,7 @@ function onGlobalLeave(el: Element): void {
         >
           <span v-if="aiRunningId === ai.id" class="nb-ai-spinner" aria-hidden="true" />
           <span v-else aria-hidden="true" v-html="ai.icon" />
-        </button>
+        </Button>
         <span
           v-if="aiError"
           class="nb-ai-error"
@@ -3208,12 +3217,17 @@ function onGlobalLeave(el: Element): void {
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
         <!-- 有失效引用时：发送按钮左边一个警告图标，hover 出 tooltip 说清楚哪一个失效 -->
         <div class="nb-warn">
-          <Tooltip v-if="invalidHint" :content="invalidHint" placement="bottom">
-            <span class="nb-gap-hint" role="button" tabindex="0"><span aria-hidden="true" v-html="ICON_WARN" /></span>
-          </Tooltip>
+          <TooltipProvider v-if="invalidHint" :delay-duration="120">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="nb-gap-hint" role="button" tabindex="0"><span aria-hidden="true" v-html="ICON_WARN" /></span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{{ invalidHint }}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         
-        <button
+        <Button variant="ghost" size="icon-sm"
           class="nb-run"
           :class="{ 'is-running': running }"
           type="button"
@@ -3224,7 +3238,7 @@ function onGlobalLeave(el: Element): void {
         >
           <span v-if="running" class="nb-spinner" aria-hidden="true" />
           <span v-else class="nb-send-icon" aria-hidden="true" v-html="ICON_SEND" />
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -3356,19 +3370,13 @@ function onGlobalLeave(el: Element): void {
   padding: 2px 0 0 2px;
 }
 .nb-pill {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
-  height: 26px;
-  padding: 0 10px;
-  border: 0;
   border-radius: 999px;
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   color: var(--ui-ink, #18202b);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
-  cursor: pointer;
   transition: background-color 0.18s ease-out, color 0.18s ease-out;
 }
 .nb-pill:hover:not(:disabled) {
@@ -3376,24 +3384,22 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-pill--action:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }
 .nb-pill:disabled,
 .nb-pill.is-disabled {
   /* 用户要求：「标记」暂不支持 → 给一个透明度效果 */
   opacity: 0.38;
-  cursor: not-allowed;
 }
 .nb-pill.is-active {
   background: var(--ui-accent, #1f6dff);
-  color: var(--ui-primary-ink, #ffffff);
+  color: var(--ui-on-accent, #fff);
 }
 .nb-pill.is-active:hover:not(:disabled) {
   background: var(--ui-accent, #1f6dff);
 }
 .nb-pill.is-active .nb-pill-badge {
-  background: color-mix(in srgb, var(--ui-primary-ink, #ffffff) 24%, transparent);
-  color: var(--ui-primary-ink, #ffffff);
+  background: color-mix(in srgb, var(--ui-on-accent, #fff) 24%, transparent);
+  color: var(--ui-on-accent, #fff);
 }
 .nb-pill--action.is-active {
   background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
@@ -3433,19 +3439,9 @@ function onGlobalLeave(el: Element): void {
 }
 
 .nb-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
-  /* 32×32 圆角 8：照参考站实测（底行右侧那排图标按钮与它同尺寸） */
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
   border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #6b7280);
-  cursor: pointer;
   transition: background-color 0.18s ease-out, color 0.18s ease-out;
 }
 .nb-icon-btn:hover {
@@ -3461,6 +3457,11 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-icon-btn.is-on {
   background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+}
+
+/* AI 按钮跑动态：与发送键同口径，只补一个提示性转圈，不改底色 */
+.nb-icon-btn.is-running {
   color: var(--ui-accent, #0891b2);
 }
 
@@ -3486,11 +3487,6 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-icon-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
-}
-.nb-icon-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
-  outline-offset: 1px;
 }
 .nb-icon-btn :deep(svg) {
   width: 16px;
@@ -3744,15 +3740,20 @@ function onGlobalLeave(el: Element): void {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
-/* 整张卡的可点区（点开全屏预览）。用**原生 button** 拿键盘可达与 Enter/Space，
-   外观全透明、铺满卡片 —— 卡片自己因此是 div（里面还有关闭按钮，按钮不能套按钮）。 */
+/* 整张卡的可点区（点开全屏预览）。用 Button 的 ghost 档拿键盘可达，
+   尺寸与外观由卡片决定（48×48，全透明铺满）。 */
 .nb-card-hit {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   border-radius: inherit;
   background: transparent;
+  transform: none;
+  box-shadow: none;
   cursor: inherit;
   outline: none;
 }
@@ -3865,22 +3866,19 @@ function onGlobalLeave(el: Element): void {
   top: -7px;
   right: -7px;
   z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
   /**
    * 命中区放大（用户 2026-10-29 报「点不动」）：
    * 视觉仍是 16px 圆点，但用 ::before 把可点范围撑到 24px ——
    * 卡角只有 48px，16px 的圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
    * 放大用伪元素（不占布局），视觉尺寸不变。
    */
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
   background: var(--ui-ink, #18202b);
   color: var(--ui-panel, #fff);
   box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.28));
-  cursor: pointer;
   opacity: 0;
   /* 视觉默认隐藏，但**始终可点**：隐藏态如果连指针都不接，
      鼠标从卡片外靠近时那几像素的缝会落到画布上（真机踩过）。 */
@@ -4036,12 +4034,9 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-card-act {
   position: absolute;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 16px;
   height: 16px;
-  border: 0;
+  padding: 0;
   border-radius: 999px;
   background: var(--ui-scrim, rgb(0 0 0 / 0.55));
   /**
@@ -4055,7 +4050,6 @@ function onGlobalLeave(el: Element): void {
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
-  cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
 }
@@ -4129,8 +4123,6 @@ function onGlobalLeave(el: Element): void {
   position: absolute;
   right: 6px;
   bottom: 6px;
-  padding: 2px 8px;
-  border: 0;
   border-radius: 6px;
   background: var(--ui-scrim, rgb(0 0 0 / 0.55));
   /* 白字固定在深色半透明底上（同 .nb-card-act：--ui-panel 在深色主题下等于糊底） */
@@ -4138,7 +4130,6 @@ function onGlobalLeave(el: Element): void {
   color: var(--ui-tip-ink, #fff);
   font-size: 11px;
   font-weight: 600;
-  cursor: pointer;
 }
 .nb-hover-preview-open:hover {
   background: var(--ui-ink, #18202b);
@@ -4159,7 +4150,7 @@ function onGlobalLeave(el: Element): void {
   height: 100%;
   pointer-events: none;
 }
-/* Dropdown 浮层被 teleport 到 body，scoped 命不中 → 全局类 */
+/* DropdownMenu 浮层被 teleport 到 body，scoped 命不中 → 全局类 */
 :global(.nb-tagmenu-body) {
   padding: 8px;
   border-radius: 16px;
@@ -4294,21 +4285,15 @@ function onGlobalLeave(el: Element): void {
   letter-spacing: 0.04em;
 }
 .nb-tagmenu-row {
-  display: flex;
-  align-items: center;
   gap: 10px;
   width: 100%;
   min-height: 34px;
-  padding: 0 10px;
-  border: 0;
   border-radius: 10px;
   background: transparent;
   color: var(--ui-ink, #18202b);
-  font: inherit;
   font-size: 13px;
   font-weight: 500;
   text-align: left;
-  cursor: pointer;
 }
 .nb-tagmenu-row:hover {
   background: var(--ui-hover, rgb(0 0 0 / 0.06));
@@ -4733,7 +4718,7 @@ function onGlobalLeave(el: Element): void {
   max-width: 200px;
 }
 /* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
-.nb-field :deep(.mck-select) {
+.nb-field :deep([data-slot='select-trigger']) {
   gap: 4px;
   padding: 4px 8px;
   border-color: transparent;
@@ -4741,20 +4726,23 @@ function onGlobalLeave(el: Element): void {
   color: var(--ui-ink-dim, #6b7280);
   font-size: 13px;
   font-weight: 600;
+  width: auto;
+  min-width: 148px;
+  max-width: 200px;
   /* 圆角 8（不是胶囊）：照参考站的模型按钮 */
   border-radius: 8px;
 }
-.nb-field :deep(.mck-select:hover:not(.is-open)) {
+.nb-field :deep([data-slot='select-trigger']:hover:not([data-state='open'])) {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   color: var(--ui-ink, #18202b);
 }
-.nb-field :deep(.mck-select.is-open) {
+.nb-field :deep([data-slot='select-trigger'][data-state='open']) {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   border-color: transparent;
   box-shadow: none;
   color: var(--ui-ink, #18202b);
 }
-.nb-field :deep(.mck-select__arrow) {
+.nb-field :deep([data-slot='select-trigger'] svg) {
   width: 14px;
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);
@@ -4823,17 +4811,13 @@ function onGlobalLeave(el: Element): void {
 
 /* 发送按钮：32×32、圆角 12（照参考站；浅色主题下白底深箭头，由 token 决定） */
 .nb-run {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
+  border-radius: 12px;
   width: 32px;
   height: 32px;
-  border: 0;
-  border-radius: 12px;
+  padding: 0;
   background: var(--ui-primary-bg, #1f2937);
   color: var(--ui-primary-ink, #fff);
-  cursor: pointer;
   transition: background-color 0.18s ease-out, transform 0.15s ease-out;
 }
 .nb-run:hover:not(:disabled) {
@@ -4844,11 +4828,6 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-run:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
-}
-.nb-run:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
-  outline-offset: 2px;
 }
 .nb-send-icon {
   display: inline-flex;

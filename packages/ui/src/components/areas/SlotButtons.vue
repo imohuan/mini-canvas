@@ -6,6 +6,10 @@
  * 而各自抄一遍 class 必然漂移。宿主把本组件经 SlotComposer 的 sharedProps 下发给插件，
  * 插件只传 title / icon / 点击，不再关心尺寸、圆角、hover、暗色。
  *
+ * 提示气泡的 TooltipProvider 由**外层宿主**统一提供（StatusArea / DockArea / LeftDrawer），
+ * 本组件只负责「触发 + 气泡」。一颗按钮一个 provider 会重复开 context，
+ * 而且同一工具栏里的延迟设置应当一致。
+ *
  * 尺寸/配色照 docs/design/ui-style-guide.md §3.3 与现有外壳：
  * - dock   ：32×32 / 圆角 8（底栏图标按钮）
  * - status ：28×28 / 圆角 8（状态条图标按钮）
@@ -13,8 +17,12 @@
  */
 import { computed, type Component } from 'vue'
 // 外壳默认按钮统一用 shadcn 原始 Button；尺寸档位仍由下面的 TONE 覆盖住。
-import { Button } from '@mini-canvas/ui-kit-shadcn'
-import AxTooltip from '../AxTooltip.vue'
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{
@@ -77,26 +85,29 @@ const ICON_CLASS = {
 </script>
 
 <template>
-  <!-- 提示用 AxTooltip：内置按钮那种主题气泡；不再用浏览器原生 title 的小黑框。 -->
-  <AxTooltip :content="title" placement="top" trigger-class="flex-none">
-    <Button
-      variant="ghost"
-      :size="buttonSize"
-      class="inline-flex flex-none items-center justify-center gap-1 text-ink disabled:cursor-not-allowed disabled:opacity-40"
-      :class="[
-        TONE[props.tone],
-        isText ? 'font-medium' : '',
-        props.active ? 'bg-hover-strong' : '',
-      ]"
-      type="button"
-      :aria-label="label"
-      :aria-pressed="pressed"
-      :disabled="disabled"
-      @click="emit('click', $event)"
-    >
-      <span v-if="iconHtml" class="inline-flex shrink-0" :class="ICON_CLASS[props.tone]" aria-hidden="true" v-html="iconHtml" />
-      <component :is="iconComp" v-else-if="iconComp" class="shrink-0" :class="ICON_CLASS[props.tone]" aria-hidden="true" />
-      <span v-if="$slots.default"><slot /></span>
-    </Button>
-  </AxTooltip>
+  <!-- 提示用 shadcn Tooltip：内置按钮那种主题气泡；不再用浏览器原生 title 的小黑框。 -->
+  <Tooltip>
+    <TooltipTrigger as-child>
+      <Button
+        variant="ghost"
+        :size="buttonSize"
+        class="inline-flex flex-none items-center justify-center gap-1 text-ink disabled:cursor-not-allowed disabled:opacity-40"
+        :class="[
+          TONE[props.tone],
+          isText ? 'font-medium' : '',
+          props.active ? 'bg-hover-strong' : '',
+        ]"
+        type="button"
+        :aria-label="label"
+        :aria-pressed="pressed"
+        :disabled="disabled"
+        @click="emit('click', $event)"
+      >
+        <span v-if="iconHtml" class="inline-flex shrink-0" :class="ICON_CLASS[props.tone]" aria-hidden="true" v-html="iconHtml" />
+        <component :is="iconComp" v-else-if="iconComp" class="shrink-0" :class="ICON_CLASS[props.tone]" aria-hidden="true" />
+        <span v-if="$slots.default"><slot /></span>
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent side="top" :side-offset="8">{{ title }}</TooltipContent>
+  </Tooltip>
 </template>

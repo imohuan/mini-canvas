@@ -12,11 +12,19 @@
  * 每套演示保留自己的 id 前缀（demo-kit/gallery、demo-kit/ui-slots…），
  * 卸载插件时内核按归属统一回收，不会留半截浮层。
  */
+import { markRaw } from 'vue'
+import { Palette } from 'lucide-vue-next'
 import type { PluginModule } from '@mini-canvas/canvas-base'
 import { apply as applyGallery } from './gallery'
 import { apply as applyUiSlots } from './ui-slots'
 import { apply as applyShellSlots } from './shell-slots'
 import { apply as applyHotReload } from './hot-reload'
+import ThemeLabNav from './theme-lab/ThemeLabNav.vue'
+import ThemeLabSettingsPage from './theme-lab/ThemeLabSettingsPage.vue'
+import { Config, THEME_LAB_NAV_ID } from './theme-lab/config'
+
+export { Config }
+export { THEME_LAB_NAV_ID }
 
 export const name = 'demo-kit'
 
@@ -33,7 +41,30 @@ export function apply(ctx: Parameters<typeof applyGallery>[0]): void {
   applyUiSlots(ctx as never)
   applyShellSlots(ctx as never)
   applyHotReload(ctx as never)
+
+  // 设置面板：左导航「外观 → 主题工作台」+ 整页正文。
+  // 颜色格来自真实 settings 中已声明的 color 字段，插件没装就没有对应的项。
+  ctx.slots.register('settings.nav', {
+    id: 'demo-kit/theme-lab-nav',
+    order: 6,
+    component: markRaw(ThemeLabNav),
+    // pageGroup：这一整页属于 Config.group「主题工作台」；设置菜单把它挂到
+    // 「外观 → 主题 → 主题工作台」这个二级节，不再长成一个并列的一级入口。
+    meta: {
+      title: THEME_LAB_NAV_ID,
+      category: '外观',
+      icon: Palette,
+      page: markRaw(ThemeLabSettingsPage),
+      pageGroup: THEME_LAB_NAV_ID,
+    },
+  })
+  ctx.slots.register('settingsGroup/' + THEME_LAB_NAV_ID, {
+    id: 'demo-kit/theme-lab-page',
+    order: 6,
+    component: markRaw(ThemeLabSettingsPage),
+    meta: { mode: 'replace' },
+  })
 }
 
-export const demoKitPlugin: PluginModule = { name, inject, apply }
+export const demoKitPlugin: PluginModule = { name, inject, Config, apply }
 export default demoKitPlugin

@@ -4,6 +4,8 @@ import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
 import { pluginLibBuild } from '../vite-plugin-lib'
 
 // plugin-demo-kit —— 四套开发演示合并后的**唯一**产物（UMD），供「插件管理」按需安装。
+// 另带一个独立的主题工作台预览页（`pnpm -C packages/plugins/plugin-demo-kit dev` → /theme-lab.html）：
+// dev 时才挂到 vite 的 root/服务配置上，build 走共享的 UMD 配置，两边互不影响。
 //
 // external / globals 走共享表（../vite-plugin-lib）——唯一事实源，与其它可装卸插件同一份。
 //
@@ -15,8 +17,30 @@ import { pluginLibBuild } from '../vite-plugin-lib'
 // 全局挂到 window 才装得上 —— 而宿主其实把主题当**源码**冷启动装配（packages/ui/src/assembly.ts），
 // 并不存在这个全局，装上去只会「找不到依赖」直接炸。
 // vue / @vue-flow/core / 内核那批仍然 external：它们是块内小画布与展厅共享的真运行时。
-export default defineConfig({
-  plugins: [vue(), cssInjectedByJs()],
-  build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginDemoKit' }),
+export default defineConfig(({ command }) => {
+  if (command === 'serve') {
+    return {
+      plugins: [vue()],
+      server: { port: 5318, strictPort: true, open: false },
+      optimizeDeps: {
+        exclude: [
+          '@mini-canvas/canvas-data',
+          '@mini-canvas/canvas-render',
+          '@mini-canvas/canvas-base',
+          '@mini-canvas/kernel',
+          '@mini-canvas/ui-kit-shadcn',
+          '@mini-canvas/plugin-theme-default',
+          '@mini-canvas/plugin-multi-select',
+          '@mini-canvas/plugin-align-guide',
+          '@mini-canvas/plugin-edge-cutting',
+        ],
+      },
+    }
+  }
+
+  return {
+    plugins: [vue(), cssInjectedByJs()],
+    build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginDemoKit' }),
+  }
 })
 

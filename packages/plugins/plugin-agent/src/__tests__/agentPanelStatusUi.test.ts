@@ -27,7 +27,10 @@ describe('上下文统计行', () => {
   it('hover tooltip 保留（恢复之前的模式：环 + 悬停提示）', () => {
     // 截取到 .ac-send 的**首次**出现（它就在统计块之后）：环与 tooltip 都应在其前
     const toolbar = host.slice(host.indexOf('class="ac-toolbar"'), host.indexOf('class="ac-send"'))
-    expect(toolbar).toContain('ThemedTooltip')
+    // 组件已从主题目录取件改为直接用组件库的 Tooltip（全项目统一 shadcn），
+    // 但「环 + 悬停提示」这个用户可见行为必须仍在。
+    expect(toolbar).toContain('TooltipProvider')
+    expect(toolbar).toContain('TooltipContent')
     expect(toolbar).toContain('上下文剩余 ')
   })
 

@@ -10,6 +10,7 @@
  * 都能 useUiComponent 按名取用；换主题/换实现时一起换。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { formatClock } from "./audioPlayback"
 import AudioWavePlayer from "./AudioWavePlayer.vue"
 
@@ -91,8 +92,10 @@ onBeforeUnmount(() => {
 
     <!-- 预览壳自己的底栏：播放按钮 + 时长 + 大小 + 文件名 -->
     <div class="apv-bar">
-      <button
+      <Button
         class="apv-btn"
+        variant="ghost"
+        size="icon-xs"
         type="button"
         :title="playerPlaying ? '暂停' : '播放'"
         :aria-label="playerPlaying ? '暂停' : '播放'"
@@ -100,7 +103,7 @@ onBeforeUnmount(() => {
       >
         <svg v-if="!playerPlaying" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
         <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-      </button>
+      </Button>
       <span class="apv-time">{{ formatClock(playerCurrent) }} / {{ formatClock(playerDuration) }}</span>
       <span v-if="sizeText" class="apv-size">{{ sizeText }}</span>
       <span v-if="name" class="apv-name" :title="name">{{ name }}</span>
@@ -129,18 +132,13 @@ onBeforeUnmount(() => {
   flex: none;
 }
 .apv-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 0;
   border-radius: 8px;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
   color: var(--ui-ink, inherit);
-  cursor: pointer;
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease;
 }
 .apv-btn:hover {
@@ -148,6 +146,10 @@ onBeforeUnmount(() => {
 }
 .apv-btn:active {
   transform: scale(0.97);
+}
+.apv-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
 }
 .apv-btn svg {
   width: 13px;

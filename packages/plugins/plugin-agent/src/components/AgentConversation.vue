@@ -10,8 +10,8 @@
  *   工具条高 32、间距 3px；发送键 32×32 圆角 12（白底深字）。
  *
  * 两处刻意的设计：
- *  ① 下拉一律用**设计系统目录里登记的 dropdown**（useUiComponent('dropdown')），
- *    不自绘浮层 —— 定位/翻边/出屏收进/互斥/点外关闭都由它统一负责（换主题零改动）。
+ *  ① 下拉一律用 shadcn 的 DropdownMenu 分离件，不自绘浮层 ——
+ *    定位/翻边/出屏收进/点外关闭都由 reka-ui 统一负责。
  *  ② 技能 / MCP / 节点是**输入框内联标签**：点下拉里的一项 = 往正文插一个标记 chip，
  *    引用了谁由正文里的标记决定 —— 删掉 chip 引用即失效，不再切开关。
  */
@@ -30,10 +30,17 @@ import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
 // 输入框工具行与发送键使用 shadcn 原始 Button；两个下拉的**内容 UI 不改**，只换触发按钮。
 import {
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@mini-canvas/ui-kit-shadcn'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
@@ -128,10 +135,6 @@ const contextArcOffset = computed(() => {
   return CONTEXT_CIRCUMFERENCE * (Math.min(100, Math.max(0, left)) / 100)
 })
 
-/** 设计系统件按名取（主题目录）：换主题时这里一行不改 */
-const ThemedDropdown = useUiComponent('dropdown')
-/** 悬浮提示也走主题目录（与 dropdown 同一套做法）—— 提示气泡的观感随主题一起换 */
-const ThemedTooltip = useUiComponent('tooltip')
 /** 全屏媒体查看器也走主题目录（用户消息图片 / 待发送图片点开看大图） */
 const MediaViewer = useUiComponent('mediaViewer')
 
@@ -2052,17 +2055,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
       <strong>连不上后台</strong>
       <p>{{ s.error || '请确认 cloud-server 已经启动。' }}</p>
       <p class="ac-onboard-path">{{ s.baseUrl || '同源（当前页面所在地址）' }}</p>
-      <button class="ac-btn" @click="agent.refresh()">重试连接</button>
+      <Button size="sm" @click="agent.refresh()">重试连接</Button>
     </div>
 
     <!-- ③ 消息流 -->
     <div v-else class="ac-scroll-wrap">
       <!-- 「回到底部」（用户口径 2026-10-09）：放在**消息区内部、底部居中**。
          有滚动条且未滚到底时才出现（原语义不变）。 -->
-      <button v-if="showScrollToBottom" class="ac-to-bottom" aria-label="回到底部" title="回到底部"
+      <Button v-if="showScrollToBottom" variant="ghost" size="icon-sm" class="ac-to-bottom" aria-label="回到底部" title="回到底部"
         @click="smoothScrollToBottom()">
         <ChevronDown :size="16" />
-      </button>
+      </Button>
       <div ref="scroller" class="ac-scroll" role="log" aria-live="polite">
         <!-- 稳定的**内容容器**：空态与消息流都在它里面。
            为什么必须有一层稳定的壳：ResizeObserver 只能盯住一个具体的 DOM 节点，
@@ -2084,18 +2087,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <div v-if="!s.turns.length" class="ac-welcome">
             <div v-if="!hintDismissed" class="ac-hint-card">
               <p class="ac-hint-text"><strong>我能帮你做很多事</strong>，比如回答问题、写文章、编剧本、生成图片/视频/音频…</p>
-              <button class="ac-hint-close" aria-label="我知道了" @click="dismissHint">
+              <Button variant="ghost" size="icon-sm" class="ac-hint-close" aria-label="我知道了" @click="dismissHint">
                 <X :size="13" />
-              </button>
+              </Button>
             </div>
             <div class="ac-welcome-orb"></div>
             <p class="ac-welcome-title">让 Agent 辅助你的无限创意</p>
             <div class="ac-suggestions">
-              <button v-for="g in SUGGESTIONS" :key="g.text" class="ac-suggestion" @click="useSuggestion(g.text)">
+              <Button v-for="g in SUGGESTIONS" :key="g.text" variant="ghost" size="sm" class="ac-suggestion" @click="useSuggestion(g.text)">
                 <component :is="g.icon" :size="15" />
                 <span>{{ g.text }}</span>
                 <ChevronRight :size="14" class="ac-suggestion-arrow" />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -2123,8 +2126,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </div>
               <pre class="ac-approval-args">{{ t.approval?.arguments }}</pre>
               <div class="ac-approval-actions">
-                <button class="ac-btn ac-btn-primary" @click="agent.decide(t.approval!.id, 'allow')">允许</button>
-                <button class="ac-btn" @click="agent.decide(t.approval!.id, 'deny')">拒绝</button>
+                <Button size="sm" @click="agent.decide(t.approval!.id, 'allow')">允许</Button>
+                <Button variant="ghost" size="sm" @click="agent.decide(t.approval!.id, 'deny')">拒绝</Button>
               </div>
             </div>
 
@@ -2141,9 +2144,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
                   <!-- 原位思考折叠行：这一段思考发生在它所处的位置（用户口径 2026-10-16） -->
                   <div v-else-if="row.type === 'thinking' && row.text" class="ac-think-inline">
-                    <button class="ac-think-toggle" @click="toggleThinking(t.id + ':' + row.key)">
+                    <Button variant="ghost" size="xs" class="ac-think-toggle" @click="toggleThinking(t.id + ':' + row.key)">
                       <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id + ':' + row.key] }" />思考过程
-                    </button>
+                    </Button>
                     <pre v-if="openThinking[t.id + ':' + row.key]" class="ac-think">{{ row.text }}</pre>
                   </div>
 
@@ -2167,14 +2170,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   <!-- 默认工具（通用）：折叠行 —— 收起 = 箭头 + 名字 + 摘要；展开 = 输入/输出 -->
                   <template v-else-if="row.type === 'tools' && row.tools.length === 1">
                     <div class="ac-tool-fold">
-                      <button class="ac-tf-toggle" :aria-expanded="!!openTools[row.tools[0].id]"
+                      <Button variant="ghost" size="sm" class="ac-tf-toggle" :aria-expanded="!!openTools[row.tools[0].id]"
                         @click="toggleTool(row.tools[0].id)">
                         <ChevronRight :size="13" class="ac-tf-caret"
                           :class="{ 'is-open': openTools[row.tools[0].id] }" />
                         <code>{{ row.tools[0].name }}</code>
                         <span v-if="toolRowSummary(row.tools[0])" class="ac-tf-summary">{{ toolRowSummary(row.tools[0])
                           }}</span>
-                      </button>
+                      </Button>
                       <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
                         <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
                           :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
@@ -2184,11 +2187,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
                   <!-- 多个工具：折成一组（用户口径：中间没有文字的工具要合并），标题点开看逐个明细 -->
                   <div v-else-if="row.type === 'tools'" class="ac-tool-group">
-                    <button class="ac-tg-toggle" :aria-expanded="!!openToolGroups[row.key]"
+                    <Button variant="ghost" size="sm" class="ac-tg-toggle" :aria-expanded="!!openToolGroups[row.key]"
                       @click="toggleToolGroup(row.key)">
                       <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openToolGroups[row.key] }" />
                       {{ toolGroupTitle(row.tools) }}
-                    </button>
+                    </Button>
                     <div v-if="openToolGroups[row.key]" class="ac-tg-body">
                       <div v-for="tool in row.tools" :key="tool.id"
                         :class="hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'">
@@ -2202,12 +2205,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             :name="tool.name" @preview="previewToolMedia" />
                         </template>
                         <template v-else>
-                          <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
+                          <Button variant="ghost" size="sm" class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
                             @click="toggleTool(tool.id)">
                             <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
                             <code>{{ tool.name }}</code>
                             <span v-if="toolRowSummary(tool)" class="ac-tf-summary">{{ toolRowSummary(tool) }}</span>
-                          </button>
+                          </Button>
                           <div v-if="openTools[tool.id]" class="ac-tf-body">
                             <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
                               :name="tool.name" @preview="previewToolMedia" />
@@ -2241,27 +2244,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <span v-else class="ac-user-text">{{ seg.value }}</span>
                     </template>
                   </p>
-                  <button v-if="overflowingUser[t.id]" class="ac-user-toggle"
+                  <Button v-if="overflowingUser[t.id]" variant="ghost" size="xs" class="ac-user-toggle"
                     :aria-expanded="!!openUserBubbles[t.id]" aria-label="展开完整消息"
                     :title="openUserBubbles[t.id] ? '收起' : '展开'" @click="toggleUserBubble(t.id)">
                     {{ openUserBubbles[t.id] ? '收起' : '展开' }}
                     <ChevronDown v-if="!openUserBubbles[t.id]" :size="13" />
                     <ChevronUp v-else :size="13" />
-                  </button>
+                  </Button>
                 </template>
                 <!-- 用户消息带的图：按原比例排一行缩略图，点开看大图 -->
                 <div v-if="t.kind === 'user' && t.images?.length" class="ac-user-images">
-                  <button v-for="(src, ii) in t.images" :key="ii" class="ac-user-image" :aria-label="'查看图片 ' + (ii + 1)"
+                  <Button v-for="(src, ii) in t.images" :key="ii" variant="ghost" size="icon-sm" class="ac-user-image" :aria-label="'查看图片 ' + (ii + 1)"
                     @click="openPreview(src, t.images)">
                     <img :src="src" alt="" />
-                  </button>
+                  </Button>
                 </div>
                 <!-- 「正在编辑」徽标（用户口径 2026-10-06：语义是正在编辑，不是已编辑；带高亮） -->
                 <span v-if="t.editing" class="ac-editing-badge" role="status">
                   <Pencil :size="12" />正在编辑
-                  <button class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
+                  <Button variant="ghost" size="icon-sm" class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
                     <X :size="12" />
-                  </button>
+                  </Button>
                 </span>
                 <!-- 助手消息才走 Markdown。
                  这里**必须**是独立的 v-if，不能接在用户那条的 v-else-if 链上：
@@ -2295,34 +2298,34 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
               <div v-if="t.kind === 'user'" class="ac-msg-actions">
                 <span class="ac-msg-time" :title="msgTimeTitle(t.ts)">{{ msgTimeText(t.ts) }}</span>
-                <button class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
+                <Button variant="ghost" size="icon-sm" class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
                   @click="copyMessage(t.text, t.id)">
                   <CircleCheck v-if="copied[t.id]" :size="13" class="is-ok" />
                   <Copy v-else :size="13" />
-                </button>
-                <button class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
+                </Button>
+                <Button variant="ghost" size="icon-sm" class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
                   <Pencil :size="13" />
-                </button>
+                </Button>
               </div>
             </div>
             <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
              回复块结束处（下一条用户消息之前）。左右箭头切的是**这个位置**的其它版本，
              切过去后不含当前版本后来的消息。 -->
             <div v-if="pagerByAnchor.get(t.id)" class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
-              <button class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0" aria-label="上一个版本"
+              <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0" aria-label="上一个版本"
                 title="上一个版本"
                 @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
                 <ChevronLeft :size="14" />
-              </button>
+              </Button>
               <span class="ac-branch-pos" :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
                 {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
               </span>
-              <button class="ac-branch-arrow"
+              <Button variant="ghost" size="icon-sm" class="ac-branch-arrow"
                 :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1" aria-label="下一个版本"
                 title="下一个版本"
                 @click="pagerTarget(pagerByAnchor.get(t.id)!, 1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, 1)!)">
                 <ChevronRight :size="14" />
-              </button>
+              </Button>
             </div>
           </template>
           <!-- 压缩进度 / 结果（用户口径 2026-10-11）：压缩要跑一次模型，几十秒内必须有回音。
@@ -2334,9 +2337,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <div v-else-if="s.compactNotice" class="ac-compact-note" role="status">
             <Minimize2 :size="14" />
             <span>{{ s.compactNotice }}</span>
-            <button class="ac-note-x" aria-label="知道了" @click="s.compactNotice = ''">
+            <Button variant="ghost" size="icon-sm" class="ac-note-x" aria-label="知道了" @click="s.compactNotice = ''">
               <X :size="12" />
-            </button>
+            </Button>
           </div>
           <!-- 常驻错误条（用户口径 2026-10-11 的问题 2）：这一轮失败时**必须**看得见。
            为什么要一条独立的条：错误以前只挂在"最后一条助手消息"上 —— 出错时若那条
@@ -2345,9 +2348,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <div v-if="s.lastError && !hasInlineError" class="ac-error-bar" role="alert">
             <AlertCircle :size="14" class="ac-error-bar-icon" />
             <span class="ac-error-bar-text">{{ s.lastError }}</span>
-            <button class="ac-note-x" aria-label="关闭错误提示" @click="s.lastError = ''">
+            <Button variant="ghost" size="icon-sm" class="ac-note-x" aria-label="关闭错误提示" @click="s.lastError = ''">
               <X :size="12" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -2359,10 +2362,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
       <div v-if="showNotifyTip" class="ac-notify" role="status">
         <BellRing :size="14" class="ac-notify-icon" />
         <span class="ac-notify-text">开启浏览器通知，及时获取最新消息</span>
-        <button class="ac-notify-btn" @click="enableNotify">开启</button>
-        <button class="ac-notify-close" aria-label="不再提示" @click="notifyDismissed = true">
+        <Button variant="ghost" size="sm" class="ac-notify-btn" @click="enableNotify">开启</Button>
+        <Button variant="ghost" size="icon-sm" class="ac-notify-close" aria-label="不再提示" @click="notifyDismissed = true">
           <X :size="13" />
-        </button>
+        </Button>
       </div>
       <!-- 排队列表（设计 §3.6.1）：**紧贴**输入框上缘、宽 80%、靠左；右侧 36px 一列放
            暂停 / 启动按钮（G9）。
@@ -2437,39 +2440,38 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
             <span class="ac-queue-actions">
               <!-- 编辑中：这一条是"停住队列"的那条，行上给一个取消编辑（状态回 queued） -->
-              <button v-if="row.editing" class="ac-queue-btn" aria-label="取消编辑这条排队消息" title="取消编辑"
+              <Button v-if="row.editing" variant="ghost" size="icon-sm" class="ac-queue-btn" aria-label="取消编辑这条排队消息" title="取消编辑"
                 @click="cancelEditQueue(row.id)">
                 <X :size="12" />
-              </button>
+              </Button>
               <!-- 引导 ↳：跑着时 = 插队（插进当前轮的下一次请求）；没跑时后端直接当一次发送 -->
-              <button v-else class="ac-queue-btn" aria-label="引导（插队发送）" title="引导：插到当前这一轮的下一次请求"
+              <Button v-else variant="ghost" size="icon-sm" class="ac-queue-btn" aria-label="引导（插队发送）" title="引导：插到当前这一轮的下一次请求"
                 @click="steerItem(row.id)">
                 <CornerUpRight :size="12" />
-              </button>
-              <button class="ac-queue-btn is-danger" aria-label="删除这条排队消息" title="删除" @click="removeItem(row.id)">
+              </Button>
+              <Button variant="ghost" size="icon-sm" class="ac-queue-btn is-danger" aria-label="删除这条排队消息" title="删除" @click="removeItem(row.id)">
                 <Trash2 :size="12" />
-              </button>
+              </Button>
               <!-- ⋯ 只有两项：编辑消息 / 关闭排队（设计 §3.6.2），用目录里的 dropdown -->
-              <ThemedDropdown placement="top-end" :offset="6" menu-width="180px" :model-value="rowMenuId === row.id"
-                @update:model-value="(v: boolean) => (rowMenuId = v ? row.id : null)">
-                <template #trigger>
-                  <button class="ac-queue-btn" :aria-expanded="rowMenuId === row.id" aria-label="更多操作">
-                    <MoreHorizontal :size="12" />
-                  </button>
-                </template>
-                <template #default="{ close }">
-                  <div class="ac-ddmenu" role="menu" aria-label="排队消息操作">
-                    <button class="ac-menu-item" role="menuitem" @click="beginEditQueue(row.id); close()">
-                      <span class="ac-menu-name">编辑消息</span>
-                      <span class="ac-menu-hint">改完发送，位置不变</span>
-                    </button>
-                    <button class="ac-menu-item" role="menuitem" @click="closeItem(row.id); close()">
-                      <span class="ac-menu-name">关闭排队</span>
-                      <span class="ac-menu-hint">内容回到输入框，不再自动发</span>
-                    </button>
-                  </div>
-                </template>
-              </ThemedDropdown>
+                <DropdownMenu :open="rowMenuId === row.id" @update:open="(v: boolean) => (rowMenuId = v ? row.id : null)">
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon-sm" class="ac-queue-btn" :aria-expanded="rowMenuId === row.id" aria-label="更多操作">
+                      <MoreHorizontal :size="12" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" side="top" :side-offset="6" class="ac-ddmenu" :style="{ minWidth: '180px' }">
+                    <div class="ac-ddmenu" role="menu" aria-label="排队消息操作">
+                      <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="beginEditQueue(row.id); rowMenuId = null">
+                        <span class="ac-menu-name">编辑消息</span>
+                        <span class="ac-menu-hint">改完发送，位置不变</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="closeItem(row.id); rowMenuId = null">
+                        <span class="ac-menu-name">关闭排队</span>
+                        <span class="ac-menu-hint">内容回到输入框，不再自动发</span>
+                      </Button>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
             </span>
           </div>
           </VueDraggable>
@@ -2479,13 +2481,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             <!-- 左侧图标：hover 时从「目标」变成「编辑」（用户口径 2026-10-09），点它进入编辑 -->
             <!-- 真完成的目标**不需要编辑**（用户口径 2026-10-09）：那时只画一个纯图标、不可点。
                    注意判据是 goalRow.finished（不是 ended）—— 「被中止」仍可编辑/可续跑。 -->
-            <button v-if="!goalRow.finished" class="ac-pending-lead ac-goal-lead" type="button"
+            <Button v-if="!goalRow.finished" variant="ghost" size="icon-sm" class="ac-pending-lead ac-goal-lead" type="button"
               :aria-label="editingGoal ? '正在编辑目标' : '编辑目标'" :title="editingGoal ? '正在编辑目标' : '编辑目标'"
               :class="{ 'is-editing': editingGoal }" @click="startEditGoalRow()">
               <!-- 图标尺寸与队列行的 lead 完全一致（14×14，内联 SVG）—— 两行左列才对得齐 -->
               <Target :size="14" class="ac-goal-lead-target" />
               <Pencil :size="14" class="ac-goal-lead-edit" />
-            </button>
+            </Button>
             <span v-else class="ac-pending-lead" aria-hidden="true">
               <Target :size="14" />
             </span>
@@ -2529,14 +2531,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </span>
             <!-- 暂停 / 播放：**只要目标没真完成就给**（用户口径 2026-10-11）。
                    被中止（aborted）不是完成 —— 那时必须还能点播放接着跑。 -->
-            <button v-if="!goalRow.finished" class="ac-goal-btn" :aria-label="s.goalPaused ? '启动目标' : '暂停目标'"
+            <Button v-if="!goalRow.finished" variant="ghost" size="icon-xs" class="ac-goal-btn" :aria-label="s.goalPaused ? '启动目标' : '暂停目标'"
               :title="s.goalPaused ? '启动目标' : '暂停目标'" @click="s.goalPaused ? agent.resumeGoal() : agent.pauseGoal()">
               <Play v-if="s.goalPaused" :size="12" />
               <Pause v-else :size="12" />
-            </button>
-            <button class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）" @click="agent.endGoal()">
+            </Button>
+            <Button variant="ghost" size="icon-xs" class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）" @click="agent.endGoal()">
               <X :size="12" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -2545,13 +2547,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
              位置口径与参考 HTML 一致 —— 挂在 **composer** 里（不是容器里）：容器要 overflow:hidden
              才能把内部方角按外层圆角裁掉；按钮若放进容器会被一起裁掉半个。 -->
         <!-- 显示条件（用户口径 2026-10-15）：过滤掉「发送中」后还有排着的（或已暂停要恢复）才给 -->
-        <button v-if="queue.pauseVisible" class="ac-queue-pause" :class="{ 'is-paused': queue.paused }"
+        <Button v-if="queue.pauseVisible" variant="ghost" size="xs" class="ac-queue-pause" :class="{ 'is-paused': queue.paused }"
           :aria-label="queue.paused ? '恢复队列' : '暂停队列自动发送'" :title="queue.pauseTitle" @click="toggleQueuePause()">
           <Play v-if="queue.paused" :size="12" />
           <Pause v-else :size="12" />
           <span>{{ queue.paused ? '队列恢复' : '队列暂停' }}</span>
           <span class="ac-queue-pause-cnt">{{ queue.pendingCount }}</span>
-        </button>
+        </Button>
         <!-- 未发送的目标：**输入框内侧顶部**（用户口径 2026-10-09）。
              标签只写「目标」二字（目标正文就是下面输入框里的内容，不重复）；
              预算行内可编辑（下划线 = CSS text-decoration）；口径开关与取消在右侧。 -->
@@ -2568,9 +2570,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(goalMark?.budget, tokenUnit) }}</span>
           </span>
           <span class="ac-tb-spacer"></span>
-          <button class="ac-goal-btn" aria-label="取消目标（这条按普通消息发）" title="取消目标" @click="clearGoalMark()">
+          <Button variant="ghost" size="icon-xs" class="ac-goal-btn" aria-label="取消目标（这条按普通消息发）" title="取消目标" @click="clearGoalMark()">
             <X :size="12" />
-          </button>
+          </Button>
         </div>
         <!-- 「正在编辑」联动标记：**输入框内部最上一行**（用户口径 2026-10-06 参考图箭头位），
              点它滚回那条消息、✕ 取消 —— 与消息上的徽标互为呼应 -->
@@ -2578,21 +2580,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                谁在编辑就说谁；三者互斥，所以这里最多出现一条。 -->
         <div v-if="editingKind" class="ac-editing-mark" role="status">
           <Pencil :size="12" />
-          <button class="ac-editing-mark-btn" :aria-label="editingKindText" @click="scrollToEditing">{{ editingKindText
-            }}</button>
+          <Button variant="ghost" size="xs" class="ac-editing-mark-btn" :aria-label="editingKindText" @click="scrollToEditing">{{ editingKindText
+            }}</Button>
           <span class="ac-editing-mark-spacer"></span>
-          <button class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing">
+          <Button variant="ghost" size="icon-sm" class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing">
             <X :size="12" />
-          </button>
+          </Button>
         </div>
         <!-- 待发送的图片：贴在输入框上方，可单张移除；点图本体看全屏预览 -->
         <div v-if="attached.length" class="ac-attach-list">
           <div v-for="(src, i) in attached" :key="i" class="ac-attach">
             <img :src="src" alt="" role="button" :aria-label="'查看图片 ' + (i + 1)" style="cursor: zoom-in"
               @click="openPreview(src, attached)" />
-            <button class="ac-attach-del" :aria-label="'移除图片 ' + (i + 1)" @click="removeAttachment(i)">
+            <Button variant="ghost" size="icon-sm" class="ac-attach-del" :aria-label="'移除图片 ' + (i + 1)" @click="removeAttachment(i)">
               <X :size="12" />
-            </button>
+            </Button>
           </div>
         </div>
         <div class="ac-editor">
@@ -2605,15 +2607,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- 「+」两项菜单（设计 §3.6.4 / G12）：**目标** / **上传文件**。
                点「目标」直接在输入框上方加标签（预算用全局设置里的默认值），**不弹框**；
                只有点那个标签本身才弹目标编辑框。 -->
-          <ThemedDropdown v-model="plusOpen" placement="top-start" :offset="8" menu-width="210px" menu-role="menu">
-            <template #trigger>
+          <DropdownMenu v-model:open="plusOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加">
                 <Plus :size="17" class="size-[17px]" />
               </Button>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" :side-offset="8" class="ac-ddmenu" :style="{ minWidth: '210px' }">
               <div class="ac-ddmenu" role="menu" aria-label="添加">
-                <button class="ac-menu-item" role="menuitem" @click="addGoalMark(); close()">
+                <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="addGoalMark(); plusOpen = false">
                   <span class="ac-menu-title-row">
                     <span class="ac-menu-icon">
                       <Target :size="14" />
@@ -2621,8 +2623,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     <span class="ac-menu-name">目标</span>
                   </span>
                   <span class="ac-menu-hint">给这条消息挂一个目标（可改预算）</span>
-                </button>
-                <button class="ac-menu-item" role="menuitem" @click="pickImages(); close()">
+                </Button>
+                <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="pickImages(); plusOpen = false">
                   <span class="ac-menu-title-row">
                     <span class="ac-menu-icon">
                       <Upload :size="14" />
@@ -2630,12 +2632,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     <span class="ac-menu-name">上传文件</span>
                   </span>
                   <span class="ac-menu-hint">选图片，跟这条消息一起发</span>
-                </button>
+                </Button>
                 <!-- 「压缩」（用户口径 2026-10-11）：把历史总结成摘要、腾出上下文。
                      与 @ 菜单里的那一项走同一条命令（agent.compact）—— 两个入口，
                      一处实现，行为只会一起改。压缩只对**已有对话**有意义：
                      没会话时后端会如实拒绝（不装作成功）。 -->
-                <button class="ac-menu-item" role="menuitem" :disabled="s.compacting" @click="compactNow(); close()">
+                <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" :disabled="s.compacting" @click="compactNow(); plusOpen = false">
                   <span class="ac-menu-title-row">
                     <span class="ac-menu-icon">
                       <Minimize2 :size="14" />
@@ -2643,33 +2645,33 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     <span class="ac-menu-name">压缩</span>
                   </span>
                   <span class="ac-menu-hint">{{ s.compacting ? '正在压缩…' : '把历史总结成摘要，腾出上下文空间' }}</span>
-                </button>
+                </Button>
               </div>
-            </template>
-          </ThemedDropdown>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <input ref="fileInput" class="ac-file" type="file" accept="image/*" multiple aria-hidden="true" tabindex="-1"
             @change="onFilesPicked" />
 
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
-          <ThemedDropdown v-model="modeOpen" placement="top-start" :offset="8" menu-width="220px" menu-role="listbox">
-            <template #trigger>
+          <DropdownMenu v-model:open="modeOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="sm" class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
                 <span class="ac-pill-text">{{ modeLabel }}</span>
                 <ChevronDown :size="13" class="ac-pill-caret" />
               </Button>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" :side-offset="8" class="ac-ddmenu" :style="{ minWidth: '220px' }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择创作模式">
-                <button v-for="m in promptPresets" :key="m.id" class="ac-menu-item" role="option"
-                  :aria-selected="s.activePromptId === m.id" @click="pickMode(m.id, close)">
+                <Button v-for="m in promptPresets" :key="m.id" variant="ghost" size="sm" class="ac-menu-item" role="option"
+                  :aria-selected="s.activePromptId === m.id" @click="pickMode(m.id, () => (modeOpen = false))">
                   <span class="ac-menu-name">{{ m.name }}</span>
                   <span class="ac-menu-hint">{{ m.builtin ? '内置提示词' : '自建提示词' }}</span>
-                </button>
+                </Button>
                 <!-- 一套都没拉到（后端没起 / 还在加载）：别给空菜单 -->
                 <p v-if="!promptPresets.length" class="ac-menu-empty">还没有提示词，去「设置 → Agent → 提示词」加一个</p>
               </div>
-            </template>
-          </ThemedDropdown>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <!-- 授权方式：接受审核 / 完全自动授权（与设置→Agent→审批规则 是同一个开关）。
                布局照 docs/demo/agent-select-panels 的「审核」面板：标题 + 计数 + 右侧状态小标签，
@@ -2677,14 +2679,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- placement=top-end：菜单右缘对按钮右缘（向左铺开）。
                箭头不看 align、只看触发器中心（AxDropdown 里夹进菜单范围），
                所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
-          <ThemedDropdown v-model="authOpen" placement="top-end" :offset="8" menu-width="360px" menu-role="listbox">
-            <template #trigger>
+          <DropdownMenu v-model:open="authOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
                 <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
               </Button>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu" :style="{ width: '360px' }">
               <div class="ac-ddmenu ac-review-panel" role="listbox" aria-label="选择授权方式">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top ac-panel-head-top--review">
@@ -2698,8 +2700,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 </div>
                 <div class="ac-review-body">
                   <div class="ac-review-list" role="radiogroup" aria-label="审核模式">
-                    <button v-for="m in AUTH_MODES" :key="m.value" class="ac-review-option" :class="{ 'is-auto': m.value === 'auto' }"
-                      type="button" role="radio" :aria-checked="authMode === m.value" @click="setAuthMode(m.value); close()">
+                    <Button v-for="m in AUTH_MODES" :key="m.value" variant="ghost" size="sm" class="ac-review-option" :class="{ 'is-auto': m.value === 'auto' }"
+                      type="button" role="radio" :aria-checked="authMode === m.value" @click="setAuthMode(m.value); authOpen = false">
                       <span class="ac-option-icon">
                         <component :is="m.icon" :size="16" />
                       </span>
@@ -2711,24 +2713,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                         <span class="ac-option-desc">{{ m.hint }}</span>
                       </span>
                       <span class="ac-radio" aria-hidden="true"><Check :size="11" /></span>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
-            </template>
-          </ThemedDropdown>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
-          <ThemedDropdown v-model="modelOpen" placement="top-end" :offset="8"
-            :menu-width="modelView === 'split' ? '586px' : '320px'"
-            menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
-            <template #trigger>
+          <DropdownMenu v-model:open="modelOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
                 <Box :size="16" class="size-4" />
               </Button>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu"
+              :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen, 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -2759,14 +2760,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       </Button>
                       <div class="ac-segment" role="group" aria-label="面板布局">
                         <span class="ac-segment-indicator" :class="'is-' + modelView" aria-hidden="true"></span>
-                        <button class="ac-segment-btn" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
+                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
                           <span class="ac-segment-icon" v-html="ICON_VIEW_GRID"></span>
                           <span class="ac-segment-label">卡片</span>
-                        </button>
-                        <button class="ac-segment-btn" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
+                        </Button>
+                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
                           <span class="ac-segment-icon" v-html="ICON_VIEW_SPLIT"></span>
                           <span class="ac-segment-label">分栏</span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -2778,8 +2779,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   <div class="ac-panel-body ac-panel-scroll">
                   <div v-if="modelView === 'card'">
                     <div v-if="filteredModels.length" class="ac-model-grid">
-                      <button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" class="ac-model-card"
-                        role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, close)">
+                      <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-card"
+                        role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
                         <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
                         <span class="ac-model-copy">
                           <span class="ac-model-card-top">
@@ -2793,7 +2794,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             <span>{{ modelNote(m) }}</span>
                           </span>
                         </span>
-                      </button>
+                      </Button>
                     </div>
                     <div v-else class="ac-empty-state">
                       <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -2805,20 +2806,20 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     <aside class="ac-split-rail" aria-label="模型平台">
                       <div class="ac-rail-label">平台</div>
                       <div class="ac-rail-scroll">
-                        <button v-for="g in modelPlatformGroups" :key="g.key" class="ac-rail-item"
+                        <Button v-for="g in modelPlatformGroups" :key="g.key" variant="ghost" size="sm" class="ac-rail-item"
                           :aria-pressed="modelPlatform === g.key" @click="modelPlatform = g.key">
                           <span v-if="g.key === 'all'" class="ac-rail-icon" aria-hidden="true"><Layers :size="14" /></span>
                           <span v-else class="ac-rail-brand" :title="g.label" aria-hidden="true" v-html="brandSvg(g.key)"></span>
                           <span class="ac-rail-name">{{ g.label }}</span>
                           <span class="ac-rail-count">{{ g.count }}</span>
-                        </button>
+                        </Button>
                       </div>
                     </aside>
                     <div class="ac-split-main">
                       <div class="ac-split-scroll">
                       <div v-if="filteredModels.length" class="ac-model-row-list">
-                        <button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" class="ac-model-row"
-                          role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, close)">
+                        <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-row"
+                          role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
                           <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
                           <span class="ac-model-copy">
                             <span class="ac-model-id">{{ m.modelId }}</span>
@@ -2832,7 +2833,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
                           </span>
                           <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
-                        </button>
+                        </Button>
                       </div>
                       <div v-else class="ac-empty-state">
                         <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -2848,21 +2849,20 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   <span class="ac-selection-summary">{{ s.model ? '已选 1 个模型' : '未选择模型' }}</span>
                 </div>
               </div>
-            </template>
-          </ThemedDropdown>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
-          <ThemedDropdown v-if="s.skills.length" v-model="skillOpen" placement="top-end" :offset="8"
-            :menu-width="skillView === 'split' ? '586px' : '320px'" menu-max-width="600px"
-            menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
-            <template #trigger>
+          <DropdownMenu v-if="s.skills.length" v-model:open="skillOpen">
+            <DropdownMenuTrigger as-child>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
               <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能">
                 <WandSparkles :size="16" class="size-4" />
               </Button>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu"
+              :style="{ width: skillView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-split': skillView === 'split' }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">
@@ -2891,14 +2891,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       </Button>
                       <div class="ac-segment" role="group" aria-label="面板布局">
                         <span class="ac-segment-indicator" :class="'is-' + skillView" aria-hidden="true"></span>
-                        <button class="ac-segment-btn" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
+                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
                           <span class="ac-segment-icon" v-html="ICON_VIEW_GRID"></span>
                           <span class="ac-segment-label">卡片</span>
-                        </button>
-                        <button class="ac-segment-btn" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
+                        </Button>
+                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
                           <span class="ac-segment-icon" v-html="ICON_VIEW_SPLIT"></span>
                           <span class="ac-segment-label">分栏</span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -2906,8 +2906,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <div class="ac-panel-body">
                   <div v-if="skillView === 'card'" class="ac-panel-scroll">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
-                      <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-card" role="option"
-                        :aria-pressed="false" :title="item.value" @click="insertRef(item, close)">
+                      <Button v-for="item in filteredSkills" :key="item.id" variant="ghost" size="sm" class="ac-skill-card" role="option"
+                        :aria-pressed="false" :title="item.value" @click="insertRef(item, () => (skillOpen = false))">
                         <span class="ac-skill-thumb" :style="skillCoverStyle(item.name)" aria-hidden="true">
                           <span class="ac-skill-icon" v-html="ICON_SKILL"></span>
                         </span>
@@ -2924,7 +2924,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             <span>{{ skillFileCount(item.name) }} 文件</span>
                           </span>
                         </span>
-                      </button>
+                      </Button>
                     </div>
                     <div v-else class="ac-empty-state">
                       <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -2936,21 +2936,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     <aside class="ac-split-rail" aria-label="技能分类">
                       <div class="ac-rail-label">分类</div>
                       <div class="ac-rail-scroll">
-                        <button v-for="row in skillCategoryRows" :key="row.name" class="ac-rail-item"
+                        <Button v-for="row in skillCategoryRows" :key="row.name" variant="ghost" size="sm" class="ac-rail-item"
                           :aria-pressed="skillCategory === row.name" @click="skillCategory = row.name">
                           <span class="ac-rail-icon" aria-hidden="true">
                             <component :is="row.name === '全部' ? Layers : row.name === '精选' ? Sparkles : Box" :size="14" />
                           </span>
                           <span class="ac-rail-name">{{ row.name }}</span>
                           <span class="ac-rail-count">{{ row.count }}</span>
-                        </button>
+                        </Button>
                       </div>
                     </aside>
                     <div class="ac-split-main">
                       <div class="ac-split-scroll">
                         <div v-if="filteredSkills.length" class="ac-skill-grid ac-skill-grid--split">
-                          <button v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option"
-                            :aria-pressed="false" :title="item.value" @click="insertRef(item, close)">
+                          <Button v-for="item in filteredSkills" :key="item.id" variant="ghost" size="sm" class="ac-skill-tile" role="option"
+                            :aria-pressed="false" :title="item.value" @click="insertRef(item, () => (skillOpen = false))">
                             <span class="ac-skill-cover" :style="skillCoverStyle(item.name)" aria-hidden="true">
                               <span class="ac-skill-icon" v-html="ICON_SKILL"></span>
                             </span>
@@ -2968,7 +2968,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                                 <span>{{ skillSize(item.name) }}</span>
                               </span>
                             </span>
-                          </button>
+                          </Button>
                         </div>
                         <div v-else class="ac-empty-state">
                           <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -2983,20 +2983,20 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   <span class="ac-selection-summary">点击技能会直接插入标签</span>
                 </div>
               </div>
-            </template>
-          </ThemedDropdown>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
           <!-- MCP 暂只有轻卡片一种布局：宽度固定在紧凑档（与卡片视图一致）。 -->
-          <ThemedDropdown v-if="s.mcpServers.length" v-model="mcpOpen" placement="top-end" :offset="8"
-            menu-width="320px" menu-max-width="600px" menu-max-height="440px" menu-role="listbox" layout="inner-scroll">
-            <template #trigger>
+          <DropdownMenu v-if="s.mcpServers.length" v-model:open="mcpOpen">
+            <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
                 <Plug :size="16" class="size-4" />
               </Button>
-            </template>
-            <template #default="{ close }">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" :side-offset="8" class="ac-ddmenu"
+              :style="{ width: '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-mcp-panel" :class="{ 'is-search-open': mcpSearchOpen }" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -3037,19 +3037,19 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <!-- 卡片是勾选 + 展开两件事：左边的框勾「整个服务」，点标题行展开工具（DEMO 同一条分工） -->
                       <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
                         <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name) }">
-                        <button class="ac-pick-box" :aria-pressed="mcpPickedServers.has(item.name)"
+                        <Button variant="ghost" size="icon-xs" class="ac-pick-box" :aria-pressed="mcpPickedServers.has(item.name)"
                           :aria-label="'引用整个 ' + item.name + ' 服务'" :title="'引用整个 ' + item.name + ' 服务'"
                           @click.stop="toggleMcpServer(item.name)">
                           <Check :size="11" />
-                        </button>
-                        <button class="ac-mcp-server-main" :title="item.value"
+                        </Button>
+                        <Button variant="ghost" size="sm" class="ac-mcp-server-main" :title="item.value"
                           :aria-expanded="mcpExpanded.has(item.name) || !!item.toolHits" @click="toggleMcpExpand(item.name)">
                           <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
                           <span class="ac-server-copy">
                             <span class="ac-server-name">{{ item.name }}</span>
                             <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
                           </span>
-                        </button>
+                        </Button>
                         <span class="ac-server-side">
                           <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
                             :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
@@ -3063,7 +3063,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                         </div>
                         <!-- 工具行：搜索命中工具时自动展开、只列命中的几条；每行都能单独勾选 -->
                         <div v-if="(mcpExpanded.has(item.name) || item.toolHits) && (item.toolHits || mcpToolsOf(item.name)).length" class="ac-mcp-tools">
-                          <button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
+                          <Button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName" variant="ghost" size="sm"
                             class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"
                             :title="t.fullName" :aria-pressed="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
                             @click="toggleMcpTool(item.name, t.name)">
@@ -3072,7 +3072,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                               <span class="ac-tool-name">{{ t.name }}</span>
                               <span class="ac-tool-desc">{{ t.description }}</span>
                             </span>
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -3093,22 +3093,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     </template>
                     <template v-else>未选择服务或工具</template>
                   </span>
-                  <Button size="sm" class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(close)">
+                  <Button size="sm" class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(() => (mcpOpen = false))">
                     <Check :size="13" />确认引用
                   </Button>
                 </div>
               </div>
-            </template>
-          </ThemedDropdown>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <span class="ac-tb-spacer"></span>
           <!-- 上下文统计：**回到发送键左侧**（用户口径 2026-10-11：恢复之前的位置）。
                hover 气泡给剩余百分比；有绝对值时把「已用 / 上限」一起标在环旁边
                （只有百分比看不出还剩多少 tokens）。什么都不知道时整块不画。 -->
           <span v-if="s.contextLeft !== null || s.contextUsed !== null" class="ac-ctxwrap">
-            <component :is="ThemedTooltip || 'span'"
-              :content="ThemedTooltip && s.contextLeft !== null ? '上下文剩余 ' + s.contextLeft + '%' : undefined"
-              :placement="ThemedTooltip ? 'top' : undefined">
+            <TooltipProvider :delay-duration="120">
+              <Tooltip>
+                <TooltipTrigger as-child>
               <span class="ac-context" role="img"
                 :aria-label="s.contextLeft !== null ? '上下文剩余 ' + s.contextLeft + '%' : '上下文用量'">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -3118,7 +3118,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     transform="rotate(-90 6 6)" />
                 </svg>
               </span>
-            </component>
+                </TooltipTrigger>
+                <TooltipContent v-if="s.contextLeft !== null" side="top">上下文剩余 {{ s.contextLeft }}%</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </span>
           <Button size="icon" class="ac-send" :class="{ 'is-running': sendMode === 'stop' }"
             :aria-label="sendMode === 'stop' ? '停止' : '发送'" :disabled="sendMode === 'disabled'"
@@ -3228,21 +3231,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-hint-close {
   position: absolute;
-  right: 6px;
-  top: 6px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
+  right: 2px;
+  top: 2px;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
 }
 
 .ac-hint-close:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
   color: var(--ui-ink, #f7f7f7);
 }
 
@@ -3273,34 +3267,26 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   flex-direction: column;
 }
 
-/* 建议行照参考页实测：39 高 / 圆角 12 / 内边距 0 12 / 间距 10 / 正文 14px，文字用 60% 白 */
+/* 建议行：间距 10 / 正文 14px，文字用 60% 白；高度、圆角、内边距、悬停底色由 Button 提供 */
 .ac-suggestion {
-  display: flex;
-  align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   width: 100%;
-  height: 39px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
   font-size: 14px;
   text-align: left;
-  cursor: pointer;
-  transition: background 0.16s ease;
 }
 
-.ac-suggestion:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-}
-
-.ac-suggestion span {
+.ac-suggestion > span:not(.ac-suggestion-arrow) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ac-suggestion .ac-suggestion-arrow {
+  flex: none;
 }
 
 .ac-suggestion-arrow {
@@ -3401,23 +3387,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-note-x {
   flex: none;
-  display: grid;
-  place-items: center;
-  /* 交互目标不得小于 32px（ui-style-guide §5.4）；图标仍按 12 档，靠内边距撑到 32 */
-  width: 32px;
-  height: 32px;
   margin-left: auto;
   margin-top: -6px;
   margin-bottom: -6px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: inherit;
-  cursor: pointer;
-}
-
-.ac-note-x:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
 }
 
 .ac-msg.user {
@@ -3475,26 +3448,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 /* 展开 / 收起：文字 + 箭头，放气泡左下角。圆角 6、12px/600，走样式表的「文本按钮」档。 */
 .ac-user-toggle {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
   align-self: flex-start;
   margin: 6px 0 0;
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
-  cursor: pointer;
-  transition: background 0.14s ease;
-}
-
-.ac-user-toggle:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 /* 操作行在气泡外（右下角、贴气泡下缘）：.ac-msg 是 flex 容器，操作行要跟气泡组成一列 */
@@ -3602,20 +3562,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-msg-btn {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-msg-btn:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-msg-btn .is-ok {
@@ -3674,13 +3621,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-editing-mark-btn {
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: inherit;
   font-size: 11px;
   font-weight: 600;
-  cursor: pointer;
 }
 
 .ac-editing-mark-btn:hover {
@@ -3692,20 +3635,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-editing-x {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
   color: inherit;
-  cursor: pointer;
-}
-
-.ac-editing-x:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-bubble :deep(.md) {
@@ -3739,16 +3669,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-think-toggle {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
   margin-bottom: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
   font-size: 12px;
-  cursor: pointer;
 }
 
 /* 原位思考折叠块（用户口径 2026-10-16）：每段思考独立成块、按发生位置展示 */
@@ -3837,19 +3761,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-tg-toggle {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
   font-size: 12px;
-  cursor: pointer;
-}
-
-.ac-tg-toggle:hover {
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-tg-body {
@@ -3869,23 +3783,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 /* 默认工具行（用户口径 2026-10-08 定稿）：悬停**不加任何背景**，只让左侧折叠箭头变亮。
    早先悬停给整行加 rgba(255,255,255,.06) 的底色 —— 用户明确不要背景条。 */
 .ac-tf-toggle {
-  display: flex;
-  align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 2px 4px;
-  margin: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
   font-size: 12px;
   text-align: left;
-  cursor: pointer;
-}
-
-.ac-tf-toggle:hover {
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-tf-caret {
@@ -4077,23 +3979,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   }
 }
 
-.ac-btn {
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ui-ink, #f7f7f7);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.ac-btn-primary {
-  border-color: transparent;
-  background: var(--ui-accent, #0891b2);
-  color: var(--ui-on-accent, #fff);
-}
-
 .ac-onboard {
   display: flex;
   flex: 1;
@@ -4136,26 +4021,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-branch-arrow {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
   flex: none;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-branch-arrow:hover:not(:disabled) {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-branch-arrow:disabled {
   opacity: 0.35;
-  cursor: default;
 }
 
 .ac-branch-pos {
@@ -4205,13 +4076,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-notify-btn {
   flex: none;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
   color: var(--ui-ink, #f7f7f7);
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
 }
 
 .ac-notify-btn:hover {
@@ -4219,21 +4086,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-notify-close {
-  display: grid;
-  place-items: center;
   flex: none;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-notify-close:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-input-box {
@@ -4266,16 +4120,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   transform: translateX(-50%);
   bottom: 12px;
   z-index: 5;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
   border: 1px solid var(--ui-line, #363636);
   border-radius: 999px;
   background: var(--ui-overlay-solid, #212121);
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
   box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16));
   transition: color 0.15s ease, transform 0.15s ease;
 }
@@ -4283,11 +4131,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-to-bottom:hover {
   color: var(--ui-ink, #f7f7f7);
   transform: translateX(-50%) translateY(-1px);
-}
-
-.ac-to-bottom:focus-visible {
-  outline: 2px solid var(--ui-accent, #0891b2);
-  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4498,17 +4341,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-queue-btn {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
   flex: none;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
 }
 
 .ac-queue-btn:hover {
@@ -4521,11 +4355,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-danger, #ef4444);
 }
 
-.ac-queue-btn:focus-visible {
-  outline: 2px solid var(--ui-accent, #0891b2);
-  outline-offset: 1px;
-}
-
 /* 队列暂停/恢复：**骑在容器与输入框分界线上**、水平居中。
      它是 .ac-input-box 的子元素（不是容器的）—— 容器 overflow:hidden 会把它裁掉半个；
      挂输入框上、top:0 + translateY(-50%)，正好压在输入框上边框 = 两块的接缝。 */
@@ -4535,21 +4364,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 6;
-  display: inline-flex;
-  align-items: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 10px 0 9px;
   border: 1px solid var(--ui-line, #363636);
   border-radius: 999px;
   background: var(--ui-overlay-solid, #212121);
   color: var(--ui-ink-dim, #919191);
-  font: inherit;
   font-size: 11px;
   font-weight: 600;
-  white-space: nowrap;
   box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16));
-  cursor: pointer;
   transition: color 0.15s ease;
 }
 
@@ -4584,11 +4406,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   background: rgb(255 255 255 / 0.28);
   /* 主题色白名单: 同上（胶囊里的白字） */
   color: #fff;
-}
-
-.ac-queue-pause:focus-visible {
-  outline: 2px solid var(--ui-accent, #0891b2);
-  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4627,24 +4444,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
      不用负 margin、不用绝对定位 —— 那两样会让两行左列的基线对不上（真机量到 13 vs 14）。 */
 .ac-goal-lead {
   flex: none;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-goal-lead:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
-}
-
-.ac-goal-lead:focus-visible {
-  outline: 2px solid var(--ui-accent, #0891b2);
-  outline-offset: 1px;
 }
 
 .ac-goal-lead .ac-goal-lead-edit {
@@ -4820,26 +4620,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-goal-btn {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
   flex: none;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: inherit;
-  cursor: pointer;
-}
-
-.ac-goal-btn:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-}
-
-.ac-goal-btn:focus-visible {
-  outline: 2px solid var(--ui-accent, #0891b2);
-  outline-offset: 1px;
 }
 
 /* 口径开关的图标：已用 = 实心、剩余 = 空心 */
@@ -4877,22 +4659,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-plus {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
   flex: none;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-plus:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 /* 原生 file input 只是「被点」的载体，视觉由上面的 + 按钮承担 */
@@ -4901,21 +4669,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-tb-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
-
-.ac-tb-icon:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink, #f7f7f7);
 }
 
 .ac-tb-icon.is-on {
@@ -4928,24 +4682,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-pill {
-  display: inline-flex;
-  align-items: center;
   gap: 1px;
-  height: 32px;
+  padding-inline: 8px 4px;
+  border-radius: 999px;
   /* 提示词名是用户自建的（没有长度上限）：胶囊可缩、单行省略，
      保证右侧的授权 / 模型 / 发送按钮永远不被挤出工具条（RULES §9）。 */
   flex: 0 1 auto;
   min-width: 0;
   max-width: 160px;
-  /* 文字档按钮：shadcn 默认 px-3 会把胶囊撑宽，这里收回原来的 8/4 内边距 */
-  padding: 0 4px 0 8px;
-  border: 0;
-  border-radius: 9999px;
-  background: transparent;
   color: var(--ui-ink, #f7f7f7);
   font-weight: 400;
   font-size: 13px;
-  cursor: pointer;
 }
 
 .ac-pill-text {
@@ -4957,10 +4704,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-pill-caret {
   flex: none;
-}
-
-.ac-pill:hover {
-  background: var(--ui-hover, rgb(255 255 255 / 0.1));
 }
 
 .ac-tb-spacer {
@@ -5021,15 +4764,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   position: absolute;
   top: 2px;
   right: 2px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border: 0;
-  border-radius: 999px;
   background: var(--ui-scrim, rgb(0 0 0 / 0.6));
   color: var(--ui-tip-ink, #fff);
-  cursor: pointer;
 }
 
 .ac-attach-del:hover {
@@ -5045,7 +4781,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-user-image {
-  display: block;
   width: 96px;
   height: 96px;
   padding: 0;
@@ -5070,23 +4805,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-send {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
   flex: none;
-  border: 0;
+  padding: 0;
   border-radius: 12px;
   background: var(--ui-primary-bg, #f7f7f7);
   color: var(--ui-primary-ink, #141414);
-  cursor: pointer;
   transition: opacity 0.16s ease;
 }
 
 .ac-send:disabled {
   opacity: 0.45;
-  cursor: default;
 }
 
 .ac-send.is-running {
@@ -5519,20 +5247,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-segment-btn {
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 4px;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
   transition: color 0.18s ease;
 }
 
@@ -5629,14 +5347,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-review-option {
-  display: flex;
-  align-items: flex-start;
   gap: 10px;
   width: 100%;
   min-height: 76px;
   padding: 11px;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
@@ -5764,8 +5479,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-skill-card {
-  display: flex;
-  align-items: center;
   gap: 9px;
   width: 100%;
   min-width: 0;
@@ -5775,7 +5488,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
-  cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
@@ -5949,20 +5661,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-rail-item {
-  display: flex;
-  align-items: center;
   gap: 6px;
   width: 100%;
-  height: 34px;
   flex: none;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
   text-align: left;
-  cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
 
@@ -6040,15 +5744,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 /* 分栏封面瓦片（DEMO 的 .skill-tile / .skill-cover） */
 .ac-skill-tile {
-  display: flex;
-  flex-direction: column;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
-  cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
@@ -6135,8 +5835,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-model-card {
-  display: flex;
-  align-items: center;
   gap: 8px;
   width: 100%;
   min-width: 0;
@@ -6146,7 +5844,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border-radius: 12px;
   background: var(--ui-panel, #fff);
   text-align: left;
-  cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
@@ -6233,8 +5930,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-model-row {
-  display: flex;
-  align-items: center;
   gap: 8px;
   width: 100%;
   min-height: 54px;
@@ -6243,7 +5938,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border-radius: 10px;
   background: transparent;
   text-align: left;
-  cursor: pointer;
 }
 
 .ac-model-row:hover {
@@ -6342,17 +6036,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-pick-box {
-  display: grid;
-  place-items: center;
+  flex: none;
+  /* 复选块：按钮尺寸由组件库 icon-xs 提供，这里只管方框描边与选中底色 */
   width: 20px;
   height: 20px;
-  flex: none;
-  padding: 0;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.18));
-  border-radius: 6px;
   background: var(--ui-panel, #fff);
   color: var(--ui-panel, #fff);
-  cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
 }
 
@@ -6386,16 +6076,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-mcp-server-main {
-  display: flex;
-  align-items: center;
   gap: 9px;
   flex: 1;
   min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
   text-align: left;
-  cursor: pointer;
 }
 
 .ac-server-icon {
@@ -6528,8 +6212,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-tool-row {
-  display: flex;
-  align-items: center;
   gap: 7px;
   width: 100%;
   padding: 4px 6px;
@@ -6537,7 +6219,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border-radius: 7px;
   background: transparent;
   text-align: left;
-  cursor: pointer;
 }
 
 .ac-tool-row:hover {
@@ -6903,17 +6584,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 /* 简单两项式下拉（创作模式 / 授权方式）：标题一行 + 说明一行 */
 .ac-menu-item {
-  display: flex;
-  flex-direction: column;
   align-items: flex-start;
   gap: 2px;
   width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
   text-align: left;
-  cursor: pointer;
 }
 
 .ac-menu-item:hover {

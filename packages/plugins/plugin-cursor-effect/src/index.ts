@@ -45,13 +45,35 @@ export function apply(ctx: Context): void {
     meta: { title: '光标特效' },
   })
 
+  // 菜单：进「画布 → 工具 → 光标」。只注册自己的那一页。
+  ctx.settingsMenu.nav({
+    id: 'nav/canvas/tools',
+    category: 'category/canvas',
+    title: '工具',
+    order: 50,
+  })
+  ctx.settingsMenu.section({
+    id: 'section/canvas/tools/cursor',
+    nav: 'nav/canvas/tools',
+    title: '光标',
+    group: CURSOR_NAV_ID,
+    order: 30,
+  })
+
   // ② 设置面板：左导航「光标」项 + 整页正文（mode: replace = 这一页完全由本插件自绘）
   ctx.slots.register('settings.nav', {
     id: 'cursor-effect/nav',
     order: 7,
     component: markRaw(CursorSettingsNav),
     // 只提供数据：外观由设置面板统一渲染，整页走 page
-    meta: { title: '光标', category: '画布', icon: MousePointer2, page: markRaw(CursorSettingsPage) },
+    // pageGroup：整页属于 Config.group「光标」，挂到「画布 → 工具 → 光标」这个二级节。
+    meta: {
+      title: '光标',
+      category: '画布',
+      icon: MousePointer2,
+      page: markRaw(CursorSettingsPage),
+      pageGroup: CURSOR_NAV_ID,
+    },
   })
   ctx.slots.register('settingsGroup/' + CURSOR_NAV_ID, {
     id: 'cursor-effect/page',

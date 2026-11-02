@@ -17,11 +17,18 @@
 //   读屏会把两件事说成一件事，也是 ui-style-guide §5 第 2 条明令禁止的嵌套交互。
 import { Check, ChevronDown, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
-// 外壳按钮改用 shadcn 原始 Button；下拉菜单内容与行内交互保持不变。
-import { Button } from '@mini-canvas/ui-kit-shadcn'
-import AxDropdown from './AxDropdown.vue'
-import AxMenu from './AxMenu.vue'
-import AxMenuItem from './AxMenuItem.vue'
+// 外壳按钮与下拉菜单全部使用 shadcn 原始组件；行内交互保持不变。
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 
 /** 下拉里的一项：画布 id + 显示名 */
 export interface CanvasOption {
@@ -62,29 +69,15 @@ const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) =
 
 // ===== 行尾「⋯」弹的**画布操作菜单** =====
 //
-// 用 AxDropdown 的「鼠标点锚点」（openAtPoint，行右键菜单同款）：菜单挂 body 下、按点击坐标定位，
-// 所以外层列表在它弹出时被互斥关掉也不影响它 —— 锚点不依赖那个随即卸载的行 DOM。
+// 画布操作菜单与画布列表都使用 shadcn 的 DropdownMenu：
+// 行尾「⋯」的菜单是列表的**子菜单**（DropdownMenuSub），列表留着、子菜单并排展开；
+// 选中项后一起收起，定位/翻转/点外关闭交给 reka-ui。
 const actionOpen = ref(false)
-const actionRef = ref<{ openAtPoint: (x: number, y: number) => void } | null>(null)
 const actionTarget = ref<CanvasOption | null>(null)
 
-// 外层**画布列表**的浮层实例：操作菜单要**挂在它旁边**（而不是把它顶掉）。
-const listRef = ref<{ isOpen?: boolean; chainId?: string } | null>(null)
-/** 操作菜单的父浮层上下文：不点开列表时（null）它就是普通下拉 */
-const actionParent = (): { chain: string; open: boolean } | undefined => {
-  const list = listRef.value
-  if (!list?.chainId) return undefined
-  return { chain: list.chainId, open: list.isOpen === true }
-}
-
-/** 点行尾的「⋯」/「勾」：记下是哪张画布，在按钮下方弹出操作菜单（**列表留着**） */
-function openActions(e: MouseEvent, item: CanvasOption): void {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+/** 点行尾的「⋯」/「勾」：记下是哪张画布（子菜单的条目据此派发） */
+function openActions(item: CanvasOption): void {
   actionTarget.value = item
-  // 同屏并存：操作菜单是列表的**子浮层**（nestedIn），列表不收、操作菜单挂在按钮下。
-  // 锚点取按钮**右缘**：菜单从列表右边展开，与列表并排（就是用户效果图里的摆法）。
-  // 若这一份菜单正开着（连着点另一行的「⋯」），AxDropdown 内部会按新坐标重算位置。
-  actionRef.value?.openAtPoint(r.right + 2, r.bottom + 4)
 }
 
 /** 操作菜单里选了一项：转发给宿主（宿主才知道怎么改数据），并收起菜单 */
@@ -125,26 +118,18 @@ function pickAction(
       @change="emit('rename-canvas', ($event.target as HTMLInputElement).value)"
     />
     <span class="divider"></span>
-    <AxDropdown
-      ref="listRef"
-      :model-value="menuOpen"
-      placement="bottom-start"
-      menu-width="214px"
-      arrow
-      @update:model-value="emit('update:menuOpen', $event)"
-    >
-      <template #trigger>
+    <DropdownMenu :open="menuOpen" @update:open="emit('update:menuOpen', $event)">
+      <DropdownMenuTrigger as-child>
         <Button variant="ghost" class="canvas-chip h-8 gap-1 rounded-lg px-2 font-normal"
           aria-label="当前画布" :aria-expanded="menuOpen">
           <span>画布 {{ canvasIndex }}</span><ChevronDown :size="12" class="size-3 shrink-0" />
         </Button>
-      </template>
-      <template #default="{ close }">
-        <AxMenu>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '214px' }">
           <div class="canvas-menu-head">
             <span>画布</span>
             <Button variant="ghost" size="icon-xs" class="canvas-new size-[22px] rounded-md" aria-label="新建画布"
-              @click="emit('new-canvas'); close()"><Plus :size="13" class="size-[13px]" /></Button>
+              @click="emit('new-canvas'); emit('update:menuOpen', false)"><Plus :size="13" class="size-[13px]" /></Button>
           </div>
           <!-- 一行 = 主按钮（切画布）+ 行尾按钮（开操作菜单）。两个动作，两个真按钮。 -->
           <div
@@ -159,62 +144,34 @@ function pickAction(
               role="menuitem"
               :aria-current="item.id === canvasId ? 'true' : undefined"
               :aria-label="'切换到画布 ' + item.label"
-              @click="emit('pick-canvas', item.id); close()"
+              @click="emit('pick-canvas', item.id); emit('update:menuOpen', false)"
             >
               <span class="canvas-open">{{ item.label }}</span>
             </button>
             <!-- 悬停/聚焦才显形；选中行的「勾」也靠 hover 让位给「⋯」（一组 hover 场景切换，故写在本行里） -->
-            <button
-              type="button"
-              class="canvas-row-more"
-              :class="{ 'is-pinned': item.id === canvasId }"
-              :aria-label="'画布操作 ' + item.label"
-              :aria-expanded="actionOpen && actionTarget?.id === item.id"
-              @click.stop="openActions($event, item)"
-            >
-              <Check v-if="item.id === canvasId" class="canvas-row-check" :size="14" aria-hidden="true" />
-              <MoreHorizontal class="canvas-row-dots" :size="14" aria-hidden="true" />
-            </button>
+            <DropdownMenuSub v-model:open="actionOpen" @update:open="(v: boolean) => { if (v) openActions(item) }">
+              <DropdownMenuSubTrigger class="canvas-row-more" :class="{ 'is-pinned': item.id === canvasId }"
+                :aria-label="'画布操作 ' + item.label">
+                <Check v-if="item.id === canvasId" class="canvas-row-check" :size="14" aria-hidden="true" />
+                <MoreHorizontal class="canvas-row-dots" :size="14" aria-hidden="true" />
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent :style="{ minWidth: '176px' }">
+                <DropdownMenuItem @select="pickAction('open-canvas-window', () => (actionOpen = false))">在新窗口打开</DropdownMenuItem>
+                <DropdownMenuItem @select="pickAction('rename-canvas-item', () => (actionOpen = false))">重命名画布</DropdownMenuItem>
+                <DropdownMenuItem @select="pickAction('duplicate-canvas', () => (actionOpen = false))">复制画布</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" @select="pickAction('delete-canvas', () => (actionOpen = false))">删除画布</DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </div>
-        </AxMenu>
-      </template>
-    </AxDropdown>
-
-    <!--
-    画布操作菜单（点行尾「⋯」弹出）。锚点走 AxDropdown 的「鼠标点锚点」，与行右键菜单同一套机制：
-      翻转 / 防溢出 / 互斥 / 点外关闭全照旧，不另写一份定位。
-       它没有触发器（只为借那个锚点能力），所以整块藏起来 —— 浮层本体是 teleport 到 body 的，
-       藏住这个空壳不影响菜单弹出（也不在胶囊里多占一个格）。
-    -->
-    <span class="canvas-action-host">
-      <AxDropdown
-        ref="actionRef"
-        v-model="actionOpen"
-        placement="bottom-start"
-        :arrow="false"
-        menu-width="176px"
-        :nested-in="actionParent"
-      >
-        <template #default="{ close }">
-          <AxMenu @click.stop>
-            <AxMenuItem @click="pickAction('open-canvas-window', close)">在新窗口打开</AxMenuItem>
-            <AxMenuItem @click="pickAction('rename-canvas-item', close)">重命名画布</AxMenuItem>
-            <AxMenuItem @click="pickAction('duplicate-canvas', close)">复制画布</AxMenuItem>
-            <div class="my-1 h-px bg-line"></div>
-            <!-- 删除：**永远可点**（任何画布都能删，含内置画布与当前画布） -->
-            <AxMenuItem danger @click="pickAction('delete-canvas', close)">删除画布</AxMenuItem>
-          </AxMenu>
-        </template>
-      </AxDropdown>
-    </span>
+      </DropdownMenuContent>
+    </DropdownMenu>
   </div>
 </template>
 
 <style scoped>
 /* 全部走主题变量：亮色下 logo 用深墨色，暗色下用浅色，避免"浅底浅图标"看不清 */
 .project-cluster { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-panel); }
-/* 只借「鼠标点锚点」能力的空壳（没有触发器），不占胶囊里的位置 */
-.canvas-action-host { display: none; }
 .logo-button { color: var(--ui-ink); background: transparent; cursor: pointer; }
 .logo-chevron { color: var(--ui-ink-dim); }
 .project-name { width: 86px; height: 22px; padding: 0 4px; color: inherit; border: 0; border-bottom: 1px dashed transparent; outline: 0; background: transparent; font-family: inherit; font-size: 13px; }

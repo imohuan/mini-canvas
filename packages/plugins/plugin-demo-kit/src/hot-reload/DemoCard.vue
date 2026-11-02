@@ -30,10 +30,10 @@ const HINT = '改版本号再构建，这张卡片应自己变样'
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; border-radius: 14px;
   background: var(--ui-accent, #0891b2);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
   box-shadow: var(--ui-shadow-lg, 0 6px 18px rgb(0 0 0 / 0.25));
 }
-.hrdemo-badge { flex: none; display: grid; place-items: center; min-width: 40px; height: 40px; padding: 0 8px; border-radius: 10px; background: var(--ui-primary-ink-soft, rgb(255 255 255 / 0.22)); font-size: 14px; font-weight: 800; }
+.hrdemo-badge { flex: none; display: grid; place-items: center; min-width: 40px; height: 40px; padding: 0 8px; border-radius: 10px; background: color-mix(in srgb, var(--ui-on-accent, #fff) 22%, transparent); font-size: 14px; font-weight: 800; }
 .hrdemo-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .hrdemo-title { font-size: 14px; font-weight: 800; letter-spacing: 0.02em; }
 .hrdemo-hint { font-size: 11px; opacity: 0.9; }

@@ -261,19 +261,20 @@ describe('队列行（G2/G4/G8/G10）：结构与接线', () => {
     const row = host.slice(host.indexOf('ac-queue-row" role="listitem"'), host.indexOf('class="ac-input-box"'))
     expect(row).toContain('@click="steerItem(row.id)"')
     expect(row).toContain('@click="removeItem(row.id)"')
-    expect(row).toContain('@click="beginEditQueue(row.id); close()"')
-    expect(row).toContain('@click="closeItem(row.id); close()"')
+    // ⋯ 菜单改用 shadcn DropdownMenu：关闭靠父级状态 rowMenuId，不再有插槽给的 close()
+    expect(row).toContain('@click="beginEditQueue(row.id); rowMenuId = null"')
+    expect(row).toContain('@click="closeItem(row.id); rowMenuId = null"')
   })
 
   it('⋯ 菜单**只有两项**：编辑消息 / 关闭排队（G12 的修正）', () => {
     // 从抽屉开始截（触发器 + 菜单 + 闭合标签），到模板结束
-    const start = host.lastIndexOf('<ThemedDropdown', host.indexOf('aria-label="更多操作"'))
-    const menu = host.slice(start, host.indexOf('</ThemedDropdown>', host.indexOf('aria-label="更多操作"')))
+    const start = host.lastIndexOf('<DropdownMenu ', host.indexOf('aria-label="更多操作"'))
+    const menu = host.slice(start, host.indexOf('</DropdownMenu>', host.indexOf('aria-label="更多操作"')))
     expect((menu.match(/role="menuitem"/g) ?? []).length).toBe(2)
     expect(menu).toContain('编辑消息')
     expect(menu).toContain('关闭排队')
-    // 菜单走设计系统的 dropdown（定位/翻边/互斥它负责），不自绘浮层
-    expect(menu).toContain('ThemedDropdown')
+    // 菜单走组件库的 DropdownMenu（定位/翻边/互斥它负责），不自绘浮层
+    expect(menu).toContain('DropdownMenuContent')
   })
 
   it('行内容：16×16 缩略图（有图时）+ 单行省略文本 + 编辑中标记（G10）', () => {

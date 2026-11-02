@@ -33,6 +33,7 @@ import { formatTime } from './videoNodeData'
 import VideoPlayerBar from './VideoPlayerBar.vue'
 import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
 import { Play, Pause, Volume2, VolumeX, Camera, Maximize2 } from 'lucide-vue-next'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { openPreview } from './mediaPreviewBus'
 
 /** 正有限数才算有值（与 videoFit 内同口径） */
@@ -975,27 +976,27 @@ watch(videoUrl, (prev) => {
       >
         <template #capture>
           <div ref="captureMenuRef" class="vc-capture">
-            <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
+            <Button class="vc-btn" variant="ghost" size="icon-xs" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
               :aria-expanded="captureMenuOpen" :aria-haspopup="'menu'"
               @mouseenter="cancelDelayedClose('capture'); openExclusive('capture')"
               @mouseleave="captureMenuOpen && delayedClose('capture')">
               <Camera class="vc-ico" :size="15" aria-hidden="true" />
-            </button>
+            </Button>
             <!-- 截帧菜单（liblib 同款三项）：向上弹出 -->
             <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu"
               @mouseenter="cancelDelayedClose('capture')" @mouseleave="delayedClose('capture')">
-              <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('current')">截取当前帧</button>
-              <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('first')">截取首帧</button>
-              <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</button>
+              <Button class="vc-capture-item" variant="ghost" size="sm" role="menuitem" @click.stop="onCaptureMenuPick('current')">截取当前帧</Button>
+              <Button class="vc-capture-item" variant="ghost" size="sm" role="menuitem" @click.stop="onCaptureMenuPick('first')">截取首帧</Button>
+              <Button class="vc-capture-item" variant="ghost" size="sm" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</Button>
             </div>
           </div>
         </template>
         <!-- 全屏按钮放进条内尾部：整条底栏铺满宽度，图标仍在最右侧（与拆分前一致） -->
         <template #end>
-          <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放"
+          <Button class="vc-btn" variant="ghost" size="icon-xs" type="button" title="全屏播放" aria-label="全屏播放"
             @click.stop="openPreview({ name: (typeof props.data?.videoName === 'string' && props.data.videoName) || '视频预览', kind: 'video', url: videoUrl })">
             <Maximize2 class="vc-ico" :size="15" aria-hidden="true" />
-          </button>
+          </Button>
         </template>
       </VideoPlayerBar>
     </div>
@@ -1183,15 +1184,13 @@ watch(videoUrl, (prev) => {
 .vc-capture-item {
   display: block;
   width: 100%;
+  height: auto;
   padding: 8px 12px;
-  border: 0;
   border-radius: 6px;
-  background: transparent;
   color: rgba(255, 255, 255, 0.92); /* 主题色白名单: 视频覆盖层上的菜单文字 */
   font-size: 13px;
   line-height: 18px;
   text-align: left;
-  cursor: pointer;
   white-space: nowrap;
 }
 .vc-capture-item:hover {
@@ -1204,19 +1203,11 @@ watch(videoUrl, (prev) => {
 }
 
 .vc-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
   width: 26px;
   height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
   /* 控件叠在视频画面上（不是面板底色），用恒浅色前景保证任何画面上都读得清 */
   color: color-mix(in srgb, var(--ui-tip-ink, #fff) 88%, transparent);
-  cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s ease;
 }
 .vc-btn:hover:not(:disabled) {
@@ -1232,8 +1223,8 @@ watch(videoUrl, (prev) => {
 }
 .vc-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
-}.vc-btn svg {
+}
+.vc-btn svg {
   width: 15px;
   height: 15px;
   /* 渐变衬底已保证可读性，图标不再单独投影 */

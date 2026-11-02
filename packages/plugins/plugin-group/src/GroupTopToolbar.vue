@@ -13,8 +13,13 @@
  * 与图片节点的 ImageTopToolbar 逐字同形：**定位不在这里**，选中态也不在这里。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useCanvasRender, useSoleNodeSelected, ToolbarIcon } from '@mini-canvas/canvas-render'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor, groupServiceOf } from './groupEngine'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -27,9 +32,6 @@ const { ctx } = useCanvasRender()
  * 少了这一句，未选中或选中别人时这条栏也会一直挂在那儿（用户实测报的就是这个）。
  */
 const visible = useSoleNodeSelected(props.id)
-/** 下拉仍按名取（主题可换）；按钮本体直接用 shadcn Button */
-const ThemedDropdown = useUiComponent('dropdown')
-
 /** 解组图标（与 GroupContent 里那枚同源写法：内联 SVG 字符串） */
 const ICON_UNGROUP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h8v8H8z"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h6v6h-6z"/></svg>'
@@ -69,9 +71,8 @@ function pickColor(color: string): void {
 <template>
   <div v-if="visible" class="ntp-root group-top-toolbar">
     <!-- 背景颜色：色点触发器 + 下拉的预设色板（只有预制色，不做自定义取色） -->
-    <component :is="ThemedDropdown" v-model="colorOpen" placement="bottom-start" :offset="8" menu-width="152px"
-      menu-role="listbox" body-class="group-color-menu-body" :teleport="true">
-      <template #trigger>
+    <DropdownMenu v-model:open="colorOpen">
+      <DropdownMenuTrigger as-child>
         <!--
           触发器 = 「小圆点 + 文字」的文本按钮（用户口径 2026-10-08）。
 
@@ -88,17 +89,17 @@ function pickColor(color: string): void {
             <span class="mck-toolbar-label">背景颜色</span>
           </div>
         </Button>
-      </template>
-      <template #default="{ close }">
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" :side-offset="8" class="group-color-menu" :style="{ minWidth: '152px' }">
         <div class="group-color-grid" role="listbox" aria-label="分组背景颜色" @click.stop>
           <button v-for="swatch in GROUP_COLOR_SWATCHES" :key="swatch.id" class="group-color-swatch"
             :class="{ 'is-active': swatch.color === currentColor }" type="button" role="option"
             :aria-selected="swatch.color === currentColor ? 'true' : 'false'" :title="swatch.label"
             :aria-label="swatch.label" :style="{ backgroundColor: swatch.color }"
-            @click.stop="pickColor(swatch.color); close()" />
+            @click.stop="pickColor(swatch.color); colorOpen = false" />
         </div>
-      </template>
-    </component>
+      </DropdownMenuContent>
+    </DropdownMenu>
 
     <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
       title="解散分组" aria-label="解散分组" @click="onUngroup">
@@ -132,6 +133,14 @@ function pickColor(color: string): void {
 .group-color-grid {
   --gt-ring-in: rgba(255, 255, 255, 0.38);
   --gt-ring-out: rgba(15, 23, 42, 0.22);
+}
+
+.group-color-menu {
+  width: 152px;
+  min-width: 152px;
+  padding: 0;
+  border-radius: var(--mct-radius, 16px);
+  background: var(--ui-overlay-solid, #fff);
 }
 
 html.dark .group-color-trigger,

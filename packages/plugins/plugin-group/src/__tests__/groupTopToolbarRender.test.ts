@@ -8,7 +8,7 @@
  *
  * 渲染契约用 SSR 拿真 HTML 断言；「点下去真的调到服务」用纯函数 + 源码守卫盯（见文件尾）。
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,27 +18,41 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 import GroupTopToolbar from '../GroupTopToolbar.vue'
 import { GROUP_COLOR_SWATCHES, groupServiceOf } from '../groupEngine'
 
+/**
+ * shadcn 的菜单内容在真实运行时走 Teleport，SSR 的 renderToString 返回值里看不到。
+ * 这里只把菜单容器换成「按开关渲染插槽」的薄壳，色板网格、色块、选中态与宽度
+ * 仍然是 GroupTopToolbar 的真实模板/CSS 在渲染，断言没有降级。
+ */
+const mockMenuState = vi.hoisted(() => ({ open: false }))
+vi.mock('@mini-canvas/ui-kit-shadcn', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@mini-canvas/ui-kit-shadcn')>()
+  return {
+    ...actual,
+    DropdownMenu: defineComponent({
+      name: 'StubDropdownMenu',
+      setup(_props, { slots }) {
+        return () => h('div', { class: 'stub-dropdown' }, slots.default?.())
+      },
+    }),
+    DropdownMenuTrigger: defineComponent({
+      name: 'StubDropdownMenuTrigger',
+      inheritAttrs: false,
+      setup(_props, { slots }) {
+        return () => slots.default?.()
+      },
+    }),
+    DropdownMenuContent: defineComponent({
+      name: 'StubDropdownMenuContent',
+      inheritAttrs: false,
+      setup(_props, { slots, attrs }) {
+        return () => (mockMenuState.open ? h('div', attrs, slots.default?.()) : null)
+      },
+    }),
+  }
+})
+
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
-
-/**
- * 目录里的 dropdown 替身。真件的菜单是 v-if（收起时不渲染），这里给两个形态对齐该行为：
- * - ClosedDropdown：只渲染触发器（验「收起时工具栏不会被色板撑长」）；
- * - OpenDropdown：触发器 + 默认插槽（验「展开后色板里是哪些色块」）。
- * 两个都只是把插槽摊平，不做定位 —— 本文件验的是内容，不是浮层几何。
- */
-const ClosedDropdown = defineComponent({
-  name: 'ClosedDropdown',
-  setup(_props, { slots }) {
-    return () => h('div', { class: 'stub-dropdown' }, [slots.trigger?.()])
-  },
-})
-const OpenDropdown = defineComponent({
-  name: 'OpenDropdown',
-  setup(_props, { slots }) {
-    return () => h('div', { class: 'stub-dropdown' }, [slots.trigger?.(), slots.default?.({ close: () => {} })])
-  },
-})
 
 /**
  * 最小渲染上下文：本组件用 ctx.get('group')（解组）、ctx.get('doc')（改底色）
@@ -59,9 +73,9 @@ function renderCtx(openMenu = false, selectedIds: string[] = []) {
       return undefined
     },
     tryGet: (name: string) => (ctx as { get(n: string): unknown }).get(name),
-    // ui 目录：只登记 dropdown（button 故意缺席 → 顺带验「回退原生按钮」那条降级路径）
+    // 按钮直接来自 shadcn，不再有旧 ui 目录的 dropdown 条目
     registryOf: () => ({
-      top: (name: string) => (name === 'dropdown' ? { value: openMenu ? OpenDropdown : ClosedDropdown } : undefined),
+      top: () => undefined,
       list: () => [],
       subscribe: () => ({ dispose() {} }),
     }),
@@ -76,6 +90,7 @@ function render(
   /** 选中集：缺省 = 恰好选中本节点（控制栏该显示） */
   selectedIds: string[] = ['g1'],
 ): { html: Promise<string>; box: ReturnType<typeof renderCtx> } {
+  mockMenuState.open = openMenu
   const box = renderCtx(openMenu, selectedIds)
   const app = createSSRApp({ render: () => h(GroupTopToolbar as Component, { id: 'g1', data }) })
   app.provide(RENDER_CONTEXT_KEY, { ctx: box.ctx } as unknown as CanvasRenderContext)
@@ -184,10 +199,15 @@ describe('分组节点上控制栏', () => {
    */
   it('色板面板宽度容得下网格（不再被裁）+ 色块放大到 26px', () => {
     const src = read('../GroupTopToolbar.vue')
-    // 面板最小宽（dropdown 的 menu-width）：必须 ≥ 4 列 × 26 + 3 间距 × 6 + 两侧 8 = 138
-    const m = /menu-width="(\d+)px"/.exec(src)
+    // 面板最小宽（shadcn 菜单的内联 minWidth）：必须 ≥ 4 列 × 26 + 3 间距 × 6 + 两侧 8 = 138
+    const m = /minWidth:\s*'(\d+)px'/.exec(src)
     expect(m).toBeTruthy()
     expect(Number(m![1])).toBeGreaterThanOrEqual(138)
+    const widthRule = /\.group-color-menu\s*\{([\s\S]*?)\}/.exec(src)?.[1] ?? ''
+    expect(widthRule).toMatch(/width:\s*(\d+)px/)
+    expect(Number(/width:\s*(\d+)px/.exec(widthRule)?.[1] ?? 0)).toBeGreaterThanOrEqual(138)
+    expect(widthRule).toMatch(/min-width:\s*(\d+)px/)
+    expect(Number(/min-width:\s*(\d+)px/.exec(widthRule)?.[1] ?? 0)).toBeGreaterThanOrEqual(138)
     // 网格：4 列 26px + 6 间隙 + 8 内边距，且水平居中（4+3 的排布不再贴左缘缺角）
     expect(src).toMatch(/grid-template-columns:\s*repeat\(4,\s*26px\)/)
     expect(src).toMatch(/justify-content:\s*center/)

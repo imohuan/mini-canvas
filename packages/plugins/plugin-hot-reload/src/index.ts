@@ -98,7 +98,14 @@ export const hotReloadPlugin: PluginModule = {
       order: 7,
       component: markRaw(HotReloadNav),
       // 只提供数据：外观由设置面板统一渲染，整页走 page
-      meta: { title: HOT_RELOAD_NAV_ID, category: '开发', icon: Bug, page: markRaw(HotReloadPage) },
+      // pageGroup：整页属于 Config.group「调试插件」，挂到「开发 → 调试 → 热重载」这个二级节。
+      meta: {
+        title: HOT_RELOAD_NAV_ID,
+        category: '开发',
+        icon: Bug,
+        page: markRaw(HotReloadPage),
+        pageGroup: HOT_RELOAD_NAV_ID,
+      },
     })
     ctx.slots.register('settingsGroup/' + HOT_RELOAD_NAV_ID, {
     id: 'hot-reload/page',

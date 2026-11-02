@@ -21,6 +21,7 @@
  * `tall`：宿主把它放在**大舞台**（全屏预览）里时传 true —— 控件条略大、进屏自动播放。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import VideoPlayerBar from "./VideoPlayerBar.vue"
 import { fitPreviewBox } from "./videoPreviewFit"
 
@@ -358,17 +359,17 @@ watch(
       <!-- ===== 小屏态：只留一个居中播放/暂停键 =====
            窄容器里完整控件条排不下（进度条实测被裁得只剩几十像素），只保留必需的这一个交互。 -->
       <div v-if="dense" class="vpv-dense" :class="{ 'is-playing': playing }">
-        <button class="vpv-dense-play" type="button" :title="playing ? '暂停' : '播放'"
+        <Button class="vpv-dense-play" variant="ghost" size="icon-xs" type="button" :title="playing ? '暂停' : '播放'"
           :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
           <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
           <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-        </button>
-        <button v-if="expandable" class="vpv-dense-expand" type="button" title="进入预览" aria-label="进入预览"
+        </Button>
+        <Button v-if="expandable" class="vpv-dense-expand" variant="ghost" size="icon-xs" type="button" title="进入预览" aria-label="进入预览"
           @click.stop="emit('expand')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
           </svg>
-        </button>
+        </Button>
       </div>
 
       <!-- 大屏态：完整控制条 = 共用组件（视觉标准在视频节点那一侧，2026-10-29 用户拍板）。
@@ -479,17 +480,13 @@ watch(
 }
 .vpv-dense-play {
   pointer-events: auto;
-  display: grid;
-  place-items: center;
   width: 46px;
   height: 46px;
   padding: 0;
-  border: 0;
   border-radius: 50%;
   /* 主题色白名单: 播放键压在任意画面上，用固定中性黑底 + 白色图标（同下面的按钮） */
   background: rgb(0 0 0 / 0.45);
   color: var(--vpv-ink);
-  cursor: pointer;
   backdrop-filter: blur(4px);
   transition: transform 0.16s ease, background 0.16s ease;
 }
@@ -509,17 +506,13 @@ watch(
   right: 8px;
   bottom: 8px;
   pointer-events: auto;
-  display: grid;
-  place-items: center;
   width: 28px;
   height: 28px;
   padding: 0;
-  border: 0;
   border-radius: 8px;
   /* 主题色白名单: 同上，压在画面上的固定中性色 */
   background: rgb(0 0 0 / 0.42);
   color: var(--vpv-ink);
-  cursor: pointer;
   backdrop-filter: blur(4px);
   transition: background 0.16s ease;
 }

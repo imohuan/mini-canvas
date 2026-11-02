@@ -13,10 +13,13 @@ import {
   X as XIcon, ChevronRight as ChevronIcon, Library as LibIcon,
   FileImage as FileImageIcon, Film as FilmIcon, Music as MusicIcon, Check as CheckIcon,
 } from 'lucide-vue-next'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 import folderImg from '../assets/folder.png'
-import AxDropdown from './AxDropdown.vue'
-import AxMenu from './AxMenu.vue'
-import AxMenuItem from './AxMenuItem.vue'
 import AssetBatchBar from './AssetBatchBar.vue'
 import AssetTree, { type AssetTreeRow } from './AssetTree.vue'
 import AssetUploadDialog from './AssetUploadDialog.vue'
@@ -498,58 +501,54 @@ function onBatchDownload(): void {
                 <ChevronIcon v-if="i < breadcrumb.length - 1" :size="13" class="text-ink-dim" />
               </template>
               <span class="flex-1"></span>
-              <AxDropdown placement="bottom-end" :offset="4">
-                <template #trigger><button
+              <DropdownMenu>
+                <DropdownMenuTrigger as-child><button
                     class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
                     aria-label="搜索">
                     <SearchIcon :size="15" />
-                  </button></template>
-                <template #default="{ close }">
+                  </button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end" :side-offset="4">
                   <div class="p-1.5">
                     <input v-model="searchQuery"
                       class="h-8 w-48 rounded-lg bg-chip px-2.5 text-[13px] text-ink placeholder:text-ink-dim focus:outline-none"
-                      placeholder="搜索资产" aria-label="搜索资产" @keydown.esc="close()" />
+                      placeholder="搜索资产" aria-label="搜索资产" />
                   </div>
-                </template>
-              </AxDropdown>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <button class="grid size-8 place-items-center rounded-lg transition-colors hover:bg-hover"
                 :class="batchOn ? 'bg-brand/15 text-brand' : 'text-ink/85'" aria-label="批量操作" :aria-pressed="batchOn"
                 @click="batchOn ? exitBatch() : batchOn = true">
                 <BatchIcon :size="15" />
               </button>
-              <AxDropdown v-model="kindOpen" placement="bottom-end" :offset="4">
-                <template #trigger><button
+              <DropdownMenu v-model:open="kindOpen">
+                <DropdownMenuTrigger as-child><button
                     class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
                     aria-label="筛选" :aria-expanded="kindOpen">
                     <FilterIcon :size="15" />
-                  </button></template>
-                <template #default="{ close }">
-                  <AxMenu>
-                    <AxMenuItem v-for="k in ASSET_KINDS" :key="k" :active="s.assetFilterKind === k"
-                      @click="s.assetFilterKind = k; close()">{{ k }}</AxMenuItem>
-                  </AxMenu>
-                </template>
-              </AxDropdown>
+                  </button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end" :side-offset="4">
+                  <DropdownMenuItem v-for="k in ASSET_KINDS" :key="k" :class="{ 'bg-accent': s.assetFilterKind === k }"
+                    @select="s.assetFilterKind = k">{{ k }}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <!-- 加号下拉：新建文件夹 / 上传资产（照左侧抽屉的加号；用户口径 2026-10-08） -->
-              <AxDropdown v-model="plusOpen" placement="bottom-end" :offset="4">
-                <template #trigger>
+              <DropdownMenu v-model:open="plusOpen">
+                <DropdownMenuTrigger as-child>
                   <button
                     class="ml-2 grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover"
                     aria-label="新建或上传" :aria-expanded="plusOpen">
                     <PlusIcon :size="15" />
                   </button>
-                </template>
-                <template #default="{ close }">
-                  <AxMenu>
-                    <AxMenuItem @click="close(); addFolderIn(currentFolderId)">
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" :side-offset="4">
+                    <DropdownMenuItem @select="plusOpen = false; addFolderIn(currentFolderId)">
                       <FolderPlusIcon :size="14" class="text-ink-dim" /> 新建文件夹
-                    </AxMenuItem>
-                    <AxMenuItem @click="close(); uploadOpen = true">
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @select="plusOpen = false; uploadOpen = true">
                       <UploadIcon :size="14" class="text-ink-dim" /> 上传资产
-                    </AxMenuItem>
-                  </AxMenu>
-                </template>
-              </AxDropdown>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <!-- 内容：**树形列表**（与侧边栏同一个共用组件；右键 / 拖拽 / 菜单行为完全一致） -->

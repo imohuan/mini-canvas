@@ -28,6 +28,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 
 // over:inset 条目会被 SlotHost/壳下发 class/data-*；fragment 根继承不了，显式关掉防 warn。
 defineOptions({ inheritAttrs: false })
@@ -156,7 +157,7 @@ function onCancel(): void {
     <p v-if="failed" class="ld-hint">可再点一次发送重试</p>
 
     <!-- 取消：右下角、小号（只有跑着时才给） -->
-    <button
+    <Button variant="ghost" size="sm"
       v-if="running"
       class="task-overlay-cancel"
       type="button"
@@ -164,7 +165,7 @@ function onCancel(): void {
       @click.stop="onCancel"
     >
       取消
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -394,15 +395,12 @@ html.dark .ld-prompt {
   right: 6px;
   bottom: 6px;
   z-index: 3;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 6px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   background: var(--ui-overlay-solid, #fff);
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 11px;
   font-weight: 600;
-  line-height: 1;
   cursor: pointer;
   pointer-events: auto;
   transition: color 0.15s ease-out, background-color 0.15s ease-out;
@@ -411,11 +409,6 @@ html.dark .ld-prompt {
   color: var(--ui-danger, #ef4444);
   background: var(--ui-danger-soft, color-mix(in srgb, var(--ui-danger, #ef4444) 14%, transparent));
 }
-.task-overlay-cancel:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
-  outline-offset: 1px;
-}
-
 @keyframes ld-in {
   from {
     opacity: 0;

@@ -4,7 +4,8 @@
  * 用户口径（2026-10-26，附截图）：
  * 1. 底栏右侧「翻译 / 提示词优化」按钮要**可配置**：每条 = 图标 + 描述 + 提示词模板；
  *    清单存云端 KV（config/bottomBarAiActions），配置界面挂设置面板「底栏」组
- *    （见 PromptActionSettings.vue：内容插槽 settingsGroup/底栏 优先于 schema 平铺字段）。
+ *    （见 PromptActionSettings.vue：内容插槽 settingsGroup/常规/底栏 优先于 schema 平铺字段；
+ *    菜单层把这一组收进「画布 → 布局 → 控制栏」。）
  * 2. 点按钮 → 请求后台 AI（POST /api/agent/chat/completion，**不带 model** = 直接用
  *    Agent 插件已配好的默认渠道/模型），流式返回**直接写进底栏输入框**。
  * 3. 提示词模板支持 {{变量}}：{{prompt}} 输入框当前内容、{{nodeType}} 节点类型、

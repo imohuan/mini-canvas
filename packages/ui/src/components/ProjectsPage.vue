@@ -10,7 +10,8 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon, Blocks, ArrowUpRight } from 'lucide-vue-next'
+import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 
@@ -147,31 +148,28 @@ function dateOf(ts: number): string {
         <span class="grid size-6 place-items-center rounded-md bg-brand text-[13px] font-black text-white">M</span>
         MiniCanvas
       </div>
-      <button class="flex h-9 items-center gap-2 rounded-lg bg-brand px-3 text-[13px] font-semibold text-white transition-colors hover:bg-brand/85" @click="newProject">
+      <Button size="sm" class="h-9 w-full gap-2 rounded-lg text-[13px] font-semibold" @click="newProject">
         <Plus :size="15" /> 新建项目
-      </button>
+      </Button>
       <nav class="mt-1 flex flex-col gap-0.5">
-        <button class="flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] transition-colors hover:bg-hover" :class="nav === 'home' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('home')">
+        <Button variant="ghost" size="sm" class="h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'home' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('home')">
           <House :size="15" /> 首页
-        </button>
-        <button class="flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] transition-colors hover:bg-hover" :class="nav === 'projects' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('projects')">
+        </Button>
+        <Button variant="ghost" size="sm" class="h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'projects' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('projects')">
           <Folder :size="15" /> 项目
-        </button>
-        <button class="flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] transition-colors hover:bg-hover" :class="nav === 'assets' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('assets')">
+        </Button>
+        <Button variant="ghost" size="sm" class="h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'assets' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('assets')">
           <ImageIcon :size="15" /> 资产
-        </button>
-        <button class="flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] text-ink/90 transition-colors hover:bg-hover" @click="router.push('/ui-kit')">
-          <Blocks :size="15" /> 组件库
-        </button>
+        </Button>
       </nav>
     </aside>
 
     <!-- 主区 -->
     <main class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-14 flex-none items-center gap-3 px-6">
-        <button class="flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] text-ink-dim transition-colors hover:bg-hover" @click="router.back()">
+        <Button variant="ghost" size="xs" class="justify-start gap-1 rounded-lg px-2 text-[13px] font-normal text-ink-dim" @click="router.back()">
           <ChevronLeft :size="15" /> 返回
-        </button>
+        </Button>
         <span class="h-4 w-px bg-line"></span>
         <strong class="text-[15px]">{{ nav === 'assets' ? '全部资产' : nav === 'home' ? '首页' : '全部项目' }}</strong>
         <div class="ml-auto flex items-center gap-2">
@@ -179,16 +177,16 @@ function dateOf(ts: number): string {
             <Search :size="15" class="flex-none text-ink-dim" />
             <input v-model="query" class="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-dim focus:outline-none" placeholder="搜索项目" aria-label="搜索项目" />
           </label>
-          <button class="flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[13px] text-ink transition-colors hover:bg-hover">
+          <Button variant="outline" size="sm" class="h-9 gap-1.5 rounded-lg text-[13px] font-normal text-ink">
             <Trash2 :size="14" /> 回收站
-          </button>
-          <button class="flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[13px] text-ink transition-colors hover:bg-hover" @click="newProject">
+          </Button>
+          <Button variant="outline" size="sm" class="h-9 gap-1.5 rounded-lg text-[13px] font-normal text-ink" @click="newProject">
             <FolderPlus :size="14" /> 新建文件夹
-          </button>
-          <button class="grid size-9 place-items-center rounded-lg border border-line text-ink transition-colors hover:bg-hover" aria-label="主题切换" @click="toggleTheme">
+          </Button>
+          <Button variant="outline" size="icon" class="rounded-lg text-ink" aria-label="主题切换" @click="toggleTheme">
             <Sun v-if="theme === 'dark'" :size="15" />
             <Moon v-else :size="15" />
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -208,45 +206,36 @@ function dateOf(ts: number): string {
           <p v-if="assets.length === 0" class="col-span-5 py-16 text-center text-[13px] text-ink/50">还没有资产。生成或上传之后会出现在这里。</p>
         </div>
 
-        <!-- 首页页签：欢迎语 + 组件库入口（展示页在 #/ui-kit） -->
+        <!-- 首页页签：欢迎语 -->
         <div v-else-if="nav === 'home'" class="py-12">
           <p class="text-center text-[13px] text-ink/60">欢迎使用 MiniCanvas。选「项目」开始创作，或「资产」查看生成与上传的素材。</p>
-          <button class="mt-8 flex w-full max-w-[420px] items-center gap-4 rounded-2xl border border-line bg-panel px-5 py-4 text-left transition-colors hover:bg-hover" @click="router.push('/ui-kit')">
-            <span class="grid size-10 flex-none place-items-center rounded-xl bg-brand/10 text-brand">
-              <Blocks :size="20" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <strong class="block text-[14px] text-ink">组件库</strong>
-              <span class="mt-0.5 block text-[12px] text-ink-dim">Button 已经就位。调参数、看代码、复制到你的插件里。</span>
-            </span>
-            <ArrowUpRight :size="16" class="flex-none text-ink-dim" />
-          </button>
         </div>
 
         <!-- 项目页签 -->
         <div v-else class="grid grid-cols-5 gap-4">
           <!-- 开始创作 -->
-          <button class="flex flex-col gap-2 text-left" @click="newProject">
+          <Button variant="ghost" size="sm" class="flex h-auto w-full flex-col items-stretch justify-start gap-2 text-left font-normal" @click="newProject">
             <span class="grid h-[150px] place-items-center rounded-xl border border-line bg-panel text-ink-dim transition-colors hover:bg-hover">
               <Plus :size="26" />
             </span>
             <span class="text-[13px] text-ink">创建新的视频项目</span>
-          </button>
+          </Button>
 
           <!-- 项目卡片 -->
           <div v-for="p in projects.filter((x) => !query || x.name.includes(query))" :key="p.id" class="group relative flex flex-col gap-2">
-            <button class="absolute inset-0 z-10 rounded-xl" :aria-label="'打开项目 ' + p.name" @click="openProject(p)"></button>
+            <Button variant="ghost" size="sm" class="absolute inset-0 z-10 h-auto w-auto p-0 hover:bg-transparent" :aria-label="'打开项目 ' + p.name" @click="openProject(p)"></Button>
             <div class="grid h-[150px] place-items-center overflow-hidden rounded-xl border border-line bg-gradient-to-br from-panel-active to-panel-soft text-ink-mute">
               <Folder :size="30" :stroke-width="1" />
             </div>
             <span class="truncate text-[13px] text-ink">{{ p.name }}</span>
             <span class="text-[11px] text-ink-dim">{{ dateOf(p.createdAt) }}</span>
-            <button
+            <Button
               v-if="p.id !== 'default'"
-              class="absolute right-1 top-1 z-20 grid size-6 place-items-center rounded-lg bg-panel/90 text-ink-dim opacity-0 transition-opacity hover:bg-hover hover:text-ink group-hover:opacity-100"
+              variant="ghost" size="icon-xs"
+              class="absolute right-1 top-1 z-20 rounded-lg bg-panel/90 text-ink-dim opacity-0 group-hover:opacity-100 hover:bg-hover hover:text-ink"
               :aria-label="'删除项目 ' + p.name" @click.stop="removeProject(p)">
               <Trash2 :size="13" />
-            </button>
+            </Button>
           </div>
         </div>
 

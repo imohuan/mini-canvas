@@ -28,17 +28,19 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
-// 面板头部动作按钮改用 shadcn 原始 Button；历史下拉的外壳与内容 UI 都保持不变。
-import { Button } from '@mini-canvas/ui-kit-shadcn'
-import { SlotHost, useUiComponent, broadcastCloseAllDropdowns } from '@mini-canvas/canvas-render'
-import AxResizeHandle from '../AxResizeHandle.vue'
+// 面板头部动作按钮与历史下拉都直接用 shadcn 原始组件。
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
+import { SlotHost, broadcastCloseAllDropdowns } from '@mini-canvas/canvas-render'
+import PanelResizeHandle from '../PanelResizeHandle.vue'
 import { useUi } from '../../composables/ui'
 
 const ui = useUi()
 const s = ui.state
-
-/** 历史对话仍用主题目录里的 dropdown：外壳、定位、点外关闭都由它负责。 */
-const ThemedDropdown = useUiComponent('dropdown')
 
 /**
  * 历史列表的标题 / 摘要显示：剥掉引用标记再截断。
@@ -221,7 +223,7 @@ function startCornerResize(e: PointerEvent): void {
       : { left: floatPos.x + 'px', top: floatPos.y + 'px', width: fitW + 'px', height: fitH + 'px' }"
     aria-label="Agent 对话面板"
   >
-    <AxResizeHandle v-if="ui.agent.docked" class="agent-resize" edge="left"
+    <PanelResizeHandle v-if="ui.agent.docked" class="agent-resize" edge="left"
       label="调整 Agent 面板宽度" @resize-start="startResize" />
 
     <!-- 头部：两种摆法都能抓（浮窗 = 移动；停靠 = 拖出来），所以 draggable 常开 -->
@@ -233,15 +235,13 @@ function startCornerResize(e: PointerEvent): void {
         <!-- 历史对话：就是**普通的 dropdown**，居中靠它自己的 placement。
              触发器是这个「历史」按钮，所以居中也是相对**它**（placement="bottom" = 菜单中轴对触发器中轴）。
              只有触发器按钮换成了 shadcn Button；菜单外壳与列表 UI 原样保留。 -->
-        <component :is="ThemedDropdown || 'div'" v-model="s.agentHistoryOpen" placement="bottom"
-          :offset="10" layout="inner-scroll"
-          menu-width="320px" menu-max-width="min(320px, calc(100vw - 40px))" menu-max-height="min(60vh, 460px)" menu-role="menu">
-          <!-- 触发器**不要**自己写 @click：dropdown 的触发层已经绑了 toggle。 -->
-          <template #trigger="{ open }">
+        <DropdownMenu v-model:open="s.agentHistoryOpen">
+          <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="历史对话"
-              :aria-expanded="open"><History :size="16" class="size-4" /></Button>
-          </template>
-          <template #default="{ close }">
+              :aria-expanded="s.agentHistoryOpen"><History :size="16" class="size-4" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center" side="bottom" :side-offset="10" class="agent-history-menu"
+            :style="{ width: '320px', maxWidth: 'min(320px, calc(100vw - 40px))', maxHeight: 'min(60vh, 460px)' }">
             <div class="agent-history" role="menu" aria-label="历史对话">
               <!-- 分组头：与其它下拉同一套结构（标题 + 计数，固定不滚） -->
               <div class="agent-history-head">
@@ -254,7 +254,7 @@ function startCornerResize(e: PointerEvent): void {
                      选中 = 当前会话属于这棵树（在任意一条分支上都算「在这个对话里」）。 -->
                 <li v-for="c in ui.agent.conversations" :key="c.rootId">
                   <button class="agent-history-item" :class="{ 'is-current': c.memberIds.includes(ui.agent.sessionId || '') }"
-                    @click="ui.openAgentConversation(c.rootId, c.memberIds); close()">
+                    @click="ui.openAgentConversation(c.rootId, c.memberIds); s.agentHistoryOpen = false">
                     <strong>{{ historyText(c.meta.title, 24) }}</strong>
                     <small>{{ historyText(c.meta.preview || c.rootId, 60) }}</small>
                   </button>
@@ -264,8 +264,8 @@ function startCornerResize(e: PointerEvent): void {
                 <li v-if="!ui.agent.conversations.length" class="agent-history-empty">还没有历史对话</li>
               </ul>
             </div>
-          </template>
-        </component>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="Agent 设置"
           @click="s.settingsOpen = true"><Settings2 :size="16" class="size-4" /></Button>
         <!-- TV Director 全局设置：从旧 ChatPanel 的「Agent 偏好」齿轮搬过来。
@@ -310,7 +310,7 @@ function startCornerResize(e: PointerEvent): void {
 /* 停靠态：去圆角、去阴影，左缘留一条普通分隔线
    （--ui-line 而不是浮窗那条更亮的 --ui-shell-line：它不是浮起的卡片，是贴在画布边上的一条边）。 */
 .agent-shell.is-docked { top: 0; bottom: 0; right: 0; height: 100%; border-radius: 0; border-width: 0 0 0 1px; border-color: var(--ui-line, #e2e5ea); background: var(--ui-overlay-solid, var(--ui-panel, #fff)); box-shadow: none; }
-/* 拖宽手柄的观感（线宽 / 主题色 / 拖拽态）统一在 AxResizeHandle 里；这里只定位置 */
+/* 拖宽手柄的观感（线宽 / 主题色 / 拖拽态）统一在 PanelResizeHandle 里；这里只定位置 */
 .agent-resize { top: 1px; bottom: 0; left: 0; z-index: 20; }
 .agent-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 10px 14px 10px 16px; }
 .agent-head.draggable { cursor: grab; user-select: none; }
@@ -324,6 +324,12 @@ function startCornerResize(e: PointerEvent): void {
 /* 历史下拉（外框/定位/滚动/点外关闭都由 dropdown 提供；这里只管内容）。
    结构与技能 / MCP 那两个下拉**刻意保持一致**：上下 flex 分栏 —— 标题固定、只有列表滚。 */
 .agent-history { display: flex; flex-direction: column; min-height: 0; flex: 1; padding: 2px; }
+/*
+ * 菜单外壳：shadcn 的 DropdownMenuContent 默认带 p-1 / min-w-48 / 固定宽度变量；
+ * 历史面板要自己控制内外两层（头部固定、列表滚），所以把默认内边距归零、
+ * 高度交给内层 flex —— 否则 maxHeight 会卡在外壳上，头部和列表一起被截断。
+ */
+.agent-history-menu { padding: 0; min-width: 0; overflow: hidden; }
 .agent-history-head { display: flex; align-items: center; gap: 8px; flex: none; padding: 8px 10px 6px; }
 .agent-history-title { font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
 .agent-history-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 10px; line-height: 16px; text-align: center; color: var(--ui-ink-dim, #919191); }

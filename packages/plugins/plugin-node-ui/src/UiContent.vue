@@ -28,6 +28,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, useUiComponent, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { buildPalette, buildSrcdoc, normalizeUpstream, toCloneableState, type PaletteToken, type UpstreamItem } from './uiData'
 import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
@@ -1262,16 +1263,18 @@ const hint = computed(() => {
           原样不动。副本点坏了大不了重开，节点上那份不受影响。
           2026-10-15 用户报「无法操作、无法调试」，根因就是沙箱本身（见 uiDebug.ts 文件头）。
         -->
-        <button
+        <Button
           type="button"
           class="ui-gate-debug"
+          variant="ghost"
+          size="sm"
           title="在新窗口里调试这份界面（可读变量 / 打断点）"
           @mousedown.stop
           @dblclick.stop
           @click.stop="openDebug"
         >
           调试
-        </button>
+        </Button>
 
       </div>
 
@@ -1290,8 +1293,8 @@ const hint = computed(() => {
             该节点会与后台建立调试连接，并阻止意外刷新（刷新前会再确认）。
           </p>
           <div class="debug-prompt-actions">
-            <button type="button" class="debug-btn-ghost" @click.stop="dismissDebugInvite">先不连</button>
-            <button type="button" class="debug-btn-primary" @click.stop="acceptDebugInvite">同意调试</button>
+            <Button type="button" class="debug-btn-ghost" variant="ghost" size="sm" @click.stop="dismissDebugInvite">先不连</Button>
+            <Button type="button" class="debug-btn-primary" variant="default" size="sm" @click.stop="acceptDebugInvite">同意调试</Button>
           </div>
         </div>
       </div>
@@ -1402,21 +1405,20 @@ const hint = computed(() => {
  * 为什么放在遮罩层上、且只 hover 才露出来：遮罩平时是透明的（要把事件让回画布），
  * 常驻一个按钮会挡视线；而「调试」是个低频动作，藏起来不影响日常使用。
  *
- * 为什么用 <button> 而不是 <span>：键盘要能 Tab 到它、回车要能触发
+ * 为什么用按钮而不是 <span>：键盘要能 Tab 到它、回车要能触发
  * （a11y 硬性规则，见 docs/design/ui-style-guide.md）。
  */
 .ui-gate-debug {
   position: absolute;
   left: 8px;
   bottom: 8px;
+  height: auto;
   padding: 2px 10px;
-  border: 0;
   border-radius: 999px;
   background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
   color: var(--text-faint, #9ca3af);
   font-size: 11px;
   line-height: 18px;
-  cursor: pointer;
   opacity: 0;
   transition: opacity 160ms ease;
 }
@@ -1460,6 +1462,7 @@ const hint = computed(() => {
   justify-content: flex-end;
 }
 .debug-btn-ghost {
+  height: auto;
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
@@ -1467,20 +1470,18 @@ const hint = computed(() => {
   color: var(--text-muted, #6b7280);
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
 }
 .debug-btn-ghost:hover {
   background: var(--fill-hover, rgba(0, 0, 0, 0.05));
 }
 .debug-btn-primary {
+  height: auto;
   padding: 6px 14px;
   border-radius: 8px;
-  border: 0;
   background: var(--ui-accent, #0891b2);
   color: var(--ui-on-accent, #fff);
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
 }
 .debug-btn-primary:hover {
   background: var(--ui-accent-hover, #0e7490);

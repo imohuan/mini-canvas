@@ -9,6 +9,7 @@
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
 import { CanvasHost, CanvasProvider, SettingsHost } from '@mini-canvas/canvas-render'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import { SlotHost } from '@mini-canvas/canvas-render'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
@@ -170,10 +171,10 @@ onBeforeUnmount(() => {
                   </span>
                   <span class="min-w-0 flex-1"><strong class="block truncate text-xs">{{ item.name }}</strong><small
                       class="block truncate text-[10px] text-ink-dim">{{ item.meta }}</small></span>
-                  <button class="grid size-6 place-items-center rounded-md text-ink-dim hover:bg-hover hover:text-ink"
+                  <Button variant="ghost" size="icon-xs" class="text-ink-dim hover:text-ink"
                     :aria-label="'对话 ' + item.name" @click.stop="ui.showToast('与 ' + item.name + ' 对话')">
                     <MessageSquarePlus :size="14" />
-                  </button>
+                  </Button>
                 </article>
               </div>
             </section>
@@ -187,9 +188,10 @@ onBeforeUnmount(() => {
             <span class="size-2 rounded-full bg-white"></span>
             <span>正在跟随</span>
             <!-- 主题色白名单: 横幅内的白胶囊按钮，压在恒亮绿底上需恒定对比 -->
-            <button
-              class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90"><!-- 主题色白名单: 恒亮绿底上的恒白胶囊，见上方注释 -->
-              aria-label="退出跟随" @click="s.following = false">取消ESC</button>
+            <Button
+              variant="ghost" size="xs"
+              class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] hover:bg-white/90"><!-- 主题色白名单: 恒亮绿底上的恒白胶囊，见上方注释 -->
+              aria-label="退出跟随" @click="s.following = false">取消ESC</Button>
           </div>
           <!-- 真实画布 -->
           <!-- 函数 ref：字符串 ref("ui.hostEl") 带点号 Vue 绑不上（hostEl 恒 null → 设置改动永远到不了画布）。

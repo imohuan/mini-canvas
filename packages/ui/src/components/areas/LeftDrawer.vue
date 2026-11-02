@@ -5,20 +5,25 @@ import { ref, computed, isRef, nextTick, h, defineComponent, onMounted, onBefore
 import { ArrowLeftToLine as ArrowLeftToLineIcon, Folder as FolderIcon, Video as VideoIcon, Type as TypeIcon, Image as ImageIcon, Music as AudioIcon, Download as DownloadIcon, Trash2 as Trash2Icon, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon, Check as CheckIcon, ChevronRight as ChevronIcon, MoreHorizontal as MoreIcon, Palette as PaletteIcon, Pencil as PencilIconLucide, ArrowRightFromLine as AddCanvasIcon, Wand2 as AgentIcon, Cloud as CloudIcon, Aperture as ApertureIcon, Car as CarIcon, BookUser as BookUserIcon, CircleDot as CircleDotIcon, Plane as PlaneIcon, Film as FilmIcon, Cookie as CookieIcon, Flame as FlameIcon, Wrench as WrenchIcon, Paintbrush as PaintbrushIcon, Shapes as ShapesIcon, Candy as CandyIcon, Monitor as MonitorIcon, Landmark as LandmarkIcon, Book as BookIcon, Camera as CameraIcon, Ghost as GhostIcon, Briefcase as BriefcaseIcon } from 'lucide-vue-next'
 import folderImg from '../../assets/folder.png'
 import { AnimatePresence, motion } from 'motion-v'
-import AxDropdown from '../AxDropdown.vue'
-import AxMenu from '../AxMenu.vue'
-import AxMenuItem from '../AxMenuItem.vue'
-import AxScrollArea from '../AxScrollArea.vue'
-import AxResizeHandle from '../AxResizeHandle.vue'
+import PanelResizeHandle from '../PanelResizeHandle.vue'
+import ScrollPane from '../ScrollPane.vue'
 import LibIcon from '../LibIcon.vue'
 import ProjectCluster from '../ProjectCluster.vue'
 import AssetBatchBar from '../AssetBatchBar.vue'
 import AssetUploadDialog from '../AssetUploadDialog.vue'
 import AssetTree, { type AssetTreeRow } from '../AssetTree.vue'
 import CanvasRowMenu from '../CanvasRowMenu.vue'
-import AxDialog from '../AxDialog.vue'
+import AppDialog from '../AppDialog.vue'
 // 抽屉的页签 / 工具按钮 / 搜索框改用 shadcn 原始组件；各下拉菜单的内容 UI 保持不变。
-import { Button, Input } from '@mini-canvas/ui-kit-shadcn'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Input,
+} from '@mini-canvas/ui-kit-shadcn'
 import { useUi, type TreeNode } from '../../composables/ui'
 import { checkedRowIds } from '../../composables/assetSelection'
 import { canvasTreeBlocks } from '../../composables/canvasTree'
@@ -741,20 +746,18 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
                   class="h-full w-auto min-w-0 flex-1 rounded-lg border-0 bg-transparent px-0 md:text-[13px] leading-normal shadow-none focus-visible:border-transparent focus-visible:ring-0"
                   placeholder="搜索节点" aria-label="搜索节点" @keydown.esc="closeSearch()" />
               </div>
-              <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
-                <template #trigger><Button variant="ghost" size="icon-sm"
+              <DropdownMenu v-model:open="s.filterTypeOpen">
+                <DropdownMenuTrigger as-child><Button variant="ghost" size="icon-sm"
                     class="flex-none rounded-lg text-ink/85"
                     aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8"
                         stroke-linecap="round" />
-                    </svg></Button></template>
-                <template #default="{ close }">
-                  <AxMenu>
-                    <AxMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
-                      @click="s.filterType = t; close()">{{ t }}</AxMenuItem>
-                  </AxMenu>
-                </template>
-              </AxDropdown>
+                    </svg></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="start" :side-offset="4">
+                  <DropdownMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
+                    @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="ghost" size="icon-sm"
                 class="flex-none rounded-lg text-ink/85"
                 aria-label="关闭搜索" @click="closeSearch()">
@@ -776,57 +779,52 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
                 fill="currentColor" fill-rule="evenodd" />
             </svg>
           </Button>
-          <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
-            <template #trigger><Button variant="ghost" size="icon-sm"
+          <DropdownMenu v-model:open="s.filterTypeOpen">
+            <DropdownMenuTrigger as-child><Button variant="ghost" size="icon-sm"
                 class="rounded-lg text-ink/85"
                 aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                </svg></Button></template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
-                  @click="s.filterType = t; close()">{{
-                    t }}</AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+                </svg></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start" :side-offset="4">
+              <DropdownMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
+                @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <span class="flex-1"></span>
           <!-- 展示设置：列表/宫格/展开/收起（照图 2，带勾选态） -->
-          <AxDropdown v-model="menuOpen" placement="bottom-end" :offset="4" menu-width="180px">
-            <template #trigger>
+          <DropdownMenu v-model:open="menuOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
                 aria-label="展示设置" :aria-expanded="menuOpen">
                 <LibIcon name="display-grid" :size="16" class="size-4 shrink-0" />
               </Button>
-            </template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem :active="viewMode === 'list'" @click="viewMode = 'list'; close()">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" :side-offset="4" :style="{ minWidth: '180px' }">
+                <DropdownMenuItem :class="{ 'bg-accent': viewMode === 'list' }" @select="viewMode = 'list'; menuOpen = false">
                   <LibIcon name="list-view" :size="16" /> 列表展示 <svg v-if="viewMode === 'list'" class="ml-auto"
                     width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <path
                       d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z"
                       fill="currentColor" />
                   </svg>
-                </AxMenuItem>
-                <AxMenuItem :active="viewMode === 'grid'" @click="viewMode = 'grid'; close()">
+                </DropdownMenuItem>
+                <DropdownMenuItem :class="{ 'bg-accent': viewMode === 'grid' }" @select="viewMode = 'grid'; menuOpen = false">
                   <LibIcon name="display-grid" :size="16" /> 宫格展示 <svg v-if="viewMode === 'grid'" class="ml-auto"
                     width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <path
                       d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z"
                       fill="currentColor" />
                   </svg>
-                </AxMenuItem>
-                <div class="my-1 h-px bg-line"></div>
-                <AxMenuItem @click="expandAll(); close()">
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @select="expandAll(); menuOpen = false">
                   <LibIcon name="expand-groups" :size="16" /> 展开全部分组
-                </AxMenuItem>
-                <AxMenuItem @click="collapseAll(); close()">
+                </DropdownMenuItem>
+                <DropdownMenuItem @select="collapseAll(); menuOpen = false">
                   <LibIcon name="collapse-groups" :size="16" /> 收起全部分组
-                </AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </template>
       </div>
 
@@ -876,41 +874,37 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
               <path d="M5.5 11.5v3a2 2 0 0 0 2 2h1M14.5 8.5v-3a2 2 0 0 0-2-2h-1" stroke="currentColor"
                 stroke-width="1.5" stroke-linecap="round" />
             </svg></Button>
-          <AxDropdown placement="bottom-start" :offset="4">
-            <template #trigger>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="rounded-lg"
                 :class="s.assetFilterKind !== '全部' ? 'text-brand' : 'text-ink/85'" aria-label="筛选"><svg width="15"
                   height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                 </svg></Button>
-            </template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem v-for="k in ASSET_KINDS" :key="k" :active="s.assetFilterKind === k"
-                  @click="pickAssetKind(k); close()">{{ k }}</AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" :side-offset="4">
+              <DropdownMenuItem v-for="k in ASSET_KINDS" :key="k" :class="{ 'bg-accent': s.assetFilterKind === k }"
+                @select="pickAssetKind(k)">{{ k }}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <span class="flex-1"></span>
           <!-- 加号下拉：新建文件夹 / 上传资产（照图 4） -->
-          <AxDropdown v-model="plusOpen" placement="bottom-end" :offset="4">
-            <template #trigger>
+          <DropdownMenu v-model:open="plusOpen">
+            <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" class="rounded-lg text-ink/85"
                 aria-label="新建或上传" :aria-expanded="plusOpen">
                 <PlusIcon :size="16" />
               </Button>
-            </template>
-            <template #default="{ close }">
-              <AxMenu>
-                <AxMenuItem @click="close(); addFolder()">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" :side-offset="4">
+                <DropdownMenuItem @select="plusOpen = false; addFolder()">
                   <FolderPlusIcon :size="14" class="text-ink-dim" /> 新建文件夹
-                </AxMenuItem>
-                <AxMenuItem @click="close(); uploadOpen = true">
+                </DropdownMenuItem>
+                <DropdownMenuItem @select="plusOpen = false; uploadOpen = true">
                   <UploadIcon :size="14" class="text-ink-dim" /> 上传资产
-                </AxMenuItem>
-              </AxMenu>
-            </template>
-          </AxDropdown>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="secondary" size="sm" class="h-8 rounded-lg px-2.5 text-[13px] font-normal hover:bg-hover-strong"
             aria-label="资产管理" @click="openAssetManager(undefined, { fromRef: false })">资产管理</Button>
         </template>
@@ -919,7 +913,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
       </div>
 
       <!-- ===== 资产 tab：文件夹树 + 根级资产（后台结构与此显示一致）===== -->
-      <AxScrollArea v-if="s.leftTab === 'assets'" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
+      <ScrollPane v-if="s.leftTab === 'assets'" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
         <!-- 空态：没有任何资产也没有文件夹 -->
         <div v-if="!rootFolders.length && !ui.filteredAssets.value.length"
           class="flex flex-col items-center justify-center gap-2.5 p-8">
@@ -943,7 +937,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           @start-rename="startRename($event.id, $event.name)" @drop-on="onTreeDrop" @add-agent="onTreeAddAgent"
           @add-canvas="onTreeAddCanvas" @child-folder="onTreeChildFolder" @move-to="onTreeMoveTo"
           @set-icon="onTreeSetIcon" @set-tags="onTreeSetTags" @download="onTreeDownload" @remove="onTreeRemove" />
-      </AxScrollArea>
+      </ScrollPane>
 
       <!-- 批量操作悬浮条（图 1 底部）：抽屉内绝对定位贴底居中 -->
       <div v-if="s.leftTab === 'assets' && s.assetBatchOn"
@@ -958,7 +952,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
         @close="uploadOpen = false" @save="onUploadSave" />
 
       <!-- 文件夹「添加到画布」确认（数量 > 10 时出现；用户口径：一下添加太多会卡死） -->
-      <AxDialog :model-value="!!folderConfirm" width="380px" @update:model-value="onFolderConfirmCancel">
+      <AppDialog :model-value="!!folderConfirm" width="380px" @update:model-value="onFolderConfirmCancel">
         <div v-if="folderConfirm" class="flex flex-col gap-4 p-5">
           <p class="text-sm font-medium text-ink">把「{{ folderConfirm.name }}」添加到画布？</p>
           <p class="text-[13px] leading-relaxed text-ink-dim">
@@ -972,11 +966,11 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
               aria-label="确认添加" @click="onFolderConfirmOk">继续添加</Button>
           </div>
         </div>
-      </AxDialog>
+      </AppDialog>
 
 
       <!-- ===== 画布 tab 主体：列表 / 宫格 双模式（照图 1）===== -->
-      <AxScrollArea v-if="isCanvasTab" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
+      <ScrollPane v-if="isCanvasTab" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
         <template v-for="block in canvasBlocks" :key="block.key">
           <!-- 分组行（任意层）：depth 决定缩进；行内改名与资产树同款（用户口径 2026-10-08） -->
           <div v-if="block.kind === 'group'"
@@ -1108,12 +1102,12 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           </template>
         </template>
 
-      </AxScrollArea>
+      </ScrollPane>
 
       <!-- 插件页签正文：只在当前选中的是插件页签时渲染（画布/资产树走各自的 v-if） -->
-      <AxScrollArea v-if="activePluginTab" class="min-h-0 flex-1" direction="y" body-class="p-2">
+      <ScrollPane v-if="activePluginTab" class="min-h-0 flex-1" direction="y" body-class="p-2">
         <component :is="activePluginTab.panel" :host="drawerHost" />
-      </AxScrollArea>
+      </ScrollPane>
 
       <!-- 底部状态条 -->
       <div class="flex h-[53px] flex-none items-center justify-between border-t border-line px-3 pb-3 pt-2">
@@ -1123,7 +1117,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
         </Button>
         <span class="text-xs text-ink-dim">共 {{ ui.treeTotal }} 节点</span>
       </div>
-      <AxResizeHandle class="left-drawer-resize" edge="right" label="调整侧栏宽度"
+      <PanelResizeHandle class="left-drawer-resize" edge="right" label="调整侧栏宽度"
         @resize-start="ui.startDrawerResize" />
     </motion.aside>
   </AnimatePresence>
@@ -1148,6 +1142,6 @@ export const WandIcon = mk('M9.5 2.5v2M9.5 9.5v2M2.5 9.5h2M6.5 6.5 3 3M13.5 13.5
   background: var(--ui-overlay-solid, var(--ui-panel, #fff));
   box-shadow: none;
 }
-/* 拖宽手柄的观感统一在 AxResizeHandle 里；这里只定位置（线贴抽屉右缘） */
+/* 拖宽手柄的观感统一在 PanelResizeHandle 里；这里只定位置（线贴抽屉右缘） */
 .left-drawer-resize { top: 0; bottom: 0; right: 0; z-index: 2; }
 </style>

@@ -9,8 +9,8 @@
  * 结构：触发器 = 工具栏按钮（色块图标）；菜单 = 预置色网格 + 注册的颜色组件。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+import { Button, Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   /** 当前颜色（#rrggbb / #rrggbbaa） */
@@ -22,7 +22,6 @@ const emit = defineEmits<{
   (e: "update:modelValue", value: string): void
 }>()
 
-const Dropdown = useUiComponent('dropdown')
 const ColorField = useUiComponent('color')
 
 /** 面板开关（受控给 Dropdown） */
@@ -46,43 +45,35 @@ function onColorChange(value: string): void {
   emit('update:modelValue', value)
 }
 
-/** 色块图标（透明底 + 填充圆） */
-const ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>'
 </script>
 
 <template>
-  <component
-    :is="Dropdown || 'div'"
-    v-if="Dropdown"
-    v-model="open"
-    placement="bottom-start"
-    :offset="6"
-    menu-width="232px"
-    menu-role="dialog"
-  >
-    <template #trigger="{ toggle }">
-      <button
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <Button
         type="button"
         class="pcp-trigger"
+        variant="ghost"
+        size="sm"
         title="标记颜色"
         aria-label="标记颜色"
         aria-haspopup="dialog"
         :aria-expanded="open"
-        @click.stop="toggle"
       >
         <span class="pcp-swatch" :style="{ backgroundColor: swatch }" aria-hidden="true" />
-      </button>
-    </template>
+      </Button>
+    </PopoverTrigger>
 
-    <div class="pcp-panel">
+    <PopoverContent align="start" :side-offset="6" class="pcp-panel">
       <div class="pcp-title">预置颜色</div>
       <div class="pcp-grid">
-        <button
+        <Button
           v-for="c in PRESET_COLORS"
           :key="c"
           type="button"
           class="pcp-dot"
+          variant="ghost"
+          size="sm"
           :class="{ 'is-active': swatch.toLowerCase() === c }"
           :style="{ backgroundColor: c }"
           :title="c"
@@ -99,13 +90,8 @@ const ICON =
         @update:model-value="onColorChange"
       />
       <div v-else class="pcp-missing">主题没有注册颜色组件</div>
-    </div>
-  </component>
-  <!-- 主题没注册 dropdown 时：退化成只有色块的静态按钮（不静默消失） -->
-  <Button v-else class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
-    :title="'标记颜色 ' + swatch" aria-label="标记颜色">
-    <ToolbarIcon :icon="ICON" />
-  </Button>
+    </PopoverContent>
+  </Popover>
 </template>
 
 <style scoped>
@@ -116,10 +102,7 @@ const ICON =
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid transparent;
   border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 .pcp-trigger:hover {
@@ -142,7 +125,10 @@ const ICON =
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 4px;
+  width: 232px;
+  padding: 12px;
+  border-radius: var(--mct-radius, 16px);
+  background: var(--ui-overlay-solid, #fff);
 }
 .pcp-title {
   font-size: 11px;
@@ -158,8 +144,7 @@ const ICON =
   width: 100%;
   aspect-ratio: 1;
   border-radius: 8px;
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.12));
-  cursor: pointer;
+  padding: 0;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .pcp-dot:hover {

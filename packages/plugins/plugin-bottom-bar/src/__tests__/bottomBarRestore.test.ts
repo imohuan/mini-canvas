@@ -138,9 +138,9 @@ function render(data: Record<string, unknown>): Promise<string> {
 
 /** 下拉触发器上显示的动作名（没有底栏时返回空串） */
 function triggerLabel(html: string): string {
-  // ui-kit Select 的触发器标签是 `mck-select__label`。
-  const m = html.match(/class="[^"]*\bmck-select__label\b[^"]*"[^>]*>([^<]*)</)
-  return (m?.[1] ?? '').trim()
+  // shadcn Select 的当前值由 SelectValue 渲染，稳定标记是 data-slot="select-value"。
+  const m = html.match(/<[^>]*data-slot="select-value"[^>]*>([\s\S]*?)<\/(?:span|div)>/)
+  return (m?.[1] ?? '').replace(/<[^>]+>/g, '').trim()
 }
 
 describe('底栏配置恢复：上次用的动作（模型）', () => {

@@ -467,7 +467,7 @@ html.dark .remap-panel {
   padding: 6px 14px;
   border: 0;
   background: var(--ui-accent, #0891b2);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
   font-size: 12px;
   font-weight: 700;
   border-radius: 8px;

@@ -22,6 +22,7 @@ import { computed, ref } from 'vue'
 import {
   ChevronRight, LayoutGrid, CircleDot, Image as ImageIcon, ImageOff, Video, Music, Type, Folder, Briefcase, Wand2, FileText,
 } from 'lucide-vue-next'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import type { CardBlock, CardIcon, ToolView } from '../toolViews.js'
 
 const props = defineProps<{ view: ToolView; args: string; output?: string; name?: string }>()
@@ -130,12 +131,12 @@ function visibleRows<T>(items: T[]): T[] {
         </span>
         <!-- 视频 / 音频：没有静态画面，给一个带播放角的媒体位，点开全屏播放
              （全屏那只 MediaViewer 里有节点插件登记的真播放器） -->
-        <button v-else-if="b.src" class="tvc-media-play" type="button"
+        <Button v-else-if="b.src" variant="ghost" size="icon-sm" class="tvc-media-play" type="button"
           :aria-label="'播放 ' + (b.title || '')" :title="'播放 ' + (b.title || '')"
           @click="emit('preview', b.src!, b.mediaKind === 'audio' ? 'audio' : 'video')">
           <component :is="b.mediaKind === 'audio' ? Music : Video" :size="15" />
           <span class="tvc-media-play-badge" aria-hidden="true">▶</span>
-        </button>
+        </Button>
         <span class="tvc-media-text">
           <span v-if="b.title" class="tvc-media-title">{{ b.title }}</span>
           <span v-if="b.sub" class="tvc-media-sub">{{ b.sub }}</span>
@@ -187,10 +188,10 @@ function visibleRows<T>(items: T[]): T[] {
 
     <!-- 卡内「详情」折叠（用户口径 2026-10-08 定稿）：卡片下方一块；
          展开 = 工具名称 / 输入 / 输出，三块都在、内容不省略 -->
-    <button class="tvc-details-toggle" :aria-expanded="showDetails" @click="showDetails = !showDetails">
+    <Button variant="ghost" size="xs" class="tvc-details-toggle" :aria-expanded="showDetails" @click="showDetails = !showDetails">
       <ChevronRight :size="12" class="tvc-details-caret" :class="{ 'is-open': showDetails }" />
       详情
-    </button>
+    </Button>
     <div v-if="showDetails" class="tvc-details">
       <div class="tvc-details-row">
         <span class="tvc-details-label">工具名称</span>
@@ -242,7 +243,7 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-media-thumb:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
 .tvc-media-broken { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 8px; border: 1px dashed var(--ui-line, #363636); background: var(--ui-veil, rgb(255 255 255 / 0.04)); color: var(--ui-ink-dim, #919191); }
 /* 视频 / 音频的播放位：与图片缩略图同尺寸（40px），一眼看出「这里点一下会播」 */
-.tvc-media-play { position: relative; display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border-radius: 8px; border: 1px solid var(--ui-line, #363636); background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink-dim, #919191); cursor: pointer; }
+.tvc-media-play { position: relative; flex: none; width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--ui-line, #363636); background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink-dim, #919191); }
 .tvc-media-play:hover { color: var(--ui-ink, #f7f7f7); border-color: var(--ui-ink-dim, #919191); }
 .tvc-media-play:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
 .tvc-media-play-badge { position: absolute; right: 2px; bottom: 1px; font-size: 8px; line-height: 1; color: var(--ui-ink, #f7f7f7); }
@@ -286,7 +287,7 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-note.is-info { color: var(--ui-ink-dim, #919191); }
 
 /* 卡内「详情」折叠 */
-.tvc-details-toggle { display: inline-flex; align-items: center; gap: 3px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 11px; cursor: pointer; }
+.tvc-details-toggle { align-self: flex-start; gap: 3px; color: var(--ui-ink-dim, #919191); font-size: 11px; }
 .tvc-details-toggle:hover { color: var(--ui-ink, #f7f7f7); }
 .tvc-details-caret { flex: none; transition: transform 0.18s ease; }
 .tvc-details-caret.is-open { transform: rotate(90deg); }

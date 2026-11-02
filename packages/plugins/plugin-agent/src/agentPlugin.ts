@@ -33,10 +33,8 @@ export const Config = {
     type: 'string' as const,
     default: '',
     label: '后端地址',
-    // 一级名就叫 Agent（不带二级段）：面板会把「有同名导航项的分组」直接当这一页的内容，
-    // 于是不需要再额外注册 settingsTab —— 实测把整页塞进 settingsTab 会把页签条撑到 600px，
-    // 内容区被压成 22px，整页都看不见了。
-    group: 'Agent',
+    // 分组归属由 ctx.settingsMenu 的 section 决定；group 只是配置字段的稳定 key。
+    group: '集成/Agent',
     description: 'cloud-server 的根地址。留空 = 与画布同源（由 cloud-server 托管界面时就是这样）。',
   },
 }
@@ -49,6 +47,16 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
   // （现象：面板已停靠、画布却没被挤窄，右上角按钮压在面板上）。
   // 对比 plugin-mini-map：它直接把 reactive 对象当服务注入，所以从来没这个问题。
   ctx.inject('agent', reactive(service))
+
+  // 菜单：进「集成 → Agent」。默认主题只提供默认树，本插件只注册自己的那一页。
+  ctx.settingsMenu.nav({
+    id: 'nav/integration/agent',
+    category: 'category/integration',
+    title: 'Agent',
+    icon: Bot,
+    order: 10,
+    page: markRaw(AgentSettingsPage),
+  })
 
   // ① 内容槽：消息流 + 输入区（外壳由 packages/ui 提供）
   ctx.slots.register('agent-conversation', {
@@ -64,11 +72,11 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     order: 5,
     component: markRaw(AgentSettingsNav),
     // 只提供数据：外观由设置面板统一渲染，整页走 page，避免再自绘一套导航
-    meta: { title: 'Agent', category: '集成', icon: Bot, page: markRaw(AgentSettingsPage) },
+    meta: { title: 'Agent', category: '集成', icon: Bot, page: markRaw(AgentSettingsPage), pageGroup: '集成/Agent' },
   })
   // 内容：段的正文来自 settingsGroup/<完整分组 key>。整页只注册这一处，
   // 页签切换由页面自己负责（用户口径：上面一排页签切换 provider / 技能 / MCP / 系统提示词…）。
-  ctx.slots.register('settingsGroup/Agent', {
+  ctx.slots.register('settingsGroup/集成/Agent', {
     id: 'agent/page',
     order: 5,
     component: markRaw(AgentSettingsPage),

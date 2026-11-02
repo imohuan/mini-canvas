@@ -115,6 +115,8 @@ function onPointerMove(e: PointerEvent): void {
 
   if (!boxEl) {
     boxEl = document.createElement('div')
+    // 稳定钩子：主题工作台/浏览器目验需要从真实绘制框上量颜色与位置
+    boxEl.dataset.multiSelectBox = ''
     // 绘制框（Shift 拖拽时画出来的那个框）：
     //  - 颜色走**主题 token** --ui-select-box（用户在「常规/主题配色」里改，用户口径"删掉自定义色就用主题色"）；
     //  - 线型 / 线宽 / 填充来自「布局/多选」的绘制框三项配置。

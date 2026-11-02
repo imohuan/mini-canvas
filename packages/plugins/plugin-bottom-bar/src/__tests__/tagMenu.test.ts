@@ -80,8 +80,9 @@ describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
 
   it('标签菜单用主题 Dropdown（不是自绘浮层）', () => {
     const sfc = readFileSync(fileURLToPath(new URL('../NodeBottomBar.vue', import.meta.url)), 'utf8')
-    expect(sfc).toContain('body-class="nb-tagmenu-body"')
-    expect(sfc).toContain('v-model="tagMenuOpen"')
+    // shadcn DropdownMenu 的受控属性是 v-model:open，内容样式走普通 class。
+    expect(sfc).toContain('v-model:open="tagMenuOpen"')
+    expect(sfc).toContain('class="nb-tagmenu-body"')
     // 数据源 = 整个画布（doc.getNodes），不是当前连线
     expect(sfc).toContain('buildTagMenuGroups(tagMenuEntries.value')
     // 两栏结构（左类别 / 右节点，图 4），不是平铺一列
