@@ -27,40 +27,25 @@
  * 的时序，而这里只需要单向注一次。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { buildPalette, buildSrcdoc, normalizeUpstream, toCloneableState, type PaletteToken, type UpstreamItem } from './uiData'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { buildPalette, buildSrcdoc, normalizeUpstream, type PaletteToken, type UpstreamItem } from './uiData'
 import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
-import {
-  RASTER_TIER_PREFIX,
-  rasterScaleFor,
-  rasterTierKeys,
-  readRasterTiers,
-  resolveRasterTier,
-  type RasterTierConfig,
-} from './rasterTier'
 import { fetchBackendOrigin } from './uiOrigin'
-import {
-  UI_DEBUG_INVITE_KEY,
-  buildSdkScriptBody,
-  appendSdkScript,
-  readInvite,
-  readCredential,
-  writeCredential,
-  clearCredential,
-} from './debugSession'
-import { emitUiDebugEvent } from './debugEventBus'
-import { createHostProxy, errText, isSavePayload, type SavePayload } from './hostFetch'
-import { openDebugWindow } from './debugWindow'
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { useUiFrame } from './ui-content/useUiFrame'
+import { useUiProxy } from './ui-content/useUiProxy'
+import { useUiOutput } from './ui-content/useUiOutput'
+import { useUiBridge } from './ui-content/useUiBridge'
+import { useUiDebugWindow } from './ui-content/useUiDebugWindow'
+import UiDebugPrompt from './ui-content/UiDebugPrompt.vue'
+import UiInteractionGate from './ui-content/UiInteractionGate.vue'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, flow } = useCanvasRender()
 /** 统一空状态（默认主题提供；极简宿主回落本组件原来的「标题 + 提示」两行） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
-const Button = useUiComponent('Button')
 
 /**
  * 本插件的配置（后台地址 / 允不允许联网）。
@@ -69,83 +54,7 @@ const Button = useUiComponent('Button')
  */
 const pluginConfig = readUiConfig(ctx.tryGet('settings') as { get(k: string): unknown } | undefined)
 
-/**
- * 渲染清晰度：**按画布缩放自动分三档**（与图片插件 thumbTier 同一套做法）。
- *
- * 每档的阈值和倍数都在设置面板里配（「可视化节点/渲染清晰度」）：
- *   一档（缩放 >= 二档阈值） 倍数 tier1Scale，默认 1
- *   二档（三档阈值 <= 缩放 < 二档阈值） 倍数 tier2Scale，默认 2
- *   三档（缩放 < 三档阈值） 倍数 tier3Scale，默认 4
- *
- * 为什么档位是「渲染期计算」而不是写进节点：它跟着缩放走；写进节点等于每次缩放
- * 都改画布数据、还占撤销栈。
- */
-const settingsSvc = ctx.tryGet<{ get(k: string): unknown; onChange?(cb: (k: string, v: unknown) => void): { dispose(): void } }>('settings')
-
-/**
- * 每次现读一遍设置。
- *
- * readRasterTiers 要的是 **ctx 本身**（它内部自己 ctx.get('settings') 再 .get(key)）——
- * 之前我把 settings 对象包成 { get } 传进去，结果它拿不到 settings，永远读默认值，
- * 面板里改成 8 倍也不生效（用户 2026-10-17 截图实测）。
- * 这里再套一层：ctx 不完整（测试夹具）时直接回默认，不抛错。
- */
-const readCfg = (): RasterTierConfig => {
-  const safeCtx = typeof ctx?.get === 'function' ? ctx : ({ get: () => undefined } as never)
-  return readRasterTiers(RASTER_TIER_PREFIX, safeCtx)
-}
-const rasterCfg = ref<RasterTierConfig>(readCfg())
-const rasterSettingOff = settingsSvc?.onChange?.((key) => {
-  if (!rasterTierKeys(RASTER_TIER_PREFIX).includes(key)) return
-  rasterCfg.value = readCfg()
-})
-onBeforeUnmount(() => rasterSettingOff?.dispose())
-
-// flow 可能缺席（极简渲染上下文 / 测试夹具）：拿不到当 1，退回一档。
-const zoom = computed(() => (flow as CanvasRenderContext['flow'] | undefined)?.viewport?.value?.zoom ?? 1)
-/** 画布最小缩放：作为兜底传进档位判定，保证"缩到最小"能进第三档 */
-const canvasMinZoom = computed(() => settingsSvc?.get('minZoom'))
-const rasterTier = computed(() => resolveRasterTier(zoom.value, rasterCfg.value, canvasMinZoom.value))
-
-/**
- * 当前档位对应的倍数。
- *
- * 注意它**只跟缩放档位走，不跟缩放连续变化** —— 区间内缩放时倍数不变，
- * 所以画面不会一直重排、不会闪。
- */
-const rasterScale = computed(() => rasterScaleFor(rasterTier.value, rasterCfg.value))
-
-/**
- * iframe 的渲染倍数样式 —— **四个属性全部从同一个倍数 N 算出来**，不写死。
- *
- *   width/height: N × 100%
- *   transform:    scale(1 / N)
- *   zoom:         N
- *   transform-origin: top left
- *
- * 为什么这四项要一起算：盒子撑成 N 倍 → 浏览器按 N 倍像素重画；
- * zoom=N 让排版宽度回到原来的宽度（布局不变）；scale(1/N) 把屏幕尺寸缩回原来的大小。
- * 缺一项就会变形（变小 / 溢出 / 挤出屏幕），所以只能成套出现。
- *
- * ⚠️ **N 小于 1 也必须生成样式**（2026-10-17 用户报「1/2、1/4、1/8 和 1 倍都没样式」）：
- * 之前写成 `if (!(n > 1)) return undefined`，把 N ≤ 1 全跳过了 —— 缩小档（省性能）
- * 和 1 倍一样什么都不做，面板里选了也看不出变化。只有 N 恰好等于 1 才是"完全不动"。
- *
- * 缩小档的算式示例（N = 0.5）：width 50%｜zoom 0.5｜transform scale(2)
- * 盒子只有一半宽 → 按半分辨率绘制 → 再放大 2 倍回屏幕尺寸：省性能、略糊。
- */
-const frameStyle = computed(() => {
-  const n = rasterScale.value
-  // 只有 1 倍（默认）才完全不写样式；小于 1 和大于 1 都要生成
-  if (!Number.isFinite(n) || Math.abs(n - 1) < 1e-6) return undefined
-  return {
-    width: n * 100 + '%',
-    height: n * 100 + '%',
-    transform: 'scale(' + 1 / n + ')',
-    zoom: String(n),
-    transformOrigin: 'top left',
-  }
-})
+const { iframeEl, frameStyle } = useUiFrame({ ctx, flow })
 
 /**
  * 生成页面该连的地址：**优先用节点上存的后台自报地址**。
@@ -177,15 +86,11 @@ void (async () => {
 
 const canvasId = currentCanvasId(typeof location !== 'undefined' ? location.href : undefined)
 
-/**
- * 宿主代发器。
- *
- * 每次请求现建一个：后台地址是 computed（可能先空后到）、管理令牌也可能刚在设置里填上，
- * 建对象时把两者冻住就会「填了令牌还要刷新」。创建本身不花钱。
- */
-function hostProxy() {
-  return createHostProxy({ baseUrl: baseUrl.value, canvasId, nodeId: props.id })
-}
+const { handleProxyRequest, handleDebugProxyRequest } = useUiProxy({
+  baseUrl: () => baseUrl.value,
+  canvasId,
+  nodeId: props.id,
+})
 
 /** 生成的 HTML（空 = 还没画，显示空态而不是一个白框） */
 const html = computed(() => (typeof props.data?.uiHtml === 'string' ? (props.data.uiHtml as string) : ''))
@@ -325,54 +230,21 @@ watch(html, () => { gen.value += 1 })
  * frameDoc 只在「界面重建级」的变化（html / 主题 / 调试态）时才变 —— 上游与参数走
  * postMessage 不经过它，这里重挂不会误伤用户正在输入的内容。
  */
-/**
- * 文档里注入的那份「上游素材 / 输入参数」的**初值**。
- *
- * 为什么不是直接绑 upstream / inputValues：那样这两个一变，srcdoc 就变、iframe 就重挂
- * （用户正在输的东西全丢）。这里把它们**冻结在"挂载那一刻"**：
- *   · 新挂载 → 用当时的真值写进文档（老界面靠这个读数据）；
- *   · 之后变了 → 走消息（见 pushDataToFrame），文档里的初值不动。
- */
-const frameSeed = ref({ inputs: inputValues.value, upstream: upstream.value })
-
-// 重挂（换 HTML）时把初值刷成最新 —— 否则新文档里注入的还是上一次挂载时的旧数据，
-// 而"数据变了"那条消息是在页面还没建好时发的，会丢。
-watch(gen, () => {
-  frameSeed.value = { inputs: inputValues.value, upstream: upstream.value }
+const { frameSeed, pushDataToFrame, onBridgeMessage } = useUiBridge({
+  iframeEl,
+  html,
+  gen,
+  upstream,
+  inputValues,
+  nodeData: () => props.data,
+  nodeId: props.id,
+  doc: () =>
+    ctx.tryGet<{
+      updateNode(id: string, patch: { data: Record<string, unknown> }): void
+      updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
+    }>('doc'),
+  handleProxyRequest: (win, reqId, m) => void handleProxyRequest(win, reqId, m),
 })
-
-/**
- * 把**这个节点的全部数据**发给页面（**不重挂**）。
- *
- * 发三样，都是"这个节点的 data 上、页面要读的东西"：
- *   upstream  连进来的素材
- *   inputs    节点参数
- *   state     界面自己交上来的那份（笔迹等）
- *
- * 为什么合成一条（用户 2026-10-13 定的）：这三样**根本是同一个道理** ——
- * 都是节点 data 的字段、都要送到页面里、页面拿到的动作都是"有数据了，照着重画"。
- * 以前我把 state 拆成单独一条（pushStateToFrame），害得界面要写两个监听，纯属自找麻烦。
- */
-function pushDataToFrame(): void {
-  const win = iframeEl.value?.contentWindow
-  if (!win) return
-  try {
-    win.postMessage(
-      {
-        __canvasUiCmd: 1,
-        type: 'data',
-        upstream: toCloneableState(upstream.value),
-        inputs: toCloneableState(inputValues.value),
-      },
-      '*',
-    )
-  } catch {
-    // 文档还没建好：页面自己会发 ready 报到，那时再补一次
-  }
-}
-
-// 上游素材 / 输入参数变了 → 发消息（**不碰 srcdoc**，所以页面不重启）
-watch([upstream, inputValues], () => pushDataToFrame())
 
 // ======================================================================
 // 调试连接（用户 2026-10-15 定的流程：邀请 → 用户确认唯一标签页 → 注入 SDK）
@@ -394,184 +266,34 @@ watch([upstream, inputValues], () => pushDataToFrame())
 /** 本标签页正在调试的会话号（空 = 没在调试）——与凭据同步存在 */
 const debugSession = ref('')
 
-/** 邀请标记（从节点 data 读出来；没有 = undefined） */
-const pendingInvite = computed(() => readInvite(props.data))
-
-/** sessionStorage 的安全访问：SSR / 隐私模式里可能不存在或抛错 —— 一律按「没凭据」降级 */
-function safeStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined {
-  try {
-    return typeof sessionStorage !== 'undefined' ? sessionStorage : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** 读凭据的环境安全版（storage 不在 = 没凭据） */
-function loadCred() {
-  const st = safeStorage()
-  return st ? readCredential(st) : undefined
-}
-
-/** 是否该弹确认框：有邀请、且本标签页还不是那个被选中的（凭据对不上这个邀请） */
-const showDebugPrompt = computed(() => {
-  const inv = pendingInvite.value
-  if (!inv) return false
-  const cred = loadCred()
-  // 凭据就是为这次会话写的 → 我就是被选中的那个，不弹（正在调试中）
-  if (cred && cred.session === inv.session && cred.nodeId === props.id && cred.canvasId === canvasId) return false
-  return true
+const {
+  showDebugPrompt,
+  frameDoc,
+  openDebug,
+  onDebugMessage,
+  onDebugSdkEvent,
+  acceptDebugInvite,
+  dismissDebugInvite,
+  dispose: disposeDebugWindow,
+} = useUiDebugWindow({
+  ctx,
+  nodeId: props.id,
+  data: props.data,
+  canvasId,
+  baseUrl: () => baseUrl.value,
+  hasHtml: () => hasHtml.value,
+  html: () => html.value,
+  inputValues: () => inputValues.value,
+  upstream,
+  srcdoc: () => srcdoc.value,
+  debugSession,
+  gen,
+  updateNodeForDebug: (prev, patch) => {
+    ctx
+      .tryGet<{ updateNode(id: string, p: { data: Record<string, unknown> }): void }>('doc')
+      ?.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
+  },
 })
-
-/** 调试态 = 本标签页持有对得上当前节点的凭据（它存在与清理由 accept / disconnect 写） */
-const activeDebug = computed(() => {
-  // debugSession（响应式）参与依赖：点「同意」那一刻它被置位，frameDoc 立刻重算、
-  // iframe 重挂时带上 SDK。sessionStorage 本身不是响应式的，光靠它 computed 不会动。
-  void debugSession.value
-  const cred = loadCred()
-  // 只认**当前邀请**或**后台仍记着的会话**的凭据：旧调试的残留凭据不再让组件停在调试态
-  // （2026-10-17 真机抓到：connect 后节点重挂不弹确认框，就是这个旧凭据在作怪）。
-  if (!cred || cred.nodeId !== props.id || cred.canvasId !== canvasId) return false
-  const inv = readInvite(props.data)
-  if (inv) return cred.session === inv.session
-  return debugSession.value === cred.session
-})
-
-/** 用户在确认框点「同意」：写凭据 → 回执后台 → 清节点上的邀请标记 */
-/**
- * 画布把视线带到本节点（选中 + 居中）。用户口径 2026-10-17：**弹确认框时**就聚焦，
- * 不要等到点「同意」—— 用户第一眼就该看到被调试的是哪个节点。
- */
-function focusThisNode(): void {
-  try {
-    ctx.tryGet<{ set(ids: Iterable<string>): void }>('selection')?.set([props.id])
-    // 用 auto-layout 的聚焦命令（等效快捷键 F）：它按节点 bounds 计算**合适的缩放**
-    // （keepZoom:false），节点小就放大、超界就缩小 —— 与用户手动按 F 同一套行为。
-    // 之前自拼 setCenter(…, 当前zoom) 只平移不缩放，节点小时依旧看不清（用户 2026-10-17 指出）。
-    const cmd = ctx.tryGet<{ runCommand(id: string): unknown }>('canvas')
-    if (cmd && typeof cmd.runCommand === 'function') {
-      // 带动画的视口过渡（auto-layout 内部 animateViewport），约 0.8s 到位
-      cmd.runCommand('auto-layout:focus-selected')
-    } else {
-      console.log('[ui-debug] command 服务不可用，cmd =', typeof cmd)
-    }
-  } catch (err) {
-    console.log('[ui-debug] 聚焦异常:', (err as Error)?.message ?? err)
-  }
-}
-// 邀请标记一出现就聚焦（pendingInvite 从无到有的那一次）
-watch(pendingInvite, (inv, old) => {
-  if (inv && !old) {
-    console.log('[ui-debug] 邀请出现，聚焦节点 ' + props.id)
-    focusThisNode()
-  }
-})
-
-async function acceptDebugInvite(): Promise<void> {
-  const inv = pendingInvite.value
-  if (!inv) return
-  console.log('[ui-debug] accept clicked, inv.session=' + inv.session)
-  const st = safeStorage()
-  if (!st) return
-  writeCredential(st, {
-    session: inv.session,
-    nodeId: props.id,
-    canvasId,
-    at: Date.now(),
-  })
-  debugSession.value = inv.session
-  emitUiDebugEvent({ nodeId: props.id, kind: 'connected' })
-  console.log('[ui-debug] debugSession set to ' + debugSession.value)
-  // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
-  try {
-    // 这条也在首版的令牌白名单里（`/api/node-ui/debug-`），宿主同源，直接带头。
-    const res = await fetch(baseUrl.value + '/api/node-ui/debug-accept', {
-      method: 'POST',
-      headers: withAdminToken({ 'content-type': 'application/json' }),
-      body: JSON.stringify({ session: inv.session, nodeId: props.id, canvasId }),
-    })
-    console.log('[ui-debug] 回执后台: status=' + res.status, 'baseUrl=' + baseUrl.value)
-  } catch (err) {
-    console.log('[ui-debug] 回执后台失败:', (err as Error)?.message ?? err, 'baseUrl=' + baseUrl.value)
-    /* 后台不在也没关系：SDK 连不上 ws 时会自己重试 */
-  }
-  // 清邀请标记（节点 data 合并写空）：其他标签页看到标记消失，自动收起确认框。
-  // 为什么前端清而不是后台在回执里清：回执只来自被选中的标签页，让它顺手把标记
-  // 清掉，语义正好是「这个邀请已被某人认领」。writeUiHtml 在后台有写锁，安全。
-  try {
-    const doc = ctx.tryGet<{
-      updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
-    }>('doc')
-    doc?.updateNodeRuntime(props.id, { data: { [UI_DEBUG_INVITE_KEY]: null } })
-  } catch {
-    /* 节点可能刚被删：无妨，凭据已写，刷新恢复逻辑靠 sessionStorage */
-  }
-}
-
-/** 用户点「拒绝」：不写凭据。框的显隐跟着邀请标记走，标记在框就在（别催用户） */
-function dismissDebugInvite(): void {
-  /* 故意空：什么都不做，框随标记存在。用户想关掉只能让 Agent disconnect */
-}
-
-/**
- * srcdoc 在调试态追加 SDK 连接脚本（不改 buildSrcdoc —— 平时零成本）。
- * WebSocket 地址：后台地址的 http(s) 换成 ws(s)。SDK 自己带指数退避重连，
- * 所以刷新后只要凭据还在，重挂的 iframe 会自动重连，不需要宿主做任何事。
- */
-const frameDoc = computed(() => {
-  const base = srcdoc.value
-  // 依赖 debugSession（session id 字符串）：第二次 connect/换会话时 id 必变，
-  // computed 立即重算并把**新 session** 注入 SDK（真机验证 2026-10-16 抓到：
-  // 依赖 activeDebug 布尔时 true→true 不触发重算，iframe 里残留旧 session，
-  // SDK 轮询 404、eval 全部超时）。
-  void debugSession.value
-  if (!base || !activeDebug.value) return base
-  const cred = readCredential(sessionStorage)
-  if (!cred) {
-    console.log('[ui-debug] 调试态但没有凭据，SDK 不注入')
-    return base
-  }
-  console.log('[ui-debug] 注入 SDK: session=' + cred.session, 'baseUrl=' + baseUrl.value)
-  return appendSdkScript(base, buildSdkScriptBody({
-    baseUrl: baseUrl.value,
-    session: cred.session,
-    canvasId,
-    nodeId: props.id,
-  }))
-})
-/**
- * 调试态切换（首次同意 / 换会话）也要**重挂**（用户口径 2026-10-16 真机复现）：
- * frameDoc 在 activeDebug 翻转时追加了 SDK 脚本，但只改 srcdoc 属性浏览器**不会重跑脚本**
- * —— 表现就是「点了同意调试，SDK 还是连不上」（真机自动化测试抓到：srcdoc 里 SDK 在、
- * session 是新的，可 iframe 里的脚本从未执行，后台 debugSse 一直没人拨）。
- * frameDoc 只在「界面重建级」的变化（html / 主题 / 调试态）时才变 —— 上游与参数走
- * postMessage 不经过它，这里重挂不会误伤用户正在输入的内容。
- */
-watch(frameDoc, () => { gen.value += 1 })
-
-/**
- * 拦截刷新（调试态专用）：beforeunload 在调试会话存在时弹浏览器原生确认。
- * 为什么用原生弹窗而不是自制：刷新是浏览器动作，宿主拦不住也没资格美化它 ——
- * 原生确认是唯一可靠的「用户明确说了要刷新」凭证。
- */
-function onDebugBeforeUnload(e: BeforeUnloadEvent): void {
-  if (!activeDebug.value) return
-  e.preventDefault()
-  // Chrome 要求 returnValue 有值才弹框
-  e.returnValue = ''
-}
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', onDebugBeforeUnload)
-}
-
-// 组件卸载 = 节点删除或画布关闭：清凭据（调试会话没意义了），摘掉监听
-onBeforeUnmount(() => {
-  window.removeEventListener('beforeunload', onDebugBeforeUnload)
-  if (activeDebug.value) {
-    const st = safeStorage()
-    if (st) clearCredential(st)
-  }
-})
-
 
 /**
  * 页面就绪 → 送状态（刷新恢复靠这条）。
@@ -598,502 +320,34 @@ function onFrameLoad(): void {
  */
 const interactive = ref(false)
 
-/**
- * 收生成页面「往外报」的两件事（见 uiData.buildUiBridge 的说明）。
- *
- * 两条路各走各的，这是整个设计的要点：
- *   · **状态**（笔迹 / 参数）→ `doc.updateNode`（**进历史**）→ 撤销退的是一笔，不是一张图；
- *   · **产物**（图 / 视频 / 音频的地址）→ `doc.updateNodeRuntime`（**不进历史**）→ 下游拿到，
- *     且不会把图片字节复制进撤销栈（那会让磁盘和内存一起爆）。
- *
- * 必须校验 `ev.source`：只认本节点这个 iframe 发来的消息。
- * 不校验的话，页面里任何一段脚本都能伪造一条消息往节点里写东西。
- *
- * **ready 报到**（2026-10-13 新增）：页面脚本一跑起来就发一条，宿主这时才把状态送回去。
- * 这是刷新后恢复笔迹的关键 —— 由页面说「我已经在听了」，宿主不再猜时机（见 buildUiBridge）。
- */
-function onBridgeMessage(ev: MessageEvent): void {
-  const win = iframeEl.value?.contentWindow
-  if (!win || ev.source !== win) return
-  /*
-   * 还要看 Origin：沙箱 iframe（`sandbox="allow-scripts"`、不给 allow-same-origin）
-   * 是不透明源，消息的 origin 是字符串 `'null'`。只比 `ev.source` 的话，哪天这个 iframe
-   * 被导航到一个同源页面（`ev.source` 仍然是同一个 window），那条页面里的脚本就能冒充
-   * 沙箱页往节点里写东西。
-   *
-   * 放宽一种情况：某些浏览器在 `srcdoc` 上给的是 `about:srcdoc` 或空串 —— 那种仍是同一个
-   * 不可信文档，按沙箱页对待即可。真正该拒的是「有自己源的同源页面」。
-   */
-  if (ev.origin && ev.origin !== 'null' && ev.origin === window.location.origin) return
-  const m = ev.data as
-    | ({
-        __canvasUi?: unknown
-        type?: unknown
-        state?: unknown
-        url?: unknown
-        text?: unknown
-        reqId?: unknown
-        payload?: unknown
-        name?: unknown
-        runId?: unknown
-        args?: unknown
-        wait?: unknown
-        subscribe?: unknown
-        methods?: unknown
-      } & Record<string, unknown>)
-    | null
-  if (!m || m.__canvasUi !== 1) return
-  // 报到：页面已就绪 → 把存下来的状态送过去（刷新恢复）。同步返回，不走下面的 doc 写入。
-  if (m.type === 'ready') {
-    pushDataToFrame()
-    return
-  }
-  // 代发：沙箱页不再自己请求后台，全部交给宿主（同源 + 管理令牌）。
-  // reqId 原样带回，页面按它结算自己的 pending promise。
-  if (m.type === 'save' || m.type === 'task' || m.type === 'task-cancel' || m.type === 'api') {
-    if (typeof m.reqId !== 'string' || !m.reqId) return
-    void handleProxyRequest(win, m.reqId, m)
-    return
-  }
-  const doc = ctx.tryGet<{
-    updateNode(id: string, patch: { data: Record<string, unknown> }): void
-    updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
-  }>('doc')
-  if (!doc) return
-  try {
-    if (m.type === 'state') {
-      // 页面交上来的东西 = **这个节点的参数**（用户 2026-10-13 口径：state 就是参数）。
-      //
-      // 所以它直接并进 uiInputs（参数），**不再另开一个 uiState 字段** ——
-      // 以前那个字段让"状态"和"参数"变成两套要分别解释、分别推送的东西，
-      // 而它们本来就是同一个道理（都是节点 data 上、要送进页面、拿到就重绘）。
-      //
-      // 并进 uiInputs 也顺手解决了：新挂载时页面读 __CANVAS_INPUTS__ 就能看到自己上次交的笔迹，
-      // 不用再等一条单独的"恢复"消息。
-      const prev = (props.data?.uiInputs ?? {}) as Record<string, unknown>
-      const patch = m.state && typeof m.state === 'object' ? (m.state as Record<string, unknown>) : { value: m.state }
-      // 值没变就不写（2026-10-16 用户实测修复：页面 img.onload → publish → setInputs →
-      // 写节点 → onChange 回推 → applyInputs → showResult 新时间戳 → onload → publish
-      // …… 无限循环，同一张 jpg 刷出几百个请求）。逐键对比，**URL 类的值去掉
-      // ?v= 版本号再比**（iframe 每次上报都会带新时间戳，裸比永远"变了"），全等就跳过。
-      const stripV = (v: unknown) => (typeof v === 'string' ? v.split('?v=')[0] : v)
-      const changed = Object.keys(patch).some((k) => JSON.stringify(stripV(prev[k])) !== JSON.stringify(stripV(patch[k])))
-      if (changed) doc.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
-    } else if (m.type === 'output' && typeof m.url === 'string' && m.url) {
-      // 产物不进历史：它每次都覆盖同一个槽位地址，存进撤销栈只是白占内存。
-      //
-      // ★ 地址必须带一个**版本号**：槽位的地址是固定的（文件也只有一个），
-      //   但下游节点（图片对比 / 图片生成）拿到的是同一个 url 字符串，
-      //   字符串没变它们就不会重新请求 —— 表现为「里面画了、下游还是旧图」。
-      //   加 ?v= 之后：文件仍是一份，地址变了，下游自然会重新取。
-      const bust = m.url.indexOf('?') >= 0 ? '&v=' : '?v='
-      const versioned = m.url + bust + Date.now()
-      // ★ 产物按**类型**写对应的媒体字段（2026-10-13 修正）。
-      //   底栏/图片对比这些下游收上游素材时，是**按字段名**认类型的：
-      //     imageUrl → 图片 / videoUrl → 视频 / audioUrl → 音频 / text → 文本
-      //   以前不管什么都写 imageUrl —— 音频的 .mp3 装在 imageUrl 里，
-      //   下游就把它当图片读（裂图），正是用户 Agent 复盘里踩的坑。
-      //
-      //   文本那一支以前**漏了**（四支只写了三支），于是界面里 `save('正文', 'note.txt')`
-      //   会把正文写进 imageUrl —— 与脚本侧 ctx.save 的映射不一致（同一条规矩写两遍必漂）。
-      const ext = (m.url.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
-      const field =
-        ext === 'mp4' || ext === 'webm' || ext === 'mov' ? 'videoUrl'
-        : ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a' ? 'audioUrl'
-        : ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' ? 'text'
-        : 'imageUrl'
-      // 文本给的是**正文**（下游 data.text 的约定就是内容），媒体给的是地址。
-      //
-      // 文本这一支**只认正文**：拿不到正文（页面交的是 Blob/字节）就只留 uiOutputUrl，
-      // 不把地址塞进 data.text —— 那是「把 URL 当文本内容」，下游会照着念一串网址，
-      // 比空着更糟（空着至少下游知道没东西）。
-      const patch: Record<string, unknown> = { uiOutputUrl: m.url }
-      if (field === 'text') {
-        if (typeof m.text === 'string') patch.text = m.text
-      } else {
-        patch[field] = versioned
-      }
-      // 地址与节点现值"去版本号后"相同 ⇒ 只是同一份产物又一次上报（循环末梢），
-      // 不写节点 —— 写了就会触发 onChange 再推回页面，形成刷新风暴
-      // （2026-10-16 用户实测：一张 jpg 刷出几百个请求）。
-      const cur = (props.data?.[field] as string | undefined) ?? ''
-      if (field !== 'text' && cur.split('?')[0] === m.url.split('?')[0]) return
-      doc.updateNodeRuntime(props.id, { data: patch })
-    }
-  } catch {
-    // 节点可能已被删掉：静默跳过（不该因为一次上报把页面搞崩）
-  }
-}
-
-/** 给沙箱页回一条代发结果（reqId 必须原样带回） */
-function replyProxy(win: Window, msg: Record<string, unknown>): void {
-  try {
-    win.postMessage({ __canvasUi: 1, ...msg }, '*')
-  } catch {
-    /* iframe 可能已经重挂：这条回包没人收了 */
-  }
-}
-
-/**
- * 处理一条代发请求：save / task / task-cancel。
- *
- * 所有错误都变成 `ok:false + error` 回给页面，让它自己的 promise 能 reject；
- * 403 的原文照实带回去（用户填错令牌时能看到后台到底说了什么）。
- */
-async function handleProxyRequest(win: Window, reqId: string, m: Record<string, unknown>): Promise<void> {
-  const proxy = hostProxy()
-  // save 的失败也必须回 save-result：页面侧按类型读 url，混成 task-result 会让协议表失真
-  // （虽然两边都靠 reqId 结算，功能暂时不坏，但下一个人会照着协议写错）。
-  const failType = m.type === 'save' ? 'save-result' : m.type === 'api' ? 'api-result' : 'task-result'
-  try {
-    if (m.type === 'save') {
-      const payload = m.payload
-      if (!isSavePayload(payload)) {
-        throw new Error('save 的 payload 必须是 Blob / Uint8Array / ArrayBuffer')
-      }
-      const { url } = await proxy.save(payload as SavePayload, typeof m.name === 'string' ? m.name : 'out.png')
-      replyProxy(win, { type: 'save-result', reqId, ok: true, url })
-      return
-    }
-    if (m.type === 'task') {
-      const subscribe = m.subscribe === true
-      const result = await proxy.task(
-        {
-          name: String(m.name ?? ''),
-          methods: String(m.methods ?? ''),
-          args: Array.isArray(m.args) ? m.args : [],
-          wait: m.wait === true,
-          events: subscribe,
-        },
-        (event) => replyProxy(win, { type: 'task-event', reqId, event }),
-      )
-      replyProxy(win, { type: 'task-result', reqId, ...result })
-      return
-    }
-    if (m.type === 'api') {
-      // 通用转发：只接受 /api/ 下的同源路径（hostFetch 里再校验一次）。
-      const path = String(m.path ?? '')
-      const method = String(m.method ?? 'GET')
-      const headers = (m.headers && typeof m.headers === 'object' ? m.headers : {}) as Record<string, string>
-      const body = m.body
-      const res = await proxy.fetchApi({
-        path,
-        method,
-        headers,
-        ...(body == null ? {} : { body: body as BodyInit }),
-      })
-      replyProxy(win, {
-        type: 'api-result',
-        reqId,
-        ok: true,
-        status: res.status,
-        headers: res.headers,
-        body: res.body,
-      })
-      return
-    }
-    const runId = typeof m.runId === 'string' ? m.runId : ''
-    if (!runId) throw new Error('缺少 runId')
-    const result = await proxy.cancel(runId)
-    replyProxy(win, { type: 'task-result', reqId, ...result })
-  } catch (err) {
-    replyProxy(win, { type: failType, reqId, ok: false, error: errText(err) })
-  }
-}
-
-const iframeEl = ref<HTMLIFrameElement | null>(null)
-
-// 注：这里曾有一版「反向缩放」（缩小画布时把 iframe 按屏幕像素重渲染，文字不糊）。
-// 2026-10-12 用户决定删掉，理由两条，都成立：
-//   1. 它不是用户想要的效果；
-//   2. 用户在设置面板里拨那个开关**根本没生效**（我当时的验证是手改 settings 造的假象），
-//      而实测「开着和关着画面完全一样」—— 留着就是个骗人的开关。
-// 需要时从 git 历史里找回（counterScale.ts + UiContent 的对应那段）。
-// 调试窗口用到的窗口形状。**不能写 Window**：与 DOM lib 的 Window 接口撞名，
-// 会把 addEventListener / postMessage 的签名搅乱（实测 typecheck 报
-// 「EventListener 只接受 1 个参数」）。所以这里只声明本文件真用到的那几个方法。
-interface DebugWindow {
-  readonly closed: boolean
-  addEventListener(t: string, fn: () => void): void
-  close(): void
-  location: { href: string }
-}
-
-/** 当前开着的调试窗口（空 = 没开） */
-const debugWin = ref<DebugWindow | null>(null)
-
-/** 参数 / 上游变了以后，攒一下再重发（不然拖一次滑杆能发几十次请求） */
-let debugTimer: ReturnType<typeof setTimeout> | null = null
-
-/**
- * 上一次真正发出去的调试数据指纹。
- *
- * 为什么需要：调试页会把 `CanvasUI.setInputs` 回报给宿主，宿主再写回节点；
- * 如果页面在 `onChange` 里回写同一份值，就会「宿主发 → 页面回 → 宿主再发」来回打。
- * 内容没变就不发，这个环自动断掉。
- */
-let lastDebugSig = ''
-
-/**
- * 打开**独立调试页**。
- *
- * ## 为什么不再是「同源副本 + document.write」（2026-10-20 审查 S1b）
- *
- * 原来那个副本是 `about:blank`，**继承画布页的源**：节点 HTML 里的脚本能读
- * `localStorage.mc_admin_token`、能直接调 `/api/*` 改画布。沙箱 iframe 好不容易
- * 守住的那条线，被这个"方便调试"的按钮从后门绕开了。
- *
- * 现在调试产物由后台写到 `resources/debug/`，再由**另一个端口**（调试源）只读提供。
- * 浏览器眼里它是另一个源，读不到画布页的令牌。DevTools / CDP / 断点照旧全通。
- *
- * ## 时序
- *
- * 先同步开窗口（躲过弹窗拦截），再 POST 让后台生成三份文件，成功后才导航到调试 URL。
- * 空白窗口里不执行任何用户代码，所以这段等待没有安全问题。
- *
- * ## 参数 / 上游变了怎么办
- *
- * 调试页每 5 秒用 <script> 重载 context.js，所以这里只要把新数据重发一遍，
- * 页面自己会跟上 —— 不用用户关掉重开。
- */
-async function openDebug(): Promise<void> {
-  if (!hasHtml.value) return
-  /*
-   * 三条分支（被拦 / 后台没生成出来 / 导航失败）都在 openDebugWindow 里，那边有单测。
-   * 这里只负责把副作用接进来：真开窗、真 alert、真取地址。
-   */
-  const r = await openDebugWindow({
-    openWindow: () =>
-      window.open('about:blank', 'mc-ui-debug-' + props.id, 'width=960,height=720') as unknown as DebugWindow | null,
-    fetchDocUrl: async () => {
-      // 打开窗口时**总是**发一次（窗口是新开的，得把文件刷成最新的）
-      const made = await pushDebugDocs(true)
-      return made.ok ? made : { ok: false as const, error: made.error }
-    },
-    alert: (m) => window.alert(m),
-  })
-  if (!r.ok) return
-
-  const win = r.win as unknown as DebugWindow
-  debugWin.value = win
-  // pagehide 在这里有两次：① 我们把 about:blank 导航到调试源（不是关窗）；
-  // ② 用户真的关掉窗口。**只有 closed 为真才算关**，否则会把刚打开的窗口误清掉。
-  try {
-    win.addEventListener('pagehide', () => {
-      setTimeout(() => {
-        if (win.closed) clearDebugWindow(win)
-      }, 0)
-    })
-  } catch {
-    /* 跨源之后挂不上：靠下面 watch 里的 closed 判断兜底 */
-  }
-}
-
-/** 窗口真的没了：清引用 + 撤掉还没发的重发任务 */
-function clearDebugWindow(win: DebugWindow): void {
-  if (debugWin.value === win) debugWin.value = null
-  if (debugTimer) {
-    clearTimeout(debugTimer)
-    debugTimer = null
-  }
-}
-
-/**
- * 把当前这份界面 + 数据写到调试源，返回可打开的 URL。
- *
- * 这条 POST 带管理令牌（它要写文件、签短令牌）。但**调试页自己拿不到管理令牌** ——
- * 页面里只有一张"只能写本节点这个槽位"的短令牌。
- */
-async function pushDebugDocs(
-  force = false,
-): Promise<{ ok: true; url: string } | { ok: false; error: string; skip?: boolean }> {
-  const payload = {
-    nodeId: props.id,
-    html: html.value,
-    inputs: inputValues.value,
-    upstream: upstream.value,
-  }
-  const sig = JSON.stringify(payload)
-  // 内容没变：直接跳过（不是错误，调用方不必打日志）
-  if (!force && sig === lastDebugSig) return { ok: false, error: '', skip: true }
-  try {
-    const res = await fetch(baseUrl.value + '/api/canvases/' + encodeURIComponent(canvasId) + '/debug-docs', {
-      method: 'POST',
-      headers: withAdminToken({ 'content-type': 'application/json' }),
-      body: sig,
-    })
-    const json = (await res.json().catch(() => ({}))) as { ok?: unknown; urls?: { html?: unknown }; error?: unknown }
-    if (!res.ok || json.ok !== true) {
-      const why = typeof json.error === 'string' && json.error ? json.error : 'HTTP ' + res.status
-      return { ok: false, error: '调试页没生成出来：' + why }
-    }
-    const url = json.urls && typeof json.urls.html === 'string' ? json.urls.html : ''
-    if (!url) return { ok: false, error: '调试页没生成出来：后台没给地址' }
-    lastDebugSig = sig
-    return { ok: true, url }
-  } catch (err) {
-    return { ok: false, error: '调试页没生成出来：' + errText(err) }
-  }
-}
-
-/**
- * 调试窗口开着时，参数 / 上游 / 界面一变就把新数据重发过去（攒 300ms）。
- *
- * 为什么窗口关着就不发：那等于每次改参数都往磁盘写三份文件，纯浪费。
- */
-watch([upstream, inputValues, html], () => {
-  const win = debugWin.value
-  if (!win) return
-  if (win.closed) {
-    clearDebugWindow(win)
-    return
-  }
-  if (debugTimer) clearTimeout(debugTimer)
-  debugTimer = setTimeout(() => {
-    debugTimer = null
-    void pushDebugDocs().then((r) => {
-      if (!r.ok && !r.skip) console.warn('[ui-debug] 重发调试数据失败：' + r.error)
-    })
-  }, 300)
+const { isOwnResourceUrl, applyOutput } = useUiOutput({
+  nodeId: props.id,
+  canvasId,
+  baseUrl: () => baseUrl.value,
+  updateNodeRuntime: (id, data) => {
+    ctx
+      .tryGet<{ updateNodeRuntime(id: string, p: { data: Record<string, unknown> }): void }>('doc')
+      ?.updateNodeRuntime(id, { data })
+  },
 })
 
-/**
- * 收调试页「往外报」的两件事：**已保存**通知，和参数变更。
- *
- * 为什么还要收「已保存」：独立调试页自己带短令牌把产物写进槽位，
- * 但节点上的 `uiOutputUrl` / `imageUrl` 还得宿主补一笔（否则下游节点不知道有新产物）。
- *
- * 为什么必须校验 ev.source：消息是广播的，不认来源的话页面里任何一段脚本
- * 都能伪造一条消息往节点里写东西（与沙箱那条链同一套理由）。
- */
-function onDebugMessage(ev: MessageEvent): void {
-  const win = debugWin.value
-  if (!win || ev.source !== win) return
-  const m = ev.data as
-    | ({
-        __canvasUiDebug?: unknown
-        type?: unknown
-        name?: unknown
-        text?: unknown
-        url?: unknown
-      } & Record<string, unknown>)
-    | null
-  if (!m || m.__canvasUiDebug !== 1) return
-  try {
-    /*
-     * 调试页里的 `CanvasUI.api / task / cancel` 也交给宿主代发。
-     *
-     * 为什么复用 handleProxyRequest：调试页与沙箱页面对的是同一套权限表。
-     * 另写一份白名单，迟早会出现「画布里能调、调试页不能调」这种只有真机能发现的差异。
-     * 回包走 replyProxy（`__canvasUi` 标记），调试页那边的监听器两个标记都认。
-     */
-    if ((m.type === 'api' || m.type === 'task' || m.type === 'task-cancel') && typeof m.reqId === 'string') {
-      void handleProxyRequest(win as unknown as Window, m.reqId, m)
-      return
-    }
-    if (m.type === 'saved' && typeof m.url === 'string' && m.url) {
-      // 调试页现在是**另一个源**，它说什么都只能当"提示"。产物地址必须是本画布的资源路径，
-      // 否则页面里一段脚本就能把节点的 imageUrl 指到任意地址（例如收集访问）。
-      if (!isOwnResourceUrl(m.url)) return
-      applyOutput(
-        m.url,
-        typeof m.name === 'string' && m.name ? m.name : 'out.png',
-        typeof m.text === 'string' ? m.text : undefined,
-      )
-      return
-    }
-    // 页面说「令牌不好使了」（403）：重新签一张发过去。它下个 5 秒周期就拿到新的。
-    if (m.type === 'token-stale') {
-      if (debugTimer) clearTimeout(debugTimer)
-      debugTimer = setTimeout(() => {
-        debugTimer = null
-        void pushDebugDocs(true).then((r) => {
-          if (!r.ok) console.warn('[ui-debug] 重签调试令牌失败：' + r.error)
-        })
-      }, 0)
-      return
-    }
-    if (m.type === 'state') {
-      // 与沙箱那条链同一套口径：界面交上来的就是**这个节点的参数**
-      const st = ev.data as { state?: unknown }
-      const patch = st.state && typeof st.state === 'object' ? (st.state as Record<string, unknown>) : { value: st.state }
-      const prev = (props.data?.uiInputs ?? {}) as Record<string, unknown>
-      ctx
-        .tryGet<{ updateNode(id: string, p: { data: Record<string, unknown> }): void }>('doc')
-        ?.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
-    }
-  } catch {
-    // 节点可能已被删掉：静默跳过（不该因为一次上报把调试搞崩）
-  }
-}
-
-/**
- * 这个地址是不是本画布的资源（调试页回报产物时用；防止把节点指到别处）。
- *
- * 后台回的是**同源相对路径**（`/api/canvases/<id>/resources/<hash>`），所以两种形态都要认：
- * 相对的那一份，和带后台地址的绝对形态。
- */
-function isOwnResourceUrl(url: string): boolean {
-  const rel = '/api/canvases/' + encodeURIComponent(canvasId) + '/resources/'
-  if (url.startsWith(rel)) return true
-  const base = baseUrl.value
-  return !!base && url.startsWith(base + rel)
-}
-
-/** 按产物名字认类型，写进节点（产物不进历史，且带版本号让下游重新取） */
-function applyOutput(url: string, name: string, text?: string): string {
-  const ext = (name.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
-  const field =
-    ext === 'mp4' || ext === 'webm' || ext === 'mov' ? 'videoUrl'
-    : ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a' ? 'audioUrl'
-    : ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' ? 'text'
-    : 'imageUrl'
-  const bust = url.indexOf('?') >= 0 ? '&v=' : '?v='
-  const patch: Record<string, unknown> = { uiOutputUrl: url }
-  if (field === 'text') {
-    if (text !== undefined) patch.text = text
-  } else {
-    patch[field] = url + bust + Date.now()
-  }
-  ctx
-    .tryGet<{ updateNodeRuntime(id: string, p: { data: Record<string, unknown> }): void }>('doc')
-    ?.updateNodeRuntime(props.id, { data: patch })
-  return url
-}
-
 if (typeof window !== 'undefined') {
-  window.addEventListener('message', onDebugMessage)
+  window.addEventListener('message', onDebugMessageFromWindow)
 }
-
-/**
- * iframe 内 SDK 的调试动作上报（__uiDebugEvt）→ 调试事件总线。
- * 标题右侧的「调试」标签（DebugBadge）据此实时反映：收到指令 / 已执行 / 出错。
- * （用户口径 2026-10-16：否则用户根本不知道调试通道有没有在工作。）
- */
-function onDebugSdkEvent(ev: MessageEvent): void {
-  // 只认本节点这个 iframe：__uiDebugEvt 会清凭据、摘刷新拦截，不能听别人的。
-  const win = iframeEl.value?.contentWindow
-  if (!win || ev.source !== win) return
-  const m = ev.data as { __uiDebugEvt?: { kind?: unknown; detail?: unknown } } | null
-  if (!m || !m.__uiDebugEvt || typeof m.__uiDebugEvt.kind !== 'string') return
-  // disconnected：SDK 收到后台 stop。清凭据 + 摘刷新拦截（用户口径 2026-10-17：
-  // 「断开链接的时候，把你的调试关闭掉，还有把你的拦截也关闭掉」）。
-  if (m.__uiDebugEvt.kind === 'disconnected') {
-    console.log('[ui-debug] 后台断开：清凭据 + 摘刷新拦截')
-    const st2 = safeStorage()
-    if (st2) clearCredential(st2)
-    debugSession.value = ''
-    emitUiDebugEvent({ nodeId: props.id, kind: 'disconnected' })
-    return
-  }
-  emitUiDebugEvent({
-    nodeId: props.id,
-    kind: m.__uiDebugEvt.kind as 'eval' | 'result' | 'error' | 'disconnected',
-    ...(typeof m.__uiDebugEvt.detail === 'string' ? { detail: m.__uiDebugEvt.detail } : {}),
+/** 调试页消息：来源校验在 hook 内，副作用通过参数接上 */
+function onDebugMessageFromWindow(ev: MessageEvent): void {
+  onDebugMessage(ev, {
+    proxy: (win, reqId, m) => void handleProxyRequest(win, reqId, m),
+    applyOutput,
+    isOwnResourceUrl,
   })
 }
+/** iframe 内 SDK 的调试事件：监听保持为具名函数，卸载时必须能摘掉 */
+function onDebugSdkEventMessage(ev: MessageEvent): void {
+  onDebugSdkEvent(ev, iframeEl.value?.contentWindow ?? null)
+}
 if (typeof window !== 'undefined') {
-  window.addEventListener('message', onDebugSdkEvent)
+  window.addEventListener('message', onDebugSdkEventMessage)
 }
 
 /**
@@ -1110,29 +364,7 @@ function onDebugProxyMessage(ev: MessageEvent): void {
   const m = ev.data as { __uiDebugCmd?: unknown; kind?: unknown; reqId?: unknown; session?: unknown; body?: unknown } | null
   if (!m || m.__uiDebugCmd !== 1 || typeof m.reqId !== 'string' || !m.reqId) return
 
-  const reply = (msg: Record<string, unknown>): void => {
-    try {
-      win.postMessage({ __uiDebugReply: 1, reqId: m.reqId, ...msg }, '*')
-    } catch {
-      /* iframe 已重挂 */
-    }
-  }
-
-  const proxy = hostProxy()
-  if (m.kind === 'poll') {
-    const session = typeof m.session === 'string' ? m.session : ''
-    void proxy
-      .debugPoll(session)
-      .then((body) => reply({ ok: true, body }))
-      .catch((err) => reply({ ok: false, error: errText(err) }))
-    return
-  }
-  if (m.kind === 'result') {
-    void proxy
-      .debugResult(m.body)
-      .then((body) => reply({ ok: true, body }))
-      .catch((err) => reply({ ok: false, error: errText(err) }))
-  }
+  handleDebugProxyRequest(win, m.reqId, m)
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('message', onDebugProxyMessage)
@@ -1206,14 +438,13 @@ onBeforeUnmount(() => {
 // 不关的话它成了孤儿 —— 界面还在跑、还在往一个已消失的节点报产物，
 // 而用户看着那个窗口会以为画布上还有个节点在（2026-10-15）。
 onBeforeUnmount(() => {
-  window.removeEventListener('message', onDebugMessage)
+  window.removeEventListener('message', onDebugMessageFromWindow)
   window.removeEventListener('message', onDebugProxyMessage)
   // SDK 事件监听（connected / eval / result / error / disconnected）也要摘：
   // 它是挂在 window 上的模块级回调，节点卸载后仍会收到所有 iframe 的 message ——
   // 每开过一个可视化节点就多留一个（画布上节点一多，消息分发越来越慢）。
-  window.removeEventListener('message', onDebugSdkEvent)
-  debugWin.value?.close()
-  debugWin.value = null
+  window.removeEventListener('message', onDebugSdkEventMessage)
+  disposeDebugWindow()
 })
 
 
@@ -1240,43 +471,11 @@ const hint = computed(() => {
         :title="'可视化节点 ' + props.id"
         @load="onFrameLoad"
       />
-      <!--
-        交互遮罩：平时盖在 iframe 上，把鼠标事件让回画布。
-        双击摘掉它，里面的界面才开始吃点击；失去聚焦时自动盖回来。
-
-        ⚠️ **不要**给这一层加 nodrag / nopan —— 那两个类的意思正好是"这一层不参与拖拽/平移"，
-        而遮罩盖满整张卡，等于把整个节点的拖拽彻底禁掉（2026-10-12 用户实测「依然无法拖拽」的根因）。
-        它必须是**普通的一层**：pointerdown 落上去后正常冒泡，VueFlow 才知道用户要拖这个节点。
-      -->
-      <div
+      <UiInteractionGate
         v-if="!interactive"
-        class="ui-gate"
-        title="双击进入交互（点击界面里的按钮等）"
-        @dblclick.stop="enterInteractive"
-      >
-        <span class="ui-gate-badge">双击交互</span>
-        <!--
-          调试入口：把这份界面复制进一个**普通窗口**（同源），
-          于是 DevTools 能点进去、能读变量、能打断点。
-
-          ⚠️ 它**不碰**画布上那个沙箱 iframe —— 沙箱边界原样不动
-          原样不动。副本点坏了大不了重开，节点上那份不受影响。
-          2026-10-15 用户报「无法操作、无法调试」，根因就是沙箱本身（见 uiDebug.ts 文件头）。
-        -->
-        <Button
-          type="button"
-          class="ui-gate-debug"
-          variant="ghost"
-          size="sm"
-          title="在新窗口里调试这份界面（可读变量 / 打断点）"
-          @mousedown.stop
-          @dblclick.stop
-          @click.stop="openDebug"
-        >
-          调试
-        </Button>
-
-      </div>
+        @enter="enterInteractive"
+        @debug="openDebug"
+      />
 
       <!--
         调试确认框：Agent 发起连接后，每个打开这张画布的标签页都会看到它。
@@ -1284,20 +483,11 @@ const hint = computed(() => {
         被清掉（节点数据同步），这个框自动消失。
         样式走 ui-style-guide：浮层材质、radius-panel、主按钮青底白字。
       -->
-      <div v-if="showDebugPrompt" class="debug-prompt" role="dialog" aria-modal="true" aria-label="调试连接确认">
-        <div class="debug-prompt-card">
-          <div class="debug-prompt-title">调试连接请求</div>
-          <p class="debug-prompt-text">
-            Agent 想连接这个节点的界面进行调试。本画布开了多个标签页，
-            请只在<strong>你想用来调试的这个标签页</strong>点同意。同意后：
-            该节点会与后台建立调试连接，并阻止意外刷新（刷新前会再确认）。
-          </p>
-          <div class="debug-prompt-actions">
-            <Button type="button" class="debug-btn-ghost" variant="ghost" size="sm" @click.stop="dismissDebugInvite">先不连</Button>
-            <Button type="button" class="debug-btn-primary" variant="default" size="sm" @click.stop="acceptDebugInvite">同意调试</Button>
-          </div>
-        </div>
-      </div>
+      <UiDebugPrompt
+        v-if="showDebugPrompt"
+        @dismiss="dismissDebugInvite"
+        @accept="acceptDebugInvite"
+      />
     </template>
 
     <!-- 空态：只给"还没画"的节点（v-if="!hasHtml" 必须写！
@@ -1339,39 +529,6 @@ const hint = computed(() => {
    */
 }
 
-/* 交互遮罩：透明、盖满，负责"把事件让回画布" */
-.ui-gate {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  /* 透明但要"摸得到"：pointer-events 必须是 auto，否则事件又落回 iframe 了 */
-  background: transparent;
-  cursor: default;
-}
-/* 提示角标：只在鼠标停到节点上时淡淡地露一下，不打扰看内容 */
-.ui-gate-badge {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
-  color: var(--text-faint, #9ca3af);
-  font-size: 11px;
-  line-height: 18px;
-  opacity: 0;
-  transition: opacity 160ms ease;
-  pointer-events: none;
-}
-.ui-gate:hover .ui-gate-badge {
-  opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ui-gate-badge {
-    transition: none;
-  }
-}
-
 /* 交互态：给一圈内描边，让用户知道"现在点进去的是里面那个界面" */
 .ui-node.is-interactive {
   box-shadow: inset 0 0 0 2px var(--ui-accent, #0891b2);
@@ -1399,110 +556,6 @@ const hint = computed(() => {
   color: var(--canvas-node-text-faint, #9ca3af);
 }
 
-/*
- * 调试按钮：开一份同源副本，让这份界面能被 DevTools 调试。
- *
- * 为什么放在遮罩层上、且只 hover 才露出来：遮罩平时是透明的（要把事件让回画布），
- * 常驻一个按钮会挡视线；而「调试」是个低频动作，藏起来不影响日常使用。
- *
- * 为什么用按钮而不是 <span>：键盘要能 Tab 到它、回车要能触发
- * （a11y 硬性规则，见 docs/design/ui-style-guide.md）。
- */
-.ui-gate-debug {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  height: auto;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
-  color: var(--text-faint, #9ca3af);
-  font-size: 11px;
-  line-height: 18px;
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-
-/* ==================== 调试确认框（ui-style-guide：浮层材质 + 主按钮唯一实心）==================== */
-.debug-prompt {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--ui-scrim, rgba(0, 0, 0, 0.32));
-  border-radius: inherit;
-}
-.debug-prompt-card {
-  width: calc(100% - 32px);
-  max-width: 340px;
-  padding: 16px;
-  border-radius: 16px;
-  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
-  background: var(--ui-overlay-solid, #ffffff);
-  backdrop-filter: blur(20px);
-  box-shadow: var(--ui-shadow-e2, 0 20px 40px rgba(0, 0, 0, 0.08));
-}
-.debug-prompt-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-strong, #111827);
-  margin-bottom: 8px;
-}
-.debug-prompt-text {
-  margin: 0 0 12px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text-body, #374151);
-}
-.debug-prompt-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.debug-btn-ghost {
-  height: auto;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
-  background: transparent;
-  color: var(--text-muted, #6b7280);
-  font-size: 12px;
-  font-weight: 600;
-}
-.debug-btn-ghost:hover {
-  background: var(--fill-hover, rgba(0, 0, 0, 0.05));
-}
-.debug-btn-primary {
-  height: auto;
-  padding: 6px 14px;
-  border-radius: 8px;
-  background: var(--ui-accent, #0891b2);
-  color: var(--ui-on-accent, #fff);
-  font-size: 12px;
-  font-weight: 600;
-}
-.debug-btn-primary:hover {
-  background: var(--ui-accent-hover, #0e7490);
-}
-@media (prefers-reduced-motion: reduce) {
-  .debug-prompt-card {
-    transition: none;
-  }
-}
-.ui-gate:hover .ui-gate-debug,
-.ui-gate-debug:focus-visible {
-  opacity: 1;
-}
-.ui-gate-debug:hover {
-  color: var(--text-muted, #6b7280);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ui-gate-debug {
-    transition: none;
-  }
-}
 
 
 </style>

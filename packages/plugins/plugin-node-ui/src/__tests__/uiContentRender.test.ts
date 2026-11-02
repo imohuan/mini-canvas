@@ -175,7 +175,7 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
    */
   it('★ 调试入口不再往窗口里写文档（同源副本已换成独立源页面）', async () => {
     const src = await import('node:fs').then((fs) =>
-      fs.readFileSync(new URL('../UiContent.vue', import.meta.url), 'utf8'),
+      fs.readFileSync(new URL('../ui-content/useUiDebugWindow.ts', import.meta.url), 'utf8'),
     )
     // 只看代码，不看注释（注释里会解释"为什么不再用 document.write"）
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
@@ -200,7 +200,7 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
    */
   it('★ openDebug 只做注入，不自己开窗/导航/关窗（把流程交给被测函数）', async () => {
     const src = await import('node:fs').then((fs) =>
-      fs.readFileSync(new URL('../UiContent.vue', import.meta.url), 'utf8'),
+      fs.readFileSync(new URL('../ui-content/useUiDebugWindow.ts', import.meta.url), 'utf8'),
     )
     // 去掉注释后再抠函数体，避免注释里的解释被当成实现
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
@@ -232,7 +232,7 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
    */
   it('★ 收沙箱消息时同时校验 origin（同源导航不能冒充沙箱页）', async () => {
     const src = await import('node:fs').then((fs) =>
-      fs.readFileSync(new URL('../UiContent.vue', import.meta.url), 'utf8'),
+      fs.readFileSync(new URL('../ui-content/useUiBridge.ts', import.meta.url), 'utf8'),
     )
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '')
     expect(code).toContain("ev.origin !== 'null'")

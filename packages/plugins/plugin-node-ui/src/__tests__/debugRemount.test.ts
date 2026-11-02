@@ -11,7 +11,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../UiContent.vue'), 'utf8')
+const host = readFileSync(path.resolve(HERE, '../ui-content/useUiDebugWindow.ts'), 'utf8')
 
 describe('调试态切换必须重挂 iframe', () => {
   it('frameDoc 变化 → gen+1（重挂），与 html 变化同款', () => {
