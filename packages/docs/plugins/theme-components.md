@@ -125,6 +125,10 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
 
 ## 八、注意事项
 
+0. **看某个组件到底在哪被用**：设置里打开「常规 → 调试 → 组件库使用标记」，每个 shadcn 组件右上角会出现
+   一个小圆点，悬停显示使用文件与行号。模板里直写的使用点由 Vite 开发插件注入；
+   插件按名取到的（`<component :is="...">`）由默认主题登记时包一层透明标记（`withUiKitDebugMark`，
+   props / slots / 事件完全透传）。生产构建不注入、不挂载调试层。
 1. **取不到不抛错，但会静默不显示**：`useUiComponent` 找不到名字时返回 `undefined`
    并 `console.warn`；`uiComponent` / `uiComponentOutside` 只返回 `undefined`。
    表现为"组件没渲染"，**先查名字拼写**。

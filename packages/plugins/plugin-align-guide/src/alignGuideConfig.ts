@@ -32,7 +32,7 @@ export const Config = {
     default: '',
     optional: true,
     label: '参考线颜色',
-    group: '常规/主题配色',
+    group: '外观/主题配色',
     description: '亮色主题下的参考线颜色。拖拽时的对齐辅助线颜色。清空 = 跟随主题强调色。',
   },
   alignGuideColorDark: {
@@ -40,7 +40,7 @@ export const Config = {
     default: '',
     optional: true,
     label: '参考线颜色',
-    group: '常规/暗色主题配色',
+    group: '外观/暗色主题配色',
     description: '暗色主题下的参考线颜色。拖拽时的对齐辅助线颜色。清空 = 跟随主题强调色。',
   },
 } satisfies ConfigSchema

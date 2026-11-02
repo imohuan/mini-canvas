@@ -249,7 +249,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     )
   }
 
-  // —— 主题色板（「常规/主题配色」+「常规/暗色主题配色」）：每个可配置颜色**亮/暗各一格** ——
+  // —— 主题色板（「外观/主题配色」+「外观/暗色主题配色」）：每个可配置颜色**亮/暗各一格** ——
   // 与上面交互配置同一套语义：渲染宿主级声明（scope='canvas-render'），热卸业务插件不回收；
   // 时序也一致：在 settingsPersist.restore 之前 define，用户已保存的配色能在 define 时命中为初值。
   defineThemePaletteSettings(interactionSettings)

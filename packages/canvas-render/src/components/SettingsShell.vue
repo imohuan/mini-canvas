@@ -579,7 +579,8 @@ onBeforeUnmount(() => {
   background: var(--ui-scrim-soft, linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.18)));
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
-  font-family: system-ui, 'Microsoft YaHei', sans-serif;
+  /* 跟随主题插件「外观 → 正文字体」；没选时回落到原来的系统栈 */
+  font-family: var(--mct-font-body, system-ui, 'Microsoft YaHei', sans-serif);
 }
 
 /* 浮动模式下：蒙版透明、不可点击、不拦截事件，dialog 自己 fixed 定位 */

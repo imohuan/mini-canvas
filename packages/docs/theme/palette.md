@@ -14,6 +14,9 @@
 
 数据上每个颜色是一个 token，派生成两格：
 
+> 设置面板里的位置：这两个分组现在都挂在第 0 级分类 **外观** 下
+> （一级菜单 `主题配色` / `暗色主题配色`），与「形状」「字体」「主题模式」并列。
+
 ~~~ts
 // 文件：packages/canvas-render/src/contracts/themePalette.ts
 // 格式：TypeScript 模块（摘录）
@@ -105,10 +108,10 @@ export const THEME_COLOR_TOKENS: readonly ThemeColorToken[] = Object.freeze([
 // 格式：TypeScript 模块（公开面签名，逐字摘录）
 // 位置：色板 API
 
-/** 亮色主题的配置分组（一级「常规」，与其它设置同层；二级点明是哪个主题） */
-export const THEME_COLOR_LIGHT_GROUP = '常规/主题配色'
+/** 亮色主题的配置分组（一级「外观」，与形状 / 字体同层；二级点明是哪个主题） */
+export const THEME_COLOR_LIGHT_GROUP = '外观/主题配色'
 /** 暗色主题的配置分组 */
-export const THEME_COLOR_DARK_GROUP = '常规/暗色主题配色'
+export const THEME_COLOR_DARK_GROUP = '外观/暗色主题配色'
 
 /** camelCase → kebab-case（accentHoverColor → accent-hover-color） */
 function kebab(name: string): string

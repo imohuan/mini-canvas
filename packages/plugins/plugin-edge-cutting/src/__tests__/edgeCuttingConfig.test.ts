@@ -12,12 +12,13 @@ import { Config, edgeCuttingConfigFrom } from '../edgeCuttingConfig'
 const bareCtx = { tryGet: () => undefined } as unknown as Context
 
 describe('切割颜色 schema', () => {
-  it('两格都是 color + optional + 默认留空，且挂在「常规/主题配色」', () => {
-    for (const key of ['pathColor', 'bladeColor']) {
+  it('两格都是 color + optional + 默认留空，且挂在「外观/主题配色」', () => {
+    // as const：Config 是字面量 schema，用 string 索引在 strict 下会报隐式 any（既有问题，顺手收掉）
+    for (const key of ['pathColor', 'bladeColor'] as const) {
       expect(Config[key].type).toBe('color')
       expect(Config[key].optional).toBe(true)
       expect(Config[key].default).toBe('')
-      expect(Config[key].group).toBe('常规/主题配色')
+      expect(Config[key].group).toBe('外观/主题配色')
     }
   })
 

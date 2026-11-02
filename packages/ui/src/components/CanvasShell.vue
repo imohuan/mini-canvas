@@ -80,7 +80,8 @@ const dockStyle = computed(() => {
 
 <style scoped>
 /* 外壳底/字走主题 token：亮暗由 <html class="dark"> 切换，不再靠 data-theme 手写两套值 */
-.shell { position: relative; height: 100vh; overflow: hidden; background: var(--ui-canvas-bg, #141414); color: var(--ui-ink, #f7f7f7); font-family: system-ui, 'Microsoft YaHei', sans-serif; }
+/* 字体：跟随主题插件「外观 → 正文字体」；没选时回落到原来的系统栈 */
+.shell { position: relative; height: 100vh; overflow: hidden; background: var(--ui-canvas-bg, #141414); color: var(--ui-ink, #f7f7f7); font-family: var(--mct-font-body, system-ui, 'Microsoft YaHei', sans-serif); }
 .shell[data-theme='light'] { background: var(--ui-canvas-bg, #f5f6f8); color: var(--ui-ink, #18202b); }
 .shell-canvas { position: absolute; inset: 0; }
 .shell-topbar { position: absolute; inset: 8px 8px auto; z-index: var(--layer-app-chrome, 700); display: flex; align-items: center; justify-content: space-between; height: 32px; pointer-events: none; }

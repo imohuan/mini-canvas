@@ -1192,7 +1192,9 @@ function clamp(value: number, min: number, max: number): number {
   position: relative;
   display: flex;
   flex-direction: column;
-  font-family: system-ui, sans-serif;
+  /* 跟随主题插件「外观 → 正文字体」；没选时回落到原来的系统栈。
+     这条以前写死 system-ui，于是整站换字体时节点里的文字不跟着变。 */
+  font-family: var(--mct-font-body, system-ui, sans-serif);
 }
 
 /* —— 视口外节点（culled / culled-linked）骨架态 ——

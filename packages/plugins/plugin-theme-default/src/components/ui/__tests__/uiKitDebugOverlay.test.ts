@@ -42,8 +42,12 @@ describe('组件库使用标记', () => {
     expect(body).not.toContain('pointer-events: auto')
   })
 
-  /** 设置面板打开时圆点整层让位：它是被查看的主体，圆点压上去反而看不清 */
-  it('设置面板打开时让位（不叠在设置界面上）', () => {
-    expect(CODE).toContain('[role="dialog"]')
+  /**
+   * 2026-11-02 用户反馈：在设置面板里打开开关后完全看不到圆点。
+   * 根因是调试层看到 `[role="dialog"]` 就整层让位 —— 但设置面板本身正是最需要看标记的地方。
+   * 这条按代码钉死：扫描逻辑里不允许再出现"有 dialog 就清空"的分支。
+   */
+  it('有设置面板打开时仍然显示标记（不整层让位）', () => {
+    expect(CODE).not.toContain('[role="dialog"]')
   })
 })

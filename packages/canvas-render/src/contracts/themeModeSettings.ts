@@ -18,8 +18,12 @@ import type { SettingSchema } from '@mini-canvas/kernel'
 /** 设置 key（settings 全局平面命名，先声明者独占） */
 export const THEME_MODE_KEY = 'themeMode'
 
-/** 设置面板里的分组：一级「常规」/ 二级「外观」（与「常规/画布」同层） */
-export const THEME_MODE_GROUP = '常规/外观'
+/**
+ * 设置面板里的分组：一级「外观」/ 二级「主题模式」。
+ * 2026-11-02 用户口径：主题配色等"只改长相"的项全部归到「外观」；
+ * 亮/暗模式也是外观的一部分，不再挂在「常规」下。
+ */
+export const THEME_MODE_GROUP = '外观/主题模式'
 
 /** 主题模式：与 `<html class="dark">` 一一对应 */
 export type ThemeMode = 'light' | 'dark'

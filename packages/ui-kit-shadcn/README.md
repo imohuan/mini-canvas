@@ -26,6 +26,23 @@ import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, Dropdow
 
 `styles.css` 把 shadcn 的颜色映射到项目现有的 `--ui-*` 变量，亮暗主题跟随 `<html class="dark">`。
 
+### 主题交接（真实应用里）
+
+默认主题插件（`plugin-theme-default`）是外观配置的唯一入口：
+
+| 配置项 | 写入的变量 | 谁消费 |
+| --- | --- | --- |
+| 圆角 `themeRadius` | `--mct-radius` | `styles/host.css` 按 `data-slot` 覆盖按钮 / 输入框 / 卡片 / 浮层 |
+| 正文字体 `themeFont` | `--mct-font-body` | `<html>` + 外壳 / 设置壳 / 节点壳（都写 `var(--mct-font-body, 原栈)`） |
+| 标题字体 `themeHeadingFont` | `--mct-font-heading` | 组件标题（`cn-font-heading`）+ 设置页小标题 |
+
+颜色不在这里另写一份：`styles.css` 已经把 shadcn 语义色映射到 `--ui-*`，
+而 `--ui-*` 由 canvas-render 的主题色板（设置 → 外观 → 主题配色）驱动。
+
+开发期还有一个开关「设置 → 常规 → 调试 → 组件库使用标记」：打开后每个 shadcn 组件右上角出现一个小圆点，
+鼠标悬停显示它被使用的文件与行号。模板里直写的使用点由 Vite 插件（`vite-plugin-debug-loc`）注入；
+按名登记进 `registryOf('ui')` 的组件由 `withUiKitDebugMark` 包一层透明标记（不改变 props / slots / 事件）。
+
 ## 目录
 
 - `src/components/ui/*`：shadcn-vue 原始组件，未做包装。

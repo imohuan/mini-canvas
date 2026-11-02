@@ -4,7 +4,7 @@
  * 对齐 v1 EdgeCuttingOptions / 现有 EdgeCuttingOptions 的可调项：
  *   总开关 / 命中容差 / 路径采样步长 / 轨迹色 / 刀锋色 / 是否显示完整拖拽轨迹。
  * 分组：非颜色的开关/数值归一级「边」的 `边/连线切割`；轨迹色/刀锋色两个颜色归一级「常规」的
- * `常规/主题配色`（配色集中调）。标量字段经内核 SettingsStore（settings 单一数据源）登记进 ⚙ 设置面板，
+ * `外观/主题配色`（配色集中调）。标量字段经内核 SettingsStore（settings 单一数据源）登记进 ⚙ 设置面板，
  * 改动实时生效（切割会话/绘制点读到本函数，不缓存 apply 时 config）。
  * 独立成文件避免 edgeCuttingPlugin ↔ edgeCuttingOverlay 循环 import。
  */
@@ -50,14 +50,14 @@ export const Config = {
     description:
       '开启：显示完整拖拽轨迹，并按整条轨迹切割（划到哪删到哪）。关闭：只显示刀锋短尾迹，且只按刀锋短路径切割——完整长轨迹扫到、但刀锋没真正碰到的地方不会误删。',
   },
-  // —— 颜色统一归「常规/主题配色」——
+  // —— 颜色统一归「外观/主题配色」——
   // 两个颜色都是**可选**（optional）：不给自定义色 → 跟随主题（见下 description）。
   // 语义与多选框颜色一致：清空 = 回落主题色；只有设置了自定义色才用它。
   pathColor: {
     type: 'color',
     default: '',
     label: '切割轨迹颜色',
-    group: '常规/主题配色',
+    group: '外观/主题配色',
     optional: true,
     description:
       'Alt 拖拽时画出的完整轨迹线的颜色（半透明发光线条）。清空 = 跟随主题强调色（悬停档）。',
@@ -66,7 +66,7 @@ export const Config = {
     type: 'color',
     default: '',
     label: '刀锋颜色',
-    group: '常规/主题配色',
+    group: '外观/主题配色',
     optional: true,
     description: '刀锋尾迹/刀尖的主题色（发光描边颜色）。清空 = 跟随主题强调色。',
   },

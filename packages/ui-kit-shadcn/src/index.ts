@@ -49,5 +49,6 @@ export {
   UI_KIT_DEBUG_COMPONENT_ATTR,
   parseDebugLoc,
   usageLocOf,
+  withUiKitDebugMark,
 } from './debugLoc'
 export type { UiKitUsageLoc } from './debugLoc'

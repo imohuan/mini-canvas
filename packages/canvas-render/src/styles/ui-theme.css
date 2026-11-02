@@ -142,7 +142,7 @@
      兜底直通 --ui-accent。原 0.75 透明度现算保留（参考线需要半透明）。 */
   --ui-guide: color-mix(in srgb, var(--uic-align-guide-light, var(--ui-accent, #3b82f6)) 75%, transparent);
   --ui-guide-veil: color-mix(in srgb, var(--ui-guide) 8%, transparent);
-  /* 多选框 / 绘制框颜色（色板两格制）：三个框各一个，用户能在「常规/主题配色」里改；
+  /* 多选框 / 绘制框颜色（色板两格制）：三个框各一个，用户能在「外观/主题配色」里改；
      缺省时用 --uic-* 兜底。绘制框=Shift 拖拽时画的；外框/内框=选中后围着节点的两条线。 */
   /* 多选三色（绘制框/多选框-外框/多选框-内框）：由 multi-select 插件自报（插件卸载配置跟着消失），
      这里只是**兜底直通主题强调色** —— 不再走 --uic-* 间接层（那层已死：插件自报的 key 不经它）。 */

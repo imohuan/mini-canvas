@@ -29,7 +29,11 @@
 export const DEFAULT_SETTINGS_CATEGORY = '个人'
 
 /** 内置分类的显示顺序（后面的分类排最后） */
-export const SETTINGS_CATEGORY_ORDER: readonly string[] = ['个人', '集成', '画布', '开发']
+/**
+ * 「外观」紧跟个人偏好：形状 / 字体 / 主题配色 / 亮暗模式都只改长相。
+ * 用户口径（2026-11-02）：「主题配色应该全部放到外观里面」。
+ */
+export const SETTINGS_CATEGORY_ORDER: readonly string[] = ['个人', '外观', '集成', '画布', '开发']
 
 /** `settings/navCategory` 场域名 */
 export const SETTINGS_NAV_CATEGORY_FIELD = 'settings/navCategory'
@@ -39,13 +43,17 @@ export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
   // 个人：跟着人走的偏好
   常规: '个人',
   通用: '个人',
-  外观: '个人',
   主题: '个人',
   导入: '个人',
   存储: '个人',
   配置: '个人',
   个性化: '个人',
   键盘快捷键: '个人',
+  // 外观：形状 / 字体 / 配色这类"只改长相"的项。用户口径（2026-11-02）：
+  // 「主题配色应该全部放到外观里面」—— 它也是外观，不该待在「个人」下被当成功能开关。
+  外观: '外观',
+  主题配色: '外观',
+  暗色主题配色: '外观',
   // 集成：接外部能力的入口
   插件: '集成',
   Agent: '集成',
@@ -106,6 +114,8 @@ export function categoryOf(
 ): string {
   const explicit = metaCategory?.trim() || registryCategory?.trim()
   if (explicit) return explicit
+  // 「常规」这个一级菜单是历史包袱：功能开关与配色曾混在一起。
+  // 配色已经独立成「外观/主题配色」组，剩下的「常规」菜单仍是功能开关，归个人。
   return DEFAULT_NAV_CATEGORY[nav] ?? DEFAULT_SETTINGS_CATEGORY
 }
 

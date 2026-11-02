@@ -49,6 +49,14 @@ const panelW = ref(320)
 const panelH = ref(120)
 const shown = ref(false)
 
+/** 定位文字：模板使用点带行列；按名登记的组件只到文件（line = 0） */
+const locText = computed(() => {
+  const loc = target.value?.loc
+  if (!loc) return ''
+  if (!loc.line) return `${loc.file} · 目录登记`
+  return `${loc.file}:${loc.line}:${loc.column}`
+})
+
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 let moveRaf = 0
 let tickRaf = 0
@@ -80,16 +88,6 @@ const panelStyle = computed(() => {
 
 /** 扫描带标记的元素，算好圆点与命中框（只在调试层挂载后跑） */
 function scan(): void {
-  // 设置面板打开时整层让位：它自己就是「正在看组件库用在哪」的主要目标，
-  // 圆点压在上面反而看不清面板本身。面板关掉后下一帧自动回来。
-  if (document.querySelector('[role="dialog"]')) {
-    if (markers.value.length) markers.value = []
-    if (shown.value) {
-      shown.value = false
-      target.value = null
-    }
-    return
-  }
   const next: Marker[] = []
   for (const el of document.querySelectorAll<HTMLElement>(`[${UI_KIT_DEBUG_ATTR}]`)) {
     if (!el.isConnected || !el.getClientRects().length) continue
@@ -238,7 +236,7 @@ onBeforeUnmount(() => {
     />
     <div v-if="shown && target" ref="panelRef" class="ukdo-body" :style="panelStyle" role="tooltip">
       <div class="ukdo-head">{{ target.loc.component }}</div>
-      <div class="ukdo-path">{{ target.loc.file }}:{{ target.loc.line }}:{{ target.loc.column }}</div>
+      <div class="ukdo-path">{{ locText }}</div>
       <div class="ukdo-hint">使用点 · 来源 @mini-canvas/ui-kit-shadcn</div>
     </div>
   </div>

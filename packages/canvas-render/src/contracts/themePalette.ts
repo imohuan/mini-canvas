@@ -120,10 +120,16 @@ export const THEME_COLOR_TOKENS: readonly ThemeColorToken[] = Object.freeze([
   // 插件卸载时配置跟着消失；CSS 侧 ui-theme.css 的 --ui-guide 兜底直通 --ui-accent。
 ])
 
-/** 亮色主题的配置分组（一级「常规」，与其它设置同层；二级点明是哪个主题） */
-export const THEME_COLOR_LIGHT_GROUP = '常规/主题配色'
+/**
+ * 亮色主题的配置分组。
+ *
+ * 2026-11-02 用户口径：「主题配色应该全部放到外观里面」。
+ * 一级段是「外观」—— 形状 / 字体 / 配色都是"只改长相"的项，归在同一个第 0 级分类下。
+ * 二级段仍点明是哪套主题的色格。
+ */
+export const THEME_COLOR_LIGHT_GROUP = '外观/主题配色'
 /** 暗色主题的配置分组 */
-export const THEME_COLOR_DARK_GROUP = '常规/暗色主题配色'
+export const THEME_COLOR_DARK_GROUP = '外观/暗色主题配色'
 
 /** 展平后的一格：一个 token × 一个主题模式 = 一个 Config 字段 = 一个内联变量 */
 export interface ThemeColorSlot {

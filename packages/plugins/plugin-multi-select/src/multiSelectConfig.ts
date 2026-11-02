@@ -23,7 +23,7 @@ import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 export type FrameLineStyle = 'solid' | 'dashed' | 'dotted'
 
 /**
- * 三个框的颜色配置（挂「常规/主题配色」与「常规/暗色主题配色」，与其它主题色同层）。
+ * 三个框的颜色配置（挂「外观/主题配色」与「外观/暗色主题配色」，与其它主题色同层）。
  *
  * 为什么在这里声明而不是进 canvas-render 的色板：这些颜色**属于多选插件**——插件卸载后
  * 这几格配置也该一起消失（用户实测报过"卸载了多选，颜色还留在主题配色里"）。declareConfig
@@ -154,7 +154,7 @@ export const DEFAULT_MULTI_SELECT_FRAME: MultiSelectFrameConfig = {
   innerPaddingX: 0,
   innerPaddingTop: 0,
   innerPaddingBottom: 0,
-  // 颜色默认**留空** = 走主题配色（用户在「常规/主题配色」里改；这是用户要求的"删掉自定义色就用主题色"）。
+  // 颜色默认**留空** = 走主题配色（用户在「外观/主题配色」里改；这是用户要求的"删掉自定义色就用主题色"）。
   // 想要固定色就自己在设置里选一个。
   outer: { lineStyle: 'dashed', lineWidth: 1, radius: 6, fillOpacity: 0 },
   // 内框默认 0 = 直角：它要"紧贴选中节点的并集"，而节点并集是个正矩形，
@@ -354,7 +354,7 @@ export const Config: ConfigSchema = {
     type: 'color',
     default: '',
     label: '绘制框颜色',
-    group: '常规/主题配色',
+    group: '外观/主题配色',
     optional: true,
     description: 'Shift 拖拽框选时随鼠标画出来的框（绘制框）的描边颜色。清空 = 跟随主题强调色。',
   },
@@ -362,7 +362,7 @@ export const Config: ConfigSchema = {
     type: 'color',
     default: '',
     label: '绘制框颜色',
-    group: '常规/暗色主题配色',
+    group: '外观/暗色主题配色',
     optional: true,
     description: '暗色主题下的绘制框描边颜色。清空 = 跟随主题强调色。',
   },
@@ -370,7 +370,7 @@ export const Config: ConfigSchema = {
     type: 'color',
     default: '',
     label: '多选框-外框颜色',
-    group: '常规/主题配色',
+    group: '外观/主题配色',
     optional: true,
     description: '选中多个节点后，外面那圈较大的框（多选框-外框）的颜色。清空 = 跟随主题强调色。',
   },
@@ -378,7 +378,7 @@ export const Config: ConfigSchema = {
     type: 'color',
     default: '',
     label: '多选框-外框颜色',
-    group: '常规/暗色主题配色',
+    group: '外观/暗色主题配色',
     optional: true,
     description: '暗色主题下的多选框-外框颜色。清空 = 跟随主题强调色。',
   },
@@ -386,7 +386,7 @@ export const Config: ConfigSchema = {
     type: 'color',
     default: '',
     label: '多选框-内框颜色',
-    group: '常规/主题配色',
+    group: '外观/主题配色',
     optional: true,
     description: '选中多个节点后，紧贴节点那圈较小的框（多选框-内框）的颜色。清空 = 跟随主题强调色。',
   },
@@ -394,7 +394,7 @@ export const Config: ConfigSchema = {
     type: 'color',
     default: '',
     label: '多选框-内框颜色',
-    group: '常规/暗色主题配色',
+    group: '外观/暗色主题配色',
     optional: true,
     description: '暗色主题下的多选框-内框颜色。清空 = 跟随主题强调色。',
   },

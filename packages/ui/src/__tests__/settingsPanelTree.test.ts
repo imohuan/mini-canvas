@@ -81,8 +81,8 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     expect(NAV).toMatch(/class="ssn-caption"/)
     expect(NAV).toMatch(/v-for="group in groups"/)
     expect(NAV).toMatch(/v-for="item in group.items"/)
-    // 分类顺序固定：个人 → 集成 → 画布 → 开发
-    expect(CATEGORY).toMatch(/SETTINGS_CATEGORY_ORDER[^=]*=\s*\[\s*'个人'\s*,\s*'集成'\s*,\s*'画布'\s*,\s*'开发'\s*\]/)
+    // 分类顺序固定：个人 → 外观 → 集成 → 画布 → 开发
+    expect(CATEGORY).toMatch(/SETTINGS_CATEGORY_ORDER[^=]*=\s*\[\s*'个人'\s*,\s*'外观'\s*,\s*'集成'\s*,\s*'画布'\s*,\s*'开发'\s*\]/)
   })
 
   it('没有显式分类时默认落在「个人」', () => {

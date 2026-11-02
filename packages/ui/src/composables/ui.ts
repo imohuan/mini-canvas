@@ -1752,11 +1752,13 @@ function createUi() {
     }
     syncSlotDebug()
     // 组件库使用标记：外壳只负责把开关同步成 <html> 属性；调试层是否挂载由 App.vue 决定。
+    // 属性名带 -enabled 后缀：调试层按 [data-ui-kit-debug] 找"使用点"，
+    // 根节点若用同名属性会被当成一个组件（属性值 "on" 不是定位串，白扫一遍）。
     const syncUiKitDebug = (): void => {
       if (typeof document === 'undefined') return
       const root = document.documentElement
-      if (store.get('uiKitDebug') === true) root.setAttribute('data-ui-kit-debug', 'on')
-      else root.removeAttribute('data-ui-kit-debug')
+      if (store.get('uiKitDebug') === true) root.setAttribute('data-ui-kit-debug-enabled', 'on')
+      else root.removeAttribute('data-ui-kit-debug-enabled')
     }
     syncUiKitDebug()
     disposeSettingsBind = store.onChange((key, value) => {

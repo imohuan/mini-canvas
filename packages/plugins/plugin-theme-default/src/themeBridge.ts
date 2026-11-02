@@ -11,7 +11,7 @@
  *   shadcn 的 `--primary` / `--background` / …，所以**颜色本来就已经接上了**，
  *   这里不再写第二份色板 —— 否则用户改「强调色」时组件库不跟着变，正是要避免的漂移。
  * - **形状 / 字体**：这两项项目里原本没有统一出口，这里补上。写成 `--mct-*` 变量，
- *   由组件库的 host.css 消费（`--radius-sm/md/lg/xl`、`font-family`）。
+ *   由组件库的 host.css 消费（`--radius-sm/md/lg/xl`、全站 `font-family`）。
  *
  * 为什么是 `--mct-*` 而不是直接改 `--radius`：`--radius` 是 shadcn 自己的变量名，
  * 组件库里只有个别文件用；直接占用它会让「以后组件库升级」与「主题包」抢同一个名字。
@@ -20,7 +20,14 @@
  * **选项表（字体 / 圆角）不在本文件重复**：直接引用组件库导出的 `FONT_OPTIONS` /
  * `RADIUS_OPTIONS`，否则预览页加一种字体、真实应用不跟着加，两份必然漂移。
  */
-import { FONT_OPTIONS, RADIUS_OPTIONS, type FontOption, type RadiusOption } from '@mini-canvas/ui-kit-shadcn'
+import {
+  FONT_OPTIONS,
+  RADIUS_OPTIONS,
+  findFont,
+  loadFont,
+  type FontOption,
+  type RadiusOption,
+} from '@mini-canvas/ui-kit-shadcn'
 
 /** 字体选项：`inherit`（跟随宿主）在最前，其余原样取自组件库 */
 export const THEME_FONT_OPTIONS: readonly FontOption[] = FONT_OPTIONS
@@ -60,8 +67,9 @@ export const THEME_RADIUS_LABELS: Readonly<Record<string, string>> = {
 /**
  * 字体 id → CSS font-family 栈。
  *
- * 只列「本地 / 系统已装就有效」的常见家族：真要用 Web Font，应由使用方在自己的
- * 入口按需加载（组件库预览页就是动态插 `<link>`）。主题包不偷偷往用户页面塞外链。
+ * 只列「本地 / 系统已装就有效」的常见家族。选中的字体由 `applyThemeBridge` 调
+ * 组件库的 `loadFont` 按需插一次 Google Fonts `<link>`（与预览页同一条路），
+ * 机器上没装该字体时也能真的换过去。
  */
 export const THEME_FONT_STACKS: Readonly<Record<ThemeFontChoice, string>> = {
   inherit: '',
@@ -161,6 +169,13 @@ export function applyThemeBridge(input: ThemeBridgeInput, root?: HTMLElement): v
     const value = next[name]
     if (value) el.style.setProperty(name, value)
     else el.style.removeProperty(name)
+  }
+  // 预览页选了字体后会按需插 Google Fonts；真实应用也走同一条路，
+  // 否则用户选了 Inter 之类的字体，机器上没装就还是原来的字。
+  // loadFont 内部有 typeof document 守卫，纯函数单测不会碰网络。
+  if (input.font !== 'inherit') loadFont(findFont(input.font))
+  if (input.heading !== 'inherit' && input.heading !== input.font) {
+    loadFont(findFont(input.heading))
   }
 }
 

@@ -24,6 +24,8 @@
 | 从最后一个节点倒推、按依赖顺序执行 | [上游与执行顺序](/canvas-data/upstream) | `upstream.order()` 返回拓扑序 | 执行类插件（ComfyUI 式） |
 | 定时任务/轮询 | 案例 8 | `ctx.effect` 包 `setInterval` | `plugin-auto-save` |
 | 换掉整个节点外壳/连线 | [主题手册](/theme/) | `ctx.theme.add(slot, comp, { order })` | `plugin-theme-default` |
+| 设置里改字体 / 圆角，整站跟着变 | [组件库](/plugins/theme-components) | 默认主题的「外观」配置 → `--mct-*` 变量 | `plugin-theme-default` |
+| 看某个 shadcn 组件是哪个文件在用 | [组件库](/plugins/theme-components) | 「常规 → 调试 → 组件库使用标记」 | `plugin-theme-default` |
 
 ## 没找到你想做的？
 

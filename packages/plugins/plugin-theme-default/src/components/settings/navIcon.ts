@@ -24,6 +24,8 @@ import {
   Grid2x2,
   Keyboard,
   LayoutGrid,
+  Moon,
+  Palette,
   Pipette,
   Puzzle,
   RefreshCw,
@@ -31,6 +33,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   SquareStack,
+  SunMoon,
   Upload,
 } from 'lucide-vue-next'
 
@@ -40,6 +43,9 @@ export const SETTINGS_NAV_ICON_NAMES: ReadonlyArray<readonly [string, Component]
   ['常规', SlidersHorizontal],
   ['通用', SlidersHorizontal],
   ['外观', Brush],
+  ['主题配色', Palette],
+  ['暗色主题配色', Moon],
+  ['主题模式', SunMoon],
   ['主题', Brush],
   ['导入', Download],
   ['存储', Database],

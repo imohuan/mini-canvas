@@ -34,7 +34,7 @@ export function defineThemePaletteSettings(settings: SettingsStore): void {
   // 而本表两格分属两个分组（亮/暗各一个页签），故按 group 分桶后各申报一次。
   const byGroup = new Map<string, Record<string, SettingSchema>>()
   for (const [key, field] of Object.entries(schema)) {
-    const group = field.group ?? '常规/主题配色'
+    const group = field.group ?? '外观/主题配色'
     const bucket = byGroup.get(group) ?? {}
     bucket[key] = field as unknown as SettingSchema
     byGroup.set(group, bucket)

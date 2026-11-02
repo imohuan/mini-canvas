@@ -104,10 +104,12 @@
  * 默认档回落各自原来的观感（Button 32px 胶囊、Input 24px、卡片 16px）。
  */
 /*
- * `!important` 在这里是必要的：组件模板里写的是 Tailwind 工具类（rounded-4xl 等），
- * 它们和这里同为「单类 / 属性选择器」权重，靠源序才能压过去；而工具类的注入顺序
- * 随构建变化，靠顺序等于靠运气（实测被压回去了）。用 important 明确定义
- * 「主题配置 > 组件默认」这一条优先级，调用方仍可用行内 style 覆盖单个实例。
+ * 这里不用 important。
+ *
+ * 2026-11-02 复核：Tailwind v4 的 rounded-* 工具类在 @layer utilities 里，
+ * 而本文件这三条是**无层**样式；无层样式天然压过所有 @layer（含 utilities），
+ * 不靠源序、也不需要提高优先级。之前写 important 是把「靠运气」的结论留在了代码里，
+ * 结果连用户自己写的 class="rounded-none" 也压不住，属于不该有的硬约束。
  */
 /*
  * 注意选择器用 `[data-variant]` 而不是 `[data-slot='button']`：
@@ -119,13 +121,13 @@
 [data-slot='button'] {
   /* 默认档不写 --mct-radius：这里回落到 Button 自己的 rounded-4xl，保持原有观感。
      写死一个 999px 兜底会把按钮从「模板里的圆角」偷偷改成胶囊，用户没配置却变了样子。 */
-  border-radius: var(--mct-radius, revert-layer) !important;
+  border-radius: var(--mct-radius, revert-layer);
 }
 
 [data-slot='input'],
 [data-slot='select-trigger'],
 [data-slot='textarea'] {
-  border-radius: var(--mct-radius, revert-layer) !important;
+  border-radius: var(--mct-radius, revert-layer);
 }
 
 [data-slot='card'],
@@ -133,7 +135,26 @@
 [data-slot='popover-content'],
 [data-slot='dropdown-menu-content'],
 [data-slot='select-content'] {
-  border-radius: var(--mct-radius, revert-layer) !important;
+  border-radius: var(--mct-radius, revert-layer);
+}
+
+/*
+ * 字体：主题插件把选中的字体写到 --mct-font-*，这里让**全站**跟随，
+ * 不只组件库这几类元素。用户口径（2026-11-02）：改字体只变组件库、页面其它地方没变。
+ *
+ * 为什么落在 html 而不是每个组件：外壳 / 画布 / 插件面板里大量元素是
+ * font-family: inherit，只要根上换了，它们自动跟着换；而写死系统字体栈的几处
+ * （CanvasShell / SettingsShell / BaseNode）已改成 var(--mct-font-body, 原栈)。
+ *
+ * 兜底必须指回 Tailwind preflight 的 --default-font-family：写 inherit 会把
+ * html 的字体退成浏览器默认的衬线体（没选字体时整站变样）。
+ */
+html {
+  font-family: var(--mct-font-body, var(--default-font-family, system-ui, sans-serif));
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--mct-font-heading, inherit);
 }
 
 /* 组件库自己的文字：跟主题插件选的正文 / 标题字体走（没选就用宿主字体栈） */
@@ -151,5 +172,14 @@
 /* 设置页的二级小标题走标题字体 */
 .shadcn-settings-section__title,
 [data-slot='dialog-title'] {
+  font-family: var(--mct-font-heading, inherit);
+}
+
+/*
+ * 组件库自带 cn-font-heading 的标题（CardTitle / dialog-title 等）：
+ * shadcn 用 Tailwind 的 --font-heading 提供它，本项目没有在 app.css 里声明，
+ * 于是这些标题的字体一直是浏览器缺省值。这里统一指到主题插件写的标题字体。
+ */
+.cn-font-heading {
   font-family: var(--mct-font-heading, inherit);
 }

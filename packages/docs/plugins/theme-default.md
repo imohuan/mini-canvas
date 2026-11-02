@@ -56,6 +56,7 @@ export function apply(ctx) {
 | 标题外观 | 标题显不显示、离卡片多远 | `titleVisible`、`titleOffset`、`titleScaleMinZoom` |
 | 控制栏布局 | 上/下控制栏离卡片多远 | `toolbarTopOffset`、`toolbarBottomOffset` |
 | 生成面板 | 输入框那一栏的尺寸 | `panelImageWidth`、`panelEditorMinHeight` |
+| 外观 | 只改长相、不改行为的项 | `themeRadius`（圆角）、`themeFont`（正文字体）、`themeHeadingFont`（标题字体） |
 
 > 这些默认值是**全仓唯一权威**。渲染层不再自己写一份默认值 ——
 > 两边各写一份必然漂移，最后表现成"装不装主题插件，端口位置不一样"。

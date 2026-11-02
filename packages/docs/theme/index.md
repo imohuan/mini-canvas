@@ -109,8 +109,8 @@ html.dark {
 
 /** 设置 key（settings 全局平面命名，先声明者独占） */
 export const THEME_MODE_KEY = 'themeMode'
-/** 设置面板里的分组：一级「常规」/ 二级「外观」（与「常规/画布」同层） */
-export const THEME_MODE_GROUP = '常规/外观'
+/** 设置面板里的分组：一级「外观」/ 二级「主题模式」（与「外观/主题配色」同层） */
+export const THEME_MODE_GROUP = '外观/主题模式'
 /** 默认暗色（对齐 index.html 首屏 class="dark"，避免首屏亮→暗闪一下） */
 export const THEME_MODE_DEFAULT: ThemeMode = 'dark'
 

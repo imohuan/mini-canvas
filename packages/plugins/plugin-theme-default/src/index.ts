@@ -63,7 +63,7 @@ import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
-import { SHADCN_COMPONENTS } from "@mini-canvas/ui-kit-shadcn";
+import { SHADCN_COMPONENTS, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn";
 import { SETTINGS_NAV_ICON_NAMES } from "./components/settings/navIcon";
 import {
   applyThemeBridge,
@@ -269,7 +269,7 @@ export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<
  * 内核装配时经它校验 + 补默认，apply(ctx, config) 收到的即完整 config。
  *
  * 分组命名约定：`一级/二级`（左侧一级导航、右侧二级页签条），一级按"画布对象/功能"归类、跨插件聚合；
- * 视觉配色统一收进一级「常规」下的 `常规/主题配色`（各插件颜色集中一处调）；调试开关在 `常规/调试`。
+ * 视觉配色统一收进一级「外观」下的 `外观/主题配色`（各插件颜色集中一处调）；调试开关在 `常规/调试`。
  * 本插件字段分属：节点(端口/吸附带)、边(连线)、常规(主题配色/调试)。
  */
 export const Config: ConfigSchema = {
@@ -703,7 +703,7 @@ export const Config: ConfigSchema = {
   // ===== 一级「常规」：调试 / 小地图等跨插件的常规设置收归一处 =====
   // 注意：连线颜色（导轨 / 流光）**不在这里声明** —— 已上移进渲染层主题色板
   //（themePalette 的 `edgeRailColor` / `edgeFlowColor`，各带亮/暗两格，
-  //  见「常规/主题配色」与「常规/暗色主题配色」两个分组）。
+  //  见「外观/主题配色」与「外观/暗色主题配色」两个分组）。
   // 单值 Config 无法表达"两套主题各一个值"，留着反而会盖住色板。
   // —— 调试：开发校准开关 ——
   handleDebug: {
@@ -743,7 +743,7 @@ export const Config: ConfigSchema = {
     type: "select",
     default: DEFAULT_THEME_APPEARANCE.themeRadius,
     label: "圆角",
-    group: "外观/外观",
+    group: "外观/形状",
     description:
       "组件库（按钮 / 输入框 / 卡片 / 弹层）的圆角档位。默认跟随项目原有的 8px 控件圆角。",
     options: THEME_RADIUS_CHOICES.map((id) => ({
@@ -755,7 +755,7 @@ export const Config: ConfigSchema = {
     type: "select",
     default: DEFAULT_THEME_APPEARANCE.themeFont,
     label: "正文字体",
-    group: "外观/外观",
+    group: "外观/字体",
     description:
       "组件库组件的字体。选「跟随宿主」时用项目原有字体栈；这里不往页面里塞外部字体链接。",
     options: THEME_FONT_CHOICES.map((id) => ({ value: id, label: THEME_FONT_LABELS[id] })),
@@ -764,7 +764,7 @@ export const Config: ConfigSchema = {
     type: "select",
     default: DEFAULT_THEME_APPEARANCE.themeHeadingFont,
     label: "标题字体",
-    group: "外观/外观",
+    group: "外观/字体",
     description: "设置页小标题、弹窗标题用的字体。「跟随正文」= 与上面正文保持一致。",
     options: THEME_FONT_CHOICES.map((id) => ({ value: id, label: THEME_FONT_LABELS[id] })),
   },
@@ -884,8 +884,24 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" });
   // ===== shadcn-vue 原始组件：全部登记进 ui 场，供业务插件按名取用 =====
   // 名字统一 `shadcn` 前缀（shadcnButton / shadcnDropdownMenuContent …），避免和上面的旧目录名撞车。
-  // 值就是 shadcn-vue 生成的那个组件，不做任何适配层。
-  for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
+  // 值就是 shadcn-vue 生成的那个组件，不做功能适配层；只在**开发期**包一层透明标记，
+  // 让「按名取用」的组件也能在组件库使用标记里显示登记点（模板直写的那种由 Vite 插件注入）。
+  // 生产构建里 import.meta.env.DEV 为 false，登记值就是原始组件本身。
+  // tsconfig 的 types 是空数组（不引 vite/client）：用结构化断言读，避免为一个开关引入全局类型。
+  const isDev = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
+  const shadcnComponents = isDev
+    ? Object.fromEntries(
+        Object.entries(SHADCN_COMPONENTS).map(([uiName, component]) => [
+          uiName,
+          withUiKitDebugMark(
+            component,
+            "packages/plugins/plugin-theme-default/src/index.ts",
+            uiName.replace(/^shadcn/, ""),
+          ),
+        ]),
+      )
+    : SHADCN_COMPONENTS;
+  for (const [uiName, component] of Object.entries(shadcnComponents)) {
     ui.add(uiName, component, { id: "shadcn" });
   }
   // 设置导航图标：独立场域，按一级分组名登记。优先级高（order 小）的赢。
