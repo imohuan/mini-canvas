@@ -36,6 +36,7 @@ import {
   type ThemeColor,
 } from '@/theme/colors'
 import { FONT_OPTIONS, HEADING_OPTIONS, RADIUS_OPTIONS, findFont } from '@/theme/fonts'
+import { SIZE_OPTIONS } from '@/theme/sizes'
 import { exportThemeCss, type PreviewThemeConfig } from '@/theme/useThemePreview'
 
 const props = defineProps<{
@@ -59,7 +60,7 @@ interface ChoiceOption {
   swatch?: string
 }
 
-type FieldKey = 'baseColor' | 'theme' | 'chartColor' | 'radius' | 'heading' | 'font'
+type FieldKey = 'baseColor' | 'theme' | 'chartColor' | 'radius' | 'heading' | 'font' | 'size'
 
 interface Field {
   key: FieldKey
@@ -105,6 +106,12 @@ const radiusOptions = computed<ChoiceOption[]>(() =>
   RADIUS_OPTIONS.map((r) => ({ value: r.id, label: r.label })),
 )
 
+/** 尺寸档位：`inherit` 表示各组件按自己的 size prop（升级前的行为） */
+const sizeOptions = computed<ChoiceOption[]>(() => [
+  { value: 'inherit', label: '跟随组件默认' },
+  ...SIZE_OPTIONS.map((s) => ({ value: s.id, label: s.label, hint: s.hint })),
+])
+
 function titleOf(name: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
@@ -116,6 +123,7 @@ const fields = computed<Field[]>(() => [
   { key: 'radius', label: 'Radius', value: props.config.radius.id, options: radiusOptions.value },
   { key: 'heading', label: 'Heading', value: props.config.heading, options: headingOptions.value },
   { key: 'font', label: 'Font', value: props.config.font, options: fontOptions.value },
+  { key: 'size', label: 'Size（控件尺寸）', value: props.config.size, options: sizeOptions.value },
 ])
 
 function setField(key: FieldKey, value: unknown): void {
@@ -125,6 +133,7 @@ function setField(key: FieldKey, value: unknown): void {
   else if (key === 'chartColor') onChart(value)
   else if (key === 'radius') onRadius(value)
   else if (key === 'heading') onHeading(value)
+  else if (key === 'size') onSize(value)
   else onFont(value)
 }
 
@@ -154,6 +163,10 @@ function onHeading(value: string): void {
 function onRadius(value: string): void {
   const radius = RADIUS_OPTIONS.find((r) => r.id === value) ?? RADIUS_OPTIONS[0]!
   patch({ radius })
+}
+function onSize(value: string): void {
+  const size = SIZE_OPTIONS.find((s) => s.id === value)
+  patch({ size: size ? size.id : 'inherit' })
 }
 
 async function copyCss(): Promise<void> {
@@ -234,6 +247,9 @@ async function copyCss(): Promise<void> {
           <Badge variant="outline">{{ titleOf(config.chartColor) }}</Badge>
           <Badge variant="outline">{{ findFont(config.font).label }}</Badge>
           <Badge variant="outline">radius {{ config.radius.value }}</Badge>
+          <Badge variant="outline">
+            size {{ config.size === 'inherit' ? '组件默认' : config.size }}
+          </Badge>
         </div>
         <Button variant="outline" size="sm" @click="copyCss">
           <CheckIcon v-if="copied" />

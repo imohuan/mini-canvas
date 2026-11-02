@@ -13,6 +13,11 @@ import AxButton from '../AxButton.vue'
 import {
   Button,
   Input,
+  NumberField,
+  NumberFieldContent,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
   Select,
   SelectContent,
   SelectItem,
@@ -68,9 +73,8 @@ const sendKeyLabel = computed(
  * 目标默认预算输入框：改完（失焦 / 回车）归一化再落 KV，并把归一化结果写回输入框
  * （0 / 空 / 负数都收成 0 = 不限）。不用 v-model：默认预算的真源在后台，本地再绑一个变量就是第三份状态。
  */
-function agentBudgetOnChange(e: Event): void {
-  const input = e.target as HTMLInputElement
-  void agent.setGoalBudget(input.value).then((n) => { input.value = String(n) })
+function agentBudgetOnChange(value: number | undefined): void {
+  void agent.setGoalBudget(value === undefined ? '' : String(value))
 }
 
 /**
@@ -2129,8 +2133,23 @@ onClickOutside(
           <div><strong class="text-[13px] text-ink">目标设置</strong>
             <p class="text-xs text-ink-dim">点 + 选目标时用这里的默认预算；之后可以点目标标签单独改</p>
           </div>
-          <Input :value="agent.state.goalBudget" type="number" min="0" step="1000" placeholder="0 = 不限"
-            class="h-8 w-28 text-xs" aria-label="目标默认预算" @change="agentBudgetOnChange" />
+          <!-- 数字输入统一用组件库的 NumberField（减号 + 输入框 + 加号），
+               与设置面板里的数字项同一套外观；此前的原生 input 只有一根光秃秃的框，
+               连步进按钮都没有（用户口径 2026-11-02）。 -->
+          <NumberField
+            :model-value="agent.state.goalBudget"
+            :min="0"
+            :step="1000"
+            class="w-28 flex-none"
+            aria-label="目标默认预算"
+            @update:model-value="agentBudgetOnChange"
+          >
+            <NumberFieldContent>
+              <NumberFieldDecrement aria-label="减少目标预算" />
+              <NumberFieldInput placeholder="0 = 不限" />
+              <NumberFieldIncrement aria-label="增加目标预算" />
+            </NumberFieldContent>
+          </NumberField>
         </div>
         <!-- 发送键（用户口径 2026-10-25）：目标设置下面配「哪一种回车提交」。
              为什么用下拉而不是开关：三种取值互斥，开关只能表达两态。 -->

@@ -10,6 +10,8 @@
  */
 @import "shadcn-vue/tailwind.css";
 @import "@vuelor/picker/tailwind.css";
+/* 尺寸档位：主题插件写 --mct-size-*，这里按 data-slot 接到各组件实体尺寸上 */
+@import "./size.css";
 
 @theme inline {
   --color-background: var(--ui-overlay-solid, #fff);

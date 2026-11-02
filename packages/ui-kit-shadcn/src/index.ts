@@ -42,6 +42,12 @@ export { SHADCN_FAMILY_NAMES, isShadcnPrimitive } from './shadcnFamilies'
  */
 export { FONT_OPTIONS, HEADING_OPTIONS, RADIUS_OPTIONS, findFont, loadFont } from './theme/fonts'
 export type { FontOption, RadiusOption } from './theme/fonts'
+/**
+ * 尺寸档位：主题插件写 `--mct-size-*`，组件库 `styles/size.css` 统一消费。
+ * 选项表同样只在这里维护一份，预览页与真实应用不会漂移。
+ */
+export { SIZE_OPTIONS, sizeCssVars } from './theme/sizes'
+export type { SizeOption } from './theme/sizes'
 export { BASE_COLORS, THEME_COLORS, CHART_COLORS, resolveThemeVars, previewColor } from './theme/colors'
 export type { BaseColor, ThemeColor, ChartColor, ThemeSelection, ThemePalette } from './theme/colors'
 

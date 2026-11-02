@@ -95,6 +95,7 @@ const themeConfig = ref<PreviewThemeConfig>({
   font: 'montserrat',
   heading: 'inherit',
   radius: RADIUS_OPTIONS[4]!,
+  size: 'default',
 })
 
 useThemePreview(themeConfig, dark)

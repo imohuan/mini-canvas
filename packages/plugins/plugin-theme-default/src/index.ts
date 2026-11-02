@@ -72,6 +72,9 @@ import {
   THEME_FONT_LABELS,
   THEME_RADIUS_CHOICES,
   THEME_RADIUS_LABELS,
+  THEME_SIZE_CHOICES,
+  THEME_SIZE_HINTS,
+  THEME_SIZE_LABELS,
   type ThemeBridgeInput,
   toThemeBridgeInput,
 } from "./themeBridge";
@@ -151,6 +154,7 @@ export const DEFAULT_THEME_APPEARANCE = {
   themeRadius: "default",
   themeFont: "inherit",
   themeHeadingFont: "inherit",
+  themeSize: "inherit",
 } as const;
 
 /**
@@ -768,6 +772,18 @@ export const Config: ConfigSchema = {
     description: "设置页小标题、弹窗标题用的字体。「跟随正文」= 与上面正文保持一致。",
     options: THEME_FONT_CHOICES.map((id) => ({ value: id, label: THEME_FONT_LABELS[id] })),
   },
+  themeSize: {
+    type: "select",
+    default: DEFAULT_THEME_APPEARANCE.themeSize,
+    label: "控件尺寸",
+    group: "外观/尺寸",
+    description:
+      "统一所有组件库控件（按钮 / 输入框 / 下拉 / 开关 / 页签 / 菜单行 / 卡片）的高度与字号。默认「跟随组件默认」= 各组件按自己的 size prop 显示。",
+    options: THEME_SIZE_CHOICES.map((id) => ({
+      value: id,
+      label: THEME_SIZE_LABELS[id] + (THEME_SIZE_HINTS[id] ? " · " + THEME_SIZE_HINTS[id] : ""),
+    })),
+  },
 };
 
 /** apply 收到的 config TS 类型（与 schema 对齐） */
@@ -783,17 +799,25 @@ export function apply(ctx: Context, config?: ThemeConfig) {
     themeRadius: config?.themeRadius ?? DEFAULT_THEME_APPEARANCE.themeRadius,
     themeFont: config?.themeFont ?? DEFAULT_THEME_APPEARANCE.themeFont,
     themeHeadingFont: config?.themeHeadingFont ?? DEFAULT_THEME_APPEARANCE.themeHeadingFont,
+    themeSize: config?.themeSize ?? DEFAULT_THEME_APPEARANCE.themeSize,
   });
   applyThemeBridge(appearance);
-  // 设置面板改了就重写：订阅整表 onChange，只认这三个 key，别的变化不做事
+  // 设置面板改了就重写：订阅整表 onChange，只认外观这几个 key，别的变化不做事
   const appearanceOff = ctx
     .tryGet<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
     ?.onChange((key, value) => {
-      if (key !== 'themeRadius' && key !== 'themeFont' && key !== 'themeHeadingFont') return
+      if (
+        key !== 'themeRadius' &&
+        key !== 'themeFont' &&
+        key !== 'themeHeadingFont' &&
+        key !== 'themeSize'
+      )
+        return
       appearance = toThemeBridgeInput({
         themeRadius: key === 'themeRadius' ? value : appearance.radius,
         themeFont: key === 'themeFont' ? value : appearance.font,
         themeHeadingFont: key === 'themeHeadingFont' ? value : appearance.heading,
+        themeSize: key === 'themeSize' ? value : appearance.size,
       })
       applyThemeBridge(appearance)
     });

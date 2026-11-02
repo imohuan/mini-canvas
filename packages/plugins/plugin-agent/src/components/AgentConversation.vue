@@ -28,7 +28,13 @@ import {
 import { VueDraggable } from 'vue-draggable-plus'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
 // 输入框工具行与发送键使用 shadcn 原始 Button；两个下拉的**内容 UI 不改**，只换触发按钮。
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import {
+  Button,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@mini-canvas/ui-kit-shadcn'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { useAgent } from '../useAgent.js'
@@ -2731,19 +2737,26 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <span class="ac-panel-count">{{ usableModels.length }}</span>
                     </div>
                     <div class="ac-panel-search">
-                      <div class="ac-search-inline">
-                        <span class="ac-search-icon" aria-hidden="true"><Search :size="14" /></span>
-                        <input v-model="modelQuery" class="ac-search-input" type="search" name="ac-model-search"
+                      <!-- 搜索框统一用组件库 InputGroup（用户口径 2026-11-02）：
+                           以前是自画的 div + 原生 input，跟设置面板里的输入框不是一套。
+                           图标 / 清除按钮放进 Addon，输入框本体用 InputGroupInput。 -->
+                      <InputGroup class="ac-search-inline">
+                        <InputGroupAddon align="inline-start" class="ac-search-addon">
+                          <Search :size="14" aria-hidden="true" />
+                        </InputGroupAddon>
+                        <InputGroupInput v-model="modelQuery" class="ac-search-input" type="search" name="ac-model-search"
                           data-ac-search="model" placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
-                        <button v-if="modelQuery" class="ac-search-clear" aria-label="清空搜索" @click="modelQuery = ''">
-                          <X :size="12" />
-                        </button>
-                      </div>
+                        <InputGroupAddon v-if="modelQuery" align="inline-end" class="ac-search-addon">
+                          <InputGroupButton size="icon-xs" class="ac-search-clear" aria-label="清空搜索" @click="modelQuery = ''">
+                            <X :size="12" />
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
                     </div>
                     <div class="ac-panel-tools">
-                      <button class="ac-icon-btn ac-search-toggle" :aria-expanded="modelSearchOpen" aria-label="搜索" @click="togglePanelSearch('model')">
+                      <Button variant="ghost" size="icon-sm" class="ac-icon-btn ac-search-toggle" :aria-expanded="modelSearchOpen" aria-label="搜索" @click="togglePanelSearch('model')">
                         <Search :size="16" />
-                      </button>
+                      </Button>
                       <div class="ac-segment" role="group" aria-label="面板布局">
                         <span class="ac-segment-indicator" :class="'is-' + modelView" aria-hidden="true"></span>
                         <button class="ac-segment-btn" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
@@ -2859,19 +2872,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <span class="ac-panel-count">{{ s.skills.length }}</span>
                     </div>
                     <div class="ac-panel-search">
-                      <div class="ac-search-inline">
-                        <span class="ac-search-icon" aria-hidden="true"><Search :size="14" /></span>
-                        <input v-model="skillQuery" class="ac-search-input" type="search" name="ac-skill-search"
+                      <InputGroup class="ac-search-inline">
+                        <InputGroupAddon align="inline-start" class="ac-search-addon">
+                          <Search :size="14" aria-hidden="true" />
+                        </InputGroupAddon>
+                        <InputGroupInput v-model="skillQuery" class="ac-search-input" type="search" name="ac-skill-search"
                           data-ac-search="skill" placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
-                        <button v-if="skillQuery" class="ac-search-clear" aria-label="清空搜索" @click="skillQuery = ''">
-                          <X :size="12" />
-                        </button>
-                      </div>
+                        <InputGroupAddon v-if="skillQuery" align="inline-end" class="ac-search-addon">
+                          <InputGroupButton size="icon-xs" class="ac-search-clear" aria-label="清空搜索" @click="skillQuery = ''">
+                            <X :size="12" />
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
                     </div>
                     <div class="ac-panel-tools">
-                      <button class="ac-icon-btn ac-search-toggle" :aria-expanded="skillSearchOpen" aria-label="搜索" @click="togglePanelSearch('skill')">
+                      <Button variant="ghost" size="icon-sm" class="ac-icon-btn ac-search-toggle" :aria-expanded="skillSearchOpen" aria-label="搜索" @click="togglePanelSearch('skill')">
                         <Search :size="16" />
-                      </button>
+                      </Button>
                       <div class="ac-segment" role="group" aria-label="面板布局">
                         <span class="ac-segment-indicator" :class="'is-' + skillView" aria-hidden="true"></span>
                         <button class="ac-segment-btn" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
@@ -2988,25 +3005,29 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
                     </div>
                     <div class="ac-panel-search">
-                      <div class="ac-search-inline">
-                        <span class="ac-search-icon" aria-hidden="true"><Search :size="14" /></span>
-                        <input v-model="mcpQuery" class="ac-search-input" type="search" name="ac-mcp-search"
+                      <InputGroup class="ac-search-inline">
+                        <InputGroupAddon align="inline-start" class="ac-search-addon">
+                          <Search :size="14" aria-hidden="true" />
+                        </InputGroupAddon>
+                        <InputGroupInput v-model="mcpQuery" class="ac-search-input" type="search" name="ac-mcp-search"
                           data-ac-search="mcp" placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
-                        <button v-if="mcpQuery" class="ac-search-clear" aria-label="清空搜索" @click="mcpQuery = ''">
-                          <X :size="12" />
-                        </button>
-                      </div>
+                        <InputGroupAddon v-if="mcpQuery" align="inline-end" class="ac-search-addon">
+                          <InputGroupButton size="icon-xs" class="ac-search-clear" aria-label="清空搜索" @click="mcpQuery = ''">
+                            <X :size="12" />
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
                     </div>
                     <div class="ac-panel-tools">
-                      <button class="ac-icon-btn ac-search-toggle" :aria-expanded="mcpSearchOpen" aria-label="搜索" @click="togglePanelSearch('mcp')">
+                      <Button variant="ghost" size="icon-sm" class="ac-icon-btn ac-search-toggle" :aria-expanded="mcpSearchOpen" aria-label="搜索" @click="togglePanelSearch('mcp')">
                         <Search :size="16" />
-                      </button>
+                      </Button>
                       <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
-                      <button class="ac-detect-btn" :class="{ 'is-busy': mcpProbing }" :disabled="mcpProbing"
+                      <Button variant="outline" size="sm" class="ac-detect-btn" :class="{ 'is-busy': mcpProbing }" :disabled="mcpProbing"
                         :aria-label="mcpProbing ? '正在检测 MCP' : '检测全部 MCP 服务'" :title="mcpProbing ? '正在检测' : '检测全部 MCP 服务'" @click.stop="runMcpProbe">
                         <RefreshCw :size="14" :class="{ 'ac-spin': mcpProbing }" />
                         <span class="ac-detect-label">{{ mcpProbing ? '检测中' : '重新检测' }}</span>
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -3072,9 +3093,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     </template>
                     <template v-else>未选择服务或工具</template>
                   </span>
-                  <button class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(close)">
+                  <Button size="sm" class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(close)">
                     <Check :size="13" />确认引用
-                  </button>
+                  </Button>
                 </div>
               </div>
             </template>
@@ -4070,7 +4091,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-btn-primary {
   border-color: transparent;
   background: var(--ui-accent, #0891b2);
-  color: var(--ui-primary-ink, #141414);
+  color: var(--ui-on-accent, #fff);
 }
 
 .ac-onboard {
@@ -5070,7 +5091,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-send.is-running {
   background: var(--ui-danger, #ef4444);
-  color: var(--ui-primary-ink, #141414);
+  color: var(--ui-on-accent, #fff);
 }
 
 /* 停止键里的实心方块：走 currentColor（与按钮文字色同一套 token），
@@ -5389,45 +5410,38 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   min-width: 0;
 }
 
-/* 搜索条（DEMO 的 .search-inline）：宽屏 max-width 240、高 32、圆角 10、左 10 右 6。 */
+/*
+ * 搜索条：结构交给组件库 InputGroup（Height / 圆角 / focus 环都归它），
+ * 这里只保留面板内的宽度与「矮一档」的体量，免得搜索框比旁边的图标按钮高一头。
+ */
 .ac-search-inline {
-  display: flex;
-  align-items: center;
-  gap: 7px;
   width: 100%;
   max-width: 240px;
   height: 32px;
-  padding: 0 6px 0 10px;
   border-radius: 10px;
   background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-  transition: background 0.18s ease;
+}
+
+/*
+ * 外层容器是 flex，InputGroup 本体默认 width:100% —— 没有这条时会被
+ * 「宽度由内容决定」压成 0（实测 2026-11-02：搜索框整个看不见，但 DOM 在）。
+ */
+.ac-panel-search > .ac-search-inline {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .ac-search-inline:focus-within {
   background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 
-.ac-search-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  color: var(--ui-ink-mute, #9ca3af);
+.ac-search-addon {
+  padding-inline: 0;
 }
 
 .ac-search-input {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--ui-ink, #111827);
   font-size: 12px;
   font-weight: 500;
-  font-family: inherit;
-}
-
-.ac-search-input::placeholder {
-  color: var(--ui-ink-mute, #9ca3af);
 }
 
 .ac-search-input::-webkit-search-cancel-button,
@@ -5438,16 +5452,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-search-clear {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: var(--ui-ink-mute, #9ca3af);
-  cursor: pointer;
 }
 
 .ac-search-clear:hover {
@@ -5455,19 +5460,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 /* 图标按钮（DEMO 的 .icon-btn）：32×32、圆角 8、默认浅底。 */
+/* 图标按钮：本体改成组件库 Button（ghost / icon-sm），这里只留面板内的浅底与悬停色。 */
 .ac-icon-btn {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
   flex: none;
-  border: 0;
-  border-radius: 8px;
   background: var(--ui-veil, rgba(0, 0, 0, 0.04));
   color: var(--ui-ink-dim, #6b7280);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
 }
 
 .ac-icon-btn:hover {
@@ -5559,22 +5557,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 /* 重新检测（DEMO 的 .detect-btn）：高 32、左右 8、1px 描边、圆角 8、字号 11。 */
+/* 「重新检测」：本体是组件库 Button（outline / sm），这里只补面板内的字号与配色。 */
 .ac-detect-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 8px;
   flex: none;
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 8px;
-  background: var(--ui-panel, #fff);
   color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .ac-detect-btn:hover:not(:disabled) {
@@ -5901,7 +5889,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   flex: none;
   border-radius: 50%;
   background: var(--ui-accent, #0891b2);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
   opacity: 0;
   transform: scale(0.72);
   transition: opacity 0.18s ease, transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
@@ -6627,25 +6615,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   font-weight: 700;
 }
 
-/* 确认按钮（DEMO 的 .confirm-btn）：主色实心，未选禁用。 */
+/*
+ * 确认按钮：本体是组件库 Button（size=sm），这里只补「主色实心 + 白字」。
+ * 以前整套尺寸 / 圆角 / 内边距都是自画的，改全局尺寸时它不跟着变。
+ */
 .ac-confirm-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 12px;
   flex: none;
-  border: 0;
-  border-radius: 9px;
   background: var(--ui-accent, #0891b2);
   /* 主题色白名单: 强调色实心按钮上的白字，任何强调色下都要最高对比 */
   color: #fff;
-  font-size: 12px;
   font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.18s ease, transform 0.15s ease, opacity 0.18s ease;
 }
 
 .ac-confirm-btn:hover:not(:disabled) {
@@ -7097,12 +7076,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-label,
 .prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-label {
-  color: var(--ui-primary-ink, #141414);
+  color: var(--ui-on-accent, #fff);
 }
 
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-icon,
 .prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-icon {
-  color: var(--ui-primary-ink, #141414);
+  color: var(--ui-on-accent, #fff);
 }
 
 /* @ 菜单里的行（富行外观与工具栏下拉保持一致） */

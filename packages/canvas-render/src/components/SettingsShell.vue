@@ -487,6 +487,8 @@ onBeforeUnmount(() => {
             <h2 class="psd-title">{{ title }}</h2>
           </div>
           <div class="psd-head-actions">
+            <!-- 头部三枚按钮：外观对齐 Agent 悬浮面板（用户口径 2026-11-02）。
+                 尺寸 / 圆角读全局 token，跟组件库一起变；图标用统一的线性描边。 -->
             <button
               class="psd-icon-btn"
               aria-label="最小化为悬浮球"
@@ -494,7 +496,7 @@ onBeforeUnmount(() => {
               @click="minimizeToBall"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 12h12"/>
+                <path d="M5 12h14"/>
               </svg>
             </button>
             <button
@@ -503,7 +505,7 @@ onBeforeUnmount(() => {
               :title="floating ? '回到弹窗' : '转为悬浮窗口'"
               @click="toggleFloating"
             >
-              <!-- 浮动模式：显示"两个对向箭头 / 收回"图标；弹窗模式：显示"外向箭头"图标 -->
+              <!-- 浮动模式：显示"收回"图标；弹窗模式：显示"外向箭头"图标 -->
               <svg v-if="floating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 3v6H3"/><path d="M3 9l6-6"/>
                 <path d="M15 21v-6h6"/><path d="M21 15l-6 6"/>
@@ -636,7 +638,7 @@ onBeforeUnmount(() => {
   /* inset 高光是镜面高光，恒白半透明（不属主题语义色） */
   /* 主题色白名单: 镜面高光恒白半透明 */
   box-shadow: var(--ui-shadow-md, 0 10px 26px rgba(8, 145, 178, 0.4)), inset 0 1px 0 rgb(255 255 255 / 0.25);
-  color: var(--ui-primary-ink, #fff);
+  color: var(--ui-on-accent, #fff);
   cursor: grab;
   user-select: none;
   /* 出现/消失的淡入淡出（尺寸由 transform 之外的 width/height 决定，不参与动画） */
@@ -765,55 +767,24 @@ onBeforeUnmount(() => {
   line-height: 1.2;
 }
 
-.psd-close {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-  color: var(--ui-ink-dim, #6b7280);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease;
-}
-
-.psd-close svg {
-  width: 16px;
-  height: 16px;
-}
-
-.psd-close:hover {
-  background: var(--ui-chip, rgba(0, 0, 0, 0.08));
-  color: var(--ui-danger, #ef4444);
-}
-
-/* 头部"转浮动/回弹窗"图标按钮：与关闭按钮同尺寸、同底色，仅 hover 色不同 */
+/*
+ * 头部按钮尺寸：宽高与圆角读全局 token，与组件库 Button（icon-sm）同源。
+ * 设置外壳属于渲染层，不能 import 业务组件库；这里只共享同两个变量：
+ *   --mct-size-control-h-sm  组件库的 sm 高度（默认 2rem）
+ *   --mct-radius           主题选的圆角
+ * 主题换了尺寸 / 圆角，设置窗口右上角这排按钮跟着变，不会和面板里的按钮对不上。
+ */
+.psd-close,
 .psd-icon-btn {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-  color: var(--ui-ink-dim, #6b7280);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease;
+  width: var(--mct-size-control-h-sm, 32px);
+  height: var(--mct-size-control-h-sm, 32px);
+  border-radius: var(--mct-radius, 8px);
 }
 
+.psd-close svg,
 .psd-icon-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.psd-icon-btn:hover {
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
-  color: var(--ui-accent, #0891b2);
+  width: var(--mct-size-icon, 16px);
+  height: var(--mct-size-icon, 16px);
 }
 
 /* 右下角 resize 把手：贴角放一个 16x16 图标 + 隐形放大命中区 */
