@@ -9,12 +9,17 @@ import {
   type RasterTierConfig,
 } from '../rasterTier'
 
+/**
+ * Vue 的 :style 需要可索引的 CSS 属性表；`zoom` 是 iframe 的渲染倍数，保持原值。
+ * 这里不改样式内容，只把形状标成可被 Vue 接受的样式对象。
+ */
 export interface UiFrameStyle {
   width: string
   height: string
   transform: string
   zoom: string
   transformOrigin: string
+  [key: string]: string
 }
 
 /** iframe 渲染倍数样式：四个属性必须由同一个倍数算出来（原 frameStyle 的算式）。 */
