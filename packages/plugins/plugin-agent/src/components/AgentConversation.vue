@@ -15,7 +15,7 @@
  *  ② 技能 / MCP / 节点是**输入框内联标签**：点下拉里的一项 = 往正文插一个标记 chip，
  *    引用了谁由正文里的标记决定 —— 删掉 chip 引用即失效，不再切开关。
  */
-import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue'
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Loader2, Sparkles, Plus, Box,
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
@@ -353,6 +353,63 @@ const skillOpen = ref(false)
 const mcpOpen = ref(false)
 /** 「+」两项菜单（目标 / 上传文件） */
 const plusOpen = ref(false)
+
+/**
+ * 输入区所有下拉的统一位置参数（用户口径 2026-11-02）：
+ * 一律从按钮**向上**弹出、水平**居中**，且离按钮的距离一致。
+ *
+ * 之前每个菜单各写各的：align 有 start 也有 end，side-offset 有 8 / 10 / 18；
+ * 同一排按钮点开，菜单一个贴左、一个贴右、一个离得远，看起来像没对齐。
+ * 收成一份常量，改一处就会一起变，也不用再逐个比对。
+ */
+const COMPOSER_MENU_SIDE = 'top' as const
+const COMPOSER_MENU_ALIGN = 'center' as const
+const COMPOSER_MENU_OFFSET = 10
+
+/**
+ * 输入区菜单「同一时刻只开一个」。
+ *
+ * 每个 DropdownMenu 各自 v-model:open，reka 只保证点到外面会关，不会替你关掉
+ * **另一个**已经开着的菜单。实测（2026-11-02）：先开「创作模式」再点「选择模型」，
+ * 两个菜单会同时挂在 body 上，AI 面板上就叠出两层浮层。
+ *
+ * 收成一个 open flag：任何一个要打开，先把其余五个关掉；关的时候只动自己。
+ */
+type ComposerMenuKey = 'plus' | 'mode' | 'auth' | 'model' | 'skill' | 'mcp'
+const COMPOSER_MENU_FLAGS: Record<ComposerMenuKey, Ref<boolean>> = {
+  plus: plusOpen,
+  mode: modeOpen,
+  auth: authOpen,
+  model: modelOpen,
+  skill: skillOpen,
+  mcp: mcpOpen,
+}
+
+function composerMenuOpen(key: ComposerMenuKey): boolean {
+  return COMPOSER_MENU_FLAGS[key].value
+}
+
+function setComposerMenuOpen(key: ComposerMenuKey, open: boolean): void {
+  if (open) {
+    for (const [other, flag] of Object.entries(COMPOSER_MENU_FLAGS)) {
+      if (other !== key) flag.value = false
+    }
+  }
+  COMPOSER_MENU_FLAGS[key].value = open
+}
+
+/**
+ * 工具行按钮的 pointerdown：先把其它菜单收掉，**再主动打开自己**。
+ *
+ * 只关不开会丢一次点击：A 开着时，A 的「点外面」层会在 pointerdown 关掉 A，
+ * 浏览器随后认为这次点击已经处理完，B 的 click 就不再触发 ——
+ * 用户看到的就是「点第二个菜单没反应，要点两次」。这里在 pointerdown 里直接开 B，
+ * 一次按下就能切换。
+ */
+function switchComposerMenu(key: ComposerMenuKey): void {
+  // 再点同一个按钮 = 收起（和原生下拉一致）；点另一个 = 直接切过去。
+  setComposerMenuOpen(key, !COMPOSER_MENU_FLAGS[key].value)
+}
 
 function dismissHint(): void {
   hintDismissed.value = true
@@ -2607,13 +2664,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- 「+」两项菜单（设计 §3.6.4 / G12）：**目标** / **上传文件**。
                点「目标」直接在输入框上方加标签（预算用全局设置里的默认值），**不弹框**；
                只有点那个标签本身才弹目标编辑框。 -->
-          <DropdownMenu v-model:open="plusOpen">
+          <DropdownMenu :open="composerMenuOpen('plus')" @update:open="(v: boolean) => setComposerMenuOpen('plus', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加">
+              <Button variant="ghost" size="icon-sm" class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加" @pointerdown="switchComposerMenu('plus')">
                 <Plus :size="17" class="size-[17px]" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow align="start" side="top" :side-offset="10" class="ac-ddmenu" :style="{ minWidth: '210px' }">
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ minWidth: '210px' }">
               <div class="ac-ddmenu" role="menu" aria-label="添加">
                 <Button variant="ghost" size="sm" class="ac-menu-item" role="menuitem" @click="addGoalMark(); plusOpen = false">
                   <span class="ac-menu-title-row">
@@ -2653,19 +2710,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             @change="onFilesPicked" />
 
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
-          <DropdownMenu v-model:open="modeOpen">
+          <DropdownMenu :open="composerMenuOpen('mode')" @update:open="(v: boolean) => setComposerMenuOpen('mode', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="sm" class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
+              <Button variant="ghost" size="sm" class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式" @pointerdown="switchComposerMenu('mode')">
                 <span class="ac-pill-text">{{ modeLabel }}</span>
                 <ChevronDown :size="13" class="ac-pill-caret" />
               </Button>
             </DropdownMenuTrigger>
-            <!-- 位置：菜单紧贴输入框上沿，箭头指向「全能创作」。
-                 为什么 sideOffset 只有 6：上面还有一条 40px 的浏览器通知提示，
-                 留 10 会压住提示条底边（2026-11-02 实测 7px 重叠）；
-                 6 + 8（箭头高度）= 14px，菜单刚好落在提示条下方。
-                 内边距压到 4px，是为了让只有两条的菜单再矮 4px、彻底让开提示条。 -->
-            <DropdownMenuContent arrow align="start" side="top" :side-offset="18" class="ac-ddmenu" :style="{ minWidth: '220px', padding: '4px' }">
+            <!-- 位置：与输入区其它菜单同一套参数（向上 / 居中 / 统一偏移），
+                 见 COMPOSER_MENU_OFFSET 的注释。 -->
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ minWidth: '220px', padding: '4px' }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择创作模式">
                 <Button v-for="m in promptPresets" :key="m.id" variant="ghost" size="sm" class="ac-menu-item" role="option"
                   :aria-selected="s.activePromptId === m.id" @click="pickMode(m.id, () => (modeOpen = false))">
@@ -2684,14 +2738,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <!-- placement=top-end：菜单右缘对按钮右缘（向左铺开）。
                箭头不看 align、只看触发器中心（AxDropdown 里夹进菜单范围），
                所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
-          <DropdownMenu v-model:open="authOpen">
+          <DropdownMenu :open="composerMenuOpen('auth')" @update:open="(v: boolean) => setComposerMenuOpen('auth', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen" @pointerdown="switchComposerMenu('auth')"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
                 <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu" :style="{ width: '360px' }">
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ width: '360px' }">
               <div class="ac-ddmenu ac-review-panel" role="listbox" aria-label="选择授权方式">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top ac-panel-head-top--review">
@@ -2727,13 +2781,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
-          <DropdownMenu v-model:open="modelOpen">
+          <DropdownMenu :open="composerMenuOpen('model')" @update:open="(v: boolean) => setComposerMenuOpen('model', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型" @pointerdown="switchComposerMenu('model')">
                 <Box :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu"
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
               :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen, 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
@@ -2858,15 +2912,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </DropdownMenu>
 
           <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
-          <DropdownMenu v-if="s.skills.length" v-model:open="skillOpen">
+          <DropdownMenu v-if="s.skills.length" :open="composerMenuOpen('skill')" @update:open="(v: boolean) => setComposerMenuOpen('skill', v)">
             <DropdownMenuTrigger as-child>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能">
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能" @pointerdown="switchComposerMenu('skill')">
                 <WandSparkles :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu"
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
               :style="{ width: skillView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-split': skillView === 'split' }"
                 role="listbox" aria-label="选择技能">
@@ -3001,16 +3055,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </DropdownMenu>
 
           <!-- MCP：同上，点一项 = 插入一个标签 -->
-          <!-- MCP 暂只有轻卡片一种布局：宽度固定在紧凑档（与卡片视图一致）。 -->
-          <DropdownMenu v-if="s.mcpServers.length" v-model:open="mcpOpen">
+          <!-- MCP 暂只有轻卡片一种布局：宽度固定在紧凑档（与卡片视图一致）。
+               280 是「居中还能落在屏幕内」的上限：触发器离右边缘约 124px，
+               320 宽居中会被 reka 自动往左推 20px，看起来这个菜单没跟其它对齐。 -->
+          <DropdownMenu v-if="s.mcpServers.length" :open="composerMenuOpen('mcp')" @update:open="(v: boolean) => setComposerMenuOpen('mcp', v)">
             <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
+              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP" @pointerdown="switchComposerMenu('mcp')">
                 <Plug :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow align="end" side="top" :side-offset="10" class="ac-ddmenu"
-              :style="{ width: '320px', maxWidth: '600px', maxHeight: '440px' }">
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
+              :style="{ width: '280px', maxWidth: '600px', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-mcp-panel" :class="{ 'is-search-open': mcpSearchOpen }" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
