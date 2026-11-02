@@ -261,7 +261,7 @@ function onUploadPick(e: Event): void {
          不使用 SlotAnchor，也不参与 before/after 排序。 -->
     <Tooltip>
       <TooltipTrigger as-child>
-        <Button variant="outline" size="icon-lg" class="agent-orb-button size-12 rounded-full border-line text-ink"
+        <Button variant="outline" size="icon-lg" class="agent-orb-button size-12 border-line text-ink"
           :class="ui.agent.open ? 'is-open bg-panel-active' : ''" aria-label="Agent 对话"
           @click="ui.toggleAgent()">
           <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。

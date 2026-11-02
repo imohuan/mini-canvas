@@ -168,8 +168,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 尺寸由外壳给（底栏那颗按钮是 48×48）；这里只负责铺满与"球感"。 */
-.ao { position: relative; display: block; width: 100%; height: 100%; border-radius: 999px; overflow: hidden; }
+/* 尺寸由外壳给（底栏那颗按钮是 48×48）；这里只负责铺满。
+   圆角跟随外层 Button（全局圆角配置），不再写死成圆形。 */
+.ao { position: relative; display: block; width: 100%; height: 100%; border-radius: inherit; overflow: hidden; }
 .ao-svg { display: block; width: 100%; height: 100%; }
 
 /* —— 球身颜色（令牌）：亮暗自动切换 —— */
@@ -208,7 +209,7 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: inherit;
   pointer-events: none;
   border: 2px solid transparent;
   transition: border-color 0.18s ease;
