@@ -62,3 +62,34 @@
   其余插件包与之前记录一致。`packages/ui`、`plugin-theme-default`、`canvas-data` 类型检查通过。
 - 文档站构建通过。浏览器目验仍受 `Local browser use is disabled in Work settings` 限制，
   设置菜单、主题工作台、右键菜单和底栏的交互只能算测试/SSR/构建验证，不能算 Chrome 验收。
+
+## 2026-11-02 三项问题验收（调度器）
+
+本节记录用户 11-02 报的三类问题，以及各自修复提交与验收方式。
+
+| 问题 | 提交 | 结论 |
+| --- | --- | --- |
+| 设置面板打开白屏（`Cannot access 'ue' before initialization`） | `e810a4b8` | 已修；两套面板把 `navIcons/iconOf` 提到 `watch(navEntries)` 之前，并加 SSR 渲染与声明顺序测试 |
+| 设置左导航重复「外观」、破折号图标、个人下多出兜底项 | `64c7f7ab`、`498038f7`、`ea95cf81` | 已修；section 按完整分组名匹配，图标按标题取，导航改用 shadcn Button，新增全插件菜单测试 |
+| 尺寸档管不到显式 `size`、下拉高亮字看不清、浮层被外壳压住、Agent 按钮圆角写死 | `32867b40`、`ed89b117` | 已修；显式 size 改为以全局控件高为基准，菜单高亮成对用 `--ui-on-accent`，浮层提到 `--layer-modal`，去掉 `rounded-full` |
+
+验收结果：
+
+- `packages/ui-kit-shadcn test`：6 条契约测试通过；类型检查通过。
+- 设置相关 7 个测试文件：52 条通过（含 `settingsAllPlugins` 全插件零兜底）。
+- `canvas-render`：627 条通过；`plugin-theme-default`：341 条通过；两者类型检查通过。
+- `packages/ui typecheck` 通过；`packages/ui test` 当前唯一红点是「颜色配置」会话未提交的
+  `ThemePreview*.vue` 里 12 处硬编码颜色（`themeColorHygiene`），与本节三项修复无关，
+  等该会话交付后复跑。
+- Chrome（8865，新构建 `index-DHTIwEz5.js`）目验：设置面板正常打开、左导航只剩
+  「外观 / 集成 / 画布 / 开发」各一份且无兜底项、顶部只剩浮动与关闭；尺寸档从紧凑切到
+  大时 `size="icon-sm"` 的关闭按钮 24px → 40px、导航行高同步变化；下拉选中行青底白字；
+  左上画布菜单、资产面板加号菜单完整显示；Agent 圆球圆角为 7.2px（跟随 `--mct-radius`）。
+- 「快捷键」tooltip 的箭头只能核对样式层级（`--layer-modal-top` = 100001 > 外壳 700），
+  本轮坐标点击/悬停均未触发 tooltip，未算作目验通过。
+
+遗留（不属于本次三项）：
+
+- 「颜色配置」会话仍在工作区写 `ThemePreview*`：改完需复跑 `packages/ui test` 与 typecheck。
+- 当前 8865 实例未安装光标 / 风格库插件，设置「工具」页只显示导出、小地图；
+  全插件测试已覆盖这两项的归组。
