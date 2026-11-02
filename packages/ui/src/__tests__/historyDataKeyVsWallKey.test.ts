@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync(new URL('../components/areas/ModalsArea.vue', import.meta.url), 'utf-8')
+const src = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
 
 describe('历史墙：数据签名 vs 墙 key', () => {
   it('分别定义了 historyDataKey（不含显示开关）与 historyWallKey（含）', () => {

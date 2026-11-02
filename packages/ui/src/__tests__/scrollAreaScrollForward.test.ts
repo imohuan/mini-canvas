@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 
 const scrollPane = readFileSync(new URL('../components/ScrollPane.vue', import.meta.url), 'utf-8')
 const scrollPaneUtil = readFileSync(new URL('../components/scrollPane.ts', import.meta.url), 'utf-8')
-const modalsArea = readFileSync(new URL('../components/areas/ModalsArea.vue', import.meta.url), 'utf-8')
+const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
 
 describe('ScrollPane 转发内部滚动层的 scroll 事件', () => {
   it('声明 scroll 自定义事件（否则写在组件上的 @scroll 会被吞掉）', () => {

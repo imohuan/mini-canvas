@@ -34,7 +34,7 @@ describe('AppDialog：遮罩不能盖住面板', () => {
 
   it('生成历史使用透明遮罩（withOverlay=false）而不是被深色层挡住', () => {
     const modals = readFileSync(
-      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/ModalsArea.vue'),
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/HistoryModal.vue'),
       'utf-8',
     )
     expect(modals).toMatch(/s\.historyOpen[\s\S]{0,200}:with-overlay="false"/)

@@ -16,7 +16,7 @@ const videoPreview = readFileSync(
   new URL('../../../plugins/plugin-node-video/src/VideoPreview.vue', import.meta.url),
   'utf-8',
 )
-const modalsArea = readFileSync(new URL('../components/areas/ModalsArea.vue', import.meta.url), 'utf-8')
+const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
 const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
