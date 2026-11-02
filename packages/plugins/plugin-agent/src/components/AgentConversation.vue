@@ -27,21 +27,7 @@ import {
 } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
-// 输入框工具行与发送键使用 shadcn 原始 Button；两个下拉的**内容 UI 不改**，只换触发按钮。
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+// 输入框工具行与发送键使用主题登记的 shadcn Button；两个下拉的**内容 UI 不改**，只换触发按钮。
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { useAgent } from '../useAgent.js'
@@ -84,6 +70,21 @@ const s = agent.state
 
 /** 画布上下文：节点 @ 引用与「点标签聚焦节点」都要它（doc / view） */
 const { ctx } = useCanvasRender()
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const InputGroup = useUiComponent('InputGroup')
+const InputGroupAddon = useUiComponent('InputGroupAddon')
+const InputGroupButton = useUiComponent('InputGroupButton')
+const InputGroupInput = useUiComponent('InputGroupInput')
+const Tabs = useUiComponent('Tabs')
+const TabsList = useUiComponent('TabsList')
+const TabsTrigger = useUiComponent('TabsTrigger')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
 
 /**
  * 根是多根（fragment）：对话本体 .ac-root + 一个全屏 MediaViewer。
@@ -109,20 +110,6 @@ const CONTEXT_CIRCUMFERENCE = 2 * Math.PI * CONTEXT_R
  */
 const ICON_COMPACT =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
-
-/**
- * 分段切换（卡片 / 分栏）的两枚图标 —— 直接照抄 DEMO 的 LINE.grid / LINE.columns。
- *
- * 为什么不用 lucide 的 LayoutGrid / Columns3：同一块面板里技能封面、MCP 插头
- * 都走 agentResources 的内联 SVG（stroke-width 2、圆角 1.6 的方框），再混一套
- * lucide 组件会出现「线条粗细与圆角不一致」的两套图标观感（用户 2026-10-29 指出过）。
- * 统一成 DEMO 原图后，面板内部只有一种线稿。
- */
-const ICON_VIEW_GRID =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>'
-
-const ICON_VIEW_SPLIT =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>'
 
 /**
  * 已用弧的 dashoffset = 周长 × 剩余比例 —— dashoffset 越大弧越短。
@@ -1547,27 +1534,15 @@ const modelPlatform = ref('all')
 const skillQuery = ref('')
 const skillView = ref<'card' | 'split'>('card')
 const mcpQuery = ref('')
+/** 模型 / 技能面板的卡片-分栏切换（Tabs 值来自组件库，收窄成两档） */
+function setModelView(value: string | number): void {
+  modelView.value = value === 'split' ? 'split' : 'card'
+}
+function setSkillView(value: string | number): void {
+  skillView.value = value === 'split' ? 'split' : 'card'
+}
 /** 技能分栏的分类过滤（DEMO 的 activeCategory；卡片视图不看它，切到卡片时重置为全部） */
 const skillCategory = ref('全部')
-/** 窄面板下折叠成按钮的搜索框（DEMO 的 searchOpen；三个面板各一份） */
-const modelSearchOpen = ref(false)
-const skillSearchOpen = ref(false)
-const mcpSearchOpen = ref(false)
-
-function searchOpenOf(kind: 'skill' | 'mcp' | 'model') {
-  return kind === 'skill' ? skillSearchOpen : kind === 'mcp' ? mcpSearchOpen : modelSearchOpen
-}
-
-/** 点搜索按钮：展开/收起（展开后自动聚焦输入框，与 DEMO 一致） */
-function togglePanelSearch(kind: 'skill' | 'mcp' | 'model'): void {
-  const box = searchOpenOf(kind)
-  box.value = !box.value
-  if (!box.value) return
-  void nextTick(() => {
-    const el = document.querySelector<HTMLInputElement>('[data-ac-search="' + kind + '"]')
-    el?.focus()
-  })
-}
 
 function modelNote(m: { contextWindow?: number; isVision: boolean }): string {
   if (m.contextWindow) return Math.round(m.contextWindow / 1000) + 'K'
@@ -2789,47 +2764,37 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
               :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
-              <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-search-open': modelSearchOpen, 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
+              <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
                     <div class="ac-panel-heading">
                       <span class="ac-panel-title">模型</span>
                       <span class="ac-panel-count">{{ usableModels.length }}</span>
                     </div>
-                    <div class="ac-panel-search">
-                      <!-- 搜索框统一用组件库 InputGroup（用户口径 2026-11-02）：
-                           以前是自画的 div + 原生 input，跟设置面板里的输入框不是一套。
-                           图标 / 清除按钮放进 Addon，输入框本体用 InputGroupInput。 -->
-                      <InputGroup class="ac-search-inline">
-                        <InputGroupAddon align="inline-start" class="ac-search-addon">
-                          <Search :size="14" aria-hidden="true" />
-                        </InputGroupAddon>
-                        <InputGroupInput v-model="modelQuery" class="ac-search-input" type="search" name="ac-model-search"
-                          data-ac-search="model" placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
-                        <InputGroupAddon v-if="modelQuery" align="inline-end" class="ac-search-addon">
-                          <InputGroupButton size="icon-xs" class="ac-search-clear" aria-label="清空搜索" @click="modelQuery = ''">
-                            <X :size="12" />
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
-                    </div>
-                    <div class="ac-panel-tools">
-                      <Button variant="ghost" size="icon-sm" class="ac-icon-btn ac-search-toggle" :aria-expanded="modelSearchOpen" aria-label="搜索" @click="togglePanelSearch('model')">
-                        <Search :size="16" />
-                      </Button>
-                      <div class="ac-segment" role="group" aria-label="面板布局">
-                        <span class="ac-segment-indicator" :class="'is-' + modelView" aria-hidden="true"></span>
-                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="modelView === 'card'" aria-label="轻卡片" @click="modelView = 'card'">
-                          <span class="ac-segment-icon" v-html="ICON_VIEW_GRID"></span>
-                          <span class="ac-segment-label">卡片</span>
-                        </Button>
-                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="modelView === 'split'" aria-label="分栏" @click="modelView = 'split'">
-                          <span class="ac-segment-icon" v-html="ICON_VIEW_SPLIT"></span>
-                          <span class="ac-segment-label">分栏</span>
-                        </Button>
-                      </div>
-                    </div>
+                    <!-- 视图切换用组件库原生的 Tabs（用户口径 2026-11-02）：
+                         以前是自绘的分段按钮 + 绝对定位指示条，不跟主题尺寸走。 -->
+                    <Tabs :model-value="modelView" @update:model-value="setModelView" class="ac-view-tabs">
+                      <TabsList aria-label="面板布局">
+                        <TabsTrigger value="card">卡片</TabsTrigger>
+                        <TabsTrigger value="split">分栏</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </div>
+                  <!-- 搜索框统一用组件库 InputGroup（用户口径 2026-11-02）：
+                       图标 / 清除按钮放进 Addon，输入框本体用 InputGroupInput。
+                       始终整行显示，不再折叠成放大镜按钮。 -->
+                  <InputGroup class="ac-search-inline">
+                    <InputGroupAddon align="inline-start">
+                      <Search :size="14" aria-hidden="true" />
+                    </InputGroupAddon>
+                    <InputGroupInput v-model="modelQuery" type="search" name="ac-model-search"
+                      data-ac-search="model" placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
+                    <InputGroupAddon v-if="modelQuery" align="inline-end">
+                      <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="modelQuery = ''">
+                        <X :size="12" />
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
                 </div>
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
@@ -2845,7 +2810,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                           <span class="ac-model-card-top">
                             <span class="ac-model-id">{{ m.modelId }}</span>
                             <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
-                            <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
+                            <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                           </span>
                           <span class="ac-model-meta">
                             <span>{{ brandNameOf(m) }}</span>
@@ -2891,7 +2856,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                           <span class="ac-model-badges">
                             <span v-if="m.isDefault" class="ac-badge is-accent">默认</span>
                           </span>
-                          <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
+                          <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                         </Button>
                       </div>
                       <div v-else class="ac-empty-state">
@@ -2903,9 +2868,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     </div>
                   </div>
                   </div>
-                </div>
-                <div class="ac-panel-foot ac-model-foot">
-                  <span class="ac-selection-summary">{{ s.model ? '已选 1 个模型' : '未选择模型' }}</span>
                 </div>
               </div>
             </DropdownMenuContent>
@@ -2922,7 +2884,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
               :style="{ width: skillView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
-              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-search-open': skillSearchOpen, 'is-split': skillView === 'split' }"
+              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -2930,37 +2892,25 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       <span class="ac-panel-title">技能</span>
                       <span class="ac-panel-count">{{ s.skills.length }}</span>
                     </div>
-                    <div class="ac-panel-search">
-                      <InputGroup class="ac-search-inline">
-                        <InputGroupAddon align="inline-start" class="ac-search-addon">
-                          <Search :size="14" aria-hidden="true" />
-                        </InputGroupAddon>
-                        <InputGroupInput v-model="skillQuery" class="ac-search-input" type="search" name="ac-skill-search"
-                          data-ac-search="skill" placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
-                        <InputGroupAddon v-if="skillQuery" align="inline-end" class="ac-search-addon">
-                          <InputGroupButton size="icon-xs" class="ac-search-clear" aria-label="清空搜索" @click="skillQuery = ''">
-                            <X :size="12" />
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
-                    </div>
-                    <div class="ac-panel-tools">
-                      <Button variant="ghost" size="icon-sm" class="ac-icon-btn ac-search-toggle" :aria-expanded="skillSearchOpen" aria-label="搜索" @click="togglePanelSearch('skill')">
-                        <Search :size="16" />
-                      </Button>
-                      <div class="ac-segment" role="group" aria-label="面板布局">
-                        <span class="ac-segment-indicator" :class="'is-' + skillView" aria-hidden="true"></span>
-                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="skillView === 'card'" aria-label="轻卡片" @click="skillView = 'card'">
-                          <span class="ac-segment-icon" v-html="ICON_VIEW_GRID"></span>
-                          <span class="ac-segment-label">卡片</span>
-                        </Button>
-                        <Button variant="ghost" size="xs" class="ac-segment-btn" :aria-pressed="skillView === 'split'" aria-label="分栏" @click="skillView = 'split'">
-                          <span class="ac-segment-icon" v-html="ICON_VIEW_SPLIT"></span>
-                          <span class="ac-segment-label">分栏</span>
-                        </Button>
-                      </div>
-                    </div>
+                    <Tabs :model-value="skillView" @update:model-value="setSkillView" class="ac-view-tabs">
+                      <TabsList aria-label="面板布局">
+                        <TabsTrigger value="card">卡片</TabsTrigger>
+                        <TabsTrigger value="split">分栏</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </div>
+                  <InputGroup class="ac-search-inline">
+                    <InputGroupAddon align="inline-start">
+                      <Search :size="14" aria-hidden="true" />
+                    </InputGroupAddon>
+                    <InputGroupInput v-model="skillQuery" type="search" name="ac-skill-search"
+                      data-ac-search="skill" placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
+                    <InputGroupAddon v-if="skillQuery" align="inline-end">
+                      <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="skillQuery = ''">
+                        <X :size="12" />
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
                 </div>
                 <div class="ac-panel-body">
                   <div v-if="skillView === 'card'" class="ac-panel-scroll">
@@ -2980,7 +2930,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                           <span class="ac-skill-name-row">
                             <span class="ac-skill-name">{{ item.name }}</span>
                             <span v-if="skillMetaOf(item.name).featured" class="ac-badge is-accent">精选</span>
-                            <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
                           </span>
                           <span class="ac-skill-desc">{{ item.value }}</span>
                           <span class="ac-skill-meta">
@@ -3025,7 +2974,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             <span class="ac-skill-tile-body">
                               <span class="ac-tile-top">
                                 <span class="ac-skill-name">{{ item.name }}</span>
-                                <span class="ac-check-mark" aria-hidden="true"><Check :size="11" /></span>
                               </span>
                               <span class="ac-skill-desc">{{ item.value }}</span>
                               <span class="ac-skill-meta">
@@ -3067,31 +3015,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
               :style="{ width: '280px', maxWidth: '600px', maxHeight: '440px' }">
-              <div class="ac-ddmenu ac-panel ac-mcp-panel" :class="{ 'is-search-open': mcpSearchOpen }" role="listbox" aria-label="选择 MCP">
+              <div class="ac-ddmenu ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
                     <div class="ac-panel-heading">
                       <span class="ac-panel-title">MCP</span>
                       <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
                     </div>
-                    <div class="ac-panel-search">
-                      <InputGroup class="ac-search-inline">
-                        <InputGroupAddon align="inline-start" class="ac-search-addon">
-                          <Search :size="14" aria-hidden="true" />
-                        </InputGroupAddon>
-                        <InputGroupInput v-model="mcpQuery" class="ac-search-input" type="search" name="ac-mcp-search"
-                          data-ac-search="mcp" placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
-                        <InputGroupAddon v-if="mcpQuery" align="inline-end" class="ac-search-addon">
-                          <InputGroupButton size="icon-xs" class="ac-search-clear" aria-label="清空搜索" @click="mcpQuery = ''">
-                            <X :size="12" />
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
-                    </div>
                     <div class="ac-panel-tools">
-                      <Button variant="ghost" size="icon-sm" class="ac-icon-btn ac-search-toggle" :aria-expanded="mcpSearchOpen" aria-label="搜索" @click="togglePanelSearch('mcp')">
-                        <Search :size="16" />
-                      </Button>
                       <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
                       <Button variant="outline" size="sm" class="ac-detect-btn" :class="{ 'is-busy': mcpProbing }" :disabled="mcpProbing"
                         :aria-label="mcpProbing ? '正在检测 MCP' : '检测全部 MCP 服务'" :title="mcpProbing ? '正在检测' : '检测全部 MCP 服务'" @click.stop="runMcpProbe">
@@ -3100,6 +3031,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       </Button>
                     </div>
                   </div>
+                  <InputGroup class="ac-search-inline">
+                    <InputGroupAddon align="inline-start">
+                      <Search :size="14" aria-hidden="true" />
+                    </InputGroupAddon>
+                    <InputGroupInput v-model="mcpQuery" type="search" name="ac-mcp-search"
+                      data-ac-search="mcp" placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
+                    <InputGroupAddon v-if="mcpQuery" align="inline-end">
+                      <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="mcpQuery = ''">
+                        <X :size="12" />
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
                 </div>
                 <div class="ac-panel-body">
                   <div class="ac-panel-scroll">
@@ -5122,12 +5065,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 12px 8px;
+  padding: 8px 10px;
 }
 
 .ac-panel-head-top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -5202,60 +5145,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   flex: none;
 }
 
-.ac-panel-search {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-}
-
 /*
- * 搜索条：结构交给组件库 InputGroup（Height / 圆角 / focus 环都归它），
- * 这里只保留面板内的宽度与「矮一档」的体量，免得搜索框比旁边的图标按钮高一头。
+ * 搜索条：结构、高度、圆角、focus 环全部交给组件库 InputGroup，
+ * 这里不再压高度或改圆角，只让它整行铺满。
  */
 .ac-search-inline {
   width: 100%;
-  max-width: 240px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-}
-
-/*
- * 外层容器是 flex，InputGroup 本体默认 width:100% —— 没有这条时会被
- * 「宽度由内容决定」压成 0（实测 2026-11-02：搜索框整个看不见，但 DOM 在）。
- */
-.ac-panel-search > .ac-search-inline {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.ac-search-inline:focus-within {
-  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
-}
-
-.ac-search-addon {
-  padding-inline: 0;
-}
-
-.ac-search-input {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.ac-search-input::-webkit-search-cancel-button,
-.ac-search-input::-webkit-search-decoration {
-  -webkit-appearance: none;
-  appearance: none;
-  display: none;
-}
-
-.ac-search-clear {
-  color: var(--ui-ink-mute, #9ca3af);
-}
-
-.ac-search-clear:hover {
-  color: var(--ui-ink, #111827);
 }
 
 /* 图标按钮（DEMO 的 .icon-btn）：32×32、圆角 8、默认浅底。 */
@@ -5281,68 +5176,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-accent-hover, #0e7490);
 }
 
-/* 窄屏才出现的搜索按钮；宽屏由容器查询隐藏（DEMO 的 .search-toggle）。 */
-.ac-search-toggle {
-  display: none;
-}
-
-/* 分段切换（DEMO 的 .segment）：容器浅底、2px 内衬、两枚 28 高按钮。
-   选中块用一条独立的指示条（绝对定位 + 平移），观感与 DEMO 的白底阴影一致。 */
-.ac-segment {
-  position: relative;
-  display: inline-flex;
+/* 视图切换：组件库 Tabs 原生外观；宽度收成内容宽，别撑满头部。 */
+.ac-view-tabs {
   flex: none;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 10px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
-}
-
-.ac-segment-indicator {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: calc(50% - 3px);
-  height: 28px;
-  border-radius: 8px;
-  background: var(--ui-panel, #fff);
-  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
-  transition: transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
-  pointer-events: none;
-}
-
-.ac-segment-indicator.is-split {
-  transform: translateX(calc(100% + 2px));
-}
-
-.ac-segment-btn {
-  position: relative;
-  z-index: 1;
-  gap: 4px;
-  color: var(--ui-ink-dim, #6b7280);
-  font-size: 11px;
-  font-weight: 600;
-  transition: color 0.18s ease;
-}
-
-.ac-segment-btn:hover {
-  color: var(--ui-ink, #111827);
-}
-
-/* 分段按钮里的线稿图标（DEMO 的 .segment-btn > svg）：14×14、随 currentColor。 */
-.ac-segment-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-}
-
-.ac-segment-icon :deep(svg) {
-  width: 14px;
-  height: 14px;
-}
-
-.ac-segment-btn[aria-pressed='true'] {
-  color: var(--ui-ink, #111827);
+  width: auto;
 }
 
 /* 重新检测（DEMO 的 .detect-btn）：高 32、左右 8、1px 描边、圆角 8、字号 11。 */
@@ -5674,19 +5511,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   background: var(--ui-line, rgba(0, 0, 0, 0.08));
 }
 
-/* 选中勾（DEMO 的 .check-mark）：17 圆点，选中才放大出现。 */
+/* 选中勾：照 shadcn 菜单项的做法，只画一枚普通 Check，选中才显示。
+   以前是 17px 的青色实心圆 + 弹跳缩放，在卡片里像一颗独立按钮（用户 2026-11-02 截图）。 */
 .ac-check-mark {
   display: grid;
   place-items: center;
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   flex: none;
-  border-radius: 50%;
-  background: var(--ui-accent, #0891b2);
-  color: var(--ui-on-accent, #fff);
+  color: var(--ui-ink, #18202b);
   opacity: 0;
-  transform: scale(0.72);
-  transition: opacity 0.18s ease, transform 0.18s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+  transition: opacity 0.12s ease;
 }
 
 [aria-pressed='true'] > .ac-check-mark,
@@ -5697,7 +5532,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 [aria-selected='true'] > .ac-check-mark,
 [aria-selected='true'] .ac-model-card-top > .ac-check-mark {
   opacity: 1;
-  transform: scale(1);
 }
 
 /* —— 分栏骨架（DEMO 的 .split / .split-rail / .rail-*）—— */
@@ -5924,12 +5758,6 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   white-space: normal;
 }
 
-.ac-tile-top .ac-check-mark {
-  width: 15px;
-  height: 15px;
-  margin-top: 0;
-}
-
 .ac-skill-tile .ac-skill-name {
   font-size: 12px;
 }
@@ -5971,10 +5799,8 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 
 .ac-model-card[aria-checked='true'],
 .ac-model-card[aria-selected='true'] {
-  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--ui-accent, #0891b2) 7%, transparent),
-    color-mix(in srgb, var(--ui-accent, #0891b2) 3%, transparent));
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.08));
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
 }
 
 /* 品牌图标托（DEMO 的 .brand）：35×35、圆角 9、白底 + 1px 内描边，svg 22×22。 */
@@ -6033,11 +5859,6 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   flex: 1;
 }
 
-.ac-model-card .ac-check-mark {
-  width: 14px;
-  height: 14px;
-}
-
 .ac-model-row-list {
   display: flex;
   flex-direction: column;
@@ -6062,18 +5883,13 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 
 .ac-model-row[aria-checked='true'],
 .ac-model-row[aria-selected='true'] {
-  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  border-color: var(--ui-line-soft, rgba(0, 0, 0, 0.05));
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
 }
 
 .ac-model-row .ac-model-brand {
   background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
   box-shadow: none;
-}
-
-.ac-model-row .ac-check-mark {
-  width: 14px;
-  height: 14px;
 }
 
 .ac-model-badges {
@@ -6377,14 +6193,14 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   color: var(--ui-ink-mute, #9ca3af);
 }
 
-/* —— 底栏（DEMO 的 .panel-foot）：54 高、9 12 内边距、上描边。 —— */
+/* —— 底栏：按内容高的窄条，不再用 54px 撑出一块空白 —— */
 .ac-panel-foot {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
-  min-height: 54px;
-  padding: 9px 12px;
+  min-height: 36px;
+  padding: 6px 10px;
   border-top: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
   background: var(--ui-overlay, rgba(255, 255, 255, 0.94));
 }
@@ -6474,78 +6290,7 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 /* —— 容器响应式（阈值与 DEMO 的 @container 完全一致）—— */
 @container (max-width: 469px) {
   .ac-panel-head-top {
-    grid-template-columns: auto 1fr;
-  }
-
-  .ac-panel-search {
-    display: none;
-  }
-
-  .ac-search-toggle {
-    display: grid;
-  }
-
-  .ac-panel.is-search-open .ac-panel-search {
-    display: flex;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    min-width: 0;
-    height: 32px;
-    animation: ac-search-expand 0.2s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
-  }
-
-  .ac-panel.is-search-open .ac-panel-search > .ac-search-inline {
-    width: 100%;
-    max-width: none;
-  }
-
-  .ac-panel.is-search-open .ac-search-toggle {
-    display: none;
-  }
-}
-
-@container (min-width: 470px) {
-  .ac-search-toggle {
-    display: none;
-  }
-
-  .ac-panel-search {
-    display: flex;
-  }
-}
-
-/* MCP 多一个检测按钮，空间要求更高；放不下时提前换到第二行（DEMO 原样）。 */
-@container (min-width: 470px) and (max-width: 494px) {
-  .ac-mcp-panel .ac-panel-head-top {
-    grid-template-columns: auto 1fr;
-  }
-
-  .ac-mcp-panel .ac-panel-search {
-    display: none;
-  }
-
-  .ac-mcp-panel .ac-search-toggle {
-    display: grid;
-  }
-
-  .ac-mcp-panel.is-search-open .ac-panel-search {
-    display: flex;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    min-width: 0;
-    height: 32px;
-    animation: ac-search-expand 0.2s var(--ui-ease-back, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
-  }
-
-  .ac-mcp-panel.is-search-open .ac-panel-search > .ac-search-inline {
-    width: 100%;
-    max-width: none;
-  }
-
-  .ac-mcp-panel.is-search-open .ac-search-toggle {
-    display: none;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 
@@ -6561,15 +6306,6 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 }
 
 @container (max-width: 386px) {
-  .ac-segment-btn {
-    width: 28px;
-    padding: 0;
-  }
-
-  .ac-segment-label {
-    display: none;
-  }
-
   .ac-panel-tools {
     gap: 4px;
   }
@@ -6685,19 +6421,6 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   .ac-panel-foot {
     padding-left: 10px;
     padding-right: 10px;
-  }
-}
-
-@keyframes ac-search-expand {
-  from {
-    opacity: 0;
-    transform: scaleX(0.92);
-    transform-origin: right center;
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 

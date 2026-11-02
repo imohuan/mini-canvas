@@ -58,6 +58,9 @@ import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
 import { SHADCN_COMPONENTS, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn";
+import { SettingsRow, SettingsSection } from "@mini-canvas/ui-kit-shadcn";
+import { UiToaster } from "@mini-canvas/ui-kit-shadcn";
+import { createNotifyService } from "./notifyService";
 import { SETTINGS_NAV_ICON_NAMES } from "./components/settings/navIcon";
 import {
   applyThemeBridge,
@@ -868,6 +871,9 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 通用件按名字登记进 ui 场 —— 别的插件按名取用，换一套主题时它们一起变、业务插件零改动。
   // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
   const ui = ctx.registryOf<unknown>("ui");
+  // 全局通知服务：底层 vue-sonner，宿主只挂一个 Toaster（从 ui 目录取）。
+  ctx.provide("notify", createNotifyService());
+  ui.add("Toaster", UiToaster, { id: "default" });
   // 工具栏按钮 / 下拉不再按名登记：调用点直接用 shadcn Button + 全局
   // .mck-toolbar-btn / DropdownMenu 分离件（用户口径 2026-11-02）。
   // 统一空状态：节点插件按名取用（图片/视频/音频/3D 共用同一套图标/文案/动作布局）。
@@ -901,7 +907,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 插槽调试说明层：外壳按名取，换主题时一起换（它只读 DOM 上的 data-slot*，不需要 props）。
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" });
   // ===== shadcn-vue 原始组件：全部登记进 ui 场，供业务插件按名取用 =====
-  // 名字统一 `shadcn` 前缀（shadcnButton / shadcnDropdownMenuContent …），避免和上面的旧目录名撞车。
+  // 注册名 = 源码导出名（Button / DropdownMenuContent …），与 shadcn-vue 的 import 名对齐。
+  // 与上面的旧目录名（slider / color …）是两套语义：这些是"组件库原子件"，名字不大写就撞不上。
   // 值就是 shadcn-vue 生成的那个组件，不做功能适配层；只包一层透明标记，
   // 让「按名取用」的组件也能在组件库使用标记里显示登记点（模板直写的那种由 Vite 插件注入）。
   //
@@ -912,10 +919,14 @@ export function apply(ctx: Context, config?: ThemeConfig) {
     const marked = withUiKitDebugMark(
       component,
       "packages/plugins/plugin-theme-default/src/index.ts",
-      uiName.replace(/^shadcn/, ""),
+      uiName,
     );
     ui.add(uiName, marked, { id: "shadcn" });
   }
+  // 设置页排版件（非 shadcn 生成件，但同属组件库）：设置页只能经注册表取，
+  // 业务插件不直接 import 组件库（用户口径 2026-11-03）。
+  ui.add("settingsRow", SettingsRow, { id: "default" });
+  ui.add("settingsSection", SettingsSection, { id: "default" });
   // 设置导航图标：独立场域，按一级分组名登记。优先级高（order 小）的赢。
   const navIcons = ctx.registryOf<unknown>("settings/navIcon");
   for (const [group, icon] of SETTINGS_NAV_ICON_NAMES) {
