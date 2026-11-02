@@ -2,7 +2,7 @@
  * SlotDebugPopover —— 插槽调试提示面板的契约。
  *
  * 用户口径（2026-10-28）：
- * 1. 面板要复用**主题自己的 Dropdown**（不是另造浮层）；
+ * 1. 面板要用 shadcn 的 Tooltip（定位与浮层都交给组件库）；
  * 2. 悬停触发，内容按 key/value 展示。
  */
 import { describe, expect, it } from 'vitest'
@@ -11,7 +11,7 @@ import { renderToString } from 'vue/server-renderer'
 import SlotDebugPopover from '../SlotDebugPopover.vue'
 
 describe('SlotDebugPopover', () => {
-  it('复用主题 Dropdown（hover 触发），触发器里放传入内容', async () => {
+  it('触发器里放传入内容，提示层交给 shadcn（SSR 不渲染未展开的气泡）', async () => {
     const app = createSSRApp({
       render: () =>
         h(SlotDebugPopover, { content: 'id: host/agent\norder: 800' }, () =>
@@ -19,8 +19,7 @@ describe('SlotDebugPopover', () => {
         ),
     })
     const html = await renderToString(app)
-    expect(html).toContain('class="mck-dropdown"')
-    expect(html).toContain('class="mck-dropdown__trigger"')
+    expect(html).toContain('data-slot="tooltip-trigger"')
     expect(html).toContain('data-dot="1"')
   })
 
@@ -30,6 +29,6 @@ describe('SlotDebugPopover', () => {
         h(SlotDebugPopover, { content: 'id: host/agent' }, () => h('span', 'dot')),
     })
     const html = await renderToString(app)
-    expect(html).not.toContain('dd-menu')
+    expect(html).not.toContain('data-slot="tooltip-content"')
   })
 })

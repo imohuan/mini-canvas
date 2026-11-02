@@ -26,7 +26,6 @@
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/ui-kit": "workspace:*",
     "@mini-canvas/ui-kit-shadcn": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "@vue-flow/core": "^1.48.2",
@@ -34,7 +33,6 @@
   },
   "devDependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/ui-kit": "workspace:*",
     "@mini-canvas/ui-kit-shadcn": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue-flow/core": "^1.48.2",

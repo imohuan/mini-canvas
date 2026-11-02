@@ -16,14 +16,14 @@
  *
  * 依赖方向：只 import 内核 ToolParamDef 类型 + 本包自家 UI 组件，不反向依赖节点插件。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
-import { useCatalogDropdown } from './useCatalogDropdown'
+import { Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
 import ToolParamField from './ToolParamField.vue'
 import { resolvePresetKind, resolveInlineSoleSelect } from './paramKind'
 
-/** 下拉容器：优先用注册场登记的那一份（成品应用顶替了就用它），取不到回落本包自带 */
-const Dropdown = useCatalogDropdown()
+/** 参数面板开关（Popover 受控） */
+const open = ref(false)
 
 const props = withDefaults(
   defineProps<{
@@ -102,14 +102,8 @@ const summary = computed(() => {
     />
   </div>
 
-  <Dropdown
-    v-else
-    :offset="4"
-    body-class="tpg-menu-body tpg-menu-body--blocks"
-    menu-width="288px"
-    class="tpg-root"
-  >
-    <template #trigger="{ open }">
+  <Popover v-else v-model:open="open">
+    <PopoverTrigger as-child>
       <button
         type="button"
         class="tpg-trigger"
@@ -131,28 +125,30 @@ const summary = computed(() => {
           </svg>
         </span>
       </button>
-    </template>
+    </PopoverTrigger>
 
-    <div class="tpg-menu tpg-menu--blocks">
-      <!--
-        统一版式：一个参数 = 一整块（第一行标题、第二行控件），按声明顺序排。
-        预设件（比例网格 / 按钮网格 / 滑块）自己就画标题，所以这里只在**非预设件**
-        前面补一行标题 —— 从前非预设件走横排「标签 + 控件」，与预设件的竖排块两种观感并存，
-        用户要求统一成竖排这一种。
-      -->
-      <div v-for="p in blocks" :key="p.key" class="tpg-block">
-        <h4 v-if="!isPreset(p)" class="tpg-title">{{ p.label || p.key }}</h4>
-        <ToolParamField
-          :param="p"
-          :model-value="(values?.[p.key] as string | number | boolean) ?? ''"
-          :disabled="disabled"
-          :id-prefix="idPrefix + '-b'"
-          @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
-        />
+    <PopoverContent align="start" :side-offset="4" class="tpg-popover tpg-menu-body tpg-menu-body--blocks">
+      <div class="tpg-menu tpg-menu--blocks">
+        <!--
+          统一版式：一个参数 = 一整块（第一行标题、第二行控件），按声明顺序排。
+          预设件（比例网格 / 按钮网格 / 滑块）自己就画标题，所以这里只在**非预设件**
+          前面补一行标题 —— 从前非预设件走横排「标签 + 控件」，与预设件的竖排块两种观感并存，
+          用户要求统一成竖排这一种。
+        -->
+        <div v-for="p in blocks" :key="p.key" class="tpg-block">
+          <h4 v-if="!isPreset(p)" class="tpg-title">{{ p.label || p.key }}</h4>
+          <ToolParamField
+            :param="p"
+            :model-value="(values?.[p.key] as string | number | boolean) ?? ''"
+            :disabled="disabled"
+            :id-prefix="idPrefix + '-b'"
+            @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
+          />
+        </div>
+        <div v-if="blocks.length === 0" class="tpg-empty">该动作没有额外参数</div>
       </div>
-      <div v-if="blocks.length === 0" class="tpg-empty">该动作没有额外参数</div>
-    </div>
-  </Dropdown>
+    </PopoverContent>
+  </Popover>
 </template>
 
 <style scoped>
@@ -162,13 +158,6 @@ const summary = computed(() => {
  */
 .tpg-inline {
   display: block;
-  width: 100%;
-  min-width: 0;
-}
-.tpg-root {
-  display: inline-flex;
-  /* 填满宿主给的宽度（用户实测反馈：不填满时触发器按内容收缩，参数下拉只有 ~100px，
-     看着又挤又短，和左边的模型下拉不成对）。宿主那边给多宽就多宽。 */
   width: 100%;
   min-width: 0;
 }
@@ -249,17 +238,14 @@ const summary = computed(() => {
 
 <style>
 /* 浮层内容（经 Teleport 到 body，必须用全局样式）。
-   圆角/底色通过 --dd-* 交给 Dropdown 的浮层规则消费（那边是 scoped、特异性更高，
-   直接写属性盖不住），取值照右键菜单 .ctx-menu：16 圆角 + 不透明白底。 */
-.tpg-menu-body {
-  --dd-padding: 6px;
-  /* 与右键菜单同档，但跟着主题圆角走；没选时仍是 16px。 */
-  --dd-radius: var(--mct-radius, 16px);
-  --dd-bg: var(--ui-overlay-solid, #fff);
-}
-/* 整块版式（有预设块时）：面板宽 288（参考稿 w-72）、内边距 16（p-4）、块间 gap 12（gap-3） */
-.tpg-menu-body--blocks {
-  --dd-padding: 16px;
+   浮层本身交给 shadcn PopoverContent（圆角/阴影/动画/点外关闭都是它的），
+   这里只覆盖参数面板自己的宽度与内边距：宽 288（参考稿 w-72）、内边距 16（p-4）。 */
+.tpg-popover {
+  width: 288px;
+  padding: 16px;
+  gap: 12px;
+  border-radius: var(--mct-radius, 16px);
+  background: var(--ui-overlay-solid, #fff);
 }
 /* 参数面板里的滑块走**黑白**（用户口径 2026-10-12：这里不用主题色，与右键菜单同口径）：
    填充与圆球改用主按钮那档深墨，白底黑轨一眼能看出进度，不再是一条青色的条。 */

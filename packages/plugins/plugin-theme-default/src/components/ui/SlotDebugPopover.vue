@@ -5,11 +5,15 @@
  * 现行默认实现是 SlotDebugOverlay（全局挂一次、读 data-slot / data-slot-id），
  * 本组件不再被 SlotComposer 引用；保留它是为了让别的宿主也能拿这一份面板。
  *
- * 实现用本包的 Dropdown（trigger=hover）：与全站下拉共用定位、翻转、
- * 点击外部关闭与箭头，不另造一套浮层。
+ * 实现用 shadcn 的 Tooltip（悬停触发）：定位、翻转、视口收边都由组件库负责。
  */
 import { computed } from 'vue'
-import Dropdown from './Dropdown.vue'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@mini-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   /** 多行文本，每行形如 "key: value" */
@@ -35,12 +39,13 @@ const rows = computed<Row[]>(() =>
 </script>
 
 <template>
-  <Dropdown trigger="hover" placement="top" :offset="8" :hover-close-delay="120" menu-width="max-content"
-    body-class="sdp-body">
-    <template #trigger>
+  <TooltipProvider :delay-duration="120">
+    <Tooltip>
+      <TooltipTrigger as-child>
       <slot />
-    </template>
-    <dl class="sdp-list">
+      </TooltipTrigger>
+      <TooltipContent side="top" :side-offset="8" class="sdp-body">
+        <dl class="sdp-list">
       <template v-for="(row, i) in rows" :key="i">
         <template v-if="row.key">
           <dt>{{ row.key }}</dt>
@@ -48,8 +53,10 @@ const rows = computed<Row[]>(() =>
         </template>
         <dd v-else class="sdp-note">{{ row.value }}</dd>
       </template>
-    </dl>
-  </Dropdown>
+        </dl>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 </template>
 
 <style>

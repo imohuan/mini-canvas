@@ -71,8 +71,8 @@ describe('底栏「添加节点」菜单：隐藏预留项 + 上传真可用（2
     // 上传弹窗只服务「加入资产库」（节点右键 / 多选）与底栏「添加资源」，不再被「上传」使用
     expect(ui).not.toContain('queueUploadFiles')
     // 「添加资源」= 打开上传资产弹窗（不再只是拉开左侧抽屉）
-    expect(visible(dock)).toMatch(/<AxMenuItem[^>]*openUploadDialog\(\)[^>]*>[\s\S]{0,80}添加资源/)
-    expect(dock).not.toMatch(/<AxMenuItem[^>]*openDrawer\('left'\)[^>]*>[\s\S]{0,80}添加资源/)
+    expect(visible(dock)).toMatch(/<DropdownMenuItem[^>]*openUploadDialog\(\)[^>]*>[\s\S]{0,80}添加资源/)
+    expect(dock).not.toMatch(/<DropdownMenuItem[^>]*openDrawer\('left'\)[^>]*>[\s\S]{0,80}添加资源/)
     // 总线提供这个入口，宿主按空清单开窗（弹窗本体仍是同一份组件）
     const bus = read('../composables/assetUploadBus.ts')
     expect(bus).toMatch(/export function openUploadDialog/)

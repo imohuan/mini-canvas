@@ -38,7 +38,8 @@ describe('内置控件按 type 渲染', () => {
       },
       'medium',
     )
-    expect(html).toContain('mck-select')
+    // Select 触发器是 shadcn 的 data-slot 标记（不再有旧 ui-kit 的 mck-select 类）
+    expect(html).toContain('data-slot="select-trigger"')
     expect(html).not.toContain('<select')
     // 当前值作为标签显示在触发器上
     expect(html).toContain('中')
@@ -52,11 +53,14 @@ describe('内置控件按 type 渲染', () => {
 
   it('boolean → 渲染开关，且选中态由布尔值驱动（不是字符串 "true"）', async () => {
     const on = await render({ key: 'enhance', label: '提示词增强', type: 'boolean' }, true)
-    expect(on).toContain('type="checkbox"')
-    expect(on).toContain('checked')
+    // 开关是 shadcn Switch（button[role=switch]），选中态写 aria-checked / data-state
+    expect(on).toContain('role="switch"')
+    expect(on).toContain('aria-checked="true"')
+    expect(on).toContain('data-state="checked"')
 
     const off = await render({ key: 'enhance', label: '提示词增强', type: 'boolean' }, false)
-    expect(off).not.toContain('checked')
+    expect(off).toContain('aria-checked="false"')
+    expect(off).not.toContain('data-state="checked"')
   })
 
   it('number（有 min/max）→ 走滑块控件', async () => {
@@ -93,7 +97,7 @@ describe('自定义组件渲染（用户明确要求的能力）', () => {
     )
     expect(html).toContain('data-custom-param="hit"')
     // 内置控件不该同时出现（否则用户会看到两套 UI）
-    expect(html).not.toContain('mck-select')
+    expect(html).not.toContain('data-slot="select-trigger"')
     expect(html).not.toContain('<select')
   })
 

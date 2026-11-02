@@ -56,14 +56,12 @@ describe('批量勾选：两处宿主同一份判定', () => {
 
 describe('批量条：窄版补提示 + 去掉主题色方块', () => {
   it('抽屉（compact）的图标按钮各挂一条 tooltip，宽版不重复挂', () => {
-    expect(batchBar).toContain("import AxTooltip")
-    const tips = (batchBar.match(/<AxTooltip/g) ?? []).length
-    // 退出 / 添加到 / 移动到 / 修改标签 / 下载 / 删除 —— 6 个图标按钮各一条
-    expect(tips).toBe(6)
-    // 每条都只在紧凑模式生效（宽版本来就有文字，再挂气泡是重复）
-    expect((batchBar.match(/:disabled="!compact"/g) ?? []).length).toBe(6)
-    for (const label of ['退出批量操作', '添加到', '移动到', '修改标签', '下载', '删除']) {
-      expect(batchBar).toContain('content="' + label + '"')
+    // 退出 / 下载 / 删除是图标按钮，各自挂一条 shadcn Tooltip；
+    // 添加到 / 移动到 / 修改标签是下拉按钮（宽版带文字、窄版靠 aria-label）。
+    const tips = (batchBar.match(/<TooltipProvider/g) ?? []).length
+    expect(tips).toBe(3)
+    for (const label of ['退出批量操作', '下载', '删除']) {
+      expect(batchBar).toContain('>' + label + '</TooltipContent>')
     }
   })
 

@@ -16,7 +16,15 @@
  */
 import { computed, type Component } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
-import Select from './Select.vue'
+import {
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+} from '@mini-canvas/ui-kit-shadcn'
 import PrecisionSlider from './PrecisionSlider.vue'
 import { resolvePresetKind, PRESET_UI_NAMES, presetColumns } from './paramKind'
 import ToolOptionGrid from './ToolOptionGrid.vue'
@@ -86,8 +94,9 @@ const useSlider = computed(
 
 const inputId = computed(() => `${props.idPrefix}-${props.param.key}`)
 
-function onSelect(value: string | number): void {
-  emit('update:modelValue', value)
+function onSelect(value: unknown): void {
+  // reka-ui 的 Select 允许 null（清空）；这里按旧语义回成空串，别把 null 传给工具参数
+  emit('update:modelValue', (value ?? '') as string | number)
 }
 
 function onNumber(e: Event): void {
@@ -100,8 +109,8 @@ function onText(e: Event): void {
   emit('update:modelValue', (e.target as HTMLInputElement).value)
 }
 
-function onBool(e: Event): void {
-  emit('update:modelValue', (e.target as HTMLInputElement).checked)
+function onBool(value: boolean): void {
+  emit('update:modelValue', value)
 }
 
 function onSlider(value: number): void {
@@ -115,6 +124,18 @@ function onSlider(value: number): void {
 const selectValue = computed<string | number>(() => {
   const v = props.modelValue
   return typeof v === 'number' ? v : String(v ?? '')
+})
+
+/**
+ * 触发器上显示的当前选项文案。
+ *
+ * 为什么不用 SelectValue 自己推：reka-ui 的当前值标签来自「已经挂载过的选项」——
+ * 浮层没打开过时它拿到的是空列表，于是首屏/收起态只剩占位符（实测：值已是 medium，
+ * 触发器仍显示「思考程度」）。这里按 options 直接算出 label，语义与旧件一致。
+ */
+const selectLabel = computed(() => {
+  const hit = options.value.find((o) => o.value === selectValue.value)
+  return hit?.label ?? ''
 })
 
 const boolValue = computed(() => props.modelValue === true)
@@ -142,29 +163,29 @@ const numberValue = computed(() => {
     @update:model-value="(v: string | number | boolean) => emit('update:modelValue', v)"
   />
 
-  <!-- 内置：下拉 -->
+  <!-- 内置：下拉（分离件：触发器 / 内容 / 选项各写各的，可任意定制） -->
   <Select
     v-else-if="param.type === 'select'"
     :model-value="selectValue"
-    :options="options"
     :disabled="disabled"
-    :placeholder="param.label || param.key"
-    match-width
-    :input-id="inputId"
     @update:model-value="onSelect"
-  />
+  >
+    <SelectTrigger :id="inputId" size="sm" class="tpf-select" :aria-label="param.label || param.key">
+      <SelectValue :placeholder="param.label || param.key">{{ selectLabel }}</SelectValue>
+    </SelectTrigger>
+    <SelectContent position="popper" side="bottom" :side-offset="4">
+      <SelectItem v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+    </SelectContent>
+  </Select>
 
   <!-- 内置：开关 -->
   <label v-else-if="param.type === 'boolean'" class="tpf-bool" :class="{ 'is-disabled': disabled }">
-    <input
+    <Switch
       :id="inputId"
-      type="checkbox"
-      class="tpf-bool-input"
-      :checked="boolValue"
+      :model-value="boolValue"
       :disabled="disabled"
-      @change="onBool"
+      @update:model-value="onBool"
     />
-    <span class="tpf-bool-track" aria-hidden="true"><span class="tpf-bool-dot" /></span>
     <span class="tpf-bool-text">{{ param.label || param.key }}</span>
   </label>
 
@@ -180,7 +201,7 @@ const numberValue = computed(() => {
   />
 
   <!-- 内置：数字（无范围）/ 文本 -->
-  <input
+  <Input
     v-else
     :id="inputId"
     class="tpf-input"
@@ -224,7 +245,12 @@ const numberValue = computed(() => {
   color: var(--sf-desc, #9ca3af);
 }
 
-/* 开关：小尺寸轨道 + 圆点，与设置界面的 checkbox 语义一致但更紧凑 */
+/* 下拉触发器：跟随可用宽度（表单/参数面板里不该按内容收窄），外观交给 shadcn 与主题圆角 */
+.tpf-select {
+  width: 100%;
+}
+
+/* 开关：与设置界面的 Switch 同一件，只保留标签排版 */
 .tpf-bool {
   display: inline-flex;
   align-items: center;
@@ -236,43 +262,6 @@ const numberValue = computed(() => {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.tpf-bool-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-.tpf-bool-track {
-  position: relative;
-  flex: none;
-  width: 28px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--sf-track, rgba(0, 0, 0, 0.14));
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.tpf-bool-dot {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: var(--sf-thumb, #fff);
-  box-shadow: 0 1px 2px var(--ui-shadow-md, rgba(0, 0, 0, 0.2));
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.tpf-bool-input:checked + .tpf-bool-track {
-  background: var(--sf-accent, #0891b2);
-}
-.tpf-bool-input:checked + .tpf-bool-track .tpf-bool-dot {
-  transform: translateX(12px);
-}
-.tpf-bool-input:focus-visible + .tpf-bool-track {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
-  outline-offset: 1px;
-}
 .tpf-bool-text {
   color: var(--ui-ink, #374151);
   font-size: 12px;
@@ -280,9 +269,7 @@ const numberValue = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tpf-input,
-  .tpf-bool-track,
-  .tpf-bool-dot {
+  .tpf-input {
     transition: none;
   }
 }

@@ -10,7 +10,7 @@
  */
 import { computed, ref } from 'vue'
 import { Chrome, type Payload } from '@ckpack/vue-color'
-import Dropdown from './Dropdown.vue'
+import { Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
 import { colorAlpha, normalizeHexColor } from './colorValue'
 
 const props = withDefaults(
@@ -61,22 +61,11 @@ function commit(payload: Payload): void {
   emit('change', value)
 }
 
-function toggle(): void {
-  if (props.disabled) return
-  open.value = !open.value
-}
 </script>
 
 <template>
-  <Dropdown
-    v-model="open"
-    placement="bottom-start"
-    :offset="6"
-    menu-width="225px"
-    menu-role="dialog"
-    body-class="cf-menu-body"
-  >
-    <template #trigger>
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child :disabled="disabled">
       <div class="cf-wrap">
         <button
           type="button"
@@ -87,7 +76,6 @@ function toggle(): void {
           :aria-label="ariaLabel"
           aria-haspopup="dialog"
           :aria-expanded="open"
-          @click.stop="toggle"
         >
           <span class="cf-swatch" aria-hidden="true">
             <span v-if="!(clearable && isEmpty)" class="cf-swatch-color" :style="{ backgroundColor: normalized }" />
@@ -110,19 +98,17 @@ function toggle(): void {
           </svg>
         </button>
       </div>
-    </template>
+    </PopoverTrigger>
 
-    <template #default>
-      <div class="cf-pop">
-        <Chrome
-          :model-value="normalized"
-          :disable-fields="false"
-          :disable-alpha="false"
-          @update:model-value="commit"
-        />
-      </div>
-    </template>
-  </Dropdown>
+    <PopoverContent align="start" :side-offset="6" class="cf-popover">
+      <Chrome
+        :model-value="normalized"
+        :disable-fields="false"
+        :disable-alpha="false"
+        @update:model-value="commit"
+      />
+    </PopoverContent>
+  </Popover>
 </template>
 
 <style scoped>
@@ -245,11 +231,12 @@ function toggle(): void {
   outline-offset: 1px;
 }
 
-:global(.cf-menu-body) {
-  /* Dropdown 的 scoped 规则是 .dd-menu[data-v-x]（特异性更高），直接写 padding: 0
-     盖不过它 —— 走变量：scoped 规则读 var(--dd-padding, 6px)，这里把变量归零。 */
-  --dd-padding: 0;
+:global(.cf-popover) {
+  /* 取色器自己就是一块完整面板：外层不留内边距，宽度与 Chrome 对齐（225px）。 */
   padding: 0;
+  width: 225px;
+  gap: 0;
+  overflow: hidden;
 }
 
 /*
@@ -259,7 +246,7 @@ function toggle(): void {
  * 现在只在菜单上写 225px，再让 .vc-chrome 撑满菜单内容区 —— 以后要改宽度
  * 只动 menu-width 一处，面板和取色器永远同宽，不会再错位。
  */
-:global(.cf-menu-body .vc-chrome) {
+:global(.cf-popover .vc-chrome) {
   width: 100%;
   box-shadow: none;
   border-radius: inherit;

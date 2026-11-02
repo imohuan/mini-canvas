@@ -18,6 +18,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender, useThemeColor } from '@mini-canvas/canvas-render'
 import { isTransient } from '@mini-canvas/canvas-data'
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   getSourcePosition,
@@ -645,11 +646,11 @@ onUnmounted(() => {
       height="32"
       style="overflow: visible"
     >
-      <button class="cut-btn" @click.stop="cutEdge" @mousedown.stop title="删除连线">
+      <Button class="cut-btn" variant="ghost" size="icon-sm" type="button" @click.stop="cutEdge" @mousedown.stop title="删除连线">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4">
           <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-      </button>
+      </Button>
     </foreignObject>
   </g>
 </template>
@@ -679,10 +680,9 @@ onUnmounted(() => {
 /* 胶囊渐变光斑容器：子 path 均为 pointer-events:none（由 _makeFlowPath 内联设置），容器再兜底一次 */
 .ef-capsules { pointer-events: none; }
 .cut-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 50%; border: none;
+  width: 32px; height: 32px; padding: 0; border-radius: 50%;
   background: var(--ui-overlay-solid, rgba(255, 255, 255, 0.95)); color: var(--ui-ink-dim, #374151);
-  box-shadow: var(--ui-shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15)); cursor: pointer; padding: 0;
+  box-shadow: var(--ui-shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15));
   transition: background 0.15s;
 }
 .cut-btn:hover { background: var(--ui-danger, #ef4444); color: var(--ui-tip-ink, #fff); }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from '@mini-canvas/ui-kit-shadcn'
 /**
  * NodeEmptyState —— 节点内容区的**统一空状态**（默认主题提供，节点插件按名取用）。
  *
@@ -51,7 +52,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="nes-root" :class="[`is-${tone}`, `is-${layout}`, `is-${size}`]" role="status">
+  <div class="nes-root" :class="[`is-${tone}`, `is-${layout}`, `is-${size}`]" role="status" :data-lab="tone === 'warning' ? 'warn-state' : tone === 'danger' ? 'danger-state' : undefined">
     <!-- 有默认插槽时完全交给调用方（可视化节点那种「标题 + 提示」两行的样子） -->
     <slot>
       <div class="nes-icon" aria-hidden="true">
@@ -70,15 +71,17 @@ const emit = defineEmits<{
       </div>
     </slot>
     <!-- 动作按钮独立于正文插槽：用了默认插槽时也仍然可点 -->
-    <button
+    <Button
       v-if="actionText"
       class="nes-action nodrag nopan nowheel"
+      variant="ghost"
+      size="sm"
       type="button"
       :disabled="actionDisabled"
       @click.stop="emit('action')"
     >
       {{ actionText }}
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -154,15 +157,14 @@ const emit = defineEmits<{
 
 .nes-action {
   margin-top: 2px;
+  height: auto;
   padding: 5px 12px;
-  border: 0;
   border-radius: 8px;
   background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
   color: var(--ui-accent-hover, #0e7490);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
   /* 按钮可点：把根层放行的手势事件收回来 */
   pointer-events: auto;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -174,7 +176,6 @@ const emit = defineEmits<{
 
 .nes-action:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .nes-action:focus-visible {

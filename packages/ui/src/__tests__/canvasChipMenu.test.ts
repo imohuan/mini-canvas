@@ -99,29 +99,20 @@ describe('行尾菜单：条目与真实现', () => {
     expect(cluster).toContain('在新窗口打开')
     expect(cluster).toContain('重命名画布')
     expect(cluster).toContain('复制画布')
-    expect(cluster).toMatch(/<AxMenuItem[^>]*danger[^>]*>[\s\S]{0,40}删除画布/)
+    expect(cluster).toMatch(/<DropdownMenuItem[^>]*variant="destructive"[^>]*>[\s\S]{0,40}删除画布/)
   })
 
-  it('菜单用 AxDropdown 的「鼠标点锚点」弹出（与行右键菜单同一套机制）', () => {
-    expect(cluster).toContain('openAtPoint')
-    expect(cluster).toMatch(/ref="actionRef"[\s\S]{0,260}actionOpen/)
+  it('行尾「⋯」是画布列表的子菜单（列表留着、子菜单并排）', () => {
+    expect(cluster).toContain('<DropdownMenuSub')
+    expect(cluster).toMatch(/<DropdownMenuSubTrigger[\s\S]{0,260}canvas-row-more/)
   })
 
-  /**
-   * **两个浮层并存**（用户口径 2026-10-09：点操作菜单时画布列表不能消失）。
-   *
-   * 画布列表要点三个点之后**留在屏幕上**，操作菜单挂在它旁边（效果图就是并排两份）。
-   * 判据盯源码接线，不看渲染：
-   *   ① 操作菜单声明 nested-in（把自己当列表的子浮层，不触发「同屏只留一个」把列表顶掉）；
-   *   ② 宿主不再把 menuOpen 置 false（那正是让列表消失的那一步）。
-   */
-  it('操作菜单是列表的**子浮层**（列表留着不消失，两个菜单并排）', () => {
-    expect(cluster).toMatch(/ref="actionRef"[\s\S]{0,320}:nested-in="actionParent"/)
-    expect(cluster).toMatch(/const actionParent = \(\): \{ chain: string; open: boolean \} \| undefined/)
-    expect(cluster).toMatch(/const listRef = ref<\{ isOpen\?: boolean; chainId\?: string \} \| null>\(null\)/)
-    expect(cluster).toMatch(/ref="listRef"/)
-    // 旧行为：开着操作菜单先把列表关掉 —— 必须消失
-    expect(cluster).not.toMatch(/emit\('update:menuOpen', false\)/)
+  /** 两个浮层并存：清单是父菜单、行尾操作是子菜单，父菜单不因开子菜单而关闭。 */
+  it('操作菜单是列表的**子菜单**（列表留着不消失，两个菜单并排）', () => {
+    expect(cluster).toContain('<DropdownMenuSub v-model:open="actionOpen"')
+    expect(cluster).toContain('<DropdownMenuSubContent')
+    // 子菜单打开时不主动关闭列表（列表只在「切画布 / 新建」这类完成动作后才收）
+    expect(cluster).not.toMatch(/openActions[\s\S]{0,200}update:menuOpen', false/)
   })
 
   it('两个宿主都把行数据换成 id + 名字（只传名字没法按 id 操作）', () => {
@@ -184,7 +175,7 @@ describe('行尾菜单：条目与真实现', () => {
     expect(cluster, '删除项不许再带条件').not.toMatch(/v-if="canDelete"/)
     expect(cluster).not.toMatch(/:disabled="!canDelete"/)
     expect(cluster, 'canDelete 这个开关整个该消失').not.toMatch(/canDelete/)
-    expect(cluster).toMatch(/<AxMenuItem danger @click="pickAction\('delete-canvas', close\)">删除画布<\/AxMenuItem>/)
+    expect(cluster).toMatch(/variant="destructive"[\s\S]{0,160}pickAction\('delete-canvas'[\s\S]{0,40}删除画布/)
     // deletable 这个「谁不许删」的概念也一并退役
     expect(ui).not.toMatch(/deletable: c\.id !== 'default'/)
   })
