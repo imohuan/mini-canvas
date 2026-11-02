@@ -86,14 +86,14 @@ function onEscapeKeyDown(e: KeyboardEvent): void {
       弹窗内容区域，正好把面板整块盖住 —— 生成历史“点了没反应”就是这个原因
       （2026-11-02 实测：弹窗 DOM 存在，但第一个子元素是 0.35 不透明度的遮罩）。
 
-      这里只保留调用方自定义遮罩样式的入口；默认的 DialogContent 已经自带一层遮罩。
+      DialogContent 自带一层遮罩；只有需要「无遮罩」时才额外渲染一层透明遮罩，
+      保持模态行为（焦点陷阱 / 点外不关）不变。普通弹窗不要再叠一层，否则画面会暗两次。
     -->
     <DialogOverlay
       v-if="!withOverlay"
       class="appdlg-overlay is-clear"
       :class="overlayClass"
     />
-    <DialogOverlay v-else-if="overlayClass" class="appdlg-overlay" :class="overlayClass" />
     <DialogContent
       class="appdlg-panel"
       :class="panelClass"
