@@ -205,6 +205,19 @@
  */
 [data-slot='dialog-content'] {
   border-radius: var(--mct-radius, var(--radius-panel, 16px));
+  /*
+   * 应用内弹窗的外层不留内边距（2026-11-02 用户实测：全局设置顶部、生成历史标题与卡片区都多了一圈）。
+   *
+   * shadcn 的 DialogContent 自带 p-6 + gap-6，是给「标题/正文/按钮逐段塞进去」的通用用法。
+   * 本项目每个弹窗都是整块面板：标题栏、分隔线、滚动区、底栏各自带 px/pt/pb，还要靠 flex 撑满高度。
+   * 两者叠加后：全局设置顶部 24+16=40px（改版前 16px）；生成历史标题左 24+24=48px、
+   * 卡片区 24+40=64px，左右也不对称。
+   *
+   * 不能写在 AppDialog.vue 的 scoped 样式里：DialogContent 被 Teleport 到 body，
+   * 根节点没有 data-v 作用域属性，scoped 规则根本匹配不上。这里放在宿主层统一归零。
+   */
+  padding: 0 !important;
+  gap: 0 !important;
 }
 
 /*
