@@ -42,9 +42,6 @@ import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
 // import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
 // import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
 import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
-// 全局下拉：把成品应用那份带箭头的 AxDropdown 注册进 ui 目录（order -1 顶替主题默认件）。
-// 详见该文件顶部注释：全应用只剩一份下拉实现，插件按名取到的也是它。
-import { uiDropdownPlugin } from './uiDropdownPlugin'
 // 热重载：设置面板「热重载」分类（开发工具：登记链接，产物变了自动重装插件）
 import { hotReloadPlugin } from '@mini-canvas/plugin-hot-reload'
 // 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
@@ -105,7 +102,6 @@ export const APP_PLUGINS = [
   nodeAudioPlugin,
   agentPlugin,
   uiSettingsPanelPlugin,
-  uiDropdownPlugin,
   hotReloadPlugin,
   uiAssetUploadPlugin,
 ]
