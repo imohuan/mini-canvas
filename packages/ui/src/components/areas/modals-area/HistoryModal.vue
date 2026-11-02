@@ -11,6 +11,15 @@ import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/
 import { useMasonry } from '../../../composables/useMasonry'
 import { uiComponentOf, useUi, useUiComponentOutside } from '../../../composables/ui'
 import { historySignatureOf } from '../../../composables/historySignature'
+import {
+  esc,
+  formatBytes,
+  formatDuration,
+  formatDurationLong,
+  formatExactTime,
+  mediaAspect,
+  ratioLabel,
+} from './historyCardText'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
@@ -684,11 +693,6 @@ function observeLastItem(): void {
 
 }
 
-/** HTML 转义（卡片 DOM 用 innerHTML 拼，标题来自后台要防注入） */
-function esc(t: string): string {
-  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
-}
-
 /** 无产物（失败）的异常卡 / 有地址但资源打不开的中性卡：警示图标 + 标题（没数据 = 异常，不装作正常素材） */
 function buildErrorCard(item: HistItem, opts?: { missingResource?: boolean }): HTMLElement {
   const wrap = document.createElement('div')
@@ -814,62 +818,6 @@ function toggleHistSelected(id: string): void {
  * 音频/视频卡：封面 + 播放圆钮（点卡片直接开 MediaViewer 预览/播放）。
  * 音频没有画面 —— 给柔和渐变底 + 波形点阵装饰；视频有封面帧。
  */
-/**
- * 媒体（视频 / 音频）卡的外框：与图片卡**同一套瀑布流格子**，按产物真实宽高比排布。
- *
- * 用户口径 2026-10-27：
- * - 视频要和图片一样走瀑布流（以前视频卡写死 180px 高、16:9，所以整排等高、和图片格格不入）；
- * - 卡片上要有宽高比、时长、文件大小；图片卡上现有的"尺寸 + 时间"样式保持一致。
- * - 音视频地址打不开时不许出黑框，要和图片一样归入「显示异常」。
- */
-function mediaAspect(item: HistItem, fallback: number): string {
-  const w = item.media?.width
-  const h = item.media?.height
-  return w && h && w > 0 && h > 0 ? w + ' / ' + h : String(fallback)
-}
-
-/** 字节数 → 人能读的大小（0 / 缺省返回空串，不显示） */
-function formatBytes(n?: number): string {
-  if (!n || n <= 0) return ''
-  const kb = 1024
-  const mb = kb * 1024
-  if (n >= mb) return (n / mb).toFixed(1) + ' MB'
-  if (n >= kb) return Math.round(n / kb) + ' KB'
-  return n + ' B'
-}
-
-/** 毫秒 → m:ss（缺省 / 非正数返回空串） */
-function formatDuration(ms?: number): string {
-  if (!ms || ms <= 0) return ''
-  const total = Math.round(ms / 1000)
-  const m = Math.floor(total / 60)
-  const sec = total % 60
-  return m + ':' + String(sec).padStart(2, '0')
-}
-
-/** 详情弹窗里的时长：带单位，超过一分钟说"X 分 Y 秒"，比 m:ss 更好读 */
-function formatDurationLong(ms?: number): string {
-  if (!ms || ms <= 0) return ''
-  const total = Math.round(ms / 1000)
-  const m = Math.floor(total / 60)
-  const sec = total % 60
-  return m > 0 ? m + ' 分 ' + sec + ' 秒' : sec + ' 秒'
-}
-
-/** 宽高 → 最简比（如 1086×1448 → 543:724；用最大公约数，不四舍五入成假比例） */
-function ratioLabel(w: number, h: number): string {
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
-  const g = gcd(Math.round(w), Math.round(h)) || 1
-  return Math.round(w / g) + ':' + Math.round(h / g)
-}
-
-/** 完成时间：精确到分钟（卡片上只显示"多久前"，复盘要看具体时刻） */
-function formatExactTime(ts: number): string {
-  const d = new Date(ts)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
-}
-
 /**
  * 卡外信息行（方案 5 定稿，用户口径 2026-10-27）：
  *

@@ -11,12 +11,18 @@
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const videoPreview = readFileSync(
   new URL('../../../plugins/plugin-node-video/src/VideoPreview.vue', import.meta.url),
   'utf-8',
 )
 const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
+const historyCardText = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/historyCardText.ts'),
+  'utf-8',
+)
 const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
 const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
@@ -510,7 +516,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(style, '视频卡仍写死高度，瀑布流按真实比例排布会失效').not.toMatch(/\.hist-card-video-plugin\s*\{[^}]*height:\s*180px/)
     expect(style, '视频媒体框没有铺满媒体区').toMatch(/\.hist-card-video-plugin\s*\{[^}]*position:\s*absolute/)
     expect(style, '媒体框缺少按产物宽高比排布的能力（aspect-ratio 未与 media 元数据联动）').toMatch(/\.hist-card-media\s*\{/)
-    expect(modalsArea, '卡片没有用 media 元数据给真实比例').toMatch(/function mediaAspect/)
+    expect(historyCardText, '卡片没有用 media 元数据给真实比例').toMatch(/function mediaAspect/)
   })
 
   it('方案 5：信息全部在图片外，一行 = 类型标签 + 宽高 · 时长 · 大小', () => {
