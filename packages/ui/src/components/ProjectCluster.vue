@@ -125,7 +125,7 @@ function pickAction(
           <span>画布 {{ canvasIndex }}</span><ChevronDown :size="12" class="size-3 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '214px' }">
+      <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '232px' }">
           <div class="canvas-menu-head">
             <span>画布</span>
             <Button variant="ghost" size="icon-xs" class="canvas-new size-[22px] rounded-md" aria-label="新建画布"
@@ -191,11 +191,14 @@ function pickAction(
    选中行（与「勾」一起表达「当前就是这张」）与 hover 行都给整行一块底。 */
 .canvas-row.is-active { background: var(--ui-hover-soft, var(--ui-hover)); }
 .canvas-row:hover { background: var(--ui-hover); }
-.canvas-row-main { display: flex; flex: 1; min-width: 0; align-items: center; height: 32px; padding: 0 8px; color: var(--ui-ink); border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-family: inherit; font-size: 12px; text-align: left; }
+.canvas-row-main { display: flex; flex: 1; min-width: 0; align-items: center; height: 32px; padding: 0 10px; color: var(--ui-ink); border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; text-align: left; }
 .canvas-row-main:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: -1px; }
 .canvas-open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 行尾：默认 32×32 占位（行内不跳动的锚），勾/三个点叠在同一格里换显 */
 .canvas-row-more { position: relative; display: grid; flex: none; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--ui-ink-dim); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+/* 这个「⋯」本身就是子菜单触发器，ui-kit 会再塞一个 › 箭头，两个图标在 32px 里会叠在一起。
+   行尾只留勾/三个点，箭头去掉（用户口径 2026-11-02）。 */
+.canvas-row-more :deep(svg.ml-auto) { display: none; }
 .canvas-row-check, .canvas-row-dots { grid-area: 1 / 1; transition: opacity .14s ease; }
 /* 选中行的勾：常显。鼠标进这一行 → 勾让位给三个点（用户口径：hover 时图标变成三个点）。 */
 .canvas-row-more.is-pinned .canvas-row-check { opacity: 1; }

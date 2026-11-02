@@ -110,7 +110,7 @@ function onUploadPick(e: Event): void {
                 <TooltipContent side="top">添加节点</TooltipContent>
               </Tooltip>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="center" :side-offset="10" :style="{ width: '240px' }">
+            <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ width: '240px' }">
               <div class="mb-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-veil px-2.5 text-ink-dim">
                 <Search :size="13" /><input class="w-full bg-transparent text-xs text-ink outline-none"
                   aria-label="搜索画布节点" placeholder="搜索画布节点" />
@@ -172,7 +172,9 @@ function onUploadPick(e: Event): void {
                 <component :is="s.canvasMode === 'move' ? Move : Hand" :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="center" :side-offset="10" :style="{ minWidth: '200px' }">
+            <!-- 向上弹时留 24px：sideOffset 从触发按钮算起，按钮又在 50px 托盘里下沉约 9px，
+                 留 24px 后菜单底边与托盘顶部才有 14px 左右的视觉缝隙（用户口径 2026-11-02）。 -->
+            <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ minWidth: '200px' }">
                 <DropdownMenuItem :class="{ 'bg-accent': s.canvasMode === 'move' }" @select="ui.setCanvasMode('move'); s.moveMenuOpen = false; ui.showToast('已切换到移动工具')">
                   <Move :size="15" /> 移动
                   <span class="ml-auto text-[10px] text-ink-dim">V</span>
@@ -194,7 +196,7 @@ function onUploadPick(e: Event): void {
                 <FolderOpen :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="center" :side-offset="10" :style="{ minWidth: '228px' }">
+            <DropdownMenuContent side="top" align="center" :side-offset="24" :style="{ minWidth: '228px' }">
                 <!-- 「风格库」由 plugin-style-library 提供：这里执行它注册的命令（未装该插件则 no-op，不报错） -->
                 <DropdownMenuItem @select="s.libraryMenuOpen = false; ui.runCommand('style-library:open')">
                   <Shapes :size="15" /> 风格库
