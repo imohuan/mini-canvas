@@ -12,8 +12,14 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const SFC = readFileSync(fileURLToPath(new URL('../NodeBottomBar.vue', import.meta.url)), 'utf8')
+const SFC = [
+  readFileSync(fileURLToPath(new URL('../NodeBottomBar.vue', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../node-bottom-bar/BottomBarCardList.vue', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../node-bottom-bar/useBottomBarCards.ts', import.meta.url)), 'utf8'),
+].join('\n')
+const CARDS_HOOK = readFileSync(fileURLToPath(new URL('../node-bottom-bar/useBottomBarCards.ts', import.meta.url)), 'utf8')
 const SCRIPT = SFC.slice(0, SFC.indexOf('<template>'))
+  + CARDS_HOOK
 const TEMPLATE = SFC.slice(SFC.indexOf('<template>'), SFC.indexOf('<style'))
 
 describe('卡片单击：不进全屏预览', () => {
@@ -44,7 +50,7 @@ describe('卡片单击：不进全屏预览', () => {
       TEMPLATE.indexOf('class="nb-card"') - 600,
       TEMPLATE.indexOf('class="nb-card"') + 800,
     )
-    expect(cardTag).toMatch(/@dblclick\.stop\.prevent="onCardDblClick/)
+    expect(cardTag).toMatch(/@dblclick\.stop\.prevent="emit\('cardDblClick'/)
     expect(cardTag).toMatch(/@click\.stop=/)
   })
 })

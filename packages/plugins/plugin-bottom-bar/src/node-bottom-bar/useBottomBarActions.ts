@@ -1,0 +1,183 @@
+import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
+import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { BarAction } from '../barTypes'
+import { FALLBACK_TYPE_ICONS } from './icons'
+
+interface ActionDeps {
+  ctx: CanvasRenderContext['ctx']
+  host: CanvasRenderContext['host']
+  doc: ComputedRef<{
+    getNode(id: string): { type?: string } | undefined
+    subscribe(fn: () => void): () => void
+  } | undefined>
+}
+
+/** 动作列表、当前动作、参数与参数落盘。 */
+export function useBottomBarActions(
+  props: { id: string; data: Record<string, unknown> },
+  deps: ActionDeps,
+) {
+  const { ctx, host } = deps
+
+  // —— 节点类型（props 没有 type，从 doc 取；订阅 doc 跟随） ——
+  const nodeType = ref<string | undefined>(undefined)
+  let docOff: (() => void) | null = null
+  function syncNodeType(): void {
+    nodeType.value = deps.doc.value?.getNode(props.id)?.type
+  }
+  syncNodeType()
+  if (deps.doc.value) docOff = deps.doc.value.subscribe(() => syncNodeType())
+  onBeforeUnmount(() => docOff?.())
+
+  // —— 动作列表（热装卸后重读） ——
+  const bar = computed(() => ctx.get<{ list(f?: { type?: string }): BarAction[] }>('nodeBar'))
+  const actions = ref<BarAction[]>([])
+  let barFieldOff: { dispose(): void } | null = null
+  const pluginOffs: Array<{ dispose(): void }> = []
+  function reloadActions(): void {
+    actions.value = bar.value?.list({ type: nodeType.value }) ?? []
+  }
+  function watchBarField(): void {
+    barFieldOff?.dispose()
+    barFieldOff = null
+    const field = ctx.registryOf('node/bar')
+    if (field && typeof field.subscribe === 'function') {
+      barFieldOff = field.subscribe(() => reloadActions())
+    }
+  }
+  watch(nodeType, reloadActions, { immediate: true })
+  watchBarField()
+  pluginOffs.push(ctx.on('ctx:plugin-installed', () => { reloadActions(); watchBarField() }))
+  pluginOffs.push(ctx.on('ctx:plugin-uninstalled', () => { reloadActions(); watchBarField() }))
+  onBeforeUnmount(() => {
+    barFieldOff?.dispose()
+    for (const d of pluginOffs) d.dispose()
+  })
+
+  const hasActions = computed(() => actions.value.length > 0)
+  const actionOptions = computed(() =>
+    actions.value.map((a) => ({
+      label: a.title,
+      value: a.id,
+      description: a.description,
+      icon: iconOfType(a.types?.[0] ?? nodeType.value),
+      group: a.group,
+    })),
+  )
+
+  function iconOfType(type: string | undefined): unknown {
+    if (!type) return undefined
+    const reg = host.nodeRegistry as { get(t: string): { icon?: unknown } | undefined } | undefined
+    const fromRegistry = reg?.get(type)?.icon
+    if (fromRegistry) return fromRegistry
+    return FALLBACK_TYPE_ICONS[type]
+  }
+
+  // —— 当前动作与参数 ——
+  const currentId = ref('')
+  const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
+  const currentActionLabel = computed(
+    () => actionOptions.value.find((o) => o.value === currentId.value)?.label ?? '',
+  )
+
+  function plainObject(v: unknown): Record<string, unknown> | undefined {
+    return v && typeof v === 'object' && !Array.isArray(v) ? { ...(v as Record<string, unknown>) } : undefined
+  }
+  const values = ref<Record<string, unknown>>(plainObject(props.data?.barValues) ?? {})
+  const storedActionId = computed<string | undefined>(() => {
+    const raw = plainObject(props.data?.barValues)
+    return typeof raw?.actionId === 'string' ? raw.actionId : undefined
+  })
+
+  function defaultActionId(): string {
+    const list = actions.value
+    return (list.find((a) => a.needsPrompt === true) ?? list[0])?.id ?? ''
+  }
+
+  function initialActionId(): string {
+    const remembered = storedActionId.value
+    if (remembered && actions.value.some((a) => a.id === remembered)) return remembered
+    return defaultActionId()
+  }
+
+  /** select 无 default 取第一项（与内核 resolveToolParams 同口径） */
+  function defaultsOf(action: BarAction | undefined): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const p of action?.fields ?? []) {
+      if (p.default !== undefined) {
+        out[p.key] = p.default
+        continue
+      }
+      if (p.type === 'select' && p.options?.length) out[p.key] = p.options[0].value
+    }
+    return out
+  }
+
+  watch(
+    () => actions.value.map((a) => a.id).join('|'),
+    () => {
+      if (!actions.value.some((a) => a.id === currentId.value)) {
+        const remembered = storedActionId.value
+        const pick = remembered && actions.value.some((a) => a.id === remembered) ? remembered : defaultActionId()
+        selectAction(pick)
+      }
+    },
+  )
+
+  function selectAction(id: string): void {
+    const prev = currentAction.value
+    if (prev?.onDeselect) prev.onDeselect(props.id)
+    currentId.value = id
+    // 换动作时保留用户已经调过的参数，但只保留新动作也声明了的 key。
+    const kept: Record<string, unknown> = {}
+    for (const p of (currentAction.value?.fields ?? []) as ToolParamDef[]) {
+      if (p.key in values.value) kept[p.key] = values.value[p.key]
+    }
+    values.value = { ...defaultsOf(currentAction.value), ...kept }
+    currentAction.value?.onSelect?.(props.id)
+  }
+
+  if (hasActions.value && !currentId.value) selectAction(initialActionId())
+
+  const promptBinding = computed(() => currentAction.value?.promptBinding ?? 'none')
+  const needsPrompt = computed(() => currentAction.value?.needsPrompt === true)
+  const paramDefs = computed<ToolParamDef[]>(() =>
+    ((currentAction.value?.fields ?? []) as ToolParamDef[]).filter((p) => p.kind !== 'style'),
+  )
+  const showEditor = computed(() => needsPrompt.value)
+
+  function onFieldChange(key: string, v: string | number | boolean): void {
+    values.value = { ...values.value, [key]: v }
+  }
+
+  const fieldSummary = computed(() => {
+    const parts: string[] = []
+    for (const p of paramDefs.value) {
+      const v = values.value[p.key]
+      if (v === undefined || v === '') continue
+      const opt = p.options?.find((o) => o.value === v)
+      parts.push(opt ? opt.label : String(v))
+    }
+    return parts.join(' · ')
+  })
+
+  return {
+    nodeType,
+    actions,
+    hasActions,
+    actionOptions,
+    currentId,
+    currentAction,
+    currentActionLabel,
+    values,
+    storedActionId,
+    selectAction,
+    onFieldChange,
+    fieldSummary,
+    promptBinding,
+    needsPrompt,
+    paramDefs,
+    showEditor,
+  }
+}
