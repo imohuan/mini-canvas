@@ -90,3 +90,71 @@
 本次仍沿用原有 `ScrollPane` 与固定 `bottom-[64px]` 批量条定位。窄抽屉里批量条内容
 较多时只能横向滚动；后续若要改成换行布局或压缩按钮密度，需要单独做窄宽度视觉验证，
 并保持现有 `role="toolbar"`、按钮 aria-label 和批量动作语义。
+
+## 13. UI 规范审计：组件取件与通知（已核查，无需改动）
+
+2026-11-03 全仓扫描结果：
+
+- 业务插件与 `packages/ui` 的生产源码里**没有**直接 `import '@mini-canvas/ui-kit-shadcn'`。
+  仅剩默认主题插件、`packages/ui/vite.config.ts`、`sharedGlobals.ts` 与测试文件引用，均属允许范围。
+- 业务代码里**没有**直接 `import 'vue-sonner'`；唯一引用是 `ui-kit-shadcn` 自己的 `UiToaster.vue`。
+- 直接 `import '@mini-canvas/plugin-theme-default'` 的只有 demo-kit 的 `ThemeLab.vue` /
+  `ThemeStudio.vue`（主题实验室本身就在调主题 API），不算普通业务插件越界。
+
+结论：`useUiComponent()` 取件与上下文 `notify` 两条硬规则当前是干净的，不需要返工。
+
+## 14. 自绘界面清单（需要后续重构，本次不动）
+
+按「是否自己画控件」排序，确认存在自绘 UI 的文件：
+
+| 文件 | 自绘情况 | 建议 |
+| --- | --- | --- |
+| `packages/plugins/plugin-style-library/src/components/StyleGalleryView.vue` | 页签、搜索框、分类条、排序按钮全是原生 `<button>` / `<input>` + `sg-*` 自绘样式 | 页签换 `Tabs`，搜索换 `Input`，分类/排序换 `ToggleGroup` 或 `Button` 尺寸变体 |
+| `packages/plugins/plugin-style-library/src/components/StyleDetailView.vue` | 关闭、上一张/下一张、缩略图页签、收藏/使用按钮均原生；整体浮层自绘 | 浮层改 `AppDialog`，按钮改 `Button`，缩略图条改 `Tabs` |
+| `packages/plugins/plugin-style-library/src/components/StyleCardView.vue` | 卡片上的收藏、放大、加入画布三个悬浮按钮原生 | 改 `Button` 的 `size="icon-sm"` + `variant="ghost"`；先核对 hover 浮层定位 |
+| `packages/plugins/plugin-style-library/src/components/StyleLibraryOverlay.vue` / `EffectLibraryOverlay.vue` | 标题栏按钮原生，浮层 `z-index:100000` 手写 | 与 StyleDetailView 一起迁到 `AppDialog`；注意「最小化/关闭」的窗口语义要保留 |
+| `packages/plugins/plugin-shortcut-manager/src/ShortcutHelpPanel.vue`（784 行） | 4 个内联 SVG 图标按钮、原生搜索框、重映射徽标按钮；整套 `shortcut-help-*` 样式 | 图标换 lucide + `Button`，搜索换 `Input`；该文件同时偏大，建议先拆分再换件 |
+| `packages/plugins/plugin-shortcut-manager/src/RemapPanel.vue` | 录制按钮、重置/重新录制/完成按钮原生，内联 SVG | 按钮换 `Button`，SVG 换 lucide；录制态的脉冲环保留 |
+| `packages/plugins/plugin-cursor-effect/src/components/settings/CursorSettingsPage.vue` | 光标/跟随/点击三组 `ce-tile` 选择格子是原生 `<button>`，自绘选中态 | 换 `ToggleGroup` 或 `Button` + `aria-pressed`；缩略图布局需保留 |
+| `packages/plugins/plugin-bottom-bar/src/PromptActionSettings.vue` | 图标预设、模板变量 chips 是原生按钮 | 换 `ToggleGroup` / `Button`；图标网格密度较高，迁移时保持现有间距 |
+| `packages/plugins/plugin-context-menu/src/ContextMenu.vue`（662 行） | 整份右键菜单自绘（行、图标托、键帽、二级菜单），与旧版菜单母体一致 | 组件库没有等价「右键菜单」，可保留自绘，但应复用 `DropdownMenu` 的定位与键盘语义，至少统一键帽与行样式 token |
+| `packages/plugins/plugin-context-menu/src/ConnectionMenuContent.vue` | 连线菜单同样是原生按钮列表 | 同上，和 ContextMenu 共用一套菜单行组件 |
+| `packages/plugins/plugin-group/src/GroupTopToolbar.vue` | 分组颜色九宫格是原生 `<button>` + `group-color-swatch` | 色板本身可保留自绘（需要色块预览），外部容器已用 `DropdownMenu`，只需统一 focus 态与 token |
+| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 左侧设置页签是原生 `<button class="psd-tab-item">` | 主题插件自己可以继续自绘，但建议换 `Tabs` 以获得键盘方向键导航 |
+| `packages/plugins/plugin-demo-kit/src/theme-lab/ThemeLab.vue` / `ThemeStudio.vue` / `gallery/ThemeGalleryOverlay.vue` | 大量原生按钮与自绘色调/模式切换 | demo-kit 是开发演示件，优先级最低；换成组件库前先确认它不依赖宿主主题变量 |
+| `packages/plugins/plugin-demo-kit/src/shell-slots/DrawerTabButton.vue` / `DockEndButton.vue` | 原生按钮演示槽位 | 演示件，保持现状即可 |
+
+可以保留原生的地方（不算违规）：
+
+- 隐藏的文件选择 `<input type="file">`：`VideoTopToolbar.vue`、`ImageTopToolbar.vue`、`AudioTopToolbar.vue`、
+  `CursorSettingsPage.vue`、`AgentConversation.vue`、`AssetUploadDialog.vue`。这些是浏览器平台能力，
+  组件库没有替代品，视觉上也是 `visually-hidden`。
+- `plugin-theme-default` 的 `TitleLabel.vue` 用 `contenteditable`：注释说明换 `<input>` 会改变行高，
+  属于经过实测的设计决策，不要动。
+- `VideoPlayerBar.vue` 的透明 `<input type="range">` 叠在自绘轨道上：为了接管手势，
+  迁移到 `Slider` 前必须验证拖动、点击跳转与键盘步进一致。
+- `plugin-theme-default` 的 `ToolOptionGrid.vue`、`ToolRatioGrid.vue`、`ToolParamGroup.vue`、
+  `PrecisionSlider.vue`、`ColorField.vue` 本身就是主题层 UI 原语，允许自绘，但要遵守
+  `docs/design/ui-style-guide.md` 的 token 与尺寸。
+
+## 15. `packages/ui` 外壳的换件与滚动容器
+
+这些文件在装配层，取件入口是 `useUiComponentOutside()`：
+
+- `ChatPanel.vue`（140 行）**已无任何引用**，只有历史文档提到它；`ui.ts` 里的 `chat*` 演示状态
+  也只服务它。建议单独一次提交删除，并清理 `chatMessages / chatSuggestions / chatModes /
+  sendChat / renameChat / startChatDrag / startChatResize` 等残留，删前再确认一次全仓引用。
+- `AssetManageDialog.vue`（613 行）：11 处原生按钮/输入框，弹窗是手写 `fixed inset-0` + `role="dialog"`，
+  正文用裸 `overflow-y-auto`。建议迁到 `AppDialog` + `ScrollPane` + `Button`/`Input`；
+  它和 `LeftDrawer` 的资产动作重复，可和第 7 条一起做。
+- `AssetUploadDialog.vue`：12 处原生控件，同样手写弹窗与裸滚动容器；「+」按钮依赖隐藏 file input，
+  迁移时别把 `chooseFiles()` 的触发链弄断。
+- `AssetTree.vue`：8 处原生按钮/输入框（展开、行点击、就地改名）。行内改名输入框可换 `Input`，
+  但行本身是「整行可点 + 内部按钮」结构，换 `Button` 会产生嵌套按钮，需要改成 `div role="button"`
+  或拆开命中区域——属于交互结构调整，需单独验证。
+- `ProjectsPage.vue`：搜索框原生；正文 `overflow-y-auto` 应换 `ScrollPane`。
+- `App.vue`：插件面板列表用 `overflow-y-auto`，应换 `ScrollPane`。
+- `ShortcutModal.vue`、`DirectorSettingsDialog.vue`、`AssetManageDialog.vue`、`AssetUploadDialog.vue`：
+  四处裸滚动容器，统一换 `ScrollPane` 时要保持父级 `min-h-0` / 固定高度。
+
+上述换件都涉及真实交互与视觉，必须用 @Chrome 实测亮色/暗色、窄容器和空数据后再提交。
