@@ -13,16 +13,28 @@
  * 它由 canvas-render 的 mediaFit.test.ts 直接测（含脏数据边界），这里再走一遍 DOM
  * 只是把同一份数学抄第二遍。
  */
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
+// 只导入主题**插件**（走注册流程）：SSR 要断言播放/截图按钮的可达性，
+// 必须给 ui 目录装上真实主题组件；不直接 import 组件实现（与顶部操作条同一口径）。
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import VideoContent from '../VideoContent.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
 import { framingStyle } from '../videoCrop'
 
 const VIDEO = '/api/canvases/c1/resources/abc.mp4'
+
+let uiFieldShared: { top(name: string): { value: unknown } | undefined }
+beforeAll(async () => {
+  const { Context } = await import('@mini-canvas/canvas-data')
+  const ctx = new Context()
+  ctx.plugin(themeDefaultPlugin)
+  await ctx.start()
+  uiFieldShared = ctx.registryOf('ui')
+})
 
 /** 最小渲染上下文：组件还要用 ctx.get('command'/'settings') 与 ctx.on */
 function renderCtx(selectedIds: string[] = []): CanvasRenderContext {
@@ -46,8 +58,7 @@ function renderCtx(selectedIds: string[] = []): CanvasRenderContext {
     ctx: {
       get: (name: string) => services[name],
       on: () => ({ dispose: () => {} }),
-      // 极简上下文：没有主题 ui 目录 → 空态回落到组件自身的一行灰字
-      registryOf: () => new RegistryImpl(),
+      registryOf: (kind: string) => (kind === 'ui' ? uiFieldShared : new RegistryImpl()),
     },
     flow: { viewport: { value: { zoom: 1 } } },
     // 可视区闸门（生成帧图前会问一句"这个节点在不在视野里"）
@@ -169,9 +180,11 @@ describe('播放控件与可达性', () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
     const src = await fs.readFile(path.resolve(__dirname, '../VideoContent.vue'), 'utf8')
-    // stopPlayback 的定义 1 处 + 唯一调用点 1 处
-    const calls = [...src.matchAll(/stopPlayback\(\)/g)].filter((m) => !src.slice(0, m.index).endsWith('function '))
-    expect(calls.length).toBe(1)
+    // 拆分后停播逻辑住在 hook 里：定义 1 处 + 唯一调用点 1 处 = 2 次出现
+    const playback = await fs.readFile(path.resolve(__dirname, '../video-content/useVideoPlayback.ts'), 'utf8')
+    const calls = [...playback.matchAll(/stopPlayback\(\)/g)]
+    expect(playback).toMatch(/function stopPlayback\(\): void/)
+    expect(calls.length).toBe(2)
     // PaneClick 里不许再出现它
     const pane = /PaneClick[\s\S]{0,200}/.exec(src)?.[0] ?? ''
     expect(pane).not.toContain('stopPlayback')
