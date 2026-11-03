@@ -41,6 +41,9 @@ import { useAgentEditing } from './useAgentEditing.js'
 import { useAgentMenus } from './useAgentMenus.js'
 import { useAgentNotify } from './useAgentNotify.js'
 import { useAgentResources } from './useAgentResources.js'
+import { segClickable, segTitle } from '../../userSegments.js'
+import { formatToken, budgetTokenText, goalMarkText } from '../../queueModel.js'
+import { brandSvg } from '../../modelBrandIcons.js'
 
 /** 对话内容用到的完整控制器形状（由 useAgentConversation 的返回值推导）。 */
 export type AgentConversationController = ReturnType<typeof useAgentConversation>
@@ -837,6 +840,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     userSegments,
     displayUserText,
     onSegClick,
+    segClickable,
+    segTitle,
+    formatToken,
+    budgetTokenText,
+    goalMarkText,
+    brandSvg,
     emitRefClick,
   }
 }
