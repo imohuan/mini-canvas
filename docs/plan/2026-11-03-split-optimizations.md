@@ -295,3 +295,42 @@
 - 已知基线失败：`plugin-node-audio` 的「播放与刷新两个按钮各自拦手势」2 条在拆分前同样失败
   （测试环境取不到主题注册的 Button，渲染出的按钮数为 0）。这是既有问题，不是本次拆分引入，
   后续修主题注入桩即可。
+   - 已修：两份测试改为经真实 `themeDefaultPlugin` 注册取 `ui` 目录，110 条全部通过。
+
+## 28. 拆分后复核发现的回归（已全部修复）
+
+这四条都是**拆分过程本身引入**的，不是既有问题，记录在此避免以后再犯。
+
+1. **CSS 里残留 `</style>`**：`node-bottom-bar/bottom-bar.css` 从 SFC 整段迁出时带走了两行
+   收尾标签，`pnpm start` 的资源构建在 lightningcss 压缩阶段直接失败（`Unexpected token Delim('/')`）。
+   教训：迁出 CSS 时要连同标签一起剥掉；`pnpm build` 必须进验证清单，单测与 typecheck 都发现不了。
+2. **测试读源码的路径漏改**：`plugin-bottom-bar` 的 `tagMenu.test.ts` 仍在 `useEditor.ts` 找
+   `CHIP_CARET_DELAY`，实际定义已迁到 `editor/chipRegistry.ts`。改成读新文件后 306 条全通过。
+3. **弹窗被重复渲染**：`HistoryModal.vue` 拆分后仍留着 `<ShortcutModal>` 与 `<DirectorSettingsDialog>`，
+   而 `ModalsArea.vue` 也在渲染它们。已删除，并加 `modalsAreaOwnership.test.ts` 钉住归属。
+4. **scoped 样式放错组件**：消息流的 `.ac-earlier` / `.ac-welcome*` / `.ac-model-split*` /
+   `.ac-user-text` / `.ac-editing-badge` / `.ac-stopped` / `.ac-notice` / `.ac-error` 写进了
+   兄弟组件 `AgentComposer` 的 scoped 样式里，对消息流节点完全不生效。已搬回 `AgentMessageList`，
+   并加 `agentScopedStylesOwnership.test.ts` 按「模板类名 → 同组件样式」检查。
+5. **模块顶层副作用**：`useShortcutHelpPanel` 曾在模块顶层读 manager，import 即执行、
+   且早于 `apply()`，导致列表永久为空、搜索与展开行被所有实例共享。已改为工厂内建状态、
+   打开时刷新，并加 `shortcutHelpPanelState.test.ts` 覆盖「先 import、后 apply」。
+
+## 29. 浏览器回归实测结论（2026-11-03，`pnpm start` + Chrome）
+
+用 `pnpm start` 起完整服务（构建后台 → 构建前端与插件资源 → 8865），再用 Chrome 扩展实测：
+
+| 项目 | 结果 |
+| --- | --- |
+| 画布渲染（节点 / 连线 / 点状背景 / 小地图） | 正常 |
+| 节点悬停端口与卡片阴影 | 正常 |
+| 多选框（内外双框 / 上下控制栏 / 滚轮缩放） | 正常 |
+| 底栏（提示词可输入 / 动作 pill） | 正常 |
+| 视频节点（未播放只有帧图，点播放才挂 video） | 正常 |
+| 设置面板（左右两栏 / 导航 / 关闭） | 正常 |
+| 生成历史（打开 / 内容 / 关闭，且只有一层） | 正常 |
+| 快捷键面板首次打开即有内容 | 正常（修复后） |
+| 控制台 error / warning | 0 / 0 |
+
+截图存在 `docs/tmp/verify/split-regression-*.png`。`localhost:5288` 那张旧标签页上的
+「发生意外错误」浮层属于另一个画布的数据问题（该服务已停），在 8865 的同名画布上不存在。
