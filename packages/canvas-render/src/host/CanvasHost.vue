@@ -20,74 +20,32 @@
  *
  * 模板结构：本组件占满父容器高度(定位 100%)，内部是准备态/错误态 + canvas-wrap(VueFlow+主题背景)。
  * 父级想加自己的 toolbar/面板，在本组件外层套一层 flex 布局即可。
+ *
+ * 拆分说明：具体状态与事件处理在 ./canvas-host/ 的 hooks，本文件只做装配接线。
  */
-import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
-import { type Disposable } from '@mini-canvas/kernel'
-import { type CanvasEdge, type EdgeStoreService, GRAPH_VIEWPORT_KEY } from '@mini-canvas/canvas-data'
-import { findCommandByKeys } from '@mini-canvas/kernel'
-import { validateConnection, typeConnectionDef, type ValidationResult } from '@mini-canvas/canvas-data'
+import { reactive, ref, shallowRef } from 'vue'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
 import type { CanvasHostEmits, CanvasHostRenderProps } from './canvasHostTypes'
 import { useCanvasContext } from '../contracts/canvasContext'
-import type { ViewportState } from '../viewport/viewportService'
-import type { NodeWrite, NodeWritePatch } from '../contracts/nodeRegistryKey'
-import type { ConnectionFeedbackState, FlowPoint, HoverFeedback, AimedTarget } from '../contracts/connectionContext'
-import {
-  CANVAS_INTERACTION_SCHEMA,
-  resolveCanvasInteraction,
-  applyCanvasInteractionChangeInto,
-  type CanvasInteractionSettings,
-} from '../contracts/canvasInteractionSettings'
-import { createConnectionState, beginConnection, endConnection } from './connectionState'
-import {
-  createInteractionState,
-  beginNodeDrag,
-  endNodeDrag,
-  beginViewportMove,
-  endViewportMove,
-} from '../contracts/interactionContext'
-import { clickNode, clickEdge, clickPane, dragSelectNode } from './selectionInteractions'
-import { RenderEvents, toDragPayload } from './renderEvents'
-import { reasonText as reasonTextFrom } from '../connection/reasonText'
-import type { HoverDecision } from '../connection/resolveFeedback'
-import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect } from '../connection/geometry'
+import { resolveCanvasInteraction, type CanvasInteractionSettings } from '../contracts/canvasInteractionSettings'
+import { createInteractionState } from '../contracts/interactionContext'
 import { createV2Logger } from '../utils/log'
-import type { FlowRect } from '../geometry/visibleArea'
-import {
-  CLIPBOARD_COPY_KIND,
-  CLIPBOARD_COPY_KEY,
-  CLIPBOARD_CUT_KEY,
-  CLIPBOARD_PASTE_KIND,
-  CLIPBOARD_PASTE_KEY,
-  buildClipboardWritePayload,
-  buildClipboardPastePayload,
-  dispatchClipboardWrite,
-  dispatchClipboardPaste,
-  type ClipboardWriteHandler,
-  type ClipboardPasteHandler,
-} from '@mini-canvas/canvas-data'
 import CanvasSurface from './CanvasSurface.vue'
-import {
-  assembleTheme,
-  nodeShellSlot,
-  expandDragProtection,
-  needsLiveProtectionCollection,
-  pruneProtectionIds,
-  hitNodeIdAt,
-  nodesFromStore,
-  overlayDraggingPositions,
-  edgesFromStore,
-  splitNodeWritePatch,
-  DEFAULT_EDGE_VISUAL,
-  DEFAULT_HANDLE_VISUAL,
-  DEFAULT_DEBUG_VISUAL,
-  FIRST_RUN_FIT_PADDING,
-  FIRST_RUN_FIT_RETRY_DELAYS,
-} from './canvasHostCore'
-import { LAYERS } from '../contracts/layers'
-import { computeVisibleIds, type VisibleCullConfig } from './visibleCull'
-import { viewportRectInFlow } from '../geometry/visibleArea'
+import { useCanvasCulling } from './canvas-host/useCanvasCulling'
+import { useCanvasLayer } from './canvas-host/useCanvasLayer'
+import { useCanvasRenderState } from './canvas-host/useCanvasRenderState'
+import { useCanvasTheme } from './canvas-host/useCanvasTheme'
+import { useCanvasViewport } from './canvas-host/useCanvasViewport'
+import { useCanvasViewportMove } from './canvas-host/useCanvasViewportMove'
+import { useCanvasSelection } from './canvas-host/useCanvasSelection'
+import { useCanvasNodeDrag } from './canvas-host/useCanvasNodeDrag'
+import { useCanvasConnections } from './canvas-host/useCanvasConnections'
+import { useCanvasKeyboard } from './canvas-host/useCanvasKeyboard'
+import { useCanvasClipboard } from './canvas-host/useCanvasClipboard'
+import { useCanvasContextMenu } from './canvas-host/useCanvasContextMenu'
+import { useCanvasSave } from './canvas-host/useCanvasSave'
+import { useCanvasLifecycle } from './canvas-host/useCanvasLifecycle'
+import type { CanvasSurfaceHandle } from './canvas-host/types'
 
 const log = createV2Logger('canvas-host')
 
@@ -109,27 +67,7 @@ const hostRef = shallowRef<CanvasHostHandle>(host)
 const surfaceReady = ref(false)
 const mountError = ref('')
 /** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 screenToFlow / viewport / pane） */
-const surfaceRef = shallowRef<{
-  getViewport?: () => ViewportState
-  getPaneRect?: () => DOMRect | null
-  getVisibleRect?: () => FlowRect | null
-  screenToFlow?: (x: number, y: number) => { x: number; y: number }
-  queryNodeEl?: (nodeId: string) => HTMLElement | null
-  getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
-  /** 正在拖动节点的实时位置（拖动中 store 尚未落盘；重灌时用它保留画面位置） */
-  getDraggingNodePositions?: () => Map<string, { x: number; y: number }>
-  /** 当前渲染节点位置快照（含插件逐帧视觉写、dragging 标志、父节点） */
-  getRenderNodePositions?: () => ReadonlyArray<{
-    id: string
-    position: { x: number; y: number }
-    dragging: boolean
-    parentId?: string
-  }>
-  /** 插件视觉位移的节点 id + 变化计数（事件驱动裁剪保护用） */
-  getVisualMoveSnapshot?: () => { ids: Set<string>; epoch: number }
-  setCenter?: (x: number, y: number, zoom?: number) => void
-  animateViewport?: (v: { x: number; y: number; zoom: number }, durationMs?: number) => void
-} | undefined>()
+const surfaceRef = shallowRef<CanvasSurfaceHandle | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
 // provide 点已移到 CanvasSurface（boot 完成后才挂载，故能 provide 裸 ctx/host）：
@@ -139,1402 +77,125 @@ const surfaceRef = shallowRef<{
 // 插件 setup 经 ctx.get('nodeRegistry') 把 content 组件注册进来；BaseNode(壳)经此解析 content 段。
 const registry = host.nodeRegistry
 
-// 节点写回（标题就地重命名 / 卡片 resize 尺寸）：缺省 = 改内核 nodeStore 并落盘。
-// nodeStore.subscribe 会自动刷新渲染态，无需像旧 demo 那样手动 map 改 nodes 数组。
-//
-// 保留 key `size`：写进正式尺寸字段 node.size（而非 data），与 data.cardWidth/cardHeight 同一个 patch
-// 原子提交 —— 这样 resize 一次只产生一条撤销记录，且 node.size 不再恒空（布局回退链可与数据字段一致）。
-function defaultWrite(id: string, patch: NodeWritePatch): void {
-  const h = hostRef.value
-  if (!h) return
-  const node = h.nodeStore.getNode(id)
-  if (!node) return
-  const { data, size } = splitNodeWritePatch(patch)
-  // 统一走 graph：历史 + 提交落盘由唯一写入口负责，避免与其它写路径漂移。
-  h.graph.updateNode(id, size !== undefined ? { data, size } : { data })
-}
-const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
+const { nodeWrite, edgeVisualToProvide, handleToProvide, debugToProvide, snapZoneToProvide } = useCanvasLayer({
+  hostRef,
+  props,
+})
 
-// 外观参数注入：EDGE_VISUAL(边) / CANVAS_PARAMS(浮动端口)。
-// 父级若传 props.edgeVisual / props.handleVisual（应为响应式对象，改属性实时生效），
-// 我们直接传那个引用；未传则用内部 DEFAULT reactive 回落。
-// 注意：BaseNode 读 handle 字段不做默认回落，故 handleVisual 需含全部 5 个字段（通常传一个全字段 reactive）。
-const edgeDefaultR = reactive({ ...DEFAULT_EDGE_VISUAL })
-const handleDefaultR = reactive({ ...DEFAULT_HANDLE_VISUAL })
-const debugDefaultR = reactive({ ...DEFAULT_DEBUG_VISUAL })
-const snapZoneDefaultR = reactive({ ...DEFAULT_SNAP_ZONE_CONFIG })
 // 画布交互配置（「常规/画布」）：boot 后从 settings 读初值 + 订阅实时更新（见 onMounted）。
 // boot 前给默认值占位（CanvasSurface boot 完成才挂载，模板绑定时实际值已就绪）。
 const interactionSettings = reactive<CanvasInteractionSettings>(resolveCanvasInteraction(() => undefined))
 
-// ==================== 可见剔除（2026-10-15 性能优化，docs/plan/2026-10-15-canvas-perf-diagnosis.md） ====================
-/**
- * cullIds = 视口(+缓冲带)内节点 id 集合（null = 不剔除）。
- * hidden 路线已退役（2026-10-26）：VueFlow EdgeWrapper 对 hidden 端点的边整体不画，
- * 连线跟着节点消失（用户实测断线）。集合现在只用于派生 data._cullState
- * （visible / culled / culled-linked，见 canvasHostCore.nodesFromStore），
- * 节点一律常驻渲染，绘制深度由壳按状态自选。
- * 刷新时机：CanvasSurface 的 visibleRect 每帧变化回调（rAF 节流）+ store/选中重灌前现算，
- * 保证两条重灌路径拿到的都是同一份最新集合。
- */
-const cullIds = shallowRef<ReadonlySet<string> | null>(null)
-/**
- * 与被剔除节点相连的节点 id 集（任一端在剔除集合外 ⇒ 两端都算 linked）。
- * 壳据此区分 culled / culled-linked：至少一端在画布内的连线必须继续画，
- * 该连线的两端节点常驻成骨架（锚点/标题/量测保留），连线端点永远锚在真实几何上。
- * 邻接表在 syncFromStore 内随 edgeStore 变化重建，平移/缩放只读不重建。
- */
-let linkedIds = new Set<string>()
-function rebuildLinkedIds(): void {
-  const h = hostRef.value
-  if (!h) return
-  // 注意：cullIds 的语义是「视口内可见集合」（不是视口外集合）——名字来自 computeVisibleIds
-  const visible = cullIds.value
-  const next = new Set<string>()
-  if (!visible) { linkedIds = next; return }
-  for (const e of h.edgeStore.getEdges()) {
-    const sOut = !visible.has(e.source)
-    const tOut = !visible.has(e.target)
-    if (sOut !== tOut) { next.add(e.source); next.add(e.target) }
-  }
-  linkedIds = next
-}
-let cullRaf = 0
-function cullConfigFromSettings(): VisibleCullConfig {
-  return {
-    enabled: interactionSettings.visibleCullEnabled !== false,
-    buffer: typeof interactionSettings.visibleCullBuffer === 'number' ? interactionSettings.visibleCullBuffer : 300,
-  }
-}
-/** 压缩档开关（屏外无连线节点连壳不渲染）—— 缺省开（用户场景：1000 节点壳压到 ~50） */
-function compactShellsEnabled(): boolean {
-  return interactionSettings.cullCompactShells !== false
-}
-/**
- * 事件驱动缓存：拖拽开始/插件视觉位移变化时才重建，视口每帧只读。
- *
- * 为什么不能每帧重算：refreshCull 在平移/缩放时每帧都跑，全量遍历 1000 节点 + 重建两个 Map
- * 会把裁剪省下的时间吃回去。缓存的生命周期：
- * - NodeDragStart：按 e.nodes（多选整组）建名单，再扩展到分组子节点；
- * - updateNodeVisual：插件视觉位移的 id 增补进名单；
- * - NodeDragStop：清空，松手后立即恢复常规裁剪；
- * - store 变化：只修剪失效成员（节点删除/撤销/已落盘），不清正在拖的成员。
- */
-let dragProtectedIds: Set<string> | undefined
-/** 最近一次原生拖拽的种子（含多选成员），手势期间保持不变，只负责派生子节点 */
-let gestureSeedIds = new Set<string>()
-/** 最近一次读到的插件视觉位移（只保留仍与 store 不一致的 id） */
-let liveVisualIds = new Set<string>()
-/** 已知从"视觉位移"回归到 store 的成员，用于修剪，防止插件不清理自身集合时永久保留 */
-let alignedVisualIds = new Set<string>()
-
-/** 清空保护缓存（松手、store 变更、撤销/删除后调用，立即恢复常规裁剪） */
-function clearDragProtection(): void {
-  dragProtectedIds = undefined
-  gestureSeedIds = new Set<string>()
-  liveVisualIds = new Set<string>()
-  alignedVisualIds = new Set<string>()
-}
-
-/**
- * store 变化后修剪名单：删掉已不存在的节点；视觉位移已与 store 对齐的成员也移除。
- * 拖拽中 store 的其它更新（远端同步、进度帧）不能清空整张名单 —— 否则正在拖的节点会被裁掉。
- */
-function pruneDragProtection(): void {
-  const h = hostRef.value
-  if (!h || !dragProtectedIds) return
-  const alive = new Set<string>()
-  const aligned = new Set<string>()
-  for (const node of h.nodeStore.getNodes()) alive.add(node.id)
-  const rendered = surfaceRef.value?.getRenderNodePositions?.()
-  if (rendered) {
-    const byId = new Map(rendered.map((n) => [n.id, n.position]))
-    for (const node of h.nodeStore.getNodes()) {
-      const p = byId.get(node.id)
-      if (p && p.x === node.position.x && p.y === node.position.y) aligned.add(node.id)
-    }
-  }
-  for (const id of aligned) if (liveVisualIds.has(id)) alignedVisualIds.add(id)
-  const next = pruneProtectionIds(
-    dragProtectedIds,
-    alive,
-    interaction.activity.value.nodeDragging,
-    liveVisualIds,
-    alignedVisualIds,
-  )
-  if (next.size === dragProtectedIds.size) return
-  if (next.size === 0) {
-    clearDragProtection()
-    return
-  }
-  dragProtectedIds = next
-  for (const id of gestureSeedIds) if (!next.has(id)) gestureSeedIds.delete(id)
-}
-
-/** 拖拽开始：一次 O(n) 收集父链 + 扩展到子节点，之后整段手势都复用 */
-function primeDragProtection(seed: Iterable<string>): void {
-  const h = hostRef.value
-  if (!h) return
-  gestureSeedIds = new Set(seed)
-  const allIds: string[] = []
-  const parentOf = new Map<string, string | undefined>()
-  for (const node of h.nodeStore.getNodes()) {
-    allIds.push(node.id)
-    parentOf.set(node.id, node.parentId)
-  }
-  dragProtectedIds = expandDragProtection(gestureSeedIds, allIds, parentOf)
-  applyCullProtection()
-}
-
-/** 没有拖拽时的 O(1) 检查：只有插件视觉位移或已有缓存才需要继续处理 */
-function currentVisualMoveSnapshot(): { ids: Set<string>; epoch: number } | undefined {
-  try {
-    return surfaceRef.value?.getVisualMoveSnapshot?.()
-  } catch {
-    return undefined
-  }
-}
-
-/** 视觉位移集合变化 → 合并进保护名单（拖拽中增减成员都走这里，不重建父链） */
-function syncVisualMoveProtection(): Set<string> | undefined {
-  const h = hostRef.value
-  if (!h) return undefined
-  const snap = currentVisualMoveSnapshot()
-  if (!snap) return dragProtectedIds
-  // 视觉位移集合被插件/对账清空：只要没有原生拖拽，整个保护名单也可以清掉
-  if (snap.ids.size === 0 && gestureSeedIds.size === 0) {
-    clearDragProtection()
-    return undefined
-  }
-  // 成员没变就复用上一份名单：插件逐帧写位置会让 epoch 一直涨，但名单不必重建
-  const sameMembers = liveVisualIds.size === snap.ids.size && [...snap.ids].every((id) => liveVisualIds.has(id))
-  for (const id of snap.ids) if (!h.nodeStore.getNode(id)) snap.ids.delete(id)
-  if (!sameMembers || !dragProtectedIds) {
-    const allIds: string[] = []
-    const parentOf = new Map<string, string | undefined>()
-    for (const node of h.nodeStore.getNodes()) {
-      allIds.push(node.id)
-      parentOf.set(node.id, node.parentId)
-    }
-    dragProtectedIds = expandDragProtection(gestureSeedIds, allIds, parentOf, snap.ids)
-    liveVisualIds = new Set(snap.ids)
-  }
-  for (const id of [...alignedVisualIds]) if (dragProtectedIds && !dragProtectedIds.has(id)) alignedVisualIds.delete(id)
-  return dragProtectedIds
-}
-
-/** 用当前保护名单重算裁剪（名单为空时就是常规裁剪） */
-function applyCullProtection(): void {
-  const h = hostRef.value
-  if (!h) return
-  const surface = surfaceRef.value
-  const rect = surface?.getVisibleRect?.() ?? null
-  if (!interactionSettings.visibleCullEnabled) {
-    cullIds.value = null
-    return
-  }
-  const liveIds = dragProtectedIds && dragProtectedIds.size > 0 ? dragProtectedIds : undefined
-  if (rect) {
-    cullIds.value = computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds)
-    return
-  }
-  if (typeof window === 'undefined') {
-    cullIds.value = null
-    return
-  }
-  const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-    cullIds.value = computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds)
-}
-function refreshCull(): void {
-  const h = hostRef.value
-  if (!h) return
-  if (!interactionSettings.visibleCullEnabled) {
-    cullIds.value = null
-    return
-  }
-  /* 快路径：没拖拽、没视觉位移、没缓存 → 不建 Map、不扫节点，直接常规裁剪 */
-  const visual = currentVisualMoveSnapshot()
-  const visualCount = visual?.ids.size ?? 0
-  const needCollect = needsLiveProtectionCollection(
-    interaction.activity.value.nodeDragging,
-    visualCount,
-    !!dragProtectedIds,
-  )
-  const liveIds = needCollect ? syncVisualMoveProtection() : undefined
-  const surface = surfaceRef.value
-  const rect = surface?.getVisibleRect?.() ?? null
-  if (rect) {
-    cullIds.value = computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds)
-    return
-  }
-  // 视口还量不到（初始挂载窗口）：用**近似视口**先算一版剔除，别全量挂 160 个节点再剔。
-  // VueFlow 初始视口是 {0,0,zoom:1}，pane 尺寸回落到窗口尺寸 —— 偏差不大，rAF 到来后精确化。
-  // 没有这一步的话：打开大画布 = 全量挂载（含几十个媒体组件创建）→ 下一帧再整批卸载 ——
-  // 这一上一下就是打开页面 CPU 打满的原因（2026-10-15 卡死排查）。
-  if (typeof window === 'undefined') {
-    cullIds.value = null
-    return
-  }
-  const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-    cullIds.value = computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds)
-}
-/** 视口帧回调（CanvasSurface 每次可视矩形变化都会调；rAF 节流防同一帧多次重灌） */
-function onVisibleRectFrame(): void {
-  if (cullRaf) return
-  cullRaf = requestAnimationFrame(() => {
-    cullRaf = 0
-    // 性能关键（LoAF trace 实测 27-134ms/帧）：视口每帧都变，但**可见集合**只在跨越
-    // 缓冲边界时才变。先重算集合，与旧集合 diff——相同就跳过重灌（syncNodesFromStore
-    // 是 160 节点 DTO 全量重建，每帧都做的话剔除本身反成瓶颈）。
-    const prev = cullIds.value
-    refreshCull()
-    rebuildLinkedIds()
-    const next = cullIds.value
-    const same = prev === next || (prev && next && prev.size === next.size && [...next].every((id) => prev.has(id)))
-    if (!same) syncNodesFromStore()
-  })
-}
-/** 统一的"从 store 重灌渲染节点"出口：两条路径（选中变化/store 变化）共用，保证同一份 cullIds */
-/**
- * 分批挂载（2026-10-15 卡死排查兜底）：一次性把上百个节点灌给 VueFlow 时，若含
- * 媒体/iframe 等重组件，挂载窗口的解码/布局会把主线程打满数秒到数十秒（实测打开
- * default 画布即失去响应）。策略：目标列表一次算好；新增挂载超过 40 个时先挂前 40 个，
- * 其余按每帧 30 个渐进追加（rAF 链）。已有节点的更新（props 变化）不受影响。
- */
-let mountRaf = 0
-let publishedExtra = new Set<string>()
-let stagedTarget: ReturnType<typeof nodesFromStore> = []
-function syncNodesFromStore(): void {
-  const h = hostRef.value
-  if (!h) return
-  const target = overlayDraggingPositions(
-    nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value, linkedIds, compactShellsEnabled()),
-    surfaceRef.value?.getDraggingNodePositions?.(),
-  )
-  /*
-   * 分批进行中：已有节点必须**立即**吃到新数据（远端改内容、进度帧、拖动位置），
-   * 只有尚未挂载的新节点继续排队。以前这里直接 return，分批窗口内所有更新都只写进
-   * stagedTarget，画面要等下一批 rAF 才变 —— 用户看到「数据改了但 UI 没动」。
-   */
-  if (mountRaf) {
-    stagedTarget = target
-    const publishedIds = new Set(nodes.value.map((n) => n.id))
-    const stagedById = new Map(target.map((n) => [n.id, n]))
-    nodes.value = nodes.value.map((n) => stagedById.get(n.id) ?? n)
-    // 新节点仍然只加已经发布过的（publishedExtra / 首批），不会因此把整批一次性挂上。
-    for (const n of target) {
-      if (!publishedIds.has(n.id) && publishedExtra.has(n.id)) nodes.value.push(n)
-    }
-    return
-  }
-  const existingIds = new Set(nodes.value.map((n) => n.id))
-  const addedCount = target.filter((n) => !existingIds.has(n.id)).length
-  if (addedCount <= 40) {
-    publishedExtra = new Set<string>()
-    nodes.value = target
-    return
-  }
-  // 首批：可见节点优先，最多 40 个；其余进 rAF 队列渐进挂载
-  const visible = (id: string) => !cullIds.value || cullIds.value.has(id)
-  const firstIds = new Set(
-    target.filter((n) => !existingIds.has(n.id) && visible(n.id)).slice(0, 40).map((n) => n.id),
-  )
-  stagedTarget = target
-  publishedExtra = new Set<string>()
-  const pendingIds: string[] = []
-  for (const n of target) {
-    if (!existingIds.has(n.id) && !firstIds.has(n.id)) pendingIds.push(n.id)
-  }
-  nodes.value = target.filter((n) => existingIds.has(n.id) || firstIds.has(n.id))
-  let idx = 0
-  const step = (): void => {
-    for (const id of pendingIds.slice(idx, idx + 30)) publishedExtra.add(id)
-    idx += 30
-    nodes.value = stagedTarget.filter((n) => existingIds.has(n.id) || firstIds.has(n.id) || publishedExtra.has(n.id))
-    if (idx < pendingIds.length) {
-      mountRaf = requestAnimationFrame(step)
-    } else {
-      mountRaf = 0
-    }
-  }
-  mountRaf = requestAnimationFrame(step)
-}
-const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
-const handleToProvide = props.handleVisual ?? handleDefaultR
-const debugToProvide = props.debugVisual ?? debugDefaultR
-const snapZoneToProvide = props.snapZoneVisual ?? snapZoneDefaultR
-
-// 选中集合注入给 CustomEdge：相连节点被选 → 边高亮流光。
-// 以 ReadonlySet 形状暴露（消费方只读）。内核 Selection 是单源：本 ref 只是它的派生投影——
-// 点击/清空/删除/撤销只写内核 selection，此处经订阅 onChange 整体替换新集合以触发响应式。
-const selectedIds = ref<ReadonlySet<string>>(new Set())
-const selectedEdgeSelRef = ref<ReadonlySet<string>>(new Set())
-const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: selectedEdgeSelRef }
-
-// 拖线连接过程反馈状态（能力层）。onConnectStart/onConnectEnd 写入；每帧 hover 由 ConnectionLineHost 写。
-// 同一引用经 renderContext provide，BaseNode/ConnectionLine 消费。
-const connectionState: ConnectionFeedbackState = createConnectionState()
 /** 画布交互状态（拖节点/pan/缩放等活动位 + 派生 isBusyDragging；CanvasSurface 塞进 renderCtx，theme/UI 消费）。
  *  A 决策：pan 与 wheel/pinch 缩放走 VueFlow 同一套 move 事件，不拆位——视图在动一律置 paneDragging
  *  (计入 isBusyDragging，端口被压)。zooming 位保留给未来需要细分"缩放手势"的场景。 */
 const interaction = createInteractionState()
-/** 拖线期间 Host 端实时 mouse 跟踪的 flow 坐标（VueFlow 自身 lineProps 不可靠时由这里兜底）。
- *  拖线开始时清零、mousemove 更新、connect-end 清零。供 ConnectionLineHost 渲染端点。 */
-const dragFlowPoint = shallowRef<FlowPoint | null>(null)
 
-/** 把内核 Selection 的 ids 投影成新的 ReadonlySet 引用（整体替换以触发 Vue 响应式） */
-function syncSelected(): void {
-  const h = hostRef.value
-  if (!h) return
-  selectedIds.value = new Set(h.selection.ids)
-  selectedEdgeSelRef.value = new Set(h.selection.edgeIds)
-  // 重建渲染态节点与连线：内核选中(单击/框选/Ctrl+A)驱动 VueFlow 节点高亮一致，
-  // 同时选中节点的连线要抬到 edgeSelected 档（连线的 z 在 syncFromStore 里随 selection 重算）
-  syncFromStore()
-  h.ctx.emit(RenderEvents.SelectionChange, {
-    nodeIds: [...h.selection.ids],
-    edgeIds: [...h.selection.edgeIds],
-  })
-}
+// ==================== 可见剔除 + 渲染态 ====================
+const culling = useCanvasCulling({
+  hostRef,
+  surfaceRef,
+  interactionSettings,
+  isNodeDragging: () => interaction.activity.value.nodeDragging,
+  syncNodesFromStore: () => syncNodesFromStore(),
+})
+const theme = useCanvasTheme(hostRef)
+const renderState = useCanvasRenderState({
+  hostRef,
+  surfaceRef,
+  cullIds: culling.cullIds,
+  linkedIds: () => culling.linkedIds(),
+  compactShellsEnabled: culling.compactShellsEnabled,
+  edgeVisual: () => edgeVisualToProvide,
+  pruneDragProtection: culling.pruneDragProtection,
+  refreshCull: culling.refreshCull,
+  rebuildLinkedIds: culling.rebuildLinkedIds,
+  log,
+})
+const { nodes, edges, syncNodesFromStore, syncFromStore, dispose: disposeRenderState } = renderState
 
-// ==================== 渲染态（VueFlow 消费）====================
+const selection = useCanvasSelection({ hostRef, syncFromStore })
 
-const nodes = ref<ReturnType<typeof nodesFromStore>>([])
-const edges = ref<Array<{ id: string; type: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>>([])
-// 组件句柄(opaque，来自 themeRegistry/registry)塞给 VueFlow 的 node-types/edge-types。
-// 必须用 shallowRef：里面存的是 .vue 组件对象，ref 会深代理组件触发 Vue "组件被 reactive 化" 警告，
-// 且我们总是整体替换 .value，浅层响应式就够。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const nodeTypes = shallowRef<Record<string, any>>({})
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const edgeTypes = shallowRef<Record<string, any>>({})
-// 背景也是组件句柄，同样浅层即可。
-const backgroundComp = shallowRef<unknown>(undefined)
-// 拖线临时连接线组件（connectionLine 槽赢家；未注册 undefined → ConnectionLineHost 回退默认线）。
-const connectionLineComp = shallowRef<unknown>(undefined)
-const edgeDefaultType = ref('custom')
-const nodeEpoch = ref(0) // 插件变更后 bump → 触发 VueFlow 子树重挂
-
-// 选中态：与内核 selection 双向——CustomEdge 高亮读 selectedIds；命令(command:delete)读内核 selection。
-const canUndo = ref(false)
-const canRedo = ref(false)
-
-// ==================== 装配：主题 + nodeTypes ====================
-
-function applyTheme(): boolean {
-  const h = hostRef.value
-  if (!h) return false
-  let typesChanged = false
-  // P1-9：孤儿 type（有存量节点但类型已注销）也映射 BaseNode 壳 → 卸载插件后存量节点仍有占位渲染，
-  // 数据不丢、插件重装后自动恢复（BaseNode 对无 content 的 type 显示占位文本）。
-  // 第三个参数 = registryOf('node/shell') 场：设计文档 §4.5/案例 3/8 教作者用 add/wrap 换壳，
-  // 不读它那些写法就"不报错也不生效"（作者最怕的静默失效）。解析优先级见 assembleTheme。
-  const asm = assembleTheme(
-    h.themeRegistry,
-    [...h.nodeStore.types.keys(), ...h.nodeStore.orphanTypes()],
-    h.ctx.registryOf<unknown>('node/shell'),
-  )
-  // markRaw 组件句柄：防止它们被 VueFlow/响应式系统 proxy，避免 Vue "组件被 reactive 化" 警告与性能损耗。
-  // **结构 diff 后再写**：没变化就不替换引用 —— 一个插件装载会同时命中 4 个订阅源
-  // （ctx:plugin-installed / themeRegistry / nodeRegistry / node/shell 场），每个都调 applyTheme；
-  // 若每次都整体重置 nodeTypes/edgeTypes，引用全变 → VueFlow 全量重渲（对每条边重跑校验），
-  // 启动装载 N 个插件 = 4N 次全量重渲（实测：日志爆发 200+ 条、画布闪烁、图片反复重载）。
-  // 相同内容保持旧引用 = VueFlow 零更新，代价只是一次浅比较。
-  const nextNodeTypes: Record<string, unknown> = {}
-  for (const t of asm.nodeTypes) {
-    const shell = asm.nodeShells[t]
-    if (shell !== undefined && shell !== null) nextNodeTypes[t] = shell
-  }
-  const nextEdgeTypes: Record<string, unknown> = asm.edge ? { custom: asm.edge } : {}
-  if (!shallowEqualMarks(nodeTypes.value, nextNodeTypes)) {
-    nodeTypes.value = markRawAll(nextNodeTypes)
-    typesChanged = true
-  }
-  if (!shallowEqualMarks(edgeTypes.value, nextEdgeTypes)) {
-    edgeTypes.value = markRawAll(nextEdgeTypes)
-    typesChanged = true
-  }
-  const nextEdgeDefault = asm.edgeDefaultType
-  if (edgeDefaultType.value !== nextEdgeDefault) { edgeDefaultType.value = nextEdgeDefault; typesChanged = true }
-  const nextBackground = asm.background ?? undefined
-  if (backgroundComp.value !== nextBackground) { backgroundComp.value = nextBackground ? markRaw(nextBackground) : undefined; typesChanged = true }
-  const nextConnLine = asm.connectionLine ?? undefined
-  if (connectionLineComp.value !== nextConnLine) { connectionLineComp.value = nextConnLine ? markRaw(nextConnLine) : undefined; typesChanged = true }
-  return typesChanged
-}
-
-/** 浅比较两个"组件句柄表"：键集合一致且每值同引用才算没变（markRaw 包装不改变比较对象，见 markRawAll） */
-function shallowEqualMarks(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  const ka = Object.keys(a)
-  const kb = Object.keys(b)
-  if (ka.length !== kb.length) return false
-  for (const k of ka) {
-    if (!Object.prototype.hasOwnProperty.call(b, k)) return false
-    if (a[k] !== b[k]) return false
-  }
-  return true
-}
-
-/** 整表 markRaw：防组件句柄被 VueFlow/响应式系统 proxy */
-function markRawAll(table: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const k of Object.keys(table)) out[k] = markRaw(table[k] as object)
-  return out
-}
-
-// ==================== 通用 UI 槽(overlay) ====================
-// 渲染交给内层 CanvasSurface 里的 <SlotHost slot="overlay" />（SlotHost 自动读 ctx.slots.occupants 并按序渲染）。
-// 这里不再维护 uiOverlay/syncUiOverlay——那段"读槽+markRaw+渲染"已抽成可复用组件 SlotHost。
-
-// 订阅 nodeStore / edgeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
-let unsubStore: (() => void) | undefined
-let unsubEdge: (() => void) | undefined
-let unsubSel: (() => void) | undefined
-let stopEdgeOnTopWatch: (() => void) | undefined
-
-/** 上一次 syncFromStore 时的节点 id 集合（检测「新增」用，视口跟随） */
-let prevNodeIds = new Set<string>()
-function syncFromStore(): void {
-  const h = hostRef.value
-  if (!h) return
-  const alive = new Set(h.nodeStore.getNodes().map((n) => n.id))
-  // 边数据源 = 内核 edgeStore（边下沉后唯一数据源）；渲染态取 source/target 仍存活的边(删除路径已在 edgeStore 清边,此处兜底过滤)。
-  // B 项：DTO 保留端口句柄（edgesFromStore 也滤悬挂边，纯逻辑单测覆盖）
-  const edgeOnTop = (edgeVisualToProvide as { edgeOnTop?: boolean } | undefined)?.edgeOnTop ?? false
-  edges.value = edgesFromStore(h.edgeStore.getEdges(), alive, edgeOnTop ? undefined : h.selection.ids).map((e) =>
-    // 连线分层：普通边走 LAYERS.edge（在节点之下），置顶边走 LAYERS.edgeTop（压过所有节点，
-    // 含选中节点）；选中节点的连线在 edgesFromStore 里按 LAYERS.edgeSelected 抬到普通节点
-    // 之上、选中节点之下（edgeOnTop 开启时不抬，全部走置顶档）。临时边自己的 z 在
-    // edgesFromStore 里按 LAYERS.tempEdge 给。
-    // 层值唯一事实源 = contracts/layers（见门牌注释与 docs/plans/2026-09-29-canvas-z-layers.md）。
-    // 普通边现在恒有 zIndex（显式回落，防 VueFlow 合并语义残留），所以这里不能再写
-    // !e.zIndex 判断，否则「连线置顶」开关会静默失效。临时边保持自己的 tempEdge 档。
-    edgeOnTop && e.zIndex !== LAYERS.tempEdge ? { ...e, zIndex: LAYERS.edgeTop } : e,
-  )
-  // 灌节点前现算剔除集合与邻接表：保证 syncNodesFromStore 拿到同一份最新状态
-  //（store 变化包含节点/边增删改；视口帧回调路径已在 onVisibleRectFrame 内算过，此处幂等重算）。
-  /*
-   * 拖拽中 store 的因果来源只有两种：
-   * 1. 别的插件/云端更新（不是落盘）—— 保护名单不能清；
-   * 2. onNodeDragStop 落盘 —— 那时已经 endNodeDrag + clearDragProtection。
-   * 所以这里**不能无条件清**，否则拖拽期间的 store 更新会把正在拖的节点重新裁掉。
-   * 只清理已不存在 / 已落盘的成员，保证撤销/删除后名单不残留。
-   */
-  pruneDragProtection()
-  refreshCull()
-  rebuildLinkedIds()
-  syncNodesFromStore()
-  // —— 新增节点重扫可视区域（2026-10-16 用户口径：**不要聚焦、不要移动视口**，
-  //  只需要新建节点时手动重扫一遍剔除集合，让新节点不被误隐藏）：
-  const nowIds = new Set(h.nodeStore.getNodes().map((n) => n.id))
-  if (prevNodeIds.size > 0) {
-    const added = [...nowIds].filter((id) => !prevNodeIds.has(id))
-    if (added.length > 0) {
-      refreshCull()
-      syncNodesFromStore()
-    }
-  }
-  prevNodeIds = nowIds
-  canUndo.value = h.history.canUndo()
-  canRedo.value = h.history.canRedo()
-  log.debug(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
-}
-
-// ==================== 视口(view)持久化与恢复 ====================
-// 视口与 graph 一样属于"整图画布状态"：nodes/edges 落盘了，视图停在哪(zoom+平移)也该记住，
-// 否则刷新后视野重置(回到 (0,0) 或每次强制 fitView)，用户在别处看的大图又得重新翻回去。
-// 行为：
-//   1) boot 时读存档 viewport(GRAPH_VIEWPORT_KEY)；CanvasSurface 首次挂载(视口 backend 已 attach)后：
-//      - 有存档 → setViewport 恢复到上次停的位置；
-//      - 无存档(首次/无历史) → 对所有节点 fitView 一次让 seed/恢复的图居中，并把结果存为基线。
-//   2) 视图移动/缩放结束(onMoveEnd)把当前 viewport 落盘，后续刷新即可还原。
-//   首次 fitView 依赖节点实测尺寸(text/image 自适应节点首帧 dimensions=0 会算出空包围盒 no-op)，
-//   故带重试调度，直到某次真正改变了视口或尝试用尽。用 persistViewport=false 可整体关掉。
-let stopViewportRestore: (() => void) | undefined
-let viewportTimers: ReturnType<typeof setTimeout>[] = []
-/** boot 时读到的存档视口；undefined = 从未存过(首次/无历史)，走 fitView 基线 */
-const savedViewport = shallowRef<ViewportState | undefined>()
-
-/** 首次/无存档：对所有节点 fitView 一次(带重试等节点量测就绪)，成功后把结果存为基线 */
-function fitViewFirstRun(): void {
-  const h = hostRef.value
-  if (!h) return
-  // 每次 fitView 的间隔：先紧后松，覆盖 text/image 自适应节点量测(ResizeObserver)完成前的空档。
-  const delays = FIRST_RUN_FIT_RETRY_DELAYS
-  let k = 0
-  // VueFlow fitView 是 200ms 动画，调用后视口并不会立即落到目标值；故每次调用后等动画跑完再对比
-  // 调用前/后的视口，判断这轮 fitView 是否真的把视口移向"包住全部节点"的居中位。以「本轮调用前」为基准
-  // 而非入口一次性快照：量测就绪前用户若手动拖/缩放，拿过期入口位置比对会误判。阈值语义：
-  // 位移 >0.5px 或缩放变化 >1e-4 视为已生效。
-  const attempt = (): void => {
-    const hh = hostRef.value
-    if (!hh) return
-    const before = hh.view.getViewport()
-    hh.view.fitView(FIRST_RUN_FIT_PADDING)
-    viewportTimers.push(
-      setTimeout(() => {
-        const h2 = hostRef.value
-        if (!h2) return
-        const after = h2.view.getViewport()
-        const moved =
-          Math.abs(after.x - before.x) > 0.5 ||
-          Math.abs(after.y - before.y) > 0.5 ||
-          Math.abs(after.zoom - before.zoom) > 0.0001
-        if (moved) {
-          h2.save.set(GRAPH_VIEWPORT_KEY, after, 'canvas') // 把基线落盘，二次刷新也稳定恢复
-          return
-        }
-        if (k < delays.length) {
-          viewportTimers.push(setTimeout(attempt, delays[k]))
-          k++
-        }
-      }, 250), // >200ms 动画时长，等动画落定后再判
-    )
-  }
-  attempt()
-}
-
-/** 移动/缩放结束：把当前 viewport 落盘(与 graph 同走 save，防抖 flush 统一；读视口统一走 viewport 服务) */
-function persistViewport(): void {
-  const h = hostRef.value
-  if (!h) return
-  h.save.set(GRAPH_VIEWPORT_KEY, h.view.getViewport(), 'canvas')
-}
-
-stopViewportRestore = watch(surfaceRef, (surface) => {
-  // 空 surface(未挂载)/未启持久化 → 本次不恢复；但都提前自我停止，避免 watch 长期空转(只靠 unmount 兜底不干净)
-  if (surface && hostRef.value && props.persistViewport) {
-    const saved = savedViewport.value
-    if (saved) hostRef.value.view.setViewport(saved)
-    else fitViewFirstRun()
-  }
-  // 只需首帧执行一次；后续 VueFlow 重挂(epoch bump)不应再动视口
-  stopViewportRestore?.()
-  viewportTimers = []
+const connections = useCanvasConnections({
+  hostRef,
+  surfaceRef,
+  edges: () => edges.value,
+  edgeDefaultType: () => theme.edgeDefaultType.value,
+  log,
 })
 
-// ==================== 通用交互事件 ====================
-
-function onNodeDragStart(e: NodeDragEvent): void {
-  beginNodeDrag(interaction, e.node.id)
-  // 一次收集本手势的保护名单（多选整组 + 分组子树），之后视口每帧只读缓存
-  primeDragProtection([...e.nodes.map((n) => n.id), e.node.id])
-  // 「拖拽选中」：拖动未选中节点时顺手选中它（写进内核 selection 单源；VueFlow 内部
-  // select-on-drag 不回写内核，会被渲染投影覆盖 —— 必须在这里显式写）。
-  const h0 = hostRef.value
-  if (h0) {
-    dragSelectNode(h0.selection, e.node.id, {
-      enabled: interactionSettings.selectNodesOnDrag,
-      selectable: interactionSettings.elementsSelectable,
-    })
-  }
-  const payload = toDragPayload(e)
-  if (payload) hostRef.value?.ctx.emit(RenderEvents.NodeDragStart, payload)
-}
-
-function onNodeDragStop(e: NodeDragEvent): void {
-  endNodeDrag(interaction)
-  // 松手后位置已经落盘：立即清缓存，让视口外的节点恢复常规裁剪
-  clearDragProtection()
-  const h = hostRef.value
-  if (!h) return
-  // VueFlow 拖动多选时已把位移应用到全部选中节点：这里把它们的最终位置一起写回内核 store，
-  // 避免只写主节点导致其它被拖节点弹回原位。
-  const surface = surfaceRef.value
-  const moved = surface?.getSelectedNodePositions?.() ?? []
-  if (moved.length > 0 || e.node.position) {
-    const patches = moved.length > 0
-      ? moved.map((p) => ({ id: p.id, patch: { position: { x: p.x, y: p.y } } }))
-      : [{ id: e.node.id, patch: { position: { x: e.node.position.x, y: e.node.position.y } } }]
-    // 拖动结束统一走 graph：历史 + 提交落盘由唯一写入口负责；无位移时快照无差异不入历史。
-    h.graph.updateNodes(patches)
-  }
-  // 逐个成员广播 drag-end：成员归属插件（plugin-group）按各自新位置重算 join/leave。
-  // 曾经只广播主节点 —— 多选整组拖动时其它成员的脱离/归组没人处理
-  //（用户实测："多选拖拽只计算了单个节点的脱离，第一个节点依然跟随它的父节点移动"）。
-  const movedIds =
-    moved.length > 0
-      ? moved
-      : [{ id: e.node.id, x: e.node.position.x, y: e.node.position.y }]
-  for (const m of movedIds) {
-    // payload.position 一律报 **flow 绝对坐标**（与 NodeDragStart/NodeDrag 同契约，见 renderEvents.toDragPayload）。
-    // 上面写回 store 用的是 VueFlow 的 position —— 分组子节点那是**相对父**的（store 语义就是相对，必须这么写）；
-    // 但事件契约是绝对坐标（消费方按绝对理解：多选包围盒、对齐吸附都用 nodeLayout 的绝对矩形）。
-    // 直接广播 m.x/m.y 会让子节点场景下消费方拿到相对值 —— 多选框据此算包围盒时高度会炸（实测 240 → 600）。
-    h.ctx.emit(RenderEvents.NodeDragEnd, { nodeId: m.id, position: h.view.absolutePosition(m.id) })
-  }
-}
-
-/** 视图平移/缩放开始（pan 与 wheel/pinch 缩放同源于 VueFlow 同一套 move 事件，A 决策：统一置 paneDragging） */
-function onMoveStart(): void {
-  beginViewportMove(interaction)
-  emitMove(RenderEvents.MoveStart)
-}
-
-/** 视图平移/缩放结束：清 paneDragging（与 start 对称，无 wheel/pan 配对残留问题）；并把停的位置落盘 */
-function onMoveEnd(): void {
-  endViewportMove(interaction)
-  emitMove(RenderEvents.MoveEnd)
-  if (props.persistViewport) persistViewport()
-}
-
-/**
- * paneDragging 兜底复位（自愈）：正常由 onMoveEnd 配对清除，但若 VueFlow 漏发 moveEnd
- * （或 host 重挂载丢了 end），paneDragging 会永久卡在 true —— isBusyDragging 随之恒真，
- * 消费它的显隐门（如端口按钮）就会被永久压死。这里在"任何指针抬起 / 窗口失焦"时无条件清一次：
- * 只要没有按键按住，视图移动就不可能还在进行，清掉一定安全（清了再动也有 onMoveStart 重新置位）。
- */
-function resetViewportMoveIfIdle(): void {
-  if (!interaction.activity.value.paneDragging) return
-  log.log('paneDragging 兜底复位（未收到配对 moveEnd，疑似漏发）')
-  endViewportMove(interaction)
-}
-
-/** emit 带当前视口的视图事件（host 未就绪则跳过） */
-function emitMove(event: string): void {
-  const h = hostRef.value
-  const surface = surfaceRef.value
-  if (!h) return
-  const vp = surface?.getViewport?.() ?? { x: 0, y: 0, zoom: 1 }
-  h.ctx.emit(event, { viewport: vp })
-}
-
-/** 节点拖动逐帧（rAF 节流后 emit，避免 60Hz 刷屏） */
-let dragEmitRaf = 0
-function onNodeDrag(e: NodeDragEvent): void {
-  if (dragEmitRaf) return
-  dragEmitRaf = requestAnimationFrame(() => {
-    dragEmitRaf = 0
-    const h = hostRef.value
-    const payload = toDragPayload(e)
-    if (h && payload) h.ctx.emit(RenderEvents.NodeDrag, payload)
-  })
-}
-function onNodeClick(e: NodeMouseEvent): void {
-  const h = hostRef.value
-  if (!h) return
-  clickNode(h.selection, e.node.id, { shiftKey: e.event.shiftKey })
-  h.ctx.emit(RenderEvents.NodeClick, { nodeId: e.node.id, shiftKey: e.event.shiftKey })
-}
-
-function onEdgeClick(e: EdgeMouseEvent): void {
-  const h = hostRef.value
-  if (!h) return
-  clickEdge(h.selection, e.edge.id, { shiftKey: e.event.shiftKey })
-  h.ctx.emit(RenderEvents.EdgeClick, { edgeId: e.edge.id, shiftKey: e.event.shiftKey })
-}
-
-function onPaneClick(): void {
-  const h = hostRef.value
-  if (!h) return
-  clickPane(h.selection)
-  h.ctx.emit(RenderEvents.PaneClick, {})
-}
-
-/** 框选/多选手势结束：把 VueFlow 当前选中节点/边写回内核 Selection（单源），触发 onChange → 渲染态高亮一致 */
-
-
-// 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
-// 返回 ValidationResult 的纯校验（供 isValidConnection / 拖线反馈 validateEdge 复用，reason 不丢弃）。
-// allowCommitted（默认 false）：是否把"端点相同的已提交边"放行为 ok ——
-// 只有 VueFlow 全量重喂已存边的重校验路径(isValidConnection)传 true；
-// 拖线 hover/drop 校验的新候选必须保持 false，让重复连线报 duplicate（"已存在同一条连线"气泡）。
-function checkConnection(
-  source: string,
-  target: string,
-  sourceHandle?: string,
-  targetHandle?: string,
-  allowCommitted = false,
-): ValidationResult {
-  const h = hostRef.value
-  if (!h) return { ok: false, reason: 'missing-node' }
-  const map = new Map(h.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
-  // 幂等重校验：这条连接已真实存在于内核 edgeStore(=已提交的历史边)，不是新拖出的候选——
-  // VueFlow 每次 setEdges 全量重喂都会把已存在边再校验一遍，若按"重复"驳回会把已落盘边丢掉(拖线后连线"看不见")。
-  // 已存在的边放行(重复/环判定交给真正的新候选)。内核 edgeStore 天然按端点去重，故不影响数据唯一性。
-  const alreadyCommitted = h.edgeStore
-    .getEdges()
-    .some(
-      (e) =>
-        e.source === source &&
-        e.target === target &&
-        (sourceHandle === undefined || e.sourceHandle === sourceHandle) &&
-        (targetHandle === undefined || e.targetHandle === targetHandle),
-    )
-  if (alreadyCommitted) {
-    if (allowCommitted) {
-      // 高频路径：每次 VueFlow 重挂都会对每条已提交边跑一遍（O(边数)）——插件/边一多必刷屏。
-      // 降为 debug（默认静音，localStorage.v2debug=1 打开），真正的"新候选非法"仍走 warn。
-      log.debug(`checkConnection ${source}→${target} = 已提交边，幂等放行`)
-      return { ok: true, reason: 'ok' as const }
-    }
-    // 新候选语义：端点完全相同的边已存在 → duplicate（"已存在同一条连线"气泡）
-    return { ok: false, reason: 'duplicate' }
-  }
-  const res = validateConnection(
-    { source, sourceHandle: sourceHandle ?? undefined, target, targetHandle: targetHandle ?? undefined },
-    { nodes: map, edges: edges.value, getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)) },
-  )
-  if (!res.ok) log.warn(`checkConnection ${source}→${target} 非法:${res.reason}`)
-  return res
-}
-
-function isValidConnection(conn: Connection): boolean {
-  if (!conn.source || !conn.target) return false
-  return checkConnection(
-    conn.source,
-    conn.target,
-    conn.sourceHandle ?? undefined,
-    conn.targetHandle ?? undefined,
-    true,
-  ).ok
-}
-
-/**
- * 拖线反馈用的候选校验：给(规范 source,target)返回非法文案(空串=合法)。
- * 供 ConnectionLineHost 每帧 resolveFeedback 判定 hover valid/invalid 用。
- */
-function validateEdgeText(sourceId: string, targetId: string): string {
-  const res = checkConnection(sourceId, targetId)
-  return res.ok ? '' : reasonTextFrom(res.reason)
-}
-
-// —— 拖线生命周期：connect-start 记源+挂全局 mousemove 日志；connect-end 用 mouseup 自带的 clientX/Y 解析吸附建边 ——
-/** 本次拖线手势是否已走 @connect(精确 handle) 建边。connect-end 判 drop 建边时据此避免双建。 */
-let connectedThisGesture = false
-/** 上一次 mousemove 日志写入时间（throttle 50ms，避免每帧刷屏） */
-let lastDragHoverLogAt = 0
-/** 本次拖线源端快照（onConnectEnd 用） */
-let dragSourceId = ''
-let dragSourceHandle: 'source' | 'target' = 'source'
-/** 本次拖线的按下点（屏幕坐标）：用于算"拖了多远"，供消费方按阈值区分拖线/点一下 */
-let dragStartClient: { x: number; y: number } | null = null
-/** 最近一次全局按下点（capture 阶段记录；拖线开始时作为起点快照） */
-let lastPointerDownClient: { x: number; y: number } | null = null
-function onGlobalPointerDown(e: MouseEvent): void {
-  lastPointerDownClient = { x: e.clientX, y: e.clientY }
-}
-/** mousemove/mouseup 是否在拖线期间挂上（用于 onMounted 早期 + boot 顺序保证） */
-let dragListenersBound = false
-/** rAF 节流：mousemove 高频，只记最新一次 client 坐标；rAF 内做吸附判定+写 state，避免每帧都跑导致卡顿 */
-let dragRafId = 0
-let pendingClient: { x: number; y: number } | null = null
-
-function onConnectStart(p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }): void {
-  if (!p.nodeId) return
-  const handleType = p.handleType ?? (p.handleId as 'source' | 'target') ?? 'source'
-  connectedThisGesture = false
-  dragSourceId = p.nodeId
-  dragSourceHandle = handleType === 'target' ? 'target' : 'source'
-  // 按下点快照：VueFlow 的 connectStart 不带鼠标坐标，这里记全局 pointerdown 位置兜底（见 onDragMouseMove 首帧回填）
-  dragStartClient = lastPointerDownClient
-  dragFlowPoint.value = null
-  log.log(`connectStart node=${p.nodeId} handle=${p.handleId} type=${handleType} (挂 drag listeners)`)
-  beginConnection(connectionState, {
-    sourceNodeId: p.nodeId,
-    sourceHandle: dragSourceHandle,
-  })
-  // 拖线期间挂全局 mousemove/mouseup（捕获阶段优先于 VueFlow 的事件，确保一定能拿到鼠标坐标）
-  if (!dragListenersBound) {
-    document.addEventListener('mousemove', onDragMouseMove, true)
-    document.addEventListener('mouseup', onDragMouseUp, true)
-    dragListenersBound = true
-  }
-}
-
-/** 拖线 mousemove：取最新 client 坐标，**rAF 节流**做吸附判定+写 dragFlowPoint/hoverNode（避免每帧都跑导致卡顿） */
-function onDragMouseMove(ev: MouseEvent): void {
-  if (!dragSourceId) return
-  // 每次 mousemove 只更新最新坐标；具体 resolveFeedback 与写 state 都放到下一帧 rAF 内（合并批次）
-  pendingClient = { x: ev.clientX, y: ev.clientY }
-  if (dragRafId) return
-  dragRafId = requestAnimationFrame(() => {
-    dragRafId = 0
-    if (!pendingClient || !dragSourceId) return
-    const { x, y } = pendingClient
-    pendingClient = null
-    const flowPoint = clientToFlow(x, y)
-    // 命中来源 = 前端 mouse 事件上报的 aimedTarget（不再几何重算）；线端点跟鼠标，命中合法 snap 才吸锚点
-    const target = resolveFromAim(connectionState.aimedTarget.value, flowPoint)
-    // 写 dragFlowPoint（给 ConnectionLineHost 渲染端点）
-    dragFlowPoint.value = { x: target.point.x, y: target.point.y }
-    // 写 hoverNode（给 BaseNode 3D/气泡/吸附带 + ConnectionLineHost hasSnap）。rAF 内合并避免每帧多次写 ref
-    const h = target.hover
-    const nextHover: HoverFeedback | null = h ? enrichHover(h, dragSourceHandle, dragSourceId, target.point) : null
-    // 变化比对（与 v1 思路一致：避免无谓写触发下游重渲）
-    const cur = connectionState.hoverNode.value
-    const changed =
-      cur?.nodeId !== nextHover?.nodeId ||
-      cur?.status !== nextHover?.status ||
-      cur?.zone !== nextHover?.zone ||
-      cur?.reason !== nextHover?.reason ||
-      cur?.flowPosition?.x !== nextHover?.flowPosition?.x ||
-      cur?.flowPosition?.y !== nextHover?.flowPosition?.y
-    if (changed) {
-      connectionState.hoverNode.value = nextHover
-      // 节流日志（50ms 一次），hover 状态变更时打
-      const now = Date.now()
-      if (now - lastDragHoverLogAt >= 50) {
-        lastDragHoverLogAt = now
-        log.log(
-          `drag hover client=${Math.round(x)},${Math.round(y)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${nextHover ? `→ ${nextHover.nodeId}/${nextHover.status}/${nextHover.zone}${nextHover.reason ? ' ' + nextHover.reason : ''}` : '空'}`,
-        )
-      }
-    }
-  })
-}
-
-/** 拖线 mouseup：用 mouseup 事件自带的 clientX/Y 直接解析吸附（跟 v1 useCanvasConnection.onConnectEnd 同思路） */
-function onDragMouseUp(ev: MouseEvent): void {
-  // 仅在拖线源端快照存在时处理（避免与其它业务 mouseup 冲突）
-  if (!dragSourceId) return
-  // 取消未触发的 rAF（直接走 mouseup 路径）
-  if (dragRafId) {
-    cancelAnimationFrame(dragRafId)
-    dragRafId = 0
-    pendingClient = null
-  }
-  const flowPoint = clientToFlow(ev.clientX, ev.clientY)
-  const target = resolveFromAim(connectionState.aimedTarget.value, flowPoint)
-  // 同步最后一次 mouseup 坐标到 dragFlowPoint（让 release 那一帧连接线也对齐）
-  dragFlowPoint.value = { x: target.point.x, y: target.point.y }
-  const drop = decideDropFromHover(dragSourceId, dragSourceHandle, target)
-  log.log(
-    `drop resolve client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${drop ? `→ ${drop.source}→${drop.target}/${drop.zone}` : '→ 空白(松空)'}`,
-  )
-  if (drop) {
-    // checkConnection 兜底：drop 来源于 aimedTarget(前端 mouse 上报)的 hover 状态，hover 在合法→非法
-    // 之间可能滞后一帧，此处再跑一次内核校验保证 capacity/类型/环/重等规则硬拦截——例如目标节点
-    // 输入口 capacity 已满(已有入边)时直接拒，不进入 commitEdge。
-    const res = checkConnection(drop.source, drop.target)
-    if (!res.ok) log.warn(`drop ${drop.source}→${drop.target} 非法:${res.reason}`)
-    else commitEdge(drop.source, drop.target)
-  } else {
-    // 没建成边有三种情况，只有"真落在空白"才广播 —— 落在节点卡片上（连接不成立/方向不符）
-    // 不该冒出"在此处新建节点"的菜单。用几何命中判定：拖线期间画布挂着 .connecting 覆盖层，
-    // elementFromPoint 会命中覆盖元素而非卡片（已踩过这个坑）。
-    const landedOnNode = hitNodeIdAt(
-      target.point,
-      connectableNodeRects().map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.width, h: r.height })),
-    )
-    if (landedOnNode) {
-      log.log(`drop 落在节点 ${landedOnNode} 上但连接不成立（非法/方向不符），不广播空白`)
-    } else {
-      // 空白松手：只广播事实（谁、从哪个口、落在哪），不决定 UI —— 消费方(plugin-context-menu 等)
-      // 可据此放临时节点/弹菜单。hostRef 可能尚未就绪（boot 早期），则跳过广播。
-      hostRef.value?.ctx.emit(RenderEvents.ConnectionDropBlank, {
-      clientX: ev.clientX,
-      clientY: ev.clientY,
-      flowPosition: { x: target.point.x, y: target.point.y },
-      sourceNodeId: dragSourceId,
-      sourceHandle: dragSourceHandle,
-      // 本次拖线位移（屏幕 px）：消费方据此区分"真拖线"与"在端口上点一下"
-      dragDistance: dragStartClient
-        ? Math.hypot(ev.clientX - dragStartClient.x, ev.clientY - dragStartClient.y)
-        : 0,
-      })
-    }
-  }
-  // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
-  dragSourceId = ''
-  dragSourceHandle = 'source'
-}
-
-/** client 坐标 → flow 坐标（用 VueFlow 自带 screenToFlowCoordinate：缩放/平移/zoom 完全可靠，
- *  比手算 paneRect.left / zoom 准）。boot 前/未挂载时回退 client 当 flow（兜底） */
-function clientToFlow(clientX: number, clientY: number): { x: number; y: number } {
-  const surface = surfaceRef.value
-  if (surface?.screenToFlow) return surface.screenToFlow(clientX, clientY)
-  return { x: clientX, y: clientY }
-}
-
-/** 取 host 内核中存活节点矩形（flow 坐标）。
- *  尺寸优先用 nodeLayout 的**实测值**（ResizeObserver 量到的真实渲染尺寸），
- *  退而用内核声明的 size，最后才是兜底 —— 否则卡片实际高度与兜底值不同，命中判定会偏。 */
-function liveNodeRects(): NodeRect[] {
-  const h = hostRef.value
-  if (!h) return []
-  const layout = h.view
-  return h.nodeStore.getNodes().map((n) => {
-    const abs = layout?.absolutePosition ? layout.absolutePosition(n.id) : (n.position ?? { x: 0, y: 0 })
-    const size = layout?.nodeSize ? layout.nodeSize(n.id) : { w: n.size?.w ?? 256, h: n.size?.h ?? 128 }
-    return {
-      id: n.id,
-      type: n.type,
-      x: abs.x,
-      y: abs.y,
-      width: size.w || 256,
-      height: size.h || 128,
-    }
-  })
-}
-
-/** 可参与拖线命中的节点矩形：排除"无端口"类型（inputs/outputs 均声明为空，如分组容器）。
- *  容器不参与连接 —— 拖线悬停不产生 hover 反馈，松手按空白处理（可弹新建菜单）。 */
-function connectableNodeRects(): NodeRect[] {
-  const h = hostRef.value
-  if (!h) return []
-  const portless = (type: string): boolean => {
-    const def = h.nodeStore.types.get(type)
-    return !def || (def.inputs?.length === 0 && def.outputs?.length === 0)
-  }
-  return liveNodeRects().filter((r) => r.type != null && !portless(r.type))
-}
-
-/** 由前端上报的 aimedTarget（mouse 事件驱动）解析当前 hover + 线端点。
- *  命中来源是前端 .moving-handle-zone / 卡片的 mouseenter 上报，后端不再几何重算吸附带。
- *  point = 连接线临时端点：命中**合法 snap 吸附带**时吸到端口锚点；否则(卡片 body/空白/非法)跟鼠标。 */
-function resolveFromAim(
-  aim: AimedTarget | null,
-  flowPoint: { x: number; y: number },
-): { point: { x: number; y: number }; hover: HoverDecision | null } {
-  if (!aim || !dragSourceId) return { point: flowPoint, hover: null }
-  const reverse = dragSourceHandle === 'target'
-  const dir = reverse ? 'reverse' : 'forward'
-  // 方向匹配：forward(拖 source 口)只认对方 input(输入口) 或 body；reverse(拖 target 口)只认 output(输出口) 或 body。
-  // 方向不符的端口侧直接视为空白（与原几何「只生成方向侧吸附带」一致）。
-  if (aim.side !== 'body') {
-    const expectSide = reverse ? 'output' : 'input'
-    if (aim.side !== expectSide) return { point: flowPoint, hover: null }
-  }
-  // 候选边 + 业务校验（类型/容量/方向，与 checkConnection 同源）
-  const candidate = reverse
-    ? { source: aim.nodeId, target: dragSourceId }
-    : { source: dragSourceId, target: aim.nodeId }
-  const msg = validateEdgeText(candidate.source, candidate.target)
-  // 端口锚点：优先用前端上报的 anchor（真实渲染高度 cardHeight 算，保证居中）；
-  // 无 anchor 时回落到节点矩形左缘/右缘中点（body 命中跟鼠标，不需锚点）。
-  const rect = liveNodeRects().find((r) => r.id === aim.nodeId)
-  const anchorX =
-    aim.anchor?.x ?? (rect ? (dir === 'forward' ? rect.x : rect.x + rect.width) : flowPoint.x)
-  const anchorY = aim.anchor?.y ?? (rect ? rect.y + rect.height / 2 : flowPoint.y)
-  const zone: 'snap' | 'body' = aim.side === 'body' ? 'body' : 'snap'
-  const hover: HoverDecision = {
-    nodeId: aim.nodeId,
-    status: msg ? 'invalid' : 'valid',
-    zone,
-    portSide: zone === 'snap' ? (dir === 'forward' ? 'input' : 'output') : undefined,
-    reason: msg || undefined,
-  }
-  // 仅合法 snap(端口吸附带)把线端吸到端口锚点；body/空白/非法保持跟鼠标（body 松手仍可连）
-  const snapped = !msg && zone === 'snap'
-  return { point: snapped ? { x: anchorX, y: anchorY } : flowPoint, hover }
-}
-
-/** 给定 hover 决策 + 源信息，补全成富 HoverFeedback（nodeType/nodeData/nodeEl/willEvict） */
-function enrichHover(
-  h: HoverDecision,
-  sourceHandle: 'source' | 'target',
-  sourceId: string,
-  flowPoint: FlowPoint,
-): HoverFeedback {
-  const host = hostRef.value
-  const node = host?.nodeStore.getNode(h.nodeId)
-  // 新边真正的"输入端接收节点"：forward=悬停节点；reverse(从 input 反拖)=发起反向拖的源节点
-  const receiverId = sourceHandle === 'target' ? sourceId : h.nodeId
-  const tgtNode = host?.nodeStore.getNode(receiverId)
-  const tgtType = tgtNode ? host?.nodeStore.types.get(tgtNode.type) : undefined
-  const inputDef = tgtType?.inputs?.find((i) => !i.port || i.port === 'target')
-  const capacity = inputDef?.capacity
-  const incoming = host ? host.edgeStore.getEdges().filter((e) => e.target === receiverId).length : 0
-  // 输入口已满额(>=capacity>1) → 本次连接将挤最老一条（evict 为 render 默认行为）
-  const willEvict = !!capacity && capacity > 1 && incoming >= capacity
-  let nodeEl: HTMLElement | null = null
-  try {
-    nodeEl = surfaceRef.value?.queryNodeEl?.(h.nodeId) ?? null
-  } catch {
-    /* SSR/测试环境无 DOM：忽略 */
-  }
-  return {
-    nodeId: h.nodeId,
-    status: h.status,
-    zone: h.zone,
-    flowPosition: flowPoint,
-    reason: h.reason,
-    portSide: h.portSide,
-    nodeType: node?.type,
-    willEvict,
-    nodeData: node ? { id: node.id, type: node.type, data: node.data } : null,
-    nodeEl,
-  }
-}
-
-/** 把 hover 决策转成规范 (source,target) 候选；空白则 null */
-function decideDropFromHover(
-  sourceId: string,
-  sourceHandle: 'source' | 'target',
-  target: { hover: HoverDecision | null },
-): { source: string; target: string; zone: 'snap' | 'body' } | null {
-  const h = target.hover
-  if (!h || h.status !== 'valid') return null
-  // reverse 方向（从 target口反向连）需把 source/target 对调
-  return sourceHandle === 'target'
-    ? { source: h.nodeId, target: sourceId, zone: h.zone }
-    : { source: sourceId, target: h.nodeId, zone: h.zone }
-}
-
-function onConnectEnd(): void {
-  // @connect 与 drag mouseup 都会尝试建边 — 二者任一成功则跳过另一。
-  // 注：VueFlow 顺序：精确命中 handle → @connect(先) → mouseup → @connect-end。@connect 已建则 commitEdge 也会被幂等挡掉。
-  // 这里仅负责清空状态 + 拆监听（拖线 mouseup 在 mousemove 同源时已 commit）。
-  endConnection(connectionState)
-  connectedThisGesture = false
-  if (dragListenersBound) {
-    document.removeEventListener('mousemove', onDragMouseMove, true)
-    document.removeEventListener('mouseup', onDragMouseUp, true)
-    dragListenersBound = false
-  }
-  dragSourceId = ''
-  dragSourceHandle = 'source'
-  dragFlowPoint.value = null
-  // 收尾清 rAF（避免异步 rAF 在手势结束后还写 state）
-  if (dragRafId) {
-    cancelAnimationFrame(dragRafId)
-    dragRafId = 0
-  }
-  pendingClient = null
-  log.log('connectEnd 清空反馈')
-}
-
-function onConnect(conn: Connection): void {
-  log.log(`connect 事件 ${conn.source}→${conn.target}`, conn)
-  connectedThisGesture = true
-  if (!isValidConnection(conn) || !conn.source || !conn.target) {
-    connectedThisGesture = false
-    log.warn(`connect 被拒(非法或缺端点) ${conn.source}→${conn.target}`)
-    return
-  }
-  commitEdge(conn.source, conn.target, conn.sourceHandle ?? undefined, conn.targetHandle ?? undefined)
-}
-
-/**
- * 真正落一条边：内核校验硬兜底 + 幂等去重(已存在同源同目标同 handle 的边则不重复建) + 记历史 + 落盘。
- * @connect(精确命中 handle) 与 connect-end 的 lastDrop(body/snap 松开) 两条路径都走这里，保证不会双建。
- *
- * 内核校验：所有提交路径(@connect、drop)都已经过 isValidConnection / checkConnection，但落一道兜底
- * 防止未来新路径漏校验——比如目标节点输入口 capacity 已满(已有入边)时禁止再建（同源节点多次连向
- * 同一目标会被内核返回 limit-reached 而拒；本函数不再 evict 第一条，由 evictOldestIncoming 单独控）。
- */
-function commitEdge(
-  source: string,
-  target: string,
-  sourceHandle?: string,
-  targetHandle?: string,
-): void {
-  const h = hostRef.value
-  if (!h) return
-  // 全路径统一入口：校验（自连/环/重/类型/朝向）+ 满额挤出（capacity/evictOnFull）+ 落边，
-  // 全在 graph.connectEdge 一处。渲染层不再自查一遍 —— 以前"拖线能连、批量连被拒"就是
-  // 两套判定漂移造成的。edge type（边外观类型）仍由本层补上（那是渲染层才知道的默认皮）。
-  const res = h.graph.connectEdge({
-    source,
-    target,
-    type: edgeDefaultType.value,
-    sourceHandle: sourceHandle ?? undefined,
-    targetHandle: targetHandle ?? undefined,
-  })
-  if (res.status === 'rejected') log.warn(`commitEdge ${source}→${target} 被拒:${res.reason}`)
-  else if (res.status === 'duplicate') log.log(`commitEdge ${source}→${target} 已存在，幂等跳过`)
-  else if (res.evictedEdgeId) log.log(`commitEdge ${source}→${target} 成功，满额挤出最老边 ${res.evictedEdgeId}`)
-  else log.log(`commitEdge 建边成功 ${source}→${target}`)
-}
-
-// —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
-function onKeydown(e: KeyboardEvent): void {
-  const t = e.target as HTMLElement | null
-  if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
-  const h = hostRef.value
-  if (!h) return
-  // 通用快捷键：扫描已注册命令的 keys，命中即 execute（Delete/Ctrl+Z 等命令的 keys 由插件声明）
-  // 传内核 ctx 作为执行上下文：命令的 when 不满足时**让位**给同键的其它命令（如选中 3D 节点时
-  // f/r 归节点用，没选中时仍走画布的聚焦/适应视图），同键多个可用命令按 order 定优先级。
-  const commands = h.ctx.tryGet<{ listCommands(): Array<{ id: string }>; runCommand(id: string): unknown }>('canvas')
-  if (!commands) return
-  const hit = findCommandByKeys(commands.listCommands() as never, e, h.ctx)
-  if (hit) {
-    // deferToNative：该键交给平台原生事件（如 Ctrl/Cmd+V → paste）。
-    // 不 preventDefault、不 execute —— preventDefault 会让浏览器不再派发原生 paste
-    // （真机实测），而剪贴板内容只有原生事件读得到。真正的工由下面的 onPaste 仲裁场派发。
-    if ((hit as { deferToNative?: boolean }).deferToNative) return
-    e.preventDefault()
-    commands.runCommand(hit.id)
-    syncFromStore()
-  }
-}
-
-/**
- * 原生 paste 仲裁：一次粘贴只有一个赢家（按注册场 order）。
- *
- * 为什么由宿主收这一个事件：插件的"粘贴"动作要经过统一分发（铁律 7，插件不自绑 window）。
- * 宿主读一次原生事件、归一成 payload，按 order 升序问各处理器，第一个接管的赢。
- * 谁注册、谁先：file-drop 的图片/视频(10) > clipboard 的内存节点(20) > file-drop 的纯文本(30)。
- */
-function onPaste(e: ClipboardEvent): void {
-  const t = e.target as HTMLElement | null
-  // 输入框/可编辑区内的粘贴归它们自己（与 onKeydown、各插件的 isEditableTarget 同规则）
-  if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
-  const h = hostRef.value
-  if (!h) return
-  const entries = h.ctx
-    .registryOf<ClipboardPasteHandler>(CLIPBOARD_PASTE_KIND)
-    .list(CLIPBOARD_PASTE_KEY)
-  if (entries.length === 0) return
-  dispatchClipboardPaste(entries, buildClipboardPastePayload(e))
-  syncFromStore()
-}
-
-/**
- * 页面里是否有非折叠的文本选择（普通文本被用户选中时，copy/cut 应归浏览器默认行为，
- * 画布不得把它覆盖成节点数据 —— 用户报的"在页面上选中文字复制也被拦截"就是这条）。
- * 输入框/可编辑区的选择由 onKeydown/onPaste 的 tagName 检查放行，这里只兜普通文本。
- */
-function hasPlainTextSelection(): boolean {
-  const sel = window.getSelection?.()
-  if (!sel || sel.isCollapsed) return false
-  // 空的 range（有些浏览器在画布空白处给 isCollapsed=false 但无文本）不算选中
-  return sel.rangeCount > 0 && sel.toString().length > 0
-}
-
-/** 原生 copy/cut 仲裁：命中 deferToNative 的命令键由这里统一接管写剪贴板（见 onKeydown 注释） */
-function onClipboardWrite(e: ClipboardEvent, key: string): void {
-  const t = e.target as HTMLElement | null
-  if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
-  // 页面上有用户选中的普通文本 → 放行浏览器默认复制/剪切（拷走选中的文字）
-  if (hasPlainTextSelection()) return
-  const h = hostRef.value
-  if (!h) return
-  const entries = h.ctx
-    .registryOf<ClipboardWriteHandler>(CLIPBOARD_COPY_KIND)
-    .list(key)
-  if (entries.length === 0) return
-  dispatchClipboardWrite(entries, buildClipboardWritePayload(e))
-}
-function onCopy(e: ClipboardEvent): void {
-  onClipboardWrite(e, CLIPBOARD_COPY_KEY)
-}
-function onCut(e: ClipboardEvent): void {
-  onClipboardWrite(e, CLIPBOARD_CUT_KEY)
-}
-
-// 右键菜单：内部统一 preventDefault，把坐标透给父级弹业务菜单。
-function onNodeContextMenu(e: NodeMouseEvent): void {
-  const ev = e.event as MouseEvent
-  ev.preventDefault()
-  emit('context-menu', { kind: 'node', clientX: ev.clientX, clientY: ev.clientY, nodeId: e.node.id })
-  // ctx 广播：插件(context-menu 等)经 ctx.on(RenderEvents.ContextMenuNode) 消费
-  const h = hostRef.value
-  const node = h?.nodeStore.getNode(e.node.id)
-  h?.ctx.emit(RenderEvents.ContextMenuNode, {
-    clientX: ev.clientX,
-    clientY: ev.clientY,
-    flowPosition: clientToFlow(ev.clientX, ev.clientY),
-    nodeId: e.node.id,
-    nodeType: node?.type,
-  })
-}
-function onEdgeContextMenu(e: EdgeMouseEvent): void {
-  const ev = e.event as MouseEvent
-  ev.preventDefault()
-  emit('context-menu', { kind: 'edge', clientX: ev.clientX, clientY: ev.clientY, edgeId: e.edge.id })
-  const h = hostRef.value
-  h?.ctx.emit(RenderEvents.ContextMenuEdge, {
-    clientX: ev.clientX,
-    clientY: ev.clientY,
-    flowPosition: clientToFlow(ev.clientX, ev.clientY),
-    edgeId: e.edge.id,
-  })
-}
-function onPaneContextMenu(e: MouseEvent): void {
-  e.preventDefault()
-  emit('context-menu', { kind: 'pane', clientX: e.clientX, clientY: e.clientY })
-  const h = hostRef.value
-  h?.ctx.emit(RenderEvents.ContextMenuPane, {
-    clientX: e.clientX,
-    clientY: e.clientY,
-    flowPosition: clientToFlow(e.clientX, e.clientY),
-  })
-}
-
-// ==================== 生命周期 ====================
-
-let subs: Disposable[] = []
-let keydownBound = false
-let pasteBound = false
-let clipboardWriteBound = false
-
-onMounted(async () => {
-  try {
-    // 画布交互配置：读当前值 + 订阅设置面板改动实时生效（unmount 随 subs 统一回收）
-    const settingsStore = host.ctx.get<{ get(key: string): unknown; onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
-    Object.assign(interactionSettings, resolveCanvasInteraction((key) => settingsStore.get(key)))
-    subs.push(
-      settingsStore.onChange((key, value) => {
-        // 原地写回（引用不变，Vue 响应式可感知 → VueFlow 绑定实时跟随）
-        applyCanvasInteractionChangeInto(interactionSettings, key, value)
-        // 可见剔除配置变化 → 立即重算集合并重灌（不等下一次视口变化，否则关掉剔除画面不恢复）
-        if (key === 'visibleCullEnabled' || key === 'visibleCullBuffer' || key === 'cullCompactShells') {
-          refreshCull()
-          rebuildLinkedIds()
-          syncNodesFromStore()
-        }
-      }),
-    )
-
-    // 订阅 store 变化自动刷渲染态（nodeStore 与 edgeStore 任一变化都触发整图重刷）
-    unsubStore = host.nodeStore.subscribe(syncFromStore)
-    unsubEdge = host.edgeStore.subscribe(syncFromStore)
-    // 连线置顶开关变化 → 重灌渲染态（给 edges 重新算 zIndex）
-    stopEdgeOnTopWatch = watch(
-      () => (edgeVisualToProvide as { edgeOnTop?: boolean } | undefined)?.edgeOnTop,
-      () => { if (hostRef.value) syncFromStore() },
-    )
-
-    // 订阅内核 Selection(选中单源)：点击/删除/撤销等只写内核，这里投影给 CustomEdge 高亮
-    unsubSel = host.selection.onChange(syncSelected)
-    syncSelected() // 初始同步一次(seed 恢复不触发 onChange)
-
-    // 主题 + nodeTypes 装配
-    applyTheme()
-
-    // 初始灌入：seed/restore 发生在 Provider 建宿主时（早于本组件订阅），
-    // 不会触发回调，这里主动同步一次把当前 store 节点渲染出来。
-    syncFromStore()
-
-    // 订阅插件热装/热卸：重装配主题与 nodeTypes + bump epoch 触发 VueFlow 重挂
-    // (overlay 槽内容由 CanvasSurface 内 SlotHost 自行订阅刷新，无需在此处理)
-    // 插件装卸的重挂请求走**微任务合并**：一次装载会同时命中下面 4 个订阅源（事件 + 三个注册场），
-    // 各自 bump nodeEpoch 会让 VueFlow 连挂 4 次（启动时装 N 个插件 = 4N 次整树重挂 →
-    // 画布闪烁 / 图片节点反复重载 / 每次重挂全量重校验边）。合并成一帧内一次重挂，语义不变。
-    let remountQueued = false
-    function queueRemount(): void {
-      const typesChanged = applyTheme()
-      // 装配结果没变（该插件不提供壳/主题组件）→ 不重挂，画布零扰动
-      if (!typesChanged) return
-      if (remountQueued) return
-      remountQueued = true
-      // **防抖窗口 120ms**：插件启动风暴期间（N 个插件逐个装，每个都 bump），把重挂一直推迟到
-      // 风暴安静 120ms 后 —— 一批 N 个插件只重挂 1 次，而不是 N 次。120ms 足以覆盖单个插件
-      // 的装载间隔，又不至于让用户在装卸单个插件后感觉到可感知的延迟。
-      const sched: (fn: () => void, ms: number) => void =
-        typeof window !== 'undefined'
-          ? (fn, ms) => window.setTimeout(fn, ms)
-          : (fn) => Promise.resolve().then(fn)
-      sched(() => {
-        remountQueued = false
-        nodeEpoch.value += 1
-      }, 120)
-    }
-    subs.push(
-      host.ctx.on('ctx:plugin-installed', () => { queueRemount() }),
-      host.ctx.on('ctx:plugin-uninstalled', () => { queueRemount() }),
-      // 运行期主题槽/节点段 occupant 被改（不经过插件装卸）也要重装配 + 重挂渲染子树
-      { dispose: host.themeRegistry.subscribe(() => { queueRemount() }) },
-      { dispose: host.nodeRegistry.subscribe(() => { queueRemount() }) },
-      // node/shell 场（换壳）变了也要重装配：插件热装/热卸走上面的 lifecycle 事件，
-      // 但运行期直接 add/wrap 换壳（不经过插件装卸）只有订场才知道，否则"换了壳却没生效"。
-      {
-        dispose: (
-          host.ctx.registryOf<unknown>('node/shell') as unknown as {
-            subscribe(fn: () => void): { dispose(): void }
-          }
-        ).subscribe(() => {
-          queueRemount()
-        }).dispose,
-      },
-      // 运行期插件装载失败上报(事件驱动)：内核在插件 setup/config 抛错时经 ctx:lifecycle-change ERROR 广播。
-      // 此处只转发 ERROR(装载失败)这一非正常终态，不误报 ACTIVE/卸载等正常跳变。
-      host.ctx.on('ctx:lifecycle-change', ({ name, lifecycle }) => {
-        if (lifecycle === 'error') emit('plugin-issue', { name, lifecycle: String(lifecycle) })
-      }),
-    )
-
-    // 键盘
-    window.addEventListener('keydown', onKeydown)
-    keydownBound = true
-    /*
-     * 把“某节点此刻正被编辑哪些字段”暴露给云端同步插件（只读探针）。
-     *
-     * 为什么由宿主提供：拖拽/框选是 canvas-render 维护的交互状态，插件按服务名取不到；
-     * 但云端合并需要它来决定“哪些字段先别覆盖”。宿主提供窄接口，插件只需 tryGet，
-     * 没有这份服务时安全降级（不同步暂停整张画布）。
-     */
-    subs.push({
-      dispose: host.ctx.inject('cloud-client/edit-guard', (nodeId: string): ReadonlySet<'position' | 'data' | 'size'> => {
-        const held = new Set<'position' | 'data' | 'size'>()
-        const act = interaction.activity.value
-        if (act.nodeDragging && act.nodeDragId === nodeId) held.add('position')
-        if (act.nodeResizing && act.nodeResizeId === nodeId) held.add('size')
-        return held
-      }),
-    })
-    // 原生粘贴（仲裁场）：插件经 registryOf('clipboard/paste') 声明粘贴动作，宿主统一派发
-    window.addEventListener('paste', onPaste)
-    pasteBound = true
-    // 原生复制/剪切（仲裁场）：插件经 registryOf('clipboard/copy') 声明"复制画布节点"，
-    // 命中时写一个"来自画布"的标记进系统剪贴板（粘贴仲裁据此判"该贴节点还是贴外部媒体"）。
-    window.addEventListener('copy', onCopy)
-    window.addEventListener('cut', onCut)
-    clipboardWriteBound = true
-    // 全局按下点（capture）：拖线开始时作为"拖拽起点"，用于算拖了多远
-    document.addEventListener('mousedown', onGlobalPointerDown, true)
-
-    // 页面隐藏/离开落盘
-    window.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('pagehide', flushSave)
-
-    // paneDragging 兜底自愈：指针抬起 / 窗口失焦 / 页面隐藏时，若还残留 paneDragging 就清掉
-    // （正常路径已由 onMoveEnd 清；这里防漏发 moveEnd 导致永久卡 true 把端口等显隐门压死）。
-    window.addEventListener('pointerup', resetViewportMoveIfIdle, true)
-    window.addEventListener('pointercancel', resetViewportMoveIfIdle, true)
-    window.addEventListener('blur', resetViewportMoveIfIdle)
-    window.addEventListener('visibilitychange', resetViewportMoveIfIdle)
-
-    // 读存档视口(仅需持久化时)：有 → 首次挂载后恢复到停的位置；无 → fitView 基线。
-    // 在 surfaceReady=true(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
-    if (props.persistViewport) {
-      const vp = await host.save.get<ViewportState>(GRAPH_VIEWPORT_KEY, 'canvas')
-      savedViewport.value = vp
-    }
-
-    surfaceReady.value = true
-    emit('ready', host)
-  } catch (err) {
-    mountError.value = err instanceof Error ? err.message : String(err)
-    surfaceReady.value = true
-  }
+const nodeDrag = useCanvasNodeDrag({
+  hostRef,
+  surfaceRef,
+  interaction,
+  interactionSettings,
+  primeDragProtection: culling.primeDragProtection,
+  clearDragProtection: culling.clearDragProtection,
 })
 
-function onVisibilityChange(): void {
-  if (document.visibilityState === 'hidden') flushSave()
-}
-function flushSave(): void {
-  const h = hostRef.value
-  if (!h) return
-  // 资源引用扫描（P1-14）：落盘前回收"不再被任何存活节点引用"的 object URL。
-  // 延迟到 flush 而非删除即时 revoke，保证 undo 恢复节点时 URL 仍有效。
-  //
-  // 派生资源（缩略图 / 视频帧图）不在此列：它们本来就不写进节点的 resourceId
-  // （只由插件按可推算的名字取用），拿"没被引用"当判据会把它们全清掉 ——
-  // 现象是"每次落盘都把刚生成的缩略图清掉、下次打开又重算一遍"。
-  // 由 ResourceStore 按条目的 derived 标记跳过（见那里的说明）。
-  if (h.resources) {
-    const alive = new Set<string>()
-    // 资源引用字段的完整清单：主引用 + 派生引用（帧图 / 左右图）。
-    // 只扫 resourceId 会把 frameResourceId / leftResourceId / rightResourceId 误判为“未引用”，
-    // 落盘后这些资源被回收，界面表现为“刷新后帧图/对比图消失”。
-    const REF_FIELDS = ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId'] as const
-    for (const n of h.nodeStore.getNodes()) {
-      const data = n.data as Record<string, unknown> | undefined
-      if (!data) continue
-      for (const key of REF_FIELDS) {
-        const rid = data[key]
-        if (typeof rid === 'string' && rid) alive.add(rid)
-      }
-    }
-    h.resources.disposeUnreferenced(alive)
-  }
-  if (h.save.isDirty()) void h.save.flush()
-}
+const viewport = useCanvasViewport({
+  hostRef,
+  surfaceRef,
+  persistViewport: () => props.persistViewport,
+})
+const viewportMove = useCanvasViewportMove({
+  hostRef,
+  surfaceRef,
+  interaction,
+  persistViewport: () => props.persistViewport,
+  persist: viewport.persistViewport,
+  log,
+})
+const keyboard = useCanvasKeyboard({
+  commands: () => hostRef.value?.ctx.tryGet<{ listCommands(): Array<{ id: string }>; runCommand(id: string): unknown }>('canvas'),
+  executeContext: () => hostRef.value?.ctx,
+  syncFromStore,
+})
+const clipboard = useCanvasClipboard({ hostRef, syncFromStore })
+const contextMenu = useCanvasContextMenu({
+  hostRef,
+  clientToFlow: connections.clientToFlow,
+  emitContextMenu: (payload) => emit('context-menu', payload),
+})
+const save = useCanvasSave({ hostRef })
+
+// 视口恢复 watch 与原来一样在 setup 期建立（CanvasSurface 首帧挂载时触发一次）。
+viewport.bindViewportRestore()
+
+useCanvasLifecycle({
+  host,
+  hostRef,
+  persistViewport: props.persistViewport,
+  emitReady: (h) => emit('ready', h),
+  emitPluginIssue: (payload) => emit('plugin-issue', payload),
+  surfaceReady,
+  mountError,
+  interactionSettings,
+  interaction,
+  savedViewport: viewport.savedViewport,
+  nodeEpoch: theme.nodeEpoch,
+  syncFromStore,
+  syncSelected: selection.syncSelected,
+  applyTheme: theme.applyTheme,
+  refreshCull: culling.refreshCull,
+  rebuildLinkedIds: culling.rebuildLinkedIds,
+  syncNodesFromStore,
+  flushSave: save.flushSave,
+  onVisibilityChange: save.onVisibilityChange,
+  resetViewportMoveIfIdle: viewportMove.resetViewportMoveIfIdle,
+  onKeydown: keyboard.onKeydown,
+  onPaste: clipboard.onPaste,
+  onCopy: clipboard.onCopy,
+  onCut: clipboard.onCut,
+  onGlobalPointerDown: connections.onGlobalPointerDown,
+  edgeVisualToProvide,
+  cleanup: {
+    clearDragProtection: culling.clearDragProtection,
+    disposeNodeDrag: nodeDrag.dispose,
+    disposeRenderState,
+    disposeViewport: viewport.dispose,
+  },
+})
 
 // 暴露给父级：拿 host/api 驱动业务(建节点/撤销/读 nodeStore 等)，拿 ready 判断画布是否可交互。
 // 启动成功/失败由外层 CanvasProvider 负责，这里只说“画布自己的订阅是否准备完毕”。
@@ -1548,35 +209,6 @@ defineExpose({
   get bootErrorText(): string {
     return mountError.value
   },
-})
-
-onBeforeUnmount(() => {
-  clearDragProtection()
-  if (dragEmitRaf) cancelAnimationFrame(dragEmitRaf)
-  if (mountRaf) { cancelAnimationFrame(mountRaf); mountRaf = 0 }
-  unsubStore?.()
-  unsubEdge?.()
-  unsubSel?.()
-  stopEdgeOnTopWatch?.()
-  stopViewportRestore?.()
-  for (const t of viewportTimers) clearTimeout(t)
-  viewportTimers = []
-  for (const s of subs) s.dispose()
-  if (keydownBound) window.removeEventListener('keydown', onKeydown)
-  if (pasteBound) window.removeEventListener('paste', onPaste)
-  if (clipboardWriteBound) {
-    window.removeEventListener('copy', onCopy)
-    window.removeEventListener('cut', onCut)
-  }
-  document.removeEventListener('mousedown', onGlobalPointerDown, true)
-  window.removeEventListener('visibilitychange', onVisibilityChange)
-  window.removeEventListener('pagehide', flushSave)
-  window.removeEventListener('pointerup', resetViewportMoveIfIdle, true)
-  window.removeEventListener('pointercancel', resetViewportMoveIfIdle, true)
-  window.removeEventListener('blur', resetViewportMoveIfIdle)
-  window.removeEventListener('visibilitychange', resetViewportMoveIfIdle)
-  // 只落盘，不停止内核：生命周期归 CanvasProvider，且它会在子组件全部卸载后再 stop。
-  void host.save.flush()
 })
 </script>
 
@@ -1596,35 +228,35 @@ onBeforeUnmount(() => {
         :edge-visual="edgeVisualToProvide"
         :debug-visual="debugToProvide"
         :snap-zone="snapZoneToProvide"
-        :edge-selection="edgeSelection"
+        :edge-selection="selection.edgeSelection"
         :nodes="nodes"
         :edges="edges"
-        :node-types="nodeTypes"
-        :edge-types="edgeTypes"
-        :background-comp="backgroundComp"
-        :connection-line-comp="connectionLineComp"
-        :node-epoch="nodeEpoch"
+        :node-types="theme.nodeTypes.value"
+        :edge-types="theme.edgeTypes.value"
+        :background-comp="theme.backgroundComp.value"
+        :connection-line-comp="theme.connectionLineComp.value"
+        :node-epoch="theme.nodeEpoch.value"
         :interaction-settings="interactionSettings"
-      :on-visible-rect-change="onVisibleRectFrame"
-        :is-valid-connection="isValidConnection"
-        :connection-state="connectionState"
+        :on-visible-rect-change="culling.onVisibleRectFrame"
+        :is-valid-connection="connections.isValidConnection"
+        :connection-state="connections.connectionState"
         :interaction="interaction"
-        :drag-flow-point="dragFlowPoint"
-        :on-connect="onConnect"
-        :on-connect-start="onConnectStart"
-        :on-connect-end="onConnectEnd"
-        :validate-edge="validateEdgeText"
-        :on-node-click="onNodeClick"
-        :on-edge-click="onEdgeClick"
-        :on-node-drag="onNodeDrag"
-        :on-node-drag-start="onNodeDragStart"
-        :on-node-drag-stop="onNodeDragStop"
-        :on-move-start="onMoveStart"
-        :on-move-end="onMoveEnd"
-        :on-pane-click="onPaneClick"
-        :on-node-context-menu="onNodeContextMenu"
-        :on-edge-context-menu="onEdgeContextMenu"
-        :on-pane-context-menu="onPaneContextMenu"
+        :drag-flow-point="connections.dragFlowPoint.value"
+        :on-connect="connections.onConnect"
+        :on-connect-start="connections.onConnectStart"
+        :on-connect-end="connections.onConnectEnd"
+        :validate-edge="connections.validateEdgeText"
+        :on-node-click="selection.onNodeClick"
+        :on-edge-click="selection.onEdgeClick"
+        :on-node-drag="nodeDrag.onNodeDrag"
+        :on-node-drag-start="nodeDrag.onNodeDragStart"
+        :on-node-drag-stop="nodeDrag.onNodeDragStop"
+        :on-move-start="viewportMove.onMoveStart"
+        :on-move-end="viewportMove.onMoveEnd"
+        :on-pane-click="selection.onPaneClick"
+        :on-node-context-menu="contextMenu.onNodeContextMenu"
+        :on-edge-context-menu="contextMenu.onEdgeContextMenu"
+        :on-pane-context-menu="contextMenu.onPaneContextMenu"
       >
         <!-- 宿主业务 UI 区(#ui)：转发给 CanvasSurface，使宿主放在本组件 <template #ui> 里的 toolbar/设置 dock 等能经 useCanvasRender 读 ctx -->
         <template #ui>
@@ -1661,11 +293,4 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
-
-
-
-
-
-
-
 
