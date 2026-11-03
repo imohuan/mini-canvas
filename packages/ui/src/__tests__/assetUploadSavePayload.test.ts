@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 
 const hosts = [
   ['components/areas/left-drawer/useAssetTreeActions.ts', '../components/areas/left-drawer/useAssetTreeActions.ts'],
-  ['components/AssetManageDialog.vue', '../components/AssetManageDialog.vue'],
+  ['components/assets/manage-dialog/AssetManageDialog.vue', '../components/assets/manage-dialog/AssetManageDialog.vue'],
   ['components/AssetUploadHost.vue', '../components/AssetUploadHost.vue'],
 ] as const
 

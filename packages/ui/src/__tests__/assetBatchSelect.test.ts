@@ -16,8 +16,11 @@ const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf
 
 const drawer = read('../components/areas/left-drawer/useAssetTreeActions.ts')
 const drawerPanel = read('../components/areas/left-drawer/AssetTreePanel.vue')
-const dialog = read('../components/AssetManageDialog.vue')
-const tree = read('../components/AssetTree.vue')
+const dialog = [
+  read('../components/assets/manage-dialog/AssetManageDialog.vue'),
+  read('../components/assets/manage-dialog/useAssetTreeActions.ts'),
+].join('\n')
+const tree = read('../components/assets/tree/AssetTreeRow.vue')
 const batchBar = read('../components/AssetBatchBar.vue')
 
 describe('批量勾选：两处宿主同一份判定', () => {
