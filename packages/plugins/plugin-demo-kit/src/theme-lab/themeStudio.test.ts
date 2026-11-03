@@ -16,7 +16,7 @@ import { createStudioPreviewSource } from './themeStudioPreview'
 import { THEME_PREVIEW_SLOT } from '@mini-canvas/canvas-render'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const STUDIO = readFileSync(path.join(HERE, 'ThemeStudio.vue'), 'utf8')
+const STUDIO = readFileSync(path.join(HERE, 'theme-studio-panel/ThemeStudioView.vue'), 'utf8')
 
 function colorFields(): DeclaredColorField[] {
   const { store } = createStudioPreviewSource()
