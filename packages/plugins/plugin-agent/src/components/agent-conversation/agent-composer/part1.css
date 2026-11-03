@@ -63,6 +63,16 @@
   color: inherit;
 }
 
+/* 用户口径 2026-11-03：编辑标记里的 ✕ 也是纯图标钮，hover 不画底色、只亮图标 */
+.ac-editing-x:hover,
+.ac-editing-x:active {
+  background: transparent;
+}
+
+.ac-editing-x:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
 .ac-rot {
   transform: rotate(90deg);
 }
