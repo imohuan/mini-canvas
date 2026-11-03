@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync(new URL('../PanoramaContent.vue', import.meta.url), 'utf-8')
+const src = readFileSync(new URL('../panorama-content/scene.ts', import.meta.url), 'utf-8')
 
 describe('3D 预览释放', () => {
   it('disposeThree 里丢了 WebGL 上下文', () => {

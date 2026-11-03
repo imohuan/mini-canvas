@@ -152,7 +152,7 @@ describe('底色（用户口径 2026-10-27）', () => {
   })
 
   it('WebGL 用透明清屏、不设场景底色（没贴图时不画那层灰）', async () => {
-    const src = readFileSync(new URL('../PanoramaContent.vue', import.meta.url), 'utf8')
+    const src = readFileSync(new URL('../panorama-content/scene.ts', import.meta.url), 'utf8')
     expect(src).toContain('alpha: true')
     expect(src).toContain('setClearAlpha(0)')
     expect(src).not.toMatch(/scene\.background\s*=/)
