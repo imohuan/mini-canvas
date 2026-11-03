@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
-const ui = read('../composables/ui.ts')
+const ui = read('../composables/ui/useCreateNode.ts')
 const drawer = read('../components/areas/left-drawer/useAssetCanvasDrop.ts')
 
 /** 取出一个函数的函数体（从声明到下一个顶层 function 之前） */

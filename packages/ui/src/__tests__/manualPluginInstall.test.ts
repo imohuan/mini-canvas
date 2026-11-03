@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const UI_SRC = path.resolve(here, '..', 'composables', 'ui.ts')
+const UI_SRC = path.resolve(here, '..', 'composables', 'ui', 'useUiLifecycle.ts')
 
 describe('外部插件：由用户手动安装，应用不自动装', () => {
   const source = readFileSync(UI_SRC, 'utf8')

@@ -21,7 +21,7 @@ const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf
 const cluster = read('../components/ProjectCluster.vue')
 const topLeft = read('../components/areas/TopLeftArea.vue')
 const drawer = read('../components/areas/LeftDrawer.vue')
-const ui = read('../composables/ui.ts')
+const ui = read('../composables/ui/useCanvasList.ts')
 const api = read('../composables/projectsApi.ts')
 
 describe('画布下拉行：勾 ⇄ 三个点', () => {

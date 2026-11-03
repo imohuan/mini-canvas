@@ -11,18 +11,19 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const ui = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
+const lifecycle = readFileSync(new URL('../composables/ui/useUiLifecycle.ts', import.meta.url), 'utf-8')
+const history = readFileSync(new URL('../composables/ui/useHistoryScope.ts', import.meta.url), 'utf-8')
 
 describe('切画布后历史页码复位', () => {
   it('onReady 里有「画布变了就复位历史」的调用，且在 loadHistory 之前', () => {
-    const onReady = ui.slice(ui.indexOf('async function onReady()'), ui.indexOf('function bindAssetsChanged'))
+    const onReady = lifecycle.slice(lifecycle.indexOf('async function onReady()'), lifecycle.indexOf('function bindAssetsChanged'))
     expect(onReady, 'onReady 没有对齐历史到当前画布').toMatch(/alignHistoryToCanvas\(\)/)
     expect(onReady.indexOf('alignHistoryToCanvas()'), '复位在拉数据之后等于没做')
       .toBeLessThan(onReady.indexOf('void loadHistory()'))
   })
 
   it('复位包含：作废在途请求 + 页码回 1 + 清掉旧签名', () => {
-    const fn = ui.slice(ui.indexOf('function alignHistoryToCanvas'), ui.indexOf('function bindHistoryFilters'))
+    const fn = history.slice(history.indexOf('function alignHistoryToCanvas'), history.indexOf('function bindHistoryFilters'))
     expect(fn, '找不到 alignHistoryToCanvas').not.toBe('')
     expect(fn, '没有作废在途请求').toMatch(/resetHistoryRequest\(\)/)
     expect(fn, '页码没有回到第 1 页').toMatch(/state\.histPage = 1/)

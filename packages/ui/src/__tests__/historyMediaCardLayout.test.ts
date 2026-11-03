@@ -43,7 +43,7 @@ const historyDetail = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/HistoryDetailDialog.vue'),
   'utf-8',
 )
-const uiSource = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
+const uiSource = readFileSync(new URL('../composables/ui/useHistoryScope.ts', import.meta.url), 'utf-8')
 const masonrySource = readFileSync(new URL('../composables/useMasonry.ts', import.meta.url), 'utf-8')
 const audioWavePlayer = readFileSync(
   new URL('../../../plugins/plugin-node-audio/src/AudioWavePlayer.vue', import.meta.url),
@@ -590,7 +590,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, '评级筛选仍无条件渲染').toMatch(/<template v-if="SHOW_RATING_UI">[\s\S]{0,400}aria-label="所有评级"/)
     expect(modalsArea, '批量评级按钮仍无条件渲染').toMatch(/<button v-if="SHOW_RATING_UI"[\s\S]{0,220}aria-label="批量评级"/)
     // 逻辑不许删：以后要恢复，只是把开关改成 true
-    expect(uiSource, '评级筛选逻辑被删了（要求隐藏不删除）').toMatch(/histRating:/)
+    expect(uiSource, '评级筛选逻辑被删了（要求隐藏不删除）').toMatch(/HIST_RATING\[/)
     expect(uiSource, '批量评级逻辑被删了（要求隐藏不删除）').toMatch(/batchRateHistory/)
   })
 

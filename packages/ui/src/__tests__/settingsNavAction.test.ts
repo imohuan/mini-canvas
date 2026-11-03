@@ -46,7 +46,7 @@ describe('设置里的快捷键动作项', () => {
   })
 
   it('宿主把 shortcuts 动作翻译成打开快捷键帮助', () => {
-    const ui = read('../composables/ui.ts')
+    const ui = read('../composables/ui/useUiLifecycle.ts')
     expect(ui).toMatch(/settings:ui-action/)
     expect(ui).toMatch(/action === 'shortcuts'/)
     expect(ui).toMatch(/shortcutsOpen = true/)

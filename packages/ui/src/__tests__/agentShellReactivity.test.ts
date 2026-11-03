@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const UI_SRC = readFileSync(path.resolve(HERE, '../composables/ui.ts'), 'utf8')
+const UI_SRC = readFileSync(path.resolve(HERE, '../composables/ui/useAgentShell.ts'), 'utf8')
 const PANEL = readFileSync(path.resolve(HERE, '../components/areas/AgentPanel.vue'), 'utf8')
 
 describe('Agent 面板显隐', () => {

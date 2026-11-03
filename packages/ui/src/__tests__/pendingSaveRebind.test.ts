@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const ui = readFileSync(new URL('../composables/ui.ts', import.meta.url), 'utf-8')
+const ui = readFileSync(new URL('../composables/ui/useUiLifecycle.ts', import.meta.url), 'utf-8')
 const app = readFileSync(new URL('../App.vue', import.meta.url), 'utf-8')
 
 describe('pendingSave 注册的生命周期', () => {

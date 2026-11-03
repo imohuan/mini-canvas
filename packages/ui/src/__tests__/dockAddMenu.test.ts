@@ -20,7 +20,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
 const dock = read('../components/areas/DockArea.vue')
-const ui = read('../composables/ui.ts')
+const ui = read('../composables/ui/useCreateNode.ts')
 
 /**
  * 菜单的**可见正文**：只取 <template> 段、并去掉 HTML 注释 ——

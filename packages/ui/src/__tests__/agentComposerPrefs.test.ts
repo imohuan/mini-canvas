@@ -160,12 +160,16 @@ describe('设置页 UI：目标设置下面那一行', () => {
 })
 
 describe('Agent 面板：读取同一个键（不自己再造一份）', () => {
-  const src = readFileSync(
+  const conversationSrc = readFileSync(
     path.resolve(PKG_ROOT, '../plugins/plugin-agent/src/components/AgentConversation.vue'),
+    'utf8',
+  )
+  const conversationHookSrc = readFileSync(
+    path.resolve(PKG_ROOT, '../plugins/plugin-agent/src/components/agent-conversation/useAgentConversation.ts'),
     'utf8',
   )
 
   it('订阅设置页的本地广播 + 订阅跨标签页 KV 变更', () => {
-    expect(src).toContain('mini-canvas:agent-composer-prefs-changed')
+    expect(conversationSrc + conversationHookSrc).toContain('mini-canvas:agent-composer-prefs-changed')
   })
 })
