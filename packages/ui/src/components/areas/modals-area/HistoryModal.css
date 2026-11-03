@@ -1,0 +1,44 @@
+/* 自绘缩放滑块：整条轨道可拖（原生 range 只有 thumb 可拖，用户实测"拖不动"） */
+.hist-zoom-track { display: flex; align-items: center; }
+.hist-zoom-rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 9999px; background: var(--ui-hover-strong); }
+.hist-zoom-fill { position: absolute; left: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 9999px; background: var(--ui-accent, #0891b2); }
+.hist-zoom-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 9999px; background: var(--ui-ink); transform: translate(-50%, -50%); box-shadow: 0 0 0 3px var(--ui-panel, #fff); pointer-events: none; }
+.hist-zoom-track:hover .hist-zoom-thumb { box-shadow: 0 0 0 3px var(--ui-panel, #fff), 0 0 0 5px var(--ui-veil, rgb(0 0 0 / 0.06)); }
+/* 显示异常开关（checkbox 自绘小方块） */
+.hist-error-toggle { appearance: none; width: 14px; height: 14px; margin: 0; border: 1.5px solid var(--ui-ink-mute, #888); border-radius: 4px; background: transparent; cursor: pointer; display: grid; place-items: center; }
+.hist-error-toggle:checked { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); }
+.hist-error-toggle:checked::after { content: ""; width: 8px; height: 8px; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E"); }
+/* 批量操作栏 */
+.hist-batch-bar { background: var(--ui-panel, #fff); }
+
+/* 加载更多指示（用户口径 2026-10-28：显示 1 秒、要更清楚）。
+   中性灰阶：转圈 + 文案，居中放在列表底部；不用主题色。 */
+.hist-loading {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 0;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+.hist-loading-spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ui-line, rgb(128 128 128 / 0.25));
+  border-top-color: var(--ui-ink-dim, #6b7280);
+  border-radius: 999px;
+  animation: hist-loading-spin 0.75s linear infinite;
+}
+@keyframes hist-loading-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hist-loading-spinner { animation: none; }
+}
+
+/* 下一页加载哨兵：滚动区最底部的一小块占位（IntersectionObserver 只认几何，不需要可见样式） */
+.hist-load-sentinel { height: 1px; width: 100%; }

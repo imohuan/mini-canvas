@@ -1,0 +1,116 @@
+.hist-masonry { min-height: 200px; }
+.hist-card { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--ui-line, rgba(128,128,128,.2)); background: var(--ui-veil, rgba(127,127,127,.08)); transition: border-color .16s ease, box-shadow .16s ease; }
+/* 强调色走规范青（ui-style-guide §2.1：全界面只有青一种强调色；--ui-brand 全仓未定义，会掉进蓝色兜底） */
+.hist-card:hover { border-color: var(--ui-accent, #0891b2); box-shadow: 0 2px 10px var(--ui-scrim, rgb(0 0 0 / 0.08)); }
+.hist-card-media { position: relative; width: 100%; overflow: hidden; cursor: pointer; background: var(--ui-scrim, rgb(0 0 0 / 0.06)); }
+.hist-card-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 骨架屏：onload 后由 JS 移除 */
+.hist-card-skeleton { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: var(--ui-veil, rgba(127,127,127,.12)); }
+.hist-card-pulse { width: 40px; height: 40px; border-radius: 12px; background: var(--ui-hover, rgba(127,127,127,.25)); animation: hist-pulse 1.4s ease-in-out infinite; }
+@keyframes hist-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+/* ===== 方案 5 定稿（用户口径 2026-10-27）：信息全部在图片外 =====
+   卡片本体只包图片；下方一行 = 类型标签（最左）+ 宽高 · 时长 · 大小。
+   图片上不再有任何渐变条/标签文字，缩略图完整可见。 */
+.hist-card--facts-out { border: 0; background: transparent; border-radius: 0; overflow: visible; }
+.hist-card--facts-out:hover { border-color: transparent; box-shadow: none; }
+.hist-card--facts-out .hist-card-media { border-radius: 10px; }
+.hist-card-facts { display: flex; align-items: center; gap: 6px; margin-top: 7px; min-width: 0; font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums; }
+.hist-card-kind { flex: none; display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 4px; background: var(--ui-veil, rgb(127 127 127 / 0.1)); color: var(--ui-ink-dim, #6b7280); font-size: 9.5px; line-height: 1.6; letter-spacing: .02em; }
+.hist-card-fact-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 异常卡不套图片框：保持原来的居中说明，去掉父级透明卡带来的圆角/边框差异 */
+.hist-card--facts-out .hist-card-fallback { border-radius: 10px; background: var(--ui-veil, rgba(127,127,127,.06)); }
+/* 播放圆钮：音频/视频卡中央，hover 微放大 */
+.hist-card-play { position: absolute; left: 50%; top: 50%; z-index: 3; transform: translate(-50%, -50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ui-scrim, rgb(0 0 0 / 0.45)); color: var(--ui-tip-ink, #fff); font-size: 12px; backdrop-filter: blur(4px); transition: transform 0.16s ease; pointer-events: none; }
+.hist-card-media:hover .hist-card-play { transform: translate(-50%, -50%) scale(1.1); }
+/* 音频卡（静态装饰兜底）：柔和渐变底 + 波形竖条 */
+.hist-card-audio { position: absolute; inset: 0; display: grid; place-items: center; background: var(--ui-veil, rgb(127 127 127 / 0.06)); }
+.hist-card-wave { display: flex; align-items: center; justify-content: center; gap: 3px; width: 70%; height: 46%; }
+.hist-card-wave i { flex: 1 1 auto; max-width: 5px; height: 30%; border-radius: 2px; background: var(--ui-ink-mute, #9ca3af); opacity: .75; }
+.hist-card-wave i:nth-child(3n) { height: 62%; }
+.hist-card-wave i:nth-child(4n) { height: 44%; }
+.hist-card-wave i:nth-child(5n) { height: 78%; }
+.hist-card-wave i:nth-child(7n) { height: 24%; }
+/* 音频注册件卡（上下布局）：组件舞台定高 96px 自适应宽，下方信息条 fixed 行高 —— 用户口径 */
+.hist-card-audio-plugin { position: absolute; inset: 0; overflow: hidden; background: var(--ui-panel, #fff); }
+.hist-card-audio-plugin .apv-root { height: 100%; }
+.hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
+/* 历史卡里的音频波形一律中性灰阶（用户口径 2026-10-27：不要主题紫）。
+   只覆盖卡片内的表现，节点里的播放器仍按自己的主题走。 */
+/* 音频：波形本身要**卡片边框包住**（用户口径 2026-10-28 附红框截图），
+   白底 + 1px 细边框 + 圆角；与图片/视频卡同一套卡片外观。 */
+.hist-card-media--audio {
+  border: 1px solid var(--ui-line, rgba(128, 128, 128, 0.2));
+  background: var(--ui-panel, #fff);
+  border-radius: 10px;
+}
+/* 播放键/文字说明由宿主放到卡片外：播放器自带的底栏（时长/大小/文件名）在条内隐藏，
+   避免和卡外说明重复。 */
+.hist-card-audio-plugin .apv-bar { display: none; }
+/* 卡外底栏（用户口径 2026-10-28 定稿）：
+   左 = 类型 + 当前播放进度；右 = 时长 + 播放按钮。
+   整行用 flex + items-center 做**垂直居中**对齐（用户反馈：之前文字看着没有居中）。 */
+.hist-card-audio-controls {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 7px; min-width: 0;
+  font-size: 10.5px; color: var(--ui-ink-mute, #888); font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.hist-audio-left, .hist-audio-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hist-audio-left { flex: 0 1 auto; }
+.hist-audio-right { flex: none; }
+/* 文字用等宽数字 + 与按钮同高，避免"字比按钮高一截"看起来没对齐 */
+.hist-audio-progress, .hist-audio-duration { white-space: nowrap; line-height: 18px; }
+.hist-audio-left .hist-card-kind { line-height: 18px; }
+/* 单独一个按钮：不要圆角边框，不要底色（用户口径） */
+.hist-audio-play {
+  flex: none; display: inline-grid; place-items: center;
+  width: 18px; height: 18px; padding: 0; margin-left: 2px;
+  border: 0; border-radius: 0; background: transparent;
+  color: var(--ui-ink, #18202b); cursor: pointer;
+}
+.hist-audio-play:hover { color: var(--ui-accent, #0891b2); }
+.hist-audio-play svg { width: 11px; height: 11px; }
+/* 批量模式：只让波形层让位（点波形落到整卡勾选）；
+   媒体框本身仍可点 —— 右上角「详情」钮是它的子元素，不能一起关掉。 */
+.hist-card--batch .hist-card-audio-plugin { pointer-events: none; }
+.hist-card--batch .hist-card-audio-controls { pointer-events: none; }
+.hist-card--batch .hist-card-video-plugin,
+.hist-card--batch .hist-card-video-plugin * { pointer-events: none; }
+.hist-card--batch .vpv-dense-play,
+.hist-card--batch .vpv-dense-expand,
+.hist-card--batch .vpv-bar-wrap,
+.hist-card--batch .vpv-scrim { display: none; }
+.hist-card-audio-plugin .aw-wave-bar { background: var(--ui-ink-mute, #9ca3af); opacity: .55; }
+.hist-card-audio-plugin .aw-wave-bar.is-played { background: var(--ui-ink, #374151); opacity: .9; }
+.hist-card-audio-plugin .aw-wave:hover .aw-wave-bar,
+.hist-card-audio-plugin .aw-wave:hover .aw-wave-bar.is-played { background: var(--ui-ink, #374151); }
+.hist-card-audio-plugin .aw-knob::after { background: var(--ui-ink, #374151); }
+.hist-card-audio-plugin .aw-knob:hover::after,
+.hist-card-audio-plugin .aw-knob:active::after { background: var(--ui-ink, #111827); }
+.hist-card-audio-plugin .aw-progress-fill { background: var(--ui-ink-mute, #9ca3af); }
+.hist-card-audio-plugin .aw-progress-thumb { border-color: var(--ui-ink-mute, #9ca3af); }
+.hist-card-video-plugin { position: absolute; inset: 0; overflow: hidden; background: var(--ui-scrim, #000); /* 主题色白名单: 视频黑边属媒体底色，不随主题 */ }
+.hist-card-video-plugin .vpv-root { height: 100%; }
+/* 异常卡：警示圆圈 + 「生成异常 · 无产物」说明 */
+.hist-card-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 130px; padding: 16px 12px; cursor: pointer; text-align: center; }
+/* 批量模式勾选层：卡片左上角圆形勾选钮。
+   必须放在全局块里 —— 卡片是 createMasonryElement 用 createElement 现拼的，拿不到
+   scoped 的 data-v 属性；写在 scoped 里等于整段样式不存在，内联 SVG 会按默认 300×150
+   铺满整张卡（用户实测 2026-10-27：勾选后每张卡都是一个大对勾）。 */
+.hist-card-check { position: absolute; left: 6px; top: 6px; z-index: 5; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 9999px; border: 1.5px solid var(--ui-tip-ink, rgb(255 255 255 / 0.85)); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); color: transparent; cursor: pointer; backdrop-filter: blur(4px); transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.hist-card-check svg { width: 12px; height: 12px; flex: none; }
+.hist-card-check:hover { transform: scale(1.08); }
+.hist-card-check.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); color: var(--ui-on-accent, #fff); /* 主题色白名单: 勾选态对勾在主题色上的前景色 */ }
+/* 卡片右上角的「详情」入口：中性玻璃小圆钮，压在画面上也看得清（不抢缩略图） */
+.hist-card-detail { position: absolute; right: 6px; top: 6px; z-index: 6; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--ui-line, rgb(255 255 255 / .35)); border-radius: 9999px; background: var(--ui-panel, rgb(0 0 0 / .45)); color: var(--ui-ink, #fff); cursor: pointer; opacity: .82; transition: opacity .15s ease, transform .15s ease; }
+.hist-card-detail:hover { opacity: 1; transform: scale(1.08); }
+.hist-card-detail svg { width: 13px; height: 13px; }
+/* 视频卡详情钮仍是右上角。
+   ⚠️ 不要在这里把图标强制成白色：详情钮的底是 --ui-panel（亮色主题 = 纯白），
+   白图标压在白底上 = 看不见（用户截图 2026-10-28：视频卡右上角只有一个空圆圈）。
+   图标颜色统一跟随主题文字色 --ui-ink 即可，深浅两套主题都清楚。 */
+.hist-card-fallback .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-ink-mute, #888); color: var(--ui-ink-mute, #888); font-size: 15px; font-weight: 700; }
+.hist-card-fallback.is-error .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-danger, #ef4444); color: var(--ui-danger, #ef4444); font-size: 15px; font-weight: 700; }
+.hist-card-fallback strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; color: var(--ui-ink, inherit); }
+.hist-card-fallback .hist-card-meta { font-size: 10px; color: var(--ui-ink-mute, #888); }
+.hist-card-fallback .hist-card-meta--danger { color: var(--ui-danger, #ef4444); }

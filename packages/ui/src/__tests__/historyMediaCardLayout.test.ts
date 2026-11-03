@@ -13,12 +13,13 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const videoPreview = readFileSync(
   new URL('../../../plugins/plugin-node-video/src/VideoPreview.vue', import.meta.url),
   'utf-8',
 )
-const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
+const modalsArea = readSfcWithStyles(fileURLToPath(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url)))
 const historyCardText = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/historyCardText.ts'),
   'utf-8',
@@ -146,10 +147,12 @@ describe('全屏预览的音频不用主题紫', () => {
  * 这条契约按样式块切分来判，避免靠"文件里出现过 .hist-card-check"误判为已生效。
  */
 describe('批量勾选钮样式对动态卡片生效', () => {
-  // 取**最后一个**无 scoped 的 <style> 块。之前只用 indexOf 取第一个 <style>，
-  // 取到的是 <style scoped> —— 断言会把"写在 scoped 里"当成通过，正是这次要防的坑。
-  const globalStart = modalsArea.lastIndexOf('<style>')
-  const globalStyle = modalsArea.slice(globalStart, modalsArea.indexOf('</style>', globalStart))
+  // 取**无 scoped** 的样式块。之前只用 indexOf 取第一个 <style>，取到的是
+  // <style scoped> —— 断言会把"写在 scoped 里"当成通过，正是这次要防的坑。
+  // 样式外置到 CSS 后由 readSfcWithStyles 拼回源码，这里按标签边界找，不再依赖
+  // 末尾 <style> 的注释位置。
+  const globalStart = modalsArea.search(/<style(?![^>]*\bscoped\b)[^>]*>/)
+  const globalStyle = globalStart < 0 ? '' : modalsArea.slice(globalStart, modalsArea.indexOf('</style>', globalStart))
 
   it('勾选钮的尺寸/定位写在全局样式块', () => {
     expect(globalStart, '找不到不带 scoped 的全局样式块').toBeGreaterThan(-1)
