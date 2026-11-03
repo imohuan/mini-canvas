@@ -38,10 +38,12 @@
  * 拖播放头/进度条时只有手在动才出声：每次指针移动重置一个 60ms 定时器（SCRUB_IDLE_MS），
  * 到点还没再动就暂停；松手恢复"拖之前"的播放/暂停状态。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { progressRatio, ratioFromPointer } from "./audioPlayback"
-import { WAVEFORM_MAX, isValidWaveform } from "./waveform"
-import { openAudioSource, type AudioSource } from "./audioSource"
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useAudioTransport } from "./audio-wave-player/useAudioTransport"
+import { useWaveformWindow } from "./audio-wave-player/useWaveformWindow"
+import { usePeakWindow } from "./audio-wave-player/usePeakWindow"
+import { useSeekGestures } from "./audio-wave-player/useSeekGestures"
+import { useWaveSize } from "./audio-wave-player/useWaveSize"
 
 const props = withDefaults(
   defineProps<{
@@ -61,547 +63,127 @@ const props = withDefaults(
   { url: "", waveform: undefined, duration: 0, compact: false, barWidth: 2, waveMinHeight: 28 },
 )
 
-const barGap = 1
-const barPitch = computed(() => props.barWidth + barGap)
-/** 波形区的实测宽度（px）；窗口里能放多少根由它决定 */
-const waveWidth = ref(0)
-/** 默认可视窗口秒数：短于它的音频整条铺满，长于它的按这个窗口滑动 */
-const WINDOW_SECONDS = 20
-
-const audioRef = ref<HTMLAudioElement | null>(null)
 const waveRef = ref<HTMLElement | null>(null)
 const knobRef = ref<HTMLElement | null>(null)
 const trackRef = ref<HTMLElement | null>(null)
-
-const ratio = ref(0)
-const playing = ref(false)
-const current = ref(0)
 /** 拖动中冻结的窗口左端（秒）；null = 跟随播放位置 */
 const frozenStart = ref<number | null>(null)
-/** 解码读出来的时长 */
-const decodedDuration = ref(0)
 /** 按需算出来的"当前窗口"峰值（0..1 原始振幅；null = 还没算出来） */
 const windowPeaks = ref<number[] | null>(null)
 /** 上面那批峰值对应的起始格号（与绝对格号对齐，滑动时才不会错位/抖动） */
 let windowPeaksFrom = 0
 
-/** 当前音频时长（秒）：优先解码结果，元数据没到之前用调用方给的已知值 */
-const duration = computed(() =>
-  decodedDuration.value > 0 ? decodedDuration.value : props.duration > 0 ? props.duration : 0,
-)
-
-// ==================== 轮播窗口 ====================
-
-/** 可视区能放多少根竖条（固定条宽 → 由实测宽度决定） */
-const barCount = computed(() => Math.max(8, Math.floor(Math.max(1, waveWidth.value) / barPitch.value)))
-
-/** 每根竖条代表多少秒：短音频整条铺满，长音频按 WINDOW_SECONDS 的窗口 */
-const secondsPerBar = computed(() => {
-  const total = duration.value
-  if (!(total > 0)) return 0
-  // 格子锚在**绝对时间**上 —— 若让每根条跟着窗口左端漂移，同一格每帧显示的采样点
-  // 都在变，看起来就是波形原地抖动（实测的"像水波纹一样来回晃荡"）。
-  const visibleSeconds = Math.min(total, WINDOW_SECONDS)
-  return visibleSeconds / barCount.value
+const transport = useAudioTransport({
+  url: () => props.url,
+  knownDuration: () => props.duration,
+  onProgress: () => {
+    void refreshWindowPeaks()
+  },
 })
+const {
+  audioRef,
+  ratio,
+  playing,
+  current,
+  duration,
+  progressPct,
+  startLoop,
+  stopLoop,
+  togglePlay,
+  onLoadedMetadata,
+  onTimeUpdate,
+  onEnded,
+} = transport
 
-const windowSeconds = computed(() => secondsPerBar.value * barCount.value)
-
-const windowStart = computed(() => {
-  if (frozenStart.value !== null) return frozenStart.value
-  const total = duration.value
-  const span = windowSeconds.value
-  if (!(total > 0) || span >= total) return 0
-  return Math.min(Math.max(0, current.value - span / 2), total - span)
+const windowState = useWaveformWindow({
+  waveform: () => props.waveform,
+  barWidth: () => props.barWidth,
+  duration: () => duration.value,
+  current: () => current.value,
+  frozenStart,
+  windowPeaks,
+  windowPeaksFrom: {
+    get value() {
+      return windowPeaksFrom
+    },
+    set value(v: number) {
+      windowPeaksFrom = v
+    },
+  },
 })
+const { waveWidth, barCount, windowSeconds, windowStart, timelineShiftPx, bars, headPct } = windowState
 
-/** 时间轴整体平移量（px）：窗口滑到 start 秒，整条就向左移 start 对应的像素 */
-const timelineShiftPx = computed(() =>
-  secondsPerBar.value > 0 ? -(windowStart.value / secondsPerBar.value) * barPitch.value : 0,
-)
-
-/** 当前要画的竖条：**单层**，每根带自己的已播状态与坐标 */
-const bars = computed<Array<{ key: number; played: boolean; style: Record<string, string> }>>(() => {
-  const total = duration.value
-  const perBar = secondsPerBar.value
-  if (!(total > 0) || perBar <= 0) return []
-  const count = barCount.value
-  const start = windowStart.value
-  const live = windowPeaks.value
-  const stored = props.waveform && isValidWaveform(props.waveform) ? props.waveform : null
-  const list: Array<{ key: number; played: boolean; style: Record<string, string> }> = []
-  const visible = Math.min(count, Math.max(1, Math.ceil(total / perBar - 1e-6)))
-  const firstCell = Math.max(0, Math.floor(start / perBar))
-  for (let k = 0; k < visible; k++) {
-    const cell = firstCell + k
-    const timeSec = cell * perBar
-    if (timeSec > total + 1e-6) break
-    let value = 0
-    if (live && cell >= windowPeaksFrom && cell - windowPeaksFrom < live.length) {
-      value = live[cell - windowPeaksFrom] ?? 0
-    } else if (stored) {
-      const si = Math.min(stored.length - 1, Math.max(0, Math.round((timeSec / total) * (stored.length - 1))))
-      value = (stored[si] ?? 0) / WAVEFORM_MAX
-    }
-    const h = Math.max(2, Math.min(100, value * 100))
-    list.push({
-      key: cell,
-      played: timeSec <= current.value,
-      style: {
-        left: (cell * barPitch.value).toFixed(2) + "px",
-        top: (50 - h / 2).toFixed(2) + "%",
-        height: h.toFixed(2) + "%",
-      },
-    })
-  }
-  return list
+const peakWindow = usePeakWindow({
+  url: () => props.url,
+  duration: () => duration.value,
+  windowStart,
+  windowSeconds,
+  secondsPerBar: windowState.secondsPerBar,
+  barCount: windowState.barCount,
+  windowPeaks,
+  windowPeaksFrom: {
+    get value() {
+      return windowPeaksFrom
+    },
+    set value(v: number) {
+      windowPeaksFrom = v
+    },
+  },
+  setDecodedDuration: transport.setDecodedDuration,
 })
+const { refreshWindowPeaks, openSource, invalidatePeakRequest } = peakWindow
 
-const headPct = computed(() => {
-  const span = windowSeconds.value
-  if (!(span > 0)) return "0%"
-  const f = (current.value - windowStart.value) / span
-  return (Math.min(1, Math.max(0, f)) * 100).toFixed(4) + "%"
+const gestures = useSeekGestures({
+  url: () => props.url,
+  compact: () => props.compact,
+  audioRef,
+  waveRef,
+  knobRef,
+  trackRef,
+  duration: () => duration.value,
+  current,
+  ratio,
+  playing,
+  frozenStart,
+  windowStart,
+  windowSeconds,
+  startLoop,
+  stopLoop,
+  refreshWindowPeaks,
+  invalidatePeakRequest,
 })
-const progressPct = computed(() => (Math.min(1, Math.max(0, ratio.value)) * 100).toFixed(4) + "%")
-
-// ==================== 按需峰值 ====================
-
-let source: AudioSource | null = null
-let sourceGeneration = 0
-let lastPeakRequest = ""
-
-async function refreshWindowPeaks(): Promise<void> {
-  const src = source
-  if (!src) return
-  const span = windowSeconds.value
-  const start = windowStart.value
-  if (!(span > 0)) return
-  const key = start.toFixed(3) + "|" + span.toFixed(3) + "|" + barCount.value
-  if (key === lastPeakRequest) return
-  lastPeakRequest = key
-  const generation = sourceGeneration
-  try {
-    const perBar = secondsPerBar.value
-    const firstCell = Math.max(0, Math.floor(start / perBar))
-    const askedFrom = firstCell * perBar
-    const askedTo = Math.min(duration.value, askedFrom + span)
-    const peaks = await src.peaks(askedFrom, askedTo, barCount.value)
-    if (generation !== sourceGeneration) return
-    windowPeaksFrom = firstCell
-    windowPeaks.value = peaks
-  } catch {
-    /* 单次取样失败不影响已有画面 */
-  }
-}
-
-/** 打开（或重开）按需解码源；url 变化与"刷新"都走这里 */
-async function openSource(): Promise<void> {
-  const generation = ++sourceGeneration
-  source?.dispose()
-  source = null
-  windowPeaks.value = null
-  lastPeakRequest = ""
-  if (!props.url) return
-  const next = await openAudioSource(props.url)
-  if (generation !== sourceGeneration) {
-    next?.dispose()
-    return
-  }
-  source = next
-  if (!next) return
-  if (next.duration > 0) decodedDuration.value = next.duration
-  void refreshWindowPeaks()
-}
-
-// ==================== 播放控制 ====================
-
-let rafId = 0
-
-/** 每帧读一次播放位置（只在播放中跑；暂停立即停 —— 不空转 rAF） */
-function tick(): void {
-  const el = audioRef.value
-  if (!el) {
-    playing.value = false
-    return
-  }
-  current.value = el.currentTime
-  ratio.value = progressRatio(el.currentTime, duration.value)
-  void refreshWindowPeaks()
-  if (!el.paused && !el.ended) rafId = requestAnimationFrame(tick)
-  else playing.value = false
-}
-
-function startLoop(): void {
-  if (rafId) cancelAnimationFrame(rafId)
-  rafId = requestAnimationFrame(tick)
-}
-
-function stopLoop(): void {
-  if (rafId) cancelAnimationFrame(rafId)
-  rafId = 0
-}
-
-async function togglePlay(): Promise<void> {
-  const el = audioRef.value
-  if (!el || !props.url) return
-  if (el.paused) {
-    try {
-      await el.play()
-    } catch {
-      playing.value = false
-      return
-    }
-    playing.value = true
-    startLoop()
-  } else {
-    el.pause()
-    playing.value = false
-    stopLoop()
-    current.value = el.currentTime
-    ratio.value = progressRatio(el.currentTime, duration.value)
-  }
-}
-
-function onLoadedMetadata(): void {
-  const el = audioRef.value
-  if (!el) return
-  if (Number.isFinite(el.duration) && el.duration > 0) decodedDuration.value = el.duration
-  void refreshWindowPeaks()
-}
-
-/** 暂停中的位置变化（如进度条 seek 后）也要反映到画面 */
-function onTimeUpdate(): void {
-  const el = audioRef.value
-  if (!el || playing.value) return
-  current.value = el.currentTime
-  ratio.value = progressRatio(el.currentTime, duration.value)
-  void refreshWindowPeaks()
-}
-
-function onEnded(): void {
-  playing.value = false
-  stopLoop()
-  current.value = duration.value
-  ratio.value = duration.value > 0 ? 1 : 0
-}
-
-// ==================== 播放头拖动（轮播窗口 + seek + 搓碟） ====================
-
-let seeking = false
-/** 拖动前是否正在播放：松手后只在这种情况下才恢复播放 */
-let wasPlayingBeforeSeek = false
-/** 是否正在拖那条整体进度条 */
-let trackSeeking = false
-/** 拖动中指针的横向位置（不夹取）：用来判断是否进入边缘滚动区 */
-let pointerClientX = 0
-/** 边缘滚动区宽度（px）：指针进到这个范围里，波纹就往那一侧滚 */
-const EDGE_ZONE_PX = 28
-/** 边缘滚动的每帧推进量（秒/帧）—— 与帧率无关地按 60fps 折算 */
-const EDGE_SCROLL_SECONDS_PER_FRAME = 0.12
-let edgeScrollRaf = 0
-/**
- * 拖动出声的节流窗口（毫秒）：每次指针移动就重置定时器，到点还没再动就暂停。
- * 用户口径：拖的时候一直响，手一停（60ms）就静音；按住不放不会自己往前溜。
- */
-const SCRUB_IDLE_MS = 60
-/** 停手后"该暂停"的定时器 */
-let scrubIdleTimer = 0
-/** 指针停手后音频是否已暂停（下次移动要重新播放） */
-let scrubPaused = false
-
-/** 指针横坐标 → 目标时间（拖动中窗口冻结，所以换算用的是同一把尺子） */
-function seekTo(clientX: number): void {
-  const el = audioRef.value
-  const wave = waveRef.value
-  if (!el || !wave) return
-  const rect = wave.getBoundingClientRect()
-  const fraction = ratioFromPointer(clientX, rect.left, rect.width)
-  const time = windowStart.value + fraction * windowSeconds.value
-  const clamped = Math.min(Math.max(0, time), duration.value || time)
-  try {
-    el.currentTime = clamped
-  } catch {
-    /* 元数据还没到 / 浏览器拒绝：显示仍跟着手指走 */
-  }
-  current.value = clamped
-  ratio.value = duration.value > 0 ? clamped / duration.value : 0
-}
-
-/** 把音频定位到某个绝对时间（整体进度条与边缘滚动共用；不改变播放状态） */
-function seekToTime(time: number): void {
-  const el = audioRef.value
-  const total = duration.value
-  const clamped = Math.min(Math.max(0, time), total > 0 ? total : Math.max(0, time))
-  if (el) {
-    try {
-      el.currentTime = clamped
-    } catch {
-      /* 元数据还没到：只更新显示 */
-    }
-  }
-  current.value = clamped
-  ratio.value = total > 0 ? clamped / total : 0
-}
-
-/** 整体进度条：指针位置 → 绝对时间（这条是**整条音频**的尺子，与窗口无关） */
-function onTrackPointerDown(e: PointerEvent): void {
-  if (!props.url) return
-  e.stopPropagation()
-  e.preventDefault()
-  trackSeeking = true
-  const el = audioRef.value
-  wasPlayingBeforeSeek = !!el && !el.paused
-  scrubPaused = false
-  if (el) {
-    // 与把手一致：拖动期间出声、停手即静音，松手原样恢复
-    void el.play().catch(() => {})
-    playing.value = true
-    startLoop()
-  }
-  trackRef.value?.setPointerCapture?.(e.pointerId)
-  seekByTrackPointer(e.clientX)
-  armScrubIdleTimer()
-}
-
-function onTrackPointerMove(e: PointerEvent): void {
-  if (!trackSeeking) return
-  e.stopPropagation()
-  noteScrubActivity()
-  seekByTrackPointer(e.clientX)
-}
-
-function onTrackPointerUp(e: PointerEvent): void {
-  if (!trackSeeking) return
-  trackSeeking = false
-  trackRef.value?.releasePointerCapture?.(e.pointerId)
-  cancelScrubIdle()
-  const el = audioRef.value
-  if (el) {
-    if (wasPlayingBeforeSeek) {
-      void el.play().catch(() => {})
-      playing.value = true
-      startLoop()
-    } else {
-      el.pause()
-      playing.value = false
-      stopLoop()
-    }
-  }
-  wasPlayingBeforeSeek = false
-  void refreshWindowPeaks()
-}
-
-/** 指针横坐标 → 整条音频上的时间 */
-function seekByTrackPointer(clientX: number): void {
-  const track = trackRef.value
-  if (!track) return
-  const rect = track.getBoundingClientRect()
-  const fraction = ratioFromPointer(clientX, rect.left, rect.width)
-  seekToTime(fraction * duration.value)
-}
-
-/** 开始一次 seek（播放头与历史卡的整条波形共用同一套逻辑） */
-function beginSeek(e: PointerEvent, captureEl: HTMLElement | null): void {
-  if (!props.url) return
-  e.stopPropagation()
-  e.preventDefault()
-  // 冻结窗口：否则"窗口跟着播放走"+"指针映射到时间"会形成反馈环（实测进度会飞）
-  frozenStart.value = windowStart.value
-  seeking = true
-  const el = audioRef.value
-  wasPlayingBeforeSeek = !!el && !el.paused
-  scrubPaused = false
-  if (el) {
-    void el.play().catch(() => {})
-    playing.value = true
-    startLoop()
-  }
-  pointerClientX = e.clientX
-  captureEl?.setPointerCapture?.(e.pointerId)
-  startEdgeScroll()
-  armScrubIdleTimer()
-}
-
-function moveSeek(e: PointerEvent): void {
-  if (!seeking) return
-  e.stopPropagation()
-  pointerClientX = e.clientX
-  noteScrubActivity()
-  seekTo(e.clientX)
-}
-
-function finishSeek(e: PointerEvent, captureEl: HTMLElement | null): void {
-  if (!seeking) return
-  seeking = false
-  frozenStart.value = null
-  stopEdgeScroll()
-  cancelScrubIdle()
-  const el = audioRef.value
-  if (el) {
-    // 恢复"拖之前"的状态：原本在播就继续播，原本暂停就回到暂停（用户口径）
-    if (wasPlayingBeforeSeek) {
-      void el.play().catch(() => {})
-      playing.value = true
-      startLoop()
-    } else {
-      el.pause()
-      playing.value = false
-      stopLoop()
-    }
-  }
-  wasPlayingBeforeSeek = false
-  captureEl?.releasePointerCapture?.(e.pointerId)
-  void refreshWindowPeaks()
-}
-
-function onKnobPointerDown(e: PointerEvent): void {
-  beginSeek(e, knobRef.value)
-}
-
-function onKnobPointerMove(e: PointerEvent): void {
-  moveSeek(e)
-}
-
-function onKnobPointerUp(e: PointerEvent): void {
-  finishSeek(e, knobRef.value)
-}
-
-/**
- * 历史卡（compact）里整条波形都能点/拖：点哪跳哪，按住拖连续 seek。
- * 只在 compact 模式接管 —— 节点里的波形要留给画布拖拽（手势契约，别回退）。
- */
-function onWavePointerDown(e: PointerEvent): void {
-  if (!props.compact) return
-  beginSeek(e, waveRef.value)
-  seekTo(e.clientX)
-}
-
-function onWavePointerMove(e: PointerEvent): void {
-  if (!props.compact) return
-  moveSeek(e)
-}
-
-function onWavePointerUp(e: PointerEvent): void {
-  if (!props.compact) return
-  finishSeek(e, waveRef.value)
-}
-
-/** 拖动时每次指针移动重置定时器；到点自动暂停（声音、播放头、时间轴一起停） */
-function armScrubIdleTimer(): void {
-  if (scrubIdleTimer) clearTimeout(scrubIdleTimer)
-  scrubIdleTimer = window.setTimeout(pauseScrub, SCRUB_IDLE_MS)
-}
-
-function cancelScrubIdle(): void {
-  if (scrubIdleTimer) clearTimeout(scrubIdleTimer)
-  scrubIdleTimer = 0
-}
-
-/** 指针动了：若停手时被暂停过，先恢复出声，再把"停手暂停"的定时器往后推一格 */
-function noteScrubActivity(): void {
-  if (scrubPaused) {
-    const el = audioRef.value
-    if (el) {
-      void el.play().catch(() => {})
-      playing.value = true
-      startLoop()
-    }
-    scrubPaused = false
-  }
-  armScrubIdleTimer()
-}
-
-/** 停手了：暂停播放，下次移动再恢复 */
-function pauseScrub(): void {
-  scrubIdleTimer = 0
-  if (!seeking && !trackSeeking) return
-  if (scrubPaused) return
-  const el = audioRef.value
-  if (el && !el.paused) {
-    el.pause()
-    current.value = el.currentTime
-    ratio.value = progressRatio(el.currentTime, duration.value)
-  }
-  playing.value = false
-  stopLoop()
-  scrubPaused = true
-}
-
-/**
- * 边缘滚动：指针拖到可视区左/右边缘时，让**窗口**持续朝那一侧走 ——
- * 一根把手就能控制整条音频，而不是只有可视窗口那一小段。
- */
-function runEdgeScroll(): void {
-  edgeScrollRaf = 0
-  if (!seeking) return
-  const wave = waveRef.value
-  const total = duration.value
-  const span = windowSeconds.value
-  if (!wave || !(total > 0) || !(span > 0) || span >= total) return
-  const rect = wave.getBoundingClientRect()
-  const left = rect.left + EDGE_ZONE_PX
-  const right = rect.right - EDGE_ZONE_PX
-  let step = 0
-  if (pointerClientX < left) step = -EDGE_SCROLL_SECONDS_PER_FRAME
-  else if (pointerClientX > right) step = EDGE_SCROLL_SECONDS_PER_FRAME
-  if (step !== 0) {
-    const from = frozenStart.value ?? windowStart.value
-    const next = Math.min(Math.max(0, from + step), Math.max(0, total - span))
-    if (Math.abs(next - from) > 1e-6) {
-      frozenStart.value = next
-      // 窗口在滚：把播放位置也带到窗口中心附近，松手时落点才跟得上画面
-      const target = Math.min(total, Math.max(0, next + span / 2))
-      const el = audioRef.value
-      if (el) {
-        try {
-          el.currentTime = target
-        } catch {
-          /* 元数据还没到：只滚窗口 */
-        }
-      }
-      current.value = target
-      ratio.value = total > 0 ? target / total : 0
-      lastPeakRequest = ""
-      void refreshWindowPeaks()
-    }
-  }
-  edgeScrollRaf = requestAnimationFrame(runEdgeScroll)
-}
-
-function startEdgeScroll(): void {
-  if (!edgeScrollRaf) edgeScrollRaf = requestAnimationFrame(runEdgeScroll)
-}
-
-function stopEdgeScroll(): void {
-  if (edgeScrollRaf) cancelAnimationFrame(edgeScrollRaf)
-  edgeScrollRaf = 0
-}
+const {
+  onTrackPointerDown,
+  onTrackPointerMove,
+  onTrackPointerUp,
+  onKnobPointerDown,
+  onKnobPointerMove,
+  onKnobPointerUp,
+  onWavePointerDown,
+  onWavePointerMove,
+  onWavePointerUp,
+  cancelScrubIdle,
+  stopEdgeScroll,
+  isSeeking,
+} = gestures
 
 // ==================== 生命周期 ====================
 
-let observer: ResizeObserver | null = null
-
-/** 量一次波形区宽度（固定条宽 → 根数由它算出来） */
-function measure(): void {
-  const el = waveRef.value
-  if (!el) return
-  // 用 clientWidth（布局像素）而不是 getBoundingClientRect：后者含画布缩放，
-  // 而条宽是布局像素 —— 两者混用会让"能放多少根"算错（实测波形只铺到一部分）。
-  const w = el.clientWidth
-  if (Number.isFinite(w) && w > 0 && Math.abs(w - waveWidth.value) > 0.5) {
-    waveWidth.value = w
-    lastPeakRequest = ""
+const waveSize = useWaveSize({
+  waveWidth,
+  waveRef,
+  onWidthChange: () => {
+    invalidatePeakRequest()
     void refreshWindowPeaks()
-  }
-}
+  },
+})
 
 onMounted(() => {
-  measure()
+  waveSize.measure()
   // 再量一次：挂载这一帧宽度可能还没定下来（卡片尺寸是异步落位的）
   void nextTick(() => {
-    measure()
-    requestAnimationFrame(() => measure())
+    waveSize.measure()
+    requestAnimationFrame(() => waveSize.measure())
   })
   void openSource()
 })
@@ -609,11 +191,7 @@ onMounted(() => {
 watch(
   () => props.url,
   () => {
-    current.value = 0
-    ratio.value = 0
-    playing.value = false
-    decodedDuration.value = 0
-    stopLoop()
+    transport.resetForNewUrl()
     void openSource()
   },
 )
@@ -622,31 +200,22 @@ watch(
 watch(
   waveRef,
   (el) => {
-    observer?.disconnect()
-    observer = null
-    if (!el) return
-    measure()
-    if (typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(() => measure())
-      observer.observe(el)
-    }
+    waveSize.observeWave(el)
   },
   { flush: "post" },
 )
 
 /** 跟随播放位置时，窗口一变就补算新进入可视区的峰值（拖动中窗口冻结，不重算） */
 watch([windowStart, barCount], () => {
-  if (!seeking) void refreshWindowPeaks()
+  if (!isSeeking()) void refreshWindowPeaks()
 })
 
 onBeforeUnmount(() => {
   stopLoop()
   stopEdgeScroll()
   cancelScrubIdle()
-  observer?.disconnect()
-  sourceGeneration++
-  source?.dispose()
-  source = null
+  waveSize.disconnect()
+  peakWindow.dispose()
 })
 
 /** 对调用方公开：播放态（defineExpose 会自动解包 ref）+ 播放/暂停 + 重开解码源 */

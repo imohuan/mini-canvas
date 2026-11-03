@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync(new URL('../MediaViewer.vue', import.meta.url), 'utf-8')
+const src = readFileSync(new URL('../media-viewer/useBodyScrollLock.ts', import.meta.url), 'utf-8')
 
 describe('MediaViewer 滚动锁', () => {
   it('不再无脑清空 body.overflow，而是记原值再恢复', () => {

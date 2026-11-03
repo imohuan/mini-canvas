@@ -122,7 +122,7 @@ describe('时长与文案', () => {
   })
 
   it('hover 只提亮波形本身，不铺灰底（用户指定）', () => {
-    // 波形样式随抽组件搬进了 AudioWavePlayer.vue（渲染入口仍是 AudioContent，SSR 用例已覆盖）
+    // 波形样式随拆分仍住在 AudioWavePlayer.vue（渲染入口仍是 AudioContent，SSR 用例已覆盖）
     const SFC = readFileSync(new URL('../AudioWavePlayer.vue', import.meta.url), 'utf8')
     const hoverRule = SFC.match(/\.aw-wave:hover\s*\{[^}]*\}/)?.[0] ?? ''
     expect(hoverRule).not.toMatch(/background\s*:/)

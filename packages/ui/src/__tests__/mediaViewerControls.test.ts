@@ -18,6 +18,22 @@ const viewer = readFileSync(
   new URL('../../../plugins/plugin-theme-default/src/components/ui/MediaViewer.vue', import.meta.url),
   'utf-8',
 )
+const source = readFileSync(
+  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useMediaViewerSource.ts', import.meta.url),
+  'utf-8',
+)
+const imageViewer = readFileSync(
+  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useImageViewer.ts', import.meta.url),
+  'utf-8',
+)
+const navigation = readFileSync(
+  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useMediaNavigation.ts', import.meta.url),
+  'utf-8',
+)
+const controller = readFileSync(
+  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useMediaViewerController.ts', import.meta.url),
+  'utf-8',
+)
 
 /**
  * 只取 <template> 段：样式里也有 .mv-controls，混在一起断言会假绿。
@@ -68,22 +84,24 @@ describe('全屏预览底部控制条', () => {
       expect(btn, `找不到「${label}」按钮`).not.toBe('')
       expect(btn, `「${label}」仍只在图片时出现（视频缺这两个功能）`).toMatch(/v-if="hasTools"/)
     }
-    expect(viewer, '没有 hasTools 判定（图片+视频）').toMatch(/const hasTools = computed\(\(\) => isImage\.value \|\| kind\.value === "video"\)/)
+    expect(source, '没有 hasTools 判定（图片+视频）').toMatch(/const hasTools = computed\(\(\) => isImage\.value \|\| kind\.value === "video"\)/)
   })
 
   it('视频的旋转/镜像作用在舞台盒上，不碰视频元素本身', () => {
     // 变换层上还挂着 ref（量尺寸算缩放系数），所以按 class + style 绑定判，不要求属性紧邻
     expect(template, '视频舞台里没有变换层').toMatch(/<div[^>]*class="mv-video-transform"[^>]*:style="videoTransform"/)
-    expect(viewer, '缺少 videoTransform 计算').toMatch(/const videoTransform = computed/)
+    expect(imageViewer, '缺少 videoTransform 计算').toMatch(/const videoTransform = computed/)
     // 视频元素本身不该挂 transform 样式（会与插件内部缩放冲突）
     const videoTag = template.match(/<video[^>]*class="mv-video"[^>]*>/)?.[0] ?? ''
     expect(videoTag, '视频元素自己挂了 style（应由外层变换层承担）').not.toMatch(/:style=/)
   })
 
   it('换张 / 重新打开时视频朝向归零（不继承上一张的旋转）', () => {
-    const prev = viewer.slice(viewer.indexOf('function prevImage'), viewer.indexOf('function download'))
+    const prev = navigation.slice(navigation.indexOf('function prevImage'), navigation.indexOf('function nextImage'))
+    const next = navigation.slice(navigation.indexOf('function nextImage'), navigation.indexOf('return { prevImage'))
     expect(prev, '换张没有重置视频变换').toMatch(/videoTransformReset\(\)/)
-    expect(viewer, '打开预览时没有重置视频变换').toMatch(/resetTransform\(\)\s*\n\s*videoTransformReset\(\)/)
+    expect(next, '换张没有重置视频变换').toMatch(/videoTransformReset\(\)/)
+    expect(controller, '打开预览时没有重置视频变换').toMatch(/resetTransform\(\)\s*\n\s*videoTransformReset\(\)/)
   })
 })
 

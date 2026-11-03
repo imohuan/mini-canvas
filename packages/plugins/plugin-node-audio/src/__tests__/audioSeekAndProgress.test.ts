@@ -41,8 +41,8 @@ function render(id: string, data: Record<string, unknown>): Promise<string> {
   app.provide(RENDER_CONTEXT_KEY, renderCtx())
   return renderToString(app)
 }
-// 波形/拖拽实现随抽组件搬进了 AudioWavePlayer.vue（行为契约原样搬走，测试跟着锁新家）
-const SFC = readFileSync(new URL('../AudioWavePlayer.vue', import.meta.url), 'utf8')
+// 波形/拖拽实现随拆分搬进了 audio-wave-player/useSeekGestures.ts（行为契约原样搬走，测试跟着锁新家）
+const SFC = readFileSync(new URL('../audio-wave-player/useSeekGestures.ts', import.meta.url), 'utf8')
 
 describe('波纹下面那条整体进度条', () => {
   it('渲染出来了，且带无障碍语义（role=slider + 数值范围）', async () => {
@@ -102,9 +102,10 @@ describe('拖拽手感：指针在动才出声，停手即静音（第十一轮�
   })
 
   it('松手 / 卸载时清掉停手定时器（不留常驻计时）', () => {
-    const upBlock = SFC.slice(SFC.indexOf('function finishSeek'), SFC.indexOf('function armScrubIdleTimer'))
+    const upBlock = SFC.slice(SFC.indexOf('function finishSeek'), SFC.indexOf('function onKnobPointerDown'))
     expect(upBlock).toMatch(/cancelScrubIdle\(\)/)
-    const unmount = SFC.slice(SFC.indexOf('onBeforeUnmount'))
+    const viewer = readFileSync(new URL('../AudioWavePlayer.vue', import.meta.url), 'utf8')
+    const unmount = viewer.slice(viewer.indexOf('onBeforeUnmount'))
     expect(unmount).toMatch(/cancelScrubIdle\(\)/)
   })
 
@@ -121,7 +122,8 @@ describe('拖拽手感：指针在动才出声，停手即静音（第十一轮�
 
 describe('播放头线的外观（平时无形，hover 出高亮且**线宽不能变细**）', () => {
   const base = SFC.match(/\.aw-knob::after\s*\{[^}]*\}/)?.[0] ?? ''
-  const hover = SFC.match(/\.aw-knob:hover::after[^{]*\{[^}]*\}/)?.[0] ?? ''
+  const styleSFC = readFileSync(new URL('../AudioWavePlayer.vue', import.meta.url), 'utf8')
+  const hover = styleSFC.match(/\.aw-knob:hover::after[^{]*\{[^}]*\}/)?.[0] ?? ''
 
   it('平时：不画边框、不用阴影，就是一条半透明的线', () => {
     expect(base).not.toMatch(/border\s*:/)

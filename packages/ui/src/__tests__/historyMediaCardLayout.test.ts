@@ -49,6 +49,10 @@ const audioWavePlayer = readFileSync(
   new URL('../../../plugins/plugin-node-audio/src/AudioWavePlayer.vue', import.meta.url),
   'utf-8',
 )
+const audioWaveSeek = readFileSync(
+  new URL('../../../plugins/plugin-node-audio/src/audio-wave-player/useSeekGestures.ts', import.meta.url),
+  'utf-8',
+)
 
 describe('VideoPreview 按实测宽度切两套 UI', () => {
   it('用 ResizeObserver 量自己的宽度（宽度的真源在组件内部，不由宿主传）', () => {
@@ -517,8 +521,8 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('历史卡的波形可点/可拖 seek（只在紧凑模式，不拦画布节点拖动）', () => {
-    expect(audioWavePlayer, '缺少波形指针 seek').toMatch(/function onWavePointerDown/)
-    expect(audioWavePlayer, '波形 seek 没有限制在紧凑模式').toMatch(/if \(!props\.compact\) return/)
+    expect(audioWaveSeek, '缺少波形指针 seek').toMatch(/function onWavePointerDown/)
+    expect(audioWaveSeek, '波形 seek 没有限制在紧凑模式').toMatch(/if \(!options\.compact\(\)\) return/)
     expect(audioWavePlayer, '波形区没有接 pointerdown').toMatch(/@pointerdown="onWavePointerDown"/)
     // 批量模式要能点波形选中卡片：波形不拦 click，只拦 pointer 手势
     expect(audioWavePlayer, '波形上挂了 click 拦截，批量模式点波形会选不中').not.toMatch(/@click=/) 

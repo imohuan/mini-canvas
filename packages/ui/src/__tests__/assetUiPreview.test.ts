@@ -102,7 +102,8 @@ describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {
   })
 
   it('item 类型声明里有 html 字段', () => {
-    expect(viewer).toMatch(/html\?: string/)
+    const types = read('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/types.ts')
+    expect(types).toMatch(/html\?: string/)
   })
 })
 

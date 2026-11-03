@@ -15,10 +15,16 @@
  *
  * onDelete：宿主给了才出现删除按钮（悬停显示）。删除动作由宿主定
  * （底栏=断开连线，资产面板=调后台接口），本组件不猜。
+ *
+ * 实现位置：状态与行为在 media-viewer/ —— 预览件取用与多张清单、图片/视频变换、
+ * 换张、下载、键盘、滚动锁、打开关闭接线；模板与 scoped 样式仍留在本入口。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from "vue"
+import { computed } from "vue"
 import { Button } from "@mini-canvas/ui-kit-shadcn"
-import { useUiComponent, uiComponentOutside } from "@mini-canvas/canvas-render"
+import { useMediaViewerController } from "./media-viewer/useMediaViewerController"
+import type { MediaViewerItem } from "./media-viewer/types"
+
+export type { MediaViewerItem } from "./media-viewer/types"
 
 /**
  * 根节点是 Teleport：外层（SlotHost 的 overlay 槽 / 底栏 MediaPreviewOverlay）会下发
@@ -28,30 +34,6 @@ import { useUiComponent, uiComponentOutside } from "@mini-canvas/canvas-render"
  * 外层传的 data-testid（底栏 e2e 用它找预览浮层）就不会丢。
  */
 defineOptions({ inheritAttrs: false })
-
-/** 一个待预览的媒体（与底栏 mediaPreview.ts 的 PreviewItem 同构；这里是通用形状） */
-export interface MediaViewerItem {
-  /** 标题（左上角悬浮显示；空则不显示） */
-  name?: string
-  /** 媒体种类（决定内置预览用 img / video / audio / 纯文本） */
-  kind: "image" | "video" | "audio" | "text" | string
-  /** 图片/视频/音频地址 */
-  url?: string
-  /** 文本内容（kind="text" 用） */
-  text?: string
-  /**
-   * 一段自包含 HTML（kind="ui" 用）—— 可视化节点的界面代码。
-   *
-   * 为什么不能像别的类型那样给 url：可视化节点的内容不是"可加载的媒体"，
-   * 而是一段 HTML（它没有独立的可访问地址）。用户口径 2026-10-14：
-   * 「可以在预览中添加一个 iframe 预览框」—— 这个字段就是给那个 iframe 的 srcdoc。
-   */
-  html?: string
-  /** 宿主自带的同组媒体（给了就出 上一张/下一张 与页码；图片变换工具随当前张走） */
-  list?: string[]
-  /** 当前张在 list 里的下标（配合 list 用；默认 0） */
-  index?: number
-}
 
 const props = withDefaults(
   defineProps<{
@@ -77,207 +59,38 @@ const emit = defineEmits<{
 }>()
 
 const item = computed(() => props.item ?? null)
-const canRemove = computed(() => typeof props.onDelete === "function")
-
-/**
- * kind 归一化：宿主可能传中文标签（生成历史的「图片/视频/音频/文本」），
- * 这里统一映射成内置渲染认的英文 kind —— 各接入方不必各自换算。
- */
-const KIND_ALIASES: Record<string, string> = { 图片: "image", 视频: "video", 音频: "audio", 文本: "text" }
-const kind = computed(() => KIND_ALIASES[item.value?.kind ?? ""] ?? item.value?.kind ?? "")
-
-/**
- * 三类媒体的**预览注册件**（audioPreview / videoPreview / textPreview，节点插件登记）。
- * 登记了就用它们（波形播放器 / 自绘控件 / 文本排版），没登记才回落原生标签 ——
- * 预览观感跟着插件实现走，这里不做第二套。
- */
-function tryUseComponent(name: string) {
-  try {
-    return useUiComponent(name)
-  } catch {
-    // 画布树外（资产抽屉 / 生成历史弹窗等）：useUiComponent 抛错（无 provide），
-    // 但注册表本身是**全局单例**（宿主 ctx 上）—— 用树外取件入口照常拿到。
-    // 这样树里树外取到的都是**同一个注册件**，各宿主不必再传 previewComponents。
-    return ref(uiComponentOutside(name))
-  }
-}
-const AudioPreview = computed(() => (props.previewComponents?.audioPreview as Component | undefined) ?? (tryUseComponent("audioPreview").value as Component | undefined))
-const VideoPreview = computed(() => (props.previewComponents?.videoPreview as Component | undefined) ?? (tryUseComponent("videoPreview").value as Component | undefined))
-const TextPreview = computed(() => (props.previewComponents?.textPreview as Component | undefined) ?? (tryUseComponent("textPreview").value as Component | undefined))
-
-// ===== 多图（宿主给 list 时才有） =====
-const list = computed<string[]>(() => (item.value?.list?.length ? item.value.list : item.value?.url ? [item.value.url] : []))
-const currentIdx = ref(0)
-const isMultiple = computed(() => list.value.length > 1)
-const currentUrl = computed(() => list.value[currentIdx.value] ?? "")
-const isImage = computed(() => kind.value === "image")
-/** 能缩放/平移的媒体（图片 + 视频）。音频/文本不参与变换。
- *  用户口径（2026-10-07）：**只有图片**参与缩放/平移（视频默认铺满已够大，不要那一排缩放按钮）。
- *  视频改用节点插件的 videoPreview（自带播放/进度/音量），底部控制条对视频不再出现。 */
-const canZoom = computed(() => isImage.value)
-
-/**
- * 底部控制条**常驻**（用户口径 2026-10-29：页码 + 下载是所有媒体都有的常驻项）。
- *
- * 中段工具按媒体类型给：
- *   · 图片：缩放 / 旋转 / 翻转 / 重置（可拖拽平移，所以有缩放与重置）；
- *   · 视频：旋转 / 翻转（不能缩放，但「镜像 / 旋转」保留；变换作用在视频舞台盒上）；
- *   · 音频 / 文本 / 其它：只有常驻的页码 + 下载。
- */
-const hasTools = computed(() => isImage.value || kind.value === "video")
-
-// ===== 图片变换（AxImageViewer 同款：缩放 / 拖拽 / 旋转 / 翻转） =====
-const scale = ref(1)
-const rotation = ref(0)
-const flip = ref(false)
-const offsetX = ref(0)
-const offsetY = ref(0)
-const dragging = ref(false)
-let dragStartX = 0
-let dragStartY = 0
-
-const imageStyle = computed(() => ({
-  transform: `translate(${offsetX.value}px, ${offsetY.value}px) scale(${scale.value}) rotate(${rotation.value}deg) scaleX(${flip.value ? -1 : 1})`,
-  transition: dragging.value ? "none" : "transform 0.2s ease",
-}))
-
-function resetTransform(): void {
-  scale.value = 1
-  rotation.value = 0
-  flip.value = false
-  offsetX.value = 0
-  offsetY.value = 0
-}
-function zoomIn(): void { scale.value = Math.min(scale.value + 0.25, 5) }
-function zoomOut(): void { scale.value = Math.max(scale.value - 0.25, 0.25) }
-function rotateImg(): void { rotation.value = (rotation.value + 90) % 360 }
-function toggleFlip(): void { flip.value = !flip.value }
-
-/** 视频的旋转 / 翻转：套在**视频舞台盒**上（不碰插件内部的播放状态，也不改视频元素本身） */
-const videoTransform = computed(() => ({
-  transform: `rotate(${rotation.value}deg) scaleX(${flip.value ? -1 : 1})`,
-  transition: "transform 0.2s ease",
-}))
-
-function handleWheel(e: WheelEvent): void {
-  if (!isImage.value) return
-  e.preventDefault()
-  scale.value = Math.min(Math.max(scale.value + (e.deltaY > 0 ? -0.1 : 0.1), 0.25), 5)
-}
-function handleMouseDown(e: MouseEvent): void {
-  if (!isImage.value) return
-  if ((e.target as HTMLElement).closest(".mv-controls")) return
-  dragging.value = true
-  dragStartX = e.clientX - offsetX.value
-  dragStartY = e.clientY - offsetY.value
-}
-function handleMouseMove(e: MouseEvent): void {
-  if (!dragging.value) return
-  offsetX.value = e.clientX - dragStartX
-  offsetY.value = e.clientY - dragStartY
-}
-function handleMouseUp(): void { dragging.value = false }
-
-// ===== 切换（多图） =====
-function prevImage(): void {
-  if (!isMultiple.value) return
-  currentIdx.value = (currentIdx.value - 1 + list.value.length) % list.value.length
-  resetTransform()
-  videoTransformReset()
-  emit("index", currentIdx.value)
-}
-function nextImage(): void {
-  if (!isMultiple.value) return
-  currentIdx.value = (currentIdx.value + 1) % list.value.length
-  resetTransform()
-  videoTransformReset()
-  emit("index", currentIdx.value)
-}
-
-/** 换张时把视频的旋转/镜像也归零（否则新视频会继承上一张的朝向） */
-function videoTransformReset(): void {
-  rotation.value = 0
-  flip.value = false
-}
-
-// ===== 下载（AxImageViewer 同款：fetch 转 blob；跨域失败退开新窗口） =====
-async function download(): Promise<void> {
-  const url = currentUrl.value
-  if (!url) return
-  try {
-    const resp = await fetch(url)
-    const blob = await resp.blob()
-    const objUrl = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = objUrl
-    a.download = item.value?.name || "image"
-    a.click()
-    URL.revokeObjectURL(objUrl)
-  } catch {
-    window.open(url, "_blank")
-  }
-}
-
-function close(): void { emit("close") }
-function remove(): void {
-  if (item.value && props.onDelete) props.onDelete(item.value)
-}
-
-// ===== 键盘（AxImageViewer 同款键位） =====
-function handleKeydown(e: KeyboardEvent): void {
-  if (!item.value) return
-  switch (e.key) {
-    case "Escape": e.stopPropagation(); close(); break
-    case "ArrowLeft": case "a": case "A": prevImage(); break
-    case "ArrowRight": case "d": case "D": nextImage(); break
-    case "+": case "=": if (canZoom.value) zoomIn(); break
-    case "-": if (canZoom.value) zoomOut(); break
-    case "0": if (canZoom.value) resetTransform(); break
-    case "r": case "R": if (hasTools.value) rotateImg(); break
-    case "f": case "F": if (hasTools.value) toggleFlip(); break
-  }
-}
-
-onMounted(() => window.addEventListener("keydown", handleKeydown, true))
-onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleKeydown, true)
-  restoreBodyOverflow()
-})
-
-/**
- * 打开前 body 的 overflow（null = 我们没锁）。
- *
- * 为什么记原值而不是关闭时写 ""：预览常常叠在别的弹窗上（资产/历史/对话框），
- * 那些弹窗正锁着滚动（body.overflow = hidden）。预览关掉就写 ""，等于把底下的
- * 弹窗也一起解锁 —— 用户能在弹窗背后滚动画布。恢复原值才是正确语义。
- */
-let overflowBeforeOpen: string | null = null
-
-function lockBodyOverflow(): void {
-  if (typeof document === "undefined" || overflowBeforeOpen !== null) return
-  overflowBeforeOpen = document.body.style.overflow
-  document.body.style.overflow = "hidden"
-}
-
-function restoreBodyOverflow(): void {
-  if (typeof document === "undefined" || overflowBeforeOpen === null) return
-  document.body.style.overflow = overflowBeforeOpen
-  overflowBeforeOpen = null
-}
-
-/** 打开时锁 body 滚动、从宿主给的 index 起步、变换归零；关闭恢复 */
-watch(item, (v) => {
-  if (typeof document === "undefined") return
-  if (v) {
-    currentIdx.value = Math.min(Math.max(v.index ?? 0, 0), Math.max(list.value.length - 1, 0))
-    emit("index", currentIdx.value)
-    resetTransform()
-    videoTransformReset()
-    lockBodyOverflow()
-  } else {
-    restoreBodyOverflow()
-  }
-})
+const {
+  canRemove,
+  AudioPreview,
+  VideoPreview,
+  TextPreview,
+  kind,
+  list,
+  currentIdx,
+  isMultiple,
+  currentUrl,
+  isImage,
+  canZoom,
+  hasTools,
+  scale,
+  dragging,
+  imageStyle,
+  videoTransform,
+  resetTransform,
+  zoomIn,
+  zoomOut,
+  rotateImg,
+  toggleFlip,
+  handleWheel,
+  handleMouseDown,
+  handleMouseMove,
+  handleMouseUp,
+  prevImage,
+  nextImage,
+  download,
+  close,
+  remove,
+} = useMediaViewerController(props, emit, item)
 </script>
 
 <template>
