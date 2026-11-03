@@ -1195,8 +1195,6 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ShortcutModal @close="s.shortcutsOpen = false" />
-
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
   <AppDialog :model-value="s.historyOpen" :close-on-overlay="false" :with-overlay="false" width="min(90vw, 1600px)" height="calc(100vh - 160px)"
     radius="24px" @update:model-value="!$event && (s.historyOpen = false)">
@@ -1348,8 +1346,6 @@ onBeforeUnmount(() => {
   <component :is="PreviewViewer" v-if="previewItem" :item="previewItem" @close="previewItem = null" />
 
   <HistoryDetailDialog :item="detailItem" @close="detailItem = null" />
-
-  <DirectorSettingsDialog />
 </template>
 
 <style scoped>
