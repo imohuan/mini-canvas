@@ -96,7 +96,12 @@ describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
 })
 
 describe('标签的两半点击（用户 2026-10-29 定稿）', () => {
-  const EDITOR = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
+  // chipIconRect / clickInsideChipIcon 随拆分搬到 editor/chipDom.ts；两处一起读，
+  // 断言仍是「源码里有没有这段实现」，不依赖具体文件位置。
+  const EDITOR = [
+    readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8'),
+    readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipDom.ts', import.meta.url)), 'utf8'),
+  ].join('\n')
   /** 常量定义随拆分搬到了 editor/chipRegistry.ts；拼进来只为让「定义 + 使用」都能查到 */
   const CHIP_REGISTRY = readFileSync(
     fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipRegistry.ts', import.meta.url)),
@@ -109,7 +114,10 @@ describe('标签的两半点击（用户 2026-10-29 定稿）', () => {
   })
 
   it('图标位的命中按真实矩形算（缩略图 pointer-events:none，只能按坐标判）', () => {
-    const body = EDITOR.slice(EDITOR.indexOf('function chipIconRect'), EDITOR.indexOf('function handleResourceClick'))
+    // chipIconRect 拆到了 editor/chipDom.ts；按起始位置向后取到它所在函数的结尾，
+    // 断言仍只检查「图标命中是不是按真实矩形算」这一条。
+    const at = EDITOR.indexOf('function chipIconRect')
+    const body = at < 0 ? '' : EDITOR.slice(at, EDITOR.indexOf('\n}\n', at) + 3)
     expect(body).toContain('resource-chip-thumb')
     expect(body).toContain('getBoundingClientRect')
   })
