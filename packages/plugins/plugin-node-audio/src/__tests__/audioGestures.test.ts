@@ -2,15 +2,26 @@
  * 渲染契约（SSR 真 HTML）。与 audioContentRender 分开：这里只盯**画布手势边界** ——
  * 哪些元素该拦、哪些该放行，是用户实测踩过的坑（文字拖不动节点 / 拖节点变成拖进度）。
  */
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
+// 走真实主题插件注册流程拿 Button：组件经 useUiComponent 取件，桩一个空目录会让按钮渲染成
+// Vue 警告里的 undefined，"两个按钮各拦手势"这条就变成数到 0 个按钮（与组件行为无关）。
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import AudioContent from '../AudioContent.vue'
 import { WAVEFORM_BUCKETS } from '../waveform'
 
 const AUDIO = 'blob:mock-audio'
+let uiFieldShared: { top(name: string): { value: unknown } | undefined }
+beforeAll(async () => {
+  const { Context } = await import('@mini-canvas/canvas-data')
+  const ctx = new Context()
+  ctx.plugin(themeDefaultPlugin)
+  await ctx.start()
+  uiFieldShared = ctx.registryOf('ui')
+})
 function waveform(): number[] {
   return Array.from({ length: WAVEFORM_BUCKETS }, (_, i) => (i % 2 === 0 ? 90 : 20))
 }
@@ -24,7 +35,7 @@ function renderCtx(): CanvasRenderContext {
     ctx: {
       get: (name: string) => services[name],
       on: () => ({ dispose: () => {} }),
-      registryOf: () => new RegistryImpl(),
+      registryOf: (kind: string) => (kind === 'ui' ? uiFieldShared : new RegistryImpl()),
     },
     viewport: { value: { zoom: 1 } },
   } as unknown as CanvasRenderContext

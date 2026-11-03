@@ -6,16 +6,27 @@
  * 看起来像"又拉出来一条波纹"（用户实测截图报的 bug）。所以这里钉死：竖条**只有一层**，
  * 每根自己带"已播/未播"状态。
  */
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
+// 走真实主题插件注册流程拿 Button：组件经 useUiComponent 取件，桩一个空目录会让按钮渲染成
+// undefined，"两个按钮各拦手势"那条就变成数到 0 个按钮（与组件行为无关）。
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import AudioContent from '../AudioContent.vue'
 import { WAVEFORM_BUCKETS } from '../waveform'
 
 const AUDIO = 'blob:mock-audio'
+let uiFieldShared: { top(name: string): { value: unknown } | undefined }
+beforeAll(async () => {
+  const { Context } = await import('@mini-canvas/canvas-data')
+  const ctx = new Context()
+  ctx.plugin(themeDefaultPlugin)
+  await ctx.start()
+  uiFieldShared = ctx.registryOf('ui')
+})
 
 /** 一条形状有起伏的假波形（大小交替，便于断言真的按高度画了） */
 function waveform(): number[] {
@@ -32,8 +43,8 @@ function renderCtx(): CanvasRenderContext {
     ctx: {
       get: (name: string) => services[name],
       on: () => ({ dispose: () => {} }),
-      // 极简上下文：没有主题 ui 目录 → 空态回落到组件自身的一行灰字
-      registryOf: () => new RegistryImpl(),
+      // ui 目录接真实主题（按钮要从这里取件）；其它目录仍用空实现
+      registryOf: (kind: string) => (kind === 'ui' ? uiFieldShared : new RegistryImpl()),
     },
     viewport: { value: { zoom: 1 } },
   } as unknown as CanvasRenderContext
