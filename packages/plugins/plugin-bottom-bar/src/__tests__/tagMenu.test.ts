@@ -97,9 +97,14 @@ describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
 
 describe('标签的两半点击（用户 2026-10-29 定稿）', () => {
   const EDITOR = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
+  /** 常量定义随拆分搬到了 editor/chipRegistry.ts；拼进来只为让「定义 + 使用」都能查到 */
+  const CHIP_REGISTRY = readFileSync(
+    fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipRegistry.ts', import.meta.url)),
+    'utf8',
+  )
 
   it('点右侧文字 = 1 秒后把光标落到标签后面（默认行为）', () => {
-    expect(EDITOR).toContain('CHIP_CARET_DELAY = 1000')
+    expect(CHIP_REGISTRY).toContain('CHIP_CARET_DELAY = 1000')
     expect(EDITOR).toMatch(/\}, CHIP_CARET_DELAY\)/)
   })
 

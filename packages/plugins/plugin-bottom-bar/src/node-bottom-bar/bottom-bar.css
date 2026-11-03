@@ -1659,7 +1659,6 @@
     animation: none;
   }
 }
-</style>
 
 /* Ctrl 拖资源的「影子」：跟鼠标走 —— 手建 DOM（document.createElement），必须是
    非 scoped 样式才能命中（scoped 的 data-v 属性选择器匹配不上手建节点，实测踩过：
@@ -1716,7 +1715,6 @@
   width: 40px;
   height: 40px;
 }
-</style>
 
 /* starting 阶段的小字提示（用户口径：放**输入框右下角**）——不遮原文，跟随输入区。
    必须放非 scoped 块：提示 span 挂在 .nb-editor 内、由 v-if 控制，scoped 属性选择器
