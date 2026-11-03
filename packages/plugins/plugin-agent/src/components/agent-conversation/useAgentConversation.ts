@@ -201,19 +201,6 @@ function setComposerMenuOpen(key: ComposerMenuKey, open: boolean): void {
   COMPOSER_MENU_FLAGS[key].value = open
 }
 
-/**
- * 工具行按钮的 pointerdown：先把其它菜单收掉，**再主动打开自己**。
- *
- * 只关不开会丢一次点击：A 开着时，A 的「点外面」层会在 pointerdown 关掉 A，
- * 浏览器随后认为这次点击已经处理完，B 的 click 就不再触发 ——
- * 用户看到的就是「点第二个菜单没反应，要点两次」。这里在 pointerdown 里直接开 B，
- * 一次按下就能切换。
- */
-function switchComposerMenu(key: ComposerMenuKey): void {
-  // 再点同一个按钮 = 收起（和原生下拉一致）；点另一个 = 直接切过去。
-  setComposerMenuOpen(key, !COMPOSER_MENU_FLAGS[key].value)
-}
-
 function dismissHint(): void {
   hintDismissed.value = true
 }
@@ -662,7 +649,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     COMPOSER_MENU_FLAGS,
     composerMenuOpen,
     setComposerMenuOpen,
-    switchComposerMenu,
     dismissHint,
     mcpProbing,
     mcpProbeHint,

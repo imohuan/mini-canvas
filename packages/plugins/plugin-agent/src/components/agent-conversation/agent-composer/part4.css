@@ -181,9 +181,28 @@
 
 .ac-detect-btn {
   flex: none;
+  height: 26px;
+  min-height: 26px;
+  padding-inline: 8px;
+  gap: 4px;
   color: var(--ui-ink-dim, #6b7280);
   font-size: 11px;
   font-weight: 600;
+}
+
+html[data-mct-size] [data-slot='button'].ac-detect-btn {
+  height: 26px;
+  min-height: 26px;
+}
+
+[data-slot='button'].ac-detect-btn {
+  height: 26px;
+  min-height: 26px;
+}
+
+.ac-detect-btn :deep(svg) {
+  width: 12px;
+  height: 12px;
 }
 
 .ac-detect-btn:hover:not(:disabled) {
@@ -312,18 +331,17 @@
 }
 
 .ac-rail-scroll {
-  display: flex;
   flex: 1;
-  flex-direction: column;
-  gap: 2px;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 0 8px 10px;
   /* 左栏独立滚：滚到头也不把动作传给外层（否则外层一滚，右栏跟着整块跑） */
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
+}
+
+.ac-rail-scroll-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 10px;
 }
 
 html[data-mct-size] .ac-split .ac-rail-item {
@@ -394,20 +412,92 @@ html[data-mct-size] .ac-split .ac-rail-item {
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-width: 0;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 空状态在结果区里上下左右居中：滚动层给了确定高度，子项以 auto 上下的 flex 居中，
+   不会因为内容只有几十像素而贴顶。模型 / 技能 / MCP 三处分栏共用。 */
+.ac-split-scroll .ac-split-scroll-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.ac-split-scroll .ac-empty-state {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* 消息流的 .ac-empty-state 是 scoped 样式，Composer 里的三处空态拿不到它。
+   在这里补一份面板专用的居中规则：图标、标题、说明作为一组，在可用高度里居中。 */
+.ac-panel .ac-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 190px;
+  padding: 20px;
+  color: var(--ui-ink-mute, #9ca3af);
+  text-align: center;
+}
+
+.ac-panel .ac-empty-state:last-child,
+.ac-panel-scroll-body > .ac-empty-state,
+.ac-mcp-scroll-body > .ac-empty-state,
+.ac-model-scroll-body > div > .ac-empty-state {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 模型卡片视图多一层普通 div 外壳；把它也接进纵向 flex 链，空态才能拿满高度。 */
+.ac-model-scroll-body > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ac-panel .ac-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 2px;
+  border-radius: 12px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-panel .ac-empty-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-panel .ac-empty-desc {
+  font-size: 11px;
 }
 
 .ac-split-scroll {
   flex: 1;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 10px 12px 12px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  /* 右侧结果区必须被「分栏」的确定高度夹住：只写 flex:1 时，
+     它仍按内容长高，ScrollArea 的 viewport 也跟着长，滚动条不出现。 */
+  height: auto;
+  max-height: 100%;
   /* 两列各自是一条独立的滚动链：不继承外层、也不把滚动传回外层 */
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
+}
+
+.ac-split-scroll-body {
+  padding: 10px 12px 12px;
 }
 
 .ac-tile-top {
@@ -419,12 +509,26 @@ html[data-mct-size] .ac-split .ac-rail-item {
 .ac-pick-box {
   flex: none;
   /* 复选块：按钮尺寸由组件库 icon-xs 提供，这里只管方框描边与选中底色 */
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.18));
+  border-radius: 4px;
   background: var(--ui-panel, #fff);
   color: var(--ui-panel, #fff);
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+/* 行内勾选框：可见框 16×16，点击区用透明 padding 保到 24×24（仍小于服务行 48px 高）。 */
+[data-slot='button'].ac-pick-box {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 4px;
 }
 
 .ac-pick-box:hover {
@@ -433,9 +537,18 @@ html[data-mct-size] .ac-split .ac-rail-item {
 }
 
 .ac-pick-box.is-sm {
-  width: 17px;
-  height: 17px;
-  border-radius: 5px;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+[data-slot='button'].ac-confirm-btn {
+  height: 26px;
+  min-height: 26px;
 }
 
 .ac-pick-box :deep(svg) {
@@ -533,8 +646,8 @@ html[data-mct-size] .ac-split .ac-rail-item {
 .ac-expand-btn {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   flex: none;
   border: 0;
   border-radius: 6px;
@@ -575,6 +688,10 @@ html[data-mct-size] .ac-split .ac-rail-item {
 
 .ac-confirm-btn {
   flex: none;
+  height: 26px;
+  padding-inline: 10px;
+  gap: 4px;
+  font-size: 11px;
   background: var(--ui-accent, #0891b2);
   /* 主题色白名单: 强调色实心按钮上的白字，任何强调色下都要最高对比 */
   color: #fff;
@@ -587,6 +704,11 @@ html[data-mct-size] .ac-split .ac-rail-item {
 
 .ac-confirm-btn:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+.ac-confirm-btn :deep(svg) {
+  width: 12px;
+  height: 12px;
 }
 
 .ac-confirm-btn:disabled {

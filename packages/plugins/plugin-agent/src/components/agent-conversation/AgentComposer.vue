@@ -12,12 +12,15 @@ import { X, Plus, Upload, Target, Minimize2, Search, Check, Layers, WandSparkles
 import { VueDraggable } from 'vue-draggable-plus'
 import { ICON_SKILL, ICON_MCP } from '../../agentResources.js'
 import type { AgentConversationController } from './useAgentConversation'
+import AgentScrollArea from './AgentScrollArea.vue'
 
 const c = inject('agentConversation') as AgentConversationController
 
 const cProps = c as unknown as Record<string, any>
+/** MCP 探测态 */
+const probing = cProps.mcpProbing as { value: boolean }
 const {
-  agent, s, prompt, attached: attachedMaybe, queue, pending,
+  agent, s, prompt, editorRef, attached: attachedMaybe, queue, pending,
   showNotifyTip, enableNotify, notifyDismissed, onQueueReorder, hoverRowId, rowMenuId,
   openPreview, previewItem, userSegments, displayUserText, onSegClick, segTitle, segClickable,
   cancelEditQueue, steerItem, removeItem, closeItem, beginEditQueue,
@@ -25,7 +28,7 @@ const {
   onGoalEditFocus, formatToken, tokenUnit, budgetTokenText, goalMark, goalMarkText, clearGoalMark,
   editingKind, editingKindText, scrollToEditing,
   toggleQueuePause, cancelEditing, removeAttachment, editorResources,
-  onEditorKeydown, onPaste, composerMenuOpen, setComposerMenuOpen, plusOpen, switchComposerMenu,
+  onEditorKeydown, onPaste, composerMenuOpen, setComposerMenuOpen, plusOpen,
   COMPOSER_MENU_ALIGN, COMPOSER_MENU_SIDE, COMPOSER_MENU_OFFSET, addGoalMark, pickImages,
   compactNow, onFilesPicked, modeOpen, modeLabel, pickMode, AUTH_MODES, authMode, setAuthMode,
   promptPresets, authOpen, modelOpen, modelView, usableModels, setModelView, modelQuery,
@@ -38,7 +41,7 @@ const {
   skillQuery, skillView, setSkillView, filteredSkills, skillCategory, skillCategoryRows,
   skillMetaOf, skillFileCount, skillSize, skillCoverStyle, mcpQuery, mcpOpen, mcpExpanded,
   toggleMcpExpand, mcpPickedServers, mcpPickedTools, mcpToolKey, toggleMcpServer, toggleMcpTool,
-  mcpPickTotal, confirmMcpPicks, mcpProbing, mcpProbeHint, mcpStatusOf, mcpServerDesc,
+  mcpPickTotal, confirmMcpPicks, mcpProbeHint, mcpStatusOf, mcpServerDesc,
   mcpTransport, mcpToolCount, mcpToolsOf, runMcpProbe, filteredMcpResources,
   sendMode, submit, showPendingOn, COMPOSER_MENU_FLAGS, contextArcOffset, CONTEXT_CIRCUMFERENCE,
   SUGGESTIONS, useSuggestion, dismissHint, hintDismissed, insertRef, brandSvg, skillOpen,
@@ -314,7 +317,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
         <div class="ac-toolbar">
           <DropdownMenu :open="composerMenuOpen('plus')" @update:open="(v: boolean) => setComposerMenuOpen('plus', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加" @pointerdown="switchComposerMenu('plus')">
+              <Button variant="ghost" size="icon-xs" class="ac-plus ac-toolbar-btn" :aria-expanded="plusOpen" aria-label="更多添加">
                 <Plus :size="17" class="size-[17px]" />
               </Button>
             </DropdownMenuTrigger>
@@ -359,7 +362,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
           <DropdownMenu :open="composerMenuOpen('mode')" @update:open="(v: boolean) => setComposerMenuOpen('mode', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="sm" class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式" @pointerdown="switchComposerMenu('mode')">
+              <Button variant="ghost" size="xs" class="ac-pill ac-toolbar-btn" :aria-expanded="modeOpen" aria-label="选择创作模式">
                 <span class="ac-pill-text">{{ modeLabel }}</span>
                 <ChevronDown :size="13" class="ac-pill-caret" />
               </Button>
@@ -387,7 +390,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
           <DropdownMenu :open="composerMenuOpen('auth')" @update:open="(v: boolean) => setComposerMenuOpen('auth', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen" @pointerdown="switchComposerMenu('auth')"
+              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
                 <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
               </Button>
@@ -430,7 +433,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
           <DropdownMenu :open="composerMenuOpen('model')" @update:open="(v: boolean) => setComposerMenuOpen('model', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型" @pointerdown="switchComposerMenu('model')">
+              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
                 <Box :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -471,8 +474,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
                      ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
-                <div class="ac-menu-scroll" ref="modelScrollRef">
-                  <div class="ac-panel-body ac-panel-scroll">
+                <AgentScrollArea ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body" body-class="ac-model-scroll-body">
                   <div v-if="modelView === 'card'">
                     <div v-if="filteredModels.length" class="ac-model-grid">
                       <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-card"
@@ -501,7 +503,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   <div v-else class="ac-split">
                     <aside class="ac-split-rail" aria-label="模型平台">
                       <div class="ac-rail-label">平台</div>
-                      <div class="ac-rail-scroll">
+                      <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
                         <Button v-for="g in modelPlatformGroups" :key="g.key" variant="ghost" size="sm" class="ac-rail-item"
                           :aria-pressed="modelPlatform === g.key" @click="modelPlatform = g.key">
                           <span v-if="g.key === 'all'" class="ac-rail-icon" aria-hidden="true"><Layers :size="14" /></span>
@@ -509,10 +511,10 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                           <span class="ac-rail-name">{{ g.label }}</span>
                           <span class="ac-rail-count">{{ g.count }}</span>
                         </Button>
-                      </div>
+                      </AgentScrollArea>
                     </aside>
                     <div class="ac-split-main">
-                      <div class="ac-split-scroll">
+                      <AgentScrollArea class="ac-split-scroll" body-class="ac-split-scroll-body">
                       <div v-if="filteredModels.length" class="ac-model-row-list">
                         <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-row"
                           role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
@@ -536,11 +538,10 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                         <span class="ac-empty-title">没有找到模型</span>
                         <span class="ac-empty-desc">换个模型名或平台名试试。</span>
                       </div>
-                      </div>
+                      </AgentScrollArea>
                     </div>
                   </div>
-                  </div>
-                </div>
+                </AgentScrollArea>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -550,7 +551,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             <DropdownMenuTrigger as-child>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能" @pointerdown="switchComposerMenu('skill')">
+              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="skillOpen" aria-label="选择技能">
                 <WandSparkles :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -585,7 +586,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   </InputGroup>
                 </div>
                 <div class="ac-panel-body">
-                  <div v-if="skillView === 'card'" class="ac-panel-scroll">
+                  <AgentScrollArea v-if="skillView === 'card'" class="ac-panel-scroll" body-class="ac-panel-scroll-body">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
                       <!-- 卡片外壳用 div：shadcn Button 的 size="sm" 会强制 32px 高 + 左右内边距，
                            把带封面的卡片压成一条细线（用户截图 2026-11-02）。
@@ -617,11 +618,11 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-empty-title">没有找到技能</span>
                       <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
                     </div>
-                  </div>
+                  </AgentScrollArea>
                   <div v-else class="ac-split">
                     <aside class="ac-split-rail" aria-label="技能分类">
                       <div class="ac-rail-label">分类</div>
-                      <div class="ac-rail-scroll">
+                      <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
                         <Button v-for="row in skillCategoryRows" :key="row.name" variant="ghost" size="sm" class="ac-rail-item"
                           :aria-pressed="skillCategory === row.name" @click="skillCategory = row.name">
                           <span class="ac-rail-icon" aria-hidden="true">
@@ -630,10 +631,10 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                           <span class="ac-rail-name">{{ row.name }}</span>
                           <span class="ac-rail-count">{{ row.count }}</span>
                         </Button>
-                      </div>
+                      </AgentScrollArea>
                     </aside>
                     <div class="ac-split-main">
-                      <div class="ac-split-scroll">
+                      <AgentScrollArea class="ac-split-scroll" body-class="ac-split-scroll-body">
                         <div v-if="filteredSkills.length" class="ac-skill-grid ac-skill-grid--split">
                           <div v-for="item in filteredSkills" :key="item.id" class="ac-skill-tile" role="option" tabindex="0"
                             :aria-pressed="false" :title="item.value"
@@ -663,7 +664,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                           <span class="ac-empty-title">没有找到技能</span>
                           <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
                         </div>
-                      </div>
+                      </AgentScrollArea>
                     </div>
                   </div>
                 </div>
@@ -681,12 +682,12 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <DropdownMenu v-if="s.mcpServers.length" :open="composerMenuOpen('mcp')" @update:open="(v: boolean) => setComposerMenuOpen('mcp', v)">
             <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
-              <Button variant="ghost" size="icon-sm" class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP" @pointerdown="switchComposerMenu('mcp')">
+              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="mcpOpen" aria-label="选择 MCP">
                 <Plug :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
-              :style="{ width: '280px', maxWidth: '600px', maxHeight: '440px' }">
+              :style="{ width: '360px', maxWidth: 'calc(100vw - 24px)', maxHeight: '440px' }">
               <div class="ac-ddmenu ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -696,10 +697,10 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </div>
                     <div class="ac-panel-tools">
                       <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
-                      <Button variant="outline" size="sm" class="ac-detect-btn" :class="{ 'is-busy': mcpProbing }" :disabled="mcpProbing"
-                        :aria-label="mcpProbing ? '正在检测 MCP' : '检测全部 MCP 服务'" :title="mcpProbing ? '正在检测' : '检测全部 MCP 服务'" @click.stop="runMcpProbe">
-                        <RefreshCw :size="14" :class="{ 'ac-spin': mcpProbing }" />
-                        <span class="ac-detect-label">{{ mcpProbing ? '检测中' : '重新检测' }}</span>
+                      <Button variant="outline" size="sm" class="ac-detect-btn" :class="{ 'is-busy': probing }" :disabled="probing"
+                        :aria-label="probing ? '正在检测 MCP' : '检测全部 MCP 服务'" :title="probing ? '正在检测' : '检测全部 MCP 服务'" @click.stop="runMcpProbe">
+                        <RefreshCw :size="14" :class="{ 'ac-spin': probing }" />
+                        <span class="ac-detect-label">{{ probing ? '检测中' : '重新检测' }}</span>
                       </Button>
                     </div>
                   </div>
@@ -717,7 +718,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   </InputGroup>
                 </div>
                 <div class="ac-panel-body">
-                  <div class="ac-panel-scroll">
+                  <AgentScrollArea class="ac-panel-scroll" body-class="ac-panel-scroll-body ac-mcp-scroll-body">
                     <div v-if="filteredMcpResources.length" class="ac-mcp-list">
                       <!-- 卡片是勾选 + 展开两件事：左边的框勾「整个服务」，点标题行展开工具（DEMO 同一条分工） -->
                       <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
@@ -747,17 +748,26 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                         </span>
                         </div>
                         <!-- 工具行：搜索命中工具时自动展开、只列命中的几条；每行都能单独勾选 -->
-                        <div v-if="(mcpExpanded.has(item.name) || item.toolHits) && (item.toolHits || mcpToolsOf(item.name)).length" class="ac-mcp-tools">
-                          <Button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName" variant="ghost" size="sm"
-                            class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"
-                            :title="t.fullName" :aria-pressed="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
-                            @click="toggleMcpTool(item.name, t.name)">
-                            <span class="ac-pick-box is-sm" aria-hidden="true"><Check :size="10" /></span>
-                            <span class="ac-tool-copy">
-                              <span class="ac-tool-name">{{ t.name }}</span>
-                              <span class="ac-tool-desc">{{ t.description }}</span>
-                            </span>
-                          </Button>
+                        <div v-if="mcpExpanded.has(item.name) || item.toolHits" class="ac-mcp-tools">
+                          <div v-if="!(item.toolHits || mcpToolsOf(item.name)).length" class="ac-mcp-tools-empty">
+                            还没有检测到工具，点「重新检测」再试。
+                          </div>
+                          <template v-else>
+                            <div class="ac-mcp-tools-head">
+                              <span>工具</span>
+                              <span class="ac-mcp-tools-count">{{ (item.toolHits || mcpToolsOf(item.name)).length }}</span>
+                            </div>
+                            <Button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName" variant="ghost" size="sm"
+                              class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"
+                              :title="t.fullName" :aria-pressed="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
+                              @click="toggleMcpTool(item.name, t.name)">
+                              <span class="ac-pick-box is-sm" aria-hidden="true"><Check :size="9" /></span>
+                              <span class="ac-tool-copy">
+                                <span class="ac-tool-name">{{ t.name }}</span>
+                                <span class="ac-tool-desc" :title="t.description">{{ t.description }}</span>
+                              </span>
+                            </Button>
+                          </template>
                         </div>
                       </div>
                     </div>
@@ -767,7 +777,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
                     </div>
                     <p v-if="mcpProbeHint" class="ac-panel-note">{{ mcpProbeHint }}</p>
-                  </div>
+                  </AgentScrollArea>
                 </div>
                 <div class="ac-panel-foot">
                   <!-- 多选 + 确认：勾选只记状态，点这里才真正往输入框插标签 -->
@@ -778,7 +788,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </template>
                     <template v-else>未选择服务或工具</template>
                   </span>
-                  <Button size="sm" class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(() => (mcpOpen = false))">
+                  <Button size="xs" class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(() => (mcpOpen = false))">
                     <Check :size="13" />确认引用
                   </Button>
                 </div>

@@ -426,21 +426,9 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   flex: none;
 }
 
-/* 模型滚动区：契约要求滚动层是 .ac-menu-scroll，内层 .ac-panel-body 只负责内边距。 */
+/* 模型滚动区：外层 AgentScrollArea（shadcn ScrollArea）负责滚动，内容层只给内边距。 */
 
-.ac-model-panel .ac-menu-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  display: block;
-  padding: 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12)) transparent;
-}
-
-.ac-model-panel .ac-menu-scroll .ac-panel-body {
-  overflow: visible;
+.ac-model-scroll-body {
   padding: 2px 12px 12px;
 }
 
@@ -451,16 +439,22 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
    确定的视口高度可滚。 */
 
 .ac-model-panel.is-split .ac-menu-scroll {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
 }
 
-.ac-model-panel.is-split .ac-menu-scroll .ac-panel-body {
+.ac-model-panel.is-split .ac-model-scroll-body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   padding: 0;
+}
+
+/* 分栏自身必须占满内容层的可用高度；否则左右两栏按内容长高，
+   ScrollArea 的 viewport 也跟着长，最后得到一条「永远滚不到底」的长面板。
+   shadcn ScrollArea 的 viewport 实际是「absolute + inset-0」：内容层不是它的直接流量子项，
+   所以这里必须把可用高度显式写成 height，单靠 flex:1 传不下去。 */
+.ac-model-panel.is-split .ac-split {
+  min-height: 0;
 }
 
 /* —— MCP（DEMO 的 .mcp-list / .mcp-card / .status）—— */
@@ -469,6 +463,12 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+
+/* 展开工具后给面板留出可用的浏览高度：默认两个服务时仍保持紧凑，
+   展开后不再只有两三行高的视口。高度仍受浮层 440px 上限约束。 */
+.ac-mcp-panel:has(.ac-mcp-tools) {
+  min-height: min(clamp(360px, 56vh, 420px), calc(100dvh - 32px));
 }
 
 .ac-mcp-card {
@@ -522,14 +522,45 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 4px 0 0 28px;
-  padding: 4px;
+  margin: 4px 0 0 30px;
+  padding: 5px;
   border: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.05));
   border-radius: 10px;
   background: var(--ui-veil, rgba(0, 0, 0, 0.02));
-  max-height: 180px;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  /* 只由外层 AgentScrollArea 负责滚动：这里不再出现第二条滚动条。 */
+  overflow: visible;
+}
+
+.ac-mcp-tools-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 5px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-mcp-tools-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.05));
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-mcp-tools-empty {
+  padding: 8px 5px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ui-ink-mute, #9ca3af);
 }
 
 .ac-panel-note {

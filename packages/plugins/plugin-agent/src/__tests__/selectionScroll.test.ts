@@ -71,7 +71,9 @@ describe('scrollTopForVisibleItem：选中项该滚到哪', () => {
 
 describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
   it('模型列表的滚动区挂着 ref（有它才找得到要滚的容器）', () => {
-    expect(host).toMatch(/class="ac-menu-scroll"\s+ref="modelScrollRef"/)
+    // 滚动层已统一为 AgentScrollArea（底座 shadcn ScrollArea）：ref 仍要挂在这个滚动层上，
+    // 而且同时保留 ac-menu-scroll 这个稳定选择器，供滚动定位找容器。
+    expect(host).toMatch(/<AgentScrollArea[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
   })
 
   it('打开时才滚（那一刻面板与列表才在 DOM 里，ref 才有值）', () => {
@@ -103,8 +105,8 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
     expect(controller).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]{0,120}modelBoxObserver\?\.disconnect\(\)/)
   })
 
-  it('认的是 aria-selected="true"（选中态的唯一真相，不另造一个标记）', () => {
-    expect(controller).toMatch(/querySelector<HTMLElement>\('\[aria-selected="true"\]'\)/)
+  it('认的是 role=option 的 aria-selected="true"（不误认分栏页签）', () => {
+    expect(controller).toMatch(/querySelector<HTMLElement>\('\[role="option"\]\[aria-selected="true"\]'\)/)
   })
 
   /**

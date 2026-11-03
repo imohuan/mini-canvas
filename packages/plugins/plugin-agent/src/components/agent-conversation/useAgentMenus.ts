@@ -220,6 +220,14 @@ const filteredMcpResources = computed(() => {
  */
 const modelScrollRef = ref<HTMLElement | null>(null)
 
+/** 模板 ref 可能指向原生元素，也可能指向 AgentScrollArea；统一取回真实 DOM。 */
+function scrollRootOf(value: unknown): HTMLElement | null {
+  if (!value) return null
+  if (value instanceof HTMLElement) return value
+  const exposed = value as { rootElement?: () => HTMLElement | null }
+  return typeof exposed.rootElement === 'function' ? exposed.rootElement() : null
+}
+
 /**
  * 把选中的那条滚进列表的可视区（打开下拉时调一次）。
  *
@@ -234,11 +242,16 @@ function scrollSelectedModelIntoView(): void {
   // 切视图时 ref 还指着旧的那个 —— 对它写 scrollTop 什么也不会发生，
   // 表现就是「切到分栏，选中项又跑回列表顶」。所以每次都按当前 DOM 重新取一次，
   // 并优先认「正真装着选中项」的那个容器。
-  const root = modelScrollRef.value
-  const sel = (root ?? document).querySelector<HTMLElement>('[aria-selected="true"]')
-  const box = sel?.closest<HTMLElement>('.ac-split-scroll, .ac-menu-scroll') ?? root
+  const root = scrollRootOf(modelScrollRef.value)
+  // 必须限定 role="option"：分栏视图的 TabsTrigger 也用 aria-selected 表示当前页签，
+  // 只按 aria-selected 找会先命中「分栏」按钮，滚错元素。
+  const sel = (root ?? document).querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
+  // ScrollArea 真正滚动的是内部 viewport，不是组件的根节点；取容器时必须落到 viewport。
+  const scrollViewport = (el: Element | null | undefined): HTMLElement | null =>
+    el?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? (el as HTMLElement | null) ?? null
+  const box = scrollViewport(sel?.closest<HTMLElement>('.ac-split-scroll, .ac-menu-scroll') ?? scrollViewport(root))
   if (!box || box.clientHeight <= 0) return
-  const item = sel && box.contains(sel) ? sel : box.querySelector<HTMLElement>('[aria-selected="true"]')
+  const item = sel && box.contains(sel) ? sel : box.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
   if (!item) return
   // 用**真实矩形**换算，不用 offsetTop：列表项可能挂在不同的 offsetParent 下
   // （模型面板外面还套着 .ac-panel-body / .ac-menu-scroll 两层），
@@ -298,8 +311,11 @@ let modelBoxResizeTimer: number | null = null
 function observeModelBox(): void {
   modelBoxObserver?.disconnect()
   // 观察「当前真正在滚的那一层」：卡片视图是 .ac-menu-scroll，分栏视图是右栏 .ac-split-scroll。
-  const root = modelScrollRef.value
-  const box = (root?.querySelector<HTMLElement>('.ac-split-scroll') ?? root) as HTMLElement | null
+  const root = scrollRootOf(modelScrollRef.value)
+  // ScrollArea 的滚动事件落在内部 viewport 上：观察者也必须盯 viewport，盯根节点不会触发。
+  const box = root?.querySelector<HTMLElement>('.ac-split-scroll [data-slot="scroll-area-viewport"]')
+    ?? root?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    ?? null
   if (!box || typeof ResizeObserver === 'undefined') return
   modelBoxObserver = new ResizeObserver(() => {
     if (modelBoxResizeTimer !== null) window.clearTimeout(modelBoxResizeTimer)

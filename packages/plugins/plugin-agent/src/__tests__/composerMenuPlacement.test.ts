@@ -67,10 +67,10 @@ describe('输入区菜单同一时刻只开一个', () => {
     }
   })
 
-  it('按另一个菜单按钮时先收掉已开的，避免第一下落空', () => {
-    // 只「关掉别的」还不够：开着 A 点 B 时，A 的点外层会把这次按下吃掉，B 开不了。
-    // pointerdown 里必须**顺便把自己打开**，一次按下就完成切换。
-    const downs = toolbar.match(/@pointerdown="switchComposerMenu\('[a-z]+'\)"/g) ?? []
-    expect(downs.length, '六个菜单按钮都要在 pointerdown 里直接切到自己').toBeGreaterThanOrEqual(6)
+  it('触发器不再在 pointerdown 自己开合（一次点击只能翻转一次）', () => {
+    // 根因（用户口径 2026-11-03）：pointerdown 先开、Reka 的原生 click 又 toggle 一次，
+    // 菜单就会闪一下消失。开合的唯一入口必须留给 DropdownMenuTrigger。
+    expect(toolbar).not.toMatch(/@pointerdown="switchComposerMenu\('[a-z]+'\)"/)
+    expect(toolbar).not.toContain("@pointerdown=\"switchComposerMenu")
   })
 })
