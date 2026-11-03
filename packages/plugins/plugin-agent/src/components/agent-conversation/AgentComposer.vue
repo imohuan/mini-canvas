@@ -822,111 +822,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
 </template>
 
 <style scoped>
-/* —— 顶部「更早对话」哨兵（对话分页，用户口径 2026-10-15）——
-   颜色/字号按 ui-style-guide 的次要文本口径；它只有内容流顶部一小条，不抢视线。 */
-
-.ac-earlier {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 8px;
-  padding: 6px 0 2px;
-  font-size: 11px;
-  color: var(--ui-ink-mute, #9aa3af);
-}
-
-.ac-earlier-loading {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ac-earlier-hint {
-  user-select: none;
-}
-
-/* —— 空态（照参考图）—— */
-
-.ac-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding-top: 32px;
-}
-
-/* 主题色白名单: 空态那颗渐变球是品牌装饰（照参考图的三段青渐变），不是主题 UI 色 */
-
-.ac-welcome-orb {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  border-radius: 999px;
-  /* 主题色白名单: 空态那颗渐变球是品牌装饰（照参考图的三段青渐变），不是主题 UI 色 */
-  background: linear-gradient(160deg, #7dd3fc, #0891b2 55%, #0e7490);
-  /* 主题色白名单: 同上（品牌装饰的辉光） */
-  box-shadow: 0 0 30px rgb(8 145 178 / 0.45);
-}
-
-.ac-welcome-title {
-  margin: 0;
-  padding: 0 6px;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 24px;
-  color: var(--ui-ink, #f7f7f7);
-}
-
-/* —— 模型分割线（用户口径 2026-10-11）——
-   切换模型 = 换一条会话（SDK 的模型钉在会话上），所以画一条横线把"换脑子"这件事说清楚。
-   「中间一枚标签、两侧各一条发丝线」：与分支分页器同一族的"分隔"语义，不抢眼但要看得见。
-   颜色走 --ui-*（与面板其它线一致）；只动 opacity/transform，不吃 layout。 */
-
-.ac-model-split {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* 间距只用 4/6/8/10/12 档（ui-style-guide §2.4） */
-  margin: 4px 0 12px;
-}
-
-.ac-model-split-line {
-  flex: 1;
-  min-width: 8px;
-  height: 1px;
-  background: var(--ui-line, #363636);
-}
-
-.ac-model-split-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  /* 模型 id 没有长度上限：标签可缩、名字单行省略，极端窄面板里也不越界 */
-  min-width: 0;
-  max-width: 100%;
-  padding: 2px 8px;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 999px;
-  background: var(--ui-overlay-solid, #212121);
-  color: var(--ui-ink-dim, #919191);
-  font-size: 11px;
-  line-height: 18px;
-}
-
-.ac-model-split-name {
-  min-width: 0;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ui-ink, #f7f7f7);
-}
-
-.ac-user-text {
-  white-space: pre-wrap;
-}
-
+/* 目标行里的「正在编辑」小标。基础外观必须在这里写全：scoped 不会从兄弟组件
+   AgentMessageList 继承规则，只写 .is-compact 的覆盖会缺 display/gap/配色。 */
 .ac-editing-badge {
   display: inline-flex;
   align-items: center;
@@ -1008,16 +905,6 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
 
 /* 「已停止」小标（用户口径 2026-10-16）：终止后对话里要有表示 */
 
-.ac-stopped {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 22px;
-  color: var(--ui-danger, #ef4444);
-}
-
 /* 开口圆弧 = 一个圆 + 透明上边框：转起来能看清缺口在走。
    颜色随 currentColor，所以这行整体改色时图标自动跟随。 */
 
@@ -1030,18 +917,6 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
   border-top-color: transparent;
   border-radius: 50%;
   animation: ac-rotate 0.8s linear infinite;
-}
-
-.ac-notice {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-error {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--ui-danger, #ef4444);
 }
 
 /* 通知提示条：照参考页实测 40 高 / 圆角 12 / 强调色 20% 底；底色用 --ui-accent-soft 现算，

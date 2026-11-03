@@ -327,6 +327,138 @@ const Button = useUiComponent('Button')
 </template>
 
 <style scoped>
+/* —— 以下样式只服务本组件模板（消息流）。它们原先错放在同级 AgentComposer 的
+   scoped 样式里：scoped 不会跨兄弟组件，那些规则对这里的节点一律不生效 —— 空态、
+   模型分割线、换行、编辑标记、停止/错误提示都会掉样式。拆分别把同一批规则再搬回去。 */
+
+/* —— 顶部「更早对话」哨兵（对话分页，用户口径 2026-10-15）——
+   颜色/字号按 ui-style-guide 的次要文本口径；它只有内容流顶部一小条，不抢视线。 */
+.ac-earlier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 8px;
+  padding: 6px 0 2px;
+  font-size: 11px;
+  color: var(--ui-ink-mute, #9aa3af);
+}
+.ac-earlier-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ac-earlier-hint {
+  user-select: none;
+}
+
+/* —— 空态（照参考图）—— */
+.ac-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding-top: 32px;
+}
+.ac-welcome-orb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 999px;
+  /* 主题色白名单: 空态那颗渐变球是品牌装饰（照参考图的三段青渐变），不是主题 UI 色 */
+  background: linear-gradient(160deg, #7dd3fc, #0891b2 55%, #0e7490);
+  /* 主题色白名单: 同上（品牌装饰的辉光） */
+  box-shadow: 0 0 30px rgb(8 145 178 / 0.45);
+}
+.ac-welcome-title {
+  margin: 0;
+  padding: 0 6px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* —— 模型分割线（用户口径 2026-10-11）——
+   切换模型 = 换一条会话（SDK 的模型钉在会话上），所以画一条横线把"换脑子"这件事说清楚。 */
+.ac-model-split {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 间距只用 4/6/8/10/12 档（ui-style-guide §2.4） */
+  margin: 4px 0 12px;
+}
+.ac-model-split-line {
+  flex: 1;
+  min-width: 8px;
+  height: 1px;
+  background: var(--ui-line, #363636);
+}
+.ac-model-split-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 模型 id 没有长度上限：标签可缩、名字单行省略，极端窄面板里也不越界 */
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink-dim, #919191);
+  font-size: 11px;
+  line-height: 18px;
+}
+.ac-model-split-name {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-user-text {
+  white-space: pre-wrap;
+}
+
+.ac-editing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-end;
+  height: 20px;
+  margin-top: 4px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent);
+  color: var(--ui-warn, #e3a25f);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ac-stopped {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--ui-danger, #ef4444);
+}
+
+.ac-notice {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ui-danger, #ef4444);
+}
+
 /* 间距统一交给 .ac-welcome 的 gap（照参考页：整块 gap 20px），这里不再单独留 margin */
 
 .ac-hint-card {

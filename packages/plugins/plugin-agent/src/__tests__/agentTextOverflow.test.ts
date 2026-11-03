@@ -35,12 +35,13 @@ function rule2(selector: string): string {
   return composer.slice(at, end + 1)
 }
 
+/** 模型分割线属于消息流（AgentMessageList），样式也在那边 */
 function rule3(selector: string): string {
   const normalized = selector.replace(/\s*\{\s*$/, '')
-  const at = composer.indexOf(normalized + ' {')
+  const at = host.indexOf(normalized + ' {')
   expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
-  const end = composer.indexOf('}', at)
-  return composer.slice(at, end + 1)
+  const end = host.indexOf('}', at)
+  return host.slice(at, end + 1)
 }
 
 describe('Agent 面板：极端长文字不撑破容器', () => {
