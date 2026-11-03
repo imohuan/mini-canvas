@@ -14,8 +14,9 @@ import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
-const conversation = read('../components/AgentConversation.vue')
+const conversation = read('../components/agent-conversation/AgentComposer.vue')
 const resources = read('../agentResources.ts')
+const msgList = read('../components/agent-conversation/AgentMessageList.vue')
 
 /** 取一条样式规则的正文（从 `选择器 {` 到它自己的 `}`） */
 function ruleBody(source: string, selector: string): string {
@@ -41,11 +42,11 @@ describe('输入框内联标签（.ac-tag）', () => {
 
 describe('已发送的标签（.ac-sent-tag，与输入框那颗同款外观）', () => {
   it('同样限宽', () => {
-    expect(ruleBody(conversation, '.ac-sent-tag')).toMatch(/max-width:\s*[^;]+;/)
+    expect(ruleBody(msgList, '.ac-sent-tag')).toMatch(/max-width:\s*[^;]+;/)
   })
 
   it('名字那一格同样截断', () => {
-    const body = ruleBody(conversation, '.ac-sent-tag-label')
+    const body = ruleBody(msgList, '.ac-sent-tag-label')
     expect(body).toMatch(/min-width:\s*0/)
     expect(body).toMatch(/overflow:\s*hidden/)
     expect(body).toMatch(/text-overflow:\s*ellipsis/)

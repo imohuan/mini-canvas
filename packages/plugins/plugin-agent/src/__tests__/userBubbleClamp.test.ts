@@ -14,8 +14,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
-
+const host = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 describe('用户气泡高度夹层与展开按钮', () => {
   it('正文有测量壳：ref 回调按消息 id 注册，夹层类由「超出且未展开」驱动', () => {
     expect(host).toContain(':ref="setUserBubbleBody(t.id)"')
@@ -30,7 +30,7 @@ describe('用户气泡高度夹层与展开按钮', () => {
   })
 
   it('测量对已展开的消息保持原判（否则展开后按钮消失，没法收起）', () => {
-    expect(host).toContain('if (openUserBubbles.value[id]) next[id] = overflowingUser.value[id] === true')
+    expect(controller).toContain('if (openUserBubbles.value[id]) next[id] = overflowingUser.value[id] === true')
   })
 
   it('按钮只在「超出」时出现，带展开/收起图标，位于气泡左下角', () => {
@@ -47,8 +47,8 @@ describe('用户气泡高度夹层与展开按钮', () => {
 
   it('测量用 ResizeObserver 兜底（内容变化 / 面板拖宽换行都会重测），卸载时清干净', () => {
     // 回调走 scheduleMeasureUserBubbles（nextTick 合并），防渲染帧内写响应式状态自触发
-    expect(host).toContain('new ResizeObserver(() => scheduleMeasureUserBubbles())')
-    expect(host).toContain('bubbleRO?.disconnect()')
-    expect(host).toContain('userBubbleBodies.clear()')
+    expect(controller).toContain('new ResizeObserver(() => scheduleMeasureUserBubbles())')
+    expect(controller).toContain('bubbleRO?.disconnect()')
+    expect(controller).toContain('userBubbleBodies.clear()')
   })
 })

@@ -133,14 +133,14 @@ describe('parseNotifyPrefs', () => {
   it('护栏：摘要压缩用的是「空白」正则（\\s+），不是丢反斜杠的 /s+/', () => {
     // 曾经写成 /s+/g：它匹配字母 s，于是换行原样留在通知正文里、正文里所有 s 还被
     // 换成空格（真机实测）。这条守卫直接读组件源码，防止再手滑敲掉那个反斜杠。
-    const vue = read('../components/AgentConversation.vue')
+    const vue = read('../components/agent-conversation/useAgentConversation.ts')
     expect(vue).toContain(".replace(/\\s+/g, ' ')")
     expect(vue).not.toContain(".replace(/s+/g, ' ')")
   })
 
   it('护栏：每轮开跑时重读一次通知开关（设置里改了要立刻生效，不必刷新页面）', () => {
     // 开关只挂载时读一次的话，用户中途关掉它、当前页面照样弹（实测）。
-    const vue = read('../components/AgentConversation.vue')
+    const vue = read('../components/agent-conversation/useAgentConversation.ts')
     const onRunStart = vue.indexOf('queueAtRunStart = queue.value.count')
     expect(onRunStart, '没找到「一轮开跑」那段 watch').toBeGreaterThan(-1)
     // 同一条分支里必须紧接着重读开关

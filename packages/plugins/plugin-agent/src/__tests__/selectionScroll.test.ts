@@ -18,9 +18,9 @@ import { fileURLToPath } from 'node:url'
 import { scrollTopForVisibleItem } from '../selectionScroll'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
-
 /** 造一份滚动状态：内容总高 scrollHeight、视口 clientHeight、当前 scrollTop */
+const host = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 const box = (scrollTop: number, scrollHeight: number, clientHeight: number) => ({
   scrollTop,
   scrollHeight,
@@ -73,8 +73,8 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
   })
 
   it('打开时才滚（那一刻面板与列表才在 DOM 里，ref 才有值）', () => {
-    expect(host).toMatch(/watch\(modelOpen,[\s\S]{0,400}scheduleScrollSelectedModel/)
-    expect(host).toMatch(/function scrollSelectedModelIntoView\(\): void/)
+    expect(controller).toMatch(/watch\(modelOpen,[\s\S]{0,400}scheduleScrollSelectedModel/)
+    expect(controller).toMatch(/function scrollSelectedModelIntoView\(\): void/)
   })
 
   /**
@@ -86,23 +86,23 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
    */
   it('滚两次并盯着可视高度（入场动画结束后再校正，尺寸一变就重定位）', () => {
     // 二次校正：定时器再滚一次
-    const at = host.indexOf('function scheduleScrollSelectedModel')
+    const at = controller.indexOf('function scheduleScrollSelectedModel')
     expect(at, '没找到 scheduleScrollSelectedModel').toBeGreaterThan(-1)
-    const body = host.slice(at, host.indexOf('\nwatch(modelOpen', at))
+    const body = controller.slice(at, controller.indexOf('\nwatch(modelOpen', at))
     expect(body, '要做动画后的二次校正').toMatch(/setTimeout\(\(\) => scrollSelectedModelIntoView/)
     // 尺寸变化兜底：ResizeObserver 盯列表可视高度
-    expect(host, '要用 ResizeObserver 盯列表可视高度').toMatch(/new ResizeObserver\(/)
-    expect(host, '观察的是模型列表滚动区').toMatch(/observe\(box\)/)
+    expect(controller, '要用 ResizeObserver 盯列表可视高度').toMatch(/new ResizeObserver\(/)
+    expect(controller, '观察的是模型列表滚动区').toMatch(/observe\(box\)/)
     // 切模式会换一整套列表，位置要重算
-    expect(host).toMatch(/watch\(modelView,[\s\S]{0,200}scheduleScrollSelectedModel/)
+    expect(controller).toMatch(/watch\(modelView,[\s\S]{0,200}scheduleScrollSelectedModel/)
   })
 
   it('卸载时断开观察者（不留孤儿回调）', () => {
-    expect(host).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]{0,120}modelBoxObserver\?\.disconnect\(\)/)
+    expect(controller).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]{0,120}modelBoxObserver\?\.disconnect\(\)/)
   })
 
   it('认的是 aria-selected="true"（选中态的唯一真相，不另造一个标记）', () => {
-    expect(host).toMatch(/querySelector<HTMLElement>\('\[aria-selected="true"\]'\)/)
+    expect(controller).toMatch(/querySelector<HTMLElement>\('\[aria-selected="true"\]'\)/)
   })
 
   /**
@@ -114,8 +114,8 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
    * 滚完选中项仍贴在下缘外面。动画的影响改成「等动画结束再校一次」来消除。
    */
   it('几何用 getBoundingClientRect 换算（offsetTop 跨 offsetParent 会算错）', () => {
-    const at = host.indexOf('function scrollSelectedModelIntoView')
-    const body = host.slice(at, host.indexOf('\nfunction ', at + 10))
+    const at = controller.indexOf('function scrollSelectedModelIntoView')
+    const body = controller.slice(at, controller.indexOf('\nfunction ', at + 10))
     expect(body).toMatch(/getBoundingClientRect\(\)\.top - box\.getBoundingClientRect\(\)\.top/)
     expect(body).not.toMatch(/offsetTop\s*-\s*box\.offsetTop/)
     expect(body).toMatch(/scrollTopForVisibleItem\(/)

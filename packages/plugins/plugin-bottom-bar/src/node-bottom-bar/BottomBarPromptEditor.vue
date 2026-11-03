@@ -10,7 +10,8 @@ const props = defineProps<{
   aiPhase: 'idle' | 'starting' | 'streaming'
   aiEditorLocked: boolean
   editorResources: ResourceItem[]
-  resolveResource: (id: string) => ResourceItem | undefined
+  /** 与 ProseMirrorEditor 的 prop 声明一致：按 token 解析，找不到返回 null */
+  resolveResource: (name: string) => ResourceItem | null
   onPasteFiles: (files: File[], editorCtx: { insert(item: ResourceItem): void }) => Promise<boolean>
 }>()
 

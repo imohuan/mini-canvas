@@ -18,7 +18,6 @@ interface TagMenuDeps {
   replaceChipWith(newNodeId: string, chip: ResourceItem, name: string): Promise<void>
   getAnchorEl(): HTMLElement | null
   focusSearch(): void
-  invalidateChips(): void
 }
 
 /** 标签菜单：全画布节点数据、菜单分组、锚点与条目 hover 预览。 */

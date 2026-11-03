@@ -321,7 +321,7 @@ describe('图片加载失败：换占位，不再给裂图（用户口径 2026-1
 
 describe('结构与接线守卫（源码级）', () => {
   const body = read('../components/ToolViewBody.vue')
-  const host = read('../components/AgentConversation.vue')
+  const host = read('../components/agent-conversation/AgentMessageList.vue')
 
   it('ToolViewBody：缩略图给「放大镜」光标 + 键盘 focus 环（样式渲染不在 node 里跑，盯源码）', () => {
     expect(body).toContain('cursor: zoom-in')
@@ -355,10 +355,12 @@ describe('结构与接线守卫（源码级）', () => {
   })
 
   it('预览仍只有一只 MediaViewer（复用主题注册的预览 API，不新增第二只）', () => {
-    expect((host.match(/<MediaViewer/g) ?? []).length).toBe(1)
-    expect(host).toMatch(/<MediaViewer\s+:item="previewItem"\s+@close="previewImage = null"\s*\/>/)
+    const entry = read('../components/AgentConversation.vue')
+    const controller = read('../components/agent-conversation/useAgentConversation.ts')
+    expect((entry.match(/<MediaViewer/g) ?? []).length).toBe(1)
+    expect(entry).toMatch(/<MediaViewer\s+:item="previewItem"\s+@close="previewImage = null"\s*\/>/)
     // 预览项要带上媒体种类，否则视频 / 音频会被当图片打开
-    expect(host).toMatch(/kind:\s*previewKind\.value/)
+    expect(controller).toMatch(/kind:\s*previewKind\.value/)
   })
 
   it('read_file 的媒体卡片：图片是缩略图、视频音频是播放位（都在卡片里，不走折叠行）', () => {

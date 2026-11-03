@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url'
 import { isSubmitShortcut, normalizeSubmitKeyMode, SUBMIT_KEY_MODES, loadSubmitKeyMode } from '../composerKeys'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const conversation = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
-
+const conversation = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 /** 造一个按键事件：只给判定用到的字段，够纯函数读就行 */
 const key = (k: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; isComposing: boolean }> = {}) => ({
   key: k,
@@ -115,17 +115,17 @@ describe('模板接线：编辑器接的是这条判定', () => {
   })
 
   it('该入口先问 isSubmitShortcut，命中才 preventDefault + submit', () => {
-    const start = conversation.indexOf('function onEditorKeydown')
+    const start = controller.indexOf('function onEditorKeydown')
     expect(start, '找不到 onEditorKeydown 的实现').toBeGreaterThan(-1)
-    const body = conversation.slice(start, conversation.indexOf('\n}', start))
+    const body = controller.slice(start, controller.indexOf('\n}', start))
     expect(body).toContain('isSubmitShortcut')
     expect(body).toContain('preventDefault')
     expect(body).toContain('submit()')
   })
 
   it('提交键取自全局设置（不是写死的常量）', () => {
-    const start = conversation.indexOf('function onEditorKeydown')
-    const body = conversation.slice(start, conversation.indexOf('\n}', start))
+    const start = controller.indexOf('function onEditorKeydown')
+    const body = controller.slice(start, controller.indexOf('\n}', start))
     expect(body).toContain('submitKeyMode')
   })
 })

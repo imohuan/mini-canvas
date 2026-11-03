@@ -14,7 +14,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
+
+const host = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const composer = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
 
 function rule(selector: string): string {
   // 调用方可传「.ac-pill」或「.ac-pill {」：统一成一个选择器再找规则块。
@@ -23,6 +25,22 @@ function rule(selector: string): string {
   expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
   const end = host.indexOf('}', at)
   return host.slice(at, end + 1)
+}
+
+function rule2(selector: string): string {
+  const normalized = selector.replace(/\s*\{\s*$/, '')
+  const at = composer.indexOf(normalized + ' {')
+  expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
+  const end = composer.indexOf('}', at)
+  return composer.slice(at, end + 1)
+}
+
+function rule3(selector: string): string {
+  const normalized = selector.replace(/\s*\{\s*$/, '')
+  const at = composer.indexOf(normalized + ' {')
+  expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
+  const end = composer.indexOf('}', at)
+  return composer.slice(at, end + 1)
 }
 
 describe('Agent 面板：极端长文字不撑破容器', () => {
@@ -36,12 +54,12 @@ describe('Agent 面板：极端长文字不撑破容器', () => {
   })
 
   it('创作模式胶囊：长提示词名可缩、单行省略，不把工具条按钮挤走', () => {
-    expect(host).toContain('class="ac-pill-text"')
+    expect(composer).toContain('class="ac-pill-text"')
     // 约束看基础规则 .ac-pill（可缩 / 省略）；高度与圆角已由组件库 Button 的 size 决定。
-    const pill = rule('.ac-pill')
+    const pill = rule2('.ac-pill')
     expect(pill).toContain('min-width: 0')
     expect(pill).toContain('max-width')
-    const text = rule('.ac-pill-text')
+    const text = rule2('.ac-pill-text')
     expect(text).toContain('min-width: 0')
     expect(text).toContain('overflow: hidden')
     expect(text).toContain('text-overflow: ellipsis')
@@ -49,10 +67,10 @@ describe('Agent 面板：极端长文字不撑破容器', () => {
   })
 
   it('模型分割标签：长模型 id 可缩，不越出面板', () => {
-    const badge = rule('.ac-model-split-badge')
+    const badge = rule3('.ac-model-split-badge')
     expect(badge).toContain('min-width: 0')
     expect(badge).toContain('max-width: 100%')
-    expect(rule('.ac-model-split-name')).toContain('min-width: 0')
+    expect(rule3('.ac-model-split-name')).toContain('min-width: 0')
   })
 
   it('思考块：无空格长串也能换行，不横向撑破气泡', () => {

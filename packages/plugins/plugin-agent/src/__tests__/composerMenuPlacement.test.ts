@@ -14,9 +14,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const source = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
+
 
 /** 只取输入区工具行那一段，避免把队列行「⋯」菜单（它不是输入区菜单）算进来 */
+const source = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 const toolbar = (() => {
   const start = source.indexOf('<div class="ac-toolbar">')
   expect(start, '找不到输入区工具行').toBeGreaterThan(-1)
@@ -40,15 +42,15 @@ describe('输入区下拉：向上 / 居中 / 统一偏移', () => {
   })
 
   it('常量取值就是向上 + 居中', () => {
-    expect(source).toMatch(/COMPOSER_MENU_SIDE = 'top'/)
-    expect(source).toMatch(/COMPOSER_MENU_ALIGN = 'center'/)
-    expect(source).toMatch(/COMPOSER_MENU_OFFSET = \d+/)
+    expect(controller).toMatch(/COMPOSER_MENU_SIDE = 'top'/)
+    expect(controller).toMatch(/COMPOSER_MENU_ALIGN = 'center'/)
+    expect(controller).toMatch(/COMPOSER_MENU_OFFSET = \d+/)
   })
 })
 
 describe('输入区菜单同一时刻只开一个', () => {
   it('开一个菜单会把其余关掉', () => {
-    const fn = source.slice(source.indexOf('function setComposerMenuOpen'), source.indexOf('function closeOtherComposerMenus'))
+    const fn = controller.slice(controller.indexOf('function setComposerMenuOpen'), controller.indexOf('function switchComposerMenu'))
     expect(fn, '找不到统一开合函数').not.toBe('')
     expect(fn, '打开时没有先关掉其它菜单').toMatch(/if \(open\)[\s\S]{0,200}flag\.value = false/)
   })

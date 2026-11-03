@@ -13,7 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const conversation = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
+const conversation = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
 const toolBody = readFileSync(path.resolve(HERE, '../components/ToolViewBody.vue'), 'utf8')
 
 /** 取第一个以 selector 开头的样式块（本包样式都在同一个 <style scoped> 里） */

@@ -11,9 +11,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const SRC = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
 
 /** 三个面板的容器：只截「面板本体」，避免把输入区其它下拉算进来 */
+const SRC = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const MSG = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
 const panels = ['ac-model-panel', 'ac-skill-panel', 'ac-mcp-panel'].map((name) => {
   const start = SRC.indexOf(name)
   expect(start, '找不到面板 ' + name).toBeGreaterThan(-1)
@@ -69,7 +70,8 @@ describe('搜索框：常显的 shadcn InputGroup + 前置图标', () => {
 
 describe('选中勾：普通 Check，不是青色实心圆', () => {
   it('没有实心底色与圆形半径', () => {
-    const block = SRC.slice(SRC.indexOf('.ac-check-mark {'), SRC.indexOf('\n}', SRC.indexOf('.ac-check-mark {')))
+    const base = SRC.indexOf('.ac-check-mark {\n  display: grid')
+    const block = SRC.slice(base, SRC.indexOf('\n}', base))
     expect(block).not.toContain('background')
     expect(block).not.toContain('border-radius')
     expect(block).toContain('opacity: 0')

@@ -21,8 +21,9 @@ import ts from 'typescript'
 import { sendButtonMode } from '../queueModel'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
-
+const host = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const msgList = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 /** shadcn Button 替身：只负责把 class / disabled / click 透传到真按钮 */
 const ShadcnButtonStub = vue.defineComponent({
   name: 'ShadcnButton',
@@ -35,9 +36,9 @@ const ShadcnButtonStub = vue.defineComponent({
 describe('队列分流口径（用户 2026-10-16）', () => {
   it('队列里已有排队任务时，新消息一律入队（不再因"没在跑"直发对话）', () => {
     // 分流顺序：编辑队列项 → 编辑目标 → 目标标记 → running → **队列有排队条目** → 空闲直发
-    const runningIdx = host.indexOf('} else if (s.running) {')
-    const queueIdx = host.indexOf("} else if (queue.value.rows.some((r) => !r.sent)) {")
-    const idleIdx = host.indexOf('// 空闲：和以前一样直接发')
+    const runningIdx = controller.indexOf('} else if (s.running) {')
+    const queueIdx = controller.indexOf("} else if (queue.value.rows.some((r) => !r.sent)) {")
+    const idleIdx = controller.indexOf('// 空闲：和以前一样直接发')
     expect(runningIdx).toBeGreaterThan(-1)
     expect(queueIdx).toBeGreaterThan(runningIdx)
     expect(idleIdx).toBeGreaterThan(queueIdx)
@@ -298,10 +299,10 @@ describe('队列行（G2/G4/G8/G10）：结构与接线', () => {
     expect(pill).toContain('队列暂停')
     expect(host).toMatch(/\.ac-pending-box \{[^}]*overflow: hidden;/)
     // 回到底部在消息区（.ac-scroll-wrap）里，且居中定位
-    const wrap = host.slice(host.indexOf('class="ac-scroll-wrap"'), host.indexOf('class="ac-composer"'))
+    const wrap = msgList.slice(msgList.indexOf('class="ac-scroll-wrap"'), msgList.indexOf('class="ac-scroll"'))
     expect(wrap).toContain('class="ac-to-bottom"')
     expect(wrap).toContain('smoothScrollToBottom()')
-    expect(host).toMatch(/.ac-to-bottom {[^}]*left: 50%;[^}]*bottom: 12px;/)
+    expect(msgList).toMatch(/.ac-to-bottom {[^}]*left: 50%;[^}]*bottom: 12px;/)
   })
 
   it('队列列表贴在输入框上方、宽 80%、靠左（设计 §3.6.1 的数值）', () => {
@@ -349,6 +350,6 @@ describe('队列行（G2/G4/G8/G10）：结构与接线', () => {
 
   it('引导按钮的语义写在 title / aria 里：跑着 = 插队，跑完 = 正常发（G4）', () => {
     expect(host).toContain('aria-label="引导（插队发送）"')
-    expect(host).toContain('steerQueueItem')
+    expect(host).toContain('steerItem')
   })
 })

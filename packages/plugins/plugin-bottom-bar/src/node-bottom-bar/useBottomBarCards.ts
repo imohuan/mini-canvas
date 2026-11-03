@@ -47,7 +47,6 @@ interface CardDeps {
   persistValues: () => void
   onPromptText: (v: string) => void
   onOpenTagMenu(item: ResourceItem, anchor: { left: number; top: number; right: number; bottom: number }): void
-  replaceChipWith(newNodeId: string, chip: ResourceItem, name: string): Promise<void>
 }
 
 /** 参考卡行、上传/换绑、排序、卡片点击与标签刷新。 */

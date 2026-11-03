@@ -17,8 +17,9 @@ import { fileURLToPath } from 'node:url'
 import { isSubmitShortcut, shouldDeferEnterToMenu } from '../composerKeys'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const conversation = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
 
+const conversation = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
+const composer = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
 const enter = (mods: Record<string, boolean> = {}) => ({
   key: 'Enter',
   ctrlKey: false,
@@ -80,8 +81,8 @@ describe('接线：判定必须在**捕获阶段**跑（真机踩过的时序坑
    * 捕获阶段在 ProseMirror 之前跑，读到的是**按键那一刻**的菜单状态。
    */
   it('编辑器挂的是 @keydown.capture，不是普通 @keydown', () => {
-    expect(conversation).toContain('@keydown.capture="onEditorKeydown"')
-    expect(conversation).not.toContain('@keydown="onEditorKeydown"')
+    expect(composer).toContain('@keydown.capture="onEditorKeydown"')
+    expect(composer).not.toContain('@keydown="onEditorKeydown"')
   })
 
   it('菜单开着时放行给菜单：不 preventDefault、不 stopPropagation（ProseMirror 还要收到回车去选中）', () => {
