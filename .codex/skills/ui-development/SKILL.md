@@ -226,6 +226,27 @@ pnpm -C packages/ui typecheck
 
 下拉、弹窗、提示这类浮层必须用组件库里的版本，不要写原生 `<select>`、手搓绝对定位菜单。
 
+### 浮层间距：按可见边缘定一个数
+
+所有下拉、子菜单和带箭头浮层，只看**用户看得见的边缘**，不把代码里的 `side-offset` 当成最终答案。
+组件有内边距，箭头本身也有高度，同一个偏移值在不同组件上会量出不同距离。
+
+| 关系 | 默认值 | 从哪里量到哪里 |
+| --- | --- | --- |
+| 父菜单展开子菜单 | `8px` | 父菜单可见右边缘 → 子菜单可见左边缘 |
+| 触发器打开带箭头的浮层 | `8px` | 箭头尖端 → 触发器可见边缘 |
+| 不带箭头的浮层 | `8px` | 浮层可见边缘 → 触发器可见边缘 |
+
+具体做法：
+
+1. 目标统一按 `8px` 理解。子菜单的 `side-offset` 之外还有父菜单内边距，实际可能量出 14px；这时回调偏移，直到可见边缘落在 `7–9px`。
+2. 用 `getBoundingClientRect()` 量元素，不靠截图目测猜像素。带箭头浮层要量箭头尖端，不能量菜单面板的外框。
+3. 浮层翻到另一侧、贴近视口边缘或发生碰撞位移后，再量一次。默认方向正确不代表翻转后也正确。
+4. 同一组件里多个同类菜单使用同一档；不要一个写 4、一个写 10、另一个写 24。底栏托盘的补偿写在组件布局里，不塞进一个看不清的偏移数字。
+5. 验收时同时看亮色、暗色和窄窗口；间距不因主题和窗口缩放改变。
+
+新增或修改二级菜单、下拉、弹出面板，都要把这一项写进验收清单。已经存在的旧浮层按所属任务逐步对齐，不要借一次无关改动全站重排。
+
 ### 滚动：优先 ScrollArea
 
 任何可能超出容器的列表、设置页、抽屉、弹窗正文，都用 `ScrollArea`，不要写 `overflow-y: auto` 的普通 div。
@@ -333,6 +354,7 @@ notify?.success('已保存')
 4. 通知走 `notify`，页面里没有第二个 Toaster。
 5. 运行：`pnpm -C packages/ui typecheck`、相关插件 test、组件库 typecheck。
 6. 用 @Chrome 实测页面，确认亮色 / 暗色、窄容器、空数据都正常。
+7. 浮层的可见间距符合规范：子菜单与父菜单相距 8px，箭头尖端到触发器相距 8px；翻转后重新量一次，不能只检查默认方向。
 
 ## 去哪里对照源码
 
@@ -341,5 +363,6 @@ notify?.success('已保存')
 - 取件实现：`packages/canvas-render/src/contracts/uiCatalog.ts`
 - 现成滚动容器：`packages/ui/src/components/ScrollPane.vue`
 - 现成弹窗：`packages/ui/src/components/AppDialog.vue`
+ - 浮层箭头与默认偏移：`packages/ui-kit-shadcn/src/components/ui/dropdown-menu/DropdownMenuArrow.vue`、`DropdownMenuContent.vue`、`DropdownMenuSubContent.vue`
 - 通知服务：`packages/plugins/plugin-theme-default/src/notifyService.ts`
 - 真实插件示例：`packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue`
