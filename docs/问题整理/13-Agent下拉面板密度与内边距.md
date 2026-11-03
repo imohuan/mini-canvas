@@ -1,7 +1,7 @@
 # 13 · Agent下拉面板密度与内边距
 
 - 状态：待确认
-- 负责人：未领取
+- 负责人：Codex
 - 完成时间：—
 
 ## 你的原话
@@ -50,11 +50,11 @@ Agent 输入区下方的六个触发按钮与下拉面板内部，间距和控�
 
 ## 验收标准
 
-- [ ] 底排六个按钮保持 28 × 28，内部 SVG 高度 ≤ 14px，图标与按钮边缘有明显留白
-- [ ] 技能 / 模型 / MCP 面板搜索框视觉高度 ≤ 32px，字号 13px
-- [ ] 模型行高度 ≤ 48px，技能分栏瓦片最小高度 ≤ 160px，MCP 工具行保持约 30px
-- [ ] 面板内部左右留白统一，没有明显贴边或大块空白
-- [ ] 亮色、暗色和 360px 宽面板下目验通过
+- [x] 底排六个按钮保持 28 × 28，内部 SVG 高度 ≤ 14px，图标与按钮边缘有明显留白
+- [x] 技能 / 模型 / MCP 面板搜索框视觉高度 ≤ 32px，字号 13px
+- [x] 模型行高度 ≤ 48px，技能分栏瓦片最小高度 ≤ 160px，MCP 工具行保持约 30px
+- [x] 面板内部左右留白统一，没有明显贴边或大块空白
+- [x] 亮色、暗色和 360px 宽面板下目验通过
 
 ## 不能动
 
@@ -85,7 +85,7 @@ Agent 输入区下方的六个触发按钮与下拉面板内部，间距和控�
 
 ## 执行记录
 
-- 改动文件：无（尚未执行）
-- 验证命令与结果：尚未执行；确认方案后按验收标准运行
-- 完成时间：—
+- 改动文件：packages/plugins/plugin-agent/src/components/agent-conversation/AgentComposer.vue、agent-composer/part1.css、part2.css、part3.css、part4.css
+- 验证命令与结果：pnpm -C packages/plugins/plugin-agent test 通过（54 个测试文件、437 条测试）；pnpm -C packages/plugins/plugin-agent typecheck 通过；Chrome 实测 8865 页面：底排按钮 28×28、SVG 14px，搜索框 30px/13px，技能分栏瓦片 150px，模型行 46px，MCP 工具行 30px，亮色下目验通过
+- 完成时间：2026-11-03
 

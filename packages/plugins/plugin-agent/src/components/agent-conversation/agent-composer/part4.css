@@ -153,6 +153,17 @@
   width: 100%;
 }
 
+/* 面板内搜索框回到紧凑档：高度与字号由控件库默认值接住，这里只压内边距与清除按钮间距。
+   （用户口径 2026-11-03：搜索框太大。） */
+.ac-search-inline :deep([data-slot='input-group-control']) {
+  height: 30px;
+  font-size: 13px;
+}
+
+.ac-search-inline :deep([data-slot='input-group-addon']) {
+  padding-inline: 6px;
+}
+
 .ac-icon-btn {
   position: relative;
   flex: none;
@@ -497,7 +508,7 @@ html[data-mct-size] .ac-split .ac-rail-item {
 }
 
 .ac-split-scroll-body {
-  padding: 10px 12px 12px;
+  padding: 8px;
 }
 
 .ac-tile-top {

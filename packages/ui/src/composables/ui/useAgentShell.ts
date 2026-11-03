@@ -66,6 +66,14 @@ export function createAgentShellScope(state: UiState) {
     get title(): string {
       return agentSvc()?.state.title ?? '新会话'
     },
+    /** 当前模型展示名（标题下小字用）：displayName 优先，其次 modelId；未选时为 null */
+    get modelLabel(): string | null {
+      const svc = agentSvc()
+      const state = svc?.state as { model?: { provider: string; modelId: string } | null; models?: Array<{ provider: string; modelId: string; displayName?: string }> } | undefined
+      if (!state?.model) return null
+      const hit = state.models?.find((m) => m.provider === state.model!.provider && m.modelId === state.model!.modelId)
+      return hit?.displayName || state.model.modelId
+    },
     get sessions(): Array<{ id: string; title: string; preview?: string; updatedAt: number }> {
       return agentSvc()?.state.sessions ?? []
     },

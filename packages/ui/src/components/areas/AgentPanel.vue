@@ -227,7 +227,10 @@ function startCornerResize(e: PointerEvent): void {
 
     <!-- 头部：两种摆法都能抓（浮窗 = 移动；停靠 = 拖出来），所以 draggable 常开 -->
     <header class="agent-head draggable" @pointerdown="startDrag">
-      <span class="agent-title" :title="ui.agent.title">{{ ui.agent.title }}</span>
+      <div class="agent-heading">
+        <span class="agent-title" :title="ui.agent.title">{{ ui.agent.title }}</span>
+        <span class="agent-model" :title="ui.agent.modelLabel ?? '未选择模型'">{{ ui.agent.modelLabel ?? '未选择模型' }}</span>
+      </div>
       <div class="agent-actions">
         <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="新建对话"
           @click="ui.newAgentChat()"><MessageSquarePlus :size="16" class="size-4" /></Button>
@@ -312,7 +315,9 @@ function startCornerResize(e: PointerEvent): void {
 .agent-resize { top: 1px; bottom: 0; left: 0; z-index: 20; }
 .agent-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 10px 14px 10px 16px; }
 .agent-head.draggable { cursor: grab; user-select: none; }
-.agent-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }
+.agent-heading { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
+.agent-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }
+.agent-model { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; color: var(--ui-ink-dim, #919191); }
 .agent-actions { display: flex; flex: none; align-items: center; gap: 2px; }
 .agent-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-width: 28px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink, #18202b); cursor: pointer; transition: background 0.16s ease; }
 .agent-icon:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }

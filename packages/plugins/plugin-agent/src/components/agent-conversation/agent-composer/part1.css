@@ -709,8 +709,18 @@ html[data-mct-size] [data-slot='button'].ac-toolbar-btn.ac-pill,
 }
 
 html[data-mct-size] [data-slot].ac-toolbar-btn svg:not([class*='size-']) {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+}
+
+/* 底排 icon-xs 的图标统一 14px：size-4 是全局 16px 档，28px 按钮里会显得贴边。
+   DropdownMenuTrigger 会把 data-slot 换成 dropdown-menu-trigger，两条都要盖住。 */
+html[data-mct-size] [data-slot='button'][data-size='icon-xs'].ac-toolbar-btn svg[class*='size-'],
+html[data-mct-size] [data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class*='size-'],
+[data-slot='button'][data-size='icon-xs'].ac-toolbar-btn svg[class*='size-'],
+[data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class*='size-'] {
+  width: 14px;
+  height: 14px;
 }
 
 .ac-plus {
@@ -730,6 +740,11 @@ html[data-mct-size] [data-slot].ac-toolbar-btn svg:not([class*='size-']) {
 
 .ac-tb-icon.ac-pill {
   min-width: 0;
+}
+
+/* 下拉打开时按钮不再出现「选中底色」：面板本身已经是明确反馈（用户口径 2026-11-03） */
+[data-slot].ac-toolbar-btn[aria-expanded='true'] {
+  background: transparent !important;
 }
 
 /* MCP 面板内的工具行：更高密度的两行（工具名 + 一句说明），说明最多两行、全文看 title。 */
@@ -779,10 +794,6 @@ html[data-mct-size] [data-slot].ac-toolbar-btn svg:not([class*='size-']) {
   font-size: 10.5px;
   line-height: 1.45;
   color: var(--ui-ink-mute, #9ca3af);
-}
-
-.ac-tb-icon.is-on {
-  color: var(--ui-accent, #0891b2);
 }
 
 /* 授权方式 = 完全自动授权时用警示色（琥珀）：这是唯一需要用户留意的状态，图标染上提醒留意 */

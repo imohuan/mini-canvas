@@ -32,7 +32,7 @@ const {
   COMPOSER_MENU_ALIGN, COMPOSER_MENU_SIDE, COMPOSER_MENU_OFFSET, addGoalMark, pickImages,
   compactNow, onFilesPicked, modeOpen, modeLabel, pickMode, AUTH_MODES, authMode, setAuthMode,
   promptPresets, authOpen, modelOpen, modelView, usableModels, setModelView, modelQuery,
-  filteredModels, isModelPicked, pickModel, brandNameOf, brandSvgOf, modelNote,
+  filteredModels, isModelPicked, pickModel, brandNameOf, brandSvgOf, modelNote, currentModelLabel,
   modelPlatformGroups, modelPlatform, assistantRows, hasCardView, viewOf, previewToolMedia,
   openTools, openToolGroups, toggleTool, toggleToolGroup, toolGroupTitle, toolRowSummary,
   openThinking, toggleThinking, openUserBubbles, overflowingUser, toggleUserBubble,
@@ -318,7 +318,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <DropdownMenu :open="composerMenuOpen('plus')" @update:open="(v: boolean) => setComposerMenuOpen('plus', v)">
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-xs" class="ac-plus ac-toolbar-btn" :aria-expanded="plusOpen" aria-label="更多添加">
-                <Plus :size="17" class="size-[17px]" />
+                <Plus :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ minWidth: '210px' }">
@@ -392,7 +392,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
-                <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
+                <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ width: '360px' }">
@@ -433,8 +433,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
           <DropdownMenu :open="composerMenuOpen('model')" @update:open="(v: boolean) => setComposerMenuOpen('model', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
-                <Box :size="16" class="size-4" />
+              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="modelOpen" aria-label="选择模型">
+                <Box :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
@@ -552,7 +552,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
               <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="skillOpen" aria-label="选择技能">
-                <WandSparkles :size="16" class="size-4" />
+                <WandSparkles :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
@@ -683,7 +683,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="mcpOpen" aria-label="选择 MCP">
-                <Plug :size="16" class="size-4" />
+                <Plug :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"

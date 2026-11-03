@@ -60,6 +60,16 @@ function isModelPicked(m: { provider: string; modelId: string }): boolean {
   return s.model?.provider === m.provider && s.model?.modelId === m.modelId
 }
 
+/**
+ * 外壳标题下要显示的「当前模型」：有 displayName 用显示名，否则 modelId。
+ * 没选模型时返回空串，外壳据此显示「未选择模型」。
+ */
+const currentModelLabel = computed(() => {
+  if (!s.model) return ''
+  const hit = s.models.find((m) => m.provider === s.model!.provider && m.modelId === s.model!.modelId)
+  return hit?.displayName || s.model.modelId
+})
+
 /** 模型 → 平台 key（品牌图标与分栏分组共用一把尺子） */
 function platformOf(m: { provider: string; modelId: string }): string {
   return detectPlatform(m.modelId, m.provider)
@@ -396,6 +406,7 @@ return {
   skillCategory,
   modelNote,
   isModelPicked,
+  currentModelLabel,
   platformOf,
   brandNameOf,
   brandSvgOf,

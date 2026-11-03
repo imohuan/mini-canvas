@@ -222,7 +222,7 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   flex-direction: column;
   cursor: pointer;
   height: auto;
-  min-height: 188px;
+  min-height: 150px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
@@ -248,7 +248,7 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   display: grid;
   place-items: center;
   width: 100%;
-  height: 74px;
+  height: 60px;
   overflow: hidden;
   color: var(--ui-primary-ink, rgba(255, 255, 255, 0.94));
   background:
@@ -260,8 +260,8 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 .ac-skill-cover::after {
   content: '';
   position: absolute;
-  inset: auto -20px -22px 16px;
-  height: 48px;
+  inset: auto -20px -18px 16px;
+  height: 40px;
   border-radius: 50%;
   background: var(--ui-primary-ink, rgba(255, 255, 255, 0.12));
   transform: rotate(-7deg);
@@ -325,8 +325,9 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 
 .ac-model-card[aria-checked='true'],
 .ac-model-card[aria-selected='true'] {
+  /* 选中只用行尾默认勾：卡片也不加底色或描边（用户口径 2026-11-03） */
   border-color: var(--ui-line, rgba(0, 0, 0, 0.08));
-  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  background: transparent;
 }
 
 /* 品牌图标托（DEMO 的 .brand）：35×35、圆角 9、白底 + 1px 内描边，svg 22×22。 */
@@ -360,7 +361,7 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 600 13.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 600 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--ui-ink, #111827);
 }
 
@@ -395,8 +396,8 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 .ac-model-row {
   gap: 8px;
   width: 100%;
-  min-height: 54px;
-  padding: 7px 9px;
+  min-height: 46px;
+  padding: 6px 8px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -410,8 +411,9 @@ html[data-mct-size] [data-slot='button'].ac-menu-item[data-size='sm'] {
 
 .ac-model-row[aria-checked='true'],
 .ac-model-row[aria-selected='true'] {
-  border-color: var(--ui-line-soft, rgba(0, 0, 0, 0.05));
-  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  /* 选中只用行尾默认勾：不加整行底色或描边（用户口径 2026-11-03） */
+  border-color: transparent;
+  background: transparent;
 }
 
 .ac-model-row .ac-model-brand {
