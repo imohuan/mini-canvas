@@ -1,3 +1,6 @@
+/* 输入框内失效引用：拆分时这条规则的左半段落在 cards 分片，这里补回右半段。 */
+.nb-editor .resource-chip--invalid {
+  opacity: 0.55;
   text-decoration: line-through;
 }
 
