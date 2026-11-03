@@ -192,3 +192,23 @@
   但会改变部分调用点的可选链写法，需要整体评估，不要只为缩短行数而改。
 - `createUi()` 里各域按原顺序创建，存在隐式先后依赖（history 依赖 canvasList、nodes 依赖 assets
   + viewport、lifecycle 依赖全部）。后续若调整顺序，必须先补集成测试验证初始化副作用。
+
+## 19. CanvasHost 拆分后的待办
+
+- 拖线全局监听（`document` 上的 `mousemove` / `mouseup`）在组件卸载且没收到 `connect-end` 时
+  没有兜底解绑；下一次 `connect-start` 会再绑一遍。建议加幂等解绑，并补一条“卸载时清干净”的测试。
+- `useCanvasConnections.ts` 仍有约 455 行，可拆成「候选校验」与「拖线手势」两层。
+- `useCanvasCulling.ts` 的拖拽保护缓存可以和剔除计算分开。
+- `useCanvasLifecycle.ts` 的插件重装订阅可独立成 `usePluginRemount.ts`。
+- 这套 hook 目前没有事件配对的行为测试；建议补最小 DOM 测试，覆盖拖线监听注销、卸载清理、
+  键盘/剪贴板仲裁这三条最容易回归的路径。
+
+## 20. SelectionFrame 拆分后的待办
+
+- 批量连线目前按抓取的源节点逐个计算反馈，目标是多件组合时会重复工作；可改成一次几何命中，
+  但必须先实测多源反馈的视觉与性能。
+- `useGroupDragState.ts` 单独存在只为保持原来的初始化时序，后续可并回 `useSelectionFrame`。
+- 控制栏仍是自绘定位加屏幕钳制，可复用画布布局里的公共定位工具。
+- 入口保留约 35 行跨子件兜底选择器（`.selection-frame-batch-slot`、`body.mc-pointer-down`）；
+  继续下沉会改变 scoped 边界，动之前先确认这些类在哪些子件里落地。
+- 源码文本回归测试现在跨两个文件读取，后续可改成行为测试，减少对源码形状的依赖。
