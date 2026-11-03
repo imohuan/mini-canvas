@@ -5,18 +5,25 @@
  * 面板入口负责 Teleport、可见性和键盘监听。
  */
 import { computed, ref } from 'vue'
-import type { V2ShortcutHelpItem, V2ShortcutManager } from '../v2ShortcutManager'
-import { shortcutHelpState } from '../shortcutState'
+import type { V2ShortcutConflict, V2ShortcutHelpItem, V2ShortcutManager } from '../v2ShortcutManager'
+import { getShortcutManager, shortcutHelpState } from '../shortcutState'
 import { normalizeKeyForPlatform } from '../keyLabels'
 
-const manager = shortcutHelpState as V2ShortcutManager
 const service = shortcutHelpState
 
-const searchQuery = ref('')
-const conflicts = ref(manager?.getConflicts() ?? [])
-const helpList = ref(manager?.getHelpList() ?? [])
-/** 当前正在展开"重映射"面板的行 ID（null = 全部收起） */
-const remappingId = ref<string | null>(null)
+/**
+ * ⚠️ 本模块是**模块级单例**（不是组件内的 setup 作用域）。
+ *
+ * 原实现全部写在 `<script setup>` 里，每个面板挂载时才执行；抽成模块后若在顶层
+ * 直接读 `manager.getConflicts()`，只要有人 import 本包（例如 shortcutsSource.test.ts）
+ * 就会在 apply 之前触发一次，拿到 undefined 当场 TypeError。
+ *
+ * 因此这里保持原语义：只在真正使用时惰性取 manager；取不到就按空列表处理
+ * （与原 `manager?.xxx() ?? []` 一致）。
+ */
+function managerNow(): V2ShortcutManager | undefined {
+  return getShortcutManager()
+}
 
 const groupLabels: Record<string, string> = {
   system: '系统',
@@ -89,6 +96,21 @@ function decorateItem(it: V2ShortcutHelpItem): DecoratedItem {
     systemReserved: isSystemReservedKey(it.keys),
   }
 }
+
+const searchQuery = ref('')
+/** 每组一行（getHelpList 返回的是分组后的结构，不是扁平项） */
+type HelpGroup = { group: V2ShortcutHelpItem['group']; items: V2ShortcutHelpItem[] }
+const conflicts = ref<V2ShortcutConflict[]>([])
+const helpList = ref<HelpGroup[]>([])
+/** 当前正在展开"重映射"面板的行 ID（null = 全部收起） */
+const remappingId = ref<string | null>(null)
+
+function syncFromManager(): void {
+  const manager = managerNow()
+  conflicts.value = manager?.getConflicts() ?? []
+  helpList.value = manager?.getHelpList() ?? []
+}
+syncFromManager()
 
 const filteredHelpList = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
@@ -171,17 +193,19 @@ function closeRemap() {
 }
 
 function refreshData() {
+  const manager = managerNow()
   if (!manager) return
   helpList.value = manager.getHelpList()
   conflicts.value = manager.getConflicts()
 }
 
 function resetDefaults() {
-  manager?.resetDefaults()
+  managerNow()?.resetDefaults()
   refreshData()
 }
 
 function exportKeymap() {
+  const manager = managerNow()
   if (!manager) return
   const data = manager.exportKeymap()
   const json = JSON.stringify(data, null, 2)
@@ -205,7 +229,7 @@ function importKeymap() {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result as string)
-        manager?.loadKeymap(data)
+        managerNow()?.loadKeymap(data)
         refreshData()
       } catch {
         alert('导入失败：JSON 格式无效')
