@@ -16,7 +16,11 @@ import { createStudioPreviewSource } from './themeStudioPreview'
 import { THEME_PREVIEW_SLOT } from '@mini-canvas/canvas-render'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const STUDIO = readFileSync(path.join(HERE, 'theme-studio-panel/ThemeStudioView.vue'), 'utf8')
+// 样式外置后，模板与样式分居两个文件：断言仍按「页面整体」读，语义不变。
+const STUDIO = [
+  readFileSync(path.join(HERE, 'theme-studio-panel/ThemeStudioView.vue'), 'utf8'),
+  readFileSync(path.join(HERE, 'theme-studio-panel/theme-studio.css'), 'utf8'),
+].join('\n')
 
 function colorFields(): DeclaredColorField[] {
   const { store } = createStudioPreviewSource()
