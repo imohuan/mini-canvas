@@ -72,10 +72,10 @@ describe('Agent 面板紧凑尺寸', () => {
     expect(SRC).toMatch(/class="ac-pill ac-toolbar-btn"/)
   })
 
-  it('没选主题尺寸档时也保持 28px 紧凑尺寸', () => {
+  it('没选主题尺寸档时也保持 32px（与顶部按钮同档，用户口径 2026-11-03）', () => {
     const at = CSS.indexOf("[data-slot].ac-toolbar-btn:not([data-slot='button'])")
     expect(at).toBeGreaterThan(-1)
-    expect(CSS.slice(at, CSS.indexOf('\n}', at))).toContain('height: 28px !important')
+    expect(CSS.slice(at, CSS.indexOf('\n}', at))).toContain('height: 32px !important')
   })
 
   it('MCP 行内勾选与文字按钮不依赖主题尺寸档', () => {

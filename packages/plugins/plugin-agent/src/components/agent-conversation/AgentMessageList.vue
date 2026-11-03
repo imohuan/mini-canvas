@@ -270,10 +270,10 @@ const Button = useUiComponent('Button')
                 <Button variant="ghost" size="icon-xs" class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
                   @click="copyMessage(t.text, t.id)">
                   <CircleCheck v-if="copied[t.id]" :size="13" class="is-ok" />
-                  <Copy v-else :size="12" />
+                  <Copy v-else :size="11" />
                 </Button>
                 <Button variant="ghost" size="icon-xs" class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
-                  <Pencil :size="12" />
+                  <Pencil :size="11" />
                 </Button>
               </div>
             </div>

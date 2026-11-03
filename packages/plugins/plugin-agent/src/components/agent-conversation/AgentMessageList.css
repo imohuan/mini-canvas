@@ -108,6 +108,18 @@
   font-weight: 600;
 }
 
+/* 用户口径 2026-11-03：徽标里的 ✕ 是纯图标钮，hover 不画底色、只亮图标
+   （scoped 作用域只到本组件，Composer 里同名规则盖不到这里）。 */
+.ac-editing-x:hover,
+.ac-editing-x:active,
+.ac-editing-x[aria-expanded='true'] {
+  background: transparent !important;
+}
+
+.ac-editing-x:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
 .ac-stopped {
   display: flex;
   align-items: center;

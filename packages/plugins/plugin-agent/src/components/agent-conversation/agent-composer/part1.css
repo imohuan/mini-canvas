@@ -63,10 +63,12 @@
   color: inherit;
 }
 
-/* 用户口径 2026-11-03：编辑标记里的 ✕ 也是纯图标钮，hover 不画底色、只亮图标 */
+/* 用户口径 2026-11-03：编辑标记里的 ✕ 也是纯图标钮，hover 不画底色、只亮图标
+   （!important 压过 ghost 变体在 dark 模式下的 hover:bg-muted/50） */
 .ac-editing-x:hover,
-.ac-editing-x:active {
-  background: transparent;
+.ac-editing-x:active,
+.ac-editing-x[aria-expanded='true'] {
+  background: transparent !important;
 }
 
 .ac-editing-x:hover {
@@ -644,6 +646,17 @@
   color: inherit;
 }
 
+/* 用户口径 2026-11-03：目标行的暂停 / 结束 / 取消钮同口径 —— hover 不画底色、只亮图标 */
+.ac-goal-btn:hover,
+.ac-goal-btn:active,
+.ac-goal-btn[aria-expanded='true'] {
+  background: transparent !important;
+}
+
+.ac-goal-btn:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
 /* 口径开关的图标：已用 = 实心、剩余 = 空心 */
 
 .ac-goal-btn .is-hollow {
@@ -678,11 +691,11 @@
   align-items: center;
   gap: 3px;
   min-width: 0;
-  /* 面板内统一紧凑尺寸：图标 28、胶囊 28。不改全局主题尺寸档。 */
+  /* 面板内统一尺寸（用户口径 2026-11-03：与顶部按钮同为 32px 一档）。 */
 }
 
 /* DropdownMenuTrigger 会把 data-slot 换成 dropdown-menu-trigger；
-   不能只按 data-slot='button' 找，否则主题尺寸档永远压过这里的 28px。 */
+   不能只按 data-slot='button' 找，否则主题尺寸档永远压过这里的 32px。 */
 html[data-mct-size] [data-slot].ac-toolbar-btn:not([data-slot='button']):not(.ac-send),
 [data-slot].ac-toolbar-btn:not([data-slot='button']):not(.ac-send) {
   display: inline-flex;
@@ -693,15 +706,15 @@ html[data-mct-size] [data-slot].ac-toolbar-btn:not([data-slot='button']):not(.ac
   gap: 1px;
   border-radius: 8px;
   font-size: 12px;
-  width: 28px !important;
-  min-width: 28px !important;
-  height: 28px !important;
-  min-height: 28px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
 }
 
 
-/* 主题尺寸档会把 icon-xs 压到 24px；这里按 28px 的紧凑档兜底，
+/* 主题尺寸档会把 icon-xs 压到 24px；这里按 32px 的紧凑档兜底，
    但必须比 size.css 的 `html[data-mct-size] [data-slot='button'][data-size='icon-xs']` 更具体。 */
 html[data-mct-size] [data-slot='button'][data-size='icon-xs'].ac-toolbar-btn,
 html[data-mct-size] [data-slot].ac-toolbar-btn.ac-pill:not([data-slot='button']),
@@ -714,8 +727,8 @@ html[data-mct-size] [data-slot='button'].ac-toolbar-btn.ac-pill,
   min-width: 0 !important;
   max-width: 160px;
   padding-inline: 8px 4px;
-  height: 28px !important;
-  min-height: 28px !important;
+  height: 32px !important;
+  min-height: 32px !important;
 }
 
 html[data-mct-size] [data-slot].ac-toolbar-btn svg:not([class*='size-']) {
@@ -723,7 +736,7 @@ html[data-mct-size] [data-slot].ac-toolbar-btn svg:not([class*='size-']) {
   height: 14px;
 }
 
-/* 底排 icon-xs 的图标统一 14px：size-4 是全局 16px 档，28px 按钮里会显得贴边。
+/* 底排 icon-xs 的图标统一 14px：size-4 是全局 16px 档，32px 按钮里会显得贴边。
    DropdownMenuTrigger 会把 data-slot 换成 dropdown-menu-trigger，两条都要盖住。 */
 html[data-mct-size] [data-slot='button'][data-size='icon-xs'].ac-toolbar-btn svg[class*='size-'],
 html[data-mct-size] [data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class*='size-'],
