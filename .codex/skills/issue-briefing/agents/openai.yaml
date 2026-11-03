@@ -1,0 +1,4 @@
+interface:
+  display_name: "问题整理"
+  short_description: "把零散问题整理成可执行任务文档"
+  default_prompt: "使用 $issue-briefing 把我发来的问题整理成可执行文档。"
