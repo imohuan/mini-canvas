@@ -13,13 +13,14 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readSfcWithStyles } from './readSfcWithStyles'
+import { readAgentConversationSource } from './readAgentConversationSource'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 
 /** 只取输入区工具行那一段，避免把队列行「⋯」菜单（它不是输入区菜单）算进来 */
 const source = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
-const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
+const controller = readAgentConversationSource()
 const toolbar = (() => {
   const start = source.indexOf('<div class="ac-toolbar">')
   expect(start, '找不到输入区工具行').toBeGreaterThan(-1)

@@ -26,6 +26,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readSfcWithStyles } from './readSfcWithStyles'
+import { readAgentConversationSource } from './readAgentConversationSource'
 import * as vue from 'vue'
 import * as lucide from 'lucide-vue-next'
 import { parse, compileScript } from 'vue/compiler-sfc'
@@ -357,7 +358,7 @@ const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversat
 
   it('预览仍只有一只 MediaViewer（复用主题注册的预览 API，不新增第二只）', () => {
     const entry = read('../components/AgentConversation.vue')
-    const controller = read('../components/agent-conversation/useAgentConversation.ts')
+    const controller = readAgentConversationSource()
     expect((entry.match(/<MediaViewer/g) ?? []).length).toBe(1)
     expect(entry).toMatch(/<MediaViewer\s+:item="previewItem"\s+@close="previewImage = null"\s*\/>/)
     // 预览项要带上媒体种类，否则视频 / 音频会被当图片打开

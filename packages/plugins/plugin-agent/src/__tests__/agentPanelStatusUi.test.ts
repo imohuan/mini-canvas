@@ -13,9 +13,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { readSfcWithStyles } from './readSfcWithStyles'
+import { readAgentConversationSource } from './readAgentConversationSource'
 
 const host = readFileSync(path.join(__dirname, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
-const controller = readFileSync(path.join(__dirname, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
+const controller = readAgentConversationSource()
 const composer = readSfcWithStyles(path.join(__dirname, '../components/agent-conversation/AgentComposer.vue'))
 
 describe('上下文统计行', () => {

@@ -22,5 +22,9 @@ export function readSfcWithStyles(file: string): string {
     if (!rel.startsWith('./') && !rel.startsWith('../')) continue
     styles.push(readFileSync(path.resolve(dir, rel), 'utf8'))
   }
-  return styles.length ? source + '\n' + styles.join('\n') : source
+  // 外部样式按 SFC 里 <style src> 的位置拼回去，保留「scoped 块 → 全局块」的顺序。
+  return source.replace(STYLE_SRC, (tag, rel: string) => {
+    if (!rel.startsWith('./') && !rel.startsWith('../')) return tag
+    return tag + '\n' + readFileSync(path.resolve(dir, rel), 'utf8') + '\n'
+  })
 }
