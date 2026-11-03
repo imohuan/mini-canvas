@@ -10,6 +10,7 @@
  * 5. 认不得的 kind / 作者自带 component → 回落内置控件（不炸、不抢）。
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import type { ToolParamDef } from '@mini-canvas/kernel'
@@ -83,9 +84,33 @@ describe('resolvePresetKind：判定表（纯函数）', () => {
     expect(resolvePresetKind({ ...withOptions('ratio'), component: { name: 'X' } })).toBeUndefined()
   })
 
-  it('列数：比例 5 列，其余 3 列（照参考站实测）', () => {
-    expect(presetColumns('ratio')).toBe(5)
+  /**
+   * 用户口径（2026-11-03，附截图「宽度没有自适应」「高度那?」）：
+   * 6 档比例被排成 5+1 两行，第二行剩一格、右侧一大片空白。
+   * 现在比例**按选项数排一行**（最多 6 列），其余网格仍 3 列。
+   */
+  it('列数：比例按选项数排一行（最多 6 列），其余 3 列', () => {
+    expect(presetColumns('ratio')).toBe(6)
+    expect(presetColumns('ratio', 6)).toBe(6)
+    expect(presetColumns('ratio', 4)).toBe(4)
+    expect(presetColumns('ratio', 7)).toBe(6)
     expect(presetColumns('grid')).toBe(3)
+    expect(presetColumns('grid', 9)).toBe(3)
+  })
+
+  /**
+   * 用户口径（2026-11-03）：「高度那?」「宽度没有自适应?」
+   *
+   * 两件事必须同时成立，缺一个面板就会空：
+   * ① 列数按实际选项数算（不再固定 5 列留 1 格残行）；
+   * ② 面板宽度随内容走，只用上下限兜底（不再固定 288px）。
+   */
+  it('比例面板：6 档排一行 6 列，宽度随内容而不是写死 288', () => {
+    const ratioParam = withOptions('ratio', 6)
+    expect(presetColumns('ratio', ratioParam.options?.length ?? 0)).toBe(6)
+    const css = readFileSync(new URL('../ToolParamGroup.vue', import.meta.url), 'utf-8')
+    expect(css).toMatch(/width:\s*max-content/)
+    expect(css).not.toMatch(/width:\s*288px/)
   })
 })
 

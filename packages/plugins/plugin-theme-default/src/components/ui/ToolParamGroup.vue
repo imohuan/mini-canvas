@@ -102,6 +102,10 @@ const summary = computed(() => {
     />
   </div>
 
+  <!--
+    默认左侧展开 + 自动翻转：底栏这个按钮靠近右侧时，向右展开会被屏幕边缘裁掉
+    （2026-11-03 实测：面板右缘被切掉一格）。reka 默认 `avoidCollisions` 会翻到左侧。
+  -->
   <Popover v-else v-model:open="open">
     <PopoverTrigger as-child>
       <button
@@ -127,7 +131,12 @@ const summary = computed(() => {
       </button>
     </PopoverTrigger>
 
-    <PopoverContent align="start" :side-offset="4" class="tpg-popover tpg-menu-body tpg-menu-body--blocks">
+    <PopoverContent
+      align="end"
+      :side-offset="4"
+      :collision-padding="12"
+      class="tpg-popover tpg-menu-body tpg-menu-body--blocks"
+    >
       <div class="tpg-menu tpg-menu--blocks">
         <!--
           统一版式：一个参数 = 一整块（第一行标题、第二行控件），按声明顺序排。
@@ -240,8 +249,19 @@ const summary = computed(() => {
 /* 浮层内容（经 Teleport 到 body，必须用全局样式）。
    浮层本身交给 shadcn PopoverContent（圆角/阴影/动画/点外关闭都是它的），
    这里只覆盖参数面板自己的宽度与内边距：宽 288（参考稿 w-72）、内边距 16（p-4）。 */
+/*
+ * 宽度随内容自适应（用户口径 2026-11-03：「宽度没有自适应」）。
+ *
+ * 从前写死 288px：6 档比例按 5 列排成两行，第二行剩一格、右侧留一大片空白。
+ * 现在宽度交给内容决定，再用上下限兜住极端情况：
+ * - `min-width` 保住「比例 6 列」放得下（6 × 50 格 + 5 × 8 间距 + 32 内边距 ≈ 372）；
+ * - `max-width` 不超过视口可用宽度，窄屏也不会被顶出屏幕。
+ */
 .tpg-popover {
-  width: 288px;
+  /* 宽度随内容（比例 6 列），但不能超过视口可用宽度，否则右侧会被裁掉 */
+  width: max-content;
+  min-width: 220px;
+  max-width: min(420px, calc(100vw - 32px));
   padding: 16px;
   gap: 12px;
   border-radius: var(--mct-radius, 16px);

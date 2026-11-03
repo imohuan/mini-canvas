@@ -254,7 +254,7 @@ export const Config: ConfigSchema = {
     max: 400,
     step: 1,
     label: "活动区域宽度",
-    group: "节点/端口",
+    group: "节点/端口活动区",
     description: "端口自己的命中区域宽度，只决定鼠标离端口多近能抓住它；拖线吸附另见「吸附区域」。",
   },
   portZoneHeightRatio: {
@@ -264,7 +264,7 @@ export const Config: ConfigSchema = {
     max: 1,
     step: 0.05,
     label: "活动区域高度占比",
-    group: "节点/端口",
+    group: "节点/端口活动区",
     description: "端口活动区域的高度占节点高度的比例（0.8=占 80%），不是拖线吸附带。",
   },
   portZoneOffset: {
@@ -274,7 +274,7 @@ export const Config: ConfigSchema = {
     max: 200,
     step: 1,
     label: "活动区域偏移",
-    group: "节点/端口",
+    group: "节点/端口活动区",
     description: "端口活动区域整体横向偏移：>0 向节点内、<0 向节点外；只影响端口命中，不影响拖线吸附。",
   },
   portZoneArcRatio: {
@@ -284,7 +284,7 @@ export const Config: ConfigSchema = {
     max: 1,
     step: 0.05,
     label: "活动区域弧饱满度",
-    group: "节点/端口",
+    group: "节点/端口活动区",
     description:
       "端口活动区域半椭圆弧的垂直饱满程度：1=半椭圆，越小弧越扁越接近平顶矩形。",
   },
@@ -292,7 +292,7 @@ export const Config: ConfigSchema = {
     type: "select",
     default: DEFAULT_THEME_HANDLE.portZoneShape,
     label: "活动区域形状",
-    group: "节点/端口",
+    group: "节点/端口活动区",
     description: "端口自己的活动区域使用矩形或半椭圆，和拖线吸附区域是两件事。",
     options: [
       { value: "arc", label: "半椭圆" },

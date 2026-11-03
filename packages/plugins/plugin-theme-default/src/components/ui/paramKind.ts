@@ -148,7 +148,23 @@ export function resolveInlineSoleSelect(params: ReadonlyArray<ToolParamDef>): To
   return p
 }
 
-/** 该预设件的默认列数（照参考站实测：比例 5 列，其余 3 列） */
-export function presetColumns(kind: PresetKind): number {
-  return kind === 'ratio' ? 5 : 3
+/**
+ * 该预设件的列数。
+ *
+ * 用户口径（2026-11-03，附截图「宽度没有自适应」「高度那?」）：6 档比例被排成
+ * 5+1 两行，第二行只有一格、右侧一大片空白，面板又宽又高。根因是列数写死 5，
+ * 不看这个动作实际给了几档。
+ *
+ * 现在的规则：
+ * - 比例：**按选项数排一行**，最多 6 列（6 档刚好一行）；超过 6 档才折行，折成等宽。
+ * - 其它网格：保持 3 列（画质 / 分辨率这类选项名短，三列一眼看全）。
+ *
+ * 选项数为 0 时按默认列数返回，调用方不会拿到 0 列（那会让 grid 塌掉）。
+ */
+export function presetColumns(kind: PresetKind, optionCount = 0): number {
+  if (kind === 'ratio') {
+    if (optionCount <= 0) return 6
+    return Math.min(optionCount, 6)
+  }
+  return 3
 }

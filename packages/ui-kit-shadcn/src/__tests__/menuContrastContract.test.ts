@@ -1,8 +1,9 @@
 /**
- * 弹层状态色契约：高亮 = 半透明 hover 底；真正选中 = 实色强调底 + on-accent 前景。
+ * 弹层状态色契约：高亮 = 半透明 hover 底；真正选中 = 只用默认勾，不铺整行色底。
  *
  * 用户口径（2026-11-02）：下拉一打开第一行就是青底、暗色下字还发黑；
- * 这是把「键盘高亮」当成了「选中」。现在两种状态分开写，这里扫描 CSS 防漂移。
+ * 这是把「键盘高亮」当成了「选中」。2026-11-03 又补充：选中统一只用勾，
+ * 不再额外加主题色底。这里扫描 CSS 防漂移。
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -25,9 +26,13 @@ describe('弹层状态色：高亮与选中分开', () => {
     }
   })
 
-  it('真正选中（.bg-accent）才配 --ui-on-accent，保证暗色下不出现青底黑字', () => {
-    expect(css).toMatch(/\[data-slot='dropdown-menu-item'\]\.bg-accent[^{]*\{[^}]*var\(--ui-on-accent/)
-    expect(css).toMatch(/\[data-slot='select-item'\]\.bg-accent[^{]*\{[^}]*var\(--ui-on-accent/)
+  it('选中项（data-state=checked）只用勾，不再铺主题色底', () => {
+    expect(css).toMatch(/\[data-slot='dropdown-menu-radio-item'\]\[data-state='checked'\][^{]*\{[^}]*background-color: transparent/)
+    expect(css).toMatch(/\[data-slot='select-item'\]\[data-state='checked'\][^{]*\{[^}]*background-color: transparent/)
+    // checked 行被悬停 / 键盘高亮时，浅灰底仍要回来
+    expect(css).toMatch(/\[data-slot='dropdown-menu-radio-item'\]\[data-state='checked'\]\[data-highlighted\][^{]*\{[^}]*var\(--ui-hover/)
+    expect(css).not.toMatch(/\[data-slot='dropdown-menu-item'\]\.bg-accent/)
+    expect(css).not.toMatch(/\[data-slot='select-item'\]\.bg-accent/)
   })
 
   it('内部元素跟随 inherit（次级小字不残留深色）', () => {

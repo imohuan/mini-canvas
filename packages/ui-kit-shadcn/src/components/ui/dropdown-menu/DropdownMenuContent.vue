@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuContentEmits, DropdownMenuContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
+import { computed } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import { cn } from 'cn'
 import {
@@ -9,6 +10,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui'
 import DropdownMenuArrow from './DropdownMenuArrow.vue'
+import { popupArrowVisible, popupSideOffset } from '../../../popup/popupConfig'
 
 defineOptions({
   inheritAttrs: false,
@@ -18,24 +20,21 @@ const props = withDefaults(
   defineProps<
     DropdownMenuContentProps & {
       class?: HTMLAttributes['class']
-      /**
-       * 是否画一个指向触发按钮的小箭头。
-       *
-       * 默认关闭：菜单不一定都从按钮长出来（行尾「⋯」、右键菜单式入口等），
-       * 一律加箭头会指错地方。需要的主菜单显式写 `arrow`。
-       */
+      /** 是否画箭头；缺省读「设置 → 外观 → 浮层」。 */
       arrow?: boolean
     }
   >(),
   {
     align: 'start',
-    sideOffset: 4,
-    arrow: false,
+    arrow: undefined,
+    sideOffset: undefined,
   },
 )
 const emits = defineEmits<DropdownMenuContentEmits>()
 
-const delegatedProps = reactiveOmit(props, 'class', 'arrow')
+const arrowVisible = computed(() => popupArrowVisible('dropdown', props.arrow))
+const effectiveSideOffset = computed(() => popupSideOffset('dropdown', props.sideOffset))
+const delegatedProps = reactiveOmit(props, 'class', 'arrow', 'sideOffset')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -54,7 +53,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     -->
     <DropdownMenuContent
       data-slot="dropdown-menu-content"
-      v-bind="{ ...$attrs, ...forwarded }"
+      v-bind="{ ...$attrs, ...forwarded, sideOffset: effectiveSideOffset }"
       :class="cn('data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 bg-popover text-popover-foreground flex min-w-48 flex-col rounded-3xl p-1.5 shadow-lg ring-1 duration-100 cn-menu-translucent z-50 max-h-(--reka-dropdown-menu-content-available-height) w-(--reka-dropdown-menu-trigger-width) origin-(--reka-dropdown-menu-content-transform-origin) overflow-visible', props.class)"
     >
       <div
@@ -63,7 +62,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       >
         <slot />
       </div>
-      <DropdownMenuArrow v-if="props.arrow" class="fill-popover stroke-line" />
+      <DropdownMenuArrow v-if="arrowVisible" :width="16" :height="8" class="fill-popover stroke-line" />
     </DropdownMenuContent>
   </DropdownMenuPortal>
 </template>

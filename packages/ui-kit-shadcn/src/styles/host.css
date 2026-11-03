@@ -57,6 +57,11 @@
   --vuelor-surface: var(--ui-overlay-solid, #ffffff);
   --vuelor-border: var(--ui-line, #e6e6e6);
   --vuelor-input: var(--ui-chip, #f5f5f5);
+  /* 浮层配置的 CSS 兜底：未接主题桥接的独立组件库页面也能读 */
+  --mct-popup-arrow: auto;
+  --mct-popup-gap: 8;
+  --mct-popup-sub-gap: 8;
+  --mct-popup-selected-style: check;
 }
 
 /*
@@ -79,8 +84,9 @@
  *    半透明底 + 正常文字色。下拉菜单一打开第一项就带 data-highlighted，
  *    以前这里用实色强调底，等于“菜单刚打开就有一行青底”，用户读成选中态。
  *
- * 2. 真正的选中项 = 调用方显式加 bg-accent（见各菜单的 :class）：
- *    实色强调底 + --ui-on-accent。这条必须成对，否则暗色主题下会出现青底深字。
+ * 2. 真正的选中项 = reka 的 data-state="checked"（单选 / 复选行）：
+ *    只用行尾自带的勾，不铺整行主题色底。设置「外观 → 浮层 → 选中样式」只提供这一种。
+ *    调用方历史上可能还写了 bg-accent；下面统一把选中行的底色收掉，文字保持正常颜色。
  *
  * 之前把 1 和 2 混用，才会出现“下拉一打开就变色、暗色下还看不清”的反复问题。
  */
@@ -93,27 +99,37 @@
   color: var(--ui-ink, #18202b);
 }
 
-/* 真正的选中项：底色是实色强调色时，文字必须换成 on-accent */
-[data-slot='select-item'].bg-accent,
-[data-slot='dropdown-menu-item'].bg-accent,
-[data-slot='context-menu-item'].bg-accent,
-[data-slot='menubar-item'].bg-accent,
-[data-slot='combobox-item'].bg-accent {
-  color: var(--ui-on-accent, #ffffff);
+/*
+ * 选中项只用勾：清掉调用方可能残留的 bg-accent / bg-chip 底色。
+ * 选择器带 [data-state='checked']，不会误伤键盘 / 鼠标高亮。
+ * 悬停与高亮仍走上面的浅灰底；两层同时命中时，悬停的浅灰继续可见。
+ */
+[data-slot='select-item'][data-state='checked'],
+[data-slot='dropdown-menu-radio-item'][data-state='checked'],
+[data-slot='dropdown-menu-checkbox-item'][data-state='checked'],
+[data-slot='context-menu-radio-item'][data-state='checked'],
+[data-slot='context-menu-checkbox-item'][data-state='checked'],
+[data-slot='combobox-item'][data-state='checked'] {
+  background-color: transparent;
+  color: inherit;
 }
 
-/* 高亮行内部的图标 / 次级文字一起跟白字，避免残留深色小字 */
+/* 选中项在悬停 / 键盘高亮时仍保留浅灰底，不能因为上面清底色而消失 */
+[data-slot='select-item'][data-state='checked'][data-highlighted],
+[data-slot='dropdown-menu-radio-item'][data-state='checked'][data-highlighted],
+[data-slot='dropdown-menu-checkbox-item'][data-state='checked'][data-highlighted],
+[data-slot='context-menu-radio-item'][data-state='checked'][data-highlighted],
+[data-slot='context-menu-checkbox-item'][data-state='checked'][data-highlighted],
+[data-slot='combobox-item'][data-state='checked'][data-highlighted] {
+  background-color: var(--ui-hover, rgb(0 0 0 / 0.06));
+}
+
 /* 行内图标 / 次级文字跟随行本身，避免残留一套深色 */
 [data-slot='select-item'][data-highlighted] *,
 [data-slot='dropdown-menu-item'][data-highlighted] *,
 [data-slot='context-menu-item'][data-highlighted] *,
 [data-slot='menubar-item'][data-highlighted] *,
-[data-slot='combobox-item'][data-highlighted] *,
-[data-slot='select-item'].bg-accent *,
-[data-slot='dropdown-menu-item'].bg-accent *,
-[data-slot='context-menu-item'].bg-accent *,
-[data-slot='menubar-item'].bg-accent *,
-[data-slot='combobox-item'].bg-accent * {
+[data-slot='combobox-item'][data-highlighted] * {
   color: inherit;
 }
 
@@ -198,6 +214,11 @@
   border-radius: var(--mct-radius, var(--radius-open, 12px));
 }
 
+/* Select 自绘箭头不应被「菜单行」的 8px 圆角规则命中；它只是三角形，靠菜单圆角本身收边。 */
+[data-slot='select-content'] [data-slot='select-arrow'] {
+  border-radius: 0;
+}
+
 /*
  * 弹窗 / 弹出面板的圆角：默认跟随全局档位。
  * DialogContent 自带的 rounded-4xl 会把 32px 级别的圆角带进生成历史这类大面板，
@@ -274,7 +295,12 @@
    * 所以「细」交给 thin，「不刺眼」交给颜色：静止 20% 墨色、悬停 36%，暗色下融进背景。
    */
   scrollbar-width: thin;
-  scrollbar-gutter: auto;
+  /*
+   * 通道改 stable（问题 17）：滚动条单独占一条 10px 窄道，不再压在行高亮上。
+   * 以前 auto 是怕常驻通道让内容左右跳；但覆盖式滚动条在 Chrome 里会直接叠住
+   * 选中的整行底色，用户明确要求像浏览器原生那样「单独扩展一条区域」。
+   */
+  scrollbar-gutter: stable;
   scrollbar-color: color-mix(in srgb, var(--ui-ink, #18202b) 20%, transparent) transparent;
 }
 

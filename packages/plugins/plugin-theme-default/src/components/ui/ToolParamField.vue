@@ -72,7 +72,7 @@ const presetProps = computed<Record<string, unknown>>(() => {
     param: props.param,
     modelValue: props.modelValue,
     disabled: props.disabled,
-    ...(kind ? { columns: presetColumns(kind) } : {}),
+    ...(kind ? { columns: presetColumns(kind, props.param.options?.length ?? 0) } : {}),
   }
 })
 

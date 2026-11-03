@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuRootEmits, DropdownMenuRootProps } from 'reka-ui'
 import { DropdownMenuRoot, useForwardPropsEmits } from 'reka-ui'
+import { usePopupExclusive, usePopupOpenState } from '../../../popup/exclusive'
 
 /**
  * 菜单默认非模态。
@@ -14,6 +15,21 @@ import { DropdownMenuRoot, useForwardPropsEmits } from 'reka-ui'
 const props = withDefaults(defineProps<DropdownMenuRootProps>(), { modal: false })
 const emits = defineEmits<DropdownMenuRootEmits>()
 
+/**
+ * 受控开合 + 全局互斥（用户口径 2026-11-03：「两个下拉可以同时打开」）。
+ *
+ * `open` 交给我们自己的 state，才能让别的浮层打开时把它关掉；
+ * 调用点继续写 `v-model:open` / `open` 都照常工作。
+ */
+/** reka 的 emits 是重载联合类型，这里收窄成单一签名再交给 helper。 */
+const emitOpen = (value: boolean): void => {
+  ;(emits as unknown as (event: string, value: boolean) => void)('update:open', value)
+}
+const open = usePopupOpenState(props, emitOpen)
+usePopupExclusive(open, () => {
+  if (open.value) open.value = false
+})
+
 const forwarded = useForwardPropsEmits(props, emits)
 </script>
 
@@ -22,6 +38,7 @@ const forwarded = useForwardPropsEmits(props, emits)
     v-slot="slotProps"
     data-slot="dropdown-menu"
     v-bind="forwarded"
+    v-model:open="open"
   >
     <slot v-bind="slotProps" />
   </DropdownMenuRoot>

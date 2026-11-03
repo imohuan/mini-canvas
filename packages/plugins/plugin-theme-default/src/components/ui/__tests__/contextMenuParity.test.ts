@@ -38,7 +38,11 @@ describe('参数面板 = 右键菜单那一档', () => {
     expect(body).toMatch(/background:\s*var\(--ui-overlay-solid/)
     expect(body).toMatch(/border-radius:\s*var\(--mct-radius,\s*16px\)/)
     expect(body).toMatch(/padding:\s*16px/)
-    expect(body).toMatch(/width:\s*288px/)
+    // 宽度不再写死 288（用户口径 2026-11-03「宽度没有自适应」）：随内容走，
+    // 只用上下限兜住极端情况。
+    expect(body).toMatch(/width:\s*max-content/)
+    expect(body).toMatch(/min-width:\s*220px/)
+    expect(body).toMatch(/max-width:\s*min\(420px/)
   })
 
   it('块之间 12 间距 + 一条分割线（参考稿在比例网格与滑块之间就是 border-t）', () => {

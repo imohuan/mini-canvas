@@ -27,9 +27,38 @@ import {
   findFont,
   loadFont,
   sizeCssVars,
+  POPUP_BRIDGE_VARS,
+  applyPopupBridge,
+  clearPopupBridge,
+  resolvePopupCssVars,
+  resolvePopupGap,
+  resolvePopupArrow,
+  resolvePopupSelectedStyle,
+  DEFAULT_POPUP_CONFIG,
+  POPUP_ARROW_LABELS,
+  POPUP_GAP_LABELS,
+  type PopupArrowMode,
+  type PopupConfig,
+  type PopupGapChoice,
   type FontOption,
   type RadiusOption,
 } from '@mini-canvas/ui-kit-shadcn'
+
+/** 浮层配置的选项与文案：组件库是唯一真源，主题设置只引用。 */
+export const THEME_POPUP_ARROW_CHOICES = ['auto', 'show', 'hide'] as const
+export type ThemePopupArrowChoice = PopupArrowMode
+export const THEME_POPUP_ARROW_LABELS = POPUP_ARROW_LABELS
+
+export const THEME_POPUP_GAP_CHOICES = [4, 8, 12] as const
+export type ThemePopupGapChoice = PopupGapChoice
+export const THEME_POPUP_GAP_LABELS = POPUP_GAP_LABELS
+
+/** 「选中样式」先只做默认勾一种；保留字段是为了让设置页和契约稳定。 */
+export const THEME_POPUP_SELECTED_STYLE_CHOICES = ['check'] as const
+export type ThemePopupSelectedStyleChoice = 'check'
+export const THEME_POPUP_SELECTED_STYLE_LABELS: Readonly<Record<ThemePopupSelectedStyleChoice, string>> = {
+  check: '只显示勾选',
+}
 
 /** 字体选项：`inherit`（跟随宿主）在最前，其余原样取自组件库 */
 export const THEME_FONT_OPTIONS: readonly FontOption[] = FONT_OPTIONS
@@ -152,6 +181,8 @@ export interface ThemeBridgeInput {
   heading: ThemeFontChoice | 'inherit'
   /** 控件尺寸档位；inherit 表示不统一（各组件按自己的 size prop） */
   size: ThemeSizeChoice
+  /** 浮层：箭头 / 触发器间距 / 子菜单间距 / 选中样式 */
+  popup?: PopupConfig
 }
 
 /** 把设置里读到的裸字符串收敛成合法档位；不认识的值一律回落到默认档 */
@@ -160,6 +191,10 @@ export function toThemeBridgeInput(raw: {
   themeFont?: unknown
   themeHeadingFont?: unknown
   themeSize?: unknown
+  themePopupArrow?: unknown
+  themePopupGap?: unknown
+  themePopupSubGap?: unknown
+  themePopupSelectedStyle?: unknown
 }): ThemeBridgeInput {
   const radius = THEME_RADIUS_CHOICES.includes(raw.themeRadius as ThemeRadiusChoice)
     ? (raw.themeRadius as ThemeRadiusChoice)
@@ -173,7 +208,15 @@ export function toThemeBridgeInput(raw: {
   const size = THEME_SIZE_CHOICES.includes(raw.themeSize as ThemeSizeChoice)
     ? (raw.themeSize as ThemeSizeChoice)
     : 'inherit'
-  return { radius, font, heading, size }
+  const popup: PopupConfig = {
+    arrow: resolvePopupArrow(raw.themePopupArrow ?? DEFAULT_POPUP_CONFIG.arrow),
+    gap: resolvePopupGap(raw.themePopupGap ?? DEFAULT_POPUP_CONFIG.gap),
+    subGap: resolvePopupGap(raw.themePopupSubGap ?? DEFAULT_POPUP_CONFIG.subGap),
+    selectedStyle: resolvePopupSelectedStyle(
+      raw.themePopupSelectedStyle ?? DEFAULT_POPUP_CONFIG.selectedStyle,
+    ),
+  }
+  return { radius, font, heading, size, popup }
 }
 
 /**
@@ -204,6 +247,7 @@ export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, 
   }
   // 尺寸：一档写一整组变量；inherit 不写，组件库回落到 shadcn 原始尺寸
   if (input.size !== 'inherit') Object.assign(out, sizeCssVars(input.size))
+  if (input.popup) Object.assign(out, resolvePopupCssVars(input.popup))
   return out
 }
 
@@ -213,10 +257,17 @@ export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, 
  * 纯 DOM 操作、幂等，可反复调用（设置面板每次改都会调用一次）。
  */
 export function applyThemeBridge(input: ThemeBridgeInput, root?: HTMLElement): void {
+  // 浮层配置是组件库的响应式对象，不依赖 DOM；纯逻辑单测 / SSR 也要能更新。
+  applyPopupBridge(input.popup ?? DEFAULT_POPUP_CONFIG)
   const el = root ?? (typeof document === 'undefined' ? undefined : document.documentElement)
   if (!el) return
   const next = resolveThemeBridgeVars(input)
   for (const name of [...Object.values(THEME_BRIDGE_VARS), ...THEME_SIZE_VARS]) {
+    const value = next[name]
+    if (value) el.style.setProperty(name, value)
+    else el.style.removeProperty(name)
+  }
+  for (const name of Object.values(POPUP_BRIDGE_VARS)) {
     const value = next[name]
     if (value) el.style.setProperty(name, value)
     else el.style.removeProperty(name)
@@ -244,5 +295,7 @@ export function clearThemeBridge(root?: HTMLElement): void {
   for (const name of [...Object.values(THEME_BRIDGE_VARS), ...THEME_SIZE_VARS]) {
     el.style.removeProperty(name)
   }
+  for (const name of Object.values(POPUP_BRIDGE_VARS)) el.style.removeProperty(name)
+  clearPopupBridge()
   el.removeAttribute('data-mct-size')
 }

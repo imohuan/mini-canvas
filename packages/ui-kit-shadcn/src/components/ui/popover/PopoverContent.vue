@@ -1,28 +1,33 @@
 <script setup lang="ts">
 import type { PopoverContentEmits, PopoverContentProps } from 'reka-ui'
-import type { HTMLAttributes } from 'vue'
+import { computed, type HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import { cn } from 'cn'
 import {
   PopoverContent,
   PopoverPortal,
+  PopoverArrow,
   useForwardPropsEmits,
 } from 'reka-ui'
+import { popupArrowVisible, popupSideOffset } from '../../../popup/popupConfig'
 
 defineOptions({
   inheritAttrs: false,
 })
 
 const props = withDefaults(
-  defineProps<PopoverContentProps & { class?: HTMLAttributes['class'] }>(),
+  defineProps<PopoverContentProps & { class?: HTMLAttributes['class']; arrow?: boolean }>(),
   {
     align: 'center',
-    sideOffset: 4,
+    sideOffset: undefined,
+    arrow: undefined,
   },
 )
 const emits = defineEmits<PopoverContentEmits>()
 
-const delegatedProps = reactiveOmit(props, 'class')
+const arrowVisible = computed(() => popupArrowVisible('popover', props.arrow))
+const effectiveSideOffset = computed(() => popupSideOffset('popover', props.sideOffset))
+const delegatedProps = reactiveOmit(props, 'class', 'arrow', 'sideOffset')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -31,7 +36,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <PopoverPortal>
     <PopoverContent
       data-slot="popover-content"
-      v-bind="{ ...$attrs, ...forwarded }"
+      v-bind="{ ...$attrs, ...forwarded, sideOffset: effectiveSideOffset }"
       :class="
         cn(
           'bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 flex flex-col gap-4 rounded-3xl p-4 text-sm shadow-lg ring-1 duration-100 z-50 w-72 max-w-(--reka-popover-content-available-width) origin-(--reka-popover-content-transform-origin) outline-hidden',
@@ -40,6 +45,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       "
     >
       <slot />
+      <PopoverArrow v-if="arrowVisible" :width="10" :height="5" class="fill-popover stroke-line" />
     </PopoverContent>
   </PopoverPortal>
 </template>

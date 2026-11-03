@@ -10,6 +10,9 @@ description: 在 mini-canvas 里开发 UI、补 shadcn-vue 组件、把组件注
 `packages/plugins/plugin-theme-default/src/index.ts` 的 `registryOf('ui')`。
 业务代码只从插件上下文取组件，不直接 import 组件库。
 
+**写界面前先读 [`ui-rules.md`](./ui-rules.md)**：那份文件讲「怎么写」（选哪个浮层、
+同屏只开一个、宽度按内容、二级菜单 8px、token 规矩）；本文件讲「组件从哪来、怎么取、怎么补」。
+
 ## 先用一句话判断怎么做
 
 要用的组件已经存在 → 直接 `useUiComponent()` 解构，模板里写组件名。
@@ -245,13 +248,23 @@ pnpm -C packages/ui typecheck
 
 具体做法：
 
-1. 默认目标统一按 `8px` 理解；用户改过全局配置时，以设置里的可见边缘档位为准。子菜单的 `side-offset` 之外还有父菜单内边距，实际可能量出 14px；这时回调偏移，直到可见边缘落在目标值附近。
+1. 默认目标统一按 `8px` 理解；用户改过全局配置时，以设置里的可见边缘档位为准。子菜单不再手调偏移（见下面「子菜单间距已经由组件库自动算」），验收时只需量可见边缘。
 2. 用 `getBoundingClientRect()` 量元素，不靠截图目测猜像素。带箭头浮层要量箭头尖端，不能量菜单面板的外框。
 3. 浮层翻到另一侧、贴近视口边缘或发生碰撞位移后，再量一次。默认方向正确不代表翻转后也正确。
 4. 同一组件里多个同类菜单使用同一档；不要一个写 4、一个写 10、另一个写 24。底栏托盘的补偿写在组件布局里，不塞进一个看不清的偏移数字。
 5. 验收时同时看亮色、暗色和窄窗口；间距不因主题和窗口缩放改变。
 
 新增或修改二级菜单、下拉、弹出面板，都要把这一项写进验收清单。已经存在的旧浮层按所属任务逐步对齐，不要借一次无关改动全站重排。
+
+### 子菜单间距已经由组件库自动算
+
+reka 的 `sideOffset` 是从**触发行边框**量起的，触发行又缩在父面板内边距里，
+所以手写 `sideOffset=8` 实际只有 2px，画布下拉里甚至是 **-8px（子菜单压在父菜单上，2026-11-03 实测）**。
+
+现在 `packages/ui-kit-shadcn/src/popup/useSubMenuGap.ts` 会在挂载后按真实矩形补偏移，
+`DropdownMenuSubContent` 直接用它。**调用点不要再写 `side-offset`**；
+设置里的「子菜单间距」是目标可见距离，不是这个补偿值。
+测量别依赖 `requestAnimationFrame`：后台标签页会暂停 rAF，永远量不出来。
 
 ### 滚动：优先 ScrollArea
 
@@ -294,6 +307,14 @@ import ScrollPane from './ScrollPane.vue'
 弹窗内容长到会滚动时，正文用 `ScrollPane`，不要给面板加裸滚动。
 
 ## 通知：统一用上下文里的 notify
+
+### 同屏只开一个浮层
+
+任何下拉 / 选择 / 弹出面板打开时，别的必须自动收起。这条由组件库根组件统一执行
+（`packages/ui-kit-shadcn/src/popup/exclusive.ts`），`DropdownMenu` / `Select` / `Popover` /
+`Combobox` 都已接入。业务侧**不要**再写第二套互斥表。
+
+父子豁免：父面板里再打开的子浮层不关父面板；二级菜单不参与互斥。
 
 底层是 `vue-sonner`。服务由默认主题提供，名字是 `notify`；`Toaster` 也是从 `ui` 目录取，
 画布页只挂一次。业务插件里不要 `import { toast } from 'vue-sonner'`，也不要挂 `<Toaster>`。

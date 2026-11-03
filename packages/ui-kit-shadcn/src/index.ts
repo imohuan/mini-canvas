@@ -35,6 +35,27 @@ export { SettingsRow, SettingsSection } from './components/settings'
 export { UiToaster } from './components/notification'
 
 export { SHADCN_COMPONENTS, SHADCN_COMPONENT_NAMES } from './registry'
+/** 浮层统一配置：六类浮层共用一套箭头 / 间距 / 选中样式。 */
+export {
+  DEFAULT_POPUP_CONFIG,
+  POPUP_ARROW_CHOICES,
+  POPUP_ARROW_LABELS,
+  POPUP_BRIDGE_VARS,
+  POPUP_GAP_CHOICES,
+  POPUP_GAP_LABELS,
+  applyPopupBridge,
+  clearPopupBridge,
+  popupArrowVisible,
+  popupConfig,
+  popupDirectArrowSideOffset,
+  popupSideOffset,
+  popupSubSideOffset,
+  resolvePopupArrow,
+  resolvePopupCssVars,
+  resolvePopupGap,
+  resolvePopupSelectedStyle,
+} from './popup/popupConfig'
+export type { PopupArrowMode, PopupConfig, PopupGapChoice, PopupKind, PopupSelectedStyle } from './popup/popupConfig'
 /** 家族名单：组件库使用标记只认这些 shadcn 生成组件（详见文件头注释） */
 export { SHADCN_FAMILY_NAMES, isShadcnPrimitive } from './shadcnFamilies'
 
