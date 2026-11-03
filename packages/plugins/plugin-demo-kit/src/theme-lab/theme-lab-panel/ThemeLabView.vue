@@ -405,6 +405,8 @@ const pageMode = display.pageMode
   </div>
 </template>
 
-<style scoped src="./ThemeLabView.css"></style>
+<style scoped src="./theme-lab-view-base.css"></style>
+<style scoped src="./theme-lab-view-editor.css"></style>
+<style scoped src="./theme-lab-view-preview.css"></style>
 
 
