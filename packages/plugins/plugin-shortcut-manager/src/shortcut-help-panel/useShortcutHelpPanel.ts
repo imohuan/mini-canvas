@@ -97,43 +97,51 @@ function decorateItem(it: V2ShortcutHelpItem): DecoratedItem {
   }
 }
 
-const searchQuery = ref('')
 /** 每组一行（getHelpList 返回的是分组后的结构，不是扁平项） */
 type HelpGroup = { group: V2ShortcutHelpItem['group']; items: V2ShortcutHelpItem[] }
-const conflicts = ref<V2ShortcutConflict[]>([])
-const helpList = ref<HelpGroup[]>([])
-/** 当前正在展开"重映射"面板的行 ID（null = 全部收起） */
-const remappingId = ref<string | null>(null)
 
-function syncFromManager(): void {
-  const manager = managerNow()
-  conflicts.value = manager?.getConflicts() ?? []
-  helpList.value = manager?.getHelpList() ?? []
-}
-syncFromManager()
+/**
+ * 查询、重映射与导入导出动作。
+ *
+ * ⚠️ **每次调用都新建一份状态**：面板是组件实例，搜索词/展开行不能被多个实例共享；
+ * 更关键的是这里不能在模块顶层读 manager —— 本文件随 ShortcutHelpPanel.vue 一起被 import，
+ * 那时 `apply()` 还没跑，读到的必然是 undefined，列表会永远停在空。
+ */
+export function useShortcutHelpPanel() {
+  const searchQuery = ref('')
+  const conflicts = ref<V2ShortcutConflict[]>([])
+  const helpList = ref<HelpGroup[]>([])
+  /** 当前正在展开"重映射"面板的行 ID（null = 全部收起） */
+  const remappingId = ref<string | null>(null)
 
-const filteredHelpList = computed(() => {
-  const q = searchQuery.value.toLowerCase().trim()
-  const mapGroups = helpList.value.map((g) => ({
-    ...g,
-    items: g.items.map((it) => decorateItem(it)),
-  }))
-  if (!q) return mapGroups
-  // mod 归一成 ctrl 后再匹配一次：用户搜 'ctrl+z' 能命中 'mod+z'
-  const normQ = normalizeKeyForPlatform(q)
-  return mapGroups
-    .map((g) => ({
+  function syncFromManager(): void {
+    const manager = managerNow()
+    conflicts.value = manager?.getConflicts() ?? []
+    helpList.value = manager?.getHelpList() ?? []
+  }
+
+  const filteredHelpList = computed(() => {
+    const q = searchQuery.value.toLowerCase().trim()
+    const mapGroups = helpList.value.map((g) => ({
       ...g,
-      items: g.items.filter(
-        (i) =>
-          i.command.toLowerCase().includes(q) ||
-          i.keys.toLowerCase().includes(q) ||
-          i.id.toLowerCase().includes(q) ||
-          (normQ.length > 0 && normalizeKeyForPlatform(i.keys).includes(normQ)),
-      ),
+      items: g.items.map((it) => decorateItem(it)),
     }))
-    .filter((g) => g.items.length > 0)
-})
+    if (!q) return mapGroups
+    // mod 归一成 ctrl 后再匹配一次：用户搜 'ctrl+z' 能命中 'mod+z'
+    const normQ = normalizeKeyForPlatform(q)
+    return mapGroups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (i) =>
+            i.command.toLowerCase().includes(q) ||
+            i.keys.toLowerCase().includes(q) ||
+            i.id.toLowerCase().includes(q) ||
+            (normQ.length > 0 && normalizeKeyForPlatform(i.keys).includes(normQ)),
+        ),
+      }))
+      .filter((g) => g.items.length > 0)
+  })
 
 function shortcutIcon(keys: string): string {
   const k = keys.toLowerCase()
@@ -179,72 +187,71 @@ function shortcutIcon(keys: string): string {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9h6v6H9z"/></svg>'
 }
 
-function onSelectRow(item: DecoratedItem) {
-  remappingId.value = remappingId.value === item.id ? null : item.id
-}
-
-function openRemap(item: DecoratedItem) {
-  remappingId.value = item.id
-}
-
-function closeRemap() {
-  refreshData()
-  remappingId.value = null
-}
-
-function refreshData() {
-  const manager = managerNow()
-  if (!manager) return
-  helpList.value = manager.getHelpList()
-  conflicts.value = manager.getConflicts()
-}
-
-function resetDefaults() {
-  managerNow()?.resetDefaults()
-  refreshData()
-}
-
-function exportKeymap() {
-  const manager = managerNow()
-  if (!manager) return
-  const data = manager.exportKeymap()
-  const json = JSON.stringify(data, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'shortcut-keymap.json'
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function importKeymap() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  input.onchange = () => {
-    const file = input.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result as string)
-        managerNow()?.loadKeymap(data)
-        refreshData()
-      } catch {
-        alert('导入失败：JSON 格式无效')
-      }
-    }
-    reader.readAsText(file)
+  function onSelectRow(item: DecoratedItem) {
+    remappingId.value = remappingId.value === item.id ? null : item.id
   }
-  input.click()
-}
 
-function close(): void {
-  if (service) service.visible = false
-}
+  function openRemap(item: DecoratedItem) {
+    remappingId.value = item.id
+  }
 
-export function useShortcutHelpPanel() {
+  function refreshData(): void {
+    syncFromManager()
+  }
+
+  function closeRemap() {
+    refreshData()
+    remappingId.value = null
+  }
+
+  function resetDefaults() {
+    managerNow()?.resetDefaults()
+    refreshData()
+  }
+
+  function exportKeymap() {
+    const manager = managerNow()
+    if (!manager) return
+    const data = manager.exportKeymap()
+    const json = JSON.stringify(data, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'shortcut-keymap.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function importKeymap() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result as string)
+          managerNow()?.loadKeymap(data)
+          refreshData()
+        } catch {
+          alert('导入失败：JSON 格式无效')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
+  function close(): void {
+    if (service) service.visible = false
+  }
+
+  // 面板首次打开时 apply() 早已跑完；这里再同步一次，避免"先 import 后 apply"的时序留下空列表。
+  refreshData()
+
   return {
     service,
     searchQuery,
