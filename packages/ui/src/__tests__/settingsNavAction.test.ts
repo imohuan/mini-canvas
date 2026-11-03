@@ -36,8 +36,8 @@ describe('设置里的快捷键动作项', () => {
 
   it('两套设置面板都保留动作项，并广播 settings:ui-action', () => {
     for (const rel of [
-      '../components/settings/AppSettingsPanel.vue',
-      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+      '../components/settings/settings/useSettingsNavigation.ts',
+      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
     ]) {
       const src = read(rel)
       expect(src, rel + ' 丢掉了动作项').toMatch(/action/)
@@ -54,8 +54,8 @@ describe('设置里的快捷键动作项', () => {
 
   it('动作项在被“直接 return”之前执行（默认选中也能点开）', () => {
     for (const rel of [
-      '../components/settings/AppSettingsPanel.vue',
-      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+      '../components/settings/settings/useSettingsNavigation.ts',
+      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
     ]) {
       const src = read(rel)
       const fn = src.slice(src.indexOf('function selectNav('), src.indexOf('function selectSection('))

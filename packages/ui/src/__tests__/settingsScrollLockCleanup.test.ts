@@ -13,15 +13,15 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(
-  new URL('../components/settings/AppSettingsPanel.vue', import.meta.url),
+  new URL('../components/settings/settings/useSettingsNavigation.ts', import.meta.url),
   'utf-8',
 )
 
 describe('设置面板卸载时释放滚动锁', () => {
   it('onBeforeUnmount 里调了 releaseScrollLock', () => {
-    const from = source.indexOf('onBeforeUnmount(')
+    const from = source.indexOf('onBeforeUnmount(() => {')
     expect(from, '找不到 onBeforeUnmount').toBeGreaterThan(-1)
-    const block = source.slice(from, source.indexOf('\n})', from) + 3)
+    const block = source.slice(from, source.indexOf('\n  })', from) + 4)
     expect(block, '卸载时没有释放滚动锁（定时器会悬空）').toMatch(/releaseScrollLock\(\)/)
   })
 

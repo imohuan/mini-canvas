@@ -15,6 +15,15 @@ const APP = read('../components/settings/AppSettingsPanel.vue')
 const THEME = read(
   '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
 )
+/** 拆分后两套皮的菜单推导与导航状态分别在各自 settings/ 子目录；入口只剩装配。 */
+const APP_MODEL = read('../components/settings/settings/settingsMenuModel.ts')
+const APP_STATE = read('../components/settings/settings/useSettingsNavigation.ts')
+const THEME_MODEL = read(
+  '../../../plugins/plugin-theme-default/src/components/settings/settings/settingsMenuModel.ts',
+)
+const THEME_STATE = read(
+  '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
+)
 const NAV = read(
   '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsNav.vue',
 )
@@ -54,10 +63,10 @@ describe('设置菜单注册接线', () => {
     // 成品皮先在代码里接；默认皮同样消费它
     expect(APP).toMatch(/settingsMenu/)
     expect(THEME).toMatch(/settingsMenu/)
-    expect(THEME).toMatch(/resolve\(/)
+    expect(THEME_STATE).toMatch(/resolve\(/)
     // 旧 group 兜底不能删：没注册菜单的插件配置仍然必须可见
-    expect(THEME).toMatch(/groups\(\)/)
-    expect(APP).toMatch(/groups\(\)/)
+    expect(THEME_STATE).toMatch(/groups\(\)/)
+    expect(APP_STATE).toMatch(/groups\(\)/)
   })
 
   it('菜单树按第 0 级分类渲染，分类下是一级菜单', () => {
@@ -67,21 +76,21 @@ describe('设置菜单注册接线', () => {
 
   it('第 0 级分类顺序也走菜单 order（不是只认写死的五个分类）', () => {
     // 左导航传给分组的 categoryPosition = menu.category.position；按解析后的位置排
-    expect(THEME).toMatch(/categoryPosition: entry\.categoryPosition/)
-    expect(APP).toMatch(/categoryPosition: entry\.categoryPosition/)
+    expect(THEME_MODEL).toMatch(/categoryPosition: entry\.categoryPosition/)
+    expect(APP_MODEL).toMatch(/categoryPosition: entry\.categoryPosition/)
     expect(NAV).toMatch(/item\.categoryPosition/)
     expect(NAV).toMatch(/compareSettingsCategory/)
     // 旧入口（没注册菜单的分组）也要沿用本分类的最终位置，不能整组掉到最末
-    expect(THEME).toMatch(/categoryPositions\.has\(category\)/)
-    expect(APP).toMatch(/categoryPositions\.has\(category\)/)
+    expect(THEME_MODEL).toMatch(/categoryPositions\.has\(category\)/)
+    expect(APP_MODEL).toMatch(/categoryPositions\.has\(category\)/)
   })
 
   it('左导航保留菜单树的最终顺序，不再按原始 order 重排', () => {
     // before / after 已在注册场里落成 position；皮若再按 order 排一次，相对位置会被覆盖。
-    expect(THEME).toMatch(/return menuEntries\s*$/m)
-    expect(APP).toMatch(/return out\s*$/m)
-    expect(THEME).not.toMatch(/menuEntries\.sort\(\(a, b\) => a\.order - b\.order\)/)
-    expect(APP).not.toMatch(/out\.sort\(\(a, b\) => a\.order - b\.order\)/)
+    expect(THEME_MODEL).toMatch(/return menuEntries\s*$/m)
+    expect(APP_MODEL).toMatch(/return out\s*$/m)
+    expect(THEME_MODEL).not.toMatch(/menuEntries\.sort\(\(a, b\) => a\.order - b\.order\)/)
+    expect(APP_MODEL).not.toMatch(/out\.sort\(\(a, b\) => a\.order - b\.order\)/)
   })
 
   it('二级段按 settingsMenu.section.order 排（注册 25 的夹在 20 和 30 之间）', () => {
@@ -98,10 +107,10 @@ describe('设置菜单注册接线', () => {
     const layout = view.navs.find((n) => n.id === 'nav/canvas/layout')!
     expect(layout.sections.map((s) => s.title)).toEqual(['对齐辅助线', '自动布局', '网格', '分组'])
     // 面版必须按菜单 section 的顺序铺开，而不是 sectionMap（旧分组顺序）
-    expect(THEME).toMatch(/for \(const section of nav\.sections\)/)
-    expect(APP).toMatch(/for \(const section of nav\.sections\)/)
-    expect(THEME).not.toMatch(/order: section\.order \?\? 1000/)
-    expect(APP).not.toMatch(/order: section\.order \?\? 1000/)
+    expect(THEME_MODEL).toMatch(/for \(const section of nav\.sections\)/)
+    expect(APP_MODEL).toMatch(/for \(const section of nav\.sections\)/)
+    expect(THEME_MODEL).not.toMatch(/order: section\.order \?\? 1000/)
+    expect(APP_MODEL).not.toMatch(/order: section\.order \?\? 1000/)
   })
 
   it('同一组配置可被一个 section 收拢（分组不改、菜单合并展示）', () => {
@@ -128,17 +137,17 @@ describe('设置菜单注册接线', () => {
   it('旧 settings.nav 的整页（pageGroup）并入菜单二级节，只保留一条', () => {
     // 皮里的合并规则：菜单命中后 used.add(occ.id)，后续“未命中旧入口”循环会跳过；
     // 页面本身按 pageGroup 挂到对应 section.page。
-    expect(THEME).toMatch(/metaPageGroup\(item\.meta\)/)
-    expect(THEME).toMatch(/used\.add\(item\.id\)/)
-    expect(APP).toMatch(/metaPageGroup\(item\.meta\)/)
-    expect(APP).toMatch(/used\.add\(item\.id\)/)
+    expect(THEME_MODEL).toMatch(/metaPageGroup\(item\.meta\)/)
+    expect(THEME_MODEL).toMatch(/used\.add\(item\.id\)/)
+    expect(APP_MODEL).toMatch(/metaPageGroup\(item\.meta\)/)
+    expect(APP_MODEL).toMatch(/used\.add\(item\.id\)/)
     // 宽版：菜单 key 是 section id 时也要能命中主题工作台
-    expect(APP).toMatch(/activeEntry\.leaves\.includes\(THEME_STUDIO_NAV\)/)
+    expect(read('../components/settings/settings/SettingsContent.vue')).toMatch(/activeEntry\.leaves\.includes\(THEME_STUDIO_NAV\)/)
     // 二级节上的整页也要真的画出来，并且宽版规则作用于它
-    expect(THEME).toMatch(/class="psd-section-page"/)
-    expect(APP).toMatch(/class="asp-section-page"/)
-    expect(THEME).toMatch(/\.psd-section-page\.is-wide/)
-    expect(APP).toMatch(/\.asp-section-page\.is-wide/)
+    expect(read('../../../plugins/plugin-theme-default/src/components/settings/settings/SettingsContent.vue')).toMatch(/class="psd-section-page"/)
+    expect(read('../components/settings/settings/SettingsContent.vue')).toMatch(/class="asp-section-page"/)
+    expect(read('../../../plugins/plugin-theme-default/src/components/settings/settings/SettingsContent.vue')).toMatch(/\.psd-section-page\.is-wide/)
+    expect(read('../components/settings/settings/SettingsContent.vue')).toMatch(/\.asp-section-page\.is-wide/)
   })
 
   it('未注册 group 仍自动兜底可见，并报告 issue', () => {

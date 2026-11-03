@@ -30,6 +30,12 @@ const SRC = read('../components/settings/AppSettingsPanel.vue')
 /** 只看代码、不看注释 */
 const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '')
 
+/** 拆分后主题实现分别在三个文件；源契约断言按职责读对应文件。 */
+const MODEL = read('../components/settings/settings/settingsMenuModel.ts')
+const NAV_STATE = read('../components/settings/settings/useSettingsNavigation.ts')
+const CONTENT = read('../components/settings/settings/SettingsContent.vue')
+const NAV_VIEW = read('../components/settings/settings/SettingsNav.vue')
+
 const NAV_ITEM = read(
   '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsNavItem.vue',
 )
@@ -59,9 +65,9 @@ describe('ui-settings-panel 注册：顶替主题默认皮成为设置面板赢�
 
 describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
   it('一级 = 第一个 / 分段；二级 = 后段（扁平分组取它自己）', () => {
-    expect(CODE).toMatch(/function navOf\(key: string\): string/)
-    expect(CODE).toMatch(/function leafLabelOf\(key: string\): string/)
-    expect(CODE).toMatch(/const sectionMap = computed<Map<string, string\[\]>>/)
+    expect(MODEL).toMatch(/function navOf\(key: string\): string/)
+    expect(MODEL).toMatch(/function leafLabelOf\(key: string\): string/)
+    expect(NAV_STATE).toMatch(/const sectionMap = computed<Map<string, string\[\]>>/)
   })
 
   it('每项是图标 + 名称，选中项高亮', () => {
@@ -80,7 +86,7 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
 
   it('左侧按第 0 级分类分组：分类标题 + 该分类下的一级菜单', () => {
     // 两套皮共用同一个导航组件，插件不再自绘
-    expect(SRC).toMatch(/<ShadcnSettingsNav/)
+    expect(NAV_VIEW).toMatch(/<ShadcnSettingsNav/)
     expect(NAV).toMatch(/class="ssn-caption"/)
     expect(NAV).toMatch(/v-for="group in groups"/)
     expect(NAV).toMatch(/v-for="item in group.items"/)
@@ -97,21 +103,21 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     expect(CATEGORY).toMatch(/metaCategory\?\.trim\(\) \|\| registryCategory\?\.trim\(\)/)
     expect(CATEGORY).toMatch(/SETTINGS_NAV_CATEGORY_FIELD\s*=\s*'settings\/navCategory'/)
     // 两套皮都从同一个注册场读取
-    expect(CODE).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
+    expect(NAV_STATE).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
     const THEME_SETTINGS = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
     )
     expect(THEME_SETTINGS).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
   })
 
   it('图标走独立场域 settings/navIcon，命中顺序由场域 order 决定', () => {
-    expect(CODE).toMatch(/ctx\.registryOf<unknown>\('settings\/navIcon'\)/)
-    expect(CODE).toMatch(/navIcons\?\.top\(name\)\?\.value/)
+    expect(NAV_STATE).toMatch(/ctx\.registryOf<unknown>\('settings\/navIcon'\)/)
+    expect(NAV_STATE).toMatch(/navIcons\?\.top\(name\)\?\.value/)
     // 取不到图标时也必须落一个兜底，不能留空位
-    expect(CODE).toMatch(/\?\?\s*Circle/)
+    expect(NAV_STATE).toMatch(/\?\?\s*Circle/)
     // 默认皮使用导航图标模块导出的兜底常量
     const THEME_SETTINGS = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
     )
     expect(THEME_SETTINGS).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
   })
@@ -122,9 +128,9 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     // watch(navEntries, { immediate: true }) 在 setup 阶段就会求值；
     // iconOf 若在它之后声明，读 navIcons 会撞 TDZ。
     const THEME_SETTINGS = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue',
+      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
     )
-    for (const src of [CODE, THEME_SETTINGS]) {
+    for (const src of [NAV_STATE, THEME_SETTINGS]) {
       const iconsAt = src.indexOf("registryOf<unknown>('settings/navIcon')")
       const entriesAt = src.indexOf('const navEntries = computed')
       expect(iconsAt, '找不到图标注册表声明').toBeGreaterThan(-1)
@@ -135,28 +141,28 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
 
   it('二级小节依次排开；顶部页签条保留但默认隐藏', () => {
     // 左导航项只由一级名生成，不再为二级单独出项
-    expect(SRC).toMatch(/:items="navItems"/)
+    expect(SRC).toMatch(/<SettingsNav/)
     expect(SRC).not.toMatch(/v-for="leaf in leavesOf/)
     // 页签条是开关：默认 false；宿主显式打开且多于一个段时才出现
     expect(SRC).toMatch(/showSectionTabs\?: boolean/)
     expect(SRC).toMatch(/showSectionTabs: false/)
-    expect(SRC).toMatch(/const showTabs = computed<boolean>\(\(\) => props\.showSectionTabs && sections\.value\.length > 1\)/)
-    expect(SRC).toMatch(/v-if="showTabs"/)
-    expect(SRC).toMatch(/class="asp-tabbar"/)
+    expect(NAV_STATE).toMatch(/const showTabs = computed<boolean>\(\(\) => options\.showSectionTabs\(\) && sections\.value\.length > 1\)/)
+    expect(CONTENT).toMatch(/v-if="showTabs"/)
+    expect(CONTENT).toMatch(/class="asp-tabbar"/)
   })
 })
 
 describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行', () => {
   it('每个二级小节一张卡片；默认模式不按页签只显示当前段', () => {
-    expect(SRC).toMatch(/v-for="section in sections"/)
+    expect(CONTENT).toMatch(/v-for="section in sections"/)
     // 自绘整页（pageGroup 归到二级节）走 .asp-section-page；普通小节仍是一张卡片
-    expect(SRC).toMatch(/<ShadcnSettingsSection v-else :title="section.label">/)
-    expect(SRC).toMatch(/class="asp-section-page"/)
-    expect(CODE).toMatch(/const activeEntry = computed<NavEntry \| undefined>/)
+    expect(CONTENT).toMatch(/<ShadcnSettingsSection v-else :title="section.label">/)
+    expect(CONTENT).toMatch(/class="asp-section-page"/)
+    expect(NAV_STATE).toMatch(/const activeEntry = computed<NavEntry \| undefined>/)
   })
 
   it('字段用 SettingsSchemaField，行由标题 + 描述 + 控件构成', () => {
-    expect(CODE).toMatch(/:is="FieldRenderer"/)
+    expect(CONTENT).toMatch(/:is="fieldRenderer"/)
     // 字段渲染器本身改成一行一项：开关/下拉/输入/数字各一条
     expect(FIELD).toMatch(/ShadcnSettingsRow/)
     expect(FIELD).toMatch(/<Switch/)
@@ -198,20 +204,20 @@ describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行',
 
 describe('AppSettingsPanel 硬性保留：插槽、滚动锁、关闭通道', () => {
   it('消费 settingsGroup/<完整分组 key>', () => {
-    expect(CODE).toMatch(/ctx\.slots\.occupants\('settingsGroup\/' \+ groupKey\)/)
+    expect(NAV_STATE).toMatch(/ctx\.slots\.occupants\('settingsGroup\/' \+ groupKey\)/)
   })
 
   it('消费 settings.nav：插件导航项按 id / meta.title 命中默认项，不重复渲染', () => {
-    expect(CODE).toMatch(/ctx\.slots\.occupants\('settings\.nav'\)/)
-    expect(CODE).toMatch(/byKey\.get\(occ\.id\)/)
-    expect(CODE).toMatch(/byTitle\.get\(title\)/)
+    expect(NAV_STATE).toMatch(/ctx\.slots\.occupants\('settings\.nav'\)/)
+    expect(MODEL).toMatch(/byKey\.get\(occ\.id\)/)
+    expect(MODEL).toMatch(/byTitle\.get\(title\)/)
     // 命中项复用同一个 NavEntry，不新增第二个导航项
-    expect(CODE).toMatch(/hit\.kind = 'nav'/)
+    expect(MODEL).toMatch(/hit\.kind = 'nav'/)
   })
 
   it('消费 settings.tab：只对当前一级生效，可顶替或追加页签', () => {
-    expect(CODE).toMatch(/ctx\.slots\.occupants\('settings\.tab'\)/)
-    expect(CODE).toMatch(/occ\.id === nav \|\| occ\.id\.startsWith\(nav \+ SEP\)/)
+    expect(NAV_STATE).toMatch(/ctx\.slots\.occupants\('settings\.tab'\)/)
+    expect(MODEL).toMatch(/occ\.id === nav \|\| occ\.id\.startsWith\(nav \+ SEP\)/)
   })
 
   it('关闭事件仍由外壳统一广播，面板不自己关窗', () => {
@@ -221,8 +227,8 @@ describe('AppSettingsPanel 硬性保留：插槽、滚动锁、关闭通道', ()
   })
 
   it('卸载时释放滚动锁（含摘 scrollend 监听）', () => {
-    expect(CODE).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]*?releaseScrollLock\(\)/)
-    const block = CODE.slice(CODE.indexOf('function releaseScrollLock'))
+    expect(NAV_STATE).toMatch(/onBeforeUnmount\(\(\) => \{[\s\S]*?releaseScrollLock\(\)/)
+    const block = NAV_STATE.slice(NAV_STATE.indexOf('function releaseScrollLock'))
     expect(block).toMatch(/removeEventListener\(\s*'scrollend'/)
   })
 })

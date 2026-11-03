@@ -8,9 +8,9 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync(new URL('../PluginSettingsContent.vue', import.meta.url), 'utf-8')
+const src = readFileSync(new URL('../settings/useSettingsNavigation.ts', import.meta.url), 'utf-8')
 const app = readFileSync(
-  new URL('../../../../../../ui/src/components/settings/AppSettingsPanel.vue', import.meta.url),
+  new URL('../../../../../../ui/src/components/settings/settings/useSettingsNavigation.ts', import.meta.url),
   'utf-8',
 )
 
@@ -18,7 +18,7 @@ describe('设置面板滚动锁', () => {
   it('卸载钩子里释放滚动锁（含清兜底定时器）', () => {
     const at = src.indexOf('onBeforeUnmount(() => {')
     expect(at).toBeGreaterThan(0)
-    const block = src.slice(at, src.indexOf('\n})', at))
+    const block = src.slice(at, src.indexOf('\n  })', at))
     expect(block, '卸载没有 releaseScrollLock()').toMatch(/releaseScrollLock\(\)/)
   })
 
