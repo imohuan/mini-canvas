@@ -393,17 +393,18 @@ describe('整组拖动起手（回归：拖动状态 ref 漏声明导致 Referen
     async () => {
       const { readFileSync } = await import('node:fs')
       const { fileURLToPath } = await import('node:url')
-      const src = readFileSync(fileURLToPath(new URL('../SelectionFrame.vue', import.meta.url)), 'utf8')
+      const stateSrc = readFileSync(fileURLToPath(new URL('../selection-frame/useGroupDragState.ts', import.meta.url)), 'utf8')
+      const dragSrc = readFileSync(fileURLToPath(new URL('../selection-frame/useGroupDrag.ts', import.meta.url)), 'utf8')
       // 拖动位移状态存在（起手屏幕坐标 / 累计 flow 位移 / 成员并集快照，均 ref 形式）
-      expect(src).toMatch(/const lastClient\s*=\s*ref</)
-      expect(src).toMatch(/const dragDelta\s*=\s*ref</)
-      expect(src).toMatch(/const dragStartUnion\s*=\s*ref</)
+      expect(stateSrc).toMatch(/lastClient:\s*ref</)
+      expect(stateSrc).toMatch(/dragDelta:\s*ref</)
+      expect(stateSrc).toMatch(/dragStartUnion:\s*ref</)
       // onDragMove 必须记录"上帧坐标"走逐段增量，不能保留"总位移 ÷ 当前 zoom"的旧公式：
       // 旧公式在拖动中缩放会把已拖的段按新 zoom 重算，内容当场跳位（拖拽时缩放定位出问题）。
-      expect(src).toMatch(/lastClient\.value = \{ x: e\.clientX, y: e\.clientY \}/)
-      expect(src).not.toMatch(/e\.clientX - dragStartClient/)
+      expect(dragSrc).toMatch(/lastClient\.value = \{ x: e\.clientX, y: e\.clientY \}/)
+      expect(dragSrc).not.toMatch(/e\.clientX - dragStartClient/)
       // 起手做了异常回滚：isDragging 置 true 之后任何异常都不能把状态卡在"拖动中"
-      expect(src).toMatch(/catch[^{]*{[\s\S]*?isDragging\.value\s*=\s*false/)
+      expect(dragSrc).toMatch(/catch[^{]*{[\s\S]*?isDragging\.value\s*=\s*false/)
     },
   )
 })
