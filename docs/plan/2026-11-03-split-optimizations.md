@@ -271,3 +271,27 @@
   必须保留「先登记、再 `nodeFromJSON`」的冷启动顺序。
 - `useEditor.ts` 直接 import 10 个 editor 模块。若以后加 `editor/index.ts` 统一导出，先确认
   schema、注册表、插件创建时机没有被模块初始化顺序影响。
+
+## 26. PanoramaContent 拆分后的待办
+
+- 模板与样式仍留在入口：`NodeEmptyState` 依赖 `useUiComponent` 与 scoped 样式，抽子组件要先实测
+  主题空态件与兜底两种形态。
+- `events.ts` 通过 `three: () => three` 惰性取场景，原因是入口初始化顺序（size → events → scene）。
+  后续可让 scene 先建、去掉这层间接，但要实测 setup 内的声明顺序副作用。
+- `useTextureSource.ts` 约 224 行，可拆 `useUpstreamFetch` 与 `useTextureApply`；token 竞态逻辑
+  要一起搬，建议独立评审。
+- `scene.ts` 的 `cleanupFns` 数组目前只为对齐原实现，可收成单回调。
+- `dragging` ref 在 events 模块创建再透传，可移入 events 内部后返回，入口少传一个参数。
+
+## 27. AudioWavePlayer / MediaViewer 拆分后的待办
+
+- `useSeekGestures` 约 300 行，可拆「边缘滚动」与「搓碟定时器」；拆前补指针拖动、松手恢复、
+  卸载清理的行为测试。
+- 音频入口保留模板与样式；继续抽子组件要先确认 scoped 边界与 `defineExpose` 的调用契约。
+- `MediaViewer` 的模板与 scoped 样式仍在入口；继续拆舞台/控制条时要同步迁移 `:deep()` 覆盖规则。
+- `MediaViewer` 目前只处理 Esc 与快捷键，没有焦点圈定与关闭后焦点回送，可补键盘焦点管理。
+- 预览器滚动锁绑定整个组件生命周期；若以后支持多实例叠加，要改成引用计数。
+- 音频搓碟 60ms 定时器与边缘滚动靠注释约定，建议补最小 DOM 交互测试。
+- 已知基线失败：`plugin-node-audio` 的「播放与刷新两个按钮各自拦手势」2 条在拆分前同样失败
+  （测试环境取不到主题注册的 Button，渲染出的按钮数为 0）。这是既有问题，不是本次拆分引入，
+  后续修主题注入桩即可。
