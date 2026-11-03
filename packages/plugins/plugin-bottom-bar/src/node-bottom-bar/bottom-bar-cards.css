@@ -1,0 +1,657 @@
+/* —— 一排 pill（参考图顶行） —— */
+.nb-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 0 2px;
+}
+.nb-pill {
+  gap: 4px;
+  border-radius: 999px;
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 0.18s ease-out, color 0.18s ease-out;
+}
+.nb-pill:hover:not(:disabled) {
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+}
+.nb-pill--action:disabled {
+  opacity: 0.5;
+}
+.nb-pill:disabled,
+.nb-pill.is-disabled {
+  /* 用户要求：「标记」暂不支持 → 给一个透明度效果 */
+  opacity: 0.38;
+}
+.nb-pill.is-active {
+  background: var(--ui-accent, #1f6dff);
+  color: var(--ui-on-accent, #fff);
+}
+.nb-pill.is-active:hover:not(:disabled) {
+  background: var(--ui-accent, #1f6dff);
+}
+.nb-pill.is-active .nb-pill-badge {
+  background: color-mix(in srgb, var(--ui-on-accent, #fff) 24%, transparent);
+  color: var(--ui-on-accent, #fff);
+}
+.nb-pill--action.is-active {
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+}
+.nb-pill:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
+}
+.nb-pill-icon {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+}
+.nb-pill-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.nb-pill-badge {
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 展开按钮浮在右上角；右缘与面板内容边（左右 padding 12）对齐 */
+.nb-expand {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  /* 全屏态：pills 行隐藏后行高没了 —— 按钮改为钉在面板右上角，不占行 */
+  /* 全屏时编辑器宽度溢出到按钮下方 —— 不抬层会被输入框盖住（真机踩过） */
+  z-index: 40;
+}
+
+.nb-icon-btn {
+  flex: none;
+  border-radius: 8px;
+  color: var(--ui-ink-dim, #6b7280);
+  transition: background-color 0.18s ease-out, color 0.18s ease-out;
+}
+.nb-icon-btn:hover {
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+  color: var(--ui-ink, #18202b);
+}
+.nb-icon-btn--static {
+  cursor: default;
+}
+.nb-icon-btn--static:hover {
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+}
+.nb-icon-btn.is-on {
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+}
+
+/* AI 按钮跑动态：与发送键同口径，只补一个提示性转圈，不改底色 */
+.nb-icon-btn.is-running {
+  color: var(--ui-accent, #0891b2);
+}
+
+/* AI 按钮跑动中的小转圈（与发送按钮的 spinner 同款观感，尺寸 14） */
+.nb-ai-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--ui-ink-dim, #6b7280) 40%, transparent);
+  border-top-color: var(--ui-accent, #0891b2);
+  border-radius: 999px;
+  animation: nb-spin 0.7s linear infinite;
+}
+
+/* AI 失败提示：琥珀短句贴在按钮右侧，4 秒自动消（详情在 title 里） */
+.nb-ai-error {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--ui-warn, #b45309);
+  cursor: help;
+}
+.nb-icon-btn:disabled {
+  opacity: 0.4;
+}
+.nb-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* —— 素材卡（常显；48×48，序号角标左下；参考图 size-12） —— */
+
+.nb-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding-left: 2px;
+}
+/* 参考格：待输入（虚线） */
+.nb-card.is-pending {
+  border: 1px dashed color-mix(in srgb, var(--ui-ink, #18202b) 26%, transparent);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
+  cursor: pointer;
+}
+.nb-card.is-pending:hover {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+}
+.nb-card-pending {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+.nb-card.is-pending:hover .nb-card-pending {
+  color: var(--ui-accent, #0891b2);
+}
+.nb-card-plus {
+  font-size: 15px;
+  line-height: 1;
+}
+/* 默认图片占位图标（用户口径 2026-10-27：没有图片时显示图片图标） */
+.nb-card-placeholder {
+  display: grid;
+  place-items: center;
+  opacity: 0.9;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+/* 有内容但没图（视频未取到帧 / 音频 / 文本）→ 居中显示类型图标 */
+
+.nb-card-fallback {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: block;
+  width: 18px;
+  height: 18px;
+  color: color-mix(in srgb, var(--ui-ink, #18202b) 45%, transparent);
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+/* 四类型占位图标（用户 2026-10-28：卡片空态也要区分类型） */
+.nb-card-placeholder[data-kind='image'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.nb-card-placeholder[data-kind='video'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-card-placeholder[data-kind='audio'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-card-placeholder[data-kind='text'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+
+/*
+ * 有内容但无图时的类型图标（与空槽同一套形状，颜色略淡）。
+ * 2026-10-29：image 规则保留（video 帧图没就绪时兜底用），
+ * 但模板只在 audio/text/video 时渲染 fallback，图片永远走缩略图 —— 不再有「空白方块」。
+ */
+.nb-card-fallback[data-kind='image'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.nb-card-fallback[data-kind='video'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-card-fallback[data-kind='audio'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-card-fallback[data-kind='text'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+
+/*
+ * 类型角标：右下角一个小白图标 + 半透明底（用户 2026-10-28：卡片分不清图片还是视频）。
+ * 图片不挂（缩略图本身就是它）；视频 / 音频 / 文本挂自己的图标。
+ */
+.nb-card-kind {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background-color: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  /* 图标用 mask，颜色取白色（深底上才看得清） */
+  color: var(--ui-tip-ink, #fff);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 10px 10px;
+  mask-size: 10px 10px;
+  pointer-events: none;
+  /* 用两层叠出「深底 + 白图标」：background 是底色，mask 挖出图标形状太复杂，
+     改成伪元素画图标更直接 */
+}
+.nb-card-kind::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.nb-card-kind[data-kind='video']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-card-kind[data-kind='audio']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-card-kind[data-kind='text']::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+.nb-card-placeholder svg {
+  width: 16px;
+  height: 16px;
+}
+.nb-card-pending-label {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.nb-card-pending-tag {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: var(--ui-overlay-solid, #fff);
+  border: 1px solid color-mix(in srgb, var(--ui-warn, #b45309) 30%, transparent);
+  color: var(--ui-warn, #b45309);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+/* 待输入格上传/拖入失败的原因：贴在格子下方，几秒自动消失 */
+.nb-slot-error {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 3px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--ui-danger, #ef4444);
+  pointer-events: none;
+}
+/* Ctrl 拖资源悬停到的目标格：描边高亮（待输入/已填通用） */
+.nb-card.is-target {
+  border-color: var(--ui-accent, #0891b2) !important;
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12)) !important;
+}
+/* 参考行整体拖放高亮 */
+.nb-cards.is-drop-hot {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent, #0891b2) 35%, transparent);
+  border-radius: 12px;
+}
+
+.nb-card {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  /** 卡片用 block（主题 Tooltip 的透明外壳铺满它，见下方 .tlt-root 说明） */
+  display: block;
+  padding: 0;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  /**
+   * 圆角恢复成 8px（用户 2026-10-29：卡片圆角丢了）。
+   * 根因是包了主题 Tooltip 之后，内层 .nb-card-clip 的 border-radius:inherit
+   * 继承的是中间那层透明外壳 .tlt-trigger（它没有圆角 → 0），圆角被吃掉。
+   * 现在内外两层都显式写同一个值，不再跨层继承。
+   */
+  border-radius: 8px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  /*
+   * ⚠️ 卡片自己**不能** overflow:hidden（用户点名提醒）：右上角的关闭按钮有一半在卡片外面，
+   * 被裁掉就只剩半个、hover 也点不着。圆角裁剪挪到内层 .nb-card-clip 上做。
+   */
+  overflow: visible;
+  /* 用户要求：素材顺序可以拖拽改变 —— 告诉用户这张卡是可以拎起来挪的 */
+  cursor: grab;
+  /*
+   * ⚠️ 这里**绝不能**给 `transform` 加过渡（用户带截图报的「拖拽跟不上鼠标，有种缩放阻尼感」）：
+   * 拖拽库每一帧都在给这张卡写 `transform: matrix(... , tx, 0)`（写进去的值是 1:1 跟手的），
+   * 而 `transition: transform` 会把这串逐帧变化的 matrix **补间**起来 —— 移动越快落后越多，
+   * 表现就是「鼠标都到那儿了元素才挪一点点」。
+   * 缩放改用**独立的 `scale` 属性**（`translate/scale/rotate` 与 `transform` 是两套合成层，
+   * 各走各的、互不覆盖），于是卡片既能按下回弹，又不干扰库写的 translate。
+   */
+  transition: border-color 0.18s ease-out, scale 0.15s ease-out, box-shadow 0.18s ease-out;
+}
+.nb-card:hover {
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
+}
+.nb-card:active {
+  cursor: grabbing;
+  scale: 0.96;
+}
+.nb-card:has(.nb-card-hit:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
+}
+/* 整张卡的可点区（点开全屏预览）。用 Button 的 ghost 档拿键盘可达，
+   尺寸与外观由卡片决定（48×48，全透明铺满）。 */
+.nb-card-hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  transform: none;
+  box-shadow: none;
+  cursor: inherit;
+  outline: none;
+}
+
+
+/*
+ * 拖拽三态（Vue Draggable Plus 的 ghost / chosen / drag 三个 class）。
+ *
+ * 用户要求「他的那个动画效果挺好的」——动画由库自己补间，我们只给「原位置留下的空位」
+ * 与「跟着手走的那张」两副面孔：
+ * - ghost：原位置的空位（虚线框，提示这里会空出来）；
+ * - chosen / drag：拎起来那张（提亮 + 轻微放大 + 投影，看得出「拿在手上了」）。
+ */
+.nb-card--ghost {
+  opacity: 0.4;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+}
+.nb-card--chosen,
+.nb-card--drag {
+  cursor: grabbing;
+  border-color: var(--ui-accent, #0891b2);
+  box-shadow: var(--ui-shadow-md, 0 8px 20px rgb(15 23 42 / 0.24));
+  /* 拎起来那张：**只给阴影与描边，绝不给缩放**。
+     实测（自己做的对照实验）：给被拖拽的这张卡任何形式的放大（transform: scale 或独立的
+     `scale` 属性都一样）都会把库写进来的位移一起放大 —— 独立属性与 `transform` 是
+     `translate·rotate·scale·transform` 复合，`scale: 1.06` 会把 translate 的 dx 也乘 1.06，
+     拖得越远越偏（量到 mouseDx=300 时位置到 317）。阴影已经足够表达「拿在手上了」。 */
+}
+.nb-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* 用户 2026-10-29：卡片缩略图不要模糊，直接原样铺满。 */
+}
+/**
+ * 卡片图片没出来时的加载层（用户 2026-10-29：没加载出来就给加载 UI）。
+ *
+ * - 加载中：半透明底 + 转圈；
+ * - 加载失败：半透明底 + 感叹号，并写「资源走丢」在 title 里。
+ * 都盖在缩略图位置上，尺寸与卡片一致，不推动布局。
+ */
+.nb-card-media-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
+}
+.nb-card-media-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent);
+  border-top-color: var(--ui-accent, #0891b2);
+  animation: nb-card-spin 0.9s linear infinite;
+}
+.nb-card-media-lost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 55%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.nb-card-media-state.is-broken {
+  background: color-mix(in srgb, var(--ui-danger, #ef4444) 8%, transparent);
+}
+@keyframes nb-card-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-card-media-spinner {
+    animation: none;
+  }
+}
+/* 内层裁剪：卡片本身的 overflow 必须留 visible（关闭按钮一半在外），
+   所以「正方形 + 圆角 + 把图片裁进来」这三件事挪到这一层做。 */
+.nb-card-clip {
+  position: absolute;
+  inset: 0;
+  display: block;
+  /* 与卡片同一个圆角值（继承会被 Tooltip 外壳截断成 0，见 .nb-card 的说明） */
+  border-radius: 8px;
+  overflow: hidden;
+}
+/**
+ * Tooltip 外壳铺满卡片（气泡按卡片真实矩形定位）。
+ * 只铺这两层透明壳；图片裁剪仍归内层 .nb-card-clip 管（它才是 overflow:hidden 的那层）。
+ */
+.nb-card .tlt-root,
+.nb-card .tlt-trigger {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 8px;
+}
+/* 右上角关闭按钮：**有一半在卡片外**（所以内层这个 inset 是负的），
+   默认隐藏，hover / 键盘聚焦才露出；hover 时转成危险色（照 ui-style-guide §5）。 */
+.nb-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  /**
+   * 命中区放大（用户 2026-10-29 报「点不动」）：
+   * 视觉仍是 16px 圆点，但用 ::before 把可点范围撑到 24px ——
+   * 卡角只有 48px，16px 的圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
+   * 放大用伪元素（不占布局），视觉尺寸不变。
+   */
+  background: var(--ui-ink, #18202b);
+  color: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.28));
+  opacity: 0;
+  /* 视觉默认隐藏，但**始终可点**：隐藏态如果连指针都不接，
+     鼠标从卡片外靠近时那几像素的缝会落到画布上（真机踩过）。 */
+  pointer-events: auto;
+  transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
+}
+.nb-remove::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
+}
+.nb-remove svg {
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.nb-card:hover .nb-remove,
+.nb-card:focus-within .nb-remove,
+.nb-remove:focus-visible {
+  opacity: 1;
+}
+.nb-remove:hover {
+  background: var(--ui-danger, #ef4444);
+}
+.nb-card-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 15px;
+  font-weight: 700;
+}
+.nb-card-index {
+  position: absolute;
+  /**
+   * 索引移到**左上角**（用户 2026-10-29 重构：圆角小徽章）。
+   * 常驻显示（名称条已移除，序号是卡面上唯一的顺序线索）。
+   */
+  left: 3px;
+  top: 3px;
+  z-index: 3;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 72%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.15s ease-out;
+}
+
+/**
+ * 视频时长角标（用户 2026-10-29：右下角显示分:秒，字小一点）。
+ * 与序号角标错开：时长在右下、序号在左下，互不打架。
+ * 超过 60 秒用警示色（用户：超过要醒目提醒）。
+ */
+.nb-card-duration {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 3;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 72%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.nb-card-duration.is-over {
+  background: var(--ui-warn, #b45309);
+  color: var(--ui-panel, #fff);
+}
+
+/**
+ * 视频播放按钮（用户 2026-10-29 重构：视频卡片中间给半透明播放键）。
+ * 只是身份标识 —— 真正播放发生在 hover 悬浮预览里。
+ */
+.nb-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.nb-card-play svg {
+  width: 18px;
+  height: 18px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  color: var(--ui-panel, #fff);
+}
+
+/**
+ * 卡片**不再**在底部显示名称条（用户 2026-10-29 第三次反馈）：
+ * 名称条浮在卡片底部，正好压住右下角的 @ 按钮，点不到。
+ * 名字统一交给主题 Tooltip（卡片下方弹出）与 aria-label，卡面上只留序号/时长。
+ */
+
+/* 失效引用：灰掉 + 斜纹，明示「这颗标签指向的节点已经不在了」 */
+.nb-card.is-invalid {
+  border-color: color-mix(in srgb, var(--ui-danger, #ef4444) 45%, transparent);
+}
+/**
+ * 失效角标：名称条去掉后，失效不能只靠一条淡红边（用户看不出哪张坏了）。
+ * 居中一颗红色「!」，与编号（左上）、时长（右下）、@（右下 hover）都不打架。
+ */
+.nb-card.is-invalid::after {
+  content: '!';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ui-danger, #ef4444);
+  color: var(--ui-panel, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+.nb-editor .resource-chip--invalid {
+  opacity: 0.55;

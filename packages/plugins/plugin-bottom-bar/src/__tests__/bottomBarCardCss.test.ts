@@ -23,10 +23,11 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { readBottomBarCss } from './readBottomBarCss'
 
 const SFC = [
   readFileSync(fileURLToPath(new URL('../NodeBottomBar.vue', import.meta.url)), 'utf8'),
-  readFileSync(fileURLToPath(new URL('../node-bottom-bar/bottom-bar.css', import.meta.url)), 'utf8'),
+  readBottomBarCss(),
 ].join('\n')
 
 /** 去掉 CSS 注释：注释里会写到「transform」「scale: 1.06」这些词（解释为什么不能这么写），

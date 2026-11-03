@@ -8,7 +8,11 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { registerTagSpec } from 'prosemirror-editor-bundle'
-import './node-bottom-bar/bottom-bar.css'
+import './node-bottom-bar/bottom-bar-layout.css'
+import './node-bottom-bar/bottom-bar-cards.css'
+import './node-bottom-bar/bottom-bar-tagmenu.css'
+import './node-bottom-bar/bottom-bar-editor-footer.css'
+import './node-bottom-bar/bottom-bar-preview.css'
 import { useCanvasRender, useGenPanelMetrics, useSoleNodeSelected, useUiComponent, RenderEvents, LAYERS } from '@mini-canvas/canvas-render'
 import { bottomBarTagSpecFor, toToolResources } from './panelSource'
 import { readRunState } from './runState'

@@ -1,0 +1,454 @@
+/* —— 输入区（内联在卡下面；点得进去、能打字） —— */
+.nb-editor {
+  position: relative;
+  min-height: 24px;
+  padding: 0 2px;
+  cursor: text;
+  border-radius: 8px;
+}
+
+/*
+ * AI 生成期间的**流光描边**（用户口径 2026-10-27 截图）：画在**面板最外缘**，
+ * 位置 = 用户红框处。::before 铺 2px conic 渐变描边旋转（@property 让 --ai-sweep 可动画）。
+ * 颜色吃 --ui-accent 跟主题走；prefers-reduced-motion 退化为静态描边（全站动效规矩）。
+ *
+ * 落点（用户口径 2026-10-27 截图）：画在**面板最外缘** —— nb-ai-frame 内部容器已删，
+ * 改为 `.nb-root.is-ai-locking::before`（面板本体），描边沿面板圆角 16px 走一圈，
+ * 位置就是用户红框画的地方。内容区不再有任何额外框。
+ */
+.nb-root.is-ai-locking::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  /*
+   * 流光环：整面 conic 渐变 + 负 z-index 垫在内容**下面**。
+   * 为什么不用 mask：rolldown 会把 `mask` 简写展开成一串 longhand，并在那次合并里
+   * **丢掉 padding: 2px** —— 双层 mask 全重合，整面被 mask 盖死、什么都看不见
+   * （2026-10-27 解剖产物确认）。负 z-index 方案不依赖任何简写，压缩后行为一致。
+   */
+  z-index: -2;
+  background: conic-gradient(
+    from var(--ai-sweep, 0deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 85%, transparent) 40deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent) 90deg,
+    transparent 150deg,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent) 250deg,
+    transparent 330deg
+  );
+  pointer-events: none;
+  animation: nb-ai-sweep 2.4s linear infinite;
+}
+.nb-root.is-ai-locking::after {
+  /*
+   * 内层遮罩：把 ::before 的渐变中间盖掉，只留 2px 外圈；同样是负 z-index（-1），
+   * 压在流光上面、内容下面。**不响应指针**，顶部参考列表/底部下拉照常可点
+   * （用户口径 2026-10-27：加载中只有输入框不可操作）。
+   */
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 14px;
+  background: var(--ui-panel, #fff);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/*
+ * 负 z-index 的两层要能被内容盖住：给面板建一个"隔离"的层叠上下文。
+ * 用 isolation 而不是给每个子元素塞 position:relative + z-index（那会动到参考列表/
+ * 下拉的定位与点击，用户口径：加载中只有输入框不可操作，其余照常可用）。
+ */
+.nb-root.is-ai-locking {
+  isolation: isolate;
+}
+@property --ai-sweep {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes nb-ai-sweep {
+  to {
+    --ai-sweep: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-root.is-ai-locking::before {
+    animation: none;
+    /* 光斑停转：退化为静态的柔和描边 */
+    background: color-mix(in srgb, var(--ui-accent, #0891b2) 45%, transparent);
+  }
+}
+
+/*
+ * 字号/行高/最小高必须写在 **.ProseMirror 本体**上，不能只写在 .prose-mirror-editor 外壳上：
+ * bundle 的 `.prose-mirror-editor .ProseMirror` 把这些值直配在正文元素自己身上（16px/120px），
+ * 外壳上设的只是「会被继承的值」，永远输给它 —— 底栏要的是 13px 紧凑正文。
+ * color/min-height 也一并覆写，理由同上（本体直配 > 外壳继承）。
+ * 注意：颜色这件事的**根因**已在 bundle 侧修好（那边的写死 #111 会跟着主题走），
+ * 这里保留一条显式声明，是为了底栏自己不去依赖上游默认值。
+ */
+.nb-editor .ProseMirror {
+  /* 撑满整块可见输入框（用户实测：绿色框那么大，却只有第一行能点进去聚焦）。
+     bundle 里 `.prose-mirror-editor > div:first-child` 有 min-height:120px 决定了整块高度，
+     但 .ProseMirror 本体只有一行高（21px）——真正能聚焦/能点的只有那一行。
+     这里让正文元素 flex 撑满外壳，于是整块区域都可点、可聚焦。 */
+  flex: 1 1 auto;
+  min-height: var(--nb-min, 20px) !important;
+  outline: none !important;
+  font-size: 13px;
+  /* 与 .prose-mirror-editor 的 1.75 保持一致（chip 高 20px 需要 ≥22px 行框） */
+  line-height: 1.75;
+  color: var(--ui-ink, #18202b);
+  word-break: break-word;
+}
+/* bundle 的中间层（editorRef 容器）：转成纵向 flex 列，正文才能被 flex:1 撑到整块高度。 */
+.nb-editor .prose-mirror-editor > div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+.nb-editor .prose-mirror-editor {
+  max-height: var(--nb-max, 220px);
+  overflow-y: auto;
+  font-size: 13px;
+  /**
+   * 行高（用户 2026-10-29：两行标签的底部重合）：chip 高 20px，
+   * 1.75 × 13 ≈ 22.8px 的行框能完整包住它；1.6 时 20.8px 会重叠。
+   */
+  line-height: 1.75;
+  color: var(--ui-ink, #18202b);
+}
+/* @ 引用素材的标签：bundle 里写死了深灰字 + 深色下划线，深色主题下同样看不清 */
+.nb-editor .resource-node .label {
+  color: var(--ui-ink, #18202b);
+  font-size: 13px;
+}
+.nb-editor .resource-node {
+  border-bottom-color: color-mix(in srgb, var(--ui-ink, #18202b) 45%, transparent);
+}
+
+/*
+ * @ 引用在输入框里的样子：**卡片**（用户要求，替换原来"缩略图 + 下划线"）。
+ * 圆角小框 + 缩略图/图标 + 名字，整体贴着文字基线，像一颗内联 chip。
+ * 颜色一律走主题变量；尺寸按 13px 正文配。
+ */
+.nb-editor .resource-chip {
+  display: inline-flex;
+  align-items: center;
+  /*
+   * 缩略图/图标与名字之间留 2px（用户 2026-10-29 截图报「挤在一起」）。
+   * 缩略图是**绝对定位**盖在图标位上的（见下方 .resource-chip-thumb），不占 flex 流，
+   * 所以这里的 gap 作用在「图标位 → 名字」之间，正好是用户要的那 2px。
+   */
+  gap: 2px;
+  max-width: 160px;
+  /**
+   * 行高重合修复（用户 2026-10-29）：chip 高 22px，而 .ProseMirror 的 line-height
+   * 是 1.6 × 13px ≈ 20.8px —— 两行 chip 的盒子互相重叠（第二行压住第一行底部）。
+   * vertical-align: bottom 让 22px 的盒子向下沉到基线之下，同样会压住下一行。
+   * 改成「chip 自身 20px 高 + vertical-align: middle」，放进 1.75 的行高里刚好放下。
+   */
+  height: 20px;
+  padding: 0 7px 0 3px;
+  margin: 0 2px;
+  border: 1px solid color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent);
+  border-radius: 6px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+  vertical-align: middle;
+  line-height: 1;
+  /* 覆盖编辑器公共样式里那条下划线（卡片不需要它） */
+  border-bottom-width: 1px;
+}
+/*
+ * 图标与缩略图**叠在同一个格子里**（用户 2026-10-29：图挂了左边就空白）。
+ *
+ * 结构：图标（底，代表类型）+ 缩略图（盖在上面，加载成功才可见）+ 名字。
+ * 两者都占 14×14，用 grid 叠放，所以加载前后**布局不跳**。
+ */
+.nb-editor .resource-chip {
+  /* 让图标/缩略图共用同一格：图标先占位，图片绝对定位盖上去 */
+  position: relative;
+}
+.nb-editor .resource-chip-thumb,
+.nb-editor .resource-chip-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.nb-editor .resource-chip-thumb {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  object-fit: cover;
+  pointer-events: none;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+}
+.nb-editor .resource-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 缩略图还没加载好：图标位转一圈，告诉用户「正在取图」（用户 2026-10-29 要求） */
+.nb-editor .resource-chip-icon.is-loading {
+  opacity: 0.45;
+}
+.nb-editor .resource-chip-icon.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--ui-ink, #18202b) 22%, transparent);
+  border-top-color: var(--ui-accent, #0891b2);
+  animation: nb-chip-spin 0.9s linear infinite;
+}
+/* 图片已盖住图标：底图不再转圈 */
+.nb-editor .resource-chip-icon.is-covered {
+  opacity: 0;
+}
+@keyframes nb-chip-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-editor .resource-chip-icon.is-loading::after {
+    animation: none;
+  }
+}
+/**
+ * 图标用 mask 画（用户 2026-10-28）：DOMOutputSpec 不解析 innerHTML 属性（会被当成
+ * 普通属性写上 DOM），所以 spec 里不能塞 svg 字符串 —— 这里用 mask + data-icon 渲染，
+ * 图标形状由 CSS 保证，任何渲染路径（HTMLElement / DOMOutputSpec）结果一致。
+ */
+.nb-editor .resource-chip-icon[data-icon] {
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+/* 四种类型各自的图标（用户 2026-10-28：图片/视频/音频/文本各有默认图标） */
+.nb-editor .resource-chip-icon[data-icon='image'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.nb-editor .resource-chip-icon[data-icon='video'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-editor .resource-chip-icon[data-icon='audio'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-editor .resource-chip-icon[data-icon='text'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+/*
+ * 待绑定标签（手打的 @名字，还没拖节点进来）：统一「资源」图标。
+ * 用户 2026-10-28 定案：这时无从判断类型，不许猜 —— 绑定后才换成真实类型图标。
+ */
+.nb-editor .resource-chip-icon[data-icon='resource'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+}
+.nb-editor .resource-chip-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.nb-editor .resource-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink, #18202b);
+}
+/* 选中态：与文本选区同色（用户口径：和文本选中背景一致，不用黑色） */
+.nb-editor .resource-chip.ProseMirror-selectednode,
+.nb-editor .resource-chip.resource-node-selected {
+  border-color: transparent;
+  /* 与文本选区同一个背景变量（用户口径：标签选中和文字选中背景一致，用灰） */
+  background: var(--ui-selection-bg, rgb(0 0 0 / 0.18));
+}
+.nb-placeholder {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 13px;
+  line-height: 1.6;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* —— 底部行（参考图：左模型·参数，右图标·计数·发送） —— */
+.nb-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  min-height: 36px;
+}
+.nb-selects {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.nb-divider {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--ui-line, #e2e5ea);
+}
+.nb-field {
+  flex: none;
+  min-width: 0;
+}
+/* 模型下拉给一个最小宽度（用户实测反馈）：不设的话，模型名稍长就把触发框压成一条窄缝。
+   参数下拉**不设**下限 —— 它的摘要本来很短（16:9），按内容宽即可，见 .nb-field--params。 */
+.nb-field--action {
+  min-width: 148px;
+  max-width: 200px;
+}
+/* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
+.nb-field [data-slot='select-trigger'] {
+  gap: 4px;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 13px;
+  font-weight: 600;
+  width: auto;
+  min-width: 148px;
+  max-width: 200px;
+  /* 圆角 8（不是胶囊）：照参考站的模型按钮 */
+  border-radius: 8px;
+}
+.nb-field [data-slot='select-trigger']:hover:not([data-state='open']) {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+}
+.nb-field [data-slot='select-trigger'][data-state='open'] {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--ui-ink, #18202b);
+}
+.nb-field [data-slot='select-trigger'] svg {
+  width: 14px;
+  height: 14px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+/*
+ * 参数合并下拉：**按内容自适应宽度**。
+ *
+ * 用户实测反馈：「你这个比例的下拉，文字就那么长，你给我把按钮搞那么大」——
+ * 之前这里写死 min-width:148px 又强制 width:100%，于是 "16:9" 撑成一整条长按钮。
+ * 参数摘要本来就短（16:9 / 1:1…），让它随内容收紧、超长才省略即可。
+ */
+.nb-field--params {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+}
+/* 触发器按内容宽（不拉满），与模型下拉之间保持一个分隔线；箭头仍在文字右侧 */
+.nb-field--params .tpg-root {
+  width: auto;
+}
+.nb-field--params .tpg-trigger {
+  width: auto;
+}
+/*
+ * 只有一个普通下拉参数时，ToolParamGroup 会**直接铺出那个下拉**（不再套一层参数面板，
+ * 用户口径 2026-10-14：「如果里面只有唯一的一项，并且它是下拉的话，就直接把它做成外部的形式」）。
+ * 那时里面是一个普通 Select —— 与左边的模型下拉同款：给一档最小宽，免得长名字（音色）
+ * 被压成一条缝，同时仍按内容收缩（不拉满整行）。
+ */
+.nb-field--params .tpg-inline {
+  width: auto;
+  min-width: 96px;
+}
+
+.nb-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.nb-info {
+  font-size: 11px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-variant-numeric: tabular-nums;
+}
+.nb-count {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 0px 10px;
+  line-height: 32px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.nb-warn {
+  padding-right: 10px;
+}
+
+/* 参考序号缺格提示：小警告图标贴着发送按钮，hover 出鼠标跟随提示（详情走 tip 服务） */
+.nb-gap-hint {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ui-warn, #b45309);
+  cursor: help;
+}
+
+/* 发送按钮：32×32、圆角 12（照参考站；浅色主题下白底深箭头，由 token 决定） */
+.nb-run {
+  flex: none;
+  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--ui-primary-bg, #1f2937);
+  color: var(--ui-primary-ink, #fff);
+  transition: background-color 0.18s ease-out, transform 0.15s ease-out;
+}
+.nb-run:hover:not(:disabled) {
+  background: var(--ui-primary-bg-hover, #111827);
+}
+.nb-run:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.nb-run:disabled {
+  opacity: 0.4;
+}
+.nb-send-icon {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+}
+.nb-send-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.nb-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--ui-primary-ink, #fff) 40%, transparent);
+  border-top-color: var(--ui-primary-ink, #fff);
+  border-radius: 999px;
+  animation: nb-spin 0.7s linear infinite;
+}
+@keyframes nb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

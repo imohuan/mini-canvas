@@ -1,0 +1,380 @@
+  text-decoration: line-through;
+}
+
+/**
+ * hover 操作层（用户 2026-10-29 重构）：删除右上、@ 右下、音频播放居中。
+ * 按钮都是小圆片，只在卡片 hover 时出现（外层 .nb-card-actions 默认不接指针）。
+ */
+.nb-card-actions {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.nb-card:hover .nb-card-actions {
+  pointer-events: auto;
+}
+.nb-card-act {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  /**
+   * 字/图标颜色**固定白**（用户 2026-10-29 报「hover 时 @ 的文字和背景一样，看不见」）。
+   * 根因：以前写的是 var(--ui-panel)，深色主题下它是 #262626 —— 正好等于半透明黑底
+   * 混出来的灰，按钮就糊成一块。这个圆片本身就是深色底（--ui-scrim），
+   * 对比色应当固定为白，跟主题面板色无关。
+   */
+  /* 主题色白名单: 固定在深色半透明圆片上的对比白（不随主题变） */
+  color: var(--ui-tip-ink, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
+}
+.nb-card:hover .nb-card-act {
+  opacity: 1;
+}
+.nb-card-act:hover {
+  background: var(--ui-ink, #18202b);
+}
+.nb-card-at {
+  right: 2px;
+  bottom: 2px;
+  z-index: 4;
+}
+.nb-card-play-act {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  z-index: 4;
+}
+
+/**
+ * 悬浮预览（用户 2026-10-29 重构）：hover 卡片后在上方弹出的大图 / 视频。
+ */
+.nb-hover-preview {
+  position: fixed;
+  /* 宽高都由 previewBox 内联写入；border-box 保证 200 就是最终外框（含 1px 边框） */
+  box-sizing: border-box;
+  /*
+   * 宽高由 previewBox 内联写入（按素材原始宽高比，最长边 200px —— 用户 2026-10-29 第 2 点）。
+   * 这里只给一个兜底宽度，防止首帧（还没量到素材尺寸）时塌成 0。
+   */
+  width: 200px;
+  border-radius: 10px;
+  border: 1px solid var(--line-hair, rgb(0 0 0 / 0.08));
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
+  overflow: hidden;
+  z-index: 100002;
+}
+.nb-hover-preview-media {
+  display: block;
+  width: 100%;
+  /* 盒子已经按原比例算好，图直接铺满，绝不裁切也绝不留黑边 */
+  height: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}
+/*
+ * 黑衬底只给**视频**（用户 2026-10-29 第 1.1 点：图片预览四周有黑边）。
+ *
+ * 根因：这条背景原来写在共用类上，图片也吃到了 —— 图片是 contain 等比缩放，
+ * 盒子与图片有 1px 亚像素差，露出的就是这层深色底，看着像「黑边框」。
+ * 图片必须透出面板底色（透明图也要透），视频画面才需要黑衬底。
+ */
+.nb-hover-preview-media[data-media='video'] {
+  /* 主题色白名单: hover 预览里视频画面的衬底（任意视频都要有黑底，与主题无关） */
+  background: var(--ui-tip, #000);
+}
+.nb-hover-preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
+}
+.nb-hover-preview-open {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  border-radius: 6px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
+  /* 白字固定在深色半透明底上（同 .nb-card-act：--ui-panel 在深色主题下等于糊底） */
+  /* 主题色白名单: 同上，深色衬底上的恒定对比白 */
+  color: var(--ui-tip-ink, #fff);
+  font-size: 11px;
+  font-weight: 600;
+}
+.nb-hover-preview-open:hover {
+  background: var(--ui-ink, #18202b);
+  color: var(--ui-panel, #fff);
+}
+
+/**
+/* 待绑定（手打的 @名字，还没拖节点）：统一资源图标 */
+/*
+ * 标签下拉菜单（用户 2026-10-29 第三轮，图 4 风格）：
+ * 浮层外框/定位/点外关闭由主题 Dropdown 提供，这里只排内容。
+ * 结构 = 顶部搜索框 + 分组列表（组标题 + 行：缩略图/类型图标 + 名称 + 已引用勾）。
+ * 数值全部走 ui-style-guide：面板 16 → 行 10 → 徽章 6，间距 4/6/8/12。
+ */
+.nb-tagmenu-anchor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* DropdownMenu 浮层被 teleport 到 body，scoped 命不中 → 全局类 */
+.nb-tagmenu-body {
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--ui-overlay-solid, #fff);
+}
+/*
+ * 节点行 hover 预览浮层（用户 2026-10-29 第 3.2 点）：Teleport 到 body 的独立块。
+ * 尺寸由内联样式写（fitPreviewBox 按素材比例算好），这里只管外观与层级。
+ */
+.nb-tagpreview {
+  position: fixed;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--line-hair, rgb(0 0 0 / 0.08));
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-lg, 0 20px 40px rgb(0 0 0 / 0.12));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100003; /* 菜单之上（Dropdown 的浮层链在上面一级） */
+  pointer-events: none; /* 纯展示：不挡菜单行的 hover/点击 */
+}
+.nb-tagpreview-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.nb-tagpreview-media[data-media='video'] {
+  /* 主题色白名单: 视频画面黑衬底（与卡片 hover 预览同一规则） */
+  background: var(--ui-tip, #000);
+}
+.nb-tagpreview-empty {
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
+}
+.nb-tagmenu-panes {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  /**
+   * **固定高度**（用户 2026-10-29 第 4 点）：以前高度跟着右栏内容走 ——
+   * 鼠标停在一个类别上，右栏节点多就撑高、少就缩矮，整块浮层跟着变。
+   * 浮层一变高，原本在鼠标下方的行就被推到别处，于是又命中下一个类别 →
+   * 内容再换 → 高度再变，来回闪。把高度钉死，鼠标下的那一行永远在同一个位置。
+   * 内容超出就在各自栏里滚（见 .nb-tagmenu-pane 的 overflow）。
+   */
+  height: 268px;
+}
+.nb-tagmenu-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  /* 高度由外层 .nb-tagmenu-panes 定，这里只负责在内部滚动 */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.nb-tagmenu-pane--nav {
+  flex: 0 0 156px;
+  padding-right: 4px;
+  border-right: 1px solid var(--ui-line-soft, rgb(0 0 0 / 0.06));
+}
+.nb-tagmenu-pane--items {
+  flex: 1 1 auto;
+}
+.nb-tagmenu-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0 10px;
+  height: 32px;
+  /**
+   * 黑白基础色（用户 2026-10-30 图 1：暗色主题下边框发紫、底色发灰主题化）。
+   * 菜单是画布上的中性浮层，不跟随主题：边框/底色/聚焦都固定黑白灰。
+   */
+  /* 主题色白名单: 用户点名要「不跟随主题」的中性菜单，固定黑白色 */
+  border: 1px solid #e2e5ea;
+  border-radius: 10px;
+  /* 主题色白名单: 同上 */
+  background: #fff;
+  /* 主题色白名单: 同上 */
+  color: #8c95a3;
+}
+.nb-tagmenu-search:focus-within {
+  /* 主题色白名单: 同上，聚焦态用深黑 */
+  border-color: #18202b;
+}
+.nb-tagmenu-search svg {
+
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.nb-tagmenu-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  /* 主题色白名单: 同上，输入文字固定深黑 */
+  color: #18202b;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.nb-tagmenu-search input::placeholder {
+  /* 主题色白名单: 同上，占位文字固定灰 */
+  color: #9ca3af;
+}
+.nb-tagmenu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 搜索结果也钉同一高度：输一个词命中多/少时，浮层不再上下跳 */
+  height: 268px;
+  max-height: 268px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.nb-tagmenu-group-label {
+  padding: 6px 8px 2px;
+  color: var(--text-faint, #9ca3af);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.nb-tagmenu-row {
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-ink, #18202b);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+.nb-tagmenu-row:hover {
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+}
+.nb-tagmenu-row.is-current {
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+}
+/* 左栏当前类别：浅底 + 强调色条（图 4 的选中格） */
+.nb-tagmenu-row.is-active {
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+  color: var(--ui-ink, #18202b);
+}
+.nb-tagmenu-chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+.nb-tagmenu-count {
+  flex: none;
+  min-width: 16px;
+  text-align: right;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* 行首缩略图 / 类型图标：18px 圆角小块，图片盖在类型图标上 */
+.nb-tagmenu-thumb {
+  position: relative;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+  overflow: hidden;
+}
+.nb-tagmenu-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.nb-tagmenu-thumb::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background-color: color-mix(in srgb, var(--ui-ink, #18202b) 55%, transparent);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  /* 默认（未指定类型）：通用资源方块 */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+}
+/* 有真图时把类型图标藏掉，只留图片 */
+.nb-tagmenu-thumb:has(img)::before {
+  display: none;
+}
+.nb-tagmenu-thumb[data-kind='image']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='8.5' cy='9.5' r='1.6'/%3E%3Cpath d='m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-thumb[data-kind='video']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='6' width='12' height='12' rx='2'/%3E%3Cpath d='m15 10 6-4v12l-6-4z'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-thumb[data-kind='audio']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V6l10-2v12'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='16' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-thumb[data-kind='text']::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
+}
+.nb-tagmenu-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nb-tagmenu-check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ui-accent, #0891b2);
+}
+.nb-tagmenu-empty {
+  padding: 16px 8px;
+  text-align: center;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
+}
+
+.nb-card-placeholder[data-kind='resource'],
+.nb-card-fallback[data-kind='resource'] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+}
