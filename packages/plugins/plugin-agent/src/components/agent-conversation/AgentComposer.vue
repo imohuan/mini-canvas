@@ -821,5 +821,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
     </div>
 </template>
 
-<style scoped src="./AgentComposer.css"></style>
+<style scoped src="./agent-composer/part1.css"></style>
+<style scoped src="./agent-composer/part2.css"></style>
+<style scoped src="./agent-composer/part3.css"></style>
+<style scoped src="./agent-composer/part4.css"></style>
 <style src="./AgentComposer.global.css"></style>
