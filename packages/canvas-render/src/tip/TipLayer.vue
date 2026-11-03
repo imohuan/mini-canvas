@@ -49,7 +49,7 @@ onBeforeUnmount(() => {
 /* 非 scoped：Teleport 到 body。 */
 .ctip-layer {
   position: fixed;
-  z-index: 3200;
+  z-index: var(--ui-layer-tooltip, calc(var(--layer-modal-top, 100001) + 2));
   padding: 5px 10px;
   border-radius: 8px;
   background: var(--ui-tip, rgb(0 0 0 / 0.9));

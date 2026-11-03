@@ -1,0 +1,84 @@
+/**
+ * 默认主题的界面浮层层级（唯一入口）。
+ *
+ * 背景（用户口径 2026-11-03）：画布上的节点、节点上下控制栏、画布浮层、外壳顶栏 / 底栏 /
+ * 状态条早就分成 500 / 600 / 700 几档，但组件库的 Dialog 仍是默认的 z-50，
+ * 结果「生成历史」弹窗打开后反而被 Agent 面板（1000）和底栏（700）盖住。
+ *
+ * 这些数字**不属于组件库**：组件库不知道宿主有没有画布、画布控件多高。
+ * 默认主题才是宿主外观的装配方，所以层级也收在这里，由主题统一给所有界面浮层定位：
+ *
+ *   画布节点 / 控制栏 / 外壳（来自 canvas-render 的 --layer-*）
+ *     < 应用浮面板（左抽屉 / Agent / 展开底栏 / 快捷键）
+ *     < 对话框（Dialog / AlertDialog / Sheet / 应用弹窗）
+ *     < 菜单（下拉 / 选择 / 气泡 / 右键菜单）
+ *     < 提示（Tooltip / 跟随鼠标提示）
+ *     < 全屏预览（MediaViewer）
+ *     < 调试标记（保留原有 200000）
+ *
+ * 为什么不把菜单继续放在 100000：对话框也升到 100000 之后，菜单必须明确高它一级，
+ * 否则在弹窗里打开下拉时会被遮罩吃掉（设置面板里的字段已经踩过一次）。
+ * 这里用 calc 从核心层叠带的 modalTop 往上加，避免另写一套与大表漂移的数字。
+ */
+
+:root {
+  /* 应用级浮面板：必须高于画布节点工具栏（500）、画布浮层（600）和外壳（700） */
+  --ui-layer-app-panel: 1000;
+
+  /* 对话框 = 核心层叠带的模态档；嵌套确认框再高一级；全屏预览再高一级 */
+  --ui-layer-dialog: var(--layer-modal, 100000);
+  --ui-layer-dialog-raised: var(--layer-modal-top, 100001);
+  --ui-layer-viewer: calc(var(--layer-modal-top, 100001) + 100);
+
+  /* 菜单与提示：必须能压在对话框之上，tooltip 再压在菜单之上 */
+  --ui-layer-menu: calc(var(--layer-modal-top, 100001) + 1);
+  --ui-layer-tooltip: calc(var(--layer-modal-top, 100001) + 2);
+}
+
+/* 应用浮面板：左抽屉、Agent 浮窗、展开的节点底栏、快捷键面板 */
+.mc-layer-app-panel {
+  z-index: var(--ui-layer-app-panel, 1000);
+}
+
+/* 非 shadcn 的整块弹窗（资产上传 / 资产管理） */
+.mc-layer-dialog {
+  z-index: var(--ui-layer-dialog, 100000);
+}
+
+/* 在对话框里再弹一个整块确认框：必须压住父对话框。
+   菜单档是它上面一级，所以确认框里打开的下拉仍能显示。 */
+.mc-layer-dialog-raised {
+  z-index: var(--ui-layer-dialog-raised, 100001);
+}
+
+/* shadcn 的模态家族：Dialog / AlertDialog / Sheet。
+   Dialog 内容与遮罩同层，靠 DOM 顺序保证内容在遮罩之后（组件内部就是先 overlay 后 content）。 */
+[data-slot='dialog-overlay'],
+[data-slot='dialog-content'],
+[data-slot='dialog-scroll-overlay'],
+[data-slot='dialog-scroll-content'],
+[data-slot='alert-dialog-overlay'],
+[data-slot='alert-dialog-content'],
+[data-slot='sheet-overlay'],
+[data-slot='sheet-content'] {
+  z-index: var(--ui-layer-dialog);
+}
+
+/* 菜单家族：全部 Teleport 到 body，统一压在对话框之上。
+   子菜单（SubContent）也在这里，否则会钻到父菜单下面。 */
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'],
+[data-slot='popover-content'],
+[data-slot='context-menu-content'],
+[data-slot='context-menu-sub-content'],
+[data-slot='menubar-content'],
+[data-slot='menubar-sub-content'],
+[data-slot='combobox-content'] {
+  z-index: var(--ui-layer-menu);
+}
+
+/* 提示气泡：压在菜单之上，避免菜单刚打开时把提示盖住 */
+[data-slot='tooltip-content'] {
+  z-index: var(--ui-layer-tooltip);
+}

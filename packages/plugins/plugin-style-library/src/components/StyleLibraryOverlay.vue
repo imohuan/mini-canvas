@@ -177,7 +177,7 @@ watch(() => s.open, (v) => {
 .slol-layer {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  z-index: var(--ui-layer-dialog, var(--layer-modal, 100000));
   display: flex;
   align-items: center;
   justify-content: center;

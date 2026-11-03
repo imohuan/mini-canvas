@@ -47,32 +47,8 @@
   --color-primary-ink: var(--ui-primary-ink);
 }
 
-/*
- * shadcn 浮层（下拉 / 选择 / 气泡 / 弹层）默认只有 z-50，
- * 而应用外壳是 700（顶栏 / 底栏 / 状态条）、左抽屉是 70。
- * 这些浮层都 Teleport 到 body，视觉上属于「菜单」那一档，
- * 必须按层叠带提到 --layer-modal，否则会被外壳与抽屉压住（2026-11-02 实测：
- * 左上角画布下拉只露出一条、资产面板加号菜单整块被盖、快捷键 tooltip 箭头被底栏挡住）。
- *
- * 为什么写在这里而不是 ui-kit-shadcn：组件库不知道宿主有哪些层，
- * 宿主接入时统一接一次，组件库保持与具体应用解耦。
- */
-[data-slot='dropdown-menu-content'],
-[data-slot='dropdown-menu-sub-content'],
-[data-slot='select-content'],
-[data-slot='popover-content'],
-[data-slot='tooltip-content'],
-[data-slot='context-menu-content'],
-[data-slot='context-menu-sub-content'],
-[data-slot='menubar-content'],
-[data-slot='combobox-content'] {
-  z-index: var(--layer-modal, 100000);
-}
-
-/* tooltip 要能盖在模态里（层叠带 modalTop 的语义），例如设置弹窗里的字段提示。 */
-[data-slot='tooltip-content'] {
-  z-index: var(--layer-modal-top, 100001);
-}
+/* 界面浮层的 z-index 统一由默认主题接管（styles/ui-layers.css）：
+ * 组件库不知道宿主有没有画布，层级必须由主题按画布层叠带装配。 */
 
 /* ===== 主题变量 =====
    通用 UI token（--ui-* / --sf-* / --ps-* / --dd-*）的唯一真源在

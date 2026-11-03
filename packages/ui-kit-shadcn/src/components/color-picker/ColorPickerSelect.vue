@@ -50,6 +50,7 @@ const emit = defineEmits<{
 
     <SelectPortal>
       <SelectContent
+        data-slot="select-content"
         class="w-[96px] px-2 bg-[#1e1e1e] rounded-[13px] shadow-sm will-change-[opacity,transform] data-[side=top]:animate-slideDownAndFade data-[side=right]:animate-slideLeftAndFade data-[side=bottom]:animate-slideUpAndFade data-[side=left]:animate-slideRightAndFade z-[100]"
         :side-offset="5"
       >

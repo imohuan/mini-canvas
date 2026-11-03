@@ -352,7 +352,7 @@ const {
     </ManageDialogShell>
 
     <!-- 文件夹「添加到画布」确认（数量 > 10 时出现；与左侧抽屉同一个服务，用户口径：一次加太多会卡死） -->
-    <div v-if="folderConfirm" class="fixed inset-0 z-[100001] grid place-items-center"
+    <div v-if="folderConfirm" class="mc-layer-dialog-raised fixed inset-0 grid place-items-center"
       @pointerdown.self="onFolderConfirmCancel">
       <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="onFolderConfirmCancel"></div>
       <div
@@ -376,8 +376,8 @@ const {
 
   <!--
     上传资产弹窗（与左侧抽屉同一个组件、同一条保存口径；保存位置默认 = 当前所在层）。
-    层级：两个浮层都是 z-[100000]；本组件在源码里排在资产管理面板之后，同挂 body 时
-    渲染在上层 —— 上传弹窗不会被资产管理盖住（反过来也不会盖住它的子浮层）。
+    层级：两个弹窗都走默认主题的 mc-layer-dialog；本组件在源码里排在资产管理面板之后，
+    同挂 body 时渲染在上层 —— 上传弹窗不会被资产管理盖住（反过来也不会盖住它的子浮层）。
     Esc 联动见上面的 onEscKey（上传开着时让位 + stopPropagation，一次 Esc 只关一层）。
   -->
   <AssetUploadDialog v-if="uploadOpen" :folders="flatFolders" :tag-options="[...ASSET_TAGS]"

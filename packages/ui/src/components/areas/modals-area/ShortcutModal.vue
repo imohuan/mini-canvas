@@ -21,7 +21,7 @@ function closeShortcutPanel(): void {
 
 <template>
   <!-- 快捷键：毛玻璃，相对**整个视口**居中；底部箭头指向 dock 的「快捷键」按钮（中轴对齐） -->
-  <div v-if="s.shortcutsOpen" class="fixed inset-0 z-[90] flex flex-col items-center justify-end overflow-y-auto pb-[74px] pt-6">
+  <div v-if="s.shortcutsOpen" class="mc-layer-app-panel fixed inset-0 flex flex-col items-center justify-end overflow-y-auto pb-[74px] pt-6">
     <motion.section
       ref="shortcutPanelRef"
       class="shortcut-modal relative flex max-h-[calc(100vh-110px)] w-[min(1152px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-glass text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.4]"

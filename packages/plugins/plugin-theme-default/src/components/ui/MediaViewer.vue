@@ -239,9 +239,8 @@ const {
 .mv-root {
   position: fixed;
   inset: 0;
-  /* 100200：盖过生成历史弹窗（AxDialog z-index 200）与设置面板（SettingsShell 100000/100001），
-     预览必须永远在最上层（用户实测：从历史里点开图片被弹窗压住）。 */
-  z-index: 100200;
+  /* 全屏预览盖过所有对话框与菜单；层级由默认主题的浮层表统一决定。 */
+  z-index: var(--ui-layer-viewer, 100200);
   background: var(--ui-scrim, rgb(0 0 0 / 0.6));
   user-select: none;
 }

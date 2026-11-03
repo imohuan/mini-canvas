@@ -102,7 +102,7 @@ const isCanvasTab = computed(() => s.leftTab === 'canvas')
 <template>
   <AnimatePresence>
     <motion.aside v-if="s.drawer === 'left'"
-      class="left-drawer fixed bottom-0 left-0 top-0 z-[70] flex flex-col bg-panel-soft backdrop-blur-xl"
+      class="left-drawer mc-layer-app-panel fixed bottom-0 left-0 top-0 flex flex-col bg-panel-soft backdrop-blur-xl"
       :style="{ width: s.drawerWidth + 'px' }" aria-label="资产管理" :initial="{ x: -s.drawerWidth, opacity: 0 }"
       :animate="{ x: 0, opacity: 1 }" :exit="{ x: -s.drawerWidth, opacity: 0 }"
       :transition="{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }" @pointerdown.stop>

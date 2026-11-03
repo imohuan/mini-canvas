@@ -171,7 +171,7 @@ function human(n: number): string {
 .sd-layer {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  z-index: var(--ui-layer-dialog-raised, var(--layer-modal-top, 100001));
   display: flex;
   align-items: center;
   justify-content: center;

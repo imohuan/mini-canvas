@@ -15,7 +15,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[100000] flex items-center justify-center">
+  <div class="mc-layer-dialog fixed inset-0 flex items-center justify-center">
     <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="emit('close')"></div>
     <div
       class="relative flex h-[min(760px,calc(100vh-64px))] w-[min(1560px,calc(100vw-64px))] flex-col overflow-hidden rounded-2xl border border-line bg-panel text-ink shadow-[var(--ui-shadow-md)]"

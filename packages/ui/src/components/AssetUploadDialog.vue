@@ -208,7 +208,7 @@ function save(): void {
 
 <template>
   <Teleport to="body">
-  <div class="fixed inset-0 z-[100000] flex items-center justify-center">
+  <div class="mc-layer-dialog fixed inset-0 flex items-center justify-center">
     <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="emit('close')"></div>
     <div
       class="relative flex w-[min(760px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-panel text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)]"

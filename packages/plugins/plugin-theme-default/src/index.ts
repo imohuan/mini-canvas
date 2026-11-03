@@ -22,6 +22,8 @@ import { markRaw } from "vue";
 import "@mini-canvas/ui-kit-shadcn/styles.css";
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import "./styles/node-theme.css";
+// 界面浮层层级：组件库只管组件本身，宿主/主题在这里统一决定 Dialog / 菜单 / 预览谁盖谁。
+import "./styles/ui-layers.css";
 import { registerThemePreview } from "./themePreview";
 import BaseNode from "./components/node/BaseNode.vue";
 import {

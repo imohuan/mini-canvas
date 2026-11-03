@@ -375,7 +375,7 @@ onBeforeUnmount(() => {
     v-if="barShown"
     class="nb-shell"
     :class="{ 'is-expanded': expanded }"
-    :style="expanded ? { zIndex: LAYERS.nodeToolbar + 1 } : undefined"
+    :style="expanded ? { zIndex: 'var(--ui-layer-dialog, 100000)' } : undefined"
     @pointerdown.self="expanded = false"
   >
     <div
