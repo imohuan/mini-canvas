@@ -432,6 +432,17 @@
   color: var(--ui-ink-dim, #919191);
 }
 
+/* 用户口径 2026-11-03：图标按钮不再画 hover/active 底色，只让图标本身高亮。
+   否则按钮底色叠在气泡边缘上，看起来像「背景和气泡重合」（用户截图 4）。 */
+.ac-msg-btn:hover,
+.ac-msg-btn:active {
+  background: transparent;
+}
+
+.ac-msg-btn:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
 .ac-msg-btn .is-ok {
   color: var(--ui-accent, #0891b2);
 }

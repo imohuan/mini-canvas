@@ -164,7 +164,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               <!-- ⋯ 只有两项：编辑消息 / 关闭排队（设计 §3.6.2），用目录里的 dropdown -->
                 <DropdownMenu :open="rowMenuId === row.id" @update:open="(v: boolean) => (rowMenuId = v ? row.id : null)">
                   <DropdownMenuTrigger as-child>
-                    <Button variant="ghost" size="icon-sm" class="ac-queue-btn" :aria-expanded="rowMenuId === row.id" aria-label="更多操作">
+                    <Button variant="ghost" size="icon-xs" class="ac-queue-btn" :aria-expanded="rowMenuId === row.id" aria-label="更多操作">
                       <MoreHorizontal :size="12" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -293,7 +293,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <Button variant="ghost" size="xs" class="ac-editing-mark-btn" :aria-label="editingKindText" @click="scrollToEditing">{{ editingKindText
             }}</Button>
           <span class="ac-editing-mark-spacer"></span>
-          <Button variant="ghost" size="icon-sm" class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing">
+          <Button variant="ghost" size="icon-xs" class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing">
             <X :size="12" />
           </Button>
         </div>

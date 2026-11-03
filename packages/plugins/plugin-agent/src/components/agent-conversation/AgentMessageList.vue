@@ -231,8 +231,8 @@ const Button = useUiComponent('Button')
                 <!-- 「正在编辑」徽标（用户口径 2026-10-06：语义是正在编辑，不是已编辑；带高亮） -->
                 <span v-if="t.editing" class="ac-editing-badge" role="status">
                   <Pencil :size="12" />正在编辑
-                  <Button variant="ghost" size="icon-sm" class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
-                    <X :size="12" />
+                  <Button variant="ghost" size="icon-xs" class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
+                    <X :size="11" />
                   </Button>
                 </span>
                 <!-- 助手消息才走 Markdown。
@@ -267,13 +267,13 @@ const Button = useUiComponent('Button')
                不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
               <div v-if="t.kind === 'user'" class="ac-msg-actions">
                 <span class="ac-msg-time" :title="msgTimeTitle(t.ts)">{{ msgTimeText(t.ts) }}</span>
-                <Button variant="ghost" size="icon-sm" class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
+                <Button variant="ghost" size="icon-xs" class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
                   @click="copyMessage(t.text, t.id)">
                   <CircleCheck v-if="copied[t.id]" :size="13" class="is-ok" />
-                  <Copy v-else :size="13" />
+                  <Copy v-else :size="12" />
                 </Button>
-                <Button variant="ghost" size="icon-sm" class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
-                  <Pencil :size="13" />
+                <Button variant="ghost" size="icon-xs" class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
+                  <Pencil :size="12" />
                 </Button>
               </div>
             </div>
@@ -281,7 +281,7 @@ const Button = useUiComponent('Button')
              回复块结束处（下一条用户消息之前）。左右箭头切的是**这个位置**的其它版本，
              切过去后不含当前版本后来的消息。 -->
             <div v-if="pagerByAnchor.get(t.id)" class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
-              <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0" aria-label="上一个版本"
+              <Button variant="ghost" size="icon-xs" class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0" aria-label="上一个版本"
                 title="上一个版本"
                 @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
                 <ChevronLeft :size="14" />
@@ -289,7 +289,7 @@ const Button = useUiComponent('Button')
               <span class="ac-branch-pos" :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
                 {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
               </span>
-              <Button variant="ghost" size="icon-sm" class="ac-branch-arrow"
+              <Button variant="ghost" size="icon-xs" class="ac-branch-arrow"
                 :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1" aria-label="下一个版本"
                 title="下一个版本"
                 @click="pagerTarget(pagerByAnchor.get(t.id)!, 1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, 1)!)">
@@ -306,7 +306,7 @@ const Button = useUiComponent('Button')
           <div v-else-if="s.compactNotice" class="ac-compact-note" role="status">
             <Minimize2 :size="14" />
             <span>{{ s.compactNotice }}</span>
-            <Button variant="ghost" size="icon-sm" class="ac-note-x" aria-label="知道了" @click="s.compactNotice = ''">
+            <Button variant="ghost" size="icon-xs" class="ac-note-x" aria-label="知道了" @click="s.compactNotice = ''">
               <X :size="12" />
             </Button>
           </div>
@@ -317,7 +317,7 @@ const Button = useUiComponent('Button')
           <div v-if="s.lastError && !hasInlineError" class="ac-error-bar" role="alert">
             <AlertCircle :size="14" class="ac-error-bar-icon" />
             <span class="ac-error-bar-text">{{ s.lastError }}</span>
-            <Button variant="ghost" size="icon-sm" class="ac-note-x" aria-label="关闭错误提示" @click="s.lastError = ''">
+            <Button variant="ghost" size="icon-xs" class="ac-note-x" aria-label="关闭错误提示" @click="s.lastError = ''">
               <X :size="12" />
             </Button>
           </div>
