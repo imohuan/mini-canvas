@@ -6,14 +6,12 @@ import { baseKeymap } from "prosemirror-commands";
 import { history, undo, redo } from "prosemirror-history";
 import type { MenuPosition, ResourceItem } from "./types";
 import { isVideoUrl, loadImageWithThumbnail } from "./utils";
-import { formatReferenceMarkup } from "./referenceMarkup";
+import { clipboardTextOf, exportTextOf, plainTextOf } from "./editor/docText";
 import { filterMentionItems } from "./mentionFilter";
 import { deleteAtomBackward, deleteAtomForward, isAtomNode } from "./editor/atomDelete";
 import {
   CHIP_CARET_DELAY,
   buildSlotItem,
-  chipRenderSig,
-  chipSignature,
   itemRegistry,
   kindOfResource,
   registerSlotItemsFromDoc,
@@ -21,10 +19,18 @@ import {
 import { createPasteHandlerPlugin, markPlainTextPaste, parsePlainTextToContent, type PasteFilesHandler } from "./editor/clipboard";
 import { createCursorFixPlugin } from "./editor/cursorFixPlugin";
 import { createDropCursorPlugin } from "./editor/dropCursorPlugin";
-import { applyThumbByIds, buildResourceNode, chipAttrsNeedUpdate } from "./editor/resourceNode";
+import { buildResourceNode } from "./editor/resourceNode";
 import { mySchema } from "./editor/schema";
 import { createSelectionDecorationPlugin } from "./editor/selectionDecorationPlugin";
 import { activeTagSpec, builtinScan } from "./editor/tagSpec";
+import { attachChipThumbState, clickInsideChipIcon } from "./editor/chipDom";
+import { initialMenuPosition, measuredMenuPosition } from "./editor/menuPosition";
+import {
+  refreshChips as refreshChipsInDoc,
+  replaceResource as replaceResourceInDoc,
+  replaceResourceThumbByIds as replaceResourceThumbByIdsInDoc,
+  replaceResourceThumbByName as replaceResourceThumbByNameInDoc,
+} from "./editor/resourceCommands";
 
 export { deleteAtomBackward, deleteAtomForward } from "./editor/atomDelete";
 export {
@@ -138,45 +144,13 @@ export function useEditor(
   // 获取纯文本
   function getPlainText(): string {
     if (!view) return "";
-    let text = "";
-    view.state.doc.descendants((node) => {
-      if (node.type.name === "resource") {
-        // 引用类标签（技能 / MCP / 节点）导出成**标记文本**：`@[kind:name](value)`。
-        // 它是后端认「引用了哪一种、引用了谁」的唯一凭据，也是删标签即失效的那份真相。
-        // 其它标签（图片 / 视频素材）维持旧的 `@名字` —— 它们只是展示，不需要后端解析。
-        if (node.attrs.refKind) {
-          text += formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue, {
-            ...(node.attrs.refExt ? { ext: node.attrs.refExt } : {}),
-            ...(node.attrs.refFolderId ? { folderId: node.attrs.refFolderId } : {}),
-          }) + " ";
-        } else {
-          text += `@${node.attrs.name || node.attrs.id} `;
-        }
-      } else if (node.isText) {
-        // 过滤掉零宽空格（用于修复光标问题）
-        text += node.text?.replace(/\u200B/g, "") || "";
-      } else if (node.isBlock && text.length > 0) {
-        text += "\n";
-      }
-    });
-    return text.trim();
+    return plainTextOf(view.state.doc);
   }
 
   // 导出文本，将变量替换为真实值
   function exportText(): string {
     if (!view) return "";
-    let text = "";
-    view.state.doc.descendants((node) => {
-      if (node.type.name === "resource") {
-        // 文本资源导出其正文；图片/视频导出**可读引用名** token（图片1 这种）
-        text += node.attrs.value ? node.attrs.value : `@${node.attrs.name || node.attrs.id} `;
-      } else if (node.isText) {
-        text += node.text?.replace(/\u200B/g, "") || "";
-      } else if (node.isBlock && text.length > 0) {
-        text += "\n";
-      }
-    });
-    return text.trim();
+    return exportTextOf(view.state.doc);
   }
 
   // 序列化文档结构为 JSON
@@ -224,42 +198,7 @@ export function useEditor(
   // 显示菜单
   function showMenu(coords: { left: number; top: number; bottom: number; right: number }) {
     menuVisible.value = true;
-
-    // 智能定位逻辑：**先用写死的宽高给出初值**，真实翻转由 MentionMenu 测完自己尺寸后
-    // 通过 anchorTop/anchorBottom 再修正（见下面的 reflowMenu）。
-    // 为什么不在这一步就定死：这里拿不到菜单真实高度，估成 280 会把明明放得下的菜单顶到屏幕上方。
-    const menuWidth = 200;
-    const menuMaxHeight = 280;
-    const gap = 8; // 离触发点的偏移量
-    const minMargin = 8; // 最小边距
-
-    let finalX = coords.left;
-    let finalY = coords.bottom + gap;
-    let originH = "left";
-    let originV = "top";
-    let side: 'top' | 'bottom' = "bottom";
-
-    // 水平边界检测
-    if (coords.left + menuWidth > window.innerWidth) {
-      finalX = coords.left - menuWidth; // 靠左显示
-      originH = "right";
-    }
-
-    // 垂直方向先用估算值兜底；真实尺寸出来后由 reflowMenu 修正
-    if (coords.bottom + menuMaxHeight + gap > window.innerHeight) {
-      finalY = Math.max(minMargin, coords.top - menuMaxHeight - gap);
-      originV = "bottom";
-      side = "top";
-    }
-
-    menuPosition.value = {
-      left: `${Math.max(minMargin, finalX)}px`,
-      top: `${Math.max(minMargin, finalY)}px`,
-      origin: `${originV} ${originH}`,
-      side: side,
-      anchorTop: coords.top,
-      anchorBottom: coords.bottom,
-    };
+    menuPosition.value = initialMenuPosition(coords);
     activeIndex.value = 0;
   }
 
@@ -269,35 +208,10 @@ export function useEditor(
   */
   function reflowMenu(rect: { width: number; height: number }) {
     const pos = menuPosition.value;
-    if (!menuVisible.value || pos.anchorTop === undefined || pos.anchorBottom === undefined) return;
-    const gap = 8;
-    const minMargin = 8;
-    const anchorTop = pos.anchorTop;
-    const anchorBottom = pos.anchorBottom;
-    const innerW = window.innerWidth;
-    const innerH = window.innerHeight;
-
-    // 水平：默认贴光标左侧（showMenu 已算好）；右边放不下就往左挪，且保证不出左边框
-    let left = Number.parseFloat(pos.left) || 0;
-    if (left + rect.width > innerW - minMargin) {
-      left = Math.max(minMargin, innerW - rect.width - minMargin);
-    }
-
-    // 垂直：下方放得下就往下弹；放不下且上方更宽裕才往上弹（两者都不够时选空间大的一侧）
-    const spaceBelow = innerH - anchorBottom - gap - minMargin;
-    const spaceAbove = anchorTop - gap - minMargin;
-    const fitsBelow = rect.height <= spaceBelow;
-    const fitsAbove = rect.height <= spaceAbove;
-    const placeBelow = fitsBelow || (!fitsAbove && spaceBelow >= spaceAbove);
-    const top = placeBelow ? anchorBottom + gap : Math.max(minMargin, anchorTop - rect.height - gap);
-
-    menuPosition.value = {
-      ...pos,
-      left: `${left}px`,
-      top: `${top}px`,
-      origin: `${placeBelow ? 'top' : 'bottom'} left`,
-      side: placeBelow ? 'bottom' : 'top',
-    };
+    if (!menuVisible.value) return;
+    const next = measuredMenuPosition(pos, rect);
+    if (!next) return;
+    menuPosition.value = next;
   }
 
   // 隐藏菜单
@@ -428,29 +342,6 @@ export function useEditor(
   }
 
   // 处理资源节点点击
-/**
- * 这次点击是否落在标签**左侧图标格**（用户 2026-10-29 定案：标签分左右两半）。
- *
- * 图标格 = 缩略图（.resource-chip-thumb，绝对定位在图标位上）或类型图标本身。
- * 按真实 DOM 矩形判断，不猜 padding/宽度 —— 换主题改尺寸也不用同步常量。
- * 缩略图是 pointer-events:none，事件目标一定是外层 chip，所以只能按坐标判。
- */
-function clickInsideChipIcon(el: HTMLElement, e: MouseEvent | undefined): boolean {
-  const b = chipIconRect(el)
-  if (!b || !e) return false
-  const pad = 2
-  return e.clientX >= b.left - pad && e.clientX <= b.right + pad
-    && e.clientY >= b.top - pad && e.clientY <= b.bottom + pad
-}
-
-/** 标签左侧图标格（缩略图或类型图标）的屏幕矩形；没有图标 → null */
-function chipIconRect(el: HTMLElement): DOMRect | null {
-  const icon = (el.querySelector('.resource-chip-thumb') ?? el.querySelector('.resource-chip-icon')) as HTMLElement | null
-  if (!icon) return null
-  const b = icon.getBoundingClientRect()
-  return b.width > 0 && b.height > 0 ? b : null
-}
-
   function handleResourceClick(el: HTMLElement, e?: MouseEvent) {
     const id = el.getAttribute("data-id")
     const item = id ? itemRegistry.get(id) : undefined
@@ -505,39 +396,6 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
 
   // 存储资源节点图片的取消加载函数
   const resourceCleanupMap = new WeakMap<HTMLImageElement, () => void>();
-
-  /**
-   * 参考标签里的缩略图接上「加载状态」（用户 2026-10-29）。
-   *
-   * 为什么不在 renderRefChip 里直接接：DOM 每次重建都会重跑 toDOM，
-   * 这里统一在挂载后按**真实 DOM** 接一次，图表和实际元素永远对得上。
-   * 语义：loading 时图标位转圈；load 成功把图片盖上来；error 保持图标。
-   */
-  function attachChipThumbState(el: HTMLElement): void {
-    const img = el.querySelector('img') as HTMLImageElement | null
-    const icon = el.querySelector('.resource-chip-icon') as HTMLElement | null
-    if (!img || !icon) return
-    const done = () => {
-      icon.classList.remove('is-loading')
-      icon.classList.add('is-covered')
-      img.style.display = ''
-    }
-    const fail = () => {
-      icon.classList.remove('is-loading')
-      icon.classList.remove('is-covered')
-      img.style.display = 'none'
-    }
-    if (img.complete) {
-      // 已经在缓存里：直接给结论，不要闪一下转圈
-      if (img.naturalWidth > 0) done()
-      else fail()
-      return
-    }
-    icon.classList.add('is-loading')
-    img.style.display = 'none'
-    img.addEventListener('load', done)
-    img.addEventListener('error', fail)
-  }
 
   // 绑定 atom 节点事件（资源和变量）
   function bindResourceEvents() {
@@ -790,33 +648,7 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
           hideMenu();
         }
       },
-      clipboardTextSerializer: (slice) => {
-        let text = "";
-        function collect(fragment: any) {
-          fragment.forEach((node: any) => {
-            if (node.type.name === "resource") {
-              // 复制走的文本要和输入框里的一致：引用类标签复制成标记，其它照旧 @名字。
-              text += node.attrs.refKind
-                ? formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue, {
-                    ...(node.attrs.refExt ? { ext: node.attrs.refExt } : {}),
-                    ...(node.attrs.refFolderId ? { folderId: node.attrs.refFolderId } : {}),
-                  }) + " "
-                : `@${node.attrs.name || node.attrs.id} `;
-            } else if (node.isText) {
-              // 过滤掉零宽空格
-              text += node.text?.replace(/\u200B/g, "") || "";
-            } else if (node.isBlock) {
-              // 递归深入 block 内部，遍历其子节点（text / resource 等）
-              collect(node.content);
-              if (text.length > 0 && !text.endsWith("\n")) {
-                text += "\n";
-              }
-            }
-          });
-        }
-        collect(slice.content);
-        return text.trim();
-      },
+      clipboardTextSerializer: (slice) => clipboardTextOf(slice),
     });
 
     // 监听 DOM 变化
@@ -959,224 +791,20 @@ function chipIconRect(el: HTMLElement): DOMRect | null {
     view.focus()
   }
 
-  /**
-   * 找到正文里 id 相同的资源标签并**原地替换**它的样子（url / name / 状态）。
-   *
-   * 为什么需要它：底栏的「待输入」槽位填好内容后，正文里那个标签要立刻从虚线变实线、
-   * 显示缩略图/新名字 —— 删了重插会丢光标位置，而且用户的正文顺序会跳（标签会跑到文末）。
-   * 只在文档里那个节点存在时改属性，不碰选区。
-   *
-   * @returns 找到并替换了 → true；正文里没有这个 id → false（调用方自行决定要不要插入）
-   */
   function replaceResource(item: ResourceItem): boolean {
-    if (!view) return false
-    const nodeType = mySchema.nodes.resource
-    if (!nodeType) return false
-    /**
-     * 换绑（用户 2026-10-28：替换插槽内容时，正文里的标签名称要跟着换成新节点）。
-     *
-     * `previousId` 给了且与新 id 不同 → 找旧身份那颗标签，**整颗换成新身份**。
-     * 为什么必须改 id 而不只改名字：标签的身份就是「绑定了谁」，只改显示名的话，
-     * 下一次刷新会按旧节点把名字又拉回去（而且失效判断也会错）。
-     */
-    const previousId = item.previousId
-    if (previousId && previousId !== item.id) {
-      const prevItem = itemRegistry.get(previousId)
-      itemRegistry.delete(previousId)
-      itemRegistry.set(item.id, item.renderEditor || !prevItem ? item : { ...prevItem, ...item })
-      let rebound = false
-      let changed = false
-      const tr = view.state.tr
-      view.state.doc.descendants((node, pos) => {
-        if (rebound || node.type.name !== 'resource' || node.attrs.id !== previousId) return
-        rebound = true
-        changed = chipAttrsNeedUpdate(node.attrs, {
-          id: item.id,
-          name: item.name,
-          url: item.url ?? '',
-        }) || String(node.attrs.chipKind ?? '') !== String(item.chipKind ?? '')
-        tr.setNodeMarkup(pos, undefined, {
-          ...node.attrs,
-          id: item.id,
-          name: item.name,
-          url: item.url ?? '',
-          thumbnail_url: item.thumbnail_url ?? '',
-          value: item.value ?? '',
-          category: item.category,
-          chipKind: item.chipKind ?? '',
-        })
-      })
-      if (!rebound) return false
-      /**
-       * 内容没变就不派发事务（用户 2026-10-27 报「点标签后光标跳来跳去」）：
-       * 底栏的刷新 watcher 会反复调这里，无条件 dispatch 会反复重建节点、丢光标。
-       */
-      if (changed) view.dispatch(tr)
-      return true
-    }
-    // 名字 undefined = 保留注册表里原条目的名字（引用名是提示词的一部分，
-    // 排序/替换只换图 —— 注册表条目如果被 undefined 覆盖，chip 文字会漂移）。
-    const prev = itemRegistry.get(item.id)
-    // renderEditor 等外观字段也要从 prev 继承（item 只带数据，不带渲染函数）。
-    itemRegistry.set(item.id, item.name === undefined && prev ? { ...prev, ...item, name: prev.name } : item)
-    /**
-     * 失效标签（用户 2026-10-29：失效了还挂着旧缩略图）：
-     * 一旦标成 invalid，就把 url / 类型 / 缩略图**一起清空**，只留名字。
-     * 否则 toDOM 会从 attrs 里把旧图捡回来，看着像「还连着」。
-     */
-    const clearing = item.invalid === true
-    let found = false
-    let changed = false
-    const tr = view.state.tr
-    view.state.doc.descendants((node, pos) => {
-      if (found || node.type.name !== 'resource' || node.attrs.id !== item.id) return
-      found = true
-      // registry（按节点 id 存）也要同步 url —— chip 走 renderEditor 分支渲染时
-      // 读的是 registry 条目，只改 attrs 不改 registry 的话缩略图不会变（真机踩过）。
-      const reg = itemRegistry.get(node.attrs.id)
-      if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
-      const nextAttrs = {
-        ...node.attrs,
-        // name 传 undefined = 保留原名字：标签名是用户提示词的一部分（引用名），
-        // 排序/替换只换缩略图，绝不能改写它（真机踩过：排序后"图片3"被改成别的名字）。
-        name: item.name ?? node.attrs.name,
-        url: item.url ?? '',
-        // 缩略图必须跟着新 url 重算：留着旧 attrs 的话 toDOM 会继续用旧 thumbnail_url，
-        // 表现为「排序/替换后标签缩略图不更新」（真机踩过）。
-        thumbnail_url: item.thumbnail_url ?? '',
-        value: item.value ?? '',
-        category: item.category,
-        chipKind: item.chipKind ?? '',
-      }
-      if (clearing) {
-        nextAttrs.url = ''
-        nextAttrs.thumbnail_url = ''
-        nextAttrs.chipKind = ''
-        nextAttrs.value = ''
-      }
-      changed = chipAttrsNeedUpdate(node.attrs, {
-        name: nextAttrs.name,
-        url: nextAttrs.url,
-      }) || String(node.attrs.chipKind ?? '') !== String(nextAttrs.chipKind)
-      tr.setNodeMarkup(pos, undefined, nextAttrs)
-    })
-    if (!found) return false
-    if (changed) view.dispatch(tr)
-    return true
+    return replaceResourceInDoc(view, item)
   }
-  /**
-   * 按**标签名字**（图片2）更新正文中该标签的缩略图 —— 名字（引用）保持不动。
-   * 用户口径：资源卡片排序只换「第 N 格现在放哪张图」，正文标签的名字绝不能变。
-   * 找不到同名标签 → false（调用方决定要不要插入）。
-   */
+
   function replaceResourceThumbByName(name: string, url: string): boolean {
-    if (!view) return false
-    const nodeType = mySchema.nodes.resource
-    if (!nodeType) return false
-    let found = false
-    let changed = false
-    const tr = view.state.tr
-    view.state.doc.descendants((node, pos) => {
-      if (found || node.type.name !== 'resource' || node.attrs.name !== name) return
-      found = true
-      /**
-       * 内容没变就一个字都别动（用户 2026-10-27 报：点标签后光标先跳到前面再跳回来）。
-       *
-       * 根因：底栏的标签刷新会反复调用这个函数，以前无条件 setNodeMarkup —— 即使 url
-       * 一模一样，也会重建标签节点、让文档"改"一次。节点一重建，整颗选中就没了，
-       * 浏览器顺手把光标就近放到标签**前面**，0.5s 计时器再把它挪到后面。
-       */
-      if (!chipAttrsNeedUpdate(node.attrs, { url })) {
-        // 文档不动；注册表仍需同步（toDOM 读的是它），这一步不产生事务
-        const reg0 = itemRegistry.get(node.attrs.id)
-        if (!reg0 || reg0.url !== url) {
-          itemRegistry.set(node.attrs.id, {
-            ...(reg0 ?? { id: node.attrs.id, category: node.attrs.category }),
-            url,
-            thumbnail_url: '',
-            name: String(node.attrs.name ?? reg0?.name ?? name),
-          })
-        }
-        return
-      }
-      // registry（按节点 id 存）同步 url —— chip 走 renderEditor(registry item) 渲染，
-      // 只改 attrs 不改 registry，toDOM 重渲染时缩略图还是旧图（真机踩过）。
-      const reg = itemRegistry.get(node.attrs.id)
-      // 名字固定为正文 attrs.name（用户提示词的引用名，绝不改写）；图随格子换。
-      if (reg) itemRegistry.set(node.attrs.id, { ...reg, url, thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
-      tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        url,
-        // 缩略图跟着新 url 重算（旧 thumbnail_url 不清会显示旧图，真机踩过）
-        thumbnail_url: '',
-      })
-      changed = true
-    })
-    if (!found) return false
-    if (changed) view.dispatch(tr)
-    return true
+    return replaceResourceThumbByNameInDoc(view, name, url)
   }
 
-  /**
-   * 按 id 列表换缩略图（拖拽排序后按「该类型数组第 N 项」取图时用）。
-   *
-   * 只改 url、不改 name；没有命中或内容未变时不产生事务。
-   */
   function replaceResourceThumbByIds(ids: readonly string[], url: string): boolean {
-    if (!view) return false
-    const next = applyThumbByIds(view.state.doc, ids, url)
-    if (next === view.state.doc) return false
-    // registry 也同步：chip 走 renderEditor(registry item) 渲染，只改 attrs 不改 registry，
-    // 重渲染时缩略图还是旧图（真机踩过）。
-    const set = new Set(ids.filter(Boolean))
-    for (const id of set) {
-      const reg = itemRegistry.get(id)
-      if (reg) itemRegistry.set(id, { ...reg, url, thumbnail_url: '' })
-    }
-    view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, next.content))
-    return true
+    return replaceResourceThumbByIdsInDoc(view, ids, url)
   }
 
-  /**
-   * 把正文里所有 ref-slot 标签**就地重渲染**一遍（注册表里已是最新 item）。
-   *
-   * 为什么需要整体刷新：底栏的参考内容随连线变化（上传/替换/断开），同一颗「待输入」
-   * 标签要跟着从虚线变实线、换名字与缩略图。逐个 replaceResource 也可以，但调用方
-   * 得自己枚举 id；给一个"全刷"入口，调用方一行就够。只对 ref-slot:* 生效，
-   * 用户手工插入的其它引用不受影响。没有可刷的节点 → 不 dispatch。
-   */
   function refreshChips(): void {
-    if (!view) return
-    // 标签身份不再自动迁移（旧格式按失效处理，用户 2026-10-28 定案）
-    // 注册表已更新（调用方先 itemRegistry.set），toDOM 每次渲染都会读 ——
-    // 这里用一行**无操作事务**（带标记）逼 ProseMirror 重画这些节点：
-    // setNodeMarkup 用原 attrs 也会触发 toDOM 重建（注册表已新，外观即为新）。
-    const tr = view.state.tr
-    let changed = false
-    view.state.doc.descendants((node, pos) => {
-      if (node.type.name !== 'resource') return
-      // 刷所有**注册表里有条目**的资源节点：正文标签的身份有两种（@声明的 ref-slot:*、
-      // 资源面板插入的节点 id）—— 只刷 ref-slot:* 会漏掉后者（真机踩过：排序后那类
-      // 标签的缩略图不更新）。registry 没有的（用户手打的裸引用）不动。
-      const item = itemRegistry.get(String(node.attrs.id ?? ''))
-      if (!item) return
-      /**
-       * 只刷「外观真的变了」的标签。
-       *
-       * 用户 2026-10-27 报「点标签后光标先跳到前面再跳回来」：这个函数被底栏 watcher
-       * 反复调用，以前**无条件**对每颗标签 setNodeMarkup —— attrs 一个字没变也算文档
-       * 改动，节点被重建、整颗选中被销毁，浏览器顺手把光标放到标签前面。
-       * 外观相同就不该产生事务。
-       */
-      const chipId = String(node.attrs.id ?? '')
-      const sig = chipSignature(item)
-      if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '' })
-        && chipRenderSig.get(chipId) === sig) return
-      chipRenderSig.set(chipId, sig)
-      tr.setNodeMarkup(pos, undefined, { ...node.attrs })
-      changed = true
-    })
-    if (changed) view.dispatch(tr)
+    refreshChipsInDoc(view)
   }
 
   /**

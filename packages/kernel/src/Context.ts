@@ -4,13 +4,6 @@ import { depsOf } from './topo'
 import type { CapabilityLayer } from './capabilityLayer'
 import { getDefaultCapabilityLayerFactory } from './capabilityLayer'
 import { ToolRegistry } from './toolRegistry'
-import type {
-  ToolDef,
-  ToolFilter,
-  ToolInput,
-  ToolInvokeOptions,
-  ToolResult,
-} from './toolRegistry'
 import { Fiber } from './fiber'
 import { resolveConfig } from './configSchema'
 import type {
@@ -40,146 +33,16 @@ import type {
   ModelToolSurface,
 } from './surface'
 import { toolFieldOptions } from './modelTool'
+import type { ContextState, PluginRuntimeStatus } from './contextTypes'
+import { describeMethods, entryFields, errorMessage } from './contextDiagnostics'
+import { buildToolSegment, runPlugin } from './contextServices'
+
+export type { ContextState, PluginRuntimeStatus } from './contextTypes'
+export { runPlugin } from './contextServices'
 
 /**
  * 每个插件在 setup(ctx) 里拿到的"能力视图"见 types.ts 的 PluginScope（Context 实现之）。
  */
-
-/** Context 生命周期状态 */
-export type ContextState = 'created' | 'started' | 'stopped'
-
-/** 单个插件的运行时态快照（P5：宿主/管理器/console 做 fiber 状态可查与 PENDING 诊断的只读视图） */
-export interface PluginRuntimeStatus {
-  /** 插件唯一名 */
-  name: string
-  /** fiber 状态名（pending/loading/active/failed/unloading/disposed，字符串便于展示/比较） */
-  state: string
-  /** 该插件 deps 中此刻仍未满足的依赖（仅当 state!=='active' 才可能非空；对齐 depSatisfied 判定） */
-  missingDeps: string[]
-  /** FAILED 时的错误信息（message 字符串，便于面板/console 展示）；非 FAILED 缺省 */
-  error?: string
-  /**
-   * 是否核心插件（决策 1：拒绝动态热卸）。宿主 UI 据此**禁用卸载按钮**，
-   * 而不是等用户点了才被拒（可诊断 > 事后报错）。非核心插件不带本字段。
-   */
-  core?: boolean
-}
-
-/** 把错误归一成可展示的 message（Error 取 message，其余 String 兜底） */
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
-/**
- * best-effort 字段名清单：一个场条目的值"有哪些顶层字段可读"（surface() 的条目轴用）。
- *
- * 只读 descriptor 名，**不取字段值**（值里可能有组件句柄/函数，摊出去既读不完也会泄漏）。
- *
- * 两处刻意收窄（否则这条轴只会输出噪声）：
- * - 只认**朴素对象**（类实例 / 数组 / Map / 函数都不是"有字段可读的声明"）；
- * - **组件句柄不算**：SFC 编译产物也是朴素对象，但它的"字段"是 `__name`/`setup`/`render`/`__file`
- *   这类编译内部物，对作者零诊断价值（`theme`/`ui` 两条轴里大量是这种），故识别到组件形状就跳过。
- * - 下划线开头的键一律不算（编译/内部约定）。
- */
-function entryFields(value: unknown): string[] | undefined {
-  if (value === null || typeof value !== 'object') return undefined
-  const proto = Object.getPrototypeOf(value)
-  if (proto !== Object.prototype && proto !== null) return undefined
-  const all = Object.getOwnPropertyNames(value)
-  // 组件形状识别：这些键出现即视为 opaque 组件句柄，不是"数据声明"
-  if (all.some((k) => k === 'setup' || k === 'render' || k === '__name' || k === '__file')) return undefined
-  const names = all.filter((k) => k !== 'constructor' && !k.startsWith('_'))
-  return names.length > 0 ? names : undefined
-}
-
-/**
- * best-effort 方法名清单：一个服务实例上"能调哪些函数"（surface() 的服务轴用）。
- *
- * 只用 descriptor 反射 —— **绝不用 `obj[k]` 取值**，否则会真的执行 getter
- * （如 selection.ids 这类访问器会被跑一次，产生副作用）。
- * 走自有属性 + 原型链；拿不到（null/原始值）返回 undefined。
- * 名字压缩/混淆后可能失真，故 surface 把它标成可选诊断字段、不写进稳定契约。
- */
-function describeMethods(target: unknown): string[] | undefined {
-  if (target === null || target === undefined) return undefined;
-  if (typeof target !== 'object' && typeof target !== 'function') return undefined;
-  const names = new Set<string>();
-  let obj: object | null = target as object;
-  while (obj && obj !== Object.prototype) {
-    for (const key of Object.getOwnPropertyNames(obj)) {
-      if (key === 'constructor' || names.has(key)) continue;
-      try {
-        const d = Object.getOwnPropertyDescriptor(obj, key);
-        if (d && typeof d.value === 'function') names.add(key);
-      } catch {
-        /* 某些宿主对象的 descriptor 不可读：跳过该键，不中断枚举 */
-      }
-    }
-    obj = Object.getPrototypeOf(obj) as object | null;
-  }
-  return names.size > 0 ? [...names].sort() : undefined;
-}
-
-/**
- * 跑一个插件的注册函数：apply(收校验后 config)。
- * 返回值（cleanup/Disposable）由调用方登记进插件 fiber，卸载即清。
- */
-export function runPlugin(
-  mod: PluginModule,
-  ctx: PluginScope,
-  config?: unknown,
-): void | (() => void) | Disposable {
-  return mod.apply(ctx, config as never)
-}
-
-/**
- * 内核自带的 `ctx.tools` 能力段：把工具注册表的操作收口成作者直接可用的形状。
- *
- * 注册随所属插件 scope 自动回收（ctx.effect）—— 插件卸载后它注册的工具从表里消失。
- * 表本身是内核单实例（`Context.builtinTools`），插件注册进它、别的插件/节点从它取，
- * 于是"加一个模型"= 装一个注册了新工具的插件，消费方零改动。
- *
- * @param ctx 插件 scope 或根 Context（需有 get + effect）
- */
-function buildToolSegment(ctx: PluginScope): {
-  tools: {
-    register(def: ToolDef): void
-    unregister(name: string): boolean
-    has(name: string): boolean
-    get(name: string): ToolDef | undefined
-    list(filter?: ToolFilter): ToolDef[]
-    invoke(name: string, input: ToolInput, options?: ToolInvokeOptions): Promise<ToolResult>
-  }
-} {
-  const reg = (): ToolRegistry | undefined => ctx.get<ToolRegistry | undefined>('tools') ?? undefined
-  return {
-    tools: {
-      register(def: ToolDef): void {
-        const r = reg()
-        if (!r) throw new Error('[tools] 内核未提供 tools 服务')
-        const handle = r.register(def)
-        ctx.effect(() => () => handle.dispose())
-      },
-      unregister(name: string): boolean {
-        return reg()?.unregister(name) ?? false
-      },
-      has(name: string): boolean {
-        return reg()?.has(name) ?? false
-      },
-      get(name: string): ToolDef | undefined {
-        return reg()?.get(name)
-      },
-      list(filter?: ToolFilter): ToolDef[] {
-        return reg()?.list(filter) ?? []
-      },
-      invoke(name: string, input: ToolInput, options?: ToolInvokeOptions): Promise<ToolResult> {
-        const r = reg()
-        if (!r) return Promise.resolve({ ok: false, error: '内核未提供 tools 服务' })
-        return r.invoke(name, input, options)
-      },
-    },
-  }
-}
 
 /**
  * Context —— 根上下文（宿主创建：createContext()，然后 plugin()×N，最后 start()）。
