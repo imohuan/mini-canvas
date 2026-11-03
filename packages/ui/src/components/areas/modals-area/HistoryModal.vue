@@ -17,6 +17,8 @@ import { useHistoryPreview, type HistoryDetailItem } from './useHistoryPreview'
 import HistoryDetailDialog from './HistoryDetailDialog.vue'
 import { useHistoryLoadMore } from './useHistoryLoadMore'
 import { createHistoryCardDom } from './historyCardDom'
+import { useHistoryWallApps } from './useHistoryWallApps'
+import { createHistoryCard, type HistItem } from './createHistoryCard'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
@@ -112,128 +114,17 @@ const {
   registerCardApp: (card, app) => { appOfCard.set(card, app) },
 })
 
-/**
- * 每个页签各自保留一面**已经建好的卡片墙**（DOM + 滚动位置 + 视频/音频实例）。
- *
- * 用户口径 2026-10-28：切页签 / 开批量操作时整面墙重画，视频会黑一下、音频波形会重建，
- * 数据一多很难受。现在切走只是把墙挪到旁边存着，切回来原样挂回 —— 媒体元素完全不重建。
- */
-interface WallSnapshot {
-  /** 墙的容器（masonry 直接挂在这上面） */
-  wall: HTMLElement
-  /** 墙里已经画了多少张（= 当时的 renderedCount） */
-  count: number
-  /** 当时的数据签名：和当前签名不一致就不复用 */
-  signature: string
-  /** 当时的列宽（缩放滑杆档位变了要重排） */
-  columnWidth: number
-  /** 滚动位置：切回来还停在原地 */
-  scrollTop: number
-}
-const wallCache = new Map<string, WallSnapshot>()
-/** 当前挂在页面上的墙属于哪个签名（'' = 还没建） */
-let mountedWallKey = ''
-/**
- * 墙里**仍然活着**的 Vue 应用（每张视频/音频卡一个）。
- *
- * 为什么必须记：瀑布流里挂插件预览件用的是 createApp().mount()，而墙的销毁路径
- * （rebuildMasonry 的 innerHTML = ''、LRU 逐出、弹窗卸载）都只删 DOM。
- * 不显式 unmount，应用实例、ResizeObserver、<video>/<audio> 解码器与网络请求
- * 会一直留着 —— 用户实测「进视频/音频页一直闪烁、一直加载，把电脑干崩」就是这个。
- *
- * 按墙分组记：key 为墙缓存签名或 MOUNTED_WALL，这样「只丢弃某一面旧墙」时
- * 能精确回收那一面的应用，不影响当前正在显示的墙。
- */
-const appsByWall = new Map<string, Set<VueApp>>()
-/** 当前挂载中的那面墙的 key（与 mountedWallKey 同步；'' = 还没建） */
-const MOUNTED_WALL = 'mounted'
-/** 卡片元素 → 它自己的 Vue 应用：单张卡被摘掉（坏资源）时精确卸载，不牵连整墙 */
-const appOfCard = new WeakMap<HTMLElement, VueApp>()
-
-/** 卸载某张卡自己的 Vue 应用（没有就什么都不做） */
-function unmountCardApp(card: HTMLElement): void {
-  const app = appOfCard.get(card)
-  if (!app) return
-  appOfCard.delete(card)
-  try {
-    app.unmount()
-  } catch {
-    /* 已经卸过/宿主已失效：忽略 */
-  }
-}
-
-/** 取（或建）某一面墙的应用登记表 */
-function appsOfWall(key: string): Set<VueApp> {
-  let set = appsByWall.get(key)
-  if (!set) {
-    set = new Set<VueApp>()
-    appsByWall.set(key, set)
-  }
-  return set
-}
-
-/**
- * 卸载一面墙里所有还活着的 Vue 应用，并把登记项删掉。
- *
- * 单个应用 unmount 抛错（典型：节点已被外部替换/删掉）不能中断整轮清理，
- * 否则剩下几十张卡的视频解码器会一起泄漏 —— 这正是本函数存在的原因。
- * key 省略时清「当前挂载中的墙」；传 'all' 之外的任意 key 就只清那一面。
- */
-function unmountMountedApps(key: string = MOUNTED_WALL): void {
-  const keys = key === '*' ? [...appsByWall.keys()] : [key]
-  for (const k of keys) {
-    const set = appsByWall.get(k)
-    if (!set) continue
-    appsByWall.delete(k)
-    for (const app of set) {
-      try {
-        app.unmount()
-      } catch {
-        /* 单个应用卸载失败不阻断其余卡片回收 */
-      }
-    }
-    set.clear()
-  }
-}
-
-/** 只卸载某一面墙的应用（不传 = 当前挂载中的墙） */
-function unmountWallApps(key: string): void {
-  unmountMountedApps(key)
-}
-
-/**
- * 把一面墙的应用登记换到另一个 key 上（收墙进缓存 / 从缓存挂回来时用）。
- *
- * 这两个动作**不销毁** DOM 与应用（那正是切页签不闪的原因），只是「这面墙现在算谁的」
- * 变了。登记表跟着一起换名，逐出那一面时才能精确回收它自己的应用。
- */
-function rekeyWallApps(from: string, to: string): void {
-  const set = appsByWall.get(from)
-  if (!set || from === to) return
-  appsByWall.delete(from)
-  const target = appsOfWall(to)
-  for (const app of set) target.add(app)
-  set.clear()
-}
-/**
- * 墙缓存上限（LRU 逐出）：每次切页签都会 stash 一整面墙（含 video/audio 实例），
- * 不设上限的话，多页签反复切换 + 大量媒体会让内存持续增长（扫描记录 2026-10-30 A6）。
- * 6 面 ≈ 6 个页签/筛选组合，够"来回切"的常用场景；超出的最旧墙直接丢弃（切回去重建）。
- */
-const WALL_CACHE_LIMIT = 6
-
-/** 收进缓存前先按 LRU 上限逐出最旧的墙（Map 迭代序 = 插入序，最旧在前） */
-function trimWallCache(): void {
-  while (wallCache.size >= WALL_CACHE_LIMIT) {
-    const oldest = wallCache.keys().next().value
-    if (oldest === undefined) break
-    wallCache.delete(oldest)
-    // 逐出的墙再也不会挂回来：墙里那些 Vue 应用（视频/音频播放器）必须跟着卸载，
-    // 否则缓存有上限、泄漏却没有上限（用户实测切页签切到电脑崩）。
-    unmountWallApps(oldest)
-  }
-}
-
+const {
+  wallCache,
+  mountedWallKey,
+  MOUNTED_WALL,
+  appOfCard,
+  appsOfWall,
+  unmountCardApp,
+  unmountMountedApps,
+  rekeyWallApps,
+  trimWallCache,
+} = useHistoryWallApps()
 /**
  * histZoom 滑杆 → 最小卡片宽度（px）：滑杆越大卡片越大、列数越少。
  * 瀑布流的列数随容器宽度自适应（calcColumns），这里只提供「最小列宽」。
@@ -375,6 +266,15 @@ function showBrokenResourceCard(card: HTMLElement, item: HistItem): void {
  * - 批量模式 → **整卡都能勾选/取消**（用户口径 2026-10-27：不想只点左上角小圆点）。
  *   点左上角那个圆钮仍走它自己的 stopPropagation，不会重复切换。
  */
+function toggleHistSelected(id: string): void {
+  const i = s.histSelectedIds.indexOf(id)
+  if (i >= 0) s.histSelectedIds.splice(i, 1)
+  else s.histSelectedIds.push(id)
+  // 重新刷这张卡的勾选态（覆盖层 class）
+  const el = masonryEl.value?.querySelector('[data-hist-id="' + id + '"] .hist-card-check')
+  if (el) el.classList.toggle('is-on', s.histSelectedIds.includes(id))
+}
+
 function onCardClick(item: HistItem): void {
   if (!s.histBatchMode) {
     openHistoryItem(item)
@@ -391,345 +291,24 @@ function onAudioCardClick(item: HistItem): void {
   if (s.histBatchMode && item.id) toggleHistSelected(item.id)
 }
 
-/** 历史条目类型（卡片构建函数共用；id 参与批量勾选） */
-interface HistItem {
-  id?: string
-  title: string
-  kind: string
-  time: string
-  urls?: string[]
-  canvasId?: string
-  nodeId?: string
-  /** 提示词 / 参数 / 参考素材 / 媒体元数据（详情弹窗与卡片角标用） */
-  prompt?: string
-  values?: Record<string, unknown>
-  resources?: Array<{ kind: string; url?: string; value?: string }>
-  media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
-  finishedAt?: number
-  error?: string
-}
-
-/** 勾选/取消一条 */
-function toggleHistSelected(id: string): void {
-  const i = s.histSelectedIds.indexOf(id)
-  if (i >= 0) s.histSelectedIds.splice(i, 1)
-  else s.histSelectedIds.push(id)
-  // 重新刷这张卡的勾选态（覆盖层 class）
-  const el = masonryEl.value?.querySelector('[data-hist-id="' + id + '"] .hist-card-check')
-  if (el) el.classList.toggle('is-on', s.histSelectedIds.includes(id))
-}
-
-/**
- * 音频/视频卡：封面 + 播放圆钮（点卡片直接开 MediaViewer 预览/播放）。
- * 音频没有画面 —— 给柔和渐变底 + 波形点阵装饰；视频有封面帧。
- */
-/**
- * 音频的「卡外控制行」：播放键 + 时间在左，尺寸/时长/大小在右。
- *
- * 用户口径 2026-10-28：波形条本身恢复成白底细条（不再是带边框的卡片），
- * 播放键与文字说明像图片卡那样放到卡片外。播放器组件自己不带这些按钮
- * （它在条内被隐藏了底栏），所以这里补一个最小的播放键 + 时间，
- * 点击/拖动进度仍走条内的波形（可点、可拖）。
- */
-function buildAudioControls(item: HistItem, audio: HTMLAudioElement, card: HTMLElement): HTMLElement {
-  const row = document.createElement('div')
-  row.className = 'hist-card-audio-controls'
-  /* 整行两端对齐 + 垂直居中（用户口径 2026-10-28：文字要跟按钮垂直居中）。
-     用内联样式而不是只依赖样式表：这张卡是 JS 现拼的，样式表若被裁剪/覆盖也不会丢。 */
-  row.style.display = 'flex'
-  row.style.alignItems = 'center'
-  row.style.justifyContent = 'space-between'
-  /** 左半：类型 + 当前播放进度 */
-  const left = document.createElement('div')
-  left.className = 'hist-audio-left'
-  const kind = document.createElement('span')
-  kind.className = 'hist-card-kind'
-  kind.textContent = item.kind
-  const progress = document.createElement('span')
-  progress.className = 'hist-audio-progress'
-  left.appendChild(kind)
-  left.appendChild(progress)
-
-  /** 右半：总时长 + 播放按钮（纯图标，无边框无圆角） */
-  const right = document.createElement('div')
-  right.className = 'hist-audio-right'
-  const duration = document.createElement('span')
-  duration.className = 'hist-audio-duration'
-  const btn = document.createElement('button')
-  btn.type = 'button'
-  btn.className = 'hist-audio-play'
-  btn.setAttribute('aria-label', '播放')
-  const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20"/></svg>'
-  const pauseIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
-  btn.innerHTML = playIcon
-  right.appendChild(duration)
-  right.appendChild(btn)
-  const fmt = (sec: number): string => {
-    if (!Number.isFinite(sec) || sec <= 0) return '0:00'
-    const total = Math.round(sec)
-    return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0')
-  }
-  const sync = (): void => {
-    progress.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration)
-    duration.textContent = fmt(audio.duration)
-    btn.innerHTML = audio.paused ? playIcon : pauseIcon
-    btn.setAttribute('aria-label', audio.paused ? '播放' : '暂停')
-  }
-  btn.addEventListener('click', (ev) => {
-    ev.stopPropagation()
-    if (audio.paused) void audio.play().catch(() => {})
-    else audio.pause()
-  })
-  audio.addEventListener('timeupdate', sync)
-  audio.addEventListener('play', sync)
-  audio.addEventListener('pause', sync)
-  audio.addEventListener('loadedmetadata', sync)
-  sync()
-  row.appendChild(left)
-  row.appendChild(right)
-  return row
-}
-
-function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): HTMLElement {
-  const card = document.createElement('div')
-  card.className = 'hist-card'
-  if (item.id) card.dataset.histId = item.id
-  const isAudio = kind === 'audio'
-  // 音频/视频卡优先用节点插件注册的预览件（真播放器：波形 / 带控件的视频画面）；
-  // 目录里没登记/没就绪才回落到静态装饰。视频以前直接把媒体地址塞 <img>，必然裂图。
-  const PluginPreview = isAudio
-    ? (uiComponentOf('audioPreview') as Component | undefined)
-    : (uiComponentOf('videoPreview') as Component | undefined)
-  // 媒体框：与图片卡同一套瀑布流格子。按产物真实宽高比给高度，
-  // 这样竖版视频就是竖的、横版就是横的（不再全部写死 180px）。
-  const media = document.createElement('div')
-  media.className = isAudio
-    ? 'hist-card-media hist-card-media--audio'
-    : 'hist-card-media hist-card-media--video'
-  /**
-   * 音频：恢复成最开始那版的**横向细条**（宽度由瀑布流决定、高度 96px、白底），
-   * 不做带边框的"卡片面板"（用户口径 2026-10-28：不喜欢现在这种卡片形式）。
-   * 播放键与文字说明移到卡片外（见 finishCard 之后挂的 attachAudioControls）。
-   * 图片/视频仍按产物真实宽高比。
-   */
-  if (isAudio) {
-    media.style.height = '96px'
-  } else {
-    media.style.aspectRatio = mediaAspect(item, 16 / 9)
-  }
-  card.appendChild(media)
-  if (PluginPreview) {
-      const mount = document.createElement('div')
-      mount.className = isAudio ? 'hist-card-audio-plugin' : 'hist-card-video-plugin'
-      media.appendChild(mount)
-      // 视频件自带「按宽度自适应」：小卡片走小屏态（只有一个居中播放键），宽了给完整控制栏。
-      // 信息（类型 / 宽高 / 时长 / 大小）全部放在图外的一行里（见 finishCard），图上只留详情圆钮。
-      //
-      // 视频卡额外给 expandable + 接 expand：小屏态右下角出现「进入预览」小方块，
-      // 点它打开全屏预览（用户口径：视频可以点进全屏）。组件自己不开窗 —— 它不知道
-      // MediaViewer 挂在哪，所以由这里把事件接到 openHistoryItem 上。
-      const app = createApp({
-        render: () =>
-          h(
-            PluginPreview,
-            isAudio
-              // 音频：恢复成改之前那版 —— 播放器里带名称/时长/大小那一行信息
-              ? { url, name: item.title, compact: true }
-              : { url, name: item.title, expandable: true, onExpand: () => openHistoryItem(item) },
-          ),
-      })
-      app.mount(mount)
-      // 登记：这张卡的 Vue 应用必须在墙被回收时 unmount（见 appsByWall 的说明）。
-      // 一律记在「当前挂载中的墙」名下：建卡可能发生在 rebuild / append / prepend 三条路径，
-      // 统一记一个桶，收墙时再整体换名到该墙的缓存 key，逐出时才能精确回收。
-      appsOfWall(MOUNTED_WALL).add(app)
-      // 单张卡被摘掉（坏资源 → 换占位卡）时也要能单独回收它，不牵连整墙
-      appOfCard.set(card, app)
-      // 视频件自带的控制条自带 aria-label，不再额外补；这里只记录媒体元素，供加载失败与尺寸同步
-      // 详情入口留在图上（右上角小圆钮）；信息行在图外，见 finishCard
-      media.appendChild(buildDetailButton(item))
-      // 媒体加载失败（文件被清理 / 换地址）：与图片卡同一口径，开关关着就整条隐藏
-      const tag = isAudio ? 'audio' : 'video'
-      const el = mount.querySelector(tag) as HTMLMediaElement | null
-      el?.addEventListener('error', () => showBrokenResourceCard(card, item))
-      if (el) {
-        /**
-         * 老记录没有 media 元数据（历史里还没存宽高/时长）。
-         * 媒体加载出 metadata 后自己补上：卡片比例按真实宽高重排，左下角角标补宽高与时长，
-         * 这样即使没重新生成，旧视频也能显示"宽高 + 时长"，而不是只有"视频 · 12 天前"。
-         * 已经记过的（新记录）不覆盖 —— 后端量出来的值更准，也避免二次跳动。
-         */
-        const syncFromMedia = (): void => {
-          // 视频元素才有 videoWidth/height；音频没有可视尺寸，只补时长
-          const v = el as HTMLVideoElement
-          const w = !isAudio ? v.videoWidth || 0 : 0
-          const h = !isAudio ? v.videoHeight || 0 : 0
-          const durSec = Number.isFinite(el.duration) ? el.duration : 0
-          if (w > 0 && h > 0) {
-            if (!item.media) item.media = {}
-            if (!item.media.width) item.media.width = w
-            if (!item.media.height) item.media.height = h
-            if (!isAudio) media.style.aspectRatio = w + ' / ' + h
-          }
-          if (durSec > 0 && !item.media?.durationMs) {
-            if (!item.media) item.media = {}
-            item.media.durationMs = Math.round(durSec * 1000)
-          }
-          const old = card.querySelector('.hist-card-facts')
-          if (old) old.replaceWith(buildFactsLine(item))
-          scheduleImageRelayout()
-        }
-        el.addEventListener('loadedmetadata', syncFromMedia)
-        el.addEventListener('loadeddata', syncFromMedia)
-        // 音频：把真实时长回写到播放器（卡外那行的时长也用它），避免显示 0:00
-        if (isAudio) {
-          const durEl = mount.querySelector('.apv-time') as HTMLElement | null
-          const fmt = (sec: number): string => {
-            if (!Number.isFinite(sec) || sec <= 0) return '0:00'
-            const total = Math.round(sec)
-            return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0')
-          }
-          const syncAudioTime = (): void => {
-            if (durEl) durEl.textContent = fmt(el.currentTime) + ' / ' + fmt(el.duration)
-          }
-          el.addEventListener('timeupdate', syncAudioTime)
-          el.addEventListener('loadedmetadata', syncAudioTime)
-        }
-      }
-
-      if (isAudio) card.addEventListener('click', () => onAudioCardClick(item))
-      else card.addEventListener('click', () => onCardClick(item))
-      // 批量模式下媒体层让位给整卡勾选：点在波形/视频上也要落到卡片本身。
-      // 标记由 syncBatchOverlays 统一同步（进入/退出批量模式时也要生效，不只是建卡那一刻）。
-      card.classList.toggle('hist-card--batch', s.histBatchMode)
-      if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
-      if (isAudio && el) {
-        /**
-         * 音频：卡外放"播放键 + 时间 + 尺寸信息"这一行（波形条内只留白底波形）。
-         * 结构仍与图片卡一致：媒体条在上、说明在下。
-         */
-        const finished = finishCard(card, item)
-        const facts = finished.querySelector('.hist-card-facts')
-        if (facts) facts.remove()
-        finished.appendChild(buildAudioControls(item, el as HTMLAudioElement, finished))
-        return finished
-      }
-      return finishCard(card, item)
-  }
-  // 没有注册件时的兜底卡面：同样套在 media 框里，保留同一套角标与比例
-  const inner = document.createElement('div')
-  inner.style.cssText = 'position:absolute;inset:0'
-  inner.innerHTML = isAudio
-    ? '<div class="hist-card-audio"><span class="hist-card-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>'
-    : '<img src="' + esc(url) + '" alt="" loading="lazy" />'
-  inner.insertAdjacentHTML('beforeend', '<div class="hist-card-play">▶</div>')
-  media.appendChild(inner)
-  media.appendChild(buildDetailButton(item))
-  if (!isAudio) {
-    const img = inner.querySelector('img')!
-    img.addEventListener('load', () => {
-      if (img.naturalWidth && img.naturalHeight) {
-        media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
-        scheduleImageRelayout()
-      }
-    })
-    img.addEventListener('error', () => {
-      // 与图片卡同一口径：地址打不开 ≠ 生成失败 —— 用中性「资源走丢」卡，
-      // 不亮红色异常卡（否则"显示异常"关着也会冒出红叹号，用户实测 2026-10-27）。
-      showBrokenResourceCard(card, item)
-    })
-  }
-  card.addEventListener('click', () => onCardClick(item))
-  if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
-  card.classList.toggle('hist-card--batch', s.histBatchMode)
-  return finishCard(card, item)
-}
-
-/** 生成瀑布流里一张卡的 DOM（图片卡带骨架屏 + 底部渐变信息栏；无产物退图标卡） */
-function createMasonryElement(item: HistItem): HTMLElement {
-  const card = document.createElement('div')
-  card.className = 'hist-card'
-  if (item.id) card.dataset.histId = item.id
-  const url = thumbOf(item)
-
-  // 音频/视频先行：它们的 urls[0] 是媒体地址（不是图片），交给专属媒体卡
-  // （之前顺序反了：音频地址先被当图片 <img> 加载 → error → 被误换成"异常卡"，
-  //  而点开其实能播 —— 用户实测抓到的就是这个）。
-  const isAudio = item.kind === '音频' || item.kind === 'audio'
-  const isVideo = item.kind === '视频' || item.kind === 'video'
-  if (isAudio || isVideo) {
-    /**
-     * 媒体地址先过 previewableUrl（2026-10-30 复测：跨端 http://localhost:8033/.../*.mp4
-     * 被 <video> 反复自动重试，12 秒上百次请求）。不是本服务地址就别挂 video/audio。
-     */
-    const mediaUrl = previewableUrl(item)
-    if (mediaUrl) return buildMediaCard(item, mediaUrl, isAudio ? 'audio' : 'video')
-    /**
-     * 不可预览：与"资源走丢"同一条口径 —— 显示异常关着就整条不画（登记已摘，避免补漏
-     * 又把它画回来）；开着才画一张中性占位卡。
-     */
-    if (item.id) droppedHistoryIds.add(item.id)
-    if (s.histShowError) return buildErrorCard(item, { missingResource: true })
-    const skip = document.createElement('div')
-    skip.className = 'hist-card hist-card--skip'
-    skip.dataset.histSkip = '1'
-    return skip
-  }
-
-  if (url) {
-    // 图片卡：优先用历史里记下的真实宽高（不用等图加载，卡片不会先闪 1:1 再跳）；
-    // 早期记录没有 media 时退回 1/1 骨架，等 onload 再按真实宽高比重设。
-    const known = !!(item.media?.width && item.media?.height)
-    card.innerHTML =
-      '<div class="hist-card-media" style="aspect-ratio:' + (known ? mediaAspect(item, 1) : '1/1') + '">' +
-      '<img src="' + esc(url) + '" alt="" loading="lazy" />' +
-      (known ? '' : '<div class="hist-card-skeleton"><span class="hist-card-pulse"></span></div>') +
-      '</div>'
-    const mediaEl = card.querySelector('.hist-card-media') as HTMLElement
-    mediaEl.appendChild(buildDetailButton(item))
-    const img = card.querySelector('img')!
-    const media = card.querySelector('.hist-card-media') as HTMLElement
-    img.addEventListener('load', () => {
-      if (img.naturalWidth && img.naturalHeight) {
-        media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
-        card.querySelector('.hist-card-skeleton')?.remove()
-        // 老记录没有 media 元数据时，用实测尺寸补到**卡外的信息行**
-        if (!item.media) item.media = {}
-        if (!item.media.width) item.media.width = img.naturalWidth
-        if (!item.media.height) item.media.height = img.naturalHeight
-        const facts = card.querySelector('.hist-card-facts')
-        if (facts) facts.replaceWith(buildFactsLine(item))
-        scheduleImageRelayout()
-      }
-    })
-    img.addEventListener('error', () => {
-      // 裂图：记录有产物、文件却被清理/换地址了 —— 同样归入异常，
-      // 开关关着时整条隐藏，开着时给中性「资源走丢」卡（不占用红色的"生成失败"）。
-      showBrokenResourceCard(card, item)
-    })
-    /**
-     * 加载超时兜底（用户口径 2026-10-28：截图里出现一块空白卡片，拖缩放才消失）。
-     *
-     * 有些地址既不会触发 error、也不会 load（连接挂住 / 被浏览器静默丢弃 / 缓存层返回空），
-     * 卡片就一直是"有格子没画面"的白块。12 秒还没拿到尺寸就按裂图处理：
-     * 归入「显示异常」（开关关着整条隐藏）—— 不留白格，也不误留一幅假图。
-     */
-    window.setTimeout(() => {
-      if (!img.isConnected) return
-      if (img.complete && img.naturalWidth > 0) return
-      if (s.histShowError) return // 用户要看异常时，交给 error 回调统一成中性卡
-      showBrokenResourceCard(card, item)
-    }, 12000)
-    card.addEventListener('click', () => onCardClick(item))
-  } else {
-    card.appendChild(buildErrorCard(item))
-  }
-  if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
-  card.classList.toggle('hist-card--batch', s.histBatchMode)
-  return finishCard(card, item)
-
-}
-
+const { buildMediaCard, createMasonryElement } = createHistoryCard({
+  s,
+  thumbOf,
+  previewableUrl,
+  openHistoryItem,
+  droppedHistoryIds,
+  uiComponentOf,
+  finishCard,
+  buildErrorCard,
+  buildDetailButton,
+  buildFactsLine,
+  buildCheckOverlay,
+  showBrokenResourceCard,
+  onCardClick,
+  onAudioCardClick,
+  scheduleImageRelayout,
+  wallApps: { appsOfWall, appOfCard, MOUNTED_WALL },
+})
 /**
  * 完整重建瀑布流（**只在没有可复用墙时**用：首次打开 / 数据整表换掉 / 没有缓存）。
  *
@@ -750,7 +329,7 @@ function rebuildMasonry(): void {
   const { columnWidth } = calcColumns(containerWidth)
   lastColumnWidth = columnWidth
   container.innerHTML = ''
-  mountedWallKey = ''
+  mountedWallKey.value = ''
 
   const items = ui.histVisible.value.slice(0, renderedCount.value)
   for (const item of items) {
@@ -764,7 +343,7 @@ function rebuildMasonry(): void {
       rebuilding = false
       // 记**墙的 key**（含显示开关）：记成数据签名的话，开关一开（key 多一位 e1）
       // 每次数据更新都会被判成「换了筛选」，整面墙反复重建 —— 视频一直重载。
-      mountedWallKey = historyWallKey()
+      mountedWallKey.value = historyWallKey()
       observeLastItem()
       // 整墙重建后哨兵元素可能被换掉/才刚出现：统一在这里补挂一次观察器
       setupLoadSentinel()
@@ -873,7 +452,7 @@ function scheduleImageRelayout(): void {
 function stashCurrentWall(): void {
   const container = masonryEl.value
   if (!container) return
-  const key = mountedWallKey || historyWallKey()
+  const key = mountedWallKey.value || historyWallKey()
   if (!container.querySelector('.' + ITEM_CLASS)) return
   const wall = container.cloneNode(false) as HTMLElement
   wall.removeAttribute('id')
@@ -892,7 +471,7 @@ function stashCurrentWall(): void {
   // DOM 搬进缓存快照了，但应用还活着（有意：切回来不用重建）。登记项跟着换名，
   // 这样这面墙被 LRU 逐出时能精确卸载它自己的播放器。
   rekeyWallApps(MOUNTED_WALL, key)
-  mountedWallKey = ''
+  mountedWallKey.value = ''
   masonry.destroy()
 }
 
@@ -920,13 +499,13 @@ function switchWall(): void {
     })
     return
   }
-  if (mountedWallKey === key && container.querySelector('.' + ITEM_CLASS)) {
+  if (mountedWallKey.value === key && container.querySelector('.' + ITEM_CLASS)) {
     // 已经是这面墙：只补挂观察器（数据可能刚变过）
     masonry.layout()
     setupLoadSentinel()
     return
   }
-  if (mountedWallKey && mountedWallKey !== key) stashCurrentWall()
+  if (mountedWallKey.value && mountedWallKey.value !== key) stashCurrentWall()
 
   const cached = wallCache.get(key)
   const containerWidth = container.clientWidth
@@ -939,7 +518,7 @@ function switchWall(): void {
     rekeyWallApps(key, MOUNTED_WALL)
     renderedCount.value = cached.count
     lastColumnWidth = cached.columnWidth
-    mountedWallKey = key
+    mountedWallKey.value = key
     /**
      * 列宽变了（拖过缩放滑杆 / 容器宽度变了）也**只改宽度**，不重建卡片：
      * 重建就等于把视频重新加载一遍。 */
@@ -958,7 +537,7 @@ function switchWall(): void {
     return
   }
   // 没有可复用墙（或列宽变了）：这张卡从头建，属于必要的一次
-  mountedWallKey = ''
+  mountedWallKey.value = ''
   rebuildMasonry()
 }
 
@@ -1038,7 +617,7 @@ watch(() => s.histDataVersion, async () => {
    * 是否切了页签：除了筛选 watch 的标记，再用"墙上记的键 ≠ 当前键"兜底。
    * 两个 watch 的触发顺序不保证，只看标记会在某些时序下把新页签当成追加。
    */
-  const switching = filterSwitching || (mountedWallKey !== '' && mountedWallKey !== historyWallKey())
+  const switching = filterSwitching || (mountedWallKey.value !== '' && mountedWallKey.value !== historyWallKey())
   if (switching) {
     filterSwitching = false
   }
@@ -1067,7 +646,7 @@ watch(() => s.histDataVersion, async () => {
    * 必须在"切页签/回填"判断之前识别，否则这一拍只切墙、新卡全丢。
    */
   await nextTick()
-  const wallReadyForAppend = !!masonry.instance.value && mountedWallKey === historyWallKey() && !switching
+  const wallReadyForAppend = !!masonry.instance.value && mountedWallKey.value === historyWallKey() && !switching
   if (wallReadyForAppend && renderedCount.value < len) {
     const from = renderedCount.value
     renderedCount.value = Math.min(from + BATCH_SIZE, len)
@@ -1198,7 +777,7 @@ onBeforeUnmount(() => {
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
   <AppDialog :model-value="s.historyOpen" :close-on-overlay="false" :with-overlay="false" width="min(90vw, 1600px)" height="calc(100vh - 160px)"
     radius="24px" @update:model-value="!$event && (s.historyOpen = false)">
-    <div class="flex flex-none items-center justify-between gap-4 px-6 pb-5 pt-6">
+    <div class="flex flex-none items-center justify-between gap-4 px-6 pb-3 pt-4">
       <span class="text-lg font-medium leading-[26px] text-ink">生成历史</span>
       <div class="flex items-center gap-4">
         <div class="hist-zoom-wrap flex items-center gap-2 rounded-lg bg-veil p-2" role="group" aria-label="缩放">

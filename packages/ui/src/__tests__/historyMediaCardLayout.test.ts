@@ -19,7 +19,11 @@ const videoPreview = readFileSync(
   new URL('../../../plugins/plugin-node-video/src/VideoPreview.vue', import.meta.url),
   'utf-8',
 )
-const modalsArea = readSfcWithStyles(fileURLToPath(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url)))
+const modalsArea = [
+  readSfcWithStyles(fileURLToPath(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url))),
+  // 卡片 DOM 与墙缓存拆到同目录后，源码契约测试要把它们一起读进来
+  readFileSync(new URL('../components/areas/modals-area/createHistoryCard.ts', import.meta.url), 'utf-8'),
+].join('\n')
 const historyCardText = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/areas/modals-area/historyCardText.ts'),
   'utf-8',
@@ -491,13 +495,14 @@ describe('批量勾选钮样式对动态卡片生效', () => {
   })
 
   it('音频卡普通模式点卡片不打开全屏（点击/拖动交给波形 seek）', () => {
-    const fn = modalsArea.slice(
-      modalsArea.indexOf('function onAudioCardClick'),
-      modalsArea.indexOf('/** 历史条目类型'),
-    )
-    expect(fn, '缺少音频卡专用点击处理').toMatch(/function onAudioCardClick/)
-    expect(fn, '普通模式又打开了全屏预览').not.toMatch(/openHistoryItem/)
-    expect(fn, '批量模式没有切换选中').toMatch(/histBatchMode[\s\S]{0,120}toggleHistSelected/)
+    // 拆分后 onAudioCardClick 后面直接跟 createHistoryCard 调用；按函数自身结尾截取
+    const start = modalsArea.indexOf('function onAudioCardClick')
+    const audioHandler = start < 0
+      ? ''
+      : modalsArea.slice(start, modalsArea.indexOf('\n}\n', start) + 3)
+    expect(audioHandler, '缺少音频卡专用点击处理').toMatch(/function onAudioCardClick/)
+    expect(audioHandler, '普通模式又打开了全屏预览').not.toMatch(/openHistoryItem/)
+    expect(audioHandler, '批量模式没有切换选中').toMatch(/histBatchMode[\s\S]{0,120}toggleHistSelected/)
     const media = modalsArea.slice(
       modalsArea.indexOf('function buildMediaCard'),
       modalsArea.indexOf('/** 生成瀑布流里一张卡'),

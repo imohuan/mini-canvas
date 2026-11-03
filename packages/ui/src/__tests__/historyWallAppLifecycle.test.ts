@@ -17,7 +17,11 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
+const modalsArea = [
+  readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8'),
+  readFileSync(new URL('../components/areas/modals-area/useHistoryWallApps.ts', import.meta.url), 'utf-8'),
+  readFileSync(new URL('../components/areas/modals-area/createHistoryCard.ts', import.meta.url), 'utf-8'),
+].join('\n')
 
 /** 取一段源码（函数或 watch 块），找不到就返回空串让断言报出来 */
 function slice(start: string, end: string): string {

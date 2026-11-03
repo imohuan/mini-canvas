@@ -23,9 +23,9 @@ describe('历史墙：数据签名 vs 墙 key', () => {
 
   it('挂载中/备份的墙 key 记的是 historyWallKey，不是数据签名', () => {
     expect(src, 'mountedWallKey 又记成数据签名了（开关一开就会反复整墙重建）')
-      .not.toMatch(/mountedWallKey = s\.histSignature/)
-    expect(src, '重建后没有记墙 key').toMatch(/mountedWallKey = historyWallKey\(\)/)
-    expect(src, '备份时没有记墙 key').toMatch(/const key = mountedWallKey \|\| historyWallKey\(\)/)
+      .not.toMatch(/mountedWallKey(\.value)? = s\.histSignature/)
+    expect(src, '重建后没有记墙 key').toMatch(/mountedWallKey(\.value)? = historyWallKey\(\)/)
+    expect(src, '备份时没有记墙 key').toMatch(/const key = mountedWallKey(\.value)? \|\| historyWallKey\(\)/)
   })
 
   it('判断「数据换了」时比数据签名（墙 key 多一维，拿它比永远不相等）', () => {
