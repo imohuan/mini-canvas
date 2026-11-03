@@ -39,6 +39,16 @@ describe('ScrollPane 转发内部滚动层的 scroll 事件', () => {
     expect(scrollPane, 'rootRef 不能挂在组件上').not.toMatch(/<ScrollArea[^>]*ref="rootRef"/)
     expect(scrollPane, '找不到原生 root div').toMatch(/<div ref="rootRef"/)
   })
+
+  /**
+   * 问题 17：滚动条必须占独立通道，不能像 ScrollArea 自绘滑块那样压在行高亮上。
+   * 判据是「原生滚动 + scrollbar-gutter: stable」，两者缺一都会退回覆盖式滚动条。
+   */
+  it('滚动层是原生 div，并给滚动条留独立通道', () => {
+    expect(scrollPane, 'ScrollPane 又改回 ScrollArea 覆盖式滑块了').not.toMatch(/<ScrollArea/)
+    expect(scrollPane, '缺少 scrollbar-gutter: stable（滚动条会压住内容）').toMatch(/scrollbar-gutter:\s*stable/)
+    expect(scrollPaneUtil, '滚动层查找认不出新的原生滚动层').toMatch(/data-scroll-pane-view/)
+  })
 })
 
 describe('生成历史的「加载更多」改走哨兵元素（用户口径 2026-10-15：禁止滚动触发）', () => {

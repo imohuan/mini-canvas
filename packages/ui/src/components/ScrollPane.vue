@@ -1,20 +1,21 @@
 <script setup lang="ts">
 /**
- * ScrollPane —— 应用内的滚动容器，底座是组件库的 shadcn ScrollArea。
+ * ScrollPane —— 应用内的滚动容器。
  *
- * 为什么还要这一层（而不是各处直接写 ScrollArea）：
- * 1. 滚动事件要转发：Vue 会把组件上的 @scroll 当自定义事件消费；ScrollArea 没声明它，
- *    外层的触底加载 / 滚动位置记忆就永远收不到。这里显式转发内部 viewport 的原生 scroll。
- * 2. 滚动入口要能拿到：生成历史要读写 scrollTop（切页签恢复位置），需要真实的滚动元素。
- * 3. 给一个稳定的 data 标记，调用方不必依赖 shadcn 内部的 DOM 结构。
+ * 底座是原生溢出的 div，不再是 shadcn ScrollArea（2026-11-03 改，问题 17）：
+ * ScrollArea 的滚动条是 reka 自绘的绝对定位滑块，覆盖在内容上面，
+ * 行选中高亮 / 卡片边缘会被压住；用户要的是浏览器原生那样单独占一条通道。
+ * 原生滚动条 + scrollbar-gutter: stable 正好给出这条通道，样式由全局
+ * 滚动条规则统一（6px、低对比）。
+ *
+ * 这一层仍要保留，因为调用方需要三件事：
+ * 1. 滚动事件转发：Vue 会把组件上的 @scroll 当自定义事件，必须先声明再 emit；
+ * 2. 真实滚动元素：生成历史要读写 scrollTop（切页签恢复位置）；
+ * 3. 稳定的 data 标记，调用方不依赖内部 DOM。
  *
  * 它不含任何业务样式：尺寸 / padding 仍由调用方的 class 与 body-class 决定。
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
-import { SCROLL_VIEWPORT_SELECTOR } from './scrollPane'
-
-const ScrollArea = useUiComponent('ScrollArea')
 
 withDefaults(
   defineProps<{
@@ -28,18 +29,17 @@ withDefaults(
 
 const emit = defineEmits<{ (e: 'scroll', payload: Event): void }>()
 
-/** 外层普通 div：ScrollArea 组件挂在里面，DOM 查询从这层向下找，不碰组件实例。 */
+/** 外层普通 div：模板 ref 拿真实 DOM。 */
 const rootRef = ref<HTMLElement | null>(null)
-/** 真正的滚动层（shadcn ScrollArea 的 viewport） */
+/** 真正的滚动层：就是上面这层原生 div，供 scrollTop 读写与触底观察。 */
 const viewport = ref<HTMLElement | null>(null)
 
 function syncViewport(): void {
-  const el = rootRef.value?.querySelector<HTMLElement>(SCROLL_VIEWPORT_SELECTOR) ?? null
+  const el = rootRef.value ?? null
   if (el === viewport.value) return
   viewport.value?.removeEventListener('scroll', onScroll)
   viewport.value = el
   if (!el) return
-  el.dataset.scrollPaneView = ''
   el.addEventListener('scroll', onScroll, { passive: true })
 }
 
@@ -51,7 +51,7 @@ onBeforeUnmount(() => {
   viewport.value?.removeEventListener('scroll', onScroll)
 })
 
-// ScrollArea 的内容是插槽里动态挂的：viewport 首帧就有，但热更新 / 重新挂载后要重接一次。
+// 热更新 / 重新挂载后要重接一次监听。
 watch(rootRef, (el) => {
   if (el) syncViewport()
 }, { flush: 'post' })
@@ -69,17 +69,11 @@ defineExpose({ scrollElement })
 </script>
 
 <template>
-  <!--
-    外层 div 只用来拿真实 DOM。以前 ref 放在 ScrollArea 组件上，拿到的是组件实例，
-    实例没有 querySelector，于是打开 Agent 面板就抛 `querySelector is not a function`。
-    横向滚动条由 ScrollArea 自己按 overflow 方向显示，不再单独取 ScrollBar。
-  -->
-  <div ref="rootRef" class="scroll-pane" :class="'scroll-pane--' + direction">
-    <ScrollArea class="size-full">
-      <div :class="bodyClass" data-scroll-pane-body>
-        <slot />
-      </div>
-    </ScrollArea>
+  <!-- 根节点自己就是滚动层：原生滚动条走全局样式，并靠 scrollbar-gutter 占独立通道。 -->
+  <div ref="rootRef" class="scroll-pane" :class="'scroll-pane--' + direction" tabindex="0" data-scroll-pane-view>
+    <div :class="bodyClass" data-scroll-pane-body>
+      <slot />
+    </div>
   </div>
 </template>
 
@@ -90,22 +84,25 @@ defineExpose({ scrollElement })
   overflow: hidden;
 }
 
-.scroll-pane :deep([data-slot='scroll-area']) {
-  height: 100%;
-}
-
-.scroll-pane--x :deep([data-slot='scroll-area-viewport']) {
+/*
+ * 滚动条独立通道（问题 17）：原生滚动条按浏览器规则占布局宽度，
+ * 不再像 ScrollArea 滑块那样压在行高亮上。细度 / 颜色来自 app.css 全局规则。
+ */
+.scroll-pane--x {
   overflow-x: auto;
   overflow-y: hidden;
+  scrollbar-gutter: stable;
 }
 
-.scroll-pane--y :deep([data-slot='scroll-area-viewport']) {
+.scroll-pane--y {
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
-.scroll-pane--both :deep([data-slot='scroll-area-viewport']) {
+.scroll-pane--both {
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 </style>
 

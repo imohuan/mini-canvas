@@ -8,8 +8,12 @@
  * 这里集中一处，将来结构变了只改这里。
  */
 
-/** shadcn ScrollArea 的滚动视口选择器（内部实现，只在本文件出现） */
-export const SCROLL_VIEWPORT_SELECTOR = '[data-slot="scroll-area-viewport"]'
+/**
+ * 滚动层选择器（问题 17 起，ScrollPane 自己就是滚动层）。
+ * 仍保留 shadcn ScrollArea 的旧选择器做兼容：Agent 面板的 AgentScrollArea 还在用组件库版本。
+ */
+export const SCROLL_VIEWPORT_SELECTOR =
+  '[data-scroll-pane-view], [data-slot="scroll-area-viewport"]'
 
 /** 从某个后代元素往上找 ScrollPane 的真实滚动层；不在 ScrollPane 里则返回 null */
 export function scrollViewportOf(start: Element | null | undefined): HTMLElement | null {
