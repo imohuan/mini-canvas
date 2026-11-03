@@ -12,12 +12,13 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const host = readFileSync(path.join(__dirname, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
 const controller = readFileSync(path.join(__dirname, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
+const composer = readSfcWithStyles(path.join(__dirname, '../components/agent-conversation/AgentComposer.vue'))
 
 describe('上下文统计行', () => {
-const composer = readFileSync(path.join(__dirname, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
   it('恢复到发送键左侧：在 .ac-toolbar 里、发送按钮之前（用户口径 2026-10-11 的截图反馈）', () => {
     const toolbar = composer.indexOf('class="ac-toolbar"')
     const wrap = composer.indexOf('class="ac-ctxwrap"')

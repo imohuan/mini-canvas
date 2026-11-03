@@ -14,12 +14,13 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 import { isSubmitShortcut, shouldDeferEnterToMenu } from '../composerKeys'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 const conversation = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
-const composer = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const composer = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
 const enter = (mods: Record<string, boolean> = {}) => ({
   key: 'Enter',
   ctrlKey: false,

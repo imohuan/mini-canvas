@@ -1,0 +1,148 @@
+/* 编辑器最小高度：库默认 120px（.prose-mirror-editor .ProseMirror 与它的一层 wrapper），
+   照参考页实测应是 64px（min-height 4rem）—— 不压下来的话整块输入区比目标高 56px。
+   只作用在 Agent 面板内（都挂在 .ac-editor 下），不影响底栏等其它调用方。 */
+.ac-editor .prose-mirror-editor .ProseMirror,
+.ac-editor .prose-mirror-editor>div:first-child {
+  min-height: 64px;
+}
+
+.prose-mirror-editor .ac-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* 名字可能非常长（技能 / MCP / 节点名都没有长度上限）：限宽收住，
+     否则一颗标签就能把整行撑出输入框（用户口径 2026-10-11）。
+     200px 的取法：一颗标签最多占输入框（约 364px）一半多点，
+     同一行还能并排放下第二颗；再宽就在窄面板里顶出去了。 */
+  max-width: 200px;
+  height: 22px;
+  padding: 0 6px 0 4px;
+  margin: 0 2px;
+  border-radius: 6px;
+  /* 与已发送标签同款底色（--ui-hover-strong）：亮暗各一档，比旧的 --ui-hover-soft 明显（用户口径 2026-10-06） */
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.10));
+  vertical-align: bottom;
+  user-select: none;
+  cursor: pointer;
+}
+
+/* 编辑器给资源节点默认画一条下划线（.resource-node 的 border-bottom），那是给"文字引用"用的。
+   我们的标签自带底色块，再叠一条下划线就成了"带线的胶囊"（实测参考图里没有线）。
+   用 .resource-node 一起限定，靠更高的选择器权重压过后加载的库样式。 */
+.prose-mirror-editor .ac-tag.resource-node {
+  border-bottom: 0;
+  padding: 0 6px 0 4px;
+  height: 22px;
+}
+
+.prose-mirror-editor .ac-tag .ac-tag-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.prose-mirror-editor .ac-tag .ac-tag-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 图标固定、名字让位：`min-width: 0` 不能省 —— flex 子项的默认 min-width 是「内容宽」，
+   只写 max-width 的话它会把标签顶回去，省略号永远不出现。 */
+.prose-mirror-editor .ac-tag .ac-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.prose-mirror-editor .ProseMirror-selectednode.ac-tag,
+.prose-mirror-editor .ac-tag.resource-node-selected {
+  background: var(--ui-accent, #0891b2);
+}
+
+.prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-label,
+.prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-label {
+  color: var(--ui-on-accent, #fff);
+}
+
+.prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-icon,
+.prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-icon {
+  color: var(--ui-on-accent, #fff);
+}
+
+/* @ 菜单里的行（富行外观与工具栏下拉保持一致） */
+/* @ 行：默认只显示**名称**一行；hover / 键盘选中时描述行展开（多出一行，行高自然撑开）。
+   描述不再常显 —— 常显会把每行都拉成两行，列表看着发灰又挤（用户口径）。 */
+.mention-menu .ac-mrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mention-menu .ac-mrow-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.mention-menu .ac-mrow-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mention-menu .ac-mrow-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 名字超长时单行省略：不省略的话行会被名字撑宽（浮层跟着变长），
+   而在窄屏上触发翻边后名字又会把描述行挤没（用户口径 2026-10-11）。 */
+.mention-menu .ac-mrow-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* 描述行：默认高度收起（0），hover/active 展开 —— 行高跟着**平滑过渡**，不是啪一下跳出来。
+   为什么不用 display:none：display 不参与过渡（none ↔ block 之间没有中间态），
+   展开只能是一瞬间的跳变（用户实测报的：「高度变化很突兀」）。
+   改成 max-height + opacity 就可以插值；overflow:hidden 让文字在展开过程中被裁切着露出来。 */
+.mention-menu .ac-mrow-hint {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--ui-ink-dim, #919191);
+  transition: max-height 0.18s ease, opacity 0.18s ease;
+}
+
+.mention-menu .menu-item:hover .ac-mrow-hint,
+.mention-menu .menu-item.active .ac-mrow-hint {
+  max-height: 16px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mention-menu .ac-mrow-hint {
+    transition: none;
+  }
+}

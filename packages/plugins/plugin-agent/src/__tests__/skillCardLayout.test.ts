@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const SRC = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+import { readSfcWithStyles } from './readSfcWithStyles'
+const SRC = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
 describe('技能面板卡片', () => {
   it('卡片外壳不是 shadcn Button（避免被按钮尺寸规则压扁）', () => {
     expect(SRC).not.toMatch(/<Button[^>]*class="ac-skill-card"/)

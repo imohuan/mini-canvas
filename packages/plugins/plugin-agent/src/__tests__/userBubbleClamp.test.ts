@@ -12,9 +12,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
 const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 describe('用户气泡高度夹层与展开按钮', () => {
   it('正文有测量壳：ref 回调按消息 id 注册，夹层类由「超出且未展开」驱动', () => {

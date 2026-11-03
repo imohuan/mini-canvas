@@ -11,10 +11,11 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 import { isSubmitShortcut, normalizeSubmitKeyMode, SUBMIT_KEY_MODES, loadSubmitKeyMode } from '../composerKeys'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const conversation = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const conversation = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
 const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 /** 造一个按键事件：只给判定用到的字段，够纯函数读就行 */
 const key = (k: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; isComposing: boolean }> = {}) => ({

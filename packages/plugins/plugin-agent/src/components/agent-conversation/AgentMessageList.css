@@ -1,0 +1,970 @@
+/* —— 以下样式只服务本组件模板（消息流）。它们原先错放在同级 AgentComposer 的
+   scoped 样式里：scoped 不会跨兄弟组件，那些规则对这里的节点一律不生效 —— 空态、
+   模型分割线、换行、编辑标记、停止/错误提示都会掉样式。拆分别把同一批规则再搬回去。 */
+
+/* —— 顶部「更早对话」哨兵（对话分页，用户口径 2026-10-15）——
+   颜色/字号按 ui-style-guide 的次要文本口径；它只有内容流顶部一小条，不抢视线。 */
+.ac-earlier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 8px;
+  padding: 6px 0 2px;
+  font-size: 11px;
+  color: var(--ui-ink-mute, #9aa3af);
+}
+.ac-earlier-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ac-earlier-hint {
+  user-select: none;
+}
+
+/* —— 空态（照参考图）—— */
+.ac-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding-top: 32px;
+}
+.ac-welcome-orb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 999px;
+  /* 主题色白名单: 空态那颗渐变球是品牌装饰（照参考图的三段青渐变），不是主题 UI 色 */
+  background: linear-gradient(160deg, #7dd3fc, #0891b2 55%, #0e7490);
+  /* 主题色白名单: 同上（品牌装饰的辉光） */
+  box-shadow: 0 0 30px rgb(8 145 178 / 0.45);
+}
+.ac-welcome-title {
+  margin: 0;
+  padding: 0 6px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* —— 模型分割线（用户口径 2026-10-11）——
+   切换模型 = 换一条会话（SDK 的模型钉在会话上），所以画一条横线把"换脑子"这件事说清楚。 */
+.ac-model-split {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 间距只用 4/6/8/10/12 档（ui-style-guide §2.4） */
+  margin: 4px 0 12px;
+}
+.ac-model-split-line {
+  flex: 1;
+  min-width: 8px;
+  height: 1px;
+  background: var(--ui-line, #363636);
+}
+.ac-model-split-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 模型 id 没有长度上限：标签可缩、名字单行省略，极端窄面板里也不越界 */
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink-dim, #919191);
+  font-size: 11px;
+  line-height: 18px;
+}
+.ac-model-split-name {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-user-text {
+  white-space: pre-wrap;
+}
+
+.ac-editing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-end;
+  height: 20px;
+  margin-top: 4px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent);
+  color: var(--ui-warn, #e3a25f);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ac-stopped {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--ui-danger, #ef4444);
+}
+
+.ac-notice {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ui-danger, #ef4444);
+}
+
+/* 间距统一交给 .ac-welcome 的 gap（照参考页：整块 gap 20px），这里不再单独留 margin */
+
+.ac-hint-card {
+  position: relative;
+  width: 100%;
+  padding: 10px 28px 10px 12px;
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-hint-text {
+  margin: 0;
+}
+
+.ac-hint-text strong {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-hint-close {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-hint-close:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-suggestions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 建议行：间距 10 / 正文 14px，文字用 60% 白；高度、圆角、内边距、悬停底色由 Button 提供 */
+
+.ac-suggestion {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 14px;
+  text-align: left;
+}
+
+.ac-suggestion > span:not(.ac-suggestion-arrow) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-suggestion .ac-suggestion-arrow {
+  flex: none;
+}
+
+.ac-suggestion-arrow {
+  color: var(--ui-ink-dim, #919191);
+}
+
+/* —— 消息（照参考图：用户靠右灰底、助手靠左无底、都无头像、正文 14px）—— */
+
+.ac-msg {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+/* 用户消息间距收紧（用户口径 2026-10-16）：user 气泡自带 actions 行（时间/复制/编辑），
+   再叠 16px 下间距，连续气泡之间空得能塞下一条消息 —— 用户要求缩小。
+   助手消息保持 16px（阅读节奏不变）。 */
+
+.ac-msg.user {
+  margin-bottom: 4px;
+}
+
+/* —— 压缩提示 / 错误条（用户口径 2026-10-11）——
+   两条都是"刚发生的事"的常驻交代，挂在消息流末尾。错误条用危险色，压缩提示用中性色。 */
+
+.ac-compact-note,
+.ac-error-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ac-compact-note {
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-error-bar {
+  background: color-mix(in srgb, var(--ui-danger, #ef4444) 12%, transparent);
+  color: var(--ui-danger, #ef4444);
+}
+
+.ac-error-bar-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.ac-error-bar-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.ac-note-x {
+  flex: none;
+  margin-left: auto;
+  margin-top: -6px;
+  margin-bottom: -6px;
+  color: inherit;
+}
+
+.ac-msg.user {
+  justify-content: flex-end;
+}
+
+.ac-msg.assistant {
+  justify-content: flex-start;
+}
+
+.ac-bubble {
+  min-width: 0;
+}
+
+/* 助手消息占满整行：之前留了 84px 右内边距（照参考图早期版本量到的"正文右缘距面板 84px"），
+   但那是把面板宽度量错造成的空档 —— 现在内容区左右各 16px 已经给足呼吸，
+   再留 84px 就变成右边一条明显空白（用户实测点名）。 */
+
+.ac-msg.assistant .ac-bubble {
+  width: 100%;
+}
+
+.ac-msg.user .ac-bubble {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--ui-hover-soft, rgb(255 255 255 / 0.05));
+}
+
+/* 用户消息正文：文字与标签在同一行内自然换行 */
+
+.ac-user-line {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+  word-break: break-word;
+}
+
+/* 「前 8 行」夹层（用户口径 2026-10-15）：行高 24px × 8 = 192px。
+   **常驻**而不是"判定超出后才挂" —— 挂上之前元素没被夹住，
+   scrollHeight == clientHeight，超出判定恒为否，折叠永远不生效（真机踩到的鸡生蛋）。
+   常驻后正文元素就是测量体：scrollHeight 是完整内容高、clientHeight 是被夹住的高，
+   差值超过 1px 即"超出"，左下角给「展开」。没超出的消息 max-height 不影响显示。 */
+
+.ac-user-line {
+  max-height: 192px;
+  overflow: hidden;
+}
+
+.ac-user-line.is-open {
+  max-height: none;
+}
+
+/* 展开 / 收起：文字 + 箭头，放气泡左下角。圆角 6、12px/600，走样式表的「文本按钮」档。 */
+
+.ac-user-toggle {
+  gap: 4px;
+  align-self: flex-start;
+  margin: 6px 0 0;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+/* 操作行在气泡外（右下角、贴气泡下缘）：.ac-msg 是 flex 容器，操作行要跟气泡组成一列 */
+
+.ac-msg.user {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6）。
+   之所以单独一套类名：输入框里那颗是 ProseMirror 直接造 DOM 的（.ac-tag），
+   这颗是 Vue 模板渲染的（.ac-sent-tag）—— 两边选择器作用域不同，但视觉值必须一致。
+   底色用 --ui-hover-strong（用户口径 2026-10-06：原来太淡、不好区分）：它亮暗各一档、
+   比旧值 --ui-hover-soft 深两三倍；而**旧值正是用户气泡本身的底色**，标签与气泡同色
+   所以糊在一起，加深后才分得开。 */
+
+.ac-sent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  height: 22px;
+  margin: 0 2px;
+  padding: 0 6px 0 4px;
+  border-radius: 6px;
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.10));
+  vertical-align: bottom;
+}
+
+/* 可聚焦的节点标签：给 hover 态与 focus 环（用户口径：对话里的标签也要能点开聚焦） */
+
+.ac-sent-tag.is-clickable {
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.ac-sent-tag.is-clickable:hover {
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.16));
+}
+
+.ac-sent-tag.is-clickable:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+.ac-sent-tag-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-sent-tag-icon :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+
+.ac-sent-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* 目标行 / 队列行是**单行 dense 布局**（min-height 36）：标签收小一点，别把行撑高 */
+
+.ac-sent-tag.is-compact {
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
+/* 用户消息 hover 操作条（时间 · 复制 · 编辑）：右下角浮出，不占布局空间。
+   位置参照参考图 2 —— 时间在消息气泡外右下角，按钮跟在旁边。 */
+
+.ac-msg {
+  position: relative;
+}
+
+.ac-msg.user .ac-bubble {
+  position: relative;
+}
+
+.ac-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: flex-end;
+  height: 22px;
+  margin-top: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.ac-msg.user:hover .ac-msg-actions,
+.ac-msg-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ac-msg-time {
+  font-size: 11px;
+  color: var(--ui-ink-dim, #919191);
+  margin-right: 4px;
+}
+
+.ac-msg-btn {
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-msg-btn .is-ok {
+  color: var(--ui-accent, #0891b2);
+}
+
+/* 「正在编辑」：消息高亮（琥珀警示语义，与语义色表一致）+ 徽标 + 输入框联动标记。
+   高亮只描边不填底，避免盖住用户消息气泡本来的层次。 */
+
+.ac-msg.is-editing .ac-bubble {
+  box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f);
+  border-radius: 12px;
+}
+
+.ac-bubble :deep(.md) {
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-bubble :deep(.md .md-p) {
+  margin: 0 0 10px;
+}
+
+.ac-bubble :deep(.md .md-p:last-child) {
+  margin-bottom: 0;
+}
+
+.ac-bubble :deep(.md .md-h) {
+  margin: 14px 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ac-bubble :deep(.md .md-list) {
+  margin: 6px 0 10px;
+  padding-left: 24px;
+  list-style: disc outside;
+}
+
+.ac-bubble :deep(.md .md-list li) {
+  margin: 4px 0;
+}
+
+.ac-think-toggle {
+  gap: 4px;
+  margin-bottom: 6px;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+}
+
+/* 原位思考折叠块（用户口径 2026-10-16）：每段思考独立成块、按发生位置展示 */
+
+.ac-think-inline {
+  margin: 2px 0 8px;
+}
+
+.ac-think {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  color: var(--ui-ink-dim, #919191);
+  font-family: inherit;
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
+}
+
+.ac-tool-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-tool-line code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+}
+
+.ac-tool-line-out {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-tool-group {
+  margin: 6px 0;
+}
+
+.ac-tg-toggle {
+  gap: 4px;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+}
+
+.ac-tg-body {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--ui-line, #363636);
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
+}
+
+/* 可折叠工具行（单工具与组内工具同一套）：收起一行，展开看输入/输出（用户口径 2026-10-06）。
+   展开块 max-width 到气泡全宽、pre 自身滚动 —— 「提供最大的范围 + 滚动条」。 */
+
+.ac-tool-fold {
+  margin: 4px 0;
+}
+
+/* 默认工具行（用户口径 2026-10-08 定稿）：悬停**不加任何背景**，只让左侧折叠箭头变亮。
+   早先悬停给整行加 rgba(255,255,255,.06) 的底色 —— 用户明确不要背景条。 */
+
+.ac-tf-toggle {
+  gap: 6px;
+  width: 100%;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+  text-align: left;
+}
+
+.ac-tf-caret {
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-tf-toggle:hover .ac-tf-caret {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* 折叠箭头动画（用户口径 2026-10-07）：旋转要有过渡，不是啪一下跳 */
+
+.ac-tf-caret {
+  transition: transform 0.18s ease;
+}
+
+.ac-tf-caret.is-open {
+  transform: rotate(90deg);
+}
+
+.ac-tf-toggle code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  /* 工具名没有长度上限（MCP 名可能很长）：限宽单行省略，
+     否则整条折叠行会被它撑出气泡（极端长文本复查，2026-10-22）。 */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-tf-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.ac-tf-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
+}
+
+.ac-tf-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ac-tf-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-tf-body .ac-tool-args,
+.ac-tf-body .ac-tool-out {
+  margin: 0;
+  max-width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 外层已经有统一上限并在滚动：内层 pre 别再叠一层小滚动框，
+   否则同一份输入 / 输出会出现两个滚动条（用户口径 2026-10-25）。 */
+
+.ac-tf-body .ac-tool-args,
+.ac-tf-body .ac-tool-out,
+.ac-tf-body :deep(.tvc-pre),
+.ac-tf-body :deep(.tvb-pre) {
+  max-height: none;
+}
+
+.ac-tool-card {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+/* 分组里的**卡片**沿用同一只卡片壳（用户口径 2026-10-07：分界线要好找）；
+   收起状态的折叠行不加壳（用户口径 2026-10-08）：单工具长什么样，组里就长什么样 ——
+   早先的规则把每条折叠行也包了灰底 + 8px 内边距，收起行被灰底裹住、上下很空。 */
+
+.ac-tg-body .ac-tool-card {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+.ac-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ac-tool-args,
+.ac-tool-out {
+  margin: 6px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--ui-ink-dim, #919191);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.ac-approval {
+  margin: 8px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-warn, #b45309);
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+.ac-approval-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+/* 审批标题带工具名（MCP 名可能很长）：单行省略，别把卡片撑宽 */
+
+.ac-approval-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-approval-head svg {
+  flex: none;
+}
+
+.ac-approval-args {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ui-code-bg, rgb(0 0 0 / 0.25));
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.ac-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ac-spin {
+  animation: ac-rotate 0.9s linear infinite;
+}
+
+.ac-onboard {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.ac-onboard strong {
+  font-size: 15px;
+}
+
+.ac-onboard p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-onboard-icon {
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-onboard-path {
+  font-size: 12px;
+  opacity: 0.75;
+  word-break: break-all;
+}
+
+/* 分支分页器（AI 回复结束下面一条）：左箭头 / 第 N / 共 M / 右箭头。
+   居中、紧凑、不抢内容视线；到底/到顶的那侧箭头置灰不可点。 */
+
+.ac-branch-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 4px 0 12px;
+}
+
+.ac-pick-box[aria-pressed='true'],
+.ac-mcp-card.is-picked .ac-pick-box,
+.ac-tool-row.is-picked .ac-pick-box {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent, #0891b2);
+}
+
+.ac-pick-box[aria-pressed='true'] :deep(svg),
+.ac-mcp-card.is-picked .ac-pick-box :deep(svg),
+.ac-tool-row.is-picked .ac-pick-box :deep(svg) {
+  opacity: 1;
+}
+
+.ac-tool-row {
+  gap: 7px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+}
+
+.ac-tool-row:hover {
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+.ac-tool-row.is-picked {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+  box-shadow: none;
+}
+
+.ac-tool-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ac-tool-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #111827);
+}
+
+.ac-tool-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+/* —— 空状态（DEMO 的 .empty-state）—— */
+
+.ac-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 190px;
+  height: 100%;
+  padding: 20px;
+  color: var(--ui-ink-mute, #9ca3af);
+  text-align: center;
+}
+
+.ac-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 2px;
+  border-radius: 12px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.ac-empty-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-empty-desc {
+  font-size: 11px;
+}
+
+.ac-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--ui-ink, #f7f7f7);
+  /* 展开内容的统一高度上限（用户口径 2026-10-25）：思考过程、工具输入 /
+     输出、工具分组、卡片详情共用一个值。不设上限时，长日志会把整段对话
+     一路撑长；超出上限后在各自块内滚动，面板高度保持稳定。
+     面板本身很矮时按视口收缩，别把输入框挤出可视区。 */
+  --ac-expand-max-height: min(360px, 50vh);
+}
+
+.ac-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 0;
+}
+
+.ac-inner {
+  display: flex;
+  flex-direction: column;
+  user-select: text;
+}
+
+@keyframes ac-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ac-branch-arrow {
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-branch-arrow:disabled {
+  opacity: 0.35;
+}
+
+.ac-branch-pos {
+  min-width: 48px;
+  padding: 0 2px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-ink-dim, #919191);
+}
+
+/* —— 「回到底部」：消息区**内部**、底部居中（用户口径 2026-10-09）——
+   外层 .ac-scroll-wrap 是定位参照（它固定占满消息区，内容在里面的 .ac-scroll 滚）。 */
+
+/* 注意：包了一层 wrap 之后，**必须也是 flex 容器** —— 里面的 .ac-scroll 靠 flex:1 撑高、
+     自己 overflow-y:auto 滚。wrap 若只是普通块级，.ac-scroll 会按内容高度长出去、溢出到输入区，
+     表现就是「消息文字压在队列行/输入框上」（真机踩到）。 */
+
+.ac-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ac-to-bottom {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12px;
+  z-index: 5;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink-dim, #919191);
+  box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16));
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.ac-to-bottom:hover {
+  color: var(--ui-ink, #f7f7f7);
+  transform: translateX(-50%) translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-to-bottom {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .ac-spin,
+  .ac-pending-spin {
+    animation: none;
+  }
+}

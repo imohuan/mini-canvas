@@ -9,11 +9,12 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 /** 三个面板的容器：只截「面板本体」，避免把输入区其它下拉算进来 */
-const SRC = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
+const SRC = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
 const MSG = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
 const panels = ['ac-model-panel', 'ac-skill-panel', 'ac-mcp-panel'].map((name) => {
   const start = SRC.indexOf(name)

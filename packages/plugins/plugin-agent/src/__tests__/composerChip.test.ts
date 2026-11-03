@@ -11,12 +11,13 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
-const conversation = read('../components/agent-conversation/AgentComposer.vue')
+const conversation = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
 const resources = read('../agentResources.ts')
-const msgList = read('../components/agent-conversation/AgentMessageList.vue')
+const msgList = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
 
 /** 取一条样式规则的正文（从 `选择器 {` 到它自己的 `}`） */
 function ruleBody(source: string, selector: string): string {

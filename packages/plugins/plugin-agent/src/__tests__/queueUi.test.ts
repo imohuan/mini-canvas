@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 import * as vue from 'vue'
 import * as lucide from 'lucide-vue-next'
 import { compileTemplate } from 'vue/compiler-sfc'
@@ -21,8 +22,8 @@ import ts from 'typescript'
 import { sendButtonMode } from '../queueModel'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'), 'utf8')
-const msgList = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
+const msgList = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
 const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
 /** shadcn Button 替身：只负责把 class / disabled / click 透传到真按钮 */
 const ShadcnButtonStub = vue.defineComponent({

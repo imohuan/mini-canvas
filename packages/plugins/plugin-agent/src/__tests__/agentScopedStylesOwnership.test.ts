@@ -7,13 +7,13 @@
  * 这里按「模板用到的类名 → 同一组件样式里有定义」检查，不依赖具体数值。
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (name: string): string =>
-  readFileSync(path.resolve(HERE, '../components/agent-conversation', name), 'utf8')
+  readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation', name))
 
 /** 只扫消息流真正拥有的类名（输入区的另行检查） */
 const MESSAGE_LIST_OWNED = [

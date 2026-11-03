@@ -25,6 +25,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 import * as vue from 'vue'
 import * as lucide from 'lucide-vue-next'
 import { parse, compileScript } from 'vue/compiler-sfc'
@@ -321,7 +322,7 @@ describe('图片加载失败：换占位，不再给裂图（用户口径 2026-1
 
 describe('结构与接线守卫（源码级）', () => {
   const body = read('../components/ToolViewBody.vue')
-  const host = read('../components/agent-conversation/AgentMessageList.vue')
+const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
 
   it('ToolViewBody：缩略图给「放大镜」光标 + 键盘 focus 环（样式渲染不在 node 里跑，盯源码）', () => {
     expect(body).toContain('cursor: zoom-in')

@@ -11,9 +11,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const conversation = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const conversation = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
 const toolBody = readFileSync(path.resolve(HERE, '../components/ToolViewBody.vue'), 'utf8')
 
 /** 取第一个以 selector 开头的样式块（本包样式都在同一个 <style scoped> 里） */
