@@ -158,3 +158,37 @@
   四处裸滚动容器，统一换 `ScrollPane` 时要保持父级 `min-h-0` / 固定高度。
 
 上述换件都涉及真实交互与视觉，必须用 @Chrome 实测亮色/暗色、窄容器和空数据后再提交。
+
+## 16. NodeBottomBar 拆分后的待办
+
+- `node-bottom-bar/bottom-bar.css` 是从入口整段迁出的全局样式表（约 66KB），声明与数值未改。
+  后续可按子组件拆成同目录局部 CSS，或改回 scoped；改前要确认手建 DOM（Ctrl 拖拽影子、
+  starting 提示）依赖非 scoped 选择器，不能直接全改 scoped。
+- 样式里有死代码：`.nb-preview*` 浮层类当前没有对应模板，可删除前先确认没有动态拼接。
+- 入口顶部还留着大段历史说明注释，可精简成当前职责说明。
+- `useBottomBarCards.ts` 仍约 24KB，可继续拆「上传/换绑」与「卡片点击/排序」两个 hook。
+- `onRun` 仍留在入口，可并入 `useBottomBarActions`；迁移时保持提交与 `submitted` 复位的顺序。
+- `BottomBarCardList.vue` 事件透传较多，可收敛成单个对象回调。
+
+## 17. AgentConversation 拆分后的待办
+
+- `AgentComposer.vue` 约 3100 行（含约 2700 行样式），可继续把模型 / 技能 / MCP / 审查 / 认证 /
+  模式六套下拉抽成子组件；抽时要保留 `switchComposerMenu` 的互斥关闭语义。
+- `useAgentConversation.ts` 约 2330 行，可按队列 / 目标 / 模型面板 / MCP 面板继续拆 composable；
+  它现在通过 `provide('agentConversation')` 一份控制器下发给两个子组件，改绑定粒度需要评审。
+- 拆分后的样式按选择器前缀分给了消息流与输入区，少数规则（如 `.ac-editing-badge`）留在消息流侧；
+  后续若再调结构，要同步检查归属，避免 scoped 属性对不上导致样式静默失效。
+- 入口只保留引导块与 `<MediaViewer>`；`.ac-onboard*` 样式因此留在入口（scoped 必须与模板同组件）。
+  若以后把引导块也抽成组件，样式要一起搬。
+
+## 18. `ui.ts` 拆分后的待办
+
+- `ui.ts` 现在只有约 130 行的组合入口，按域拆出 18 个文件（`createUiState`、`useUiHost`、
+  `useCanvasTreeScope`、`useCanvasList`、`useHistoryScope`、`useAssetScope`、`useAgentShell`、
+  `useCanvasToggles`、`useThemeScope`、`useShortcutsScope`、`useShellControls`、`useViewportControls`、
+  `useCanvasNodeActions`、`useCreateNode`、`usePanelResize`、`useUiLifecycle` 等）。
+- 其中 `useHistoryScope.ts`（约 31KB）与 `useCreateNode.ts`（约 26KB）仍偏大，是下一轮拆分的首选。
+- 组合入口目前用大对象字面量逐个转出成员（约 60 行）。后续可考虑按域返回嵌套对象再展开，
+  但会改变部分调用点的可选链写法，需要整体评估，不要只为缩短行数而改。
+- `createUi()` 里各域按原顺序创建，存在隐式先后依赖（history 依赖 canvasList、nodes 依赖 assets
+  + viewport、lifecycle 依赖全部）。后续若调整顺序，必须先补集成测试验证初始化副作用。
