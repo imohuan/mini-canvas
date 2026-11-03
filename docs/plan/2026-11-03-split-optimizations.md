@@ -212,3 +212,37 @@
 - 入口保留约 35 行跨子件兜底选择器（`.selection-frame-batch-slot`、`body.mc-pointer-down`）；
   继续下沉会改变 scoped 边界，动之前先确认这些类在哪些子件里落地。
 - 源码文本回归测试现在跨两个文件读取，后续可改成行为测试，减少对源码形状的依赖。
+
+## 21. agentService 拆分后的待办
+
+- `agent-service/sessions.ts` 仍约 553 行，可继续拆 `stream.ts`、`sessionList.ts`、`pagers.ts`。
+- `send.ts` 可再拆 `useSend`、`compression.ts`、`modelSwitch.ts`；拆时必须保持提示词新鲜度检查、
+  fork 与发送的先后顺序。
+- `queue.ts` 可拆成只读查询、变更操作、转录分页三块。
+- `AgentServiceDeps` 目前是平铺的晚绑定接口，后续可按域收窄依赖面；收窄前先补流重连、队列自动发送、
+  目标暂停恢复、多标签队列同步的集成测试。
+- `context.ts` 里的共享槽（`abortRef` / `seqRef`）可换成显式状态对象，减少手动同步点。
+
+## 22. VideoClipPanel 拆分后的待办
+
+- 入口仍用 DOM 查询拿胶片与量尺元素（`panelEl`），可改成子组件显式 expose；改前先验证
+  `onMounted` 的读取时序。
+- `video-clip-panel/useClipPanel.ts` 仍约 176 行，可把「可见性 / 时长 / 最小片段」收成 `useClipSession`。
+- `useClipTimeline.ts` 同时管几何测量、播放头和异步抽帧，可拆 `useClipGeometry` 与 `useClipFilmstrip`。
+- `VideoClipFilm.vue` 的 props 较多，可收成单个对象，但会改变子组件接口，需单独评审。
+- `VideoClipDock.vue` 内置整张快捷键表，可抽成数据表渲染。
+- `snapLength.ts` 可并入 `videoClip.ts` 的统一数学规则。
+- 拖动预览的 90ms 节流与吸附边界目前靠注释约定，建议补指针交互测试锁定注册/注销与边界行为。
+
+## 23. BaseNode 拆分后的待办
+
+- 拆分方式是「入口只留 props，模板与样式整体搬到 `base-node/NodeCardShell.vue`」，两者已逐字比对：
+  模板 202 行、样式 409 行完全一致。`BaseNode.vue` 现在 11 行。
+- `useNodeConnectionFeedback.ts` 仍约 283 行，可拆「端口显隐/禁用」与「aimedTarget 上报」；拆前必须
+  复核拖线事件的写入顺序，并重跑三区域规范相关测试。
+- `NodeCardShell.vue` 的模板仍保留全部区域。若以后拆成子组件，先解决 scoped 样式与 z-index 归属，
+  不能只搬 DOM。
+- `useNodeRegions` 返回的多个 computed 只有少数被直接消费，可按区域聚合；前提是能力实例缓存仍保持
+  「每节点一份」。
+- 红线提醒：以后动 BaseNode 相关代码，仍要先读 `docs/tmp/canvas-core-v2-survey/core-node-contract.md`
+  与 `docs/规则/节点区域与连接线拖拽规范.md`，本次拆分不改变这条规矩。
