@@ -246,3 +246,28 @@
   「每节点一份」。
 - 红线提醒：以后动 BaseNode 相关代码，仍要先读 `docs/tmp/canvas-core-v2-survey/core-node-contract.md`
   与 `docs/规则/节点区域与连接线拖拽规范.md`，本次拆分不改变这条规矩。
+
+## 24. 设置面板拆分后的待办
+
+- 两侧的 `settings/settingsMenuModel.ts` 有大量相同推导。后续可建立共享接口，抽成一份公共实现，
+  由两套皮分别注入 `categoryFor`、`iconOf` 与分组来源。
+- 两侧的插槽重读、菜单订阅和选中态 watcher 也可收成公共 hook，避免以后改菜单规则只改一边。
+- 滚动锁差异要保留：一边是「平滑补间 + `scrollend`」，一边是定时释放。后续可做成两种独立策略。
+- `SettingsContent.vue` 里卡片模式与页签模式各有一份相同卡片模板，可抽 `SettingsSectionCard.vue`。
+- UI 端用回调 ref 把滚动容器交给 hook，可在公共层统一容器绑定方式，减少模板 props。
+- 真要合并两份实现前，先补一组两套皮共用的行为测试（菜单顺序、动作项、`pageGroup`、滚动锁）。
+
+## 25. 编辑器 bundle 拆分后的待办
+
+- `useEditor.ts` 仍有约 1330 行，菜单、hover 预览、标签点击事件还在 hook 里。可拆 `useEditorMenu.ts`、
+  `useEditorPreview.ts`、`useEditorResourceEvents.ts`；拆前单独验证 DOM 重建、计时器与事件绑定顺序。
+- `editor/clipboard.ts` 同时管文件粘贴与纯文本解析，可把 `parsePlainTextToContent` 单独成文件。
+- `editor/schema.ts` 的 chip 兜底渲染分支较长，可抽 `chipRenderFallback.ts`；必须保持
+  「注册表优先 → ref 兜底 → 普通资源最后」的判断顺序。
+- `editor/resourceNode.ts` 可拆 `resourceNodeFactory.ts` 与 `chipAttrs.ts`，对外仍从 `useEditor` 重导出。
+- `chipRegistry` 与 `tagSpec` 是模块级单例，多个编辑器实例共享注册表。若以后要支持实例隔离，
+  需显式传入上下文，改动与回归范围较大。
+- `registerSlotItemsFromDoc` 与 `deserializeDoc` 里各有一段 `ref-slot` 登记逻辑，可合并成内部助手；
+  必须保留「先登记、再 `nodeFromJSON`」的冷启动顺序。
+- `useEditor.ts` 直接 import 10 个 editor 模块。若以后加 `editor/index.ts` 统一导出，先确认
+  schema、注册表、插件创建时机没有被模块初始化顺序影响。
