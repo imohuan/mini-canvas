@@ -1,0 +1,286 @@
+[
+  {
+    "path": "docs/tmp/scan-ax.cjs",
+    "hash": "A9D78D76263573B0CEBDA2AA1F8721161501D9FE0E6E5A2670F20ABFED3E9812"
+  },
+  {
+    "path": "docs/tmp/scan-aximg.cjs",
+    "hash": "2948C943C3CD94DCFF119E74E7FDE1746FF095D287A0742513A61D97C5C7C4F8"
+  },
+  {
+    "path": "docs/tmp/scan-dd.cjs",
+    "hash": "A70B6B4FC7A04A70B7CBEB0408CCE93B0C03BF4B308FBDBA5FB4EE97C44538BA"
+  },
+  {
+    "path": "docs/tmp/scan-ddmodes.cjs",
+    "hash": "425E2104D405568B6D8218F9E0CD954E263E504F683B9A34FD963ED591440588"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/__tests__/settingsMenu.test.ts",
+    "hash": "638262A6219550E100803395BD44985406C49AFAF1ED5920B9026A2C5C681F33"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/capabilities.ts",
+    "hash": "587701A206EAC972E43D2342B6344DADA1C45D30AA0289EDCB77F404F1635E0D"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/capabilityLayer.ts",
+    "hash": "E6DECEC85BEADA642C1B83BFDC0F26CF2F570779A8E681E85D8BF781EC7BD7FF"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/capabilityTypes.ts",
+    "hash": "CA3F4105F15F5A38B6CA85FB1765F7409F11E2117057483ED8BBCE92A820D241"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/index.ts",
+    "hash": "68808A15B56C5323ECDF810320EA08918C5B69AA3379C7BC1CDA9709D6227CF5"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/serviceTypes.ts",
+    "hash": "27EE6B58635B44870B4C738C237808411E4B34B7B5FECE98FAB664A9A09CDC9F"
+  },
+  {
+    "path": "packages/canvas-data/src/canvas/settingsMenu.ts",
+    "hash": "3DEAACCCC1216B7205EB0E5E8E13FE6ACB24E6ECD995E19FFD5FEACFCDDA06D4"
+  },
+  {
+    "path": "packages/canvas-render/src/crop/__tests__/mediaFit.test.ts",
+    "hash": "506C4EBA6BE9B1BDE52FC6B7770DE82B960AE17F8F1A0997C79DD4BD4764975E"
+  },
+  {
+    "path": "packages/canvas-render/src/crop/__tests__/mediaFrameOverlayChrome.test.ts",
+    "hash": "F613E20BAC5AC51B10A51E2BC531C8579DE7FED836551A4E8CF85F6B39255D47"
+  },
+  {
+    "path": "packages/canvas-render/src/crop/mediaFit.ts",
+    "hash": "7DAE3B4C5771A8762A0305721B2662144452151B3B3644D33C051AA00D017A58"
+  },
+  {
+    "path": "packages/canvas-render/src/crop/MediaFrameOverlay.vue",
+    "hash": "AF70B8D9AA50E5C8F27AFEDB0A87F678D0AF2725CA2D4C9DCCB1EE12918E10BD"
+  },
+  {
+    "path": "packages/canvas-render/src/styles/ui-theme.css",
+    "hash": "CF925E12E074AF4A9FA590592A170EB03C6081DABFB9C2E0E00F3FD5F22B3C3E"
+  },
+  {
+    "path": "packages/plugins/plugin-agent/src/components/AgentConversation.vue",
+    "hash": "2D7E5531524C078FDAB57287182F9BBA97D7B55121B9BC23727425BB5230078B"
+  },
+  {
+    "path": "packages/plugins/plugin-agent/src/components/ToolViewBody.vue",
+    "hash": "9EA51348FA44B267B0B7BEF1D90FB19B1C67347993DAD4BA8493C6490CF0105C"
+  },
+  {
+    "path": "packages/plugins/plugin-bottom-bar/src/NodeBottomBar.vue",
+    "hash": "02B8A3210B155A4A8ECFCE3665BF0D9AC741C1DF0818762001B3CF6A382C4474"
+  },
+  {
+    "path": "packages/plugins/plugin-bottom-bar/src/NodeSelectOverlay.vue",
+    "hash": "C31060D52AE80DECB86E95719D416162D05A9D4C6F08628027699AD5C0F5018A"
+  },
+  {
+    "path": "packages/plugins/plugin-bottom-bar/src/NodeTaskOverlay.vue",
+    "hash": "B1E380DC580BB99063BDB4082B9E05E8166A4F2E10B1384B88DA073BA40B190E"
+  },
+  {
+    "path": "packages/plugins/plugin-bottom-bar/src/PromptActionSettings.vue",
+    "hash": "21C3F1EA32E742A8CBEF5E1E0597A4BC7632F94ECA49D58E11FF45D5992A3376"
+  },
+  {
+    "path": "packages/plugins/plugin-bottom-bar/src/ReferenceSelectOverlay.vue",
+    "hash": "E727A086DBADC7E20F2BFBE88BA5BC4E80506D4BCC0E19CEEF3340648FED1C8F"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/package.json",
+    "hash": "993CDABA936E7F0A8C52308FB432875EEE0155E29FB909CBE0B201972569C1FF"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/src/__tests__/demoKit.test.ts",
+    "hash": "E32F8C9F0F1DB22445F4B53B79B54AB5FAA849B46CD6A421828D9CEFBE332F9D"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/src/gallery/ThemeGalleryOverlay.vue",
+    "hash": "7435C0D791A972588A4C4A19C17BB11CF7DFD9E0E3C37B983D8D15DEDED5752F"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/src/hot-reload/DemoCard.vue",
+    "hash": "FEF589C38C5341C772251066DFFEE636848CED656329D8D2141D15EB52337644"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/src/index.ts",
+    "hash": "C41457524387C8D7971E31F0FFC6922A31FB00CB2C8AAB075A2757264C12C863"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/theme-lab-main.ts",
+    "hash": "DA4CF99737DACA06488660DBC3C1220153476276EDD0C87FA3C431DECAC02943"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/theme-lab.html",
+    "hash": "DD0A8E4E603AD999CBC59E820D68F3DDD887B3872186288B8F35597F871CBA73"
+  },
+  {
+    "path": "packages/plugins/plugin-demo-kit/vite.config.ts",
+    "hash": "5FD67E5478FD229E4911BFF08C1CBB8A572E56FDBB5BB281C133B75977EF5FC1"
+  },
+  {
+    "path": "packages/plugins/plugin-group/src/GroupTopToolbar.vue",
+    "hash": "7EE643E60762CBECFE621238A97E6D6C0054E1B3DCD23FF3779C297129929851"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/__tests__/publishExit.test.ts",
+    "hash": "EF21C085D6B4BEA5F0F698776CED8BF70C1BEECFDD9E55E798E7C94F388C68A3"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/__tests__/storyboardDragHint.test.ts",
+    "hash": "D9C1E0C5BE9C9838B2C938D8F1C0A493D6E9937DDE10B070782511C47C7D69F1"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/__tests__/storyboardLayer.test.ts",
+    "hash": "4AD1D09B9EA910BCAC7F5749E92EE5496121E13AA3B0CF622F3FBF8BD6D125C1"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/GridSplitEntry.vue",
+    "hash": "CB186002A688AD5387C5ADB5C7E2FC620D388AA2B9AFD56F49F3F3C67A629DCE"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/GridSplitPanel.vue",
+    "hash": "365C3AF0208253852A28E79F1312676B00E587C51079AAEF29F6BA666CF82BBC"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/index.ts",
+    "hash": "D1E4253B52F6F8AE0F8460CBA9E1E1D5DDD3EB7FD035E9064393AA8CFBDFA7AE"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/publish.ts",
+    "hash": "4E580FA5DD78B64155812ACA38AEA2950A09EADF044AE4787F078587DDF4CE52"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/storyboardDrag.ts",
+    "hash": "96BE83BD7CC9CE6E43B61CD945E996D3D356086A096CE02541BDE951FB651080"
+  },
+  {
+    "path": "packages/plugins/plugin-image-grid-split/src/StoryboardGrid.vue",
+    "hash": "8327B9368FF1A20B016DA3C324E13BADFF0857B586DB718EDB2CF46269B5796F"
+  },
+  {
+    "path": "packages/plugins/plugin-multi-select/src/BoxSelectLayer.vue",
+    "hash": "53B8A73F5C28CB28AB4023CCCCEA41924B93ED6665E6D095E004302EA78F6B14"
+  },
+  {
+    "path": "packages/plugins/plugin-node-image/src/PaintColorPicker.vue",
+    "hash": "43EEF188589FC571F44CB5A7D03FA906B04E145F6B0A91C81995E47C667D5C75"
+  },
+  {
+    "path": "packages/plugins/plugin-node-video/src/__tests__/videoFrameOverlayRender.test.ts",
+    "hash": "31A7A46553AAEAF78C08D79763751C4DC62B222E6E35C9B46DE9DDBB8544E052"
+  },
+  {
+    "path": "packages/plugins/plugin-shortcut-manager/src/RemapPanel.vue",
+    "hash": "B8731D4904270140BF69E0323A3A23FC77E8CA6354CA5C3E3F48D651E4F8B34C"
+  },
+  {
+    "path": "packages/plugins/plugin-style-library/src/components/StyleDetailView.vue",
+    "hash": "148CBCF69A37326FEA0FFC4C4BF8A426B5E50D325D11C8B6E87CB3B14E20F852"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/package.json",
+    "hash": "E69443618DAF794D72F992F817D06CC713150D4A8573E3E19BC8A6BEB683D985"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue",
+    "hash": "A5B8C0967119C22A95EF662E302DACB1526A39C6F5D3352F0532E67C93609D28"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/settings/settingsNavModel.ts",
+    "hash": "007F78C31378EFA5DF8E12D782E037F9CB132AE9D9E7E970B0C4D4069E0B9692"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/ColorField.vue",
+    "hash": "2717D7D23F7499BBF28DAC3A2162CC7CE626C8B6B6FF3DFAA2982F6B05AE6C57"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/index.ts",
+    "hash": "3DBB69FA548AC1B2914BC81776C2F3861DE11363C7A30DADAB3F436CAD05AD3A"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/node-toolbar-button.css",
+    "hash": "BB0475BE91FFBA00FFFD29BF83831AD3915F84FCA6F03DD3774A18ECE9747ABC"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/NodeEmptyState.vue",
+    "hash": "C1B6A3F802934FA5678B8DB3BC16D96D901119E9FF1545BE335F4DA3D3116AB5"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/SlotDebugPopover.vue",
+    "hash": "16C2280136BF5050F2A5D0E28C539C25BE0BCF2CC4A5B65962A57A92A5642540"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/ToolbarDropdownButton.vue",
+    "hash": "35E2B5C1BD575CE4894B0665AE357A1BAA2986F820FE8CCC98715564D8D73113"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/ToolParamField.vue",
+    "hash": "8CBF835C6BD999FC87997F76940FE2C4A120D0A16F5A089F3A32F782A6DE5F1D"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/components/ui/ToolParamGroup.vue",
+    "hash": "1F299974008733C8DCFC4248E994FC243A66DDC0C5C1C8C71BE59C08A6F08C83"
+  },
+  {
+    "path": "packages/plugins/plugin-theme-default/src/index.ts",
+    "hash": "8A01B16450DB46FCC2F1A1BBF55613B7446C0310FB24FFD567504E86BDFC3AD6"
+  },
+  {
+    "path": "packages/ui-kit-shadcn/src/components/color-picker/ColorPicker.vue",
+    "hash": "FFEF7C068DC809E36AC365CEDE8990C0C296DAEF7CD9C9D24E4B19BDB77F0DD8"
+  },
+  {
+    "path": "packages/ui-kit-shadcn/tsconfig.tsbuildinfo",
+    "hash": "74413AEBC3D61E95077E57F743BAC1F5BDDA785C636D79259322333FA9C4A428"
+  },
+  {
+    "path": "packages/ui-kit/src/components/button/button.css",
+    "hash": "859A1764C75B1CE5588AD8F944C270F28ECFA13A92DB842FD77D3CA37978274B"
+  },
+  {
+    "path": "packages/ui/src/__tests__/axSubMenuWidth.test.ts",
+    "hash": "5FA5E4D7BEF4D55076D86E419CE641EDE74009261743C9E1FC81BD995791647F"
+  },
+  {
+    "path": "packages/ui/src/__tests__/settingsMenuNavigation.test.ts",
+    "hash": "22583C22C1E0D1738C6BC0EABCA972DE3931C781398A0826334DB7DB256E9EB4"
+  },
+  {
+    "path": "packages/ui/src/__tests__/themeForegroundPairing.test.ts",
+    "hash": "A2FF6E46D4CD1AF371C63B44DD879FD700AA646C937E6C530B89520831AFFA93"
+  },
+  {
+    "path": "packages/ui/src/App.vue",
+    "hash": "12CB8B2764ECFB4BC16A0A06F8A62BF3F0FBFC1E3C1ACEDA82CA94B86DE35189"
+  },
+  {
+    "path": "packages/ui/src/components/areas/AgentPanel.vue",
+    "hash": "54821BD3D4E61F661792307530BA6304E0A17D5FC039C1AE347B355F7F525BC8"
+  },
+  {
+    "path": "packages/ui/src/components/AssetBatchBar.vue",
+    "hash": "AF356F07378604F4F4774163263D3B28A4EBF3B415F6020FB3F93AC3736E3EC9"
+  },
+  {
+    "path": "packages/ui/src/components/AxSubMenu.vue",
+    "hash": "924C84F8F37EC92CAD00999D9DB7D54548F80B642118BCE12F1AA4218E8559FD"
+  },
+  {
+    "path": "packages/ui/src/components/ProjectsPage.vue",
+    "hash": "4F12031C941EA2D89C9B7D83AD68DD566BCCC13ED30969CD60D4B641FCEAF474"
+  },
+  {
+    "path": "packages/ui/src/components/settings/AppSettingsPanel.vue",
+    "hash": "364BC85AAC37CC9C83E23505D646C91CAC47C7F61CECD8652E15A1F5E26C4D90"
+  },
+  {
+    "path": "pnpm-lock.yaml",
+    "hash": "2407D534038DDA00A04134978183C1F85D453D90ADCBDF1A10A53C4F2A067AFA"
+  }
+]

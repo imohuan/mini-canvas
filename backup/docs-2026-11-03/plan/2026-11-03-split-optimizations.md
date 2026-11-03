@@ -334,3 +334,83 @@
 
 截图存在 `docs/tmp/verify/split-regression-*.png`。`localhost:5288` 那张旧标签页上的
 「发生意外错误」浮层属于另一个画布的数据问题（该服务已停），在 8865 的同名画布上不存在。
+
+## 30. 第二轮复核（全部超过 1000 行的文件）
+
+扫描口径：`git ls-files` 的 .vue/.ts/.css/.mjs/.js，排除 `backup/`、根 `src/`、
+`packages/docs/`、`.d.ts`。第二轮开始时超过 1000 行的源码共 13 个，现已全部降到 1000 行以下。
+
+拆分方式统一为「原逻辑不动，只换文件位置」：
+
+- Vue 单文件组件的样式改为 `<style scoped src="./X.css">`，scoped 语义不变；
+- 仍超 1000 行的样式表按顶层注释边界切成多个分片，由入口按原顺序加载，层叠顺序不变；
+- TS 文件按已有职责块抽成同目录模块，入口保留原来的调用顺序与导出路径。
+
+### 本轮结果
+
+| 文件 | 拆分前 | 现状 | 拆法 |
+|---|---:|---:|---|
+| AgentComposer.vue | 3034 | 828 | 样式外置，再切成 4 个 agent-composer/*.css |
+| useAgentConversation.ts | 2184 | 843 | 拆成 10 个领域 hook |
+| bottom-bar.css | 1687 | 5 个分片 | 布局 / 素材卡 / 标签菜单 / 输入区与底行 / 预览 |
+| plugin-node-ui/src/server.ts | 1624 | 63 | 5 个 apply* + 共享类型与画布访问模块 |
+| ThemeLabView.vue | 1463 | 385 | 样式外置，再切成 3 个分片 |
+| HistoryModal.vue | 1462 | 936 | 卡片 DOM 与墙缓存拆到两个模块 |
+| agent/config.ts | 1396 | 757 | 类型 / 工具 / 共享基类 |
+| useEditor.ts | 1260 | 958 | 文本导出、菜单位置、标签 DOM、资源命令 |
+| AgentMessageList.vue | 1142 | 329 | 样式外置 |
+| agentSessions.ts | 1087 | 796 | 消息路由与共享类型 |
+| hotReload.ts | 1033 | 839 | 类型、presence 与 URL 工具 |
+| runtime.ts | 1031 | 842 | 类型与纯函数 |
+| Context.ts | 1020 | 950 | 类型、诊断、工具段工厂（生命周期主流程未动） |
+
+### 本轮拆分引入并已修复的回归
+
+1. CSS 规则被切断：`bottom-bar.css` 切分时 `.nb-editor .resource-chip--invalid` 被分到
+   两个分片，`bottom-bar-cards.css` 少了右括号、`bottom-bar-tagmenu.css` 少了左半段。
+   `pnpm -C packages/ui build` 报 `Missing closing }` / `Missing opening {`；已把整条规则
+   放回 tagmenu 分片，构建恢复。教训：按行号切 CSS 必须校验每个分片的括号配平。
+2. 读源码的契约测试看不到新文件：样式外置与 hook 拆分后，一批测试还在旧文件里
+   找字符串。统一改成「同时读取拆分后的文件」，断言本身未改。涉及：
+   `readSfcWithStyles`（ui / plugin-agent 各一份）、`readAgentConversationSource`、
+   `readBottomBarCss`、`historyMediaCardLayout`、`historyWallAppLifecycle`、
+   `historyDataKeyVsWallKey`、`tagMenu.test`。
+
+### 仍需在真实浏览器确认的地方
+
+- 编辑器菜单定位、hover 预览、标签替换（依赖真实 DOM 与计时）；
+- Agent 会话装载、审批与压缩时序（目前只有类型检查与单测）；
+- 历史卡片墙切页签、LRU 逐出时的播放器回收（内存与解码器）。
+
+### 仍然超过 1000 行、但不在拆分范围
+
+- `packages/ui/e2e/agent-e2e.mjs`（1077 行）：端到端脚本，按扫描口径排除。
+- `backup/` 下的文件：已移出的 v1 代码，不参与构建。
+
+### 浏览器回归发现并已修复的回归（2026-11-03 第二轮）
+
+3. **控制器返回值漏了子组件在用的成员**：`AgentMessageList` / `AgentComposer` 从
+   `inject('agentConversation')` 解构 `segClickable`、`formatToken`、`budgetTokenText`、
+   `goalMarkText`，但 `useAgentConversation` 拆分后既没 import 也没在返回对象里导出。
+   表现：消息流渲染直接抛 `segClickable is not a function`（整块消息区白屏），
+   工具栏「选择创作模式 / 选择模型」与缩放菜单点了不展开。
+   修法：恢复 `userSegments.js` / `queueModel.js` 的直接导入并在返回值里导出。
+   新增 `agentControllerExports.test.ts`：按「子组件解构的名字 → 控制器返回对象必须有」
+   做结构守卫，避免再漏。
+
+   教训：这类错误 **typecheck 与既有单测都发现不了**（模板里的 `inject` 是 any），
+   必须靠浏览器实测或结构守卫。以后拆 composable 时，先把子组件的解构列表当契约核对一遍。
+
+### 第二轮复核之后的再次全量扫描
+
+按同一口径（`git ls-files` 的 .vue/.ts/.css/.mjs/.js，排除 `backup/`、根 `src/`、
+`packages/docs/`、`.d.ts`）复查，又发现 3 个超过 1000 行的产品源码，均已原样拆分：
+
+| 文件 | 拆分前 | 现状 | 拆法 |
+|---|---:|---:|---|
+| plugin-theme-default/src/index.ts | 1067 | 305 | 默认值、key 映射与 Config schema 搬到 themeConfig.ts，入口重导出 |
+| plugin-demo-kit/.../ThemeStudioView.vue | 1074 | 228 | 样式外置到 theme-studio.css（逐字一致） |
+| cloud-server/src/server.ts | 1003 | 907 | CloudServerOptions / CloudServer 搬到 serverTypes.ts，入口重导出 |
+
+`packages/ui/e2e/agent-e2e.mjs`（1121）与 `plugin-manager` 的单测（1039）仍在 1000 行以上，
+按拆分文档的口径（测试与 e2e 不拆）排除。

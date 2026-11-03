@@ -507,9 +507,14 @@ onBeforeUnmount(() => {
               :title="floating ? '回到弹窗' : '转为悬浮窗口'"
               @click="toggleFloating"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg v-if="!floating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="12" y="13" width="8" height="7" rx="1.5" />
                 <path d="M19 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+                <path d="M3 12v6a2 2 0 0 0 2 2h6" />
+                <path d="M8 16l4-4-4-4" />
               </svg>
             </Button>
             <Button variant="ghost" size="icon-sm" class="psd-head-btn" aria-label="关闭" title="关闭" @click="close">
@@ -781,23 +786,27 @@ onBeforeUnmount(() => {
   line-height: 1.2;
 }
 
-/* 右下角 resize 把手：贴角放一个 16x16 图标 + 隐形放大命中区 */
+/* 右下角 resize 把手：视觉图标往内收，完整露出面板圆角；命中区保持 20x20 不缩小 */
 .psd-resize-handle {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
+  right: 2px;
+  bottom: 2px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
   color: var(--ui-ink-mute, #9ca3af);
   cursor: nwse-resize;
-  /* 命中区向右下扩展到 18px，方便抓 */
-  box-sizing: content-box;
+  box-sizing: border-box;
   margin: 0;
   z-index: 2;
+}
+
+.psd-resize-handle svg {
+  width: 14px;
+  height: 14px;
 }
 
 .psd-resize-handle:hover {
