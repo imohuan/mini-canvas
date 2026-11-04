@@ -14,6 +14,7 @@ import { Service, type Context } from '@mini-canvas/canvas-base'
 import type { PluginScope } from '@mini-canvas/kernel'
 import type { DocService } from '@mini-canvas/canvas-data'
 import type { BarAction, BarApplier } from './barTypes'
+import { registerBarAction, registerBarApplier } from '@mini-canvas/bar-contract'
 import type { ToolResourceKind } from '@mini-canvas/kernel'
 import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
 import { readRunState } from './runState'
@@ -227,18 +228,7 @@ export class NodeTaskService extends Service {
 
 // ==================== 注册糖（写走调用方作用域，条目归注册方） ====================
 
-/** 注册一个底栏动作：条目归**调用方插件**（卸载自动摘除、同 id 替换） */
-export function registerBarAction(ctx: PluginScope, action: BarAction): void {
-  ctx.registryOf<BarAction>(BAR_FIELD).add(`actions/${action.id}`, action, { id: action.id })
-}
-
-/** 注册某节点类型的结果写入器（一个 kind 只允许一个，同 kind 重复抛错） */
-export function registerBarApplier(ctx: PluginScope, kind: string, fn: BarApplier): void {
-  const field = ctx.registryOf<BarApplier>(BAR_FIELD)
-  const key = `appliers/${kind}`
-  if (field.has(key)) throw new Error('[bottom-bar] applier already registered: ' + kind)
-  field.add(key, fn, { id: kind })
-}
+export { registerBarAction, registerBarApplier }
 
 export const name = 'bottom-bar'
 export const inject = ['doc'] as string[]

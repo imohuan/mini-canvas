@@ -33,7 +33,7 @@ import VideoFullscreenOverlay from './VideoFullscreenOverlay.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
-import { publishToolActions } from '@mini-canvas/plugin-bottom-bar'
+import { publishToolActions } from '@mini-canvas/bar-contract'
 import { beginOverlay, endOverlay, isClipPending, onOverlayModeChange, setClipPending, setCropPending } from './videoSession'
 import { clearClipPrefs } from './videoClipStore'
 import {

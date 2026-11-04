@@ -38,7 +38,7 @@ export const Config: ConfigSchema = {
 }
 import type { DocService } from '@mini-canvas/canvas-data'
 import TextContent from './TextContent.vue'
-import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
+import { publishToolActions, registerBarAction, registerBarApplier } from '@mini-canvas/bar-contract'
 
 /** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用；形状保持不变，.vue 零改动） */
 export interface TextNodeService {

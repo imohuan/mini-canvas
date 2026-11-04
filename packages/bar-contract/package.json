@@ -1,0 +1,25 @@
+{
+  "name": "@mini-canvas/bar-contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0"
+  }
+}

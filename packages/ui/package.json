@@ -28,6 +28,7 @@
   "dependencies": {
     "@floating-ui/vue": "^1.1.11",
     "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/bar-contract": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",

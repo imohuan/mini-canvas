@@ -26,8 +26,14 @@ import type { DocService } from '@mini-canvas/canvas-data'
 import type { ToolResource } from '@mini-canvas/kernel'
 // 只借**类型**（类型编译期擦除，不构成运行时依赖）：插件之间不 import 实现。
 // 运行时一律 `ctx.get('nodeBar')` 拿服务（见 apply 里的 registerBar）。
-import type { BarRunContext } from '@mini-canvas/plugin-bottom-bar'
-import type { BarAction, BarApplier, BarRunInput } from '@mini-canvas/plugin-bottom-bar'
+/**
+ * 底栏契约的最小结构类型（不 import 另一个业务插件）。
+ *
+ * 死规则：业务插件之间零引用。底栏是服务（nodeBar），这里只声明用到的形状，
+ * 字段与 plugin-bottom-bar 的 BarAction / BarRunContext 保持一致；两边漂移由
+ * 底栏的类型测试与本文件的用法共同约束。
+ */
+import type { BarAction, BarApplier, BarRunContext, BarRunInput } from '@mini-canvas/bar-contract'
 import { McpClient } from './mcpClient'
 import { WEB2API_PRESETS } from './presets'
 import { runPreset, makeTaskPoll, type RunDeps, type RunInput } from './presetRun'
@@ -150,7 +156,7 @@ export function apply(ctx: Context) {
 
   // —— 底栏动作：每个预置一条动作（§0.3：nodeBar 是插件服务，取得到才注册）——
   const registerBar = (): boolean => {
-    // 插件之间**不互相 import**：按名字取底栏提供的服务（nodeBar）。
+  // 插件之间**不互相 import**：按名字取底栏提供的服务（nodeBar）。
     // 取不到 = 宿主没装底栏插件 → 本插件静默无用（不算错）。
     // 服务方法签名（与 plugin-bottom-bar 的 NodeBarService 一致；这里只声明用得到的两个写入口）
     const bar = ctx.tryGet<{

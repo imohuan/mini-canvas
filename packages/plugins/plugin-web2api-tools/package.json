@@ -24,7 +24,7 @@
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/plugin-bottom-bar": "workspace:*"
+    "@mini-canvas/bar-contract": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
