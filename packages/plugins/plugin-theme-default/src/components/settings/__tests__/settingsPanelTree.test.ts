@@ -1,9 +1,10 @@
 /**
- * 设置面板（AppSettingsPanel）的结构契约 —— 用户口径 2026-11-01：
+ * 设置面板（PluginSettingsContent，settingsPanel 默认赢家）的结构契约 —— 用户口径 2026-11-01：
  * 「左侧带图标的导航，右侧显示当前分组的配置；顶部有标题与关闭按钮」。
  *
  * 钉住四件事：
- * ① 注册：ui-settings-panel（order -1）真的顶替了默认皮，成为 settingsPanel 赢家；
+ * ① 注册：主题插件注册的 PluginSettingsContent（order 0）就是 settingsPanel 赢家
+ *    （2026-11-04 起成品应用那套面板已并入本包，ui 包不再注册换皮插件）；
  * ② 导航：按分组名推导一级项；图标来自独立场域 settings/navIcon（top(分组名)?.value），
  *    取不到用 fallback；每项 = 图标 + 名称；选中态用中性底色；
  * ③ 内容：右侧只显示当前分类；配置项一行一个（标题 + 描述 + 右侧控件）；
@@ -12,7 +13,7 @@
  * ⑤ 用户口径 2026-11-02 追加：第 0 级分类默认「个人」、右侧卡片小节、顶部页签默认隐藏、
  *    所有 number 字段统一「滑块 + 数字框」。
  *
- * 为什么仍读源码：ui 包没有 @vue/server-renderer，而"导航由哪个场域取图标"这类
+ * 为什么仍读源码：插件包没有 @vue/server-renderer，而"导航由哪个场域取图标"这类
  * 接线事实在源码里可读，配合 chrome 实测已足够。
  */
 import { describe, it, expect } from 'vitest'
@@ -20,50 +21,40 @@ import { readFileSync } from 'node:fs'
 import { Context } from '@mini-canvas/canvas-data'
 import { ThemeRegistry } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
-import { uiSettingsPanelPlugin } from '../settingsPanelPlugin'
-import AppSettingsPanel from '../components/settings/AppSettingsPanel.vue'
+import PluginSettingsContent from '../PluginSettingsContent.vue'
 
 const read = (path: string): string =>
   readFileSync(new URL(path, import.meta.url), 'utf-8')
 
-const SRC = read('../components/settings/AppSettingsPanel.vue')
+const SRC = read('../PluginSettingsContent.vue')
 /** 只看代码、不看注释 */
 const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '')
 
-/** 拆分后主题实现分别在三个文件；源契约断言按职责读对应文件。 */
-const MODEL = read('../components/settings/settings/settingsMenuModel.ts')
-const NAV_STATE = read('../components/settings/settings/useSettingsNavigation.ts')
-const CONTENT = read('../components/settings/settings/SettingsContent.vue')
-const NAV_VIEW = read('../components/settings/settings/SettingsNav.vue')
+/** 面板实现分成几个文件；源契约断言按职责读对应文件。 */
+const MODEL = read('../settings/settingsMenuModel.ts')
+const NAV_STATE = read('../settings/useSettingsNavigation.ts')
+const CONTENT = read('../settings/SettingsContent.vue')
+const NAV_VIEW = read('../settings/SettingsNav.vue')
 
-const NAV_ITEM = read(
-  '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsNavItem.vue',
-)
-const NAV = read(
-  '../../../plugins/plugin-theme-default/src/components/settings/ShadcnSettingsNav.vue',
-)
-const CATEGORY = read(
-  '../../../plugins/plugin-theme-default/src/components/settings/navCategory.ts',
-)
-const FIELD = read(
-  '../../../plugins/plugin-theme-default/src/components/settings/SettingsSchemaField.vue',
-)
+const NAV_ITEM = read('../ShadcnSettingsNavItem.vue')
+const NAV = read('../ShadcnSettingsNav.vue')
+const CATEGORY = read('../navCategory.ts')
+const FIELD = read('../SettingsSchemaField.vue')
 
-describe('ui-settings-panel 注册：顶替主题默认皮成为设置面板赢家', () => {
-  it('ui-settings-panel 顶替默认皮后，settingsPanel 的赢家是 AppSettingsPanel', async () => {
+describe('默认主题注册：PluginSettingsContent 就是设置面板赢家', () => {
+  it('装默认主题插件后，settingsPanel 的赢家是 PluginSettingsContent', async () => {
     const ctx = new Context()
     ctx.inject('themeRegistry', new ThemeRegistry())
     ctx.plugin(themeDefaultPlugin)
-    ctx.plugin(uiSettingsPanelPlugin)
     await ctx.start()
 
     const theme = ctx.get<{ winner(slot: string): unknown }>('themeRegistry')
-    expect(theme.winner('settingsPanel')).toBe(AppSettingsPanel)
+    expect(theme.winner('settingsPanel')).toBe(PluginSettingsContent)
     ctx.stop()
   })
 })
 
-describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
+describe('PluginSettingsContent 左导航：第 0 级分类 + 图标菜单', () => {
   it('一级 = 第一个 / 分段；二级 = 后段（扁平分组取它自己）', () => {
     expect(MODEL).toMatch(/function navOf\(key: string\): string/)
     expect(MODEL).toMatch(/function leafLabelOf\(key: string\): string/)
@@ -80,12 +71,12 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     expect(NAV_ITEM).toMatch(/\{\{ label \}\}/)
     expect(NAV_ITEM).toMatch(/:class="\{ 'is-active': active \}"/)
     // 右侧不再有旧的两级树
-    expect(SRC).not.toMatch(/asp-row/)
-    expect(SRC).not.toMatch(/asp-caret/)
+    expect(SRC).not.toMatch(/psd-row/)
+    expect(SRC).not.toMatch(/psd-caret/)
   })
 
   it('左侧按第 0 级分类分组：分类标题 + 该分类下的一级菜单', () => {
-    // 两套皮共用同一个导航组件，插件不再自绘
+    // 外观统一由 ShadcnSettingsNav 画，插件不再自绘
     expect(NAV_VIEW).toMatch(/<ShadcnSettingsNav/)
     expect(NAV).toMatch(/class="ssn-caption"/)
     expect(NAV).toMatch(/v-for="group in groups"/)
@@ -102,12 +93,8 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
   it('分类可配置：meta.category 优先，其次置 navCategory 场域，再回默认表', () => {
     expect(CATEGORY).toMatch(/metaCategory\?\.trim\(\) \|\| registryCategory\?\.trim\(\)/)
     expect(CATEGORY).toMatch(/SETTINGS_NAV_CATEGORY_FIELD\s*=\s*'settings\/navCategory'/)
-    // 两套皮都从同一个注册场读取
+    // 面板从注册场读取分类，而不是各处硬编码
     expect(NAV_STATE).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
-    const THEME_SETTINGS = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
-    )
-    expect(THEME_SETTINGS).toMatch(/registryOf<string>\(SETTINGS_NAV_CATEGORY_FIELD\)/)
   })
 
   it('图标走独立场域 settings/navIcon，命中顺序由场域 order 决定', () => {
@@ -115,11 +102,8 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     expect(NAV_STATE).toMatch(/navIcons\?\.top\(name\)\?\.value/)
     // 取不到图标时也必须落一个兜底，不能留空位
     expect(NAV_STATE).toMatch(/\?\?\s*Circle/)
-    // 默认皮使用导航图标模块导出的兜底常量
-    const THEME_SETTINGS = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
-    )
-    expect(THEME_SETTINGS).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
+    // 图标模块导出的兜底常量仍可用（场域没登记图标时不吃空）
+    expect(read('../navIcon.ts')).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
   })
 
   it('图标注册表声明在 navEntries 之前（否则 immediate watch 撞暂时性死区）', () => {
@@ -127,16 +111,11 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     // ReferenceError: Cannot access 'ue' before initialization。
     // watch(navEntries, { immediate: true }) 在 setup 阶段就会求值；
     // iconOf 若在它之后声明，读 navIcons 会撞 TDZ。
-    const THEME_SETTINGS = read(
-      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
-    )
-    for (const src of [NAV_STATE, THEME_SETTINGS]) {
-      const iconsAt = src.indexOf("registryOf<unknown>('settings/navIcon')")
-      const entriesAt = src.indexOf('const navEntries = computed')
-      expect(iconsAt, '找不到图标注册表声明').toBeGreaterThan(-1)
-      expect(entriesAt, '找不到 navEntries 声明').toBeGreaterThan(-1)
-      expect(iconsAt, '图标注册表必须在 navEntries 之前声明').toBeLessThan(entriesAt)
-    }
+    const iconsAt = NAV_STATE.indexOf("registryOf<unknown>('settings/navIcon')")
+    const entriesAt = NAV_STATE.indexOf('const navEntries = computed')
+    expect(iconsAt, '找不到图标注册表声明').toBeGreaterThan(-1)
+    expect(entriesAt, '找不到 navEntries 声明').toBeGreaterThan(-1)
+    expect(iconsAt, '图标注册表必须在 navEntries 之前声明').toBeLessThan(entriesAt)
   })
 
   it('二级小节依次排开；顶部页签条保留但默认隐藏', () => {
@@ -148,16 +127,16 @@ describe('AppSettingsPanel 左导航：第 0 级分类 + 图标菜单', () => {
     expect(SRC).toMatch(/showSectionTabs: false/)
     expect(NAV_STATE).toMatch(/const showTabs = computed<boolean>\(\(\) => options\.showSectionTabs\(\) && sections\.value\.length > 1\)/)
     expect(CONTENT).toMatch(/v-if="showTabs"/)
-    expect(CONTENT).toMatch(/class="asp-tabbar"/)
+    expect(CONTENT).toMatch(/class="psd-tabbar"/)
   })
 })
 
-describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行', () => {
+describe('PluginSettingsContent 右内容：二级小标题 + 卡片 + 分割线行', () => {
   it('每个二级小节一张卡片；默认模式不按页签只显示当前段', () => {
     expect(CONTENT).toMatch(/v-for="section in sections"/)
-    // 自绘整页（pageGroup 归到二级节）走 .asp-section-page；普通小节仍是一张卡片
+    // 自绘整页（pageGroup 归到二级节）走 .psd-section-page；普通小节仍是一张卡片
     expect(CONTENT).toMatch(/<ShadcnSettingsSection v-else :title="section.label">/)
-    expect(CONTENT).toMatch(/class="asp-section-page"/)
+    expect(CONTENT).toMatch(/class="psd-section-page"/)
     expect(NAV_STATE).toMatch(/const activeEntry = computed<NavEntry \| undefined>/)
   })
 
@@ -174,7 +153,7 @@ describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行',
     // 取色器要浮在正文之上，滚动时不被裁切
     expect(FIELD).toMatch(/<PopoverContent/)
     // 配置项左边标题、右边控件：行组件用左右两栏
-    const ROW = read('../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue')
+    const ROW = read('../../../../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue')
     expect(ROW).toMatch(/justify-content: space-between/)
     expect(ROW).toMatch(/shadcn-settings-row__label/)
     expect(ROW).toMatch(/shadcn-settings-row__desc/)
@@ -190,19 +169,19 @@ describe('AppSettingsPanel 右内容：二级小标题 + 卡片 + 分割线行',
 
   it('小标题下是卡片；卡片里的行之间是分割线', () => {
     const SECTION = read(
-      '../../../ui-kit-shadcn/src/components/settings/SettingsSection.vue',
+      '../../../../../../ui-kit-shadcn/src/components/settings/SettingsSection.vue',
     )
     expect(SECTION).toMatch(/shadcn-settings-section__title/)
     expect(SECTION).toMatch(/border: 1px solid var\(--ui-line/)
     expect(SECTION).toMatch(/border-radius: var\(--radius-panel/)
     const ROW = read(
-      '../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue',
+      '../../../../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue',
     )
     expect(ROW).toMatch(/\.shadcn-settings-row \+ \.shadcn-settings-row \{[^}]*border-top: 1px solid/s)
   })
 })
 
-describe('AppSettingsPanel 硬性保留：插槽、滚动锁、关闭通道', () => {
+describe('PluginSettingsContent 硬性保留：插槽、滚动锁、关闭通道', () => {
   it('消费 settingsGroup/<完整分组 key>', () => {
     expect(NAV_STATE).toMatch(/ctx\.slots\.occupants\('settingsGroup\/' \+ groupKey\)/)
   })
@@ -233,7 +212,7 @@ describe('AppSettingsPanel 硬性保留：插槽、滚动锁、关闭通道', ()
   })
 })
 
-describe('AppSettingsPanel 导航选中态', () => {
+describe('PluginSettingsContent 导航选中态', () => {
   it('未选中统一弱化色；选中用中性浅底 + 正常文字色', () => {
     expect(NAV_ITEM).toMatch(/\.shadcn-nav-item\.is-active \{/)
     expect(NAV_ITEM).toMatch(/background: var\(--ui-panel-active/)

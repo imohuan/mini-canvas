@@ -13,13 +13,11 @@ import { renderToString } from 'vue/server-renderer'
 import { Context } from '@mini-canvas/canvas-data'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
-import AppSettingsPanel from '../components/settings/AppSettingsPanel.vue'
-import { uiSettingsPanelPlugin } from '../settingsPanelPlugin'
+import PluginSettingsContent from '../PluginSettingsContent.vue'
 
 async function boot(): Promise<Context> {
   const ctx = new Context()
   ctx.plugin(themeDefaultPlugin)
-  ctx.plugin(uiSettingsPanelPlugin)
   await ctx.start()
   return ctx
 }
@@ -34,10 +32,10 @@ function renderCtx(ctx: Context): CanvasRenderContext {
 }
 
 describe('设置面板打开不白屏', () => {
-  it('成品皮在真实内核下能渲染出分类和菜单', async () => {
+  it('默认皮在真实内核下能渲染出分类和菜单', async () => {
     const ctx = await boot()
     const app = createSSRApp({
-      render: () => h(AppSettingsPanel, { settings: ctx.get('settings') }),
+      render: () => h(PluginSettingsContent, { settings: ctx.get('settings') }),
     })
     app.provide(RENDER_CONTEXT_KEY, renderCtx(ctx))
     const html = await renderToString(app)

@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(
-  new URL('../components/settings/settings/useSettingsNavigation.ts', import.meta.url),
+  new URL('../settings/useSettingsNavigation.ts', import.meta.url),
   'utf-8',
 )
 

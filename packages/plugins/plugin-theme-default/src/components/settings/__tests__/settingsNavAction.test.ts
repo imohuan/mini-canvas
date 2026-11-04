@@ -34,36 +34,28 @@ describe('设置里的快捷键动作项', () => {
     ctx.stop()
   })
 
-  it('两套设置面板都保留动作项，并广播 settings:ui-action', () => {
-    for (const rel of [
-      '../components/settings/settings/useSettingsNavigation.ts',
-      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
-    ]) {
-      const src = read(rel)
-      expect(src, rel + ' 丢掉了动作项').toMatch(/action/)
-      expect(src, rel + ' 没有广播动作').toMatch(/settings:ui-action/)
-    }
+  it('设置面板保留动作项，并广播 settings:ui-action', () => {
+    const rel = '../settings/useSettingsNavigation.ts'
+    const src = read(rel)
+    expect(src, rel + ' 丢掉了动作项').toMatch(/action/)
+    expect(src, rel + ' 没有广播动作').toMatch(/settings:ui-action/)
   })
 
   it('宿主把 shortcuts 动作翻译成打开快捷键帮助', () => {
-    const ui = read('../composables/ui/useUiLifecycle.ts')
+    const ui = read('../../../../../../ui/src/composables/ui/useUiLifecycle.ts')
     expect(ui).toMatch(/settings:ui-action/)
     expect(ui).toMatch(/action === 'shortcuts'/)
     expect(ui).toMatch(/shortcutsOpen = true/)
   })
 
   it('动作项在被“直接 return”之前执行（默认选中也能点开）', () => {
-    for (const rel of [
-      '../components/settings/settings/useSettingsNavigation.ts',
-      '../../../plugins/plugin-theme-default/src/components/settings/settings/useSettingsNavigation.ts',
-    ]) {
-      const src = read(rel)
-      const fn = src.slice(src.indexOf('function selectNav('), src.indexOf('function selectSection('))
-      const actionAt = fn.search(/action/)
-      const earlyReturnAt = fn.search(/if \(activeNav\.value === key\) return/)
-      expect(actionAt, rel + ' 没有动作分支').toBeGreaterThan(-1)
-      expect(earlyReturnAt, rel + ' 没有去重分支').toBeGreaterThan(-1)
-      expect(actionAt, rel + ' 的动作分支必须在去重 return 之前').toBeLessThan(earlyReturnAt)
-    }
+    const rel = '../settings/useSettingsNavigation.ts'
+    const src = read(rel)
+    const fn = src.slice(src.indexOf('function selectNav('), src.indexOf('function selectSection('))
+    const actionAt = fn.search(/action/)
+    const earlyReturnAt = fn.search(/if \(activeNav\.value === key\) return/)
+    expect(actionAt, rel + ' 没有动作分支').toBeGreaterThan(-1)
+    expect(earlyReturnAt, rel + ' 没有去重分支').toBeGreaterThan(-1)
+    expect(actionAt, rel + ' 的动作分支必须在去重 return 之前').toBeLessThan(earlyReturnAt)
   })
 })
