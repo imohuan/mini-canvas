@@ -158,7 +158,8 @@ export const mySettingsPlugin: PluginModule = { name, inject, Config, apply }
 ```
 
 **想整张皮都换掉**：往 `settingsPanel` 槽注册一个 `order` 更小的组件
-（成品应用就是这么干的，见 `packages/ui/src/settingsPanelPlugin.ts`）。
+（默认赢家是本文件的 `PluginSettingsContent`，`order: 0`；2026-11-04 起成品应用不再自己换皮，
+设置界面就这一份）。
 注意换皮后**上面这些插槽就没有了** —— 它们属于默认皮内容区的实现，不是槽的契约。
 
 ## 注意事项
