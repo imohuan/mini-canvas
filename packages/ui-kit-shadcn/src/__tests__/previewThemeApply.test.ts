@@ -159,15 +159,13 @@ describe('预览页的接线（静态检查）', () => {
     for (const option of RADIUS_OPTIONS) {
       expect(option.label).not.toContain('默认')
     }
-    // 第一档是无圆角；除“全圆”外，固定档不超过 12px（再大就都是「很圆」）
+    // 第一档是无圆角；所有固定档不超过 12px（再大就都是「很圆」）
     expect(RADIUS_OPTIONS[0]!.value).toBe('0rem')
-    const fixed = RADIUS_OPTIONS.filter((r) => r.value.endsWith('rem'))
-    const maxPx = Math.max(...fixed.map((r) => Number.parseFloat(r.value) * 16))
+    const maxPx = Math.max(...RADIUS_OPTIONS.map((r) => Number.parseFloat(r.value) * 16))
     expect(maxPx).toBeLessThanOrEqual(12)
-    // 用户口径 2026-11-04：12px 和 8px 看不出差别，最后一档改成「全圆」胶囊
-    const pill = RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1]!
-    expect(pill.id).toBe('full')
-    expect(Number.parseFloat(pill.value)).toBeGreaterThanOrEqual(9999)
+    // 用户口径 2026-11-04 二次反馈：全圆没有实际场景，已删除
+    expect(RADIUS_OPTIONS.map((r) => r.id)).not.toContain('full')
+    expect(RADIUS_OPTIONS.length).toBe(5)
   })
 
   it('浮层组件案例按组件名逐项列出（不是一张配色表）', () => {

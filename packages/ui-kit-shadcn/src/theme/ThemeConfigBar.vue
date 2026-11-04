@@ -94,14 +94,12 @@ const sizeOptions = computed<Option[]>(() =>
  *
  * 通过档位表换算（不是把 id 当 rem 解析）；认不出的 id 一律当 0。
  * 预览改成 SVG 弧线后（见 RadiusPreview.vue），这里只需要给数值。
- * 「全圆 9999px」按预览框的一半算，画出来就是半圆角，和真实胶囊一致。
+ * 认不出的值（旧档位残留）一律当 0。
  */
 function radiusPx(id: string): number {
   const option = RADIUS_OPTIONS.find((r) => r.id === id)
   const match = /^([\d.]+)rem$/.exec(option?.value ?? '')
-  if (match) return Number(match[1]) * 16
-  // 9999px 这类「无限大」档：预览框里最多画到半宽
-  return 14
+  return match ? Number(match[1]) * 16 : 0
 }
 
 /**
