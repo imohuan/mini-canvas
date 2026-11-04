@@ -1,23 +1,22 @@
 /**
- * CanvasContext —— 画布体系最外层的“基础上下文”。
+ * CanvasContext —— 转发件。
  *
- * 为什么单独立一层：
- * - 内核 ctx 是所有插件/服务/命令的来源，它不属于 VueFlow；
- * - 外壳（左侧抽屉、状态条、底栏）也需要读取 ctx，但它们不在 CanvasHost 里；
- * - 如果它们用 useCanvasRender()，就会把“外壳”和“画布渲染子树”绑死。
+ * 实现只有一份，住在 `@mini-canvas/vue-render/context`（通用渲染底座）。这里保留旧路径，
+ * 现有 import 不用改；新代码直接从 vue-render 取。
  *
- * 因此由 CanvasProvider 在应用最外层 provide 这一份；它只有 ctx / host / api / manager，
- * **不含** flow、renderNodes、visibleRect 这些只有 VueFlow 挂载后才存在的渲染能力。
- * 需要这些东西的组件仍必须放在 CanvasHost 内，用 useCanvasRender()。
- *
- * 失败策略：找不到就抛错，不回退读 RENDER_CONTEXT_KEY。
- * 回退会让“外壳里拿到了画布上下文”变成静默 bug —— 表面上能跑，实际上依赖了不该依赖的东西。
+ * 为什么必须删掉本地那份实现：以前这里自己写了一个 `useCanvasContextOrRender`，
+ * 从渲染上下文回退时会造出 `api/manager = undefined` 的假上下文；两份实现并存时，
+ * 从哪个路径 import 决定拿到真的还是假的，很难查。
  */
-import { inject, type InjectionKey } from 'vue'
+import type { InjectionKey } from 'vue'
 import type { Context } from '@mini-canvas/canvas-data'
 import type { CanvasHostHandle, MiniCanvasApi } from '../host/createMiniCanvasHost'
 import type { PluginManager } from '../host/pluginManager'
-import { RENDER_CONTEXT_KEY } from './renderContext'
+import {
+  CANVAS_CONTEXT_KEY as BASE_KEY,
+  useCanvasContext as useBaseContext,
+  useCanvasContextOrRender as useBaseContextOrRender,
+} from '@mini-canvas/vue-render/context'
 
 /** 外壳与画布共用的一份基础上下文（不含 VueFlow 专属的 flow / 渲染快照）。 */
 export interface CanvasContext {
@@ -32,52 +31,18 @@ export interface CanvasContext {
 }
 
 /**
- * 单令牌：CanvasProvider provide、外壳与画布组件经 useCanvasContext() 取。
+ * 同一个注入键（Symbol.for，跨包一致），这里按画布类型重新标注。
  *
- * **故意用固定字符串 key 而不是 Symbol**：UMD/ESM 插件包内自带一份 canvas-render
- * （不与宿主共享模块实例），Symbol 会因"两份模块各建一个"而永远对不上 —— 插件组件
- * 在外壳槽里 useCanvasContext() 必然取不到宿主 provide 的那份，抛"缺少画布上下文"
- * （2026-10-28 shell-slots-demo 真机实测）。字符串 key 让两份实现共享同一个注入名，
- * 与 DOM 的 data-* 契约同一思路。
+ * 为什么需要重标：vue-render 的 `CanvasContext` 故意把 host/api/manager 声明成可选 + unknown
+ * （它不认识画布）；画布层的调用方需要具体类型，否则 `host.save` / `api.installPlugin` 全是 unknown。
+ * 实现与运行时对象都只有一份，这里只是类型收窄。
  */
-export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext> = Symbol.for('mini-canvas-context')
+export const CANVAS_CONTEXT_KEY = BASE_KEY as unknown as InjectionKey<CanvasContext>
 
-/**
- * 取基础上下文。
- *
- * 必须在 <CanvasProvider> 的默认插槽内调用；在 Provider 外会抛清晰错误。
- * 若组件需要视口 / 节点渲染快照 / 连线反馈，请放进 <CanvasHost> 内并用 useCanvasRender()。
- */
-export function useCanvasContext(): CanvasContext {
-  const base = inject(CANVAS_CONTEXT_KEY, null)
-  if (!base) {
-    throw new Error(
-      '[useCanvasContext] 缺少画布上下文：请把组件放在 <CanvasProvider> 内。' +
-        '如果这里需要视口 / 节点渲染快照 / 连线反馈，它应该放在 <CanvasHost> 内并使用 useCanvasRender()。',
-    )
-  }
-  return base
-}
+/** 取基础上下文；Provider 外抛清晰错误（实现见 vue-render/context）。 */
+export const useCanvasContext = useBaseContext as unknown as () => CanvasContext
 
-/**
- * 读入口专用的“宽松”取 ctx：先基础上下文，再回退渲染上下文。
- *
- * 只给 useUiComponent / useThemeColor / useToolbarOffsets 这类「给我 ctx 就行」的 helper 用。
- * 渲染子树里的组件可以只 provide 渲染上下文；外壳与业务组件仍走 useCanvasContext()。
- */
-export function useCanvasContextOrRender(): CanvasContext {
-  const base = inject(CANVAS_CONTEXT_KEY, null)
-  if (base) return base
-  const render = inject(RENDER_CONTEXT_KEY, null)
-  if (render) {
-    return {
-      ctx: render.ctx,
-      host: render.host,
-      api: undefined as unknown as MiniCanvasApi,
-      manager: undefined as unknown as PluginManager,
-    }
-  }
-  return useCanvasContext()
-}
+/** 宽松取 ctx：先外壳上下文，再回退渲染上下文；host/api/manager 有就一并透传。 */
+export const useCanvasContextOrRender = useBaseContextOrRender as unknown as () => CanvasContext
 
 
