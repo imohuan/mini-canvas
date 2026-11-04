@@ -26,15 +26,20 @@
 import {
   FONT_OPTIONS,
   RADIUS_OPTIONS,
-  COMPONENT_SIZE_CHOICES,
   findFont,
   loadFont,
-  setComponentConfig,
-  resetComponentConfig,
   type FontOption,
-  type ComponentSize,
   type RadiusOption,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@mini-canvas/ui-kit-shadcn/theme/fonts'
+// 尺寸配置来自组件库的**纯 TS 模块**，不走包根：
+// 包根会连带 .vue 组件，纯 node 单测（theme-contract）解析不了。
+import {
+  COMPONENT_SIZE_CHOICES,
+  resetComponentConfig,
+  setComponentConfig,
+  type ComponentSize,
+} from '@mini-canvas/ui-kit-shadcn/componentConfig'
+
 
 /** 字体选项：`inherit`（跟随宿主）在最前，其余原样取自组件库 */
 export const THEME_FONT_OPTIONS: readonly FontOption[] = FONT_OPTIONS

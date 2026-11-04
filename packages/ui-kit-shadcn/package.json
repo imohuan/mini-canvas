@@ -15,6 +15,14 @@
       "types": "./src/shadcnFamilies.ts",
       "default": "./src/shadcnFamilies.ts"
     },
+    "./componentConfig": {
+      "types": "./src/componentConfig.ts",
+      "default": "./src/componentConfig.ts"
+    },
+    "./theme/fonts": {
+      "types": "./src/theme/fonts.ts",
+      "default": "./src/theme/fonts.ts"
+    },
     "./vite-plugin-debug-loc": {
       "types": "./src/vite-plugin-debug-loc.ts",
       "default": "./src/vite-plugin-debug-loc.ts"
