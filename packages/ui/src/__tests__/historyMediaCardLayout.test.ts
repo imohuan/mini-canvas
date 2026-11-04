@@ -600,7 +600,7 @@ describe('批量勾选钮样式对动态卡片生效', () => {
     expect(modalsArea, '缺少评级 UI 开关常量').toMatch(/const SHOW_RATING_UI = false/)
     // 筛选下拉与批量评级按钮都必须受开关控制
     expect(modalsArea, '评级筛选仍无条件渲染').toMatch(/<template v-if="SHOW_RATING_UI">[\s\S]{0,400}aria-label="所有评级"/)
-    expect(modalsArea, '批量评级按钮仍无条件渲染').toMatch(/<button v-if="SHOW_RATING_UI"[\s\S]{0,220}aria-label="批量评级"/)
+    expect(modalsArea, '批量评级按钮仍无条件渲染').toMatch(/<Button v-if="SHOW_RATING_UI"[\s\S]{0,220}aria-label="批量评级"/)
     // 逻辑不许删：以后要恢复，只是把开关改成 true
     expect(uiSource, '评级筛选逻辑被删了（要求隐藏不删除）').toMatch(/HIST_RATING\[/)
     expect(uiSource, '批量评级逻辑被删了（要求隐藏不删除）').toMatch(/batchRateHistory/)

@@ -23,6 +23,9 @@ import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
 const Button = useUiComponent('Button')
+const Tabs = useUiComponent('Tabs')
+const TabsList = useUiComponent('TabsList')
+const TabsTrigger = useUiComponent('TabsTrigger')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
@@ -40,6 +43,12 @@ const s = ui.state
  * 这里保留全部逻辑与样式，只把入口收起来；将来真做了审核流程，把 true 改回来即可。
  */
 const SHOW_RATING_UI = false
+
+/** 类型页签点选：再点当前项等于取消筛选（沿用原来「可取消」的交互）。 */
+function onHistTypeTabs(value: unknown): void {
+  const next = String(value)
+  s.histType = s.histType === next ? '' : next
+}
 
 const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? AudioLines : ImageIcon)
 
@@ -803,25 +812,28 @@ onBeforeUnmount(() => {
     <div class="flex min-h-0 flex-1 flex-col">
       <div class="flex flex-none flex-wrap items-center justify-between gap-3 px-6 py-3">
         <div class="flex items-center gap-4">
-          <div class="flex items-center gap-0.5 rounded-xl bg-veil p-0.5" role="tablist">
-            <button v-for="sc in s.histScopes" :key="sc"
-              class="relative h-8 rounded-[10px] px-3 text-sm transition-colors"
-              :class="s.histScope === sc ? 'text-ink' : 'text-ink/60 hover:text-ink'" role="tab"
-              :aria-selected="s.histScope === sc" @click="s.histScope = sc">
-              <span v-if="s.histScope === sc"
-                class="absolute inset-0 rounded-[10px] border border-line bg-canvas-bg"></span>
-              <span class="relative">{{ sc }}</span>
-            </button>
-          </div>
+          <!-- 范围页签：组件库 Tabs 的默认（分段）样式，不额外改外观 -->
+          <Tabs :model-value="s.histScope" @update:model-value="(v: unknown) => s.histScope = String(v)">
+            <TabsList aria-label="历史范围">
+              <TabsTrigger v-for="sc in s.histScopes" :key="sc" :value="sc">
+                {{ sc }}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           <span class="h-4 w-px bg-line"></span>
-          <div class="flex items-center gap-4 pl-1">
-            <button v-for="t in s.histTypes" :key="t"
-              class="flex h-8 items-center gap-1.5 text-[13px] transition-colors"
-              :class="s.histType === t ? 'text-brand' : 'text-ink'" @click="s.histType = s.histType === t ? '' : t">
-              <span>{{ t }}</span><span
-                class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-chip px-1 text-[11px]">{{
-                  ui.histCount(t) }}</span>
-            </button>
+          <!-- 类型筛选也是页签：默认样式；再点一次当前项 = 取消筛选，
+               所以用 Tabs 的 model-value 自己做开关，不走 reka 的「点了必选中」。
+               数字仍是 chip 小标（用 data 属性让页签内部的 svg/文字配色不受影响）。 -->
+          <div class="hist-type-tabs flex items-center gap-1 pl-1">
+            <Tabs :model-value="s.histType" @update:model-value="onHistTypeTabs">
+              <TabsList aria-label="按类型筛选">
+                <TabsTrigger v-for="t in s.histTypes" :key="t" :value="t" class="gap-1.5">
+                  <span>{{ t }}</span><span
+                    class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-chip px-1 text-[11px]">{{
+                      ui.histCount(t) }}</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -905,16 +917,12 @@ onBeforeUnmount(() => {
       <div v-if="s.histBatchMode" class="hist-batch-bar flex flex-none items-center justify-between border-t border-line px-6 py-3">
         <span class="text-[13px] text-ink">已选择 {{ s.histSelectedIds.length }} 项</span>
         <div class="flex items-center gap-2">
-          <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
-            aria-label="批量删除" @click="ui.batchDeleteHistory()">删除</button>
+          <Button variant="ghost" size="sm" class="text-[13px]" aria-label="批量删除" @click="ui.batchDeleteHistory()">删除</Button>
           <!-- 批量评级：UI 已隐藏（逻辑保留，见 SHOW_RATING_UI 注释） -->
-          <button v-if="SHOW_RATING_UI"
-            class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
-            aria-label="批量评级" @click="ui.batchRateHistory('passed')">评级</button>
-          <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
-            aria-label="保存到资产" @click="ui.batchSaveAssets()">保存到资产</button>
-          <button class="flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-[13px] text-primary-ink transition-colors hover:opacity-90"
-            aria-label="完成选择" @click="toggleBatchMode">完成</button>
+          <Button v-if="SHOW_RATING_UI" variant="ghost" size="sm" class="text-[13px]"
+            aria-label="批量评级" @click="ui.batchRateHistory('passed')">评级</Button>
+          <Button variant="ghost" size="sm" class="text-[13px]" aria-label="保存到资产" @click="ui.batchSaveAssets()">保存到资产</Button>
+          <Button size="sm" class="text-[13px]" aria-label="完成选择" @click="toggleBatchMode">完成</Button>
         </div>
       </div>
     </div>

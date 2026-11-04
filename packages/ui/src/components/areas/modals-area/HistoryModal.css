@@ -11,6 +11,14 @@
 /* 批量操作栏 */
 .hist-batch-bar { background: var(--ui-panel, #fff); }
 
+/*
+ * 类型筛选页签（组件库 Tabs 默认样式）。
+ * 外观全部交给 TabsList / TabsTrigger 自己，这里只修一处：被选中的类型用品牌色文字，
+ * 与原来「筛选中的类型高亮」一致；数字 chip 的底色不受影响。
+ */
+.hist-type-tabs [data-slot='tabs-trigger'][data-state='active'] { color: var(--ui-accent, #0891b2); }
+.hist-type-tabs [data-slot='tabs-trigger'][data-state='active'] .bg-chip { color: var(--ui-ink, #18202b); }
+
 /* 加载更多指示（用户口径 2026-10-28：显示 1 秒、要更清楚）。
    中性灰阶：转圈 + 文案，居中放在列表底部；不用主题色。 */
 .hist-loading {
