@@ -18,7 +18,8 @@ import { listProjects, createProject, deleteProject, listCanvases, createCanvas,
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 
 const router = useRouter()
-// 项目页在 CanvasProvider 之外（独立路由）：走宿主单例取件，树内/树外都能拿到同一个组件。
+// 项目页在画布路由之外：当前仍走宿主单例取件，树内/树外都能拿到同一个组件。
+// 根级 Provider 已经把它包进应用上下文；项目页自己的插槽接线放在后续步骤。
 const Button = useUiComponentOutside('Button')
 const projects = ref<ProjectSummary[]>([])
 const loading = ref(true)

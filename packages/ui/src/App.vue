@@ -2,17 +2,15 @@
 // App.vue —— 画布应用的**装配层**。
 //
 // 各区域已组件化（components/areas/*），这里只负责：
-//   1. 用 CanvasProvider 启动唯一内核、提供基础上下文（插件/存储/窗口句柄都在这）
+//   1. 从根级 Provider 取唯一的内核上下文（插件/存储/窗口句柄都在这）
 //   2. 挂 CanvasShell 布局壳并把区域组件放进对应插槽
 //   3. 挂真实 CanvasHost（只画画布，不再启动）
 //   4. 全局键盘（Esc / Ctrl+/）
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
-import { CanvasHost, CanvasProvider, SettingsHost } from '@mini-canvas/canvas-render'
-import { SlotHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost, SlotHost, useCanvasContext } from '@mini-canvas/canvas-render'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
-import { createDefaultStorageAdapter, resolveAppPlugins, seedDefaultCanvas } from './assembly'
 import CanvasShell from './components/CanvasShell.vue'
 import TopLeftArea from './components/areas/TopLeftArea.vue'
 import TopRightArea from './components/areas/TopRightArea.vue'
@@ -49,12 +47,13 @@ const UiKitDebugOverlay = defineAsyncComponent(
   () => import('@mini-canvas/plugin-theme-default/components/ui/UiKitDebugOverlay.vue'),
 )
 const s = ui.state
-// 装载清单 = 静态装配 + 按运行环境追加的自带件（cloud-server 托管时含云端连接，见 assembly）
-const plugins = resolveAppPlugins()
 
 // 外壳命令（打开抽屉 / 切页签 / 收起展开）：注册在 Provider 的 ctx 上，
 // 插件按钮通过 command 调用，不反向依赖 @mini-canvas/ui 的状态。
 let shellCommandDisposers: Array<{ dispose(): void }> = []
+
+// 唯一的根上下文：由 Root.vue 的 AppProvider 提供，画布页只消费、不再自己建。
+const { host } = useCanvasContext()
 
 // ===== 小地图位置：Teleport 到状态栏按钮旁的挂点 =====
 //
@@ -67,7 +66,7 @@ let shellCommandDisposers: Array<{ dispose(): void }> = []
 // 不需要任何读坐标 / 定时器。Teleport 的目标不在画布子树内也不影响：SlotHost 只需要
 // 渲染上下文，Provider 在最外层已经给它包好了。
 const miniMapDock = provideMiniMapDockTarget()
-function onProviderReady(host: CanvasHostHandle): void {
+function bindHost(host: CanvasHostHandle): void {
   setReadyHost(host)
   ui.setHostEl({ host })
   // 插件管理服务必须**在宿主就绪时就拿到安装句柄**，不能等用户打开「设置 → 插件」页。
@@ -81,8 +80,7 @@ function onProviderReady(host: CanvasHostHandle): void {
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = registerShellCommands(host.ctx, ui)
 }
-const adapter = createDefaultStorageAdapter()
-const DEV = import.meta.env.DEV
+bindHost(host)
 
 function onKeydown(event: KeyboardEvent): void {
   /**
@@ -147,9 +145,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <CanvasProvider :plugins="plugins" :adapter="adapter" :seed="seedDefaultCanvas" :dev="DEV" window-key="MiniCanvasUI"
-    @ready="onProviderReady">
-    <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
+  <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
       :right-width="ui.agent.open && ui.agent.docked ? ui.agent.width : 0" :push-status="true" :push-dock="true">
       <template #top-left>
         <TopLeftArea />
@@ -249,7 +245,6 @@ onBeforeUnmount(() => {
       <component :is="UiKitDebugOverlay" v-if="UiKitDebugOverlay && s.cfg.debug.uiKitDebug" />
 
     </CanvasShell>
-  </CanvasProvider>
 </template>
 
 <style scoped>

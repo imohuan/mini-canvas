@@ -9,14 +9,14 @@
  */
 import { createRouter, createWebHashHistory } from 'vue-router'
 import ProjectsPage from './components/ProjectsPage.vue'
-import CanvasApp from './App.vue'
+import CanvasWorkspace from './App.vue'
 import { flushPendingSave } from './composables/pendingSave'
 
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', name: 'projects', component: ProjectsPage },
-    { path: '/canvas/:id', name: 'canvas', component: CanvasApp, props: true },
+    { path: '/canvas/:id', name: 'canvas', component: CanvasWorkspace, props: true },
     // 其它路径（含旧的直接打开根路径）一律回项目页
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

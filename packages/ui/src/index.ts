@@ -3,7 +3,8 @@
  *
  * 这一份公开面说清两件事，别的都不该从这里出去：
  *
- * 1. **应用本体**：`CanvasApp`（= `App.vue`）是"已组装好的画布应用"，含顶部工具条与设置弹窗。
+ * 1. **应用本体**：`CanvasApp`（= `CanvasAppRoot.vue`）是"已组装好的画布应用"，含根级 Provider、
+ *    顶部工具条与设置弹窗。
  *    装进任意 Vue 3 应用用 `<CanvasApp/>`，或整体挂载用 `mountCanvasApp(root)`。
  * 2. **装配决定**：`APP_PLUGINS` / `resolveAppPlugins` / `createDefaultStorageAdapter` / `seedDefaultCanvas` 是这一版
  *    装了哪些插件、用哪个存储、空画布塞什么。换一套组合不用改组件，改这里（或 `./assembly`）即可。
@@ -19,9 +20,9 @@
  * （`src/main.ts` 里就是这么做的。）
  */
 import { createApp, type App as VueApp } from 'vue'
-import CanvasApp from './App.vue'
+import CanvasApp from './CanvasAppRoot.vue'
 
-export { default as CanvasApp } from './App.vue'
+export { default as CanvasApp } from './CanvasAppRoot.vue'
 export {
   APP_PLUGINS,
   resolveAppPlugins,
