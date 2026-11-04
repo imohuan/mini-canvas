@@ -20,13 +20,15 @@ import { UI_GALLERY, UI_DETAIL } from '../names'
 import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
 import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
+import { useCanvasGate } from '../useCanvasGate'
 
 /**
  * 只从根上下文取服务：项目页没有画布也能打开风格广场、看详情、收藏。
  * flow 这类画布能力按需现取（tryGet('view')），拿不到就把"加入画布"禁用。
  */
 const { ctx } = useCanvasContext()
-const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
+/** 「能不能加入画布」：doc + media 两件都在才行，缺哪件给哪句原因。 */
+const gate = useCanvasGate(ctx, '素材')
 
 /** 广场正文 / 详情：按名从 ui 目录取（树内调用 useUiComponent）；缺件时退化为不渲染 */
 const GalleryComp = useUiComponent(UI_GALLERY)
@@ -88,9 +90,9 @@ const useError = ref('')
  * 多图风格在标题后加序号（第 1 张不加），避免同名分不清。
  */
 async function onUse(item: StyleCard, index: number): Promise<void> {
-  // 项目页没有画布：给可见提示，不创建半成品节点。
-  if (!hasCanvas.value) {
-    useError.value = '打开一张画布后可使用素材'
+  // 缺画布或缺 media 能力：给可见提示，不创建半成品节点。
+  if (!gate.canUse.value) {
+    useError.value = gate.reason.value
     return
   }
   const url = item.images[index] ?? item.cover
@@ -177,8 +179,8 @@ watch(() => s.open, (v) => {
 
         <div class="slol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            :using-ids="usingIds" :use-disabled="!hasCanvas"
-            :use-disabled-reason="'打开一张画布后可使用素材'"
+            :using-ids="usingIds" :use-disabled="!gate.canUse.value"
+            :use-disabled-reason="gate.reason.value"
             @toggle-star="onToggleStar" @open-detail="onOpenDetail" @use="onUse" />
         </div>
       </div>

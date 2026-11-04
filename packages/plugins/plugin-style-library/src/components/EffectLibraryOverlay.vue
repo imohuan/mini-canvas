@@ -18,10 +18,12 @@ import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
 import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
 import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
+import { useCanvasGate } from '../useCanvasGate'
 
 /** 只从根上下文取服务：项目页没有画布也能浏览与收藏。 */
 const { ctx } = useCanvasContext()
-const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
+/** 「能不能加入画布」：doc + media 两件都在才行，缺哪件给哪句原因。 */
+const gate = useCanvasGate(ctx, '特效')
 
 /** 广场正文：按名从 ui 目录取（树内 useUiComponent）——风格/特效共用同一件 */
 const GalleryComp = useUiComponent(UI_GALLERY)
@@ -81,8 +83,8 @@ const useError = ref('')
  * 有图就取第一张图，没有才退回预览视频的地址。
  */
 async function onUse(item: StyleCard): Promise<void> {
-  if (!hasCanvas.value) {
-    useError.value = '打开一张画布后可使用特效'
+  if (!gate.canUse.value) {
+    useError.value = gate.reason.value
     return
   }
   const url = item.images[0] ?? item.cover ?? item.videos[0] ?? ''
@@ -180,8 +182,8 @@ watch(() => s.open, (v) => {
 
         <div class="elol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            mode="preview" :using-ids="usingIds" :use-disabled="!hasCanvas"
-            :use-disabled-reason="'打开一张画布后可使用素材'"
+            mode="preview" :using-ids="usingIds" :use-disabled="!gate.canUse.value"
+            :use-disabled-reason="gate.reason.value"
             @toggle-star="onToggleStar" @preview="onPreview" @use="onUse" />
         </div>
       </div>

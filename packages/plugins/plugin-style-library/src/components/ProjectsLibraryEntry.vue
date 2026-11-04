@@ -9,10 +9,11 @@ import { computed } from 'vue'
 import { SparklesIcon, WandSparklesIcon } from 'lucide-vue-next'
 import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
 import type { LibraryService } from '../data/store'
+import { useCanvasGate } from '../useCanvasGate'
 
 const { ctx } = useCanvasContext()
 const Button = useUiComponent('Button')
-const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
+const gate = useCanvasGate(ctx, '素材')
 
 function open(name: 'style-library' | 'effect-library'): void {
   const svc = ctx.tryGet<LibraryService>(name)
@@ -32,6 +33,6 @@ function open(name: 'style-library' | 'effect-library'): void {
         <WandSparklesIcon :size="14" /> 特效库
       </component>
     </div>
-    <p v-if="!hasCanvas" class="mt-2 text-xs text-ink-dim">打开画布后可使用素材。</p>
+    <p v-if="!gate.canUse.value" class="mt-2 text-xs text-ink-dim">{{ gate.reason.value }}</p>
   </div>
 </template>
