@@ -31,6 +31,10 @@ const props = defineProps<{
   showCommercial?: boolean
   /** 正在加入画布（父组件在提交期间置 true，避免连点重复建节点） */
   busy?: boolean
+  /** 现在能不能加入画布（项目页没有画布时为 false：按钮禁用并给出原因） */
+  useDisabled?: boolean
+  /** 不能加入时按钮上的说明 */
+  useDisabledReason?: string
 }>()
 
 const emit = defineEmits<{
@@ -191,10 +195,10 @@ function human(n: number): string {
       <button
         class="sc-iconbtn sc-add"
         :class="{ 'is-busy': busy }"
-        :disabled="busy"
+        :disabled="busy || useDisabled"
         type="button"
-        :aria-label="busy ? '正在加入画布' : '加入画布'"
-        title="加入画布"
+        :aria-label="busy ? '正在加入画布' : useDisabled ? '加入画布（' + (useDisabledReason || '需要先打开画布') + '）' : '加入画布'"
+        :title="busy ? '正在加入画布' : useDisabled ? (useDisabledReason || '打开一张画布后可使用素材') : '加入画布'"
         @click.stop="emit('use', props.item)"
       >
         <Plus :size="14" />

@@ -62,7 +62,7 @@ describe('focusStyleNode：选中 + 聚焦', () => {
     const view = { fitTo: vi.fn(() => true) }
     focusStyleNode({ selection, view } as never, 'n1')
     expect(view.fitTo).toHaveBeenCalledTimes(1)
-    expect(view.fitTo.mock.calls[0][1]).toEqual({ keepZoom: true, select: true })
+    expect(view.fitTo).toHaveBeenCalledWith(['n1'], { keepZoom: true, select: true })
   })
 
   it('fitTo 返回 false（节点不存在）→ 不抛错，选中照旧', () => {

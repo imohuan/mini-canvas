@@ -52,8 +52,12 @@ const props = withDefaults(
     mode?: 'detail' | 'preview'
     /** 正在加入画布的素材 id（只影响那一张的按钮态） */
     usingIds?: Array<number | string>
+    /** 现在能不能加入画布；false 时卡片按钮禁用并显示原因 */
+    useDisabled?: boolean
+    /** 不能加入时的可见说明 */
+    useDisabledReason?: string
   }>(),
-  { columns: 4, mode: 'detail', usingIds: () => [] },
+  { columns: 4, mode: 'detail', usingIds: () => [], useDisabled: false, useDisabledReason: '' },
 )
 
 const svc = props.service
@@ -232,6 +236,7 @@ defineExpose({ markRecent })
         <component :is="CardFromRegistry ?? 'div'" v-for="it in visible" :key="it.id" :item="it"
           :starred="starred.includes(it.id)" :show-commercial="mode !== 'preview'"
           :busy="usingIds.includes(it.id)"
+          :use-disabled="useDisabled" :use-disabled-reason="useDisabledReason"
           @open="onOpen" @toggle-star="onToggleStar" @use="onCardUse" />
       </div>
 

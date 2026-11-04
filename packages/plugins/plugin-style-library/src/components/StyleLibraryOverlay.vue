@@ -177,7 +177,9 @@ watch(() => s.open, (v) => {
 
         <div class="slol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            :using-ids="usingIds" @toggle-star="onToggleStar" @open-detail="onOpenDetail" @use="onUse" />
+            :using-ids="usingIds" :use-disabled="!hasCanvas"
+            :use-disabled-reason="'打开一张画布后可使用素材'"
+            @toggle-star="onToggleStar" @open-detail="onOpenDetail" @use="onUse" />
         </div>
       </div>
 

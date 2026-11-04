@@ -180,7 +180,9 @@ watch(() => s.open, (v) => {
 
         <div class="elol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            mode="preview" :using-ids="usingIds" @toggle-star="onToggleStar" @preview="onPreview" @use="onUse" />
+            mode="preview" :using-ids="usingIds" :use-disabled="!hasCanvas"
+            :use-disabled-reason="'打开一张画布后可使用素材'"
+            @toggle-star="onToggleStar" @preview="onPreview" @use="onUse" />
         </div>
       </div>
 
