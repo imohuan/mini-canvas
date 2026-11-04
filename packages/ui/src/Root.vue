@@ -10,17 +10,17 @@ import AppProvider from './AppProvider.vue'
 // 项目页和画布页都在这棵树下：Toaster 只在这里挂一次，两个路由共用。
 const Toaster = useUiComponentOutside('Toaster')
 
-// 用 fullPath 当 key：切画布（#/canvas/A → #/canvas/B）时**重新挂载** Provider 和路由组件。
+// 用 fullPath 当 key：切画布（#/canvas/A → #/canvas/B）时**重新挂载**路由组件。
 // 为什么必须：画布那个 CanvasHost 在插件 apply 时按当时的 `?canvas=` / hash 读出画布 id，
 // 不重新挂载的话切了画布还是老那份数据（同一个路由、组件被复用）。重新挂载 = 干净的重新装载。
 //
-// 过渡说明：这一步 Provider 还负责启动画布宿主，所以 key 先挂在 AppProvider 上。
-// 等画布服务拆到 mountCanvas 后，Provider 可以长期常驻，key 只需留在 RouterView 上。
+// Provider 必须**长期常驻**（不挂 key）：它持有应用级 Context、插件注册和 ui 目录。
+// 切画布只重建 RouterView 里的画布工作台，不再重建整棵应用。
 const route = useRoute()
 </script>
 
 <template>
-  <AppProvider :key="route.fullPath">
+  <AppProvider>
     <RouterView :key="route.fullPath" />
     <component :is="Toaster" v-if="Toaster" position="bottom-right" close-button-position="top-right" />
   </AppProvider>

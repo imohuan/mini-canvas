@@ -16,6 +16,7 @@ import { onMounted, onUnmounted, provide, ref, shallowRef } from 'vue'
 import type { MiniCanvasApi } from '@mini-canvas/canvas-render'
 import type { PluginManager } from '@mini-canvas/canvas-render'
 import { APP_SHELL_KEY, type AppCanvasSession, type AppShell } from './app-shell'
+import { setReadyHost } from './composables/ui/hostRuntime'
 import { Context, createCanvasAppBasePlugin, type CanvasAppBaseServices } from '@mini-canvas/canvas-data'
 import { CANVAS_CONTEXT_KEY, type CanvasContext } from '@mini-canvas/canvas-render'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
@@ -95,6 +96,9 @@ onMounted(async () => {
     boot.value = { ctx, appBase: appBase.services }
     // 配置桥在插件 Config 都声明完之后恢复一次，用户已保存的值才能作为初值
     await appBase.services.settingsPersist?.restore()
+    // 树外按名取件 / 设置 / 历史 / Agent 都读这一份根上下文。
+    // 它常驻整个应用，项目页也能拿到 ui 目录与通用服务。
+    setReadyHost({ ctx })
     ready.value = true
   } catch (e) {
     if (disposed) return
@@ -109,6 +113,7 @@ onUnmounted(() => {
   void value.appBase.save.flush()
   value.appBase.settingsPersist?.dispose()
   value.appBase.resources.dispose()
+  setReadyHost(undefined)
   value.ctx.stop()
   boot.value = null
 })

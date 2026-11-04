@@ -265,6 +265,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     revokeView?.()
     revokeCanvas?.()
     revokeNodeToolbar?.()
+    // doc / selection 随 canvas-session 的 fiber 回收；共享根 Context 时再显式摘一次，
+    // 保证离开画布后 ctx.tryGet('doc') 一定是 undefined。
+    base.services.revokeDoc?.()
+    base.services.revokeSelection?.()
   }
   ctx.slots.register('overlay', {
       id: 'canvas-render/tip-layer',
@@ -285,7 +289,15 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
       for (const p of opts.coldPlugins ?? []) ctx.plugin(p)
       await ctx.start()
     } else {
-      for (const p of opts.coldPlugins ?? []) ctx.installPlugin(p)
+      // 根级 Context 已 started：画布插件只登记一次（第一次进画布），之后每次
+      // 重新进画布只恢复会话服务，由内核的 inject 依赖把 PENDING 插件唤醒。
+      // 重复 installPlugin 会因重名抛错（用户实测：进画布 → 回项目页 → 再进画布就失败）。
+      const registered = new Set(ctx.listPlugins())
+      for (const p of opts.coldPlugins ?? []) {
+        const pluginName = (p as { name?: string }).name
+        if (pluginName && registered.has(pluginName)) continue
+        ctx.installPlugin(p)
+      }
     }
   }
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）

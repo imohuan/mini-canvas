@@ -47,9 +47,15 @@ describe('应用装配层级', () => {
     expect(app).toContain('mountCanvas(')
     expect(app).toContain('shell.ctx')
     expect(app).toContain('bindHost(session.host)')
-    expect(app).toContain('setReadyHost(host)')
+    // readyHost 指向根级应用上下文，由 AppProvider 设置；画布只登记会话句柄。
+    expect(provider).toContain('setReadyHost({ ctx })')
     expect(app).toContain('ui.setHostEl({ host })')
     expect(app).toContain('void ui.onReady()')
+  })
+
+  it('根 Provider 不随路由重建（项目页与画布页共用同一个 Context）', () => {
+    expect(root).toContain('<AppProvider>')
+    expect(root).not.toContain('<AppProvider :key')
   })
 
   it('离开画布先落盘再卸会话，项目页不建画布宿主', () => {

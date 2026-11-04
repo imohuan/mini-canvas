@@ -257,9 +257,15 @@ describe('问题 03：外壳菜单选中只用默认勾', () => {
  * 这几条都是「样式被另一条规则盖掉」才会复发的错误，用结构断言钉住根因位置。
  */
 describe('问题 05：右上实色 / 状态图标替换 / 缩放下拉 / Agent 圆形按钮', () => {
-  it('右上角两个按钮使用实色面板底，不再带 /80 透明度', () => {
+  it('右上角两个按钮用组件自己的 ghost / secondary 样式，不再手写半透明底', () => {
+    // 早先这里手写 bg-panel/80；后来统一成 Button 的 variant，半透明问题由组件库兜住。
+    // 测试盯住"不要再手写半透明底色"，不再要求源码里出现某个具体类名。
     expect(topRight).not.toContain('bg-panel/80')
-    expect((topRight.match(/bg-panel(?![-/])/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(topRight).not.toMatch(/bg-panel\/\d+/)
+    expect(topRight).toContain('aria-label="主题切换"')
+    expect(topRight).toContain('aria-label="设置"')
+    expect(topRight).toMatch(/variant="ghost"/)
+    expect(topRight).toMatch(/variant=/)
   })
 
   it('状态栏小地图关闭态换成另一个真实图标，不只改颜色', () => {

@@ -23,7 +23,7 @@ import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
 // 插槽调试覆盖层由默认主题提供（与主题的 Dropdown 同一套浮层与定位）
 import DefaultSlotDebugOverlay from '@mini-canvas/plugin-theme-default/components/ui/SlotDebugOverlay.vue'
-import { setReadyHost, useUi, useUiComponentOutside } from './composables/ui'
+import { useUi, useUiComponentOutside } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
@@ -71,7 +71,7 @@ const shell = inject(APP_SHELL_KEY) as AppShell
 // 渲染上下文，Provider 在最外层已经给它包好了。
 const miniMapDock = provideMiniMapDockTarget()
 function bindHost(host: CanvasHostHandle): void {
-  setReadyHost(host)
+  // readyHost 指向根级应用上下文（由 AppProvider 设置），这里只登记画布会话句柄。
   ui.setHostEl({ host })
   // 插件管理服务必须**在宿主就绪时就拿到安装句柄**，不能等用户打开「设置 → 插件」页。
   // 启动时它会按安装名单补装上次装过、这次冷启动没装的插件（小地图 / 自动布局这类）；
@@ -107,6 +107,11 @@ onMounted(async () => {
     bindHost(session.host)
   } catch (err) {
     console.error('[ui] 画布会话启动失败', err)
+    // 启动失败时不能停在"空白画布"上：清掉会话状态并回到项目页，让用户能重试。
+    shell.setSession(undefined)
+    if (typeof window !== 'undefined' && /^#\/canvas\//.test(window.location.hash)) {
+      window.location.hash = '#/'
+    }
   }
 })
 

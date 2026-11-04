@@ -16,6 +16,7 @@ import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, Ch
 import { useUiComponentOutside } from '../composables/ui'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
+import ProjectsPluginsPanel from './projects/ProjectsPluginsPanel.vue'
 
 const router = useRouter()
 // 项目页在画布路由之外：当前仍走宿主单例取件，树内/树外都能拿到同一个组件。
@@ -247,6 +248,9 @@ function dateOf(ts: number): string {
         <p v-if="nav === 'projects' && loading" class="py-16 text-center text-[13px] text-ink/50">正在读取项目…</p>
         <p v-else-if="nav === 'projects' && projects.length === 0" class="py-16 text-center text-[13px] text-ink/50">还没有项目，点「新建项目」开始。</p>
         <p v-else-if="nav === 'projects'" class="py-10 text-center text-[12px] text-ink-dim">没有更多了</p>
+
+        <!-- 插件面板：只提供主内容区这一块（app.projects.main），没有条目时整块隐藏 -->
+        <ProjectsPluginsPanel :hidden="nav !== 'projects'" />
       </div>
     </main>
   </div>

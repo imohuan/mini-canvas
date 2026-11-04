@@ -108,6 +108,9 @@ export interface CanvasBaseServices {
   nodeFactory: NodeFactory
   /** 配置持久化桥；persistSettings: false（或 ctx 无 settings 段）时缺席 */
   settingsPersist?: SettingsPersistService
+  /** 会话级服务撤销句柄（共享根 Context 时，离开画布要主动摘掉，不能等整棵 Context 停） */
+  revokeDoc?: () => void
+  revokeSelection?: () => void
 }
 
 
@@ -235,9 +238,9 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
       if (!app) ctx.inject('save', save)
       // 数据那一格只有一个名字：doc（5c 删掉 nodeStore/edgeStore/graph/history 四个老服务名）。
       // 四个实例仍在 base.services 上（宿主/渲染层拿它们订阅、量尺寸），但**不再是按名可取的服务**。
-      ctx.inject('doc', doc)
+      services.revokeDoc = ctx.inject('doc', doc)
       if (!app) ctx.inject('resources', resources)
-      ctx.inject('selection', selection)
+      services.revokeSelection = ctx.inject('selection', selection)
       // 容器与工厂不再上架服务名：能力糖 / 画布命令 / 宿主经内部运行时读同一批实例。
       const canvasRuntime: CanvasRuntime = {
         command,

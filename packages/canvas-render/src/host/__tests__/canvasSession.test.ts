@@ -29,9 +29,11 @@ describe('mountCanvas / unmountCanvas', () => {
     expect(hasActiveCanvasSession()).toBe(true)
 
     await session.dispose()
-    for (const name of ['doc', 'selection', 'canvas']) {
+    for (const name of ['doc', 'selection', 'canvas', 'nodeToolbar']) {
       expect(ctx.hasService(name), name + ' 未撤销').toBe(false)
     }
+    // 项目页的插件靠 tryGet('doc') 判断"现在有没有画布"，这一步必须彻底。
+    expect(ctx.tryGet('doc')).toBeUndefined()
     expect(hasActiveCanvasSession()).toBe(false)
     // 应用级服务不受影响：项目页仍能读设置/资源
     expect(ctx.hasService('save')).toBe(true)
@@ -72,6 +74,25 @@ describe('mountCanvas / unmountCanvas', () => {
     await unmountCanvas()
     await unmountCanvas()
     expect(ctx.hasService('doc')).toBe(false)
+    ctx.stop()
+  })
+
+  it('第二次进画布：插件已登记过，只恢复会话服务，不重装（用户实测回归）', async () => {
+    const { ctx, app } = await bootApp()
+    const plugin: PluginModule = {
+      name: 'biz-node',
+      inject: ['doc'],
+      apply() {},
+    }
+    await mountCanvas({ ctx, appBase: app.services, plugins: [plugin] })
+    await unmountCanvas()
+
+    // 再进一次：插件仍在清单里，不能因重名抛错
+    await expect(
+      mountCanvas({ ctx, appBase: app.services, plugins: [plugin] }),
+    ).resolves.toBeTruthy()
+    expect(ctx.hasService('doc')).toBe(true)
+    await unmountCanvas()
     ctx.stop()
   })
 })
