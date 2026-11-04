@@ -52,10 +52,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --vuelor-primary: #0d99ff;
-  --vuelor-surface: #ffffff;
-  --vuelor-border: #e6e6e6;
-  --vuelor-input: #f5f5f5;
+  /* 取色器的色值不在这里写死，统一在 :root 里映射到主题 token（否则暗色不跟随） */
   --shadow-vuelor-card: 0 2px 5px 0 #00000026, 0 10px 16px 0 #0000001f, 0 0 .5px 0 #0000001f;
   --shadow-vuelor-thumb: 0px 0px .5px #0000002e, 0px 3px 8px #0000001a, 0px 1px 3px #0000001a;
   --shadow-vuelor-inner: inset 0 0 0 1px #0000001a;
@@ -67,11 +64,14 @@
 }
 
 :root {
-  /* 取色器只负责选颜色，面板固定浅色（它自己的文字写死了黑色，跟随暗色会看不清）。 */
-  --vuelor-surface: #ffffff;
-  --vuelor-border: #e6e6e6;
-  --vuelor-input: #f5f5f5;
-  --vuelor-primary: #0d99ff;
+  /*
+   * 取色器（Vuelor）只认自己这套变量，这里把它接到主题 token 上，
+   * 亮 / 暗两种主题都不用再单独写死颜色。
+   */
+  --vuelor-surface: var(--popover);
+  --vuelor-border: var(--border);
+  --vuelor-input: var(--muted);
+  --vuelor-primary: var(--primary);
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -163,14 +163,18 @@
  *
  * 真实应用里这层由 `styles/host.css` 负责（它按 `--mct-radius` 覆盖 data-slot）；
  * 预览页没有宿主，这里用同一套写法接 `--radius`，于是两边的结论一致。
- * 倍数沿用原工具类：按钮/输入 1×、浮层 2.2×、卡片/弹窗 2.6×。
+ *
+ * **倍数必须保留组件原本的档位**（用户口径 2026-11-04 第二次反馈）：
+ * 组件自带的是 rounded-3xl / rounded-4xl，即 2.2× / 2.6×。之前这里一律写成 1×，
+ * 选「大 8px」时按钮只剩 8px，看起来像被缩水；而漏网的主按钮仍是原来的 2.6×（20.8px），
+ * 于是同一个 size 下两种圆角。现在所有控件统一按 2.6×，和主按钮一致。
  */
 [data-slot='button'][data-variant],
 [data-slot='input'],
-[data-slot='textarea'],
 [data-slot='select-trigger'],
+[data-slot='textarea'],
 [data-slot='input-group'] {
-  border-radius: var(--radius, 0.875rem);
+  border-radius: calc(var(--radius, 0.875rem) * 2.6);
 }
 
 [data-slot='popover-content'],
@@ -181,14 +185,16 @@
 [data-slot='context-menu-sub-content'],
 [data-slot='menubar-content'],
 [data-slot='combobox-content'] {
-  border-radius: calc(var(--radius, 0.875rem) * 2.2);
+  /* 面板封顶 24px：圆角选「全圆」时控件是胶囊，面板不该跟着变成药丸 */
+  border-radius: min(calc(var(--radius, 0.875rem) * 2.6), 24px);
 }
 
 [data-slot='card'],
 [data-slot='dialog-content'],
 [data-slot='alert-dialog-content'],
 [data-slot='sheet-content'] {
-  border-radius: calc(var(--radius, 0.875rem) * 2.6);
+  /* 卡片 / 弹窗封顶 24px，同上 */
+  border-radius: min(calc(var(--radius, 0.875rem) * 2.6), 24px);
 }
 
 /* 菜单行 / 选项行跟着同一档走，但最多到 8px，免得一列条目变成一排药丸。 */
@@ -196,7 +202,7 @@
 [data-slot='select-item'],
 [data-slot='context-menu-item'],
 [data-slot='combobox-item'] {
-  border-radius: min(var(--radius, 0.875rem), 8px);
+  border-radius: min(calc(var(--radius, 0.875rem) * 1.8), 12px);
 }
 
 /*

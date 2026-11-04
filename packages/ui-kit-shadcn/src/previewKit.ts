@@ -22,7 +22,6 @@ function configure<T extends Record<string, unknown>>(mod: T, family: string): T
   return out as T
 }
 
-import * as alertDialogModule from './components/ui/alert-dialog'
 import * as badgeModule from './components/ui/badge'
 import * as buttonModule from './components/ui/button'
 import * as cardModule from './components/ui/card'
@@ -41,8 +40,9 @@ import * as switchModule from './components/ui/switch'
 import * as tabsModule from './components/ui/tabs'
 import * as textareaModule from './components/ui/textarea'
 import * as colorPickerModule from './components/color-picker'
+import * as selectModule from './components/ui/select'
+import * as tooltipModule from './components/ui/tooltip'
 
-const alertDialog = configure(alertDialogModule, 'AlertDialog')
 const badge = configure(badgeModule, 'Badge')
 const button = configure(buttonModule, 'Button')
 const card = configure(cardModule, 'Card')
@@ -61,17 +61,14 @@ const switchComponent = configure(switchModule, 'Switch')
 const tabs = configure(tabsModule, 'Tabs')
 const textarea = configure(textareaModule, 'Textarea')
 const colorPicker = configure(colorPickerModule, 'ColorPicker')
-
-export const AlertDialogAction = alertDialog.AlertDialogAction
-export const AlertDialogCancel = alertDialog.AlertDialogCancel
-export const AlertDialogContent = alertDialog.AlertDialogContent
+const select = configure(selectModule, 'Select')
+const tooltip = configure(tooltipModule, 'Tooltip')
 
 export const Badge = badge.Badge
 
 export const Button = button.Button
 
 export const Card = card.Card
-export const CardAction = card.CardAction
 export const CardContent = card.CardContent
 export const CardDescription = card.CardDescription
 export const CardFooter = card.CardFooter
@@ -97,15 +94,12 @@ export const DialogTitle = dialog.DialogTitle
 export const DialogTrigger = dialog.DialogTrigger
 
 export const DropdownMenu = dropdown.DropdownMenu
-export const DropdownMenuCheckboxItem = dropdown.DropdownMenuCheckboxItem
 export const DropdownMenuContent = dropdown.DropdownMenuContent
-export const DropdownMenuGroup = dropdown.DropdownMenuGroup
 export const DropdownMenuItem = dropdown.DropdownMenuItem
 export const DropdownMenuLabel = dropdown.DropdownMenuLabel
 export const DropdownMenuRadioGroup = dropdown.DropdownMenuRadioGroup
 export const DropdownMenuRadioItem = dropdown.DropdownMenuRadioItem
 export const DropdownMenuSeparator = dropdown.DropdownMenuSeparator
-export const DropdownMenuShortcut = dropdown.DropdownMenuShortcut
 export const DropdownMenuSub = dropdown.DropdownMenuSub
 export const DropdownMenuSubContent = dropdown.DropdownMenuSubContent
 export const DropdownMenuSubTrigger = dropdown.DropdownMenuSubTrigger
@@ -143,4 +137,17 @@ export const TabsTrigger = tabs.TabsTrigger
 export const Textarea = textarea.Textarea
 
 export const ColorPicker = colorPicker.ColorPicker
-export const ColorPickerSelect = colorPicker.ColorPickerSelect
+
+export const Select = select.Select
+export const SelectContent = select.SelectContent
+export const SelectGroup = select.SelectGroup
+export const SelectItem = select.SelectItem
+export const SelectLabel = select.SelectLabel
+export const SelectSeparator = select.SelectSeparator
+export const SelectTrigger = select.SelectTrigger
+export const SelectValue = select.SelectValue
+
+export const Tooltip = tooltip.Tooltip
+export const TooltipContent = tooltip.TooltipContent
+export const TooltipProvider = tooltip.TooltipProvider
+export const TooltipTrigger = tooltip.TooltipTrigger

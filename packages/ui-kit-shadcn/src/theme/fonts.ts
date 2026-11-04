@@ -67,12 +67,25 @@ export interface RadiusOption {
   value: string
 }
 
+/**
+ * 圆角档位。
+ *
+ * 用户口径 2026-11-04：原来的档位整体偏大（最小也有 0.45rem，最大 0.875rem），
+ * 每一档看起来都很圆；而且用「默认」当标签分不清轻重。
+ * 现在改成**无 / 极小 / 小 / 中 / 大**五档，步长 2px 起，默认档落在 6px。
+ *
+ * 「全圆（胶囊）」那一档已删除（用户 2026-11-04 二次反馈）：
+ * 卡片、面板这类大块用它很怪，平时也没有必须设成全圆的场景。
+ *
+ * 关于 id：'default' 这一档保留（旧的存档里 themeRadius 可能写的是 default），
+ * 但它现在表示「中 6px」，标签上不再出现“默认”两个字。
+ */
 export const RADIUS_OPTIONS: RadiusOption[] = [
-  { id: 'default', label: '默认（0.625rem）', value: '0.625rem' },
-  { id: 'none', label: '无圆角', value: '0rem' },
-  { id: 'small', label: '小（0.45rem）', value: '0.45rem' },
-  { id: 'medium', label: '中（0.625rem）', value: '0.625rem' },
-  { id: 'large', label: '大（0.875rem）', value: '0.875rem' },
+  { id: 'none', label: '无（0px）', value: '0rem' },
+  { id: 'xs', label: '极小（2px）', value: '0.125rem' },
+  { id: 'small', label: '小（4px）', value: '0.25rem' },
+  { id: 'default', label: '中（6px）', value: '0.375rem' },
+  { id: 'large', label: '大（8px）', value: '0.5rem' },
 ]
 
 /** 圆角档位 id → 档位（不认识的值回落到第一档）。 */

@@ -17,19 +17,6 @@ export { default as NumberFieldInput } from './NumberFieldInput.vue'
  * 现在高度、内边距、字号都进变体，子件按根节点 provide 的档位取，
  * 全局「控件尺寸」一改，输入框和两侧加减按钮一起变高。
  */
-export const numberFieldVariants = cva('', {
-  variants: {
-    size: {
-      sm: '',
-      default: '',
-      lg: '',
-    },
-  },
-  defaultVariants: {
-    size: 'default',
-  },
-})
-
 /** 输入框本体：高度与圆角随档位走 */
 export const numberFieldInputVariants = cva('', {
   variants: {

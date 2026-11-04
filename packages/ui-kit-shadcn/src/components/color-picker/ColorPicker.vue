@@ -65,10 +65,11 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
           <ColorPickerSliderAlpha />
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <!-- 底部一行：格式下拉 + 色值输入，两者同高同圆角（原来一个 24px、一个 32px） -->
+      <div class="mck-cp-value-row flex items-center gap-2">
         <ColorPickerSelect
           v-model="format"
-          class="w-[56px]"
+          class="w-16 shrink-0"
           label="Color Format"
           placeholder="Format"
           :disabled="props.disabled"
@@ -101,5 +102,38 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
   background: transparent;
   box-shadow: none;
   color: inherit;
+}
+
+/*
+ * 色值输入框（Hex / RGB …）跟随主题。
+ *
+ * 取色器自带的是 `bg-vuelor-input` + 5px 圆角 + 24px 高，和左边的 Select
+ * 一高一矮、圆角也不一致（用户 2026-11-04 截图反馈）。
+ * 这里统一成 32px 高、同一档圆角、同一套底色。
+ */
+/* 外层：一整条圆角输入框，和左边的 Select 同高同圆角 */
+.mck-cp-value-row :deep(> div:last-child) {
+  height: 2rem;
+  gap: 1px;
+  border-radius: calc(var(--radius, 0.5rem) * 2.6);
+  overflow: hidden;
+  background-color: var(--border);
+}
+
+/* 内层两段（色值 / 透明度）：去掉各自的圆角，靠外层统一收边 */
+.mck-cp-value-row :deep(> div:last-child > div) {
+  height: 100%;
+  border-radius: 0;
+  background-color: var(--muted);
+}
+
+.mck-cp-value-row :deep(input) {
+  height: 100%;
+  font-size: 0.75rem;
+  color: var(--foreground);
+}
+
+.mck-cp-value-row :deep(span) {
+  color: var(--muted-foreground);
 }
 </style>

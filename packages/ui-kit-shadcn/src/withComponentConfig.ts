@@ -30,7 +30,8 @@ import { componentConfig, type ComponentSize } from './componentConfig'
  * - 表里没写组件 → 认为它支持全部三档（Button / Input 这类）。
  */
 const SUPPORTED_SIZES: Record<string, readonly string[]> = {
-  Switch: ['sm', 'default', 'lg'],
+  // Switch 原组件只有 sm / default：全局选“大”时收敛成 default，不塞它不认识的 lg
+  Switch: ['sm', 'default'],
   SelectTrigger: ['sm', 'default', 'lg'],
   Card: ['sm', 'default'],
   AlertDialogContent: ['sm', 'default'],
@@ -39,7 +40,14 @@ const SUPPORTED_SIZES: Record<string, readonly string[]> = {
 
 /** 组件能显示的档位：表里没登记就当作三档全支持。 */
 export function supportedSizes(name: string): readonly string[] {
-  return SUPPORTED_SIZES[name] ?? ['sm', 'default', 'lg']
+  /*
+   * 名字可能是 "Switch"、"Switch.Switch"、"DropdownMenu.Sub" 这几种写法：
+   * 预览页的薄层按 `家族.导出名` 传，注册表按导出名传。
+   * 不拆掉前缀就会查不到表、直接放行 lg —— Switch 收到不认识的档位又塌成一个点
+   * （2026-11-04 用户截图：最大尺寸只剩 4×4）。
+   */
+  const key = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : name
+  return SUPPORTED_SIZES[key] ?? ['sm', 'default', 'lg']
 }
 
 /**
