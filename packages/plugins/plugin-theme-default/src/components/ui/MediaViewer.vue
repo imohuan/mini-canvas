@@ -132,9 +132,9 @@ const {
       <!-- 左上角悬浮标题 -->
       <span v-if="item.name" class="mv-title">{{ item.name }}</span>
 
-      <!-- 主内容：上一张 · 舞台 · 下一张 -->
+      <!-- 主内容：上一张 / 下一张浮在两侧（absolute，不占位、不挤压舞台） -->
       <div class="mv-container">
-        <Button v-if="isMultiple" variant="ghost" type="button" title="上一张 (←)" aria-label="上一张" @click.stop="prevImage">
+        <Button v-if="isMultiple" variant="secondary" class="mv-nav mv-nav--prev" type="button" title="上一张 (←)" aria-label="上一张" @click.stop="prevImage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         </Button>
 
@@ -157,8 +157,13 @@ const {
           <div v-else-if="kind === 'video' && currentUrl" class="mv-video-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
             <!-- 旋转/翻转套在舞台盒上：不碰插件内部的播放状态，也不改视频元素本身 -->
             <div class="mv-video-transform" :style="videoTransform">
-              <component :is="VideoPreview" v-if="VideoPreview" :key="currentUrl" :url="currentUrl" :name="item.name" tall />
-              <video v-else :key="currentUrl" class="mv-video" :src="currentUrl" controls autoplay playsinline />
+              <!--
+                两个"二选一"分支不能挂在同一个 :key 上：同层 v-if / v-else 分支必须各自平铺，
+                否则 Vue 报 "v-if/else branches must use unique keys"、TS 也认不出 currentUrl 已判空。
+                这里各自作为独立根节点书写，判空靠上面的 v-else-if 保证。
+              -->
+              <component v-if="VideoPreview" :is="VideoPreview" :key="'plugin-' + currentUrl" :url="currentUrl" :name="item.name" tall />
+              <video v-else :key="'native-' + currentUrl" class="mv-video" :src="currentUrl" controls autoplay playsinline />
             </div>
           </div>
           <!-- 音频也要跟 currentUrl 走：之前写死 item.url，左右切张时波形永远停在第一段（用户实测 2026-10-29） -->
@@ -193,7 +198,7 @@ const {
           <slot v-else name="stage" :item="item" />
         </div>
 
-        <Button v-if="isMultiple" variant="ghost" type="button" title="下一张 (→)" aria-label="下一张" @click.stop="nextImage">
+        <Button v-if="isMultiple" variant="secondary" class="mv-nav mv-nav--next" type="button" title="下一张 (→)" aria-label="下一张" @click.stop="nextImage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
         </Button>
       </div>
@@ -207,27 +212,27 @@ const {
           <span class="mv-divider" />
         </template>
         <template v-if="canZoom">
-          <Button variant="ghost" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
+          <Button variant="ghost" size="icon-sm" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
           </Button>
         <span class="mv-zoom-label">{{ Math.round(scale * 100) }}%</span>
-          <Button variant="ghost" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
+          <Button variant="ghost" size="icon-sm" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /><line x1="11" y1="8" x2="11" y2="14" /></svg>
           </Button>
           <span class="mv-divider" />
         </template>
-        <Button v-if="hasTools" variant="ghost" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
+        <Button v-if="hasTools" variant="ghost" size="icon-sm" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
         </Button>
-        <Button v-if="hasTools" variant="ghost" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
+        <Button v-if="hasTools" variant="ghost" size="icon-sm" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" /><path d="M8 7 4 12l4 5" /><path d="m16 7 4 5-4 5" /></svg>
         </Button>
-        <Button v-if="canZoom" variant="ghost" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
+        <Button v-if="canZoom" variant="ghost" size="icon-sm" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
         </Button>
         <!-- 分隔线只属于工具按钮：没有旋转/镜像的媒体（音频/文本）不再多出第二条线 -->
         <span v-if="hasTools" class="mv-divider" />
-        <Button variant="ghost" type="button" title="下载" aria-label="下载" @click="download">
+        <Button variant="ghost" size="icon-sm" type="button" title="下载" aria-label="下载" @click="download">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </Button>
       </div>
@@ -273,18 +278,28 @@ const {
   text-shadow: 0 1px 4px var(--ui-scrim, rgb(0 0 0 / 0.35));
   pointer-events: none;
 }
-/* 主内容：左右留出导航键的位置 */
+/* 主内容：舞台铺满，两侧留出导航键的浮层位置 */
 .mv-container {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   padding: 56px 72px 88px;
 }
+/* 上一张/下一张：浮在舞台左右边缘，absolute 不占位 —— 舞台不会被挤窄 */
+.mv-nav {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 10;
+  /* 落在图片亮色背景上也要看得清：半透明底 + 模糊，颜色仍走主题 token */
+  background: color-mix(in oklab, var(--ui-overlay-solid, #fff) 72%, transparent);
+  backdrop-filter: blur(8px);
+}
+.mv-nav--prev { left: 16px; }
+.mv-nav--next { right: 16px; }
 .mv-nav svg { width: 20px; height: 20px; }
-.mv-nav { flex: none; }
 .mv-stage {
   min-width: 0;
   min-height: 0;
@@ -426,7 +441,7 @@ const {
   word-break: break-word;
   user-select: text;
 }
-/* 底部浮动控制条：居中胶囊 */
+/* 底部浮动控制条：居中胶囊。底色是卡片色，文字/按钮都按卡片内的 token 走 */
 .mv-controls {
   position: absolute;
   bottom: 24px;
@@ -435,17 +450,15 @@ const {
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border-radius: 12px;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: var(--radius-xl, 12px);
   background: var(--ui-overlay-solid, #ffffff);
-  color: var(--ui-tip-ink, #fff);
-  backdrop-filter: blur(12px);
+  color: var(--ui-ink, inherit);
+  box-shadow: var(--ui-shadow-md, 0 4px 16px rgb(0 0 0 / 0.16));
 }
-.mv-btn svg { width: 15px; height: 15px; }
-/* 控制条底色是卡片色，按钮文字跟随正文色（原先继承的 --ui-tip-ink 是白字，会看不见） */
-.mv-controls :deep(button) { color: var(--ui-ink, inherit); }
-.mv-zoom-label { min-width: 44px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* 控制条是卡片底色：图标尺寸交给 Button，这里只把文字项对齐 */
+.mv-zoom-label { min-width: 40px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .mv-page { padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.mv-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--ui-line, rgb(255 255 255 / 0.18)); }
+.mv-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--ui-line, rgb(0 0 0 / 0.12)); }
 </style>
