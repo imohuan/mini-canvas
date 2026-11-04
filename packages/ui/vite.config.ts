@@ -27,7 +27,9 @@ export default defineConfig({
     // 否则全部回落 index.html（表现为「列表空 / 建文件夹没反应」）。
     proxy: {
       '/api': {
-        target: 'http://localhost:8865',
+        // 多 Agent 并行开发时各用各的后台：启动前设置 MINI_CANVAS_BACKEND，
+        // 不设置才回落到默认的 8865。
+        target: process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865',
         changeOrigin: true,
         // 把后台的 CORS 头**原样**带回来。
         //

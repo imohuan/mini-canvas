@@ -1,8 +1,8 @@
 # AGENTS.md — mini-canvas 项目开工入口
 
 > 本文件是项目入口：说明这是什么、有哪些包、怎么开发、怎么验证、怎么调试。
-> `docs/STATUS.md` 只作为历史记录查阅，不再是每次开工必须通读的文件。
-> 要动架构、分层、注册机制或加扩展点时，再读 `docs/design/core-layers-and-registry.md`。
+> 历史开发文档已归档到 `backup/docs-2026-11-03/`；`docs/STATUS.md` 等旧路径按归档目录查找。
+> 要动架构、分层、注册机制或加扩展点时，再读 `backup/docs-2026-11-03/design/core-layers-and-registry.md`。
 
 ## 一、这个项目是什么
 
@@ -72,7 +72,7 @@ mini-canvas 是一个可扩展的画布应用。画布本身只负责节点、�
 5. 用语义定位（角色、文字、label）操作；每步之后读回 URL、截图或控制台日志再决定下一步。
 6. 需要留给用户看的页面，调用 `markDeliverable()`；下轮还要用的调用 `markHandoff()`。
 
-如果 Chrome 扩展没连上，先看 `docs/STATUS.md` 里的 Chrome 排障记录，
+如果 Chrome 扩展没连上，先看 `backup/docs-2026-11-03/STATUS.md` 里的 Chrome 排障记录，
 或运行浏览器插件的诊断脚本。不要因为 Chrome 暂时不可用就改用 Playwright。
 
 ### 测试顺序
@@ -109,11 +109,11 @@ pnpm -C packages/ui typecheck
 | 文档 | 写在哪里 | 写什么 |
 | --- | --- | --- |
 | 正式文档 | `packages/docs/`（VitePress 文档站，:5290） | 给用户看的最新功能、完整用法、案例教程、组件说明。功能开发完、行为更新后，用户需要知道的新用法写到这里。 |
-| 开发过程文档 | 仓库根目录 `docs/` | 计划、调研、方案比较、排障记录、迁移说明、临时笔记和历史记录。只给开发者查，不挂进 VitePress。 |
+| 开发过程文档 | 历史归档在 `backup/docs-2026-11-03/`；新问题整理放 `docs/问题整理/` | 计划、调研、方案比较、排障记录、迁移说明、临时笔记和历史记录。只给开发者查，不挂进 VitePress。 |
 
 正式文档讲「现在怎么用」，开发过程文档讲「当时怎么想、怎么做的」。
 功能改了，先更新 `packages/docs` 里的正式文档；需要留过程记录，再写到 `docs/`。
-不要把临时计划写进 `packages/docs`，也不要只把新功能写在 `docs/` 里却不更新正式文档。
+不要把临时计划写进 `packages/docs`，也不要只把新功能写在历史文档里却不更新正式文档。
 
 写正式文档前，先读一篇同类文档（案例看 `examples/`，组件看 `plugins/theme-components/`），照着它的结构和口吻写。
 
@@ -126,7 +126,7 @@ pnpm -C packages/ui typecheck
 | 组件说明 | `packages/docs/plugins/theme-components/<组件名>.md` | `config.ts` 的 `pluginsSidebar` 对应分组加一行 |
 | 插件能力解析 | `packages/docs/plugins/parsed/<插件>/index.md` + 子页 | **不用改**：构建时扫目录自动生成 |
 | 速查表入口 | `packages/docs/examples/recipe-map.md` 的表加一行 | — |
-| 开发过程文档（计划、调研、排障） | 仓库根目录 `docs/` | 不挂：只给开发者查 |
+| 开发过程文档（计划、调研、排障） | 历史在 `backup/docs-2026-11-03/`，新问题在 `docs/问题整理/` | 不挂：只给开发者查 |
 
 侧边栏显示名 = 页面 H1（插件解析页）。其它分组改标题只改页面，不改 config；
 侧边栏条目名 2～10 个字，不换行。
@@ -193,7 +193,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\8060-mi
 
 ### 插件实时调试
 
-完整协议见 `docs/plugin-dev/10-debug-protocol.md`。要点：
+完整协议见 `backup/docs-2026-11-03/plugin-dev/10-debug-protocol.md`。要点：
 
 - 插件 watch 构建成功后，把产物地址写到 `plugin-watch:<插件名>`；
 - watch 进程每 10 秒发一次心跳到 `/api/plugin-presence/heartbeat`；
@@ -221,20 +221,22 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 2. **核心节点件禁止改坏**：`packages/plugins/plugin-theme-default/src/components/` 下的
    `node/BaseNode.vue`、`node/MovingHandle.vue`、`node/BaseTitle.vue`、`edge/CustomEdge.vue`、
    `edge/ConnectionLine.vue`、`background/DefaultBackground.vue`。
-   改动前先读 `docs/tmp/canvas-core-v2-survey/core-node-contract.md`，
-   相关规范见 `docs/规则/节点区域与连接线拖拽规范.md`。
+   改动前先读 `backup/docs-2026-11-03/tmp/canvas-core-v2-survey/core-node-contract.md`，
+   相关规范见 `backup/docs-2026-11-03/规则/节点区域与连接线拖拽规范.md`。
 3. **kernel 不依赖任何 @mini-canvas 包**，也不 import `.vue`。
-4. **写 UI 前先读** `docs/design/ui-style-guide.md`，不自造颜色、圆角、字号。
+4. **写 UI 前先读** `backup/docs-2026-11-03/design/ui-style-guide.md`，不自造颜色、圆角、字号。
 
 ## 十、找文档
 
 - 正式文档（最新功能与用法）：`packages/docs/`
-- 开发过程文档（计划、调研、排障、历史）：仓库根目录 `docs/`
-- 项目历史与排障记录：`docs/STATUS.md`（只查阅，不通读）
-- 架构与注册场设计：`docs/design/core-layers-and-registry.md`
-- 插件作者教程：`docs/plugin-dev/index.md`
-- 插件调试协议：`docs/plugin-dev/10-debug-protocol.md`
-- 各包 API 手册：`docs/代码开发/00-总览与架构.md`
-- UI 规范：`docs/design/ui-style-guide.md`
-- 架构决策记录：`docs/adr/`
+- 开发过程文档（计划、调研、排障、历史）：`backup/docs-2026-11-03/`
+- 新问题整理：`docs/问题整理/`
+- 问题整理技能：`.codex/skills/issue-briefing/SKILL.md`
+- 项目历史与排障记录：`backup/docs-2026-11-03/STATUS.md`（只查阅，不通读）
+- 架构与注册场设计：`backup/docs-2026-11-03/design/core-layers-and-registry.md`
+- 插件作者教程：`backup/docs-2026-11-03/plugin-dev/index.md`
+- 插件调试协议：`backup/docs-2026-11-03/plugin-dev/10-debug-protocol.md`
+- 各包 API 手册：`backup/docs-2026-11-03/代码开发/00-总览与架构.md`
+- UI 规范：`backup/docs-2026-11-03/design/ui-style-guide.md`
+- 架构决策记录：`backup/docs-2026-11-03/adr/`
 
