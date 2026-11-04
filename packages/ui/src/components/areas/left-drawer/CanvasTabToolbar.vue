@@ -11,8 +11,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  updateMenuOpen: [value: boolean]
-  updateViewMode: [value: 'list' | 'grid']
+  'update:menuOpen': [value: boolean]
+  'update:viewMode': [value: 'list' | 'grid']
   expandAll: []
   collapseAll: []
 }>()
@@ -23,6 +23,8 @@ const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
+const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const Input = useUiComponent('Input')
@@ -45,11 +47,11 @@ function closeSearch(): void {
 
 const localMenuOpen = computed({
   get: () => props.menuOpen,
-  set: (value: boolean) => emit('updateMenuOpen', value),
+  set: (value: boolean) => emit('update:menuOpen', value),
 })
 const localViewMode = computed({
   get: () => props.viewMode,
-  set: (value: 'list' | 'grid') => emit('updateViewMode', value),
+  set: (value: 'list' | 'grid') => emit('update:viewMode', value),
 })
 </script>
 
@@ -75,8 +77,11 @@ const localViewMode = computed({
                   <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                 </svg></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="start" :side-offset="4">
-              <DropdownMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
-                @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuItem>
+          <!-- 搜索里的类型筛选也是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底。 -->
+          <DropdownMenuRadioGroup :model-value="s.filterType">
+            <DropdownMenuRadioItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t" :value="t"
+              @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="ghost" size="icon-sm" class="flex-none rounded-lg text-ink/85"
@@ -102,8 +107,10 @@ const localViewMode = computed({
               <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="start" :side-offset="4">
-          <DropdownMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
-            @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuItem>
+          <DropdownMenuRadioGroup :model-value="s.filterType">
+            <DropdownMenuRadioItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t" :value="t"
+              @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       <span class="flex-1"></span>
@@ -115,20 +122,15 @@ const localViewMode = computed({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" :side-offset="4" :style="{ minWidth: '180px' }">
-          <DropdownMenuItem :class="{ 'bg-accent': viewMode === 'list' }" @select="localViewMode = 'list'; localMenuOpen = false">
-            <LibIcon name="list-view" :size="16" /> 列表展示 <svg v-if="viewMode === 'list'" class="ml-auto"
-              width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z"
-                fill="currentColor" />
-            </svg>
-          </DropdownMenuItem>
-          <DropdownMenuItem :class="{ 'bg-accent': viewMode === 'grid' }" @select="localViewMode = 'grid'; localMenuOpen = false">
-            <LibIcon name="display-grid" :size="16" /> 宫格展示 <svg v-if="viewMode === 'grid'" class="ml-auto"
-              width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z"
-                fill="currentColor" />
-            </svg>
-          </DropdownMenuItem>
+          <!-- 展示方式是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
+          <DropdownMenuRadioGroup :model-value="viewMode">
+            <DropdownMenuRadioItem value="list" @select="localViewMode = 'list'; localMenuOpen = false">
+              <LibIcon name="list-view" :size="16" /> 列表展示
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="grid" @select="localViewMode = 'grid'; localMenuOpen = false">
+              <LibIcon name="display-grid" :size="16" /> 宫格展示
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem @select="emit('expandAll'); localMenuOpen = false">
             <LibIcon name="expand-groups" :size="16" /> 展开全部分组

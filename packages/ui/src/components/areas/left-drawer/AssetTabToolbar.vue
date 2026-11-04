@@ -13,9 +13,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  updatePlusOpen: [value: boolean]
-  updateUploadOpen: [value: boolean]
-  updateAssetSearchActive: [value: boolean]
+  'update:plusOpen': [value: boolean]
+  'update:uploadOpen': [value: boolean]
+  'update:assetSearchActive': [value: boolean]
   addFolder: []
   pickAssetKind: [kind: string]
   uploadChange: [e: Event]
@@ -27,6 +27,8 @@ const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
+const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const Input = useUiComponent('Input')
 
@@ -37,19 +39,19 @@ function focusInput(el: InputRef | null): void {
 }
 const assetSearchInput = ref<InputRef | null>(null)
 async function openAssetSearch(): Promise<void> {
-  emit('updateAssetSearchActive', true)
+  emit('update:assetSearchActive', true)
   s.assetSearchQuery = ''
   await nextTick()
   focusInput(assetSearchInput.value)
 }
 function closeAssetSearch(): void {
-  emit('updateAssetSearchActive', false)
+  emit('update:assetSearchActive', false)
   s.assetSearchQuery = ''
 }
 
 const localPlusOpen = computed({
   get: () => props.plusOpen,
-  set: (value: boolean) => emit('updatePlusOpen', value),
+  set: (value: boolean) => emit('update:plusOpen', value),
 })
 const uploadInput = ref<HTMLInputElement | null>(null)
 function pickUpload(): void {
@@ -106,8 +108,11 @@ function pickUpload(): void {
             </svg></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" :side-offset="4">
-          <DropdownMenuItem v-for="k in assetKinds" :key="k" :class="{ 'bg-accent': s.assetFilterKind === k }"
-            @select="emit('pickAssetKind', k)">{{ k }}</DropdownMenuItem>
+          <!-- 类型筛选是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
+          <DropdownMenuRadioGroup :model-value="s.assetFilterKind">
+            <DropdownMenuRadioItem v-for="k in assetKinds" :key="k" :value="k"
+              @select="emit('pickAssetKind', k)">{{ k }}</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       <span class="flex-1"></span>
@@ -122,7 +127,7 @@ function pickUpload(): void {
           <DropdownMenuItem @select="localPlusOpen = false; emit('addFolder')">
             <FolderPlusIcon :size="14" class="text-ink-dim" /> 新建文件夹
           </DropdownMenuItem>
-          <DropdownMenuItem @select="localPlusOpen = false; emit('updateUploadOpen', true)">
+          <DropdownMenuItem @select="localPlusOpen = false; emit('update:uploadOpen', true)">
             <UploadIcon :size="14" class="text-ink-dim" /> 上传资产
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -129,7 +129,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               <span class="nb-card-index">{{ tile.index }}</span>
             </span>
             <span v-if="!tile.pending && !tile.invalid" class="nb-card-actions" aria-hidden="false">
-              <Button variant="ghost" size="icon-sm"
+              <Button variant="ghost" size="icon-xs"
                 v-if="tile.kind === 'audio'"
                 class="nb-card-act nb-card-play-act"
                 type="button"
@@ -139,7 +139,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
               </Button>
-              <Button variant="ghost" size="icon-sm"
+              <Button variant="ghost" size="icon-xs"
                 class="nb-card-act nb-card-at"
                 type="button"
                 :aria-label="'插入标签 @' + tile.label"
@@ -148,7 +148,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               >@</Button>
             </span>
             <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
-            <Button variant="ghost" size="icon-sm"
+            <Button variant="ghost" size="icon-xs"
               v-if="!tile.pending"
               class="nb-card-hit"
               type="button"

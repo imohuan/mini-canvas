@@ -13,6 +13,8 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
+const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const props = defineProps<{
@@ -288,13 +290,15 @@ function save(): void {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" :style="{ width: '250px' }">
-                <DropdownMenuItem :class="{ 'bg-accent': !targetFolderId }" @select="targetFolderId = ''">个人资产库</DropdownMenuItem>
-                <DropdownMenuItem
-                  v-for="f in folderRows" :key="f.id"
-                  :class="{ 'bg-accent': targetFolderId === f.id }"
-                  :style="f.pad"
-                  @select="targetFolderId = f.id"
-                >{{ f.name }}</DropdownMenuItem>
+                <!-- 保存位置是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
+                <DropdownMenuRadioGroup :model-value="targetFolderId">
+                  <DropdownMenuRadioItem value="" @select="targetFolderId = ''">个人资产库</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem
+                    v-for="f in folderRows" :key="f.id" :value="f.id"
+                    :style="f.pad"
+                    @select="targetFolderId = f.id"
+                  >{{ f.name }}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

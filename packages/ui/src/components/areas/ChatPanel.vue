@@ -11,10 +11,27 @@ import { useUi } from '../../composables/ui'
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
+const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const ui = useUi()
 const s = ui.state
+
+/** 对话模式是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 */
+function pickChatMode(value: unknown): void {
+  if (typeof value === 'string') s.chatMode = value
+}
+
+/** 模型是单选：当前项用组件自带行尾勾表示，不再叠整行底色或卡片底（问题 03）。 */
+function pickModel(value: unknown): void {
+  if (typeof value === 'string') s.currentModel = value
+}
+
+/** 生成模式是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 */
+function pickGenMode(value: unknown): void {
+  if (value === 'manual' || value === 'auto') s.genMode = value
+}
 </script>
 
 <template>
@@ -101,7 +118,10 @@ const s = ui.state
         <DropdownMenu v-model:open="s.chatModeOpen">
           <DropdownMenuTrigger as-child><button class="flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-ink transition-colors hover:bg-hover" aria-label="选择创作模式">{{ s.chatMode }} <span class="text-[9px]">▼</span></button></DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" :side-offset="8">
-            <DropdownMenuItem v-for="m in s.chatModes" :key="m" @select="s.chatMode = m">{{ m }}</DropdownMenuItem>
+            <DropdownMenuRadioGroup :model-value="s.chatMode" @update:model-value="pickChatMode">
+              <DropdownMenuRadioItem v-for="m in s.chatModes" :key="m" :value="m"
+                @select="s.chatMode = m">{{ m }}</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <DropdownMenu>
@@ -110,9 +130,13 @@ const s = ui.state
             <div class="mb-1 flex items-center justify-between px-2 py-1"><strong class="text-xs text-ink">选择模型</strong>
               <span class="flex gap-1"><button class="rounded-md px-2 py-0.5 text-[11px]" :class="s.modelTab === 'image' ? 'bg-chip text-ink' : 'text-ink-dim'" @click="s.modelTab = 'image'">图片</button><button class="rounded-md px-2 py-0.5 text-[11px]" :class="s.modelTab === 'video' ? 'bg-chip text-ink' : 'text-ink-dim'" @click="s.modelTab = 'video'">视频</button></span>
             </div>
-            <DropdownMenuItem v-for="m in s.models" :key="m.name" class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-hover-soft" :class="{ 'bg-chip': s.currentModel === m.name }" @select="s.currentModel = m.name">
-              <span class="min-w-0 flex-1"><span class="block truncate text-xs text-ink">{{ m.name }}</span><span class="block truncate text-[10px] text-ink-dim">{{ m.desc }}</span></span>
-            </DropdownMenuItem>
+            <DropdownMenuRadioGroup :model-value="s.currentModel" @update:model-value="pickModel">
+              <DropdownMenuRadioItem v-for="m in s.models" :key="m.name" :value="m.name"
+                class="flex w-full items-center gap-2 py-2 text-left"
+                @select="s.currentModel = m.name">
+                <span class="min-w-0 flex-1"><span class="block truncate text-xs text-ink">{{ m.name }}</span><span class="block truncate text-[10px] text-ink-dim">{{ m.desc }}</span></span>
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <DropdownMenu>
@@ -132,8 +156,10 @@ const s = ui.state
         <DropdownMenu>
           <DropdownMenuTrigger as-child><button class="grid size-7 place-items-center rounded-lg text-ink transition-colors hover:bg-hover hover:text-ink" :aria-label="s.genMode === 'manual' ? '手动生成' : '自动生成'"><Hand :size="15" /></button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" :side-offset="8">
-            <DropdownMenuItem :class="{ 'bg-accent': s.genMode === 'manual' }" @select="s.genMode = 'manual'"><span class="flex-1"><span class="block text-xs">手动生成 <em class="ml-1 text-[9px] not-italic text-brand">TV Director</em></span><span class="block text-[10px] text-ink-dim">每次生成前询问</span></span></DropdownMenuItem>
-            <DropdownMenuItem :class="{ 'bg-accent': s.genMode === 'auto' }" @select="s.genMode = 'auto'"><span class="flex-1"><span class="block text-xs">自动生成 <em class="ml-1 text-[9px] not-italic text-brand">TV Director</em></span><span class="block text-[10px] text-ink-dim">可直接消耗积分</span></span></DropdownMenuItem>
+            <DropdownMenuRadioGroup :model-value="s.genMode" @update:model-value="pickGenMode">
+              <DropdownMenuRadioItem value="manual" @select="s.genMode = 'manual'"><span class="flex-1"><span class="block text-xs">手动生成 <em class="ml-1 text-[9px] not-italic text-brand">TV Director</em></span><span class="block text-[10px] text-ink-dim">每次生成前询问</span></span></DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="auto" @select="s.genMode = 'auto'"><span class="flex-1"><span class="block text-xs">自动生成 <em class="ml-1 text-[9px] not-italic text-brand">TV Director</em></span><span class="block text-[10px] text-ink-dim">可直接消耗积分</span></span></DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <span class="ml-auto text-[11px] text-ink-dim">上下文剩余 {{ s.contextLeft }}%</span>

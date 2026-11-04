@@ -6,6 +6,8 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
+const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 defineProps<{
@@ -53,8 +55,11 @@ const emit = defineEmits<{
         <FilterIcon :size="15" />
       </button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" :side-offset="4">
-      <DropdownMenuItem v-for="k in assetKinds" :key="k" :class="{ 'bg-accent': activeKind === k }"
-        @select="emit('pickKind', k)">{{ k }}</DropdownMenuItem>
+      <!-- 类型筛选是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
+      <DropdownMenuRadioGroup :model-value="activeKind">
+        <DropdownMenuRadioItem v-for="k in assetKinds" :key="k" :value="k"
+          @select="emit('pickKind', k)">{{ k }}</DropdownMenuRadioItem>
+      </DropdownMenuRadioGroup>
     </DropdownMenuContent>
   </DropdownMenu>
   <!-- 加号下拉：新建文件夹 / 上传资产（照左侧抽屉的加号；用户口径 2026-10-08） -->
