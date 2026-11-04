@@ -20,6 +20,7 @@
     "./*": "./dist/*"
   },
   "scripts": {
+    "dev": "tsx src/cli.ts serve -d ../../.mini-canvas --trusted-origin http://localhost:5288",
     "build": "pnpm typecheck && pnpm bundle",
     "bundle": "node scripts/bundle.mjs && tsc -p tsconfig.build.json",
     "build:assets": "node scripts/build-assets-parallel.mjs",

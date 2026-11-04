@@ -13,11 +13,16 @@
 
 ```bash
 pnpm install                                  # 仓库根目录执行一次
-pnpm -C packages/cloud-server serve           # 起后台（默认 :8865）
+pnpm -C packages/cloud-server serve --trusted-origin http://localhost:5288
 ```
 
-看到「Built site served at …」就起来了。后台同时托管画布界面，浏览器自动打开
-`http://127.0.0.1:8865/`。
+看到「mini-canvas-cloud 已启动」就起来了。后台同时托管画布界面，手动打开
+`http://127.0.0.1:8865/`（默认不自动弹浏览器）。
+
+`--trusted-origin` 不能省：后台默认只信任自己的 :8865，开发页（:5288）的保存 /
+删除等写操作会被来源边界挡下，返回 `403 请求来源不受信任`。启动日志会打印
+「额外 Origin:」，可以据此确认有没有写进去。换成别的开发端口（例如 :5289）时，
+把这条改成对应地址，或设环境变量 `MINI_CANVAS_TRUSTED_ORIGINS=http://localhost:5289`。
 
 ### 端口被占用
 
@@ -53,7 +58,7 @@ pnpm -C packages/ui dev                       # :5288，画布界面热更新
 
 | 命令 | 干什么 |
 | --- | --- |
-| `pnpm -C packages/cloud-server serve` | 起后台 + 画布（**日常就用这个**） |
+| `pnpm -C packages/cloud-server serve --trusted-origin http://localhost:5288` | 起后台 + 画布，并放行开发页（**日常就用这个**） |
 | `pnpm -C packages/ui dev` | 前端热更新（改 ui 时用） |
 | `npx mini-canvas-cloud list-tools` | 列出 MCP 暴露的工具 |
 | `pnpm -C packages/cloud-server test` | 后台测试 |

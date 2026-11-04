@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm -C packages/ui dev",
+    "dev": "node scripts/kill-port.mjs 5288 && pnpm -C packages/ui dev",
     "dev:docs": "pnpm -C packages/docs dev",
-    "dev:server": "pnpm -C packages/cloud-server build && pnpm -C packages/cloud-server serve",
+    "dev:server": "pnpm -C packages/cloud-server dev",
     "serve": "pnpm -C packages/cloud-server serve",
     "start": "node scripts/launch-server.mjs",
     "start:8865": "node scripts/launch-server.mjs --port 8865",

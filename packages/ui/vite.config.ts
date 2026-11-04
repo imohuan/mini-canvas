@@ -43,6 +43,48 @@ export default defineConfig({
   },
   // 让应用能 import 同 workspace 的源码插件/内核，交由 vite 直接转换源码 .ts/.vue
   optimizeDeps: {
+    // 冷启动一次构建齐：下面这些依赖来自 `exclude` 里的 workspace 源码包。
+    //
+    // 为什么必须显式 include：vite 的依赖扫描不进入 exclude 的包，只有页面真正
+    // import 到某个源码包时才在源码里发现它用到的第三方库；此时 vite 会重新
+    // pre-bundle，但浏览器手上还是旧 hash 的地址 —— 表现就是刷新时
+    // `504 (Outdated Optimize Dep)` + `ERR_ABORTED`，随后被迫整页刷新。
+    //
+    // 写法 `包 > 依赖` 是官方支持的（让 vite 从该包的 node_modules 解析）：
+    // cn / reka-ui 这类只在 ui-kit-shadcn 的依赖里，写在 ui 顶层会解析不到。
+    // 加/删下面任何一个源码包的第三方依赖时，记得同步这一份（有配置守卫测试）。
+    include: [
+      // ui 自己直接用的（动态 import 的那几个尤其容易漏）
+      'vue',
+      'vue-router',
+      '@vue-flow/core',
+      // vue-draggable-plus 只在 plugin-bottom-bar 的依赖里（ui 顶层解析不到）
+      '@mini-canvas/plugin-bottom-bar > vue-draggable-plus',
+      'lucide-vue-next',
+      'motion-v',
+      'imagesloaded',
+      'masonry-layout',
+      // 组织/格式组件（@mini-canvas/ui-kit-shadcn）
+      '@mini-canvas/ui-kit-shadcn > cn',
+      '@mini-canvas/ui-kit-shadcn > reka-ui',
+      '@mini-canvas/ui-kit-shadcn > @vueuse/core',
+      '@mini-canvas/ui-kit-shadcn > class-variance-authority',
+      '@mini-canvas/ui-kit-shadcn > vue-sonner',
+      '@mini-canvas/ui-kit-shadcn > @lucide/vue',
+      '@mini-canvas/ui-kit-shadcn > @vuelor/picker',
+      // 默认主题（plugin-theme-default）
+      '@mini-canvas/plugin-theme-default > @ckpack/vue-color',
+      // 3D 节点（plugin-node-3d-preview）
+      '@mini-canvas/plugin-node-3d-preview > three',
+      // 富文本编辑器（prosemirror-editor-bundle）
+      'prosemirror-editor-bundle > prosemirror-view',
+      'prosemirror-editor-bundle > prosemirror-state',
+      'prosemirror-editor-bundle > prosemirror-model',
+      'prosemirror-editor-bundle > prosemirror-commands',
+      'prosemirror-editor-bundle > prosemirror-history',
+      'prosemirror-editor-bundle > prosemirror-keymap',
+      'prosemirror-editor-bundle > prosemirror-schema-basic',
+    ],
     exclude: [
     '@mini-canvas/canvas-data',
     '@mini-canvas/canvas-render',
