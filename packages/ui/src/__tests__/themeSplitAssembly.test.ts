@@ -11,11 +11,11 @@ import {
   themeCanvasPlugin,
 } from '@mini-canvas/plugin-theme-default'
 
-async function boot(plugins: Parameters<Context['plugin']>[0][]) {
+async function boot(plugins: unknown[]) {
   const ctx = new Context()
   // 真实根级装配：应用底座先建容器（save/resources/注册表/命令）。
   ctx.plugin(createCanvasAppBasePlugin().plugin)
-  for (const p of plugins) ctx.plugin(p)
+  for (const p of plugins) ctx.plugin(p as never)
   await ctx.start()
   return ctx
 }

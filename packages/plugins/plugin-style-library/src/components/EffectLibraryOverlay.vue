@@ -11,7 +11,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
@@ -19,8 +19,9 @@ import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
 import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
 
-/** ctx：服务与标题入口；flow：视口中心 / 坐标换算（未就绪时会抛，stylePlacementOf 内部兜住） */
-const { ctx, flow } = useCanvasRender()
+/** 只从根上下文取服务：项目页没有画布也能浏览与收藏。 */
+const { ctx } = useCanvasContext()
+const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
 
 /** 广场正文：按名从 ui 目录取（树内 useUiComponent）——风格/特效共用同一件 */
 const GalleryComp = useUiComponent(UI_GALLERY)
@@ -80,6 +81,10 @@ const useError = ref('')
  * 有图就取第一张图，没有才退回预览视频的地址。
  */
 async function onUse(item: StyleCard): Promise<void> {
+  if (!hasCanvas.value) {
+    useError.value = '打开一张画布后可使用特效'
+    return
+  }
   const url = item.images[0] ?? item.cover ?? item.videos[0] ?? ''
   if (!url) {
     useError.value = '这条素材没有可加入画布的文件'
@@ -90,10 +95,15 @@ async function onUse(item: StyleCard): Promise<void> {
   usingIds.value = [item.id]
   useError.value = ''
   // 落点跟随视口中心（用户口径 2026-10-25）；拿不到视口才退回旧的固定偏移
-  const position = stylePlacementOf({
-    screenToFlow: flow.screenToFlow,
-    paneRect: flow.paneRect.value,
-  }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+  const view = ctx.tryGet<{
+    screenToFlow?: (p: { x: number; y: number }) => { x: number; y: number }
+    paneRect?: { value?: { x: number; y: number; width: number; height: number } }
+  }>('view')
+  const position =
+    stylePlacementOf({
+      screenToFlow: view?.screenToFlow as never,
+      paneRect: view?.paneRect?.value as never,
+    }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   try {
     const result = await useStyleItem(styleItemDepsOf(ctx), { url, label: item.name }, position)
     if (!result.ok) {

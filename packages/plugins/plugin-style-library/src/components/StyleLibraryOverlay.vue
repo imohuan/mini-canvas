@@ -13,7 +13,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
@@ -21,8 +21,12 @@ import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
 import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
 
-/** ctx：服务与标题入口；flow：视口中心 / 坐标换算（未就绪时会抛，stylePlacementOf 内部兜住） */
-const { ctx, flow } = useCanvasRender()
+/**
+ * 只从根上下文取服务：项目页没有画布也能打开风格广场、看详情、收藏。
+ * flow 这类画布能力按需现取（tryGet('view')），拿不到就把"加入画布"禁用。
+ */
+const { ctx } = useCanvasContext()
+const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
 
 /** 广场正文 / 详情：按名从 ui 目录取（树内调用 useUiComponent）；缺件时退化为不渲染 */
 const GalleryComp = useUiComponent(UI_GALLERY)
@@ -84,15 +88,26 @@ const useError = ref('')
  * 多图风格在标题后加序号（第 1 张不加），避免同名分不清。
  */
 async function onUse(item: StyleCard, index: number): Promise<void> {
+  // 项目页没有画布：给可见提示，不创建半成品节点。
+  if (!hasCanvas.value) {
+    useError.value = '打开一张画布后可使用素材'
+    return
+  }
   const url = item.images[index] ?? item.cover
   /**
    * 落点：按**当前视口中心**（用户口径 2026-10-25）。
    * 拿不到视口（未挂载 / 极简宿主）才退回原来的固定偏移。
    */
-  const position = stylePlacementOf({
-    screenToFlow: flow.screenToFlow,
-    paneRect: flow.paneRect.value,
-  }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+  // 没有画布视口时用固定偏移；真正的落点只有画布内才有意义。
+  const view = ctx.tryGet<{
+    screenToFlow?: (p: { x: number; y: number }) => { x: number; y: number }
+    paneRect?: { value?: { x: number; y: number; width: number; height: number } }
+  }>('view')
+  const position =
+    stylePlacementOf({
+      screenToFlow: view?.screenToFlow as never,
+      paneRect: view?.paneRect?.value as never,
+    }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   // 多图时带序号（第 1 张不加，避免"名 1"这种啰嗦标题）
   const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
   if (using.value) return

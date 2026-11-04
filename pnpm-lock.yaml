@@ -1680,6 +1680,9 @@ importers:
       '@mini-canvas/plugin-shortcut-manager':
         specifier: workspace:*
         version: link:../plugins/plugin-shortcut-manager
+      '@mini-canvas/plugin-style-library':
+        specifier: workspace:*
+        version: link:../plugins/plugin-style-library
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
         version: link:../plugins/plugin-theme-default

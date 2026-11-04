@@ -49,6 +49,7 @@ import {
 } from './data/store'
 import StyleLibraryOverlay from './components/StyleLibraryOverlay.vue'
 import EffectLibraryOverlay from './components/EffectLibraryOverlay.vue'
+import ProjectsLibraryEntry from './components/ProjectsLibraryEntry.vue'
 import StyleGalleryView from './components/StyleGalleryView.vue'
 import StyleCardView from './components/StyleCardView.vue'
 import StyleDetailView from './components/StyleDetailView.vue'
@@ -132,6 +133,14 @@ export function apply(ctx: Context, config?: StyleLibraryConfig): void {
   ui.add(UI_GALLERY, markRaw(StyleGalleryView), { id: 'default', order: 0 })
   ui.add(UI_CARD, markRaw(StyleCardView), { id: 'default', order: 0 })
   ui.add(UI_DETAIL, markRaw(StyleDetailView), { id: 'default', order: 0 })
+  // 项目页入口：不进画布也能打开风格库 / 特效库。
+  ui.add('projectsLibraryEntry', markRaw(ProjectsLibraryEntry), { id: 'default', order: 0 })
+  ctx.slots.register('app.projects.main', {
+    id: 'style-library/projects-entry',
+    order: 20,
+    component: markRaw(ProjectsLibraryEntry),
+    meta: { title: '素材库' },
+  })
 
   // —— 两个外壳挂到画布 overlay 槽（各自按服务 state.open 判显隐）——
   ctx.slots.register(OVERLAY_SLOT, {
@@ -143,6 +152,21 @@ export function apply(ctx: Context, config?: StyleLibraryConfig): void {
   ctx.slots.register(OVERLAY_SLOT, {
     id: 'effect-library/overlay',
     order: 47,
+    component: markRaw(EffectLibraryOverlay),
+    meta: { title: '特效库' },
+  })
+
+  // 项目页也要能显示同一个浮层：overlay 槽只在画布内渲染，项目页走自己的主内容槽。
+  // 两个浮层按 state.open 自判显隐，所以同时挂在两处不会重复出现。
+  ctx.slots.register('app.projects.main', {
+    id: 'style-library/projects-overlay',
+    order: 21,
+    component: markRaw(StyleLibraryOverlay),
+    meta: { title: '风格库' },
+  })
+  ctx.slots.register('app.projects.main', {
+    id: 'effect-library/projects-overlay',
+    order: 22,
     component: markRaw(EffectLibraryOverlay),
     meta: { title: '特效库' },
   })

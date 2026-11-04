@@ -50,6 +50,7 @@ import { hotReloadPlugin } from '@mini-canvas/plugin-hot-reload'
 import { uiAssetUploadPlugin } from './assetUploadPlugin'
 import { agentPlugin } from '@mini-canvas/plugin-agent'
 import { projectsPanelPlugin } from './projectsPanelPlugin'
+import { styleLibraryPlugin } from '@mini-canvas/plugin-style-library'
 // 组件展厅：把默认主题的组件真渲染在画布 UI 上（用户口径 2026-10-13：直观看到样式与行为）
 // 组件展厅等开发演示已合并进 plugin-demo-kit（可安装件，不冷启动）。
 // 插件管理是**独立包**（曾住在 plugin-cloud-client 包内部，2026-10-11 拆出来）：
@@ -93,6 +94,8 @@ export const APP_PLUGINS = [
   hotReloadPlugin,
   uiAssetUploadPlugin,
   projectsPanelPlugin,
+  // 素材库：注入 []，项目页可浏览；「加入画布」缺能力时禁用。
+  styleLibraryPlugin,
 ]
 
 /**

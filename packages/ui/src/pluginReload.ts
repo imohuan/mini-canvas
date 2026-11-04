@@ -166,8 +166,9 @@ export interface ReloaderDeps {
 /** 清单缓存时长（ms）：够短以便改完立刻看到，够长以免每次 reload 都打一次网络 */
 const CATALOG_TTL = 5000
 
-/** 默认清单地址（与「插件管理」同源同路径） */
-export const DEFAULT_CATALOG_URL = '/plugin-catalog.json'
+import { DEFAULT_CATALOG_URL } from '@mini-canvas/plugin-manager'
+/** 默认清单地址：单一来源在插件管理包，这里只转发，避免两处漂移。 */
+export { DEFAULT_CATALOG_URL }
 
 /** 默认挂到 window 的 key */
 export const DEFAULT_RELOADER_KEY = 'MiniCanvasPlugin'
