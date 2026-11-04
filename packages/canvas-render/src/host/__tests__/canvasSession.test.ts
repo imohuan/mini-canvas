@@ -95,4 +95,44 @@ describe('mountCanvas / unmountCanvas', () => {
     await unmountCanvas()
     ctx.stop()
   })
+
+  it('画布 A → B：先卸旧再装新，旧会话的落盘在换画布前完成', async () => {
+    const { ctx, app } = await bootApp()
+    const first = await mountCanvas({ ctx, appBase: app.services, plugins: [] })
+    const firstDoc = ctx.get('doc')
+
+    let secondDoc: unknown
+    const second = await mountCanvas({ ctx, appBase: app.services, plugins: [] })
+    secondDoc = ctx.get('doc')
+
+    // 换画布后服务指向新会话，不是旧会话留下的那一份。
+    expect(secondDoc).not.toBe(firstDoc)
+    expect(hasActiveCanvasSession()).toBe(true)
+    // 旧句柄已经卸过：再 dispose 一次是安全 no-op，也不会把新会话带走。
+    await first.dispose()
+    expect(ctx.get('doc')).toBe(secondDoc)
+    await second.dispose()
+    expect(ctx.hasService('doc')).toBe(false)
+    ctx.stop()
+  })
+
+  it('连续快速 mount 时，旧 mount 的异步恢复不会覆盖最后一份画布', async () => {
+    const { ctx, app } = await bootApp()
+    // 不 await 第一次：模拟用户在切换动画里连续点两张画布。
+    // 两次挂载必须在同一条串行队列上排队，否则第二次会撞上重名 canvas-session。
+    const racing = mountCanvas({ ctx, appBase: app.services, plugins: [] })
+    const latest = await mountCanvas({ ctx, appBase: app.services, plugins: [] })
+    const earlier = await racing
+
+    // 先挂的那次会被后一次先卸掉；最终活动的是最后一次。
+    expect(earlier).not.toBe(latest)
+    expect(hasActiveCanvasSession()).toBe(true)
+    expect(ctx.tryGet('doc')).toBeTruthy()
+    // 旧句柄再 dispose 一次是 no-op，不能带走新会话。
+    await earlier.dispose()
+    expect(ctx.tryGet('doc')).toBeTruthy()
+    await latest.dispose()
+    expect(hasActiveCanvasSession()).toBe(false)
+    ctx.stop()
+  })
 })

@@ -259,6 +259,11 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     const names = ctx.surface().events
     // 内核自带四条 + modelTool 模块加载时登记的三条
     expect(names).toContain('ctx:ready')
+    // 事件清单只有这四条内核生命周期事件；服务注入/撤销不新增事件。
+    expect(names).toContain('ctx:plugin-installed')
+    expect(names).toContain('ctx:plugin-uninstalled')
+    expect(names).toContain('ctx:lifecycle-change')
+    expect(names.filter((n) => /^(service|ctx):.*(injected|inject|provided|revoked)/.test(n))).toEqual([])
     expect(names).toContain('tools/result')
     // 返回副本：调用方改不动登记表
     names.push('injected-by-caller')

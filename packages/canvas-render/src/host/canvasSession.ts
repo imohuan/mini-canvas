@@ -43,6 +43,14 @@ export interface MountCanvasOptions {
 
 let active: CanvasSessionHandle | undefined
 let generation = 0
+/**
+ * 挂载串行队列。
+ *
+ * 为什么需要：连续点两张画布时，两次 mountCanvas 会同时往同一个 Context 装
+ * canvas-session，第二次撞上"重名插件"直接失败，用户看到的是白屏或停在旧画布。
+ * 串行后每一次都等上一份卸干净再装；旧异步恢复也不可能覆盖最后一份。
+ */
+let mountQueue: Promise<void> = Promise.resolve()
 
 /** 当前是否在画布内（项目页为 false）。 */
 export function hasActiveCanvasSession(): boolean {
@@ -56,6 +64,16 @@ export function hasActiveCanvasSession(): boolean {
  * 并发：每次挂载带 generation，旧的异步恢复结果不会覆盖新的。
  */
 export async function mountCanvas(opts: MountCanvasOptions): Promise<CanvasSessionHandle> {
+  const run = mountQueue.then(() => mountCanvasNow(opts))
+  // 失败也要放行队列，否则一次挂载失败会让后续所有切换卡死。
+  mountQueue = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+async function mountCanvasNow(opts: MountCanvasOptions): Promise<CanvasSessionHandle> {
   const gen = ++generation
   if (active) await unmountCanvas()
 
