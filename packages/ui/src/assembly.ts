@@ -51,6 +51,7 @@ import { uiAssetUploadPlugin } from './assetUploadPlugin'
 import { agentPlugin } from '@mini-canvas/plugin-agent'
 import { projectsPanelPlugin } from './projectsPanelPlugin'
 import { styleLibraryPlugin } from '@mini-canvas/plugin-style-library'
+import { projectsApiPlugin } from './projectsApiPlugin'
 // 组件展厅：把默认主题的组件真渲染在画布 UI 上（用户口径 2026-10-13：直观看到样式与行为）
 // 组件展厅等开发演示已合并进 plugin-demo-kit（可安装件，不冷启动）。
 // 插件管理是**独立包**（曾住在 plugin-cloud-client 包内部，2026-10-11 拆出来）：
@@ -112,6 +113,7 @@ export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
   { plugin: uiAssetUploadPlugin, kind: 'app', reason: '资产入库入口' },
   { plugin: projectsPanelPlugin, kind: 'app', reason: '项目页面板示例' },
   { plugin: styleLibraryPlugin, kind: 'app', reason: '素材库（项目页可浏览）' },
+  { plugin: projectsApiPlugin, kind: 'app', reason: '项目数据服务（项目页面板可用）' },
   { plugin: shortcutSettingsPlugin, kind: 'app', reason: '设置页快捷键配置' },
 
   { plugin: themeCanvasPlugin, kind: 'canvas', reason: '节点壳 / 连线 / 背景' },

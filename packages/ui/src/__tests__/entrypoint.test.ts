@@ -74,9 +74,9 @@ describe('@mini-canvas/ui 出口契约', () => {
     // 分层后：应用级常驻清单 + 画布级清单，两份合起来才是全部自带件。
     // 应用级只留与画布无关的（主题组件/设置/插件管理/Agent/热重载/资产入口）。
     // 主题已拆成 theme-components（应用级）与 theme-canvas（画布级）。
-    expect(APP_PLUGINS).toHaveLength(8)
+    expect(APP_PLUGINS).toHaveLength(9)
     expect(CANVAS_PLUGINS.length).toBeGreaterThan(10)
-    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(24)
+    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(25)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 设置页「个人 → 快捷键」要有真实配置页：成品外壳不装完整快捷键插件，

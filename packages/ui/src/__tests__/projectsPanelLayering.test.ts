@@ -19,6 +19,7 @@ import {
 } from '@mini-canvas/canvas-render'
 import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-default'
 import { projectsPanelPlugin } from '../projectsPanelPlugin'
+import { projectsApiPlugin } from '../projectsApiPlugin'
 
 async function boot() {
   const ctx = new Context()
@@ -26,6 +27,7 @@ async function boot() {
   ctx.plugin(app.plugin)
   ctx.plugin(themeComponentsPlugin)
   ctx.plugin(projectsPanelPlugin)
+  ctx.plugin(projectsApiPlugin)
   await ctx.start()
   return { ctx, app }
 }
@@ -59,6 +61,8 @@ describe('项目页插件面板与画布能力分层', () => {
     expect(ctx.registryOf<unknown>('ui').keys()).toContain('Button')
     expect(ctx.registryOf<unknown>('ui').top('Button')?.value, 'ui 目录的 Button 是空的').toBeTruthy()
     expect(ctx.hasService('doc')).toBe(false)
+    // 项目页面板要能真正操作项目数据：服务必须常驻，不需要打开画布。
+    expect(ctx.tryGet('projectsApi')).toBeTruthy()
 
     const html = await renderPanel(ctx)
     expect(html).toContain('项目页面板示例')
