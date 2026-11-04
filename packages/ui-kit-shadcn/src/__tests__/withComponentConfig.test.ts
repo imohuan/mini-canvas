@@ -128,7 +128,7 @@ describe('size 档位收敛', () => {
     expect(src).toMatch(/data-\[size=lg\]:size-/)
   })
 
-  it('Tabs 选中胶囊有亮暗都能看见的底色（不能再写死白色半透明）', () => {
+  it('Tabs 选中胶囊跟 shadcn 原生一致：panel 底，亮暗都看得见', () => {
     const src = readFileSync(
       new URL('../components/ui/tabs/TabsList.vue', import.meta.url),
       'utf-8',
@@ -136,7 +136,7 @@ describe('size 档位收敛', () => {
     const style = src.slice(src.indexOf('.cn-tabs-capsule'))
     const rule = style.slice(0, style.indexOf('}'))
     expect(rule).toContain('--ui-tab-capsule')
-    expect(rule).toMatch(/color-mix\(in oklab, var\(--foreground\)/)
+    expect(rule).toMatch(/var\(--ui-panel, var\(--background\)\)/)
     // 写死白色半透明会让亮色主题下完全看不见
     expect(rule).not.toMatch(/background:\s*rgb\(255 255 255/)
   })
