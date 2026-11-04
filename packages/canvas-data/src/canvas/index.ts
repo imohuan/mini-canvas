@@ -172,7 +172,7 @@ export { createCanvasBasePlugin, CANVAS_BASE_PLUGIN_NAME } from './canvasBasePlu
 export type { CanvasBaseAssembly, CanvasBaseOptions, CanvasBaseServices } from './canvasBasePlugin'
 
 // 应用级底座：根级 Provider 常驻的那一层（save / resources / 注册表容器 / 配置桥）。
-// 它和 canvas-session 组合起来，就等于原来的 canvas-base；拆分目的是让项目页不必启动画布。
+// 插件名就是 `canvas-base`（分层名）；它和下面的 `canvas-data` 会话插件组合起来才是完整画布。
 export {
   createCanvasAppBasePlugin,
   CANVAS_APP_BASE_PLUGIN_NAME,
@@ -182,6 +182,11 @@ export type {
   CanvasAppBaseOptions,
   CanvasAppBaseServices,
 } from './canvasAppBasePlugin'
+
+// 画布数据会话插件：doc / selection / 历史 / 图写入 / 节点工厂（可装卸，插件名 `canvas-data`）。
+// 进入画布装它、离开画布卸它；依赖 doc 的业务插件由内核自动在 PENDING 与 active 之间切换。
+export { createCanvasDataPlugin, CANVAS_DATA_PLUGIN_NAME } from './canvasDataPlugin'
+export type { CanvasDataAssembly } from './canvasDataPlugin'
 
 export { NodeFactory } from './nodeFactory'
 export type { NodeCreator, NodeFactoryService } from './nodeFactory'

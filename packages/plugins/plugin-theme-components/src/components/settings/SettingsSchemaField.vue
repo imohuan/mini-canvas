@@ -34,10 +34,21 @@ import {
   Switch,
 } from '@mini-canvas/ui-kit-shadcn'
 import { Minus, Plus } from 'lucide-vue-next'
+import { componentConfig } from '@mini-canvas/ui-kit-shadcn'
 import ShadcnSettingsRow from './ShadcnSettingsRow.vue'
 import ThemeFontField from './ThemeFontField.vue'
 import ThemeRadiusField from './ThemeRadiusField.vue'
 import ThemeSizeField from './ThemeSizeField.vue'
+
+/**
+ * 设置面板里的控件也要跟全局「控件尺寸」走。
+ *
+ * 面板里的下拉 / 输入框是**直接 import** 组件库的，绕过了按名取件那层 size 注入；
+ * 再加上模板里写死 `size="sm"`、CSS 里写死 30/32px 高度，所以用户把设置切到「大」时
+ * 设置界面完全没反应（2026-11-05 实测）。
+ * 现在：模板不写死档位，统一读 componentConfig（响应式），CSS 高度也改成读同一档的行高变量。
+ */
+const sizeTier = computed(() => componentConfig.size)
 
 const props = defineProps<{
   /** 字段所属分组（须等于 settings.groupOf 的组名） */
@@ -260,7 +271,7 @@ const appearanceControl = computed(() =>
       >
         <SelectTrigger
           class="sf-select-trigger"
-          size="sm"
+          :size="sizeTier"
           :aria-label="entry.schema.label ?? entry.key"
         >
           <SelectValue placeholder="请选择" />
@@ -417,7 +428,8 @@ const appearanceControl = computed(() =>
 .sf-input {
   width: 260px;
   max-width: 100%;
-  height: 32px;
+  /* 高度交给全局控件尺寸：Input 自带 h-9，写死 32px 会让「小 / 大」档失效 */
+  height: auto;
 }
 
 .sf-number {
@@ -438,7 +450,7 @@ const appearanceControl = computed(() =>
 }
 
 .sf-number-input {
-  height: 30px;
+  /* 高度跟着全局尺寸档（NumberField 自己按 size 出 h-8/9/10），只保留左右留白 */
   padding: 0 18px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -471,7 +483,8 @@ const appearanceControl = computed(() =>
   gap: 8px;
   /* 给角标留出右侧空间：清除按钮压在色块内侧，不再盖住 hex 文本 */
   position: relative;
-  height: 32px;
+  /* 高度跟设置行一起走（--mct-size-control-h 由尺寸档位写入） */
+  height: calc(var(--mct-size-control-h, 2.25rem) - 4px);
   padding: 0 10px 0 5px;
   border: 1px solid var(--ui-line, #e2e5ea);
   /* 圆角交给组件库：全局圆角档位改的是 [data-slot] 本体，

@@ -2,7 +2,7 @@
  * renderPlugin —— 渲染层自己的插件身份。
  *
  * 它只提供「渲染层基础设施」：标准能力包（registryOf('capability') 里的 node/zoom/… 默认实现）。
- * 它**不**注入 doc / selection / view：这三个是画布会话的服务，由 canvas-session 在进入画布时提供；
+ * 它**不**注入 doc / selection / view：这三个是画布会话的服务，由 canvas-data 在进入画布时提供；
  * 渲染层插件在根级常驻，项目页也要能用，不能把画布会话的生命周期绑在自己身上。
  *
  * 为什么能力注册要收进插件：宿主（createMiniCanvasHost）也走同一条装配路径，

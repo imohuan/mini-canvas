@@ -71,6 +71,16 @@ export type {
 export type { NotifyContract, NotifyKind, NotifyMessage, NotifyOptions } from '@mini-canvas/canvas-data'
 
 export * from './define'
+/**
+ * 应用级画布底座插件（插件名 `canvas-base`）：save / resources / 注册表容器 / 命令表 / 配置桥。
+ * 装配在根级 Provider；画布数据会话是另一个身份 `canvas-data`（见 canvas-data 包）。
+ */
+export {
+  canvasBasePlugin,
+  createCanvasBaseAppPlugin,
+  CANVAS_BASE_PLUGIN_NAME,
+  type CanvasBasePluginAssembly,
+} from './plugin'
 /** 管理令牌的本机存取（面板 / 对话 / 云端连接 / 视觉节点代发共用一处键名） */
 export {
   ADMIN_TOKEN_KEY,

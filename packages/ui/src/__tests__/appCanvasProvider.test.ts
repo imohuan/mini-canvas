@@ -29,7 +29,8 @@ describe('应用装配层级', () => {
     expect(app).not.toContain('<CanvasProvider')
     // 启动配方在外壳（AppProvider），建 Context / provide 在 vue-render 的 RenderProvider。
     expect(provider).toContain('new Context')
-    expect(provider).toContain('createCanvasAppBasePlugin')
+    // 应用级底座走自己的插件身份（canvas-base），不再从 canvas-data 里直接取工厂。
+    expect(provider).toContain('createCanvasBaseAppPlugin')
     expect(provider).toContain('resolveAppPlugins()')
     expect(provider).toContain('await ctx.start()')
     expect(provider).toContain('<RenderProvider')

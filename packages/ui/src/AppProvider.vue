@@ -7,13 +7,15 @@
  * 这里只补外壳自己的启动配方（默认存储适配器、要登记的插件清单、配置桥）。
  */
 import { RenderProvider } from '@mini-canvas/vue-render'
-import { Context, createCanvasAppBasePlugin } from '@mini-canvas/canvas-data'
+import { Context } from '@mini-canvas/canvas-data'
+import { createCanvasBaseAppPlugin } from '@mini-canvas/canvas-base'
 import { setReadyHost } from './composables/ui/hostRuntime'
 import { createDefaultStorageAdapter, resolveAppPlugins } from './assembly'
 
 async function bootstrap() {
   const ctx = new Context({ dev: import.meta.env.DEV })
-  const appBase = createCanvasAppBasePlugin({
+  // 应用级底座就是这个插件的身份：canvas-base（save / resources / 注册表 / 命令 / 配置桥）。
+  const appBase = createCanvasBaseAppPlugin({
     adapter: createDefaultStorageAdapter(),
     persistSettings: true,
   })

@@ -54,7 +54,7 @@ export const CANVAS_BASE_PLUGIN_NAME = 'canvas-base'
 
 /** 建基础插件时可选项（都是「宿主才知道」的东西：存储后端、宿主自建的注册表实例） */
 export interface CanvasBaseOptions {
-  /** 插件名；缺省 'canvas-base'。画布会话用 'canvas-session' 另起一个可卸单元。 */
+  /** 插件名；缺省 'canvas-base'。画布会话用 canvasDataPlugin（'canvas-data'）另起一个可卸单元。 */
   pluginName?: string
   /** 是否声明 core（拒绝动态热卸）；缺省 true。画布会话必须为 false。 */
   core?: boolean

@@ -124,7 +124,7 @@ describe('项目页插件面板与画布能力分层', () => {
   it('项目页不建画布宿主：没有 doc / canvas / nodeToolbar，也不读 default 画布', async () => {
     const { ctx } = await boot()
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    // 这些只由 canvas-session 注入；项目页少任何一个都说明有人偷偷启动了画布。
+    // 这些只由 canvas-data 注入；项目页少任何一个都说明有人偷偷启动了画布。
     for (const name of ['doc', 'canvas', 'nodeToolbar', 'selection']) {
       expect(ctx.hasService(name), '项目页不该有 ' + name).toBe(false)
     }

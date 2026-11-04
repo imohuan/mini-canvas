@@ -4,7 +4,7 @@
  * 和 canvas-base 的分工：
  * - 本插件只管**与当前画布无关**的东西：存储通道（save）、资源生命周期（resources）、
  *   主题/节点注册表的容器，以及配置持久化桥。
- * - canvas-base / canvas-session 关心的是「这张画布」：doc / selection / view / 命令 / 节点数据。
+ * - canvas-base / canvas-data 关心的是「这张画布」：doc / selection / view / 命令 / 节点数据。
  *
  * 为什么需要拆开：项目页也要能取设置、装插件、使用通用组件，但不该为此启动一张画布。
  * 根级 Provider 常驻的只有这一层；进入画布时再装会话插件，把 doc/selection 等服务补上。
@@ -23,10 +23,18 @@ import { ThemeRegistry } from './registry/themeRegistry'
 import { setCanvasRuntime, canvasRuntime, type CanvasRuntime } from './canvasRuntime'
 import { clearCommandRuntime, setCommandRuntime, type CommandRuntime } from './commandRuntime'
 
-/** 应用级底座插件名 */
-export const CANVAS_APP_BASE_PLUGIN_NAME = 'canvas-app-base'
+/**
+ * 应用级底座插件名。
+ *
+ * 名字就是分层名 `canvas-base`：这一层负责「与当前画布无关」的 save / resources /
+ * 注册表容器 / 命令表 / 配置桥。画布会话那层另有自己的身份 `canvas-data`
+ * （见 canvasDataPlugin.ts），两者不会撞名。
+ */
+export const CANVAS_APP_BASE_PLUGIN_NAME = 'canvas-base'
 
 export interface CanvasAppBaseOptions {
+  /** 插件名；缺省 CANVAS_APP_BASE_PLUGIN_NAME（'canvas-base'）。 */
+  pluginName?: string
   /** 存储后端（本地 / 云端可插拔）；缺省内存 adapter。 */
   adapter?: StorageAdapter
   /** 宿主自建的注册表容器（根级 Provider 需要在启动前就拿到同一份实例）。 */
@@ -59,6 +67,7 @@ export interface CanvasAppBaseAssembly {
  */
 export function createCanvasAppBasePlugin(opts: CanvasAppBaseOptions = {}): CanvasAppBaseAssembly {
   const persistSettings = opts.persistSettings !== false
+  const pluginName = opts.pluginName ?? CANVAS_APP_BASE_PLUGIN_NAME
 
   const save = new SaveServiceImpl()
   if (opts.adapter) save.useAdapterForAll(opts.adapter)
@@ -85,7 +94,10 @@ export function createCanvasAppBasePlugin(opts: CanvasAppBaseOptions = {}): Canv
   const services: CanvasAppBaseServices = { save, resources, nodeRegistry, themeRegistry, command }
 
   const plugin: PluginModule = {
-    name: CANVAS_APP_BASE_PLUGIN_NAME,
+    name: pluginName,
+    // 应用级底座是「环境」：随整个应用生命周期常驻，不该被业务层热卸。
+    // 画布会话（canvas-data）才是可装卸的那一层，core 只加在这里。
+    core: true,
     inject: [],
     apply(ctx: PluginScope) {
       ctx.inject('save', save)
@@ -133,5 +145,5 @@ export function createCanvasAppBasePlugin(opts: CanvasAppBaseOptions = {}): Canv
     },
   }
 
-  return { name: CANVAS_APP_BASE_PLUGIN_NAME, plugin, services }
+  return { name: pluginName, plugin, services }
 }

@@ -7,8 +7,8 @@
 | 东西 | 什么时候有 | 谁提供 |
 | --- | --- | --- |
 | `slots` / `settings` / `settingsMenu` / `tools` | 应用启动到关闭 | 内核与画布能力层 |
-| `save` / `resources` / `notify` | 应用启动到关闭 | 根级应用底座 + `theme-components` |
-| `doc` / `selection` / `view` / `canvas` / `nodeToolbar` | 只在画布路由内 | `canvas-session` |
+| `save` / `resources` / `notify` | 应用启动到关闭 | `canvas-base`（应用级底座）+ `theme-components` |
+| `doc` / `selection` / `view` / `canvas` / `nodeToolbar` | 只在画布路由内 | `canvas-data`（画布数据会话） |
 | `cloud-client` / `cloud-client:history` | 应用启动到关闭 | `cloud-client` 的连接部分 |
 | `projectsApi` | 应用启动到关闭 | `projects-api` 插件 |
 
@@ -39,7 +39,15 @@ Provider **不挂 key**：切路由只重建路由组件，不重建整棵应用
 | 通用插件（主题组件、设置、插件管理、Agent） | `[]` | 启动 | 继续运行 |
 | 画布插件（节点、底栏、选区、画布外观） | `['doc', …]` | 停在 PENDING | 自动启动 |
 
-离开画布执行 `unmountCanvas()`：先落盘，再卸载 `canvas-session`。依赖它的插件会自动回到 PENDING，注册的节点类型、槽位与主题条目一起回收。
+离开画布执行 `unmountCanvas()`：先落盘，再卸载 `canvas-data`。依赖它的插件会自动回到 PENDING，注册的节点类型、槽位与主题条目一起回收。
+
+base / data / render 三层都有自己的插件身份，名字就是分层名：
+
+| 插件 | 名字 | 什么时候在 | 提供什么 |
+| --- | --- | --- | --- |
+| 应用级底座 | `canvas-base` | 应用启动到关闭 | `save` / `resources` / 注册表容器 / 命令表 / 配置桥 |
+| 画布数据会话 | `canvas-data` | 只在画布路由内 | `doc` / `selection` / 历史 / 图写入 / 节点工厂 |
+| 渲染层 | `canvas-render` | 应用启动到关闭 | 标准能力包（`registryOf('capability')`） |
 
 ## 在项目页加一个面板
 
@@ -74,7 +82,7 @@ const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
 
 ## 主题也分两半
 
-+默认主题拆成了两个独立的插件包，互相不 import：
+默认主题拆成了两个独立的插件包，互相不 import：
 
 | 包 | 插件 | 作用 | 何时启动 |
 | --- | --- | --- | --- |

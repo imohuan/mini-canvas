@@ -119,7 +119,7 @@ describe('mountCanvas / unmountCanvas', () => {
   it('连续快速 mount 时，旧 mount 的异步恢复不会覆盖最后一份画布', async () => {
     const { ctx, app } = await bootApp()
     // 不 await 第一次：模拟用户在切换动画里连续点两张画布。
-    // 两次挂载必须在同一条串行队列上排队，否则第二次会撞上重名 canvas-session。
+    // 两次挂载必须在同一条串行队列上排队，否则第二次会撞上重名 canvas-data。
     const racing = mountCanvas({ ctx, appBase: app.services, plugins: [] })
     const latest = await mountCanvas({ ctx, appBase: app.services, plugins: [] })
     const earlier = await racing

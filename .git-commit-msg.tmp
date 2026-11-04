@@ -1,0 +1,10 @@
+refactor(layering): base / data / render 三层各有插件身份
+
+- canvas-base 包新增插件身份 canvas-base（应用级底座：save / resources / 注册表 / 命令 / 配置桥），
+  根级 Provider 改为从这里取装配入口
+- canvas-data 包新增 canvas-data 会话插件（doc / selection / 历史 / 图写入 / 节点工厂，core: false）
+- 旧名 canvas-app-base → canvas-base、canvas-session → canvas-data 全部替换，注释与文档同步
+- 设置面板的字段控件不再写死 size="sm"，改读全局尺寸档
+
+验证：kernel 250、canvas-base 31、canvas-data 452、canvas-render 610、ui 579、
+theme-components 155、theme-canvas 224、theme-contract 14 全过；相关包 typecheck 通过。

@@ -2,7 +2,8 @@
  * createMiniCanvasHost —— 可复用画布宿主门面（window.MiniCanvas 的唯一装配点）。
  *
  * 定位：
- * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 12 件画布基础服务 = 8 个 ctx 服务名
+ * - 一个工厂：建 Context → 装应用底座（canvas-base：save / resources / 注册表 / 命令）
+ *   → 装画布数据会话（canvas-data，它自带 12 件画布基础服务 = 8 个 ctx 服务名
  *   + 4 个仅由 services 直接持有的内部实例）→ 注入渲染层两件
  *   （view）→ 冷启动业务插件 → start。
  * - **不 import 任何具体插件**：冷启动要装哪些由调用方(宿主/demo)经 `coldPlugins` 传入，
@@ -18,8 +19,9 @@ import type { CommandService } from '@mini-canvas/kernel'
 import {
   Context,
   createCanvasAppBasePlugin,
-  createCanvasBasePlugin,
+  createCanvasDataPlugin,
   CANVAS_APP_BASE_PLUGIN_NAME,
+  CANVAS_DATA_PLUGIN_NAME,
   GRAPH_EDGES_KEY,
   GRAPH_KEY,
 } from '@mini-canvas/canvas-data'
@@ -168,8 +170,8 @@ export interface MiniCanvasApi {
  * 返回 { host, api, manager, exposeToWindow }：宿主(Vue)拿 host 渲染；api/manager 是插件安装入口
  * (manager 是目标 D 的统一安装句柄, 带外部来源 + manifest)；exposeToWindow(windowKey) 把 api 挂到 window 上。
  *
- * 装配形状（步骤 4「搬窝」后）：**建 ctx → 装基础插件 → 装业务插件 → start**。
- * 原来写在这里的 15 行 `ctx.inject(...)` 已收进 `canvasBasePlugin`（core: true，拒绝热卸）；
+ * 装配形状：**建 ctx → 装 canvas-base（应用底座）→ 装 canvas-data（画布会话）→ 装业务插件 → start**。
+ * 原来写在这里的 15 行 `ctx.inject(...)` 已收进 `canvasDataPlugin`（core: false，可随离开画布卸掉）；
  * 宿主这里只留一处 `ctx.inject`，留给**真属于渲染层、必须由宿主在挂载时注入**的 `view`
  * （要 ResizeObserver 量 DOM、也要 attach VueFlow 后端）。
  * 注意时序：它在 `ctx.plugin(basePlugin)` **之前**注入 —— 基础插件之后装的业务插件一 start 就能
@@ -203,9 +205,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、已不再是 ctx 服务名，
   // 数据统一经 doc。工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建视口。
   // 根级已有应用底座时，这里只补画布会话，且允许卸载（core: false）。 ——
-  const base = createCanvasBasePlugin({
-    pluginName: opts.ctx ? 'canvas-session' : undefined,
-    core: opts.ctx ? false : undefined,
+  const base = createCanvasDataPlugin({
+    ...(opts.ctx
+      ? {}
+      : { adapter: opts.adapter, nodeRegistry: opts.nodeRegistry, themeRegistry: opts.themeRegistry }),
     appBase: appServices,
     persistSettings: opts.persistSettings,
   })
@@ -260,7 +263,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     revokeView?.()
     revokeCanvas?.()
     revokeNodeToolbar?.()
-    // doc / selection 随 canvas-session 的 fiber 回收；共享根 Context 时再显式摘一次，
+    // doc / selection 随 canvas-data 的 fiber 回收；共享根 Context 时再显式摘一次，
     // 保证离开画布后 ctx.tryGet('doc') 一定是 undefined。
     base.services.revokeDoc?.()
     base.services.revokeSelection?.()
@@ -319,10 +322,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 时序同样在 settingsPersist.restore 之前 define，用户保存过的模式才能在 define 时命中为初值。
   defineThemeModeSetting(interactionSettings)
 
-  // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）已收进基础插件（canvasBasePlugin.apply 里的
+  // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）已收进画布数据会话插件（canvas-data.apply 里的
   // ctx.effect → registerCanvasCommands），宿主不再重复注册 —— 再注册会撞命令 id 抛错。
 
-  // 配置持久化桥（P1-5 修复）：由基础插件建好并注入 ctx（见 canvasBasePlugin.apply，缺省开启）。
+  // 配置持久化桥（P1-5 修复）：由会话插件建好并注入 ctx（见 canvas-data → canvasBasePlugin.apply，缺省开启）。
   // 宿主这里只负责"插件装载完成之后"的那一次 restore：插件 Config 已声明完成，
   // 注入的保存快照能在 define 时命中为初值（若宿主关掉 persistSettings，桥缺席 → 不 restore）。
   const settingsPersist: SettingsPersistService | undefined = base.services.settingsPersist
@@ -397,7 +400,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
         ctx.stop()
       } else {
         disposeSessionServices()
-        ctx.uninstallPlugin('canvas-session')
+        ctx.uninstallPlugin(CANVAS_DATA_PLUGIN_NAME)
       }
     },
   }
