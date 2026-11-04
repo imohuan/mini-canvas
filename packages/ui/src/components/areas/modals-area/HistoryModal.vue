@@ -3,7 +3,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare, Download } from 'lucide-vue-next'
 import AppDialog from '../../AppDialog.vue'
-import ScrollPane from '../../ScrollPane.vue'
 import { scrollViewportOf } from '../../scrollPane'
 // 浮层里的控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记）。
 import { useUiComponent } from '@mini-canvas/canvas-render'
@@ -31,6 +30,8 @@ const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+/** 历史卡片墙滚动层：组件库 ScrollArea（用户口径 2026-11-04）。 */
+const ScrollArea = useUiComponent('ScrollArea')
 /** 全屏预览走 ui 目录；没登记时回落默认皮。历史预览只在打开时渲染，取件晚到也不会丢。 */
 const MediaViewer = useUiComponentOutside('mediaViewer')
 /** 模板 :is 用；目录没登记时回落默认皮。 */
@@ -441,7 +442,7 @@ function prependMasonryItems(count: number): void {
   observeLastItem()
 }
 
-/** 卡片墙的滚动容器（AxScrollArea 内部真正滚的那一层） */
+/** 卡片墙的滚动容器（ScrollArea 内部的 viewport，触底加载与位置恢复都读它） */
 function historyScroller(): HTMLElement | null {
   return scrollViewportOf(masonryEl.value)
 }
@@ -873,7 +874,8 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
-      <ScrollPane class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
+      <ScrollArea class="min-h-0 flex-1 mr-1">
+      <div class="pl-10 pr-9 pb-6">
         <!-- masonry 瀑布流：卡片按图片原始宽高比展示，列数随容器宽自适应（照 TaskResultGalleryView）。
              卡片 DOM 由 createMasonryElement 手工构建（骨架屏/裂图回退/底部信息栏都在那里）。 -->
         <!-- 卡片墙：容器**永远在**（不随数据 v-if 挂载/卸载）。切页签只是把旧墙整块
@@ -913,7 +915,8 @@ onBeforeUnmount(() => {
           <span class="text-[11px] text-ink-mute">用 <code>npx mini-canvas-cloud serve</code> 起服务后即可看到</span>
         </p>
         <p v-else-if="!ui.histVisible.value.length" class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
-      </ScrollPane>
+      </div>
+      </ScrollArea>
       <!-- 批量操作栏（图2 参考效果）：进入批量模式才出现 -->
       <div v-if="s.histBatchMode" class="hist-batch-bar flex flex-none items-center justify-between border-t border-line px-6 py-3">
         <span class="text-[13px] text-ink">已选择 {{ s.histSelectedIds.length }} 项</span>

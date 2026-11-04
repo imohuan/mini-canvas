@@ -2,10 +2,10 @@
 import { X } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import AppDialog from '../../AppDialog.vue'
-import ScrollPane from '../../ScrollPane.vue'
 import { useDirectorSettings } from './useDirectorSettings'
 
 const Button = useUiComponent('Button')
+const ScrollArea = useUiComponent('ScrollArea')
 const Input = useUiComponent('Input')
 const NumberField = useUiComponent('NumberField')
 const NumberFieldContent = useUiComponent('NumberFieldContent')
@@ -33,7 +33,8 @@ const { ui, s, agent, SUBMIT_KEY_MODE_OPTIONS, sendKeyLabel, agentBudgetOnChange
         <X :size="15" />
       </Button>
     </div>
-    <ScrollPane class="min-h-0 flex-1" direction="y" body-class="px-4 pb-2">
+    <ScrollArea class="min-h-0 flex-1">
+    <div class="px-4 pb-2">
       <div class="mb-4 rounded-xl border border-line p-3">
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">协作模式</strong>
@@ -132,7 +133,8 @@ const { ui, s, agent, SUBMIT_KEY_MODE_OPTIONS, sendKeyLabel, agentBudgetOnChange
           />
         </div>
       </div>
-    </ScrollPane>
+    </div>
+    </ScrollArea>
     <div class="flex flex-none justify-end border-t border-line p-3">
       <Button variant="outline" size="sm" type="button" @click="s.directorOpen = false; ui.showToast('设置已保存')">完成</Button>
     </div>

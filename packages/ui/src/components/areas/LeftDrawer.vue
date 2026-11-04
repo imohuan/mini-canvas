@@ -5,7 +5,6 @@ import { computed, h, defineComponent } from 'vue'
 import { ArrowLeftToLine as ArrowLeftToLineIcon } from 'lucide-vue-next'
 import { AnimatePresence, motion } from 'motion-v'
 import PanelResizeHandle from '../PanelResizeHandle.vue'
-import ScrollPane from '../ScrollPane.vue'
 import ProjectCluster from '../ProjectCluster.vue'
 import AssetBatchBar from '../AssetBatchBar.vue'
 import AssetUploadDialog from '../AssetUploadDialog.vue'
@@ -196,9 +195,9 @@ const isCanvasTab = computed(() => s.leftTab === 'canvas')
         @remove="ui.removeNode($event)" />
 
       <!-- 插件页签正文：只在当前选中的是插件页签时渲染（画布/资产树走各自的 v-if） -->
-      <ScrollPane v-if="activePluginTab" class="min-h-0 flex-1" direction="y" body-class="p-2">
+      <div v-if="activePluginTab" class="min-h-0 flex-1 overflow-y-auto p-2">
         <component :is="activePluginTab.panel" :host="drawerHost" />
-      </ScrollPane>
+      </div>
 
       <!-- 底部状态条 -->
       <div class="flex h-[53px] flex-none items-center justify-between border-t border-line px-3 pb-3 pt-2">

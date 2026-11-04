@@ -80,6 +80,7 @@ defineExpose({ scrollElement, rootElement })
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  padding-right: 4px!important;
 }
 
 .ac-scrollarea :deep([data-slot='scroll-area']) {
@@ -92,6 +93,7 @@ defineExpose({ scrollElement, rootElement })
   width: 100%;
   height: 100%;
   min-height: 0;
+  padding-right: 12px;
 }
 
 .ac-scrollarea :deep([data-slot='scroll-area-viewport']) {

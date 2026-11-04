@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Folder as FolderIcon } from 'lucide-vue-next'
-import ScrollPane from '../../ScrollPane.vue'
 import AssetTree, { type AssetTreeRow, type AssetTreeTarget } from '../../AssetTree.vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { AssetFolderSummary } from '../../../composables/projectsApi'
@@ -44,10 +43,13 @@ const emit = defineEmits<{
 }>()
 
 const Button = useUiComponent('Button')
+/** 资产树滚动层：与设置面板左栏同一套组件库 ScrollArea（细滚动条、叠在内容上）。 */
+const ScrollArea = useUiComponent('ScrollArea')
 </script>
 
 <template>
-  <ScrollPane v-if="show" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
+  <ScrollArea v-if="show" class="asset-tree-scroll min-h-0 flex-1">
+    <div class="px-2 pb-2">
     <!-- 空态：没有任何资产也没有文件夹 -->
     <div v-if="!rootFolders.length && !assetsCount"
       class="flex flex-col items-center justify-center gap-2.5 p-8">
@@ -73,5 +75,6 @@ const Button = useUiComponent('Button')
       @add-canvas="emit('addCanvas', $event)" @child-folder="emit('childFolder', $event)"
       @move-to="emit('moveTo', $event)" @set-icon="emit('setIcon', $event)"
       @set-tags="emit('setTags', $event)" @download="emit('download', $event)" @remove="emit('remove', $event)" />
-  </ScrollPane>
+    </div>
+  </ScrollArea>
 </template>

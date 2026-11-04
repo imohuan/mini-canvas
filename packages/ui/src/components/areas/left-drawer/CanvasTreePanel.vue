@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Folder as FolderIcon, Video as VideoIcon, Type as TypeIcon, Image as ImageIcon, Music as AudioIcon } from 'lucide-vue-next'
 import folderImg from '../../../assets/folder.png'
-import ScrollPane from '../../ScrollPane.vue'
 import LibIcon from '../../LibIcon.vue'
 import CanvasRowMenu from '../../CanvasRowMenu.vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
@@ -33,6 +32,8 @@ const emit = defineEmits<{
 
 const ui = useUi()
 const Button = useUiComponent('Button')
+/** 画布树滚动层：与资产面板、设置左栏同一套组件库 ScrollArea。 */
+const ScrollArea = useUiComponent('ScrollArea')
 
 const lucideOf = (icon: string) =>
   icon === 'video' ? VideoIcon
@@ -43,7 +44,8 @@ const lucideOf = (icon: string) =>
 </script>
 
 <template>
-  <ScrollPane v-if="show" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
+  <ScrollArea v-if="show" class="canvas-tree-scroll min-h-0 flex-1">
+    <div class="px-2 pb-2">
     <template v-for="block in blocks" :key="block.key">
       <!-- 分组行（任意层）：depth 决定缩进；行内改名与资产树同款（用户口径 2026-10-08） -->
       <div v-if="block.kind === 'group'"
@@ -165,5 +167,6 @@ const lucideOf = (icon: string) =>
         </div>
       </template>
     </template>
-  </ScrollPane>
+    </div>
+  </ScrollArea>
 </template>

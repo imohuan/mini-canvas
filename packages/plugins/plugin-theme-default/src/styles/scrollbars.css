@@ -1,0 +1,46 @@
+/**
+ * 默认主题的全局滚动条（唯一入口，用户口径 2026-11-04）。
+ *
+ * 不再有 ScrollPane / 统一的滚动组件：需要滚动的地方直接用原生溢出的 div，
+ * 滚动条外观全部收在这里，改一处全站生效。
+ *
+ * 只有一条规矩：滚动条就是浏览器自己的形状和位置，这里只统一"细一点、低对比"的观感。
+ * 颜色走 --ui-scroll-thumb（亮 / 暗两套在 ui-theme.css）。
+ */
+
+/* —— 全局默认观感 —— */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb, rgb(0 0 0 / 0.2)) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: var(--ui-scroll-thumb, rgb(0 0 0 / 0.2));
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-scroll-thumb-hover, rgb(0 0 0 / 0.32));
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/**
+ * 历史 / 资产列表要按「滚动层」定位的那个标记（只做标记，不改任何样式）：
+ * 触底加载、位置恢复靠它找真实滚动元素，滚动条仍是浏览器默认行为。
+ */
+[data-ui-scroll] {
+  scroll-behavior: auto;
+}
+

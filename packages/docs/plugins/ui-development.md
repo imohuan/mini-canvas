@@ -86,32 +86,32 @@ function save(): void {
 
 ## 滚动、弹窗、通知
 
-### 滚动优先 ScrollArea
+### 滚动直接用原生容器
 
-会超出的列表、设置页、抽屉正文都用 `ScrollArea`。`packages/ui` 里直接用现成的
-`ScrollPane`：它转发内部 viewport 的 `scroll` 事件，也能拿到真实滚动元素。
+需要滚动的地方，直接用会溢出的普通 `div`（`overflow-y: auto` 等），
+不要再包一层自定义滚动组件。滚动条就是浏览器默认的形状和位置，外观由默认主题统一给
+（`packages/plugins/plugin-theme-default/src/styles/scrollbars.css`）：细、低对比、
+悬停才变亮，亮暗主题各一套。
 
 ```vue
 <!-- 文件：packages/ui/src/components/MyPanel.vue -->
-<script setup lang="ts">
-import ScrollPane from './ScrollPane.vue'
-</script>
-
 <template>
   <div class="flex h-64 min-h-0 flex-col">
-    <ScrollPane direction="y" body-class="space-y-1 p-2">
+    <div class="flex-1 p-2 space-y-1 overflow-y-auto">
       <div v-for="item in items" :key="item.id">{{ item.label }}</div>
-    </ScrollPane>
+    </div>
   </div>
 </template>
 ```
 
 父容器要有确定高度并允许收缩（`min-h-0` / `flex-1`），否则不会滚。
 
+要读写 `scrollTop` 或监听滚动时，把 `ref` 直接挂在这个 div 上即可。
+
 ### 弹窗优先 AppDialog
 
 `packages/ui/src/components/AppDialog.vue` 已经接好遮罩、Esc、焦点和滚动锁。
-长内容用 `ScrollPane`，不要给面板加裸 `overflow-y`。
+长内容用原生溢出的容器，不要手写别的滚动实现。
 
 ### 通知用 notify 服务
 

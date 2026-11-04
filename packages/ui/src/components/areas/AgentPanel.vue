@@ -268,8 +268,8 @@ function startCornerResize(e: PointerEvent): void {
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="Agent 设置"
-          @click="s.settingsOpen = true"><Settings2 :size="16" class="size-4" /></Button>
+        <!-- <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="Agent 设置"
+          @click="s.settingsOpen = true"><Settings2 :size="16" class="size-4" /></Button> -->
         <!-- TV Director 全局设置：从旧 ChatPanel 的「Agent 偏好」齿轮搬过来。
              那个组件在这次迁移里被删掉了，如果不在新外壳上补一个入口，
              ModalsArea 里那块 600×532 的全局设置弹窗就**永远打不开**（实测：页面上找不到任何按钮）。 -->

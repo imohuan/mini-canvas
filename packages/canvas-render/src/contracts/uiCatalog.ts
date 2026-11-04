@@ -126,6 +126,7 @@ export function useUiComponentRefs(): UiComponentRefs {
   return uiComponentRefs(ctx);
 }
 
+
 /** 纯取件版本：给测试与非组件上下文复用，订阅随当前 effectScope 回收。 */
 export function uiComponentRefs(ctx: Context | undefined): UiComponentRefs {
   if (!ctx) return {};

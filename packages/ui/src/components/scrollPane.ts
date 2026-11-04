@@ -1,23 +1,32 @@
 /**
- * ScrollPane 的滚动层查找工具（**全仓只在这里认 shadcn 的内部结构**）。
+ * 滚动层查找工具（全仓只在这里认滚动容器的选择器）。
  *
- * 为什么单独一个模块：
- * - shadcn 的 `data-slot="scroll-area-viewport"` 是它的内部实现细节，不是我们的公开契约；
- * - 生成历史 / 资产列表需要拿这个真实的滚动元素做触底加载与位置恢复（IntersectionObserver 的 root、
- *   scrollTop 读写）。若各调用点各写一份 `closest(...)`，shadcn 一升级就要改 N 处。
- * 这里集中一处，将来结构变了只改这里。
+ * 生成历史 / 资产列表需要拿真实的滚动元素做触底加载与位置恢复
+ * （IntersectionObserver 的 root、scrollTop 读写）。集中一处，
+ * 以后换滚动容器写法只改这里。
  */
 
 /**
- * 滚动层选择器（问题 17 起，ScrollPane 自己就是滚动层）。
- * 仍保留 shadcn ScrollArea 的旧选择器做兼容：Agent 面板的 AgentScrollArea 还在用组件库版本。
+ * 滚动层选择器。
+ *
+ * 用户口径（2026-11-04）：滚动容器统一用组件库的 ScrollArea（内部 viewport 才是
+ * 真正滚动的那层），原生溢出的 div 也继续兼容。
  */
 export const SCROLL_VIEWPORT_SELECTOR =
-  '[data-scroll-pane-view], [data-slot="scroll-area-viewport"]'
+  '.ui-scroll, [data-ui-scroll], [data-slot="scroll-area-viewport"]'
 
-/** 从某个后代元素往上找 ScrollPane 的真实滚动层；不在 ScrollPane 里则返回 null */
+/**
+ * 从某个后代元素往上找真实滚动层。
+ *
+ * 落到组件库 ScrollArea 上时，它内部 viewport 才是滚动的那层（根节点只是定位容器），
+ * 所以再往下取一次 viewport；拿不到就退回根节点。
+ */
 export function scrollViewportOf(start: Element | null | undefined): HTMLElement | null {
   if (!start || typeof start.closest !== 'function') return null
-  return start.closest(SCROLL_VIEWPORT_SELECTOR) as HTMLElement | null
+  const nearest = start.closest(SCROLL_VIEWPORT_SELECTOR) as HTMLElement | null
+  if (nearest) return nearest
+  const area = start.closest('[data-slot="scroll-area"]') as HTMLElement | null
+  if (!area) return null
+  return area.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? area
 }
 

@@ -414,6 +414,7 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   font-size: 13px;
   user-select: none;
 }
+
 .ctx-menu::-webkit-scrollbar {
   width: 6px;
 }

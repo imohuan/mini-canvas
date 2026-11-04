@@ -3,9 +3,15 @@ import type { Component, ComponentPublicInstance } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import ShadcnSettingsSection from '../ShadcnSettingsSection.vue'
 import type { ContentBlock, NavEntry, Section } from './settingsMenuModel'
-import ScrollPane from './ScrollPane.vue'
 import TierTierPreview from '../TierTierPreview.vue'
 import { tierSectionSpec } from '../tierSection'
+import { useUiComponentOutside } from '../../../composables/useUiComponentOutside'
+
+/**
+ * 正文滚动层：组件库的 ScrollArea（用户口径 2026-11-04）。
+ * 设置面板在画布树外，所以用树外取件（先宿主目录，再退主题发布的静态目录）。
+ */
+const ScrollArea = useUiComponentOutside('ScrollArea')
 
 /** 主题工作台是两栏工作区，需要比普通设置页更宽的正文（仍是设置外壳内的同一页）。 */
 const THEME_STUDIO_NAV = '主题工作台'
@@ -74,7 +80,8 @@ function selectTab(key: string): void {
       </template>
     </div>
 
-    <ScrollPane ref="setScrollEl" class="psd-body flex-1" direction="y" body-class="psd-body-inner">
+    <!-- 正文滚动层：组件库 ScrollArea；ref 交给 setScrollEl，切分组回顶读它内部的滚动元素。 -->
+    <ScrollArea ref="setScrollEl" class="psd-body flex-1">
       <!-- 插件自绘 nav 配置页（如设置页快捷键）：正文滚动容器由设置皮统一提供 -->
       <div v-if="activeEntry?.navPage && !activeEntry?.page" class="psd-page psd-nav-page">
         <component :is="activeEntry.navPage" :group="activeEntry.key" :settings="props.settings" />
@@ -181,7 +188,7 @@ function selectTab(key: string): void {
           </ShadcnSettingsSection>
         </section>
       </template>
-    </ScrollPane>
+    </ScrollArea>
   </div>
 </template>
 
@@ -270,14 +277,14 @@ function selectTab(key: string): void {
 .psd-body {
   flex: 1;
   min-height: 0;
-  /* ScrollPane 根节点仍是正文弹性容器：卡片组居中语义保留（契约测试盯着这条） */
+  /* 正文滚动层是弹性项：卡片组居中语义保留（契约测试盯着这条） */
   display: flex;
   flex-direction: column;
 }
 
-/* 滚动内容层：padding 从滚动容器挪进来（容器只管滚动，问题 17）；
-   宽版整页的 margin-right: -22px 仍然以这层的 22px 内边距为基准 */
-.psd-body :deep([data-settings-scroll-body]) {
+/* 正文内边距：滚动条由 ScrollArea 负责，内容留白仍按原样（宽版整页的
+   margin-right: -22px 以这 22px 为基准）。 */
+.psd-body :deep([data-slot='scroll-area-viewport'] > div) {
   padding: 0 22px 24px;
 }
 

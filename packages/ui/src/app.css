@@ -83,13 +83,8 @@
   pointer-events: auto;
 }
 
-/* 全局滚动条（照 LibTV 实测：轨道 6px 透明 / 滑块 4px 圆角 6 / 白 40%） */
-* { scrollbar-width: thin; scrollbar-color: var(--ui-scroll-thumb) transparent; }
-*::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: var(--ui-scroll-thumb); border-radius: 6px; }
-*::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
-*::-webkit-scrollbar-corner { background: transparent; }
+/* 全局滚动条样式搬到默认主题插件：packages/plugins/plugin-theme-default/src/styles/scrollbars.css
+   （用户口径 2026-11-04：滚动条外观由主题统一管，外壳不再自己写一套） */
 
 /* ===== 全界面关掉焦点环（用户口径 2026-10-14）=====
    现象（用户原话，附了资产行被一圈黑框套住的截图）：「这边去掉这个黑色的边框，这应该是

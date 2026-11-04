@@ -5,10 +5,11 @@
  * 纯拆分：模板与 class / 文案 / 事件原样保留；状态来自同一个
  * useAgentConversation 控制器（入口 provide）。
  */
-import { inject } from 'vue'
+import { inject, nextTick, onMounted, ref, watch } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import AgentMarkdown from '../render/AgentMarkdown.vue'
 import ToolViewBody from '../render/ToolViewBody.vue'
+import AgentScrollArea from './AgentScrollArea.vue'
 import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
 import type { AgentConversationController } from './useAgentConversation'
 
@@ -25,6 +26,24 @@ const {
 } = c
 
 const Button = useUiComponent('Button')
+
+/**
+ * 消息流滚动层：换成组件库的 ScrollArea（用户口径 2026-11-04）。
+ * 吸底、触底加载、位置恢复都直接读 ref="scroller" 的那个真实滚动元素，
+ * 所以这里把它接到 AgentScrollArea 暴露的 scrollElement() 上。
+ */
+const scrollRef = ref<InstanceType<typeof AgentScrollArea> | null>(null)
+
+function syncScroller(): void {
+  const el = scrollRef.value?.scrollElement() ?? null
+  if (el !== scroller.value) scroller.value = el
+}
+
+onMounted(() => {
+  syncScroller()
+  void nextTick(syncScroller)
+})
+watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
 </script>
 
 <template>
@@ -35,7 +54,7 @@ const Button = useUiComponent('Button')
         @click="smoothScrollToBottom()">
         <ChevronDown :size="16" />
       </Button>
-      <div ref="scroller" class="ac-scroll" role="log" aria-live="polite">
+      <AgentScrollArea ref="scrollRef" class="ac-scroll" body-class="ac-scroll-body">
         <!-- 稳定的**内容容器**：空态与消息流都在它里面。
            为什么必须有一层稳定的壳：ResizeObserver 只能盯住一个具体的 DOM 节点，
            而空态与消息流是 v-if/v-else 互换的（挂载时看到的那个节点随后会被换掉），
@@ -322,7 +341,7 @@ const Button = useUiComponent('Button')
             </Button>
           </div>
         </div>
-      </div>
+      </AgentScrollArea>
     </div>
 </template>
 

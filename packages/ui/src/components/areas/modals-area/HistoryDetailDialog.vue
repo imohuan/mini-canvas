@@ -2,7 +2,6 @@
 import { X } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import AppDialog from '../../AppDialog.vue'
-import ScrollPane from '../../ScrollPane.vue'
 import { formatBytes, formatDurationLong, formatExactTime, ratioLabel } from './historyCardText'
 import type { HistoryDetailItem } from './useHistoryPreview'
 
@@ -31,7 +30,7 @@ const Button = useUiComponent('Button')
         </Button>
       </header>
 
-      <ScrollPane class="min-h-0 flex-1" direction="y" body-class="px-4 pb-4">
+      <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <div class="hist-detail-body">
           <!-- 产物信息：图片给宽高比，视频/音频额外给时长，所有类型都给文件大小 -->
           <section class="hist-detail-sec">
@@ -86,7 +85,7 @@ const Button = useUiComponent('Button')
             <p v-else class="hist-detail-empty">这条记录没有参考素材（早期记录没有这一项）</p>
           </section>
         </div>
-      </ScrollPane>
+      </div>
     </div>
   </AppDialog>
 </template>

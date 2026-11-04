@@ -327,14 +327,16 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
   }
 
   /**
-   * 模板回调 ref：正文滚动层换成 ScrollPane 后，模板拿到的是组件实例，
-   * 真正滚动的元素要经它暴露的 scrollElement() 取（问题 17）。
+   * 模板回调 ref：正文滚动层换成组件库 ScrollArea 后（用户口径 2026-11-04），
+   * 模板拿到的是组件实例，真正滚动的是它内部的 viewport —— 从根节点里查出来再记。
    */
   function setScrollEl(el: Element | ComponentPublicInstance | null): void {
-    const exposed = el as { scrollElement?: () => HTMLElement | null } | null
-    scrollEl.value = typeof exposed?.scrollElement === 'function'
-      ? exposed.scrollElement()
-      : el instanceof HTMLElement ? el : null
+    const root = el instanceof HTMLElement
+      ? el
+      : (el as { $el?: unknown } | null)?.$el instanceof HTMLElement
+        ? ((el as { $el: HTMLElement }).$el)
+        : null
+    scrollEl.value = root?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? root
   }
 
   watch(activeNav, () => {

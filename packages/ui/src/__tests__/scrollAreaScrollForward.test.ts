@@ -1,53 +1,25 @@
 /**
- * ScrollPane 的滚动事件必须能被外层接到（用户口径 2026-10-10：「生成历史」的
- * "加载更多"没效果）。
- *
- * 为什么需要这条测试：ScrollPane 的底座是 shadcn ScrollArea，真正滚动的是**内部的**
- * viewport（根元素 overflow: hidden）。Vue 把写在组件上的 @scroll 当作**自定义事件**消费，
- * 组件没声明 scroll emit 就直接吞掉 —— 外层的滚动位置记忆 / 触底逻辑永远不会被调用。
+ * 滚动容器契约（用户口径 2026-11-04：取消统一滚动组件，改原生滚动 + 主题统一滚动条）。
  *
  * 手法：node 环境没有真实样式表与 DOM 滚动，用**源码结构契约**钉住
- * 「内部滚动层的 scroll 被转发出去」，以及「滚动层查找只在一处认 shadcn 内部结构」。
+ * 「生成历史靠哨兵加载，不靠滚动事件」，以及「滚动层查找只在一处认容器」。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const scrollPane = readFileSync(new URL('../components/ScrollPane.vue', import.meta.url), 'utf-8')
 const scrollPaneUtil = readFileSync(new URL('../components/scrollPane.ts', import.meta.url), 'utf-8')
 const modalsArea = readFileSync(new URL('../components/areas/modals-area/HistoryModal.vue', import.meta.url), 'utf-8')
 const historyLoadMore = readFileSync(new URL('../components/areas/modals-area/useHistoryLoadMore.ts', import.meta.url), 'utf-8')
 
-describe('ScrollPane 转发内部滚动层的 scroll 事件', () => {
-  it('声明 scroll 自定义事件（否则写在组件上的 @scroll 会被吞掉）', () => {
-    expect(scrollPane, 'ScrollPane 没有声明 scroll emit').toMatch(/defineEmits[^)]*['"]scroll['"]/)
-  })
-
-  it('内部 viewport 的 scroll 被 emit 出去（连同原生事件）', () => {
-    expect(scrollPane, '没有监听 viewport 的 scroll').toMatch(/addEventListener\(\s*['"]scroll['"]/)
-    expect(scrollPane, 'scroll 必须把原生事件一起 emit（外层要读 e.target 的滚动几何）')
-      .toMatch(/emit\(\s*['"]scroll['"]\s*,\s*e\s*\)/)
-  })
-
+describe('滚动容器只在一处认', () => {
   it('滚动层查找只在一处认 shadcn 内部结构', () => {
     expect(scrollPaneUtil, 'SCROLL_VIEWPORT_SELECTOR 丢了').toMatch(/SCROLL_VIEWPORT_SELECTOR/)
     expect(scrollPaneUtil, '查找函数丢了').toMatch(/export function scrollViewportOf/)
   })
 
-  it('根 ref 挂在原生 div 上（组件实例没有 querySelector）', () => {
-    // 真实 bug（2026-11-03）：ref 放在 ScrollArea 组件上，open Agent 面板时
-    // `rootRef.value?.querySelector` 抛 "querySelector is not a function"。
-    expect(scrollPane, 'rootRef 不能挂在组件上').not.toMatch(/<ScrollArea[^>]*ref="rootRef"/)
-    expect(scrollPane, '找不到原生 root div').toMatch(/<div ref="rootRef"/)
-  })
-
-  /**
-   * 问题 17：滚动条必须占独立通道，不能像 ScrollArea 自绘滑块那样压在行高亮上。
-   * 判据是「原生滚动 + scrollbar-gutter: stable」，两者缺一都会退回覆盖式滚动条。
-   */
-  it('滚动层是原生 div，并给滚动条留独立通道', () => {
-    expect(scrollPane, 'ScrollPane 又改回 ScrollArea 覆盖式滑块了').not.toMatch(/<ScrollArea/)
-    expect(scrollPane, '缺少 scrollbar-gutter: stable（滚动条会压住内容）').toMatch(/scrollbar-gutter:\s*stable/)
-    expect(scrollPaneUtil, '滚动层查找认不出新的原生滚动层').toMatch(/data-scroll-pane-view/)
+  it('查找器认得原生滚动容器与组件库 ScrollArea 的 viewport', () => {
+    expect(scrollPaneUtil, '要认 ui-scroll 标记的滚动层').toMatch(/ui-scroll/)
+    expect(scrollPaneUtil, '要兼容组件库 ScrollArea 的 viewport').toMatch(/data-slot="scroll-area-viewport"/)
   })
 })
 
