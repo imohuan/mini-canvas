@@ -58,6 +58,14 @@ describe('应用装配层级', () => {
     expect(root).not.toContain('<AppProvider :key')
   })
 
+  it('ctx.start() 完成前只渲染 loading，路由子树不会提前挂载', () => {
+    // 先 start 再 ready：子组件一挂载就 installPlugin，必须等内核 started。
+    expect(provider.indexOf('await ctx.start()')).toBeGreaterThan(provider.indexOf('onMounted('))
+    expect(provider.indexOf('ready.value = true')).toBeGreaterThan(provider.indexOf('await ctx.start()'))
+    expect(provider).toMatch(/<slot v-if="ready" \/>/)
+    expect(provider).toContain('正在启动应用')
+  })
+
   it('离开画布先落盘再卸会话，项目页不建画布宿主', () => {
     expect(app).toContain('unmountCanvas') // 由会话 dispose 承载；App 只关自己的会话
     expect(app).toContain('flushPendingSave()')

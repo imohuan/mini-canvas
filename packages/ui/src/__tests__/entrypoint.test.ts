@@ -41,6 +41,19 @@ describe('@mini-canvas/ui 出口契约', () => {
     expect(typeof entry.createDefaultStorageAdapter).toBe('function')
   })
 
+  it('库入口与应用入口各有明确注释，路径与 index.html 一致', () => {
+    const lib = readFileSync(path.join(PKG_ROOT, 'src/index.ts'), 'utf8')
+    const app = readFileSync(path.join(PKG_ROOT, 'src/main.ts'), 'utf8')
+    expect(lib).toContain('库入口')
+    expect(lib).toContain('main.ts')
+    expect(app).toContain('应用入口')
+    expect(app).toContain('src/index.ts')
+    // 浏览器真正加载的是 main.ts；package.json 的 main/types 指库入口。
+    const html = readFileSync(path.join(PKG_ROOT, 'index.html'), 'utf8')
+    expect(html).toContain('/src/main.ts')
+    expect(pkg.main).toBe('./src/index.ts')
+  })
+
   it('装配清单自洽：插件数、无重名、含画布基础件', () => {
     // 2026-10-03：批量把插件改为经「插件管理」从云服务清单安装（默认已装），不再冷启动：
     //   image-compare / tool-image-generation / tool-text-generation / web2api-tools +

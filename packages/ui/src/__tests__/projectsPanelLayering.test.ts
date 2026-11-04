@@ -6,7 +6,7 @@
  * - 进画布：同一个 ctx 上 doc 出现，动作可用；
  * - 回项目页：doc 消失，面板还在；插槽条目始终只有一条（不重复登记）。
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { Context, MemoryStorageAdapter, createCanvasAppBasePlugin } from '@mini-canvas/canvas-data'
@@ -118,6 +118,21 @@ describe('项目页插件面板与画布能力分层', () => {
     expect(inside).not.toContain('缺少画布上下文')
     await session.dispose()
     expect(ctx.slots.occupants('app.projects.main').map((e) => e.id)).toEqual(before)
+    ctx.stop()
+  })
+
+  it('项目页不建画布宿主：没有 doc / canvas / nodeToolbar，也不读 default 画布', async () => {
+    const { ctx } = await boot()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    // 这些只由 canvas-session 注入；项目页少任何一个都说明有人偷偷启动了画布。
+    for (const name of ['doc', 'canvas', 'nodeToolbar', 'selection']) {
+      expect(ctx.hasService(name), '项目页不该有 ' + name).toBe(false)
+    }
+    // 项目数据服务在项目页可用，但它只读 /api/projects，不碰 /api/canvases/default。
+    await ctx.get<{ listProjects(): Promise<unknown> }>('projectsApi').listProjects().catch(() => undefined)
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/default'))).toBe(false)
+    fetchSpy.mockRestore()
     ctx.stop()
   })
 })

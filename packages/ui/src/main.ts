@@ -1,3 +1,11 @@
+/**
+ * 应用入口（浏览器启动用）：挂共享全局 / KV 通道 / 插件重装器，再把 Root 挂到 #app。
+ *
+ * 库入口是 `src/index.ts`（package.json 的 main/types 指向它）：导出 CanvasApp、
+ * APP_PLUGINS、mountCanvasApp 给别的宿主复用。两者用途不同，不要互相替代：
+ * - 入口文件（本文件）→ 跑这一版成品应用；
+ * - 库入口（index.ts）→ 让别人装进自己的 Vue 应用。
+ */
 import { createApp } from "vue";
 import "./app.css";
 

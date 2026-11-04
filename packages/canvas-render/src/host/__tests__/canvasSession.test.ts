@@ -135,4 +135,49 @@ describe('mountCanvas / unmountCanvas', () => {
     expect(hasActiveCanvasSession()).toBe(false)
     ctx.stop()
   })
+
+  it('换画布会回收旧会话的订阅、定时器与 onCanvasReady 清理', async () => {
+    const { ctx, app } = await bootApp()
+    const cleanups: string[] = []
+    // 直接数"还活着的定时器"：比看它在多少毫秒里跑了几次稳定得多。
+    let liveTimers = 0
+    let started = 0
+    const plugin: PluginModule = {
+      name: 'biz-sync',
+      inject: ['doc'],
+      apply(scope) {
+        started += 1
+        // 模拟插件在画布内挂的定时器 / 订阅：挂在**本插件** scope 上，
+        // 离开画布（插件回退 PENDING）时必须一起回收。
+        scope.effect(() => {
+          liveTimers += 1
+          const handle = setInterval(() => {}, 1000)
+          return () => {
+            liveTimers -= 1
+            clearInterval(handle)
+          }
+        })
+      },
+      // mountCanvas 会把这里的返回值记进本会话的清理表；换画布时必须先执行它。
+      onCanvasReady: () => () => {
+        cleanups.push('old-session')
+      },
+    } as PluginModule
+
+    const first = await mountCanvas({ ctx, appBase: app.services, plugins: [plugin] })
+    expect(started).toBe(1)
+    expect(liveTimers).toBe(1)
+
+    await mountCanvas({ ctx, appBase: app.services, plugins: [plugin] })
+    expect(cleanups, '换画布时旧会话的 onCanvasReady 清理没有执行').toEqual(['old-session'])
+    expect(started, '新画布里插件应重新启动').toBe(2)
+    // 旧定时器必须回收：换画布后只剩新会话那一份，不是两份叠加。
+    expect(liveTimers, '旧画布的定时器没有回收').toBe(1)
+
+    await first.dispose()
+    await unmountCanvas()
+    expect(cleanups).toEqual(['old-session', 'old-session'])
+    expect(liveTimers, '离开画布后定时器仍在').toBe(0)
+    ctx.stop()
+  })
 })
