@@ -16,11 +16,10 @@
  * （命令切换同一对象）。面板与本插件同包 import，不再占 shortcut-manager / shortcut-remap 服务名。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import { createShortcutRemapEngine } from './shortcutRemapEngine'
-import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
 import SettingsShortcutPanel from './SettingsShortcutPanel.vue'
-import { shortcutHelpState, setShortcutManager } from './shortcutState'
+import { onShortcutManager, shortcutHelpState } from './shortcutState'
+import { ensureShortcutManager, getShortcutRemapEngine } from './ensureShortcutManager'
 import { commandRuntime } from '@mini-canvas/canvas-data'
 
 export const name = 'shortcut-manager'
@@ -30,26 +29,18 @@ export type { ShortcutManagerState } from './shortcutState'
 
 export function apply(ctx: Context): void {
   const save = ctx.tryGet('save')
-  // 命令注册表经渲染层运行时句柄取（command 服务名已并入 canvas；本插件不依赖它）。
-  const command = commandRuntime()
-  if (!command) return
-
-  // 持久化 remap 引擎：装配时读回上次 remap 表并批量应用
-  const remapEngine = createShortcutRemapEngine(command, save)
-  void remapEngine.restore()
-  // shortcut 域后端被云插件切到云端后，重读一次（否则云端存的重映射键位刷新后进不来）
-  ctx.effect(() => remapEngine.subscribe())
-
-  // v2 适配器：命令 registry（含 remap）+ 持久化引擎 → 老版面板需要的查询/改键 API
-  const manager = createV2ShortcutManager(command, {
-    remap: (id, keys) => remapEngine.remap(id, keys),
-    reset: (id) => remapEngine.reset(id),
-    snapshot: () => remapEngine.snapshot(),
+  // 管理器与设置页插件共用同一个单例：谁先起来谁建，后起的直接复用。
+  // 命令注册表经运行时句柄取（command 服务名已并入 canvas；本插件不依赖它）。
+  // 外壳自带的帮助面板可能在画布之前就打开；管理器晚一点建好也要拿到。
+  const off = onShortcutManager((manager) => {
+    Object.assign(shortcutHelpState, manager)
   })
-
-  // 同包共享状态（不再上架服务）：面板直接 import 同一对象
-  Object.assign(shortcutHelpState, manager)
-  setShortcutManager(manager)
+  ctx.effect(() => () => off())
+  const manager = ensureShortcutManager({ command: commandRuntime(), save })
+  if (!manager) return
+  // shortcut 域后端被云插件切到云端后，重读一次（否则云端存的重映射键位刷新后进不来）
+  const remapEngine = getShortcutRemapEngine()
+  if (remapEngine) ctx.effect(() => remapEngine.subscribe())
 
   // 浮层：overlay 槽 occupant（宿主已渲染该槽）。显隐由 state.visible 控制。
   ctx.slots.register('overlay', {
@@ -67,6 +58,11 @@ export function apply(ctx: Context): void {
     component: SettingsShortcutPanel,
     meta: { title: '快捷键', category: '个人' },
   })
+  // 主题设置页按名取这一件（不再静态 import 本包），换皮也能一起换。
+  ctx.registryOf<unknown>('ui').add('settingsShortcutPanel', SettingsShortcutPanel, { id: 'shortcut-manager' })
+  // 管理器也按名提供：主题设置页不再 import 本包，缺它就显示"暂无快捷键"。
+  // shortcut-settings 可能先起并已上架同一实例，重复注入会被内核拒绝。
+  if (!ctx.tryGet('shortcut-manager')) ctx.inject('shortcut-manager', manager)
 
   // Ctrl+/（或 Cmd+/）开/关帮助面板
   ctx.commands.register({

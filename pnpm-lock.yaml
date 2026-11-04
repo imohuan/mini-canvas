@@ -13,6 +13,19 @@ importers:
 
   .: {}
 
+  packages/bar-contract:
+    dependencies:
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
   packages/canvas-base:
     dependencies:
       '@mini-canvas/canvas-data':
@@ -53,6 +66,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@mini-canvas/vue-render':
+        specifier: workspace:*
+        version: link:../vue-render
     devDependencies:
       '@mini-canvas/plugin-multi-select':
         specifier: workspace:*
@@ -351,6 +367,9 @@ importers:
 
   packages/plugins/plugin-bottom-bar:
     dependencies:
+      '@mini-canvas/bar-contract':
+        specifier: workspace:*
+        version: link:../../bar-contract
       '@mini-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
@@ -1126,6 +1145,9 @@ importers:
 
   packages/plugins/plugin-node-text:
     dependencies:
+      '@mini-canvas/bar-contract':
+        specifier: workspace:*
+        version: link:../../bar-contract
       '@mini-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
@@ -1138,9 +1160,6 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-bottom-bar':
-        specifier: workspace:*
-        version: link:../plugin-bottom-bar
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
@@ -1215,6 +1234,9 @@ importers:
 
   packages/plugins/plugin-node-video:
     dependencies:
+      '@mini-canvas/bar-contract':
+        specifier: workspace:*
+        version: link:../../bar-contract
       '@mini-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
@@ -1227,9 +1249,6 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-bottom-bar':
-        specifier: workspace:*
-        version: link:../plugin-bottom-bar
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
@@ -1495,6 +1514,9 @@ importers:
 
   packages/plugins/plugin-web2api-tools:
     dependencies:
+      '@mini-canvas/bar-contract':
+        specifier: workspace:*
+        version: link:../../bar-contract
       '@mini-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
@@ -1504,9 +1526,6 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-bottom-bar':
-        specifier: workspace:*
-        version: link:../plugin-bottom-bar
     devDependencies:
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
@@ -1584,6 +1603,9 @@ importers:
       '@floating-ui/vue':
         specifier: ^1.1.11
         version: 1.1.11(vue@3.5.38(typescript@6.0.3))
+      '@mini-canvas/bar-contract':
+        specifier: workspace:*
+        version: link:../bar-contract
       '@mini-canvas/canvas-base':
         specifier: workspace:*
         version: link:../canvas-base
@@ -1812,6 +1834,31 @@ importers:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
 
+  packages/vue-render:
+    dependencies:
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
 packages:
 
   '@algolia/abtesting@1.25.0':
@@ -2024,11 +2071,6 @@ packages:
 
   '@babel/parser@7.29.12':
     resolution: {integrity: sha512-WJ7JBp/Q4+z/ImydtI7jS6NVco5++632ExBemSX+Ysb+G1lCwQ5BVo3SY+jGGOcZXI4ZccbZSUSJLNBW6eEpJg==}
-    engines: {node: '>=6.0.0'}
-    hasBin: true
-
-  '@babel/parser@7.29.7':
-    resolution: {integrity: sha512-hnORnjP/1P/zFEndoeX+n+t1RwWRJiJpM/jO7FW32Kn9r5+sJB2JWOdYo4L6k78j15eCwY3Gm/7364B1EMwtNg==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -2693,9 +2735,6 @@ packages:
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
     engines: {node: '>=6.0.0'}
-
-  '@jridgewell/sourcemap-codec@1.5.5':
-    resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
   '@jridgewell/sourcemap-codec@1.6.0':
     resolution: {integrity: sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==}
@@ -6975,10 +7014,6 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.11
 
-  '@babel/parser@7.29.7':
-    dependencies:
-      '@babel/types': 7.29.11
-
   '@babel/parser@8.0.0-alpha.12': {}
 
   '@babel/runtime@7.29.7': {}
@@ -7446,8 +7481,6 @@ snapshots:
       '@jridgewell/trace-mapping': 0.3.31
 
   '@jridgewell/resolve-uri@3.1.2': {}
-
-  '@jridgewell/sourcemap-codec@1.5.5': {}
 
   '@jridgewell/sourcemap-codec@1.6.0': {}
 
@@ -8181,7 +8214,7 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       magic-string: 0.30.21
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
       tailwindcss: 4.3.3
 
   '@tailwindcss/oxide-android-arm64@4.3.3':
@@ -8586,15 +8619,15 @@ snapshots:
 
   '@vue/compiler-sfc@3.5.38':
     dependencies:
-      '@babel/parser': 7.29.7
+      '@babel/parser': 7.29.12
       '@vue/compiler-core': 3.5.38
       '@vue/compiler-dom': 3.5.38
       '@vue/compiler-ssr': 3.5.38
       '@vue/shared': 3.5.38
       estree-walker: 2.0.2
       magic-string: 0.30.21
-      postcss: 8.5.15
-      source-map-js: 1.2.1
+      postcss: 8.5.32
+      source-map-js: 1.2.2
 
   '@vue/compiler-sfc@3.5.44':
     dependencies:
@@ -10253,7 +10286,7 @@ snapshots:
 
   magic-string@0.30.21:
     dependencies:
-      '@jridgewell/sourcemap-codec': 1.5.5
+      '@jridgewell/sourcemap-codec': 1.6.0
 
   magic-string@1.4.5:
     dependencies:
@@ -11403,7 +11436,7 @@ snapshots:
   vite@5.4.21(@types/node@24.13.2)(lightningcss@1.32.0)(stylus@0.57.0):
     dependencies:
       esbuild: 0.21.5
-      postcss: 8.5.15
+      postcss: 8.5.32
       rollup: 4.62.2
     optionalDependencies:
       '@types/node': 24.13.2

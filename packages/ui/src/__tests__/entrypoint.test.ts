@@ -51,8 +51,8 @@ describe('@mini-canvas/ui 出口契约', () => {
     //          + Agent + 插件管理本身。
     // 主题色配置**不在清单里**了：色板已上移进渲染层（canvas-render 的 themePalette），
     // 由宿主 createMiniCanvasHost 直接声明与落值，任一宿主都自带。
-    // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea 按钮 + ModalsArea 浮层），
-    // 插件版 Ctrl+/ 帮助面板与之重复；键盘分发由 CanvasHost 按命令 keys 统一做，不依赖它。
+    // 不装完整 shortcut-manager：成品 UI 自带快捷键帮助（DockArea 按钮 + ModalsArea 浮层），
+    // 插件版 Ctrl+/ 帮助面板与之重复；只装 shortcut-settings，提供设置页里的重映射配置。
     // 假后台插件（旧 plugin-mock-task-backend）已删：测试用的假动作不该以插件形式
     // 混进成品清单 —— 需要假后台的浏览器回归在测试里现场注册一条 e2e 动作。
     // +1：ui-dropdown（全局下拉注册件，order -1 顶替主题默认件）。
@@ -74,11 +74,14 @@ describe('@mini-canvas/ui 出口契约', () => {
     // 分层后：应用级常驻清单 + 画布级清单，两份合起来才是全部自带件。
     // 应用级只留与画布无关的（主题组件/设置/插件管理/Agent/热重载/资产入口）。
     // 主题已拆成 theme-components（应用级）与 theme-canvas（画布级）。
-    expect(APP_PLUGINS).toHaveLength(7)
+    expect(APP_PLUGINS).toHaveLength(8)
     expect(CANVAS_PLUGINS.length).toBeGreaterThan(10)
-    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(23)
+    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(24)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
+    // 设置页「个人 → 快捷键」要有真实配置页：成品外壳不装完整快捷键插件，
+    // 这一项专门提供设置页与按名组件。
+    expect(APP_PLUGINS.map((p) => (p as { name?: string }).name)).toContain('shortcut-settings')
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查
     const names = [...APP_PLUGINS, ...CANVAS_PLUGINS]
       .map((p) => (p as { name?: string }).name)

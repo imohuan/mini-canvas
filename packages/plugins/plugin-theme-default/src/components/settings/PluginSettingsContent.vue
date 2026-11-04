@@ -36,7 +36,6 @@ import DefaultSettingsSchemaField from './SettingsSchemaField.vue'
 import SettingsNav from './settings/SettingsNav.vue'
 import SettingsContent from './settings/SettingsContent.vue'
 import { createSettingsFieldBridge } from './settingsFieldBridge'
-import { SETTINGS_SHORTCUT_HOST } from '../../composables/ensureShortcutManager'
 import { useSettingsNavigation } from './settings/useSettingsNavigation'
 
 const props = withDefaults(
@@ -79,14 +78,11 @@ const {
   selectTab,
   setScrollEl,
   sectionBlocks,
-  hostCtx,
 } = useSettingsNavigation({
   settings: () => props.settings,
   showSectionTabs: () => props.showSectionTabs,
 })
 
-// 自绘页（快捷键配置页）要命令表建管理器：宿主 ctx 由这里下发
-provide(SETTINGS_SHORTCUT_HOST, hostCtx as unknown)
 </script>
 
 <template>

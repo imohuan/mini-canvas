@@ -64,6 +64,8 @@ import { nodeUiPlugin } from '@mini-canvas/plugin-node-ui'
 // 这一版应用）要直接启动 —— 用户口径：「如果是 cloud-server 启动的服务，cloud-client 应该放在
 // 自带中直接启动」。判据见 CLOUD_HOST_FLAG。
 import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
+// 设置页「快捷键」配置面板：外壳自带帮助浮层，只需要这个轻量设置页插件。
+import { shortcutSettingsPlugin } from '@mini-canvas/plugin-shortcut-manager'
 
 /**
  * 成品应用的插件清单（顺序即装载序）。
@@ -86,17 +88,54 @@ import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
  * （云端保存要有人提供后台；history 与宿主自带的撤销栈职责重叠）。
  * 云端保存那条路走的是运行期外部清单（cloud-server 的 `/plugin-manifest.json`），见 App.vue。
  */
-export const APP_PLUGINS = [
+/** 一条静态装配记录：插件 + 它属于哪一层 + 为什么在这里（维护者与测试共读）。 */
+export interface AppPluginEntry {
+  plugin: PluginModule
+  /** app = 应用级常驻；canvas = 进入画布才装 */
+  kind: 'app' | 'canvas'
+  /** 一句话理由，测试用它核对注释与实现是否一致 */
+  reason: string
+}
+
+/**
+ * 唯一静态注册表：应用级与画布级都在这里，派生下面两个数组。
+ *
+ * 为什么不拆成两个独立数组：两份清单最容易漂移（加了一个忘了另一个）。
+ * 现在只维护这一份，kind 决定它进哪一层；顺序即装载顺序。
+ */
+export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
   // 通用组件 / 设置面板 / 外观变量：应用级常驻，项目页也要用。
-  themeComponentsPlugin,
-  pluginManagerPlugin,
-  agentPlugin,
-  hotReloadPlugin,
-  uiAssetUploadPlugin,
-  projectsPanelPlugin,
-  // 素材库：注入 []，项目页可浏览；「加入画布」缺能力时禁用。
-  styleLibraryPlugin,
-]
+  { plugin: themeComponentsPlugin, kind: 'app', reason: '通用组件与设置面板' },
+  { plugin: pluginManagerPlugin, kind: 'app', reason: '插件管理页' },
+  { plugin: agentPlugin, kind: 'app', reason: 'Agent 对话与设置' },
+  { plugin: hotReloadPlugin, kind: 'app', reason: '热重载开发工具' },
+  { plugin: uiAssetUploadPlugin, kind: 'app', reason: '资产入库入口' },
+  { plugin: projectsPanelPlugin, kind: 'app', reason: '项目页面板示例' },
+  { plugin: styleLibraryPlugin, kind: 'app', reason: '素材库（项目页可浏览）' },
+  { plugin: shortcutSettingsPlugin, kind: 'app', reason: '设置页快捷键配置' },
+
+  { plugin: themeCanvasPlugin, kind: 'canvas', reason: '节点壳 / 连线 / 背景' },
+  { plugin: nodeTextPlugin, kind: 'canvas', reason: '文本节点' },
+  { plugin: nodeUiPlugin, kind: 'canvas', reason: 'AI 可视化节点' },
+  { plugin: pluginBottomBar, kind: 'canvas', reason: '节点底栏' },
+  { plugin: node3dPreviewPlugin, kind: 'canvas', reason: '3D 预览节点' },
+  { plugin: contextMenuPlugin, kind: 'canvas', reason: '右键菜单' },
+  { plugin: clipboardPlugin, kind: 'canvas', reason: '复制粘贴' },
+  { plugin: multiSelectPlugin, kind: 'canvas', reason: '多选' },
+  { plugin: groupPlugin, kind: 'canvas', reason: '分组' },
+  { plugin: edgeCuttingPlugin, kind: 'canvas', reason: '连线切割' },
+  { plugin: fileDropPlugin, kind: 'canvas', reason: '文件拖入' },
+  { plugin: nodeImagePlugin, kind: 'canvas', reason: '图片节点' },
+  { plugin: gridSplitPlugin, kind: 'canvas', reason: '宫格切分' },
+  { plugin: nodeRotatePlugin, kind: 'canvas', reason: '旋转与镜像' },
+  { plugin: nodeVideoPlugin, kind: 'canvas', reason: '视频节点' },
+  { plugin: nodeAudioPlugin, kind: 'canvas', reason: '音频节点' },
+] as const
+
+/** 应用级插件（顺序即装载序）。 */
+export const APP_PLUGINS: PluginModule[] = APP_PLUGIN_REGISTRY
+  .filter((e) => e.kind === 'app')
+  .map((e) => e.plugin)
 
 /**
  * 画布专用插件：只在进入画布时安装（项目页不装、不 apply）。
@@ -107,25 +146,10 @@ export const APP_PLUGINS = [
  *
  * 顺序与 APP_PLUGINS 里的画布项保持一致（主题仍在应用级，先行提供外观目录）。
  */
-export const CANVAS_PLUGINS: PluginModule[] = [
-  // 画布外观：节点壳 / 连线 / 背景 / 节点工具栏，进画布才启动。
-  themeCanvasPlugin,
-  nodeTextPlugin,
-  nodeUiPlugin,
-  pluginBottomBar,
-  node3dPreviewPlugin,
-  contextMenuPlugin,
-  clipboardPlugin,
-  multiSelectPlugin,
-  groupPlugin,
-  edgeCuttingPlugin,
-  fileDropPlugin,
-  nodeImagePlugin,
-  gridSplitPlugin,
-  nodeRotatePlugin,
-  nodeVideoPlugin,
-  nodeAudioPlugin,
-]
+/** 画布级插件（顺序即装载序）。 */
+export const CANVAS_PLUGINS: PluginModule[] = APP_PLUGIN_REGISTRY
+  .filter((e) => e.kind === 'canvas')
+  .map((e) => e.plugin)
 
 
 /**

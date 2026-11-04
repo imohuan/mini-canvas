@@ -18,7 +18,6 @@ import "./styles/scrollbars.css"
 import { registerThemePreview } from "./themePreview"
 import SettingsSchemaField from "./components/settings/SettingsSchemaField.vue"
 import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue"
-import SettingsShortcutPage from "./components/settings/SettingsShortcutPage.vue"
 import { registerDefaultSettingsMenu } from "./components/settings/defaultMenu"
 import { registerEventName } from "@mini-canvas/canvas-base"
 import {
@@ -129,12 +128,8 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
     navIcons.add(group, icon, { id: "default" })
   }
   ctx.theme.register("settingsPanel", PluginSettingsContent, { id: "default", order: 0 })
-  ctx.slots.register("settings.nav", {
-    id: "nav/personal/shortcuts",
-    order: 20,
-    component: SettingsShortcutPage,
-    meta: { title: "快捷键", category: "个人" },
-  })
+  // 「快捷键」页由 plugin-shortcut-manager 注册（同一个 id）。主题不再重复占位：
+  // 没装它时，菜单里那一项不会变成"只显示需要安装"的空页。
 }
 
 export const themeComponentsPlugin: PluginModule = { name, inject, Config, apply }

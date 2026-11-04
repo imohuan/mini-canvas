@@ -39,12 +39,13 @@ describe('设置面板打开不白屏', () => {
     })
     app.provide(RENDER_CONTEXT_KEY, renderCtx(ctx))
     const html = await renderToString(app)
-    // 只装主题皮时没有「个人 → 通用」的配置项，快捷键配置页就是第一项；
-    // 断言分类、快捷键配置页与搜索框都真的挂上了（不是白屏/空白导航）。
+    // 只装主题皮时，快捷键页没有插件提供面板，默认应落在第一个能直接渲染的
+    // 「外观 → 主题」页，而不是一行"需要安装"的占位提示。
     expect(html).toContain('外观')
     expect(html).toContain('主题')
     expect(html).toContain('快捷键')
-    expect(html).toContain('搜索命令、键位或 ID')
+    expect(html).toContain('尺寸')
+    expect(html).not.toContain('快捷键配置需要安装')
     expect(html).toContain('设置')
     ctx.stop()
   })

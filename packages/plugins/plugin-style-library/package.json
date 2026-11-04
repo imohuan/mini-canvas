@@ -7,7 +7,7 @@
     "title": "风格库",
     "description": "本地风格素材库：读一个资源目录（图片/视频 + 索引），前后台成对，带亮暗主题的风格广场 UI",
     "pluginName": "style-library",
-    "installable": true,
+    "builtin": true,
     "serverPermissions": []
   },
   "main": "./src/index.ts",

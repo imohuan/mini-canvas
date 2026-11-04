@@ -190,9 +190,16 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
         activeNav.value = ''
         return
       }
-      // 动作项（如快捷键）不占默认位置：打开设置应该落在第一个真正的配置页
-      const first = entries.find((entry) => !entry.action) ?? entries[0]!
-      if (!entries.some((entry) => entry.key === activeNav.value && !entry.action)) {
+      // 默认落在第一个带配置分组的页（如「外观 → 主题」），而不是只有一整页面板的
+      // 导航项（如「个人 → 快捷键」）：配置项才是用户打开设置时最先要找的东西。
+      // 没有带字段的页时，再退到任何能直接渲染的页。
+      const usable = (e: (typeof entries)[number]): boolean =>
+        !e.action && !(e.key === 'nav/personal/shortcuts' && !e.navPage)
+      const first =
+        entries.find((e) => usable(e) && e.leaves.length > 0) ??
+        entries.find(usable) ??
+        entries[0]!
+      if (!entries.some((entry) => entry.key === activeNav.value && usable(entry))) {
         activeNav.value = first.key
       }
     },
@@ -395,7 +402,5 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
     selectTab,
     setScrollEl,
     sectionBlocks,
-    /** 宿主 ctx：面板把它下发给自绘页（快捷键配置页要命令表） */
-    hostCtx: ctx,
   }
 }

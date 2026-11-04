@@ -1,5 +1,16 @@
 // plugin-shortcut-manager —— 快捷键帮助面板（Ctrl/Cmd+/ 开合；命令 keys 为唯一数据源）。
 export { shortcutManagerPlugin, name, apply } from './shortcutManagerPlugin'
+export {
+  shortcutSettingsPlugin,
+  name as shortcutSettingsName,
+} from './shortcutSettingsPlugin'
+export {
+  ensureShortcutManager,
+  getShortcutRemapEngine,
+  isShortcutManagerInstalled,
+  resetShortcutManager,
+} from './ensureShortcutManager'
+export type { ShortcutManagerHost } from './ensureShortcutManager'
 export { default as SettingsShortcutPanel } from './SettingsShortcutPanel.vue'
 export { setShortcutManager as installShortcutManager } from './shortcutState'
 export type { ShortcutManagerState } from './shortcutManagerPlugin'

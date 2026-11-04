@@ -10,6 +10,7 @@ import {
   themeComponentsPlugin,
   themeCanvasPlugin,
 } from '@mini-canvas/plugin-theme-default'
+import { shortcutSettingsPlugin } from '@mini-canvas/plugin-shortcut-manager'
 
 async function boot(plugins: unknown[]) {
   const ctx = new Context()
@@ -56,6 +57,17 @@ describe('主题拆分后的注册边界', () => {
     expect(theme?.winner('edge')).toBeTruthy()
     expect(theme?.winner('background')).toBeTruthy()
     expect(ctx.registryOf<unknown>('ui').keys()).toContain('Button')
+    ctx.stop()
+  })
+
+  it('设置页快捷键：只装应用级插件就有真实配置页，不依赖画布', async () => {
+    const ctx = await boot([themeComponentsPlugin, shortcutSettingsPlugin])
+    const entry = ctx.slots
+      .occupants('settings.nav')
+      .find((item) => item.id === 'nav/personal/shortcuts')
+    expect(entry, '快捷键配置页没有注册').toBeTruthy()
+    expect(ctx.registryOf<unknown>('ui').keys()).toContain('settingsShortcutPanel')
+    expect(ctx.tryGet('shortcut-manager')).toBeTruthy()
     ctx.stop()
   })
 })

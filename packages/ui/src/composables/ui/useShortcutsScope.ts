@@ -1,12 +1,11 @@
 import { reactive } from 'vue'
 import {
   buildV2HelpList,
-  createShortcutRemapEngine,
-  createV2ShortcutManager,
+  ensureShortcutManager,
   groupV2HelpList,
-  installShortcutManager,
   keyPartsToLabels,
   type V2ShortcutManager,
+  type ShortcutManagerHost,
 } from '@mini-canvas/plugin-shortcut-manager'
 import type { FullHost } from './types'
 import type { UiState } from './createUiState'
@@ -48,45 +47,23 @@ export function createShortcutsScope(state: UiState, hostElValue: () => unknown)
   }
 
   /**
-   * 设置页的快捷键配置页需要同一套重映射 API。
+   * 设置页的快捷键配置页与外壳帮助面板共用同一套重映射 API。
    *
-   * 成品应用不装 plugin-shortcut-manager（它的命令/帮助浮层由本包自带），
-   * 因此不能只靠插件 apply() 里的 setShortcutManager：否则设置页里的
-   * RemapPanel / 导入导出拿到的是 undefined，页面能画但所有按钮都没反应。
-   * 这里从同一个 CommandRegistry 现建管理器；宿主就绪后首次进入设置页时再绑定。
+   * 成品应用装的是 shortcut-settings（只提供设置页），它会在 apply 时建好管理器；
+   * 外壳这里只做兜底：插件还没起来时再用宿主命令表现建一次，避免帮助面板为空。
+   * 创建逻辑在插件包里只有一份，两边不会各建一套。
    */
-  let manager: V2ShortcutManager | undefined
-  let remapEngine: ReturnType<typeof createShortcutRemapEngine> | undefined
-  function ensureShortcutManager(): V2ShortcutManager | undefined {
-    if (manager) return manager
+  function ensureManager(): V2ShortcutManager | undefined {
     const host = ((hostElValue() as { host?: FullHost } | null)?.host ?? hostElValue()) as FullHost | undefined
-    const command = host?.command as (Parameters<typeof createV2ShortcutManager>[0] & Partial<{
-      list(): Array<{ id: string; title?: string; keys?: string[]; group?: string; areas?: string[]; order?: number }>
-      remapKeys(id: string, keys: string[]): string[]
-      resetKeys(id: string): string[] | undefined
-      originalKeys(id: string): string[] | undefined
-      isRemapped(id: string): boolean
-      has(id: string): boolean
-    }>) | undefined
-    if (!command || typeof command.has !== 'function') return undefined
-    const save = host?.ctx?.tryGet?.<{
-      get<T>(key: string, type?: string): Promise<T | undefined>
-      set(key: string, value: unknown, type?: string): void
-      onAdapterChange?(cb: (type: string) => void): { dispose(): void }
-    }>('save')
-    remapEngine = createShortcutRemapEngine(command as Parameters<typeof createShortcutRemapEngine>[0], save)
-    void remapEngine.restore()
-    manager = createV2ShortcutManager(command, {
-      remap: (id, keys) => remapEngine!.remap(id, keys),
-      reset: (id) => remapEngine!.reset(id),
-      snapshot: () => remapEngine!.snapshot(),
+    const save = host?.ctx?.tryGet?.<NonNullable<ShortcutManagerHost['save']>>('save')
+    if (!host?.command) return undefined
+    return ensureShortcutManager({
+      command: host.command as unknown as NonNullable<ShortcutManagerHost['command']>,
+      save,
     })
-    installShortcutManager(manager)
-    return manager
   }
 
-  return { shortcuts, refreshShortcuts, ensureShortcutManager }
+  return { shortcuts, refreshShortcuts, ensureShortcutManager: ensureManager }
 }
 
 export type ShortcutsScope = ReturnType<typeof createShortcutsScope>
-

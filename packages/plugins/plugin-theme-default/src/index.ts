@@ -36,7 +36,6 @@ import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import MovingHandle from "./components/node/MovingHandle.vue";
 import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue";
-import SettingsShortcutPage from "./components/settings/SettingsShortcutPage.vue";
 import { registerDefaultSettingsMenu } from "./components/settings/defaultMenu";
 import { registerEventName } from "@mini-canvas/canvas-base";
 import {
@@ -281,12 +280,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   });
   // 设置页「个人 → 快捷键」的配置页：默认菜单只登记 id，页面由本包提供。
   // （成品应用曾由 packages/ui 的换皮插件补这一页；2026-11-04 面板并入本包，注册也一起搬过来。）
-  ctx.slots.register("settings.nav", {
-    id: "nav/personal/shortcuts",
-    order: 20,
-    component: SettingsShortcutPage,
-    meta: { title: "快捷键", category: "个人" },
-  });
+  // 「快捷键」页由 plugin-shortcut-manager 注册；主题不再重复占位。
 
 }
 

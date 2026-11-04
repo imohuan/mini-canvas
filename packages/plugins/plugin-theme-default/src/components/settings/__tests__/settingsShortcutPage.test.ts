@@ -1,21 +1,21 @@
 /**
- * 快捷键配置页接线：菜单项命中 settings.nav 的 page，设置面板渲染它；
- * 面板本身只做配置，不再把点击翻译成打开帮助浮层。
+ * 快捷键配置页接线：设置菜单只登记 id，页面由 plugin-shortcut-manager 提供；
+ * 主题按名从 ui 目录取件，不再静态 import 另一个业务插件。
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { Context, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context, ThemeRegistry, createCanvasAppBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
 import { buildNavEntries } from '../settings/settingsMenuModel'
-import SettingsShortcutPage from '../SettingsShortcutPage.vue'
 
 const read = (rel: string): string => readFileSync(new URL(rel, import.meta.url), 'utf-8')
 
 const themeModel = read('../settings/settingsMenuModel.ts')
 const themeContent = read('../settings/SettingsContent.vue')
+const themeIndex = read('../../../index.ts')
+const themeComponents = read('../../../themeComponents.ts')
 const panel = read('../../../../../plugin-shortcut-manager/src/SettingsShortcutPanel.vue')
-const bridge = read('../SettingsShortcutPage.vue')
 
 describe('设置页快捷键配置页', () => {
   it('菜单模型把 settings.nav occupant 当 navPage 保留', () => {
@@ -38,9 +38,10 @@ describe('设置页快捷键配置页', () => {
     expect(panel).toMatch(/getConflicts/)
   })
 
-  it('快捷键插件真的注册了配置页（默认菜单按 id 命中）', async () => {
+  it('快捷键插件真的注册了配置页与按名组件（默认菜单按 id 命中）', async () => {
     const ctx = new Context()
-    ctx.inject('themeRegistry', new ThemeRegistry())
+    // 命令表由应用级底座提供：快捷键插件读不到命令表会整体不启动。
+    ctx.plugin(createCanvasAppBasePlugin({ adapter: new MemoryStorageAdapter() }).plugin)
     ctx.plugin(themeDefaultPlugin)
     ctx.plugin(shortcutManagerPlugin)
     await ctx.start()
@@ -50,14 +51,17 @@ describe('设置页快捷键配置页', () => {
       .find((item) => item.id === 'nav/personal/shortcuts')
     expect(entry, '快捷键配置页没有注册到 settings.nav').toBeTruthy()
     expect(entry?.meta).toMatchObject({ title: '快捷键', category: '个人' })
+    expect(ctx.registryOf<unknown>('ui').keys()).toContain('settingsShortcutPanel')
+    expect(ctx.tryGet('shortcut-manager')).toBeTruthy()
     ctx.stop()
   })
 
-  it('快捷键页先安装管理器，再渲染配置面板', () => {
-    const installAt = bridge.indexOf('ensureShortcutManager(')
-    const renderAt = bridge.indexOf('<SettingsShortcutPanel')
-    expect(installAt).toBeGreaterThan(-1)
-    expect(renderAt).toBeGreaterThan(installAt)
+  it('主题不再占快捷键页，也不静态 import 快捷键插件', () => {
+    // 页面与按名组件都由快捷键插件提供，主题只消费 navPage。
+    for (const source of [themeIndex, themeComponents]) {
+      expect(source).not.toMatch(/slots\.register\(\s*['"]settings\.nav['"]/)
+      expect(source).not.toContain("SettingsShortcutPage.vue")
+    }
   })
 
   it('没有 Config 分组、只有 settings.nav 页面时，菜单入口仍保留', () => {
