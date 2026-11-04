@@ -44,14 +44,15 @@ export function apply(ctx) { /* 在这里注册你的东西 */ }
 | [6 · 注册生成工具](/examples/register-tool) | `ctx.tools.register`，让节点面板能调你的能力 | ⭐⭐ |
 | [7 · 节点底部动作](/examples/bottom-bar) | 跨插件注册：往别的插件的注册场放动作 | ⭐⭐⭐ |
 | [8 · 监听浏览器事件](/examples/file-drop) | `ctx.effect` 包 window 监听 + 坐标换算 | ⭐⭐ |
+| [9 · 节点状态栏](/examples/node-toolbar) | `nodeToolbar` 服务：默认栏与功能模式 | ⭐⭐⭐ |
+| [10 · 项目页面板](/examples/projects-panel) | `app.projects.main` 插槽，不用打开画布 | ⭐ |
 
 ## 插件之间怎么嵌套（读案例 7 前先看这段）
 
 插件不是孤岛，有两种协作方式，仓库里都有真实用法：
 
 **方式一：`tryGet` 可选探测（推荐，松耦合）。**
-比如所有节点插件都想往 `plugin-bottom-bar` 的底栏上放按钮，但没人想硬依赖它 ——
-bottom-bar 没装，节点插件照样工作。真实写法（节选自 `plugin-node-text`）：
+比如节点插件想往底栏上放动作，但底栏没装时自己也要照常工作。真实写法（节选自 `plugin-node-text`）：
 
 ```ts
 // 在 apply 里：底栏服务装了就注册动作；没装就等它「装好」的事件再注册
@@ -60,19 +61,25 @@ if (!ctx.tryGet('nodeBar')) {
 }
 ```
 
-**方式二：`inject` 硬依赖（紧耦合，仅用于「缺它就没意义」的场景）。**
-比如 `plugin-node-image` 依赖 `@mini-canvas/plugin-bottom-bar` 的服务 ——
-在 `package.json` 里加依赖、模块级 `inject` 里写服务名，内核会保证装载顺序。
+**方式二：`inject` 硬依赖（仅用于「缺它就没意义」且提供方是基础服务的场景）。**
+比如节点插件声明 `inject: ['doc']` —— 项目页没有画布时它停在 PENDING，进画布才启动。
+内核会保证装载顺序；卸载提供方时依赖方自动回退。
 
-这个仓库真实的嵌套关系（从各插件 `package.json` 的依赖扫出来的）：
+死规则：**业务插件之间零引用** —— 源码与 dependencies 都不允许 import 另一个
+`@mini-canvas/plugin-*`。要协作就经过服务、注册场、插槽或共享类型契约：
 
-```
-plugin-bottom-bar ←── plugin-node-text / node-image / node-video / web2api-tools
-       ↑ 这些插件往底栏注册动作（方式一 tryGet，node-image 走方式二）
+```text
+plugin-node-text / node-video / web2api-tools
+       │ 往 node/bar 注册动作
+       └──► @mini-canvas/bar-contract（纯类型 + 注册糖）
 
 plugin-theme-default（默认皮）←── 不依赖任何节点插件（刻意解耦）
 plugin-tool-*-generation（生成工具）←── 不依赖节点插件（节点面板反向调它）
-plugin-file-drop ←── 不依赖节点插件；运行时检测 nodeStore 里注册了哪些类型，能建才建
+plugin-file-drop ←── 不依赖节点插件；运行时检测注册了哪些类型，能建才建
+```
+
+装配顺序只写在 `packages/ui/src/assembly.ts` 的 `APP_PLUGIN_REGISTRY`（`kind` 决定
+应用级 / 画布级）；插件不需要知道别人先装还是后装。
 ```
 
 ## 每篇案例的结构

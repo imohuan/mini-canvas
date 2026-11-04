@@ -116,6 +116,7 @@ const examplesSidebar = [
       { text: '7 · 底栏动作', link: '/examples/bottom-bar' },
       { text: '8 · 浏览器事件', link: '/examples/file-drop' },
       { text: '9 · 状态栏按钮', link: '/examples/node-toolbar' },
+        { text: '10 · 项目页面板', link: '/examples/projects-panel' },
     ],
   },
 ]

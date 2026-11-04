@@ -10,6 +10,7 @@
 | `save` / `resources` / `notify` | 应用启动到关闭 | 根级应用底座 + `theme-components` |
 | `doc` / `selection` / `view` / `canvas` / `nodeToolbar` | 只在画布路由内 | `canvas-session` |
 | `cloud-client` / `cloud-client:history` | 应用启动到关闭 | `cloud-client` 的连接部分 |
+| `projectsApi` | 应用启动到关闭 | `projects-api` 插件 |
 
 项目页没有 `doc`，这不是错误。插件用 `ctx.tryGet('doc')` 判断"现在有没有画布"，有就做，没有就禁用或跳过。
 
