@@ -139,7 +139,8 @@ describe('预览页的接线（静态检查）', () => {
   it('预览样式直接读 --radius，不依赖构建期写死的 rounded-* 工具类', () => {
     const css = readFileSync(path.join(srcRoot, 'assets', 'index.css'), 'utf-8')
     expect(css).toMatch(/\[data-slot='button'\][\s\S]{0,400}border-radius:\s*var\(--radius/)
-    expect(css).toMatch(/\[data-slot='card'\][\s\S]{0,300}border-radius:\s*calc\(var\(--radius/)
+    // 现在外面套了一层 min() 封顶，只要里面还是读 --radius 就算接上了
+    expect(css).toMatch(/\[data-slot='card'\][\s\S]{0,300}border-radius:[^;]{0,40}calc\(var\(--radius/)
   })
 
   it('圆角档位足够细，且标签里不再出现“默认”', async () => {
@@ -149,23 +150,35 @@ describe('预览页的接线（静态检查）', () => {
     for (const option of RADIUS_OPTIONS) {
       expect(option.label).not.toContain('默认')
     }
-    // 第一档必须是无圆角，最后一档不超过 12px（再大就都是「很圆」）
+    // 第一档是无圆角；除“全圆”外，固定档不超过 12px（再大就都是「很圆」）
     expect(RADIUS_OPTIONS[0]!.value).toBe('0rem')
-    const maxPx = Math.max(...RADIUS_OPTIONS.map((r) => Number.parseFloat(r.value) * 16))
+    const fixed = RADIUS_OPTIONS.filter((r) => r.value.endsWith('rem'))
+    const maxPx = Math.max(...fixed.map((r) => Number.parseFloat(r.value) * 16))
     expect(maxPx).toBeLessThanOrEqual(12)
+    // 用户口径 2026-11-04：12px 和 8px 看不出差别，最后一档改成「全圆」胶囊
+    const pill = RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1]!
+    expect(pill.id).toBe('full')
+    expect(Number.parseFloat(pill.value)).toBeGreaterThanOrEqual(9999)
   })
 
   it('浮层组件案例按组件名逐项列出（不是一张配色表）', () => {
-    const showcase = readFileSync(path.join(srcRoot, 'theme/OverlayShowcase.vue'), 'utf-8')
-    for (const name of ['Select', 'DropdownMenu', 'Popover', 'Tooltip', 'Dialog', 'Notify', 'Message']) {
-      expect(showcase, name).toContain(`>${name}<`)
+    // 用户口径 2026-11-04：浮层不要挤在一个「案例盒」里，各自成卡片
+    const select = readFileSync(path.join(srcRoot, 'theme/cards/SelectCard.vue'), 'utf-8')
+    const floating = readFileSync(path.join(srcRoot, 'theme/cards/FloatingCard.vue'), 'utf-8')
+    const feedback = readFileSync(path.join(srcRoot, 'theme/cards/FeedbackCard.vue'), 'utf-8')
+    expect(select).toContain('DropdownMenu')
+    for (const name of ['Popover', 'Tooltip', 'Dialog']) {
+      expect(floating, name).toContain(name)
+    }
+    for (const name of ['Notify', 'Message']) {
+      expect(feedback, name).toContain(name)
     }
     // 之前那个「浮层配色」面板已删除
     expect(() => readFileSync(path.join(srcRoot, 'theme/SurfaceColors.vue'))).toThrow()
   })
 
   it('Select 提供嵌入 / 分离 / 滚动 / 二级四种写法', () => {
-    const showcase = readFileSync(path.join(srcRoot, 'theme/OverlayShowcase.vue'), 'utf-8')
+    const showcase = readFileSync(path.join(srcRoot, 'theme/cards/SelectCard.vue'), 'utf-8')
     // 嵌入：显式 item-aligned；分离：显式 popper
     expect(showcase).toMatch(/position="item-aligned"/)
     expect(showcase).toMatch(/position="popper"/)
@@ -173,8 +186,8 @@ describe('预览页的接线（静态检查）', () => {
     expect(showcase).toMatch(/SelectGroup/)
   })
 
-  it('左侧「生成参数」有前缀图标、可拉伸输入框与多状态按钮', () => {
-    const app = readFileSync(path.join(srcRoot, 'App.vue'), 'utf-8')
+  it('「生成参数」卡片有前缀图标、可拉伸输入框与多状态按钮', () => {
+    const app = readFileSync(path.join(srcRoot, 'theme/cards/GenerateCard.vue'), 'utf-8')
     // 1. 反向提示词带前缀图标（图标 + 左内边距）
     expect(app).toMatch(/BanIcon/)
     expect(app).toMatch(/class="pl-9"/)
@@ -183,23 +196,30 @@ describe('预览页的接线（静态检查）', () => {
     // 3. 加载 / 禁用 / 图标按钮都有
     expect(app).toMatch(/animate-spin/)
     expect(app).toMatch(/生成中/)
-    expect(app).toMatch(/size="icon-sm"/)
+    expect(readFileSync(path.join(srcRoot, 'theme/cards/BasicsCard.vue'), 'utf-8')).toMatch(/size="icon-sm"/)
   })
 
-  it('右侧面板已删除，Tabs 并入左侧卡片；旧标题不再出现', () => {
+  it('Tabs 单独成卡，旧的「左右两栏」标题不再出现', () => {
     const app = readFileSync(path.join(srcRoot, 'App.vue'), 'utf-8')
-    expect(app).not.toContain('基础组件</CardTitle>')
     expect(app).not.toContain('其余组件')
     expect(app).not.toContain('覆盖范围')
-    // Tabs 必须在左栏卡片内部（在 CardFooter 里）
-    expect(app).toMatch(/<Tabs v-model="activeTab"/)
+    const tabs = readFileSync(path.join(srcRoot, 'theme/cards/TabsCard.vue'), 'utf-8')
+    expect(tabs).toMatch(/<Tabs v-model="active"/)
   })
 
-  it('页面全宽铺开，不再用 max-w-6xl 收成窄条', () => {
+  it('卡片墙：三列各自堆叠，没有整宽横条卡片', () => {
     const app = readFileSync(path.join(srcRoot, 'App.vue'), 'utf-8')
     // 只看模板里的 class，注释里提到旧做法不算
     expect(app).not.toMatch(/class="[^"]*max-w-6xl/)
-    expect(app).toMatch(/xl:grid-cols-3/)
+    // 用户口径：要 shadcn blocks 那种卡片墙 —— 多列 + 卡片各自高度
+    expect(app).toMatch(/lg:grid-cols-3/)
+    // 每列是一个竖向 flex 堆叠，卡片才不会被同行拉高
+    expect(app).toMatch(/flex flex-col gap-4/)
+    // 不允许再出现横跨整行的卡片
+    expect(app).not.toMatch(/col-span-full/)
+    for (const card of ['GenerateCard', 'BasicsCard', 'TabsCard', 'SelectCard', 'FloatingCard', 'FeedbackCard']) {
+      expect(app, card).toContain(`<${card} />`)
+    }
   })
 
   it('圆角预览按真实像素画弧（不是把 100 单位整体缩放）', () => {

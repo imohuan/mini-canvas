@@ -192,19 +192,24 @@
 
 [data-slot='input'],
 [data-slot='select-trigger'],
-[data-slot='textarea'],
 [data-slot='input-group'] {
   border-radius: var(--mct-radius, var(--radius-control, 8px));
 }
 
+/* 多行文本域封顶 20px：选「全圆」时单行控件是胶囊，高盒子拉成胶囊会畸形 */
+[data-slot='textarea'] {
+  border-radius: min(var(--mct-radius, var(--radius-control, 8px)), 20px);
+}
+
 [data-slot='card'] {
-  border-radius: var(--mct-radius, var(--radius-panel, 16px));
+  /* 封顶 24px：主题选「全圆」时控件是胶囊，卡片不该跟着变成药丸 */
+  border-radius: min(var(--mct-radius, var(--radius-panel, 16px)), 24px);
 }
 
 [data-slot='popover-content'],
 [data-slot='dropdown-menu-content'],
 [data-slot='select-content'] {
-  border-radius: var(--mct-radius, var(--radius-open, 12px));
+  border-radius: min(var(--mct-radius, var(--radius-open, 12px)), 20px);
 }
 
 /* Select 自绘箭头不应被「菜单行」的 8px 圆角规则命中；它只是三角形，靠菜单圆角本身收边。 */
@@ -218,7 +223,7 @@
  * 即使设置了 --mct-radius 也不生效。这里只覆盖需要统一的那一档。
  */
 [data-slot='dialog-content'] {
-  border-radius: var(--mct-radius, var(--radius-panel, 16px));
+  border-radius: min(var(--mct-radius, var(--radius-panel, 16px)), 24px);
   /*
    * 应用内弹窗的外层不留内边距（2026-11-02 用户实测：全局设置顶部、生成历史标题与卡片区都多了一圈）。
    *

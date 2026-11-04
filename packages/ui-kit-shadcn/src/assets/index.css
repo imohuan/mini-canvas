@@ -167,10 +167,17 @@
  */
 [data-slot='button'][data-variant],
 [data-slot='input'],
-[data-slot='textarea'],
 [data-slot='select-trigger'],
 [data-slot='input-group'] {
   border-radius: var(--radius, 0.875rem);
+}
+
+/*
+ * 多行输入框封顶 20px：单行控件选「全圆」是胶囊，很好认；
+ * 但文本域是高盒子，拉成胶囊反而畸形。
+ */
+[data-slot='textarea'] {
+  border-radius: min(var(--radius, 0.875rem), 20px);
 }
 
 [data-slot='popover-content'],
@@ -181,14 +188,16 @@
 [data-slot='context-menu-sub-content'],
 [data-slot='menubar-content'],
 [data-slot='combobox-content'] {
-  border-radius: calc(var(--radius, 0.875rem) * 2.2);
+  /* 面板封顶 20px：圆角选「全圆」时控件是胶囊，面板不该跟着变成药丸 */
+  border-radius: min(calc(var(--radius, 0.875rem) * 2.2), 20px);
 }
 
 [data-slot='card'],
 [data-slot='dialog-content'],
 [data-slot='alert-dialog-content'],
 [data-slot='sheet-content'] {
-  border-radius: calc(var(--radius, 0.875rem) * 2.6);
+  /* 卡片 / 弹窗封顶 24px，同上 */
+  border-radius: min(calc(var(--radius, 0.875rem) * 2.6), 24px);
 }
 
 /* 菜单行 / 选项行跟着同一档走，但最多到 8px，免得一列条目变成一排药丸。 */

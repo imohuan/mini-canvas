@@ -94,11 +94,14 @@ const sizeOptions = computed<Option[]>(() =>
  *
  * 通过档位表换算（不是把 id 当 rem 解析）；认不出的 id 一律当 0。
  * 预览改成 SVG 弧线后（见 RadiusPreview.vue），这里只需要给数值。
+ * 「全圆 9999px」按预览框的一半算，画出来就是半圆角，和真实胶囊一致。
  */
 function radiusPx(id: string): number {
   const option = RADIUS_OPTIONS.find((r) => r.id === id)
   const match = /^([\d.]+)rem$/.exec(option?.value ?? '')
-  return match ? Number(match[1]) * 16 : 0
+  if (match) return Number(match[1]) * 16
+  // 9999px 这类「无限大」档：预览框里最多画到半宽
+  return 14
 }
 
 /**
@@ -120,7 +123,7 @@ function radiusPx(id: string): number {
  * 单选选项就是一个 Button，size 走组件配置，与页面其它控件同步变化。
  */
 const CHOICE_CHIP =
-  'w-auto cursor-pointer justify-start gap-2 rounded-xl px-2.5 text-xs transition-colors hover:bg-muted/60'
+  'w-auto cursor-pointer justify-start gap-1.5 rounded-lg px-1.5 text-xs transition-colors hover:bg-muted/60'
 
 /**
  * 选中 / 未选中的配色（两组一致）。
@@ -154,19 +157,26 @@ function asText(value: unknown): string {
 </script>
 
 <template>
-  <div class="rounded-3xl border border-border bg-card p-3">
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+  <!-- 只画一条细线：配置栏本身不是卡片，别和下面的卡片抢视觉 -->
+  <div class="border-t border-border/60 pt-2">
+    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
       <div class="flex items-baseline gap-2">
-        <span class="text-sm font-medium">组件配置</span>
-        <span class="text-xs text-muted-foreground">改完立刻作用到下面所有组件（含 Teleport 出去的浮层）</span>
+        <span class="text-xs font-medium">组件配置</span>
+        <span class="text-[11px] text-muted-foreground">改完立刻作用到下面所有卡片（含 Teleport 出去的浮层）</span>
       </div>
-      <label class="flex items-center gap-2 text-xs text-muted-foreground">
+      <label class="flex items-center gap-2 text-[11px] text-muted-foreground">
         暗色
         <Switch :model-value="dark" @update:model-value="emit('update:dark', $event)" />
       </label>
     </div>
 
-    <div class="grid gap-x-3 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+    <!--
+      6 列（用户口径 2026-11-04，反复强调）：
+      第一行：底色 / 主题 / 正文字体 / 标题字体 各 1 列，圆角占 2 列 → 正好 6；
+      第二行：尺寸 2 列 + 箭头 / 子菜单 / gap / offset 各 1 列 → 正好 6。
+      两行装完全部配置，滚动看卡片时吸顶不挡内容。
+    -->
+    <div class="grid gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-6">
       <!-- 颜色：底色 / 主题色 -->
       <div class="grid gap-1.5">
         <Label class="text-xs">底色 Base Color</Label>
@@ -251,7 +261,7 @@ function asText(value: unknown): string {
         -->
         <RadioGroup
           :model-value="config.radius"
-          class="flex flex-wrap gap-1.5"
+          class="flex flex-wrap gap-1"
           @update:model-value="(v) => patch({ radius: asText(v) })"
         >
           <Button
@@ -367,8 +377,8 @@ function asText(value: unknown): string {
       </div>
     </div>
 
-    <p class="mt-3 text-xs text-muted-foreground">
-      浮层最终距离 = gap + offset。箭头是三角形时，间隔从箭头尖端量起。
+    <p class="mt-2 text-[11px] text-muted-foreground">
+      浮层最终距离 = gap + offset；有箭头时从箭头尖端量起。
     </p>
   </div>
 </template>

@@ -72,8 +72,11 @@ export interface RadiusOption {
  *
  * 用户口径 2026-11-04：原来的档位整体偏大（最小也有 0.45rem，最大 0.875rem），
  * 每一档看起来都很圆；而且用「默认」当标签分不清轻重。
- * 现在改成**无 / 极小 / 小 / 中 / 大 / 特大**六档，步长 2px 起，
- * 默认档也落在 6px，界面会明显更利落。
+ * 现在改成**无 / 极小 / 小 / 中 / 大 / 全圆**六档，步长 2px 起，
+ * 默认档落在 6px，界面会明显更利落。
+ *
+ * 最后一档从「特大 12px」换成「全圆（胶囊）」：12px 落在 40px 高的控件上
+ * 和大 8px 几乎看不出差别（用户 2026-11-04 实测反馈），换成 full 才能一眼看出来。
  *
  * 关于 id：'default' 这一档保留（旧的存档里 themeRadius 可能写的是 default），
  * 但它现在表示「中 6px」，标签上不再出现“默认”两个字。
@@ -84,7 +87,7 @@ export const RADIUS_OPTIONS: RadiusOption[] = [
   { id: 'small', label: '小（4px）', value: '0.25rem' },
   { id: 'default', label: '中（6px）', value: '0.375rem' },
   { id: 'large', label: '大（8px）', value: '0.5rem' },
-  { id: 'xl', label: '特大（12px）', value: '0.75rem' },
+  { id: 'full', label: '全圆（胶囊）', value: '9999px' },
 ]
 
 /** 圆角档位 id → 档位（不认识的值回落到第一档）。 */
