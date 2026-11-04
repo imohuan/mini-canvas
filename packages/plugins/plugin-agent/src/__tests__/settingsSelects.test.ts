@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 const PAGES = ['ModelsPage.vue', 'McpPage.vue', 'TitleModelPage.vue']
 
 function sourceOf(name: string): string {
-  return readFileSync(new URL('../components/settings/' + name, import.meta.url), 'utf-8')
+  return readFileSync(new URL('../ui/settings/' + name, import.meta.url), 'utf-8')
 }
 
 describe('Agent 设置页的下拉', () => {

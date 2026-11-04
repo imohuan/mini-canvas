@@ -1,6 +1,6 @@
 /** token 单位换算 / 口径（用户口径 2026-10-09）—— 两态「已用预算 ⇄ 剩余预算」+ 单位缩写。 */
 import { describe, it, expect } from 'vitest'
-import { formatToken, budgetTokenText, parseTokenText } from '../queueModel'
+import { formatToken, budgetTokenText, parseTokenText } from '../model/queueModel'
 
 describe('formatToken：按量级缩写', () => {
   it('国际单位 k / M / B / T', () => {

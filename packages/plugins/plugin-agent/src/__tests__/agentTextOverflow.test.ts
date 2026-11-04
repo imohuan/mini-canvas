@@ -16,8 +16,8 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
-const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
-const composer = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
+const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'))
+const composer = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
 
 function rule(selector: string): string {
   // 调用方可传「.ac-pill」或「.ac-pill {」：统一成一个选择器再找规则块。

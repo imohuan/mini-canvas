@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentApi } from '../agentApi'
+import { AgentApi } from '../api/agentApi'
 
 let dir: string
 let api: AgentApi

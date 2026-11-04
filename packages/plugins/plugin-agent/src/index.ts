@@ -1,6 +1,6 @@
-export { agentPlugin, name, inject, Config, apply } from './agentPlugin.js'
-export type { AgentPluginConfig } from './agentPlugin.js'
-export { createAgentService, CANVAS_ID } from './agentService.js'
+export { agentPlugin, name, inject, Config, apply } from './plugin/agentPlugin.js'
+export type { AgentPluginConfig } from './plugin/agentPlugin.js'
+export { createAgentService, CANVAS_ID } from './service/agentService.js'
 export type {
   AgentService,
   AgentServiceState,
@@ -10,18 +10,18 @@ export type {
   McpRow,
   ApprovalRuleRow,
   ApprovalPolicyView,
-} from './agentService.js'
-export { useAgent } from './useAgent.js'
+} from './service/agentService.js'
+export { useAgent } from './plugin/useAgent.js'
 // 「引用标签被点了」这条系统事件的**唯一一份**名字与载荷定义（应用层按名监听，见 packages/ui 的
 // useAssetRefOpen）。放这里是因为发事件的是本插件；消费方只取类型与常量，不 import 任何组件。
-export { REF_CLICK_EVENT, refClickPayloadOf } from './refClickEvents.js'
-export type { RefClickPayload, RefClickSource } from './refClickEvents.js'
+export { REF_CLICK_EVENT, refClickPayloadOf } from './plugin/refClickEvents.js'
+export type { RefClickPayload, RefClickSource } from './plugin/refClickEvents.js'
 // 输入框「提交键」的三种可选值 + 归一化：设置页（packages/ui）要用了这份判定，
 // 两边若各写一份枚举，改一处就会静默漂移（设置页写着 enter、面板只认 ctrl-enter）。
 // 这是纯常量/纯函数，不 import 任何组件，导出安全。
-export { SUBMIT_KEY_MODES, DEFAULT_SUBMIT_KEY_MODE, normalizeSubmitKeyMode } from './composerKeys.js'
-export type { SubmitKeyMode } from './composerKeys.js'
-export { AgentApi } from './agentApi.js'
-export type { ChatEvent, SessionMetaView, SessionRecordView, SendOptions } from './agentApi.js'
-export { ChatModel } from './sessionModel.js'
-export type { AgentTurnView, ToolCard, ApprovalCard } from './sessionModel.js'
+export { SUBMIT_KEY_MODES, DEFAULT_SUBMIT_KEY_MODE, normalizeSubmitKeyMode } from './ui/shared/composerKeys.js'
+export type { SubmitKeyMode } from './ui/shared/composerKeys.js'
+export { AgentApi } from './api/agentApi.js'
+export type { ChatEvent, SessionMetaView, SessionRecordView, SendOptions } from './api/agentApi.js'
+export { ChatModel } from './model/sessionModel.js'
+export type { AgentTurnView, ToolCard, ApprovalCard } from './model/sessionModel.js'

@@ -43,7 +43,7 @@ export const Config = {
   },
 }
 
-/** 对话服务的形状（真实版见 plugin-agent/src/agentService.ts，这里有几十个字段/方法） */
+/** 对话服务的形状（真实版见 plugin-agent/src/service/agentService.ts，这里有几十个字段/方法） */
 export interface MyAgentService {
   state: { open: boolean; running: boolean; turns: unknown[] }
   toggle(): void
@@ -173,12 +173,12 @@ HTTP 路由收到 `{canvasId, text}` → 先跑中间件链（可改写 text / �
 
 | 这篇里的做法 | 真实文件 | 真实行为 |
 | --- | --- | --- |
-| 服务包 reactive 再上架 | `packages/plugins/plugin-agent/src/agentPlugin.ts` | `ctx.inject('agent', reactive(service))`，注释记了不包的后果 |
+| 服务包 reactive 再上架 | `packages/plugins/plugin-agent/src/plugin/agentPlugin.ts` | `ctx.inject('agent', reactive(service))`，注释记了不包的后果 |
 | 内容槽 + 设置页 | 同上 | `agent-conversation` / `ctx.settingsMenu.nav` / `settingsGroup/集成/Agent` |
 | 引用按钮挂多选框 | 同上 | `ctx.selectionRegion.attach({ region:'out:top', needs:['selection'] })` |
 | `mod+j` 与 `areas:['node']` 命令 | 同上 | `agent:toggle` 与 `AGENT_REFERENCE_COMMAND_ID` |
-| 与后台的唯一对话通道 | `packages/plugins/plugin-agent/src/agentApi.ts` | AgentApi 类，SSE 流式收 ChatEvent |
-| 会话/队列/目标状态镜像 | `packages/plugins/plugin-agent/src/agentService.ts` | AgentServiceState（真相在后台会话文件，前端是镜像 + SSE 同步） |
+| 与后台的唯一对话通道 | `packages/plugins/plugin-agent/src/api/agentApi.ts` | AgentApi 类，SSE 流式收 ChatEvent |
+| 会话/队列/目标状态镜像 | `packages/plugins/plugin-agent/src/service/agentService.ts` | AgentServiceState（真相在后台会话文件，前端是镜像 + SSE 同步） |
 
 ## 常见坑
 

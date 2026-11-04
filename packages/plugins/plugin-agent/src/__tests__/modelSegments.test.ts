@@ -6,7 +6,7 @@
  *  · 上下文统计行在没有数据时**不画**（不显示 "已用 0"，那是假的）。
  */
 import { describe, it, expect } from 'vitest'
-import { segmentAnchors, type ModelSegment } from '../modelSegments'
+import { segmentAnchors, type ModelSegment } from '../model/modelSegments'
 
 const turns = [
   { id: 'u1', kind: 'user' },

@@ -6,7 +6,7 @@
  * 队列自动发的下一条同理（acceptUserMessage 补占位那条路）。
  */
 import { describe, it, expect } from 'vitest'
-import { ChatModel } from '../sessionModel'
+import { ChatModel } from '../model/sessionModel'
 
 const assistants = (m: ChatModel) => m.turns.filter((t) => t.kind === 'assistant')
 

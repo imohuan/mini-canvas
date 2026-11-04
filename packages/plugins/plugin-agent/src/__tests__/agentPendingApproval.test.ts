@@ -8,7 +8,7 @@
  * 修法：openSession 读 GET 会话返回的 approvals，补渲染成审批卡片。
  */
 import { describe, it, expect } from 'vitest'
-import { createAgentService } from '../agentService'
+import { createAgentService } from '../service/agentService'
 
 const json = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })

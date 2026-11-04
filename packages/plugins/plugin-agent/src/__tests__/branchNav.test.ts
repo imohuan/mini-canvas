@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupConversations, inlinePagers, pagerAnchors, type ForkPoint } from '../branchNav.js'
+import { groupConversations, inlinePagers, pagerAnchors, type ForkPoint } from '../model/branchNav.js'
 
 const rows = [
   { id: 'A', title: '根会话', updatedAt: 100, createdAt: 10 },
@@ -84,7 +84,7 @@ describe('pagerAnchors（渲染定位）', () => {
     { id: 'u2', kind: 'user' },
     { id: 'a2', kind: 'assistant' },
   ]
-  const pager = (userOrdinal: number): import('../branchNav.js').PagerGroup => ({
+  const pager = (userOrdinal: number): import('../model/branchNav.js').PagerGroup => ({
     at: 3, userOrdinal, items: [{ id: 'x', label: 'x' }], index: 0, position: 1, total: 2,
   })
 

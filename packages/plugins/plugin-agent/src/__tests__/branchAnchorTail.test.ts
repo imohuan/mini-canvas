@@ -6,7 +6,7 @@
  * （用户实测："返回 root 后分页不见了"）。修复后 k === userIdx.length 锚到列表末尾。
  */
 import { describe, expect, it } from 'vitest'
-import { pagerAnchors, type PagerGroup } from '../branchNav'
+import { pagerAnchors, type PagerGroup } from '../model/branchNav'
 
 const turns = [
   { id: 'u1', kind: 'user' },

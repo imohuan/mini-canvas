@@ -13,7 +13,7 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (name: string): string =>
-  readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation', name))
+  readSfcWithStyles(path.resolve(HERE, '../ui/conversation', name))
 
 /** 只扫消息流真正拥有的类名（输入区的另行检查） */
 const MESSAGE_LIST_OWNED = [

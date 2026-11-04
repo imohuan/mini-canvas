@@ -31,7 +31,7 @@ import * as vue from 'vue'
 import * as lucide from 'lucide-vue-next'
 import { parse, compileScript } from 'vue/compiler-sfc'
 import ts from 'typescript'
-import { toolView, type ToolView } from '../toolViews'
+import { toolView, type ToolView } from '../model/toolViews'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
@@ -79,7 +79,7 @@ function loadComponent(rel: string): unknown {
   return mod.exports.default
 }
 
-const Body = loadComponent('../components/ToolViewBody.vue') as vue.Component
+const Body = loadComponent('../ui/render/ToolViewBody.vue') as vue.Component
 
 /* —————————————————— 极小的内存节点宿主（够挖元素 + 派发事件） —————————————————— */
 
@@ -322,8 +322,8 @@ describe('图片加载失败：换占位，不再给裂图（用户口径 2026-1
 })
 
 describe('结构与接线守卫（源码级）', () => {
-  const body = read('../components/ToolViewBody.vue')
-const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
+  const body = read('../ui/render/ToolViewBody.vue')
+const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'))
 
   it('ToolViewBody：缩略图给「放大镜」光标 + 键盘 focus 环（样式渲染不在 node 里跑，盯源码）', () => {
     expect(body).toContain('cursor: zoom-in')
@@ -357,7 +357,7 @@ const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversat
   })
 
   it('预览仍只有一只 MediaViewer（复用主题注册的预览 API，不新增第二只）', () => {
-    const entry = read('../components/AgentConversation.vue')
+    const entry = read('../ui/conversation/AgentConversation.vue')
     const controller = readAgentConversationSource()
     expect((entry.match(/<MediaViewer/g) ?? []).length).toBe(1)
     expect(entry).toMatch(/<MediaViewer\s+:item="previewItem"\s+@close="previewImage = null"\s*\/>/)

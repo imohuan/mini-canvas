@@ -19,7 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 
 /** 只取输入区工具行那一段，避免把队列行「⋯」菜单（它不是输入区菜单）算进来 */
-const source = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
+const source = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
 const controller = readAgentConversationSource()
 const toolbar = (() => {
   const start = source.indexOf('<div class="ac-toolbar">')

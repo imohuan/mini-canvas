@@ -8,7 +8,7 @@
  * 图片节点/文件预览用 media 单行（40px 缩略图），资源列表只铺图、音频视频折成一句统计。
  */
 import { describe, it, expect } from 'vitest'
-import { toolFamily, toolView, toolBrief } from '../toolViews'
+import { toolFamily, toolView, toolBrief } from '../model/toolViews'
 
 describe('toolBrief：折叠行后面那截「执行内容」（用户口径 2026-10-11）', () => {
   it('exec_command ⇒ 给**命令本身**（不是输出、也不是工具名）', () => {

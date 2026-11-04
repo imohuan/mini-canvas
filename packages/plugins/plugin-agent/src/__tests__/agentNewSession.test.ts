@@ -7,7 +7,7 @@
  * 也没断开旧会话的常驻流（那条流还会把旧会话的 goal_state 推回来）。
  */
 import { describe, it, expect } from 'vitest'
-import { createAgentService } from '../agentService'
+import { createAgentService } from '../service/agentService'
 
 const json = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })

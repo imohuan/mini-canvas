@@ -5,7 +5,7 @@
  * （块出现 = sending 条目已真实投递 ⇒ 从队列删掉）。
  */
 import { describe, it, expect } from 'vitest'
-import { parseUserSteeringBlock, stripUserSteering, steeringFingerprint, matchSendingQueueItem } from '../userSteering'
+import { parseUserSteeringBlock, stripUserSteering, steeringFingerprint, matchSendingQueueItem } from '../model/userSteering'
 
 describe('user_steering 块', () => {
   it('标准形状（SDK 的 markerBlock：tag 换行内文 换行闭tag）⇒ 解析出内文', () => {

@@ -9,7 +9,7 @@
  * 客户端按 `acceptSeq` 去重、按 `onSeq` 推进重连水位。
  */
 import { describe, it, expect } from 'vitest'
-import { AgentApi, type ChatEvent } from '../agentApi.js'
+import { AgentApi, type ChatEvent } from '../api/agentApi.js'
 
 /** 造一个吐固定 SSE 字节的响应（帧格式与 Hono 的 writeSSE 一致：data 在前、id 在后） */
 function sseResponse(body: string): typeof fetch {

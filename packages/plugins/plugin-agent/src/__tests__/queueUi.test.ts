@@ -20,11 +20,11 @@ import * as vue from 'vue'
 import * as lucide from 'lucide-vue-next'
 import { compileTemplate } from 'vue/compiler-sfc'
 import ts from 'typescript'
-import { sendButtonMode } from '../queueModel'
+import { sendButtonMode } from '../model/queueModel'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
-const msgList = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
+const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+const msgList = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'))
 const controller = readAgentConversationSource()
 /** shadcn Button 替身：只负责把 class / disabled / click 透传到真按钮 */
 const ShadcnButtonStub = vue.defineComponent({
@@ -265,15 +265,19 @@ describe('队列行（G2/G4/G8/G10）：结构与接线', () => {
     expect(row).toContain('@click="steerItem(row.id)"')
     expect(row).toContain('@click="removeItem(row.id)"')
     // ⋯ 菜单改用 shadcn DropdownMenu：关闭靠父级状态 rowMenuId，不再有插槽给的 close()
-    expect(row).toContain('@click="beginEditQueue(row.id); rowMenuId = null"')
-    expect(row).toContain('@click="closeItem(row.id); rowMenuId = null"')
+    expect(row).toContain('@select="beginEditQueue(row.id); rowMenuId = null"')
+    expect(row).toContain('@select="closeItem(row.id); rowMenuId = null"')
   })
 
   it('⋯ 菜单**只有两项**：编辑消息 / 关闭排队（G12 的修正）', () => {
     // 从抽屉开始截（触发器 + 菜单 + 闭合标签），到模板结束
     const start = host.lastIndexOf('<DropdownMenu ', host.indexOf('aria-label="更多操作"'))
     const menu = host.slice(start, host.indexOf('</DropdownMenu>', host.indexOf('aria-label="更多操作"')))
-    expect((menu.match(/role="menuitem"/g) ?? []).length).toBe(2)
+    // 菜单项走组件库 DropdownMenuItem（用户口径 2026-11-04：别拿 Button 当菜单项自己造样式）。
+    // 触发器本身仍是 Button —— 只禁「菜单项」那一段（DropdownMenuContent 之内）。
+    const items = menu.slice(menu.indexOf('<DropdownMenuContent'))
+    expect((items.match(/<DropdownMenuItem /g) ?? []).length).toBe(2)
+    expect(items).not.toContain('<Button')
     expect(menu).toContain('编辑消息')
     expect(menu).toContain('关闭排队')
     // 菜单走组件库的 DropdownMenu（定位/翻边/互斥它负责），不自绘浮层
@@ -318,10 +322,12 @@ describe('队列行（G2/G4/G8/G10）：结构与接线', () => {
 
   it('「+」菜单三项（目标 / 上传文件 / 压缩），点目标直接加标记、不弹框（G12）', () => {
     const start = host.indexOf('aria-label="更多添加"')
-    const menu = host.slice(start, host.indexOf('</ThemedDropdown>', start))
+    const menu = host.slice(start, host.indexOf('</DropdownMenu>', start))
     // 用户口径 2026-10-11 加了第三项「压缩」：Agent 的压缩功能要有入口
     // （@ 菜单里也有一份，两处走同一条命令 agent.compact）。
-    expect((menu.match(/role="menuitem"/g) ?? []).length).toBe(3)
+    // 三项都是组件库 DropdownMenuItem（不自绘菜单行样式）。
+    expect((menu.match(/<DropdownMenuItem /g) ?? []).length).toBe(3)
+    expect(menu).not.toContain('<Button')
     expect(menu).toContain('addGoalMark()')
     expect(menu).toContain('pickImages()')
     expect(menu).toContain('compactNow()')

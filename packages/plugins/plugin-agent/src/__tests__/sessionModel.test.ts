@@ -1,6 +1,6 @@
 /** 事件合并：去重是硬要求（delta + final 不能显示两遍），另加四种状态 */
 import { describe, it, expect } from 'vitest'
-import { ChatModel } from '../sessionModel'
+import { ChatModel } from '../model/sessionModel'
 
 describe('审批卡片的补渲染与去重', () => {
   /**

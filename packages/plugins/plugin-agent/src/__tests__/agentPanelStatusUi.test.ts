@@ -15,9 +15,9 @@ import path from 'node:path'
 import { readSfcWithStyles } from './readSfcWithStyles'
 import { readAgentConversationSource } from './readAgentConversationSource'
 
-const host = readFileSync(path.join(__dirname, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const host = readFileSync(path.join(__dirname, '../ui/conversation/AgentMessageList.vue'), 'utf8')
 const controller = readAgentConversationSource()
-const composer = readSfcWithStyles(path.join(__dirname, '../components/agent-conversation/AgentComposer.vue'))
+const composer = readSfcWithStyles(path.join(__dirname, '../ui/conversation/AgentComposer.vue'))
 
 describe('上下文统计行', () => {
   it('恢复到发送键左侧：在 .ac-toolbar 里、发送按钮之前（用户口径 2026-10-11 的截图反馈）', () => {

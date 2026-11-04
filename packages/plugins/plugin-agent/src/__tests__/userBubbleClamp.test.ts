@@ -16,7 +16,7 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 import { readAgentConversationSource } from './readAgentConversationSource'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
+const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'))
 const controller = readAgentConversationSource()
 describe('用户气泡高度夹层与展开按钮', () => {
   it('正文有测量壳：ref 回调按消息 id 注册，夹层类由「超出且未展开」驱动', () => {

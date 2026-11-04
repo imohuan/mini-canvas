@@ -5,7 +5,7 @@
  * 真相（该不该发、发没发过）在后端，前端只管说对话。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { AgentApi, type ChatEvent } from '../agentApi.js'
+import { AgentApi, type ChatEvent } from '../api/agentApi.js'
 
 /** 造一个记录请求、可编排响应的假 fetch */
 function makeFetch(responses: Array<unknown>, status = 200) {

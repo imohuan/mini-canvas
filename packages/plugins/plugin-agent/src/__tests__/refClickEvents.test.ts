@@ -5,7 +5,7 @@
  * 浏览器里很难定位；而应用层是**按名 + 按字段**监听的，两边必须逐字一致。
  */
 import { describe, expect, it } from 'vitest'
-import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents'
+import { REF_CLICK_EVENT, refClickPayloadOf } from '../plugin/refClickEvents'
 import { hasKnownEvent } from '@mini-canvas/kernel'
 
 describe('事件名', () => {

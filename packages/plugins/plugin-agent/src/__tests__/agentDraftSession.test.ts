@@ -9,7 +9,7 @@
  * sessions[0]（最近一条历史）装载 —— 用户刚点的「新对话」被当成了「刷新页面，接着看老对话」。
  */
 import { describe, it, expect } from 'vitest'
-import { createAgentService } from '../agentService'
+import { createAgentService } from '../service/agentService'
 
 const json = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })

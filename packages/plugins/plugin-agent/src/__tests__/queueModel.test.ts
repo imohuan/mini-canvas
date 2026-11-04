@@ -12,8 +12,8 @@ import {
   usedText,
   goalEndedBadge,
   goalIsFinished,
-} from '../queueModel'
-import type { QueueItemView, QueueStateView } from '../agentApi'
+} from '../model/queueModel'
+import type { QueueItemView, QueueStateView } from '../api/agentApi'
 
 /** 小工厂：造一条队列条目（只写关心的字段，其余走默认） */
 function item(patch: Partial<QueueItemView> & { id: string }): QueueItemView {

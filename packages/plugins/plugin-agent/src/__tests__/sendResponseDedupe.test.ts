@@ -8,7 +8,7 @@
  * 这里锁住：agentService 的两条发送路径都把同一套帧级水位交给 api.sendMessage。
  */
 import { describe, it, expect } from 'vitest'
-import { AgentApi } from '../agentApi.js'
+import { AgentApi } from '../api/agentApi.js'
 
 const NL = String.fromCharCode(10)
 const SEP = String.fromCharCode(10, 10)

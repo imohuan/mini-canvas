@@ -3,7 +3,7 @@
  * 现有消息原样保留；批次结尾的空助手占位与现有头部重复时去掉一条。
  */
 import { describe, it, expect } from 'vitest'
-import { ChatModel } from '../sessionModel'
+import { ChatModel } from '../model/sessionModel'
 
 const turn = (role: string, text: string, ts = 0) => ({ role, text, ts })
 

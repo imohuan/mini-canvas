@@ -24,11 +24,11 @@ import { Context } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import type { CommandService } from '@mini-canvas/kernel'
 import * as renderPkg from '@mini-canvas/canvas-render'
-import { agentPlugin } from '../agentPlugin'
-import AgentRefToolbar from '../components/AgentRefToolbar.vue'
-import * as commandsMod from '../agentCommands'
-import * as resourcesMod from '../agentResources'
-import { AGENT_REFERENCE_COMMAND_ID } from '../agentCommands'
+import { agentPlugin } from '../plugin/agentPlugin'
+import AgentRefToolbar from '../ui/toolbar/AgentRefToolbar.vue'
+import * as commandsMod from '../plugin/agentCommands'
+import * as resourcesMod from '../ui/shared/agentResources'
+import { AGENT_REFERENCE_COMMAND_ID } from '../plugin/agentCommands'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
@@ -195,7 +195,7 @@ const StubButton = vue.defineComponent({
  * 与 queueUi / toolViewImagePreview 同一套办法，能真派发事件而不是只盯源码字符串。
  */
 function loadComponent(): unknown {
-  const { descriptor, errors } = parse(read('../components/AgentRefToolbar.vue'), { filename: 'AgentRefToolbar.vue' })
+  const { descriptor, errors } = parse(read('../ui/toolbar/AgentRefToolbar.vue'), { filename: 'AgentRefToolbar.vue' })
   if (errors.length) throw new Error('AgentRefToolbar.vue 解析失败：' + errors.map(String).join('；'))
   const compiled = compileScript(descriptor, { id: 'agent-ref-test', inlineTemplate: true })
   const js = ts.transpileModule(compiled.content, {
@@ -209,8 +209,8 @@ function loadComponent(): unknown {
       // 让被测组件仍走**真组件里的按名取件逻辑**，而不是把 Button 换掉。
       return { ...renderPkg, ToolbarIcon: ToolbarIconStub, useUiComponent: () => vue.shallowRef(ShadcnButtonStub) }
     }
-    if (id.startsWith('../agentCommands')) return commandsMod
-    if (id.startsWith('../agentResources')) return resourcesMod
+    if (id.startsWith('../plugin/agentCommands') || id.startsWith('../../plugin/agentCommands')) return commandsMod
+    if (id.includes('shared/agentResources')) return resourcesMod
     throw new Error('不认识这个依赖（测试的 require 只放已知几项）：' + id)
   }
   new Function('module', 'exports', 'require', js)(mod, mod.exports, requireShim)
@@ -311,7 +311,7 @@ describe('按钮行为：点击与降级', () => {
 /* —————————————————— ③ 源码守卫（改回错写法时当场红） —————————————————— */
 
 /** 先剥注释再查：解释这条约束的注释自己不该踩中 */
-const componentCode = read('../components/AgentRefToolbar.vue')
+const componentCode = read('../ui/toolbar/AgentRefToolbar.vue')
   .replace(/<!--[\s\S]*?-->/g, ' ')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/^\s*\/\/.*$/gm, ' ')
@@ -325,7 +325,7 @@ describe('源码守卫', () => {
   it('两个入口共用同一个命令 id 常量（不在组件里写字符串字面量）', () => {
     expect(componentCode).toContain('AGENT_REFERENCE_COMMAND_ID')
     expect(componentCode).not.toContain("'agent:reference-node'")
-    const plugin = read('../agentPlugin.ts')
+    const plugin = read('../plugin/agentPlugin.ts')
     expect(plugin).toContain("import { AGENT_REFERENCE_COMMAND_ID } from './agentCommands.js'")
     expect(plugin).not.toMatch(/id:\s*'agent:reference-node'/)
   })

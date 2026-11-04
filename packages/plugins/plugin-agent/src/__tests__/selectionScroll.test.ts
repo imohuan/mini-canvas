@@ -17,11 +17,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readSfcWithStyles } from './readSfcWithStyles'
 import { readAgentConversationSource } from './readAgentConversationSource'
-import { scrollTopForVisibleItem } from '../selectionScroll'
+import { scrollTopForVisibleItem } from '../ui/shared/selectionScroll'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 /** 造一份滚动状态：内容总高 scrollHeight、视口 clientHeight、当前 scrollTop */
-const host = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
+const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
 const controller = readAgentConversationSource()
 const box = (scrollTop: number, scrollHeight: number, clientHeight: number) => ({
   scrollTop,

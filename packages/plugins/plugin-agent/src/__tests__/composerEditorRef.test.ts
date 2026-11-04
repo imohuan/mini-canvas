@@ -12,8 +12,8 @@ import { fileURLToPath } from 'node:url'
 import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const composer = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
-const controller = readFileSync(path.resolve(HERE, '../components/agent-conversation/useAgentConversation.ts'), 'utf8')
+const composer = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+const controller = readFileSync(path.resolve(HERE, '../ui/conversation/useAgentConversation.ts'), 'utf8')
 
 describe('AgentComposer 编辑器 ref 接线', () => {
   it('模板 ref 指向控制器暴露的 editorRef', () => {

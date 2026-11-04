@@ -14,8 +14,8 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 /** 三个面板的容器：只截「面板本体」，避免把输入区其它下拉算进来 */
-const SRC = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
-const MSG = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const SRC = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+const MSG = readFileSync(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'), 'utf8')
 const panels = ['ac-model-panel', 'ac-skill-panel', 'ac-mcp-panel'].map((name) => {
   const start = SRC.indexOf(name)
   expect(start, '找不到面板 ' + name).toBeGreaterThan(-1)

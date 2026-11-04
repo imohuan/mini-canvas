@@ -15,9 +15,9 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
-const conversation = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
-const resources = read('../agentResources.ts')
-const msgList = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentMessageList.vue'))
+const conversation = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+const resources = read('../ui/shared/agentResources.ts')
+const msgList = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'))
 
 /** 取一条样式规则的正文（从 `选择器 {` 到它自己的 `}`） */
 function ruleBody(source: string, selector: string): string {

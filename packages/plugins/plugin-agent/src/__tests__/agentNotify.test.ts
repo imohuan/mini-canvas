@@ -17,8 +17,8 @@ import {
   showNotify,
   playNotifySound,
   DEFAULT_NOTIFY_PREFS,
-} from '../agentNotify'
-import type { AgentNotifyPrefs } from '../agentNotify'
+} from '../api/agentNotify'
+import type { AgentNotifyPrefs } from '../api/agentNotify'
 import { readAgentConversationSource } from './readAgentConversationSource'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))

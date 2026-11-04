@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createAgentService } from '../agentService'
+import { createAgentService } from '../service/agentService'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 

@@ -1,6 +1,6 @@
 /** Markdown 渲染：功能 + XSS 防护（模型的输出不可信） */
 import { describe, it, expect } from 'vitest'
-import { renderMarkdown, escapeHtml } from '../markdown'
+import { renderMarkdown, escapeHtml } from '../ui/render/markdown'
 
 describe('基础渲染', () => {
   it('段落与换行', () => {

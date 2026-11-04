@@ -6,8 +6,8 @@
  * 2. 中间**没有文字**隔开的多个工具，要合并成一组（参考 codex-base-ui 的 useGroups）。
  */
 import { describe, it, expect } from 'vitest'
-import { groupTurnBlocks } from '../turnBlocks'
-import type { ToolCard, TurnStep } from '../sessionModel'
+import { groupTurnBlocks } from '../model/turnBlocks'
+import type { ToolCard, TurnStep } from '../model/sessionModel'
 
 /**
  * 小工厂：一边造「按顺序的步骤」，一边造工具的明细表 —— 与 ChatModel 的真实产物同形

@@ -1,6 +1,6 @@
 /** 引用资源标签：技能/MCP/节点的标记（ref）必须带对的 kind 与载荷 */
 import { describe, it, expect } from 'vitest'
-import { skillResources, mcpResources, nodeResources, assetResource, assetExtOf } from '../agentResources'
+import { skillResources, mcpResources, nodeResources, assetResource, assetExtOf } from '../ui/shared/agentResources'
 
 describe('技能标签', () => {
   it('带 skill 标记，载荷 = SKILL.md 路径', () => {

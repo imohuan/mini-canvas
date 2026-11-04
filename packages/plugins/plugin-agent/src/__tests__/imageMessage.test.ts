@@ -7,7 +7,7 @@
  *   ③ 回放（load）时图片跟着回来 —— 不落这一点，切会话就只剩光秃秃的文字。
  */
 import { describe, it, expect } from 'vitest'
-import { ChatModel } from '../sessionModel'
+import { ChatModel } from '../model/sessionModel'
 
 const IMG = 'data:image/png;base64,iVBORw0KGgo='
 

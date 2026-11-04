@@ -8,7 +8,7 @@
  * 这里钉的是**判定**（纯函数）；监听/滚动那部分靠浏览器 e2e 验收。
  */
 import { describe, it, expect } from 'vitest'
-import { distanceToBottom, hasScrollbar, isNearBottom } from '../stickToBottomCore'
+import { distanceToBottom, hasScrollbar, isNearBottom } from '../ui/shared/stickToBottomCore'
 
 /** 造一份滚动状态：内容总高 scrollHeight、视口 clientHeight、当前 scrollTop */
 const at = (scrollTop: number, scrollHeight: number, clientHeight: number) => ({ scrollTop, scrollHeight, clientHeight })

@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const conversation = readFileSync(path.resolve(here, '../components/agent-conversation/AgentMessageList.vue'), 'utf8')
+const conversation = readFileSync(path.resolve(here, '../ui/conversation/AgentMessageList.vue'), 'utf8')
 describe('工具行分流：卡片只给自带卡片的画布 MCP 工具', () => {
   it('单工具分支不再以 tool.card 当卡片条件', () => {
     expect(conversation).not.toContain("row.tools[0].card ? 'ac-tool-card'")

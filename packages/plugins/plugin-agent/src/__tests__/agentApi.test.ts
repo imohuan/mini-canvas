@@ -1,7 +1,7 @@
 /** SSE 解析：逐帧切分、半帧拼接、错误文案 */
 import { afterEach, describe, it, expect } from 'vitest'
 import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@mini-canvas/canvas-base'
-import { AgentApi, type ChatEvent } from '../agentApi'
+import { AgentApi, type ChatEvent } from '../api/agentApi'
 
 /** 最小的 localStorage 替身（Node 里没有 DOM；令牌走全局 localStorage） */
 class MemoryStorage {

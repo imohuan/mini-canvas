@@ -16,12 +16,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readSfcWithStyles } from './readSfcWithStyles'
 import { readAgentConversationSource } from './readAgentConversationSource'
-import { isSubmitShortcut, shouldDeferEnterToMenu } from '../composerKeys'
+import { isSubmitShortcut, shouldDeferEnterToMenu } from '../ui/shared/composerKeys'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 const conversation = readAgentConversationSource()
-const composer = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
+const composer = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
 const enter = (mods: Record<string, boolean> = {}) => ({
   key: 'Enter',
   ctrlKey: false,

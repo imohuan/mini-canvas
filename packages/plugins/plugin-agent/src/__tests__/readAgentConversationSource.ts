@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const CONVERSATION_DIR = path.resolve(HERE, '../components/agent-conversation')
+const CONVERSATION_DIR = path.resolve(HERE, '../ui/conversation')
 const FILES = [
   'useAgentConversation.ts',
   'useAgentAttachments.ts',

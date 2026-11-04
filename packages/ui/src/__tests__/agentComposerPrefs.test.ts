@@ -161,11 +161,11 @@ describe('设置页 UI：目标设置下面那一行', () => {
 
 describe('Agent 面板：读取同一个键（不自己再造一份）', () => {
   const conversationSrc = readFileSync(
-    path.resolve(PKG_ROOT, '../plugins/plugin-agent/src/components/AgentConversation.vue'),
+    path.resolve(PKG_ROOT, '../plugins/plugin-agent/src/ui/conversation/AgentConversation.vue'),
     'utf8',
   )
   const conversationHookSrc = readFileSync(
-    path.resolve(PKG_ROOT, '../plugins/plugin-agent/src/components/agent-conversation/useAgentConversation.ts'),
+    path.resolve(PKG_ROOT, '../plugins/plugin-agent/src/ui/conversation/useAgentConversation.ts'),
     'utf8',
   )
 

@@ -7,7 +7,7 @@
  *      Agent 直接用），但浏览器加载不了本机路径 —— 必须换算回同源的 HTTP 面。
  *
  * 判断「是文件还是文件夹」不在这里：那由**标记里有没有 ext** 决定（消费方分流），
- * 见 packages/plugins/plugin-agent/src/refClickEvents.ts。
+ * 见 packages/plugins/plugin-agent/src/plugin/refClickEvents.ts。
  */
 
 /** 扩展名 → MediaViewer 认的 kind */

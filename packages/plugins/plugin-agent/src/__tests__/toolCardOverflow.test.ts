@@ -17,7 +17,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const body = readFileSync(path.resolve(HERE, '../components/ToolViewBody.vue'), 'utf8')
+const body = readFileSync(path.resolve(HERE, '../ui/render/ToolViewBody.vue'), 'utf8')
 
 /** 取一条以 selector 开头的样式块（只在本文件里用，够简单） */
 function rule(selector: string): string {

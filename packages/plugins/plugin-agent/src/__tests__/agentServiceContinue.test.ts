@@ -6,7 +6,7 @@
  * 用户看到「在分支上继续对话，却给我新开了一个对话」。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { createAgentService } from '../agentService'
+import { createAgentService } from '../service/agentService'
 
 /** 造一个最小的假 fetch：按 URL 返回固定 JSON / SSE */
 function fakeFetch(routes: Record<string, () => Response>): typeof fetch {

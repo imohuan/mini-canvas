@@ -5,7 +5,7 @@
  * 判反了的表现是「点了没反应」或「点文件夹弹出图片预览」，浏览器里很难查，钉在单测里。
  */
 import { describe, expect, it } from 'vitest'
-import { parseUserSegments, segClickable, segTitle, assetRefInputOf } from '../userSegments'
+import { parseUserSegments, segClickable, segTitle, assetRefInputOf } from '../model/userSegments'
 
 const tags = (text: string) => parseUserSegments(text).filter((s) => s.type === 'tag')
 

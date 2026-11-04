@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync(new URL('../useStickyScroll.ts', import.meta.url), 'utf-8')
+const src = readFileSync(new URL('../ui/shared/useStickyScroll.ts', import.meta.url), 'utf-8')
 
 describe('useStickyScroll 清理', () => {
   it('定时器存在可被卸载钩子看到的变量里（不是函数内局部常量）', () => {

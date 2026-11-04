@@ -15,7 +15,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const DIR = path.resolve(HERE, '../components/agent-conversation')
+const DIR = path.resolve(HERE, '../ui/conversation')
 const read = (name: string): string => readFileSync(path.join(DIR, name), 'utf8')
 
 /** 从 "const {...} = c" / "const {...} = cProps" 里取出解构的名字 */

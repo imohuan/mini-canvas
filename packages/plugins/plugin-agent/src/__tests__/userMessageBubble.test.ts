@@ -9,7 +9,7 @@
  * 助手占位。这层钉住 acceptUserMessage 的语义（含去重与助手占位）。
  */
 import { describe, it, expect } from 'vitest'
-import { ChatModel } from '../sessionModel.js'
+import { ChatModel } from '../model/sessionModel.js'
 
 describe('acceptUserMessage：从流里补用户气泡', () => {
   it('队列自动发的那条（前端没参与）⇒ 补出用户气泡 + 助手占位', () => {

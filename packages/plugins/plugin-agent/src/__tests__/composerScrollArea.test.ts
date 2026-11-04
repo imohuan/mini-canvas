@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url'
 import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const SRC = readSfcWithStyles(path.resolve(HERE, '../components/agent-conversation/AgentComposer.vue'))
+const SRC = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
 const CSS = ['part1.css', 'part2.css', 'part3.css', 'part4.css']
-  .map((f) => readFileSync(path.resolve(HERE, '../components/agent-conversation/agent-composer', f), 'utf8'))
+  .map((f) => readFileSync(path.resolve(HERE, '../ui/conversation/agent-composer', f), 'utf8'))
   .join('\n')
 
 describe('Agent 面板滚动层', () => {
@@ -26,7 +26,7 @@ describe('Agent 面板滚动层', () => {
   })
 
   it('ScrollArea 取件来自 useUiComponent，不直接 import 组件库', () => {
-    const area = readFileSync(path.resolve(HERE, '../components/agent-conversation/AgentScrollArea.vue'), 'utf8')
+    const area = readFileSync(path.resolve(HERE, '../ui/conversation/AgentScrollArea.vue'), 'utf8')
     expect(area).toContain("useUiComponent('ScrollArea')")
     expect(area).not.toMatch(/from ['"]@mini-canvas\/ui-kit-shadcn/)
   })
