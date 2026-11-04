@@ -9,7 +9,6 @@
 import { componentConfig, popupTotalGap } from '../../componentConfig'
 
 export type PopupKind = 'dropdown' | 'select' | 'popover' | 'tooltip' | 'context' | 'combobox'
-export type PopupArrowMode = 'auto' | 'show' | 'hide'
 
 /**
  * 箭头高度：reka 会把这个高度自动加进 sideOffset，量“可见边缘”时要扣掉。

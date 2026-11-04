@@ -33,41 +33,6 @@ export interface PreviewThemeConfig extends ThemeSelection {
   offset: number
   /** 二级菜单与父菜单的可见间距（px） */
   subGap: number
-  /**
-   * 各类浮层自己的底色覆盖（按组件名区分）。
-   *
-   * 为什么需要它：所有浮层默认共用 --popover 一个色，预览里根本分不出
-   * 「这个是 Select 的、那个是 Popover 的」。用户要求按组件名单独调色，
-   * 便于逐个确认观感（2026-11-04）。
-   *
-   * key = 组件族名（Select / DropdownMenu / Popover / Tooltip / Dialog / Notify / Message），
-   * value = 颜色字符串；空字符串表示「跟随全局 popover」。
-   */
-  surface: Record<SurfaceKey, string>
-}
-
-/** 可单独调色的浮层种类（顺序即面板展示顺序）。 */
-export const SURFACE_KINDS = [
-  'Select',
-  'DropdownMenu',
-  'Popover',
-  'Tooltip',
-  'Dialog',
-  'Notify',
-  'Message',
-] as const
-
-export type SurfaceKey = (typeof SURFACE_KINDS)[number]
-
-/** 每种浮层真正消费的 CSS 变量（组件按 data-slot 区分，见 host.css）。 */
-const SURFACE_VARS: Record<SurfaceKey, string> = {
-  Select: '--mct-surface-select',
-  DropdownMenu: '--mct-surface-dropdown',
-  Popover: '--mct-surface-popover',
-  Tooltip: '--mct-surface-tooltip',
-  Dialog: '--mct-surface-dialog',
-  Notify: '--mct-surface-notify',
-  Message: '--mct-surface-message',
 }
 
 /** 上一轮写在 `<html>` 上的内联变量（换主题前先摘干净，避免旧键残留）。 */
@@ -103,14 +68,6 @@ export function applyThemePreview(config: PreviewThemeConfig, dark: boolean, roo
 
     el.style.setProperty('--radius', findRadius(config.radius).value)
     writtenVars.push('--radius')
-
-    // 每种浮层的底色：留空就清掉，回落到全局 --popover
-    for (const kind of SURFACE_KINDS) {
-      const name = SURFACE_VARS[kind]
-      const value = config.surface?.[kind] ?? ''
-      if (value) el.style.setProperty(name, value)
-      else el.style.removeProperty(name)
-    }
   }
 
   const patch: Partial<ComponentConfig> = {

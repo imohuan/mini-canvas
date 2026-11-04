@@ -52,10 +52,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --vuelor-primary: #0d99ff;
-  --vuelor-surface: #ffffff;
-  --vuelor-border: #e6e6e6;
-  --vuelor-input: #f5f5f5;
+  /* 取色器的色值不在这里写死，统一在 :root 里映射到主题 token（否则暗色不跟随） */
   --shadow-vuelor-card: 0 2px 5px 0 #00000026, 0 10px 16px 0 #0000001f, 0 0 .5px 0 #0000001f;
   --shadow-vuelor-thumb: 0px 0px .5px #0000002e, 0px 3px 8px #0000001a, 0px 1px 3px #0000001a;
   --shadow-vuelor-inner: inset 0 0 0 1px #0000001a;
@@ -228,38 +225,4 @@
 [data-slot='context-menu-content'],
 [data-slot='menubar-content'] {
   --tw-ring-color: color-mix(in oklab, var(--foreground) 14%, transparent);
-}
-
-/*
- * 每类浮层可单独调底色（预览页按组件名分别给色）。
- *
- * 为什么不能都吃 --popover：全站浮层共用一个色时，预览里根本分不清
- * 「这层是 Select 还是 Popover」。这里按 data-slot 分别给一个可覆盖的变量，
- * 没设置时仍回落到 --popover，真实应用观感不变。
- */
-[data-slot='select-content'] {
-  background-color: var(--mct-surface-select, var(--color-popover));
-}
-
-[data-slot='dropdown-menu-content'],
-[data-slot='dropdown-menu-sub-content'],
-[data-slot='context-menu-content'],
-[data-slot='context-menu-sub-content'],
-[data-slot='menubar-content'] {
-  background-color: var(--mct-surface-dropdown, var(--color-popover));
-}
-
-[data-slot='popover-content'],
-[data-slot='combobox-content'] {
-  background-color: var(--mct-surface-popover, var(--color-popover));
-}
-
-[data-slot='tooltip-content'] {
-  background-color: var(--mct-surface-tooltip, var(--color-foreground));
-}
-
-[data-slot='dialog-content'],
-[data-slot='alert-dialog-content'],
-[data-slot='sheet-content'] {
-  background-color: var(--mct-surface-dialog, var(--color-popover));
 }

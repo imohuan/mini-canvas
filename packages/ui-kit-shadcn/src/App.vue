@@ -34,16 +34,6 @@ const themeConfig = ref<PreviewThemeConfig>({
   gap: 8,
   offset: 0,
   subGap: 8,
-  // 每类浮层默认跟随全局 popover（空串）
-  surface: {
-    Select: '',
-    DropdownMenu: '',
-    Popover: '',
-    Tooltip: '',
-    Dialog: '',
-    Notify: '',
-    Message: '',
-  },
 })
 
 useThemePreview(themeConfig, dark)

@@ -51,18 +51,6 @@ export function releaseExclusive(entry: OpenEntry): void {
   openEntries.delete(entry)
 }
 
-/** 当前开着的浮层数（测试 / 调试用）。 */
-export function openExclusiveCount(): number {
-  return openEntries.size
-}
-
-/** 全关（拖拽 / 缩放这类「环境变了」的时刻用）。 */
-export function closeAllExclusives(): void {
-  const entries = [...openEntries]
-  openEntries.clear()
-  for (const entry of entries) entry.close()
-}
-
 /**
  * 把某个浮层的开合接到登记表上。
  *
