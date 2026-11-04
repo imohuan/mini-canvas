@@ -7,15 +7,16 @@
 // 名字语义（用户口径）：左边那个可编辑的名字 = **当前画布的名字**（改了就是改这张画布，
 // 下拉里出现的也是这些名字）；右边的小胶囊显示「画布 + 索引」，只是位置提示。
 //
-// 画布列表的行尾（用户口径 2026-10-09，附效果图）：
-//   ① 当前画布 → 行尾常显一个**勾**（位置提示）；
-//   ② 鼠标悬停（或键盘聚焦）这一行 → 勾**换成三个点**；没选中的行则直接现出三个点；
-//   ③ 点三个点 → 在它旁边弹出该画布的**操作菜单**（在新窗口打开 / 重命名画布 / 复制画布 / 删除画布）。
+// 画布列表的行尾（用户口径 2026-11-03）：
+//   ① 默认显示一个向右的箭头，提示这里还有次级操作；
+//   ② 鼠标悬停（或键盘聚焦）这一行 → 箭头**换成三个点**；
+//   ③ 点箭头 / 三个点 → 在它旁边弹出该画布的**操作菜单**（在新窗口打开 / 重命名画布 / 复制画布 / 删除画布）；
+//   ④ 当前画布只用整行浅色背景表示选中，不再显示勾。
 //
 // 为什么卷标行要拆成「两个按钮」而不是像以前那样在一行里套一个 span 当按钮：
 //   行的主点击 = 切画布，行尾 = 另一件事（开操作菜单）。一个 <button> 里再塞一个可点的 span，
 //   读屏会把两件事说成一件事，也是 ui-style-guide §5 第 2 条明令禁止的嵌套交互。
-import { Check, ChevronDown, MoreHorizontal, Plus } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 // 外壳按钮与下拉菜单从画布 ctx 的 ui 注册表按名取；行内交互保持不变。
 import { useUiComponent } from '@mini-canvas/canvas-render'
@@ -39,7 +40,7 @@ export interface CanvasOption {
 const props = defineProps<{
   /** 当前画布的名字（显示在可编辑输入框里） */
   canvas: string
-  /** 当前画布 id（判断哪一行打勾） */
+  /** 当前画布 id（判断哪一行显示选中背景） */
   canvasId: string
   /** 画布清单（下拉列出每一项；点了切过去） */
   canvasItems: CanvasOption[]
@@ -91,7 +92,7 @@ function setActionOpen(item: CanvasOption, open: boolean): void {
   }
 }
 
-/** 点行尾的「⋯」/「勾」：记下是哪张画布（子菜单的条目据此派发） */
+/** 点行尾的「›」/「⋯」：记下是哪张画布（子菜单的条目据此派发） */
 function openActions(item: CanvasOption): void {
   actionTarget.value = item
 }
@@ -164,11 +165,10 @@ function pickAction(
             >
               <span class="canvas-open">{{ item.label }}</span>
             </button>
-            <!-- 悬停/聚焦才显形；选中行的「勾」也靠 hover 让位给「⋯」（一组 hover 场景切换，故写在本行里） -->
+            <!-- 行尾一次只占一个图标位：默认右箭头，hover / 键盘聚焦 / 子菜单打开时换成三个点。 -->
             <DropdownMenuSub :open="actionOpenId === item.id" @update:open="(v: boolean) => setActionOpen(item, v)">
-              <DropdownMenuSubTrigger class="canvas-row-more" :class="{ 'is-pinned': item.id === canvasId }"
-                :aria-label="'画布操作 ' + item.label">
-                <Check v-if="item.id === canvasId" class="canvas-row-check" :size="14" aria-hidden="true" />
+              <DropdownMenuSubTrigger class="canvas-row-more" :aria-label="'画布操作 ' + item.label">
+                <ChevronRight class="canvas-row-chevron" :size="14" aria-hidden="true" />
                 <MoreHorizontal class="canvas-row-dots" :size="14" aria-hidden="true" />
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent :style="{ minWidth: '176px' }">
@@ -204,33 +204,35 @@ function pickAction(
 /* 底必须打在**行**上，不能打在行里的按钮上（用户口径 2026-10-09：
    「hover 的是整块的一个背景」）。打在按钮上只会染主按钮那半块 ——
    行尾「⋯」与两者之间的留白就成了没底的缺口，看着像「只有左侧有背景」。
-   选中行（与「勾」一起表达「当前就是这张」）与 hover 行都给整行一块底。 */
+   选中行（当前就是这张）与 hover 行都给整行一块底。 */
 .canvas-row.is-active { background: var(--ui-hover-soft, var(--ui-hover)); }
 .canvas-row:hover { background: var(--ui-hover); }
 .canvas-row-main { display: flex; flex: 1; min-width: 0; align-items: center; height: 32px; padding: 0 10px; color: var(--ui-ink); border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; text-align: left; }
 .canvas-row-main:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: -1px; }
 .canvas-open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 行尾：默认 32×32 占位（行内不跳动的锚），勾/三个点叠在同一格里换显 */
-.canvas-row-more { position: relative; display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 4px; width: 44px; height: 32px; padding: 0 7px; color: var(--ui-ink-dim); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
-/* 行尾是「勾/⋯ + shadcn 自带的子菜单箭头」两格：32px 时两个图标会挤在一起，
-   撑到 44px、左格放状态图标、右格放箭头（用户口径 2026-11-02）。 */
-.canvas-row-more :deep(svg.ml-auto) { flex: none; width: 12px; height: 12px; margin: 0; opacity: .7; }
-.canvas-row-check, .canvas-row-dots { position: absolute; left: 8px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); transition: opacity .14s ease; }
-/* 选中行的勾：常显。鼠标进这一行 → 勾让位给三个点（用户口径：hover 时图标变成三个点）。 */
-.canvas-row-more.is-pinned .canvas-row-check { opacity: 1; }
-.canvas-row-more.is-pinned .canvas-row-dots { opacity: 0; }
-.canvas-row:hover .canvas-row-more.is-pinned .canvas-row-check { opacity: 0; }
-.canvas-row:hover .canvas-row-more.is-pinned .canvas-row-dots { opacity: 1; }
-/* 未选中的行：平时不占视线，hover 行（或键盘聚焦按钮）才现出三个点。 */
-.canvas-row-more:not(.is-pinned) .canvas-row-check { display: none; }
-.canvas-row-more:not(.is-pinned) .canvas-row-dots { opacity: 0; }
-.canvas-row:hover .canvas-row-more:not(.is-pinned) .canvas-row-dots,
-.canvas-row-more:focus-visible .canvas-row-dots { opacity: 1; }
+/* 行尾：固定 32×32，一次只放一个图标（用户口径 2026-11-03）。
+   子组件默认会在右侧自动追加一个箭头；这里把它藏掉，由本行自己决定显示哪个图标。 */
+.canvas-row-more { position: relative; display: flex; flex: none; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; color: var(--ui-ink-dim); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.canvas-row-more :deep(svg.ml-auto) { display: none; }
+.canvas-row-chevron, .canvas-row-dots { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); transition: opacity .14s ease; }
+.canvas-row-chevron { opacity: 1; }
+.canvas-row-dots { opacity: 0; }
+/* 默认右箭头；鼠标进整行 / 键盘聚焦行尾 / 子菜单展开时，只换成三个点。
+   键盘在菜单里移动焦点时，浏览器用脚本聚焦 role=menuitem，不会命中 :focus-visible，
+   所以图标替换看 :focus；外圈焦点提示仍只用 :focus-visible，鼠标点击不会多出描边。 */
+.canvas-row:hover .canvas-row-more .canvas-row-chevron,
+.canvas-row-more:focus .canvas-row-chevron,
+.canvas-row-more[data-state='open'] .canvas-row-chevron,
+.canvas-row-more[aria-expanded='true'] .canvas-row-chevron { opacity: 0; }
+.canvas-row:hover .canvas-row-more .canvas-row-dots,
+.canvas-row-more:focus .canvas-row-dots,
+.canvas-row-more[data-state='open'] .canvas-row-dots,
+.canvas-row-more[aria-expanded='true'] .canvas-row-dots { opacity: 1; }
 /* 行尾按钮 hover **不给底色**，只把图标颜色提亮（用户口径 2026-10-09：
    「这个按钮不要给 hover 的背景颜色，就直接给这个图标颜色就行」）。 */
 .canvas-row-more:hover { color: var(--ui-ink); }
 .canvas-row-more:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: -1px; }
 @media (prefers-reduced-motion: reduce) {
-  .canvas-row-check, .canvas-row-dots { transition: none; }
+  .canvas-row-chevron, .canvas-row-dots { transition: none; }
 }
 </style>
