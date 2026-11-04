@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
+import { Check } from 'lucide-vue-next'
 import LibIcon from '../../LibIcon.vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useUi } from '../../../composables/ui'
@@ -23,8 +24,6 @@ const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
-const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
-const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const Input = useUiComponent('Input')
@@ -77,11 +76,12 @@ const localViewMode = computed({
                   <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                 </svg></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="start" :side-offset="4">
-          <!-- 搜索里的类型筛选也是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底。 -->
-          <DropdownMenuRadioGroup :model-value="s.filterType">
-            <DropdownMenuRadioItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t" :value="t"
-              @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+          <!-- 搜索里的类型筛选也是单选：当前项在行尾用勾表示，不叠整行主题色底。 -->
+          <DropdownMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
+            @select="s.filterType = t; s.filterTypeOpen = false">
+            {{ t }}
+            <Check v-if="t === s.filterType" :size="14" class="ml-auto size-3.5! text-ink" />
+          </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="ghost" size="icon-sm" class="flex-none rounded-lg text-ink/85"
@@ -107,10 +107,11 @@ const localViewMode = computed({
               <path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="start" :side-offset="4">
-          <DropdownMenuRadioGroup :model-value="s.filterType">
-            <DropdownMenuRadioItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t" :value="t"
-              @select="s.filterType = t; s.filterTypeOpen = false">{{ t }}</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+          <DropdownMenuItem v-for="t in ['全部', '图片', '视频', '音频', '文本', '分组']" :key="t"
+            @select="s.filterType = t; s.filterTypeOpen = false">
+            {{ t }}
+            <Check v-if="t === s.filterType" :size="14" class="ml-auto size-3.5! text-ink" />
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <span class="flex-1"></span>
@@ -122,15 +123,15 @@ const localViewMode = computed({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" :side-offset="4" :style="{ minWidth: '180px' }">
-          <!-- 展示方式是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
-          <DropdownMenuRadioGroup :model-value="viewMode">
-            <DropdownMenuRadioItem value="list" @select="localViewMode = 'list'; localMenuOpen = false">
-              <LibIcon name="list-view" :size="16" /> 列表展示
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="grid" @select="localViewMode = 'grid'; localMenuOpen = false">
-              <LibIcon name="display-grid" :size="16" /> 宫格展示
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+          <!-- 展示方式是单选：当前项在行尾用勾表示，不叠整行主题色底（问题 03）。 -->
+          <DropdownMenuItem @select="localViewMode = 'list'; localMenuOpen = false">
+            <LibIcon name="list-view" :size="16" /> 列表展示
+            <Check v-if="viewMode === 'list'" :size="14" class="ml-auto size-3.5! text-ink" />
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="localViewMode = 'grid'; localMenuOpen = false">
+            <LibIcon name="display-grid" :size="16" /> 宫格展示
+            <Check v-if="viewMode === 'grid'" :size="14" class="ml-auto size-3.5! text-ink" />
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem @select="emit('expandAll'); localMenuOpen = false">
             <LibIcon name="expand-groups" :size="16" /> 展开全部分组

@@ -233,11 +233,17 @@ describe('行尾菜单：条目与真实现', () => {
  * 这条盯的是「又有人顺手把选中态写成整行高亮」的回归，不是替代 Chrome 目验。
  */
 describe('问题 03：外壳菜单选中只用默认勾', () => {
-  it('缩放、移动、筛选、展示、保存位置都用原生单选项，不再手动加选中底', () => {
+  it('缩放、筛选、展示、保存位置都用普通菜单项 + 行尾勾，不再手动加选中底', () => {
     for (const source of [statusArea, dockArea, manageToolbar, assetToolbar, assetUpload]) {
-      expect(source).toContain('DropdownMenuRadioGroup')
-      expect(source).toContain('DropdownMenuRadioItem')
+      expect(source, '单选组已退场，改回普通菜单项').not.toContain('DropdownMenuRadioGroup')
+      expect(source).not.toContain('DropdownMenuRadioItem')
+      expect(source).toContain('DropdownMenuItem')
     }
+    expect(manageToolbar).toMatch(/DropdownMenuItem[\s\S]{0,200}v-if="k === activeKind"/)
+    expect(assetToolbar).toMatch(/DropdownMenuItem[\s\S]{0,200}v-if="k === s\.assetFilterKind"/)
+    expect(assetUpload).toMatch(/v-if="targetFolderId === ''"/)
+    expect(statusArea).toMatch(/isFixedZoom\(50\)/)
+    expect(dockArea).toMatch(/v-if="s\.canvasMode === 'move'"/)
     expect(statusArea).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
     expect(dockArea).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
     expect(manageToolbar).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)

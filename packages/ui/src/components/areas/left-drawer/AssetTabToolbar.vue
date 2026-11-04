@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import { Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon } from 'lucide-vue-next'
+import { Check, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useUi } from '../../../composables/ui'
 import { openAssetManager } from '../../../composables/assetUiBus'
@@ -27,8 +27,6 @@ const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
-const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
-const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const Input = useUiComponent('Input')
 
@@ -108,11 +106,11 @@ function pickUpload(): void {
             </svg></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" :side-offset="4">
-          <!-- 类型筛选是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
-          <DropdownMenuRadioGroup :model-value="s.assetFilterKind">
-            <DropdownMenuRadioItem v-for="k in assetKinds" :key="k" :value="k"
-              @select="emit('pickAssetKind', k)">{{ k }}</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+          <!-- 类型筛选是单选：当前项在行尾用勾表示，不叠整行主题色底（问题 03）。 -->
+          <DropdownMenuItem v-for="k in assetKinds" :key="k" @select="emit('pickAssetKind', k)">
+            {{ k }}
+            <Check v-if="k === s.assetFilterKind" :size="14" class="ml-auto size-3.5! text-ink" />
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <span class="flex-1"></span>

@@ -13,8 +13,6 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
-const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
-const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 const props = defineProps<{
@@ -290,15 +288,19 @@ function save(): void {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" :style="{ width: '250px' }">
-                <!-- 保存位置是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
-                <DropdownMenuRadioGroup :model-value="targetFolderId">
-                  <DropdownMenuRadioItem value="" @select="targetFolderId = ''">个人资产库</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    v-for="f in folderRows" :key="f.id" :value="f.id"
-                    :style="f.pad"
-                    @select="targetFolderId = f.id"
-                  >{{ f.name }}</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
+                <!-- 保存位置是单选：当前项在行尾用勾表示，不叠整行主题色底（问题 03）。 -->
+                <DropdownMenuItem @select="targetFolderId = ''">
+                  个人资产库
+                  <CheckIcon v-if="targetFolderId === ''" :size="14" class="ml-auto size-3.5! text-ink" />
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  v-for="f in folderRows" :key="f.id"
+                  :style="f.pad"
+                  @select="targetFolderId = f.id"
+                >
+                  {{ f.name }}
+                  <CheckIcon v-if="targetFolderId === f.id" :size="14" class="ml-auto size-3.5! text-ink" />
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

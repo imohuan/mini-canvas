@@ -35,8 +35,6 @@ const Button = useUiComponent("Button")
 const DropdownMenu = useUiComponent("DropdownMenu")
 const DropdownMenuContent = useUiComponent("DropdownMenuContent")
 const DropdownMenuItem = useUiComponent("DropdownMenuItem")
-const DropdownMenuRadioGroup = useUiComponent("DropdownMenuRadioGroup")
-const DropdownMenuRadioItem = useUiComponent("DropdownMenuRadioItem")
 const DropdownMenuTrigger = useUiComponent("DropdownMenuTrigger")
 const Tooltip = useUiComponent("Tooltip")
 const TooltipContent = useUiComponent("TooltipContent")
@@ -46,9 +44,9 @@ const TooltipTrigger = useUiComponent("TooltipTrigger")
 const ui = useUi();
 const s = ui.state;
 
-/** 单选组点选时的回写：真正切换工具仍由每个选项的 @select 完成。 */
-function pickCanvasMode(value: unknown): void {
-  if (value === "move" || value === "hand") ui.setCanvasMode(value);
+/** 工具切换：菜单项点选后写宿主设置，并收起菜单。 */
+function pickCanvasMode(value: "move" | "hand"): void {
+  ui.setCanvasMode(value);
 }
 
 /** 下发给插件条目的共享 props：默认按钮 + 常用函数（插件不必再抄一份样式） */

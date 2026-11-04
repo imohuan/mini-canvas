@@ -1,13 +1,11 @@
 <script setup lang="ts">
 // 弹窗工具行的按钮区：搜索 / 批量 / 筛选 / 新建，保持原有 DOM 与事件顺序。
-import { Search as SearchIcon, ListFilter as BatchIcon, Filter as FilterIcon, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon } from 'lucide-vue-next'
+import { Check, Search as SearchIcon, ListFilter as BatchIcon, Filter as FilterIcon, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
-const DropdownMenuRadioGroup = useUiComponent('DropdownMenuRadioGroup')
-const DropdownMenuRadioItem = useUiComponent('DropdownMenuRadioItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 
 defineProps<{
@@ -55,11 +53,11 @@ const emit = defineEmits<{
         <FilterIcon :size="15" />
       </button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" :side-offset="4">
-      <!-- 类型筛选是单选：当前项用组件自带行尾勾表示，不再叠整行主题色底（问题 03）。 -->
-      <DropdownMenuRadioGroup :model-value="activeKind">
-        <DropdownMenuRadioItem v-for="k in assetKinds" :key="k" :value="k"
-          @select="emit('pickKind', k)">{{ k }}</DropdownMenuRadioItem>
-      </DropdownMenuRadioGroup>
+      <!-- 类型筛选是单选：当前项在行尾用勾表示，不叠整行主题色底（问题 03）。 -->
+      <DropdownMenuItem v-for="k in assetKinds" :key="k" @select="emit('pickKind', k)">
+        {{ k }}
+        <Check v-if="k === activeKind" :size="14" class="ml-auto size-3.5! text-ink" />
+      </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
   <!-- 加号下拉：新建文件夹 / 上传资产（照左侧抽屉的加号；用户口径 2026-10-08） -->
