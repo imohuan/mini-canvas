@@ -110,6 +110,7 @@ export type { CanvasRenderContext } from './contracts/renderContext'
 // 只有 ctx / host / api / manager；需要 flow / renderNodes / visibleRect 的组件仍走 useCanvasRender()。
 export { CANVAS_CONTEXT_KEY, useCanvasContext, useCanvasContextOrRender } from './contracts/canvasContext'
 export type { CanvasContext } from './contracts/canvasContext'
+// 通用渲染底座（vue-render）：令牌与槽宿主的实现住在那里，这里保持旧导出可用。
 // 画布层叠带（z-index 唯一事实源）：所有层级数值从这里取，别处不再写 z-index 字面量
 export { LAYERS } from './contracts/layers'
 export type { LayerName } from './contracts/layers'
