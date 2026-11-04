@@ -138,9 +138,18 @@ describe('预览页的接线（静态检查）', () => {
 
   it('预览样式直接读 --radius，不依赖构建期写死的 rounded-* 工具类', () => {
     const css = readFileSync(path.join(srcRoot, 'assets', 'index.css'), 'utf-8')
-    expect(css).toMatch(/\[data-slot='button'\][\s\S]{0,400}border-radius:\s*var\(--radius/)
-    // 现在外面套了一层 min() 封顶，只要里面还是读 --radius 就算接上了
-    expect(css).toMatch(/\[data-slot='card'\][\s\S]{0,300}border-radius:[^;]{0,40}calc\(var\(--radius/)
+    expect(css).toMatch(/\[data-slot='button'\][\s\S]{0,400}border-radius:[^;]{0,40}var\(--radius/)
+    expect(css).toMatch(/\[data-slot='card'\][\s\S]{0,300}border-radius:[^;]{0,40}var\(--radius/)
+  })
+
+  it('按钮 / 输入框 / 下拉用同一个倍率（否则同 size 下圆角不一样）', () => {
+    const css = readFileSync(path.join(srcRoot, 'assets', 'index.css'), 'utf-8')
+    const block = css.slice(css.indexOf("[data-slot='button'][data-variant]"), css.indexOf("[data-slot='card'],"))
+    // 用户口径 2026-11-04：主按钮比其它按钮圆 —— 因为漏了 data-variant 就走了默认 2.6×
+    const multipliers = [...block.matchAll(/\*\s*([\d.]+)\)/g)].map((m) => m[1])
+    expect(multipliers.length).toBeGreaterThan(0)
+    expect(new Set(multipliers).size, '控件倍率必须一致：' + multipliers.join('/')).toBe(1)
+    expect(multipliers[0]).toBe('2.6')
   })
 
   it('圆角档位足够细，且标签里不再出现“默认”', async () => {

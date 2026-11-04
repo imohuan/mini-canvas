@@ -163,21 +163,18 @@
  *
  * 真实应用里这层由 `styles/host.css` 负责（它按 `--mct-radius` 覆盖 data-slot）；
  * 预览页没有宿主，这里用同一套写法接 `--radius`，于是两边的结论一致。
- * 倍数沿用原工具类：按钮/输入 1×、浮层 2.2×、卡片/弹窗 2.6×。
+ *
+ * **倍数必须保留组件原本的档位**（用户口径 2026-11-04 第二次反馈）：
+ * 组件自带的是 rounded-3xl / rounded-4xl，即 2.2× / 2.6×。之前这里一律写成 1×，
+ * 选「大 8px」时按钮只剩 8px，看起来像被缩水；而漏网的主按钮仍是原来的 2.6×（20.8px），
+ * 于是同一个 size 下两种圆角。现在所有控件统一按 2.6×，和主按钮一致。
  */
 [data-slot='button'][data-variant],
 [data-slot='input'],
 [data-slot='select-trigger'],
+[data-slot='textarea'],
 [data-slot='input-group'] {
-  border-radius: var(--radius, 0.875rem);
-}
-
-/*
- * 多行输入框封顶 20px：单行控件选「全圆」是胶囊，很好认；
- * 但文本域是高盒子，拉成胶囊反而畸形。
- */
-[data-slot='textarea'] {
-  border-radius: min(var(--radius, 0.875rem), 20px);
+  border-radius: calc(var(--radius, 0.875rem) * 2.6);
 }
 
 [data-slot='popover-content'],
@@ -188,8 +185,8 @@
 [data-slot='context-menu-sub-content'],
 [data-slot='menubar-content'],
 [data-slot='combobox-content'] {
-  /* 面板封顶 20px：圆角选「全圆」时控件是胶囊，面板不该跟着变成药丸 */
-  border-radius: min(calc(var(--radius, 0.875rem) * 2.2), 20px);
+  /* 面板封顶 24px：圆角选「全圆」时控件是胶囊，面板不该跟着变成药丸 */
+  border-radius: min(calc(var(--radius, 0.875rem) * 2.6), 24px);
 }
 
 [data-slot='card'],
@@ -205,7 +202,7 @@
 [data-slot='select-item'],
 [data-slot='context-menu-item'],
 [data-slot='combobox-item'] {
-  border-radius: min(var(--radius, 0.875rem), 8px);
+  border-radius: min(calc(var(--radius, 0.875rem) * 1.8), 12px);
 }
 
 /*
