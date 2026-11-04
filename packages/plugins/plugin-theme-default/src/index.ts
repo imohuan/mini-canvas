@@ -34,6 +34,7 @@ import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import MovingHandle from "./components/node/MovingHandle.vue";
 import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue";
+import SettingsShortcutPage from "./components/settings/SettingsShortcutPage.vue";
 import { registerDefaultSettingsMenu } from "./components/settings/defaultMenu";
 import { registerEventName } from "@mini-canvas/canvas-base";
 import {
@@ -53,6 +54,7 @@ import { SHADCN_COMPONENTS, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadc
 import { SettingsRow, SettingsSection } from "@mini-canvas/ui-kit-shadcn";
 import { UiToaster } from "@mini-canvas/ui-kit-shadcn";
 import { setStaticUiCatalog } from "@mini-canvas/canvas-render";
+import { setSettingsUiCatalog } from "./composables/useUiComponentOutside";
 import { createNotifyService } from "./notifyService";
 import { SETTINGS_NAV_ICON_NAMES } from "./components/settings/navIcon";
 import {
@@ -141,6 +143,9 @@ export function apply(ctx: Context, config?: ThemeConfig) {
       config?.themePopupSelectedStyle ?? DEFAULT_THEME_APPEARANCE.themePopupSelectedStyle,
   });
   applyThemeBridge(appearance);
+  // 设置面板的字段控件按 ui 目录取：这里把「同一张表」交给面板，宿主就绪后赢家变了它跟着换。
+  // 同一 kind 各处拿到的是同一张表（内核 Context.registryOf），所以插件 ctx 与宿主 ctx 取到的是同一份。
+  setSettingsUiCatalog(ctx as unknown as { registryOf?: (kind: string) => unknown });
   // 设置面板改了就重写：订阅整表 onChange，只认外观这几个 key，别的变化不做事
   const appearanceOff = ctx
     .tryGet<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
@@ -217,7 +222,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ctx.provide("notify", createNotifyService());
   ui.add("Toaster", UiToaster, { id: "default" });
   // 工具栏按钮 / 下拉按导出名登记（Button / DropdownMenu / …），调用点从 ui 目录取，
-  // 再配全局 .mck-toolbar-btn 样式。
+  // 外观直接用组件自己的 variant / size。
   // 统一空状态：节点插件按名取用（图片/视频/音频/3D 共用同一套图标/文案/动作布局）。
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" });
   // 插槽调试小点的悬停说明面板：外壳（底栏/状态条/抽屉/设置导航）按名取
@@ -280,6 +285,14 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ctx.theme.register("settingsPanel", PluginSettingsContent, {
     id: "default",
     order: 0,
+  });
+  // 设置页「个人 → 快捷键」的配置页：默认菜单只登记 id，页面由本包提供。
+  // （成品应用曾由 packages/ui 的换皮插件补这一页；2026-11-04 面板并入本包，注册也一起搬过来。）
+  ctx.slots.register("settings.nav", {
+    id: "nav/personal/shortcuts",
+    order: 20,
+    component: SettingsShortcutPage,
+    meta: { title: "快捷键", category: "个人" },
   });
 
 }

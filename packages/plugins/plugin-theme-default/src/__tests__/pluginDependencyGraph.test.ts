@@ -11,7 +11,8 @@
  * 也正是环的判据（theme-default → 节点插件 那条腿当时只存在于 devDeps + 一条 import type）。
  *
  * 断言三件事：
- * 1. theme-default 不声明任何 @mini-canvas/plugin-* 依赖；
+ * 1. theme-default 不声明任何 @mini-canvas/plugin-* 依赖，唯一例外是**不是节点插件**的
+ *    plugin-shortcut-manager（设置页的快捷键配置页整块复用它，2026-11-04 随设置面板并进来）；
  * 2. theme-default 的源码（含 demo-web 预览页）里没有指向其它插件包的 import 边
  *    （防"只删 package.json 却留着 import"——这条腿历史上正是落在 demo-web/App.vue 上）；
  * 3. packages/plugins/* 的 plugin-* 依赖图无环。
@@ -37,6 +38,14 @@ function readPkg(dir: string): Pkg {
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as Pkg
 }
 
+/**
+ * 允许 theme-default 依赖的插件包：快捷键管理器。
+ *
+ * 为什么放行它而不是放宽整条规则：环的成因是"皮肤 ↔ 节点插件"互指；快捷键管理器不依赖
+ * 主题包，也不带节点类型，接进来只是复用它的设置页组件（重映射 API 也只有它一份）。
+ */
+const ALLOWED_PLUGIN_DEPS = ['@mini-canvas/plugin-shortcut-manager']
+
 function declaredPluginDeps(pkg: Pkg): string[] {
   const out: string[] = []
   for (const section of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
@@ -60,10 +69,11 @@ function collectSources(dir: string): string[] {
 }
 
 describe('步骤 7 · 插件包无环', () => {
-  it('theme-default 不声明任何 @mini-canvas/plugin-* 依赖（断掉"皮肤依赖业务节点"这条腿）', () => {
+  it('theme-default 只允许声明插件依赖里的快捷键管理器（断掉"皮肤依赖业务节点"这条腿）', () => {
     const pkg = readPkg(themeDefaultDir)
     expect(pkg.name).toBe('@mini-canvas/plugin-theme-default')
-    expect(declaredPluginDeps(pkg)).toEqual([])
+    const deps = declaredPluginDeps(pkg).filter((name) => !ALLOWED_PLUGIN_DEPS.includes(name))
+    expect(deps).toEqual([])
   })
 
   it('theme-default 源码（含 demo-web 预览页）里没有指向其它插件包的 import 边', () => {
@@ -76,9 +86,9 @@ describe('步骤 7 · 插件包无环', () => {
         const text = readFileSync(file, 'utf8')
         for (const line of text.split(/\r?\n/)) {
           // 只认真正的 import/export from 语句（注释里提到插件名不算）
-          if (/^\s*(import|export)\b/.test(line) && line.includes('@mini-canvas/plugin-')) {
-            offenders.push(file.replace(themeDefaultDir, '') + ' :: ' + line.trim())
-          }
+          if (!/^\s*(import|export)\b/.test(line) || !line.includes('@mini-canvas/plugin-')) continue
+          if (ALLOWED_PLUGIN_DEPS.some((name) => line.includes(name))) continue
+          offenders.push(file.replace(themeDefaultDir, '') + ' :: ' + line.trim())
         }
       }
     }

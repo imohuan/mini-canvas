@@ -80,9 +80,9 @@ defineProps<{
 | `overlay` | `plugin-align-guide`（对齐线）、`plugin-multi-select`（框选层 + 选择框）、`plugin-group`（分组控制栏）、`plugin-shortcut-manager`（快捷键面板）、`plugin-style-library`（样式库）、`plugin-cursor-effect`（光标特效）、`plugin-bottom-bar`（节点底栏浮层 + 预览浮层 + 任务浮层） | **`CanvasSurface.vue`** 里固定一行 `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` |
 | `mini-map` | `plugin-mini-map` | 宿主自选：`packages/ui/src/App.vue` 里 `<SlotHost slot="mini-map" />` |
 | `agent-conversation` | `plugin-agent`（消息流 + 输入区） | `packages/ui/src/components/areas/AgentPanel.vue` |
-| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload`（兼容入口） | 设置面板皮：默认皮 `plugin-theme-default` 的 `PluginSettingsContent.vue` 与成品皮 `packages/ui/src/components/settings/AppSettingsPanel.vue` 都消费它。新菜单优先 `ctx.settingsMenu`；这里只补 page / component / 图标，不再决定层级 |
+| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload`（兼容入口） | 设置面板：`plugin-theme-default` 的 `PluginSettingsContent.vue`（`settingsPanel` 唯一赢家，2026-11-04 起成品应用那套面板已并入本包）。新菜单优先 `ctx.settingsMenu`；这里只补 page / component / 图标，不再决定层级 |
 | `settings.tab` | 当前生产代码里没有插件注册它（保留给「自定义二级页签」） | 默认设置皮按「一级名匹配 id 首段」归并渲染 |
-| `settingsGroup/<分组名>` | 同上那批插件（每条整页正文一条，如 `settingsGroup/集成/Agent`、`settingsGroup/光标`） | 默认设置皮 / `AppSettingsPanel.vue` 按菜单 section 收拢的 group 读 `occupants('settingsGroup/' + groupKey)` |
+| `settingsGroup/<分组名>` | 同上那批插件（每条整页正文一条，如 `settingsGroup/集成/Agent`、`settingsGroup/光标`） | 设置面板按菜单 section 收拢的 group 读 `occupants('settingsGroup/' + groupKey)` |
 
 想让插件往某个槽放东西，插件那侧写：
 
@@ -226,10 +226,8 @@ const Field = injectSettingsFieldRenderer()   // ① 不在设置面板子树内
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/ui/src/App.vue` | `<SettingsHost v-if="s.settingsOpen" />` 与 `<SlotHost slot="mini-map" />` 都放在 `#ui` 插槽里 |
-| `packages/ui/src/components/settings/AppSettingsPanel.vue` | 成品应用自己的设置皮（`order -1` 顶替默认皮）：消费 `settingsGroup/<key>`，并消费 `settings.nav` / `settings.tab` |
-| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 默认设置皮：读 `settings.nav` / `settings.tab` / `settingsGroup/<key>` 三种槽 |
+| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 设置面板（`settingsPanel` 唯一赢家）：读 `settings.nav` / `settings.tab` / `settingsGroup/<key>` 三种槽；字段控件按 ui 目录取 |
 | `packages/plugins/plugin-theme-default/src/index.ts` | `ctx.theme.register("settingsPanel", PluginSettingsContent, …)` 注册默认赢家 |
-| `packages/ui/src/settingsPanelPlugin.ts` | 换皮插件：`ctx.theme.register('settingsPanel', AppSettingsPanel, { id: name, order: -1 })` |
 | `packages/canvas-render/src/host/CanvasSurface.vue` | overlay 槽的唯一渲染点 |
 | `packages/canvas-render/src/components/__tests__/settingsSource.test.ts` | `settingsSourceFrom` 的行为测试 |
 

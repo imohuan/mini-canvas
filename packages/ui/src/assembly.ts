@@ -41,7 +41,6 @@ import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
 // import { canvasExportPlugin } from '@mini-canvas/plugin-canvas-export'
 // import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
 // import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
-import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 // 热重载：设置面板「热重载」分类（开发工具：登记链接，产物变了自动重装插件）
 import { hotReloadPlugin } from '@mini-canvas/plugin-hot-reload'
 // 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
@@ -101,7 +100,6 @@ export const APP_PLUGINS = [
   nodeVideoPlugin,
   nodeAudioPlugin,
   agentPlugin,
-  uiSettingsPanelPlugin,
   hotReloadPlugin,
   uiAssetUploadPlugin,
 ]

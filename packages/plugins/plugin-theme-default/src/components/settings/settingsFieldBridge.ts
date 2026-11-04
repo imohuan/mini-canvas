@@ -1,7 +1,7 @@
 /**
  * 设置字段下发的桥组件。
  *
- * 背景：设置面板把「标准字段控件」通过 provide 下发给插件自绘的 settingsGroup 页。
+ * 背景：默认主题设置面板把「标准字段控件」通过 provide 下发给插件自绘的 settingsGroup 页。
  * provide 的值不会自动解包 —— 直接塞 ComputedRef 时，下游 `<component :is>` 拿到的是
  * 一个 ref 对象，页面不报错但什么都不画。
  *

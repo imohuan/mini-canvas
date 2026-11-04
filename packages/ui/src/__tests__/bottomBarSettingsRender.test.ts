@@ -88,7 +88,7 @@ describe('底栏设置页：Config 真的进了设置、界面真的画得出来
 
   it('自绘页是 append 模式（不顶掉同组的 schema 字段）', () => {
     // ⚠️ occupants 在**插件作用域**的 ctx.slots 上；ctx.get('slots') 拿到的是内核 SlotRegistry
-    //（只有 list/add/remove，没有 occupants）。设置面板消费的正是前者（AppSettingsPanel 的 ctx.slots）。
+    //（只有 list/add/remove，没有 occupants）。设置面板消费的正是前者（ctx.slots）。
     const slots = ctx.slots as unknown as { occupants(slot: string): Array<{ id: string; meta?: { mode?: string } }> }
     const occ = slots.occupants('settingsGroup/常规/底栏')
     expect(occ.map((o) => o.id)).toContain('bottom-bar/prompt-actions')

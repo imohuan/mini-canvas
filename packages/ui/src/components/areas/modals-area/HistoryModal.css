@@ -1,11 +1,13 @@
 /*
- * 缩放滑块（组件库 Slider）：只按高度等比缩小。
+ * 缩放滑块（组件库 Slider）：整体等比缩小。
  *
- * 组件自己按 16px 的 thumb 设计（thumb 是 h-4 w-6 的胶囊），放进弹窗标题栏偏大
- * （2026-11-04 用户口径：太大）。这里不改颜色、不改形状，只把整条 Slider 的高度降下来，
- * 轨道与 thumb 由组件内部的相对尺寸跟着收——等于整体等比缩放。
+ * 组件内部是固定像素（轨道 8px、thumb 24×16 的胶囊），只改外层高度不会让它们跟着变，
+ * 所以这里按 0.7 的比例把两者一起缩：轨道 8→5px、thumb 24×16→17×11px。
+ * 颜色、形状、圆角全部沿用组件默认值，不动。
  */
-.hist-zoom-slider { height: 16px; }
+.hist-zoom-slider { height: 12px; }
+.hist-zoom-slider :deep([data-slot='slider-track']) { height: 5px !important; }
+.hist-zoom-slider :deep([data-slot='slider-thumb']) { width: 17px !important; height: 11px !important; }
 
 /* 显示异常开关（checkbox 自绘小方块） */
 .hist-error-toggle { appearance: none; width: 14px; height: 14px; margin: 0; border: 1.5px solid var(--ui-ink-mute, #888); border-radius: 4px; background: transparent; cursor: pointer; display: grid; place-items: center; }

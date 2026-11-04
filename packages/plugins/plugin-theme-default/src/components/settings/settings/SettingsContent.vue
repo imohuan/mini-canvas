@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { Component, ComponentPublicInstance } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import ScrollPane from './ScrollPane.vue'
 import ShadcnSettingsSection from '../ShadcnSettingsSection.vue'
 import type { ContentBlock, NavEntry, Section } from './settingsMenuModel'
+import ScrollPane from './ScrollPane.vue'
 import TierTierPreview from '../TierTierPreview.vue'
 import { tierSectionSpec } from '../tierSection'
+
+/** 主题工作台是两栏工作区，需要比普通设置页更宽的正文（仍是设置外壳内的同一页）。 */
+const THEME_STUDIO_NAV = '主题工作台'
 
 const props = defineProps<{
   settings: SettingsPanelSource
@@ -17,16 +20,16 @@ const props = defineProps<{
   activeSectionIndex: number
   setScrollEl: (el: Element | ComponentPublicInstance | null) => void
   sectionBlocks: (section: Section) => ContentBlock[]
-  isWideSection: (section: Section) => boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'select-section', key: string): void
+  (e: 'select-tab', key: string): void
 }>()
 
-/** 二级页签组件统一用 select 事件回传自己的 key。 */
+/** 点击页签：只切内容；同一页里的长内容回到顶部 */
 function selectTab(key: string): void {
-  emit('select-section', key)
+  emit('select-tab', key)
 }
 </script>
 
@@ -40,8 +43,13 @@ function selectTab(key: string): void {
       </p>
     </header>
 
-    <!-- 二级页签：保留代码，默认关掉（showSectionTabs） -->
-    <div v-if="showTabs" class="psd-tabbar" role="tablist" :aria-label="(activeEntry?.title || '设置') + '分类'">
+    <!-- 顶部页签条：保留代码，默认关掉（showSectionTabs） -->
+    <div
+      v-if="showTabs"
+      class="psd-tabbar"
+      role="tablist"
+      :aria-label="(activeEntry?.title || '设置') + '分类'"
+    >
       <template v-for="section in sections" :key="section.key">
         <component
           :is="section.component"
@@ -59,7 +67,7 @@ function selectTab(key: string): void {
           :class="{ 'is-active': activeSection === section.key }"
           :aria-selected="activeSection === section.key"
           :data-tab="section.key"
-          @click="emit('select-section', section.key)"
+          @click="selectTab(section.key)"
         >
           {{ section.label }}
         </button>
@@ -73,11 +81,15 @@ function selectTab(key: string): void {
       </div>
 
       <!-- 插件自绘整页：只换外层标题，内部内容仍归插件（业务逻辑不动） -->
-      <div v-else-if="activeEntry?.page" class="psd-page">
+      <div
+        v-else-if="activeEntry?.page"
+        class="psd-page"
+        :class="{ 'is-wide': activeEntry.key === THEME_STUDIO_NAV || activeEntry.leaves.includes(THEME_STUDIO_NAV) }"
+      >
         <component :is="activeEntry.page" :group="activeEntry.key" :settings="props.settings" />
       </div>
 
-      <div v-else-if="!sections.length" class="psd-empty">暂无分组</div>
+      <div v-else-if="!sections.length" class="psd-empty">暂无设置项</div>
 
       <!-- 卡片模式：所有二级小节依次排开，每节一张卡片 -->
       <template v-else-if="!showTabs">
@@ -87,7 +99,11 @@ function selectTab(key: string): void {
           class="psd-section"
           :data-sec="section.key"
         >
-          <div v-if="section.page" class="psd-section-page" :class="{ 'is-wide': isWideSection(section) }">
+          <div
+            v-if="section.page"
+            class="psd-section-page"
+            :class="{ 'is-wide': section.groups.includes(THEME_STUDIO_NAV) }"
+          >
             <component :is="section.page" :group="section.groups[0]" :settings="props.settings" />
           </div>
           <ShadcnSettingsSection v-else :title="section.label">
@@ -120,7 +136,7 @@ function selectTab(key: string): void {
         </section>
       </template>
 
-      <!-- 页签模式：只显示当前段 -->
+      <!-- 页签模式：只显示当前段，保留原有切换能力 -->
       <template v-else>
         <section
           v-for="(section, index) in sections"
@@ -129,7 +145,11 @@ function selectTab(key: string): void {
           class="psd-section"
           :data-sec="section.key"
         >
-          <div v-if="section.page" class="psd-section-page" :class="{ 'is-wide': isWideSection(section) }">
+          <div
+            v-if="section.page"
+            class="psd-section-page"
+            :class="{ 'is-wide': section.groups.includes(THEME_STUDIO_NAV) }"
+          >
             <component :is="section.page" :group="section.groups[0]" :settings="props.settings" />
           </div>
           <ShadcnSettingsSection v-else :title="section.label">
@@ -289,17 +309,31 @@ function selectTab(key: string): void {
   margin-right: -22px;
 }
 
+/* 自绘整页（如主题工作台）用两栏工作区：太窄会把预览挤成一条，正文也放不下四列颜色。
+   贴齐正文左缘、不压掉 22px 阅读留白。 */
+.psd-page.is-wide {
+  max-width: none;
+  margin-inline: 0;
+  margin-right: -22px;
+}
+
 .psd-empty {
   padding: 36px 0;
   text-align: center;
-  color: var(--ui-ink-mute, #8c95a3);
   font-size: 12px;
+  color: var(--ui-ink-mute, #8c95a3);
 }
 
 .psd-empty-line {
   margin: 0;
   padding: 12px 0;
-  color: var(--ui-ink-mute, #8c95a3);
   font-size: 12px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .psd-tab-item {
+    transition: none;
+  }
 }
 </style>

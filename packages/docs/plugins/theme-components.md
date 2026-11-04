@@ -150,9 +150,8 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
    在画布外调用会抛错 —— 树外请用 `uiComponentOutside`。
 3. **"默认主题装了才有"**：这些目录名是 theme-default 登记的。只装业务插件、不装主题插件，目录就是空的。
    成品应用一定装了它（`packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 第一条）。
-4. **成品应用只顶替 `settingsPanel`**：`packages/ui` 用 `order: -1` 注册了
-   `settingsPanel`（`AppSettingsPanel`），所以按名取到的是成品应用那一份。
-   **这不是冲突，是设计**：目录的用途正是"让顶层替换掉底层实现"。
+4. **设置面板只有一份**：`settingsPanel` 由本主题包注册（`PluginSettingsContent`），
+   成品应用那套界面已并入本包（2026-11-04），`packages/ui` 不再注册换皮插件。
 5. **`edgeDefaultType` 存的是字符串不是组件**：它是"默认边类型"这个取值
    （`ctx.theme.register('edgeDefaultType', 'custom')`），不是渲染件。
 

@@ -69,7 +69,9 @@ describe('@mini-canvas/ui 出口契约', () => {
     //   它是**开发演示**，不该混进真实产品；改由「设置 → 插件」从清单安装。
     // -1（2026-11-02）：ui-dropdown 注册层退场 —— 下拉统一直接用 shadcn 组件，
     // 不再需要「成品应用顶替主题默认件」的注册插件。
-    expect(APP_PLUGINS).toHaveLength(21)
+    // -1（2026-11-04）：ui-settings-panel 退场 —— 成品应用那套设置面板已并入默认主题插件，
+    // 面板只剩一份，不再需要「order -1 顶替默认皮」的换皮插件。
+    expect(APP_PLUGINS).toHaveLength(20)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查

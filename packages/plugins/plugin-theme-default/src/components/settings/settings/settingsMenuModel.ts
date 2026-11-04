@@ -1,5 +1,5 @@
 /**
- * PluginSettingsContent 的菜单数据模型。
+ * 默认主题设置面板（SettingsPanel）的菜单数据模型。
  *
  * 这里只放纯数据推导：分组 / 一级菜单 / 二级段 / 导航项。
  * 注册场、插件装卸、滚动锁等有状态逻辑在 useSettingsNavigation.ts。
@@ -10,12 +10,12 @@ import { asSettingsIcon, metaIcon, metaPage, metaPageGroup, metaText } from '../
 
 export const SEP = '/'
 
-/** 一级名：分组名第一个 / 段（扁平分组取它自己） */
+/** 一级名：第一个 / 分段 */
 export function navOf(key: string): string {
   return key.split(SEP)[0]
 }
 
-/** 二级展示名：取 / 后的部分 */
+/** 二级展示名：/ 之后的段 */
 export function leafLabelOf(key: string): string {
   const segs = key.split(SEP)
   return segs.slice(1).join(SEP) || segs[0]
@@ -25,25 +25,18 @@ export function leafLabelOf(key: string): string {
 export type SlotOcc = { id: string; order: number; component: any; meta?: any }
 
 export interface NavEntry {
-  /** 一级名，也是导航项的稳定 key */
   key: string
-  /** section = 由分组推导；nav = 插件注册的组件 */
   kind: 'section' | 'nav'
   /** 该一级下的二级段（菜单注册顺序优先；旧分组按原顺序兜底） */
   sections: MenuSection[]
-  /** 该一级下的完整分组 key */
   leaves: string[]
-  /** 插件导航组件（兼容旧插件；外观不再渲染它） */
   component?: Component
-  /** 插件自绘整页（meta.page，优先于 settingsGroup） */
+  /** 插件自绘整页（优先于 settingsGroup） */
   page?: Component
-  /** 显示名 */
   title: string
-  /** 第 0 级分类 */
   category: string
   /** 第 0 级分类在菜单里的最终位置（缺省按内置顺序） */
   categoryPosition?: number
-  /** 图标 */
   icon?: unknown
   /** 非配置动作 id（如「快捷键」）；有值时点击执行动作，不切内容页 */
   action?: string
@@ -56,7 +49,7 @@ export interface MenuSection {
   key: string
   label: string
   groups: string[]
-  /** 插件自绘的整页（旧 settings.nav 的 meta.page，按 pageGroup 归到这一节） */
+  /** 插件自绘整页（旧 settings.nav 的 meta.page，按 pageGroup 归到这一节） */
   page?: Component
 }
 
@@ -64,7 +57,7 @@ export interface Section {
   key: string
   label: string
   kind: 'leaf' | 'tab'
-  /** 这一段对应一个还是多个 Config.group */
+  /** 这一段收拢的 Config.group（合并段可能有多个） */
   groups: string[]
   /** 插件自绘整页（pageGroup 归到这一节时使用） */
   page?: Component
@@ -96,29 +89,26 @@ export function buildSectionMap(groups: readonly string[]): Map<string, string[]
 
 export interface BuildNavEntriesInput {
   navList: readonly SlotOcc[]
-  groups: readonly string[]
+  sectionMap: ReadonlyMap<string, string[]>
   groupSet: ReadonlySet<string>
   menuView: SettingsMenuView
   categoryFor(nav: string, meta?: unknown): string
   iconOf(name: string): unknown
 }
 
-/**
- * 合并「0/1/2 级菜单」与旧 settings.nav：
- * - 菜单决定标题 / 分类 / 顺序；旧插槽只补 page、component、icon。
- * - 只有真有字段 / 内容 / 整页的菜单才出现：不展示空壳。
- * - 没注册菜单的旧入口按 groups 继续兜底，配置不会消失。
- */
+/** 分组推导的一级项 + 插件导航项（命中默认项就顶替外观，否则追加） */
 export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
-  const { navList, groups, groupSet, menuView, categoryFor, iconOf } = input
-  const view = menuView
-  const menuEntries: NavEntry[] = []
+  const { navList, sectionMap, groupSet, menuView, categoryFor, iconOf } = input
+  const out: NavEntry[] = []
   const used = new Set<string>()
   const sorted = [...navList].sort((a, b) => a.order - b.order)
+  /** 哪些 key 来自菜单树：它们的标题 / 分类由菜单决定，旧槽只补 page 与 component */
+  const menuKeys = new Set(menuView.navs.map((nav) => nav.id))
   /** 分类名 → 菜单位置：旧入口也按所在分类的最终位置排，不因没有菜单项而掉到最后 */
-  const categoryPositions = new Map(view.categories.map((c) => [c.title, c.position]))
+  const categoryPositions = new Map(menuView.categories.map((c) => [c.title, c.position]))
 
-  for (const nav of view.navs) {
+  // 新菜单：order / before / after 已由设置菜单注册场排好
+  for (const nav of menuView.navs) {
     const occ =
       sorted.find((o) => o.id === nav.id) ??
       sorted.find((o) => !used.has(o.id) && metaText(o.meta, 'title') === nav.title)
@@ -133,8 +123,7 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
         groups: hit,
       })
     }
-    // 旧 settings.nav 用 pageGroup 声明“我这个整页属于哪个配置分组”：
-    // 归到对应二级节，不再额外长出一个一级入口（页仍由 meta.page 提供）。
+    // 旧 settings.nav 的 pageGroup：整页归到对应二级节，不再额外长出一级入口
     for (const item of sorted) {
       if (used.has(item.id)) continue
       const group = metaPageGroup(item.meta)
@@ -147,14 +136,14 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
     }
     const leaves = navSections.flatMap((section) => section.groups)
     const page = (nav.page ?? metaPage(occ?.meta)) as Component | undefined
-    // 动作项（如「快捷键」）没有配置分组：保留它，点击执行动作而不是点开空页
+    // 动作项（如「快捷键」）本来就没有配置分组：不能按空页过滤掉，否则点了没反应
     const action = typeof nav.action === 'string' ? nav.action : ''
     // settings.nav 注册的配置页（navPage）即使没有 Config 分组也要保留：
     // 快捷键就是这样一页。旧式自绘整页靠 meta.page 识别，不能把带组件的旧入口也当成页。
     const navPage = !metaPage(occ?.meta) ? (occ?.component as Component | undefined) : undefined
     if (!leaves.length && !page && !navPage && !action) continue
-    const category = view.categories.find((c) => c.id === nav.category)
-    menuEntries.push({
+    const category = menuView.categories.find((c) => c.id === nav.category)
+    out.push({
       key: nav.id,
       kind: page || occ ? 'nav' : 'section',
       sections: navSections,
@@ -172,30 +161,25 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
     })
   }
 
-  // 旧分组兜底：没有注册成菜单的 group 仍按第一个 / 分段聚成一级
+  // 旧分组兜底：没有菜单注册的配置仍按第一个 / 分段聚合，绝不隐藏
   const covered = new Set(
-    menuEntries.flatMap((e) => e.sections.flatMap((section) => section.groups)),
+    out.flatMap((entry) => entry.sections.flatMap((section) => section.groups)),
   )
-  const legacy = new Map<string, string[]>()
-  for (const group of groups) {
-    if (covered.has(group)) continue
-    const nav = navOf(group)
-    if (!legacy.has(nav)) legacy.set(nav, [])
-    legacy.get(nav)!.push(group)
-  }
-  for (const [nav, leaves] of legacy) {
+  for (const [nav, leaves] of sectionMap) {
+    const uncovered = leaves.filter((g) => !covered.has(g))
+    if (!uncovered.length) continue
     const occ = sorted.find((o) => o.id === nav || metaText(o.meta, 'title') === nav)
     if (occ) used.add(occ.id)
     const category = categoryFor(nav, occ?.meta)
-    menuEntries.push({
+    out.push({
       key: nav,
       kind: 'section',
-      sections: leaves.map((group) => ({
+      sections: uncovered.map((group) => ({
         key: group,
         label: leafLabelOf(group),
         groups: [group],
       })),
-      leaves,
+      leaves: uncovered,
       component: occ?.component as Component | undefined,
       navPage: occ?.component as Component | undefined,
       page: metaPage(occ?.meta) as Component | undefined,
@@ -206,23 +190,40 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
     })
   }
 
-  // 旧 settings.nav 里没被任何菜单 / 分组命中的，继续追加
+  const byKey = new Map(out.map((entry) => [entry.key, entry]))
+  const byTitle = new Map(out.map((entry) => [entry.title, entry]))
+  const extras: NavEntry[] = []
   for (const occ of sorted) {
     if (used.has(occ.id)) continue
     const pageGroup = metaPageGroup(occ.meta)
     if (pageGroup && covered.has(pageGroup)) {
-      // 整页已挂到菜单的二级节上：页本身仍然可见，但不再变成第二个一级入口
-      const host = menuEntries.find((e) =>
-        e.sections.some((section) => section.groups.includes(pageGroup) && section.page),
+      const host = out.find((entry) =>
+        entry.sections.some((section) => section.groups.includes(pageGroup) && section.page),
       )
       if (host) {
         used.add(occ.id)
         continue
       }
     }
-    const title = metaText(occ.meta, 'title') || leafLabelOf(occ.id)
-    const category = categoryFor(title, occ.meta)
-    menuEntries.push({
+    const title = metaText(occ.meta, 'title')
+    const hit = byKey.get(occ.id) ?? (title ? byTitle.get(title) : undefined)
+    if (hit) {
+      hit.kind = 'nav'
+      hit.component = occ.component as Component
+      hit.page = metaPage(occ.meta) as Component | undefined
+      hit.icon = metaIcon(occ.meta)
+      // 旧入口命中旧分组项时，导航项 meta 里的分类优先；菜单项的分类仍由菜单决定
+      if (menuKeys.has(hit.key)) continue
+      const metaCategory = metaText(occ.meta, 'category')
+      if (metaCategory) {
+        hit.category = metaCategory
+        const position = categoryPositions.get(metaCategory)
+        if (position !== undefined) hit.categoryPosition = position
+      }
+      continue
+    }
+    const category = categoryFor(title || leafLabelOf(occ.id), occ.meta)
+    extras.push({
       key: occ.id,
       kind: 'nav',
       sections: [],
@@ -230,14 +231,15 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
       component: occ.component as Component,
       navPage: occ.component as Component,
       page: metaPage(occ.meta) as Component | undefined,
-      title,
+      title: title || leafLabelOf(occ.id),
       category,
       ...(categoryPositions.has(category) ? { categoryPosition: categoryPositions.get(category) } : {}),
       icon: metaIcon(occ.meta),
     })
   }
+  out.push(...extras)
   // 菜单树已经按 order + before / after 排好；这里保持该顺序，不再按原始 order 重排。
-  return menuEntries
+  return out
 }
 
 export interface BuildSectionsInput {
@@ -247,7 +249,7 @@ export interface BuildSectionsInput {
   tabList: readonly SlotOcc[]
 }
 
-/** 当前一级下的段（菜单 section 优先；未注册的旧分组按原顺序兜底） */
+/** 当前一级下的段：菜单 section 优先；未注册的旧分组按原顺序兜底 */
 export function buildSections(input: BuildSectionsInput): Section[] {
   const { activeNav: nav, activeEntry: entry, sectionMap, tabList } = input
   const leaves = entry?.leaves ?? sectionMap.get(nav) ?? []
@@ -263,7 +265,6 @@ export function buildSections(input: BuildSectionsInput): Section[] {
   // 菜单注册的 section 顺序（含合并组）；旧分组没被收拢时再按 sectionMap 原顺序补
   const merged = new Set((entry?.sections ?? []).flatMap((section) => section.groups))
   const menuSections: Section[] = (entry?.sections ?? []).map((section) => {
-    // 单组且该组注册了 settings.tab：沿用旧页签组件
     const occ = section.groups.length === 1 ? byLeaf.get(section.groups[0]!) : undefined
     return {
       key: section.key,
