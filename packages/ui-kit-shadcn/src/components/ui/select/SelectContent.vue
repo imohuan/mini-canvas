@@ -62,8 +62,14 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       "
     >
       <SelectScrollUpButton />
+      <!--
+        这层包裹必须是 **flex 列**：SelectViewport 自带「flex:1 + overflow:hidden auto」，
+        库里的 `h-(--reka-select-trigger-height)`（触发器高度，约 32px）本来会被 flex-basis:0
+        压住；父级一变成普通块，flex:1 失效，高度就直接落成 32px —— 下拉只剩一行
+        （用户 2026-11-04 报「选项很多却只渲染一个 item 的高度」）。
+      -->
       <div
-        class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        class="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
         data-slot="select-viewport-scroll"
       >
         <SelectViewport
