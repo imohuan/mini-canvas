@@ -34,6 +34,8 @@ const Button = useUiComponent("Button")
 const DropdownMenu = useUiComponent("DropdownMenu")
 const DropdownMenuContent = useUiComponent("DropdownMenuContent")
 const DropdownMenuItem = useUiComponent("DropdownMenuItem")
+const DropdownMenuRadioGroup = useUiComponent("DropdownMenuRadioGroup")
+const DropdownMenuRadioItem = useUiComponent("DropdownMenuRadioItem")
 const DropdownMenuTrigger = useUiComponent("DropdownMenuTrigger")
 const Tooltip = useUiComponent("Tooltip")
 const TooltipContent = useUiComponent("TooltipContent")
@@ -42,6 +44,11 @@ const TooltipTrigger = useUiComponent("TooltipTrigger")
 
 const ui = useUi();
 const s = ui.state;
+
+/** 单选组点选时的回写：真正切换工具仍由每个选项的 @select 完成。 */
+function pickCanvasMode(value: unknown): void {
+  if (value === "move" || value === "hand") ui.setCanvasMode(value);
+}
 
 /** 下发给插件条目的共享 props：默认按钮 + 常用函数（插件不必再抄一份样式） */
 const slotShared = {
@@ -177,14 +184,18 @@ function onUploadPick(e: Event): void {
             <!-- 向上弹时留 24px：sideOffset 从触发按钮算起，按钮又在 50px 托盘里下沉约 9px，
                  留 24px 后菜单底边与托盘顶部才有 14px 左右的视觉缝隙（用户口径 2026-11-02）。 -->
             <DropdownMenuContent arrow side="top" align="center" :side-offset="24" :style="{ minWidth: '200px' }">
-                <DropdownMenuItem :class="{ 'bg-accent': s.canvasMode === 'move' }" @select="ui.setCanvasMode('move'); s.moveMenuOpen = false; ui.showToast('已切换到移动工具')">
-                  <Move :size="15" /> 移动
-                  <span class="ml-auto text-[10px] text-ink-dim">V</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem :class="{ 'bg-accent': s.canvasMode === 'hand' }" @select="ui.setCanvasMode('hand'); s.moveMenuOpen = false; ui.showToast('已切换到抓手工具')">
-                  <Hand :size="15" /> 抓手工具
-                  <span class="ml-auto text-[10px] text-ink-dim">H</span>
-                </DropdownMenuItem>
+              <!-- 两个工具用普通菜单项（不再用单选组）：当前项仍在行尾用勾表示，不叠整行主题色底（问题 03）。
+                   pr-8 是给行尾勾留位，与单选项的间距一致。 -->
+              <DropdownMenuItem @select="pickCanvasMode('move'); s.moveMenuOpen = false; ui.showToast('已切换到移动工具')">
+                <Move :size="15" /> 移动
+                <span class="ml-auto text-[10px] text-ink-dim">V</span>
+                <Check v-if="s.canvasMode === 'move'" :size="14" class="size-3.5! text-ink" />
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="pickCanvasMode('hand'); s.moveMenuOpen = false; ui.showToast('已切换到抓手工具')">
+                <Hand :size="15" /> 抓手工具
+                <span class="ml-auto text-[10px] text-ink-dim">H</span>
+                <Check v-if="s.canvasMode === 'hand'" :size="14" class="size-3.5! text-ink" />
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </SlotAnchor>
@@ -263,11 +274,11 @@ function onUploadPick(e: Event): void {
 
     <!-- Agent 圆球：**独立按钮**，不属于插槽排序容器（用户口径 2026-10-28）。
          不使用 SlotAnchor，也不参与 before/after 排序。
-         2026-11-02：高度与同一行的「画布工具栏」「画布状态栏」一致（40px），
-         圆角走全局 --mct-radius —— 它是圆角按钮，不是圆形球（用户口径）。 -->
+         2026-11-03：高度与同一行的「画布工具栏」「画布状态栏」一致（40px），
+         外观固定为真圆形，不再跟着全局圆角档位变方。 -->
     <Tooltip>
       <TooltipTrigger as-child>
-        <Button variant="outline" size="icon-lg" class="agent-orb-button size-10 rounded-full border-line text-ink"
+        <Button variant="outline" size="icon-lg" class="agent-orb-button size-14! rounded-full border-line text-ink"
           :class="ui.agent.open ? 'is-open bg-panel-active' : ''" aria-label="Agent 对话"
           @click="ui.toggleAgent()">
           <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
@@ -275,7 +286,7 @@ function onUploadPick(e: Event): void {
           <AgentOrb :open="ui.agent.open" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">Agent 对话</TooltipContent>
+      <TooltipContent side="top">Agent 对话</TooltipContent>
     </Tooltip>
   </div>
   </TooltipProvider>
@@ -285,13 +296,12 @@ function onUploadPick(e: Event): void {
 /* 圆球按钮自己画底：shadcn 的 outline 变体在暗色下带 dark:bg-transparent，
    会盖住 bg-panel（实测暗色主题里球身透出画布网格）。这里用组件类固定面板色；
    打开态换 --ui-panel-active，和原来的 bg-panel-active 是同一个语义。 */
-/*
- * 圆角与状态栏 / 工具栏的 40px 方块一致：读全局圆角档位，不写死。
- * Button 自己带的 rounded-4xl 会把球切成 36px 大圆角，这里必须覆盖一次。
- */
+/* Button 自带的大圆角会覆盖 rounded-full，这里固定成真圆形；直径保持 size-10（40px）。 */
 .agent-orb-button {
+  width: 2.5rem;
+  height: 2.5rem;
   background: var(--ui-panel, #fff) !important;
-  border-radius: var(--mct-radius, var(--radius-control, 8px));
+  border-radius: 9999px !important;
 }
 .agent-orb-button:hover { background: var(--ui-panel, #fff) !important; }
 .agent-orb-button.is-open { background: var(--ui-panel-active, #e8eaf0) !important; }
