@@ -19,7 +19,14 @@ defineOptions({
 const props = withDefaults(
   defineProps<SelectContentProps & { class?: HTMLAttributes['class']; arrow?: boolean }>(),
   {
-    position: 'item-aligned',
+    /**
+     * 这里必须是 undefined，不能写死 'item-aligned'。
+     *
+     * Vue 的 withDefaults 会把缺省值当成「调用点传了这个 prop」，
+     * 于是显式写 `position="popper"` 也会被判定成「和默认值相同」而丢掉，
+     * 结果分离模式静默变成嵌入模式（2026-11-04 用户实测：两种模式长得一样）。
+     */
+    position: undefined,
     align: 'center',
     // 缺省必须是 undefined，不能交给 Vue 的布尔缺省 false；否则会盖掉全局浮层配置。
     arrow: undefined,
@@ -27,6 +34,9 @@ const props = withDefaults(
   },
 )
 const emits = defineEmits<SelectContentEmits>()
+
+/** 没传 position 时按嵌入模式渲染（shadcn 的历史默认），显式传 popper 时如实生效。 */
+const effectivePosition = computed(() => props.position ?? 'item-aligned')
 
 const arrowVisible = computed(() => popupArrowVisible('select', props.arrow))
 /**
@@ -44,7 +54,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <SelectPortal>
     <SelectContent
       data-slot="select-content"
-      :data-align-trigger="position === 'item-aligned'"
+      :data-align-trigger="effectivePosition === 'item-aligned'"
       v-bind="{ ...$attrs, ...forwarded, sideOffset: effectiveSideOffset }"
       :class="cn(
         /*
@@ -73,7 +83,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         data-slot="select-viewport-scroll"
       >
         <SelectViewport
-          :data-position="position"
+          :data-position="effectivePosition"
           :class="cn(
             'data-[position=popper]:h-(--reka-select-trigger-height) data-[position=popper]:w-full data-[position=popper]:min-w-(--reka-select-trigger-width)',
           )"

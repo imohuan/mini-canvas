@@ -41,6 +41,8 @@ import * as switchModule from './components/ui/switch'
 import * as tabsModule from './components/ui/tabs'
 import * as textareaModule from './components/ui/textarea'
 import * as colorPickerModule from './components/color-picker'
+import * as selectModule from './components/ui/select'
+import * as tooltipModule from './components/ui/tooltip'
 
 const alertDialog = configure(alertDialogModule, 'AlertDialog')
 const badge = configure(badgeModule, 'Badge')
@@ -61,6 +63,8 @@ const switchComponent = configure(switchModule, 'Switch')
 const tabs = configure(tabsModule, 'Tabs')
 const textarea = configure(textareaModule, 'Textarea')
 const colorPicker = configure(colorPickerModule, 'ColorPicker')
+const select = configure(selectModule, 'Select')
+const tooltip = configure(tooltipModule, 'Tooltip')
 
 export const AlertDialogAction = alertDialog.AlertDialogAction
 export const AlertDialogCancel = alertDialog.AlertDialogCancel
@@ -144,3 +148,18 @@ export const Textarea = textarea.Textarea
 
 export const ColorPicker = colorPicker.ColorPicker
 export const ColorPickerSelect = colorPicker.ColorPickerSelect
+
+export const Select = select.Select
+export const SelectContent = select.SelectContent
+export const SelectGroup = select.SelectGroup
+export const SelectItem = select.SelectItem
+export const SelectItemText = select.SelectItemText
+export const SelectLabel = select.SelectLabel
+export const SelectSeparator = select.SelectSeparator
+export const SelectTrigger = select.SelectTrigger
+export const SelectValue = select.SelectValue
+
+export const Tooltip = tooltip.Tooltip
+export const TooltipContent = tooltip.TooltipContent
+export const TooltipProvider = tooltip.TooltipProvider
+export const TooltipTrigger = tooltip.TooltipTrigger

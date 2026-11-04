@@ -70,13 +70,15 @@ describe('withComponentConfig', () => {
  * 3. 组件侧确实补上了 lg 的样式（否则收敛回 default 只是掩盖问题）。
  */
 describe('size 档位收敛', () => {
-  it('Switch / SelectTrigger 支持三档；Card 只到 default', () => {
-    expect(supportedSizes('Switch')).toEqual(['sm', 'default', 'lg'])
+  it('SelectTrigger 支持三档；Switch / Card 只到 default', () => {
+    // Switch 原组件只有 sm / default 两档，不额外加 lg（用户口径 2026-11-04）
+    expect(supportedSizes('Switch')).toEqual(['sm', 'default'])
     expect(supportedSizes('SelectTrigger')).toEqual(['sm', 'default', 'lg'])
     expect(supportedSizes('Card')).toEqual(['sm', 'default'])
   })
 
   it('全局“大” + 只支持两档的组件 → 收敛成 default（不再注入 lg）', () => {
+    expect(resolveSizeFor('Switch', 'lg')).toBe('default')
     expect(resolveSizeFor('Card', 'lg')).toBe('default')
     expect(resolveSizeFor('AlertDialogContent', 'lg')).toBe('default')
   })
@@ -84,6 +86,13 @@ describe('size 档位收敛', () => {
   it('未登记的组件原样透传三档', () => {
     expect(resolveSizeFor('Button', 'lg')).toBe('lg')
     expect(resolveSizeFor('Button', 'sm')).toBe('sm')
+  })
+
+  it('带家族前缀的名字也能查到表（previewKit 传的是 Switch.Switch）', () => {
+    // 之前只按全名查表，`Switch.Switch` 查不到 → 放行 lg → 开关塌成 4×4
+    expect(resolveSizeFor('Switch.Switch', 'lg')).toBe('default')
+    expect(supportedSizes('Card.Card')).toEqual(['sm', 'default'])
+    expect(supportedSizes('SelectTrigger.SelectTrigger')).toEqual(['sm', 'default', 'lg'])
   })
 
   it('薄层注入时也走收敛：Card 在全局 lg 下拿到 default', async () => {
@@ -97,14 +106,16 @@ describe('size 档位收敛', () => {
     expect(await renderToString(h(Wrapped as never))).toContain('>default<')
   })
 
-  it('Switch 源码里真的有 data-[size=lg] 的高度规则', () => {
+  it('Switch 源码里只有 sm / default 两档，没有自创的 lg', () => {
     const src = readFileSync(
       new URL('../components/ui/switch/Switch.vue', import.meta.url),
       'utf-8',
     )
-    expect(src).toMatch(/data-\[size=lg\]:h-/)
-    expect(src).toMatch(/data-\[size=lg\]:w-/)
-    expect(src).toMatch(/group-data-\[size=lg\]\/switch:h-/)
+    expect(src).toMatch(/data-\[size=default\]:h-5/)
+    expect(src).toMatch(/data-\[size=sm\]:h-4/)
+    // 这两条守住「不要自己加档位」：原组件模板里没有 lg 规则
+    expect(src).not.toMatch(/data-\[size=lg\]/)
+    expect(src).not.toMatch(/group-data-\[size=lg\]\/switch/)
   })
 
   it('RadioGroupItem 声明了 size prop 并有三档尺寸', () => {

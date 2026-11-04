@@ -48,10 +48,11 @@ describe('外观交接：默认档不改观感', () => {
       heading: 'inherit',
       size: 'inherit',
     })
-    expect(vars[THEME_BRIDGE_VARS.radius]).toBe('0.875rem')
-    expect(vars[THEME_BRIDGE_VARS.radiusControl]).toBe('0.875rem')
-    expect(vars[THEME_BRIDGE_VARS.radiusOpen]).toBe('calc(0.875rem * 1.5)')
-    expect(vars[THEME_BRIDGE_VARS.radiusPanel]).toBe('calc(0.875rem * 2)')
+    // 圆角档位细化后：large = 8px = 0.5rem（旧值 0.875rem 是现在最大那一档）
+    expect(vars[THEME_BRIDGE_VARS.radius]).toBe('0.5rem')
+    expect(vars[THEME_BRIDGE_VARS.radiusControl]).toBe('0.5rem')
+    expect(vars[THEME_BRIDGE_VARS.radiusOpen]).toBe('calc(0.5rem * 1.5)')
+    expect(vars[THEME_BRIDGE_VARS.radiusPanel]).toBe('calc(0.5rem * 2)')
     // 字体没选，就不该写字体变量
     expect(vars[THEME_BRIDGE_VARS.fontBody]).toBeUndefined()
   })
@@ -83,7 +84,7 @@ describe('外观交接：落值与清理', () => {
   it('写进去的变量能读到；改成默认后旧键被清掉（不留幽灵变量）', () => {
     const { el, map } = fakeRoot()
     applyThemeBridge({ radius: 'large', font: 'inter', heading: 'inherit', size: 'inherit' }, el)
-    expect(map.get(THEME_BRIDGE_VARS.radius)).toBe('0.875rem')
+    expect(map.get(THEME_BRIDGE_VARS.radius)).toBe('0.5rem')
     expect(map.has(THEME_BRIDGE_VARS.fontBody)).toBe(true)
 
     applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit' }, el)
@@ -108,9 +109,11 @@ describe('外观交接：落值与清理', () => {
 
   it('合法档位原样透传', () => {
     expect(
-      toThemeBridgeInput({ themeRadius: 'medium', themeFont: 'inter', themeHeadingFont: 'roboto' }),
+      // 'medium' 已从档位表移除（和 default 重复）。旧存档里存着它时
+      // 会回落成 inherit，不做静默映射 —— 用户重新选一次即可。
+      toThemeBridgeInput({ themeRadius: 'small', themeFont: 'inter', themeHeadingFont: 'roboto' }),
     ).toEqual({
-      radius: 'medium',
+      radius: 'small',
       font: 'inter',
       heading: 'roboto',
       size: 'inherit',
@@ -176,8 +179,9 @@ describe('外观交接：浮层配置（已删除）', () => {
     for (const key of ['themePopupArrow', 'themePopupGap', 'themePopupSubGap', 'themePopupSelectedStyle']) {
       expect(Object.keys(Config)).not.toContain(key)
     }
+    // 旧存档里的 'medium' 档已并入 'default'：读不到就回落 inherit
     const input = toThemeBridgeInput({ themeRadius: 'medium' })
-    expect(input).toEqual({ radius: 'medium', font: 'inherit', heading: 'inherit', size: 'inherit' })
+    expect(input).toEqual({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit' })
   })
 })
 

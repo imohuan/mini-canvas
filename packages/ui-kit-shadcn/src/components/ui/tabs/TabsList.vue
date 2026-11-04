@@ -11,6 +11,8 @@ import { tabsListVariants } from '.'
 const props = withDefaults(defineProps<TabsListProps & {
   class?: HTMLAttributes['class']
   variant?: TabsListVariants['variant']
+  /** 高度档位：与 Button / Input 同一套三档，由注册薄层注入全局尺寸 */
+  size?: 'sm' | 'default' | 'lg'
   /**
    * 选中项底下那条「胶囊」是否滑动过去。
    * 默认开：切换页签时用一个 absolute 的圆角底板从旧位置滑到新位置，
@@ -19,10 +21,11 @@ const props = withDefaults(defineProps<TabsListProps & {
   animated?: boolean
 }>(), {
   variant: 'default',
+  size: 'default',
   animated: true,
 })
 
-const delegatedProps = reactiveOmit(props, 'class', 'variant', 'animated')
+const delegatedProps = reactiveOmit(props, 'class', 'variant', 'size', 'animated')
 
 /* —— 滑动胶囊：位置与宽度都按真实矩形量 ——
    为什么不写 CSS 百分比：各页签名长短不一（「全部画布」/「图片 67」），
@@ -145,7 +148,8 @@ function onListClick(): void {
     :data-variant="variant"
     :data-animated="animated ? '' : undefined"
     v-bind="delegatedProps"
-    :class="cn(tabsListVariants({ variant }), 'cn-tabs-list-animated', props.class)"
+    :data-size="props.size"
+    :class="cn(tabsListVariants({ variant, size: props.size }), 'cn-tabs-list-animated', props.class)"
     @click="onListClick"
   >
     <!-- 滑动胶囊：只在 default 变体（有底分段样式）下有意义；line 变体用下划线，胶囊隐掉 -->

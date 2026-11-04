@@ -25,11 +25,11 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
   RadioGroup,
-  RadioGroupItem,
 } from '@/previewKit'
 import { BASE_COLORS, THEME_COLORS, previewColor, type BaseColor, type ThemeColor } from './colors'
 import { RADIUS_OPTIONS } from './fonts'
 import FontSelect from './FontSelect.vue'
+import RadiusPreview from './RadiusPreview.vue'
 import { COMPONENT_SIZE_CHOICES } from '../componentConfig'
 import type { PreviewThemeConfig } from './useThemePreview'
 
@@ -72,12 +72,11 @@ const themeOptions = computed<Option[]>(() =>
 
 const radiusOptions = computed<Option[]>(() =>
   RADIUS_OPTIONS
-    // 'default' 与 'medium' 都是 0.625rem：在面板里并成一档，免得出现两个“默认”
-    .filter((r) => r.id !== 'medium')
     .map((r) => ({
       value: r.id,
       label: r.label,
-      short: r.id === 'none' ? '无' : r.label.split('（')[0],
+      // 标签直接用「无 / 极小 / 小 / 中 / 大 / 特大」，不再出现“默认”
+      short: r.label.split('（')[0],
     })),
 )
 
@@ -91,17 +90,15 @@ const sizeOptions = computed<Option[]>(() =>
 )
 
 /**
- * 圆角预览：把**档位 id** 换算成一小块方块的圆角，直接画出差别。
+ * 圆角档位 id → 真实像素值。
  *
- * 注意入参是 id（'large'），不是像素值。之前把 id 直接丢给 rem 正则，
- * 结果每一档都算成 0px —— 用户看到的就是「选中哪个方块都不变」。
+ * 通过档位表换算（不是把 id 当 rem 解析）；认不出的 id 一律当 0。
+ * 预览改成 SVG 弧线后（见 RadiusPreview.vue），这里只需要给数值。
  */
-function radiusPreview(id: string): string {
+function radiusPx(id: string): number {
   const option = RADIUS_OPTIONS.find((r) => r.id === id)
   const match = /^([\d.]+)rem$/.exec(option?.value ?? '')
-  const px = match ? Number(match[1]) * 16 : 0
-  // 预览块 22px 见方：上限 11px（正好半圆），三档之间的差别一眼能分开
-  return `${Math.min(Math.max(px, 0), 11).toFixed(1)}px`
+  return match ? Number(match[1]) * 16 : 0
 }
 
 /**
@@ -115,8 +112,15 @@ function radiusPreview(id: string): string {
  * 现在两格都固定 h-9（36px）、同样的内边距与字号，视觉方块统一装在 20×20 的框里居中，
  * 只有框**内部**的形状随档位变 —— 行高恒定，内容仍能看出差别。
  */
+/**
+ * 单选项的排版类 —— 高度不写死。
+ *
+ * 用户口径 2026-11-04：为什么尺寸选「小」时这格还是 36px 高？
+ * 因为这里之前写死了 h-9。现在高度交给 Button 自己的 size 变体（h-8 / h-9 / h-10），
+ * 单选选项就是一个 Button，size 走组件配置，与页面其它控件同步变化。
+ */
 const CHOICE_CHIP =
-  'flex h-9 cursor-pointer items-center gap-2 rounded-xl px-2.5 text-xs transition-colors hover:bg-muted/60'
+  'w-auto cursor-pointer justify-start gap-2 rounded-xl px-2.5 text-xs transition-colors hover:bg-muted/60'
 
 /**
  * 选中 / 未选中的配色（两组一致）。
@@ -250,25 +254,34 @@ function asText(value: unknown): string {
           class="flex flex-wrap gap-1.5"
           @update:model-value="(v) => patch({ radius: asText(v) })"
         >
-          <label
+          <Button
             v-for="o in radiusOptions"
             :key="o.value"
             :title="o.label"
+            type="button"
+            variant="ghost"
             :class="[CHOICE_CHIP, chipClass(config.radius === o.value)]"
+            @click="patch({ radius: o.value })"
           >
-            <RadioGroupItem :value="o.value" />
-            <!-- 20×20 的固定框：里面画档位对应的圆角，框本身不变，行高才不会跳 -->
             <span
-              class="flex size-5 flex-none items-center justify-center"
+              class="size-2.5 flex-none rounded-full"
+              :class="config.radius === o.value ? 'bg-primary ring-2 ring-primary/30' : 'ring-1 ring-foreground/40'"
+              aria-hidden="true"
+            />
+            <!--
+              20×20 的固定框：里面用 SVG 画「直线→圆弧→直线」的转角，
+              和真实圆角的过渡一致（参考用户给的 SVG path 方案）。
+              框本身尺寸不变，所以每格高度仍然一致。
+            -->
+            <span
+              class="flex size-5 flex-none items-center justify-center text-current"
               aria-hidden="true"
             >
-              <span
-                class="size-4 border-2 border-current"
-                :style="{ borderRadius: radiusPreview(o.value) }"
-              />
+              <!-- 26px 框 + 2px 线：12px 的弧才看得出弯 -->
+              <RadiusPreview :radius="radiusPx(o.value)" :box="28" class="size-[26px]" />
             </span>
             <span>{{ o.short }}</span>
-          </label>
+          </Button>
         </RadioGroup>
       </div>
 
@@ -280,12 +293,19 @@ function asText(value: unknown): string {
           class="flex flex-wrap gap-1.5"
           @update:model-value="(v) => patch({ size: asText(v) as PreviewThemeConfig['size'] })"
         >
-          <label
+          <Button
             v-for="o in sizeOptions"
             :key="o.value"
+            type="button"
+            variant="ghost"
             :class="[CHOICE_CHIP, chipClass(config.size === o.value)]"
+            @click="patch({ size: o.value as PreviewThemeConfig['size'] })"
           >
-            <RadioGroupItem :value="o.value" />
+            <span
+              class="size-2.5 flex-none rounded-full"
+              :class="config.size === o.value ? 'bg-primary ring-2 ring-primary/30' : 'ring-1 ring-foreground/40'"
+              aria-hidden="true"
+            />
             <!-- 和圆角那组同规格的 20×20 框，里面画档位对应的高度 -->
             <span
               class="flex size-5 flex-none items-center justify-center"
@@ -297,7 +317,7 @@ function asText(value: unknown): string {
               />
             </span>
             <span>{{ o.label }}</span>
-          </label>
+          </Button>
         </RadioGroup>
       </div>
 
