@@ -1,9 +1,12 @@
-/* 自绘缩放滑块：整条轨道可拖（原生 range 只有 thumb 可拖，用户实测"拖不动"） */
-.hist-zoom-track { display: flex; align-items: center; }
-.hist-zoom-rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 9999px; background: var(--ui-hover-strong); }
-.hist-zoom-fill { position: absolute; left: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 9999px; background: var(--ui-accent, #0891b2); }
-.hist-zoom-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 9999px; background: var(--ui-ink); transform: translate(-50%, -50%); box-shadow: 0 0 0 3px var(--ui-panel, #fff); pointer-events: none; }
-.hist-zoom-track:hover .hist-zoom-thumb { box-shadow: 0 0 0 3px var(--ui-panel, #fff), 0 0 0 5px var(--ui-veil, rgb(0 0 0 / 0.06)); }
+/*
+ * 缩放滑块（组件库 Slider）：只按高度等比缩小。
+ *
+ * 组件自己按 16px 的 thumb 设计（thumb 是 h-4 w-6 的胶囊），放进弹窗标题栏偏大
+ * （2026-11-04 用户口径：太大）。这里不改颜色、不改形状，只把整条 Slider 的高度降下来，
+ * 轨道与 thumb 由组件内部的相对尺寸跟着收——等于整体等比缩放。
+ */
+.hist-zoom-slider { height: 16px; }
+
 /* 显示异常开关（checkbox 自绘小方块） */
 .hist-error-toggle { appearance: none; width: 14px; height: 14px; margin: 0; border: 1.5px solid var(--ui-ink-mute, #888); border-radius: 4px; background: transparent; cursor: pointer; display: grid; place-items: center; }
 .hist-error-toggle:checked { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); }
@@ -12,12 +15,15 @@
 .hist-batch-bar { background: var(--ui-panel, #fff); }
 
 /*
- * 类型筛选页签（组件库 Tabs 默认样式）。
- * 外观全部交给 TabsList / TabsTrigger 自己，这里只修一处：被选中的类型用品牌色文字，
+ * 类型筛选页签（组件库 Tabs 的 line 变体：无胶囊底，选中项下方一条下划线）。
+ * 外观交给 TabsList / TabsTrigger 自己，这里只修一处：被选中的类型用品牌色文字，
  * 与原来「筛选中的类型高亮」一致；数字 chip 的底色不受影响。
+ * line 变体选中项自带 text-foreground，要用同等优先级盖回品牌色。
  */
 .hist-type-tabs [data-slot='tabs-trigger'][data-state='active'] { color: var(--ui-accent, #0891b2); }
 .hist-type-tabs [data-slot='tabs-trigger'][data-state='active'] .bg-chip { color: var(--ui-ink, #18202b); }
+/* 下划线也用品牌色，跟选中文字一致 */
+.hist-type-tabs [data-slot='tabs-trigger'][data-state='active']::after { background: var(--ui-accent, #0891b2); opacity: 1; }
 
 /* 加载更多指示（用户口径 2026-10-28：显示 1 秒、要更清楚）。
    中性灰阶：转圈 + 文案，居中放在列表底部；不用主题色。 */

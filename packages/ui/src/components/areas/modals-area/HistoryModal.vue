@@ -26,6 +26,7 @@ const Button = useUiComponent('Button')
 const Tabs = useUiComponent('Tabs')
 const TabsList = useUiComponent('TabsList')
 const TabsTrigger = useUiComponent('TabsTrigger')
+const Slider = useUiComponent('Slider')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
@@ -140,8 +141,14 @@ const {
  */
 const minCardSize = computed(() => ({ 1: 340, 2: 280, 3: 220, 4: 170 }[s.histZoom] ?? 220))
 
-const { ZOOM_MIN, ZOOM_MAX, zoomPct, onZoomPointerDown, onZoomPointerMove, onZoomPointerUp } =
-  useHistoryZoom(s)
+const { ZOOM_MIN, ZOOM_MAX } = useHistoryZoom(s)
+
+/** Slider 回写：值是数组，取第一档；卡在 1~4 之间，防止外部传进越界值。 */
+function onZoomChange(value: number[] | undefined): void {
+  const next = Number(value?.[0] ?? s.histZoom)
+  if (!Number.isFinite(next)) return
+  s.histZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next)))
+}
 
 /** 容器宽 + 最小列宽 → 实际列数与列宽（列宽均分撑满容器） */
 function calcColumns(containerWidth: number): { cols: number; columnWidth: number } {
@@ -791,16 +798,10 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-4">
         <div class="hist-zoom-wrap flex items-center gap-2 rounded-lg bg-veil p-2" role="group" aria-label="缩放">
           <Grid2x2 :size="16" class="text-ink" />
-          <!-- 自绘滑块：整条轨道可按下拖拽（原生 range 只有 thumb 可拖，用户实测"拖不动"） -->
-          <div class="hist-zoom-track relative h-4 w-[120px] cursor-pointer touch-none" role="slider"
-            :aria-valuenow="s.histZoom" :aria-valuemin="ZOOM_MIN" :aria-valuemax="ZOOM_MAX"
-            aria-label="调整卡片宽度（大值列多图小）"
-            @pointerdown="onZoomPointerDown" @pointermove="onZoomPointerMove"
-            @pointerup="onZoomPointerUp" @pointercancel="onZoomPointerUp">
-            <span class="hist-zoom-rail" />
-            <span class="hist-zoom-fill" :style="{ width: zoomPct + '%' }" />
-            <span class="hist-zoom-thumb" :style="{ left: zoomPct + '%' }" />
-          </div>
+          <!-- 缩放滑块：组件库 Slider（reka），值是数组；点轨道任意位置也能跳过去 -->
+          <Slider class="hist-zoom-slider w-[120px]" :model-value="[s.histZoom]" :min="ZOOM_MIN"
+            :max="ZOOM_MAX" :step="1" aria-label="调整卡片宽度（大值列多图小）"
+            @update:model-value="onZoomChange" />
           <LayoutGrid :size="16" class="text-ink" />
         </div>
         <Button variant="ghost" size="icon" aria-label="关闭生成历史" @click="s.historyOpen = false">
@@ -821,12 +822,12 @@ onBeforeUnmount(() => {
             </TabsList>
           </Tabs>
           <span class="h-4 w-px bg-line"></span>
-          <!-- 类型筛选也是页签：默认样式；再点一次当前项 = 取消筛选，
-               所以用 Tabs 的 model-value 自己做开关，不走 reka 的「点了必选中」。
-               数字仍是 chip 小标（用 data 属性让页签内部的 svg/文字配色不受影响）。 -->
+          <!-- 类型筛选也是页签，用 line 变体（无胶囊底、选中项下方一条下划线）；
+               再点一次当前项 = 取消筛选，所以用 Tabs 的 model-value 自己做开关，
+               不走 reka 的「点了必选中」。数字仍是 chip 小标。 -->
           <div class="hist-type-tabs flex items-center gap-1 pl-1">
             <Tabs :model-value="s.histType" @update:model-value="onHistTypeTabs">
-              <TabsList aria-label="按类型筛选">
+              <TabsList variant="line" aria-label="按类型筛选">
                 <TabsTrigger v-for="t in s.histTypes" :key="t" :value="t" class="gap-1.5">
                   <span>{{ t }}</span><span
                     class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-chip px-1 text-[11px]">{{
