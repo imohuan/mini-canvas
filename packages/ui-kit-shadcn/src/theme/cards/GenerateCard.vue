@@ -100,7 +100,7 @@ function runGenerate(): void {
 </script>
 
 <template>
-  <Card size="sm" class="break-inside-avoid">
+  <Card class="break-inside-avoid">
     <CardHeader>
       <CardTitle class="text-sm">生成参数</CardTitle>
       <CardDescription class="text-xs">输入、下拉、数字、滑块、开关，底下是真实按钮组</CardDescription>

@@ -23,18 +23,25 @@ function configure<T extends Record<string, unknown>>(mod: T, family: string): T
 }
 
 import * as badgeModule from './components/ui/badge'
+import * as alertDialogModule from './components/ui/alert-dialog'
 import * as buttonModule from './components/ui/button'
 import * as cardModule from './components/ui/card'
 import * as checkboxModule from './components/ui/checkbox'
 import * as comboboxModule from './components/ui/combobox'
+import * as commandModule from './components/ui/command'
+import * as contextMenuModule from './components/ui/context-menu'
 import * as dialogModule from './components/ui/dialog'
 import * as dropdownModule from './components/ui/dropdown-menu'
 import * as inputModule from './components/ui/input'
+import * as inputGroupModule from './components/ui/input-group'
 import * as labelModule from './components/ui/label'
+import * as menubarModule from './components/ui/menubar'
 import * as numberFieldModule from './components/ui/number-field'
 import * as popoverModule from './components/ui/popover'
 import * as radioGroupModule from './components/ui/radio-group'
+import * as scrollAreaModule from './components/ui/scroll-area'
 import * as separatorModule from './components/ui/separator'
+import * as sheetModule from './components/ui/sheet'
 import * as sliderModule from './components/ui/slider'
 import * as switchModule from './components/ui/switch'
 import * as tabsModule from './components/ui/tabs'
@@ -44,18 +51,27 @@ import * as selectModule from './components/ui/select'
 import * as tooltipModule from './components/ui/tooltip'
 
 const badge = configure(badgeModule, 'Badge')
+const alertDialog = configure(alertDialogModule, 'AlertDialog')
 const button = configure(buttonModule, 'Button')
 const card = configure(cardModule, 'Card')
 const checkbox = configure(checkboxModule, 'Checkbox')
 const combobox = configure(comboboxModule, 'Combobox')
+const command = configure(commandModule, 'Command')
+const contextMenu = configure(contextMenuModule, 'ContextMenu')
 const dialog = configure(dialogModule, 'Dialog')
 const dropdown = configure(dropdownModule, 'DropdownMenu')
 const input = configure(inputModule, 'Input')
+const inputGroup = configure(inputGroupModule, 'InputGroup')
 const label = configure(labelModule, 'Label')
+const menubar = configure(menubarModule, 'Menubar')
 const numberField = configure(numberFieldModule, 'NumberField')
 const popover = configure(popoverModule, 'Popover')
 const radioGroup = configure(radioGroupModule, 'RadioGroup')
+const scrollArea = configure(scrollAreaModule, 'ScrollArea')
+// ScrollBar 与 ScrollArea 同目录、不同家族名；单独过一次薄层，保证尺寸档位也认它。
+const scrollBar = configure(scrollAreaModule, 'ScrollBar')
 const separator = configure(separatorModule, 'Separator')
+const sheet = configure(sheetModule, 'Sheet')
 const slider = configure(sliderModule, 'Slider')
 const switchComponent = configure(switchModule, 'Switch')
 const tabs = configure(tabsModule, 'Tabs')
@@ -65,6 +81,17 @@ const select = configure(selectModule, 'Select')
 const tooltip = configure(tooltipModule, 'Tooltip')
 
 export const Badge = badge.Badge
+
+export const AlertDialog = alertDialog.AlertDialog
+export const AlertDialogAction = alertDialog.AlertDialogAction
+export const AlertDialogCancel = alertDialog.AlertDialogCancel
+export const AlertDialogContent = alertDialog.AlertDialogContent
+export const AlertDialogDescription = alertDialog.AlertDialogDescription
+export const AlertDialogFooter = alertDialog.AlertDialogFooter
+export const AlertDialogHeader = alertDialog.AlertDialogHeader
+export const AlertDialogMedia = alertDialog.AlertDialogMedia
+export const AlertDialogTitle = alertDialog.AlertDialogTitle
+export const AlertDialogTrigger = alertDialog.AlertDialogTrigger
 
 export const Button = button.Button
 
@@ -84,6 +111,31 @@ export const ComboboxInput = combobox.ComboboxInput
 export const ComboboxItem = combobox.ComboboxItem
 export const ComboboxList = combobox.ComboboxList
 export const ComboboxViewport = combobox.ComboboxViewport
+
+export const Command = command.Command
+export const CommandDialog = command.CommandDialog
+export const CommandEmpty = command.CommandEmpty
+export const CommandGroup = command.CommandGroup
+export const CommandInput = command.CommandInput
+export const CommandItem = command.CommandItem
+export const CommandList = command.CommandList
+export const CommandSeparator = command.CommandSeparator
+export const CommandShortcut = command.CommandShortcut
+
+export const ContextMenu = contextMenu.ContextMenu
+export const ContextMenuCheckboxItem = contextMenu.ContextMenuCheckboxItem
+export const ContextMenuContent = contextMenu.ContextMenuContent
+export const ContextMenuGroup = contextMenu.ContextMenuGroup
+export const ContextMenuItem = contextMenu.ContextMenuItem
+export const ContextMenuLabel = contextMenu.ContextMenuLabel
+export const ContextMenuRadioGroup = contextMenu.ContextMenuRadioGroup
+export const ContextMenuRadioItem = contextMenu.ContextMenuRadioItem
+export const ContextMenuSeparator = contextMenu.ContextMenuSeparator
+export const ContextMenuShortcut = contextMenu.ContextMenuShortcut
+export const ContextMenuSub = contextMenu.ContextMenuSub
+export const ContextMenuSubContent = contextMenu.ContextMenuSubContent
+export const ContextMenuSubTrigger = contextMenu.ContextMenuSubTrigger
+export const ContextMenuTrigger = contextMenu.ContextMenuTrigger
 
 export const Dialog = dialog.Dialog
 export const DialogContent = dialog.DialogContent
@@ -106,7 +158,31 @@ export const DropdownMenuSubTrigger = dropdown.DropdownMenuSubTrigger
 export const DropdownMenuTrigger = dropdown.DropdownMenuTrigger
 
 export const Input = input.Input
+
+export const InputGroup = inputGroup.InputGroup
+export const InputGroupAddon = inputGroup.InputGroupAddon
+export const InputGroupButton = inputGroup.InputGroupButton
+export const InputGroupInput = inputGroup.InputGroupInput
+export const InputGroupText = inputGroup.InputGroupText
+export const InputGroupTextarea = inputGroup.InputGroupTextarea
+
 export const Label = label.Label
+
+export const Menubar = menubar.Menubar
+export const MenubarCheckboxItem = menubar.MenubarCheckboxItem
+export const MenubarContent = menubar.MenubarContent
+export const MenubarGroup = menubar.MenubarGroup
+export const MenubarItem = menubar.MenubarItem
+export const MenubarLabel = menubar.MenubarLabel
+export const MenubarMenu = menubar.MenubarMenu
+export const MenubarRadioGroup = menubar.MenubarRadioGroup
+export const MenubarRadioItem = menubar.MenubarRadioItem
+export const MenubarSeparator = menubar.MenubarSeparator
+export const MenubarShortcut = menubar.MenubarShortcut
+export const MenubarSub = menubar.MenubarSub
+export const MenubarSubContent = menubar.MenubarSubContent
+export const MenubarSubTrigger = menubar.MenubarSubTrigger
+export const MenubarTrigger = menubar.MenubarTrigger
 
 export const NumberField = numberField.NumberField
 export const NumberFieldContent = numberField.NumberFieldContent
@@ -124,7 +200,20 @@ export const PopoverTrigger = popover.PopoverTrigger
 export const RadioGroup = radioGroup.RadioGroup
 export const RadioGroupItem = radioGroup.RadioGroupItem
 
+export const ScrollArea = scrollArea.ScrollArea
+export const ScrollBar = scrollBar.ScrollBar
+
 export const Separator = separator.Separator
+
+export const Sheet = sheet.Sheet
+export const SheetClose = sheet.SheetClose
+export const SheetContent = sheet.SheetContent
+export const SheetDescription = sheet.SheetDescription
+export const SheetFooter = sheet.SheetFooter
+export const SheetHeader = sheet.SheetHeader
+export const SheetTitle = sheet.SheetTitle
+export const SheetTrigger = sheet.SheetTrigger
+
 export const Slider = slider.Slider
 
 export const Switch = switchComponent.Switch

@@ -30,7 +30,7 @@ const text = ref('')
 </script>
 
 <template>
-  <Card size="sm" class="break-inside-avoid">
+  <Card class="break-inside-avoid">
     <CardHeader>
       <CardTitle class="text-sm">基础组件</CardTitle>
       <CardDescription class="text-xs">同一档尺寸下高矮一致，圆角跟随顶部配置</CardDescription>

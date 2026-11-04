@@ -21,7 +21,13 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxViewport,
-  Input,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
   Tabs,
   TabsContent,
   TabsList,
@@ -47,6 +53,20 @@ const MODELS = [
   { value: 'seedance-fast', label: 'Seedance 2.0 Fast', hint: '更快' },
 ]
 
+/** 命令面板按分组展示；搜索时只保留命中的条目，空分组整段收起。 */
+const commandGroups = computed(() => {
+  const q = commandQuery.value.trim().toLowerCase()
+  const names = [...new Set(COMMANDS.map((c) => c.group))]
+  return names
+    .map((name) => ({
+      name,
+      items: COMMANDS.filter(
+        (c) => c.group === name && (!q || c.label.toLowerCase().includes(q)),
+      ),
+    }))
+    .filter((g) => g.items.length > 0)
+})
+
 const filteredModels = computed(() => {
   const q = modelQuery.value.trim().toLowerCase()
   return q ? MODELS.filter((m) => m.label.toLowerCase().includes(q)) : MODELS
@@ -54,7 +74,7 @@ const filteredModels = computed(() => {
 </script>
 
 <template>
-  <Card size="sm" class="break-inside-avoid">
+  <Card class="break-inside-avoid">
     <CardHeader>
       <CardTitle class="text-sm">Tabs</CardTitle>
       <CardDescription class="text-xs">四个页签：基础 / 命令面板 / 组合框 / 反馈</CardDescription>
@@ -81,24 +101,20 @@ const filteredModels = computed(() => {
         </TabsContent>
 
         <TabsContent value="command" class="pt-3">
-          <div class="overflow-hidden rounded-xl border border-border">
-            <Input
-              v-model="commandQuery"
-              placeholder="搜动作 / 节点 / 设置"
-              class="rounded-none border-0 border-b border-border bg-transparent"
-            />
-            <div class="flex flex-col p-1.5">
-              <button
-                v-for="item in COMMANDS"
-                :key="item.value"
-                type="button"
-                class="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-muted"
-              >
-                <span>{{ item.label }}</span>
-                <span class="text-[11px] text-muted-foreground">{{ item.shortcut }}</span>
-              </button>
-            </div>
-          </div>
+          <!-- 用真正的 Command 组件：输入、分组、快捷键都跟组件库一致，
+               不再手写一套 button 列表（那条路绕开了组件库的尺寸与圆角配置）。 -->
+          <Command class="rounded-xl border border-border">
+            <CommandInput v-model="commandQuery" placeholder="搜动作 / 节点 / 设置" />
+            <CommandList>
+              <CommandEmpty>没有匹配的动作</CommandEmpty>
+              <CommandGroup v-for="group in commandGroups" :key="group.name" :heading="group.name">
+                <CommandItem v-for="item in group.items" :key="item.value" :value="item.label">
+                  <span>{{ item.label }}</span>
+                  <CommandShortcut>{{ item.shortcut }}</CommandShortcut>
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+          </Command>
         </TabsContent>
 
         <TabsContent value="combobox" class="pt-3">
@@ -122,9 +138,9 @@ const filteredModels = computed(() => {
 
         <TabsContent value="feedback" class="pt-3">
           <div class="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm">轻提示</Button>
-            <Button variant="ghost" size="sm">消息</Button>
-            <Button variant="secondary" size="sm">次要操作</Button>
+            <Button variant="outline">轻提示</Button>
+            <Button variant="ghost">消息</Button>
+            <Button variant="secondary">次要操作</Button>
           </div>
         </TabsContent>
       </Tabs>

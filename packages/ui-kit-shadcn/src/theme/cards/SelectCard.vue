@@ -44,7 +44,7 @@ const LONG_LIST = Array.from({ length: 40 }, (_, i) => `分辨率 ${1024 + i * 1
 </script>
 
 <template>
-  <Card size="sm" class="break-inside-avoid">
+  <Card class="break-inside-avoid">
     <CardHeader>
       <CardTitle class="text-sm">Select / DropdownMenu</CardTitle>
       <CardDescription class="text-xs">嵌入、分离、长列表滚动、分组，以及三级子菜单</CardDescription>

@@ -37,7 +37,7 @@ import {
 </script>
 
 <template>
-  <Card size="sm" class="break-inside-avoid">
+  <Card class="break-inside-avoid">
     <CardHeader>
       <CardTitle class="text-sm">Popover / Tooltip / Dialog</CardTitle>
       <CardDescription class="text-xs">三种浮层的真实用法，箭头与间距跟随顶部配置</CardDescription>

@@ -33,7 +33,7 @@ function showMessage(kind: 'info' | 'error'): void {
 </script>
 
 <template>
-  <Card size="sm" class="break-inside-avoid">
+  <Card class="break-inside-avoid">
     <CardHeader>
       <CardTitle class="text-sm">Notify / Message</CardTitle>
       <CardDescription class="text-xs">一个在右下角浮出，一个贴在页里不挡内容</CardDescription>
@@ -53,8 +53,8 @@ function showMessage(kind: 'info' | 'error'): void {
       <div class="flex flex-col gap-1.5">
         <span class="text-xs text-muted-foreground">Message · 页内消息条</span>
         <div class="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" @click="showMessage('info')">普通消息</Button>
-          <Button variant="outline" size="sm" @click="showMessage('error')">错误消息</Button>
+          <Button variant="outline" @click="showMessage('info')">普通消息</Button>
+          <Button variant="outline" @click="showMessage('error')">错误消息</Button>
         </div>
 
         <div
