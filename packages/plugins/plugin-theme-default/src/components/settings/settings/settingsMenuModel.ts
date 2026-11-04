@@ -47,6 +47,8 @@ export interface NavEntry {
   icon?: unknown
   /** 非配置动作 id（如「快捷键」）；有值时点击执行动作，不切内容页 */
   action?: string
+  /** 插件自绘的 nav 配置页（settings.nav occupant：如设置页快捷键面板） */
+  navPage?: Component
 }
 
 /** 一个二级段：显示名 + 它收拢的配置分组（一个段可合并多个 group） */
@@ -147,14 +149,20 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
     const page = (nav.page ?? metaPage(occ?.meta)) as Component | undefined
     // 动作项（如「快捷键」）没有配置分组：保留它，点击执行动作而不是点开空页
     const action = typeof nav.action === 'string' ? nav.action : ''
-    if (!leaves.length && !page && !occ && !action) continue
+    // settings.nav 注册的配置页（navPage）即使没有 Config 分组也要保留：
+    // 快捷键就是这样一页。旧式自绘整页靠 meta.page 识别，不能把带组件的旧入口也当成页。
+    const navPage = !metaPage(occ?.meta) ? (occ?.component as Component | undefined) : undefined
+    if (!leaves.length && !page && !navPage && !action) continue
     const category = view.categories.find((c) => c.id === nav.category)
     menuEntries.push({
       key: nav.id,
       kind: page || occ ? 'nav' : 'section',
       sections: navSections,
       leaves,
-      component: occ?.component as Component | undefined,
+      // component 只留给旧式自绘入口；配置页走 navPage，避免 SettingsContent 把
+      // 同一个组件当两套页面重复判断。
+      component: page ? (occ?.component as Component | undefined) : undefined,
+      navPage,
       page,
       title: nav.title,
       category: category?.title ?? categoryFor(nav.title, occ?.meta),
@@ -189,6 +197,7 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
       })),
       leaves,
       component: occ?.component as Component | undefined,
+      navPage: occ?.component as Component | undefined,
       page: metaPage(occ?.meta) as Component | undefined,
       title: nav,
       category,
@@ -219,6 +228,7 @@ export function buildNavEntries(input: BuildNavEntriesInput): NavEntry[] {
       sections: [],
       leaves: [],
       component: occ.component as Component,
+      navPage: occ.component as Component,
       page: metaPage(occ.meta) as Component | undefined,
       title,
       category,

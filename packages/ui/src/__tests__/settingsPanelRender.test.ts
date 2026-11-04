@@ -41,11 +41,12 @@ describe('设置面板打开不白屏', () => {
     })
     app.provide(RENDER_CONTEXT_KEY, renderCtx(ctx))
     const html = await renderToString(app)
-    // 只装主题皮时没有「个人」下的配置项（菜单项无内容会被过滤），
-    // 所以这里断言真实存在的分类 / 菜单 / 二级节，而不是写死空分类。
+    // 只装主题皮时没有「个人 → 通用」的配置项，快捷键配置页就是第一项；
+    // 断言分类、快捷键配置页与搜索框都真的挂上了（不是白屏/空白导航）。
     expect(html).toContain('外观')
     expect(html).toContain('主题')
-    expect(html).toContain('形状')
+    expect(html).toContain('快捷键')
+    expect(html).toContain('搜索命令、键位或 ID')
     expect(html).toContain('设置')
     ctx.stop()
   })

@@ -42,7 +42,10 @@ export function createShellScope(
   }
   /** 开面板前先重读一次注册表（插件热装/热卸后开面板即见最新键位） */
   function toggleShortcuts(): void {
-    if (!state.shortcutsOpen) shortcuts.refreshShortcuts()
+    if (!state.shortcutsOpen) {
+      shortcuts.ensureShortcutManager()
+      shortcuts.refreshShortcuts()
+    }
     state.shortcutsOpen = !state.shortcutsOpen
   }
   /** 开关历史弹窗：打开时重拉一页（后台那边可能已经有新的了） */

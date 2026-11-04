@@ -200,12 +200,11 @@ function onColor(value: string | { toString(): string } | null): void {
         >
           <SelectValue placeholder="请选择" />
         </SelectTrigger>
-        <!-- position=popper：避免 item-aligned 把选项层叠在触发器上；抬高到设置遮罩之上 -->
+        <!-- position=popper：避免 item-aligned 把选项层叠在触发器上；间距读「外观 → 浮层」 -->
         <SelectContent
           class="settings-floating-layer"
           position="popper"
           side="bottom"
-          :side-offset="4"
         >
           <SelectItem
             v-for="option in entry.schema.options ?? []"
@@ -306,7 +305,7 @@ function onColor(value: string | { toString(): string } | null): void {
             </svg>
           </button>
           <!-- 浮层挂在 body 上：滚动正文时不会被容器裁掉；抬到设置遮罩之上 -->
-          <PopoverContent class="sf-color-pop settings-floating-layer" align="start" :side-offset="8">
+          <PopoverContent class="sf-color-pop settings-floating-layer" align="start">
             <ColorPicker
               :model-value="colorValue || pickerSeed"
               @update:model-value="onColor"

@@ -144,7 +144,10 @@ describe('真实全插件装配：设置菜单', () => {
     const view = menu.resolve(groups)
     const seen = view.navs.flatMap((n) => n.sections.flatMap((s) => s.groups))
     for (const group of groups) {
-      expect(seen.filter((g) => g === group), group + ' 出现了多次').toHaveLength(1)
+      // 「节点/缩略图」由图片、视频两个 section 共用同一个 Config.group：
+      // 设置皮按 section 的字段前缀切片，展示上仍是两块，不会重复渲染字段。
+      const expected = group === '节点/缩略图' ? 2 : 1
+      expect(seen.filter((g) => g === group), group + ' 出现了 ' + seen.filter((g) => g === group).length + ' 次').toHaveLength(expected)
     }
     host.stop()
   })

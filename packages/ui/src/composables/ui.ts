@@ -103,6 +103,7 @@ export function createUi() {
     toggleAssetBatch: assets.toggleAssetBatch, toggleAssetSelected: assets.toggleAssetSelected,
     unbindSettingsClose: lifecycle.unbindSettingsClose,
     toggleShortcuts: shell.toggleShortcuts, refreshShortcuts: shortcuts.refreshShortcuts,
+    ensureShortcutManager: shortcuts.ensureShortcutManager,
     toggleHistory: shell.toggleHistory, toggleLeftCollapsed: shell.toggleLeftCollapsed,
     renameNode: nodeActions.renameNode, locateNode: nodeActions.locateNode,
     unbindCanvasTree: canvasTree.unbindCanvasTree, unbindAssetsChanged: lifecycle.unbindAssetsChanged,

@@ -4,7 +4,7 @@
  * 负责读取 settings.nav / settings.tab / settingsGroup 插槽、菜单与图标注册场，
  * 维护一级 / 二级选中态，以及切换设置页时的滚动锁。菜单数据推导在 settingsMenuModel.ts。
  */
-import { computed, markRaw, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Component, ComponentPublicInstance } from 'vue'
 import type { SettingsMenuView } from '@mini-canvas/canvas-data'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
@@ -25,6 +25,7 @@ import {
   type Section,
   type SlotOcc,
 } from './settingsMenuModel'
+import { tierSectionAllowsField } from '@mini-canvas/plugin-theme-default/components/settings/tierSection.js'
 
 export interface UseSettingsNavigationOptions {
   settings: () => SettingsPanelSource
@@ -55,6 +56,13 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
   }
   reloadSlots()
 
+  // 设置面板通常是“打开时才挂载”：插件（含快捷键配置页）往往早于面板装好，
+  // 这里若只信构造时读到的一份插槽，就会永远少掉后装进来的导航。每次挂载再同步一次。
+  onMounted(() => {
+    reloadSlots()
+    occTick.value += 1
+  })
+
   const disposers: Array<{ dispose(): void }> = [
     ctx.on('ctx:plugin-installed', () => {
       reloadSlots()
@@ -65,6 +73,16 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
       occTick.value += 1
     }),
   ]
+
+  // 运行期 slots.register/remove（不经过插件装卸、也不在面板挂载那一刻）同样要刷新：
+  // 快捷键配置页就是由已有快捷键作用域挂上来的。直接订阅底层注册表，少一个时序窗口。
+  const slotRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+  if (slotRegistry && typeof slotRegistry.subscribe === 'function') {
+    disposers.push({ dispose: slotRegistry.subscribe(() => {
+      reloadSlots()
+      occTick.value += 1
+    }) })
+  }
 
   onBeforeUnmount(() => {
     for (const disposer of disposers) disposer.dispose()
@@ -308,9 +326,15 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
     animateScrollTop(el, 0)
   }
 
-  /** 模板回调 ref：Vue 模板会解包 Ref，不能把 scrollEl 直接当普通 prop 传下去。 */
+  /**
+   * 模板回调 ref：正文滚动层换成 ScrollPane 后，模板拿到的是组件实例，
+   * 真正滚动的元素要经它暴露的 scrollElement() 取（问题 17）。
+   */
   function setScrollEl(el: Element | ComponentPublicInstance | null): void {
-    scrollEl.value = el instanceof HTMLElement ? el : null
+    const exposed = el as { scrollElement?: () => HTMLElement | null } | null
+    scrollEl.value = typeof exposed?.scrollElement === 'function'
+      ? exposed.scrollElement()
+      : el instanceof HTMLElement ? el : null
   }
 
   watch(activeNav, () => {
@@ -351,7 +375,9 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
 
   /** 一个二级段可能合并多个 Config.group；字段与内容槽按段的 group 顺序串起来。 */
   function sectionBlocks(section: Section): ContentBlock[] {
-    return section.groups.flatMap((group) => blocksOf(group))
+    return section.groups
+      .flatMap((group) => blocksOf(group))
+      .filter((block) => block.kind !== 'field' || tierSectionAllowsField(section.key, block.key))
   }
 
   return {

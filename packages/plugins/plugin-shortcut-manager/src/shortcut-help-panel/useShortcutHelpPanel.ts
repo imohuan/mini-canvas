@@ -223,10 +223,18 @@ function shortcutIcon(keys: string): string {
     URL.revokeObjectURL(url)
   }
 
-  function importKeymap() {
+  /**
+   * 打开文件选择并导入键位。
+   *
+   * @param onDone 文件真正读入并写进管理器之后调用；设置页面板用它刷新列表。
+   *   不能靠调用后的 `setTimeout(0)`：文件选择与 FileReader 都是异步的，
+   *   那一刻列表还没变，刷新必然读到旧数据（2026-11-03 实测）。
+   */
+  function importKeymap(onDone?: () => void) {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.json'
+    // 用户取消选择时 input 不会触发 onchange；不处理也没关系，面板保持原样。
     input.onchange = () => {
       const file = input.files?.[0]
       if (!file) return
@@ -236,6 +244,7 @@ function shortcutIcon(keys: string): string {
           const data = JSON.parse(reader.result as string)
           managerNow()?.loadKeymap(data)
           refreshData()
+          onDone?.()
         } catch {
           alert('导入失败：JSON 格式无效')
         }

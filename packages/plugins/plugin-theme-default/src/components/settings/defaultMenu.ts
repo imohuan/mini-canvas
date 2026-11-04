@@ -26,10 +26,11 @@ const categories: SettingsCategoryDef[] = [
 const navs: SettingsNavDef[] = [
   { id: 'nav/personal/general', category: C.personal, title: '通用', order: 10 },
   /**
-   * 快捷键没有 Config 字段：它是一个动作页（点开宿主已有的帮助浮层），
-   * 不是配置分组。`action` 让设置面板渲染成可点项，而不是一条点了没内容的空壳。
+   * 快捷键：设置页里的真实配置页。面板由 plugin-shortcut-manager 注册为
+   * settings.nav occupant（id 与这里一致），两套设置皮按 id 命中同一页。
+   * 不能再标成 action —— 那会只弹出帮助浮层，右侧仍是空白。
    */
-  { id: 'nav/personal/shortcuts', category: C.personal, title: '快捷键', order: 20, action: 'shortcuts' },
+  { id: 'nav/personal/shortcuts', category: C.personal, title: '快捷键', order: 20 },
   { id: 'nav/appearance/theme', category: C.appearance, title: '主题', order: 10, icon: Brush },
   { id: 'nav/integration/agent', category: C.integration, title: 'Agent', order: 10 },
   { id: 'nav/integration/plugins', category: C.integration, title: '插件', order: 20, icon: Puzzle },
@@ -68,6 +69,7 @@ const sections: SettingsSectionDef[] = [
   s('appearance/theme', 'shape', '形状', '外观/形状', 10),
   s('appearance/theme', 'font', '字体', '外观/字体', 20),
   s('appearance/theme', 'size', '尺寸', '外观/尺寸', 30),
+  s('appearance/theme', 'popup', '浮层', '外观/浮层', 32),
   s('appearance/theme', 'mode', '主题模式', '外观/主题模式', 35),
   s('appearance/theme', 'palette', '主题配色', '外观/主题配色', 40),
   s('appearance/theme', 'palette-dark', '暗色主题配色', '外观/暗色主题配色', 50),
@@ -98,22 +100,26 @@ const sections: SettingsSectionDef[] = [
   s('canvas/layout', 'toolbar', '控制栏', ['布局/控制栏', '常规/底栏'], 60),
   s('canvas/layout', 'diagnose', '诊断', '布局/诊断', 70),
   s('canvas/node', 'port', '端口', '节点/端口', 10),
+  s('canvas/node', 'port-zone', '活动区域', '节点/端口活动区', 15),
   s('canvas/node', 'title', '标题', '节点/标题', 20),
   s(
     'canvas/node',
     'detail',
     '细节',
-    ['节点/细节', '节点/低细节', '节点/多选标记', '节点/文本LOD', '节点/吸附带'],
+    ['节点/细节', '节点/低细节', '节点/多选标记', '节点/文本LOD'],
     30,
   ),
+  s('canvas/node', 'snap-zone', '吸附区域', '节点/吸附带', 16),
   s('canvas/node', 'size', '尺寸', '节点/尺寸', 40),
   s(
     'canvas/node',
     'content',
     '内容',
-    ['节点/内容', '节点/缩略图', '可视化节点/渲染清晰度', '常规/可视化节点'],
+    ['节点/内容', '可视化节点/渲染清晰度', '常规/可视化节点'],
     50,
   ),
+  s('canvas/node', 'image-tiers', '图片分档', '节点/缩略图', 52),
+  s('canvas/node', 'video-tiers', '视频分档', '节点/缩略图', 54),
   s('canvas/node', 'audio', '音频', ['节点/音频', '节点/音频节点'], 60),
   s('canvas/node', 'video-edit', '视频剪辑', '节点/视频剪辑', 70),
   s('canvas/edge', 'line', '连线', ['边/连线', '节点/连线菜单'], 10),

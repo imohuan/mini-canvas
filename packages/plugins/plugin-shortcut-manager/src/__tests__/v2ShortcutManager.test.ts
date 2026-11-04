@@ -48,6 +48,16 @@ describe('normalizeCombo / findV2Conflicts', () => {
   it('大小写与空格归一', () => {
     expect(normalizeCombo(' Ctrl + Z ')).toBe('ctrl+z')
   })
+  it('mod 与 ctrl 是同一个键（Windows/Linux），冲突不能漏报', () => {
+    expect(normalizeCombo('mod+z')).toBe(normalizeCombo('ctrl+z'))
+    const item = (id: string, command: string, keys: string) =>
+      ({ id, commandId: id, command, keys, group: 'plugin', priority: 1 }) as const
+    const conflicts = findV2Conflicts([
+      item('undo', '撤销', 'mod+z'),
+      item('agent', '切换 Agent 面板', 'ctrl+z'),
+    ])
+    expect(conflicts).toHaveLength(1)
+  })
   it('同键位冲突检出', () => {
     const items = [
       { id: 'a:mod+f', commandId: 'a', command: 'A', keys: 'mod+f', group: 'plugin', priority: 1 },
@@ -79,6 +89,15 @@ describe('createV2ShortcutManager 重映射', () => {
       expect(r.conflict.entries.some((e) => e.commandId === 'node-find:open')).toBe(true)
     }
     expect(c.get('command:undo')?.keys).toEqual(['mod+z'])
+  })
+  it('录制面板的 ctrl+z 与命令表的 mod+z 判为冲突并拒绝', () => {
+    const c = makeCommands()
+    const mgr = createV2ShortcutManager(c)
+    const check = mgr.checkRemapConflict('node-find:open', 'ctrl+z')
+    expect(check.ok).toBe(false)
+    const r = mgr.remapCombo('node-find:open', 'mod+f', 'ctrl+z')
+    expect(r.ok).toBe(false)
+    expect(c.get('node-find:open')?.keys).toEqual(['mod+f'])
   })
   it('resetDefaults 只还原 remap 过的命令', () => {
     const c = makeCommands()

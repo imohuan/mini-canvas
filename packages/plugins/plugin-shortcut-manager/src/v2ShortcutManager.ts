@@ -11,6 +11,7 @@
  * 纯逻辑、零 Vue（.vue 面板经同包 shortcutState.getShortcutManager() 拿到本实例调用）；可单测。
  */
 import type { CommandService } from '@mini-canvas/kernel'
+import { normalizeKeyForPlatform } from './keyLabels'
 
 /** 帮助列表一条（v1 ShortcutHelpItem 形状：command/keys/group/priority；多 keys 命令拆成多条） */
 export interface V2ShortcutHelpItem {
@@ -100,9 +101,15 @@ export function groupV2HelpList(items: V2ShortcutHelpItem[]): Array<{ group: V2S
   return result
 }
 
-/** 规范化键位（小写去空格）——与 v1 normalizeKeys 同语义 */
+/**
+ * 规范化键位（小写去空格，并把跨平台的 mod 归一成当前平台 ctrl/meta）。
+ *
+ * 为什么不能只做 lowercase：命令表里的撤销写 `mod+z`，录制面板捕获到的是
+ * `ctrl+z`。两者实际触发同一个键，但字面不同；不归一的话冲突检测会漏报，
+ * 保存后会出现两个命令抢同一个快捷键。
+ */
 export function normalizeCombo(keys: string): string {
-  return keys.toLowerCase().replace(/\s+/g, '')
+  return normalizeKeyForPlatform(keys)
 }
 
 /** 收集冲突：同键位被 ≥2 条帮助条目占用 */

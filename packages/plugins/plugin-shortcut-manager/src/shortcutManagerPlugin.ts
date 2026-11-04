@@ -19,6 +19,7 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { createShortcutRemapEngine } from './shortcutRemapEngine'
 import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
+import SettingsShortcutPanel from './SettingsShortcutPanel.vue'
 import { shortcutHelpState, setShortcutManager } from './shortcutState'
 import { commandRuntime } from '@mini-canvas/canvas-data'
 
@@ -56,6 +57,15 @@ export function apply(ctx: Context): void {
     order: 200,
     component: ShortcutHelpPanel,
     meta: { title: '快捷键帮助' },
+  })
+
+  // 设置页「快捷键」是配置页：同一个管理器、同一套重映射组件，不再只广播一个动作。
+  // 两套设置皮按 id 命中这一页；底部的帮助浮层仍由上面的 overlay 槽保留。
+  ctx.slots.register('settings.nav', {
+    id: 'nav/personal/shortcuts',
+    order: 20,
+    component: SettingsShortcutPanel,
+    meta: { title: '快捷键', category: '个人' },
   })
 
   // Ctrl+/（或 Cmd+/）开/关帮助面板

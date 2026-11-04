@@ -12,13 +12,36 @@
 */
 import type { PluginModule } from '@mini-canvas/kernel'
 import AppSettingsPanel from './components/settings/AppSettingsPanel.vue'
+import SettingsShortcutPage from './components/settings/SettingsShortcutPage.vue'
 
 const name = 'ui-settings-panel'
 
+interface SettingsPanelPluginCtx {
+  theme: { register(slot: string, comp: unknown, opts?: { id?: string; order?: number }): void }
+  slots: {
+    register(slot: string, req: {
+      id?: string
+      order?: number
+      component: unknown
+      meta?: unknown
+    }): string
+  }
+}
+
 export const uiSettingsPanelPlugin: PluginModule = {
   name,
-  apply(ctx: { theme: { register(slot: string, comp: unknown, opts?: { id?: string; order?: number }): void } }) {
+  apply(ctx: SettingsPanelPluginCtx) {
     // order 比默认皮(0)小 → 顶替它成为 settingsPanel 赢家
     ctx.theme.register('settingsPanel', AppSettingsPanel, { id: name, order: -1 })
+
+    // 设置左导航「个人 → 快捷键」：默认菜单只登记了 id，配置页由这里补上。
+    // 成品应用没有装 plugin-shortcut-manager 的插件体，但设置页仍要能改键；
+    // 桥接页先安装管理器再渲染面板，细节见 SettingsShortcutPage.vue。
+    ctx.slots.register('settings.nav', {
+      id: 'nav/personal/shortcuts',
+      order: 20,
+      component: SettingsShortcutPage,
+      meta: { title: '快捷键', category: '个人' },
+    })
   },
 }

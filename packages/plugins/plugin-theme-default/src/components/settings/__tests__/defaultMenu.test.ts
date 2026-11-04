@@ -23,8 +23,28 @@ describe('默认设置菜单', () => {
     registerDefaultSettingsMenu(menu.forPlugin('theme-default'))
     const theme = menu.resolve([]).navs.find((n) => n.title === '主题')!
     expect(theme.sections.map((s) => s.title)).toEqual([
-      '形状', '字体', '尺寸', '主题模式', '主题配色', '暗色主题配色', '主题工作台',
+      '形状', '字体', '尺寸', '浮层', '主题模式', '主题配色', '暗色主题配色', '主题工作台',
     ])
+  })
+
+  it('节点页把吸附区域、图片分档、视频分档拆成独立二级菜单', () => {
+    const menu = new SettingsMenuRegistry()
+    registerDefaultSettingsMenu(menu.forPlugin('theme-default'))
+    const node = menu.resolve([
+      '节点/细节', '节点/低细节', '节点/多选标记', '节点/文本LOD',
+      '节点/吸附带', '节点/内容', '节点/缩略图',
+    ]).navs.find((n) => n.title === '节点')!
+    // 只校验本批拆出来的节点小节顺序；端口/标题/尺寸等原有小节仍在
+    expect(node.sections.map((s) => s.title)).toEqual(expect.arrayContaining([
+      '细节', '活动区域', '吸附区域', '图片分档', '视频分档',
+    ]))
+    expect(node.sections.find((s) => s.title === '细节')!.groups).not.toContain('节点/吸附带')
+    // 「内容」小节仍在，但缩略图字段已经搬到图片/视频两个独立小节
+    expect(node.sections.find((s) => s.title === '内容')!.groups).not.toContain('节点/缩略图')
+    expect(node.sections.find((s) => s.title === '吸附区域')!.groups).toEqual(['节点/吸附带'])
+    // 图片/视频共用同一个 Config.group，靠字段前缀切片；菜单保留两块
+    expect(node.sections.find((s) => s.title === '图片分档')!.groups).toEqual(['节点/缩略图'])
+    expect(node.sections.find((s) => s.title === '视频分档')!.groups).toEqual(['节点/缩略图'])
   })
 
   it('另一个插件不改默认表：只注册自己的 section 就能挂进已有 nav', () => {

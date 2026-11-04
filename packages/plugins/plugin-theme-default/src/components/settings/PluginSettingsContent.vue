@@ -23,6 +23,8 @@
  * settings/SettingsContent.vue。
  */
 import { markRaw, provide } from 'vue'
+import TierTierPreview from './TierTierPreview.vue'
+import { SETTINGS_TIER_PREVIEW, SETTINGS_TIER_SPEC, tierSectionSpec } from './tierSection'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from './SettingsSchemaField.vue'
@@ -41,6 +43,8 @@ const props = withDefaults(
 
 // 插件自绘的 settingsGroup 页也拿得到标准字段控件
 provide(SETTINGS_FIELD_RENDERER, markRaw(SettingsSchemaField))
+provide(SETTINGS_TIER_PREVIEW, markRaw(TierTierPreview))
+provide(SETTINGS_TIER_SPEC, tierSectionSpec)
 
 const {
   navItems,

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { Component, ComponentPublicInstance } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import ScrollPane from './ScrollPane.vue'
 import ShadcnSettingsSection from '../ShadcnSettingsSection.vue'
 import type { ContentBlock, NavEntry, Section } from './settingsMenuModel'
+import TierTierPreview from '../TierTierPreview.vue'
+import { tierSectionSpec } from '../tierSection'
 
 const props = defineProps<{
   settings: SettingsPanelSource
@@ -63,9 +66,14 @@ function selectTab(key: string): void {
       </template>
     </div>
 
-    <div :ref="setScrollEl" class="psd-body">
+    <ScrollPane ref="setScrollEl" class="psd-body flex-1" direction="y" body-class="psd-body-inner">
+      <!-- 插件自绘 nav 配置页（如设置页快捷键）：正文滚动容器由设置皮统一提供 -->
+      <div v-if="activeEntry?.navPage && !activeEntry?.page" class="psd-page psd-nav-page">
+        <component :is="activeEntry.navPage" :group="activeEntry.key" :settings="props.settings" />
+      </div>
+
       <!-- 插件自绘整页：只换外层标题，内部内容仍归插件（业务逻辑不动） -->
-      <div v-if="activeEntry?.page" class="psd-page">
+      <div v-else-if="activeEntry?.page" class="psd-page">
         <component :is="activeEntry.page" :group="activeEntry.key" :settings="props.settings" />
       </div>
 
@@ -83,6 +91,12 @@ function selectTab(key: string): void {
             <component :is="section.page" :group="section.groups[0]" :settings="props.settings" />
           </div>
           <ShadcnSettingsSection v-else :title="section.label">
+            <TierTierPreview
+              v-if="tierSectionSpec(section.key)"
+              :section-id="section.key"
+              :group="section.groups[0]"
+              :settings="props.settings"
+            />
             <template
               v-for="block in sectionBlocks(section)"
               :key="block.kind === 'field' ? 'f-' + block.group + '-' + block.key : 's-' + block.occ.id"
@@ -119,6 +133,12 @@ function selectTab(key: string): void {
             <component :is="section.page" :group="section.groups[0]" :settings="props.settings" />
           </div>
           <ShadcnSettingsSection v-else :title="section.label">
+            <TierTierPreview
+              v-if="tierSectionSpec(section.key)"
+              :section-id="section.key"
+              :group="section.groups[0]"
+              :settings="props.settings"
+            />
             <template
               v-for="block in sectionBlocks(section)"
               :key="block.kind === 'field' ? 'f-' + block.group + '-' + block.key : 's-' + block.occ.id"
@@ -141,7 +161,7 @@ function selectTab(key: string): void {
           </ShadcnSettingsSection>
         </section>
       </template>
-    </div>
+    </ScrollPane>
   </div>
 </template>
 
@@ -230,28 +250,42 @@ function selectTab(key: string): void {
 .psd-body {
   flex: 1;
   min-height: 0;
+  /* ScrollPane 根节点仍是正文弹性容器：卡片组居中语义保留（契约测试盯着这条） */
+  display: flex;
+  flex-direction: column;
+}
+
+/* 滚动内容层：padding 从滚动容器挪进来（容器只管滚动，问题 17）；
+   宽版整页的 margin-right: -22px 仍然以这层的 22px 内边距为基准 */
+.psd-body :deep([data-settings-scroll-body]) {
   padding: 0 22px 24px;
-  overflow-y: auto;
 }
 
 .psd-section {
+  width: 100%;
   max-width: 760px;
+  margin-inline: auto;
   margin-bottom: 18px;
 }
 
 .psd-page {
+  width: 100%;
   max-width: 760px;
+  margin-inline: auto;
   padding: 4px 0 8px;
 }
 
 /* pageGroup 归到二级节的自绘整页（如主题工作台）：与一级整页同一套宽版规则 */
 .psd-section-page {
+  width: 100%;
   max-width: 760px;
+  margin-inline: auto;
   padding: 4px 0 8px;
 }
 
 .psd-section-page.is-wide {
   max-width: none;
+  margin-inline: 0;
   margin-right: -22px;
 }
 

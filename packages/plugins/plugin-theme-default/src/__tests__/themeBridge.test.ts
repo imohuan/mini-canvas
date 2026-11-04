@@ -14,6 +14,7 @@ import {
   resolveThemeBridgeVars,
   toThemeBridgeInput,
 } from '../themeBridge'
+import { DEFAULT_POPUP_CONFIG, popupConfig } from '@mini-canvas/ui-kit-shadcn'
 
 /** 最小假的 style 容器：只实现 setProperty / removeProperty */
 function fakeRoot() {
@@ -102,13 +103,20 @@ describe('外观交接：落值与清理', () => {
       font: 'inherit',
       heading: 'inherit',
       size: 'inherit',
+      popup: DEFAULT_POPUP_CONFIG,
     })
   })
 
   it('合法档位原样透传', () => {
     expect(
       toThemeBridgeInput({ themeRadius: 'medium', themeFont: 'inter', themeHeadingFont: 'roboto' }),
-    ).toEqual({ radius: 'medium', font: 'inter', heading: 'roboto', size: 'inherit' })
+    ).toEqual({
+      radius: 'medium',
+      font: 'inter',
+      heading: 'roboto',
+      size: 'inherit',
+      popup: DEFAULT_POPUP_CONFIG,
+    })
   })
 })
 
@@ -165,6 +173,50 @@ describe('外观交接：尺寸档位', () => {
     applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit' }, el)
     expect([...map.keys()].filter((k) => k.startsWith('--mct-size-'))).toEqual([])
     expect(attrs.has('data-mct-size')).toBe(false)
+  })
+})
+
+describe('外观交接：浮层配置', () => {
+  it('浮层四项进入桥接输入，未知值回落默认', () => {
+    const input = toThemeBridgeInput({
+      themePopupArrow: 'show',
+      themePopupGap: '12',
+      themePopupSubGap: '4',
+      themePopupSelectedStyle: 'check',
+    })
+    expect(input.popup).toEqual({ arrow: 'show', gap: 12, subGap: 4, selectedStyle: 'check' })
+
+    const fallback = toThemeBridgeInput({
+      themePopupArrow: 'wat',
+      themePopupGap: Number.NaN,
+      themePopupSubGap: Number.NaN,
+      themePopupSelectedStyle: 'wat',
+    })
+    expect(fallback.popup).toEqual(DEFAULT_POPUP_CONFIG)
+  })
+
+  it('落值时同步更新组件库的浮层响应式配置', () => {
+    applyThemeBridge({
+      radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit',
+      popup: { arrow: 'hide', gap: 12, subGap: 4, selectedStyle: 'check' },
+    })
+    expect(popupConfig.arrow).toBe('hide')
+    expect(popupConfig.gap).toBe(12)
+    expect(popupConfig.subGap).toBe(4)
+    // 传一个最小根节点：纯逻辑测试没有 document，clearThemeBridge 在没有 root 时会直接返回。
+    clearThemeBridge(fakeRoot().el)
+    expect(popupConfig).toEqual(DEFAULT_POPUP_CONFIG)
+  })
+})
+
+describe('外观交接：浮层字段文案', () => {
+  it('Config 的四个浮层字段挂在「外观/浮层」并给出真实选项', { timeout: 15000 }, async () => {
+    const { Config } = await import('../index')
+    const fields = Object.entries(Config).filter(([, schema]) => schema.group === '外观/浮层')
+    expect(fields.map(([key]) => key).sort()).toEqual([
+      'themePopupArrow', 'themePopupGap', 'themePopupSelectedStyle', 'themePopupSubGap',
+    ])
+    for (const [, schema] of fields) expect(schema.type).toBe('select')
   })
 })
 

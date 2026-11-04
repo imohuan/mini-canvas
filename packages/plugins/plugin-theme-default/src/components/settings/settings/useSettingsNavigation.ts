@@ -4,13 +4,14 @@
  * 负责读取 settings.nav / settings.tab / settingsGroup 插槽、菜单与图标注册场，
  * 维护一级 / 二级选中态，以及切换设置页时的滚动锁。菜单数据推导在 settingsMenuModel.ts。
  */
-import { computed, markRaw, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Component, ComponentPublicInstance } from 'vue'
 import type { SettingsMenuView } from '@mini-canvas/canvas-data'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { SETTINGS_NAV_ICON_FALLBACK } from '../navIcon'
 import { categoryOf, metaText, SETTINGS_NAV_CATEGORY_FIELD } from '../navCategory'
+import { tierSectionAllowsField } from '../tierSection'
 import {
   buildNavEntries,
   buildSectionMap,
@@ -61,6 +62,25 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
     ctx.on('ctx:plugin-installed', reloadTabs),
     ctx.on('ctx:plugin-uninstalled', reloadTabs),
   )
+
+  // 运行期 slots.register/remove（不经过插件装卸）同样要刷新：
+  // 设置页里的快捷键配置页由宿主在就绪后挂上，不能只等插件装卸事件。
+  const slotRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+  if (slotRegistry && typeof slotRegistry.subscribe === 'function') {
+    disposers.push({ dispose: slotRegistry.subscribe(() => {
+      reloadNav()
+      reloadTabs()
+      refreshTick.value += 1
+    }) })
+  }
+
+  // 设置面板通常“打开时才挂载”：插件往往早于面板装好，
+  // 若只信构造时读到的一份插槽，后装进来的快捷键配置页会永远缺席。挂载时再同步一次。
+  onMounted(() => {
+    reloadNav()
+    reloadTabs()
+    refreshTick.value += 1
+  })
 
   // schema 变化（插件热装卸）后重算分组
   const refreshTick = ref(0)
@@ -243,9 +263,13 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
     releaseScrollLock()
   }
 
-  /** 模板回调 ref：Vue 模板会解包 Ref，不能把 scrollEl 直接当普通 prop 传下去。 */
+  /**
+   * 模板回调 ref：正文滚动层换成 ScrollPane 后，模板拿到的是组件实例，
+   * 真正滚动的元素要经它暴露的 scrollElement() 取（问题 17）。
+   */
   function setScrollEl(el: Element | ComponentPublicInstance | null): void {
-    scrollEl.value = el instanceof HTMLElement ? el : null
+    const exposed = (el as { scrollElement?: () => HTMLElement | null } | null) ?? null
+    scrollEl.value = typeof exposed?.scrollElement === 'function' ? exposed.scrollElement() : (el instanceof HTMLElement ? el : null)
   }
 
   /** 内容插槽的摆放方式 */
@@ -281,7 +305,9 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
 
   /** 一个二级段可能合并多个 Config.group；字段与内容槽按段的 group 顺序串起来。 */
   function sectionBlocks(section: Section): ContentBlock[] {
-    return section.groups.flatMap((group) => blocksOf(group))
+    return section.groups
+      .flatMap((group) => blocksOf(group))
+      .filter((block) => block.kind !== 'field' || tierSectionAllowsField(section.key, block.key))
   }
 
   // 自绘整页的二级节是否要用宽版工作区
