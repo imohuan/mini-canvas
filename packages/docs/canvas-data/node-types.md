@@ -110,7 +110,7 @@ export interface NodeCreator {
   字符串 = 静态文案；函数 = 按节点 data 现算。派生值（宽高/字数/时长）一律走函数，
   **不写进 data** —— 写进去就成了落盘字段，每次尺寸变化多一条撤销记录，
   还会被后台/MCP 复制粘贴带跑。函数返回空串则那一格不渲染。
-  它受默认皮（plugin-theme-default）的配置 `titleVisible` 管控：关掉标题时这一格跟着一起收起。
+  它受默认皮（theme-canvas）的配置 `titleVisible` 管控：关掉标题时这一格跟着一起收起。
 - **`resizable` / `frameless` / `transparent` 是类型级能力**，由渲染层读。曾经因为"两条注册路径只透传了一条"，
   出现过"单测全绿、浏览器里边框照旧"的事故，所以现在两条路都透传。
 
@@ -351,7 +351,7 @@ export default defineNode({
 | 3D 预览节点 | `packages/plugins/plugin-node-3d-preview/src/node3dPreviewPlugin.ts` | `outputs: []` 声明终点型节点 + `resizable: true` |
 | 底部状态栏 | `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts` | `ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, ... })` |
 | 多选群组框 | `packages/plugins/plugin-multi-select/src/multiSelectPlugin.ts` | `ctx.selectionRegion.attach({ region: 'out:top', needs: ['selection'], ... })` |
-| 节点外壳 | `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` | 合成 `nodeRegistry` + `node/region` 场，按区域词渲染 |
+| 节点外壳 | `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` | 合成 `nodeRegistry` + `node/region` 场，按区域词渲染 |
 | 注册助手 | `packages/canvas-data/src/canvas/registry/registerNodeType.ts` | `ctx.nodes.register` 内部调它，一次落数据 + 展示两张表 |
 | 展示注册表 | `packages/canvas-data/src/canvas/registry/nodeRegistry.ts` | 存"哪个区域用哪个组件"，段名逐个过 `assertRegion` |
 | 区域读取 | `packages/canvas-data/src/canvas/region.ts` | `nodeRegionStackEntries` 把两条写路径合成同一摞 |

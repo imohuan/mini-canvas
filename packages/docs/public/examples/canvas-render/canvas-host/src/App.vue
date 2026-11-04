@@ -5,12 +5,13 @@
 import { ref, shallowRef } from 'vue'
 import { CanvasHost, CanvasProvider, type CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { edge, handle } from './uiState'
 
-// ① 装配清单：顺序即装载顺序（皮在前，业务节点在后）
-const plugins = [themeDefaultPlugin, nodeTextPlugin]
+// ① 装配清单：顺序即装载顺序（通用件常驻 + 画布皮，业务节点在后）
+const plugins = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
 const adapter = new LocalStorageAdapter()   // 刷新后画布还在
 
 // ② 宿主句柄：@ready 之后才有值，所以用 shallowRef（组件句柄不该深代理）

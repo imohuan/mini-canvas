@@ -5,7 +5,7 @@
  * 用户分不清节点边界在哪。以前这里声明 frameless: true（内容铺满、去掉外壳那圈 1px 缝），
  * 现在不声明 = 走 BaseNode 的默认边框。
  *
- * 边框本来就由**共享外壳**（plugin-theme-default 的 BaseNode 的 .v2-card）画，
+ * 边框本来就由**共享外壳**（plugin-theme-canvas 的 BaseNode 的 .v2-card）画，
  * 节点类型只声明"要不要"。这条测试钉住"别又声明回 frameless"。
  */
 import { describe, it, expect } from 'vitest'

@@ -14,17 +14,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, type Context } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
 import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { setReadyHost, useUi } from '../composables/ui'
 
-/** 与成品清单同形的宿主：装默认皮（edgeVisible）+ 小地图 + 自动布局（整理画布命令） */
+/**
+ * 与成品清单同形的宿主：装默认皮（theme-canvas 声明 edgeVisible 等画布键）
+ * + 小地图 + 自动布局（整理画布命令）。
+ */
 async function boot() {
   const { host } = await createMiniCanvasHost({
     adapter: new MemoryStorageAdapter(),
-    coldPlugins: [themeDefaultPlugin, nodeTextPlugin, miniMapPlugin, autoLayoutPlugin],
+    coldPlugins: [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin, miniMapPlugin, autoLayoutPlugin],
   })
   return host
 }
@@ -134,7 +138,7 @@ describe('画布开关按钮接上内核（状态栏 / 底栏）', () => {
     host.stop()
     const late = await createMiniCanvasHost({
       adapter: new MemoryStorageAdapter(),
-      coldPlugins: [themeDefaultPlugin],
+      coldPlugins: [themeComponentsPlugin],
     })
     ui.setHostEl({ host: late.host })
     setReadyHost(late.host)

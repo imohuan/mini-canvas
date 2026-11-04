@@ -34,7 +34,8 @@ import { data } from '../.vitepress/data/plugins.data.ts'
 
 | 页面 | 讲什么 |
 | --- | --- |
-| [默认主题 theme-default](/plugins/theme-default) | 节点/连线/背景长什么样；怎么换皮 |
+| [默认主题 theme-canvas](/plugins/theme-canvas) | 节点/连线/背景长什么样；怎么换皮 |
+| [默认主题组件库](/plugins/theme-components) | 按钮/下拉/预览/参数控件等通用件怎么按名取 |
 | [渲染宿主 canvas-render](/plugins/canvas-render) | 画布怎么被装配起来；它注入的三件服务 |
 
 ## 前后端对接插件

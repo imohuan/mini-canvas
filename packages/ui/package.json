@@ -61,17 +61,20 @@
     "@mini-canvas/plugin-node-video": "workspace:*",
     "@mini-canvas/plugin-shortcut-manager": "workspace:*",
     "@mini-canvas/plugin-style-library": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*",
     "@mini-canvas/plugin-tool-image-generation": "workspace:*",
     "@mini-canvas/plugin-tool-text-generation": "workspace:*",
     "@mini-canvas/plugin-web2api-tools": "workspace:*",
     "@mini-canvas/ui-kit-shadcn": "workspace:*",
+    "@mini-canvas/vue-render": "workspace:*",
     "@vueuse/core": "^14.3.0",
     "lucide-vue-next": "^1.0.0",
     "motion-v": "^2.4.4",
     "prosemirror-editor-bundle": "workspace:*",
     "vue-router": "^4.6.4",
-    "vue-sonner": "^2.0.9"
+    "vue-sonner": "^2.0.9",
+    "@mini-canvas/plugin-theme-components": "workspace:*",
+    "@mini-canvas/plugin-theme-canvas": "workspace:*",
+    "@mini-canvas/theme-contract": "workspace:*"
   },
   "devDependencies": {
     "@types/imagesloaded": "4.1.7",

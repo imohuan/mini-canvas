@@ -3,7 +3,7 @@
 **一句话**：参数预设件之一 —— 「一个小标题 + 一块按钮网格」（画质、清晰度、背景、生成数量那一排）。
 登记在 `ui` 目录名 `toolParamGrid`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/ToolOptionGrid.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/ToolOptionGrid.vue`。
 版式照参考站实测：区块标题高 20、12px/600 弱化色；网格 gap 8；按钮高 32、圆角 8、1px 发丝边、透明底；选中 = `--ui-hover-strong` 底。
 
 ## 功能说明

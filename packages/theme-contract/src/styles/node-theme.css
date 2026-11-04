@@ -1,0 +1,43 @@
+/* node-theme.css —— plugin-theme-canvas 的 --canvas-node-* 主题变量（默认值照搬 v1 canvas-core/node-theme.css）。
+   包加载即生效于全局 :root（index.ts 顶部 import）。壳/端口/边组件 CSS 一律引这些变量，便于换肤。 */
+:root {
+  --canvas-node-surface: #f9fafb;
+  --canvas-node-panel-surface: #ffffff;
+  --canvas-node-panel-surface-hover: #f3f4f6;
+  --canvas-node-panel-surface-active: #e5e7eb;
+  --canvas-node-text-muted: #64748b;
+  --canvas-node-text: #4b5563;
+  /* 节点正文文字色（文本节点内容区消费；对齐 v1 TextNode 的 text-gray-700） */
+  --canvas-node-text-body: #374151;
+  --canvas-node-text-strong: #111827;
+  /* 节点标题右侧附加文本（尺寸这类元信息）：比标题正文更弱一档，不跟节点名字抢注意力 */
+  --canvas-node-text-faint: #9ca3af;
+  --canvas-node-border: #e5e7eb;
+  --canvas-node-border-subtle: #e5e7eb;
+  --canvas-node-border-hover: #d1d5db;
+  --canvas-node-border-selected: rgb(17 24 39 / 0.85);
+  --canvas-node-ring: rgb(17 24 39 / 0.92);
+  --canvas-node-ring-soft: rgb(17 24 39 / 0.38);
+  --canvas-node-ring-transparent: rgb(17 24 39 / 0);
+  --canvas-node-shadow-strong: rgb(17 24 39 / 0.2);
+  --canvas-node-shadow-soft: rgb(17 24 39 / 0.12);
+  --canvas-node-shadow-subtle: rgb(0 0 0 / 0.06);
+  --canvas-node-shadow-panel: rgb(15 23 42 / 0.12);
+  --canvas-node-resize-handle: #9ca3af;
+  --canvas-node-resize-handle-active: #111827;
+  --canvas-node-target-zone-surface: rgb(17 24 39 / 0.08);
+  --canvas-node-target-zone-border: rgb(17 24 39 / 0.55);
+  --canvas-node-snap-zone-surface: rgb(17 24 39 / 0.1);
+  --canvas-node-snap-zone-border: rgb(17 24 39 / 0.9);
+  --canvas-node-snap-zone-highlight: rgb(255 255 255 / 0.75);
+  --canvas-node-snap-zone-shadow: rgb(17 24 39 / 0.28);
+  /* source 输出口吸附带（吸附调试右缘分色）：此前无 token、组件里只有硬编码蓝色兜底，收编成主题变量 */
+  --canvas-node-snap-zone-source-surface: rgb(37 99 235 / 0.12);
+  --canvas-node-snap-zone-source-border: rgb(37 99 235 / 0.9);
+  --canvas-node-debug-danger: rgb(17 24 39 / 0.65);
+  --canvas-node-debug-danger-fill: rgb(17 24 39 / 0.04);
+  --canvas-node-debug-center: #111827;
+  --canvas-node-debug-rest: #4b5563;
+  --canvas-node-debug-mouse: #6b7280;
+  --canvas-node-debug-label-stroke: #ffffff;
+}

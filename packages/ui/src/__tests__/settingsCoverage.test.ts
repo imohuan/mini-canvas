@@ -17,7 +17,8 @@ import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
@@ -54,7 +55,9 @@ async function bootWithSettings() {
   ctx.inject('themeRegistry', new ThemeRegistry())
 
   for (const p of [
-    themeDefaultPlugin,
+    themeComponentsPlugin,
+    // 外观 / 布局 / 节点这类设置键由画布半边声明；与成品装配一致，两边都装。
+    themeCanvasPlugin,
     nodeTextPlugin,
     nodeImagePlugin,
     node3dPreviewPlugin,

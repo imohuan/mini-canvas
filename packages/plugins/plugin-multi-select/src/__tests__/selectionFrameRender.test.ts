@@ -14,7 +14,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 // T06：多选已改为从 UI 目录按名取端口/拖线件。测试注入**真实主题实现**（devDependency），
 // 这样"与节点端口同款"的类名断言仍验的是真件，而不是自造的假桩。
-import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
+import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-canvas'
 import SelectionFrame from '../SelectionFrame.vue'
 import { MULTI_SELECT_FRAME_KEYS, MULTI_SELECT_COLOR_KEYS, DEFAULT_MULTI_SELECT_FRAME } from '../multiSelectConfig'
 

@@ -1,32 +1,40 @@
 # 默认主题组件库：装了默认皮，你就有一整套现成组件
 
-**一句话**：默认主题插件（theme-default）不只画节点和连线，它还把一整套通用界面件
+**一句话**：默认主题的通用组件半边（theme-components）不只画节点和连线，它还把一整套通用界面件
 （按钮、下拉、气泡、滑块、取色器、参数控件、端口、临时连线……）**注册到画布上**，
 任何插件都能**按名字取来直接用**，不必自己写、也不该自己复制一份。
 
 本页回答三件事：**注册了哪些**、**为什么算"全局可用"**、**每件怎么用**（每件一篇，见页面末尾目录）。
 
-## 一、它注册了两类东西
+## 一、先分清两个包
+
+默认主题拆成了两个独立插件包，互不 import：
+
+| 包 | 插件 | 管什么 |
+| --- | --- | --- |
+| `@mini-canvas/plugin-theme-components` | `theme-components` | 本页讲的通用组件、设置面板、外观变量、通知服务（应用级常驻） |
+| `@mini-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 节点工具栏（进画布才启动），见 [默认主题](/plugins/theme-canvas) |
+
+两者共享的纯数据在 `@mini-canvas/theme-contract`。
+
+## 二、它注册了两类东西
 
 | 类别 | 落在哪 | 是什么 | 能不能被换掉 |
 | --- | --- | --- | --- |
-| **渲染皮**（6 条） | 主题槽 `ctx.theme` | 节点壳 / 连线 / 背景 / 拖线临时线 / 默认边类型 / 设置面板 | 能。装一个 order 更小的插件占同一槽即顶替 |
+| **渲染皮**（本包 1 条） | 主题槽 `ctx.theme` | 设置面板 `settingsPanel`；节点壳 / 连线 / 背景 / 拖线临时线由 theme-canvas 注册 | 能。装一个 order 更小的插件占同一槽即顶替 |
 | **设计系统组件目录** | 注册场 `ctx.registryOf('ui')` | 工具栏件 / 全屏预览 / 滑块 / 参数控件族 / 取色器 / 浮动端口 / 临时连线，以及全部 shadcn 原始组件 | 能。同一个名字上叠一条 order 更小的即顶替 |
 
-## 二、渲染皮（主题槽）—— 画布"长什么样"由它们决定
+## 三、渲染皮（主题槽）—— 本包只占设置面板
 
-来源：`packages/plugins/plugin-theme-default/src/index.ts` 的 `apply(ctx)`。
+来源：`packages/plugins/plugin-theme-components/src/index.ts` 的 `apply(ctx)`。
 
 | 槽名 | 放进去的组件 | 它管什么 | 详情 |
 | --- | --- | --- | --- |
-| `nodeShell` | `BaseNode` | 每个节点的外壳：端口、标题、选中环、低细节、浮动端口 | [节点壳 BaseNode](/plugins/theme-components/base-node) |
-| `edge` | `CustomEdge` | 连线的完整外观：流光、箭头、双击剪切 | [连线 CustomEdge](/plugins/theme-components/custom-edge) |
-| `background` | `DefaultBackground` | 画布底：跟随平移缩放的点状网格 | [画布背景 DefaultBackground](/plugins/theme-components/default-background) |
-| `connectionLine` | `ConnectionLine` | 拖线时那根"待连预览线" | [拖线临时线 ConnectionLine](/plugins/theme-components/connection-line) |
-| `edgeDefaultType` | 字符串值 `'custom'` | 新建边的默认类型走 `custom` | 见下方"注意事项"第 5 条 |
 | `settingsPanel` | `PluginSettingsContent` | 设置界面的**中间层**（左导航 + 内容区）；最外层窗口由渲染层 `SettingsShell` 提供 | [设置面板 PluginSettingsContent](/plugins/theme-components/plugin-settings-content) |
 
-这六条都是**单赢家槽**：同一槽名上 `order` 最小者赢（`order` 越小越靠外）。
+节点壳 / 连线 / 背景 / 拖线临时线 / 默认边类型这五条由 [theme-canvas](/plugins/theme-canvas) 注册。
+
+所有主题槽都是**单赢家槽**：同一槽名上 `order` 最小者赢（`order` 越小越靠外）。
 想换其中一块，注册一个 `order` 更小的插件即可；默认件不会被删，只是排到后面。
 
 ## 三、设计系统组件目录（`ui` 场）
@@ -43,8 +51,9 @@
 | `toolParamRatio` | `ToolRatioGrid` | 参数预设：按真实宽高比画小矩形的比例网格 | [比例网格](/plugins/theme-components/tool-ratio-grid) |
 | `toolParamSlider` | `ToolParamSlider` | 参数预设：滑块 + 当前值 + 单位 | [参数滑块](/plugins/theme-components/tool-param-slider) |
 | `color` | `ColorField` | 取色器（色板 + 透明度） | [取色器](/plugins/theme-components/color-field) |
-| `movingHandle` | `MovingHandle` | 节点浮动端口（拖拽时看到的小圆球） | [浮动端口](/plugins/theme-components/moving-handle) |
-| `connectionLine` | `ConnectionLine` | 拖线临时线（与 `theme.connectionLine` 是同一个组件） | [拖线临时线](/plugins/theme-components/connection-line) |
+| `movingHandle` | `MovingHandle` | 节点浮动端口（拖拽时看到的小圆球）—— **由 theme-canvas 登记** | [浮动端口](/plugins/theme-components/moving-handle) |
+| `connectionLine` | `ConnectionLine` | 拖线临时线（与 `theme.connectionLine` 是同一个组件）—— **由 theme-canvas 登记** | [拖线临时线](/plugins/theme-components/connection-line) |
+| `nodeModeTopBar` / `nodeModeBottomBar` | `NodeModeTopBar` / `NodeModeBottomBar` | 节点上下模式工具栏 —— **由 theme-canvas 登记** | [节点工具栏](/examples/node-toolbar) |
 
 > 通用按钮、下拉、选择器、气泡也在这张目录里：默认主题把 shadcn 原始组件按**导出名**登记，
 > 业务插件写 `const Button = useUiComponent('Button')` 或
@@ -107,9 +116,9 @@ function refresh() { /* ... */ }
 // 文件：packages/my-plugin/src/SomePanel.vue
 // 格式：Vue 单文件组件
 // 位置：插件包里的面板 —— 它明确就要默认主题的这一份具体实现
-import { PrecisionSlider, ToolParamField, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-default'
-// 渲染件也导出了
-import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-theme-default'
+import { PrecisionSlider, ToolParamField, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-components'
+// 渲染件在画布那一半
+import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-theme-canvas'
 ```
 
 **两种拿法怎么选**：想"换主题时它一起换" → **按名取**；只是同包内自己用、
@@ -148,8 +157,9 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
    表现为"组件没渲染"，**先查名字拼写**。
 2. **`useUiComponent` 必须在画布渲染子树内调用**（它内部走 `useCanvasRender()` 拿 ctx）。
    在画布外调用会抛错 —— 树外请用 `uiComponentOutside`。
-3. **"默认主题装了才有"**：这些目录名是 theme-default 登记的。只装业务插件、不装主题插件，目录就是空的。
-   成品应用一定装了它（`packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 第一条）。
+3. **"默认主题装了才有"**：通用件由 theme-components 登记，端口 / 临时线 / 节点工具栏由 theme-canvas 登记。
+   只装业务插件、不装主题插件，目录就是空的。成品应用一定两件都装了
+   （`packages/ui/src/assembly.ts` 的 `APP_PLUGIN_REGISTRY`）。
 4. **设置面板只有一份**：`settingsPanel` 由本主题包注册（`PluginSettingsContent`），
    成品应用那套界面已并入本包（2026-11-04），`packages/ui` 不再注册换皮插件。
 5. **`edgeDefaultType` 存的是字符串不是组件**：它是"默认边类型"这个取值
@@ -182,7 +192,7 @@ import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-th
 
 ## 相关
 
-- 默认主题插件本身（配置项、设置面板扩展插槽、怎么换皮）：[默认主题 theme-default](/plugins/theme-default)
+- 画布外观那一半（节点壳 / 连线 / 背景 / 怎么换皮）：[默认主题 theme-canvas](/plugins/theme-canvas)
 - 注册场规则：`order` 谁小谁赢、单赢家槽怎么取 → [注册场](/intro/registries)
 - 源码：`packages/canvas-render/src/contracts/uiCatalog.ts`（按名取的实现）、
-  `packages/plugins/plugin-theme-default/src/index.ts`（登记处）
+  `packages/plugins/plugin-theme-components/src/index.ts`（登记处）

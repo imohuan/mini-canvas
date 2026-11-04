@@ -17,10 +17,14 @@ import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import {
+  CANVAS_CONTEXT_KEY,
+  RENDER_CONTEXT_KEY,
+  type CanvasRenderContext,
+} from '@mini-canvas/canvas-render'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
-import SettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
+import SettingsSchemaField from '../../../plugins/plugin-theme-components/src/components/settings/SettingsSchemaField.vue'
 import PromptActionSettings from '@mini-canvas/plugin-bottom-bar/PromptActionSettings.vue'
 
 /** 与宿主同形的真内核（底栏的 inject 依赖都在） */
@@ -50,7 +54,7 @@ async function boot(): Promise<Context> {
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   ctx.plugin(pluginBottomBar)
   await ctx.start()
   return ctx
@@ -69,6 +73,9 @@ function renderCtx(ctx: Context): CanvasRenderContext {
 function render(comp: Component, props: Record<string, unknown>, ctx: Context): Promise<string> {
   const app = createSSRApp({ render: () => h(comp, props) });
   app.provide(RENDER_CONTEXT_KEY, renderCtx(ctx));
+  // 取件工具（useUiComponent）先读应用级上下文。设置条目渲染在外壳里，两格都提供，
+  // 与真实 <AppProvider><CanvasProvider> 的嵌套一致。
+  app.provide(CANVAS_CONTEXT_KEY, { ctx } as never);
   return renderToString(app);
 }
 

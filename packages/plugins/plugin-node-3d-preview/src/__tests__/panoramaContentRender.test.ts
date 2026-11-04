@@ -17,7 +17,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 import { Context } from '@mini-canvas/canvas-data'
 import { RegistryImpl } from '@mini-canvas/kernel'
 import type { Registry } from '@mini-canvas/kernel'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import PanoramaContent from '../PanoramaContent.vue'
 import { beginInteract, enterFullscreen, resetInteractSessions } from '../panoramaSession'
 
@@ -25,7 +25,7 @@ import { beginInteract, enterFullscreen, resetInteractSessions } from '../panora
 let uiField: Registry<unknown>
 beforeAll(async () => {
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   uiField = ctx.registryOf<unknown>('ui')
 })

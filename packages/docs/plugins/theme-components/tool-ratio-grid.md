@@ -3,7 +3,7 @@
 **一句话**：参数预设件之一 —— 比例参数专用网格，每格画一个**按真实宽高比缩放的小描边矩形**，
 一眼能看出 16:9 与 9:16 的区别。登记在 `ui` 目录名 `toolParamRatio`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/ToolRatioGrid.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/ToolRatioGrid.vue`。
 
 ## 功能说明
 

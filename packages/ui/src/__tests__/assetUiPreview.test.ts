@@ -88,7 +88,7 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
 })
 
 describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {
-  const viewer = read('../../../plugins/plugin-theme-default/src/components/ui/MediaViewer.vue')
+  const viewer = read('../../../plugins/plugin-theme-components/src/components/ui/MediaViewer.vue')
 
   it('模板里有 iframe + srcdoc，绑的是 item.html', () => {
     expect(viewer).toContain("kind === 'ui'")
@@ -102,7 +102,7 @@ describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {
   })
 
   it('item 类型声明里有 html 字段', () => {
-    const types = read('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/types.ts')
+    const types = read('../../../plugins/plugin-theme-components/src/components/ui/media-viewer/types.ts')
     expect(types).toMatch(/html\?: string/)
   })
 })

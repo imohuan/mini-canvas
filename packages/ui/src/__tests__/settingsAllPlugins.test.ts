@@ -13,7 +13,7 @@ import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import type { PluginModule } from '@mini-canvas/kernel'
 
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
@@ -54,7 +54,7 @@ import { historyPlugin } from '../../../plugins/plugin-history/src/index'
 
 /** 本地全部插件（顺序无妨；settings 只按 Config 收分组） */
 const ALL_PLUGINS = [
-  themeDefaultPlugin,
+  themeComponentsPlugin,
   nodeTextPlugin,
   nodeImagePlugin,
   nodeVideoPlugin,

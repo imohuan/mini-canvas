@@ -60,8 +60,9 @@ describe('APP_PLUGIN_REGISTRY', () => {
       const pluginName = mc.pluginName
       if (!pluginName) continue
       if (mc.builtin === true) {
-        // theme-default 在注册表里拆成了主题的两件，包级名字不同，单独核对。
-        const themeSplit = dir === 'plugin-theme-default'
+        // 主题拆成了两个独立包：dir（包目录名）与 miniCanvas.pluginName 不同，
+        // 两边都按 pluginName 核对（theme-components / theme-canvas 都在注册表里）。
+        const themeSplit = dir === 'plugin-theme-components' || dir === 'plugin-theme-canvas'
         if (!themeSplit) {
           expect(registered.has(pluginName), dir + ' 声明 builtin 但没登记').toBe(true)
         }

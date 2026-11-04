@@ -41,4 +41,22 @@ describe('vue-render 边界', () => {
       expect(text, rel).not.toMatch(/from ['"][^'"]*(canvas-data|canvas-render)/)
     }
   })
+
+  it('从 canvas-render 搬来的通用件也在扫描范围内（不能靠"没扫到"过关）', () => {
+    const moved = [
+      'components/SlotComposer.vue',
+      'components/SlotAnchor.vue',
+      'components/slotComposer.ts',
+      'components/SettingsHost.vue',
+      'components/SettingsShell.vue',
+      'components/settingsSource.ts',
+      'components/settingsPanelTypes.ts',
+      'contracts/uiCatalog.ts',
+      'contracts/layers.ts',
+    ]
+    const scanned = new Set(walk(SRC).map((f) => path.relative(SRC, f).replace(/\\/g, '/')))
+    for (const rel of moved) {
+      expect(scanned.has(rel), rel + ' 没有被边界扫描收录').toBe(true)
+    }
+  })
 })

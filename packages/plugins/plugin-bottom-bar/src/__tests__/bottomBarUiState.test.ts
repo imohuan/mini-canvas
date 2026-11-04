@@ -12,7 +12,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
 import { Context } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import ReferenceSelectOverlay from '../ReferenceSelectOverlay.vue'
 import MediaPreviewOverlay from '../MediaPreviewOverlay.vue'
@@ -31,7 +31,7 @@ const DEMO_ACTION: BarAction = {
 let uiField: { top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }
 beforeAll(async () => {
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   uiField = ctx.registryOf('ui') as typeof uiField
 })

@@ -17,7 +17,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 import { RegistryImpl } from '@mini-canvas/kernel'
 import { Context } from '@mini-canvas/canvas-data'
 // 只导入主题**插件**（走注册流程），不导入它的实现组件（T08）
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import AudioTopToolbar from '../AudioTopToolbar.vue'
 
 const AUDIO = 'blob:mock-audio'
@@ -31,7 +31,7 @@ async function themeUiField(): Promise<{
   subscribe(fn: () => void): { dispose(): void }
 }> {
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   return ctx.registryOf('ui')
 }

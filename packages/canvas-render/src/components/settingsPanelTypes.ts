@@ -1,11 +1,5 @@
-import type { SettingSchema, SettingEntry } from '@mini-canvas/kernel'
-
-/** 面板消费的最小 settings 接口（与内核 SettingsStore / ctx.settings 能力对齐）。独立 .ts 以便 plain tsc 导出类型。 */
-export interface SettingsPanelSource {
-  groups(): string[]
-  groupOf(group: string): SettingEntry[]
-  set(key: string, value: string | number | boolean): boolean
-  onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
-}
-
-export type { SettingSchema, SettingEntry }
+/**
+ * 转发件：设置面板的数据契约只有一份，住在 @mini-canvas/vue-render/components/settingsPanelTypes.ts。
+ * 这里保留旧路径，现有 import 不用改；新代码直接从 vue-render 取。
+ */
+export * from '@mini-canvas/vue-render/components/settingsPanelTypes'

@@ -72,8 +72,8 @@ export default defineConfig({
       '@mini-canvas/ui-kit-shadcn > vue-sonner',
       '@mini-canvas/ui-kit-shadcn > @lucide/vue',
       '@mini-canvas/ui-kit-shadcn > @vuelor/picker',
-      // 默认主题（plugin-theme-default）
-      '@mini-canvas/plugin-theme-default > @ckpack/vue-color',
+      // 默认主题的通用组件半边（plugin-theme-components）
+      '@mini-canvas/plugin-theme-components > @ckpack/vue-color',
       // 3D 节点（plugin-node-3d-preview）
       '@mini-canvas/plugin-node-3d-preview > three',
       // 富文本编辑器（prosemirror-editor-bundle）
@@ -91,7 +91,9 @@ export default defineConfig({
     '@mini-canvas/kernel',
     '@mini-canvas/canvas-base',
     '@mini-canvas/ui-kit-shadcn',
-    '@mini-canvas/plugin-theme-default',
+    '@mini-canvas/plugin-theme-components',
+    '@mini-canvas/plugin-theme-canvas',
+    '@mini-canvas/theme-contract',
     '@mini-canvas/plugin-node-text',
     '@mini-canvas/plugin-node-ui',
     '@mini-canvas/plugin-node-image',

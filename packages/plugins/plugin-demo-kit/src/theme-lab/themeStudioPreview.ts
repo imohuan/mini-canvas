@@ -14,11 +14,11 @@ import { defineThemePaletteSettings } from '@mini-canvas/canvas-render'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import { Context } from '@mini-canvas/canvas-data'
 import type { ConfigField, ConfigSchema } from '@mini-canvas/canvas-base'
 import type { SettingSchema } from '@mini-canvas/kernel'
-import { registerThemePreview as registerThemeDefaultPreview } from '@mini-canvas/plugin-theme-default'
+import { registerThemePreview as registerThemeDefaultPreview } from '@mini-canvas/plugin-theme-components'
 import { registerThemePreview as registerMultiSelectPreview } from '@mini-canvas/plugin-multi-select'
 import { registerThemePreview as registerAlignGuidePreview } from '@mini-canvas/plugin-align-guide'
 import { registerThemePreview as registerEdgeCuttingPreview } from '@mini-canvas/plugin-edge-cutting'
@@ -102,7 +102,7 @@ export function createStudioPreviewSource(): { store: SettingsStore; source: Set
   }, 'canvas-render')
 
   // 默认主题 + 三个可选插件：颜色格和“插件没装就没有”都走真实 Config。
-  definePluginConfig(store, themeDefaultPlugin.name, themeDefaultPlugin.Config ?? {})
+  definePluginConfig(store, themeComponentsPlugin.name, themeComponentsPlugin.Config ?? {})
   definePluginConfig(store, multiSelectPlugin.name, multiSelectPlugin.Config ?? {})
   definePluginConfig(store, alignGuidePlugin.name, alignGuidePlugin.Config ?? {})
   definePluginConfig(store, edgeCuttingPlugin.name, edgeCuttingPlugin.Config ?? {})

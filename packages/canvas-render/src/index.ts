@@ -7,7 +7,7 @@
 //   render 注入令牌（CanvasHost provide、渲染插件 content/壳/边 消费）。
 // 依赖方向：本包 runtime 依赖内核；渲染插件(theme-default/node-text)依赖本包拿 vue-flow 原语 + 令牌。
 //
-// 注：edgeGeometry(边几何纯算法)已随实现插件迁到 plugin-theme-default/src/edgeGeometry.ts，
+// 注：edgeGeometry(边几何纯算法)已随实现插件迁到 theme-contract/src/edgeGeometry.ts，
 //     由 CustomEdge 本地 import —— 本包与内核均不再提供。
 
 // 通用 UI 主题变量（--ui-* / --sf-* / --ps-* / --dd-*）：包加载即生效于 <html class="dark">，
@@ -444,6 +444,12 @@ export type {
 
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'
+// 渲染层插件：标准能力包注册（应用级常驻；不注入 doc/selection/view）
+export {
+  canvasRenderPlugin,
+  name as canvasRenderPluginName,
+  registerStandardCapabilities,
+} from './renderPlugin'
 export type {
   MiniCanvasOptions,
   MiniCanvasApi,

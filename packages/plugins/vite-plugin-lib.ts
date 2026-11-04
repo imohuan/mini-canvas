@@ -41,6 +41,9 @@ export const HOST_GLOBALS: Record<string, string> = {
   // 组件库（shadcn-vue 原始件）：插件直接 import Button，靠宿主这一份实例渲染。
   // 打进插件会变成两份组件定义 + 两份样式，主题与 Tailwind 类都对不上。
   '@mini-canvas/ui-kit-shadcn': 'MiniCanvasUiKit',
+  // 主题契约（纯数据/纯函数）：两个主题包与业务插件都可能读同一张默认值表，
+  // 多份实例会出现"两个真相"，所以和其它 @mini-canvas/* 一样由宿主提供。
+  '@mini-canvas/theme-contract': 'MiniCanvasThemeContract',
 }
 /**
  * 生成 build 段（纯数据）。各插件的 vite.config.ts：

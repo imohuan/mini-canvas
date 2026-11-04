@@ -9,9 +9,10 @@ import { readFileSync } from 'node:fs'
 const read = (rel: string): string => readFileSync(new URL(rel, import.meta.url), 'utf-8')
 
 const themeContent = read(
-  '../../../plugins/plugin-theme-default/src/components/settings/settings/SettingsContent.vue',
+  '../../../plugins/plugin-theme-components/src/components/settings/settings/SettingsContent.vue',
 )
-const shell = read('../../../canvas-render/src/components/SettingsShell.vue')
+// 外壳实现已搬进通用渲染底座（vue-render）；canvas-render 只剩转发件。
+const shell = read('../../../vue-render/src/components/SettingsShell.vue')
 
 describe('设置正文：固定最大宽度、整体居中', () => {
   it('正文容器用水平居中', () => {

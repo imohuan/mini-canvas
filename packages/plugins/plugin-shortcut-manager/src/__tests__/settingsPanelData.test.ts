@@ -34,7 +34,7 @@ describe('设置页快捷键配置数据', () => {
   })
 
   it('设置菜单是配置页，不再只广播动作；插件注册 settings.nav 页面', () => {
-    const menu = readFileSync(new URL('../../../../plugins/plugin-theme-default/src/components/settings/defaultMenu.ts', import.meta.url), 'utf-8')
+    const menu = readFileSync(new URL('../../../../plugins/plugin-theme-components/src/components/settings/defaultMenu.ts', import.meta.url), 'utf-8')
     expect(menu).toMatch(/id: 'nav\/personal\/shortcuts'[^\n]*title: '快捷键'[^\n]*order: 20 \}/)
     expect(menu).not.toMatch(/id: 'nav\/personal\/shortcuts'[^\n]*action:/)
     const plugin = readFileSync(new URL('../shortcutManagerPlugin.ts', import.meta.url), 'utf-8')

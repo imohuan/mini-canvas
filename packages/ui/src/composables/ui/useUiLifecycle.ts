@@ -1,7 +1,7 @@
 import type { SettingsStore } from '@mini-canvas/kernel'
 import {
   EDGE_SETTING_KEYS, HANDLE_SETTING_KEYS, DEBUG_SETTING_KEYS, SNAP_ZONE_SETTING_KEYS,
-} from '@mini-canvas/plugin-theme-default'
+} from '@mini-canvas/theme-contract'
 import { registerPendingSave } from '../pendingSave'
 import type { UiConfig, UiState } from './createUiState'
 import type { UiHostScope } from './useUiHost'

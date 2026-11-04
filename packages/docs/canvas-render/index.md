@@ -51,11 +51,12 @@
      位置：告诉它装哪些插件，剩下的它全包 -->
 <script setup lang="ts">
 import { CanvasHost } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 
 // ① 顺序即装载顺序：先装「皮」（它提供节点壳/边/背景），再装业务节点
-const plugins = [themeDefaultPlugin, nodeTextPlugin]
+const plugins = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
 </script>
 
 <template>
@@ -178,7 +179,8 @@ const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flo
 | `packages/ui/src/assembly.ts` | `APP_PLUGINS`：成品应用的装配清单（数组顺序即装载顺序） |
 | `packages/canvas-render/src/host/CanvasHost.vue` | 建宿主 + 订阅数据自动重灌 + 主题装配 + 转发 VueFlow 事件 |
 | `packages/canvas-render/src/host/__tests__/createMiniCanvasHost.test.ts` | 门面行为的测试：seed、热装热卸、manifest、`exposeToWindow` 清理 |
-| `packages/plugins/plugin-theme-default/src/index.ts` | 往 `ctx.theme` 注册 nodeShell / edge / background / settingsPanel，再往 `ui` 目录注册通用件 |
+| `packages/plugins/plugin-theme-components/src/index.ts` | 往 `ui` 目录注册通用件、注册 settingsPanel 与外观变量 |
+| `packages/plugins/plugin-theme-canvas/src/index.ts` | 往 `ctx.theme` 注册 nodeShell / edge / background / connectionLine |
 
 ## 阅读顺序
 
@@ -197,4 +199,4 @@ const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flo
 3. **`view` 的视口部分在 CanvasSurface 挂载前是「假可用」**：读得到默认值 `{x:0,y:0,zoom:1}`、写什么都不发生。插件 `apply` 里立刻读视口就会踩这个 —— 详见 [view 服务](/services/view)；要「没就绪就报错」的严格语义，用 `useCanvasRender().flow`（`CanvasFlowNotReadyError`）。
 4. **渲染组件必须在 `CanvasHost` 的渲染子树里**。`useCanvasRender()` 在子树外会**抛错**（这是故意的：这些组件本来就依赖宿主能力）。宿主自己的业务 UI 要放进 `<template #ui>`。
 5. **组件句柄要 markRaw**。往 VueFlow 的 node-types/edge-types 塞 `.vue` 组件时必须包一层 `markRaw`（或整表放 `shallowRef`），否则 Vue 会深代理组件对象，控制台刷「组件被 reactive 化」警告。CanvasHost 已处理，你手写渲染时才要注意。
-6. **theme-default 不是必需品**。不装它，画布里节点是「裸内容」（没有卡片壳、端口、背景）—— 架构上允许，「一行渲染出好看的画布」才是它的活。
+6. **theme-canvas 不是必需品**。不装它，画布里节点是「裸内容」（没有卡片壳、端口、背景）—— 架构上允许，「一行渲染出好看的画布」才是它的活。

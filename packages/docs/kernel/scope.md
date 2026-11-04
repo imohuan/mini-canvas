@@ -190,7 +190,7 @@ ctx.effect(async () => {
 | `packages/kernel/src/Context.ts` | `deriveScope`：插件 ctx 每个方法的登记去向；`stop()` 的倒序卸载与根作用域释放 |
 | `packages/kernel/src/__tests__/scope.test.ts` | 锁住 Scope 的八条行为（LIFO、幂等、子先于父、防泄漏…） |
 | `packages/kernel/src/__tests__/fiber.test.ts` | 锁住 fiber 的异步 disposer、单错不阻断、幂等 |
-| `packages/plugins/plugin-theme-default/src/index.ts` | 真实插件：`ctx.theme.register(...)` / `ui.add(...)` 全靠自动回收，一个 uninstall 都不写 |
+| `packages/plugins/plugin-theme-components/src/index.ts` | 真实插件：`ctx.theme.register(...)` / `ui.add(...)` 全靠自动回收，一个 uninstall 都不写 |
 | `packages/kernel/src/__tests__/contextRegistryState.test.ts` | 锁住「注册场放置随插件卸载自动摘除」 |
 
 ## 完整例子

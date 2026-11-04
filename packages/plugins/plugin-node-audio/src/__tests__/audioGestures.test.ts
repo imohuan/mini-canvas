@@ -9,7 +9,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 import { RegistryImpl } from '@mini-canvas/kernel'
 // 走真实主题插件注册流程拿 Button：组件经 useUiComponent 取件，桩一个空目录会让按钮渲染成
 // Vue 警告里的 undefined，"两个按钮各拦手势"这条就变成数到 0 个按钮（与组件行为无关）。
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import AudioContent from '../AudioContent.vue'
 import { WAVEFORM_BUCKETS } from '../waveform'
 
@@ -18,7 +18,7 @@ let uiFieldShared: { top(name: string): { value: unknown } | undefined }
 beforeAll(async () => {
   const { Context } = await import('@mini-canvas/canvas-data')
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   uiFieldShared = ctx.registryOf('ui')
 })

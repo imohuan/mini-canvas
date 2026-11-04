@@ -86,7 +86,7 @@ const visible = computed(() => resolveVisible({
 | `CanvasHost.vue` 的 `onMoveEnd` | 视图移动结束 | `endViewportMove(interaction)` |
 | `CanvasHost.vue` 的 `resetViewportMoveIfIdle` | 指针抬起 / 窗口失焦 / 页面隐藏（**兜底自愈**） | `endViewportMove(interaction)` |
 | `plugin-multi-select/src/BoxSelectLayer.vue` | 自绘框选开始 / 结束 / 拖动中被卸载 | `beginSelecting` / `endSelecting` |
-| `plugin-theme-default/src/components/node/BaseNode.vue` | 节点壳的 resize 拖柄按下 / 松开 | `beginNodeResize(interaction, props.id)` / `endNodeResize(interaction, props.id)` |
+| `plugin-theme-canvas/src/components/node/BaseNode.vue` | 节点壳的 resize 拖柄按下 / 松开 | `beginNodeResize(interaction, props.id)` / `endNodeResize(interaction, props.id)` |
 
 **为什么 `paneDragging` 需要兜底**（这段逻辑值得单独记住）：VueFlow 偶尔会漏发 `move-end`，那面旗子就会**永久卡在 true** —— 于是所有拿它当门的东西（比如端口按钮的显隐）被永久压死。所以宿主在任何「指针抬起 / 窗口失焦 / 页面隐藏」时无条件清一次：那一刻视图不可能还在移动，清了也安全（真在动会由 `move-start` 重新置位）。
 
@@ -113,7 +113,7 @@ const visible = computed(() => resolveVisible({
 
 | 谁读 | 读哪一位 | 用它干什么 |
 | --- | --- | --- |
-| `plugin-theme-default/src/components/node/BaseNode.vue` | `isSelecting` / `nodeResizeId` / `isNodeDragging` | 收起上下控制栏（`hideToolbars` / `hideSlotBars`） |
+| `plugin-theme-canvas/src/components/node/BaseNode.vue` | `isSelecting` / `nodeResizeId` / `isNodeDragging` | 收起上下控制栏（`hideToolbars` / `hideSlotBars`） |
 | `plugin-bottom-bar/src/NodeBottomBarOverlay.vue` + `bottomBarOverlay.ts` | `isSelecting` / `nodeResizeId` / `isNodeDragging` | 底栏浮层的显隐门（框选中 / 多选 / 该节点 resize 中 / 画布上有节点在拖 → 收起） |
 | `plugin-align-guide/src/AlignGuideOverlay.vue` | `isNodeDragging` | 拖拽结束的权威信号：翻成 false 就统一清掉对齐线 |
 | `plugin-multi-select/src/SelectionFrame.vue` | `isSelecting` / `isNodeDragging` | 框选中不显示选择框；拖动中继续跟随 |
@@ -141,7 +141,7 @@ isBusy         = 上面全部 + zooming                        ← 更宽，覆�
 | `packages/canvas-render/src/contracts/renderContext.ts` | `CanvasRenderContext.interaction` 字段的类型与注释 |
 | `packages/canvas-render/src/contracts/__tests__/interactionContext.test.ts` | 状态与驱动函数的单测 |
 | `packages/plugins/plugin-multi-select/src/BoxSelectLayer.vue` | 唯一「组件自己写」的生产例子（框选） |
-| `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` | 主要消费方（控制栏显隐 + resize 起手上报） |
+| `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` | 主要消费方（控制栏显隐 + resize 起手上报） |
 
 ## 完整例子
 

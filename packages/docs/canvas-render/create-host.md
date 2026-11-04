@@ -103,12 +103,13 @@ const { host, api, manager, exposeToWindow } = await createMiniCanvasHost(opts)
 // 位置：应用里建宿主的唯一地方
 import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 
 export const canvas = await createMiniCanvasHost({
   adapter: new LocalStorageAdapter(),                 // ① 落盘到 localStorage
-  coldPlugins: [themeDefaultPlugin, nodeTextPlugin],   // ② 皮在前、业务节点在后
+  coldPlugins: [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin],   // ② 皮在前、业务节点在后
   dev: import.meta.env.DEV,                           // ③ 由调用方显式给（库不自读）
   seedDefault: () => [                                // ④ 只有「从未保存过」才会跑
     { id: 'welcome', type: 'text', position: { x: 120, y: 120 }, data: { text: '双击编辑' } },
@@ -158,7 +159,7 @@ describe('全链路', () => {
 
 ```ts
 // 片段：拿到宿主后用宿主句柄做事（命令 / 撤销 / 重做都走同一批服务）
-const { host } = await createMiniCanvasHost({ coldPlugins: [themeDefaultPlugin, nodeTextPlugin] })
+const { host } = await createMiniCanvasHost({ coldPlugins: [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin] })
 
 // ① 用命令建节点（命令是「按 id 调」的公共入口，快捷键 / 右键菜单 / 脚本都走它）
 host.command.execute('command:create-node', { type: 'text', position: { x: 300, y: 200 } })
@@ -199,12 +200,14 @@ else if (opts.seedDefault) { /* 播种 */ }
 // 格式：TypeScript 模块（也可以是 JSON，只放 manifest 的 plugins 数组）
 // 位置：声明「这一版装了哪些插件、什么顺序、每个插件的配置」
 import { createMiniCanvasHost, type PluginManifest } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 
 export const manifest: PluginManifest = {
   plugins: [
-    { id: 'theme-default', source: themeDefaultPlugin },                              // ① 皮：顺序放在最前
+    { id: 'theme-components', source: themeComponentsPlugin },
+    { id: 'theme-canvas', source: themeCanvasPlugin },                              // ① 皮：顺序放在最前
     { id: 'node-text', source: nodeTextPlugin, group: '节点' },                        // ② group 只供 UI 分组，不影响装载
     { id: 'node-image', source: { url: '/plugins/node-image.js' }, disabled: true },    // ③ disabled：登记但不装
     { id: 'node-image', source: { url: '/plugins/node-image.next.js' } },               // ④ 同 id 后装覆盖先装（换版本）
@@ -310,7 +313,7 @@ canvas-render-host-demo/
   "dependencies": {
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/plugin-theme-components": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
     "tsx": "^4.22.4"
   }
@@ -325,7 +328,8 @@ canvas-render-host-demo/
 // 位置：整个示例唯一建宿主的地方
 import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, type CanvasNode } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 
 // ① 首次打开时的那张默认画布
@@ -336,7 +340,7 @@ function seed(): CanvasNode[] {
 export async function boot() {
   return createMiniCanvasHost({
     adapter: new MemoryStorageAdapter(),                 // ② 换 LocalStorageAdapter 就能跨刷新持久化
-    coldPlugins: [themeDefaultPlugin, nodeTextPlugin],    // ③ 皮在前，业务节点在后
+    coldPlugins: [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin],    // ③ 皮在前，业务节点在后
     seedDefault: seed,                                   // ④ 只在「从未保存过」时跑
     dev: true,                                           // ⑤ 能力缺项当场抛错，方便发现漏声明
   })

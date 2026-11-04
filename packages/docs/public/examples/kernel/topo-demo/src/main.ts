@@ -7,7 +7,7 @@ import { KNOWN_SERVICES, manifest } from './manifest'
 // ① 正常排序：依赖在前
 const order = topoSort(manifest, KNOWN_SERVICES)
 console.log('[topo] 合法顺序：', order)
-// ['canvas-base', 'tool-registry', 'theme-default', 'agent']（同级保持登记序）
+// ['canvas-base', 'tool-registry', 'theme-components', 'agent']（同级保持登记序）
 
 // ② depsOf 的优先级：inject 优先于 deps
 console.log('[topo] depsOf 优先级：', depsOf({ name: 'x', inject: ['a'], deps: ['b'] }))  // ['a']

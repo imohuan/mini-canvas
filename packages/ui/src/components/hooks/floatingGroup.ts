@@ -14,7 +14,7 @@
  *
  * **本文件是 `@mini-canvas/ui` 自己的一份实现**（不跨包共享）：插件都是独立的，
  * 各库自带自己那份，谁也不改核心层（用户口径 2026-10-15）。
- * 主题默认件 `@mini-canvas/plugin-theme-default` 里另有一份等价的实现（见其
+ * 主题默认件 `@mini-canvas/plugin-theme-canvas` 里另有一份等价的实现（见其
  * `components/ui/floatingChain.ts`）—— 两份都读同一个 DOM 属性 `data-mck-floating-chain`，
  * 所以两边浮层混在一起时照样认得出父子关系。
  */

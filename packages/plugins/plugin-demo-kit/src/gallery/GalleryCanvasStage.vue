@@ -15,12 +15,12 @@
  */
 import { CanvasHost, CanvasProvider } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import { galleryDemoNodesPlugin } from './demoNodes'
 
 withDefaults(defineProps<{ height?: number }>(), { height: 300 })
 
-const plugins = [themeDefaultPlugin, galleryDemoNodesPlugin]
+const plugins = [themeComponentsPlugin, galleryDemoNodesPlugin]
 
 // 两块示例卡 + 一条连线：节点壳 / 端口 / 连线 / 背景一次看全
 const NODES: CanvasNode[] = [

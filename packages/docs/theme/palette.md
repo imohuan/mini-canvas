@@ -230,7 +230,7 @@ export function installThemePalette(
 `useThemeColor` 的用法（真实消费点：默认主题的连线组件 `CustomEdge.vue`）：
 
 ~~~ts
-// 文件：packages/plugins/plugin-theme-default/src/components/edge/CustomEdge.vue（摘录）
+// 文件：packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue（摘录）
 // 格式：Vue 组件 <script setup>
 // 位置：为什么必须经 JS —— :stroke="edgeColor" 是 SVG 表现属性，var(--x) 在这里不解析
 const railPalette = useThemeColor('edgeRailColor')
@@ -270,7 +270,7 @@ const edgeColor = computed(() => visual.value.edgeColor || railPalette.value || 
 | 宿主接线 | `packages/canvas-render/src/host/themePaletteSettings.ts` | `defineThemePaletteSettings` + `installThemePalette` |
 | 宿主时序 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | define → `restore()` → install（顺序不能反） |
 | 取色（JS 通道） | `packages/canvas-render/src/contracts/useThemeColor.ts` | SVG 表现属性 / canvas 2D 的响应式取色 |
-| 连线组件 | `packages/plugins/plugin-theme-default/src/components/edge/CustomEdge.vue` | `useThemeColor('edgeRailColor')` / `('edgeFlowColor')` |
+| 连线组件 | `packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue` | `useThemeColor('edgeRailColor')` / `('edgeFlowColor')` |
 | 参考线插件 | `packages/plugins/plugin-align-guide/src/alignGuidePlugin.ts` | 自己申报 `--uic-align-guide-light/dark`（用户口径：参考线颜色放专门插件里） |
 | 成品应用 | `packages/ui/src/composables/appTheme.ts` | 首页等页面复用同一套 `applyThemeMode` / `installThemePalette` |
 | 不漂移测试 | `packages/canvas-render/src/contracts/__tests__/themePalette.test.ts` | 钉住"token 表 ↔ ui-theme.css 两侧不漂移"（漏一侧 = 切主题不变色，肉眼极难发现） |

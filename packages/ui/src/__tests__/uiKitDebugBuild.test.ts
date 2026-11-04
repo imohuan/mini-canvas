@@ -25,7 +25,7 @@ const PLUGIN = readFileSync(
 )
 const PLUGIN_CODE = PLUGIN.replace(/\/\*[\s\S]*?\*\//g, '')
 const THEME = readFileSync(
-  new URL('../../../plugins/plugin-theme-default/src/index.ts', import.meta.url),
+  new URL('../../../plugins/plugin-theme-components/src/index.ts', import.meta.url),
   'utf-8',
 )
 const THEME_CODE = THEME.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
@@ -37,7 +37,7 @@ describe('组件库使用标记：构建版可用', () => {
     // 调试层按名从 ui 目录取（主题登记）；不再由 App.vue 直接 import 某一份实现，
     // 因此换主题时调试层也跟着换，且构建版不会因为 DEV 判断变成 null。
     expect(APP_CODE).toContain("useUiComponentOutside('uiKitDebugOverlay')")
-    expect(APP_CODE).not.toContain('plugin-theme-default/components/ui/UiKitDebugOverlay.vue')
+    expect(APP_CODE).not.toContain('plugin-theme-components/components/ui/UiKitDebugOverlay.vue')
     expect(APP_CODE).toMatch(/<component[^>]*:is="UiKitDebugOverlay"/)
   })
 
@@ -53,7 +53,7 @@ describe('组件库使用标记：构建版可用', () => {
 
   it('默认主题把调试层登记进 ui 目录（换主题时一起换）', () => {
     const COMPONENTS = readFileSync(
-      new URL('../../../plugins/plugin-theme-default/src/themeComponents.ts', import.meta.url),
+      new URL('../../../plugins/plugin-theme-components/src/index.ts', import.meta.url),
       'utf-8',
     )
     expect(COMPONENTS).toContain('ui.add("uiKitDebugOverlay"')

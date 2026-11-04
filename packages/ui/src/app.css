@@ -83,7 +83,7 @@
   pointer-events: auto;
 }
 
-/* 全局滚动条样式搬到默认主题插件：packages/plugins/plugin-theme-default/src/styles/scrollbars.css
+/* 全局滚动条样式搬到默认主题插件：packages/plugins/plugin-theme-components/src/styles/scrollbars.css
    （用户口径 2026-11-04：滚动条外观由主题统一管，外壳不再自己写一套） */
 
 /* ===== 全界面关掉焦点环（用户口径 2026-10-14）=====
@@ -133,7 +133,7 @@ input,
 
 /* ===== 画布暗色主题（可换肤插槽）======
    节点卡片在 CanvasHost 子树里，必须全局；画布底由 DefaultBackground 的 canvas 硬编码浅色绘制，用 filter 反相为暗色。
-   用 `html.dark`（而非 `.dark`）拿到 0,1,1 特异性：plugin-theme-default 的 node-theme.css
+   用 `html.dark`（而非 `.dark`）拿到 0,1,1 特异性：plugin-theme-components 的 node-theme.css
    用 `:root` 定义这批变量的亮色默认值，同特异性下它后加载就会赢。 */
 html.dark {
   --canvas-node-surface: #262626;

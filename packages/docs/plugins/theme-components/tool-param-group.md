@@ -3,7 +3,7 @@
 **一句话**：把**多个参数收敛成一个下拉** —— 平时显示成一行点分摘要加一个箭头
 （「16:9 · 标准画质 · 2K · 1张 ⌄」），点开才在浮层里逐项改。登记在 `ui` 目录名 `toolParamGroup`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/ToolParamGroup.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/ToolParamGroup.vue`。
 底栏一条参数一个下拉会把底行挤爆，所以有了这一件（版式参考 LibTV 的画布底行）。
 
 ## 功能说明

@@ -207,7 +207,7 @@ export function apply(ctx: Context) {
   // 状态栏的内容必须走同一条解析链路（nodeToolbar），否则「默认 / 功能模式」两套入口会打架。
   // 节点类型不再声明 out:top 段，避免同一个位置出现两份内容。
   //
-  // 不 import @mini-canvas/plugin-theme-default / plugin-bottom-bar —— 插件之间不互相
+  // 不 import @mini-canvas/plugin-theme-canvas / plugin-bottom-bar —— 插件之间不互相
   // import 是硬规则；服务名与 ui 目录名才是跨插件公共契约。
   const registerToolbar = (): boolean => {
     const svc = ctx.tryGet<{

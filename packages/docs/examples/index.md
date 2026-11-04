@@ -73,7 +73,7 @@ plugin-node-text / node-video / web2api-tools
        │ 往 node/bar 注册动作
        └──► @mini-canvas/bar-contract（纯类型 + 注册糖）
 
-plugin-theme-default（默认皮）←── 不依赖任何节点插件（刻意解耦）
+theme-canvas（默认皮）←── 不依赖任何节点插件（刻意解耦）
 plugin-tool-*-generation（生成工具）←── 不依赖节点插件（节点面板反向调它）
 plugin-file-drop ←── 不依赖节点插件；运行时检测注册了哪些类型，能建才建
 ```

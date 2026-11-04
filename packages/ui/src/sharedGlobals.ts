@@ -8,7 +8,7 @@
  * 这个模块就是补上那一层：在应用启动前，把「宿主只允许一份」的共享运行时挂到 window。
  * 挂的名字必须与各插件 vite.config.ts 里 `output.globals` 写的一致：
  *   Vue / VueFlow / MiniCanvasKernel / MiniCanvasCore / MiniCanvasBase / MiniCanvasRender /
- *   ProseMirrorEditorBundle / MiniCanvasUiKit
+ *   ProseMirrorEditorBundle / MiniCanvasUiKit / MiniCanvasThemeContract
  * 改名字要两边一起改（本文件 + 各插件 vite.config 的 globals），否则插件加载会报「找不到依赖」。
  *
  * 与 vite 配置里 `optimizeDeps.exclude` 那串源码包是同一批：它们在 dev 下由 vite 现编、
@@ -25,6 +25,7 @@ import * as MiniCanvasBase from '@mini-canvas/canvas-base'
 import * as MiniCanvasRender from '@mini-canvas/canvas-render'
 import * as ProseMirrorEditorBundle from 'prosemirror-editor-bundle'
 import * as MiniCanvasUiKit from '@mini-canvas/ui-kit-shadcn'
+import * as MiniCanvasThemeContract from '@mini-canvas/theme-contract'
 
 /** 暴露出去的全局名 → 值（唯一事实源；测试据此核对名字没写岔） */
 export const SHARED_GLOBAL_NAMES = [
@@ -36,6 +37,7 @@ export const SHARED_GLOBAL_NAMES = [
   'MiniCanvasRender',
   'ProseMirrorEditorBundle',
   'MiniCanvasUiKit',
+  'MiniCanvasThemeContract',
 ] as const
 
 /**
@@ -54,6 +56,7 @@ export function exposeSharedGlobals(
     MiniCanvasRender,
     ProseMirrorEditorBundle,
     MiniCanvasUiKit,
+    MiniCanvasThemeContract,
   }
   for (const [name, value] of Object.entries(bag)) {
     if (target[name] === undefined) target[name] = value

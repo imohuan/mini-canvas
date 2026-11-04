@@ -70,7 +70,7 @@ import { Handle, Position, type NodeProps } from '@mini-canvas/canvas-render'
 const props = defineProps<NodeProps>()   // ① 引擎给的 props（id / type / data / selected …）
 ```
 
-真实对照（谁在用 bridge）：`packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue`（`Handle` / `Position` / `NodeProps`）、`.../node/MovingHandle.vue`、`.../edge/CustomEdge.vue`。
+真实对照（谁在用 bridge）：`packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue`（`Handle` / `Position` / `NodeProps`）、`.../node/MovingHandle.vue`、`.../edge/CustomEdge.vue`。
 
 ### 二、`createCoalescer` 的签名与用法
 
@@ -93,7 +93,7 @@ export function createCoalescer(
 ```
 
 ```ts
-// 文件：某设置项组件的 script 段（真实写法见 packages/plugins/plugin-theme-default/src/components/settings/SettingsSchemaField.vue）
+// 文件：某设置项组件的 script 段（真实写法见 packages/plugins/plugin-theme-components/src/components/settings/SettingsSchemaField.vue）
 // 格式：Vue 单文件组件 script setup
 // 位置：插件里的设置控件 —— 连续拖动值不要每次都写 store
 import { onBeforeUnmount } from 'vue'
@@ -149,10 +149,10 @@ it('一帧内多次 push 合并成一次 apply', () => {
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/canvas-render/src/index.ts` | `export * from './vueFlowBridge'`（精选出口在这里汇总）+ 导出 `createCoalescer` / `rafScheduler` / `manualScheduler` / `CoalesceScheduler` |
-| `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` | 从本包 import `Position` / `NodeProps` 等（端口方向、引擎 props 类型） |
-| `packages/plugins/plugin-theme-default/src/components/node/MovingHandle.vue` | 浮动端口的实现（`Handle` / `Position`） |
-| `packages/plugins/plugin-theme-default/src/components/edge/CustomEdge.vue` | 自定义边（`getBezierPath` 系列几何在插件本地的 `edgeGeometry.ts`，props 类型从本包来） |
-| `packages/plugins/plugin-theme-default/src/components/settings/SettingsSchemaField.vue` | `createCoalescer` 的真实生产用法（滑块 / 颜色拖动合帧提交） |
+| `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` | 从本包 import `Position` / `NodeProps` 等（端口方向、引擎 props 类型） |
+| `packages/plugins/plugin-theme-canvas/src/components/node/MovingHandle.vue` | 浮动端口的实现（`Handle` / `Position`） |
+| `packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue` | 自定义边（`getBezierPath` 系列几何在插件本地的 `edgeGeometry.ts`，props 类型从本包来） |
+| `packages/plugins/plugin-theme-components/src/components/settings/SettingsSchemaField.vue` | `createCoalescer` 的真实生产用法（滑块 / 颜色拖动合帧提交） |
 | `packages/canvas-render/src/utils/__tests__/coalesce.test.ts` | 合帧器的行为测试（用 `manualScheduler` 同步推进） |
 
 ## 完整例子

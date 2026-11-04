@@ -97,7 +97,7 @@ export const inject = ['selection'] as string[]
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 registerEventName('canvas-export:exported')
 
-/** 背景网格参数：与主题 plugin-theme-default 的 DefaultBackground 在 zoom=1 时一致（GRID=24、DOT_R=1.6） */
+/** 背景网格参数：与主题 plugin-theme-canvas 的 DefaultBackground 在 zoom=1 时一致（GRID=24、DOT_R=1.6） */
 const BG_GRID = 24
 const BG_DOT_R = 1.6
 
@@ -165,7 +165,7 @@ function getFlowEl(ctx: Context): HTMLElement | null {
   return renderer ?? null
 }
 
-/** 主题调试可视化容器的类名（导出时经 html-to-image filter 剔除；与 plugin-theme-default 约定） */
+/** 主题调试可视化容器的类名（导出时经 html-to-image filter 剔除；与 plugin-theme-canvas 约定） */
 const DEBUG_OVERLAY_CLASSES = [
   'moving-handle-debug',
   'v2-debug-overlay',

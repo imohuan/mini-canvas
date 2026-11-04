@@ -64,8 +64,16 @@ export { SHADCN_FAMILY_NAMES, isShadcnPrimitive } from './shadcnFamilies'
  * 外观选项表（字体 / 圆角）：**组件库是唯一真源**，主题插件引用它、不另抄一份。
  * 预览页与真实应用的选项因此永远同步（此前两边各写一份，已经漂移）。
  */
-export { FONT_OPTIONS, RADIUS_OPTIONS, findFont, findRadius, loadFont } from './theme/fonts'
-export type { FontOption, RadiusOption } from './theme/fonts'
+export {
+  FONT_OPTIONS,
+  RADIUS_OPTIONS,
+  findFont,
+  findRadius,
+  fontGroup,
+  fontStack,
+  loadFont,
+} from './theme/fonts'
+export type { FontGroup, FontOption, RadiusOption } from './theme/fonts'
 export { BASE_COLORS, THEME_COLORS, resolveThemeVars, previewColor } from './theme/colors'
 export type { BaseColor, ThemeColor, ThemeSelection, ThemePalette } from './theme/colors'
 

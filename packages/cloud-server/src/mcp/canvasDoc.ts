@@ -212,7 +212,7 @@ function edgeKey(e: { source: string; target: string; sourceHandle?: string; tar
  * 为什么要挡住别的名字：VueFlow 画边时按 handle id 在节点的 handleBounds 里找锚点，
  * 找不到就回落到 source=Bottom / target=Top。于是 AI 写一个看起来合理的
  * sourceHandle:'out' / targetHandle:'in'，边照常落盘、不报错，画面上却从图片底部中心
- * 连到另一个节点顶部中心。端口名不是自由文本：它由 plugin-theme-default 的 BaseNode
+ * 连到另一个节点顶部中心。端口名不是自由文本：它由 plugin-theme-canvas 的 BaseNode
  * 固定为 id="target"/"source"，数据层也按同一套名字校验。
  */
 /**

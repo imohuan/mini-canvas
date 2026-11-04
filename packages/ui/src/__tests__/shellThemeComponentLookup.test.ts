@@ -22,7 +22,7 @@ describe('外壳通用组件按名取件', () => {
       ['AssetUiSlot.vue', assetUiSlot],
       ['HistoryModal.vue', historyModal],
     ] as const) {
-      expect(src, name).not.toMatch(/from ['"]@mini-canvas\/plugin-theme-default\/components\//)
+      expect(src, name).not.toMatch(/from ['"]@mini-canvas\/plugin-theme-components\/components\//)
     }
   })
 
@@ -34,7 +34,7 @@ describe('外壳通用组件按名取件', () => {
   })
 
   it('默认主题登记了这两个名字（换主题时能一起换）', () => {
-    const theme = read('../../../plugins/plugin-theme-default/src/themeComponents.ts')
+    const theme = read('../../../plugins/plugin-theme-components/src/index.ts')
     expect(theme).toContain('ui.add("slotDebugOverlay"')
     expect(theme).toContain('ui.add("uiKitDebugOverlay"')
     expect(theme).toContain('ui.add("mediaViewer"')

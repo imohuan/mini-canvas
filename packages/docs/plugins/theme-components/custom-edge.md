@@ -4,7 +4,7 @@
 双击弹出的"剪切"按钮；拖线时那根临时线也是它画的（见
 [ConnectionLine](/plugins/theme-components/connection-line)）。注册在主题槽 `edge`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/edge/CustomEdge.vue`（红线组件）。
+源码：`packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue`（红线组件）。
 
 ## 功能说明
 

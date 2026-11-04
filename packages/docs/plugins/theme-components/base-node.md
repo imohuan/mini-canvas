@@ -3,7 +3,7 @@
 **一句话**：画布上每一个节点的外形都由它画 —— 卡片、标题、端口、选中环、上/下控制栏，
 全在这一件里决定。注册在主题槽 `nodeShell`（单赢家，`order: 0`）。
 
-源码：`packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue`。
+源码：`packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue`。
 它属于 AGENTS.md 里的**红线组件**（改坏会破坏核心交互），动之前先读行为契约金标准。
 
 ## 功能说明
@@ -166,7 +166,7 @@ hidden，结果画布内节点的连线凭空断掉 —— 这就是现在这套
 判定逻辑收在纯函数里，直接 import：
 
 ```ts
-// 文件：packages/plugins/plugin-theme-default/src/components/node/culledRenderingPolicy.ts
+// 文件：packages/plugins/plugin-theme-canvas/src/components/node/culledRenderingPolicy.ts
 import { culledPolicy } from '../culledRenderingPolicy' // 路径按你的包调整
 
 // state = props.data?._cullState；rendering = 你壳的绘制档位（skeleton/full/ghost）

@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 1 | 一个 Vue 应用挂在页面上 | 你自己（`createApp`） |
 | 2 | 画布组件 `<CanvasHost>` | `@mini-canvas/canvas-render` |
-| 3 | 「皮肤」插件（节点壳 / 边 / 背景） | `@mini-canvas/plugin-theme-default` |
+| 3 | 「皮肤」插件（节点壳 / 边 / 背景） | `@mini-canvas/plugin-theme-canvas`（通用件另装 `plugin-theme-components`） |
 | 4 | 至少一种业务节点 | `@mini-canvas/plugin-node-text`（或 image 等） |
 
 外加两件**一定要做**的事：引入 VueFlow 的两份样式表、给画布容器一个确定的尺寸。
@@ -79,11 +79,12 @@ canvas-app/
 // 位置：装配决定（装哪些插件 / 用什么存储 / 空画布塞什么）的唯一住址
 import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 
 // ① 顺序即装载顺序：先装「皮」（提供节点壳/边/背景/端口），再装业务节点
-export const APP_PLUGINS = [themeDefaultPlugin, nodeTextPlugin]
+export const APP_PLUGINS = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
 
 // ② 存储后端：换 MemoryStorageAdapter 就是「刷新即丢」（试东西时很方便）
 export function createStorage(): StorageAdapter {
@@ -114,7 +115,7 @@ const host = shallowRef<CanvasHostHandle>()  // ② 宿主句柄：@ready 之后
 
 function onReady(h: CanvasHostHandle) {
   host.value = h
-  // ③ 验证装配：控制台应看到 ['theme-default', 'text']（宿主自有的 canvas-base 被隐藏）
+  // ③ 验证装配：控制台应看到 ['theme-components', 'text']（宿主自有的 canvas-base 被隐藏）
   console.log('已装插件：', h.ctx.listPlugins())
 }
 
@@ -196,7 +197,7 @@ export default defineConfig({
       '@mini-canvas/kernel',
       '@mini-canvas/canvas-data',
       '@mini-canvas/canvas-render',
-      '@mini-canvas/plugin-theme-default',
+      '@mini-canvas/plugin-theme-components',
       '@mini-canvas/plugin-node-text',
     ],
   },
@@ -220,7 +221,7 @@ export default defineConfig({
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/plugin-theme-components": "workspace:*",
     "@vue-flow/core": "^1.48.2",
     "vue": "^3.5.34"
   },
@@ -265,7 +266,7 @@ const mod = {
 }
 
 MiniCanvas.installPlugin(mod)      // ① 装上
-MiniCanvas.listPlugins()           // ② → ['theme-default', 'text', 'console-demo']
+MiniCanvas.listPlugins()           // ② → ['theme-components', 'text', 'console-demo']
 MiniCanvas.getContext().get('canvas').runCommand('console-demo:add')   // ③ 跑一次
 MiniCanvas.uninstallPlugin('console-demo')   // ④ 卸掉：命令也一起消失
 ```

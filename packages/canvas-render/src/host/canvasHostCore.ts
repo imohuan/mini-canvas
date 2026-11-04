@@ -463,7 +463,7 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeGlowEnabled: true,
   edgeGlowIntensity: 1,
   edgeGlowColor: '#3b82f6',
-  // —— 连线新视觉默认（导轨 + 光斑流动；与 plugin-theme-default DEFAULT_THEME_EDGE 对齐）——
+  // —— 连线新视觉默认（导轨 + 光斑流动；与 theme-contract DEFAULT_THEME_EDGE 对齐）——
   edgeFlowEnabled: true,
   edgeFlowCount: 3,
   edgeFlowRatio: 20,

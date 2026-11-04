@@ -3,7 +3,7 @@
 **一句话**：数值滑块，带"精细调节" —— 拖动时按住 Ctrl 变细（×0.1）、按住 Shift 变粗（×10）。
 登记在 `ui` 目录名 `slider`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/PrecisionSlider.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/PrecisionSlider.vue`。
 
 ## 功能说明
 

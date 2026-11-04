@@ -19,7 +19,7 @@
  * 于是没装 web2api 的宿主也能有音频节点（上传本地音频听一段）。
  *
  * 依赖方向：只依赖 canvas-base/canvas-data/kernel + plugin-bottom-bar。
- * 不 import plugin-theme-default（预设组件走 ui 目录按名取，见 T08 守卫）。
+ * 不 import plugin-theme-components（预设组件走 ui 目录按名取，见 T08 守卫）。
  */
 import { type Context, type ConfigSchema, type PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'

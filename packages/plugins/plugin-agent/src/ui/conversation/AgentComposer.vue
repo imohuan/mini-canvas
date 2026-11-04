@@ -530,8 +530,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <!-- 技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签 -->
-          <DropdownMenu v-if="s.skills.length" :open="composerMenuOpen('skill')" @update:open="(v: boolean) => setComposerMenuOpen('skill', v)">
+          <!--
+            技能：每行「图标 + 标题 + 说明」；点一项 = 往输入框插一个标签。
+
+            按钮**始终显示**（用户口径 2026-11-05：技能入口在工具栏里看不到）。
+            以前是 `v-if="s.skills.length"`：没装技能时整个按钮消失，用户以为功能没了；
+            面板里已有「还没有技能 / 去设置里导入」的空态，入口应该一直在。
+          -->
+          <DropdownMenu :open="composerMenuOpen('skill')" @update:open="(v: boolean) => setComposerMenuOpen('skill', v)">
             <DropdownMenuTrigger as-child>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
@@ -570,6 +576,11 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   </InputGroup>
                 </div>
                 <div class="ac-panel-body">
+                  <div v-if="!s.skills.length" class="ac-empty-state">
+                    <span class="ac-empty-icon"><WandSparkles :size="18" /></span>
+                    <span class="ac-empty-title">还没有安装技能</span>
+                    <span class="ac-empty-desc">到「设置 → Agent → 技能」里导入，导入后即可在这里 @ 引用。</span>
+                  </div>
                   <AgentScrollArea v-if="skillView === 'card'" class="ac-panel-scroll" body-class="ac-panel-scroll-body">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
                       <!-- 卡片外壳用 div：shadcn Button 的 size="sm" 会强制 32px 高 + 左右内边距，

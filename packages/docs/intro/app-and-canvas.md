@@ -74,15 +74,15 @@ const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
 
 ## 主题也分两半
 
-`plugin-theme-default` 现在导出三个插件：
++默认主题拆成了两个独立的插件包，互相不 import：
 
-| 导出 | 作用 | 何时启动 |
-| --- | --- | --- |
-| `themeComponentsPlugin` | 通用 UI 目录、设置面板、外观变量 | 应用级常驻 |
-| `themeCanvasPlugin` | 节点壳、连线、背景、节点工具栏 | 进画布（`inject: ['doc']`） |
-| `themeDefaultPlugin` | 旧入口：一次装上前两件 | 兼容已有装配 |
+| 包 | 插件 | 作用 | 何时启动 |
+| --- | --- | --- | --- |
+| `@mini-canvas/plugin-theme-components` | `themeComponentsPlugin`（`theme-components`） | 通用 UI 目录、设置面板、外观变量、通知服务 | 应用级常驻 |
+| `@mini-canvas/plugin-theme-canvas` | `themeCanvasPlugin`（`theme-canvas`） | 节点壳、连线、背景、节点工具栏 | 进画布（`inject: ['doc']`） |
 
-新装配请分开用，项目页就不必启动画布外观。
+两个包共享的纯数据（配置默认值、外观桥接、图标表）住在 `@mini-canvas/theme-contract`，
+两边都能读，但谁也不认识对方的组件。旧的聚合入口 `themeDefaultPlugin` 已删除。
 
 ## 云端插件也分两段
 

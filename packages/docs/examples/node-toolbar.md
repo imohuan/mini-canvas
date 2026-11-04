@@ -321,7 +321,7 @@ svc.exit(nodeId)
 2. **主题往两个位置各挂一个解析面板**（装配时执行一次）：
 
    ```ts
-   // packages/plugins/plugin-theme-default/src/index.ts
+   // packages/plugins/plugin-theme-canvas/src/index.ts
    ctx.nodes.attach('*', { region: 'out:top',    component: NodeModeTopBar })
    ctx.nodes.attach('*', { region: 'out:bottom', component: NodeModeBottomBar })
    ```
@@ -406,5 +406,5 @@ svc.exit(nodeId)
 | 往按钮组插一条 + 下拉二级菜单 | `packages/plugins/plugin-demo-kit/src/ui-slots/DemoTopEntry.vue` |
 | 注册默认顶栏 + 功能模式（裁剪/扩展，bottomBar: null） | `packages/plugins/plugin-node-image/src/nodeImagePlugin.ts` |
 | 默认底栏的注册者（与节点插件平等） | `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts` |
-| 服务本体（裁决规则全在这一个文件） | `packages/plugins/plugin-theme-default/src/components/node/nodeToolbarService.ts` |
+| 服务本体（裁决规则全在这一个文件） | `packages/plugins/plugin-theme-canvas/src/components/node/nodeToolbarService.ts` |
 | 解析面板（顶/底各一个） | 同目录 `NodeModeTopBar.vue` / `NodeModeBottomBar.vue` |

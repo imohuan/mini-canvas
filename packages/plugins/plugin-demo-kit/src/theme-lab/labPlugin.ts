@@ -13,7 +13,7 @@
  */
 import { defineComponent, h, type Component } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import { NodeEmptyState } from '@mini-canvas/plugin-theme-default'
+import { NodeEmptyState } from '@mini-canvas/plugin-theme-components'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
 const NODE_ICON =

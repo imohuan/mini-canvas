@@ -88,7 +88,7 @@ export const EDGE_TILE_MARGIN = 120
  * 那些「调试叠加」是主题自己的内部结构，导出插件不该知道每个主题内部用了哪些类名；
  * 有了这个约定，主题侧只要在元素上加一个类，插件侧零改动就能剔除，互不耦合。
  *
- * 与插件作者的约定（同名常量在 plugin-theme-default 的 BaseNode/MovingHandle 里以字面量出现，
+ * 与插件作者的约定（同名常量在 plugin-theme-canvas 的 BaseNode/MovingHandle 里以字面量出现，
  * 因为插件之间不互相 import —— 与下方 DEBUG_OVERLAY_CLASSES 的处理方式一致）。
  */
 export const EXPORT_IGNORE_CLASS = 'mc-export-ignore'

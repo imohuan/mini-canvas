@@ -168,7 +168,7 @@ import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
 
 const { host, api, manager } = await createMiniCanvasHost({
   adapter: new LocalStorageAdapter(),
-  coldPlugins: [themeDefaultPlugin, nodeTextPlugin],
+  coldPlugins: [themeComponentsPlugin, nodeTextPlugin],
   dev: import.meta.env.DEV,
 })
 ~~~

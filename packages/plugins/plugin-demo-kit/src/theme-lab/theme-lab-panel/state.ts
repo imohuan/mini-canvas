@@ -5,7 +5,7 @@ import {
   type CanvasHostHandle,
   type UiComponentHandle,
 } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
@@ -79,7 +79,7 @@ export function useThemeLabState(props: ThemeLabProps, hostCanvas: CanvasContext
   const enabledPlugins = ref<string[]>([...OPTIONAL_PLUGINS])
 
   const activePlugins = computed(() => {
-    const out = [themeDefaultPlugin]
+    const out = [themeComponentsPlugin]
     if (enabledPlugins.value.includes('multi-select')) out.push(multiSelectPlugin)
     if (enabledPlugins.value.includes('align-guide')) out.push(alignGuidePlugin)
     if (enabledPlugins.value.includes('edge-cutting')) out.push(edgeCuttingPlugin)

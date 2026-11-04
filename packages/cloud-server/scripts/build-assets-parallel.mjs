@@ -18,6 +18,7 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
+import { readdirSync, readFileSync } from "node:fs"
 import { availableParallelism } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -186,8 +187,11 @@ async function readStamp() {
   return { version: STAMP_VERSION, tasks: {} }
 }
 
-/** 可装卸插件目录名（对应 @mini-canvas/<name>） */
+/** 可装卸插件目录名（对应 @mini-canvas/<name>）。手写部分用于固定构建顺序。 */
 const INSTALLABLE_PLUGIN_DIRS = [
+  // 手写清单最容易漏：新加的可装卸插件忘了加这里，就会出现「插件管理里少了这一项」
+  // （用户 2026-11-05 实测：main 分支有的插件，这份清单里没有）。
+  // 下面由 buildPackageIndex() 扫 package.json 自动补齐，手写保留只为固定构建顺序。
   "plugin-align-arrange",
   "plugin-align-guide",
   "plugin-auto-layout",
@@ -207,11 +211,30 @@ const INSTALLABLE_PLUGIN_DIRS = [
   "plugin-web2api-tools",
 ]
 
+/**
+ * 扫 packages/plugins/* 的 package.json，把“声明了 installable 但漏在这份手写清单里”的插件补上。
+ *
+ * 为什么必须自动补：插件管理页的清单来自 dist 产物；漏构建的插件在面板里直接不出现，
+ * 用户看到的就是“main 分支有这个插件，你这个分支没有”（2026-11-05 实测）。
+ */
+function discoverInstallablePlugins() {
+  const root = path.join(REPO_ROOT, "packages/plugins")
+  const names = []
+  for (const dir of readdirSync(root, { withFileTypes: true })) {
+    if (!dir.isDirectory()) continue
+    try {
+      const pkg = JSON.parse(readFileSync(path.join(root, dir.name, "package.json"), "utf8"))
+      if (pkg.miniCanvas?.installable === true) names.push(dir.name)
+    } catch { /* 没有 package.json / JSON 坏了：跳过 */ }
+  }
+  return names
+}
+
 const TASKS = [
   // ui 不 external → externalize:false，指纹覆盖整个工作区依赖闭包
   { name: "@mini-canvas/ui", label: "画布界面", dir: path.join(REPO_ROOT, "packages/ui"), externalize: false },
   { name: "@mini-canvas/plugin-cloud-client", label: "云端客户端", dir: path.join(REPO_ROOT, "packages/plugins/plugin-cloud-client"), externalize: true },
-  ...INSTALLABLE_PLUGIN_DIRS.map((d) => ({
+  ...[...new Set([...INSTALLABLE_PLUGIN_DIRS, ...discoverInstallablePlugins()])].map((d) => ({
     name: "@mini-canvas/" + d,
     label: d,
     dir: path.join(REPO_ROOT, "packages/plugins", d),

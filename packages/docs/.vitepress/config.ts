@@ -201,7 +201,7 @@ const pluginsSidebar = [
     items: [
       { text: '插件总览', link: '/plugins/' },
       { text: '活快照', link: '/plugins/live' },
-      { text: '默认主题', link: '/plugins/theme-default' },
+      { text: '默认主题', link: '/plugins/theme-canvas' },
       { text: '默认组件库', link: '/plugins/theme-components' },
       { text: 'UI 开发', link: '/plugins/ui-development' },
       { text: '插件解析', link: '/plugins/parsed/' },

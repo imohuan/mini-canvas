@@ -141,7 +141,7 @@ const selected = caps['selected'] as SelectedCapability
 ### 五、`edgeVisual` / `edgeSelection`：自定义边要读的两格
 
 ```ts
-// 片段：自定义边组件（真实写法见 packages/plugins/plugin-theme-default/src/components/edge/CustomEdge.vue）
+// 片段：自定义边组件（真实写法见 packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue）
 const { edgeVisual, edgeSelection } = useCanvasRender()
 
 // ① 外观：响应式对象，属性可改；宿主已合并过 DEFAULT_EDGE_VISUAL
@@ -348,8 +348,8 @@ const tooSmall = computed(() => zoom.value < 0.18)
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/plugins/plugin-node-text/src/TextContent.vue` | 最典型的 content 组件：LOD 渲染 + 双击编辑 + `nodeWrite` 写回 |
-| `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` | 节点壳：用 `registry` 解析 content 段，用 `nodeWrite` 提交尺寸，读 `connectionState` / `interaction` |
-| `packages/plugins/plugin-theme-default/src/components/edge/CustomEdge.vue` | 自定义边：读 `edgeVisual` / `edgeSelection` / `connectionState` |
+| `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` | 节点壳：用 `registry` 解析 content 段，用 `nodeWrite` 提交尺寸，读 `connectionState` / `interaction` |
+| `packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue` | 自定义边：读 `edgeVisual` / `edgeSelection` / `connectionState` |
 | `packages/plugins/plugin-mini-map/src/MiniMapOverlay.vue` | 读 `renderNodes` + `flow` 画小地图 |
 | `packages/plugins/plugin-align-guide/src/AlignGuideOverlay.vue` | 用 `interaction.isNodeDragging` 当门 + `visibleNodes` 裁剪候选 |
 | `packages/canvas-render/src/components/RegionEntryHost.vue` | 能力包的 provide 点（每条区域条目一层） |

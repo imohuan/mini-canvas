@@ -235,7 +235,7 @@ asm.nodeShells['text']   // → 文本类型最终使用的壳组件（undefined
 | packages/canvas-render/src/host/CanvasHost.vue | 引用 nodesFromStore / edgesFromStore / assembleTheme / splitNodeWritePatch / DEFAULT_* |
 | packages/canvas-render/src/host/__tests__/canvasHostCore.test.ts | 纯函数的单测（层级断言、写回拆分、悬挂边过滤都在这里） |
 | packages/canvas-render/src/host/__tests__/canvasBaseHost.test.ts | 宿主装配行为测试（主题换壳、写回、数据同步） |
-| packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue | 壳组件：消费渲染上下文的 registry / nodeWrite / handleParams / connectionState / interaction |
+| packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue | 壳组件：消费渲染上下文的 registry / nodeWrite / handleParams / connectionState / interaction |
 
 ## 完整例子
 
@@ -294,12 +294,13 @@ export const handle: CanvasParams = reactive({
 import { ref, shallowRef } from 'vue'
 import { CanvasHost, type CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { edge, handle } from './uiState'
 
 // ① 装配清单：顺序即装载顺序（皮在前，业务节点在后）
-const plugins = [themeDefaultPlugin, nodeTextPlugin]
+const plugins = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
 const adapter = new LocalStorageAdapter()   // 刷新后画布还在
 
 // ② 宿主句柄：@ready 之后才有值，所以用 shallowRef（组件句柄不该深代理）
@@ -382,7 +383,7 @@ createApp(App).mount('#app')
 2. 点「加文本节点」：画布上出现一个文本节点（走 command:create-node）。
 3. 点「撤销」：节点消失（命令走的是 graph.undo()，一次操作一条历史）。
 4. 点「换连线颜色」：从节点圆点拖出一条连线，颜色跟着按钮变（响应式外观对象生效）。
-5. 控制台敲 MiniCanvasHostDemo.listPlugins()：应看到 ['theme-default', 'text']（不含被隐藏的 canvas-base）。
+5. 控制台敲 MiniCanvasHostDemo.listPlugins()：应看到 ['theme-components', 'text']（不含被隐藏的 canvas-base）。
 
 ## 常见坑
 

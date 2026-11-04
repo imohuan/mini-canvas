@@ -9,7 +9,7 @@
  *   多选 / 参考线 / 切割各画自己的那层）。这里只负责提供画板、模式与自动取景。
  */
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { ColorField } from '@mini-canvas/plugin-theme-default'
+import { ColorField } from '@mini-canvas/plugin-theme-components'
 import { SlotHost, THEME_PREVIEW_SLOT } from '@mini-canvas/canvas-render'
 import { BookmarkPlus, Check, Copy, Moon, Palette, Plus, RotateCcw, Sun } from 'lucide-vue-next'
 import { useThemeStudioState } from './state'

@@ -3,7 +3,7 @@
 **一句话**：颜色控件 —— 一个色块按钮，点开是色板与透明度调节；值就是 hex 字符串。
 登记在 `ui` 目录名 `color`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/ColorField.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/ColorField.vue`。
 
 ## 功能说明
 

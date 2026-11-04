@@ -5,8 +5,8 @@
  * 就是这么漂回去的），所以钉成测试：新增反向依赖会在这里直接红。
  *
  * 三条规则：
- * 1) 业务插件不得在 dependencies 里声明 plugin-theme-default（组件走主题可替换目录）；
- * 2) 业务插件源码不得出现指向 plugin-theme-default 的运行时 import（测试代码除外）；
+ * 1) 业务插件不得在 dependencies 里声明主题插件包（组件走主题可替换目录）；
+ * 2) 业务插件源码不得出现指向主题插件包的运行时 import（测试代码除外）；
  * 3) canvas-base 不引入 Vue / VueFlow / 具体 UI 第三方库（它是纯类型 + 纯逻辑作者入口）。
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
@@ -18,6 +18,17 @@ const here = dirname(fileURLToPath(import.meta.url))
 // src/__tests__ → src → ui → packages
 const packagesDir = resolve(here, '../../..')
 const pluginsDir = join(packagesDir, 'plugins')
+
+/**
+ * 主题插件包（拆包后的两件）。
+ *
+ * 这条守卫的判据没变：业务插件不该把主题当组件库。拆分前是一个包，现在两个包各管一半，
+ * 任何一个都不该被业务插件运行时依赖 —— 所以用集合而不是单个名字。
+ */
+const THEME_PACKAGES = new Set([
+  '@mini-canvas/plugin-theme-components',
+  '@mini-canvas/plugin-theme-canvas',
+])
 
 interface Pkg {
   name: string
@@ -40,7 +51,7 @@ function pluginDirs(): string[] {
 function collectSources(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === '__tests__' || entry.name === 'node_modules') continue
+  if (entry.name === '__tests__' || entry.name === 'node_modules') continue
     const full = join(dir, entry.name)
     if (entry.isDirectory()) out.push(...collectSources(full))
     else if (/\.(ts|vue)$/.test(entry.name)) out.push(full)
@@ -49,7 +60,7 @@ function collectSources(dir: string): string[] {
 }
 
 describe('T08 · 业务插件不依赖默认主题当组件库', () => {
-  it('没有任何业务插件在 dependencies 里声明 plugin-theme-default', () => {
+  it('没有任何业务插件在 dependencies 里声明主题插件包', () => {
     const offenders: string[] = []
     // 白名单：开发演示合集（demo-kit）。它是默认主题的"橱窗"——职责就是把主题组件
     // 真渲染出来给人看（含嵌真画布展示节点壳/连线/背景），所以它**必须**依赖主题包。
@@ -57,22 +68,22 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
     const GALLERY = '@mini-canvas/plugin-demo-kit'
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
-      if (pkg.name === '@mini-canvas/plugin-theme-default') continue
+      if (THEME_PACKAGES.has(pkg.name)) continue
       if (pkg.name === GALLERY) continue
-      if (pkg.dependencies?.['@mini-canvas/plugin-theme-default']) {
+      if ([...THEME_PACKAGES].some((name) => pkg.dependencies?.[name])) {
         offenders.push(pkg.name)
       }
     }
     expect(offenders, '这些插件把默认主题当运行时依赖：' + offenders.join(', ')).toEqual([])
   })
 
-  it('业务插件生产源码不出现指向 plugin-theme-default 的运行时 import', () => {
+  it('业务插件生产源码不出现指向主题插件包的运行时 import', () => {
     const offenders: string[] = []
     // 同上白名单：展厅的运行时 import 是职责（见上一条用例的注释）
     const GALLERY_PKG = '@mini-canvas/plugin-demo-kit'
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
-      if (pkg.name === '@mini-canvas/plugin-theme-default') continue
+      if (THEME_PACKAGES.has(pkg.name)) continue
       if (pkg.name === GALLERY_PKG) continue
       for (const sub of ['src']) {
         const root = join(dir, sub)
@@ -80,7 +91,7 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
         for (const file of collectSources(root)) {
           for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
             // import type 不算运行时依赖（类型可擦除）；真正要拦的是值导入
-            if (/^\s*import\b/.test(line) && line.includes('@mini-canvas/plugin-theme-default')) {
+            if (/^\s*import\b/.test(line) && [...THEME_PACKAGES].some((name) => line.includes(name))) {
               offenders.push(file.replace(packagesDir, '') + ' :: ' + line.trim())
             }
           }
@@ -116,7 +127,7 @@ describe('T08 · 组件库只由默认主题登记', () => {
     const GALLERY_PKG = '@mini-canvas/plugin-demo-kit'
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
-      if (pkg.name === '@mini-canvas/plugin-theme-default') continue
+      if (THEME_PACKAGES.has(pkg.name)) continue
       if (pkg.name === GALLERY_PKG) continue
       const root = join(dir, 'src')
       if (!existsSync(root)) continue

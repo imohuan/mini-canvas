@@ -274,7 +274,7 @@ bus.clear()                  // 清空所有监听
 | `packages/kernel/src/modelTool.ts` | 登记 `tools/registered` / `tools/unregistered` / `tools/result` 三条事件；`runToolCall` 在结果物化时发 `tools/result` |
 | `packages/kernel/src/__tests__/events.test.ts` | 锁住五种分发与 dev warn 的实测行为 |
 | `packages/canvas-render/src/host/renderEvents.ts` | 渲染层自己登记 + 广播的渲染事件（真实消费点示例） |
-| `packages/plugins/plugin-theme-default/src/index.ts` | `registerEventName('settings:ui-close')`：插件登记自己的事件名，消掉 dev warn |
+| `packages/plugins/plugin-theme-components/src/index.ts` | `registerEventName('settings:ui-close')`：插件登记自己的事件名，消掉 dev warn |
 
 ## 完整例子
 

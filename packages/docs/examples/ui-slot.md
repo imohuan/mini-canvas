@@ -266,9 +266,9 @@ id 首段 = 当前一级名，面板同样传 `{ group, active, onSelect }`。�
 | `packages/plugins/plugin-cursor-effect/src/index.ts:54` | 步骤 ⑥ | `'settingsGroup/' + CURSOR_NAV_ID`，`meta: { mode: 'replace' }` 整页自绘 |
 | `packages/canvas-render/src/host/CanvasSurface.vue:425` | overlay 消费端 | `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` 渲染该槽全部条目 |
 | `packages/vue-render/src/SlotHost.vue:1` | 通用槽宿主 | 读 `ctx.slots.occupants(slot)` 按 order 逐个渲染，插件装卸时自动重读（`canvas-render` 继续转发同名导出） |
-| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 菜单消费端 | 读 `settingsMenu.resolve()` 画左导航；旧 `settings.nav` 只补 page / component |
+| `packages/plugins/plugin-theme-components/src/components/settings/PluginSettingsContent.vue` | 菜单消费端 | 读 `settingsMenu.resolve()` 画左导航；旧 `settings.nav` 只补 page / component |
 | `packages/plugins/plugin-cursor-effect/src/index.ts` | 真实菜单注册 | `ctx.settingsMenu.nav/section` 声明「画布 → 工具 → 光标」；旧 `settings.nav` 只留给兼容装配 |
-| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue:330` | settingsGroup 消费端 | 读 `'settingsGroup/' + sectionKey`；replace 模式接管整组内容 |
+| `packages/plugins/plugin-theme-components/src/components/settings/PluginSettingsContent.vue:330` | settingsGroup 消费端 | 读 `'settingsGroup/' + sectionKey`；replace 模式接管整组内容 |
 | `packages/plugins/plugin-mini-map/src/miniMapPlugin.ts:55` | 专用槽 | `ctx.slots.register('mini-map', …)` —— 宿主想放哪就 `<SlotHost slot="mini-map" />` 放哪 |
 | `packages/ui/src/App.vue:181` | 专用槽消费端 | 成品 UI 用 `<SlotHost slot="mini-map" />` 给小地图选位置 |
 

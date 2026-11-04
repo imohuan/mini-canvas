@@ -17,7 +17,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
 import { Context } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import NodeTaskOverlay from '../NodeTaskOverlay.vue'
 import type { BarAction } from '../barTypes'
@@ -46,7 +46,7 @@ const DEMO_ACTION: BarAction = {
 /** UI 目录来自真实主题插件的注册流程（与生产同形） */
 async function themeUiField() {
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   return ctx.registryOf('ui')
 }

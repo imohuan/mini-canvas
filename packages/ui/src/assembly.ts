@@ -9,10 +9,9 @@
 import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
 import type { PluginModule } from '@mini-canvas/kernel'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import {
-  themeComponentsPlugin,
-  themeCanvasPlugin,
-} from '@mini-canvas/plugin-theme-default'
+import { canvasRenderPlugin } from '@mini-canvas/canvas-render'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { gridSplitPlugin } from '@mini-canvas/plugin-image-grid-split'
@@ -105,6 +104,8 @@ export interface AppPluginEntry {
  * 现在只维护这一份，kind 决定它进哪一层；顺序即装载顺序。
  */
 export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
+  // 渲染层基础设施：标准能力包要最先注册，后面的业务插件启动时就能按名取到。
+  { plugin: canvasRenderPlugin, kind: 'app', reason: '渲染层基础设施（能力包注册）' },
   // 通用组件 / 设置面板 / 外观变量：应用级常驻，项目页也要用。
   { plugin: themeComponentsPlugin, kind: 'app', reason: '通用组件与设置面板' },
   { plugin: pluginManagerPlugin, kind: 'app', reason: '插件管理页' },

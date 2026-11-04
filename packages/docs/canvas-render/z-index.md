@@ -110,7 +110,7 @@ edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
 
 ### ④ 节点内部 → 主题壳的 scoped 样式（一般不用动）
 
-节点**肚子里**的排版在 `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` 与 `MovingHandle.vue` 的 `<style scoped>`，是一组小数字：
+节点**肚子里**的排版在 `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` 与 `MovingHandle.vue` 的 `<style scoped>`，是一组小数字：
 
 | 部件 | 值 | 出处 |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
 | `packages/canvas-render/src/host/CanvasHost.vue` | 「连线置顶」时给边 `zIndex: 1001` |
 | `packages/canvas-render/src/host/CanvasSurface.vue` | `.csurface-overlay { z-index: 20 }`；`:elevate-nodes-on-select="false"` |
 | `packages/canvas-render/src/host/__tests__/canvasHostCore.test.ts` | 层级断言（改常量后这里会先红） |
-| `packages/plugins/plugin-theme-default/src/components/node/BaseNode.vue` | 节点内部那一组小数字 |
+| `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` | 节点内部那一组小数字 |
 | `packages/plugins/plugin-group/src/GroupTopToolbarOverlay.vue` | 文件头写了「为什么分组控制栏必须搬到画布浮层」的完整推理 |
 | `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts` | 同上（底栏为什么不能住在节点里，以及 out:bottom 锚点重构） |
 | `packages/ui/src/components/CanvasShell.vue` | 外壳三块（顶栏 / 状态条 / 底栏）的值 |

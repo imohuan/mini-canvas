@@ -120,7 +120,7 @@ export function apply(ctx: Context) {
 
 | 插件 | 注册文件 | 画什么 |
 | --- | --- | --- |
-| `plugin-theme-default` | `src/themePreview.ts` | 两个节点、一条连线、工具条、状态色 |
+| `theme-components` | `src/themePreview.ts` | 两个节点、一条连线、工具条、状态色 |
 | `plugin-multi-select` | `src/themePreview.ts` | 多选框（内外双框） |
 | `plugin-align-guide` | `src/themePreview.ts` | 对齐参考线 |
 | `plugin-edge-cutting` | `src/themePreview.ts` | 切割轨迹与刀锋 |

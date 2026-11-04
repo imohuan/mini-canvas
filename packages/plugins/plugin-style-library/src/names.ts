@@ -15,7 +15,7 @@ export const UI_DETAIL = 'styleLibraryDetail'
 /** 特效库外壳（与风格库外壳同构，只是标题/点击行为不同） */
 export const UI_EFFECT_OVERLAY = 'effectLibraryOverlay'
 
-/** 主题登记的全屏预览件名（生成历史用的同一个；见 plugin-theme-default） */
+/** 主题登记的全屏预览件名（生成历史用的同一个；见 plugin-theme-components） */
 export const UI_MEDIA_VIEWER = 'mediaViewer'
 
 export const UI_NAMES = [UI_OVERLAY, UI_GALLERY, UI_CARD, UI_DETAIL, UI_EFFECT_OVERLAY] as const

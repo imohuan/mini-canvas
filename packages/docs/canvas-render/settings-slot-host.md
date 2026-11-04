@@ -81,7 +81,7 @@ defineProps<{
 | `overlay` | `plugin-align-guide`（对齐线）、`plugin-multi-select`（框选层 + 选择框）、`plugin-group`（分组控制栏）、`plugin-shortcut-manager`（快捷键面板）、`plugin-style-library`（样式库）、`plugin-cursor-effect`（光标特效）、`plugin-bottom-bar`（节点底栏浮层 + 预览浮层 + 任务浮层） | **`CanvasSurface.vue`** 里固定一行 `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` |
 | `mini-map` | `plugin-mini-map` | 宿主自选：`packages/ui/src/App.vue` 里 `<SlotHost slot="mini-map" />` |
 | `agent-conversation` | `plugin-agent`（消息流 + 输入区） | `packages/ui/src/components/areas/AgentPanel.vue` |
-| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload`（兼容入口） | 设置面板：`plugin-theme-default` 的 `PluginSettingsContent.vue`（`settingsPanel` 唯一赢家，2026-11-04 起成品应用那套面板已并入本包）。新菜单优先 `ctx.settingsMenu`；这里只补 page / component / 图标，不再决定层级 |
+| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload`（兼容入口） | 设置面板：`theme-components` 的 `PluginSettingsContent.vue`（`settingsPanel` 唯一赢家，2026-11-04 起成品应用那套面板已并入本包）。新菜单优先 `ctx.settingsMenu`；这里只补 page / component / 图标，不再决定层级 |
 | `settings.tab` | 当前生产代码里没有插件注册它（保留给「自定义二级页签」） | 默认设置皮按「一级名匹配 id 首段」归并渲染 |
 | `settingsGroup/<分组名>` | 同上那批插件（每条整页正文一条，如 `settingsGroup/集成/Agent`、`settingsGroup/光标`） | 设置面板按菜单 section 收拢的 group 读 `occupants('settingsGroup/' + groupKey)` |
 
@@ -201,7 +201,7 @@ export const SETTINGS_FIELD_RENDERER: InjectionKey<Component | undefined>
 export function injectSettingsFieldRenderer(): Component | undefined
 ```
 
-用途：默认设置皮会把「标准字段控件」（颜色/数字/开关/下拉/文本 + 描述）provide 出来。于是**插件自己注册的 `settingsGroup/<key>` 内容组件**（自定义预览 UI 之类）不必反向依赖 `plugin-theme-default`，直接 `inject` 到这个渲染器，就能把某个字段的标准控件摆进自己的页面。
+用途：默认设置皮会把「标准字段控件」（颜色/数字/开关/下拉/文本 + 描述）provide 出来。于是**插件自己注册的 `settingsGroup/<key>` 内容组件**（自定义预览 UI 之类）不必反向依赖 `theme-components`，直接 `inject` 到这个渲染器，就能把某个字段的标准控件摆进自己的页面。
 
 依赖方向很讲究：**canvas-render 只导类型 / 令牌 / 辅助函数（不持有 .vue 组件）**，实际组件由主题皮在运行时 provide。
 
@@ -227,8 +227,8 @@ const Field = injectSettingsFieldRenderer()   // ① 不在设置面板子树内
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/ui/src/App.vue` | `<SettingsHost v-if="s.settingsOpen" />` 与 `<SlotHost slot="mini-map" />` 都放在 `#ui` 插槽里 |
-| `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 设置面板（`settingsPanel` 唯一赢家）：读 `settings.nav` / `settings.tab` / `settingsGroup/<key>` 三种槽；字段控件按 ui 目录取 |
-| `packages/plugins/plugin-theme-default/src/index.ts` | `ctx.theme.register("settingsPanel", PluginSettingsContent, …)` 注册默认赢家 |
+| `packages/plugins/plugin-theme-components/src/components/settings/PluginSettingsContent.vue` | 设置面板（`settingsPanel` 唯一赢家）：读 `settings.nav` / `settings.tab` / `settingsGroup/<key>` 三种槽；字段控件按 ui 目录取 |
+| `packages/plugins/plugin-theme-components/src/index.ts` | `ctx.theme.register("settingsPanel", PluginSettingsContent, …)` 注册默认赢家 |
 | `packages/canvas-render/src/host/CanvasSurface.vue` | overlay 槽的唯一渲染点 |
 | `packages/canvas-render/src/components/__tests__/settingsSource.test.ts` | `settingsSourceFrom` 的行为测试 |
 

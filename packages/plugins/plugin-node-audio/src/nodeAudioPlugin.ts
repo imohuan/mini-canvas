@@ -17,7 +17,7 @@
  *   卡片里只显示素材与空态，**放素材的按钮固定在上控制栏**（用户口径 2026-10-14）。
  *
  * 依赖方向：只依赖 canvas-base / canvas-data / canvas-render / kernel。
- * 不 import plugin-theme-default（设计系统按钮走 ui 目录按名取，见 T08 守卫）。
+ * 不 import plugin-theme-components（设计系统按钮走 ui 目录按名取，见 T08 守卫）。
  */
 import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'

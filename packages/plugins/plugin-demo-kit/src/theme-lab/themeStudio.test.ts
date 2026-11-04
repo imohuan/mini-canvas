@@ -93,7 +93,7 @@ describe('主题工作台契约', () => {
   it('四个已装插件都注册自己的预览层，主题页不认识具体插件', async () => {
     const { Context } = await import('@mini-canvas/canvas-data')
     const ctx = new Context()
-    const { registerThemePreview: registerTheme } = await import('@mini-canvas/plugin-theme-default')
+    const { registerThemePreview: registerTheme } = await import('@mini-canvas/plugin-theme-components')
     const { registerThemePreview: registerMulti } = await import('@mini-canvas/plugin-multi-select')
     const { registerThemePreview: registerGuide } = await import('@mini-canvas/plugin-align-guide')
     const { registerThemePreview: registerCut } = await import('@mini-canvas/plugin-edge-cutting')
@@ -104,7 +104,7 @@ describe('主题工作台契约', () => {
     const ids = ctx.slots.occupants(THEME_PREVIEW_SLOT).map((item) => item.id)
     expect(ids).toEqual(
       expect.arrayContaining([
-        'theme-default/preview',
+        'theme-components/preview',
         'multi-select/preview-frame',
         'align-guide/preview',
         'edge-cutting/preview',

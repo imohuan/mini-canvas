@@ -3,7 +3,7 @@
 **一句话**：参数预设件之一 —— 「小标题 + 当前值 + 单位 + 滑块」，用在"取值多、要拖"的参数上
 （连续时长、语速这类）。登记在 `ui` 目录名 `toolParamSlider`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/ToolParamSlider.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/ToolParamSlider.vue`。
 内部复用 [PrecisionSlider](/plugins/theme-components/precision-slider)，只是把标题、值、单位排成一行。
 
 ## 功能说明

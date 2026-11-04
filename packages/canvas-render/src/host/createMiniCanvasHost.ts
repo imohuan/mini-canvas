@@ -24,8 +24,7 @@ import {
   GRAPH_KEY,
 } from '@mini-canvas/canvas-data'
 import { restoreNodeMediaUrls } from '@mini-canvas/canvas-data'
-import type { CapabilityFactory } from '../contracts/capabilities'
-import { createStandardCapabilities } from '../contracts/standardCapabilities'
+import { registerStandardCapabilities } from '../renderPlugin'
 import type {
   CanvasEdge,
   CanvasNode,
@@ -238,12 +237,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 组件在 ctx.nodes.attach 里写 needs:['node','zoom',…]，BaseNode 按名造实例喂给它
   // （useCapabilities() 取用）。注册在这里 = "宿主那一份默认实现"；任何插件都能注册同名能力
   // 覆盖它（order 小者赢），主题插件因此能整套换掉 —— 决策 9 的第①条。
-  {
-    const capField = ctx.registryOf<CapabilityFactory>('capability')
-    for (const [name, factory] of Object.entries(createStandardCapabilities(ctx))) {
-      capField.add(name, factory, { id: 'host:standard', order: 100 })
-    }
-  }
+  // 注册函数与 canvasRenderPlugin 共用；已有同 id 条目时它自己跳过，不会出现两份。
+  registerStandardCapabilities(ctx)
 
   // —— 统一安装句柄提前建（capture ctx 即可；内部方法需 ctx started，调用时满足） ——
   // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），

@@ -3,7 +3,7 @@
 **一句话**：点开素材后铺满整屏的预览器 —— 图片能缩放/拖拽/旋转/翻转，视频/音频/文本走各自的预览件，
 左右键翻页、Esc 关闭。登记在 `ui` 目录名 `mediaViewer`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/MediaViewer.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/MediaViewer.vue`。
 底栏插件的素材预览浮层与成品应用的生成历史/资产面板都用它。
 
 ## 功能说明

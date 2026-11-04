@@ -161,9 +161,6 @@ importers:
       '@mini-canvas/plugin-node-text':
         specifier: workspace:*
         version: link:../plugins/plugin-node-text
-      '@mini-canvas/plugin-theme-default':
-        specifier: workspace:*
-        version: link:../plugins/plugin-theme-default
       '@mini-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../ui-kit-shadcn
@@ -389,9 +386,9 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1(@types/sortablejs@1.15.9)
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -610,9 +607,12 @@ importers:
       '@mini-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugin-multi-select
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-canvas':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-canvas
+      '@mini-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
       '@mini-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../../ui-kit-shadcn
@@ -905,9 +905,9 @@ importers:
         specifier: ^3.5.0
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-canvas':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-canvas
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -945,9 +945,9 @@ importers:
         specifier: ^0.184.0
         version: 0.184.0
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -982,9 +982,9 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1053,9 +1053,9 @@ importers:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1093,9 +1093,9 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1164,9 +1164,9 @@ importers:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1204,9 +1204,9 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1253,9 +1253,9 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1401,11 +1401,11 @@ importers:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
 
-  packages/plugins/plugin-theme-default:
+  packages/plugins/plugin-theme-canvas:
     dependencies:
-      '@ckpack/vue-color':
-        specifier: 1.6.0
-        version: 1.6.0(vue@3.5.38(typescript@6.0.3))
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
       '@mini-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
@@ -1415,19 +1415,16 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/theme-contract':
+        specifier: workspace:*
+        version: link:../../theme-contract
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@mini-canvas/plugin-shortcut-manager':
-        specifier: workspace:*
-        version: link:../plugin-shortcut-manager
-      '@mini-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../../ui-kit-shadcn
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1452,9 +1449,61 @@ importers:
       vue:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-theme-components:
+    dependencies:
+      '@ckpack/vue-color':
+        specifier: 1.6.0
+        version: 1.6.0(vue@3.5.38(typescript@6.0.3))
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../canvas-data
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      '@mini-canvas/theme-contract':
+        specifier: workspace:*
+        version: link:../../theme-contract
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../../ui-kit-shadcn
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
       vue-sonner:
         specifier: ^2.0.9
         version: 2.0.9
+    devDependencies:
+      '@mini-canvas/plugin-shortcut-manager':
+        specifier: workspace:*
+        version: link:../plugin-shortcut-manager
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
 
   packages/plugins/plugin-tool-image-generation:
     dependencies:
@@ -1530,9 +1579,9 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugin-theme-default
+        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1600,6 +1649,34 @@ importers:
       vue-tsc:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
+
+  packages/theme-contract:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../canvas-base
+      '@mini-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../canvas-data
+      '@mini-canvas/ui-kit-shadcn':
+        specifier: workspace:*
+        version: link:../ui-kit-shadcn
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+      vue-sonner:
+        specifier: ^2.0.9
+        version: 2.0.9
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
 
   packages/ui:
     dependencies:
@@ -1708,9 +1785,12 @@ importers:
       '@mini-canvas/plugin-style-library':
         specifier: workspace:*
         version: link:../plugins/plugin-style-library
-      '@mini-canvas/plugin-theme-default':
+      '@mini-canvas/plugin-theme-canvas':
         specifier: workspace:*
-        version: link:../plugins/plugin-theme-default
+        version: link:../plugins/plugin-theme-canvas
+      '@mini-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugins/plugin-theme-components
       '@mini-canvas/plugin-tool-image-generation':
         specifier: workspace:*
         version: link:../plugins/plugin-tool-image-generation
@@ -1720,9 +1800,15 @@ importers:
       '@mini-canvas/plugin-web2api-tools':
         specifier: workspace:*
         version: link:../plugins/plugin-web2api-tools
+      '@mini-canvas/theme-contract':
+        specifier: workspace:*
+        version: link:../theme-contract
       '@mini-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../ui-kit-shadcn
+      '@mini-canvas/vue-render':
+        specifier: workspace:*
+        version: link:../vue-render
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.38(typescript@6.0.3))

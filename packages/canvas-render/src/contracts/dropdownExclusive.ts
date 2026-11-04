@@ -4,7 +4,7 @@
  * 为什么住在渲染层（而不是某个主题插件里）：
  *   这份表要被**所有**下拉实现共用，才能保证互斥。现在应用里同时存在两处下拉实现 ——
  *   `@mini-canvas/ui` 的全局下拉（成品应用注册进目录的那份）与主题默认件
- *   （`@mini-canvas/plugin-theme-default` 的 Dropdown，它被同包的 Select 直接复用）。
+ *   （`@mini-canvas/plugin-theme-canvas` 的 Dropdown，它被同包的 Select 直接复用）。
  *   两处若各拿一份表，就会同时开出两个浮层。放在共同依赖里，两边 import 同一份。
  *
  * 为什么必须是独立模块（不写在组件的 `<script setup>` 里）：

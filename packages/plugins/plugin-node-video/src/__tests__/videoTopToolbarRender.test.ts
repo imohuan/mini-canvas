@@ -11,13 +11,13 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
 // 只导入主题**插件**（走注册流程），不导入它的实现组件（与图片包同一条 T07 口径）
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import VideoTopToolbar from '../VideoTopToolbar.vue'
 
 async function themeUiField(): Promise<{ top(name: string): { value: unknown } | undefined }> {
   const { Context } = await import('@mini-canvas/canvas-data')
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   return ctx.registryOf('ui')
 }

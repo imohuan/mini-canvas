@@ -19,7 +19,7 @@ flowchart LR
 | --- | --- | --- |
 | 组件源 | `packages/ui-kit-shadcn/src/components/ui/` | 原样的 shadcn-vue 组件 |
 | 清单 | `packages/ui-kit-shadcn/src/registry.ts` | 生成 `SHADCN_COMPONENTS` |
-| 登记 | `packages/plugins/plugin-theme-default/src/index.ts` | 以导出名登记到 `ui` 注册场 |
+| 登记 | `packages/plugins/plugin-theme-components/src/index.ts` | 以导出名登记到 `ui` 注册场（端口/临时线由 `plugin-theme-canvas` 登记） |
 | 消费 | `packages/ui`、`packages/plugins/*` | `useUiComponent()` 按名取 |
 
 注册名就是源码导出名：`Button`、`Input`、`DialogContent`、`DropdownMenuTrigger`。
@@ -90,7 +90,7 @@ function save(): void {
 
 需要滚动的地方，直接用会溢出的普通 `div`（`overflow-y: auto` 等），
 不要再包一层自定义滚动组件。滚动条就是浏览器默认的形状和位置，外观由默认主题统一给
-（`packages/plugins/plugin-theme-default/src/styles/scrollbars.css`）：细、低对比、
+（`packages/plugins/plugin-theme-components/src/styles/scrollbars.css`）：细、低对比、
 悬停才变亮，亮暗主题各一套。
 
 ```vue
@@ -145,7 +145,8 @@ notify.success('生成完成', { id })
 
 ```bash
 pnpm -C packages/ui-kit-shadcn typecheck
-pnpm -C packages/plugins/plugin-theme-default typecheck
+pnpm -C packages/plugins/plugin-theme-components typecheck
+pnpm -C packages/plugins/plugin-theme-canvas typecheck
 pnpm -C packages/ui typecheck
 ```
 

@@ -33,11 +33,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@mini-canvas/ui-kit-shadcn'
-import ToolParamGroup from '@mini-canvas/plugin-theme-default/components/ui/ToolParamGroup.vue'
+import ToolParamGroup from '@mini-canvas/plugin-theme-components/src/components/ui/ToolParamGroup.vue'
 // 三个参数预设件没有从包根导出 → 从组件子路径取（同一份实现）
-import ToolOptionGrid from '@mini-canvas/plugin-theme-default/components/ui/ToolOptionGrid.vue'
-import ToolRatioGrid from '@mini-canvas/plugin-theme-default/components/ui/ToolRatioGrid.vue'
-import ToolParamSlider from '@mini-canvas/plugin-theme-default/components/ui/ToolParamSlider.vue'
+import ToolOptionGrid from '@mini-canvas/plugin-theme-components/src/components/ui/ToolOptionGrid.vue'
+import ToolRatioGrid from '@mini-canvas/plugin-theme-components/src/components/ui/ToolRatioGrid.vue'
+import ToolParamSlider from '@mini-canvas/plugin-theme-components/src/components/ui/ToolParamSlider.vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 
 withDefaults(

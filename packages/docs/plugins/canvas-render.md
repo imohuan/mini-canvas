@@ -22,7 +22,7 @@
 import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 
 const { host, api, exposeToWindow } = await createMiniCanvasHost({
-  coldPlugins: [themeDefaultPlugin, nodeTextPlugin],
+  coldPlugins: [themeComponentsPlugin, nodeTextPlugin],
 })
 exposeToWindow()   // 顺手把 api 挂到 window.MiniCanvas
 ```

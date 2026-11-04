@@ -18,7 +18,7 @@ import {
   DEFAULT_THEME_DEBUG,
   DEFAULT_THEME_EDGE,
   DEFAULT_THEME_HANDLE,
-} from '@mini-canvas/plugin-theme-default'
+} from '@mini-canvas/plugin-theme-components'
 import { PLUGIN_LABELS, OPTIONAL_PLUGINS, SCENE_META } from '../catalog'
 import type { ThemeLabMode } from '../catalog'
 import type { ThemeLabProps } from './state'

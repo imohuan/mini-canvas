@@ -18,7 +18,7 @@ export default defineConfig({
       fileName: () => 'plugin-node-image.js',
     },
     rollupOptions: {
-      // plugin-theme-default 同为"宿主只允许一份"的共享运行时（它提供 Select/Dropdown 等通用 UI 组件，
+      // plugin-theme-components 同为"宿主只允许一份"的共享运行时（它提供 Select/Dropdown 等通用 UI 组件，
       // 打进插件会造成两份组件定义、样式重复）。
       // 注：T07 起本插件的生产代码不再 import theme-default（UI 走主题可替换目录按名取），
       // 它只因**测试**装载真实主题而留在 devDependencies；是否 external 已不影响产物。

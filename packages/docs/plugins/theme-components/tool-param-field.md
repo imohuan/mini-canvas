@@ -3,7 +3,7 @@
 **一句话**：**一个工具参数的渲染入口** —— 工具作者只声明"这个参数是什么"，
 它负责挑出该用哪个控件（预设件或内置控件）。登记在 `ui` 目录名 `toolParamField`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/ui/ToolParamField.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/ui/ToolParamField.vue`。
 判定表在 `components/ui/paramKind.ts`（纯函数，可单测）。
 
 ## 功能说明

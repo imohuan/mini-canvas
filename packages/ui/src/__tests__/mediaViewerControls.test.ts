@@ -15,23 +15,23 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
 const viewer = readFileSync(
-  new URL('../../../plugins/plugin-theme-default/src/components/ui/MediaViewer.vue', import.meta.url),
+  new URL('../../../plugins/plugin-theme-components/src/components/ui/MediaViewer.vue', import.meta.url),
   'utf-8',
 )
 const source = readFileSync(
-  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useMediaViewerSource.ts', import.meta.url),
+  new URL('../../../plugins/plugin-theme-components/src/components/ui/media-viewer/useMediaViewerSource.ts', import.meta.url),
   'utf-8',
 )
 const imageViewer = readFileSync(
-  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useImageViewer.ts', import.meta.url),
+  new URL('../../../plugins/plugin-theme-components/src/components/ui/media-viewer/useImageViewer.ts', import.meta.url),
   'utf-8',
 )
 const navigation = readFileSync(
-  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useMediaNavigation.ts', import.meta.url),
+  new URL('../../../plugins/plugin-theme-components/src/components/ui/media-viewer/useMediaNavigation.ts', import.meta.url),
   'utf-8',
 )
 const controller = readFileSync(
-  new URL('../../../plugins/plugin-theme-default/src/components/ui/media-viewer/useMediaViewerController.ts', import.meta.url),
+  new URL('../../../plugins/plugin-theme-components/src/components/ui/media-viewer/useMediaViewerController.ts', import.meta.url),
   'utf-8',
 )
 

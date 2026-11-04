@@ -6,7 +6,8 @@
   "dependencies": {
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/plugin-theme-components": "workspace:*",
+    "@mini-canvas/plugin-theme-canvas": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
     "tsx": "^4.22.4"
   }

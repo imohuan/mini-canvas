@@ -85,8 +85,16 @@ export interface CanvasRenderContext {
   visibleNodes(margin?: number): LayoutRect[]
 }
 
-/** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */
-export const RENDER_CONTEXT_KEY: InjectionKey<CanvasRenderContext> = Symbol('canvas-v2-render-context')
+/**
+ * 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取。
+ *
+ * 用 Symbol.for 固定名而不是裸 Symbol：通用件（uiCatalog / SlotComposer / SettingsHost）
+ * 已搬进 @mini-canvas/vue-render，那里按同一个名字回退读取渲染上下文，
+ * 不允许反向 import 本包。裸 Symbol 会让两边各建一个键，永远对不上。
+ */
+export const RENDER_CONTEXT_KEY: InjectionKey<CanvasRenderContext> = Symbol.for(
+  'canvas-v2-render-context',
+)
 
 /**
  * 取渲染宿主上下文。必须在 <CanvasHost> 的渲染子树内(CanvasSurface provide 作用域下)调用；

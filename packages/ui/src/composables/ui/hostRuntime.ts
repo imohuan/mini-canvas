@@ -50,7 +50,7 @@ export function useUiComponentOutside(name: string): Ref<unknown> {
 }
 export function setReadyHost(h: unknown): void {
   hostRef.value = h as HostApi | undefined
-  // 同步给 canvas-render 的“树外取件”入口：MediaViewer（plugin-theme-default）在画布树外
+  // 同步给 canvas-render 的“树外取件”入口：MediaViewer（plugin-theme-components）在画布树外
   // （资产抽屉 / 生成历史弹窗）也要能按名取注册件 —— 主题包不能反向依赖 ui 包，
   // 所以由宿主侧在就绪时注入，见 canvas-render/contracts/uiCatalog.ts。
   void setUiCatalogHost(readyHost?.ctx as never)

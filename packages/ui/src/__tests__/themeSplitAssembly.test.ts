@@ -6,10 +6,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { Context, canvasRuntime, createCanvasAppBasePlugin } from '@mini-canvas/canvas-data'
-import {
-  themeComponentsPlugin,
-  themeCanvasPlugin,
-} from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { shortcutSettingsPlugin } from '@mini-canvas/plugin-shortcut-manager'
 
 async function boot(plugins: unknown[]) {

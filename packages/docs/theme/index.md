@@ -21,7 +21,7 @@
 | 变量族 | 管什么 | 谁在用 |
 | --- | --- | --- |
 | `--ui-*` | 全画布通用 UI：画布底、面板、文字、边框、遮罩、阴影、强调色、语义色（危险 / 警示）、连线色、辅助线色 | 几乎每个插件的浮层与面板 |
-| `--sf-*` | 设置字段（Settings Field）：标签、描述、开关轨道、开关圆点、输入框、气泡 | `plugin-theme-default` 的设置面板 |
+| `--sf-*` | 设置字段（Settings Field）：标签、描述、开关轨道、开关圆点、输入框、气泡 | `theme-components` 的设置面板 |
 | `--ps-*` | 精度滑块（Precision Slider）：轨道、强调色、圆点 | 数值微调的滑块 |
 | `--dd-*` | 下拉浮层（Dropdown / Select）：底色、边框、文字 | 各种下拉菜单 |
 | `--ntb-*` | 节点上 / 下控制栏（Node Toolbar）：按钮填充、文字、聚焦环、激活态 | 节点外的操作条 |
@@ -202,7 +202,7 @@ const disposeThemeMode = installThemeMode(interactionSettings)        // 落 <ht
 | 主题模式 | `packages/canvas-render/src/contracts/themeModeSettings.ts` | `THEME_MODE_KEY` / `applyThemeMode` / `installThemeMode` |
 | 色板 | `packages/canvas-render/src/contracts/themePalette.ts` | 可配置颜色的两格制（[专页](/theme/palette)） |
 | 宿主接线 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | `defineThemeModeSetting` + `installThemeMode` + 色板落值 |
-| 默认主题插件 | `packages/plugins/plugin-theme-default/src/components/` | 节点壳 / 边 / 背景 / 设置面板，全部走 token |
+| 默认主题 | `packages/plugins/plugin-theme-canvas/src/components/`（壳/边/背景）+ `packages/plugins/plugin-theme-components/src/components/`（设置面板），全部走 token |
 | 右键菜单 | `packages/plugins/plugin-context-menu/src/ContextMenu.vue` | 注释写着"配色全部走通用 UI token，本组件不带任何主题配置项" |
 | 多选框 | `packages/plugins/plugin-multi-select/src/BoxSelectLayer.vue` | 颜色走 `--ui-select-box`，自定义色为空时回落主题 token |
 | 对齐辅助线 | `packages/plugins/plugin-align-guide/src/alignGuidePlugin.ts` | 自己申报 `--uic-align-guide-light/dark` 两个内联变量 |

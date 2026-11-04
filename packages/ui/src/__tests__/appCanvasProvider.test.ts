@@ -12,6 +12,11 @@ import { fileURLToPath } from 'node:url'
 const app = readFileSync(fileURLToPath(new URL('../App.vue', import.meta.url)), 'utf8')
 const root = readFileSync(fileURLToPath(new URL('../Root.vue', import.meta.url)), 'utf8')
 const provider = readFileSync(fileURLToPath(new URL('../AppProvider.vue', import.meta.url)), 'utf8')
+/** Provider 本体住在 vue-render；这里校验启动门控仍在真实实现里。 */
+const renderProvider = readFileSync(
+  fileURLToPath(new URL('../../../vue-render/src/RenderProvider.vue', import.meta.url)),
+  'utf8',
+)
 
 describe('应用装配层级', () => {
   it('唯一的根 Provider 包住 RouterView', () => {
@@ -22,11 +27,14 @@ describe('应用装配层级', () => {
 
   it('项目页与画布页共用同一个 Provider（Provider 不再在画布路由里）', () => {
     expect(app).not.toContain('<CanvasProvider')
-    // 根级 Provider 自己建 Context，不再套一层 CanvasProvider（画布宿主只在画布页出现）。
+    // 启动配方在外壳（AppProvider），建 Context / provide 在 vue-render 的 RenderProvider。
     expect(provider).toContain('new Context')
     expect(provider).toContain('createCanvasAppBasePlugin')
     expect(provider).toContain('resolveAppPlugins()')
     expect(provider).toContain('await ctx.start()')
+    expect(provider).toContain('<RenderProvider')
+    expect(renderProvider).toContain('provide(RENDER_SHELL_KEY')
+    expect(renderProvider).toContain('provide(CANVAS_CONTEXT_KEY')
   })
 
   it('CanvasHost 不再携带启动参数', () => {
@@ -60,10 +68,13 @@ describe('应用装配层级', () => {
 
   it('ctx.start() 完成前只渲染 loading，路由子树不会提前挂载', () => {
     // 先 start 再 ready：子组件一挂载就 installPlugin，必须等内核 started。
-    expect(provider.indexOf('await ctx.start()')).toBeGreaterThan(provider.indexOf('onMounted('))
-    expect(provider.indexOf('ready.value = true')).toBeGreaterThan(provider.indexOf('await ctx.start()'))
-    expect(provider).toMatch(/<slot v-if="ready" \/>/)
-    expect(provider).toContain('正在启动应用')
+    expect(provider.indexOf('await ctx.start()')).toBeGreaterThan(provider.indexOf('async function bootstrap'))
+    // 门控在 RenderProvider：bootstrap 完成后才 ready，插槽才渲染。
+    expect(renderProvider.indexOf('ready.value = true')).toBeGreaterThan(
+      renderProvider.indexOf('await props.bootstrap()'),
+    )
+    expect(renderProvider).toMatch(/<slot v-if="ready" \/>/)
+    expect(renderProvider).toContain('正在启动应用')
   })
 
   it('离开画布先落盘再卸会话，项目页不建画布宿主', () => {

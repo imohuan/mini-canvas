@@ -1,0 +1,273 @@
+<script lang="ts">
+/**
+ * SlotComposer —— 让「内置 UI」和「插件 UI」一起排序的槽容器。
+ *
+ * 写法（宿主）：
+ *   <SlotComposer slot="shell.dock" item-class="flex-none">
+ *     <SlotAnchor id="host/add" :order="100">…内置按钮…</SlotAnchor>
+ *     <SlotAnchor id="host/agent" :order="700">…Agent 圆球…</SlotAnchor>
+ *   </SlotComposer>
+ *
+ * 写法（插件）：
+ *   ctx.slots.register('shell.dock', {
+ *     id: 'my-plugin/export',
+ *     before: 'host/agent',
+ *     order: 900,
+ *     component: ExportButton,
+ *   })
+ *
+ * 规则：
+ * - before / after 指向**同槽条目 id**（owner/name），不是槽名；
+ * - 目标不存在 → 忽略该约束，退回 order；
+ * - order 缺省 1000；同 order 保持传入顺序；
+ * - 本地锚点同 id 时优先，插件不能顶掉内置按钮；
+ * - 环 / 自引用 / 重复 id 会 warn，并按 order 兜底。
+ *
+ * 与 SlotHost 的分工：SlotHost 只渲染插件条目（overlay / mini-map 这类纯插件区域）；
+ * SlotComposer 额外容纳宿主的 SlotAnchor，所以内置按钮也能被插件精确插入前后。
+ */
+import {
+  Comment,
+  Fragment,
+  cloneVNode,
+  defineComponent,
+  h,
+  isVNode,
+  markRaw,
+  onBeforeUnmount,
+  shallowRef,
+  type Component,
+  type PropType,
+  type VNode,
+  type VNodeArrayChildren,
+  type VNodeChild,
+} from 'vue'
+import { orderSlotItems, type SlotOrderIssue } from '@mini-canvas/kernel'
+import { useCanvasContextOrRender } from '../context'
+import SlotAnchor from './SlotAnchor.vue'
+import { isSlotItemId } from '@mini-canvas/kernel'
+import type { SlotComposerEntry } from './slotComposer'
+
+interface SlotComposerItem extends SlotComposerEntry {
+  component: unknown
+  source: 'host' | 'plugin'
+  /** 宿主锚点的内容（插件条目为 undefined） */
+  content?: VNodeChild[]
+}
+
+/** 默认兜底 order：内置项显式给 100~900，未声明者排最后 */
+const FALLBACK_ORDER = 1000
+
+export default defineComponent({
+  name: 'SlotComposer',
+  inheritAttrs: false,
+  props: {
+    /** 槽名（用点，如 shell.dock） */
+    slot: { type: String, required: true },
+    /** 给插件组件根元素加的 class */
+    itemClass: { type: String, default: undefined },
+    /** 给插件条目补宿主 props（如抽屉页签 active/onSelect/host） */
+    itemProps: { type: Function, default: undefined },
+    /**
+     * 所有条目共享的宿主 props（默认按钮组件 / 打开抽屉等函数）。
+     * 插件组件与 SlotAnchor 的插槽内容都会收到；itemProps 可覆盖同名项。
+     */
+    sharedProps: { type: Object, default: undefined },
+  },
+  setup(props, { slots, attrs }) {
+    // 宽松读取：Provider 存在时走它；只 provide 了渲染上下文的宿主/单测（历史写法）
+    // 也能用同一个槽 —— 读插槽与订阅插件装卸只需要「有 ctx」，不要求外壳上下文。
+    const { ctx } = useCanvasContextOrRender()
+    const plugins = shallowRef<Array<SlotComposerEntry & { component: unknown }>>([])
+    const warned = new Set<string>()
+
+    function reload(): void {
+      // slots 是内核能力段：极简上下文（单测桩）可能没有 —— 按「空槽」处理，
+      // 内置锚点仍照常渲染（这也是既有单测依赖的行为）。
+      const occupants = ctx.slots?.occupants?.(props.slot) ?? []
+      plugins.value = occupants.map((e) => ({
+        id: e.id,
+        order: e.order,
+        ...(e.before !== undefined ? { before: e.before } : {}),
+        ...(e.after !== undefined ? { after: e.after } : {}),
+        component: e.component,
+      }))
+    }
+    reload()
+
+    const disposers: Array<{ dispose(): void }> = []
+    if (typeof ctx.on === 'function') {
+      disposers.push(ctx.on('ctx:plugin-installed', reload), ctx.on('ctx:plugin-uninstalled', reload))
+    }
+    const slotRegistry = typeof ctx.get === 'function'
+      ? ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+      : undefined
+    if (slotRegistry && typeof slotRegistry.subscribe === 'function') {
+      const off = slotRegistry.subscribe(reload)
+      disposers.push({ dispose: off })
+    }
+    onBeforeUnmount(() => {
+      for (const d of disposers) d.dispose()
+    })
+
+    /** 把一个 SlotAnchor VNode 的默认插槽展开成一组 VNode */
+    function anchorContent(node: VNode): VNodeChild[] {
+      const children = node.children as
+        | VNodeChild[]
+        | Record<string, unknown>
+        | {
+            default?: (props?: Record<string, unknown>) => VNodeChild[]
+          }
+        | null
+      if (Array.isArray(children)) return children
+      if (children && typeof children === 'object' && typeof children.default === 'function') {
+        return children.default(props.sharedProps)
+      }
+      return []
+    }
+
+    /** 收集宿主锚点；非 SlotAnchor 的普通内容保持原样并参与排序 */
+    function collectHostItems(): SlotComposerItem[] {
+      const out: SlotComposerItem[] = []
+      const walk = (nodes: VNodeChild[] | VNodeArrayChildren): void => {
+        for (const n of nodes as VNodeChild[]) {
+          if (!isVNode(n)) continue
+          if (n.type === Fragment) {
+            walk(n.children as VNodeArrayChildren)
+            continue
+          }
+          if (n.type === Comment) continue
+          if (n.type === SlotAnchor) {
+            const p = n.props as {
+              id?: unknown
+              order?: unknown
+              before?: unknown
+              after?: unknown
+            } | null
+            const id = p && typeof p.id === 'string' ? p.id : ''
+            if (!isSlotItemId(id)) {
+              if (!warned.has('bad-anchor:' + id)) {
+                warned.add('bad-anchor:' + id)
+                console.warn(
+                  '[SlotComposer] SlotAnchor 的 id 必须是 owner/name 形式（如 host/agent）；收到：' + id,
+                )
+              }
+              continue
+            }
+            out.push({
+              id,
+              order: typeof p?.order === 'number' ? p.order : FALLBACK_ORDER,
+              ...(typeof p?.before === 'string' ? { before: p.before } : {}),
+              ...(typeof p?.after === 'string' ? { after: p.after } : {}),
+              component: undefined,
+              source: 'host',
+              content: anchorContent(n),
+            })
+            continue
+          }
+          // 普通内容：用一个匿名条目参与排序，不会意外消失
+          out.push({
+            id: 'host/anonymous-' + out.length,
+            order: FALLBACK_ORDER,
+            component: undefined,
+            source: 'host',
+            content: [n],
+          })
+        }
+      }
+      const children = slots.default ? slots.default() : []
+      walk(children)
+      return out
+    }
+
+    function report(issue: SlotOrderIssue): void {
+      const key = issue.kind + ':' + issue.id + ':' + (issue.target ?? '')
+      if (warned.has(key)) return
+      warned.add(key)
+      console.warn(
+        '[SlotComposer] ' + props.slot + ' 排序问题：' + issue.kind + ' id=' + issue.id +
+          (issue.target ? ' target=' + issue.target : '') + '（已按 order 兜底）',
+      )
+    }
+
+    function renderItem(item: SlotComposerItem): VNodeChild {
+      if (item.source === 'host') {
+        // 锚点内容用 Fragment 原样展开：不生成 DOM，也不会把子节点合并/改写成别的元素。
+        // 不要对单根 cloneVNode 合并 class/attrs —— 会把 Tailwind class 拼串，
+        // 也会在组件根上丢失 data-*（2026-10-28 设置左树/底栏实测）。
+        const raw = item.content ?? []
+        const content = Array.isArray(raw) ? raw : [raw]
+        // 宿主锚点：属性要落到**真实元素**上（否则覆盖层找不到条目）。
+        // 只给第一个可渲染元素补 data-*；组件根不强行塞（多根会 warn）。
+        const first = content.find((c) => isVNode(c) && c.type !== Comment)
+        const marked = content.map((c) =>
+          c === first && isVNode(c)
+            ? cloneVNode(
+                c,
+                {
+                  'data-slot-id': item.id,
+                  'data-slot-order': item.order,
+                  ...(item.before !== undefined ? { 'data-slot-before': item.before } : {}),
+                  ...(item.after !== undefined ? { 'data-slot-after': item.after } : {}),
+                },
+                true,
+              )
+            : c,
+        )
+        return h(Fragment, { key: item.id }, marked)
+      }
+      const extra = (props.itemProps as
+        | ((entry: SlotComposerEntry & { component: unknown }) => Record<string, unknown> | undefined)
+        | undefined)?.(item)
+      // itemProps 返回 undefined = 这一项只参与排序、不渲染（如设置左树只认分组名）
+      if (props.itemProps && extra === undefined) return null
+      const node = h(markRaw(item.component as Component), {
+        key: item.id,
+        ...(props.itemClass ? { class: props.itemClass } : {}),
+        // 身份走下发给组件的普通 prop；同时用 aria/data 不行：多根组件会吞掉并触发 Vue warn。
+        slotItem: item.id,
+        'data-slot-id': item.id,
+        'data-slot-order': item.order,
+        ...(item.before !== undefined ? { 'data-slot-before': item.before } : {}),
+        ...(item.after !== undefined ? { 'data-slot-after': item.after } : {}),
+        ...(props.sharedProps ?? {}),
+        ...(extra ?? {}),
+      })
+      return node
+    }
+
+    return () => {
+      const hostItems = collectHostItems()
+      // 宿主锚点在前：同 id 时本地赢
+      const merged: SlotComposerItem[] = [
+        ...hostItems,
+        ...plugins.value.map((p) => ({
+          ...p,
+          component: p.component,
+          source: 'plugin' as const,
+        })),
+      ]
+      const { items } = orderSlotItems(merged, { onIssue: report })
+      const nodes: VNodeChild[] = []
+      for (const item of items) {
+        const node = renderItem(item)
+        if (node) nodes.push(node)
+      }
+      // 根容器：承载 attrs（class/role 等）。布局由使用方通过 class 指定：
+      // 底栏/状态条是横向 flex，设置左树是纵向 flex —— 这里不能写死方向。
+      // attrs 内的 class 与固定 class 合并，不能直接覆盖（否则使用方的布局会丢）。
+      const userClass = (attrs.class as string | undefined) ?? ''
+      return h(
+        'div',
+        {
+          ...attrs,
+          class: ['slot-composer', userClass],
+          'data-slot': props.slot,
+          'data-slot-count': nodes.length,
+        },
+        nodes,
+      )
+    }
+  },
+})
+</script>

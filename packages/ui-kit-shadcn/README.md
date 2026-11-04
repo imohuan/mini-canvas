@@ -34,7 +34,7 @@ import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, Dropdow
 
 ### 主题交接（真实应用里）
 
-默认主题插件（`plugin-theme-default`）是外观配置的唯一入口：
+默认主题插件（`plugin-theme-canvas`）是外观配置的唯一入口：
 
 | 配置项 | 写入的变量 | 谁消费 |
 | --- | --- | --- |

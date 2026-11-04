@@ -17,7 +17,7 @@ import type { ToolDef } from '@mini-canvas/kernel'
 import { RegistryImpl } from '@mini-canvas/kernel'
 import { Context } from '@mini-canvas/canvas-data'
 // 只导入主题**插件**（走注册流程），不导入它的实现组件（T07）
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import ImageTopToolbar from '../ImageTopToolbar.vue'
 
 const IMG = 'data:image/png;base64,iVBORw0KGgo='
@@ -28,7 +28,7 @@ const IMG = 'data:image/png;base64,iVBORw0KGgo='
  */
 async function themeUiField(): Promise<{ top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }> {
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   return ctx.registryOf('ui')
 }

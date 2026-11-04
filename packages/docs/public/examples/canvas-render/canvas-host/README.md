@@ -13,4 +13,4 @@ pnpm -C packages/docs/public/examples/canvas-render/canvas-host dev
 1. 点「加文本节点」→ 画布上出现文本节点（走 `command:create-node`）。
 2. 点「撤销」→ 节点消失（走 `graph.undo()`）。
 3. 拖出一条连线后点「换连线颜色」→ 连线颜色实时变（响应式外观对象生效）。
-4. 控制台 `MiniCanvasHostDemo.listPlugins()` → `['theme-default', 'text']`（不含被隐藏的 `canvas-base`）。
+4. 控制台 `MiniCanvasHostDemo.listPlugins()` → `['theme-components', 'text']`（不含被隐藏的 `canvas-base`）。

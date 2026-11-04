@@ -176,7 +176,7 @@
   --ntb-active-bg: color-mix(in srgb, var(--ui-accent) 12%, transparent);
   --ntb-active-bg-hover: color-mix(in srgb, var(--ui-accent) 20%, transparent);
   --ntb-active-ink: var(--ui-accent-hover);
-  /* 设置字段样式（供 plugin-theme-default 的 SettingsSchemaField 消费） */
+  /* 设置字段样式（供 plugin-theme-canvas 的 SettingsSchemaField 消费） */
   --sf-label: #111827;
   --sf-desc: #9ca3af;
   --sf-line: rgb(0 0 0 / 0.06);

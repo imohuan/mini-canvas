@@ -20,7 +20,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 import { RegistryImpl } from '@mini-canvas/kernel'
 // 只导入主题**插件**（走注册流程）：SSR 要断言播放/截图按钮的可达性，
 // 必须给 ui 目录装上真实主题组件；不直接 import 组件实现（与顶部操作条同一口径）。
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import VideoContent from '../VideoContent.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
 import { framingStyle } from '../videoCrop'
@@ -31,7 +31,7 @@ let uiFieldShared: { top(name: string): { value: unknown } | undefined }
 beforeAll(async () => {
   const { Context } = await import('@mini-canvas/canvas-data')
   const ctx = new Context()
-  ctx.plugin(themeDefaultPlugin)
+  ctx.plugin(themeComponentsPlugin)
   await ctx.start()
   uiFieldShared = ctx.registryOf('ui')
 })

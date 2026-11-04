@@ -7,7 +7,7 @@
 浮动窗口、悬浮球全部由渲染层 `SettingsShell` 提供 —— 换皮的人只写内容区，
 不重画窗口，也不用管怎么关。
 
-源码：`packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue`。
+源码：`packages/plugins/plugin-theme-components/src/components/settings/PluginSettingsContent.vue`。
 
 ## 功能说明
 

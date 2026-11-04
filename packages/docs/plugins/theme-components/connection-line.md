@@ -6,7 +6,7 @@
 
 它注册在两处：主题槽 `connectionLine` 与 `ui` 目录名 `connectionLine`（同一个组件）。
 
-源码：`packages/plugins/plugin-theme-default/src/components/edge/ConnectionLine.vue`（红线组件，仅 46 行）。
+源码：`packages/plugins/plugin-theme-canvas/src/components/edge/ConnectionLine.vue`（红线组件，仅 46 行）。
 
 ## 功能说明
 

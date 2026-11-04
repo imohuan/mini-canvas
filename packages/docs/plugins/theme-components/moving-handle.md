@@ -6,7 +6,7 @@
 它注册在两处：主题槽 `nodeShell` 由 [BaseNode](/plugins/theme-components/base-node) 内部使用；
 `ui` 目录名 `movingHandle` 供插件按名取（如多选框的批量连线端口）。
 
-源码：`packages/plugins/plugin-theme-default/src/components/node/MovingHandle.vue`（红线组件）。
+源码：`packages/plugins/plugin-theme-canvas/src/components/node/MovingHandle.vue`（红线组件）。
 
 ## 功能说明
 

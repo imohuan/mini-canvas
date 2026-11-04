@@ -57,10 +57,24 @@ export function useCanvasContextOrRender(): CanvasContext {
   const base = inject(CANVAS_CONTEXT_KEY, null)
   if (base) return base
   // 渲染上下文的 key 由 canvas-render 定义；这里用同一个 Symbol.for 名称取，避免反向依赖。
-  const render = inject<{ ctx?: ContextWithSlots } | null>(
+  const render = inject<{
+    ctx?: ContextWithSlots
+    host?: unknown
+    api?: unknown
+    manager?: unknown
+  } | null>(
     Symbol.for('canvas-v2-render-context') as never,
     null,
   )
-  if (render?.ctx) return { ctx: render.ctx }
+  // host / api / manager 一并透传：SettingsHost 这类"要 ctx 也要宿主句柄"的组件
+  // 只 provide 了渲染上下文时也得拿到 themeRegistry，否则设置面板永远显示空槽。
+  if (render?.ctx) {
+    return {
+      ctx: render.ctx,
+      ...(render.host !== undefined ? { host: render.host } : {}),
+      ...(render.api !== undefined ? { api: render.api } : {}),
+      ...(render.manager !== undefined ? { manager: render.manager } : {}),
+    }
+  }
   return useCanvasContext()
 }

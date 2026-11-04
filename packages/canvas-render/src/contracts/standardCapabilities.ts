@@ -13,6 +13,7 @@
  */
 import type { Ref } from 'vue'
 import type { CapabilityFactory } from './capabilities'
+import type { Registry } from '@mini-canvas/kernel'
 import {
   buildParentIndex,
   collectAncestors,
@@ -691,7 +692,10 @@ export function mediaCapabilityOf(ctx: Context): MediaCapability | undefined {
  *
  * 只依赖 ctx（与传入的节点上下文），不 import 任何节点插件 —— 保持"渲染层不认识业务节点"的边界。
  */
-export function createStandardCapabilities(ctx: Context): Record<string, CapabilityFactory> {
+export function createStandardCapabilities(ctx: {
+  get<Service = unknown>(name: string): Service
+  registryOf<T>(kind: string): Registry<T>
+}): Record<string, CapabilityFactory> {
   const viewportOf = () =>
     ctx.get<
       | {

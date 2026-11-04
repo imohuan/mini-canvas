@@ -2,7 +2,7 @@
 
 **一句话**：画布上那层"跟着平移缩放走的点状网格"就是它。注册在主题槽 `background`。
 
-源码：`packages/plugins/plugin-theme-default/src/components/background/DefaultBackground.vue`（红线组件）。
+源码：`packages/plugins/plugin-theme-canvas/src/components/background/DefaultBackground.vue`（红线组件）。
 
 ## 功能说明
 

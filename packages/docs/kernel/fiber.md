@@ -49,7 +49,7 @@ for (const [name, { status, fiber }] of ctx.registry) {
 
 // ③ 数组快照（最好读；诊断面板 / console 用这个）
 ctx.inspectPlugins()
-// → [{ name: 'theme-default', state: 'active', missingDeps: [] },
+// → [{ name: 'theme-components', state: 'active', missingDeps: [] },
 //    { name: 'consumer', state: 'pending', missingDeps: ['greeter'] },
 //    { name: 'bad', state: 'failed', missingDeps: [], error: 'config invalid' }]
 ```

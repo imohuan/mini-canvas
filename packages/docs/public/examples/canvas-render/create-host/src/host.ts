@@ -3,7 +3,8 @@
 // 位置：整个示例唯一建宿主的地方
 import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, type CanvasNode } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 
 // ① 首次打开时的那张默认画布
@@ -14,7 +15,7 @@ function seed(): CanvasNode[] {
 export async function boot() {
   return createMiniCanvasHost({
     adapter: new MemoryStorageAdapter(),                 // ② 换 LocalStorageAdapter 就能跨刷新持久化
-    coldPlugins: [themeDefaultPlugin, nodeTextPlugin],    // ③ 皮在前，业务节点在后
+    coldPlugins: [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin], // ③ 通用件 + 画布皮在前
     seedDefault: seed,                                   // ④ 只在「从未保存过」时跑
     dev: true,                                           // ⑤ 能力缺项当场抛错，方便发现漏声明
   })

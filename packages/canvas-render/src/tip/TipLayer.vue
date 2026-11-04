@@ -24,7 +24,16 @@ const ctx = useCanvasContextOrRender().ctx
 const tips = computed<NotifyItem[]>(
   () => ctx.tryGet<{ notifications: { list(): NotifyItem[] } }>('canvas')?.notifications.list().filter((x) => x.followPointer) ?? [],
 )
-const message = computed(() => tips.value.map((x) => x.message).join(' · '))
+/**
+ * 只显示**一条**提示。
+ *
+ * 以前是 `tips.map(...).join(' · ')`：同一个 source 反复报「已存在同一条连线」时，
+ * 队列里的条目会越积越多，气泡里就出现「已存在同一条连线 · 已存在同一条连线 · …」
+ * 一路追加（用户截图 2026-11-05）。提示是“当前这一下不能连”的状态，只该有最新一条。
+ *
+ * 优先级仍由 notifyService 保证（列表已按 priority 排序），这里取最靠前、也就是最新的那一条。
+ */
+const message = computed(() => tips.value[tips.value.length - 1]?.message ?? '')
 function onMove(e: PointerEvent): void {
   pos.value = { x: e.clientX, y: e.clientY }
 }

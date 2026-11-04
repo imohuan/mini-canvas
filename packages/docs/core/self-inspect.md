@@ -33,7 +33,7 @@ console.table(ctx.surface().services)
 
 ```ts
 ctx.inspectPlugins()
-// → [{ name: 'theme-default', state: 'active', core: true, missingDeps: [] }, ...]
+// → [{ name: 'theme-components', state: 'active', core: true, missingDeps: [] }, ...]
 ```
 
 它回答："哪些插件在跑、哪些卡住了、卡在缺哪个依赖、哪些是核心件"。

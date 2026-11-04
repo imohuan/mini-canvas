@@ -165,7 +165,7 @@ export const manifest: Array<Pick<PluginModule, 'name' | 'inject'>> = [
   { name: 'agent', inject: ['tool-registry', 'canvas-base'] },   // 依赖两个
   { name: 'canvas-base', inject: [] },                           // 谁都不依赖
   { name: 'tool-registry', inject: ['canvas-base'] },            // 依赖 canvas-base
-  { name: 'theme-default', inject: ['canvas-base'] },
+  { name: 'theme-components', inject: ['canvas-base'] },
 ]
 
 /** 宿主已经注入的外部服务名（不是插件；排序时应当忽略它们） */
@@ -184,7 +184,7 @@ import { KNOWN_SERVICES, manifest } from './manifest'
 // ① 正常排序：依赖在前
 const order = topoSort(manifest, KNOWN_SERVICES)
 console.log('[topo] 合法顺序：', order)
-// ['canvas-base', 'tool-registry', 'theme-default', 'agent']（同级保持登记序）
+// ['canvas-base', 'tool-registry', 'theme-components', 'agent']（同级保持登记序）
 
 // ② depsOf 只读 inject
 console.log('[topo] depsOf：', depsOf({ name: 'x', inject: ['a'] }))  // ['a']

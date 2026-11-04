@@ -201,7 +201,7 @@ export function apply(ctx: Context, config: MyPluginConfig): void {
 }
 ```
 
-真实例子：`packages/plugins/plugin-theme-default/src/index.ts` 导出几十项外观参数，
+真实例子：`packages/theme-contract/src/themeDefaults.ts` 用两份 schema（`CanvasConfig` + `AppearanceConfig`）导出几十项外观参数，
 `packages/plugins/plugin-align-guide/src/alignGuidePlugin.ts` 用 `ctx.tryGet('settings')` + `onChange` 把颜色实时写进 CSS 变量。
 
 ## 会在哪里用到
@@ -213,7 +213,7 @@ export function apply(ctx: Context, config: MyPluginConfig): void {
 | `packages/kernel/src/Context.ts` | `tryActivate`：校验 config → 填 `fiber.config` → 调能力层 `declareConfig` → 传 `apply` |
 | `packages/canvas-data/src/canvas/capabilityLayer.ts` | `declareConfig`：标量字段 → settings；返回的清理函数登记进插件 fiber |
 | `packages/canvas-data/src/canvas/capabilities.ts` | `ctx.settings` 能力段的实现（define / set / get / onChange / groups） |
-| `packages/plugins/plugin-theme-default/src/index.ts` | 真实的大 `Config`：几十项外观参数全靠 schema 登记进设置面板 |
+| `packages/plugins/plugin-theme-canvas/src/index.ts` | 真实的大 `Config`：画布半边（端口/标题/吸附/连线）全靠 schema 登记进设置面板 |
 | `packages/ui/src/App.vue` | 成品应用把装配 config（`ui.cfg.*`）逐项喂给宿主 |
 
 ## 完整例子

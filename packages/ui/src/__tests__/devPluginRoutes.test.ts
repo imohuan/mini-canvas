@@ -61,7 +61,8 @@ describe('dev 插件路由（packages/ui 的 catalogPlugin）', () => {
     // 自带件不进外部清单：它们由应用源码冷启动装配，产物多 external 掉 @mini-canvas/*，
     // 走 data: URL 装会在浏览器里直接炸（"Failed to resolve module specifier"）
     expect(ids).not.toContain('plugin-node-text')
-    expect(ids).not.toContain('plugin-theme-default')
+    expect(ids).not.toContain('plugin-theme-components')
+    expect(ids).not.toContain('plugin-theme-canvas')
 
     // UMD 产物不进：没有顶层 export，靠 <script> 全局注入，data: URL 加载必失败。
     // 样例用**仍是可装卸**的插件（align-guide 未改自带）—— 早前这里是 multi-select，

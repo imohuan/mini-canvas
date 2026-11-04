@@ -17,7 +17,7 @@ import {
   useUiComponent,
   type CanvasContext,
 } from '@mini-canvas/canvas-render'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-default'
+import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import { projectsPanelPlugin } from '../projectsPanelPlugin'
 
 function ctxOnly(ctx: Context): CanvasContext {

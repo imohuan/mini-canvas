@@ -117,7 +117,7 @@ describe('生成历史的视频/音频卡面保持干净（没有任何信息浮
  */
 describe('全屏预览的音频不用主题紫', () => {
   const mediaViewer = readFileSync(
-    new URL('../../../plugins/plugin-theme-default/src/components/ui/MediaViewer.vue', import.meta.url),
+    new URL('../../../plugins/plugin-theme-components/src/components/ui/MediaViewer.vue', import.meta.url),
     'utf-8',
   )
 
