@@ -195,10 +195,11 @@ describe('全屏预览浮层', () => {
     const body = Object.values(teleports).join('')
     const all = html + body
     // 2026-10-06：视觉整只交给主题注册的 MediaViewer（AxImageViewer 同款交互），
-    // 测试锚点跟着组件走（mv-root / mv-corner-btn），删除按钮来自底栏的 onDelete。
+    // 测试锚点跟着组件走（mv-root / mv-actions），删除按钮来自底栏的 onDelete。
+    // 2026-11-04：关闭/删除按钮改用 Button 后不再带 mv-corner-btn 类，锚点取 mv-actions。
     expect(all).toContain('图片1')
     expect(all).toContain('mv-root')
-    expect(all).toContain('mv-corner-btn')
+    expect(all).toContain('mv-actions')
     expect(all).toContain('mv-remove')
     closePreview()
   })

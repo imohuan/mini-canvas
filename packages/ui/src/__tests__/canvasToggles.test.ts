@@ -122,6 +122,38 @@ describe('画布开关按钮接上内核（状态栏 / 底栏）', () => {
     ui.onReady()
   })
 
+  /**
+   * 插件是**后来装上的**（用户报障的真实路径：设置页装小地图 → 配置里存着关）。
+   * onReady 时 miniMapVisible 还没被声明，镜像按「显示」兜底；插件安装时才 define。
+   * SettingsStore.define 只通知 schema 变化、**不触发 onChange** —— 镜像只订阅 onChange
+   * 就永远停在 true。此时点按钮写回同一个 false，set 返回 false、没有通知，图标再也切不回来。
+   */
+  it('插件后装：设置项晚于 onReady 声明时，按钮镜像要跟着对齐', async () => {
+    // 重开一个「没有小地图」的宿主：模拟插件还没装（本用例自己管生命周期）
+    ui.unbindCanvasToggles()
+    host.stop()
+    const late = await createMiniCanvasHost({
+      adapter: new MemoryStorageAdapter(),
+      coldPlugins: [themeDefaultPlugin],
+    })
+    ui.setHostEl({ host: late.host })
+    setReadyHost(late.host)
+    await ui.onReady()
+    // onReady 时还没人声明这一项 → 镜像按「显示」兜底
+    expect(late.host.ctx.get<{ get(k: string): unknown }>('settings').get('miniMapVisible')).toBeUndefined()
+    expect(ui.minimapOn.value).toBe(true)
+
+    // 安装小地图插件：用户存过的 miniMapVisible=false 在 define 时命中
+    late.host.ctx.get<{ setSavedSnapshot(s: Record<string, string | number | boolean>): void }>('settings')
+      .setSavedSnapshot({ miniMapVisible: false })
+    late.host.ctx.installPlugin(miniMapPlugin)
+    expect(late.host.ctx.get<{ get(k: string): unknown }>('settings').get('miniMapVisible')).toBe(false)
+    expect(ui.minimapOn.value, '镜像没跟着后装的设置对齐，按钮会一直显示开、点不动').toBe(false)
+
+    ui.unbindCanvasToggles()
+    late.host.stop()
+  })
+
   it('整理画布：真的执行自动布局命令（节点位置被写回 doc）', () => {
     const doc = host.ctx.get<{
       addNodes(n: unknown[]): void

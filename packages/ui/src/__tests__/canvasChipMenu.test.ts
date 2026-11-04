@@ -264,8 +264,11 @@ describe('问题 05：右上实色 / 状态图标替换 / 缩放下拉 / Agent �
 
   it('状态栏小地图关闭态换成另一个真实图标，不只改颜色', () => {
     expect(statusArea).toContain('MapPinOff')
-    expect(statusArea).toContain('<MapPin v-if="ui.minimapOn"')
+    // ui 是普通对象，模板不会解包嵌套的 computed ref：必须读 .value，
+    // 否则 ui.minimapOn 恒为 ref 对象（truthy），图标永远停在 MapPin。
+    expect(statusArea).toContain('<MapPin v-if="ui.minimapOn.value"')
     expect(statusArea).toMatch(/<MapPinOff v-else/)
+    expect(statusArea).not.toContain('<MapPin v-if="ui.minimapOn"')
   })
 
   it('缩放触发器不再套 Tooltip（两个浮层抢同一个锚点会让菜单失效）', () => {

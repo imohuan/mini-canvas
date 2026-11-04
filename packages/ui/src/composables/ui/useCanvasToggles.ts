@@ -76,12 +76,17 @@ export function createCanvasTogglesScope(state: UiState, host: UiHostScope) {
    * mini-map 也是同款做法）。重复 onReady 时先撤旧订阅，避免回调堆积。
    */
   let disposeCanvasToggleBind: (() => void) | undefined
-  function bindCanvasToggles(): void {
-    disposeCanvasToggleBind?.()
-    disposeCanvasToggleBind = undefined
-    const store = hostCtx()?.get<SettingsStore>('settings')
-    if (!store) return
-    // 先按现值对齐一次（面板之前可能已经改过）
+  let disposeCanvasToggleSchema: (() => void) | undefined
+  /**
+   * 按设置现值对齐一次镜像（缺省值规则与首次绑定一致）。
+   *
+   * 为什么单独抽出来：插件是**可以后装的**（设置 → 插件 → 安装）。安装时才 define
+   * `miniMapVisible` 这些项，而 `SettingsStore.define` 只通知 schema 变化、**不发 onChange**。
+   * 只订阅 onChange 的话：onReady 时没人声明 → 镜像兜底 true；插件装好后设置里其实是
+   * 用户存的 false，镜像却仍是 true。点按钮写回同一个 false，`set` 返回 false 也不通知，
+   * 图标和地图从此卡死在「开」（用户报障：两个图标没有切换效果）。
+   */
+  function syncCanvasTogglesFromSettings(store: SettingsStore): void {
     state.edgesVisible = (store.get('edgeVisible') as boolean | undefined) ?? state.edgesVisible
     state.snapOn = (store.get('snapToGrid') as boolean | undefined) ?? state.snapOn
     // 未赋值时 SettingsStore 返回 undefined（不是 schema 默认值）；旧实现读插件服务的
@@ -90,18 +95,33 @@ export function createCanvasTogglesScope(state: UiState, host: UiHostScope) {
     // 画布模式由 nodesDraggable 反推：关掉拖节点 = 抓手态（拖哪都平移画布），否则是移动态
     const draggable = store.get('nodesDraggable') as boolean | undefined
     if (typeof draggable === 'boolean') state.canvasMode = draggable ? 'move' : 'hand'
+  }
+
+  function bindCanvasToggles(): void {
+    disposeCanvasToggleBind?.()
+    disposeCanvasToggleBind = undefined
+    disposeCanvasToggleSchema?.()
+    disposeCanvasToggleSchema = undefined
+    const store = hostCtx()?.get<SettingsStore>('settings')
+    if (!store) return
+    // 先按现值对齐一次（面板之前可能已经改过）
+    syncCanvasTogglesFromSettings(store)
     disposeCanvasToggleBind = store.onChange((key, value) => {
       if (key === 'edgeVisible' && typeof value === 'boolean') state.edgesVisible = value
       else if (key === 'snapToGrid' && typeof value === 'boolean') state.snapOn = value
       else if (key === 'nodesDraggable' && typeof value === 'boolean') state.canvasMode = value ? 'move' : 'hand'
       else if (key === 'miniMapVisible' && typeof value === 'boolean') minimapVisible.value = value
     }).dispose
+    // 后装/热卸插件会**晚于 onReady** 申报或回收这些键：schema 变化时重读一遍现值。
+    disposeCanvasToggleSchema = store.onSchemaChange(() => syncCanvasTogglesFromSettings(store)).dispose
   }
 
   /** 撤掉画布开关的设置订阅（宿主销毁时调用，与 unbindSettingsClose 同处） */
   function unbindCanvasToggles(): void {
     disposeCanvasToggleBind?.()
     disposeCanvasToggleBind = undefined
+    disposeCanvasToggleSchema?.()
+    disposeCanvasToggleSchema = undefined
   }
 
   return {

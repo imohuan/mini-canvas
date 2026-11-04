@@ -85,9 +85,9 @@ const miniMapDock = useMiniMapDockTarget()
         <Tooltip>
           <TooltipTrigger as-child>
             <Button variant="ghost" size="icon-sm" class="size-7 rounded-lg"
-              :class="ui.minimapOn ? 'text-ink' : 'text-ink-dim'" aria-label="切换小地图"
-              :aria-pressed="ui.minimapOn ? 'true' : 'false'" @click="ui.toggleMinimap()">
-              <MapPin v-if="ui.minimapOn" :size="14" class="size-3.5" />
+              :class="ui.minimapOn.value ? 'text-ink' : 'text-ink-dim'" aria-label="切换小地图"
+              :aria-pressed="ui.minimapOn.value ? 'true' : 'false'" @click="ui.toggleMinimap()">
+              <MapPin v-if="ui.minimapOn.value" :size="14" class="size-3.5" />
               <MapPinOff v-else :size="14" class="size-3.5" />
             </Button>
           </TooltipTrigger>
