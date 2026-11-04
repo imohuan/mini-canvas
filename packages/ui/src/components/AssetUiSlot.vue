@@ -17,7 +17,6 @@
  */
 import { computed, ref, watch } from 'vue'
 import AssetManageDialog from './AssetManageDialog.vue'
-import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/MediaViewer.vue'
 import { assetManager, assetPreview, closeAssetManager } from '../composables/assetUiBus'
 import { currentAssetPreview, setAssetPreviewIndex } from '../composables/assetUiBus'
 import { peekPack } from '../composables/nodePack'
@@ -25,10 +24,8 @@ import { useAssetRefOpen } from '../composables/useAssetRefOpen'
 import { useUi, useUiComponentOutside } from '../composables/ui'
 
 const ui = useUi()
-/** 预览件按 ui 目录取；主题没登记时回落到默认皮，保证单独渲染也不白屏。 */
+/** 预览件按 ui 目录取：换主题时一起换，外壳不 import 具体实现。 */
 const MediaViewer = useUiComponentOutside('mediaViewer')
-/** 模板 :is 用；目录没登记时回落默认皮。 */
-const PreviewViewer = computed(() => MediaViewer.value ?? DefaultMediaViewer)
 
 // 监听 Agent 插件广播的「引用被点了」：资产文件 → 全屏预览；资产文件夹 → 资产管理并展开到那一层
 useAssetRefOpen()
@@ -131,8 +128,8 @@ function onPreviewDelete(): void {
   />
 
   <!-- 全屏预览：与底栏素材卡 / 生成历史是同一只组件 -->
-  <component :is="PreviewViewer"
-    v-if="previewItem"
+  <component :is="MediaViewer"
+    v-if="previewItem && MediaViewer"
     :item="previewItem"
     :on-delete="canDelete ? onPreviewDelete : undefined"
     @index="setAssetPreviewIndex"

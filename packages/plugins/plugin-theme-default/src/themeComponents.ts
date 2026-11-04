@@ -33,6 +33,7 @@ import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue"
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue"
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue"
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue"
+import UiKitDebugOverlay from "./components/ui/UiKitDebugOverlay.vue"
 import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn"
 import ShadcnSettingsRow from "./components/settings/ShadcnSettingsRow.vue"
 import ShadcnSettingsSection from "./components/settings/ShadcnSettingsSection.vue"
@@ -110,6 +111,8 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   ui.add("color", ColorField, { id: "default" })
   ui.add("settingsField", SettingsSchemaField, { id: "default" })
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" })
+  // 组件库使用标记（设置 → 调试 → 组件库使用标记）：外壳按名取，换主题时一起换。
+  ui.add("uiKitDebugOverlay", UiKitDebugOverlay, { id: "default" })
 
   for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
     const configured = withComponentConfig(component, uiName)

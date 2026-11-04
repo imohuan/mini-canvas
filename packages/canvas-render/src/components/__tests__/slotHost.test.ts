@@ -12,7 +12,7 @@ import { Context } from '@mini-canvas/canvas-data'
 import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
 import type { PluginManager } from '../../host/pluginManager'
 import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../../contracts/canvasContext'
-import SlotHost from '../SlotHost.vue'
+import SlotHost from '@mini-canvas/vue-render/SlotHost.vue'
 
 function baseContext(ctx: Context): CanvasContext {
   return {

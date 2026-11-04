@@ -6,7 +6,6 @@ import AppDialog from '../../AppDialog.vue'
 import { scrollViewportOf } from '../../scrollPane'
 // 浮层里的控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记）。
 import { useUiComponent } from '@mini-canvas/canvas-render'
-import DefaultMediaViewer from '@mini-canvas/plugin-theme-default/components/ui/MediaViewer.vue'
 import { useMasonry } from '../../../composables/useMasonry'
 import { uiComponentOf, useUi, useUiComponentOutside } from '../../../composables/ui'
 import { historySignatureOf } from '../../../composables/historySignature'
@@ -32,10 +31,8 @@ const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 /** 历史卡片墙滚动层：组件库 ScrollArea（用户口径 2026-11-04）。 */
 const ScrollArea = useUiComponent('ScrollArea')
-/** 全屏预览走 ui 目录；没登记时回落默认皮。历史预览只在打开时渲染，取件晚到也不会丢。 */
+/** 全屏预览走 ui 目录：换主题时一起换；取件晚到时预览晚一步出现，不会白屏。 */
 const MediaViewer = useUiComponentOutside('mediaViewer')
-/** 模板 :is 用；目录没登记时回落默认皮。 */
-const PreviewViewer = computed(() => MediaViewer.value ?? DefaultMediaViewer)
 const s = ui.state
 
 /**
@@ -934,7 +931,7 @@ onBeforeUnmount(() => {
 
   <!-- 历史预览：与资产面板同一只 MediaViewer（Esc / 点遮罩 / 右上角关闭；历史不可删 → 不传 onDelete）。
        视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
-  <component :is="PreviewViewer" v-if="previewItem" :item="previewItem" @close="previewItem = null" />
+    <component :is="MediaViewer" v-if="previewItem && MediaViewer" :item="previewItem" @close="previewItem = null" />
 
   <HistoryDetailDialog :item="detailItem" @close="detailItem = null" />
 </template>

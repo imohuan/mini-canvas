@@ -356,8 +356,9 @@ export { default as SettingsHost } from './components/SettingsHost.vue'
 export { default as SettingsShell } from './components/SettingsShell.vue'
 // 把 ctx.get('settings')(内核 SettingsStore) 适配成设置面板消费的最小接口(SettingsPanelSource) 的复用入口
 export { settingsSourceFrom } from './components/settingsSource'
-// 通用 UI 槽宿主：给槽名就渲染该槽全部 occupant（<SlotHost slot="overlay" />），插件侧 ctx.slots.register 填
-export { default as SlotHost } from './components/SlotHost.vue'
+// 通用 UI 槽宿主：实现只有一份，住在 @mini-canvas/vue-render。
+// 这里保留同名导出，旧代码 import { SlotHost } from '@mini-canvas/canvas-render' 照常可用。
+export { default as SlotHost } from '@mini-canvas/vue-render/SlotHost.vue'
 // 可排序槽：内置 UI（SlotAnchor）与插件条目（ctx.slots）一起按 order + before/after 排
 export { default as SlotComposer } from './components/SlotComposer.vue'
 export { default as SlotAnchor } from './components/SlotAnchor.vue'

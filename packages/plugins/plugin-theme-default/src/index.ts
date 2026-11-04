@@ -51,6 +51,7 @@ import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
+import UiKitDebugOverlay from "./components/ui/UiKitDebugOverlay.vue";
 import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn";
 import ShadcnSettingsRow from "./components/settings/ShadcnSettingsRow.vue";
 import ShadcnSettingsSection from "./components/settings/ShadcnSettingsSection.vue";
@@ -93,6 +94,9 @@ setStaticUiCatalog({
   settingsRow: ShadcnSettingsRow,
   settingsSection: ShadcnSettingsSection,
   Toaster: UiToaster,
+  slotDebugOverlay: SlotDebugOverlay,
+  uiKitDebugOverlay: UiKitDebugOverlay,
+  mediaViewer: MediaViewer,
 });
 
 // 默认值、key 映射与 Config schema 都是纯数据表，搬到 themeConfig.ts（导出名与值不变）。

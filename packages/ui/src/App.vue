@@ -21,12 +21,10 @@ import AgentPanel from './components/areas/AgentPanel.vue'
 import ModalsArea from './components/areas/ModalsArea.vue'
 import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
-// 插槽调试覆盖层由默认主题提供（与主题的 Dropdown 同一套浮层与定位）
-import DefaultSlotDebugOverlay from '@mini-canvas/plugin-theme-default/components/ui/SlotDebugOverlay.vue'
 import { useUi, useUiComponentOutside } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
 import { flushPendingSave } from './composables/pendingSave'
 import { CANVAS_PLUGINS, seedDefaultCanvas } from './assembly'
@@ -36,10 +34,8 @@ import { inject } from 'vue'
 const ui = useUi()
 /** 按钮在根 Provider ready 后才渲染，用宿主单例取件。 */
 const Button = useUiComponentOutside('Button')
-/** 插槽调试覆盖层按 ui 目录取；没装主题/没登记时回落默认皮。 */
+/** 插槽调试覆盖层按 ui 目录取：主题换皮时它会一起换，外壳不 import 具体实现。 */
 const SlotDebugOverlay = useUiComponentOutside('slotDebugOverlay')
-/** 模板 :is 用；目录没登记时回落默认皮。 */
-const DebugOverlay = computed(() => SlotDebugOverlay.value ?? DefaultSlotDebugOverlay)
 /**
  * 组件库使用标记：按需异步加载。
  *
@@ -47,9 +43,8 @@ const DebugOverlay = computed(() => SlotDebugOverlay.value ?? DefaultSlotDebugOv
  * cloud-server 托管的构建版永远是 null，开关打开了也看不到任何圆点。
  * 现在两种构建都保留这段代码；是否挂载仍由开关决定，关着时零开销。
  */
-const UiKitDebugOverlay = defineAsyncComponent(
-  () => import('@mini-canvas/plugin-theme-default/components/ui/UiKitDebugOverlay.vue'),
-)
+/** 组件库使用标记：同样按名从 ui 目录取（主题登记 uiKitDebugOverlay）。 */
+const UiKitDebugOverlay = useUiComponentOutside('uiKitDebugOverlay')
 const s = ui.state
 
 // 外壳命令（打开抽屉 / 切页签 / 收起展开）：注册在 Provider 的 ctx 上，
@@ -284,7 +279,7 @@ onBeforeUnmount(() => {
       <AssetUploadHost />
       <!-- 插槽调试覆盖层：默认主题提供，全应用只挂一次。
            它读 <html data-slot-debug="on"> 与 data-slot / data-slot-id，不需要各区域传参。 -->
-      <component :is="DebugOverlay" />
+      <component :is="SlotDebugOverlay" v-if="SlotDebugOverlay" />
       <!-- 组件库使用标记：默认关闭；关闭时组件不挂载，监听与扫描都不存在。 -->
       <component :is="UiKitDebugOverlay" v-if="UiKitDebugOverlay && s.cfg.debug.uiKitDebug" />
 
