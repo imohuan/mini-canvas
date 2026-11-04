@@ -265,7 +265,7 @@ id 首段 = 当前一级名，面板同样传 `{ group, active, onSelect }`。�
 | `packages/plugins/plugin-cursor-effect/src/index.ts` | 步骤 ⑤ | `ctx.settingsMenu.nav/section` 注册「画布 → 工具 → 光标」；兼容入口仍写 `settings.nav` 的 meta.pageGroup |
 | `packages/plugins/plugin-cursor-effect/src/index.ts:54` | 步骤 ⑥ | `'settingsGroup/' + CURSOR_NAV_ID`，`meta: { mode: 'replace' }` 整页自绘 |
 | `packages/canvas-render/src/host/CanvasSurface.vue:425` | overlay 消费端 | `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` 渲染该槽全部条目 |
-| `packages/canvas-render/src/components/SlotHost.vue:1` | 通用槽宿主 | 读 `ctx.slots.occupants(slot)` 按 order 逐个渲染，插件装卸时自动重读 |
+| `packages/vue-render/src/SlotHost.vue:1` | 通用槽宿主 | 读 `ctx.slots.occupants(slot)` 按 order 逐个渲染，插件装卸时自动重读（`canvas-render` 继续转发同名导出） |
 | `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue` | 菜单消费端 | 读 `settingsMenu.resolve()` 画左导航；旧 `settings.nav` 只补 page / component |
 | `packages/plugins/plugin-cursor-effect/src/index.ts` | 真实菜单注册 | `ctx.settingsMenu.nav/section` 声明「画布 → 工具 → 光标」；旧 `settings.nav` 只留给兼容装配 |
 | `packages/plugins/plugin-theme-default/src/components/settings/PluginSettingsContent.vue:330` | settingsGroup 消费端 | 读 `'settingsGroup/' + sectionKey`；replace 模式接管整组内容 |

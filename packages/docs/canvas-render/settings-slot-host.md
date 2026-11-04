@@ -41,7 +41,8 @@ SettingsHost  = 只提供最外层 Dialog（遮罩 / 居中 / 标题栏 / ✕ / 
 ### 一、SlotHost：宿主侧一行渲染一个槽
 
 ```ts
-// 组件 props（逐字来自 packages/canvas-render/src/components/SlotHost.vue）
+// 组件 props（逐字来自 packages/vue-render/src/SlotHost.vue；
+// canvas-render 从 '@mini-canvas/vue-render/SlotHost.vue' 继续转发同名导出）
 defineProps<{
   slot: string        // 要渲染的槽名（插件经 ctx.slots.register(同名, …) 往里填）
   itemClass?: string  // 可选：给每个 occupant 的根元素额外加的 class
