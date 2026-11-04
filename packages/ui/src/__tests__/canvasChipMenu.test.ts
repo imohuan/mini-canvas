@@ -22,7 +22,6 @@ const cluster = read('../components/ProjectCluster.vue')
 const statusArea = read('../components/areas/StatusArea.vue')
 const dockArea = read('../components/areas/DockArea.vue')
 const topRight = read('../components/areas/TopRightArea.vue')
-const chatPanel = read('../components/areas/ChatPanel.vue')
 const manageToolbar = read('../components/assets/manage-dialog/ManageDialogToolbar.vue')
 const assetToolbar = read('../components/areas/left-drawer/AssetTabToolbar.vue')
 const assetUpload = read('../components/AssetUploadDialog.vue')
@@ -235,7 +234,7 @@ describe('行尾菜单：条目与真实现', () => {
  */
 describe('问题 03：外壳菜单选中只用默认勾', () => {
   it('缩放、移动、筛选、展示、保存位置都用原生单选项，不再手动加选中底', () => {
-    for (const source of [statusArea, dockArea, manageToolbar, assetToolbar, assetUpload, chatPanel]) {
+    for (const source of [statusArea, dockArea, manageToolbar, assetToolbar, assetUpload]) {
       expect(source).toContain('DropdownMenuRadioGroup')
       expect(source).toContain('DropdownMenuRadioItem')
     }
@@ -244,8 +243,6 @@ describe('问题 03：外壳菜单选中只用默认勾', () => {
     expect(manageToolbar).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
     expect(assetToolbar).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
     expect(assetUpload).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
-    expect(chatPanel).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
-    expect(chatPanel).not.toMatch(/DropdownMenuItem[^>]*bg-chip/)
   })
 })
 

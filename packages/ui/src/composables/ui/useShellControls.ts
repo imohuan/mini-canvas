@@ -71,22 +71,6 @@ export function createShellScope(
     }
   }
 
-  function sendChat(): void {
-    const text = state.chatInput.trim()
-    if (!text) return
-    state.chatMessages.push({ role: 'user', text })
-    state.chatInput = ''
-    window.setTimeout(() => {
-      state.chatMessages.push({ role: 'ai', text: '（演示数据）已收到你的指令，正在按当前画布节点生成结果。' })
-    }, 400)
-  }
-  function renameChat(index: number): void {
-    const cur = state.chatHistories[index]?.title ?? ''
-    const next = window.prompt('重命名对话', cur)
-    if (next === null || !next.trim()) return
-    state.chatHistories[index].title = next.trim()
-    showToast('已重命名')
-  }
   function closeMenus(): void {
     state.canvasMenuOpen = false
     state.addMenuOpen = false
@@ -95,7 +79,7 @@ export function createShellScope(
   }
   return {
     openDrawer, showLeftDrawer, openDrawerTab, toggleShortcuts, toggleHistory, toggleLeftCollapsed,
-    sendChat, renameChat, closeMenus,
+    closeMenus,
   }
 }
 

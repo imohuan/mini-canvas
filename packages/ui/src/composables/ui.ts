@@ -107,12 +107,10 @@ export function createUi() {
     toggleHistory: shell.toggleHistory, toggleLeftCollapsed: shell.toggleLeftCollapsed,
     renameNode: nodeActions.renameNode, locateNode: nodeActions.locateNode,
     unbindCanvasTree: canvasTree.unbindCanvasTree, unbindAssetsChanged: lifecycle.unbindAssetsChanged,
-    sendChat: shell.sendChat,
     removeNode: nodeActions.removeNode, duplicateNode: nodeActions.duplicateNode,
     referenceNodeToAgent: nodeActions.referenceNodeToAgent, ungroupNode: nodeActions.ungroupNode,
-    renameChat: shell.renameChat, closeMenus: shell.closeMenus,
-    startChatDrag: panelResize.startChatDrag, startDrawerResize: panelResize.startDrawerResize,
-    startChatResize: panelResize.startChatResize, startChatCornerResize: panelResize.startChatCornerResize,
+    closeMenus: shell.closeMenus,
+    startDrawerResize: panelResize.startDrawerResize,
   }
 }
 

@@ -90,54 +90,11 @@ export function createUiState() {
         { name: '视频节点 2', meta: '待确认后生成 · 2.5', icon: 'video' },
       ] },
     ] as Array<{ type: string; items: Array<{ name: string; meta: string; icon: string }> }>,
-    // AI 对话面板（默认收起，底栏星形按钮可展开）
-    chatOpen: false,
-    chatDocked: false,
-    /** 浮动态默认 400×640（照 LibTV）；停靠态默认 516 */
-    chatWidth: 400,
+    /** Agent 浮窗的尺寸与位置（AgentPanel 用；停靠宽度走 agent 服务） */
     chatHeight: 640,
-    /** 浮窗缩放下限（照目标：不能缩得比这更小） */
-    chatMinW: 320,
-    chatMinH: 400,
     chatPos: null as { x: number; y: number } | null,
     /** Agent 面板的历史下拉是否展开（外壳自己的界面状态） */
     agentHistoryOpen: false,
-    chatInput: '',
-    chatTitle: '技能总结',
-    chatMessages: [
-      { role: 'user', text: '根据这些画布节点总结 Skill', refs: [{ name: '视频节点 2', tag: '图生图', prompt: '根据这些画布节点总结 Skill' }] },
-      { role: 'ai', text: '已读取 19 个节点：包含分组、参考图、成品与智能剪辑节点。可以为你生成一套「角色设定 + 分镜」的可复用 Skill。' },
-    ] as Array<{ role: 'user' | 'ai'; text: string; refs?: Array<{ name: string; tag: string; prompt: string }> }>,
-    chatHistories: [
-      { title: '技能总结', date: '9/17' },
-      { title: '感谢夸奖', date: '9/17' },
-      { title: '产品视频脚本', date: '9/16' },
-    ],
-    chatModes: ['全能创作', '图片生成', '视频生成', '智能剪辑'],
-    chatMode: '全能创作',
-    chatModeOpen: false,
-    chatSuggestions: ['5分钟超长视频', '首尾帧生成视频', '首帧生成视频'],
-    contextLeft: 96,
-    genMode: 'manual' as 'manual' | 'auto',
-    modelTab: 'image' as 'image' | 'video',
-    models: [
-      { name: 'Lib Image 2.5 Pro', desc: '精准生成与编辑，复杂指令稳定还原' },
-      { name: 'Lib Image 2.5 Fast', desc: '极速高质量图像生成，兼顾效果与效率' },
-      { name: 'Lib Image', desc: '最新图片模型、长文本能力突出' },
-      { name: 'General image Pro', desc: '最强图片编辑模型，一致性好' },
-      { name: 'General image V2', desc: '支持联网搜索、文字准确、速度更快' },
-      { name: 'Seedream 5.0 Pro', desc: '精准交互式编辑，支持原生多语言排版' },
-      { name: 'Style Image V8.2', desc: '电影感全面升级，精准还原光影、人物与真实材质' },
-    ],
-    currentModel: 'Lib Image 2.5 Pro',
-    skillTab: 'all' as 'all' | 'fav' | 'mine',
-    skills: [
-      { name: '皮克斯动画广告', path: '/pixar-animated-ad-creator', desc: '从角色立绘、分镜草图到最终合成带广告歌的完整成片' },
-      { name: '爆款拉片复刻', path: '/viral-video-replicator', desc: 'AI拆解爆款视频，一键复刻同款' },
-      { name: '新中式美学TVC', path: '/neo-chinese-aesthetic-tvc', desc: '东方意境产品大片，快速出片' },
-      { name: '分镜脚手架', path: '/storyboard-builder', desc: '从文本大纲生成 25 宫格连贯分镜' },
-    ],
-    currentSkill: null as string | null,
     directorOpen: false,
     // 「浏览器通知 / 通知声音」已改读后台 KV（config/agentNotify，见 composables/agentSettings.ts），
     // 不再在这里留一份 —— 两处各存一份就是漂移。collab/budget 仍是本地 UI 状态。
