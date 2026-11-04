@@ -110,13 +110,13 @@ const {
       @wheel="handleWheel"
       @contextmenu.prevent
     >
-      <!-- 右上角：删除（悬停显示）+ 常驻关闭 -->
+      <!-- 右上角：删除（悬停显示）+ 常驻关闭。观感全交给 Button 的 variant/默认 size，
+           class 只负责摆放位置与删除按钮的悬停显隐（规范：class 只管位置、大小、间距）。 -->
       <span class="mv-actions">
         <Button
           v-if="canRemove"
-          variant="ghost"
-          size="icon-sm"
-          class="mv-corner-btn mv-remove"
+          variant="destructive"
+          class="mv-remove"
           type="button"
           title="删除该素材"
           aria-label="删除该素材"
@@ -124,7 +124,7 @@ const {
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
         </Button>
-        <Button variant="ghost" size="icon-sm" class="mv-corner-btn" type="button" title="关闭 (Esc)" aria-label="关闭预览" @click.stop="close">
+        <Button variant="ghost" type="button" title="关闭 (Esc)" aria-label="关闭预览" @click.stop="close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </Button>
       </span>
@@ -134,7 +134,7 @@ const {
 
       <!-- 主内容：上一张 · 舞台 · 下一张 -->
       <div class="mv-container">
-        <Button v-if="isMultiple" variant="ghost" size="icon-sm" class="mv-nav" type="button" title="上一张 (←)" aria-label="上一张" @click.stop="prevImage">
+        <Button v-if="isMultiple" variant="ghost" type="button" title="上一张 (←)" aria-label="上一张" @click.stop="prevImage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         </Button>
 
@@ -193,7 +193,7 @@ const {
           <slot v-else name="stage" :item="item" />
         </div>
 
-        <Button v-if="isMultiple" variant="ghost" size="icon-sm" class="mv-nav" type="button" title="下一张 (→)" aria-label="下一张" @click.stop="nextImage">
+        <Button v-if="isMultiple" variant="ghost" type="button" title="下一张 (→)" aria-label="下一张" @click.stop="nextImage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
         </Button>
       </div>
@@ -207,27 +207,27 @@ const {
           <span class="mv-divider" />
         </template>
         <template v-if="canZoom">
-          <Button variant="ghost" size="icon-xs" class="mv-btn" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
+          <Button variant="ghost" type="button" title="缩小 (-)" aria-label="缩小" @click="zoomOut">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
           </Button>
         <span class="mv-zoom-label">{{ Math.round(scale * 100) }}%</span>
-          <Button variant="ghost" size="icon-xs" class="mv-btn" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
+          <Button variant="ghost" type="button" title="放大 (+)" aria-label="放大" @click="zoomIn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /><line x1="11" y1="8" x2="11" y2="14" /></svg>
           </Button>
           <span class="mv-divider" />
         </template>
-        <Button v-if="hasTools" variant="ghost" size="icon-xs" class="mv-btn" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
+        <Button v-if="hasTools" variant="ghost" type="button" title="旋转 (R)" aria-label="旋转" @click="rotateImg">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
         </Button>
-        <Button v-if="hasTools" variant="ghost" size="icon-xs" class="mv-btn" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
+        <Button v-if="hasTools" variant="ghost" type="button" title="镜像 (F)" aria-label="镜像" @click="toggleFlip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" /><path d="M8 7 4 12l4 5" /><path d="m16 7 4 5-4 5" /></svg>
         </Button>
-        <Button v-if="canZoom" variant="ghost" size="icon-xs" class="mv-btn" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
+        <Button v-if="canZoom" variant="ghost" type="button" title="重置 (0)" aria-label="重置" @click="resetTransform">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
         </Button>
         <!-- 分隔线只属于工具按钮：没有旋转/镜像的媒体（音频/文本）不再多出第二条线 -->
         <span v-if="hasTools" class="mv-divider" />
-        <Button variant="ghost" size="icon-xs" class="mv-btn" type="button" title="下载" aria-label="下载" @click="download">
+        <Button variant="ghost" type="button" title="下载" aria-label="下载" @click="download">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </Button>
       </div>
@@ -244,7 +244,7 @@ const {
   background: var(--ui-scrim, rgb(0 0 0 / 0.6));
   user-select: none;
 }
-/* 右上角悬浮按钮组 */
+/* 右上角悬浮按钮组：只管摆放，按钮外观交给 Button 组件本身 */
 .mv-actions {
   position: absolute;
   top: 16px;
@@ -253,29 +253,10 @@ const {
   display: flex;
   gap: 8px;
 }
-.mv-corner-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.12));
-  color: var(--ui-tip-ink, #fff);
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: background-color 0.15s ease-out;
-}
-.mv-corner-btn svg { width: 18px; height: 18px; }
-.mv-corner-btn:hover { background: var(--ui-hover-strong, rgb(255 255 255 / 0.24)); }
-.mv-corner-btn:focus-visible { outline: 2px solid var(--ui-tip-ink, #fff); outline-offset: 1px; }
-/* 删除：悬停才露，落下去是危险色 */
-.mv-remove { opacity: 0; pointer-events: none; transition: opacity 0.15s ease-out, background-color 0.15s ease-out; }
+/* 删除：悬停才露（只切可见性与事件，不碰外观；危险色由 variant="destructive" 提供） */
+.mv-remove { opacity: 0; pointer-events: none; transition: opacity 0.15s ease-out; }
 .mv-actions:hover .mv-remove,
 .mv-remove:focus-visible { opacity: 1; pointer-events: auto; }
-.mv-remove:hover { background: var(--ui-danger, #ef4444); color: var(--ui-overlay-solid, #fff); }
 /* 左上角悬浮标题 */
 .mv-title {
   position: absolute;
@@ -302,25 +283,8 @@ const {
   gap: 12px;
   padding: 56px 72px 88px;
 }
-.mv-nav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.12));
-  color: var(--ui-tip-ink, #fff);
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: background-color 0.15s ease-out;
-}
 .mv-nav svg { width: 20px; height: 20px; }
-.mv-nav:hover { background: var(--ui-hover-strong, rgb(255 255 255 / 0.24)); }
-.mv-nav:focus-visible { outline: 2px solid var(--ui-tip-ink, #fff); outline-offset: 1px; }
+.mv-nav { flex: none; }
 .mv-stage {
   min-width: 0;
   min-height: 0;
@@ -478,23 +442,9 @@ const {
   color: var(--ui-tip-ink, #fff);
   backdrop-filter: blur(12px);
 }
-.mv-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition: background-color 0.15s ease-out;
-}
 .mv-btn svg { width: 15px; height: 15px; }
-.mv-btn:hover { background: var(--ui-hover, rgb(255 255 255 / 0.12)); }
-.mv-btn:focus-visible { outline: 2px solid var(--ui-tip-ink, #fff); outline-offset: 1px; }
+/* 控制条底色是卡片色，按钮文字跟随正文色（原先继承的 --ui-tip-ink 是白字，会看不见） */
+.mv-controls :deep(button) { color: var(--ui-ink, inherit); }
 .mv-zoom-label { min-width: 44px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .mv-page { padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .mv-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--ui-line, rgb(255 255 255 / 0.18)); }
