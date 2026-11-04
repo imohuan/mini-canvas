@@ -193,17 +193,19 @@ describe('预览页的接线（静态检查）', () => {
     expect(showcase).toMatch(/SelectGroup/)
   })
 
-  it('「生成参数」卡片有前缀图标、可拉伸输入框与多状态按钮', () => {
+  it('「生成参数」卡片有前缀图标与多状态按钮；预览页不再放多行文本', () => {
     const app = readFileSync(path.join(srcRoot, 'theme/cards/GenerateCard.vue'), 'utf-8')
     // 1. 反向提示词带前缀图标（图标 + 左内边距）
     expect(app).toMatch(/BanIcon/)
     expect(app).toMatch(/class="pl-9"/)
-    // 2. 提示词可纵向拉伸
-    expect(app).toMatch(/resize-y/)
-    // 3. 加载 / 禁用 / 图标按钮都有
+    // 2. 加载 / 禁用 / 图标按钮都有
     expect(app).toMatch(/animate-spin/)
     expect(app).toMatch(/生成中/)
     expect(readFileSync(path.join(srcRoot, 'theme/cards/BasicsCard.vue'), 'utf-8')).toMatch(/size="icon-sm"/)
+    // 3. 用户口径 2026-11-04：两张卡片里的多行文本都删掉（Textarea 自带 resize-none，拖不动）
+    for (const card of ['GenerateCard.vue', 'BasicsCard.vue']) {
+      expect(readFileSync(path.join(srcRoot, 'theme/cards', card), 'utf-8'), card).not.toContain('Textarea')
+    }
   })
 
   it('Tabs 单独成卡，旧的「左右两栏」标题不再出现', () => {

@@ -41,7 +41,6 @@ import {
   RadioGroupItem,
   Slider,
   Switch,
-  Textarea,
 } from '@/previewKit'
 
 interface ChoiceOption {
@@ -110,13 +109,7 @@ function runGenerate(): void {
     <CardContent class="grid gap-3">
       <div class="grid gap-1.5">
         <Label for="prompt" class="text-xs">提示词</Label>
-        <!-- 可纵向拉伸：右下角能拖出 resize 手柄 -->
-        <Textarea
-          id="prompt"
-          v-model="prompt"
-          class="min-h-20 max-h-56 resize-y"
-          placeholder="描述你想生成的内容"
-        />
+        <Input id="prompt" v-model="prompt" placeholder="描述你想生成的内容" />
       </div>
 
       <div class="grid gap-1.5">

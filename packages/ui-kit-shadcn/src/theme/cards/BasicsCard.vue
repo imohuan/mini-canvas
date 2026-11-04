@@ -21,7 +21,6 @@ import {
   Separator,
   Slider,
   Switch,
-  Textarea,
 } from '@/previewKit'
 
 const checked = ref(true)
@@ -76,9 +75,8 @@ const text = ref('')
       </div>
 
       <div class="grid gap-1.5">
-        <Label class="text-xs">输入框 / 文本域</Label>
+        <Label class="text-xs">输入框</Label>
         <Input v-model="text" placeholder="单行输入" />
-        <Textarea v-model="text" class="min-h-16 resize-y" placeholder="多行文本" />
       </div>
     </CardContent>
   </Card>
