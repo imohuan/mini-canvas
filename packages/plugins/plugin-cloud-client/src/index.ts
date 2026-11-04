@@ -2,7 +2,7 @@
 //
 // 1. 插件本体：宿主 / 外部 js 装配用（export 的 name / inject / Config / apply）
 // 2. 纯函数与适配器：供"在别处复用这套云端读写"（比如自己写一个只上传不恢复的插件）
-export { cloudClientPlugin, name, inject, Config, apply } from './plugin.js'
+export { cloudClientPlugin, name, inject, Config, apply, onCanvasReady } from './plugin.js'
 export { migrateLocalResources } from './plugin.js'
 export type { GenHistoryService, CloudClientService, CloudClientStatus } from './plugin.js'
 

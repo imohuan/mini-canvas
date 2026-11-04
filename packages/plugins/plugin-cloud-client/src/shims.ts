@@ -30,6 +30,11 @@ export interface PluginModule {
   inject?: string[]
   Config?: unknown
   apply(ctx: Context): void
+  /**
+   * 可选：画布会话就绪后的钩子（mountCanvas 装完 doc/selection 后调用）。
+   * 返回值是清理函数，离开画布时执行。
+   */
+  onCanvasReady?(ctx: Context): void | (() => void)
 }
 
 // —— StorageAdapter 的资源形式孔位（与 @mini-canvas/canvas-data 的 storage/types.ts 同形） ——

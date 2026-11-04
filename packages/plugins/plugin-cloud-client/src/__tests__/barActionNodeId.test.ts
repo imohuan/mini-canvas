@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { cloudClientPlugin } from '../plugin'
+import { cloudClientPlugin, onCanvasReady } from '../plugin'
 import type { BarActionLike } from '../actions'
 
 /** 记录请求的假 fetch（不起真服务；Node 里相对地址必须自己接，故整体替换 globalThis.fetch） */
@@ -90,6 +90,8 @@ describe('云端动作下单带节点 id', () => {
     // 这里按结构塞进真实内核即可。
     ctx.plugin(cloudClientPlugin as never)
     await ctx.start()
+    // 动作注册属于画布会话：应用级 apply 只建连接，画布钩子单独跑一次。
+    onCanvasReady(ctx as never)
     // 清单是异步拉的：等动作落进注册口
     await waitFor(() => registered.some((a) => a.id === SERVER_ACTION.id))
 

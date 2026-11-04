@@ -25,7 +25,13 @@ import { createCloudKvAdapter } from './cloudKvAdapter.js'
 import type { ServerAction, ServerHistoryPage } from './apiTypes.js'
 
 export const name = 'cloud-client'
-export const inject = ['doc'] as string[]
+/**
+ * 应用级常驻：不再硬依赖 doc。
+ *
+ * 项目页也要能用云端连接（历史查询、动作清单）；doc 只在画布内存在，
+ * 所以连接部分不能等 doc。画布同步由 mountCanvas 在装完服务后调 onCanvasReady 挂上。
+ */
+export const inject = [] as string[]
 export { Config }
 
 /** 挂在 ctx 上的历史服务（前端只读；ui 的历史弹窗读它渲染） */
@@ -200,24 +206,98 @@ const MEDIA_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
   'image-compare': ['leftImageUrl', 'rightImageUrl'],
 }
 
+/** 连接态：apply 建、onCanvasReady 用。每次 apply 覆盖一份（插件热重载会重新来）。 */
+let shared:
+  | {
+      ctx: Context
+      settings: SettingsLike | undefined
+      cfg: ReturnType<typeof configFrom>
+      api: CloudApi
+      status: CloudClientStatus
+      notifyHistory: () => void
+      offSettings?: { dispose(): void }
+    }
+  | undefined
+
+/**
+ * 应用级入口：只建**连接**（API、历史查询、状态服务、设置订阅与清单轮询）。
+ *
+ * 项目页没有 doc/selection，也要能查历史、刷新平台清单；画布读写一律推迟到
+ * onCanvasReady。这里不做任何 save.useAdapter / 画布恢复，否则项目页会读写一张
+ * 默认画布。
+ */
 export function apply(ctx: Context): void {
   const settings = ctx.tryGet<SettingsLike>('settings')
   const cfg = configFrom(settings as never)
   const api = new CloudApi({ baseUrl: cfg.baseUrl })
 
-  // 当前画布 id（多画布）：URL `?canvas=` 优先，拿不到回落默认。本插件的所有存档 / 资源 / 任务
-  // 都围绕它走 —— 同一套代码服务任意一张画布，不再写死 default。
-  const CID = canvasId()
-
-  const doc = ctx.get<HostDoc>('doc')
-const adapter = new CanvasDiffAdapter(api, CID)
   const status: CloudClientStatus = { active: true, baseUrl: cfg.baseUrl, actions: 0 }
 
+  /** 历史查询：应用级常驻，与画布无关。 */
+  const historyListeners = new Set<() => void>()
+  const genHistory: GenHistoryService = {
+    query: (q) => api.fetchHistory(q),
+    subscribe(fn) {
+      historyListeners.add(fn)
+      return () => historyListeners.delete(fn)
+    },
+  }
+  ctx.inject('cloud-client:history', genHistory)
+
+  const notifyHistory = (): void => {
+    for (const fn of historyListeners) {
+      try {
+        fn()
+      } catch {
+        /* 单个订阅者抛错不打断其它 */
+      }
+    }
+  }
+
+  const service: CloudClientService = {
+    status: () => ({ ...status }),
+    // 清单刷新的真实现挂在画布会话里；项目页没有底栏，刷新是安全 no-op。
+    refreshActions: async () => undefined,
+  }
+  ctx.inject('cloud-client', service)
+
+  // 设置里改了地址 → 立刻换（不用重装插件）。画布侧的同步对象在会话里，
+  // 由 onCanvasReady 用同一份 api 实例，地址切换对它同样生效。
+  const offSettings = settings?.onChange?.((key, value) => {
+    if (key === 'cloudClientBaseUrl' && typeof value === 'string') {
+      api.setBaseUrl(value)
+      status.baseUrl = value
+    }
+  })
+  ctx.effect(() => () => {
+    offSettings?.dispose?.()
+  })
+
+  /** 连接态存到这里，画布会话（onCanvasReady）复用同一份 api / status。 */
+  shared = { ctx, settings, cfg, api, status, notifyHistory, offSettings }
+}
+/**
+ * onCanvasReady —— 画布会话钩子（mountCanvas 装完 doc/selection 后调用）。
+ *
+ * 这里才做「把存档域切到云端 / 恢复当前画布 / 注册动作 / 开实时通道」。
+ * 返回的清理函数由 unmountCanvas 调用：停 SSE、恢复本地 adapter、退定时器。
+ */
+export function onCanvasReady(ctx: Context): void | (() => void) {
+  const s = shared
+  // 没有连接态（插件没 apply 过）或当前不在画布内（没有 doc）→ 什么都不做。
+  if (!s || !ctx.tryGet('doc')) return
+  const { api, cfg, status, notifyHistory } = s
+
+  // 当前画布 id：URL 的 #/canvas/<id> 优先，拿不到回落 default。
+  const CID = canvasId()
+  const doc = ctx.get<HostDoc>('doc')
+  const adapter = new CanvasDiffAdapter(api, CID)
+
   /**
-   * 当前是否正在编辑某节点（只用于“哪些字段先别覆盖”）。
+   * 当前是否正在编辑某节点（只用于"哪些字段先别覆盖"）。
    *
-   * 宿主可以在装配时提供 `cloud-client/edit-guard`（返回某节点当前被占用的字段）。
-   * 没有这个服务时用 DOM 焦点兜底；都取不到就返回空集（宁可同步，也不整体停更）。
+   * 宿主可以提供 cloud-client/edit-guard；没有时用 DOM 焦点兜底。
+   * 只属于画布：项目页没有节点，也不该为它注册任何东西。
    */
   function editingFieldsOf(nodeId: string): ReadonlySet<'position' | 'data' | 'size'> {
     const out = new Set<'position' | 'data' | 'size'>()
@@ -225,13 +305,10 @@ const adapter = new CanvasDiffAdapter(api, CID)
     if (typeof guard === 'function') {
       for (const field of guard(nodeId)) out.add(field)
     }
-    // 文本/可视化编辑没有统一事件：用 DOM 焦点所在的节点兜底。
     if (typeof document !== 'undefined') {
       const active = document.activeElement
       const nodeEl = active instanceof HTMLElement ? active.closest('.vue-flow__node') : null
       if (nodeEl instanceof HTMLElement) {
-        // VueFlow 的节点外壳通常是 `data-id` / `id` 两者之一；只认精确 id，
-        // 不用 endsWith（'1' 会误配 '11'，正好把别人的输入当成这个节点的）。
         const dataId = nodeEl.getAttribute('data-id')
         const domId = nodeEl.id
         const matches =
@@ -242,12 +319,17 @@ const adapter = new CanvasDiffAdapter(api, CID)
     return out
   }
 
-  // ==================== 1. 存档：画布域换成走后台的 adapter ====================
-  //
   // adapter 必须最先换，之后所有读写才走网络。只换 canvas 域：
   // 四格全部换到云端（canvas / resource / config / shortcut）——
   // 用户要求：云端时配置与快捷键也用云端的，而不是本地的（否则换台机器设置全丢）。
   const save = ctx.tryGet<SaveLike>('save')
+  // 离开画布要能换回本地：先记下原来的那一格。
+  const previousAdapters = {
+    canvas: save?.adapterOf?.('canvas'),
+    resource: save?.adapterOf?.('resource'),
+    config: save?.adapterOf?.('config'),
+    shortcut: save?.adapterOf?.('shortcut'),
+  }
   save?.useAdapter('canvas', adapter)
   // 换资源后端**之前**先抓住本地那个：首次上云时要用它把本地已存的字节捞出来传到云端
   // （换完就够不着本地库了 —— 那正是"本地画布里已有的图，上云后全丢"的成因）。
@@ -411,23 +493,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
     }
   }
 
-  // ==================== 4. 历史服务（ui 只读）====================
-  const historyListeners = new Set<() => void>()
-  const genHistory: GenHistoryService = {
-    query: (q) => api.fetchHistory(q),
-    subscribe(fn) {
-      historyListeners.add(fn)
-      return () => historyListeners.delete(fn)
-    },
-  }
-  // 服务名带插件前缀（Spec 3.4）：避免与别的插件的历史服务撞名。
-  ctx.inject('cloud-client:history', genHistory)
-
-  const service: CloudClientService = {
-    status: () => ({ ...status }),
-    refreshActions: reloadActions,
-  }
-  ctx.inject('cloud-client', service)
+  // 历史服务与 cloud-client 状态属于应用级（apply 里已注入），这里不再重复。
 
   // ==================== 5. 实时跟随（一条 SSE 带三件事）====================
   const sync = createRemoteSync({
@@ -472,15 +538,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
     knownType: (type) => (doc.types ? doc.types.has(type) : true),
     subscribe: (onChange, onError) => api.subscribeChanges(onChange, onError),
     onActionsChanged: () => void reloadActions(),
-    onHistoryChanged: () => {
-      for (const fn of historyListeners) {
-        try {
-          fn()
-        } catch {
-          // 单个订阅者抛错不打断其它
-        }
-      }
-    },
+    onHistoryChanged: notifyHistory,
     onError: (msg, err) => console.warn('[cloud-client] ' + msg, err),
   })
 
@@ -506,23 +564,16 @@ const adapter = new CanvasDiffAdapter(api, CID)
     timer = setInterval(() => void reloadActions(), cfg.pollMs)
   }
 
-  // 设置里改了地址 → 立刻换（不用重装插件）
-  const offSettings = settings?.onChange?.((key, value) => {
-    if (key === 'cloudClientBaseUrl' && typeof value === 'string') {
-      api.setBaseUrl(value)
-      status.baseUrl = value
-      void reloadActions()
-    }
-  })
-
-  // 卸载清理：定时器 / 订阅随插件作用域一起收掉
-  ctx.effect(() => () => {
+  // 离开画布：停 SSE、退兜底轮询、把四个 adapter 换回进画布前的那一格。
+  return () => {
     if (timer) clearInterval(timer)
     timer = null
     sync.stop()
-    // 设置订阅也要退：插件热卸后它还在听 settings，改一次地址就调一次已卸载的 api 实例
-    offSettings?.dispose?.()
-  })
+    if (previousAdapters.canvas) save?.useAdapter('canvas', previousAdapters.canvas)
+    if (previousAdapters.resource) save?.useAdapter('resource', previousAdapters.resource)
+    if (previousAdapters.config) save?.useAdapter('config', previousAdapters.config)
+    if (previousAdapters.shortcut) save?.useAdapter('shortcut', previousAdapters.shortcut)
+  }
 }
 
-export const cloudClientPlugin: PluginModule = { name, inject, Config, apply }
+export const cloudClientPlugin: PluginModule = { name, inject, Config, apply, onCanvasReady }

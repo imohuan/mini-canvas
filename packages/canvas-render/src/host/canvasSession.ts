@@ -74,6 +74,23 @@ export async function mountCanvas(opts: MountCanvasOptions): Promise<CanvasSessi
   }
   if (opts.windowKey) created.exposeToWindow(opts.windowKey)
 
+  /**
+   * 画布会话就绪钩子：插件在 apply 里只能拿到应用级服务，
+   * 需要 doc/selection 的部分（如云端同步）在这里挂上。
+   * 钩子抛错不影响画布本身：记一条 warn，继续往下走。
+   */
+  const sessionDisposers: Array<() => void> = []
+  for (const plugin of opts.plugins ?? []) {
+    const hook = (plugin as { onCanvasReady?: (ctx: Context) => void | (() => void) }).onCanvasReady
+    if (typeof hook !== 'function') continue
+    try {
+      const dispose = hook(opts.ctx)
+      if (typeof dispose === 'function') sessionDisposers.push(dispose)
+    } catch (err) {
+      console.warn('[canvas-session] onCanvasReady 失败：' + ((plugin as { name?: string }).name ?? '?'), err)
+    }
+  }
+
   let disposed = false
   const handle: CanvasSessionHandle = {
     ctx: created.host.ctx,
@@ -89,6 +106,13 @@ export async function mountCanvas(opts: MountCanvasOptions): Promise<CanvasSessi
         await created.host.save.flush()
       } catch {
         /* 落盘失败不该挡住离开画布 */
+      }
+      for (const dispose of sessionDisposers.reverse()) {
+        try {
+          dispose()
+        } catch {
+          /* 单个清理失败不打断其它 */
+        }
       }
       created.host.stop()
     },
