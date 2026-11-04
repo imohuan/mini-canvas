@@ -185,9 +185,8 @@ function onListClick(): void {
  * 这样页面重渲染、开关弹窗都不会把它重置成静态。
  * z-index 给 0：胶囊当「底」，页签文字在它上面（页签自己是定位元素，会盖住它）。
  *
- * 颜色必须用宿主的「选中底」token（--ui-panel-active / --ui-hover），
- * 不能用 --background：本项目主题里 --background 接近纯白，暗色下会变成一块死白色块
- * （2026-11-04 实测截图就是那样）。没有 token 时才退回半透明 hover 底。
+ * 颜色对齐 shadcn 原生选中态：列表是 muted 底，选中项是 **panel 底**（亮色白、暗色深灰）。
+ * 之前用前景色 12% 叠出来是灰块，比默认观感暗一档（用户 2026-11-04 截图反馈）。
  */
 .cn-tabs-capsule {
   position: absolute;
@@ -196,15 +195,13 @@ function onListClick(): void {
   /* 宽、高、位置全部由脚本按选中项的真实矩形写入（含列表内边距），这里不写死任何尺寸 */
   border-radius: 9999px;
   /*
-   * 选中胶囊必须**两种主题下都有实底**。
-   *
-   * 2026-11-04 实测：之前兜底是 `rgb(255 255 255 / 0.14)` —— 暗色下勉强能看见，
-   * 亮色下白底上等于没有，用户读到的是「亮色主题下选中项没有背景」。
-   * 改用前景色 12%：亮色=浅灰块、暗色=浅白块，两边都是「比底稍深/稍亮一块」。
-   * 宿主给了 --ui-panel-active 时仍以宿主为准。
+   * 三档回退，越靠前越贴近 shadcn 默认：
+   * 1. --ui-tab-capsule：宿主想单独指定时用；
+   * 2. --ui-panel：项目面板底（亮色白 / 暗色 #262626），和 bg-background 同义；
+   * 3. --background：预览页没有宿主，用它。
    */
-  background: var(--ui-tab-capsule, var(--ui-panel-active, color-mix(in oklab, var(--foreground) 12%, transparent)));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  background: var(--ui-tab-capsule, var(--ui-panel, var(--background)));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
   pointer-events: none;
   will-change: transform, width;
   z-index: 0;

@@ -40,12 +40,14 @@ describe('TabsList 滑动胶囊', () => {
     )
   })
 
-  it('胶囊颜色走宿主 token，不能用 --background（暗色下会变成死白色块）', () => {
-    expect(source, '胶囊没有用 --ui-tab-capsule / --ui-panel-active 这类宿主 token').toMatch(
-      /var\(--ui-tab-capsule,\s*var\(--ui-panel-active/,
+  it('胶囊颜色对齐 shadcn 原生选中态（panel 底，不是前景色叠加）', () => {
+    // 用户口径 2026-11-04：选中项那块比默认的深一档，要跟 shadcn 原生的 panel 底一致
+    expect(source, '胶囊应优先读 --ui-tab-capsule 再回落 --ui-panel').toMatch(
+      /var\(--ui-tab-capsule,\s*var\(--ui-panel,\s*var\(--background\)\)\)/,
     )
-    expect(source, '胶囊又退回 --background 了（暗色变白色块）').not.toMatch(
-      /cn-tabs-capsule[\s\S]{0,400}background:\s*var\(--background/,
+    // 不允许再用前景色叠加出灰块（那正是偏暗的原因）
+    expect(source, '胶囊又用前景色叠加了').not.toMatch(
+      /cn-tabs-capsule[\s\S]{0,600}color-mix\(in oklab, var\(--foreground\)/,
     )
   })
 
