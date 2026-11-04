@@ -44,7 +44,7 @@ function enter(): void {
 </script>
 
 <template>
-  <Button v-if="selected && hasImage" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+  <Button v-if="selected && hasImage" variant="ghost" size="icon-sm" type="button"
     title="旋转与镜像（复制并编辑副本）" aria-label="旋转与镜像（复制并编辑副本）" :disabled="busy" @click="enter">
     <ToolbarIcon :icon="ICON" />
   </Button>

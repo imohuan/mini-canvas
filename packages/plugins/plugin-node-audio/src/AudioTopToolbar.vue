@@ -62,7 +62,7 @@ async function onFileChange(e: Event): Promise<void> {
   <div v-if="visible" class="ntp-root at-root nodrag nopan">
     <input ref="fileInput" class="at-file" type="file" accept="audio/*" @change="onFileChange" />
 
-    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    <Button variant="ghost" size="icon-sm" type="button"
       title="上传音频" aria-label="上传音频" :disabled="uploading" @click="openPicker">
       <ToolbarIcon :icon="ICON_UPLOAD" />
     </Button>

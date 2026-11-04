@@ -147,7 +147,7 @@ function cancelEdit(): void {
     <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
          布局对齐 liblib 的 `× | 原比例 | 确认`：取消在最左、比例下拉居中、确认在最右。 -->
     <template v-if="editing">
-      <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+      <Button variant="destructive" size="icon-sm" type="button"
         title="取消编辑" aria-label="取消编辑" :disabled="pending" @click="cancelEdit">
         <ToolbarIcon :icon="ICON_CANCEL" />
       </Button>
@@ -155,9 +155,9 @@ function cancelEdit(): void {
            只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。 -->
       <DropdownMenu v-if="editing">
         <DropdownMenuTrigger as-child>
-          <Button class="mck-toolbar-btn vt-ratio" variant="ghost" size="sm" type="button"
+          <Button class="vt-ratio" variant="ghost" size="sm" type="button"
             :title="ratioTitle" :aria-label="ratioTitle">
-            <span class="mck-toolbar-label">{{ ratioTitle }}</span>
+            <span>{{ ratioTitle }}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '160px' }">
@@ -167,53 +167,53 @@ function cancelEdit(): void {
         </DropdownMenuContent>
       </DropdownMenu>
       <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"） -->
-      <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+      <Button variant="default" size="sm" type="button"
         :title="pending ? '正在裁剪…' : '确认编辑'"
         :aria-label="pending ? '正在裁剪' : '确认编辑'" :disabled="pending" @click="confirmEdit">
         <ToolbarIcon :icon="ICON_CONFIRM" />
-        <span class="mck-toolbar-label">{{ pending ? '裁剪中…' : '确认' }}</span>
+        <span>{{ pending ? '裁剪中…' : '确认' }}</span>
       </Button>
     </template>
 
     <!-- 平时：上传 / 剪辑 / 裁剪 / 扩展 / 截图 / 下载 / 恢复 -->
     <template v-else>
       <!-- 剪辑会话：顶栏给一个明确的退出入口（底栏的胶片条也有，但顶部这格不能空着） -->
-      <Button v-if="clipping" class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+      <Button v-if="clipping" variant="destructive" size="icon-sm" type="button"
         title="退出剪辑" aria-label="退出剪辑" @click="endOverlay(props.id)">
         <ToolbarIcon :icon="ICON_CANCEL" />
       </Button>
-      <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+      <Button variant="ghost" size="icon-sm" type="button"
         title="上传视频" aria-label="上传视频" :disabled="uploading" @click="openPicker">
         <ToolbarIcon :icon="ICON_UPLOAD" />
       </Button>
 
       <template v-if="hasVideo">
-        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="剪辑时长" aria-label="剪辑时长"
+        <Button variant="ghost" size="icon-sm" type="button" title="剪辑时长" aria-label="剪辑时长"
           @click="beginOverlay(props.id, 'clip')">
           <ToolbarIcon :icon="ICON_CLIP" />
         </Button>
-        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="裁剪画面" aria-label="裁剪画面"
+        <Button variant="ghost" size="icon-sm" type="button" title="裁剪画面" aria-label="裁剪画面"
           @click="beginOverlay(props.id, 'crop')">
           <ToolbarIcon :icon="ICON_CROP" />
         </Button>
-        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="截取当前帧" aria-label="截取当前帧"
+        <Button variant="ghost" size="icon-sm" type="button" title="截取当前帧" aria-label="截取当前帧"
           @click="run('video:capture-frame')">
           <ToolbarIcon :icon="ICON_FRAME" />
         </Button>
         <!-- 转音频：后台 ffmpeg 抽音轨，新建一个音频节点 + 连线（与裁剪/剪辑同一条顺序） -->
-        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="转为音频" aria-label="转为音频"
+        <Button variant="ghost" size="icon-sm" type="button" title="转为音频" aria-label="转为音频"
           @click="run('video:to-audio')">
           <ToolbarIcon :icon="ICON_AUDIO" />
         </Button>
-        <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="下载视频" aria-label="下载视频"
+        <Button variant="ghost" size="icon-sm" type="button" title="下载视频" aria-label="下载视频"
           @click="run('video:download')">
           <ToolbarIcon :icon="ICON_DOWNLOAD" />
         </Button>
-        <Button v-if="cropped" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+        <Button v-if="cropped" variant="ghost" size="icon-sm" type="button"
           title="恢复整幅画面" aria-label="恢复整幅画面" @click="run('video:reset-crop')">
           <ToolbarIcon :icon="ICON_RESET" />
         </Button>
-        <Button v-if="clipped" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+        <Button v-if="clipped" variant="ghost" size="icon-sm" type="button"
           title="恢复整段时长" aria-label="恢复整段时长" @click="run('video:reset-clip')">
           <ToolbarIcon :icon="ICON_RESET" />
         </Button>

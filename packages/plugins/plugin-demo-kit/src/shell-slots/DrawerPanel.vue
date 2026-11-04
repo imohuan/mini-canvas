@@ -35,8 +35,8 @@ onBeforeUnmount(() => {
     </ul>
 
     <div class="ssd-actions">
-      <Button v-if="Button" class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="关闭抽屉" @click="props.host.close()">关闭抽屉</Button>
-      <Button v-if="Button" class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="收起或展开抽屉" @click="props.host.toggleCollapsed()">收起/展开</Button>
+      <Button v-if="Button" variant="ghost" size="sm" type="button" title="关闭抽屉" @click="props.host.close()">关闭抽屉</Button>
+      <Button v-if="Button" variant="ghost" size="sm" type="button" title="收起或展开抽屉" @click="props.host.toggleCollapsed()">收起/展开</Button>
     </div>
   </div>
 </template>

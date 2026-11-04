@@ -25,9 +25,9 @@ const configOpen = defineModel<boolean>('configOpen', { default: false })
 
 <template>
   <!-- 外壳 = 主题胶囊 .ntp-root（与图片裁剪/绘制状态栏同一套 token）：
-       底色、边框、圆角、阴影都跟着亮/暗主题走；按钮直接用 shadcn Button + 全局 .mck-toolbar-btn。 -->
+       底色、边框、圆角、阴影都跟着亮/暗主题走；按钮直接用 shadcn Button。 -->
   <div class="ntp-root vclip-dock">
-    <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+    <Button variant="destructive" size="icon-sm" type="button"
       title="退出剪辑" aria-label="退出剪辑" @click="emit('cancel')">
       <ToolbarIcon :icon="ICON_CLOSE" />
     </Button>
@@ -40,7 +40,7 @@ const configOpen = defineModel<boolean>('configOpen', { default: false })
     -->
     <Popover v-model:open="configOpen">
       <PopoverTrigger as-child>
-        <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': configOpen }" variant="ghost" size="sm" type="button"
+        <Button :variant="configOpen ? 'secondary' : 'ghost'" size="icon-sm" type="button"
           title="快捷键" aria-label="快捷键" :aria-pressed="configOpen ? 'true' : 'false'">
           <ToolbarIcon :icon="ICON_KEYBOARD" />
         </Button>
@@ -93,23 +93,23 @@ const configOpen = defineModel<boolean>('configOpen', { default: false })
 
     <slot />
 
-    <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': snap }" variant="ghost" size="sm" type="button"
+    <Button :variant="snap ? 'secondary' : 'ghost'" size="icon-sm" type="button"
       :title="snap ? '关闭吸附' : '开启吸附'" aria-label="吸附" :aria-pressed="snap ? 'true' : 'false'"
       @click="emit('toggle-snap')">
       <ToolbarIcon :icon="ICON_MAGNET" />
     </Button>
 
-    <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': loop }" variant="ghost" size="sm" type="button"
+    <Button :variant="loop ? 'secondary' : 'ghost'" size="icon-sm" type="button"
       :title="loop ? '关闭区间循环' : '开启区间循环'" aria-label="区间循环" :aria-pressed="loop ? 'true' : 'false'"
       @click="emit('toggle-loop')">
       <ToolbarIcon :icon="ICON_LOOP" />
     </Button>
 
-    <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+    <Button variant="default" size="sm" type="button"
       :title="pending ? '剪辑中…' : '确认剪辑'"
       :aria-label="pending ? '剪辑中' : '确认剪辑'" :disabled="pending" @click="emit('confirm')">
       <ToolbarIcon :icon="ICON_CONFIRM" />
-      <span class="mck-toolbar-label">{{ pending ? '剪辑中…' : '确认' }}</span>
+      <span>{{ pending ? '剪辑中…' : '确认' }}</span>
     </Button>
   </div>
 </template>

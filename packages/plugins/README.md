@@ -113,8 +113,8 @@ ctx.nodes.register({
 2. **同一区域可以叠多个**。别的插件可以往任意 type 的任意区域挂东西，不必改那个插件：
    `ctx.nodes.contribute('image', 'out:top', MyButton)`（带 `id`/`order`，卸载自动摘除）。
 3. **按钮从 ui 目录取**。`const Button = useUiComponent('Button')`，不要直接 import 组件库；
-   配上 `mck-toolbar-btn`（纯图标再加 `is-icon-only`），尺寸/hover/focus/禁用/激活态就绪；
-   纯图标时 `title` 与 `aria-label` 都要给。数值见 `docs/design/ui-style-guide.md` §3.3。
+   外观用组件自己的 `variant`（ghost / default / destructive）与 `size`（icon-sm / sm），
+   不要再挂额外的工具栏按钮类；纯图标时 `title` 与 `aria-label` 都要给。
 
 区域组件只收到 `{ id, data }`；"我该不该出现"由组件自己判断
 （通常用 `useSoleNodeSelected(id)` —— 恰好选中一个且是我才显示，多选时全部收起；

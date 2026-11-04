@@ -11,8 +11,7 @@
  * 上下文怎么拿：走能力包（needs:['selection']），不是自己 ctx.get 拼 —— 与节点按钮
  * "needs:['node']" 同一套规则。设置面板/主题换皮时，能力实现可以整体被换掉。
  *
- * 按钮从 ui 目录按名取（默认主题登记的 shadcn Button），再配全局 .mck-toolbar-btn，
- * 与其它控制栏同一套外观。
+ * 按钮从 ui 目录按名取（默认主题登记的 shadcn Button），外观走 shadcn 自己的 variant / size。
  */
 import { computed } from 'vue'
 import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
@@ -45,10 +44,10 @@ function onGroup(): void {
 <template>
   <!-- 定位由宿主给（selection-frame-slot--top）；这里只声明"这是上控制栏里的一排内容" -->
   <div class="ntp-root selection-group-toolbar">
-    <Button class="mck-toolbar-btn selection-group-toolbar__btn" variant="ghost" size="sm" type="button"
+    <Button class="selection-group-toolbar__btn" variant="ghost" size="sm" type="button"
       title="创建分组" aria-label="创建分组" :disabled="!canGroup" @click="onGroup">
       <ToolbarIcon :icon="ICON_GROUP" />
-      <span class="mck-toolbar-label">打组</span>
+      <span>打组</span>
     </Button>
   </div>
 </template>

@@ -100,9 +100,9 @@ const pageMode = display.pageMode
             </div>
             <p class="lab-embed-node-body">节点边框、标题、控制栏和端口都跟着主题颜色一起变。</p>
             <div class="lab-embed-node-bar">
-              <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="确认" aria-label="确认" data-lab="accent-action">确认</Button>
-              <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="更多操作" aria-label="更多操作">更多</Button>
-              <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button" title="删除" aria-label="删除">删除</Button>
+              <Button variant="default" size="sm" type="button" title="确认" aria-label="确认" data-lab="accent-action">确认</Button>
+              <Button variant="ghost" size="sm" type="button" title="更多操作" aria-label="更多操作">更多</Button>
+              <Button variant="destructive" size="sm" type="button" title="删除" aria-label="删除">删除</Button>
             </div>
             <span class="lab-embed-port lab-embed-port--left" aria-hidden="true"></span>
             <span class="lab-embed-port lab-embed-port--right" aria-hidden="true"></span>

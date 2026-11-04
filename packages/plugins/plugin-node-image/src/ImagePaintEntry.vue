@@ -36,7 +36,7 @@ function enter(): void {
 </script>
 
 <template>
-  <Button v-if="selected && hasImage && !painting" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+  <Button v-if="selected && hasImage && !painting" variant="ghost" size="icon-sm" type="button"
     title="绘制" aria-label="绘制" @click="enter">
     <ToolbarIcon :icon="ICON_PAINT" />
   </Button>

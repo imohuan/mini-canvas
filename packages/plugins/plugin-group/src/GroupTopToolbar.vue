@@ -80,11 +80,11 @@ function pickColor(color: string): void {
           同一个坑在别处也出现过：凡是 span 画色块，display 与尺寸要成对写。
           文字与 aria-label 同名（无障碍硬性要求：可见标签要能被读屏念出来）。
         -->
-        <Button class="mck-toolbar-btn group-color-trigger" variant="ghost" size="sm" type="button"
+        <Button class="group-color-trigger" variant="ghost" size="sm" type="button"
           title="背景颜色" aria-label="背景颜色" aria-haspopup="listbox" :aria-expanded="colorOpen">
           <div class="group-color-trigger__content">
             <span class="group-color-trigger__dot" :style="{ backgroundColor: currentColor }" aria-hidden="true" />
-            <span class="mck-toolbar-label">背景颜色</span>
+            <span>背景颜色</span>
           </div>
         </Button>
       </DropdownMenuTrigger>
@@ -99,10 +99,10 @@ function pickColor(color: string): void {
       </DropdownMenuContent>
     </DropdownMenu>
 
-    <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
+    <Button variant="destructive" size="sm" type="button"
       title="解散分组" aria-label="解散分组" @click="onUngroup">
       <ToolbarIcon :icon="ICON_UNGROUP" />
-      <span class="mck-toolbar-label">解散分组</span>
+      <span>解散分组</span>
     </Button>
   </div>
 </template>

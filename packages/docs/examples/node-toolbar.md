@@ -176,7 +176,7 @@ function enter(): void {
 
 <template>
   <!-- 显隐自己判断：恰好选中本节点才出现 -->
-  <Button v-if="selected" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+  <Button v-if="selected" variant="ghost" size="icon-sm" type="button"
     title="盖章" aria-label="盖章" @click="enter">
     <ToolbarIcon :icon="STAMP_ICON" />
   </Button>
@@ -216,7 +216,7 @@ function exit(): void {
   <!-- 菜单 + 二级菜单直接用 shadcn DropdownMenu（独立浮层，不嵌进面板） -->
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="盖章形状">
+      <Button variant="ghost" size="icon-sm" type="button" title="盖章形状">
         <ToolbarIcon :icon="STAMP_ICON" />
       </Button>
     </DropdownMenuTrigger>
@@ -231,11 +231,11 @@ function exit(): void {
       </DropdownMenuSub>
     </DropdownMenuContent>
   </DropdownMenu>
-  <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="应用">
-    <span class="mck-toolbar-label">应用</span>
+  <Button variant="default" size="sm" type="button" title="应用">
+    <span>应用</span>
   </Button>
-  <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
-    title="退出盖章" @click="exit"><span class="mck-toolbar-label">退出</span></Button>
+  <Button variant="destructive" size="sm" type="button"
+    title="退出盖章" @click="exit"><span>退出</span></Button>
 </template>
 ```
 
@@ -256,8 +256,8 @@ ctx.slots.register('image.topToolbar', {
 
 两条硬规矩：
 
-1. **按钮从 ui 目录取 `Button`（`useUiComponent('Button')`），再挂全局 `.mck-toolbar-btn` 类**
-   （`is-icon-only` = 纯图标钮），不许自己画一套圆角/高度 —— 否则同一排出现两种外观，
+1. **按钮从 ui 目录取 `Button`（`useUiComponent('Button')`），外观只给 `variant` + `size`**
+   （纯图标钮用 `size="icon-sm"`），不许自己画一套圆角/高度/颜色 —— 否则同一排出现两种外观，
    就是用户报过很多次的「按钮在外面」问题；
 2. **显隐自己判断**（`useSoleNodeSelected`）：宿主只管位置，每个条目自己决定「我该不该出现」。
 
@@ -343,7 +343,7 @@ svc.exit(nodeId)
    顶栏底栏分开算，谁也不覆盖谁。字符串取值会顺着引用链走（深度上限 8 层，防写错死循环）。
 
 5. **渲染**：`component :is` 挂上你的组件，props 是 `{ id, data }`。
-   按钮用 `useUiComponent('Button')` + 全局 `.mck-toolbar-btn`；
+   按钮用 `useUiComponent('Button')`，外观只给 `variant` / `size`；
    下拉用 `useUiComponent('DropdownMenu')` 及对应的分离件。
 
 ## 按钮与下拉的速查
@@ -351,14 +351,14 @@ svc.exit(nodeId)
 ### 工具栏按钮（shadcn Button）
 
 ```vue
-<Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+<Button variant="ghost" size="icon-sm" type="button"
   title="上传图片" aria-label="上传图片"><ToolbarIcon :icon="ICON_UPLOAD" /></Button>
-<Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
-  title="确认"><ToolbarIcon :icon="ICON_OK" /><span class="mck-toolbar-label">确认</span></Button>
-<Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
-  title="取消"><span class="mck-toolbar-label">取消</span></Button>
-<!-- 开关态：给了 active 才加 is-active + aria-pressed -->
-<Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': on }" variant="ghost" size="sm" type="button"
+<Button variant="default" size="sm" type="button"
+  title="确认"><ToolbarIcon :icon="ICON_OK" /><span>确认</span></Button>
+<Button variant="destructive" size="sm" type="button"
+  title="取消"><span>取消</span></Button>
+<!-- 开关态：切 variant，并同步 aria-pressed -->
+<Button :variant="on ? 'secondary' : 'ghost'" size="icon-sm" type="button"
   title="收藏" aria-label="收藏" :aria-pressed="on ? 'true' : 'false'"><ToolbarIcon :icon="ICON" /></Button>
 ```
 
@@ -367,9 +367,9 @@ svc.exit(nodeId)
 ```vue
 <DropdownMenu>
   <DropdownMenuTrigger as-child>
-    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="宫格切分">
+    <Button variant="ghost" size="sm" type="button" title="宫格切分">
       <ToolbarIcon :icon="ICON" />
-      <span class="mck-toolbar-label">宫格切分</span>
+      <span>宫格切分</span>
     </Button>
   </DropdownMenuTrigger>
   <DropdownMenuContent align="start" :side-offset="6">

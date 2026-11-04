@@ -118,15 +118,15 @@ function cancelEdit(): void {
 
     <!-- 编辑态：只剩确认 / 取消（布局对齐 liblib：取消在最左、比例下拉居中、确认在最右） -->
     <div v-if="editing" class="ntp-root it-root">
-      <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+      <Button variant="destructive" size="icon-sm" type="button"
         title="取消编辑" aria-label="取消编辑" @click="cancelEdit">
         <ToolbarIcon :icon="ICON_CANCEL" />
       </Button>
       <DropdownMenu v-if="cropping">
         <DropdownMenuTrigger as-child>
-          <Button class="mck-toolbar-btn it-ratio" variant="ghost" size="sm" type="button"
+          <Button class="it-ratio" variant="ghost" size="sm" type="button"
             :title="'比例：' + ratioLabel" :aria-label="'比例：' + ratioLabel">
-            <span class="mck-toolbar-label">比例：{{ ratioLabel }}</span>
+            <span>比例：{{ ratioLabel }}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '160px' }">
@@ -135,10 +135,10 @@ function cancelEdit(): void {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+      <Button variant="default" size="sm" type="button"
         title="确认编辑" aria-label="确认编辑" @click="confirmEdit">
         <ToolbarIcon :icon="ICON_CONFIRM" />
-        <span class="mck-toolbar-label">确认</span>
+        <span>确认</span>
       </Button>
     </div>
 
@@ -153,19 +153,19 @@ function cancelEdit(): void {
       :data="props.data"
     >
       <SlotAnchor id="host/upload" :order="100">
-        <Button v-if="!featureMode" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+        <Button v-if="!featureMode" variant="ghost" size="icon-sm" type="button"
           title="上传图片" aria-label="上传图片" :disabled="busy" @click="openPicker">
           <ToolbarIcon :icon="ICON_UPLOAD" />
         </Button>
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/crop" :order="200">
-        <Button v-if="!featureMode" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+        <Button v-if="!featureMode" variant="ghost" size="icon-sm" type="button"
           title="裁剪图片" aria-label="裁剪图片" @click="onCrop">
           <ToolbarIcon :icon="ICON_CROP" />
         </Button>
       </SlotAnchor>
       <SlotAnchor v-if="hasImage" id="host/expand" :order="300">
-        <Button v-if="!featureMode" class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+        <Button v-if="!featureMode" variant="ghost" size="icon-sm" type="button"
           title="扩展图片" aria-label="扩展图片" @click="onExpand">
           <ToolbarIcon :icon="ICON_EXPAND" />
         </Button>

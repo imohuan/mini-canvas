@@ -99,9 +99,9 @@ function pickItem(key: string): void {
 <template>
   <DropdownMenu v-if="hasImage && !splitting" v-model:open="menuOpen">
     <DropdownMenuTrigger as-child>
-      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="宫格切分" aria-label="宫格切分" aria-haspopup="menu">
+      <Button variant="ghost" size="sm" type="button" title="宫格切分" aria-label="宫格切分" aria-haspopup="menu">
         <ToolbarIcon :icon="ICON_GRID" />
-        <span class="mck-toolbar-label">宫格切分</span>
+        <span>宫格切分</span>
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" :side-offset="6" class="gse-menu" data-testid="grid-split-entry-menu">

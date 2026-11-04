@@ -25,20 +25,18 @@ const s = ui.state
       ><Zap :size="14" /> 20</Button> -->
       <Tooltip>
         <TooltipTrigger as-child>
-          <Button variant="ghost" size="icon-sm" class="rounded-lg border-line bg-panel font-normal text-ink-dim hover:bg-hover hover:text-ink"
-            aria-label="主题切换" @click="ui.toggleTheme()">
-            <Palette :size="15" class="size-[15px]" />
+          <Button variant="ghost" size="icon-sm" aria-label="主题切换" @click="ui.toggleTheme()">
+            <Palette />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">主题切换</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger as-child>
-          <Button variant="ghost" size="icon-sm" class="rounded-lg border-line bg-panel font-normal"
-            :class="s.settingsOpen ? 'bg-panel-active text-ink' : 'text-ink-dim hover:text-ink'"
+          <Button :variant="s.settingsOpen ? 'secondary' : 'ghost'" size="icon-sm"
             aria-label="设置" :aria-pressed="s.settingsOpen ? 'true' : 'false'"
             @click="s.settingsOpen = !s.settingsOpen">
-            <Settings :size="15" class="size-[15px]" />
+            <Settings />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">设置</TooltipContent>

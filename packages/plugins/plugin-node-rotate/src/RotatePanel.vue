@@ -4,7 +4,7 @@
  *
  * 内容从左到右：退出 / 旋转与镜像（名称） / 当前角度（纯展示） / 右转 90° / 水平翻转 / 垂直翻转。
  * 外观完全沿用图片默认顶栏：容器（.ntp-root 的圆角/边框/阴影）由全局类提供，
- * 按钮直接用 shadcn Button + 全局 .mck-toolbar-btn，不自绘。
+ * 按钮直接用 shadcn Button，不自绘。
  */
 import { computed, ref } from 'vue'
 import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
@@ -54,7 +54,7 @@ async function flip(axis: 'horizontal' | 'vertical'): Promise<void> {
 
 <template>
   <div v-if="active" class="ntp-root nr-root nodrag nopan">
-    <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+    <Button variant="destructive" size="icon-sm" type="button"
       title="退出旋转与镜像" aria-label="退出旋转与镜像" @click="exit">
       <ToolbarIcon :icon="ICON_EXIT" />
     </Button>
@@ -72,15 +72,15 @@ async function flip(axis: 'horizontal' | 'vertical'): Promise<void> {
     </span>
     <!-- 角度右侧的分割线：与左侧标题后的那条同款，把「展示」和「操作按钮」分成两段 -->
     <span class="nr-sep" aria-hidden="true" />
-    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    <Button variant="ghost" size="icon-sm" type="button"
       title="向右旋转 90 度" aria-label="向右旋转 90 度" :disabled="busy" @click="rotate90">
       <ToolbarIcon :icon="ICON_ROTATE" />
     </Button>
-    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    <Button variant="ghost" size="icon-sm" type="button"
       title="水平翻转" aria-label="水平翻转" :disabled="busy" @click="flip('horizontal')">
       <ToolbarIcon :icon="ICON_FLIP_H" />
     </Button>
-    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button"
+    <Button variant="ghost" size="icon-sm" type="button"
       title="垂直翻转" aria-label="垂直翻转" :disabled="busy" @click="flip('vertical')">
       <ToolbarIcon :icon="ICON_FLIP_V" />
     </Button>

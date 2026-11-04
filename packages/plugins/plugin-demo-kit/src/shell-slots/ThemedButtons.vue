@@ -3,7 +3,7 @@
  * ThemedButtons —— 外壳插槽里的按钮演示。
  *
  * 按钮从画布 ctx 的 ui 注册表按名取（默认主题插件登记的 shadcn 原始件），
- * 复用全局工具栏类 `.mck-toolbar-btn`，不再由宿主下发按钮组件。
+ * 外观完全走 shadcn 自己的 variant / size，不再由宿主下发按钮组件。
  */
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
@@ -20,15 +20,14 @@ const Button = useUiComponent('Button')
   <span class="ssd-themed" data-testid="ssd-themed">
     <Button
       v-if="Button"
-      class="mck-toolbar-btn is-icon-only"
       variant="ghost"
-      size="sm"
+      size="icon-sm"
       type="button"
       title="插槽演示：网格视图"
       aria-label="插槽演示：网格视图"
       @click="() => {}"
     >
-      <span class="mck-toolbar-icon-raw" v-html="ICON_GRID" />
+      <span v-html="ICON_GRID" />
     </Button>
   </span>
 </template>

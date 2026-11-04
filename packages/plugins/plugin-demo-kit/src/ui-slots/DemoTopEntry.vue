@@ -121,9 +121,9 @@ function pickFeature(label: string): void {
   <!-- 普通态：下拉按钮（插在图片按钮组内部） -->
   <DropdownMenu v-model:open="demoOpen">
     <DropdownMenuTrigger as-child>
-      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能演示" aria-label="功能演示">
+      <Button variant="ghost" size="sm" type="button" title="功能演示" aria-label="功能演示">
         <ToolbarIcon :icon="ICON_DEMO" />
-        <span class="mck-toolbar-label">功能演示</span>
+        <span>功能演示</span>
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" :side-offset="6" :style="{ minWidth: '200px' }">
@@ -144,10 +144,10 @@ function pickFeature(label: string): void {
   <!-- 对齐演示：同一件 DropdownMenu，只改 align；菜单里切换，立刻能看出差别。 -->
   <DropdownMenu v-model:open="alignOpen">
     <DropdownMenuTrigger as-child>
-      <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button"
+      <Button variant="ghost" size="sm" type="button"
         :title="'对齐：' + ALIGN_LABEL[align]" :aria-label="'对齐：' + ALIGN_LABEL[align]">
         <ToolbarIcon :icon="ICON_ALIGN" />
-        <span class="mck-toolbar-label">对齐：{{ ALIGN_LABEL[align] }}</span>
+        <span>对齐：{{ ALIGN_LABEL[align] }}</span>
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent :align="align" :side-offset="6" :style="{ minWidth: '160px' }">
@@ -162,13 +162,13 @@ function pickFeature(label: string): void {
   <template v-else>
     <span class="dte-feature-name">{{ LABEL[kind] }}</span>
     <span class="dte-feature-sep" aria-hidden="true" />
-    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能动作一" aria-label="功能动作一"
-      @click="pickFeature('动作一')"><span class="mck-toolbar-label">动作一</span></Button>
-    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button" title="功能动作二" aria-label="功能动作二"
-      @click="pickFeature('动作二')"><span class="mck-toolbar-label">动作二</span></Button>
+    <Button variant="ghost" size="sm" type="button" title="功能动作一" aria-label="功能动作一"
+      @click="pickFeature('动作一')"><span>动作一</span></Button>
+    <Button variant="ghost" size="sm" type="button" title="功能动作二" aria-label="功能动作二"
+      @click="pickFeature('动作二')"><span>动作二</span></Button>
     <span class="dte-feature-sep" aria-hidden="true" />
-    <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button"
-      title="退出功能模式" aria-label="退出功能模式" @click="exit"><span class="mck-toolbar-label">退出</span></Button>
+    <Button variant="destructive" size="sm" type="button"
+      title="退出功能模式" aria-label="退出功能模式" @click="exit"><span>退出</span></Button>
   </template>
 </template>
 

@@ -118,13 +118,13 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
       <section class="tg-sec">
         <h4>按钮 button / shadcn Button</h4>
         <div class="tg-row">
-          <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="下载">
-            <span class="mck-toolbar-label">下载</span>
+          <Button variant="default" size="sm" type="button" title="下载">
+            <span>下载</span>
           </Button>
-          <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button" title="删除">
-            <span class="mck-toolbar-label">删除</span>
+          <Button variant="destructive" size="sm" type="button" title="删除">
+            <span>删除</span>
           </Button>
-          <Button class="mck-toolbar-btn is-icon-only" :class="{ 'is-active': starred }" variant="ghost" size="sm" type="button"
+          <Button :variant="starred ? 'secondary' : 'ghost'" size="icon-sm" type="button"
             title="收藏（开关态）" aria-label="收藏（开关态）" :aria-pressed="starred ? 'true' : 'false'" @click="starred = !starred">
             <ToolbarIcon icon="★" />
           </Button>
@@ -138,7 +138,7 @@ const panelStyle = computed(() => ({ display: open.value ? 'flex' : 'none' }))
           <TooltipProvider :delay-duration="120">
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="悬停我" aria-label="悬停我">
+                <Button variant="ghost" size="icon-sm" type="button" title="悬停我" aria-label="悬停我">
                   <ToolbarIcon icon="?" />
                 </Button>
               </TooltipTrigger>

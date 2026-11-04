@@ -4,7 +4,7 @@
  *
  * 图标句柄是 opaque 的：SVG 字符串走 v-html，Vue 组件走 <component :is>。
  * 判定统一交给内核的 iconRenderMode，与节点类型图标同一套规则。
- * 只负责「画图标」，按钮本体始终是 shadcn Button。
+ * 只负责「画图标」，按钮本体与图标尺寸都由 shadcn Button 自己决定。
  */
 import { computed } from 'vue'
 import { iconRenderMode } from '@mini-canvas/kernel'
@@ -16,7 +16,7 @@ const mode = computed(() => iconRenderMode(props.icon))
 
 <template>
   <span class="mck-toolbar-icon">
-    <span v-if="mode === 'html'" class="mck-toolbar-icon-raw" v-html="icon" />
-    <component v-else-if="mode === 'component'" :is="icon" class="mck-toolbar-icon-raw" />
+    <span v-if="mode === 'html'" v-html="icon" />
+    <component v-else-if="mode === 'component'" :is="icon" />
   </span>
 </template>

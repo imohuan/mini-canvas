@@ -56,9 +56,9 @@ function onSaveAssets(): void {
     再套一层会画出第二个背景块（用户看到的"两个背景"正是这么来的），
     和打组按钮（SelectionGroupToolbar）的写法也就对不上了。
   -->
-  <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button"
+  <Button variant="ghost" size="sm" type="button"
     title="加入资产库" aria-label="加入资产库" :disabled="!enabled" @click="onSaveAssets">
     <ToolbarIcon :icon="ICON_SAVE_ASSET" />
-    <span class="mck-toolbar-label">加入资产库</span>
+    <span>加入资产库</span>
   </Button>
 </template>

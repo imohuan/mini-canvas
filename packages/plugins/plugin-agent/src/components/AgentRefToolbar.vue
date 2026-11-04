@@ -57,10 +57,10 @@ function onReference(): void {
     与「加入资产库」按钮逐字同形：这里只放按钮本身，不再自套一层 .ntp-root
     （再套一层会画出第二个背景块，用户报过「两个背景」）。
   -->
-  <Button class="mck-toolbar-btn agent-ref-toolbar__btn" variant="ghost" size="sm" type="button"
+  <Button class="agent-ref-toolbar__btn" variant="ghost" size="sm" type="button"
     title="引用到 Agent" aria-label="引用到 Agent" :disabled="!enabled" @click="onReference">
     <ToolbarIcon :icon="ICON_NODE" />
-    <span class="mck-toolbar-label">引用到 Agent</span>
+    <span>引用到 Agent</span>
   </Button>
 </template>
 

@@ -74,7 +74,7 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
   <!-- ntp-root = 主题胶囊（与图片顶栏/绘制模式同一个壳），不另画面板 -->
   <div v-if="state" class="ntp-root gsp-root nodrag nopan" data-testid="grid-split-panel">
     <!-- 退出 + 名称 -->
-    <Button class="mck-toolbar-btn mck-toolbar-btn--danger is-icon-only" variant="destructive" size="sm" type="button"
+    <Button variant="destructive" size="icon-sm" type="button"
       title="退出宫格切分" aria-label="退出宫格切分" @click="exit">
       <ToolbarIcon :icon="ICON_EXIT" />
     </Button>
@@ -88,25 +88,25 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
     <span class="gsp-sep" aria-hidden="true" />
 
     <!-- 创建分镜组 -->
-    <Button class="mck-toolbar-btn" variant="ghost" size="sm" type="button"
+    <Button variant="ghost" size="sm" type="button"
       :disabled="publishing"
       title="对选中的格子创建分镜组（组内可拖拽排序）"
       aria-label="创建分镜组"
       @click="publish('storyboard')">
       <ToolbarIcon :icon="ICON_STORYBOARD" />
-      <span class="mck-toolbar-label">创建分镜组</span>
+      <span>创建分镜组</span>
     </Button>
 
     <span class="gsp-sep" aria-hidden="true" />
 
     <!-- 发送到画布（主按钮，最右） -->
-    <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button"
+    <Button variant="default" size="sm" type="button"
       :disabled="publishing"
       title="把选中格子的图片发送到画布，并放进一个分组节点里"
       aria-label="发送到画布"
       @click="publish('canvas')">
       <ToolbarIcon :icon="ICON_SEND" />
-      <span class="mck-toolbar-label">发送到画布</span>
+      <span>发送到画布</span>
     </Button>
   </div>
 </template>

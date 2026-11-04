@@ -58,9 +58,9 @@ onBeforeUnmount(() => scene.unregisterBounds(LAYER_ID))
 <template>
   <div class="theme-preview-base" aria-hidden="true">
     <div class="tpb-toolbar">
-      <Button class="mck-toolbar-btn is-icon-only is-active" variant="ghost" size="sm" type="button" title="移动"><Hand /></Button>
+      <Button variant="ghost" size="icon-sm" type="button" title="移动"><Hand /></Button>
       <span class="tpb-divider"></span>
-      <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="新建"><Plus /></Button>
+      <Button variant="ghost" size="icon-sm" type="button" title="新建"><Plus /></Button>
     </div>
 
     <svg class="tpb-wires" viewBox="0 0 720 400">
@@ -74,7 +74,7 @@ onBeforeUnmount(() => scene.unregisterBounds(LAYER_ID))
       <div class="tpb-node-title"><i></i><span>灵感速记</span><em>文本</em></div>
       <div class="tpb-node-body">
         <p>把碎片想法收进来，<br />再用连线整理。</p>
-        <Button class="mck-toolbar-btn mck-toolbar-btn--primary tpb-cta" variant="default" size="sm" type="button">生成</Button>
+        <Button class="tpb-cta" variant="default" size="sm" type="button">生成</Button>
       </div>
       <span class="tpb-port is-left"></span>
       <span class="tpb-port is-right"></span>

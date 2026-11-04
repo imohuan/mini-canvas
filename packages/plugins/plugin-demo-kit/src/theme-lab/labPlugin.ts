@@ -3,7 +3,7 @@
  *
  * 这一版不再注册“选择框样张 / 参考线样张 / 切割样张”这类假元素。
  * 工作台里能看到的每一种颜色目标，都来自真实插件自己的组件：
- * - 强调色 → shadcn Button（配合全局 .mck-toolbar-btn 的强调色样式）；
+ * - 强调色 → shadcn Button（variant="default" 的强调色底）；
  * - 危险/警示 → 默认主题的 NodeEmptyState；
  * - 连线 / 流光 → 默认主题的 CustomEdge；
  * - 多选框 / 绘制框 / 参考线 / 刀光 → 三个真实插件自己绘制。
@@ -78,7 +78,6 @@ const LabTopBar = defineComponent({
             title: '确认',
             variant: 'default',
             size: 'sm',
-            class: 'mck-toolbar-btn mck-toolbar-btn--primary',
             'data-lab': 'accent-action',
           },
           () => '确认',
