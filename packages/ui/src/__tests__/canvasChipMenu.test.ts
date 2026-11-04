@@ -259,7 +259,7 @@ describe('问题 03：外壳菜单选中只用默认勾', () => {
 describe('问题 05：右上实色 / 状态图标替换 / 缩放下拉 / Agent 圆形按钮', () => {
   it('右上角两个按钮使用实色面板底，不再带 /80 透明度', () => {
     expect(topRight).not.toContain('bg-panel/80')
-    expect(topRight.match(/bg-panel(?![-/])/g)?.length).toBeGreaterThanOrEqual(2)
+    expect((topRight.match(/bg-panel(?![-/])/g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 
   it('状态栏小地图关闭态换成另一个真实图标，不只改颜色', () => {

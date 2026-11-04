@@ -22,11 +22,11 @@ describe('应用装配层级', () => {
 
   it('项目页与画布页共用同一个 Provider（Provider 不再在画布路由里）', () => {
     expect(app).not.toContain('<CanvasProvider')
-    expect(provider).toContain('<CanvasProvider')
-    expect(provider).toContain(':plugins="plugins"')
-    expect(provider).toContain(':adapter="adapter"')
-    expect(provider).toContain(':seed="seedDefaultCanvas"')
-    expect(provider).toContain('window-key="MiniCanvasUI"')
+    // 根级 Provider 自己建 Context，不再套一层 CanvasProvider（画布宿主只在画布页出现）。
+    expect(provider).toContain('new Context')
+    expect(provider).toContain('createCanvasAppBasePlugin')
+    expect(provider).toContain('resolveAppPlugins()')
+    expect(provider).toContain('await ctx.start()')
   })
 
   it('CanvasHost 不再携带启动参数', () => {
@@ -43,12 +43,21 @@ describe('应用装配层级', () => {
     expect(host).toContain('<SettingsHost')
   })
 
-  it('App 从根上下文取宿主，并接上外壳生命周期', () => {
-    expect(app).toContain('useCanvasContext()')
-    expect(app).toContain('bindHost(host)')
+  it('App 进入画布时挂会话，并接上外壳生命周期', () => {
+    expect(app).toContain('mountCanvas(')
+    expect(app).toContain('shell.ctx')
+    expect(app).toContain('bindHost(session.host)')
     expect(app).toContain('setReadyHost(host)')
     expect(app).toContain('ui.setHostEl({ host })')
     expect(app).toContain('void ui.onReady()')
+  })
+
+  it('离开画布先落盘再卸会话，项目页不建画布宿主', () => {
+    expect(app).toContain('unmountCanvas') // 由会话 dispose 承载；App 只关自己的会话
+    expect(app).toContain('flushPendingSave()')
+    const root = readFileSync(fileURLToPath(new URL('../Root.vue', import.meta.url)), 'utf8')
+    // 项目页与画布页在同一棵树下，Provider 只挂一次
+    expect(root).toContain('<AppProvider')
   })
 
   /**
@@ -57,7 +66,7 @@ describe('应用装配层级', () => {
    * 用户看到的是「插件装了、刷新又没了」。
    */
   it('Provider 的 ready 里就绑上插件管理的安装句柄', () => {
-    const ready = app.slice(app.indexOf('function bindHost'), app.indexOf('bindHost(host)'))
+    const ready = app.slice(app.indexOf('function bindHost'), app.indexOf('/** 当前画布会话'))
     expect(ready).toContain("'plugin-manager'")
     expect(ready).toContain('bindManager(host.manager)')
   })

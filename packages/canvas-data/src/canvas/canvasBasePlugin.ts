@@ -47,18 +47,31 @@ import { NodeFactory } from './nodeFactory'
 import { registerCanvasCommands } from './canvasCommands'
 import { clearCommandRuntime, setCommandRuntime, type CommandRuntime } from './commandRuntime'
 import { setCanvasRuntime, type CanvasRuntime } from './canvasRuntime'
+import type { CanvasAppBaseServices } from './canvasAppBasePlugin'
 
 /** 基础插件名（宿主门面据此识别「这是宿主自己的装配，不是业务插件」） */
 export const CANVAS_BASE_PLUGIN_NAME = 'canvas-base'
 
 /** 建基础插件时可选项（都是「宿主才知道」的东西：存储后端、宿主自建的注册表实例） */
 export interface CanvasBaseOptions {
+  /** 插件名；缺省 'canvas-base'。画布会话用 'canvas-session' 另起一个可卸单元。 */
+  pluginName?: string
+  /** 是否声明 core（拒绝动态热卸）；缺省 true。画布会话必须为 false。 */
+  core?: boolean
   /** 存储后端（本地 / 云端可插拔）。缺省内存 adapter。 */
   adapter?: StorageAdapter
   /** 节点展示注册表实例（宿主若需在 boot 前就 provide 给 Vue，可自建传入）。缺省内部新建。 */
   nodeRegistry?: NodeRegistry
   /** 主题 / 外观注册表实例（宿主提供默认 UI 用）。缺省内部新建。 */
   themeRegistry?: ThemeRegistry
+  /**
+   * 复用一个已建好的「应用级底座」实例（根级 Provider 的 save/resources/注册表/命令表）。
+   *
+   * 传了它就不再新建这几件，直接复用同一份实例 —— 于是应用级与画布级看到的是同一个
+   * save / resources / 主题注册表，不会出现两份。缺省（不传）保持原有行为：
+   * 本插件自建整套服务（独立宿主 / 测试仍可用）。
+   */
+  appBase?: CanvasAppBaseServices
   /**
    * 是否自动接入配置持久化桥（settingsPersist）：把 ctx.settings（插件 Config 分组配置）的变更
    * 持久化到 save(config) 域并在启动时恢复。缺省 true（内置；与画布 graph 同走 adapter）。
@@ -119,10 +132,13 @@ export interface CanvasBaseAssembly {
  */
 export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBaseAssembly {
   const persistSettings = opts.persistSettings !== false
+  const app = opts.appBase
+  const pluginName = opts.pluginName ?? CANVAS_BASE_PLUGIN_NAME
+  const isCore = opts.core !== false
 
   // —— 存储：每 type 一个激活 adapter（宿主给后端则整包切过去） ——
-  const save = new SaveServiceImpl()
-  if (opts.adapter) save.useAdapterForAll(opts.adapter)
+  const save = app?.save ?? new SaveServiceImpl()
+  if (!app && opts.adapter) save.useAdapterForAll(opts.adapter)
 
   const nodeStore = new NodeStore()
   const edgeStore = new EdgeStore()
@@ -132,25 +148,28 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
   // 于是"文本存哪"与"资源存哪"是同一个开关（用户最初的设计：一个 adapter 管两种形式）。
   // 兜底：宿主显式给了 adapter 时，若它不是资源后端，仍装上本地 IndexedDB 资源后端，
   // 免得"换了文本 adapter"顺带把资源存储弄没了。
-  const localResourceAdapter = createIndexedDbResourceAdapter()
-  if (localResourceAdapter && !isResourceAdapter(save.adapterOf('resource'))) {
-    save.useAdapter('resource', localResourceAdapter)
+  let resources = app?.resources
+  if (!resources) {
+    const localResourceAdapter = createIndexedDbResourceAdapter()
+    if (localResourceAdapter && !isResourceAdapter(save.adapterOf('resource'))) {
+      save.useAdapter('resource', localResourceAdapter)
+    }
+    resources = new ResourceStore(
+      () => {
+        const a = save.adapterOf('resource')
+        return isResourceAdapter(a) ? a : undefined
+      },
+      typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+        ? {
+            revokeUrl: (u) => URL.revokeObjectURL(u),
+          }
+        : undefined,
+    )
   }
-  const resources = new ResourceStore(
-    () => {
-      const a = save.adapterOf('resource')
-      return isResourceAdapter(a) ? a : undefined
-    },
-    typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
-      ? {
-          revokeUrl: (u) => URL.revokeObjectURL(u),
-        }
-      : undefined,
-  )
 
   // 展示注册表：节点段（content/工具栏）与主题槽（边/背景/设置面板）
-  const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
-  const themeRegistry = opts.themeRegistry ?? new ThemeRegistry()
+  const nodeRegistry = opts.nodeRegistry ?? app?.nodeRegistry ?? new NodeRegistry()
+  const themeRegistry = opts.themeRegistry ?? app?.themeRegistry ?? new ThemeRegistry()
 
   const selection = new Selection()
 
@@ -179,7 +198,7 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
     save.set(GRAPH_EDGES_KEY, envelope.edges.filter((e) => !isTransient(e)), 'canvas')
   })
 
-  const command = new CommandRegistry()
+  const command = app?.command ?? new CommandRegistry()
 
   const nodeFactory = new NodeFactory()
 
@@ -206,17 +225,18 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
   }
 
   const plugin: PluginModule = {
-    name: CANVAS_BASE_PLUGIN_NAME,
+    name: pluginName,
     // 决策 1：核心插件 —— 拒绝动态热卸（依赖它的插件才不会被连带回退 PENDING）
-    core: true,
+    core: isCore,
     inject: [],
     apply(ctx: PluginScope) {
       // —— 基础服务：装完即全画布可用，随本插件 fiber 回收 ——
-      ctx.inject('save', save)
+      // 根级应用底座已经提供过 save/resources 时不再重复注入（内核会拒绝重复服务名）。
+      if (!app) ctx.inject('save', save)
       // 数据那一格只有一个名字：doc（5c 删掉 nodeStore/edgeStore/graph/history 四个老服务名）。
       // 四个实例仍在 base.services 上（宿主/渲染层拿它们订阅、量尺寸），但**不再是按名可取的服务**。
       ctx.inject('doc', doc)
-      ctx.inject('resources', resources)
+      if (!app) ctx.inject('resources', resources)
       ctx.inject('selection', selection)
       // 容器与工厂不再上架服务名：能力糖 / 画布命令 / 宿主经内部运行时读同一批实例。
       const canvasRuntime: CanvasRuntime = {
@@ -243,22 +263,26 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
 
       // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）由数据层自带，基础插件默认注册 ——
       // 不必再装一个插件才有 Delete / Ctrl+Z。ctx.effect 登记：随本插件 fiber 回收（restart 不重复注册）。
-      ctx.effect(() =>
-        registerCanvasCommands({
-          command,
-          graph,
-          selection,
-          nodeFactory,
-          // 命令场是插件侧的自省入口；运行表仍是 command，场里只放同一份定义。
-          field: ctx.registryOf<{ def: CommandDef }>('command'),
-        }),
-      )
+      // 应用底座已注册同一批命令时不重复：同一个 id 再注册会抛错。
+      const alreadyHasCommands = command.has('command:create-node')
+      if (!alreadyHasCommands) {
+        ctx.effect(() =>
+          registerCanvasCommands({
+            command,
+            graph,
+            selection,
+            nodeFactory,
+            // 命令场是插件侧的自省入口；运行表仍是 command，场里只放同一份定义。
+            field: ctx.registryOf<{ def: CommandDef }>('command'),
+          }),
+        )
+      }
 
       // 配置持久化桥：ctx.settings 是分组配置单一数据源；桥把用户改动经 save(config) 持久化，
       // 启动时 restore 注入（**由宿主在插件装载完成后 await restore()**，保证插件 Config 已声明完成）。
       // 注意：settingsPersist 依赖 ctx.settings（能力层内置服务）；纯内核 ctx（不装画布能力层）拿不到，
       // 那种环境下跳过 —— 不静默造假服务。
-      if (persistSettings) {
+      if (persistSettings && !app?.settingsPersist) {
         const store = ctx.get<SettingsStore | undefined>('settings')
         if (store) {
           services.settingsPersist = createSettingsPersist(store, save)
@@ -270,9 +294,13 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
           }
           canvasRuntime.settingsPersist = services.settingsPersist
         }
+      } else if (app?.settingsPersist) {
+        // 应用级底座已经建过同一个桥：画布会话复用它，避免两份订阅同时写 config。
+        services.settingsPersist = app.settingsPersist
+        canvasRuntime.settingsPersist = app.settingsPersist
       }
     },
   }
 
-  return { name: CANVAS_BASE_PLUGIN_NAME, plugin, services }
+  return { name: pluginName, plugin, services }
 }

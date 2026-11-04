@@ -37,7 +37,7 @@ describe('五个零读取场不再被写', () => {
     ctx.theme.register('edge', { name: 'prod-edge' }, { id: 'p' })
     const runtime = canvasRuntime()
     expect(runtime).toBeDefined()
-    expect(runtime!.nodeFactory.creatableTypes()).toContain('prod')
+    expect(runtime!.nodeFactory?.creatableTypes()).toContain('prod')
     expect(runtime!.themeRegistry.winner('edge')).toEqual({ name: 'prod-edge' })
     expect(ctx.get<{ creatableTypes(): string[] }>('nodeFactory')).toBeUndefined()
     ctx.stop()

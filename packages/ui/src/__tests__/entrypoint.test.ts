@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { APP_PLUGINS, SAMPLE_TEXT, createDefaultStorageAdapter, seedDefaultCanvas } from '../assembly'
+import { APP_PLUGINS, CANVAS_PLUGINS, SAMPLE_TEXT, createDefaultStorageAdapter, seedDefaultCanvas } from '../assembly'
 import * as entry from '../index'
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -71,14 +71,20 @@ describe('@mini-canvas/ui 出口契约', () => {
     // 不再需要「成品应用顶替主题默认件」的注册插件。
     // -1（2026-11-04）：ui-settings-panel 退场 —— 成品应用那套设置面板已并入默认主题插件，
     // 面板只剩一份，不再需要「order -1 顶替默认皮」的换皮插件。
-    expect(APP_PLUGINS).toHaveLength(20)
+    // 分层后：应用级常驻清单 + 画布级清单，两份合起来才是全部自带件。
+    // 应用级只留与画布无关的（主题组件/设置/插件管理/Agent/热重载/资产入口）。
+    expect(APP_PLUGINS).toHaveLength(5)
+    expect(CANVAS_PLUGINS.length).toBeGreaterThan(10)
+    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(20)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查
-    const names = APP_PLUGINS.map((p) => (p as { name?: string }).name).filter(Boolean) as string[]
+    const names = [...APP_PLUGINS, ...CANVAS_PLUGINS]
+      .map((p) => (p as { name?: string }).name)
+      .filter(Boolean) as string[]
     expect(new Set(names).size).toBe(names.length)
     // 每个条目都得是可装载形态（对象带 apply，或类）
-    for (const p of APP_PLUGINS) {
+    for (const p of [...APP_PLUGINS, ...CANVAS_PLUGINS]) {
       const ok = typeof p === 'function' || typeof (p as { apply?: unknown }).apply === 'function'
       expect(ok, `清单里有一项不是可装载的插件形态: ${JSON.stringify(p)}`).toBe(true)
     }

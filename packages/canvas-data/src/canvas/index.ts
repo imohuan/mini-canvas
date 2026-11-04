@@ -171,5 +171,17 @@ export type { CanvasCommandServices } from './canvasCommands'
 export { createCanvasBasePlugin, CANVAS_BASE_PLUGIN_NAME } from './canvasBasePlugin'
 export type { CanvasBaseAssembly, CanvasBaseOptions, CanvasBaseServices } from './canvasBasePlugin'
 
+// 应用级底座：根级 Provider 常驻的那一层（save / resources / 注册表容器 / 配置桥）。
+// 它和 canvas-session 组合起来，就等于原来的 canvas-base；拆分目的是让项目页不必启动画布。
+export {
+  createCanvasAppBasePlugin,
+  CANVAS_APP_BASE_PLUGIN_NAME,
+} from './canvasAppBasePlugin'
+export type {
+  CanvasAppBaseAssembly,
+  CanvasAppBaseOptions,
+  CanvasAppBaseServices,
+} from './canvasAppBasePlugin'
+
 export { NodeFactory } from './nodeFactory'
 export type { NodeCreator, NodeFactoryService } from './nodeFactory'

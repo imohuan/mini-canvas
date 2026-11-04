@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { APP_PLUGINS } from '../assembly'
+import { APP_PLUGINS, CANVAS_PLUGINS } from '../assembly'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
@@ -58,10 +58,14 @@ describe('6 个基础交互插件 = 自带件', () => {
     }
   })
 
-  it('每个包都在 APP_PLUGINS 冷启动清单里（声明 builtin 却不装配 = 假绿灯）', () => {
-    const names = new Set(APP_PLUGINS.map((p) => (p as { name?: string }).name))
+  it('每个包都在冷启动清单里（应用级或画布级；声明 builtin 却不装配 = 假绿灯）', () => {
+    // 分层后清单拆成两份：应用级常驻（APP_PLUGINS）与进入画布才装的（CANVAS_PLUGINS）。
+    // 这两份合起来才是"自带件全都在"。
+    const names = new Set(
+      [...APP_PLUGINS, ...CANVAS_PLUGINS].map((p) => (p as { name?: string }).name),
+    )
     for (const [dir, pluginName] of Object.entries(BUILTIN_INTERACTIVE)) {
-      expect(names.has(pluginName), dir + '（' + pluginName + '）不在 APP_PLUGINS 里').toBe(true)
+      expect(names.has(pluginName), dir + '（' + pluginName + '）不在冷启动清单里').toBe(true)
     }
   })
 
@@ -73,7 +77,7 @@ describe('6 个基础交互插件 = 自带件', () => {
     const byPluginName = new Map<string, string>(
       Object.entries(BUILTIN_INTERACTIVE).map(([dir, name]) => [name, dir]),
     )
-    for (const plugin of APP_PLUGINS) {
+    for (const plugin of [...APP_PLUGINS, ...CANVAS_PLUGINS]) {
       const name = (plugin as { name?: string }).name
       const dir = name ? byPluginName.get(name) : undefined
       if (!dir) continue

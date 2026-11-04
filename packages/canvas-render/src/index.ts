@@ -447,6 +447,13 @@ export type {
   MiniCanvasApi,
   CanvasHostHandle,
 } from './host/createMiniCanvasHost'
+// 画布会话：根级 Provider 常驻应用级服务，进入画布时才挂这一层。
+export {
+  mountCanvas,
+  unmountCanvas,
+  hasActiveCanvasSession,
+} from './host/canvasSession'
+export type { CanvasSessionHandle, MountCanvasOptions } from './host/canvasSession'
 // 统一安装句柄 manager + 外部来源加载 + 装配清单(目标 D)
 export { createPluginManager, sourceKind } from './host/pluginManager'
 export type {

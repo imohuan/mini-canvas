@@ -15,8 +15,10 @@ import type { ThemeRegistry } from './registry/themeRegistry'
 import type { SettingsPersistService } from '../settingsPersist'
 
 export interface CanvasRuntime {
-  command: CommandService
-  nodeFactory: NodeFactory
+  /** 命令表：应用级底座先留空，画布会话装上后才有实例 */
+  command?: CommandService
+  /** 建节点工厂：同上，只属于画布会话 */
+  nodeFactory?: NodeFactory
   nodeRegistry: NodeRegistry
   themeRegistry: ThemeRegistry
   settingsPersist?: SettingsPersistService

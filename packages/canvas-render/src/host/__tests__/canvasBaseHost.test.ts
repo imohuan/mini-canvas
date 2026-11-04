@@ -85,7 +85,8 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
     expect(api.listPlugins()).toEqual([])
     expect(manager.list()).toEqual([])
     // 内核层看得见（诊断用），只是应用层门面不列
-    expect(host.ctx.listPlugins()).toEqual([CANVAS_BASE_PLUGIN_NAME])
+    // 独立宿主也走同一套拆分：应用级底座 + 画布基础件，两件都是"环境"。
+    expect(host.ctx.listPlugins()).toEqual(['canvas-app-base', CANVAS_BASE_PLUGIN_NAME])
     expect(host.ctx.inspectPlugins().find((p) => p.name === CANVAS_BASE_PLUGIN_NAME)?.core).toBe(true)
     host.stop()
   })

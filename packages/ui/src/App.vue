@@ -8,7 +8,7 @@
 //   4. 全局键盘（Esc / Ctrl+/）
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
-import { CanvasHost, SettingsHost, SlotHost, useCanvasContext } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost, SlotHost, mountCanvas, unmountCanvas } from '@mini-canvas/canvas-render'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
 import CanvasShell from './components/CanvasShell.vue'
@@ -28,9 +28,13 @@ import { registerShellCommands } from './shellCommands'
 import { handleTab } from './tabPageOnly'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
+import { flushPendingSave } from './composables/pendingSave'
+import { CANVAS_PLUGINS, seedDefaultCanvas } from './assembly'
+import { APP_SHELL_KEY, type AppShell } from './app-shell'
+import { inject } from 'vue'
 
 const ui = useUi()
-/** App 自己是 Provider 的父组件，不能走注入；按钮在 Provider ready 后才渲染，用宿主单例取件。 */
+/** 按钮在根 Provider ready 后才渲染，用宿主单例取件。 */
 const Button = useUiComponentOutside('Button')
 /** 插槽调试覆盖层按 ui 目录取；没装主题/没登记时回落默认皮。 */
 const SlotDebugOverlay = useUiComponentOutside('slotDebugOverlay')
@@ -52,8 +56,8 @@ const s = ui.state
 // 插件按钮通过 command 调用，不反向依赖 @mini-canvas/ui 的状态。
 let shellCommandDisposers: Array<{ dispose(): void }> = []
 
-// 唯一的根上下文：由 Root.vue 的 AppProvider 提供，画布页只消费、不再自己建。
-const { host } = useCanvasContext()
+// 根级应用底座：由 Root.vue 的 AppProvider 提供。画布会话在 onMounted 里挂上。
+const shell = inject(APP_SHELL_KEY) as AppShell
 
 // ===== 小地图位置：Teleport 到状态栏按钮旁的挂点 =====
 //
@@ -80,7 +84,31 @@ function bindHost(host: CanvasHostHandle): void {
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = registerShellCommands(host.ctx, ui)
 }
-bindHost(host)
+
+/** 当前画布会话；离开画布时先落盘再卸。 */
+let session: Awaited<ReturnType<typeof mountCanvas>> | undefined
+let disposed = false
+
+onMounted(async () => {
+  try {
+    session = await mountCanvas({
+      ctx: shell.ctx,
+      appBase: shell.appBase,
+      seed: seedDefaultCanvas,
+      dev: import.meta.env.DEV,
+      plugins: CANVAS_PLUGINS,
+    })
+    if (disposed) {
+      await session.dispose()
+      session = undefined
+      return
+    }
+    shell.setSession(session)
+    bindHost(session.host)
+  } catch (err) {
+    console.error('[ui] 画布会话启动失败', err)
+  }
+})
 
 function onKeydown(event: KeyboardEvent): void {
   /**
@@ -124,6 +152,7 @@ onMounted(() => {
 })
 watch(() => s.theme, (v) => ui.applyTheme(v))
 onBeforeUnmount(() => {
+  disposed = true
   window.removeEventListener('keydown', onKeydown)
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = []
@@ -141,11 +170,21 @@ onBeforeUnmount(() => {
   ui.unbindCanvasTree()
   // 注销「离开画布前落盘」钩子（宿主已销毁，钩子里取不到 ctx 了）。
   ui.releasePendingSave()
+  // 先把脏改动写完，再卸画布会话（卸掉后 save 服务就不在了）。
+  // 这里不能 await：Vue 的卸载钩子是同步的；路由守卫里还有一次 await flushPendingSave，
+  // 两处合起来保证"离开前写完"。
+  void flushPendingSave()
+  const current = session
+  session = undefined
+  shell.setSession(undefined)
+  void current?.dispose()
 })
 </script>
 
 <template>
-  <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
+  <!-- 会话挂载完成前只显示占位：CanvasHost 在 setup 里就读 host，空值会让整页白屏。 -->
+  <div v-if="!shell.sessionHost.value" class="canvas-session-loading">正在打开画布…</div>
+  <CanvasShell v-else class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
       :right-width="ui.agent.open && ui.agent.docked ? ui.agent.width : 0" :push-status="true" :push-dock="true">
       <template #top-left>
         <TopLeftArea />
@@ -251,5 +290,14 @@ onBeforeUnmount(() => {
 .app-root {
   height: 100vh;
   overflow: hidden;
+}
+.canvas-session-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--ui-ink-dim, #6b7280);
+  background: var(--ui-canvas-bg, #f5f6f8);
+  font: 13px system-ui, 'Microsoft YaHei', sans-serif;
 }
 </style>

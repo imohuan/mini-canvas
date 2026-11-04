@@ -15,7 +15,14 @@
  */
 import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@mini-canvas/kernel'
 import type { CommandService } from '@mini-canvas/kernel'
-import { Context, createCanvasBasePlugin, GRAPH_EDGES_KEY, GRAPH_KEY } from '@mini-canvas/canvas-data'
+import {
+  Context,
+  createCanvasAppBasePlugin,
+  createCanvasBasePlugin,
+  CANVAS_APP_BASE_PLUGIN_NAME,
+  GRAPH_EDGES_KEY,
+  GRAPH_KEY,
+} from '@mini-canvas/canvas-data'
 import { restoreNodeMediaUrls } from '@mini-canvas/canvas-data'
 import type { CapabilityFactory } from '../contracts/capabilities'
 import { createStandardCapabilities } from '../contracts/standardCapabilities'
@@ -58,6 +65,22 @@ export type HostPlugin = PluginModule | PluginClassLike
 export interface MiniCanvasOptions {
   /** 存储后端（本地/云端可插拔）。默认内存 adapter。 */
   adapter?: StorageAdapter
+  /**
+   * 复用一个已启动的根级应用底座（save/resources/注册表/命令表）。
+   * 传了就只装画布会话（doc/selection/view/...），不再自建应用级服务。
+   */
+  appBase?: {
+    pluginName: string
+    services: import('@mini-canvas/canvas-data').CanvasAppBaseServices
+  }
+  /**
+   * 复用一个已启动的根级 Context（单 Context 模型）。
+   *
+   * 传了就**不再 new Context**：画布会话、渲染服务、业务插件都挂到这一份上，
+   * 项目页与画布页共享同一套 slots/settings/ui 目录。此时本函数只负责
+   * 「装画布会话 + 渲染层服务 + 恢复当前画布」，不负责停掉整个 Context。
+   */
+  ctx?: Context
   /** 冷启动要装载的插件（顺序即装载顺序）。宿主负责给全(含内置+业务)。支持 PluginModule 对象与 Service 类。 */
   coldPlugins?: HostPlugin[]
   /**
@@ -160,19 +183,36 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   exposeToWindow: (key?: string) => void
 }> {
   // dev 开关落到 ctx.isDev（决策 9 的 needs 缺项裁决要用；缺省 false = 生产语义）
-  const ctx = new Context({ dev: opts.dev ?? false })
+  const ctx = opts.ctx ?? new Context({ dev: opts.dev ?? false })
+  const ownsCtx = !opts.ctx
 
-  // —— 基础插件：画布基础服务（save/doc/resources/nodeRegistry/themeRegistry/selection/command/
-  // nodeFactory 八个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、
-  // 已不再是 ctx 服务名（5c 下线），数据统一经 doc）
-  // + 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入（§4.1：数据那一格只有 doc）。
-  // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建视口。 ——
+  // —— 应用底座：save / resources / 注册表容器 / 命令表 / 配置桥。
+  // 根级 Provider 时由调用方传入已启动的 appBase；独立宿主则在这里就地建一份并启动。
+  const ownAppBase = opts.appBase
+    ? undefined
+    : createCanvasAppBasePlugin({
+        adapter: opts.adapter,
+        nodeRegistry: opts.nodeRegistry,
+        themeRegistry: opts.themeRegistry,
+        persistSettings: opts.persistSettings,
+      })
+  // 先登记；只有等所有插件都登记完才 start（见文件末尾的启动段）。
+  if (ownAppBase) ctx.plugin(ownAppBase.plugin)
+  const appServices = opts.appBase?.services ?? ownAppBase!.services
+
+  // —— 基础插件：画布会话服务（doc/selection + 复用应用级 save/resources/注册表/命令）。
+  // nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、已不再是 ctx 服务名，
+  // 数据统一经 doc。工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建视口。
+  // 根级已有应用底座时，这里只补画布会话，且允许卸载（core: false）。 ——
   const base = createCanvasBasePlugin({
-    adapter: opts.adapter,
-    nodeRegistry: opts.nodeRegistry,
-    themeRegistry: opts.themeRegistry,
+    pluginName: opts.ctx ? 'canvas-session' : undefined,
+    core: opts.ctx ? false : undefined,
+    appBase: appServices,
     persistSettings: opts.persistSettings,
   })
+  // 根级 Context 已经 started：会话必须先热装，后面 inject view/canvas 与 slot 注册才有效。
+  // 独立宿主仍走文件末尾的 plugin() + start()。
+  if (opts.ctx) ctx.installPlugin(base.plugin)
   const { save, doc, nodeStore, edgeStore, resources, nodeRegistry, themeRegistry, selection, history, graph, command, nodeFactory } =
     base.services
 
@@ -185,13 +225,14 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // view：几何 + 视口的正式名字。构造时传入同一份 layout/viewport 实例，
   // 保证量测写口、视口后端与别名读的是同一份状态。
   const view = new ViewService({ nodeStore, layout: nodeLayout, viewport })
-  ctx.inject('view', view)
+  // 根级 Context 里可能已经有上一次会话残留：卸载时统一清掉，这里只在缺的时候注入。
+  const revokeView = ctx.hasService('view') ? undefined : ctx.inject('view', view)
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
 
-  // —— 装基础插件（core: true：拒绝动态热卸，见决策 1）——
-  ctx.plugin(base.plugin)
+  // —— 装画布会话插件（独立宿主时是 core；共享根 Context 时已在上面热装）——
+  if (!opts.ctx) ctx.plugin(base.plugin)
 
   // —— 标准能力包（§4.5 capability / 决策 9）——
   // 组件在 ctx.nodes.attach 里写 needs:['node','zoom',…]，BaseNode 按名造实例喂给它
@@ -207,31 +248,45 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // —— 统一安装句柄提前建（capture ctx 即可；内部方法需 ctx started，调用时满足） ——
   // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），
   // 从 manager.list()/diagnose() 隐去 —— 画布基础服务对应用层是"环境"，不是"清单项"。
-  const manager: PluginManager = createPluginManager(ctx, { hiddenPlugins: [base.name] })
+  const manager: PluginManager = createPluginManager(ctx, { hiddenPlugins: [base.name, CANVAS_APP_BASE_PLUGIN_NAME] })
   // 画布动作门面（服务名 canvas）与提示队列。
   // 提示跟随鼠标、可撤回、多持有者不互盖。
   const canvas = new CanvasService(ctx)
-  ctx.inject('canvas', canvas)
+  const revokeCanvas = ctx.hasService('canvas') ? undefined : ctx.inject('canvas', canvas)
   // 节点上下状态栏的会话与模式注册：属于渲染层基础设施，**不能**住在主题插件里
   // （否则卸载主题就丢模式，这是 Spec D4 要修的真实缺陷）。业务插件启动前注入。
   const nodeToolbar = new NodeToolbarService()
   nodeToolbar.docPeek = doc
-  ctx.inject('nodeToolbar', nodeToolbar)
+  const revokeNodeToolbar = ctx.hasService('nodeToolbar') ? undefined : ctx.inject('nodeToolbar', nodeToolbar)
+
+  // 会话级服务的撤销函数（共享根 Context 时由 host.stop 调用；独立宿主由 ctx.stop 统一回收）。
+  const disposeSessionServices = (): void => {
+    // 撤销函数内部会核对实例身份，不会误删别人的服务。
+    revokeView?.()
+    revokeCanvas?.()
+    revokeNodeToolbar?.()
+  }
   ctx.slots.register('overlay', {
-    id: 'canvas-render/tip-layer',
-    order: 95,
-    component: TipLayer,
-    meta: { title: '鼠标提示' },
-  })
+      id: 'canvas-render/tip-layer',
+      order: 95,
+      component: TipLayer,
+      meta: { title: '鼠标提示' },
+    })
 
   // —— 冷启动插件：manifest 模式走 applyManifest(disabled/config覆盖/同id换版本)；缺省 coldPlugins(顺序装载) ——
   if (opts.manifest) {
     // applyManifest 走 ctx.installPlugin(需 started)：先空 start，再逐项热装
-    await ctx.start()
+    if (ctx.getState() !== 'started') await ctx.start()
     await manager.applyManifest(opts.manifest)
   } else {
-    for (const p of opts.coldPlugins ?? []) ctx.plugin(p)
-    await ctx.start()
+    // 独立宿主：所有插件先登记再一次性 start（保持原有装载语义）。
+    // 根级 Context 已经 started：新插件要热装，不能再走 plugin()。
+    if (ctx.getState() === 'created') {
+      for (const p of opts.coldPlugins ?? []) ctx.plugin(p)
+      await ctx.start()
+    } else {
+      for (const p of opts.coldPlugins ?? []) ctx.installPlugin(p)
+    }
   }
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）
   command.setContext(ctx)
@@ -330,7 +385,13 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
         if (w[exposedWindowKey] === api) delete w[exposedWindowKey]
         exposedWindowKey = null
       }
-      ctx.stop()
+      // 共享根 Context 时，画布宿主只卸自己那一层（会话/渲染服务/插槽），不关整个应用。
+      if (ownsCtx) {
+        ctx.stop()
+      } else {
+        disposeSessionServices()
+        ctx.uninstallPlugin('canvas-session')
+      }
     },
   }
 
@@ -352,7 +413,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     },
     // 对外插件清单 = 业务插件。宿主自有装配（canvas-base）是"环境"不是"清单项"，
     // 从门面隐去 —— 与本文件原先的对外契约（默认空清单）逐字一致。
-    listPlugins: () => ctx.listPlugins().filter((n) => n !== base.name),
+    listPlugins: () =>
+      ctx.listPlugins().filter((n) => n !== base.name && n !== CANVAS_APP_BASE_PLUGIN_NAME),
     inspectPlugins: () => ctx.inspectPlugins(),
     getContext: () => ctx,
     getRegistry: () => nodeRegistry,

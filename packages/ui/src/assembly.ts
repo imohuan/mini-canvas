@@ -83,11 +83,26 @@ import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
  */
 export const APP_PLUGINS = [
   themeDefaultPlugin,
+  pluginManagerPlugin,
+  agentPlugin,
+  hotReloadPlugin,
+  uiAssetUploadPlugin,
+]
+
+/**
+ * 画布专用插件：只在进入画布时安装（项目页不装、不 apply）。
+ *
+ * 为什么单独一份：项目页只需要应用级插件（主题组件、设置、插件管理、Agent 等）。
+ * 节点、底栏、选区交互这些离开画布就没意义；把它们留在应用级清单里会让项目页
+ * 也启动一整套画布业务，违背"项目页不启动画布"的目标。
+ *
+ * 顺序与 APP_PLUGINS 里的画布项保持一致（主题仍在应用级，先行提供外观目录）。
+ */
+export const CANVAS_PLUGINS: PluginModule[] = [
   nodeTextPlugin,
   nodeUiPlugin,
   pluginBottomBar,
   node3dPreviewPlugin,
-  pluginManagerPlugin,
   contextMenuPlugin,
   clipboardPlugin,
   multiSelectPlugin,
@@ -99,9 +114,6 @@ export const APP_PLUGINS = [
   nodeRotatePlugin,
   nodeVideoPlugin,
   nodeAudioPlugin,
-  agentPlugin,
-  hotReloadPlugin,
-  uiAssetUploadPlugin,
 ]
 
 
