@@ -296,11 +296,12 @@
    */
   scrollbar-width: thin;
   /*
-   * 通道改 stable（问题 17）：滚动条单独占一条 10px 窄道，不再压在行高亮上。
-   * 以前 auto 是怕常驻通道让内容左右跳；但覆盖式滚动条在 Chrome 里会直接叠住
-   * 选中的整行底色，用户明确要求像浏览器原生那样「单独扩展一条区域」。
+   * 通道回 auto（2026-11-04 用户口径）：stable 会让**每个**菜单右侧常驻一条
+   * 约 10px 的空道，哪怕只有两三项不滚动——用户不接受这个效果。
+   * 现在只有真要滚时才出滚动条；滚动条用 scrollbar-color 做到低对比，
+   * 压在行尾也不会盖住文字。
    */
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
   scrollbar-color: color-mix(in srgb, var(--ui-ink, #18202b) 20%, transparent) transparent;
 }
 
