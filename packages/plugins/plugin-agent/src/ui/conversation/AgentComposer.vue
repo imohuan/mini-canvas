@@ -326,23 +326,25 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ minWidth: '210px' }">
-              <DropdownMenuItem @select="addGoalMark(); plusOpen = false">
+              <!-- 带说明的项统一排成「图标+标题 / 说明」两行：图标只占标题那一行，
+                   说明整行铺满（不再被图标挤到右边，长文案也不会截断）。 -->
+              <DropdownMenuItem class="ac-ddmenu-row" @select="addGoalMark(); plusOpen = false">
                 <Target />
-                目标
+                <span class="ac-ddmenu-row-title">目标</span>
                 <span class="ac-menu-hint">给这条消息挂一个目标（可改预算）</span>
               </DropdownMenuItem>
-              <DropdownMenuItem @select="pickImages(); plusOpen = false">
+              <DropdownMenuItem class="ac-ddmenu-row" @select="pickImages(); plusOpen = false">
                 <Upload />
-                上传文件
+                <span class="ac-ddmenu-row-title">上传文件</span>
                 <span class="ac-menu-hint">选图片，跟这条消息一起发</span>
               </DropdownMenuItem>
               <!-- 「压缩」（用户口径 2026-10-11）：把历史总结成摘要、腾出上下文。
                    与 @ 菜单里的那一项走同一条命令（agent.compact）—— 两个入口，
                    一处实现，行为只会一起改。压缩只对**已有对话**有意义：
                    没会话时后端会如实拒绝（不装作成功）。 -->
-              <DropdownMenuItem :disabled="s.compacting" @select="compactNow(); plusOpen = false">
+              <DropdownMenuItem class="ac-ddmenu-row" :disabled="s.compacting" @select="compactNow(); plusOpen = false">
                 <Minimize2 />
-                压缩
+                <span class="ac-ddmenu-row-title">压缩</span>
                 <span class="ac-menu-hint">{{ s.compacting ? '正在压缩…' : '把历史总结成摘要，腾出上下文空间' }}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>

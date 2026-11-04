@@ -36,6 +36,43 @@
   color: var(--ui-ink-dim, #919191);
 }
 
+/* 带图标的两行项（「+」菜单）：图标 + 标题同一行居中，说明单独占第二行、左边与标题对齐。
+   做法是让图标与标题撑满第一行的列宽（图标列 + 文字列），说明再整行铺到这两列下面；
+   DropdownMenuItem 本身是 flex + gap，所以副标题不铺满就会被图标列挤到右边。 */
+
+.ac-ddmenu .ac-ddmenu-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+}
+
+.ac-ddmenu .ac-ddmenu-row > :first-child {
+  grid-column: 1;
+  align-self: center;
+}
+
+.ac-ddmenu .ac-ddmenu-row-title {
+  grid-column: 2;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--ui-ink, #f7f7f7);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 说明整行铺满（跨两列），长文案直接换行，不做省略号截断 */
+.ac-ddmenu .ac-ddmenu-row > .ac-menu-hint {
+  grid-column: 1 / -1;
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.45;
+  text-overflow: clip;
+}
+
 .ac-menu-empty {
   margin: 8px 10px;
   font-size: 12px;
