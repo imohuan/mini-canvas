@@ -20,7 +20,7 @@ import { ResourceStore } from '../resourceService'
 import { createSettingsPersist, type SettingsPersistFacade, type SettingsPersistService } from '../settingsPersist'
 import { NodeRegistry } from './registry/nodeRegistry'
 import { ThemeRegistry } from './registry/themeRegistry'
-import { setCanvasRuntime, type CanvasRuntime } from './canvasRuntime'
+import { setCanvasRuntime, canvasRuntime, type CanvasRuntime } from './canvasRuntime'
 import { clearCommandRuntime, setCommandRuntime, type CommandRuntime } from './commandRuntime'
 
 /** 应用级底座插件名 */

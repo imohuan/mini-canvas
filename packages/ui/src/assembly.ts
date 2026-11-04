@@ -9,7 +9,10 @@
 import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
 import type { PluginModule } from '@mini-canvas/kernel'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import {
+  themeComponentsPlugin,
+  themeCanvasPlugin,
+} from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { gridSplitPlugin } from '@mini-canvas/plugin-image-grid-split'
@@ -83,7 +86,8 @@ import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
  * 云端保存那条路走的是运行期外部清单（cloud-server 的 `/plugin-manifest.json`），见 App.vue。
  */
 export const APP_PLUGINS = [
-  themeDefaultPlugin,
+  // 通用组件 / 设置面板 / 外观变量：应用级常驻，项目页也要用。
+  themeComponentsPlugin,
   pluginManagerPlugin,
   agentPlugin,
   hotReloadPlugin,
@@ -101,6 +105,8 @@ export const APP_PLUGINS = [
  * 顺序与 APP_PLUGINS 里的画布项保持一致（主题仍在应用级，先行提供外观目录）。
  */
 export const CANVAS_PLUGINS: PluginModule[] = [
+  // 画布外观：节点壳 / 连线 / 背景 / 节点工具栏，进画布才启动。
+  themeCanvasPlugin,
   nodeTextPlugin,
   nodeUiPlugin,
   pluginBottomBar,

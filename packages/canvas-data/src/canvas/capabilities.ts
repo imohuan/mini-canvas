@@ -257,10 +257,19 @@ export function buildCapabilities(
   ): void => {
     const id = opts.id ?? pluginName
     const reg = theme()
-    if (reg) {
-      reg.addOccupant(slot, { id, order: opts.order, value: component })
-      ctx.effect(() => () => reg.removeOccupant(slot, id))
+    if (!reg) {
+      // 直接 apply 调用的老路径（测试 / 极简宿主）没有画布会话，历史上是静默跳过。
+      // 正式宿主（有 doc）却拿不到容器 = 装配错误，直接抛；老路径只给一条可见提示。
+      if (ctx.tryGet('doc')) {
+        throw new Error(
+          '[theme] 有画布会话却没有主题注册表：请检查 canvas-base / canvas-session 的装配顺序。',
+        )
+      }
+      console.warn('[theme] 没有可用的主题注册表：本次注册已跳过（请先装载画布会话）。')
+      return
     }
+    reg.addOccupant(slot, { id, order: opts.order, value: component })
+    ctx.effect(() => () => reg.removeOccupant(slot, id))
   }
 
   return {

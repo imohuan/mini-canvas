@@ -46,7 +46,7 @@ import { ThemeRegistry } from './registry/themeRegistry'
 import { NodeFactory } from './nodeFactory'
 import { registerCanvasCommands } from './canvasCommands'
 import { clearCommandRuntime, setCommandRuntime, type CommandRuntime } from './commandRuntime'
-import { setCanvasRuntime, type CanvasRuntime } from './canvasRuntime'
+import { canvasRuntime, setCanvasRuntime, type CanvasRuntime } from './canvasRuntime'
 import type { CanvasAppBaseServices } from './canvasAppBasePlugin'
 
 /** 基础插件名（宿主门面据此识别「这是宿主自己的装配，不是业务插件」） */
@@ -242,14 +242,21 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
       if (!app) ctx.inject('resources', resources)
       services.revokeSelection = ctx.inject('selection', selection)
       // 容器与工厂不再上架服务名：能力糖 / 画布命令 / 宿主经内部运行时读同一批实例。
-      const canvasRuntime: CanvasRuntime = {
+      // 应用底座已经建好容器（项目页的 UI 目录 / 设置面板要用）时，复用它的注册表，
+      // 只把本会话的 command / nodeFactory 补进去；卸载时不能把根级容器一起清掉。
+      const inherited = app ? canvasRuntime() : undefined
+      const sessionRuntime: CanvasRuntime = {
         command,
         nodeFactory,
-        nodeRegistry,
-        themeRegistry,
+        nodeRegistry: inherited?.nodeRegistry ?? nodeRegistry,
+        themeRegistry: inherited?.themeRegistry ?? themeRegistry,
+        ...(inherited?.settingsPersist ? { settingsPersist: inherited.settingsPersist } : {}),
       }
-      setCanvasRuntime(canvasRuntime)
-      ctx.effect(() => () => setCanvasRuntime(undefined))
+      setCanvasRuntime(sessionRuntime)
+      ctx.effect(() => () => {
+        // 只在顶层容器仍是本会话这份时清空；根级应用底座的生命周期比会话长。
+        if (canvasRuntime() === sessionRuntime) setCanvasRuntime(inherited)
+      })
       // 命令运行时：`command` 服务名迁移期保留；新入口是 ctx.commands 糖与 canvas.runCommand。
       const runtime: CommandRuntime = {
         execute: (id, ...payload) => command.execute(id, ...payload),
@@ -295,12 +302,12 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
             persistNow: () => services.settingsPersist!.persistNow(),
             resetKey: (k) => services.settingsPersist!.resetKey(k),
           }
-          canvasRuntime.settingsPersist = services.settingsPersist
+          sessionRuntime.settingsPersist = services.settingsPersist
         }
       } else if (app?.settingsPersist) {
         // 应用级底座已经建过同一个桥：画布会话复用它，避免两份订阅同时写 config。
         services.settingsPersist = app.settingsPersist
-        canvasRuntime.settingsPersist = app.settingsPersist
+        sessionRuntime.settingsPersist = app.settingsPersist
       }
     },
   }

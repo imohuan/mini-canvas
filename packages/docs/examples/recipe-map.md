@@ -4,6 +4,7 @@
 
 | 我想让画布…… | 抄哪个案例 | 核心调用 | 真实插件参照 |
 | --- | --- | --- | --- |
+| 在项目页加一个插件面板（不用打开画布） | [应用与画布](/intro/app-and-canvas) | `ctx.slots.register('app.projects.main')` | `packages/ui/src/projectsPanelPlugin.ts` |
 | 多一种节点（卡片） | [案例 1](/examples/first-node) | `ctx.nodes.register` | `plugin-node-text` |
 | 节点卡片里面长这样 | 案例 1 | `ctx.nodes.register` 的 `in:` 字段 | `plugin-node-text` |
 | 节点外面挂个按钮/徽标 | 案例 1 + [案例 7](/examples/bottom-bar) | `ctx.nodes.attach` | `plugin-bottom-bar` |

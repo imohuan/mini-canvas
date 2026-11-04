@@ -23,6 +23,7 @@ const guideSidebar = [
     collapsed: false,
     items: [
       { text: '概念导览', link: '/intro/' },
+      { text: '应用与画布', link: '/intro/app-and-canvas' },
       { text: '三层分工', link: '/intro/three-layers' },
       { text: '七个原语', link: '/intro/plugin-system' },
       { text: '注册场', link: '/intro/registries' },

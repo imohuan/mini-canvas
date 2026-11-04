@@ -290,8 +290,18 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 
 }
 
-/** 插件模块出口 */
-export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
+/**
+ * 旧入口（兼容）：一次装上"通用组件 + 画布外观"两件。
+ *
+ * 新装配建议分开用：theme-components 常驻，theme-canvas 进画布再装。
+ * 现有调用方（demo / 测试 / 独立宿主）继续用这个名字，行为与拆分前一致。
+ */
+export {
+  themeComponentsPlugin,
+  themeCanvasPlugin,
+  themeDefaultPlugin,
+} from "./themeSplit";
+/** 旧名字兼容：等价于 theme-components + theme-canvas 的组合入口（见 themeSplit.ts）。 */
 
 /**
  * 通用 UI 组件出口（供其它插件复用，避免各节点面板自绘一套近似的参数控件）。
