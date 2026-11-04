@@ -2,7 +2,7 @@
  * 画布下拉的行尾菜单（用户口径 2026-10-09，附效果图）结构守卫。
  *
  * 要的三件事，缺一都不算完成：
- *   ① 当前画布那一行常显**勾**；hover 到该行时勾**换成三个点**；
+ *   ① 行尾默认显示**右箭头**；hover 到该行时换成**三个点**；当前画布不再显示勾；
  *   ② 点三个点弹出**该画布**的操作菜单：在新窗口打开 / 重命名画布 / 复制画布 / 删除画布；
  *   ③ 四个动作必须有**真实现**（占位 toast 一律不算）。
  *
@@ -19,12 +19,22 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
 
 const cluster = read('../components/ProjectCluster.vue')
+const statusArea = read('../components/areas/StatusArea.vue')
+const dockArea = read('../components/areas/DockArea.vue')
+const topRight = read('../components/areas/TopRightArea.vue')
+const chatPanel = read('../components/areas/ChatPanel.vue')
+const manageToolbar = read('../components/assets/manage-dialog/ManageDialogToolbar.vue')
+const assetToolbar = read('../components/areas/left-drawer/AssetTabToolbar.vue')
+const assetUpload = read('../components/AssetUploadDialog.vue')
+const canvasTabToolbar = read('../components/areas/left-drawer/CanvasTabToolbar.vue')
+const assetTabToolbar = read('../components/areas/left-drawer/AssetTabToolbar.vue')
+const leftDrawer = read('../components/areas/LeftDrawer.vue')
 const topLeft = read('../components/areas/TopLeftArea.vue')
 const drawer = read('../components/areas/LeftDrawer.vue')
 const ui = read('../composables/ui/useCanvasList.ts')
 const api = read('../composables/projectsApi.ts')
 
-describe('画布下拉行：勾 ⇄ 三个点', () => {
+describe('画布下拉行：右箭头 ⇄ 三个点', () => {
   it('行是「主按钮 + 行尾按钮」两个真按钮（不再在一个按钮里套可点的 span）', () => {
     expect(cluster).toContain('class="canvas-row-main"')
     expect(cluster).toContain('class="canvas-row-more"')
@@ -32,38 +42,40 @@ describe('画布下拉行：勾 ⇄ 三个点', () => {
     expect(cluster).not.toContain('class="canvas-more"')
   })
 
-  it('行尾同时渲染勾（Check）与三个点（MoreHorizontal）', () => {
-    expect(cluster).toMatch(/import \{[^}]*\bCheck\b[^}]*\} from 'lucide-vue-next'/)
+  it('行尾渲染右箭头（ChevronRight）与三个点（MoreHorizontal），不再渲染勾', () => {
+    expect(cluster).toMatch(/import \{[^}]*\bChevronRight\b[^}]*\} from 'lucide-vue-next'/)
     expect(cluster).toMatch(/import \{[^}]*\bMoreHorizontal\b[^}]*\} from 'lucide-vue-next'/)
-    expect(cluster).toContain('class="canvas-row-check"')
+    expect(cluster).toContain('class="canvas-row-chevron"')
     expect(cluster).toContain('class="canvas-row-dots"')
-    // 勾只给当前画布那一行
-    expect(cluster).toMatch(/v-if="item\.id === canvasId"[\s\S]{0,200}class="canvas-row-check"/)
+    // 勾彻底退役：连图标导入都不该出现（用户口径 2026-11-03「不需要提供一个勾了」）
+    expect(cluster).not.toMatch(/\bCheck\b/)
+    expect(cluster).not.toContain('canvas-row-check')
   })
 
   /**
-   * 显隐规则（用户口径：选中显示勾、hover 变三个点）。
-   * 判据是「这一行里同时有 hover 到勾/点的切换规则」—— 写在别处（比如全局样式）就说明
+   * 显隐规则（用户口径：默认右箭头、hover 变三个点）。
+   * 判据是「这一行里同时有 hover 到箭头/点的切换规则」—— 写在别处（比如全局样式）就说明
    * 换了实现方式，得回来改这条。
    */
-  it('选中行常显勾、hover 到该行时勾让位给三个点', () => {
-    expect(cluster).toMatch(/\.canvas-row-more\.is-pinned \.canvas-row-check \{ opacity: 1/)
-    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more\.is-pinned \.canvas-row-check \{ opacity: 0/)
-    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more\.is-pinned \.canvas-row-dots \{ opacity: 1/)
-    // 未选中的行平时不显三个点，hover 行（或键盘聚焦按钮）才显
-    expect(cluster).toMatch(/\.canvas-row-more:not\(\.is-pinned\) \.canvas-row-dots \{ opacity: 0/)
-    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more:not\(\.is-pinned\) \.canvas-row-dots/)
-    expect(cluster).toMatch(/\.canvas-row-more:focus-visible \.canvas-row-dots/)
+  it('默认显示右箭头、hover 到该行时箭头让位给三个点', () => {
+    expect(cluster).toMatch(/\.canvas-row-chevron \{ opacity: 1/)
+    expect(cluster).toMatch(/\.canvas-row-dots \{ opacity: 0/)
+    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more \.canvas-row-chevron,[\s\S]{0,300}opacity: 0/)
+    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more \.canvas-row-dots,[\s\S]{0,300}opacity: 1/)
+    // 键盘在菜单里移动焦点是用脚本聚焦 role=menuitem，不会命中 :focus-visible，
+    // 所以图标替换必须看 :focus；外圈焦点框仍由下面的 :focus-visible 规则负责。
+    expect(cluster).toMatch(/\.canvas-row-more:focus \.canvas-row-dots/)
+    expect(cluster).toMatch(/\.canvas-row-more:focus-visible \{ outline:/)
     // 动效必须有 reduced-motion 降级（ui-style-guide §2.7）
-    expect(cluster).toMatch(/prefers-reduced-motion: reduce[\s\S]{0,200}canvas-row-check/)
+    expect(cluster).toMatch(/prefers-reduced-motion: reduce[\s\S]{0,200}canvas-row-chevron/)
   })
 
   it('动效只动 opacity（不动 width/height/top/left —— ui-style-guide §2.7 硬性）', () => {
-    const block = cluster.slice(cluster.indexOf('.canvas-row-check, .canvas-row-dots'))
+    const block = cluster.slice(cluster.indexOf('.canvas-row-chevron, .canvas-row-dots'))
     const rule = block.slice(0, block.indexOf('}'))
     expect(rule).toContain('transition: opacity')
     // 只检查 transition 列表里没有几何属性：定位（position/left/top）与固定尺寸不参与动画。
-    // 勾/点在 44px 行尾里绝对定位是为了给 shadcn 的子菜单箭头留出右格。
+    // 箭头/点在 32px 行尾里绝对定位，是为了让两个图标占同一格、替换时不推动行文字。
     const transition = rule.slice(rule.indexOf('transition'))
     expect(transition).not.toMatch(/(width|height|top|left)\s*:/)
   })
@@ -94,6 +106,15 @@ describe('画布下拉行：勾 ⇄ 三个点', () => {
     // 按钮是浮在行底上的：自己必须透明，否则会叠出第二块色
     const base = /\.canvas-row-more \{([^}]*)\}/.exec(cluster)
     expect(base![1], '行尾按钮底色应为透明').toMatch(/background:\s*transparent/)
+  })
+
+  it('行尾固定 32px，并隐藏子菜单自动追加的第二个箭头', () => {
+    const base = /\.canvas-row-more \{([^}]*)\}/.exec(cluster)
+    expect(base, '没找到 .canvas-row-more 基础规则').toBeTruthy()
+    expect(base![1], '行尾宽度应为 32px').toMatch(/width:\s*32px/)
+    expect(cluster, '要覆盖子菜单自动箭头，保证一次只显示一个图标').toMatch(
+      /\.canvas-row-more :deep\(svg\.ml-auto\) \{ display: none/,
+    )
   })
 })
 
@@ -205,5 +226,83 @@ describe('行尾菜单：条目与真实现', () => {
     expect(ui).toMatch(/deleteCanvas[\s\S]{0,1200}await newCanvas\(\)/)
     // 旧的「只剩一张就不给删」护栏必须消失（用户要的是任何画布都能删）
     expect(ui).not.toMatch(/deleteCanvas[\s\S]{0,300}canvasOptions\.value\.length <= 1\) return/)
+  })
+})
+
+/**
+ * 问题 03（packages/ui 外壳部分）：菜单选中项只保留组件默认勾，不再叠主题色 / 灰色底。
+ * 这条盯的是「又有人顺手把选中态写成整行高亮」的回归，不是替代 Chrome 目验。
+ */
+describe('问题 03：外壳菜单选中只用默认勾', () => {
+  it('缩放、移动、筛选、展示、保存位置都用原生单选项，不再手动加选中底', () => {
+    for (const source of [statusArea, dockArea, manageToolbar, assetToolbar, assetUpload, chatPanel]) {
+      expect(source).toContain('DropdownMenuRadioGroup')
+      expect(source).toContain('DropdownMenuRadioItem')
+    }
+    expect(statusArea).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
+    expect(dockArea).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
+    expect(manageToolbar).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
+    expect(assetToolbar).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
+    expect(assetUpload).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
+    expect(chatPanel).not.toMatch(/DropdownMenuItem[^>]*bg-accent/)
+    expect(chatPanel).not.toMatch(/DropdownMenuItem[^>]*bg-chip/)
+  })
+})
+
+/**
+ * 问题 05：底栏与右上按钮。
+ * 这几条都是「样式被另一条规则盖掉」才会复发的错误，用结构断言钉住根因位置。
+ */
+describe('问题 05：右上实色 / 状态图标替换 / 缩放下拉 / Agent 圆形按钮', () => {
+  it('右上角两个按钮使用实色面板底，不再带 /80 透明度', () => {
+    expect(topRight).not.toContain('bg-panel/80')
+    expect(topRight.match(/bg-panel(?![-/])/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('状态栏小地图关闭态换成另一个真实图标，不只改颜色', () => {
+    expect(statusArea).toContain('MapPinOff')
+    expect(statusArea).toContain('<MapPin v-if="ui.minimapOn"')
+    expect(statusArea).toMatch(/<MapPinOff v-else/)
+  })
+
+  it('缩放触发器不再套 Tooltip（两个浮层抢同一个锚点会让菜单失效）', () => {
+    const zoomBlock = statusArea.slice(statusArea.indexOf('id="host/zoom"'))
+    const trigger = zoomBlock.slice(0, zoomBlock.indexOf('</DropdownMenuTrigger>'))
+    expect(trigger).toContain('aria-label="缩放选项"')
+    expect(trigger).not.toContain('<Tooltip')
+    expect(trigger).not.toContain('TooltipTrigger')
+  })
+
+  it('Agent 按钮固定 40px 真圆形，不再被全局圆角变量改成方角', () => {
+    const block = dockArea.slice(dockArea.indexOf('.agent-orb-button {'))
+    const rule = block.slice(0, block.indexOf('}'))
+    expect(rule).toMatch(/width:\s*2\.5rem/)
+    expect(rule).toMatch(/height:\s*2\.5rem/)
+    expect(rule).toMatch(/border-radius:\s*9999px/)
+    expect(rule).not.toContain('--mct-radius')
+  })
+})
+
+/** 抽屉工具条：父子事件名必须严格对上，否则菜单永远关闭（用户报「点了没反应」）。 */
+describe('左抽屉工具条事件接线', () => {
+  it('画布工具条发出 update:menuOpen / update:viewMode，宿主用 kebab 监听', () => {
+    expect(canvasTabToolbar).toContain("'update:menuOpen': [value: boolean]")
+    expect(canvasTabToolbar).toContain("'update:viewMode': [value: 'list' | 'grid']")
+    expect(canvasTabToolbar).not.toMatch(/emit\('updateMenuOpen'/)
+    expect(canvasTabToolbar).not.toMatch(/emit\('updateViewMode'/)
+    expect(leftDrawer).toContain('@update:menu-open="setMenuOpen"')
+    expect(leftDrawer).toContain('@update:view-mode="setViewMode"')
+  })
+
+  it('资产工具条发出 update:plusOpen / update:uploadOpen / update:assetSearchActive', () => {
+    expect(assetTabToolbar).toContain("'update:plusOpen': [value: boolean]")
+    expect(assetTabToolbar).toContain("'update:uploadOpen': [value: boolean]")
+    expect(assetTabToolbar).toContain("'update:assetSearchActive': [value: boolean]")
+    expect(assetTabToolbar).not.toMatch(/emit\('updatePlusOpen'/)
+    expect(assetTabToolbar).not.toMatch(/emit\('updateUploadOpen'/)
+    expect(assetTabToolbar).not.toMatch(/emit\('updateAssetSearchActive'/)
+    expect(leftDrawer).toContain('@update:plus-open="setPlusOpen"')
+    expect(leftDrawer).toContain('@update:upload-open="setUploadOpen"')
+    expect(leftDrawer).toContain('@update:asset-search-active="setAssetSearchActive"')
   })
 })
