@@ -15,7 +15,7 @@
 // 箭头颜色：与 flowColor 同色（统一连线视觉）。颜色用 :style 内联绑定到 element.style，优先级高于 .vue-flow 全局 CSS
 //       的 var(--ce-color, #3b82f6) 兜底，避免被覆盖为线色（之前就是这个 bug）。
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender, useThemeColor } from '@mini-canvas/canvas-render'
 import { isTransient } from '@mini-canvas/canvas-data'
 import { Button } from '@mini-canvas/ui-kit-shadcn'
@@ -293,6 +293,8 @@ let _capHotGrads: SVGLinearGradientElement[] = []
 let _capSoftPaths: SVGPathElement[] = []
 let _capHotPaths: SVGPathElement[] = []
 let _capRaf = 0
+/** 逐帧循环是否在跑（_capRaf 每帧会被换成新句柄，不能用它判断“已启动”） */
+let _capLooping = false
 let _capPrevTs = 0
 let _capAnimDist = 0
 let _capConfigSig = ''
@@ -547,11 +549,33 @@ function _renderFlowFrame(ts: number) {
       : 'none'
 }
 
-onMounted(() => {
-  _capRaf = requestAnimationFrame(_renderFlowFrame)
-})
+/**
+ * 只在「这条边真的在流光」时才跑逐帧；空闲边一个 rAF 都不占。
+ *
+ * 以前是每条边常驻一个 rAF（未激活也每帧进函数、再开头 return）：单看每条"几乎零开销"，
+ * 但一个画布几十上百条边时，每帧都要唤醒同样多的回调，滚动/缩放时和节点拖拽抢同一帧。
+ * 现在 flowActive 变化才开关循环，空闲成本为 0；重新激活时 _capPrevTs 归零，避免相位一次跳很远。
+ */
+function syncFlowLoop(): void {
+  if (flowActive.value && edgeShowVisual.value) {
+    if (!_capLooping) {
+      _capLooping = true
+      _capRaf = requestAnimationFrame(_renderFlowFrame)
+    }
+    return
+  }
+  if (_capLooping) cancelAnimationFrame(_capRaf)
+  _capLooping = false
+  _capRaf = 0
+  _capPrevTs = 0
+}
+
+watch([flowActive, edgeShowVisual], syncFlowLoop, { immediate: true })
+
+onMounted(syncFlowLoop)
 onUnmounted(() => {
-  cancelAnimationFrame(_capRaf)
+  if (_capLooping) cancelAnimationFrame(_capRaf)
+  _capLooping = false
   _capRaf = 0
 })
 </script>

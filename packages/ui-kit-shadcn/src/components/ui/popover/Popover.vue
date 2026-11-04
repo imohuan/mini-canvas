@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PopoverRootEmits, PopoverRootProps } from 'reka-ui'
 import { PopoverRoot, useForwardPropsEmits } from 'reka-ui'
-import { usePopupExclusive, usePopupOpenState } from '../../../popup/exclusive'
+import { usePopupExclusive, usePopupOpenState } from '../../../theme/popup/exclusive'
 
 const props = defineProps<PopoverRootProps>()
 const emits = defineEmits<PopoverRootEmits>()

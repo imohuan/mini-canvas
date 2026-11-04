@@ -153,3 +153,70 @@
     cursor: pointer;
   }
 }
+
+/*
+ * 圆角必须直接读 `--radius`，不能只靠 `rounded-*` 工具类。
+ *
+ * 为什么：工具类在**构建期**就把 rem 写死了（`rounded-4xl` → `calc(0.875rem * 2.6)`），
+ * 运行时改 `--radius` 对它没有任何作用。实测：把圆角切到「无圆角」，卡片变 0，
+ * 按钮却还是 36.4px —— 用户读成「圆角配置没用」。
+ *
+ * 真实应用里这层由 `styles/host.css` 负责（它按 `--mct-radius` 覆盖 data-slot）；
+ * 预览页没有宿主，这里用同一套写法接 `--radius`，于是两边的结论一致。
+ * 倍数沿用原工具类：按钮/输入 1×、浮层 2.2×、卡片/弹窗 2.6×。
+ */
+[data-slot='button'][data-variant],
+[data-slot='input'],
+[data-slot='textarea'],
+[data-slot='select-trigger'],
+[data-slot='input-group'] {
+  border-radius: var(--radius, 0.875rem);
+}
+
+[data-slot='popover-content'],
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'],
+[data-slot='context-menu-content'],
+[data-slot='context-menu-sub-content'],
+[data-slot='menubar-content'],
+[data-slot='combobox-content'] {
+  border-radius: calc(var(--radius, 0.875rem) * 2.2);
+}
+
+[data-slot='card'],
+[data-slot='dialog-content'],
+[data-slot='alert-dialog-content'],
+[data-slot='sheet-content'] {
+  border-radius: calc(var(--radius, 0.875rem) * 2.6);
+}
+
+/* 菜单行 / 选项行跟着同一档走，但最多到 8px，免得一列条目变成一排药丸。 */
+[data-slot='dropdown-menu-item'],
+[data-slot='select-item'],
+[data-slot='context-menu-item'],
+[data-slot='combobox-item'] {
+  border-radius: min(var(--radius, 0.875rem), 8px);
+}
+
+/*
+ * 描边按钮 / 浮层外框在暗色下「看不见边」。
+ *
+ * 原因：暗色的 `--border` 是 10% 白（shadcn 原值），落在深灰底上几乎融掉，
+ * 用户读到的是「按钮没有边框」（2026-11-04 反馈）。
+ * 预览页统一把这两处的描边提到 22% 前景色：既保持中性，又能看清轮廓。
+ * 真实应用不这么做——那边由 host.css 与 --ui-line 决定。
+ */
+[data-slot='button'][data-variant='outline'] {
+  border-color: color-mix(in oklab, var(--foreground) 26%, transparent);
+}
+
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'],
+[data-slot='popover-content'],
+[data-slot='combobox-content'],
+[data-slot='context-menu-content'],
+[data-slot='menubar-content'] {
+  --tw-ring-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+}

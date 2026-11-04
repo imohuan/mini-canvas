@@ -10,7 +10,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui'
 import { SelectScrollDownButton, SelectScrollUpButton } from '.'
-import { popupArrowVisible, popupDirectArrowSideOffset } from '../../../popup/popupConfig'
+import { popupArrowVisible, popupDirectArrowSideOffset } from '../../../theme/popup/popupConfig'
 
 defineOptions({
   inheritAttrs: false,

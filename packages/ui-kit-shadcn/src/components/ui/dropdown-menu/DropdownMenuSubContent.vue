@@ -8,8 +8,8 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui'
 import DropdownMenuArrow from './DropdownMenuArrow.vue'
-import { popupArrowVisible, popupSubSideOffset } from '../../../popup/popupConfig'
-import { useSubMenuGap } from '../../../popup/useSubMenuGap'
+import { popupArrowVisible, popupSubSideOffset } from '../../../theme/popup/popupConfig'
+import { useSubMenuGap } from '../../../theme/popup/useSubMenuGap'
 
 const props = withDefaults(
   defineProps<DropdownMenuSubContentProps & { class?: HTMLAttributes['class']; arrow?: boolean }>(),

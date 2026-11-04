@@ -153,7 +153,7 @@ describe('PluginSettingsContent 右内容：二级小标题 + 卡片 + 分割线
     // 取色器要浮在正文之上，滚动时不被裁切
     expect(FIELD).toMatch(/<PopoverContent/)
     // 配置项左边标题、右边控件：行组件用左右两栏
-    const ROW = read('../../../../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue')
+    const ROW = read('../ShadcnSettingsRow.vue')
     expect(ROW).toMatch(/justify-content: space-between/)
     expect(ROW).toMatch(/shadcn-settings-row__label/)
     expect(ROW).toMatch(/shadcn-settings-row__desc/)
@@ -169,13 +169,13 @@ describe('PluginSettingsContent 右内容：二级小标题 + 卡片 + 分割线
 
   it('小标题下是卡片；卡片里的行之间是分割线', () => {
     const SECTION = read(
-      '../../../../../../ui-kit-shadcn/src/components/settings/SettingsSection.vue',
+      '../ShadcnSettingsSection.vue',
     )
     expect(SECTION).toMatch(/shadcn-settings-section__title/)
     expect(SECTION).toMatch(/border: 1px solid var\(--ui-line/)
     expect(SECTION).toMatch(/border-radius: var\(--radius-panel/)
     const ROW = read(
-      '../../../../../../ui-kit-shadcn/src/components/settings/SettingsRow.vue',
+      '../ShadcnSettingsRow.vue',
     )
     expect(ROW).toMatch(/\.shadcn-settings-row \+ \.shadcn-settings-row \{[^}]*border-top: 1px solid/s)
   })

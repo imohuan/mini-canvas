@@ -14,7 +14,7 @@ import {
   resolveThemeBridgeVars,
   toThemeBridgeInput,
 } from '../themeBridge'
-import { DEFAULT_POPUP_CONFIG, popupConfig } from '@mini-canvas/ui-kit-shadcn'
+import { DEFAULT_COMPONENT_CONFIG, componentConfig, resetComponentConfig } from '@mini-canvas/ui-kit-shadcn'
 
 /** 最小假的 style 容器：只实现 setProperty / removeProperty */
 function fakeRoot() {
@@ -103,7 +103,6 @@ describe('外观交接：落值与清理', () => {
       font: 'inherit',
       heading: 'inherit',
       size: 'inherit',
-      popup: DEFAULT_POPUP_CONFIG,
     })
   })
 
@@ -115,7 +114,6 @@ describe('外观交接：落值与清理', () => {
       font: 'inter',
       heading: 'roboto',
       size: 'inherit',
-      popup: DEFAULT_POPUP_CONFIG,
     })
   })
 })
@@ -143,80 +141,43 @@ describe('外观交接：选项表', () => {
   })
 })
 
-describe('外观交接：尺寸档位', () => {
-  it('选标准档 → 写出整组 --mct-size-*（值与原 shadcn 尺寸一致）', () => {
-    const vars = resolveThemeBridgeVars({
-      radius: 'inherit',
-      font: 'inherit',
-      heading: 'inherit',
-      size: 'default',
-    })
-    expect(vars['--mct-size-control-h']).toBe('2.25rem')
-    expect(vars['--mct-size-control-h-sm']).toBe('2rem')
-    expect(vars['--mct-size-switch-w']).toBe('2.75rem')
+describe('外观交接：尺寸档位（改为组件配置）', () => {
+  it('尺寸不再写 CSS 变量，而是写进组件配置', () => {
+    resetComponentConfig()
+    const { el, map } = fakeRoot()
+    applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'lg' }, el)
+    expect(componentConfig.size).toBe('lg')
+    // 尺寸不该再进 CSS：这条正则守住“别再回到用 CSS 强压尺寸”
+    expect([...map.keys()].filter((k) => k.includes('size'))).toEqual([])
+    resetComponentConfig()
   })
 
-  it('紧凑比标准小，大档比标准大（档位单调）', () => {
-    const base = { radius: 'inherit', font: 'inherit', heading: 'inherit' } as const
-    const compact = resolveThemeBridgeVars({ ...base, size: 'compact' })['--mct-size-control-h']
-    const standard = resolveThemeBridgeVars({ ...base, size: 'default' })['--mct-size-control-h']
-    const large = resolveThemeBridgeVars({ ...base, size: 'large' })['--mct-size-control-h']
-    expect(parseFloat(compact!)).toBeLessThan(parseFloat(standard!))
-    expect(parseFloat(large!)).toBeGreaterThan(parseFloat(standard!))
-  })
-
-  it('切回跟随默认 → 尺寸变量全部清掉，不留幽灵值', () => {
-    const { el, map, attrs } = fakeRoot()
-    applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'large' }, el)
-    expect(map.has('--mct-size-control-h')).toBe(true)
-    expect(attrs.get('data-mct-size')).toBe('large')
-    applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit' }, el)
-    expect([...map.keys()].filter((k) => k.startsWith('--mct-size-'))).toEqual([])
-    expect(attrs.has('data-mct-size')).toBe(false)
+  it('卸载时组件配置回到默认档', () => {
+    resetComponentConfig()
+    const { el } = fakeRoot()
+    applyThemeBridge({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'sm' }, el)
+    expect(componentConfig.size).toBe('sm')
+    clearThemeBridge(el)
+    expect(componentConfig.size).toBe(DEFAULT_COMPONENT_CONFIG.size)
   })
 })
 
-describe('外观交接：浮层配置', () => {
-  it('浮层四项进入桥接输入，未知值回落默认', () => {
-    const input = toThemeBridgeInput({
-      themePopupArrow: 'show',
-      themePopupGap: '12',
-      themePopupSubGap: '4',
-      themePopupSelectedStyle: 'check',
-    })
-    expect(input.popup).toEqual({ arrow: 'show', gap: 12, subGap: 4, selectedStyle: 'check' })
-
-    const fallback = toThemeBridgeInput({
-      themePopupArrow: 'wat',
-      themePopupGap: Number.NaN,
-      themePopupSubGap: Number.NaN,
-      themePopupSelectedStyle: 'wat',
-    })
-    expect(fallback.popup).toEqual(DEFAULT_POPUP_CONFIG)
-  })
-
-  it('落值时同步更新组件库的浮层响应式配置', () => {
-    applyThemeBridge({
-      radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit',
-      popup: { arrow: 'hide', gap: 12, subGap: 4, selectedStyle: 'check' },
-    })
-    expect(popupConfig.arrow).toBe('hide')
-    expect(popupConfig.gap).toBe(12)
-    expect(popupConfig.subGap).toBe(4)
-    // 传一个最小根节点：纯逻辑测试没有 document，clearThemeBridge 在没有 root 时会直接返回。
-    clearThemeBridge(fakeRoot().el)
-    expect(popupConfig).toEqual(DEFAULT_POPUP_CONFIG)
-  })
-})
-
-describe('外观交接：浮层字段文案', () => {
-  it('Config 的四个浮层字段挂在「外观/浮层」并给出真实选项', { timeout: 15000 }, async () => {
+describe('外观交接：浮层配置（已删除）', () => {
+  it('设置页不再提供「外观/浮层」分组（四项只提供单一或近乎单一选择，已固定为默认）', { timeout: 15000 }, async () => {
     const { Config } = await import('../index')
     const fields = Object.entries(Config).filter(([, schema]) => schema.group === '外观/浮层')
-    expect(fields.map(([key]) => key).sort()).toEqual([
-      'themePopupArrow', 'themePopupGap', 'themePopupSelectedStyle', 'themePopupSubGap',
-    ])
-    for (const [, schema] of fields) expect(schema.type).toBe('select')
+    expect(fields).toEqual([])
+  })
+
+  it('已删掉的浮层键不再出现在 Config 里（旧存档里的值被内核忽略）', {
+    timeout: 15000,
+  }, async () => {
+    const { Config } = await import('../index')
+    for (const key of ['themePopupArrow', 'themePopupGap', 'themePopupSubGap', 'themePopupSelectedStyle']) {
+      expect(Object.keys(Config)).not.toContain(key)
+    }
+    const input = toThemeBridgeInput({ themeRadius: 'medium' })
+    expect(input).toEqual({ radius: 'medium', font: 'inherit', heading: 'inherit', size: 'inherit' })
   })
 })
 

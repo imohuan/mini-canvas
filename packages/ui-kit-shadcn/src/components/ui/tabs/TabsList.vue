@@ -191,8 +191,16 @@ function onListClick(): void {
   left: 0;
   /* 宽、高、位置全部由脚本按选中项的真实矩形写入（含列表内边距），这里不写死任何尺寸 */
   border-radius: 9999px;
-  background: var(--ui-tab-capsule, var(--ui-panel-active, var(--ui-hover, rgb(255 255 255 / 0.14))));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  /*
+   * 选中胶囊必须**两种主题下都有实底**。
+   *
+   * 2026-11-04 实测：之前兜底是 `rgb(255 255 255 / 0.14)` —— 暗色下勉强能看见，
+   * 亮色下白底上等于没有，用户读到的是「亮色主题下选中项没有背景」。
+   * 改用前景色 12%：亮色=浅灰块、暗色=浅白块，两边都是「比底稍深/稍亮一块」。
+   * 宿主给了 --ui-panel-active 时仍以宿主为准。
+   */
+  background: var(--ui-tab-capsule, var(--ui-panel-active, color-mix(in oklab, var(--foreground) 12%, transparent)));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
   pointer-events: none;
   will-change: transform, width;
   z-index: 0;

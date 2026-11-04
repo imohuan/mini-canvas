@@ -16,14 +16,11 @@
  *
  * 依赖方向：只 import 内核 ToolParamDef 类型 + 本包自家 UI 组件，不反向依赖节点插件。
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
 import ToolParamField from './ToolParamField.vue'
 import { resolvePresetKind, resolveInlineSoleSelect } from './paramKind'
-
-/** 参数面板开关（Popover 受控） */
-const open = ref(false)
 
 const props = withDefaults(
   defineProps<{
@@ -106,14 +103,22 @@ const summary = computed(() => {
     默认左侧展开 + 自动翻转：底栏这个按钮靠近右侧时，向右展开会被屏幕边缘裁掉
     （2026-11-03 实测：面板右缘被切掉一格）。reka 默认 `avoidCollisions` 会翻到左侧。
   -->
-  <Popover v-else v-model:open="open">
+  <!--
+    浮层开合**交给 Popover 自己管**，这里不再存一份 `ref(false)`。
+
+    为什么要去掉（2026-11-04 排查「两个浮层同时打开」）：
+    自己接管 `v-model:open` 之后，组件内建的「点外面关闭」只是通知外面改那个变量；
+    业务侧一旦漏处理（或与另一个浮层各存一份状态），就会出现两个面板同时挂着。
+    不受控时由组件统一执行点外关闭 / Esc / 切换，和菜单、选择器行为一致。
+
+    按钮的开启态视觉改用 Popover 透传的 slot 状态（`data-state`），不需要我们自己维护变量。
+  -->
+  <Popover v-else>
     <PopoverTrigger as-child>
       <button
         type="button"
         class="tpg-trigger"
-        :class="{ 'is-open': open }"
         :disabled="disabled"
-        :aria-expanded="open"
         aria-haspopup="dialog"
         :title="summary || placeholder"
       >
@@ -192,7 +197,7 @@ const summary = computed(() => {
   transition: background-color 0.15s ease-out;
 }
 .tpg-trigger:hover:not(:disabled),
-.tpg-trigger.is-open {
+.tpg-trigger[data-state='open'] {
   background: var(--ui-hover, rgb(0 0 0 / 0.06));
 }
 .tpg-trigger:disabled {
@@ -234,7 +239,7 @@ const summary = computed(() => {
   width: 14px;
   height: 14px;
 }
-.tpg-trigger.is-open .tpg-arrow {
+.tpg-trigger[data-state='open'] .tpg-arrow {
   transform: rotate(180deg);
 }
 @media (prefers-reduced-motion: reduce) {

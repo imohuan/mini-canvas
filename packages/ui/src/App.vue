@@ -70,6 +70,13 @@ const miniMapDock = provideMiniMapDockTarget()
 function onProviderReady(host: CanvasHostHandle): void {
   setReadyHost(host)
   ui.setHostEl({ host })
+  // 插件管理服务必须**在宿主就绪时就拿到安装句柄**，不能等用户打开「设置 → 插件」页。
+  // 启动时它会按安装名单补装上次装过、这次冷启动没装的插件（小地图 / 自动布局这类）；
+  // 只在页面里 bind 的话，没打开过设置页的会话里这些补装全部失败（错误落在 row.error，
+  // 界面显示「宿主没有提供 host.manager」，插件看起来像装了又消失）。
+  // bindManager 幂等：页面挂载时再绑一次是同一个句柄，不会重复安装。
+  const pluginManager = host.ctx.tryGet<{ bindManager?(m: unknown): Promise<void> }>('plugin-manager')
+  if (pluginManager?.bindManager) void pluginManager.bindManager(host.manager)
   void ui.onReady()
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = registerShellCommands(host.ctx, ui)

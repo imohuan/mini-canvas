@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ComboboxRootEmits, ComboboxRootProps } from 'reka-ui'
 import { ComboboxRoot, useForwardPropsEmits } from 'reka-ui'
-import { usePopupExclusive, usePopupOpenState } from '../../../popup/exclusive'
+import { usePopupExclusive, usePopupOpenState } from '../../../theme/popup/exclusive'
 
 const props = defineProps<ComboboxRootProps>()
 const emits = defineEmits<ComboboxRootEmits>()

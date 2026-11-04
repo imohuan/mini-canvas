@@ -10,7 +10,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui'
 import DropdownMenuArrow from './DropdownMenuArrow.vue'
-import { popupArrowVisible, popupSideOffset } from '../../../popup/popupConfig'
+import { popupArrowVisible, popupSideOffset } from '../../../theme/popup/popupConfig'
 
 defineOptions({
   inheritAttrs: false,

@@ -10,8 +10,6 @@
  */
 @import "shadcn-vue/tailwind.css";
 @import "@vuelor/picker/tailwind.css";
-/* 尺寸档位：主题插件写 --mct-size-*，这里按 data-slot 接到各组件实体尺寸上 */
-@import "./size.css";
 
 @theme inline {
   --color-background: var(--ui-overlay-solid, #fff);
@@ -57,11 +55,6 @@
   --vuelor-surface: var(--ui-overlay-solid, #ffffff);
   --vuelor-border: var(--ui-line, #e6e6e6);
   --vuelor-input: var(--ui-chip, #f5f5f5);
-  /* 浮层配置的 CSS 兜底：未接主题桥接的独立组件库页面也能读 */
-  --mct-popup-arrow: auto;
-  --mct-popup-gap: 8;
-  --mct-popup-sub-gap: 8;
-  --mct-popup-selected-style: check;
 }
 
 /*

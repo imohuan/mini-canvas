@@ -1,53 +1,26 @@
 /**
- * 色板数据：全部取自 shadcn 官方的 Tailwind v4 变量（oklch）。
+ * 预览页的色板：底色（surface）+ 主题色（accent）两组，各给亮 / 暗两套 shadcn 变量。
  *
- * 预览页把这些值写到 `document.documentElement` 的内联变量上，
- * 所以切换 base color / 主题色时不用改 CSS 文件，浮层（Teleport 到 body）也会跟着变。
+ * 这**只是预览页用的一份小色板**，不是全站配色真源：
+ * 真实应用的语义色一直由 canvas-render 的 `--ui-*` 色板提供，host.css 再把它们映射成
+ * shadcn 的 `--background` / `--primary` …。预览页没有宿主，才需要自带一份能点着玩的颜色。
+ *
+ * 之前这里存了 7 套底色 × 24 套主题色 × 24 套图表色（约 700 行），其中图表色整块没有任何
+ * 组件在读，属于纯占位。这里收成：4 种底色 + 6 种主题色，够验证「换色确实生效」。
  */
 
-/** 中性底色：决定背景 / 卡片 / 边框的整体冷暖。 */
-export const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve', 'olive', 'mist', 'taupe'] as const
+export const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve'] as const
 export type BaseColor = (typeof BASE_COLORS)[number]
 
-/** 主题色：只改 primary / ring / chart 等强调色，不改背景。 */
-export const THEME_COLORS = [
-  'neutral',
-  'stone',
-  'zinc',
-  'mauve',
-  'olive',
-  'mist',
-  'taupe',
-  'red',
-  'orange',
-  'amber',
-  'yellow',
-  'lime',
-  'green',
-  'emerald',
-  'teal',
-  'cyan',
-  'sky',
-  'blue',
-  'indigo',
-  'violet',
-  'purple',
-  'fuchsia',
-  'pink',
-  'rose',
-] as const
+export const THEME_COLORS = ['neutral', 'blue', 'violet', 'emerald', 'amber', 'rose'] as const
 export type ThemeColor = (typeof THEME_COLORS)[number]
-
-/** 图表色：同样是一组可选色，单独配置（shadcn 的 Chart Color）。 */
-export const CHART_COLORS = THEME_COLORS
-export type ChartColor = ThemeColor
 
 export interface ThemePalette {
   light: Record<string, string>
   dark: Record<string, string>
 }
 
-/** 中性底色板（亮 / 暗两套，来自 shadcn 的 base color）。 */
+/** 底色：背景 / 卡片 / 浮层 / 文字 / 边框这一圈。 */
 const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
   neutral: {
     light: {
@@ -57,26 +30,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.145 0 0)',
       popover: 'oklch(1 0 0)',
       'popover-foreground': 'oklch(0.145 0 0)',
-      primary: 'oklch(0.205 0 0)',
-      'primary-foreground': 'oklch(0.985 0 0)',
       secondary: 'oklch(0.97 0 0)',
       'secondary-foreground': 'oklch(0.205 0 0)',
       muted: 'oklch(0.97 0 0)',
       'muted-foreground': 'oklch(0.556 0 0)',
       accent: 'oklch(0.97 0 0)',
       'accent-foreground': 'oklch(0.205 0 0)',
-      destructive: 'oklch(0.577 0.245 27.325)',
       border: 'oklch(0.922 0 0)',
       input: 'oklch(0.922 0 0)',
-      ring: 'oklch(0.708 0 0)',
-      sidebar: 'oklch(0.985 0 0)',
-      'sidebar-foreground': 'oklch(0.145 0 0)',
-      'sidebar-primary': 'oklch(0.205 0 0)',
-      'sidebar-primary-foreground': 'oklch(0.985 0 0)',
-      'sidebar-accent': 'oklch(0.97 0 0)',
-      'sidebar-accent-foreground': 'oklch(0.205 0 0)',
-      'sidebar-border': 'oklch(0.922 0 0)',
-      'sidebar-ring': 'oklch(0.708 0 0)',
     },
     dark: {
       background: 'oklch(0.145 0 0)',
@@ -85,26 +46,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.985 0 0)',
       popover: 'oklch(0.205 0 0)',
       'popover-foreground': 'oklch(0.985 0 0)',
-      primary: 'oklch(0.922 0 0)',
-      'primary-foreground': 'oklch(0.205 0 0)',
       secondary: 'oklch(0.269 0 0)',
       'secondary-foreground': 'oklch(0.985 0 0)',
       muted: 'oklch(0.269 0 0)',
       'muted-foreground': 'oklch(0.708 0 0)',
       accent: 'oklch(0.269 0 0)',
       'accent-foreground': 'oklch(0.985 0 0)',
-      destructive: 'oklch(0.704 0.191 22.216)',
       border: 'oklch(1 0 0 / 10%)',
       input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.556 0 0)',
-      sidebar: 'oklch(0.205 0 0)',
-      'sidebar-foreground': 'oklch(0.985 0 0)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.985 0 0)',
-      'sidebar-accent': 'oklch(0.269 0 0)',
-      'sidebar-accent-foreground': 'oklch(0.985 0 0)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.556 0 0)',
     },
   },
   stone: {
@@ -115,26 +64,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.147 0.004 49.25)',
       popover: 'oklch(1 0 0)',
       'popover-foreground': 'oklch(0.147 0.004 49.25)',
-      primary: 'oklch(0.216 0.006 56.043)',
-      'primary-foreground': 'oklch(0.985 0.001 106.423)',
       secondary: 'oklch(0.97 0.001 106.424)',
       'secondary-foreground': 'oklch(0.216 0.006 56.043)',
       muted: 'oklch(0.97 0.001 106.424)',
       'muted-foreground': 'oklch(0.553 0.013 58.071)',
       accent: 'oklch(0.97 0.001 106.424)',
       'accent-foreground': 'oklch(0.216 0.006 56.043)',
-      destructive: 'oklch(0.577 0.245 27.325)',
       border: 'oklch(0.923 0.003 48.717)',
       input: 'oklch(0.923 0.003 48.717)',
-      ring: 'oklch(0.709 0.01 56.259)',
-      sidebar: 'oklch(0.985 0.001 106.423)',
-      'sidebar-foreground': 'oklch(0.147 0.004 49.25)',
-      'sidebar-primary': 'oklch(0.216 0.006 56.043)',
-      'sidebar-primary-foreground': 'oklch(0.985 0.001 106.423)',
-      'sidebar-accent': 'oklch(0.97 0.001 106.424)',
-      'sidebar-accent-foreground': 'oklch(0.216 0.006 56.043)',
-      'sidebar-border': 'oklch(0.923 0.003 48.717)',
-      'sidebar-ring': 'oklch(0.709 0.01 56.259)',
     },
     dark: {
       background: 'oklch(0.147 0.004 49.25)',
@@ -143,26 +80,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.985 0.001 106.423)',
       popover: 'oklch(0.216 0.006 56.043)',
       'popover-foreground': 'oklch(0.985 0.001 106.423)',
-      primary: 'oklch(0.923 0.003 48.717)',
-      'primary-foreground': 'oklch(0.216 0.006 56.043)',
       secondary: 'oklch(0.268 0.007 34.298)',
       'secondary-foreground': 'oklch(0.985 0.001 106.423)',
       muted: 'oklch(0.268 0.007 34.298)',
       'muted-foreground': 'oklch(0.709 0.01 56.259)',
       accent: 'oklch(0.268 0.007 34.298)',
       'accent-foreground': 'oklch(0.985 0.001 106.423)',
-      destructive: 'oklch(0.704 0.191 22.216)',
       border: 'oklch(1 0 0 / 10%)',
       input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.553 0.013 58.071)',
-      sidebar: 'oklch(0.216 0.006 56.043)',
-      'sidebar-foreground': 'oklch(0.985 0.001 106.423)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.985 0.001 106.423)',
-      'sidebar-accent': 'oklch(0.268 0.007 34.298)',
-      'sidebar-accent-foreground': 'oklch(0.985 0.001 106.423)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.553 0.013 58.071)',
     },
   },
   zinc: {
@@ -173,26 +98,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.141 0.005 285.823)',
       popover: 'oklch(1 0 0)',
       'popover-foreground': 'oklch(0.141 0.005 285.823)',
-      primary: 'oklch(0.21 0.006 285.885)',
-      'primary-foreground': 'oklch(0.985 0 0)',
       secondary: 'oklch(0.967 0.001 286.375)',
       'secondary-foreground': 'oklch(0.21 0.006 285.885)',
       muted: 'oklch(0.967 0.001 286.375)',
       'muted-foreground': 'oklch(0.552 0.016 285.938)',
       accent: 'oklch(0.967 0.001 286.375)',
       'accent-foreground': 'oklch(0.21 0.006 285.885)',
-      destructive: 'oklch(0.577 0.245 27.325)',
       border: 'oklch(0.92 0.004 286.32)',
       input: 'oklch(0.92 0.004 286.32)',
-      ring: 'oklch(0.705 0.015 286.067)',
-      sidebar: 'oklch(0.985 0 0)',
-      'sidebar-foreground': 'oklch(0.141 0.005 285.823)',
-      'sidebar-primary': 'oklch(0.21 0.006 285.885)',
-      'sidebar-primary-foreground': 'oklch(0.985 0 0)',
-      'sidebar-accent': 'oklch(0.967 0.001 286.375)',
-      'sidebar-accent-foreground': 'oklch(0.21 0.006 285.885)',
-      'sidebar-border': 'oklch(0.92 0.004 286.32)',
-      'sidebar-ring': 'oklch(0.705 0.015 286.067)',
     },
     dark: {
       background: 'oklch(0.141 0.005 285.823)',
@@ -201,26 +114,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.985 0 0)',
       popover: 'oklch(0.21 0.006 285.885)',
       'popover-foreground': 'oklch(0.985 0 0)',
-      primary: 'oklch(0.92 0.004 286.32)',
-      'primary-foreground': 'oklch(0.21 0.006 285.885)',
       secondary: 'oklch(0.274 0.006 286.033)',
       'secondary-foreground': 'oklch(0.985 0 0)',
       muted: 'oklch(0.274 0.006 286.033)',
       'muted-foreground': 'oklch(0.705 0.015 286.067)',
       accent: 'oklch(0.274 0.006 286.033)',
       'accent-foreground': 'oklch(0.985 0 0)',
-      destructive: 'oklch(0.704 0.191 22.216)',
       border: 'oklch(1 0 0 / 10%)',
       input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.552 0.016 285.938)',
-      sidebar: 'oklch(0.21 0.006 285.885)',
-      'sidebar-foreground': 'oklch(0.985 0 0)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.985 0 0)',
-      'sidebar-accent': 'oklch(0.274 0.006 286.033)',
-      'sidebar-accent-foreground': 'oklch(0.985 0 0)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.552 0.016 285.938)',
     },
   },
   mauve: {
@@ -231,26 +132,14 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.145 0.008 326)',
       popover: 'oklch(1 0 0)',
       'popover-foreground': 'oklch(0.145 0.008 326)',
-      primary: 'oklch(0.212 0.019 322.12)',
-      'primary-foreground': 'oklch(0.985 0 0)',
       secondary: 'oklch(0.96 0.003 325.6)',
       'secondary-foreground': 'oklch(0.212 0.019 322.12)',
       muted: 'oklch(0.96 0.003 325.6)',
       'muted-foreground': 'oklch(0.542 0.034 322.5)',
       accent: 'oklch(0.96 0.003 325.6)',
       'accent-foreground': 'oklch(0.212 0.019 322.12)',
-      destructive: 'oklch(0.577 0.245 27.325)',
       border: 'oklch(0.922 0.005 325.62)',
       input: 'oklch(0.922 0.005 325.62)',
-      ring: 'oklch(0.711 0.019 323.02)',
-      sidebar: 'oklch(0.985 0 0)',
-      'sidebar-foreground': 'oklch(0.145 0.008 326)',
-      'sidebar-primary': 'oklch(0.212 0.019 322.12)',
-      'sidebar-primary-foreground': 'oklch(0.985 0 0)',
-      'sidebar-accent': 'oklch(0.96 0.003 325.6)',
-      'sidebar-accent-foreground': 'oklch(0.212 0.019 322.12)',
-      'sidebar-border': 'oklch(0.922 0.005 325.62)',
-      'sidebar-ring': 'oklch(0.711 0.019 323.02)',
     },
     dark: {
       background: 'oklch(0.145 0.008 326)',
@@ -259,276 +148,39 @@ const BASE_PALETTES: Record<BaseColor, ThemePalette> = {
       'card-foreground': 'oklch(0.985 0 0)',
       popover: 'oklch(0.212 0.019 322.12)',
       'popover-foreground': 'oklch(0.985 0 0)',
-      primary: 'oklch(0.922 0.005 325.62)',
-      'primary-foreground': 'oklch(0.212 0.019 322.12)',
       secondary: 'oklch(0.263 0.024 320.12)',
       'secondary-foreground': 'oklch(0.985 0 0)',
       muted: 'oklch(0.263 0.024 320.12)',
       'muted-foreground': 'oklch(0.711 0.019 323.02)',
       accent: 'oklch(0.263 0.024 320.12)',
       'accent-foreground': 'oklch(0.985 0 0)',
-      destructive: 'oklch(0.704 0.191 22.216)',
       border: 'oklch(1 0 0 / 10%)',
       input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.542 0.034 322.5)',
-      sidebar: 'oklch(0.212 0.019 322.12)',
-      'sidebar-foreground': 'oklch(0.985 0 0)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.985 0 0)',
-      'sidebar-accent': 'oklch(0.263 0.024 320.12)',
-      'sidebar-accent-foreground': 'oklch(0.985 0 0)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.542 0.034 322.5)',
-    },
-  },
-  olive: {
-    light: {
-      background: 'oklch(1 0 0)',
-      foreground: 'oklch(0.153 0.006 107.1)',
-      card: 'oklch(1 0 0)',
-      'card-foreground': 'oklch(0.153 0.006 107.1)',
-      popover: 'oklch(1 0 0)',
-      'popover-foreground': 'oklch(0.153 0.006 107.1)',
-      primary: 'oklch(0.228 0.013 107.4)',
-      'primary-foreground': 'oklch(0.988 0.003 106.5)',
-      secondary: 'oklch(0.966 0.005 106.5)',
-      'secondary-foreground': 'oklch(0.228 0.013 107.4)',
-      muted: 'oklch(0.966 0.005 106.5)',
-      'muted-foreground': 'oklch(0.58 0.031 107.3)',
-      accent: 'oklch(0.966 0.005 106.5)',
-      'accent-foreground': 'oklch(0.228 0.013 107.4)',
-      destructive: 'oklch(0.577 0.245 27.325)',
-      border: 'oklch(0.93 0.007 106.5)',
-      input: 'oklch(0.93 0.007 106.5)',
-      ring: 'oklch(0.737 0.021 106.9)',
-      sidebar: 'oklch(0.988 0.003 106.5)',
-      'sidebar-foreground': 'oklch(0.153 0.006 107.1)',
-      'sidebar-primary': 'oklch(0.228 0.013 107.4)',
-      'sidebar-primary-foreground': 'oklch(0.988 0.003 106.5)',
-      'sidebar-accent': 'oklch(0.966 0.005 106.5)',
-      'sidebar-accent-foreground': 'oklch(0.228 0.013 107.4)',
-      'sidebar-border': 'oklch(0.93 0.007 106.5)',
-      'sidebar-ring': 'oklch(0.737 0.021 106.9)',
-    },
-    dark: {
-      background: 'oklch(0.153 0.006 107.1)',
-      foreground: 'oklch(0.988 0.003 106.5)',
-      card: 'oklch(0.228 0.013 107.4)',
-      'card-foreground': 'oklch(0.988 0.003 106.5)',
-      popover: 'oklch(0.228 0.013 107.4)',
-      'popover-foreground': 'oklch(0.988 0.003 106.5)',
-      primary: 'oklch(0.93 0.007 106.5)',
-      'primary-foreground': 'oklch(0.228 0.013 107.4)',
-      secondary: 'oklch(0.286 0.016 107.4)',
-      'secondary-foreground': 'oklch(0.988 0.003 106.5)',
-      muted: 'oklch(0.286 0.016 107.4)',
-      'muted-foreground': 'oklch(0.737 0.021 106.9)',
-      accent: 'oklch(0.286 0.016 107.4)',
-      'accent-foreground': 'oklch(0.988 0.003 106.5)',
-      destructive: 'oklch(0.704 0.191 22.216)',
-      border: 'oklch(1 0 0 / 10%)',
-      input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.58 0.031 107.3)',
-      sidebar: 'oklch(0.228 0.013 107.4)',
-      'sidebar-foreground': 'oklch(0.988 0.003 106.5)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.988 0.003 106.5)',
-      'sidebar-accent': 'oklch(0.286 0.016 107.4)',
-      'sidebar-accent-foreground': 'oklch(0.988 0.003 106.5)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.58 0.031 107.3)',
-    },
-  },
-  mist: {
-    light: {
-      background: 'oklch(1 0 0)',
-      foreground: 'oklch(0.148 0.004 228.8)',
-      card: 'oklch(1 0 0)',
-      'card-foreground': 'oklch(0.148 0.004 228.8)',
-      popover: 'oklch(1 0 0)',
-      'popover-foreground': 'oklch(0.148 0.004 228.8)',
-      primary: 'oklch(0.218 0.008 223.9)',
-      'primary-foreground': 'oklch(0.987 0.002 197.1)',
-      secondary: 'oklch(0.963 0.002 197.1)',
-      'secondary-foreground': 'oklch(0.218 0.008 223.9)',
-      muted: 'oklch(0.963 0.002 197.1)',
-      'muted-foreground': 'oklch(0.56 0.021 213.5)',
-      accent: 'oklch(0.963 0.002 197.1)',
-      'accent-foreground': 'oklch(0.218 0.008 223.9)',
-      destructive: 'oklch(0.577 0.245 27.325)',
-      border: 'oklch(0.925 0.005 214.3)',
-      input: 'oklch(0.925 0.005 214.3)',
-      ring: 'oklch(0.723 0.014 214.4)',
-      sidebar: 'oklch(0.987 0.002 197.1)',
-      'sidebar-foreground': 'oklch(0.148 0.004 228.8)',
-      'sidebar-primary': 'oklch(0.218 0.008 223.9)',
-      'sidebar-primary-foreground': 'oklch(0.987 0.002 197.1)',
-      'sidebar-accent': 'oklch(0.963 0.002 197.1)',
-      'sidebar-accent-foreground': 'oklch(0.218 0.008 223.9)',
-      'sidebar-border': 'oklch(0.925 0.005 214.3)',
-      'sidebar-ring': 'oklch(0.723 0.014 214.4)',
-    },
-    dark: {
-      background: 'oklch(0.148 0.004 228.8)',
-      foreground: 'oklch(0.987 0.002 197.1)',
-      card: 'oklch(0.218 0.008 223.9)',
-      'card-foreground': 'oklch(0.987 0.002 197.1)',
-      popover: 'oklch(0.218 0.008 223.9)',
-      'popover-foreground': 'oklch(0.987 0.002 197.1)',
-      primary: 'oklch(0.925 0.005 214.3)',
-      'primary-foreground': 'oklch(0.218 0.008 223.9)',
-      secondary: 'oklch(0.275 0.011 216.9)',
-      'secondary-foreground': 'oklch(0.987 0.002 197.1)',
-      muted: 'oklch(0.275 0.011 216.9)',
-      'muted-foreground': 'oklch(0.723 0.014 214.4)',
-      accent: 'oklch(0.275 0.011 216.9)',
-      'accent-foreground': 'oklch(0.987 0.002 197.1)',
-      destructive: 'oklch(0.704 0.191 22.216)',
-      border: 'oklch(1 0 0 / 10%)',
-      input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.56 0.021 213.5)',
-      sidebar: 'oklch(0.218 0.008 223.9)',
-      'sidebar-foreground': 'oklch(0.987 0.002 197.1)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.987 0.002 197.1)',
-      'sidebar-accent': 'oklch(0.275 0.011 216.9)',
-      'sidebar-accent-foreground': 'oklch(0.987 0.002 197.1)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.56 0.021 213.5)',
-    },
-  },
-  taupe: {
-    light: {
-      background: 'oklch(1 0 0)',
-      foreground: 'oklch(0.147 0.004 49.3)',
-      card: 'oklch(1 0 0)',
-      'card-foreground': 'oklch(0.147 0.004 49.3)',
-      popover: 'oklch(1 0 0)',
-      'popover-foreground': 'oklch(0.147 0.004 49.3)',
-      primary: 'oklch(0.214 0.009 43.1)',
-      'primary-foreground': 'oklch(0.986 0.002 67.8)',
-      secondary: 'oklch(0.96 0.002 17.2)',
-      'secondary-foreground': 'oklch(0.214 0.009 43.1)',
-      muted: 'oklch(0.96 0.002 17.2)',
-      'muted-foreground': 'oklch(0.547 0.021 43.1)',
-      accent: 'oklch(0.96 0.002 17.2)',
-      'accent-foreground': 'oklch(0.214 0.009 43.1)',
-      destructive: 'oklch(0.577 0.245 27.325)',
-      border: 'oklch(0.922 0.005 34.3)',
-      input: 'oklch(0.922 0.005 34.3)',
-      ring: 'oklch(0.714 0.014 41.2)',
-      sidebar: 'oklch(0.986 0.002 67.8)',
-      'sidebar-foreground': 'oklch(0.147 0.004 49.3)',
-      'sidebar-primary': 'oklch(0.214 0.009 43.1)',
-      'sidebar-primary-foreground': 'oklch(0.986 0.002 67.8)',
-      'sidebar-accent': 'oklch(0.96 0.002 17.2)',
-      'sidebar-accent-foreground': 'oklch(0.214 0.009 43.1)',
-      'sidebar-border': 'oklch(0.922 0.005 34.3)',
-      'sidebar-ring': 'oklch(0.714 0.014 41.2)',
-    },
-    dark: {
-      background: 'oklch(0.147 0.004 49.3)',
-      foreground: 'oklch(0.986 0.002 67.8)',
-      card: 'oklch(0.214 0.009 43.1)',
-      'card-foreground': 'oklch(0.986 0.002 67.8)',
-      popover: 'oklch(0.214 0.009 43.1)',
-      'popover-foreground': 'oklch(0.986 0.002 67.8)',
-      primary: 'oklch(0.922 0.005 34.3)',
-      'primary-foreground': 'oklch(0.214 0.009 43.1)',
-      secondary: 'oklch(0.268 0.011 36.5)',
-      'secondary-foreground': 'oklch(0.986 0.002 67.8)',
-      muted: 'oklch(0.268 0.011 36.5)',
-      'muted-foreground': 'oklch(0.714 0.014 41.2)',
-      accent: 'oklch(0.268 0.011 36.5)',
-      'accent-foreground': 'oklch(0.986 0.002 67.8)',
-      destructive: 'oklch(0.704 0.191 22.216)',
-      border: 'oklch(1 0 0 / 10%)',
-      input: 'oklch(1 0 0 / 15%)',
-      ring: 'oklch(0.547 0.021 43.1)',
-      sidebar: 'oklch(0.214 0.009 43.1)',
-      'sidebar-foreground': 'oklch(0.986 0.002 67.8)',
-      'sidebar-primary': 'oklch(0.488 0.243 264.376)',
-      'sidebar-primary-foreground': 'oklch(0.986 0.002 67.8)',
-      'sidebar-accent': 'oklch(0.268 0.011 36.5)',
-      'sidebar-accent-foreground': 'oklch(0.986 0.002 67.8)',
-      'sidebar-border': 'oklch(1 0 0 / 10%)',
-      'sidebar-ring': 'oklch(0.547 0.021 43.1)',
     },
   },
 }
 
-/** 主题色只覆盖强调色档；其余交给 base color。 */
+/** 主题色：只覆盖 primary / ring，不改背景。 */
 const ACCENT_PALETTES: Record<ThemeColor, ThemePalette> = {
-  neutral: { light: {}, dark: {} },
-  stone: { light: {}, dark: {} },
-  zinc: { light: {}, dark: {} },
-  mauve: { light: {}, dark: {} },
-  olive: { light: {}, dark: {} },
-  mist: { light: {}, dark: {} },
-  taupe: { light: {}, dark: {} },
-  red: {
-    light: { primary: 'oklch(0.637 0.237 25.331)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.637 0.237 25.331)' },
-    dark: { primary: 'oklch(0.704 0.191 22.216)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.704 0.191 22.216)' },
-  },
-  orange: {
-    light: { primary: 'oklch(0.705 0.213 47.604)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.705 0.213 47.604)' },
-    dark: { primary: 'oklch(0.75 0.183 55.934)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.75 0.183 55.934)' },
-  },
-  amber: {
-    light: { primary: 'oklch(0.769 0.188 70.08)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.769 0.188 70.08)' },
-    dark: { primary: 'oklch(0.828 0.189 84.429)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.828 0.189 84.429)' },
-  },
-  yellow: {
-    light: { primary: 'oklch(0.795 0.184 86.047)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.795 0.184 86.047)' },
-    dark: { primary: 'oklch(0.852 0.199 91.936)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.852 0.199 91.936)' },
-  },
-  lime: {
-    light: { primary: 'oklch(0.768 0.233 130.85)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.768 0.233 130.85)' },
-    dark: { primary: 'oklch(0.841 0.238 128.85)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.841 0.238 128.85)' },
-  },
-  green: {
-    light: { primary: 'oklch(0.723 0.219 149.579)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.723 0.219 149.579)' },
-    dark: { primary: 'oklch(0.792 0.209 151.711)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.792 0.209 151.711)' },
-  },
-  emerald: {
-    light: { primary: 'oklch(0.696 0.17 162.48)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.696 0.17 162.48)' },
-    dark: { primary: 'oklch(0.765 0.177 163.223)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.765 0.177 163.223)' },
-  },
-  teal: {
-    light: { primary: 'oklch(0.704 0.14 182.503)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.704 0.14 182.503)' },
-    dark: { primary: 'oklch(0.777 0.152 181.912)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.777 0.152 181.912)' },
-  },
-  cyan: {
-    light: { primary: 'oklch(0.715 0.143 215.221)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.715 0.143 215.221)' },
-    dark: { primary: 'oklch(0.789 0.154 211.53)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.789 0.154 211.53)' },
-  },
-  sky: {
-    light: { primary: 'oklch(0.685 0.169 237.323)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.685 0.169 237.323)' },
-    dark: { primary: 'oklch(0.746 0.16 232.661)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.746 0.16 232.661)' },
+  neutral: {
+    light: { primary: 'oklch(0.205 0 0)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.708 0 0)' },
+    dark: { primary: 'oklch(0.922 0 0)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.556 0 0)' },
   },
   blue: {
     light: { primary: 'oklch(0.623 0.214 259.815)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.623 0.214 259.815)' },
     dark: { primary: 'oklch(0.707 0.165 254.624)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.707 0.165 254.624)' },
   },
-  indigo: {
-    light: { primary: 'oklch(0.585 0.233 277.117)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.585 0.233 277.117)' },
-    dark: { primary: 'oklch(0.673 0.182 276.935)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.673 0.182 276.935)' },
-  },
   violet: {
     light: { primary: 'oklch(0.606 0.25 292.717)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.606 0.25 292.717)' },
     dark: { primary: 'oklch(0.702 0.183 293.541)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.702 0.183 293.541)' },
   },
-  purple: {
-    light: { primary: 'oklch(0.627 0.265 303.9)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.627 0.265 303.9)' },
-    dark: { primary: 'oklch(0.714 0.203 305.504)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.714 0.203 305.504)' },
+  emerald: {
+    light: { primary: 'oklch(0.696 0.17 162.48)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.696 0.17 162.48)' },
+    dark: { primary: 'oklch(0.765 0.177 163.223)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.765 0.177 163.223)' },
   },
-  fuchsia: {
-    light: { primary: 'oklch(0.667 0.295 322.15)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.667 0.295 322.15)' },
-    dark: { primary: 'oklch(0.74 0.238 322.16)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.74 0.238 322.16)' },
-  },
-  pink: {
-    light: { primary: 'oklch(0.656 0.241 354.308)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.656 0.241 354.308)' },
-    dark: { primary: 'oklch(0.74 0.2 349.761)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.74 0.2 349.761)' },
+  amber: {
+    light: { primary: 'oklch(0.769 0.188 70.08)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.769 0.188 70.08)' },
+    dark: { primary: 'oklch(0.828 0.189 84.429)', 'primary-foreground': 'oklch(0.205 0 0)', ring: 'oklch(0.828 0.189 84.429)' },
   },
   rose: {
     light: { primary: 'oklch(0.645 0.246 16.439)', 'primary-foreground': 'oklch(0.985 0 0)', ring: 'oklch(0.645 0.246 16.439)' },
@@ -536,178 +188,22 @@ const ACCENT_PALETTES: Record<ThemeColor, ThemePalette> = {
   },
 }
 
-/** 图表色板：只用于 chart-1..5，不参与卡片 / 按钮。 */
-const CHART_PALETTES: Record<ChartColor, ThemePalette> = {
-  neutral: {
-    light: {
-      'chart-1': 'oklch(0.646 0.222 41.116)',
-      'chart-2': 'oklch(0.6 0.118 184.704)',
-      'chart-3': 'oklch(0.398 0.07 227.392)',
-      'chart-4': 'oklch(0.828 0.189 84.429)',
-      'chart-5': 'oklch(0.769 0.188 70.08)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.488 0.243 264.376)',
-      'chart-2': 'oklch(0.696 0.17 162.48)',
-      'chart-3': 'oklch(0.769 0.188 70.08)',
-      'chart-4': 'oklch(0.627 0.265 303.9)',
-      'chart-5': 'oklch(0.645 0.246 16.439)',
-    },
-  },
-  stone: {
-    light: {
-      'chart-1': 'oklch(0.646 0.222 41.116)',
-      'chart-2': 'oklch(0.6 0.118 184.704)',
-      'chart-3': 'oklch(0.398 0.07 227.392)',
-      'chart-4': 'oklch(0.828 0.189 84.429)',
-      'chart-5': 'oklch(0.769 0.188 70.08)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.488 0.243 264.376)',
-      'chart-2': 'oklch(0.696 0.17 162.48)',
-      'chart-3': 'oklch(0.769 0.188 70.08)',
-      'chart-4': 'oklch(0.627 0.265 303.9)',
-      'chart-5': 'oklch(0.645 0.246 16.439)',
-    },
-  },
-  zinc: {
-    light: {
-      'chart-1': 'oklch(0.646 0.222 41.116)',
-      'chart-2': 'oklch(0.6 0.118 184.704)',
-      'chart-3': 'oklch(0.398 0.07 227.392)',
-      'chart-4': 'oklch(0.828 0.189 84.429)',
-      'chart-5': 'oklch(0.769 0.188 70.08)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.488 0.243 264.376)',
-      'chart-2': 'oklch(0.696 0.17 162.48)',
-      'chart-3': 'oklch(0.769 0.188 70.08)',
-      'chart-4': 'oklch(0.627 0.265 303.9)',
-      'chart-5': 'oklch(0.645 0.246 16.439)',
-    },
-  },
-  mauve: {
-    light: {
-      'chart-1': 'oklch(0.865 0.012 325.68)',
-      'chart-2': 'oklch(0.542 0.034 322.5)',
-      'chart-3': 'oklch(0.435 0.029 321.78)',
-      'chart-4': 'oklch(0.364 0.029 323.89)',
-      'chart-5': 'oklch(0.263 0.024 320.12)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.865 0.012 325.68)',
-      'chart-2': 'oklch(0.542 0.034 322.5)',
-      'chart-3': 'oklch(0.435 0.029 321.78)',
-      'chart-4': 'oklch(0.364 0.029 323.89)',
-      'chart-5': 'oklch(0.263 0.024 320.12)',
-    },
-  },
-  olive: {
-    light: {
-      'chart-1': 'oklch(0.88 0.011 106.6)',
-      'chart-2': 'oklch(0.58 0.031 107.3)',
-      'chart-3': 'oklch(0.466 0.025 107.3)',
-      'chart-4': 'oklch(0.394 0.023 107.4)',
-      'chart-5': 'oklch(0.286 0.016 107.4)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.88 0.011 106.6)',
-      'chart-2': 'oklch(0.58 0.031 107.3)',
-      'chart-3': 'oklch(0.466 0.025 107.3)',
-      'chart-4': 'oklch(0.394 0.023 107.4)',
-      'chart-5': 'oklch(0.286 0.016 107.4)',
-    },
-  },
-  mist: {
-    light: {
-      'chart-1': 'oklch(0.872 0.007 219.6)',
-      'chart-2': 'oklch(0.56 0.021 213.5)',
-      'chart-3': 'oklch(0.45 0.017 213.2)',
-      'chart-4': 'oklch(0.378 0.015 216)',
-      'chart-5': 'oklch(0.275 0.011 216.9)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.872 0.007 219.6)',
-      'chart-2': 'oklch(0.56 0.021 213.5)',
-      'chart-3': 'oklch(0.45 0.017 213.2)',
-      'chart-4': 'oklch(0.378 0.015 216)',
-      'chart-5': 'oklch(0.275 0.011 216.9)',
-    },
-  },
-  taupe: {
-    light: {
-      'chart-1': 'oklch(0.868 0.007 39.5)',
-      'chart-2': 'oklch(0.547 0.021 43.1)',
-      'chart-3': 'oklch(0.438 0.017 39.3)',
-      'chart-4': 'oklch(0.367 0.016 35.7)',
-      'chart-5': 'oklch(0.268 0.011 36.5)',
-    },
-    dark: {
-      'chart-1': 'oklch(0.868 0.007 39.5)',
-      'chart-2': 'oklch(0.547 0.021 43.1)',
-      'chart-3': 'oklch(0.438 0.017 39.3)',
-      'chart-4': 'oklch(0.367 0.016 35.7)',
-      'chart-5': 'oklch(0.268 0.011 36.5)',
-    },
-  },
-  red: coloredCharts('oklch(0.637 0.237 25.331)', 'oklch(0.505 0.213 27.518)'),
-  orange: coloredCharts('oklch(0.705 0.213 47.604)', 'oklch(0.646 0.222 41.116)'),
-  amber: coloredCharts('oklch(0.769 0.188 70.08)', 'oklch(0.666 0.179 58.318)'),
-  yellow: coloredCharts('oklch(0.795 0.184 86.047)', 'oklch(0.681 0.162 75.834)'),
-  lime: coloredCharts('oklch(0.768 0.233 130.85)', 'oklch(0.648 0.2 131.684)'),
-  green: coloredCharts('oklch(0.723 0.219 149.579)', 'oklch(0.627 0.194 149.214)'),
-  emerald: coloredCharts('oklch(0.696 0.17 162.48)', 'oklch(0.596 0.145 163.225)'),
-  teal: coloredCharts('oklch(0.704 0.14 182.503)', 'oklch(0.6 0.118 184.704)'),
-  cyan: coloredCharts('oklch(0.715 0.143 215.221)', 'oklch(0.609 0.126 221.723)'),
-  sky: coloredCharts('oklch(0.685 0.169 237.323)', 'oklch(0.588 0.158 241.966)'),
-  blue: coloredCharts('oklch(0.623 0.214 259.815)', 'oklch(0.546 0.245 262.881)'),
-  indigo: coloredCharts('oklch(0.585 0.233 277.117)', 'oklch(0.511 0.262 276.966)'),
-  violet: coloredCharts('oklch(0.606 0.25 292.717)', 'oklch(0.541 0.281 293.009)'),
-  purple: coloredCharts('oklch(0.627 0.265 303.9)', 'oklch(0.558 0.288 302.321)'),
-  fuchsia: coloredCharts('oklch(0.667 0.295 322.15)', 'oklch(0.591 0.293 322.896)'),
-  pink: coloredCharts('oklch(0.656 0.241 354.308)', 'oklch(0.592 0.249 0.584)'),
-  rose: coloredCharts('oklch(0.645 0.246 16.439)', 'oklch(0.586 0.253 17.585)'),
-}
-
-function coloredCharts(primary: string, primaryDark: string): ThemePalette {
-  return {
-    light: {
-      'chart-1': primary,
-      'chart-2': 'oklch(0.6 0.118 184.704)',
-      'chart-3': 'oklch(0.398 0.07 227.392)',
-      'chart-4': 'oklch(0.828 0.189 84.429)',
-      'chart-5': 'oklch(0.769 0.188 70.08)',
-    },
-    dark: {
-      'chart-1': primaryDark,
-      'chart-2': 'oklch(0.696 0.17 162.48)',
-      'chart-3': 'oklch(0.769 0.188 70.08)',
-      'chart-4': 'oklch(0.627 0.265 303.9)',
-      'chart-5': 'oklch(0.645 0.246 16.439)',
-    },
-  }
-}
-
 export interface ThemeSelection {
   baseColor: BaseColor
   theme: ThemeColor
-  chartColor: ChartColor
 }
 
-/** 把三项选择合成一组 CSS 变量（亮 / 暗各一套）。 */
+/** 把两项选择合成一组 CSS 变量（亮 / 暗各一套）。 */
 export function resolveThemeVars(selection: ThemeSelection): ThemePalette {
   const base = BASE_PALETTES[selection.baseColor]
   const accent = ACCENT_PALETTES[selection.theme]
-  const chart = CHART_PALETTES[selection.chartColor]
   return {
-    light: { ...base.light, ...accent.light, ...chart.light },
-    dark: { ...base.dark, ...accent.dark, ...chart.dark },
+    light: { ...base.light, ...accent.light },
+    dark: { ...base.dark, ...accent.dark },
   }
 }
 
-/** 色板里的主色，给面板上的色块用。 */
+/** 面板上的色块用：主题色的主色。 */
 export function previewColor(name: ThemeColor, scheme: 'light' | 'dark'): string {
-  const base = BASE_PALETTES[name === 'neutral' || name === 'stone' || name === 'zinc' || name === 'mauve' || name === 'olive' || name === 'mist' || name === 'taupe' ? name : 'neutral']
-  const accent = ACCENT_PALETTES[name]
-  return accent[scheme].primary ?? base[scheme].primary
+  return ACCENT_PALETTES[name][scheme].primary ?? ''
 }

@@ -9,7 +9,7 @@ import {
   ContextMenuArrow,
   useForwardPropsEmits,
 } from 'reka-ui'
-import { popupArrowVisible } from '../../../popup/popupConfig'
+import { popupArrowVisible } from '../../../theme/popup/popupConfig'
 
 defineOptions({
   inheritAttrs: false,

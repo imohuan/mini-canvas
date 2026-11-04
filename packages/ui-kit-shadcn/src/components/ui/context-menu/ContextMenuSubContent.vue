@@ -8,7 +8,7 @@ import {
   ContextMenuArrow,
   useForwardPropsEmits,
 } from 'reka-ui'
-import { popupArrowVisible, popupSubSideOffset } from '../../../popup/popupConfig'
+import { popupArrowVisible, popupSubSideOffset } from '../../../theme/popup/popupConfig'
 
 const props = withDefaults(
   defineProps<DropdownMenuSubContentProps & { class?: HTMLAttributes['class']; arrow?: boolean }>(),

@@ -1,18 +1,14 @@
 /**
  * 浮层互斥：同一时刻只允许一个下拉 / 弹出面板开着。
  *
- * 为什么住在组件库、而不是业务调用点：
- * 以前「只开一个」分散在三处 —— Agent 输入区手写 6 键互斥表、画布底栏的 Select 与
- * ToolParamGroup 的 Popover 各自 `ref(false)`、组件库根组件什么都不管。
- * 结果就是模型下拉与比例面板能同时挂着（用户截图 2026-11-03）。
- * 互斥是所有浮层共有的约束，必须由根组件统一执行，业务侧不需要再记这条规矩。
+ * 为什么需要它（2026-11-04 在真实画布实测）：
+ * 取消互斥后，底栏「模型下拉」开着时点「参数下拉」，两个浮层会**同时可见**。
+ * 原因是点对方按钮的那一下由对方组件自己接收（非模态），而先开的那个并不知道。
+ * reka 自带的“点外面关闭”只覆盖“点到空白处”，不覆盖“点到另一个浮层的触发器”。
  *
- * 为什么是模块级 Set、不写进 `<script setup>`：
- * `<script setup>` 的顶层代码会被编译进 setup()，每个实例一份「模块级」变量，
- * 登记表在实例之间不通，互斥直接失效（旧实现在别处踩过这个坑）。
+ * 所以这层只管一件事：**打开新的，把旧的关掉**。点外面 / Esc 仍由组件自己做。
  *
- * **二级菜单不参与**：它由 reka 的 MenuSub 管理，打开子菜单不能关掉父菜单。
- * 这里只登记一级浮层（DropdownMenu / Select / Popover / Combobox 的内容层）。
+ * 二级菜单不参与：它由 reka 的 MenuSub 管理，打开子菜单不能关掉父菜单。
  */
 import { computed, inject, onScopeDispose, provide, ref, watch, type Ref } from 'vue'
 
@@ -31,16 +27,23 @@ const POPUP_CHAIN_KEY = Symbol('mini-canvas:popup-chain')
 
 /** 打开自己：先关掉其它还开着的浮层，再登记自己。 */
 export function claimExclusive(entry: OpenEntry): void {
+  /*
+   * 先把自己登记进去，再关别人。
+   *
+   * 顺序很关键（2026-11-04 实测踩到）：如果先关旧的再登记新的，旧浮层收到 close 后会走一次
+   * `releaseExclusive` / 自己的 open=false；若那次变更回写晚于新浮层的 claim，就会把新浮层一起关掉。
+   * 先登记新的一笔，关旧的时候表里已经有“当前赢家”，新浮层不会被误伤。
+   */
+  openEntries.add(entry)
   for (const other of [...openEntries]) {
     if (other === entry) continue
     // 自己是从它里面弹出来的（比如参数面板里的下拉）→ 不关父级
     if (entry.chain.includes(other.token)) continue
-    // 先摘再关：close() 在真实组件里是异步生效的（open=false 下一帧才走 watch），
+    // 先摘再关：close() 是异步生效的（open=false 下一帧才走 watch），
     // 立刻摘掉可以避免同一次 claim 里重复关同一个浮层。
     openEntries.delete(other)
     other.close()
   }
-  openEntries.add(entry)
 }
 
 /** 关闭自己：从登记表摘掉（幂等）。 */
@@ -48,27 +51,22 @@ export function releaseExclusive(entry: OpenEntry): void {
   openEntries.delete(entry)
 }
 
-/** 全关（拖拽 / 缩放这类「环境变了」的时刻用）。 */
-export function closeAllExclusives(): void {
-  const entries = [...openEntries]
-  // 先清空再逐个关：close() 在真实浮层里是异步走 watch 摘除的，
-  // 同步清表可以保证「全关」返回时登记表一定是空的。
-  openEntries.clear()
-  for (const entry of entries) entry.close()
-}
-
 /** 当前开着的浮层数（测试 / 调试用）。 */
 export function openExclusiveCount(): number {
   return openEntries.size
+}
+
+/** 全关（拖拽 / 缩放这类「环境变了」的时刻用）。 */
+export function closeAllExclusives(): void {
+  const entries = [...openEntries]
+  openEntries.clear()
+  for (const entry of entries) entry.close()
 }
 
 /**
  * 把某个浮层的开合接到登记表上。
  *
  * 同时给插槽内容 provide 一条浮层链：面板里再开下拉时，子浮层能认出父级并豁免它。
- *
- * @param open  该浮层是否打开（reka 根组件 context 里的 open ref）
- * @param close 关闭自己（reka 根组件 context 里的 onOpenChange(false)）
  */
 export function usePopupExclusive(open: Ref<boolean>, close: () => void): void {
   const token = {}
@@ -99,17 +97,18 @@ export function usePopupOpenState(
   emit: (value: boolean) => void,
 ): Ref<boolean> {
   const local = ref<boolean>(props.open ?? props.defaultOpen ?? false)
-  watch(
-    () => props.open,
-    (value) => {
-      if (typeof value === 'boolean') local.value = value
-    },
-  )
   return computed({
     get: () => local.value,
     set: (value: boolean) => {
       local.value = value
-      emit(value)
+      /**
+       * 只在**用户真正改变**开合时才通知外面。
+       *
+       * 为什么（2026-11-04 实测踩到）：互斥表关闭旧浮层时会写 `open=false`，
+       * 如果这里无条件 emit，外部监听（例如业务侧 v-model）会把这次“被动关闭”
+       * 当成用户操作再走一遍，和刚打开的新浮层互相覆盖，表现为“切到 B 时两个都关”。
+       */
+      if (value !== props.open) emit(value)
     },
   })
 }

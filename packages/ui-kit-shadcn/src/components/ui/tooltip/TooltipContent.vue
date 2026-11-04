@@ -4,7 +4,7 @@ import { computed, type HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import { cn } from 'cn'
 import { TooltipArrow, TooltipContent, TooltipPortal, useForwardPropsEmits } from 'reka-ui'
-import { popupArrowVisible, popupSideOffset } from '../../../popup/popupConfig'
+import { popupArrowVisible, popupSideOffset } from '../../../theme/popup/popupConfig'
 
 defineOptions({
   inheritAttrs: false,

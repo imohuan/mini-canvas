@@ -52,8 +52,9 @@ import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue";
-import { SHADCN_COMPONENTS, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn";
-import { SettingsRow, SettingsSection } from "@mini-canvas/ui-kit-shadcn";
+import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn";
+import ShadcnSettingsRow from "./components/settings/ShadcnSettingsRow.vue";
+import ShadcnSettingsSection from "./components/settings/ShadcnSettingsSection.vue";
 import { UiToaster } from "@mini-canvas/ui-kit-shadcn";
 import { setStaticUiCatalog } from "@mini-canvas/canvas-render";
 import { setSettingsUiCatalog } from "./composables/useUiComponentOutside";
@@ -90,8 +91,8 @@ export const inject = [] as string[];
  */
 setStaticUiCatalog({
   ...SHADCN_COMPONENTS,
-  settingsRow: SettingsRow,
-  settingsSection: SettingsSection,
+  settingsRow: ShadcnSettingsRow,
+  settingsSection: ShadcnSettingsSection,
   Toaster: UiToaster,
 });
 
@@ -138,11 +139,6 @@ export function apply(ctx: Context, config?: ThemeConfig) {
     themeFont: config?.themeFont ?? DEFAULT_THEME_APPEARANCE.themeFont,
     themeHeadingFont: config?.themeHeadingFont ?? DEFAULT_THEME_APPEARANCE.themeHeadingFont,
     themeSize: config?.themeSize ?? DEFAULT_THEME_APPEARANCE.themeSize,
-    themePopupArrow: config?.themePopupArrow ?? DEFAULT_THEME_APPEARANCE.themePopupArrow,
-    themePopupGap: config?.themePopupGap ?? DEFAULT_THEME_APPEARANCE.themePopupGap,
-    themePopupSubGap: config?.themePopupSubGap ?? DEFAULT_THEME_APPEARANCE.themePopupSubGap,
-    themePopupSelectedStyle:
-      config?.themePopupSelectedStyle ?? DEFAULT_THEME_APPEARANCE.themePopupSelectedStyle,
   });
   applyThemeBridge(appearance);
   // 设置面板的字段控件按 ui 目录取：这里把「同一张表」交给面板，宿主就绪后赢家变了它跟着换。
@@ -156,11 +152,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
         key !== 'themeRadius' &&
         key !== 'themeFont' &&
         key !== 'themeHeadingFont' &&
-        key !== 'themeSize' &&
-        key !== 'themePopupArrow' &&
-        key !== 'themePopupGap' &&
-        key !== 'themePopupSubGap' &&
-        key !== 'themePopupSelectedStyle'
+        key !== 'themeSize'
       )
         return
       appearance = toThemeBridgeInput({
@@ -168,11 +160,6 @@ export function apply(ctx: Context, config?: ThemeConfig) {
         themeFont: key === 'themeFont' ? value : appearance.font,
         themeHeadingFont: key === 'themeHeadingFont' ? value : appearance.heading,
         themeSize: key === 'themeSize' ? value : appearance.size,
-        themePopupArrow: key === 'themePopupArrow' ? value : appearance.popup?.arrow,
-        themePopupGap: key === 'themePopupGap' ? value : appearance.popup?.gap,
-        themePopupSubGap: key === 'themePopupSubGap' ? value : appearance.popup?.subGap,
-        themePopupSelectedStyle:
-          key === 'themePopupSelectedStyle' ? value : appearance.popup?.selectedStyle,
       })
       applyThemeBridge(appearance)
     });
@@ -266,8 +253,12 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 构建版里按名取的组件没有任何标记。这一层不产生 DOM、不改 props/slots/事件，
   // 调试层关闭时连读属性的人都没有，所以两种构建保持同一份实现。
   for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
+    // 两层薄层，顺序固定：先注入组件配置（只对声明了 size 的组件生效），
+    // 再包调试标记（完全透明，只读登记点）。反过来会让标记层夹在中间，
+    // props 的缺省判断读不到真实组件。
+    const configured = withComponentConfig(component, uiName);
     const marked = withUiKitDebugMark(
-      component,
+      configured,
       "packages/plugins/plugin-theme-default/src/index.ts",
       uiName,
     );
@@ -275,8 +266,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   }
   // 设置页排版件（非 shadcn 生成件，但同属组件库）：设置页只能经注册表取，
   // 业务插件不直接 import 组件库（用户口径 2026-11-03）。
-  ui.add("settingsRow", SettingsRow, { id: "default" });
-  ui.add("settingsSection", SettingsSection, { id: "default" });
+  ui.add("settingsRow", ShadcnSettingsRow, { id: "default" });
+  ui.add("settingsSection", ShadcnSettingsSection, { id: "default" });
   // 设置导航图标：独立场域，按一级分组名登记。优先级高（order 小）的赢。
   const navIcons = ctx.registryOf<unknown>("settings/navIcon");
   for (const [group, icon] of SETTINGS_NAV_ICON_NAMES) {

@@ -11,7 +11,7 @@
  * 翻转（side=left）时用镜像公式，方向变了也不会错位。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
-import { popupConfig } from './popupConfig'
+import { componentConfig } from '../../componentConfig'
 
 /** 从组件 ref / DOM 元素里取出真实的浮层根节点 */
 function nodeOf(value: unknown): HTMLElement | null {
@@ -63,7 +63,7 @@ export function useSubMenuGap(rootRef: Ref<unknown>, slot: string): {
     // 触发行比父面板可见边缘缩进多少（含面板内边距）
     const inset = side === 'left' ? row.left - panel.left : panel.right - row.right
     // 目标：可见边缘相距 subGap
-    offset.value = Math.round(inset + popupConfig.subGap)
+    offset.value = Math.round(inset + componentConfig.subGap)
   }
 
   /**

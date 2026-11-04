@@ -23,42 +23,15 @@
 import {
   FONT_OPTIONS,
   RADIUS_OPTIONS,
-  SIZE_OPTIONS,
+  COMPONENT_SIZE_CHOICES,
   findFont,
   loadFont,
-  sizeCssVars,
-  POPUP_BRIDGE_VARS,
-  applyPopupBridge,
-  clearPopupBridge,
-  resolvePopupCssVars,
-  resolvePopupGap,
-  resolvePopupArrow,
-  resolvePopupSelectedStyle,
-  DEFAULT_POPUP_CONFIG,
-  POPUP_ARROW_LABELS,
-  POPUP_GAP_LABELS,
-  type PopupArrowMode,
-  type PopupConfig,
-  type PopupGapChoice,
+  setComponentConfig,
+  resetComponentConfig,
   type FontOption,
+  type ComponentSize,
   type RadiusOption,
 } from '@mini-canvas/ui-kit-shadcn'
-
-/** 浮层配置的选项与文案：组件库是唯一真源，主题设置只引用。 */
-export const THEME_POPUP_ARROW_CHOICES = ['auto', 'show', 'hide'] as const
-export type ThemePopupArrowChoice = PopupArrowMode
-export const THEME_POPUP_ARROW_LABELS = POPUP_ARROW_LABELS
-
-export const THEME_POPUP_GAP_CHOICES = [4, 8, 12] as const
-export type ThemePopupGapChoice = PopupGapChoice
-export const THEME_POPUP_GAP_LABELS = POPUP_GAP_LABELS
-
-/** 「选中样式」先只做默认勾一种；保留字段是为了让设置页和契约稳定。 */
-export const THEME_POPUP_SELECTED_STYLE_CHOICES = ['check'] as const
-export type ThemePopupSelectedStyleChoice = 'check'
-export const THEME_POPUP_SELECTED_STYLE_LABELS: Readonly<Record<ThemePopupSelectedStyleChoice, string>> = {
-  check: '只显示勾选',
-}
 
 /** 字体选项：`inherit`（跟随宿主）在最前，其余原样取自组件库 */
 export const THEME_FONT_OPTIONS: readonly FontOption[] = FONT_OPTIONS
@@ -96,29 +69,29 @@ export const THEME_RADIUS_LABELS: Readonly<Record<string, string>> = {
 }
 
 /**
- * 尺寸档位：`inherit` = 不写变量，各组件的 size prop 各管各的（升级前的行为）；
- * 其余四档写 `--mct-size-*`，组件库按 data-slot 统一尺寸。
+ * 尺寸档位：`inherit` = 各组件的 size prop 各管各的；
+ * 其余档写进组件配置，由注册薄层注入给**声明了 size prop** 的组件。
+ * 不声明 size 的组件（输入框 / 卡片等）不受影响 —— 这是有意的：
+ * 它们本来就没有尺寸档位可“选”，从外面用 CSS 压会绕开组件自己的尺寸体系。
  */
-export const THEME_SIZE_CHOICES = ['inherit', ...SIZE_OPTIONS.map((s) => s.id)] as const
+export const THEME_SIZE_CHOICES = ['inherit', ...COMPONENT_SIZE_CHOICES] as const
 export type ThemeSizeChoice = (typeof THEME_SIZE_CHOICES)[number]
 
 /** 档位 id → 设置面板文字 */
 export const THEME_SIZE_LABELS: Readonly<Record<string, string>> = {
   inherit: '跟随组件默认',
-  ...Object.fromEntries(SIZE_OPTIONS.map((s) => [s.id, s.label])),
+  sm: '小',
+  default: '标准',
+  lg: '大',
 }
 
 /** 档位 id → 一句话说明（设置面板副标题用） */
 export const THEME_SIZE_HINTS: Readonly<Record<string, string>> = {
   inherit: '各组件按自己的 size prop 显示，不做统一缩放',
-  ...Object.fromEntries(SIZE_OPTIONS.map((s) => [s.id, s.hint])),
+  sm: '带 size 的组件默认用小档',
+  default: '带 size 的组件默认用标准档',
+  lg: '带 size 的组件默认用大档',
 }
-
-/**
- * 尺寸变量名清单（所有档位的键相同，取标准档即可）。
- * 清理旧值时也要按这份清单 removeProperty，否则切换档位会留下幽灵变量。
- */
-export const THEME_SIZE_VARS: readonly string[] = Object.keys(SIZE_OPTIONS[1]!.vars)
 
 /**
  * 字体 id → CSS font-family 栈。
@@ -154,6 +127,11 @@ export const THEME_FONT_STACKS: Readonly<Record<ThemeFontChoice, string>> = {
   merriweather: "'Merriweather', Georgia, serif",
   lora: "'Lora', Georgia, serif",
   oxanium: "'Oxanium', system-ui, sans-serif",
+  // —— 中文优先的字体（与组件库 FONT_OPTIONS 一一对应，漏一个就会「选了点不动」）——
+  'noto-sans-sc': "'Noto Sans SC', 'Noto Sans', system-ui, sans-serif",
+  'noto-serif-sc': "'Noto Serif SC', 'Noto Serif', Georgia, serif",
+  'zcool-xiaowei': "'ZCOOL XiaoWei', 'Noto Serif SC', serif",
+  'ma-shan-zheng': "'Ma Shan Zheng', 'ZCOOL XiaoWei', cursive",
 }
 
 /** 桥接要写进 `<html>` 的变量名（只在有自定义值时写，缺省一律清掉） */
@@ -181,8 +159,6 @@ export interface ThemeBridgeInput {
   heading: ThemeFontChoice | 'inherit'
   /** 控件尺寸档位；inherit 表示不统一（各组件按自己的 size prop） */
   size: ThemeSizeChoice
-  /** 浮层：箭头 / 触发器间距 / 子菜单间距 / 选中样式 */
-  popup?: PopupConfig
 }
 
 /** 把设置里读到的裸字符串收敛成合法档位；不认识的值一律回落到默认档 */
@@ -191,10 +167,6 @@ export function toThemeBridgeInput(raw: {
   themeFont?: unknown
   themeHeadingFont?: unknown
   themeSize?: unknown
-  themePopupArrow?: unknown
-  themePopupGap?: unknown
-  themePopupSubGap?: unknown
-  themePopupSelectedStyle?: unknown
 }): ThemeBridgeInput {
   const radius = THEME_RADIUS_CHOICES.includes(raw.themeRadius as ThemeRadiusChoice)
     ? (raw.themeRadius as ThemeRadiusChoice)
@@ -208,15 +180,7 @@ export function toThemeBridgeInput(raw: {
   const size = THEME_SIZE_CHOICES.includes(raw.themeSize as ThemeSizeChoice)
     ? (raw.themeSize as ThemeSizeChoice)
     : 'inherit'
-  const popup: PopupConfig = {
-    arrow: resolvePopupArrow(raw.themePopupArrow ?? DEFAULT_POPUP_CONFIG.arrow),
-    gap: resolvePopupGap(raw.themePopupGap ?? DEFAULT_POPUP_CONFIG.gap),
-    subGap: resolvePopupGap(raw.themePopupSubGap ?? DEFAULT_POPUP_CONFIG.subGap),
-    selectedStyle: resolvePopupSelectedStyle(
-      raw.themePopupSelectedStyle ?? DEFAULT_POPUP_CONFIG.selectedStyle,
-    ),
-  }
-  return { radius, font, heading, size, popup }
+  return { radius, font, heading, size }
 }
 
 /**
@@ -245,9 +209,6 @@ export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, 
     const heading = THEME_FONT_STACKS[input.heading] ?? ''
     if (heading) out[THEME_BRIDGE_VARS.fontHeading] = heading
   }
-  // 尺寸：一档写一整组变量；inherit 不写，组件库回落到 shadcn 原始尺寸
-  if (input.size !== 'inherit') Object.assign(out, sizeCssVars(input.size))
-  if (input.popup) Object.assign(out, resolvePopupCssVars(input.popup))
   return out
 }
 
@@ -257,28 +218,17 @@ export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, 
  * 纯 DOM 操作、幂等，可反复调用（设置面板每次改都会调用一次）。
  */
 export function applyThemeBridge(input: ThemeBridgeInput, root?: HTMLElement): void {
-  // 浮层配置是组件库的响应式对象，不依赖 DOM；纯逻辑单测 / SSR 也要能更新。
-  applyPopupBridge(input.popup ?? DEFAULT_POPUP_CONFIG)
   const el = root ?? (typeof document === 'undefined' ? undefined : document.documentElement)
   if (!el) return
+  // 尺寸走组件配置（行为类），不写 CSS：由注册薄层注入给声明了 size 的组件。
+  // inherit = 不注入默认值，各组件的 size prop 各管各的。
+  setComponentConfig({ size: input.size === 'inherit' ? 'default' : input.size })
   const next = resolveThemeBridgeVars(input)
-  for (const name of [...Object.values(THEME_BRIDGE_VARS), ...THEME_SIZE_VARS]) {
+  for (const name of Object.values(THEME_BRIDGE_VARS)) {
     const value = next[name]
     if (value) el.style.setProperty(name, value)
     else el.style.removeProperty(name)
   }
-  for (const name of Object.values(POPUP_BRIDGE_VARS)) {
-    const value = next[name]
-    if (value) el.style.setProperty(name, value)
-    else el.style.removeProperty(name)
-  }
-  /**
-   * 尺寸是「可选档位」：只有真选了才写 data-mct-size。
-   * size.css 的选择器都以这个属性为前提，否则默认档也会把调用点自己的
-   * h-8 / size-6 压掉（本文件不加 important，但无层样式会赢过 utilities）。
-   */
-  if (input.size === 'inherit') el.removeAttribute('data-mct-size')
-  else el.setAttribute('data-mct-size', input.size)
   // 预览页选了字体后会按需插 Google Fonts；真实应用也走同一条路，
   // 否则用户选了 Inter 之类的字体，机器上没装就还是原来的字。
   // loadFont 内部有 typeof document 守卫，纯函数单测不会碰网络。
@@ -292,10 +242,8 @@ export function applyThemeBridge(input: ThemeBridgeInput, root?: HTMLElement): v
 export function clearThemeBridge(root?: HTMLElement): void {
   const el = root ?? (typeof document === 'undefined' ? undefined : document.documentElement)
   if (!el) return
-  for (const name of [...Object.values(THEME_BRIDGE_VARS), ...THEME_SIZE_VARS]) {
+  for (const name of Object.values(THEME_BRIDGE_VARS)) {
     el.style.removeProperty(name)
   }
-  for (const name of Object.values(POPUP_BRIDGE_VARS)) el.style.removeProperty(name)
-  clearPopupBridge()
-  el.removeAttribute('data-mct-size')
+  resetComponentConfig()
 }

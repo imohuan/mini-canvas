@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuRootEmits, DropdownMenuRootProps } from 'reka-ui'
 import { DropdownMenuRoot, useForwardPropsEmits } from 'reka-ui'
-import { usePopupExclusive, usePopupOpenState } from '../../../popup/exclusive'
+import { usePopupExclusive, usePopupOpenState } from '../../../theme/popup/exclusive'
 
 /**
  * 菜单默认非模态。

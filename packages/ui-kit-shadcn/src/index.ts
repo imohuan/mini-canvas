@@ -31,31 +31,32 @@ export * from './components/ui/tabs'
 export * from './components/ui/textarea'
 export * from './components/ui/tooltip'
 export * from './components/color-picker'
-export { SettingsRow, SettingsSection } from './components/settings'
 export { UiToaster } from './components/notification'
 
 export { SHADCN_COMPONENTS, SHADCN_COMPONENT_NAMES } from './registry'
-/** 浮层统一配置：六类浮层共用一套箭头 / 间距 / 选中样式。 */
+/** 浮层几何：箭头高度 / 可见间距（读全局组件配置）。 */
 export {
-  DEFAULT_POPUP_CONFIG,
-  POPUP_ARROW_CHOICES,
-  POPUP_ARROW_LABELS,
-  POPUP_BRIDGE_VARS,
-  POPUP_GAP_CHOICES,
-  POPUP_GAP_LABELS,
-  applyPopupBridge,
-  clearPopupBridge,
   popupArrowVisible,
-  popupConfig,
   popupDirectArrowSideOffset,
   popupSideOffset,
   popupSubSideOffset,
-  resolvePopupArrow,
-  resolvePopupCssVars,
-  resolvePopupGap,
-  resolvePopupSelectedStyle,
-} from './popup/popupConfig'
-export type { PopupArrowMode, PopupConfig, PopupGapChoice, PopupKind, PopupSelectedStyle } from './popup/popupConfig'
+} from './theme/popup/popupConfig'
+export type { PopupKind } from './theme/popup/popupConfig'
+
+/**
+ * 组件配置：全局默认值（size / 箭头 / 间距 / 外推量）的唯一入口。
+ * size 由注册薄层注入给声明了 size prop 的组件；其余项由组件读这份响应式配置。
+ */
+export {
+  COMPONENT_SIZE_CHOICES,
+  DEFAULT_COMPONENT_CONFIG,
+  componentConfig,
+  popupTotalGap,
+  resetComponentConfig,
+  setComponentConfig,
+} from './componentConfig'
+export type { ComponentConfig, ComponentSize } from './componentConfig'
+export { declaresSizeProp, withComponentConfig } from './withComponentConfig'
 /** 家族名单：组件库使用标记只认这些 shadcn 生成组件（详见文件头注释） */
 export { SHADCN_FAMILY_NAMES, isShadcnPrimitive } from './shadcnFamilies'
 
@@ -63,16 +64,10 @@ export { SHADCN_FAMILY_NAMES, isShadcnPrimitive } from './shadcnFamilies'
  * 外观选项表（字体 / 圆角）：**组件库是唯一真源**，主题插件引用它、不另抄一份。
  * 预览页与真实应用的选项因此永远同步（此前两边各写一份，已经漂移）。
  */
-export { FONT_OPTIONS, HEADING_OPTIONS, RADIUS_OPTIONS, findFont, loadFont } from './theme/fonts'
+export { FONT_OPTIONS, RADIUS_OPTIONS, findFont, findRadius, loadFont } from './theme/fonts'
 export type { FontOption, RadiusOption } from './theme/fonts'
-/**
- * 尺寸档位：主题插件写 `--mct-size-*`，组件库 `styles/size.css` 统一消费。
- * 选项表同样只在这里维护一份，预览页与真实应用不会漂移。
- */
-export { SIZE_OPTIONS, sizeCssVars } from './theme/sizes'
-export type { SizeOption } from './theme/sizes'
-export { BASE_COLORS, THEME_COLORS, CHART_COLORS, resolveThemeVars, previewColor } from './theme/colors'
-export type { BaseColor, ThemeColor, ChartColor, ThemeSelection, ThemePalette } from './theme/colors'
+export { BASE_COLORS, THEME_COLORS, resolveThemeVars, previewColor } from './theme/colors'
+export type { BaseColor, ThemeColor, ThemeSelection, ThemePalette } from './theme/colors'
 
 /** 组件库使用标记的读取工具（只读 DOM 属性，不改变组件） */
 export {

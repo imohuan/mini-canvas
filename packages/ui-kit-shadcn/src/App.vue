@@ -4,6 +4,9 @@
  *
  * 这一页只做一件事：把 shadcn-vue 的组合件按真实用法摆出来，方便先看交互再决定
  * 哪些件注册进画布的 `ui` 目录。组件本身保持原样，没有在预览里再包一层“适配组件”。
+ *
+ * 组件统一从 `@/previewKit` 取：它只多套一层和真实应用相同的 `withComponentConfig`，
+ * 这样顶部「组件配置」改尺寸/箭头/间距时，页面上的组件会真的跟着变。
  */
 import { computed, onBeforeUnmount, ref, watchEffect } from 'vue'
 import {
@@ -12,20 +15,17 @@ import {
   SearchIcon,
 } from '@lucide/vue'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
+  Badge,
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import ColorPicker from '@/components/color-picker/ColorPicker.vue'
-import ThemePanel from '@/components/preview/ThemePanel.vue'
-import {
+  Checkbox,
+  ColorPicker,
   Combobox,
   ComboboxAnchor,
   ComboboxEmpty,
@@ -33,8 +33,6 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxViewport,
-} from '@/components/ui/combobox'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,8 +40,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
-import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -58,44 +54,45 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
+  Input,
+  Label,
   NumberField,
   NumberFieldContent,
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
-} from '@/components/ui/number-field'
-import {
   Popover,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from '@/components/ui/popover'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Separator } from '@/components/ui/separator'
-import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
-import { RADIUS_OPTIONS } from '@/theme/fonts'
+  RadioGroup,
+  RadioGroupItem,
+  Separator,
+  Slider,
+  Switch,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+} from '@/previewKit'
+import ThemeConfigBar from '@/theme/ThemeConfigBar.vue'
 import { useThemePreview, type PreviewThemeConfig } from '@/theme/useThemePreview'
 
 const dark = ref(true)
-const previewTheme = computed(() => (dark.value ? 'dark' : 'light'))
-
 const themeConfig = ref<PreviewThemeConfig>({
   baseColor: 'neutral',
   theme: 'neutral',
-  chartColor: 'neutral',
   font: 'montserrat',
   heading: 'inherit',
-  radius: RADIUS_OPTIONS[4]!,
+  radius: 'large',
   size: 'default',
+  arrowVisible: false,
+  gap: 8,
+  offset: 0,
+  subGap: 8,
 })
 
 useThemePreview(themeConfig, dark)
@@ -188,24 +185,24 @@ function notifyAction(label: string): void {
 </script>
 
 <template>
-  <div :class="previewTheme" class="min-h-dvh bg-background text-foreground">
+  <!-- 暗色变量挂在 <html> 上（见脚本），预览根不需要再加上 .dark 类。 -->
+  <div class="min-h-dvh bg-background text-foreground">
     <div class="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
       <header class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2">
             <Badge variant="outline">shadcn-vue</Badge>
             <Badge variant="secondary">reka-ui</Badge>
-            <Badge>preset a2vfIHS</Badge>
           </div>
           <h1 class="text-2xl font-semibold tracking-tight">mini-canvas · shadcn UI 预览</h1>
           <p class="max-w-2xl text-sm text-muted-foreground">
-            这些组件保持 shadcn-vue 的原始组合结构。下拉选择全部由 DropdownMenu 的分离件拼成，
-            触发器和菜单内容都能随意替换；上方主题面板可直接改底色、主题色、图表色、字体与圆角。
+            这些组件保持 shadcn-vue 的原始组合结构。下面所有下拉都走同一套组件配置，
+            顶部改一项，页面上的触发器和浮层就跟着变。
           </p>
         </div>
       </header>
 
-      <ThemePanel v-model:config="themeConfig" v-model:dark="dark" />
+      <ThemeConfigBar v-model:config="themeConfig" v-model:dark="dark" />
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <Card>
@@ -417,7 +414,7 @@ function notifyAction(label: string): void {
                         <span class="tabular-nums text-muted-foreground">{{ detailOpacity[0] }}%</span>
                       </div>
                       <Slider v-model="detailOpacity" :min="0" :max="100" :step="1" />
-                      <Button size="sm" @click="notifyAction('应用参数')">应用参数</Button>
+                      <Button @click="notifyAction('应用参数')">应用参数</Button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -502,8 +499,8 @@ function notifyAction(label: string): void {
                     <Badge variant="secondary">次级</Badge>
                     <Badge variant="outline">描边</Badge>
                     <Badge variant="destructive">危险</Badge>
-                    <Button size="sm" variant="outline">轻提示</Button>
-                    <Button size="sm" variant="ghost">消息</Button>
+                    <Button variant="outline">轻提示</Button>
+                    <Button variant="ghost">消息</Button>
                   </div>
                 </TabsContent>
               </Tabs>

@@ -18,12 +18,6 @@ import {
   THEME_SIZE_CHOICES,
   THEME_SIZE_HINTS,
   THEME_SIZE_LABELS,
-  THEME_POPUP_ARROW_CHOICES,
-  THEME_POPUP_ARROW_LABELS,
-  THEME_POPUP_GAP_CHOICES,
-  THEME_POPUP_GAP_LABELS,
-  THEME_POPUP_SELECTED_STYLE_CHOICES,
-  THEME_POPUP_SELECTED_STYLE_LABELS,
 } from "./themeBridge";
 
 // 默认皮对应的连线外观默认值（作为本插件 config schema 的默认/单一数据源初始值）。
@@ -89,10 +83,6 @@ export const DEFAULT_THEME_APPEARANCE = {
   themeFont: "inherit",
   themeHeadingFont: "inherit",
   themeSize: "inherit",
-  themePopupArrow: "auto",
-  themePopupGap: 8,
-  themePopupSubGap: 8,
-  themePopupSelectedStyle: "check",
 } as const;
 
 /**
@@ -720,53 +710,6 @@ export const Config: ConfigSchema = {
     options: THEME_SIZE_CHOICES.map((id) => ({
       value: id,
       label: THEME_SIZE_LABELS[id] + (THEME_SIZE_HINTS[id] ? " · " + THEME_SIZE_HINTS[id] : ""),
-    })),
-  },
-  // —— 外观：浮层（dropdown / select / popover / tooltip / context / combobox 共用）——
-  themePopupArrow: {
-    type: "select",
-    default: DEFAULT_THEME_APPEARANCE.themePopupArrow,
-    label: "箭头显示",
-    group: "外观/浮层",
-    description:
-      "下拉、选择、弹出面板、右键菜单、搜索组合与提示气泡是否画指向触发器的小箭头。\"按组件默认\"保留升级前观感：提示气泡有箭头，其它浮层没有。",
-    options: THEME_POPUP_ARROW_CHOICES.map((id) => ({
-      value: id,
-      label: THEME_POPUP_ARROW_LABELS[id],
-    })),
-  },
-  themePopupGap: {
-    type: "select",
-    default: String(DEFAULT_THEME_APPEARANCE.themePopupGap),
-    label: "触发器间距",
-    group: "外观/浮层",
-    description:
-      "浮层可见边缘与触发器之间的距离。带箭头的浮层量到箭头尖端；六类组件使用同一档。",
-    options: THEME_POPUP_GAP_CHOICES.map((id) => ({
-      value: String(id),
-      label: THEME_POPUP_GAP_LABELS[id],
-    })),
-  },
-  themePopupSubGap: {
-    type: "select",
-    default: String(DEFAULT_THEME_APPEARANCE.themePopupSubGap),
-    label: "子菜单间距",
-    group: "外观/浮层",
-    description: "子菜单与父菜单的可见边缘间距；翻转后也按同一档。",
-    options: THEME_POPUP_GAP_CHOICES.map((id) => ({
-      value: String(id),
-      label: THEME_POPUP_GAP_LABELS[id],
-    })),
-  },
-  themePopupSelectedStyle: {
-    type: "select",
-    default: DEFAULT_THEME_APPEARANCE.themePopupSelectedStyle,
-    label: "选中样式",
-    group: "外观/浮层",
-    description: "单选菜单只用右侧默认勾，不额外加主题色底。悬停和键盘高亮仍是浅灰底。",
-    options: THEME_POPUP_SELECTED_STYLE_CHOICES.map((id) => ({
-      value: id,
-      label: THEME_POPUP_SELECTED_STYLE_LABELS[id],
     })),
   },
 };

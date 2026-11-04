@@ -40,4 +40,15 @@ describe('App 装配层级', () => {
     expect(app).toContain('ui.setHostEl({ host })')
     expect(app).toContain('void ui.onReady()')
   })
+
+  /**
+   * 插件管理的安装句柄要在**宿主就绪**时接上，而不是等「设置 → 插件」页挂载。
+   * 否则启动阶段按安装名单补装（小地图 / 自动布局…）全部报「宿主没有提供 host.manager」，
+   * 用户看到的是「插件装了、刷新又没了」。
+   */
+  it('Provider 的 ready 里就绑上插件管理的安装句柄', () => {
+    const ready = app.slice(app.indexOf('function onProviderReady'), app.indexOf('const adapter'))
+    expect(ready).toContain("'plugin-manager'")
+    expect(ready).toContain('bindManager(host.manager)')
+  })
 })

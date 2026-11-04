@@ -1,0 +1,68 @@
+/**
+ * 预览页的全局滚动条。
+ *
+ * 这一页有大量长列表（下拉菜单、字体列表、整页滚动），浏览器默认滚动条在暗色下
+ * 是一条亮灰的粗条，既刺眼又把菜单文字顶开。这里统一成：
+ * - 细、低对比：静止时几乎看不见，悬停/拖动才变亮；
+ * - 两端留呼吸位：滑块自己带圆角，不顶到面板边框；
+ * - 只在需要滚动时出现（不用 `scrollbar-gutter: stable`，否则常驻一条空道）。
+ *
+ * 写法两套并存是刻意的：`scrollbar-width/-color` 给标准实现，
+ * `::-webkit-scrollbar` 给 Chromium。只写 webkit 时，一旦某个元素上出现
+ * `scrollbar-width: thin`，浏览器就改用标准滚动条并忽略 webkit 那套。
+ */
+
+:root {
+  /* 滑块在悬停 / 拖动时更亮一点，静止时压得很低 */
+  --preview-scroll-thumb: color-mix(in oklab, var(--foreground) 20%, transparent);
+  --preview-scroll-thumb-hover: color-mix(in oklab, var(--foreground) 38%, transparent);
+}
+
+html,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--preview-scroll-thumb) transparent;
+}
+
+html:hover,
+*:hover {
+  scrollbar-color: var(--preview-scroll-thumb-hover) transparent;
+}
+
+*::-webkit-scrollbar,
+[data-slot='dropdown-menu-scroll']::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track,
+[data-slot='dropdown-menu-scroll']::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-scroll']::-webkit-scrollbar-thumb {
+  background-color: var(--preview-scroll-thumb);
+  border-radius: 999px;
+  /* 透明描边把滑块“变细”，轨道宽度不变，鼠标更好抓 */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*:hover::-webkit-scrollbar-thumb,
+[data-slot='dropdown-menu-scroll']:hover::-webkit-scrollbar-thumb {
+  background-color: var(--preview-scroll-thumb-hover);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--foreground) 50%, transparent);
+}
+
+/* 滚轮到底时两端的箭头按钮没有意义，去掉更干净 */
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
