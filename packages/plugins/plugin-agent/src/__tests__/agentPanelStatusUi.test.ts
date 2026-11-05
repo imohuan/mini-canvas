@@ -23,14 +23,16 @@ describe('上下文统计行', () => {
   it('恢复到发送键左侧：在 .ac-toolbar 里、发送按钮之前（用户口径 2026-10-11 的截图反馈）', () => {
     const toolbar = composer.indexOf('class="ac-toolbar"')
     const wrap = composer.indexOf('class="ac-ctxwrap"')
-    const send = composer.indexOf('class="ac-send"', toolbar)
+    // 发送键不再挂自定义 class（用户口径 2026-11-05：shadcn 组件用默认样式），
+    // 用 data-ac-send 这个无样式的标记定位。
+    const send = composer.indexOf('data-ac-send', toolbar)
     expect(wrap).toBeGreaterThan(toolbar)
     expect(wrap).toBeLessThan(send)
   })
 
   it('hover tooltip 保留（恢复之前的模式：环 + 悬停提示）', () => {
-    // 截取到 .ac-send 的**首次**出现（它就在统计块之后）：环与 tooltip 都应在其前
-    const toolbar = composer.slice(composer.indexOf('class="ac-toolbar"'), composer.indexOf('class="ac-send"'))
+    // 截取到发送键的**首次**出现（它就在统计块之后）：环与 tooltip 都应在其前
+    const toolbar = composer.slice(composer.indexOf('class="ac-toolbar"'), composer.indexOf('data-ac-send'))
     // 组件已从主题目录取件改为直接用组件库的 Tooltip（全项目统一 shadcn），
     // 但「环 + 悬停提示」这个用户可见行为必须仍在。
     expect(toolbar).toContain('TooltipProvider')

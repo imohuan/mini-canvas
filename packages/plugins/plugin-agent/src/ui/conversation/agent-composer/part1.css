@@ -694,88 +694,10 @@
   /* 面板内统一尺寸（用户口径 2026-11-03：与顶部按钮同为 32px 一档）。 */
 }
 
-/* DropdownMenuTrigger 会把 data-slot 换成 dropdown-menu-trigger；
-   不能只按 data-slot='button' 找，否则主题尺寸档永远压过这里的 32px。 */
-html[data-mct-size] [data-slot].ac-toolbar-btn:not([data-slot='button']):not(.ac-send),
-[data-slot].ac-toolbar-btn:not([data-slot='button']):not(.ac-send) {
-  display: inline-flex;
-  flex: none;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  border-radius: 8px;
-  font-size: 12px;
-  width: 32px !important;
-  min-width: 32px !important;
-  height: 32px !important;
-  min-height: 32px !important;
-  padding: 0 !important;
-}
-
-
-/* 主题尺寸档会把 icon-xs 压到 24px；这里按 32px 的紧凑档兜底，
-   但必须比 size.css 的 `html[data-mct-size] [data-slot='button'][data-size='icon-xs']` 更具体。 */
-html[data-mct-size] [data-slot='button'][data-size='icon-xs'].ac-toolbar-btn,
-html[data-mct-size] [data-slot].ac-toolbar-btn.ac-pill:not([data-slot='button']),
-html[data-mct-size] [data-slot='button'].ac-toolbar-btn.ac-pill,
-[data-slot='button'][data-size='icon-xs'].ac-toolbar-btn,
-[data-slot].ac-toolbar-btn.ac-pill:not([data-slot='button']),
-[data-slot='button'].ac-toolbar-btn.ac-pill {
-  border-radius: 999px;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: 160px;
-  padding-inline: 8px 4px;
-  height: 32px !important;
-  min-height: 32px !important;
-}
-
-html[data-mct-size] [data-slot].ac-toolbar-btn svg:not([class*='size-']) {
-  width: 14px;
-  height: 14px;
-}
-
-/* 底排 icon-xs 的图标统一 14px：size-4 是全局 16px 档，32px 按钮里会显得贴边。
-   DropdownMenuTrigger 会把 data-slot 换成 dropdown-menu-trigger，两条都要盖住。 */
-html[data-mct-size] [data-slot='button'][data-size='icon-xs'].ac-toolbar-btn svg[class*='size-'],
-html[data-mct-size] [data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class*='size-'],
-[data-slot='button'][data-size='icon-xs'].ac-toolbar-btn svg[class*='size-'],
-[data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class*='size-'] {
-  width: 14px;
-  height: 14px;
-}
-
-.ac-plus {
-  flex: none;
-  color: var(--ui-ink-dim, #919191);
-}
-
 /* 原生 file input 只是「被点」的载体，视觉由上面的 + 按钮承担 */
 
 .ac-file {
   display: none;
-}
-
-.ac-tb-icon {
-  color: var(--ui-ink-dim, #919191);
-}
-
-.ac-tb-icon.ac-pill {
-  min-width: 0;
-}
-
-/* 下拉打开时按钮不再出现「选中底色」：面板本身已经是明确反馈（用户口径 2026-11-03） */
-[data-slot].ac-toolbar-btn[aria-expanded='true'] {
-  background: transparent !important;
-}
-
-/* MCP 面板内的工具行：组件库 DropdownMenuItem 本体（高度 / 内边距 / 悬停底都由它给），
-   这里只把「工具名 + 一句说明」排成两行；勾选态用 aria-checked 显示左侧对勾。 */
-.ac-tool-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
 }
 
 .ac-tool-check {
@@ -784,7 +706,8 @@ html[data-mct-size] [data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class
   opacity: 0;
 }
 
-.ac-tool-row[aria-checked='true'] .ac-tool-check {
+/* 工具行勾选态：保留「选中的工具显示对勾」这一点交互反馈（行本身样式交给 DropdownMenuItem） */
+[aria-checked='true'] > .ac-tool-check {
   opacity: 1;
 }
 
@@ -812,26 +735,6 @@ html[data-mct-size] [data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class
   font-size: 10.5px;
   line-height: 1.45;
   color: var(--ui-ink-mute, #9ca3af);
-}
-
-/* 授权方式 = 完全自动授权时用警示色（琥珀）：这是唯一需要用户留意的状态，图标染上提醒留意 */
-
-.ac-tb-icon.is-warn {
-  color: var(--ui-warn, #e3a25f);
-}
-
-.ac-pill {
-  gap: 1px;
-  padding-inline: 8px 4px;
-  border-radius: 999px;
-  /* 提示词名是用户自建的（没有长度上限）：胶囊可缩、单行省略，
-     保证右侧的授权 / 模型 / 发送按钮永远不被挤出工具条（RULES §9）。 */
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 160px;
-  color: var(--ui-ink, #f7f7f7);
-  font-weight: 400;
-  font-size: 13px;
 }
 
 .ac-pill-text {
@@ -950,20 +853,9 @@ html[data-mct-size] [data-slot='dropdown-menu-trigger'].ac-toolbar-btn svg[class
   opacity: 0.25;
 }
 
-.ac-send {
-  flex: none;
-  padding: 0;
-  border-radius: 12px;
-  background: var(--ui-primary-bg, #f7f7f7);
-  color: var(--ui-primary-ink, #141414);
-  transition: opacity 0.16s ease;
-}
-
-.ac-send:disabled {
-  opacity: 0.45;
-}
-
-.ac-send.is-running {
+/* 发送键的尺寸 / 圆角 / 底色全部用组件库 Button 默认样式；
+   这里只保留「运行中 = 停止」这一个状态色（红底白方块）。 */
+.ac-toolbar .is-running {
   background: var(--ui-danger, #ef4444);
   color: var(--ui-on-accent, #fff);
 }

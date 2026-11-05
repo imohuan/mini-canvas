@@ -118,15 +118,17 @@ function findAll(n: HNode, out: HNode[] = []): HNode[] {
  * 这里同时兼容两种起始标签，断言仍盯真渲染出来的那两颗按钮。
  */
 function sendButtonTemplate(): string {
-  const at = host.indexOf('class="ac-send"')
-  if (at < 0) throw new Error('AgentConversation.vue 里找不到 .ac-send 按钮')
+  // 发送键不再挂自定义 class（用户口径 2026-11-05：shadcn 组件用默认样式），
+  // 用 data-ac-send 这个无样式标记定位。
+  const at = host.indexOf('data-ac-send')
+  if (at < 0) throw new Error('AgentConversation.vue 里找不到发送按钮')
   const lower = host.lastIndexOf('<button', at)
   const upper = host.lastIndexOf('<Button', at)
   const start = Math.max(lower, upper)
-  if (start < 0) throw new Error('.ac-send 按钮的模板不完整')
+  if (start < 0) throw new Error('发送按钮的模板不完整')
   const close = host.startsWith('<Button', start) ? '</Button>' : '</button>'
   const end = host.indexOf(close, at)
-  if (end < 0) throw new Error('.ac-send 按钮的模板不完整')
+  if (end < 0) throw new Error('发送按钮的模板不完整')
   return host.slice(start, end + close.length)
 }
 
@@ -198,7 +200,7 @@ function fireClick(el: HNode): void {
 describe('发送键三态（G1）：真渲染 + 真点击', () => {
   it('有内容（跑着也是「发送」）：按钮不是禁用的，红方块（stop 标记）不出现', () => {
     const { root } = mountSendButton('send')
-    const btn = findAll(root).find((n) => String(n.props.class ?? '').includes('ac-send'))
+    const btn = findAll(root).find((n) => n.props['data-ac-send'] !== undefined)
     expect(btn).toBeTruthy()
     expect(btn!.props.disabled).toBeFalsy()
     expect(String(btn!.props.class)).not.toContain('is-running')
@@ -211,7 +213,7 @@ describe('发送键三态（G1）：真渲染 + 真点击', () => {
   it('有内容 + 正在跑：点它 = 发送（submit），不会终止那一轮', () => {
     // 这是用户口径里最容易写错的一条：跑着时按钮仍是「发送」，不是红方块
     const { root, stopped, submitted } = mountSendButton('send')
-    const btn = findAll(root).find((n) => String(n.props.class ?? '').includes('ac-send'))!
+    const btn = findAll(root).find((n) => n.props['data-ac-send'] !== undefined)!
     fireClick(btn)
     expect(submitted.length).toBe(1)
     expect(stopped.length).toBe(0)
@@ -219,7 +221,7 @@ describe('发送键三态（G1）：真渲染 + 真点击', () => {
 
   it('空 + 正在跑：是红方块「终止」，点它 = agent.stop()', () => {
     const { root, stopped, submitted } = mountSendButton('stop')
-    const btn = findAll(root).find((n) => String(n.props.class ?? '').includes('ac-send'))!
+    const btn = findAll(root).find((n) => n.props['data-ac-send'] !== undefined)!
     expect(String(btn.props.class)).toContain('is-running')
     expect(btn.props.disabled).toBeFalsy()
     expect(btn.props['aria-label']).toBe('停止')
@@ -233,7 +235,7 @@ describe('发送键三态（G1）：真渲染 + 真点击', () => {
 
   it('空 + 空闲：禁用（点不动）', () => {
     const { root, stopped, submitted } = mountSendButton('disabled')
-    const btn = findAll(root).find((n) => String(n.props.class ?? '').includes('ac-send'))!
+    const btn = findAll(root).find((n) => n.props['data-ac-send'] !== undefined)!
     // 真浏览器对 disabled 的按钮**根本不派发 click**；内存渲染器不模拟这条语义，
     // 所以这里只断言"它确实是 disabled"（那正是点不动的那个原因）。
     expect(btn.props.disabled).toBe(true)

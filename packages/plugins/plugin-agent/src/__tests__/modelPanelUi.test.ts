@@ -42,15 +42,14 @@ describe('面板头部：视图切换用原生 Tabs', () => {
 describe('搜索框：常显的 shadcn InputGroup + 前置图标', () => {
   it('三个面板都直接渲染 InputGroup（不再折叠成按钮）', () => {
     for (const panel of panels) {
-      expect(panel).toMatch(/<InputGroup class="ac-search-inline"/)
+      // 用户口径 2026-11-05：shadcn 组件用默认样式，不再挂自定义 class。
+      expect(panel).toMatch(/<InputGroup>/)
       expect(panel).toMatch(/<InputGroupAddon align="inline-start"[^>]*>[\s\S]{0,120}<Search/)
     }
   })
 
-  it('搜索框不再自带高度 / 字号 / addon 内边距覆盖', () => {
-    const block = SRC.slice(SRC.indexOf('.ac-search-inline {'), SRC.indexOf('\n}', SRC.indexOf('.ac-search-inline {')))
-    expect(block).not.toContain('height')
-    expect(block).not.toContain('border-radius')
+  it('搜索框完全用组件库默认样式（不再有尺寸覆盖）', () => {
+    expect(SRC).not.toContain('.ac-search-inline')
     expect(SRC).not.toContain('.ac-search-addon')
     expect(SRC).not.toContain('.ac-search-input')
   })
@@ -85,10 +84,9 @@ describe('选中勾：普通 Check，不是青色实心圆', () => {
 
 describe('头尾间距', () => {
   it('默认 / 精选标签用组件库 Badge，不再自绘胶囊', () => {
-    expect(SRC).toMatch(/<Badge[^>]*variant="secondary"[^>]*class="ac-badge"/)
-    const block = SRC.slice(SRC.indexOf('.ac-badge {'), SRC.indexOf('\n}', SRC.indexOf('.ac-badge {')))
-    expect(block).not.toContain('border-radius')
-    expect(block).not.toContain('height')
+    expect(SRC).toMatch(/<Badge[^>]*variant="secondary"/)
+    // 不挂自定义 class，也不再有自己的尺寸规则。
+    expect(SRC).not.toContain('ac-badge')
   })
 
   it('底栏不再固定 54px 高', () => {

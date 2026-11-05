@@ -1,18 +1,6 @@
 /* —— 下拉内容（浮层本体由目录里的 dropdown 提供：定位/翻边/出屏/互斥它负责）——
-   层次结构（照参考图）：上下 flex 分栏 ——
-     ┌ 分组头（固定，不滚）  标题 + 计数
-     ├ 列表区（flex:1，自己滚，滚动条只出在这里）
-     │   └ 行卡片：图标托 + 标题/说明 + 选中勾
-   浮层用 dropdown 的 layout="inner-scroll"：它只当外框，滚动由下面的列表区负责，
-   所以顶部标题天然不滚，不需要 sticky 去补。 */
-
-.ac-ddmenu {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-  padding: 2px;
-}
+   层次结构：分组头（固定）／列表区（自己滚）／底栏。
+   浮层外观完全交给组件库 DropdownMenuContent，这里只给面板内部排布。 */
 
 /* 分组头：普通 flex 行。它不滚是因为**滚动发生在下面的列表区**，不是靠定位吸住。 */
 
@@ -204,7 +192,13 @@
    但 2026-11-02 把滚动区移进 dropdown 内部后，负边距会被滚动容器的 overflow 裁掉，
    左侧少 6px、右侧多 6px。去掉这段，面板自然铺满，左右留白重新对称。 */
 
-.ac-ddmenu.ac-panel {
+.ac-panel {
+  /* 面板自己的布局（不是组件库组件）：头部固定、列表滚动、底栏固定。
+     shadcn 的下拉只当外框，这里不覆盖它的外观。 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
   width: 100%;
   /* 最小高度（用户口径 2026-10-30：「分栏 / 卡片两种模式都要有最小高度」）。
      卡片模式只有两三条时别塌成一条窄缝。
@@ -218,7 +212,7 @@
   font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-.ac-ddmenu.ac-panel.is-split {
+.ac-panel.is-split {
   /* 分栏要高过卡片：左栏是竖排分类、右栏是瓦片网格，太矮两边都只剩两行。
      上限压到 420 —— 浮层的 max-height 是 440，再高就会被裁掉（inner-scroll 不出滚动条）。
      下限给到 380：技能分栏只有两张瓦片时也要有「两列都在滚」的样子，不外扩成一条窄带。 */

@@ -57,10 +57,8 @@ describe('Agent 面板：极端长文字不撑破容器', () => {
 
   it('创作模式胶囊：长提示词名可缩、单行省略，不把工具条按钮挤走', () => {
     expect(composer).toContain('class="ac-pill-text"')
-    // 约束看基础规则 .ac-pill（可缩 / 省略）；高度与圆角已由组件库 Button 的 size 决定。
-    const pill = rule2('.ac-pill')
-    expect(pill).toContain('min-width: 0')
-    expect(pill).toContain('max-width')
+    // 胶囊（高度 / 圆角 / padding）全部用组件库 Button 默认样式（用户口径 2026-11-05），
+    // 这里只要求文字本身可缩、单行省略。
     const text = rule2('.ac-pill-text')
     expect(text).toContain('min-width: 0')
     expect(text).toContain('overflow: hidden')

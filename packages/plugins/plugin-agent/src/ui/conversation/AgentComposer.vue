@@ -321,29 +321,29 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
         <div class="ac-toolbar">
           <DropdownMenu :open="composerMenuOpen('plus')" @update:open="(v: boolean) => setComposerMenuOpen('plus', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" class="ac-plus ac-toolbar-btn" :aria-expanded="plusOpen" aria-label="更多添加">
+              <Button variant="ghost" size="icon-xs" :aria-expanded="plusOpen" aria-label="更多添加">
                 <Plus :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ minWidth: '180px' }">
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ minWidth: '180px' }">
               <!-- 简洁模式（用户口径 2026-11-04）：只留「图标 + 标题」一行，说明文案不再展示 ——
                    文字说明改为 title 提示（鼠标悬停可见），菜单也更矮更干净。
                    图标与标题同行靠 ac-ddmenu-row 的网格排布。 -->
-              <DropdownMenuItem class="ac-ddmenu-row" title="给这条消息挂一个目标（可改预算）" @select="addGoalMark(); plusOpen = false">
+              <DropdownMenuItem title="给这条消息挂一个目标（可改预算）" @select="addGoalMark(); plusOpen = false">
                 <Target />
-                <span class="ac-ddmenu-row-title">目标</span>
+                <span>目标</span>
               </DropdownMenuItem>
-              <DropdownMenuItem class="ac-ddmenu-row" title="选图片，跟这条消息一起发" @select="pickImages(); plusOpen = false">
+              <DropdownMenuItem title="选图片，跟这条消息一起发" @select="pickImages(); plusOpen = false">
                 <Upload />
-                <span class="ac-ddmenu-row-title">上传文件</span>
+                <span>上传文件</span>
               </DropdownMenuItem>
               <!-- 「压缩」（用户口径 2026-10-11）：把历史总结成摘要、腾出上下文。
                    与 @ 菜单里的那一项走同一条命令（agent.compact）—— 两个入口，
                    一处实现，行为只会一起改。压缩只对**已有对话**有意义：
                    没会话时后端会如实拒绝（不装作成功）。 -->
-              <DropdownMenuItem class="ac-ddmenu-row" :disabled="s.compacting" :title="s.compacting ? '正在压缩…' : '把历史总结成摘要，腾出上下文空间'" @select="compactNow(); plusOpen = false">
+              <DropdownMenuItem :disabled="s.compacting" :title="s.compacting ? '正在压缩…' : '把历史总结成摘要，腾出上下文空间'" @select="compactNow(); plusOpen = false">
                 <Minimize2 />
-                <span class="ac-ddmenu-row-title">压缩</span>
+                <span>压缩</span>
                 <span v-if="s.compacting" class="ac-menu-hint">正在压缩…</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -353,14 +353,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
           <DropdownMenu :open="composerMenuOpen('mode')" @update:open="(v: boolean) => setComposerMenuOpen('mode', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="xs" class="ac-pill ac-toolbar-btn" :aria-expanded="modeOpen" aria-label="选择创作模式">
+              <Button variant="ghost" size="xs" :aria-expanded="modeOpen" aria-label="选择创作模式">
                 <span class="ac-pill-text">{{ modeLabel }}</span>
                 <ChevronDown :size="13" class="ac-pill-caret" />
               </Button>
             </DropdownMenuTrigger>
             <!-- 位置：与输入区其它菜单同一套参数（向上 / 居中 / 统一偏移），
                  见 COMPOSER_MENU_OFFSET 的注释。 -->
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ minWidth: '220px', padding: '4px' }">
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ minWidth: '220px' }">
                 <DropdownMenuItem v-for="m in promptPresets" :key="m.id" :aria-checked="s.activePromptId === m.id"
                   @select="pickMode(m.id, () => (modeOpen = false))">
                   {{ m.name }}
@@ -379,13 +379,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
           <DropdownMenu :open="composerMenuOpen('auth')" @update:open="(v: boolean) => setComposerMenuOpen('auth', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :class="{ 'is-warn': authMode === 'auto' }" :aria-expanded="authOpen"
+              <Button variant="ghost" size="icon-xs" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
                 <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu" :style="{ width: '360px' }">
-              <div class="ac-ddmenu ac-review-panel" role="listbox" aria-label="选择授权方式">
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ width: '360px' }">
+              <div class="ac-review-panel" role="listbox" aria-label="选择授权方式">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top ac-panel-head-top--review">
                     <div class="ac-panel-heading">
@@ -398,8 +398,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 </div>
                 <div class="ac-review-body">
                   <div class="ac-review-list" role="radiogroup" aria-label="审核模式">
-                    <DropdownMenuItem v-for="m in AUTH_MODES" :key="m.value" class="ac-review-option"
-                      :class="{ 'is-auto': m.value === 'auto' }" role="radio" :aria-checked="authMode === m.value"
+                    <DropdownMenuItem v-for="m in AUTH_MODES" :key="m.value"
+                      role="radio" :aria-checked="authMode === m.value"
                       @select="setAuthMode(m.value); authOpen = false">
                       <span class="ac-option-title">
                         {{ m.label }}
@@ -417,13 +417,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
           <DropdownMenu :open="composerMenuOpen('model')" @update:open="(v: boolean) => setComposerMenuOpen('model', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="modelOpen" aria-label="选择模型">
+              <Button variant="ghost" size="icon-xs" :aria-expanded="modelOpen" aria-label="选择模型">
                 <Box :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
               :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
-              <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
+              <div class="ac-panel ac-model-panel" :class="{ 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
                     <div class="ac-panel-heading">
@@ -432,7 +432,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </div>
                     <!-- 视图切换用组件库原生的 Tabs（用户口径 2026-11-02）：
                          以前是自绘的分段按钮 + 绝对定位指示条，不跟主题尺寸走。 -->
-                    <Tabs :model-value="modelView" @update:model-value="setModelView" class="ac-view-tabs">
+                    <Tabs :model-value="modelView" @update:model-value="setModelView">
                       <TabsList aria-label="面板布局">
                         <TabsTrigger value="card">卡片</TabsTrigger>
                         <TabsTrigger value="split">分栏</TabsTrigger>
@@ -442,7 +442,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   <!-- 搜索框统一用组件库 InputGroup（用户口径 2026-11-02）：
                        图标 / 清除按钮放进 Addon，输入框本体用 InputGroupInput。
                        始终整行显示，不再折叠成放大镜按钮。 -->
-                  <InputGroup class="ac-search-inline">
+                  <InputGroup>
                     <InputGroupAddon align="inline-start">
                       <Search :size="14" aria-hidden="true" />
                     </InputGroupAddon>
@@ -466,13 +466,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <AgentScrollArea v-else ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body" body-class="ac-model-scroll-body">
                   <div v-if="modelView === 'card'">
                     <div v-if="filteredModels.length" class="ac-model-grid">
-                      <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-card"
+                      <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm"
                         role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
                         <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
                         <span class="ac-model-copy">
                           <span class="ac-model-card-top">
                             <span class="ac-model-id">{{ m.modelId }}</span>
-                            <Badge v-if="m.isDefault" variant="secondary" class="ac-badge">默认</Badge>
+                            <Badge v-if="m.isDefault" variant="secondary">默认</Badge>
                             <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                           </span>
                           <span class="ac-model-meta">
@@ -493,7 +493,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     <aside class="ac-split-rail" aria-label="模型平台">
                       <div class="ac-rail-label">平台</div>
                       <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
-                        <Button v-for="g in modelPlatformGroups" :key="g.key" variant="ghost" size="sm" class="ac-rail-item"
+                        <Button v-for="g in modelPlatformGroups" :key="g.key" variant="ghost" size="sm"
                           :aria-pressed="modelPlatform === g.key" @click="modelPlatform = g.key">
                           <span v-if="g.key === 'all'" class="ac-rail-icon" aria-hidden="true"><Layers :size="14" /></span>
                           <span v-else class="ac-rail-brand" :title="g.label" aria-hidden="true" v-html="brandSvg(g.key)"></span>
@@ -505,7 +505,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     <div class="ac-split-main">
                       <AgentScrollArea class="ac-split-scroll" body-class="ac-split-scroll-body">
                       <div v-if="filteredModels.length" class="ac-model-row-list">
-                        <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-row"
+                        <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm"
                           role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
                           <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
                           <span class="ac-model-copy">
@@ -517,7 +517,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                             </span>
                           </span>
                           <span class="ac-model-badges">
-                            <Badge v-if="m.isDefault" variant="secondary" class="ac-badge">默认</Badge>
+                            <Badge v-if="m.isDefault" variant="secondary">默认</Badge>
                           </span>
                           <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                         </Button>
@@ -546,7 +546,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             <DropdownMenuTrigger as-child>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
-              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="skillOpen" aria-label="选择技能">
+              <Button variant="ghost" size="icon-xs" :aria-expanded="skillOpen" aria-label="选择技能">
                 <WandSparkles :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -555,9 +555,9 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               点了也不会有任何变化。按分栏的 586px 展开只会留一大片空白（用户 2026-11-05 截图）。
               视图开关同理只在有内容时出现，没有可切换的东西就不摆按钮。
             -->
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
               :style="{ width: skillView === 'split' && s.skills.length ? '586px' : '320px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
-              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' && !!s.skills.length }"
+              <div class="ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' && !!s.skills.length }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -565,14 +565,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-panel-title">技能</span>
                       <span class="ac-panel-count">{{ s.skills.length }}</span>
                     </div>
-                    <Tabs v-if="s.skills.length" :model-value="skillView" @update:model-value="setSkillView" class="ac-view-tabs">
+                    <Tabs v-if="s.skills.length" :model-value="skillView" @update:model-value="setSkillView">
                       <TabsList aria-label="面板布局">
                         <TabsTrigger value="card">卡片</TabsTrigger>
                         <TabsTrigger value="split">分栏</TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </div>
-                  <InputGroup class="ac-search-inline">
+                  <InputGroup>
                     <InputGroupAddon align="inline-start">
                       <Search :size="14" aria-hidden="true" />
                     </InputGroupAddon>
@@ -613,7 +613,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                         <span class="ac-skill-copy">
                           <span class="ac-skill-name-row">
                             <span class="ac-skill-name">{{ item.name }}</span>
-                            <Badge v-if="skillMetaOf(item.name).featured" variant="secondary" class="ac-badge">精选</Badge>
+                            <Badge v-if="skillMetaOf(item.name).featured" variant="secondary">精选</Badge>
                           </span>
                           <span class="ac-skill-desc">{{ item.value }}</span>
                           <span class="ac-skill-meta">
@@ -634,7 +634,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     <aside class="ac-split-rail" aria-label="技能分类">
                       <div class="ac-rail-label">分类</div>
                       <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
-                        <Button v-for="row in skillCategoryRows" :key="row.name" variant="ghost" size="sm" class="ac-rail-item"
+                        <Button v-for="row in skillCategoryRows" :key="row.name" variant="ghost" size="sm"
                           :aria-pressed="skillCategory === row.name" @click="skillCategory = row.name">
                           <span class="ac-rail-icon" aria-hidden="true">
                             <component :is="row.name === '全部' ? Layers : row.name === '精选' ? Sparkles : Box" :size="14" />
@@ -693,13 +693,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <DropdownMenu v-if="s.mcpServers.length" :open="composerMenuOpen('mcp')" @update:open="(v: boolean) => setComposerMenuOpen('mcp', v)">
             <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
-              <Button variant="ghost" size="icon-xs" class="ac-tb-icon ac-toolbar-btn" :aria-expanded="mcpOpen" aria-label="选择 MCP">
+              <Button variant="ghost" size="icon-xs" :aria-expanded="mcpOpen" aria-label="选择 MCP">
                 <Plug :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
               :style="{ width: '360px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
-              <div class="ac-ddmenu ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
+              <div class="ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
                     <div class="ac-panel-heading">
@@ -708,14 +708,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </div>
                     <div class="ac-panel-tools">
                       <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
-                      <Button variant="outline" size="sm" class="ac-detect-btn" :class="{ 'is-busy': probing }" :disabled="probing"
+                      <Button variant="outline" size="sm" :disabled="probing"
                         :aria-label="probing ? '正在检测 MCP' : '检测全部 MCP 服务'" :title="probing ? '正在检测' : '检测全部 MCP 服务'" @click.stop="runMcpProbe">
                         <RefreshCw :size="14" :class="{ 'ac-spin': probing }" />
                         <span class="ac-detect-label">{{ probing ? '检测中' : '重新检测' }}</span>
                       </Button>
                     </div>
                   </div>
-                  <InputGroup class="ac-search-inline">
+                  <InputGroup>
                     <InputGroupAddon align="inline-start">
                       <Search :size="14" aria-hidden="true" />
                     </InputGroupAddon>
@@ -734,12 +734,12 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <!-- 卡片是勾选 + 展开两件事：左边的框勾「整个服务」，点标题行展开工具（DEMO 同一条分工） -->
                       <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
                         <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name) }">
-                        <Button variant="ghost" size="icon-xs" class="ac-pick-box" :aria-pressed="mcpPickedServers.has(item.name)"
+                        <Button variant="ghost" size="icon-xs" :aria-pressed="mcpPickedServers.has(item.name)"
                           :aria-label="'引用整个 ' + item.name + ' 服务'" :title="'引用整个 ' + item.name + ' 服务'"
                           @click.stop="toggleMcpServer(item.name)">
                           <Check :size="11" />
                         </Button>
-                        <Button variant="ghost" size="sm" class="ac-mcp-server-main" :title="item.value"
+                        <Button variant="ghost" size="sm" :title="item.value"
                           :aria-expanded="mcpExpanded.has(item.name) || !!item.toolHits" @click="toggleMcpExpand(item.name)">
                           <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
                           <span class="ac-server-copy">
@@ -766,10 +766,10 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                           <template v-else>
                             <div class="ac-mcp-tools-head">
                               <span>工具</span>
-                              <Badge variant="secondary" class="ac-tools-count">{{ (item.toolHits || mcpToolsOf(item.name)).length }}</Badge>
+                              <Badge variant="secondary">{{ (item.toolHits || mcpToolsOf(item.name)).length }}</Badge>
                             </div>
                             <DropdownMenuItem v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
-                              class="ac-tool-row" :title="t.fullName"
+                              :title="t.fullName"
                               :aria-checked="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
                               @select="toggleMcpTool(item.name, t.name)">
                               <Check :size="12" class="ac-tool-check" />
@@ -799,7 +799,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </template>
                     <template v-else>未选择服务或工具</template>
                   </span>
-                  <Button size="xs" class="ac-confirm-btn" :disabled="!mcpPickTotal" @click="confirmMcpPicks(() => (mcpOpen = false))">
+                  <Button size="xs" :disabled="!mcpPickTotal" @click="confirmMcpPicks(() => (mcpOpen = false))">
                     <Check :size="13" />确认引用
                   </Button>
                 </div>
@@ -828,7 +828,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               </Tooltip>
             </TooltipProvider>
           </span>
-          <Button size="icon" class="ac-send" :class="{ 'is-running': sendMode === 'stop' }"
+          <Button size="icon" data-ac-send :class="{ 'is-running': sendMode === 'stop' }"
             :aria-label="sendMode === 'stop' ? '停止' : '发送'" :disabled="sendMode === 'disabled'"
             @click="sendMode === 'stop' ? agent.stop() : submit()">
             <!-- 三态（设计 G1）：有内容 ⇒ 发送（**跑着也是发送**，点了进队列）；

@@ -67,31 +67,15 @@ describe('Agent 面板空态', () => {
 })
 
 describe('Agent 面板紧凑尺寸', () => {
-  it('底排六个触发器与创作模式胶囊都挂 ac-toolbar-btn', () => {
-    expect(SRC.match(/ac-toolbar-btn/g)?.length ?? 0).toBeGreaterThanOrEqual(6)
-    expect(SRC).toMatch(/class="ac-pill ac-toolbar-btn"/)
-  })
-
-  it('没选主题尺寸档时也保持 32px（与顶部按钮同档，用户口径 2026-11-03）', () => {
-    const at = CSS.indexOf("[data-slot].ac-toolbar-btn:not([data-slot='button'])")
-    expect(at).toBeGreaterThan(-1)
-    expect(CSS.slice(at, CSS.indexOf('\n}', at))).toContain('height: 32px !important')
-  })
-
-  it('MCP 行内勾选与文字按钮不依赖主题尺寸档', () => {
-    for (const selector of [
-      "[data-slot='button'].ac-detect-btn",
-      "[data-slot='button'].ac-pick-box",
-      ".ac-pick-box.is-sm {",
-      "[data-slot='button'].ac-confirm-btn",
-    ]) {
-      expect(CSS).toContain(selector)
+  /**
+   * 用户口径 2026-11-05：「我使用默认的组件样式就行，不需要你的 css 样式，请删除他们的 class」。
+   * 底排触发器、胶囊、检测键、勾选框、确认键全部用组件库自己的尺寸与外观，
+   * 这里反向钉住「不再给它们套自定义 class」。
+   */
+  it('底排的 shadcn 按钮不再挂自定义 class', () => {
+    for (const cls of ['ac-toolbar-btn', 'ac-plus', 'ac-pick-box', 'ac-confirm-btn', 'ac-detect-btn']) {
+      expect(SRC, '仍在使用自定义 class：' + cls).not.toContain(cls)
     }
-    // 工具行可见框 14px、点击区 22px：基础 .is-sm 规则负责可见框。
-    const at = CSS.indexOf('.ac-pick-box.is-sm {')
-    const block = CSS.slice(at, CSS.indexOf('\n}', at))
-    expect(block).toContain('height: 22px')
-    expect(block).toContain('padding: 4px')
   })
 
   it('触发器不再用 pointerdown 开合，避免与 Reka click 双翻转', () => {
