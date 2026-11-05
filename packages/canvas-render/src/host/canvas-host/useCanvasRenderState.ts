@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import { LAYERS } from '../../contracts/layers'
+import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
 import { edgeOnTopOf } from './helpers'
 import {
   edgesFromStore,

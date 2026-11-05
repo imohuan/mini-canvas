@@ -38,7 +38,7 @@ import { createCanvasFlowController } from '../contracts/canvasFlowApi'
 import type { ViewportBackend } from '../viewport/viewportService'
 import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
-import { LAYERS } from '../contracts/layers'
+import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
 import { NODE_TOOLBAR_HOST_KEY } from '../contracts/nodeToolbarHost'
 import { queryNodeElIn } from './instanceDom'
 

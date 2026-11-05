@@ -13,7 +13,7 @@ import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { CanvasDebug } from '../contracts/debugContext'
 import type { NodeWritePatch } from '../contracts/nodeRegistryKey'
-import { LAYERS } from '../contracts/layers'
+import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
 
 // ============================================================================
 // 首屏取景

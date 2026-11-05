@@ -111,9 +111,10 @@ export type { CanvasRenderContext } from './contracts/renderContext'
 export { CANVAS_CONTEXT_KEY, useCanvasContext, useCanvasContextOrRender } from './contracts/canvasContext'
 export type { CanvasContext } from './contracts/canvasContext'
 // 通用渲染底座（vue-render）：令牌与槽宿主的实现住在那里，这里保持旧导出可用。
-// 画布层叠带（z-index 唯一事实源）：所有层级数值从这里取，别处不再写 z-index 字面量
-export { LAYERS } from './contracts/layers'
-export type { LayerName } from './contracts/layers'
+// 画布层叠带（z-index 唯一事实源）：所有层级数值从这里取，别处不再写 z-index 字面量。
+// 直接从 vue-render 取，不再在 canvas-render 里留一份同名转发文件（用户 2026-11-05 指出的重复件）。
+export { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
+export type { LayerName } from '@mini-canvas/vue-render/contracts/layers'
 // 节点上/下控制栏的画布级宿主令牌：节点壳把控制栏 DOM Teleport 到它（脱离节点的层叠上下文，
 // 从而能压过置顶连线）；缺省不装则该令牌取不到，节点壳原地渲染（行为与改动前一致）。
 export { NODE_TOOLBAR_HOST_KEY } from './contracts/nodeToolbarHost'
@@ -273,7 +274,11 @@ export type {
   CanvasProviderEmits,
 } from './host/canvasHostTypes'
 // 设置面板数据契约(面板消费的最小 settings 接口)仍归渲染抽象层；成品面板组件 PluginSettingsPanel 已迁 @mini-canvas/ui
-export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
+export type {
+  SettingsPanelSource,
+  SettingSchema,
+  SettingEntry,
+} from '@mini-canvas/vue-render/components/settingsPanelTypes'
 // 设置内容「标准字段控件渲染器」下发令牌（provide/inject）：默认设置内容 provide，
 // 插件自定义 settingsGroup/<key> 内容组件 inject 后直接渲染某字段控件（无需反向依赖 theme-default）
 export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contracts/settingsField'
@@ -291,8 +296,12 @@ export {
   setStaticUiCatalog,
   uiComponentStatic,
   uiStaticNames,
-} from './contracts/uiCatalog'
-export type { UiComponentHandle, UiComponentRefs, UiSelectOption } from './contracts/uiCatalog'
+} from '@mini-canvas/vue-render/contracts/uiCatalog'
+export type {
+  UiComponentHandle,
+  UiComponentRefs,
+  UiSelectOption,
+} from '@mini-canvas/vue-render/contracts/uiCatalog'
 // 下拉浮层互斥登记表（所有下拉实现共用这一份：成品应用的全局下拉 + 主题默认件 + 它的 Select）
 export {
   claimDropdownExclusive,
@@ -351,21 +360,21 @@ export { MEDIA_CREATOR_FIELD } from './contracts/standardCapabilities'
 // 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的十个区域渲染位用它）
 export { default as RegionEntryHost } from './components/RegionEntryHost.vue'
 // 可替换设置面板宿主：提供外壳(遮罩/居中/✕/Esc/浮动窗) + 读 themeRegistry.winner('settingsPanel') 渲染内容区，把 ctx.settings 喂给它
-export { default as SettingsHost } from './components/SettingsHost.vue'
+export { default as SettingsHost } from '@mini-canvas/vue-render/components/SettingsHost.vue'
 // 设置面板外壳：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗口 / 悬浮球。皮只渲染内容区，换皮不重画窗口
-export { default as SettingsShell } from './components/SettingsShell.vue'
+export { default as SettingsShell } from '@mini-canvas/vue-render/components/SettingsShell.vue'
 // 把 ctx.get('settings')(内核 SettingsStore) 适配成设置面板消费的最小接口(SettingsPanelSource) 的复用入口
-export { settingsSourceFrom } from './components/settingsSource'
+export { settingsSourceFrom } from '@mini-canvas/vue-render/components/settingsSource'
 // 通用 UI 槽宿主：实现只有一份，住在 @mini-canvas/vue-render。
 // 这里保留同名导出，旧代码 import { SlotHost } from '@mini-canvas/canvas-render' 照常可用。
 export { default as SlotHost } from '@mini-canvas/vue-render/SlotHost.vue'
 // 可排序槽：内置 UI（SlotAnchor）与插件条目（ctx.slots）一起按 order + before/after 排
-export { default as SlotComposer } from './components/SlotComposer.vue'
-export { default as SlotAnchor } from './components/SlotAnchor.vue'
+export { default as SlotComposer } from '@mini-canvas/vue-render/components/SlotComposer.vue'
+export { default as SlotAnchor } from '@mini-canvas/vue-render/components/SlotAnchor.vue'
 // 控制栏按钮的图标位：SVG 字符串 / Vue 组件两种句柄都认（按钮本体直接用 shadcn Button）
 export { default as ToolbarIcon } from './components/ToolbarIcon.vue'
-export { isSlotItemId, isSlotName, mergeSlotEntries } from './components/slotComposer'
-export type { SlotComposerEntry } from './components/slotComposer'
+export { isSlotItemId, isSlotName, mergeSlotEntries } from '@mini-canvas/vue-render/components/slotComposer'
+export type { SlotComposerEntry } from '@mini-canvas/vue-render/components/slotComposer'
 export {
   nodesFromStore,
   edgesFromStore,

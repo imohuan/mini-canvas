@@ -20,7 +20,7 @@ import {
   FIRST_RUN_FIT_PADDING,
   FIRST_RUN_FIT_RETRY_DELAYS,
 } from '../canvasHostCore'
-import { LAYERS } from '../../contracts/layers'
+import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
 
 function makeStore(): NodeStore {
   const s = new NodeStore()

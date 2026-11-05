@@ -16,6 +16,49 @@ import type { PluginClassLike, PluginModule } from '@mini-canvas/kernel'
 import { createMiniCanvasHost, type CanvasHostHandle, type MiniCanvasApi } from './createMiniCanvasHost'
 import type { PluginManager } from './pluginManager'
 
+type CanvasReadyPlugin = PluginModule & {
+  onCanvasReady?: (ctx: Context) => void | (() => void)
+}
+
+/**
+ * 这次会话要叫醒哪些插件的 onCanvasReady。
+ *
+ * 为什么不能只看 opts.plugins（画布级清单）：cloud-client、auto-save 这类
+ * 应用级插件也有画布钩子（云端动作清单 / 存档域切换都要等 doc 就位）。
+ * 只传画布级清单时它们永远收不到钩子 —— 用户实测 2026-11-05：选中图片底部状态栏不出现，
+ * 因为云端动作一条都没注册进 node/bar。
+ *
+ * 规则：画布级清单在前（按装配序），再把根 Context 里已激活的应用级插件补上，
+ * 同一个 name 只叫一次。只补 active 的，PENDING/FAILED 的插件还不到能用的时候。
+ */
+function canvasReadyPlugins(opts: MountCanvasOptions): CanvasReadyPlugin[] {
+  const out: CanvasReadyPlugin[] = []
+  const seen = new Set<string>()
+  const push = (plugin: PluginModule | PluginClassLike | undefined): void => {
+    if (!plugin || typeof plugin !== 'object') return
+    const p = plugin as CanvasReadyPlugin
+    if (typeof p.onCanvasReady !== 'function') return
+    const key = p.name ?? ''
+    if (key) {
+      if (seen.has(key)) return
+      seen.add(key)
+    }
+    out.push(p)
+  }
+  for (const plugin of opts.plugins ?? []) push(plugin)
+  const active = new Set(
+    opts.ctx
+      .inspectPlugins()
+      .filter((p) => p.state === 'active')
+      .map((p) => p.name),
+  )
+  for (const pluginName of opts.ctx.listPlugins()) {
+    if (!active.has(pluginName)) continue
+    push(opts.ctx.pluginModule(pluginName))
+  }
+  return out
+}
+
 /** 画布会话句柄：一次挂载的完整结果。 */
 export interface CanvasSessionHandle {
   ctx: Context
@@ -100,8 +143,8 @@ async function mountCanvasNow(opts: MountCanvasOptions): Promise<CanvasSessionHa
    * 钩子抛错不影响画布本身：记一条 warn，继续往下走。
    */
   const sessionDisposers: Array<() => void> = []
-  for (const plugin of opts.plugins ?? []) {
-    const hook = (plugin as { onCanvasReady?: (ctx: Context) => void | (() => void) }).onCanvasReady
+  for (const plugin of canvasReadyPlugins(opts)) {
+    const hook = plugin.onCanvasReady
     if (typeof hook !== 'function') continue
     try {
       const dispose = hook(opts.ctx)

@@ -43,6 +43,7 @@ import {
   useBottomBarPrompt,
   useBottomBarTagMenu,
   useCtrlResourceDrag,
+  useBarNudge,
   type BottomBarEditorHandle,
 } from './node-bottom-bar'
 
@@ -56,6 +57,12 @@ const metrics = useGenPanelMetrics()
 const panelStyle = computed<Record<string, string>>(() => ({
   width: metrics.value.imageWidth + 'px',
 }))
+
+/**
+ * 贴边收拢：底栏宽度固定，节点靠近视口左右边缘时会被裁掉一半。
+ * 这里只做横向平移，宽度与插槽定位规则都不变（见 useBarNudge 的说明）。
+ */
+const barEl = ref<HTMLElement | null>(null)
 const editorStyle = computed<Record<string, string>>(() => ({
   '--nb-min': '20px',
   '--nb-max': metrics.value.editorMaxHeight + 'px',
@@ -318,6 +325,13 @@ async function onRun(): Promise<void> {
 
 // —— 展开 / 设置 ——
 const expanded = ref(false)
+
+/** 贴边收拢：只在收起态生效（展开是全屏 dialog，有自己的居中） */
+const { shift: barShift } = useBarNudge({
+  el: barEl,
+  shown: barShown,
+  paused: expanded,
+})
 function onExpandKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && expanded.value) {
     e.stopPropagation()
@@ -383,9 +397,10 @@ onBeforeUnmount(() => {
     @pointerdown.self="expanded = false"
   >
     <div
+      ref="barEl"
       class="nb-root nodrag nopan"
       :class="{ 'is-expanded': expanded, 'is-ai-locking': aiEditorLocked }"
-      :style="expanded ? undefined : panelStyle"
+      :style="expanded ? undefined : [panelStyle, barShift ? { transform: 'translateX(' + barShift + 'px)' } : undefined]"
       :role="expanded ? 'dialog' : undefined"
       :aria-modal="expanded ? 'true' : undefined"
       data-testid="node-bottom-bar"

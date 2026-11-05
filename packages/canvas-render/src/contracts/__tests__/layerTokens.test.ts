@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { LAYERS } from '../layers'
+import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
 
 /**
  * layerTokens —— 锁住 CSS 出口（ui-theme.css 的 --layer-* 变量）与 TS 唯一事实源（LAYERS）一致。

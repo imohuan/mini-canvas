@@ -77,6 +77,64 @@ describe('mountCanvas / unmountCanvas', () => {
     ctx.stop()
   })
 
+  /**
+   * 应用级插件也有画布钩子。
+   *
+   * 用户实测 2026-11-05：选中图片底栏不出现 —— cloud-client 是应用级插件，
+   * 它的 onCanvasReady 负责把云端动作清单注册进 node/bar，但之前只对画布级清单调用，
+   * 于是底栏一条动作都没有。
+   */
+  it('应用级插件的 onCanvasReady 也会被调用，且每次进画布只调一次', async () => {
+    const ctx = new Context()
+    const app = createCanvasAppBasePlugin({ adapter: new MemoryStorageAdapter(), persistSettings: false })
+    let readyCalls = 0
+    let disposeCalls = 0
+    const appPlugin: PluginModule & { onCanvasReady?: (c: unknown) => () => void } = {
+      name: 'app-level-cloud',
+      apply() {},
+      onCanvasReady() {
+        readyCalls += 1
+        return () => {
+          disposeCalls += 1
+        }
+      },
+    }
+    ctx.plugin(app.plugin)
+    ctx.plugin(appPlugin)
+    await ctx.start()
+
+    await mountCanvas({ ctx, appBase: app.services, plugins: [] })
+    expect(readyCalls, '应用级插件没收到画布钩子').toBe(1)
+
+    await unmountCanvas()
+    expect(disposeCalls, '离开画布时钩子的清理没跑').toBe(1)
+
+    await mountCanvas({ ctx, appBase: app.services, plugins: [] })
+    expect(readyCalls, '第二次进画布应当再挂一次').toBe(2)
+    await unmountCanvas()
+    ctx.stop()
+  })
+
+  it('同一插件同时出现在两份清单里时只调一次钩子', async () => {
+    const ctx = new Context()
+    const app = createCanvasAppBasePlugin({ adapter: new MemoryStorageAdapter(), persistSettings: false })
+    let readyCalls = 0
+    const shared: PluginModule & { onCanvasReady?: (c: unknown) => void } = {
+      name: 'shared-hook',
+      apply() {},
+      onCanvasReady() {
+        readyCalls += 1
+      },
+    }
+    ctx.plugin(app.plugin)
+    ctx.plugin(shared)
+    await ctx.start()
+    await mountCanvas({ ctx, appBase: app.services, plugins: [shared] })
+    expect(readyCalls).toBe(1)
+    await unmountCanvas()
+    ctx.stop()
+  })
+
   it('第二次进画布：插件已登记过，只恢复会话服务，不重装（用户实测回归）', async () => {
     const { ctx, app } = await bootApp()
     const plugin: PluginModule = {

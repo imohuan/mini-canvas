@@ -471,6 +471,18 @@ export class Context implements PluginScope {
   }
 
   /**
+   * 取已装载插件的模块（只读）。
+   *
+   * 为什么宿主需要它：应用级插件也可能有「画布会话钩子」（onCanvasReady），
+   * 而画布会话只拿得到自己那份画布级插件数组。宿主靠这个入口把应用级插件一起叫一遍，
+   * 不必让每个插件自己去监听 doc 出现（那会在切换画布时重复挂）。
+   * 只返回登记表里的模块，不触发装载、不改状态。
+   */
+  pluginModule(name: string): PluginModule | undefined {
+    return this.plugins.get(name)
+  }
+
+  /**
    * P5 只读查询：每个"已装/仍在 runtime"插件的运行时态快照，供宿主/管理器/console 诊断。
    *
    * 覆盖两类条目：
