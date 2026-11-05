@@ -29,9 +29,6 @@
   --color-brand: var(--ui-accent);
   --color-danger: var(--ui-danger);
   --color-gold: var(--ui-warn);
-  --color-accent: var(--ui-accent);
-  --color-accent-hover: var(--ui-accent-hover);
-  --color-accent-soft: var(--ui-accent-soft);
   /* 半透明交互层（hover / 选中 / 卡片底）：亮色主题里换成黑色系，暗色主题里是白色系 */
   --color-hover: var(--ui-hover);
   --color-hover-strong: var(--ui-hover-strong);
