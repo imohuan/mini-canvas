@@ -1,7 +1,0 @@
-const fs = require('fs')
-const { parse } = require('vue/compiler-sfc')
-const src = fs.readFileSync(__dirname + '/src/ui/conversation/AgentMessageList.vue', 'utf8')
-const { descriptor, errors } = parse(src, { filename: 'AgentMessageList.vue' })
-console.log('template src len:', descriptor.template ? descriptor.template.src : null)
-console.log('template content starts:', descriptor.template ? JSON.stringify(descriptor.template.content.slice(0, 120)) : 'none')
-console.log('errors:', errors.length)
