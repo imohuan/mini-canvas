@@ -8,10 +8,14 @@ import { groupTurnBlocks, type TurnRow } from '../../model/turnBlocks.js'
 import { toolView, toolBrief, type ToolView } from '../../model/toolViews.js'
 import type { AgentTurnView, ToolCard } from '../../model/sessionModel.js'
 
-export function useAgentMessageViews(bubbleRO: {
-  unobserve: (el: HTMLElement) => void
-  observe: (el: HTMLElement) => void
-}) {
+export function useAgentMessageViews(
+  bubbleRO: {
+    unobserve: (el: HTMLElement) => void
+    observe: (el: HTMLElement) => void
+  },
+  /** 这一轮是否还在跑（来源是服务状态 s.running，不是消息自己的 streaming 标记） */
+  running: { value: boolean },
+) {
 /**
  * 用户气泡「默认只显示前 8 行」（用户口径 2026-10-15）：
  * 长消息会把对话列表的滚动区占掉一大块，默认收着、想看再点「展开」。
@@ -98,6 +102,47 @@ function toggleToolGroup(key: string): void {
   openToolGroups.value[key] = !openToolGroups.value[key]
 }
 
+/**
+ * 工具行的**标题**（对照 AI Elements Tool / Task Demo）。
+ *
+ * 用户口径（2026-11-05）：官方 Demo 的行标题是「Searching for cacheKey」这种人话动作，
+ * 不是裸工具名。所以按「工具名 + 入参摘要」拼一句可读标题：
+ *   - 有执行内容（命令 / 文件名）→「工具名 · 内容」
+ *   - 没有 → 只给工具名（不编内容）
+ * 工具名里的 MCP 前缀剥掉，避免一屏都是 mcp__canvas__…
+ */
+function toolTitle(tool: ToolCard): string {
+  const bare = String(tool.name || '').replace(/^mcp__[A-Za-z0-9_-]+__/, '')
+  const brief = toolBrief(tool.name, tool.arguments)
+  return brief ? bare + ' · ' + brief : bare
+}
+
+/**
+ * 这一轮是否**还在思考**（用户口径 2026-11-05：思考中自动展开、图标转圈，
+ * 思考结束后自动折叠）。依据：助手这一轮最后一行还是思考块（后面没出正文/工具）。
+ */
+function isThinking(t: AgentTurnView): boolean {
+  if (t.kind !== 'assistant') return false
+  if (t.aborted) return false
+  const rows = assistantRows(t)
+  const last = rows[rows.length - 1]
+  return !!last && last.type === 'thinking'
+}
+
+/**
+ * 这一段思考**是否还在增量进来**（决定自动展开 / 转圈 / 「正在思考」标题）。
+ *
+ * 与 isThinking 的区别：isThinking 看「整轮最后一行是不是思考」；
+ * 这里看「这一轮还在跑，且还没出正文」—— 中间可能已经跑过工具，思考仍在继续时
+ * 也要保持展开（用户口径 2026-11-05）。
+ */
+function thinkingLive(t: AgentTurnView): boolean {
+  if (t.kind !== 'assistant') return false
+  if (t.aborted) return false
+  if (!running.value) return false
+  return !assistantRows(t).some((r) => r.type === 'text')
+}
+
 /** 组标题：跑着几个 / 跑完了几个（照参考项目的「N 个工具调用」写法） */
 function toolGroupTitle(tools: ToolCard[]): string {
   const running = tools.filter((x) => !x.settled).length
@@ -180,6 +225,9 @@ return {
   openToolGroups,
   toggleToolGroup,
   toolGroupTitle,
+  toolTitle,
+  isThinking,
+  thinkingLive,
   openTools,
   toggleTool,
   hasCardView,

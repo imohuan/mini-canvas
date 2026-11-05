@@ -325,6 +325,8 @@ const {
   openToolGroups,
   toggleToolGroup,
   toolGroupTitle,
+  toolTitle,
+  isThinking,
   openTools,
   toggleTool,
   hasCardView,
@@ -336,7 +338,7 @@ const {
 } = useAgentMessageViews({
   unobserve: (el) => bubbleRO?.unobserve(el),
   observe: (el) => bubbleRO?.observe(el),
-})
+}, { get value() { return s.running } })
 
 const {
   resetEditStates: resetMessageEditStates,
@@ -709,6 +711,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     openToolGroups,
     toggleToolGroup,
     toolGroupTitle,
+    toolTitle,
+    isThinking,
+    thinkingLive,
     openTools,
     toggleTool,
     hasCardView,

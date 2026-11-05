@@ -20,7 +20,7 @@ import {
 } from '../ai-elements/trace'
 // TraceIcon 在 TraceCollapsibleTrigger 里已内置折叠箭头；行内状态图标用 TraceIcon + lucide
 import { TraceIcon } from '../ai-elements/trace'
-import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle, Terminal, ListTree } from 'lucide-vue-next'
+import { X, Loader2, LoaderCircle, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
 import type { AgentConversationController } from './useAgentConversation'
 
 const c = inject('agentConversation') as unknown as Record<string, any>
@@ -29,13 +29,15 @@ const {
   hintDismissed, dismissHint, SUGGESTIONS, useSuggestion,
   segmentByAnchor, segmentModelLabel, assistantRows, openThinking,
   hasCardView, viewOf, previewToolMedia,
-  toolGroupTitle, toolRowSummary, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  toolGroupTitle, toolRowSummary, toolTitle, thinkingLive, userSegments, displayUserText, onSegClick, segTitle, segClickable,
   openUserBubbles, overflowingUser, toggleUserBubble, setUserBubbleBody, msgTimeText, msgTimeTitle,
   copied, copyMessage, beginEditMessage, hasInlineError, pagerByAnchor, pagerTarget,
   SHOW_PROCESS_NOTICE, openPreview, showPendingOn,
 } = c
 
 const Button = useUiComponent('Button')
+// 加载指示用组件库的 Spinner（shadcn 原生，转圈动画在组件里）
+const Spinner = useUiComponent('Spinner')
 // 全局 shadcn 原语（Bubble）：用户气泡的视觉壳，与文档 Demo 的 Message align="end" + Bubble 同款
 const Bubble = useUiComponent('Bubble')
 const BubbleContent = useUiComponent('BubbleContent')
@@ -149,14 +151,20 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                        收起 = TraceCollapsibleTrigger + TraceLine「思考过程」；
                        展开 = TraceCollapsibleContent 内 pre（等宽、上限内滚动）。 -->
                   <Trace v-else-if="row.type === 'thinking' && row.text">
-                    <TraceCollapsible :default-open="!!openThinking[t.id + ':' + row.key]">
+                    <TraceCollapsible
+                      :open="thinkingLive(t) || !!openThinking[t.id + ':' + row.key]"
+                      :unmount-on-hide="false"
+                      @update:open="(v) => { if (!thinkingLive(t)) openThinking[t.id + ':' + row.key] = v }">
                      <TraceCollapsibleTrigger>
                       <TraceLine>
-                        <TraceIcon><CircleCheck :size="14" /></TraceIcon>
-                        <TraceTitle>思考过程</TraceTitle>
+                        <TraceIcon>
+                          <LoaderCircle v-if="thinkingLive(t)" :size="14" class="animate-spin" />
+                          <CircleCheck v-else :size="14" />
+                        </TraceIcon>
+                        <TraceTitle>{{ thinkingLive(t) ? '正在思考' : '思考过程' }}</TraceTitle>
                       </TraceLine>
                     </TraceCollapsibleTrigger>
-                      <TraceCollapsibleContent>
+                    <TraceCollapsibleContent>
                       <div class="max-h-[min(360px,50vh)] overflow-y-auto whitespace-pre-wrap wrap-break-word">{{ row.text }}</div>
                     </TraceCollapsibleContent>
                     </TraceCollapsible>
@@ -185,8 +193,11 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                     <TraceCollapsible>
                       <TraceCollapsibleTrigger>
                         <TraceLine>
-                          <TraceIcon><Terminal :size="14" /></TraceIcon>
-                        <TraceTitle>{{ row.tools[0].name }}</TraceTitle>
+                        <TraceIcon>
+                          <LoaderCircle v-if="!row.tools[0].settled" :size="14" class="animate-spin" />
+                          <CircleCheck v-else :size="14" />
+                        </TraceIcon>
+                        <TraceTitle>{{ toolTitle(row.tools[0]) }}</TraceTitle>
                           <TraceDescription v-if="toolRowSummary(row.tools[0])">{{ toolRowSummary(row.tools[0]) }}</TraceDescription>
                         </TraceLine>
                       </TraceCollapsibleTrigger>
@@ -203,9 +214,11 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                     <TraceCollapsible>
                       <TraceCollapsibleTrigger>
                         <TraceLine>
-                          <TraceIcon><ListTree :size="14" /></TraceIcon>
-                          <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
-                          <TraceDescription>{{ row.tools.length }}</TraceDescription>
+                        <TraceIcon>
+                          <LoaderCircle v-if="row.tools.some((x) => !x.settled)" :size="14" class="animate-spin" />
+                          <CircleCheck v-else :size="14" />
+                        </TraceIcon>
+                        <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
                         </TraceLine>
                       </TraceCollapsibleTrigger>
                       <TraceCollapsibleContent>
@@ -221,8 +234,11 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                           <TraceCollapsible v-else>
                             <TraceCollapsibleTrigger>
                               <TraceLine>
-                                <TraceIcon><Terminal :size="14" /></TraceIcon>
-                                <TraceTitle>{{ tool.name }}</TraceTitle>
+                          <TraceIcon>
+                            <LoaderCircle v-if="!tool.settled" :size="14" class="animate-spin" />
+                            <CircleCheck v-else :size="14" />
+                          </TraceIcon>
+                          <TraceTitle>{{ toolTitle(tool) }}</TraceTitle>
                                 <TraceDescription v-if="toolRowSummary(tool)">{{ toolRowSummary(tool) }}</TraceDescription>
                               </TraceLine>
                             </TraceCollapsibleTrigger>
@@ -295,12 +311,15 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                  （s.running，用户口径 2026-10-16 二次澄清：按钮状态就是加载状态）。
                  与 t.streaming 解耦：streaming 标记会被 hub 重放/收尾逻辑翻转，
                  而 s.running 由后端 run_state 驱动、刷新后由 openSession 恢复，是唯一真相。 -->
-                <p v-if="showPendingOn(t)" class="ac-pending" role="status" aria-live="polite">
-                  <!-- 图标是**一段开口的圆弧**（照参考图：3/4 圈转圈），不是整圈的 Loader2 ——
-                   整圈转起来几乎看不出在动，开口的弧才有"在转"的观感。 -->
-                  <span class="ac-pending-spin" aria-hidden="true"></span>
-                  <span>正在思考</span>
-                </p>
+                <!-- 加载行（用户口径 2026-11-05）：用 AI Elements 的 Trace 行，
+                     与官方 "Researching" 同款 —— 图标转圈 + 文字用 shimmer 动效。
+                     只有这一轮还没出正文时才显示（思考块已经在上面时不再叠一行）。 -->
+                <Trace v-if="showPendingOn(t) && !thinkingLive(t)" role="status" aria-live="polite">
+                  <TraceLine status="running">
+                    <TraceIcon><Spinner class="size-4" /></TraceIcon>
+                    <TraceTitle>正在思考</TraceTitle>
+                  </TraceLine>
+                </Trace>
                 <!-- 用户按了终止（用户口径 2026-10-16：对话里要有表示，不能静默收场） -->
                 <p v-if="t.aborted" class="ac-stopped" role="status">
                   <CircleSlash :size="13" aria-hidden="true" />
