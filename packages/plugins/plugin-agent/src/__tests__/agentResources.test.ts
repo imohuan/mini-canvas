@@ -128,4 +128,14 @@ describe('节点标签的缩略图', () => {
     expect(without.thumbnail_url).toBeUndefined()
     expect(without.chipKind).toBe('video')
   })
+
+  /** @ 菜单里那一行也要能看出内容（用户 2026-11-06：下拉里的节点同样要缩略图） */
+  it('@ 菜单行：有缩略图时带一层背景图，没有就只留类型图标', () => {
+    const hasThumb = (vnode: unknown): boolean =>
+      JSON.stringify((vnode as { children?: unknown[] })?.children ?? '').includes('ac-mrow-thumb')
+    const [withThumb] = nodeResources([{ id: 'n4', name: '立绘', type: 'image', kind: 'image', thumb: '/x.png' }], 'c')
+    const [without] = nodeResources([{ id: 'n5', name: '文本 1', type: 'text', kind: 'text' }], 'c')
+    expect(hasThumb(withThumb.renderItem?.(withThumb))).toBe(true)
+    expect(hasThumb(without.renderItem?.(without))).toBe(false)
+  })
 })

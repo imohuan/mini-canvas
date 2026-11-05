@@ -59,10 +59,24 @@ function renderTag(svg: string, label: string, thumb?: string): HTMLElement {
   return el
 }
 
-/** @ 菜单里的那一行：图标 + 标题 + 次要说明（与插入后的标签同款图标） */
-function renderMenuRow(svg: string, name: string, hint: string): VNode {
+/**
+ * @ 菜单里的那一行：图标格 + 标题 + 次要说明（与插入后的标签同款图标）。
+ *
+ * 有缩略图时把图铺在同一格里（用户 2026-11-06：@ 菜单里的节点也要能看出内容）。
+ * 用背景图层、不用 <img>：与标签那一格同一条理由（失败也只是透明，露出类型图标）。
+ */
+function renderMenuRow(svg: string, name: string, hint: string, thumb?: string): VNode {
   return h('span', { class: 'ac-mrow' }, [
-    h('span', { class: 'ac-mrow-icon', innerHTML: svg }),
+    h('span', { class: 'ac-mrow-icon' }, [
+      // 图标单独一层：Vue 不允许同一个元素既给 innerHTML 又给子节点
+      h('span', { class: 'ac-mrow-glyph', innerHTML: svg }),
+      thumb
+        ? h('span', {
+          class: 'ac-mrow-thumb',
+          style: { backgroundImage: 'url("' + thumb.replace(/["\\]/g, '\\$&') + '")' },
+        })
+        : null,
+    ]),
     h('span', { class: 'ac-mrow-text' }, [
       h('span', { class: 'ac-mrow-name' }, name),
       hint ? h('span', { class: 'ac-mrow-hint' }, hint) : null,
@@ -155,7 +169,7 @@ export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen)
       ...(ext ? { ext } : {}),
       ...(asset.folderId ? { folderId: asset.folderId } : {}),
     },
-    renderItem: () => renderMenuRow(ICON_ASSET, asset.name, '资产'),
+    renderItem: () => renderMenuRow(ICON_ASSET, asset.name, '资产', thumb),
     renderEditor: () => renderTag(ICON_ASSET, asset.name, thumb),
     // 点输入框里这颗 chip = 与点对话气泡里的标签同一件事（预览 / 打开所在文件夹）。
     // 不传 onOpen（纯展示场景）就不带点击行为 —— 与技能 / MCP 标签一致。
@@ -271,7 +285,7 @@ export function nodeResources(
     ...(n.thumb ? { thumbnail_url: n.thumb } : {}),
     ref: { kind: 'node', name: n.name || n.id, value: canvasId + '#' + n.id },
     ...(onClick ? { onClick: () => onClick(n.id) } : {}),
-    renderItem: () => renderMenuRow(ICON_NODE, n.name || n.id, n.type),
+    renderItem: () => renderMenuRow(ICON_NODE, n.name || n.id, n.type, n.thumb),
     renderEditor: () => renderTag(ICON_NODE, n.name || n.id, n.thumb),
   }))
 }

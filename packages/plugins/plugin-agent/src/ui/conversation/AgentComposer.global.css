@@ -104,12 +104,14 @@
 }
 
 .mention-menu .ac-mrow-icon {
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
   width: 24px;
   height: 24px;
   border-radius: 6px;
+  overflow: hidden;
   background: var(--ui-chip, rgb(255 255 255 / 0.1));
   color: var(--ui-ink, #f7f7f7);
 }
@@ -117,6 +119,22 @@
 .mention-menu .ac-mrow-icon svg {
   width: 14px;
   height: 14px;
+}
+
+/* 图标格里的两层：图标垫底、缩略图铺满盖在上面。
+   为什么用背景图层而不是 <img>：与标签那一格同一理由（加载失败只是透明，露出类型图标）。 */
+.mention-menu .ac-mrow-glyph {
+  display: grid;
+  place-items: center;
+}
+
+.mention-menu .ac-mrow-thumb {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 .mention-menu .ac-mrow-text {
