@@ -33,87 +33,24 @@ const drawer = read('../components/areas/LeftDrawer.vue')
 const ui = read('../composables/ui/useCanvasList.ts')
 const api = read('../composables/projectsApi.ts')
 
-describe('画布下拉行：右箭头 ⇄ 三个点', () => {
-  it('行是「主按钮 + 行尾按钮」两个真按钮（不再在一个按钮里套可点的 span）', () => {
-    expect(cluster).toContain('class="canvas-row-main"')
-    expect(cluster).toContain('class="canvas-row-more"')
-    // 旧的写法（菜单行里塞一个 aria-hidden 的 span 当按钮）必须消失
-    expect(cluster).not.toContain('class="canvas-more"')
-  })
-
-  it('行尾渲染右箭头（ChevronRight）与三个点（MoreHorizontal），不再渲染勾', () => {
-    expect(cluster).toMatch(/import \{[^}]*\bChevronRight\b[^}]*\} from 'lucide-vue-next'/)
-    expect(cluster).toMatch(/import \{[^}]*\bMoreHorizontal\b[^}]*\} from 'lucide-vue-next'/)
-    expect(cluster).toContain('class="canvas-row-chevron"')
-    expect(cluster).toContain('class="canvas-row-dots"')
-    // 勾彻底退役：连图标导入都不该出现（用户口径 2026-11-03「不需要提供一个勾了」）
-    expect(cluster).not.toMatch(/\bCheck\b/)
-    expect(cluster).not.toContain('canvas-row-check')
-  })
-
+describe('画布下拉行：整行 = shadcn 默认 SubTrigger', () => {
   /**
-   * 显隐规则（用户口径：默认右箭头、hover 变三个点）。
-   * 判据是「这一行里同时有 hover 到箭头/点的切换规则」—— 写在别处（比如全局样式）就说明
-   * 换了实现方式，得回来改这条。
+   * 用户口径 2026-11-05：用 shadcn 的默认二级组件，开合交给组件默认行为
+   * （悬停整行就展开二级菜单），不要在模板里加 mouseenter 这类手工开关。
    */
-  it('默认显示右箭头、hover 到该行时箭头让位给三个点', () => {
-    expect(cluster).toMatch(/\.canvas-row-chevron \{ opacity: 1/)
-    expect(cluster).toMatch(/\.canvas-row-dots \{ opacity: 0/)
-    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more \.canvas-row-chevron,[\s\S]{0,300}opacity: 0/)
-    expect(cluster).toMatch(/\.canvas-row:hover \.canvas-row-more \.canvas-row-dots,[\s\S]{0,300}opacity: 1/)
-    // 键盘在菜单里移动焦点是用脚本聚焦 role=menuitem，不会命中 :focus-visible，
-    // 所以图标替换必须看 :focus；外圈焦点框仍由下面的 :focus-visible 规则负责。
-    expect(cluster).toMatch(/\.canvas-row-more:focus \.canvas-row-dots/)
-    expect(cluster).toMatch(/\.canvas-row-more:focus-visible \{ outline:/)
-    // 动效必须有 reduced-motion 降级（ui-style-guide §2.7）
-    expect(cluster).toMatch(/prefers-reduced-motion: reduce[\s\S]{0,200}canvas-row-chevron/)
+  it('整行是 DropdownMenuSubTrigger（悬停展开交给组件默认行为）', () => {
+    expect(cluster).toMatch(/<DropdownMenuSubTrigger[\s\S]{0,200}class="canvas-row"/)
+    // 手工 hover 开关与行尾双图标旧结构必须退役
+    expect(cluster).not.toContain('@mouseenter')
+    expect(cluster).not.toContain('canvas-row-main')
+    expect(cluster).not.toContain('canvas-row-more')
+    expect(cluster).not.toContain('canvas-row-chevron')
+    expect(cluster).not.toContain('canvas-row-dots')
   })
 
-  it('动效只动 opacity（不动 width/height/top/left —— ui-style-guide §2.7 硬性）', () => {
-    const block = cluster.slice(cluster.indexOf('.canvas-row-chevron, .canvas-row-dots'))
-    const rule = block.slice(0, block.indexOf('}'))
-    expect(rule).toContain('transition: opacity')
-    // 只检查 transition 列表里没有几何属性：定位（position/left/top）与固定尺寸不参与动画。
-    // 箭头/点在 32px 行尾里绝对定位，是为了让两个图标占同一格、替换时不推动行文字。
-    const transition = rule.slice(rule.indexOf('transition'))
-    expect(transition).not.toMatch(/(width|height|top|left)\s*:/)
-  })
-
-  /**
-   * 底色打在**整行**上，行里的按钮自己是透明的 —— 用户口径两句话合起来就是这个形状：
-   *   ① 「这个按钮不要给 hover 的背景颜色，就直接给这个图标颜色就行」→ 行尾按钮 hover 只变色；
-   *   ② 「hover 的是整块的一个背景」→ 行 hover 要给**整行**一块底。
-   *
-   * 为什么必须钉住（实测踩过）：底若打在 `.canvas-row-main` 上，只染主按钮那半块 ——
-   * 行尾「⋯」与中间留白成了缺口，用户看到的正是「只有左侧有背景」。
-   */
-  it('行 hover 给**整行**一块底（不是只给行里的按钮）', () => {
-    const row = /\.canvas-row:hover\s*\{([^}]*)\}/.exec(cluster)
-    expect(row, '没找到 .canvas-row:hover 规则').toBeTruthy()
-    expect(row![1], '整行 hover 要有底色').toMatch(/background:\s*var\(--ui-hover/)
-    // 旧形状（染色主按钮那半块）必须消失
-    expect(cluster).not.toMatch(/\.canvas-row:not\(\.is-active\) \.canvas-row-main:hover/)
-    // 选中态仍要有自己的整行淡底
+  it('点击整行切画布，选中行保留整行淡底', () => {
+    expect(cluster).toMatch(/DropdownMenuSubTrigger[\s\S]{0,300}emit\('pick-canvas', item\.id\)/)
     expect(cluster).toMatch(/\.canvas-row\.is-active \{ background:/)
-  })
-
-  it('行尾按钮自己不给底色，hover 只提亮图标', () => {
-    const rule = /\.canvas-row-more:hover\s*\{([^}]*)\}/.exec(cluster)
-    expect(rule, '没找到 .canvas-row-more:hover 规则').toBeTruthy()
-    expect(rule![1], 'hover 不许给 background（底色由整行给）').not.toMatch(/background/)
-    expect(rule![1], 'hover 要提亮图标颜色').toMatch(/color:/)
-    // 按钮是浮在行底上的：自己必须透明，否则会叠出第二块色
-    const base = /\.canvas-row-more \{([^}]*)\}/.exec(cluster)
-    expect(base![1], '行尾按钮底色应为透明').toMatch(/background:\s*transparent/)
-  })
-
-  it('行尾固定 32px，并隐藏子菜单自动追加的第二个箭头', () => {
-    const base = /\.canvas-row-more \{([^}]*)\}/.exec(cluster)
-    expect(base, '没找到 .canvas-row-more 基础规则').toBeTruthy()
-    expect(base![1], '行尾宽度应为 32px').toMatch(/width:\s*32px/)
-    expect(cluster, '要覆盖子菜单自动箭头，保证一次只显示一个图标').toMatch(
-      /\.canvas-row-more :deep\(svg\.ml-auto\) \{ display: none/,
-    )
   })
 })
 
@@ -125,28 +62,16 @@ describe('行尾菜单：条目与真实现', () => {
     expect(cluster).toMatch(/<DropdownMenuItem[^>]*variant="destructive"[^>]*>[\s\S]{0,40}删除画布/)
   })
 
-  it('行尾「⋯」是画布列表的子菜单（列表留着、子菜单并排）', () => {
+  it('每行自带 SubContent，操作项直接按 item.id 派发（开合交给组件默认行为）', () => {
     expect(cluster).toContain('<DropdownMenuSub')
-    expect(cluster).toMatch(/<DropdownMenuSubTrigger[\s\S]{0,260}canvas-row-more/)
-  })
-
-  /** 两个浮层并存：清单是父菜单、行尾操作是子菜单，父菜单不因开子菜单而关闭。 */
-  it('操作菜单是列表的**子菜单**（列表留着不消失，两个菜单并排）', () => {
-    expect(cluster).toContain('<DropdownMenuSub :open="actionOpenId === item.id"')
     expect(cluster).toContain('<DropdownMenuSubContent')
-    // 子菜单打开时不主动关闭列表（列表只在「切画布 / 新建」这类完成动作后才收）
-    expect(cluster).not.toMatch(/openActions[\s\S]{0,200}update:menuOpen', false/)
-  })
-
-  /**
-   * 回归：每行必须有自己的开关（存画布 id），不能共用一个 boolean。
-   * 共用时点开一行，v-for 里所有行的 SubContent 会同时展开，叠成十几份
-   * 「在新窗口打开」（用户截图 2026-11-02）。
-   */
-  it('行尾子菜单按画布 id 分行开关，不共用同一个布尔值', () => {
-    expect(cluster).toContain('const actionOpenId = ref<string | null>(null)')
-    expect(cluster).not.toMatch(/const actionOpen = ref\(false\)/)
-    expect(cluster).toMatch(/setActionOpen\(item, v\)/)
+    // 旧的手工开关（分行布尔）必须退役，悬停展开由 shadcn 默认处理
+    expect(cluster).not.toContain('actionOpenId')
+    expect(cluster).not.toContain('setActionOpen')
+    expect(cluster).toMatch(/emit\('open-canvas-window', item\.id\)/)
+    expect(cluster).toMatch(/emit\('rename-canvas-item', item\.id\)/)
+    expect(cluster).toMatch(/emit\('duplicate-canvas', item\.id\)/)
+    expect(cluster).toMatch(/emit\('delete-canvas', item\.id\)/)
   })
 
   it('两个宿主都把行数据换成 id + 名字（只传名字没法按 id 操作）', () => {
@@ -209,7 +134,7 @@ describe('行尾菜单：条目与真实现', () => {
     expect(cluster, '删除项不许再带条件').not.toMatch(/v-if="canDelete"/)
     expect(cluster).not.toMatch(/:disabled="!canDelete"/)
     expect(cluster, 'canDelete 这个开关整个该消失').not.toMatch(/canDelete/)
-    expect(cluster).toMatch(/variant="destructive"[\s\S]{0,160}pickAction\('delete-canvas'[\s\S]{0,40}删除画布/)
+    expect(cluster).toMatch(/variant="destructive"[\s\S]{0,160}emit\('delete-canvas', item\.id\)[\s\S]{0,40}删除画布/)
     // deletable 这个「谁不许删」的概念也一并退役
     expect(ui).not.toMatch(/deletable: c\.id !== 'default'/)
   })

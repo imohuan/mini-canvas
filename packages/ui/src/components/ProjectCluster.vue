@@ -7,17 +7,12 @@
 // 名字语义（用户口径）：左边那个可编辑的名字 = **当前画布的名字**（改了就是改这张画布，
 // 下拉里出现的也是这些名字）；右边的小胶囊显示「画布 + 索引」，只是位置提示。
 //
-// 画布列表的行尾（用户口径 2026-11-03）：
-//   ① 默认显示一个向右的箭头，提示这里还有次级操作；
-//   ② 鼠标悬停（或键盘聚焦）这一行 → 箭头**换成三个点**；
-//   ③ 点箭头 / 三个点 → 在它旁边弹出该画布的**操作菜单**（在新窗口打开 / 重命名画布 / 复制画布 / 删除画布）；
-//   ④ 当前画布只用整行浅色背景表示选中，不再显示勾。
-//
-// 为什么卷标行要拆成「两个按钮」而不是像以前那样在一行里套一个 span 当按钮：
-//   行的主点击 = 切画布，行尾 = 另一件事（开操作菜单）。一个 <button> 里再塞一个可点的 span，
-//   读屏会把两件事说成一件事，也是 ui-style-guide §5 第 2 条明令禁止的嵌套交互。
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+// 画布列表行（用户口径 2026-11-05）：
+//   整行就是一个 shadcn 的 DropdownMenuSubTrigger —— 悬停整行即展开二级菜单
+//   （在新窗口打开 / 重命名画布 / 复制画布 / 删除画布），开合时机交给组件默认行为；
+//   点击整行仍然是切画布。当前画布只用整行浅色背景表示选中，不显示勾。
+import { ChevronDown, Plus } from 'lucide-vue-next'
+import { computed } from 'vue'
 // 外壳按钮与下拉菜单从画布 ctx 的 ui 注册表按名取；行内交互保持不变。
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
@@ -68,57 +63,6 @@ const emit = defineEmits<{
 /** 右侧小胶囊只显示「画布 + 索引」（位置提示）；画布名显示在左边的输入框里 */
 const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) => c.id === props.canvasId) + 1))
 
-// ===== 行尾「⋯」弹的**画布操作菜单** =====
-//
-// 画布操作菜单与画布列表都使用 shadcn 的 DropdownMenu：
-// 行尾「⋯」的菜单是列表的**子菜单**（DropdownMenuSub），列表留着、子菜单并排展开；
-// 选中项后一起收起，定位/翻转/点外关闭交给 reka-ui。
-/**
- * 哪一行的操作子菜单开着（存画布 id，不是布尔）。
- *
- * 这里以前是一个共享的 boolean，v-for 里每一行都绑同一个值 —— 点开一行，
- * 14 行的 SubContent 会同时变 open，全部叠在同一个位置，看起来就是
- * 「在新窗口打开」重复了十几条（用户截图 2026-11-02）。
- */
-const actionOpenId = ref<string | null>(null)
-const actionTarget = ref<CanvasOption | null>(null)
-
-function setActionOpen(item: CanvasOption, open: boolean): void {
-  if (open) {
-    actionOpenId.value = item.id
-    openActions(item)
-  } else if (actionOpenId.value === item.id) {
-    actionOpenId.value = null
-  }
-}
-
-/** 悬停整行就直接展开二级菜单（用户口径 2026-11-05），不必先碰到行尾图标。 */
-function hoverRow(item: CanvasOption): void {
-  if (actionOpenId.value !== item.id) setActionOpen(item, true)
-}
-
-/** 点行尾的「›」/「⋯」：记下是哪张画布（子菜单的条目据此派发） */
-function openActions(item: CanvasOption): void {
-  actionTarget.value = item
-}
-
-/** 操作菜单里选了一项：转发给宿主（宿主才知道怎么改数据），并收起菜单 */
-function pickAction(
-  ev: 'open-canvas-window' | 'rename-canvas-item' | 'duplicate-canvas' | 'delete-canvas',
-  close: () => void,
-): void {
-  const id = actionTarget.value?.id
-  // 逐个 if 而不是 emit(dynamicName, id)：Vue 的 emit 签名按事件名分别声明，
-  // 传联合类型会被判成「不匹配任何一个重载」（vue-tsc 报错）。
-  if (id) {
-    if (ev === 'open-canvas-window') emit('open-canvas-window', id)
-    else if (ev === 'rename-canvas-item') emit('rename-canvas-item', id)
-    else if (ev === 'duplicate-canvas') emit('duplicate-canvas', id)
-    else emit('delete-canvas', id)
-  }
-  close()
-}
-
 // 「删除画布」**永远可点**（用户口径 2026-10-09）：
 //   「不管是哪个画布都支持删除，即使是当前选中的也支持删除，只不过删除之后跳转到第一个画布就行」
 // 所以这里不再有任何「能不能删」的判断 —— 内置画布也删、当前画布也删；
@@ -153,39 +97,28 @@ function pickAction(
             <Button variant="ghost" size="icon-xs" class="canvas-new size-[22px] rounded-md" aria-label="新建画布"
               @click="emit('new-canvas'); emit('update:menuOpen', false)"><Plus :size="13" class="size-[13px]" /></Button>
           </div>
-          <!-- 一行 = 主按钮（切画布）+ 行尾按钮（开操作菜单）。两个动作，两个真按钮。 -->
-          <div
+          <!-- 整行 = SubTrigger：悬停展开二级菜单（组件默认行为），点击切画布。 -->
+          <DropdownMenuSub
             v-for="item in canvasItems"
             :key="item.id"
-            class="canvas-row"
-            :class="{ 'is-active': item.id === canvasId }"
-            @mouseenter="hoverRow(item)"
           >
-            <button
-              type="button"
-              class="canvas-row-main"
-              role="menuitem"
+            <DropdownMenuSubTrigger
+              class="canvas-row"
+              :class="{ 'is-active': item.id === canvasId }"
               :aria-current="item.id === canvasId ? 'true' : undefined"
-              :aria-label="'切换到画布 ' + item.label"
+              :aria-label="'画布 ' + item.label"
               @click="emit('pick-canvas', item.id); emit('update:menuOpen', false)"
             >
               <span class="canvas-open">{{ item.label }}</span>
-            </button>
-            <!-- 行尾一次只占一个图标位：默认右箭头，hover / 键盘聚焦 / 子菜单打开时换成三个点。 -->
-            <DropdownMenuSub :open="actionOpenId === item.id" @update:open="(v: boolean) => setActionOpen(item, v)">
-              <DropdownMenuSubTrigger class="canvas-row-more" :aria-label="'画布操作 ' + item.label">
-                <ChevronRight class="canvas-row-chevron" :size="14" aria-hidden="true" />
-                <MoreHorizontal class="canvas-row-dots" :size="14" aria-hidden="true" />
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent :style="{ minWidth: '176px' }">
-                <DropdownMenuItem @select="pickAction('open-canvas-window', () => (actionOpenId = null))">在新窗口打开</DropdownMenuItem>
-                <DropdownMenuItem @select="pickAction('rename-canvas-item', () => (actionOpenId = null))">重命名画布</DropdownMenuItem>
-                <DropdownMenuItem @select="pickAction('duplicate-canvas', () => (actionOpenId = null))">复制画布</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" @select="pickAction('delete-canvas', () => (actionOpenId = null))">删除画布</DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </div>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent :style="{ minWidth: '176px' }">
+              <DropdownMenuItem @select="emit('open-canvas-window', item.id); emit('update:menuOpen', false)">在新窗口打开</DropdownMenuItem>
+              <DropdownMenuItem @select="emit('rename-canvas-item', item.id); emit('update:menuOpen', false)">重命名画布</DropdownMenuItem>
+              <DropdownMenuItem @select="emit('duplicate-canvas', item.id); emit('update:menuOpen', false)">复制画布</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" @select="emit('delete-canvas', item.id); emit('update:menuOpen', false)">删除画布</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
   </div>
@@ -205,40 +138,8 @@ function pickAction(
 .canvas-new { color: var(--ui-ink); background: transparent; cursor: pointer; }
 .canvas-new:hover { background: var(--ui-hover) !important; }
 /* ===== 画布列表行 =====
-   行 = 主按钮（切画布）+ 行尾按钮（操作菜单）。两者都要是 32px 的可点目标（ui-style-guide §5 第 4 条）。 */
+   整行是 DropdownMenuSubTrigger：悬停展开二级菜单（组件默认），点击切画布。 */
 .canvas-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
-/* 底必须打在**行**上，不能打在行里的按钮上（用户口径 2026-10-09：
-   「hover 的是整块的一个背景」）。打在按钮上只会染主按钮那半块 ——
-   行尾「⋯」与两者之间的留白就成了没底的缺口，看着像「只有左侧有背景」。
-   选中行（当前就是这张）与 hover 行都给整行一块底。 */
 .canvas-row.is-active { background: var(--ui-hover-soft, var(--ui-hover)); }
-.canvas-row:hover { background: var(--ui-hover); }
-.canvas-row-main { display: flex; flex: 1; min-width: 0; align-items: center; height: 32px; padding: 0 10px; color: var(--ui-ink); border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; text-align: left; }
-.canvas-row-main:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: -1px; }
 .canvas-open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 行尾：固定 32×32，一次只放一个图标（用户口径 2026-11-03）。
-   子组件默认会在右侧自动追加一个箭头；这里把它藏掉，由本行自己决定显示哪个图标。 */
-.canvas-row-more { position: relative; display: flex; flex: none; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; color: var(--ui-ink-dim); border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
-.canvas-row-more :deep(svg.ml-auto) { display: none; }
-.canvas-row-chevron, .canvas-row-dots { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); transition: opacity .14s ease; }
-.canvas-row-chevron { opacity: 1; }
-.canvas-row-dots { opacity: 0; }
-/* 默认右箭头；鼠标进整行 / 键盘聚焦行尾 / 子菜单展开时，只换成三个点。
-   键盘在菜单里移动焦点时，浏览器用脚本聚焦 role=menuitem，不会命中 :focus-visible，
-   所以图标替换看 :focus；外圈焦点提示仍只用 :focus-visible，鼠标点击不会多出描边。 */
-.canvas-row:hover .canvas-row-more .canvas-row-chevron,
-.canvas-row-more:focus .canvas-row-chevron,
-.canvas-row-more[data-state='open'] .canvas-row-chevron,
-.canvas-row-more[aria-expanded='true'] .canvas-row-chevron { opacity: 0; }
-.canvas-row:hover .canvas-row-more .canvas-row-dots,
-.canvas-row-more:focus .canvas-row-dots,
-.canvas-row-more[data-state='open'] .canvas-row-dots,
-.canvas-row-more[aria-expanded='true'] .canvas-row-dots { opacity: 1; }
-/* 行尾按钮 hover **不给底色**，只把图标颜色提亮（用户口径 2026-10-09：
-   「这个按钮不要给 hover 的背景颜色，就直接给这个图标颜色就行」）。 */
-.canvas-row-more:hover { color: var(--ui-ink); }
-.canvas-row-more:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: -1px; }
-@media (prefers-reduced-motion: reduce) {
-  .canvas-row-chevron, .canvas-row-dots { transition: none; }
-}
 </style>
