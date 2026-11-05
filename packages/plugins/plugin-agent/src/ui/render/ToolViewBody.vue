@@ -99,10 +99,12 @@ function visibleRows<T>(items: T[]): T[] {
     <!-- 标题行：折叠箭头在最左（用户口径 2026-11-05：折叠开关放在卡片标题左侧），
          之后才是工具图标 / 人话标题 / 右侧徽章。 -->
     <div class="tvc-head">
-      <button type="button" class="tvc-head-toggle" :aria-expanded="showDetails"
+      <!-- 折叠开关用组件库的 Button（用户口径 2026-11-05：不要手写 button）。
+           ghost + icon-xs = 24px 方形、无底色，悬停才出浅灰底；图标自带旋转过渡。 -->
+      <Button variant="ghost" size="icon-xs" class="tvc-head-toggle" :aria-expanded="showDetails"
         :aria-label="showDetails ? '收起详情' : '展开详情'" @click="showDetails = !showDetails">
-        <ChevronRight :size="12" class="tvc-details-caret" :class="{ 'is-open': showDetails }" />
-      </button>
+        <ChevronRight class="tvc-details-caret" :class="{ 'is-open': showDetails }" />
+      </Button>
       <span v-if="view.heading" class="tvc-head-icon"><component :is="iconOf(view.icon)" :size="13" /></span>
       <span class="tvc-title">{{ view.heading || name || '工具调用' }}</span>
       <span v-if="view.badge" class="tvc-badge">{{ view.badge }}</span>
@@ -289,21 +291,9 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-note.is-error { color: var(--ui-danger, #ef4444); }
 .tvc-note.is-info { color: var(--ui-ink-dim, #919191); }
 
-/* 卡内「详情」折叠 */
-.tvc-head-toggle {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-right: -2px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--ui-ink-dim, #919191);
-  cursor: pointer;
-}
+/* 卡内「详情」折叠：按钮本体是组件库 Button(ghost/icon-xs)，这里只收紧外边距，
+   让 24px 按钮不把标题行撑开。 */
+.tvc-head-toggle { flex: none; margin-inline: -4px -2px; color: var(--ui-ink-dim, #919191); }
 .tvc-head-toggle:hover { color: var(--ui-ink, #f7f7f7); }
 .tvc-details-caret { flex: none; transition: transform 0.18s ease; }
 .tvc-details-caret.is-open { transform: rotate(90deg); }
