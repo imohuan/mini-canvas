@@ -25,39 +25,30 @@ const props = withDefaults(
 
 const open = ref(false)
 
-const align = computed<'start' | 'center' | 'end'>(() => {
-  const suffix = props.placement.split('-')[1]
-  return suffix === 'start' || suffix === 'center' ? suffix : 'end'
-})
-
 /**
  * 在鼠标点处打开（行右键用）。
  *
- * 用 reka 的 **虚拟锚点**（`reference`）表达"鼠标点"，而不是把真实触发器挪过去：
- * 挪触发器会带来两个真实 bug —— 关闭后坐标残留（下一次点「⋯」仍出现在旧位置）、
- * 以及 1×1 触发器挡住鼠标下的元素。虚拟锚点只在这次打开期间生效，关闭即失效。
+ * 做法：右键时把「⋯」触发器本身临时 fixed 到鼠标点（1×1、透明、不接管指针），
+ * 菜单仍以这个真实触发器为锚点。
  *
- * 右键与「⋯」共用同一个 DropdownMenu 实例与同一份条目，只是锚点来源不同。
+ * 为什么不用 `reference` 虚拟锚点（2026-11-05 实测）：floating-ui 取参考矩形走的是
+ * 模块内函数 `getBoundingClientRect(element)`，伪造的对象属性和 `reference` 传参在这条
+ * 链路上都没生效 —— 菜单每次都弹到 (0,0)，离鼠标很远。用真实触发器最稳。
+ * 关闭后 `point` 清空，触发器回到行尾原位，不会残留坐标。
  */
 const point = ref<{ x: number; y: number } | null>(null)
 
-/** reka 的 reference 取一个"有尺寸的矩形"：用鼠标点当作左上角，宽高 1px */
-const virtualRef = computed(() => {
-  const p = point.value
-  if (!p) return undefined
-  return {
-    getBoundingClientRect: () => ({
-      x: p.x,
-      y: p.y,
-      left: p.x,
-      top: p.y,
-      right: p.x,
-      bottom: p.y,
-      width: 1,
-      height: 1,
-      toJSON: () => ({}),
-    }),
-  } as unknown as HTMLElement
+const align = computed<'start' | 'center' | 'end'>(() => {
+  /*
+   * 右键时从鼠标点**向右**展开。
+   *
+   * 行尾的「⋯」贴右边，用 end 对齐才对；但右键点可能落在窄抽屉的任意横向位置，
+   * 还按 end 对齐就要把 180px 的菜单往左摆，抽屉只有 320px 时会撞到视口边、被夹回 x=0
+   * （实测菜单压在左边缘、离鼠标很远）。向右展开在窄栏里最稳。
+   */
+  if (point.value) return 'start'
+  const suffix = props.placement.split('-')[1]
+  return suffix === 'start' || suffix === 'center' ? suffix : 'end'
 })
 
 function openAt(x: number, y: number): void {
@@ -75,7 +66,11 @@ defineExpose({ openAt })
 <template>
   <DropdownMenu v-model:open="open" :modal="false">
     <DropdownMenuTrigger as-child>
-      <span class="rms-trigger" :class="{ 'is-at-point': !!point }">
+      <span
+        class="rms-trigger"
+        :class="{ 'is-at-point': !!point }"
+        :style="point ? { left: point.x + 'px', top: point.y + 'px' } : undefined"
+      >
         <button
           class="grid size-6 flex-none place-items-center rounded-lg text-ink-dim opacity-0 transition-opacity hover:bg-hover hover:text-ink group-hover/row:opacity-100 focus-visible:opacity-100"
           :aria-label="'更多操作 ' + name"
@@ -87,7 +82,6 @@ defineExpose({ openAt })
       :align="align"
       side="bottom"
       :side-offset="4"
-      :reference="virtualRef"
       class="rms-menu"
       :style="{ minWidth: menuWidth }"
     >
@@ -99,13 +93,11 @@ defineExpose({ openAt })
 <style scoped>
 .rms-trigger { display: inline-flex; }
 /*
- * 右键入口：菜单用虚拟锚点定位到鼠标点，这里只把原来的⋯触发器临时收成 1×1 藏在
- * 指针下方，避免它在右键位置闪一下；关闭后恢复成正常按钮（point 已清空）。
+ * 右键入口：触发器临时收成 1×1、挪到鼠标点（left/top 由内联 style 给），
+ * 菜单以它为锚点定位。关闭后恢复成行尾的普通按钮（point 已清空）。
  */
 .rms-trigger.is-at-point {
   position: fixed;
-  left: 0;
-  top: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;

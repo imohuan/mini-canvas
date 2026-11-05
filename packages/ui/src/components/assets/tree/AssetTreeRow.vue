@@ -209,7 +209,13 @@ function openMenuAt(e: MouseEvent): void {
         补一个等宽的空占位，缩略图就能落到文件夹图标的正下方。
       -->
       <span class="size-5 flex-none" aria-hidden="true"></span>
-      <button class="flex h-full min-w-0 flex-1 items-center gap-2 text-left" :aria-label="'预览 ' + row.name" @click="onAssetRowClick(row, $event)">
+      <!--
+        名字按钮负责「占满剩下的宽度」，菜单/进入按钮是它的兄弟。
+        关键：右侧必须给行尾按钮**留出真实空间**（mr-1 + 按钮 24px 在 flex 里已经占位），
+        而不是让按钮叠在行尾 —— 否则名字的可视宽度盖到按钮底下，
+        悬停时文字会顶到「⋯」上（用户 2026-11-05 截图：文本把右侧按钮盖住了）。
+      -->
+      <button class="flex h-full min-w-0 flex-1 items-center gap-2 overflow-hidden text-left" :aria-label="'预览 ' + row.name" @click="onAssetRowClick(row, $event)">
         <!--
           缩略图（用户口径 2026-10-14：「弹出框里左侧的图片 logo…点击它没有预览效果，请修复」）：
           它就是「我想看看这张图」，两处宿主都该开预览 —— 所以自己 @click.stop 派发 openThumb，

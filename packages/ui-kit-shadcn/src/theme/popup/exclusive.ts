@@ -85,6 +85,22 @@ export function usePopupOpenState(
   emit: (value: boolean) => void,
 ): Ref<boolean> {
   const local = ref<boolean>(props.open ?? props.defaultOpen ?? false)
+  /**
+   * 外部把 `open` 从 false 改成 true 时，必须同步进内部。
+   *
+   * 为什么（2026-11-05 实测）：计算属性只读 `local`，初始化时读了一次 props.open 就不再管；
+   * 行右键（RowMenuShell.openAt 直接写 open=true）属于「外部打开」，结果菜单组件的
+   * aria-expanded 已经是 true，面板却始终不渲染 —— 用户看到的就是「右键菜单没有反应」。
+   * 只在值真的变化时写，避免和下面的 emit 互相触发。
+   */
+  watch(
+    () => props.open,
+    (value) => {
+      if (typeof value === 'boolean' && value !== local.value) local.value = value
+    },
+    // 立即对齐一次：父级可能在建实例之前就把 open 设成 true（例如弹窗里先挂载再显示）。
+    { immediate: true },
+  )
   return computed({
     get: () => local.value,
     set: (value: boolean) => {

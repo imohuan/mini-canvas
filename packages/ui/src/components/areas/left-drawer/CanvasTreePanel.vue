@@ -49,7 +49,7 @@ const lucideOf = (icon: string) =>
     <template v-for="block in blocks" :key="block.key">
       <!-- 分组行（任意层）：depth 决定缩进；行内改名与资产树同款（用户口径 2026-10-08） -->
       <div v-if="block.kind === 'group'"
-        class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover"
+        class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-2 transition-colors hover:bg-hover"
         :style="{ paddingLeft: block.depth * 24 + 'px' }" @contextmenu="emit('openMenu', 'group', block.id, $event)">
         <Button variant="ghost" size="icon-xs" class="flex-none rounded-lg text-ink/85"
           :aria-label="(block.collapsed ? '展开 ' : '折叠 ') + block.name" :aria-expanded="!block.collapsed"
@@ -86,8 +86,12 @@ const lucideOf = (icon: string) =>
       <!-- 同层节点段（任意层）：列表 = 缩进行；宫格 = 一个三列网格（每层各自成网格，缩进不打架） -->
       <template v-else>
         <template v-if="viewMode === 'list'">
+          <!--
+            pr-2：行尾给那个「⋯」按钮留出真实的空间（不再是 4px 贴边）。
+            用户 2026-11-05 截图：悬停时右侧按钮被行背景/滚动条压住。
+          -->
           <div v-for="child in block.nodes" :key="child.id"
-            class="group/row relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover"
+            class="group/row relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-2 transition-colors hover:bg-hover"
             :style="{ paddingLeft: block.depth * 24 + 'px' }"
             @contextmenu="emit('openMenu', 'node', child.id, $event)">
             <span class="size-6 flex-none" aria-hidden="true"></span>

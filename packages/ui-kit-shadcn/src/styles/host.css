@@ -199,12 +199,12 @@
  * 结果连用户自己写的 class="rounded-none" 也压不住，属于不该有的硬约束。
  */
 /*
- * 注意选择器用 `[data-variant]` 而不是 `[data-slot='button']`：
- * TooltipTrigger / DropdownMenuTrigger 这类 `as-child` 包装会把**自己的** data-slot
- * 写到同一个根元素上（实测按钮上是 `data-slot="tooltip-trigger"`），
- * 而 `data-variant` 只有 Button 自己会写，正好用来定位按钮本体。
+ * 注意选择器用 `[data-slot='button']`，不要写成 `[data-variant]`：
+ * TabsList / Item / Bubble 也会写 data-variant，前者本该是胶囊（rounded-full），
+ * 被这条 8px 规则一盖，胶囊和父容器圆角就对不上了（2026-11-05 用户截图：
+ * 「生成历史」范围页签、Agent 模型面板的卡片/分栏页签，父容器都成了 8px 方角）。
+ * Button 的 as-child 包装只会额外加一个 data-slot，`[data-slot='button']` 仍然命中按钮本体。
  */
-[data-variant][data-size],
 [data-slot='button'] {
   /* 默认档 = 项目控件圆角（8px）；选了档位则全站统一成那个值 */
   border-radius: var(--mct-radius, var(--radius-control, 8px));
