@@ -11,6 +11,26 @@
 @import "shadcn-vue/tailwind.css";
 @import "@vuelor/picker/tailwind.css";
 
+/*
+ * 边框默认色（shadcn 标准基础规则，本仓宿主入口此前漏了这条）。
+ *
+ * 为什么必须有：Tailwind preflight 把 border-style 设为 solid、border-color 继承
+ * currentColor。组件里只写 border-l / border（不带颜色）时，边线就是文字色 ——
+ * AI Elements 的 Trace 左边线因此在亮色下成 #6b7280（深灰），视觉过重。
+ * 官方站点把它默认成 --border（#e2e5ea 这档浅线）。
+ *
+ * 只影响没显式指定颜色的边框；写了 border-border / border-transparent 的照旧。
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border);
+  }
+}
+
 @theme inline {
   --color-background: var(--ui-overlay-solid, #fff);
   --color-foreground: var(--ui-ink, #18202b);
