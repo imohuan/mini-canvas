@@ -84,6 +84,7 @@ export function collectReferenceResources(
   edges: Array<{ source: string; target: string }>,
   targetNodeId: string,
   extraNodeIds: string[] = [],
+  canvasId = '',
 ): CanvasResourceRef[] {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const wanted = [...edges.filter((e) => e.target === targetNodeId).map((e) => e.source), ...extraNodeIds]
@@ -96,7 +97,14 @@ export function collectReferenceResources(
     if (!n) continue
     const d = (n.data ?? {}) as Record<string, unknown>
     const kind = n.type === 'video' ? 'video' : n.type === 'audio' ? 'audio' : n.type === 'image' ? 'image' : 'other'
-    const url = [d.imageUrl, d.videoUrl, d.audioUrl].find((u): u is string => typeof u === 'string' && !!u)
+    // 媒体地址：优先读显式字段（imageUrl 等）；没有再回退用 resourceId 拼同源地址。
+    // 很多媒体节点持久化时只写了 resourceId（没有 imageUrl），若只认 imageUrl 会丢参考图
+    // （影响所有这类节点当上游的参考图场景，不只在 ffmpeg provider）。
+    const url =
+      [d.imageUrl, d.videoUrl, d.audioUrl].find((u): u is string => typeof u === 'string' && !!u) ??
+      (typeof d.resourceId === 'string' && d.resourceId
+        ? toResourceUrl(canvasId, d.resourceId.replace(/^[^/]+\//, ''))
+        : undefined)
     const text = typeof d.text === 'string' ? d.text : undefined
     out.push({ kind, ...(url ? { url } : {}), ...(text && !url ? { value: text } : {}) })
   }
@@ -582,7 +590,7 @@ export function createCanvasMcpServer(
           if (!('error' in picked)) {
             targetDoc = picked.doc
             const snap = await picked.doc.read()
-            resources.push(...collectReferenceResources(snap.nodes, snap.edges, args.nodeId, args.referenceNodeIds ?? []))
+            resources.push(...collectReferenceResources(snap.nodes, snap.edges, args.nodeId, args.referenceNodeIds ?? [], canvasId ?? ''))
           }
         } catch {
           /* 收集参考图失败不该挡下单：缺参考图仍可生成，只是少了参考 */
