@@ -51,8 +51,13 @@ async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
   let result: Awaited<ReturnType<typeof publishCells>>
   try {
     result = await publishCells(deps, props.id, s.rows, s.cols, ids, kind)
-  } catch {
+  } catch (err) {
     endPublish(props.id)
+    // 异常也要说出来：以前这里静默 return，用户只看到"点了没反应"（2026-11-05 实测）
+    ctx.tryGet<{ notify?(m: string, o?: object): unknown } | undefined>('canvas')?.notify?.(
+      '发布失败：' + (err instanceof Error ? err.message : String(err)),
+      { source: 'image-grid-split/publish' },
+    )
     return
   }
   if (!result.ok) {

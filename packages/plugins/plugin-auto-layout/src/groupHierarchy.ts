@@ -4,6 +4,8 @@
  * 用户拍板的语义：
  * - 主节点（组）在**它所在的层**被识别为一个节点（占位）参与布局；
  * - 组内部的节点又识别成一张"子画布"独立布局；
+ * - 分镜组（storyboard）也是容器，但它的槽位是固定宫格：整体当一个占位移动，
+ *   **不重排内部**（重排会让图片和槽位错位）。
  * - 平铺节点数组先转成树（支持组嵌套组），从嵌套最深的组开始布局；
  * - 每个组内部布局完成后重算该组 rect（frame = 直接子节点新包围盒 + padding），
  *   然后该组作为占位节点参与其上层布局，逐层向上直到完成。
@@ -35,6 +37,8 @@ export interface GroupTreeNode {
   /** 组节点自身的 LayoutNode（占位尺寸用当前 frame）；叶子 = 普通节点 LayoutNode */
   node: LayoutNode
   children: GroupTreeNode[]
+  /** 原子容器：整体移动、不递归排版内部（分镜组）。 */
+  atomic?: boolean
 }
 
 export interface GroupTree {
@@ -44,22 +48,58 @@ export interface GroupTree {
 }
 
 /**
- * 平铺节点数组 → 树（支持组嵌套组）。
- * 组节点判定：type === 'group'（与 plugin-group / autoLayoutPlugin 同约定）。
+ * 已知的容器型节点类型：子节点 parentId 指向它、position 是相对它的局部坐标。
+ *
+ * 为什么不止 group：宫格插件「创建分镜组」建的是 `storyboard` 容器。只认 group 时，
+ * 它的子图会被拆出去当自由节点排，容器留在原地成空框（用户实测 2026-11-05 截图）。
+ * 这份名单只是「还没看到子节点时」的兜底：真正的判据是数据里有没有孩子（见 buildGroupTree）。
+ */
+export const KNOWN_CONTAINER_NODE_TYPES: ReadonlySet<string> = new Set(['group', 'storyboard'])
+
+/**
+ * 可以**重排内部**的容器类型（目前只有普通分组）。
+ *
+ * 分镜组不行：它的子图坐标是对着固定槽位算好的，重排会让图片离开槽位。
+ * 其它未知容器一律按原子处理 —— 不认识其内部约束时，整体移动比瞎排安全。
+ */
+export const REORDERABLE_CONTAINER_NODE_TYPES: ReadonlySet<string> = new Set(['group'])
+
+/**
+ * 平铺节点数组 → 树（支持容器嵌套）。
+ *
+ * 容器判定**以数据为准**：任何被别的节点写成 parentId 的节点都是容器，
+ * 不按 type 写死。用户实测（2026-11-05）宫格「创建分镜组」建出的 `storyboard` 容器，
+ * 以前只认 `type === 'group'`，它的子图被拆出去当自由节点、容器留在原地成空框。
+ * 按「有没有孩子」判，任何新容器（分镜组、以后的别的）都自动正确。
+ *
+ * 已知容器类型（group / storyboard）仍算容器，即使此刻还没有孩子 —— 刚建的空分镜组
+ * 也要作为一个整体占位参与布局，别被当成普通图片。
+ *
  * parentId 指向不存在节点的孤儿按顶层处理（防悬挂）。
  */
-export function buildGroupTree(nodes: LayoutNode[]): GroupTree {
+export function buildGroupTree(
+  nodes: LayoutNode[],
+  knownContainers: ReadonlySet<string> = KNOWN_CONTAINER_NODE_TYPES,
+): GroupTree {
   const byId = new Map(nodes.map((n) => [n.id, n]))
+  const parentIds = new Set<string>()
+  for (const n of nodes) {
+    if (n.parentId && byId.has(n.parentId) && n.parentId !== n.id) parentIds.add(n.parentId)
+  }
+  const isContainer = (n: LayoutNode): boolean => parentIds.has(n.id) || knownContainers.has(n.type)
+
   const groups = new Map<string, GroupTreeNode>()
   const leaves = new Map<string, GroupTreeNode>()
   const makeNode = (n: LayoutNode, depth: number): GroupTreeNode => ({
     id: n.id,
-    isGroup: n.type === 'group',
+    isGroup: isContainer(n),
     depth,
     node: n,
     children: [],
+    // 只有普通分组允许重排内部；分镜组/未知容器一律整体移动（槽位不能被打乱）
+    ...(isContainer(n) && !REORDERABLE_CONTAINER_NODE_TYPES.has(n.type) ? { atomic: true } : {}),
   })
-  // 两遍：先建所有树节点，再连父子（组可能嵌套组）
+  // 两遍：先建所有树节点，再连父子（容器可能嵌套）
   for (const n of nodes) {
     const t = makeNode(n, 0)
     if (t.isGroup) groups.set(n.id, t)
@@ -71,8 +111,8 @@ export function buildGroupTree(nodes: LayoutNode[]): GroupTree {
     const t = all.get(n.id)!
     const pid = n.parentId
     const parent = pid ? byId.get(pid) : undefined
-    // 父存在且（父是组 或 父是任意节点——非组父属非常规数据，按顶层处理防错位）
-    if (pid && parent && parent.type === 'group' && all.has(pid)) {
+    // 父存在且是容器（非容器父属非常规数据，按顶层处理防错位）
+    if (pid && parent && pid !== n.id && groups.has(pid)) {
       const pt = groups.get(pid)!
       t.depth = pt.depth + 1
       pt.children.push(t)
@@ -169,6 +209,23 @@ export function layoutHierarchy(
    * 返回本组 frame（绝对坐标），并把组内子节点的最终相对坐标写入 positions。
    */
   function layoutGroupSubtree(t: GroupTreeNode): GroupBounds {
+    /**
+     * 原子容器（分镜组）：整体保留当前 frame，内部一张图都不排。
+     *
+     * 子节点的相对坐标本来就是对槽位算好的，重排内部会让图片离开槽位；
+     * 而容器随后作为占位参与上层布局，整块（连同内部图片）一起移动即可。
+     */
+    if (t.atomic) {
+      const frame: GroupBounds = {
+        x: t.node.position.x,
+        y: t.node.position.y,
+        w: nodeDim(t.node).w,
+        h: nodeDim(t.node).h,
+      }
+      groupFrames.set(t.id, frame)
+      logs.push(`[container ${t.id}] atomic frame=${frame.w.toFixed(0)}x${frame.h.toFixed(0)}`)
+      return frame
+    }
     // 1) 先递归：内层嵌套组先完成（各自得到 frame）
     const nestedGroups = t.children.filter((c) => c.isGroup)
     const nestedFrames = new Map<string, GroupBounds>()

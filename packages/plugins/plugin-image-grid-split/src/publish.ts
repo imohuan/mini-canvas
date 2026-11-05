@@ -79,6 +79,13 @@ export interface PublishDeps {
   transaction<T>(reason: string, fn: () => T): T
   /** 临时诊断（发布卡住时打点；定位后删除） */
   debug?(stage: string, detail?: unknown): void
+  /**
+   * 给用户一句失败原因（可撤回的跟随鼠标 tip）。
+   *
+   * 为什么必须有（用户实测 2026-11-05）：发布失败（如资源库 403）时按钮只是"点了没反应"，
+   * 画布上不多任何节点、也没有任何提示 —— 用户只能猜。失败原因必须说出来。
+   */
+  notify?(message: string): void
 }
 
 /** 从 ctx 组装发布依赖（服务缺失时各调用方自己兜底） */
@@ -104,6 +111,15 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
   const media = () => mediaCapabilityOf(ctx as never)
   const group = () =>
     ctx.tryGet<{ createGroup?(ids: string[]): string | null }>('group')
+  /** 失败原因走同一条提示口（与 PublishDeps.notify 同源，避免两套写法） */
+  const notify = (message: string): void => {
+    try {
+      ctx.tryGet<{ notify?(m: string, o?: object): unknown } | undefined>('canvas')
+        ?.notify?.(message, { source: 'image-grid-split/publish' })
+    } catch {
+      /* 没有提示服务也不能让发布流程抛错 */
+    }
+  }
 
   return {
     ctx: ctx as Context,
@@ -114,10 +130,14 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
       return undefined
     },
     putBlob: async (blob, name) => {
-      if (!resources) return undefined
+      if (!resources) {
+        notify('资源库服务没装（resources 不可用），切片存不上')
+        return undefined
+      }
       try {
         return await resources.put(blob, { kind: 'image', name })
-      } catch {
+      } catch (err) {
+        notify('切片存不上（资源库写入失败）：' + (err instanceof Error ? err.message : String(err)))
         return undefined
       }
     },
@@ -181,6 +201,14 @@ export function publishDepsOf(ctx: Context): PublishDeps | null {
     },
     transaction: (reason, fn) => doc.transaction(reason, () => fn()),
     debug: (stage, detail) => console.log('[grid-split:debug]', stage, JSON.stringify(detail)),
+    notify: (message) => {
+      try {
+        const canvas = ctx.tryGet<{ notify?(m: string, o?: object): unknown } | undefined>('canvas')
+        canvas?.notify?.(message, { source: 'image-grid-split/publish' })
+      } catch {
+        // 没有提示服务：至少别让发布流程因此抛错
+      }
+    },
   }
 }
 
@@ -229,6 +257,12 @@ export interface PublishResult {
   containerId?: string
   /** 失败原因（用户可读；给 tip 用） */
   reason?: string
+}
+
+/** 失败结果 + 同时把原因告诉用户（所有失败出口共用，避免漏提示）。 */
+function fail(deps: PublishDeps, reason: string): PublishResult {
+  deps.notify?.(reason)
+  return { ok: false, count: 0, reason }
 }
 
 /** 发布收尾的最小依赖（单测可直接给桩，不必搭整套 canvas） */
@@ -300,32 +334,22 @@ export async function publishCells(
   selected: number[],
   kind: 'canvas' | 'storyboard',
 ): Promise<PublishResult> {
-  if (selected.length === 0) {
-    return { ok: false, count: 0, reason: '先勾选要发布的格子' }
-  }
+  if (selected.length === 0) return fail(deps, '先勾选要发布的格子')
 
   const data = deps.getNodeData(nodeId)
   const imageW = typeof data?.imageWidth === 'number' ? data.imageWidth : 0
   const imageH = typeof data?.imageHeight === 'number' ? data.imageHeight : 0
-  if (imageW <= 0 || imageH <= 0) {
-    return { ok: false, count: 0, reason: '图片尺寸未知（还没加载完）' }
-  }
+  if (imageW <= 0 || imageH <= 0) return fail(deps, '图片尺寸未知（还没加载完）')
   const src = await resolveSourceUrl(deps, data)
-  if (!src) {
-    return { ok: false, count: 0, reason: '找不到原图地址' }
-  }
+  if (!src) return fail(deps, '找不到原图地址')
   const img = await loadImage(src)
-  if (!img || !img.naturalWidth) {
-    return { ok: false, count: 0, reason: '原图加载失败' }
-  }
+  if (!img || !img.naturalWidth) return fail(deps, '原图加载失败')
   deps.debug?.('image-loaded', { w: img.naturalWidth, h: img.naturalHeight, src })
 
   // 公共切片上传步骤
   const sliced = await sliceAndUpload(deps, img, rows, cols, selected)
   deps.debug?.('sliced', { size: sliced.size, selected })
-  if (sliced.size === 0) {
-    return { ok: false, count: 0, reason: '切片没存上（资源库不可用？）' }
-  }
+  if (sliced.size === 0) return fail(deps, '切片没存上（资源库不可用？）')
 
   if (kind === 'canvas') {
     /**
@@ -387,9 +411,7 @@ export async function publishCells(
         if (gid) groupId = gid
       }
     })
-    if (createdIds.length === 0) {
-      return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }
-    }
+    if (createdIds.length === 0) return fail(deps, '建图片节点失败（图片插件不可用）')
     return {
       ok: true,
       count: createdIds.length,
@@ -456,15 +478,9 @@ export async function publishCells(
     // 2) 吸附进槽位（与手动拖拽同一条计算：parentId + 槽位坐标 + 等比缩放）
     placed = snapIntoBoard(deps.ctx, boardId, cellIds, rows, cols)
   })
-  if (!boardId) {
-    return { ok: false, count: 0, reason: '建分镜组失败（插件未装或宿主不支持）' }
-  }
-  if (cellIds.size === 0) {
-    return { ok: false, count: 0, reason: '建图片节点失败（图片插件不可用）' }
-  }
-  if (!placed) {
-    return { ok: false, count: 0, reason: '分镜组吸附失败' }
-  }
+  if (!boardId) return fail(deps, '建分镜组失败（插件未装或宿主不支持）')
+  if (cellIds.size === 0) return fail(deps, '建图片节点失败（图片插件不可用）')
+  if (!placed) return fail(deps, '分镜组吸附失败')
   return { ok: true, count: cellIds.size, containerId: boardId }
 }
 
