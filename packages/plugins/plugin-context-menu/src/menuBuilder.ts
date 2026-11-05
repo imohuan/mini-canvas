@@ -22,6 +22,21 @@ export interface MenuCommandLike {
   order?: number
   keys?: string[]
   icon?: string
+  /**
+   * 仅对 node 模式生效：这个节点要不要显示本条命令。
+   *
+   * 为什么不是 `when`：`when` 只拿得到执行上下文，看不到"右键的是哪个节点"。
+   * `when` 也管执行；这里只管显示 —— 例如「导出节点包」只能对可视化节点用，
+   * 在图片 / 文本节点上显示出来只会让人点出一个 400。
+   */
+  nodeVisible?: (node: MenuNodeContext) => boolean
+}
+
+/** 右键命中的节点（只给菜单显示判断用；命令执行仍拿原来的 payload） */
+export interface MenuNodeContext {
+  id: string
+  type?: string
+  data?: Record<string, unknown>
 }
 
 /** 可创建节点类型最小形状（nodeStore.types 的只读子集） */
@@ -120,6 +135,23 @@ export function commandVisibleInMode(cmd: MenuCommandLike, mode: ContextMenuMode
   return cmd.areas.includes(mode)
 }
 
+/** 命令在当前右键上下文里是否显示（node 模式下额外问节点的 nodeVisible） */
+export function commandVisibleInMenu(
+  cmd: MenuCommandLike,
+  mode: ContextMenuMode,
+  node?: MenuNodeContext,
+): boolean {
+  if (!commandVisibleInMode(cmd, mode)) return false
+  if (mode !== 'node' || !cmd.nodeVisible) return true
+  if (!node) return false
+  try {
+    return cmd.nodeVisible(node) !== false
+  } catch {
+    // 显示判断坏了就别把菜单搞崩：宁可少一项，也不让右键点不出来
+    return false
+  }
+}
+
 /** 取分组优先级；未登记组给 999（按其名排最后，稳定） */
 export function groupRank(group: string): number {
   return GROUP_PRIORITY[group] ?? 999
@@ -151,6 +183,8 @@ export function buildMenuItems(
   mode: ContextMenuMode,
   commands: readonly MenuCommandLike[],
   nodeTypes: readonly MenuNodeTypeLike[],
+  /** node 模式：右键命中的那个节点（nodeVisible 用；缺省 = 无法判断，带条件的项不显示） */
+  node?: MenuNodeContext,
 ): ContextMenuItem[] {
   const items: ContextMenuItem[] = []
 
@@ -172,7 +206,7 @@ export function buildMenuItems(
 
   // 命令区：过滤可见 → 归一化
   for (const cmd of commands) {
-    if (!commandVisibleInMode(cmd, mode)) continue
+    if (!commandVisibleInMenu(cmd, mode, node)) continue
     const group = cmd.group || (mode === 'node' ? '节点' : mode === 'edge' ? '连线' : '操作')
     // 分组路径：**谁写了斜杠，谁才产生层级**。
     //

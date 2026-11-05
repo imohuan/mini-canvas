@@ -156,7 +156,19 @@ export function apply(ctx: Context): void {
     // 命令表（现取，注册即生效）+ 节点类型表。areas 语义 = 开放注册：命令声明 areas 含当前
     // mode 即自动出现在右键；未声明 areas 的命令（纯快捷键）不进菜单 —— 无需本插件白名单。
     // 命令表经服务取（能力段 ctx.commands 只有 register/has；list 在 CommandService 上）
-    const raw = buildMenuItems(mode, ctx.get<CanvasActions>('canvas').listCommands(), nodeTypes)
+    // 右键命中的那个节点也要交给菜单：有些命令只对某类节点有意义（如「导出节点包」只认可视化节点）
+    const hitNode = nodeId
+      ? (() => {
+          const n = doc.getNode(nodeId) as { id?: string; type?: string; data?: Record<string, unknown> } | undefined
+          return n ? { id: String(n.id ?? nodeId), type: n.type, data: n.data } : undefined
+        })()
+      : undefined
+    const raw = buildMenuItems(
+      mode,
+      ctx.get<CanvasActions>('canvas').listCommands(),
+      nodeTypes,
+      hitNode,
+    )
     // UI 增强：补图标 + hover 描述（与快捷键面板同款 item 视觉）
     state.items = enrichMenuItems(raw)
     state.mode = mode

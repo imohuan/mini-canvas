@@ -17,7 +17,7 @@
  */
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
+import { cp, copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { readdirSync, readFileSync } from "node:fs"
 import { availableParallelism } from "node:os"
 import path from "node:path"
@@ -28,6 +28,11 @@ const PACKAGE_ROOT = path.resolve(SCRIPT_DIR, "..")
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, "../..")
 const ASSETS = path.join(PACKAGE_ROOT, "assets")
 const STAMP_FILE = path.join(PACKAGE_ROOT, ".build-stamp.json")
+/**
+ * 一键启动用的数据根（与 scripts/launch-server.mjs 的 `pnpm serve` 默认一致）。
+ * 只在这里拼路径、不建目录：构建脚本不该顺手改用户的运行数据。
+ */
+const DATA_ROOT = path.resolve(process.env.MINI_CANVAS_DATA_DIR ?? path.join(REPO_ROOT, ".mini-canvas"))
 /** 指纹规则版本：改了本脚本的指纹算法就 +1，旧 stamp 自动作废（下次全量重建） */
 const STAMP_VERSION = 3
 
@@ -40,6 +45,17 @@ function intArg(name, fallback) {
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : fallback
 }
 const jobs = intArg("--jobs", Math.max(2, Math.floor(availableParallelism() / 2)))
+
+/**
+ * 自带插件的**后台半**：前端随应用冷启动，后台半要单独放进数据根的 server-plugins。
+ *
+ * 为什么必须在这里做：用户实测 2026-11-05（分支 codex/app-shell-layering）右键「导出节点包」
+ * 报「打包失败（HTTP 403）」，后台其实是 404「接口不存在: /api/node-packages/build」——
+ * `/api/node-packages/*` 来自 plugin-node-ui 的后台半，而一键启动只构建前端与可装卸插件，
+ * 从来没人跑过 `deploy:server`。这类插件的前端看起来完全正常（导出菜单还在），
+ * 坏掉的是菜单背后的接口，最容易被当成"导出功能本身坏了"。
+ */
+const BUILTIN_SERVER_PLUGINS = ["plugin-node-ui"]
 
 /**
  * 打包时一律 external（运行期由宿主 window 全局提供）的工作区包。
@@ -234,6 +250,14 @@ const TASKS = [
   // ui 不 external → externalize:false，指纹覆盖整个工作区依赖闭包
   { name: "@mini-canvas/ui", label: "画布界面", dir: path.join(REPO_ROOT, "packages/ui"), externalize: false },
   { name: "@mini-canvas/plugin-cloud-client", label: "云端客户端", dir: path.join(REPO_ROOT, "packages/plugins/plugin-cloud-client"), externalize: true },
+  // 自带插件的后台半：前端产物在 ui 的闭包里，这里只补 dist/server.js
+  ...BUILTIN_SERVER_PLUGINS.map((d) => ({
+    name: "@mini-canvas/" + d,
+    label: d + "（后台半）",
+    dir: path.join(REPO_ROOT, "packages/plugins", d),
+    externalize: false,
+    script: "build:server",
+  })),
   ...[...new Set([...INSTALLABLE_PLUGIN_DIRS, ...discoverInstallablePlugins()])].map((d) => ({
     name: "@mini-canvas/" + d,
     label: d,
@@ -245,7 +269,7 @@ const TASKS = [
 /** 跑一个 pnpm --filter <pkg> build；输出收进缓冲，失败时打印尾部 */
 function buildOne(task) {
   return new Promise((resolve) => {
-    const child = spawn("pnpm", ["--filter", task.name, "build"], {
+    const child = spawn("pnpm", ["--filter", task.name, task.script ?? "build"], {
       cwd: REPO_ROOT,
       shell: process.platform === "win32", // Windows 上 pnpm 是 .cmd，需要 shell 才能起
       stdio: ["ignore", "pipe", "pipe"],
@@ -321,7 +345,30 @@ if (toBuild.length === 0) {
   console.log("\n重建 " + results.length + " 个包成功（耗时 " + buildSecs + "s）\n")
 }
 
-// ---------- 3. 收产物进 assets/ ----------
+// ---------- 3. 自带插件的后台半 → <数据根>/server-plugins ----------
+// 只复制、不装：server-plugins 是**启动时**扫的，复制完在下一次启动生效。
+// 为什么不在运行期打安装接口：构建阶段后台可能还没起来，而且那需要管理令牌。
+const serverPluginsDir = path.join(DATA_ROOT, "server-plugins")
+await mkdir(serverPluginsDir, { recursive: true })
+let missingServer = 0
+for (const d of BUILTIN_SERVER_PLUGINS) {
+  const artifact = path.join(REPO_ROOT, "packages/plugins", d, "dist/server.js")
+  if (!(await pathExists(artifact))) {
+    console.error("[FAIL] 没有 " + d + " 的后台半产物：" + artifact)
+    console.error("       它负责 /api/node-packages/*（导出节点包）等接口；缺了会表现为「导出失败」")
+    missingServer += 1
+    continue
+  }
+  const target = path.join(serverPluginsDir, d + ".js")
+  await copyFile(artifact, target)
+  console.log("[ ok ] " + d + " 后台半 -> " + path.relative(PACKAGE_ROOT, target))
+}
+if (missingServer > 0) {
+  console.error("\n" + missingServer + " 个自带后台半缺失，中止（否则启动后导出 / 导入节点包会 404）。")
+  process.exit(1)
+}
+
+// ---------- 4. 收产物进 assets/ ----------
 await rm(ASSETS, { recursive: true, force: true })
 await mkdir(ASSETS, { recursive: true })
 
@@ -356,7 +403,7 @@ for (const must of [
   }
 }
 
-// ---------- 4. 写回 stamp（全部任务，含这次跳过的）----------
+// ---------- 5. 写回 stamp（全部任务，含这次跳过的）----------
 const nextTasks = {}
 for (const t of TASKS) nextTasks[t.name] = t.hash
 await writeFile(STAMP_FILE, JSON.stringify({ version: STAMP_VERSION, tasks: nextTasks }, null, 2) + "\n", "utf8")

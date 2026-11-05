@@ -31,6 +31,26 @@ export default defineConfig({
         // 不设置才回落到默认的 8865。
         target: process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865',
         changeOrigin: true,
+        /**
+         * 代理不是"另一个网站"，而是开发页面的同源后端入口 —— 请求到了这里，
+         * 就按**它转发的那个页面**算来源。
+         *
+         * 为什么不能原样转发浏览器带来的 Origin：后台的来源白名单只认显式配置
+         * （默认只有 http://localhost:5288）。多 Agent 并行时前端会在 5299 / 5300
+         * 这类端口上跑，浏览器发 `Origin: http://localhost:5299`，代理原样带过去
+         * 就被后台判成 origin-not-trusted → 导出节点包 403（用户 2026-11-05 实测）。
+         * 让代理用目标地址作为 Origin，等于承认"这个页面本来就走这条同源通道"；
+         * 其它网站也走不到这台机器的开发代理上。
+         */
+        configure: (proxy) => {
+          // 同源化：代理转发时把 Origin 改写成后台地址。
+          // 为什么不用 `headers` 选项：http-proxy 的 headers 只在**没有** Origin 时补，
+          // 浏览器带来的 `Origin: http://localhost:5299` 会原样透过去，后台照样 403。
+          // 预检（OPTIONS）也要改：预检不过，带 x-admin-token 的请求根本发不出去。
+          proxy.on('proxyReq', (req: { setHeader(name: string, value: string): void }) => {
+            req.setHeader('origin', process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865')
+          })
+        },
         // 把后台的 CORS 头**原样**带回来。
         //
         // 这里曾经是写死 `'*'` 的：那时可视化节点的沙箱页自己发请求，需要放宽 CORS。

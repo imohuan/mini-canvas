@@ -120,5 +120,24 @@ describe('打包路由：缺依赖声明的提示（用户那句"规则没提供
     expect(res.status).toBe(200)
     expect(res.headers.get('x-pack-scripts')).toBe('')
   })
+
+  /**
+   * 空界面也必须能导出。
+   *
+   * 真实现象（2026-11-05）：新放下的可视化节点还没让 AI 画内容时，右键「导出节点包」
+   * 直接 400「这个节点还没有界面内容」。但该节点本身就在画布上、有类型、有数据 ——
+   * 用户要的正是"先把空节点存下来"。拒绝只会让人以为导出坏了。
+   * 只有"节点不存在"和"不是可视化节点"才该拒。
+   */
+  it('★ 可视化节点还没有界面内容 → 仍然导出（空 ui.html），不报错', async () => {
+    const s = fakeCtx({ storedNode: uiNode({ uiHtml: '' }) })
+    apply(s.ctx)
+    const res = (await s.routes.get('POST /api/node-packages/build')!(
+      callCtx({ canvasId: 'c-other', nodeId: 'grid1' }),
+    )) as Response
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('mini-canvas-node')
+    expect(res.headers.get('x-pack-name')).toBeTruthy()
+  })
 })
 

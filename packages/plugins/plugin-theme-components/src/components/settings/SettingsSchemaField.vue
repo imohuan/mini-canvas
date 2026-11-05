@@ -401,6 +401,7 @@ const appearanceControl = computed(() =>
         :id="fieldId"
         class="sf-input"
         :model-value="String(entry.value)"
+        :placeholder="entry.schema.placeholder"
         :aria-label="entry.schema.label ?? entry.key"
         @update:model-value="set(entry.key, String($event))"
       />

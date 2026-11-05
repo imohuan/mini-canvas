@@ -24,6 +24,44 @@ function fakeScope() {
   return { scope: ctx as never, commands }
 }
 
+/**
+ * 导出失败的提示。
+ *
+ * 真实现象（2026-11-05）：导出接口 404 / 403 时，命令只打一条 console.warn，
+ * 用户点完完全看不出发生了什么。所以这里钉：失败一定要走到 notify，并带上原因。
+ */
+describe('uiAssetUploadPlugin：导出节点包失败要让人看见', () => {
+  it('★ 接口报错 → notify 带原因（不是只写控制台）', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+    }))
+    const s = fakeScope()
+    const shown: string[] = []
+    // useUi() 读的是外壳共享单例上的 showToast；真实外壳会把它接到 notify 服务。
+    // 这里替换同一个单例的入口，验证「失败 → 用户看得到」这条链，而不是只断言 console。
+    const { useUi } = await import('../composables/ui')
+    const prevToast = useUi().showToast
+    useUi().showToast = (m: string) => shown.push(m)
+    uiAssetUploadPlugin.apply?.(s.scope)
+    const cmd = s.commands.get('ui:node-export-pack')! as { run: (c: unknown, p: unknown) => Promise<void> }
+    await cmd.run({}, { nodeId: '2' })
+    expect(shown.join('\n')).toMatch(/导出节点包失败/)
+    expect(shown.join('\n')).toMatch(/404/)
+    useUi().showToast = prevToast
+    vi.unstubAllGlobals()
+  })
+
+  it('★ 导出菜单只对可视化节点出现（图片节点上不该有这条）', () => {
+    const s = fakeScope()
+    uiAssetUploadPlugin.apply?.(s.scope)
+    const cmd = s.commands.get('ui:node-export-pack')! as { nodeVisible?: (n: { type?: string }) => boolean }
+    expect(cmd.nodeVisible?.({ type: 'ui' })).toBe(true)
+    expect(cmd.nodeVisible?.({ type: 'image' })).toBe(false)
+  })
+})
+
 describe('uiAssetUploadPlugin 装配', () => {
   it('apply 不抛，并注册了节点右键那几条命令', async () => {
     // loadAssets 会打网络：这里给它一个"永远失败"的 fetch，验证**失败也不影响装配**

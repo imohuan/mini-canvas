@@ -39,6 +39,15 @@ export interface ConfigField {
   label?: string
   /** UI 描述/说明（可选，标量控件在控件下方渲染小字；缺省不显示） */
   description?: string
+  /**
+   * UI 占位文字（可选，string/text 控件空值时显示在输入框里）。
+   *
+   * 为什么需要它：说明文字在左侧、输入框在右侧，空值字段看起来就是一块
+   * 没有任何提示的灰条 —— 用户 2026-11-05 实测「上游资源接口」时原话：
+   * 「这个输入框就摆在那里，没有任何描述，会让人感觉很疑惑」。
+   * 只影响展示，不参与校验、不写进配置值。
+   */
+  placeholder?: string
   /** UI 分组名（面板按组展示；缺省 = 插件名） */
   group?: string
   /** number 用：最小/最大（装配 raw 越界 → 校验错 FAILED；运行时面板 set 仍走 store 夹取） */

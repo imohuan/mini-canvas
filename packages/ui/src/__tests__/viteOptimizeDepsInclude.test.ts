@@ -27,6 +27,19 @@ const UI = path.join(REPO, 'packages/ui')
 
 const config = readFileSync(path.join(UI, 'vite.config.ts'), 'utf8')
 
+describe('dev 代理的来源边界（多 Agent 端口）', () => {
+  it('★ 代理把 Origin 改写成后台地址，5299 这类独立端口不会被判成 origin-not-trusted', () => {
+    // 只转发、不改 Origin 时，浏览器带来的 http://localhost:5299 会被后台来源白名单拒掉
+    // —— 导出节点包直接 403（用户 2026-11-05 实测）。
+    //
+    // 必须改在 proxyReq 上：http-proxy 的 `headers` 选项只在请求**没有** Origin 时补，
+    // 浏览器带来的 Origin 会原样透过去（预检同样不被改写），所以断言真实实现的那一段。
+    expect(config).toMatch(/configure\s*:\s*\(\s*proxy\s*\)\s*=>\s*\{/)
+    expect(config).toMatch(/proxy\.on\(\s*['"]proxyReq['"]/)
+    expect(config).toMatch(/setHeader\(\s*['"]origin['"]\s*,\s*process\.env\.MINI_CANVAS_BACKEND\s*\|\|\s*['"]http:\/\/localhost:8865['"]\s*\)/)
+  })
+})
+
 /** 取 `optimizeDeps: { include: [...], exclude: [...] }` 里两段字符串数组 */
 function arrayAfter(marker: RegExp): string[] {
   const m = marker.exec(config)

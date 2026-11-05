@@ -37,6 +37,8 @@ export interface SettingSchema {
   label?: string
   /** UI 描述/说明（可选，控件下方小字；缺省不显示） */
   description?: string
+  /** UI 占位文字（text 控件空值时显示；由 Config schema 的 placeholder 映射而来） */
+  placeholder?: string
   /** number 用：最小/最大（越界夹取） */
   min?: number
   max?: number

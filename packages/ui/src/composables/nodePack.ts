@@ -13,7 +13,6 @@
  *
  * 打包本身**只能在后台做**（脚本内容在服务器上），所以这里只有"调接口 + 拼数据"。
  */
-import { fetchBackendOrigin } from '@mini-canvas/plugin-node-ui'
 import { withAdminToken } from '@mini-canvas/canvas-base'
 
 /** 本模块用到的 fetch 最小形状（便于测试注入假货） */
@@ -35,21 +34,21 @@ export const PACK_EXT = '.mcnode'
 export const VERSION_SEP = '_v'
 
 /**
- * 问后台它是谁；拿不到就回落同源。
+ * 节点包接口的地址：**默认同源**（空串 = 相对当前页面）。
  *
- * 为什么要问：dev 下前端在 5288、后台在 8865，同源地址不是后台
- * （与 UiContent 里那条回落的同一条理由，见 uiOrigin.ts）。
+ * 为什么不先问后台要绝对地址（旧实现）：
+ *   节点包接口要带 `x-admin-token`，属于带自定义头的跨源请求；dev 下前端在
+ *   5288/5299、后台在 8865，若直接按后台自报的 `http://127.0.0.1:8865` 发，
+ *   就绕过了 vite 代理、变成浏览器直连另一个源 —— 后台会按来源白名单拒掉，
+ *   页面上只看到 `Failed to fetch`（用户 2026-11-05 导出节点包实测）。
+ *   同源相对路径经 vite 代理转发，代理那边会把 Origin 归一成后台认识的地址
+ *   （见 packages/ui/vite.config.ts），生产形态本来就是同源托管，两种部署一致。
+ *
+ * `configured` 仍保留：插件自报的地址（`uiNodeBaseUrl`）显式给了就用它，
+ * 那是用户自己声明的"另一套后台"。
  */
-export async function resolvePackBase(configured?: string, pageHref?: string): Promise<string> {
-  if (configured) return configured.replace(/\/+$/, '')
-  const discovered = await fetchBackendOrigin()
-  if (discovered) return discovered.replace(/\/+$/, '')
-  if (!pageHref) return ''
-  try {
-    return new URL(pageHref).origin
-  } catch {
-    return ''
-  }
+export async function resolvePackBase(configured?: string, _pageHref?: string): Promise<string> {
+  return (configured ?? '').trim().replace(/\/+$/, '')
 }
 
 /** 打包结果：字节 + 名字 + 清单 */

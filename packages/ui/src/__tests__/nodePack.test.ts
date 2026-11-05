@@ -25,18 +25,21 @@ describe('PACK_EXT 与后台保持一致（防悄悄漂移）', () => {
   })
 })
 
-describe('resolvePackBase —— 先问后台，问不到回落同源', () => {
+describe('resolvePackBase —— 默认同源（走 dev 代理），显式配置才用绝对地址', () => {
   it('配置里给了就用配置（去掉尾部斜杠）', async () => {
     expect(await resolvePackBase('http://x:1/')).toBe('http://x:1')
   })
-  it('没配 → 问后台；问到了用它', async () => {
-    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ ok: true, origin: 'http://127.0.0.1:8865' }) }))
-    expect(await resolvePackBase(undefined, 'http://localhost:5288/#/canvas/default')).toBe('http://127.0.0.1:8865')
-    vi.unstubAllGlobals()
-  })
-  it('问不到 → 回落页面同源（生产形态本来就这样）', async () => {
-    vi.stubGlobal('fetch', async () => { throw new Error('offline') })
-    expect(await resolvePackBase(undefined, 'http://localhost:5288/#/canvas/default')).toBe('http://localhost:5288')
+  /**
+   * ★ 默认必须是**相对地址**，不能换成后台自报的绝对地址。
+   *
+   * 带 x-admin-token 的请求一旦直连另一个源，就绕过 vite 代理、撞上后台的来源白名单：
+   * 页面上只看到 `导出节点包失败：Failed to fetch`（用户 2026-11-05 实测）。
+   */
+  it('没配 → 空串（同源相对地址，经 dev 代理转发）', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('不应该为了拼地址去打网络')
+    })
+    expect(await resolvePackBase(undefined, 'http://localhost:5299/#/canvas/default')).toBe('')
     vi.unstubAllGlobals()
   })
 })

@@ -53,6 +53,16 @@ import { applyFavorites } from './server/applyFavorites.js'
 import { applyFunctions } from './server/applyFunctions.js'
 import { applyDebug } from './server/applyDebug.js'
 
+/**
+ * 后台插件的名字（cloud-server 的外挂加载器按它判「是不是合法后台插件」，也用它去重）。
+ *
+ * 漏了它不会在编译期报错：产物能生成、能复制进 server-plugins，服务也能启动，
+ * 只是启动日志里多一句「不是合法后台插件（需导出 name 与 apply）」并被跳过 ——
+ * 表现成 /api/node-packages/* 全部 404、导出节点包失败（2026-11-05 实测）。
+ * 与 plugin-manager 里的插件 id 对齐，装 / 卸时报错也认得出来。
+ */
+export const name = 'plugin-node-ui'
+
 export function apply(ctx: ServerCtx): void {
   applyBase(ctx)
   applyTools(ctx)

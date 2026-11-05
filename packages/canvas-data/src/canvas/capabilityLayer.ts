@@ -30,6 +30,7 @@ function toSettingSchema(field: ConfigField): SettingSchema {
     ...(field.optional !== undefined ? { optional: field.optional } : {}),
     ...(field.label !== undefined ? { label: field.label } : {}),
     ...(field.description !== undefined ? { description: field.description } : {}),
+    ...(field.placeholder !== undefined ? { placeholder: field.placeholder } : {}),
     ...(field.min !== undefined ? { min: field.min } : {}),
     ...(field.max !== undefined ? { max: field.max } : {}),
     ...(field.step !== undefined ? { step: field.step } : {}),

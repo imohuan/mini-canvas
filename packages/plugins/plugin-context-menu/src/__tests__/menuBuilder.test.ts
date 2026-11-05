@@ -2,12 +2,49 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMenuItems,
   commandVisibleInMode,
+  commandVisibleInMenu,
   sortMenuItems,
   splitMenuPath,
   topGroupOf,
   type MenuCommandLike,
   type MenuNodeTypeLike,
 } from '../menuBuilder'
+
+describe('nodeVisible —— 只对某类节点显示的命令', () => {
+  const exportPack = {
+    id: 'ui:node-export-pack',
+    title: '导出节点包',
+    areas: ['node'],
+    nodeVisible: (n: { type?: string }) => n.type === 'ui',
+  }
+
+  it('★ 图片节点上不显示、可视化节点上显示（用户点出来只会是打包失败）', () => {
+    expect(commandVisibleInMenu(exportPack, 'node', { id: '1', type: 'image' })).toBe(false)
+    expect(commandVisibleInMenu(exportPack, 'node', { id: '2', type: 'ui' })).toBe(true)
+  })
+
+  it('不知道右键的是哪个节点时，带条件的命令不显示（宁缺勿错）', () => {
+    expect(commandVisibleInMenu(exportPack, 'node', undefined)).toBe(false)
+  })
+
+  it('没有 nodeVisible 的命令不受影响', () => {
+    expect(commandVisibleInMenu({ id: 'a', title: '删除', areas: ['node'] }, 'node', { id: '1', type: 'image' })).toBe(true)
+  })
+
+  it('buildMenuItems 把节点上下文传进去（真实菜单路径）', () => {
+    const cmds = [exportPack, { id: 'context-menu:delete-node', title: '删除节点', areas: ['node'] }]
+    const image = buildMenuItems('node', cmds, [], { id: '1', type: 'image' }).map((i) => i.id)
+    const ui = buildMenuItems('node', cmds, [], { id: '2', type: 'ui' }).map((i) => i.id)
+    expect(image).not.toContain('ui:node-export-pack')
+    expect(image).toContain('context-menu:delete-node')
+    expect(ui).toContain('ui:node-export-pack')
+  })
+
+  it('节点判断抛错时只隐藏这一项，不让整个菜单坏掉', () => {
+    const broken = { id: 'x', title: '坏的', areas: ['node'], nodeVisible: () => { throw new Error('boom') } }
+    expect(commandVisibleInMenu(broken, 'node', { id: '1', type: 'ui' })).toBe(false)
+  })
+})
 
 /**
  * 二级菜单：注册方在 group / title 里写斜杠就落成嵌套。

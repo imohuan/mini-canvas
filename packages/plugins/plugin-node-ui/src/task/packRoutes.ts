@@ -115,10 +115,10 @@ async function packOf(
   if (node.type !== 'ui') {
     return { ok: false, error: '节点 ' + nodeId + ' 是「' + node.type + '」类型，不是可视化节点（只有它能打包）' }
   }
+  // 空界面**照常导出**（用户 2026-11-05 实测）：刚放下的可视化节点还没让 AI 画内容时，
+  // 用户也可能想先存一份空壳。之前这里 400「还没有界面内容」，看起来就像导出坏了。
+  // 包里照样有 node.json / manifest.json，ui.html 就是空文件；导入端会还原成空节点。
   const html = typeof node.data?.uiHtml === 'string' ? (node.data.uiHtml as string) : ''
-  if (!html.trim()) {
-    return { ok: false, error: '这个节点还没有界面内容（先让 AI 画上去再打包）' }
-  }
   // 声明为空、但界面里确实调了脚本 → 明说"缺的是依赖声明"以及怎么补。
   // 为什么不直接放行：包里带哪些脚本**只能**看声明（见 node-package-plan 第六节）；
   // 不给提示的话，用户拿到的包看着正常、实际一个脚本都没带（2026-10-13 用户实测：

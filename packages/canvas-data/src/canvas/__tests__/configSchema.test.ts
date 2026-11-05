@@ -51,6 +51,24 @@ describe('configSchema（轻量对象 schema，自研 cordis ch5）', () => {
   })
 })
 
+describe('placeholder 从 Config 贯通到设置面板', () => {
+  it('★ string 字段的 placeholder 进设置项（用户看到的空输入框要有提示）', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'cfg-placeholder',
+      Config: {
+        api: { type: 'string', default: '', label: '接口', placeholder: 'https://example.com/api?nodeId={nodeId}' },
+      },
+      apply() {},
+    })
+    await ctx.start()
+    const settings = ctx.get<{ groupOf(g: string): Array<{ key: string; schema: { placeholder?: string } }> }>('settings')
+    expect(settings.groupOf('cfg-placeholder')[0]?.schema.placeholder).toBe(
+      'https://example.com/api?nodeId={nodeId}',
+    )
+  })
+})
+
 describe('configSchema 数组/嵌套对象（DSH/Schemastery 子集）', () => {
   const schema: ConfigSchema = {
     targets: F.array([], F.string('')),

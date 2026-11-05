@@ -82,6 +82,8 @@ export const Config: ConfigSchema = {
     default: '',
     label: '上游资源接口',
     group: '常规/上游接口',
+    // 空值时给一个真实可抄的地址；用户看到输入框里有字就不会再问"这里该填什么"。
+    placeholder: 'https://example.com/api/media/{nodeId}',
     description:
       '读取某个节点的上游资源时优先请求这个地址。支持 {canvasId} / {nodeId} 占位；不写占位会自动带上这两个查询参数。留空 = 按节点里保存的 resourceId / imageUrl 解析。',
   },

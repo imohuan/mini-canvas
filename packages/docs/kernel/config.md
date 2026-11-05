@@ -111,6 +111,7 @@ interface ConfigField {
   default: ConfigValue           // 必填
   label?: string
   description?: string
+  placeholder?: string
   group?: string
   min?: number
   max?: number
@@ -128,6 +129,7 @@ interface ConfigField {
 | `default` | 永远 | 装配没给值时补它；标量还作设置面板的初值 |
 | `label` | 标量 | 控件上显示的中文名 |
 | `description` | 标量 | 控件下方的小字说明 |
+| `placeholder` | string（文本控件） | 输入框为空时显示的提示。说明文字在左边、输入框在右边，空输入框没有提示时用户会不知道这里该填什么 |
 | `group` | 标量 | 设置面板的分组名；**缺省 = 插件名** |
 | `min` / `max` | number | **装配校验时越界 = 报错（fiber FAILED）**；运行时面板 `set` 才是夹取 |
 | `step` | number | 滑块步长。**小数比例字段必须显式给**（如 `0.05`），否则滑块会卡死 |
@@ -162,7 +164,7 @@ interface ConfigField {
 
 - `type: 'string'` → settings 侧的 `'text'`（控件类型叫 text）；
 - 分组名取字段的 `group`，没写就用**插件名**；
-- `min` / `max` / `step` / `options` / `label` / `description` / `optional` 原样带过去；
+- `min` / `max` / `step` / `options` / `label` / `description` / `placeholder` / `optional` 原样带过去；
 - **同一个 key 已被别的插件声明过 → 不覆盖**（先到者保留所有权），dev 下给一条 `console.warn`；
 - 插件卸载时随 fiber 清（`settings.removeByScope(插件名)`），所以**热卸再重装不会撞 key**。
 

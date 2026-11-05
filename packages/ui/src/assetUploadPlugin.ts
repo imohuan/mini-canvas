@@ -117,6 +117,9 @@ export const uiAssetUploadPlugin: PluginModule = {
       areas: ['node'],
       group: '节点',
       order: 23,
+      // 只有可视化节点能打包（后台 packOf 会拒其它类型）——菜单里就别让它出现，
+      // 用户在图片 / 视频节点上点出一个「打包失败」只会以为是坏了。
+      nodeVisible: (node: { type?: string }) => node.type === 'ui',
       run: async (_c: unknown, payload?: { nodeId?: string }) => {
         const nodeId = payload?.nodeId
         if (!nodeId) return
@@ -127,6 +130,8 @@ export const uiAssetUploadPlugin: PluginModule = {
           downloadBytes(pack.bytes, packFileName(pack.name || label || '节点包'))
         } catch (err) {
           console.warn('[ui] 导出节点包失败:', err)
+          // 界面里必须有一句人话：只写 console 的话，用户点完就是"没反应"（2026-11-05 实测）
+          useUi().showToast('导出节点包失败：' + (err instanceof Error ? err.message : String(err)))
         }
       },
     })
