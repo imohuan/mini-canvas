@@ -148,18 +148,19 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                   <!-- 原位思考折叠行（AI Elements Trace 结构，文档 Task Demo 同款）：
                        收起 = TraceCollapsibleTrigger + TraceLine「思考过程」；
                        展开 = TraceCollapsibleContent 内 pre（等宽、上限内滚动）。 -->
-                  <TraceCollapsible v-else-if="row.type === 'thinking' && row.text"
-                    :default-open="!!openThinking[t.id + ':' + row.key]" class="ac-think-inline">
+                  <Trace v-else-if="row.type === 'thinking' && row.text" class="ac-think-inline">
+                    <TraceCollapsible :default-open="!!openThinking[t.id + ':' + row.key]">
                     <TraceCollapsibleTrigger class="ac-think-toggle">
                       <TraceLine>
-                        <TraceIcon><Loader2 :size="14" /></TraceIcon>
+                        <TraceIcon><CircleCheck :size="14" /></TraceIcon>
                         <TraceTitle>思考过程</TraceTitle>
                       </TraceLine>
                     </TraceCollapsibleTrigger>
-                    <TraceCollapsibleContent>
+                    <TraceCollapsibleContent class="ac-think-content">
                       <pre class="ac-think">{{ row.text }}</pre>
                     </TraceCollapsibleContent>
-                  </TraceCollapsible>
+                    </TraceCollapsible>
+                  </Trace>
 
                   <!-- 单工具：**只有带自定义卡片的画布 MCP 工具**才直接展示卡片；
                    其余全部走默认折叠行（用户口径 2026-10-10：审批有自己的卡片 UI，
@@ -180,56 +181,60 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                   </template>
                   <!-- 默认工具（通用）：AI Elements Trace 折叠行 —— 收起 = 图标 + 工具名 + 摘要；
                        展开区 = ToolViewBody（输入 / 输出），右侧摘要用 TraceDescription 语义。 -->
-                  <TraceCollapsible v-else-if="row.type === 'tools' && row.tools.length === 1" class="ac-tool-fold">
-                    <TraceCollapsibleTrigger class="ac-tf-toggle">
-                      <TraceLine>
-                        <TraceIcon><Terminal :size="14" /></TraceIcon>
-                        <TraceTitle class="ac-tf-name">{{ row.tools[0].name }}</TraceTitle>
-                        <TraceDescription v-if="toolRowSummary(row.tools[0])">{{ toolRowSummary(row.tools[0]) }}</TraceDescription>
-                      </TraceLine>
-                    </TraceCollapsibleTrigger>
-                    <TraceCollapsibleContent class="ac-tf-body">
-                      <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
-                    </TraceCollapsibleContent>
-                  </TraceCollapsible>
+                  <Trace v-else-if="row.type === 'tools' && row.tools.length === 1" class="ac-tool-fold">
+                    <TraceCollapsible>
+                      <TraceCollapsibleTrigger class="ac-tf-toggle">
+                        <TraceLine>
+                          <TraceIcon><Terminal :size="14" /></TraceIcon>
+                          <TraceTitle class="ac-tf-name">{{ row.tools[0].name }}</TraceTitle>
+                          <TraceDescription v-if="toolRowSummary(row.tools[0])">{{ toolRowSummary(row.tools[0]) }}</TraceDescription>
+                        </TraceLine>
+                      </TraceCollapsibleTrigger>
+                      <TraceCollapsibleContent class="ac-tf-body">
+                        <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                          :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
+                      </TraceCollapsibleContent>
+                    </TraceCollapsible>
+                  </Trace>
 
                   <!-- 多个工具：AI Elements Trace 折叠组（文档 Task Demo 的嵌套 TraceCollapsible）——
                        收起 = 组标题一行；展开 = 逐个工具（卡片直接出 / 其余再套一层 Trace 折叠行）。 -->
-                  <TraceCollapsible v-else-if="row.type === 'tools'" class="ac-tool-group">
-                    <TraceCollapsibleTrigger class="ac-tg-toggle">
-                      <TraceLine>
-                        <TraceIcon><ListTree :size="14" /></TraceIcon>
-                        <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
-                        <TraceDescription>{{ row.tools.length }}</TraceDescription>
-                      </TraceLine>
-                    </TraceCollapsibleTrigger>
-                    <TraceCollapsibleContent class="ac-tg-body">
-                      <template v-for="tool in row.tools" :key="tool.id">
-                        <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ Trace 折叠行 -->
-                        <div v-if="hasCardView(tool)" class="ac-tool-card">
-                          <div v-if="!tool.settled" class="ac-tool-head">
-                            <Loader2 :size="13" class="ac-spin" />
-                          </div>
-                          <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
-                            :name="tool.name" @preview="previewToolMedia" />
-                        </div>
-                        <TraceCollapsible v-else class="ac-tool-fold">
-                          <TraceCollapsibleTrigger class="ac-tf-toggle">
-                            <TraceLine>
-                              <TraceIcon><Terminal :size="14" /></TraceIcon>
-                              <TraceTitle class="ac-tf-name">{{ tool.name }}</TraceTitle>
-                              <TraceDescription v-if="toolRowSummary(tool)">{{ toolRowSummary(tool) }}</TraceDescription>
-                            </TraceLine>
-                          </TraceCollapsibleTrigger>
-                          <TraceCollapsibleContent class="ac-tf-body">
+                  <Trace v-else-if="row.type === 'tools'" class="ac-tool-group">
+                    <TraceCollapsible>
+                      <TraceCollapsibleTrigger class="ac-tg-toggle">
+                        <TraceLine>
+                          <TraceIcon><ListTree :size="14" /></TraceIcon>
+                          <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
+                          <TraceDescription>{{ row.tools.length }}</TraceDescription>
+                        </TraceLine>
+                      </TraceCollapsibleTrigger>
+                      <TraceCollapsibleContent class="ac-tg-body">
+                        <template v-for="tool in row.tools" :key="tool.id">
+                          <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ Trace 折叠行 -->
+                          <div v-if="hasCardView(tool)" class="ac-tool-card">
+                            <div v-if="!tool.settled" class="ac-tool-head">
+                              <Loader2 :size="13" class="ac-spin" />
+                            </div>
                             <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
                               :name="tool.name" @preview="previewToolMedia" />
-                          </TraceCollapsibleContent>
-                        </TraceCollapsible>
-                      </template>
-                    </TraceCollapsibleContent>
-                  </TraceCollapsible>
+                          </div>
+                          <TraceCollapsible v-else class="ac-tool-fold">
+                            <TraceCollapsibleTrigger class="ac-tf-toggle">
+                              <TraceLine>
+                                <TraceIcon><Terminal :size="14" /></TraceIcon>
+                                <TraceTitle class="ac-tf-name">{{ tool.name }}</TraceTitle>
+                                <TraceDescription v-if="toolRowSummary(tool)">{{ toolRowSummary(tool) }}</TraceDescription>
+                              </TraceLine>
+                            </TraceCollapsibleTrigger>
+                            <TraceCollapsibleContent class="ac-tf-body">
+                              <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
+                                :name="tool.name" @preview="previewToolMedia" />
+                            </TraceCollapsibleContent>
+                          </TraceCollapsible>
+                        </template>
+                      </TraceCollapsibleContent>
+                    </TraceCollapsible>
+                  </Trace>
                 </template>
 
                 <!-- 用户消息：把正文里出现的 @技能 / @MCP 还原成**标签**（与输入框里那颗 chip 同款），

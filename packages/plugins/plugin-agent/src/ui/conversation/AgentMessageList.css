@@ -506,9 +506,25 @@
 }
 
 /* 思考行 / 工具行 / 工具组已换成 AI Elements Trace 结构：
-   折叠箭头、悬停变色、展开动画都由 TraceCollapsible* 组件出，这里只留字号微调。 */
+   折叠箭头、悬停变色、展开动画、左侧竖线都由 TraceCollapsible* 组件出，
+   这里只留字号微调与旧契约的滚动上限。 */
 .ac-think-toggle {
   font-size: 12px;
+}
+
+/* 思考内容（文档 Reasoning Demo：直接 whitespace-pre-wrap，不限宽）——
+   保留项目契约的上限内滚动（长思考不撑长对话，用户口径 2026-10-25）。 */
+.ac-think-content .ac-think {
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--ui-ink-dim, #919191);
+  margin: 0;
 }
 
 /* 原位思考折叠块（用户口径 2026-10-16）：每段思考独立成块、按发生位置展示 */

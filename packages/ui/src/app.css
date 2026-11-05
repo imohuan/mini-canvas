@@ -13,6 +13,14 @@
    必须写在本入口里：@custom-variant 只有 Tailwind 入口文件才处理。 */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Tailwind v4 的类提取器在本仓没生成 .border-l（.border-r/.border-t/.border-b 都有，唯独它缺失，
+   真机 2026-11-05 实测 AI Elements Trace 展开区左侧竖线因此消失）。这里按 Tailwind 生成的
+   等价定义补上，等 Tailwind 升级修复提取后可删。 */
+.border-l {
+  border-left-style: var(--tw-border-style, solid);
+  border-left-width: 1px;
+}
+
 @theme inline {
   /* 语义 token：全部指向 CSS 变量，变量按主题在下面重定义（inline 让 Tailwind 生成 var() 引用） */
   --color-canvas-bg: var(--ui-canvas-bg);
