@@ -1,6 +1,8 @@
 import type { VariantProps } from "class-variance-authority"
 import { cva } from "class-variance-authority"
 
+// Bubble 气泡组件家族（shadcn 原样转发）。
+
 export { default as Bubble } from "./Bubble.vue"
 export { default as BubbleContent } from "./BubbleContent.vue"
 export { default as BubbleGroup } from "./BubbleGroup.vue"
