@@ -214,14 +214,6 @@
   margin-bottom: 16px;
 }
 
-/* AI Elements 的 MessageContent 用的是 Tailwind 原子类（flex / min-w-0 等），
-   这里把消息流自己的节奏对齐进去：内容格是一个普通块容器，
-   用户气泡的壳（内边距 / 圆角 / 底色）仍由下面的 .ac-msg.user .ac-bubble 负责。 */
-.ac-msg > .ac-bubble {
-  display: block;
-  min-width: 0;
-}
-
 /* 用户消息间距收紧（用户口径 2026-10-16）：user 气泡自带 actions 行（时间/复制/编辑），
    再叠 16px 下间距，连续气泡之间空得能塞下一条消息 —— 用户要求缩小。
    助手消息保持 16px（阅读节奏不变）。 */
@@ -274,14 +266,6 @@
   color: inherit;
 }
 
-.ac-msg.user {
-  justify-content: flex-end;
-}
-
-.ac-msg.assistant {
-  justify-content: flex-start;
-}
-
 .ac-bubble {
   min-width: 0;
 }
@@ -289,10 +273,6 @@
 /* 助手消息占满整行：之前留了 84px 右内边距（照参考图早期版本量到的"正文右缘距面板 84px"），
    但那是把面板宽度量错造成的空档 —— 现在内容区左右各 16px 已经给足呼吸，
    再留 84px 就变成右边一条明显空白（用户实测点名）。 */
-
-.ac-msg.assistant .ac-bubble {
-  width: 100%;
-}
 
 /* 用户消息正文：文字与标签在同一行内自然换行 */
 
@@ -334,12 +314,7 @@
 
 /* 操作行在气泡外（右下角、贴气泡下缘）：.ac-msg 是 flex 容器，操作行要跟气泡组成一列 */
 
-.ac-msg.user {
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-/* 文档 Demo 的用户气泡：Bubble variant="muted" 出底色，这里只管位置（右对齐、可收缩）。 */
+/* 用户气泡宽度约束（视觉由 Bubble 组件出；右对齐由 Message align="end" 出）。 */
 .ac-user-bubble {
   max-width: 85%;
   min-width: 0;
