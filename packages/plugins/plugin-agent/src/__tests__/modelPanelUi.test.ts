@@ -95,8 +95,8 @@ describe('头尾间距', () => {
     expect(foot).toMatch(/min-height: 36px/)
   })
 
-  it('头部一行 8px 上下内边距', () => {
+  it('头部与列表共用 12px 横向留白（左对齐同一条竖线）', () => {
     const head = SRC.slice(SRC.indexOf('.ac-panel-head {'), SRC.indexOf('\n}', SRC.indexOf('.ac-panel-head {')))
-    expect(head).toMatch(/padding: 8px 10px/)
+    expect(head).toMatch(/padding: 12px 12px 10px/)
   })
 })

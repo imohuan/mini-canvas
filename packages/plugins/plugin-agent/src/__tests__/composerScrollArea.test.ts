@@ -73,7 +73,7 @@ describe('Agent 面板紧凑尺寸', () => {
    * 这里反向钉住「不再给它们套自定义 class」。
    */
   it('底排的 shadcn 按钮不再挂自定义 class', () => {
-    for (const cls of ['ac-toolbar-btn', 'ac-plus', 'ac-pick-box', 'ac-confirm-btn', 'ac-detect-btn']) {
+    for (const cls of ['ac-toolbar-btn', 'ac-plus', 'ac-confirm-btn', 'ac-detect-btn']) {
       expect(SRC, '仍在使用自定义 class：' + cls).not.toContain(cls)
     }
   })

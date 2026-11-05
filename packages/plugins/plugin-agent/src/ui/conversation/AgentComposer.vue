@@ -422,7 +422,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
-              :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
+              :style="{ width: modelView === 'split' ? '588px' : '340px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(520px, calc(100dvh - 120px))' }">
               <div class="ac-panel ac-model-panel" :class="{ 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -464,7 +464,15 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
                      ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
                 <AgentScrollArea v-else ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body" body-class="ac-model-scroll-body">
-                  <div v-if="modelView === 'card'">
+                  <!--
+                    两种视图**同时挂载**，切换只切显示，不做 v-if 拆装。
+
+                    为什么要这样（用户 2026-11-06）：v-if 切换时整块内容被销毁再重建，
+                    列表、滚动位置、选中项都要重新渲染一遍，切换像“硬切”。
+                    现在两个面板都在 DOM 里，切到哪个哪个淡入（见 .ac-view-pane）。
+                  -->
+                  <div class="ac-view-stack">
+                  <div class="ac-view-pane" :class="{ 'is-active': modelView === 'card' }">
                     <div v-if="filteredModels.length" class="ac-model-grid">
                       <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm"
                         role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
@@ -489,7 +497,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-empty-desc">换个模型名或平台名试试。</span>
                     </div>
                   </div>
-                  <div v-else class="ac-split">
+                  <div class="ac-view-pane ac-split" :class="{ 'is-active': modelView === 'split' }">
                     <aside class="ac-split-rail" aria-label="模型平台">
                       <div class="ac-rail-label">平台</div>
                       <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
@@ -530,6 +538,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       </AgentScrollArea>
                     </div>
                   </div>
+                  </div>
                 </AgentScrollArea>
               </div>
             </DropdownMenuContent>
@@ -556,7 +565,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               视图开关同理只在有内容时出现，没有可切换的东西就不摆按钮。
             -->
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
-              :style="{ width: skillView === 'split' && s.skills.length ? '586px' : '320px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
+              :style="{ width: skillView === 'split' && s.skills.length ? '588px' : '340px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(520px, calc(100dvh - 120px))' }">
               <div class="ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' && !!s.skills.length }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">
@@ -597,7 +606,9 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     <span class="ac-empty-title">还没有安装技能</span>
                     <span class="ac-empty-desc">到「设置 → Agent → 技能」里导入，导入后即可在这里 @ 引用。</span>
                   </div>
-                  <AgentScrollArea v-else-if="skillView === 'card'" class="ac-panel-scroll" body-class="ac-panel-scroll-body">
+                  <!-- 同模型面板：两种视图同时挂载，切换只切显示（淡入），不拆装 DOM。 -->
+                  <div v-else class="ac-view-stack">
+                  <AgentScrollArea class="ac-panel-scroll ac-view-pane" :class="{ 'is-active': skillView === 'card' }" body-class="ac-panel-scroll-body">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
                       <!-- 卡片外壳用 div：shadcn Button 的 size="sm" 会强制 32px 高 + 左右内边距，
                            把带封面的卡片压成一条细线（用户截图 2026-11-02）。
@@ -630,7 +641,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-empty-desc">换个关键词，或清空搜索再试。</span>
                     </div>
                   </AgentScrollArea>
-                  <div v-else class="ac-split">
+                  <div class="ac-view-pane ac-split" :class="{ 'is-active': skillView === 'split' }">
                     <aside class="ac-split-rail" aria-label="技能分类">
                       <div class="ac-rail-label">分类</div>
                       <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
@@ -678,6 +689,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       </AgentScrollArea>
                     </div>
                   </div>
+                  </div>
                 </div>
                 <div class="ac-panel-foot">
                   <span class="ac-selection-summary">点击技能会直接插入标签</span>
@@ -698,7 +710,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
-              :style="{ width: '360px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
+              :style="{ width: '400px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(520px, calc(100dvh - 120px))' }">
               <div class="ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -731,22 +743,27 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <div class="ac-panel-body">
                   <AgentScrollArea class="ac-panel-scroll" body-class="ac-panel-scroll-body ac-mcp-scroll-body">
                     <div v-if="filteredMcpResources.length" class="ac-mcp-list">
-                      <!-- 卡片是勾选 + 展开两件事：左边的框勾「整个服务」，点标题行展开工具（DEMO 同一条分工） -->
+                      <!--
+                        服务行：左侧勾选框（引用整个服务）／中间图标 + 名称 + 地址／右侧工具数与展开箭头。
+                        交互语义不变，只把三块对齐到同一条基线、给足留白（用户 2026-11-06：MCP 布局乱）。
+                      -->
                       <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
-                        <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name) }">
-                        <Button variant="ghost" size="icon-sm" :aria-pressed="mcpPickedServers.has(item.name)"
+                        <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name), 'is-open': mcpExpanded.has(item.name) || !!item.toolHits }">
+                        <button type="button" class="ac-pick-box" :aria-pressed="mcpPickedServers.has(item.name)"
                           :aria-label="'引用整个 ' + item.name + ' 服务'" :title="'引用整个 ' + item.name + ' 服务'"
                           @click.stop="toggleMcpServer(item.name)">
-                          <Check :size="11" />
-                        </Button>
-                        <Button variant="ghost" size="sm" :title="item.value"
+                          <Check :size="12" />
+                        </button>
+                        <button type="button" class="ac-mcp-main" :title="item.value"
                           :aria-expanded="mcpExpanded.has(item.name) || !!item.toolHits" @click="toggleMcpExpand(item.name)">
-                          <span class="ac-server-icon" v-html="ICON_MCP" aria-hidden="true"></span>
+                          <span class="ac-server-icon" aria-hidden="true">
+                            <span v-html="ICON_MCP"></span>
+                          </span>
                           <span class="ac-server-copy">
                             <span class="ac-server-name">{{ item.name }}</span>
                             <span class="ac-server-desc">{{ mcpServerDesc(item) }}</span>
                           </span>
-                        </Button>
+                        </button>
                         <span class="ac-server-side">
                           <span v-if="mcpStatusOf(item.name)" class="ac-status" :class="mcpStatusOf(item.name)!.ok ? 'is-ok' : 'is-bad'"
                             :title="mcpStatusOf(item.name)!.text">{{ mcpToolCount(item.name) }} 工具</span>
@@ -754,7 +771,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                           <span v-if="mcpToolsOf(item.name).length" class="ac-expand-btn" role="button" tabindex="0"
                             :aria-expanded="mcpExpanded.has(item.name) || !!item.toolHits" aria-label="展开工具" title="展开工具"
                             @click.stop="toggleMcpExpand(item.name)" @keydown.enter.stop.prevent="toggleMcpExpand(item.name)">
-                            <ChevronDown :size="13" :class="{ 'is-open': mcpExpanded.has(item.name) || !!item.toolHits }" />
+                            <ChevronDown :size="14" :class="{ 'is-open': mcpExpanded.has(item.name) || !!item.toolHits }" />
                           </span>
                         </span>
                         </div>
