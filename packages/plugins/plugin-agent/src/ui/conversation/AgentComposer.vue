@@ -422,7 +422,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
-              :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
+              :style="{ width: modelView === 'split' ? '586px' : '320px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
               <div class="ac-ddmenu ac-panel ac-model-panel" :class="{ 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -455,10 +455,15 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </InputGroupAddon>
                   </InputGroup>
                 </div>
+                <!--
+                  没有可用模型时，只留这一句提示：滚动区整体不渲染。
+                  以前提示和滚动区里的「没有找到模型」空态会同时出现（用户 2026-11-05 截图：
+                  技能面板上下两个空态叠在一起、分类栏被挤到最底下）。
+                -->
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
                      ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
-                <AgentScrollArea ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body" body-class="ac-model-scroll-body">
+                <AgentScrollArea v-else ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body" body-class="ac-model-scroll-body">
                   <div v-if="modelView === 'card'">
                     <div v-if="filteredModels.length" class="ac-model-grid">
                       <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm" class="ac-model-card"
@@ -545,9 +550,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <WandSparkles :size="14" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
+            <!--
+              没有技能时固定用紧凑宽度：这时卡片/分栏两种视图都不渲染，右上角那组「卡片 / 分栏」
+              点了也不会有任何变化。按分栏的 586px 展开只会留一大片空白（用户 2026-11-05 截图）。
+              视图开关同理只在有内容时出现，没有可切换的东西就不摆按钮。
+            -->
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
-              :style="{ width: skillView === 'split' ? '586px' : '320px', maxWidth: '600px', maxHeight: '440px' }">
-              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' }"
+              :style="{ width: skillView === 'split' && s.skills.length ? '586px' : '320px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
+              <div class="ac-ddmenu ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' && !!s.skills.length }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
@@ -555,7 +565,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-panel-title">技能</span>
                       <span class="ac-panel-count">{{ s.skills.length }}</span>
                     </div>
-                    <Tabs :model-value="skillView" @update:model-value="setSkillView" class="ac-view-tabs">
+                    <Tabs v-if="s.skills.length" :model-value="skillView" @update:model-value="setSkillView" class="ac-view-tabs">
                       <TabsList aria-label="面板布局">
                         <TabsTrigger value="card">卡片</TabsTrigger>
                         <TabsTrigger value="split">分栏</TabsTrigger>
@@ -576,12 +586,18 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   </InputGroup>
                 </div>
                 <div class="ac-panel-body">
+                  <!--
+                    未安装技能 = 只有这一块空态。
+                    以前它和下面卡片/分栏视图里的「没有找到技能」同时渲染：分栏视图的左栏
+                    （分类 / 全部）被顶到面板底部、压在底栏上，用户看到的就是两块空态叠着
+                    （2026-11-05 截图）。有内容时才渲染视图本身，两种空态不会再同时出现。
+                  -->
                   <div v-if="!s.skills.length" class="ac-empty-state">
                     <span class="ac-empty-icon"><WandSparkles :size="18" /></span>
                     <span class="ac-empty-title">还没有安装技能</span>
                     <span class="ac-empty-desc">到「设置 → Agent → 技能」里导入，导入后即可在这里 @ 引用。</span>
                   </div>
-                  <AgentScrollArea v-if="skillView === 'card'" class="ac-panel-scroll" body-class="ac-panel-scroll-body">
+                  <AgentScrollArea v-else-if="skillView === 'card'" class="ac-panel-scroll" body-class="ac-panel-scroll-body">
                     <div v-if="filteredSkills.length" class="ac-skill-grid">
                       <!-- 卡片外壳用 div：shadcn Button 的 size="sm" 会强制 32px 高 + 左右内边距，
                            把带封面的卡片压成一条细线（用户截图 2026-11-02）。
@@ -682,7 +698,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" class="ac-ddmenu"
-              :style="{ width: '360px', maxWidth: 'calc(100vw - 24px)', maxHeight: '440px' }">
+              :style="{ width: '360px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(440px, calc(100dvh - 120px))' }">
               <div class="ac-ddmenu ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">

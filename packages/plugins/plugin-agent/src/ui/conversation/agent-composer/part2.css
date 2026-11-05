@@ -211,7 +211,8 @@
      为什么这么小：卡片模式本来就该贴着内容长，托底只为挡住「一条窄缝」；
      真要撑高的是分栏（见 .is-split），两种模式的最小高度不是同一个数。
      外面再套一层 min()：视口极矮时按可用高度收，别把面板顶出屏幕。 */
-  min-height: min(232px, calc(100dvh - 32px));
+  /* 卡片视图同理：最多占「视口 - 160px」，给输入区与工具栏留出位置。 */
+  min-height: min(232px, calc(100dvh - 160px));
   padding: 0;
   container-type: inline-size;
   font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -221,7 +222,13 @@
   /* 分栏要高过卡片：左栏是竖排分类、右栏是瓦片网格，太矮两边都只剩两行。
      上限压到 420 —— 浮层的 max-height 是 440，再高就会被裁掉（inner-scroll 不出滚动条）。
      下限给到 380：技能分栏只有两张瓦片时也要有「两列都在滚」的样子，不外扩成一条窄带。 */
-  min-height: min(clamp(380px, 56vh, 420px), calc(100dvh - 32px));
+  /*
+   * 视口矮的时候还要再让一步：面板最多只占「视口 - 160px」。
+   * 下拉自身的 max-height 是 min(440px, 100dvh - 120px)（见 AgentComposer）；
+   * 若这里仍按 100dvh - 32px 算，min-height 会顶穿 max-height，面板把下面的
+   * 输入区整块盖住（2026-11-05 用户截图：分栏盖到输入框上）。
+   */
+  min-height: min(clamp(380px, 56vh, 420px), calc(100dvh - 160px));
 }
 
 .ac-panel-head {
