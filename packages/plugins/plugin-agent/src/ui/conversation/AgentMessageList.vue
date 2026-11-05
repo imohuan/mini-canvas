@@ -16,9 +16,11 @@ import { Message as AiMessage, MessageContent, MessageFooter } from '../ai-eleme
 // AI Elements Trace：思考行 / 工具行 / 工具分组的可折叠结构（文档 Task / Tool Demo 同款）
 import {
   Trace, TraceCollapsible, TraceCollapsibleTrigger, TraceCollapsibleContent,
-  TraceLine, TraceTitle,
+  TraceLine, TraceTitle, TraceDescription,
 } from '../ai-elements/trace'
-import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
+// TraceIcon 在 TraceCollapsibleTrigger 里已内置折叠箭头；行内状态图标用 TraceIcon + lucide
+import { TraceIcon } from '../ai-elements/trace'
+import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle, Terminal, ListTree } from 'lucide-vue-next'
 import type { AgentConversationController } from './useAgentConversation'
 
 const c = inject('agentConversation') as unknown as Record<string, any>
@@ -27,7 +29,7 @@ const {
   hintDismissed, dismissHint, SUGGESTIONS, useSuggestion,
   segmentByAnchor, segmentModelLabel, assistantRows, openThinking,
   hasCardView, viewOf, previewToolMedia,
-  toolGroupTitle, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  toolGroupTitle, toolRowSummary, userSegments, displayUserText, onSegClick, segTitle, segClickable,
   openUserBubbles, overflowingUser, toggleUserBubble, setUserBubbleBody, msgTimeText, msgTimeTitle,
   copied, copyMessage, beginEditMessage, hasInlineError, pagerByAnchor, pagerTarget,
   SHOW_PROCESS_NOTICE, openPreview, showPendingOn,
@@ -150,6 +152,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                     :default-open="!!openThinking[t.id + ':' + row.key]" class="ac-think-inline">
                     <TraceCollapsibleTrigger class="ac-think-toggle">
                       <TraceLine>
+                        <TraceIcon><Loader2 :size="14" /></TraceIcon>
                         <TraceTitle>思考过程</TraceTitle>
                       </TraceLine>
                     </TraceCollapsibleTrigger>
@@ -180,7 +183,9 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                   <TraceCollapsible v-else-if="row.type === 'tools' && row.tools.length === 1" class="ac-tool-fold">
                     <TraceCollapsibleTrigger class="ac-tf-toggle">
                       <TraceLine>
+                        <TraceIcon><Terminal :size="14" /></TraceIcon>
                         <TraceTitle class="ac-tf-name">{{ row.tools[0].name }}</TraceTitle>
+                        <TraceDescription v-if="toolRowSummary(row.tools[0])">{{ toolRowSummary(row.tools[0]) }}</TraceDescription>
                       </TraceLine>
                     </TraceCollapsibleTrigger>
                     <TraceCollapsibleContent class="ac-tf-body">
@@ -194,7 +199,9 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                   <TraceCollapsible v-else-if="row.type === 'tools'" class="ac-tool-group">
                     <TraceCollapsibleTrigger class="ac-tg-toggle">
                       <TraceLine>
+                        <TraceIcon><ListTree :size="14" /></TraceIcon>
                         <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
+                        <TraceDescription>{{ row.tools.length }}</TraceDescription>
                       </TraceLine>
                     </TraceCollapsibleTrigger>
                     <TraceCollapsibleContent class="ac-tg-body">
@@ -210,7 +217,9 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                         <TraceCollapsible v-else class="ac-tool-fold">
                           <TraceCollapsibleTrigger class="ac-tf-toggle">
                             <TraceLine>
+                              <TraceIcon><Terminal :size="14" /></TraceIcon>
                               <TraceTitle class="ac-tf-name">{{ tool.name }}</TraceTitle>
+                              <TraceDescription v-if="toolRowSummary(tool)">{{ toolRowSummary(tool) }}</TraceDescription>
                             </TraceLine>
                           </TraceCollapsibleTrigger>
                           <TraceCollapsibleContent class="ac-tf-body">
