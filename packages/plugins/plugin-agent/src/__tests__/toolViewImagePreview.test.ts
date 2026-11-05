@@ -379,9 +379,10 @@ const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessa
   })
 
   it('工具分组：收起行不加壳（只有卡片才包灰底，用户口径 2026-10-08）', () => {
-    // 早先这条规则同时命中 .ac-tool-fold —— 每条收起行都被灰底 + 8px 内边距裹住。
-    expect(host).toMatch(/\.ac-tg-body \.ac-tool-card \{[^}]*\}/)
-    expect(host).not.toMatch(/\.ac-tg-body \.ac-tool-fold[,\s]/)
+    // 2026-11-05：工具行外观全部交给 AI Elements Trace 组件，
+    // 项目 CSS 不再为收起行/卡片写任何壳（.ac-tg-body/.ac-tool-card 已删）。
+    expect(host).not.toMatch(/\.ac-tg-body/)
+    expect(host).not.toMatch(/\.ac-tool-fold[,\s{]/)
     // 「画布 MCP 自定义卡片」在分组里也走卡片壳（v-if 分流只认 hasCardView），普通折叠行不加壳。
     // 用户口径 2026-10-10：**只认 hasCardView** —— 审批不再给底层工具打 card 标记，
     // 所以分流里不该再出现 tool.card（否则 exec_command 又被顶成常驻卡片、丢掉折叠箭头）。

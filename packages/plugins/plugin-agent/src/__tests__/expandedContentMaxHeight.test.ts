@@ -36,16 +36,17 @@ function expectBounded(selector: string, source: string): void {
 
 describe('Agent 对话：展开内容不会无限长高', () => {
   it('思考过程：长段思考在块内滚动', () => {
-    expectBounded('.ac-think', conversation)
+    // 2026-11-05：思考块不再写项目 CSS（颜色/内边距全交给组件），
+    // 滚动上限改为模板里的 Tailwind 任意值类，与官方组件同一套机制。
+    expect(conversation).toContain('max-h-[min(360px,50vh)]')
+    expect(conversation).toContain('overflow-y-auto')
   })
 
   it('工具卡片详情：工具名 + 输入 + 输出合计高度受限', () => {
     expectBounded('.tvc-details', toolBody)
   })
 
-  it('各处共用同一个高度上限，调大调小只改一处', () => {
-    expect(rule(conversation, '.ac-root')).toContain('--ac-expand-max-height:')
-    expect(rule(conversation, '.ac-think')).toContain('var(--ac-expand-max-height')
+  it('工具卡片详情的高度上限仍然走统一变量', () => {
     expect(rule(toolBody, '.tvc-details')).toContain('var(--ac-expand-max-height')
   })
 })

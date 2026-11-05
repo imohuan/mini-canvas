@@ -480,51 +480,9 @@
   margin: 4px 0;
 }
 
-/* 思考行 / 工具行 / 工具组完全使用 AI Elements Trace 组件的原生样式（Tailwind 原子类）：
-   折叠箭头、悬停变色、展开动画、左侧竖线、文字色全部由组件出，这里不写任何视觉样式。
-   仅保留一条项目契约：长思考内容在展开区内滚动（max-height 上限），不撑长对话。 */
-.ac-think {
-  max-height: var(--ac-expand-max-height, min(360px, 50vh));
-  overflow-y: auto;
-  margin: 0;
-}
-.ac-tool-card {
-  margin: 8px 0;
-  padding: 6px 8px;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 10px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
-}
-
-/* 分组里的**卡片**沿用同一只卡片壳（用户口径 2026-10-07：分界线要好找）；
-   收起状态的折叠行不加壳（用户口径 2026-10-08）：单工具长什么样，组里就长什么样 ——
-   早先的规则把每条折叠行也包了灰底 + 8px 内边距，收起行被灰底裹住、上下很空。 */
-
-.ac-tg-body .ac-tool-card {
-  margin: 6px 0;
-  padding: 6px 8px;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 10px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
-}
-
-.ac-tool-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.ac-tool-args,
-.ac-tool-out {
-  margin: 6px 0 0;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--ui-ink-dim, #919191);
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-}
-
+/* 思考行 / 工具行 / 工具组完全使用 AI Elements Trace 组件的原生样式：
+   折叠箭头、悬停变色、展开动画、左侧竖线、文字颜色全部由组件出（用户口径 2026-11-05：
+   颜色不对就是因为这里曾经写了自定义色值，全部删除，只留下面这条滚动契约）。 */
 .ac-approval {
   margin: 8px 0 16px;
   padding: 12px 14px;
