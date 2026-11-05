@@ -20,6 +20,12 @@ import { styleItemDepsOf } from '../useStyleItemPorts'
 import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
 import { useCanvasGate } from '../useCanvasGate'
 
+/**
+ * 根节点是 Teleport：槽宿主传下来的 class / data-slot-* 无处可落，显式声明不继承
+ * （与 StyleLibraryOverlay 同一原因，见那边的注释）。
+ */
+defineOptions({ inheritAttrs: false })
+
 /** 只从根上下文取服务：项目页没有画布也能浏览与收藏。 */
 const { ctx } = useCanvasContext()
 /** 「能不能加入画布」：doc + media 两件都在才行，缺哪件给哪句原因。 */

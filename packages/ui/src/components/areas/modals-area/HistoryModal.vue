@@ -790,6 +790,7 @@ onBeforeUnmount(() => {
 <template>
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
   <AppDialog :model-value="s.historyOpen" :close-on-overlay="false" :with-overlay="false" width="min(90vw, 1600px)" height="calc(100vh - 160px)"
+    title="生成历史" description="浏览、筛选并管理本画布的生成记录。"
     radius="24px" @update:model-value="!$event && (s.historyOpen = false)">
     <div class="flex flex-none items-center justify-between gap-4 px-6 pb-3 pt-4">
       <span class="text-lg font-medium leading-[26px] text-ink">生成历史</span>

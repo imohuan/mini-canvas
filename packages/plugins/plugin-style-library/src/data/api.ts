@@ -10,6 +10,7 @@
  */
 import type { StyleMeta, StylePage, StyleSort } from './types'
 import { withAdminToken } from '@mini-canvas/canvas-base'
+import { apiUrl, normalizeApiBase } from '@mini-canvas/bar-contract'
 
 /**
  * 素材库种类：「风格库」与「特效库」共用同一套后台逻辑（路由前缀不同）。
@@ -32,27 +33,23 @@ export interface CtxLike {
   tryGet(name: string): unknown
 }
 
-function stripSlash(u: string): string {
-  return u.replace(/\/+$/, '')
-}
-
 /** 解析后台根地址（见文件头三级回落） */
 export function resolveApiBase(ctx: CtxLike | undefined): string {
   const settings = ctx?.tryGet('settings') as { get(key: string): unknown } | undefined
   const fromSettings = settings?.get('cloudClientBaseUrl')
-  if (typeof fromSettings === 'string' && fromSettings.trim()) return stripSlash(fromSettings.trim())
+  // 只认 http(s) 绝对地址：脏值（用户实测存成过一个「的」字）一律当同源，
+  // 否则会拼出 `/%E7%9A%84/api/...` 这种必然 404 的地址。
+  const normalized = normalizeApiBase(fromSettings)
+  if (normalized) return normalized
 
   const svc = ctx?.tryGet('cloud-client') as { status?: () => { baseUrl?: string } } | undefined
   const base = svc?.status?.()?.baseUrl
-  if (typeof base === 'string' && base.trim()) return stripSlash(base.trim())
+  const fromService = normalizeApiBase(base)
+  if (fromService) return fromService
   return ''
 }
 
-/** 拼完整地址（base 为空 = 同源相对路径） */
-export function apiUrl(base: string, path: string): string {
-  if (/^https?:/i.test(path)) return path
-  return base ? base + (path.startsWith('/') ? path : '/' + path) : path
-}
+export { apiUrl }
 
 /** 把"后台回了 HTML"翻成人话（多半是地址不对或后台半没生效） */
 export function friendlyError(raw: string): string {

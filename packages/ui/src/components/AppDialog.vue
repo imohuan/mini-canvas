@@ -21,6 +21,8 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
 const DialogOverlay = useUiComponent('DialogOverlay')
+const DialogTitle = useUiComponent('DialogTitle')
+const DialogDescription = useUiComponent('DialogDescription')
 
 const props = withDefaults(
   defineProps<{
@@ -36,6 +38,16 @@ const props = withDefaults(
     radius?: string
     panelClass?: HTMLAttributes['class']
     overlayClass?: HTMLAttributes['class']
+    /**
+     * 读屏用的标题与描述。
+     *
+     * 为什么要在这里统一给：shadcn 的 DialogContent 沿用 reka-ui 的无障碍校验，
+     * 缺 DialogTitle / DialogDescription 会在控制台刷两条 warn（2026-11-05 实测
+     * 打开「生成历史」就报）。面板本身是自定义排版，不放可见标题，所以渲染成
+     * sr-only —— 只给读屏用，界面看不出变化。
+     */
+    title?: string
+    description?: string
   }>(),
   {
     modelValue: false,
@@ -48,6 +60,8 @@ const props = withDefaults(
     radius: '24px',
     panelClass: '',
     overlayClass: '',
+    title: '对话框',
+    description: '对话框内容',
   },
 )
 
@@ -103,6 +117,8 @@ function onEscapeKeyDown(e: KeyboardEvent): void {
       @pointer-down-outside="onPointerDownOutside"
       @escape-key-down="onEscapeKeyDown"
     >
+      <DialogTitle class="sr-only">{{ title }}</DialogTitle>
+      <DialogDescription class="sr-only">{{ description }}</DialogDescription>
       <slot :close="() => (open = false)" />
     </DialogContent>
   </Dialog>

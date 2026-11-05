@@ -17,6 +17,7 @@ import {
   type ServerHistoryPage,
   type ServerJob,
 } from './apiTypes.js'
+import { normalizeApiBase } from './config.js'
 
 /**
  * 管理令牌的键名与头名（就地内联 —— 本插件产物必须零 import）。
@@ -102,7 +103,7 @@ export class CloudApi {
   private readonly doFetch: FetchLike
 
   constructor(private readonly opts: CloudApiOptions = {}) {
-    this.baseUrl = opts.baseUrl ?? ''
+    this.baseUrl = normalizeApiBase(opts.baseUrl)
     const rawFetch = opts.fetchImpl ?? ((url, init) => fetch(url, init))
     // 唯一请求出口：所有 HTTP 方法都在这里补令牌（一处覆盖画布写 / 资源 / 任务）。
     // SSE 不走这里（EventSource 不能带头），见 subscribeChanges。
@@ -117,7 +118,7 @@ export class CloudApi {
 
   /** 换服务地址（设置改了立刻生效，不用重装插件） */
   setBaseUrl(baseUrl: string): void {
-    this.baseUrl = baseUrl
+    this.baseUrl = normalizeApiBase(baseUrl)
   }
 
   get base(): string {

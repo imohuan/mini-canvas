@@ -25,6 +25,7 @@ const { ui, s, agent, SUBMIT_KEY_MODE_OPTIONS, sendKeyLabel, agentBudgetOnChange
 <template>
   <!-- TV Director 全局设置：独立全局弹窗（不在 Agent 面板内） -->
   <AppDialog :model-value="s.directorOpen" width="600px" height="532px" radius="12px"
+    title="TV Director 全局设置" description="调整协作模式、积分预算与提交方式。"
     @update:model-value="!$event && (s.directorOpen = false)">
     <div class="flex items-center justify-between px-4 pb-2.5 pt-4">
       <div><span class="block text-[9px] font-extrabold tracking-[0.12em] text-ink-dim">TV DIRECTOR</span><strong

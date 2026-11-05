@@ -34,6 +34,30 @@ describe('SettingsPersist 配置持久化桥', () => {
     await save.flush()
     expect(await save.get(SETTINGS_SAVE_KEY, 'config')).toEqual({ x: 5 }) // 不再更新
   })
+  /**
+   * 恢复过程中的就地纠正要落盘。
+   *
+   * 真实场景：cloud-client 的 apply 里有个 onChange，收到非法服务地址（用户存成过一个汉字）
+   * 就改回空串。restore 注入快照时正好触发它，但那一刻桥还没 subscribe —— 不补这一次对账，
+   * 脏值会一直留在 localStorage 里，每次启动都重新触发一遍。
+   */
+  it('restore 期间插件就地纠正的值会写回存档', async () => {
+    const { store, save } = makePair()
+    save.set(SETTINGS_SAVE_KEY, { address: 'dirty' }, 'config')
+    await save.flush()
+    store.define('g', { address: { type: 'text', default: '' } }, 'p')
+    // 模拟插件：一旦收到变化就把它改回空串（发生在 setSavedSnapshot 的同步通知里）
+    store.onChange((key, value) => {
+      if (key === 'address' && value !== '') store.set('address', '')
+    })
+    const persist = createSettingsPersist(store, save)
+    await persist.restore()
+    await save.flush()
+    expect(store.get('address')).toBe('')
+    expect(await save.get(SETTINGS_SAVE_KEY, 'config')).toEqual({ address: '' })
+    persist.dispose()
+  })
+
   it('persistNow 落盘当前全部值；resetKey 恢复默认并清快照', async () => {
     const { store, save } = makePair()
     store.define('g', { x: { type: 'number', default: 1 }, y: { type: 'text', default: 'a' } }, 'p')

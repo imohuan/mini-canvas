@@ -40,3 +40,24 @@ describe('AppDialog：遮罩不能盖住面板', () => {
     expect(modals).toMatch(/s\.historyOpen[\s\S]{0,200}:with-overlay="false"/)
   })
 })
+
+/**
+ * 无障碍标题契约。
+ *
+ * reka-ui 的 DialogContent 在挂载时检查有没有 DialogTitle / DialogDescription，
+ * 缺了就在控制台刷两条 warn（2026-11-05 打开「生成历史」实测）。标题在这里统一
+ * 渲染成 sr-only，调用方只传文案 —— 漏掉的话这里会红。
+ */
+describe('AppDialog：无障碍标题与描述', () => {
+  const inner = template.slice(contentStart, contentEnd)
+
+  it('面板里渲染 DialogTitle 和 DialogDescription', () => {
+    expect(inner).toMatch(/<DialogTitle/)
+    expect(inner).toMatch(/<DialogDescription/)
+  })
+
+  it('默认值兜底，调用方不传也不会留下空的标签', () => {
+    expect(source).toMatch(/title:\s*'/)
+    expect(source).toMatch(/description:\s*'/)
+  })
+})

@@ -58,6 +58,32 @@ describe('动作清单', () => {
   })
 })
 
+describe('服务地址只认 http(s) 绝对地址', () => {
+  const DIRTY = String.fromCharCode(0x7684) // 用户实测存进去的一个中文字
+
+  it('构造时传脏值 → 按同源处理（不拼进 URL）', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, version: 0, changed: false, actions: [] } }))
+    const api = new CloudApi({ baseUrl: DIRTY, fetchImpl })
+    expect(api.base).toBe('')
+    await api.fetchActions()
+    expect(calls[0].url).toBe('/api/actions')
+  })
+
+  it('setBaseUrl 传脏值 → 立刻回落同源（设置变更这条路径曾经绕过校验）', () => {
+    const api = new CloudApi({ baseUrl: 'http://srv:8865', fetchImpl: (async () => new Response('{}')) as FetchLike })
+    api.setBaseUrl(DIRTY)
+    expect(api.base).toBe('')
+    expect(api.absolute('/api/history?page=1')).toBe('/api/history?page=1')
+  })
+
+  it('末尾斜杠和空格照旧去掉，合法地址不受影响', () => {
+    const api = new CloudApi({ fetchImpl: (async () => new Response('{}')) as FetchLike })
+    api.setBaseUrl('  http://srv:8865//  ')
+    expect(api.base).toBe('http://srv:8865')
+    expect(api.absolute('/api/history')).toBe('http://srv:8865/api/history')
+  })
+})
+
 describe('任务', () => {
   it('下单取 jobId', async () => {
     const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, jobId: 'j1' } }))

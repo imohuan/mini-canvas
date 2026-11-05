@@ -18,6 +18,7 @@ const Button = useUiComponent('Button')
   <!-- 生成详情：一条历史的完整参数（提示词 / 参数 / 参考素材 / 产物信息）。
        用户口径 2026-10-27：卡片上要有入口，能复盘"当时到底用了什么"。 -->
   <AppDialog :model-value="!!item" width="640px" height="auto" max-height="80vh" radius="16px"
+    title="生成详情" description="查看这条记录的提示词、参数与产物信息。"
     @update:model-value="!$event && emit('close')">
     <div v-if="item" class="hist-detail">
       <header class="hist-detail-head">

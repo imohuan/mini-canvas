@@ -23,6 +23,17 @@ import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
 import { useCanvasGate } from '../useCanvasGate'
 
 /**
+ * 根节点是 Teleport：槽宿主传下来的 class / data-slot-* 无处可落。
+ *
+ * SlotHost 会把 `class` 与 `data-slot-*` 作为属性传给每个 occupant；本组件把整块面板
+ * Teleport 到 body（层级由自己的 CSS 决定），这些属性既挂不到遮罩上也挂不到面板上，
+ * Vue 于是报「Extraneous non-props attributes ... because component renders fragment
+ * or text or teleport root nodes」。显式声明不继承，语义上也正确：这个槽 item 的定位类
+ * 对它没有意义。
+ */
+defineOptions({ inheritAttrs: false })
+
+/**
  * 只从根上下文取服务：项目页没有画布也能打开风格广场、看详情、收藏。
  * flow 这类画布能力按需现取（tryGet('view')），拿不到就把"加入画布"禁用。
  */

@@ -15,3 +15,6 @@ export type {
 export { BAR_FIELD, registerBarAction, registerBarApplier } from './registry'
 export { publishToolActions, toolToAction } from './toolActions'
 export type { PublishToolActionsOptions } from './toolActions'
+
+/** 后台根地址的校验与拼接（纯函数）：云端客户端 / 风格库 / 展示台共用同一套规则。 */
+export { apiUrl, apiUrlFrom, normalizeApiBase } from './apiBase'

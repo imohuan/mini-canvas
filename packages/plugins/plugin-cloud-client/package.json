@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/bar-contract": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

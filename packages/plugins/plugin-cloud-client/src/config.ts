@@ -32,6 +32,20 @@ export interface CloudClientConfig {
   pollMs: number
 }
 
+/**
+ * 后台根地址校验（**就地内联** —— 本插件产物必须零 import，见 vite.config.ts）。
+ *
+ * 与 `@mini-canvas/bar-contract` 的 `normalizeApiBase` 保持同一规则，
+ * `apiBaseParity.test.ts` 会逐条比对两边。
+ */
+const ABSOLUTE_HTTP = /^https?:\/\/[^/\s]+/i
+export function normalizeApiBase(candidate: unknown): string {
+  if (typeof candidate !== 'string') return ''
+  const trimmed = candidate.trim()
+  if (!ABSOLUTE_HTTP.test(trimmed)) return ''
+  return trimmed.replace(/\/+$/, '')
+}
+
 /** 读一面 settings（缺省 / 未就绪都回落默认值） */
 export interface SettingsLike {
   get(key: string): unknown
@@ -43,7 +57,14 @@ export function configFrom(settings: SettingsLike | undefined): CloudClientConfi
     return (v === undefined || v === null || v === '' ? fallback : v) as T
   }
   return {
-    baseUrl: read('cloudClientBaseUrl', ''),
+    /**
+     * 服务地址：只接受 http(s) 绝对地址。
+     *
+     * 用户实测 2026-11-05：设置里存成过一个「的」字，旧实现原样拼成
+     * `/%E7%9A%84/api/history` → 404、控制台刷警告。脏值现在统一当同源，
+     * 与「留空 = 由 cloud-server 托管」是同一种行为。
+     */
+    baseUrl: normalizeApiBase(read('cloudClientBaseUrl', '')),
     pollMs: read('cloudClientPollMs', 8000),
   }
 }

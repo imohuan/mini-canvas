@@ -33,6 +33,25 @@ function saveStub() {
 }
 
 describe('cloud-client 的应用级 / 画布级边界', () => {
+  /**
+   * 持久化快照是 apply 之后才注入 store 的，所以脏地址只会在 onChange 里出现。
+   * 用户实测 2026-11-05：刷新后 localStorage 里那个字一直在，历史请求 404。
+   */
+  it('恢复快照带进非法地址 → 按同源处理并写回空串', async () => {
+    const DIRTY = String.fromCharCode(0x7684)
+    const ctx = new Context()
+    ctx.plugin(cloudClientPlugin as never)
+    await ctx.start()
+    const store = ctx.get<{ setSavedSnapshot(v: Record<string, string>): void; get(k: string): unknown }>('settings')
+
+    // 真实顺序：apply 先跑（读到默认空值），持久化快照之后才注入。
+    store.setSavedSnapshot({ cloudClientBaseUrl: DIRTY })
+
+    expect(store.get('cloudClientBaseUrl')).toBe('')
+    expect(ctx.get<{ status(): { baseUrl: string } }>('cloud-client').status().baseUrl).toBe('')
+    ctx.stop()
+  })
+
   it('apply 不碰 save：项目页没有画布也不会切换存档域', async () => {
     const { switched, save } = saveStub()
     const ctx = new Context()

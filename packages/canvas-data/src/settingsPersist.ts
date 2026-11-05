@@ -100,6 +100,20 @@ export function createSettingsPersist(store: SettingsStore, save: SaveService): 
       snapshot = saved && typeof saved === 'object' ? { ...saved } : {}
       // 注入 store：已声明项立即覆盖；未声明项留给后续 define（define 命中快照作初值）
       store.setSavedSnapshot(snapshot)
+      /**
+       * 恢复时的同步通知里，有些插件会把非法值就地纠正（cloud-client 把存成乱码的
+       * 服务地址改回空串 = 同源）。那一刻 watch() 还没接上，纠正值不会被写回存档 ——
+       * 用户实测 2026-11-05：刷新后 localStorage 里那个脏字符一直在，每次启动都要重来一遍。
+       * 这里对一次账：凡是「已声明项在 store 里的现值与快照不同」，以 store 为准写回。
+       */
+      let corrected = false
+      const current = store.entries()
+      for (const key of Object.keys(snapshot)) {
+        if (!(key in current) || Object.is(current[key], snapshot[key])) continue
+        snapshot[key] = current[key]
+        corrected = true
+      }
+      if (corrected) save.set(SETTINGS_SAVE_KEY, snapshot, 'config')
       watch() // restore 后开始追踪变更（避免恢复本身被当成用户改动重复写回）
       // 适配器被换（config 从本地切云端）→ 重读新后端，把云端已存的设置拉进来。
       // 只认 config 域：本桥就管配置持久化；canvas/shortcut/resource 的切换与它无关。

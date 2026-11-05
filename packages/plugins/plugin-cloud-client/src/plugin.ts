@@ -18,7 +18,7 @@ import { makeJobPoll, submitJob, type ResourceLike, type RunDeps } from './jobRu
 import { writeAudioResult, writeVideoResult } from './appliers.js'
 import { applyMergePlan, type DocLike } from './applyMerge.js'
 import { restoreOrSeed } from './restore.js'
-import { Config, configFrom } from './config.js'
+import { Config, configFrom, normalizeApiBase as normalizeConfiguredBase } from './config.js'
 import { CANVAS_ID, canvasId, restoreMediaUrls as restoreMediaUrlsList } from './keys.js'
 import { createCloudResourceAdapter } from './cloudResourceAdapter.js'
 import { createCloudKvAdapter } from './cloudKvAdapter.js'
@@ -98,6 +98,8 @@ interface SaveLike {
 interface SettingsLike {
   get(key: string): unknown
   onChange?(fn: (key: string, value: unknown) => void): { dispose(): void }
+  /** 写回单项配置（用于把历史遗留的非法服务地址纠正成空 = 同源） */
+  set?(key: string, value: string | number | boolean): boolean
 }
 
 /** 宿主资源服务里本插件用到的那一点（按结构取，不 import 数据层类型） */
@@ -228,6 +230,22 @@ let shared:
  */
 export function apply(ctx: Context): void {
   const settings = ctx.tryGet<SettingsLike>('settings')
+  /**
+   * 纠正历史遗留的非法服务地址。
+   *
+   * 用户实测 2026-11-05：设置里 `cloudClientBaseUrl` 被存成了一个「的」字，
+   * 界面每次启动都拿它拼 `/%E7%9A%84/api/...` → 404。读的时候已经把它当同源
+   * （见 configFrom），这里再把脏值写回空串，设置面板里也不会继续显示那个字。
+   * 只在「原本有值、但不是合法地址」时写，正常配置不受影响。
+   */
+  const rawBase = settings?.get('cloudClientBaseUrl')
+  if (typeof rawBase === 'string' && rawBase.trim() && !normalizeConfiguredBase(rawBase)) {
+    try {
+      settings?.set?.('cloudClientBaseUrl', '')
+    } catch {
+      /* 设置还没声明这项（插件未登记 Config）时跳过：读路径仍是安全的 */
+    }
+  }
   const cfg = configFrom(settings as never)
   const api = new CloudApi({ baseUrl: cfg.baseUrl })
 
@@ -265,8 +283,26 @@ export function apply(ctx: Context): void {
   // 由 onCanvasReady 用同一份 api 实例，地址切换对它同样生效。
   const offSettings = settings?.onChange?.((key, value) => {
     if (key === 'cloudClientBaseUrl' && typeof value === 'string') {
-      api.setBaseUrl(value)
-      status.baseUrl = value
+      // 脏值（比如存成了一个「的」字）一律按同源处理：api 内部还会再挡一次，
+      // 这里同步把状态里的显示值也纠正，避免底栏显示一个用不了的地址。
+      const next = normalizeConfiguredBase(value)
+      api.setBaseUrl(next)
+      status.baseUrl = next
+      /**
+       * 顺手把存储里的脏值改回空串。
+       *
+       * 为什么不能只在 apply 开头纠正：持久化快照是**之后**才注入 store 的，
+       * 那时 apply 已经跑完、读到的还是默认空值。用户实测 2026-11-05 刷新后
+       * localStorage 里那个字仍在，正是这条顺序造成的。set 在这里是幂等的
+       * （值没变就不会再通知），不会打转。
+       */
+      if (value.trim() && !next) {
+        try {
+          settings?.set?.('cloudClientBaseUrl', '')
+        } catch {
+          /* 设置项还没声明时跳过：读路径仍安全 */
+        }
+      }
     }
   })
   ctx.effect(() => () => {

@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/bar-contract": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {

@@ -168,7 +168,10 @@ const isCanvasTab = computed(() => s.leftTab === 'canvas')
         @close="uploadOpen = false" @save="onUploadSave" />
 
       <!-- 文件夹「添加到画布」确认（数量 > 10 时出现；用户口径：一下添加太多会卡死） -->
-      <AppDialog :model-value="!!folderConfirm" width="380px" @update:model-value="onFolderConfirmCancel">
+      <AppDialog :model-value="!!folderConfirm" width="380px"
+        :title="folderConfirm ? '把「' + folderConfirm.name + '」添加到画布？' : '添加到画布'"
+        description="文件夹内容较多时一次全部添加可能会卡顿，需要确认后再继续。"
+        @update:model-value="onFolderConfirmCancel">
         <div v-if="folderConfirm" class="flex flex-col gap-4 p-5">
           <p class="text-sm font-medium text-ink">把「{{ folderConfirm.name }}」添加到画布？</p>
           <p class="text-[13px] leading-relaxed text-ink-dim">
