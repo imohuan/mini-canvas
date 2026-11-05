@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "cn": "^0.5.1",
+    "@vueuse/core": "^14.3.0",
     "reka-ui": "^2.11.0",
     "@prismshadow/penguin-core": "0.2.13",
     "hono": "^4.6.0",

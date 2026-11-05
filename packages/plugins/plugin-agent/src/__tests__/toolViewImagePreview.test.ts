@@ -382,10 +382,11 @@ const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessa
     // 早先这条规则同时命中 .ac-tool-fold —— 每条收起行都被灰底 + 8px 内边距裹住。
     expect(host).toMatch(/\.ac-tg-body \.ac-tool-card \{[^}]*\}/)
     expect(host).not.toMatch(/\.ac-tg-body \.ac-tool-fold[,\s]/)
-    // 「画布 MCP 自定义卡片」在分组里也走卡片壳（:class 分流要认 hasCardView），普通折叠行不加壳。
+    // 「画布 MCP 自定义卡片」在分组里也走卡片壳（v-if 分流只认 hasCardView），普通折叠行不加壳。
     // 用户口径 2026-10-10：**只认 hasCardView** —— 审批不再给底层工具打 card 标记，
     // 所以分流里不该再出现 tool.card（否则 exec_command 又被顶成常驻卡片、丢掉折叠箭头）。
-    expect(host).toContain(":class=\"hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'\"")
+    // 2026-11-05 换 AI Elements Trace 结构：分流从三元 class 换成 v-if / v-else 分支，契约不变。
+    expect(host).toContain('v-if="hasCardView(tool)"')
     expect(host).not.toContain("tool.card || hasCardView(tool)")
   })
 })

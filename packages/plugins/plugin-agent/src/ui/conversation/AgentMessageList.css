@@ -342,6 +342,13 @@
 /* 文档 Demo 的用户气泡：Bubble variant="muted" 出底色，这里只管位置（右对齐、可收缩）。 */
 .ac-user-bubble {
   max-width: 85%;
+  min-width: 0;
+}
+
+/* 编辑态描边落在**气泡本体**上（用户口径 2026-11-05：描边曾错挂在整行 MessageContent 上，
+   视觉上像把容器撑开、内容跑到容器外）。 */
+.ac-user-bubble--editing {
+  box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f);
 }
 
 /* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6）。
@@ -468,11 +475,6 @@
 /* 「正在编辑」：消息高亮（琥珀警示语义，与语义色表一致）+ 徽标 + 输入框联动标记。
    高亮只描边不填底，避免盖住用户消息气泡本来的层次。 */
 
-.ac-msg.is-editing .ac-bubble {
-  box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f);
-  border-radius: 12px;
-}
-
 .ac-bubble :deep(.md) {
   font-size: 14px;
   line-height: 24px;
@@ -503,10 +505,9 @@
   margin: 4px 0;
 }
 
+/* 思考行 / 工具行 / 工具组已换成 AI Elements Trace 结构：
+   折叠箭头、悬停变色、展开动画都由 TraceCollapsible* 组件出，这里只留字号微调。 */
 .ac-think-toggle {
-  gap: 4px;
-  margin-bottom: 6px;
-  color: var(--ui-ink-dim, #919191);
   font-size: 12px;
 }
 
@@ -558,8 +559,6 @@
 }
 
 .ac-tg-toggle {
-  gap: 4px;
-  color: var(--ui-ink-dim, #919191);
   font-size: 12px;
 }
 
@@ -582,11 +581,12 @@
    早先悬停给整行加 rgba(255,255,255,.06) 的底色 —— 用户明确不要背景条。 */
 
 .ac-tf-toggle {
-  gap: 6px;
-  width: 100%;
-  color: var(--ui-ink-dim, #919191);
   font-size: 12px;
-  text-align: left;
+}
+
+/* 工具名在 TraceTitle 里单行省略（沿用旧契约的 60% 宽度约束，长 MCP 名不撑出气泡） */
+.ac-tf-name {
+  max-width: 60%;
 }
 
 .ac-tf-caret {

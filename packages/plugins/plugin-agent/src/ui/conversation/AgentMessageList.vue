@@ -13,6 +13,11 @@ import AgentScrollArea from './AgentScrollArea.vue'
 // AI Elements 本地件（vendored shadcn-vue）：只取消息轮次容器与内容格。
 // 为什么走相对路径：这是插件专属组件，不进全局注册表（见 ui/ai-elements/README）。
 import { Message as AiMessage, MessageContent, MessageFooter } from '../ai-elements/message'
+// AI Elements Trace：思考行 / 工具行 / 工具分组的可折叠结构（文档 Task / Tool Demo 同款）
+import {
+  Trace, TraceCollapsible, TraceCollapsibleTrigger, TraceCollapsibleContent,
+  TraceLine, TraceTitle,
+} from '../ai-elements/trace'
 import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
 import type { AgentConversationController } from './useAgentConversation'
 
@@ -20,9 +25,9 @@ const c = inject('agentConversation') as unknown as Record<string, any>
 const {
   agent, s, showScrollToBottom, smoothScrollToBottom, scroller, earlierSentinel,
   hintDismissed, dismissHint, SUGGESTIONS, useSuggestion,
-  segmentByAnchor, segmentModelLabel, assistantRows, openThinking, toggleThinking,
-  hasCardView, viewOf, previewToolMedia, openTools, openToolGroups, toggleTool, toggleToolGroup,
-  toolGroupTitle, toolRowSummary, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  segmentByAnchor, segmentModelLabel, assistantRows, openThinking,
+  hasCardView, viewOf, previewToolMedia,
+  toolGroupTitle, userSegments, displayUserText, onSegClick, segTitle, segClickable,
   openUserBubbles, overflowingUser, toggleUserBubble, setUserBubbleBody, msgTimeText, msgTimeTitle,
   copied, copyMessage, beginEditMessage, hasInlineError, pagerByAnchor, pagerTarget,
   SHOW_PROCESS_NOTICE, openPreview, showPendingOn,
@@ -138,13 +143,20 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 <template v-for="row in assistantRows(t)" :key="row.key">
                   <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
 
-                  <!-- 原位思考折叠行：这一段思考发生在它所处的位置（用户口径 2026-10-16） -->
-                  <div v-else-if="row.type === 'thinking' && row.text" class="ac-think-inline">
-                    <Button variant="ghost" size="xs" class="ac-think-toggle" @click="toggleThinking(t.id + ':' + row.key)">
-                      <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id + ':' + row.key] }" />思考过程
-                    </Button>
-                    <pre v-if="openThinking[t.id + ':' + row.key]" class="ac-think">{{ row.text }}</pre>
-                  </div>
+                  <!-- 原位思考折叠行（AI Elements Trace 结构，文档 Task Demo 同款）：
+                       收起 = TraceCollapsibleTrigger + TraceLine「思考过程」；
+                       展开 = TraceCollapsibleContent 内 pre（等宽、上限内滚动）。 -->
+                  <TraceCollapsible v-else-if="row.type === 'thinking' && row.text"
+                    :default-open="!!openThinking[t.id + ':' + row.key]" class="ac-think-inline">
+                    <TraceCollapsibleTrigger class="ac-think-toggle">
+                      <TraceLine>
+                        <TraceTitle>思考过程</TraceTitle>
+                      </TraceLine>
+                    </TraceCollapsibleTrigger>
+                    <TraceCollapsibleContent>
+                      <pre class="ac-think">{{ row.text }}</pre>
+                    </TraceCollapsibleContent>
+                  </TraceCollapsible>
 
                   <!-- 单工具：**只有带自定义卡片的画布 MCP 工具**才直接展示卡片；
                    其余全部走默认折叠行（用户口径 2026-10-10：审批有自己的卡片 UI，
@@ -163,58 +175,52 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                         :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
                     </div>
                   </template>
-                  <!-- 默认工具（通用）：折叠行 —— 收起 = 箭头 + 名字 + 摘要；展开 = 输入/输出 -->
-                  <template v-else-if="row.type === 'tools' && row.tools.length === 1">
-                    <div class="ac-tool-fold">
-                      <Button variant="ghost" size="sm" class="ac-tf-toggle" :aria-expanded="!!openTools[row.tools[0].id]"
-                        @click="toggleTool(row.tools[0].id)">
-                        <ChevronRight :size="13" class="ac-tf-caret"
-                          :class="{ 'is-open': openTools[row.tools[0].id] }" />
-                        <code>{{ row.tools[0].name }}</code>
-                        <span v-if="toolRowSummary(row.tools[0])" class="ac-tf-summary">{{ toolRowSummary(row.tools[0])
-                          }}</span>
-                      </Button>
-                      <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
-                        <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                          :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
-                      </div>
-                    </div>
-                  </template>
+                  <!-- 默认工具（通用）：AI Elements Trace 折叠行 —— 收起 = 图标 + 工具名 + 摘要；
+                       展开区 = ToolViewBody（输入 / 输出），右侧摘要用 TraceDescription 语义。 -->
+                  <TraceCollapsible v-else-if="row.type === 'tools' && row.tools.length === 1" class="ac-tool-fold">
+                    <TraceCollapsibleTrigger class="ac-tf-toggle">
+                      <TraceLine>
+                        <TraceTitle class="ac-tf-name">{{ row.tools[0].name }}</TraceTitle>
+                      </TraceLine>
+                    </TraceCollapsibleTrigger>
+                    <TraceCollapsibleContent class="ac-tf-body">
+                      <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
+                    </TraceCollapsibleContent>
+                  </TraceCollapsible>
 
-                  <!-- 多个工具：折成一组（用户口径：中间没有文字的工具要合并），标题点开看逐个明细 -->
-                  <div v-else-if="row.type === 'tools'" class="ac-tool-group">
-                    <Button variant="ghost" size="sm" class="ac-tg-toggle" :aria-expanded="!!openToolGroups[row.key]"
-                      @click="toggleToolGroup(row.key)">
-                      <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openToolGroups[row.key] }" />
-                      {{ toolGroupTitle(row.tools) }}
-                    </Button>
-                    <div v-if="openToolGroups[row.key]" class="ac-tg-body">
-                      <div v-for="tool in row.tools" :key="tool.id"
-                        :class="hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'">
-                        <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ 折叠行 -->
-                        <template v-if="hasCardView(tool)">
-                          <div class="ac-tool-head">
-                            <!-- 同上：只留运行中的转圈，跑完不再叠一行与卡片自身重复的摘要 -->
-                            <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
+                  <!-- 多个工具：AI Elements Trace 折叠组（文档 Task Demo 的嵌套 TraceCollapsible）——
+                       收起 = 组标题一行；展开 = 逐个工具（卡片直接出 / 其余再套一层 Trace 折叠行）。 -->
+                  <TraceCollapsible v-else-if="row.type === 'tools'" class="ac-tool-group">
+                    <TraceCollapsibleTrigger class="ac-tg-toggle">
+                      <TraceLine>
+                        <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
+                      </TraceLine>
+                    </TraceCollapsibleTrigger>
+                    <TraceCollapsibleContent class="ac-tg-body">
+                      <template v-for="tool in row.tools" :key="tool.id">
+                        <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ Trace 折叠行 -->
+                        <div v-if="hasCardView(tool)" class="ac-tool-card">
+                          <div v-if="!tool.settled" class="ac-tool-head">
+                            <Loader2 :size="13" class="ac-spin" />
                           </div>
                           <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
                             :name="tool.name" @preview="previewToolMedia" />
-                        </template>
-                        <template v-else>
-                          <Button variant="ghost" size="sm" class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
-                            @click="toggleTool(tool.id)">
-                            <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
-                            <code>{{ tool.name }}</code>
-                            <span v-if="toolRowSummary(tool)" class="ac-tf-summary">{{ toolRowSummary(tool) }}</span>
-                          </Button>
-                          <div v-if="openTools[tool.id]" class="ac-tf-body">
+                        </div>
+                        <TraceCollapsible v-else class="ac-tool-fold">
+                          <TraceCollapsibleTrigger class="ac-tf-toggle">
+                            <TraceLine>
+                              <TraceTitle class="ac-tf-name">{{ tool.name }}</TraceTitle>
+                            </TraceLine>
+                          </TraceCollapsibleTrigger>
+                          <TraceCollapsibleContent class="ac-tf-body">
                             <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
                               :name="tool.name" @preview="previewToolMedia" />
-                          </div>
-                        </template>
-                      </div>
-                    </div>
-                  </div>
+                          </TraceCollapsibleContent>
+                        </TraceCollapsible>
+                      </template>
+                    </TraceCollapsibleContent>
+                  </TraceCollapsible>
                 </template>
 
                 <!-- 用户消息：把正文里出现的 @技能 / @MCP 还原成**标签**（与输入框里那颗 chip 同款），
@@ -224,7 +230,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                  超出的内容点左下角「展开」再看；收起按钮原地换「收起」。 -->
                 <template v-if="t.kind === 'user'">
                   <!-- 文档 Demo 结构：Bubble variant="muted" align="end" 包 BubbleContent -->
-                  <Bubble align="end" variant="muted" class="ac-user-bubble">
+                  <Bubble align="end" variant="muted" :class="['ac-user-bubble', { 'ac-user-bubble--editing': t.editing }]">
                     <BubbleContent class="ac-user-bubble-content">
                       <p v-if="t.text" class="ac-user-line" :ref="setUserBubbleBody(t.id)"
                         :class="{ 'is-open': openUserBubbles[t.id] }">

@@ -26,7 +26,9 @@ describe('工具行分流：卡片只给自带卡片的画布 MCP 工具', () =>
   })
 
   it('分组分支的分流只看 hasCardView（不再 || tool.card）', () => {
-    expect(conversation).toContain(":class=\"hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'\"")
+    // 2026-11-05 换 AI Elements Trace 结构后：卡片 = v-if hasCardView(tool)，折叠行 = v-else TraceCollapsible。
+    // 分流只认 hasCardView 不变的契约不变，只是从三元 class 换成 v-if / v-else 分支。
+    expect(conversation).toContain('v-if="hasCardView(tool)"')
     expect(conversation).not.toContain('tool.card || hasCardView(tool)')
   })
 
