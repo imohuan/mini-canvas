@@ -59,6 +59,32 @@ describe('buildCanvasTree —— 按 parentId 组织成分组树', () => {
     expect(tree.map((n) => n.id)).toEqual(['a'])
   })
 
+  /**
+   * 用户口径 2026-11-05：「把所有带有分组的数据都排在顶部，单个资源排在下面」。
+   *
+   * 之前的 groupsFirst 只认 type === 'group'，于是宫格插件建出的 storyboard
+   * （分镜组）被当成普通资源，排在图片后面（用户截图里「分镜组 2」压在视频/图片下面）。
+   */
+  it('分镜组（storyboard）也算容器：和 group 一起排在不同类型资源前面', () => {
+    const tree = buildCanvasTree([
+      { id: 'v', type: 'video', position: { x: 0, y: 0 }, data: { videoName: '视频 3' } },
+      { id: 'i', type: 'image', position: { x: 0, y: 0 }, data: { imageName: '图片 25' } },
+      { id: 'sb', type: 'storyboard', position: { x: 0, y: 0 }, data: { title: '分镜组 2' } },
+      { id: 'img', type: 'image', parentId: 'sb', position: { x: 0, y: 0 }, data: { imageName: '图片 36' } },
+    ])
+    expect(tree.map((n) => n.id)).toEqual(['sb', 'v', 'i'])
+  })
+
+  it('任何能把节点收进来的容器都置顶（不靠类型白名单）', () => {
+    const tree = buildCanvasTree([
+      { id: 'i', type: 'image', position: { x: 0, y: 0 }, data: { imageName: '图片 1' } },
+      { id: 'custom-box', type: 'custom', position: { x: 0, y: 0 }, data: { title: '自定义容器' } },
+      { id: 'inner', type: 'image', parentId: 'custom-box', position: { x: 0, y: 0 }, data: {} },
+    ])
+    expect(tree.map((n) => n.id)).toEqual(['custom-box', 'i'])
+    expect(tree[0].children?.map((n) => n.id)).toEqual(['inner'])
+  })
+
   it('名字只认 data.label（节点自己的名字）', () => {
     expect(nodeDisplayName({ id: '1', type: 'image', data: { label: '图片 1' } })).toBe('图片 1')
     expect(nodeDisplayName({ id: '2', type: 'text', data: { label: '文本 3' } })).toBe('文本 3')

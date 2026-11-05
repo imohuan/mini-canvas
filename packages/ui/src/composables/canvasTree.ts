@@ -153,7 +153,15 @@ function effectiveType(node: CanvasNodeLike): string {
  * 刻意**不**用「有没有 children」判：那会把「只有一个孩子的普通节点」也算成分组（不成立）。
  */
 function isGroupLike(node: CanvasNodeLike): boolean {
-  return effectiveType(node) === 'group'
+  const t = effectiveType(node)
+  /*
+   * storyboard（宫格插件建的分镜组）与 group 一样是**容器型节点**：
+   * 它在抽屉里也是一个可折叠的分组头。漏掉它时「分镜组 2」会被当成普通节点，
+   * 排到图片下面（用户 2026-11-05 截图：分组没有统一置顶）。
+   *
+   * 判据与 auto-layout 的 KNOWN_CONTAINER_NODE_TYPES 对齐，两边认同一批容器类型。
+   */
+  return t === 'group' || t === 'storyboard'
 }
 
 /** 类型 → 中文名（兜底标题用） */
@@ -264,10 +272,19 @@ export function buildCanvasTree(nodes: CanvasNodeLike[]): TreeNode[] {
    * 组内相对顺序 / 普通节点之间的相对顺序一律**保持画布节点的原始顺序**（Array.sort 稳定），
    * 不引入第二套排序键（画布顺序才是用户能感知、能拖拽调整的那个顺序）。
    */
+  /**
+   * 排序判据：**容器型节点**（group / storyboard）或**此刻有子节点**的节点都算分组。
+   *
+   * 只认 type 时，「有孩子但类型是别的东西」的容器会排在图片下面，
+   * 用户的期望是「所有带分组的数据都在顶部」。用 childrenOf 兜底后，
+   * 任何能把节点收进来的容器都会被置顶，判断依据与实际树结构一致。
+   */
+  const isGroupRow = (n: CanvasNodeLike): boolean =>
+    isGroupLike(n) || (childrenOf.get(n.id)?.length ?? 0) > 0
   const groupsFirst = (list: CanvasNodeLike[]): CanvasNodeLike[] =>
-    list.every(isGroupLike) || list.every((n) => !isGroupLike(n))
+    list.every(isGroupRow) || list.every((n) => !isGroupRow(n))
       ? list // 全是分组 / 全是普通节点：顺序无关，省一次拷贝
-      : [...list].sort((a, b) => Number(isGroupLike(b)) - Number(isGroupLike(a)))
+      : [...list].sort((a, b) => Number(isGroupRow(b)) - Number(isGroupRow(a)))
 
   const toTree = (n: CanvasNodeLike): TreeNode => {
     const kids = childrenOf.get(n.id)

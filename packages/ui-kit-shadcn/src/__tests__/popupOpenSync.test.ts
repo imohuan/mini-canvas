@@ -31,8 +31,21 @@ describe('浮层受控开合：外部 open 要真的打开面板', () => {
 })
 
 describe('行菜单右键锚点', () => {
-  it('用真实触发器定位，不再传虚拟 reference', () => {
-    expect(shellSrc, '右键又用回虚拟 reference 了（会弹到左上角）').not.toMatch(/:reference=/)
-    expect(shellSrc, '触发器没有挪到鼠标点').toMatch(/left: point\.x \+ 'px'/)
+  /**
+   * 2026-11-05 第二次实测（用户截图：菜单出现在鼠标右边 279px 处）。
+   *
+   * 上一版把行尾触发器挪成 fixed 当锚点，但它的祖先带 transform（-translate-y-1/2），
+   * transform 祖先会成为 fixed 后代的包含块 → left/top 变成相对那一小格，落点整体偏。
+   * 现在锚点 Teleport 到 body（没有 transform 祖先），再用真实元素做 reference。
+   */
+  it('锚点 Teleport 到 body，并用真实元素做 reference', () => {
+    expect(shellSrc, '锚点没有 Teleport 到 body，会被抽屉里的 transform 改掉包含块').toMatch(/<Teleport to="body">[\s\S]{0,400}rms-anchor/)
+    expect(shellSrc, 'reference 不是真实锚点元素').toMatch(/:reference="point \? anchorEl/)
+    expect(shellSrc, '锚点没有跟着鼠标点定位').toMatch(/left: point\.x \+ 'px'/)
+  })
+
+  it('右键不再挪动行内触发器（transform 祖先会让 fixed 偏移）', () => {
+    const triggerBlock = shellSrc.slice(shellSrc.indexOf('.rms-trigger.is-at-point'), shellSrc.indexOf('.rms-anchor'))
+    expect(triggerBlock, '触发器又被改成 fixed 定位了').not.toMatch(/position:\s*fixed/)
   })
 })
