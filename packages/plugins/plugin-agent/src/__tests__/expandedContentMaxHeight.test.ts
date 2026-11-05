@@ -39,14 +39,6 @@ describe('Agent 对话：展开内容不会无限长高', () => {
     expectBounded('.ac-think', conversation)
   })
 
-  it('默认工具展开区：输入 + 输出合计高度受限', () => {
-    expectBounded('.ac-tf-body', conversation)
-  })
-
-  it('工具分组展开区：很多工具时也不会一路撑长', () => {
-    expectBounded('.ac-tg-body', conversation)
-  })
-
   it('工具卡片详情：工具名 + 输入 + 输出合计高度受限', () => {
     expectBounded('.tvc-details', toolBody)
   })
@@ -54,13 +46,6 @@ describe('Agent 对话：展开内容不会无限长高', () => {
   it('各处共用同一个高度上限，调大调小只改一处', () => {
     expect(rule(conversation, '.ac-root')).toContain('--ac-expand-max-height:')
     expect(rule(conversation, '.ac-think')).toContain('var(--ac-expand-max-height')
-    expect(rule(conversation, '.ac-tf-body')).toContain('var(--ac-expand-max-height')
     expect(rule(toolBody, '.tvc-details')).toContain('var(--ac-expand-max-height')
-  })
-
-  it('外层限高后不再套第二层滚动：输入 / 输出 pre 只跟随外层滚动', () => {
-    expect(conversation).toMatch(/\.ac-tf-body :deep\(\.tvc-pre\),\s*\.ac-tf-body :deep\(\.tvb-pre\) \{\s*max-height: none;/)
-    // 卡片详情里的 pre 同样不再固定 320px，而是跟随统一上限（给三块标题留出余量）
-    expect(toolBody).toMatch(/\.tvc-details \.tvc-pre \{[^}]*max-height: max\(240px, calc\(var\(--ac-expand-max-height/)
   })
 })

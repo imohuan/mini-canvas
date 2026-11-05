@@ -157,7 +157,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                       </TraceLine>
                     </TraceCollapsibleTrigger>
                     <TraceCollapsibleContent class="ac-think-content">
-                      <pre class="ac-think">{{ row.text }}</pre>
+                      <div class="ac-think whitespace-pre-wrap wrap-break-word">{{ row.text }}</div>
                     </TraceCollapsibleContent>
                     </TraceCollapsible>
                   </Trace>
@@ -186,7 +186,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                       <TraceCollapsibleTrigger class="ac-tf-toggle">
                         <TraceLine>
                           <TraceIcon><Terminal :size="14" /></TraceIcon>
-                          <TraceTitle class="ac-tf-name">{{ row.tools[0].name }}</TraceTitle>
+                        <TraceTitle>{{ row.tools[0].name }}</TraceTitle>
                           <TraceDescription v-if="toolRowSummary(row.tools[0])">{{ toolRowSummary(row.tools[0]) }}</TraceDescription>
                         </TraceLine>
                       </TraceCollapsibleTrigger>
@@ -222,7 +222,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                             <TraceCollapsibleTrigger class="ac-tf-toggle">
                               <TraceLine>
                                 <TraceIcon><Terminal :size="14" /></TraceIcon>
-                                <TraceTitle class="ac-tf-name">{{ tool.name }}</TraceTitle>
+                                <TraceTitle>{{ tool.name }}</TraceTitle>
                                 <TraceDescription v-if="toolRowSummary(tool)">{{ toolRowSummary(tool) }}</TraceDescription>
                               </TraceLine>
                             </TraceCollapsibleTrigger>

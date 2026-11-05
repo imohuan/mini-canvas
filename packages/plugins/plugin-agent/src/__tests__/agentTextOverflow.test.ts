@@ -76,7 +76,8 @@ describe('Agent 面板：极端长文字不撑破容器', () => {
   })
 
   it('思考块：无空格长串也能换行，不横向撑破气泡', () => {
-    const think = rule('.ac-think')
-    expect(think).toMatch(/overflow-wrap:\s*anywhere|word-break:\s*break-word/)
+    // 2026-11-05 换 AI Elements Trace 后：换行由组件的 wrap-break-word Tailwind 类出（在模板里），
+    // 项目不再自绘思考块样式。
+    expect(host).toContain('wrap-break-word')
   })
 })
