@@ -92,6 +92,11 @@ function setActionOpen(item: CanvasOption, open: boolean): void {
   }
 }
 
+/** 悬停整行就直接展开二级菜单（用户口径 2026-11-05），不必先碰到行尾图标。 */
+function hoverRow(item: CanvasOption): void {
+  if (actionOpenId.value !== item.id) setActionOpen(item, true)
+}
+
 /** 点行尾的「›」/「⋯」：记下是哪张画布（子菜单的条目据此派发） */
 function openActions(item: CanvasOption): void {
   actionTarget.value = item
@@ -154,6 +159,7 @@ function pickAction(
             :key="item.id"
             class="canvas-row"
             :class="{ 'is-active': item.id === canvasId }"
+            @mouseenter="hoverRow(item)"
           >
             <button
               type="button"
