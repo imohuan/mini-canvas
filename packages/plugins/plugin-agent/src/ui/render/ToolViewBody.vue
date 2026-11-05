@@ -96,9 +96,15 @@ function visibleRows<T>(items: T[]): T[] {
   <!-- 自定义卡片（紧凑两行）：头行（图标 + 标题 + 标记）+ 内容块；
        底部「详情」折叠出 工具名称 + 输入 + 输出 -->
   <div v-else class="tvc">
-    <div v-if="view.heading" class="tvc-head">
-      <span class="tvc-head-icon"><component :is="iconOf(view.icon)" :size="13" /></span>
-      <span class="tvc-title">{{ view.heading }}</span>
+    <!-- 标题行：折叠箭头在最左（用户口径 2026-11-05：折叠开关放在卡片标题左侧），
+         之后才是工具图标 / 人话标题 / 右侧徽章。 -->
+    <div class="tvc-head">
+      <button type="button" class="tvc-head-toggle" :aria-expanded="showDetails"
+        :aria-label="showDetails ? '收起详情' : '展开详情'" @click="showDetails = !showDetails">
+        <ChevronRight :size="12" class="tvc-details-caret" :class="{ 'is-open': showDetails }" />
+      </button>
+      <span v-if="view.heading" class="tvc-head-icon"><component :is="iconOf(view.icon)" :size="13" /></span>
+      <span class="tvc-title">{{ view.heading || name || '工具调用' }}</span>
       <span v-if="view.badge" class="tvc-badge">{{ view.badge }}</span>
     </div>
 
@@ -187,12 +193,8 @@ function visibleRows<T>(items: T[]): T[] {
     </template>
     </div>
 
-    <!-- 卡内「详情」折叠（用户口径 2026-10-08 定稿）：卡片下方一块；
-         展开 = 工具名称 / 输入 / 输出，三块都在、内容不省略 -->
-    <Button variant="ghost" size="xs" class="tvc-details-toggle" :aria-expanded="showDetails" @click="showDetails = !showDetails">
-      <ChevronRight :size="12" class="tvc-details-caret" :class="{ 'is-open': showDetails }" />
-      详情
-    </Button>
+    <!-- 卡内「详情」：折叠开关已移到标题行左侧（用户口径 2026-11-05）；
+         展开后仍是 工具名称 / 输入 / 输出 三块，内容不省略。 -->
     <div v-if="showDetails" class="tvc-details">
       <div class="tvc-details-row">
         <span class="tvc-details-label">工具名称</span>
@@ -288,8 +290,21 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-note.is-info { color: var(--ui-ink-dim, #919191); }
 
 /* 卡内「详情」折叠 */
-.tvc-details-toggle { align-self: flex-start; gap: 3px; color: var(--ui-ink-dim, #919191); font-size: 11px; }
-.tvc-details-toggle:hover { color: var(--ui-ink, #f7f7f7); }
+.tvc-head-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+.tvc-head-toggle:hover { color: var(--ui-ink, #f7f7f7); }
 .tvc-details-caret { flex: none; transition: transform 0.18s ease; }
 .tvc-details-caret.is-open { transform: rotate(90deg); }
 /* 详情展开后的整体高度上限（用户口径 2026-10-25）：工具名 + 输入 + 输出三块

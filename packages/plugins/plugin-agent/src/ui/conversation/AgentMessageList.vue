@@ -38,6 +38,10 @@ const {
 const Button = useUiComponent('Button')
 // 加载指示用组件库的 Spinner（shadcn 原生，转圈动画在组件里）
 const Spinner = useUiComponent('Spinner')
+// 工具卡片外壳用 shadcn Card（用户口径 2026-11-05：卡片要有轮廓）
+const Card = useUiComponent('Card')
+const CardHeader = useUiComponent('CardHeader')
+const CardContent = useUiComponent('CardContent')
 // 全局 shadcn 原语（Bubble）：用户气泡的视觉壳，与文档 Demo 的 Message align="end" + Bubble 同款
 const Bubble = useUiComponent('Bubble')
 const BubbleContent = useUiComponent('BubbleContent')
@@ -175,17 +179,15 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                    不该给底层工具再打「卡片」标记把它顶成常驻展开 —— exec_command 这类
                    要恢复成折叠行，对齐 docs/tmp/tool-card-demo-v3.html 的做法）。 -->
                   <template v-else-if="row.type === 'tools' && row.tools.length === 1 && hasCardView(row.tools[0])">
-                    <div class="ac-tool-card">
-                      <!-- 运行中才给一行转圈（卡片还没内容时的进度指示）。
-                       跑完就整行收掉：卡片自己的头行（图标 + 标题 + 角标）已经是头部，
-                       再叠一行摘要（如「+1 ~ 0 -0」）与下面的「1 新增 / 0 更新 / 0 删除」纯属重复
-                       （用户口径 2026-10-10：删掉那行没意义的文字）。 -->
-                      <div v-if="!row.tools[0].settled" class="ac-tool-head">
-                        <Loader2 :size="13" class="ac-spin" />
-                      </div>
-                      <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
-                    </div>
+                    <!-- 自定义卡片（画布 MCP 工具）：shadcn Card 外壳（自带轮廓 / 圆角 / 底色）。
+                         标题行与折叠开关由 ToolViewBody 自己出（它已经有人话标题 + 徽章），
+                         折叠箭头在标题左侧。用户口径 2026-11-05。 -->
+                    <Card size="sm" class="ac-tool-card">
+                      <CardContent>
+                        <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                          :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
+                      </CardContent>
+                    </Card>
                   </template>
                   <!-- 默认工具（通用）：AI Elements Trace 折叠行 —— 收起 = 图标 + 工具名 + 摘要；
                        展开区 = ToolViewBody（输入 / 输出），右侧摘要用 TraceDescription 语义。 -->

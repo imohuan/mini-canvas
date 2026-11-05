@@ -337,16 +337,16 @@ const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessa
     // 最多 3 张 + 「+N」
     expect(body).toContain('const STRIP_MAX = 3')
     expect(body).toContain("tvc-img-more")
-    // 「详情」折叠块在卡片下方（按钮在内容之后），标签是「工具名称 / 输入 / 输出」三块。
-    // 注意别用 indexOf('</template>') 截模板：第一个闭标签是内层 v-for 的，会截掉后半段。
+    // 2026-11-05：折叠开关移到**标题行左侧**（tvc-head-toggle 在 tvc-head 里、tvc-title 之前），
+    // 展开内容仍是「工具名称 / 输入 / 输出」三块。
     const tpl = body.slice(body.indexOf('<template>'), body.indexOf('</style>'))
-    expect(tpl.indexOf('tvc-details-toggle')).toBeGreaterThan(tpl.indexOf('tvc-body'))
+    expect(tpl.indexOf('tvc-head-toggle')).toBeLessThan(tpl.indexOf('tvc-title'))
     for (const label of ['工具名称', '输入', '输出']) expect(tpl).toContain(label)
     // 输入为空也写「（无输入）」——不省略、不跳过
     expect(tpl).toContain("（无输入）")
     // 悬停不加背景：折叠行/详情按钮的 hover 只改颜色，不动 background
     expect(host).not.toMatch(/\.ac-tf-toggle:hover\s*\{[^}]*background/)
-    expect(body).not.toMatch(/\.tvc-details-toggle:hover\s*\{[^}]*background/)
+    expect(body).not.toMatch(/\.tvc-head-toggle:hover\s*\{[^}]*background/)
   })
 
   it('宿主 AgentConversation：4 处 ToolViewBody 全部接上 @preview', () => {

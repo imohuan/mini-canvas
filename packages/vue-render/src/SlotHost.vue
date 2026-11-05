@@ -4,14 +4,20 @@
 // 只依赖应用级上下文（ctx），所以项目页和画布页都能用。
 // 不做定位 / pointer-events / 容器样式：那是具体槽的布局职责。
 import { markRaw, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasContext } from './context'
+import { useCanvasContextOrRender } from './context'
 
 const props = defineProps<{
   slot: string
   itemClass?: string
 }>()
 
-const { ctx } = useCanvasContext()
+/**
+ * 用**宽松**取件：外壳槽只有应用级上下文，画布内的 overlay 槽（CanvasSurface 里）
+ * 只有渲染上下文。早先这里写死 useCanvasContext()，画布内取不到就抛错，
+ * 于是 overlay occupant（对齐参考线浮层等）永远不渲染 —— 真机表现为
+ * 「参考线插件没效果」（2026-11-05）。
+ */
+const { ctx } = useCanvasContextOrRender()
 
 interface SlotOccupant {
   id: string
