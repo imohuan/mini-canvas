@@ -224,14 +224,13 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                       </TraceCollapsibleTrigger>
                       <TraceCollapsibleContent>
                         <template v-for="tool in row.tools" :key="tool.id">
-                          <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ Trace 折叠行 -->
-                          <div v-if="hasCardView(tool)" class="ac-tool-card">
-                            <div v-if="!tool.settled" class="ac-tool-head">
-                              <Loader2 :size="13" class="ac-spin" />
-                            </div>
-                            <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
-                              :name="tool.name" @preview="previewToolMedia" />
-                          </div>
+                          <!-- 有卡片（画布 MCP）→ shadcn Card 外壳；其余（含要审批的默认工具）→ Trace 折叠行 -->
+                          <Card v-if="hasCardView(tool)" size="sm" class="ac-tool-card">
+                            <CardContent>
+                              <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
+                                :name="tool.name" @preview="previewToolMedia" />
+                            </CardContent>
+                          </Card>
                           <TraceCollapsible v-else>
                             <TraceCollapsibleTrigger>
                               <TraceLine>

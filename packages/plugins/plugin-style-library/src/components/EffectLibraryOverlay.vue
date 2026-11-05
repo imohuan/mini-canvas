@@ -11,7 +11,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
@@ -27,7 +27,8 @@ import { useCanvasGate } from '../useCanvasGate'
 defineOptions({ inheritAttrs: false })
 
 /** 只从根上下文取服务：项目页没有画布也能浏览与收藏。 */
-const { ctx } = useCanvasContext()
+// 宽松取件：本浮层注册在画布 overlay 槽里（详见 StyleLibraryOverlay 的说明）。
+const { ctx } = useCanvasContextOrRender()
 /** 「能不能加入画布」：doc + media 两件都在才行，缺哪件给哪句原因。 */
 const gate = useCanvasGate(ctx, '特效')
 

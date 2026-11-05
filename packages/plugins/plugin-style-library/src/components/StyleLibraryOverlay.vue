@@ -13,7 +13,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
@@ -37,7 +37,9 @@ defineOptions({ inheritAttrs: false })
  * 只从根上下文取服务：项目页没有画布也能打开风格广场、看详情、收藏。
  * flow 这类画布能力按需现取（tryGet('view')），拿不到就把"加入画布"禁用。
  */
-const { ctx } = useCanvasContext()
+// 宽松取件：本浮层注册在画布 overlay 槽里（CanvasSurface 只 provide 渲染上下文），
+// 严格 useCanvasContext() 会抛错导致整个浮层不渲染（2026-11-05 与参考线同一根因）。
+const { ctx } = useCanvasContextOrRender()
 /** 「能不能加入画布」：doc + media 两件都在才行，缺哪件给哪句原因。 */
 const gate = useCanvasGate(ctx, '素材')
 
