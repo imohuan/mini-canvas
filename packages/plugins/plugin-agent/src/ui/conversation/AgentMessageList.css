@@ -294,13 +294,6 @@
   width: 100%;
 }
 
-.ac-msg.user .ac-bubble {
-  max-width: 85%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--ui-hover-soft, rgb(255 255 255 / 0.05));
-}
-
 /* 用户消息正文：文字与标签在同一行内自然换行 */
 
 .ac-user-line {
@@ -344,6 +337,11 @@
 .ac-msg.user {
   flex-direction: column;
   align-items: flex-end;
+}
+
+/* 文档 Demo 的用户气泡：Bubble variant="muted" 出底色，这里只管位置（右对齐、可收缩）。 */
+.ac-user-bubble {
+  max-width: 85%;
 }
 
 /* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6）。

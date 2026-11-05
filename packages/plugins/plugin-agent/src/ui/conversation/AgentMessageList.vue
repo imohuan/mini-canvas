@@ -12,7 +12,7 @@ import ToolViewBody from '../render/ToolViewBody.vue'
 import AgentScrollArea from './AgentScrollArea.vue'
 // AI Elements 本地件（vendored shadcn-vue）：只取消息轮次容器与内容格。
 // 为什么走相对路径：这是插件专属组件，不进全局注册表（见 ui/ai-elements/README）。
-import { Message as AiMessage, MessageContent } from '../ai-elements/message'
+import { Message as AiMessage, MessageContent, MessageFooter } from '../ai-elements/message'
 import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
 import type { AgentConversationController } from './useAgentConversation'
 
@@ -29,6 +29,9 @@ const {
 } = c
 
 const Button = useUiComponent('Button')
+// 全局 shadcn 原语（Bubble）：用户气泡的视觉壳，与文档 Demo 的 Message align="end" + Bubble 同款
+const Bubble = useUiComponent('Bubble')
+const BubbleContent = useUiComponent('BubbleContent')
 
 /**
  * 消息流滚动层：换成组件库的 ScrollArea（用户口径 2026-11-04）。
@@ -125,7 +128,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
             <!-- 用户靠右 / 助手靠左（照参考图，都没有头像）。
              外壳换成本地 AI Elements 的 Message（对话轮次容器，align 端对齐），
              class 与编辑态挂法不变（合同测试照旧钉住）。 -->
-            <AiMessage v-else align="start" :class="['ac-msg', t.kind, { 'is-editing': t.editing }]">
+            <AiMessage v-else :align="t.kind === 'user' ? 'end' : 'start'" :class="['ac-msg', t.kind, { 'is-editing': t.editing }]">
               <MessageContent :class="t.kind === 'user' ? 'ac-bubble' : 'ac-bubble ac-bubble--full'">
                 <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
                  文字一段、中间没有文字隔开的多个工具合并成一组、再一段文字。
@@ -220,30 +223,42 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 <!-- 默认只显示前 8 行（用户口径 2026-10-15）：长消息夹在 max-height 里，
                  超出的内容点左下角「展开」再看；收起按钮原地换「收起」。 -->
                 <template v-if="t.kind === 'user'">
-                  <p v-if="t.text" class="ac-user-line" :ref="setUserBubbleBody(t.id)"
-                    :class="{ 'is-open': openUserBubbles[t.id] }">
-                    <!-- user_steering 块（后台队列自动发的）剥掉标记只显示内文（用户口径 2026-10-15） -->
-                    <template v-for="(seg, si) in userSegments(displayUserText(t.text))" :key="si">
-                      <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
-                       用户口径 2026-10-06：对话里出现的节点标签也要能点。 -->
-                      <span v-if="seg.type === 'tag'" class="ac-sent-tag"
-                        :class="{ 'is-clickable': segClickable(seg) }" :title="segTitle(seg)"
-                        :role="segClickable(seg) ? 'button' : undefined"
-                        :tabindex="segClickable(seg) ? 0 : undefined" @click="onSegClick(seg)"
-                        @keydown.enter.prevent="onSegClick(seg)">
-                        <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
-                        <span class="ac-sent-tag-label">{{ seg.name }}</span>
+                  <!-- 文档 Demo 结构：Bubble variant="muted" align="end" 包 BubbleContent -->
+                  <Bubble align="end" variant="muted" class="ac-user-bubble">
+                    <BubbleContent class="ac-user-bubble-content">
+                      <p v-if="t.text" class="ac-user-line" :ref="setUserBubbleBody(t.id)"
+                        :class="{ 'is-open': openUserBubbles[t.id] }">
+                        <!-- user_steering 块（后台队列自动发的）剥掉标记只显示内文（用户口径 2026-10-15） -->
+                        <template v-for="(seg, si) in userSegments(displayUserText(t.text))" :key="si">
+                          <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
+                           用户口径 2026-10-06：对话里出现的节点标签也要能点。 -->
+                          <span v-if="seg.type === 'tag'" class="ac-sent-tag"
+                            :class="{ 'is-clickable': segClickable(seg) }" :title="segTitle(seg)"
+                            :role="segClickable(seg) ? 'button' : undefined"
+                            :tabindex="segClickable(seg) ? 0 : undefined" @click="onSegClick(seg)"
+                            @keydown.enter.prevent="onSegClick(seg)">
+                            <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
+                            <span class="ac-sent-tag-label">{{ seg.name }}</span>
+                          </span>
+                          <span v-else class="ac-user-text">{{ seg.value }}</span>
+                        </template>
+                      </p>
+                      <Button v-if="overflowingUser[t.id]" variant="ghost" size="xs" class="ac-user-toggle"
+                        :aria-expanded="!!openUserBubbles[t.id]" aria-label="展开完整消息"
+                        :title="openUserBubbles[t.id] ? '收起' : '展开'" @click="toggleUserBubble(t.id)">
+                        {{ openUserBubbles[t.id] ? '收起' : '展开' }}
+                        <ChevronDown v-if="!openUserBubbles[t.id]" :size="13" />
+                        <ChevronUp v-else :size="13" />
+                      </Button>
+                      <!-- 「正在编辑」徽标（用户口径 2026-10-06）：在气泡内部显示 -->
+                      <span v-if="t.editing" class="ac-editing-badge" role="status">
+                        <Pencil :size="12" />正在编辑
+                        <Button variant="ghost" size="icon-xs" class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
+                          <X :size="11" />
+                        </Button>
                       </span>
-                      <span v-else class="ac-user-text">{{ seg.value }}</span>
-                    </template>
-                  </p>
-                  <Button v-if="overflowingUser[t.id]" variant="ghost" size="xs" class="ac-user-toggle"
-                    :aria-expanded="!!openUserBubbles[t.id]" aria-label="展开完整消息"
-                    :title="openUserBubbles[t.id] ? '收起' : '展开'" @click="toggleUserBubble(t.id)">
-                    {{ openUserBubbles[t.id] ? '收起' : '展开' }}
-                    <ChevronDown v-if="!openUserBubbles[t.id]" :size="13" />
-                    <ChevronUp v-else :size="13" />
-                  </Button>
+                    </BubbleContent>
+                  </Bubble>
                 </template>
                 <!-- 用户消息带的图：按原比例排一行缩略图，点开看大图 -->
                 <div v-if="t.kind === 'user' && t.images?.length" class="ac-user-images">
@@ -252,13 +267,6 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                     <img :src="src" alt="" />
                   </Button>
                 </div>
-                <!-- 「正在编辑」徽标（用户口径 2026-10-06：语义是正在编辑，不是已编辑；带高亮） -->
-                <span v-if="t.editing" class="ac-editing-badge" role="status">
-                  <Pencil :size="12" />正在编辑
-                  <Button variant="ghost" size="icon-xs" class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
-                    <X :size="11" />
-                  </Button>
-                </span>
                 <!-- 助手消息才走 Markdown。
                  这里**必须**是独立的 v-if，不能接在用户那条的 v-else-if 链上：
                  中间隔着「用户图片」那个 div 时，链会被打断，导致用户消息既渲染标签行、
@@ -286,9 +294,9 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 <template v-if="t.error">
                   <p class="ac-error">{{ t.error }}</p>
                 </template>
-              <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
-               不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
-              <div v-if="t.kind === 'user'" class="ac-msg-actions">
+              <!-- hover 操作条（文档 Demo 的 MessageFooter 语义：时间/复制/编辑贴着消息下方，
+               右对齐跟气泡同侧）。编辑 = 把这条消息回填到底部输入框。 -->
+              <MessageFooter v-if="t.kind === 'user'" class="ac-msg-actions">
                 <span class="ac-msg-time" :title="msgTimeTitle(t.ts)">{{ msgTimeText(t.ts) }}</span>
                 <Button variant="ghost" size="icon-xs" class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
                   @click="copyMessage(t.text, t.id)">
@@ -298,7 +306,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 <Button variant="ghost" size="icon-xs" class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
                   <Pencil :size="11" />
                 </Button>
-              </div>
+              </MessageFooter>
               </MessageContent>
             </AiMessage>
             <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
