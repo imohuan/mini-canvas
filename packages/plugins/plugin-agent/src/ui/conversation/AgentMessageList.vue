@@ -40,7 +40,6 @@ const Button = useUiComponent('Button')
 const Spinner = useUiComponent('Spinner')
 // 工具卡片外壳用 shadcn Card（用户口径 2026-11-05：卡片要有轮廓）
 const Card = useUiComponent('Card')
-const CardHeader = useUiComponent('CardHeader')
 const CardContent = useUiComponent('CardContent')
 // 全局 shadcn 原语（Bubble）：用户气泡的视觉壳，与文档 Demo 的 Message align="end" + Bubble 同款
 const Bubble = useUiComponent('Bubble')
