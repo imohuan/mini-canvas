@@ -25,4 +25,3 @@ describe('canvas-export 装配 smoke', () => {
     ctx.stop()
   })
 })
-

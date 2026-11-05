@@ -65,7 +65,9 @@ import type {
 import type { SelectionService } from '@mini-canvas/canvas-data'
 import { isTransient } from '@mini-canvas/canvas-data'
 import { registerEventName } from '@mini-canvas/canvas-base'
-import { getFontEmbedCSS, toCanvas } from 'html-to-image'
+import { toCanvas } from 'html-to-image'
+import { buildExportFontCss } from './exportFonts'
+import { stripXmlUnsafeComments, withXmlSafeSerialization } from './xmlSanitize'
 import {
   EXPORT_SCALE_DEFAULT,
   EXPORT_SCALE_MAX,
@@ -391,6 +393,10 @@ function paintBackground(
  *
  * fontEmbedCSS：字体 CSS 由调用方**只算一次**传进来复用。html-to-image 不传就会每块都重新抓一遍
  * 页面上所有字体并转 dataURL——块一多就是个可观的浪费（与「节点多不能卡」同一个诉求）。
+ *
+ * 拿不到字体 CSS 时传 skipFonts=true：绝不能让截图库自己回退去抓全局字体表。
+ * 那张中文 Google Fonts 表有几百个分片，而且跨域表读 cssRules 会抛 SecurityError，
+ * 表现就是控制台报错 + 导出卡在「正在导出…」。
  */
 async function renderPane(
   el: HTMLElement,
@@ -405,9 +411,17 @@ async function renderPane(
     height: paneH,
     pixelRatio: scale,
     filter,
-    fontEmbedCSS,
+    ...(fontEmbedCSS ? { fontEmbedCSS } : { skipFonts: true }),
+    // 单张图片翻成 dataURL 失败时（视频封面、跨域素材、临时 404…）html-to-image 会把 src
+    // 设成空串并触发 error，整块截图因此失败、导出图缺一块。
+    // 给它一张必然能加载的 1×1 透明图当占位：失败的那张图留空位，其余内容照常截。
+    imagePlaceholder: TRANSPARENT_PIXEL,
   })
 }
+
+/** 1×1 透明 GIF：html-to-image 抓图失败时的占位，避免单张图把整块拖垮 */
+const TRANSPARENT_PIXEL =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
 export function apply(ctx: Context) {
   const { selection } = ctx
@@ -568,10 +582,11 @@ export function apply(ctx: Context) {
     const overlay = showExportOverlay(el)
     await nextFrame() // 等遮罩先画上，再开始折腾视口
 
-    // 字体 CSS 只抓一次（首次会触发字体请求；抓不到就退回让截图库每块自己抓，不影响导出）
+    // 字体 CSS 只抓一次，且只抓画布实际用到的字体分片（中文 Google Fonts 有几百个分片，
+    // 全抓会让导出卡住、并因跨域样式表报 SecurityError）。抓不到就跳过字体内联。
     let fontEmbedCSS = ''
     try {
-      fontEmbedCSS = await getFontEmbedCSS(el)
+      fontEmbedCSS = await buildExportFontCss(el)
     } catch (err) {
       console.warn('[canvas-export] 内联字体失败，改用系统字体渲染：', err)
     }
@@ -593,19 +608,28 @@ export function apply(ctx: Context) {
         const keepEdges = tileEdgeIds(edges, rectById, plan.edgeIds, tile)
 
         let pane: HTMLCanvasElement
+        // 开发期模板注释里常有 CSS 变量名（含两个连续减号）。html-to-image 会把 DOM
+        // 序列化成 XML，XML 注释不允许那两个减号 —— 留在里面会让整块 SVG 解码失败。
+        // 注释不参与渲染：截前摘掉、截完还原，导出画面不受影响。
+        const restoreComments = stripXmlUnsafeComments(el)
         try {
-          pane = await renderPane(
-            el,
-            paneW,
-            paneH,
-            scale,
-            makeExportFilter(keepNodes, keepEdges),
-            fontEmbedCSS || undefined,
+          // 序列化阶段的兜底：即使 Vue 在异步克隆途中补回注释锚点，也不会把非法注释带进 SVG。
+          pane = await withXmlSafeSerialization(() =>
+            renderPane(
+              el,
+              paneW,
+              paneH,
+              scale,
+              makeExportFilter(keepNodes, keepEdges),
+              fontEmbedCSS || undefined,
+            ),
           )
         } catch (err) {
           failedTiles++
           console.warn('[canvas-export] 某一块截图失败，已跳过：', err)
           continue
+        } finally {
+          restoreComments()
         }
 
         // 4) 取本块那一片，贴到输出画布对应位置（坐标全整数 → 拼缝严丝合缝）
