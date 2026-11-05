@@ -6,7 +6,8 @@
  * （与图片节点同约定）。本组件只负责「放哪些按钮、点了干什么」。
  *
  * **两套按钮，按会话态切换**（用户要求「确认按钮应该放在上下控制栏」）：
- * - 平时：上传 / 剪辑 / 裁剪 / 截图 / 下载（以及裁剪或剪辑后的「恢复」）；
+ * - 平时：上传 / 剪辑 / 裁剪 / 下载（以及裁剪或剪辑后的「恢复」）；
+ *   截图**不在顶栏**：视频播放控件条里的相机按钮（VideoCaptureMenu，含当前帧/首帧/尾帧）才是唯一入口。
  *   裁剪入口 2026-10-29 恢复：裁剪会话此前只能经命令（video:crop）进入，界面上不可达；
  *   与图片节点同一条口径 —— 入口按钮 + 编辑态换确认/取消（文档案例 9 的方式 C 同款）。
  * - 编辑态（正在裁剪或扩展）：只剩 **取消** 与 **确认** —— 编辑时其它入口都没有意义，
@@ -83,8 +84,6 @@ const ICON_CLIP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 17h16"/><path d="M8 4v16"/><path d="M16 4v16"/></svg>'
 const ICON_CROP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>'
-const ICON_FRAME =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'
 const ICON_DOWNLOAD =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
 /** 转音频：音符 + 向右箭头（"声音被取出来"） */
@@ -175,7 +174,8 @@ function cancelEdit(): void {
       </Button>
     </template>
 
-    <!-- 平时：上传 / 剪辑 / 裁剪 / 扩展 / 截图 / 下载 / 恢复 -->
+    <!-- 平时：上传 / 剪辑 / 裁剪 / 扩展 / 下载 / 恢复
+         截图不在这里：视频控件条里的相机按钮（三帧菜单）是唯一入口。 -->
     <template v-else>
       <!-- 剪辑会话：顶栏给一个明确的退出入口（底栏的胶片条也有，但顶部这格不能空着） -->
       <Button v-if="clipping" variant="destructive" size="icon-sm" type="button"
@@ -195,10 +195,6 @@ function cancelEdit(): void {
         <Button variant="ghost" size="icon-sm" type="button" title="裁剪画面" aria-label="裁剪画面"
           @click="beginOverlay(props.id, 'crop')">
           <ToolbarIcon :icon="ICON_CROP" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" type="button" title="截取当前帧" aria-label="截取当前帧"
-          @click="run('video:capture-frame')">
-          <ToolbarIcon :icon="ICON_FRAME" />
         </Button>
         <!-- 转音频：后台 ffmpeg 抽音轨，新建一个音频节点 + 连线（与裁剪/剪辑同一条顺序） -->
         <Button variant="ghost" size="icon-sm" type="button" title="转为音频" aria-label="转为音频"

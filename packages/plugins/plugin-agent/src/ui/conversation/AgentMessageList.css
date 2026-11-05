@@ -482,15 +482,7 @@
 
 /* 思考行 / 工具行 / 工具组完全使用 AI Elements Trace 组件的原生样式（Tailwind 原子类）：
    折叠箭头、悬停变色、展开动画、左侧竖线、文字色全部由组件出，这里不写任何视觉样式。
-   仅保留一条项目契约：长思考内容在展开区内滚动（max-height 上限），不撑长对话。
-
-   另有一处圆角补偿：官方 docs 用**语义类版本**
-   （.cn-trace-collapsible-trigger { border-radius: calc(--radius * 0.8) } → 实测 10px），
-   我们从 registry 拿的是原子类版本（rounded-md → 6px），这里按官方实测值补回。 */
-[data-slot='trace-collapsible-trigger'] {
-  border-radius: calc(var(--mct-radius, 8px) * 1.25);
-}
-
+   仅保留一条项目契约：长思考内容在展开区内滚动（max-height 上限），不撑长对话。 */
 .ac-think {
   max-height: var(--ac-expand-max-height, min(360px, 50vh));
   overflow-y: auto;
