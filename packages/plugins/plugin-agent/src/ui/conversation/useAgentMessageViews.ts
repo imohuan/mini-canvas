@@ -117,6 +117,11 @@ function toolTitle(tool: ToolCard): string {
   return brief ? bare + ' · ' + brief : bare
 }
 
+/** 这组工具里是否还有没跑完的（决定组标题行的图标是转圈还是对勾） */
+function anyToolRunning(tools: ToolCard[]): boolean {
+  return tools.some((x) => !x.settled)
+}
+
 /**
  * 这一轮是否**还在思考**（用户口径 2026-11-05：思考中自动展开、图标转圈，
  * 思考结束后自动折叠）。依据：助手这一轮最后一行还是思考块（后面没出正文/工具）。
@@ -226,6 +231,7 @@ return {
   toggleToolGroup,
   toolGroupTitle,
   toolTitle,
+  anyToolRunning,
   isThinking,
   thinkingLive,
   openTools,

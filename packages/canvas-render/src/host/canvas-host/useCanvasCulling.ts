@@ -29,6 +29,35 @@ export function useCanvasCulling(opts: {
    * 保证两条重灌路径拿到的都是同一份最新集合。
    */
   const cullIds = shallowRef<ReadonlySet<string> | null>(null)
+
+  /**
+   * 写入可见集合，**内容相同就保持旧引用**。
+   *
+   * 为什么必须做（2026-11-05 真机报 "Maximum recursive updates exceeded in <CanvasSurface>"）：
+   * computeVisibleIds 每次都新建 Set，而 cullIds 是 shallowRef —— 无脑赋值会让引用变化，
+   * 依赖它的 syncNodesFromStore / watch 全部重新执行；重灌又会再算一次可见集合，
+   * 于是形成「重灌 → 重算 → 引用变化 → 再重灌」的自激循环，Vue 判定递归更新超限。
+   * 集合内容没变时复用旧引用，Vue 就不会把这次写入当成更新。
+   */
+  function setCullIds(next: Set<string> | null): void {
+    const prev = cullIds.value
+    if (prev === next) return
+    if (prev === null || next === null) {
+      cullIds.value = next
+      return
+    }
+    if (prev.size === next.size) {
+      let same = true
+      for (const id of next) {
+        if (!prev.has(id)) {
+          same = false
+          break
+        }
+      }
+      if (same) return
+    }
+    cullIds.value = next
+  }
   /**
    * 与被剔除节点相连的节点 id 集（任一端在剔除集合外 ⇒ 两端都算 linked）。
    * 壳据此区分 culled / culled-linked：至少一端在画布内的连线必须继续画，
@@ -181,26 +210,26 @@ export function useCanvasCulling(opts: {
     const surface = surfaceRef.value
     const rect = surface?.getVisibleRect?.() ?? null
     if (!interactionSettings.visibleCullEnabled) {
-      cullIds.value = null
+      setCullIds(null)
       return
     }
     const liveIds = dragProtectedIds && dragProtectedIds.size > 0 ? dragProtectedIds : undefined
     if (rect) {
-      cullIds.value = computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds)
+      setCullIds(computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds))
       return
     }
     if (typeof window === 'undefined') {
-      cullIds.value = null
+      setCullIds(null)
       return
     }
     const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-    cullIds.value = computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds)
+    setCullIds(computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds))
   }
   function refreshCull(): void {
     const h = hostRef.value
     if (!h) return
     if (!interactionSettings.visibleCullEnabled) {
-      cullIds.value = null
+      setCullIds(null)
       return
     }
     /* 快路径：没拖拽、没视觉位移、没缓存 → 不建 Map、不扫节点，直接常规裁剪 */
@@ -215,7 +244,7 @@ export function useCanvasCulling(opts: {
     const surface = surfaceRef.value
     const rect = surface?.getVisibleRect?.() ?? null
     if (rect) {
-      cullIds.value = computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds)
+      setCullIds(computeVisibleIds(h.view, rect, cullConfigFromSettings(), liveIds))
       return
     }
     // 视口还量不到（初始挂载窗口）：用**近似视口**先算一版剔除，别全量挂 160 个节点再剔。
@@ -223,11 +252,11 @@ export function useCanvasCulling(opts: {
     // 没有这一步的话：打开大画布 = 全量挂载（含几十个媒体组件创建）→ 下一帧再整批卸载 ——
     // 这一上一下就是打开页面 CPU 打满的原因（2026-10-15 卡死排查）。
     if (typeof window === 'undefined') {
-      cullIds.value = null
+      setCullIds(null)
       return
     }
     const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
-    cullIds.value = computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds)
+    setCullIds(computeVisibleIds(h.view, approx, cullConfigFromSettings(), liveIds))
   }
   /** 视口帧回调（CanvasSurface 每次可视矩形变化都会调；rAF 节流防同一帧多次重灌） */
   function onVisibleRectFrame(): void {

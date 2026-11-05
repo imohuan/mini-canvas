@@ -29,7 +29,7 @@ const {
   hintDismissed, dismissHint, SUGGESTIONS, useSuggestion,
   segmentByAnchor, segmentModelLabel, assistantRows, openThinking,
   hasCardView, viewOf, previewToolMedia,
-  toolGroupTitle, toolRowSummary, toolTitle, thinkingLive, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  toolGroupTitle, toolRowSummary, toolTitle, anyToolRunning, thinkingLive, userSegments, displayUserText, onSegClick, segTitle, segClickable,
   openUserBubbles, overflowingUser, toggleUserBubble, setUserBubbleBody, msgTimeText, msgTimeTitle,
   copied, copyMessage, beginEditMessage, hasInlineError, pagerByAnchor, pagerTarget,
   SHOW_PROCESS_NOTICE, openPreview, showPendingOn,
@@ -215,7 +215,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                       <TraceCollapsibleTrigger>
                         <TraceLine>
                         <TraceIcon>
-                          <LoaderCircle v-if="row.tools.some((x) => !x.settled)" :size="14" class="animate-spin" />
+                          <LoaderCircle v-if="anyToolRunning(row.tools)" :size="14" class="animate-spin" />
                           <CircleCheck v-else :size="14" />
                         </TraceIcon>
                         <TraceTitle>{{ toolGroupTitle(row.tools) }}</TraceTitle>
