@@ -10,9 +10,11 @@ import type { Component } from 'vue'
 import * as AlertDialogModule from './components/ui/alert-dialog'
 import * as BadgeModule from './components/ui/badge'
 import * as ButtonModule from './components/ui/button'
+import * as BubbleModule from './components/ui/bubble'
 import * as CardModule from './components/ui/card'
 import * as CheckboxModule from './components/ui/checkbox'
 import * as ColorPickerModule from './components/color-picker'
+import * as CollapsibleModule from './components/ui/collapsible'
 import * as ComboboxModule from './components/ui/combobox'
 import * as CommandModule from './components/ui/command'
 import * as ContextMenuModule from './components/ui/context-menu'
@@ -20,6 +22,7 @@ import * as DialogModule from './components/ui/dialog'
 import * as DropdownMenuModule from './components/ui/dropdown-menu'
 import * as InputModule from './components/ui/input'
 import * as InputGroupModule from './components/ui/input-group'
+import * as ItemModule from './components/ui/item'
 import * as LabelModule from './components/ui/label'
 import * as MenubarModule from './components/ui/menubar'
 import * as NumberFieldModule from './components/ui/number-field'
@@ -29,6 +32,7 @@ import * as ScrollAreaModule from './components/ui/scroll-area'
 import * as SelectModule from './components/ui/select'
 import * as SeparatorModule from './components/ui/separator'
 import * as SheetModule from './components/ui/sheet'
+import * as SpinnerModule from './components/ui/spinner'
 import * as SliderModule from './components/ui/slider'
 import * as SwitchModule from './components/ui/switch'
 import * as TabsModule from './components/ui/tabs'
@@ -40,9 +44,11 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   AlertDialog: AlertDialogModule,
   Badge: BadgeModule,
   Button: ButtonModule,
+  Bubble: BubbleModule,
   Card: CardModule,
   Checkbox: CheckboxModule,
   ColorPicker: ColorPickerModule,
+  Collapsible: CollapsibleModule,
   Combobox: ComboboxModule,
   Command: CommandModule,
   ContextMenu: ContextMenuModule,
@@ -50,6 +56,7 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   DropdownMenu: DropdownMenuModule,
   Input: InputModule,
   InputGroup: InputGroupModule,
+  Item: ItemModule,
   Label: LabelModule,
   Menubar: MenubarModule,
   NumberField: NumberFieldModule,
@@ -61,6 +68,7 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   Select: SelectModule,
   Separator: SeparatorModule,
   Sheet: SheetModule,
+  Spinner: SpinnerModule,
   Slider: SliderModule,
   Switch: SwitchModule,
   Tabs: TabsModule,
