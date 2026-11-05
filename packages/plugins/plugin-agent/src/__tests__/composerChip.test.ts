@@ -68,3 +68,30 @@ describe('截断之后还读得到全名', () => {
     expect(resources).toMatch(/el\.title\s*=/)
   })
 })
+
+/**
+ * 标签的缩略图**不能**用 <img>（用户 2026-11-06 实测报的「图被隐藏」）。
+ *
+ * 编辑器会给标签里每个 <img> 套上自己的缩略加载器：按 item.url 重设 src，
+ * 失败就 display:none —— 视频标签的 url 是 mp4，于是图被换成 mp4 再隐藏。
+ * 用背景图层绕开那条路，这里钉住这一点，防止以后被"顺手改回 <img>"。
+ */
+describe('标签缩略图（.ac-tag-thumb）', () => {
+  it('用背景图层，不插 <img>', () => {
+    expect(resources).toMatch(/backgroundImage/)
+    expect(resources).not.toMatch(/createElement\('img'\)/)
+  })
+
+  it('图层铺满图标格并裁切（不撑大标签）', () => {
+    const body = ruleBody(conversation, '.prose-mirror-editor .ac-tag .ac-tag-thumb')
+    expect(body).toMatch(/position:\s*absolute/)
+    expect(body).toMatch(/background-size:\s*cover/)
+  })
+
+  it('图标格是固定方形（换图时标签宽度不跳）', () => {
+    const body = ruleBody(conversation, '.prose-mirror-editor .ac-tag .ac-tag-icon')
+    expect(body).toMatch(/width:\s*16px/)
+    expect(body).toMatch(/height:\s*16px/)
+    expect(body).toMatch(/overflow:\s*hidden/)
+  })
+})

@@ -84,3 +84,48 @@ describe('资产标签（引用要能点开看东西）', () => {
     expect(assetExtOf({ name: '没有扩展名' })).toBe('')
   })
 })
+
+/**
+ * 标签左侧的缩略图（用户 2026-11-06）：图片资产直接用自身地址，
+ * 视频资产由调用方取好首帧再传进来，文件夹不画图。
+ */
+describe('资产标签的缩略图', () => {
+  it('图片资产：自身 url 就是缩略图，并标出 chipKind=image', () => {
+    const r = assetResource({ name: 'a.png', url: '/api/assets/files/ab.png' })
+    expect(r.thumbnail_url).toBe('/api/assets/files/ab.png')
+    expect(r.chipKind).toBe('image')
+  })
+
+  it('视频资产：没有首帧时不给图（mp4 塞进 <img> 只会裂图），类型仍标 video', () => {
+    const r = assetResource({ name: 'a.mp4', url: '/api/assets/files/ab.mp4' })
+    expect(r.thumbnail_url).toBeUndefined()
+    expect(r.chipKind).toBe('video')
+  })
+
+  it('视频资产：调用方取到首帧后传 thumb，就用那张图', () => {
+    const r = assetResource({ name: 'a.mp4', url: '/api/assets/files/ab.mp4', thumb: 'data:image/png;base64,ZZ' })
+    expect(r.thumbnail_url).toBe('data:image/png;base64,ZZ')
+  })
+
+  it('文件夹 / 音频 / 文本：不画缩略图', () => {
+    expect(assetResource({ name: '素材', url: '', folderId: 'f1', isFolder: true }).thumbnail_url).toBeUndefined()
+    expect(assetResource({ name: 'a.mp3', url: '/x/a.mp3' }).thumbnail_url).toBeUndefined()
+    expect(assetResource({ name: 'a.txt', url: '/x/a.txt' }).thumbnail_url).toBeUndefined()
+  })
+})
+
+describe('节点标签的缩略图', () => {
+  it('图片节点的地址直接当缩略图，并带上真实类型', () => {
+    const [r] = nodeResources([{ id: 'n1', name: '立绘', type: 'ui', kind: 'image', thumb: '/api/x.png' }], 'c')
+    expect(r.thumbnail_url).toBe('/api/x.png')
+    expect(r.chipKind).toBe('image')
+  })
+
+  it('视频节点有首帧才画图；没有就只标类型（交给类型图标）', () => {
+    const [withThumb] = nodeResources([{ id: 'n2', name: '视频 1', type: 'video', kind: 'video', thumb: 'data:image/png;base64,F' }], 'c')
+    expect(withThumb.thumbnail_url).toBe('data:image/png;base64,F')
+    const [without] = nodeResources([{ id: 'n3', name: '视频 2', type: 'video', kind: 'video' }], 'c')
+    expect(without.thumbnail_url).toBeUndefined()
+    expect(without.chipKind).toBe('video')
+  })
+})

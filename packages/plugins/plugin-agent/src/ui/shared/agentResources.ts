@@ -12,6 +12,7 @@
 import { h, type VNode } from 'vue'
 import { REF_ICONS, type ResourceItem } from 'prosemirror-editor-bundle'
 import type { McpRow, SkillRow } from '../../service/agentService.js'
+import { mediaKindOfExt } from './agentChipThumbs.js'
 
 /** 技能图标（魔杖 + 星光）：与工具栏上的技能按钮同源 */
 export const ICON_SKILL = REF_ICONS.skill
@@ -19,16 +20,33 @@ export const ICON_SKILL = REF_ICONS.skill
 /** MCP 图标（插头）：与工具栏上的 MCP 按钮同源 */
 export const ICON_MCP = REF_ICONS.mcp
 
-/** 标签里那枚图标：ProseMirror 直接把这串 HTML 塞进 span */
-function iconSpan(svg: string): HTMLElement {
+/**
+ * 标签左侧那格：有缩略图就画图（下面垫着类型图标，图没出来时露出来）。
+ *
+ * 用户口径 2026-11-06：节点 / 资产的标签要能看出内容，不再一律是类型图标。
+ * 为什么图垫在图标上而不是替换：图可能 404 / 还没取到视频首帧，
+ * 只画图时那一下就剩空白；垫着图标则永远有个能认的标识。
+ *
+ * 为什么用背景图层而不是 <img>：编辑器会给标签里每个 <img> 套上它自己的
+ * 缩略加载器（按 resourceItem.url 重设 src，失败就 display:none），
+ * 那会把手上的图换成 mp4 再隐藏掉。背景图不过那条路，加载失败也只是透明。
+ */
+function iconSpan(svg: string, thumb?: string): HTMLElement {
   const el = document.createElement('span')
   el.className = 'ac-tag-icon'
   el.innerHTML = svg
+  if (thumb) {
+    const layer = document.createElement('span')
+    layer.className = 'ac-tag-thumb'
+    // 用 style 赋值而不是拼 HTML：data URL / 带引号的地址不会被拼串拼坏
+    layer.style.backgroundImage = 'url("' + thumb.replace(/["\\]/g, '\\$&') + '")'
+    el.append(layer)
+  }
   return el
 }
 
 /** ProseMirror 造标签时调的工厂：渲染成「[图标] 标题」 */
-function renderTag(svg: string, label: string): HTMLElement {
+function renderTag(svg: string, label: string, thumb?: string): HTMLElement {
   const el = document.createElement('span')
   el.className = 'ac-tag'
   // 名字超长时标签会被样式截断（.ac-tag 有限宽），全名靠 title 补回来：
@@ -37,7 +55,7 @@ function renderTag(svg: string, label: string): HTMLElement {
   const lb = document.createElement('span')
   lb.className = 'ac-tag-label'
   lb.textContent = label
-  el.append(iconSpan(svg), lb)
+  el.append(iconSpan(svg, thumb), lb)
   return el
 }
 
@@ -63,6 +81,8 @@ export interface AssetRefInput {
   url: string
   path?: string
   folderId?: string
+  /** 直接可用的缩略图地址（图片 = 自身地址；视频 = 已取到的首帧） */
+  thumb?: string
   /**
    * 这是一条**资产库文件夹**引用（不是文件）。
    *
@@ -110,6 +130,9 @@ export function assetExtOf(a: { path?: string; url?: string; name?: string }): s
 export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen) => void): ResourceItem {
   // 文件夹不取扩展名（见 AssetRefInput.isFolder 的说明）——「没有 ext」就是给读的人看的「这是目录」
   const ext = asset.isFolder ? '' : assetExtOf(asset)
+  // 文件夹没有内容可缩略；图片直接用自己的地址，视频用调用方取好的首帧。
+  const kind = mediaKindOfExt(ext)
+  const thumb = asset.isFolder ? '' : asset.thumb || (kind === 'image' ? asset.url : '')
   const open: AssetRefOpen = {
     name: asset.name,
     ...(asset.path ? { path: asset.path } : {}),
@@ -121,6 +144,10 @@ export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen)
     name: asset.name,
     category: '资产',
     value: asset.path || asset.url,
+    ...(thumb ? { thumbnail_url: thumb } : {}),
+    ...(!asset.isFolder && (kind === 'image' || kind === 'video' || kind === 'audio')
+      ? { chipKind: kind }
+      : {}),
     ref: {
       kind: 'asset',
       name: asset.name,
@@ -129,7 +156,7 @@ export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen)
       ...(asset.folderId ? { folderId: asset.folderId } : {}),
     },
     renderItem: () => renderMenuRow(ICON_ASSET, asset.name, '资产'),
-    renderEditor: () => renderTag(ICON_ASSET, asset.name),
+    renderEditor: () => renderTag(ICON_ASSET, asset.name, thumb),
     // 点输入框里这颗 chip = 与点对话气泡里的标签同一件事（预览 / 打开所在文件夹）。
     // 不传 onOpen（纯展示场景）就不带点击行为 —— 与技能 / MCP 标签一致。
     ...(onOpen ? { onClick: () => onOpen(open) } : {}),
@@ -213,6 +240,10 @@ export interface CanvasNodeRow {
   id: string
   name: string
   type: string
+  /** 节点类型或 data.nodeType 归一后的值（image / video / audio / text …） */
+  kind?: string
+  /** 能直接塞进 <img> 的缩略图（图片节点：图片地址；视频节点：已取到的首帧） */
+  thumb?: string
 }
 
 /** 节点图标（按类型粗分；装饰用，认不出就当通用节点） */
@@ -234,9 +265,13 @@ export function nodeResources(
     name: n.name || n.id,
     category: '节点',
     value: n.id,
+    ...(n.kind === 'image' || n.kind === 'video' || n.kind === 'audio' || n.kind === 'text'
+      ? { chipKind: n.kind }
+      : {}),
+    ...(n.thumb ? { thumbnail_url: n.thumb } : {}),
     ref: { kind: 'node', name: n.name || n.id, value: canvasId + '#' + n.id },
     ...(onClick ? { onClick: () => onClick(n.id) } : {}),
     renderItem: () => renderMenuRow(ICON_NODE, n.name || n.id, n.type),
-    renderEditor: () => renderTag(ICON_NODE, n.name || n.id),
+    renderEditor: () => renderTag(ICON_NODE, n.name || n.id, n.thumb),
   }))
 }

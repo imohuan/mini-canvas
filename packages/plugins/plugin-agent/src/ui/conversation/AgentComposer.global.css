@@ -36,15 +36,33 @@
 }
 
 .prose-mirror-editor .ac-tag .ac-tag-icon {
+  /* 固定的方形格子：类型图标与缩略图都占这一格，换图不会让标签宽度跳动 */
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  overflow: hidden;
   color: var(--ui-ink-dim, #919191);
 }
 
 .prose-mirror-editor .ac-tag .ac-tag-icon svg {
   width: 13px;
   height: 13px;
+}
+
+/* 缩略图：盖在类型图标上面（背景图，不走编辑器的 <img> 加载逻辑）。
+   图加载失败 / 视频还没取到首帧时这一层是透明的，露出的就是下面的类型图标。 */
+.prose-mirror-editor .ac-tag .ac-tag-thumb {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 
 /* 图标固定、名字让位：`min-width: 0` 不能省 —— flex 子项的默认 min-width 是「内容宽」，

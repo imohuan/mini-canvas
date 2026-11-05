@@ -6,7 +6,7 @@
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Box, Sparkles, WandSparkles } from 'lucide-vue-next'
 import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { registerItem, type ResourceItem } from 'prosemirror-editor-bundle'
 import {
   skillResources,
   mcpResources,
@@ -19,6 +19,13 @@ import {
 import { parseUserSegments, assetRefInputOf, type UserSegment } from '../../model/userSegments.js'
 import { stripUserSteering } from '../../model/userSteering.js'
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../../plugin/refClickEvents.js'
+import {
+  peekAgentVideoThumb,
+  ensureAgentVideoThumb,
+  peekAgentResourceUrl,
+  ensureAgentResourceUrl,
+  mediaKindOfExt,
+} from '../shared/agentChipThumbs.js'
 import type { AgentService } from '../../service/types.js'
 import type { AgentServiceState } from '../../service/types.js'
 import type { ProseMirrorEditorExposed } from './editorTypes.js'
@@ -52,6 +59,87 @@ let nodeSub: { dispose?: () => void } | null = null
  * 为什么不再按 imageName / text 首行之类去猜：那是以前没有统一命名时的权宜，
  * 结果同一节点在标题条 / @ 菜单 / 左侧树三处显示三个名字。名字只有一个来源 —— data.label。
  */
+type NodeLike = { id: string; type: string; data?: Record<string, unknown> }
+
+/** 节点的实际类型：data.nodeType 优先（图片节点常见 type=ui、nodeType=image） */
+function nodeKindOf(n: NodeLike): 'image' | 'video' | 'audio' | 'text' | '' {
+  const d = n.data ?? {}
+  const t = (typeof d.nodeType === 'string' && d.nodeType) || n.type
+  return t === 'image' || t === 'video' || t === 'audio' || t === 'text' ? t : ''
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+
+/**
+ * 视频节点的播放地址：优先旧字段 videoUrl，其次把持久引用 resourceId 解析出来的地址。
+ * （节点长期只存 resourceId，地址是现取的 —— 与视频插件自己的解析顺序一致。）
+ */
+function videoUrlOf(d: Record<string, unknown>): string {
+  return str(d.videoUrl) || peekAgentResourceUrl(str(d.resourceId)) || ''
+}
+
+/**
+ * 节点标签的缩略图（用户 2026-11-06：引用节点的标签要能直接看到内容）。
+ *
+ * · 图片节点：imageUrl 本身就能当图用；节点只存 resourceId 时用解析好的地址；
+ * · 视频节点：先看已经取到的统一首帧（与底栏同一份），没有就先给 posterUrl 兜底，
+ *   异步取帧完成后由 ensureNodeVideoThumbs 刷新标签；
+ * · 其它类型没有可画的图，返回空串（渲染方保留类型图标）。
+ */
+function nodeThumbOf(n: NodeLike): string {
+  const d = n.data ?? {}
+  const kind = nodeKindOf(n)
+  if (kind === 'image') {
+    return str(d.imageUrl) || peekAgentResourceUrl(str(d.resourceId)) || str(d.thumbUrl)
+  }
+  if (kind === 'video') {
+    return peekAgentVideoThumb(videoUrlOf(d)) || str(d.posterUrl) || str(d.thumbUrl)
+  }
+  return ''
+}
+
+/**
+ * 给所有视频节点取统一首帧（与底栏 ctx.get('video').thumb 同一条路）。
+ *
+ * 取到后刷新一遍节点清单，让已经插进输入框的标签也跟着换图。
+ * 同一个视频只取一次（缓存 + 单飞都在 agentChipThumbs 里）。
+ */
+async function ensureNodeVideoThumbs(): Promise<void> {
+  const doc = ctx.tryGet<{ getNodes(): NodeLike[] }>('doc')
+  if (!doc) return
+  let changed = false
+  for (const n of doc.getNodes()) {
+    const kind = nodeKindOf(n)
+    if (kind !== 'image' && kind !== 'video') continue
+    const d = n.data ?? {}
+    // ① 只有 resourceId 时先把地址解出来（图片节点也一样：标签要的是能画的地址）
+    if (kind === 'image' && !str(d.imageUrl) && str(d.resourceId) && !peekAgentResourceUrl(str(d.resourceId))) {
+      const url = await ensureAgentResourceUrl(ctx, str(d.resourceId))
+      if (url) changed = true
+      continue
+    }
+    if (kind !== 'video') continue
+    if (!str(d.videoUrl) && str(d.resourceId) && !peekAgentResourceUrl(str(d.resourceId))) {
+      const url = await ensureAgentResourceUrl(ctx, str(d.resourceId))
+      if (url) changed = true
+    }
+    // ② 视频 mp4 不能当图：取统一首帧（与底栏 / 左侧树同一份）
+    const v = videoUrlOf(d)
+    if (!v || peekAgentVideoThumb(v)) continue
+    const got = await ensureAgentVideoThumb(ctx, v)
+    if (got) changed = true
+  }
+  if (!changed) return
+  syncNodes()
+  /**
+   * 已插进正文的标签：正文 DOM 是渲染时按 id 读注册表造的，
+   * 所以先**更新注册表里的条目**（补上新取到的首帧），再让正文重画。
+   * 只重画不更新注册表的话，标签会按旧条目重画回播放图标。
+   */
+  for (const item of nodeResources(nodeList.value, s.canvasId, focusNode)) registerItem(item)
+  editorRef.value?.refreshChips?.()
+}
+
 function nodeNameOf(
   n: { id: string; type: string; data?: Record<string, unknown> },
   typeLabelOf: (t: string) => string | undefined,
@@ -73,7 +161,16 @@ function syncNodes(): void {
   nodeList.value = doc
     .getNodes()
     .filter((n) => n.type !== 'group') // 分组只当容器，不作为内容引用
-    .map((n) => ({ id: n.id, name: nodeNameOf(n, typeLabelOf), type: n.type }))
+    .map((n) => {
+      const thumb = nodeThumbOf(n)
+      return {
+        id: n.id,
+        name: nodeNameOf(n, typeLabelOf),
+        type: n.type,
+        kind: nodeKindOf(n),
+        ...(thumb ? { thumb } : {}),
+      }
+    })
 }
 syncNodes()
 onMounted(() => {
@@ -89,9 +186,15 @@ onMounted(() => {
   }
   const doc = ctx.tryGet<{ subscribe(cb: () => void): unknown }>('doc')
   // subscribe 返回取消句柄（与本仓其它插件同款）；形状不确定时按 off/dispose 兜底
-  const off = doc?.subscribe(() => syncNodes()) as { dispose?: () => void } | (() => void) | undefined
+  const off = doc?.subscribe(() => {
+    syncNodes()
+    // 新加进来的视频节点先显示播放图标，首帧取到后再补图（一遍视频只会真取一次）
+    void ensureNodeVideoThumbs()
+  }) as { dispose?: () => void } | (() => void) | undefined
   if (typeof off === 'function') nodeSub = { dispose: off }
   else if (off) nodeSub = off
+  // 打开面板时画布上已有的视频节点也补一次首帧（@ 菜单 / 已插入标签都要能显示图）
+  void ensureNodeVideoThumbs()
 })
 onBeforeUnmount(() => nodeSub?.dispose?.())
 
@@ -160,6 +263,8 @@ function insertPendingNodeRefs(): void {
   const items = nodeIds.map((id) => all.find((x) => x.id === 'node:' + id)).filter((x) => Boolean(x))
   if (items.length) void nextTick(() => { for (const item of items) editorRef.value?.insertResource(item!) })
   agent.clearNodeRefs()
+  // 刚引用的可能是还没取过首帧的视频：先按类型图标插进去，取到图后自动补上
+  void ensureNodeVideoThumbs()
 }
 // 两条路都要覆盖：
 //   · 面板已开着 → 命令只改 state，watch 触发；
@@ -167,6 +272,37 @@ function insertPendingNodeRefs(): void {
 //     挂载前设的值它收不到）。onMounted 跑在子组件挂载之后，editorRef 已就绪。
 watch(() => s.pendingNodeRefs, () => insertPendingNodeRefs())
 onMounted(() => insertPendingNodeRefs())
+
+/**
+ * 资产补缩略图：图片直接用地址，视频先查统一首帧缓存。
+ *
+ * 资产列表里给的 url 是后端地址（`/api/assets/files/xx.png`），图片可以直接当图用；
+ * 视频是 mp4，塞进去只会裂图，所以查 video 服务已缓存的首帧，查不到就交给类型图标。
+ */
+function withAssetThumb<T extends { name: string; url: string; path?: string; ext?: string; isFolder?: boolean }>(
+  asset: T,
+): T & { thumb?: string } {
+  if (asset.isFolder) return asset
+  const ext = asset.ext || /\.([A-Za-z0-9]{1,8})$/.exec(asset.path || asset.url || asset.name)?.[1] || ''
+  const kind = mediaKindOfExt(ext)
+  if (kind === 'image') return { ...asset, thumb: asset.url }
+  if (kind === 'video') {
+    const thumb = peekAgentVideoThumb(asset.url)
+    if (thumb) return { ...asset, thumb }
+    void ensureAgentVideoThumb(ctx, asset.url).then((got) => {
+      if (!got) return
+      /**
+       * 已经插进去的那颗标签要补图。
+       *
+       * 不能靠"再插一次"（会多插一颗重复标签）：改注册表里的条目 ——
+       * 标签的 DOM 是渲染时按 id 读注册表造的 —— 再让正文重画一遍。
+       */
+      registerItem(assetResource({ ...asset, thumb: got }, emitRefClick))
+      editorRef.value?.refreshChips?.()
+    })
+  }
+  return asset
+}
 
 /**
  * 资产「添加到 Agent」：服务只记**资产数据**（state.pendingAsset），这里用 assetResource
@@ -177,7 +313,7 @@ function insertPendingResource(): void {
   const asset = s.pendingAsset
   if (!asset) return
   // 带上 onClick：插进输入框的 chip 点一下也发同一条事件（与气泡里的标签同一件事）
-  const item = assetResource(asset, emitRefClick)
+  const item = assetResource(withAssetThumb(asset), emitRefClick)
   void nextTick(() => editorRef.value?.insertResource(item))
   agent.clearPendingResource()
 }
@@ -191,7 +327,7 @@ onMounted(() => insertPendingResource())
 function insertPendingResources(): void {
   const assets = s.pendingAssets
   if (!assets || !assets.length) return
-  const items = assetResources(assets, emitRefClick)
+  const items = assetResources(assets.map(withAssetThumb), emitRefClick)
   void nextTick(() => { for (const item of items) editorRef.value?.insertResource(item) })
   agent.clearPendingResources()
 }
@@ -201,6 +337,13 @@ onMounted(() => insertPendingResources())
 /** 往输入框插一个标签（点下拉里的一项 = 插 chip，不切开关），插完就收起下拉 */
 function insertRef(item: ResourceItem, close: () => void): void {
   editorRef.value?.insertResource(item)
+  // @ 菜单里点视频节点 / 视频资产：同样是先出类型图标，首帧取到后补图
+  const ref = item.ref
+  if (ref?.kind === 'node') {
+    const nodeId = String(ref.value).split('#')[1]
+    const n = nodeList.value.find((x) => x.id === nodeId)
+    if (n?.kind === 'video') void ensureNodeVideoThumbs()
+  }
   close()
 }
 
