@@ -24,6 +24,8 @@ function configure<T extends Record<string, unknown>>(mod: T, family: string): T
 
 import * as badgeModule from './components/ui/badge'
 import * as alertDialogModule from './components/ui/alert-dialog'
+import * as bubbleModule from './components/ui/bubble'
+import * as collapsibleModule from './components/ui/collapsible'
 import * as buttonModule from './components/ui/button'
 import * as cardModule from './components/ui/card'
 import * as checkboxModule from './components/ui/checkbox'
@@ -34,11 +36,13 @@ import * as dialogModule from './components/ui/dialog'
 import * as dropdownModule from './components/ui/dropdown-menu'
 import * as inputModule from './components/ui/input'
 import * as inputGroupModule from './components/ui/input-group'
+import * as itemModule from './components/ui/item'
 import * as labelModule from './components/ui/label'
 import * as menubarModule from './components/ui/menubar'
 import * as numberFieldModule from './components/ui/number-field'
 import * as popoverModule from './components/ui/popover'
 import * as radioGroupModule from './components/ui/radio-group'
+import * as spinnerModule from './components/ui/spinner'
 import * as scrollAreaModule from './components/ui/scroll-area'
 import * as separatorModule from './components/ui/separator'
 import * as sheetModule from './components/ui/sheet'
@@ -52,6 +56,8 @@ import * as tooltipModule from './components/ui/tooltip'
 
 const badge = configure(badgeModule, 'Badge')
 const alertDialog = configure(alertDialogModule, 'AlertDialog')
+const bubble = configure(bubbleModule, 'Bubble')
+const collapsible = configure(collapsibleModule, 'Collapsible')
 const button = configure(buttonModule, 'Button')
 const card = configure(cardModule, 'Card')
 const checkbox = configure(checkboxModule, 'Checkbox')
@@ -62,6 +68,7 @@ const dialog = configure(dialogModule, 'Dialog')
 const dropdown = configure(dropdownModule, 'DropdownMenu')
 const input = configure(inputModule, 'Input')
 const inputGroup = configure(inputGroupModule, 'InputGroup')
+const item = configure(itemModule, 'Item')
 const label = configure(labelModule, 'Label')
 const menubar = configure(menubarModule, 'Menubar')
 const numberField = configure(numberFieldModule, 'NumberField')
@@ -73,6 +80,7 @@ const scrollBar = configure(scrollAreaModule, 'ScrollBar')
 const separator = configure(separatorModule, 'Separator')
 const sheet = configure(sheetModule, 'Sheet')
 const slider = configure(sliderModule, 'Slider')
+const spinner = configure(spinnerModule, 'Spinner')
 const switchComponent = configure(switchModule, 'Switch')
 const tabs = configure(tabsModule, 'Tabs')
 const textarea = configure(textareaModule, 'Textarea')
@@ -81,6 +89,15 @@ const select = configure(selectModule, 'Select')
 const tooltip = configure(tooltipModule, 'Tooltip')
 
 export const Badge = badge.Badge
+
+export const Bubble = bubble.Bubble
+export const BubbleContent = bubble.BubbleContent
+export const BubbleGroup = bubble.BubbleGroup
+export const BubbleReactions = bubble.BubbleReactions
+
+export const Collapsible = collapsible.Collapsible
+export const CollapsibleContent = collapsible.CollapsibleContent
+export const CollapsibleTrigger = collapsible.CollapsibleTrigger
 
 export const AlertDialog = alertDialog.AlertDialog
 export const AlertDialogAction = alertDialog.AlertDialogAction
@@ -166,6 +183,17 @@ export const InputGroupInput = inputGroup.InputGroupInput
 export const InputGroupText = inputGroup.InputGroupText
 export const InputGroupTextarea = inputGroup.InputGroupTextarea
 
+export const Item = item.Item
+export const ItemActions = item.ItemActions
+export const ItemContent = item.ItemContent
+export const ItemDescription = item.ItemDescription
+export const ItemFooter = item.ItemFooter
+export const ItemGroup = item.ItemGroup
+export const ItemHeader = item.ItemHeader
+export const ItemMedia = item.ItemMedia
+export const ItemSeparator = item.ItemSeparator
+export const ItemTitle = item.ItemTitle
+
 export const Label = label.Label
 
 export const Menubar = menubar.Menubar
@@ -215,6 +243,8 @@ export const SheetTitle = sheet.SheetTitle
 export const SheetTrigger = sheet.SheetTrigger
 
 export const Slider = slider.Slider
+
+export const Spinner = spinner.Spinner
 
 export const Switch = switchComponent.Switch
 
