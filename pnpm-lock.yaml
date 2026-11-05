@@ -206,6 +206,9 @@ importers:
       '@prismshadow/penguin-core':
         specifier: 0.2.13
         version: 0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+      cn:
+        specifier: ^0.5.1
+        version: 0.5.1
       hono:
         specifier: ^4.6.0
         version: 4.13.5
@@ -215,6 +218,9 @@ importers:
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
+      reka-ui:
+        specifier: ^2.11.0
+        version: 2.11.0(vue@3.5.38(typescript@6.0.3))
       vue-draggable-plus:
         specifier: ^0.6.1
         version: 0.6.1(@types/sortablejs@1.15.9)
@@ -2746,9 +2752,6 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
-
-  '@floating-ui/core@1.7.5':
-    resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -7473,18 +7476,14 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@floating-ui/core@1.7.5':
-    dependencies:
-      '@floating-ui/utils': 0.2.11
-
   '@floating-ui/core@1.8.0':
     dependencies:
       '@floating-ui/utils': 0.2.12
 
   '@floating-ui/dom@1.7.6':
     dependencies:
-      '@floating-ui/core': 1.7.5
-      '@floating-ui/utils': 0.2.11
+      '@floating-ui/core': 1.8.0
+      '@floating-ui/utils': 0.2.12
 
   '@floating-ui/dom@1.8.0':
     dependencies:
@@ -7509,6 +7508,12 @@ snapshots:
       '@floating-ui/dom': 1.8.0
       '@floating-ui/utils': 0.2.12
       vue: 3.5.38(typescript@5.9.3)
+
+  '@floating-ui/vue@2.0.1(vue@3.5.38(typescript@6.0.3))':
+    dependencies:
+      '@floating-ui/dom': 1.8.0
+      '@floating-ui/utils': 0.2.12
+      vue: 3.5.38(typescript@6.0.3)
 
   '@floating-ui/vue@2.0.1(vue@3.5.44(typescript@5.9.3))':
     dependencies:
@@ -8389,6 +8394,11 @@ snapshots:
     dependencies:
       '@tanstack/virtual-core': 3.19.9
       vue: 3.5.38(typescript@5.9.3)
+
+  '@tanstack/vue-virtual@3.13.50(vue@3.5.38(typescript@6.0.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.9
+      vue: 3.5.38(typescript@6.0.3)
 
   '@tanstack/vue-virtual@3.13.50(vue@3.5.44(typescript@5.9.3))':
     dependencies:
@@ -10930,6 +10940,19 @@ snapshots:
       defu: 6.1.7
       ohash: 2.0.12
       vue: 3.5.38(typescript@5.9.3)
+
+  reka-ui@2.11.0(vue@3.5.38(typescript@6.0.3)):
+    dependencies:
+      '@floating-ui/vue': 2.0.1(vue@3.5.38(typescript@6.0.3))
+      '@internationalized/date': 3.12.4
+      '@internationalized/number': 3.6.9
+      '@tanstack/vue-virtual': 3.13.50(vue@3.5.38(typescript@6.0.3))
+      '@vueuse/core': 14.3.0(vue@3.5.38(typescript@6.0.3))
+      '@vueuse/shared': 14.3.0(vue@3.5.38(typescript@6.0.3))
+      aria-hidden: 1.2.6
+      defu: 6.1.7
+      ohash: 2.0.12
+      vue: 3.5.38(typescript@6.0.3)
 
   reka-ui@2.11.0(vue@3.5.44(typescript@5.9.3)):
     dependencies:
