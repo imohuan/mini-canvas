@@ -34,3 +34,11 @@ describe('浮层箭头 prop 缺省值', () => {
     })
   }
 })
+
+describe('下拉箭头形状', () => {
+  it('用 rounded 路径：没有顶部横线，不会在面板边上压出「框」（用户 2026-11-05 截图）', () => {
+    const source = readFileSync(path.join(root, 'dropdown-menu/DropdownMenuArrow.vue'), 'utf-8')
+    expect(source, '箭头没有开 rounded').toMatch(/rounded:\s*true/)
+    expect(source, '模板没有把 rounded 传给 reka').toMatch(/:rounded="props\.rounded"/)
+  })
+})

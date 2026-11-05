@@ -62,7 +62,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       >
         <slot />
       </div>
-      <DropdownMenuArrow v-if="arrowVisible" :width="16" :height="8" class="fill-popover stroke-line" />
+      <DropdownMenuArrow v-if="arrowVisible" :width="16" :height="8" rounded class="fill-popover stroke-line" />
     </DropdownMenuContent>
   </DropdownMenuPortal>
 </template>

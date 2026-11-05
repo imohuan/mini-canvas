@@ -232,6 +232,24 @@
   border-radius: min(var(--mct-radius, var(--radius-open, 12px)), 20px);
 }
 
+/*
+ * 箭头要「长在面板上」，而不是贴在面板边缘：
+ * 面板的 ring 描边在箭头两侧能看见（那是箭头以外的面板边框），
+ * 只有箭头自己下面那一段必须是实心的，不能断成一条横线。
+ * 这里把箭头整体往面板内压 1px（正好盖住 ring 的 1px 描边），
+ * 并把斜边接头收圆，视觉上箭头与面板连成一块。
+ * 用户 2026-11-05 截图：创作模式菜单的箭头看起来被一个框框住。
+ */
+[data-slot='dropdown-menu-arrow'] {
+  /* 向上压住面板 1px：面板的 ring 描边正好在箭头根部，压住之后箭头与面板连成一块，
+     不会留下一条横穿的线（看起来像给箭头套了框）。 */
+  margin-top: -1px;
+}
+
+[data-slot='dropdown-menu-arrow'] path {
+  stroke-linejoin: round;
+}
+
 /* Select 自绘箭头不应被「菜单行」的 8px 圆角规则命中；它只是三角形，靠菜单圆角本身收边。 */
 [data-slot='select-content'] [data-slot='select-arrow'] {
   border-radius: 0;

@@ -321,8 +321,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
         <div class="ac-toolbar">
           <DropdownMenu :open="composerMenuOpen('plus')" @update:open="(v: boolean) => setComposerMenuOpen('plus', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" :aria-expanded="plusOpen" aria-label="更多添加">
-                <Plus :size="14" class="size-4" />
+              <Button variant="ghost" size="icon-sm" :aria-expanded="plusOpen" aria-label="更多添加">
+                <Plus :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ minWidth: '180px' }">
@@ -353,7 +353,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
           <DropdownMenu :open="composerMenuOpen('mode')" @update:open="(v: boolean) => setComposerMenuOpen('mode', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="xs" :aria-expanded="modeOpen" aria-label="选择创作模式">
+              <Button variant="ghost" size="sm" :aria-expanded="modeOpen" aria-label="选择创作模式">
                 <span class="ac-pill-text">{{ modeLabel }}</span>
                 <ChevronDown :size="13" class="ac-pill-caret" />
               </Button>
@@ -379,9 +379,9 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                所以菜单多宽、往哪边铺，箭头都还指着这个按钮。 -->
           <DropdownMenu :open="composerMenuOpen('auth')" @update:open="(v: boolean) => setComposerMenuOpen('auth', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" :aria-expanded="authOpen"
+              <Button variant="ghost" size="icon-sm" :aria-expanded="authOpen"
                 :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
-                <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="14" class="size-4" />
+                <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ width: '360px' }">
@@ -417,8 +417,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
           <DropdownMenu :open="composerMenuOpen('model')" @update:open="(v: boolean) => setComposerMenuOpen('model', v)">
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-xs" :aria-expanded="modelOpen" aria-label="选择模型">
-                <Box :size="14" class="size-4" />
+              <Button variant="ghost" size="icon-sm" :aria-expanded="modelOpen" aria-label="选择模型">
+                <Box :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
@@ -546,8 +546,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             <DropdownMenuTrigger as-child>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
-              <Button variant="ghost" size="icon-xs" :aria-expanded="skillOpen" aria-label="选择技能">
-                <WandSparkles :size="14" class="size-4" />
+              <Button variant="ghost" size="icon-sm" :aria-expanded="skillOpen" aria-label="选择技能">
+                <WandSparkles :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <!--
@@ -693,8 +693,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <DropdownMenu v-if="s.mcpServers.length" :open="composerMenuOpen('mcp')" @update:open="(v: boolean) => setComposerMenuOpen('mcp', v)">
             <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
-              <Button variant="ghost" size="icon-xs" :aria-expanded="mcpOpen" aria-label="选择 MCP">
-                <Plug :size="14" class="size-4" />
+              <Button variant="ghost" size="icon-sm" :aria-expanded="mcpOpen" aria-label="选择 MCP">
+                <Plug :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
@@ -734,7 +734,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <!-- 卡片是勾选 + 展开两件事：左边的框勾「整个服务」，点标题行展开工具（DEMO 同一条分工） -->
                       <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
                         <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name) }">
-                        <Button variant="ghost" size="icon-xs" :aria-pressed="mcpPickedServers.has(item.name)"
+                        <Button variant="ghost" size="icon-sm" :aria-pressed="mcpPickedServers.has(item.name)"
                           :aria-label="'引用整个 ' + item.name + ' 服务'" :title="'引用整个 ' + item.name + ' 服务'"
                           @click.stop="toggleMcpServer(item.name)">
                           <Check :size="11" />
