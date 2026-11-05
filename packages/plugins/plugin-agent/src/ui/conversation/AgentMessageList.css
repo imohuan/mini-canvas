@@ -484,19 +484,32 @@
    折叠箭头、悬停变色、展开动画、左侧竖线、文字颜色全部由组件出（用户口径 2026-11-05：
    颜色不对就是因为这里曾经写了自定义色值，全部删除，只留下面这条滚动契约）。 */
 
-/* 工具卡片（shadcn Card 外壳）。
-   用户口径 2026-11-05：卡片要有看得见的轮廓。
-   Card 自带的是 ring-foreground/5（黑 5%）+ shadow-md —— 在浅色画布上几乎看不见
-   （官方 docs 页也是这个值，实测 boxShadow 里 ring 全透明、只剩极淡阴影）。
-   这里只加一条 1px 实线边框 + 圆角对齐，颜色走主题 --ui-line，其余交给 Card。 */
+/* 工具卡片：**按 tool-card-demo-v3.html 的紧凑规格**（用户口径 2026-11-05：
+   参考早期 MCP 画布卡片的定稿设计，而不是 shadcn Card 的大尺寸默认值）。
+
+   设计稿数值 → 这里逐条落地：
+     background: var(--veil)      极淡底色，不是纯白
+     border: 1px solid var(--line) 细线轮廓
+     border-radius: 10px          不是 Card 的 28px
+     padding: 6px 8px            不是 Card 的 24px
+     gap: 6px                    头部 / 内容 / 详情三行紧贴
+     no shadow                   设计稿没有任何投影
+
+   外壳仍是 shadcn Card 组件（用户要求用 shadcn），只是把它的默认尺寸覆盖回设计稿。 */
 .ac-tool-card {
   margin: 6px 0;
+  gap: 6px;
+  padding: 6px 8px;
   border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(0 0 0 / 0.04));
+  box-shadow: none;
 }
 
-/* Card 默认 px-6 / py-4（sm 档）对对话里的紧凑卡片偏大，收到 10px。 */
+/* Card 内容槽默认 px-6（sm 档 px-4）+ py-4：卡片自己已经有 6px 8px 内边距，这里必须归零，
+   否则会叠成 24px+ 的大留白（就是用户说的「风格不太行」）。 */
 .ac-tool-card [data-slot='card-content'] {
-  padding-inline: 10px;
+  padding: 0;
 }
 .ac-approval {
   margin: 8px 0 16px;

@@ -222,9 +222,11 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-pre, .tvb-pre { margin: 0; max-width: 100%; max-height: 320px; overflow: auto; padding: 8px; border-radius: 8px; background: var(--ui-code-bg, rgb(0 0 0 / 0.25)); font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-all; color: var(--ui-ink-dim, #919191); font-family: ui-monospace, Menlo, Consolas, monospace; }
 
 /* —— 自定义卡片（紧凑两行，用户口径 2026-10-08 定稿）—— */
+/* 卡片本体（设计稿 .b-card）：紧凑两行，行间 6px */
 .tvc { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
  .tvc-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-height: 200px; overflow: auto; }
-.tvc-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* 头行（设计稿 .b-head）：12px、标题 600 字重、图标与标题间 6px */
+.tvc-head { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--ui-ink, #f7f7f7); }
 /* 头行左侧的小图标（语义色走次要文字色，不抢标题） */
 .tvc-head-icon { display: grid; place-items: center; flex: none; color: var(--ui-ink-dim, #919191); }
 .tvc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
@@ -291,10 +293,21 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-note.is-error { color: var(--ui-danger, #ef4444); }
 .tvc-note.is-info { color: var(--ui-ink-dim, #919191); }
 
-/* 卡内「详情」折叠：按钮本体是组件库 Button(ghost/icon-xs)，这里只收紧外边距，
-   让 24px 按钮不把标题行撑开。 */
-.tvc-head-toggle { flex: none; margin-inline: -4px -2px; color: var(--ui-ink-dim, #919191); }
-.tvc-head-toggle:hover { color: var(--ui-ink, #f7f7f7); }
+/* 卡内「详情」折叠：按钮本体是组件库 Button(ghost/icon-xs)，这里只收紧外边距与底色。
+   设计稿（tool-card-demo-v3）的折叠开关是**纯文字 + 箭头**、没有底色；
+   所以按钮保持 ghost，但把悬停底色收掉，只让箭头/文字变亮（用户口径 2026-10-08）。 */
+.tvc-head-toggle {
+  flex: none;
+  margin-inline: -6px -4px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.tvc-head-toggle:hover,
+.tvc-head-toggle:active,
+.tvc-head-toggle[aria-expanded='true'] {
+  background: transparent !important;
+  color: var(--ui-ink, #f7f7f7);
+}
 .tvc-details-caret { flex: none; transition: transform 0.18s ease; }
 .tvc-details-caret.is-open { transform: rotate(90deg); }
 /* 详情展开后的整体高度上限（用户口径 2026-10-25）：工具名 + 输入 + 输出三块
