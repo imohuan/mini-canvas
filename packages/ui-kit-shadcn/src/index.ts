@@ -6,6 +6,7 @@
  */
 export * from './components/ui/alert-dialog'
 export * from './components/ui/badge'
+// Bubble 家族（2026-11-05 新增；确认本模块图已含该目录）
 export * from './components/ui/bubble'
 export * from './components/ui/button'
 export * from './components/ui/card'

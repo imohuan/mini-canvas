@@ -214,6 +214,14 @@
   margin-bottom: 16px;
 }
 
+/* AI Elements 的 MessageContent 用的是 Tailwind 原子类（flex / min-w-0 等），
+   这里把消息流自己的节奏对齐进去：内容格是一个普通块容器，
+   用户气泡的壳（内边距 / 圆角 / 底色）仍由下面的 .ac-msg.user .ac-bubble 负责。 */
+.ac-msg > .ac-bubble {
+  display: block;
+  min-width: 0;
+}
+
 /* 用户消息间距收紧（用户口径 2026-10-16）：user 气泡自带 actions 行（时间/复制/编辑），
    再叠 16px 下间距，连续气泡之间空得能塞下一条消息 —— 用户要求缩小。
    助手消息保持 16px（阅读节奏不变）。 */

@@ -10,6 +10,9 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 import AgentMarkdown from '../render/AgentMarkdown.vue'
 import ToolViewBody from '../render/ToolViewBody.vue'
 import AgentScrollArea from './AgentScrollArea.vue'
+// AI Elements 本地件（vendored shadcn-vue）：只取消息轮次容器与内容格。
+// 为什么走相对路径：这是插件专属组件，不进全局注册表（见 ui/ai-elements/README）。
+import { Message as AiMessage, MessageContent } from '../ai-elements/message'
 import { X, Loader2, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
 import type { AgentConversationController } from './useAgentConversation'
 
@@ -119,9 +122,11 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
               </div>
             </div>
 
-            <!-- 用户靠右 / 助手靠左（照参考图，都没有头像） -->
-            <div v-else class="ac-msg" :class="[t.kind, { 'is-editing': t.editing }]">
-              <div class="ac-bubble">
+            <!-- 用户靠右 / 助手靠左（照参考图，都没有头像）。
+             外壳换成本地 AI Elements 的 Message（对话轮次容器，align 端对齐），
+             class 与编辑态挂法不变（合同测试照旧钉住）。 -->
+            <AiMessage v-else align="start" :class="['ac-msg', t.kind, { 'is-editing': t.editing }]">
+              <MessageContent :class="t.kind === 'user' ? 'ac-bubble' : 'ac-bubble ac-bubble--full'">
                 <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
                  文字一段、中间没有文字隔开的多个工具合并成一组、再一段文字。
                  以前这里是「先把所有工具画完、再画正文」，所以工具永远堆在最上面、看不出时序。
@@ -281,7 +286,6 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 <template v-if="t.error">
                   <p class="ac-error">{{ t.error }}</p>
                 </template>
-              </div>
               <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
                不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
               <div v-if="t.kind === 'user'" class="ac-msg-actions">
@@ -295,7 +299,8 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                   <Pencil :size="11" />
                 </Button>
               </div>
-            </div>
+              </MessageContent>
+            </AiMessage>
             <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
              回复块结束处（下一条用户消息之前）。左右箭头切的是**这个位置**的其它版本，
              切过去后不含当前版本后来的消息。 -->
