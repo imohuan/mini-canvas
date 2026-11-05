@@ -38,19 +38,16 @@ describe('画布下拉行：整行 = shadcn 默认 SubTrigger', () => {
    * 用户口径 2026-11-05：用 shadcn 的默认二级组件，开合交给组件默认行为
    * （悬停整行就展开二级菜单），不要在模板里加 mouseenter 这类手工开关。
    */
-  it('整行是 DropdownMenuSubTrigger（悬停展开交给组件默认行为）', () => {
-    expect(cluster).toMatch(/<DropdownMenuSubTrigger[\s\S]{0,200}class="canvas-row"/)
-    // 手工 hover 开关与行尾双图标旧结构必须退役
+  it('整行是 DropdownMenuSubTrigger，样式全部走组件默认', () => {
+    expect(cluster).toContain('<DropdownMenuSubTrigger')
+    // 手工 hover 开关、行尾双图标旧结构与手写行样式都必须退役
     expect(cluster).not.toContain('@mouseenter')
-    expect(cluster).not.toContain('canvas-row-main')
-    expect(cluster).not.toContain('canvas-row-more')
-    expect(cluster).not.toContain('canvas-row-chevron')
-    expect(cluster).not.toContain('canvas-row-dots')
+    expect(cluster).not.toContain('canvas-row')
+    expect(cluster).not.toContain('canvas-open')
   })
 
-  it('点击整行切画布，选中行保留整行淡底', () => {
+  it('点击整行切画布', () => {
     expect(cluster).toMatch(/DropdownMenuSubTrigger[\s\S]{0,300}emit\('pick-canvas', item\.id\)/)
-    expect(cluster).toMatch(/\.canvas-row\.is-active \{ background:/)
   })
 })
 

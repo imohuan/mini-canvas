@@ -103,13 +103,11 @@ const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) =
             :key="item.id"
           >
             <DropdownMenuSubTrigger
-              class="canvas-row"
-              :class="{ 'is-active': item.id === canvasId }"
               :aria-current="item.id === canvasId ? 'true' : undefined"
               :aria-label="'画布 ' + item.label"
               @click="emit('pick-canvas', item.id); emit('update:menuOpen', false)"
             >
-              <span class="canvas-open">{{ item.label }}</span>
+              <span>{{ item.label }}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent :style="{ minWidth: '176px' }">
               <DropdownMenuItem @select="emit('open-canvas-window', item.id); emit('update:menuOpen', false)">在新窗口打开</DropdownMenuItem>
@@ -137,9 +135,4 @@ const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) =
 .canvas-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px; font-size: 12px; }
 .canvas-new { color: var(--ui-ink); background: transparent; cursor: pointer; }
 .canvas-new:hover { background: var(--ui-hover) !important; }
-/* ===== 画布列表行 =====
-   整行是 DropdownMenuSubTrigger：悬停展开二级菜单（组件默认），点击切画布。 */
-.canvas-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
-.canvas-row.is-active { background: var(--ui-hover-soft, var(--ui-hover)); }
-.canvas-open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
