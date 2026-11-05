@@ -68,19 +68,31 @@ export function useMediaViewerController(
     restoreBodyOverflow()
   })
 
-  /** 打开时锁 body 滚动、从宿主给的 index 起步、变换归零；关闭恢复 */
-  watch(item, (v) => {
-    if (typeof document === "undefined") return
-    if (v) {
-      source.currentIdx.value = Math.min(Math.max(v.index ?? 0, 0), Math.max(source.list.value.length - 1, 0))
-      emit("index", source.currentIdx.value)
-      resetTransform()
-      videoTransformReset()
-      lockBodyOverflow()
-    } else {
-      restoreBodyOverflow()
-    }
-  })
+  /**
+   * 打开时锁 body 滚动、从宿主给的 index 起步、变换归零；关闭恢复。
+   *
+   * ⚠️ 必须 immediate：宿主都是「有预览项才挂 MediaViewer」
+   * （`<MediaViewer v-if="previewItem" :item="previewItem" />`，见生成历史 / 资产预览 / 底栏）。
+   * 首次挂载时 item 已经有值，不带 immediate 的 watch 不会执行 —— 起始下标停在 0，
+   * 点第二张、第三张都只显示列表第一张（用户 2026-11-06 实测）。
+   * 只有宿主改成常驻挂载时才会"碰巧正常"，不能靠那个前提。
+   */
+  watch(
+    item,
+    (v) => {
+      if (typeof document === "undefined") return
+      if (v) {
+        source.currentIdx.value = Math.min(Math.max(v.index ?? 0, 0), Math.max(source.list.value.length - 1, 0))
+        emit("index", source.currentIdx.value)
+        resetTransform()
+        videoTransformReset()
+        lockBodyOverflow()
+      } else {
+        restoreBodyOverflow()
+      }
+    },
+    { immediate: true },
+  )
 
   return {
     canRemove,
