@@ -37,11 +37,13 @@ import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue"
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue"
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue"
 import UiKitDebugOverlay from "./components/ui/UiKitDebugOverlay.vue"
+import FeedbackHost from "./components/ui/FeedbackHost.vue"
 import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn"
 import ShadcnSettingsRow from "./components/settings/ShadcnSettingsRow.vue"
 import ShadcnSettingsSection from "./components/settings/ShadcnSettingsSection.vue"
 import { UiToaster } from "@mini-canvas/ui-kit-shadcn"
 import { setStaticUiCatalog } from "@mini-canvas/canvas-render"
+import { createFeedbackService, feedbackDebugSnapshot, setFeedbackService } from "@mini-canvas/canvas-render"
 import {
   AppearanceConfig,
   DEFAULT_THEME_APPEARANCE,
@@ -76,6 +78,7 @@ export function publishStaticUiCatalog(): void {
     settingsRow: ShadcnSettingsRow,
     settingsSection: ShadcnSettingsSection,
     Toaster: UiToaster,
+    feedbackHost: FeedbackHost,
     slotDebugOverlay: SlotDebugOverlay,
     uiKitDebugOverlay: UiKitDebugOverlay,
     mediaViewer: MediaViewer,
@@ -128,7 +131,19 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
 
   const ui = ctx.registryOf<unknown>("ui")
   ctx.provide("notify", createNotifyService())
+  // 统一确认 / 输入 / 告知：禁止各处再用浏览器原生 confirm / prompt / alert。
+  // 服务只排一次（应用级常驻插件），面板由下面的 feedbackHost 取件渲染。
+  const feedback = createFeedbackService()
+  ctx.provide("feedback", feedback)
+  setFeedbackService(feedback)
+  ctx.effect(() => () => setFeedbackService(undefined))
+  // 开发期排障：真机点按钮没反应时，先在控制台看这里 —— 是「没调用服务」还是「面板没画」。
+  if (typeof window !== "undefined") {
+    ;(window as unknown as Record<string, unknown>).__miniFeedback = () => feedbackDebugSnapshot()
+    ;(window as unknown as Record<string, unknown>).__miniFeedbackService = feedback
+  }
   ui.add("Toaster", UiToaster, { id: "default" })
+  ui.add("feedbackHost", FeedbackHost, { id: "default" })
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" })
   ui.add("slotDebugPopover", SlotDebugPopover, { id: "default" })
   ui.add("mediaViewer", MediaViewer, { id: "default" })

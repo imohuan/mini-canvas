@@ -14,6 +14,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
 import { useUiComponentOutside } from '../composables/ui'
+import { useCanvasContextOrRender, type FeedbackService } from '@mini-canvas/canvas-render'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 import ProjectsPluginsPanel from './projects/ProjectsPluginsPanel.vue'
@@ -22,6 +23,11 @@ const router = useRouter()
 // 项目页在画布路由之外：当前仍走宿主单例取件，树内/树外都能拿到同一个组件。
 // 根级 Provider 已经把它包进应用上下文；项目页自己的插槽接线放在后续步骤。
 const Button = useUiComponentOutside('Button')
+/** 顶栏的输入框也从同一份 ui 目录取，避免项目页首帧出现两套按钮/输入样式。 */
+const Input = useUiComponentOutside('Input')
+/** 统一确认 / 输入框：项目页不再使用浏览器原生 prompt / confirm。 */
+const { ctx } = useCanvasContextOrRender()
+const feedback = ctx.get<FeedbackService>('feedback')
 const projects = ref<ProjectSummary[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -117,7 +123,14 @@ async function openProject(p: ProjectSummary): Promise<void> {
 
 /** 新建项目（「开始创作」与左栏「新建项目」同一动作） */
 async function newProject(): Promise<void> {
-  const name = window.prompt('新项目名字', '未命名项目')
+  if (!feedback) return
+  const name = await feedback.prompt({
+    title: '新建项目',
+    label: '项目名字',
+    defaultValue: '未命名项目',
+    confirmText: '创建',
+    validate: (value) => (value.trim() ? '' : '项目名字不能为空'),
+  })
   if (name === null) return
   try {
     const p = await createProject(name.trim() || '未命名项目')
@@ -129,7 +142,15 @@ async function newProject(): Promise<void> {
 
 async function removeProject(p: ProjectSummary): Promise<void> {
   if (p.id === 'default') return
-  if (!window.confirm('删除项目「' + p.name + '」及其全部画布？')) return
+  if (!feedback) return
+  const ok = await feedback.confirm({
+    title: '删除项目',
+    description: '删除「' + p.name + '」及其全部画布？\n\n这个操作不能撤销。',
+    confirmText: '删除',
+    cancelText: '取消',
+    tone: 'destructive',
+  })
+  if (!ok) return
   try {
     await deleteProject(p.id)
     await refresh()
@@ -181,7 +202,7 @@ function dateOf(ts: number): string {
         <div class="ml-auto flex items-center gap-2">
           <label class="flex h-9 w-[240px] items-center gap-2 rounded-lg border border-line bg-veil px-3">
             <Search :size="15" class="flex-none text-ink-dim" />
-            <input v-model="query" class="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-dim focus:outline-none" placeholder="搜索项目" aria-label="搜索项目" />
+            <Input v-model="query" class="h-full flex-1 border-0 bg-transparent px-0 focus-visible:ring-0" placeholder="搜索项目" aria-label="搜索项目" />
           </label>
           <Button variant="outline" size="sm" class="h-9 gap-1.5 rounded-lg text-[13px] font-normal text-ink">
             <Trash2 :size="14" /> 回收站

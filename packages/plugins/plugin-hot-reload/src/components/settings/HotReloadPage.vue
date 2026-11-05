@@ -10,7 +10,7 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RefreshCw, RotateCcw, Trash2, Bug } from 'lucide-vue-next'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, type FeedbackService } from '@mini-canvas/canvas-render'
 import { presenceStatusOf, type DebugPluginRow, type DebugPresenceStatus, type HotReload } from '../../data/hotReload'
 
 /** 从内核取热重载服务（本插件自己上架的，与插件管理无关） */
@@ -18,6 +18,8 @@ const { ctx } = useCanvasRender()
 const Badge = useUiComponent('Badge')
 const Button = useUiComponent('Button')
 const hr = ctx.get<HotReload>('hot-reload')
+/** 统一确认框：卸载调试插件也走应用级 AlertDialog。 */
+const feedback = ctx.get<FeedbackService>('feedback')
 if (!hr) throw new Error('[HotReloadPage] 没找到 hot-reload 服务')
 
 const rows = ref<DebugPluginRow[]>([])
@@ -59,7 +61,14 @@ async function onReinstall(row: DebugPluginRow): Promise<void> {
 
 /** 卸载：内核卸 + 后台卸 + 删上报记录 */
 async function onUninstall(row: DebugPluginRow): Promise<void> {
-  if (!window.confirm('卸载调试插件「' + row.name + '」？\n（只删这一侧；插件管理那边装的同名插件不会被动。）')) return
+  const ok = await feedback?.confirm({
+    title: '卸载调试插件「' + row.name + '」',
+    description: '只删这一侧；插件管理那边装的同名插件不会被动。',
+    confirmText: '卸载',
+    cancelText: '取消',
+    tone: 'destructive',
+  })
+  if (!ok) return
   busy.value = row.name
   error.value = ''
   try {

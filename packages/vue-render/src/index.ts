@@ -35,6 +35,24 @@ export {
   uiStaticNames,
 } from './contracts/uiCatalog'
 export type { UiComponentHandle, UiComponentRefs, UiSelectOption } from './contracts/uiCatalog'
+// 应用级「确认 / 输入 / 告知」服务：禁止各处再调 window.confirm / prompt / alert。
+// 面板由默认主题登记（ui 目录名 feedbackHost），这里只提供数据与排队语义。
+export {
+  createFeedbackService,
+  feedbackDebugSnapshot,
+  feedbackService,
+  setFeedbackService,
+  splitDescription,
+  FEEDBACK_SERVICE,
+} from './contracts/feedback'
+export type {
+  FeedbackService,
+  FeedbackRequest,
+  ConfirmOptions,
+  PromptOptions,
+  AlertOptions,
+  FeedbackTone,
+} from './contracts/feedback'
 // 层叠带（z-index 唯一事实源）：所有层级数值从这里取
 export { LAYERS } from './contracts/layers'
 export type { LayerName } from './contracts/layers'

@@ -13,7 +13,7 @@ import './node-bottom-bar/bottom-bar-cards.css'
 import './node-bottom-bar/bottom-bar-tagmenu.css'
 import './node-bottom-bar/bottom-bar-editor-footer.css'
 import './node-bottom-bar/bottom-bar-preview.css'
-import { useCanvasRender, useGenPanelMetrics, useSoleNodeSelected, useUiComponent, RenderEvents, LAYERS } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useGenPanelMetrics, useSoleNodeSelected, useUiComponent, RenderEvents, LAYERS, type FeedbackService } from '@mini-canvas/canvas-render'
 import { bottomBarTagSpecFor, toToolResources } from './panelSource'
 import { readRunState } from './runState'
 import { exitReference, referenceActive, referenceOwner, selectionEpoch, toggleReference as toggleReferenceMode } from './referenceMode'
@@ -261,12 +261,19 @@ function toggleReference(): void {
 // —— 失效引用 ——
 const invalidHint = computed(() => invalidRefHint(refTiles.value))
 const invalidTiles = computed(() => refTiles.value.filter((t) => t.invalid))
-function clearInvalidRefs(): void {
+async function clearInvalidRefs(): Promise<void> {
   const ids = invalidTiles.value.map((t) => t.key).filter(Boolean)
   if (ids.length === 0) return
-  const ok = typeof window === 'undefined'
-    ? true
-    : window.confirm('会从提示词里删除 ' + ids.length + ' 个失效引用（正文其它内容不动），继续？')
+  const feedback = ctx.get<FeedbackService>('feedback')
+  const ok = feedback
+    ? await feedback.confirm({
+      title: '清理失效引用',
+      description: '会从提示词里删除 ' + ids.length + ' 个失效引用（正文其它内容不动），继续？',
+      confirmText: '删除',
+      cancelText: '取消',
+      tone: 'destructive',
+    })
+    : false
   if (!ok) return
   const removed = editorComponentRef.value?.removeRefChips?.(ids) === true
   if (!removed) return

@@ -7,8 +7,10 @@ import { RouterView, useRoute } from 'vue-router'
 import { useUiComponentOutside } from './composables/ui'
 import AppProvider from './AppProvider.vue'
 
-// 项目页和画布页都在这棵树下：Toaster 只在这里挂一次，两个路由共用。
+// 项目页和画布页都在这棵树下：Toaster 与统一确认框只在这里挂一次，两个路由共用。
 const Toaster = useUiComponentOutside('Toaster')
+// 全应用唯一的确认 / 输入 / 告知宿主（禁止各页面再调 window.confirm 等原生弹窗）。
+const FeedbackHost = useUiComponentOutside('feedbackHost')
 
 // 用 fullPath 当 key：切画布（#/canvas/A → #/canvas/B）时**重新挂载**路由组件。
 // 为什么必须：画布那个 CanvasHost 在插件 apply 时按当时的 `?canvas=` / hash 读出画布 id，
@@ -22,6 +24,7 @@ const route = useRoute()
 <template>
   <AppProvider>
     <RouterView :key="route.fullPath" />
+    <component :is="FeedbackHost" v-if="FeedbackHost" />
     <component :is="Toaster" v-if="Toaster" position="bottom-right" close-button-position="top-right" />
   </AppProvider>
 </template>

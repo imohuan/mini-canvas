@@ -10,6 +10,7 @@
  */
 import { reactive } from 'vue'
 import { withAdminToken, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 import {
   normalizeCatalog,
   resolveDesiredIds,
@@ -174,7 +175,7 @@ export interface NpmInstalledEntry {
 export const DEFAULT_CATALOG_URL = '/plugin-catalog.json'
 
 /** 「全部安装」时的服务端权限一次性确认文案（与单个安装的确认同口径，覆盖整批） */
-const SERVER_CONFIRM_TEXT =
+export const SERVER_CONFIRM_TEXT =
   '本批插件中有包含后台插件（以服务端权限运行，可读写文件、发起网络请求）。\n\n' +
   '只在你信任插件来源时才继续。是否确认安装？'
 
@@ -793,7 +794,17 @@ export function createPluginManagerService(
       // 含后台半的插件：一次性确认（installAll 入口弹一次，覆盖本批所有 server 插件），
       // 不然"全部安装"会把服务端半静默留在半装状态（后端 400 拒掉 confirm=false 的请求）。
       const hasServer = state.rows.some((row) => !row.installed && row.entry.server !== undefined)
-      const serverConfirm = !hasServer || window.confirm(SERVER_CONFIRM_TEXT)
+      // 统一走应用级确认框（禁止浏览器原生 confirm）；拿不到服务时按“未确认”处理，
+      // 后台半会停在未装状态，不会悄悄以服务端权限安装。
+      const feedback = ctx.tryGet<FeedbackService>('feedback')
+      const serverConfirm = !hasServer
+        || (await feedback?.confirm({
+          title: '安装含后台的插件',
+          description: SERVER_CONFIRM_TEXT,
+          confirmText: '安装',
+          cancelText: '取消',
+        })) === true
+      if (!serverConfirm) return
       await installMany(
         state.rows.filter((row) => !row.installed).map((row) => row.entry.id),
         { serverConfirm },

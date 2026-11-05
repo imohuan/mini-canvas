@@ -8,6 +8,24 @@ import { computed, ref } from 'vue'
 import type { V2ShortcutConflict, V2ShortcutHelpItem, V2ShortcutManager } from '../v2ShortcutManager'
 import { getShortcutManager, shortcutHelpState } from '../shortcutState'
 import { normalizeKeyForPlatform } from '../keyLabels'
+/**
+ * 反馈服务按需加载，不在模块顶层 import canvas-render。
+ *
+ * 为什么：本包的单测是纯 node 环境（没有 @vitejs/plugin-vue），顶层 import 会把
+ * canvas-render 的一串 .vue 拉进解析，测试直接「invalid JS syntax」（2026-11-06 实测）。
+ * 运行期应用已经加载过 canvas-render，动态 import 会命中同一份模块，不会多一份实例。
+ */
+async function feedbackNow(): Promise<{ showAlert(o: { title: string; description?: string }): Promise<void> } | undefined> {
+  try {
+    const mod = await import('@mini-canvas/canvas-render')
+    const svc = mod.feedbackService()
+    if (!svc) return undefined
+    // 包一层，避免把「服务方法 alert」写成裸 alert() 被全仓扫描误判成浏览器全局
+    return { showAlert: (o) => svc.alert(o) }
+  } catch {
+    return undefined
+  }
+}
 
 const service = shortcutHelpState
 
@@ -246,7 +264,15 @@ function shortcutIcon(keys: string): string {
           refreshData()
           onDone?.()
         } catch {
-          alert('导入失败：JSON 格式无效')
+          // 统一告知走应用级 alert（禁止浏览器原生 alert）；宿主还没就绪时退回控制台，
+          // 不因为拿不到服务就让文件导入流程抛错。
+          void feedbackNow().then((feedback) => {
+            if (feedback) {
+              void feedback.showAlert({ title: '导入失败', description: 'JSON 格式无效，请检查文件内容。' })
+              return
+            }
+            console.warn('[shortcut-manager] 导入失败：JSON 格式无效')
+          })
         }
       }
       reader.readAsText(file)

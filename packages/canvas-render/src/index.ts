@@ -14,6 +14,24 @@
 // 所有渲染插件与宿主应用共用同一套 token，插件不必再自己发明“配色”配置项。
 import './styles/ui-theme.css'
 import './styles/slot-debug.css'
+// 应用级确认 / 输入 / 告知：服务本体住在 vue-render。
+// ctx.get('feedback') 取得服务；面板由默认主题按 ui 目录名 feedbackHost 登记。
+export {
+  createFeedbackService,
+  feedbackDebugSnapshot,
+  feedbackService,
+  setFeedbackService,
+  splitDescription,
+  FEEDBACK_SERVICE,
+} from '@mini-canvas/vue-render/contracts/feedback'
+export type {
+  FeedbackService,
+  FeedbackRequest,
+  ConfirmOptions,
+  PromptOptions,
+  AlertOptions,
+  FeedbackTone,
+} from '@mini-canvas/vue-render/contracts/feedback'
 
 export type {
   SegmentComponent,

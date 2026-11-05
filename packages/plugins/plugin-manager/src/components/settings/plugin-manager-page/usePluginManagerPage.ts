@@ -6,6 +6,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { getAdminToken, setAdminToken } from '@mini-canvas/canvas-base'
+import { useCanvasRender, type FeedbackService } from '@mini-canvas/canvas-render'
 import { usePluginManager } from '../../../usePluginManager'
 import type { PluginRow } from '../../../pluginManagerService'
 import type {
@@ -21,6 +22,8 @@ export type TabId = 'market' | 'installed' | 'local' | 'builtin'
 export function usePluginManagerPage() {
   const svc = usePluginManager()
   const s = svc.state
+  /** 统一确认框：卸载 / 含后台安装都走它，不用浏览器原生 confirm。 */
+  const feedback = useCanvasRender().ctx.get<FeedbackService>('feedback')
 
   /** 地址输入框先写草稿，点「刷新」再写回服务。 */
   const urlDraft = ref(s.catalogUrl)
@@ -37,26 +40,32 @@ export function usePluginManagerPage() {
   }
 
   /** 带后台的插件必须先确认：后台代码以服务端权限运行。 */
-  function onInstall(row: Row): void {
+  async function onInstall(row: Row): Promise<void> {
     const hasServer = row.entry.server !== undefined
     if (hasServer) {
-      const ok = window.confirm(
-        '「' + (row.entry.title || row.entry.id) + '」包含后台插件。\n\n' +
-          '后台插件会以服务端权限在本机运行（可读写文件、发起网络请求）。\n' +
-          '只在你信任这个插件来源时才继续。\n\n确定要安装吗？',
-      )
+      const ok = await feedback?.confirm({
+        title: '安装「' + (row.entry.title || row.entry.id) + '」',
+        description:
+          '这个插件包含后台部分。后台插件会以服务端权限在本机运行（可读写文件、发起网络请求）。\n\n' +
+          '只在你信任这个插件来源时才继续。',
+        confirmText: '安装',
+        cancelText: '取消',
+      })
       if (!ok) return
     }
     void svc.install(row.entry.id, { serverConfirm: hasServer })
   }
 
-  function onReinstall(row: Row): void {
+  async function onReinstall(row: Row): Promise<void> {
     const hasServer = row.entry.server !== undefined
     if (hasServer) {
-      const ok = window.confirm(
-        '「' + (row.entry.title || row.entry.id) + '」包含后台插件。\n\n' +
-          '重装会把后台代码重新写入本机并以服务端权限运行。\n\n确定要重装吗？',
-      )
+      const ok = await feedback?.confirm({
+        title: '重装「' + (row.entry.title || row.entry.id) + '」',
+        description:
+          '这个插件包含后台部分。重装会把后台代码重新写入本机并以服务端权限运行。',
+        confirmText: '重装',
+        cancelText: '取消',
+      })
       if (!ok) return
     }
     void svc.reinstall(row.entry.id, { serverConfirm: hasServer })
@@ -332,11 +341,14 @@ export function usePluginManagerPage() {
 
   async function onNpmInstall(pkg: string, hasServer: boolean): Promise<void> {
     if (hasServer) {
-      const ok = window.confirm(
-        '「' + pkg + '」包含后台插件。\n\n' +
-          '后台插件会以服务端权限在本机运行（可读写文件、发起网络请求）。\n' +
-          '只在你信任这个包来源时才继续。\n\n确定要从 NPM 安装吗？',
-      )
+      const ok = await feedback?.confirm({
+        title: '从 NPM 安装「' + pkg + '」',
+        description:
+          '这个包包含后台部分。后台插件会以服务端权限在本机运行（可读写文件、发起网络请求）。\n\n' +
+          '只在你信任这个包来源时才继续。',
+        confirmText: '安装',
+        cancelText: '取消',
+      })
       if (!ok) return
     }
     npmBusyPkg.value = pkg
@@ -365,7 +377,14 @@ export function usePluginManagerPage() {
   }
 
   async function onNpmUninstall(pkg: string): Promise<void> {
-    if (!window.confirm('从 NPM 卸载「' + pkg + '」？\n（后台半重启服务后消失）')) return
+    const ok = await feedback?.confirm({
+      title: '从 NPM 卸载「' + pkg + '」',
+      description: '卸载后，后台那一半要重启服务才会消失。',
+      confirmText: '卸载',
+      cancelText: '取消',
+      tone: 'destructive',
+    })
+    if (!ok) return
     npmBusyPkg.value = pkg
     npmError.value = ''
     try {
@@ -383,7 +402,7 @@ export function usePluginManagerPage() {
   }
 
   /** 卡片按钮和整卡点击统一从这里分发。 */
-  function onCardAction(key: string): void {
+  async function onCardAction(key: string): Promise<void> {
     const sep = key.indexOf(':')
     if (sep < 0) return
     const kind = key.slice(0, sep)
@@ -391,21 +410,29 @@ export function usePluginManagerPage() {
 
     if (kind === 'install') {
       const row = findLocalRow(value)
-      if (row) onInstall(row)
+      if (row) await onInstall(row)
       return
     }
     if (kind === 'reinstall') {
       const row = findLocalRow(value)
-      if (row) onReinstall(row)
+      if (row) await onReinstall(row)
       return
     }
     if (kind === 'uninstall') {
-      void svc.uninstall(value)
+      const row = findLocalRow(value)
+      const ok = await feedback?.confirm({
+        title: '卸载「' + (row?.entry.title || value) + '」',
+        description: '卸载后，它的界面与后台部分会一起停用。',
+        confirmText: '卸载',
+        cancelText: '取消',
+        tone: 'destructive',
+      })
+      if (ok) await svc.uninstall(value)
       return
     }
     if (kind === 'npm-install') {
       const item = marketList.value.find((entry) => entry.pkg === value)
-      if (item) void onNpmInstall(item.pkg, item.hasServer)
+      if (item) await onNpmInstall(item.pkg, item.hasServer)
       return
     }
     if (kind === 'npm-update') {

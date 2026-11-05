@@ -3,6 +3,7 @@
     <div class="header">
       <h1>ProseMirror Editor 测试用例</h1>
       <p class="subtitle">支持 @ 提及变量和资源（图片/视频）</p>
+      <p v-if="demoNotice" class="demo-notice" role="status">{{ demoNotice }}</p>
     </div>
 
     <div class="main-content">
@@ -143,6 +144,8 @@ const content = ref('你好，我是 ，今年 ，来自 ');
 const exportedText = ref('');
 const savedData = ref('');
 const showSavedData = ref(false);
+/** 页面内提示（取代浏览器原生 alert；这个 demo 是独立页，没有应用级反馈服务） */
+const demoNotice = ref('');
 
 // 全屏预览状态（demo 自管）
 const fullscreenVisible = ref(false);
@@ -314,7 +317,8 @@ function loadContent() {
       console.log('已导入内容:', data);
     }, 100);
   } catch (error) {
-    alert('导入失败：数据格式错误');
+    // 禁止浏览器原生 alert：用页面自己的提示条（这个 demo 是独立页，没有应用级反馈服务）。
+    demoNotice.value = '导入失败：数据格式错误';
     console.error('导入错误:', error);
   }
 }
@@ -322,7 +326,7 @@ function loadContent() {
 // 复制保存的数据
 function copySavedData() {
   navigator.clipboard.writeText(savedData.value).then(() => {
-    alert('已复制到剪贴板');
+    demoNotice.value = '已复制到剪贴板';
   });
 }
 
@@ -352,6 +356,17 @@ function handleResourceInsert(resource: ResourceItem) {
 .subtitle {
   color: #6b7280;
   font-size: 14px;
+}
+
+/* 页面内提示条：独立 demo 用它代替浏览器原生 alert */
+.demo-notice {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 13px;
 }
 
 .main-content {

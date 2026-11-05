@@ -30,6 +30,10 @@
       "types": "./src/contracts/uiCatalog.ts",
       "default": "./src/contracts/uiCatalog.ts"
     },
+    "./contracts/feedback": {
+      "types": "./src/contracts/feedback.ts",
+      "default": "./src/contracts/feedback.ts"
+    },
     "./contracts/layers": {
       "types": "./src/contracts/layers.ts",
       "default": "./src/contracts/layers.ts"

@@ -12,6 +12,7 @@ import {
 import { emitUiDebugEvent } from '../debugEventBus'
 import { openDebugWindow } from '../debugWindow'
 import { errText } from '../hostFetch'
+import { feedbackService } from '@mini-canvas/canvas-render'
 
 export interface DebugWindow {
   readonly closed: boolean
@@ -228,7 +229,13 @@ export function useUiDebugWindow(options: UseUiDebugWindowOptions) {
         const made = await pushDebugDocs(true)
         return made.ok ? made : { ok: false as const, error: made.error }
       },
-      alert: (m) => window.alert(m),
+      // 禁止浏览器原生 alert：统一交给应用级反馈服务。它没有返回值，这里不 await，
+      // 开窗流程仍按原时序继续（提示只是告知，不改变决策）。
+      alert: (m) => {
+        const feedback = feedbackService()
+        if (feedback) void feedback.alert({ title: '调试窗口', description: m })
+        else console.warn('[node-ui] ' + m)
+      },
     })
     if (!r.ok) return
 

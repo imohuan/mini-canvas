@@ -9,6 +9,7 @@ import {
   type CanvasSummary,
 } from '../projectsApi'
 import { unregisterPendingSave } from '../pendingSave'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 import type { UiState } from './createUiState'
 import type { UiHostScope } from './useUiHost'
 
@@ -20,6 +21,10 @@ import type { UiHostScope } from './useUiHost'
  */
 export function createCanvasListScope(state: UiState, host: UiHostScope) {
   const { hostCtx } = host
+  /** 统一确认 / 输入框：画布列表也走应用级反馈服务，不用浏览器原生弹窗。 */
+  function feedback(): FeedbackService | undefined {
+    return hostCtx()?.get<FeedbackService>('feedback')
+  }
   // ===== 当前画布 / 项目的画布列表（多画布）=====
   // 数据来自 cloud-server 的 `/api/projects/:id/canvases`；当前画布 id 从 URL 的
   // `#/canvas/<id>` 读（与 cloud-client 的 canvasId() 同一口径）。切画布 = 换 hash → Root 重新挂载。
@@ -169,13 +174,21 @@ export function createCanvasListScope(state: UiState, host: UiHostScope) {
   /**
    * 重命名**指定**画布（列表行菜单用）。
    *
-   * 名字从哪来：`window.prompt` 与「项目页新建项目 / 改名」同一种口径，不另造一套弹窗组件。
+   * 名字从哪来：统一反馈服务的输入框（与「项目页新建项目」同一套弹窗），不用浏览器原生 prompt。
    * 改的不是当前画布时，改完只要刷新列表；改的正是当前这张，界面上的名字框靠 computed 自己跟上。
    */
   async function renameCanvasById(id: string): Promise<void> {
     if (typeof window === 'undefined') return
     const cur = canvasOptions.value.find((c) => c.id === id)?.label ?? ''
-    const input = window.prompt('重命名画布', cur)
+    const svc = feedback()
+    if (!svc) return
+    const input = await svc.prompt({
+      title: '重命名画布',
+      label: '画布名字',
+      defaultValue: cur,
+      confirmText: '保存',
+      validate: (value) => (value.trim() ? '' : '画布名字不能为空'),
+    })
     if (input === null) return
     const next = input.trim()
     if (!next || next === cur) return
@@ -215,7 +228,16 @@ export function createCanvasListScope(state: UiState, host: UiHostScope) {
    *    必须还能看见至少一张。
    */
   async function deleteCanvas(id: string): Promise<void> {
-    if (typeof window !== 'undefined' && !window.confirm('删除画布「' + (canvasNameOf(id)) + '」及其全部内容？')) return
+    const svc = feedback()
+    if (svc) {
+      const ok = await svc.confirm({
+        title: '删除画布',
+        description: '删除「' + canvasNameOf(id) + '」及其全部内容？\n\n这个操作不能撤销。',
+        confirmText: '删除',
+        tone: 'destructive',
+      })
+      if (!ok) return
+    }
     const wasCurrent = id === currentCanvasId.value
     try {
       if (wasCurrent) await flushCanvasSave()

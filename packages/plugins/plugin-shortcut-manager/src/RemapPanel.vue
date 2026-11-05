@@ -203,7 +203,7 @@ function resetToDefault() {
 }
 
 /** 点「完成」：此刻才真正写键并算修改成功；有冲突则停留提示 */
-function confirm() {
+function confirmRemap() {
   if (!dirty()) {
     emit('close')
     return
@@ -283,7 +283,7 @@ onBeforeUnmount(() => {
         <button class="remap-text-btn" @click="startListening" :disabled="listening" type="button">
           重新录制
         </button>
-        <button class="remap-confirm-btn" @click="confirm" :disabled="listening || !!conflict" type="button">完成</button>
+        <button class="remap-confirm-btn" @click="confirmRemap" :disabled="listening || !!conflict" type="button">完成</button>
       </div>
     </div>
   </div>

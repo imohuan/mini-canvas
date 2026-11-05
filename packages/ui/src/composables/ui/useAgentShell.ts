@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { readyHost } from './hostRuntime'
 import type { UiState } from './createUiState'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 
 export interface AgentShellView {
   open: boolean
@@ -138,8 +139,16 @@ export function createAgentShellScope(state: UiState) {
     if (!svc?.deleteSession) return
     for (const id of [...memberIds].reverse()) void svc.deleteSession(id)
   }
-  function renameAgentSession(id: string, current: string): void {
-    const next = window.prompt('重命名这个对话', current)
+  async function renameAgentSession(id: string, current: string): Promise<void> {
+    const feedback = readyHost.ctx?.get<FeedbackService>('feedback')
+    if (!feedback) return
+    const next = await feedback.prompt({
+      title: '重命名对话',
+      label: '对话名字',
+      defaultValue: current,
+      confirmText: '保存',
+      validate: (value) => (value.trim() ? '' : '对话名字不能为空'),
+    })
     if (!next || !next.trim()) return
     const svc = readyHost?.ctx?.get<{ renameSession?: (id: string, t: string) => Promise<void> }>('agent')
     if (svc?.renameSession) void svc.renameSession(id, next.trim())

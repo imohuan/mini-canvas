@@ -260,7 +260,7 @@ function startCornerResize(e: PointerEvent): void {
                     <strong>{{ historyText(c.meta.title, 24) }}</strong>
                     <small>{{ historyText(c.meta.preview || c.rootId, 60) }}</small>
                   </button>
-                  <button class="agent-history-icon" :aria-label="'重命名 ' + c.meta.title" @click="ui.renameAgentSession(c.rootId, c.meta.title)">✎</button>
+                  <button class="agent-history-icon" :aria-label="'重命名 ' + c.meta.title" @click="void ui.renameAgentSession(c.rootId, c.meta.title)">✎</button>
                   <button class="agent-history-icon danger" :aria-label="'删除 ' + c.meta.title" @click="ui.deleteAgentConversation(c.memberIds)">✕</button>
                 </li>
                 <li v-if="!ui.agent.conversations.length" class="agent-history-empty">还没有历史对话</li>

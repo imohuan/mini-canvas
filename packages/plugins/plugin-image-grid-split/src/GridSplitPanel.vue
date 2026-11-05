@@ -10,9 +10,10 @@
  *   × 宫格切分 | 已选择 N 项 | 创建分镜组 | 发送到画布
  */
 import { computed } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon, type FeedbackService } from '@mini-canvas/canvas-render'
 import { beginPublish, endPublish, endSplit, splitState } from './splitSession'
 import { finishSplitPublish, publishCells, publishDepsOf } from './publish'
+import { publishConfirmText } from './publishConfirm'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
@@ -36,6 +37,10 @@ function exit(): void {
 async function publish(kind: 'canvas' | 'storyboard'): Promise<void> {
   const s = state.value
   if (!s || publishing.value) return
+  // 用户口径 2026-11-06：发布会新增节点，必须先确认（与删除一样走统一 Dialog）。
+  const feedback = ctx.tryGet<FeedbackService>('feedback')
+  const ok = await feedback?.confirm(publishConfirmText(kind, s.selected.size))
+  if (!ok) return
   // 防双击：真正置 publishing 锁（以前只读 state.publishing，却没人写它）。
   if (!beginPublish(props.id)) return
   const deps = publishDepsOf(ctx)

@@ -105,8 +105,10 @@ describe('行尾菜单：条目与真实现', () => {
     // 复制 / 删除：走真接口
     expect(ui).toMatch(/duplicateCanvas[\s\S]{0,300}apiDuplicateCanvas\(id\)/)
     expect(ui).toMatch(/deleteCanvas[\s\S]{0,700}apiDeleteCanvas\(id\)/)
-    // 删除前有确认 + 当前画布删完要跳到剩下的那张（否则停在已不存在的 hash 上白屏）
-    expect(ui).toMatch(/deleteCanvas[\s\S]{0,500}window\.confirm/)
+    // 删除前有确认（统一反馈服务，不是浏览器原生 confirm）+ 当前画布删完要跳到剩下的那张
+    // （否则停在已不存在的 hash 上白屏）
+    expect(ui).toMatch(/deleteCanvas[\s\S]{0,500}svc\.confirm\(/)
+    expect(ui).not.toMatch(/window\.confirm/)
     expect(ui).toMatch(/deleteCanvas[\s\S]{0,900}await openCanvas\(next\.id\)/)
   })
 
