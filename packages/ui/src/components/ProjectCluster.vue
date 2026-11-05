@@ -92,11 +92,12 @@ const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) =
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent arrow align="start" :side-offset="2" :style="{ minWidth: '232px' }">
-          <div class="canvas-menu-head">
-            <span>画布</span>
-            <Button variant="ghost" size="icon-xs" class="canvas-new size-[22px] rounded-md" aria-label="新建画布"
-              @click="emit('new-canvas'); emit('update:menuOpen', false)"><Plus :size="13" class="size-[13px]" /></Button>
-          </div>
+          <!-- 头部也是一条 DropdownMenuItem：加号在行尾，样式与下面的画布行同源。 -->
+          <DropdownMenuItem :style="{ fontSize: '12px', color: 'var(--ui-ink-dim)' }" aria-label="新建画布"
+            @select="emit('new-canvas'); emit('update:menuOpen', false)">
+            画布
+            <Plus :size="14" class="ml-auto" />
+          </DropdownMenuItem>
           <!-- 整行 = SubTrigger：悬停展开二级菜单（组件默认行为），点击切画布。 -->
           <DropdownMenuSub
             v-for="item in canvasItems"
@@ -132,7 +133,4 @@ const canvasIndex = computed(() => Math.max(1, props.canvasItems.findIndex((c) =
 .divider { width: 1px; height: 21px; margin: 0; background: var(--ui-line); }
 .canvas-chip { color: inherit; background: transparent; cursor: pointer; font-size: 13px; }
 .logo-button:hover, .canvas-chip:hover { background: var(--ui-hover) !important; }
-.canvas-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px; font-size: 12px; }
-.canvas-new { color: var(--ui-ink); background: transparent; cursor: pointer; }
-.canvas-new:hover { background: var(--ui-hover) !important; }
 </style>
