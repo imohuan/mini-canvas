@@ -28,7 +28,12 @@
 
 .ac-skill-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr));
+  /*
+   * 卡片视图**单列**（用户 2026-11-06：技能默认只显示一列，宽度和模型卡片模式一样）。
+   * 原来 auto-fill + 235px 下限，340px 宽的面板会挤成两列、每列都放不下封面 + 文案；
+   * 现在整行一张卡，与模型面板的卡片视图同宽同构。
+   */
+  grid-template-columns: repeat(1, minmax(0, 1fr));
   gap: 8px;
 }
 
