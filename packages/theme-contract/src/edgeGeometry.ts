@@ -63,6 +63,41 @@ export interface EdgeObstacle {
   y: number;
   w: number;
   h: number;
+  /**
+   * 本矩形单独的外扩距离（px）。缺省 = 使用 EdgeAppearance.avoidMargin。
+   * 边自身的两端卡片传 0：端口就贴在卡片边上，若也外扩，窄缝会被两圈边距挤到没有通路。
+   */
+  inflate?: number;
+}
+
+/**
+ * 把节点矩形整理成避障输入。
+ *
+ * 两端卡片**也要**参与避障（只把外扩距离设为 0）：
+ * 之前把它们整个排除，路线就会从目标卡片背后穿过，最后一段被卡片挡住，
+ * 看起来像"右侧端口连到了右侧端口"。
+ */
+export function resolveEdgeObstacles(
+  rects: ReadonlyArray<EdgeObstacle>,
+  endpointIds: ReadonlyArray<string | undefined>,
+  options: {
+    liveOffsets?: ReadonlyMap<string, { dx: number; dy: number }>;
+    isTransparent?: (id: string) => boolean;
+  } = {},
+): EdgeObstacle[] {
+  const endpoints = new Set(endpointIds.filter((id): id is string => Boolean(id)));
+  const offsets = options.liveOffsets;
+  return rects
+    .filter((rect) => !(rect.id && options.isTransparent?.(rect.id)))
+    .map((rect) => {
+      const live = rect.id ? offsets?.get(rect.id) : undefined;
+      return {
+        ...rect,
+        x: rect.x + (live?.dx ?? 0),
+        y: rect.y + (live?.dy ?? 0),
+        ...(rect.id && endpoints.has(rect.id) ? { inflate: 0 } : {}),
+      };
+    });
 }
 
 const handleDirections: Record<Position, XYPosition> = {
@@ -752,13 +787,16 @@ function buildAvoidGeometry(
   obstacles: ReadonlyArray<EdgeObstacle> | undefined,
 ): AvoidGeometry {
   const margin = Math.max(4, appearance.avoidMargin);
-  const inflated = (obstacles ?? []).map((rect) => ({
-    ...rect,
-    x: rect.x - margin,
-    y: rect.y - margin,
-    w: rect.w + margin * 2,
-    h: rect.h + margin * 2,
-  }));
+  const inflated = (obstacles ?? []).map((rect) => {
+    const pad = Math.max(0, rect.inflate ?? margin);
+    return {
+      ...rect,
+      x: rect.x - pad,
+      y: rect.y - pad,
+      w: rect.w + pad * 2,
+      h: rect.h + pad * 2,
+    };
+  });
   const sd = directionOf(sourcePosition);
   const td = directionOf(targetPosition);
   const stub = margin + 10;

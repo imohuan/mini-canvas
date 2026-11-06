@@ -11,6 +11,7 @@ import {
   buildEdgePath,
   sampleEdgePath,
   findClosestPointOnPath,
+  resolveEdgeObstacles,
   type EdgeAppearance,
 } from './edgeGeometry'
 
@@ -165,4 +166,68 @@ describe('正交避障', () => {
     expect(d).toBe(buildEdgePath(0, 0, 14, 150, Position.Right, Position.Left, 'adaptive'))
   })
 })
+
+describe('正交避障：两端卡片也参与避障', () => {
+  const source = { id: 's', x: 0, y: 0, w: 250, h: 210 }
+  const target = { id: 't', x: 14, y: 150, w: 250, h: 210 }
+  // 右端口 (250,105) → 左端口 (14,255)：与截图相同的上下错位布局
+  const s = { x: 250, y: 105 }
+  const t = { x: 14, y: 255 }
+
+  function sampleAll() {
+    const points: Array<{ x: number; y: number }> = []
+    for (let i = 0; i <= 120; i++) {
+      points.push(
+        sampleEdgePath(
+          i / 120,
+          s.x, s.y, t.x, t.y,
+          Position.Right, Position.Left,
+          'avoid',
+          undefined,
+          [
+            { ...source, inflate: 0 },
+            { ...target, inflate: 0 },
+          ],
+        ),
+      )
+    }
+    return points
+  }
+
+  function inside(p: { x: number; y: number }, rect: { x: number; y: number; w: number; h: number }) {
+    return p.x > rect.x + 1 && p.x < rect.x + rect.w - 1 && p.y > rect.y + 1 && p.y < rect.y + rect.h - 1
+  }
+
+  it('不穿过起点或终点卡片（以前会从目标卡片背后穿过去）', () => {
+    for (const point of sampleAll()) {
+      expect(inside(point, source)).toBe(false)
+      expect(inside(point, target)).toBe(false)
+    }
+  })
+
+  it('从右侧端口向右出线，从左端口左侧进入（不是右侧连右侧）', () => {
+    const points = sampleAll()
+    expect(points[1].x).toBeGreaterThan(s.x)
+    const nearEnd = points[points.length - 3]
+    const end = points[points.length - 1]
+    expect(end.x - nearEnd.x).toBeGreaterThan(0)
+    expect(end.x).toBeCloseTo(t.x, 5)
+  })
+
+  it('resolveEdgeObstacles 给两端卡片 inflate=0，其它节点保留默认边距', () => {
+    const rects = [
+      { id: 's', x: 0, y: 0, w: 10, h: 10 },
+      { id: 't', x: 20, y: 0, w: 10, h: 10 },
+      { id: 'o', x: 40, y: 0, w: 10, h: 10 },
+    ]
+    const out = resolveEdgeObstacles(rects, ['s', 't'], {
+      liveOffsets: new Map([['o', { dx: 5, dy: 6 }]]),
+    })
+    expect(out.find((r) => r.id === 's')?.inflate).toBe(0)
+    expect(out.find((r) => r.id === 't')?.inflate).toBe(0)
+    expect(out.find((r) => r.id === 'o')?.inflate).toBeUndefined()
+    expect(out.find((r) => r.id === 'o')).toMatchObject({ x: 45, y: 6 })
+  })
+})
+
 

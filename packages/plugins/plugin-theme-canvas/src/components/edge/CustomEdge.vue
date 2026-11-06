@@ -31,6 +31,7 @@ import {
   buildEdgePath,
   sampleEdgePath,
   findClosestPointOnPath,
+  resolveEdgeObstacles,
   type EdgeType,
   type EdgeAppearance,
   type EdgeObstacle,
@@ -172,33 +173,29 @@ onMounted(trackObstacleDrag)
  * 正交避障要看的节点矩形（flow 绝对坐标）。
  *
  * 只在 edgeType === 'avoid' 时读取：每帧/每次拖拽都全量取矩形会很贵，其它线型保持 0 额外开销。
- * 跳过边自身两端（端口就贴在矩形边上，不该被当成障碍），并跳过分组这类 transparent 容器。
- * 临时拖线只有源端真实存在，target 端跟着鼠标，不参与避障。
+ *
+ * 两端节点**必须**参与避障：端口贴在卡片边上，路线若只看"别的节点"，就会从目标卡片背后
+ * 穿进去、最后一段被卡片挡住，看起来像右侧端口连了右侧端口。端口方向的出线由 geometry 里的
+ * 30px 出线桩负责（桩在矩形外扩层之外），所以把两端矩形一起交给避障不会堵死端口。
+ * 分组这类 transparent 容器仍然跳过（它们不是实体卡片）。
+ * 临时拖线只有源端真实存在，target 端跟着鼠标，getAllRects 里没有它，自然不参与。
  */
 const obstacles = computed<ReadonlyArray<EdgeObstacle> | undefined>(() => {
   if (edgeType.value !== 'avoid') return undefined
   const view = ctx.tryGet('view')
   if (!view) return undefined
-  const skip = new Set<string>([props.source ?? '', props.target ?? ''])
   const doc = ctx.tryGet('doc')
-  const offsets = liveOffsets.value
-  return view
-    .getAllRects()
-    .filter((rect) => !skip.has(rect.id))
-    .filter((rect) => {
-      const node = doc?.getNode(rect.id)
-      return node ? doc?.types.get(node.type)?.transparent !== true : true
-    })
-    .map((rect) => {
-      const live = offsets.get(rect.id)
-      return {
-        id: rect.id,
-        x: rect.x + (live?.dx ?? 0),
-        y: rect.y + (live?.dy ?? 0),
-        w: rect.w,
-        h: rect.h,
-      }
-    })
+  return resolveEdgeObstacles(
+    view.getAllRects().map((rect) => ({ id: rect.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h })),
+    [props.source, props.target],
+    {
+      liveOffsets: liveOffsets.value,
+      isTransparent: (id) => {
+        const node = doc?.getNode(id)
+        return node ? doc?.types.get(node.type)?.transparent === true : false
+      },
+    },
+  )
 })
 
 watch(liveOffsets, () => {

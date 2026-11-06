@@ -1530,9 +1530,12 @@ c1.x &gt; c2.x：控制点交叉</div>
 
   function buildAvoidPath(s, t, app) {
     var margin = Math.max(4, app.margin);
+    // 两端卡片也必须参与避障，但外扩为 0：端口贴在卡片边上。
+    // 从前只把"别的节点"当障碍，路线会从目标卡片背后穿进去，
+    // 最后一段被卡片盖住，看起来像"右侧端口连到了右侧端口"。
     var obstacles = [
-      inflateRect(nodeRect(state.nodes.a), margin),
-      inflateRect(nodeRect(state.nodes.b), margin)
+      nodeRect(state.nodes.a),
+      nodeRect(state.nodes.b)
     ];
     if (state.show.blocker) obstacles.push(inflateRect(nodeRect(state.nodes.c), margin));
 
