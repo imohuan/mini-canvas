@@ -208,26 +208,161 @@ function dateOf(ts: number): string {
 }
 </script>
 
+<style scoped>
+/*
+ * 项目 / 资产卡片网格：按**可用宽度**自动排，不再写死 grid-cols-5。
+ *
+ * 旧问题（用户 2026-11-06 截图）：窗口一窄，5 列固定宽度把卡片压成竖条，
+ * 名字和日期被挤到换行。这里用 auto-fill + minmax：
+ *   - 每个格子最窄 200px（卡片本身仍可再窄一点，因为 min(200px, 100%) 兜底）；
+ *   - 容器很窄时自动退到 1～2 列，而不是继续硬塞 5 列；
+ *   - 卡片宽度有上限 300px：项目少的时候不会被拉成一整块巨幅卡片
+ *     （1920 宽屏下只有 4 个项目时，铺满整行会变成四个大方块，很难看）。
+ *     超过上限就留白，和 Lightroom / Figma 的文件页一致。
+ *   - 容器只剩不足 200px 时用 100%，绝不横向溢出。
+ * 卡片缩略图用 aspect-ratio 定比例，宽度变化时高度跟着走，不会被压扁。
+ */
+.project-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 300px));
+  justify-content: start;
+  align-items: start;
+}
+/* 空态文案不参与网格列宽计算（否则会挤出一列空位） */
+.project-grid-empty { grid-column: 1 / -1; }
+
+/* 缩略图统一比例：不同宽度下视觉节奏一致 */
+.project-thumb { aspect-ratio: 16 / 10; }
+
+/*
+ * 卡片外壳 & 点击层：文字区不许有任何背景。
+ *
+ * 旧实现用 shadcn Button 的 ghost 变体铺满整卡，ghost 自带
+ * hover:bg-muted 和 dark:hover:bg-muted/50；类名覆盖不掉 dark:hover 那条，
+ * 所以悬停时名字/日期下面会浮出一块灰底（用户 2026-11-06 截图指出）。
+ *
+ * 现在卡片用原生 button / div，点击层是纯透明元素：
+ * hover 只动缩略图里的图案，文字区始终跟页面底色一致。
+ */
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.project-hit {
+  border: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.project-hit:hover,
+.project-hit:active { background: transparent; }
+
+/* 名字 / 日期：永远是页面底色，不加任何 hover 背景、不位移。 */
+.project-name,
+.project-date {
+  display: block;
+  padding: 0 2px;
+  background: transparent;
+}
+.project-name { line-height: 1.45; }
+.project-date { line-height: 1.4; }
+
+/*
+ * hover = 图案放大（用户 2026-11-06 选定的方案）。
+ *
+ * 只放大缩略图里的图案，卡片本身不位移、不抬高：
+ *   - 图案 scale(1.3)，用较长缓动，像镜头轻轻推近；
+ *   - 背后铺一层很淡的主题色光，避免"图放大了但背景还是死的"；
+ *   - 名字、日期完全不动，保证列表扫读时不会跟着抖。
+ */
+.project-thumb-zoom { position: relative; }
+.project-thumb-zoom::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(100% 100% at 50% 30%, var(--ui-accent-soft, rgb(8 145 178 / 0.12)), transparent 72%);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: none;
+}
+.project-thumb-zoom > svg,
+.project-thumb-zoom > img {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.3, 1), color 0.18s ease;
+}
+.project-thumb-zoom:hover::after,
+.group:hover .project-thumb-zoom::after,
+.group\/asset:hover .project-thumb-zoom::after {
+  opacity: 1;
+}
+.project-thumb-zoom:hover > svg,
+.group:hover .project-thumb-zoom > svg,
+.project-thumb-zoom:hover > img,
+.group\/asset:hover .project-thumb-zoom > img {
+  transform: scale(1.3);
+}
+.project-thumb-zoom:hover > svg,
+.group:hover .project-thumb-zoom > svg {
+  color: var(--ui-accent, #0891b2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-thumb-zoom > svg,
+  .project-thumb-zoom > img,
+  .project-thumb-zoom::after { transition: none !important; }
+}
+
+/* 窄屏：侧栏收成图标栏，标题栏换行，搜索框占满一行 */
+@media (max-width: 860px) {
+  .projects-side { width: 60px; padding-left: 8px; padding-right: 8px; align-items: center; }
+  .projects-brand { padding-left: 0; padding-right: 0; }
+  .projects-brand-name,
+  .projects-label { display: none; }
+  .projects-nav { width: 36px; justify-content: center; padding: 0; }
+  .projects-new { width: 36px; padding: 0; }
+  .projects-head { padding-left: 12px; padding-right: 12px; }
+  .projects-head-title { margin-right: auto; }
+  .projects-actions { width: 100%; margin-left: 0; }
+  .projects-search { width: auto; flex: 1 1 180px; min-width: 0; }
+  .projects-scroll { padding-left: 12px; padding-right: 12px; }
+}
+/* 极窄：卡片最小宽度收到 160px，保证一屏至少能看见一整张卡 */
+@media (max-width: 520px) {
+  .project-grid { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); gap: 12px; justify-content: stretch; }
+  .project-thumb { aspect-ratio: 4 / 3; }
+}
+</style>
+
 <template>
-  <div class="flex h-screen bg-canvas-bg text-ink">
+  <div class="projects-page flex h-screen bg-canvas-bg text-ink">
     <!-- 左栏 -->
-    <aside class="flex w-[200px] flex-none flex-col gap-2 border-r border-line px-3 py-4">
-      <div class="flex items-center gap-2 px-2 pb-2 text-[15px] font-bold tracking-wide">
+    <aside class="projects-side flex w-[200px] flex-none flex-col gap-2 border-r border-line px-3 py-4">
+      <div class="projects-brand flex items-center gap-2 px-2 pb-2 text-[15px] font-bold tracking-wide">
         <span class="grid size-6 place-items-center rounded-md bg-brand text-[13px] font-black text-white">M</span>
-        MiniCanvas
+        <span class="projects-brand-name">MiniCanvas</span>
       </div>
-      <Button size="sm" class="h-9 w-full gap-2 rounded-lg text-[13px] font-semibold" @click="newProject">
-        <Plus :size="15" /> 新建项目
+      <Button size="sm" class="projects-new h-9 w-full gap-2 rounded-lg text-[13px] font-semibold" @click="newProject">
+        <Plus :size="15" class="flex-none" /> <span class="projects-label">新建项目</span>
       </Button>
       <nav class="mt-1 flex flex-col gap-0.5">
-        <Button variant="ghost" size="sm" class="h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'home' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('home')">
-          <House :size="15" /> 首页
+        <Button variant="ghost" size="sm" class="projects-nav h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'home' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('home')">
+          <House :size="15" class="flex-none" /> <span class="projects-label">首页</span>
         </Button>
-        <Button variant="ghost" size="sm" class="h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'projects' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('projects')">
-          <Folder :size="15" /> 项目
+        <Button variant="ghost" size="sm" class="projects-nav h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'projects' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('projects')">
+          <Folder :size="15" class="flex-none" /> <span class="projects-label">项目</span>
         </Button>
-        <Button variant="ghost" size="sm" class="h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'assets' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('assets')">
-          <ImageIcon :size="15" /> 资产
+        <Button variant="ghost" size="sm" class="projects-nav h-9 w-full justify-start gap-2 rounded-lg text-[13px] font-normal" :class="nav === 'assets' ? 'bg-hover-strong font-semibold text-ink' : 'text-ink/90'" @click="switchNav('assets')">
+          <ImageIcon :size="15" class="flex-none" /> <span class="projects-label">资产</span>
         </Button>
       </nav>
       <ProjectsTabsNav :tabs="pluginTabs" :active-id="pluginTabId" @select="selectPluginTab" />
@@ -235,22 +370,22 @@ function dateOf(ts: number): string {
 
     <!-- 主区 -->
     <main class="flex min-w-0 flex-1 flex-col">
-      <header class="flex h-14 flex-none items-center gap-3 px-6">
+      <header class="projects-head flex min-h-14 flex-none flex-wrap items-center gap-x-3 gap-y-2 px-6 py-2">
         <Button variant="ghost" size="xs" class="justify-start gap-1 rounded-lg px-2 text-[13px] font-normal text-ink-dim" @click="goBack">
-          <ChevronLeft :size="15" /> 返回
+          <ChevronLeft :size="15" class="flex-none" /> <span class="projects-label">返回</span>
         </Button>
         <span class="h-4 w-px bg-line"></span>
-        <strong class="text-[15px]">{{ pageTitle }}</strong>
-        <div v-if="!activePluginTab" class="ml-auto flex items-center gap-2">
-          <label class="flex h-9 w-[240px] items-center gap-2 rounded-lg border border-line bg-veil px-3">
+        <strong class="projects-head-title text-[15px]">{{ pageTitle }}</strong>
+        <div v-if="!activePluginTab" class="projects-actions ml-auto flex flex-wrap items-center gap-2">
+          <label class="projects-search flex h-9 w-[240px] items-center gap-2 rounded-lg border border-line bg-veil px-3">
             <Search :size="15" class="flex-none text-ink-dim" />
             <Input v-model="query" class="h-full flex-1 border-0 bg-transparent px-0 focus-visible:ring-0" placeholder="搜索项目" aria-label="搜索项目" />
           </label>
           <Button variant="outline" size="sm" class="h-9 gap-1.5 rounded-lg text-[13px] font-normal text-ink">
-            <Trash2 :size="14" /> 回收站
+            <Trash2 :size="14" class="flex-none" /> 回收站
           </Button>
           <Button variant="outline" size="sm" class="h-9 gap-1.5 rounded-lg text-[13px] font-normal text-ink" @click="newProject">
-            <FolderPlus :size="14" /> 新建文件夹
+            <FolderPlus :size="14" class="flex-none" /> 新建文件夹
           </Button>
           <Button variant="outline" size="icon" class="rounded-lg text-ink" aria-label="主题切换" @click="toggleTheme">
             <Sun v-if="theme === 'dark'" :size="15" />
@@ -264,18 +399,18 @@ function dateOf(ts: number): string {
       <!-- 插件整页：与内置页平级切换，不叠在项目卡片下面 -->
       <ProjectsTabsPanel v-if="activePluginTab" :tab="activePluginTab" />
 
-      <div v-else class="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
+      <div v-else class="projects-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-10">
         <!-- 资产页签：生成产物 + 自己上传，统一列表 -->
-        <div v-if="nav === 'assets'" class="grid grid-cols-5 gap-4">
-          <div v-for="a in assets" :key="a.id" class="flex flex-col gap-2">
-            <div class="relative h-[150px] overflow-hidden rounded-xl border border-line bg-thumb-soft">
+        <div v-if="nav === 'assets'" class="project-grid">
+          <div v-for="a in assets" :key="a.id" class="group/asset flex flex-col gap-2">
+            <div class="project-thumb project-thumb-zoom relative overflow-hidden rounded-xl border border-line bg-thumb-soft">
               <img v-if="a.kind === 'image'" :src="a.url" alt="" class="h-full w-full object-cover" />
               <span v-else class="grid h-full place-items-center text-ink-mute"><ImageIcon :size="26" :stroke-width="1" /></span>
             </div>
             <span class="truncate text-[13px] text-ink">{{ a.name }}</span>
             <span class="text-[11px] text-ink-dim">{{ a.source === 'upload' ? '手动上传' : '生成' }} · {{ dateOf(a.createdAt) }}</span>
           </div>
-          <p v-if="assets.length === 0" class="col-span-5 py-16 text-center text-[13px] text-ink/50">还没有资产。生成或上传之后会出现在这里。</p>
+          <p v-if="assets.length === 0" class="project-grid-empty py-16 text-center text-[13px] text-ink/50">还没有资产。生成或上传之后会出现在这里。</p>
         </div>
 
         <!-- 首页页签：欢迎语 -->
@@ -284,27 +419,41 @@ function dateOf(ts: number): string {
         </div>
 
         <!-- 项目页签 -->
-        <div v-else class="grid grid-cols-5 gap-4">
+        <div v-else class="project-grid">
           <!-- 开始创作 -->
-          <Button variant="ghost" size="sm" class="flex h-auto w-full flex-col items-stretch justify-start gap-2 text-left font-normal" @click="newProject">
-            <span class="grid h-[150px] place-items-center rounded-xl border border-line bg-panel text-ink-dim transition-colors hover:bg-hover">
+          <button type="button" class="project-card group" aria-label="创建新的视频项目" @click="newProject">
+            <span class="project-thumb project-thumb-zoom grid place-items-center rounded-xl border border-dashed border-line bg-panel text-ink-dim transition-colors hover:border-brand/40">
               <Plus :size="26" />
             </span>
-            <span class="text-[13px] text-ink">创建新的视频项目</span>
-          </Button>
+            <span class="project-name text-[13px] text-ink">创建新的视频项目</span>
+          </button>
 
           <!-- 项目卡片 -->
-          <div v-for="p in projects.filter((x) => !query || x.name.includes(query))" :key="p.id" class="group relative flex flex-col gap-2">
-            <Button variant="ghost" size="sm" class="absolute inset-0 z-10 h-auto w-auto p-0 hover:bg-transparent" :aria-label="'打开项目 ' + p.name" @click="openProject(p)"></Button>
-            <div class="grid h-[150px] place-items-center overflow-hidden rounded-xl border border-line bg-gradient-to-br from-panel-active to-panel-soft text-ink-mute">
+          <div v-for="p in projects.filter((x) => !query || x.name.includes(query))" :key="p.id" class="project-card group relative">
+            <!--
+              整卡点击层：必须是**透明**的原生按钮。
+
+              原来用 shadcn Button（ghost）铺满整张卡，ghost 自带
+              hover:bg-muted / dark:hover:bg-muted/50；即使再写 hover:bg-transparent，
+              Tailwind 里 dark:hover 的那条后编译、会盖掉它 ——
+              结果鼠标一上去，名字和日期那片文字区就浮出一块灰底
+              （用户 2026-11-06 截图指出：「我不希望文字这部分有什么背景」）。
+            -->
+            <button
+              type="button"
+              class="project-hit absolute inset-0 z-10 cursor-pointer rounded-xl bg-transparent p-0"
+              :aria-label="'打开项目 ' + p.name"
+              @click="openProject(p)"
+            ></button>
+            <div class="project-thumb project-thumb-zoom grid place-items-center overflow-hidden rounded-xl border border-line bg-gradient-to-br from-panel-active to-panel-soft text-ink-mute transition-[border-color] group-hover:border-line-soft">
               <Folder :size="30" :stroke-width="1" />
             </div>
-            <span class="truncate text-[13px] text-ink">{{ p.name }}</span>
-            <span class="text-[11px] text-ink-dim">{{ dateOf(p.createdAt) }}</span>
+            <span class="project-name truncate text-[13px] text-ink">{{ p.name }}</span>
+            <span class="project-date text-[11px] text-ink-dim">{{ dateOf(p.createdAt) }}</span>
             <Button
               v-if="p.id !== 'default'"
               variant="ghost" size="icon-xs"
-              class="absolute right-1 top-1 z-20 rounded-lg bg-panel/90 text-ink-dim opacity-0 group-hover:opacity-100 hover:bg-hover hover:text-ink"
+              class="absolute right-2 top-2 z-20 rounded-lg bg-panel/90 text-ink-dim opacity-0 group-hover:opacity-100 hover:bg-hover hover:text-ink"
               :aria-label="'删除项目 ' + p.name" @click.stop="removeProject(p)">
               <Trash2 :size="13" />
             </Button>

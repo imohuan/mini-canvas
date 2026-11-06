@@ -131,15 +131,20 @@ const lucideOf = (icon: string) =>
           </div>
         </template>
 
-        <!-- 宫格模式：3 列卡片（照图 1：卡片 120 宽 圆角16 缩略图方形圆角12 名字 13px 在下方） -->
-        <div v-else class="grid grid-cols-3 gap-0.5 pt-0.5" :style="{ paddingLeft: block.depth * 24 + 'px' }">
+        <!--
+          宫格模式：列数按抽屉**实际宽度**自动排（不再是写死 3 列）。
+          抽屉可以拖宽 / 拖窄，固定 3 列在窄抽屉里会把方形缩略图压成细条
+          （用户 2026-11-06 截图：卡片全变成窄竖条，名字被截成两行）。
+          用 auto-fill + minmax 后，窄了自动变 2 列 / 1 列，宽了自动多排。
+        -->
+        <div v-else class="canvas-node-grid pt-0.5" :style="{ paddingLeft: block.depth * 24 + 'px' }">
           <div v-for="child in block.nodes" :key="child.id"
-            class="group/cell relative flex min-w-0 flex-col gap-2 rounded-[16px] p-1 pb-3 transition-colors hover:bg-hover-soft"
+            class="group/cell relative flex min-w-0 flex-col gap-2 rounded-[16px] p-1 pb-3"
             @contextmenu="emit('openMenu', 'node', child.id, $event)">
             <button v-if="renamingNodeId !== child.id" class="absolute inset-0 z-10 rounded-[16px]"
               :aria-label="'定位到节点 ' + child.name" @click="emit('locate', child.id)"></button>
             <div
-              class="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-thumb-soft transition-opacity">
+              class="canvas-node-thumb relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-thumb-soft transition-colors group-hover/cell:border-line-soft">
               <img v-if="child.thumb" :src="child.thumb" alt="" class="h-full w-full object-cover" />
               <video v-else-if="child.video" :src="child.video" class="h-full w-full object-cover" muted playsinline
                 preload="metadata" aria-hidden="true"></video>
@@ -174,3 +179,62 @@ const lucideOf = (icon: string) =>
     </div>
   </ScrollArea>
 </template>
+
+<style scoped>
+/*
+ * 宫格卡片列数：按可用宽度自动排，最小 88px。
+ *
+ * 为什么不固定 3 列（用户 2026-11-06 截图）：抽屉最小宽度只有两百多像素，
+ * 3 列固定宽度会把每张卡压成 40px 宽的竖条，方形缩略图和名字都变形。
+ *
+ * min(88px, 100%) 兜底：极端窄（<88px）时也只用满宽度，绝不横向溢出。
+ * 抽屉默认宽度下仍是一行 3 张；拖宽后自动变 4～5 张，不必再改代码。
+ */
+.canvas-node-grid {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(min(88px, 100%), 1fr));
+}
+
+/*
+ * 宫格卡 hover = 图案放大（与项目页同一套语言，用户 2026-11-06 定）。
+ *
+ * 卡片本身不位移；只让缩略图里的图案放大 1.3 倍并转成主题色，
+ * 同时铺一层很淡的主题色光。图片 / 视频缩略图同理放大，外框不动，
+ * 所以下方名字不会跟着抖。
+ */
+.canvas-node-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(100% 100% at 50% 30%, var(--ui-accent-soft, rgb(8 145 178 / 0.12)), transparent 72%);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: none;
+}
+.canvas-node-thumb :deep(svg),
+.canvas-node-thumb :deep(img),
+.canvas-node-thumb :deep(video) {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.3, 1), color 0.18s ease;
+}
+.group\/cell:hover .canvas-node-thumb::after {
+  opacity: 1;
+}
+.group\/cell:hover .canvas-node-thumb :deep(svg),
+.group\/cell:hover .canvas-node-thumb :deep(img),
+.group\/cell:hover .canvas-node-thumb :deep(video) {
+  transform: scale(1.3);
+}
+.group\/cell:hover .canvas-node-thumb :deep(svg) {
+  color: var(--ui-accent, #0891b2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-node-thumb :deep(svg),
+  .canvas-node-thumb :deep(img),
+  .canvas-node-thumb :deep(video),
+  .canvas-node-thumb::after { transition: none !important; }
+}
+</style>

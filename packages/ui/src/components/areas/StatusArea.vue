@@ -12,6 +12,7 @@ import { Check, PanelLeft, LayoutGrid, MapPin, MapPinOff, Link2Off, Link2, Magne
 import { SlotAnchor, SlotComposer, useUiComponent } from '@mini-canvas/canvas-render'
 import { useUi } from '../../composables/ui'
 import { useMiniMapDockTarget } from '../../composables/miniMapDock'
+import HoverTip from '../HoverTip.vue'
 
 const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
@@ -127,16 +128,27 @@ const miniMapDock = useMiniMapDockTarget()
         </SlotAnchor>
         <SlotAnchor id="host/zoom" :order="600">
       <DropdownMenu v-model:open="s.zoomMenuOpen">
-        <DropdownMenuTrigger as-child>
-          <!-- 缩放菜单和 Tooltip 共用一个按钮时，Tooltip 会接管浮层锚点，菜单被挪出屏幕。
-               用原生 title 保留悬停提示，菜单定位只认按钮本身。 -->
-          <Button variant="ghost" size="sm" class="h-7 rounded-lg whitespace-nowrap px-1 text-[13px] font-normal hover:bg-hover"
-            aria-label="缩放选项" title="缩放选项" :aria-expanded="s.zoomMenuOpen">{{ s.zoom }}%</Button>
-        </DropdownMenuTrigger>
+        <!--
+          提示气泡用 HoverTip（纯 CSS 定位），不是 reka 的 Tooltip。
+
+          原因（2026-11-02 / 2026-11-06 两次实测）：这个按钮同时是
+          DropdownMenuTrigger。只要再套一层 reka Tooltip —— 即使 TooltipTrigger
+          包在外层 span 上 —— 下拉菜单都会被定位到屏幕左上角/屏幕外
+          （实测 top = -482px）。
+
+           HoverTip 不创建浮层、不注册 reference，只画一个绝对定位的气泡，
+           所以下拉菜单的锚点始终只认按钮本身。
+        -->
+        <HoverTip label="缩放选项">
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="sm" class="h-7 rounded-lg whitespace-nowrap px-1 text-[13px] font-normal hover:bg-hover"
+              aria-label="缩放选项" :aria-expanded="s.zoomMenuOpen">{{ s.zoom }}%</Button>
+          </DropdownMenuTrigger>
+        </HoverTip>
         <DropdownMenuContent side="top" align="center" :style="{ minWidth: '215px' }">
-          <DropdownMenuItem @select="ui.zoomInStep(); s.zoomMenuOpen = false">放大 <span class="ax-menu-hint ml-auto">Ctrl +</span></DropdownMenuItem>
-          <DropdownMenuItem @select="ui.zoomOutStep(); s.zoomMenuOpen = false">缩小 <span class="ax-menu-hint ml-auto">Ctrl −</span></DropdownMenuItem>
-          <DropdownMenuItem @select="ui.zoomFit(); s.zoomMenuOpen = false">适合屏幕 <span class="ax-menu-hint ml-auto">Ctrl 0</span></DropdownMenuItem>
+          <DropdownMenuItem @select="ui.zoomInStep(); s.zoomMenuOpen = false">放大 <span class="zoom-hint"><kbd>Ctrl</kbd><kbd>+</kbd></span></DropdownMenuItem>
+          <DropdownMenuItem @select="ui.zoomOutStep(); s.zoomMenuOpen = false">缩小 <span class="zoom-hint"><kbd>Ctrl</kbd><kbd>−</kbd></span></DropdownMenuItem>
+          <DropdownMenuItem @select="ui.zoomFit(); s.zoomMenuOpen = false">适合屏幕 <span class="zoom-hint"><kbd>Ctrl</kbd><kbd>0</kbd></span></DropdownMenuItem>
           <DropdownMenuSeparator />
           <!-- 固定档位用普通菜单项（不再用单选组）：当前项在行尾用勾表示，不叠整行主题色底（问题 03）。 -->
           <DropdownMenuItem @select="ui.zoomToPercent(50); s.zoomMenuOpen = false">
@@ -157,3 +169,33 @@ const miniMapDock = useMiniMapDockTarget()
   </div>
   </TooltipProvider>
 </template>
+
+<style scoped>
+/* 菜单行尾的快捷键：小键帽，跟在菜单文字后面，不抢主文字。
+   以前这里只有一个没定义样式的 .ax-menu-hint，浏览器就按普通小字渲染，
+   看起来像“缩水的一行字”（用户截图指出的问题）。 */
+.zoom-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.zoom-hint kbd {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink-dim, #6b7280);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+</style>

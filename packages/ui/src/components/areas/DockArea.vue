@@ -26,6 +26,7 @@ import {
 // 底栏按钮 / 提示 / 下拉全部从画布 ctx 的 ui 注册表按名取（默认主题插件登记），
 // 业务外壳不直接 import 组件库（用户口径 2026-11-03）。
 import AgentOrb from "../AgentOrb.vue";
+import HoverTip from "../HoverTip.vue";
 import { useUi } from "../../composables/ui";
 import { openUploadDialog } from "../../composables/assetUploadBus";
 import { computed, ref } from "vue";
@@ -102,22 +103,21 @@ function onUploadPick(e: Event): void {
         -->
           <DropdownMenu v-model:open="s.addMenuOpen">
             <!--
-              这个按钮只挂 DropdownMenu，不再套 Tooltip。
+              提示气泡与下拉菜单必须挂在不同 DOM 节点上，否则会互相抢同一个锚点：
+              2026-11-02 实测，Tooltip 和 DropdownMenuTrigger 共用 <button> 时，
+              要么点了不弹菜单，要么菜单被挪到屏幕外。
 
-              2026-11-02 实测两轮：
-                · Tooltip 在 DropdownMenuTrigger 里层 → 按钮只拿到 tooltip-trigger，
-                  点下去只弹提示、菜单不出现（用户报「加号点不动」）；
-                · Tooltip 在外层 → 菜单能开，但 popper 锚点被 tooltip 气泡接管，
-                  整块菜单被挪到 translate(0, -200%)（屏幕外，用户仍看不到菜单）。
-              原因是两个浮层共用同一个 <button> 作为 reference，reka 只有一个触发上下文。
-              这里改用原生 title：悬停仍显示「添加节点」，菜单定位只认按钮本身。
+              现在 TooltipTrigger 是外层 span（只负责悬停位置），下拉仍然锚按钮。
+              三个带菜单的按钮（添加 / 移动 / 素材库）都用这个写法。
             -->
-            <DropdownMenuTrigger as-child>
-              <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
-                :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点" title="添加节点">
-                <Plus :size="17" class="size-[17px]" />
-              </Button>
-            </DropdownMenuTrigger>
+            <HoverTip label="添加节点">
+              <DropdownMenuTrigger as-child>
+                <Button variant="default" size="icon-sm" class="size-8 rounded-lg"
+                  :class="{ 'brightness-105': s.addMenuOpen }" aria-label="添加节点">
+                  <Plus :size="17" class="size-[17px]" />
+                </Button>
+              </DropdownMenuTrigger>
+            </HoverTip>
             <DropdownMenuContent arrow side="top" align="center" :side-offset="12" :style="{ width: '240px' }">
               <div class="mb-1.5 flex h-8 items-center gap-1.5 rounded-lg bg-veil px-2.5 text-ink-dim">
                 <Search :size="13" /><input class="w-full bg-transparent text-xs text-ink outline-none"
@@ -174,12 +174,14 @@ function onUploadPick(e: Event): void {
         <SlotAnchor id="host/move" :order="200">
           <!-- 移动：中轴对齐的下拉（菜单中心 = 按钮中心，箭头居中指按钮），V/H 切换 -->
           <DropdownMenu v-model:open="s.moveMenuOpen">
-            <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
-                :class="{ 'bg-chip': s.moveMenuOpen }" aria-label="移动" :aria-expanded="s.moveMenuOpen">
-                <component :is="s.canvasMode === 'move' ? Move : Hand" :size="16" class="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
+            <HoverTip label="移动工具">
+              <DropdownMenuTrigger as-child>
+                <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
+                  :class="{ 'bg-chip': s.moveMenuOpen }" aria-label="移动" :aria-expanded="s.moveMenuOpen">
+                  <component :is="s.canvasMode === 'move' ? Move : Hand" :size="16" class="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </HoverTip>
             <!-- 向上弹时的间距统一为 12（用户口径 2026-11-04）：sideOffset 从触发按钮算起，
                  按钮又在 50px 托盘里下沉约 9px，12 之后菜单底边离托盘约 2px。 -->
             <DropdownMenuContent arrow side="top" align="center" :side-offset="12" :style="{ minWidth: '200px' }">
@@ -201,13 +203,15 @@ function onUploadPick(e: Event): void {
         <SlotAnchor id="host/library" :order="300">
           <!-- 素材库：**点击触发**（与移动一致；方向键/素材库都点开才展开，不再 hover 弹出） -->
           <DropdownMenu v-model:open="s.libraryMenuOpen">
-            <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
-                :class="{ 'bg-chip': s.libraryMenuOpen || s.drawer === 'left' }" aria-label="素材库"
-                :aria-expanded="s.libraryMenuOpen">
-                <FolderOpen :size="16" class="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
+            <HoverTip label="素材库">
+              <DropdownMenuTrigger as-child>
+                <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg"
+                  :class="{ 'bg-chip': s.libraryMenuOpen || s.drawer === 'left' }" aria-label="素材库"
+                  :aria-expanded="s.libraryMenuOpen">
+                  <FolderOpen :size="16" class="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </HoverTip>
             <DropdownMenuContent arrow side="top" align="center" :side-offset="12" :style="{ minWidth: '228px' }">
                 <!-- 「风格库」由 plugin-style-library 提供：这里执行它注册的命令（未装该插件则 no-op，不报错） -->
                 <DropdownMenuItem @select="s.libraryMenuOpen = false; ui.runCommand('style-library:open')">

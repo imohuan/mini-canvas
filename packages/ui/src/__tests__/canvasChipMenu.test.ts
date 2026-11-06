@@ -201,12 +201,33 @@ describe('问题 05：右上实色 / 状态图标替换 / 缩放下拉 / Agent �
     expect(statusArea).not.toContain('<MapPin v-if="ui.minimapOn"')
   })
 
-  it('缩放触发器不再套 Tooltip（两个浮层抢同一个锚点会让菜单失效）', () => {
+  it('带下拉的按钮不吃 reka Tooltip（两个浮层抢锚点会把菜单挪到屏幕外）', () => {
+    // 2026-11-02 的 bug：TooltipTrigger 直接包 DropdownMenuTrigger 时，
+    // 两者共用同一个 <button> 做 reference，菜单被挪出屏幕。
+    // 2026-11-06 再测：把 TooltipTrigger 挪到外层 span 也一样 —— reka 的
+    // Tooltip 仍会登记成同一个触发上下文，实测下拉菜单 top = -482px。
+    //
+    // 最终修法：带下拉的按钮统一用 HoverTip（纯 CSS 气泡，不创建浮层），
+    // 下拉锚点只认按钮本身。这条守住「不许再套回 reka Tooltip」。
     const zoomBlock = statusArea.slice(statusArea.indexOf('id="host/zoom"'))
     const trigger = zoomBlock.slice(0, zoomBlock.indexOf('</DropdownMenuTrigger>'))
     expect(trigger).toContain('aria-label="缩放选项"')
-    expect(trigger).not.toContain('<Tooltip')
-    expect(trigger).not.toContain('TooltipTrigger')
+    expect(trigger).toContain('<HoverTip label="缩放选项">')
+    // 注释里会解释「为什么不用 Tooltip」，判之前先去掉注释，只看真实标签
+    const zoomMarkup = zoomBlock
+      .slice(0, zoomBlock.indexOf('</HoverTip>'))
+      .replace(/<!--[\s\S]*?-->/g, '')
+    expect(zoomMarkup).not.toContain('TooltipTrigger')
+    expect(zoomMarkup).not.toContain('<Tooltip>')
+  })
+
+  it('底栏三个带下拉的按钮也用 HoverTip，不用 reka Tooltip', () => {
+    for (const label of ['添加节点', '移动工具', '素材库']) {
+      expect(dockArea, label + ' 没有用 HoverTip').toContain('<HoverTip label="' + label + '">')
+    }
+    const dockStart = dockArea.indexOf('id="host/add"')
+    const dockMenuZone = dockArea.slice(dockStart, dockArea.indexOf('id="host/roles"'))
+    expect(dockMenuZone, '底栏下拉区里又混进了 TooltipTrigger').not.toContain('<TooltipTrigger')
   })
 
   it('Agent 按钮固定 40px 真圆形，不再被全局圆角变量改成方角', () => {
