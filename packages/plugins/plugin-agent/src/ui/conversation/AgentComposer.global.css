@@ -6,6 +6,20 @@
   min-height: 64px;
 }
 
+/*
+ * 正文字号必须写在这里（用户 2026-11-06：输入框的字比对话列表大）。
+ *
+ * 原因：bundle 的 `.prose-mirror-editor .ProseMirror` 直配了 16px/24px，
+ * 外壳上设字号只是「会被继承的值」，永远输给它（与底栏同一条坑）。
+ * 对话列表正文是 14px（.md-p），占位符 .ac-placeholder 也是 14px/24px ——
+ * 只有真正打的字是 16px，于是看着比别处都大、与占位符也不齐。
+ * 行高保持 24px：22px 高的标签 chip 仍能落在同一行里不撑开。
+ */
+.ac-editor .prose-mirror-editor .ProseMirror {
+  font-size: 14px;
+  line-height: 24px;
+}
+
 .prose-mirror-editor .ac-tag {
   display: inline-flex;
   align-items: center;
