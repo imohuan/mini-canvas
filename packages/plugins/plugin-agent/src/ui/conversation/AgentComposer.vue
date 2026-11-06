@@ -583,14 +583,16 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               视图开关同理只在有内容时出现，没有可切换的东西就不摆按钮。
             -->
             <!--
-              宽度固定成**卡片档**（用户 2026-11-06：技能默认单列，宽度和模型卡片模式一致）。
+              宽度固定成**分栏档**（用户 2026-11-06：技能页签点「卡片」有时没反应）。
 
-              为什么固定而不再按视图切：reka 的菜单贴着触发按钮、按尺寸重新定位，
-              宽度一变菜单就挪位置，页签点击会落空（详见 .ac-panel.is-split 的注释）。
-              卡片视图单列，340px 正好；分栏视图若也觉得窄，后续单独调，别用切宽度实现。
+              reka 的菜单贴着触发按钮、按尺寸重新定位。切视图时宽度 340↔588、
+              高度 312↔443 一起变，菜单就会挪位置；页签在顶部，用户点下时按钮已经不在原处，
+              点击落空（实测：点击坐标 y=463，切完后按钮跑到 y=332）。
+              现在宽高都不随视图变 —— 菜单尺寸恒定、不再重排，页签点击永远落在原地。
+              代价是卡片视图也按 588 宽排；技能卡是整行卡（封面 + 文案），宽一点更好读。
             -->
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
-              :style="{ width: '340px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(520px, calc(100dvh - 120px))' }">
+              :style="{ width: s.skills.length ? '588px' : '340px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(520px, calc(100dvh - 120px))' }">
               <div class="ac-panel ac-skill-panel" :class="{ 'is-split': skillView === 'split' && !!s.skills.length }"
                 role="listbox" aria-label="选择技能">
                 <div class="ac-panel-head">

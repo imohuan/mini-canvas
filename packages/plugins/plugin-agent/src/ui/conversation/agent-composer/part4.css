@@ -608,17 +608,9 @@
 
   .ac-split-rail {
     width: auto;
-    /*
-     * 窄面板（340px）里分栏必须**横向**排：左栏改成一排可横向滚动的分类条，
-     * 高度只占一行；否则它会按 328px 高铺满整列，把右侧内容整个挤下去
-     *（用户 2026-11-06 截图：切分栏后只剩分类列表、技能卡不见了）。
-     */
-    height: auto;
-    max-height: 44px;
     flex: none;
     border-right: 0;
     border-bottom: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
-    padding: 0;
   }
 
   .ac-rail-label {
@@ -626,28 +618,11 @@
   }
 
   .ac-rail-scroll {
-    height: 44px;
-    flex: none;
     flex-direction: row;
     gap: 5px;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 7px 10px;
-  }
-
-  /* 分类条内部：按钮横向排成一行，不换行 */
-  .ac-rail-scroll :deep(.ac-rail-scroll-body) {
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-    padding: 0;
-    height: 100%;
-  }
-
-  .ac-rail-scroll :deep(.ac-rail-scroll-body > button) {
-    width: auto;
-    flex: none;
-    padding-inline: 8px;
   }
 
   .ac-rail-icon,
