@@ -712,9 +712,11 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                   </div>
                   </div>
                 </div>
-                <div class="ac-panel-foot">
-                  <span class="ac-selection-summary">点击技能会直接插入标签</span>
-                </div>
+                <!--
+                  技能面板不再有底栏（用户 2026-11-06）：那句操作说明占一整条 36px 的条，
+                  还把列表下方空出一块；点击即插入这件事从交互本身就能看出来。
+                  底部的呼吸改成容器自己的 padding-bottom（见 .ac-skill-panel）。
+                -->
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

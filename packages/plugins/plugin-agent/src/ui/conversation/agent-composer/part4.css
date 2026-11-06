@@ -1,5 +1,13 @@
 /* —— 底栏：按内容高的窄条，不再用 54px 撑出一块空白 —— */
 
+/*
+ * 技能面板没有底栏了（用户 2026-11-06：那条操作说明是多余的），
+ * 底部呼吸补在面板自己身上。模型 / MCP 面板仍有底栏，它们自带内边距。
+ */
+.ac-skill-panel {
+  padding-bottom: 8px;
+}
+
 .ac-panel-foot {
   display: flex;
   align-items: center;
