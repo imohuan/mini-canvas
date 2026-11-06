@@ -177,6 +177,7 @@ export const Config = {
   },
   cursorFxCustomId: {
     type: 'string', default: '', label: '自定义光标', group: CURSOR_NAV_ID,
+    placeholder: '在下方「自定义」里上传后自动填入',
     description: '当前选中的自定义素材 id（在本页「自定义」里上传图片/SVG 或帧序列后选它）。',
   },
   cursorFxCustomFps: {

@@ -39,6 +39,7 @@ export const Config = {
     default: DEFAULT_BASE_URL,
     label: '生成后台地址',
     group: '常规/图片生成',
+    placeholder: 'http://127.0.0.1:{端口}',
     description: '图片生成后台的根地址（默认连本地 mcp-server）。改完需重新装载插件生效。',
   },
   imageGenTimeoutMs: {

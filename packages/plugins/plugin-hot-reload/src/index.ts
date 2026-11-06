@@ -57,6 +57,7 @@ export const Config = {
     default: '',
     label: '调试服务地址',
     group: HOT_RELOAD_NAV_ID,
+    placeholder: '留空 = 用打开画布的这个地址，例如 http://127.0.0.1:{端口}',
     description:
       'watch 上报用的后台地址（如 http://127.0.0.1:8865）。留空 = 用打开画布的这个地址。' +
       '它只用于读取/清理调试上报记录，不影响插件管理那边的清单地址。',

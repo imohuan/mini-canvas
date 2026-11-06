@@ -32,7 +32,7 @@ const busy = ref(false)
 const form = ref({
   name: '',
   kind: 'http' as Kind,
-  url: 'http://127.0.0.1:3000/mcp/$smart',
+  url: '',
   command: 'node',
   args: '',
 })
@@ -158,7 +158,7 @@ async function save(): Promise<void> {
     <ShadcnSettingsSection title="添加 MCP 服务">
       <form class="ap-form-stack ap-mcp-form" @submit.prevent="save">
         <ShadcnSettingsRow label="名称">
-          <Input v-model="form.name" class="ap-input" aria-label="MCP 名称" placeholder="smart" />
+          <Input v-model="form.name" class="ap-input" aria-label="MCP 名称" placeholder="给这个服务起个名字" />
         </ShadcnSettingsRow>
         <ShadcnSettingsRow label="类型">
           <Select v-model="form.kind">
@@ -171,11 +171,11 @@ async function save(): Promise<void> {
           </Select>
         </ShadcnSettingsRow>
         <ShadcnSettingsRow v-if="!isStdio" label="URL">
-          <Input v-model="form.url" class="ap-input" aria-label="MCP URL" placeholder="http://127.0.0.1:3000/mcp/$smart" />
+          <Input v-model="form.url" class="ap-input" aria-label="MCP URL" placeholder="https://{服务地址}/mcp" />
         </ShadcnSettingsRow>
         <template v-else>
           <ShadcnSettingsRow label="命令">
-            <Input v-model="form.command" class="ap-input" aria-label="MCP 命令" />
+            <Input v-model="form.command" class="ap-input" aria-label="MCP 命令" placeholder="例如：npx" />
           </ShadcnSettingsRow>
           <ShadcnSettingsRow label="参数">
             <Input v-model="form.args" class="ap-input" aria-label="MCP 参数" placeholder="用空格分隔" />

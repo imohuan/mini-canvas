@@ -51,6 +51,7 @@ export const Config: ConfigSchema = {
     default: 'http://localhost:8033/mcp',
     label: 'MCP 服务地址',
     group: 'web2api/连接',
+    placeholder: 'http://127.0.0.1:{端口}/mcp',
     description: 'web2api 的 MCP Streamable HTTP 端点。默认本机 8033 端口。',
   },
   web2apiPollIntervalMs: {

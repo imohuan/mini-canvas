@@ -18,6 +18,7 @@ export const Config: ConfigSchema = {
     default: '',
     label: '主题工作台',
     group: THEME_LAB_NAV_ID,
+    placeholder: '这一项只用于形成分组，可以留空',
     description: '这个分组提供一个颜色预览与调色入口；颜色项来自各插件已声明的主题配色。',
   },
 }

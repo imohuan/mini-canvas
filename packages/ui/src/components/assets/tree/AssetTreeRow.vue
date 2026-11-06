@@ -150,6 +150,7 @@ function openMenuAt(e: MouseEvent): void {
           :data-row-rename="renameDataAttr === 'data-row-rename' ? '' : undefined"
           class="h-7 min-w-0 flex-1 rounded-md border border-brand/60 bg-chip px-1.5 text-[13px] text-ink focus:outline-none"
           aria-label="文件夹名称"
+          placeholder="文件夹名称"
           @keydown.enter="emit('renameCommit', { kind: 'folder', id: row.id, name: renameVal })"
           @keydown.esc.stop="emit('renameCancel')"
           @keyup.space.stop.prevent
@@ -288,6 +289,7 @@ function openMenuAt(e: MouseEvent): void {
           :data-row-rename="renameDataAttr === 'data-row-rename' ? '' : undefined"
           class="h-7 min-w-0 flex-1 rounded-md border border-brand/60 bg-chip px-1.5 text-[13px] text-ink focus:outline-none"
           aria-label="资产名称"
+          placeholder="资产名称"
           @keydown.enter="emit('renameCommit', { kind: 'asset', id: row.id, name: renameVal })"
           @keydown.esc.stop="emit('renameCancel')"
           @keyup.space.stop.prevent

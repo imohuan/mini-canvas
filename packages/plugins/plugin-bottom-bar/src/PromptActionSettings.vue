@@ -213,10 +213,10 @@ async function save(): Promise<void> {
 
       <div v-if="active" class="pas-edit">
         <label class="pas-field">名称
-          <Input v-model="active.name" class="pas-input" @input="touch()" />
+          <Input v-model="active.name" class="pas-input" placeholder="按钮名称（例如：优化提示词）" @input="touch()" />
         </label>
         <label class="pas-field">描述（悬停提示）
-          <Input v-model="active.description" class="pas-input" @input="touch()" />
+          <Input v-model="active.description" class="pas-input" placeholder="鼠标悬停时的小字说明（可留空）" @input="touch()" />
         </label>
 
         <div class="pas-field">

@@ -26,7 +26,10 @@ export const API_BASE = ''
  * 所以这里声明一个"占位分组"，面板正文仍由 settingsGroup/showcase-page 整组接管。
  */
 export const Config: ConfigSchema = {
-  showcasePanelHint: { type: 'string', default: '', label: '展示面板', group: '插件展示' },
+  showcasePanelHint: {
+    type: 'string', default: '', label: '展示面板', group: '插件展示',
+    placeholder: '给展示面板留一句说明（可留空）',
+  },
 }
 
 /** 导航 id 必须 === Config 的分组名（见上） */

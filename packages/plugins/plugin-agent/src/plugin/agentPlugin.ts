@@ -35,6 +35,7 @@ export const Config = {
     label: '后端地址',
     // 分组归属由 ctx.settingsMenu 的 section 决定；group 只是配置字段的稳定 key。
     group: '集成/Agent',
+    placeholder: '留空 = 与画布同源，例如 http://127.0.0.1:{端口}',
     description: 'cloud-server 的根地址。留空 = 与画布同源（由 cloud-server 托管界面时就是这样）。',
   },
 }

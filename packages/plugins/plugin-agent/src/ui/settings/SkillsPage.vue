@@ -80,7 +80,7 @@ async function importDir(): Promise<void> {
         <Input
           v-model="dir"
           aria-label="技能目录"
-          placeholder="C:/Users/Administrator/.agents/skills/code-review"
+          placeholder="{技能来源目录}/<技能名>"
         />
         <div class="ap-form-actions">
           <Button type="submit" size="sm" :disabled="busy || !dir.trim()">

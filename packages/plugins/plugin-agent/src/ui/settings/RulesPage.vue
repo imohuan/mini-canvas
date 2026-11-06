@@ -101,7 +101,7 @@ function quickAdd(pattern: string, label?: string): void {
     <ShadcnSettingsSection title="添加规则" description="匹配模式支持 * 通配，例如 mcp__smart__* 或 exec_command">
       <form class="ap-form-stack ap-rule-form" @submit.prevent="addRule">
         <div class="ap-form-actions">
-          <Input v-model="draft" aria-label="匹配模式" placeholder="mcp__smart__*" />
+          <Input v-model="draft" aria-label="匹配模式" placeholder="例如：mcp__{服务名}__*" />
           <Button type="submit" size="sm" :disabled="busy || !draft.trim()">
             <Plus :size="13" aria-hidden="true" /> 添加
           </Button>

@@ -12,7 +12,7 @@ export const Config = {
     default: '',
     label: '服务地址',
     group: '常规/云端客户端',
-    placeholder: '留空 = 与画布同源，例如 http://127.0.0.1:8865',
+    placeholder: '留空 = 与画布同源，例如 http://127.0.0.1:{端口}',
     description: 'cloud-server 的根地址。留空 = 与画布同源（由 cloud-server 托管界面时就是这样）。',
   },
   cloudClientPollMs: {

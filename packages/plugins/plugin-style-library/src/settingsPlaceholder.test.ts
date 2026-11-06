@@ -7,14 +7,19 @@
  * 不给占位提示时，用户分不清「没填」「填了空」「默认值是多少」。
  */
 import { describe, expect, it } from 'vitest'
-import { Config, DEFAULT_EFFECT_ROOT, DEFAULT_ROOT } from './index'
+import { Config } from './index'
 
 describe('素材库目录字段的占位提示', () => {
-  it('★ 风格库目录空着时提示默认路径', () => {
-    expect(Config.styleLibraryRoot.placeholder).toBe(DEFAULT_ROOT)
+  it('★ 风格库目录空着时提示虚拟目录（不暴露本机真实路径）', () => {
+    const ph = Config.styleLibraryRoot.placeholder ?? ''
+    expect(ph).toContain('{素材目录}')
+    // 具体盘符 / 用户名这类"某台机器的事实"不能出现在提示里
+    expect(ph).not.toMatch(/[A-Za-z]:[\\/]/)
   })
 
   it('★ 特效库目录同理', () => {
-    expect(Config.effectLibraryRoot.placeholder).toBe(DEFAULT_EFFECT_ROOT)
+    const ph = Config.effectLibraryRoot.placeholder ?? ''
+    expect(ph).toContain('{素材目录}')
+    expect(ph).not.toMatch(/[A-Za-z]:[\\/]/)
   })
 })

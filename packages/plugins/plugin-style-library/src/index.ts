@@ -81,7 +81,8 @@ export const Config: ConfigSchema = {
     default: DEFAULT_ROOT,
     label: '风格库资源目录',
     group: '常规/风格库',
-    placeholder: DEFAULT_ROOT,
+    // 提示用**虚拟目录**，不暴露某台机器的真实路径（用户口径：别拿具体值当占位）。
+    placeholder: '{素材目录}/风格库',
     description: '磁盘上存放风格素材的目录绝对路径（含 index.json，或直接放图片/视频）。改完自动同步给后台并重扫。',
   },
   effectLibraryRoot: {
@@ -89,7 +90,7 @@ export const Config: ConfigSchema = {
     default: DEFAULT_EFFECT_ROOT,
     label: '特效库资源目录',
     group: '常规/风格库',
-    placeholder: DEFAULT_EFFECT_ROOT,
+    placeholder: '{素材目录}/特效库',
     description: '磁盘上存放特效素材的目录绝对路径（含 index.json；目录里有同名 .mp4 时，全屏预览会放视频）。改完自动同步给后台并重扫。',
   },
   styleLibraryPageSize: {

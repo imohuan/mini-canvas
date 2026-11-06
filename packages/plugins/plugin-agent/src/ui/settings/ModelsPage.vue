@@ -54,7 +54,7 @@ const clientChoices = computed(() => clientOptions.value.map((c) => ({ label: c,
 const form = ref({
   provider: 'local',
   apiKey: '',
-  baseUrl: 'http://127.0.0.1:3000/v1',
+  baseUrl: '',
   clientType: DEFAULT_CLIENT as string,
   vision: true,
 })
@@ -253,10 +253,10 @@ async function save(): Promise<void> {
       </div>
       <form class="ap-form-stack ap-model-form" @submit.prevent="save">
         <ShadcnSettingsRow label="渠道名（provider）">
-          <Input v-model="form.provider" class="ap-input" aria-label="渠道名" placeholder="local" />
+          <Input v-model="form.provider" class="ap-input" aria-label="渠道名" placeholder="给这个渠道起个名字" />
         </ShadcnSettingsRow>
         <ShadcnSettingsRow label="Base URL">
-          <Input v-model="form.baseUrl" class="ap-input" aria-label="Base URL" placeholder="http://127.0.0.1:3000/v1" />
+          <Input v-model="form.baseUrl" class="ap-input" aria-label="Base URL" placeholder="https://{接口地址}/v1" />
         </ShadcnSettingsRow>
         <!-- 钥匙：编辑已有渠道时回显**掩码**（不是明文），所以这里是 text 而不是 password ——
              用 password 会把掩码也打成一排圆点，用户还是看不出「已配置」。

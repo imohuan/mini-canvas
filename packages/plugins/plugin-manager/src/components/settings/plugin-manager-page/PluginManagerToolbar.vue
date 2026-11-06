@@ -33,7 +33,7 @@ const Input = useUiComponent('Input')
         type="text"
         spellcheck="false"
         aria-label="中转后台地址"
-        placeholder="http://127.0.0.1:5320/catalog.json"
+        placeholder="留空 = 同源 /plugin-catalog.json"
         @update:model-value="emit('update:urlDraft', $event)"
         @keydown.enter.prevent="emit('refresh')"
       />

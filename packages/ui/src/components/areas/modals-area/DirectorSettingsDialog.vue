@@ -109,7 +109,7 @@ const { ui, s, agent, SUBMIT_KEY_MODE_OPTIONS, sendKeyLabel, agentBudgetOnChange
         <div v-if="s.director.budget" class="flex items-center justify-between gap-3 border-t border-line pt-2">
           <span class="text-xs text-ink-dim">提醒阈值设置</span>
           <Input v-model.number="s.director.budgetLimit" type="number" min="100" step="100"
-            class="h-8 w-28 text-xs" aria-label="提醒阈值设置" />
+            class="h-8 w-28 text-xs" aria-label="提醒阈值设置" placeholder="例如 100" />
         </div>
       </div>
       <div class="rounded-xl border border-line p-3">

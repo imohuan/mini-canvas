@@ -38,6 +38,7 @@ export const Config = {
     default: DEFAULT_CATALOG_URL,
     label: '中转后台地址',
     group: '集成/插件',
+    placeholder: '/plugin-catalog.json 或 http://127.0.0.1:{端口}/plugin-catalog.json',
     description:
       '插件清单地址。默认取同源的 /plugin-catalog.json（cloud-server 提供：mini-canvas-cloud serve）。' +
       '若画布界面与服务不同源（如 ui 单独 dev），在这里填服务的绝对地址，再点「刷新」重拉。',
