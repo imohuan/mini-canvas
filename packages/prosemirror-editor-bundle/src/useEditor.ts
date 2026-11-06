@@ -1,5 +1,5 @@
 import { ref, computed, onMounted, onUnmounted, watch, type Ref, unref } from "vue";
-import { EditorState, Selection, TextSelection } from "prosemirror-state";
+import { EditorState, NodeSelection, Selection, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
@@ -23,7 +23,7 @@ import { buildResourceNode } from "./editor/resourceNode";
 import { mySchema } from "./editor/schema";
 import { createSelectionDecorationPlugin } from "./editor/selectionDecorationPlugin";
 import { activeTagSpec, builtinScan } from "./editor/tagSpec";
-import { attachChipThumbState, clickInsideChipIcon } from "./editor/chipDom";
+import { applyChipEditingState, attachChipThumbState, clickInsideChipIcon } from "./editor/chipDom";
 import { initialMenuPosition, measuredMenuPosition } from "./editor/menuPosition";
 import {
   refreshChips as refreshChipsInDoc,
@@ -93,6 +93,13 @@ export function useEditor(
 ) {
   let view: EditorView | null = null;
   let mutationObserver: MutationObserver | null = null;
+  /**
+   * 编辑器最后一次「真的在里面」的选区。
+   *
+   * 底栏的 @ 按钮点击时编辑器已经失焦，但用户光标该留在刚才的位置；
+   * 从没进过输入框（这边为空）才按「没有光标」处理，插到文末。
+   */
+  let lastFocusedSelection: { from: number; to: number } | null = null;
 
   // 菜单状态
   const menuVisible = ref(false);
@@ -418,6 +425,9 @@ export function useEditor(
     atomNodes.forEach((node) => {
       const el = node as HTMLElement;
 
+      // 菜单开着时这颗标签要固定显示铅笔（DOM 重建后也要补回来）
+      applyChipEditingState(el);
+
       el.onmouseenter = () => handleResourceMouseEnter(el);
       el.onmouseleave = () => handleResourceMouseLeave(el);
       el.onclick = (event: MouseEvent) => {
@@ -602,6 +612,10 @@ export function useEditor(
         const newState = view.state.apply(transaction);
         view.updateState(newState);
 
+        if (view.hasFocus()) {
+          lastFocusedSelection = { from: newState.selection.from, to: newState.selection.to }
+        }
+
         emit("update:modelValue", getPlainText());
         emit("update:promptDoc", serializeDoc());
 
@@ -747,6 +761,40 @@ export function useEditor(
     const selection = Selection.atEnd(state.doc)
     if (selection) {
       view.dispatch(state.tr.setSelection(selection))
+    }
+    view.focus()
+  }
+
+  /**
+   * 在**当前光标**处插入纯文本（没有光标就落到文末）。
+   *
+   * 底栏最左侧的「@」按钮用它：插进去的 @ 会走编辑器自己的 dispatchTransaction，
+   * 于是 @ 下拉菜单自然弹出来，不需要底栏再认识菜单的实现。
+   */
+  function insertText(text: string) {
+    if (!view || !text) return
+    const { state } = view
+    const { selection } = state
+    const fallback = Selection.atEnd(state.doc)
+    let from = lastFocusedSelection?.from ?? fallback.from
+    let to = lastFocusedSelection?.to ?? fallback.to
+    if (view.hasFocus()) {
+      from = selection.from
+      to = selection.to
+    }
+    // 整颗标签被选中时，插在它后面（替换掉用户没打算删的标签会很意外）
+    if (selection instanceof NodeSelection) {
+      from = selection.to
+      to = selection.to
+    }
+    // 位置可能已失效（文档被别的操作改短）：退回文末，别让按钮点下去没反应
+    from = Math.min(Math.max(from, 0), state.doc.content.size)
+    to = Math.min(Math.max(to, 0), state.doc.content.size)
+    if (from > to) [from, to] = [to, from]
+    try {
+      view.dispatch(state.tr.insertText(text, from, to).scrollIntoView())
+    } catch {
+      view.dispatch(state.tr.insertText(text, fallback.from, fallback.to).scrollIntoView())
     }
     view.focus()
   }
@@ -934,6 +982,7 @@ export function useEditor(
     serializeDoc,
     deserializeDoc,
     focusEnd,
+    insertText,
     setText,
     /** 把正文里的 @图片N 文字转成素材标签（底栏「标记」按钮调用） */
     markRefSlots,

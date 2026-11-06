@@ -54,3 +54,26 @@ export function attachChipThumbState(el: HTMLElement): void {
   img.addEventListener('error', fail)
 }
 
+/**
+ * 当前正在编辑的标签 id（用户 2026-11-06）。
+ *
+ * 菜单开着期间，标签左侧必须**固定显示铅笔**，不能被缩略图盖回去。
+ * 为什么要记在模块里：标签 DOM 会被 ProseMirror 整颗重建（换内容 / 刷新），
+ * 只在上层加一次类，重建后就丢了。渲染完由 applyChipEditingState 统一补回来。
+ */
+let editingChipId = ''
+
+/** 给一颗标签补「正在编辑」类（标签 DOM 每次重建后调用） */
+export function applyChipEditingState(el: HTMLElement): void {
+  const on = !!editingChipId && el.getAttribute('data-id') === editingChipId
+  el.classList.toggle('resource-chip--editing', on)
+}
+
+/** 标记 / 取消「这颗标签正在编辑」（菜单开 = true，关 = false） */
+export function setChipEditing(id: string, editing: boolean): void {
+  if (editing) editingChipId = id
+  else if (editingChipId === id) editingChipId = ''
+  if (typeof document === 'undefined') return
+  document.querySelectorAll<HTMLElement>('.resource-chip').forEach(applyChipEditingState)
+}
+

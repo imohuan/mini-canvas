@@ -10,6 +10,7 @@ export type { PasteFilesContext, PasteFilesHandler, TagMatch, TagSpec } from './
 export { registerTagSpec, currentTagSpec, builtinScan, pickFilesFromClipboard } from './useEditor.ts';
 export { registeredItem } from './useEditor.ts';
 export { registerItem } from './useEditor.ts';
+export { setChipEditing, applyChipEditingState } from './editor/chipDom.ts';
 export * from './mentionFilter.ts';
 import "./style.css"
 

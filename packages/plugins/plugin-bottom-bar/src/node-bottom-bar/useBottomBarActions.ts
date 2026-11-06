@@ -3,6 +3,7 @@ import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { BarAction } from '../barTypes'
 import { FALLBACK_TYPE_ICONS } from './icons'
+import { modelIconOf, type ModelIcon } from './modelIcons'
 
 interface ActionDeps {
   ctx: CanvasRenderContext['ctx']
@@ -62,9 +63,17 @@ export function useBottomBarActions(
       value: a.id,
       description: a.description,
       icon: iconOfType(a.types?.[0] ?? nodeType.value),
+      /** 模型图标（用户 2026-11-06）：下拉每一项 + 触发器都要有 */
+      model: modelIconOf(a.title, a.types?.[0] ?? nodeType.value),
       group: a.group,
     })),
   )
+
+  /** 当前选中动作的模型图标（触发器左侧那颗） */
+  const currentModelIcon = computed<ModelIcon | null>(() => {
+    const hit = actionOptions.value.find((o) => o.value === currentId.value)
+    return hit ? hit.model : null
+  })
 
   function iconOfType(type: string | undefined): unknown {
     if (!type) return undefined
@@ -170,6 +179,7 @@ export function useBottomBarActions(
     currentId,
     currentAction,
     currentActionLabel,
+    currentModelIcon,
     values,
     storedActionId,
     selectAction,

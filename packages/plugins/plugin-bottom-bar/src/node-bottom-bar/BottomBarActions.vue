@@ -2,6 +2,8 @@
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
+import type { ModelIcon } from './modelIcons'
+import { ICON_AT } from './icons'
 
 defineProps<{
   id: string
@@ -23,13 +25,17 @@ defineProps<{
   currentActionTitle: string
   iconWarn: string
   iconSend: string
-  actionOptions: Array<{ value: string; label: string }>
+  actionOptions: Array<{ value: string; label: string; model: ModelIcon }>
+  /** 当前动作的模型图标（触发器左侧），没有动作时为 null */
+  currentModelIcon: ModelIcon | null
 }>()
 
 const emit = defineEmits<{
   actionPicked: [value: string | number]
   fieldChange: [key: string, value: string | number | boolean]
   aiClick: [action: AiActionConfig]
+  /** 最左侧「@」按钮：在光标处插入一个 @（会直接打开编辑器的 @ 下拉） */
+  insertAt: []
   run: []
 }>()
 
@@ -67,12 +73,29 @@ function keepFocusOnOutsideControl(event: Event): void {
 
 <template>
   <div class="nb-bottom">
+    <!--
+      最左侧的 @ 按钮（用户 2026-11-06 图 2）。
+      只做一件事：往输入框光标处塞一个 @ 字符，@ 菜单由编辑器自己弹出。
+    -->
+    <Button variant="ghost" size="icon-xs"
+      class="nb-icon-btn nb-at-btn"
+      type="button"
+      data-testid="bar-insert-at"
+      title="插入 @ 引用素材"
+      aria-label="插入 @ 引用素材"
+      :disabled="!showEditor"
+      @click.stop="emit('insertAt')"
+    >
+      <span aria-hidden="true" v-html="ICON_AT" />
+    </Button>
     <div class="nb-selects">
       <div class="nb-field nb-field--action">
         <Select :model-value="currentId" :disabled="running"
           @update:model-value="(v: string | number) => emit('actionPicked', v)">
           <SelectTrigger :id="'nb-action-' + id" size="sm" class="nb-action-select"
             title="选择动作 / 模型" aria-label="选择动作 / 模型">
+            <span v-if="currentModelIcon" class="nb-model-badge" :data-tone="currentModelIcon.tone"
+              aria-hidden="true" v-html="currentModelIcon.svg" />
             <SelectValue placeholder="选择动作">{{ currentActionLabel }}</SelectValue>
           </SelectTrigger>
           <!--
@@ -83,7 +106,10 @@ function keepFocusOnOutsideControl(event: Event): void {
           <SelectContent position="popper" side="bottom" :side-offset="4" :body-lock="false"
             :disable-outside-pointer-events="false" class="nb-action-menu"
             @close-auto-focus="keepFocusOnOutsideControl">
-            <SelectItem v-for="o in actionOptions" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+            <SelectItem v-for="o in actionOptions" :key="o.value" :value="o.value" class="nb-model-item">
+              <span class="nb-model-badge" :data-tone="o.model.tone" aria-hidden="true" v-html="o.model.svg" />
+              <span class="nb-model-item-label">{{ o.label }}</span>
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>

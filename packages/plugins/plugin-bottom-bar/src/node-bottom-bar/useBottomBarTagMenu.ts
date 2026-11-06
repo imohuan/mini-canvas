@@ -1,5 +1,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { setChipEditing } from 'prosemirror-editor-bundle'
 import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { UpstreamMaterial } from '../panelSource'
 import { nodeIdOfChip } from '../refSlots'
@@ -33,6 +34,32 @@ export function useBottomBarTagMenu(deps: TagMenuDeps) {
   const tagMenuPreviewPos = ref({ left: 0, top: 0, above: false })
   const tagMenuPreviewTimer = ref<ReturnType<typeof setTimeout> | null>(null)
   const tagMenuPreviewBoxEl = ref<HTMLElement | null>(null)
+
+  /**
+   * 菜单开着 = 这颗标签进入编辑态（用户 2026-11-06）：左侧固定显示铅笔，
+   * 不再露出缩略图。
+   *
+   * 记 id 而不是关闭时再读 tagMenuChip：点外 / Esc / 选中时 chip 可能已经先被清空，
+   * 那时还得把旧的那颗恢复成缩略图。
+   */
+  let editingChipId = ''
+  watch(tagMenuOpen, (open) => {
+    if (editingChipId) setChipEditing(editingChipId, open)
+    if (!open) editingChipId = ''
+  })
+
+  /**
+   * 菜单关掉时把「正在编辑」的标签恢复成缩略图（用户 2026-11-06）。
+   *
+   * 为什么不能只靠 watch(tagMenuOpen)：菜单是点外/Esc 关的，而 Esc 在搜索框里
+   * 会被原生输入框先吃掉；这时外层 open 变了、chip 也清了，标签却还挂着铅笔。
+   * 统一在这里兜一次，任何关闭路径都能恢复。
+   */
+  function restoreEditingChip(): void {
+    if (!editingChipId) return
+    setChipEditing(editingChipId, false)
+    editingChipId = ''
+  }
 
   function hoverTagMenuRow(entry: TagMenuEntry, rowEl: HTMLElement): void {
     if (tagMenuPreviewTimer.value) { clearTimeout(tagMenuPreviewTimer.value); tagMenuPreviewTimer.value = null }
@@ -197,13 +224,16 @@ export function useBottomBarTagMenu(deps: TagMenuDeps) {
       }
       return nextTick()
     }).then(() => {
+      editingChipId = String(item.id ?? '')
       tagMenuOpen.value = true
+      setChipEditing(editingChipId, true)
       void nextTick().then(() => deps.focusSearch())
     })
   }
 
   function closeTagMenu(): void {
     tagMenuOpen.value = false
+    restoreEditingChip()
     tagMenuChip.value = null
     tagMenuQuery.value = ''
   }
@@ -222,6 +252,7 @@ export function useBottomBarTagMenu(deps: TagMenuDeps) {
 
   function invalidateChips(): void {
     tagMenuOpen.value = false
+    restoreEditingChip()
     tagMenuChip.value = null
     tagMenuQuery.value = ''
   }
@@ -253,5 +284,6 @@ export function useBottomBarTagMenu(deps: TagMenuDeps) {
     closeTagMenu,
     pickTagMenuNode,
     invalidateChips,
+    restoreEditingChip,
   }
 }

@@ -28,13 +28,24 @@ const emit = defineEmits<{
 }>()
 
 const anchorEl = ref<HTMLElement | null>(null)
-const searchEl = ref<HTMLInputElement | null>(null)
-defineExpose({ anchorEl, searchEl })
+const searchBoxEl = ref<HTMLElement | null>(null)
+function focusSearch(): void {
+  const input = searchBoxEl.value?.querySelector('input')
+  input?.focus()
+  // 打开即全选：用户多半是直接重打关键词，不是接着上一轮的搜索词继续打
+  input?.select?.()
+}
+defineExpose({ anchorEl, focusSearch })
 
 const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+// 搜索框走全局注册的 shadcn 组件（用户 2026-11-06：不要手写原生输入框）
+const InputGroup = useUiComponent('InputGroup')
+const InputGroupAddon = useUiComponent('InputGroupAddon')
+const InputGroupButton = useUiComponent('InputGroupButton')
+const InputGroupInput = useUiComponent('InputGroupInput')
 </script>
 
 <template>
@@ -49,20 +60,31 @@ const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
       class="nb-tagmenu-body"
       :style="{ width: flat ? '268px' : '452px', maxHeight: '420px' }"
     >
-      <label class="nb-tagmenu-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-        </svg>
-        <input
-          ref="searchEl"
-          :value="query"
-          type="search"
-          placeholder="搜索"
-          aria-label="搜索画布节点"
-          @input="(ev: Event) => emit('update:query', (ev.target as HTMLInputElement).value)"
-          @keydown.stop
-        />
-      </label>
+      <div ref="searchBoxEl" class="nb-tagmenu-searchbox">
+        <InputGroup class="nb-tagmenu-search">
+          <InputGroupAddon align="inline-start">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            </svg>
+          </InputGroupAddon>
+          <InputGroupInput
+            :model-value="query"
+            type="search"
+            placeholder="搜索"
+            aria-label="搜索画布素材"
+            @update:model-value="(v: string | number) => emit('update:query', String(v))"
+            @keydown.stop
+            @keydown.esc.stop="emit('update:open', false)"
+          />
+          <InputGroupAddon v-if="query" align="inline-end">
+            <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="emit('update:query', '')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+      </div>
 
       <div v-if="flat" class="nb-tagmenu-list" role="menu" aria-label="搜索结果">
         <Button variant="ghost" size="sm"

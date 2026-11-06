@@ -176,6 +176,19 @@
   height: 14px;
   flex: none;
 }
+/**
+ * 标签左侧缩略图（用户 2026-11-06）：图片和文字要一样高。
+ *
+ * 根因：bundle 的 `.prose-mirror-editor .resource-node img` 是 18×18（选择器比这里的
+ * `.nb-editor .resource-chip-thumb` 多一个元素名，优先级更高），而标签名只有 12px ——
+ * 图比字大一整圈。这里用子选择器把缩略图钉回 14×14，与图标格同尺寸。
+ */
+.nb-editor .resource-chip > img.resource-chip-thumb {
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+  border-radius: 4px;
+}
 .nb-editor .resource-chip-thumb {
   position: absolute;
   left: 3px;
@@ -265,7 +278,39 @@
   white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
+  /* 与左侧图标/缩略图同高（14px 行框），两者看起来一样大 */
+  line-height: 14px;
   color: var(--ui-ink, #18202b);
+}
+/**
+ * 标签编辑态（用户 2026-11-06）：点左侧图标打开候选菜单后，这里**固定显示铅笔**，
+ * 不再露出缩略图（正常 hover 也会换铅笔，但鼠标一移到菜单上就恢复成图）。
+ * 与 bundle 的 `--editable::after` 用同一个铅笔图形，保证两处长得一样。
+ */
+.nb-editor .resource-chip--editing .resource-chip-thumb,
+.nb-editor .resource-chip--editing .resource-chip-icon {
+  opacity: 0;
+}
+.nb-editor .resource-chip--editing::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  background-color: currentColor;
+  /* 铅笔（与 bundle 的 editable 图标同一个 data URI，不依赖那边有没有定义变量） */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4l10.5-10.5a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5V20z'/%3E%3Cpath d='M13.5 6.5 17.5 10.5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4l10.5-10.5a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5V20z'/%3E%3Cpath d='M13.5 6.5 17.5 10.5'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  pointer-events: none;
 }
 /* 选中态：与文本选区同色（用户口径：和文本选中背景一致，不用黑色） */
 .nb-editor .resource-chip.ProseMirror-selectednode,
@@ -347,6 +392,82 @@
   width: 14px;
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);
+}
+/** 触发器里那颗模型图标不吃上面的 14px：它自己定尺寸与颜色（见 .nb-model-badge） */
+.nb-field [data-slot='select-trigger'] .nb-model-badge svg {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+/**
+ * 模型图标（用户 2026-11-06 图 2）：触发器和下拉项各一颗。
+ * 图形用 currentColor，颜色按家族给（品牌色属于内容资产），容器负责尺寸与底色。
+ */
+.nb-model-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+  color: var(--ui-ink-dim, #6b7280);
+}
+.nb-model-badge svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+/* 家族色（品牌内容资产：不随主题改色，深色主题下也保持可辨认） */
+.nb-model-badge[data-tone='seedream'] { color: #1e37fc; }
+.nb-model-badge[data-tone='seedance'] { color: #7c3aed; }
+.nb-model-badge[data-tone='doubao'] { color: #1e37fc; }
+.nb-model-badge[data-tone='openai'] { color: var(--ui-ink, #18202b); }
+.nb-model-badge[data-tone='dola'] { color: #0ea5e9; }
+.nb-model-badge[data-tone='volcengine'] { color: #166534; }
+.nb-model-badge[data-tone='kling'] { color: #f97316; }
+.nb-model-badge[data-tone='sora'] { color: #0f766e; }
+.nb-model-badge[data-tone='veo'] { color: #2563eb; }
+.nb-model-badge[data-tone='runway'] { color: #111827; }
+.nb-model-badge[data-tone='pika'] { color: #e11d48; }
+.nb-model-badge[data-tone='hailuo'] { color: #0891b2; }
+.nb-model-badge[data-tone='qwen'] { color: #7c3aed; }
+.nb-model-badge[data-tone='midjourney'] { color: #334155; }
+.nb-model-badge[data-tone='image'] { color: #2563eb; }
+.nb-model-badge[data-tone='video'] { color: #7c3aed; }
+.nb-model-badge[data-tone='audio'] { color: #059669; }
+.nb-model-badge[data-tone='text'] { color: var(--ui-ink-dim, #6b7280); }
+
+/* 下拉行：图标 + 名称（名称过长省略，箭头/勾仍由 SelectItem 自己管） */
+.nb-model-item {
+  gap: 8px;
+}
+.nb-model-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 触发器空间紧：模型名过长时省略，图标永远在 */
+.nb-field--action [data-slot='select-trigger'] [data-slot='select-value'] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 最左侧 @ 按钮：与右侧图标按钮同高，不占额外间距 */
+.nb-at-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+  border-radius: 8px;
+}
+.nb-at-btn svg {
+  width: 15px;
+  height: 15px;
 }
 /*
  * 参数合并下拉：**按内容自适应宽度**。

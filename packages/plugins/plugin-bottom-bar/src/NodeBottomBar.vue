@@ -83,6 +83,7 @@ const {
   currentId,
   currentAction,
   currentActionLabel,
+  currentModelIcon,
   values,
   storedActionId,
   selectAction,
@@ -186,7 +187,7 @@ const {
   markDragEnd,
 } = cardApi
 
-const tagMenuView = ref<{ anchorEl: HTMLElement | null; searchEl: HTMLInputElement | null } | null>(null)
+const tagMenuView = ref<{ anchorEl: HTMLElement | null; focusSearch(): void } | null>(null)
 const tagApi = useBottomBarTagMenu({
   ctx,
   props,
@@ -196,7 +197,7 @@ const tagApi = useBottomBarTagMenu({
   videoProvider,
   replaceChipWith: cardApi.replaceChipWith,
   getAnchorEl: () => tagMenuView.value?.anchorEl ?? null,
-  focusSearch: () => tagMenuView.value?.searchEl?.focus(),
+  focusSearch: () => tagMenuView.value?.focusSearch(),
 })
 openTagMenuRef = tagApi.openTagMenu
 const {
@@ -218,7 +219,11 @@ const {
   hoverTagMenuRow,
   leaveTagMenuRow,
   pickTagMenuNode,
+  restoreEditingChip,
 } = tagApi
+
+// 菜单不管从哪条路关（点外 / Esc / 选中 / 失效），都把标签恢复成缩略图
+watch(tagMenuOpen, (open) => { if (!open) restoreEditingChip() })
 
 // —— 悬浮预览 ——
 const previewApi = useBottomBarPreview({
@@ -362,6 +367,11 @@ const aiApi = useBottomBarAiActions({
   editorComponentRef,
 })
 const { aiRunningId, aiPhase, aiEditorLocked, aiError, aiButtons, runAiAction } = aiApi
+
+// —— 最左侧 @ 按钮 ——
+function insertAt(): void {
+  editorComponentRef.value?.insertText?.('@')
+}
 
 // —— Ctrl 拖资源 ——
 const ctrlApi = useCtrlResourceDrag({
@@ -526,6 +536,7 @@ onBeforeUnmount(() => {
         :id="props.id"
         :current-id="currentId"
         :current-action-label="currentActionLabel"
+        :current-model-icon="currentModelIcon"
         :running="running"
         :param-defs="paramDefs"
         :values="values"
@@ -546,6 +557,7 @@ onBeforeUnmount(() => {
         @action-picked="onActionPicked"
         @field-change="onFieldChange"
         @ai-click="runAiAction"
+        @insert-at="insertAt"
         @run="onRun"
       />
 
