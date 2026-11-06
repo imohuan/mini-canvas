@@ -399,6 +399,19 @@
   width: 14px;
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);
+  /*
+   * 展开时箭头翻转（用户 2026-11-06）：与右侧参数下拉（.tpg-arrow）同一套观感，
+   * 时长 / 缓动也保持一致，避免一个转一个不转。
+   */
+  transition: transform 0.15s ease-out;
+}
+.nb-model-trigger[aria-expanded='true'] .nb-model-trigger-caret {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-model-trigger-caret {
+    transition: none;
+  }
 }
 /**
  * 参数区的普通下拉（例如只有一个「比例」参数时铺出来的那个 Select）：
@@ -488,7 +501,8 @@
   width: 14px;
   height: 14px;
   margin-left: auto;
-  color: var(--ui-accent, #0891b2);
+  /* 选中勾用默认灰（用户 2026-11-06）：不抢强调色，与组件库菜单的常规勾一致 */
+  color: var(--ui-ink-mute, #8c95a3);
 }
 .nb-model-menu {
   width: 240px;
