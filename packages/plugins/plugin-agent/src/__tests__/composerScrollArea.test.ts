@@ -39,8 +39,10 @@ describe('Agent 面板滚动层', () => {
   it('MCP 工具区只由外层滚动，不叠第二层 overflow-y', () => {
     const at = CSS.indexOf('.ac-mcp-tools {')
     const block = CSS.slice(at, CSS.indexOf('\n}', at))
-    expect(block).toContain('overflow: visible')
+    // 2026-11-06 改成「整块带边框 + 左侧竖线」后不再用 visible，
+    // 判断标准仍是一条：这里不能自己滚（不能出现 auto/scroll 的第二层）。
     expect(block).not.toContain('overflow-y: auto')
+    expect(block).not.toContain('overflow-y: scroll')
     expect(block).not.toContain('max-height')
   })
 

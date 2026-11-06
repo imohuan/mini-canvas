@@ -10,6 +10,20 @@
   gap: 8px;
 }
 
+/* 审核选项：标题与描述上下两行；组件库菜单项默认是横向 flex，
+   不改成纵向的话描述会被挤到标题右边（用户 2026-11-06 截图）。 */
+.ac-review-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+}
+
+.ac-review-item .ac-option-title {
+  width: 100%;
+}
+
 /* —— 通用选择卡（DEMO 的 .skill-grid / .skill-card）—— */
 
 .ac-skill-grid {
@@ -458,25 +472,118 @@
 .ac-mcp-tools {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   /* 与上面卡片的文字列对齐：勾选框 20 + 间距 8 + 外边距 10。 */
-  margin: 2px 0 4px 38px;
-  padding: 6px;
-  border: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.05));
+  margin: 6px 0 6px 38px;
+  padding: 8px 8px 8px 10px;
+  /* 整块一个外框 + 左侧竖线（用户 2026-11-06：用边框把所有工具包起来，左侧带一条竖线） */
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.09));
   border-radius: 10px;
-  background: var(--ui-veil, rgba(0, 0, 0, 0.02));
+  background: var(--ui-panel, #fff);
   /* 只由外层 AgentScrollArea 负责滚动：这里不再出现第二条滚动条。 */
-  overflow: visible;
+  overflow: hidden;
 }
 
 .ac-mcp-tools-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  padding: 2px 4px 6px;
+}
+
+/* 工具块内的服务名（原来那块「工具」标题已去掉，改放服务名） */
+.ac-tools-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #111827);
+}
+
+/* 工具列表：左侧竖线把每一项串起来（每行自己的左边框在 hover 时点亮） */
+.ac-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--ui-line, rgba(0, 0, 0, 0.10));
+}
+
+/* 单个工具行：左单选框 + 名称/描述两行；整行可点，hover / 选中用法与菜单项一致。 */
+.ac-tool-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.ac-tool-row:hover {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
+}
+
+.ac-tool-row.is-picked {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
+}
+
+/* 单选框：默认空心圆，选中填实（与菜单里的勾选语义一致，但不占左侧 20px 方格）。 */
+.ac-tool-radio {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 2px;
+  border: 1.5px solid var(--ui-line-strong, rgba(0, 0, 0, 0.22));
+  border-radius: 50%;
+  background: var(--ui-panel, #fff);
+  color: transparent;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.ac-tool-row:hover .ac-tool-radio {
+  border-color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-tool-row.is-picked .ac-tool-radio {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent, #0891b2);
+  color: #fff;
+}
+
+.ac-tool-row .ac-tool-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ac-tool-row .ac-tool-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #111827);
+}
+
+/* 描述最多两行，超出省略：一块里并排放很多工具时不能被长描述撑得很高。 */
+.ac-tool-row .ac-tool-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 10.5px;
+  line-height: 1.5;
   color: var(--ui-ink-mute, #9ca3af);
 }
 

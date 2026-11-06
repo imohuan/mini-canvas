@@ -34,12 +34,21 @@ const modelPlatform = ref('all')
 const skillQuery = ref('')
 const skillView = ref<'card' | 'split'>('card')
 const mcpQuery = ref('')
-/** 模型 / 技能面板的卡片-分栏切换（Tabs 值来自组件库，收窄成两档） */
+/**
+ * 模型 / 技能面板的卡片-分栏切换。
+ *
+ * 只认两个值；认不出就**保持原样**（不能回落成 card）。
+ * 为什么：tabs 偶尔会传来奇数（键盘切换 / 组件重建时的初始值），
+ * 以前一律回落 card，会出现「界面在分栏、页签高亮在卡片」的错位
+ *（用户 2026-11-06 截图：面板是分栏，右上角却停在卡片）。
+ */
 function setModelView(value: string | number): void {
-  modelView.value = value === 'split' ? 'split' : 'card'
+  if (value === 'split') modelView.value = 'split'
+  else if (value === 'card') modelView.value = 'card'
 }
 function setSkillView(value: string | number): void {
-  skillView.value = value === 'split' ? 'split' : 'card'
+  if (value === 'split') skillView.value = 'split'
+  else if (value === 'card') skillView.value = 'card'
 }
 /** 技能分栏的分类过滤（DEMO 的 activeCategory；卡片视图不看它，切到卡片时重置为全部） */
 const skillCategory = ref('全部')

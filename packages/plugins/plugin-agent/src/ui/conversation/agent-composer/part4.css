@@ -93,11 +93,26 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  /* 徽章紧贴标题、始终同一行（用户 2026-11-06：不要把「推荐 / 谨慎」挤到下一行） */
+  flex-wrap: nowrap;
+  min-width: 0;
   font-size: 13px;
   line-height: 1.35;
   font-weight: 600;
   color: var(--ui-ink, #111827);
+}
+
+.ac-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-option-title > :last-child:not(.ac-option-label) {
+  /* 徽章自己不被压缩、也不换行 */
+  flex: none;
+  white-space: nowrap;
 }
 
 .ac-option-desc {
@@ -106,6 +121,9 @@
   font-size: 12px;
   line-height: 1.45;
   color: var(--ui-ink-dim, #6b7280);
+  /* 描述按可用宽度自然换行（用户 2026-11-06：不要挤成一行被截断） */
+  white-space: normal;
+  word-break: break-word;
 }
 
 .ac-dot-sep {
@@ -160,6 +178,15 @@
   transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
   transform: translateY(2px);
   pointer-events: none;
+  /*
+   * 视图必须**裁在自己的格子里**，否则它会按内容高度参与布局：卡片视图实测 1033px，
+   * 把外层滚动区一起撑高 → 右边浮出第二条滚动条，而真正该滚的分栏右侧被挤
+   * （用户 2026-11-06 截图）。DOM 与淡入过渡都保留，只是不让内容决定行高。
+   */
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .ac-view-pane.is-active {
@@ -371,6 +398,19 @@
 .ac-split-scroll-body {
   /* 右侧结果区：上下 6、左右留出滚动条位置，行与左栏顶到同一条竖线。 */
   padding: 6px 8px 10px 10px;
+}
+
+/*
+ * 分栏右侧的纵向留白交给内容层（用户 2026-11-06 截图：选中项贴到顶边，没有 padding）。
+ *
+ * 为什么在这里再补一次：分栏的滚动容器是 ScrollArea，它的 viewport 不传内边距给内容，
+ * 而 .ac-split-scroll-body 只吃到左右留白 —— 首行正好贴着面板上沿，
+ * 选中底色与面板边缘粘成一条。给第一行留 8px 呼吸，选中底色才像一颗完整的胶囊。
+ */
+.ac-split-scroll .ac-model-row-list,
+.ac-split-scroll .ac-skill-grid--split {
+  padding-top: 8px;
+  padding-bottom: 2px;
 }
 
 .ac-tile-top {

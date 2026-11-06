@@ -398,11 +398,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 </div>
                 <div class="ac-review-body">
                   <div class="ac-review-list" role="radiogroup" aria-label="审核模式">
-                    <DropdownMenuItem v-for="m in AUTH_MODES" :key="m.value"
+                    <DropdownMenuItem v-for="m in AUTH_MODES" :key="m.value" class="ac-review-item"
                       role="radio" :aria-checked="authMode === m.value"
                       @select="setAuthMode(m.value); authOpen = false">
+                      <!-- 标题 + 紧跟其后的徽章（用户 2026-11-06：徽章贴在标题右侧，不要换行到下一行）。
+                           徽章不再参与换行，标题过长时自己截断。 -->
                       <span class="ac-option-title">
-                        {{ m.label }}
+                        <span class="ac-option-label">{{ m.label }}</span>
                         <Badge :variant="m.value === 'auto' ? 'destructive' : 'secondary'">{{ m.value === 'auto' ? '谨慎' : '推荐' }}</Badge>
                       </span>
                       <span class="ac-option-desc">{{ m.hint }}</span>
@@ -775,26 +777,33 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                           </span>
                         </span>
                         </div>
-                        <!-- 工具行：搜索命中工具时自动展开、只列命中的几条；每行都能单独勾选 -->
+                        <!--
+                          工具区（用户 2026-11-06 重新设计）：
+                          · 一个带边框的整块，左侧一条竖线把所有工具串起来；
+                          · 每个工具左侧是**单选框**，可多选；
+                          · 不再单独画「工具」标题，标题与计数放进块内第一行。
+                        -->
                         <div v-if="mcpExpanded.has(item.name) || item.toolHits" class="ac-mcp-tools">
                           <div v-if="!(item.toolHits || mcpToolsOf(item.name)).length" class="ac-mcp-tools-empty">
                             还没有检测到工具，点「重新检测」再试。
                           </div>
                           <template v-else>
                             <div class="ac-mcp-tools-head">
-                              <span>工具</span>
-                              <Badge variant="secondary">{{ (item.toolHits || mcpToolsOf(item.name)).length }}</Badge>
+                              <span class="ac-tools-title">{{ item.name }}</span>
+                              <Badge variant="secondary">{{ (item.toolHits || mcpToolsOf(item.name)).length }} 个工具</Badge>
                             </div>
-                            <DropdownMenuItem v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
-                              :title="t.fullName"
-                              :aria-checked="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
-                              @select="toggleMcpTool(item.name, t.name)">
-                              <Check :size="12" class="ac-tool-check" />
-                              <span class="ac-tool-copy">
-                                <span class="ac-tool-name">{{ t.name }}</span>
-                                <span class="ac-tool-desc" :title="t.description">{{ t.description }}</span>
-                              </span>
-                            </DropdownMenuItem>
+                            <div class="ac-tool-list">
+                              <button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
+                                type="button" class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"
+                                role="checkbox" :aria-checked="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
+                                :title="t.fullName" @click.stop="toggleMcpTool(item.name, t.name)">
+                                <span class="ac-tool-radio" aria-hidden="true"><Check :size="10" /></span>
+                                <span class="ac-tool-copy">
+                                  <span class="ac-tool-name">{{ t.name }}</span>
+                                  <span class="ac-tool-desc">{{ t.description }}</span>
+                                </span>
+                              </button>
+                            </div>
                           </template>
                         </div>
                       </div>
