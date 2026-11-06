@@ -416,6 +416,35 @@
   min-height: min(clamp(360px, 56vh, 420px), calc(100dvh - 32px));
 }
 
+/*
+ * 一个 MCP 服务 = 一张卡片（用户 2026-11-06：展开的工具必须在这张卡片的框里，
+ * 不要再另外长出一个面板）。所以边框画在容器上，服务行与工具区都是它的内部内容。
+ */
+.ac-mcp-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--ui-panel, #fff);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ac-mcp-item:hover {
+  border-color: var(--ui-line-strong, rgba(0, 0, 0, 0.14));
+}
+
+.ac-mcp-item.is-picked {
+  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
+  background: linear-gradient(180deg, var(--ui-accent-soft, rgba(8, 145, 178, 0.05)), var(--ui-panel, #fff) 42%);
+}
+
+.ac-mcp-item.is-open {
+  border-color: var(--ui-line-strong, rgba(0, 0, 0, 0.14));
+}
+
+/* 服务行本身只负责排版，不再自己画框（框由外层 .ac-mcp-item 画） */
 .ac-mcp-card {
   display: flex;
   align-items: center;
@@ -424,25 +453,11 @@
   min-width: 0;
   overflow: hidden;
   padding: 8px 10px;
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 10px;
-  background: var(--ui-panel, #fff);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
-}
-
-.ac-mcp-card:hover {
-  border-color: var(--ui-line-strong, rgba(0, 0, 0, 0.14));
-}
-
-.ac-mcp-card.is-picked {
-  border-color: var(--ui-accent-line, rgba(8, 145, 178, 0.28));
-  background: linear-gradient(180deg, var(--ui-accent-soft, rgba(8, 145, 178, 0.05)), var(--ui-panel, #fff) 42%);
-}
-
-.ac-mcp-card.is-open {
-  border-color: var(--ui-line-strong, rgba(0, 0, 0, 0.14));
 }
 
 /* 勾选框：16px 的可见方框，24px 的点击区；悬停 / 选中只改描边与底色。 */
@@ -490,33 +505,21 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  /* 与上面卡片的文字列对齐：勾选框 20 + 间距 8 + 外边距 10。 */
-  margin: 6px 0 6px 38px;
-  padding: 8px 8px 8px 10px;
-  /* 整块一个外框 + 左侧竖线（用户 2026-11-06：用边框把所有工具包起来，左侧带一条竖线） */
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.09));
-  border-radius: 10px;
-  background: var(--ui-panel, #fff);
+  /*
+   * 这块是**卡片内部**的展开区（用户 2026-11-06：不要再单独长出一个面板）。
+   * 所以自己不再画外框、不再用圆角，只在上边压一条分隔线把它和服务行分开；
+   * 左右留白与上面那行对齐（勾选框 20 + 间距 8 + 行内边距 10）。
+   */
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 0;
+  border-top: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
+  border-radius: 0;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.015));
   /* 只由外层 AgentScrollArea 负责滚动：这里不再出现第二条滚动条。 */
   overflow: hidden;
 }
 
-.ac-mcp-tools-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 4px 6px;
-}
-
-/* 工具块内的服务名（原来那块「工具」标题已去掉，改放服务名） */
-.ac-tools-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: var(--ui-ink, #111827);
-}
 
 /* 工具列表：左侧竖线把每一项串起来（每行自己的左边框在 hover 时点亮） */
 .ac-tool-list {

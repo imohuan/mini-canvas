@@ -19,7 +19,10 @@ const CSS = ['part1.css', 'part2.css', 'part3.css', 'part4.css']
 
 describe('Agent 面板滚动层', () => {
   it('模型 / 技能 / MCP 都用 AgentScrollArea，并保留固定选择器', () => {
-    expect(SRC).toMatch(/<AgentScrollArea[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
+    // 2026-11-06：模型面板改成「每个视图各自滚」（与技能面板一致），
+    // ref 挂在外层容器上，视图内部才是 AgentScrollArea。
+    expect(SRC).toMatch(/<div[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
+    expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-panel-scroll ac-view-pane"/)
     expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-rail-scroll"/)
     expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-split-scroll"/)
     expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-panel-scroll"[^>]*body-class="ac-panel-scroll-body ac-mcp-scroll-body"/)

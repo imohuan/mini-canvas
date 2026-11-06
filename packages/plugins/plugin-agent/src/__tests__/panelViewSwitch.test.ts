@@ -159,15 +159,30 @@ describe('MCP 工具块', () => {
   })
 
   it('整块有外框，左侧带一条竖线', () => {
-    const tools = ruleBody(CSS, '.ac-mcp-tools')
-    expect(tools).toMatch(/border:\s*1px solid/)
+    // 外框在服务卡片容器上（工具区是它的内部展开区），工具列表左侧仍是竖线
+    const item = ruleBody(CSS, '.ac-mcp-item')
+    expect(item).toMatch(/border:\s*1px solid/)
     const list = ruleBody(CSS, '.ac-tool-list')
     expect(list).toMatch(/border-left:\s*1px solid/)
   })
 
-  it('不再单独画「工具」标题（标题放进块内，写服务名）', () => {
-    expect(SRC).toContain('class="ac-tools-title"')
-    expect(SRC).not.toContain('<span>工具</span>')
+  /** 用户 2026-11-06：卡片行上已经有「canvas / 11 工具」，工具区里不要再重复一遍标题。 */
+  it('工具区里没有任何标题（服务名 / 工具数只在卡片行上出现一次）', () => {
+    expect(SRC).not.toContain('ac-tools-title')
+    expect(SRC).not.toContain('ac-mcp-tools-head')
+    // 工具区里不再出现服务名（卡片行上那处是 .ac-server-name，保留）
+    const tools = SRC.slice(SRC.indexOf('class="ac-mcp-tools"'), SRC.indexOf('class="ac-tool-list"'))
+    expect(tools).not.toContain('{{ item.name }}')
+  })
+
+  /** 用户 2026-11-06：工具区必须落在服务卡片的边框内，不能另外再长出一个面板。 */
+  it('工具区在服务卡片容器内部，共用同一圈外框', () => {
+    const item = SRC.slice(SRC.indexOf('class="ac-mcp-item"'), SRC.indexOf('class="ac-tool-list"'))
+    expect(item).toContain('class="ac-mcp-card"')
+    expect(item).toContain('class="ac-mcp-tools"')
+    // 工具区自己不再画边框（外框由 .ac-mcp-item 画）
+    const tools = ruleBody(CSS, '.ac-mcp-tools')
+    expect(tools).toMatch(/border:\s*0/)
   })
 })
 

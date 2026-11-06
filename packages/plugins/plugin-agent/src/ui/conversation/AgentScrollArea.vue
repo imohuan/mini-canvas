@@ -89,7 +89,14 @@ defineExpose({ scrollElement, rootElement })
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /*
+   * 不能再写 overflow: hidden（用户 2026-11-06：卡片视图没有滚动条）。
+   *
+   * 组件库的滚动条是**绝对定位**、贴在根节点右缘的；根节点一裁切，
+   * 它就整条被裁掉 —— 表现是有内容、能滚，但右侧什么都看不见。
+   * 这里改成 visible，让滚动条正常画出来（内容仍由内部 viewport 自己滚）。
+   */
+  overflow: visible;
   width: 100%;
   height: 100%;
   min-height: 0;

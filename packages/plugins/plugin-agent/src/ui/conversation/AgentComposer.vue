@@ -465,16 +465,21 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
                 <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
                      ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
-                <AgentScrollArea v-else ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body" body-class="ac-model-scroll-body">
-                  <!--
-                    两种视图**同时挂载**，切换只切显示，不做 v-if 拆装。
+                <!--
+                  两种视图**同时挂载**，切换只切显示，不做 v-if 拆装。
 
-                    为什么要这样（用户 2026-11-06）：v-if 切换时整块内容被销毁再重建，
-                    列表、滚动位置、选中项都要重新渲染一遍，切换像“硬切”。
-                    现在两个面板都在 DOM 里，切到哪个哪个淡入（见 .ac-view-pane）。
-                  -->
+                  为什么要这样（用户 2026-11-06）：v-if 切换时整块内容被销毁再重建，
+                  列表、滚动位置、选中项都要重新渲染一遍，切换像“硬切”。
+                  现在两个面板都在 DOM 里，切到哪个哪个淡入（见 .ac-view-pane）。
+
+                  滚动容器放在**每个视图内部**（与技能面板一致）：
+                  以前是外面套一个 ScrollArea、里面再叠两个视图，外层 viewport 被
+                  裁到看不见内容（用户 2026-11-06：卡片视图没有滚动条、滚不动）。
+                -->
+                <div v-else ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body">
                   <div class="ac-view-stack">
-                  <div class="ac-view-pane" :class="{ 'is-active': modelView === 'card' }">
+                  <AgentScrollArea class="ac-panel-scroll ac-view-pane" :class="{ 'is-active': modelView === 'card' }"
+                    body-class="ac-panel-scroll-body ac-model-scroll-body">
                     <div v-if="filteredModels.length" class="ac-model-grid">
                       <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm"
                         role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
@@ -498,7 +503,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-empty-title">没有找到模型</span>
                       <span class="ac-empty-desc">换个模型名或平台名试试。</span>
                     </div>
-                  </div>
+                  </AgentScrollArea>
                   <div class="ac-view-pane ac-split" :class="{ 'is-active': modelView === 'split' }">
                     <aside class="ac-split-rail" aria-label="模型平台">
                       <div class="ac-rail-label">平台</div>
@@ -541,7 +546,7 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </div>
                   </div>
                   </div>
-                </AgentScrollArea>
+                  </div>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -716,10 +721,11 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               <div class="ac-panel ac-mcp-panel" role="listbox" aria-label="选择 MCP">
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
-                    <div class="ac-panel-heading">
-                      <span class="ac-panel-title">MCP</span>
-                      <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
-                    </div>
+                    <!--
+                      不再写「MCP」大标题（用户 2026-11-06：面板里这块标题是多余的）。
+                      留一个占位把右侧的「重新检测」推到行尾，不改变那排按钮的位置。
+                    -->
+                    <div class="ac-panel-heading"></div>
                     <div class="ac-panel-tools">
                       <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
                       <Button variant="outline" size="sm" :disabled="probing"
@@ -749,8 +755,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                         服务行：左侧勾选框（引用整个服务）／中间图标 + 名称 + 地址／右侧工具数与展开箭头。
                         交互语义不变，只把三块对齐到同一条基线、给足留白（用户 2026-11-06：MCP 布局乱）。
                       -->
-                      <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item">
-                        <div class="ac-mcp-card" :class="{ 'is-picked': mcpPickedServers.has(item.name), 'is-open': mcpExpanded.has(item.name) || !!item.toolHits }">
+                      <!--
+                        服务卡片 = 一个整体面板（用户 2026-11-06）：
+                        展开后的工具区必须**落在这张卡片的边框之内**，不能另外再长出一个面板。
+                        所以卡片与工具区同属一个 .ac-mcp-item，外层边框只画一圈。
+                      -->
+                      <div v-for="item in filteredMcpResources" :key="item.id" class="ac-mcp-item"
+                        :class="{ 'is-picked': mcpPickedServers.has(item.name), 'is-open': mcpExpanded.has(item.name) || !!item.toolHits }">
+                        <div class="ac-mcp-card">
                         <button type="button" class="ac-pick-box" :aria-pressed="mcpPickedServers.has(item.name)"
                           :aria-label="'引用整个 ' + item.name + ' 服务'" :title="'引用整个 ' + item.name + ' 服务'"
                           @click.stop="toggleMcpServer(item.name)">
@@ -778,20 +790,17 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                         </span>
                         </div>
                         <!--
-                          工具区（用户 2026-11-06 重新设计）：
-                          · 一个带边框的整块，左侧一条竖线把所有工具串起来；
-                          · 每个工具左侧是**单选框**，可多选；
-                          · 不再单独画「工具」标题，标题与计数放进块内第一行。
+                          工具区（用户 2026-11-06 第二次反馈）：
+                          · 收在服务卡片的边框内，是这张卡片自己的一块展开区；
+                          · 不再有「canvas / 11 个工具」的小标题（信息在卡片行上已经有了）；
+                          · 每个工具左侧是单选框，可多选；
+                          · 左侧一条竖线把所有工具串起来。
                         -->
                         <div v-if="mcpExpanded.has(item.name) || item.toolHits" class="ac-mcp-tools">
                           <div v-if="!(item.toolHits || mcpToolsOf(item.name)).length" class="ac-mcp-tools-empty">
                             还没有检测到工具，点「重新检测」再试。
                           </div>
                           <template v-else>
-                            <div class="ac-mcp-tools-head">
-                              <span class="ac-tools-title">{{ item.name }}</span>
-                              <Badge variant="secondary">{{ (item.toolHits || mcpToolsOf(item.name)).length }} 个工具</Badge>
-                            </div>
                             <div class="ac-tool-list">
                               <button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
                                 type="button" class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"

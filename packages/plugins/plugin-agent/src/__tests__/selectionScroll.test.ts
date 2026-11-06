@@ -73,7 +73,8 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
   it('模型列表的滚动区挂着 ref（有它才找得到要滚的容器）', () => {
     // 滚动层已统一为 AgentScrollArea（底座 shadcn ScrollArea）：ref 仍要挂在这个滚动层上，
     // 而且同时保留 ac-menu-scroll 这个稳定选择器，供滚动定位找容器。
-    expect(host).toMatch(/<AgentScrollArea[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
+    // 2026-11-06：滚动容器改成每个视图各自持有，ref 挂在外层容器（ac-menu-scroll）上。
+    expect(host).toMatch(/<div[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
   })
 
   it('打开时才滚（那一刻面板与列表才在 DOM 里，ref 才有值）', () => {
