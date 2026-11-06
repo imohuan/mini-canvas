@@ -8,6 +8,9 @@
  * 为什么单独一个组件、一套 nbp- 类名：
  * 底栏的 BottomBarActions / 样式表正在被另一个任务改，这里尽量自成一块，
  * 只在底行借一个插槽把按钮放进去，减少两边同时改同一段代码的机会。
+ *
+ * 插入方式（用户口径「可以添加一些自己的提示词」）：输入框为空就直接填入；
+ * 已有内容就接在后面，不覆盖用户正在写的东西。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
@@ -29,7 +32,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  /** 用户点了某条预设：把正文插到输入框光标处 */
+  /** 用户点了某条预设：把正文放进输入框（已有内容时接在后面） */
   apply: [content: string]
 }>()
 
