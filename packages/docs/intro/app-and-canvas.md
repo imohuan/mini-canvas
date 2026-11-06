@@ -49,9 +49,12 @@ base / data / render 三层都有自己的插件身份，名字就是分层名�
 | 画布数据会话 | `canvas-data` | 只在画布路由内 | `doc` / `selection` / 历史 / 图写入 / 节点工厂 |
 | 渲染层 | `canvas-render` | 应用启动到关闭 | 标准能力包（`registryOf('capability')`） |
 
-## 在项目页加一个面板
+## 在项目页加一个页签
 
-项目页主内容区有一个固定插槽：`app.projects.main`。
+项目页左栏有一组「工具」页签，插件注册的是**一整页**：`app.projects.tabs`。
+
+点开页签，主内容区整块换成插件页面；不点就停在原来的项目 / 资产页，
+不会在下面多挂一块卡片。
 
 ```ts
 // 文件：my-plugin/src/index.ts（参照 packages/ui/src/projectsPanelPlugin.ts）
@@ -64,14 +67,18 @@ export const plugin: PluginModule = {
   name,
   inject,
   apply(ctx) {
-    ctx.slots.register('app.projects.main', {
+    ctx.slots.register('app.projects.tabs', {
       id: 'my-projects-panel/main',
       order: 10,
       component: MyPanel,
+      meta: { title: '我的面板', icon: BlocksIcon },
     })
   },
 }
 ```
+
+左栏文字来自 `meta.title`，图标来自 `meta.icon`。
+页面自己撑满高度、内部要滚动时，再加 `meta.scroll: false`，避免出现两条滚动条。
 
 面板组件里要画布能力时现取：
 

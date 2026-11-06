@@ -32,7 +32,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@/previewKit'
+} from '../../previewKit'
 
 const active = ref('basics')
 const commandQuery = ref('')

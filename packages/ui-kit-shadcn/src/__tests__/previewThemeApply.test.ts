@@ -94,11 +94,12 @@ describe('预览页配置落到生效位置', () => {
 })
 
 describe('预览页的接线（静态检查）', () => {
-  it('App.vue 从 previewKit 取组件，而不是直接 import components/ui', () => {
-    const app = readFileSync(path.join(srcRoot, 'App.vue'), 'utf-8')
+  it('预览卡片从 previewKit 取组件，而不是直接 import components/ui', () => {
+    // 卡片墙搬进 ComponentShowcase 后（项目页「组件库」页复用同一份），入口 App.vue 只剩一行。
+    const app = readFileSync(path.join(srcRoot, 'theme/ComponentShowcase.vue'), 'utf-8')
     // 直接 import '@/components/ui/...' 就绕过了 size 注入薄层
     expect(app).not.toMatch(/from '@\/components\/ui\//)
-    expect(app).toMatch(/from '@\/previewKit'/)
+    expect(app).toMatch(/from '\.\.\/previewKit'/)
   })
 
   it('previewKit 对每个导出都套了 withComponentConfig', () => {
@@ -209,7 +210,7 @@ describe('预览页的接线（静态检查）', () => {
   })
 
   it('Tabs 单独成卡，旧的「左右两栏」标题不再出现', () => {
-    const app = readFileSync(path.join(srcRoot, 'App.vue'), 'utf-8')
+    const app = readFileSync(path.join(srcRoot, 'theme/ComponentShowcase.vue'), 'utf-8')
     expect(app).not.toContain('其余组件')
     expect(app).not.toContain('覆盖范围')
     const tabs = readFileSync(path.join(srcRoot, 'theme/cards/TabsCard.vue'), 'utf-8')
@@ -217,7 +218,7 @@ describe('预览页的接线（静态检查）', () => {
   })
 
   it('卡片墙：三列各自堆叠，没有整宽横条卡片', () => {
-    const app = readFileSync(path.join(srcRoot, 'App.vue'), 'utf-8')
+    const app = readFileSync(path.join(srcRoot, 'theme/ComponentShowcase.vue'), 'utf-8')
     // 只看模板里的 class，注释里提到旧做法不算
     expect(app).not.toMatch(/class="[^"]*max-w-6xl/)
     // 用户口径：要 shadcn blocks 那种卡片墙 —— 多列 + 卡片各自高度

@@ -6,7 +6,8 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { getAdminToken, setAdminToken } from '@mini-canvas/canvas-base'
-import { useCanvasRender, type FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 import { usePluginManager } from '../../../usePluginManager'
 import type { PluginRow } from '../../../pluginManagerService'
 import type {
@@ -23,7 +24,7 @@ export function usePluginManagerPage() {
   const svc = usePluginManager()
   const s = svc.state
   /** 统一确认框：卸载 / 含后台安装都走它，不用浏览器原生 confirm。 */
-  const feedback = useCanvasRender().ctx.get<FeedbackService>('feedback')
+  const feedback = useCanvasContextOrRender().ctx.get<FeedbackService>('feedback')
 
   /** 地址输入框先写草稿，点「刷新」再写回服务。 */
   const urlDraft = ref(s.catalogUrl)

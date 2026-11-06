@@ -33,7 +33,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/previewKit'
+} from '../../previewKit'
 </script>
 
 <template>

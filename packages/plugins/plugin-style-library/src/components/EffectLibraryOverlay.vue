@@ -9,7 +9,7 @@
  *
  * 收藏、最近使用这些与风格库通用；外壳结构照旧（遮罩 + 居中面板 + 标题栏）。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, Teleport } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
 import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
@@ -25,6 +25,11 @@ import { useCanvasGate } from '../useCanvasGate'
  * （与 StyleLibraryOverlay 同一原因，见那边的注释）。
  */
 defineOptions({ inheritAttrs: false })
+
+/**
+ * 与风格库同一套双壳：画布模式是弹出框，项目模式（inline）是左栏整页页签。
+ */
+const props = withDefaults(defineProps<{ inline?: boolean }>(), { inline: false })
 
 /** 只从根上下文取服务：项目页没有画布也能浏览与收藏。 */
 // 宽松取件：本浮层注册在画布 overlay 槽里（详见 StyleLibraryOverlay 的说明）。
@@ -155,6 +160,9 @@ const previewMedia = computed(() => {
 
 const minimized = ref(false)
 
+/** 浮层模式看 state.open；内嵌模式由页签决定显隐，始终显示。 */
+const visible = computed(() => props.inline || (s.open && !minimized.value))
+
 function onKey(e: KeyboardEvent): void {
   if (!s.open) return
   if (e.key === 'Escape' && !previewItem.value) { e.stopPropagation(); svc.close() }
@@ -169,10 +177,10 @@ watch(() => s.open, (v) => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="s.open && !minimized" class="elol-layer" @pointerdown.self="svc.close()" @contextmenu.prevent>
-      <div class="elol-panel" @pointerdown.stop>
-        <header class="elol-head">
+  <component :is="inline ? 'section' : Teleport" :to="inline ? undefined : 'body'">
+    <div v-if="visible" :class="inline ? 'elol-inline' : 'elol-layer'" @pointerdown.self="inline || svc.close()" @contextmenu.prevent>
+      <div class="elol-panel" :class="{ 'elol-panel--inline': inline }" @pointerdown.stop>
+        <header v-if="!inline" class="elol-head">
           <h3 class="elol-title">素材库 · 特效库</h3>
           <div class="elol-head-actions">
             <button class="elol-icon" type="button" aria-label="最小化" title="最小化" @click="minimized = true">
@@ -198,10 +206,27 @@ watch(() => s.open, (v) => {
       <!-- 全屏预览：优先主题注册的 mediaViewer（与生成历史同一个）；缺件时用自带薄壳 -->
       <component :is="MediaViewerComp" v-if="MediaViewerComp" :item="previewMedia" @close="previewItem = null" />
     </div>
-  </Teleport>
+  </component>
 </template>
 
 <style scoped>
+.elol-inline {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--ui-panel, #fff);
+}
+
+.elol-panel--inline {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
 .elol-layer {
   position: fixed;
   inset: 0;

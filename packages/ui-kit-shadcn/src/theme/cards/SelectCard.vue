@@ -32,7 +32,7 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from '@/previewKit'
+} from '../../previewKit'
 
 const embedded = ref('Seedream 4.5')
 const detached = ref('seedance')

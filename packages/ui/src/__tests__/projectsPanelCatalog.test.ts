@@ -89,7 +89,7 @@ describe('项目页面板的组件来源', () => {
     // 用同一个"按名取件"函数再查一次：把"目录里存着"与"渲染时读得到"分开验。
     expect(uiComponent(ctx, 'Button'), '按名取件拿不到 Button').toBeTruthy()
 
-    const app = createSSRApp({ render: () => h(SlotHost, { slot: 'app.projects.main' }) })
+    const app = createSSRApp({ render: () => h(SlotHost, { slot: 'app.projects.tabs' }) })
     app.provide(CANVAS_CONTEXT_KEY, ctxOnly(ctx))
     const html = await renderToString(app)
 
@@ -97,10 +97,14 @@ describe('项目页面板的组件来源', () => {
     expect(captured.join('\n')).not.toContain('没有名为 "Button"')
     console.warn = original
 
-    expect(html).toContain('项目页面板示例')
-    // 目录里的 Button 被主题包调试标记包过：data-ui-kit-component 只来自目录件。
-    expect(html).toContain('data-ui-kit-component="Button"')
-    expect(html).toContain('disabled')
+    // 项目页的「组件库」页签：正文按名取 ui 目录里的组件展厅（不直接 import 组件库）。
+    expect(html).toContain('组件预览')
+    // 展厅正文真的渲染出来了（按钮 / 卡片来自组件库，与预览页同一份）。
+    expect(html).toContain('data-slot="button"')
+    expect(html).toContain('基础组件')
+    expect(html).toContain('组件配置')
+    // 内嵌模式不能把应用的主题色改成预览页那套。
+    expect(html).not.toContain('底色 Base Color')
     ctx.stop()
     console.warn = original
   })

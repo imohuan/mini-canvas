@@ -20,7 +20,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/previewKit'
+} from '../previewKit'
 import { FONT_OPTIONS, findFont, fontGroup, fontStack, loadFont, type FontGroup } from './fonts'
 
 const props = withDefaults(

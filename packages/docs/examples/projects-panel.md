@@ -1,11 +1,11 @@
-# 案例 10 · 在项目页加一块插件面板
+# 案例 10 · 在项目页加一个插件页签
 
 ## 这个案例能做到什么
 
-**装上这个插件，项目页（`#/`）主内容区多出一张「我的工作台」卡片**；
-不用先打开画布，也不用改宿主的任何组件。
+**装上这个插件，项目页（`#/`）左栏多出一个「我的工作台」页签**；
+点开就是整页工作台。不用先打开画布，也不用改宿主的任何组件。
 
-卡片里有三个按钮：
+页面里有三个按钮：
 
 - **新建项目**：直接调 `projectsApi` 服务，创建后列表刷新就能看到；
 - **刷新列表**：重新拉一次项目清单；
@@ -13,6 +13,7 @@
   进入 `#/canvas/:id` 后同一条目自动变成可用，回到项目页又自动置灰。
 
 整个过程只用了「应用级上下文 + 一个固定插槽」，没有第二个 Provider。
+同一个组件在画布模式下也可以注册成浮层（素材库就是这么做的），壳不同、内容同一份。
 
 ## 先弄懂：项目页与画布页的关系
 
@@ -26,7 +27,7 @@ flowchart TD
   RV --> Projects[#/ 项目页]
   RV --> Canvas[#/canvas/:id]
   Canvas --> Mount[mountCanvas<br/>装 doc / selection]
-  Projects --> Slot[app.projects.main 插槽]
+  Projects --> Slot[app.projects.tabs 插槽 → 左栏页签]
   Mount -.同一个 ctx.-> Slot
 ```
 
@@ -82,11 +83,12 @@ export const name = 'my-project-panel'
 export const inject = [] as string[]
 
 export function apply(ctx: Context): void {
-  ctx.slots.register('app.projects.main', {
+  ctx.slots.register('app.projects.tabs', {
     id: 'my-project-panel/main',
     order: 10,
     component: markRaw(ProjectPanel),
-    meta: { title: '我的工作台' },
+    // 左栏页签的文字与图标都从这里读；scroll: false = 页面自己滚（全高页面用）。
+    meta: { title: '我的工作台', icon: LayoutGridIcon },
   })
 }
 
@@ -213,18 +215,22 @@ export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
    需要画布能力时用 `ctx.tryGet('doc')` 现取。
 2. **别在 setup 里缓存 `doc`**：它是随画布会话装卸的，缓存了就会一直是 `undefined` 或旧值。
 3. **插槽 id 要唯一**：本项目用 `<插件名>/<用途>` 的形式，避免两个插件撞上同一个 id。
+   同一个插件想同时出现在「项目页页签」和「画布浮层」，用两个不同的 id 注册到两个槽。
 4. **`component` 用 `markRaw` 包一下**：避免 Vue 把组件定义变成响应式对象。
 5. **通用件按名取**：`useUiComponent('Button')`，不要 `import` 某个主题包的按钮；
    换主题时面板会自动换外观。
 6. **项目数据走服务**：成品应用的 `projects-api` 插件已经上架 `projectsApi`，
    面板用 `ctx.tryGet('projectsApi')` 取即可。自己的宿主没装它时要把按钮禁用并说明原因，
    不要偷偷直接 fetch。
+7. **整页要自己撑住高度**：页签正文默认由宿主滚动；像素材广场那种「内部再滚」的页面，
+   给 `meta.scroll: false`，并把根元素写成 `height: 100%`，否则会出现两条滚动条。
 
 ## 真实插件参照
 
 | 想抄什么 | 看哪里 |
 | --- | --- |
-| 最小项目页面板（含缺画布禁用） | `packages/ui/src/projectsPanelPlugin.ts` + `components/projects/ProjectsPanelDemo.vue` |
-| 项目页能浏览、缺画布时禁用「加入」 | `packages/plugins/plugin-style-library/src/components/ProjectsLibraryEntry.vue` |
+| 最小项目页页签 | `packages/ui/src/projectsPanelPlugin.ts` + `components/projects/ProjectsShowcaseTab.vue` |
+| 同一份内容：项目页整页 / 画布浮层 | `packages/plugins/plugin-style-library/src/components/ProjectsStyleTab.vue`、`StyleLibraryOverlay.vue` |
+| 项目页能浏览、缺画布时禁用「加入」 | `packages/plugins/plugin-style-library/src/components/StyleGalleryView.vue` |
 | 根级唯一 Provider 与画布会话分离 | `packages/ui/src/AppProvider.vue`、`packages/canvas-render/src/host/canvasSession.ts` |
 | 插槽宿主本身 | `packages/vue-render/src/SlotHost.vue`（`canvas-render` 继续转发同名导出） |

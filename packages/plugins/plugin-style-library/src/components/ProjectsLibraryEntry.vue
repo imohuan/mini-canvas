@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 项目页里的素材库入口（app.projects.main）。
+ * 项目页里的素材库入口（旧卡片形态，保留给需要「两个按钮」的宿主）。
  *
- * 只做两个按钮：打开风格库 / 特效库。真正的广场是应用级 overlay 组件，
- * 没进画布也能浏览；「使用」在缺画布能力时禁用并提示。
+ * 成品应用现在把风格库 / 特效库注册成左栏整页页签（见 index.ts 的 app.projects.tabs），
+ * 这张卡片不再挂在项目页上；保留导出是为了不破坏已有引用与外部宿主。
  */
 import { computed } from 'vue'
 import { SparklesIcon, WandSparklesIcon } from 'lucide-vue-next'

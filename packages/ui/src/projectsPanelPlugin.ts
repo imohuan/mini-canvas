@@ -1,26 +1,31 @@
 /**
- * 项目页示例面板插件（ui-shell 自带的最小演示）。
+ * 项目页「组件库」页签（ui-shell 自带）。
  *
- * 它只做两件事，用来证明「应用级插件能在项目页工作」：
+ * 直接把 ui-kit-shadcn 的展厅注册到项目页左栏（app.projects.tabs）：
+ * 卡片与配置条就是组件库预览页那一份，不另建插件，也不复制组件。
+ *
+ * 它同时是「项目页插件页签」的最小样板：
  * - apply 只登记槽位，不依赖 doc / selection，所以项目页就能启动；
- * - 面板里用按钮演示「没有画布时禁用并给出可见提示」。
- *
- * 业务插件照这个模式写：apply 里 ctx.slots.register('app.projects.main', …)，
- * 需要画布能力时用 ctx.tryGet('doc') 现取，不要在 apply 里缓存。
+ * - meta 里给 title / icon，宿主负责画左栏、切整页。
  */
 import { markRaw } from 'vue'
+import { BlocksIcon } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import ProjectsPanelDemo from './components/projects/ProjectsPanelDemo.vue'
+import ProjectsShowcaseTab from './components/projects/ProjectsShowcaseTab.vue'
 
 export const name = 'ui-projects-panel'
 export const inject = [] as string[]
 
 export function apply(ctx: Context): void {
-  ctx.slots.register('app.projects.main', {
-    id: 'ui-projects-panel/demo',
-    order: 10,
-    component: markRaw(ProjectsPanelDemo),
-    meta: { title: '项目页面板示例' },
+  ctx.slots.register('app.projects.tabs', {
+    id: 'ui-projects-panel/component-kit',
+    order: 30,
+    component: markRaw(ProjectsShowcaseTab),
+    meta: {
+      title: '组件库',
+      icon: BlocksIcon,
+      hint: '按钮、输入框、浮层等通用组件；改尺寸 / 圆角立刻生效',
+    },
   })
 }
 

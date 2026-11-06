@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
   Separator,
-} from '@/previewKit'
+} from '../../previewKit'
 
 const messageVisible = ref(true)
 const messageKind = ref<'info' | 'error'>('info')

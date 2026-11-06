@@ -38,6 +38,7 @@ import ToolParamSlider from "./components/ui/ToolParamSlider.vue"
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue"
 import UiKitDebugOverlay from "./components/ui/UiKitDebugOverlay.vue"
 import FeedbackHost from "./components/ui/FeedbackHost.vue"
+import ComponentShowcase from "@mini-canvas/ui-kit-shadcn/theme/ComponentShowcase.vue"
 import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn"
 import ShadcnSettingsRow from "./components/settings/ShadcnSettingsRow.vue"
 import ShadcnSettingsSection from "./components/settings/ShadcnSettingsSection.vue"
@@ -79,6 +80,7 @@ export function publishStaticUiCatalog(): void {
     settingsSection: ShadcnSettingsSection,
     Toaster: UiToaster,
     feedbackHost: FeedbackHost,
+    componentShowcase: ComponentShowcase,
     slotDebugOverlay: SlotDebugOverlay,
     uiKitDebugOverlay: UiKitDebugOverlay,
     mediaViewer: MediaViewer,
@@ -144,6 +146,8 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   }
   ui.add("Toaster", UiToaster, { id: "default" })
   ui.add("feedbackHost", FeedbackHost, { id: "default" })
+  // 组件库展厅：项目页「组件库」页按名取这份，外壳不直接认识组件库。
+  ui.add("componentShowcase", ComponentShowcase, { id: "default" })
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" })
   ui.add("slotDebugPopover", SlotDebugPopover, { id: "default" })
   ui.add("mediaViewer", MediaViewer, { id: "default" })

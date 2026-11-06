@@ -21,7 +21,7 @@ import {
   Separator,
   Slider,
   Switch,
-} from '@/previewKit'
+} from '../../previewKit'
 
 const checked = ref(true)
 const enabled = ref(true)

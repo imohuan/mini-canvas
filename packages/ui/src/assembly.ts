@@ -112,7 +112,7 @@ export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
   { plugin: agentPlugin, kind: 'app', reason: 'Agent 对话与设置' },
   { plugin: hotReloadPlugin, kind: 'app', reason: '热重载开发工具' },
   { plugin: uiAssetUploadPlugin, kind: 'app', reason: '资产入库入口' },
-  { plugin: projectsPanelPlugin, kind: 'app', reason: '项目页面板示例' },
+  { plugin: projectsPanelPlugin, kind: 'app', reason: '项目页「组件库」页签' },
   { plugin: styleLibraryPlugin, kind: 'app', reason: '素材库（项目页可浏览）' },
   { plugin: projectsApiPlugin, kind: 'app', reason: '项目数据服务（项目页面板可用）' },
   { plugin: shortcutSettingsPlugin, kind: 'app', reason: '设置页快捷键配置' },

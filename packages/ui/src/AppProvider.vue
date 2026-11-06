@@ -9,6 +9,7 @@
 import { RenderProvider } from '@mini-canvas/vue-render'
 import { Context } from '@mini-canvas/canvas-data'
 import { createCanvasBaseAppPlugin } from '@mini-canvas/canvas-base'
+import { createPluginManager } from '@mini-canvas/canvas-render'
 import { setReadyHost } from './composables/ui/hostRuntime'
 import { createDefaultStorageAdapter, resolveAppPlugins } from './assembly'
 
@@ -20,6 +21,15 @@ async function bootstrap() {
     persistSettings: true,
   })
   ctx.plugin(appBase.plugin)
+  /**
+   * 应用级安装句柄：项目页没有画布宿主，但「插件」页仍然要能装东西。
+   *
+   * 内核的 Context 是唯一的，manager 只是"对同一个 Context 的装卸门面"；
+   * 先在 start 之前注入，插件管理的 apply 就能直接绑上，不会先报一轮
+   * "宿主没有提供 host.manager"。
+   */
+  const appManager = createPluginManager(ctx, { hiddenPlugins: [appBase.name] })
+  const revokeAppManager = ctx.inject('appPluginManager', appManager)
   // 所有插件只登记一次：不依赖 doc 的立刻启动，依赖 doc 的停在 PENDING 等画布。
   for (const plugin of resolveAppPlugins()) ctx.plugin(plugin)
   await ctx.start()
@@ -33,6 +43,7 @@ async function bootstrap() {
     appBase: appBase.services,
     dispose: async () => {
       await appBase.services.save.flush()
+      revokeAppManager()
       appBase.services.settingsPersist?.dispose()
       appBase.services.resources.dispose()
       setReadyHost(undefined)

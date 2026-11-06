@@ -40,6 +40,7 @@
  * 命令 `style-library:open` / `effect-library:open`；服务也有 `open()/close()/toggle()`。
  */
 import { markRaw } from 'vue'
+import { SparklesIcon, WandSparklesIcon } from 'lucide-vue-next'
 import type { Context, PluginModule, ConfigSchema } from '@mini-canvas/canvas-base'
 import {
   createLibraryService,
@@ -50,6 +51,8 @@ import {
 import StyleLibraryOverlay from './components/StyleLibraryOverlay.vue'
 import EffectLibraryOverlay from './components/EffectLibraryOverlay.vue'
 import ProjectsLibraryEntry from './components/ProjectsLibraryEntry.vue'
+import ProjectsStyleTab from './components/ProjectsStyleTab.vue'
+import ProjectsEffectTab from './components/ProjectsEffectTab.vue'
 import StyleGalleryView from './components/StyleGalleryView.vue'
 import StyleCardView from './components/StyleCardView.vue'
 import StyleDetailView from './components/StyleDetailView.vue'
@@ -138,11 +141,24 @@ export function apply(ctx: Context, config?: StyleLibraryConfig): void {
   ui.add(UI_DETAIL, markRaw(StyleDetailView), { id: 'default', order: 0 })
   // 项目页入口：不进画布也能打开风格库 / 特效库。
   ui.add('projectsLibraryEntry', markRaw(ProjectsLibraryEntry), { id: 'default', order: 0 })
-  ctx.slots.register('app.projects.main', {
-    id: 'style-library/projects-entry',
+
+  /**
+   * 项目页：同一个库注册成**左栏整页页签**（用户口径 2026-11-06）。
+   *
+   * 之前这里塞的是两张小卡片 + 弹出框；现在点左栏就是整块广场，
+   * 组件还是画布里的那一份，只是外壳换成 inline。
+   */
+  ctx.slots.register('app.projects.tabs', {
+    id: 'style-library/projects-style-tab',
     order: 20,
-    component: markRaw(ProjectsLibraryEntry),
-    meta: { title: '素材库' },
+    component: markRaw(ProjectsStyleTab),
+    meta: { title: '风格库', icon: SparklesIcon, hint: '浏览风格素材；加入画布需要先打开一张画布', scroll: false },
+  })
+  ctx.slots.register('app.projects.tabs', {
+    id: 'style-library/projects-effect-tab',
+    order: 21,
+    component: markRaw(ProjectsEffectTab),
+    meta: { title: '特效库', icon: WandSparklesIcon, hint: '浏览特效素材；加入画布需要先打开一张画布', scroll: false },
   })
 
   // —— 两个外壳挂到画布 overlay 槽（各自按服务 state.open 判显隐）——
@@ -159,20 +175,6 @@ export function apply(ctx: Context, config?: StyleLibraryConfig): void {
     meta: { title: '特效库' },
   })
 
-  // 项目页也要能显示同一个浮层：overlay 槽只在画布内渲染，项目页走自己的主内容槽。
-  // 两个浮层按 state.open 自判显隐，所以同时挂在两处不会重复出现。
-  ctx.slots.register('app.projects.main', {
-    id: 'style-library/projects-overlay',
-    order: 21,
-    component: markRaw(StyleLibraryOverlay),
-    meta: { title: '风格库' },
-  })
-  ctx.slots.register('app.projects.main', {
-    id: 'effect-library/projects-overlay',
-    order: 22,
-    component: markRaw(EffectLibraryOverlay),
-    meta: { title: '特效库' },
-  })
 
   // —— 命令：开合两个库（宿主统一分发键位；素材库菜单项执行它们）——
   ctx.commands.register({

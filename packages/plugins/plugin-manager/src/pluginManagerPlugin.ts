@@ -15,7 +15,11 @@
 import { markRaw, reactive } from 'vue'
 import { Puzzle } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import { DEFAULT_CATALOG_URL, createPluginManagerService } from './pluginManagerService'
+import {
+  DEFAULT_CATALOG_URL,
+  createPluginManagerService,
+  type HostPluginManager,
+} from './pluginManagerService'
 import PluginManagerNav from './components/settings/PluginManagerNav.vue'
 import PluginManagerPage from './components/settings/PluginManagerPage.vue'
 
@@ -59,6 +63,9 @@ export function apply(
   })
   // 服务本身包成响应式：页面经它读 state，装卸变化能驱动重渲染（与 plugin-agent 同款）
   ctx.inject('plugin-manager', reactive(service))
+  // 应用级句柄（根 Provider 注入）：项目页没有画布宿主，也照样能装插件。
+  const appManager = ctx.tryGet<HostPluginManager>('appPluginManager')
+  if (appManager) void service.bindManager(appManager)
 
   // 菜单：进「集成 → 插件」。引用默认树的 nav id，注册自己的整页。
   ctx.settingsMenu.nav({
@@ -89,6 +96,22 @@ export function apply(
     id: 'plugin-manager/page',
     order: 6,
     component: markRaw(PluginManagerPage),
+  })
+
+  /**
+   * 项目页左栏「插件」整页（用户口径 2026-11-06）。
+   *
+   * 页面组件与设置里那一页是同一个；只换了外壳 —— 不再是弹窗，而是左栏页签。
+   */
+  ctx.slots.register('app.projects.tabs', {
+    id: 'plugin-manager/projects-tab',
+    order: 10,
+    component: markRaw(PluginManagerPage),
+    meta: {
+      title: '插件',
+      icon: Puzzle,
+      hint: '安装、卸载、重装插件',
+    },
   })
 
   // ③ 一打开设置页就拉一次清单（失败不致命：页面会显示错误 + 刷新按钮）

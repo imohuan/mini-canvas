@@ -41,7 +41,7 @@ import {
   RadioGroupItem,
   Slider,
   Switch,
-} from '@/previewKit'
+} from '../../previewKit'
 
 interface ChoiceOption {
   value: string

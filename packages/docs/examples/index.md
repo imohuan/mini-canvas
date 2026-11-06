@@ -45,7 +45,7 @@ export function apply(ctx) { /* 在这里注册你的东西 */ }
 | [7 · 节点底部动作](/examples/bottom-bar) | 跨插件注册：往别的插件的注册场放动作 | ⭐⭐⭐ |
 | [8 · 监听浏览器事件](/examples/file-drop) | `ctx.effect` 包 window 监听 + 坐标换算 | ⭐⭐ |
 | [9 · 节点状态栏](/examples/node-toolbar) | `nodeToolbar` 服务：默认栏与功能模式 | ⭐⭐⭐ |
-| [10 · 项目页面板](/examples/projects-panel) | `app.projects.main` 插槽，不用打开画布 | ⭐ |
+| [10 · 项目页插件页签](/examples/projects-panel) | `app.projects.tabs` 插槽，不用打开画布 | ⭐ |
 
 ## 插件之间怎么嵌套（读案例 7 前先看这段）
 

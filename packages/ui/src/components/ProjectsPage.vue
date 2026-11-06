@@ -10,14 +10,16 @@
  *
  * 通知宿主由 Root 统一挂载（全应用一只），本页不再重复挂。
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
 import { useUiComponentOutside } from '../composables/ui'
 import { useCanvasContextOrRender, type FeedbackService } from '@mini-canvas/canvas-render'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
-import ProjectsPluginsPanel from './projects/ProjectsPluginsPanel.vue'
+import ProjectsTabsNav from './projects/ProjectsTabsNav.vue'
+import ProjectsTabsPanel from './projects/ProjectsTabsPanel.vue'
+import { activeProjectsTab, useProjectsTabs } from './projects/useProjectsPanels'
 
 const router = useRouter()
 // 项目页在画布路由之外：当前仍走宿主单例取件，树内/树外都能拿到同一个组件。
@@ -34,6 +36,10 @@ const error = ref('')
 const query = ref('')
 /** 左栏页签：首页 / 项目 / 资产（同一页里切换主区内容） */
 const nav = ref<'home' | 'projects' | 'assets'>('projects')
+/** 左栏插件页签（app.projects.tabs）：选中时主区整块换成插件页面。 */
+const pluginTabs = useProjectsTabs()
+const pluginTabId = ref('')
+const activePluginTab = activeProjectsTab(pluginTabs, pluginTabId)
 const assets = ref<AssetSummary[]>([])
 /**
  * 主题：亮 / 暗。
@@ -99,9 +105,27 @@ onBeforeUnmount(() => {
 
 /** 切左栏页签：进「资产」时拉一次资产清单 */
 function switchNav(tab: 'home' | 'projects' | 'assets'): void {
+  // 从插件页切回内置页：清掉插件选中态，主区才会回到项目 / 资产。
+  pluginTabId.value = ''
   nav.value = tab
   if (tab === 'assets') void loadAssets()
 }
+
+/** 选中插件页签：左栏高亮换人，主区整页切换。 */
+function selectPluginTab(id: string): void {
+  pluginTabId.value = id
+}
+
+/** 标题：插件页用插件自己的标题，内置页用原来的规则。 */
+const pageTitle = computed(() =>
+  activePluginTab.value
+    ? activePluginTab.value.meta.title
+    : nav.value === 'assets'
+      ? '全部资产'
+      : nav.value === 'home'
+        ? '首页'
+        : '全部项目',
+)
 async function loadAssets(): Promise<void> {
   try {
     assets.value = await listAssets()
@@ -189,6 +213,7 @@ function dateOf(ts: number): string {
           <ImageIcon :size="15" /> 资产
         </Button>
       </nav>
+      <ProjectsTabsNav :tabs="pluginTabs" :active-id="pluginTabId" @select="selectPluginTab" />
     </aside>
 
     <!-- 主区 -->
@@ -198,8 +223,8 @@ function dateOf(ts: number): string {
           <ChevronLeft :size="15" /> 返回
         </Button>
         <span class="h-4 w-px bg-line"></span>
-        <strong class="text-[15px]">{{ nav === 'assets' ? '全部资产' : nav === 'home' ? '首页' : '全部项目' }}</strong>
-        <div class="ml-auto flex items-center gap-2">
+        <strong class="text-[15px]">{{ pageTitle }}</strong>
+        <div v-if="!activePluginTab" class="ml-auto flex items-center gap-2">
           <label class="flex h-9 w-[240px] items-center gap-2 rounded-lg border border-line bg-veil px-3">
             <Search :size="15" class="flex-none text-ink-dim" />
             <Input v-model="query" class="h-full flex-1 border-0 bg-transparent px-0 focus-visible:ring-0" placeholder="搜索项目" aria-label="搜索项目" />
@@ -219,7 +244,10 @@ function dateOf(ts: number): string {
 
       <p v-if="error" class="mx-6 mb-2 rounded-lg border border-[color:var(--ui-danger,#ef4444)] px-3 py-2 text-[12px] text-[color:var(--ui-danger,#ef4444)]" role="alert">{{ error }}</p>
 
-      <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
+      <!-- 插件整页：与内置页平级切换，不叠在项目卡片下面 -->
+      <ProjectsTabsPanel v-if="activePluginTab" :tab="activePluginTab" />
+
+      <div v-else class="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
         <!-- 资产页签：生成产物 + 自己上传，统一列表 -->
         <div v-if="nav === 'assets'" class="grid grid-cols-5 gap-4">
           <div v-for="a in assets" :key="a.id" class="flex flex-col gap-2">
@@ -270,8 +298,6 @@ function dateOf(ts: number): string {
         <p v-else-if="nav === 'projects' && projects.length === 0" class="py-16 text-center text-[13px] text-ink/50">还没有项目，点「新建项目」开始。</p>
         <p v-else-if="nav === 'projects'" class="py-10 text-center text-[12px] text-ink-dim">没有更多了</p>
 
-        <!-- 插件面板：只提供主内容区这一块（app.projects.main），没有条目时整块隐藏 -->
-        <ProjectsPluginsPanel :hidden="nav !== 'projects'" />
       </div>
     </main>
   </div>

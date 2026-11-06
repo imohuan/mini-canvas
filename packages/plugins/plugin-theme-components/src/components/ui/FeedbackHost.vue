@@ -127,7 +127,7 @@ function acceptSimple(): void {
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter :style="footerStyle">
-        <AlertDialogCancel class="rounded-lg">{{ current.cancelText }}</AlertDialogCancel>
+        <AlertDialogCancel class="rounded-lg">{{ 'cancelText' in current ? current.cancelText : '取消' }}</AlertDialogCancel>
         <AlertDialogAction
           class="rounded-lg"
           :style="destructive ? dangerStyle : undefined"

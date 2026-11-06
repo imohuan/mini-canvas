@@ -11,7 +11,7 @@
  * 不写死 import —— 换外观注册同名更小 order 的件即可。
  * 收藏是本地持久化（localStorage，按画布无关的全局键）—— 与后台无关，不需要服务端支持。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, Teleport } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
 import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
@@ -32,6 +32,15 @@ import { useCanvasGate } from '../useCanvasGate'
  * 对它没有意义。
  */
 defineOptions({ inheritAttrs: false })
+
+/**
+ * 同一个组件两种壳（用户口径 2026-11-06）：
+ * - 画布模式：默认值 = 弹出框（Teleport + 遮罩 + 居中面板）；
+ * - 项目模式：项目页把它注册成左栏整页页签，传 `inline` 就地渲染，不再盖住整个应用。
+ *
+ * 里面的广场、详情、收藏、加入画布逻辑一行不改 —— 只是换了个外壳。
+ */
+const props = withDefaults(defineProps<{ inline?: boolean }>(), { inline: false })
 
 /**
  * 只从根上下文取服务：项目页没有画布也能打开风格广场、看详情、收藏。
@@ -158,6 +167,9 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
 /** 最小化：只收起面板（不关，保留状态） */
 const minimized = ref(false)
 
+/** 浮层模式看 state.open；内嵌模式由页签决定显隐，始终显示。 */
+const visible = computed(() => props.inline || (s.open && !minimized.value))
+
 function onKey(e: KeyboardEvent): void {
   if (!s.open) return
   if (e.key === 'Escape' && !detailItem.value) { e.stopPropagation(); svc.close() }
@@ -172,10 +184,10 @@ watch(() => s.open, (v) => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="s.open && !minimized" class="slol-layer" @pointerdown.self="svc.close()" @contextmenu.prevent>
-      <div class="slol-panel" @pointerdown.stop>
-        <header class="slol-head">
+  <component :is="inline ? 'section' : Teleport" :to="inline ? undefined : 'body'">
+    <div v-if="visible" :class="inline ? 'slol-inline' : 'slol-layer'" @pointerdown.self="inline || svc.close()" @contextmenu.prevent>
+      <div class="slol-panel" :class="{ 'slol-panel--inline': inline }" @pointerdown.stop>
+        <header v-if="!inline" class="slol-head">
           <h3 class="slol-title">素材库 · 风格广场</h3>
           <div class="slol-head-actions">
             <!-- <button class="slol-icon" type="button" aria-label="最小化" title="最小化" @click="minimized = true">
@@ -202,10 +214,27 @@ watch(() => s.open, (v) => {
       <component :is="DetailComp" v-if="DetailComp" :item="detailItem" :starred="detailStarred"
         @close="detailItem = null" @toggle-star="onToggleStar" @use="onUse" />
     </div>
-  </Teleport>
+  </component>
 </template>
 
 <style scoped>
+.slol-inline {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--ui-panel, #fff);
+}
+
+.slol-panel--inline {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
 .slol-layer {
   position: fixed;
   inset: 0;
