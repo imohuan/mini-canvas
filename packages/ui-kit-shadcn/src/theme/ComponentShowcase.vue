@@ -2,12 +2,9 @@
 /**
  * 组件库展厅 —— 配置条 + 卡片墙。
  *
- * 两处共用同一份代码：
- * - 组件库自己的预览页（src/App.vue）：可以改颜色 / 暗色，验证「配置真的生效」；
- * - 成品应用「项目 → 组件库」页：只保留会作用到真实界面的项（尺寸 / 圆角 / 字体 / 浮层间距），
- *   颜色和暗色交给应用自己的主题设置，避免在这里改一套、回到画布又变回去。
- *
- * 默认（不传 embedded）就是预览页的完整行为。
+ * 由组件库自己的预览页（src/App.vue）渲染。成品应用「项目 → 组件库」页
+ * 用 iframe 直接打开这个预览站，所以这里的主题变量只作用于自己的 document，
+ * 不会和画布应用的 --mct-* 主题桥互相覆盖（用户 2026-11-06：内嵌后圆角/字体无效）。
  */
 import { onBeforeUnmount, ref, watchEffect } from 'vue'
 import { Badge } from '../previewKit'
@@ -21,15 +18,7 @@ import SelectCard from './cards/SelectCard.vue'
 import FloatingCard from './cards/FloatingCard.vue'
 import FeedbackCard from './cards/FeedbackCard.vue'
 
-const props = withDefaults(
-  defineProps<{
-    /** 嵌进成品应用：不接管全站暗色，也不写预览专用的颜色变量。 */
-    embedded?: boolean
-  }>(),
-  { embedded: false },
-)
-
-const dark = ref(!props.embedded)
+const dark = ref(true)
 const themeConfig = ref<PreviewThemeConfig>({
   baseColor: 'neutral',
   theme: 'neutral',
@@ -43,30 +32,28 @@ const themeConfig = ref<PreviewThemeConfig>({
   subGap: 8,
 })
 
-useThemePreview(themeConfig, dark, { embedded: props.embedded })
+useThemePreview(themeConfig, dark)
 
-// 预览页自己管暗色；嵌进应用时暗色由应用的设置面板决定，这里不能抢。
-if (!props.embedded) {
-  watchEffect(() => {
-    document.documentElement.classList.toggle('dark', dark.value)
-  })
-  onBeforeUnmount(() => {
-    document.documentElement.classList.remove('dark')
-  })
-}
+// 浮层会 Teleport 到 body，暗色变量必须挂在 <html> 上。
+watchEffect(() => {
+  document.documentElement.classList.toggle('dark', dark.value)
+})
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove('dark')
+})
 </script>
 
 <template>
   <div class="flex min-h-0 flex-col">
     <!-- 一行标题，把版面让给卡片墙 -->
     <header class="flex flex-wrap items-center gap-2 px-4 pt-3">
-      <Badge v-if="!embedded" variant="outline">shadcn-vue</Badge>
-      <Badge v-if="!embedded" variant="secondary">reka-ui</Badge>
+      <Badge variant="outline">shadcn-vue</Badge>
+      <Badge variant="secondary">reka-ui</Badge>
       <h2 class="text-base font-semibold tracking-tight">
-        {{ embedded ? '组件预览' : 'mini-canvas · shadcn UI 预览' }}
+        mini-canvas · shadcn UI 预览
       </h2>
       <span class="text-[11px] text-muted-foreground">
-        {{ embedded ? '这里看到的就是画布里真实使用的组件与外观' : '顶部改一项，卡片里的组件立刻跟着变' }}
+        顶部改一项，卡片里的组件立刻跟着变
       </span>
     </header>
 
@@ -78,8 +65,6 @@ if (!props.embedded) {
       <ThemeConfigBar
         v-model:config="themeConfig"
         v-model:dark="dark"
-        :show-colors="!embedded"
-        :show-dark="!embedded"
       />
     </div>
 
@@ -103,7 +88,7 @@ if (!props.embedded) {
       </div>
     </div>
 
-    <!-- 通知挂载点：Notify 案例（vue-sonner）需要有它才会出现；应用里已有全局 Toaster。 -->
-    <UiToaster v-if="!embedded" />
+    <!-- 通知挂载点：Notify 案例（vue-sonner）需要有它才会出现 -->
+    <UiToaster />
   </div>
 </template>

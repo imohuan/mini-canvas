@@ -97,14 +97,11 @@ describe('项目页面板的组件来源', () => {
     expect(captured.join('\n')).not.toContain('没有名为 "Button"')
     console.warn = original
 
-    // 项目页的「组件库」页签：正文按名取 ui 目录里的组件展厅（不直接 import 组件库）。
-    expect(html).toContain('组件预览')
-    // 展厅正文真的渲染出来了（按钮 / 卡片来自组件库，与预览页同一份）。
-    expect(html).toContain('data-slot="button"')
-    expect(html).toContain('基础组件')
-    expect(html).toContain('组件配置')
-    // 内嵌模式不能把应用的主题色改成预览页那套。
-    expect(html).not.toContain('底色 Base Color')
+    // 项目页的「组件库」页签：用 iframe 打开组件库自己的预览站。
+    // 不再把组件直接塞进这个 document —— 两套主题变量会互相覆盖（圆角/字体改不动）。
+    expect(html).toContain('<iframe')
+    expect(html).toContain('/ui-kit/')
+    expect(html).toContain('组件库预览')
     ctx.stop()
     console.warn = original
   })

@@ -33,28 +33,7 @@ import RadiusPreview from './RadiusPreview.vue'
 import { COMPONENT_SIZE_CHOICES } from '../componentConfig'
 import type { PreviewThemeConfig } from './useThemePreview'
 
-const props = withDefaults(
-  defineProps<{
-    config: PreviewThemeConfig
-    dark: boolean
-    /** 预览页：显示底色 / 主题色（嵌进应用时颜色归应用主题管）。 */
-    showColors?: boolean
-    /** 预览页：显示「暗色」开关（嵌进应用时归应用设置管）。 */
-    showDark?: boolean
-  }>(),
-  { showColors: true, showDark: true },
-)
-
-/**
- * 列数跟着可见项走。
- *
- * 预览页有 10 项，6 列刚好两行；嵌进应用后颜色两项被藏起来，只剩 8 项，
- * 仍用 6 列会把「圆角」那组挤成两行（用户 2026-11-06 截图：最后一档「大」掉下去了）。
- * 4 列时：字体 / 标题字体 / 圆角(2) 一行，尺寸(2) / 箭头 / 子菜单一行，间距 / 偏移一行。
- */
-const columnsClass = computed(() =>
-  props.showColors ? 'sm:grid-cols-2 lg:grid-cols-6' : 'sm:grid-cols-2 lg:grid-cols-4',
-)
+const props = defineProps<{ config: PreviewThemeConfig; dark: boolean }>()
 const emit = defineEmits<{ 'update:config': [value: PreviewThemeConfig]; 'update:dark': [value: boolean] }>()
 
 interface Option {
@@ -183,7 +162,7 @@ function asText(value: unknown): string {
         <span class="text-xs font-medium">组件配置</span>
         <span class="text-[11px] text-muted-foreground">改完立刻作用到下面所有卡片（含 Teleport 出去的浮层）</span>
       </div>
-      <label v-if="showDark" class="flex items-center gap-2 text-[11px] text-muted-foreground">
+      <label class="flex items-center gap-2 text-[11px] text-muted-foreground">
         暗色
         <Switch :model-value="dark" @update:model-value="emit('update:dark', $event)" />
       </label>
@@ -195,9 +174,9 @@ function asText(value: unknown): string {
       第二行：尺寸 2 列 + 箭头 / 子菜单 / gap / offset 各 1 列 → 正好 6。
       两行装完全部配置，滚动看卡片时吸顶不挡内容。
     -->
-    <div class="grid gap-x-3 gap-y-3" :class="columnsClass">
-      <!-- 颜色：底色 / 主题色（只有预览页可改） -->
-      <div v-if="showColors" class="grid gap-1.5">
+    <div class="grid gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-6">
+      <!-- 颜色：底色 / 主题色 -->
+      <div class="grid gap-1.5">
         <Label class="text-xs">底色 Base Color</Label>
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
@@ -226,7 +205,7 @@ function asText(value: unknown): string {
         </DropdownMenu>
       </div>
 
-      <div v-if="showColors" class="grid gap-1.5">
+      <div class="grid gap-1.5">
         <Label class="text-xs">主题色 Theme</Label>
         <DropdownMenu>
           <DropdownMenuTrigger as-child>

@@ -32,6 +32,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "build:preview": "vite build --outDir ../ui/dist/ui-kit --emptyOutDir",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test": "pnpm -C ../ui exec vitest run --root ../ui-kit-shadcn --passWithNoTests src/__tests__"

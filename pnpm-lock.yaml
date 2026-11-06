@@ -1867,6 +1867,9 @@ importers:
       '@vue-flow/core':
         specifier: ^1.48.2
         version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      happy-dom:
+        specifier: ^21.0.4
+        version: 21.0.4
       imagesloaded:
         specifier: 5.0.0
         version: 5.0.0
