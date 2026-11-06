@@ -43,12 +43,15 @@ const mcpQuery = ref('')
  *（用户 2026-11-06 截图：面板是分栏，右上角却停在卡片）。
  */
 function setModelView(value: string | number): void {
-  if (value === 'split') modelView.value = 'split'
-  else if (value === 'card') modelView.value = 'card'
+  // 用「同一个值」也要显式写一次：reka 的 Tabs 收到 update 后自己也会改内部状态，
+  // 两边各改一次时顺序不保证 —— 真机上出现过「点卡片没反应、点第二次才生效」。
+  // 这里只认两档，其它值一律不动，保证视图与页签永远指向同一档。
+  if (value === 'split' && modelView.value !== 'split') modelView.value = 'split'
+  else if (value === 'card' && modelView.value !== 'card') modelView.value = 'card'
 }
 function setSkillView(value: string | number): void {
-  if (value === 'split') skillView.value = 'split'
-  else if (value === 'card') skillView.value = 'card'
+  if (value === 'split' && skillView.value !== 'split') skillView.value = 'split'
+  else if (value === 'card' && skillView.value !== 'card') skillView.value = 'card'
 }
 /** 技能分栏的分类过滤（DEMO 的 activeCategory；卡片视图不看它，切到卡片时重置为全部） */
 const skillCategory = ref('全部')

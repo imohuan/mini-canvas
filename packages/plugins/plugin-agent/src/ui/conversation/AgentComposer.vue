@@ -434,10 +434,21 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     </div>
                     <!-- 视图切换用组件库原生的 Tabs（用户口径 2026-11-02）：
                          以前是自绘的分段按钮 + 绝对定位指示条，不跟主题尺寸走。 -->
+                    <!--
+                      受控页签（用户 2026-11-06 连续三次反馈「值一直不对」）。
+
+                      reka 的 Tabs 内部还有一份用 useVModel 维护的选中值；外层再用
+                      useForwardPropsEmits 转发 props/emits，它的更新偶尔不会回灌到
+                      reka —— 表现就是「点卡片没反应、再点一次才好」。
+                      这里改成**完全受控**：选中态只看 modelView，点击只走我们自己的
+                      handler（setModelView），页签不再持有自己的状态。
+                    -->
                     <Tabs :model-value="modelView" @update:model-value="setModelView">
                       <TabsList aria-label="面板布局">
-                        <TabsTrigger value="card">卡片</TabsTrigger>
-                        <TabsTrigger value="split">分栏</TabsTrigger>
+                        <TabsTrigger value="card" :data-state="modelView === 'card' ? 'active' : 'inactive'"
+                          :aria-selected="modelView === 'card'" @click="setModelView('card')">卡片</TabsTrigger>
+                        <TabsTrigger value="split" :data-state="modelView === 'split' ? 'active' : 'inactive'"
+                          :aria-selected="modelView === 'split'" @click="setModelView('split')">分栏</TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </div>
@@ -581,10 +592,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                       <span class="ac-panel-title">技能</span>
                       <span class="ac-panel-count">{{ s.skills.length }}</span>
                     </div>
+                    <!-- 与模型面板同一套受控写法：选中态只看 skillView，点击只走 setSkillView。 -->
                     <Tabs v-if="s.skills.length" :model-value="skillView" @update:model-value="setSkillView">
                       <TabsList aria-label="面板布局">
-                        <TabsTrigger value="card">卡片</TabsTrigger>
-                        <TabsTrigger value="split">分栏</TabsTrigger>
+                        <TabsTrigger value="card" :data-state="skillView === 'card' ? 'active' : 'inactive'"
+                          :aria-selected="skillView === 'card'" @click="setSkillView('card')">卡片</TabsTrigger>
+                        <TabsTrigger value="split" :data-state="skillView === 'split' ? 'active' : 'inactive'"
+                          :aria-selected="skillView === 'split'" @click="setSkillView('split')">分栏</TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </div>
@@ -722,10 +736,14 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top">
                     <!--
-                      不再写「MCP」大标题（用户 2026-11-06：面板里这块标题是多余的）。
-                      留一个占位把右侧的「重新检测」推到行尾，不改变那排按钮的位置。
+                      面板标题必须留着（用户 2026-11-06 截图：标题整块不见了）。
+                      上一轮我把「删掉工具区里那行 canvas / 11 个工具」误做成删了面板标题，
+                      这里恢复；工具区内部仍然不重复显示服务名。
                     -->
-                    <div class="ac-panel-heading"></div>
+                    <div class="ac-panel-heading">
+                      <span class="ac-panel-title">MCP</span>
+                      <span class="ac-panel-count">{{ s.mcpServers.length }}</span>
+                    </div>
                     <div class="ac-panel-tools">
                       <!-- 重新检测（全部）：主动连一次，看当前连没连上、有哪些工具 -->
                       <Button variant="outline" size="sm" :disabled="probing"
