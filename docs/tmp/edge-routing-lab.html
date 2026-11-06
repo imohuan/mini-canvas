@@ -1,0 +1,2230 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>连接线路径实验室 · mini-canvas</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --panel-soft: #fbfcfd;
+    --ink: #111827;
+    --body: #374151;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --line: rgba(0, 0, 0, 0.08);
+    --line-strong: rgba(0, 0, 0, 0.14);
+    --fill: rgba(0, 0, 0, 0.03);
+    --fill-2: rgba(0, 0, 0, 0.055);
+    --accent: #0891b2;
+    --accent-strong: #0e7490;
+    --accent-soft: rgba(8, 145, 178, 0.12);
+    --warn: #b45309;
+    --warn-bg: rgba(245, 158, 11, 0.13);
+    --danger: #dc2626;
+    --danger-bg: rgba(239, 68, 68, 0.1);
+    --ok: #0f766e;
+    --ok-bg: rgba(13, 148, 136, 0.1);
+    --stage: #fbfcfd;
+    --grid: rgba(17, 24, 39, 0.13);
+    --node: #ffffff;
+    --node-shadow: 0 16px 34px -22px rgba(15, 23, 42, 0.4);
+    --port-target: #374151;
+    --port-target-ink: #ffffff;
+    --code-bg: #0f172a;
+    --code-ink: #cbd5e1;
+    --r-lg: 16px;
+    --r-md: 12px;
+    --r-sm: 8px;
+    --r-xs: 6px;
+    --font: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #101214;
+    --panel: #191c20;
+    --panel-soft: #1d2126;
+    --ink: #f3f4f6;
+    --body: #d1d5db;
+    --muted: #9ca3af;
+    --faint: #737b86;
+    --line: rgba(255, 255, 255, 0.09);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --fill: rgba(255, 255, 255, 0.045);
+    --fill-2: rgba(255, 255, 255, 0.075);
+    --accent: #22b8d4;
+    --accent-strong: #67d6e8;
+    --accent-soft: rgba(34, 184, 212, 0.16);
+    --warn: #fbbf24;
+    --warn-bg: rgba(251, 191, 36, 0.13);
+    --danger: #f87171;
+    --danger-bg: rgba(248, 113, 113, 0.12);
+    --ok: #5eead4;
+    --ok-bg: rgba(45, 212, 191, 0.12);
+    --stage: #15181c;
+    --grid: rgba(255, 255, 255, 0.13);
+    --node: #202429;
+    --node-shadow: 0 16px 34px -20px rgba(0, 0, 0, 0.8);
+    --port-target: #e5e7eb;
+    --port-target-ink: #111827;
+    --code-bg: #0b0f16;
+    --code-ink: #dbe4f0;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background:
+      radial-gradient(1100px 600px at 8% -10%, rgba(8, 145, 178, 0.08), transparent 60%),
+      radial-gradient(900px 520px at 100% 0%, rgba(124, 58, 237, 0.055), transparent 55%),
+      var(--bg);
+    color: var(--body);
+    font-family: var(--font);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  button, input { font: inherit; }
+  button { color: inherit; }
+  button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .app-head {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 18px 24px 16px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-mark {
+    width: 38px; height: 38px; flex: 0 0 auto;
+    border-radius: 11px;
+    display: grid; place-items: center;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 20px;
+    font-weight: 700;
+    border: 1px solid rgba(8, 145, 178, 0.18);
+  }
+  h1 { margin: 0; color: var(--ink); font-size: 18px; line-height: 1.25; letter-spacing: -0.01em; }
+  .brand p {
+    margin: 3px 0 0;
+    color: var(--faint);
+    font: 10.5px/1.4 var(--mono);
+    letter-spacing: 0.02em;
+  }
+  .head-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .btn {
+    height: 30px; padding: 0 11px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+  }
+  .btn:hover { background: var(--fill-2); color: var(--ink); }
+  .btn:active { transform: scale(0.97); }
+  .btn--accent { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+  .btn--accent:hover { background: var(--accent-strong); color: #ffffff; }
+  .btn--icon { width: 30px; padding: 0; font-size: 14px; }
+
+  .layout {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 18px 24px 34px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 356px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .canvas-card {
+    min-width: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 60px -42px rgba(15, 23, 42, 0.5);
+    overflow: hidden;
+  }
+
+  .canvas-toolbar {
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-soft);
+  }
+  .mode-groups { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0; }
+  .mode-group { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .group-label {
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--faint);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .segmented {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--fill);
+    border: 1px solid transparent;
+  }
+  .mode-btn {
+    height: 27px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .mode-btn:hover { color: var(--ink); background: var(--fill); }
+  .mode-btn.is-active {
+    background: var(--panel);
+    color: var(--ink);
+    box-shadow: 0 1px 5px rgba(15, 23, 42, 0.12);
+  }
+  .mode-btn.is-new.is-active {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.15);
+  }
+  .toolbar-spacer { flex: 1 1 12px; }
+  .quick-toggles { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  .check input {
+    width: 13px; height: 13px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1000 / 620;
+    overflow: hidden;
+    background-color: var(--stage);
+    background-image: radial-gradient(var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 0 0;
+  }
+  .stage.no-grid { background-image: none; }
+  .stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 1px 0 var(--line), inset 0 -1px 0 var(--line);
+  }
+  .world {
+    position: absolute;
+    left: 0; top: 0;
+    width: 1000px; height: 620px;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  #edgeSvg {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    overflow: visible;
+    z-index: 2;
+    pointer-events: none;
+  }
+  #edgeSvg.is-on-top { z-index: 4; }
+  .node-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .edge-main {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 1px 2px rgba(8, 145, 178, 0.22));
+  }
+  .edge-ghost {
+    fill: none;
+    stroke: var(--danger);
+    stroke-width: 1.4;
+    stroke-dasharray: 5 4;
+    stroke-linecap: round;
+    opacity: 0.7;
+  }
+  .margin-rect {
+    fill: none;
+    stroke: #d97706;
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    opacity: 0.55;
+  }
+  .margin-label {
+    fill: #b45309;
+    font: 9px var(--mono);
+    paint-order: stroke;
+    stroke: var(--stage);
+    stroke-width: 3px;
+    opacity: 0.8;
+  }
+  .control-line {
+    stroke: var(--faint);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+    opacity: 0.8;
+  }
+  .control-dot {
+    fill: var(--panel);
+    stroke: var(--accent);
+    stroke-width: 1.5;
+  }
+  .junction-dot {
+    fill: var(--panel);
+    stroke: var(--accent);
+    stroke-width: 1.4;
+  }
+  .svg-label {
+    fill: var(--muted);
+    font: 9px var(--mono);
+    paint-order: stroke;
+    stroke: var(--stage);
+    stroke-width: 3px;
+  }
+
+  .node {
+    position: absolute;
+    background: var(--node);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    box-shadow: var(--node-shadow);
+    display: flex;
+    flex-direction: column;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    pointer-events: auto;
+  }
+  .node:hover { border-color: rgba(8, 145, 178, 0.45); }
+  .node.is-dragging {
+    cursor: grabbing;
+    border-color: var(--accent);
+    box-shadow: 0 20px 44px -18px rgba(8, 145, 178, 0.45);
+    z-index: 6;
+  }
+  .node--blocker {
+    border-style: dashed;
+    border-color: rgba(217, 119, 6, 0.55);
+    background: var(--node);
+    box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.5);
+  }
+  .node--blocker:hover { border-color: #d97706; }
+  .node-head {
+    height: 40px;
+    flex: 0 0 auto;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+  }
+  .node-role {
+    width: 20px; height: 20px;
+    flex: 0 0 auto;
+    display: grid; place-items: center;
+    border-radius: 6px;
+    font: 700 9px/1 var(--mono);
+  }
+  .node-role--source { color: var(--accent-strong); background: var(--accent-soft); }
+  .node-role--target { color: var(--ink); background: var(--fill-2); }
+  .node-role--blocker { color: var(--warn); background: var(--warn-bg); }
+  .node-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 650;
+  }
+  .node-meta {
+    margin-left: auto;
+    color: var(--faint);
+    font: 9.5px var(--mono);
+    white-space: nowrap;
+  }
+  .node-body {
+    flex: 1;
+    min-height: 0;
+    padding: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    border-radius: 0 0 13px 13px;
+    overflow: hidden;
+  }
+  .node-art {
+    flex: 1;
+    min-height: 52px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .node-art--a {
+    background:
+      linear-gradient(90deg, transparent 0 23%, rgba(255,255,255,0.13) 23% 24%, transparent 24% 49%, rgba(255,255,255,0.13) 49% 50%, transparent 50% 75%, rgba(255,255,255,0.13) 75% 76%, transparent 76%),
+      radial-gradient(circle at 24% 38%, rgba(255,255,255,0.22), transparent 18%),
+      linear-gradient(135deg, #111827, #4b5563 58%, #0f172a);
+  }
+  .node-art--b {
+    background:
+      radial-gradient(circle at 72% 24%, #fef3c7, transparent 21%),
+      radial-gradient(circle at 28% 72%, rgba(255,255,255,0.22), transparent 30%),
+      linear-gradient(135deg, #f59e0b, #dc2626 56%, #451a1a);
+  }
+  .node-art--c {
+    background:
+      repeating-linear-gradient(135deg, var(--fill-2) 0 7px, transparent 7px 14px),
+      var(--fill);
+  }
+  .node-caption {
+    color: var(--muted);
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+  .node-coord {
+    color: var(--faint);
+    font: 9.5px var(--mono);
+  }
+
+  .port {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--panel);
+    box-shadow: 0 2px 7px rgba(15, 23, 42, 0.2);
+    color: #ffffff;
+    background: var(--accent);
+    z-index: 8;
+    cursor: default;
+  }
+  .port b { font: 700 8.5px/1 var(--mono); letter-spacing: 0.03em; }
+  .node[data-role="target"] .port {
+    background: var(--port-target);
+    color: var(--port-target-ink);
+  }
+  .port--left { left: -11px; top: 50%; transform: translateY(-50%); }
+  .port--right { right: -11px; top: 50%; transform: translateY(-50%); }
+  .port--top { top: -11px; left: 50%; transform: translateX(-50%); }
+  .port--bottom { bottom: -11px; left: 50%; transform: translateX(-50%); }
+
+  .port-hint {
+    position: absolute;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--faint);
+    opacity: 0.32;
+    pointer-events: none;
+  }
+  .port-hint--left { left: -3px; top: 50%; transform: translateY(-50%); }
+  .port-hint--right { right: -3px; top: 50%; transform: translateY(-50%); }
+  .port-hint--top { top: -3px; left: 50%; transform: translateX(-50%); }
+  .port-hint--bottom { bottom: -3px; left: 50%; transform: translateX(-50%); }
+
+  .stage-chip {
+    position: absolute;
+    left: 14px; top: 13px;
+    z-index: 10;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: calc(100% - 28px);
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    color: var(--muted);
+    font: 10.5px var(--mono);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+    white-space: nowrap;
+  }
+  .chip-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex: 0 0 auto;
+  }
+  .stage-chip[data-tone="warn"] { color: var(--warn); border-color: rgba(217, 119, 6, 0.24); background: var(--panel); }
+  .stage-chip[data-tone="warn"] .chip-dot { background: #d97706; }
+  .stage-chip[data-tone="ok"] { color: var(--ok); border-color: rgba(13, 148, 136, 0.22); }
+  .stage-chip[data-tone="ok"] .chip-dot { background: var(--ok); }
+
+  .stage-legend {
+    position: absolute;
+    left: 14px; bottom: 12px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    flex-wrap: wrap;
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    color: var(--faint);
+    font-size: 10px;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .legend-swatch { width: 16px; height: 0; border-top: 2px solid var(--accent); }
+  .legend-swatch--ghost { border-top: 1.5px dashed var(--danger); opacity: 0.8; }
+  .legend-swatch--margin { width: 12px; height: 8px; border: 1px dashed #d97706; border-radius: 2px; }
+
+  .canvas-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 13px;
+    border-top: 1px solid var(--line);
+    color: var(--faint);
+    font-size: 10.5px;
+    line-height: 1.45;
+  }
+  .canvas-foot kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--line-strong);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--fill);
+    color: var(--muted);
+    font: 9.5px var(--mono);
+  }
+
+  .inspector {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  .inspector h2 { font-size: 12.5px; }
+  .card-head .mini, .param-note, .node-caption, .canvas-foot, .formula, .metric span { color: var(--muted); }
+  .param-note { opacity: .82; }
+  .param-top output { font-weight: 700; }
+  .diag-desc { font-size: 11.5px; color: var(--body); }
+  .metric b { font-size: 12px; }
+  .formula { font-size: 10px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 13px;
+    box-shadow: 0 10px 30px -28px rgba(15, 23, 42, 0.45);
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .card h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .card-head .mini { margin-left: auto; color: var(--faint); font-size: 9.5px; }
+
+  .diag-card[data-tone="warn"] { border-color: rgba(217, 119, 6, 0.24); background: linear-gradient(180deg, var(--warn-bg), transparent 70%), var(--panel); }
+  .diag-card[data-tone="ok"] { border-color: rgba(13, 148, 136, 0.2); background: linear-gradient(180deg, var(--ok-bg), transparent 72%), var(--panel); }
+  .diag-card[data-tone="danger"] { border-color: rgba(220, 38, 38, 0.22); background: linear-gradient(180deg, var(--danger-bg), transparent 72%), var(--panel); }
+  .diag-status { display: flex; align-items: flex-start; gap: 9px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-top: 5px; flex: 0 0 auto; }
+  .diag-card[data-tone="warn"] .status-dot { background: #d97706; }
+  .diag-card[data-tone="ok"] .status-dot { background: var(--ok); }
+  .diag-card[data-tone="danger"] .status-dot { background: var(--danger); }
+  .diag-title { margin: 0; color: var(--ink); font-size: 12.5px; font-weight: 700; line-height: 1.4; }
+  .diag-desc { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 11px;
+  }
+  .metric {
+    min-width: 0;
+    padding: 7px 8px;
+    border-radius: var(--r-sm);
+    background: var(--fill);
+  }
+  .metric span { display: block; color: var(--faint); font-size: 9.5px; }
+  .metric b { display: block; margin-top: 3px; color: var(--ink); font: 700 11.5px/1.3 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .metric b[data-tone="warn"] { color: var(--warn); }
+  .metric b[data-tone="ok"] { color: var(--ok); }
+  .formula {
+    margin-top: 8px;
+    padding: 8px 9px;
+    border-radius: var(--r-sm);
+    background: var(--fill);
+    color: var(--muted);
+    font: 9.5px/1.65 var(--mono);
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .formula .accent { color: var(--accent-strong); }
+  .formula .danger { color: var(--danger); }
+
+  .port-config { display: flex; flex-direction: column; gap: 8px; }
+  .port-row { display: flex; align-items: center; gap: 8px; }
+  .port-name { display: flex; align-items: center; gap: 6px; min-width: 66px; color: var(--body); font-size: 11px; font-weight: 600; }
+  .role-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .role-dot--target { background: var(--port-target); }
+  .side-buttons { display: flex; gap: 2px; margin-left: auto; padding: 2px; border-radius: 8px; background: var(--fill); }
+  .side-btn {
+    width: 27px; height: 23px;
+    border: 0; border-radius: 6px;
+    background: transparent;
+    color: var(--faint);
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+  .side-btn:hover { color: var(--ink); background: var(--fill); }
+  .side-btn.is-active { color: var(--accent-strong); background: var(--panel); box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1); }
+
+  .params { display: flex; flex-direction: column; gap: 10px; }
+  .param-row { transition: opacity 0.15s; }
+  .param-row.is-off { opacity: 0.4; }
+  .param-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  .param-top label { color: var(--body); font-size: 11px; font-weight: 600; }
+  .param-top output { margin-left: auto; color: var(--accent-strong); font: 10px var(--mono); }
+  .param-row input[type="range"] {
+    width: 100%;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .param-note { margin: 4px 0 0; color: var(--faint); font-size: 9.5px; line-height: 1.45; }
+
+  .toggle-list { display: flex; flex-direction: column; gap: 8px; }
+  .toggle-list .check { justify-content: space-between; gap: 10px; color: var(--body); font-size: 11px; }
+  .toggle-list .check input { order: 2; }
+  .toggle-list .check span { display: inline-flex; align-items: center; gap: 6px; }
+
+  .code-card { padding-bottom: 10px; }
+  .code-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .code-head h2 { margin: 0; }
+  .copy-btn { margin-left: auto; height: 24px; padding: 0 8px; font-size: 10.5px; }
+  pre.path-code {
+    margin: 0;
+    max-height: 164px;
+    overflow: auto;
+    padding: 9px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: var(--r-sm);
+    background: var(--code-bg);
+    color: var(--code-ink);
+    font: 9.5px/1.65 var(--mono);
+    white-space: pre-wrap;
+    word-break: break-all;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  .note-card p { margin: 0 0 7px; color: var(--muted); font-size: 10.5px; line-height: 1.6; }
+  .note-card p:last-child { margin-bottom: 0; }
+  .note-card b { color: var(--body); }
+  .source-path { margin-top: 8px; color: var(--faint); font: 9px/1.5 var(--mono); word-break: break-all; }
+
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: 1fr; }
+    .inspector {
+      position: static;
+      max-height: none;
+      overflow: visible;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+    .diag-card, .code-card, .note-card { grid-column: 1 / -1; }
+  }
+  @media (max-width: 760px) {
+    .app-head { padding: 14px 16px; align-items: flex-start; flex-wrap: wrap; }
+    .head-actions { width: 100%; margin-left: 0; }
+    .layout { padding: 14px 16px 26px; }
+    .canvas-toolbar { align-items: flex-start; }
+    .mode-groups { width: 100%; gap: 9px; }
+    .mode-group { width: 100%; justify-content: space-between; }
+    .segmented { flex: 1; overflow-x: auto; }
+    .quick-toggles { margin-left: 0; }
+    .inspector { grid-template-columns: 1fr; }
+    .diag-card, .code-card, .note-card { grid-column: auto; }
+    .canvas-foot { align-items: flex-start; flex-direction: column; }
+    .stage-legend { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <header class="app-head">
+    <div class="brand">
+      <div class="brand-mark">↗</div>
+      <div>
+        <h1>连接线路径实验室</h1>
+        <p>plugin-theme-canvas / edgeGeometry.ts · 原版逐行复刻</p>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button class="btn" type="button" id="presetShot">复现截图场景</button>
+      <button class="btn" type="button" id="presetNormal">常规布局</button>
+      <button class="btn btn--accent" type="button" id="presetObstacle">障碍布局</button>
+      <button class="btn btn--icon" type="button" id="themeToggle" title="切换明暗主题" aria-label="切换明暗主题">◐</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="canvas-card">
+      <div class="canvas-toolbar">
+        <div class="mode-groups">
+          <div class="mode-group">
+            <span class="group-label">现有算法</span>
+            <div class="segmented">
+              <button class="mode-btn is-active" type="button" data-mode="bezier" aria-pressed="true">贝塞尔</button>
+              <button class="mode-btn" type="button" data-mode="straight" aria-pressed="false">直线</button>
+              <button class="mode-btn" type="button" data-mode="step" aria-pressed="false">直角</button>
+              <button class="mode-btn" type="button" data-mode="smoothstep" aria-pressed="false">圆角折线</button>
+            </div>
+          </div>
+          <div class="mode-group">
+            <span class="group-label">新算法</span>
+            <div class="segmented">
+              <button class="mode-btn is-new" type="button" data-mode="adaptive" aria-pressed="false">自适应贝塞尔</button>
+              <button class="mode-btn is-new" type="button" data-mode="avoid" aria-pressed="false">正交避障</button>
+            </div>
+          </div>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="quick-toggles">
+          <label class="check"><input type="checkbox" id="edgesOnTop" /> <span>连线置顶</span></label>
+          <label class="check"><input type="checkbox" id="ghostToggle" checked /> <span>叠加原版</span></label>
+        </div>
+      </div>
+
+      <div class="stage" id="stage">
+        <div class="world" id="world">
+          <svg id="edgeSvg" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <g id="marginLayer"></g>
+            <g id="ghostLayer"><path id="ghostPath" class="edge-ghost"></path></g>
+            <g id="routeLayer"><path id="mainPath" class="edge-main"></path></g>
+            <g id="controlLayer"></g>
+          </svg>
+          <div class="node-layer" id="nodeLayer"></div>
+        </div>
+        <div class="stage-chip" id="stageChip" data-tone="neutral">
+          <span class="chip-dot"></span>
+          <span id="stageChipText">Δx 14 px · Δy 150 px</span>
+        </div>
+        <div class="stage-legend">
+          <span class="legend-item"><span class="legend-swatch"></span>当前路径</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch--ghost"></span>原版贝塞尔</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch--margin"></span>避障边距</span>
+        </div>
+      </div>
+
+      <div class="canvas-foot">
+        <span>拖动任意节点，观察两个端口在不同位置时的路径。端口方向可在右侧切换，参数与调试图层都在右侧。</span>
+        <span>当前 lineWidth 1.5px · round join（与主题默认一致）</span>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <section class="card diag-card" id="diagCard" data-tone="warn">
+        <div class="diag-status">
+          <span class="status-dot"></span>
+          <div>
+            <p class="diag-title" id="diagTitle">短缝被拉成蛇形</p>
+            <p class="diag-desc" id="diagDesc">水平缝很窄，但曲率固定 80px；两个控制点越过彼此，曲线先向右鼓再折回。</p>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span>穿过节点</span><b id="metricHits" data-tone="ok">0 处</b></div>
+          <div class="metric"><span>路径长度</span><b id="metricLength">0 px</b></div>
+          <div class="metric"><span>端口位移</span><b id="metricDelta">Δx 14 / Δy 150</b></div>
+          <div class="metric"><span>折点 / 控制点</span><b id="metricPoints">2 个控制点</b></div>
+        </div>
+        <div class="formula" id="formulaText">c1.x = 440 · c2.x = 294
+c1.x &gt; c2.x：控制点交叉</div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>端口方向</h2><span class="mini">点击切换</span></div>
+        <div class="port-config">
+          <div class="port-row">
+            <span class="port-name"><span class="role-dot"></span>源节点 S</span>
+            <div class="side-buttons" data-node-side="a">
+              <button class="side-btn" type="button" data-side="left">左</button>
+              <button class="side-btn" type="button" data-side="right">右</button>
+              <button class="side-btn" type="button" data-side="top">上</button>
+              <button class="side-btn" type="button" data-side="bottom">下</button>
+            </div>
+          </div>
+          <div class="port-row">
+            <span class="port-name"><span class="role-dot role-dot--target"></span>目标 T</span>
+            <div class="side-buttons" data-node-side="b">
+              <button class="side-btn" type="button" data-side="left">左</button>
+              <button class="side-btn" type="button" data-side="right">右</button>
+              <button class="side-btn" type="button" data-side="top">上</button>
+              <button class="side-btn" type="button" data-side="bottom">下</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>路径参数</h2><span class="mini">实时重算</span></div>
+        <div class="params">
+          <div class="param-row" data-param-row="minCurvature">
+            <div class="param-top"><label for="pMinCurvature">原版最小曲率</label><output id="vMinCurvature">80 px</output></div>
+            <input id="pMinCurvature" type="range" min="0" max="200" step="1" value="80" data-config="minCurvature" />
+            <p class="param-note">原版贝塞尔的 distX 下限。短缝时它会把控制点推过对方。</p>
+          </div>
+          <div class="param-row" data-param-row="stepOffset">
+            <div class="param-top"><label for="pStepOffset">直角伸出</label><output id="vStepOffset">20 px</output></div>
+            <input id="pStepOffset" type="range" min="0" max="60" step="1" value="20" data-config="stepOffset" />
+            <p class="param-note">step / smoothstep 从端口沿法线伸出的距离。</p>
+          </div>
+          <div class="param-row" data-param-row="smoothRadius">
+            <div class="param-top"><label for="pSmoothRadius">折线圆角</label><output id="vSmoothRadius">5 px</output></div>
+            <input id="pSmoothRadius" type="range" min="0" max="20" step="1" value="5" data-config="smoothRadius" />
+            <p class="param-note">smoothstep 的 Q 圆角半径。</p>
+          </div>
+          <div class="param-row" data-param-row="margin">
+            <div class="param-top"><label for="pMargin">避障边距</label><output id="vMargin">18 px</output></div>
+            <input id="pMargin" type="range" min="4" max="48" step="1" value="18" data-config="margin" />
+            <p class="param-note">节点矩形向外扩的距离。路径不进入这层虚线框。</p>
+          </div>
+          <div class="param-row" data-param-row="cornerRadius">
+            <div class="param-top"><label for="pCornerRadius">避障圆角</label><output id="vCornerRadius">8 px</output></div>
+            <input id="pCornerRadius" type="range" min="0" max="16" step="1" value="8" data-config="cornerRadius" />
+            <p class="param-note">正交路径转弯处的圆角；会自动限制在边距以内。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>显示与调试</h2><span class="mini">叠加观察</span></div>
+        <div class="toggle-list">
+          <label class="check"><span>显示贝塞尔控制点</span><input type="checkbox" id="showControls" /></label>
+          <label class="check"><span>显示折点 / 路由节点</span><input type="checkbox" id="showJunctions" /></label>
+          <label class="check"><span>显示避障边距</span><input type="checkbox" id="showMargins" checked /></label>
+          <label class="check"><span>显示中间障碍节点</span><input type="checkbox" id="showBlocker" /></label>
+          <label class="check"><span>显示点阵网格</span><input type="checkbox" id="showGrid" checked /></label>
+        </div>
+      </section>
+
+      <section class="card code-card">
+        <div class="code-head">
+          <h2>当前 path d</h2>
+          <button class="btn copy-btn" type="button" id="copyPath">复制</button>
+        </div>
+        <pre class="path-code" id="pathCode">M 0 0</pre>
+      </section>
+
+      <section class="card note-card">
+        <h2>这次新增了什么</h2>
+        <p><b>自适应贝塞尔</b>：控制点长度取实际缝宽的一半，不再使用固定 80px 下限；上下端口按端口法线出线。</p>
+        <p><b>正交避障</b>：把节点矩形向外扩后，在边界坐标组成的网格上跑 A*，路径绕开节点，再给拐角加圆角。</p>
+        <p class="source-path">来源：packages/plugins/plugin-theme-canvas/src/components/edge/edgeGeometry.ts</p>
+      </section>
+    </aside>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+
+  var WORLD = { w: 1000, h: 620 };
+  var DEFAULT_APPEARANCE = {
+    minCurvature: 80,
+    stepOffset: 20,
+    smoothRadius: 5
+  };
+  var HANDLE_DIRECTIONS = {
+    left: { x: -1, y: 0 },
+    right: { x: 1, y: 0 },
+    top: { x: 0, y: -1 },
+    bottom: { x: 0, y: 1 }
+  };
+  var MODE_LABELS = {
+    bezier: "贝塞尔",
+    straight: "直线",
+    step: "直角",
+    smoothstep: "圆角折线",
+    adaptive: "自适应贝塞尔",
+    avoid: "正交避障"
+  };
+
+  var state = {
+    mode: "bezier",
+    scale: 1,
+    nodes: {
+      a: { id: "a", role: "source", label: "图片 3", x: 110, y: 130, w: 250, h: 210, port: "right" },
+      b: { id: "b", role: "target", label: "图片 1", x: 374, y: 280, w: 250, h: 210, port: "left" },
+      c: { id: "c", role: "blocker", label: "障碍节点", x: 760, y: 120, w: 170, h: 120, port: null }
+    },
+    config: {
+      minCurvature: 80,
+      stepOffset: 20,
+      smoothRadius: 5,
+      margin: 18,
+      cornerRadius: 8
+    },
+    show: {
+      edgesOnTop: false,
+      ghost: true,
+      controls: false,
+      junctions: false,
+      margins: true,
+      blocker: false,
+      grid: true
+    }
+  };
+
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  function round1(v) {
+    return Math.round(v * 10) / 10;
+  }
+
+  function round2(v) {
+    return Math.round(v * 100) / 100;
+  }
+
+  function pointDistance(a, b) {
+    return Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
+  }
+
+  function nodeRect(node) {
+    return { id: node.id, x: node.x, y: node.y, w: node.w, h: node.h };
+  }
+
+  function inflateRect(rect, margin) {
+    return {
+      id: rect.id,
+      x: rect.x - margin,
+      y: rect.y - margin,
+      w: rect.w + margin * 2,
+      h: rect.h + margin * 2
+    };
+  }
+
+  function portPoint(node) {
+    if (!node || !node.port) return null;
+    var dir = HANDLE_DIRECTIONS[node.port];
+    var point = { x: node.x + node.w / 2, y: node.y + node.h / 2 };
+    if (node.port === "left") point.x = node.x;
+    if (node.port === "right") point.x = node.x + node.w;
+    if (node.port === "top") point.y = node.y;
+    if (node.port === "bottom") point.y = node.y + node.h;
+    point.pos = node.port;
+    point.dir = dir;
+    point.nodeId = node.id;
+    return point;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 现有实现：逐行对应 edgeGeometry.ts 的 getPoints / getBend / buildStepPath
+  // ---------------------------------------------------------------------------
+
+  function getDirection(input) {
+    var source = input.source;
+    var target = input.target;
+    var sourcePosition = input.sourcePosition || "bottom";
+    if (sourcePosition === "left" || sourcePosition === "right") {
+      return source.x < target.x ? { x: 1, y: 0 } : { x: -1, y: 0 };
+    }
+    return source.y < target.y ? { x: 0, y: 1 } : { x: 0, y: -1 };
+  }
+
+  function edgeDistance(a, b) {
+    return Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
+  }
+
+  function getSimpleEdgeCenter(sourceX, sourceY, targetX, targetY) {
+    var xOffset = Math.abs(targetX - sourceX) / 2;
+    var centerX = targetX < sourceX ? targetX + xOffset : targetX - xOffset;
+    var yOffset = Math.abs(targetY - sourceY) / 2;
+    var centerY = targetY < sourceY ? targetY + yOffset : targetY - yOffset;
+    return [centerX, centerY, xOffset, yOffset];
+  }
+
+  function getPoints(input) {
+    var source = input.source;
+    var target = input.target;
+    var sourcePosition = input.sourcePosition;
+    var targetPosition = input.targetPosition;
+    var offset = input.offset;
+    var center = input.center;
+    var sourceDir = HANDLE_DIRECTIONS[sourcePosition];
+    var targetDir = HANDLE_DIRECTIONS[targetPosition];
+    var sourceGapped = {
+      x: source.x + sourceDir.x * offset,
+      y: source.y + sourceDir.y * offset
+    };
+    var targetGapped = {
+      x: target.x + targetDir.x * offset,
+      y: target.y + targetDir.y * offset
+    };
+    var dir = getDirection({
+      source: sourceGapped,
+      sourcePosition: sourcePosition,
+      target: targetGapped
+    });
+    var dirAccessor = dir.x !== 0 ? "x" : "y";
+    var currDir = dir[dirAccessor];
+    var points;
+    var labelX;
+    var labelY;
+    var sourceGapOffset = { x: 0, y: 0 };
+    var targetGapOffset = { x: 0, y: 0 };
+    var centerDefaults = getSimpleEdgeCenter(source.x, source.y, target.x, target.y);
+    var defaultCenterX = centerDefaults[0];
+    var defaultCenterY = centerDefaults[1];
+
+    if (sourceDir[dirAccessor] * targetDir[dirAccessor] === -1) {
+      var cx = center.x === undefined ? defaultCenterX : center.x;
+      var cy = center.y === undefined ? defaultCenterY : center.y;
+      var verticalSplit = [
+        { x: cx, y: sourceGapped.y },
+        { x: cx, y: targetGapped.y }
+      ];
+      var horizontalSplit = [
+        { x: sourceGapped.x, y: cy },
+        { x: targetGapped.x, y: cy }
+      ];
+      if (sourceDir[dirAccessor] === currDir) {
+        points = dirAccessor === "x" ? verticalSplit : horizontalSplit;
+      } else {
+        points = dirAccessor === "x" ? horizontalSplit : verticalSplit;
+      }
+      labelX = cx;
+      labelY = cy;
+    } else {
+      var sourceTarget = [{ x: sourceGapped.x, y: targetGapped.y }];
+      var targetSource = [{ x: targetGapped.x, y: sourceGapped.y }];
+      if (dirAccessor === "x") {
+        points = sourceDir.x === currDir ? targetSource : sourceTarget;
+      } else {
+        points = sourceDir.y === currDir ? sourceTarget : targetSource;
+      }
+
+      if (sourcePosition === targetPosition) {
+        var diff = Math.abs(source[dirAccessor] - target[dirAccessor]);
+        if (diff <= offset) {
+          var gapOffset = Math.min(offset - 1, offset - diff);
+          if (sourceDir[dirAccessor] === currDir) {
+            var sourceSign = sourceGapped[dirAccessor] > source[dirAccessor] ? -1 : 1;
+            sourceGapOffset[dirAccessor] = sourceSign * gapOffset;
+          } else {
+            var targetSign = targetGapped[dirAccessor] > target[dirAccessor] ? -1 : 1;
+            targetGapOffset[dirAccessor] = targetSign * gapOffset;
+          }
+        }
+      }
+
+      if (sourcePosition !== targetPosition) {
+        var dirAccOpp = dirAccessor === "x" ? "y" : "x";
+        var isSameDir = sourceDir[dirAccessor] === targetDir[dirAccOpp];
+        var sourceGt = sourceGapped[dirAccOpp] > targetGapped[dirAccOpp];
+        var sourceLt = sourceGapped[dirAccOpp] < targetGapped[dirAccOpp];
+        var flip =
+          (sourceDir[dirAccessor] === 1 &&
+            ((!isSameDir && sourceGt) || (isSameDir && sourceLt))) ||
+          (sourceDir[dirAccessor] !== 1 &&
+            ((!isSameDir && sourceLt) || (isSameDir && sourceGt)));
+        if (flip) {
+          points = dirAccessor === "x" ? sourceTarget : targetSource;
+        }
+      }
+
+      var sourceGapPoint = {
+        x: sourceGapped.x + sourceGapOffset.x,
+        y: sourceGapped.y + sourceGapOffset.y
+      };
+      var targetGapPoint = {
+        x: targetGapped.x + targetGapOffset.x,
+        y: targetGapped.y + targetGapOffset.y
+      };
+      var maxX = Math.max(
+        Math.abs(sourceGapPoint.x - points[0].x),
+        Math.abs(targetGapPoint.x - points[0].x)
+      );
+      var maxY = Math.max(
+        Math.abs(sourceGapPoint.y - points[0].y),
+        Math.abs(targetGapPoint.y - points[0].y)
+      );
+      if (maxX >= maxY) {
+        labelX = (sourceGapPoint.x + targetGapPoint.x) / 2;
+        labelY = points[0].y;
+      } else {
+        labelX = points[0].x;
+        labelY = (sourceGapPoint.y + targetGapPoint.y) / 2;
+      }
+    }
+
+    var pathPoints = [
+      source,
+      {
+        x: sourceGapped.x + sourceGapOffset.x,
+        y: sourceGapped.y + sourceGapOffset.y
+      },
+      ...points,
+      {
+        x: targetGapped.x + targetGapOffset.x,
+        y: targetGapped.y + targetGapOffset.y
+      },
+      target
+    ];
+
+    return [pathPoints, labelX, labelY];
+  }
+
+  function getBend(a, b, c, size) {
+    var bendSize = Math.min(edgeDistance(a, b) / 2, edgeDistance(b, c) / 2, size);
+    var x = b.x;
+    var y = b.y;
+    if ((a.x === x && x === c.x) || (a.y === y && y === c.y)) {
+      return "L" + x + " " + y;
+    }
+    if (a.y === y) {
+      var xDir = a.x < c.x ? -1 : 1;
+      var yDir = a.y < c.y ? 1 : -1;
+      return "L " + (x + bendSize * xDir) + "," + y + "Q " + x + "," + y + " " + x + "," + (y + bendSize * yDir);
+    }
+    var xDir2 = a.x < c.x ? 1 : -1;
+    var yDir2 = a.y < c.y ? -1 : 1;
+    return "L " + x + "," + (y + bendSize * yDir2) + "Q " + x + "," + y + " " + (x + bendSize * xDir2) + "," + y;
+  }
+
+  function buildStepPath(params, borderRadius) {
+    var app = Object.assign({}, DEFAULT_APPEARANCE, params);
+    var offset = params.offset === undefined ? app.stepOffset : params.offset;
+    var pointsResult = getPoints({
+      source: { x: params.sourceX, y: params.sourceY },
+      sourcePosition: params.sourcePosition,
+      target: { x: params.targetX, y: params.targetY },
+      targetPosition: params.targetPosition,
+      center: { x: params.centerX, y: params.centerY },
+      offset: offset
+    });
+    var points = pointsResult[0];
+    var path = points.reduce(function (res, p, i) {
+      var segment;
+      if (i > 0 && i < points.length - 1) {
+        segment = getBend(points[i - 1], p, points[i + 1], borderRadius);
+      } else {
+        segment = (i === 0 ? "M" : "L") + p.x + " " + p.y;
+      }
+      return res + segment;
+    }, "");
+    return [path, points];
+  }
+
+  function buildOriginalBezier(s, t, app) {
+    var sourceSign = s.pos === "left" ? -1 : 1;
+    var targetSign = t.pos === "left" ? -1 : 1;
+    var distX = Math.max(Math.abs(t.x - s.x) * 0.5, app.minCurvature);
+    var c1 = { x: s.x + sourceSign * distX, y: s.y };
+    var c2 = { x: t.x + targetSign * distX, y: t.y };
+    return {
+      d: "M " + s.x + " " + s.y + " C " + c1.x + " " + c1.y + ", " + c2.x + " " + c2.y + ", " + t.x + " " + t.y,
+      c1: c1,
+      c2: c2,
+      distX: distX
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 新算法 1：自适应贝塞尔。控制点沿端口法线，长度随实际缝宽收缩。
+  // ---------------------------------------------------------------------------
+
+  function buildAdaptiveBezier(s, t, app) {
+    var sDir = HANDLE_DIRECTIONS[s.pos];
+    var tDir = HANDLE_DIRECTIONS[t.pos];
+    var chord = pointDistance(s, t);
+    var facing = sDir.x * tDir.x + sDir.y * tDir.y < -0.5;
+    var axial = (t.x - s.x) * sDir.x + (t.y - s.y) * sDir.y;
+    var kS;
+    var kT;
+    var strategy;
+
+    if (facing) {
+      if (axial >= 0) {
+        var halfGap = Math.min(axial * 0.5, 180);
+        kS = halfGap;
+        kT = halfGap;
+        strategy = "facing-half-gap";
+      } else {
+        kS = Math.min(Math.max(chord * 0.32, 28), 140);
+        kT = kS;
+        strategy = "facing-u-turn";
+      }
+    } else {
+      kS = Math.min(Math.max(chord * 0.32, 22), 140);
+      kT = kS;
+      strategy = "perpendicular";
+    }
+
+    var c1 = { x: s.x + sDir.x * kS, y: s.y + sDir.y * kS };
+    var c2 = { x: t.x + tDir.x * kT, y: t.y + tDir.y * kT };
+    return {
+      d: "M " + round2(s.x) + " " + round2(s.y) + " C " + round2(c1.x) + " " + round2(c1.y) + ", " + round2(c2.x) + " " + round2(c2.y) + ", " + round2(t.x) + " " + round2(t.y),
+      c1: c1,
+      c2: c2,
+      kS: kS,
+      kT: kT,
+      axial: axial,
+      strategy: strategy
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 新算法 2：正交避障。节点矩形外扩，在边界坐标网格上跑 A*。
+  // ---------------------------------------------------------------------------
+
+  function uniqueSorted(values) {
+    var arr = values.slice().sort(function (a, b) { return a - b; });
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      if (!out.length || Math.abs(arr[i] - out[out.length - 1]) > 0.001) out.push(arr[i]);
+    }
+    return out;
+  }
+
+  function addMidpoints(values) {
+    var base = uniqueSorted(values);
+    if (!base.length) return [];
+    var out = [base[0]];
+    for (var i = 1; i < base.length; i++) {
+      if (base[i] - base[i - 1] > 2) out.push((base[i - 1] + base[i]) / 2);
+      out.push(base[i]);
+    }
+    return out;
+  }
+
+  function pointInsideRect(point, rect, pad) {
+    var x1 = rect.x + pad;
+    var y1 = rect.y + pad;
+    var x2 = rect.x + rect.w - pad;
+    var y2 = rect.y + rect.h - pad;
+    return point.x > x1 && point.x < x2 && point.y > y1 && point.y < y2;
+  }
+
+  function segmentIntersectsRect(a, b, rect, pad) {
+    var x1 = rect.x + pad;
+    var y1 = rect.y + pad;
+    var x2 = rect.x + rect.w - pad;
+    var y2 = rect.y + rect.h - pad;
+    if (x2 <= x1 || y2 <= y1) return false;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var t0 = 0;
+    var t1 = 1;
+    var ps = [-dx, dx, -dy, dy];
+    var qs = [a.x - x1, x2 - a.x, a.y - y1, y2 - a.y];
+    for (var i = 0; i < 4; i++) {
+      var p = ps[i];
+      var q = qs[i];
+      if (Math.abs(p) < 0.0000001) {
+        if (q < 0) return false;
+      } else {
+        var r = q / p;
+        if (p < 0) {
+          if (r > t1) return false;
+          if (r > t0) t0 = r;
+        } else {
+          if (r < t0) return false;
+          if (r < t1) t1 = r;
+        }
+      }
+    }
+    return t0 < t1 - 0.0000001;
+  }
+
+  function MinHeap() {
+    this.items = [];
+  }
+  MinHeap.prototype.size = function () {
+    return this.items.length;
+  };
+  MinHeap.prototype.push = function (item) {
+    var items = this.items;
+    items.push(item);
+    var index = items.length - 1;
+    while (index > 0) {
+      var parent = Math.floor((index - 1) / 2);
+      if (items[parent].f <= items[index].f) break;
+      var tmp = items[parent];
+      items[parent] = items[index];
+      items[index] = tmp;
+      index = parent;
+    }
+  };
+  MinHeap.prototype.pop = function () {
+    var items = this.items;
+    if (!items.length) return null;
+    var top = items[0];
+    var last = items.pop();
+    if (items.length) {
+      items[0] = last;
+      var index = 0;
+      while (true) {
+        var left = index * 2 + 1;
+        var right = left + 1;
+        var smallest = index;
+        if (left < items.length && items[left].f < items[smallest].f) smallest = left;
+        if (right < items.length && items[right].f < items[smallest].f) smallest = right;
+        if (smallest === index) break;
+        var tmp = items[index];
+        items[index] = items[smallest];
+        items[smallest] = tmp;
+        index = smallest;
+      }
+    }
+    return top;
+  };
+
+  function routeOrthogonal(start, end, obstacles) {
+    if (pointDistance(start, end) < 0.5) return [start, end];
+    var baseXs = [start.x, end.x];
+    var baseYs = [start.y, end.y];
+    for (var i = 0; i < obstacles.length; i++) {
+      var rect = obstacles[i];
+      baseXs.push(rect.x, rect.x + rect.w);
+      baseYs.push(rect.y, rect.y + rect.h);
+    }
+    var xs = addMidpoints(baseXs);
+    var ys = addMidpoints(baseYs);
+    var nx = xs.length;
+    var ny = ys.length;
+    var startIx = -1;
+    var startIy = -1;
+    var endIx = -1;
+    var endIy = -1;
+    for (var ix = 0; ix < nx; ix++) {
+      if (Math.abs(xs[ix] - start.x) < 0.001) startIx = ix;
+      if (Math.abs(xs[ix] - end.x) < 0.001) endIx = ix;
+    }
+    for (var iy = 0; iy < ny; iy++) {
+      if (Math.abs(ys[iy] - start.y) < 0.001) startIy = iy;
+      if (Math.abs(ys[iy] - end.y) < 0.001) endIy = iy;
+    }
+    if (startIx < 0 || startIy < 0 || endIx < 0 || endIy < 0) return null;
+
+    function pointAt(pointIndex) {
+      return {
+        x: xs[pointIndex % nx],
+        y: ys[Math.floor(pointIndex / nx)]
+      };
+    }
+    function pointValid(pointIndex) {
+      var point = pointAt(pointIndex);
+      for (var j = 0; j < obstacles.length; j++) {
+        if (pointInsideRect(point, obstacles[j], 0.35)) return false;
+      }
+      return true;
+    }
+    function segmentClear(a, b) {
+      for (var j = 0; j < obstacles.length; j++) {
+        if (segmentIntersectsRect(a, b, obstacles[j], 0.45)) return false;
+      }
+      return true;
+    }
+
+    var startPointIndex = startIy * nx + startIx;
+    var endPointIndex = endIy * nx + endIx;
+    if (!pointValid(startPointIndex) || !pointValid(endPointIndex)) return null;
+
+    var pointCount = nx * ny;
+    var stateCount = pointCount * 5;
+    var distances = new Float64Array(stateCount);
+    var parents = new Int32Array(stateCount);
+    var closed = new Uint8Array(stateCount);
+    for (var s = 0; s < stateCount; s++) {
+      distances[s] = Infinity;
+      parents[s] = -1;
+    }
+
+    var startState = startPointIndex * 5 + 4;
+    var endPoint = pointAt(endPointIndex);
+    distances[startState] = 0;
+    var heap = new MinHeap();
+    heap.push({ key: startState, g: 0, f: Math.abs(start.x - endPoint.x) + Math.abs(start.y - endPoint.y) });
+
+    var dirs = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 }
+    ];
+    var turnPenalty = 28;
+    var goal = -1;
+
+    while (heap.size()) {
+      var item = heap.pop();
+      var key = item.key;
+      if (closed[key]) continue;
+      if (item.g > distances[key] + 0.000001) continue;
+      closed[key] = 1;
+      var pointIndex = Math.floor(key / 5);
+      var prevDir = key % 5;
+      if (pointIndex === endPointIndex) {
+        goal = key;
+        break;
+      }
+      var current = pointAt(pointIndex);
+      var currentIx = pointIndex % nx;
+      var currentIy = Math.floor(pointIndex / nx);
+      for (var d = 0; d < 4; d++) {
+        var dir = dirs[d];
+        var nextIx = currentIx + dir.dx;
+        var nextIy = currentIy + dir.dy;
+        if (nextIx < 0 || nextIx >= nx || nextIy < 0 || nextIy >= ny) continue;
+        var nextPointIndex = nextIy * nx + nextIx;
+        if (!pointValid(nextPointIndex)) continue;
+        var nextPoint = pointAt(nextPointIndex);
+        if (!segmentClear(current, nextPoint)) continue;
+        var nextState = nextPointIndex * 5 + d;
+        var cost = pointDistance(current, nextPoint);
+        if (prevDir !== 4 && prevDir !== d) cost += turnPenalty;
+        var nextG = item.g + cost;
+        if (nextG + 0.000001 >= distances[nextState]) continue;
+        distances[nextState] = nextG;
+        parents[nextState] = key;
+        var heuristic = Math.abs(nextPoint.x - endPoint.x) + Math.abs(nextPoint.y - endPoint.y);
+        heap.push({ key: nextState, g: nextG, f: nextG + heuristic });
+      }
+    }
+
+    if (goal < 0) return null;
+    var route = [];
+    var cursor = goal;
+    while (cursor !== -1) {
+      route.push(pointAt(Math.floor(cursor / 5)));
+      if (cursor === startState) break;
+      cursor = parents[cursor];
+    }
+    route.reverse();
+    return route;
+  }
+
+  function simplifyPoints(points) {
+    var clean = [];
+    for (var i = 0; i < points.length; i++) {
+      var point = { x: points[i].x, y: points[i].y };
+      var last = clean.length ? clean[clean.length - 1] : null;
+      if (!last || pointDistance(last, point) > 0.01) clean.push(point);
+    }
+    var changed = true;
+    while (changed && clean.length > 2) {
+      changed = false;
+      for (var j = 1; j < clean.length - 1; j++) {
+        var a = clean[j - 1];
+        var b = clean[j];
+        var c = clean[j + 1];
+        var cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        if (Math.abs(cross) < 0.01) {
+          clean.splice(j, 1);
+          changed = true;
+          break;
+        }
+      }
+    }
+    return clean;
+  }
+
+  function roundedOrthogonalPath(points, radius) {
+    if (!points.length) return "";
+    if (points.length === 1) return "M " + round2(points[0].x) + " " + round2(points[0].y);
+    var d = "M " + round2(points[0].x) + " " + round2(points[0].y);
+    for (var i = 1; i < points.length - 1; i++) {
+      var prev = points[i - 1];
+      var cur = points[i];
+      var next = points[i + 1];
+      var inLen = pointDistance(prev, cur);
+      var outLen = pointDistance(cur, next);
+      if (inLen < 0.001 || outLen < 0.001) continue;
+      var r = Math.min(radius, inLen / 2, outLen / 2);
+      var inUx = (cur.x - prev.x) / inLen;
+      var inUy = (cur.y - prev.y) / inLen;
+      var outUx = (next.x - cur.x) / outLen;
+      var outUy = (next.y - cur.y) / outLen;
+      var dot = inUx * outUx + inUy * outUy;
+      if (r < 0.4 || dot < -0.999) {
+        d += " L " + round2(cur.x) + " " + round2(cur.y);
+        continue;
+      }
+      var a = { x: cur.x - inUx * r, y: cur.y - inUy * r };
+      var b = { x: cur.x + outUx * r, y: cur.y + outUy * r };
+      d += " L " + round2(a.x) + " " + round2(a.y) + " Q " + round2(cur.x) + " " + round2(cur.y) + " " + round2(b.x) + " " + round2(b.y);
+    }
+    var last = points[points.length - 1];
+    d += " L " + round2(last.x) + " " + round2(last.y);
+    return d;
+  }
+
+  function buildAvoidPath(s, t, app) {
+    var margin = Math.max(4, app.margin);
+    var obstacles = [
+      inflateRect(nodeRect(state.nodes.a), margin),
+      inflateRect(nodeRect(state.nodes.b), margin)
+    ];
+    if (state.show.blocker) obstacles.push(inflateRect(nodeRect(state.nodes.c), margin));
+
+    var stub = margin + 10;
+    var start = { x: s.x + s.dir.x * stub, y: s.y + s.dir.y * stub };
+    var end = { x: t.x + t.dir.x * stub, y: t.y + t.dir.y * stub };
+    var route = routeOrthogonal(start, end, obstacles);
+    var adaptive = buildAdaptiveBezier(s, t, app);
+
+    if (!route) {
+      return {
+        d: adaptive.d,
+        c1: adaptive.c1,
+        c2: adaptive.c2,
+        fallback: true,
+        inflated: obstacles,
+        routePoints: [],
+        junctions: [],
+        margin: margin
+      };
+    }
+
+    var all = simplifyPoints([{ x: s.x, y: s.y }].concat(route, [{ x: t.x, y: t.y }]));
+    var radius = Math.min(app.cornerRadius, margin * 0.55);
+    return {
+      d: roundedOrthogonalPath(all, radius),
+      routePoints: all,
+      junctions: all,
+      inflated: obstacles,
+      fallback: false,
+      margin: margin,
+      radius: radius
+    };
+  }
+
+  function buildCurrentPath(s, t) {
+    var app = state.config;
+    if (state.mode === "straight") {
+      return { d: "M " + s.x + " " + s.y + " L " + t.x + " " + t.y, junctions: [] };
+    }
+    if (state.mode === "step") {
+      var step = buildStepPath({
+        sourceX: s.x, sourceY: s.y, sourcePosition: s.pos,
+        targetX: t.x, targetY: t.y, targetPosition: t.pos,
+        borderRadius: 0, offset: app.stepOffset
+      }, 0);
+      return { d: step[0], junctions: step[1] };
+    }
+    if (state.mode === "smoothstep") {
+      var smooth = buildStepPath({
+        sourceX: s.x, sourceY: s.y, sourcePosition: s.pos,
+        targetX: t.x, targetY: t.y, targetPosition: t.pos,
+        borderRadius: app.smoothRadius, offset: app.stepOffset
+      }, app.smoothRadius);
+      return { d: smooth[0], junctions: smooth[1] };
+    }
+    if (state.mode === "adaptive") {
+      return buildAdaptiveBezier(s, t, app);
+    }
+    if (state.mode === "avoid") {
+      return buildAvoidPath(s, t, app);
+    }
+    var bezier = buildOriginalBezier(s, t, app);
+    return {
+      d: bezier.d,
+      c1: bezier.c1,
+      c2: bezier.c2,
+      distX: bezier.distX,
+      junctions: []
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // DOM / rendering
+  // ---------------------------------------------------------------------------
+
+  var stage = document.getElementById("stage");
+  var world = document.getElementById("world");
+  var nodeLayer = document.getElementById("nodeLayer");
+  var edgeSvg = document.getElementById("edgeSvg");
+  var mainPath = document.getElementById("mainPath");
+  var ghostPath = document.getElementById("ghostPath");
+  var ghostLayer = document.getElementById("ghostLayer");
+  var marginLayer = document.getElementById("marginLayer");
+  var controlLayer = document.getElementById("controlLayer");
+  var diagCard = document.getElementById("diagCard");
+  var diagTitle = document.getElementById("diagTitle");
+  var diagDesc = document.getElementById("diagDesc");
+  var metricHits = document.getElementById("metricHits");
+  var metricLength = document.getElementById("metricLength");
+  var metricDelta = document.getElementById("metricDelta");
+  var metricPoints = document.getElementById("metricPoints");
+  var formulaText = document.getElementById("formulaText");
+  var pathCode = document.getElementById("pathCode");
+  var stageChip = document.getElementById("stageChip");
+  var stageChipText = document.getElementById("stageChipText");
+  var frameHandle = 0;
+
+  function svgNode(tag, attrs) {
+    var element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (key) {
+        element.setAttribute(key, attrs[key]);
+      });
+    }
+    return element;
+  }
+
+  function updateNodePositions() {
+    var elements = nodeLayer.querySelectorAll(".node");
+    for (var i = 0; i < elements.length; i++) {
+      var el = elements[i];
+      var node = state.nodes[el.getAttribute("data-id")];
+      if (!node) continue;
+      el.style.left = node.x + "px";
+      el.style.top = node.y + "px";
+      var coord = el.querySelector(".node-coord");
+      if (coord) coord.textContent = "x " + Math.round(node.x) + " · y " + Math.round(node.y);
+    }
+  }
+
+  function bindNodeDrag(el, id) {
+    el.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      var node = state.nodes[id];
+      var startClientX = event.clientX;
+      var startClientY = event.clientY;
+      var startX = node.x;
+      var startY = node.y;
+      el.classList.add("is-dragging");
+
+      function onMove(moveEvent) {
+        var dx = (moveEvent.clientX - startClientX) / state.scale;
+        var dy = (moveEvent.clientY - startClientY) / state.scale;
+        node.x = clamp(startX + dx, 8, WORLD.w - node.w - 8);
+        node.y = clamp(startY + dy, 8, WORLD.h - node.h - 8);
+        updateNodePositions();
+        scheduleRender();
+      }
+
+      function onUp() {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        el.classList.remove("is-dragging");
+      }
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp, { once: true });
+      window.addEventListener("pointercancel", onUp, { once: true });
+    });
+  }
+
+  function renderNodes() {
+    nodeLayer.innerHTML = "";
+    var order = ["a", "b", "c"];
+    for (var i = 0; i < order.length; i++) {
+      var id = order[i];
+      if (id === "c" && !state.show.blocker) continue;
+      var node = state.nodes[id];
+      var roleLabel = node.role === "source" ? "S" : node.role === "target" ? "T" : "障碍";
+      var portHtml = "";
+      if (node.role !== "blocker") {
+        portHtml =
+          '<span class="port-hint port-hint--left"></span>' +
+          '<span class="port-hint port-hint--right"></span>' +
+          '<span class="port-hint port-hint--top"></span>' +
+          '<span class="port-hint port-hint--bottom"></span>' +
+          '<span class="port port--' + node.port + '" title="' + roleLabel + ' 端口：' + node.port + '"><b>' + roleLabel + '</b></span>';
+      }
+      var el = document.createElement("div");
+      el.className = "node node--" + node.role;
+      el.setAttribute("data-id", id);
+      el.setAttribute("data-role", node.role);
+      el.style.left = node.x + "px";
+      el.style.top = node.y + "px";
+      el.style.width = node.w + "px";
+      el.style.height = node.h + "px";
+      el.innerHTML =
+        '<div class="node-head">' +
+          '<span class="node-role node-role--' + node.role + '">' + roleLabel + '</span>' +
+          '<span class="node-title">' + node.label + '</span>' +
+          '<span class="node-meta">' + node.w + " × " + node.h + '</span>' +
+        '</div>' +
+        '<div class="node-body">' +
+          '<div class="node-art node-art--' + id + '"></div>' +
+          '<div class="node-caption">' + (node.role === "blocker" ? "拖动我，改变障碍位置" : "拖动我，改变端口坐标") + '</div>' +
+          '<div class="node-coord">x ' + Math.round(node.x) + ' · y ' + Math.round(node.y) + '</div>' +
+        '</div>' +
+        portHtml;
+      nodeLayer.appendChild(el);
+      bindNodeDrag(el, id);
+    }
+    updateNodePositions();
+  }
+
+  function analyzePath(pathElement) {
+    var length = 0;
+    try { length = pathElement.getTotalLength(); } catch (error) { length = 0; }
+    var hits = {};
+    var active = {};
+    var nodes = [state.nodes.a, state.nodes.b];
+    if (state.show.blocker) nodes.push(state.nodes.c);
+    var steps = Math.max(140, Math.min(900, Math.ceil(length / 2.5)));
+    for (var i = 0; i <= steps; i++) {
+      var point;
+      try { point = pathElement.getPointAtLength(length * i / steps); } catch (error) { point = { x: 0, y: 0 }; }
+      for (var j = 0; j < nodes.length; j++) {
+        var node = nodes[j];
+        var inside =
+          point.x > node.x + 1.5 &&
+          point.x < node.x + node.w - 1.5 &&
+          point.y > node.y + 1.5 &&
+          point.y < node.y + node.h - 1.5;
+        if (inside && !active[node.id]) {
+          hits[node.id] = (hits[node.id] || 0) + 1;
+          active[node.id] = true;
+        } else if (!inside) {
+          active[node.id] = false;
+        }
+      }
+    }
+    return { length: length, hits: hits };
+  }
+
+  function totalHits(hits) {
+    var total = 0;
+    Object.keys(hits).forEach(function (key) { total += hits[key]; });
+    return total;
+  }
+
+  function buildStatus(result, s, t, analysis) {
+    var hits = totalHits(analysis.hits);
+    if (result.fallback) {
+      return {
+        tone: "warn",
+        title: "避障没有找到通路",
+        desc: "两个矩形的间隙太窄，已经回退到自适应贝塞尔。把节点拖开，或把避障边距调小。"
+      };
+    }
+    if (state.mode === "bezier") {
+      var horizontal = (s.pos === "left" || s.pos === "right") && (t.pos === "left" || t.pos === "right");
+      var axial = (t.x - s.x) * (s.pos === "right" ? 1 : -1);
+      if (horizontal && axial >= 0 && axial < state.config.minCurvature * 2) {
+        return {
+          tone: "warn",
+          title: "短缝被拉成蛇形",
+          desc: "水平缝只有 " + Math.round(axial) + "px，但曲率固定 " + state.config.minCurvature +
+            "px；c1 与 c2 越过了彼此 " + Math.round(Math.abs(result.c1.x - result.c2.x)) +
+            "px，曲线先向右鼓再折回。" + (hits ? " 另外还有 " + hits + " 段穿过节点。" : "")
+        };
+      }
+      if (s.pos === "top" || s.pos === "bottom" || t.pos === "top" || t.pos === "bottom") {
+        return {
+          tone: "warn",
+          title: "上下端口仍按 X 轴出线",
+          desc: "原版贝塞尔只判断 Left 端口；Top/Bottom 端口的控制点仍在水平方向，曲线会先横拐，再回到端口。"
+        };
+      }
+      if (hits > 0) {
+        return {
+          tone: "warn",
+          title: "路径穿过了节点",
+          desc: "当前路径有 " + hits + " 段落在节点矩形内部。可以打开「正交避障」，或把节点拖开。"
+        };
+      }
+    }
+    if (state.mode === "avoid") {
+      if (hits === 0) {
+        return {
+          tone: "ok",
+          title: "路径绕开了节点矩形",
+          desc: "A* 在 " + result.inflated.length + " 个外扩矩形的边界网格上找路；当前没有穿过节点。"
+        };
+      }
+      return {
+        tone: "warn",
+        title: "仍有 " + hits + " 段穿过节点",
+        desc: "检查避障边距和端口朝向，或把节点拖开。"
+      };
+    }
+    if (state.mode === "adaptive") {
+      return {
+        tone: "ok",
+        title: "控制点随实际缝宽收缩",
+        desc: "短缝时控制点长度取缝宽的一半，不再越过对方；上下端口也沿端口法线出线。"
+      };
+    }
+    if (hits > 0) {
+      return {
+        tone: "warn",
+        title: "路径穿过了 " + hits + " 段节点",
+        desc: "当前线型没有避障能力。切到「正交避障」看绕行结果。"
+
+      };
+    }
+    return {
+      tone: "neutral",
+      title: "当前线型正常",
+      desc: "拖动节点或切换模式，观察路径变化。"
+    };
+  }
+
+  function updateDiagnostics(result, s, t, analysis) {
+    var status = buildStatus(result, s, t, analysis);
+    var hits = totalHits(analysis.hits);
+    diagCard.setAttribute("data-tone", status.tone);
+    diagTitle.textContent = status.title;
+    diagDesc.textContent = status.desc;
+    metricHits.textContent = hits + " 处";
+    metricHits.setAttribute("data-tone", hits ? "warn" : "ok");
+    metricLength.textContent = Math.round(analysis.length) + " px";
+    metricDelta.textContent = "Δx " + Math.round(t.x - s.x) + " / Δy " + Math.round(t.y - s.y);
+
+    if (result.c1 && result.c2) {
+      metricPoints.textContent = "2 个控制点";
+      var cross;
+      if (s.pos === "left" || s.pos === "right") {
+        cross = result.c1.x > result.c2.x ? "c1.x &gt; c2.x" : "c1.x ≤ c2.x";
+      } else {
+        cross = result.c1.y > result.c2.y ? "c1.y &gt; c2.y" : "c1.y ≤ c2.y";
+      }
+      var crossClass = result.c1.x > result.c2.x ? "danger" : "accent";
+      formulaText.innerHTML =
+        "c1 (" + Math.round(result.c1.x) + ", " + Math.round(result.c1.y) + ")\n" +
+        "c2 (" + Math.round(result.c2.x) + ", " + Math.round(result.c2.y) + ")\n" +
+        '<span class="' + crossClass + '">' + cross + "</span>" +
+        (result.kS !== undefined ? "  ·  k = " + round1(result.kS) : "");
+    } else if (state.mode === "avoid") {
+      metricPoints.textContent = (result.routePoints ? result.routePoints.length : 0) + " 个折点";
+      formulaText.innerHTML =
+        "避障边距 = " + result.margin + "px\n" +
+        "路径圆角 = " + (result.radius === undefined ? 0 : round1(result.radius)) + "px\n" +
+        (result.fallback ? '<span class="danger">A* 未找到通路，已回退</span>' : '<span class="accent">A* 找到通路</span>');
+    } else if (result.junctions) {
+      metricPoints.textContent = result.junctions.length + " 个折点";
+      formulaText.innerHTML =
+        "折点 = " + result.junctions.length + " 个\n" +
+        "stepOffset = " + state.config.stepOffset + "px\n" +
+        (state.mode === "smoothstep" ? "smoothRadius = " + state.config.smoothRadius + "px" : "borderRadius = 0");
+    } else {
+      metricPoints.textContent = "0 个折点";
+      formulaText.textContent = "直线模式没有控制点或折点。";
+    }
+    pathCode.textContent = result.d;
+  }
+
+  function updateStageChip(s, t, result) {
+    var dx = Math.round(t.x - s.x);
+    var dy = Math.round(t.y - s.y);
+    var tone = "neutral";
+    if (state.mode === "avoid" && !result.fallback) tone = "ok";
+    if (state.mode === "bezier") {
+      var axial = (t.x - s.x) * (s.pos === "right" ? 1 : -1);
+      if ((s.pos === "left" || s.pos === "right") && axial >= 0 && axial < state.config.minCurvature * 2) tone = "warn";
+      if (s.pos === "top" || s.pos === "bottom" || t.pos === "top" || t.pos === "bottom") tone = "warn";
+    }
+    stageChip.setAttribute("data-tone", tone);
+    stageChipText.textContent = "Δx " + dx + " px · Δy " + dy + " px";
+  }
+
+  function drawMargins(result) {
+    marginLayer.innerHTML = "";
+    if (state.mode !== "avoid" || !state.show.margins || !result.inflated) return;
+    for (var i = 0; i < result.inflated.length; i++) {
+      var rect = result.inflated[i];
+      var element = svgNode("rect", {
+        x: rect.x,
+        y: rect.y,
+        width: rect.w,
+        height: rect.h,
+        rx: 6,
+        "class": "margin-rect"
+      });
+      marginLayer.appendChild(element);
+    }
+    var first = result.inflated[0];
+    if (first) {
+      var label = svgNode("text", {
+        x: first.x + 4,
+        y: first.y - 5,
+        "class": "margin-label"
+      });
+      label.textContent = "避障边距 " + result.margin + "px";
+      marginLayer.appendChild(label);
+    }
+  }
+
+  function drawControls(result, s, t) {
+    controlLayer.innerHTML = "";
+    if (state.show.controls && result.c1 && result.c2) {
+      controlLayer.appendChild(svgNode("line", {
+        x1: s.x, y1: s.y, x2: result.c1.x, y2: result.c1.y, "class": "control-line"
+      }));
+      controlLayer.appendChild(svgNode("line", {
+        x1: t.x, y1: t.y, x2: result.c2.x, y2: result.c2.y, "class": "control-line"
+      }));
+      var c1 = svgNode("circle", { cx: result.c1.x, cy: result.c1.y, r: 3, "class": "control-dot" });
+      var c2 = svgNode("circle", { cx: result.c2.x, cy: result.c2.y, r: 3, "class": "control-dot" });
+      controlLayer.appendChild(c1);
+      controlLayer.appendChild(c2);
+      var label1 = svgNode("text", { x: result.c1.x + 6, y: result.c1.y - 6, "class": "svg-label" });
+      label1.textContent = "c1";
+      controlLayer.appendChild(label1);
+      var label2 = svgNode("text", { x: result.c2.x + 6, y: result.c2.y + 12, "class": "svg-label" });
+      label2.textContent = "c2";
+      controlLayer.appendChild(label2);
+    }
+    if (state.show.junctions && result.junctions && result.junctions.length) {
+      var points = result.junctions;
+      for (var i = 1; i < points.length - 1; i++) {
+        controlLayer.appendChild(svgNode("circle", {
+          cx: points[i].x,
+          cy: points[i].y,
+          r: 2.6,
+          "class": "junction-dot"
+        }));
+      }
+    }
+  }
+
+  function render() {
+    frameHandle = 0;
+    var s = portPoint(state.nodes.a);
+    var t = portPoint(state.nodes.b);
+    var result = buildCurrentPath(s, t);
+    mainPath.setAttribute("d", result.d);
+    var ghost = buildOriginalBezier(s, t, state.config);
+    ghostPath.setAttribute("d", ghost.d);
+    ghostLayer.style.display = state.show.ghost && state.mode !== "bezier" ? "" : "none";
+    edgeSvg.classList.toggle("is-on-top", state.show.edgesOnTop);
+    stage.classList.toggle("no-grid", !state.show.grid);
+    drawMargins(result);
+    drawControls(result, s, t);
+    var analysis = analyzePath(mainPath);
+    updateDiagnostics(result, s, t, analysis);
+    updateStageChip(s, t, result);
+  }
+
+  function scheduleRender() {
+    if (frameHandle) return;
+    frameHandle = window.requestAnimationFrame(render);
+  }
+
+  // 调试入口：控制台可直接调用，便于逐条路径对比或写回归检查。
+  // 例：__edgeLab.step(0, 0, 200, 0, "right", "left", 20)
+  window.__edgeLab = {
+    state: state,
+    point: portPoint,
+    originalBezier: function (sx, sy, tx, ty, sourcePosition, targetPosition, minCurvature) {
+      return buildOriginalBezier(
+        { x: sx, y: sy, pos: sourcePosition },
+        { x: tx, y: ty, pos: targetPosition },
+        { minCurvature: minCurvature === undefined ? DEFAULT_APPEARANCE.minCurvature : minCurvature }
+      );
+    },
+    adaptiveBezier: function (sx, sy, tx, ty, sourcePosition, targetPosition) {
+      return buildAdaptiveBezier(
+        { x: sx, y: sy, pos: sourcePosition },
+        { x: tx, y: ty, pos: targetPosition },
+        state.config
+      );
+    },
+    step: function (sx, sy, tx, ty, sourcePosition, targetPosition, offset, radius) {
+      return buildStepPath({
+        sourceX: sx, sourceY: sy, sourcePosition: sourcePosition,
+        targetX: tx, targetY: ty, targetPosition: targetPosition,
+        borderRadius: radius || 0,
+        offset: offset === undefined ? DEFAULT_APPEARANCE.stepOffset : offset
+      }, radius || 0);
+    },
+    avoid: function () {
+      return buildAvoidPath(portPoint(state.nodes.a), portPoint(state.nodes.b), state.config);
+    }
+  };
+
+  function resizeWorld() {
+    var width = stage.clientWidth;
+    if (!width) return;
+    state.scale = width / WORLD.w;
+    world.style.transform = "scale(" + state.scale + ")";
+  }
+
+  function syncModeButtons() {
+    var buttons = document.querySelectorAll("[data-mode]");
+    for (var i = 0; i < buttons.length; i++) {
+      var active = buttons[i].getAttribute("data-mode") === state.mode;
+      buttons[i].classList.toggle("is-active", active);
+      buttons[i].setAttribute("aria-pressed", active ? "true" : "false");
+    }
+  }
+
+  function syncSideButtons() {
+    var groups = document.querySelectorAll("[data-node-side]");
+    for (var i = 0; i < groups.length; i++) {
+      var nodeId = groups[i].getAttribute("data-node-side");
+      var buttons = groups[i].querySelectorAll("[data-side]");
+      for (var j = 0; j < buttons.length; j++) {
+        var side = buttons[j].getAttribute("data-side");
+        buttons[j].classList.toggle("is-active", state.nodes[nodeId].port === side);
+      }
+    }
+  }
+
+  function syncParamAvailability() {
+    var rows = document.querySelectorAll("[data-param-row]");
+    var relevant = {
+      minCurvature: state.mode === "bezier",
+      stepOffset: state.mode === "step" || state.mode === "smoothstep",
+      smoothRadius: state.mode === "smoothstep",
+      margin: state.mode === "avoid",
+      cornerRadius: state.mode === "avoid"
+    };
+    for (var i = 0; i < rows.length; i++) {
+      var key = rows[i].getAttribute("data-param-row");
+      var off = !relevant[key];
+      rows[i].classList.toggle("is-off", off);
+      var input = rows[i].querySelector("input");
+      if (input) input.disabled = off;
+    }
+  }
+
+  function syncControls() {
+    syncModeButtons();
+    syncSideButtons();
+    syncParamAvailability();
+    document.getElementById("edgesOnTop").checked = state.show.edgesOnTop;
+    document.getElementById("ghostToggle").checked = state.show.ghost;
+    document.getElementById("showControls").checked = state.show.controls;
+    document.getElementById("showJunctions").checked = state.show.junctions;
+    document.getElementById("showMargins").checked = state.show.margins;
+    document.getElementById("showBlocker").checked = state.show.blocker;
+    document.getElementById("showGrid").checked = state.show.grid;
+    var inputs = document.querySelectorAll("[data-config]");
+    for (var i = 0; i < inputs.length; i++) {
+      var key = inputs[i].getAttribute("data-config");
+      inputs[i].value = state.config[key];
+      var output = document.getElementById("v" + key.charAt(0).toUpperCase() + key.slice(1));
+      if (output) output.textContent = state.config[key] + " px";
+    }
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    syncModeButtons();
+    syncParamAvailability();
+    scheduleRender();
+  }
+
+  function setNodeSide(nodeId, side) {
+    state.nodes[nodeId].port = side;
+    syncSideButtons();
+    renderNodes();
+    scheduleRender();
+  }
+
+  function applyPreset(name) {
+    if (name === "shot") {
+      Object.assign(state.nodes.a, { x: 110, y: 130, w: 250, h: 210, port: "right" });
+      Object.assign(state.nodes.b, { x: 374, y: 280, w: 250, h: 210, port: "left" });
+      Object.assign(state.nodes.c, { x: 760, y: 120, w: 170, h: 120 });
+      state.show.blocker = false;
+      state.config.minCurvature = 80;
+      state.config.stepOffset = 20;
+      state.config.smoothRadius = 5;
+      state.mode = "bezier";
+    } else {
+      Object.assign(state.nodes.a, { x: 90, y: 220, w: 220, h: 180, port: "right" });
+      Object.assign(state.nodes.b, { x: 680, y: 220, w: 220, h: 180, port: "left" });
+      Object.assign(state.nodes.c, { x: 380, y: 200, w: 220, h: 220 });
+      state.show.blocker = true;
+      if (name === "obstacle") {
+        state.config.margin = 18;
+        state.config.cornerRadius = 8;
+        state.show.margins = true;
+        state.mode = "avoid";
+      }
+    }
+    syncControls();
+    renderNodes();
+    scheduleRender();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Events
+  // ---------------------------------------------------------------------------
+
+  document.querySelectorAll("[data-mode]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      setMode(button.getAttribute("data-mode"));
+    });
+  });
+
+  document.querySelectorAll("[data-node-side] [data-side]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var group = button.parentElement;
+      setNodeSide(group.getAttribute("data-node-side"), button.getAttribute("data-side"));
+    });
+  });
+
+  document.querySelectorAll("[data-config]").forEach(function (input) {
+    input.addEventListener("input", function () {
+      var key = input.getAttribute("data-config");
+      state.config[key] = Number(input.value);
+      var output = document.getElementById("v" + key.charAt(0).toUpperCase() + key.slice(1));
+      if (output) output.textContent = input.value + " px";
+      scheduleRender();
+    });
+  });
+
+  document.getElementById("edgesOnTop").addEventListener("change", function (event) {
+    state.show.edgesOnTop = event.target.checked;
+    scheduleRender();
+  });
+  document.getElementById("ghostToggle").addEventListener("change", function (event) {
+    state.show.ghost = event.target.checked;
+    scheduleRender();
+  });
+  document.getElementById("showControls").addEventListener("change", function (event) {
+    state.show.controls = event.target.checked;
+    scheduleRender();
+  });
+  document.getElementById("showJunctions").addEventListener("change", function (event) {
+    state.show.junctions = event.target.checked;
+    scheduleRender();
+  });
+  document.getElementById("showMargins").addEventListener("change", function (event) {
+    state.show.margins = event.target.checked;
+    scheduleRender();
+  });
+  document.getElementById("showBlocker").addEventListener("change", function (event) {
+    state.show.blocker = event.target.checked;
+    renderNodes();
+    scheduleRender();
+  });
+  document.getElementById("showGrid").addEventListener("change", function (event) {
+    state.show.grid = event.target.checked;
+    stage.classList.toggle("no-grid", !state.show.grid);
+  });
+
+  document.getElementById("presetShot").addEventListener("click", function () { applyPreset("shot"); });
+  document.getElementById("presetNormal").addEventListener("click", function () { applyPreset("normal"); });
+  document.getElementById("presetObstacle").addEventListener("click", function () { applyPreset("obstacle"); });
+
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    var root = document.documentElement;
+    var dark = root.getAttribute("data-theme") === "dark";
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+    document.getElementById("themeToggle").textContent = dark ? "◐" : "☀";
+  });
+
+  document.getElementById("copyPath").addEventListener("click", function () {
+    var text = pathCode.textContent || "";
+    function done() {
+      var button = document.getElementById("copyPath");
+      button.textContent = "已复制";
+      window.setTimeout(function () { button.textContent = "复制"; }, 1200);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  });
+
+  function fallbackCopy(text, done) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand("copy"); } catch (error) { /* ignore */ }
+    document.body.removeChild(area);
+    done();
+  }
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(resizeWorld).observe(stage);
+  } else {
+    window.addEventListener("resize", resizeWorld);
+  }
+
+  syncControls();
+  renderNodes();
+  resizeWorld();
+  window.requestAnimationFrame(function () {
+    resizeWorld();
+    render();
+  });
+})();
+</script>
+</body>
+</html>
