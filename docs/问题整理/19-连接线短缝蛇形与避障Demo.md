@@ -2,7 +2,8 @@
 
 ## 现在有什么
 
-- Demo 页面：`docs/tmp/edge-routing-lab.html`（单文件，无构建，直接打开）。
+- Demo 页面：`packages/plugins/plugin-theme-canvas/edge-routing-lab.html`
+  （单文件，无构建，直接双击打开）。
 - 原版四种线型：贝塞尔 / 直线 / 直角 / 圆角折线，逻辑取自
   `packages/plugins/plugin-theme-canvas/src/components/edge/edgeGeometry.ts`。
 - 新增两种路径：自适应贝塞尔、正交避障。
