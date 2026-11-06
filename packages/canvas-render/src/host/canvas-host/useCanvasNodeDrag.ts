@@ -42,25 +42,23 @@ export function useCanvasNodeDrag(opts: {
     opts.clearDragProtection()
     const h = hostRef.value
     if (!h) return
-    // VueFlow 拖动多选时已把位移应用到全部选中节点：这里把它们的最终位置一起写回内核 store，
-    // 避免只写主节点导致其它被拖节点弹回原位。
-    const surface = surfaceRef.value
-    const moved = surface?.getSelectedNodePositions?.() ?? []
-    if (moved.length > 0 || e.node.position) {
-      const patches = moved.length > 0
-        ? moved.map((p) => ({ id: p.id, patch: { position: { x: p.x, y: p.y } } }))
-        : [{ id: e.node.id, patch: { position: { x: e.node.position.x, y: e.node.position.y } } }]
-      // 拖动结束统一走 graph：历史 + 提交落盘由唯一写入口负责；无位移时快照无差异不入历史。
-      h.graph.updateNodes(patches)
+    // 落盘依据 = **本次手势实际拖动的节点**（VueFlow 在拖动中已把 e.nodes 更新到最终位置）。
+    //
+    // 不能读 getSelectedNodePositions()：画布上「已有选中节点」≠「这次被拖的节点」。
+    // 例如先选中 A，再拖未选中的 B —— 选中集里仍可能有 A，只写选中集就会漏掉 B，
+    // B 在松手后的重灌里被 store 的旧位置拉回原点（用户报的「拖另一个节点回弹」）。
+    // 多选整组拖动时 e.nodes 同样是全部实际移动成员，一并写回。
+    const moved = (e.nodes ?? []).map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }))
+    // 兜底：异常/降级情况下 e.nodes 可能为空，至少把主节点写回。
+    if (!moved.some((m) => m.id === e.node.id)) {
+      moved.push({ id: e.node.id, x: e.node.position.x, y: e.node.position.y })
     }
+    // 拖动结束统一走 graph：历史 + 提交落盘由唯一写入口负责；无位移时快照无差异不入历史。
+    h.graph.updateNodes(moved.map((p) => ({ id: p.id, patch: { position: { x: p.x, y: p.y } } })))
     // 逐个成员广播 drag-end：成员归属插件（plugin-group）按各自新位置重算 join/leave。
     // 曾经只广播主节点 —— 多选整组拖动时其它成员的脱离/归组没人处理
     //（用户实测："多选拖拽只计算了单个节点的脱离，第一个节点依然跟随它的父节点移动"）。
-    const movedIds =
-      moved.length > 0
-        ? moved
-        : [{ id: e.node.id, x: e.node.position.x, y: e.node.position.y }]
-    for (const m of movedIds) {
+    for (const m of moved) {
       // payload.position 一律报 **flow 绝对坐标**（与 NodeDragStart/NodeDrag 同契约，见 renderEvents.toDragPayload）。
       // 上面写回 store 用的是 VueFlow 的 position —— 分组子节点那是**相对父**的（store 语义就是相对，必须这么写）；
       // 但事件契约是绝对坐标（消费方按绝对理解：多选包围盒、对齐吸附都用 nodeLayout 的绝对矩形）。
