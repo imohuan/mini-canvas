@@ -394,6 +394,25 @@ export function uiRoutes(
     if (rel !== '/' && rel !== '') {
       const bytes = await readWithin(uiDist, rel)
       if (bytes) return c.body(bytes, 200, { 'content-type': mimeFor(rel) })
+
+      /**
+       * 子页面：`/ui-kit/` 这类目录请求要发它自己的 index.html。
+       *
+       * 不补这一步，读目录会失败、随后回落到**主页面** —— 项目页用 iframe 打开
+       * /ui-kit/ 时，iframe 里会嵌套一整个画布应用（用户 2026-11-06 实测）。
+       * 先看 `<子路径>/index.html`；再看一级目录的 index.html（覆盖 /ui-kit 无斜杠、
+       * 以及 /ui-kit/xxx 这种子路由）。只有真的存在才发，主应用自己的 SPA 回落不变。
+       */
+      const normalized = path.posix.normalize('/' + rel)
+      const firstSeg = normalized.split('/').filter(Boolean)[0] ?? ''
+      const candidates = [
+        normalized.endsWith('/') ? normalized + 'index.html' : undefined,
+        firstSeg ? '/' + firstSeg + '/index.html' : undefined,
+      ].filter((p): p is string => Boolean(p))
+      for (const candidate of new Set(candidates)) {
+        const subIndex = await readWithin(uiDist, candidate)
+        if (subIndex) return c.body(subIndex, 200, { 'content-type': MIME_BY_EXT['.html'] })
+      }
     }
     const index = await readWithin(uiDist, '/index.html')
     if (index) {
