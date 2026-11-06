@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
 import type { ModelIcon } from './modelIcons'
 import { ICON_AT } from './icons'
 
-defineProps<{
+const props = defineProps<{
   id: string
   currentId: string
   currentActionLabel: string
@@ -41,33 +42,30 @@ const emit = defineEmits<{
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 const Button = useUiComponent('Button')
-const Select = useUiComponent('Select')
-const SelectContent = useUiComponent('SelectContent')
-const SelectItem = useUiComponent('SelectItem')
-const SelectTrigger = useUiComponent('SelectTrigger')
-const SelectValue = useUiComponent('SelectValue')
+/**
+ * 模型下拉改用 DropdownMenu（用户 2026-11-06 指定）。
+ *
+ * 为什么不再用 Select：底栏浮在画布上，为了「点画布不被遮住」关掉了 body-lock 与
+ * outside-pointer-events；而 reka 的 Select 在触发器上再点一下不会切回关闭，
+ * 点空白也不走它自己的 outside 关闭链 —— 用户实测「展开后点 trigger 收不回去、
+ * 点空白也不消失」。DropdownMenu 的触发器点击本身就是「开/关切换」，点外关闭也是
+ * 菜单自己的标准行为，正是这里需要的交互。
+ */
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const Tooltip = useUiComponent('Tooltip')
 const TooltipContent = useUiComponent('TooltipContent')
 const TooltipProvider = useUiComponent('TooltipProvider')
 const TooltipTrigger = useUiComponent('TooltipTrigger')
 
-/**
- * 底栏模型下拉关闭时不要把焦点抢回触发器。
- *
- * 为什么（2026-11-04 实测事件顺序）：
- * 下拉开着时点旁边的「比例」按钮，真实顺序是
- *   click 比例按钮 → 比例面板打开 → **基础 Select 收尾把焦点还给自己的触发器**
- *   → 比例面板收到 focusin 在它外面 → 面板立刻自我关闭。
- * 表现就是「第一下只关了模型下拉，第二个面板没打开，得点第二下」。
- *
- * 处理：只有焦点还在下拉里（键盘 Esc / 选项回车）时才交还给触发器；
- * 用户已经点到别的控件上时，保持焦点不动。
- */
-function keepFocusOnOutsideControl(event: Event): void {
-  const active = document.activeElement as HTMLElement | null
-  if (!active || active === document.body) return
-  if (active.closest('[data-slot="select-content"]')) return
-  event.preventDefault()
+/** 当前模型名（触发器文字；没选到动作时给一句提示） */
+const triggerLabel = computed(() => props.currentActionLabel || '选择模型')
+
+function pickAction(value: string): void {
+  if (value === props.currentId) return
+  emit('actionPicked', value)
 }
 </script>
 
@@ -90,28 +88,46 @@ function keepFocusOnOutsideControl(event: Event): void {
     </Button>
     <div class="nb-selects">
       <div class="nb-field nb-field--action">
-        <Select :model-value="currentId" :disabled="running"
-          @update:model-value="(v: string | number) => emit('actionPicked', v)">
-          <SelectTrigger :id="'nb-action-' + id" size="sm" class="nb-action-select"
-            title="选择动作 / 模型" aria-label="选择动作 / 模型">
-            <span v-if="currentModelIcon" class="nb-model-badge" :data-tone="currentModelIcon.tone"
-              aria-hidden="true" v-html="currentModelIcon.svg" />
-            <SelectValue placeholder="选择动作">{{ currentActionLabel }}</SelectValue>
-          </SelectTrigger>
-          <!--
-            底栏下拉不能锁页面：组件默认会写 `body { pointer-events: none }`（模态行为），
-            底栏浮在画布上，一开下拉整个画布就点不动，看起来像盖了一层遮罩。
-            这里只关掉这两项，点外关闭 / Esc / 选项选中都还在。
-          -->
-          <SelectContent position="popper" side="bottom" :side-offset="4" :body-lock="false"
-            :disable-outside-pointer-events="false" class="nb-action-menu"
-            @close-auto-focus="keepFocusOnOutsideControl">
-            <SelectItem v-for="o in actionOptions" :key="o.value" :value="o.value" class="nb-model-item">
+        <!--
+          模型下拉 = DropdownMenu（用户 2026-11-06 指定）：
+          触发器点击即开/关切换，点画布空白由菜单自己的 outside 关闭处理。
+        -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="sm"
+              :id="'nb-action-' + id"
+              class="nb-action-select nb-model-trigger"
+              type="button"
+              :disabled="running"
+              title="选择动作 / 模型"
+              aria-label="选择动作 / 模型"
+            >
+              <span v-if="currentModelIcon" class="nb-model-badge" :data-tone="currentModelIcon.tone"
+                aria-hidden="true" v-html="currentModelIcon.svg" />
+              <span class="nb-model-trigger-label">{{ triggerLabel }}</span>
+              <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="bottom" class="nb-action-menu nb-model-menu">
+            <DropdownMenuItem
+              v-for="o in actionOptions"
+              :key="o.value"
+              class="nb-model-item"
+              :data-state="o.value === currentId ? 'checked' : undefined"
+              @select="pickAction(String(o.value))"
+            >
               <span class="nb-model-badge" :data-tone="o.model.tone" aria-hidden="true" v-html="o.model.svg" />
               <span class="nb-model-item-label">{{ o.label }}</span>
-            </SelectItem>
-          </SelectContent>
-        </Select>
+              <svg v-if="o.value === currentId" class="nb-model-item-check" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m5 12 4 4L19 6" />
+              </svg>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <span class="nb-divider" aria-hidden="true" />
       <div v-if="paramDefs.length > 0" class="nb-field nb-field--params">
@@ -123,6 +139,8 @@ function keepFocusOnOutsideControl(event: Event): void {
           @change="(key: string, v: string | number | boolean) => emit('fieldChange', key, v)"
         />
       </div>
+      <!-- 参数区之后的扩展位（预设提示词等按钮挂这里，见 BottomBarPresets） -->
+      <slot name="presets" />
     </div>
     <div class="nb-actions">
       <span v-if="infoText" class="nb-info">{{ infoText }}</span>

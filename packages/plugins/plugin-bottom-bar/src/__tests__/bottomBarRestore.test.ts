@@ -138,8 +138,8 @@ function render(data: Record<string, unknown>): Promise<string> {
 
 /** 下拉触发器上显示的动作名（没有底栏时返回空串） */
 function triggerLabel(html: string): string {
-  // shadcn Select 的当前值由 SelectValue 渲染，稳定标记是 data-slot="select-value"。
-  const m = html.match(/<[^>]*data-slot="select-value"[^>]*>([\s\S]*?)<\/(?:span|div)>/)
+  // 模型下拉改用 DropdownMenu（用户 2026-11-06）：当前值在触发器的 .nb-model-trigger-label。
+  const m = html.match(/class="nb-model-trigger-label"[^>]*>([\s\S]*?)<\/span>/)
   return (m?.[1] ?? '').replace(/<[^>]+>/g, '').trim()
 }
 

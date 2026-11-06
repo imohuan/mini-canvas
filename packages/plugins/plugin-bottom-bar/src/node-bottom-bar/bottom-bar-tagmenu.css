@@ -103,21 +103,17 @@
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 12px;
 }
+/**
+ * hover 预览里的「全屏」按钮（用户 2026-11-06）。
+ *
+ * 只负责**摆位置**；形状、底色、字色全交给全局注册的 Button 默认样式。
+ * 之前这里还写死了半透明黑底 + 圆角，把组件库的默认样式盖掉了，
+ * 用户在深色画布上看到的就是「背景消失、按钮像不存在」。
+ */
 .nb-hover-preview-open {
   position: absolute;
   right: 6px;
   bottom: 6px;
-  border-radius: 6px;
-  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
-  /* 白字固定在深色半透明底上（同 .nb-card-act：--ui-panel 在深色主题下等于糊底） */
-  /* 主题色白名单: 同上，深色衬底上的恒定对比白 */
-  color: var(--ui-tip-ink, #fff);
-  font-size: 11px;
-  font-weight: 600;
-}
-.nb-hover-preview-open:hover {
-  background: var(--ui-ink, #18202b);
-  color: var(--ui-panel, #fff);
 }
 
 /**

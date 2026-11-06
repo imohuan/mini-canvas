@@ -361,10 +361,51 @@
    参数下拉**不设**下限 —— 它的摘要本来很短（16:9），按内容宽即可，见 .nb-field--params。 */
 .nb-field--action {
   min-width: 148px;
-  max-width: 200px;
+  max-width: 220px;
 }
-/* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
-.nb-field [data-slot='select-trigger'] {
+/*
+ * 模型触发器（DropdownMenuTrigger 里的 Button，用户 2026-11-06）：
+ * 透明底 + 「图标 · 名称 · 箭头」，hover / 展开才给浅底。
+ * 这里只改形状与配色，按钮本体仍由组件库负责（尺寸、焦点环、圆角走 token）。
+ */
+.nb-model-trigger {
+  gap: 6px;
+  padding: 4px 8px;
+  min-width: 148px;
+  max-width: 220px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 13px;
+  font-weight: 600;
+}
+.nb-model-trigger:hover:not(:disabled) {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+}
+.nb-model-trigger[aria-expanded='true'] {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+}
+.nb-model-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nb-model-trigger-caret {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+/**
+ * 参数区的普通下拉（例如只有一个「比例」参数时铺出来的那个 Select）：
+ * 仍是「文字 + ⌄」的透明触发器，hover 才给浅底。
+ * 模型下拉已换成 DropdownMenu，不再走这里。
+ */
+.nb-field--params [data-slot='select-trigger'] {
   gap: 4px;
   padding: 4px 8px;
   border-color: transparent;
@@ -373,31 +414,22 @@
   font-size: 13px;
   font-weight: 600;
   width: auto;
-  min-width: 148px;
-  max-width: 200px;
-  /* 圆角 8（不是胶囊）：照参考站的模型按钮 */
   border-radius: 8px;
 }
-.nb-field [data-slot='select-trigger']:hover:not([data-state='open']) {
+.nb-field--params [data-slot='select-trigger']:hover:not([data-state='open']) {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   color: var(--ui-ink, #18202b);
 }
-.nb-field [data-slot='select-trigger'][data-state='open'] {
+.nb-field--params [data-slot='select-trigger'][data-state='open'] {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   border-color: transparent;
   box-shadow: none;
   color: var(--ui-ink, #18202b);
 }
-.nb-field [data-slot='select-trigger'] svg {
+.nb-field--params [data-slot='select-trigger'] svg {
   width: 14px;
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);
-}
-/** 触发器里那颗模型图标不吃上面的 14px：它自己定尺寸与颜色（见 .nb-model-badge） */
-.nb-field [data-slot='select-trigger'] .nb-model-badge svg {
-  width: 14px;
-  height: 14px;
-  color: inherit;
 }
 
 /**
@@ -440,21 +472,27 @@
 .nb-model-badge[data-tone='audio'] { color: #059669; }
 .nb-model-badge[data-tone='text'] { color: var(--ui-ink-dim, #6b7280); }
 
-/* 下拉行：图标 + 名称（名称过长省略，箭头/勾仍由 SelectItem 自己管） */
+/* 下拉行：图标 + 名称 + 选中勾（名称过长省略） */
 .nb-model-item {
   gap: 8px;
 }
 .nb-model-item-label {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 触发器空间紧：模型名过长时省略，图标永远在 */
-.nb-field--action [data-slot='select-trigger'] [data-slot='select-value'] {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.nb-model-item-check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  color: var(--ui-accent, #0891b2);
+}
+.nb-model-menu {
+  width: 240px;
+  max-width: calc(100vw - 24px);
 }
 
 /* 最左侧 @ 按钮：与右侧图标按钮同高，不占额外间距 */

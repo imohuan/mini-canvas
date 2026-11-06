@@ -56,7 +56,11 @@ const Button = useUiComponent('Button')
         @load="(ev: Event) => emit('mediaReady', livePreviewTile!.key, (ev.target as HTMLImageElement).naturalWidth, (ev.target as HTMLImageElement).naturalHeight)"
       />
       <span v-else class="nb-hover-preview-empty">（无预览）</span>
-      <Button variant="ghost" size="sm"
+      <!--
+        全屏按钮：只用组件库默认外观（用户 2026-11-06：不要自己加任何 UI 样式）。
+        位置由 .nb-hover-preview-open 负责，外观交给 Button 的 variant / size。
+      -->
+      <Button variant="default" size="sm"
         class="nb-hover-preview-open"
         type="button"
         :aria-label="'全屏预览 ' + livePreviewTile.label"

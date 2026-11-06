@@ -791,10 +791,27 @@ export function useEditor(
     from = Math.min(Math.max(from, 0), state.doc.content.size)
     to = Math.min(Math.max(to, 0), state.doc.content.size)
     if (from > to) [from, to] = [to, from]
+    /**
+     * 插入后必须**显式**把选区放到插入内容之后（用户 2026-11-06 实测）。
+     *
+     * 只调 insertText 时，ProseMirror 会保留原来那个 selection 再映射位置；
+     * 从「没有光标（落在文末）」这一路进来时，映射后浏览器把 DOM 选区放回了
+     * contenteditable 开头 —— 文字确实加在末尾，光标却在最前面，@ 菜单看不到 @，
+     * 于是根本不弹。这里直接 setSelection 到 from + text.length，光标必然跟着字符走。
+     */
+    const insertAt = (start: number, end: number) => {
+      const tr = state.tr.insertText(text, start, end).scrollIntoView()
+      try {
+        tr.setSelection(TextSelection.create(tr.doc, Math.min(start + text.length, tr.doc.content.size)))
+      } catch {
+        /* 位置落在非文本节点上：保留默认映射，至少文字不会丢 */
+      }
+      view?.dispatch(tr)
+    }
     try {
-      view.dispatch(state.tr.insertText(text, from, to).scrollIntoView())
+      insertAt(from, to)
     } catch {
-      view.dispatch(state.tr.insertText(text, fallback.from, fallback.to).scrollIntoView())
+      insertAt(fallback.from, fallback.to)
     }
     view.focus()
   }
