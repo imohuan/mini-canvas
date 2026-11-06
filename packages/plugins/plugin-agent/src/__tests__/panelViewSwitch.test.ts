@@ -70,6 +70,66 @@ describe('分栏布局', () => {
     expect(body).toMatch(/overflow:\s*hidden/)
     expect(CSS).not.toMatch(/::-webkit-scrollbar\s*\{/)
   })
+
+  /**
+   * 切换要对得起「顺滑」两个字（用户 2026-11-06 第二次反馈：切到分栏还有一点卡）。
+   * 两套视图各渲染一整份模型列表，切换时浏览器不该重排这两大块：
+   * 位移会推动整块内容、触发布局，已删除；改用 contain + 只动 opacity。
+   */
+  it('切换只做淡入，不用位移（位移会触发重排，也是多出滚动条的原因）', () => {
+    const body = ruleBody(CSS, '.ac-view-pane')
+    expect(body).toMatch(/transition:\s*opacity/)
+    // 只检查真正的声明，注释里提到过 translateY（解释为什么去掉）不算
+    expect(body).not.toMatch(/^\s*transform:/m)
+    expect(body).not.toMatch(/transition:[^;]*transform/)
+  })
+
+  /**
+   * 反向钉住：不要给视图加 contain。
+   * contain: layout 会让这一格不参与父级尺寸协商，分栏左栏实测会塌成空白。
+   */
+  it('不给视图加 contain（会让分栏左栏塌掉）', () => {
+    const body = ruleBody(CSS, '.ac-view-pane')
+    expect(body).not.toMatch(/^\s*contain:/m)
+  })
+})
+
+describe('ScrollArea 内容层的内边距', () => {
+  /**
+   * 用户 2026-11-06 截图：「没有 Y 轴 padding」。
+   * 根因不是数值写错，而是这些 scroll-body 规则写在父组件的 scoped 样式里，
+   * 而带这个 class 的元素由子组件 AgentScrollArea 内部渲染 —— 不带父组件的 scoped 标记，
+   * 规则从来没命中过。必须用 :deep() 穿透，否则再改数值也不会生效。
+   */
+  it('所有内容层内边距都用 :deep 穿透到子组件', () => {
+    for (const sel of [
+      '.ac-split-scroll :deep(.ac-split-scroll-body)',
+      '.ac-menu-scroll :deep(.ac-model-scroll-body)',
+      '.ac-panel-scroll :deep(.ac-panel-scroll-body)',
+      '.ac-rail-scroll :deep(.ac-rail-scroll-body)',
+    ]) {
+      expect(CSS, '缺少 :deep 规则：' + sel).toContain(sel)
+    }
+  })
+
+  it('右侧结果区上下左右都有内边距（hover 底色不贴边、不压滚动条）', () => {
+    // 有两条同名规则（高度链 / 内边距），取带 padding 的那条
+    const at = CSS.lastIndexOf('.ac-split-scroll :deep(.ac-split-scroll-body)')
+    const block = CSS.slice(at, CSS.indexOf('\n}', at))
+    expect(block).toMatch(/padding:\s*6px 6px 10px 10px/)
+  })
+})
+
+describe('模型行高度', () => {
+  /**
+   * 用户 2026-11-06 截图：两行文字挤在一条 32px 高的行里，上下完全没有留白。
+   * 组件库 Button size="sm" 自带 h-8，必须让高度回到「由内容决定」。
+   */
+  it('行高跟着内容走，不被组件库固定成 32px', () => {
+    const at = CSS.indexOf('.ac-model-row-list button,')
+    const block = CSS.slice(at, CSS.indexOf('\n}', at))
+    expect(block).toMatch(/height:\s*auto/)
+  })
 })
 
 describe('审核模式选项', () => {

@@ -175,8 +175,15 @@
   grid-area: 1 / 1;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
-  transform: translateY(2px);
+  /*
+   * 只做淡入淡出，不再加 translateY 位移。
+   *
+   * 为什么：位移会把整块内容往下推 2px，超出这一格的可用高度 ——
+   * 外层 ScrollArea 于是判定「可滚动」，右边常驻一条多余滚动条
+   *（用户 2026-11-06 截图：hover 时右边有两条）。而且位移在每次切换都要重排，
+   * 那一帧的掉帧就是「切换有点卡」的来源之一。淡入只动合成层，不触发重排。
+   */
+  transition: opacity 0.14s ease, visibility 0.14s;
   pointer-events: none;
   /*
    * 视图必须**裁在自己的格子里**，否则它会按内容高度参与布局：卡片视图实测 1033px，
@@ -187,19 +194,25 @@
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
+  /*
+   * 不要给这里加 contain（试过，回退了）。
+   *
+   * contain: layout 会让这一格不再参与父级的尺寸协商：分栏里的左栏（平台列表）
+   * 拿不到可用高度，实测直接塌成空白。切换的顺滑度改用两条更安全的办法解决：
+   *   · 去掉位移（不再触发重排，见上）；
+   *   · 过渡只动 opacity（合成层，不重算布局）。
+   */
 }
 
 .ac-view-pane.is-active {
   opacity: 1;
   visibility: visible;
-  transform: none;
   pointer-events: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ac-view-pane {
     transition: none;
-    transform: none;
   }
 }
 
@@ -231,7 +244,7 @@
   overscroll-behavior: contain;
 }
 
-.ac-rail-scroll-body {
+.ac-rail-scroll :deep(.ac-rail-scroll-body) {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -318,7 +331,7 @@
 
 /* 空状态在结果区里上下左右居中：滚动层给了确定高度，子项以 auto 上下的 flex 居中，
    不会因为内容只有几十像素而贴顶。模型 / 技能 / MCP 三处分栏共用。 */
-.ac-split-scroll .ac-split-scroll-body {
+.ac-split-scroll :deep(.ac-split-scroll-body) {
   display: flex;
   flex-direction: column;
   min-height: 100%;
@@ -345,15 +358,15 @@
 }
 
 .ac-panel .ac-empty-state:last-child,
-.ac-panel-scroll-body > .ac-empty-state,
-.ac-mcp-scroll-body > .ac-empty-state,
-.ac-model-scroll-body > div > .ac-empty-state {
+.ac-panel-scroll :deep(.ac-panel-scroll-body > .ac-empty-state),
+.ac-mcp-scroll :deep(.ac-mcp-scroll-body > .ac-empty-state),
+.ac-menu-scroll :deep(.ac-model-scroll-body > div > .ac-empty-state) {
   flex: 1;
   min-height: 0;
 }
 
 /* 模型卡片视图多一层普通 div 外壳；把它也接进纵向 flex 链，空态才能拿满高度。 */
-.ac-model-scroll-body > div {
+.ac-menu-scroll :deep(.ac-model-scroll-body > div) {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -395,9 +408,15 @@
   overscroll-behavior: contain;
 }
 
-.ac-split-scroll-body {
-  /* 右侧结果区：上下 6、左右留出滚动条位置，行与左栏顶到同一条竖线。 */
-  padding: 6px 8px 10px 10px;
+/* :deep 是必须的：class 由子组件 AgentScrollArea 内部渲染，不带父组件的 scoped 标记 */
+.ac-split-scroll :deep(.ac-split-scroll-body) {
+  /*
+   * 右侧结果区：上下留住呼吸，右侧给滚动条留位（用户 2026-11-06：hover 底色不能和边框/滚动条重影）。
+   *
+   * 右侧那 6px 是给 ScrollArea 的滚动条让路：不给的话行底色会一直铺到滚动条底下，
+   * 悬停时看着像「底色把滚动条盖住」。
+   */
+  padding: 6px 6px 10px 10px;
 }
 
 /*

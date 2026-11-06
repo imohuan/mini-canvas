@@ -328,7 +328,14 @@
 
 /* 模型滚动区：外层 AgentScrollArea（shadcn ScrollArea）负责滚动，内容层只给内边距。 */
 
-.ac-model-scroll-body {
+/*
+ * :deep 是必须的：class 由子组件 AgentScrollArea 内部渲染，不带父组件的 scoped 标记。
+ *
+ * 外层容器的类名是 .ac-menu-scroll（模板里 `class="ac-menu-scroll ac-panel-body"`），
+ * 之前这里写的是 .ac-model-scroll —— 那个类名根本不存在，内边距一直没生效
+ * （用户 2026-11-06：卡片列表也没有上下留白）。
+ */
+.ac-menu-scroll :deep(.ac-model-scroll-body) {
   padding: 4px 12px 12px;
 }
 
@@ -346,6 +353,16 @@
   width: 100%;
   gap: 10px;
   padding: 8px 10px;
+  /*
+   * 高度必须跟着内容走（用户 2026-11-06 截图：上下完全没有 Y 轴留白）。
+   *
+   * 组件库 Button 的 size="sm" 带死了 h-8（32px）。这两行内容（模型名 17px +
+   * 平台/上下文 15px + 上下各 8px 内边距）其实要 48px 左右 —— 被钉在 32px 时
+   * 内边距被内容吃掉，文字顶到行边：hover 底色看着就是「贴着头尾的一条」。
+   * 这里让高度由内容决定，hover 底色才有完整的上下呼吸。
+   */
+  height: auto;
+  min-height: 0;
   border-radius: 10px;
   text-align: left;
 }
@@ -370,7 +387,7 @@
   min-height: 0;
 }
 
-.ac-model-panel.is-split .ac-model-scroll-body {
+.ac-model-panel.is-split .ac-menu-scroll :deep(.ac-model-scroll-body) {
   flex: 1;
   min-height: 0;
   overflow: hidden;

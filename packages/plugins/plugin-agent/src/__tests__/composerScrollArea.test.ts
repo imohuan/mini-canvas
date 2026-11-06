@@ -63,8 +63,10 @@ describe('Agent 面板空态', () => {
   })
 
   it('结果区空态拿满剩余高度', () => {
-    expect(CSS).toMatch(/\.ac-panel-scroll-body > \.ac-empty-state,[\s\S]{0,200}flex: 1/)
-    expect(CSS).toMatch(/\.ac-split-scroll \.ac-split-scroll-body \{[\s\S]{0,160}min-height: 100%/)
+    // 2026-11-06 起这些规则改用 :deep——内容层由子组件 AgentScrollArea 渲染，
+    // 不穿透就命中不到（当年写了但从未生效）。
+    expect(CSS).toMatch(/:deep\(\.ac-panel-scroll-body > \.ac-empty-state\)[\s\S]{0,200}flex: 1/)
+    expect(CSS).toMatch(/\.ac-split-scroll :deep\(\.ac-split-scroll-body\) \{[\s\S]{0,160}min-height: 100%/)
   })
 })
 

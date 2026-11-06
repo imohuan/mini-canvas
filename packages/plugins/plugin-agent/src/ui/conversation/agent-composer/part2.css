@@ -92,7 +92,13 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 2px 2px;
+  /*
+   * 不要再给这里写内边距（原来 0 2px 2px）。
+   * 内边距会把内容层的可用高度压掉 2px，而内容层是 height:100% 的「撑满」块 ——
+   * 于是它永远比容器高 2px，外层 ScrollArea 判成「可滚动」，右侧就常驻一条多余滚动条
+   * （用户 2026-11-06 截图：分栏时右边叠两条）。留白交给各自的内容层写。
+   */
+  padding: 0;
   /* 滚动已经交给内部 ScrollArea viewport；外层保留 flex 尺寸链路即可，
      再写 overflow:auto 会叠出第二层滚动条。 */
   overflow: visible;
@@ -339,6 +345,10 @@
   min-height: 0;
 }
 
-.ac-panel-scroll-body {
+/*
+ * 必须写 :deep —— 这个 class 由子组件 AgentScrollArea 内部渲染，
+ * 父组件的 scoped 样式命中不到它（真机表现：写了 padding 却完全没有效果）。
+ */
+.ac-panel-scroll :deep(.ac-panel-scroll-body) {
   padding: 2px 12px 12px;
 }
