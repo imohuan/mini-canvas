@@ -41,5 +41,21 @@ describe('面板尺寸不随视图切换', () => {
     expect(block).not.toMatch(/clamp\(\s*3[5-9]\dpx/)
     expect(block).not.toMatch(/5[0-9]vh|56vh|58vh/)
   })
+
+  it('MCP 展开工具后不再单独压低面板（用户 2026-11-06：展开反而变矮）', () => {
+    // 旧规则 .ac-mcp-panel:has(.ac-mcp-tools) 把 min-height 压到
+    // min(clamp(360px, 56vh, 420px), ...)，比 .ac-panel 的 460px 还小，
+    // 于是展开工具时菜单从 472 掉到 432 —— 视觉上就是「展开后更矮」。
+    expect(CSS).not.toMatch(/\.ac-mcp-panel:has\(\.ac-mcp-tools\)/)
+  })
+
+  it('面板最小高度不超过弹层上限（min-height 顶穿 max-height 就会被裁）', () => {
+    const at = CSS.indexOf('.ac-panel {')
+    const block = CSS.slice(at, CSS.indexOf('\n}', at))
+    const m = block.match(/min-height:\s*min\((\d+)px/)
+    expect(m).not.toBeNull()
+    // 弹层面板高度上限 520，头部/底栏/边距约占 60，460 是当前安全值
+    expect(Number(m![1])).toBeLessThanOrEqual(460)
+  })
 })
 

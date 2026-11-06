@@ -49,8 +49,10 @@ describe('Agent 面板滚动层', () => {
     expect(block).not.toContain('max-height')
   })
 
-  it('MCP 展开工具后有可用高度，且仍只在外层 viewport 滚动', () => {
-    expect(CSS).toMatch(/\.ac-mcp-panel:has\(\.ac-mcp-tools\)[\s\S]{0,120}min-height:/)
+  it('MCP 展开后沿用 .ac-panel 的高度，不再被特例压矮', () => {
+    // 旧规则 .ac-mcp-panel:has(.ac-mcp-tools) 给了 420 的 min-height，
+    // 比 .ac-panel 的 460 还小，展开工具时面板反而变矮（用户 2026-11-06 截图）。
+    expect(CSS).not.toMatch(/\.ac-mcp-panel:has\(\.ac-mcp-tools\)/)
   })
 })
 
