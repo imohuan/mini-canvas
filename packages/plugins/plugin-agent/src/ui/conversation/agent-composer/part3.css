@@ -28,7 +28,8 @@
 
 .ac-skill-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr));
+  /* 卡片视图单列（用户 2026-11-06）。分栏视图用 .ac-skill-grid--split，不受影响。 */
+  grid-template-columns: repeat(1, minmax(0, 1fr));
   gap: 8px;
 }
 
