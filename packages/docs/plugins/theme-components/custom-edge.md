@@ -24,7 +24,10 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
   `bezier` / `straight` / `step` / `smoothstep` 六种。
   `adaptive` 的控制点按实际缝宽收缩，短缝不会鼓成 S 弯；`avoid` 会把别的节点矩形外扩后
   绕路，拐角半径、安全区边距与连线留白在「设置 → 边 → 连线」里调（`edgeAvoidMargin` /
-  `edgeAvoidRadius` / `edgeAvoidClearance`）。
+  `edgeAvoidRadius` / `edgeAvoidClearance`）。卡片挨得近时（分镜网格一格只隔 10px），
+  每张卡的安全区会按"离邻居还剩多少缝"自动收窄，端口不会被别人的安全区埋掉，路线也不会
+  退回贝塞尔直线。分组、分镜组这类 `transparent` 容器不参与避障。
+  想并排对比各算法的路径，直接打开 `packages/plugins/plugin-theme-canvas/edge-routing-lab.html`。
 - **外观**：线宽、虚线、箭头、辉光；以及"导轨 + 青色光斑沿线流动"的流光动画。
 - **颜色两格制**：线色/流光色不在插件 Config 里，而在渲染层主题色板
   （`edgeRailColor` / `edgeFlowColor`，亮/暗各一格）。用 `useThemeColor` 取值，
