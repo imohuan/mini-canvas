@@ -9,13 +9,13 @@
  * 这层用真实 Context + 两种 provide 组合直接对照。
  */
 import { describe, expect, it } from 'vitest'
-import { createSSRApp, defineComponent, h } from 'vue'
+import { createSSRApp, defineComponent, h, type InjectionKey } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { Context } from '@mini-canvas/canvas-data'
 import { CANVAS_CONTEXT_KEY } from '@mini-canvas/vue-render/context'
 import SlotHost from '@mini-canvas/vue-render/SlotHost.vue'
 
-const RENDER_KEY = Symbol.for('canvas-v2-render-context')
+const RENDER_KEY: InjectionKey<{ ctx: Context }> = Symbol.for('canvas-v2-render-context') as never
 
 function occupant() {
   return defineComponent({ render: () => h('div', { 'data-guide': '1' }, 'guide') })
@@ -39,7 +39,7 @@ describe('SlotHost 在画布内也能渲染 overlay', () => {
     ctx.slots.register('overlay', { id: 'guide', component: occupant() })
     const app = createSSRApp({ render: () => h(SlotHost, { slot: 'overlay' }) })
     // 画布内只 provide 渲染上下文（没有应用级 key）
-    app.provide(RENDER_KEY as never, { ctx })
+    app.provide(RENDER_KEY, { ctx })
     const html = await renderToString(app)
     expect(html).toContain('data-guide')
     ctx.stop()

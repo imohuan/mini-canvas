@@ -206,3 +206,24 @@ describe('外观交接：尺寸档位', () => {
     expect(componentConfig.size).toBe(DEFAULT_COMPONENT_CONFIG.size)
   })
 })
+
+describe('外观交接：浮层配置（已删除）', () => {
+  it('设置页不再提供「外观/浮层」分组（四项只提供单一或近乎单一选择，已固定为默认）', { timeout: 15000 }, async () => {
+    // 文件随主题拆包从 plugin-theme-default/src/__tests__ 挪到了本包 src，路径跟着改。
+    const { Config } = await import('./index')
+    const fields = Object.entries(Config).filter(([, schema]) => schema.group === '外观/浮层')
+    expect(fields).toEqual([])
+  })
+
+  it('已删掉的浮层键不再出现在 Config 里（旧存档里的值被内核忽略）', {
+    timeout: 15000,
+  }, async () => {
+    const { Config } = await import('./index')
+    for (const key of ['themePopupArrow', 'themePopupGap', 'themePopupSubGap', 'themePopupSelectedStyle']) {
+      expect(Object.keys(Config)).not.toContain(key)
+    }
+    // 旧存档里的 'medium' 档已并入 'default'：读不到就回落 inherit
+    const input = toThemeBridgeInput({ themeRadius: 'medium' })
+    expect(input).toEqual({ radius: 'inherit', font: 'inherit', heading: 'inherit', size: 'inherit' })
+  })
+})
