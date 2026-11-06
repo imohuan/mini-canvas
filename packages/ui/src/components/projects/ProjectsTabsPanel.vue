@@ -4,7 +4,8 @@
  *
  * 插件只交一个组件，这里负责让它「占满主内容区」：
  * - 默认由宿主滚动（普通设置页、卡片页）；
- * - meta.scroll === false 时交给页面自己滚（素材库那种全高页面）。
+ * - meta.scroll === false 时交给页面自己滚（素材库那种全高页面），
+ *   这时也不加左右内边距：素材墙要真正铺满整块主内容区，不能被 24px 的白边缩掉。
  */
 import type { ProjectsTabEntry } from './useProjectsPanels'
 
@@ -14,7 +15,13 @@ defineProps<{ tab: ProjectsTabEntry }>()
 <template>
   <div
     class="flex min-h-0 flex-1 flex-col"
-    :class="tab.meta.scroll === false ? 'overflow-hidden' : 'overflow-y-auto px-6 pb-10'"
+    :class="
+      tab.meta.scroll === false
+        ? 'overflow-hidden'
+        : tab.meta.fullBleed
+          ? 'overflow-y-auto pb-10'
+          : 'overflow-y-auto px-6 pb-10'
+    "
     :data-projects-tab="tab.id"
   >
     <component :is="tab.component" class="min-h-0 flex-1" />

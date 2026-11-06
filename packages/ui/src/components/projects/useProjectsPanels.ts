@@ -35,6 +35,11 @@ export interface ProjectsTabMeta {
    * 的页面传 false，否则会出现两条滚动条。
    */
   scroll?: boolean
+  /**
+   * 正文是否要顶到主内容区的左右边缘（素材墙这类整页铺满）。
+   * 默认 false：保留 24px 左右内边距，与项目卡片对齐。
+   */
+  fullBleed?: boolean
 }
 
 export interface ProjectsTabEntry {
@@ -69,6 +74,7 @@ export function useProjectsTabs(): Ref<ProjectsTabEntry[]> {
             ...(meta.icon ? { icon: meta.icon } : {}),
             ...(meta.hint ? { hint: meta.hint } : {}),
             ...(meta.scroll !== undefined ? { scroll: meta.scroll } : {}),
+            ...(meta.fullBleed ? { fullBleed: true } : {}),
           },
         }
       })

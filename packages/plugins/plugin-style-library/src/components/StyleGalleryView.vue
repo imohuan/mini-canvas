@@ -56,8 +56,29 @@ const props = withDefaults(
     useDisabled?: boolean
     /** 不能加入时的可见说明 */
     useDisabledReason?: string
+    /**
+     * 是否显示「加入画布」相关的动作（卡片右下角的加号 / 详情页的「使用」）。
+     *
+     * 项目页没有画布，这些按钮点了也只会给一句“先打开画布”，属于噪音；
+     * 所以项目模式传 false，整个按钮不渲染。默认 true（画布模式）。
+     */
+    showCanvasActions?: boolean
+    /**
+     * 背景融合方式：
+     * - 'panel'（缺省）：白底 —— 弹窗里是独立面板，白底与遮罩形成层次；
+     * - 'transparent'：透明 —— 项目页整页里沿用页面底色，不出现一块突兀的白色面板。
+     */
+    surface?: 'panel' | 'transparent'
   }>(),
-  { columns: 4, mode: 'detail', usingIds: () => [], useDisabled: false, useDisabledReason: '' },
+  {
+    columns: 4,
+    mode: 'detail',
+    usingIds: () => [],
+    useDisabled: false,
+    useDisabledReason: '',
+    showCanvasActions: true,
+    surface: 'panel',
+  },
 )
 
 const svc = props.service
@@ -175,7 +196,7 @@ defineExpose({ markRecent })
 </script>
 
 <template>
-  <div class="sg">
+  <div class="sg" :class="{ 'sg--bare': surface === 'transparent' }">
     <!-- 顶部：页签 + 搜索 + 工具 -->
     <header class="sg-top">
       <nav class="sg-tabs" role="tablist" aria-label="素材库视图">
@@ -237,6 +258,8 @@ defineExpose({ markRecent })
           :starred="starred.includes(it.id)" :show-commercial="mode !== 'preview'"
           :busy="usingIds.includes(it.id)"
           :use-disabled="useDisabled" :use-disabled-reason="useDisabledReason"
+          :show-canvas-actions="showCanvasActions"
+          :surface="surface"
           @open="onOpen" @toggle-star="onToggleStar" @use="onCardUse" />
       </div>
 
@@ -256,7 +279,24 @@ defineExpose({ markRecent })
 </template>
 
 <style scoped>
-.sg { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--ui-panel, #fff); }
+/*
+ * 宽度必须显式吃满父级：本组件是「内容 → 宿主 → 页签」这条 flex 链里的一层，
+ * 只写 height:100% 时宽度仍按内容收缩 —— 项目页里表现为素材墙只占左边一截，
+ * 右侧一大片空白（用户 2026-11-06 截图）。flex:1 + width:100% + min-width:0
+ * 让它在弹窗和整页两种容器里都铺满，同时允许内部网格自己换列。
+ */
+.sg {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: var(--ui-panel, #fff);
+}
+/* 项目页整页：不要自带一块白底，融进页面背景 */
+.sg--bare { background: transparent; }
 
 /* 顶部 */
 .sg-top {

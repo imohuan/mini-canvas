@@ -116,6 +116,23 @@ function selectPluginTab(id: string): void {
   pluginTabId.value = id
 }
 
+/**
+ * 返回。
+ *
+ * 项目页本身就是 #/（应用首页），刚打开时 router.back() 没有可退的历史，
+ * 点下去毫无反应（用户 2026-11-06 实测）。这里按「当前在哪」决定退到哪：
+ * - 在插件页签里 → 回到项目列表；
+ * - 在资产 / 首页 → 回到项目列表；
+ * - 已经在项目列表 → 有历史才退历史（比如从画布返回），否则不再动。
+ */
+function goBack(): void {
+  if (activePluginTab.value || nav.value !== 'projects') {
+    switchNav('projects')
+    return
+  }
+  if (window.history.length > 1) router.back()
+}
+
 /** 标题：插件页用插件自己的标题，内置页用原来的规则。 */
 const pageTitle = computed(() =>
   activePluginTab.value
@@ -219,7 +236,7 @@ function dateOf(ts: number): string {
     <!-- 主区 -->
     <main class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-14 flex-none items-center gap-3 px-6">
-        <Button variant="ghost" size="xs" class="justify-start gap-1 rounded-lg px-2 text-[13px] font-normal text-ink-dim" @click="router.back()">
+        <Button variant="ghost" size="xs" class="justify-start gap-1 rounded-lg px-2 text-[13px] font-normal text-ink-dim" @click="goBack">
           <ChevronLeft :size="15" /> 返回
         </Button>
         <span class="h-4 w-px bg-line"></span>

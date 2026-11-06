@@ -152,13 +152,25 @@ export function apply(ctx: Context, config?: StyleLibraryConfig): void {
     id: 'style-library/projects-style-tab',
     order: 20,
     component: markRaw(ProjectsStyleTab),
-    meta: { title: '风格库', icon: SparklesIcon, hint: '浏览风格素材；加入画布需要先打开一张画布', scroll: false },
+    meta: {
+      title: '风格库',
+      icon: SparklesIcon,
+      hint: '浏览风格素材；加入画布需要先打开一张画布',
+      scroll: false,
+      fullBleed: true,
+    },
   })
   ctx.slots.register('app.projects.tabs', {
     id: 'style-library/projects-effect-tab',
     order: 21,
     component: markRaw(ProjectsEffectTab),
-    meta: { title: '特效库', icon: WandSparklesIcon, hint: '浏览特效素材；加入画布需要先打开一张画布', scroll: false },
+    meta: {
+      title: '特效库',
+      icon: WandSparklesIcon,
+      hint: '浏览特效素材；加入画布需要先打开一张画布',
+      scroll: false,
+      fullBleed: true,
+    },
   })
 
   // —— 两个外壳挂到画布 overlay 槽（各自按服务 state.open 判显隐）——
@@ -218,4 +230,7 @@ export const styleLibraryPlugin: PluginModule = { name, inject, Config, apply }
 export type { StyleCard, StyleMeta, StylePage, StyleSort } from './data/types'
 export { createLibraryService, PAGE_SIZE, DEFAULT_ROOT, DEFAULT_EFFECT_ROOT } from './data/store'
 export type { LibraryKind } from './data/api'
+// 外壳与内容分开导出：弹窗用 Overlay，项目页 / 其它宿主直接用 Content（不套弹窗）。
 export { StyleLibraryOverlay, EffectLibraryOverlay, StyleGalleryView, StyleCardView, StyleDetailView }
+export { default as StyleLibraryContent } from './components/StyleLibraryContent.vue'
+export { default as EffectLibraryContent } from './components/EffectLibraryContent.vue'

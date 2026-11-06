@@ -1,240 +1,83 @@
 <script setup lang="ts">
 /**
- * StyleLibraryOverlay —— 风格广场的浮层外壳（图 1 的那张大面板）。
+ * StyleLibraryOverlay —— 风格库的**弹窗外壳**（画布模式下使用）。
  *
- * 只做三件事：
- * ① 从服务读 state.open 决定显隐（关闭时不产出 DOM）；
- * ② 拼外壳：Teleport 到 body + 遮罩 + 居中面板 + 标题栏（✕ / 最小化）+ 内容区；
- * ③ 把「收藏 / 详情 / 使用」这些交互接上服务与宿主。
+ * 它只做外壳：Teleport 到 body + 遮罩 + 居中面板 + 标题栏（✕ / 最小化）。
+ * 内容在 StyleLibraryContent.vue：项目页的「风格库」页签用同一个内容组件，
+ * 但不套这层弹窗 —— 没有遮罩、没有圆角卡片、没有展开动画。
  *
- * 真正的广场正文与详情都**按名从 ui 目录取**（`styleLibraryGallery` / `styleLibraryDetail`），
- * 不写死 import —— 换外观注册同名更小 order 的件即可。
- * 收藏是本地持久化（localStorage，按画布无关的全局键）—— 与后台无关，不需要服务端支持。
+ * 显隐看服务的 state.open：命令 / 面板按钮打开 → 显示；加入成功或点 ✕ / Esc → 关闭。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch, Teleport } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, Teleport, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
-import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
-import type { StyleCard } from '../data/types'
+import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
 import type { LibraryService } from '../data/store'
-import { UI_GALLERY, UI_DETAIL } from '../names'
-import { useStyleItem } from '../useStyleItem'
-import { styleItemDepsOf } from '../useStyleItemPorts'
-import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
-import { useCanvasGate } from '../useCanvasGate'
+import StyleLibraryContent from './StyleLibraryContent.vue'
 
 /**
  * 根节点是 Teleport：槽宿主传下来的 class / data-slot-* 无处可落。
- *
- * SlotHost 会把 `class` 与 `data-slot-*` 作为属性传给每个 occupant；本组件把整块面板
- * Teleport 到 body（层级由自己的 CSS 决定），这些属性既挂不到遮罩上也挂不到面板上，
- * Vue 于是报「Extraneous non-props attributes ... because component renders fragment
- * or text or teleport root nodes」。显式声明不继承，语义上也正确：这个槽 item 的定位类
- * 对它没有意义。
+ * 显式声明不继承，避免 Vue 报「Extraneous non-props attributes」。
  */
 defineOptions({ inheritAttrs: false })
 
-/**
- * 同一个组件两种壳（用户口径 2026-11-06）：
- * - 画布模式：默认值 = 弹出框（Teleport + 遮罩 + 居中面板）；
- * - 项目模式：项目页把它注册成左栏整页页签，传 `inline` 就地渲染，不再盖住整个应用。
- *
- * 里面的广场、详情、收藏、加入画布逻辑一行不改 —— 只是换了个外壳。
- */
-const props = withDefaults(defineProps<{ inline?: boolean }>(), { inline: false })
-
-/**
- * 只从根上下文取服务：项目页没有画布也能打开风格广场、看详情、收藏。
- * flow 这类画布能力按需现取（tryGet('view')），拿不到就把"加入画布"禁用。
- */
-// 宽松取件：本浮层注册在画布 overlay 槽里（CanvasSurface 只 provide 渲染上下文），
-// 严格 useCanvasContext() 会抛错导致整个浮层不渲染（2026-11-05 与参考线同一根因）。
+// 宽松取件：本浮层注册在画布 overlay 槽里（CanvasSurface 只 provide 渲染上下文）。
 const { ctx } = useCanvasContextOrRender()
-/** 「能不能加入画布」：doc + media 两件都在才行，缺哪件给哪句原因。 */
-const gate = useCanvasGate(ctx, '素材')
-
-/** 广场正文 / 详情：按名从 ui 目录取（树内调用 useUiComponent）；缺件时退化为不渲染 */
-const GalleryComp = useUiComponent(UI_GALLERY)
-const DetailComp = useUiComponent(UI_DETAIL)
-
-/** 取服务（组件在画布渲染子树内，能用 useCanvasRender 拿 ctx） */
 const svc = ctx.get<LibraryService>('style-library')
 const s = svc.state
 
-/** 收藏集合：全局持久化（localStorage）—— 与具体画布无关 */
-const STAR_KEY = 'style-library:starred'
-const starred = ref<Array<number | string>>(readStars())
-function readStars(): Array<number | string> {
-  try {
-    const raw = localStorage.getItem(STAR_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-function persistStars(): void {
-  try {
-    localStorage.setItem(STAR_KEY, JSON.stringify(starred.value))
-  } catch {
-    /* 配额/隐私模式：收藏本次会话仍生效，静默 */
-  }
-}
-
-function onToggleStar(item: StyleCard): void {
-  const i = starred.value.indexOf(item.id)
-  if (i >= 0) starred.value.splice(i, 1)
-  else starred.value.push(item.id)
-  persistStars()
-}
-
-/** 详情 */
-const detailItem = ref<StyleCard | null>(null)
-const detailStarred = computed(() => (detailItem.value ? starred.value.includes(detailItem.value.id) : false))
-function onOpenDetail(item: StyleCard): void {
-  detailItem.value = item
-}
-
-/** 正在提交的素材（防连点重复建节点） */
-const using = ref(false)
-/** 正在提交的那条素材 id（只让那张卡的按钮变灰，不影响别的卡） */
-const usingIds = ref<Array<number | string>>([])
-/** 加入失败的原因（显示在面板里 —— 规范 §1.2：只在控制台 warn 不算降级） */
-const useError = ref('')
-
-/**
- * 使用：把选中的图**存进画布资源库**（resources.put）再建节点，并用风格名命名。
- *
- * 为什么不直接写风格库地址（2026-10-22 用户口径）：
- * 素材库目录一改 / 插件没装，画布上的图就全裂；且节点本来只该保存持久资源引用。
- * 落进资源库后，图片字节归本画布所有，与素材库是否在线无关。
- *
- * 命名：createNode 把 resourceId / imageUrl / label 一次写入 → 单条历史；
- * 多图风格在标题后加序号（第 1 张不加），避免同名分不清。
- */
-async function onUse(item: StyleCard, index: number): Promise<void> {
-  // 缺画布或缺 media 能力：给可见提示，不创建半成品节点。
-  if (!gate.canUse.value) {
-    useError.value = gate.reason.value
-    return
-  }
-  const url = item.images[index] ?? item.cover
-  /**
-   * 落点：按**当前视口中心**（用户口径 2026-10-25）。
-   * 拿不到视口（未挂载 / 极简宿主）才退回原来的固定偏移。
-   */
-  // 没有画布视口时用固定偏移；真正的落点只有画布内才有意义。
-  const view = ctx.tryGet<{
-    screenToFlow?: (p: { x: number; y: number }) => { x: number; y: number }
-    paneRect?: { value?: { x: number; y: number; width: number; height: number } }
-  }>('view')
-  const position =
-    stylePlacementOf({
-      screenToFlow: view?.screenToFlow as never,
-      paneRect: view?.paneRect?.value as never,
-    }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
-  // 多图时带序号（第 1 张不加，避免"名 1"这种啰嗦标题）
-  const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
-  if (using.value) return
-  using.value = true
-  usingIds.value = [item.id]
-  useError.value = ''
-  try {
-    // 规范 §3.1：字节 → media.put → media.addNode；节点字段由图片插件自己写
-    const result = await useStyleItem(styleItemDepsOf(ctx), { url, label }, position)
-    if (!result.ok) {
-      // 不退回"写素材库地址"：那会让节点依赖素材库目录与插件在线。
-      // 原因显示在面板里（见模板的 slol-use-error），用户知道该修什么。
-      console.warn('[style-library] 加入画布失败：' + result.reason + '（' + url + '）')
-      useError.value = result.message
-      return
-    }
-    // 落完选中并聚焦（保留缩放）—— 用户不必自己找刚加的节点
-    focusStyleNode(
-      {
-        selection: ctx.tryGet('selection'),
-        view: ctx.tryGet('view'),
-      },
-      result.nodeId,
-    )
-    detailItem.value = null
-    svc.close()
-  } finally {
-    using.value = false
-    usingIds.value = []
-  }
-}
-
 /** 最小化：只收起面板（不关，保留状态） */
 const minimized = ref(false)
-
-/** 浮层模式看 state.open；内嵌模式由页签决定显隐，始终显示。 */
-const visible = computed(() => props.inline || (s.open && !minimized.value))
+const visible = computed(() => s.open && !minimized.value)
 
 function onKey(e: KeyboardEvent): void {
   if (!s.open) return
-  if (e.key === 'Escape' && !detailItem.value) { e.stopPropagation(); svc.close() }
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    svc.close()
+  }
 }
 onMounted(() => document.addEventListener('keydown', onKey, true))
 onBeforeUnmount(() => document.removeEventListener('keydown', onKey, true))
 
-// 关闭时收起详情与最小化态，下次打开是干净的面板
-watch(() => s.open, (v) => {
-  if (!v) { detailItem.value = null; minimized.value = false; useError.value = '' }
-})
+// 关闭时收起最小化态，下次打开是干净的面板
+watch(
+  () => s.open,
+  (v) => {
+    if (!v) minimized.value = false
+  },
+)
+
+/** 加入画布成功：浮层任务完成，关掉自己（项目页页签不会收到这个动作）。 */
+function onUsed(): void {
+  svc.close()
+}
 </script>
 
 <template>
-  <component :is="inline ? 'section' : Teleport" :to="inline ? undefined : 'body'">
-    <div v-if="visible" :class="inline ? 'slol-inline' : 'slol-layer'" @pointerdown.self="inline || svc.close()" @contextmenu.prevent>
-      <div class="slol-panel" :class="{ 'slol-panel--inline': inline }" @pointerdown.stop>
-        <header v-if="!inline" class="slol-head">
+  <Teleport to="body">
+    <div v-if="visible" class="slol-layer" @pointerdown.self="svc.close()" @contextmenu.prevent>
+      <div class="slol-panel" @pointerdown.stop>
+        <header class="slol-head">
           <h3 class="slol-title">素材库 · 风格广场</h3>
           <div class="slol-head-actions">
-            <!-- <button class="slol-icon" type="button" aria-label="最小化" title="最小化" @click="minimized = true">
+            <button class="slol-icon" type="button" aria-label="最小化" title="最小化" @click="minimized = true">
               <Minus :size="16" />
-            </button> -->
+            </button>
             <button class="slol-icon" type="button" aria-label="关闭风格库" title="关闭" @click="svc.close()">
               <X :size="16" />
             </button>
           </div>
         </header>
 
-        <!-- 加入画布失败：必须看得见（规范 §1.2） -->
-        <p v-if="useError" class="slol-use-error" role="alert">{{ useError }}</p>
-
         <div class="slol-body">
-          <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            :using-ids="usingIds" :use-disabled="!gate.canUse.value"
-            :use-disabled-reason="gate.reason.value"
-            @toggle-star="onToggleStar" @open-detail="onOpenDetail" @use="onUse" />
+          <StyleLibraryContent @used="onUsed" />
         </div>
       </div>
-
-      <!-- 详情（图 3）：同层浮现 -->
-      <component :is="DetailComp" v-if="DetailComp" :item="detailItem" :starred="detailStarred"
-        @close="detailItem = null" @toggle-star="onToggleStar" @use="onUse" />
     </div>
-  </component>
+  </Teleport>
 </template>
 
 <style scoped>
-.slol-inline {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: var(--ui-panel, #fff);
-}
-
-.slol-panel--inline {
-  width: 100%;
-  height: 100%;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  animation: none;
-}
-
 .slol-layer {
   position: fixed;
   inset: 0;
@@ -271,15 +114,6 @@ watch(() => s.open, (v) => {
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
 }
 .slol-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--ui-ink, #18202b); }
-.slol-use-error {
-  flex: none;
-  margin: 8px 16px 0;
-  padding: 8px 10px;
-  border: 1px solid var(--ui-danger, #ef4444);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--ui-danger, #ef4444);
-}
 .slol-head-actions { display: flex; gap: 4px; }
 .slol-icon {
   display: grid;
@@ -295,7 +129,7 @@ watch(() => s.open, (v) => {
 }
 .slol-icon:hover { background: var(--ui-hover, rgb(0 0 0 / 0.06)); color: var(--ui-ink, #18202b); }
 .slol-icon:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: 1px; }
-.slol-body { flex: 1; min-height: 0; }
+.slol-body { flex: 1; min-height: 0; display: flex; }
 
 @media (prefers-reduced-motion: reduce) {
   .slol-panel, .slol-icon { transition: none !important; animation: none !important; }

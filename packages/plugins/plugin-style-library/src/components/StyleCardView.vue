@@ -23,7 +23,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CheckCircle2, Star, Expand, Flame, Film, Plus } from 'lucide-vue-next'
 import type { StyleCard } from '../data/types'
 
-const props = defineProps<{
+// Boolean 型 prop 缺省会被 Vue 收敛成 false；这里必须显式给默认值 true，
+// 否则「没传」的画布模式也会被当成项目模式，把加号整颗吞掉。
+const props = withDefaults(defineProps<{
   item: StyleCard
   /** 收藏态（受控；父组件持有） */
   starred?: boolean
@@ -35,7 +37,11 @@ const props = defineProps<{
   useDisabled?: boolean
   /** 不能加入时按钮上的说明 */
   useDisabledReason?: string
-}>()
+  /** 是否显示「加入画布」按钮（项目页没有画布：整颗按钮不渲染） */
+  showCanvasActions?: boolean
+  /** 'panel' 白卡片（弹窗默认）；'transparent' 直接浮在页面底色上（项目页整页） */
+  surface?: 'panel' | 'transparent'
+}>(), { showCanvasActions: true, surface: 'panel' })
 
 const emit = defineEmits<{
   (e: 'open', item: StyleCard): void
@@ -129,7 +135,11 @@ function human(n: number): string {
 </script>
 
 <template>
-  <article ref="rootEl" class="sc-card" :class="{ 'is-failed': failed, 'is-video': hasVideo && !videoBroken }">
+  <article
+    ref="rootEl"
+    class="sc-card"
+    :class="{ 'is-failed': failed, 'is-video': hasVideo && !videoBroken, 'sc-card--bare': surface === 'transparent' }"
+  >
     <div class="sc-media" @click="emit('open', props.item)">
       <!-- 骨架：图片 onload 前显示，撑住布局不跳 -->
       <div v-if="!loaded && !failed && showImage" class="sc-skeleton" aria-hidden="true"></div>
@@ -193,6 +203,7 @@ function human(n: number): string {
       </button>
       <!-- 右下：加入画布（两个库都有；素材走 media.put → media.addNode） -->
       <button
+        v-if="showCanvasActions !== false"
         class="sc-iconbtn sc-add"
         :class="{ 'is-busy': busy }"
         :disabled="busy || useDisabled"
@@ -241,6 +252,18 @@ function human(n: number): string {
   background: var(--ui-panel, #fff);
   overflow: hidden;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+/*
+ * 项目页整页：卡片不再是一块块白色方块压在浅灰页面上，而是半透明的「同色系」卡面。
+ * 用 --ui-panel-soft + 5% 调和，亮色下与页面底色近似、暗色下自然浮起；
+ * 弹窗里仍用不透明的白底，保持独立面板的层次（用户 2026-11-06：背景不够融合）。
+ */
+.sc-card--bare {
+  background: color-mix(in srgb, var(--ui-panel, #fff) 55%, var(--ui-canvas-bg, #f5f6f8));
+  border-color: color-mix(in srgb, var(--ui-line, #e2e5ea) 65%, transparent);
+}
+.sc-card--bare:hover {
+  background: var(--ui-panel, #fff);
 }
 .sc-card:hover {
   border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);

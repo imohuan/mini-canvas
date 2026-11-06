@@ -12,10 +12,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Star, ChevronLeft, ChevronRight, CheckCircle2, Sparkles, Flame, Heart } from 'lucide-vue-next'
 import type { StyleCard } from '../data/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   item: StyleCard | null
   starred?: boolean
-}>()
+  /** 是否显示「使用」按钮（项目页没有画布：按钮不渲染） */
+  showCanvasActions?: boolean
+}>(), { showCanvasActions: true })
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -158,7 +160,12 @@ function human(n: number): string {
                 @click="emit('toggle-star', item)">
                 <Star :size="14" :fill="starred ? 'currentColor' : 'none'" /> {{ starred ? '已收藏' : '收藏' }}
               </button>
-              <button class="sd-btn sd-btn--primary" type="button" @click="emit('use', item, index)">使用</button>
+              <button
+                v-if="showCanvasActions !== false"
+                class="sd-btn sd-btn--primary"
+                type="button"
+                @click="emit('use', item, index)"
+              >使用</button>
             </div>
           </aside>
         </div>
