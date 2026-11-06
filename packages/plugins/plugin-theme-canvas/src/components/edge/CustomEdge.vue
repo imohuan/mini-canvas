@@ -191,6 +191,7 @@ const obstacles = computed<ReadonlyArray<EdgeObstacle> | undefined>(() => {
     [props.source, props.target],
     {
       liveOffsets: liveOffsets.value,
+      openEndpoints: [sourcePos.value, targetPos.value],
       isTransparent: (id) => {
         const node = doc?.getNode(id)
         return node ? doc?.types.get(node.type)?.transparent === true : false

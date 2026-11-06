@@ -12,6 +12,7 @@ import {
   sampleEdgePath,
   findClosestPointOnPath,
   resolveEdgeObstacles,
+  expandObstacle,
   type EdgeAppearance,
 } from './edgeGeometry'
 
@@ -176,18 +177,18 @@ describe('正交避障：两端卡片也参与避障', () => {
 
   function sampleAll() {
     const points: Array<{ x: number; y: number }> = []
-    for (let i = 0; i <= 120; i++) {
+    for (let i = 0; i <= 1200; i++) {
       points.push(
         sampleEdgePath(
-          i / 120,
+          i / 1200,
           s.x, s.y, t.x, t.y,
           Position.Right, Position.Left,
           'avoid',
           undefined,
-          [
-            { ...source, inflate: 0 },
-            { ...target, inflate: 0 },
-          ],
+      [
+        { ...source, endpoint: true },
+        { ...target, endpoint: true },
+      ],
         ),
       )
     }
@@ -214,7 +215,7 @@ describe('正交避障：两端卡片也参与避障', () => {
     expect(end.x).toBeCloseTo(t.x, 5)
   })
 
-  it('resolveEdgeObstacles 给两端卡片 inflate=0，其它节点保留默认边距', () => {
+  it('resolveEdgeObstacles 给两端卡片打 endpoint 标记，其它节点保留默认边距', () => {
     const rects = [
       { id: 's', x: 0, y: 0, w: 10, h: 10 },
       { id: 't', x: 20, y: 0, w: 10, h: 10 },
@@ -223,13 +224,81 @@ describe('正交避障：两端卡片也参与避障', () => {
     const out = resolveEdgeObstacles(rects, ['s', 't'], {
       liveOffsets: new Map([['o', { dx: 5, dy: 6 }]]),
     })
-    expect(out.find((r) => r.id === 's')?.inflate).toBe(0)
-    expect(out.find((r) => r.id === 't')?.inflate).toBe(0)
+    expect(out.find((r) => r.id === 's')?.endpoint).toBe(true)
+    expect(out.find((r) => r.id === 't')?.endpoint).toBe(true)
     expect(out.find((r) => r.id === 'o')?.inflate).toBeUndefined()
+    expect(out.find((r) => r.id === 'o')?.endpoint).toBeUndefined()
     expect(out.find((r) => r.id === 'o')).toMatchObject({ x: 45, y: 6 })
   })
 })
 
+describe('正交避障：两端卡片按完整边距外扩', () => {
+  const source = { id: 's', x: 0, y: 0, w: 250, h: 210 }
+  const target = { id: 't', x: 0, y: 300, w: 250, h: 210 }
+  // 右端口 (250,105) → 左端口 (0,405)：两卡上下叠放，必须从下方绕过去。
+  const s = { x: 250, y: 105 }
+  const t = { x: 0, y: 405 }
+
+  function sampleAll(clearance: number) {
+    const points: Array<{ x: number; y: number }> = []
+    for (let i = 0; i <= 120; i++) {
+      points.push(
+        sampleEdgePath(
+          i / 120,
+          s.x, s.y, t.x, t.y,
+          Position.Right, Position.Left,
+          'avoid',
+          { avoidMargin: 48, avoidClearance: clearance },
+          [
+            { ...source, endpoint: true },
+            { ...target, endpoint: true },
+          ],
+        ),
+      )
+    }
+    return points
+  }
+
+  function inside(p: { x: number; y: number }, rect: { x: number; y: number; w: number; h: number }) {
+    return p.x > rect.x + 1 && p.x < rect.x + rect.w - 1 && p.y > rect.y + 1 && p.y < rect.y + rect.h - 1
+  }
+
+  it('不穿过两张卡片', () => {
+    for (const point of sampleAll(12)) {
+      expect(inside(point, source)).toBe(false)
+      expect(inside(point, target)).toBe(false)
+    }
+  })
+
+  it('竖直方向也有边距：底部绕行线不贴着卡片底边', () => {
+    const points = sampleAll(12)
+    // 48 + 12 = 60：目标卡片底边 510，路径必须退到 570 附近，不能贴着底边走。
+    const maxY = Math.max(...points.map((p) => p.y))
+    expect(maxY).toBeGreaterThan(target.y + target.h + 50)
+  })
+
+  it('缝隙够宽时，左右与上下都按完整边距退让', () => {
+    const far = { id: 't2', x: 500, y: 30, w: 250, h: 150 }
+    const d = buildEdgePath(
+      250, 105, 500, 105,
+      Position.Right, Position.Left,
+      'avoid',
+      { avoidMargin: 18, avoidClearance: 10 },
+      [{ ...far, endpoint: true }],
+    )
+    // 上沿应退到 30 - (18+10) = 2，而不是贴着 30。
+    expect(d).toContain(' 2')
+  })
+
+  it('端点安全区按方向外扩：上下永远保留完整边距', () => {
+    const out = expandObstacle(
+      { x: 0, y: 0, w: 100, h: 100 },
+      60,
+      { padX: 6, padY: 60, open: [Position.Right] },
+    )
+    expect(out).toMatchObject({ x: -6, y: -60, w: 106, h: 220 })
+  })
+})
 describe('正交避障：连线留白', () => {
   const o = { id: 'o', x: 100, y: -40, w: 100, h: 80 }
 

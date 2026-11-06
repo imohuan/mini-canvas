@@ -68,15 +68,23 @@ export interface EdgeObstacle {
   h: number;
   /**
    * 本矩形单独的外扩距离（px）。缺省 = 使用 EdgeAppearance.avoidMargin。
-   * 边自身的两端卡片传 0：端口就贴在卡片边上，若也外扩，窄缝会被两圈边距挤到没有通路。
+   * 边自身的两端卡片同样外扩，它们"上下左右"都必须和普通节点一样留出安全区。
+   * 空间不足时由几何层按可用缝隙自动收窄（见 buildAvoidGeometry 的端点裁剪）。
    */
   inflate?: number;
+  /** 本矩形是否是这条边的端点卡片（会按可用空间收窄外扩，不挤死通路） */
+  endpoint?: boolean;
+  /**
+   * 端点卡片的"开口方向"：端口所在那一侧不封口（安全区不覆盖出线口），
+   * 其余三边仍保留完整边距。列表中的字符串是省略方向，如 ['right']。
+   */
+  open?: Position[];
 }
 
 /**
  * 把节点矩形整理成避障输入。
  *
- * 两端卡片**也要**参与避障（只把外扩距离设为 0）：
+ * 两端卡片**也要**参与避障（与普通节点同口径，四向外扩）：
  * 之前把它们整个排除，路线就会从目标卡片背后穿过，最后一段被卡片挡住，
  * 看起来像"右侧端口连到了右侧端口"。
  */
@@ -86,10 +94,17 @@ export function resolveEdgeObstacles(
   options: {
     liveOffsets?: ReadonlyMap<string, { dx: number; dy: number }>;
     isTransparent?: (id: string) => boolean;
+    /** 端点开口方向：source 端口省略它所在的边，target 端口同理 */
+    openEndpoints?: ReadonlyArray<Position | undefined>;
   } = {},
 ): EdgeObstacle[] {
   const endpoints = new Set(endpointIds.filter((id): id is string => Boolean(id)));
   const offsets = options.liveOffsets;
+  const opens = new Map<string, Position[]>();
+  endpointIds.forEach((id, index) => {
+    const open = options.openEndpoints?.[index];
+    if (id && open) opens.set(id, [open]);
+  });
   return rects
     .filter((rect) => !(rect.id && options.isTransparent?.(rect.id)))
     .map((rect) => {
@@ -98,9 +113,44 @@ export function resolveEdgeObstacles(
         ...rect,
         x: rect.x + (live?.dx ?? 0),
         y: rect.y + (live?.dy ?? 0),
-        ...(rect.id && endpoints.has(rect.id) ? { inflate: 0 } : {}),
+        ...(rect.id && endpoints.has(rect.id)
+          ? { endpoint: true, ...(opens.has(rect.id) ? { open: opens.get(rect.id) } : {}) }
+          : {}),
       };
     });
+}
+
+/**
+ * 按四个方向分别外扩（端点卡片可以只开一个口）。
+ *
+ * open 里的方向不扩，其余方向用对应 pad；这样"面对面"端口只收窄水平方向，
+ * 上下仍保留完整安全区，不会出现"只有 X 轴有边距、Y 轴没有"。
+ */
+export function expandObstacle(
+  rect: EdgeObstacle,
+  pad: number,
+  options: {
+    /** 四个方向统一值（缺省 pad） */
+    padX?: number;
+    padY?: number;
+    /** 不扩的方向（端点端口所在边） */
+    open?: Position[];
+  } = {},
+): EdgeObstacle {
+  const open = new Set(options.open ?? []);
+  const padX = options.padX ?? pad;
+  const padY = options.padY ?? pad;
+  const left = open.has(Position.Left) ? 0 : padX;
+  const right = open.has(Position.Right) ? 0 : padX;
+  const top = open.has(Position.Top) ? 0 : padY;
+  const bottom = open.has(Position.Bottom) ? 0 : padY;
+  return {
+    ...rect,
+    x: rect.x - left,
+    y: rect.y - top,
+    w: rect.w + left + right,
+    h: rect.h + top + bottom,
+  };
 }
 
 const handleDirections: Record<Position, XYPosition> = {
@@ -519,6 +569,34 @@ function segmentIntersectsRect(
   return t0 < t1 - 1e-7;
 }
 
+
+/**
+ * 从端口沿法线找一个"出线桩"点：距离尽量大，但不能落进任何外扩矩形。
+ *
+ * 面对面端口缝很窄、边距又大时，固定 30px 桩会直接伸进对面卡片的安全区，
+ * A* 连起点都不合法，就会整条回退成贝塞尔（用户看到的"避障失效"）。
+ * 这里从期望距离往回试，保证桩点总在障碍之外。
+ */
+function pickStubPoint(
+  port: XYPosition,
+  dir: XYPosition,
+  maxDistance: number,
+  obstacles: ReadonlyArray<EdgeObstacle>,
+): XYPosition {
+  for (let d = Math.max(1, maxDistance); d >= 1; d--) {
+    const point = { x: port.x + dir.x * d, y: port.y + dir.y * d };
+    let blocked = false;
+    for (const rect of obstacles) {
+      if (pointInsideRect(point, rect, 0.35) || segmentIntersectsRect(port, point, rect, 0.45)) {
+        blocked = true;
+        break;
+      }
+    }
+    if (!blocked) return point;
+  }
+  return { x: port.x + dir.x, y: port.y + dir.y };
+}
+
 function uniqueSorted(values: number[]): number[] {
   const sorted = values.slice().sort((a, b) => a - b);
   const out: number[] = [];
@@ -791,23 +869,42 @@ function buildAvoidGeometry(
 ): AvoidGeometry {
   const margin = Math.max(4, appearance.avoidMargin);
   const clearance = Math.max(0, appearance.avoidClearance);
-  const inflated = (obstacles ?? []).map((rect) => {
-    const pad = Math.max(0, rect.inflate ?? margin) + clearance;
-    return {
-      ...rect,
-      x: rect.x - pad,
-      y: rect.y - pad,
-      w: rect.w + pad * 2,
-      h: rect.h + pad * 2,
-    };
-  });
+  const fullPad = margin + clearance;
+  // 关键：按"两张卡片中心的实际分离方向"决定哪一轴收窄，而不是按端口左右/上下。
+  // 两卡上下叠放、端口却左右相对时，按端口方向收窄 X 会让 Y 的安全区仍然过大，
+  // 两块安全区互撞 → A* 无解 → 整条退回贝塞尔（用户看到的"Y 轴没边距/避障失效"）。
+  const axisGap = Math.abs(targetX - sourceX) >= Math.abs(targetY - sourceY) ? "x" : "y";
+  const gap = axisGap === "x" ? Math.abs(targetX - sourceX) : Math.abs(targetY - sourceY);
+  const fittedPad = Math.min(fullPad, Math.max(0, (gap - 2) / 2));
   const sd = directionOf(sourcePosition);
   const td = directionOf(targetPosition);
-  // 出线桩必须越过"安全区 + 留白"，否则起点会落在自身避障矩形内，A* 直接判无解。
-  const stub = margin + clearance + 10;
-  const start = { x: sourceX + sd.x * stub, y: sourceY + sd.y * stub };
-  const end = { x: targetX + td.x * stub, y: targetY + td.y * stub };
-  const route = inflated.length ? routeOrthogonal(start, end, inflated) : null;
+
+  let route: XYPosition[] | null = null;
+  let inflated: EdgeObstacle[] = [];
+  // 端点卡片的开口是"端口所在边"：那一侧本来就不该被安全区封住。
+  // 否则窄缝时 A* 连从端口出来都做不到，会整条回退。
+  // 先按贴合值跑；仍无解再把这一轴收到 0（只发生在极端窄缝），普通节点边距不变。
+  for (let step = 0; step <= 8 && !route; step++) {
+    const endpointPad = fittedPad * (1 - step / 8);
+    inflated = (obstacles ?? []).map((rect) => {
+      if (rect.endpoint) {
+        return expandObstacle(rect, endpointPad, {
+          padX: axisGap === "x" ? endpointPad : fullPad,
+          padY: axisGap === "y" ? endpointPad : fullPad,
+          open: rect.open ?? (rect.id === "s"
+            ? [sourcePosition]
+            : rect.id === "t"
+              ? [targetPosition]
+              : undefined),
+        });
+      }
+      return expandObstacle(rect, Math.max(0, rect.inflate ?? margin) + clearance);
+    });
+    const stub = Math.max(endpointPad, 1) + 10;
+    const start = pickStubPoint({ x: sourceX, y: sourceY }, sd, stub, inflated);
+    const end = pickStubPoint({ x: targetX, y: targetY }, td, stub, inflated);
+    route = inflated.length ? routeOrthogonal(start, end, inflated) : null;
+  }
   if (!route) {
     return {
       d: buildAdaptivePath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition),

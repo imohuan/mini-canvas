@@ -979,6 +979,21 @@ c1.x &gt; c2.x：控制点交叉</div>
     };
   }
 
+  // 端点卡片：端口所在那一侧开口，其余方向仍按完整安全区外扩。
+  function expandEndpoint(rect, padX, padY, openSide) {
+    var left = openSide === "left" ? 0 : padX;
+    var right = openSide === "right" ? 0 : padX;
+    var top = openSide === "top" ? 0 : padY;
+    var bottom = openSide === "bottom" ? 0 : padY;
+    return {
+      id: rect.id,
+      x: rect.x - left,
+      y: rect.y - top,
+      w: rect.w + left + right,
+      h: rect.h + top + bottom
+    };
+  }
+
   function portPoint(node) {
     if (!node || !node.port) return null;
     var dir = HANDLE_DIRECTIONS[node.port];
@@ -1536,23 +1551,56 @@ c1.x &gt; c2.x：控制点交叉</div>
 
   function buildAvoidPath(s, t, app) {
     var margin = Math.max(4, app.margin);
-    // 两端卡片也必须参与避障，但只外扩 clearance：端口贴在卡片边上。
-    // 从前只把"别的节点"当障碍，路线会从目标卡片背后穿进去，
-    // 最后一段被卡片盖住，看起来像"右侧端口连到了右侧端口"。
-    // 黄色安全区 = 节点外扩 margin；连线实际走的网格还要再让开 clearance，
-    // 于是黄框只负责"不许穿过"，连线与黄框之间仍有可调留白。
     var clearance = Math.max(0, app.clearance);
+    var fullPad = margin + clearance;
+    // 按"两张卡片中心的实际分离方向"决定哪一轴收窄，而不是按端口左右/上下。
+    // 两卡上下叠放、端口却左右相对时，按端口方向收窄 X 会让 Y 的安全区仍然过大，
+    // 两块安全区互撞 → A* 无解 → 整条退回贝塞尔。
+    var axisGap = Math.abs(t.x - s.x) >= Math.abs(t.y - s.y) ? "x" : "y";
+    var gap = axisGap === "x" ? Math.abs(t.x - s.x) : Math.abs(t.y - s.y);
+    var fittedPad = Math.min(fullPad, Math.max(0, (gap - 2) / 2));
+
+    // 端点卡片：端口所在那一侧开口，其余三边按完整边距外扩。
     var obstacles = [
-      inflateRect(nodeRect(state.nodes.a), clearance),
-      inflateRect(nodeRect(state.nodes.b), clearance)
+      expandEndpoint(
+        nodeRect(state.nodes.a),
+        axisGap === "x" ? fittedPad : fullPad,
+        axisGap === "y" ? fittedPad : fullPad,
+        s.pos
+      ),
+      expandEndpoint(
+        nodeRect(state.nodes.b),
+        axisGap === "x" ? fittedPad : fullPad,
+        axisGap === "y" ? fittedPad : fullPad,
+        t.pos
+      )
     ];
     if (state.show.blocker) obstacles.push(inflateRect(nodeRect(state.nodes.c), margin + clearance));
 
-    // 出线桩必须越过"安全区 + 留白"，否则起点会落在自身避障矩形内，A* 直接判无解。
-    var stub = margin + clearance + 10;
-    var start = { x: s.x + s.dir.x * stub, y: s.y + s.dir.y * stub };
-    var end = { x: t.x + t.dir.x * stub, y: t.y + t.dir.y * stub };
-    var route = routeOrthogonal(start, end, obstacles);
+    var route = null;
+    for (var step = 0; step <= 8 && !route; step++) {
+      var endpointPad = fittedPad * (1 - step / 8);
+      var trial = [
+        expandEndpoint(
+          nodeRect(state.nodes.a),
+          axisGap === "x" ? endpointPad : fullPad,
+          axisGap === "y" ? endpointPad : fullPad,
+          s.pos
+        ),
+        expandEndpoint(
+          nodeRect(state.nodes.b),
+          axisGap === "x" ? endpointPad : fullPad,
+          axisGap === "y" ? endpointPad : fullPad,
+          t.pos
+        )
+      ];
+      if (state.show.blocker) trial.push(inflateRect(nodeRect(state.nodes.c), margin + clearance));
+      var stub = Math.max(endpointPad, 1) + 10;
+      var start = { x: s.x + s.dir.x * stub, y: s.y + s.dir.y * stub };
+      var end = { x: t.x + t.dir.x * stub, y: t.y + t.dir.y * stub };
+      route = routeOrthogonal(start, end, trial);
+      if (route) obstacles = trial;
+    }
     var adaptive = buildAdaptiveBezier(s, t, app);
 
     if (!route) {
