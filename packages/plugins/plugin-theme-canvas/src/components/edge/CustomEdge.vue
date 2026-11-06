@@ -16,7 +16,12 @@
 //       的 var(--ce-color, #3b82f6) 兜底，避免被覆盖为线色（之前就是这个 bug）。
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
-import { useCanvasRender, useThemeColor } from '@mini-canvas/canvas-render'
+import {
+  useCanvasRender,
+  useThemeColor,
+  RenderEvents,
+  type DragEventPayload,
+} from '@mini-canvas/canvas-render'
 import { isTransient } from '@mini-canvas/canvas-data'
 import { Button } from '@mini-canvas/ui-kit-shadcn'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
@@ -28,6 +33,7 @@ import {
   findClosestPointOnPath,
   type EdgeType,
   type EdgeAppearance,
+  type EdgeObstacle,
 } from './edgeGeometry'
 import { computeFlowBlocks, flowAllowedDuringDrag } from './edgeFlow'
 import { computeFlowAdvance, FLOW_BASE_SECONDS } from './edgeFlow'
@@ -70,7 +76,7 @@ const selectionEdgeIds = computed<ReadonlySet<string>>(() => edgeSelection.selec
 // 两者都按"临时线"处理：永不被"隐藏连线"遮住、不参与高亮/剪切、不渲染点击热区。
 const isTemporaryEdge = computed(() => Boolean(props.temporary) || isTransient({ data: props.data ?? undefined }))
 
-const edgeType = computed<EdgeType>(() => (visual.value.edgeType as EdgeType) || 'bezier')
+const edgeType = computed<EdgeType>(() => (visual.value.edgeType as EdgeType) || 'adaptive')
 const lineWidth = computed(() => visual.value.edgeLineWidth ?? 2)
 // 线色/流光色：**跟随主题色板的两格制**（亮/暗各一个值）。
 // 为什么经 JS 而不是 CSS 变量：下面 `:stroke="edgeColor"` 是 SVG 表现属性，`var(--x)` 在这种属性里
@@ -113,7 +119,11 @@ const flowRatio = computed(() => visual.value.edgeFlowRatio ?? 20)
 const flowSpeed = computed(() => visual.value.edgeFlowSpeed ?? 2.5)
 const flowFade = computed(() => visual.value.edgeFlowFade ?? 35)
 const flowIntensity = computed(() => visual.value.edgeFlowIntensity ?? 0.9)
-const geometry = computed(() => props.geometry)
+const geometry = computed<EdgeAppearance>(() => ({
+  ...(props.geometry || {}),
+  avoidMargin: visual.value.edgeAvoidMargin ?? props.geometry?.avoidMargin,
+  avoidRadius: visual.value.edgeAvoidRadius ?? props.geometry?.avoidRadius,
+}))
 
 const isHighlighted = computed(() =>
   isTemporaryEdge.value ||
@@ -128,6 +138,75 @@ const sourcePos = computed(() => getSourcePosition(props.sourcePosition, props.s
 // 直接复用 getTargetPosition 的默认归一逻辑即可，无需再在组件层做位置翻转。
 const targetPos = computed(() => getTargetPosition(props.targetPosition, props.targetHandleId))
 
+/**
+ * 拖拽中的实时位移。store 只在松手时落盘，拖拽期间 getAllRects 仍是旧位置；
+ * 若不补这一层，正交避障会在拖拽时压着旧矩形走，松手才跳一下。
+ * 只在 avoid 线型下写入，其它线型零成本。
+ */
+const liveOffsets = ref(new Map<string, { dx: number; dy: number }>())
+
+function trackObstacleDrag(): void {
+  const offDrag = ctx.on(RenderEvents.NodeDrag, (payload: DragEventPayload) => {
+    if (edgeType.value !== 'avoid') return
+    const rect = ctx.tryGet('view')?.getNodeRect(payload.nodeId)
+    if (!rect) return
+    const next = new Map(liveOffsets.value)
+    next.set(payload.nodeId, {
+      dx: payload.position.x - rect.x,
+      dy: payload.position.y - rect.y,
+    })
+    liveOffsets.value = next
+  })
+  const offEnd = ctx.on(RenderEvents.NodeDragEnd, () => {
+    liveOffsets.value = new Map()
+  })
+  onUnmounted(() => {
+    offDrag.dispose()
+    offEnd.dispose()
+  })
+}
+
+onMounted(trackObstacleDrag)
+
+/**
+ * 正交避障要看的节点矩形（flow 绝对坐标）。
+ *
+ * 只在 edgeType === 'avoid' 时读取：每帧/每次拖拽都全量取矩形会很贵，其它线型保持 0 额外开销。
+ * 跳过边自身两端（端口就贴在矩形边上，不该被当成障碍），并跳过分组这类 transparent 容器。
+ * 临时拖线只有源端真实存在，target 端跟着鼠标，不参与避障。
+ */
+const obstacles = computed<ReadonlyArray<EdgeObstacle> | undefined>(() => {
+  if (edgeType.value !== 'avoid') return undefined
+  const view = ctx.tryGet('view')
+  if (!view) return undefined
+  const skip = new Set<string>([props.source ?? '', props.target ?? ''])
+  const doc = ctx.tryGet('doc')
+  const offsets = liveOffsets.value
+  return view
+    .getAllRects()
+    .filter((rect) => !skip.has(rect.id))
+    .filter((rect) => {
+      const node = doc?.getNode(rect.id)
+      return node ? doc?.types.get(node.type)?.transparent !== true : true
+    })
+    .map((rect) => {
+      const live = offsets.get(rect.id)
+      return {
+        id: rect.id,
+        x: rect.x + (live?.dx ?? 0),
+        y: rect.y + (live?.dy ?? 0),
+        w: rect.w,
+        h: rect.h,
+      }
+    })
+})
+
+watch(liveOffsets, () => {
+  if (!flowActive.value) return
+  // 流光缓存的子路径按 edgePath 重建；避障路径依赖全图矩形，需要在几何变化后重算一次。
+  _capConfigSig = ''
+})
+
 const edgePath = computed(() =>
   buildEdgePath(
     props.sourceX, props.sourceY,
@@ -135,8 +214,16 @@ const edgePath = computed(() =>
     sourcePos.value, targetPos.value,
     edgeType.value,
     geometry.value,
+    obstacles.value,
   ),
 )
+
+// 松手落盘后 store 位置会变，但 liveOffsets 与 store 可能在同一帧对齐：
+// 用边的几何变化兜底，保证流光缓存永远不会卡在上一次路径上。
+watch(edgePath, () => {
+  if (!flowActive.value) return
+  _capConfigSig = ''
+})
 
 function samplePath(t: number) {
   return sampleEdgePath(
@@ -146,6 +233,7 @@ function samplePath(t: number) {
     sourcePos.value, targetPos.value,
     edgeType.value,
     geometry.value,
+    obstacles.value,
   )
 }
 
@@ -167,6 +255,7 @@ function updateCutButtonPosition(ev: MouseEvent) {
     sourcePos.value, targetPos.value,
     edgeType.value,
     geometry.value,
+    obstacles.value,
   )
 }
 

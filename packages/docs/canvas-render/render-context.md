@@ -152,7 +152,7 @@ const selectedNodeIds = computed(() => edgeSelection.selectedNodeIds.value)
 const selectedEdgeIds = computed(() => edgeSelection.selectedEdgeIds.value)
 ```
 
-`EdgeVisual` 的字段远超「颜色线宽」：`edgeType`（`bezier | straight | step | smoothstep`）、`edgeLineWidth`、`edgeColor`、`edgeDashed`、`edgeMarkerEnd`、`edgeMarkerSize`、`edgeVisible`、`edgeVisibleOnSelect`、`edgeOnTop`、`edgeGlowEnabled/Intensity/Color`，以及新视觉那组 `edgeFlowEnabled` / `edgeFlowCount` / `edgeFlowRatio` / `edgeFlowSpeed` / `edgeFlowFade` / `edgeFlowIntensity`（导轨 + 光斑流动）。
+`EdgeVisual` 的字段远超「颜色线宽」：`edgeType`（`adaptive | avoid | bezier | straight | step | smoothstep`）、`edgeLineWidth`、`edgeColor`、`edgeDashed`、`edgeMarkerEnd`、`edgeMarkerSize`、`edgeVisible`、`edgeVisibleOnSelect`、`edgeOnTop`、`edgeGlowEnabled/Intensity/Color`，以及新视觉那组 `edgeFlowEnabled` / `edgeFlowCount` / `edgeFlowRatio` / `edgeFlowSpeed` / `edgeFlowFade` / `edgeFlowIntensity`（导轨 + 光斑流动）。
 
 ### 六、`debug` 与 `snapZone`
 

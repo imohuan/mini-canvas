@@ -21,7 +21,7 @@ import {
 // 留着它就会永远盖住色板（登记过就有值 → CustomEdge 拿到后不再回落色板），
 // 于是用户改了主题色也看不到变化。其它非颜色的边外观（线宽/虚线/光斑参数）仍留在此处。
 export const DEFAULT_THEME_EDGE = {
-  edgeType: "bezier",
+  edgeType: "adaptive",
   edgeLineWidth: 1.5,
   edgeDashed: false,
   edgeMarkerEnd: false,
@@ -38,6 +38,9 @@ export const DEFAULT_THEME_EDGE = {
   edgeFlowSpeed: 1,
   edgeFlowFade: 35,
   edgeFlowIntensity: 0.9,
+  // 正交避障：节点矩形外扩边距 / 拐角圆角
+  edgeAvoidMargin: 18,
+  edgeAvoidRadius: 8,
 } as const;
 
 /**
@@ -485,11 +488,33 @@ export const CanvasConfig: ConfigSchema = {
     description:
       "连线在两节点之间的走线形态，贝塞尔最平滑，直角/折线更贴近工程图。",
     options: [
+      { value: "adaptive", label: "自适应贝塞尔" },
+      { value: "avoid", label: "正交避障" },
       { value: "bezier", label: "贝塞尔" },
       { value: "straight", label: "直线" },
       { value: "step", label: "直角" },
       { value: "smoothstep", label: "圆角折线" },
     ],
+  },
+  edgeAvoidMargin: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeAvoidMargin,
+    min: 4,
+    max: 48,
+    step: 1,
+    label: "避障边距",
+    group: "边/连线",
+    description: "正交避障时节点矩形向外扩的距离（像素），连线不会进入这一圈。",
+  },
+  edgeAvoidRadius: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeAvoidRadius,
+    min: 0,
+    max: 16,
+    step: 1,
+    label: "避障圆角",
+    group: "边/连线",
+    description: "正交避障路径拐角的圆角半径（像素）。",
   },
   edgeLineWidth: {
     type: "number",

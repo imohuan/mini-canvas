@@ -526,8 +526,8 @@ describe('assembleTheme', () => {
 })
 
 describe('默认外观常量', () => {
-  it('edge 默认对齐 contract（bezier/#3b82f6）', () => {
-    expect(DEFAULT_EDGE_VISUAL.edgeType).toBe('bezier')
+  it('edge 默认对齐 contract（adaptive/#3b82f6）', () => {
+    expect(DEFAULT_EDGE_VISUAL.edgeType).toBe('adaptive')
     expect(DEFAULT_EDGE_VISUAL.edgeColor).toBe('#3b82f6')
   })
   it('handle 默认含全部尺寸字段', () => {

@@ -88,6 +88,21 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
+  it('线型默认是自适应贝塞尔，新增项真的写进设置单一数据源', async () => {
+    const ctx = await bootWithSettings()
+    const settings = ctx.get<SettingsLike>('settings')
+    expect(settings.get('edgeType')).toBe('adaptive')
+    expect(settings.get('edgeAvoidMargin')).toBe(18)
+    expect(settings.get('edgeAvoidRadius')).toBe(8)
+
+    ctx.settings.set('edgeType', 'avoid')
+    expect(settings.get('edgeType')).toBe('avoid')
+    ctx.settings.set('edgeType', 'adaptive')
+    expect(settings.get('edgeType')).toBe('adaptive')
+    ctx.stop()
+  })
+
+
   /**
    * 3D 上游接口真的进设置单一数据源。
    *

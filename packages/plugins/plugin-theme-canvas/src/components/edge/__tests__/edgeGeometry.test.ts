@@ -121,3 +121,48 @@ describe('可配置几何覆盖', () => {
     expect(d).toBe('M0 0L10 0L100 0L100 0L190 0L200 0')
   })
 })
+
+describe('自适应贝塞尔', () => {
+  it('短水平缝的控制点不交叉（各取缝宽一半）', () => {
+    const d = buildEdgePath(0, 0, 14, 150, Position.Right, Position.Left, 'adaptive')
+    expect(d).toBe('M 0 0 C 7 0, 7 150, 14 150')
+  })
+
+  it('上下端口沿端口法线出线，不再固定走 X 轴', () => {
+    const d = buildEdgePath(0, 100, 200, 0, Position.Top, Position.Top, 'adaptive')
+    expect(d).toContain('C')
+    const c1 = d.match(/C\s+([-\d.]+)\s+([-\d.]+)/)
+    expect(c1).not.toBeNull()
+    expect(Number(c1![2])).toBeLessThan(100)
+  })
+
+  it('采样仍落在端点之间', () => {
+    const mid = sampleEdgePath(0.5, 0, 0, 14, 150, Position.Right, Position.Left, 'adaptive')
+    expect(mid.x).toBeGreaterThan(0)
+    expect(mid.x).toBeLessThan(14)
+    expect(mid.y).toBeGreaterThan(0)
+    expect(mid.y).toBeLessThan(150)
+  })
+})
+
+describe('正交避障', () => {
+  const obstacle = { id: 'mid', x: 100, y: -40, w: 100, h: 80 }
+
+  it('绕过外扩矩形，并给拐角圆角', () => {
+    const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', undefined, [obstacle])
+    expect(d).toContain('Q')
+    expect(d).not.toContain(' L 100 0')
+    const inside = (p: { x: number; y: number }) =>
+      p.x > obstacle.x && p.x < obstacle.x + obstacle.w && p.y > obstacle.y && p.y < obstacle.y + obstacle.h
+    for (let i = 0; i <= 30; i++) {
+      const point = sampleEdgePath(i / 30, 0, 0, 300, 0, Position.Right, Position.Left, 'avoid', undefined, [obstacle])
+      expect(inside(point)).toBe(false)
+    }
+  })
+
+  it('没有障碍矩形时回退自适应贝塞尔（不丢线）', () => {
+    const d = buildEdgePath(0, 0, 14, 150, Position.Right, Position.Left, 'avoid')
+    expect(d).toBe(buildEdgePath(0, 0, 14, 150, Position.Right, Position.Left, 'adaptive'))
+  })
+})
+

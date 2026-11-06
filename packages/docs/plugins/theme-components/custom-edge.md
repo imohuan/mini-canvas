@@ -20,7 +20,10 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 
 > 两条连线之间就是 `CustomEdge` 画的（流光、导轨、选中加亮）。试着点选节点看它变亮，或双击连线弹剪切钮。
 
-- **路径**：`bezier` / `straight` / `step` / `smoothstep` 四种，默认 bezier。
+- **路径**：`adaptive`（自适应贝塞尔，默认）/ `avoid`（正交避障）/
+  `bezier` / `straight` / `step` / `smoothstep` 六种。
+  `adaptive` 的控制点按实际缝宽收缩，短缝不会鼓成 S 弯；`avoid` 会把别的节点矩形外扩后
+  绕路，拐角半径与边距在「设置 → 边 → 连线」里调。
 - **外观**：线宽、虚线、箭头、辉光；以及"导轨 + 青色光斑沿线流动"的流光动画。
 - **颜色两格制**：线色/流光色不在插件 Config 里，而在渲染层主题色板
   （`edgeRailColor` / `edgeFlowColor`，亮/暗各一格）。用 `useThemeColor` 取值，
@@ -50,7 +53,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 > `EdgeVisual` 全字段（`edgeType` / `edgeLineWidth` / `edgeColor` /
 > `edgeDashed` / `edgeMarkerEnd` / `edgeMarkerSize` / `edgeVisible` /
 > `edgeVisibleOnSelect` / `edgeOnTop` / `edgeGlowEnabled` / `edgeGlowIntensity` /
-> `edgeGlowColor` / 流光族字段）定义在
+> `edgeGlowColor` / 流光族字段 / `edgeAvoidMargin` / `edgeAvoidRadius`）定义在
 > `packages/canvas-render/src/contracts/edgeContext.ts`。
 
 ## Slots / 插槽

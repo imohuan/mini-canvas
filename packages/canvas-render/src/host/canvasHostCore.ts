@@ -451,7 +451,7 @@ export function assembleTheme(
 // ============================================================================
 
 export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
-  edgeType: 'bezier',
+  edgeType: 'adaptive',
   edgeLineWidth: 2,
   edgeColor: '#3b82f6',
   edgeDashed: false,
@@ -470,6 +470,8 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeFlowSpeed: 1,
   edgeFlowFade: 35,
   edgeFlowIntensity: 0.9,
+  edgeAvoidMargin: 18,
+  edgeAvoidRadius: 8,
 }
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */

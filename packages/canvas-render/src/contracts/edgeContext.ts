@@ -9,8 +9,8 @@ import type { Ref } from 'vue'
 
 /** CustomEdge 外观/行为配置（默认值对齐 core-node-contract §0 的 canvas.state.core.* 表） */
 export interface EdgeVisual {
-  /** 边路径类型，默认 bezier */
-  edgeType?: 'bezier' | 'straight' | 'step' | 'smoothstep'
+  /** 边路径类型，默认 adaptive（自适应贝塞尔） */
+  edgeType?: 'bezier' | 'straight' | 'step' | 'smoothstep' | 'adaptive' | 'avoid'
   /** 线宽 px，v1 edgeLineWidth=2 */
   edgeLineWidth?: number
   /** 线色，v1 edgeColor='#3b82f6' */
@@ -48,6 +48,10 @@ export interface EdgeVisual {
   edgeFlowFade?: number
   /** 光斑峰值不透明度（默认 0.9） */
   edgeFlowIntensity?: number
+  /** 正交避障：节点矩形向外扩的边距（px，默认 18） */
+  edgeAvoidMargin?: number
+  /** 正交避障：拐角圆角半径（px，默认 8） */
+  edgeAvoidRadius?: number
 }
 
 export interface EdgeSelection {

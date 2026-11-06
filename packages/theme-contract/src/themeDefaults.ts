@@ -31,7 +31,7 @@ import {
 // 留着它就会永远盖住色板（登记过就有值 → CustomEdge 拿到后不再回落色板），
 // 于是用户改了主题色也看不到变化。其它非颜色的边外观（线宽/虚线/光斑参数）仍留在此处。
 export const DEFAULT_THEME_EDGE = {
-  edgeType: "bezier",
+  edgeType: "adaptive",
   edgeLineWidth: 1.5,
   edgeDashed: false,
   edgeMarkerEnd: false,
@@ -48,6 +48,9 @@ export const DEFAULT_THEME_EDGE = {
   edgeFlowSpeed: 1,
   edgeFlowFade: 35,
   edgeFlowIntensity: 0.9,
+  // 正交避障：节点矩形外扩边距 / 拐角圆角
+  edgeAvoidMargin: 18,
+  edgeAvoidRadius: 8,
 } as const;
 
 /**

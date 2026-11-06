@@ -8,7 +8,13 @@
  * 注意：行为必须与 v1 逐字节一致，禁止"顺手改进"几何。
  */
 
-export type EdgeType = "bezier" | "straight" | "step" | "smoothstep";
+export type EdgeType =
+  | "bezier"
+  | "straight"
+  | "step"
+  | "smoothstep"
+  | "adaptive"
+  | "avoid";
 
 export const Position = {
   Left: "left",
@@ -30,13 +36,28 @@ export interface EdgeAppearance {
   stepOffset?: number;
   /** smoothstep 圆角半径（px），v1 edgeSmoothRadius=5 */
   smoothRadius?: number;
+  /** 正交避障：节点矩形向外扩的边距（px） */
+  avoidMargin?: number;
+  /** 正交避障：拐角圆角半径（px） */
+  avoidRadius?: number;
 }
 
 const DEFAULT_APPEARANCE: Required<EdgeAppearance> = {
   minCurvature: 80,
   stepOffset: 20,
   smoothRadius: 5,
+  avoidMargin: 18,
+  avoidRadius: 8,
 };
+
+/** 正交避障的障碍矩形（flow 坐标） */
+export interface EdgeObstacle {
+  id?: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 const handleDirections: Record<Position, XYPosition> = {
   [Position.Left]: { x: -1, y: 0 },
@@ -287,6 +308,475 @@ function getBend(
   return `L ${x},${y + bendSize * yDir}Q ${x},${y} ${x + bendSize * xDir},${y}`;
 }
 
+interface PathSegment {
+  kind: "line" | "quad";
+  a: XYPosition;
+  b: XYPosition;
+  c?: XYPosition;
+}
+
+function directionOf(position: Position): XYPosition {
+  return handleDirections[position];
+}
+
+/**
+ * 自适应贝塞尔：控制点沿端口法线伸出，长度随实际缝宽收缩。
+ *
+ * 原版固定最小曲率 80px；两个端口只隔十几像素时，c1/c2 会越过彼此，曲线先鼓出去再折回。
+ * 这里对"面对面"的端口取轴向距离的一半，从数学上保证控制点不交叉；其它朝向按弦长取比例。
+ */
+function adaptiveControlPoints(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  sourcePosition: Position,
+  targetPosition: Position,
+): { c1: XYPosition; c2: XYPosition } {
+  const s = { x: sourceX, y: sourceY };
+  const t = { x: targetX, y: targetY };
+  const sd = directionOf(sourcePosition);
+  const td = directionOf(targetPosition);
+  const chord = dist(s, t);
+  const facing = sd.x * td.x + sd.y * td.y < -0.5;
+  const axial = (t.x - s.x) * sd.x + (t.y - s.y) * sd.y;
+  let kS: number;
+  let kT: number;
+
+  if (facing && axial >= 0) {
+    const halfGap = Math.min(axial * 0.5, 180);
+    kS = halfGap;
+    kT = halfGap;
+  } else if (facing) {
+    kS = Math.min(Math.max(chord * 0.32, 28), 140);
+    kT = kS;
+  } else {
+    kS = Math.min(Math.max(chord * 0.32, 22), 140);
+    kT = kS;
+  }
+
+  return {
+    c1: { x: s.x + sd.x * kS, y: s.y + sd.y * kS },
+    c2: { x: t.x + td.x * kT, y: t.y + td.y * kT },
+  };
+}
+
+function buildAdaptivePath(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  sourcePosition: Position,
+  targetPosition: Position,
+): string {
+  const { c1, c2 } = adaptiveControlPoints(
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  );
+  return `M ${sourceX} ${sourceY} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${targetX} ${targetY}`;
+}
+
+function pointInsideRect(point: XYPosition, rect: EdgeObstacle, pad: number): boolean {
+  const x1 = rect.x + pad;
+  const y1 = rect.y + pad;
+  const x2 = rect.x + rect.w - pad;
+  const y2 = rect.y + rect.h - pad;
+  return point.x > x1 && point.x < x2 && point.y > y1 && point.y < y2;
+}
+
+/** 轴对齐线段是否穿过矩形内部（Liang-Barsky；贴边不算穿过） */
+function segmentIntersectsRect(
+  a: XYPosition,
+  b: XYPosition,
+  rect: EdgeObstacle,
+  pad: number,
+): boolean {
+  const x1 = rect.x + pad;
+  const y1 = rect.y + pad;
+  const x2 = rect.x + rect.w - pad;
+  const y2 = rect.y + rect.h - pad;
+  if (x2 <= x1 || y2 <= y1) return false;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  let t0 = 0;
+  let t1 = 1;
+  const ps = [-dx, dx, -dy, dy];
+  const qs = [a.x - x1, x2 - a.x, a.y - y1, y2 - a.y];
+  for (let i = 0; i < 4; i++) {
+    const p = ps[i];
+    const q = qs[i];
+    if (Math.abs(p) < 1e-9) {
+      if (q < 0) return false;
+    } else {
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return false;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return false;
+        if (r < t1) t1 = r;
+      }
+    }
+  }
+  return t0 < t1 - 1e-7;
+}
+
+function uniqueSorted(values: number[]): number[] {
+  const sorted = values.slice().sort((a, b) => a - b);
+  const out: number[] = [];
+  for (const value of sorted) {
+    if (!out.length || Math.abs(value - out[out.length - 1]) > 0.001) out.push(value);
+  }
+  return out;
+}
+
+function withMidpoints(values: number[]): number[] {
+  const base = uniqueSorted(values);
+  if (!base.length) return [];
+  const out = [base[0]];
+  for (let i = 1; i < base.length; i++) {
+    if (base[i] - base[i - 1] > 2) out.push((base[i - 1] + base[i]) / 2);
+    out.push(base[i]);
+  }
+  return out;
+}
+
+interface MinHeapItem {
+  key: number;
+  g: number;
+  f: number;
+}
+
+class MinHeap {
+  private items: MinHeapItem[] = [];
+  size(): number {
+    return this.items.length;
+  }
+  push(item: MinHeapItem): void {
+    const items = this.items;
+    items.push(item);
+    let index = items.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (items[parent].f <= items[index].f) break;
+      [items[parent], items[index]] = [items[index], items[parent]];
+      index = parent;
+    }
+  }
+  pop(): MinHeapItem | null {
+    const items = this.items;
+    if (!items.length) return null;
+    const top = items[0];
+    const last = items.pop() as MinHeapItem;
+    if (items.length) {
+      items[0] = last;
+      let index = 0;
+      while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        let smallest = index;
+        if (left < items.length && items[left].f < items[smallest].f) smallest = left;
+        if (right < items.length && items[right].f < items[smallest].f) smallest = right;
+        if (smallest === index) break;
+        [items[index], items[smallest]] = [items[smallest], items[index]];
+        index = smallest;
+      }
+    }
+    return top;
+  }
+}
+
+/**
+ * 在"端点 + 障碍边界"组成的稀疏网格上跑 A*，只走水平/垂直边。
+ * 返回从 start 到 end 的正交折线；无路可走返回 null。
+ */
+function routeOrthogonal(
+  start: XYPosition,
+  end: XYPosition,
+  obstacles: ReadonlyArray<EdgeObstacle>,
+): XYPosition[] | null {
+  if (dist(start, end) < 0.5) return [start, end];
+  const baseXs = [start.x, end.x];
+  const baseYs = [start.y, end.y];
+  for (const rect of obstacles) {
+    baseXs.push(rect.x, rect.x + rect.w);
+    baseYs.push(rect.y, rect.y + rect.h);
+  }
+  const xs = withMidpoints(baseXs);
+  const ys = withMidpoints(baseYs);
+  const nx = xs.length;
+  const ny = ys.length;
+  if (!nx || !ny) return null;
+  const startIx = xs.findIndex((x) => Math.abs(x - start.x) < 0.001);
+  const endIx = xs.findIndex((x) => Math.abs(x - end.x) < 0.001);
+  const startIy = ys.findIndex((y) => Math.abs(y - start.y) < 0.001);
+  const endIy = ys.findIndex((y) => Math.abs(y - end.y) < 0.001);
+  if (startIx < 0 || startIy < 0 || endIx < 0 || endIy < 0) return null;
+
+  const pointAt = (pointIndex: number): XYPosition => ({
+    x: xs[pointIndex % nx],
+    y: ys[Math.floor(pointIndex / nx)],
+  });
+  const pointValid = (pointIndex: number): boolean => {
+    const point = pointAt(pointIndex);
+    for (const rect of obstacles) {
+      if (pointInsideRect(point, rect, 0.35)) return false;
+    }
+    return true;
+  };
+  const segmentClear = (a: XYPosition, b: XYPosition): boolean => {
+    for (const rect of obstacles) {
+      if (segmentIntersectsRect(a, b, rect, 0.45)) return false;
+    }
+    return true;
+  };
+
+  const startPointIndex = startIy * nx + startIx;
+  const endPointIndex = endIy * nx + endIx;
+  if (!pointValid(startPointIndex) || !pointValid(endPointIndex)) return null;
+
+  const pointCount = nx * ny;
+  const stateCount = pointCount * 5;
+  const distances = new Float64Array(stateCount);
+  const parents = new Int32Array(stateCount);
+  const closed = new Uint8Array(stateCount);
+  distances.fill(Infinity);
+  parents.fill(-1);
+
+  const startState = startPointIndex * 5 + 4;
+  const endPoint = pointAt(endPointIndex);
+  distances[startState] = 0;
+  const heap = new MinHeap();
+  heap.push({
+    key: startState,
+    g: 0,
+    f: Math.abs(start.x - endPoint.x) + Math.abs(start.y - endPoint.y),
+  });
+  const dirs = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+  ];
+  const turnPenalty = 28;
+  let goal = -1;
+
+  while (heap.size()) {
+    const item = heap.pop() as MinHeapItem;
+    if (closed[item.key]) continue;
+    if (item.g > distances[item.key] + 1e-6) continue;
+    closed[item.key] = 1;
+    const pointIndex = Math.floor(item.key / 5);
+    const prevDir = item.key % 5;
+    if (pointIndex === endPointIndex) {
+      goal = item.key;
+      break;
+    }
+    const current = pointAt(pointIndex);
+    const currentIx = pointIndex % nx;
+    const currentIy = Math.floor(pointIndex / nx);
+    for (let d = 0; d < 4; d++) {
+      const dir = dirs[d];
+      const nextIx = currentIx + dir.dx;
+      const nextIy = currentIy + dir.dy;
+      if (nextIx < 0 || nextIx >= nx || nextIy < 0 || nextIy >= ny) continue;
+      const nextPointIndex = nextIy * nx + nextIx;
+      if (!pointValid(nextPointIndex)) continue;
+      const nextPoint = pointAt(nextPointIndex);
+      if (!segmentClear(current, nextPoint)) continue;
+      const nextState = nextPointIndex * 5 + d;
+      let cost = dist(current, nextPoint);
+      if (prevDir !== 4 && prevDir !== d) cost += turnPenalty;
+      const nextG = item.g + cost;
+      if (nextG + 1e-6 >= distances[nextState]) continue;
+      distances[nextState] = nextG;
+      parents[nextState] = item.key;
+      heap.push({
+        key: nextState,
+        g: nextG,
+        f: nextG + Math.abs(nextPoint.x - endPoint.x) + Math.abs(nextPoint.y - endPoint.y),
+      });
+    }
+  }
+
+  if (goal < 0) return null;
+  const route: XYPosition[] = [];
+  let cursor = goal;
+  const seen = new Set<number>();
+  while (cursor !== -1 && !seen.has(cursor)) {
+    seen.add(cursor);
+    route.push(pointAt(Math.floor(cursor / 5)));
+    if (cursor === startState) break;
+    cursor = parents[cursor];
+  }
+  route.reverse();
+  return route;
+}
+
+function simplifyOrthogonal(points: XYPosition[]): XYPosition[] {
+  const clean: XYPosition[] = [];
+  for (const point of points) {
+    const last = clean.length ? clean[clean.length - 1] : null;
+    if (!last || dist(last, point) > 0.01) clean.push({ x: point.x, y: point.y });
+  }
+  let changed = true;
+  while (changed && clean.length > 2) {
+    changed = false;
+    for (let i = 1; i < clean.length - 1; i++) {
+      const a = clean[i - 1];
+      const b = clean[i];
+      const c = clean[i + 1];
+      const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (Math.abs(cross) < 0.01) {
+        clean.splice(i, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return clean;
+}
+
+interface AvoidGeometry {
+  d: string;
+  segments: PathSegment[];
+  points: XYPosition[];
+  fallback: boolean;
+}
+
+/** 正交折线 → 带圆角的 path，同时给出可用于采样的线段/二次曲线列表 */
+function buildRoundedOrthogonal(points: XYPosition[], radius: number): AvoidGeometry {
+  const clean = simplifyOrthogonal(points);
+  if (!clean.length) return { d: "", segments: [], points: [], fallback: false };
+  const segments: PathSegment[] = [];
+  let d = `M ${clean[0].x} ${clean[0].y}`;
+  for (let i = 1; i < clean.length - 1; i++) {
+    const prev = clean[i - 1];
+    const cur = clean[i];
+    const next = clean[i + 1];
+    const inLen = dist(prev, cur);
+    const outLen = dist(cur, next);
+    if (inLen < 0.001 || outLen < 0.001) continue;
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    const inUx = (cur.x - prev.x) / inLen;
+    const inUy = (cur.y - prev.y) / inLen;
+    const outUx = (next.x - cur.x) / outLen;
+    const outUy = (next.y - cur.y) / outLen;
+    const dot = inUx * outUx + inUy * outUy;
+    const beforeCorner = { x: cur.x - inUx * r, y: cur.y - inUy * r };
+    if (r < 0.4 || dot < -0.999) {
+      segments.push({ kind: "line", a: prev, b: cur });
+      d += ` L ${cur.x} ${cur.y}`;
+      continue;
+    }
+    const afterCorner = { x: cur.x + outUx * r, y: cur.y + outUy * r };
+    segments.push({ kind: "line", a: prev, b: beforeCorner });
+    segments.push({ kind: "quad", a: beforeCorner, c: cur, b: afterCorner });
+    d += ` L ${beforeCorner.x} ${beforeCorner.y} Q ${cur.x} ${cur.y} ${afterCorner.x} ${afterCorner.y}`;
+  }
+  const last = clean[clean.length - 1];
+  const prevLast = clean.length > 1 ? clean[clean.length - 2] : last;
+  segments.push({ kind: "line", a: prevLast, b: last });
+  d += ` L ${last.x} ${last.y}`;
+  return { d, segments, points: clean, fallback: false };
+}
+
+function buildAvoidGeometry(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  sourcePosition: Position,
+  targetPosition: Position,
+  appearance: Required<EdgeAppearance>,
+  obstacles: ReadonlyArray<EdgeObstacle> | undefined,
+): AvoidGeometry {
+  const margin = Math.max(4, appearance.avoidMargin);
+  const inflated = (obstacles ?? []).map((rect) => ({
+    ...rect,
+    x: rect.x - margin,
+    y: rect.y - margin,
+    w: rect.w + margin * 2,
+    h: rect.h + margin * 2,
+  }));
+  const sd = directionOf(sourcePosition);
+  const td = directionOf(targetPosition);
+  const stub = margin + 10;
+  const start = { x: sourceX + sd.x * stub, y: sourceY + sd.y * stub };
+  const end = { x: targetX + td.x * stub, y: targetY + td.y * stub };
+  const route = inflated.length ? routeOrthogonal(start, end, inflated) : null;
+  if (!route) {
+    return {
+      d: buildAdaptivePath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition),
+      segments: [],
+      points: [],
+      fallback: true,
+    };
+  }
+  const points = [
+    { x: sourceX, y: sourceY },
+    ...route,
+    { x: targetX, y: targetY },
+  ];
+  const radius = Math.min(appearance.avoidRadius, margin * 0.55);
+  return buildRoundedOrthogonal(points, radius);
+}
+
+function sampleSegments(segments: PathSegment[], t: number): XYPosition {
+  if (!segments.length) return { x: 0, y: 0 };
+  const lengths: number[] = [];
+  let total = 0;
+  for (const segment of segments) {
+    let length: number;
+    if (segment.kind === "line") {
+      length = dist(segment.a, segment.b);
+    } else {
+      length = 0;
+      let prev = segment.a;
+      for (let i = 1; i <= 8; i++) {
+        const u = i / 8;
+        const mt = 1 - u;
+        const point = {
+          x: mt * mt * segment.a.x + 2 * mt * u * segment.c!.x + u * u * segment.b.x,
+          y: mt * mt * segment.a.y + 2 * mt * u * segment.c!.y + u * u * segment.b.y,
+        };
+        length += dist(prev, point);
+        prev = point;
+      }
+    }
+    lengths.push(length);
+    total += length;
+  }
+  if (total <= 1e-9) return { x: segments[0].a.x, y: segments[0].a.y };
+  let target = Math.max(0, Math.min(1, t)) * total;
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const length = lengths[i];
+    if (target > length) {
+      target -= length;
+      continue;
+    }
+    const u = length <= 1e-9 ? 0 : target / length;
+    if (segment.kind === "line") {
+      return {
+        x: segment.a.x + (segment.b.x - segment.a.x) * u,
+        y: segment.a.y + (segment.b.y - segment.a.y) * u,
+      };
+    }
+    const mt = 1 - u;
+    return {
+      x: mt * mt * segment.a.x + 2 * mt * u * segment.c!.x + u * u * segment.b.x,
+      y: mt * mt * segment.a.y + 2 * mt * u * segment.c!.y + u * u * segment.b.y,
+    };
+  }
+  const last = segments[segments.length - 1];
+  return { x: last.b.x, y: last.b.y };
+}
+
 function buildStepPath(
   params: {
     sourceX: number;
@@ -347,12 +837,33 @@ export function buildEdgePath(
   targetPosition: Position,
   edgeType: EdgeType,
   appearance?: EdgeAppearance,
+  obstacles?: ReadonlyArray<EdgeObstacle>,
 ): string {
   const app: Required<EdgeAppearance> = {
     ...DEFAULT_APPEARANCE,
     ...(appearance || {}),
   };
   switch (edgeType) {
+    case "adaptive":
+      return buildAdaptivePath(
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+      );
+    case "avoid":
+      return buildAvoidGeometry(
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+        app,
+        obstacles,
+      ).d;
     case "straight":
       return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
     case "step": {
@@ -413,12 +924,73 @@ export function sampleEdgePath(
   targetPosition: Position,
   edgeType: EdgeType,
   appearance?: EdgeAppearance,
+  obstacles?: ReadonlyArray<EdgeObstacle>,
 ): XYPosition {
   const app: Required<EdgeAppearance> = {
     ...DEFAULT_APPEARANCE,
     ...(appearance || {}),
   };
   switch (edgeType) {
+    case "adaptive": {
+      const { c1, c2 } = adaptiveControlPoints(
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+      );
+      const mt = 1 - t;
+      return {
+        x:
+          mt ** 3 * sourceX +
+          3 * mt ** 2 * t * c1.x +
+          3 * mt * t ** 2 * c2.x +
+          t ** 3 * targetX,
+        y:
+          mt ** 3 * sourceY +
+          3 * mt ** 2 * t * c1.y +
+          3 * mt * t ** 2 * c2.y +
+          t ** 3 * targetY,
+      };
+    }
+    case "avoid": {
+      const geometry = buildAvoidGeometry(
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+        app,
+        obstacles,
+      );
+      if (geometry.fallback) {
+        // A* 找不到通路时画的是自适应贝塞尔，采样必须跟着走同一条曲线。
+        const { c1, c2 } = adaptiveControlPoints(
+          sourceX,
+          sourceY,
+          targetX,
+          targetY,
+          sourcePosition,
+          targetPosition,
+        );
+        const mt = 1 - t;
+        return {
+          x:
+            mt ** 3 * sourceX +
+            3 * mt ** 2 * t * c1.x +
+            3 * mt * t ** 2 * c2.x +
+            t ** 3 * targetX,
+          y:
+            mt ** 3 * sourceY +
+            3 * mt ** 2 * t * c1.y +
+            3 * mt * t ** 2 * c2.y +
+            t ** 3 * targetY,
+        };
+      }
+      return sampleSegments(geometry.segments, t);
+    }
     case "straight":
       return {
         x: sourceX + (targetX - sourceX) * t,
@@ -490,6 +1062,7 @@ export function findClosestPointOnPath(
   targetPosition: Position,
   edgeType: EdgeType,
   appearance?: EdgeAppearance,
+  obstacles?: ReadonlyArray<EdgeObstacle>,
 ): XYPosition {
   let best = { x: 0, y: 0, dist: Infinity };
   for (let i = 0; i <= 50; i++) {
@@ -503,6 +1076,7 @@ export function findClosestPointOnPath(
       targetPosition,
       edgeType,
       appearance,
+      obstacles,
     );
     const d = (p.x - mx) ** 2 + (p.y - my) ** 2;
     if (d < best.dist) {
