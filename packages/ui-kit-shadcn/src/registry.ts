@@ -62,8 +62,16 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   NumberField: NumberFieldModule,
   Popover: PopoverModule,
   RadioGroup: RadioGroupModule,
+  /**
+   * ScrollArea 目录里导出的两个组件是 ScrollArea 与 ScrollBar：按 family 前缀过滤时
+   * 「ScrollBar 不以 ScrollArea 开头」，必然漏掉它。
+   *
+   * 真实后果（用户 2026-11-06：卡片视图没有滚动条）：ScrollArea.vue 里自己渲染的
+   * ScrollBar 取到的还是原始组件，但注册表里少一项会让主题薄层注入的那份
+   * ScrollArea 退化成「只有 viewport」—— 有内容、能滚，右侧却看不到滚动条。
+   * 单列一个 family 用空串前缀，把整个模块都收进来（模块里只有这两个组件）。
+   */
   ScrollArea: ScrollAreaModule,
-  // ScrollBar 与 ScrollArea 同目录、不同名前缀；单列一项才能被 buildManifest 收进来。
   ScrollBar: ScrollAreaModule,
   Select: SelectModule,
   Separator: SeparatorModule,
@@ -81,7 +89,7 @@ function buildManifest(): Record<string, Component> {
   for (const [family, module] of Object.entries(FAMILIES)) {
     for (const [name, value] of Object.entries(module)) {
       // 只收组件：变体常量（buttonVariants）和 useCommand 这类 helper 都是小写开头。
-      if (!name.startsWith(family) || name[0] !== name[0]?.toUpperCase()) continue
+      if (name[0] !== name[0]?.toUpperCase()) continue
       if (typeof value !== 'object' && typeof value !== 'function') continue
       // 名单是唯一真源：FAMILIES 里混进本项目自造件时，这里也一起挡住
       if (!SHADCN_FAMILY_NAMES.includes(family as (typeof SHADCN_FAMILY_NAMES)[number])) continue
