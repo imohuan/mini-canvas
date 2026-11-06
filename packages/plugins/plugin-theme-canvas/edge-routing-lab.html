@@ -979,6 +979,36 @@ c1.x &gt; c2.x：控制点交叉</div>
     };
   }
 
+  // 和产品同一套规则：某一侧有邻居时，这一侧的外扩最多占那条缝的一半。
+  // 真实画布里卡片常常只隔 10px，如果每张都无脑外扩 52px，安全区会互相吞掉，
+  // 端口被埋在里面，寻路起点非法 → 整条线退回贝塞尔（看着像"完全没避障"）。
+  function fitPads(rects, pad) {
+    return rects.map(function (rect, index) {
+      function fit(gap) {
+        if (!isFinite(gap) || pad <= 0) return pad;
+        return Math.min(pad, Math.max(Math.min(2, pad), (gap - 2) / 2));
+      }
+      var left = Infinity, right = Infinity, top = Infinity, bottom = Infinity;
+      var r2 = rect.x + rect.w, b2 = rect.y + rect.h;
+      for (var i = 0; i < rects.length; i++) {
+        if (i === index) continue;
+        var other = rects[i];
+        var vOverlap = Math.min(b2, other.y + other.h) - Math.max(rect.y, other.y);
+        var hOverlap = Math.min(r2, other.x + other.w) - Math.max(rect.x, other.x);
+        if (vOverlap > 0) {
+          if (other.x >= r2) right = Math.min(right, other.x - r2);
+          if (other.x + other.w <= rect.x) left = Math.min(left, rect.x - (other.x + other.w));
+        }
+        if (hOverlap > 0) {
+          if (other.y >= b2) bottom = Math.min(bottom, other.y - b2);
+          if (other.y + other.h <= rect.y) top = Math.min(top, rect.y - (other.y + other.h));
+        }
+      }
+      return { id: rect.id, x: rect.x - fit(left), y: rect.y - fit(top),
+        w: rect.w + fit(left) + fit(right), h: rect.h + fit(top) + fit(bottom) };
+    });
+  }
+
   // 端点卡片：端口所在那一侧开口，其余方向仍按完整安全区外扩。
   function expandEndpoint(rect, padX, padY, openSide) {
     var left = openSide === "left" ? 0 : padX;
@@ -1559,11 +1589,10 @@ c1.x &gt; c2.x：控制点交叉</div>
     // 端点四边统一外扩，端口侧不留整边开口（留开口会让线贴着卡片边框走）。
     var sourceRect = nodeRect(state.nodes.a);
     var targetRect = nodeRect(state.nodes.b);
-    var rects = [
-      inflateRect(sourceRect, pad),
-      inflateRect(targetRect, pad)
-    ];
-    if (state.show.blocker) rects.push(inflateRect(nodeRect(state.nodes.c), pad));
+    var rawRects = [sourceRect, targetRect];
+    if (state.show.blocker) rawRects.push(nodeRect(state.nodes.c));
+    // 和产品一致：安全区按"离邻居还有多少缝"自动收窄。
+    var rects = fitPads(rawRects, pad);
 
     // 出线桩：端口沿法线走到自己卡片外侧 pad + 12。
     function stubFrom(rect, port, dir) {
@@ -1621,8 +1650,14 @@ c1.x &gt; c2.x：控制点交叉</div>
           var isSource = j === 0 && i === 1;
           var isTarget = j === 1 && i === points.length - 1;
           if (isSource || isTarget) {
-            // 端口那一段只允许沿法线穿出，不许穿进卡片本体
-            if (segmentIntersectsRect(points[i - 1], points[i], [sourceRect, targetRect][j], 0.5)) return true;
+            // 和产品一致：端口这一段只要求"沿端口法线朝外"，不要求完全不碰卡片本体。
+            // 真实画布的 handle 中心比卡片边往里约 2px，要求太严会把所有候选判失败。
+            var dir = isSource ? s.dir : t.dir;
+            var a = points[i - 1], b = points[i];
+            if (dir.x !== 0 && Math.abs(a.y - b.y) > 0.01) return true;
+            if (dir.y !== 0 && Math.abs(a.x - b.x) > 0.01) return true;
+            var sign = isSource ? 1 : -1;
+            if (((b.x - a.x) * dir.x + (b.y - a.y) * dir.y) * sign <= 0) return true;
             continue;
           }
           if (segmentIntersectsRect(points[i - 1], points[i], rects[j], strict ? 0.5 : -0.5)) return true;

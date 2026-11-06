@@ -13,6 +13,7 @@ import {
   findClosestPointOnPath,
   resolveEdgeObstacles,
   expandObstacle,
+  resolveObstaclePads,
   type EdgeAppearance,
 } from './edgeGeometry'
 
@@ -171,11 +172,12 @@ describe('正交避障', () => {
 })
 
 describe('正交避障：两端卡片也参与避障', () => {
-  const source = { id: 's', x: 0, y: 0, w: 250, h: 210 }
-  const target = { id: 't', x: 14, y: 150, w: 250, h: 210 }
-  // 右端口 (250,105) → 左端口 (14,255)：与截图相同的上下错位布局
-  const s = { x: 250, y: 105 }
-  const t = { x: 14, y: 255 }
+  // 与用户截图一致：两张卡片上下错位，中间有真实空隙（不重叠）。
+  const source = { id: 's', x: 0, y: 0, w: 250, h: 200 }
+  const target = { id: 't', x: 60, y: 320, w: 250, h: 200 }
+  // 右端口 (250,100) → 左端口 (60,420)
+  const s = { x: 250, y: 100 }
+  const t = { x: 60, y: 420 }
 
   function sampleAll() {
     const points: Array<{ x: number; y: number }> = []
@@ -188,8 +190,8 @@ describe('正交避障：两端卡片也参与避障', () => {
           'avoid',
           undefined,
       [
-        { ...source, endpoint: true },
-        { ...target, endpoint: true },
+        { ...source, role: 'source' as const },
+        { ...target, role: 'target' as const },
       ],
         ),
       )
@@ -235,11 +237,11 @@ describe('正交避障：两端卡片也参与避障', () => {
 })
 
 describe('正交避障：两端卡片按完整边距外扩', () => {
-  const source = { id: 's', x: 0, y: 0, w: 250, h: 210 }
-  const target = { id: 't', x: 0, y: 300, w: 250, h: 210 }
-  // 右端口 (250,105) → 左端口 (0,405)：两卡上下叠放，必须从下方绕过去。
-  const s = { x: 250, y: 105 }
-  const t = { x: 0, y: 405 }
+  // 两卡上下叠放，中间留 110px 净空：既要验证上下边距，也要验证从夹缝通过。
+  const source = { id: 's', x: 0, y: 0, w: 250, h: 200 }
+  const target = { id: 't', x: 20, y: 310, w: 250, h: 200 }
+  const s = { x: 250, y: 100 }
+  const t = { x: 20, y: 410 }
 
   function sampleAll(clearance: number) {
     const points: Array<{ x: number; y: number }> = []
@@ -252,8 +254,8 @@ describe('正交避障：两端卡片按完整边距外扩', () => {
           'avoid',
           { avoidMargin: 48, avoidClearance: clearance },
           [
-            { ...source, endpoint: true },
-            { ...target, endpoint: true },
+            { ...source, role: 'source' as const },
+            { ...target, role: 'target' as const },
           ],
         ),
       )
@@ -308,17 +310,17 @@ describe('正交避障：两端卡片按完整边距外扩', () => {
 
 
 
-  // 两卡之间放不下的情况：完整边距会互撞，但连线仍要按留白走。
-  it('两卡叠放：间距够时从缝隙穿过，不够时才绕外侧', () => {
+  // 和用户截图一致：两卡之间有真实空隙，48px 边距下也必须走正交绕行，不能退回贝塞尔。
+  it('两卡叠放：间距够时走正交绕行，不退回贝塞尔', () => {
     const rects = [
-      { id: 's', x: 0, y: 0, w: 250, h: 210, endpoint: true },
-      { id: 't', x: 0, y: 300, w: 250, h: 210, endpoint: true },
+      { id: 's', role: 'source' as const, x: 0, y: 0, w: 250, h: 200 },
+      { id: 't', role: 'target' as const, x: 20, y: 310, w: 250, h: 200 },
     ]
-    // 间隙 90px，48px 安全区各占 48 会互撞；连线留白 7px 的有 76px 净空。
-    const d = buildEdgePath(250, 105, 0, 405, Position.Right, Position.Left, 'avoid',
+    const d = buildEdgePath(250, 100, 20, 410, Position.Right, Position.Left, 'avoid',
       { avoidMargin: 48, avoidClearance: 7 }, rects)
-    expect(d).toContain('M 250 105')
+    expect(d).toContain('M 250 100')
     expect(d).not.toContain('C')
+    expect(d).toContain('Q')
   })
 
 
@@ -329,17 +331,17 @@ describe('正交避障：连线留白', () => {
   it('连线距离 = 避障边距 18 + 连线留白 6 = 24px', () => {
     const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', undefined, [o])
     // 矩形 y=-40、h=80 → 底边 40；向外 24px → 64。路线上沿正好落在 -64。
-    expect(d).toContain('L 256 -64')
+    expect(d).toContain('L 291 -64')
   })
 
   it('连线留白调大，路径继续外退', () => {
     const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', { avoidClearance: 16 }, [o])
-    expect(d).toContain('L 246 -74')
+    expect(d).toContain('L 291 -74')
   })
 
   it('留白为 0 时连线距卡片仍是避障边距 18px，不会重合', () => {
     const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', { avoidClearance: 0 }, [o])
-    expect(d).toContain('L 262 -58')
+    expect(d).toContain('L 291 -58')
     expect(d).not.toContain(' L 100 0')
   })
 })
@@ -347,6 +349,97 @@ describe('正交避障：连线留白', () => {
 
 
 
+describe('正交避障：真实画布的密集卡片（分镜网格）', () => {
+  // 复刻产品画布：源卡片在左上，目标网格的每张卡只隔 10px。
+  // 之前每张卡无脑外扩 52px，安全区互相吞掉，端口被埋住 → 整条线回退贝塞尔。
+  const source = { id: 's', role: 'source' as const, x: 0, y: 0, w: 300, h: 160 }
+  const grid = [
+    { id: 'g1', x: 600, y: 0, w: 400, h: 200 },
+    { id: 'g2', x: 1010, y: 0, w: 400, h: 200 },
+    { id: 'g3', x: 1420, y: 0, w: 400, h: 200 },
+    { id: 'g4', x: 600, y: 210, w: 400, h: 200 },
+    { id: 'g5', x: 1010, y: 210, w: 400, h: 200 },
+    { id: 'g6', x: 1420, y: 210, w: 400, h: 200 },
+  ]
+  const rects = [source, ...grid]
+  const app = { avoidMargin: 45, avoidClearance: 7, avoidRadius: 16 }
 
+  function inside(p: { x: number; y: number }, r: { x: number; y: number; w: number; h: number }) {
+    return p.x > r.x + 1 && p.x < r.x + r.w - 1 && p.y > r.y + 1 && p.y < r.y + r.h - 1
+  }
 
+  it('卡片只隔 10px 时仍然走正交路径，不退回贝塞尔', () => {
+    const withRole = [source, { ...grid[0], role: 'target' as const }, ...grid.slice(1)]
+    const d = buildEdgePath(300, 80, 600, 100, Position.Right, Position.Left, 'avoid', app, withRole)
+    expect(d).not.toContain('C')
+    expect(d).toContain('M 300 80')
+  })
+
+  it('路径不穿过任何一张卡片', () => {
+    for (const target of grid) {
+      // 真实画布每条边都会给两端打 role：这里把被测目标当成这条边的 target。
+      const edgeRects = [source, ...grid.map((r) => (r.id === target.id ? { ...r, role: 'target' as const } : r))]
+      const points: Array<{ x: number; y: number }> = []
+      for (let i = 0; i <= 300; i++) {
+        points.push(
+          sampleEdgePath(i / 300, 300, 80, target.x, target.y + target.h / 2, Position.Right, Position.Left, 'avoid', app, edgeRects),
+        )
+      }
+      for (const point of points) {
+        for (const rect of edgeRects) {
+          if (inside(point, rect)) {
+            throw new Error(`hit ${rect.id} at ${point.x},${point.y} target ${target.id} d=${buildEdgePath(300, 80, target.x, target.y + target.h / 2, Position.Right, Position.Left, 'avoid', app, edgeRects)}`)
+          }
+        }
+      }
+    }
+  })
+
+  it('目标端口仍然从左侧进入（不会被别人的安全区顶到右侧）', () => {
+    const withRole = [source, { ...grid[0], role: 'target' as const }, ...grid.slice(1)]
+    const points: Array<{ x: number; y: number }> = []
+    for (let i = 0; i <= 200; i++) {
+      points.push(sampleEdgePath(i / 200, 300, 80, 600, 100, Position.Right, Position.Left, 'avoid', app, withRole))
+    }
+    const nearEnd = points[points.length - 3]
+    expect(nearEnd.x).toBeLessThan(600)
+  })
+})
+
+describe('正交避障：产品端口的 2px 内缩', () => {
+  // 真实画布的 handle 中心比卡片边往里约 2px（端口 x 比卡片右边小 2px）。
+  // 旧实现要求"端口这一段绝不碰自己卡片"，于是每条候选都判失败 → 全部退回贝塞尔。
+  it('端口略微内缩时仍走正交避障', () => {
+    const source = { id: 's', role: 'source' as const, x: 0, y: 0, w: 300, h: 200 }
+    const target = { id: 't', role: 'target' as const, x: 20, y: 320, w: 300, h: 200 }
+    const d = buildEdgePath(298, 100, 22, 420, Position.Right, Position.Left, 'avoid',
+      { avoidMargin: 45, avoidClearance: 7 }, [source, target])
+    expect(d).not.toContain('C')
+    expect(d).toContain('M 298 100')
+  })
+})
+
+describe('安全区按缝隙收窄（resolveObstaclePads）', () => {
+  it('两侧都有邻居时，外扩只占缝隙的一半', () => {
+    const rects = [
+      { x: 0, y: 0, w: 100, h: 100 },
+      { x: 110, y: 0, w: 100, h: 100 },
+    ]
+    const pads = resolveObstaclePads(rects, 52)
+    // 缝隙 10px → 每边最多 4px（(10-2)/2），不会把通道堵死
+    expect(pads[0].right).toBeCloseTo(4, 5)
+    expect(pads[1].left).toBeCloseTo(4, 5)
+  })
+
+  it('没有邻居的一侧保留完整边距', () => {
+    const rects = [
+      { x: 0, y: 0, w: 100, h: 100 },
+      { x: 110, y: 0, w: 100, h: 100 },
+    ]
+    const pads = resolveObstaclePads(rects, 52)
+    expect(pads[0].left).toBe(52)
+    expect(pads[1].right).toBe(52)
+    expect(pads[0].top).toBe(52)
+  })
+})
 

@@ -155,6 +155,82 @@ export function expandObstacle(
   };
 }
 
+/** 一个矩形四边各自的可用外扩距离 */
+export interface ObstaclePads {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * 按"离邻居还有多少缝"收窄安全区。
+ *
+ * 为什么需要：真实画布里卡片常常只隔 10px（分镜网格就是一格挨一格）。如果每张卡都
+ * 无脑外扩 52px，两张卡的安全区会互相吞掉，端口所在的缝整条被埋住 —— 寻路起点直接
+ * 非法，整条线只能回退贝塞尔，看起来就是"完全没有避障"。
+ *
+ * 规则：某一侧有邻居时，外扩最多占这条缝的一半（再往内收 1px 留出通道）；没邻居的
+ * 一侧仍然用完整边距。这样"外面那圈"照样是 52px，只有挤在中间时才收窄。
+ */
+export function resolveObstaclePads(
+  rects: ReadonlyArray<EdgeObstacle>,
+  pad: number | ((index: number) => number),
+  options: { minPad?: number } = {},
+): ObstaclePads[] {
+  const minPad = options.minPad ?? 2;
+  const padOf = typeof pad === "number" ? () => pad : pad;
+
+  return rects.map((rect, index) => {
+    const full = Math.max(0, padOf(index));
+    const fit = (gap: number): number =>
+      gap === Number.POSITIVE_INFINITY || full <= 0
+        ? full
+        : Math.min(full, Math.max(Math.min(minPad, full), (gap - 2) / 2));
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.POSITIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.POSITIVE_INFINITY;
+    const right2 = rect.x + rect.w;
+    const bottom2 = rect.y + rect.h;
+
+    for (let i = 0; i < rects.length; i++) {
+      if (i === index) continue;
+      const other = rects[i];
+      const verticalOverlap =
+        Math.min(bottom2, other.y + other.h) - Math.max(rect.y, other.y);
+      const horizontalOverlap =
+        Math.min(right2, other.x + other.w) - Math.max(rect.x, other.x);
+
+      if (verticalOverlap > 0) {
+        if (other.x >= right2) right = Math.min(right, other.x - right2);
+        if (other.x + other.w <= rect.x) left = Math.min(left, rect.x - (other.x + other.w));
+      }
+      if (horizontalOverlap > 0) {
+        if (other.y >= bottom2) bottom = Math.min(bottom, other.y - bottom2);
+        if (other.y + other.h <= rect.y) top = Math.min(top, rect.y - (other.y + other.h));
+      }
+    }
+
+    return { left: fit(left), right: fit(right), top: fit(top), bottom: fit(bottom) };
+  });
+}
+
+/** 按四边各自的距离外扩（不为负） */
+export function expandObstacleByPads(rect: EdgeObstacle, pads: ObstaclePads): EdgeObstacle {
+  const left = Math.max(0, pads.left);
+  const right = Math.max(0, pads.right);
+  const top = Math.max(0, pads.top);
+  const bottom = Math.max(0, pads.bottom);
+  return {
+    ...rect,
+    x: rect.x - left,
+    y: rect.y - top,
+    w: rect.w + left + right,
+    h: rect.h + top + bottom,
+  };
+}
+
 const handleDirections: Record<Position, XYPosition> = {
   [Position.Left]: { x: -1, y: 0 },
   [Position.Right]: { x: 1, y: 0 },
@@ -845,163 +921,154 @@ function buildAvoidGeometry(
 ): AvoidGeometry {
   const margin = Math.max(0, appearance.avoidMargin);
   const clearance = Math.max(0, appearance.avoidClearance);
-  // 连线离节点矩形边缘的距离 = 避障边距 + 连线留白。
+  // 连线离卡片边缘的距离恒等于「避障边距 + 连线留白」，不因空间不足而偷偷缩小。
   const pad = margin + clearance;
   const sd = directionOf(sourcePosition);
   const td = directionOf(targetPosition);
   const list = obstacles ?? [];
-  // 出线桩要用**原始**卡片矩形算（外扩前的），否则会多退一次 pad。
+
+  // 每张卡的可用边距按"离邻居还有多少缝"自动收窄（见 resolveObstaclePads）。
+  const pads = resolveObstaclePads(
+    list,
+    (index) => {
+      const rect = list[index];
+      // 端点卡片一律用完整边距；普通卡片可以各自声明 inflate。
+      if (rect.role === "source" || rect.role === "target" || rect.endpoint) return pad;
+      return Math.max(0, rect.inflate ?? pad);
+    },
+  );
+  const rects: EdgeObstacle[] = list.map((rect, index) =>
+    expandObstacleByPads(rect, pads[index]),
+  );
   const rawSource = list.find((r) => r.role === "source");
   const rawTarget = list.find((r) => r.role === "target");
+  const radius = Math.min(appearance.avoidRadius, Math.max(1, pad * 0.55));
 
-  // 所有卡片（含两端）四边统一按 pad 外扩，端口侧不留整边开口 ——
-  // 留开口会让路径贴着卡片边框走（用户截图的重合问题）。
-  const rects = list.map((rect) => {
-    if (rect.role === "source" || rect.role === "target" || rect.endpoint) {
-      return expandObstacle(rect, pad);
-    }
-    return expandObstacle(rect, Math.max(0, rect.inflate ?? pad));
-  });
+  const outsideAll = (p: XYPosition): boolean =>
+    rects.every((r) => !pointInsideRect(p, r, 0.6));
 
-  // 出线桩：从端口沿法线直接放到"自己卡片 + pad + 12"之外。
-  const stubFor = (rect: EdgeObstacle | undefined, x: number, y: number, dir: XYPosition): XYPosition => {
-    // 桩点 = 端口沿法线走出 "自己卡片外侧 + pad + 12"。
-    // 这里用原始卡片矩形（未外扩），避免边距被重复计算。
-    const gapToOuter = pad + 12;
-    if (!rect) {
-      return { x: x + dir.x * gapToOuter, y: y + dir.y * gapToOuter };
+  // 出线桩：沿端口法线一直走到所有安全区之外（保证网格寻路的起点/终点合法）。
+  const stubFrom = (px: number, py: number, dir: XYPosition): XYPosition => {
+    for (let d = 1; d <= pad + 160; d++) {
+      const p = { x: px + dir.x * d, y: py + dir.y * d };
+      if (outsideAll(p)) return p;
     }
-    if (dir.x > 0) return { x: Math.max(x + gapToOuter, rect.x + rect.w + pad + 12), y };
-    if (dir.x < 0) return { x: Math.min(x - gapToOuter, rect.x - pad - 12), y };
-    if (dir.y > 0) return { x, y: Math.max(y + gapToOuter, rect.y + rect.h + pad + 12) };
-    if (dir.y < 0) return { x, y: Math.min(y - gapToOuter, rect.y - pad - 12) };
-    return { x: x + dir.x * gapToOuter, y: y + dir.y * gapToOuter };
+    return { x: px + dir.x * (pad + 160), y: py + dir.y * (pad + 160) };
   };
-  const start = stubFor(rawSource, sourceX, sourceY, sd);
-  const end = stubFor(rawTarget, targetX, targetY, td);
+  const start = stubFrom(sourceX, sourceY, sd);
+  const end = stubFrom(targetX, targetY, td);
 
-  const candidates: XYPosition[][] = [];
-  const priorities: number[] = [];
-  const push = (mid: XYPosition[], priority: number): void => {
-    const points = [{ x: sourceX, y: sourceY }, ...mid, { x: targetX, y: targetY }];
-    for (let i = 1; i < points.length - 1; i++) {
-      const a = points[i - 1];
-      const b = points[i];
-      const c = points[i + 1];
-      const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
-      if (Math.abs(cross) > 0.001) {
-        candidates.push(simplifyOrthogonal(points));
-        priorities.push(priority);
-        return;
+  // 端口那一小段允许穿过自己的安全区（且必须是沿法线离开），其余段一律不许进任何安全区。
+  const segmentAllowed = (a: XYPosition, b: XYPosition, index: number, count: number): boolean => {
+    for (const rect of rects) {
+      const own =
+        (rect.role === "source" && index === 1) ||
+        (rect.role === "target" && index === count - 1);
+      if (own) {
+        // 端口在真实画布上会有约 2px 的"内缩"（handle 中心落在卡片边以内），
+        // 所以不能要求这一段完全不碰自己的卡片 —— 那样每条路线都会被判失败、整条退回贝塞尔。
+        // 只要求它沿端口法线朝外离开，绝不沿卡片内部横向滑走。
+        const dir = index === 1 ? sd : td;
+        if (dir.x !== 0 && Math.abs(a.y - b.y) > 0.01) return false;
+        if (dir.y !== 0 && Math.abs(a.x - b.x) > 0.01) return false;
+        // source 段是"从端口向外"，target 段是"从外回到端口"，方向与端口法线相反。
+        // 简化折线时出线桩可能被并进这一段，所以只校验方向，不要求长度。
+        const sign = index === 1 ? 1 : -1;
+        const outward = ((b.x - a.x) * dir.x + (b.y - a.y) * dir.y) * sign;
+        if (outward <= 0) return false;
+        continue;
       }
+      if (segmentIntersectsRect(a, b, rect, 0.4)) return false;
     }
+    return true;
+  };
+  const validate = (points: XYPosition[]): boolean => {
+    for (let i = 1; i < points.length; i++) {
+      if (!segmentAllowed(points[i - 1], points[i], i, points.length)) return false;
+    }
+    return true;
   };
 
-  push([start, { x: end.x, y: start.y }, end], 3);
-  push([start, { x: start.x, y: end.y }, end], 3);
-
-  for (const a of rects) {
-    for (const c of rects) {
-      if (a === c) continue;
-      if (c.y > a.y + a.h) {
-        const line = (a.y + a.h + c.y) / 2;
-        push([start, { x: start.x, y: line }, { x: end.x, y: line }, end], 0);
-      }
-      if (c.x > a.x + a.w) {
-        const line = (a.x + a.w + c.x) / 2;
-        push([start, { x: line, y: start.y }, { x: line, y: end.y }, end], 0);
-      }
-    }
+  // 主算法：在"端点 + 所有安全区边界"构成的稀疏网格上寻路，只走水平/垂直。
+  const route = routeOrthogonal(start, end, rects);
+  if (route) {
+    const points = simplifyOrthogonal([
+      { x: sourceX, y: sourceY },
+      ...route,
+      { x: targetX, y: targetY },
+    ]);
+    if (validate(points)) return buildRoundedOrthogonal(points, radius);
   }
 
+  // 兜底：沿所有安全区的外接框绕行。四条边依次尝试，取第一条真正不穿卡片的。
   if (rects.length) {
     const minX = Math.min(...rects.map((r) => r.x));
     const maxX = Math.max(...rects.map((r) => r.x + r.w));
     const minY = Math.min(...rects.map((r) => r.y));
     const maxY = Math.max(...rects.map((r) => r.y + r.h));
-    // rects 已经是外扩后的安全区，这里直接用边界，不能再减一次 pad（否则边距会被算两遍）。
-    push([start, { x: start.x, y: minY }, { x: end.x, y: minY }, end], 1);
-    push([start, { x: start.x, y: maxY }, { x: end.x, y: maxY }, end], 1);
-    push([start, { x: minX, y: start.y }, { x: minX, y: end.y }, end], 1);
-    push([start, { x: maxX, y: start.y }, { x: maxX, y: end.y }, end], 1);
-  }
-
-  // 只允许跳过"端口→出线桩"那一小段（垂直于卡边、必然穿过自己的安全区）。
-  // 其余段（含最后一段）一律不许进入任何安全区，否则会从卡片内部穿回去。
-  const blocked = (points: XYPosition[], strict: boolean): boolean => {
-    for (let i = 1; i < points.length; i++) {
-      for (const rect of rects) {
-        const raw = list.find((r) => r.id === rect.id)
-        // 端口那一段允许穿过"自己"的安全区，但只允许沿端口法线方向穿（垂直于卡边）；
-        // 斜着穿或横着穿回卡片仍然禁止，否则线会穿进卡片内部或贴边行走。
-        if (raw && raw.role === "source" && i === 1 && sd.x * (points[1].x - points[0].x) + sd.y * (points[1].y - points[0].y) > 0) {
-          if (segmentIntersectsRect(points[i - 1], points[i], raw, 0.5)) return true
-          continue
-        }
-        if (raw && raw.role === "target" && i === points.length - 1 && td.x * (points[i - 1].x - points[i].x) + td.y * (points[i - 1].y - points[i].y) > 0) {
-          if (segmentIntersectsRect(points[i - 1], points[i], raw, 0.5)) return true
-          continue
-        }
-        if (segmentIntersectsRect(points[i - 1], points[i], rect, strict ? 0.5 : -0.5)) return true;
-        // 即使是被跳过的端口段，也不许穿进卡片本体。
-        if (raw && segmentIntersectsRect(points[i - 1], points[i], raw, 0.5)) return true;
+    const out = 2;
+    const options: XYPosition[][] = [
+      [{ x: sourceX, y: sourceY }, start, { x: start.x, y: minY - out }, { x: end.x, y: minY - out }, end, { x: targetX, y: targetY }],
+      [{ x: sourceX, y: sourceY }, start, { x: start.x, y: maxY + out }, { x: end.x, y: maxY + out }, end, { x: targetX, y: targetY }],
+      [{ x: sourceX, y: sourceY }, start, { x: minX - out, y: start.y }, { x: minX - out, y: end.y }, end, { x: targetX, y: targetY }],
+      [{ x: sourceX, y: sourceY }, start, { x: maxX + out, y: start.y }, { x: maxX + out, y: end.y }, end, { x: targetX, y: targetY }],
+    ];
+    let best: XYPosition[] | null = null;
+    let bestLen = Infinity;
+    for (const option of options) {
+      const pts = simplifyOrthogonal(option);
+      if (!validate(pts)) continue;
+      let len = 0;
+      for (let i = 1; i < pts.length; i++) len += dist(pts[i - 1], pts[i]);
+      if (len < bestLen) {
+        bestLen = len;
+        best = pts;
       }
     }
-    return false;
-  };
-  const lengthOf = (points: XYPosition[]): number => {
-    let total = 0;
-    for (let i = 1; i < points.length; i++) total += dist(points[i - 1], points[i]);
-    return total;
-  };
-  const pick = (strict: boolean): XYPosition[] | null => {
-    const idx = candidates
-      .map((points, i) => ({ points, i }))
-      .filter(({ points }) => !blocked(points, strict));
-    idx.sort((a, b) => priorities[a.i] - priorities[b.i] || lengthOf(a.points) - lengthOf(b.points));
-    return idx[0]?.points ?? null;
-  };
+    if (best) return buildRoundedOrthogonal(best, radius);
+  }
 
-  let best = pick(true) ?? pick(false);
-  if (!best) {
-    const grid = routeOrthogonal(start, end, rects);
-    if (grid) {
-      const gridPts = simplifyOrthogonal([{ x: sourceX, y: sourceY }, ...grid, { x: targetX, y: targetY }]);
-      if (!blocked(gridPts, false)) best = gridPts;
-    }
-  }
-  if (!best) {
-    // 兜底：所有安全区都放不下，就沿所有卡片的外接框走一条正交路径。
-    // 宁可多绕，也不能穿进卡片、更不能贴着边框走。
-    if (rects.length) {
-      const minX = Math.min(...rects.map((r) => r.x));
-      const maxX = Math.max(...rects.map((r) => r.x + r.w));
-      const minY = Math.min(...rects.map((r) => r.y));
-      const maxY = Math.max(...rects.map((r) => r.y + r.h));
-      const around = simplifyOrthogonal([
-        { x: sourceX, y: sourceY },
-        start,
-        { x: start.x, y: minY },
-        { x: end.x, y: minY },
-        end,
-        { x: targetX, y: targetY },
-      ]);
-      if (around.length > 2) {
-        const radius = Math.min(appearance.avoidRadius, Math.max(1, pad * 0.55));
-        return buildRoundedOrthogonal(around, radius);
+  // 最后一道兜底：只保证"不穿卡片"，不再强求完整边距。
+  // 两张卡本来就贴得很近时，完整边距放不下；这时沿外接框绕行，仍然优于退回贝塞尔直线。
+  if (rawSource && rawTarget) {
+    const left = Math.min(rawSource.x, rawTarget.x);
+    const right = Math.max(rawSource.x + rawSource.w, rawTarget.x + rawTarget.w);
+    const top = Math.min(rawSource.y, rawTarget.y);
+    const bottom = Math.max(rawSource.y + rawSource.h, rawTarget.y + rawTarget.h);
+    const outer = 12;
+    const simple = [
+      [{ x: sourceX, y: sourceY }, { x: start.x, y: start.y }, { x: start.x, y: top - outer }, { x: end.x, y: top - outer }, { x: end.x, y: end.y }, { x: targetX, y: targetY }],
+      [{ x: sourceX, y: sourceY }, { x: start.x, y: start.y }, { x: start.x, y: bottom + outer }, { x: end.x, y: bottom + outer }, { x: end.x, y: end.y }, { x: targetX, y: targetY }],
+      [{ x: sourceX, y: sourceY }, { x: start.x, y: start.y }, { x: left - outer, y: start.y }, { x: left - outer, y: end.y }, { x: end.x, y: end.y }, { x: targetX, y: targetY }],
+      [{ x: sourceX, y: sourceY }, { x: start.x, y: start.y }, { x: right + outer, y: start.y }, { x: right + outer, y: end.y }, { x: end.x, y: end.y }, { x: targetX, y: targetY }],
+    ];
+    let simpleBest: XYPosition[] | null = null;
+    let simpleLen = Infinity;
+    for (const option of simple) {
+      const pts = simplifyOrthogonal(option);
+      let len = 0;
+      let crossCard = false;
+      for (let i = 1; i < pts.length; i++) {
+        len += dist(pts[i - 1], pts[i]);
+        for (const raw of [rawSource, rawTarget]) {
+          if (i > 1 && segmentIntersectsRect(pts[i - 1], pts[i], raw, 0.5)) crossCard = true;
+        }
       }
-      void maxX;
-      void maxY;
+      if (crossCard) continue;
+      if (len < simpleLen) {
+        simpleLen = len;
+        simpleBest = pts;
+      }
     }
-    return {
-      d: buildAdaptivePath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition),
-      segments: [],
-      points: [],
-      fallback: true,
-    };
+    if (simpleBest) return buildRoundedOrthogonal(simpleBest, Math.min(radius, 4));
   }
-  const radius = Math.min(appearance.avoidRadius, Math.max(1, pad * 0.55));
-  return buildRoundedOrthogonal(best, radius);
+
+  return {
+    d: buildAdaptivePath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition),
+    segments: [],
+    points: [],
+    fallback: true,
+  };
 }
 
 function sampleSegments(segments: PathSegment[], t: number): XYPosition {
