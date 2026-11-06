@@ -1550,91 +1550,118 @@ c1.x &gt; c2.x：控制点交叉</div>
   }
 
   function buildAvoidPath(s, t, app) {
-    var margin = Math.max(4, app.margin);
+    var margin = Math.max(0, app.margin);
     var clearance = Math.max(0, app.clearance);
-    var fullPad = margin + clearance;
-    // 按"两张卡片中心的实际分离方向"决定哪一轴收窄，而不是按端口左右/上下。
-    // 两卡上下叠放、端口却左右相对时，按端口方向收窄 X 会让 Y 的安全区仍然过大，
-    // 两块安全区互撞 → A* 无解 → 整条退回贝塞尔。
-    var axisGap = Math.abs(t.x - s.x) >= Math.abs(t.y - s.y) ? "x" : "y";
-    var gap = axisGap === "x" ? Math.abs(t.x - s.x) : Math.abs(t.y - s.y);
-    var fittedPad = Math.min(fullPad, Math.max(0, (gap - 2) / 2));
-
-    // 端点卡片：端口所在那一侧开口，其余三边按完整边距外扩。
-    var obstacles = [
-      expandEndpoint(
-        nodeRect(state.nodes.a),
-        axisGap === "x" ? fittedPad : fullPad,
-        axisGap === "y" ? fittedPad : fullPad,
-        s.pos
-      ),
-      expandEndpoint(
-        nodeRect(state.nodes.b),
-        axisGap === "x" ? fittedPad : fullPad,
-        axisGap === "y" ? fittedPad : fullPad,
-        t.pos
-      )
-    ];
-    if (state.show.blocker) obstacles.push(inflateRect(nodeRect(state.nodes.c), margin + clearance));
-
-    var route = null;
-    for (var step = 0; step <= 8 && !route; step++) {
-      var endpointPad = fittedPad * (1 - step / 8);
-      var trial = [
-        expandEndpoint(
-          nodeRect(state.nodes.a),
-          axisGap === "x" ? endpointPad : fullPad,
-          axisGap === "y" ? endpointPad : fullPad,
-          s.pos
-        ),
-        expandEndpoint(
-          nodeRect(state.nodes.b),
-          axisGap === "x" ? endpointPad : fullPad,
-          axisGap === "y" ? endpointPad : fullPad,
-          t.pos
-        )
-      ];
-      if (state.show.blocker) trial.push(inflateRect(nodeRect(state.nodes.c), margin + clearance));
-      var stub = Math.max(endpointPad, 1) + 10;
-      var start = { x: s.x + s.dir.x * stub, y: s.y + s.dir.y * stub };
-      var end = { x: t.x + t.dir.x * stub, y: t.y + t.dir.y * stub };
-      route = routeOrthogonal(start, end, trial);
-      if (route) obstacles = trial;
-    }
+    // 与产品一致：连线距卡片 = 避障边距 + 连线留白。
+    var pad = margin + clearance;
     var adaptive = buildAdaptiveBezier(s, t, app);
 
-    if (!route) {
-      return {
-        d: adaptive.d,
-        c1: adaptive.c1,
-        c2: adaptive.c2,
-        fallback: true,
-        // 诊断黄框只表示"节点 + margin"，不含内部留白。
-        inflated: [
-          inflateRect(nodeRect(state.nodes.a), margin),
-          inflateRect(nodeRect(state.nodes.b), margin),
-          ...(state.show.blocker ? [inflateRect(nodeRect(state.nodes.c), margin)] : [])
-        ],
-        routePoints: [],
-        junctions: [],
-        margin: margin,
-        clearance: clearance
-      };
-    }
-
-    var all = simplifyPoints([{ x: s.x, y: s.y }].concat(route, [{ x: t.x, y: t.y }]));
-    // 诊断黄框只表示"节点 + margin"，不含内部留白。
-    var safetyRects = [
-      inflateRect(nodeRect(state.nodes.a), margin),
-      inflateRect(nodeRect(state.nodes.b), margin)
+    // 端点四边统一外扩，端口侧不留整边开口（留开口会让线贴着卡片边框走）。
+    var sourceRect = nodeRect(state.nodes.a);
+    var targetRect = nodeRect(state.nodes.b);
+    var rects = [
+      inflateRect(sourceRect, pad),
+      inflateRect(targetRect, pad)
     ];
-    if (state.show.blocker) safetyRects.push(inflateRect(nodeRect(state.nodes.c), margin));
-    var radius = Math.min(app.cornerRadius, margin * 0.55);
+    if (state.show.blocker) rects.push(inflateRect(nodeRect(state.nodes.c), pad));
+
+    // 出线桩：端口沿法线走到自己卡片外侧 pad + 12。
+    function stubFrom(rect, port, dir) {
+      if (dir.x > 0) return { x: rect.x + rect.w + pad + 12, y: port.y };
+      if (dir.x < 0) return { x: rect.x - pad - 12, y: port.y };
+      if (dir.y > 0) return { x: port.x, y: rect.y + rect.h + pad + 12 };
+      return { x: port.x, y: rect.y - pad - 12 };
+    }
+    var start = stubFrom(sourceRect, s, s.dir);
+    var end = stubFrom(targetRect, t, t.dir);
+
+    var candidates = [];
+    var priorities = [];
+    function push(mid, priority) {
+      var points = [{ x: s.x, y: s.y }].concat(mid, [{ x: t.x, y: t.y }]);
+      for (var i = 1; i < points.length - 1; i++) {
+        var a = points[i - 1], b = points[i], c = points[i + 1];
+        var cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        if (Math.abs(cross) > 0.001) {
+          candidates.push(simplifyPoints(points));
+          priorities.push(priority);
+          return;
+        }
+      }
+    }
+    push([start, { x: end.x, y: start.y }, end], 3);
+    push([start, { x: start.x, y: end.y }, end], 3);
+    for (var i = 0; i < rects.length; i++) {
+      for (var j = 0; j < rects.length; j++) {
+        if (i === j) continue;
+        var ra = rects[i], rb = rects[j];
+        if (rb.y > ra.y + ra.h) {
+          var lineY = (ra.y + ra.h + rb.y) / 2;
+          push([start, { x: start.x, y: lineY }, { x: end.x, y: lineY }, end], 0);
+        }
+        if (rb.x > ra.x + ra.w) {
+          var lineX = (ra.x + ra.w + rb.x) / 2;
+          push([start, { x: lineX, y: start.y }, { x: lineX, y: end.y }, end], 0);
+        }
+      }
+    }
+    var minX = Math.min.apply(null, rects.map(function (r) { return r.x; }));
+    var maxX = Math.max.apply(null, rects.map(function (r) { return r.x + r.w; }));
+    var minY = Math.min.apply(null, rects.map(function (r) { return r.y; }));
+    var maxY = Math.max.apply(null, rects.map(function (r) { return r.y + r.h; }));
+    // rects 已经是外扩后的安全区，直接用边界，不能再减一次 pad。
+    push([start, { x: start.x, y: minY }, { x: end.x, y: minY }, end], 1);
+    push([start, { x: start.x, y: maxY }, { x: end.x, y: maxY }, end], 1);
+    push([start, { x: minX, y: start.y }, { x: minX, y: end.y }, end], 1);
+    push([start, { x: maxX, y: start.y }, { x: maxX, y: end.y }, end], 1);
+
+    function blocked(points, strict) {
+      for (var i = 1; i < points.length; i++) {
+        for (var j = 0; j < rects.length; j++) {
+          var isSource = j === 0 && i === 1;
+          var isTarget = j === 1 && i === points.length - 1;
+          if (isSource || isTarget) {
+            // 端口那一段只允许沿法线穿出，不许穿进卡片本体
+            if (segmentIntersectsRect(points[i - 1], points[i], [sourceRect, targetRect][j], 0.5)) return true;
+            continue;
+          }
+          if (segmentIntersectsRect(points[i - 1], points[i], rects[j], strict ? 0.5 : -0.5)) return true;
+        }
+      }
+      return false;
+    }
+    function lengthOf(points) {
+      var total = 0;
+      for (var i = 1; i < points.length; i++) total += pointDistance(points[i - 1], points[i]);
+      return total;
+    }
+    function pick(strict) {
+      var hits = [];
+      for (var i = 0; i < candidates.length; i++) {
+        if (!blocked(candidates[i], strict)) hits.push(i);
+      }
+      hits.sort(function (a, b) { return priorities[a] - priorities[b] || lengthOf(candidates[a]) - lengthOf(candidates[b]); });
+      return hits.length ? candidates[hits[0]] : null;
+    }
+    var best = pick(true) || pick(false);
+    if (!best) {
+      var grid = routeOrthogonal(start, end, rects);
+      if (grid) best = simplifyPoints([{ x: s.x, y: s.y }].concat(grid, [{ x: t.x, y: t.y }]));
+    }
+    if (!best) {
+      // 兜底：沿所有安全区的上边界绕行，绝不穿卡片、也不贴边框。
+      best = simplifyPoints([
+        { x: s.x, y: s.y }, start,
+        { x: start.x, y: minY }, { x: end.x, y: minY },
+        end, { x: t.x, y: t.y }
+      ]);
+    }
+    var radius = Math.min(app.cornerRadius, Math.max(1, pad * 0.55));
     return {
-      d: roundedOrthogonalPath(all, radius),
-      routePoints: all,
-      junctions: all,
-      inflated: safetyRects,
+      d: roundedOrthogonalPath(best, radius),
+      routePoints: best,
+      junctions: best,
+      inflated: [inflateRect(sourceRect, margin), inflateRect(targetRect, margin)],
       fallback: false,
       margin: margin,
       clearance: clearance,
@@ -2055,7 +2082,7 @@ c1.x &gt; c2.x：控制点交叉</div>
 
   // 调试入口：控制台可直接调用，便于逐条路径对比或写回归检查。
   // 例：__edgeLab.step(0, 0, 200, 0, "right", "left", 20)
-  window.__edgeLab = {
+  window.__edgeLab = window.__edgeLab || {
     state: state,
     point: portPoint,
     originalBezier: function (sx, sy, tx, ty, sourcePosition, targetPosition, minCurvature) {

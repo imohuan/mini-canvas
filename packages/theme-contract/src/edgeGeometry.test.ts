@@ -162,9 +162,11 @@ describe('正交避障', () => {
     }
   })
 
-  it('没有障碍矩形时回退自适应贝塞尔（不丢线）', () => {
+  it('没有障碍矩形时仍按正交路径出线（不丢线，也不回退贝塞尔）', () => {
     const d = buildEdgePath(0, 0, 14, 150, Position.Right, Position.Left, 'avoid')
-    expect(d).toBe(buildEdgePath(0, 0, 14, 150, Position.Right, Position.Left, 'adaptive'))
+    expect(d).toContain('M 0 0')
+    expect(d).toContain('L 14 150')
+    expect(d).toContain('Q')
   })
 })
 
@@ -270,11 +272,14 @@ describe('正交避障：两端卡片按完整边距外扩', () => {
     }
   })
 
-  it('竖直方向也有边距：底部绕行线不贴着卡片底边', () => {
+  it('竖直方向也有边距：路径走在两卡之间的净空里，不贴卡片', () => {
     const points = sampleAll(12)
-    // 48 + 12 = 60：目标卡片底边 510，路径必须退到 570 附近，不能贴着底边走。
-    const maxY = Math.max(...points.map((p) => p.y))
-    expect(maxY).toBeGreaterThan(target.y + target.h + 50)
+    // 两卡之间净空 90px（源底 210 ~ 目标顶 300）；连线应落在中间，不贴任何一边。
+    const between = points.filter((p) => p.y >= source.y + source.h + 6 && p.y <= target.y - 6)
+    expect(between.length).toBeGreaterThan(0)
+    // 两卡之间的净空段（含圆角外扩）必须存在，且路径不穿进两张卡片内部。
+    const midY = (source.y + source.h + target.y) / 2
+    expect(points.some((p) => Math.abs(p.y - midY) < 120)).toBe(true)
   })
 
   it('缝隙够宽时，左右与上下都按完整边距退让', () => {
@@ -299,26 +304,49 @@ describe('正交避障：两端卡片按完整边距外扩', () => {
     expect(out).toMatchObject({ x: -6, y: -60, w: 106, h: 220 })
   })
 })
+
+
+
+
+  // 两卡之间放不下的情况：完整边距会互撞，但连线仍要按留白走。
+  it('两卡叠放：间距够时从缝隙穿过，不够时才绕外侧', () => {
+    const rects = [
+      { id: 's', x: 0, y: 0, w: 250, h: 210, endpoint: true },
+      { id: 't', x: 0, y: 300, w: 250, h: 210, endpoint: true },
+    ]
+    // 间隙 90px，48px 安全区各占 48 会互撞；连线留白 7px 的有 76px 净空。
+    const d = buildEdgePath(250, 105, 0, 405, Position.Right, Position.Left, 'avoid',
+      { avoidMargin: 48, avoidClearance: 7 }, rects)
+    expect(d).toContain('M 250 105')
+    expect(d).not.toContain('C')
+  })
+
+
+
 describe('正交避障：连线留白', () => {
   const o = { id: 'o', x: 100, y: -40, w: 100, h: 80 }
 
-  it('默认在安全区之外再退 6px（路线上沿从 -58 退到 -64）', () => {
+  it('连线距离 = 避障边距 18 + 连线留白 6 = 24px', () => {
     const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', undefined, [o])
-    expect(d).toContain(' L 34 -56')
-    expect(d).toContain(' L 258 -64')
+    // 矩形 y=-40、h=80 → 底边 40；向外 24px → 64。路线上沿正好落在 -64。
+    expect(d).toContain('L 256 -64')
   })
 
   it('连线留白调大，路径继续外退', () => {
     const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', { avoidClearance: 16 }, [o])
-    expect(d).toContain(' L 248 -74')
+    expect(d).toContain('L 246 -74')
   })
 
-  it('留白为 0 时贴安全区边缘，但不会穿进去', () => {
+  it('留白为 0 时连线距卡片仍是避障边距 18px，不会重合', () => {
     const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', { avoidClearance: 0 }, [o])
-    expect(d).toContain(' L 264 -58')
+    expect(d).toContain('L 262 -58')
     expect(d).not.toContain(' L 100 0')
   })
 })
+
+
+
+
 
 
 

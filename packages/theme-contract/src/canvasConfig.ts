@@ -505,7 +505,8 @@ export const CanvasConfig: ConfigSchema = {
     step: 1,
     label: "避障边距",
     group: "边/连线",
-    description: "正交避障时节点矩形向外扩的距离（像素），连线不会进入这一圈。",
+    description:
+      "正交避障时连线离节点矩形边缘的距离（像素），也就是黄色安全区的大小。调大后连线会离卡片更远。",
   },
   edgeAvoidRadius: {
     type: "number",
@@ -525,8 +526,7 @@ export const CanvasConfig: ConfigSchema = {
     step: 1,
     label: "连线留白",
     group: "边/连线",
-    description:
-      "正交避障时，连线与黄色避障安全区之间再留的间距（像素）。设为 0 时连线会贴着安全区边缘走。",
+    description: "在避障边距之外再多留的间距（像素）。想更宽松就调大它。",
   },
   edgeLineWidth: {
     type: "number",
