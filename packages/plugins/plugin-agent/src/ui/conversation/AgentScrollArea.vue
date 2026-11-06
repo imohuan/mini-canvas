@@ -80,7 +80,13 @@ defineExpose({ scrollElement, rootElement })
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding-right: 4px!important;
+  /*
+   * 这里不再留右边距（用户 2026-11-06：模型面板右侧空出一大块）。
+   *
+   * 之前 4px 在这里、12px 在根节点、12px 在内容层、6px 在网格上，四层叠起来
+   * 实际空出 34px，卡片被一路挤窄。留白只在内容层写一次就够。
+   */
+  padding-right: 0;
 }
 
 .ac-scrollarea :deep([data-slot='scroll-area']) {
@@ -100,7 +106,11 @@ defineExpose({ scrollElement, rootElement })
   width: 100%;
   height: 100%;
   min-height: 0;
-  padding-right: 12px;
+  /*
+   * 也别在这里给滚动条留位：滚动条是 absolute 贴右缘叠在内容上的，
+   * 再留 12px 只是白空一块。给滚动条让路的留白统一写在内容层的 padding-right。
+   */
+  padding-right: 0;
 }
 
 .ac-scrollarea :deep([data-slot='scroll-area-viewport']) {

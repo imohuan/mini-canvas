@@ -79,10 +79,21 @@ describe('卡片右侧圆角', () => {
     expect(body).toMatch(/min-width:\s*0/)
   })
 
-  it('滚动区给滚动条留了位置', () => {
-    const at = CSS.indexOf('.ac-model-grid {')
-    const block = CSS.slice(at, CSS.indexOf('\n}', at))
-    expect(block).toMatch(/padding-right:\s*[1-9]/)
+  /**
+   * 右侧留白只保留**一层**（用户 2026-11-06：每一层都带右边距，右边空出太多）。
+   * 最终只有内容层给 padding-right；外壳（.ac-scrollarea / ScrollArea 根节点）
+   * 不允许再留，否则又会叠出 20px 以上的空白。
+   */
+  it('右侧留白只在内容层写一次', () => {
+    const body = CSS.slice(CSS.indexOf('.ac-menu-scroll :deep(.ac-model-scroll-body)'))
+    const block = body.slice(0, body.indexOf('\n}'))
+    expect(block).toMatch(/padding:[^;]*12px/)
+
+    const area = readFileSync(path.resolve(HERE, '../ui/conversation/AgentScrollArea.vue'), 'utf8')
+    const scrollRule = area.slice(area.indexOf('.ac-scrollarea {'), area.indexOf('.ac-scrollarea {') + 400)
+    expect(scrollRule).toMatch(/padding-right:\s*0/)
+    expect(area).not.toMatch(/padding-right:\s*4px!important/)
+    expect(area).not.toMatch(/\n  padding-right:\s*12px;/)
   })
 
   it('网格列宽被压住（不按内容固有宽度撑开轨道）', () => {
