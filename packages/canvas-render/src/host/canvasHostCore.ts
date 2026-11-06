@@ -472,6 +472,7 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeFlowIntensity: 0.9,
   edgeAvoidMargin: 18,
   edgeAvoidRadius: 8,
+  edgeAvoidClearance: 6,
 }
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */

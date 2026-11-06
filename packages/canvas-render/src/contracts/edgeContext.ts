@@ -52,6 +52,8 @@ export interface EdgeVisual {
   edgeAvoidMargin?: number
   /** 正交避障：拐角圆角半径（px，默认 8） */
   edgeAvoidRadius?: number
+  /** 正交避障：连线与节点安全区之间再留的间距（px，默认 6） */
+  edgeAvoidClearance?: number
 }
 
 export interface EdgeSelection {

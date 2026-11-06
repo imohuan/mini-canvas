@@ -230,4 +230,26 @@ describe('正交避障：两端卡片也参与避障', () => {
   })
 })
 
+describe('正交避障：连线留白', () => {
+  const o = { id: 'o', x: 100, y: -40, w: 100, h: 80 }
+
+  it('默认在安全区之外再退 6px（路线上沿从 -58 退到 -64）', () => {
+    const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', undefined, [o])
+    expect(d).toContain(' L 34 -56')
+    expect(d).toContain(' L 258 -64')
+  })
+
+  it('连线留白调大，路径继续外退', () => {
+    const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', { avoidClearance: 16 }, [o])
+    expect(d).toContain(' L 248 -74')
+  })
+
+  it('留白为 0 时贴安全区边缘，但不会穿进去', () => {
+    const d = buildEdgePath(0, 0, 300, 0, Position.Right, Position.Left, 'avoid', { avoidClearance: 0 }, [o])
+    expect(d).toContain(' L 264 -58')
+    expect(d).not.toContain(' L 100 0')
+  })
+})
+
+
 

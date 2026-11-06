@@ -46,6 +46,8 @@ export interface EdgeAppearance {
   avoidMargin?: number;
   /** 正交避障：拐角圆角半径（px） */
   avoidRadius?: number;
+  /** 正交避障：连线与节点安全区之间再留的间距（px） */
+  avoidClearance?: number;
 }
 
 const DEFAULT_APPEARANCE: Required<EdgeAppearance> = {
@@ -54,6 +56,7 @@ const DEFAULT_APPEARANCE: Required<EdgeAppearance> = {
   smoothRadius: 5,
   avoidMargin: 18,
   avoidRadius: 8,
+  avoidClearance: 6,
 };
 
 /** 正交避障的障碍矩形（flow 坐标） */
@@ -787,8 +790,9 @@ function buildAvoidGeometry(
   obstacles: ReadonlyArray<EdgeObstacle> | undefined,
 ): AvoidGeometry {
   const margin = Math.max(4, appearance.avoidMargin);
+  const clearance = Math.max(0, appearance.avoidClearance);
   const inflated = (obstacles ?? []).map((rect) => {
-    const pad = Math.max(0, rect.inflate ?? margin);
+    const pad = Math.max(0, rect.inflate ?? margin) + clearance;
     return {
       ...rect,
       x: rect.x - pad,
@@ -799,7 +803,8 @@ function buildAvoidGeometry(
   });
   const sd = directionOf(sourcePosition);
   const td = directionOf(targetPosition);
-  const stub = margin + 10;
+  // 出线桩必须越过"安全区 + 留白"，否则起点会落在自身避障矩形内，A* 直接判无解。
+  const stub = margin + clearance + 10;
   const start = { x: sourceX + sd.x * stub, y: sourceY + sd.y * stub };
   const end = { x: targetX + td.x * stub, y: targetY + td.y * stub };
   const route = inflated.length ? routeOrthogonal(start, end, inflated) : null;

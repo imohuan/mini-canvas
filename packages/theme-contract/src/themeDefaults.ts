@@ -51,6 +51,7 @@ export const DEFAULT_THEME_EDGE = {
   // 正交避障：节点矩形外扩边距 / 拐角圆角
   edgeAvoidMargin: 18,
   edgeAvoidRadius: 8,
+  edgeAvoidClearance: 6,
 } as const;
 
 /**

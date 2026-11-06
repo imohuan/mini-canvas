@@ -124,6 +124,7 @@ const geometry = computed<EdgeAppearance>(() => ({
   ...(props.geometry || {}),
   avoidMargin: visual.value.edgeAvoidMargin ?? props.geometry?.avoidMargin,
   avoidRadius: visual.value.edgeAvoidRadius ?? props.geometry?.avoidRadius,
+  avoidClearance: visual.value.edgeAvoidClearance ?? props.geometry?.avoidClearance,
 }))
 
 const isHighlighted = computed(() =>

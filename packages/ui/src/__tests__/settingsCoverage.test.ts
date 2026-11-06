@@ -94,6 +94,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     expect(settings.get('edgeType')).toBe('adaptive')
     expect(settings.get('edgeAvoidMargin')).toBe(18)
     expect(settings.get('edgeAvoidRadius')).toBe(8)
+    expect(settings.get('edgeAvoidClearance')).toBe(6)
 
     ctx.settings.set('edgeType', 'avoid')
     expect(settings.get('edgeType')).toBe('avoid')

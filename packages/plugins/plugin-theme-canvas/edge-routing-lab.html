@@ -861,6 +861,11 @@ c1.x &gt; c2.x：控制点交叉</div>
             <input id="pCornerRadius" type="range" min="0" max="16" step="1" value="8" data-config="cornerRadius" />
             <p class="param-note">正交路径转弯处的圆角；会自动限制在边距以内。</p>
           </div>
+          <div class="param-row" data-param-row="clearance">
+            <div class="param-top"><label for="pClearance">连线留白</label><output id="vClearance">6 px</output></div>
+            <input id="pClearance" type="range" min="0" max="24" step="1" value="6" data-config="clearance" />
+            <p class="param-note">在黄色安全区之外再留的距离；设为 0 时连线会贴着黄框走。</p>
+          </div>
         </div>
       </section>
 
@@ -930,7 +935,8 @@ c1.x &gt; c2.x：控制点交叉</div>
       stepOffset: 20,
       smoothRadius: 5,
       margin: 18,
-      cornerRadius: 8
+      cornerRadius: 8,
+      clearance: 6
     },
     show: {
       edgesOnTop: false,
@@ -1530,16 +1536,20 @@ c1.x &gt; c2.x：控制点交叉</div>
 
   function buildAvoidPath(s, t, app) {
     var margin = Math.max(4, app.margin);
-    // 两端卡片也必须参与避障，但外扩为 0：端口贴在卡片边上。
+    // 两端卡片也必须参与避障，但只外扩 clearance：端口贴在卡片边上。
     // 从前只把"别的节点"当障碍，路线会从目标卡片背后穿进去，
     // 最后一段被卡片盖住，看起来像"右侧端口连到了右侧端口"。
+    // 黄色安全区 = 节点外扩 margin；连线实际走的网格还要再让开 clearance，
+    // 于是黄框只负责"不许穿过"，连线与黄框之间仍有可调留白。
+    var clearance = Math.max(0, app.clearance);
     var obstacles = [
-      nodeRect(state.nodes.a),
-      nodeRect(state.nodes.b)
+      inflateRect(nodeRect(state.nodes.a), clearance),
+      inflateRect(nodeRect(state.nodes.b), clearance)
     ];
-    if (state.show.blocker) obstacles.push(inflateRect(nodeRect(state.nodes.c), margin));
+    if (state.show.blocker) obstacles.push(inflateRect(nodeRect(state.nodes.c), margin + clearance));
 
-    var stub = margin + 10;
+    // 出线桩必须越过"安全区 + 留白"，否则起点会落在自身避障矩形内，A* 直接判无解。
+    var stub = margin + clearance + 10;
     var start = { x: s.x + s.dir.x * stub, y: s.y + s.dir.y * stub };
     var end = { x: t.x + t.dir.x * stub, y: t.y + t.dir.y * stub };
     var route = routeOrthogonal(start, end, obstacles);
@@ -1551,22 +1561,35 @@ c1.x &gt; c2.x：控制点交叉</div>
         c1: adaptive.c1,
         c2: adaptive.c2,
         fallback: true,
-        inflated: obstacles,
+        // 诊断黄框只表示"节点 + margin"，不含内部留白。
+        inflated: [
+          inflateRect(nodeRect(state.nodes.a), margin),
+          inflateRect(nodeRect(state.nodes.b), margin),
+          ...(state.show.blocker ? [inflateRect(nodeRect(state.nodes.c), margin)] : [])
+        ],
         routePoints: [],
         junctions: [],
-        margin: margin
+        margin: margin,
+        clearance: clearance
       };
     }
 
     var all = simplifyPoints([{ x: s.x, y: s.y }].concat(route, [{ x: t.x, y: t.y }]));
+    // 诊断黄框只表示"节点 + margin"，不含内部留白。
+    var safetyRects = [
+      inflateRect(nodeRect(state.nodes.a), margin),
+      inflateRect(nodeRect(state.nodes.b), margin)
+    ];
+    if (state.show.blocker) safetyRects.push(inflateRect(nodeRect(state.nodes.c), margin));
     var radius = Math.min(app.cornerRadius, margin * 0.55);
     return {
       d: roundedOrthogonalPath(all, radius),
       routePoints: all,
       junctions: all,
-      inflated: obstacles,
+      inflated: safetyRects,
       fallback: false,
       margin: margin,
+      clearance: clearance,
       radius: radius
     };
   }
@@ -1869,6 +1892,7 @@ c1.x &gt; c2.x：控制点交叉</div>
       metricPoints.textContent = (result.routePoints ? result.routePoints.length : 0) + " 个折点";
       formulaText.innerHTML =
         "避障边距 = " + result.margin + "px\n" +
+        "连线留白 = " + (result.clearance === undefined ? 0 : result.clearance) + "px\n" +
         "路径圆角 = " + (result.radius === undefined ? 0 : round1(result.radius)) + "px\n" +
         (result.fallback ? '<span class="danger">A* 未找到通路，已回退</span>' : '<span class="accent">A* 找到通路</span>');
     } else if (result.junctions) {
@@ -2048,7 +2072,8 @@ c1.x &gt; c2.x：控制点交叉</div>
       stepOffset: state.mode === "step" || state.mode === "smoothstep",
       smoothRadius: state.mode === "smoothstep",
       margin: state.mode === "avoid",
-      cornerRadius: state.mode === "avoid"
+      cornerRadius: state.mode === "avoid",
+      clearance: state.mode === "avoid"
     };
     for (var i = 0; i < rows.length; i++) {
       var key = rows[i].getAttribute("data-param-row");

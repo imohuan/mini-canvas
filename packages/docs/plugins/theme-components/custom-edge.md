@@ -23,7 +23,8 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 - **路径**：`adaptive`（自适应贝塞尔，默认）/ `avoid`（正交避障）/
   `bezier` / `straight` / `step` / `smoothstep` 六种。
   `adaptive` 的控制点按实际缝宽收缩，短缝不会鼓成 S 弯；`avoid` 会把别的节点矩形外扩后
-  绕路，拐角半径与边距在「设置 → 边 → 连线」里调。
+  绕路，拐角半径、安全区边距与连线留白在「设置 → 边 → 连线」里调（`edgeAvoidMargin` /
+  `edgeAvoidRadius` / `edgeAvoidClearance`）。
 - **外观**：线宽、虚线、箭头、辉光；以及"导轨 + 青色光斑沿线流动"的流光动画。
 - **颜色两格制**：线色/流光色不在插件 Config 里，而在渲染层主题色板
   （`edgeRailColor` / `edgeFlowColor`，亮/暗各一格）。用 `useThemeColor` 取值，

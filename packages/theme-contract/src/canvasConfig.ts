@@ -41,6 +41,7 @@ export const DEFAULT_THEME_EDGE = {
   // 正交避障：节点矩形外扩边距 / 拐角圆角
   edgeAvoidMargin: 18,
   edgeAvoidRadius: 8,
+  edgeAvoidClearance: 6,
 } as const;
 
 /**
@@ -515,6 +516,17 @@ export const CanvasConfig: ConfigSchema = {
     label: "避障圆角",
     group: "边/连线",
     description: "正交避障路径拐角的圆角半径（像素）。",
+  },
+  edgeAvoidClearance: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeAvoidClearance,
+    min: 0,
+    max: 24,
+    step: 1,
+    label: "连线留白",
+    group: "边/连线",
+    description:
+      "正交避障时，连线与黄色避障安全区之间再留的间距（像素）。设为 0 时连线会贴着安全区边缘走。",
   },
   edgeLineWidth: {
     type: "number",
