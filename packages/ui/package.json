@@ -17,7 +17,7 @@
     "test": "vitest run",
     "e2e": "node ./e2e/canvas-e2e.mjs",
     "dev": "vite",
-    "build": "vite build && pnpm -C ../ui-kit-shadcn build:preview",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "peerDependencies": {
@@ -84,7 +84,6 @@
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue-flow/core": "^1.48.2",
     "imagesloaded": "5.0.0",
-    "happy-dom": "^21.0.4",
     "masonry-layout": "4.2.2",
     "playwright-core": "1.63.0",
     "typescript": "~6.0.2",

@@ -95,7 +95,7 @@ describe('预览页配置落到生效位置', () => {
 
 describe('预览页的接线（静态检查）', () => {
   it('预览卡片从 previewKit 取组件，而不是直接 import components/ui', () => {
-    // 卡片墙在 ComponentShowcase（缓存 iframe 打开的整页），入口 App.vue 只剩一行。
+    // 卡片墙在 ComponentShowcase，入口 App.vue 只剩一行。
     const app = readFileSync(path.join(srcRoot, 'theme/ComponentShowcase.vue'), 'utf-8')
     // 直接 import '@/components/ui/...' 就绕过了 size 注入薄层
     expect(app).not.toMatch(/from '@\/components\/ui\//)

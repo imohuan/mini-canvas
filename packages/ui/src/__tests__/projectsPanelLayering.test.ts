@@ -6,7 +6,7 @@
  * - 进画布：同一个 ctx 上 doc 出现；
  * - 回项目页：doc 消失，页签还在；插槽条目始终一致（不重复登记）。
  *
- * 页签正文（组件库 / 插件 / 素材库）在浏览器里目验；这里只锁"页签元数据与生命周期"。
+ * 页签正文（插件 / 素材库）在浏览器里目验；这里只锁"页签元数据与生命周期"。
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createSSRApp, h } from 'vue'
@@ -20,7 +20,6 @@ import {
   type CanvasContext,
 } from '@mini-canvas/canvas-render'
 import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { projectsPanelPlugin } from '../projectsPanelPlugin'
 import { projectsApiPlugin } from '../projectsApiPlugin'
 
 async function boot() {
@@ -28,7 +27,6 @@ async function boot() {
   const app = createCanvasAppBasePlugin({ adapter: new MemoryStorageAdapter(), persistSettings: false })
   ctx.plugin(app.plugin)
   ctx.plugin(themeComponentsPlugin)
-  ctx.plugin(projectsPanelPlugin)
   ctx.plugin(projectsApiPlugin)
   await ctx.start()
   return { ctx, app }
@@ -64,11 +62,7 @@ describe('项目页插件页签与画布能力分层', () => {
     expect(ctx.hasService('doc')).toBe(false)
     expect(ctx.tryGet('projectsApi')).toBeTruthy()
 
-    const entries = ctx.slots.occupants('app.projects.tabs')
-    expect(entries.map((e) => e.id)).toContain('ui-projects-panel/component-kit')
-    const meta = entries.find((e) => e.id === 'ui-projects-panel/component-kit')?.meta as { title?: string }
-    expect(meta.title).toBe('组件库')
-    // 项目页没有画布：页签正文不依赖 doc，SlotHost 也不会因为取不到渲染上下文而报错。
+    // 项目页没有画布：SlotHost 也不会因为取不到渲染上下文而报错。
     const html = await renderTabs(ctx)
     expect(html).not.toContain('缺少画布上下文')
     ctx.stop()
@@ -94,7 +88,7 @@ describe('项目页插件页签与画布能力分层', () => {
     await mountCanvas({ ctx, appBase: app.services, plugins: [] })
     await unmountCanvas()
     expect(ctx.slots.occupants('app.projects.tabs')).toHaveLength(before)
-    expect(ctx.inspectPlugins().find((p) => p.name === 'ui-projects-panel')?.state).toBe('active')
+    expect(ctx.inspectPlugins().find((p) => p.name === 'projects-api')?.state).toBe('active')
     ctx.stop()
   })
 

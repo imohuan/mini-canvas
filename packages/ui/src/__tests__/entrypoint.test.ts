@@ -90,9 +90,9 @@ describe('@mini-canvas/ui 出口契约', () => {
     // 主题已拆成 theme-components（应用级）与 theme-canvas（画布级）。
     // +1（2026-11-05）：canvas-render（渲染层基础设施：标准能力包注册）。
     // 它必须排在业务插件之前：业务插件启动时按名取能力，缺了就得等下一次唤醒。
-    expect(APP_PLUGINS).toHaveLength(10)
+    expect(APP_PLUGINS).toHaveLength(9)
     expect(CANVAS_PLUGINS.length).toBeGreaterThan(10)
-    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(26)
+    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(25)
     // 第一项是渲染层能力注册；紧随其后的主题皮提供节点壳 / 边 / 背景 / 设置面板默认皮，
     // 缺了画布就是白屏。能力先于业务插件，是因为业务插件 apply 时就要按名取能力。
     expect(APP_PLUGINS[0]).toBe(canvasRenderPlugin)

@@ -7,8 +7,7 @@
  *  2. 下面是一条瀑布式卡片墙，每张卡片只讲一类组件，高度随内容自由错落，
  *     没有一张卡片横跨整行、也没有「卡片里再套一堆小卡片」的盒子套盒子。
  *
- * 正文在 theme/ComponentShowcase.vue。成品应用不 import 它，而是用 iframe
- * 打开这个整页：两套主题变量各自待在自己的 document 里，互不覆盖。
+ * 正文在 theme/ComponentShowcase.vue。
  */
 import ComponentShowcase from './theme/ComponentShowcase.vue'
 </script>

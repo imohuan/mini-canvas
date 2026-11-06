@@ -57,7 +57,7 @@ base / data / render 三层都有自己的插件身份，名字就是分层名�
 不会在下面多挂一块卡片。
 
 ```ts
-// 文件：my-plugin/src/index.ts（参照 packages/ui/src/projectsPanelPlugin.ts）
+// 文件：my-plugin/src/index.ts（参照 packages/plugins/plugin-style-library/src/index.ts）
 import type { PluginModule } from '@mini-canvas/canvas-base'
 
 export const name = 'my-projects-panel'

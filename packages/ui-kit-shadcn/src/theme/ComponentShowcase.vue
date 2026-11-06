@@ -2,9 +2,7 @@
 /**
  * 组件库展厅 —— 配置条 + 卡片墙。
  *
- * 由组件库自己的预览页（src/App.vue）渲染。成品应用「项目 → 组件库」页
- * 用 iframe 直接打开这个预览站，所以这里的主题变量只作用于自己的 document，
- * 不会和画布应用的 --mct-* 主题桥互相覆盖（用户 2026-11-06：内嵌后圆角/字体无效）。
+ * 由组件库自己的预览页（src/App.vue）渲染；主题变量只作用于这个预览页。
  */
 import { onBeforeUnmount, ref, watchEffect } from 'vue'
 import { Badge } from '../previewKit'

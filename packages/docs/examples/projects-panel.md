@@ -73,7 +73,7 @@ my-project-panel/
 ```
 
 ```ts
-// 文件：my-project-panel/src/index.ts（参照 packages/ui/src/projectsPanelPlugin.ts）
+// 文件：my-project-panel/src/index.ts（参照 packages/plugins/plugin-style-library/src/index.ts）
 import { markRaw } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import ProjectPanel from './ProjectPanel.vue'
@@ -229,7 +229,7 @@ export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
 
 | 想抄什么 | 看哪里 |
 | --- | --- |
-| 最小项目页页签 | `packages/ui/src/projectsPanelPlugin.ts` + `components/projects/ProjectsShowcaseTab.vue` |
+| 最小项目页页签 | `packages/plugins/plugin-style-library/src/index.ts`（`app.projects.tabs` 那两段） |
 | 同一份内容：项目页整页 / 画布浮层 | `packages/plugins/plugin-style-library/src/components/ProjectsStyleTab.vue`、`StyleLibraryOverlay.vue` |
 | 项目页能浏览、缺画布时禁用「加入」 | `packages/plugins/plugin-style-library/src/components/StyleGalleryView.vue` |
 | 根级唯一 Provider 与画布会话分离 | `packages/ui/src/AppProvider.vue`、`packages/canvas-render/src/host/canvasSession.ts` |

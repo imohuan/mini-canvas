@@ -26,20 +26,6 @@ export default defineConfig({
     // /api 转给 cloud-server（8865）：dev 下前端同源相对路径才能真正打到后台，
     // 否则全部回落 index.html（表现为「列表空 / 建文件夹没反应」）。
     proxy: {
-      /**
-       * 项目页「组件库」用 iframe 打开组件库自己的预览站。
-       *
-       * 开发时它跑在 5295（ui-kit 的 dev server），这里把 /ui-kit/ 原样转过去；
-       * 生产构建会把同一份产物落进 dist/ui-kit/，由 cloud-server 直接静态托管，
-       * 不需要这条代理。用 rewrite 之外的方式保留 /ui-kit 前缀：ui-kit 的 vite
-       * 配置里 base 是 './'，所以带前缀访问也能正常取到 assets。
-       */
-      '/ui-kit': {
-        target: process.env.MINI_CANVAS_UI_KIT || 'http://localhost:5295',
-        changeOrigin: true,
-        // 保留 /ui-kit 前缀转给 ui-kit dev server：它的 vite base 也是 /ui-kit/，
-        // 这样 iframe 里的 index.html 与它引用的 /ui-kit/assets/* 都同源可解析。
-      },
       '/api': {
         // 多 Agent 并行开发时各用各的后台：启动前设置 MINI_CANVAS_BACKEND，
         // 不设置才回落到默认的 8865。
