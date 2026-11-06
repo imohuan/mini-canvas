@@ -1,0 +1,251 @@
+/*
+ * 预设提示词面板（用户 2026-11-06）。
+ * 类名统一 nbp- 前缀：底栏其它样式表正在被别的任务改，这里自成一块互不覆盖。
+ * 颜色 / 圆角 / 字号只读 token，不写死主题色。
+ */
+
+/* 触发按钮：与右侧图标按钮同尺寸，不吃额外的间距 */
+.nbp-trigger {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+.nbp-trigger svg {
+  width: 15px;
+  height: 15px;
+}
+.nbp-trigger.is-active {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+}
+
+/* 面板：宽度按内容长，给出上下限；靠近视口边缘时由组件库负责翻转 */
+.nbp-pop {
+  width: max-content;
+  min-width: 288px;
+  max-width: min(380px, calc(100vw - 24px));
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #18202b);
+  border: 1px solid var(--ui-line, #e2e5ea);
+  box-shadow: var(--ui-shadow-lg, 0 18px 48px rgb(15 23 42 / 0.18));
+}
+
+.nbp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nbp-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-ink, #18202b);
+}
+.nbp-count {
+  font-size: 11px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-variant-numeric: tabular-nums;
+}
+
+.nbp-searchrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nbp-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.nbp-searchicon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+.nbp-searchicon svg {
+  width: 14px;
+  height: 14px;
+}
+/* 原生搜索框自带的叉与我们的清空按钮重复 */
+.nbp-search input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.nbp-new {
+  flex: none;
+  gap: 4px;
+}
+.nbp-new-icon {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+}
+.nbp-new-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 列表：固定高度上限，内部滚动交给 ScrollArea */
+.nbp-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.nbp-list {
+  /* 高度由组件按条数算好（ScrollArea 根节点必须有确定高度才会滚），这里只兜一个上限 */
+  max-height: min(300px, 46vh);
+}
+
+.nbp-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease-out;
+}
+.nbp-item:hover {
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+}
+.nbp-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
+}
+.nbp-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.nbp-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-ink, #18202b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nbp-item-preview {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-ink-mute, #8c95a3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nbp-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: var(--ui-ink-mute, #8c95a3);
+  opacity: 0;
+  transition: opacity 0.16s ease-out, background-color 0.16s ease-out, color 0.16s ease-out;
+}
+.nbp-item:hover .nbp-del,
+.nbp-del:focus-visible {
+  opacity: 1;
+}
+.nbp-del:hover {
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+  color: var(--ui-danger, #ef4444);
+}
+.nbp-del svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nbp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 176px;
+  padding: 16px;
+  color: var(--ui-ink-mute, #8c95a3);
+  text-align: center;
+}
+.nbp-empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.nbp-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--ui-chip, rgb(0 0 0 / 0.06));
+  color: var(--ui-ink-dim, #6b7280);
+}
+.nbp-empty-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.nbp-hint {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ui-ink-mute, #8c95a3);
+  text-align: right;
+}
+
+/* —— 新建对话框 —— */
+.nbp-dialog {
+  gap: 14px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #18202b);
+  border: 1px solid var(--ui-line, #e2e5ea);
+  width: min(460px, calc(100vw - 32px));
+}
+.nbp-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.nbp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nbp-label {
+  font-size: 12px;
+  color: var(--ui-ink-dim, #6b7280);
+}
+.nbp-input,
+.nbp-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
+  color: var(--ui-ink, #18202b);
+}
+.nbp-textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+.nbp-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

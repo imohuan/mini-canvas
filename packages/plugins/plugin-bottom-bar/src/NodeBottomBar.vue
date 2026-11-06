@@ -26,6 +26,7 @@ import {
   BottomBarCardList,
   BottomBarHoverPreview,
   BottomBarPills,
+  BottomBarPresets,
   BottomBarPromptEditor,
   BottomBarSettingsPanel,
   BottomBarTagMenu,
@@ -373,6 +374,28 @@ function insertAt(): void {
   editorComponentRef.value?.insertText?.('@')
 }
 
+// —— 预设提示词（用户 2026-11-06） ——
+/**
+ * 把预设正文填进输入框。
+ *
+ * 输入框已有内容时**接在后面**，不覆盖用户正在写的东西：
+ * 用户选预设多半是「先有这半句，再加一段固定要求」。
+ * 走 editor 的 setText（按行拆段落），比 insertText 稳 —— 后者插不了换行。
+ */
+function applyPreset(content: string): void {
+  const editor = editorComponentRef.value
+  if (editor?.setText) {
+    // 读编辑器里**实际**的正文，而不是组件状态：两者正常同步，但以输入框里看到的为准
+    const current = (editor.exportText?.() ?? prompt.value).trim()
+    editor.setText(current ? current.replace(/\s+$/, '') + '\n\n' + content : content)
+    editor.focusEnd?.()
+    return
+  }
+  // 编辑器还没挂上（极短的一瞬）：至少把正文写进状态，下次渲染会带上
+  const next = prompt.value.trim() ? prompt.value.replace(/\s+$/, '') + '\n\n' + content : content
+  onPromptUpdate(next)
+}
+
 // —— Ctrl 拖资源 ——
 const ctrlApi = useCtrlResourceDrag({
   ctx,
@@ -559,7 +582,15 @@ onBeforeUnmount(() => {
         @ai-click="runAiAction"
         @insert-at="insertAt"
         @run="onRun"
-      />
+      >
+        <template #presets>
+          <BottomBarPresets
+            v-if="showEditor"
+            :disabled="!showEditor || aiEditorLocked"
+            @apply="applyPreset"
+          />
+        </template>
+      </BottomBarActions>
 
       <BottomBarSettingsPanel :settings-open="settingsOpen" />
     </div>
