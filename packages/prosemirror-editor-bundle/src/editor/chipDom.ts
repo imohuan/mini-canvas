@@ -5,6 +5,8 @@
  * 按真实 DOM 矩形判断，不猜 padding/宽度 —— 换主题改尺寸也不用同步常量。
  * 缩略图是 pointer-events:none，事件目标一定是外层 chip，所以只能按坐标判。
  */
+import { itemRegistry } from './chipRegistry'
+
 export function clickInsideChipIcon(el: HTMLElement, e: MouseEvent | undefined): boolean {
   const b = chipIconRect(el)
   if (!b || !e) return false
@@ -63,10 +65,28 @@ export function attachChipThumbState(el: HTMLElement): void {
  */
 let editingChipId = ''
 
-/** 给一颗标签补「正在编辑」类（标签 DOM 每次重建后调用） */
+/**
+ * 给一颗标签补两件事（标签 DOM 每次重建后调用）：
+ *
+ * 1. 「正在编辑」类（菜单开着时需要一直显示铅笔）；
+ * 2. 「可编辑」类 —— 只要注册表里这颗标签带了 onIconClick / onReplaceClick，
+ *    就一定要有 `resource-chip--editable`。
+ *
+ * 为什么第 2 条要在这里兜底（用户 2026-11-07 实测）：toDOM 里虽然会补这个类，
+ * 但标签频繁重建（缩略图刷新 / 换绑）时会走到别的分支，真机上出现过
+ * 「点了能开菜单、hover 却不换铅笔」—— 那个类的缺失就是直接原因。
+ * 这里在每次绑定事件时按注册表重新对齐一次，两条渲染路径的结果就一致了。
+ */
 export function applyChipEditingState(el: HTMLElement): void {
-  const on = !!editingChipId && el.getAttribute('data-id') === editingChipId
+  const id = el.getAttribute('data-id') ?? ''
+  const on = !!editingChipId && id === editingChipId
   el.classList.toggle('resource-chip--editing', on)
+
+  if (!id) return
+  const item = itemRegistry.get(id)
+  const interactive = Boolean(item?.onIconClick || item?.onReplaceClick)
+  if (interactive && !item?.invalid) el.classList.add('resource-chip--editable')
+  else if (!interactive) el.classList.remove('resource-chip--editable')
 }
 
 /** 标记 / 取消「这颗标签正在编辑」（菜单开 = true，关 = false） */
