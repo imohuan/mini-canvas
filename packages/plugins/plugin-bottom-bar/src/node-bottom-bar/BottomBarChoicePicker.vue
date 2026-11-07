@@ -57,9 +57,10 @@ const available = computed(() => Boolean(AgentChoicePicker.value))
  */
 const splitView = ref(false)
 const menuWidth = computed(() => 'min(' + (splitView.value ? 588 : 520) + 'px, calc(100vw - 24px))')
-/** 必须给确定高度，不能 auto：面板是 height:100%，父级 auto 会塌成 0（理由同 BottomBarModelPicker） */
+/** 必须给确定高度，不能 auto：面板是 height:100%，父级 auto 会塌成 0（理由同 BottomBarModelPicker）。
+ * 卡片与分栏同一高度（用户 2026-11-07）：切换时外壳尺寸不变，不卡顿不跳动；左栏自己滚。 */
 const menuHeight = computed(() =>
-  splitView.value ? 'min(560px, calc(100dvh - 64px))' : 'min(380px, calc(100dvh - 180px))',
+  'min(380px, calc(100dvh - 180px))',
 )
 /** 分栏往上开：底栏下方只剩 300px 左右，放不下一整列平台 */
 const menuSide = computed(() => (splitView.value ? 'top' : 'bottom'))

@@ -474,13 +474,16 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                       <span class="ac-panel-title">技能</span>
                       <span class="ac-panel-count">{{ s.skills.length }}</span>
                     </div>
-                    <!-- 与模型面板同一套受控写法：选中态只看 skillView，点击只走 setSkillView。 -->
+                    <!--
+                      与 ModelPicker 同一条新规矩（2026-11-07）：选中态交给 reka，
+                      点击只走 update:model-value 一条通道。之前页签上手写的
+                      data-state / aria-selected / @click 与库各改各的，才会错位。
+                      CSS 的高亮由 [data-status=active] 与 aria-selected 承担。
+                    -->
                     <Tabs v-if="s.skills.length" :model-value="skillView" @update:model-value="setSkillView">
                       <TabsList aria-label="面板布局">
-                        <TabsTrigger value="card" :data-state="skillView === 'card' ? 'active' : 'inactive'"
-                          :aria-selected="skillView === 'card'" @click="setSkillView('card')">卡片</TabsTrigger>
-                        <TabsTrigger value="split" :data-state="skillView === 'split' ? 'active' : 'inactive'"
-                          :aria-selected="skillView === 'split'" @click="setSkillView('split')">分栏</TabsTrigger>
+                        <TabsTrigger value="card">卡片</TabsTrigger>
+                        <TabsTrigger value="split">分栏</TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </div>

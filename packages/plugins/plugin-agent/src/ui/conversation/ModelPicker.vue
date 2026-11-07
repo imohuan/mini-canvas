@@ -261,12 +261,17 @@ defineExpose({ refreshLayout })
           <span class="ac-panel-count">{{ usableModels.length }}</span>
         </div>
         <!-- 紧凑模式（底栏）不显示分栏切换：窄容器里左栏 + 右栏放不下 -->
+        <!--
+          页签只走 Tabs 的 update:model-value 一条通道（用户 2026-11-07）。
+          之前 TabsTrigger 上又手写 @click=setView：同一次点击 setView 被调两次，
+          与 reka 自己的状态各改各的，就出现「页签亮分栏、内容是卡片」的错位 ——
+          这个错位在 Agent 侧已经修过一遍，移植到底栏时把手写 @click 又带回来了。
+          data-state / aria-selected 也交给 reka 管理，不再手写。
+        -->
         <Tabs :model-value="view" @update:model-value="setView">
           <TabsList aria-label="面板布局">
-            <TabsTrigger value="card" :data-state="view === 'card' ? 'active' : 'inactive'"
-              :aria-selected="view === 'card'" @click="setView('card')">卡片</TabsTrigger>
-            <TabsTrigger value="split" :data-state="view === 'split' ? 'active' : 'inactive'"
-              :aria-selected="view === 'split'" @click="setView('split')">分栏</TabsTrigger>
+            <TabsTrigger value="card">卡片</TabsTrigger>
+            <TabsTrigger value="split">分栏</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

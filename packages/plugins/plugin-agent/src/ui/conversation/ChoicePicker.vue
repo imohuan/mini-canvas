@@ -226,12 +226,15 @@ defineExpose({ refreshLayout })
           <span class="ac-panel-count">{{ items.length }}</span>
         </div>
         <!-- 卡片 / 分栏：Agent 模型下拉的同一套交互，图片 / 视频也用它 -->
+        <!--
+          与 ModelPicker 同一条规矩：页签只走 update:model-value 一条通道，
+          不再手写 @click（同一次点击 setView 被调两次 → 页签与界面错位）。
+          data-state / aria-selected 交给 reka。
+        -->
         <Tabs :model-value="view" @update:model-value="setView">
           <TabsList aria-label="面板布局">
-            <TabsTrigger value="card" :data-state="view === 'card' ? 'active' : 'inactive'"
-              :aria-selected="view === 'card'" @click="setView('card')">卡片</TabsTrigger>
-            <TabsTrigger value="split" :data-state="view === 'split' ? 'active' : 'inactive'"
-              :aria-selected="view === 'split'" @click="setView('split')">分栏</TabsTrigger>
+            <TabsTrigger value="card">卡片</TabsTrigger>
+            <TabsTrigger value="split">分栏</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

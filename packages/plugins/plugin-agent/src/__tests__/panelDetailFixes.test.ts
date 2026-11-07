@@ -13,6 +13,8 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SRC = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+/** 模型面板已抽成 ModelPicker（用户 2026-11-07：Agent 与底栏共用同一件） */
+const MODEL = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/ModelPicker.vue'))
 const CSS = ['part1.css', 'part2.css', 'part3.css', 'part4.css']
   .map((f) => readFileSync(path.resolve(HERE, '../ui/conversation/agent-composer', f), 'utf8'))
   .join('\n')
@@ -50,18 +52,24 @@ describe('卡片 / 分栏页签', () => {
    * 两份状态偶发错位时，页签会停在上一次的值（点卡片没反应、再点一次才好）。
    * 现在选中态只看我们的 modelView / skillView，点击只走自己的 handler。
    */
-  it('页签的选中态由我们的状态决定（data-state / aria-selected 都绑状态）', () => {
-    expect(SRC).toContain(':data-state="modelView === \'card\' ? \'active\' : \'inactive\'"')
-    expect(SRC).toContain(':data-state="modelView === \'split\' ? \'active\' : \'inactive\'"')
-    expect(SRC).toContain(':data-state="skillView === \'card\' ? \'active\' : \'inactive\'"')
-    expect(SRC).toContain(':data-state="skillView === \'split\' ? \'active\' : \'inactive\'"')
-  })
-
-  it('点击直接改我们的状态（不再依赖库组件回传 update）', () => {
-    expect(SRC).toContain('@click="setModelView(\'card\')"')
-    expect(SRC).toContain('@click="setModelView(\'split\')"')
-    expect(SRC).toContain('@click="setSkillView(\'card\')"')
-    expect(SRC).toContain('@click="setSkillView(\'split\')"')
+  /**
+   * 2026-11-07 改版：页签的选中态与点击**只走 reka 一条通道**
+   * （Tabs 的 model-value + update:model-value），页签上不再手写
+   * data-state / aria-selected / @click —— 三份状态各改各的正是
+   * 「点卡片没反应、再点一次才好」与「页签亮分栏内容是卡片」的根因。
+   * 这条测试改为锁「单通道」契约：页签上不允许再出现手写状态 / 点击。
+   */
+  it('页签只走 reka 一条通道（TabsTrigger 上没有手写 data-state / aria-selected / @click）', () => {
+    // MODEL 与 SRC 都拼了外部样式：CSS 里含 "@click" 注释会误伤，只查 SFC 模板段
+    const modelTpl = MODEL.slice(0, MODEL.indexOf('<template>') + 1) + MODEL.slice(MODEL.indexOf('<template>')).split('</template>')[0]
+    const srcTpl = SRC.slice(0, SRC.indexOf('<template>') + 1) + SRC.slice(SRC.indexOf('<template>')).split('</template>')[0]
+    const triggerTags = (src: string) => src.match(/<TabsTrigger[\s\S]*?>/g) ?? []
+    for (const tag of triggerTags(modelTpl).concat(triggerTags(srcTpl))) {
+      expect(tag).not.toMatch(/:data-state|:aria-selected|@click/)
+    }
+    // 视图状态仍是我们的：Tabs 的 model-value 绑它
+    expect(MODEL).toContain(':model-value="view"')
+    expect(SRC).toContain(':model-value="skillView"')
   })
 
   it('切视图不会重建面板（两套视图常驻，页签也不带 key 强制重挂）', () => {

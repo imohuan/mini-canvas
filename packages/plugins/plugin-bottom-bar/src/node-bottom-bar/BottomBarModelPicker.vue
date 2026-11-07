@@ -53,20 +53,18 @@ const menuWidth = computed(() => 'min(' + (splitView.value ? 588 : 340) + 'px, c
  * 为什么：只给上限时，分栏左栏的滚动区拿不到可用高度，最后一行会被裁掉一半
  * （用户 2026-11-07 截图：阶跃星辰只露了半行）。确定高度下 height:100% 才有意义。
  */
-/**
- * 高度必须是确定值，不能用 auto。
- *
- * 面板里的 .ac-panel 是 height:100%，父级 auto 时它会塌成内容高度、
- * 内部的滚动区拿不到高度（实测分栏只剩 162px，左栏 0 高）。
- *
- * 分栏给 560 的上限：左栏 11 个平台竖排要 ~310px，360px 的卡片高度只放得下 6 行，
- * 最后一行必然只露半截（用户 2026-11-07 截图）。实际生效高度会被
- * Radix 的可用高度夹住，窗口矮的时候左栏自己滚。
- */
 const menuHeight = computed(() =>
-  splitView.value ? 'min(560px, calc(100dvh - 64px))' : 'min(360px, calc(100dvh - 180px))',
+  /*
+   * 卡片与分栏**同一高度**（用户 2026-11-07：分栏太高了）。
+   *
+   * 之前分栏给 560：左栏想一次放下全部平台，结果浮层比卡片高出一截，切换时
+   * 外壳先变高再变矮，观感就是「卡顿 + 抖」。统一 360 后：
+   * · 左栏自己滚（.ac-rail-scroll 是 flex:1 的 ScrollArea，够用）；
+   * · 外壳尺寸在两种视图间不变，切换只有内容淡入淡出，不触发布局跳动。
+   */
+  'min(360px, calc(100dvh - 180px))',
 )
-/** 分栏往上开：底栏贴着画布下方，向下只剩 300px 左右，放不下整列平台 */
+/** 分栏往上开：底栏贴着画布下方，向下放不下整列平台（两种视图同高后方向也固定，不跳） */
 const menuSide = computed(() => (splitView.value ? 'top' : 'bottom'))
 const open = ref(false)
 const available = computed(() => Boolean(AgentModelPicker.value))
@@ -112,6 +110,7 @@ function pick(m: { provider: string; modelId: string }): void {
     <DropdownMenuContent align="start" :side="menuSide" class="nb-model-menu nb-agent-model-menu"
       :style="{ width: menuWidth, height: menuHeight }">
       <!-- 不传 compact：卡片 / 分栏两个视图都保留（用户 2026-11-07） -->
+      <!-- 视图受控：面板是唯一状态源，底栏只跟随它改浮层尺寸（不反向写回） -->
       <AgentModelPicker :models="models" :current="model" @pick="pick" @update:view="(v: 'card' | 'split') => (splitView = v === 'split')" />
     </DropdownMenuContent>
   </DropdownMenu>
