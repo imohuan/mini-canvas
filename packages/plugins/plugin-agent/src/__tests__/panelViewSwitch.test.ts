@@ -15,6 +15,8 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SRC = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+/** 模型面板已抽成 ModelPicker（用户 2026-11-07：Agent 与底栏共用同一件） */
+const MODEL = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/ModelPicker.vue'))
 const CSS = ['part1.css', 'part2.css', 'part3.css', 'part4.css']
   .map((f) => readFileSync(path.resolve(HERE, '../ui/conversation/agent-composer', f), 'utf8'))
   .join('\n')
@@ -29,10 +31,10 @@ function ruleBody(source: string, selector: string): string {
 
 describe('卡片 / 分栏切换', () => {
   it('两套视图常驻 DOM，靠 is-active 切显示', () => {
-    const panes = SRC.match(/ac-view-pane/g) ?? []
-    expect(panes.length).toBeGreaterThanOrEqual(4)
-    expect(SRC).toMatch(/:class="\{ 'is-active': modelView === 'card' \}"/)
-    expect(SRC).toMatch(/:class="\{ 'is-active': modelView === 'split' \}"/)
+    const panes = (SRC.match(/ac-view-pane/g) ?? []).length + (MODEL.match(/ac-view-pane/g) ?? []).length
+    expect(panes).toBeGreaterThanOrEqual(4)
+    expect(MODEL).toMatch(/:class="\{ 'is-active': view === 'card' \}"/)
+    expect(MODEL).toMatch(/:class="\{ 'is-active': view === 'split' \}"/)
     expect(SRC).toMatch(/:class="\{ 'is-active': skillView === 'card' \}"/)
     expect(SRC).toMatch(/:class="\{ 'is-active': skillView === 'split' \}"/)
   })
@@ -72,13 +74,15 @@ describe('分栏布局', () => {
   })
 
   /**
-   * 切换要对得起「顺滑」两个字（用户 2026-11-06 第二次反馈：切到分栏还有一点卡）。
-   * 两套视图各渲染一整份模型列表，切换时浏览器不该重排这两大块：
-   * 位移会推动整块内容、触发布局，已删除；改用 contain + 只动 opacity。
+   * 切换必须**同帧原子**（用户 2026-11-07 第五次反馈「页签切了内容没跟随」）：
+   * 淡入期间新旧两视图同时半透明可见，外层浮层宽度同时 340→588 跳变，
+   * 用户看到的就是错位中间态。契约改为：无过渡（transition: none）+ 不用位移。
    */
-  it('切换只做淡入，不用位移（位移会触发重排，也是多出滚动条的原因）', () => {
+  it('切换同帧完成，无淡入过渡（过渡会造成页签与内容错位的中间态）', () => {
     const body = ruleBody(CSS, '.ac-view-pane')
-    expect(body).toMatch(/transition:\s*opacity/)
+    expect(body).toMatch(/transition:\s*none/)
+    // 淡入/visibility 过渡都不允许回来
+    expect(body).not.toMatch(/transition:[^;]*(opacity|visibility)/)
     // 只检查真正的声明，注释里提到过 translateY（解释为什么去掉）不算
     expect(body).not.toMatch(/^\s*transform:/m)
     expect(body).not.toMatch(/transition:[^;]*transform/)

@@ -27,13 +27,15 @@ const props = withDefaults(
     align: 'start',
     arrow: undefined,
     sideOffset: undefined,
+    /** 'optimized'（默认）只按需重算；浮层内容会主动改宽高时（卡片/分栏切换）传 'always' */
+    updatePositionStrategy: undefined,
   },
 )
 const emits = defineEmits<DropdownMenuContentEmits>()
 
 const arrowVisible = computed(() => popupArrowVisible('dropdown', props.arrow))
 const effectiveSideOffset = computed(() => popupSideOffset('dropdown', props.sideOffset))
-const delegatedProps = reactiveOmit(props, 'class', 'arrow', 'sideOffset')
+const delegatedProps = reactiveOmit(props, 'class', 'arrow', 'sideOffset', 'updatePositionStrategy')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const attrs = useAttrs()
@@ -54,6 +56,7 @@ const contentBindings = computed(() => {
     ...rest,
     ...forwarded.value,
     sideOffset: effectiveSideOffset.value,
+    updatePositionStrategy: props.updatePositionStrategy,
     /**
      * data-slot 必须在这里显式给：v-bind 集中透传后，模板上的静态 data-slot 不再渲染
      * —— 而 ui-layers.css / host.css 的层级与外观规则全靠它选中（漏掉时菜单 z-50

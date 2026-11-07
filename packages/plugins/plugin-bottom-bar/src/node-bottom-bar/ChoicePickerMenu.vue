@@ -61,6 +61,18 @@ const AgentChoicePicker = useUiComponent('agentChoicePicker')
 const open = ref(false)
 const available = computed(() => Boolean(AgentChoicePicker.value))
 
+/**
+ * 菜单关闭时把视图状态重置回卡片。
+ *
+ * 为什么必须：面板（AgentChoicePicker）每次打开都重新挂载、内部 view 从 card 开始；
+ * 而这里的 splitView 是外层 ref，关闭后仍保留旧值。不重置的话「上次切到分栏 → 关闭
+ * → 再打开」就会出现：面板是卡片视图、浮层却按分栏的 588px 打开 —— 页签与内容错位
+ * （用户 2026-11-07 连续反馈 5 次的「页签切换不跟随」正是这个不同步的另一面）。
+ */
+watch(open, (isOpen) => {
+  if (!isOpen) splitView.value = false
+})
+
 watch(
   available,
   (ok) => { if (!ok) void nextTick(() => emit('unavailable')) },
@@ -119,6 +131,7 @@ function pick(item: { id: string }): void {
     <DropdownMenuContent
       align="start"
       :side="menuSide"
+      update-position-strategy="always"
       class="nb-action-menu nb-model-menu nb-agent-choice-menu"
       :style="{ width: menuWidth, height: menuHeight }"
     >
@@ -135,5 +148,11 @@ function pick(item: { id: string }): void {
     </DropdownMenuContent>
   </DropdownMenu>
 </template>
+
+<!--
+  update-position-strategy="always"：卡片/分栏切换会改浮层宽高，默认 'optimized'
+  策略下 popper 不重算，实测出现「页签已切到分栏、面板还停在卡片宽度」的中间态
+  被固定住（用户 2026-11-07 连续反馈 5 次）。'always' 让位置/尺寸每帧同步。
+-->
 
 <style src="./bottom-bar-choice-menu.css"></style>

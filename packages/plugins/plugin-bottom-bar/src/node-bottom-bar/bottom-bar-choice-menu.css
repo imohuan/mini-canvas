@@ -9,6 +9,20 @@
  *
  * 所以这里同样：外层滚动关掉、面板给确定高度、头部固定、列表区 flex:1。
  */
+.nb-agent-choice-menu {
+  /*
+   * 关闭宽度过渡（2026-11-07）：卡片 340 / 分栏 588 切换时，transition(all/width)
+   * 会让浮层宽度慢慢追 —— 用户看到「页签已切到分栏、面板还是卡片宽」的中间态
+   * （连续反馈 5 次）。宽度必须同帧到位。
+   */
+  transition: none !important;
+}
+
+/* reka 的 popper wrapper 是 inline style 定位的外层，transition:all 同样拖慢宽度跟随 */
+div[data-reka-popper-content-wrapper]:has(> .nb-agent-choice-menu) {
+  transition: none !important;
+}
+
 .nb-agent-choice-menu [data-slot='dropdown-menu-scroll'] {
   display: flex;
   flex: 1;
