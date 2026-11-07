@@ -271,9 +271,9 @@
 }
 
 /* 完全自动授权 = 唯一带警示色的选项（用户口径 2026-11-07）：
-   触发器与标题图标都用琥珀色提醒"这里在放行所有工具"。接受审核保持中性灰。 */
+   触发器图标用红色提醒"这里在放行所有工具"。接受审核保持默认色。 */
 .is-auto-auth {
-  color: var(--ui-warn, #e3a25f) !important;
+  color: var(--ui-danger, #ef4444) !important;
 }
 
 .ac-panel-heading {
