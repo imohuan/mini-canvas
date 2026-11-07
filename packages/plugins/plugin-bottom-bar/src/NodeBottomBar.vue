@@ -293,11 +293,6 @@ async function clearInvalidRefs(): Promise<void> {
   })
 }
 
-// —— 运行状态 ——
-const infoText = computed(() => {
-  const info = currentAction.value?.info
-  return info ? info(props.data) : ''
-})
 const runState = computed(() => readRunState(props.data))
 const running = computed(() => runState.value.status === 'running')
 const canRun = computed(() => !running.value && !!currentAction.value && !invalidHint.value)
@@ -563,7 +558,6 @@ onBeforeUnmount(() => {
         :running="running"
         :param-defs="paramDefs"
         :values="values"
-        :info-text="infoText"
         :ai-buttons="aiButtons"
         :ai-running-id="aiRunningId"
         :ai-error="aiError"

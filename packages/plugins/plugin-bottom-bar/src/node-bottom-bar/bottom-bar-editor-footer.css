@@ -465,6 +465,14 @@
   height: 14px;
   display: block;
 }
+/* provider 自带图标走 <img>（Base64 图片）：圆角裁切，避免长图撑破 20×20 */
+.nb-model-badge img {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+  border-radius: 3px;
+}
 /* 家族色（品牌内容资产：不随主题改色，深色主题下也保持可辨认） */
 .nb-model-badge[data-tone='seedream'] { color: #1e37fc; }
 .nb-model-badge[data-tone='seedance'] { color: #7c3aed; }
@@ -556,11 +564,6 @@
   align-items: center;
   gap: 4px;
   flex: none;
-}
-.nb-info {
-  font-size: 11px;
-  color: var(--ui-ink-mute, #8c95a3);
-  font-variant-numeric: tabular-nums;
 }
 .nb-count {
   font-size: 13px;

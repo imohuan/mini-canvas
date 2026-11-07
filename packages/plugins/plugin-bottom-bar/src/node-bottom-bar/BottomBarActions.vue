@@ -13,7 +13,6 @@ const props = defineProps<{
   running: boolean
   paramDefs: ToolParamDef[]
   values: Record<string, unknown>
-  infoText: string
   aiButtons: Array<AiActionConfig & { icon: string }>
   aiRunningId: string | null
   aiError: string
@@ -143,7 +142,6 @@ function pickAction(value: string): void {
       <slot name="presets" />
     </div>
     <div class="nb-actions">
-      <span v-if="infoText" class="nb-info">{{ infoText }}</span>
       <Button variant="ghost" size="icon-sm"
         v-for="ai in aiButtons"
         :key="ai.id"

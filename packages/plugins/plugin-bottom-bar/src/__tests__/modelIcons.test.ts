@@ -6,7 +6,7 @@
  * 改形状不必改测试。
  */
 import { describe, expect, it } from 'vitest'
-import { detectModelTone, modelIcon, modelIconOf } from '../node-bottom-bar/modelIcons'
+import { customModelIcon, detectModelTone, modelIcon, modelIconOf } from '../node-bottom-bar/modelIcons'
 
 describe('模型图标：认家族', () => {
   it('Seedream 图片模型 → seedream（含豆包 / Dola 前缀）', () => {
@@ -60,5 +60,36 @@ describe('模型图标：图形', () => {
   it('动作项取图走同一个入口', () => {
     expect(modelIconOf('Dola Seedance 2.5', 'video').tone).toBe('seedance')
     expect(modelIconOf('图片→线稿（ffmpeg）', 'image').tone).toBe('image')
+  })
+})
+
+describe('模型图标：provider 自带图标', () => {
+  const SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>'
+
+  it('SVG 字符串原样采用（优先于按名字猜）', () => {
+    const icon = customModelIcon(SVG)
+    expect(icon?.tone).toBe('custom')
+    expect(icon?.svg).toBe(SVG)
+  })
+
+  it('带 XML 声明 / 前后空白也认', () => {
+    expect(customModelIcon('  <?xml version="1.0"?>' + SVG + '\n')?.svg).toBe(SVG)
+  })
+
+  it('Base64 图片包成 <img>', () => {
+    const icon = customModelIcon('data:image/png;base64,iVBORw0KGgo=')
+    expect(icon?.tone).toBe('custom')
+    expect(icon?.svg).toContain('<img src="data:image/png;base64,iVBORw0KGgo="')
+  })
+
+  it('危险内容一律拒绝（回落按名字猜的图标）', () => {
+    expect(customModelIcon('<svg viewBox="0 0 24 24" onload="alert(1)"></svg>')).toBeUndefined()
+    expect(customModelIcon('<svg viewBox="0 0 24 24"><script>x</script></svg>')).toBeUndefined()
+    expect(customModelIcon('<svg viewBox="0 0 24 24"><foreignObject/></svg>')).toBeUndefined()
+    expect(customModelIcon('javascript:alert(1)')).toBeUndefined()
+    expect(customModelIcon('data:text/html;base64,PHNjcmlwdD4=')).toBeUndefined()
+    expect(customModelIcon('<svg><circle r="8"/></svg>')).toBeUndefined()
+    expect(customModelIcon('')).toBeUndefined()
+    expect(customModelIcon(undefined)).toBeUndefined()
   })
 })

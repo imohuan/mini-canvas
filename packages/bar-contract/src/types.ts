@@ -51,7 +51,7 @@ export interface BarAction {
   title: string
   /** 一句话说明（tooltip） */
   description?: string
-  /** 图标（opaque 句柄：SVG 字符串） */
+  /** 图标（opaque 句柄：SVG 字符串，或 data:image/…;base64,…） */
   icon?: string
   /** 分组（底栏据此归类） */
   group?: string
@@ -71,8 +71,6 @@ export interface BarAction {
   externalRunState?: boolean
   /** 排序（小者在先；没给的一律排最后） */
   order?: number
-  /** 节点上显示的只读读数（如「12 字 · 3 行」）；返回空串 = 不显示 */
-  info?(data: Record<string, unknown>): string
   /** 本动作被选中 / 取消选中 */
   onSelect?(nodeId: string): void
   onDeselect?(nodeId: string): void

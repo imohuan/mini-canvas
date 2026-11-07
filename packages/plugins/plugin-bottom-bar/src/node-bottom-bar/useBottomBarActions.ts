@@ -3,7 +3,7 @@ import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { BarAction } from '../barTypes'
 import { FALLBACK_TYPE_ICONS } from './icons'
-import { modelIconOf, type ModelIcon } from './modelIcons'
+import { customModelIcon, modelIconOf, type ModelIcon } from './modelIcons'
 
 interface ActionDeps {
   ctx: CanvasRenderContext['ctx']
@@ -63,8 +63,8 @@ export function useBottomBarActions(
       value: a.id,
       description: a.description,
       icon: iconOfType(a.types?.[0] ?? nodeType.value),
-      /** 模型图标（用户 2026-11-06）：下拉每一项 + 触发器都要有 */
-      model: modelIconOf(a.title, a.types?.[0] ?? nodeType.value),
+      /** 模型图标：provider 自带的优先，没给 / 认不出再按名字猜，最后按节点类型兜底 */
+      model: customModelIcon(a.icon) ?? modelIconOf(a.title, a.types?.[0] ?? nodeType.value),
       group: a.group,
     })),
   )

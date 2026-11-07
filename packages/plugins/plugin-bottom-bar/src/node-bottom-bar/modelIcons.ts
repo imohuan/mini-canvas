@@ -30,6 +30,8 @@ export type ModelTone =
   | 'video'
   | 'audio'
   | 'text'
+  /** provider 自带图标（SVG 或 Base64 图片）；颜色由图片本身决定 */
+  | 'custom'
 
 export interface ModelIcon {
   tone: ModelTone
@@ -38,7 +40,8 @@ export interface ModelIcon {
 }
 
 /** 图形主体（不带 `fill/stroke`，由 wrapSvg 统一加） */
-const BODY: Record<ModelTone, string> = {
+// custom 不在这张表里：它来自 provider 的 icon，不是按家族画出来的
+const BODY: Record<Exclude<ModelTone, 'custom'>, string> = {
   // 豆包 Seedream：照片 + 右上角星芒（「图片生成」）
   seedream:
     '<rect x="3" y="4.5" width="15" height="15" rx="3"/>'
@@ -118,6 +121,8 @@ function wrapSvg(body: string): string {
 
 /** 某个家族 → 图标（对外只暴露这一个取图入口） */
 export function modelIcon(tone: ModelTone): ModelIcon {
+  // custom 只能经 customModelIcon 构造；这里兜一层，避免拿到空图形
+  if (tone === 'custom') return { tone, svg: wrapSvg(BODY.text) }
   return { tone, svg: wrapSvg(BODY[tone]) }
 }
 
@@ -150,4 +155,39 @@ export function detectModelTone(name: string, fallbackKind?: string): ModelTone 
 /** 动作下拉的一项 → 图标（名字优先，认不出再看节点类型） */
 export function modelIconOf(name: string, nodeType?: string): ModelIcon {
   return modelIcon(detectModelTone(name, nodeType))
+}
+
+/**
+ * provider 自带图标：SVG 字符串，或 `data:image/…;base64,…`。
+ *
+ * 为什么先校验再用：这段字符串最终走 `v-html`，来源是「丢进 providers 目录的文件」。
+ * 只放行两种确定安全的形态，认不出就返回 undefined，让调用方回落按名字猜的图标 ——
+ * 宁可显示通用图标，也不要让一段带脚本的字符串进 DOM。
+ *
+ * SVG 里的 `on*=` / `<script>` / `<foreignObject>` / `javascript:` 一律拒绝；
+ * Base64 图片用 `<img>` 承载，浏览器按图片解码，不会执行里面的脚本。
+ */
+export function customModelIcon(raw: unknown): ModelIcon | undefined {
+  if (typeof raw !== 'string') return undefined
+  let s = raw.trim()
+  if (!s) return undefined
+
+  // 允许带 XML 声明；真正的图形从第一个 <svg 开始
+  const svgAt = s.search(/<svg[\s>]/i)
+  if (svgAt > 0) s = s.slice(svgAt)
+
+  if (/^<svg[\s>]/i.test(s)) {
+    if (/<script|<foreignObject|javascript:|\son[a-z]+\s*=/i.test(s)) return undefined
+    // 没有 viewBox 也没有宽高，换到 14×14 的格子里会按原始像素乱放
+    if (!/viewBox\s*=|width\s*=/i.test(s)) return undefined
+    return { tone: 'custom', svg: s }
+  }
+
+  const m = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/i.exec(s)
+  if (!m) return undefined
+  const mime = 'image/' + m[1].toLowerCase()
+  return {
+    tone: 'custom',
+    svg: '<img src="data:' + mime + ';base64,' + m[2].replace(/\s+/g, '') + '" alt="" draggable="false">',
+  }
 }

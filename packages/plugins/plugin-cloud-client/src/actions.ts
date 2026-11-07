@@ -17,6 +17,8 @@ export interface BarActionLike {
   /** 底栏字段名（后端叫 nodeTypes） */
   types?: string[]
   title: string
+  /** provider 自带的图标：SVG 字符串或 data:image/…;base64,… */
+  icon?: string
   description?: string
   group?: string
   order?: number
@@ -46,6 +48,7 @@ export function toBarAction(
     id: def.id,
     title: def.title,
     ...(def.description !== undefined ? { description: def.description } : {}),
+    ...(typeof def.icon === 'string' && def.icon.trim() !== '' ? { icon: def.icon } : {}),
     ...(def.group !== undefined ? { group: def.group } : {}),
     ...(def.order !== undefined ? { order: def.order } : {}),
     ...(def.needsPrompt !== undefined ? { needsPrompt: def.needsPrompt } : {}),
