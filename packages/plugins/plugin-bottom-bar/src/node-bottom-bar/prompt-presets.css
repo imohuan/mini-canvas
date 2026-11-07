@@ -373,21 +373,64 @@
  */
 .nbp-dialog .nb-param-trigger {
   box-sizing: border-box;
-  width: 100%;
+  /* 与 fallback（ToolParamGroup）分支同一口径：按内容自适应（用户 2026-11-08 图2 左侧按钮） */
+  width: auto !important;
+  flex: 0 0 auto !important;
+  align-self: flex-start !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   height: 32px;
   padding: 0 10px;
   border-radius: min(var(--mct-radius, 8px), 12px);
   background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
+  color: var(--ui-ink, #18202b);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 0;
+  font-family: inherit;
+}
+.nbp-dialog .nb-param-trigger:hover,
+.nbp-dialog .nb-param-trigger[aria-expanded='true'] {
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+}
+.nbp-dialog .nb-param-glyph svg,
+.nbp-dialog .nb-param-arrow {
+  width: 14px;
+  height: 14px;
+  color: var(--ui-ink-mute, #8c95a3);
+  flex: none;
+}
+.nbp-dialog .nb-param-text {
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/*
+ * 弹窗里参数浮层的双重保险：底栏样式（.nb-param-scroll）已封顶 360/52vh，
+ * 这里在弹窗作用域再钉一次 —— 用户 2026-11-08 截图出现过浮层无限高、
+ * 内容被截断的情况（他的环境未拿到最新底栏样式时也要保证可滚）。
+ */
+.nbp-param-pop {
+  max-height: min(480px, 60vh);
+}
+.nbp-param-pop .nb-param-scroll,
+.nbp-param-pop .nb-param-scroll [data-slot='scroll-area-viewport'] {
+  max-height: min(480px, 60vh) !important;
 }
 /*
  * 弹窗里的「适用模型」触发器：同一个 ChoicePickerMenu 组件，这里只调宽度口径 ——
  * 弹窗字段是满宽输入框，触发器也满宽更协调（底栏仍是 148–220 的自适应宽）。
  */
 .nbp-dialog .nb-model-trigger {
-  width: 100% !important;
-  min-width: 0;
-  max-width: none;
-  align-self: stretch !important;
+  /* 用户 2026-11-08：所有 trigger 统一自适应宽度（与参数触发器同口径） */
+  width: auto !important;
+  min-width: 148px;
+  max-width: 100%;
+  align-self: flex-start !important;
 }
 .nbp-dialog .tpg-trigger:hover:not(:disabled),
 .nbp-dialog .tpg-trigger[data-state='open'] {
