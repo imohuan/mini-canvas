@@ -133,16 +133,19 @@ describe('预设提示词面板：禁用改成独立页签', () => {
   })
 
   /**
-   * 用户 2026-11-07：弹窗里的「适用模型」直接用底栏那个模型下拉 ——
-   * DropdownMenu + 模型图标 + 名称 + 勾（.nb-model-* 类与底栏共用一套）。
+   * 用户 2026-11-07 第二轮：弹窗里的「适用模型」要的是底栏那个**卡片/分栏面板**
+   * （Agent 的 ChoicePicker），不是简单菜单 —— 触发器 + 面板主体 + 回退菜单都要在。
    */
-  it('适用模型下拉复用底栏同款（DropdownMenu + 图标 + 勾）', () => {
-    expect(PRESETS).toContain("useUiComponent('DropdownMenu')")
+  it('适用模型复用底栏的卡片/分栏面板（agentChoicePicker）', () => {
+    expect(PRESETS).toContain("useUiComponent('agentChoicePicker')")
+    expect(PRESETS).toContain('<AgentChoicePicker')
+    expect(PRESETS).toContain('title="适用模型"')
+    // Agent 未装时的简版回退菜单也保留
     expect(PRESETS).toContain('class="nb-model-trigger nbp-model-trigger"')
-    expect(PRESETS).toContain('class="nb-model-badge"')
     expect(PRESETS).toContain('class="nb-model-item-check"')
-    // 不再是 reka 的 Select（value 空串不渲染那个坑随之消失）
     expect(PRESETS).not.toContain("useUiComponent('Select')")
+    // 面板尺寸覆盖（choice-menu.css）要随组件带上
+    expect(PRESETS).toContain('<style src="./bottom-bar-choice-menu.css"></style>')
   })
 
   it('禁用页签带条数，且点禁用条目会给出提示（不静默）', () => {

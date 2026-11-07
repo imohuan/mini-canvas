@@ -91,11 +91,13 @@ const ScrollArea = useUiComponent('ScrollArea')
 const Tabs = useUiComponent('Tabs')
 const TabsList = useUiComponent('TabsList')
 const TabsTrigger = useUiComponent('TabsTrigger')
+/** 适用模型面板 = Agent 的 ChoicePicker（图2那套卡片/分栏），取不到时回退简版菜单 */
+const AgentChoicePicker = useUiComponent('agentChoicePicker')
+const Label = useUiComponent('Label')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
-const Label = useUiComponent('Label')
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
 const DialogDescription = useUiComponent('DialogDescription')
@@ -283,9 +285,9 @@ const draftModelLabel = computed(() => {
 })
 
 /**
- * 适用模型下拉复用**底栏同款**（用户 2026-11-07：直接用底栏那个模型下拉）。
- * 触发器 / 菜单项 = 模型图标 + 名称 + 选中勾（.nb-model-* 那套类）。
- * 「通用」没有专属图标，用文字档兜底。
+ * 适用模型面板复用底栏那套卡片/分栏选择器（用户 2026-11-07 第二轮：
+ * 要的是图2那个带搜索、卡片、分栏的面板，不是简单菜单）。
+ * Agent 未装（取不到组件）时回退到底栏同款的简版 DropdownMenu。
  */
 const draftModelIcon = computed<ModelIcon | null>(() => {
   if (!draftActionId.value) return null
@@ -296,6 +298,19 @@ const draftModelIcon = computed<ModelIcon | null>(() => {
 /** 弹窗里的模型选项：图标（底栏同源）+ 名称 + id */
 const draftModelOptions = computed(() =>
   (props.modelChoices ?? []).map((m) => ({ id: m.id, title: m.title, icon: modelIconOf(m.title) })),
+)
+
+const agentPickerReady = computed(() => Boolean(AgentChoicePicker.value))
+
+/** ChoicePicker 的一行：id / 标题 / 副标题 / 图标 */
+const choiceItems = computed(() =>
+  draftModelOptions.value.map((o) => ({
+    id: o.id,
+    title: o.title,
+    subtitle: '预设可用模型',
+    platform: o.title,
+    isDefault: o.id === draftActionId.value,
+  })),
 )
 
 /** 换模型：旧参数按新模型重置，避免把 A 模型的参数写进 B 模型 */
@@ -552,8 +567,42 @@ function labelOfAction(id: string): string {
         <!-- 绑定模型：留空 = 全局通用；选了就只在该模型可用时启用 -->
         <div class="nbp-field">
           <Label class="nbp-label">适用模型</Label>
-          <!-- 底栏同款 DropdownMenu：图标 + 名称 + 勾（.nb-model-* 类与底栏共用一套 CSS） -->
-          <DropdownMenu>
+          <!-- 底栏同款：卡片 / 分栏面板（Agent 的 ChoicePicker，即底栏那个图2面板） -->
+          <DropdownMenu v-if="agentPickerReady">
+            <DropdownMenuTrigger as-child>
+              <button
+                type="button"
+                class="nb-model-trigger nbp-model-trigger"
+                aria-haspopup="menu"
+                aria-label="适用模型"
+                :title="draftModelLabel"
+              >
+                <span v-if="draftModelIcon" class="nb-model-badge" :data-tone="draftModelIcon.tone" aria-hidden="true" v-html="draftModelIcon.svg" />
+                <span class="nb-model-trigger-label">{{ draftModelLabel }}</span>
+                <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="bottom"
+              class="nb-model-menu nb-agent-choice-menu nb-agent-choice-menu--dialog"
+              :style="{ width: 'min(520px, calc(100vw - 24px))', height: 'min(380px, calc(100dvh - 320px))' }"
+            >
+              <AgentChoicePicker
+                :items="choiceItems"
+                :current-id="draftActionId"
+                title="适用模型"
+                rail-label="平台"
+                placeholder="搜索模型或平台"
+                empty-text="没有匹配的模型"
+                @pick="(item: { id: string }) => onDraftModelChange(item.id)"
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <!-- 简版回退：Agent 未装时仍是「图标 + 名称 + 勾」的菜单 -->
+          <DropdownMenu v-else>
             <DropdownMenuTrigger as-child>
               <button
                 type="button"
@@ -619,3 +668,4 @@ function labelOfAction(id: string): string {
 </template>
 
 <style src="./prompt-presets.css"></style>
+<style src="./bottom-bar-choice-menu.css"></style>
