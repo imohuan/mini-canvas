@@ -123,9 +123,15 @@ describe('NodeBottomBar：版式与显隐契约', () => {
     expect(html).not.toContain('node-bottom-bar')
   })
 
-  it('该类型没有任何可用动作 → 自身返回空（不产出底栏 DOM）', async () => {
+  /**
+   * 用户口径（2026-11-07）：不管什么平台、什么类型，预设按钮都要在 ——
+   * 音频节点一条动作都没注册，也必须能出底栏。
+   * 所以「零动作」不再等于「不渲染」：底栏保留，只是没有模型下拉，预设入口还在。
+   */
+  it('该类型没有任何可用动作 → 仍渲染底栏（预设入口要在）', async () => {
     const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'], actions: [] }))
-    expect(html).not.toContain('node-bottom-bar')
+    expect(html).toContain('data-testid=\"node-bottom-bar\"')
+    expect(html).toContain('data-testid=\"bar-presets\"')
   })
 
   it('needsPrompt=false 的动作不渲染大输入框（即时动作不留空编辑区）', async () => {
@@ -133,6 +139,29 @@ describe('NodeBottomBar：版式与显隐契约', () => {
     const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'], actions: [instant] }))
     expect(html).toContain('node-bottom-bar')
     expect(html).not.toContain('nb-editor')
+  })
+
+  /**
+   * provider 自带 HTML 面板的**位置**（用户口径 2026-11-07）：
+   * 有输入框时它是「参数下拉」的内容，**不是**压在输入框上方的一块。
+   * 之前错放在输入框上方，用户截图指出后挪进下拉。
+   */
+  it('有输入框 + provider 面板 → 面板挂在参数下拉里，不在输入框上方', async () => {
+    const withPanel: BarAction = {
+      ...DEMO_ACTION,
+      id: 'test:panel-action',
+      panelHtml: '<div class="demo">hi</div>',
+    }
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      {},
+      makeCtx({ selectedIds: ['35'], actions: [withPanel] }),
+    )
+    // 参数入口在底栏行里（与模型下拉并排），它就是面板的宿主
+    expect(html).toContain('nb-param-trigger')
+    // 输入框**上方**不再出现面板（关闭态下拉内容不渲染，整页也不该有第二份）
+    expect(html).not.toContain('nhp-frame')
   })
 
   it('默认动作优先选可输入的那条（即时动作 order 更小，也不能因此默认选中它）', async () => {

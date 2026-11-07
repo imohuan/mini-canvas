@@ -28,6 +28,7 @@ import { exitCtrlDragMode as unifiedExitCtrlDragMode } from './selectionMode'
 import {
   BottomBarActions,
   BottomBarModelPicker,
+  BottomBarChoicePicker,
   BottomBarCardList,
   BottomBarHoverPreview,
   BottomBarPills,
@@ -161,13 +162,52 @@ const agentChat = useAgentChat({
 })
 const { choice: agentChoice, pick: pickAgentModel, send: sendAgentMessage } = agentChat
 
-/** 节点类型是 text 时，下拉换成 Agent 的模型选择器 */
-const useAgentModels = computed(() => nodeType.value === 'text')
-/** Agent 没装（取不到 agentModelPicker）时退回动作下拉：只回落一次，不来回跳 */
-const agentPickerMissing = ref(false)
-/** 真正用哪一套：文本节点 + Agent 的组件确实可用 */
-const useAgentModelsEffective = computed(() => useAgentModels.value && !agentPickerMissing.value)
+/**
+ * 文本 / 图片 / 视频都用 Agent 的模型下拉（用户口径 2026-11-07）。
+ * 音频目前 Agent 侧没有对应模型，仍用底栏原有的动作下拉。
+ */
+/**
+ * 只有文本节点直接用「Agent 的对话模型」——图片 / 视频要走生成动作（带比例、时长等参数），
+ * 由下面的 ChoicePicker 承接（同样是卡片 + 分栏那套面板）。
+ */
+const AGENT_MODEL_TYPES = new Set(['text'])
+const useAgentModels = computed(() => AGENT_MODEL_TYPES.has(String(nodeType.value ?? '')))
 
+/**
+ * Agent 的两块面板是否真的注册了。
+ *
+ * 直接探测 ui 场而不是等子组件回报：回报会晚一帧，首帧旧下拉已藏、新面板未出。
+ */
+const agentModelPickerComp = useUiComponent('agentModelPicker')
+const agentChoicePickerComp = useUiComponent('agentChoicePicker')
+const agentPickerAvailable = computed(() => Boolean(agentModelPickerComp.value))
+const choicePickerAvailable = computed(() => Boolean(agentChoicePickerComp.value))
+
+/** 真正用哪一套：节点类型能用 + Agent 的模型面板确实注册了 */
+const useAgentModelsEffective = computed(() => useAgentModels.value && agentPickerAvailable.value)
+
+/** 输入框：动作要输入框，或当前类型能用 Agent 的模型面板且组件确实在 */
+const showPromptEditor = computed(() => showEditor.value || useAgentModelsEffective.value)
+
+/** 动作 → ChoicePicker 的一行：参数摘要拼进副标题 */
+const actionChoices = computed(() =>
+  actionOptions.value.map((o) => {
+    const action = actions.value.find((a) => a.id === o.value)
+    const summary = (action?.fields ?? [])
+      .filter((f) => f.kind !== 'style')
+      .map((f) => values.value[f.key])
+      .filter((v) => v !== undefined && v !== '')
+      .map(String)
+      .join(' · ')
+    return {
+      value: o.value,
+      label: o.label,
+      description: o.description ?? '',
+      group: o.group ?? '',
+      note: summary,
+    }
+  }),
+)
 // 打开时把节点里记着的模型读回来；Agent 删掉那个模型时回退到空（不带着失效选择发请求）
 watch(
   [() => props.data?.barModel, useAgentModels],
@@ -399,7 +439,7 @@ if (typeof ctx.on === 'function') {
 }
 
 async function onRun(): Promise<void> {
-  // 文本节点走 Agent：带上用户在下拉里选的模型（用户 2026-11-07）
+  // 文本 / 图片 / 视频走 Agent：带上用户在下拉里选的模型（用户 2026-11-07）
   if (useAgentModelsEffective.value) {
     if (!agentChat.canSend()) return
     persistValues()
@@ -625,22 +665,6 @@ onBeforeUnmount(() => {
 
       <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
 
-      <!-- provider 自带 HTML 面板（有输入框：坐在输入框上方） -->
-      <HtmlPanelFrame
-        v-if="useHtmlPanel && showEditor"
-        :html="panelHtml"
-        :values="values"
-        :params="paramDefs"
-        :action-id="currentId"
-        :model="currentActionLabel"
-        :node-type="nodeType"
-        :disabled="running"
-        :theme="htmlPanelTheme"
-        @set-values="onPanelValues"
-        @run="onRun"
-        @notify="onPanelNotify"
-      />
-
       <!-- 没有输入框的动作：HTML 面板直接占输入框那一行（用户口径：面板就渲染在输入框位置） -->
       <HtmlPanelFrame
         v-if="useHtmlPanel && !showEditor"
@@ -660,7 +684,7 @@ onBeforeUnmount(() => {
       />
 
       <BottomBarPromptEditor
-        v-if="showEditor"
+        v-if="showPromptEditor"
         :prompt="prompt"
         :prompt-doc="promptDoc"
         :editor-style="editorStyle"
@@ -712,23 +736,27 @@ onBeforeUnmount(() => {
         :running="running"
         :param-defs="paramDefs"
         :hide-params="useHtmlPanel"
+        :panel-html="useHtmlPanel && showEditor ? panelHtml : ''"
+        :panel-theme="htmlPanelTheme"
         :values="values"
         :ai-buttons="aiButtons"
         :ai-running-id="aiRunningId"
         :ai-error="aiError"
-        :show-editor="showEditor"
+        :show-editor="showPromptEditor"
         :char-count="charCount"
         :char-limit="CHAR_LIMIT"
         :invalid-hint="invalidHint"
-        :can-run="canRun"
+        :can-run="useAgentModelsEffective ? Boolean(agentChoice) : canRun"
         :submitted="submitted"
         :current-action-title="currentAction?.title ?? ''"
         :icon-warn="ICON_WARN"
         :icon-send="ICON_SEND"
         :action-options="actionOptions"
-        :has-model-picker="useAgentModelsEffective"
+        :has-model-picker="useAgentModelsEffective || choicePickerAvailable"
         @action-picked="onActionPicked"
         @field-change="onFieldChange"
+        @panel-values="onPanelValues"
+        @panel-notify="onPanelNotify"
         @ai-click="runAiAction"
         @insert-at="insertAt"
         @run="onRun"
@@ -740,14 +768,23 @@ onBeforeUnmount(() => {
             :model="agentChoice"
             :disabled="running || agentChat.running.value"
             @pick="onAgentModelPicked"
-            @unavailable="agentPickerMissing = true"
+          />
+          <!-- 图片 / 视频：同一套卡片 + 分栏面板，但选的是生成动作（带参数） -->
+          <BottomBarChoicePicker
+            v-if="!useAgentModelsEffective && choicePickerAvailable"
+            :options="actionChoices"
+            :current-id="currentId"
+            :current-label="currentActionLabel"
+            :current-model-icon="currentModelIcon"
+            :disabled="running"
+            @pick="onActionPicked"
           />
         </template>
         <template #presets>
           <BottomBarPresets
             :disabled="aiEditorLocked"
             :node-type="nodeType"
-            :has-target="showEditor"
+            :has-target="showPromptEditor"
             :available-ids="availableActionIds"
             :model-choices="modelChoices"
             :current-id="currentId"

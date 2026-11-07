@@ -513,6 +513,54 @@
 .nb-model-badge[data-tone='video'] { color: #7c3aed; }
 .nb-model-badge[data-tone='audio'] { color: #059669; }
 .nb-model-badge[data-tone='text'] { color: var(--ui-ink-dim, #6b7280); }
+/* provider 自带参数面板：触发按钮与内置参数下拉同款（h32、圆角 8、透明底、hover 浅底） */
+.nb-param-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  max-width: 190px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink, #18202b);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.nb-param-trigger:hover:not(:disabled) {
+  background: var(--ui-chip, rgb(0 0 0 / 0.06));
+}
+.nb-param-trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.nb-param-glyph svg,
+.nb-param-arrow {
+  width: 14px;
+  height: 14px;
+  color: var(--ui-ink-mute, #8c95a3);
+  flex: none;
+}
+.nb-param-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 面板本身：与其它浮层同一套底色 / 圆角 / 描边，宽度按底栏给，最低 320 保证按钮排得开 */
+.nb-param-pop {
+  width: max-content;
+  min-width: 320px;
+  max-width: min(460px, calc(100vw - 24px));
+  padding: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--ui-panel, #fff);
+  border: 1px solid var(--ui-line, #e2e5ea);
+  box-shadow: var(--ui-shadow-lg, 0 18px 48px rgb(15 23 42 / 0.18));
+}
 
 /* 下拉行：图标 + 名称 + 选中勾（名称过长省略） */
 .nb-model-item {

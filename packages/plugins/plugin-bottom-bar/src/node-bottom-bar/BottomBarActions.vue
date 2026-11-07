@@ -5,6 +5,7 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
 import type { ModelIcon } from './modelIcons'
 import { ICON_AT } from './icons'
+import HtmlPanelFrame from './HtmlPanelFrame.vue'
 
 const props = defineProps<{
   id: string
@@ -28,6 +29,10 @@ const props = defineProps<{
   actionOptions: Array<{ value: string; label: string; model: ModelIcon }>
   /** 参数区交给 provider 的 HTML 面板时，不再画默认的参数摘要按钮 */
   hideParams?: boolean
+  /** provider 自带的 HTML 参数面板（有输入框时放进「参数」下拉里） */
+  panelHtml?: string
+  /** 传给 HTML 面板的主题色 */
+  panelTheme?: Record<string, string>
   /** 当前动作的模型图标（触发器左侧），没有动作时为 null */
   currentModelIcon: ModelIcon | null
   /** 是否用 Agent 的模型选择器代替动作下拉（文本节点） */
@@ -41,10 +46,29 @@ const emit = defineEmits<{
   /** 最左侧「@」按钮：在光标处插入一个 @（会直接打开编辑器的 @ 下拉） */
   insertAt: []
   run: []
+  /** HTML 参数面板里改了参数（可能一次多个） */
+  panelValues: [values: Record<string, unknown>]
+  /** HTML 参数面板要提示一句 */
+  panelNotify: [payload: { level: 'info' | 'success' | 'error'; message: string }]
 }>()
+
+/** 参数摘要：下拉触发器上显示「16:9 · 暖色调」，与内置参数下拉同一口径 */
+const paramSummary = computed(() => {
+  const parts: string[] = []
+  for (const p of props.paramDefs) {
+    const v = props.values?.[p.key]
+    if (v === undefined || v === null || v === '') continue
+    const opt = p.options?.find((o) => o.value === v)
+    parts.push(opt ? opt.label : String(v))
+  }
+  return parts.join(' · ')
+})
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 const Button = useUiComponent('Button')
+const Popover = useUiComponent('Popover')
+const PopoverTrigger = useUiComponent('PopoverTrigger')
+const PopoverContent = useUiComponent('PopoverContent')
 /**
  * 模型下拉改用 DropdownMenu（用户 2026-11-06 指定）。
  *
@@ -135,7 +159,50 @@ function pickAction(value: string): void {
         </DropdownMenu>
       </div>
       <span class="nb-divider" aria-hidden="true" />
-      <div v-if="paramDefs.length > 0 && !hideParams" class="nb-field nb-field--params">
+      <!-- provider 自带 HTML 面板：作为「参数」下拉的内容（用户口径：面板属于下拉菜单，不该压在输入框上方） -->
+      <div v-if="panelHtml" class="nb-field nb-field--params">
+        <Popover>
+          <PopoverTrigger as-child>
+            <button
+              type="button"
+              class="nb-param-trigger"
+              :disabled="running"
+              aria-haspopup="dialog"
+              :title="paramSummary || '参数'">
+              <span class="nb-param-glyph" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                  stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2" /></svg>
+              </span>
+              <span class="nb-param-text">{{ paramSummary || '参数' }}</span>
+              <svg class="nb-param-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            :side-offset="4"
+            :collision-padding="12"
+            class="nb-param-pop"
+          >
+            <HtmlPanelFrame
+              :html="panelHtml"
+              :values="values"
+              :params="paramDefs"
+              :action-id="currentId"
+              :model="currentActionLabel"
+              :disabled="running"
+              :theme="panelTheme"
+              :max-height="360"
+              @set-values="(v: Record<string, unknown>) => emit('panelValues', v)"
+              @run="emit('run')"
+              @notify="(p: { level: 'info' | 'success' | 'error'; message: string }) => emit('panelNotify', p)"
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div v-else-if="paramDefs.length > 0 && !hideParams" class="nb-field nb-field--params">
         <ToolParamGroup
           :params="paramDefs"
           :values="values"
