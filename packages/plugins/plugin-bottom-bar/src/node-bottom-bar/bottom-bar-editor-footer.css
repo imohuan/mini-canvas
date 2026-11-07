@@ -272,6 +272,27 @@
   width: 14px;
   height: 14px;
 }
+/**
+ * 左侧图标 hover 高亮（用户 2026-11-07）。
+ *
+ * 为什么需要：只有点这颗图标才会弹候选菜单，但以前 hover 上去只是把图换成铅笔，
+ * 没有底色，用户看不出「这一小块是可以点的」。
+ *
+ * 为什么用径向渐变而不是给图标加 background-color：图标本身是**用 mask 画的**
+ * （background-color = 图形颜色），改成底色会把图标整个吃掉。
+ * 这里在标签内部、只覆盖图标那一块的区域铺一层浅灰圆，图标与铅笔都保持原样。
+ * 只有指针真的落在图标上才亮（:has 判断），整颗标签 hover 不触发。
+ */
+.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {
+  /* 图标格：左内边距 3px + 14px 宽 → 圆心约 10px；直径 20px 略大于图标，显得像个可点按钮 */
+  background-image: radial-gradient(
+    circle 10px at 10px 50%,
+    color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent) 0 10px,
+    transparent 10px
+  );
+  background-repeat: no-repeat;
+  background-position: left center;
+}
 .nb-editor .resource-chip-name {
   overflow: hidden;
   text-overflow: ellipsis;

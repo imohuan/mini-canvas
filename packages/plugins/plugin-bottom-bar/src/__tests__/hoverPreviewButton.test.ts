@@ -1,8 +1,8 @@
 /**
- * hover 预览里的「全屏」按钮（用户 2026-11-06）。
+ * hover 预览里的「全屏」按钮（用户 2026-11-07）。
  *
- * 用户原话：「圆形图标按钮、小尺寸、不要提供任何 UI 样式，使用默认的 UI，类型用 ghost」。
- * 所以这里钉住：ghost + icon-xs + 图标（不再是一颗写着「全屏」的文字按钮），
+ * 用户原话：「类型为 secondary 按钮使用 icon-xs，添加 class=rounded-full」，
+ * 且不要自己写 UI 样式。所以这里钉住：secondary + icon-xs + rounded-full + 图标，
  * 底栏样式只许摆位置，形状/底色/悬停交给组件库。
  */
 import { readFileSync } from 'node:fs'
@@ -14,8 +14,9 @@ const SFC = readFileSync(fileURLToPath(new URL('../node-bottom-bar/BottomBarHove
 const CSS = readBottomBarCss()
 
 describe('hover 预览的全屏按钮：默认组件样式', () => {
-  it('ghost + 小号图标按钮，里面是图标不是文字', () => {
-    expect(SFC).toContain('<Button variant="ghost" size="icon-xs"')
+  it('secondary + icon-xs + rounded-full，里面是图标不是文字', () => {
+    expect(SFC).toContain('<Button variant="secondary" size="icon-xs"')
+    expect(SFC).toContain('rounded-full')
     expect(SFC).not.toContain('>全屏</Button>')
     expect(SFC).toContain('v-html="ICON_EXPAND"')
   })
@@ -30,9 +31,13 @@ describe('hover 预览的全屏按钮：默认组件样式', () => {
     }
   })
 
-  it('圆形：只把圆角钉成胶囊，避免被主题的方角档位带偏', () => {
+  it('圆形由 rounded-full 负责，底栏不再自己写圆角', () => {
     const i = CSS.indexOf('.nb-hover-preview-open {')
     const block = CSS.slice(CSS.indexOf('{', i) + 1, CSS.indexOf('}', i))
-    expect(block).toMatch(/border-radius\s*:\s*999px/)
+    expect(block).not.toMatch(/border-radius/)
+  })
+
+  it('宿主那条无层 [data-slot=button] 圆角会压掉 rounded-full，需单独补一条同层规则', () => {
+    expect(CSS).toMatch(/\[data-slot='button'\]\.nb-hover-preview-open\.rounded-full\s*\{\s*border-radius:\s*9999px/)
   })
 })

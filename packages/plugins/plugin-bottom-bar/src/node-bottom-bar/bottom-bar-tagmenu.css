@@ -120,8 +120,14 @@
   position: absolute;
   right: 6px;
   bottom: 6px;
-  /* 圆形（用户 2026-11-06）：组件库默认圆角随主题档位变，这里钉成胶囊/圆 */
-  border-radius: 999px;
+}
+/**
+ * `rounded-full` 在按钮上会被宿主那条**无层**的 `[data-slot='button'] { border-radius }`
+ * 压掉（无层样式优先于 Tailwind 的 utilities 层，实测仍是 8px）。
+ * 这里只给这一颗按钮补一条同层规则，让它真正变成圆形；其它按钮不受影响。
+ */
+[data-slot='button'].nb-hover-preview-open.rounded-full {
+  border-radius: 9999px;
 }
 
 /**

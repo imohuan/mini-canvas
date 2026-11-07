@@ -58,11 +58,11 @@ const Button = useUiComponent('Button')
       />
       <span v-else class="nb-hover-preview-empty">（无预览）</span>
       <!--
-        全屏按钮（用户 2026-11-06）：圆形图标按钮、小尺寸、ghost 默认外观。
-        底栏只负责摆到右下角；圆角/底色/悬停一律交给组件库。
+        全屏按钮（用户 2026-11-07）：secondary + icon-xs + rounded-full。
+        底栏只负责摆到右下角；形状/底色/悬停一律交给组件库。
       -->
-      <Button variant="ghost" size="icon-xs"
-        class="nb-hover-preview-open"
+      <Button variant="secondary" size="icon-xs"
+        class="nb-hover-preview-open rounded-full"
         type="button"
         :aria-label="'全屏预览 ' + livePreviewTile.label"
         :title="'全屏预览 ' + livePreviewTile.label"
