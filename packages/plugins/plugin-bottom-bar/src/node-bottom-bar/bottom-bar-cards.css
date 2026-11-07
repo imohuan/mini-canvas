@@ -540,10 +540,13 @@
    * 卡角只有 48px，16px 的圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
    * 放大用伪元素（不占布局），视觉尺寸不变。
    */
-  /* 默认灰底（用户 2026-11-06）：hover 加深一档，不再是「深黑底 → 透明」 */
-  background: var(--ui-chip, rgb(0 0 0 / 0.07));
-  color: var(--ui-ink, #18202b);
-  box-shadow: 0 0 0 1px var(--ui-line, #e2e5ea);
+  /*
+   * 与 @ 按钮同一套实色衬底（用户 2026-11-07：@ 不够明显）。
+   * 两颗按钮在同一张卡上，衬底的强弱必须一致，否则一颗看得见、一颗隐形。
+   */
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent);
+  color: var(--ui-panel, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
   opacity: 0;
   /* 视觉默认隐藏，但**始终可点**：隐藏态如果连指针都不接，
      鼠标从卡片外靠近时那几像素的缝会落到画布上（真机踩过）。 */
@@ -575,7 +578,7 @@
  * 提到「卡片 → 按钮 → hover」三段，底色才由这里说了算（用户 2026-11-06）。
  */
 .nb-cards .nb-card .nb-remove:hover {
-  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 92%, transparent);
   color: var(--ui-danger, #ef4444);
   opacity: 1;
 }

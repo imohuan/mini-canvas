@@ -18,18 +18,25 @@
 }
 .nb-card-act {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  /*
+   * 尺寸从 16 提到 18（用户 2026-11-07：右下角 @ 不够明显）。
+   * 卡片只有 48px，18px 是「看得见」和「不糊住缩略图」的折中。
+   */
+  width: 18px;
+  height: 18px;
   padding: 0;
   border-radius: 999px;
   /*
-   * 默认灰底（用户 2026-11-06）：hover 只加深一档，像菜单行那样「浅灰 → 深灰」，
-   * 而不是从深黑跳到亮灰、看着像换了个按钮。
+   * 实心衬底（用户 2026-11-07）。
+   *
+   * 以前是 --ui-chip（深色主题只有 10% 白），压在视频缩略图上几乎隐形；
+   * 现在与时长角标同一套「实色底 + 对比字」：浅色主题深底白字、深色主题浅底深字，
+   * 两种主题下都能从任何画面上跳出来。hover 再加深一档（像菜单行）。
    */
-  background: var(--ui-chip, rgb(0 0 0 / 0.07));
-  /* 浅灰底配正常前景色：两种主题下都看得清，不依赖某个主题的深色面板值 */
-  color: var(--ui-ink, #18202b);
-  font-size: 10px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent);
+  color: var(--ui-panel, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   opacity: 0;
@@ -44,8 +51,8 @@
  * 用「卡片 → 按钮 → hover」三段选择器提权，保证我们这层生效。
  */
 .nb-cards .nb-card .nb-card-act:hover {
-  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
-  color: var(--ui-ink, #18202b);
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 92%, transparent);
+  color: var(--ui-panel, #fff);
   /* Button 基类自带 hover:text-foreground；图标色要压住它 */
   opacity: 1;
 }
@@ -53,6 +60,8 @@
   right: 2px;
   bottom: 2px;
   z-index: 4;
+  /* @ 是卡片上最要认得出的两个按钮之一：字符本身再大一点点 */
+  font-size: 12px;
 }
 .nb-card-play-act {
   left: 50%;
@@ -120,6 +129,17 @@
   position: absolute;
   right: 6px;
   bottom: 6px;
+  /*
+   * 媒体衬底（用户 2026-11-07 报「按钮不见了」）。
+   *
+   * 复现：按钮本身在（24×24、圆角 9999、可见），但 secondary 在深色主题下只有
+   * 10% 白的底 + 白图标；压在明亮的视频帧上，人眼就看成「没有按钮」。
+   * 这里只给这颗按钮垫一层主题实色的浅底，形状/尺寸/变体仍由组件库决定。
+   */
+  background-color: color-mix(in srgb, var(--ui-overlay-solid, #fff) 88%, transparent);
+}
+.nb-hover-preview-open:hover {
+  background-color: var(--ui-overlay-solid, #fff);
 }
 /**
  * `rounded-full` 在按钮上会被宿主那条**无层**的 `[data-slot='button'] { border-radius }`
