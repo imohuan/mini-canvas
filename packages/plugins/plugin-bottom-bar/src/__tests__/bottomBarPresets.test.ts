@@ -132,6 +132,19 @@ describe('预设提示词面板：禁用改成独立页签', () => {
     expect(PRESETS).toMatch(/tab.value === 'disabled' && !hasDisabledTab.value/)
   })
 
+  /**
+   * 用户 2026-11-07：弹窗里的「适用模型」直接用底栏那个模型下拉 ——
+   * DropdownMenu + 模型图标 + 名称 + 勾（.nb-model-* 类与底栏共用一套）。
+   */
+  it('适用模型下拉复用底栏同款（DropdownMenu + 图标 + 勾）', () => {
+    expect(PRESETS).toContain("useUiComponent('DropdownMenu')")
+    expect(PRESETS).toContain('class="nb-model-trigger nbp-model-trigger"')
+    expect(PRESETS).toContain('class="nb-model-badge"')
+    expect(PRESETS).toContain('class="nb-model-item-check"')
+    // 不再是 reka 的 Select（value 空串不渲染那个坑随之消失）
+    expect(PRESETS).not.toContain("useUiComponent('Select')")
+  })
+
   it('禁用页签带条数，且点禁用条目会给出提示（不静默）', () => {
     expect(PRESETS).toContain('class="nbp-tabcount"')
     expect(PRESETS).toContain('没有禁用的预设')

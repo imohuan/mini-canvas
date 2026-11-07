@@ -28,6 +28,7 @@ import {
 import { loadPresets, savePresets } from '../presetStore'
 import { resolveAgentBaseUrl } from '../aiActions'
 import type { ToolParamDef } from '@mini-canvas/kernel'
+import { modelIconOf, type ModelIcon } from './modelIcons'
 import { ICON_BOOKMARK, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
 
 const props = defineProps<{
@@ -90,11 +91,10 @@ const ScrollArea = useUiComponent('ScrollArea')
 const Tabs = useUiComponent('Tabs')
 const TabsList = useUiComponent('TabsList')
 const TabsTrigger = useUiComponent('TabsTrigger')
-const Select = useUiComponent('Select')
-const SelectContent = useUiComponent('SelectContent')
-const SelectItem = useUiComponent('SelectItem')
-const SelectTrigger = useUiComponent('SelectTrigger')
-const SelectValue = useUiComponent('SelectValue')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const Label = useUiComponent('Label')
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
@@ -262,14 +262,6 @@ const draftName = ref('')
 const draftContent = ref('')
 /** 新建时选的目标模型（空串 = 通用，不绑模型） */
 const draftActionId = ref('')
-/**
- * 下拉里「通用」那一项的取值。
- *
- * 为什么不用空串：reka-ui 的 SelectItem 把 value 当必填，传 '' 时这一项**不会被渲染**
- * （用户 2026-11-07 截图：下拉里只剩具体模型，选不到「通用」）。
- * 用一个不会和动作 id 撞的哨兵值，进出双向各转一次。
- */
-const GENERAL_OPTION = '__nbp_general__'
 /** 新建时挑的参数值（用模型自己的参数定义渲染，跟下拉里同一套控件） */
 const draftValues = ref<Record<string, unknown>>({})
 const nameInput = ref<{ $el?: HTMLElement } | null>(null)
@@ -284,14 +276,27 @@ const draftParams = computed<ToolParamDef[]>(() => {
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 
-/** 内部值 → 下拉显示值 */
-const draftModelValue = computed(() => draftActionId.value || GENERAL_OPTION)
-
 /** 新建弹窗里「适用模型」触发器上的文字 */
 const draftModelLabel = computed(() => {
   if (!draftActionId.value) return '通用（所有模型）'
   return labelOfAction(draftActionId.value)
 })
+
+/**
+ * 适用模型下拉复用**底栏同款**（用户 2026-11-07：直接用底栏那个模型下拉）。
+ * 触发器 / 菜单项 = 模型图标 + 名称 + 选中勾（.nb-model-* 那套类）。
+ * 「通用」没有专属图标，用文字档兜底。
+ */
+const draftModelIcon = computed<ModelIcon | null>(() => {
+  if (!draftActionId.value) return null
+  const hit = (props.modelChoices ?? []).find((m) => m.id === draftActionId.value)
+  return hit ? modelIconOf(hit.title) : null
+})
+
+/** 弹窗里的模型选项：图标（底栏同源）+ 名称 + id */
+const draftModelOptions = computed(() =>
+  (props.modelChoices ?? []).map((m) => ({ id: m.id, title: m.title, icon: modelIconOf(m.title) })),
+)
 
 /** 换模型：旧参数按新模型重置，避免把 A 模型的参数写进 B 模型 */
 function onDraftModelChange(id: string): void {
@@ -547,18 +552,49 @@ function labelOfAction(id: string): string {
         <!-- 绑定模型：留空 = 全局通用；选了就只在该模型可用时启用 -->
         <div class="nbp-field">
           <Label class="nbp-label">适用模型</Label>
-          <Select
-            :model-value="draftModelValue"
-            @update:model-value="(v: unknown) => onDraftModelChange(String(v ?? '') === GENERAL_OPTION ? '' : String(v ?? ''))"
-          >
-            <SelectTrigger class="nbp-select" size="sm" aria-label="适用模型">
-              <SelectValue :placeholder="draftModelLabel">{{ draftModelLabel }}</SelectValue>
-            </SelectTrigger>
-            <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
-              <SelectItem :value="GENERAL_OPTION">通用（所有模型）</SelectItem>
-              <SelectItem v-for="m in modelChoices ?? []" :key="m.id" :value="m.id">{{ m.title }}</SelectItem>
-            </SelectContent>
-          </Select>
+          <!-- 底栏同款 DropdownMenu：图标 + 名称 + 勾（.nb-model-* 类与底栏共用一套 CSS） -->
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <button
+                type="button"
+                class="nb-model-trigger nbp-model-trigger"
+                aria-haspopup="menu"
+                aria-label="适用模型"
+                :title="draftModelLabel"
+              >
+                <span v-if="draftModelIcon" class="nb-model-badge" :data-tone="draftModelIcon.tone" aria-hidden="true" v-html="draftModelIcon.svg" />
+                <span class="nb-model-trigger-label">{{ draftModelLabel }}</span>
+                <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="bottom" class="nb-model-menu">
+              <DropdownMenuItem
+                data-state="checked"
+                @select="onDraftModelChange('')"
+              >
+                <span class="nb-model-badge" data-tone="text" aria-hidden="true"
+                  v-html="modelIconOf('通用文本').svg" />
+                <span class="nb-model-item-label">通用（所有模型）</span>
+                <svg v-if="!draftActionId" class="nb-model-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                v-for="o in draftModelOptions"
+                :key="o.id"
+                :data-state="o.id === draftActionId ? 'checked' : undefined"
+                @select="onDraftModelChange(o.id)"
+              >
+                <span class="nb-model-badge" :data-tone="o.icon.tone" aria-hidden="true" v-html="o.icon.svg" />
+                <span class="nb-model-item-label">{{ o.title }}</span>
+                <svg v-if="o.id === draftActionId" class="nb-model-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <!-- 参数：用模型自己的参数定义渲染，和下拉里同一套控件 -->
