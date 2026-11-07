@@ -68,6 +68,8 @@ const paramSummary = computed(() => {
  * 用来给外层 ScrollArea 一个确定高度：短内容刚好贴住，长内容封顶后滚动。
  */
 const panelHeight = ref(240)
+/** 参数下拉的开关状态：受控之后箭头能跟着转，点空白 / Esc 由组件库关掉 */
+const paramOpen = ref(false)
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 const Button = useUiComponent('Button')
@@ -167,11 +169,12 @@ function pickAction(value: string): void {
       <span class="nb-divider" aria-hidden="true" />
       <!-- provider 自带 HTML 面板：作为「参数」下拉的内容（用户口径：面板属于下拉菜单，不该压在输入框上方） -->
       <div v-if="panelHtml" class="nb-field nb-field--params">
-        <Popover>
+        <Popover v-model:open="paramOpen">
           <PopoverTrigger as-child>
             <button
               type="button"
               class="nb-param-trigger"
+              :aria-expanded="paramOpen"
               :disabled="running"
               aria-haspopup="dialog"
               :title="paramSummary || '参数'">

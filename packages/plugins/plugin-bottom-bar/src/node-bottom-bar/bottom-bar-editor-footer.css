@@ -242,6 +242,14 @@
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+  /**
+   * 静息就是灰（用户 2026-11-07：默认图标颜色 = hover 标签 + hover 图标时的颜色，
+   * 而 hover 标签是灰）。之前的灰色只挂在 .resource-chip--editable/--hot 上，
+   * 没进这两个状态的标签图标仍继承标签的纯前景色 —— 用户看到「默认还是深色」。
+   * 这里直接把灰色写给类型图标本体，任何状态都不再依赖外层类。
+   */
+  color: color-mix(in srgb, var(--ui-ink, #18202b) 58%, transparent);
+  transition: color 0.15s ease-out;
 }
 /* 四种类型各自的图标（用户 2026-10-28：图片/视频/音频/文本各有默认图标） */
 .nb-editor .resource-chip-icon[data-icon='image'] {
@@ -285,8 +293,13 @@
  * 铅笔用 ::after 画在图标位上（绝对定位，不占布局）；图标本身靠 mask + currentColor，
  * 缩略图是叠在图标位上的 <img>，所以「藏图 + 露出铅笔」= 只改这两个 opacity。
  */
-.nb-editor .resource-chip--editable .resource-chip-icon {
-  /* 静息色：灰（用户口径：默认灰，hover 更暗） */
+/**
+ * 铅笔/图标的**静息色就是灰**（用户 2026-11-07：默认图标颜色 = hover 标签 +
+ * hover 图标时的颜色；hover 标签是灰）。所以这里不再分「没 hover 的默认色」，
+ * 任何没有 --icon-hot 的状态都用同一个灰。
+ */
+.nb-editor .resource-chip--editable,
+.nb-editor .resource-chip--hot {
   color: color-mix(in srgb, var(--ui-ink, #18202b) 58%, transparent);
   transition: color 0.15s ease-out;
 }
@@ -341,12 +354,19 @@
  * · 指针进到图标那一小块：铅笔变纯前景色（更暗），这就是用户要的「高亮」。
  * 用 :has 只认图标格上的指针；名字区域的 hover 不会让铅笔变深。
  */
-.nb-editor .resource-chip--icon-hot::after {
+.nb-editor .resource-chip--icon-hot::after,
+.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover),
+.nb-editor .resource-chip--hot:has(.resource-chip-icon:hover) {
   /* 指针落在图标格：灰 → 纯前景色，这是用户要的「高亮」 */
   background-color: var(--ui-ink, #18202b);
 }
+/* 没进编辑态的标签（缩略图加载中/纯图标型）：指针在图标上时同样加深（同一口径） */
+.nb-editor .resource-chip--icon-hot .resource-chip-icon[data-icon] {
+  color: var(--ui-ink, #18202b);
+}
 @media (prefers-reduced-motion: reduce) {
-  .nb-editor .resource-chip--editable .resource-chip-icon,
+  .nb-editor .resource-chip--editable,
+  .nb-editor .resource-chip--hot,
   .nb-editor .resource-chip--hot::after,
   .nb-editor .resource-chip--editing::after {
     transition: none;
@@ -572,6 +592,21 @@
   color: var(--ui-ink-mute, #8c95a3);
   flex: none;
 }
+/* 展开时箭头翻转（用户 2026-11-07：选中后折叠图标不动） */
+.nb-param-arrow {
+  transition: transform 0.15s ease-out;
+}
+.nb-param-trigger[aria-expanded='true'] .nb-param-arrow {
+  transform: rotate(180deg);
+}
+.nb-param-trigger[aria-expanded='true'] {
+  background: var(--ui-chip, rgb(0 0 0 / 0.06));
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-param-arrow {
+    transition: none;
+  }
+}
 .nb-param-text {
   min-width: 0;
   overflow: hidden;
@@ -581,8 +616,9 @@
 /* 面板本身：与其它浮层同一套底色 / 圆角 / 描边，宽度按底栏给，最低 320 保证按钮排得开 */
 .nb-param-pop {
   width: max-content;
-  min-width: 320px;
-  max-width: min(460px, calc(100vw - 24px));
+  /* 加宽（用户 2026-11-07 截图 2）：滑块 + 数字框一行要放得下，内容本身也松一点 */
+  min-width: 360px;
+  max-width: min(520px, calc(100vw - 24px));
   /* padding 交给 ScrollArea 的内边距；这里不能再 overflow:hidden，否则会裁掉 ScrollBar */
   padding: 0;
   overflow: visible;

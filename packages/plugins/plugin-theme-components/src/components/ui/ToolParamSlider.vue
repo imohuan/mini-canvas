@@ -15,6 +15,7 @@
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import PrecisionSlider from './PrecisionSlider.vue'
+import { Input } from '@mini-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{
@@ -37,6 +38,12 @@ const numberValue = computed(() => {
   const n = Number(props.modelValue)
   return Number.isFinite(n) ? n : min.value
 })
+
+/** 把任意输入收敛成合法数值并上报（数字输入框用） */
+function emitChange(raw: number): void {
+  const v = Number.isFinite(raw) ? Math.min(max.value, Math.max(min.value, raw)) : min.value
+  emit('update:modelValue', v)
+}
 </script>
 
 <template>
@@ -46,6 +53,7 @@ const numberValue = computed(() => {
       <span class="tps-value">{{ numberValue }}<span v-if="param.unit" class="tps-unit">{{ param.unit }}</span></span>
     </div>
     <PrecisionSlider
+      class="tps-slider"
       :model-value="numberValue"
       :min="min"
       :max="max"
@@ -53,6 +61,33 @@ const numberValue = computed(() => {
       :disabled="disabled"
       @update:model-value="(v: number) => emit('update:modelValue', v)"
     />
+    <!--
+      右侧数字输入框（用户 2026-11-07 参考图 3）：拖滑块粗调、输入框精调，
+      两边同一个值。change（松手/失焦）才上报，输入过程不刷面板。
+    -->
+    <div class="tps-row">
+      <PrecisionSlider
+        class="tps-slider"
+        :model-value="numberValue"
+        :min="min"
+        :max="max"
+        :step="step"
+        :disabled="disabled"
+        :aria-label="param.label || param.key"
+        @update:model-value="(v: number) => emit('update:modelValue', v)"
+      />
+      <Input
+        class="tps-num"
+        type="number"
+        :model-value="numberValue"
+        :min="min"
+        :max="max"
+        :step="step"
+        :disabled="disabled"
+        :aria-label="(param.label || param.key) + '数值'"
+        @change="(e: Event) => emitChange(Number((e.target as HTMLInputElement).value))"
+      />
+    </div>
   </section>
 </template>
 
