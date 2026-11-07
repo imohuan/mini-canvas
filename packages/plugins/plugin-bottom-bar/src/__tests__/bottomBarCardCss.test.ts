@@ -141,7 +141,7 @@ describe('素材卡缩略图：不模糊', () => {
     expect(clip).toBe(card)
   })
 
-  it('关闭按钮默认藏起来，hover / 键盘聚焦才露出（且 hover 转危险色）', () => {
+  it('关闭按钮默认藏起来，hover / 键盘聚焦才露出（样式中性，不用危险色）', () => {
     const css = block('.nb-remove')
     expect(css).toMatch(/opacity\s*:\s*0/)
     /**
@@ -156,6 +156,10 @@ describe('素材卡缩略图：不模糊', () => {
       expect(show, sel + ' 要把按钮露出来').toMatch(/opacity\s*:\s*1/)
       expect(show, sel + ' 要把按钮显现出来').toMatch(/opacity\s*:\s*1/)
     }
-    expect(block('.nb-remove:hover')).toMatch(/--ui-danger/)
+    /**
+     * 用户 2026-11-07：「我这边根本就不需要用到你的主题颜色」——
+     * 关闭按钮 hover 不再变红，与 @ 按钮共用同一套中性实底。
+     */
+    expect(block('.nb-remove:hover')).not.toMatch(/--ui-danger/)
   })
 })

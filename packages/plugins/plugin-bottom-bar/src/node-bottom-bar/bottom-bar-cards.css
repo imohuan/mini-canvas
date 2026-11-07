@@ -530,23 +530,12 @@
   top: -7px;
   right: -7px;
   z-index: 2;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border-radius: 999px;
   /**
    * 命中区放大（用户 2026-10-29 报「点不动」）：
-   * 视觉仍是 16px 圆点，但用 ::before 把可点范围撑到 24px ——
-   * 卡角只有 48px，16px 的圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
+   * 视觉仍与 @ 按钮同尺寸（14px），但用 ::before 把可点范围撑到 24px ——
+   * 卡角只有 48px，圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
    * 放大用伪元素（不占布局），视觉尺寸不变。
    */
-  /*
-   * 与 @ 按钮同一套实色衬底（用户 2026-11-07：@ 不够明显）。
-   * 两颗按钮在同一张卡上，衬底的强弱必须一致，否则一颗看得见、一颗隐形。
-   */
-  background: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent);
-  color: var(--ui-panel, #fff);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
   opacity: 0;
   /* 视觉默认隐藏，但**始终可点**：隐藏态如果连指针都不接，
      鼠标从卡片外靠近时那几像素的缝会落到画布上（真机踩过）。 */
@@ -569,17 +558,14 @@
 .nb-remove:focus-visible {
   opacity: 1;
 }
-.nb-remove:hover {
-  /* 危险色的语义留给图标；底色统一走 hover 那一档，和右边 @ 按钮一致 */
-  color: var(--ui-danger, #ef4444);
-}
 /**
- * 同上：ghost Button 的 `hover:bg-muted` 比单类选择器优先，会把这颗按钮 hover 成透明。
- * 提到「卡片 → 按钮 → hover」三段，底色才由这里说了算（用户 2026-11-06）。
+ * 关闭按钮的尺寸/底色/hover 全部与 @ 按钮共用一套（见 bottom-bar-tagmenu.css 的
+ * `.nb-card-act, .nb-remove`）。这里只保留「hover 时必须是实底」这一条兜底，
+ * 说明：三段选择器压过组件库 ghost 的 `hover:bg-muted`（2026-11-06 真机踩过）。
  */
 .nb-cards .nb-card .nb-remove:hover {
   background: color-mix(in srgb, var(--ui-ink, #18202b) 92%, transparent);
-  color: var(--ui-danger, #ef4444);
+  color: var(--ui-panel, #fff);
   opacity: 1;
 }
 .nb-card-text {

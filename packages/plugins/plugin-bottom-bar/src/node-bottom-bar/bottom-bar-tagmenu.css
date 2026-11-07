@@ -16,29 +16,32 @@
 .nb-card:hover .nb-card-actions {
   pointer-events: auto;
 }
-.nb-card-act {
-  position: absolute;
-  /*
-   * 尺寸从 16 提到 18（用户 2026-11-07：右下角 @ 不够明显）。
-   * 卡片只有 48px，18px 是「看得见」和「不糊住缩略图」的折中。
-   */
-  width: 18px;
-  height: 18px;
+/**
+ * 卡片上的悬浮小按钮（@ / 关闭）——**唯一一套外观**（用户 2026-11-07）。
+ *
+ * 用户口径：两颗按钮要和左下角「10s」那个小角标一样高、用同一套中性样式，
+ * hover 只加深一档中性灰，**不要主题色**（之前关闭按钮 hover 变成红色）。
+ *
+ * 因此这里把两颗按钮的尺寸/底色/字色/hover 合并成一条规则；
+ * 各自的位置与显隐在下面分开写，任何一颗都不会再单独漂移。
+ */
+.nb-card-act,
+.nb-remove {
+  /* 与 .nb-card-duration 的 13px 行高对齐（多 1px 让圆形圆角完整） */
+  width: 14px;
+  height: 14px;
   padding: 0;
   border-radius: 999px;
-  /*
-   * 实心衬底（用户 2026-11-07）。
-   *
-   * 以前是 --ui-chip（深色主题只有 10% 白），压在视频缩略图上几乎隐形；
-   * 现在与时长角标同一套「实色底 + 对比字」：浅色主题深底白字、深色主题浅底深字，
-   * 两种主题下都能从任何画面上跳出来。hover 再加深一档（像菜单行）。
-   */
+  /* 与时长角标同一套实色底 + 对比字：两种主题下都能从画面上跳出来 */
   background: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent);
   color: var(--ui-panel, #fff);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
+}
+.nb-card-act {
+  position: absolute;
   opacity: 0;
   transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
 }
@@ -46,22 +49,22 @@
   opacity: 1;
 }
 /**
- * 组件库 Button 的 ghost 档自带 `hover:bg-muted`，优先级高于单类选择器，
- * 会把这里的底色盖成透明（用户 2026-11-06 报「hover 背景消失」）。
- * 用「卡片 → 按钮 → hover」三段选择器提权，保证我们这层生效。
+ * hover 只加深中性灰。
+ *
+ * 为什么要三段选择器：组件库 Button 的 ghost 档自带 `hover:bg-muted`，
+ * 优先级高于单类选择器，会把这里的底色盖成透明（2026-11-06 真机踩过）。
+ * 关闭按钮同样走这一条，**不再出现危险色**（用户 2026-11-07 明确不要主题颜色）。
  */
-.nb-cards .nb-card .nb-card-act:hover {
+.nb-cards .nb-card .nb-card-act:hover,
+.nb-cards .nb-card .nb-remove:hover {
   background: color-mix(in srgb, var(--ui-ink, #18202b) 92%, transparent);
   color: var(--ui-panel, #fff);
-  /* Button 基类自带 hover:text-foreground；图标色要压住它 */
   opacity: 1;
 }
 .nb-card-at {
   right: 2px;
   bottom: 2px;
   z-index: 4;
-  /* @ 是卡片上最要认得出的两个按钮之一：字符本身再大一点点 */
-  font-size: 12px;
 }
 .nb-card-play-act {
   left: 50%;
