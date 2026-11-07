@@ -59,25 +59,21 @@ describe('标签缩略图与文字同高', () => {
   })
 })
 
-describe('标签左侧图标：hover 高亮（用户 2026-11-07）', () => {
-  it('只有指针落在图标上才高亮（整颗标签 hover 不触发）', () => {
-    expect(CSS).toMatch(/\.resource-chip--editable:has\(\.resource-chip-icon:hover\)/)
+describe('标签左侧图标：hover 换铅笔 + 图标高亮（用户 2026-11-07）', () => {
+  it('hover 整颗标签就换成铅笔（不只靠菜单打开）', () => {
+    // 缩略图与类型图标要在 hover 时藏掉，由同一组规则覆盖 hover 与「菜单打开」两个状态
+    const i = CSS.indexOf('.nb-editor .resource-chip--editable:hover .resource-chip-thumb,')
+    expect(i).toBeGreaterThan(-1)
+    const group = CSS.slice(i, CSS.indexOf('}', CSS.indexOf('{', i)))
+    expect(group).toContain('.resource-chip--editable:hover .resource-chip-icon')
+    expect(group).toContain('.resource-chip--editing .resource-chip-icon')
+    expect(CSS).toMatch(/\.resource-chip--editable:hover::after,\s*\n\.nb-editor \.resource-chip--editing::after \{/)
   })
 
-  it('只变图标颜色：默认灰、hover 更深，不加任何背景', () => {
-    const base = CSS.slice(
-      CSS.indexOf('.nb-editor .resource-chip--editable {'),
-      CSS.indexOf('}', CSS.indexOf('.nb-editor .resource-chip--editable {')),
-    )
-    const hover = CSS.slice(
-      CSS.indexOf('.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {'),
-      CSS.indexOf('}', CSS.indexOf('.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {')),
-    )
-    // 静息是灰（58% 前景色），hover 是纯前景色（更深）
-    expect(base).toMatch(/color:\s*color-mix\(/)
-    expect(hover).toMatch(/color:\s*var\(--ui-ink/)
+  it('指针进到图标上时铅笔变深（只改颜色，不加背景）', () => {
+    expect(CSS).toMatch(/\.resource-chip--editable:has\(\.resource-chip-icon:hover\)::after\s*\{[^}]*background-color:\s*var\(--ui-ink/)
     // 用户明确不要背景块
-    expect(CSS).not.toMatch(/resource-chip--editable[^{]*\{[^}]*background/)
     expect(CSS).not.toMatch(/radial-gradient/)
+    expect(CSS).not.toMatch(/\.resource-chip--editable:hover\s*\{[^}]*background:/)
   })
 })

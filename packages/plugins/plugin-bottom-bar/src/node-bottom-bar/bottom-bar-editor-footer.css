@@ -273,50 +273,39 @@
   height: 14px;
 }
 /**
- * 左侧图标 hover 高亮（用户 2026-11-07 第二轮）。
+ * 标签左侧的「图标位」：静息是类型图标/缩略图，hover 换成铅笔（用户 2026-11-07 定稿）。
  *
- * 用户原话：「我不要这个背景，我要的是让这个图标可以进行高亮显示，
- * 比如颜色默认是灰色，hover 上去变得更暗一些」。
+ * 两个状态都要能显示铅笔：
+ *  ① **hover 整颗标签** → 换成铅笔（用户原话：hover 到标签上，左侧要变成编辑图标）；
+ *  ② 候选菜单打开 → 一直保持铅笔（指针移到菜单上也不能变回缩略图）。
+ * 所以下面把 «hover» 与 «.resource-chip--editing» 合并进同一组选择器，
+ * 不再依赖编辑器 bundle 里那条 hover 规则（它只对 bundle 自己的样式层生效，
+ * 底栏这套样式里实测不生效，表现就是「只有点开菜单才变铅笔」）。
  *
- * 只改**图形颜色**，不加任何底色/描边：
- *   · 铅笔（hover 时盖在图标位上的 ::after）与图标都是 currentColor 画的，
- *     所以把这个格子的 color 调一档，图形就跟着变；
- *   · 名字有自己独立的颜色规则，不受影响；
- *   · 只有指针真的落在图标上才变深（:has），整颗标签 hover 不变。
+ * 铅笔用 ::after 画在图标位上（绝对定位，不占布局）；图标本身靠 mask + currentColor，
+ * 缩略图是叠在图标位上的 <img>，所以「藏图 + 露出铅笔」= 只改这两个 opacity。
  */
-.nb-editor .resource-chip--editable {
-  /* 默认灰：图形的「静息色」 */
+.nb-editor .resource-chip--editable .resource-chip-icon {
+  /* 静息色：灰（用户口径：默认灰，hover 更暗） */
   color: color-mix(in srgb, var(--ui-ink, #18202b) 58%, transparent);
   transition: color 0.15s ease-out;
 }
-.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {
-  /* hover 深一档（用户口径：更暗一些） */
-  color: var(--ui-ink, #18202b);
-}
-@media (prefers-reduced-motion: reduce) {
-  .nb-editor .resource-chip--editable {
-    transition: none;
-  }
-}
-.nb-editor .resource-chip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-  /* 与左侧图标/缩略图同高（14px 行框），两者看起来一样大 */
-  line-height: 14px;
-  color: var(--ui-ink, #18202b);
-}
-/**
- * 标签编辑态（用户 2026-11-06）：点左侧图标打开候选菜单后，这里**固定显示铅笔**，
- * 不再露出缩略图（正常 hover 也会换铅笔，但鼠标一移到菜单上就恢复成图）。
- * 与 bundle 的 `--editable::after` 用同一个铅笔图形，保证两处长得一样。
- */
+.nb-editor .resource-chip--editable:hover .resource-chip-thumb,
+.nb-editor .resource-chip--editable:hover .resource-chip-icon,
 .nb-editor .resource-chip--editing .resource-chip-thumb,
 .nb-editor .resource-chip--editing .resource-chip-icon {
   opacity: 0;
 }
+/**
+ * 图标位上的铅笔。
+ *
+ * 只在两种状态下显示：
+ *   · 整颗标签 hover（.resource-chip--editable:hover）
+ *   · 菜单打开（.resource-chip--editing）
+ * 之前这里是分开两条规则、且要靠 bundle 的默认样式；现在合并成一条，
+ * 无论从哪条路进入，铅笔的位置/尺寸/颜色都一致。
+ */
+.nb-editor .resource-chip--editable:hover::after,
 .nb-editor .resource-chip--editing::after {
   content: '';
   display: block;
@@ -337,6 +326,34 @@
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   pointer-events: none;
+  transition: background-color 0.15s ease-out;
+}
+/**
+ * 高亮：只改**铅笔/图标本身的颜色**，不加任何背景块（用户 2026-11-07 明确不要背景）。
+ *
+ * · 整颗标签 hover：铅笔是灰（58% 前景色）；
+ * · 指针进到图标那一小块：铅笔变纯前景色（更暗），这就是用户要的「高亮」。
+ * 用 :has 只认图标格上的指针；名字区域的 hover 不会让铅笔变深。
+ */
+.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover)::after {
+  background-color: var(--ui-ink, #18202b);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-editor .resource-chip--editable .resource-chip-icon,
+  .nb-editor .resource-chip--editable:hover::after,
+  .nb-editor .resource-chip--editing::after {
+    transition: none;
+  }
+}
+.nb-editor .resource-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  /* 与左侧图标/缩略图同高（14px 行框），两者看起来一样大 */
+  line-height: 14px;
+  color: var(--ui-ink, #18202b);
 }
 /* 选中态：与文本选区同色（用户口径：和文本选中背景一致，不用黑色） */
 .nb-editor .resource-chip.ProseMirror-selectednode,
