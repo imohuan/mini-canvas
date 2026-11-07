@@ -120,6 +120,8 @@
   position: absolute;
   right: 6px;
   bottom: 6px;
+  /* 圆形（用户 2026-11-06）：组件库默认圆角随主题档位变，这里钉成胶囊/圆 */
+  border-radius: 999px;
 }
 
 /**

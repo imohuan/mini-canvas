@@ -1,20 +1,22 @@
 /**
- * 视频时长 / 上限的纯函数（用户 2026-10-29）。
+ * 视频时长 / 上限的纯函数（用户 2026-11-06 改成 `10s` 这种写法）。
  *
- * 卡片右下角显示「分:秒」，超过 60 秒要醒目提醒（这边的视频限制在 60 秒以内）。
+ * 卡片左下角显示总时长，超过 60 秒要醒目提醒（这边的视频限制在 60 秒以内）。
  */
 import { describe, expect, it } from 'vitest'
 import { formatVideoDuration, mergeRefTiles, videoOverLimit, VIDEO_DURATION_LIMIT_SEC } from '../refTiles'
 
-describe('formatVideoDuration：卡片角标上的分:秒', () => {
-  it('不足一分钟也写成 0:07', () => {
-    expect(formatVideoDuration(7)).toBe('0:07')
-    expect(formatVideoDuration(59.4)).toBe('0:59')
+describe('formatVideoDuration：卡片角标上的秒数', () => {
+  it('不足一分钟直接写秒（10 → 10s）', () => {
+    expect(formatVideoDuration(10)).toBe('10s')
+    expect(formatVideoDuration(7)).toBe('7s')
+    expect(formatVideoDuration(59.4)).toBe('59s')
   })
 
-  it('一分钟以上按分:秒', () => {
-    expect(formatVideoDuration(83)).toBe('1:23')
-    expect(formatVideoDuration(600)).toBe('10:00')
+  it('一分钟以上用 m / s 组合', () => {
+    expect(formatVideoDuration(83)).toBe('1m23s')
+    expect(formatVideoDuration(600)).toBe('10m')
+    expect(formatVideoDuration(60)).toBe('1m')
   })
 
   it('缺失 / 非法 → 空串（不画角标）', () => {

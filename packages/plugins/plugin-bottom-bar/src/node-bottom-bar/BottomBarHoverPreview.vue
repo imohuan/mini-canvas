@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { RefTile } from '../refTiles'
+import { ICON_EXPAND } from './icons'
 
 defineProps<{
   livePreviewTile: RefTile | null
@@ -57,15 +58,18 @@ const Button = useUiComponent('Button')
       />
       <span v-else class="nb-hover-preview-empty">（无预览）</span>
       <!--
-        全屏按钮：只用组件库默认外观（用户 2026-11-06：不要自己加任何 UI 样式）。
-        位置由 .nb-hover-preview-open 负责，外观交给 Button 的 variant / size。
+        全屏按钮（用户 2026-11-06）：圆形图标按钮、小尺寸、ghost 默认外观。
+        底栏只负责摆到右下角；圆角/底色/悬停一律交给组件库。
       -->
-      <Button variant="default" size="sm"
+      <Button variant="ghost" size="icon-xs"
         class="nb-hover-preview-open"
         type="button"
         :aria-label="'全屏预览 ' + livePreviewTile.label"
+        :title="'全屏预览 ' + livePreviewTile.label"
         @click.stop="emit('openFullscreen', livePreviewTile)"
-      >全屏</Button>
+      >
+        <span aria-hidden="true" v-html="ICON_EXPAND" />
+      </Button>
     </div>
   </Teleport>
 </template>

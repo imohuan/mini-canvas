@@ -245,26 +245,24 @@
  * 以前这两类画的是「摄像机 / 音符」类型图标；用户要的是统一的播放三角，
  * 一眼看出「这张可以播」。因为里面是真实 svg，这里要清掉 mask 那套形状。
  */
-.nb-card-fallback--play {
-  display: grid;
-  place-items: center;
+/**
+ * 必须带 `[data-kind]`：上面那组 `.nb-card-fallback[data-kind='video']` 的优先级更高，
+ * 只写 `.nb-card-fallback--play` 的话 mask 仍会生效，里面的 svg 会被裁成摄像机形状 ——
+ * 用户看到的就是「中间图标根本没换成播放键」。
+ */
+.nb-card-fallback--play[data-kind] {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   width: 22px;
   height: 22px;
-  border-radius: 999px;
-  /* 默认灰底（hover 再加深一档，与 menu 行的 hover 观感一致） */
-  background-color: var(--ui-chip, rgb(0 0 0 / 0.07));
-  color: var(--ui-ink, #18202b);
   -webkit-mask-image: none;
   mask-image: none;
-  transition: background-color 0.15s ease-out;
 }
 .nb-card-fallback--play svg {
   width: 12px;
   height: 12px;
   margin-left: 1px;
-}
-.nb-card:hover .nb-card-fallback--play {
-  background-color: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
 }
 
 /*
@@ -621,16 +619,17 @@
  */
 .nb-card-duration {
   position: absolute;
-  right: 2px;
+  /* 放左下角（用户 2026-11-06）：右下角留给 @ 按钮，两者不再叠在一起 */
+  left: 2px;
   bottom: 2px;
   z-index: 3;
   padding: 0 3px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--ui-ink, #18202b) 72%, transparent);
   color: var(--ui-panel, #fff);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 12px;
+  line-height: 13px;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -644,21 +643,43 @@
  * 视频播放按钮（用户 2026-10-29 重构：视频卡片中间给半透明播放键）。
  * 只是身份标识 —— 真正播放发生在 hover 悬浮预览里。
  */
+/**
+ * 视频 / 音频卡片中间的播放键（用户 2026-11-06）。
+ *
+ * 有缩略图（.nb-card-play）和没缩略图（.nb-card-fallback--play）两种情况下
+ * 必须长得**一模一样** —— 以前一个用黑色半透明圆片 + 白三角，另一个用浅灰圆片 +
+ * 深色三角，用户看到的就是「中间图标像没改过」。现在统一成浅灰圆片 + 深色三角，
+ * 鼠标移到卡片上再加深一档。
+ */
+.nb-card-play,
+.nb-card-fallback--play {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background-color: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+  transition: background-color 0.15s ease-out;
+}
 .nb-card-play {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: 22px;
+  height: 22px;
   pointer-events: none;
 }
 .nb-card-play svg {
-  width: 18px;
-  height: 18px;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
-  color: var(--ui-panel, #fff);
+  width: 12px;
+  height: 12px;
+  margin-left: 1px;
+  padding: 0;
+  background: none;
+  color: inherit;
+}
+.nb-card:hover .nb-card-play,
+.nb-card:hover .nb-card-fallback--play {
+  background-color: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
 }
 
 /**

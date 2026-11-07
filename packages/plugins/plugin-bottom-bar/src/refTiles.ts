@@ -196,10 +196,11 @@ export function invalidRefHint(tiles: ReadonlyArray<RefTile>): string {
 }
 
 /**
- * 视频时长 → 卡片右下角的小字（用户 2026-10-29：只显示分:秒，字要小一点）。
+ * 视频时长 → 卡片左下角的小字（用户 2026-11-06：不要 `0:10`，直接写 `10s`）。
  *
  * - 秒以下四舍五入；
- * - 不足 1 分钟也写成 `0:07` 这种（一眼能看出是时长）；
+ * - 不足 1 分钟：`10s`；
+ * - 1 分钟以上：`1m23s`（一眼能读懂的总时长）；
  * - 非法/缺失 → 空串（调用方据此不画角标）。
  */
 export function formatVideoDuration(seconds: number | null | undefined): string {
@@ -208,7 +209,8 @@ export function formatVideoDuration(seconds: number | null | undefined): string 
   const total = Math.round(sec)
   const m = Math.floor(total / 60)
   const s = total % 60
-  return m + ':' + String(s).padStart(2, '0')
+  if (m === 0) return s + 's'
+  return s === 0 ? m + 'm' : m + 'm' + s + 's'
 }
 
 /**
