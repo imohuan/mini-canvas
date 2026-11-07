@@ -5,6 +5,16 @@ import type { BarAction } from '../barTypes'
 import { FALLBACK_TYPE_ICONS } from './icons'
 import { customModelIcon, modelIconOf, type ModelIcon } from './modelIcons'
 
+/**
+ * Agent 插件提供的平台图标服务（可选依赖）。
+ * 装在宿主里时优先用它 —— 图标只有一份，底栏不再手画品牌图形。
+ * 没装 Agent 时返回 undefined，调用方回落到本地兜底图形。
+ */
+interface ModelIconServiceLike {
+  svgOfName(name: string): string
+  platformOfName(name: string): string
+}
+
 interface ActionDeps {
   ctx: CanvasRenderContext['ctx']
   host: CanvasRenderContext['host']
@@ -57,14 +67,35 @@ export function useBottomBarActions(
   })
 
   const hasActions = computed(() => actions.value.length > 0)
+
+  /** 平台图标服务（装 Agent 时才有） */
+  const iconService = computed(() => ctx.tryGet<ModelIconServiceLike>('modelIcons'))
+
+  /**
+   * 取一个动作的图标：
+   * 1. 动作自带的 icon（provider 上传的 SVG / 图片）—— 最精确；
+   * 2. Agent 提供的平台品牌图标 —— 用户口径「两处共用一套」；
+   * 3. 本地兜底（认不出平台时按节点类型给个通用图形，绝不空白）。
+   */
+  function modelIconOfAction(a: BarAction): ModelIcon {
+    const own = customModelIcon(a.icon)
+    if (own) return own
+    const svc = iconService.value
+    if (svc) {
+      const platform = svc.platformOfName(a.title)
+      if (platform !== 'custom') return { tone: platform as ModelIcon['tone'], svg: svc.svgOfName(a.title) }
+    }
+    return modelIconOf(a.title, a.types?.[0] ?? nodeType.value)
+  }
+
   const actionOptions = computed(() =>
     actions.value.map((a) => ({
       label: a.title,
       value: a.id,
       description: a.description,
       icon: iconOfType(a.types?.[0] ?? nodeType.value),
-      /** 模型图标：provider 自带的优先，没给 / 认不出再按名字猜，最后按节点类型兜底 */
-      model: customModelIcon(a.icon) ?? modelIconOf(a.title, a.types?.[0] ?? nodeType.value),
+      /** 模型图标：provider 自带 → Agent 平台图标 → 本地兜底 */
+      model: modelIconOfAction(a),
       group: a.group,
     })),
   )

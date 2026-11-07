@@ -1,0 +1,97 @@
+/*
+ * 底栏复用的 Agent 模型面板：尺寸与滚动。
+ *
+ * 两个问题（用户 2026-11-07 截图）：
+ * 1. 面板出现两条滚动条 —— 组件库的 DropdownMenuContent 自带一层
+ *    `[data-slot='dropdown-menu-scroll']`（overflow-y:auto），我们面板里还有一层
+ *    ScrollArea。首屏内容不满时看不出来，一旦限高就两层同时滚。
+ * 2. 左侧平台栏最后一行被切掉一半 —— 面板高度是"最大高度"而不是确定高度，
+ *    左栏的滚动区拿不到可用高度，只能按内容溢出裁剪。
+ *
+ * 做法：
+ * · 外层滚动关掉（hidden），只留面板自己的 ScrollArea；
+ * · 浮层给**确定高度**，面板 height:100% 撑满，左右两栏都用这个高度；
+ * · 头部固定，列表区 flex:1 + min-height:0，滚到底也不会把标题顶走。
+ */
+.nb-agent-model-menu [data-slot='dropdown-menu-scroll'] {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * 选择器带 .ac-model-panel / .cp-panel 是为了压过 Agent 的 .ac-panel（min-height: min(460px, …)）。
+ * 只写 .ac-panel 时优先级与对方相同，后加载的顺序不保证，实测面板仍按 460px 撑高、
+ * 比外框高 100px —— 这才有「底部被裁掉半行」和「外层跟着滚」两个症状。
+ */
+.nb-agent-model-menu .ac-panel,
+.nb-agent-model-menu .ac-model-panel,
+.nb-agent-model-menu .cp-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  /* 与 Agent 的 min-height: min(460px, …) 对抗时必须显式写 0 */
+  min-height: 0 !important;
+  max-height: none;
+  height: 100%;
+  container-type: inline-size;
+}
+
+.nb-agent-model-menu .ac-panel-head {
+  flex: none;
+  /* 底栏贴着画布下方，浮层被视口高度卡住；头部每省 1px 都直接还给左栏 */
+  gap: 6px;
+  padding: 8px 8px 6px;
+}
+
+.nb-agent-model-menu .ac-panel-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nb-agent-model-menu .ac-menu-scroll {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nb-agent-model-menu .ac-view-stack {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 分栏左栏：整栏必须落在面板高度里，最后一行才不会被切掉 */
+.nb-agent-model-menu .ac-split {
+  height: 100%;
+  min-height: 0;
+}
+
+.nb-agent-model-menu .ac-split-rail {
+  min-height: 0;
+}
+
+.nb-agent-model-menu .ac-rail-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * 左栏每行压到 26px。
+ *
+ * 为什么必须压：底栏贴着画布下方，浮层向上展开时可用高度只有 ~455px，
+ * 扣掉头部后左栏只剩 ~300px；平台 11 行按组件库默认 32px 要 352px，
+ * 于是最后一行（阶跃星辰 / Grok）只露半截。
+ * 只压底栏这一份，Agent 面板里保持原样。
+ */
+.nb-agent-model-menu .ac-split-rail button {
+  height: 26px;
+  min-height: 26px;
+  padding-block: 0;
+  font-size: 12px;
+}
+

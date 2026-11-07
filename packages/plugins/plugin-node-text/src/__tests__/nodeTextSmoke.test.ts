@@ -56,12 +56,12 @@ describe('node-text 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('两条命令都注册上了（复制/删除），样式命令已删', async () => {
+  it('复制 / 删除命令已删除（用户 2026-11-07），样式命令也没有', async () => {
     const ctx = boot()
     await ctx.start()
     const cmd = ctx.get<{ has(id: string): boolean }>('command')
     for (const id of ['text:duplicate', 'text:delete']) {
-      expect(cmd.has(id)).toBe(true)
+      expect(cmd.has(id)).toBe(false)
     }
     expect(cmd.has('text.bold')).toBe(false)
     expect(cmd.has('text.style')).toBe(false)

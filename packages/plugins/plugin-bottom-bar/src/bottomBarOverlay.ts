@@ -11,6 +11,14 @@ export interface BottomBarShownInput {
   soleSelected: boolean
   /** 本节点类型有可用的底栏动作（nodeBar.list 非空） */
   hasActions: boolean
+  /**
+   * 是否有「预设提示词」入口。
+   *
+   * 用户口径（2026-11-07）：不管什么平台、什么类型，预设按钮都要在。
+   * 音频节点一条动作都没注册、文本节点删掉复制 / 删除后也是零动作 ——
+   * 只按 hasActions 判断，这两类会把整条底栏藏掉，预设按钮根本没机会出现。
+   */
+  hasPresets?: boolean
   /** 已经提交过任务、栏暂时收起 */
   submitted: boolean
 }
@@ -23,5 +31,5 @@ export interface BottomBarShownInput {
  * 可视化节点没有底栏动作 → 这里 false，哪怕画布级 `.nb-overlay` 外壳还在。
  */
 export function resolveBottomBarShown(input: BottomBarShownInput): boolean {
-  return input.soleSelected && input.hasActions && !input.submitted
+  return input.soleSelected && (input.hasActions || input.hasPresets === true) && !input.submitted
 }

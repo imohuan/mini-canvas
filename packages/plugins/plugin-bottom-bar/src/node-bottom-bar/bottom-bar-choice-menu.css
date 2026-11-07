@@ -1,0 +1,82 @@
+/*
+ * 底栏复用的 Agent「生成动作」面板：尺寸与滚动。
+ *
+ * 与 bottom-bar-model-menu.css 同一套处理（用户 2026-11-07 截图里的两个问题）：
+ * 1. 外层 DropdownMenuContent 自带一个 overflow-y:auto 的滚动容器，
+ *    面板里的 ScrollArea 又是一个 —— 两层同时滚就是两条滚动条；
+ * 2. 浮层只有 max-height 没有确定高度时，分栏左栏拿不到可用高度，
+ *    最后一行会被裁掉一半。
+ *
+ * 所以这里同样：外层滚动关掉、面板给确定高度、头部固定、列表区 flex:1。
+ */
+.nb-agent-choice-menu [data-slot='dropdown-menu-scroll'] {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * 选择器带 .ac-model-panel / .cp-panel 是为了压过 Agent 的 .ac-panel（min-height: min(460px, …)）。
+ * 只写 .ac-panel 时优先级与对方相同，后加载的顺序不保证，实测面板仍按 460px 撑高、
+ * 比外框高 100px —— 这才有「底部被裁掉半行」和「外层跟着滚」两个症状。
+ */
+.nb-agent-choice-menu .ac-panel,
+.nb-agent-choice-menu .ac-model-panel,
+.nb-agent-choice-menu .cp-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  container-type: inline-size;
+}
+
+.nb-agent-choice-menu .ac-panel-head {
+  flex: none;
+  gap: 6px;
+  padding: 8px 8px 6px;
+}
+
+.nb-agent-choice-menu .ac-panel-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nb-agent-choice-menu .ac-menu-scroll {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nb-agent-choice-menu .ac-view-stack {
+  flex: 1;
+  min-height: 0;
+}
+
+.nb-agent-choice-menu .ac-split {
+  height: 100%;
+  min-height: 0;
+}
+
+.nb-agent-choice-menu .ac-split-rail {
+  min-height: 0;
+}
+
+.nb-agent-choice-menu .ac-rail-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 与模型菜单一致：左栏每行压到 26px，平台多时不至于把最后一行切掉 */
+.nb-agent-choice-menu .ac-split-rail button {
+  height: 26px;
+  min-height: 26px;
+  padding-block: 0;
+  font-size: 12px;
+}
+

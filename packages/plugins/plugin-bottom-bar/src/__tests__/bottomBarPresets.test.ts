@@ -22,10 +22,15 @@ describe('预设提示词按钮：接线', () => {
     expect(ACTIONS).toContain('<slot name="presets" />')
   })
 
-  it('底栏把 BottomBarPresets 放进 presets 插槽（没有输入框的节点不显示）', () => {
+  /**
+   * 用户口径（2026-11-07）：不管什么平台、什么类型，预设按钮都要显示 ——
+   * 所以这里不再挂 v-if="showEditor"（音频节点没有输入框，也必须有入口）。
+   */
+  it('底栏把 BottomBarPresets 放进 presets 插槽（所有类型都显示）', () => {
     expect(BAR).toContain('<template #presets>')
     expect(BAR).toContain('<BottomBarPresets')
-    expect(BAR).toContain('v-if="showEditor"')
+    // 按钮本身不再被「有没有输入框」挡住
+    expect(BAR).not.toMatch(/<BottomBarPresets\s+v-if="showEditor"/)
   })
 
   it('按钮带无障碍名和可测标识', () => {

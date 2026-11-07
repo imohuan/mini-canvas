@@ -1,0 +1,125 @@
+<script setup lang="ts">
+/**
+ * BottomBarModelPicker —— 底栏的「模型」下拉（复用 Agent 的 ModelPicker）。
+ *
+ * 用户口径（2026-11-07）：
+ * 「在 Agent 插件 UI 里面就有一个配置好的模型下拉菜单，你是否可以把他作为一个组件
+ *   注册到上下文场域中，然后在底部状态栏中直接使用，这样他们就可以共用。」
+ *
+ * 做法：
+ * - Agent 在 `apply` 里把 ModelPicker 登记进 `ui` 场（名字 agentModelPicker）；
+ * - 这里按名取件，面板主体完全复用，不再自己写一份；
+ * - 图标由 Agent 的 `modelIcons` 服务提供，两处同一套。
+ *
+ * 与 Agent 的差别只有一个：**选中不等于换会话**。
+ * 底栏只把 provider/modelId 记下来，发送时随请求带给 Agent 的单轮接口。
+ *
+ * Agent 没装（取不到组件）时：退回原来的动作下拉（由父组件决定），这里只负责报告。
+ */
+import { computed, nextTick, ref, watch } from 'vue'
+import { useUiComponent } from '@mini-canvas/canvas-render'
+import type { ModelRowLike } from './modelPickerBridge'
+
+const props = defineProps<{
+  /** Agent 里的全量模型（含未配密钥的，组件内部自己筛） */
+  models: ModelRowLike[]
+  /** 当前选中的模型（底栏记住的那一份，不是 Agent 会话的） */
+  model: { provider: string; modelId: string } | null
+  disabled?: boolean
+}>()
+
+const emit = defineEmits<{
+  pick: [model: { provider: string; modelId: string }]
+  /** 取不到 Agent 的组件时，通知父组件回退到动作下拉 */
+  unavailable: []
+}>()
+
+const Button = useUiComponent('Button')
+const DropdownMenu = useUiComponent('DropdownMenu')
+const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
+const DropdownMenuContent = useUiComponent('DropdownMenuContent')
+/** Agent 注册的模型面板；没装 Agent 时是 undefined */
+const AgentModelPicker = useUiComponent('agentModelPicker')
+
+/**
+ * 面板宽度：分栏视图要宽一点，否则左栏平台列表被挤成一条缝（400px 实测只能露半行）。
+ * 与 Agent 输入区同一口径：卡片 340 / 分栏 588（再按视口收）。
+ */
+const splitView = ref(false)
+const menuWidth = computed(() => 'min(' + (splitView.value ? 588 : 340) + 'px, calc(100vw - 24px))')
+/**
+ * 面板高度：给**确定值**，不用 max-height。
+ *
+ * 为什么：只给上限时，分栏左栏的滚动区拿不到可用高度，最后一行会被裁掉一半
+ * （用户 2026-11-07 截图：阶跃星辰只露了半行）。确定高度下 height:100% 才有意义。
+ */
+/**
+ * 高度必须是确定值，不能用 auto。
+ *
+ * 面板里的 .ac-panel 是 height:100%，父级 auto 时它会塌成内容高度、
+ * 内部的滚动区拿不到高度（实测分栏只剩 162px，左栏 0 高）。
+ *
+ * 分栏给 560 的上限：左栏 11 个平台竖排要 ~310px，360px 的卡片高度只放得下 6 行，
+ * 最后一行必然只露半截（用户 2026-11-07 截图）。实际生效高度会被
+ * Radix 的可用高度夹住，窗口矮的时候左栏自己滚。
+ */
+const menuHeight = computed(() =>
+  splitView.value ? 'min(560px, calc(100dvh - 64px))' : 'min(360px, calc(100dvh - 180px))',
+)
+/** 分栏往上开：底栏贴着画布下方，向下只剩 300px 左右，放不下整列平台 */
+const menuSide = computed(() => (splitView.value ? 'top' : 'bottom'))
+const open = ref(false)
+const available = computed(() => Boolean(AgentModelPicker.value))
+
+/**
+ * 取不到就告诉父组件一次：底栏据此退回原下拉，不让用户面对一个空按钮。
+ *
+ * 必须延到下一帧再说：这个通知会让父组件卸载本组件；若发生在自己的挂载/更新过程中，
+ * Vue 会在 patch 里遇到已置空的 vnode（实测：Cannot set properties of null (setting __vnode)）。
+ */
+watch(
+  available,
+  (ok) => { if (!ok) void nextTick(() => emit('unavailable')) },
+  { immediate: true },
+)
+
+/** 触发器上显示的名字：优先 displayName，否则 modelId */
+const label = computed(() => {
+  if (!props.model) return '选择模型'
+  const hit = props.models.find((m) => m.provider === props.model!.provider && m.modelId === props.model!.modelId)
+  return hit?.displayName || props.model.modelId
+})
+
+function pick(m: { provider: string; modelId: string }): void {
+  emit('pick', m)
+  open.value = false
+}
+</script>
+
+<template>
+  <DropdownMenu v-if="available" v-model:open="open">
+    <DropdownMenuTrigger as-child>
+      <Button variant="ghost" size="sm" class="nb-action-select nb-model-trigger" type="button"
+        :disabled="disabled" :aria-expanded="open" title="选择模型" aria-label="选择模型"
+        data-testid="bar-model-picker">
+        <span class="nb-model-trigger-label">{{ label }}</span>
+        <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" :side="menuSide" class="nb-model-menu nb-agent-model-menu"
+      :style="{ width: menuWidth, height: menuHeight }">
+      <!-- 不传 compact：卡片 / 分栏两个视图都保留（用户 2026-11-07） -->
+      <AgentModelPicker :models="models" :current="model" @pick="pick" @update:view="(v: 'card' | 'split') => (splitView = v === 'split')" />
+    </DropdownMenuContent>
+  </DropdownMenu>
+</template>
+
+<!--
+  底栏作用域的尺寸覆盖（.nb-agent-model-menu 里的 .ac-panel 收窄）。
+  不能用 scoped：这些 class 在 Agent 的组件里渲染，不带本组件的 data-v。
+-->
+<style src="./bottom-bar-model-menu.css"></style>
+

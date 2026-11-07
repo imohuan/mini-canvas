@@ -103,35 +103,24 @@ describe('text 节点写回', () => {
     ctx.stop()
   })
 
-  it('text.delete 命令删掉节点，undo 能恢复', async () => {
+  /**
+   * 用户口径（2026-11-07）：复制 / 删除两条命令直接删掉，不需要了。
+   * 服务方法（duplicateTextNode / doc.removeNodes）仍在，只是不再注册成命令；
+   * 通用复制删除由 clipboard 插件与画布快捷键提供。
+   */
+  it('text:duplicate / text:delete 命令已移除（服务方法仍在）', async () => {
     const ctx = boot()
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
-    const graph = ctx.get<DocService>('doc')
+    const cmd = ctx.get<{ has(id: string): boolean; execute(id: string, ...p: unknown[]): unknown }>('command')
     const id = text.addTextNode({ x: 0, y: 0 })
 
-    const cmd = ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command')
-    cmd.execute('text:delete', { nodeId: id })
-    expect(graph.getNode(id)).toBeUndefined()
+    expect(cmd.has('text:duplicate')).toBe(false)
+    expect(cmd.has('text:delete')).toBe(false)
 
-    graph.undo()
-    expect(graph.getNode(id)).toBeTruthy()
-    ctx.stop()
-  })
-
-  it('text.duplicate 命令复制节点；缺 nodeId 时各命令 no-op 返回 false', async () => {
-    const ctx = boot()
-    await ctx.start()
-    const text = ctx.get<TextNodeService>('text')
-    const graph = ctx.get<DocService>('doc')
-    const cmd = ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command')
-    const id = text.addTextNode({ x: 0, y: 0 })
-
-    expect(cmd.execute('text:duplicate', { nodeId: id })).toBe(true)
-    expect(graph.getNodes().length).toBe(2)
-
-    expect(cmd.execute('text:duplicate', {})).toBe(false)
-    expect(cmd.execute('text:delete', {})).toBe(false)
+    // 服务层仍能复制（其它入口还在用），只是没有命令入口
+    const copyId = text.duplicateTextNode(id)
+    expect(copyId).not.toBe('')
     ctx.stop()
   })
 })

@@ -96,6 +96,19 @@
   color: var(--ui-ink-mute, #8c95a3);
   font-variant-numeric: tabular-nums;
 }
+/* 类型标签：提醒用户「这一份只属于当前类型」（2026-11-07） */
+.nbp-type {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.05));
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ui-ink-dim, #6b7280);
+  line-height: 1;
+}
 
 .nbp-searchrow {
   display: flex;

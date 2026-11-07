@@ -129,23 +129,8 @@ export function apply(ctx: Context) {
     if (!ctx.tryGet('nodeBar')) return false
     // AI 生成文本：每个 produces:'text' 的工具一条动作（输入框= data.text，编辑即写回）
     publishToolActions(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })
-    // 复制 / 删除：即时动作（自己已经写好节点），不经过写入器
-    registerBarAction(ctx, {
-      id: 'text:duplicate', types: ['text'], title: '复制', apply: 'self', order: 90,
-      description: '复制一份本节点（内容一起带走）',
-      run: (_input, runCtx) => {
-        text.duplicateTextNode(runCtx.nodeId)
-        return { ok: true }
-      },
-    })
-    registerBarAction(ctx, {
-      id: 'text:delete', types: ['text'], title: '删除', apply: 'self', order: 100,
-      description: '删除本节点',
-      run: (_input, runCtx) => {
-        ctx.doc.removeNodes([runCtx.nodeId])
-        return { ok: true }
-      },
-    })
+    // 复制 / 删除已按用户口径（2026-11-07）删除：底栏那个位置留给模型下拉，
+    // 节点操作走画布快捷键与右键菜单（clipboard 插件那套），不占底栏。
     // 生成结果写入器：把 result.text 写进 data.text（走 doc.updateNode，是作品、可撤销）
     registerBarApplier(ctx, 'text', (nodeId, result) => {
       ctx.doc.updateNode(nodeId, { data: { text: typeof result.text === 'string' ? result.text : '' } })
@@ -190,25 +175,8 @@ export function apply(ctx: Context) {
   // 3. 命令：底部条的按钮与命令走**同一批服务方法**——按钮是"组件自己调实现"，
   //    命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
   //    payload 约定：{ nodeId: string }。
-  ctx.commands.register({
-    id: 'text:duplicate',
-    title: '复制文本节点',
-    run: (_c, payload) => {
-      const { nodeId } = (payload ?? {}) as { nodeId?: string }
-      if (!nodeId) return false
-      return Boolean(text.duplicateTextNode(nodeId))
-    },
-  })
-  ctx.commands.register({
-    id: 'text:delete',
-    title: '删除文本节点',
-    run: (_c, payload) => {
-      const { nodeId } = (payload ?? {}) as { nodeId?: string }
-      if (!nodeId) return false
-      ctx.get('doc').removeNodes([nodeId])
-      return true
-    },
-  })
+  // 复制 / 删除两条命令已删除（用户口径 2026-11-07）；
+  // 通用复制 / 删除由 clipboard 插件与画布快捷键提供，文本节点不再各留一份。
 }
 
 /** 插件模块出口（host 用 :plugins=[...]，与裸 export 等价；name='text' 供 HMR reload） */

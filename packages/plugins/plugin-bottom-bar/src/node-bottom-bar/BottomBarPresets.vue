@@ -64,6 +64,20 @@ const emit = defineEmits<{
 const { ctx } = useCanvasRender()
 const notify = ctx.tryGet<NotifyContract>('notify')
 
+/** 面板标题旁的类型标签（文本预设 / 图片预设…）：同一台电脑上每类各一份清单 */
+const TYPE_LABELS: Record<string, string> = {
+  text: '文本',
+  image: '图片',
+  video: '视频',
+  audio: '音频',
+  panorama: '全景',
+  group: '分组',
+}
+const typeLabel = computed(() => {
+  const t = String(props.nodeType ?? '').trim().toLowerCase()
+  return t ? (TYPE_LABELS[t] ?? t) : ''
+})
+
 const Button = useUiComponent('Button')
 const Popover = useUiComponent('Popover')
 const PopoverContent = useUiComponent('PopoverContent')
@@ -356,6 +370,8 @@ function labelOfAction(id: string): string {
     >
       <div class="nbp-head">
         <span class="nbp-title">预设</span>
+        <!-- 类型标签：用户要能一眼看出各类型的清单是分开的（2026-11-07） -->
+        <span v-if="typeLabel" class="nbp-type">{{ typeLabel }}</span>
         <span class="nbp-count">{{ presets.length }} 条</span>
       </div>
 

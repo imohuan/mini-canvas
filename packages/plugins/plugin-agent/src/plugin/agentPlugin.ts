@@ -16,10 +16,13 @@ import { Bot } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { createAgentService, type AgentService } from '../service/agentService.js'
 import AgentConversation from '../ui/conversation/AgentConversation.vue'
+import ModelPicker from '../ui/conversation/ModelPicker.vue'
+import ChoicePicker from '../ui/conversation/ChoicePicker.vue'
 import AgentRefToolbar from '../ui/toolbar/AgentRefToolbar.vue'
 import AgentSettingsNav from '../ui/settings/AgentSettingsNav.vue'
 import AgentSettingsPage from '../ui/settings/AgentSettingsPage.vue'
 import { AGENT_REFERENCE_COMMAND_ID } from './agentCommands.js'
+import { createModelIconService } from '../ui/render/modelIconService.js'
 
 export const name = 'agent'
 export const inject = [] as string[]
@@ -48,6 +51,14 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
   // （现象：面板已停靠、画布却没被挤窄，右上角按钮压在面板上）。
   // 对比 plugin-mini-map：它直接把 reactive 对象当服务注入，所以从来没这个问题。
   ctx.inject('agent', reactive(service))
+  // 平台图标服务：底栏等插件按名取，避免各自再画一套「模型名 → 图形」
+  // 用户口径（2026-11-07）：图标放 Agent 里，两处共用。
+  ctx.provide('modelIcons', createModelIconService())
+  // 模型选择面板：Agent 输入区与底栏共用同一件（用户 2026-11-07）。
+  // 放 ui 场而不是用 import：底栏不能反向依赖 Agent 插件，只能按名取。
+  ctx.registryOf<unknown>('ui').add('agentModelPicker', ModelPicker, { id: 'agent' })
+  // 同一套「卡片 / 分栏」交互的通用版：图片 / 视频的生成动作也用它（用户 2026-11-07）。
+  ctx.registryOf<unknown>('ui').add('agentChoicePicker', ChoicePicker, { id: 'agent' })
 
   // 菜单：进「集成 → Agent」。默认主题只提供默认树，本插件只注册自己的那一页。
   ctx.settingsMenu.nav({
