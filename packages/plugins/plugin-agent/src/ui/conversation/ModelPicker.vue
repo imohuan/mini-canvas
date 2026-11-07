@@ -45,6 +45,15 @@ const props = withDefaults(
      * 保留字段是为了不打断现有调用点，传 true 也不再隐藏分栏。
      */
     compact?: boolean
+    /**
+     * 受控视图（调用方决定卡片 / 分栏）。
+     *
+     * 为什么必须受控：Agent 的浮层宽度是按视图算的（卡片 340 / 分栏 588），
+     * 状态如果只留在本组件内部，点「分栏」只有面板自己变、外层宽度不动 ——
+     * 分栏会被塞进 340px，左栏挤没、右侧挤成一列（用户 2026-11-07 截图）。
+     * 不传时仍按内部状态工作，底栏那种「自己管宽度」的场景不受影响。
+     */
+    view?: 'card' | 'split'
   }>(),
   { current: null, usableOnly: true, compact: false },
 )
@@ -72,7 +81,9 @@ const usableModels = computed(() =>
 )
 
 const query = ref('')
-const view = ref<'card' | 'split'>('card')
+const innerView = ref<'card' | 'split'>('card')
+/** 受控优先，未传则用内部状态 */
+const view = computed(() => props.view ?? innerView.value)
 const platform = ref('all')
 
 
@@ -82,9 +93,12 @@ const platform = ref('all')
  * （reka 的 Tabs 偶尔传来奇数，回落成 card 会让“界面在分栏、页签在卡片”错位 —— 2026-11-06 实测。）
  */
 function setView(value: string | number): void {
-  if (value === 'split' && view.value !== 'split') view.value = 'split'
-  else if (value === 'card' && view.value !== 'card') view.value = 'card'
-  emit('update:view', view.value)
+  // 只认两档；其它值（键盘切换偶尔传来奇数）保持原样，避免页签与界面错位
+  if (value !== 'split' && value !== 'card') return
+  const next = value as 'card' | 'split'
+  if (innerView.value !== next) innerView.value = next
+  // 受控时也要把用户意图发出去：外层据此改浮层宽度
+  emit('update:view', next)
 }
 
 function modelNote(m: { contextWindow?: number; isVision: boolean }): string {
