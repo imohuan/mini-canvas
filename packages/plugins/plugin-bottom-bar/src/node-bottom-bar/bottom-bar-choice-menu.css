@@ -41,8 +41,12 @@
 }
 
 /* 列表底部留 16px：最后一行完整可见 */
-.nb-agent-choice-menu .ac-panel-scroll :deep(.ac-panel-scroll-body),
-.nb-agent-choice-menu .ac-menu-scroll :deep(.ac-model-scroll-body) {
+/*
+ * 本文件是**非 scoped** 的普通 css：Agent 组件渲染出来的 class 不带本组件的 data-v，
+ * :deep() 在这里不会被编译、整条规则作废 —— 必须写普通后代选择器。
+ */
+.nb-agent-choice-menu .ac-panel-scroll .ac-panel-scroll-body,
+.nb-agent-choice-menu .ac-menu-scroll .ac-model-scroll-body {
   padding-bottom: 16px;
 }
 
@@ -58,6 +62,13 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  /*
+   * 必须 !important（与 model-menu 同一个坑）：Agent 的 scoped 规则
+   * `.ac-panel[data-v-xxx] { min-height: min(460px, …) }` 与这里同为两级选择器，
+   * 谁后加载谁赢 —— 实测面板被撑到 460px、在 368px 可见区里裁掉底部 92px，
+   * 这才是「滚到底最后一行还是只露半截」的真正根因（2026-11-07 第二次截图）。
+   */
+  min-height: 0 !important;
   max-height: none;
   height: 100%;
   container-type: inline-size;
