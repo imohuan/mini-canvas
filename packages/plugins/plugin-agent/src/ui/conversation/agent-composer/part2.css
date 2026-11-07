@@ -263,6 +263,13 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* 标题左侧的模式图标：与触发器同一个图标，选中哪条就显示哪个
+   （用户 2026-11-07：下拉标题也要带图标，与触发器呼应） */
+.ac-panel-heading > svg {
+  flex: none;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
 .ac-panel-heading {
   display: flex;
   align-items: center;

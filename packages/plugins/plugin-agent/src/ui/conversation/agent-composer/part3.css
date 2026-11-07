@@ -24,6 +24,30 @@
   width: 100%;
 }
 
+/* 选中态：当前模式高亮（用户 2026-11-07：之前选中也看不出是哪条） */
+.ac-review-item[aria-checked='true'] {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+}
+
+.ac-review-item[aria-checked='true'] .ac-option-label {
+  color: var(--ui-ink, #111827);
+}
+
+/* 选项行内的模式图标 */
+.ac-option-icon {
+  flex: none;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-review-item[aria-checked='true'] .ac-option-icon {
+  color: var(--ui-accent-hover, #0e7490);
+}
+
+/* 对勾放在标题行右端：不再单独加一列（这行本来就是纵向 flex） */
+.ac-review-item .ac-review-check {
+  margin-left: auto;
+}
+
 /* —— 通用选择卡（DEMO 的 .skill-grid / .skill-card）—— */
 
 .ac-skill-grid {
@@ -156,6 +180,7 @@
 [aria-pressed='true'] .ac-skill-name-row > .ac-check-mark,
 [aria-pressed='true'] .ac-model-card-top > .ac-check-mark,
 [aria-checked='true'] .ac-model-card-top > .ac-check-mark,
+[aria-checked='true'] .ac-option-title > .ac-check-mark,
 [aria-checked='true'] > .ac-check-mark,
 [aria-selected='true'] > .ac-check-mark,
 [aria-selected='true'] .ac-model-card-top > .ac-check-mark {

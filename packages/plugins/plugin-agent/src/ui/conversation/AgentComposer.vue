@@ -8,11 +8,12 @@
 import { computed, inject } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
-import { X, Plus, Upload, Target, Minimize2, Search, Check, Layers, WandSparkles, Plug, RefreshCw, BellRing, GripVertical, CornerUpRight, Trash2, MoreHorizontal, Pencil, Play, Pause, ChevronDown, ArrowUp, Hand, ShieldAlert, Box, Sparkles } from 'lucide-vue-next'
+import { X, Plus, Upload, Target, Minimize2, Search, Check, Layers, WandSparkles, Plug, RefreshCw, BellRing, GripVertical, CornerUpRight, Trash2, MoreHorizontal, Pencil, Play, Pause, ChevronDown, ArrowUp, Hand, ShieldAlert, Box, Sparkles, ListOrdered } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import { ICON_SKILL, ICON_MCP } from '../shared/agentResources.js'
 import type { AgentConversationController } from './useAgentConversation'
 import AgentScrollArea from './AgentScrollArea.vue'
+import ModelPicker from './ModelPicker.vue'
 
 const c = inject('agentConversation') as AgentConversationController
 
@@ -43,7 +44,7 @@ const {
   toggleMcpExpand, mcpPickedServers, mcpPickedTools, mcpToolKey, toggleMcpServer, toggleMcpTool,
   mcpPickTotal, confirmMcpPicks, mcpProbeHint, mcpStatusOf, mcpServerDesc,
   mcpTransport, mcpToolCount, mcpToolsOf, runMcpProbe, filteredMcpResources,
-  sendMode, submit, showPendingOn, COMPOSER_MENU_FLAGS, contextArcOffset, CONTEXT_CIRCUMFERENCE,
+  sendMode, submit, showPendingOn, COMPOSER_MENU_FLAGS, contextPercent, contextArcOffset, CONTEXT_CIRCUMFERENCE,
   SUGGESTIONS, useSuggestion, dismissHint, hintDismissed, insertRef, brandSvg, skillOpen,
   showScrollToBottom, smoothScrollToBottom, SHOW_PROCESS_NOTICE,
 } = cProps
@@ -77,6 +78,13 @@ const Tooltip = useUiComponent('Tooltip')
 const TooltipContent = useUiComponent('TooltipContent')
 const TooltipProvider = useUiComponent('TooltipProvider')
 const TooltipTrigger = useUiComponent('TooltipTrigger')
+const Popover = useUiComponent('Popover')
+const PopoverTrigger = useUiComponent('PopoverTrigger')
+const PopoverContent = useUiComponent('PopoverContent')
+const Progress = useUiComponent('Progress')
+const HoverCard = useUiComponent('HoverCard')
+const HoverCardTrigger = useUiComponent('HoverCardTrigger')
+const HoverCardContent = useUiComponent('HoverCardContent')
 </script>
 
 <template>
@@ -107,27 +115,15 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                    发送中 / 已发送的行没有把手 —— 它们的位置由调度器钉住，不参与排序。 -->
               <span v-if="!row.sending && !row.sent" class="ac-queue-lead-swap" aria-hidden="true">
                 <span class="ac-pending-lead is-rest">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 3v12" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
+                  <ListOrdered :size="14" />
                 </span>
                 <span class="ac-queue-handle" title="拖动调整发送顺序" :aria-label="'拖动 ' + (row.text || '').slice(0, 20)">
                   <GripVertical :size="12" />
                 </span>
               </span>
               <span v-else class="ac-pending-lead" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 3v12" />
-                <circle cx="18" cy="6" r="3" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M18 9a9 9 0 0 1-9 9" />
-              </svg>
-            </span>
+                <ListOrdered :size="14" />
+              </span>
             <!-- 迷你图 + 「+N」：白图与背景同色会看不见，加一圈淡边框（不抢眼）；多于 1 张显示 +N -->
             <img v-if="row.thumbs.length" class="ac-queue-thumb" :src="row.thumbs[0]" alt="" role="button"
               :aria-label="'查看排队图片'" :title="'这条消息带 ' + row.images.length + ' 张图'"
@@ -147,11 +143,12 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
               <template v-else>（图片）</template>
             </span>
             <!-- 编辑中：队列**整体阻塞**（后端保证不发下一条），行上直接说明，用户不用猜为什么不动 -->
-            <span v-if="row.editing" class="ac-queue-flag" role="status">编辑中</span>
-            <span v-else-if="row.goal" class="ac-queue-flag is-goal"
-              :title="'目标：' + goalMarkText(row.goal.objective, row.goal.budget)">目标</span>
-            <span v-if="row.sending" class="ac-queue-flag is-sending">发送中</span>
-            <span v-else-if="row.sent" class="ac-queue-flag is-sent">已发送</span>
+            <!-- 状态标签用组件库 Badge（不再手画胶囊） -->
+            <Badge v-if="row.editing" variant="secondary" class="ac-queue-flag" role="status">编辑中</Badge>
+            <Badge v-else-if="row.goal" variant="outline" class="ac-queue-flag is-goal"
+              :title="'目标：' + goalMarkText(row.goal.objective, row.goal.budget)">目标</Badge>
+            <Badge v-if="row.sending" variant="secondary" class="ac-queue-flag is-sending">发送中</Badge>
+            <Badge v-else-if="row.sent" variant="secondary" class="ac-queue-flag is-sent">已发送</Badge>
 
             <span class="ac-queue-actions">
               <!-- 编辑中：这一条是"停住队列"的那条，行上给一个取消编辑（状态回 queued） -->
@@ -221,11 +218,11 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <span v-else>{{ seg.value }}</span>
               </template>
             </span>
-            <span class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</span>
+            <Badge variant="outline" class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</Badge>
             <!-- 编辑目标时在右侧打「正在编辑」标签（与消息/队列编辑同一套黄色语义，用户口径 2026-10-09） -->
-            <span v-if="editingGoal" class="ac-editing-badge is-compact" role="status">
+            <Badge v-if="editingGoal" variant="secondary" class="ac-editing-badge is-compact" role="status">
               <Pencil :size="11" /><span>正在编辑</span>
-            </span>
+            </Badge>
             <!-- 右侧一组（用户口径 2026-10-09）：迷你图 → 第 N 轮 → 已用/总预算 → 按钮，**整体右对齐**（spacer 顶开）。
                    进度条删掉了 —— 「已用/总预算」数字本身就是进度。 -->
             <span class="ac-goal-round">第 {{ goalRow.round }} 轮</span>
@@ -389,6 +386,9 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <div class="ac-panel-head">
                   <div class="ac-panel-head-top ac-panel-head-top--review">
                     <div class="ac-panel-heading">
+                      <!-- 标题左侧的图标与触发器一致：选中哪条，触发器就显示哪个图标
+                           （用户 2026-11-07：下拉里的标题也要带图标） -->
+                      <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="15" aria-hidden="true" />
                       <span class="ac-panel-title">审核模式</span>
                       <span class="ac-panel-count">2</span>
                     </div>
@@ -401,11 +401,12 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                     <DropdownMenuItem v-for="m in AUTH_MODES" :key="m.value" class="ac-review-item"
                       role="radio" :aria-checked="authMode === m.value"
                       @select="setAuthMode(m.value); authOpen = false">
-                      <!-- 标题 + 紧跟其后的徽章（用户 2026-11-06：徽章贴在标题右侧，不要换行到下一行）。
-                           徽章不再参与换行，标题过长时自己截断。 -->
                       <span class="ac-option-title">
+                        <component :is="m.icon" :size="14" class="ac-option-icon" aria-hidden="true" />
                         <span class="ac-option-label">{{ m.label }}</span>
                         <Badge :variant="m.value === 'auto' ? 'destructive' : 'secondary'">{{ m.value === 'auto' ? '谨慎' : '推荐' }}</Badge>
+                        <!-- 选中标记：复用模型面板的 .ac-check-mark（aria-checked=true 时显形） -->
+                        <span class="ac-check-mark ac-review-check" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                       </span>
                       <span class="ac-option-desc">{{ m.hint }}</span>
                     </DropdownMenuItem>
@@ -415,8 +416,8 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
-          <!-- 宽度随视图切换：卡片视图紧凑（两列小卡刚好），分栏视图加宽让左栏 + 右侧瓦片都站得住。 -->
+          <!-- 模型面板本体抽成 ModelPicker（用户 2026-11-07：Agent 与底栏共用同一件）。 -->
+          <!-- 这里只保留触发器与浮层外壳：换模型 = 换一条会话，这个语义只属于 Agent。 -->
           <DropdownMenu :open="composerMenuOpen('model')" @update:open="(v: boolean) => setComposerMenuOpen('model', v)">
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" :aria-expanded="modelOpen" aria-label="选择模型">
@@ -425,140 +426,13 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
             </DropdownMenuTrigger>
             <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET"
               :style="{ width: modelView === 'split' ? '588px' : '340px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(520px, calc(100dvh - 120px))' }">
-              <div class="ac-panel ac-model-panel" :class="{ 'is-split': modelView === 'split' }" role="listbox" aria-label="选择模型">
-                <div class="ac-panel-head">
-                  <div class="ac-panel-head-top">
-                    <div class="ac-panel-heading">
-                      <span class="ac-panel-title">模型</span>
-                      <span class="ac-panel-count">{{ usableModels.length }}</span>
-                    </div>
-                    <!-- 视图切换用组件库原生的 Tabs（用户口径 2026-11-02）：
-                         以前是自绘的分段按钮 + 绝对定位指示条，不跟主题尺寸走。 -->
-                    <!--
-                      受控页签（用户 2026-11-06 连续三次反馈「值一直不对」）。
-
-                      reka 的 Tabs 内部还有一份用 useVModel 维护的选中值；外层再用
-                      useForwardPropsEmits 转发 props/emits，它的更新偶尔不会回灌到
-                      reka —— 表现就是「点卡片没反应、再点一次才好」。
-                      这里改成**完全受控**：选中态只看 modelView，点击只走我们自己的
-                      handler（setModelView），页签不再持有自己的状态。
-                    -->
-                    <Tabs :model-value="modelView" @update:model-value="setModelView">
-                      <TabsList aria-label="面板布局">
-                        <TabsTrigger value="card" :data-state="modelView === 'card' ? 'active' : 'inactive'"
-                          :aria-selected="modelView === 'card'" @click="setModelView('card')">卡片</TabsTrigger>
-                        <TabsTrigger value="split" :data-state="modelView === 'split' ? 'active' : 'inactive'"
-                          :aria-selected="modelView === 'split'" @click="setModelView('split')">分栏</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                  </div>
-                  <!-- 搜索框统一用组件库 InputGroup（用户口径 2026-11-02）：
-                       图标 / 清除按钮放进 Addon，输入框本体用 InputGroupInput。
-                       始终整行显示，不再折叠成放大镜按钮。 -->
-                  <InputGroup>
-                    <InputGroupAddon align="inline-start">
-                      <Search :size="14" aria-hidden="true" />
-                    </InputGroupAddon>
-                    <InputGroupInput v-model="modelQuery" type="search" name="ac-model-search"
-                      data-ac-search="model" placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
-                    <InputGroupAddon v-if="modelQuery" align="inline-end">
-                      <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="modelQuery = ''">
-                        <X :size="12" />
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
-                </div>
-                <!--
-                  没有可用模型时，只留这一句提示：滚动区整体不渲染。
-                  以前提示和滚动区里的「没有找到模型」空态会同时出现（用户 2026-11-05 截图：
-                  技能面板上下两个空态叠在一起、分类栏被挤到最底下）。
-                -->
-                <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
-                <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
-                     ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
-                <!--
-                  两种视图**同时挂载**，切换只切显示，不做 v-if 拆装。
-
-                  为什么要这样（用户 2026-11-06）：v-if 切换时整块内容被销毁再重建，
-                  列表、滚动位置、选中项都要重新渲染一遍，切换像“硬切”。
-                  现在两个面板都在 DOM 里，切到哪个哪个淡入（见 .ac-view-pane）。
-
-                  滚动容器放在**每个视图内部**（与技能面板一致）：
-                  以前是外面套一个 ScrollArea、里面再叠两个视图，外层 viewport 被
-                  裁到看不见内容（用户 2026-11-06：卡片视图没有滚动条、滚不动）。
-                -->
-                <div v-else ref="modelScrollRef" data-model-scroll class="ac-menu-scroll ac-panel-body">
-                  <div class="ac-view-stack">
-                  <AgentScrollArea class="ac-panel-scroll ac-view-pane" :class="{ 'is-active': modelView === 'card' }"
-                    body-class="ac-panel-scroll-body ac-model-scroll-body">
-                    <div v-if="filteredModels.length" class="ac-model-grid">
-                      <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm"
-                        role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
-                        <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
-                        <span class="ac-model-copy">
-                          <span class="ac-model-card-top">
-                            <span class="ac-model-id">{{ m.modelId }}</span>
-                            <Badge v-if="m.isDefault" variant="secondary">默认</Badge>
-                            <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
-                          </span>
-                          <span class="ac-model-meta">
-                            <span>{{ brandNameOf(m) }}</span>
-                            <span class="ac-dot-sep" aria-hidden="true"></span>
-                            <span>{{ modelNote(m) }}</span>
-                          </span>
-                        </span>
-                      </Button>
-                    </div>
-                    <div v-else class="ac-empty-state">
-                      <span class="ac-empty-icon"><Search :size="18" /></span>
-                      <span class="ac-empty-title">没有找到模型</span>
-                      <span class="ac-empty-desc">换个模型名或平台名试试。</span>
-                    </div>
-                  </AgentScrollArea>
-                  <div class="ac-view-pane ac-split" :class="{ 'is-active': modelView === 'split' }">
-                    <aside class="ac-split-rail" aria-label="模型平台">
-                      <div class="ac-rail-label">平台</div>
-                      <AgentScrollArea class="ac-rail-scroll" body-class="ac-rail-scroll-body">
-                        <Button v-for="g in modelPlatformGroups" :key="g.key" variant="ghost" size="sm"
-                          :aria-pressed="modelPlatform === g.key" @click="modelPlatform = g.key">
-                          <span v-if="g.key === 'all'" class="ac-rail-icon" aria-hidden="true"><Layers :size="14" /></span>
-                          <span v-else class="ac-rail-brand" :title="g.label" aria-hidden="true" v-html="brandSvg(g.key)"></span>
-                          <span class="ac-rail-name">{{ g.label }}</span>
-                          <span class="ac-rail-count">{{ g.count }}</span>
-                        </Button>
-                      </AgentScrollArea>
-                    </aside>
-                    <div class="ac-split-main">
-                      <AgentScrollArea class="ac-split-scroll" body-class="ac-split-scroll-body">
-                      <div v-if="filteredModels.length" class="ac-model-row-list">
-                        <Button v-for="m in filteredModels" :key="m.provider + '/' + m.modelId" variant="ghost" size="sm"
-                          role="option" :aria-selected="isModelPicked(m)" @click="pickModel(m, () => (modelOpen = false))">
-                          <span class="ac-model-brand" :title="brandNameOf(m)" aria-hidden="true" v-html="brandSvgOf(m)"></span>
-                          <span class="ac-model-copy">
-                            <span class="ac-model-id">{{ m.modelId }}</span>
-                            <span class="ac-model-meta">
-                              <span>{{ brandNameOf(m) }}</span>
-                              <span class="ac-dot-sep" aria-hidden="true"></span>
-                              <span>{{ modelNote(m) }}</span>
-                            </span>
-                          </span>
-                          <span class="ac-model-badges">
-                            <Badge v-if="m.isDefault" variant="secondary">默认</Badge>
-                          </span>
-                          <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
-                        </Button>
-                      </div>
-                      <div v-else class="ac-empty-state">
-                        <span class="ac-empty-icon"><Search :size="18" /></span>
-                        <span class="ac-empty-title">没有找到模型</span>
-                        <span class="ac-empty-desc">换个模型名或平台名试试。</span>
-                      </div>
-                      </AgentScrollArea>
-                    </div>
-                  </div>
-                  </div>
-                  </div>
-              </div>
+              <ModelPicker
+                :models="s.models"
+                :current="s.model"
+                :view="modelView"
+                @update:view="setModelView"
+                @pick="(m) => pickModel(m, () => (modelOpen = false))"
+              />
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -873,23 +747,34 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
           <!-- 上下文统计：**回到发送键左侧**（用户口径 2026-10-11：恢复之前的位置）。
                hover 气泡给剩余百分比；有绝对值时把「已用 / 上限」一起标在环旁边
                （只有百分比看不出还剩多少 tokens）。什么都不知道时整块不画。 -->
+          <!-- 上下文（用户口径 2026-11-07）：
+               ① Trigger 恢复成**原来的圆环**（不写文字），hover 才展开；
+               ② 浮层内部照 AI Elements 的 Context demo：Context + 已用/上限 + Progress。 -->
           <span v-if="s.contextLeft !== null || s.contextUsed !== null" class="ac-ctxwrap">
-            <TooltipProvider :delay-duration="120">
-              <Tooltip>
-                <TooltipTrigger as-child>
-              <span class="ac-context" role="img"
-                :aria-label="s.contextLeft !== null ? '上下文剩余 ' + s.contextLeft + '%' : '上下文用量'">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" class="ac-ctx-track" />
-                  <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                    :stroke-dasharray="CONTEXT_CIRCUMFERENCE" :stroke-dashoffset="contextArcOffset"
-                    transform="rotate(-90 6 6)" />
-                </svg>
-              </span>
-                </TooltipTrigger>
-                <TooltipContent v-if="s.contextLeft !== null" side="top">上下文剩余 {{ s.contextLeft }}%</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <HoverCard :open-delay="10" :close-delay="100">
+              <HoverCardTrigger as-child>
+                <button type="button" class="ac-ctx-ring"
+                  :aria-label="'上下文剩余 ' + (s.contextLeft ?? 0) + '%'"
+                  :title="'上下文剩余 ' + (s.contextLeft ?? 0) + '%'">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" class="ac-ctx-track" />
+                    <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                      :stroke-dasharray="CONTEXT_CIRCUMFERENCE" :stroke-dashoffset="contextArcOffset"
+                      transform="rotate(-90 6 6)" />
+                  </svg>
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent side="top" align="end" class="flex w-64 flex-col gap-3">
+                <div class="flex items-center justify-between gap-3 text-sm">
+                  <span class="font-medium">Context</span>
+                  <span class="text-muted-foreground">
+                    {{ formatToken(s.contextUsed, tokenUnit) }} / {{ formatToken(s.contextLimit, tokenUnit) }}
+                  </span>
+                </div>
+                <Progress :model-value="contextPercent" aria-label="Context used" />
+                <p class="text-xs text-muted-foreground">上下文剩余 {{ s.contextLeft ?? 0 }}%</p>
+              </HoverCardContent>
+            </HoverCard>
           </span>
           <Button size="icon" data-ac-send :class="{ 'is-running': sendMode === 'stop' }"
             :aria-label="sendMode === 'stop' ? '停止' : '发送'" :disabled="sendMode === 'disabled'"
