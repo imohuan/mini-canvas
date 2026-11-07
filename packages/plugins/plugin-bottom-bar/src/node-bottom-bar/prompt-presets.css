@@ -368,6 +368,18 @@
   max-width: none !important;
 }
 /*
+ * 弹窗里的 provider 参数面板：与底栏同一份 HtmlPanelFrame。
+ * 高度由面板自己上报（iframe 内容自适应），这里只约束不越界。
+ */
+.nbp-dialog .nhp {
+  width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 0;
+  border-radius: min(var(--mct-radius, 8px), 12px);
+  background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
+}
+/*
  * 弹窗里的「适用模型」触发器：同一个 ChoicePickerMenu 组件，这里只调宽度口径 ——
  * 弹窗字段是满宽输入框，触发器也满宽更协调（底栏仍是 148–220 的自适应宽）。
  */

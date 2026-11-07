@@ -30,6 +30,7 @@ import { resolveAgentBaseUrl } from '../aiActions'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { modelIconOf, type ModelIcon } from './modelIcons'
 import ChoicePickerMenu from './ChoicePickerMenu.vue'
+import HtmlPanelFrame from './HtmlPanelFrame.vue'
 import { ICON_BOOKMARK, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
 
 const props = defineProps<{
@@ -271,6 +272,31 @@ const draftParams = computed<ToolParamDef[]>(() => {
   const hit = (props.modelChoices ?? []).find((m) => m.id === draftActionId.value)
   return hit?.params ?? []
 })
+
+/**
+ * 新建弹窗的参数区：provider 自带 HTML 面板优先。
+ *
+ * 用户 2026-11-07 截图对比：底栏的参数面板（画面比例网格、色调、长列表）是
+ * provider 的 panelHtml，弹窗里却渲染原始 fields —— 两边对不上。
+ * 现在与底栏同源：选中动作有 panelHtml 就渲染 HtmlPanelFrame（所见即所得），
+ * 没有才回退到 ToolParamGroup（且过滤 kind==='style'，与底栏 paramDefs 同口径）。
+ */
+const draftPanelHtml = computed(() => {
+  const hit = (props.modelChoices ?? []).find((m) => m.id === draftActionId.value)
+  return (hit?.panelHtml ?? '').trim()
+})
+const draftParamDefs = computed<ToolParamDef[]>(() =>
+  draftParams.value.filter((p) => p.kind !== 'style'),
+)
+
+/** provider 面板的主题色（与底栏 htmlPanelTheme 同一份口径） */
+const draftPanelTheme = {
+  ink: 'var(--ui-ink, #18202b)',
+  inkDim: 'var(--ui-ink-dim, #6b7280)',
+  line: 'var(--ui-line, rgb(0 0 0 / 0.1))',
+  surface: 'var(--ui-surface, rgb(0 0 0 / 0.04))',
+  accent: 'var(--ui-accent, #0891b2)',
+}
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 
@@ -576,11 +602,28 @@ function labelOfAction(id: string): string {
           />
         </div>
 
-        <!-- 参数：用模型自己的参数定义渲染，和下拉里同一套控件 -->
-        <div v-if="draftParams.length > 0" class="nbp-field">
+        <!--
+          参数：provider 自带 HTML 面板优先（与底栏「参数」下拉同一份 panelHtml，
+          用户 2026-11-07 截图：两边对不上）。没有面板才回退到 ToolParamGroup，
+          且过滤 kind==='style'，与底栏 paramDefs 同口径。
+        -->
+        <div v-if="draftPanelHtml" class="nbp-field">
+          <Label class="nbp-label">参数</Label>
+          <HtmlPanelFrame
+            :html="draftPanelHtml"
+            :values="draftValues"
+            :params="draftParamDefs"
+            :action-id="draftActionId"
+            :model="draftModelLabel"
+            :theme="draftPanelTheme"
+            @set-values="(v: Record<string, unknown>) => (draftValues = v)"
+            @notify="() => {}"
+          />
+        </div>
+        <div v-else-if="draftParamDefs.length > 0" class="nbp-field">
           <Label class="nbp-label">参数</Label>
           <ToolParamGroup
-            :params="draftParams"
+            :params="draftParamDefs"
             :values="draftValues"
             placeholder="默认参数"
             id-prefix="nbp-draft"

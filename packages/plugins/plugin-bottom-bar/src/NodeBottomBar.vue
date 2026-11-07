@@ -533,6 +533,8 @@ const modelChoices = computed(() =>
       title: a.title,
       params: (a.fields ?? []) as ToolParamDef[],
       templates: a.templates ?? [],
+      /** provider 自带 HTML 参数面板（底栏「参数」下拉渲染的就是它）；弹窗复用同一份 */
+      panelHtml: (a as { panelHtml?: string }).panelHtml ?? '',
     })),
 )
 
