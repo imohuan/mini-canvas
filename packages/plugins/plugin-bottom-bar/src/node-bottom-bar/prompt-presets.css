@@ -337,12 +337,35 @@
  */
 .nbp-dialog .tpg-trigger {
   box-sizing: border-box;
-  width: 100%;
+  /*
+   * 宽度按内容自适应（用户 2026-11-07 截图）：折叠态就「图标 + 摘要 + 箭头」那么宽，
+   * 不再占满整行。ToolParamGroup 自己的 .tpg-inline 是 width:100%（为底栏服务），
+   * 这里只在弹窗内改回 auto；展开的浮层仍按内容自适应，不受影响。
+   */
+  /*
+   * 必须 !important：ToolParamGroup 的 .tpg-trigger 是 scoped 样式
+   * （.tpg-trigger[data-v-…] { width: 100% }），带属性选择器的权重高于
+   * 我们这条全局规则，不加 important 会输给它 —— 实测仍是 408px 满宽。
+   */
+  width: auto !important;
+  flex: 0 0 auto !important;
   /* 与上面「适用模型」那个下拉同高（32px），两行控件才不会一高一矮 */
   height: 32px;
   padding: 0 10px;
   border-radius: min(var(--mct-radius, 8px), 12px);
   background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
+  /*
+   * nbp-field 是 column flex，默认 align-items:normal（≈stretch）会把子项横向拉满，
+   * width:auto 照样占满整行 —— 给它 align-self:flex-start 才真的按内容收。
+   */
+  align-self: flex-start !important;
+}
+.nbp-dialog .tpg-inline {
+  width: auto !important;
+}
+.nbp-dialog .tpg-text {
+  /* 摘要不设上限：弹窗里没有底栏那种挤压，按实际文字展示 */
+  max-width: none !important;
 }
 .nbp-dialog .tpg-trigger:hover:not(:disabled),
 .nbp-dialog .tpg-trigger[data-state='open'] {
