@@ -74,6 +74,15 @@ describe('预设提示词面板：只用全局组件', () => {
     expect(startCreate.indexOf('open.value = false')).toBeLessThan(startCreate.indexOf('creating.value = true'))
   })
 
+  /**
+   * 用户 2026-11-07 截图：弹窗开着，面板还压在上面。
+   * 光把 open 设为 false 不够 —— 菜单层（100002）高于对话框层（100000），
+   * 关闭动画期间节点仍挂在 body 上。所以面板必须是**条件渲染**。
+   */
+  it('新建弹窗打开时面板整块卸载（关动画期间也不能压住弹窗）', () => {
+    expect(PRESETS).toMatch(/<PopoverContent\s+v-if="!creating"/)
+  })
+
   it('弹窗正文包在内边距容器里（host.css 把 dialog-content 的 padding / gap 清零）', () => {
     expect(PRESETS).toContain('<div class="nbp-dialog-body">')
     const css = read('../node-bottom-bar/prompt-presets.css')
@@ -82,5 +91,24 @@ describe('预设提示词面板：只用全局组件', () => {
     // 内边距不能直接写在外层 DialogContent 的类上：会被 !important 规则吃掉
     const outer = css.slice(css.indexOf('.nbp-dialog {'), css.indexOf('}', css.indexOf('.nbp-dialog {')))
     expect(outer).not.toContain('padding')
+  })
+})
+
+describe('预设提示词面板：禁用改成独立页签', () => {
+  it('不再有「显示禁用预设」开关', () => {
+    expect(PRESETS).not.toContain('显示禁用预设')
+    expect(PRESETS).not.toContain("useUiComponent('Switch')")
+  })
+
+  it('五个页签：provider / 通用 / 指定模型 / 当前模型 / 禁用', () => {
+    for (const value of ['provider', 'general', 'model', 'current', 'disabled']) {
+      expect(PRESETS).toContain('<TabsTrigger value="' + value + '"')
+    }
+  })
+
+  it('禁用页签带条数，且点禁用条目会给出提示（不静默）', () => {
+    expect(PRESETS).toContain('class="nbp-tabcount"')
+    expect(PRESETS).toContain('没有禁用的预设')
+    expect(PRESETS).toContain('当前节点用不了这个模型')
   })
 })

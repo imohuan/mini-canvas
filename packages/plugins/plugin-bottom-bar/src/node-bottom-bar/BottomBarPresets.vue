@@ -252,6 +252,14 @@ const draftName = ref('')
 const draftContent = ref('')
 /** 新建时选的目标模型（空串 = 通用，不绑模型） */
 const draftActionId = ref('')
+/**
+ * 下拉里「通用」那一项的取值。
+ *
+ * 为什么不用空串：reka-ui 的 SelectItem 把 value 当必填，传 '' 时这一项**不会被渲染**
+ * （用户 2026-11-07 截图：下拉里只剩具体模型，选不到「通用」）。
+ * 用一个不会和动作 id 撞的哨兵值，进出双向各转一次。
+ */
+const GENERAL_OPTION = '__nbp_general__'
 /** 新建时挑的参数值（用模型自己的参数定义渲染，跟下拉里同一套控件） */
 const draftValues = ref<Record<string, unknown>>({})
 const nameInput = ref<{ $el?: HTMLElement } | null>(null)
@@ -265,6 +273,9 @@ const draftParams = computed<ToolParamDef[]>(() => {
 })
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
+
+/** 内部值 → 下拉显示值 */
+const draftModelValue = computed(() => draftActionId.value || GENERAL_OPTION)
 
 /** 新建弹窗里「适用模型」触发器上的文字 */
 const draftModelLabel = computed(() => {
@@ -297,9 +308,10 @@ function startCreate(): void {
   /*
    * 打开新建弹窗前先收起预设面板（用户 2026-11-07 截图）。
    *
-   * 为什么要关：面板是 Teleport 到 body 的菜单层（--ui-layer-menu，100002），
-   * 对话框在下面一档（--ui-layer-dialog，100000），两个同时开着面板就压在弹窗上。
-   * 也符合「同屏只开一个浮层」的规矩。弹窗本身仍要能在里面开下拉，所以不抬弹窗层级。
+   * 光关 open 还不够：面板是 Teleport 到 body 的菜单层（--ui-layer-menu，100002），
+   * 对话框在下面一档（--ui-layer-dialog，100000）。关闭动画期间节点仍在 body 上，
+   * 会盖住刚打开的弹窗 —— 所以模板里再给 PopoverContent 挂 v-if="!creating"，
+   * 让它在这几百毫秒里直接不渲染。也符合「同屏只开一个浮层」的规矩。
    */
   open.value = false
   creating.value = true
@@ -365,7 +377,15 @@ function labelOfAction(id: string): string {
       </Button>
     </PopoverTrigger>
 
+    <!--
+      新建弹窗打开时**整块卸载**面板（用户 2026-11-07 截图：弹窗被面板压住）。
+
+      为什么单靠 open=false 不够：面板在菜单层（100002），新建弹窗在对话框层（100000），
+      关闭动画期间节点还挂在 body 上，这几百毫秒里它仍会盖在弹窗上面。
+      直接不渲染，就不存在两个浮层重叠的窗口期。
+    -->
     <PopoverContent
+      v-if="!creating"
       align="start"
       side="top"
       class="nbp-pop"
@@ -514,14 +534,14 @@ function labelOfAction(id: string): string {
         <div class="nbp-field">
           <Label class="nbp-label">适用模型</Label>
           <Select
-            :model-value="draftActionId"
-            @update:model-value="(v: unknown) => onDraftModelChange(String(v ?? ''))"
+            :model-value="draftModelValue"
+            @update:model-value="(v: unknown) => onDraftModelChange(String(v ?? '') === GENERAL_OPTION ? '' : String(v ?? ''))"
           >
             <SelectTrigger class="nbp-select" size="sm" aria-label="适用模型">
               <SelectValue :placeholder="draftModelLabel">{{ draftModelLabel }}</SelectValue>
             </SelectTrigger>
             <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
-              <SelectItem value="">通用（所有模型）</SelectItem>
+              <SelectItem :value="GENERAL_OPTION">通用（所有模型）</SelectItem>
               <SelectItem v-for="m in modelChoices ?? []" :key="m.id" :value="m.id">{{ m.title }}</SelectItem>
             </SelectContent>
           </Select>
