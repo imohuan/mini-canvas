@@ -368,23 +368,14 @@
   max-width: none !important;
 }
 /*
- * 弹窗里的「适用模型」触发器：底栏同款（图标 + 名称 + 箭头），宽度按内容自适应，
- * 给一个最小宽度防止「通用（所有模型）」换行；底栏里那条 min-width 148 仍只在底栏生效。
+ * 弹窗里的「适用模型」触发器：同一个 ChoicePickerMenu 组件，这里只调宽度口径 ——
+ * 弹窗字段是满宽输入框，触发器也满宽更协调（底栏仍是 148–220 的自适应宽）。
  */
-.nbp-model-trigger {
-  box-sizing: border-box;
-  /* 底栏触发器是组件库 Button（自带 flex），这里是原生 button，得自己补 */
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: auto !important;
-  min-width: 200px;
-  max-width: 100%;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: min(var(--mct-radius, 8px), 12px);
-  background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
-  align-self: flex-start !important;
+.nbp-dialog .nb-model-trigger {
+  width: 100% !important;
+  min-width: 0;
+  max-width: none;
+  align-self: stretch !important;
 }
 .nbp-dialog .tpg-trigger:hover:not(:disabled),
 .nbp-dialog .tpg-trigger[data-state='open'] {

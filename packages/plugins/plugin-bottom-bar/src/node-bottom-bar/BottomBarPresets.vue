@@ -29,6 +29,7 @@ import { loadPresets, savePresets } from '../presetStore'
 import { resolveAgentBaseUrl } from '../aiActions'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { modelIconOf, type ModelIcon } from './modelIcons'
+import ChoicePickerMenu from './ChoicePickerMenu.vue'
 import { ICON_BOOKMARK, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
 
 const props = defineProps<{
@@ -92,12 +93,7 @@ const Tabs = useUiComponent('Tabs')
 const TabsList = useUiComponent('TabsList')
 const TabsTrigger = useUiComponent('TabsTrigger')
 /** 适用模型面板 = Agent 的 ChoicePicker（图2那套卡片/分栏），取不到时回退简版菜单 */
-const AgentChoicePicker = useUiComponent('agentChoicePicker')
 const Label = useUiComponent('Label')
-const DropdownMenu = useUiComponent('DropdownMenu')
-const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
-const DropdownMenuContent = useUiComponent('DropdownMenuContent')
-const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
 const DialogDescription = useUiComponent('DialogDescription')
@@ -300,17 +296,17 @@ const draftModelOptions = computed(() =>
   (props.modelChoices ?? []).map((m) => ({ id: m.id, title: m.title, icon: modelIconOf(m.title) })),
 )
 
-const agentPickerReady = computed(() => Boolean(AgentChoicePicker.value))
-
-/** ChoicePicker 的一行：id / 标题 / 副标题 / 图标 */
-const choiceItems = computed(() =>
-  draftModelOptions.value.map((o) => ({
-    id: o.id,
-    title: o.title,
-    subtitle: '预设可用模型',
-    platform: o.title,
-    isDefault: o.id === draftActionId.value,
-  })),
+/** ChoicePicker 的一行：id / 标题；platform 不传，图标交给 Agent 按标题识别 */
+const pickerItems = computed(() =>
+  [
+    { id: '', title: '通用（所有模型）', subtitle: '不绑定模型，任何节点都能用', isDefault: draftActionId.value === '' },
+    ...draftModelOptions.value.map((o) => ({
+      id: o.id,
+      title: o.title,
+      subtitle: '预设可用模型',
+      isDefault: o.id === draftActionId.value,
+    })),
+  ],
 )
 
 /** 换模型：旧参数按新模型重置，避免把 A 模型的参数写进 B 模型 */
@@ -567,83 +563,17 @@ function labelOfAction(id: string): string {
         <!-- 绑定模型：留空 = 全局通用；选了就只在该模型可用时启用 -->
         <div class="nbp-field">
           <Label class="nbp-label">适用模型</Label>
-          <!-- 底栏同款：卡片 / 分栏面板（Agent 的 ChoicePicker，即底栏那个图2面板） -->
-          <DropdownMenu v-if="agentPickerReady">
-            <DropdownMenuTrigger as-child>
-              <button
-                type="button"
-                class="nb-model-trigger nbp-model-trigger"
-                aria-haspopup="menu"
-                aria-label="适用模型"
-                :title="draftModelLabel"
-              >
-                <span v-if="draftModelIcon" class="nb-model-badge" :data-tone="draftModelIcon.tone" aria-hidden="true" v-html="draftModelIcon.svg" />
-                <span class="nb-model-trigger-label">{{ draftModelLabel }}</span>
-                <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              side="bottom"
-              class="nb-model-menu nb-agent-choice-menu nb-agent-choice-menu--dialog"
-              :style="{ width: 'min(520px, calc(100vw - 24px))', height: 'min(380px, calc(100dvh - 320px))' }"
-            >
-              <AgentChoicePicker
-                :items="choiceItems"
-                :current-id="draftActionId"
-                title="适用模型"
-                rail-label="平台"
-                placeholder="搜索模型或平台"
-                empty-text="没有匹配的模型"
-                @pick="(item: { id: string }) => onDraftModelChange(item.id)"
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <!-- 简版回退：Agent 未装时仍是「图标 + 名称 + 勾」的菜单 -->
-          <DropdownMenu v-else>
-            <DropdownMenuTrigger as-child>
-              <button
-                type="button"
-                class="nb-model-trigger nbp-model-trigger"
-                aria-haspopup="menu"
-                aria-label="适用模型"
-                :title="draftModelLabel"
-              >
-                <span v-if="draftModelIcon" class="nb-model-badge" :data-tone="draftModelIcon.tone" aria-hidden="true" v-html="draftModelIcon.svg" />
-                <span class="nb-model-trigger-label">{{ draftModelLabel }}</span>
-                <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="bottom" class="nb-model-menu">
-              <DropdownMenuItem
-                data-state="checked"
-                @select="onDraftModelChange('')"
-              >
-                <span class="nb-model-badge" data-tone="text" aria-hidden="true"
-                  v-html="modelIconOf('通用文本').svg" />
-                <span class="nb-model-item-label">通用（所有模型）</span>
-                <svg v-if="!draftActionId" class="nb-model-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="m5 12 4 4L19 6" />
-                </svg>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                v-for="o in draftModelOptions"
-                :key="o.id"
-                :data-state="o.id === draftActionId ? 'checked' : undefined"
-                @select="onDraftModelChange(o.id)"
-              >
-                <span class="nb-model-badge" :data-tone="o.icon.tone" aria-hidden="true" v-html="o.icon.svg" />
-                <span class="nb-model-item-label">{{ o.title }}</span>
-                <svg v-if="o.id === draftActionId" class="nb-model-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="m5 12 4 4L19 6" />
-                </svg>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <!-- 与底栏**同一个组件**（ChoicePickerMenu）：触发器 / 面板 / 图标只有一份实现 -->
+          <ChoicePickerMenu
+            :items="pickerItems"
+            :current-id="draftActionId"
+            :trigger-label="draftModelLabel"
+            :trigger-icon="draftModelIcon"
+            trigger-title="适用模型"
+            title="适用模型"
+            :in-dialog="true"
+            @pick="onDraftModelChange"
+          />
         </div>
 
         <!-- 参数：用模型自己的参数定义渲染，和下拉里同一套控件 -->
@@ -668,4 +598,3 @@ function labelOfAction(id: string): string {
 </template>
 
 <style src="./prompt-presets.css"></style>
-<style src="./bottom-bar-choice-menu.css"></style>

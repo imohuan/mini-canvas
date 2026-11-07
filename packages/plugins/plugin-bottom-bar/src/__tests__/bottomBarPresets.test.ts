@@ -134,18 +134,22 @@ describe('预设提示词面板：禁用改成独立页签', () => {
 
   /**
    * 用户 2026-11-07 第二轮：弹窗里的「适用模型」要的是底栏那个**卡片/分栏面板**
-   * （Agent 的 ChoicePicker），不是简单菜单 —— 触发器 + 面板主体 + 回退菜单都要在。
+   * （Agent 的 ChoicePicker），不是简单菜单。第三轮：两个地方必须**共用同一个组件**
+   * ChoicePickerMenu，UI 只有实现一份。
    */
-  it('适用模型复用底栏的卡片/分栏面板（agentChoicePicker）', () => {
-    expect(PRESETS).toContain("useUiComponent('agentChoicePicker')")
-    expect(PRESETS).toContain('<AgentChoicePicker')
-    expect(PRESETS).toContain('title="适用模型"')
-    // Agent 未装时的简版回退菜单也保留
-    expect(PRESETS).toContain('class="nb-model-trigger nbp-model-trigger"')
-    expect(PRESETS).toContain('class="nb-model-item-check"')
-    expect(PRESETS).not.toContain("useUiComponent('Select')")
-    // 面板尺寸覆盖（choice-menu.css）要随组件带上
-    expect(PRESETS).toContain('<style src="./bottom-bar-choice-menu.css"></style>')
+  it('适用模型与底栏共用 ChoicePickerMenu 组件', () => {
+    const SHARED = read('../node-bottom-bar/ChoicePickerMenu.vue')
+    const CHOICE = read('../node-bottom-bar/BottomBarChoicePicker.vue')
+    // 共用组件就是 Agent 的 ChoicePicker + 触发器的唯一实现
+    expect(SHARED).toContain("useUiComponent('agentChoicePicker')")
+    expect(SHARED).toContain('nb-agent-choice-menu')
+    // 弹窗和底栏都只是传数据，不再自摆 UI
+    expect(PRESETS).toContain('<ChoicePickerMenu')
+    expect(PRESETS).toContain(':in-dialog="true"')
+    expect(CHOICE).toContain('<ChoicePickerMenu')
+    // 弹窗里不再直接摸 DropdownMenu / AgentChoicePicker
+    expect(PRESETS).not.toContain("useUiComponent('agentChoicePicker')")
+    expect(PRESETS).not.toContain("useUiComponent('DropdownMenu')")
   })
 
   it('禁用页签带条数，且点禁用条目会给出提示（不静默）', () => {

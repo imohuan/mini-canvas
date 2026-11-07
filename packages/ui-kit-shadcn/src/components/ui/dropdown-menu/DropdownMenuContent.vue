@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuContentEmits, DropdownMenuContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
-import { cn } from 'cn'
 import {
   DropdownMenuContent,
   DropdownMenuPortal,
@@ -37,6 +36,28 @@ const effectiveSideOffset = computed(() => popupSideOffset('dropdown', props.sid
 const delegatedProps = reactiveOmit(props, 'class', 'arrow', 'sideOffset')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const attrs = useAttrs()
+
+/**
+ * 集中合并透传属性（2026-11-07）：调用方绑的 class / style 经 $attrs 进来后，
+ * 必须与 reka 生成的 props 合并，且**调用方的 style 放在最后**。
+ * 之前模板里 v-bind={...$attrs} 会把 reka 内部生成的 style 覆盖掉调用方
+ * 显式绑的 width，表现是「:style 绑的宽度时有时无」（底栏模型/动作菜单实测）。
+ */
+const contentBindings = computed(() => {
+  const all = attrs as Record<string, unknown>
+  const callerStyle = attrs.style
+  const rest: Record<string, unknown> = { ...all }
+  delete rest.style
+  delete rest.class
+  return {
+    ...rest,
+    ...forwarded.value,
+    sideOffset: effectiveSideOffset.value,
+    class: props.class,
+    ...(callerStyle !== undefined ? { style: callerStyle } : {}),
+  }
+})
 </script>
 
 <template>
@@ -51,11 +72,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
       外层必须 overflow-visible：箭头是绝对定位的兄弟节点，放在滚动容器里会被裁掉。
     -->
-    <DropdownMenuContent
-      data-slot="dropdown-menu-content"
-      v-bind="{ ...$attrs, ...forwarded, sideOffset: effectiveSideOffset }"
-      :class="cn('data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 bg-popover text-popover-foreground flex min-w-48 flex-col rounded-3xl p-1.5 shadow-lg ring-1 duration-100 cn-menu-translucent z-50 max-h-(--reka-dropdown-menu-content-available-height) w-(--reka-dropdown-menu-trigger-width) origin-(--reka-dropdown-menu-content-transform-origin) overflow-visible', props.class)"
-    >
+    <DropdownMenuContent v-bind="contentBindings">
       <div
         data-slot="dropdown-menu-scroll"
         class="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain"
