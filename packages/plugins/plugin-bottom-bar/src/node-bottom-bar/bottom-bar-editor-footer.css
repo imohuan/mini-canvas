@@ -156,6 +156,16 @@
   border-radius: 6px;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
   vertical-align: middle;
+  /**
+   * 与正文 Y 轴对齐（用户 2026-11-07 截图：文字和标签不在一条线上）。
+   *
+   * vertical-align: middle 把盒中心对到「基线 + x 高度一半」，chip 会整体
+   * 下沉约 2px —— 真机量到 chip 名字行中心比正文行中心低 2px。这里用
+   * position:relative + top 把它抬回同一水平线，不改变布局流、不碰行高，
+   * 两行 chip 的间距也不受影响（top 只影响绘制位置）。
+   */
+  position: relative; /* .resource-chip 第二段已有 relative，这里显式声明不依赖顺序 */
+  top: -2px;
   line-height: 1;
   /* 覆盖编辑器公共样式里那条下划线（卡片不需要它） */
   border-bottom-width: 1px;
