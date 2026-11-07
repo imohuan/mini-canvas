@@ -53,23 +53,18 @@ describe('卡片 / 分栏页签', () => {
    * 现在选中态只看我们的 modelView / skillView，点击只走自己的 handler。
    */
   /**
-   * 2026-11-07 改版：页签的选中态与点击**只走 reka 一条通道**
-   * （Tabs 的 model-value + update:model-value），页签上不再手写
-   * data-state / aria-selected / @click —— 三份状态各改各的正是
-   * 「点卡片没反应、再点一次才好」与「页签亮分栏内容是卡片」的根因。
-   * 这条测试改为锁「单通道」契约：页签上不允许再出现手写状态 / 点击。
+   * 2026-11-07 第三版：页签改为**自定义按钮**（弃用 shadcn Tabs）。
+   * reka Tabs 的选中态是组件内部状态，与 view 长期不同步（用户连续反馈 5+ 次）。
+   * 契约：页签高亮 :class="'is-active': xxx === 'card'/'split'" 直接绑视图状态，
+   * 点击只走自己的 setView；不允许再出现 Tabs 组件。
    */
-  it('页签只走 reka 一条通道（TabsTrigger 上没有手写 data-state / aria-selected / @click）', () => {
-    // MODEL 与 SRC 都拼了外部样式：CSS 里含 "@click" 注释会误伤，只查 SFC 模板段
-    const modelTpl = MODEL.slice(0, MODEL.indexOf('<template>') + 1) + MODEL.slice(MODEL.indexOf('<template>')).split('</template>')[0]
-    const srcTpl = SRC.slice(0, SRC.indexOf('<template>') + 1) + SRC.slice(SRC.indexOf('<template>')).split('</template>')[0]
-    const triggerTags = (src: string) => src.match(/<TabsTrigger[\s\S]*?>/g) ?? []
-    for (const tag of triggerTags(modelTpl).concat(triggerTags(srcTpl))) {
-      expect(tag).not.toMatch(/:data-state|:aria-selected|@click/)
-    }
-    // 视图状态仍是我们的：Tabs 的 model-value 绑它
-    expect(MODEL).toContain(':model-value="view"')
-    expect(SRC).toContain(':model-value="skillView"')
+  it('页签是自定义按钮，高亮直接绑视图状态（不再用 reka Tabs）', () => {
+    expect(MODEL).toMatch(/ac-view-tab[^>]*{ 'is-active': view === 'card' }/)
+    expect(MODEL).toMatch(/ac-view-tab[^>]*{ 'is-active': view === 'split' }/)
+    expect(SRC).toMatch(/ac-view-tab[^>]*{ 'is-active': skillView === 'card' }/)
+    expect(SRC).toMatch(/ac-view-tab[^>]*{ 'is-active': skillView === 'split' }/)
+    expect(MODEL).not.toMatch(/<Tabs/)
+    expect(SRC).not.toMatch(/<Tabs/)
   })
 
   it('切视图不会重建面板（两套视图常驻，页签也不带 key 强制重挂）', () => {

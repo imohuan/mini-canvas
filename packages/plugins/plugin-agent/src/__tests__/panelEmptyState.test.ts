@@ -33,7 +33,7 @@ describe('技能面板：空态只出现一次', () => {
   })
 
   it('没有技能时视图开关不渲染（没有可切换的东西）', () => {
-    expect(skillPanel()).toMatch(/<Tabs v-if="s\.skills\.length"/)
+    expect(skillPanel()).toMatch(/v-if=\"s.skills.length\" class=\"ac-view-tabs\"/)
   })
 })
 

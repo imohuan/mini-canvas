@@ -15,20 +15,33 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 /** 三个面板的容器：只截「面板本体」，避免把输入区其它下拉算进来 */
 const SRC = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+/** 模型面板已抽成 ModelPicker（用户 2026-11-07：Agent 与底栏共用同一件） */
+const MODEL = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/ModelPicker.vue'))
 const MSG = readFileSync(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'), 'utf8')
-const panels = ['ac-model-panel', 'ac-skill-panel', 'ac-mcp-panel'].map((name) => {
-  const start = SRC.indexOf(name)
+const panels = [
+  { src: MODEL, name: 'ac-model-panel' },
+  { src: SRC, name: 'ac-skill-panel' },
+  { src: SRC, name: 'ac-mcp-panel' },
+].map(({ src, name }) => {
+  const start = src.indexOf(name)
   expect(start, '找不到面板 ' + name).toBeGreaterThan(-1)
-  return SRC.slice(start, start + 9000)
+  return src.slice(start, start + 9000)
 })
 
-describe('面板头部：视图切换用原生 Tabs', () => {
-  it('模型 / 技能面板使用 Tabs + TabsList + TabsTrigger', () => {
+describe('面板头部：视图切换用自定义页签（2026-11-07 弃用 shadcn Tabs）', () => {
+  /**
+   * 用户 2026-11-07：reka Tabs 的选中态是组件内部状态，与 view 高亮/内容
+   * 长期不同步（连续反馈 5+ 次）。改为自定义按钮，高亮直接绑 view，
+   * 不允许再引回 Tabs 组件。
+   */
+  it('模型 / 技能面板使用 ac-view-tab 自定义页签，高亮绑 view', () => {
     for (const panel of panels.slice(0, 2)) {
-      expect(panel).toMatch(/<Tabs\b/)
-      expect(panel).toMatch(/<TabsList\b/)
-      expect(panel).toMatch(/<TabsTrigger[^>]*value="card"/)
-      expect(panel).toMatch(/<TabsTrigger[^>]*value="split"/)
+      expect(panel).toContain('class="ac-view-tabs"')
+      expect(panel).toMatch(/is-active.: (view|skillView) === 'card'/)
+      expect(panel).toMatch(/is-active.: (view|skillView) === 'split'/)
+      // 不允许再引回 shadcn Tabs
+      expect(panel).not.toMatch(/<Tabs\b/)
+      expect(panel).not.toMatch(/<TabsTrigger/)
     }
   })
 

@@ -688,3 +688,45 @@
     padding-right: 10px;
   }
 }
+
+/*
+ * 卡片/分栏页签：自定义分段控件（2026-11-07 弃用 shadcn Tabs）。
+ * 高亮直接绑在 view 状态上：类一变立刻重渲染，不存在组件内部第二份状态，
+ * 也就不存在「页签亮了内容没跟」的窗口。用户 2026-11-07 连续反馈后拍板。
+ */
+.ac-view-tabs {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+}
+.ac-view-tab {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+  transition: color 0.12s ease-out, background-color 0.12s ease-out;
+}
+.ac-view-tab:hover {
+  color: var(--ui-ink, #18202b);
+}
+.ac-view-tab.is-active {
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #18202b);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.12), 0 0 0 1px var(--ui-line, #e2e5ea);
+}
+.ac-view-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
+}

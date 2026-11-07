@@ -67,9 +67,6 @@ const emit = defineEmits<{
 
 const Button = useUiComponent('Button')
 const Badge = useUiComponent('Badge')
-const Tabs = useUiComponent('Tabs')
-const TabsList = useUiComponent('TabsList')
-const TabsTrigger = useUiComponent('TabsTrigger')
 const InputGroup = useUiComponent('InputGroup')
 const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
@@ -268,12 +265,25 @@ defineExpose({ refreshLayout })
           这个错位在 Agent 侧已经修过一遍，移植到底栏时把手写 @click 又带回来了。
           data-state / aria-selected 也交给 reka 管理，不再手写。
         -->
-        <Tabs :model-value="view" @update:model-value="setView">
-          <TabsList aria-label="面板布局">
-            <TabsTrigger value="card">卡片</TabsTrigger>
-            <TabsTrigger value="split">分栏</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <!-- 卡片/分栏页签：自定义按钮（理由同 ChoicePicker，2026-11-07） -->
+        <div class="ac-view-tabs" role="tablist" aria-label="面板布局">
+          <button
+            type="button"
+            class="ac-view-tab"
+            :class="{ 'is-active': view === 'card' }"
+            :aria-selected="view === 'card'"
+            role="tab"
+            @click="setView('card')"
+          >卡片</button>
+          <button
+            type="button"
+            class="ac-view-tab"
+            :class="{ 'is-active': view === 'split' }"
+            :aria-selected="view === 'split'"
+            role="tab"
+            @click="setView('split')"
+          >分栏</button>
+        </div>
       </div>
       <!-- 搜索框：常显（不折成放大镜），组件库默认样式 -->
       <InputGroup>

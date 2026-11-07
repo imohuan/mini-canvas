@@ -71,9 +71,6 @@ const InputGroup = useUiComponent('InputGroup')
 const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
 const InputGroupInput = useUiComponent('InputGroupInput')
-const Tabs = useUiComponent('Tabs')
-const TabsList = useUiComponent('TabsList')
-const TabsTrigger = useUiComponent('TabsTrigger')
 const Tooltip = useUiComponent('Tooltip')
 const TooltipContent = useUiComponent('TooltipContent')
 const TooltipProvider = useUiComponent('TooltipProvider')
@@ -480,12 +477,25 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                       data-state / aria-selected / @click 与库各改各的，才会错位。
                       CSS 的高亮由 [data-status=active] 与 aria-selected 承担。
                     -->
-                    <Tabs v-if="s.skills.length" :model-value="skillView" @update:model-value="setSkillView">
-                      <TabsList aria-label="面板布局">
-                        <TabsTrigger value="card">卡片</TabsTrigger>
-                        <TabsTrigger value="split">分栏</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+                    <!-- 卡片/分栏页签：自定义按钮（理由同 ChoicePicker/ModelPicker，2026-11-07） -->
+                    <div v-if="s.skills.length" class="ac-view-tabs" role="tablist" aria-label="面板布局">
+                      <button
+                        type="button"
+                        class="ac-view-tab"
+                        :class="{ 'is-active': skillView === 'card' }"
+                        :aria-selected="skillView === 'card'"
+                        role="tab"
+                        @click="setSkillView('card')"
+                      >卡片</button>
+                      <button
+                        type="button"
+                        class="ac-view-tab"
+                        :class="{ 'is-active': skillView === 'split' }"
+                        :aria-selected="skillView === 'split'"
+                        role="tab"
+                        @click="setSkillView('split')"
+                      >分栏</button>
+                    </div>
                   </div>
                   <InputGroup>
                     <InputGroupAddon align="inline-start">

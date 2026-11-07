@@ -74,9 +74,6 @@ const emit = defineEmits<{
 
 const Button = useUiComponent('Button')
 const Badge = useUiComponent('Badge')
-const Tabs = useUiComponent('Tabs')
-const TabsList = useUiComponent('TabsList')
-const TabsTrigger = useUiComponent('TabsTrigger')
 const InputGroup = useUiComponent('InputGroup')
 const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
@@ -231,12 +228,30 @@ defineExpose({ refreshLayout })
           不再手写 @click（同一次点击 setView 被调两次 → 页签与界面错位）。
           data-state / aria-selected 交给 reka。
         -->
-        <Tabs :model-value="view" @update:model-value="setView">
-          <TabsList aria-label="面板布局">
-            <TabsTrigger value="card">卡片</TabsTrigger>
-            <TabsTrigger value="split">分栏</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <!--
+          卡片 / 分栏页签：**自定义按钮**，不再用 shadcn Tabs。
+          用户 2026-11-07：reka Tabs 的选中态是组件内部状态，切换时高亮与内容
+          长期不同步（连续反馈 5+ 次）。自定义版的高亮直接绑在本组件的 view 上，
+          类一变立刻重渲染，不存在第二份状态。
+        -->
+        <div class="ac-view-tabs" role="tablist" aria-label="面板布局">
+          <button
+            type="button"
+            class="ac-view-tab"
+            :class="{ 'is-active': view === 'card' }"
+            :aria-selected="view === 'card'"
+            role="tab"
+            @click="setView('card')"
+          >卡片</button>
+          <button
+            type="button"
+            class="ac-view-tab"
+            :class="{ 'is-active': view === 'split' }"
+            :aria-selected="view === 'split'"
+            role="tab"
+            @click="setView('split')"
+          >分栏</button>
+        </div>
       </div>
       <InputGroup>
         <InputGroupAddon align="inline-start">
