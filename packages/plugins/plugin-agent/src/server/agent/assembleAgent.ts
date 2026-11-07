@@ -16,6 +16,7 @@ import { GoalRuntime, goalHooksDir, findSessionTrace } from './goalRuntime.js'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot, sessionScratchpadPath } from './agentPaths.js'
 import { tracesDirOf } from './traceFork.js'
 import { ensureGoalInstalled } from './goal.js'
+import { PYTHON_UTF8_ENV, utf8SpawnConfiner } from './commandEncoding.js'
 import type { AgentHostPorts } from '../ports.js'
 import { setVendorPluginsDir } from './vendorPlugins.js'
 
@@ -81,7 +82,15 @@ export async function assembleAgentServices(opts: AssembleAgentOptions): Promise
     hub,
     agent: async () => {
       const sdk = await loadSdk()
-      return sdk.createAgent({ root: agentRoot(dataDir), projectId: AGENT_PROJECT_ID, agentId: AGENT_ID })
+      // 让 Agent 跑的所有命令都用 UTF-8（Windows 默认控制台代码页是 GBK，见 commandEncoding.ts）。
+      // controlEnv / confineSpawn 是 getter，子 Agent（run_subagent）会原样继承同一份策略。
+      return sdk.createAgent({
+        root: agentRoot(dataDir),
+        projectId: AGENT_PROJECT_ID,
+        agentId: AGENT_ID,
+        controlEnv: () => PYTHON_UTF8_ENV,
+        confineSpawn: () => utf8SpawnConfiner(),
+      })
     },
     /** 每次建会话现读：插件可热装热卸，运行期地址 / 端口也在变，快照会把旧值冻进提示词。 */
     promptSections: () => ports.promptSections().map((s) => ({ title: s.title, text: s.text })),
