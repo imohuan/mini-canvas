@@ -98,4 +98,16 @@ describe('标签左侧图标：hover 换铅笔 + 图标高亮（用户 2026-11-0
     expect(css).toMatch(/background-color:\s*currentColor/)
     expect(css).toMatch(/color:\s*color-mix\(/)
   })
+
+  it('★ 深色只涂在铅笔（::after）上，绝不能落在标签本体（用户 2026-11-07：hover 图标整个节点变黑）', () => {
+    // 所有用 background-color 画深色的选择器，都必须以 ::after 结尾
+    const deep = CSS.match(/\.nb-editor [^{]*\{[^}]*background-color:\s*var\(--ui-ink/g) ?? []
+    expect(deep.length).toBeGreaterThan(0)
+    for (const rule of deep) {
+      const selectors = rule.slice(0, rule.indexOf('{')).split(',')
+      for (const sel of selectors) {
+        expect(sel.trim()).toMatch(/::after$/)
+      }
+    }
+  })
 })

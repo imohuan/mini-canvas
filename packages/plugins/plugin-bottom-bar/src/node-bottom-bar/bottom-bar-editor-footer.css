@@ -355,8 +355,8 @@
  * 用 :has 只认图标格上的指针；名字区域的 hover 不会让铅笔变深。
  */
 .nb-editor .resource-chip--icon-hot::after,
-.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover),
-.nb-editor .resource-chip--hot:has(.resource-chip-icon:hover) {
+.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover)::after,
+.nb-editor .resource-chip--hot:has(.resource-chip-icon:hover)::after {
   /* 指针落在图标格：灰 → 纯前景色，这是用户要的「高亮」 */
   background-color: var(--ui-ink, #18202b);
 }
