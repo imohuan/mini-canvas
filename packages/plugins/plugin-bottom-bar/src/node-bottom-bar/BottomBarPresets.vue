@@ -90,7 +90,6 @@ const ScrollArea = useUiComponent('ScrollArea')
 const Tabs = useUiComponent('Tabs')
 const TabsList = useUiComponent('TabsList')
 const TabsTrigger = useUiComponent('TabsTrigger')
-const Switch = useUiComponent('Switch')
 const Select = useUiComponent('Select')
 const SelectContent = useUiComponent('SelectContent')
 const SelectItem = useUiComponent('SelectItem')
@@ -144,10 +143,8 @@ const allPresets = computed(() => [...providerPresets.value, ...presets.value])
 /** 存在哪儿：后台 / 本机（面板底部一句话说明，用户不用猜） */
 const where = ref<'cloud' | 'local'>('local')
 const loadError = ref('')
-/** 默认不显示禁用的那批（用户口径：加一个开关，打开才看得到） */
-const showDisabled = ref(false)
-/** 四个分类：provider / 通用 / 指定模型 / 当前模型 */
-type TabKey = 'provider' | 'general' | 'model' | 'current'
+/** 五个分类：provider / 通用 / 指定模型 / 当前模型 / 禁用 */
+type TabKey = 'provider' | 'general' | 'model' | 'current' | 'disabled'
 const tab = ref<TabKey>('current')
 const canApply = computed(() => {
   const ids = new Set(props.availableIds ?? [])
@@ -157,6 +154,10 @@ const canApply = computed(() => {
 /** 当前分类下的条目（搜索再筛一层） */
 const inTab = computed(() => {
   const ids = new Set(props.availableIds ?? [])
+  // 禁用页单独看：只收当前节点用不了的那批（通用预设永远可用，不会出现在这里）
+  if (tab.value === 'disabled') {
+    return allPresets.value.filter((p) => !presetEnabled(p, ids))
+  }
   return allPresets.value.filter((p) => {
     const bucket: PresetBucket = presetBucketOf(p)
     if (tab.value === 'provider') return bucket === 'provider'
@@ -169,11 +170,12 @@ const inTab = computed(() => {
 
 const filtered = computed(() => {
   const list = filterPresets(inTab.value, query.value)
-  return showDisabled.value ? list : list.filter((p) => canApply.value(p))
+  // 禁用页本身就是筛过的，其它页把用不了的藏掉
+  return tab.value === 'disabled' ? list : list.filter((p) => canApply.value(p))
 })
 
-/** 当前分类里被隐藏的禁用条数（开关旁边显示，避免用户以为丢了） */
-const disabledCount = computed(() => filterPresets(inTab.value, query.value).filter((p) => !canApply.value(p)).length)
+/** 全部清单里的禁用条数（页签上显示，避免用户以为丢了） */
+const disabledCount = computed(() => filterPresets(allPresets.value, query.value).filter((p) => !canApply.value(p)).length)
 
 /**
  * 列表高度：按真实条数给 ScrollArea 一个确定高度。
@@ -217,7 +219,11 @@ async function persist(): Promise<boolean> {
 }
 
 function use(preset: PromptPreset): void {
-  if (!canApply.value(preset)) return
+  // 点了用不了的预设要给明确提示，不能静默什么都不发生
+  if (!canApply.value(preset)) {
+    notify?.info('当前节点用不了这个模型', { description: '这份预设仍会保留，换到对应模型的节点即可使用' })
+    return
+  }
   // 没有输入框可填的模式（音频等）：仍可以打开面板、管理预设，
   // 但点「使用」要给明确提示，不能静默什么都不发生（用户 2026-11-07：所有类型都有预设按钮）。
   if (props.hasTarget === false) {
@@ -375,13 +381,16 @@ function labelOfAction(id: string): string {
         <span class="nbp-count">{{ presets.length }} 条</span>
       </div>
 
-      <!-- 四个分类：provider 自带 / 通用 / 指定模型 / 当前模型 -->
+      <!-- 五个分类：provider 自带 / 通用 / 指定模型 / 当前模型 / 禁用（2026-11-07：开关换成独立页签） -->
       <Tabs :model-value="tab" class="nbp-tabs" @update:model-value="(v: unknown) => (tab = (String(v) || 'current') as TabKey)">
         <TabsList variant="line" size="sm">
           <TabsTrigger value="provider">Provider</TabsTrigger>
           <TabsTrigger value="general">通用</TabsTrigger>
           <TabsTrigger value="model">指定模型</TabsTrigger>
           <TabsTrigger value="current">当前模型</TabsTrigger>
+          <TabsTrigger value="disabled">
+            禁用<span v-if="disabledCount > 0" class="nbp-tabcount">{{ disabledCount }}</span>
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -412,16 +421,6 @@ function labelOfAction(id: string): string {
           <span>新建</span>
         </Button>
       </div>
-
-      <!-- 默认隐藏「禁用」的那批；打开开关才显示，并且可以编辑/删除 -->
-      <label class="nbp-toggle">
-        <Switch
-          :model-value="showDisabled"
-          @update:model-value="(v: boolean) => (showDisabled = v)"
-        />
-        <span>显示禁用预设</span>
-        <span v-if="disabledCount > 0" class="nbp-count">（{{ disabledCount }}）</span>
-      </label>
 
       <div class="nbp-body">
         <ScrollArea v-if="loaded && filtered.length > 0" class="nbp-list" :style="listStyle">
@@ -461,6 +460,7 @@ function labelOfAction(id: string): string {
         <div v-else class="nbp-empty">
           <span class="nbp-empty-icon" aria-hidden="true" v-html="ICON_BOOKMARK" />
           <p v-if="query.trim()">没有匹配「{{ query.trim() }}」的预设</p>
+          <p v-else-if="tab === 'disabled'">没有禁用的预设：当前节点选中的模型都能用</p>
           <p v-else>暂无预设，点击「新建」创建第一个预设</p>
         </div>
       </div>
