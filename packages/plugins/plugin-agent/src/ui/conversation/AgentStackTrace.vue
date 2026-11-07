@@ -30,6 +30,15 @@ const error = computed(() => props.failure.message || '工具执行失败')
 const frames = computed(() => props.failure.frames)
 const full = computed(() => props.detail || error.value)
 /**
+ * 诊断用的文本：优先完整详情；没有详情时把首行错误 + 帧拼起来。
+ * 为什么不用 `full`：工具失败只传了 failure（message + frames），message 只有第一行，
+ * 光看它认不出 `/api/...` 路由或业务代码帧，标题就会退化成「未知」。
+ */
+const diagnosisText = computed(() => {
+  if (props.detail) return props.detail
+  return [error.value, ...frames.value].join('\n')
+})
+/**
  * 标题：先说**在哪出错**（后台 / 前端 / 网络），再说 HTTP 状态码，最后才是原因。
  *
  * 用户口径（2026-11-07）：原来只有「Failed: EPERM…」，800 字以内的标题也说不清
@@ -37,7 +46,7 @@ const full = computed(() => props.detail || error.value)
  *   [后台写文件失败 EPERM] · Failed: EPERM: operation not permitted, rename '...'
  * 状态码单独带出来（4xx 是请求方问题、5xx 是后台问题），展开区再给完整原因与捕获位置。
  */
-const diagnosis = computed(() => diagnoseError(full.value))
+const diagnosis = computed(() => diagnoseError(diagnosisText.value))
 const heading = computed(() => {
   if (props.title) return props.title
   const d = diagnosis.value
