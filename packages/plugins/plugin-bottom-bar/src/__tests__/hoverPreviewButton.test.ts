@@ -31,10 +31,16 @@ describe('hover 预览的全屏按钮：默认组件样式', () => {
     }
   })
 
-  it('圆形由 rounded-full 负责，底栏不再自己写圆角', () => {
+  it('圆形由 rounded-full 负责，底栏样式不写圆角', () => {
     const i = CSS.indexOf('.nb-hover-preview-open {')
     const block = CSS.slice(CSS.indexOf('{', i) + 1, CSS.indexOf('}', i))
     expect(block).not.toMatch(/border-radius/)
+  })
+
+  it('压在明亮画面上也要看得见：给一层媒体衬底', () => {
+    const i = CSS.indexOf('.nb-hover-preview-open {')
+    const block = CSS.slice(CSS.indexOf('{', i) + 1, CSS.indexOf('}', i))
+    expect(block).toMatch(/background-color:\s*color-mix\(/)
   })
 
   it('宿主那条无层 [data-slot=button] 圆角会压掉 rounded-full，需单独补一条同层规则', () => {
