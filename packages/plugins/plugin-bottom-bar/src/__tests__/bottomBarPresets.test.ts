@@ -114,8 +114,22 @@ describe('预设提示词面板：禁用改成独立页签', () => {
 
   it('五个页签：provider / 通用 / 指定模型 / 当前模型 / 禁用', () => {
     for (const value of ['provider', 'general', 'model', 'current', 'disabled']) {
-      expect(PRESETS).toContain('<TabsTrigger value="' + value + '"')
+      expect(PRESETS).toContain('value="' + value + '"')
     }
+  })
+
+  /**
+   * 用户 2026-11-07：页签要用中文；没有 provider 模板 / 没有禁用预设时，
+   * 对应页签不渲染，别给用户一个点了是空的页签。
+   */
+  it('页签中文化，provider / 禁用页签按内容显隐', () => {
+    expect(PRESETS).toContain('>平台模板</TabsTrigger>')
+    expect(PRESETS).not.toMatch(/<TabsTrigger value="provider">Provider</)
+    expect(PRESETS).toMatch(/<TabsTrigger v-if="hasProviderTab" value="provider"/)
+    expect(PRESETS).toMatch(/<TabsTrigger v-if="hasDisabledTab" value="disabled"/)
+    // 隐藏页签正被激活时退回「当前模型」
+    expect(PRESETS).toMatch(/tab.value === 'provider' && !hasProviderTab.value/)
+    expect(PRESETS).toMatch(/tab.value === 'disabled' && !hasDisabledTab.value/)
   })
 
   it('禁用页签带条数，且点禁用条目会给出提示（不静默）', () => {

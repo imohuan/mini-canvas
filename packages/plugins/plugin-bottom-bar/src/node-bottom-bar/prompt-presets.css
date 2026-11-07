@@ -158,6 +158,15 @@
 .nbp-body {
   display: flex;
   flex-direction: column;
+  /*
+   * 高度钉在内容区上（256px 由组件 style 传入）：列表态和空态共用同一块地皮，
+   * 有数据 / 空数据、切页签、搜索前后高度都不变（用户 2026-11-07）。
+   */
+  min-height: 0;
+}
+.nbp-list {
+  /* 撑满内容区；条目多时由 ScrollArea 自己滚（根节点有确定高度才会滚） */
+  flex: 1 1 auto;
   min-height: 0;
 }
 .nbp-list {
@@ -243,7 +252,9 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 176px;
+  /* 空态撑满同一块内容区，与列表态同高 */
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 16px;
   color: var(--ui-ink-mute, #8c95a3);
   text-align: center;

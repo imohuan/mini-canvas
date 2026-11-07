@@ -178,14 +178,26 @@ const filtered = computed(() => {
 const disabledCount = computed(() => filterPresets(allPresets.value, query.value).filter((p) => !canApply.value(p)).length)
 
 /**
+ * 没有内容的页签**不渲染**（用户 2026-11-07：没有 provider / 没有禁用就不显示对应 tab）。
+ * 当前页签被隐藏时自动跳回「当前模型」，避免停在一个不存在的页签上。
+ */
+const hasProviderTab = computed(() => providerPresets.value.length > 0)
+const hasDisabledTab = computed(() => disabledCount.value > 0)
+watch([hasProviderTab, hasDisabledTab], () => {
+  if (tab.value === 'provider' && !hasProviderTab.value) tab.value = 'current'
+  if (tab.value === 'disabled' && !hasDisabledTab.value) tab.value = 'current'
+})
+
+/**
  * 列表高度：**固定**，不跟条数变（用户 2026-11-07：切换页签时高度跳来跳去）。
  *
  * 以前按条数算高度（弹层贴着内容），代价是切页签 / 搜索时面板一跳一跳。
- * 现在给一个固定高度：条目少时空一点，但所有页签、搜索前后都是同一个高度，
- * 切换不再跳动。条目多时靠 ScrollArea 内部滚动。
+ * 而且高度要钉在**整个内容区**上：列表态和空态都用同一块地皮（用户 2026-11-07
+ * 第二轮反馈：有数据和空数据切换时高度也在变 —— 空态自身的 min-height 和列表
+ * 高度对不上）。条目多时靠 ScrollArea 内部滚动。
  */
 const LIST_HEIGHT = '256px'
-const listStyle = computed<Record<string, string>>(() => ({ height: LIST_HEIGHT }))
+const bodyStyle = computed<Record<string, string>>(() => ({ height: LIST_HEIGHT }))
 
 const baseUrl = (): string => resolveAgentBaseUrl(ctx)
 
@@ -402,11 +414,15 @@ function labelOfAction(id: string): string {
       <!-- 五个分类：provider 自带 / 通用 / 指定模型 / 当前模型 / 禁用（2026-11-07：开关换成独立页签） -->
       <Tabs :model-value="tab" class="nbp-tabs" @update:model-value="(v: unknown) => (tab = (String(v) || 'current') as TabKey)">
         <TabsList variant="line" size="sm">
-          <TabsTrigger value="provider">Provider</TabsTrigger>
+          <!--
+            provider / 禁用两页**按内容显隐**（用户 2026-11-07）：没有 provider 模板、
+            没有禁用预设时不渲染对应页签，页面里只留确实有东西的分类。
+          -->
+          <TabsTrigger v-if="hasProviderTab" value="provider">平台模板</TabsTrigger>
           <TabsTrigger value="general">通用</TabsTrigger>
           <TabsTrigger value="model">指定模型</TabsTrigger>
           <TabsTrigger value="current">当前模型</TabsTrigger>
-          <TabsTrigger value="disabled">
+          <TabsTrigger v-if="hasDisabledTab" value="disabled">
             禁用<span v-if="disabledCount > 0" class="nbp-tabcount">{{ disabledCount }}</span>
           </TabsTrigger>
         </TabsList>
@@ -440,8 +456,8 @@ function labelOfAction(id: string): string {
         </Button>
       </div>
 
-      <div class="nbp-body">
-        <ScrollArea v-if="loaded && filtered.length > 0" class="nbp-list" :style="listStyle">
+      <div class="nbp-body" :style="bodyStyle">
+        <ScrollArea v-if="loaded && filtered.length > 0" class="nbp-list">
           <button
             v-for="p in filtered"
             :key="p.id"
@@ -454,7 +470,7 @@ function labelOfAction(id: string): string {
             <span class="nbp-item-text">
               <span class="nbp-item-name">
                 {{ p.name }}
-                <span v-if="p.source === 'provider'" class="nbp-tag">provider</span>
+                <span v-if="p.source === 'provider'" class="nbp-tag">平台模板</span>
                 <span v-if="p.actionId" class="nbp-tag">{{ labelOfAction(p.actionId) }}</span>
                 <span v-if="p.values" class="nbp-tag">含参数</span>
               </span>
