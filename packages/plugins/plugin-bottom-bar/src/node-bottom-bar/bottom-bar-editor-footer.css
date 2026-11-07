@@ -273,25 +273,30 @@
   height: 14px;
 }
 /**
- * 左侧图标 hover 高亮（用户 2026-11-07）。
+ * 左侧图标 hover 高亮（用户 2026-11-07 第二轮）。
  *
- * 为什么需要：只有点这颗图标才会弹候选菜单，但以前 hover 上去只是把图换成铅笔，
- * 没有底色，用户看不出「这一小块是可以点的」。
+ * 用户原话：「我不要这个背景，我要的是让这个图标可以进行高亮显示，
+ * 比如颜色默认是灰色，hover 上去变得更暗一些」。
  *
- * 为什么用径向渐变而不是给图标加 background-color：图标本身是**用 mask 画的**
- * （background-color = 图形颜色），改成底色会把图标整个吃掉。
- * 这里在标签内部、只覆盖图标那一块的区域铺一层浅灰圆，图标与铅笔都保持原样。
- * 只有指针真的落在图标上才亮（:has 判断），整颗标签 hover 不触发。
+ * 只改**图形颜色**，不加任何底色/描边：
+ *   · 铅笔（hover 时盖在图标位上的 ::after）与图标都是 currentColor 画的，
+ *     所以把这个格子的 color 调一档，图形就跟着变；
+ *   · 名字有自己独立的颜色规则，不受影响；
+ *   · 只有指针真的落在图标上才变深（:has），整颗标签 hover 不变。
  */
+.nb-editor .resource-chip--editable {
+  /* 默认灰：图形的「静息色」 */
+  color: color-mix(in srgb, var(--ui-ink, #18202b) 58%, transparent);
+  transition: color 0.15s ease-out;
+}
 .nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {
-  /* 图标格：左内边距 3px + 14px 宽 → 圆心约 10px；直径 20px 略大于图标，显得像个可点按钮 */
-  background-image: radial-gradient(
-    circle 10px at 10px 50%,
-    color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent) 0 10px,
-    transparent 10px
-  );
-  background-repeat: no-repeat;
-  background-position: left center;
+  /* hover 深一档（用户口径：更暗一些） */
+  color: var(--ui-ink, #18202b);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-editor .resource-chip--editable {
+    transition: none;
+  }
 }
 .nb-editor .resource-chip-name {
   overflow: hidden;

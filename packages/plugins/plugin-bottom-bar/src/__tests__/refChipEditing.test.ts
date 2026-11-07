@@ -64,11 +64,20 @@ describe('标签左侧图标：hover 高亮（用户 2026-11-07）', () => {
     expect(CSS).toMatch(/\.resource-chip--editable:has\(\.resource-chip-icon:hover\)/)
   })
 
-  it('高亮是叠在标签上的浅灰圆，不覆盖图标本身（图标靠 mask 上色）', () => {
-    const i = CSS.indexOf('.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {')
-    expect(i).toBeGreaterThan(-1)
-    const block = CSS.slice(CSS.indexOf('{', i) + 1, CSS.indexOf('}', i))
-    expect(block).toMatch(/background-image:\s*radial-gradient/)
-    expect(block).not.toMatch(/background-color/)
+  it('只变图标颜色：默认灰、hover 更深，不加任何背景', () => {
+    const base = CSS.slice(
+      CSS.indexOf('.nb-editor .resource-chip--editable {'),
+      CSS.indexOf('}', CSS.indexOf('.nb-editor .resource-chip--editable {')),
+    )
+    const hover = CSS.slice(
+      CSS.indexOf('.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {'),
+      CSS.indexOf('}', CSS.indexOf('.nb-editor .resource-chip--editable:has(.resource-chip-icon:hover) {')),
+    )
+    // 静息是灰（58% 前景色），hover 是纯前景色（更深）
+    expect(base).toMatch(/color:\s*color-mix\(/)
+    expect(hover).toMatch(/color:\s*var\(--ui-ink/)
+    // 用户明确不要背景块
+    expect(CSS).not.toMatch(/resource-chip--editable[^{]*\{[^}]*background/)
+    expect(CSS).not.toMatch(/radial-gradient/)
   })
 })
