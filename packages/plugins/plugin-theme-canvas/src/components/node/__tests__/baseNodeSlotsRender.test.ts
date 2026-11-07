@@ -122,12 +122,14 @@ function renderNode(
     zoom?: number
     resizingId?: string | null
     draggingId?: string | null
+    /** 节点类型（缺省 image）；图片 / 视频有"一律不许 resize"的专门规则 */
+    type?: string
   } = {},
 ): Promise<string> {
   const app = createSSRApp({
     setup() {
       useVueFlow().viewport.value = { x: 0, y: 0, zoom: opts.zoom ?? 1 }
-      return () => h(BaseNode, { id: 'n1', type: 'image', data, selected: false })
+      return () => h(BaseNode, { id: 'n1', type: opts.type ?? 'image', data, selected: false })
     },
   })
   app.provide(RENDER_CONTEXT_KEY, renderCtx(registry, settings, opts))
@@ -584,8 +586,8 @@ describe('拖动进行中收起上/下控制栏（用户要求）', () => {
 describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () => {
   it('data.resizable=true → 渲染拖柄，且带 scale 反缩放绑定（与标题同一套语义）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { in: ContentStub })
-    const html = await renderNode(r, { resizable: true })
+    r.register('text', { in: ContentStub })
+    const html = await renderNode(r, { resizable: true }, {}, { type: 'text' })
     expect(html).toContain('resize-handle')
     // 拖柄是「临时 UI」，挂了导出剔除标记 mc-export-ignore（见下方 describe）
     expect(html).toMatch(/class="resize-handle mc-export-ignore"[^>]*style="[^"]*transform:scale/)
@@ -596,6 +598,20 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
     r.register('image', { in: ContentStub })
     const html = await renderNode(r)
     expect(html).not.toContain('resize-handle')
+  })
+
+  /**
+   * 用户口径 2026-11-07：图片 / 视频节点关闭 resize。
+   * 卡片尺寸只由内容比例 + 「最短边 / 最长边」决定，拖柄会把显示宽度上限顶掉。
+   * 存量节点数据里可能还留着 data.resizable: true，它也不许把拖柄打开。
+   */
+  it('图片 / 视频节点：类型不声明 resize，存量 data.resizable=true 也不出拖柄', async () => {
+    for (const type of ['image', 'video']) {
+      const r = new NodeRegistry()
+      r.register(type, { in: ContentStub })
+      const html = await renderNode(r, { resizable: true }, {}, { type })
+      expect(html).not.toContain('resize-handle')
+    }
   })
 })
 
@@ -627,8 +643,8 @@ describe('导出剔除标记 mc-export-ignore（临时 UI 不进导出图）', (
 
   it('resize 拖柄带标记', async () => {
     const r = new NodeRegistry()
-    r.register('image', { in: ContentStub })
-    const html = await renderNode(r, { resizable: true })
+    r.register('text', { in: ContentStub })
+    const html = await renderNode(r, { resizable: true }, {}, { type: 'text' })
     expect(html).toMatch(new RegExp('class="resize-handle ' + MARK + '"'))
   })
 

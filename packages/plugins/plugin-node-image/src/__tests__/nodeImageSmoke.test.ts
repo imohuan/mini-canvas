@@ -186,10 +186,10 @@ describe('node-image 装配 smoke', () => {
 
     // 分组与 label 决定设置面板长在哪、叫什么
     const group = settings.groupOf('布局/图片节点尺寸')
-    // 「布局/图片节点尺寸」下现在有六项：默认宽/高 + 最短边/最长边 + 拖拽开关/拖拽方式
+    // 「布局/图片节点尺寸」下只有四项：默认宽/高 + 最短边/最长边。
+    // 拖拽开关/方式已删除（用户口径 2026-11-07：图片节点不允许 resize）。
     expect(group.map((i) => i.key).sort()).toEqual([
       'imageCardMaxLongSide', 'imageCardMinShortSide', 'imageDefaultHeight', 'imageDefaultWidth',
-      'imageResizeEnabled', 'imageResizeMode',
     ])
     expect(group.find((i) => i.key === 'imageCardMinShortSide')?.schema.label).toBe('最短边最小')
     expect(group.find((i) => i.key === 'imageCardMaxLongSide')?.schema.label).toBe('最长边最大')
@@ -225,23 +225,18 @@ describe('node-image 装配 smoke', () => {
   })
 })
 
-describe('图片节点拖拽开关/方式（用户口径 2026-10-30）', () => {
-  it('设置一改，类型表的 resizable 立即变（真内核 + bindTypeResizeMode）', async () => {
+describe('图片节点不允许 resize（用户口径 2026-11-07）', () => {
+  it('类型表声明 resizable: false，且没有可改回打开的设置项', async () => {
     const ctx = boot()
     await ctx.start()
-    // boot() 用真宿主 → apply 里的 bindTypeResizeMode 已按配置默认值把类型表绑成 aspect；
-    // 后面再直接钉类型表这条链（updateTypeResizability → 响应式）在真内核上成立：
     const nodeStore = ctx.get<DocService>('doc').types
-    expect(nodeStore.get('image')?.resizable).toBe('aspect') // 配置默认：等比例拖拽
-    ctx.get<DocService>('doc').updateTypeResizability('image', 'aspect')
-    expect(nodeStore.get('image')?.resizable).toBe('aspect')
-    ctx.get<DocService>('doc').updateTypeResizability('image', true)
-    expect(nodeStore.get('image')?.resizable).toBe(true)
-    ctx.get<DocService>('doc').updateTypeResizability('image', false)
+    // 关掉拖柄，图片卡片尺寸只由「最短边 / 最长边」+ 原图比例决定。
+    // 别改回 true/'aspect'：拖过一次就会顶掉用户配的显示宽度上限。
     expect(nodeStore.get('image')?.resizable).toBe(false)
-    // 未知类型 no-op（不抛错、不改别人）
-    ctx.get<DocService>('doc').updateTypeResizability('不存在的类型', 'width')
-    expect(nodeStore.get('image')?.resizable).toBe(false)
+    // 设置里不再暴露「允许拖拽调整尺寸 / 拖拽方式」—— 没有入口能把它打开
+    const settings = ctx.get<{ has(key: string): boolean }>('settings')
+    expect(settings.has('imageResizeEnabled')).toBe(false)
+    expect(settings.has('imageResizeMode')).toBe(false)
     ctx.stop()
   })
 })

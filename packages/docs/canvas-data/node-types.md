@@ -114,6 +114,10 @@ export interface NodeCreator {
 - **`resizable` / `frameless` / `transparent` 是类型级能力**，由渲染层读。曾经因为"两条注册路径只透传了一条"，
   出现过"单测全绿、浏览器里边框照旧"的事故，所以现在两条路都透传。
 
+  `resizable: true` 会显示右下角拖柄。媒体节点（图片、视频）**不声明它**：这两类的卡片尺寸由内容比例 +
+  设置里的「最短边 / 最长边」算出来，拖柄会把配好的最大显示宽度顶掉。图片、视频上残留的
+  `data.resizable: true`（v1 老存档）也不再生效。
+
 ### 数据契约：`produces` / `consumes`
 
 `inputs` / `outputs` 只回答"能不能连"；`produces` / `consumes` 回答"连上之后读哪个字段"。

@@ -15,7 +15,9 @@
  *
  * 拖柄显示门：**类型级 resizable 能力**(useNodeCapability 读 nodeStore.types[type].resizable；
  * true = 自由拖拽，'width'/'height'/'aspect' = 限定方向) **或** 节点实例 data.resizable === true。
- * 类型声明支持 resize → 该类型所有节点(含存量)自动可拖；实例级 data.resizable 可单独覆盖/关闭。
+ * 类型声明支持 resize → 该类型所有节点(含存量)自动可拖。
+ * 例外：媒体类型（图片 / 视频）的卡片尺寸由内容比例 + 「最短边 / 最长边」算，用户口径 2026-11-07
+ * 要求它们**只认类型声明**，存量节点上残留的 data.resizable 不许把拖柄打开。
  *
  * 用法（BaseNode）：
  *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, toFlow, grabOffset })
@@ -80,6 +82,12 @@ export interface NodeCardSizeOptions {
 
 export const CARD_MIN_WIDTH = 120;
 export const CARD_MIN_HEIGHT = 80;
+
+/**
+ * 存量数据里曾有「图片 / 视频节点允许 resize」的实例级开关（v1 老存档、旧版本建出来的节点）。
+ * 现在这两个类型一律不许 resize，所以实例级 data.resizable 对它们不生效。
+ */
+const NO_INSTANCE_RESIZE_TYPES = new Set(['image', 'video']);
 
 export function useNodeCardSize(opts: NodeCardSizeOptions) {
   const capability = useNodeCapability(opts.type);
@@ -169,7 +177,9 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
   // 显示拖柄的门：类型声明支持 resize(capability.resizable) **或** 实例 data.resizable === true（后者单独覆盖）。
   // 类型级优先用调用方传入的 typeResizable 取值器；未传则回退 capability 已读到的类型声明。
   const resizable = computed(
-    () => (opts.typeResizable ? opts.typeResizable() : capability.resizable.value) || data.value?.resizable === true,
+    () =>
+      (opts.typeResizable ? opts.typeResizable() : capability.resizable.value) ||
+      (data.value?.resizable === true && !NO_INSTANCE_RESIZE_TYPES.has(opts.type)),
   );
 
   /**
