@@ -26,8 +26,12 @@ const props = defineProps<{
   iconWarn: string
   iconSend: string
   actionOptions: Array<{ value: string; label: string; model: ModelIcon }>
+  /** 参数区交给 provider 的 HTML 面板时，不再画默认的参数摘要按钮 */
+  hideParams?: boolean
   /** 当前动作的模型图标（触发器左侧），没有动作时为 null */
   currentModelIcon: ModelIcon | null
+  /** 是否用 Agent 的模型选择器代替动作下拉（文本节点） */
+  hasModelPicker?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -87,11 +91,13 @@ function pickAction(value: string): void {
     </Button>
     <div class="nb-selects">
       <div class="nb-field nb-field--action">
+        <!-- 文本节点：模型来自 Agent 配置（用户 2026-11-07）；面板主体复用 Agent 的 ModelPicker -->
+        <slot name="model-picker" />
         <!--
           模型下拉 = DropdownMenu（用户 2026-11-06 指定）：
           触发器点击即开/关切换，点画布空白由菜单自己的 outside 关闭处理。
         -->
-        <DropdownMenu>
+        <DropdownMenu v-if="!hasModelPicker">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="sm"
               :id="'nb-action-' + id"
@@ -129,7 +135,7 @@ function pickAction(value: string): void {
         </DropdownMenu>
       </div>
       <span class="nb-divider" aria-hidden="true" />
-      <div v-if="paramDefs.length > 0" class="nb-field nb-field--params">
+      <div v-if="paramDefs.length > 0 && !hideParams" class="nb-field nb-field--params">
         <ToolParamGroup
           :params="paramDefs"
           :values="values"

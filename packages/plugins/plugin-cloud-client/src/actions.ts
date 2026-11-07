@@ -25,6 +25,10 @@ export interface BarActionLike {
   needsPrompt?: boolean
   promptBinding?: 'none' | 'text'
   fields?: unknown[]
+  /** provider 自带的提示词模板（进预设面板的「Provider」分类） */
+  templates?: unknown[]
+  /** provider 自带的 HTML 配置面板（沙箱 iframe 渲染） */
+  panelHtml?: string
   pollIntervalMs?: number
   pollTimeoutMs?: number
   /** 状态由外部管（后台会写节点进度）—— 底栏据此不写本地 runState */
@@ -54,6 +58,10 @@ export function toBarAction(
     ...(def.needsPrompt !== undefined ? { needsPrompt: def.needsPrompt } : {}),
     ...(def.promptBinding !== undefined ? { promptBinding: def.promptBinding } : {}),
     ...(Array.isArray(def.fields) ? { fields: def.fields } : {}),
+    ...(Array.isArray(def.templates) ? { templates: def.templates } : {}),
+    ...(typeof def.panelHtml === 'string' && def.panelHtml.trim() !== ''
+      ? { panelHtml: def.panelHtml }
+      : {}),
   }
   // 字段名换算：nodeTypes → types
   if (Array.isArray(def.nodeTypes) && def.nodeTypes.length > 0) out.types = [...def.nodeTypes]

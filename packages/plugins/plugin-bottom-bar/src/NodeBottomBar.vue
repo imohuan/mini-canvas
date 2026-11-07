@@ -14,7 +14,11 @@ import './node-bottom-bar/bottom-bar-tagmenu.css'
 import './node-bottom-bar/bottom-bar-editor-footer.css'
 import './node-bottom-bar/bottom-bar-preview.css'
 import { useCanvasRender, useGenPanelMetrics, useSoleNodeSelected, useUiComponent, RenderEvents, LAYERS, type FeedbackService } from '@mini-canvas/canvas-render'
+import type { NotifyContract } from '@mini-canvas/canvas-base'
+import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { PromptPreset } from './promptPresets'
 import { bottomBarTagSpecFor, toToolResources } from './panelSource'
+import HtmlPanelFrame from './node-bottom-bar/HtmlPanelFrame.vue'
 import { readRunState } from './runState'
 import { exitReference, referenceActive, referenceOwner, selectionEpoch, toggleReference as toggleReferenceMode } from './referenceMode'
 import { resolveBottomBarShown } from './bottomBarOverlay'
@@ -23,6 +27,7 @@ import { registerStartDragHandler } from './ctrlDragMode'
 import { exitCtrlDragMode as unifiedExitCtrlDragMode } from './selectionMode'
 import {
   BottomBarActions,
+  BottomBarModelPicker,
   BottomBarCardList,
   BottomBarHoverPreview,
   BottomBarPills,
@@ -42,6 +47,9 @@ import {
   useBottomBarPersistence,
   useBottomBarPreview,
   useBottomBarPrompt,
+  useAgentChat,
+  readBarModelChoice,
+  choiceStillValid,
   useBottomBarTagMenu,
   useCtrlResourceDrag,
   useBarNudge,
@@ -98,6 +106,37 @@ function onActionPicked(value: string | number): void {
   selectAction(String(value))
 }
 
+/**
+ * provider 自带的 HTML 面板（有它就替掉默认的参数控件）。
+ *
+ * 有输入框时坐在输入框上方，没有输入框时贴着底栏行下面 —— 同一份 HTML，两种摆法。
+ */
+const panelHtml = computed(() => (currentAction.value as { panelHtml?: string } | undefined)?.panelHtml ?? '')
+/** 参数区交给 HTML 面板时，默认的参数摘要按钮就不画了（避免两套 UI 打架） */
+const useHtmlPanel = computed(() => panelHtml.value.trim() !== '')
+const htmlPanelTheme = computed<Record<string, string>>(() => ({
+  ink: 'var(--ui-ink, #e5e7eb)',
+  inkDim: 'var(--ui-ink-dim, #9ca3af)',
+  line: 'var(--ui-line, rgb(255 255 255 / 0.1))',
+  surface: 'var(--ui-surface, rgb(255 255 255 / 0.04))',
+  accent: 'var(--ui-accent, #0891b2)',
+}))
+/** 面板一次改多个参数：合并后统一写回一次，别逐个触发落盘 */
+function onPanelValues(next: Record<string, unknown>): void {
+  for (const [k, v] of Object.entries(next)) {
+    if (v === undefined) continue
+    onFieldChange(k, v as string | number | boolean)
+  }
+}
+/** 面板发来的一句提示，走统一的通知口（没有就不显示，不抛错） */
+function onPanelNotify(payload: { level: 'info' | 'success' | 'error'; message: string }): void {
+  if (!payload.message) return
+  const n = ctx.tryGet<NotifyContract>('notify')
+  if (payload.level === 'error') n?.error(payload.message)
+  else if (payload.level === 'success') n?.success(payload.message)
+  else n?.info(payload.message)
+}
+
 // —— 提示词 ——
 let persistValuesSoonRef: () => void = () => {}
 const promptApi = useBottomBarPrompt({
@@ -107,6 +146,45 @@ const promptApi = useBottomBarPrompt({
   persistValuesSoon: () => persistValuesSoonRef(),
 })
 const { prompt, promptDoc, onPromptUpdate, CHAR_LIMIT, charCount } = promptApi
+
+// —— 文本节点：直连 Agent（用户 2026-11-07） ——
+// 这个下拉不是「底栏动作」，而是 Agent 里配好的模型清单；
+// 选中的模型存进节点 data.barModel，发送时随请求带上。
+const agentChat = useAgentChat({
+  ctx,
+  prompt,
+  onDelta: (text) => {
+    prompt.value = text
+    promptDoc.value = undefined
+  },
+  onDone: () => persistValues(),
+})
+const { choice: agentChoice, pick: pickAgentModel, send: sendAgentMessage } = agentChat
+
+/** 节点类型是 text 时，下拉换成 Agent 的模型选择器 */
+const useAgentModels = computed(() => nodeType.value === 'text')
+/** Agent 没装（取不到 agentModelPicker）时退回动作下拉：只回落一次，不来回跳 */
+const agentPickerMissing = ref(false)
+/** 真正用哪一套：文本节点 + Agent 的组件确实可用 */
+const useAgentModelsEffective = computed(() => useAgentModels.value && !agentPickerMissing.value)
+
+// 打开时把节点里记着的模型读回来；Agent 删掉那个模型时回退到空（不带着失效选择发请求）
+watch(
+  [() => props.data?.barModel, useAgentModels],
+  () => {
+    if (!useAgentModels.value) return
+    const saved = readBarModelChoice(props.data)
+    const models = agentChat.availableModels()
+    agentChoice.value = choiceStillValid(saved, models) ? saved : null
+  },
+  { immediate: true },
+)
+
+function onAgentModelPicked(m: { provider: string; modelId: string }): void {
+  pickAgentModel(m)
+  // 跟着作品走：换机器 / 刷新后仍记得选的是哪个模型
+  try { ctx.get('doc').updateNode(props.id, { data: { barModel: { provider: m.provider, modelId: m.modelId } } }) } catch { /* 节点已不在 */ }
+}
 
 const persistence = useBottomBarPersistence({
   ctx,
@@ -306,6 +384,9 @@ const barShown = computed(() =>
   resolveBottomBarShown({
     soleSelected: visible.value,
     hasActions: hasActions.value,
+    // 用户口径（2026-11-07）：预设按钮在所有类型都显示；
+    // 零动作节点（音频、删掉复制 / 删除后的文本）也要能出底栏。
+    hasPresets: true,
     submitted: submitted.value,
   }),
 )
@@ -318,6 +399,16 @@ if (typeof ctx.on === 'function') {
 }
 
 async function onRun(): Promise<void> {
+  // 文本节点走 Agent：带上用户在下拉里选的模型（用户 2026-11-07）
+  if (useAgentModelsEffective.value) {
+    if (!agentChat.canSend()) return
+    persistValues()
+    if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
+    submitted.value = true
+    await sendAgentMessage()
+    resetSubmitted()
+    return
+  }
   if (!canRun.value || !currentAction.value) return
   if (submitted.value || running.value) return
   persistValues()
@@ -389,6 +480,35 @@ function applyPreset(content: string): void {
   // 编辑器还没挂上（极短的一瞬）：至少把正文写进状态，下次渲染会带上
   const next = prompt.value.trim() ? prompt.value.replace(/\s+$/, '') + '\n\n' + content : content
   onPromptUpdate(next)
+}
+
+/** 本节点当前可用的动作 id（预设判「禁用」用） */
+const availableActionIds = computed(() => actions.value.map((a) => a.id))
+/** 新建预设时能选的模型清单（名字 + 该模型自己的参数定义） */
+const modelChoices = computed(() =>
+  actions.value
+    .filter((a) => (a.needsPrompt ?? false) || (a.fields?.length ?? 0) > 0)
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      params: (a.fields ?? []) as ToolParamDef[],
+      templates: a.templates ?? [],
+    })),
+)
+
+/**
+ * 应用「带模型 / 参数」的预设：先切到它的模型（若当前节点有这个模型），
+ * 再把参数与提示词一起写进去 —— 用户点一条预设，期望的是「配置整个切过去」。
+ */
+function applyTypedPreset(preset: PromptPreset): void {
+  if (preset.actionId && availableActionIds.value.includes(preset.actionId)) {
+    selectAction(preset.actionId)
+  }
+  if (preset.values) {
+    // 等切模型的默认值写完之后再覆盖，避免被 selectAction 重置掉
+    void nextTick(() => onPanelValues({ ...preset.values }))
+  }
+  if (preset.content.trim()) applyPreset(preset.content)
 }
 
 // —— Ctrl 拖资源 ——
@@ -505,6 +625,40 @@ onBeforeUnmount(() => {
 
       <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
 
+      <!-- provider 自带 HTML 面板（有输入框：坐在输入框上方） -->
+      <HtmlPanelFrame
+        v-if="useHtmlPanel && showEditor"
+        :html="panelHtml"
+        :values="values"
+        :params="paramDefs"
+        :action-id="currentId"
+        :model="currentActionLabel"
+        :node-type="nodeType"
+        :disabled="running"
+        :theme="htmlPanelTheme"
+        @set-values="onPanelValues"
+        @run="onRun"
+        @notify="onPanelNotify"
+      />
+
+      <!-- 没有输入框的动作：HTML 面板直接占输入框那一行（用户口径：面板就渲染在输入框位置） -->
+      <HtmlPanelFrame
+        v-if="useHtmlPanel && !showEditor"
+        :html="panelHtml"
+        :values="values"
+        :params="paramDefs"
+        :action-id="currentId"
+        :model="currentActionLabel"
+        :node-type="nodeType"
+        :disabled="running"
+        :theme="htmlPanelTheme"
+        :max-height="240"
+        class="nb-panel-inline"
+        @set-values="onPanelValues"
+        @run="onRun"
+        @notify="onPanelNotify"
+      />
+
       <BottomBarPromptEditor
         v-if="showEditor"
         :prompt="prompt"
@@ -557,6 +711,7 @@ onBeforeUnmount(() => {
         :current-model-icon="currentModelIcon"
         :running="running"
         :param-defs="paramDefs"
+        :hide-params="useHtmlPanel"
         :values="values"
         :ai-buttons="aiButtons"
         :ai-running-id="aiRunningId"
@@ -571,17 +726,33 @@ onBeforeUnmount(() => {
         :icon-warn="ICON_WARN"
         :icon-send="ICON_SEND"
         :action-options="actionOptions"
+        :has-model-picker="useAgentModelsEffective"
         @action-picked="onActionPicked"
         @field-change="onFieldChange"
         @ai-click="runAiAction"
         @insert-at="insertAt"
         @run="onRun"
       >
+        <template #model-picker>
+          <BottomBarModelPicker
+            v-if="useAgentModelsEffective"
+            :models="agentChat.availableModels()"
+            :model="agentChoice"
+            :disabled="running || agentChat.running.value"
+            @pick="onAgentModelPicked"
+            @unavailable="agentPickerMissing = true"
+          />
+        </template>
         <template #presets>
           <BottomBarPresets
-            v-if="showEditor"
-            :disabled="!showEditor || aiEditorLocked"
+            :disabled="aiEditorLocked"
+            :node-type="nodeType"
+            :has-target="showEditor"
+            :available-ids="availableActionIds"
+            :model-choices="modelChoices"
+            :current-id="currentId"
             @apply="applyPreset"
+            @apply-preset="applyTypedPreset"
           />
         </template>
       </BottomBarActions>

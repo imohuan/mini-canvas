@@ -17,23 +17,48 @@ import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { NotifyContract } from '@mini-canvas/canvas-base'
 import {
   addPreset,
-  createPreset,
+  createTypedPreset,
   filterPresets,
-  loadPromptPresets,
+  presetBucketOf,
+  presetEnabled,
   removePreset,
-  savePromptPresets,
+  type PresetBucket,
   type PromptPreset,
 } from '../promptPresets'
+import { loadPresets, savePresets } from '../presetStore'
+import { resolveAgentBaseUrl } from '../aiActions'
+import type { ToolParamDef } from '@mini-canvas/kernel'
 import { ICON_BOOKMARK, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
 
-defineProps<{
+const props = defineProps<{
   /** 输入框不可用时（没有输入框 / AI 生成中）也不允许插入 */
   disabled: boolean
+  /**
+   * 当前节点类型（text / image / video / audio …）。
+   * 预设按类型分开存（用户 2026-11-07：不同平台 / 类型的预设是分开的）。
+   */
+  nodeType?: string
+  /** 当前模式有没有可填入的位置；没有时按钮仍显示，但点击要给明确提示 */
+  hasTarget?: boolean
+  /** 本节点当前可用的动作 id（判断「指定模型」的预设是否禁用） */
+  availableIds?: string[]
+  /** 供用户挑选的模型清单（id + 名字 + 参数定义），新建预设时用 */
+  modelChoices?: Array<{
+    id: string
+    title: string
+    params: ToolParamDef[]
+    /** provider 在动作声明里带的模板（只读，跟动作一起上下线） */
+    templates?: Array<{ id: string; name: string; prompt: string; description?: string; values?: Record<string, unknown> }>
+  }>
+  /** 当前下拉里选中的动作 id（新建预设默认对准它） */
+  currentId?: string
 }>()
 
 const emit = defineEmits<{
   /** 用户点了某条预设：把正文放进输入框（已有内容时接在后面） */
   apply: [content: string]
+  /** 应用一条「带模型 / 参数」的预设：调用方负责切模型 + 写参数 */
+  applyPreset: [preset: PromptPreset]
 }>()
 
 const { ctx } = useCanvasRender()
@@ -48,6 +73,15 @@ const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
 const InputGroupInput = useUiComponent('InputGroupInput')
 const ScrollArea = useUiComponent('ScrollArea')
+const Tabs = useUiComponent('Tabs')
+const TabsList = useUiComponent('TabsList')
+const TabsTrigger = useUiComponent('TabsTrigger')
+const Switch = useUiComponent('Switch')
+const Select = useUiComponent('Select')
+const SelectContent = useUiComponent('SelectContent')
+const SelectItem = useUiComponent('SelectItem')
+const SelectTrigger = useUiComponent('SelectTrigger')
+const SelectValue = useUiComponent('SelectValue')
 const Label = useUiComponent('Label')
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
@@ -60,11 +94,72 @@ const Textarea = useUiComponent('Textarea')
 
 const open = ref(false)
 const query = ref('')
-/** 首次打开才读盘；之后新增/删除都直接改这份内存副本，避免每次开关都读一遍 */
+/** 首次打开才读取；之后新增/删除都直接改这份内存副本，避免每次开关都读一遍 */
 const loaded = ref(false)
 const presets = ref<PromptPreset[]>([])
 
-const filtered = computed(() => filterPresets(presets.value, query.value))
+/**
+ * provider 带来的预设（来自动作声明的 templates）。
+ *
+ * 它们是**只读**的：跟着 provider 文件走，用户删不掉 —— 删了下次装载又回来，
+ * 反而制造「删了又出现」的困惑。要改就去改 provider 文件。
+ */
+const providerPresets = computed<PromptPreset[]>(() => {
+  const out: PromptPreset[] = []
+  for (const m of props.modelChoices ?? []) {
+    for (const t of m.templates ?? []) {
+      if (!t || typeof t.prompt !== 'string') continue
+      const content = t.prompt.trim()
+      if (!content) continue
+      out.push({
+        id: 'provider:' + m.id + ':' + t.id,
+        name: t.name || t.id,
+        content,
+        createdAt: 0,
+        actionId: m.id,
+        source: 'provider',
+        ...(t.values && Object.keys(t.values).length > 0 ? { values: { ...t.values } } : {}),
+      })
+    }
+  }
+  return out
+})
+
+/** 面板里显示的完整清单：provider 的在前，用户自己的在后 */
+const allPresets = computed(() => [...providerPresets.value, ...presets.value])
+/** 存在哪儿：后台 / 本机（面板底部一句话说明，用户不用猜） */
+const where = ref<'cloud' | 'local'>('local')
+const loadError = ref('')
+/** 默认不显示禁用的那批（用户口径：加一个开关，打开才看得到） */
+const showDisabled = ref(false)
+/** 四个分类：provider / 通用 / 指定模型 / 当前模型 */
+type TabKey = 'provider' | 'general' | 'model' | 'current'
+const tab = ref<TabKey>('current')
+const canApply = computed(() => {
+  const ids = new Set(props.availableIds ?? [])
+  return (p: PromptPreset) => presetEnabled(p, ids)
+})
+
+/** 当前分类下的条目（搜索再筛一层） */
+const inTab = computed(() => {
+  const ids = new Set(props.availableIds ?? [])
+  return allPresets.value.filter((p) => {
+    const bucket: PresetBucket = presetBucketOf(p)
+    if (tab.value === 'provider') return bucket === 'provider'
+    if (tab.value === 'general') return bucket === 'general'
+    if (tab.value === 'model') return bucket === 'model'
+    // current：当前模型的 + 通用的（用户口径：这个分类里通用也算）
+    return bucket === 'general' || (bucket === 'model' && presetEnabled(p, ids))
+  })
+})
+
+const filtered = computed(() => {
+  const list = filterPresets(inTab.value, query.value)
+  return showDisabled.value ? list : list.filter((p) => canApply.value(p))
+})
+
+/** 当前分类里被隐藏的禁用条数（开关旁边显示，避免用户以为丢了） */
+const disabledCount = computed(() => filterPresets(inTab.value, query.value).filter((p) => !canApply.value(p)).length)
 
 /**
  * 列表高度：按真实条数给 ScrollArea 一个确定高度。
@@ -78,46 +173,107 @@ const listStyle = computed<Record<string, string>>(() => {
   return { height: 'min(' + n * LIST_ITEM_HEIGHT + 'px, 46vh)' }
 })
 
-function reload(): void {
-  presets.value = loadPromptPresets()
+const baseUrl = (): string => resolveAgentBaseUrl(ctx)
+
+async function reload(): Promise<void> {
+  const r = await loadPresets({ baseUrl: baseUrl(), nodeType: props.nodeType })
+  presets.value = r.list
+  where.value = r.fromCloud ? 'cloud' : 'local'
+  loadError.value = r.error ?? ''
   loaded.value = true
 }
 
 // 打开面板时同步一次：用户可能在另一个标签页改过（storage 事件不保证）
 watch(open, (isOpen) => {
   if (!isOpen) return
-  reload()
+  void reload()
   query.value = ''
 })
 
-function persist(): boolean {
-  const ok = savePromptPresets(presets.value)
-  if (!ok) notify?.error('预设保存失败', { description: '浏览器存储不可用或空间已满' })
-  return ok
+async function persist(): Promise<boolean> {
+  const r = await savePresets(presets.value, { baseUrl: baseUrl(), nodeType: props.nodeType })
+  where.value = r.where
+  if (!r.ok) {
+    notify?.error('预设保存失败', { description: r.error ?? '存储不可用' })
+    return false
+  }
+  // 后台失败但本机存住了：仍然生效，只是要告诉用户存在哪
+  if (r.where === 'local' && r.error) notify?.info('预设暂存在本机', { description: r.error })
+  return true
 }
 
 function use(preset: PromptPreset): void {
-  if (!preset.content.trim()) return
-  emit('apply', preset.content)
+  if (!canApply.value(preset)) return
+  // 没有输入框可填的模式（音频等）：仍可以打开面板、管理预设，
+  // 但点「使用」要给明确提示，不能静默什么都不发生（用户 2026-11-07：所有类型都有预设按钮）。
+  if (props.hasTarget === false) {
+    notify?.info('当前模式没有可填入的位置', { description: '这份预设已保存，切换到有输入框的模式即可使用' })
+    return
+  }
+  // 带模型 / 参数的预设交给调用方切模型与写参数；纯提示词仍走原来的插入
+  if (preset.actionId || preset.values) emit('applyPreset', preset)
+  else if (preset.content.trim()) emit('apply', preset.content)
   open.value = false
 }
 
 function remove(id: string): void {
+  // provider 的预设是只读的：删了下次装载还会回来，别让用户白删一次
+  if (id.startsWith('provider:')) {
+    notify?.info('provider 自带的预设不能删', { description: '要改请改 provider 文件里的 templates' })
+    return
+  }
   presets.value = removePreset(presets.value, id)
-  persist()
+  void persist()
 }
 
 // —— 新建对话框 ——
 const creating = ref(false)
 const draftName = ref('')
 const draftContent = ref('')
+/** 新建时选的目标模型（空串 = 通用，不绑模型） */
+const draftActionId = ref('')
+/** 新建时挑的参数值（用模型自己的参数定义渲染，跟下拉里同一套控件） */
+const draftValues = ref<Record<string, unknown>>({})
 const nameInput = ref<{ $el?: HTMLElement } | null>(null)
 
 const canSaveDraft = computed(() => draftContent.value.trim().length > 0)
 
+/** 新建弹窗里当前模型的可视化参数定义 */
+const draftParams = computed<ToolParamDef[]>(() => {
+  const hit = (props.modelChoices ?? []).find((m) => m.id === draftActionId.value)
+  return hit?.params ?? []
+})
+
+const ToolParamGroup = useUiComponent('toolParamGroup')
+
+/** 新建弹窗里「适用模型」触发器上的文字 */
+const draftModelLabel = computed(() => {
+  if (!draftActionId.value) return '通用（所有模型）'
+  return labelOfAction(draftActionId.value)
+})
+
+/** 换模型：旧参数按新模型重置，避免把 A 模型的参数写进 B 模型 */
+function onDraftModelChange(id: string): void {
+  draftActionId.value = id
+  const next: Record<string, unknown> = {}
+  for (const p of draftParams.value) if (p.default !== undefined) next[p.key] = p.default
+  draftValues.value = next
+}
+
+function onDraftFieldChange(key: string, v: string | number | boolean): void {
+  draftValues.value = { ...draftValues.value, [key]: v }
+}
+
 function startCreate(): void {
   draftName.value = ''
   draftContent.value = ''
+  // 新建时默认对准「当前选中的模型」：用户多半就是为它建预设
+  draftActionId.value = (props.availableIds ?? []).includes(props.currentId ?? '')
+    ? (props.currentId ?? '')
+    : ''
+  const defaults: Record<string, unknown> = {}
+  for (const p of draftParams.value) if (p.default !== undefined) defaults[p.key] = p.default
+  draftValues.value = defaults
   /*
    * 打开新建弹窗前先收起预设面板（用户 2026-11-07 截图）。
    *
@@ -138,19 +294,33 @@ function startCreate(): void {
 
 function saveDraft(): void {
   if (!canSaveDraft.value) return
-  const preset = createPreset(draftName.value, draftContent.value)
+  const preset = createTypedPreset({
+    name: draftName.value,
+    content: draftContent.value,
+    ...(draftActionId.value ? { actionId: draftActionId.value } : {}),
+    ...(Object.keys(draftValues.value).length > 0 ? { values: draftValues.value } : {}),
+  })
   // 新建的内容直接填进输入框，省一步「再点一次」；用户明确要的就是「能加自己的提示词」
   presets.value = addPreset(presets.value, preset)
-  if (!persist()) return
-  creating.value = false
-  emit('apply', preset.content)
-  open.value = false
-  notify?.success('已使用新预设', { description: preset.name })
+  void persist().then((ok) => {
+    if (!ok) return
+    creating.value = false
+    if (preset.actionId || preset.values) emit('applyPreset', preset)
+    else emit('apply', preset.content)
+    open.value = false
+    notify?.success('已使用新预设', { description: preset.name })
+  })
 }
 
 /** 列表里内容预览：换行压成空格，避免一条预设把面板撑得很高 */
 function previewOf(content: string): string {
   return content.replace(/\s+/g, ' ').trim()
+}
+
+/** 模型 id → 给人看的名字（找不到就退回 id 尾段，总比空白强） */
+function labelOfAction(id: string): string {
+  const hit = (props.modelChoices ?? []).find((m) => m.id === id)
+  return hit?.title ?? id
 }
 </script>
 
@@ -185,9 +355,19 @@ function previewOf(content: string): string {
       @open-auto-focus.prevent
     >
       <div class="nbp-head">
-        <span class="nbp-title">预设提示词</span>
+        <span class="nbp-title">预设</span>
         <span class="nbp-count">{{ presets.length }} 条</span>
       </div>
+
+      <!-- 四个分类：provider 自带 / 通用 / 指定模型 / 当前模型 -->
+      <Tabs :model-value="tab" class="nbp-tabs" @update:model-value="(v: unknown) => (tab = (String(v) || 'current') as TabKey)">
+        <TabsList variant="line" size="sm">
+          <TabsTrigger value="provider">Provider</TabsTrigger>
+          <TabsTrigger value="general">通用</TabsTrigger>
+          <TabsTrigger value="model">指定模型</TabsTrigger>
+          <TabsTrigger value="current">当前模型</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div class="nbp-searchrow">
         <InputGroup class="nbp-search">
@@ -217,21 +397,38 @@ function previewOf(content: string): string {
         </Button>
       </div>
 
+      <!-- 默认隐藏「禁用」的那批；打开开关才显示，并且可以编辑/删除 -->
+      <label class="nbp-toggle">
+        <Switch
+          :model-value="showDisabled"
+          @update:model-value="(v: boolean) => (showDisabled = v)"
+        />
+        <span>显示禁用预设</span>
+        <span v-if="disabledCount > 0" class="nbp-count">（{{ disabledCount }}）</span>
+      </label>
+
       <div class="nbp-body">
         <ScrollArea v-if="loaded && filtered.length > 0" class="nbp-list" :style="listStyle">
           <button
             v-for="p in filtered"
             :key="p.id"
             class="nbp-item"
+            :class="{ 'is-disabled': !canApply(p) }"
             type="button"
-            :title="'填入：' + p.name"
+            :title="canApply(p) ? '填入：' + p.name : '当前节点用不了这个模型，预设已禁用'"
             @click.stop="use(p)"
           >
             <span class="nbp-item-text">
-              <span class="nbp-item-name">{{ p.name }}</span>
+              <span class="nbp-item-name">
+                {{ p.name }}
+                <span v-if="p.source === 'provider'" class="nbp-tag">provider</span>
+                <span v-if="p.actionId" class="nbp-tag">{{ labelOfAction(p.actionId) }}</span>
+                <span v-if="p.values" class="nbp-tag">含参数</span>
+              </span>
               <span class="nbp-item-preview">{{ previewOf(p.content) }}</span>
             </span>
             <span
+              v-if="p.source !== 'provider'"
               class="nbp-del"
               role="button"
               tabindex="0"
@@ -252,7 +449,8 @@ function previewOf(content: string): string {
         </div>
       </div>
 
-      <p class="nbp-hint">预设只保存在这台电脑的浏览器里</p>
+      <p class="nbp-hint">{{ where === 'cloud' ? '预设保存在后台，换台电脑也在' : '预设暂存在这台电脑的浏览器里' }}</p>
+      <p v-if="loadError" class="nbp-hint is-bad">{{ loadError }}</p>
     </PopoverContent>
   </Popover>
 
@@ -266,7 +464,7 @@ function previewOf(content: string): string {
       <div class="nbp-dialog-body">
         <DialogHeader class="nbp-dialog-head">
           <DialogTitle class="nbp-dialog-title">新建预设</DialogTitle>
-          <DialogDescription class="nbp-dialog-desc">填写预设名称和内容，保存后直接填入输入框</DialogDescription>
+          <DialogDescription class="nbp-dialog-desc">选模型、调参数、写提示词；保存后一起应用</DialogDescription>
         </DialogHeader>
 
         <div class="nbp-field">
@@ -293,6 +491,35 @@ function previewOf(content: string): string {
             placeholder="请输入预设内容…"
             @keydown.stop
             @keydown.enter.stop
+          />
+        </div>
+
+        <!-- 绑定模型：留空 = 全局通用；选了就只在该模型可用时启用 -->
+        <div class="nbp-field">
+          <Label class="nbp-label">适用模型</Label>
+          <Select
+            :model-value="draftActionId"
+            @update:model-value="(v: unknown) => onDraftModelChange(String(v ?? ''))"
+          >
+            <SelectTrigger class="nbp-select" size="sm" aria-label="适用模型">
+              <SelectValue :placeholder="draftModelLabel">{{ draftModelLabel }}</SelectValue>
+            </SelectTrigger>
+            <SelectContent class="settings-floating-layer" position="popper" side="bottom" :side-offset="4">
+              <SelectItem value="">通用（所有模型）</SelectItem>
+              <SelectItem v-for="m in modelChoices ?? []" :key="m.id" :value="m.id">{{ m.title }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <!-- 参数：用模型自己的参数定义渲染，和下拉里同一套控件 -->
+        <div v-if="draftParams.length > 0" class="nbp-field">
+          <Label class="nbp-label">参数</Label>
+          <ToolParamGroup
+            :params="draftParams"
+            :values="draftValues"
+            placeholder="默认参数"
+            id-prefix="nbp-draft"
+            @change="onDraftFieldChange"
           />
         </div>
 

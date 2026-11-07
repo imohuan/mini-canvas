@@ -59,6 +59,12 @@ export interface BarAction {
   fields?: ToolParamDef[]
   /** 预设模板（复用内核 ToolTemplate） */
   templates?: ToolTemplate[]
+  /**
+   * provider 自带的 HTML 配置面板（自包含一段 HTML：样式 + 可选脚本）。
+   * 有它时优先用它替代默认的参数控件；没有就走 fields 的内置可视化。
+   * 宿主在沙箱 iframe 里渲染，并通过 postMessage 把当前参数注入进去。
+   */
+  panelHtml?: string
   /** 要不要底栏那个大输入框（默认 false） */
   needsPrompt?: boolean
   /** 输入框和节点哪个字段绑在一起：'text' = data.text（文本节点） */

@@ -59,6 +59,11 @@ export interface ToolTemplate {
   description?: string
   /** 只对某些工具生效时列出工具名；缺省 = 该工具通用 */
   forTools?: string[]
+  /**
+   * 应用该模板时一并写入的参数值（键 = ToolParamDef.key）。
+   * 缺省 = 只填提示词，不动参数。
+   */
+  values?: Record<string, unknown>
 }
 
 /**

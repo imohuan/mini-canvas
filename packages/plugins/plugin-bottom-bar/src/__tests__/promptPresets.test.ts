@@ -11,6 +11,8 @@ import {
   filterPresets,
   loadPromptPresets,
   normalizePresets,
+  presetBucketOf,
+  presetEnabled,
   PROMPT_PRESETS_KEY,
   removePreset,
   savePromptPresets,
@@ -62,6 +64,31 @@ describe('预设提示词：读盘', () => {
     expect(savePromptPresets(list, storage)).toBe(true)
     expect(storage.getItem(PROMPT_PRESETS_KEY)).toContain('小红书风格')
     expect(loadPromptPresets(storage)).toEqual(list)
+  })
+
+  it('带模型与参数的预设能存能读；脏参数被丢掉', () => {
+    const list = normalizePresets([
+      { id: 'a', name: 'A', content: '正文', actionId: ' demo:1 ', values: { ratio: '16:9', n: 2, bad: { x: 1 }, arr: [1] } },
+      { id: 'b', name: 'B', content: '正文', values: '不是对象' },
+    ])
+    expect(list[0].actionId).toBe('demo:1')
+    expect(list[0].values).toEqual({ ratio: '16:9', n: 2 })
+    expect(list[1].values).toBeUndefined()
+  })
+})
+
+describe('预设：分类与可用性', () => {
+  it('provider / 通用 / 指定模型 三类', () => {
+    expect(presetBucketOf({ id: 'a', name: 'a', content: 'x', createdAt: 0, source: 'provider' })).toBe('provider')
+    expect(presetBucketOf({ id: 'b', name: 'b', content: 'x', createdAt: 0 })).toBe('general')
+    expect(presetBucketOf({ id: 'c', name: 'c', content: 'x', createdAt: 0, actionId: 'm:1' })).toBe('model')
+  })
+
+  it('全局通用永远可用；指定模型看本节点有没有这个动作', () => {
+    const available = new Set(['m:1'])
+    expect(presetEnabled({ id: 'a', name: 'a', content: 'x', createdAt: 0 }, available)).toBe(true)
+    expect(presetEnabled({ id: 'b', name: 'b', content: 'x', createdAt: 0, actionId: 'm:1' }, available)).toBe(true)
+    expect(presetEnabled({ id: 'c', name: 'c', content: 'x', createdAt: 0, actionId: 'm:2' }, available)).toBe(false)
   })
 })
 

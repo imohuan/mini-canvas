@@ -13,10 +13,40 @@ export interface PromptPreset {
   name: string
   content: string
   createdAt: number
+  /**
+   * 针对哪个动作 / 模型（bar action id）。缺省 = 全局通用预设。
+   * 应用时若这个动作在当前节点上不存在，预设显示为禁用。
+   */
+  actionId?: string
+  /** 应用时一并写入的参数值（键 = ToolParamDef.key） */
+  values?: Record<string, unknown>
+  /** 来源：user = 自己建的；provider = 后台动作自带的模板 */
+  source?: 'user' | 'provider'
+}
+
+/** 预设按「归属」分成三类展示（provider 带的自成一类） */
+export type PresetBucket = 'provider' | 'general' | 'model'
+
+/** 一条预设属于哪一类：provider 自带 / 全局通用 / 指定模型 */
+export function presetBucketOf(p: PromptPreset): PresetBucket {
+  if (p.source === 'provider') return 'provider'
+  return p.actionId ? 'model' : 'general'
 }
 
 /** 存储键（只属于这个功能，不和其他底栏配置共用） */
 export const PROMPT_PRESETS_KEY = 'mini-canvas:prompt-presets'
+
+/**
+ * 按节点类型分开存（用户 2026-11-07：不同平台的提示词预设是分开的）。
+ *
+ * 为什么不是一个大清单再加 type 字段：类型是「查哪一份」的键，
+ * 分键之后读文本预设时不会把图片预设也读进来再筛一遍，
+ * 删改也只碰当前那一份 —— 一份坏了不影响另一份。
+ */
+export function presetStorageKey(nodeType?: string): string {
+  const type = String(nodeType ?? '').trim().toLowerCase()
+  return type ? PROMPT_PRESETS_KEY + ':' + type : PROMPT_PRESETS_KEY
+}
 
 function textOf(v: unknown): string {
   return typeof v === 'string' ? v : ''
@@ -44,9 +74,33 @@ export function normalizePresets(raw: unknown): PromptPreset[] {
     const createdAt = typeof rec.createdAt === 'number' && Number.isFinite(rec.createdAt)
       ? rec.createdAt
       : 0
-    out.push({ id, name, content, createdAt })
+    const actionId = textOf(rec.actionId).trim()
+    const values = plainValues(rec.values)
+    out.push({
+      id,
+      name,
+      content,
+      createdAt,
+      ...(actionId ? { actionId } : {}),
+      ...(values ? { values } : {}),
+      ...(rec.source === 'provider' ? { source: 'provider' as const } : {}),
+    })
   }
   return out
+}
+
+/**
+ * 参数快照：只收「普通对象」，值也必须是标量。
+ * 预设来自浏览器存储 / 网络，脏数据（数组、嵌套对象、函数）直接丢掉，别让面板渲染时炸。
+ */
+function plainValues(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!k) continue
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') out[k] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /** 当前环境能不能用 localStorage（SSR / 隐私模式下没有） */
@@ -60,25 +114,36 @@ function defaultStorage(): Storage | null {
 }
 
 /** 读预设清单；没存过 / 坏了 / 读不到一律当空清单 */
-export function loadPromptPresets(storage: Storage | null = defaultStorage()): PromptPreset[] {
+export function loadPromptPresets(
+  storage: Storage | null = defaultStorage(),
+  nodeType?: string,
+): PromptPreset[] {
   if (!storage) return []
-  try {
-    const raw = storage.getItem(PROMPT_PRESETS_KEY)
-    if (!raw) return []
-    return normalizePresets(JSON.parse(raw))
-  } catch {
-    return []
+  const read = (key: string): PromptPreset[] => {
+    try {
+      const raw = storage.getItem(key)
+      if (!raw) return []
+      return normalizePresets(JSON.parse(raw))
+    } catch {
+      return []
+    }
   }
+  const typed = read(presetStorageKey(nodeType))
+  if (typed.length > 0) return typed
+  // 老数据迁移：以前的单一清单当作「通用」，第一次读某个类型时复制过去，
+  // 之后各类型独立增删，不再受那份旧清单影响。
+  return read(PROMPT_PRESETS_KEY)
 }
 
 /** 整包写回；写不进去（配额满 / 禁用存储）返回 false，由调用方提示 */
 export function savePromptPresets(
   list: PromptPreset[],
   storage: Storage | null = defaultStorage(),
+  nodeType?: string,
 ): boolean {
   if (!storage) return false
   try {
-    storage.setItem(PROMPT_PRESETS_KEY, JSON.stringify(list))
+    storage.setItem(presetStorageKey(nodeType), JSON.stringify(list))
     return true
   } catch {
     return false
@@ -94,6 +159,42 @@ export function createPreset(name: string, content: string, now = Date.now()): P
     content: body,
     createdAt: now,
   }
+}
+
+/**
+ * 新建一条预设（带模型与参数）。
+ *
+ * 与 createPreset 分开而不是加一堆可选参数：老调用点还在用「只存一句提示词」的形状，
+ * 保持它不变，新增的入口走这一条。
+ */
+export function createTypedPreset(input: {
+  name?: string
+  content: string
+  actionId?: string
+  values?: Record<string, unknown>
+  now?: number
+}): PromptPreset {
+  const now = input.now ?? Date.now()
+  const base = createPreset(input.name ?? '', input.content, now)
+  const actionId = input.actionId?.trim()
+  const values = input.values && Object.keys(input.values).length > 0 ? { ...input.values } : undefined
+  return {
+    ...base,
+    ...(actionId ? { actionId } : {}),
+    ...(values ? { values } : {}),
+  }
+}
+
+/**
+ * 当前节点能用哪些预设：
+ * - 全局通用（没有 actionId）永远可用；
+ * - 指定模型的，只有该模型在当前节点可用时才行。
+ *
+ * `availableIds` 是本节点可选的动作 id 集合（含后台 provider 与本插件）。
+ */
+export function presetEnabled(p: PromptPreset, availableIds: ReadonlySet<string>): boolean {
+  if (!p.actionId) return true
+  return availableIds.has(p.actionId)
 }
 
 /** 按关键词过滤：名字和内容都能搜，忽略大小写与首尾空格 */
