@@ -377,7 +377,8 @@ const HoverCardContent = useUiComponent('HoverCardContent')
           <DropdownMenu :open="composerMenuOpen('auth')" @update:open="(v: boolean) => setComposerMenuOpen('auth', v)">
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" :aria-expanded="authOpen"
-                :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')">
+                :aria-label="'授权方式：' + (authMode === 'ask' ? '接受审核' : '完全自动授权')"
+                :class="{ 'is-auto-auth': authMode === 'auto' }">
                 <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="16" class="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -388,7 +389,8 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                     <div class="ac-panel-heading">
                       <!-- 标题左侧的图标与触发器一致：选中哪条，触发器就显示哪个图标
                            （用户 2026-11-07：下拉里的标题也要带图标） -->
-                      <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="15" aria-hidden="true" />
+                      <component :is="authMode === 'ask' ? Hand : ShieldAlert" :size="15" class="ac-auth-head-icon"
+                        :class="{ 'is-auto-auth': authMode === 'auto' }" aria-hidden="true" />
                       <span class="ac-panel-title">审核模式</span>
                       <span class="ac-panel-count">2</span>
                     </div>
