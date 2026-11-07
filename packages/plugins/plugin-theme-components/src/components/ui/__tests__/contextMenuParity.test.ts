@@ -33,15 +33,19 @@ describe('浮层外观 token 收在 ui-theme（所有下拉共用同一档数值
 })
 
 describe('参数面板 = 右键菜单那一档', () => {
-  it('容器同样是不透明白底 + 主题圆角；内边距 16（参考稿 p-4）', () => {
+  /**
+   * 2026-11-08 改版：滚动条贴面板最右侧，右侧 padding 收窄到 4px 给滚动条通道，
+   * 其余三边仍 16px，内容再补 12px —— 左右视觉留白合计仍是 16px。
+   */
+  it('容器同样是不透明白底 + 主题圆角；右侧 padding 4 给滚动条，其余 16', () => {
     const body = rule(TOOL_GROUP, '.tpg-popover')
     expect(body).toMatch(/background:\s*var\(--ui-overlay-solid/)
     expect(body).toMatch(/border-radius:\s*var\(--mct-radius,\s*16px\)/)
-    expect(body).toMatch(/padding:\s*16px/)
+    expect(body).toMatch(/padding:\s*16px\s+4px\s+16px\s+16px/)
     // 宽度不再写死 288（用户口径 2026-11-03「宽度没有自适应」）：随内容走，
     // 只用上下限兜住极端情况。
     expect(body).toMatch(/width:\s*max-content/)
-    expect(body).toMatch(/min-width:\s*220px/)
+    expect(body).toMatch(/min-width:\s*340px/)
     expect(body).toMatch(/max-width:\s*min\(420px/)
   })
 

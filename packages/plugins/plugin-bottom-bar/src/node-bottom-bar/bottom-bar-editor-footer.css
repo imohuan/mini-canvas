@@ -662,8 +662,11 @@
 .nb-param-pop .nb-param-scroll [data-slot='scroll-area-viewport'] {
   scrollbar-width: none;
   border-radius: 12px;
-  /* 右侧留出滚动条自己的 10px，内容不再压在那条线上 */
-  padding-right: 10px;
+  /*
+   * 内容与滚动条的间距（用户 2026-11-08 的换算）：滚动条通道 8px + 间隙 4px，
+   * 内容右 padding 12 —— 视觉留白与其它三边一致，滚动条贴在面板最右侧。
+   */
+  padding-right: 12px;
 }
 .nb-param-pop .nb-param-scroll [data-slot='scroll-area-viewport']::-webkit-scrollbar {
   width: 0;
@@ -671,9 +674,9 @@
 }
 /* 滚动条本体留出与面板一致的内边距，不然会贴着内容边缘 */
 .nb-param-pop .nb-param-scroll [data-slot='scroll-area-scrollbar'] {
-  padding: 2px 2px 2px 0;
-  /* 滚动条是 absolute 的浮层，贴在最右边；给它一条自己的宽度，别和内容挤在同一个像素列上 */
-  right: 2px;
+  padding: 2px 0;
+  /* 贴到面板最右边（right:0），不再内缩 2px */
+  right: 0;
   width: 8px;
 }
 

@@ -18,7 +18,7 @@
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
-import { Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
+import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@mini-canvas/ui-kit-shadcn'
 import ToolParamField from './ToolParamField.vue'
 import { resolvePresetKind, resolveInlineSoleSelect } from './paramKind'
 
@@ -148,7 +148,13 @@ const summary = computed(() => {
       :collision-padding="12"
       class="tpg-popover tpg-menu-body tpg-menu-body--blocks"
     >
-      <div class="tpg-menu tpg-menu--blocks">
+      <!--
+        内容用 shadcn ScrollArea 滚动（用户 2026-11-08）：滚动条贴面板最右侧。
+        父容器右 padding 收窄到 4px、内层再补 12px，左右视觉留白仍一致，
+        滚动条不再浮在内容中间。
+      -->
+      <ScrollArea type="always" class="tpg-scroll">
+        <div class="tpg-menu tpg-menu--blocks">
         <!--
           统一版式：一个参数 = 一整块（第一行标题、第二行控件），按声明顺序排。
           预设件（比例网格 / 按钮网格 / 滑块）自己就画标题，所以这里只在**非预设件**
@@ -165,8 +171,9 @@ const summary = computed(() => {
             @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
           />
         </div>
-        <div v-if="blocks.length === 0" class="tpg-empty">该动作没有额外参数</div>
-      </div>
+          <div v-if="blocks.length === 0" class="tpg-empty">该动作没有额外参数</div>
+        </div>
+      </ScrollArea>
     </PopoverContent>
   </Popover>
 </template>
@@ -282,11 +289,48 @@ const summary = computed(() => {
    * 会让面板长到 600px+，既没滚动也超出弹窗。这里封顶后由 .tpg-menu 自己滚。
    */
   max-height: min(420px, 60vh);
-  padding: 16px;
+  /*
+   * 内边距按「滚动条贴右边缘」重排（用户 2026-11-08）：
+   * 原本四周 16px，滚动条会落在 padding 内侧、离右边还有 16px，看着飘在内容里。
+   * 现在右侧只留 4px 给滚动条通道，其余三边仍 16px；内容再补 12px，
+   * 左右视觉留白合计仍是 16px。
+   */
+  padding: 16px 4px 16px 16px;
   gap: 12px;
   border-radius: var(--mct-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
   overflow: hidden;
+}
+/* ScrollArea 本体：撑满面板可用高度，滚动条贴到最右 */
+.tpg-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/*
+ * 高度上限必须写在**视口**上（ScrollArea 真正滚动的是 viewport）。
+ *
+ * 只给面板 max-height 时，viewport 是 size-full（height:100%），
+ * 父级高度又由内容决定 —— 实测 viewport 撑到 443，被面板 420 裁掉，反而不出滚动条。
+ * 这里直接给 viewport 上限，内容超出即滚。
+ */
+.tpg-scroll [data-slot='scroll-area-viewport'] {
+  max-height: calc(min(420px, 60vh) - 32px);
+}
+/*
+ * 内层内容补回 12px：外层右 padding 只留 4px 给滚动条通道，
+ * 内容自己再补 12，左右视觉留白合计仍是 16px。
+ *
+ * 注意不能写「viewport 的直接子级」选择器：reka 会在视口里再包一层 div，
+ * 那条规则永远不命中（实测内层一直是 0 padding，内容贴着滚动条）。
+ * 直接给 .tpg-menu 自己加内边距才生效。
+ */
+.tpg-scroll .tpg-menu {
+  box-sizing: border-box;
+  /* 宽度跟随滚动视口（不按内容撑），padding 才能真的把内容从滚动条上推开 */
+  width: 100%;
+  max-width: 100%;
+  padding-right: 12px;
+  padding-bottom: 4px;
 }
 /* 参数面板里的滑块走**黑白**（用户口径 2026-10-12：这里不用主题色，与右键菜单同口径）：
    填充与圆球改用主按钮那档深墨，白底黑轨一眼能看出进度，不再是一条青色的条。 */
@@ -299,11 +343,8 @@ const summary = computed(() => {
   flex-direction: column;
   gap: 6px;
   min-width: 260px;
-  /* 面板封顶后，内容在这里滚（与底栏参数面板同一做法） */
-  flex: 1 1 auto;
+  /* 滚动交给外层 ScrollArea（用户 2026-11-08：统一用 shadcn 滚动） */
   min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 /* 块间 gap 12 + 块间分割线（参考稿在「比例网格」与「滑块」之间就是一条 border-t） */
 .tpg-menu--blocks {
