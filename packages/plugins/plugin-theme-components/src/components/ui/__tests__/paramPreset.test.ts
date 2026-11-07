@@ -308,13 +308,20 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
     expect(html).toContain('5秒')
   })
 
-  it('kind:duration 连续（豆包 4-10）→ 滑块 + 当前值 + 单位', async () => {
+  /**
+   * 2026-11-08 改版：滑块直接复用设置界面那一套（shadcn Slider + NumberField −/+），
+   * 不再是「滑块下方一个自绘当前值」。
+   */
+  it('kind:duration 连续（豆包 4-10）→ shadcn 滑块 + 数字框（同设置界面）', async () => {
     const html = await render(
       { key: 'durationSec', kind: 'duration', label: '时长', type: 'number', min: 4, max: 10, step: 1, unit: '秒' },
       6,
     )
-    expect(html).toMatch(/slider|role="slider"|aria-valuenow/)
-    expect(html).toContain('tps-value')
+    expect(html).toMatch(/data-slot="slider"|role="slider"/)
+    // 数字框（NumberField）与滑块同一行
+    expect(html).toContain('tps-number-field')
+    expect(html).toContain('tps-row')
+    expect(html).not.toContain('tps-value')
     expect(html).toContain('秒')
   })
 

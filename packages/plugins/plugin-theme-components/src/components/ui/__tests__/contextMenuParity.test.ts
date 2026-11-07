@@ -83,10 +83,14 @@ describe('不用主题色（黑白两套主题即可）', () => {
     expect(opt).not.toMatch(/--ui-accent/)
   })
 
-  it('参数滑块：轨道/填充/圆球走主按钮那档墨色（亮色近黑、暗色近白），不是强调色', () => {
-    expect(TOOL_SLIDER).toMatch(/--ps-accent:\s*var\(--ui-primary-bg/)
-    expect(TOOL_GROUP).toMatch(/--ps-accent:\s*var\(--ui-primary-bg/)
-    expect(TOOL_GROUP).not.toMatch(/--ps-accent:\s*var\(--ui-accent/)
+  /**
+   * 2026-11-08：滑块改用组件库 shadcn Slider（与设置界面同一个组件），
+   * 不再自绘 --ps-accent 一组变量 —— 因此这条只锁「不再出现强调色」。
+   */
+  it('参数滑块用组件库 Slider，不自造强调色变量', () => {
+    expect(TOOL_SLIDER).toContain('Slider')
+    expect(TOOL_SLIDER).toContain('NumberField')
+    expect(TOOL_SLIDER).not.toMatch(/--ps-accent:\s*var\(--ui-accent/)
   })
 
   it('取色浮层走 shadcn Popover，不再自己画下拉外壳', () => {

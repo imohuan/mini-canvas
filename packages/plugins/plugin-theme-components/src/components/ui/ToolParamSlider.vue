@@ -6,7 +6,9 @@
  * dola 视频那种只有 5 / 10 两档的时长**不用**它（走 ToolOptionGrid 按钮网格更好点）。
  * 这条分档由 paramKind.ts 的 resolvePresetKind 纯函数决定，可单测。
  *
- * 视觉沿用本包设置界面的滑块（PrecisionSlider），只是把 label/值/单位排成一行。
+ * 视觉**直接沿用设置界面的那一套**（用户 2026-11-08）：
+ * shadcn Slider（深色已填充轨道 + 白色圆角滑块）+ NumberField（− 数值 +），
+ * 与 SettingsSchemaField 的数字字段完全相同 —— 同一个组件、同一份样式，不再自绘。
  *
  * 配色**不用主题色**（用户口径 2026-10-12「这里其实不需要使用主题颜色，直接使用默认的黑白
  * 两个主题就行，就和你的右键菜单一样」）：轨道灰、填充与圆球走主按钮那档深墨
@@ -14,8 +16,15 @@
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
-import PrecisionSlider from './PrecisionSlider.vue'
-import { Input } from '@mini-canvas/ui-kit-shadcn'
+import { Minus, Plus } from 'lucide-vue-next'
+import {
+  NumberField,
+  NumberFieldContent,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
+  Slider,
+} from '@mini-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{
@@ -44,51 +53,61 @@ function emitChange(raw: number): void {
   const v = Number.isFinite(raw) ? Math.min(max.value, Math.max(min.value, raw)) : min.value
   emit('update:modelValue', v)
 }
+
+/** Slider 给出的是数组（多滑块预留），这里只有一个值 */
+function onSlider(value: number | number[] | undefined): void {
+  const v = Array.isArray(value) ? value[0] : value
+  if (typeof v === 'number' && Number.isFinite(v)) emitChange(v)
+}
 </script>
 
 <template>
   <section class="tps-block" :data-param-key="param.key">
-    <div class="tps-head">
-      <h4 v-if="!hideTitle" class="tps-title">{{ param.label || param.key }}</h4>
-      <span class="tps-value">{{ numberValue }}<span v-if="param.unit" class="tps-unit">{{ param.unit }}</span></span>
-    </div>
+    <h4 v-if="!hideTitle" class="tps-title">
+      {{ param.label || param.key }}
+      <span v-if="param.unit" class="tps-unit">{{ param.unit }}</span>
+    </h4>
     <!--
-      右侧数字输入框（用户 2026-11-07 参考图 3）：拖滑块粗调、输入框精调，
-      两边同一个值。change（松手/失焦）才上报，输入过程不刷面板。
+      与「设置 → 外观」里的数字字段**同一个组件、同一份布局**（用户 2026-11-08）：
+      左边滑块、右边「− 数值 +」。
     -->
     <div class="tps-row">
-      <PrecisionSlider
+      <Slider
         class="tps-slider"
-        :model-value="numberValue"
+        :model-value="[numberValue]"
         :min="min"
         :max="max"
         :step="step"
         :disabled="disabled"
         :aria-label="param.label || param.key"
-        @update:model-value="(v: number) => emit('update:modelValue', v)"
+        @update:model-value="onSlider"
       />
-      <Input
-        class="tps-num"
-        type="number"
+      <NumberField
+        class="tps-number-field"
         :model-value="numberValue"
         :min="min"
         :max="max"
         :step="step"
         :disabled="disabled"
-        :aria-label="(param.label || param.key) + '数值'"
-        @update:model-value="(v: string | number) => emitChange(Number(v))"
-      />
+        :format-options="{ useGrouping: false }"
+        @update:model-value="(v: number | undefined) => emitChange(Number(v ?? min))"
+      >
+        <NumberFieldContent>
+          <NumberFieldDecrement class="tps-number-btn">
+            <Minus :size="12" />
+          </NumberFieldDecrement>
+          <NumberFieldInput
+            class="tps-number-input"
+            :aria-label="(param.label || param.key) + '数值'"
+          />
+          <NumberFieldIncrement class="tps-number-btn">
+            <Plus :size="12" />
+          </NumberFieldIncrement>
+        </NumberFieldContent>
+      </NumberField>
     </div>
   </section>
 </template>
-
-<style>
-/* 滑块的黑白配色（见组件头注释；用户口径 2026-10-12）。 */
-.tps-block {
-  --ps-accent: var(--ui-primary-bg, #1f2937);
-  --ps-accent-hover: var(--ui-primary-bg-hover, #111827);
-}
-</style>
 
 <style scoped>
 .tps-block {
@@ -96,33 +115,47 @@ function emitChange(raw: number): void {
   flex-direction: column;
   gap: 8px;
 }
-.tps-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 20px;
-}
 .tps-title {
   margin: 0;
   height: 20px;
   display: flex;
   align-items: center;
+  gap: 2px;
   /* 标题按参考稿（font-bold text-gray-700）：比正文重、比正文深 */
   color: var(--ui-ink, #18202b);
   font-size: 12px;
   font-weight: 700;
   line-height: 20px;
 }
-.tps-value {
-  color: var(--ui-ink, #18202b);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
 .tps-unit {
-  margin-left: 2px;
   color: var(--ui-ink-mute, #8c95a3);
   font-weight: 500;
+}
+/*
+ * 版式照抄设置界面（SettingsSchemaField 的 .sf-number / .sf-slider / .sf-number-field）：
+ * 左滑块自适应、右数字框固定 104px，中间 12px —— 用户 2026-11-08 指定的效果。
+ */
+.tps-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.tps-slider {
+  flex: 1;
+  min-width: 120px;
+}
+.tps-number-field {
+  flex: 0 0 auto;
+  width: 104px;
+}
+.tps-number-input {
+  padding: 0 18px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tps-number-btn {
+  padding: 0 4px;
+  color: var(--ui-ink-dim, #6b7280);
 }
 </style>
