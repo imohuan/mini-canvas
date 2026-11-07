@@ -43,11 +43,10 @@ const AgentModelPicker = useUiComponent('agentModelPicker')
 
 /**
  * 面板宽度：分栏视图要宽一点，否则左栏平台列表被挤成一条缝（400px 实测只能露半行）。
- * 卡片与分栏同宽（用户 2026-11-07：卡片 340 太窄，模型名被截断）。
- * 统一 520：卡片里标题 / 平台 / 参数一行排得开；分栏 520 也够左栏 + 右栏并排。
+ * 与 Agent 输入区同一口径：卡片 340 / 分栏 588（再按视口收）。
  */
 const splitView = ref(false)
-const menuWidth = computed(() => 'min(520px, calc(100vw - 24px))')
+const menuWidth = computed(() => 'min(' + (splitView.value ? 588 : 340) + 'px, calc(100vw - 24px))')
 /**
  * 面板高度：给**确定值**，不用 max-height。
  *
