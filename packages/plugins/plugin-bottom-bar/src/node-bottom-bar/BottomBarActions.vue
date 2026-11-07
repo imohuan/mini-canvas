@@ -198,8 +198,13 @@ function pickAction(value: string): void {
               iframe 本身不限高，把内容的真实高度报上来；超过 popover 高度时由这里滚。
               不这样做的后果：iframe 里长出一个原生滚动条，和外层两套滚动打架，
               观感就是截图里那条灰长条 + 面板被截断。
+              另外：
+              type="always"：滚动条常驻。
+              面板内容是 iframe，高度是量完之后才写进去的；Reka 默认 `auto` 在挂载那一刻
+              量不到溢出，就永远不渲染 ScrollBar（用户 2026-11-07：只剩一条原生滚动条）。
+              常驻之后滚动条由组件库画，原生那条已经由组件库的样式藏掉。
             -->
-            <ScrollArea class="nb-param-scroll">
+            <ScrollArea type="always" class="nb-param-scroll">
               <HtmlPanelFrame
                 :html="panelHtml"
                 :values="values"

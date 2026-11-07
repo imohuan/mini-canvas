@@ -147,7 +147,8 @@ const BRIDGE = '<' + 'scr' + 'ipt>' + `
     var el = document.body
     if (!el) return
     var box = el.getBoundingClientRect()
-    var h = Math.ceil(box.height)
+    // +1：取整误差会让 iframe 视口比内容矮一丝，iframe 内部就冒出一条原生滚动条
+    var h = Math.ceil(box.height) + 1
     parent.postMessage({ type: 'canvas:panel:resize', height: h }, '*')
   }
   function startObserving() {
@@ -182,7 +183,9 @@ const srcdoc = computed(() => {
     return BRIDGE + html
   }
   return '<!doctype html><html><head><meta charset="utf-8">' + BRIDGE
-    + '<style>html,body{margin:0;padding:0;background:transparent;color:inherit;font:inherit}*{box-sizing:border-box}</style>'
+    + '<style>html,body{margin:0;padding:0;background:transparent;color:inherit;font:inherit;overflow:hidden}'
+    // 滚动交给外层 ScrollArea；iframe 内部一旦能滚，就会和外面那条 shadcn 滚动条并排出现
+    + '*{box-sizing:border-box}</style>'
     + '</head><body>' + html + '</body></html>'
 })
 
@@ -288,6 +291,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
       ref="frame"
       class="nhp-frame"
       sandbox="allow-scripts"
+      scrolling="no"
       :srcdoc="srcdoc"
       title="自定义配置面板"
       @load="onLoad"
