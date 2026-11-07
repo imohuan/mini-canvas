@@ -17,6 +17,36 @@
 }
 
 /*
+ * 滚动观感（用户 2026-11-07 截图 1）：
+ * · 滚到底最后一行被裁半行 —— 列表底部留白不足 + 内容盒没给滚动条让位；
+ * · 滚动时滑块「变长」—— thin + 低对比色在不同滚动位置量出的长度会变。
+ * 这里给固定 8px 通道 / 6px 滑块，并在内容盒右侧留出位置。
+ * 注意：这段必须同时写在 choice 与 model 两份，底栏实际走的是 choice。
+ */
+.nb-agent-choice-menu [data-slot='dropdown-menu-scroll'] {
+  padding-right: 6px;
+  scrollbar-width: auto;
+  scrollbar-color: color-mix(in srgb, var(--ui-ink, #18202b) 35%, transparent) transparent;
+}
+.nb-agent-choice-menu [data-slot='dropdown-menu-scroll']::-webkit-scrollbar {
+  width: 8px;
+}
+.nb-agent-choice-menu [data-slot='dropdown-menu-scroll']::-webkit-scrollbar-thumb {
+  width: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 35%, transparent);
+}
+.nb-agent-choice-menu [data-slot='dropdown-menu-scroll']::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 列表底部留 16px：最后一行完整可见 */
+.nb-agent-choice-menu .ac-panel-scroll :deep(.ac-panel-scroll-body),
+.nb-agent-choice-menu .ac-menu-scroll :deep(.ac-model-scroll-body) {
+  padding-bottom: 16px;
+}
+
+/*
  * 选择器带 .ac-model-panel / .cp-panel 是为了压过 Agent 的 .ac-panel（min-height: min(460px, …)）。
  * 只写 .ac-panel 时优先级与对方相同，后加载的顺序不保证，实测面板仍按 460px 撑高、
  * 比外框高 100px —— 这才有「底部被裁掉半行」和「外层跟着滚」两个症状。

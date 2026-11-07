@@ -28,7 +28,8 @@
  *   Chrome 的 thin 滑块长度随视口比例变化。换成固定 8px 通道 + 6px 固定色滑块，
  *   滚动过程滑块长度不再跳。
  */
-.nb-agent-model-menu [data-slot='dropdown-menu-scroll'] {
+.nb-agent-model-menu [data-slot='dropdown-menu-scroll'],
+.nb-agent-choice-menu [data-slot='dropdown-menu-scroll'] {
   padding-right: 6px;
   scrollbar-width: auto;
   scrollbar-color: color-mix(in srgb, var(--ui-ink, #18202b) 35%, transparent) transparent;

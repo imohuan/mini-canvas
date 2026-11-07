@@ -91,6 +91,11 @@ const customProps = computed<Record<string, unknown>>(() => ({
 const useSlider = computed(
   () => props.param.type === 'number' && (props.param.min !== undefined || props.param.max !== undefined),
 )
+/**
+ * 这个数值参数是否已经由预设件接管（kind 判定过的 speed / duration 档）：
+ * 是 → 保留预设件的样子；否 → 用「滑块 + 数字框」的通用形态。
+ */
+const sliderPreset = computed(() => resolvePresetKind(props.param) === 'slider')
 
 const inputId = computed(() => `${props.idPrefix}-${props.param.key}`)
 
@@ -190,6 +195,20 @@ const numberValue = computed(() => {
   </label>
 
   <!-- 内置：数字（有范围用滑块） -->
+  <!--
+    数值参数优先走 ToolParamSlider（滑块 + 右侧数字框，用户 2026-11-07 参考图 3）；
+    它与预设件是同一种东西（paramKind 的 slider 档），只是这里没有走 kind 判定。
+    注意别抢预设件的活：resolvePresetKind 已经给出的（speed、duration>3 档）仍走预设件。
+  -->
+  <ToolParamSlider
+    v-else-if="useSlider && !sliderPreset"
+    :param="param"
+    :model-value="numberValue"
+    :disabled="disabled"
+    hide-title
+    @update:model-value="onSlider"
+  />
+
   <PrecisionSlider
     v-else-if="useSlider"
     :model-value="numberValue"

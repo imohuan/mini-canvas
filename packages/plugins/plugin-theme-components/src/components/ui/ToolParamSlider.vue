@@ -52,15 +52,6 @@ function emitChange(raw: number): void {
       <h4 v-if="!hideTitle" class="tps-title">{{ param.label || param.key }}</h4>
       <span class="tps-value">{{ numberValue }}<span v-if="param.unit" class="tps-unit">{{ param.unit }}</span></span>
     </div>
-    <PrecisionSlider
-      class="tps-slider"
-      :model-value="numberValue"
-      :min="min"
-      :max="max"
-      :step="step"
-      :disabled="disabled"
-      @update:model-value="(v: number) => emit('update:modelValue', v)"
-    />
     <!--
       右侧数字输入框（用户 2026-11-07 参考图 3）：拖滑块粗调、输入框精调，
       两边同一个值。change（松手/失焦）才上报，输入过程不刷面板。
@@ -85,7 +76,7 @@ function emitChange(raw: number): void {
         :step="step"
         :disabled="disabled"
         :aria-label="(param.label || param.key) + '数值'"
-        @change="(e: Event) => emitChange(Number((e.target as HTMLInputElement).value))"
+        @update:model-value="(v: string | number) => emitChange(Number(v))"
       />
     </div>
   </section>
