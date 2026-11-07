@@ -368,14 +368,14 @@
   max-width: none !important;
 }
 /*
- * 弹窗里的 provider 参数面板：与底栏同一份 HtmlPanelFrame。
- * 高度由面板自己上报（iframe 内容自适应），这里只约束不越界。
+ * 弹窗里的参数触发器：与「适用模型」同款控件壳（满宽、同底色/高度/圆角）。
+ * 面板本体收在浮层里（.nb-param-pop 已有底栏样式），这里只调触发器。
  */
-.nbp-dialog .nhp {
+.nbp-dialog .nb-param-trigger {
+  box-sizing: border-box;
   width: 100%;
-  max-height: 320px;
-  overflow-y: auto;
-  border-top: 0;
+  height: 32px;
+  padding: 0 10px;
   border-radius: min(var(--mct-radius, 8px), 12px);
   background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
 }

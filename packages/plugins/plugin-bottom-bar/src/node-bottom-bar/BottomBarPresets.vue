@@ -298,6 +298,22 @@ const draftPanelTheme = {
   accent: 'var(--ui-accent, #0891b2)',
 }
 
+/** 弹窗参数下拉：与底栏同一套（触发器 + 浮层 provider 面板） */
+const paramOpen = ref(false)
+const panelHeight = ref(240)
+/** 参数摘要（有值的项用 · 连接），空时显示「参数」——与底栏触发器同一逻辑 */
+const paramSummary = computed(() => {
+  const parts = draftParamDefs.value
+    .map((p) => {
+      const v = draftValues.value[p.key]
+      if (v === undefined || v === null || v === '') return ''
+      const opt = p.options?.find((o) => o.value === v)
+      return opt ? opt.label : String(v)
+    })
+    .filter((s) => s !== '')
+  return parts.join(' · ')
+})
+
 const ToolParamGroup = useUiComponent('toolParamGroup')
 
 /** 新建弹窗里「适用模型」触发器上的文字 */
@@ -609,16 +625,50 @@ function labelOfAction(id: string): string {
         -->
         <div v-if="draftPanelHtml" class="nbp-field">
           <Label class="nbp-label">参数</Label>
-          <HtmlPanelFrame
-            :html="draftPanelHtml"
-            :values="draftValues"
-            :params="draftParamDefs"
-            :action-id="draftActionId"
-            :model="draftModelLabel"
-            :theme="draftPanelTheme"
-            @set-values="(v: Record<string, unknown>) => (draftValues = v)"
-            @notify="() => {}"
-          />
+          <!-- 与底栏同一套交互：摘要触发器 + 浮层 provider 面板（用户 2026-11-08：
+               其他模型的配置都在下拉菜单里，弹窗也要一致；直铺会截断长内容） -->
+          <Popover v-model:open="paramOpen">
+            <PopoverTrigger as-child>
+              <button
+                type="button"
+                class="nb-param-trigger nbp-param-trigger"
+                :aria-expanded="paramOpen"
+                aria-haspopup="dialog"
+                :title="paramSummary || '参数'"
+              >
+                <span class="nb-param-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2" /></svg>
+                </span>
+                <span class="nb-param-text">{{ paramSummary || '参数' }}</span>
+                <svg class="nb-param-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              :side-offset="4"
+              :collision-padding="12"
+              class="nb-param-pop nbp-param-pop"
+              :style="{ '--nb-panel-h': panelHeight + 'px' }"
+            >
+              <ScrollArea type="always" class="nb-param-scroll">
+                <HtmlPanelFrame
+                  :html="draftPanelHtml"
+                  :values="draftValues"
+                  :params="draftParamDefs"
+                  :action-id="draftActionId"
+                  :model="draftModelLabel"
+                  :theme="draftPanelTheme"
+                  @height="(h: number) => (panelHeight = h)"
+                  @set-values="(v: Record<string, unknown>) => (draftValues = v)"
+                  @notify="() => {}"
+                />
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
         </div>
         <div v-else-if="draftParamDefs.length > 0" class="nbp-field">
           <Label class="nbp-label">参数</Label>
