@@ -444,8 +444,29 @@ export function useEditor(
       // 菜单开着时这颗标签要固定显示铅笔（DOM 重建后也要补回来）
       applyChipEditingState(el);
 
-      el.onmouseenter = () => handleResourceMouseEnter(el);
-      el.onmouseleave = () => handleResourceMouseLeave(el);
+      /**
+       * hover 状态由 JS 打类，不依赖 CSS 的 :hover（用户 2026-11-07 反复报「就是不亮」）。
+       *
+       * 为什么：标签 DOM 会被 ProseMirror 整颗重建，重建后的元素上 :hover 规则要么不命中，
+       * 要么被别的样式层按优先级压掉 —— 用户看到的就是「hover 有预览、图标却不变」。
+       * 现在进入/离开标签时直接 toggle 两个类，样式按类写，行为可预测、也能被单测覆盖：
+       *   · resource-chip--hot      → 整颗 hover：藏缩略图、露铅笔
+       *   · resource-chip--icon-hot → 指针在图标格：铅笔从灰加深
+       */
+      el.onmouseenter = () => {
+        el.classList.add('resource-chip--hot')
+        handleResourceMouseEnter(el)
+      };
+      el.onmouseleave = () => {
+        el.classList.remove('resource-chip--hot')
+        el.classList.remove('resource-chip--icon-hot')
+        handleResourceMouseLeave(el)
+      };
+      const iconEl = el.querySelector('.resource-chip-icon') as HTMLElement | null
+      if (iconEl) {
+        iconEl.onmouseenter = () => el.classList.add('resource-chip--icon-hot')
+        iconEl.onmouseleave = () => el.classList.remove('resource-chip--icon-hot')
+      }
       el.onclick = (event: MouseEvent) => {
         handleResourceClick(el, event);
       };

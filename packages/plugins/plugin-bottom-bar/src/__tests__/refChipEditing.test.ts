@@ -15,6 +15,10 @@ const CHIP_DOM = readFileSync(
   fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipDom.ts', import.meta.url)),
   'utf8',
 )
+const EDITOR = readFileSync(
+  fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)),
+  'utf8',
+)
 
 function block(selector: string): string {
   const i = CSS.indexOf(selector + ' {')
@@ -60,20 +64,31 @@ describe('标签缩略图与文字同高', () => {
 })
 
 describe('标签左侧图标：hover 换铅笔 + 图标高亮（用户 2026-11-07）', () => {
-  it('hover 整颗标签就换成铅笔（不只靠菜单打开）', () => {
-    // 缩略图与类型图标要在 hover 时藏掉，由同一组规则覆盖 hover 与「菜单打开」两个状态
-    const i = CSS.indexOf('.nb-editor .resource-chip--editable:hover .resource-chip-thumb,')
-    expect(i).toBeGreaterThan(-1)
-    const group = CSS.slice(i, CSS.indexOf('}', CSS.indexOf('{', i)))
-    expect(group).toContain('.resource-chip--editable:hover .resource-chip-icon')
-    expect(group).toContain('.resource-chip--editing .resource-chip-icon')
-    expect(CSS).toMatch(/\.resource-chip--editable:hover::after,\s*\n\.nb-editor \.resource-chip--editing::after \{/)
+  it('hover 状态由 JS 打类（--hot），不靠 CSS :hover（真机上会被样式层吃掉）', () => {
+    expect(EDITOR).toContain("el.classList.add('resource-chip--hot')")
+    expect(EDITOR).toContain("el.classList.remove('resource-chip--hot')")
+    expect(EDITOR).toContain("el.classList.add('resource-chip--icon-hot')")
   })
 
-  it('指针进到图标上时铅笔变深（只改颜色，不加背景）', () => {
-    expect(CSS).toMatch(/\.resource-chip--editable:has\(\.resource-chip-icon:hover\)::after\s*\{[^}]*background-color:\s*var\(--ui-ink/)
-    // 用户明确不要背景块
+  it('--hot 与「菜单打开」共用同一组规则：藏图 + 露铅笔', () => {
+    const i = CSS.indexOf('.nb-editor .resource-chip--hot .resource-chip-thumb,')
+    expect(i).toBeGreaterThan(-1)
+    const group = CSS.slice(i, CSS.indexOf('}', CSS.indexOf('{', i)))
+    expect(group).toContain('.resource-chip--hot .resource-chip-icon')
+    expect(group).toContain('.resource-chip--editing .resource-chip-icon')
+    expect(CSS).toMatch(/\.resource-chip--hot::after,\s*\n\.nb-editor \.resource-chip--editing::after \{/)
+  })
+
+  it('铅笔静息是灰（不是 currentColor，否则和 hover 同色看不出变化）', () => {
+    const i = CSS.indexOf('.nb-editor .resource-chip--hot::after,')
+    const block = CSS.slice(CSS.indexOf('{', i) + 1, CSS.indexOf('}', i))
+    expect(block).toMatch(/background-color:\s*color-mix\(/)
+    expect(block).not.toMatch(/background-color:\s*currentColor/)
+  })
+
+  it('--icon-hot 时铅笔变纯前景色（只改颜色，不加背景）', () => {
+    expect(CSS).toMatch(/\.resource-chip--icon-hot::after\s*\{[^}]*background-color:\s*var\(--ui-ink/)
     expect(CSS).not.toMatch(/radial-gradient/)
-    expect(CSS).not.toMatch(/\.resource-chip--editable:hover\s*\{[^}]*background:/)
+    expect(CSS).not.toMatch(/\.resource-chip--hot\s*\{[^}]*background:/)
   })
 })
