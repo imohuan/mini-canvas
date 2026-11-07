@@ -291,7 +291,11 @@ export function useEditor(
     hoverTimer = setTimeout(() => {
       const url = el.getAttribute("data-url") || ""
       const name = el.getAttribute("data-name") || ""
-      if (!url) return
+      /**
+       * 没有 data-url 但有 hoverPreview 时仍要弹（用户 2026-11-06：视频帧图还没取到时，
+       * 标签左侧只能是图标，data-url 是空的 —— 但视频本身是能放的，hover 预览不该因此消失）。
+       */
+      if (!url && !item?.hoverPreview) return
       /**
        * 音频 / 文本**不弹 hover 预览**（用户 2026-10-28），但**必须按类型判断**。
        *
@@ -323,7 +327,19 @@ export function useEditor(
       const show = (src: string) => {
         previewUrl.value = src
         previewTitle.value = name
-        previewType.value = kind === 'video' || isVideoUrl(src) ? "video" : "image"
+        /**
+         * 预览类型按**实际拿到的地址**判断（用户 2026-11-06 报视频 hover 黑屏）。
+         *
+         * 以前写成 `kind === 'video' || isVideoUrl(src)`：视频标签的 hoverPreview
+         * 可能给的是帧图（png/jpeg），这里仍判成 video，于是 `<video src="data:image/png">`
+         * 放不出画面 —— 用户看到的就是一块黑的。
+         * 现在只有真的视频地址（扩展名 / data:video / blob 且类型是视频）才用 <video>，
+         * 帧图当图片展示。
+         */
+        previewType.value = isVideoUrl(src) || /^data:video\//i.test(src)
+          || (/^blob:/i.test(src) && kind === 'video')
+          ? "video"
+          : "image"
         previewChipId = id ?? ""
         previewVisible.value = true
       }

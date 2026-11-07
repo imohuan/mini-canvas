@@ -568,7 +568,14 @@ export function useBottomBarCards(deps: CardDeps) {
             ...(tile.value ? { value: tile.value } : {}),
             onIconClick: deps.onOpenTagMenu,
             ...(kind === 'video' && tile.url
-              ? { hoverPreview: () => deps.ensureFullVideoThumb(tile.url as string) }
+              ? {
+                  /**
+                   * 视频 hover 直接给**视频地址**（用户 2026-11-06：要看到真正的预览）——
+                   * 以前这里给的是帧图，编辑器把它塞进 <video> 就是黑屏。
+                   * 帧图只负责标签左侧那颗小缩略图。
+                   */
+                  hoverPreview: () => tile.url as string,
+                }
               : {}),
           }
           registerItem(item)

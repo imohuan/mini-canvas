@@ -22,15 +22,13 @@
   height: 16px;
   padding: 0;
   border-radius: 999px;
-  background: var(--ui-scrim, rgb(0 0 0 / 0.55));
-  /**
-   * 字/图标颜色**固定白**（用户 2026-10-29 报「hover 时 @ 的文字和背景一样，看不见」）。
-   * 根因：以前写的是 var(--ui-panel)，深色主题下它是 #262626 —— 正好等于半透明黑底
-   * 混出来的灰，按钮就糊成一块。这个圆片本身就是深色底（--ui-scrim），
-   * 对比色应当固定为白，跟主题面板色无关。
+  /*
+   * 默认灰底（用户 2026-11-06）：hover 只加深一档，像菜单行那样「浅灰 → 深灰」，
+   * 而不是从深黑跳到亮灰、看着像换了个按钮。
    */
-  /* 主题色白名单: 固定在深色半透明圆片上的对比白（不随主题变） */
-  color: var(--ui-tip-ink, #fff);
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  /* 浅灰底配正常前景色：两种主题下都看得清，不依赖某个主题的深色面板值 */
+  color: var(--ui-ink, #18202b);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -40,8 +38,16 @@
 .nb-card:hover .nb-card-act {
   opacity: 1;
 }
-.nb-card-act:hover {
-  background: var(--ui-ink, #18202b);
+/**
+ * 组件库 Button 的 ghost 档自带 `hover:bg-muted`，优先级高于单类选择器，
+ * 会把这里的底色盖成透明（用户 2026-11-06 报「hover 背景消失」）。
+ * 用「卡片 → 按钮 → hover」三段选择器提权，保证我们这层生效。
+ */
+.nb-cards .nb-card .nb-card-act:hover {
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+  color: var(--ui-ink, #18202b);
+  /* Button 基类自带 hover:text-foreground；图标色要压住它 */
+  opacity: 1;
 }
 .nb-card-at {
   right: 2px;

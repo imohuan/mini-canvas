@@ -215,11 +215,18 @@ export function renderRefChip(item: ResourceItem): HTMLElement {
    *   · 有可画缩略图时，叠一张 <img>；**加载成功才显示**，失败/未完成就露出底图；
    *   · 加载中在图标位加 is-loading 转圈（不改变布局）。
    */
+  /**
+   * 视频缩略图（用户 2026-11-06 报「视频标签变成图标了」）：
+   * 帧图既可能放在 `thumbnail_url`，也可能直接放在 `url`（底栏刷新时就是这么写的）。
+   * 以前只认 `thumbnail_url`，于是帧图明明在也画不出来，退回成类型图标。
+   * 判断「能不能当图片画」只看地址：mp4/webm 这类视频容器一律不要。
+   */
+  const urlAsImage = !!item.url && !/\.(mp4|webm|mov|m4v|ogv|mkv)(\?|#|$)/i.test(item.url)
   const thumb =
-    kind === 'video' ? (item.thumbnail_url || '')
+    kind === 'video' ? (item.thumbnail_url || (urlAsImage ? item.url : '') || '')
     : kind === 'image' ? (item.url || '')
     : ''
-  const canThumb = !!thumb && (kind === 'image' || thumb.startsWith('data:image/'))
+  const canThumb = !!thumb && (kind === 'image' || kind === 'video') && !/\.(mp4|webm|mov|m4v|ogv|mkv)(\?|#|$)/i.test(thumb)
   const ic = document.createElement('span')
   ic.className = 'resource-chip-icon'
   // 没有 chipKind = 待绑定 → 统一资源图标（data-icon 缺省 = 通用方块）

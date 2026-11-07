@@ -577,8 +577,13 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
    * 设成 `display:none`，标签就只剩名字、没有图标（用户 2026-10-28 报「音频标签没有图标」）。
    * 视频存的 url 是帧图（data:image/…）所以例外；音频没有封面，一律走类型图标。
    */
+  /**
+   * 视频帧图既可能是 data:image，也可能是 http(s) 的 png（统一取帧服务落库后的地址）。
+   * 只判 `data:image/` 会把后者漏掉，标签又退回成图标（用户 2026-11-06 报的就是这个）。
+   */
+  const urlLooksVideo = !!self.url && /\.(mp4|webm|mov|m4v|ogv|mkv)(\?|#|$)/i.test(self.url)
   const canShowThumb =
-    !!self.url && !!kind4 && kind4 !== 'audio' && (kind4 === 'image' || self.url.startsWith('data:image/'))
+    !!self.url && !!kind4 && kind4 !== 'audio' && (kind4 === 'image' || !urlLooksVideo)
   const isText = !canShowThumb
   return [
     'span',

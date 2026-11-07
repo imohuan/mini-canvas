@@ -114,10 +114,22 @@ const TooltipTrigger = useUiComponent('TooltipTrigger')
                 <span class="nb-card-placeholder" data-kind="resource" aria-hidden="true" />
                 <span class="nb-card-plus" aria-hidden="true">+</span>
               </span>
+              <!--
+                视频 / 音频没有缩略图时，中间统一显示**播放**图标（用户 2026-11-06）；
+                文本仍用自己的类型图标。
+              -->
               <span
-                v-else-if="tile.kind === 'audio' || tile.kind === 'text' || tile.kind === 'video'"
-                class="nb-card-fallback"
+                v-else-if="tile.kind === 'video' || tile.kind === 'audio'"
+                class="nb-card-fallback nb-card-fallback--play"
                 :data-kind="tile.kind"
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>
+              </span>
+              <span
+                v-else-if="tile.kind === 'text'"
+                class="nb-card-fallback"
+                data-kind="text"
                 aria-hidden="true"
               />
               <span

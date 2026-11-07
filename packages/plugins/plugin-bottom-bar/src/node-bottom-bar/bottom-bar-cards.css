@@ -239,6 +239,34 @@
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V4h16v3'/%3E%3Cpath d='M12 4v16'/%3E%3Cpath d='M8 20h8'/%3E%3C/svg%3E");
 }
 
+/**
+ * 视频 / 音频卡片没有缩略图时的**播放**标识（用户 2026-11-06）。
+ *
+ * 以前这两类画的是「摄像机 / 音符」类型图标；用户要的是统一的播放三角，
+ * 一眼看出「这张可以播」。因为里面是真实 svg，这里要清掉 mask 那套形状。
+ */
+.nb-card-fallback--play {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  /* 默认灰底（hover 再加深一档，与 menu 行的 hover 观感一致） */
+  background-color: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+  -webkit-mask-image: none;
+  mask-image: none;
+  transition: background-color 0.15s ease-out;
+}
+.nb-card-fallback--play svg {
+  width: 12px;
+  height: 12px;
+  margin-left: 1px;
+}
+.nb-card:hover .nb-card-fallback--play {
+  background-color: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+}
+
 /*
  * 类型角标：右下角一个小白图标 + 半透明底（用户 2026-10-28：卡片分不清图片还是视频）。
  * 图片不挂（缩略图本身就是它）；视频 / 音频 / 文本挂自己的图标。
@@ -514,9 +542,10 @@
    * 卡角只有 48px，16px 的圆点又一半在卡外，鼠标稍偏就点到画布或缩略图上。
    * 放大用伪元素（不占布局），视觉尺寸不变。
    */
-  background: var(--ui-ink, #18202b);
-  color: var(--ui-panel, #fff);
-  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.28));
+  /* 默认灰底（用户 2026-11-06）：hover 加深一档，不再是「深黑底 → 透明」 */
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+  box-shadow: 0 0 0 1px var(--ui-line, #e2e5ea);
   opacity: 0;
   /* 视觉默认隐藏，但**始终可点**：隐藏态如果连指针都不接，
      鼠标从卡片外靠近时那几像素的缝会落到画布上（真机踩过）。 */
@@ -540,7 +569,17 @@
   opacity: 1;
 }
 .nb-remove:hover {
-  background: var(--ui-danger, #ef4444);
+  /* 危险色的语义留给图标；底色统一走 hover 那一档，和右边 @ 按钮一致 */
+  color: var(--ui-danger, #ef4444);
+}
+/**
+ * 同上：ghost Button 的 `hover:bg-muted` 比单类选择器优先，会把这颗按钮 hover 成透明。
+ * 提到「卡片 → 按钮 → hover」三段，底色才由这里说了算（用户 2026-11-06）。
+ */
+.nb-cards .nb-card .nb-remove:hover {
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+  color: var(--ui-danger, #ef4444);
+  opacity: 1;
 }
 .nb-card-text {
   display: flex;
