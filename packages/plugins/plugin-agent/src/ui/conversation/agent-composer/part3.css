@@ -24,9 +24,10 @@
   width: 100%;
 }
 
-/* 选中态：当前模式高亮（用户 2026-11-07：之前选中也看不出是哪条） */
+/* 选中态：当前模式高亮（用户 2026-11-07：之前选中也看不出是哪条）。
+   用中性灰，不跟主题强调色走（用户口径：直接默认灰色就行）。 */
 .ac-review-item[aria-checked='true'] {
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 
 .ac-review-item[aria-checked='true'] .ac-option-label {
@@ -37,10 +38,6 @@
 .ac-option-icon {
   flex: none;
   color: var(--ui-ink-dim, #6b7280);
-}
-
-.ac-review-item[aria-checked='true'] .ac-option-icon {
-  color: var(--ui-accent-hover, #0e7490);
 }
 
 /* 对勾放在标题行右端：不再单独加一列（这行本来就是纵向 flex） */
