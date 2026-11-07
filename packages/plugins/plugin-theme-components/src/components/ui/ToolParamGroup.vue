@@ -136,8 +136,14 @@ const summary = computed(() => {
       </button>
     </PopoverTrigger>
 
+    <!--
+      统一定位：左对齐（align="start"）+ 向下（side="bottom"），与底栏/provider 面板同一口径。
+      以前这里写 align="end"（右对齐），于是「provider 面板的模型」左对齐、
+      「走 ToolParamGroup 的模型」右对齐 —— 用户 2026-11-08 截图指出的正是这个不一致。
+    -->
     <PopoverContent
-      align="end"
+      align="start"
+      side="bottom"
       :side-offset="4"
       :collision-padding="12"
       class="tpg-popover tpg-menu-body tpg-menu-body--blocks"
@@ -263,14 +269,24 @@ const summary = computed(() => {
  * - `max-width` 不超过视口可用宽度，窄屏也不会被顶出屏幕。
  */
 .tpg-popover {
+  /* 纵向 flex：面板封顶后让内容区（.tpg-menu）自己滚 */
+  display: flex;
+  flex-direction: column;
   /* 宽度随内容（比例 6 列），但不能超过视口可用宽度，否则右侧会被裁掉 */
   width: max-content;
-  min-width: 220px;
+  /* 最小 340（用户 2026-11-08：下拉最小宽度统一 340） */
+  min-width: 340px;
   max-width: min(420px, calc(100vw - 32px));
+  /*
+   * 高度上限 + 内部滚动（用户 2026-11-08 截图）：比例 14 格 + 分辨率 + 数量
+   * 会让面板长到 600px+，既没滚动也超出弹窗。这里封顶后由 .tpg-menu 自己滚。
+   */
+  max-height: min(420px, 60vh);
   padding: 16px;
   gap: 12px;
   border-radius: var(--mct-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
+  overflow: hidden;
 }
 /* 参数面板里的滑块走**黑白**（用户口径 2026-10-12：这里不用主题色，与右键菜单同口径）：
    填充与圆球改用主按钮那档深墨，白底黑轨一眼能看出进度，不再是一条青色的条。 */
@@ -283,6 +299,11 @@ const summary = computed(() => {
   flex-direction: column;
   gap: 6px;
   min-width: 260px;
+  /* 面板封顶后，内容在这里滚（与底栏参数面板同一做法） */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 /* 块间 gap 12 + 块间分割线（参考稿在「比例网格」与「滑块」之间就是一条 border-t） */
 .tpg-menu--blocks {
