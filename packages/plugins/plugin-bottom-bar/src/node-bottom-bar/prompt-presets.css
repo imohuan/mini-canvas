@@ -210,19 +210,33 @@
   text-align: right;
 }
 
-/* —— 新建对话框 —— */
+/* —— 新建对话框 ——
+ * 外层 .nbp-dialog 是 shadcn 的 DialogContent：底色、圆角、边框、阴影、居中、焦点陷阱
+ * 全部交给组件库与全局主题（host.css 对 dialog-content 统一收边、清 padding），
+ * 这里**不覆盖**它，只提供宽度上限；内边距放在 .nbp-dialog-body 里。
+ */
 .nbp-dialog {
-  gap: 14px;
-  padding: 20px;
-  border-radius: 16px;
-  background: var(--ui-panel, #fff);
-  color: var(--ui-ink, #18202b);
-  border: 1px solid var(--ui-line, #e2e5ea);
   width: min(460px, calc(100vw - 32px));
+}
+.nbp-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+.nbp-dialog-head {
+  gap: 4px;
 }
 .nbp-dialog-title {
   font-size: 15px;
   font-weight: 600;
+  line-height: 1.4;
+  color: var(--ui-ink, #18202b);
+}
+.nbp-dialog-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ui-ink-mute, #8c95a3);
 }
 .nbp-field {
   display: flex;
@@ -240,12 +254,13 @@
   background: var(--ui-input-bg, var(--ui-hover-soft, rgb(0 0 0 / 0.04)));
   color: var(--ui-ink, #18202b);
 }
+.nbp-input {
+  height: 36px;
+}
 .nbp-textarea {
   min-height: 108px;
   resize: vertical;
 }
 .nbp-dialog-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  margin-top: 2px;
 }

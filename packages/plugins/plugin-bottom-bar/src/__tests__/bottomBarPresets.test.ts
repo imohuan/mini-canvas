@@ -61,4 +61,21 @@ describe('预设提示词面板：只用全局组件', () => {
     expect(PRESETS).not.toContain('@mini-canvas/ui-kit-shadcn')
     expect(PRESETS).not.toContain('vue-sonner')
   })
+
+  it('新建弹窗打开前收起预设面板（菜单层不能压住对话框）', () => {
+    const startCreate = PRESETS.slice(PRESETS.indexOf('function startCreate'), PRESETS.indexOf('function saveDraft'))
+    expect(startCreate).toContain('open.value = false')
+    // 先关面板，再开弹窗
+    expect(startCreate.indexOf('open.value = false')).toBeLessThan(startCreate.indexOf('creating.value = true'))
+  })
+
+  it('弹窗正文包在内边距容器里（host.css 把 dialog-content 的 padding / gap 清零）', () => {
+    expect(PRESETS).toContain('<div class="nbp-dialog-body">')
+    const css = read('../node-bottom-bar/prompt-presets.css')
+    const body = css.slice(css.indexOf('.nbp-dialog-body {'), css.indexOf('}', css.indexOf('.nbp-dialog-body {')))
+    expect(body).toContain('padding')
+    // 内边距不能直接写在外层 DialogContent 的类上：会被 !important 规则吃掉
+    const outer = css.slice(css.indexOf('.nbp-dialog {'), css.indexOf('}', css.indexOf('.nbp-dialog {')))
+    expect(outer).not.toContain('padding')
+  })
 })

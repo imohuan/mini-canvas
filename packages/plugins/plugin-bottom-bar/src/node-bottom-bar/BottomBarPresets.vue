@@ -48,6 +48,7 @@ const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
 const InputGroupInput = useUiComponent('InputGroupInput')
 const ScrollArea = useUiComponent('ScrollArea')
+const Label = useUiComponent('Label')
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
 const DialogDescription = useUiComponent('DialogDescription')
@@ -117,6 +118,14 @@ const canSaveDraft = computed(() => draftContent.value.trim().length > 0)
 function startCreate(): void {
   draftName.value = ''
   draftContent.value = ''
+  /*
+   * 打开新建弹窗前先收起预设面板（用户 2026-11-07 截图）。
+   *
+   * 为什么要关：面板是 Teleport 到 body 的菜单层（--ui-layer-menu，100002），
+   * 对话框在下面一档（--ui-layer-dialog，100000），两个同时开着面板就压在弹窗上。
+   * 也符合「同屏只开一个浮层」的规矩。弹窗本身仍要能在里面开下拉，所以不抬弹窗层级。
+   */
+  open.value = false
   creating.value = true
   void nextTick(() => {
     // Input 是组件，$el 才是原生元素；拿不到就退回 querySelector（同屏只有一个新建框）
@@ -249,40 +258,49 @@ function previewOf(content: string): string {
 
   <Dialog v-model:open="creating">
     <DialogContent class="nbp-dialog" :show-close-button="false">
-      <DialogHeader>
-        <DialogTitle class="nbp-dialog-title">新建预设</DialogTitle>
-        <DialogDescription class="sr-only">填写预设名称和内容，保存后直接填入输入框</DialogDescription>
-      </DialogHeader>
+      <!--
+        正文必须多包一层：组件库 host.css 对 [data-slot='dialog-content'] 强制
+        padding:0 / gap:0 !important（全站弹窗共用这条规矩）。内边距写在外层会被吃掉，
+        标题与输入框就贴到面板边上 —— 用户 2026-11-07 截图里的样子。
+      -->
+      <div class="nbp-dialog-body">
+        <DialogHeader class="nbp-dialog-head">
+          <DialogTitle class="nbp-dialog-title">新建预设</DialogTitle>
+          <DialogDescription class="nbp-dialog-desc">填写预设名称和内容，保存后直接填入输入框</DialogDescription>
+        </DialogHeader>
 
-      <label class="nbp-field">
-        <span class="nbp-label">预设名称</span>
-        <Input
-          ref="nameInput"
-          v-model="draftName"
-          class="nbp-input"
-          placeholder="请输入预设名称"
-          maxlength="40"
-          @keydown.stop
-          @keydown.enter.prevent="saveDraft"
-        />
-      </label>
+        <div class="nbp-field">
+          <Label for="nbp-preset-name" class="nbp-label">预设名称</Label>
+          <Input
+            id="nbp-preset-name"
+            ref="nameInput"
+            v-model="draftName"
+            class="nbp-input"
+            placeholder="请输入预设名称"
+            maxlength="40"
+            @keydown.stop
+            @keydown.enter.prevent="saveDraft"
+          />
+        </div>
 
-      <label class="nbp-field">
-        <span class="nbp-label">预设内容</span>
-        <Textarea
-          v-model="draftContent"
-          class="nbp-textarea"
-          rows="5"
-          placeholder="请输入预设内容…"
-          @keydown.stop
-          @keydown.enter.stop
-        />
-      </label>
+        <div class="nbp-field">
+          <Label for="nbp-preset-content" class="nbp-label">预设内容</Label>
+          <Textarea
+            id="nbp-preset-content"
+            v-model="draftContent"
+            class="nbp-textarea"
+            rows="5"
+            placeholder="请输入预设内容…"
+            @keydown.stop
+            @keydown.enter.stop
+          />
+        </div>
 
-      <DialogFooter class="nbp-dialog-foot">
-        <Button variant="outline" type="button" @click="creating = false">取消</Button>
-        <Button variant="default" type="button" :disabled="!canSaveDraft" @click="saveDraft">保存</Button>
-      </DialogFooter>
+        <DialogFooter class="nbp-dialog-foot">
+          <Button variant="outline" type="button" @click="creating = false">取消</Button>
+          <Button variant="default" type="button" :disabled="!canSaveDraft" @click="saveDraft">保存</Button>
+        </DialogFooter>
+      </div>
     </DialogContent>
   </Dialog>
 </template>
