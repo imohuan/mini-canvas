@@ -35,10 +35,16 @@ const props = withDefaults(
     disabled?: boolean
     /** 主题相关的几个值（iframe 拿不到外层 CSS 变量，只能传进来） */
     theme?: Record<string, string>
-    /** 默认高度上限（px）：面板自己会报真实高度，这里只兜底 */
+    /** 默认高度上限（px）：到上限后交给外部滚动容器；无限高就传 Infinity */
     maxHeight?: number
+    /**
+     * 是否**自己滚**。
+     * false（默认）= 不限高，把内容真实高度报给外面，由外面的 ScrollArea 滚；
+     * true = 面板自己滚（没有输入框、直接占底栏那一行的场景用）。
+     */
+    scrollSelf?: boolean
   }>(),
-  { values: () => ({}), params: () => [], disabled: false, maxHeight: 320 },
+  { values: () => ({}), params: () => [], disabled: false, maxHeight: Infinity, scrollSelf: false },
 )
 
 const emit = defineEmits<{
@@ -48,13 +54,56 @@ const emit = defineEmits<{
   run: []
   /** 面板要提示一句话 */
   notify: [payload: { level: 'info' | 'success' | 'error'; message: string }]
+  /** 面板内容的自然高度变化（外层的滚动容器按它决定高度） */
+  height: [height: number]
 }>()
 
 const frame = ref<HTMLIFrameElement | null>(null)
+/** 根元素：读它上面真实的主题变量（主题可能被设置面板改写，读「此刻算出来的值」） */
+const hostEl = ref<HTMLElement | null>(null)
 /** 面板自己报的高度；没报之前用一个不太高也不塌的值 */
 /** 内容的自然高度；0 = 还没量到，此时先给一个最小可视高度，别让面板塌成一条线 */
 const measured = ref(0)
-const height = computed(() => (measured.value > 0 ? Math.min(measured.value, props.maxHeight) : 28))
+const height = computed(() => {
+  if (measured.value <= 0) return 28
+  return props.scrollSelf ? Math.min(measured.value, props.maxHeight) : measured.value
+})
+watch(height, (h) => emit('height', h), { immediate: true })
+
+/**
+ * 把主题变量读成**真实色值**再交给面板。
+ *
+ * 为什么不能直接把 `var(--ui-panel)` 发进去：iframe 是独立文档，没有外层那几个变量，
+ * `var()` 在里面解析不出来 → 面板里所有颜色都失效（用户 2026-11-07 截图：白底上一片灰）。
+ * 也不能写死：主题工作台能改色，写死就会和界面不一致。
+ * 所以在宿主里 getComputedStyle 读一次，读不到再用 props.theme / 兜底值。
+ */
+function readTheme(): Record<string, string> {
+  const out: Record<string, string> = { ...(props.theme ?? {}) }
+  const el = hostEl.value
+  if (!el) return out
+  const cs = getComputedStyle(el)
+  const names: Record<string, string[]> = {
+    panel: ['--ui-panel', '--ui-overlay-solid', '--ui-surface'],
+    ink: ['--ui-ink'],
+    inkDim: ['--ui-ink-dim', '--ui-ink-mute'],
+    line: ['--ui-line'],
+    accent: ['--ui-accent'],
+    chip: ['--ui-chip', '--ui-hover-soft'],
+    danger: ['--ui-danger', '--ui-error'],
+    radius: ['--ui-radius', '--radius'],
+    font: ['--ui-font', '--ui-font-family'],
+  }
+  for (const [key, vars] of Object.entries(names)) {
+    for (const v of vars) {
+      const got = cs.getPropertyValue(v).trim()
+      if (got) { out[key] = got; break }
+    }
+  }
+  // 深色 / 亮色：面板据此决定默认文字色（有些主题不设 --ui-ink）
+  out.dark = document.documentElement.classList.contains('dark') ? 'true' : 'false'
+  return out
+}
 
 /**
  * 注入到面板里的桥接脚本。
@@ -77,8 +126,21 @@ const BRIDGE = '<' + 'scr' + 'ipt>' + `
     var d = ev.data || {}
     if (d.type !== 'canvas:panel:init' && d.type !== 'canvas:panel:update') return
     if (d.type === 'canvas:panel:init') pending = d
+    // 把宿主主题色写成**真实 CSS 变量**，面板里直接 var(--ui-panel) 就能用
+    applyTheme(d.theme || {})
     for (var i = 0; i < listeners.length; i++) listeners[i](d)
   })
+  function applyTheme(t) {
+    var root = document.documentElement
+    var map = {
+      '--ui-panel': t.panel, '--ui-ink': t.ink, '--ui-ink-dim': t.inkDim,
+      '--ui-line': t.line, '--ui-accent': t.accent, '--ui-chip': t.chip,
+      '--ui-danger': t.danger, '--ui-radius': t.radius
+    }
+    for (var k in map) { if (map[k]) root.style.setProperty(k, map[k]) }
+    if (t.dark === 'true') root.style.colorScheme = 'dark'
+    if (t.font) document.body.style.fontFamily = t.font
+  }
   // 高度自动上报：内容长高/变矮都告诉宿主，provider 不用自己算。
   // 量的是**内容本身**的边界（不是 scrollHeight / 视口高度，那两个永远 >= 当前 iframe 高）。
   function reportHeight() {
@@ -90,6 +152,7 @@ const BRIDGE = '<' + 'scr' + 'ipt>' + `
   }
   function startObserving() {
     if (!document.body) return
+    window.api.reportHeight = reportHeight
     if (window.ResizeObserver) new ResizeObserver(reportHeight).observe(document.body)
     reportHeight()
   }
@@ -168,7 +231,7 @@ function pushContext(kind: 'canvas:panel:init' | 'canvas:panel:update'): void {
     model: props.model ?? '',
     nodeType: props.nodeType ?? '',
     disabled: props.disabled === true,
-    theme: plain(props.theme),
+    theme: plain(readTheme()),
   }
   try {
     win.postMessage(payload, '*')
@@ -190,6 +253,20 @@ function onLoad(): void {
   pushContext('canvas:panel:init')
 }
 
+/**
+ * 主题变量变了（切换亮暗 / 主题工作台改色）就重发一次上下文。
+ * 只监听根节点上的 class 与 style：不用轮询，也不会因为画布其它重绘而空发。
+ */
+let themeWatch: MutationObserver | null = null
+onMounted(() => {
+  themeWatch = new MutationObserver(() => pushContext('canvas:panel:update'))
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] })
+})
+onBeforeUnmount(() => {
+  themeWatch?.disconnect()
+  themeWatch = null
+})
+
 watch(
   () => [props.values, props.disabled],
   () => pushContext('canvas:panel:update'),
@@ -206,7 +283,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 </script>
 
 <template>
-  <div class="nhp" :style="{ height: height + 'px' }">
+  <div ref="hostEl" class="nhp" :style="{ height: height + 'px' }">
     <iframe
       ref="frame"
       class="nhp-frame"

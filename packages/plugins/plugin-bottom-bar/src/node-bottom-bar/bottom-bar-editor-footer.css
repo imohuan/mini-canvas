@@ -583,6 +583,24 @@
   border: 1px solid var(--ui-line, #e2e5ea);
   box-shadow: var(--ui-shadow-lg, 0 18px 48px rgb(15 23 42 / 0.18));
 }
+/*
+ * 下拉里的滚动容器：**唯一**的滚动口。
+ * 面板（iframe）不限高，内容再长也只会把这里撑到上限，然后由 ScrollArea 滚。
+ * 上限按可视高度算（视口 60%），小屏也不会顶出屏幕。
+ */
+.nb-param-scroll {
+  max-height: min(360px, 52vh);
+}
+/*
+ * 关键：ScrollArea 的视口是 `size-full`（height:100%），它需要一个**有确定高度**的父级
+ * 才会真的滚；只写 max-height 时父级仍是内容高度，视口跟着内容长高，滚动条永远不出。
+ * 所以这里给容器一个确定高度 + 上限：内容短时由 JS 高度撑开（变量 --nb-panel-h），
+ * 内容长时封顶在 360 / 52vh。
+ */
+.nb-param-pop .nb-param-scroll,
+.nb-param-pop .nb-param-scroll [data-slot='scroll-area-viewport'] {
+  height: min(var(--nb-panel-h, 240px), 360px, 52vh);
+}
 
 /* 下拉行：图标 + 名称 + 选中勾（名称过长省略） */
 .nb-model-item {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
@@ -63,12 +63,18 @@ const paramSummary = computed(() => {
   }
   return parts.join(' · ')
 })
+/**
+ * 面板内容的自然高度（由 iframe 报上来）。
+ * 用来给外层 ScrollArea 一个确定高度：短内容刚好贴住，长内容封顶后滚动。
+ */
+const panelHeight = ref(240)
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 const Button = useUiComponent('Button')
 const Popover = useUiComponent('Popover')
 const PopoverTrigger = useUiComponent('PopoverTrigger')
 const PopoverContent = useUiComponent('PopoverContent')
+const ScrollArea = useUiComponent('ScrollArea')
 /**
  * 模型下拉改用 DropdownMenu（用户 2026-11-06 指定）。
  *
@@ -185,20 +191,29 @@ function pickAction(value: string): void {
             :side-offset="4"
             :collision-padding="12"
             class="nb-param-pop"
+            :style="{ '--nb-panel-h': panelHeight + 'px' }"
           >
-            <HtmlPanelFrame
-              :html="panelHtml"
-              :values="values"
-              :params="paramDefs"
-              :action-id="currentId"
-              :model="currentActionLabel"
-              :disabled="running"
-              :theme="panelTheme"
-              :max-height="360"
-              @set-values="(v: Record<string, unknown>) => emit('panelValues', v)"
-              @run="emit('run')"
-              @notify="(p: { level: 'info' | 'success' | 'error'; message: string }) => emit('panelNotify', p)"
-            />
+            <!--
+              滚动交给 shadcn 的 ScrollArea（用户口径 2026-11-07）：
+              iframe 本身不限高，把内容的真实高度报上来；超过 popover 高度时由这里滚。
+              不这样做的后果：iframe 里长出一个原生滚动条，和外层两套滚动打架，
+              观感就是截图里那条灰长条 + 面板被截断。
+            -->
+            <ScrollArea class="nb-param-scroll">
+              <HtmlPanelFrame
+                :html="panelHtml"
+                :values="values"
+                :params="paramDefs"
+                :action-id="currentId"
+                :model="currentActionLabel"
+                :disabled="running"
+                :theme="panelTheme"
+                @height="(h: number) => (panelHeight = h)"
+                @set-values="(v: Record<string, unknown>) => emit('panelValues', v)"
+                @run="emit('run')"
+                @notify="(p: { level: 'info' | 'success' | 'error'; message: string }) => emit('panelNotify', p)"
+              />
+            </ScrollArea>
           </PopoverContent>
         </Popover>
       </div>
