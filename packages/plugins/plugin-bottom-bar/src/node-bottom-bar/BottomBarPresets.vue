@@ -178,16 +178,14 @@ const filtered = computed(() => {
 const disabledCount = computed(() => filterPresets(allPresets.value, query.value).filter((p) => !canApply.value(p)).length)
 
 /**
- * 列表高度：按真实条数给 ScrollArea 一个确定高度。
+ * 列表高度：**固定**，不跟条数变（用户 2026-11-07：切换页签时高度跳来跳去）。
  *
- * 为什么不用固定 280px：只有一条时面板会空出一大片（用户口径：弹层应该贴着内容）。
- * 三条以上封顶，再多的靠内部滚动；高度只由条数决定，搜索后条数变了跟着缩。
+ * 以前按条数算高度（弹层贴着内容），代价是切页签 / 搜索时面板一跳一跳。
+ * 现在给一个固定高度：条目少时空一点，但所有页签、搜索前后都是同一个高度，
+ * 切换不再跳动。条目多时靠 ScrollArea 内部滚动。
  */
-const LIST_ITEM_HEIGHT = 73
-const listStyle = computed<Record<string, string>>(() => {
-  const n = Math.max(1, filtered.value.length)
-  return { height: 'min(' + n * LIST_ITEM_HEIGHT + 'px, 46vh)' }
-})
+const LIST_HEIGHT = '256px'
+const listStyle = computed<Record<string, string>>(() => ({ height: LIST_HEIGHT }))
 
 const baseUrl = (): string => resolveAgentBaseUrl(ctx)
 

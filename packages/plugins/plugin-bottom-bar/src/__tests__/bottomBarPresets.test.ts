@@ -83,6 +83,18 @@ describe('预设提示词面板：只用全局组件', () => {
     expect(PRESETS).toMatch(/<PopoverContent\s+v-if="!creating"/)
   })
 
+  /**
+   * 用户 2026-11-07：切换页签时面板高度跳来跳去。
+   * 列表高度必须是常数（不读 filtered.length），条目多时靠内部滚动。
+   */
+  it('列表高度固定，不跟条数缩放', () => {
+    const script = PRESETS.slice(0, PRESETS.indexOf('</script>'))
+    const m = script.match(/const LIST_HEIGHT = '([0-9]+)px'/)
+    expect(m).not.toBeNull()
+    // 高度计算里不允许再出现 filtered / 条数
+    expect(script).not.toMatch(/Math\.max\(1,\s*filtered/)
+  })
+
   it('弹窗正文包在内边距容器里（host.css 把 dialog-content 的 padding / gap 清零）', () => {
     expect(PRESETS).toContain('<div class="nbp-dialog-body">')
     const css = read('../node-bottom-bar/prompt-presets.css')
