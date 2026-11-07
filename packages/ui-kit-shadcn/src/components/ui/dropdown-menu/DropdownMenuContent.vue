@@ -54,7 +54,22 @@ const contentBindings = computed(() => {
     ...rest,
     ...forwarded.value,
     sideOffset: effectiveSideOffset.value,
-    class: props.class,
+    /**
+     * data-slot 必须在这里显式给：v-bind 集中透传后，模板上的静态 data-slot 不再渲染
+     * —— 而 ui-layers.css / host.css 的层级与外观规则全靠它选中（漏掉时菜单 z-50
+     * 被弹窗 100000 压住，实测弹窗里的模型菜单整个被盖住）。子组件自己的 slot 名在
+     * forwarded 里不带，这里固定为 content。
+     */
+    'data-slot': 'dropdown-menu-content',
+    /**
+     * 默认外观类必须保留在 JS 合并里（不能只写在模板上）：重构成 v-bind 集中透传后，
+     * 模板上的 class 字符串不再渲染 —— 实测「生成模型」面板整个变透明（用户 2026-11-07
+     * 截图：卡片/分栏面板背景穿透）。这里 = reka 原默认类 + 调用方 class。
+     */
+    class: [
+      'bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 flex min-w-48 flex-col rounded-3xl p-1.5 shadow-lg ring-1 duration-100 cn-menu-translucent z-50 max-h-(--reka-dropdown-menu-content-available-height) w-(--reka-dropdown-menu-trigger-width) origin-(--reka-dropdown-menu-content-transform-origin) overflow-visible',
+      props.class,
+    ],
     ...(callerStyle !== undefined ? { style: callerStyle } : {}),
   }
 })
