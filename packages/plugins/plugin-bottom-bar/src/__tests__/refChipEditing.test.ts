@@ -87,8 +87,15 @@ describe('标签左侧图标：hover 换铅笔 + 图标高亮（用户 2026-11-0
   })
 
   it('--icon-hot 时铅笔变纯前景色（只改颜色，不加背景）', () => {
-    expect(CSS).toMatch(/\.resource-chip--icon-hot::after\s*\{[^}]*background-color:\s*var\(--ui-ink/)
+    // 规则和「:has(:hover)」共用一个选择器组，::after 后面是逗号，放宽匹配。
+    expect(CSS).toMatch(/\.resource-chip--icon-hot::after[\s,][\s\S]{0,240}background-color:\s*var\(--ui-ink/)
     expect(CSS).not.toMatch(/radial-gradient/)
-    expect(CSS).not.toMatch(/\.resource-chip--hot\s*\{[^}]*background:/)
+    expect(CSS).not.toMatch(/\.resource-chip--hot\s*\{[^}]*background:\s*(?!none)/)
+  })
+
+  it('类型图标静息就是灰（不依赖 --editable/--hot，用户 2026-11-07 复述的口径）', () => {
+    const css = block('.nb-editor .resource-chip-icon[data-icon]')
+    expect(css).toMatch(/background-color:\s*currentColor/)
+    expect(css).toMatch(/color:\s*color-mix\(/)
   })
 })

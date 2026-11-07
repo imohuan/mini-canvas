@@ -260,6 +260,28 @@ describe('空态与失效态', () => {
     expect(html).not.toContain('<img')
   })
 
+  /**
+   * 回归（用户 2026-11-07：视频节点偶尔纯白）：
+   * 帧图缺失时舞台要铺近黑底，不能露出卡片亮面 —— 但**只对有视频的节点生效**，
+   * 空节点仍要保持卡片底色（否则又变成一块黑）。
+   */
+  it('有视频 → 舞台带 has-media（帧图缺失时铺近黑底）', async () => {
+    const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1600, videoHeight: 900 })
+    const stageClass = (html.match(/class="[^"]*video-stage[^"]*"/) ?? [''])[0]
+    expect(stageClass).toContain('video-stage')
+    expect(stageClass).toContain('has-media')
+    // 样式在 <style scoped> 里，SSR 输出不含它：直接读源文件
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const src = await fs.readFile(path.resolve(__dirname, '../VideoContent.vue'), 'utf8')
+    expect(src).toMatch(/\.video-stage\.has-media\s*\{[^}]*background:\s*#050505/)
+  })
+
+  it('没有视频 → 舞台不带 has-media（空节点保持卡片底色）', async () => {
+    const html = await render('v1', {})
+    expect(html).not.toContain('has-media')
+  })
+
   it('没有视频 → 不渲染底部渐变衬底（空节点保持白板底色）', async () => {
     // 用户实测：没有视频时底部挂着一块灰渐变，看着像没加载完的画面。
     // 衬底只是播放控件的背景，空节点不该有它。

@@ -213,7 +213,12 @@ export async function unifiedThumbOf(
   inflight.set(key, task)
   try {
     const url = await task
-    done.set(key, url)
+    /**
+     * 只缓存**成功**结果（2026-11-07 修白屏）：
+     * 生成失败（解码错 / 服务器没回图）时把 null 也存进 done，同一个会话里
+     * 永远拿不到重试机会，节点上就一直空着。失败不进缓存，下一次取图重新生成。
+     */
+    if (url) done.set(key, url)
     return url
   } finally {
     inflight.delete(key)

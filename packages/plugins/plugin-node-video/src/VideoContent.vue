@@ -259,7 +259,8 @@ watch(videoUrl, (prev) => {
          空节点必须保持卡片本身的底色，否则底部会挂着一条没来由的灰带（用户实测报的）。 -->
     <div v-if="videoUrl && !broken && !cropping" class="vc-scrim" :class="{ 'is-hidden': !active }"
       aria-hidden="true"></div>
-    <div ref="stageRef" class="video-stage" :class="{ 'is-framed': isFramed, 'is-cropping': cropping }"
+    <div ref="stageRef" class="video-stage"
+      :class="{ 'is-framed': isFramed, 'is-cropping': cropping, 'has-media': Boolean(videoUrl) && !broken }"
       @dblclick="onStageDblClick">
       <template v-if="videoUrl && !broken">
         <!--
@@ -383,6 +384,18 @@ watch(videoUrl, (prev) => {
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+/**
+ * 有视频、但帧图还没到手（或抓帧失败正在重试）时，舞台先铺近黑底：
+ * 以前这里完全透明，露出卡片亮色表面，用户看到的就是「一块白」，
+ * 与「视频真的是白场画面」分不清。近黑底和播放时的信箱黑边同色，
+ * 画面一到（img / video）就被盖住。
+ *
+ * ★ 只对「有视频」的舞台生效：空节点 / 失效节点必须保持卡片自己的底色
+ *   （用户 2026-10-30 报过空节点底部挂灰带、纯黑块的问题）。
+ */
+.video-stage.has-media {
+  background: #050505; /* 主题色白名单: 视频信箱黑边随画面内容恒定 */
 }
 
 .video-media {

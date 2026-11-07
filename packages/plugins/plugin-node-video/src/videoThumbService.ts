@@ -22,7 +22,13 @@ export const VIDEO_THUMB_MIN_SHORT_SIDE = 50
 export const SOLID_FRAME_RATIO = 0.5
 
 /** 依次尝试的取帧时刻（秒）：开头 → 稍后 → 更后，避开片头黑场/白场 */
-export const VIDEO_THUMB_SEEK_POINTS = [0, 0.5, 1.5, 3]
+export const VIDEO_THUMB_SEEK_POINTS = [0, 0.5, 1.5, 3, 5, 8]
+
+/** 近白帧判定阈值：RGB 全部超过它就当作"没内容"的白场帧 */
+export const NEAR_WHITE_THRESHOLD = 245
+
+/** 近白像素占比超过这个值就跳过该帧（与 SOLID_FRAME_RATIO 同一套口径） */
+export const NEAR_WHITE_RATIO = 0.7
 
 /**
  * 算缩略图的输出尺寸（纯函数，方便直接断言）。
@@ -59,6 +65,8 @@ export async function captureVideoThumb(
     maxWidth?: number
     seekPoints?: number[]
     solidRatio?: number
+    /** 近白帧占比阈值（缺省 NEAR_WHITE_RATIO）；近白帧按"无内容"跳过 */
+    nearWhiteRatio?: number
     /**
      * 取景框（视频像素坐标）：用户裁过的节点只该看框内那块。
      *
@@ -164,11 +172,14 @@ export async function captureVideoThumb(
         else c2d.drawImage(video, 0, 0, cw, ch)
       } catch { continue }
 
-      // 纯色检测（用户要求：同色 > 50% 就跳过，找后面的帧）
+      // 纯色 / 近白检测（用户要求：同色 > 50% 就跳过，找后面的帧；
+      // 2026-11-07 补近白：白底片头的帧会被同色检测放行，节点上就是一块"白屏"）
       let solid = false
       try {
         const data = c2d.getImageData(0, 0, cw, ch).data
-        solid = isSolidFrame(data, cw, ch, opts.solidRatio)
+        solid =
+          isSolidFrame(data, cw, ch, opts.solidRatio) ||
+          isNearWhiteFrame(data, cw, ch, opts.nearWhiteRatio)
       } catch {
         // 跨域污染等读不了像素：无法判定纯色，先当可用
         solid = false
@@ -224,5 +235,38 @@ export function isSolidFrame(
     }
   }
   return sampled > 0 && solid / sampled > ratio
+}
+
+/**
+ * 判断一帧是否「近白」：绝大多数像素都接近纯白 → 这帧没有可看的内容。
+ *
+ * 为什么单独立一条：isSolidFrame 以**第一个采样点**为基准比色，白底 +
+ * 局部人物的帧会被放行；但把它当封面挂出去，卡片上就是一块白 ——
+ * 用户报的「视频显示成纯白背景、hover 播放才有画面」就是这种帧被存进了缓存。
+ */
+export function isNearWhiteFrame(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  ratio = NEAR_WHITE_RATIO,
+): boolean {
+  if (!pixels || width <= 0 || height <= 0) return true
+  const step = 4
+  let sampled = 0
+  let nearWhite = 0
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const i = (y * width + x) * 4
+      sampled += 1
+      if (
+        pixels[i] >= NEAR_WHITE_THRESHOLD &&
+        pixels[i + 1] >= NEAR_WHITE_THRESHOLD &&
+        pixels[i + 2] >= NEAR_WHITE_THRESHOLD
+      ) {
+        nearWhite += 1
+      }
+    }
+  }
+  return sampled > 0 && nearWhite / sampled > ratio
 }
 

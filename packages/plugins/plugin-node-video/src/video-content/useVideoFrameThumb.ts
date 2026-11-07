@@ -61,14 +61,23 @@ export function useVideoFrameThumb(options: VideoFrameThumbOptions) {
           width: videoWidth.value,
           height: videoHeight.value,
         })
-        const url = await unifiedThumbOf(src, frameResources(), {
-          tier: wantTier,
-          width: box.width,
-          height: box.height,
-          quality: tierCfg.value.quality,
-          frameWidth: videoWidth.value,
-          frameHeight: videoHeight.value,
-        })
+        /**
+         * 失败重试（2026-11-07 修白屏）：第一次截帧失败（视频还没缓冲好 /
+         * 网络抖动）就返回 null。以前这里直接认输，节点上永远空着；
+         * 现在等一小会儿再试两次 —— 命中一次就有图，全失败才真的放弃。
+         */
+        let url: string | null = null
+        for (let attempt = 0; attempt < 3 && !url; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 400))
+          url = await unifiedThumbOf(src, frameResources(), {
+            tier: wantTier,
+            width: box.width,
+            height: box.height,
+            quality: tierCfg.value.quality,
+            frameWidth: videoWidth.value,
+            frameHeight: videoHeight.value,
+          })
+        }
         unifiedThumb.value = url ?? ''
       } catch {
         unifiedThumb.value = ''
