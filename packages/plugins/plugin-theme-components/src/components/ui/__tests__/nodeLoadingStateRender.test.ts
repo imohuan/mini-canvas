@@ -9,10 +9,33 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import NodeLoadingState from '../NodeLoadingState.vue'
 
-function render(props: Record<string, unknown>): Promise<string> {
+/**
+ * 带渲染上下文渲染：档位要从 flow.viewport.zoom 与 settings 里读，
+ * 不给上下文就是「默认阈值 + zoom=1」= 第 1 档（下面大多数用例就是这种）。
+ */
+function render(
+  props: Record<string, unknown>,
+  opts: { zoom?: number; settings?: Record<string, unknown> } = {},
+): Promise<string> {
   const app = createSSRApp({ render: () => h(NodeLoadingState, props) })
+  if (opts.zoom !== undefined) {
+    const settingsMap = opts.settings ?? {}
+    const settingsSvc = {
+      get: (key: string) => settingsMap[key],
+      onChange: () => ({ dispose: () => {} }),
+    }
+    const renderCtx = {
+      ctx: {
+        get: (name: string) => (name === 'settings' ? settingsSvc : undefined),
+        tryGet: (name: string) => (name === 'settings' ? settingsSvc : undefined),
+      },
+      flow: { viewport: { value: { zoom: opts.zoom } } },
+    } as unknown as CanvasRenderContext
+    app.provide(RENDER_CONTEXT_KEY, renderCtx)
+  }
   return renderToString(app)
 }
 
@@ -79,5 +102,60 @@ describe('NodeLoadingState', () => {
     const html = await renderToString(app)
     expect(html).toContain('probe-cancel')
     expect(html).toContain('取消')
+  })
+
+  /**
+   * 用户口径 2026-11-08：加载态要分档，不同档位显示不同 UI。
+   *
+   * 三档的差别都在 DOM 上可验证：第 1 档有状态词与耗时；第 2 档去掉耗时、保留文案；
+   * 第 3 档只剩中心数字（或光圈），不写状态词与文案。
+   */
+  it('★ 第 1 档（放大）：状态词 + 耗时 + 文案 + 取消位都在', async () => {
+    const html = await render(
+      { percent: 42, message: '生成中…', startedAt: Date.now() - 3000 },
+      { zoom: 1 },
+    )
+    expect(html).toContain('is-tier1')
+    expect(html).toContain('ld-top')
+    expect(html).toContain('ld-timer')
+    expect(html).toContain('生成中')
+    expect(html).toContain('生成中…')
+  })
+
+  it('★ 第 2 档（缩小）：去掉耗时，保留阶段文案', async () => {
+    const html = await render(
+      { percent: 42, message: '生成中…', startedAt: Date.now() - 3000 },
+      { zoom: 0.5 },
+    )
+    expect(html).toContain('is-tier2')
+    expect(html).not.toContain('ld-top')
+    expect(html).not.toContain('ld-timer')
+    expect(html).toContain('生成中…')
+  })
+
+  it('★ 第 3 档（缩到很小）：只留中心数字，不写状态词与文案', async () => {
+    const html = await render({ percent: 42, message: '生成中…' }, { zoom: 0.2 })
+    expect(html).toContain('is-tier3')
+    expect(html).toContain('>42<')
+    expect(html).not.toContain('ld-top')
+    expect(html).not.toContain('ld-prompt')
+    // 不确定态在第 3 档也要保留那个旋转光圈
+    const indet = await render({ message: '排队中' }, { zoom: 0.2 })
+    expect(indet).toContain('ld-spinner')
+    // 可见文案不画，但 aria-label 仍带着阶段文案给读屏用户
+    expect(indet).not.toContain('ld-prompt')
+    expect(indet).toContain('aria-label="排队中"')
+  })
+
+  it('★ 档位阈值走全局设置（nodeLoadingTier2Zoom / Tier3Zoom）', async () => {
+    // 把第二档阈值压到 0.2 以下 → 0.5 倍仍是第 1 档
+    const cfg = { nodeLoadingTier2Zoom: 0.15, nodeLoadingTier3Zoom: 0.1 }
+    const wide = await render({ percent: 10, message: 'x' }, { zoom: 0.5, settings: cfg })
+    expect(wide).toContain('is-tier1')
+
+    // 抬高阈值 → 同样的 0.5 倍进第 2 档
+    const cfg2 = { nodeLoadingTier2Zoom: 0.8, nodeLoadingTier3Zoom: 0.45 }
+    const narrow = await render({ percent: 10, message: 'x' }, { zoom: 0.55, settings: cfg2 })
+    expect(narrow).toContain('is-tier2')
   })
 })

@@ -21,8 +21,26 @@
  *
  * 不挡交互：根 `pointer-events: none`，只有 `#action` 插槽里的按钮自己接收指针 ——
  * 加载期间节点照样能拖、能选中。
+ *
+ * 分档（用户要求）：加载态长在所有节点上，缩小时不该还画一整片大字。按画布缩放分三档，
+ * 阈值来自全局设置 nodeLoadingTier2Zoom / nodeLoadingTier3Zoom（图片 / 视频 / 可视化共用），
+ * 规则在 @mini-canvas/theme-contract 的 nodeLoadingTier：
+ * - 第 1 档：完整（状态词 + 耗时 + 大百分比 + 文案 + 取消按钮）；
+ * - 第 2 档：精简（去耗时、字号小一号，其余保留）；
+ * - 第 3 档：极简（只留中心数字 / 光圈，不写状态词与文案）。
+ *
+ * 档位由画布缩放决定；容器很小时（例如 108px 的小卡片）另有一档「紧凑」只降字号，
+ * 两者叠加取更省的那个，保证字号不会把文案挤没。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  NODE_LOADING_TIER_PREFIX,
+  nodeLoadingTierKeys,
+  readNodeLoadingTiers,
+  resolveNodeLoadingTier,
+  type NodeLoadingTierConfig,
+} from '@mini-canvas/theme-contract'
+import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 const props = withDefaults(
   defineProps<{
@@ -56,6 +74,64 @@ const props = withDefaults(
 )
 
 const rootEl = ref<HTMLElement | null>(null)
+
+/**
+ * 全局档位：读阈值 + 跟着设置变化，并跟随画布缩放算出当前档位。
+ *
+ * 为什么这只件自己读、而不是让宿主传进来：它挂在每个节点的覆盖层里，
+ * 让所有调用方都记得接线等于逼大家抄一遍；自己读一处，以后加节点类型也不用改。
+ * 单测 / 极简宿主里拿不到渲染上下文时退回默认阈值，不抛错。
+ */
+let flow: { viewport?: { value?: { zoom?: number } } } | undefined
+let settingsSvc:
+  | {
+      get?(key: string): unknown
+      onChange?(cb: (key: string, value: unknown) => void): { dispose(): void }
+    }
+  | undefined
+try {
+  const render = useCanvasRender()
+  flow = render.flow as unknown as typeof flow
+  settingsSvc = render.ctx.tryGet<typeof settingsSvc>('settings')
+} catch {
+  // 不在画布渲染子树里（单测 / 面板预览）：用默认阈值
+}
+
+function readTierCfg(): NodeLoadingTierConfig {
+  const settings = settingsSvc
+  if (!settings || typeof settings.get !== 'function') {
+    return readNodeLoadingTiers(NODE_LOADING_TIER_PREFIX, undefined)
+  }
+  return readNodeLoadingTiers(NODE_LOADING_TIER_PREFIX, {
+    get: (name: string) => (name === 'settings' ? settings : undefined),
+  } as never)
+}
+
+const tierCfg = ref<NodeLoadingTierConfig>(readTierCfg())
+/**
+ * 当前画布缩放。
+ *
+ * flow.viewport 在不同装配下可能是 Ref，也可能是裸值 —— 两种都认，读不到就当 1（不猜）。
+ */
+const zoom = computed(() => {
+  const raw = flow?.viewport as unknown
+  const state =
+    raw && typeof raw === 'object' && 'value' in (raw as Record<string, unknown>)
+      ? (raw as { value?: { zoom?: unknown } }).value
+      : (raw as { zoom?: unknown } | undefined)
+  const z = state?.zoom
+  return typeof z === 'number' && Number.isFinite(z) && z > 0 ? z : 1
+})
+const canvasMinZoom = computed(() => {
+  const v = settingsSvc?.get?.('minZoom')
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined
+})
+/** 当前档位（1 完整 / 2 精简 / 3 极简） */
+const tier = computed(() => resolveNodeLoadingTier(zoom.value, tierCfg.value, canvasMinZoom.value))
+const tierSettingOff = settingsSvc?.onChange?.((key) => {
+  if (!nodeLoadingTierKeys(NODE_LOADING_TIER_PREFIX).includes(key)) return
+  tierCfg.value = readTierCfg()
+})
 
 /**
  * 小容器自动收紧版式。
@@ -129,6 +205,7 @@ onBeforeUnmount(() => {
   sizeObserver = null
   if (radiusTimer) clearInterval(radiusTimer)
   if (tickTimer) clearInterval(tickTimer)
+  tierSettingOff?.dispose()
 })
 </script>
 
@@ -136,7 +213,7 @@ onBeforeUnmount(() => {
   <div
     ref="rootEl"
     class="nls-root"
-    :class="[`is-${variant}`, `is-${tone}`, `is-${surface}`, { 'is-compact': compact }]"
+    :class="[`is-${variant}`, `is-${tone}`, `is-${surface}`, 'is-tier' + tier, { 'is-compact': compact }]"
     :style="radius ? { borderRadius: radius } : undefined"
     role="status"
     aria-live="polite"
@@ -161,7 +238,8 @@ onBeforeUnmount(() => {
 
     <!-- 整块形态 -->
     <template v-else>
-      <div class="ld-top">
+      <!-- 状态词 + 耗时：只在第 1 档画。第 2 档起文字会糊成一片，留着反而挡数字 -->
+      <div v-if="tier === 1" class="ld-top">
         <span class="ld-state">
           <i class="ld-dot" aria-hidden="true" />{{ label || (tone === 'error' ? '执行失败' : '生成中') }}
         </span>
@@ -181,10 +259,14 @@ onBeforeUnmount(() => {
         </svg>
       </div>
 
-      <p class="ld-prompt">{{ message || (tone === 'error' ? '执行失败' : '执行中…') }}</p>
-      <p v-if="tone === 'error' && hint" class="ld-hint">{{ hint }}</p>
+      <!-- 阶段文案 / 失败原因：第 3 档不写（缩到那份上只剩一句糊字） -->
+      <template v-if="tier !== 3">
+        <p class="ld-prompt">{{ message || (tone === 'error' ? '执行失败' : '执行中…') }}</p>
+        <p v-if="tone === 'error' && hint" class="ld-hint">{{ hint }}</p>
+      </template>
 
-      <div class="nls-action"><slot name="action" /></div>
+      <!-- 取消按钮：第 3 档不画（小到点不准，且此时用户本来就不该在这里操作） -->
+      <div v-if="tier !== 3" class="nls-action"><slot name="action" /></div>
     </template>
   </div>
 </template>
@@ -467,6 +549,42 @@ html.dark .nls-root.is-error {
 }
 
 /* 小容器：降一档字号，保住文案 */
+.nls-root.is-tier2 .ld-num {
+  font-size: 40px;
+}
+.nls-root.is-tier2 .ld-pct {
+  font-size: 18px;
+}
+.nls-root.is-tier2 .ld-spinner {
+  width: 40px;
+  height: 40px;
+}
+.nls-root.is-tier2 .ld-fail-mark {
+  width: 38px;
+  height: 38px;
+  font-size: 22px;
+}
+.nls-root.is-tier2 .ld-prompt {
+  font-size: 11px;
+}
+
+/* 第 3 档：只留中心数字 / 光圈，字号收小，其余元素模板里已经不渲染 */
+.nls-root.is-tier3 .ld-num {
+  font-size: 30px;
+}
+.nls-root.is-tier3 .ld-pct {
+  font-size: 14px;
+}
+.nls-root.is-tier3 .ld-spinner {
+  width: 28px;
+  height: 28px;
+}
+.nls-root.is-tier3 .ld-fail-mark {
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+}
+
 .nls-root.is-compact .ld-num {
   font-size: 28px;
 }

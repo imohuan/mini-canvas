@@ -18,6 +18,7 @@ export * from "./themeBridge";
 export * from "./multiRadio";
 export * from "./navIcon";
 export * from "./edgeGeometry";
+export * from "./nodeLoadingTier";
 export { createNotifyService } from "./notifyService";
 
 import type { ConfigSchema } from "@mini-canvas/canvas-base";

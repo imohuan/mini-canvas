@@ -6,6 +6,7 @@
  * 字段名、默认值、分组文案原样沿用，设置面板里看到的东西不变。
  */
 import type { ConfigSchema } from "@mini-canvas/canvas-base";
+import { NODE_LOADING_TIER_PREFIX, nodeLoadingTierFields } from "./nodeLoadingTier";
 import {
   MULTI_RADIO_KEYS,
   MULTI_RADIO_SIZE_MAX,
@@ -201,6 +202,10 @@ export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<
  * 本插件字段分属：节点(端口/吸附带)、边(连线)、常规(主题配色/调试)。
  */
 export const CanvasConfig: ConfigSchema = {
+  // —— 节点/节点加载态：图片 / 视频 / 可视化 / 文本节点**共用**的一只加载件的分档阈值 ——
+  // 加载态长在所有节点上，所以阈值刻意做成全局一份（三处各配一套只会互相打架）。
+  ...nodeLoadingTierFields(NODE_LOADING_TIER_PREFIX, "常规/节点加载态"),
+
   // ===== 一级「节点」：节点自身的手柄端口 / 吸附带 / 节点内容外观（来自多个插件，二级 = 各插件块）=====
   // —— 端口（浮动球 + 吸附区）：theme-default 的节点手柄 ——
   handleRestOffset: {

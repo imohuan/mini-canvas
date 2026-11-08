@@ -120,6 +120,9 @@ const sections: SettingsSectionDef[] = [
   ),
   s('canvas/node', 'image-tiers', '图片分档', '节点/缩略图', 52),
   s('canvas/node', 'video-tiers', '视频分档', '节点/缩略图', 54),
+  // 加载态分档：全局一份（图片 / 视频 / 可视化 / 文本节点共用同一只加载件）。
+  // 放在「节点」分类下、紧跟两个缩略图分档，因为它们是同一类"缩放档位"设置。
+  s('canvas/node', 'loading-tiers', '加载态分档', '常规/节点加载态', 56),
   s('canvas/node', 'audio', '音频', ['节点/音频', '节点/音频节点'], 60),
   s('canvas/node', 'video-edit', '视频剪辑', '节点/视频剪辑', 70),
   s('canvas/edge', 'line', '连线', ['边/连线', '节点/连线菜单'], 10),
