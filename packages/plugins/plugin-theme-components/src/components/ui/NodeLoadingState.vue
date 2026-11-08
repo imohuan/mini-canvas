@@ -34,7 +34,7 @@ const props = withDefaults(
     surface?: 'card' | 'media'
     /** 左上角状态词；缺省按 tone 给「生成中」/「执行失败」 */
     label?: string
-    /** 0-100；`null` = 不确定态（显示 `···`，不编一个假数字） */
+    /** 0-100；`null` = 不确定态（显示旋转的 SVG 图标，不编一个假数字） */
     percent?: number | null
     /** 下方那行阶段文案 */
     message?: string
@@ -170,10 +170,15 @@ onBeforeUnmount(() => {
 
       <div class="ld-progress">
         <span v-if="tone === 'error'" class="ld-fail-mark" aria-hidden="true">!</span>
-        <template v-else>
-          <span class="ld-num">{{ shownPercent === null ? '···' : shownPercent }}</span>
-          <span v-if="shownPercent !== null" class="ld-pct">%</span>
+        <!-- 有进度就给数字；没有就用一个旋转的 SVG 图标（不编假百分比，也不放三个点） -->
+        <template v-else-if="shownPercent !== null">
+          <span class="ld-num">{{ shownPercent }}</span>
+          <span class="ld-pct">%</span>
         </template>
+        <svg v-else class="ld-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle class="ld-spinner-track" cx="12" cy="12" r="9" />
+          <circle class="ld-spinner-arc" cx="12" cy="12" r="9" />
+        </svg>
       </div>
 
       <p class="ld-prompt">{{ message || (tone === 'error' ? '执行失败' : '执行中…') }}</p>
@@ -384,6 +389,25 @@ html.dark .nls-root.is-error {
   font-weight: 600;
   line-height: 1;
   color: var(--nls-pct);
+}
+
+/* 不确定态：一个旋转的 SVG 光圈（不编百分比、不放三个点） */
+.ld-spinner {
+  width: 52px;
+  height: 52px;
+  transform-origin: 50% 50%;
+  animation: ld-spin 0.9s linear infinite;
+  filter: drop-shadow(0 0 10px rgb(56 189 248 / 0.35));
+}
+.ld-spinner-track {
+  stroke: color-mix(in srgb, var(--nls-pct) 22%, transparent);
+  stroke-width: 2.5;
+}
+.ld-spinner-arc {
+  stroke: var(--nls-pct);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 42 15;
 }
 
 /* 下方一行阶段文案（可换行，最多 3 行） */
@@ -604,11 +628,23 @@ html.dark .nls-root.is-chip {
     opacity: 0.35;
   }
 }
+@keyframes ld-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 不确定态的图标跟着容器大小走：小卡片里也不会把文案挤没 */
+.nls-root.is-compact .ld-spinner {
+  width: 30px;
+  height: 30px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .nls-root,
   .ld-blob,
-  .ld-dot {
+  .ld-dot,
+  .ld-spinner {
     animation: none !important;
   }
 }

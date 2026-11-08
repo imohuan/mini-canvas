@@ -516,14 +516,15 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
     expect(html).toContain('ld-blob--3')
   })
 
-  it('running 但外部只给阶段（无 progress）→ 显示占位而不是编一个百分比', async () => {
+  it('running 但外部只给阶段（无 progress）→ 显示旋转图标而不是编一个百分比', async () => {
     const html = await render(
       NodeTaskOverlay as Component,
       '35',
       { runState: { status: 'running', message: '排队中' } },
       makeCtx({ selectedIds: ['35'] }),
     )
-    expect(html).toContain('···')
+    expect(html).toContain('ld-spinner')
+    expect(html).not.toContain('···')
     expect(html).toContain('排队中')
   })
 

@@ -3,7 +3,7 @@
  *
  * 锁三件用户看得见的事：
  * 1. 整块形态有流光层（3 个光斑）、大百分比、阶段文案；
- * 2. 不给百分比时显示 `···`，不编一个假数字；
+ * 2. 不给百分比时显示**旋转的 SVG 图标**（不编假数字，也不放三个点）；
  * 3. 紧凑形态（chip）是一行小胶囊，失败态换文案与配色。
  */
 import { describe, it, expect } from 'vitest'
@@ -31,9 +31,11 @@ describe('NodeLoadingState', () => {
     expect(html).toContain('生成中')
   })
 
-  it('不给百分比 → 显示 ···，不编数字', async () => {
+  it('★ 不给百分比 → 一个旋转的 SVG 图标（不是三个点，也不编数字）', async () => {
     const html = await render({ message: '排队中' })
-    expect(html).toContain('···')
+    expect(html).toContain('ld-spinner')
+    expect(html).toContain('ld-spinner-arc')
+    expect(html).not.toContain('···')
     expect(html).not.toContain('ld-pct')
     expect(html).toContain('排队中')
   })
@@ -41,7 +43,7 @@ describe('NodeLoadingState', () => {
   it('百分比越界 / 非法值 → 夹回合法区间或走不确定态', async () => {
     expect(await render({ percent: 140 })).toContain('>100<')
     expect(await render({ percent: -5 })).toContain('>0<')
-    expect(await render({ percent: Number.NaN })).toContain('···')
+    expect(await render({ percent: Number.NaN })).toContain('ld-spinner')
   })
 
   it('失败态：感叹号 + 原因 + 下一步，没有百分比', async () => {

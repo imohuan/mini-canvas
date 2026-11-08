@@ -31,7 +31,7 @@
 | `tone` | `'loading' / 'error'` | `'loading'` | 失败态换配色和内容，版式不变 |
 | `surface` | `'card' / 'media'` | `'card'` | 跟随亮暗主题，还是恒深色（视频画面里用） |
 | `label` | `string` | `''` | 左上角状态词；不填按 `tone` 给「生成中」/「执行失败」 |
-| `percent` | `number / null` | `null` | 0-100；给 `null` 显示 `···`，不编假数字 |
+| `percent` | `number / null` | `null` | 0-100；给 `null` 显示旋转的 SVG 图标，不编假数字 |
 | `message` | `string` | `''` | 下方那行阶段文案 |
 | `hint` | `string` | `''` | 只有失败态用：下一行小字，说明接下来能做什么 |
 | `startedAt` | `number` | `0` | 计时起点（ms）。给了才显示右上角已耗时 |
@@ -65,7 +65,7 @@ const percent = ref(0)
     <!-- 你的真实内容 -->
     <img v-if="!loading" :src="src" />
 
-    <!-- 加载时整块盖住；不给 percent 就是不确定态（···） -->
+    <!-- 加载时整块盖住；不给 percent 就是不确定态（一个旋转的 SVG 图标） -->
     <NodeLoadingState
       v-if="loading"
       :percent="percent"
