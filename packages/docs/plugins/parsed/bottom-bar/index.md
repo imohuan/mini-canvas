@@ -39,3 +39,14 @@
 2. **写一律走注册糖、条目归注册方**：服务是共享单实例（`this.ctx` 恒为 bottom-bar 的 scope），所以它的**写面**方法都要收一个"调用方的 scope"参数，别人的动作才挂在自己名下、卸载时摘得掉。
 3. **一个 kind 只能一个写入器**：`registerBarApplier` 对同 kind 重复注册会**抛错**。
 
+## 引用标签上的序号
+
+输入框里的每颗引用标签，名字前面显示它在参考区里的位置，形如 `1 · 图片 11`。
+
+- **序号 = 参考卡片的显示位**：拖动卡片换顺序，标签上的数字跟着变，卡片右上角的角标也是同一个数。
+- **只改显示**：序号存在标签节点的 `chipIndex` 属性里，导出文本、`@名字` 匹配、后端解析用的引用名一个字都不变。
+- **为什么要落进属性**：正文标签是 ProseMirror 的 atom 节点，属性没变时它不会重建 DOM。只把序号放进运行时注册表，拖拽后画面会停在旧号（实测）。
+
+改这一块时三处要一起看：`panelSource.resourceEditorSpec`（画 DOM）、`useBottomBarCards.refreshSlotChips`（换序后重新登记）、
+`prosemirror-editor-bundle` 的 `resourceCommands` / `resourceNode`（把序号写回文档属性）。
+

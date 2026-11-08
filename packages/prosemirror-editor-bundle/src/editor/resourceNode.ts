@@ -39,6 +39,12 @@ export function buildResourceNode(nodeType: any, item: ResourceItem): any {
     refFolderId: item.ref?.folderId || '',
     // 参考标签的类型（用户 2026-10-28）：落进文档，冷启动注册表为空也能画对图标。
     chipKind: item.chipKind || '',
+    /**
+     * 显示序号（用户 2026-11-08）：落进文档，换序后属性真的变了，标签才会重画。
+     *
+     * 只影响画出来的样子（左侧「1 · 」前缀），不参与导出文本与引用名。
+     */
+    chipIndex: typeof item.chipIndex === 'number' && item.chipIndex > 0 ? item.chipIndex : 0,
   })
 }
 
@@ -68,12 +74,18 @@ export function slotIdFromName(name: string | null | undefined): string | null {
  * 内容相同就绝不产生事务，从这个源头掐掉"先跳前面"的那一步。
  */
 export function chipAttrsNeedUpdate(
-  attrs: { url?: string | null; name?: string | null; thumbnail_url?: string | null; id?: string | null },
-  want: { url?: string | null; name?: string | null; id?: string | null },
+  attrs: { url?: string | null; name?: string | null; thumbnail_url?: string | null; id?: string | null; chipIndex?: number | null },
+  want: { url?: string | null; name?: string | null; id?: string | null; chipIndex?: number | null },
 ): boolean {
   if (want.id != null && String(attrs.id ?? '') !== String(want.id)) return true
   if ((attrs.url ?? '') !== (want.url ?? '')) return true
   if (want.name != null && String(attrs.name ?? '') !== String(want.name)) return true
+  /*
+   * 序号也参与比较（用户 2026-11-08）：参考卡拖拽换序后，标签上的「N · 」要跟着变。
+   * 只写注册表不比较的话，节点属性没变 → ProseMirror 不重建 DOM，界面上停在旧号。
+   * 0 与缺省等价（旧文档没有这个属性），都当「没有序号」。
+   */
+  if (want.chipIndex != null && (Number(attrs.chipIndex ?? 0) || 0) !== (Number(want.chipIndex) || 0)) return true
   return false
 }
 

@@ -32,6 +32,14 @@ export const mySchema: Schema = new Schema({
          * 冷启动（注册表空）也能按它画对图标；空串 = 待绑定，画统一资源图标。
          */
         chipKind: { default: '' },
+        /**
+         * 标签显示序号（用户 2026-11-08：「1 · 名字」里那个数字）。
+         *
+         * 为什么落进文档：正文标签是 atom 节点，ProseMirror 只在**节点真的变了**时
+         * 才重建 DOM。序号若只存在运行时注册表，拖拽换序后属性一个字没变，
+         * 页面就停在旧号上（实测）。存成属性后 chipIndex 变了 → 节点变了 → 标签重画。
+         */
+        chipIndex: { default: 0 },
       },
       group: "inline",
       inline: true,
@@ -77,6 +85,9 @@ export const mySchema: Schema = new Schema({
             result.setAttribute("data-ref-value", node.attrs.refValue || "")
             result.setAttribute("data-ref-ext", node.attrs.refExt || "")
             result.setAttribute("data-ref-folder", node.attrs.refFolderId || "")
+            if (Number(node.attrs.chipIndex) > 0) {
+              result.setAttribute('data-chip-index', String(node.attrs.chipIndex))
+            }
             return result
           }
           return result  // DOMOutputSpec 数组，直接透传
@@ -141,6 +152,8 @@ export const mySchema: Schema = new Schema({
             ...(registered ?? {}),
             // 名字以文档为准（文档是用户看得见的那份），其余外观/交互以注册表为准
             name: registered?.name || fallback.name,
+            // 序号以文档为准（冷启动注册表还没登记时也能画出正确的号）
+            ...(Number(node.attrs.chipIndex) > 0 ? { chipIndex: Number(node.attrs.chipIndex) } : {}),
             ...(url ? { url: String(url) } : {}),
             ...(node.attrs.value ? { value: String(node.attrs.value) } : {}),
           }
@@ -176,6 +189,7 @@ export const mySchema: Schema = new Schema({
             thumbnail_url: getThumbnailUrlFromAssetUrl(el.getAttribute("data-url") || ""),
             value: el.getAttribute("data-value") || "",
             chipKind: el.getAttribute("data-kind") || "",
+            chipIndex: Number(el.getAttribute("data-chip-index") || 0) || 0,
           }
         },
       }],

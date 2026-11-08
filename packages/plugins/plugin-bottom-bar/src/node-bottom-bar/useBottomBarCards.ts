@@ -301,6 +301,8 @@ export function useBottomBarCards(deps: CardDeps) {
       id: tile.key,
       name: tile.label,
       category: '素材',
+      // 序号 = 参考卡的显示位（用户 2026-11-08：标签显示「序号 · 名字」）
+      ...(tile.index > 0 ? { chipIndex: tile.index } : {}),
       ...(tile.kind ? { chipKind: tile.kind } : {}),
       ...(tile.url ? { url: tile.url } : {}),
       ...(tile.value ? { value: tile.value } : {}),
@@ -404,10 +406,18 @@ export function useBottomBarCards(deps: CardDeps) {
 
   function bindChipToNode(target: RefTarget | undefined, nodeId: string, name: string): void {
     const material = deps.shownMaterials.value.find((m) => m.id === nodeId)
+    /**
+     * 先把顺序算出来再插标签：序号 = 这颗标签在参考区里的最终位置（用户 2026-11-08）。
+     * 若拿连线上游的旧序号，替换/新增的那一张会先显示成隔壁的号，等下一次刷新才纠正 ——
+     * 中间那一帧用户是看得见的。
+     */
+    const order = placeChipAt(deps.refOrder.value, target?.previousChipId, nodeId)
+    const index = order.indexOf(refNodeChipId(nodeId)) + 1
     const item: ResourceItem = {
       id: refNodeChipId(nodeId),
       name,
       category: '素材',
+      ...(index > 0 ? { chipIndex: index } : {}),
       ...(material ? { chipKind: material.kind as 'image' | 'video' | 'audio' | 'text' } : {}),
       ...(material?.url ? { url: material.url } : {}),
       ...(material?.value ? { value: material.value } : {}),
@@ -417,7 +427,6 @@ export function useBottomBarCards(deps: CardDeps) {
       ? deps.editorComponentRef.value?.replaceResource?.(item) === true
       : false
     if (!replaced) deps.editorComponentRef.value?.insertResource?.(item)
-    const order = placeChipAt(deps.refOrder.value, target?.previousChipId, nodeId)
     try {
       ctx.get('doc').updateNode(props.id, { data: { refOrder: order } })
     } catch { /* 节点已不在等情况：忽略 */ }
@@ -534,6 +543,7 @@ export function useBottomBarCards(deps: CardDeps) {
               id: tile.key,
               name: tile.label,
               category: '素材',
+              ...(tile.index > 0 ? { chipIndex: tile.index } : {}),
               invalid: true,
               chipKind: undefined,
               url: '',
@@ -542,6 +552,7 @@ export function useBottomBarCards(deps: CardDeps) {
               id: tile.key,
               name: tile.label,
               category: '素材',
+              ...(tile.index > 0 ? { chipIndex: tile.index } : {}),
               invalid: true,
               chipKind: undefined,
               url: '',
@@ -553,6 +564,7 @@ export function useBottomBarCards(deps: CardDeps) {
               id: tile.key,
               name: tile.label,
               category: '素材',
+              ...(tile.index > 0 ? { chipIndex: tile.index } : {}),
               onIconClick: deps.onOpenTagMenu,
             })
             continue
@@ -563,6 +575,7 @@ export function useBottomBarCards(deps: CardDeps) {
             id: refNodeChipId(tile.nodeId),
             name: tile.label,
             category: '素材',
+            ...(tile.index > 0 ? { chipIndex: tile.index } : {}),
             ...(kind ? { chipKind: kind } : {}),
             ...(url ? { url } : {}),
             ...(tile.value ? { value: tile.value } : {}),
@@ -593,7 +606,20 @@ export function useBottomBarCards(deps: CardDeps) {
     }
   }
 
-  watch([deps.shownMaterials, deps.refOrder], () => {
+  /**
+   * 正文标签与参考卡要保持同一份序号（用户 2026-11-08：拖拽后标签里的值也要变）。
+   *
+   * 为什么把 refTiles 也算进监听：正文里的标签可能在**不碰素材顺序**的情况下变化
+   * （@ 插入一颗、点「标记」把文字转成标签、删掉一颗）—— 那些都会改变它在卡片行里的
+   * 位置。只盯素材与 refOrder 的话，新插进来的那颗会停在「素材顺序」算出的旧号。
+   * 这里用一个字符串签名当键，内容没变不会触发（避免光标/渲染抖动）。
+   */
+  const tileSyncKey = computed(() =>
+    refTiles.value
+      .map((t) => [t.key, t.index, t.label, t.kind ?? '', t.url ?? '', t.invalid ? 1 : 0, t.pending ? 1 : 0].join('~'))
+      .join('|'),
+  )
+  watch([deps.shownMaterials, deps.refOrder, tileSyncKey], () => {
     void nextTick()
       .then(() => typeof requestAnimationFrame === 'function'
         ? new Promise<void>((r) => requestAnimationFrame(() => r()))

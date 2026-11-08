@@ -23,6 +23,12 @@ export interface UpstreamMaterial {
   /** 显示名（节点标题优先，回退文件名/默认名） */
   name: string
   /**
+   * 在参考区里的显示序号（1..n，用户 2026-11-08：标签要显示「序号 · 名字」）。
+   *
+   * 只做观察：拖拽排序后重算，标签跟着变；身份与引用名仍是节点 id / 名称。
+   */
+  index?: number
+  /**
    * 引用名 = **节点名称**（用户 2026-10-28 定案：名称画布内唯一，直接拿来当显示名）。
    *
    * 不再有「图片1 / 音频2」这种按顺序编出来的名字：序号会随排序与增删变化，
@@ -270,7 +276,12 @@ export function resolveMaterialOrder<T extends { id: string }>(
  * 保序、保身份，只补 refName 一个字段（节点名称为空时才退回「素材」）。
  */
 export function nameRefNames(materials: ReadonlyArray<UpstreamMaterial>): UpstreamMaterial[] {
-  return materials.map((m) => ({ ...m, refName: String(m.name ?? '').trim() || '素材' }))
+  return materials.map((m, i) => ({
+    ...m,
+    refName: String(m.name ?? '').trim() || '素材',
+    // 序号 = 显示位（与参考卡右上角那个数字同一口径，只做观察）
+    index: i + 1,
+  }))
 }
 
 /**
@@ -622,7 +633,17 @@ function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown
     ...(canShowThumb
       ? [['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }]]
       : []),
-    ['span', { class: 'resource-chip-name' }, name],
+    [
+      'span',
+      {
+        class: 'resource-chip-name',
+        // 序号只给样式看（CSS ::before 画「1 · 」），名字本身不动
+        ...(typeof self.chipIndex === 'number' && self.chipIndex > 0
+          ? { 'data-chip-index': String(self.chipIndex) }
+          : {}),
+      },
+      name,
+    ],
   ]
 }
 /**
@@ -714,6 +735,8 @@ export function toEditorResources(
       id: refNodeChipId(m.id),
       name: m.refName || m.name,
       category: '素材',
+      // 序号：参考区里的显示位（拖拽后由 nameRefNames 重排，标签跟着变）
+      ...(typeof m.index === 'number' && m.index > 0 ? { chipIndex: m.index } : {}),
       ...(m.kind === 'image' || m.kind === 'video' || m.kind === 'audio' || m.kind === 'text'
         ? { chipKind: m.kind }
         : {}),

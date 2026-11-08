@@ -21,6 +21,9 @@ export function chipSignature(item: ResourceItem): string {
     item.url ?? '',
     item.thumbnail_url ?? '',
     item.chipKind ?? '',
+    // 序号只影响画出来的样子（用户 2026-11-08：拖拽后标签里的序号要跟着变）。
+    // 不进签名的话，刷新时会被判成「外观没变」，正文里的角标就停在旧值。
+    item.chipIndex ?? '',
     item.invalid === true,
     Boolean(item.onIconClick),
     Boolean(item.onReplaceClick),
@@ -140,6 +143,8 @@ export function refNameOfChipId(id: string | null | undefined): string | null {
 export function buildRefChipItem(input: {
   id: string
   name: string
+  /** 显示序号（拖动参考卡后变化；只用于界面，不改引用名） */
+  index?: number
   bound?: {
     kind: 'image' | 'video' | 'audio' | 'text'
     url?: string
@@ -156,6 +161,7 @@ export function buildRefChipItem(input: {
     id: input.id,
     name: input.name,
     category: '素材',
+    ...(typeof input.index === 'number' && input.index > 0 ? { chipIndex: input.index } : {}),
     ...(bound ? { chipKind: bound.kind, mediaType: bound.kind === 'text' ? undefined : bound.kind } : {}),
     ...(bound?.url ? { url: bound.url } : {}),
     ...(bound?.thumb ? { thumbnail_url: bound.thumb } : {}),
@@ -257,6 +263,15 @@ export function renderRefChip(item: ResourceItem): HTMLElement {
   }
   const nm = document.createElement('span')
   nm.className = 'resource-chip-name'
+  /**
+   * 序号走属性 + CSS 的 ::before 画（用户 2026-11-08：「1 · 名字」）。
+   *
+   * 为什么不直接拼进 textContent：标签名是引用的一部分（serialize / plainText 都读 attrs.name），
+   * 拼进去容易被后续逻辑当成真名字；属性只给样式看，名字本身一个字不改。
+   */
+  if (typeof item.chipIndex === 'number' && item.chipIndex > 0) {
+    nm.dataset.chipIndex = String(item.chipIndex)
+  }
   nm.textContent = item.name
   span.append(nm)
   return span
@@ -358,13 +373,14 @@ export function registerSlotItemsFromDoc(docJson: unknown): void {
     for (const raw of nodes) {
       const node = raw as {
         type?: string
-        attrs?: { id?: unknown; name?: unknown; chipKind?: unknown }
+        attrs?: { id?: unknown; name?: unknown; chipKind?: unknown; chipIndex?: unknown }
         content?: unknown
       } | null
       if (!node || typeof node !== 'object') continue
       if (node.type === 'resource') {
         const id = String(node.attrs?.id ?? '')
         const name = String(node.attrs?.name ?? '')
+        const idx = Number(node.attrs?.chipIndex ?? 0) || 0
         if (!id || itemRegistry.has(id)) {
           // 已有条目（调用方登记过更新的内容）→ 不动
         } else if (id.startsWith(REF_NODE_PREFIX) || id.startsWith(REF_NAME_PREFIX)) {
@@ -372,6 +388,7 @@ export function registerSlotItemsFromDoc(docJson: unknown): void {
           itemRegistry.set(id, buildRefChipItem({
             id,
             name: name || id,
+            ...(idx > 0 ? { index: idx } : {}),
             ...(kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'text'
               ? { bound: { kind } }
               : {}),

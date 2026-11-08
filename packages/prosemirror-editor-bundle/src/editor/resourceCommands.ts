@@ -39,6 +39,7 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
         id: item.id,
         name: item.name,
         url: item.url ?? '',
+        chipIndex: item.chipIndex ?? 0,
       }) || String(node.attrs.chipKind ?? '') !== String(item.chipKind ?? '')
       tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
@@ -49,6 +50,7 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
         value: item.value ?? '',
         category: item.category,
         chipKind: item.chipKind ?? '',
+        chipIndex: item.chipIndex ?? 0,
       })
     })
     if (!rebound) return false
@@ -79,7 +81,15 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
     // registry（按节点 id 存）也要同步 url —— chip 走 renderEditor 分支渲染时
     // 读的是 registry 条目，只改 attrs 不改 registry 的话缩略图不会变（真机踩过）。
     const reg = itemRegistry.get(node.attrs.id)
-    if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
+    if (reg) {
+      itemRegistry.set(node.attrs.id, {
+        ...reg,
+        url: item.url ?? '',
+        thumbnail_url: '',
+        name: String(node.attrs.name ?? reg.name),
+        ...(typeof item.chipIndex === 'number' ? { chipIndex: item.chipIndex } : {}),
+      })
+    }
     const nextAttrs = {
       ...node.attrs,
       // name 传 undefined = 保留原名字：标签名是用户提示词的一部分（引用名），
@@ -92,16 +102,20 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
       value: item.value ?? '',
       category: item.category,
       chipKind: item.chipKind ?? '',
+      // 序号跟着注册表一起更新（参考卡拖拽后标签上的「N · 」要变）
+      chipIndex: typeof item.chipIndex === 'number' ? item.chipIndex : 0,
     }
     if (clearing) {
       nextAttrs.url = ''
       nextAttrs.thumbnail_url = ''
       nextAttrs.chipKind = ''
       nextAttrs.value = ''
+      nextAttrs.chipIndex = 0
     }
     changed = chipAttrsNeedUpdate(node.attrs, {
       name: nextAttrs.name,
       url: nextAttrs.url,
+      chipIndex: nextAttrs.chipIndex,
     }) || String(node.attrs.chipKind ?? '') !== String(nextAttrs.chipKind)
     tr.setNodeMarkup(pos, undefined, nextAttrs)
   })
@@ -216,10 +230,17 @@ export function refreshChips(view: EditorView | null): void {
      */
     const chipId = String(node.attrs.id ?? '')
     const sig = chipSignature(item)
-    if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '' })
+    /*
+     * 序号也在这里对齐（用户 2026-11-08）：参考卡拖拽换序后注册表里的 chipIndex 变了，
+     * 但文档属性没变的话 ProseMirror 不会重建标签 —— 用户看到「拖了，标签里的号不动」。
+     * 把 chipIndex 一起写回去，节点才算真的变了。
+     */
+    const wantIndex = typeof item.chipIndex === 'number' && item.chipIndex > 0 ? item.chipIndex : 0
+    const indexStale = (Number(node.attrs.chipIndex ?? 0) || 0) !== wantIndex
+    if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '', chipIndex: wantIndex })
       && chipRenderSig.get(chipId) === sig) return
     chipRenderSig.set(chipId, sig)
-    tr.setNodeMarkup(pos, undefined, { ...node.attrs })
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, chipIndex: indexStale ? wantIndex : node.attrs.chipIndex })
     changed = true
   })
   if (changed) view.dispatch(tr)

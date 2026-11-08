@@ -392,6 +392,17 @@
   line-height: 14px;
   color: var(--ui-ink, #18202b);
 }
+/**
+ * 标签序号（用户 2026-11-08）：「1 · 名字」，序号只是显示位，跟着参考区拖拽变化。
+ *
+ * 为什么用 ::before 画而不是拼进名字：名字是引用的一部分（导出文本 / @ 匹配都读它），
+ * 拼进去等于改写了引用名；这里只借属性画个前缀，名字保持原样。
+ */
+.nb-editor .resource-chip-name[data-chip-index]::before {
+  content: attr(data-chip-index) ' · ';
+  color: var(--ui-ink-dim, #6b7280);
+  font-weight: 500;
+}
 /* 选中态：与文本选区同色（用户口径：和文本选中背景一致，不用黑色） */
 .nb-editor .resource-chip.ProseMirror-selectednode,
 .nb-editor .resource-chip.resource-node-selected {
