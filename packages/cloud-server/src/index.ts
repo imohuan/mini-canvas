@@ -62,7 +62,6 @@ export { ProviderRegistry } from './providers/registry.js'
 export { loadProvidersFromDir, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
 export { providerDirSignature, watchProviders } from './providers/watch.js'
 export type { ProviderWatcher } from './providers/watch.js'
-export { createWeb2ApiProvider, WEB2API_ACTIONS } from './providers/web2api/index.js'
 export type {
   Provider,
   ActionDef,

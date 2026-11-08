@@ -16,7 +16,6 @@ import { CanvasResourceStore } from '../store/canvasResources'
 import { ProviderRegistry } from '../providers/registry'
 import { HistoryStore } from '../tasks/history'
 import { TaskManager } from '../tasks/taskManager'
-import { createWeb2ApiProvider } from '../providers/web2api/index'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -97,7 +96,15 @@ describe('MCP 工具清单', () => {
       // 生成三件套要 registry + tasks 才注册得上（不开页面也能下单）
       const doc = new CanvasDocument(new CanvasStore(dir), new CanvasResourceStore(dir))
       const registry = new ProviderRegistry()
-      registry.add(createWeb2ApiProvider())
+      // web2api 改成外挂 provider（数据根 providers/*.js）；这里只要「有动作」即可，
+      // 用仓库里自带的示例动作，不依赖具体平台。
+      registry.add({
+        id: 'test-provider',
+        actions: [{ id: 'test:echo', title: '测试动作', nodeTypes: ['image'] }],
+        async submit() {
+          return { done: true }
+        },
+      })
       const tasks = new TaskManager({
         doc,
         registry,

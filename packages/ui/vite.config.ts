@@ -119,8 +119,6 @@ export default defineConfig({
     '@mini-canvas/plugin-node-image',
     '@mini-canvas/plugin-node-3d-preview',
     '@mini-canvas/plugin-node-image-compare',
-    '@mini-canvas/plugin-tool-image-generation',
-    '@mini-canvas/plugin-tool-text-generation',
     '@mini-canvas/plugin-group',
     '@mini-canvas/plugin-multi-select',
     '@mini-canvas/plugin-auto-layout',

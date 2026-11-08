@@ -31,9 +31,6 @@ import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
 import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
 // 这两个插件由「插件管理」从清单安装，不在 ui 的依赖里；用相对路径直接读源码。
 import { styleLibraryPlugin } from '../../../plugins/plugin-style-library/src/index'
-import { web2apiToolsPlugin } from '@mini-canvas/plugin-web2api-tools'
-import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
-import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import { cursorEffectPlugin } from '../../../plugins/plugin-cursor-effect/src/index'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
 import { pluginManagerPlugin } from '@mini-canvas/plugin-manager'
@@ -71,9 +68,6 @@ const ALL_PLUGINS = [
   nodeFindPlugin,
   miniMapPlugin,
   styleLibraryPlugin,
-  web2apiToolsPlugin,
-  pluginImageGenerationTools,
-  pluginTextGenerationTools,
   cursorEffectPlugin,
   pluginBottomBar,
   pluginManagerPlugin,

@@ -21,8 +21,6 @@ import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
 import { nodeAudioPlugin } from '@mini-canvas/plugin-node-audio'
 import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
-import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
-import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import type { ToolService } from '@mini-canvas/kernel'
 
 /** 起一个与宿主同形的内核（真服务，不 mock）并装载四个节点插件 */
@@ -66,9 +64,7 @@ async function bootAll() {
   }
   // 文件拖入/粘贴也照宿主清单装载：它是"把外部素材变成节点"的唯一入口，漏装就等于拖拽完全没反应。
   ctx.plugin(fileDropPlugin)
-  // 工具提供方也照宿主清单装载：图片节点的"生成"能力来自它，不是自己写死 HTTP。
-  ctx.plugin(pluginImageGenerationTools)
-  ctx.plugin(pluginTextGenerationTools)
+  // 生成工具已改成后台 provider（<数据根>/providers/web2api-*.js），前端不再装载这两个插件。
   await ctx.start()
   return { ctx, nodeStore, nodeRegistry }
 }
@@ -180,72 +176,10 @@ describe('节点插件整装', () => {
     }
   })
 
-  it('图片节点经 ctx.tools 发现"能出图"的工具（节点不认识任何模型名）', async () => {
-    const { ctx } = await bootAll()
-    const tools = ctx.get<ToolService>('tools')
-    const imageTools = tools.list({ produces: 'image' })
-
-    expect(imageTools.length).toBeGreaterThan(0)
-    // 每个工具都自带 UI 需要的一切：显示名 + 声明式参数（节点据此自动渲染下拉）
-    for (const t of imageTools) {
-      expect(typeof t.name).toBe('string')
-      expect(t.title).toBeTruthy()
-      expect(Array.isArray(t.params)).toBe(true)
-    }
-    ctx.stop()
-  })
-
-  it('能按"吃文本输入"筛工具（文本节点 → 图片节点这条上下文链路）', async () => {
-    const { ctx } = await bootAll()
-    const tools = ctx.get<ToolService>('tools')
-    const eatText = tools.list({ produces: 'image', accepts: 'text' })
-    expect(eatText.length).toBeGreaterThan(0)
-    ctx.stop()
-  })
-
-  it('文本节点经 ctx.tools 发现"能产出文本"的工具（与图片工具互不混入）', async () => {
-    const { ctx } = await bootAll()
-    const tools = ctx.get<ToolService>('tools')
-    const textTools = tools.list({ produces: 'text' })
-
-    expect(textTools.length).toBeGreaterThan(0)
-    for (const t of textTools) {
-      expect(t.name.startsWith('text.generate:')).toBe(true)
-      expect(Array.isArray(t.params)).toBe(true)
-      // 提示词模板由工具声明（面板据此出"模板"下拉，节点不认识模板内容）
-      expect(Array.isArray(t.templates)).toBe(true)
-    }
-    // 图片工具不该出现在文本清单里（两类产出互不污染）
-    expect(textTools.every((t) => !t.name.startsWith('image.generate:'))).toBe(true)
-    ctx.stop()
-  })
-
-  it('两类生成工具并存：图片 5 个 + 文本 3 个，各自按 produces 取到', async () => {
-    const { ctx } = await bootAll()
-    const tools = ctx.get<ToolService>('tools')
-    expect(tools.list({ produces: 'image' }).length).toBeGreaterThan(0)
-    expect(tools.list({ produces: 'text' }).length).toBeGreaterThan(0)
-    // 工具名唯一（两个插件的前缀不同，不会撞名）
-    const names = tools.list().map((t) => t.name)
-    expect(new Set(names).size).toBe(names.length)
-    ctx.stop()
-  })
-
-  it('参数的声明式字段齐全（label/type/default 都有，面板才能自动长控件）', async () => {
-    const { ctx } = await bootAll()
-    const tools = ctx.get<ToolService>('tools')
-    for (const t of [...tools.list({ produces: 'image' }), ...tools.list({ produces: 'text' })]) {
-      for (const p of t.params ?? []) {
-        expect(p.key, `工具 ${t.name} 的参数缺 key`).toBeTruthy()
-        expect(p.label, `参数 ${p.key} 缺 label`).toBeTruthy()
-        expect(p.description, `参数 ${p.key} 缺 description`).toBeTruthy()
-        if (p.type === 'select') {
-          expect(p.options?.length, `下拉参数 ${p.key} 没有候选项`).toBeGreaterThan(0)
-        }
-      }
-    }
-    ctx.stop()
-  })
+  // 生成工具已移到后台 provider（<数据根>/providers/web2api-*.js），
+  // 底栏动作由 cloud-client 从 /api/actions 拉取后注册，ctx.tools 里不再有 image.generate:*
+  // / text.generate:* 这两批工具。它们的行为由 cloud-server 的
+  // src/__tests__/dataProviderWeb2api.test.ts 覆盖。
 
   it('装载顺序无关：工具注册表在插件加载前后都可用', async () => {
     const { ctx } = await bootAll()

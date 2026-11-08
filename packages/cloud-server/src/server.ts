@@ -32,7 +32,6 @@ import { CanvasDocumentPool } from './mcp/canvasDocPool.js'
 import { TOOL_LIST } from './mcp/server.js'
 import { ProviderRegistry } from './providers/registry.js'
 import { loadProvidersFromDir, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
-import { createWeb2ApiProvider } from './providers/web2api/index.js'
 import { watchProviders, type ProviderWatcher } from './providers/watch.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
@@ -129,7 +128,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
   )
   const registry = new ProviderRegistry()
-  registry.add(createWeb2ApiProvider())
   const scanned = await loadProvidersFromDir(providersDir)
   registry.load(scanned.providers)
   for (const f of scanned.failures) {
@@ -789,7 +787,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    */
   async function reloadProviders(): Promise<{ count: number; version: number }> {
     const scanned = await loadProvidersFromDir(providersDir)
-    registry.replaceAll([createWeb2ApiProvider(), ...scanned.providers])
+    registry.replaceAll(scanned.providers)
     for (const f of scanned.failures) {
       console.warn('[cloud-server] provider 加载失败 ' + f.file + '：' + f.error)
     }

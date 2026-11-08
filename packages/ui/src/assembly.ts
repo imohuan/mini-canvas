@@ -31,10 +31,9 @@ import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
 import { groupPlugin } from '@mini-canvas/plugin-group'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
-// web2api 改由「插件管理」从云服务清单安装（默认已装）—— 它已打成 UMD（见该包 vite.config.ts）。
-// import { web2apiToolsPlugin } from '@mini-canvas/plugin-web2api-tools'
-// import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
-// import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
+// 生成动作（web2api / 图片生成 / 文本生成）的前端插件已删除（2026-11-08）：
+// 改成后台 provider（<数据根>/providers/web2api-*.js），底栏动作由 cloud-client 从
+// /api/actions 拉取后注册，前端不再需要这三个包。
 // 下面这批「布局 / 画布工具」类插件改由「插件管理」从云服务清单安装（默认已装）。
 // 它们各自已有 UMD 构建（见各包 vite.config.ts），故可作外部插件装卸。
 // import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
@@ -77,8 +76,7 @@ import { shortcutSettingsPlugin } from '@mini-canvas/plugin-shortcut-manager'
  * 多选 / 连线切割）作为**自带插件**。它们已从下面那批"改由插件管理安装"里移出，
  * 对应 package.json 也从 installable 改成 builtin（否则会同时出现在两个分类里）。
  *
- * 注意：有 3 个插件**故意**不在这里冷启动装配 —— `plugin-node-image-compare` /
- * `plugin-tool-image-generation` / `plugin-tool-text-generation`：它们改由「插件管理」插件
+ * 注意：`plugin-node-image-compare` **故意**不在这里冷启动装配 —— 它改由「插件管理」插件
  * 从云服务（cloud-server 的 /plugin-catalog.json）装进来（用户要求：默认设为已安装）。
  * 想把某个恢复成冷启动：取消它 import 与下方对应行的注释即可。
  *

@@ -22,7 +22,6 @@ import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
-import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
 import { resolveAppPlugins } from '../assembly'
@@ -61,7 +60,6 @@ async function bootWithSettings() {
     nodeTextPlugin,
     nodeImagePlugin,
     node3dPreviewPlugin,
-    pluginImageGenerationTools,
     alignGuidePlugin,
     // 底栏：Config 声明「底栏」分组（AI 按钮清单的自绘页挂在 settingsGroup/底栏）
     pluginBottomBar,
