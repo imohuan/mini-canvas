@@ -13,6 +13,11 @@ export interface VideoPlaybackOptions {
   clipRange: () => { start: number; end: number }
   videoRef: { value: HTMLVideoElement | null }
   hovering?: Ref<boolean>
+  /**
+   * 卡片上是否盖着加载 / 失败态（runState 在跑或失败）。
+   * 为 true 时所有播放入口都拦掉：悬停不自动播、点播放按钮不挂 video、双击不进全屏。
+   */
+  blocked?: () => boolean
   /** 元数据读到手后的额外处理（卡片尺寸兜底等） */
   onMeta?: (v: HTMLVideoElement) => void
 }
@@ -22,6 +27,8 @@ export interface VideoPlaybackOptions {
  */
 export function useVideoPlayback(options: VideoPlaybackOptions) {
   const { nodeId, active, cropping, broken, videoUrl, clipRange, videoRef } = options
+  /** 加载态盖着时就算忙：各条播放入口统一问它，避免各判一次判歪 */
+  const blocked = (): boolean => options.blocked?.() === true
   const playing = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
@@ -54,6 +61,8 @@ export function useVideoPlayback(options: VideoPlaybackOptions) {
 
   /** 播放：起点不在剪辑段内时先跳到段首 */
   async function togglePlay(): Promise<void> {
+    // 加载态盖着时不碰视频：既不挂新解码，也不在这里暂停/起播
+    if (blocked()) return
     const v = activeVideo()
     if (!v || !videoUrl()) return
     if (v.paused) {
@@ -75,6 +84,8 @@ export function useVideoPlayback(options: VideoPlaybackOptions) {
 
   /** 播放按钮：帧图态下先挂上 video，等它挂好再播 */
   async function onPlayButton(restart = false): Promise<void> {
+    // 加载态盖着时按钮不给播（覆盖层本来就挡着，这是第二道闸）
+    if (blocked()) return
     if (!videoRequested.value) {
       videoRequested.value = true
       currentTime.value = clipRange().start
@@ -88,6 +99,8 @@ export function useVideoPlayback(options: VideoPlaybackOptions) {
     if (posterHideTimer.value !== null) { window.clearTimeout(posterHideTimer.value); posterHideTimer.value = null }
     posterCovering.value = true
     if (cropping() || broken.value || !videoUrl()) return
+    // 加载 / 失败覆盖层盖在卡片上：悬停照常记录，但不起播（用户 2026-11-08 要求拦截）
+    if (blocked()) return
     if (videoRequested.value && playing.value) { schedulePosterHide(); return }
     resumeTime.value = 0
     await onPlayButton(true)
@@ -122,6 +135,19 @@ export function useVideoPlayback(options: VideoPlaybackOptions) {
     if (on) void enterActive()
     else leaveActive()
   })
+
+  /**
+   * 加载态盖上来时把正在播的停掉。
+   *
+   * 场景：视频正在悬停播放，后台任务把 runState 写成 running，覆盖层一开始不立刻暂停的话，
+   * 底下仍有一个 video 在解码 —— 用户看到的是「加载中，但声音还在响」。
+   */
+  watch(
+    () => options.blocked?.() === true,
+    (isBlocked) => {
+      if (isBlocked) leaveActive()
+    },
+  )
 
   /** 悬停进入：只翻标志位，真正的播放交给激活态 watch */
   function onCardEnter(): void {

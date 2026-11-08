@@ -12,6 +12,7 @@ import {
   formatFileSize,
   formatTime,
   frameFileName,
+  isVideoCardBusy,
 } from '../videoNodeData'
 
 describe('formatTime：秒 → m:ss', () => {
@@ -103,5 +104,35 @@ describe('finiteOr：数值兜底（null 必须当缺失，不能当 0）', () =
     expect(finiteOr('', 9)).toBe(9)
     expect(finiteOr('x', 9)).toBe(9)
     expect(finiteOr(Number.NaN, 9)).toBe(9)
+  })
+})
+
+/**
+ * 卡片忙（加载 / 失败态盖着）的判定。
+ *
+ * 用户口径 2026-11-08：加载态盖在卡片上时不要触发悬停播放。
+ * 这条纯函数是那个拦截的判据，所以要钉住：只有 running / error 算忙，
+ * done / idle / 缺省都必须放行（否则跑完任务视频就再也不自动播了）。
+ */
+describe('isVideoCardBusy：加载 / 失败态盖着卡片', () => {
+  it('running → 忙（任务在跑，覆盖层盖住卡片）', () => {
+    expect(isVideoCardBusy({ runState: { status: 'running', progress: 42 } })).toBe(true)
+  })
+
+  it('error → 忙（失败态同样是整卡覆盖）', () => {
+    expect(isVideoCardBusy({ runState: { status: 'error', message: 'ffmpeg 退出码 1' } })).toBe(true)
+  })
+
+  it('done / idle / 没有 runState → 不忙（照常悬停播放）', () => {
+    expect(isVideoCardBusy({ runState: { status: 'done', progress: 100 } })).toBe(false)
+    expect(isVideoCardBusy({ runState: { status: 'idle' } })).toBe(false)
+    expect(isVideoCardBusy({})).toBe(false)
+    expect(isVideoCardBusy(undefined)).toBe(false)
+  })
+
+  it('脏数据（runState 是字符串/数字/null）不忙，也不抛', () => {
+    expect(isVideoCardBusy({ runState: 'running' })).toBe(false)
+    expect(isVideoCardBusy({ runState: 1 })).toBe(false)
+    expect(isVideoCardBusy({ runState: null })).toBe(false)
   })
 })

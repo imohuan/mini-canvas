@@ -28,6 +28,7 @@ function positiveNum(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
 import { createVideoOps } from './videoOps'
+import { isVideoCardBusy } from './videoNodeData'
 import { endOverlay, isClipping, isCropping } from './videoSession'
 import {
   clearClipPrefs,
@@ -89,6 +90,13 @@ const soleSelected = useSoleNodeSelected(props.id)
  * 都只看它，不再各自判断 hover，避免两条路径慢慢走偏。
  */
 const active = computed(() => hovering.value || soleSelected.value)
+/**
+ * 卡片上盖着加载 / 失败态（runState 在跑或失败）。
+ *
+ * 用户口径 2026-11-08：加载态盖着时**不要**再触发悬停播放 —— 用户看不到画面，也不该解码。
+ * 只拦播放入口（自动播 / 播放按钮 / 双击全屏），悬停与选中照常记录，关掉加载态就恢复正常。
+ */
+const busy = computed(() => isVideoCardBusy(props.data))
 
 const playback = useVideoPlayback({
   nodeId: props.id,
@@ -100,6 +108,7 @@ const playback = useVideoPlayback({
   clipRange: () => clipRange.value,
   videoRef,
   hovering,
+  blocked: () => busy.value,
   onMeta: (v) => onVideoMeta(v),
 })
 const {
@@ -210,6 +219,8 @@ const paneClickSub = ctx.on(RenderEvents.PaneClick, () => {
 // 双击画面 = 进全屏（与 v1 同手势；裁剪中不接管，免得抢了裁剪框的双击）
 function onStageDblClick(e: MouseEvent): void {
   if (cropping.value) return
+  // 加载 / 失败态盖着时不进全屏：那会绕过覆盖层直接开始播
+  if (busy.value) return
   e.stopPropagation()
   // 全屏改用全局预览组件（用户口径 2026-10-17：不要自己实现预览，
   // 生成历史 / 底栏素材卡都是主题注册的 MediaViewer）——把当前视频交给总线，

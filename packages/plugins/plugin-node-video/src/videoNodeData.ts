@@ -93,3 +93,18 @@ export function frameFileName(videoName: string | undefined, at: number): string
   const base = raw.replace(/.[^./]+$/, '') || 'video'
   return `${base}_${formatTime(at).replace(':', '-')}.png`
 }
+
+/**
+ * 卡片上是否盖着加载 / 失败态。
+ *
+ * 来源 = data.runState.status（与底部状态栏的任务覆盖层同一把 key）：
+ * running 是正在跑任务，error 是失败 / 暂停后的整卡失败态，两者都把卡片整块盖住。
+ *
+ * 为什么要单独判一次：视频节点默认鼠标移进来就自动播放。加载态盖在卡片上时，
+ * 用户看不到画面、也不需要预览，此时再去解码视频只会白耗资源。
+ * 所以悬停照常记录，但播放入口（自动播 / 点播放按钮 / 双击全屏）一律按这个判定拦掉。
+ */
+export function isVideoCardBusy(data: Record<string, unknown> | undefined | null): boolean {
+  const rs = data?.runState as { status?: unknown } | undefined | null
+  return rs?.status === 'running' || rs?.status === 'error'
+}
