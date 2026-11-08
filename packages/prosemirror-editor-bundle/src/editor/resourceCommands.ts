@@ -5,6 +5,39 @@ import { applyThumbByIds, chipAttrsNeedUpdate } from './resourceNode'
 import { mySchema } from './schema'
 
 /**
+ * 把**已经画在屏幕上**的标签名字前缀改成最新序号（用户 2026-11-08：「1 · 名字」）。
+ *
+ * 为什么单独走这条路、而不是 setNodeMarkup 改节点属性：
+ * 正文标签是 atom 节点，属性一改 ProseMirror 就重建整颗标签 DOM ——
+ * 用户刚点中的那颗会丢掉选中，光标先弹到标签前面再落回后面（2026-10-27 修过一次的老毛病，
+ * 2026-11-08 因为把序号写进属性又复发了一次）。序号是纯显示，没有理由动文档。
+ *
+ * 找不到 DOM（标签还没画、或已经被删）就静默跳过：下一次渲染会按注册表画出正确的号。
+ */
+export function syncChipIndexDom(view: EditorView | null, pos: number, item: ResourceItem): void {
+  if (!view) return
+  let el: HTMLElement | null = null
+  try {
+    const dom = view.nodeDOM(pos)
+    el = dom instanceof HTMLElement ? dom : null
+  } catch {
+    el = null
+  }
+  if (!el) return
+  // toDOM 有时会把节点包一层：按 id 兜底找一次，找不到就算了
+  if (el.getAttribute('data-id') !== item.id) {
+    const found = Array.from(el.querySelectorAll<HTMLElement>('[data-id]'))
+      .find((node) => node.getAttribute('data-id') === item.id)
+    el = found ?? el
+  }
+  const label = el.querySelector<HTMLElement>('.resource-chip-name')
+  if (!label) return
+  const index = typeof item.chipIndex === 'number' && item.chipIndex > 0 ? Math.floor(item.chipIndex) : 0
+  if (index > 0) label.setAttribute('data-chip-index', String(index))
+  else label.removeAttribute('data-chip-index')
+}
+
+/**
  * 找到正文里 id 相同的资源标签并**原地替换**它的样子（url / name / 状态）。
  *
  * 为什么需要它：底栏的「待输入」槽位填好内容后，正文里那个标签要立刻从虚线变实线、
@@ -39,7 +72,6 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
         id: item.id,
         name: item.name,
         url: item.url ?? '',
-        chipIndex: item.chipIndex ?? 0,
       }) || String(node.attrs.chipKind ?? '') !== String(item.chipKind ?? '')
       tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
@@ -50,7 +82,6 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
         value: item.value ?? '',
         category: item.category,
         chipKind: item.chipKind ?? '',
-        chipIndex: item.chipIndex ?? 0,
       })
     })
     if (!rebound) return false
@@ -81,15 +112,7 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
     // registry（按节点 id 存）也要同步 url —— chip 走 renderEditor 分支渲染时
     // 读的是 registry 条目，只改 attrs 不改 registry 的话缩略图不会变（真机踩过）。
     const reg = itemRegistry.get(node.attrs.id)
-    if (reg) {
-      itemRegistry.set(node.attrs.id, {
-        ...reg,
-        url: item.url ?? '',
-        thumbnail_url: '',
-        name: String(node.attrs.name ?? reg.name),
-        ...(typeof item.chipIndex === 'number' ? { chipIndex: item.chipIndex } : {}),
-      })
-    }
+    if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
     const nextAttrs = {
       ...node.attrs,
       // name 传 undefined = 保留原名字：标签名是用户提示词的一部分（引用名），
@@ -102,20 +125,16 @@ export function replaceResource(view: EditorView | null, item: ResourceItem): bo
       value: item.value ?? '',
       category: item.category,
       chipKind: item.chipKind ?? '',
-      // 序号跟着注册表一起更新（参考卡拖拽后标签上的「N · 」要变）
-      chipIndex: typeof item.chipIndex === 'number' ? item.chipIndex : 0,
     }
     if (clearing) {
       nextAttrs.url = ''
       nextAttrs.thumbnail_url = ''
       nextAttrs.chipKind = ''
       nextAttrs.value = ''
-      nextAttrs.chipIndex = 0
     }
     changed = chipAttrsNeedUpdate(node.attrs, {
       name: nextAttrs.name,
       url: nextAttrs.url,
-      chipIndex: nextAttrs.chipIndex,
     }) || String(node.attrs.chipKind ?? '') !== String(nextAttrs.chipKind)
     tr.setNodeMarkup(pos, undefined, nextAttrs)
   })
@@ -230,17 +249,19 @@ export function refreshChips(view: EditorView | null): void {
      */
     const chipId = String(node.attrs.id ?? '')
     const sig = chipSignature(item)
-    /*
-     * 序号也在这里对齐（用户 2026-11-08）：参考卡拖拽换序后注册表里的 chipIndex 变了，
-     * 但文档属性没变的话 ProseMirror 不会重建标签 —— 用户看到「拖了，标签里的号不动」。
-     * 把 chipIndex 一起写回去，节点才算真的变了。
+    /**
+     * 序号**只改 DOM、不碰文档**（用户 2026-11-08 第二次反馈）。
+     *
+     * 踩过的坑：一开始把序号存进标签节点属性，换序后 setNodeMarkup 重建节点 ——
+     * 用户刚点中的那颗标签因此丢掉选中，光标先弹到标签前面再落回后面（旧毛病复发）。
+     * atom 节点一重建必有这个副作用。所以序号这类**纯显示**的数据只改已经画出来的
+     * DOM：选中、光标、撤销历史全都不动，只把名字前面那个数字换掉。
      */
-    const wantIndex = typeof item.chipIndex === 'number' && item.chipIndex > 0 ? item.chipIndex : 0
-    const indexStale = (Number(node.attrs.chipIndex ?? 0) || 0) !== wantIndex
-    if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '', chipIndex: wantIndex })
+    syncChipIndexDom(view, pos, item)
+    if (!chipAttrsNeedUpdate(node.attrs, { url: item.url ?? '', name: item.name ?? node.attrs.name ?? '' })
       && chipRenderSig.get(chipId) === sig) return
     chipRenderSig.set(chipId, sig)
-    tr.setNodeMarkup(pos, undefined, { ...node.attrs, chipIndex: indexStale ? wantIndex : node.attrs.chipIndex })
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs })
     changed = true
   })
   if (changed) view.dispatch(tr)

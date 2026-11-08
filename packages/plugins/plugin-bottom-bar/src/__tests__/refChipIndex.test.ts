@@ -79,3 +79,28 @@ describe('参考卡与标签同号', () => {
     ])
   })
 })
+
+/**
+ * 序号**不许**写进标签节点属性（用户 2026-11-08 第二次反馈的老毛病）。
+ *
+ * 踩过两次：
+ *   ① 2026-10-27：底栏刷新时无条件 setNodeMarkup 重建标签 → 用户点中的标签丢选中、
+ *      光标先弹到标签前面再落回后面（闪两下）；
+ *   ② 2026-11-08：为了「拖拽后序号能刷新」把序号塞进节点属性 → 同样的重建、同样的闪。
+ *
+ * 结论：序号是纯显示，只许原位改 DOM（resourceCommands.syncChipIndexDom）。
+ * 如果哪天有人为了省事把它变成节点属性，chipAttrsNeedUpdate 也要跟着变 ——
+ * 这条测试就是在那一步踩刹车。
+ */
+describe('序号只影响显示，不算「需要重写文档」', () => {
+  it('名字格里只有 data-chip-index（样式用），节点属性里没有序号', () => {
+    const items = toEditorResources(nameRefNames([material('n1', '猫')]))
+    const spec = items[0].renderEditor!(items[0]) as unknown[]
+    const chipProps = spec[1] as Record<string, unknown>
+    expect(Object.keys(chipProps).some((k) => /chip-?index/i.test(k))).toBe(false)
+    const nameNode = (spec.slice(2) as unknown[][]).find(
+      (child) => (child[1] as Record<string, string>).class === 'resource-chip-name',
+    )!
+    expect((nameNode[1] as Record<string, string>)['data-chip-index']).toBe('1')
+  })
+})

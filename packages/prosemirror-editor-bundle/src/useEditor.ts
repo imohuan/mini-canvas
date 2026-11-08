@@ -64,6 +64,33 @@ export {
   type TagSpec,
 } from "./editor/tagSpec";
 
+/**
+ * 这条事务是不是「点标签后浏览器就近落光标」产生的噪声选区？（用户 2026-10-27 报、2026-11-08 复述）
+ *
+ * ⚠️ 别删这个保护、也不要让别的逻辑在这段时间改文档（用户反复遇到的就是它被绕过）：
+ * 点标签后 ProseMirror 先把整颗标签选中（NodeSelection），**1 秒后**才由计时器把光标
+ * 放到标签之后。这 1 秒里浏览器会先给一个「紧贴标签前面」的原生文本光标，
+ * ProseMirror 读到就再派发一条只改选区的事务 —— 用户看到「光标先跳到标签前、再跳回后面」
+ * 闪两下，且那一刻标签会失去选中态。
+ *
+ * 判定条件刻意很窄，宁可漏吞也不要误吞：
+ *   · 必须正在等落光标（pending 非空）；
+ *   · 事务不能改文档（插入/删除/换绑要照常应用）；
+ *   · 当前选区必须还是**那颗标签的整颗选中**（用户中途点了别处 → 放行）；
+ *   · 新选区必须是空的、且正好贴在标签前面（pending.from）。
+ */
+export function isChipCaretNoise(
+  tr: { docChanged: boolean; selectionSet: boolean; selection: Selection },
+  pending: { from: number } | null,
+  current: Selection,
+): boolean {
+  if (!pending) return false
+  if (tr.docChanged || !tr.selectionSet) return false
+  if (!(current instanceof NodeSelection) || current.from !== pending.from) return false
+  const { selection } = tr
+  return selection.empty && selection.from === pending.from
+}
+
 export function useEditor(
   editorRef: Ref<HTMLElement | null>,
   props: {
@@ -131,6 +158,16 @@ export function useEditor(
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
   /** 标签点击后的延迟落光标（CHIP_CARET_DELAY）；连点只保留最后一次 */
   let chipClickTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * 「点了标签、正在等光标落到标签后面」的那颗标签（标签在文档里的起始位置）。
+   *
+   * ⚠️ 别删、也别让这段时间里的选区被别的事务改掉（用户 2026-10-27 报、2026-11-08 复述）：
+   * 点标签后 ProseMirror 先把整颗标签选中（NodeSelection），1s 后才把光标放到它后面。
+   * 但浏览器在点下去的瞬间就会「就近」给一个原生文本光标，位置在标签**前面**；
+   * ProseMirror 读到它会派发一条「光标在标签前」的事务 —— 用户看到「先跳前、再跳后」闪两下。
+   * 所以这段时间要用 isChipCaretNoise 把这种纯选区噪声吞掉，只保留计时器那一次落位。
+   */
+  let pendingChipCaret: { from: number } | null = null;
 
   // 过滤后的项目
   const filteredItems = ref<ResourceItem[]>([])
@@ -396,15 +433,23 @@ export function useEditor(
      *
      * 为什么延后：直接跳光标会让人看不到"这一下点中了什么"；先选中再落光标，
      * 既确认了点击对象，又能让用户紧接着在标签后面打字（默认落点在标签之前）。
+     *
+     * ⚠️ 这里会进入「等落光标」状态（pendingChipCaret）。这 1 秒里**绝不能有任何事务
+     * 重建这颗标签节点**（setNodeMarkup / 改 attrs）：atom 节点一重建，整颗选中就没了，
+     * 浏览器把光标就近放到标签前面、计时器再挪到后面 —— 视觉上就是闪两下。
+     * 2026-10-27 修过一次（让 chipAttrsNeedUpdate 在内容没变时不写文档），
+     * 2026-11-08 因为把序号塞进节点属性又踩了一次，所以这里再钉一遍。
      */
     if (view) {
       const pos = view.posAtDOM(el, 0)
       const node = view.state.doc.nodeAt(pos)
       if (node && isAtomNode(node.type.name)) {
         const after = pos + node.nodeSize
+        pendingChipCaret = { from: pos }
         if (chipClickTimer) clearTimeout(chipClickTimer)
         chipClickTimer = setTimeout(() => {
           chipClickTimer = null
+          pendingChipCaret = null
           if (!view) return
           try {
             view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, after)))
@@ -646,6 +691,17 @@ export function useEditor(
       editable: () => unref(props.editable) !== false,
       dispatchTransaction(transaction) {
         if (!view) return;
+        /**
+         * 点标签后的 1 秒里，浏览器会先给一个「紧贴标签前面」的原生光标，
+         * ProseMirror 读到会派发一条只改选区的事务 —— 用户看到光标先跳到标签前、
+         * 再被计时器挪到后面，闪两下，标签还会在中途丢选中。
+         *
+         * ⚠️ 这一段必须排在 apply 之前（旧代码把它整个删过，问题就复发了）。
+         * 判定写得很窄，只吞「等待落光标 + 当前是这颗标签的整颗选中 + 新选区紧贴标签前」
+         * 这一种；用户点别处、或真的改了文档，都照常应用。
+         * 详见 isChipCaretNoise 的注释。
+         */
+        if (isChipCaretNoise(transaction, pendingChipCaret, view.state.selection)) return;
         const newState = view.state.apply(transaction);
         view.updateState(newState);
 

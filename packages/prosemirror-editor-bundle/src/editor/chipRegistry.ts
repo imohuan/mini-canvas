@@ -21,9 +21,6 @@ export function chipSignature(item: ResourceItem): string {
     item.url ?? '',
     item.thumbnail_url ?? '',
     item.chipKind ?? '',
-    // 序号只影响画出来的样子（用户 2026-11-08：拖拽后标签里的序号要跟着变）。
-    // 不进签名的话，刷新时会被判成「外观没变」，正文里的角标就停在旧值。
-    item.chipIndex ?? '',
     item.invalid === true,
     Boolean(item.onIconClick),
     Boolean(item.onReplaceClick),
@@ -373,14 +370,13 @@ export function registerSlotItemsFromDoc(docJson: unknown): void {
     for (const raw of nodes) {
       const node = raw as {
         type?: string
-        attrs?: { id?: unknown; name?: unknown; chipKind?: unknown; chipIndex?: unknown }
+        attrs?: { id?: unknown; name?: unknown; chipKind?: unknown }
         content?: unknown
       } | null
       if (!node || typeof node !== 'object') continue
       if (node.type === 'resource') {
         const id = String(node.attrs?.id ?? '')
         const name = String(node.attrs?.name ?? '')
-        const idx = Number(node.attrs?.chipIndex ?? 0) || 0
         if (!id || itemRegistry.has(id)) {
           // 已有条目（调用方登记过更新的内容）→ 不动
         } else if (id.startsWith(REF_NODE_PREFIX) || id.startsWith(REF_NAME_PREFIX)) {
@@ -388,7 +384,6 @@ export function registerSlotItemsFromDoc(docJson: unknown): void {
           itemRegistry.set(id, buildRefChipItem({
             id,
             name: name || id,
-            ...(idx > 0 ? { index: idx } : {}),
             ...(kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'text'
               ? { bound: { kind } }
               : {}),

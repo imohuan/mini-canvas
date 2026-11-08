@@ -36,25 +36,4 @@ describe('chipAttrsNeedUpdate：标签要不要重写', () => {
     expect(chipAttrsNeedUpdate({ url: 'a.png', name: '图片1' }, { url: 'a.png', name: '图片2' })).toBe(true)
   })
 
-  /*
-   * 序号（用户 2026-11-08）：参考卡拖拽换序后，标签上的「N · 」要跟着变。
-   *
-   * 为什么必须写进文档属性：正文标签是 atom 节点，属性一个字没变时 ProseMirror
-   * 不会重建 DOM —— 只改注册表的话用户看到的是「拖了，标签里还是旧号」。
-   */
-  it('只有序号变了 → 需要改文档（否则界面停在旧号）', () => {
-    expect(chipAttrsNeedUpdate({ url: 'a.png', name: '图片1', chipIndex: 1 }, { url: 'a.png', name: '图片1', chipIndex: 2 })).toBe(true)
-  })
-
-  it('序号没变 → 不改文档', () => {
-    expect(chipAttrsNeedUpdate({ url: 'a.png', name: '图片1', chipIndex: 2 }, { url: 'a.png', name: '图片1', chipIndex: 2 })).toBe(false)
-  })
-
-  it('旧文档没有序号（缺省）与 0 等价', () => {
-    expect(chipAttrsNeedUpdate({ url: 'a.png', name: '图片1' }, { url: 'a.png', name: '图片1', chipIndex: 0 })).toBe(false)
-  })
-
-  it('调用方不提序号 → 序号不参与判定（老调用方行为不变）', () => {
-    expect(chipAttrsNeedUpdate({ url: 'a.png', name: '图片1', chipIndex: 3 }, { url: 'a.png', name: '图片1' })).toBe(false)
-  })
 })
