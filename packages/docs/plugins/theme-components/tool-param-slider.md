@@ -46,8 +46,8 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 
 ## 使用方式与示例
 
-通常**不直接用它** —— 声明 `kind: 'duration'`（连续型）或 `kind: 'speed'`
-后由 [ToolParamField](/plugins/theme-components/tool-param-field) 自动选用：
+通常**不直接用它** —— 参数写 `type: 'number'` 并给 `min` / `max` 后，
+由 [ToolParamField](/plugins/theme-components/tool-param-field) 自动选用：
 
 ```vue
 <!-- 文件：packages/my-plugin/src/DurationPicker.vue -->
@@ -62,7 +62,7 @@ const ToolParamSlider = useUiComponent('toolParamSlider')
 
 const duration = ref(8)
 const param: ToolParamDef = {
-  key: 'duration', label: '时长', kind: 'duration', type: 'number',
+  key: 'duration', label: '时长', type: 'number',
   unit: '秒', min: 1, max: 20, step: 1, default: 8,
 }
 </script>
@@ -74,7 +74,7 @@ const param: ToolParamDef = {
 
 ## 注意事项
 
-1. **两档以内别用它**：像 5 秒 / 10 秒这种只有两档的时长，判定表会选
-   [选项网格](/plugins/theme-components/tool-option-grid)（点一下比拖一下好）。这条分档在 `paramKind.ts` 里。
-2. **`kind: 'duration'` 才走它**：只给 `type: 'number'` 不声明 `kind`，会回落内置数字控件。
+1. **有 `min` / `max` 才走它**：只写 `type: 'number'` 不给范围，会画成普通数字输入框。
+2. **几档固定值别用它**：像 5 秒 / 10 秒这种，写 `type: 'number'` + `options`
+   会变成 [选项网格](/plugins/theme-components/tool-option-grid)（点一下比拖一下好）。
 3. **单位只是后缀文案**：组件不做单位换算。

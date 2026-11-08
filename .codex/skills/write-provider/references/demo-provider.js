@@ -2,10 +2,9 @@
  * 全功能 provider 演示（自包含单文件，丢进 <数据根>/providers/ 即生效）。
  *
  * 覆盖的东西：
- *   1. 4 种参数控件：select / number / boolean / text（含 number 有范围与无范围两种形态）
- *   2. 全部会渲染的 kind：ratio / quality / resolution / background / count / camera /
- *      duration（按钮档与滑块两种形态）/ speed / model / speaker / format
- *      —— 外加未声明 kind 的普通下拉（对照组）与 kind:'style'（底栏会过滤掉）
+ *   1. 5 种基础控件：select / grid（按钮网格）/ number（滑块或输入框）/ string / boolean
+ *      其中 number 演示三种形态：带 options → 网格、带 min/max → 滑块、无范围 → 输入框
+ *   2. 专属 UI：kind:'ratio'（比例网格），外加 columns 控制一行几格
  *   3. 图标三种写法：SVG 字符串、Base64 图片、图标名（`seedance` / `火山引擎`）
  *   4. 预设 templates（选中后连提示词带参数一起填）
  *   5. panelHtml 两种形态：带输入框（画在参数区）、不带输入框（占输入框那一行）
@@ -313,12 +312,14 @@ const provider = {
         },
       ],
       fields: [
-        // kind: ratio —— 比例网格，每格画真实宽高比的小矩形
+        // ── 专属 UI：只有 ratio 需要 kind ──
+        // 每格画一个按真实宽高比缩放的描边矩形；columns 控制一行几格。
         {
           key: 'ratio',
           kind: 'ratio',
-          label: '比例',
+          label: '比例（kind: ratio + columns 6）',
           type: 'select',
+          columns: 6,
           default: '16:9',
           options: [
             { label: '1:1', value: '1:1' },
@@ -329,12 +330,13 @@ const provider = {
             { label: '自动', value: 'auto' },
           ],
         },
-        // kind: quality —— 3 列按钮网格
+
+        // ── 基础控件 1：type grid（按钮网格） ──
+        // 不写 columns 时按选项数自动排一行（3 档 → 3 列）。
         {
           key: 'quality',
-          kind: 'quality',
-          label: '画质',
-          type: 'select',
+          label: '画质（grid，自动 3 列）',
+          type: 'grid',
           default: 'hd',
           options: [
             { label: '标准', value: 'sd' },
@@ -342,12 +344,12 @@ const provider = {
             { label: '超清', value: 'uhd' },
           ],
         },
-        // kind: resolution —— 3 列按钮网格
+        // columns: 1 → 竖排一列。适合两个字的选项（低 / 中 / 高）。
         {
           key: 'resolution',
-          kind: 'resolution',
-          label: '分辨率',
-          type: 'select',
+          label: '分辨率（grid + columns 1）',
+          type: 'grid',
+          columns: 1,
           default: '2k',
           options: [
             { label: '1K', value: '1k' },
@@ -355,62 +357,37 @@ const provider = {
             { label: '4K', value: '4k' },
           ],
         },
-        // kind: background —— 3 列按钮网格
+        // columns: 2 → 两列两行。
         {
           key: 'background',
-          kind: 'background',
-          label: '背景',
-          type: 'select',
+          label: '背景（grid + columns 2）',
+          type: 'grid',
+          columns: 2,
           default: 'white',
           options: [
             { label: '白底', value: 'white' },
             { label: '黑底', value: 'black' },
             { label: '透明', value: 'transparent' },
+            { label: '渐变', value: 'gradient' },
           ],
         },
-        // kind: count —— 3 列按钮网格
+        // ── 基础控件 2：number ──
+        // number + options → 也是按钮网格（几档里选一个）。
         {
           key: 'count',
-          kind: 'count',
-          label: '数量',
-          type: 'select',
-          default: '1',
+          label: '数量（number + options → 网格）',
+          type: 'number',
+          default: 1,
           options: [
-            { label: '1 张', value: '1' },
-            { label: '2 张', value: '2' },
-            { label: '4 张', value: '4' },
+            { label: '1 张', value: 1 },
+            { label: '2 张', value: 2 },
+            { label: '4 张', value: 4 },
           ],
         },
-        // kind: camera —— 3 列按钮网格
-        {
-          key: 'camera',
-          kind: 'camera',
-          label: '运镜',
-          type: 'select',
-          default: 'fixed',
-          options: [
-            { label: '固定', value: 'fixed' },
-            { label: '推近', value: 'push' },
-            { label: '环绕', value: 'orbit' },
-          ],
-        },
-        // kind: duration + 只有 2 个档 → 按钮网格（不是滑块）
-        {
-          key: 'durationPreset',
-          kind: 'duration',
-          label: '时长档位',
-          type: 'select',
-          default: '5',
-          options: [
-            { label: '5 秒', value: '5' },
-            { label: '10 秒', value: '10' },
-          ],
-        },
-        // kind: duration + 数字区间 → 滑块 + 数字框
+        // number + min/max/step/unit → 滑块 + 数字框。
         {
           key: 'durationSec',
-          kind: 'duration',
-          label: '时长（连续）',
+          label: '时长（number + min/max，滑块）',
           type: 'number',
           default: 6,
           min: 4,
@@ -418,11 +395,9 @@ const provider = {
           step: 1,
           unit: '秒',
         },
-        // kind: speed + 数字区间 → 滑块
         {
           key: 'speed',
-          kind: 'speed',
-          label: '语速',
+          label: '语速（滑块 + unit）',
           type: 'number',
           default: 1,
           min: 0.5,
@@ -430,11 +405,18 @@ const provider = {
           step: 0.1,
           unit: '倍',
         },
-        // kind: model —— 名字长、永远走下拉（>=4 个选项也不会铺成网格）
+        // number 无范围 → 普通数字输入框（不是滑块）。
+        {
+          key: 'seed',
+          label: '种子（number 无范围 → 输入框）',
+          type: 'number',
+          default: 42,
+        },
+
+        // ── 基础控件 3：select（永远下拉） ──
         {
           key: 'model',
-          kind: 'model',
-          label: '模型',
+          label: '模型（select）',
           type: 'select',
           default: 'v2',
           options: [
@@ -444,75 +426,20 @@ const provider = {
             { label: '实验模型 v3-preview', value: 'v3-preview' },
           ],
         },
-        // kind: speaker —— 只有 2 个选项也**仍然**是下拉，用来对比上面的自动网格
-        {
-          key: 'speaker',
-          kind: 'speaker',
-          label: '音色',
-          type: 'select',
-          default: 'male',
-          options: [
-            { label: '男声 · 沉稳', value: 'male' },
-            { label: '女声 · 明亮', value: 'female' },
-          ],
-        },
-        // kind: format —— 3 个选项 → 按钮网格
-        {
-          key: 'format',
-          kind: 'format',
-          label: '格式',
-          type: 'select',
-          default: 'png',
-          options: [
-            { label: 'PNG', value: 'png' },
-            { label: 'JPEG', value: 'jpg' },
-            { label: 'WEBP', value: 'webp' },
-          ],
-        },
-        // 没写 kind 的 select → 仍是普通下拉（对比 speaker：写了 kind 也一样是下拉）
-        {
-          key: 'plainSelect',
-          label: '未声明 kind 的下拉',
-          type: 'select',
-          default: 'a',
-          options: [
-            { label: '选项 A', value: 'a' },
-            { label: '选项 B', value: 'b' },
-          ],
-        },
-        // type: text —— 单行输入
+
+        // ── 基础控件 4：string / boolean ──
         {
           key: 'note',
-          label: '备注（text）',
-          type: 'text',
+          label: '备注（string）',
+          type: 'string',
           default: '',
           placeholder: '随便写点什么',
         },
-        // type: number 且无范围 —— 普通数字输入框（不是滑块）
-        {
-          key: 'seed',
-          label: '种子（无范围的 number）',
-          type: 'number',
-          default: 42,
-        },
-        // type: boolean —— 开关
         {
           key: 'upscale',
-          label: '放大 2 倍',
+          label: '放大 2 倍（boolean）',
           type: 'boolean',
           default: false,
-        },
-        // kind: style —— 底栏会整条过滤，写在这里只是演示「不要用这一项」
-        {
-          key: 'styleName',
-          kind: 'style',
-          label: '风格（不会显示）',
-          type: 'select',
-          default: 'photo',
-          options: [
-            { label: '摄影', value: 'photo' },
-            { label: '插画', value: 'illustration' },
-          ],
         },
       ],
 
@@ -570,7 +497,6 @@ const provider = {
       fields: [
         {
           key: 'model',
-          kind: 'model',
           label: '模型',
           type: 'select',
           default: 'a',
@@ -616,9 +542,8 @@ const provider = {
         },
         {
           key: 'camera',
-          kind: 'camera',
           label: '运镜',
-          type: 'select',
+          type: 'grid',
           default: 'fixed',
           options: [
             { label: '固定', value: 'fixed' },
@@ -626,7 +551,7 @@ const provider = {
             { label: '环绕', value: 'orbit' },
           ],
         },
-        { key: 'note', label: '备注', type: 'text', default: '' },
+        { key: 'note', label: '备注', type: 'string', default: '' },
       ],
       templates: [
         {
@@ -738,9 +663,8 @@ const provider = {
         },
         {
           key: 'quality',
-          kind: 'quality',
-          label: '画质',
-          type: 'select',
+          label: '画质（grid）',
+          type: 'grid',
           default: 'hd',
           options: [
             { label: '标准', value: 'sd' },

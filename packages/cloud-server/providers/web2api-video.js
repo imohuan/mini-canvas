@@ -238,23 +238,23 @@ const ratio_doubao = {
 }
 
 const duration_doubao_auto = {
-  key: 'durationSec', kind: 'duration', label: '时长', type: 'number',
+  key: 'durationSec', label: '时长', type: 'number',
   min: 4, max: 10, step: 1, default: 5, unit: '秒',
 }
 
-/** dola 只有 5 / 10 两档 */
+/** dola 只有 5 / 10 两档：number + options 会自动画成按钮网格（不用再写 kind） */
 const duration_dola_auto = {
-  key: 'durationSec', kind: 'duration', label: '时长', type: 'number', default: 5,
+  key: 'durationSec', label: '时长', type: 'number', default: 5,
   options: [{ label: '5秒', value: '5' }, { label: '10秒', value: '10' }],
 }
 
 const duration_doubao_api = {
-  key: 'duration', kind: 'duration', label: '时长', type: 'number',
+  key: 'duration', label: '时长', type: 'number',
   min: 4, max: 15, step: 1, default: 10, unit: '秒',
 }
 
 const duration_seedance = {
-  key: 'duration', kind: 'duration', label: '时长', type: 'number',
+  key: 'duration', label: '时长', type: 'number',
   min: 4, max: 180, step: 1, default: 5, unit: '秒',
 }
 
@@ -264,7 +264,7 @@ const ratio_seedance = {
 }
 
 const camera_doubao = {
-  key: 'cameraMovement', kind: 'camera', label: '运镜', type: 'select',
+  key: 'cameraMovement', label: '运镜', type: 'grid',
   options: [
     { label: '固定镜头', value: '固定镜头' },
     { label: '镜头环绕', value: '镜头环绕拍摄' },

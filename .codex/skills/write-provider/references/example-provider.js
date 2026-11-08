@@ -36,7 +36,7 @@ const provider = {
             { label: '1:1', value: '1:1' },
           ],
         },
-        { key: 'count', kind: 'count', label: '数量', type: 'number', default: 1, min: 1, max: 4, step: 1 },
+        { key: 'count', label: '数量', type: 'number', default: 1, min: 1, max: 4, step: 1 },
       ],
       templates: [
         {

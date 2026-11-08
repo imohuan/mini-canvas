@@ -90,11 +90,12 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 - `promptBinding: 'text'`：输入框直接绑文本节点的 `data.text`。
 - `nodeTypes: ['image'|'video'|'audio']`：只在对应节点上出现；省略 = 都适用。
 - `order`：小的排前面。
-- `fields`：可视化参数。每项 `{ key, label, type, default, options?, min?, max?, step?, unit?, kind? }`。
-  `type` 只有 `select` / `number` / `boolean` / `text` 四种；`kind` 只有 12 个可识别值。
-  每种写法画成什么、哪些值会被忽略，见
-  [references/params-and-kinds.md](./references/params-and-kinds.md)。注意 `kind: 'style'`
-  会被底栏整条过滤掉，写了也不显示。
+- `fields`：可视化参数。每项 `{ key, label, type, default, options?, min?, max?, step?, unit?, columns?, kind? }`。
+  **`type` 是主体**，5 个值覆盖常规需求：`select` / `grid`（按钮网格）/ `number`
+  （滑块或输入框）/ `string` / `boolean`。**`kind` 只剩 `ratio` 一个**，专给基础控件
+  画不出来的比例网格。每种写法画成什么、`columns` 怎么用，见
+  [references/params-and-kinds.md](./references/params-and-kinds.md)。
+  注意 `kind: 'style'` 会被底栏整条过滤掉，写了也不显示。
 - `templates`：预设。`{ id, name, prompt, values?, description?, forTools? }`，
   `values` 的键就是 `fields` 里的 `key`，选中预设时连参数一起填。
 - `panelHtml`：自带一段 HTML 面板，替代 `fields` 的内置控件。写法见
@@ -132,6 +133,7 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 ## 示例
 
 - [references/example-provider.js](./references/example-provider.js)：最小可跑，同步 + 异步两个动作。
-- [references/demo-provider.js](./references/demo-provider.js)：全功能演示，覆盖 4 种 type、
-  全部会渲染的 kind、两种图标写法、预设、HTML 面板、异步轮询（含 `waiting`）与取消，
+- [references/demo-provider.js](./references/demo-provider.js)：全功能演示，覆盖 5 种基础
+  控件（含 `columns` 的三种排版）、`kind:ratio`、两种图标写法、预设、HTML 面板、
+  异步轮询（含 `waiting`）与取消，
   并真的生成 PNG 产物。

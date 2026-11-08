@@ -293,7 +293,7 @@ const ratio_apimart = {
 }
 
 const resolution_apimart = {
-  key: 'resolution', kind: 'resolution', label: '分辨率', type: 'select', default: '1k',
+  key: 'resolution', label: '分辨率', type: 'grid', default: '1k',
   options: [
     { label: '1K (标清)', value: '1k' },
     { label: '2K (高清)', value: '2k' },
@@ -301,7 +301,8 @@ const resolution_apimart = {
   ],
 }
 
-const count_apimart = { key: 'n', kind: 'count', label: '数量', type: 'number', default: 1, min: 1, max: 10, step: 1 }
+/** 数量是「1~10 档」，滑块比按钮更好用（10 个按钮排成两行） */
+const count_apimart = { key: 'n', label: '数量', type: 'number', default: 1, min: 1, max: 10, step: 1 }
 
 const provider = {
   id: 'web2api-image',

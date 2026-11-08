@@ -68,7 +68,7 @@ const ToolParamGroup = useUiComponent('toolParamGroup')
 const params: ToolParamDef[] = [
   { key: 'ratio', label: '比例', kind: 'ratio', type: 'select',
     options: [{ label: '16:9', value: '16:9' }, { label: '9:16', value: '9:16' }] },
-  { key: 'quality', label: '画质', kind: 'quality', type: 'select',
+  { key: 'quality', label: '画质', type: 'grid',
     options: [{ label: '标准', value: 'standard' }, { label: '高清', value: 'hd' }] },
 ]
 

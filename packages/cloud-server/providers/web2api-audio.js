@@ -236,7 +236,7 @@ async function pollTask(taskId) {
 }
 
 const format_volc = {
-  key: 'format', kind: 'format', label: '格式', type: 'select', default: 'wav',
+  key: 'format', label: '格式', type: 'grid', default: 'wav',
   options: [
     { label: 'WAV', value: 'wav' },
     { label: 'MP3', value: 'mp3' },
@@ -246,7 +246,7 @@ const format_volc = {
 
 /** 豆包音色：与 web2api 的 voices 表必须一致，否则「照名字选、出来另一个人」 */
 const speaker_doubao = {
-  key: 'speaker', kind: 'speaker', label: '音色', type: 'select',
+  key: 'speaker', label: '音色', type: 'select',
   default: 'zh_female_xiaohe_conversation_wvae_bigtts',
   options: [
     { label: '温柔桃子（升级版）', value: 'zh_female_wenroutaozi_v2_mars_bigtts' },
@@ -350,8 +350,12 @@ const speaker_doubao = {
   ],
 }
 
+/**
+ * 语速 / 音调 / 音量：有范围的数值 → 基础控件画成滑块 + 数字框。
+ * 以前这里写 kind:'speed'，那个 kind 现在没有了（滑块本来就是基础控件）。
+ */
 function speed(key, label, min, max, def) {
-  return { key, kind: 'speed', label, type: 'number', min, max, step: 5, default: def }
+  return { key, label, type: 'number', min, max, step: 5, default: def }
 }
 
 export default {

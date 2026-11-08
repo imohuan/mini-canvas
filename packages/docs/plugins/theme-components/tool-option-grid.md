@@ -1,7 +1,7 @@
 # 选项网格 ToolOptionGrid
 
-**一句话**：参数预设件之一 —— 「一个小标题 + 一块按钮网格」（画质、清晰度、背景、生成数量那一排）。
-登记在 `ui` 目录名 `toolParamGrid`。
+**一句话**：**按钮网格**基础控件 —— 「一个小标题 + 一块按钮网格」，点一下就切换。
+登记在 `ui` 目录名 `toolParamGrid`，由 `type: 'grid'` 触发。
 
 源码：`packages/plugins/plugin-theme-components/src/components/ui/ToolOptionGrid.vue`。
 版式照参考站实测：区块标题高 20、12px/600 弱化色；网格 gap 8；按钮高 32、圆角 8、1px 发丝边、透明底；选中 = `--ui-hover-strong` 底。
@@ -19,7 +19,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 > 一参数一块：小标题 + 按钮网格，选中态跟着 `modelValue` 走。
 
 - **一参数一块**：块内是小标题与按钮网格，选中态用 `aria-pressed` 表达。
-- **列数可配**：默认 3 列（与参考站的画质/清晰度/背景/数量一致）。
+- **列数可配**：`columns` 定一行几格；省略时按选项数排一行（最多 6 列）。
 - **可藏标题**：`hideTitle` 在"参数标签已在别处出现"时用。
 - **与比例网格共用容器数值**：它抽出容器是为了让 [ToolRatioGrid](/plugins/theme-components/tool-ratio-grid)
   只覆写"每格画什么"，避免两份数值各写一遍后漂移。
@@ -31,7 +31,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 | `param` | `ToolParamDef` | 必填 | 参数声明（标题取 `param.label` 或 `param.key`） |
 | `modelValue` | `string / number / boolean` | `''` | 当前值（与选项值做字符串比较判断选中） |
 | `disabled` | `boolean` | `false` | 禁用全部按钮 |
-| `columns` | `number` | `3` | 每行几格 |
+| `columns` | `number` | `3` | 每行几格（父组件按 `param.columns` 或选项数算好后传入） |
 | `hideTitle` | `boolean` | `false` | 不显示区块标题 |
 
 ## Slots / 插槽
@@ -48,7 +48,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 
 ## 使用方式与示例
 
-通常**不直接用它** —— 声明参数 `kind` 后由 [ToolParamField](/plugins/theme-components/tool-param-field) 自动选用。
+通常**不直接用它** —— 参数写 `type: 'grid'` 后由 [ToolParamField](/plugins/theme-components/tool-param-field) 自动选用。
 想单独用（比如面板里就想要一排按钮）：
 
 ```vue
@@ -64,7 +64,7 @@ const ToolOptionGrid = useUiComponent('toolParamGrid')
 
 const quality = ref('standard')
 const param: ToolParamDef = {
-  key: 'quality', label: '画质', kind: 'quality', type: 'select', default: 'standard',
+  key: 'quality', label: '画质', type: 'grid', default: 'standard',
   options: [{ label: '标准', value: 'standard' }, { label: '高清', value: 'hd' }, { label: '超清', value: 'uhd' }],
 }
 </script>
