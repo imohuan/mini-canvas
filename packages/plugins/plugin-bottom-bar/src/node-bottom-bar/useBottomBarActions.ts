@@ -3,17 +3,9 @@ import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { BarAction } from '../barTypes'
 import { FALLBACK_TYPE_ICONS } from './icons'
-import { customModelIcon, modelIconOf, type ModelIcon } from './modelIcons'
-
-/**
- * Agent 插件提供的平台图标服务（可选依赖）。
- * 装在宿主里时优先用它 —— 图标只有一份，底栏不再手画品牌图形。
- * 没装 Agent 时返回 undefined，调用方回落到本地兜底图形。
- */
-interface ModelIconServiceLike {
-  svgOfName(name: string): string
-  platformOfName(name: string): string
-}
+import type { ModelIcon } from './modelIcons'
+/** 图标判定收在 actionIcon：provider 的 icon → 图标名 → 标题猜测 → 兜底 */
+import { resolveActionIcon, type ModelIconServiceLike } from './actionIcon'
 
 interface ActionDeps {
   ctx: CanvasRenderContext['ctx']
@@ -78,14 +70,7 @@ export function useBottomBarActions(
    * 3. 本地兜底（认不出平台时按节点类型给个通用图形，绝不空白）。
    */
   function modelIconOfAction(a: BarAction): ModelIcon {
-    const own = customModelIcon(a.icon)
-    if (own) return own
-    const svc = iconService.value
-    if (svc) {
-      const platform = svc.platformOfName(a.title)
-      if (platform !== 'custom') return { tone: platform as ModelIcon['tone'], svg: svc.svgOfName(a.title) }
-    }
-    return modelIconOf(a.title, a.types?.[0] ?? nodeType.value)
+    return resolveActionIcon(a.title, a.icon, iconService.value, a.types?.[0] ?? nodeType.value)
   }
 
   const actionOptions = computed(() =>

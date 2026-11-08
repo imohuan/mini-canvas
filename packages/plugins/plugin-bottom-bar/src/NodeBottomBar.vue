@@ -189,7 +189,7 @@ const useAgentModelsEffective = computed(() => useAgentModels.value && agentPick
 /** 输入框：动作要输入框，或当前类型能用 Agent 的模型面板且组件确实在 */
 const showPromptEditor = computed(() => showEditor.value || useAgentModelsEffective.value)
 
-/** 动作 → ChoicePicker 的一行：参数摘要拼进副标题 */
+/** 动作 → ChoicePicker 的一行：参数摘要拼进副标题，图标与触发器同一份 */
 const actionChoices = computed(() =>
   actionOptions.value.map((o) => {
     const action = actions.value.find((a) => a.id === o.value)
@@ -205,6 +205,8 @@ const actionChoices = computed(() =>
       description: o.description ?? '',
       group: o.group ?? '',
       note: summary,
+      /** provider 图标 / 图标名 / 兜底 —— 下拉列表与触发器必须同源 */
+      model: o.model,
     }
   }),
 )
@@ -532,6 +534,9 @@ const modelChoices = computed(() =>
       id: a.id,
       title: a.title,
       params: (a.fields ?? []) as ToolParamDef[],
+      /** provider 的 icon 一路带到弹窗：那边的选择器也要长同一副样子 */
+      icon: a.icon,
+      types: a.types,
       templates: a.templates ?? [],
       /** provider 自带 HTML 参数面板（底栏「参数」下拉渲染的就是它）；弹窗复用同一份 */
       panelHtml: (a as { panelHtml?: string }).panelHtml ?? '',

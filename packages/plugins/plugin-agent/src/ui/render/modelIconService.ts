@@ -36,6 +36,17 @@ export interface ModelIconService {
   svgOfModel(modelId: string, provider?: string): string
   /** 底栏动作：显示名（如「豆包 Seedance 2.0 Fast」）→ `<svg>` */
   svgOfName(name: string): string
+  /**
+   * provider 的 `icon` 写成一个图标名 / 平台名时的查表入口。
+   *
+   * 支持三种写法：
+   * 1. 平台 key 原样（`seedance` / `volcengine`）—— 直接命中图标表；
+   * 2. 平台展示名 / 关键字（`火山引擎`、`可灵`）—— 走 NAME_RULES；
+   * 3. 带空白的模糊描述（`kling video`）—— 同上，命中哪个用哪个。
+   */
+  svgOfIconHint(hint: string): string
+  /** 同上，返回平台 key（`custom` 表示自建网关）；**认不出返回空串** */
+  platformOfIconHint(hint: string): string
   /** 底栏动作：显示名 → 平台 key */
   platformOfName(name: string): string
   /** 当前有图标的平台清单 */
@@ -76,6 +87,23 @@ const NAME_RULES: Array<[RegExp, string]> = [
   [/tts|语音|音色|朗读|配音/, 'audio'],
 ]
 
+/**
+ * `icon` 写成名字时的查表：先认平台 key 原样，再走 NAME_RULES 的关键字。
+ *
+ * 为什么要先认 key：provider 作者最自然的写法就是 `icon: 'seedance'`，
+ * 而 NAME_RULES 里没有 `/^seedance$/` 这类精确规则（它认的是人写的标题）。
+ *
+ * 返回值约定：认得出 → 平台 key（`custom` 也算认得出，它是自建网关那一格）；
+ * 认不出 → 空串。空串与 `custom` 必须分开，否则 `icon: 'custom'` 会被当成没认出。
+ */
+function platformOfIconHint(hint: string): string {
+  const raw = String(hint ?? '').trim().toLowerCase()
+  if (!raw) return ''
+  if (Object.prototype.hasOwnProperty.call(MODEL_BRAND_ICONS, raw)) return raw
+  for (const [re, key] of NAME_RULES) if (re.test(raw)) return key
+  return ''
+}
+
 export function createModelIconService(): ModelIconService {
   const platformOfName = (name: string): string => {
     const s = String(name ?? '').toLowerCase()
@@ -89,6 +117,8 @@ export function createModelIconService(): ModelIconService {
     svgOfModel: (modelId, provider) => brandSvg(detectPlatform(modelId, provider ?? '')),
     svgOfName: (name) => brandSvg(platformOfName(name)),
     platformOfName,
+    platformOfIconHint: (hint) => platformOfIconHint(hint),
+    svgOfIconHint: (hint) => brandSvg(platformOfIconHint(hint)),
     platforms: () => brandPlatforms(),
     icons: () => MODEL_BRAND_ICONS,
     bareModelId: (modelId) => stripProviderPrefix(modelId),

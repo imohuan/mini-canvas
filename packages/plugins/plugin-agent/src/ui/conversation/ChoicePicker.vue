@@ -38,6 +38,14 @@ export interface ChoiceItem {
   isDefault?: boolean
   /** 是否可用（无密钥的模型 / 当前节点不支持的动作） */
   disabled?: boolean
+  /**
+   * 这一行自己的图标（完整 `<svg>` 或 `<img>` 字符串），由调用方给。
+   *
+   * 为什么需要：面板原来只有「按 platform 查品牌图标」一条路，于是 provider 自带的
+   * 图标只在触发器上出现、列表里被换成兜底图形（用户 2026-11-08 截图）。
+   * 给了 svg 就原样渲染，platform 继续只负责分组与名字。
+   */
+  svg?: string
 }
 
 const props = withDefaults(
@@ -277,7 +285,7 @@ defineExpose({ refreshLayout })
             <Button v-for="item in filtered" :key="item.id" variant="ghost" size="sm"
               role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
               <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
-                v-html="brandSvg(platformOf(item))"></span>
+                v-html="item.svg || brandSvg(platformOf(item))"></span>
               <span class="ac-model-copy">
                 <span class="ac-model-card-top">
                   <span class="ac-model-id">{{ item.title }}</span>
@@ -320,7 +328,7 @@ defineExpose({ refreshLayout })
                 <Button v-for="item in filtered" :key="item.id" variant="ghost" size="sm"
                   role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
                   <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
-                    v-html="brandSvg(platformOf(item))"></span>
+                  v-html="item.svg || brandSvg(platformOf(item))"></span>
                   <span class="ac-model-copy">
                     <span class="ac-model-id">{{ item.title }}</span>
                     <span class="ac-model-meta">

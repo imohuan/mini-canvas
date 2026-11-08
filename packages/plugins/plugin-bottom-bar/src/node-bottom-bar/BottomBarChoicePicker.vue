@@ -43,6 +43,8 @@ const items = computed(() =>
     subtitle: o.group || o.description || '',
     note: o.note ?? '',
     isDefault: o.value === props.currentId,
+    /** 每行自己的图标：与触发器同一份，列表里不会再退回兜底图形 */
+    icon: o.model ?? null,
   })),
 )
 </script>

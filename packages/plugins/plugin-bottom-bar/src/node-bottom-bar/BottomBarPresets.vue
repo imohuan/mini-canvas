@@ -28,7 +28,8 @@ import {
 import { loadPresets, savePresets } from '../presetStore'
 import { resolveAgentBaseUrl } from '../aiActions'
 import type { ToolParamDef } from '@mini-canvas/kernel'
-import { modelIconOf, type ModelIcon } from './modelIcons'
+import type { ModelIcon } from './modelIcons'
+import { resolveActionIcon, type ModelIconServiceLike } from './actionIcon'
 import ChoicePickerMenu from './ChoicePickerMenu.vue'
 import HtmlPanelFrame from './HtmlPanelFrame.vue'
 import { ICON_BOOKMARK, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
@@ -50,6 +51,10 @@ const props = defineProps<{
     id: string
     title: string
     params: ToolParamDef[]
+    /** provider 声明的图标（SVG / Base64 / 图标名），弹窗与底栏同源 */
+    icon?: unknown
+    /** 动作适用的节点类型（图标兜底用） */
+    types?: string[]
     /** provider 在动作声明里带的模板（只读，跟动作一起上下线） */
     templates?: Array<{ id: string; name: string; prompt: string; description?: string; values?: Record<string, unknown> }>
   }>
@@ -327,15 +332,23 @@ const draftModelLabel = computed(() => {
  * 要的是图2那个带搜索、卡片、分栏的面板，不是简单菜单）。
  * Agent 未装（取不到组件）时回退到底栏同款的简版 DropdownMenu。
  */
+/** 平台图标服务：与底栏同一份，弹窗里的图标才不会另长一副样子 */
+const iconService = computed(() => ctx.tryGet<ModelIconServiceLike>('modelIcons'))
+
+/** 一个模型的图标：与底栏共用 resolveActionIcon（icon → 图标名 → 标题 → 兜底） */
+function iconOf(m: { title: string; icon?: unknown; types?: string[] }): ModelIcon {
+  return resolveActionIcon(m.title, m.icon, iconService.value, m.types?.[0])
+}
+
 const draftModelIcon = computed<ModelIcon | null>(() => {
   if (!draftActionId.value) return null
   const hit = (props.modelChoices ?? []).find((m) => m.id === draftActionId.value)
-  return hit ? modelIconOf(hit.title) : null
+  return hit ? iconOf(hit) : null
 })
 
 /** 弹窗里的模型选项：图标（底栏同源）+ 名称 + id */
 const draftModelOptions = computed(() =>
-  (props.modelChoices ?? []).map((m) => ({ id: m.id, title: m.title, icon: modelIconOf(m.title) })),
+  (props.modelChoices ?? []).map((m) => ({ id: m.id, title: m.title, icon: iconOf(m) })),
 )
 
 /** ChoicePicker 的一行：id / 标题；platform 不传，图标交给 Agent 按标题识别 */
@@ -347,6 +360,8 @@ const pickerItems = computed(() =>
       title: o.title,
       subtitle: '预设可用模型',
       isDefault: o.id === draftActionId.value,
+      /** 图标逐行带上：与底栏下拉、触发器同一份 */
+      icon: o.icon,
     })),
   ],
 )

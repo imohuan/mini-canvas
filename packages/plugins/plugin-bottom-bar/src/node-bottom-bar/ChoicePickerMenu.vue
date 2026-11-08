@@ -18,6 +18,13 @@ export interface PickerItem {
   subtitle?: string
   note?: string
   isDefault?: boolean
+  /**
+   * 这一行自己的图标（provider 的 icon / 图标名 / 兜底）。
+   *
+   * 不传时面板按标题猜平台 —— 那正是「触发器有图标、列表里全是兜底」的由来：
+   * Agent 的 ChoicePicker 只认标题。传了就优先用这里的，列表与触发器才对得上。
+   */
+  icon?: ModelIcon | null
 }
 
 const props = withDefaults(
@@ -89,7 +96,14 @@ const menuHeight = computed(() =>
 )
 const menuSide = computed(() => (props.inDialog ? 'bottom' : splitView.value ? 'top' : 'bottom'))
 
-/** 归一成 ChoicePicker 的行。**不传 platform**：交给 Agent 内部按标题识别（图标才对） */
+/**
+ * 归一成 ChoicePicker 的行。
+ *
+ * `svg` 是逐行的图标（完整 `<svg>` / `<img>` 字符串）。给了就由面板原样渲染；
+ * 没给才回落 Agent 内部「按标题猜平台」。
+ * 不在这一层传 platform：面板的 platform 还决定分栏左列的分组，
+ * 按 icon 猜出来的 key 会让分组与图标互相打架。
+ */
 const items = computed(() =>
   props.items.map((o) => ({
     id: o.id,
@@ -97,6 +111,7 @@ const items = computed(() =>
     subtitle: o.subtitle ?? '',
     note: o.note ?? '',
     isDefault: o.isDefault ?? o.id === props.currentId,
+    ...(o.icon?.svg ? { svg: o.icon.svg } : {}),
   })),
 )
 
