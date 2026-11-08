@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 240" width="760" height="240" font-family="system-ui, sans-serif">
+  <rect width="760" height="240" fill="#1b1b1d"/>
+  <text x="24" y="30" fill="#cfcfd4" font-size="14">现状：收藏（预设）按钮只在有输入框的模式出现</text>
+  <rect x="24" y="56" width="330" height="44" rx="12" fill="#222226" stroke="#33333a"/>
+  <text x="42" y="83" fill="#e6e6ea" font-size="12">文本 · 复制</text>
+  <text x="200" y="83" fill="#6f6f78" font-size="11">无输入框 → 无收藏按钮</text>
+  <text x="380" y="83" fill="#e07a6a" font-size="12">✕</text>
+  <rect x="24" y="130" width="330" height="44" rx="12" fill="#222226" stroke="#33333a"/>
+  <text x="42" y="157" fill="#e6e6ea" font-size="12">图片 · 豆包 Seedream 4.5</text>
+  <rect x="288" y="140" width="24" height="24" rx="6" fill="#2c2c31" stroke="#4a4a52"/>
+  <path d="M294 144h12v16l-6-4-6 4z" fill="none" stroke="#cfcfd4" stroke-width="1.5" stroke-linejoin="round"/>
+  <text x="322" y="157" fill="#79c98d" font-size="12">✓</text>
+  <text x="380" y="157" fill="#8f8f98" font-size="12">有输入框 → 有收藏按钮</text>
+  <text x="24" y="206" fill="#8f8f98" font-size="12">原因：NodeBottomBar 的插槽写了 v-if="showEditor"，showEditor = 当前动作 needsPrompt。</text>
+  <text x="24" y="226" fill="#cfcfd4" font-size="12">期望：任何模式都显示；预设按节点类型分开存。</text>
+</svg>

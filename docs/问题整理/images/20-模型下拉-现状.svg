@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" font-family="system-ui, sans-serif">
+  <rect width="720" height="300" fill="#1b1b1d"/>
+  <text x="24" y="30" fill="#cfcfd4" font-size="14">现状：文本节点的「模型下拉」里只有复制 / 删除</text>
+  <!-- trigger -->
+  <rect x="24" y="56" width="210" height="34" rx="10" fill="#2a2a2e" stroke="#3a3a40"/>
+  <rect x="38" y="66" width="14" height="14" rx="3" fill="none" stroke="#9a9aa2" stroke-width="1.6"/>
+  <path d="M38 71h14M45 66v14" stroke="#9a9aa2" stroke-width="1.4"/>
+  <text x="62" y="78" fill="#e6e6ea" font-size="13">复制</text>
+  <path d="m210 70 5 5 5-5" fill="none" stroke="#9a9aa2" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- menu -->
+  <rect x="24" y="100" width="210" height="86" rx="12" fill="#242428" stroke="#3a3a40"/>
+  <rect x="36" y="112" width="14" height="14" rx="3" fill="none" stroke="#9a9aa2" stroke-width="1.6"/>
+  <path d="M36 117h14M43 112v14" stroke="#9a9aa2" stroke-width="1.4"/>
+  <text x="60" y="124" fill="#e6e6ea" font-size="13">复制</text>
+  <path d="m196 116 6 6 10-12" fill="none" stroke="#e6e6ea" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="36" y="142" width="14" height="14" rx="3" fill="none" stroke="#9a9aa2" stroke-width="1.6"/>
+  <path d="M36 147h14M43 142v14" stroke="#9a9aa2" stroke-width="1.4"/>
+  <text x="60" y="154" fill="#e6e6ea" font-size="13">删除</text>
+  <!-- note -->
+  <text x="270" y="120" fill="#8f8f98" font-size="12">文本节点只装了文本插件，</text>
+  <text x="270" y="142" fill="#8f8f98" font-size="12">没有发布任何「文本生成」工具动作，</text>
+  <text x="270" y="164" fill="#8f8f98" font-size="12">所以下拉里只剩复制 / 删除。</text>
+  <text x="270" y="192" fill="#8f8f98" font-size="12">这不是 Agent 的模型清单。</text>
+  <text x="24" y="236" fill="#cfcfd4" font-size="12">期望：下拉 = Agent 配置里可用的文本 / 对话模型；复制删除不占模型位。</text>
+</svg>
