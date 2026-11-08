@@ -1,7 +1,42 @@
 # icon 可用的图标名
 
-`icon` 写成名字时，能认出下面这些平台 key（来自 `modelBrandIcons.ts` 的
-`MODEL_BRAND_ICONS`，共 31 个）。也可以直接写中文名或关键字，走同一张规则表模糊匹配。
+## 先看这里：你不用记，问后台就行
+
+图标清单有接口，直接查：
+
+```
+GET http://127.0.0.1:<端口>/api/agent/icons
+```
+
+```json
+{ "ok": true, "count": 31,
+  "platforms": [
+    { "key": "volcengine", "name": "火山引擎", "aliases": ["火山引擎", "火山", "Volcengine"] }
+  ] }
+```
+
+三个接口：
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/agent/icons` | 全部平台：key、展示名、能认的别名 |
+| `GET /api/agent/icons/:hint` | 查一个写法到底认不认得出 |
+| `GET /api/agent/icons.svg` | 带完整 SVG 的清单，想直接复用图形时看它 |
+
+单条查询最实用 —— 它走的就是 `icon` 字段那条判定：
+
+```
+GET /api/agent/icons/火山引擎
+→ { "ok": true, "hint": "火山引擎", "matched": true, "key": "volcengine", "name": "火山引擎" }
+
+GET /api/agent/icons/zzz
+→ { "ok": true, "hint": "zzz", "matched": false, "key": "", "name": "" }
+```
+
+认不出回 `matched: false` 而不是 404 —— 「这个写法认不出」是个正常答案。
+所以你可以先在接口里试一个写法，确认能认再写进 provider，不用改文件重启试。
+
+下面的表格是同一份清单的快照，方便离线看。
 
 | key | 平台 |
 | --- | --- |
@@ -43,6 +78,10 @@
 2. 命不中再走关键字表，所以 `icon: '火山引擎'`、`icon: '可灵'`、`icon: '豆包'` 都能认。
 3. 都认不出就当没写 `icon`，退回「按动作标题猜平台」。
 4. `icon: 'custom'` 是**有效值**，表示要用自建网关那一格图标，不会当成「认不出」。
+
+注意这张表既有**平台 key**，也有**中文别名**。两栏不是二选一：
+`icon: 'volcengine'` 和 `icon: '火山引擎'` 都能认出同一个图标，随便用哪个。
+上表「平台」那一列只是给人看的展示名，真正能写的是 **key 和别名**（`aliases`）。
 
 ## 什么时候用哪种写法
 

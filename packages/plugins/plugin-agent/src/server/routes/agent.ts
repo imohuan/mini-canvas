@@ -11,6 +11,7 @@ import { Hono } from 'hono'
 import type { AgentConfigService } from '../agent/config.js'
 import { isSecretMask } from '../agent/config.js'
 import type { AgentRuntime } from '../agent/runtime.js'
+import { iconRoutes } from './icons.js'
 
 export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): Hono {
   const app = new Hono()
@@ -312,6 +313,14 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     runtime.setPolicy({ enabled, rules })
     return c.json({ ok: true, policy: runtime.getPolicy() })
   })
+
+  /*
+   * 图标清单：provider 作者要知道 icon 能写哪些名字。
+   *
+   * 挂在这里而不是单开一个插件：它不依赖任何服务，本质上也是「Agent 的配置面」，
+   * 与 /api/agent/config 同一组；宿主侧也只需 adopt 一个 app。
+   */
+  app.route('/', iconRoutes())
 
   return app
 }

@@ -58,7 +58,7 @@ function need<T>(ctx: PluginScope, name: string): T {
   return v
 }
 
-/** 配置 / 模型 / 技能 / MCP / 提示词（GET/PUT /api/agent/*）。 */
+/** 配置 / 模型 / 技能 / MCP / 提示词（GET/PUT /api/agent/*）+ 图标清单。 */
 export const agentConfigPlugin: PluginModule = {
   name: 'agent-routes',
   inject: [AGENT_SERVICES.config, AGENT_SERVICES.runtime],

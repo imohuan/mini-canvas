@@ -22,6 +22,10 @@
 
 ## 二、判定顺序（命中就停）
 
+第 2 步「`icon` 写成的名字」和第 3 步「动作标题」用的是**同一套规则**，
+只是输入不同：一个是你写的 `icon`，一个是动作的 `title`。
+所以「豆包 Seedance」这几个字，写在 `icon` 里、或写在标题里，认出来的是同一个图标。
+
 四层，全部收在 `packages/plugins/plugin-bottom-bar/src/node-bottom-bar/actionIcon.ts`
 的 `resolveActionIcon()`：
 
@@ -117,6 +121,8 @@ Base64 图标走的是 `<img>`，没有尺寸规则就按原始像素画 ——
 
 ## 八、自测
 
+0. 想用平台图标时，先 `GET /api/agent/icons/<你的写法>` 看 `matched`。
+   认不出（`matched: false`）就换一个别名，或写成 SVG / Base64。
 1. `GET /api/actions` 找到你的动作，确认 `icon` 字段是你写的那串。
    Base64 可以解一下：前 8 字节是 `89 50 4E 47 0D 0A 1A 0A`，
    第 17～24 字节是大端宽高。

@@ -79,8 +79,10 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 `templates`、`panelHtml` 就是这样被静默丢掉的）。
 
 - `icon`：三种写法都行 —— SVG 字符串、`data:image/...;base64,...`、或**图标名**。
-  图标名可以是平台 key（`seedance` / `volcengine` / `kling` / `doubao`…）或者中文名 /
-  关键字（`火山引擎`、`可灵`），会做模糊匹配。可用 key 见
+图标名可以是平台 key（`seedance` / `volcengine` / `kling` / `doubao`…）或者中文名 /
+  关键字（`火山引擎`、`可灵`），会做模糊匹配。**不用背清单**：
+  `GET /api/agent/icons` 列出全部平台与别名，`GET /api/agent/icons/<你的写法>`
+  直接告诉你认不认得出（认不出回 `matched: false`，不是报错）。详见
   [references/icon-names.md](./references/icon-names.md)；
   完整判定顺序、三处消费点、尺寸规则见
   [references/icon-resolution.md](./references/icon-resolution.md)。
@@ -104,7 +106,8 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 2. 等 3 秒，后台日志应出现 `provider 目录已变更，动作清单更新为 N 项`。
 3. 请求 `GET http://127.0.0.1:<端口>/api/actions`，能搜到自己的 `action.id`。
 4. 日志里出现 `provider 加载失败 <文件>：<原因>`，就是语法错了或没通过校验。
-5. 再回画布底栏下拉里确认动作、图标、参数控件都在。
+5. `icon` 想写平台名时，先用 `GET /api/agent/icons/<写法>` 确认认不认得出。
+6. 再回画布底栏下拉里确认动作、图标、参数控件都在（触发器和列表每一行都要看）。
 
 ## 图标怎么显示
 
@@ -119,6 +122,9 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 1. `icon` 只影响显示，**不影响分组和搜索** —— 分栏左栏的平台分组仍按标题认。
 2. `<svg>` 和 `<img>` 的尺寸规则成对写；只写 `svg` 时 Base64 图标会按原始像素画，
    1×1 的图就是一块空白。
+
+「有哪些图标可写、这个写法认不认得出」不用记，查后台：
+`GET /api/agent/icons` 与 `GET /api/agent/icons/<写法>`。
 
 细节（返回的 `{ tone, svg }` 是什么、三处消费点在哪、各容器多少像素、怎么写自测）见
 [references/icon-resolution.md](./references/icon-resolution.md)。
