@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
 import { pluginLibBuild } from '../vite-plugin-lib'
+import { shikiStubPlugin } from './shikiStubPlugin'
 
 // plugin-demo-kit —— 四套开发演示合并后的**唯一**产物（UMD），供「插件管理」按需安装。
 // 另带一个独立的主题工作台预览页（`pnpm -C packages/plugins/plugin-demo-kit dev` → /theme-lab.html）：
@@ -20,7 +21,7 @@ import { pluginLibBuild } from '../vite-plugin-lib'
 export default defineConfig(({ command }) => {
   if (command === 'serve') {
     return {
-      plugins: [vue()],
+      plugins: [vue(), shikiStubPlugin()],
       server: { port: 5318, strictPort: true, open: false },
       optimizeDeps: {
         exclude: [

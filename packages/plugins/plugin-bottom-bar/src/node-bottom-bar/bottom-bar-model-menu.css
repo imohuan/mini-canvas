@@ -19,6 +19,12 @@
   min-height: 0;
   overflow: hidden;
 }
+/*
+ * 浮层内容盒的宽度必须钉住（用户 2026-11-07：卡片设 340 实测 520）。
+ * 组件库 DropdownMenuContent 自带 w-(--reka-dropdown-menu-trigger-width)，
+ * 跟随**触发器**宽度；底栏触发器一带图标就超过 340，内容盒被撑到 520。
+ * 这里 min/max 双向钉死，内联的 width 才能说了算。
+ */
 
 /*
  * 两个滚动观感问题（用户 2026-11-07 截图 1）：

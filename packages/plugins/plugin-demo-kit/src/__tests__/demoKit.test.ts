@@ -62,20 +62,16 @@ describe('demo-kit 四套演示都登记了东西', () => {
     const status = slots.occupants('shell.status')
     const dock = slots.occupants('shell.dock')
     const tabs = slots.occupants('shell.drawer.tabs')
-    const settingsNav = slots.occupants('settings.nav')
-    const settingsPage = slots.occupants('settingsGroup/主题工作台')
 
     expect(overlay).toHaveLength(2) // 组件展厅 + 热重载靶子
     expect(topToolbar).toHaveLength(1)
     expect(status).toHaveLength(2)
     expect(dock).toHaveLength(3)
     expect(tabs).toHaveLength(1)
-    expect(settingsNav).toHaveLength(1)
-    expect(settingsPage).toHaveLength(1)
     // 抽屉页签必须带 meta.panel（宿主契约：缺面板会被忽略）
     expect((tabs[0]!.meta as { panel?: unknown }).panel).toBeTruthy()
 
-    const ids = [...overlay, ...topToolbar, ...status, ...dock, ...tabs, ...settingsNav, ...settingsPage].map((e) => e.id)
+    const ids = [...overlay, ...topToolbar, ...status, ...dock, ...tabs].map((e) => e.id)
     for (const id of ids) expect(id.startsWith('demo-kit/'), id).toBe(true)
 
     ctx.stop()
@@ -94,7 +90,7 @@ describe('demo-kit 四套演示都登记了东西', () => {
     expect(slots.occupants('shell.status')).toHaveLength(0)
     expect(slots.occupants('shell.dock')).toHaveLength(0)
     expect(slots.occupants('shell.drawer.tabs')).toHaveLength(0)
-    expect(slots.occupants('settings.nav')).toHaveLength(0)
+    // 颜色配方已迁进默认主题：demo-kit 不注册任何设置页
     expect(slots.occupants('settingsGroup/主题工作台')).toHaveLength(0)
   })
 })
