@@ -218,19 +218,37 @@ const numberValue = computed(() => {
 </template>
 
 <style scoped>
-/* 视觉照项目 UI 规范与设置界面：浅底 + 发丝边 + 圆角 8 */
+/*
+ * 输入框只管「配色」，**尺寸与内边距交给 shadcn 的 Input 本体**（px-3 py-1 h-9）。
+ *
+ * 踩过的坑（用户 2026-11-08 截图：左侧文字贴边、看着像被裁掉一截）：
+ * 这里原来写 `padding: 5px 8px`，把组件的 12px 左右内边距盖成 8px，
+ * 上下也从 8px 压到 5px —— 文字贴着圆角，垂直方向又偏上，观感就是被切了。
+ * `border` 与 `border-radius` 同理：shadcn 用 border-transparent + 主题圆角，
+ * 再写一遍会把主题圆角档位（--mct-radius）顶掉。
+ */
 .tpf-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 5px 8px;
-  border: 1px solid var(--sf-input-line, rgba(0, 0, 0, 0.08));
-  border-radius: 8px;
+  /* 描边由 shadcn 的 border + 主题的发丝线给；这里只补一圈可见的边 */
+  border-color: var(--sf-input-line, rgba(0, 0, 0, 0.08));
   background: var(--sf-input-bg, rgba(0, 0, 0, 0.03));
   color: var(--sf-label, #111827);
   font: inherit;
   font-size: 12px;
   outline: none;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/*
+ * 高度与下拉触发器对齐（h32）。
+ *
+ * 只给 `height` 不给内边距的话，shadcn 的 `py-1`（4px）配 20px 行高会让文字
+ * 挤在 36px 框的中间偏上；这里把上下留白放开到 6px，视觉上与 32px 的下拉一致。
+ */
+.tpf-input {
+  height: 32px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .tpf-input:hover:not(:disabled) {
   background: var(--sf-input-bg-hover, rgba(0, 0, 0, 0.05));
