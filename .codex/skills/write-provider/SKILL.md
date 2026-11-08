@@ -80,9 +80,10 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 
 - `icon`：三种写法都行 —— SVG 字符串、`data:image/...;base64,...`、或**图标名**。
   图标名可以是平台 key（`seedance` / `volcengine` / `kling` / `doubao`…）或者中文名 /
-  关键字（`火山引擎`、`可灵`），会做模糊匹配。查表顺序：先按字面命中平台 key，
-  再按关键字模糊认；都认不出才退回「按动作标题猜」。可用 key 见
-  [references/icon-names.md](./references/icon-names.md)。
+  关键字（`火山引擎`、`可灵`），会做模糊匹配。可用 key 见
+  [references/icon-names.md](./references/icon-names.md)；
+  完整判定顺序、三处消费点、尺寸规则见
+  [references/icon-resolution.md](./references/icon-resolution.md)。
 - `needsPrompt`：要不要底栏那个大输入框（默认不要）。
 - `promptBinding: 'text'`：输入框直接绑文本节点的 `data.text`。
 - `nodeTypes: ['image'|'video'|'audio']`：只在对应节点上出现；省略 = 都适用。
@@ -107,9 +108,20 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 
 ## 图标怎么显示
 
-图标会在两个地方出现：底栏那个胶囊触发器，和展开后下拉里的**每一行**。
-两边走同一份判定（`resolveActionIcon`），所以不会出现「触发器有图标、列表里是兜底」。
-`icon` 只影响显示，不影响分组和搜索。
+图标出现在三处：底栏触发器、下拉的**每一行**、预设弹窗的模型选择器。
+三处共用 `resolveActionIcon` 一份判定，所以不会出现「触发器有图标、列表里是兜底」。
+
+判定四层，命中就停：你的 `icon`（SVG / Base64）→ `icon` 写成的图标名 →
+按动作标题猜平台 → 按节点类型兜底。
+
+两个容易踩的点：
+
+1. `icon` 只影响显示，**不影响分组和搜索** —— 分栏左栏的平台分组仍按标题认。
+2. `<svg>` 和 `<img>` 的尺寸规则成对写；只写 `svg` 时 Base64 图标会按原始像素画，
+   1×1 的图就是一块空白。
+
+细节（返回的 `{ tone, svg }` 是什么、三处消费点在哪、各容器多少像素、怎么写自测）见
+[references/icon-resolution.md](./references/icon-resolution.md)。
 
 ## 示例
 
