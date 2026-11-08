@@ -351,7 +351,9 @@ const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessa
 
   it('宿主 AgentConversation：4 处 ToolViewBody 全部接上 @preview', () => {
     const sites = host.split('<ToolViewBody').slice(1)
-    expect(sites.length).toBe(4)
+    // 2026-11-07：命令类工具改走 AgentTerminal，里面也包一层 ToolViewBody（输入 / 输出），
+    // 所以这里从 4 处变成 6 处；仍然要求全部接 @preview。
+    expect(sites.length).toBe(6)
     // 统一走 previewToolMedia：它按第二个参数（image / video / audio）决定 MediaViewer 挂哪只舞台
     for (const site of sites) expect(site).toContain('@preview="previewToolMedia"')
   })

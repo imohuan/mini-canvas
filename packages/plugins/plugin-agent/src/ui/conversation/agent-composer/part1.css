@@ -278,19 +278,15 @@
 }
 
 .ac-queue-flag {
+  /* 外观用组件库 Badge；这里只收窄一点（队列行很挤） */
   flex: none;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent);
-  color: var(--ui-warn, #e3a25f);
+  height: 18px;
+  padding-inline: 6px;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 14px;
 }
 
 .ac-queue-flag.is-sending {
-  background: var(--ui-chip, rgb(255 255 255 / 0.1));
-  color: var(--ui-ink-dim, #919191);
+  /* 视觉由 Badge variant 决定 */
 }
 
 /* 图标 hover 交换（用户口径 2026-10-16）：默认显示原图标，hover 行换成把手。
@@ -504,24 +500,23 @@
 }
 
 .ac-goal-flag {
+  /* 外观用组件库 Badge；只保留紧凑高度与两档语气色 */
   flex: none;
-  padding: 1px 6px;
-  border-radius: 999px;
+  height: 18px;
+  padding-inline: 6px;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 14px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.06));
-  color: var(--ui-ink-dim, #919191);
 }
 
 .ac-goal-flag.is-paused {
   background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent);
   color: var(--ui-warn, #e3a25f);
+  border-color: transparent;
 }
 
 .ac-goal-flag.is-done {
   background: var(--ui-chip, rgb(255 255 255 / 0.1));
   color: var(--ui-ink-dim, #919191);
+  border-color: transparent;
 }
 
 .ac-goal-round {
@@ -756,14 +751,33 @@
 /* 上下文环：照参考页实测占 32×32 的触发区（图标 12×12 居中），图标色 --ui-ink-dim。
    外面再包一层 tooltip 时也要保持这个尺寸，不然工具条按钮的基线会跳。 */
 
-.ac-context {
+/* 上下文 Trigger：**原来的圆环**（用户口径 2026-11-07：不要带文字的按钮）。
+   32×32 命中区里居中一颗 12×12 的环；hover / focus 才展开浮层。 */
+.ac-ctx-ring {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   margin-right: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--ui-ink-dim, #919191);
-  cursor: default;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.ac-ctx-ring:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-ctx-ring:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+.ac-ctx-ring .ac-ctx-track {
+  opacity: 0.25;
 }
 
 /* —— 上下文统计（用户口径 2026-10-11：恢复到发送键左侧）——
@@ -849,9 +863,7 @@
 
 /* 底圈：整圈淡显（照参考页 opacity .25），提供"盘面"感 */
 
-.ac-ctx-track {
-  opacity: 0.25;
-}
+/* 圆环的轨道（opacity 在 .ac-ctx-ring .ac-ctx-track 里设） */
 
 /* 发送键的尺寸 / 圆角 / 底色全部用组件库 Button 默认样式；
    这里只保留「运行中 = 停止」这一个状态色（红底白方块）。 */

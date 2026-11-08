@@ -66,19 +66,9 @@
   background: var(--ui-line, #363636);
 }
 .ac-model-split-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   /* 模型 id 没有长度上限：标签可缩、名字单行省略，极端窄面板里也不越界 */
   min-width: 0;
   max-width: 100%;
-  padding: 2px 8px;
-  border: 1px solid var(--ui-line, #363636);
-  border-radius: 999px;
-  background: var(--ui-overlay-solid, #212121);
-  color: var(--ui-ink-dim, #919191);
-  font-size: 11px;
-  line-height: 18px;
 }
 .ac-model-split-name {
   min-width: 0;
@@ -136,11 +126,8 @@
   color: var(--ui-ink-dim, #919191);
 }
 
-.ac-error {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--ui-danger, #ef4444);
-}
+/* 回合错误已改用 AI Elements Stack Trace（见 AgentStackTrace.vue），
+   这里不再保留单行红字样式。 */
 
 /* 间距统一交给 .ac-welcome 的 gap（照参考页：整块 gap 20px），这里不再单独留 margin */
 
@@ -223,7 +210,9 @@
 }
 
 /* —— 压缩提示 / 错误条（用户口径 2026-10-11）——
-   两条都是"刚发生的事"的常驻交代，挂在消息流末尾。错误条用危险色，压缩提示用中性色。 */
+   两条都是"刚发生的事"的常驻交代，挂在消息流末尾。
+   错误条内部是 AI Elements Stack Trace（它自己带 bg-muted 的等宽块），
+   外层只负责排版，不加红色底（用户口径 2026-11-07：不要再画红框）。 */
 
 .ac-compact-note,
 .ac-error-bar {
@@ -231,8 +220,6 @@
   align-items: flex-start;
   gap: 8px;
   margin: 4px 0 12px;
-  padding: 8px 10px;
-  border-radius: 10px;
   font-size: 12px;
   line-height: 18px;
 }
@@ -240,22 +227,13 @@
 .ac-compact-note {
   background: var(--ui-veil, rgb(255 255 255 / 0.06));
   color: var(--ui-ink-dim, #919191);
+  padding: 8px 10px;
+  border-radius: 10px;
 }
 
 .ac-error-bar {
-  background: color-mix(in srgb, var(--ui-danger, #ef4444) 12%, transparent);
-  color: var(--ui-danger, #ef4444);
-}
-
-.ac-error-bar-icon {
-  flex: none;
-  margin-top: 2px;
-}
-
-.ac-error-bar-text {
   flex: 1;
   min-width: 0;
-  word-break: break-word;
 }
 
 .ac-note-x {
@@ -511,51 +489,8 @@
 .ac-tool-card [data-slot='card-content'] {
   padding: 0;
 }
-.ac-approval {
-  margin: 8px 0 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--ui-warn, #b45309);
-  border-radius: 12px;
-  background: var(--ui-veil, rgb(255 255 255 / 0.04));
-}
-
-.ac-approval-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 13px;
-}
-
-/* 审批标题带工具名（MCP 名可能很长）：单行省略，别把卡片撑宽 */
-
-.ac-approval-head strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ac-approval-head svg {
-  flex: none;
-}
-
-.ac-approval-args {
-  margin: 8px 0 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--ui-code-bg, rgb(0 0 0 / 0.25));
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-}
-
-.ac-approval-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* 审批确认条住在 AgentConfirmation.vue 里（挂在对应工具行下面），
+   样式跟着组件走，这里不再重复定义。 */
 
 .ac-spin {
   animation: ac-rotate 0.9s linear infinite;
@@ -739,12 +674,11 @@
 }
 
 .ac-branch-pos {
+  /* 外观用组件库 Badge；这里只保证宽度稳定（页码跳动时不抖） */
   min-width: 48px;
-  padding: 0 2px;
   text-align: center;
-  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--ui-ink-dim, #919191);
+  justify-content: center;
 }
 
 /* —— 「回到底部」：消息区**内部**、底部居中（用户口径 2026-10-09）——

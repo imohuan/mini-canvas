@@ -756,7 +756,8 @@ for (let attempt = 1; attempt <= 3 && !approvalSeen; attempt++) {
 check('需要审批的工具弹出了审批卡片', approvalSeen)
 if (approvalSeen) {
   await snap('approval-card')
-  const allow = page.locator('.ac-approval .ac-btn-primary').first()
+  // 审批条换成组件库按钮后不再有 .ac-btn-primary：按文案点「允许」
+  const allow = page.locator('.ac-approval').getByRole('button', { name: '允许' }).first()
   check('审批卡片上有「允许」按钮', (await allow.count()) > 0)
   await allow.click()
   await page.waitForTimeout(1500)

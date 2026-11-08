@@ -48,20 +48,50 @@ function inline(text: string): string {
  */
 export function renderMarkdown(src: string): string {
   if (!src) return ''
-  const escaped = escapeHtml(src)
-  const parts = escaped.split(String.fromCharCode(96, 96, 96))
   const html: string[] = []
+  for (const seg of splitMarkdown(src)) {
+    if (seg.type === 'code') {
+      // 切段给的是**原文**：拼进 HTML 前必须转义一次（v-html 路径的安全边界）。
+      // 组件路径（AgentMarkdown）走文本插值，Vue 自己转义，不会两遍。
+      html.push('<pre class="md-code"><code>' + escapeHtml(seg.code) + '</code></pre>')
+    } else {
+      html.push(seg.html)
+    }
+  }
+  return html.join('')
+}
+
+/** Markdown 切成「富文本段 / 代码块段」—— 代码块交给组件库的 Code Block 渲染 */
+export type MarkdownSegment =
+  | { type: 'html'; html: string }
+  | { type: 'code'; lang: string; code: string }
+
+/**
+ * 按围栏代码块切段（纯函数）。
+ *
+ * 为什么不直接吐 HTML：代码块要用 shadcn 的 Code Block（语言标签 / 复制按钮 / 行号），
+ * 组件渲染比一段自己拼的 <pre> 更稳，也不会被 v-html 的样式覆盖。
+ * 文本段仍然先 escape 再拼标签（安全边界不变）。
+ */
+export function splitMarkdown(src: string): MarkdownSegment[] {
+  if (!src) return []
+  // 按**原文**切段：代码块要交给组件原样显示（Vue 文本插值会自己转义），
+  // 文本段在 renderBlocks 里先 escape 再拼标签。两次转义会让页面显示 "&amp;lt;"。
+  const parts = src.split(String.fromCharCode(96, 96, 96))
+  const out: MarkdownSegment[] = []
   parts.forEach((part, i) => {
-    const isCode = i % 2 === 1
-    if (isCode) {
-      // 第一行可能是语言标记（```ts），去掉；内容原样保留（已转义）
-      const body = part.replace(/^[a-zA-Z0-9_-]*\n/, '')
-      html.push('<pre class="md-code"><code>' + body.replace(/\n$/, '') + '</code></pre>')
+    if (i % 2 === 1) {
+      // 第一行可能是语言标记（```ts），去掉
+      const m = /^([a-zA-Z0-9_-]*)\n?/.exec(part)
+      const lang = m ? m[1] : ''
+      const body = m ? part.slice(m[0].length) : part
+      out.push({ type: 'code', lang, code: body.replace(/\n$/, '') })
       return
     }
-    html.push(renderBlocks(part))
+    const html = renderBlocks(escapeHtml(part))
+    if (html) out.push({ type: 'html', html })
   })
-  return html.join('')
+  return out
 }
 
 /** 段落 / 标题 / 列表 / 换行 */

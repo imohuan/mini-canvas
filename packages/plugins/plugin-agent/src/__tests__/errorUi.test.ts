@@ -25,16 +25,15 @@ describe('Terminal（命令执行）', () => {
     expect(t).toContain('TraceTitle')
   })
 
-  it('标题是 Ran / Running / exited with code（文档 Exit Code 表）', () => {
-    expect(t).toContain("'Running ' + command")
-    expect(t).toContain("'Ran ' + command")
-    expect(t).toContain('exited with code')
+  it('标题直接给 description / 命令，不带「执行命令」前缀（图标已表示）', () => {
+    expect(t).toContain('terminalLineTitle')
+    expect(t).not.toContain("'执行命令'")
+    expect(t).not.toContain("'Ran ' + command")
+    expect(t).not.toContain('Running ')
   })
 
-  it('输出在 CodeBlock(size=sm) + CodeBlockContent(wrap, max-h-64) 里', () => {
-    expect(t).toContain('<CodeBlock size="sm">')
-    expect(t).toContain('wrap')
-    expect(t).toContain('max-h-64')
+  it('展开区保留原来的「输入 / 输出」（插槽交给 ToolViewBody）', () => {
+    expect(t).toContain('<slot />')
   })
 })
 

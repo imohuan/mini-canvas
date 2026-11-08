@@ -41,7 +41,29 @@ export function segmentAnchors<T extends TurnLike>(
 ): Map<string, ModelSegment> {
   const map = new Map<string, ModelSegment>()
   if (!segments.length) return map
-  const byOrdinal = new Map(segments.map((s) => [s.fromUser, s]))
+
+  /**
+   * 用户口径（2026-11-07）：**只有真的切换过模型**才画这条线。
+   * 一条消息、一个模型也冒出一段「切换模型」是噪音。
+   *
+   * 两条收敛：
+   *   - fromUser = 0 的那段是「开头用的模型」：它不是切换，不画；
+   *   - 与上一段同模型的段（重复写入）折掉，不留空切换。
+   */
+  const sorted = [...segments].sort((a, b) => a.fromUser - b.fromUser)
+  const changed: ModelSegment[] = []
+  /** 上一段的模型（含被跳过的第 0 段）：同一模型连续重复 = 没有切换 */
+  let prevModel = ''
+  for (const seg of sorted) {
+    const key = seg.provider + '/' + seg.modelId
+    const same = key === prevModel
+    prevModel = key
+    if (seg.fromUser <= 0 || same) continue
+    changed.push(seg)
+  }
+  if (!changed.length) return map
+
+  const byOrdinal = new Map(changed.map((s) => [s.fromUser, s]))
   let ordinal = -1
   for (const t of turns) {
     if (t.kind !== 'user') continue

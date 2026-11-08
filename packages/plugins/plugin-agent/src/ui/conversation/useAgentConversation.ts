@@ -100,6 +100,19 @@ const contextArcOffset = computed(() => {
   return CONTEXT_CIRCUMFERENCE * (Math.min(100, Math.max(0, left)) / 100)
 })
 
+/**
+ * 上下文**已用**百分比（AI Elements Context 的 Trigger 显示的是已用，不是剩余）。
+ * 用界面那个整数反算，保证按钮文字与浮层里的进度条对得上。
+ */
+const contextPercent = computed(() => {
+  const left = s.contextLeft
+  if (left !== null) return Math.min(100, Math.max(0, 100 - left))
+  const used = s.contextUsed
+  const limit = s.contextLimit
+  if (used !== null && limit) return Math.min(100, Math.max(0, Math.round((used / limit) * 100)))
+  return 0
+})
+
 const {
   MediaViewer,
   prompt,
@@ -334,6 +347,10 @@ const {
   hasCardView,
   toolSummary,
   toolRowSummary,
+  toolLineTitle,
+  sourcesOf,
+  failureOf,
+  isTerminal,
   viewCache,
   viewOf,
   resetViewCaches,
@@ -610,6 +627,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     CONTEXT_CIRCUMFERENCE,
     ICON_COMPACT,
     contextArcOffset,
+    contextPercent,
     MediaViewer,
     prompt,
     attached,
@@ -722,6 +740,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     hasCardView,
     toolSummary,
     toolRowSummary,
+    toolLineTitle,
+    sourcesOf,
+    failureOf,
+    isTerminal,
     viewCache,
     viewOf,
     resetViewCaches,

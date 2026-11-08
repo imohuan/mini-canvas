@@ -35,11 +35,11 @@ function expectBounded(selector: string, source: string): void {
 }
 
 describe('Agent 对话：展开内容不会无限长高', () => {
-  it('思考过程：长段思考在块内滚动', () => {
-    // 2026-11-05：思考块不再写项目 CSS（颜色/内边距全交给组件），
-    // 滚动上限改为模板里的 Tailwind 任意值类，与官方组件同一套机制。
-    expect(conversation).toContain('max-h-[min(360px,50vh)]')
-    expect(conversation).toContain('overflow-y-auto')
+  it('思考行照官方 Demo：只加 whitespace-pre-wrap（不叠自己的高度上限）', () => {
+    // 用户口径 2026-11-07：思考行照官方 Reasoning Demo 原样写，
+    // 不再叠自己的高度上限 / 滚动（Demo 只有 whitespace-pre-wrap）。
+    expect(conversation).toContain('class="whitespace-pre-wrap"')
+    expect(conversation).not.toContain('max-h-[min(360px,50vh)]')
   })
 
   it('工具卡片详情：工具名 + 输入 + 输出合计高度受限', () => {

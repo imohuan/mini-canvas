@@ -3,7 +3,7 @@
  *
  * 用户口径：比较特别的窄 UI、文字很多时也要显示得下，不能顶出卡片 / 输入框。
  * 这里锁住四处容易漏的单行文本：
- *   ① 审批卡标题（「需要审批：<工具名>」，MCP 工具名可能很长）；
+ *   ① 审批确认条的标题（可能是整条命令，MCP 工具名也可能很长）；
  *   ② 输入区「创作模式」胶囊（提示词名是用户自建的，没有长度上限）；
  *   ③ 模型分割标签（模型 id 可能很长）；
  *   ④ 思考块（可能贴一整段无空格长串，不能横向撑破气泡）。
@@ -17,6 +17,7 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentMessageList.vue'))
+const confirmation = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentConfirmation.vue'))
 const composer = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
 
 function rule(selector: string): string {
@@ -26,6 +27,15 @@ function rule(selector: string): string {
   expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
   const end = host.indexOf('}', at)
   return host.slice(at, end + 1)
+}
+
+/** 同一套「找规则块」用于审批确认条（它拆成了独立组件） */
+function ruleOf(source: string, selector: string): string {
+  const normalized = selector.replace(/\s*\{\s*$/, '')
+  const at = source.indexOf(normalized + ' {')
+  expect(at, '找不到样式块：' + selector).toBeGreaterThanOrEqual(0)
+  const end = source.indexOf('}', at)
+  return source.slice(at, end + 1)
 }
 
 function rule2(selector: string): string {
@@ -46,13 +56,13 @@ function rule3(selector: string): string {
 }
 
 describe('Agent 面板：极端长文字不撑破容器', () => {
-  it('审批卡标题单行省略：长工具名不会把卡片撑宽', () => {
-    expect(rule('.ac-approval-head')).toContain('min-width: 0')
-    const title = rule('.ac-approval-head strong')
-    expect(title).toContain('min-width: 0')
-    expect(title).toContain('overflow: hidden')
-    expect(title).toContain('text-overflow: ellipsis')
-    expect(title).toContain('white-space: nowrap')
+  it('审批确认条：标题与说明可缩、能换行，不把条撑宽', () => {
+    expect(confirmation).toContain('class="ac-approval-title"')
+    expect(confirmation).toContain('class="ac-approval-desc"')
+    // 标题与说明共用同一条收敛规则（选择器列表写在同一块里）
+    const box = ruleOf(confirmation, '.ac-approval-desc')
+    expect(box).toContain('min-width: 0')
+    expect(box).toContain('word-break: break-word')
   })
 
   it('创作模式胶囊：长提示词名可缩、单行省略，不把工具条按钮挤走', () => {
@@ -74,8 +84,8 @@ describe('Agent 面板：极端长文字不撑破容器', () => {
   })
 
   it('思考块：无空格长串也能换行，不横向撑破气泡', () => {
-    // 2026-11-05 换 AI Elements Trace 后：换行由组件的 wrap-break-word Tailwind 类出（在模板里），
-    // 项目不再自绘思考块样式。
-    expect(host).toContain('wrap-break-word')
+    // 思考行照官方 Reasoning Demo：展开区就是 TraceCollapsibleContent +
+    // whitespace-pre-wrap（Demo 原样），换行由组件自带的 wrap-break-word 负责。
+    expect(host).toContain('class="whitespace-pre-wrap"')
   })
 })

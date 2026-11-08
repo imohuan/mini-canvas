@@ -5,7 +5,7 @@
  * 纯拆分：模板与 class / 文案 / 事件原样保留；状态来自同一个
  * useAgentConversation 控制器（入口 provide）。
  */
-import { inject, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import AgentMarkdown from '../render/AgentMarkdown.vue'
 import ToolViewBody from '../render/ToolViewBody.vue'
@@ -21,6 +21,12 @@ import {
 // TraceIcon 在 TraceCollapsibleTrigger 里已内置折叠箭头；行内状态图标用 TraceIcon + lucide
 import { TraceIcon } from '../ai-elements/trace'
 import { X, Loader2, LoaderCircle, Sparkles, Box, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, Pencil, CircleSlash, Minimize2, AlertCircle } from 'lucide-vue-next'
+import { ArrowUpRight, Globe } from 'lucide-vue-next'
+import { sourceLabel } from '../../model/webSources.js'
+import AgentConfirmation from './AgentConfirmation.vue'
+import AgentTerminal from './AgentTerminal.vue'
+import AgentStackTrace from './AgentStackTrace.vue'
+import { parseToolFailure } from '../../model/toolFailure.js'
 import type { AgentConversationController } from './useAgentConversation'
 
 const c = inject('agentConversation') as unknown as Record<string, any>
@@ -29,7 +35,8 @@ const {
   hintDismissed, dismissHint, SUGGESTIONS, useSuggestion,
   segmentByAnchor, segmentModelLabel, assistantRows, openThinking,
   hasCardView, viewOf, previewToolMedia,
-  toolGroupTitle, toolRowSummary, toolTitle, anyToolRunning, thinkingLive, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  toolGroupTitle, toolRowSummary, toolTitle, toolLineTitle, anyToolRunning, thinkingLive, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  sourcesOf, failureOf, isTerminal,
   openUserBubbles, overflowingUser, toggleUserBubble, setUserBubbleBody, msgTimeText, msgTimeTitle,
   copied, copyMessage, beginEditMessage, hasInlineError, pagerByAnchor, pagerTarget,
   SHOW_PROCESS_NOTICE, openPreview, showPendingOn,
@@ -44,6 +51,38 @@ const CardContent = useUiComponent('CardContent')
 // 全局 shadcn 原语（Bubble）：用户气泡的视觉壳，与文档 Demo 的 Message align="end" + Bubble 同款
 const Bubble = useUiComponent('Bubble')
 const BubbleContent = useUiComponent('BubbleContent')
+const Badge = useUiComponent('Badge')
+/**
+ * 挂起中的审批，按**它对应的那条工具调用**索引（toolCallId）。
+ * 用户口径 2026-11-07：确认条要跟着那条工具调用，而不是排在整段回答之后。
+ */
+const pendingApprovals = computed(() => {
+  const map = new Map<string, NonNullable<typeof s.turns[number]['approval']>>()
+  for (const t of s.turns) {
+    if (t.kind !== 'approval' || !t.approval || t.approval.decision) continue
+    const key = t.approval.toolCallId
+    if (key) map.set(key, t.approval)
+  }
+  return map
+})
+
+/** 这条工具调用有没有在等授权 */
+function approvalFor(toolId: string) {
+  return pendingApprovals.value.get(toolId)
+}
+
+/**
+ * 对不上任何工具的老审批（没有 toolCallId / 工具已被清理）：
+ * 仍然按原来的位置画一条，别让用户看不见、点不了。
+ */
+function orphanApproval(t: { kind: string; approval?: { toolCallId?: string } }): boolean {
+  return t.kind === 'approval' && !t.approval?.toolCallId
+}
+
+/** 回合级错误文本 → Stack Trace 数据（与工具失败同一套解析） */
+function parseError(text: string) {
+  return parseToolFailure(text)
+}
 
 /**
  * 消息流滚动层：换成组件库的 ScrollArea（用户口径 2026-11-04）。
@@ -116,31 +155,24 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
             <div v-if="segmentByAnchor.get(t.id)" class="ac-model-split" role="separator"
               :aria-label="'从这里开始使用模型 ' + segmentModelLabel(segmentByAnchor.get(t.id)!)">
               <span class="ac-model-split-line"></span>
-              <span class="ac-model-split-badge">
-                <Box :size="12" />
+              <Badge variant="outline" class="ac-model-split-badge">
+                <Box />
                 <span class="ac-model-split-name">{{ segmentModelLabel(segmentByAnchor.get(t.id)!) }}</span>
-              </span>
+              </Badge>
               <span class="ac-model-split-line"></span>
             </div>
-            <!-- 审批卡片：**只在等你决定时出现**。点过允许/拒绝之后这张卡就消失
-             （用户口径：「都授权了 就不显示」）—— 已经放行、工具也跑完了，
-             再挂一张「已允许」的死卡片只是挡着看下面的内容。 -->
-            <div v-if="t.kind === 'approval' && !t.approval?.decision" class="ac-approval">
-              <div class="ac-approval-head">
-                <Loader2 :size="14" class="ac-spin" />
-                <strong>需要审批：{{ t.approval?.toolName }}</strong>
-              </div>
-              <pre class="ac-approval-args">{{ t.approval?.arguments }}</pre>
-              <div class="ac-approval-actions">
-                <Button size="sm" @click="agent.decide(t.approval!.id, 'allow')">允许</Button>
-                <Button variant="ghost" size="sm" @click="agent.decide(t.approval!.id, 'deny')">拒绝</Button>
-              </div>
-            </div>
+            <!-- 审批：AI Elements Confirmation —— 一张 Item（variant=outline）确认条。
+             有 toolCallId 的确认条挂在**它那条工具调用下面**（见下面的工具行）；
+             这里只兜底「对不上工具」的老数据，免得审批看不见、点不了。
+             点过允许/拒绝就整条消失（「都授权了 就不显示」）。 -->
+            <AgentConfirmation v-if="orphanApproval(t) && !t.approval!.decision" :approval="t.approval!"
+              @decide="(d) => agent.decide(t.approval!.id, d)" />
 
             <!-- 用户靠右 / 助手靠左（照参考图，都没有头像）。
              外壳换成本地 AI Elements 的 Message（对话轮次容器，align 端对齐），
              class 与编辑态挂法不变（合同测试照旧钉住）。 -->
-            <AiMessage v-else :align="t.kind === 'user' ? 'end' : 'start'" :class="['ac-msg', t.kind, { 'is-editing': t.editing }]">
+            <!-- 已挂在工具下面的审批回合（有 toolCallId）不再单独占一条消息位 -->
+            <AiMessage v-else-if="t.kind !== 'approval'" :align="t.kind === 'user' ? 'end' : 'start'" :class="['ac-msg', t.kind, { 'is-editing': t.editing }]">
               <MessageContent :class="t.kind === 'user' ? 'ac-bubble' : 'ac-bubble ac-bubble--full'">
                 <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
                  文字一段、中间没有文字隔开的多个工具合并成一组、再一段文字。
@@ -150,26 +182,24 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 <template v-for="row in assistantRows(t)" :key="row.key">
                   <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
 
-                  <!-- 原位思考折叠行（AI Elements Trace 结构，文档 Task Demo 同款）：
-                       收起 = TraceCollapsibleTrigger + TraceLine「思考过程」；
-                       展开 = TraceCollapsibleContent 内 pre（等宽、上限内滚动）。 -->
+                  <!-- 原位思考行：照 ai-elements/reasoning 官方 Demo 的结构，
+                       一行 TraceCollapsibleTrigger + TraceLine + TraceTitle，
+                       展开区是 TraceCollapsibleContent（whitespace-pre-wrap）。
+                       强调：不加图标、不自己算耗时、不做自动收起定时器 ——
+                       开合只由「是否还在跑」和用户点击决定（与 Demo 的
+                       open="person 的选择 ?? running" 同一语义）。 -->
                   <Trace v-else-if="row.type === 'thinking' && row.text">
                     <TraceCollapsible
-                      :open="thinkingLive(t) || !!openThinking[t.id + ':' + row.key]"
-                      :unmount-on-hide="false"
-                      @update:open="(v) => { if (!thinkingLive(t)) openThinking[t.id + ':' + row.key] = v }">
-                     <TraceCollapsibleTrigger>
-                      <TraceLine>
-                        <TraceIcon>
-                          <LoaderCircle v-if="thinkingLive(t)" :size="14" class="animate-spin" />
-                          <CircleCheck v-else :size="14" />
-                        </TraceIcon>
-                        <TraceTitle>{{ thinkingLive(t) ? '正在思考' : '思考过程' }}</TraceTitle>
-                      </TraceLine>
-                    </TraceCollapsibleTrigger>
-                    <TraceCollapsibleContent>
-                      <div class="max-h-[min(360px,50vh)] overflow-y-auto whitespace-pre-wrap wrap-break-word">{{ row.text }}</div>
-                    </TraceCollapsibleContent>
+                      :open="openThinking[t.id + ':' + row.key] ?? thinkingLive(t)"
+                      @update:open="(v) => { openThinking[t.id + ':' + row.key] = v }">
+                      <TraceCollapsibleTrigger>
+                        <TraceLine :status="thinkingLive(t) ? 'running' : undefined">
+                          <TraceTitle>{{ thinkingLive(t) ? '正在思考' : '思考完成' }}</TraceTitle>
+                        </TraceLine>
+                      </TraceCollapsibleTrigger>
+                      <TraceCollapsibleContent class="whitespace-pre-wrap">
+                        {{ row.text }}
+                      </TraceCollapsibleContent>
                     </TraceCollapsible>
                   </Trace>
 
@@ -187,6 +217,22 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                           :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
                       </CardContent>
                     </Card>
+                    <AgentConfirmation v-if="approvalFor(row.tools[0].id)" :approval="approvalFor(row.tools[0].id)!"
+                      @decide="(d) => agent.decide(approvalFor(row.tools[0].id)!.id, d)" />
+                  </template>
+                  <!-- 命令执行类工具：AI Elements Terminal（Running → Ran / exited with code N，
+                       输出在 Code Block 里，失败标红）。与 Tool 文档的分流一致。 -->
+                  <template v-else-if="row.type === 'tools' && row.tools.length === 1 && isTerminal(row.tools[0])">
+                    <AgentTerminal :name="row.tools[0].name" :args="row.tools[0].arguments"
+                      :output="row.tools[0].output" :settled="row.tools[0].settled">
+                      <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
+                    </AgentTerminal>
+                    <!-- 命令失败：Stack Trace 紧跟终端行（错误摘要 + 帧） -->
+                    <AgentStackTrace v-if="failureOf(row.tools[0]).failed" :failure="failureOf(row.tools[0])"
+                      :detail="row.tools[0].output" class="mt-2" />
+                    <AgentConfirmation v-if="approvalFor(row.tools[0].id)" :approval="approvalFor(row.tools[0].id)!"
+                      @decide="(d) => agent.decide(approvalFor(row.tools[0].id)!.id, d)" />
                   </template>
                   <!-- 默认工具（通用）：AI Elements Trace 折叠行 —— 收起 = 图标 + 工具名 + 摘要；
                        展开区 = ToolViewBody（输入 / 输出），右侧摘要用 TraceDescription 语义。 -->
@@ -198,15 +244,46 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                           <LoaderCircle v-if="!row.tools[0].settled" :size="14" class="animate-spin" />
                           <CircleCheck v-else :size="14" />
                         </TraceIcon>
-                        <TraceTitle>{{ toolTitle(row.tools[0]) }}</TraceTitle>
-                          <TraceDescription v-if="toolRowSummary(row.tools[0])">{{ toolRowSummary(row.tools[0]) }}</TraceDescription>
+                        <!-- 动作 + 内容合成一句，交给 TraceTitle 的 truncate 管长度
+                             （不再用 Description 装长文本：它 shrink-0，会把标题挤没） -->
+                        <TraceTitle :title="toolLineTitle(row.tools[0])">{{ toolLineTitle(row.tools[0]) }}</TraceTitle>
                         </TraceLine>
                       </TraceCollapsibleTrigger>
                       <TraceCollapsibleContent>
                         <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
                           :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
+                        <!-- 工具失败：AI Elements Stack Trace（「Failed: <错误>」+ 帧） -->
+                        <AgentStackTrace v-if="failureOf(row.tools[0]).failed" :failure="failureOf(row.tools[0])"
+                          :detail="row.tools[0].output" class="mt-2" />
+                        <!-- 搜索 / 抓取类工具：输出里的链接折成 AI Elements Sources 一行
+                             （「使用了 N 个来源」→ 展开逐条链接），不再把整段 JSON 摊开。 -->
+                        <Trace v-if="sourcesOf(row.tools[0]).length" class="mt-2">
+                          <TraceCollapsible>
+                            <TraceCollapsibleTrigger>
+                              <TraceLine>
+                                <TraceIcon><Globe /></TraceIcon>
+                                <TraceTitle>使用了 {{ sourcesOf(row.tools[0]).length }} 个来源</TraceTitle>
+                              </TraceLine>
+                            </TraceCollapsibleTrigger>
+                            <TraceCollapsibleContent>
+                              <Trace>
+                                <a v-for="src in sourcesOf(row.tools[0])" :key="src.url" :href="src.url"
+                                  target="_blank" rel="noreferrer noopener">
+                                  <TraceLine>
+                                    <TraceIcon><Globe /></TraceIcon>
+                                    <TraceTitle>{{ sourceLabel(src) }}<span class="sr-only">（在新标签页打开）</span></TraceTitle>
+                                    <TraceIcon><ArrowUpRight /></TraceIcon>
+                                  </TraceLine>
+                                </a>
+                              </Trace>
+                            </TraceCollapsibleContent>
+                          </TraceCollapsible>
+                        </Trace>
                       </TraceCollapsibleContent>
                     </TraceCollapsible>
+                    <!-- 这条工具在等授权：确认条就贴在它下面（用户口径 2026-11-07） -->
+                    <AgentConfirmation v-if="approvalFor(row.tools[0].id)" :approval="approvalFor(row.tools[0].id)!"
+                      @decide="(d) => agent.decide(approvalFor(row.tools[0].id)!.id, d)" />
                   </Trace>
 
                   <!-- 多个工具：AI Elements Trace 折叠组（文档 Task Demo 的嵌套 TraceCollapsible）——
@@ -231,6 +308,16 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                                 :name="tool.name" @preview="previewToolMedia" />
                             </CardContent>
                           </Card>
+                          <!-- 分组里的命令执行同样用 Terminal；失败再跟一条 Stack Trace -->
+                          <template v-else-if="isTerminal(tool)">
+                            <AgentTerminal :name="tool.name" :args="tool.arguments"
+                              :output="tool.output" :settled="tool.settled">
+                              <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
+                                :name="tool.name" @preview="previewToolMedia" />
+                            </AgentTerminal>
+                            <AgentStackTrace v-if="failureOf(tool).failed" :failure="failureOf(tool)"
+                              :detail="tool.output" class="mt-2" />
+                          </template>
                           <TraceCollapsible v-else>
                             <TraceCollapsibleTrigger>
                               <TraceLine>
@@ -238,15 +325,18 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                             <LoaderCircle v-if="!tool.settled" :size="14" class="animate-spin" />
                             <CircleCheck v-else :size="14" />
                           </TraceIcon>
-                          <TraceTitle>{{ toolTitle(tool) }}</TraceTitle>
-                                <TraceDescription v-if="toolRowSummary(tool)">{{ toolRowSummary(tool) }}</TraceDescription>
+                          <TraceTitle :title="toolLineTitle(tool)">{{ toolLineTitle(tool) }}</TraceTitle>
                               </TraceLine>
                             </TraceCollapsibleTrigger>
                             <TraceCollapsibleContent>
                               <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
                                 :name="tool.name" @preview="previewToolMedia" />
+                              <AgentStackTrace v-if="failureOf(tool).failed" :failure="failureOf(tool)"
+                                :detail="tool.output" class="mt-2" />
                             </TraceCollapsibleContent>
                           </TraceCollapsible>
+                          <AgentConfirmation v-if="approvalFor(tool.id)" :approval="approvalFor(tool.id)!"
+                            @decide="(d) => agent.decide(approvalFor(tool.id)!.id, d)" />
                         </template>
                       </TraceCollapsibleContent>
                     </TraceCollapsible>
@@ -330,9 +420,9 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                  反而干扰阅读；MCP 的真实状态改在下拉里实时看（见 MCP 下拉里的「检测」）。
                  数据仍在 turn.notice 上，想放回来把 SHOW_PROCESS_NOTICE 改 true 即可。 -->
                 <p v-if="SHOW_PROCESS_NOTICE && t.notice" class="ac-notice">{{ t.notice }}</p>
-                <template v-if="t.error">
-                  <p class="ac-error">{{ t.error }}</p>
-                </template>
+                <!-- 回合错误：与工具失败共用 AI Elements Stack Trace（「Failed: <错误>」+ 帧），
+                     不再用一行红字（用户口径 2026-11-07）。 -->
+                <AgentStackTrace v-if="t.error" :failure="parseError(t.error)" :detail="t.error" class="mt-2" />
               <!-- hover 操作条（文档 Demo 的 MessageFooter 语义：时间/复制/编辑贴着消息下方，
                右对齐跟气泡同侧）。编辑 = 把这条消息回填到底部输入框。 -->
               <MessageFooter v-if="t.kind === 'user'" class="ac-msg-actions">
@@ -357,9 +447,10 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
                 @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
                 <ChevronLeft :size="14" />
               </Button>
-              <span class="ac-branch-pos" :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
+              <Badge variant="secondary" class="ac-branch-pos"
+                :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
                 {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
-              </span>
+              </Badge>
               <Button variant="ghost" size="icon-sm" class="ac-branch-arrow"
                 :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1" aria-label="下一个版本"
                 title="下一个版本"
@@ -385,9 +476,10 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
            为什么要一条独立的条：错误以前只挂在"最后一条助手消息"上 —— 出错时若那条
            还没建出来（请求在 bootstrap 阶段就失败），错误就落在空气里，用户什么也看不到。
            若这条错误已经挂在某条消息上（不重复显示），这条就不画。 -->
+          <!-- 常驻错误条：用 AI Elements 的 Stack Trace 结构（「Failed: <错误>」+ 堆栈），
+               与工具失败共用同一套视觉；关闭按钮放在触发行旁边（按钮不能塞进 trigger）。 -->
           <div v-if="s.lastError && !hasInlineError" class="ac-error-bar" role="alert">
-            <AlertCircle :size="14" class="ac-error-bar-icon" />
-            <span class="ac-error-bar-text">{{ s.lastError }}</span>
+            <AgentStackTrace :failure="parseError(s.lastError)" :detail="s.lastError" />
             <Button variant="ghost" size="icon-xs" class="ac-note-x" aria-label="关闭错误提示" @click="s.lastError = ''">
               <X :size="12" />
             </Button>

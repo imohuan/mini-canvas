@@ -32,6 +32,12 @@ describe('工具行分流：卡片只给自带卡片的画布 MCP 工具', () =>
     expect(conversation).not.toContain('tool.card || hasCardView(tool)')
   })
 
+  it('单工具行：动作 + 内容合成一句放进 TraceTitle（不再用 TraceDescription 装长文本）', () => {
+    expect(conversation).toContain('toolLineTitle(row.tools[0])')
+    // Description 自带 shrink-0，装长命令会把标题挤成「执…」并横向溢出（用户截图）
+    expect(conversation).not.toContain('<TraceDescription v-if="toolRowSummary(row.tools[0])')
+  })
+
   it('卡片头上不再叠一行与卡片自身重复的摘要（+1 ~ 0 -0 那行）', () => {
     // 卡片分支里不该再出现 toolSummary 的摘要行
     const cardBranch = conversation.slice(conversation.indexOf('hasCardView(row.tools[0])'))

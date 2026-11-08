@@ -30,19 +30,21 @@ describe('上下文统计行', () => {
     expect(wrap).toBeLessThan(send)
   })
 
-  it('hover tooltip 保留（恢复之前的模式：环 + 悬停提示）', () => {
+  it('上下文 Trigger 是原来的圆环；浮层才是 AI Elements Context', () => {
     // 截取到发送键的**首次**出现（它就在统计块之后）：环与 tooltip 都应在其前
     const toolbar = composer.slice(composer.indexOf('class="ac-toolbar"'), composer.indexOf('data-ac-send'))
-    // 组件已从主题目录取件改为直接用组件库的 Tooltip（全项目统一 shadcn），
-    // 但「环 + 悬停提示」这个用户可见行为必须仍在。
-    expect(toolbar).toContain('TooltipProvider')
-    expect(toolbar).toContain('TooltipContent')
-    expect(toolbar).toContain('上下文剩余 ')
+    // Trigger：圆环（用户口径 2026-11-07：不要带文字的按钮）
+    expect(toolbar).toContain('ac-ctx-ring')
+    expect(toolbar).toContain('ac-ctx-track')
+    // 浮层内部才用官方 Context 的结构
+    expect(toolbar).toContain('HoverCardContent')
+    expect(toolbar).toContain('HoverCardTrigger')
+    expect(toolbar).toContain('Progress')
   })
 
-  it('只画环、不配文字（用户口径 2026-10-11：有环再写「已…」是重复信息，工具条也放不下）', () => {
-    expect(composer).not.toContain('ac-ctx-text')
-    expect(composer).not.toContain('contextStatText')
+  it('触发器不写文字百分比（% context 只在浮层里）', () => {
+    const toolbar = composer.slice(composer.indexOf('class="ac-toolbar"'), composer.indexOf('data-ac-send'))
+    expect(toolbar).not.toContain('% context')
   })
 })
 
@@ -51,8 +53,15 @@ describe('错误可见性（用户报的问题 2）', () => {
     const bar = host.indexOf('class="ac-error-bar"')
     expect(bar).toBeGreaterThan(0)
     expect(host.slice(bar, bar + 400)).toContain('s.lastError')
+    // 用户口径 2026-11-07：错误不再是一行红字，用 AI Elements Stack Trace。
+    expect(host.slice(bar, bar + 600)).toContain('AgentStackTrace')
     // 放在消息流内（.ac-scroll-wrap 之后、输入区之前）—— 用户滚动对话时看得见
     expect(host.indexOf('class="ac-scroll-wrap"')).toBeGreaterThan(-1)
+  })
+
+  it('回合内的错误也用 Stack Trace（不再有 .ac-error 红字）', () => {
+    expect(host).toContain(':failure="parseError(t.error)"')
+    expect(host).not.toContain('class="ac-error"')
   })
 
   it('错误已经挂在消息上时不重复画（hasInlineError 去重）', () => {

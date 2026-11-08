@@ -23,10 +23,16 @@ describe('模型分割线的定位', () => {
   })
 
   it('分段挂在该段的**第一条用户消息**上（第一条也算：用户要知道开头用的是什么）', () => {
+    // 用户口径 2026-11-07：fromUser = 0 那一段是「开头用的模型」，不是切换，不画线。
     const map = segmentAnchors(turns, [seg(0, 'deepseek-auto'), seg(1, 'gpt-5')])
-    expect([...map.keys()]).toEqual(['u1', 'u2'])
-    expect(map.get('u1')!.modelId).toBe('deepseek-auto')
+    expect([...map.keys()]).toEqual(['u2'])
     expect(map.get('u2')!.modelId).toBe('gpt-5')
+  })
+
+  it('只有一条消息 / 只有一个模型时**不画**分割线（用户口径 2026-11-07）', () => {
+    expect(segmentAnchors(turns.slice(0, 2), [seg(0, 'only-model')]).size).toBe(0)
+    // 同一个模型被重复写入两段（老数据）也不画
+    expect(segmentAnchors(turns, [seg(0, 'm'), seg(1, 'm')]).size).toBe(0)
   })
 
   it('序号超出实际用户消息数的分段被丢掉（陈旧数据不画幽灵分割线）', () => {

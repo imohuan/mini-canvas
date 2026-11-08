@@ -6,6 +6,9 @@
 import { nextTick, ref } from 'vue'
 import { groupTurnBlocks, type TurnRow } from '../../model/turnBlocks.js'
 import { toolView, toolBrief, type ToolView } from '../../model/toolViews.js'
+import { toolLineTitle as lineTitleOf, toolTitleText } from '../../model/toolMeta.js'
+import { toolSources, type WebSource } from '../../model/webSources.js'
+import { parseToolFailure, isTerminalTool, type ToolFailure } from '../../model/toolFailure.js'
 import type { AgentTurnView, ToolCard } from '../../model/sessionModel.js'
 
 export function useAgentMessageViews(
@@ -112,9 +115,19 @@ function toggleToolGroup(key: string): void {
  * 工具名里的 MCP 前缀剥掉，避免一屏都是 mcp__canvas__…
  */
 function toolTitle(tool: ToolCard): string {
-  const bare = String(tool.name || '').replace(/^mcp__[A-Za-z0-9_-]+__/, '')
-  const brief = toolBrief(tool.name, tool.arguments)
-  return brief ? bare + ' · ' + brief : bare
+  return toolTitleText(tool.name)
+}
+
+/**
+ * 工具行的**完整标题**：动作 + 执行内容，合成一句话（照 AI Elements Tool 文档
+ * 「Ran git status --short」的写法）。
+ *
+ * 为什么不再把内容放进 TraceDescription（用户口径 2026-11-07）：
+ * Description 自带 shrink-0（它是给「5s」这种短元数据用的），长命令会把
+ * 标题挤成「执…」，自己又横向溢出面板。合成到 Title 里，由 Title 的 truncate 管住。
+ */
+function toolLineTitle(tool: ToolCard): string {
+  return lineTitleOf(tool.name, tool.arguments)
 }
 
 /** 这组工具里是否还有没跑完的（决定组标题行的图标是转圈还是对勾） */
@@ -192,6 +205,39 @@ function toolRowSummary(tool: ToolCard): string {
 }
 
 /**
+ * 工具输出里的网页来源（搜索 / 抓取类工具才有）。
+ * 结果缓存跟着 viewCache 一起清 —— 同一工具不重复扫一遍 JSON。
+ */
+const sourceCache = new Map<string, WebSource[]>()
+function sourcesOf(tool: ToolCard): WebSource[] {
+  if (tool.output === undefined) return []
+  const hit = sourceCache.get(tool.id)
+  if (hit) return hit
+  const list = toolSources(tool.name, tool.output)
+  sourceCache.set(tool.id, list)
+  return list
+}
+
+/**
+ * 工具失败信息（Terminal / Stack Trace 用）。与 sourcesOf 同一套缓存：
+ * 同一工具的输出只解析一次。
+ */
+const failureCache = new Map<string, ToolFailure>()
+function failureOf(tool: ToolCard): ToolFailure {
+  if (tool.output === undefined) return { failed: false, frames: [] }
+  const hit = failureCache.get(tool.id)
+  if (hit) return hit
+  const res = parseToolFailure(tool.output)
+  failureCache.set(tool.id, res)
+  return res
+}
+
+/** 命令执行类工具 → Terminal 行；其它工具维持原有折叠行 */
+function isTerminal(tool: ToolCard): boolean {
+  return isTerminalTool(tool.name)
+}
+
+/**
  * 展开区的**专用视图**（用户口径 2026-10-06）：内置画布 MCP 工具各自配专用 UI，
  * 不认识的回退通用 JSON。纯函数 toolView 出数据，这里只缓存（同一工具不重复解析）。
  *
@@ -212,6 +258,8 @@ function viewOf(tool: ToolCard): ToolView {
 /** 换会话 / 清屏时把缓存与展开态一起丢掉（tool id 在不同会话可能重复） */
 function resetViewCaches(): void {
   viewCache.clear()
+  sourceCache.clear()
+  failureCache.clear()
   openTools.value = {}
   openToolGroups.value = {}
 }
@@ -231,6 +279,7 @@ return {
   toggleToolGroup,
   toolGroupTitle,
   toolTitle,
+  toolLineTitle,
   anyToolRunning,
   isThinking,
   thinkingLive,
@@ -239,6 +288,9 @@ return {
   hasCardView,
   toolSummary,
   toolRowSummary,
+  sourcesOf,
+  failureOf,
+  isTerminal,
   viewCache,
   viewOf,
   resetViewCaches,

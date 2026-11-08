@@ -22,6 +22,8 @@ import { scrollTopForVisibleItem } from '../ui/shared/selectionScroll'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 /** 造一份滚动状态：内容总高 scrollHeight、视口 clientHeight、当前 scrollTop */
 const host = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+/** 模型面板已抽成 ModelPicker（用户 2026-11-07：Agent 与底栏共用同一件） */
+const modelPanel = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/ModelPicker.vue'))
 const controller = readAgentConversationSource()
 const box = (scrollTop: number, scrollHeight: number, clientHeight: number) => ({
   scrollTop,
@@ -74,7 +76,7 @@ describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
     // 滚动层已统一为 AgentScrollArea（底座 shadcn ScrollArea）：ref 仍要挂在这个滚动层上，
     // 而且同时保留 ac-menu-scroll 这个稳定选择器，供滚动定位找容器。
     // 2026-11-06：滚动容器改成每个视图各自持有，ref 挂在外层容器（ac-menu-scroll）上。
-    expect(host).toMatch(/<div[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
+    expect(modelPanel).toMatch(/<div[^>]*ref="scrollRef"[^>]*class="ac-menu-scroll/)
   })
 
   it('打开时才滚（那一刻面板与列表才在 DOM 里，ref 才有值）', () => {

@@ -13,6 +13,8 @@ import { readSfcWithStyles } from './readSfcWithStyles'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SRC = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'))
+/** 模型面板已抽成 ModelPicker（用户 2026-11-07：Agent 与底栏共用同一件） */
+const MODEL = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/ModelPicker.vue'))
 const CSS = ['part1.css', 'part2.css', 'part3.css', 'part4.css']
   .map((f) => readFileSync(path.resolve(HERE, '../ui/conversation/agent-composer', f), 'utf8'))
   .join('\n')
@@ -21,10 +23,11 @@ describe('Agent 面板滚动层', () => {
   it('模型 / 技能 / MCP 都用 AgentScrollArea，并保留固定选择器', () => {
     // 2026-11-06：模型面板改成「每个视图各自滚」（与技能面板一致），
     // ref 挂在外层容器上，视图内部才是 AgentScrollArea。
-    expect(SRC).toMatch(/<div[^>]*ref="modelScrollRef"[^>]*class="ac-menu-scroll/)
-    expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-panel-scroll ac-view-pane"/)
-    expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-rail-scroll"/)
-    expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-split-scroll"/)
+    // 模型面板的这四条现在住在 ModelPicker 里（2026-11-07 抽组件）。
+    expect(MODEL).toMatch(/<div[^>]*ref="scrollRef"[^>]*class="ac-menu-scroll/)
+    expect(MODEL).toMatch(/<AgentScrollArea[^>]*class="ac-panel-scroll ac-view-pane"/)
+    expect(MODEL).toMatch(/<AgentScrollArea[^>]*class="ac-rail-scroll"/)
+    expect(MODEL).toMatch(/<AgentScrollArea[^>]*class="ac-split-scroll"/)
     expect(SRC).toMatch(/<AgentScrollArea[^>]*class="ac-panel-scroll"[^>]*body-class="ac-panel-scroll-body ac-mcp-scroll-body"/)
   })
 
