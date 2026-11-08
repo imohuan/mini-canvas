@@ -78,7 +78,11 @@ promptBinding / fields / templates / panelHtml / nodeTypes / pollIntervalMs /
 pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `icon`、
 `templates`、`panelHtml` 就是这样被静默丢掉的）。
 
-- `icon`：SVG 字符串，或 `data:image/...;base64,...`。
+- `icon`：三种写法都行 —— SVG 字符串、`data:image/...;base64,...`、或**图标名**。
+  图标名可以是平台 key（`seedance` / `volcengine` / `kling` / `doubao`…）或者中文名 /
+  关键字（`火山引擎`、`可灵`），会做模糊匹配。查表顺序：先按字面命中平台 key，
+  再按关键字模糊认；都认不出才退回「按动作标题猜」。可用 key 见
+  [references/icon-names.md](./references/icon-names.md)。
 - `needsPrompt`：要不要底栏那个大输入框（默认不要）。
 - `promptBinding: 'text'`：输入框直接绑文本节点的 `data.text`。
 - `nodeTypes: ['image'|'video'|'audio']`：只在对应节点上出现；省略 = 都适用。
@@ -100,6 +104,12 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 3. 请求 `GET http://127.0.0.1:<端口>/api/actions`，能搜到自己的 `action.id`。
 4. 日志里出现 `provider 加载失败 <文件>：<原因>`，就是语法错了或没通过校验。
 5. 再回画布底栏下拉里确认动作、图标、参数控件都在。
+
+## 图标怎么显示
+
+图标会在两个地方出现：底栏那个胶囊触发器，和展开后下拉里的**每一行**。
+两边走同一份判定（`resolveActionIcon`），所以不会出现「触发器有图标、列表里是兜底」。
+`icon` 只影响显示，不影响分组和搜索。
 
 ## 示例
 

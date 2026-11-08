@@ -6,7 +6,7 @@
  *   2. 全部会渲染的 kind：ratio / quality / resolution / background / count / camera /
  *      duration（按钮档与滑块两种形态）/ speed / model / speaker / format
  *      —— 外加未声明 kind 的普通下拉（对照组）与 kind:'style'（底栏会过滤掉）
- *   3. 图标两种写法：SVG 字符串、Base64 图片
+ *   3. 图标三种写法：SVG 字符串、Base64 图片、图标名（`seedance` / `火山引擎`）
  *   4. 预设 templates（选中后连提示词带参数一起填）
  *   5. panelHtml 两种形态：带输入框（画在参数区）、不带输入框（占输入框那一行）
  *   6. 异步任务：submit 给 taskId，poll 轮询，waiting 帧不占超时，cancel 取消
@@ -803,13 +803,44 @@ const provider = {
     // 6. 直接失败：演示 { error } 这条返回路径
     // ---------------------------------------------------------------
     {
+      id: 'full:icon-name',
+      title: '演示 · 图标名（模糊查）',
+      description: 'icon 写成平台名：先按字面命中 key，再中文/关键字模糊认。列表与触发器同源。',
+      group: '演示 · 全功能',
+      nodeTypes: ['video'],
+      needsPrompt: false,
+      order: 6,
+      /** 写成中文名也行：火山引擎 / 可灵 / 豆包 都认 */
+      icon: 'seedance',
+      fields: [
+        {
+          key: 'ratio',
+          kind: 'ratio',
+          label: '比例',
+          type: 'select',
+          default: '16:9',
+          options: [
+            { label: '16:9', value: '16:9' },
+            { label: '9:16', value: '9:16' },
+          ],
+        },
+      ],
+      async submit() {
+        return { done: true, text: '图标名演示动作执行完毕' }
+      },
+    },
+
+    // ---------------------------------------------------------------
+    // 7. 直接失败：演示 { error } 这条返回路径
+    // ---------------------------------------------------------------
+    {
       id: 'full:fail',
       title: '演示 · 直接失败',
       description: 'submit 返回 { error }，底栏节点上会显示失败原因。',
       group: '演示 · 全功能',
       nodeTypes: ['image'],
       needsPrompt: false,
-      order: 6,
+      order: 7,
       icon: ICON_SVG,
       async submit() {
         return { error: '这是一条演示用的失败原因：上游没有图片素材' }
