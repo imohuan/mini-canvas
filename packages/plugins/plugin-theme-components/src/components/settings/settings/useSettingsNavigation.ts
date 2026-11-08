@@ -12,8 +12,13 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { Circle } from 'lucide-vue-next'
 import {
   categoryOf,
+  hidesKey,
+  hidesWholeGroup,
   metaText,
+  SETTINGS_HIDDEN_FIELD,
+  SETTINGS_HIDDEN_KEY,
   SETTINGS_NAV_CATEGORY_FIELD,
+  type SettingsHiddenDecl,
 } from '../navCategory'
 import {
   buildNavEntries,
@@ -90,10 +95,41 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
     releaseScrollLock()
   })
 
+  /**
+   * settings/hidden 场域：提供整页界面的插件可以声明"这些分组 / 单项别显示了"。
+   *
+   * 声明有两种粒度（见 SettingsHiddenDecl）：整组隐藏，或只隐藏某组里的某一项。
+   * 面板不写死任何具体分组名；插件卸载时登记自动撤销，配置重新出现。
+   */
+  const hidden = ctx.registryOf<SettingsHiddenDecl>(SETTINGS_HIDDEN_FIELD)
+  const hiddenTick = ref(0)
+  if (hidden && typeof hidden.subscribe === 'function') {
+    disposers.push(hidden.subscribe(() => void (hiddenTick.value += 1)))
+  }
+
+  /** 当前所有生效的隐藏声明（按注册顺序，后登记的可覆盖同 id）。 */
+  function hiddenDecls(): SettingsHiddenDecl[] {
+    void hiddenTick.value
+    if (!hidden) return []
+    // 所有声明都登记在同一个键下：一次取全，再逐条判断粒度
+    return hidden.list(SETTINGS_HIDDEN_KEY).map((entry) => entry.value)
+  }
+
+  /** 某个分组是否被整组隐藏 */
+  function isGroupHidden(group: string): boolean {
+    return hiddenDecls().some((decl) => hidesWholeGroup(decl) && decl.group === group)
+  }
+
+  /** 某个具体配置项是否被隐藏（整组隐藏也算） */
+  function isKeyHidden(group: string, key: string): boolean {
+    if (isGroupHidden(group)) return true
+    return hiddenDecls().some((decl) => hidesKey(decl, group, key))
+  }
+
   // —— 分组 ——
   const groups = computed<string[]>(() => {
     void occTick.value
-    return options.settings().groups()
+    return options.settings().groups().filter((group) => !isGroupHidden(group))
   })
 
   const sectionMap = computed<Map<string, string[]>>(() => buildSectionMap(groups.value))
@@ -365,7 +401,8 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
       component: markRaw(entry.component as object),
       meta: entry.meta,
     }))
-    const fields = options.settings().groupOf(groupKey)
+    // 被隐藏的单项在这里剔除：字段列不出来，也就不会渲染
+    const fields = options.settings().groupOf(groupKey).filter((item) => !isKeyHidden(groupKey, item.key))
     if (!occs.length) {
       return fields.map((item) => ({ kind: 'field' as const, key: item.key, group: groupKey }))
     }

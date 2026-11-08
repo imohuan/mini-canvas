@@ -19,6 +19,7 @@ import "./styles/ui-layers.css"
 // 全局滚动条观感（用户口径 2026-11-04：取消统一的滚动组件，改由主题统一定样式）。
 import "./styles/scrollbars.css"
 import { registerThemePreview } from "./themePreview"
+import { registerThemeStudio } from "./components/theme-studio/register"
 import SettingsSchemaField from "./components/settings/SettingsSchemaField.vue"
 import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue"
 import { registerDefaultSettingsMenu } from "./components/settings/defaultMenu"
@@ -93,6 +94,8 @@ export interface ThemeComponentsConfig extends InferConfig<typeof Config> {}
 export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   registerThemePreview(ctx as never)
   registerDefaultSettingsMenu(ctx.settingsMenu)
+  // 颜色配方（模板 + 色签 + 实时预览）属于默认主题，跟着它常驻。
+  registerThemeStudio(ctx as never)
 
   let appearance: ThemeBridgeInput = toThemeBridgeInput({
     themeRadius: config?.themeRadius ?? DEFAULT_THEME_APPEARANCE.themeRadius,
@@ -189,5 +192,6 @@ export const themeComponentsPlugin: PluginModule = { name, inject, Config, apply
  */
 export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState } from "./components/ui"
 export { MediaViewer } from "./components/ui"
-export { ThemePreviewBase, registerThemePreview } from "./themePreview"
+export { themePreviewLayer, registerThemePreview } from "./themePreview"
+export { ThemeStudio, registerThemeStudio, THEME_STUDIO_NAV_ID } from "./components/theme-studio/register"
 

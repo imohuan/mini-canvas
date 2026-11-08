@@ -70,6 +70,9 @@
 [data-slot='dropdown-menu-sub-content'],
 [data-slot='select-content'],
 [data-slot='popover-content'],
+/* HoverCard 也是菜单档：它 Teleport 到 body，默认的 z-50 会被 Agent 面板（1000）里的正文盖住，
+   用户看到的就是「hover 了但什么都没有」（2026-11-07 实测）。 */
+[data-slot='hover-card-content'],
 [data-slot='context-menu-content'],
 [data-slot='context-menu-sub-content'],
 [data-slot='menubar-content'],

@@ -98,4 +98,20 @@ export const AppearanceConfig: ConfigSchema = {
       label: THEME_SIZE_LABELS[id] + (THEME_SIZE_HINTS[id] ? " · " + THEME_SIZE_HINTS[id] : ""),
     })),
   },
+  /**
+   * 「颜色配方」整页的占位配置。
+   *
+   * 为什么必须有：设置面板的一级/二级导航只显示"真实存在配置分组"的段。
+   * 颜色配方正文注册在 settingsGroup/主题工作台 槽里，但如果没有这一格，
+   * 「主题工作台」这个分组就不存在，整节会被过滤掉 —— 表现为"卸载 demo-kit 后
+   * 设置里找不到颜色配方"。这里声明一个不参与渲染的占位项，让分组成立。
+   */
+  themeStudioNote: {
+    type: "string",
+    default: "",
+    label: "颜色配方",
+    group: "主题工作台",
+    placeholder: "这一项只用于形成分组，可以留空",
+    description: "挑一套主题模板，再点色签单独调；改过的颜色会变成「自定义」。",
+  },
 };

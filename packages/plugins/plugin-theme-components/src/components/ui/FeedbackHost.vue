@@ -23,7 +23,6 @@ const AlertDialogTitle = useUiComponent('AlertDialogTitle')
 const AlertDialogDescription = useUiComponent('AlertDialogDescription')
 const AlertDialogFooter = useUiComponent('AlertDialogFooter')
 const AlertDialogCancel = useUiComponent('AlertDialogCancel')
-const AlertDialogAction = useUiComponent('AlertDialogAction')
 
 const Dialog = useUiComponent('Dialog')
 const DialogContent = useUiComponent('DialogContent')
@@ -69,7 +68,7 @@ const panelStyle = {
 
 const titleStyle = { fontSize: '16px', fontWeight: 700, lineHeight: 1.3 } as const
 const bodyStyle = { fontSize: '13px', lineHeight: 1.7, color: 'var(--ui-ink-dim, #6b7280)' } as const
-const footerStyle = { marginTop: '8px', display: 'flex', justifyContent: 'flex-end', gap: '8px' } as const
+const footerStyle = { marginTop: '4px', display: 'flex', justifyContent: 'flex-end', gap: '8px' } as const
 /** 危险按钮：实心红底白字（删除类操作）；普通确认用主题主按钮 */
 const dangerStyle = {
   background: 'var(--ui-danger, #ef4444)',
@@ -128,11 +127,18 @@ function acceptSimple(): void {
       </AlertDialogHeader>
       <AlertDialogFooter :style="footerStyle">
         <AlertDialogCancel class="rounded-lg">{{ 'cancelText' in current ? current.cancelText : '取消' }}</AlertDialogCancel>
-        <AlertDialogAction
+        <!--
+          确认按钮用普通 Button，不用 AlertDialogAction。
+          AlertDialogAction 内部是 reka-ui 的 DialogClose：点下去先把弹窗关掉，
+          面板的 open setter 立刻调 service.cancel()，结果被定成 false；等我们的
+          @click 再执行时请求已经结束（2026-11-07 用户实测：点「卸载」没反应）。
+          取消按钮仍用 AlertDialogCancel，因为它「关闭 = 取消」本来就是对的。
+        -->
+        <Button
           class="rounded-lg"
           :style="destructive ? dangerStyle : undefined"
           @click="acceptSimple"
-        >{{ current.confirmText }}</AlertDialogAction>
+        >{{ current.confirmText }}</Button>
       </AlertDialogFooter>
       </div>
     </AlertDialogContent>
@@ -170,12 +176,13 @@ function acceptSimple(): void {
 </template>
 
 <style scoped>
-/* 自带内边距：ui-kit 统一把 dialog-content 的外层 padding / gap 清成 0，
-   这里在面板内部留 24px，标题、说明、输入框与按钮才不挤在一起。 */
+/* 自带内边距：ui-kit 统一把 dialog-content / alert-dialog-content 的外层 padding / gap 清成 0，
+   这里在面板内部留 20px。确认框本来只有标题 + 一两行说明 + 两个按钮，
+   再叠 24px 会显得四周空一大圈（2026-11-07 用户截图）。 */
 .fb-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px;
+  gap: 14px;
+  padding: 20px;
 }
 </style>

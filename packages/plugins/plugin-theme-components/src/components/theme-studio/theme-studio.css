@@ -1,0 +1,1026 @@
+.studio-root {
+  --studio-gap: 18px;
+  container-type: inline-size;
+  /*
+   * 本面板的文字色跟随当前主题的 --ui-ink；但独立验收页把 <html> 设成了 dark，
+   * 外壳却是浅底，于是出现"浅字配浅底"看不清。这里给一个兜底：
+   * 只有变量缺失时才用深色，正常情况仍跟随主题。
+   */
+  --studio-ink: var(--ui-ink, #18202b);
+  --studio-ink-mute: var(--ui-ink-mute, #8c95a3);
+  /* 卡片内部的呼吸感：顶部、左右都留出距离，避免内容贴边 */
+  /* 顶 / 左右 / 底都要留白：只给顶部会在底部收得太紧 */
+  /* 顶部再留多一点：设置外壳的标题栏会盖住内容上沿 */
+  padding: 26px 14px 18px;
+  color: var(--studio-ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+
+.studio-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  /* 顶部留出一行：外壳标题栏会盖住内容上沿，标题不能被压住 */
+  padding: 10px 0 12px;
+  min-height: 46px;
+}
+
+.studio-eyebrow {
+  margin: 0 0 2px;
+  color: var(--studio-ink-mute);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.studio-intro h2 {
+  margin: 0;
+  color: var(--studio-ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.studio-intro-copy > p:last-child {
+  margin: 3px 0 0;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.studio-saved {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.10));
+  color: var(--ui-accent, #0e7490);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.studio-saved svg {
+  width: 12px;
+  height: 12px;
+}
+
+.studio-template-section {
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--ui-line-soft, #eef0f4);
+}
+
+.studio-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.studio-section-head h3 {
+  margin: 0;
+  color: var(--ui-ink, #18202b);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.studio-section-head h3 span {
+  margin-left: 4px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-weight: 600;
+}
+
+.studio-section-head p {
+  margin: 2px 0 0;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.studio-add {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-control, 8px);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-accent, #0e7490);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.studio-add:hover {
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.10));
+  border-color: var(--ui-accent-line, rgb(8 145 178 / 0.28));
+}
+
+.studio-add svg {
+  width: 13px;
+  height: 13px;
+}
+
+.studio-template-row {
+  display: flex;
+  /* 多了就换行：不再横向滚动（滚动容器会把卡片右上角的删除按钮裁掉一半） */
+  flex-wrap: wrap;
+  gap: 8px;
+  /* 留出上/右的空间：删除按钮挂在卡片边界外一点点，容器不能裁它 */
+  padding: 8px 10px 6px;
+  overflow: visible;
+  align-items: flex-start;
+}
+
+/* 一个模板卡片 + 右上角的删除按钮 */
+.studio-template-cell {
+  position: relative;
+  display: flex;
+  flex: 0 0 92px;
+  flex-direction: column;
+  align-items: stretch;
+  /* 顶部对齐：卡片高度一致，不会被行内其它元素拉高 */
+  align-self: flex-start;
+}
+
+/* 「自定义」卡片没有外包容器，也要和右侧卡片同宽同高 */
+.studio-template-row > .studio-template-custom {
+  flex: 0 0 92px;
+  align-self: flex-start;
+}
+
+.studio-template-remove {
+  position: absolute;
+  /* 放在卡片内侧右上角：不依赖容器 overflow，也不会和相邻卡片重叠 */
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--ui-line-strong, var(--ui-line, #e2e5ea));
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #fff);
+  color: var(--ui-ink-mute, #8c95a3);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.18);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease;
+  z-index: 2;
+}
+
+.studio-template-remove svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.6;
+}
+
+.studio-template-cell:hover .studio-template-remove,
+.studio-template-remove:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.studio-template-remove:hover {
+  border-color: var(--ui-danger, #ef4444);
+  color: var(--ui-danger, #ef4444);
+}
+
+.studio-template {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-open, 12px);
+  background: var(--ui-panel, #fff);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-hover, 0.18s) ease, box-shadow var(--dur-hover, 0.18s) ease, transform var(--dur-hover, 0.18s) ease;
+}
+
+.studio-template:hover {
+  border-color: var(--ui-accent-line, rgb(8 145 178 / 0.28));
+  transform: translateY(-1px);
+  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
+}
+
+.studio-template.is-active {
+  border-color: var(--ui-accent, #0891b2);
+  box-shadow: 0 0 0 1px var(--ui-accent, #0891b2);
+}
+
+/* 自定义卡片：排在模板最前面，表示"当前这套值不属于任何模板" */
+.studio-template-custom {
+  position: relative;
+}
+
+.studio-template-custom:not(.is-active) {
+  border-style: dashed;
+}
+
+.studio-template-art-custom {
+  position: relative;
+}
+
+/* 自定义卡片中央的小滑杆图标：明示"这是手调出来的" */
+.studio-template-custom-icon {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink-dim, #6b7280);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.18);
+}
+
+.studio-template-custom-icon svg {
+  width: 9px;
+  height: 9px;
+}
+
+.studio-template-art {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--ui-panel-soft, #fff);
+}
+
+.studio-template-half {
+  position: relative;
+  overflow: hidden;
+}
+
+.studio-template-half.is-light {
+  background: var(--ui-panel, #fff);
+}
+
+.studio-template-half.is-dark {
+  background: var(--ui-ink, #18202b);
+}
+
+.studio-template-node {
+  position: absolute;
+  display: block;
+  border-radius: 3px;
+  background: var(--tpl-accent);
+}
+
+.studio-template-node.is-a {
+  top: 10px;
+  left: 7px;
+  width: 22px;
+  height: 12px;
+  opacity: 0.85;
+}
+
+.studio-template-node.is-b {
+  right: 6px;
+  bottom: 8px;
+  width: 18px;
+  height: 9px;
+  background: var(--tpl-flow);
+  opacity: 0.8;
+}
+
+.studio-template-check {
+  position: absolute;
+  top: 3px;
+  /* 放左上角：右上角留给删除按钮，两个图标不能叠在一起 */
+  left: 3px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  background: var(--ui-accent, #0891b2);
+  color: var(--ui-on-accent, #fff);
+}
+
+.studio-template-check svg {
+  width: 9px;
+  height: 9px;
+  stroke-width: 3;
+}
+
+.studio-template-name {
+  overflow: hidden;
+  padding: 0 1px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-template-new {
+  border-style: dashed;
+  background: transparent;
+  /* 和其它模板同宽，不被 flex 拉满整行 */
+  flex: 0 0 92px;
+  align-self: flex-start;
+}
+
+.studio-template-plus {
+  display: grid;
+  place-items: center;
+  height: 46px;
+  border-radius: 7px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.studio-template-plus svg {
+  width: 16px;
+  height: 16px;
+}
+
+.studio-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--studio-gap);
+}
+
+.studio-colors {
+  min-width: 0;
+}
+
+.studio-head-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-mute, #8c95a3);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-reset:hover {
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  color: var(--ui-ink, #18202b);
+}
+
+.studio-reset svg {
+  width: 11px;
+  height: 11px;
+}
+
+.studio-mode {
+  display: flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-control, 8px);
+  background: var(--ui-panel-soft, #fff);
+}
+
+.studio-mode button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-mute, #8c95a3);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-mode button svg {
+  width: 11px;
+  height: 11px;
+}
+
+.studio-mode button.is-active {
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #18202b);
+  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.12));
+}
+
+.studio-mode.is-compact button {
+  width: 25px;
+  padding: 0;
+  justify-content: center;
+}
+
+.studio-color-card {
+  position: relative;
+  padding: 0 12px;
+  overflow: visible;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-panel, 16px);
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgb(0 0 0 / 0.04));
+}
+
+/* ---------- 画板顶部的色签条：一行横向排开，不用往下滚 ---------- */
+
+.studio-swatches {
+  display: flex;
+  /* 色签条固定一行：色块已经缩到 22px，正常宽度都放得下 */
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px 5px;
+  padding: 6px 8px;
+  margin-bottom: 9px;
+  /* 极端窄屏允许横向滚动兜底（不换行，避免变成两行把卡片撑高） */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-open, 12px);
+  background: var(--ui-panel-soft, #fbfcfd);
+}
+
+.studio-swatches-empty {
+  padding: 6px 4px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 10px;
+}
+
+/* 分组名：小竖排标签，起分隔作用 */
+.studio-swatch-group {
+  display: inline-flex;
+  /* 横排分组名：竖排会把色签条撑成两行 */
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: none;
+  padding: 0 4px 0 2px;
+  border-right: 1px solid var(--ui-line-soft, #eef0f4);
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.studio-swatch-group svg {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+
+.studio-swatch {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+
+/* 色块：22 × 22 的方形（顶部色签条里一行放得下 12 个） */
+.studio-token-picker {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.studio-group {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.studio-group + .studio-group {
+  border-top: 1px solid var(--ui-line-soft, #eef0f4);
+}
+
+.studio-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.studio-group-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.studio-group-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.studio-group-label strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.studio-group-label small {
+  display: block;
+  margin-top: 1px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.studio-token-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 10px;
+  min-width: 0;
+}
+
+.studio-token {
+  display: flex;
+  width: 64px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.studio-token-picker {
+  position: relative;
+  transition: box-shadow var(--dur-hover, 0.18s) ease;
+}
+
+.studio-token-picker:focus-within {
+  box-shadow: 0 0 0 3px var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+}
+
+.studio-token-picker :deep(.cf-wrap) {
+  display: flex;
+  width: 100%;
+}
+
+.studio-token-picker :deep(.cf-trigger) {
+  display: flex;
+  align-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-token-picker :deep(.cf-trigger:hover),
+.studio-token-picker :deep(.cf-trigger.is-open),
+.studio-token-picker :deep(.cf-trigger:focus-visible) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.studio-token-picker :deep(.cf-swatch) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--ui-line, #e2e5ea);
+}
+
+.studio-token-picker :deep(.cf-swatch-color) {
+  border-radius: 5px;
+}
+
+.studio-token-picker :deep(.cf-value),
+.studio-token-picker :deep(.cf-alpha),
+.studio-token-picker :deep(.cf-clear-btn) {
+  display: none;
+}
+
+.studio-token-glyph {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--token-ink, #fff);
+  opacity: 0.92;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.studio-token-glyph svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.1;
+}
+
+.studio-token > strong {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-token > small {
+  overflow: hidden;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-color-foot {
+  margin: 0 -12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ui-line-soft, #eef0f4);
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.studio-color-foot code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--ui-code-bg, rgb(0 0 0 / 0.05));
+  font-family: ui-monospace, monospace;
+}
+
+.studio-empty {
+  padding: 22px 8px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  text-align: center;
+}
+
+.studio-preview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  /* 四边一致：底部与顶部同宽，卡片收口才不显得被截断 */
+  padding: 12px 12px 14px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-panel, 16px);
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-e1, 0 2px 10px rgb(0 0 0 / 0.04));
+  /* 实时预览是主角：整行一张卡片，颜色清单排在它下面 */
+  order: -1;
+}
+
+.studio-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-preview-head > div:first-child {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1px 5px;
+}
+
+.studio-preview-head strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.studio-preview-head small {
+  grid-column: 2;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 10px;
+}
+
+.studio-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--ui-accent, #0891b2);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+}
+
+.studio-preview-canvas {
+  position: relative;
+  /* 高度跟随宽度保持接近画板比例（760×480），避免取景被压扁、四周留白不齐 */
+  aspect-ratio: 760 / 500;
+  min-height: 300px;
+  max-height: 460px;
+  /* 内容已经被取景缩放进来了，这里留 visible 让阴影/光晕不被硬切
+     （绘制层本身是 absolute + 随内容缩放，不会真的溢出容器） */
+  overflow: hidden;
+  border: 1px solid var(--pv-line);
+  border-radius: var(--radius-open, 12px);
+  background-color: var(--pv-canvas);
+  background-image: radial-gradient(var(--pv-dot) 0.7px, transparent 0.7px);
+  background-size: 12px 12px;
+  color: var(--pv-text);
+}
+
+.studio-preview-canvas.is-light {
+  /* 不跟整站主题走：`html.dark` 时 --ui-canvas-bg 也是深色，亮色样张必须自己给值 */
+  --pv-canvas: #f5f6f8;
+  --pv-surface: #ffffff;
+  --pv-surface-soft: #ffffff;
+  --pv-line: #e2e5ea;
+  --pv-dot: #dfe3e8;
+  --pv-text: #18202b;
+  --pv-text-dim: #6b7280;
+  --pv-text-mute: #8c95a3;
+  /* 预览容器自己带一套完整变量：亮暗切换只影响这张画，不跟整站主题打架 */
+  --ui-panel: #ffffff;
+  --ui-panel-soft: #ffffff;
+  --ui-line: #e2e5ea;
+  --ui-line-soft: #eef0f4;
+  --ui-ink: #18202b;
+  --ui-ink-dim: #6b7280;
+  --ui-ink-mute: #8c95a3;
+  --ui-hover-soft: rgb(0 0 0 / 0.035);
+  --ui-shadow-sm: 0 1px 4px rgb(15 23 42 / 0.12);
+  --canvas-node-surface: #f9fafb;
+  --canvas-node-panel-surface: #ffffff;
+  --canvas-node-border: #e5e7eb;
+  --canvas-node-border-subtle: #e5e7eb;
+  --canvas-node-text-body: #374151;
+  --canvas-node-text-strong: #111827;
+  --canvas-node-text-muted: #64748b;
+  --canvas-node-text-faint: #9ca3af;
+  --canvas-node-shadow-soft: rgb(17 24 39 / 0.12);
+}
+
+.studio-preview-canvas.is-dark {
+  --pv-canvas: #171717;
+  --pv-surface: #252525;
+  --pv-surface-soft: #1e1e1e;
+  --pv-line: #3a3a3a;
+  --pv-dot: #2c2c2c;
+  --pv-text: #f2f2f2;
+  --pv-text-dim: #c4c4c4;
+  --pv-text-mute: #9a9a9a;
+  --ui-panel: #252525;
+  --ui-panel-soft: #1e1e1e;
+  --ui-line: #3a3a3a;
+  --ui-line-soft: #2a2a2a;
+  --ui-ink: #f2f2f2;
+  --ui-ink-dim: #c4c4c4;
+  --ui-ink-mute: #9a9a9a;
+  --ui-hover-soft: rgb(255 255 255 / 0.05);
+  --ui-shadow-sm: 0 1px 4px rgb(0 0 0 / 0.5);
+  --canvas-node-surface: #252525;
+  --canvas-node-panel-surface: #2c2c2c;
+  --canvas-node-border: #3a3a3a;
+  --canvas-node-border-subtle: #3a3a3a;
+  --canvas-node-text-body: #d4d4d4;
+  --canvas-node-text-strong: #f2f2f2;
+  --canvas-node-text-muted: #9c9c9c;
+  --canvas-node-text-faint: #7a7a7a;
+  --canvas-node-shadow-soft: rgb(0 0 0 / 0.4);
+}
+
+/* 画布卡片的一层极淡光晕：让预览看起来像一块正在被讲述的画布，而不是白底表格。 */
+.studio-preview-glint {
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 80%;
+  height: 90%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--ui-accent) 15%, transparent) 0%, transparent 68%);
+  pointer-events: none;
+}
+
+.studio-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  overflow: visible;
+  /* 舞台不参与布局，尺寸由内容决定；这里只是给绘制层一个定位原点 */
+  pointer-events: none;
+}
+
+.studio-preview-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  color: var(--pv-text-mute);
+  font-size: 11px;
+  text-align: center;
+}
+
+.studio-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 9px;
+}
+
+.studio-preview-meta span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-preview-meta i {
+  width: 4px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--ui-accent, #0891b2);
+}
+
+.studio-current {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--ui-line-soft, #eef0f4);
+  border-radius: var(--radius-row, 10px);
+  background: var(--ui-panel-soft, #fff);
+}
+
+.studio-current-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.10));
+  color: var(--ui-accent, #0e7490);
+}
+
+.studio-current-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.studio-current-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.studio-current-copy strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-current-copy small {
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 9px;
+}
+
+.studio-current-dots {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.studio-current-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+}
+
+.studio-preview-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.studio-preview-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 5px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-control, 8px);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink-dim, #6b7280);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-preview-actions button:hover {
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  color: var(--ui-ink, #18202b);
+}
+
+.studio-preview-actions svg {
+  width: 11px;
+  height: 11px;
+}
+
+.studio-preview-note {
+  /* 卡片最后一行：留出底部呼吸，避免文字贴着卡片下沿 */
+  margin: 0 0 4px;
+  padding-bottom: 2px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 9px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.studio-toast {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  z-index: 50;
+  padding: 7px 12px;
+  border-radius: 7px;
+  background: var(--ui-ink, #18202b);
+  color: var(--ui-panel, #fff);
+  font-size: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 6px);
+  transition: opacity var(--dur-hover, 0.18s) ease, transform var(--dur-hover, 0.18s) ease;
+}
+
+.studio-toast.is-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+
+@container (max-width: 700px) {
+  .studio-preview-canvas {
+    /* 窄屏也保持画板比例，不再用固定高度把内容压扁 */
+    aspect-ratio: 760 / 500;
+    min-height: 260px;
+  }
+}
+
+@container (max-width: 560px) {
+  .studio-intro {
+    flex-direction: column;
+  }
+
+  .studio-group {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-template,
+  .studio-toast {
+    transition: none;
+  }
+}

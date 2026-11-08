@@ -83,9 +83,9 @@ export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
   上传: '开发',
   展示: '开发',
   插件展示: '开发',
-  // 主题工作台：开发期预览工具，不是普通用户的外观设置。
-  // 放到「开发」下，和「调试 / 演示」并列，避免撑大「外观」页。
-  主题工作台: '开发',
+  // 颜色配方（主题工作台）：属于外观 —— 它调的就是主题配色，
+  // 用户口径里「主题配色应该全部放到外观里面」。
+  主题工作台: '外观',
 }
 
 /** 从 unknown meta 里安全取字符串 */
@@ -185,4 +185,43 @@ export function compareSettingsCategory(
 }
 
 /** 设置导航图标兜底（与 navIcon.ts 的导出保持一致，避免两处各写一个组件） */
+
+/** settings/hidden 场域名：登记“不要在设置页显示”的分组或单项。 */
+export const SETTINGS_HIDDEN_FIELD = 'settings/hidden'
+
+/**
+ * 一条“隐藏”声明。
+ *
+ * - 有 group、没有 key  → 整个分组都不显示
+ * - 同时有 group 和 key → 只隐藏这个分组里的某一项
+ * - 只有 key            → 按 key 全局隐藏（跨分组同名项）
+ *
+ * 由提供更完整界面的一方登记（例如颜色配方取代了零散配色项），
+ * 插件卸载时自动撤销，配置会重新出现。
+ */
+export interface SettingsHiddenDecl {
+  group?: string
+  key?: string
+}
+
+/**
+ * 全部声明都落在同一个键下：场域按 key 分桶，这里只需要"一个桶里放所有声明"。
+ * 读的时候一次 list() 全拿出来，比按 group 分桶更好维护（新增粒度不用改读取端）。
+ */
+export const SETTINGS_HIDDEN_KEY = '*'
+
+/** 这条声明是否把整个分组藏起来。 */
+export function hidesWholeGroup(decl: SettingsHiddenDecl): boolean {
+  return Boolean(decl.group) && !decl.key
+}
+
+/** 这条声明是否命中某个具体配置项。 */
+export function hidesKey(decl: SettingsHiddenDecl, group: string, key: string): boolean {
+  if (!decl.key) return false
+  if (decl.key !== key) return false
+  return !decl.group || decl.group === group
+}
+
 export { SETTINGS_NAV_ICON_FALLBACK }
+
+
