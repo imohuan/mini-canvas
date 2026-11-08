@@ -74,26 +74,22 @@ export interface ToolTemplate {
  * 小矩形，画质/清晰度/数量是一排等宽按钮，时长是滑块或两档按钮。光靠 type:select
  * 表达不出这层差异，只能让每个工具作者自己塞组件（那样每加一个模型都要写 UI）。
  *
- * 所以 kind 是**主题无关的语义标签**：工具作者声明它是 ratio / quality / …，
- * 由 UI 层把 kind 映射到**预设组件**（映射住在主题包里，换主题一起换）。
- * 不认识的 kind（或没声明）→ 回落内置 type 控件，不会炸。
+ * 所以 kind 只留给**基础控件表达不了的专属 UI**：目前只有 `ratio`
+ * （按真实宽高比画小矩形的网格）。其余需求都用 `type` 表达：
+ * 下拉 / 文本 / 数字（含 min/max/step/unit）/ 开关 / 按钮网格（含 columns）。
  *
- * 词表是**开放**的：这里列出的是仓库现有预设组件覆盖的名字，工具作者可以用自己的
- * 名字（那时回落内置控件），主题也可以登记新名字。
+ * 词表是**开放**的：写别的名字不会炸，回落 `type` 的控件。
  */
-export type ToolParamKind =
-  | 'ratio'
-  | 'quality'
-  | 'resolution'
-  | 'background'
-  | 'count'
-  | 'duration'
-  | 'model'
-  | 'style'
-  | 'speaker'
-  | 'format'
-  | 'speed'
-  | 'camera'
+/**
+ * 语义类型：**只给「基础控件表达不了的专属 UI」用**。
+ *
+ * 现在只剩 `ratio` 一个 —— 它要按真实宽高比画小矩形，别的控件替代不了。
+ * 其余都是基础控件能表达的（下拉 / 数字 / 开关 / 文本 / 按钮网格），
+ * 不该再各占一个 kind：那会让同一个 UI 有两套入口，文档也得跟着列两遍。
+ *
+ * 想加「特殊 UI」时在这里加一个值，并在主题包 `paramKind.ts` 里给它一件组件。
+ */
+export type ToolParamKind = 'ratio'
 
 /**
  * 声明式参数：UI 据此**自动**渲染控件（比例下拉、分辨率下拉、模板下拉…）。
@@ -112,22 +108,28 @@ export interface ToolParamDef {
    */
   kind?: ToolParamKind | (string & {})
   /**
-   * 内置控件类型（不给 component 时按它渲染标准控件）：
-   * - 'select'  下拉（配 options）
-   * - 'string'  单行文本
-   * - 'number'  数字（配 min/max/step 时用滑块/数字输入）
-   * - 'boolean' 开关
+   * 基础控件类型（不给 component / kind 时按它渲染）：
+   * - `select`  下拉（配 options）
+   * - `grid`    按钮网格，点一下就切换（配 options + columns）
+   * - `string`  单行文本（配 placeholder）
+   * - `number`  数字（配 min/max/step 用滑块+数字框；配 options 则变成按钮网格）
+   * - `boolean` 开关
    */
-  type?: 'select' | 'string' | 'number' | 'boolean'
-  /** number 类参数的显示单位（如 '秒' / 'Hz'）；预设滑块用它做后缀 */
+  type?: 'select' | 'grid' | 'string' | 'number' | 'boolean'
+  /** 数值单位的显示后缀（如 '秒' / 'Hz'），显示在滑块标题右侧 */
   unit?: string
-  /** type='select' 时的候选值 */
+  /** `select` / `grid` / `number` 的候选值（number + options = 按钮网格） */
   options?: ToolParamOption[]
   default?: string | number | boolean
-  /** type='number' 时的取值范围与步长（面板据此决定控件形态） */
+  /** `number` 的取值范围与步长（有范围才有滑块） */
   min?: number
   max?: number
   step?: number
+  /**
+   * 每行几格：只对按钮类控件生效（`type: 'grid'`、`type: 'number'` + options、`kind: 'ratio'`）。
+   * 省略时由 UI 按选项数自动排（≤6 个排一行）。
+   */
+  columns?: number
   /** type='string' 时的输入提示 */
   placeholder?: string
   /**

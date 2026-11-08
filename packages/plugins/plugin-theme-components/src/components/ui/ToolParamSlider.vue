@@ -105,6 +105,11 @@ function onSlider(value: number | number[] | undefined): void {
           </NumberFieldIncrement>
         </NumberFieldContent>
       </NumberField>
+      <!--
+        隐藏标题时（外层已画过标签），单位仍然要出现 —— 否则「4~15」没有量纲，
+        用户不知道是秒还是帧。放在数字框右侧，与标题行的排版一致。
+      -->
+      <span v-if="hideTitle && param.unit" class="tps-unit tps-unit--inline">{{ param.unit }}</span>
     </div>
   </section>
 </template>
@@ -130,6 +135,12 @@ function onSlider(value: number | number[] | undefined): void {
 .tps-unit {
   color: var(--ui-ink-mute, #8c95a3);
   font-weight: 500;
+}
+/* 隐藏标题时的内联单位：跟在数字框右边，不占一行 */
+.tps-unit--inline {
+  flex: none;
+  font-size: 12px;
+  white-space: nowrap;
 }
 /*
  * 版式照抄设置界面（SettingsSchemaField 的 .sf-number / .sf-slider / .sf-number-field）：

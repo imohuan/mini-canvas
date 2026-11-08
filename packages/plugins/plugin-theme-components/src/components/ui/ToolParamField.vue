@@ -25,8 +25,7 @@ import {
   SelectValue,
   Switch,
 } from '@mini-canvas/ui-kit-shadcn'
-import PrecisionSlider from './PrecisionSlider.vue'
-import { resolvePresetKind, PRESET_UI_NAMES, presetColumns } from './paramKind'
+import { resolvePresetKind, resolveBaseControl, gridColumns } from './paramKind'
 import ToolOptionGrid from './ToolOptionGrid.vue'
 import ToolRatioGrid from './ToolRatioGrid.vue'
 import ToolParamSlider from './ToolParamSlider.vue'
@@ -50,31 +49,29 @@ const emit = defineEmits<{
 /** 自定义组件（opaque 句柄）；给了就走自定义路径 */
 const custom = computed<Component | undefined>(() => props.param.component as Component | undefined)
 
+/** 基础控件的形态（下拉 / 网格 / 滑块 / 数字 / 文本 / 开关） */
+const base = computed(() => resolveBaseControl(props.param))
+
 /**
- * 预设件（按参数**语义类型**选，见 paramKind.ts 的判定表）。
+ * 专属 UI（见 paramKind.ts）：目前只有比例网格。
  *
- * 这是用户要求的「识别到固定类型参数就用预设组件」的落点：工具作者声明 kind:'ratio'，
- * 这里就换成带比例小图标的网格；声明 kind:'duration' 且只有两档，就换成按钮网格。
- * 认不得的 kind 或作者自带的 component 都回落下面的内置控件 —— 不猜、也不炸。
+ * 只有基础控件画不出来的东西才配一个 kind；按钮网格、滑块、下拉都是基础控件。
  */
 const preset = computed<Component | undefined>(() => {
-  const kind = resolvePresetKind(props.param)
-  if (kind === 'grid') return ToolOptionGrid
-  if (kind === 'ratio') return ToolRatioGrid
-  if (kind === 'slider') return ToolParamSlider
+  if (resolvePresetKind(props.param) === 'ratio') return ToolRatioGrid
   return undefined
 })
 
-/** 预设件收到的 props（统一形状：param / modelValue / disabled） */
-const presetProps = computed<Record<string, unknown>>(() => {
-  const kind = resolvePresetKind(props.param)
-  return {
-    param: props.param,
-    modelValue: props.modelValue,
-    disabled: props.disabled,
-    ...(kind ? { columns: presetColumns(kind, props.param.options?.length ?? 0) } : {}),
-  }
-})
+/** 控件的列数：作者给的 `columns` 优先，否则按选项数自动排 */
+const columns = computed(() => gridColumns(props.param, props.param.options?.length ?? 0))
+
+/** 控件收到的 props（统一形状：param / modelValue / disabled / columns） */
+const controlProps = computed<Record<string, unknown>>(() => ({
+  param: props.param,
+  modelValue: props.modelValue,
+  disabled: props.disabled,
+  columns: columns.value,
+}))
 
 /** select 的候选值（面板统一 Select 组件要的 {label,value} 形状） */
 const options = computed(() => (props.param.options ?? []).map((o) => ({ label: o.label, value: o.value })))
@@ -86,16 +83,6 @@ const customProps = computed<Record<string, unknown>>(() => ({
   disabled: props.disabled,
   ...(props.param.componentProps ?? {}),
 }))
-
-/** 数字参数：有 min/max 就用滑块，否则用普通数字输入 */
-const useSlider = computed(
-  () => props.param.type === 'number' && (props.param.min !== undefined || props.param.max !== undefined),
-)
-/**
- * 这个数值参数是否已经由预设件接管（kind 判定过的 speed / duration 档）：
- * 是 → 保留预设件的样子；否 → 用「滑块 + 数字框」的通用形态。
- */
-const sliderPreset = computed(() => resolvePresetKind(props.param) === 'slider')
 
 const inputId = computed(() => `${props.idPrefix}-${props.param.key}`)
 
@@ -152,11 +139,11 @@ const numberValue = computed(() => {
 </script>
 
 <template>
-  <!-- 预设件优先于内置控件（但不抢作者自带 component：那个在上面第一条分支） -->
+  <!-- 专属 UI（比例网格）优先；但仍不抢作者自带的 component -->
   <component
     :is="preset"
     v-if="preset && !custom"
-    v-bind="presetProps"
+    v-bind="controlProps"
     @update:model-value="(v: string | number | boolean) => emit('update:modelValue', v)"
   />
 
@@ -168,9 +155,20 @@ const numberValue = computed(() => {
     @update:model-value="(v: string | number | boolean) => emit('update:modelValue', v)"
   />
 
+  <!--
+    基础控件：按钮网格（点一下就切换）。
+    这是**基础控件**不是专属 UI —— 「画质 / 分辨率 / 数量 / 运镜」这类语义都走它，
+    列数由 `columns` 或选项数决定。
+  -->
+  <ToolOptionGrid
+    v-else-if="base === 'grid' && !custom"
+    v-bind="controlProps"
+    @update:model-value="(v: string | number | boolean) => emit('update:modelValue', v)"
+  />
+
   <!-- 内置：下拉（分离件：触发器 / 内容 / 选项各写各的，可任意定制） -->
   <Select
-    v-else-if="param.type === 'select'"
+    v-else-if="base === 'select'"
     :model-value="selectValue"
     :disabled="disabled"
     @update:model-value="onSelect"
@@ -184,7 +182,7 @@ const numberValue = computed(() => {
   </Select>
 
   <!-- 内置：开关 -->
-  <label v-else-if="param.type === 'boolean'" class="tpf-bool" :class="{ 'is-disabled': disabled }">
+  <label v-else-if="base === 'boolean'" class="tpf-bool" :class="{ 'is-disabled': disabled }">
     <Switch
       :id="inputId"
       :model-value="boolValue"
@@ -194,14 +192,9 @@ const numberValue = computed(() => {
     <span class="tpf-bool-text">{{ param.label || param.key }}</span>
   </label>
 
-  <!-- 内置：数字（有范围用滑块） -->
-  <!--
-    数值参数优先走 ToolParamSlider（滑块 + 右侧数字框，用户 2026-11-07 参考图 3）；
-    它与预设件是同一种东西（paramKind 的 slider 档），只是这里没有走 kind 判定。
-    注意别抢预设件的活：resolvePresetKind 已经给出的（speed、duration>3 档）仍走预设件。
-  -->
+  <!-- 基础控件：数值（有范围）→ 滑块 + 右侧数字框，`unit` 显示在标题后 -->
   <ToolParamSlider
-    v-else-if="useSlider && !sliderPreset"
+    v-else-if="base === 'slider'"
     :param="param"
     :model-value="numberValue"
     :disabled="disabled"
@@ -209,28 +202,18 @@ const numberValue = computed(() => {
     @update:model-value="onSlider"
   />
 
-  <PrecisionSlider
-    v-else-if="useSlider"
-    :model-value="numberValue"
-    :min="param.min ?? 0"
-    :max="param.max ?? 100"
-    :step="param.step ?? 1"
-    :disabled="disabled"
-    @update:model-value="onSlider"
-  />
-
-  <!-- 内置：数字（无范围）/ 文本 -->
+  <!-- 基础控件：数值（无范围）/ 文本 -->
   <Input
     v-else
     :id="inputId"
     class="tpf-input"
-    :type="param.type === 'number' ? 'number' : 'text'"
-    :value="param.type === 'number' ? numberValue : textValue"
+    :type="base === 'number' ? 'number' : 'text'"
+    :value="base === 'number' ? numberValue : textValue"
     :placeholder="param.placeholder || param.label || param.key"
     :disabled="disabled"
     :aria-label="param.label || param.key"
-    @change="param.type === 'number' ? onNumber($event) : onText($event)"
-    @input="param.type === 'number' ? undefined : onText($event)"
+    @change="base === 'number' ? onNumber($event) : onText($event)"
+    @input="base === 'number' ? undefined : onText($event)"
   />
 </template>
 

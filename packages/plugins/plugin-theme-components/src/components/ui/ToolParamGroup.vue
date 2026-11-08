@@ -20,7 +20,7 @@ import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@mini-canvas/ui-kit-shadcn'
 import ToolParamField from './ToolParamField.vue'
-import { resolvePresetKind, resolveInlineSoleSelect } from './paramKind'
+import { drawsOwnTitle, resolveInlineSoleSelect } from './paramKind'
 
 const props = withDefaults(
   defineProps<{
@@ -49,7 +49,8 @@ const emit = defineEmits<{
  * 第一行标题、第二行控件，块间 12 间距 + 一条分割线。
  * 从前非预设件走「标签 + 控件」横排，与预设件的竖排块并排出现两种观感，用户要求统一。
  */
-const isPreset = (p: ToolParamDef): boolean => resolvePresetKind(p) !== undefined
+/** 控件自己画标题的（比例网格 / 按钮网格），外层不再补标题 */
+const isPreset = (p: ToolParamDef): boolean => drawsOwnTitle(p)
 /**
  * 全部参数（**按声明顺序**渲染）。
  *

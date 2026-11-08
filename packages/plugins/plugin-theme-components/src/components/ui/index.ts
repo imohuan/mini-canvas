@@ -17,11 +17,17 @@ export { default as NodeEmptyState } from './NodeEmptyState.vue'
 export { default as NodeLoadingState } from './NodeLoadingState.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）
 export { default as ToolParamGroup } from './ToolParamGroup.vue'
-// 参数预设件（「按参数类型自动选组件」的那一层，判定表见 paramKind.ts）：
-//   ratio → 比例网格（带按真实宽高比画的描边矩形）；quality/resolution/background/count/… → 按钮网格；
-//   duration（两档）→ 按钮网格；duration（连续）/ speed → 滑块。
+// 参数控件（判定表见 paramKind.ts）：
+//   基础控件由 `type` 决定 —— select / grid（按钮网格）/ number（滑块或输入框）/ string / boolean；
+//   专属 UI 由 `kind` 决定 —— 目前只有 ratio（按真实宽高比画小矩形的网格）。
 export { default as ToolOptionGrid } from './ToolOptionGrid.vue'
 export { default as ToolRatioGrid } from './ToolRatioGrid.vue'
 export { default as ToolParamSlider } from './ToolParamSlider.vue'
-export { resolvePresetKind, PRESET_UI_NAMES, presetColumns } from './paramKind'
-export type { PresetKind } from './paramKind'
+export {
+  resolvePresetKind,
+  resolveBaseControl,
+  drawsOwnTitle,
+  PRESET_UI_NAMES,
+  gridColumns,
+} from './paramKind'
+export type { PresetKind, BaseControl } from './paramKind'

@@ -1,13 +1,15 @@
 /**
- * 「参数语义类型 → 预设组件」的契约测试（SSR 拿真实 HTML 断言）。
+ * 「参数声明 → 用哪个控件画」的契约测试（SSR 拿真实 HTML 断言）。
  *
- * 用户的要求：\u201c我会识别到某些固定的一些类型参数，它就会使用我的预设组件\u201d。
- * 这条测试锁的就是那层识别：
- * 1. kind:'ratio' → 比例网格（带按真实宽高比画的描边矩形，不是普通下拉）；
- * 2. kind:'quality'/'count'/… → 按钮网格（一排可点按钮）；
- * 3. kind:'duration' 两档 → 按钮网格；连续 → 滑块；
- * 4. kind:'model'/'speaker' → 明确回落下拉（选项多，网格放不下）；
- * 5. 认不得的 kind / 作者自带 component → 回落内置控件（不炸、不抢）。
+ * 2026-11-08 改版后的分工：
+ * - 基础控件用 `type`：select / grid / number / string / boolean；
+ * - 专属 UI 用 `kind`，只剩 ratio 一个。
+ *
+ * 锁住四件事：
+ * 1. `type:grid` 画按钮网格，列数能配；
+ * 2. `type:number` 有范围是滑块、带 options 是网格、无范围是输入框；
+ * 3. `kind:ratio` 仍是比例网格，也能配列数；
+ * 4. 旧的语义 kind（quality / count / model…）不再改变控件 —— 它们就是普通 select。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -15,335 +17,193 @@ import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import ToolParamField from '../ToolParamField.vue'
-import { resolvePresetKind, presetColumns, PRESET_UI_NAMES, resolveInlineSoleSelect } from '../paramKind'
+import {
+  resolvePresetKind,
+  resolveBaseControl,
+  drawsOwnTitle,
+  gridColumns,
+  PRESET_UI_NAMES,
+  resolveInlineSoleSelect,
+} from '../paramKind'
 
 function render(param: ToolParamDef, modelValue: string | number | boolean = ''): Promise<string> {
   const app = createSSRApp({ render: () => h(ToolParamField as Component, { param, modelValue, idPrefix: 'tp' }) })
   return renderToString(app)
 }
 
-describe('resolvePresetKind：判定表（纯函数）', () => {
-  const withOptions = (kind: string, count = 6): ToolParamDef => ({
-    key: 'k',
-    kind,
-    type: 'select',
-    options: Array.from({ length: count }, (_, i) => ({ label: 'o' + i, value: 'v' + i })),
+const opts = (values: string[]) => values.map((v) => ({ label: v, value: v }))
+
+describe('resolveBaseControl：基础控件判定', () => {
+  it('type:grid → 按钮网格', () => {
+    expect(resolveBaseControl({ key: 'g', type: 'grid', options: opts(['a', 'b']) })).toBe('grid')
   })
 
-  it('ratio → 比例网格；quality/resolution/background/count/camera → 按钮网格', () => {
-    expect(resolvePresetKind(withOptions('ratio'))).toBe('ratio')
-    for (const k of ['quality', 'resolution', 'background', 'count', 'camera']) {
-      expect(resolvePresetKind(withOptions(k)), k).toBe('grid')
-    }
+  it('type:number 带 options → 网格（几档里选一个，点比拖快）', () => {
+    expect(resolveBaseControl({ key: 'd', type: 'number', options: opts(['5', '10']) })).toBe('grid')
   })
 
-  it('duration：有选项且 <= 3 档 → 网格；否则数值 → 滑块', () => {
-    expect(resolvePresetKind(withOptions('duration', 2))).toBe('grid')
-    expect(resolvePresetKind({ key: 'd', kind: 'duration', type: 'number', min: 4, max: 15 })).toBe('slider')
+  it('type:number 有 min/max → 滑块', () => {
+    expect(resolveBaseControl({ key: 'd', type: 'number', min: 4, max: 10 })).toBe('slider')
+    expect(resolveBaseControl({ key: 'd', type: 'number', min: 4 })).toBe('slider')
   })
 
-  it('speed 这类数值区间 → 滑块', () => {
-    expect(resolvePresetKind({ key: 's', kind: 'speed', type: 'number', min: -50, max: 100 })).toBe('slider')
+  it('type:number 无范围 → 普通数字输入', () => {
+    expect(resolveBaseControl({ key: 'n', type: 'number' })).toBe('number')
   })
 
-  it('model / style / speaker → 永远回落下拉（名字长、可能很多，不看数量）', () => {
-    for (const k of ['model', 'style', 'speaker']) {
-      expect(resolvePresetKind(withOptions(k)), k).toBeUndefined()
-      // 即便只有两三个选项，也仍是下拉（长名字铺成按钮会挤成一团省略号）
-      expect(resolvePresetKind(withOptions(k, 2)), k + '(两档)').toBeUndefined()
-    }
-  })
-
-  /**
-   * 「选项很少的下拉」→ 铺成按钮行（切换式）。
-   *
-   * 用户口径（2026-10-14，附截图）：「我觉得像这种选项很少的情况下，可以使用另外一种方式，
-   * 就是以切换的方式进行」。截图里那个是「格式」：WAV / MP3 / OGG Opus 三档。
-   */
-  it('format（三档）→ 按钮网格，不再是要点开的下拉', () => {
-    expect(resolvePresetKind(withOptions('format', 3))).toBe('grid')
-    // 两档同理（切一下就行）
-    expect(resolvePresetKind(withOptions('format', 2))).toBe('grid')
-  })
-
-  it('选项偏多的普通下拉（> 3 档）→ 仍回落下拉（铺开太长）', () => {
-    expect(resolvePresetKind(withOptions('format', 6))).toBeUndefined()
-    expect(resolvePresetKind(withOptions('whatever', 6))).toBeUndefined()
-  })
-
-  it('没声明 kind → 不猜（回落内置控件），少选项也不认领', () => {
-    expect(resolvePresetKind({ key: 'x', type: 'select', options: [{ label: 'a', value: 'a' }] })).toBeUndefined()
-  })
-
-  it('认不得的 kind / 没声明 kind → 回落', () => {
-    expect(resolvePresetKind(withOptions('whatever'))).toBeUndefined()
-    expect(resolvePresetKind({ key: 'x', type: 'select', options: [{ label: 'a', value: 'a' }] })).toBeUndefined()
-  })
-
-  it('作者自带 component → 永远优先，预设件不抢', () => {
-    expect(resolvePresetKind({ ...withOptions('ratio'), component: { name: 'X' } })).toBeUndefined()
-  })
-
-  /**
-   * 用户口径（2026-11-03，附截图「宽度没有自适应」「高度那?」）：
-   * 6 档比例被排成 5+1 两行，第二行剩一格、右侧一大片空白。
-   * 现在比例**按选项数排一行**（最多 6 列），其余网格仍 3 列。
-   */
-  it('列数：比例按选项数排一行（最多 6 列），其余 3 列', () => {
-    expect(presetColumns('ratio')).toBe(6)
-    expect(presetColumns('ratio', 6)).toBe(6)
-    expect(presetColumns('ratio', 4)).toBe(4)
-    expect(presetColumns('ratio', 7)).toBe(6)
-    expect(presetColumns('grid')).toBe(3)
-    expect(presetColumns('grid', 9)).toBe(3)
-  })
-
-  /**
-   * 用户口径（2026-11-03）：「高度那?」「宽度没有自适应?」
-   *
-   * 两件事必须同时成立，缺一个面板就会空：
-   * ① 列数按实际选项数算（不再固定 5 列留 1 格残行）；
-   * ② 面板宽度随内容走，只用上下限兜底（不再固定 288px）。
-   */
-  it('比例面板：6 档排一行 6 列，宽度随内容而不是写死 288', () => {
-    const ratioParam = withOptions('ratio', 6)
-    expect(presetColumns('ratio', ratioParam.options?.length ?? 0)).toBe(6)
-    const css = readFileSync(new URL('../ToolParamGroup.vue', import.meta.url), 'utf-8')
-    expect(css).toMatch(/width:\s*max-content/)
-    expect(css).not.toMatch(/width:\s*288px/)
+  it('select / boolean / string / 未声明', () => {
+    expect(resolveBaseControl({ key: 's', type: 'select', options: opts(['a']) })).toBe('select')
+    expect(resolveBaseControl({ key: 'b', type: 'boolean' })).toBe('boolean')
+    expect(resolveBaseControl({ key: 't', type: 'string' })).toBe('text')
+    expect(resolveBaseControl({ key: 'x' })).toBe('text')
   })
 })
 
-describe('ToolParamField 按 kind 选预设件（渲染契约）', () => {
-
-/**
- * 「唯一一个普通下拉」→ 铺到外面（不套参数面板）。
- *
- * 用户口径（2026-10-14，附图）：「集成在这个下拉菜单里面，没有必要做成这种二级菜单……
- * 如果里面只有唯一的一项，并且它是下拉的话，就直接把它做成外部的形式」。
- * 截图里那一格是「音色」（kind:'speaker'，一个参数、普通下拉）。
- */
-describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', () => {
-  const sel = (kind?: string, options = 3, type = 'select'): ToolParamDef => ({
-    key: 'k',
-    ...(kind ? { kind } : {}),
-    type: type as ToolParamDef['type'],
-    options: Array.from({ length: options }, (_, i) => ({ label: 'o' + i, value: 'v' + i })),
+describe('resolvePresetKind：只剩 ratio', () => {
+  it('kind:ratio 有选项 → 比例网格', () => {
+    expect(resolvePresetKind({ key: 'r', kind: 'ratio', type: 'select', options: opts(['16:9']) })).toBe('ratio')
   })
 
-  it('恰好一项 + 普通下拉 → 铺出去（音色这种长名单正是样板）', () => {
-    // 音色：kind'speaker'（长名单，永远走下拉）+ 20 项
-    expect(resolveInlineSoleSelect([sel('speaker', 20)])?.key).toBe('k')
-    // 模型同理（长名单、选项多）
-    expect(resolveInlineSoleSelect([sel('model', 8)])?.key).toBe('k')
-    // 没声明 kind 的下拉（>3 项，没被「选项少→按钮行」接管）也铺
-    expect(resolveInlineSoleSelect([sel(undefined, 5)])?.key).toBe('k')
+  it('kind:ratio 没选项 → 回落基础控件', () => {
+    expect(resolvePresetKind({ key: 'r', kind: 'ratio', type: 'select' })).toBeUndefined()
   })
 
-  it('那唯一一项会变成按钮行 → 不铺（用户说的是「它是下拉的话」；按钮行不是下拉）', () => {
-    // format 三档已被上一轮规则接管成按钮网格（选项少就是切换式）
-    expect(resolveInlineSoleSelect([sel('format', 3)])).toBeUndefined()
-    // 但「没声明 kind 的两档下拉」没被按钮行规则接管，它仍是下拉 → 该铺
-    expect(resolveInlineSoleSelect([sel(undefined, 2)])?.key).toBe('k')
+  it('旧的语义 kind 不再改变控件', () => {
+    const legacy = ['quality', 'resolution', 'background', 'count', 'camera', 'duration', 'model', 'speaker', 'format', 'speed', 'style', 'whatever']
+    for (const k of legacy) {
+      expect(resolvePresetKind({ key: 'k', kind: k, type: 'select', options: opts(['a', 'b']) }), k).toBeUndefined()
+    }
   })
 
-  it('两项以上 → 不铺（必须收面板，否则底行被撑爆）', () => {
-    expect(resolveInlineSoleSelect([sel('speaker', 20), sel('format', 3)])).toBeUndefined()
-    expect(resolveInlineSoleSelect([])).toBeUndefined()
-  })
-
-  it('那唯一一项是预设件（比例网格 / 按钮网格 / 滑块）→ 不铺（要整块版面）', () => {
-    expect(resolveInlineSoleSelect([sel('ratio', 4)])).toBeUndefined()
-    expect(resolveInlineSoleSelect([sel('quality', 3)])).toBeUndefined()
-    expect(resolveInlineSoleSelect([{ key: 'd', kind: 'duration', type: 'number', min: 4, max: 10 }])).toBeUndefined()
-    expect(resolveInlineSoleSelect([{ key: 's', kind: 'speed', type: 'number', min: 0, max: 100 }])).toBeUndefined()
-  })
-
-  it('那唯一一项不是 select（布尔 / 文本 / 数字）→ 不铺', () => {
-    expect(resolveInlineSoleSelect([{ key: 'b', type: 'boolean' }])).toBeUndefined()
-    expect(resolveInlineSoleSelect([{ key: 't', type: 'string' }])).toBeUndefined()
-    expect(resolveInlineSoleSelect([{ key: 'n', type: 'number', min: 1, max: 5 }])).toBeUndefined()
-  })
-
-  it('作者自带 component → 不铺（那可能是一整块自定义 UI，不是"普通下拉"）', () => {
-    expect(resolveInlineSoleSelect([{ ...sel('speaker', 20), component: { name: 'X' } }])).toBeUndefined()
+  it('作者自带 component → 什么都不抢', () => {
+    const param: ToolParamDef = { key: 'r', kind: 'ratio', type: 'select', options: opts(['1:1']), component: { name: 'X' } }
+    expect(resolvePresetKind(param)).toBeUndefined()
   })
 })
-  it('kind:ratio → 画比例网格（有按真实宽高比的描边矩形），不再是普通下拉', async () => {
-    const html = await render(
-      {
-        key: 'ratio',
-        kind: 'ratio',
-        label: '比例',
-        type: 'select',
-        options: [
-          { label: '16:9', value: '16:9' },
-          { label: '9:16', value: '9:16' },
-        ],
-      },
-      '16:9',
-    )
-    expect(html).toContain('trg-grid')
-    expect(html).toContain('trg-shape') // 按真实比例画的矩形
-    expect(html).toContain('16:9')
-    expect(html).not.toContain('data-slot="select-trigger"') // 不是下拉
+
+describe('gridColumns：列数', () => {
+  it('作者显式给 columns 就用它（小数取整）', () => {
+    expect(gridColumns({ key: 'g', type: 'grid', columns: 2 }, 6)).toBe(2)
+    expect(gridColumns({ key: 'g', type: 'grid', columns: 1 }, 6)).toBe(1)
+    expect(gridColumns({ key: 'g', type: 'grid', columns: 4.7 }, 6)).toBe(4)
   })
 
-  it('比例矩形按真实宽高比缩放：16:9 的宽 > 高，9:16 的高 > 宽', async () => {
-    const wide = await render({ key: 'r', kind: 'ratio', type: 'select', options: [{ label: '16:9', value: '16:9' }] }, '16:9')
-    const tall = await render({ key: 'r', kind: 'ratio', type: 'select', options: [{ label: '9:16', value: '9:16' }] }, '9:16')
-    // 只取 trg-shape（描边矩形）那一处的尺寸 —— 图标位固定 17×17，不能拿它当断言对象
-    const sizeOf = (html: string): { w: number; h: number } => {
-      const m = /trg-shape[^>]*style="width:\s*(\d+)px;\s*height:\s*(\d+)px/.exec(html)
-      return { w: Number(m?.[1]), h: Number(m?.[2]) }
-    }
-    const a = sizeOf(wide)
-    const b = sizeOf(tall)
-    expect(a.w).toBeGreaterThan(a.h)
-    expect(b.h).toBeGreaterThan(b.w)
-    expect(a.w).toBeGreaterThanOrEqual(4)
+  it('没给就按选项数排一行，最多 6 列', () => {
+    expect(gridColumns({ key: 'g', type: 'grid' }, 2)).toBe(2)
+    expect(gridColumns({ key: 'g', type: 'grid' }, 6)).toBe(6)
+    expect(gridColumns({ key: 'g', type: 'grid' }, 9)).toBe(6)
   })
 
-  it('比例值解析不出（auto）→ 画虚线方块，与真比例区分', async () => {
-    const html = await render({ key: 'r', kind: 'ratio', type: 'select', options: [{ label: '自动', value: 'auto' }] }, 'auto')
-    expect(html).toContain('trg-shape')
-    expect(html).toContain('is-dashed')
+  it('选项数未知 → 3 列兜底（不能给 0，否则网格塌掉）', () => {
+    expect(gridColumns({ key: 'g', type: 'grid' }, 0)).toBe(3)
   })
 
-  it('kind:quality → 按钮网格（3 列、一排按钮），选中项带 is-active', async () => {
-    const html = await render(
-      {
-        key: 'quality',
-        kind: 'quality',
-        label: '画质',
-        type: 'select',
-        options: [
-          { label: '标准画质', value: 'standard' },
-          { label: '高画质', value: 'high' },
-        ],
-      },
-      'high',
-    )
+  it('非法 columns 忽略，回落自动排', () => {
+    expect(gridColumns({ key: 'g', type: 'grid', columns: 0 }, 4)).toBe(4)
+    expect(gridColumns({ key: 'g', type: 'grid', columns: -2 }, 4)).toBe(4)
+    expect(gridColumns({ key: 'g', type: 'grid', columns: Number.NaN }, 4)).toBe(4)
+  })
+})
+
+describe('drawsOwnTitle：谁能自己画标题', () => {
+  it('按钮网格与比例网格自己画，其余由外层补', () => {
+    expect(drawsOwnTitle({ key: 'g', type: 'grid', options: opts(['a']) })).toBe(true)
+    expect(drawsOwnTitle({ key: 'r', kind: 'ratio', type: 'select', options: opts(['1:1']) })).toBe(true)
+    expect(drawsOwnTitle({ key: 's', type: 'select', options: opts(['a']) })).toBe(false)
+    expect(drawsOwnTitle({ key: 'n', type: 'number', min: 1, max: 5 })).toBe(false)
+    expect(drawsOwnTitle({ key: 'b', type: 'boolean' })).toBe(false)
+  })
+})
+
+describe('ToolParamField 渲染：基础控件', () => {
+  it('type:grid → 按钮网格，默认按选项数排一行', async () => {
+    const html = await render({ key: 'q', label: '画质', type: 'grid', options: opts(['标准', '高清']) }, '高清')
     expect(html).toContain('tog-grid')
-    expect(html).toContain('repeat(3, 1fr)') // 3 列
-    expect(html).toContain('高画质')
+    expect(html).toContain('repeat(2, 1fr)')
     expect(html).toContain('is-active')
     expect(html).not.toContain('data-slot="select-trigger"')
   })
 
-  /**
-   * 用户截图里那个「格式」参数（WAV / MP3 / OGG Opus）：选项少 → 铺成一排按钮切换，
-   * 不再是要点开的下拉。这条是 2026-10-14 那次反馈的落点。
-   */
-  it('kind:format 三档 → 铺成按钮行（不是下拉），点一下直接切换', async () => {
-    const html = await render(
-      {
-        key: 'format',
-        kind: 'format',
-        label: '格式',
-        type: 'select',
-        default: 'wav',
-        options: [
-          { label: 'WAV', value: 'wav' },
-          { label: 'MP3', value: 'mp3' },
-          { label: 'OGG Opus', value: 'ogg_opus' },
-        ],
-      },
-      'wav',
-    )
+  it('type:grid + columns → 按配置的列数', async () => {
+    const one = await render({ key: 'q', type: 'grid', columns: 1, options: opts(['低', '中', '高']) }, '中')
+    expect(one).toContain('repeat(1, 1fr)')
+    const four = await render({ key: 'q', type: 'grid', columns: 4, options: opts(['a', 'b', 'c', 'd']) }, 'a')
+    expect(four).toContain('repeat(4, 1fr)')
+  })
+
+  it('type:number + options → 也是按钮网格', async () => {
+    const html = await render({ key: 'd', label: '时长', type: 'number', options: opts(['5', '10']) }, '5')
     expect(html).toContain('tog-grid')
-    expect(html).toContain('WAV')
-    expect(html).toContain('MP3')
-    expect(html).toContain('OGG Opus')
-    expect(html).toContain('is-active') // 当前档位高亮
-    expect(html).not.toContain('data-slot="select-trigger"') // 不再是下拉
+    expect(html).not.toContain('data-slot="select-trigger"')
   })
 
-  it('kind:format 但选项很多 → 仍是下拉（铺开太长）', async () => {
-    const much: ToolParamDef = {
-      key: 'format',
-      kind: 'format',
-      type: 'select',
-      options: ['a', 'b', 'c', 'd', 'e', 'f'].map((v) => ({ label: v.toUpperCase(), value: v })),
-    }
-    const html = await render(much, 'a')
-    expect(html).toContain('data-slot="select-trigger"')
-    expect(html).not.toContain('tog-grid')
-  })
-
-  it('kind:count → 按钮网格（数量是一排按钮，不是下拉）', async () => {
-    const html = await render(
-      {
-        key: 'count',
-        kind: 'count',
-        label: '生成数量',
-        type: 'select',
-        options: [
-          { label: '1张', value: '1' },
-          { label: '2张', value: '2' },
-          { label: '4张', value: '4' },
-        ],
-      },
-      '1',
-    )
-    expect(html).toContain('tog-grid')
-    expect(html).toContain('1张')
-  })
-
-  it('kind:duration 两档（dola 的 5/10）→ 按钮网格', async () => {
-    const html = await render(
-      {
-        key: 'durationSec',
-        kind: 'duration',
-        label: '时长',
-        type: 'number',
-        options: [
-          { label: '5秒', value: '5' },
-          { label: '10秒', value: '10' },
-        ],
-      },
-      '5',
-    )
-    expect(html).toContain('tog-grid')
-    expect(html).toContain('5秒')
-  })
-
-  /**
-   * 2026-11-08 改版：滑块直接复用设置界面那一套（shadcn Slider + NumberField −/+），
-   * 不再是「滑块下方一个自绘当前值」。
-   */
-  it('kind:duration 连续（豆包 4-10）→ shadcn 滑块 + 数字框（同设置界面）', async () => {
-    const html = await render(
-      { key: 'durationSec', kind: 'duration', label: '时长', type: 'number', min: 4, max: 10, step: 1, unit: '秒' },
-      6,
-    )
+  it('type:number 有范围 → 滑块 + 数字框，unit 显示', async () => {
+    const html = await render({ key: 'd', label: '时长', type: 'number', min: 4, max: 10, step: 1, unit: '秒' }, 6)
     expect(html).toMatch(/data-slot="slider"|role="slider"/)
-    // 数字框（NumberField）与滑块同一行
     expect(html).toContain('tps-number-field')
-    expect(html).toContain('tps-row')
-    expect(html).not.toContain('tps-value')
     expect(html).toContain('秒')
   })
 
-  it('kind:model → 仍是下拉（选项多/名字长，参考站也是单独下拉）', async () => {
-    const html = await render(
-      {
-        key: 'model',
-        kind: 'model',
-        label: '模型',
-        type: 'select',
-        options: [
-          { label: 'Seedream 4.5', value: 'Seedream 4.5' },
-          { label: 'Seedream 5.0 Pro', value: 'Seedream 5.0 Pro' },
-        ],
-      },
-      'Seedream 4.5',
-    )
+  it('type:number 无范围 → 普通数字输入框', async () => {
+    const html = await render({ key: 'seed', type: 'number', default: 42 }, 42)
+    expect(html).toContain('tpf-input')
+    expect(html).not.toContain('tps-number-field')
+  })
+
+  it('type:select → 下拉（哪怕只有 2 个选项）', async () => {
+    const html = await render({ key: 'm', type: 'select', options: opts(['A', 'B']) }, 'A')
     expect(html).toContain('data-slot="select-trigger"')
     expect(html).not.toContain('tog-grid')
   })
 
-  it('承认 kind 但作者自带 component → 用作者的（预设件不抢）', async () => {
+  it('type:boolean → 开关', async () => {
+    const html = await render({ key: 'b', label: '放大', type: 'boolean' }, true)
+    expect(html).toContain('tpf-bool')
+  })
+
+  it('type:string → 文本输入', async () => {
+    const html = await render({ key: 't', type: 'string', placeholder: '写点什么' }, 'x')
+    expect(html).toContain('tpf-input')
+    expect(html).toContain('type="text"')
+  })
+})
+
+describe('ToolParamField 渲染：专属 UI', () => {
+  it('kind:ratio → 比例网格（有按真实宽高比的描边矩形）', async () => {
+    const html = await render(
+      { key: 'ratio', kind: 'ratio', label: '比例', type: 'select', options: opts(['16:9', '9:16']) },
+      '16:9',
+    )
+    expect(html).toContain('trg-grid')
+    expect(html).toContain('trg-shape')
+    expect(html).not.toContain('data-slot="select-trigger"')
+  })
+
+  it('比例 16:9 的宽 > 高，9:16 的高 > 宽', async () => {
+    const sizeOf = (html: string) => {
+      const m = /trg-shape[^>]*style="width:\s*(\d+)px;\s*height:\s*(\d+)px/.exec(html)
+      return { w: Number(m?.[1]), h: Number(m?.[2]) }
+    }
+    const a = sizeOf(await render({ key: 'r', kind: 'ratio', type: 'select', options: opts(['16:9']) }, '16:9'))
+    const b = sizeOf(await render({ key: 'r', kind: 'ratio', type: 'select', options: opts(['9:16']) }, '9:16'))
+    expect(a.w).toBeGreaterThan(a.h)
+    expect(b.h).toBeGreaterThan(b.w)
+  })
+
+  it('比例解析不出（auto）→ 虚线方块', async () => {
+    const html = await render({ key: 'r', kind: 'ratio', type: 'select', options: opts(['auto']) }, 'auto')
+    expect(html).toContain('is-dashed')
+  })
+
+  it('kind:ratio + columns → 按配置的列数排', async () => {
+    const html = await render(
+      { key: 'r', kind: 'ratio', type: 'select', columns: 2, options: opts(['1:1', '16:9', '9:16']) },
+      '1:1',
+    )
+    expect(html).toContain('repeat(2, 1fr)')
+  })
+
+  it('作者自带 component 时，kind:ratio 也不抢', async () => {
     const Custom = defineComponent({
       name: 'MyRatio',
       props: { param: { type: Object, default: undefined }, modelValue: { type: null, default: undefined } },
@@ -352,7 +212,7 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
       },
     })
     const html = await render(
-      { key: 'ratio', kind: 'ratio', type: 'select', options: [{ label: '1:1', value: '1:1' }], component: Custom },
+      { key: 'ratio', kind: 'ratio', type: 'select', options: opts(['1:1']), component: Custom },
       '1:1',
     )
     expect(html).toContain('data-custom-ratio="ok"')
@@ -360,10 +220,52 @@ describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', ()
   })
 })
 
-describe('ui 目录登记名（业务插件按名取的通道）', () => {
-  it('三种预设件都有约定的目录名', () => {
-    expect(PRESET_UI_NAMES.ratio).toBe('toolParamRatio')
-    expect(PRESET_UI_NAMES.grid).toBe('toolParamGrid')
-    expect(PRESET_UI_NAMES.slider).toBe('toolParamSlider')
+describe('resolveInlineSoleSelect：唯一一个普通下拉就铺到外面', () => {
+  const sel = (n = 3, type = 'select'): ToolParamDef => ({
+    key: 'k',
+    type: type as ToolParamDef['type'],
+    options: Array.from({ length: n }, (_, i) => ({ label: 'o' + i, value: 'v' + i })),
+  })
+
+  it('恰好一项 + 普通下拉 → 铺出去', () => {
+    expect(resolveInlineSoleSelect([sel(20)])?.key).toBe('k')
+    expect(resolveInlineSoleSelect([sel(5)])?.key).toBe('k')
+  })
+
+  it('那唯一一项是网格 / 滑块 / 比例 → 不铺', () => {
+    expect(resolveInlineSoleSelect([{ key: 'g', type: 'grid', options: opts(['a', 'b']) }])).toBeUndefined()
+    expect(resolveInlineSoleSelect([{ key: 'n', type: 'number', min: 1, max: 5 }])).toBeUndefined()
+    expect(resolveInlineSoleSelect([{ key: 'r', kind: 'ratio', type: 'select', options: opts(['1:1']) }])).toBeUndefined()
+  })
+
+  it('两项以上 / 空 → 不铺', () => {
+    expect(resolveInlineSoleSelect([sel(3), sel(3)])).toBeUndefined()
+    expect(resolveInlineSoleSelect([])).toBeUndefined()
+  })
+
+  it('不是下拉（布尔 / 文本 / 数字）→ 不铺', () => {
+    expect(resolveInlineSoleSelect([{ key: 'b', type: 'boolean' }])).toBeUndefined()
+    expect(resolveInlineSoleSelect([{ key: 't', type: 'string' }])).toBeUndefined()
+    expect(resolveInlineSoleSelect([{ key: 'n', type: 'number' }])).toBeUndefined()
+  })
+
+  it('作者自带 component → 不铺', () => {
+    expect(resolveInlineSoleSelect([{ ...sel(20), component: { name: 'X' } }])).toBeUndefined()
   })
 })
+
+describe('参数面板版式', () => {
+  it('宽度随内容，不写死 288px', () => {
+    const css = readFileSync(new URL('../ToolParamGroup.vue', import.meta.url), 'utf-8')
+    expect(css).toMatch(/width:\s*max-content/)
+    expect(css).not.toMatch(/width:\s*288px/)
+  })
+})
+
+describe('ui 目录登记名', () => {
+  it('专属 UI 只有比例网格', () => {
+    expect(PRESET_UI_NAMES.ratio).toBe('toolParamRatio')
+    expect(Object.keys(PRESET_UI_NAMES)).toEqual(['ratio'])
+  })
+})
+
