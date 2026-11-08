@@ -83,35 +83,75 @@ function buildChatAutoPrompt(model, values, body) {
   return text ? head + ' ' + text : head
 }
 
-function referenceUrls(input) {
-  return (input.resources || [])
-    .filter((r) => (r.kind === 'image' || r.kind === 'video') && typeof r.url === 'string' && r.url)
-    .map((r) => r.url)
+/**
+ * 上游文本素材 -> 带名字的标签块（与图片那份同一口径）。
+ * 连进来的文本给一个名字（节点标题优先，没有就 文本1 / 文本2…），
+ * 正文包进 <text name="…">；用户在提示词里写 @标题内容 / @文本1 就能指到它。
+ */
+function textBlocks(input) {
+  const out = []
+  let n = 0
+  for (const r of input.resources || []) {
+    if (r.kind !== 'text') continue
+    n += 1
+    const raw = typeof r.name === 'string' ? r.name.trim() : ''
+    const name = raw !== '' ? raw : '文本' + n
+    const value = typeof r.value === 'string' ? r.value : ''
+    out.push('<text name="' + name + '">\n' + value + '\n</text>')
+  }
+  return out
 }
 
-function upstreamText(input) {
-  return (input.resources || [])
-    .filter((r) => r.kind === 'text' && typeof r.value === 'string' && r.value.trim() !== '')
-    .map((r) => r.value)
-    .join('\n')
+/**
+ * 参考素材 -> 参数（按动作声明的 refFields 分发）。
+ *
+ * ⚠️ web2api 目前**没有视频参考字段**（所有 meta.ts 的 acceptance 只有 image / audio）。
+ * 所以视频节点连进来时：跳过 + 打日志说明，而不是像以前那样混进 referenceImages
+ * （那会让 web2api 把一个 mp4 当图片解析，报「图片不存在」或生成出垃圾）。
+ */
+function attachRefs(action, input, params) {
+  const map = action.refFields || {}
+  const buckets = {}
+  const skipped = []
+  for (const r of input.resources || []) {
+    if (r.kind === 'text') continue
+    const field = map[r.kind]
+    if (!field || typeof r.url !== 'string' || !r.url) {
+      if (r.kind) skipped.push(r.kind)
+      continue
+    }
+    if (!buckets[field]) buckets[field] = []
+    buckets[field].push(r.url)
+  }
+  for (const [field, urls] of Object.entries(buckets)) {
+    const limit = field === 'referenceAudios' ? 3 : 16
+    if (urls.length > limit) {
+      console.warn('[web2api-video] ' + action.id + ' 的 ' + field + ' 最多 ' + limit + ' 个，已截断')
+    }
+    params[field] = urls.slice(0, limit)
+  }
+  if (skipped.length > 0) {
+    console.warn(
+      '[web2api-video] ' + action.id + ' 不收这些素材，已忽略：' + [...new Set(skipped)].join('、') +
+        '（当前平台只收：' + (Object.keys(map).join('、') || '无') + '）',
+    )
+  }
+  return params
 }
 
 function buildParams(action, input) {
   const values = (input.values || {})
-  const body = [input.prompt || '', upstreamText(input)].filter((s) => String(s).trim() !== '').join('\n')
-  const refs = referenceUrls(input)
+  const body = [input.prompt || '', ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
 
   if (action.promptMode === 'chat-auto') {
     const params = { prompt: buildChatAutoPrompt(action.model, values, body) }
-    if (refs.length > 0) params.referenceImages = refs
-    return params
+    return attachRefs(action, input, params)
   }
 
   const params = cleanValues(values)
   if (action.model !== undefined && action.model !== '') params.model = action.model
   params.prompt = body
-  if (refs.length > 0) params.referenceImages = refs
-  return params
+  return attachRefs(action, input, params)
 }
 
 function collectUrls(result) {
@@ -247,6 +287,7 @@ const provider = {
       platform: 'doubao', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'video', model: 'Seedance 2.0 Fast',
       fields: [ratio_doubao, duration_doubao_auto],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 4000, pollTimeoutMs: 1800000,
     },
     {
@@ -260,6 +301,7 @@ const provider = {
       platform: 'doubao', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'video', model: 'Seedance 2.0 Mini',
       fields: [ratio_doubao, duration_doubao_auto],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 4000, pollTimeoutMs: 1800000,
     },
     {
@@ -273,6 +315,7 @@ const provider = {
       platform: 'dola', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'video', model: 'Seedance 2.5',
       fields: [ratio_doubao, duration_dola_auto],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 4000, pollTimeoutMs: 1800000,
     },
     {
@@ -286,6 +329,7 @@ const provider = {
       platform: 'dola', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'video', model: 'Seedance 2.0',
       fields: [ratio_doubao, duration_dola_auto],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 4000, pollTimeoutMs: 1800000,
     },
     {
@@ -299,6 +343,7 @@ const provider = {
       platform: 'dola', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'video', model: 'Seedance 1.0',
       fields: [ratio_doubao, duration_dola_auto],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 4000, pollTimeoutMs: 1800000,
     },
     {
@@ -312,6 +357,7 @@ const provider = {
       platform: 'doubao', operation: 'generate-video',
       promptMode: 'plain', model: 'seedance_v2.0_mini',
       fields: [ratio_doubao, duration_doubao_api, camera_doubao],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 10000, pollTimeoutMs: 2700000,
     },
     {
@@ -325,6 +371,7 @@ const provider = {
       platform: 'doubao', operation: 'generate-video',
       promptMode: 'plain', model: 'seedance_v2.0',
       fields: [ratio_doubao, duration_doubao_api, camera_doubao],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 10000, pollTimeoutMs: 2700000,
     },
     {
@@ -338,6 +385,7 @@ const provider = {
       platform: 'seedance', operation: 'generate-video',
       promptMode: 'plain', model: 'fast',
       fields: [ratio_seedance, duration_seedance],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 10000, pollTimeoutMs: 2700000,
     },
     {
@@ -351,6 +399,7 @@ const provider = {
       platform: 'seedance', operation: 'generate-video',
       promptMode: 'plain', model: '2.0',
       fields: [ratio_seedance, duration_seedance],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 10000, pollTimeoutMs: 2700000,
     },
   ],

@@ -53,19 +53,136 @@ function cleanValues(values) {
   return out
 }
 
-function upstreamText(input) {
-  return (input.resources || [])
-    .filter((r) => r.kind === 'text' && typeof r.value === 'string' && r.value.trim() !== '')
-    .map((r) => r.value)
-    .join('\n')
+/**
+ * 上游文本素材 → 带名字的标签块。
+ *
+ * 用户口径（2026-11-08）：文本不要悄悄拼成一大段，要能「按名字引用」——
+ *   连进来的文本给一个名字（节点标题优先，没有就 文本1 / 文本2…），
+ *   正文包在标籤里交给上游；用户在自己的提示词里写 @标题内容 / @文本1 就能指到它。
+ *
+ * 为什么用标签而不是纯文本：纯文本拼在一起后，模型分不清哪段是「资料」、
+ * 哪段是「我的指令」，也对应不上引用名。标签把边界和名字都写清楚。
+ */
+function textBlocks(input) {
+  const out = []
+  let n = 0
+  for (const r of input.resources || []) {
+    if (r.kind !== 'text') continue
+    n += 1
+    const raw = typeof r.name === 'string' ? r.name.trim() : ''
+    const name = raw !== '' ? raw : '文本' + n
+    const value = typeof r.value === 'string' ? r.value : ''
+    out.push('<text name="' + name + '">\n' + value + '\n</text>')
+  }
+  return out
 }
 
-/** 音频类工具收 text（不是 prompt）：正文 = 用户输入 + 上游文本 */
-function buildParams(action, input) {
+/**
+ * 一张参考音频 → web2api 能读的地址。
+ *
+ * 为什么不能直接把 data URL 丢给 referenceAudios：火山引擎那条走的是
+ * resolveRefPath（只认本机文件 / 相对路径），不像图片那样会落盘 data URL。
+ * 所以这里先经 web2api 的上传接口换成它本机的 /<hash>.<ext>，再下单。
+ *
+ * 三种输入：
+ *   - 已经是 /<hash>.<ext> 或 /api/resources/uploads/...  → 原样（就在它本机）
+ *   - data:...                                            → 直接上传字节
+ *   - http(s)://...                                       → 先取字节再上传
+ */
+async function toLocalRef(url) {
+  const s = String(url || '').trim()
+  if (!s) return ''
+  if (s.startsWith('/api/resources/uploads/')) return s
+  if (/^\/[^/]/.test(s) && !s.startsWith('/api/')) return s
+
+  let buf
+  let mime = ''
+  let filename = ''
+  if (/^data:/i.test(s)) {
+    const m = /^data:([^;,]*)(;base64)?,([\s\S]*)$/i.exec(s)
+    if (!m) throw new Error('参考音频的 data URL 格式不对')
+    mime = m[1] || ''
+    buf = m[2] ? Buffer.from(m[3], 'base64') : Buffer.from(decodeURIComponent(m[3]), 'utf8')
+  } else {
+    const res = await fetch(s)
+    if (!res.ok) throw new Error('下载参考音频失败 HTTP ' + res.status)
+    buf = Buffer.from(await res.arrayBuffer())
+    mime = res.headers.get('content-type') || ''
+    filename = s.split('?')[0].split('/').pop() || ''
+  }
+  if (buf.length === 0) throw new Error('参考音频是空文件')
+
+  const form = new FormData()
+  form.append('file', new Blob([buf], { type: mime || 'application/octet-stream' }), filename || 'ref.bin')
+  const headers = {}
+  const key = process.env.WEB2API_API_KEY
+  if (key) headers.Authorization = 'Bearer ' + key
+  const res = await fetch(BASE + '/api/resources/upload', { method: 'POST', headers, body: form })
+  const text = await res.text()
+  let body
+  try {
+    body = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error('上传参考音频失败：web2api 返回的不是 JSON')
+  }
+  if (body && typeof body.code === 'number' && body.code !== 0) {
+    throw new Error(body.message || '上传参考音频失败（web2api 错误 ' + body.code + '）')
+  }
+  const data = body && body.data
+  const local = data && (data.path || data.relativeUrl)
+  if (!local || typeof local !== 'string') throw new Error('上传参考音频失败：web2api 没返回可用地址')
+  return local
+}
+
+/**
+ * 参考素材 → 参数（按动作自己声明的 refFields 分发）。
+ *
+ * refFields 就是这份 provider 的「这台平台收什么」：
+ *   { image: 'referenceImages', audio: 'referenceAudios' }
+ * 没声明的类型 = 这台平台不收，跳过并记一条日志（不静默吞掉、也不炸掉整单）。
+ * 以后接一个「图 / 文 / 视频 / 音频全收」的模型：给那条动作补一行 refFields 就行，
+ * 下面的分发逻辑不用动。
+ */
+async function attachRefs(action, input, params) {
+  const map = action.refFields || {}
+  const buckets = {}
+  const skipped = []
+  for (const r of input.resources || []) {
+    if (r.kind === 'text') continue
+    const field = map[r.kind]
+    if (!field || typeof r.url !== 'string' || !r.url) {
+      if (r.kind) skipped.push(r.kind)
+      continue
+    }
+    if (!buckets[field]) buckets[field] = []
+    buckets[field].push(r.url)
+  }
+
+  for (const [field, urls] of Object.entries(buckets)) {
+    // 上限照平台声明：火山参考音频最多 3 段；图片类各平台最多 16 张
+    const limit = field === 'referenceAudios' ? 3 : 16
+    const picked = urls.slice(0, limit)
+    if (urls.length > limit) {
+      console.warn('[web2api-audio] ' + action.id + ' 的 ' + field + ' 最多 ' + limit + ' 个，已截断')
+    }
+    params[field] = field === 'referenceAudios' ? await Promise.all(picked.map(toLocalRef)) : picked
+  }
+
+  if (skipped.length > 0) {
+    console.warn(
+      '[web2api-audio] ' + action.id + ' 不收这些素材，已忽略：' + [...new Set(skipped)].join('、') +
+        '（当前平台只收：' + (Object.keys(map).join('、') || '无') + '）',
+    )
+  }
+  return params
+}
+
+/** 音频类工具收 text（不是 prompt）：正文 = 用户输入 + 带名字的文本标签块 */
+async function buildParams(action, input) {
   const params = cleanValues(input.values || {})
   if (action.model !== undefined && action.model !== '') params.model = action.model
-  params.text = [input.prompt || '', upstreamText(input)].filter((s) => String(s).trim() !== '').join('\n')
-  return params
+  params.text = [input.prompt || '', ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
+  return attachRefs(action, input, params)
 }
 
 function collectUrls(result) {
@@ -251,6 +368,8 @@ export default {
       platform: 'doubao', operation: 'tts',
       promptMode: 'plain',
       fields: [speaker_doubao],
+      // 豆包 TTS 没有参考音频字段（meta.ts 只有 text / speaker）
+      refFields: {},
       pollIntervalMs: 2000, pollTimeoutMs: 600000,
     },
     {
@@ -264,6 +383,8 @@ export default {
       platform: 'volcengine', operation: 'generate-audio',
       promptMode: 'plain',
       fields: [format_volc, speed('speechRate', '语速', -50, 100, 0), speed('pitchRate', '音调', -12, 12, 0), speed('loudnessRate', '音量', -50, 100, 0)],
+      // 火山引擎收参考音频（最多 3 段）：连进来的音频节点会走这里
+      refFields: { audio: 'referenceAudios' },
       pollIntervalMs: 2000, pollTimeoutMs: 600000,
     },
   ],
@@ -272,7 +393,7 @@ export default {
     try {
       const body = await api('/api/tasks', {
         method: 'POST',
-        body: JSON.stringify({ platform: action.platform, operation: action.operation, params: buildParams(action, input) }),
+        body: JSON.stringify({ platform: action.platform, operation: action.operation, params: await buildParams(action, input) }),
       })
       const task = body && body.data
       if (!task) return { error: 'web2api 没有返回任务信息' }

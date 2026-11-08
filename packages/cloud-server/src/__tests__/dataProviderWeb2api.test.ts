@@ -128,6 +128,14 @@ describe('数据根里的 web2api provider 文件', () => {
       }
     }
   })
+
+  it('每条动作都声明 refFields（收哪些参考素材）', async () => {
+    for (const f of FILES) {
+      for (const a of (await load(f)).actions) {
+        expect(a.refFields, a.id + ' 没有声明 refFields').toBeTruthy()
+      }
+    }
+  })
 })
 
 describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
@@ -308,5 +316,139 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
     } finally {
       globalAny.fetch = original
     }
+  })
+
+  /**
+   * 参考素材分发 —— 修的是「视频被当成图片发出去、音频参考完全没传」这两个真问题。
+   *
+   * 用户口径：连进来什么类型，就按类型各走各的字段；平台不收的类型要**明确告知**，
+   * 不能静默吞掉、更不能塞进别的字段里让它去报一个莫名其妙的错。
+   */
+  describe('参考素材按类型分发', () => {
+    const MIXED = [
+      { kind: 'text', name: '标题内容', value: '一段标题文字' },
+      { kind: 'image', name: '封面', url: 'data:image/png;base64,IMG1' },
+      { kind: 'image', name: '参考2', url: 'data:image/png;base64,IMG2' },
+      { kind: 'video', name: '片段', url: 'data:video/mp4;base64,VID' },
+      { kind: 'audio', name: '访谈录音', url: 'data:audio/wav;base64,AUD' },
+      { kind: 'text', name: '正文', value: '第二段正文' },
+    ]
+
+    /** 装上假 fetch：记录 /api/tasks 的 body，upload 回一个固定相对路径 */
+    async function submitWith(
+      file: string,
+      actionId: string,
+    ): Promise<{ body: { platform: string; operation: string; params: Record<string, unknown> }; uploads: number }> {
+      const globalAny = globalThis as unknown as { fetch: typeof fetch }
+      const original = globalAny.fetch
+      const seen: Array<{ body: { platform: string; operation: string; params: Record<string, unknown> } }> = []
+      let uploads = 0
+      globalAny.fetch = (async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/resources/upload')) {
+          uploads += 1
+          return new Response(
+            JSON.stringify({ code: 0, message: 'ok', data: { path: '/up' + uploads + '.wav' } }),
+            { status: 201, headers: { 'content-type': 'application/json' } },
+          )
+        }
+        seen.push({ body: JSON.parse(String(init?.body ?? '{}')) })
+        return new Response(JSON.stringify({ code: 0, message: 'ok', data: { id: 't1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }) as typeof fetch
+      try {
+        const p = await load(file)
+        const action = p.actions.find((a) => a.id === actionId)!
+        await p.submit(action, {
+          canvasId: 'c1',
+          nodeId: 'n1',
+          actionId,
+          prompt: '按 @封面 的风格，用 @标题内容',
+          values: {},
+          resources: MIXED,
+        })
+        return { body: seen[0].body, uploads }
+      } finally {
+        globalAny.fetch = original
+      }
+    }
+
+    it('图片动作：只发图片，视频不再混进 referenceImages', async () => {
+      const { body } = await submitWith('web2api-image.js', 'web2api:apimart-image')
+      expect(body.params.referenceImages).toEqual([
+        'data:image/png;base64,IMG1',
+        'data:image/png;base64,IMG2',
+      ])
+      // 视频不能出现在任何参考字段里
+      expect(JSON.stringify(body.params)).not.toContain('VID')
+    })
+
+    it('视频动作：同样只发图片（web2api 没有视频参考字段）', async () => {
+      const { body } = await submitWith('web2api-video.js', 'web2api:doubao-video-fast')
+      expect(body.params.referenceImages).toEqual([
+        'data:image/png;base64,IMG1',
+        'data:image/png;base64,IMG2',
+      ])
+      expect(JSON.stringify(body.params)).not.toContain('VID')
+    })
+
+    it('火山引擎音频：先把音频上传成 web2api 本机路径，再放进 referenceAudios', async () => {
+      const { body, uploads } = await submitWith('web2api-audio.js', 'web2api:volcengine-audio')
+      expect(uploads).toBe(1)
+      expect(body.params.referenceAudios).toEqual(['/up1.wav'])
+      // 音频不能混进图片字段
+      expect(body.params.referenceImages).toBeUndefined()
+    })
+
+    it('豆包 TTS 没有参考字段：音频不传，也不报错（任务照常提交）', async () => {
+      const { body, uploads } = await submitWith('web2api-audio.js', 'web2api:doubao-tts')
+      expect(uploads).toBe(0)
+      expect(body.params.referenceAudios).toBeUndefined()
+      expect(body.params.text).toBeTruthy()
+    })
+
+    it('文本素材带名字进提示词（可以用 @名字 引用），且不糊成一段', async () => {
+      const { body } = await submitWith('web2api-image.js', 'web2api:chatgpt-image')
+      const prompt = String(body.params.prompt)
+      expect(prompt).toContain('<text name="标题内容">')
+      expect(prompt).toContain('一段标题文字')
+      expect(prompt).toContain('<text name="正文">')
+      expect(prompt).toContain('第二段正文')
+      // 用户自己的提示词在
+      expect(prompt).toContain('用 @标题内容')
+    })
+
+    it('文本没有名字时按 文本1 / 文本2 编号（保证引用名稳定）', async () => {
+      const globalAny = globalThis as unknown as { fetch: typeof fetch }
+      const original = globalAny.fetch
+      const seen: Array<{ body: { params: Record<string, unknown> } }> = []
+      globalAny.fetch = (async (_url: string, init?: RequestInit) => {
+        seen.push({ body: JSON.parse(String(init?.body ?? '{}')) })
+        return new Response(JSON.stringify({ code: 0, message: 'ok', data: { id: 't1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }) as typeof fetch
+      try {
+        const p = await load('web2api-image.js')
+        const action = p.actions.find((a) => a.id === 'web2api:chatgpt-image')!
+        await p.submit(action, {
+          canvasId: 'c1',
+          nodeId: 'n1',
+          actionId: action.id,
+          prompt: 'x',
+          resources: [
+            { kind: 'text', value: 'A' },
+            { kind: 'text', value: 'B' },
+          ],
+        })
+        const prompt = String(seen[0].body.params.prompt)
+        expect(prompt).toContain('<text name="文本1">')
+        expect(prompt).toContain('<text name="文本2">')
+      } finally {
+        globalAny.fetch = original
+      }
+    })
   })
 })

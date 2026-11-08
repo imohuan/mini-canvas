@@ -83,38 +83,80 @@ function buildChatAutoPrompt(mode, model, values, body) {
   return text ? head + ' ' + text : head
 }
 
-/** 上游素材 -> 参考图地址（只认图片 / 视频） */
-function referenceUrls(input) {
-  return (input.resources || [])
-    .filter((r) => (r.kind === 'image' || r.kind === 'video') && typeof r.url === 'string' && r.url)
-    .map((r) => r.url)
+/**
+ * 上游文本素材 -> 带名字的标签块。
+ *
+ * 用户口径（2026-11-08）：文本要能**按名字引用**，不要糊成一大段。
+ * 连进来的文本给一个名字（节点标题优先，没有就 文本1 / 文本2…），
+ * 正文包进 <text name="…"> 里；用户在自己的提示词里写 @标题内容 / @文本1 就能指到它。
+ */
+function textBlocks(input) {
+  const out = []
+  let n = 0
+  for (const r of input.resources || []) {
+    if (r.kind !== 'text') continue
+    n += 1
+    const raw = typeof r.name === 'string' ? r.name.trim() : ''
+    const name = raw !== '' ? raw : '文本' + n
+    const value = typeof r.value === 'string' ? r.value : ''
+    out.push('<text name="' + name + '">\n' + value + '\n</text>')
+  }
+  return out
 }
 
-/** 上游文本素材 -> 追加进提示词 */
-function upstreamText(input) {
-  return (input.resources || [])
-    .filter((r) => r.kind === 'text' && typeof r.value === 'string' && r.value.trim() !== '')
-    .map((r) => r.value)
-    .join('\n')
+/**
+ * 参考素材 -> 参数（按动作自己声明的 refFields 分发）。
+ *
+ * refFields 是这份 provider 的「这个平台收什么」：
+ *   { image: 'referenceImages' }
+ * 没声明的类型 = 这台平台不收，跳过并打一条日志（让用户知道为什么没生效）。
+ * 以后接「图/文/视频/音频全收」的模型：给那条动作补 refFields 即可，分发逻辑不动。
+ * 注意：web2api 目前**只有**图片与音频两个参考字段，没有视频参考字段。
+ */
+function attachRefs(action, input, params) {
+  const map = action.refFields || {}
+  const buckets = {}
+  const skipped = []
+  for (const r of input.resources || []) {
+    if (r.kind === 'text') continue
+    const field = map[r.kind]
+    if (!field || typeof r.url !== 'string' || !r.url) {
+      if (r.kind) skipped.push(r.kind)
+      continue
+    }
+    if (!buckets[field]) buckets[field] = []
+    buckets[field].push(r.url)
+  }
+  for (const [field, urls] of Object.entries(buckets)) {
+    const limit = field === 'referenceAudios' ? 3 : 16
+    if (urls.length > limit) {
+      console.warn('[web2api-image] ' + action.id + ' 的 ' + field + ' 最多 ' + limit + ' 个，已截断')
+    }
+    params[field] = urls.slice(0, limit)
+  }
+  if (skipped.length > 0) {
+    console.warn(
+      '[web2api-image] ' + action.id + ' 不收这些素材，已忽略：' + [...new Set(skipped)].join('、') +
+        '（当前平台只收：' + (Object.keys(map).join('、') || '无') + '）',
+    )
+  }
+  return params
 }
 
 /** 组一次下单参数 */
 function buildParams(action, input) {
   const values = (input.values || {})
-  const body = [input.prompt || '', upstreamText(input)].filter((s) => String(s).trim() !== '').join('\n')
-  const refs = referenceUrls(input)
+  const body = [input.prompt || '', ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
 
   if (action.promptMode === 'chat-auto') {
     const params = { prompt: buildChatAutoPrompt(action.mediaMode || 'image', action.model, values, body) }
-    if (refs.length > 0) params.referenceImages = refs
-    return params
+    return attachRefs(action, input, params)
   }
 
   const params = cleanValues(values)
   if (action.model !== undefined && action.model !== '') params.model = action.model
   params.prompt = body
-  if (refs.length > 0) params.referenceImages = refs
-  return params
+  return attachRefs(action, input, params)
 }
 
 /** 任务结果里的产物地址（兼容数组 / 嵌套对象） */
@@ -275,6 +317,7 @@ const provider = {
       platform: 'doubao', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 4.5',
       fields: [ratio_doubao],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
     {
@@ -288,6 +331,7 @@ const provider = {
       platform: 'doubao', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 5.0 Lite',
       fields: [ratio_doubao],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
     {
@@ -301,6 +345,7 @@ const provider = {
       platform: 'doubao', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 4.0',
       fields: [ratio_doubao],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
     {
@@ -314,6 +359,7 @@ const provider = {
       platform: 'dola', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 5.0 Pro',
       fields: [ratio_dola],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
     {
@@ -327,6 +373,7 @@ const provider = {
       platform: 'dola', operation: 'chat-auto',
       promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 4.5',
       fields: [ratio_dola],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
     {
@@ -340,6 +387,7 @@ const provider = {
       platform: 'chatgpt', operation: 'generate-image',
       promptMode: 'plain',
       fields: [ratio_chatgpt],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
     {
@@ -353,6 +401,7 @@ const provider = {
       platform: 'apimart', operation: 'generate-image',
       promptMode: 'plain',
       fields: [ratio_apimart, resolution_apimart, count_apimart],
+      refFields: { image: 'referenceImages' },
       pollIntervalMs: 1500, pollTimeoutMs: 600000,
     },
   ],
