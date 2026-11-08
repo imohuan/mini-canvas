@@ -294,6 +294,20 @@
 }
 
 /*
+ * 确认框（AlertDialogContent）同一个问题：它自带 p-6 + gap-6，确认面板内部
+ * 又留了一层内边距，两层叠起来四周空一大圈（2026-11-07 用户截图）。
+ * 规则单独写一份，不动上面那条已经被其它弹窗依赖的契约。
+ */
+[data-slot='alert-dialog-content'] {
+  border-radius: min(var(--mct-radius, var(--radius-panel, 16px)), 24px);
+  padding: 0 !important;
+  gap: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/*
  * 菜单行 / 提示语块：跟着同一档圆角走，但最多到行高的一半。
  * 用户把圆角调到 14px 时，行高 32px 的菜单项若直接吃 14px 会变成胶囊，
  * 一列条目看起来像一排药丸；min() 让它在「跟主题」和「仍是行」之间取平衡。

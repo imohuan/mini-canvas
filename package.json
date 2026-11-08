@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/kill-port.mjs 5288 && pnpm -C packages/ui dev",
+    "dev:ui-kit": "pnpm -C packages/ui-kit-shadcn dev",
     "dev:docs": "pnpm -C packages/docs dev",
     "dev:server": "pnpm -C packages/cloud-server dev",
     "serve": "pnpm -C packages/cloud-server serve",

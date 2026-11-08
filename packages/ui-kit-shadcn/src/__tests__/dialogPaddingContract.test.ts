@@ -21,6 +21,7 @@ const css = readFileSync(
 
 describe('弹窗外层内边距归零', () => {
   const rule = css.match(/\[data-slot='dialog-content'\]\s*\{([^}]*)\}/)?.[1] ?? ''
+  const alertRule = css.match(/\[data-slot='alert-dialog-content'\]\s*\{([^}]*)\}/)?.[1] ?? ''
 
   it('DialogContent 的 padding / gap 归零，内边距只由面板自己那一层决定', () => {
     expect(rule, '缺 [data-slot=dialog-content] 规则').not.toBe('')
@@ -40,5 +41,11 @@ describe('弹窗外层内边距归零', () => {
   it('弹窗外层要裁掉子元素，批量底栏不能盖住面板圆角', () => {
     expect(rule, '缺 overflow 规则，贴底的底栏会把面板下方圆角盖成直角')
       .toMatch(/overflow:\s*hidden\s*!important/)
+  })
+
+  it('确认框（AlertDialogContent）也归零，否则和面板内部内边距叠成两层', () => {
+    expect(alertRule, '缺 alert-dialog-content 的归零规则').not.toBe('')
+    expect(alertRule).toMatch(/padding:\s*0\s*!important/)
+    expect(alertRule).toMatch(/gap:\s*0\s*!important/)
   })
 })

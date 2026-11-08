@@ -29,11 +29,13 @@ import * as collapsibleModule from './components/ui/collapsible'
 import * as buttonModule from './components/ui/button'
 import * as cardModule from './components/ui/card'
 import * as checkboxModule from './components/ui/checkbox'
+import * as codeBlockModule from './components/ui/code-block'
 import * as comboboxModule from './components/ui/combobox'
 import * as commandModule from './components/ui/command'
 import * as contextMenuModule from './components/ui/context-menu'
 import * as dialogModule from './components/ui/dialog'
 import * as dropdownModule from './components/ui/dropdown-menu'
+import * as hoverCardModule from './components/ui/hover-card'
 import * as inputModule from './components/ui/input'
 import * as inputGroupModule from './components/ui/input-group'
 import * as itemModule from './components/ui/item'
@@ -41,6 +43,7 @@ import * as labelModule from './components/ui/label'
 import * as menubarModule from './components/ui/menubar'
 import * as numberFieldModule from './components/ui/number-field'
 import * as popoverModule from './components/ui/popover'
+import * as progressModule from './components/ui/progress'
 import * as radioGroupModule from './components/ui/radio-group'
 import * as spinnerModule from './components/ui/spinner'
 import * as scrollAreaModule from './components/ui/scroll-area'
@@ -61,11 +64,13 @@ const collapsible = configure(collapsibleModule, 'Collapsible')
 const button = configure(buttonModule, 'Button')
 const card = configure(cardModule, 'Card')
 const checkbox = configure(checkboxModule, 'Checkbox')
+const codeBlock = configure(codeBlockModule, 'CodeBlock')
 const combobox = configure(comboboxModule, 'Combobox')
 const command = configure(commandModule, 'Command')
 const contextMenu = configure(contextMenuModule, 'ContextMenu')
 const dialog = configure(dialogModule, 'Dialog')
 const dropdown = configure(dropdownModule, 'DropdownMenu')
+const hoverCard = configure(hoverCardModule, 'HoverCard')
 const input = configure(inputModule, 'Input')
 const inputGroup = configure(inputGroupModule, 'InputGroup')
 const item = configure(itemModule, 'Item')
@@ -73,6 +78,7 @@ const label = configure(labelModule, 'Label')
 const menubar = configure(menubarModule, 'Menubar')
 const numberField = configure(numberFieldModule, 'NumberField')
 const popover = configure(popoverModule, 'Popover')
+const progress = configure(progressModule, 'Progress')
 const radioGroup = configure(radioGroupModule, 'RadioGroup')
 const scrollArea = configure(scrollAreaModule, 'ScrollArea')
 // ScrollBar 与 ScrollArea 同目录、不同家族名；单独过一次薄层，保证尺寸档位也认它。
@@ -120,6 +126,17 @@ export const CardHeader = card.CardHeader
 export const CardTitle = card.CardTitle
 
 export const Checkbox = checkbox.Checkbox
+
+export const CodeBlock = codeBlock.CodeBlock
+export const CodeBlockActions = codeBlock.CodeBlockActions
+export const CodeBlockContent = codeBlock.CodeBlockContent
+export const CodeBlockCopyButton = codeBlock.CodeBlockCopyButton
+export const CodeBlockFooter = codeBlock.CodeBlockFooter
+export const CodeBlockHeader = codeBlock.CodeBlockHeader
+export const CodeBlockHighlighted = codeBlock.CodeBlockHighlighted
+export const CodeBlockLine = codeBlock.CodeBlockLine
+export const CodeBlockTitle = codeBlock.CodeBlockTitle
+export const CodeBlockToken = codeBlock.CodeBlockToken
 
 export const Combobox = combobox.Combobox
 export const ComboboxAnchor = combobox.ComboboxAnchor
@@ -174,6 +191,10 @@ export const DropdownMenuSubContent = dropdown.DropdownMenuSubContent
 export const DropdownMenuSubTrigger = dropdown.DropdownMenuSubTrigger
 export const DropdownMenuTrigger = dropdown.DropdownMenuTrigger
 
+export const HoverCard = hoverCard.HoverCard
+export const HoverCardContent = hoverCard.HoverCardContent
+export const HoverCardTrigger = hoverCard.HoverCardTrigger
+
 export const Input = input.Input
 
 export const InputGroup = inputGroup.InputGroup
@@ -219,6 +240,7 @@ export const NumberFieldIncrement = numberField.NumberFieldIncrement
 export const NumberFieldInput = numberField.NumberFieldInput
 
 export const Popover = popover.Popover
+export const Progress = progress.Progress
 export const PopoverContent = popover.PopoverContent
 export const PopoverDescription = popover.PopoverDescription
 export const PopoverHeader = popover.PopoverHeader

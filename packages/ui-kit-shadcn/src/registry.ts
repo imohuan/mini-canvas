@@ -13,6 +13,7 @@ import * as ButtonModule from './components/ui/button'
 import * as BubbleModule from './components/ui/bubble'
 import * as CardModule from './components/ui/card'
 import * as CheckboxModule from './components/ui/checkbox'
+import * as CodeBlockModule from './components/ui/code-block'
 import * as ColorPickerModule from './components/color-picker'
 import * as CollapsibleModule from './components/ui/collapsible'
 import * as ComboboxModule from './components/ui/combobox'
@@ -20,6 +21,7 @@ import * as CommandModule from './components/ui/command'
 import * as ContextMenuModule from './components/ui/context-menu'
 import * as DialogModule from './components/ui/dialog'
 import * as DropdownMenuModule from './components/ui/dropdown-menu'
+import * as HoverCardModule from './components/ui/hover-card'
 import * as InputModule from './components/ui/input'
 import * as InputGroupModule from './components/ui/input-group'
 import * as ItemModule from './components/ui/item'
@@ -27,6 +29,7 @@ import * as LabelModule from './components/ui/label'
 import * as MenubarModule from './components/ui/menubar'
 import * as NumberFieldModule from './components/ui/number-field'
 import * as PopoverModule from './components/ui/popover'
+import * as ProgressModule from './components/ui/progress'
 import * as RadioGroupModule from './components/ui/radio-group'
 import * as ScrollAreaModule from './components/ui/scroll-area'
 import * as SelectModule from './components/ui/select'
@@ -47,6 +50,7 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   Bubble: BubbleModule,
   Card: CardModule,
   Checkbox: CheckboxModule,
+  CodeBlock: CodeBlockModule,
   ColorPicker: ColorPickerModule,
   Collapsible: CollapsibleModule,
   Combobox: ComboboxModule,
@@ -54,6 +58,7 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   ContextMenu: ContextMenuModule,
   Dialog: DialogModule,
   DropdownMenu: DropdownMenuModule,
+  HoverCard: HoverCardModule,
   Input: InputModule,
   InputGroup: InputGroupModule,
   Item: ItemModule,
@@ -61,6 +66,7 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
   Menubar: MenubarModule,
   NumberField: NumberFieldModule,
   Popover: PopoverModule,
+  Progress: ProgressModule,
   RadioGroup: RadioGroupModule,
   /**
    * ScrollArea 目录里导出的两个组件是 ScrollArea 与 ScrollBar：按 family 前缀过滤时
