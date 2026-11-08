@@ -16,6 +16,8 @@ const emit = defineEmits<{
 }>()
 
 const Button = useUiComponent('Button')
+/** 默认主题的统一加载态（紧凑形态：剪辑处理中占住「确认」那一格） */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 const Popover = useUiComponent('Popover')
 const PopoverContent = useUiComponent('PopoverContent')
 const PopoverTrigger = useUiComponent('PopoverTrigger')
@@ -105,11 +107,12 @@ const configOpen = defineModel<boolean>('configOpen', { default: false })
       <ToolbarIcon :icon="ICON_LOOP" />
     </Button>
 
-    <Button variant="default" size="sm" type="button"
-      :title="pending ? '剪辑中…' : '确认剪辑'"
-      :aria-label="pending ? '剪辑中' : '确认剪辑'" :disabled="pending" @click="emit('confirm')">
+    <!-- 处理中：同一格换成默认加载件（不再自造第二套文字态） -->
+    <NodeLoadingState v-if="pending" variant="chip" label="剪辑中" message="正在处理…" />
+    <Button v-else variant="default" size="sm" type="button"
+      title="确认剪辑" aria-label="确认剪辑" @click="emit('confirm')">
       <ToolbarIcon :icon="ICON_CONFIRM" />
-      <span>{{ pending ? '剪辑中…' : '确认' }}</span>
+      <span>确认</span>
     </Button>
   </div>
 </template>

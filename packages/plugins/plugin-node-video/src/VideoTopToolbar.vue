@@ -26,6 +26,8 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
 const Button = useUiComponent('Button')
+/** 默认主题的统一加载态（紧凑形态，塞进状态栏里表示「这一格在处理」） */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
@@ -165,12 +167,13 @@ function cancelEdit(): void {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"） -->
-      <Button variant="default" size="sm" type="button"
-        :title="pending ? '正在裁剪…' : '确认编辑'"
-        :aria-label="pending ? '正在裁剪' : '确认编辑'" :disabled="pending" @click="confirmEdit">
+      <!-- 转码中禁用并换文案：后台同一节点只收一个任务，连点会被 busy 拒（那时用户只会看到"没反应"）。
+           处理中的那一格用默认加载件（紧凑形态），不再自造一套文字 + 转圈。 -->
+      <NodeLoadingState v-if="pending" variant="chip" label="裁剪中" message="正在处理…" />
+      <Button v-else variant="default" size="sm" type="button"
+        title="确认编辑" aria-label="确认编辑" @click="confirmEdit">
         <ToolbarIcon :icon="ICON_CONFIRM" />
-        <span>{{ pending ? '裁剪中…' : '确认' }}</span>
+        <span>确认</span>
       </Button>
     </template>
 

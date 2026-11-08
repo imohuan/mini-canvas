@@ -24,6 +24,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useUiComponent } from '@mini-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
+/** 默认主题的统一加载态（与节点卡片 / 底栏任务进度同一只） */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 import VideoPlayerBar from "./VideoPlayerBar.vue"
 import { fitPreviewBox } from "./videoPreviewFit"
 
@@ -60,8 +62,8 @@ const width = ref(0)
 const DENSE_MAX_WIDTH = 360
 const dense = computed(() => width.value > 0 && width.value < DENSE_MAX_WIDTH && !props.tall)
 
-/** 加载态：video 元素挂着但还没解码出第一帧（用户口径 2026-10-29：全屏别再是空白，
- *  之前那块黑底被删了，现在给一个"转圈 + 文字"的占位）。loadeddata / playing 翻假。 */
+/** 加载态：video 元素挂着但还没解码出第一帧（用户口径 2026-10-29：全屏别再是空白）。
+ *  现在统一用默认主题的加载件（流光 + 文字）。loadeddata / playing 翻假。 */
 const loading = ref(false)
 function markLoading(): void {
   if (!props.url || broken.value) { loading.value = false; return }
@@ -412,12 +414,15 @@ watch(
         </div>
       </template>
 
-      <!-- 加载占位（用户口径：视频没就绪时别再是一片空白）：转圈 + 文字。
-           底色只铺在这层元素上，且容器已按视频比例收边 —— 不会多出黑边。 -->
-      <div v-if="loading && !dense" class="vpv-loading" role="status" aria-live="polite">
-        <span class="vpv-loading-spinner" aria-hidden="true"></span>
-        <span class="vpv-loading-text">视频加载中…</span>
-      </div>
+      <!-- 加载占位（用户口径：视频没就绪时别再是一片空白）。
+           统一用默认主题的加载件（与节点卡片、底栏任务进度同一只），不再各自画转圈。
+           底色铺在画面范围内，容器已按视频比例收边 —— 不会多出黑边。 -->
+      <NodeLoadingState
+        v-if="loading && !dense"
+        surface="media"
+        label="加载中"
+        message="视频加载中…"
+      />
     </template>
     <div v-else-if="broken" class="vpv-empty">视频加载失败</div>
   </div>
@@ -561,36 +566,6 @@ watch(
 }
 .vpv-scrim.is-hidden { opacity: 0; }
 
-/* ===== 加载占位（用户口径 2026-10-29：视频没就绪时别是一片空白） =====
-   铺满舞台、黑底（这是"视频还在加载"的底色，不是画面外多余的边 ——
-   容器已按视频比例收边，所以这块黑只在画面范围内）。 */
-.vpv-loading {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: #000; /* 主题色白名单: 视频加载底衬恒为黑（与画面同口径），与主题无关 */
-}
-.vpv-loading-spinner {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.25); /* 主题色白名单: 视频覆盖层里的转圈 */
-  border-top-color: rgba(255, 255, 255, 0.95); /* 主题色白名单: 同上 */
-  animation: vpv-loading-spin 0.75s linear infinite;
-}
-.vpv-loading-text {
-  color: rgba(255, 255, 255, 0.75); /* 主题色白名单: 同上 */
-  font-size: 12px;
-}
-@keyframes vpv-loading-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .vpv-loading-spinner { animation: none; }
-}
 .vpv-root.is-tall .vpv-btn { width: 30px; height: 30px; }
 .vpv-root.is-tall .vpv-btn svg { width: 15px; height: 15px; }
 .vpv-root.is-tall .vpv-range { min-width: 120px; }

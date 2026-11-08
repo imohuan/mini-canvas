@@ -13,6 +13,8 @@ export { default as ToolParamField } from './ToolParamField.vue'
 export { default as ColorField } from './ColorField.vue'
 /** 节点内容区的统一空状态（图片/视频/音频/3D 等共用；文本/说明/图标/动作都可配） */
 export { default as NodeEmptyState } from './NodeEmptyState.vue'
+/** 节点默认加载态（流光 + 进度；任务执行 / 视频帧图 / 后台处理共用一只） */
+export { default as NodeLoadingState } from './NodeLoadingState.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）
 export { default as ToolParamGroup } from './ToolParamGroup.vue'
 // 参数预设件（「按参数类型自动选组件」的那一层，判定表见 paramKind.ts）：

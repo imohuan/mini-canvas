@@ -47,6 +47,8 @@ import VideoCaptureMenu from './video-content/VideoCaptureMenu.vue'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
+/** 默认主题的统一加载态（与底栏任务进度、全屏视频加载同一只） */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 const Button = useUiComponent('Button')
 
 const { ctx, flow } = useCanvasRender()
@@ -286,13 +288,16 @@ watch(videoUrl, (prev) => {
           alt="视频帧" draggable="false" />
         <!--
           加载态（用户 2026-10-30 要求）：缩略图还没拿到时不能只留一块空底色 ——
-          用户分不清"在加载"和"坏了"。这里给一个轻微的呼吸占位 + 转圈。
-          **帧图已经有了就不显示**：那时候屏幕上有真画面，再叠一层转圈是噪音。
+          用户分不清"在加载"和"坏了"。统一用默认主题的加载件（流光 + 文字），
+          与底栏任务进度、全屏视频加载同一只，不再各画一套转圈。
+          **帧图已经有了就不显示**：那时候屏幕上有真画面，再盖一层是噪音。
         -->
-        <div v-if="thumbLoading && !posterDisplaySrc && showPoster" class="video-loading" aria-live="polite">
-          <span class="video-loading-spinner" aria-hidden="true"></span>
-          <span class="video-loading-text">加载预览…</span>
-        </div>
+        <NodeLoadingState
+          v-if="thumbLoading && !posterDisplaySrc && showPoster"
+          surface="media"
+          label="加载中"
+          message="加载预览…"
+        />
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
         <video v-if="!showPoster" ref="videoRef" class="video-media" :class="{ 'has-frame': videoHasFrame }"
           :style="videoStyle" :src="videoUrl"
@@ -527,37 +532,6 @@ watch(videoUrl, (prev) => {
   /* 中文正文最低 12px（§2.3） */
   font-size: 12px;
   text-align: center;
-}
-/*
- * 加载态（用户 2026-10-30 要求）：缩略图还没拿到时的占位。
- *
- * 站在卡片自己的底色上（不是黑底），所以用节点文字色 —— 与空态同一套。
- * 转圈用边框做，不需要额外图标；prefers-reduced-motion 下停转（只看文字）。
- */
-.video-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--canvas-node-text-muted, #9ca3af);
-  font-size: 12px;
-  pointer-events: none;
-}
-.video-loading-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: video-loading-spin 800ms linear infinite;
-}
-@keyframes video-loading-spin {
-  to { transform: rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .video-loading-spinner { animation: none; }
 }
 .video-empty.is-broken {
   color: var(--ui-warn, #b45309);

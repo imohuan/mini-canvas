@@ -1,0 +1,615 @@
+<script setup lang="ts">
+/**
+ * NodeLoadingState —— 节点卡片的**默认加载态**（默认主题提供，节点插件按名取用）。
+ *
+ * 视觉来源：底部状态栏原本那套「流光扰动」任务加载 UI —— 不透明底色 + 3 个缓慢游走的
+ * 模糊光斑 + 中间超大百分比 + 下方一行阶段文案，右上角一个耗时小胶囊。
+ * 现在把它收成通用件，任务执行、视频帧图、视频加载、后台裁剪/剪辑都共用这一只。
+ *
+ * 用法（插件不要直接 import 本文件，按设计系统目录取，换主题时一起换；
+ * 登记处：`packages/plugins/plugin-theme-components/src/index.ts`）：
+ *   const Loading = useUiComponent('nodeLoadingState')
+ *   <Loading message="加载预览…" />
+ *   <Loading variant="chip" message="裁剪中…" />
+ *
+ * 两个形态：
+ * - `fill`（默认）：盖满最近的定位容器（节点内容区 / 预览舞台），整块任务加载态；
+ * - `chip`：一行小胶囊（高 28px），塞进上下状态栏里表示「这一格正在处理」，不挡画面。
+ *
+ * 配色：默认跟随 `<html class="dark">` 切亮/暗两套；`surface="media"` 用于视频画面内部
+ * （恒深色底，与视频的黑边同口径，不随应用主题变白闪一下）。
+ *
+ * 不挡交互：根 `pointer-events: none`，只有 `#action` 插槽里的按钮自己接收指针 ——
+ * 加载期间节点照样能拖、能选中。
+ */
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+
+const props = withDefaults(
+  defineProps<{
+    /** `fill` 盖满容器（默认）；`chip` 一行小胶囊（状态栏/按钮旁用） */
+    variant?: 'fill' | 'chip'
+    /** 加载中 / 失败（失败只换文案与配色，不做第二套版式） */
+    tone?: 'loading' | 'error'
+    /** 卡片主题（跟随亮暗）还是视频画面（恒深色） */
+    surface?: 'card' | 'media'
+    /** 左上角状态词；缺省按 tone 给「生成中」/「执行失败」 */
+    label?: string
+    /** 0-100；`null` = 不确定态（显示 `···`，不编一个假数字） */
+    percent?: number | null
+    /** 下方那行阶段文案 */
+    message?: string
+    /** 只有失败态用：下一行小字（告诉用户接下来能做什么） */
+    hint?: string
+    /** 计时起点（ms）。给了才在右上角显示已耗时；视频帧图这类瞬时加载不用给 */
+    startedAt?: number
+  }>(),
+  {
+    variant: 'fill',
+    tone: 'loading',
+    surface: 'card',
+    label: '',
+    percent: null,
+    message: '',
+    hint: '',
+    startedAt: 0,
+  },
+)
+
+const rootEl = ref<HTMLElement | null>(null)
+
+/**
+ * 小容器自动收紧版式。
+ * 视频帧图这类卡片可能只有 160px 宽，56px 的大数字会把文案挤没；窄/矮时降一档字号。
+ */
+const compact = ref(false)
+let sizeObserver: ResizeObserver | null = null
+function measure(): void {
+  if (props.variant === 'chip') return
+  const el = rootEl.value
+  if (!el) return
+  const w = el.clientWidth
+  const h = el.clientHeight
+  compact.value = (w > 0 && w < 240) || (h > 0 && h < 150)
+}
+
+/**
+ * 跟随卡片圆角。
+ *
+ * `over:inset` / 内容裁剪层的圆角是 0，直接铺一层不透明底色会把卡片的圆角涂平
+ * （真实反馈过）。这里读卡片实算值，不写死数字；找不到卡片（正文外的预览舞台）就用 0。
+ */
+const radius = ref('')
+function syncRadius(): void {
+  if (props.variant === 'chip') return
+  const card = rootEl.value?.closest('.v2-node')?.querySelector('.v2-card') as HTMLElement | null
+  const r = card ? getComputedStyle(card).borderRadius : ''
+  const next = r && r !== '0px' ? r : ''
+  if (next !== radius.value) radius.value = next
+}
+let radiusTimer: ReturnType<typeof setInterval> | null = null
+
+/** 已耗时（右上角小胶囊） */
+const elapsedSec = ref(0)
+function tickElapsed(): void {
+  elapsedSec.value = props.startedAt > 0 ? Math.max(0, (Date.now() - props.startedAt) / 1000) : 0
+}
+let tickTimer: ReturnType<typeof setInterval> | null = null
+
+const elapsedText = computed(() => {
+  if (props.startedAt <= 0) return ''
+  return elapsedSec.value < 60
+    ? elapsedSec.value.toFixed(1) + 's'
+    : Math.floor(elapsedSec.value / 60) + '分' + Math.round(elapsedSec.value % 60) + '秒'
+})
+
+const shownPercent = computed(() => {
+  const p = props.percent
+  if (typeof p !== 'number' || !Number.isFinite(p)) return null
+  return Math.max(0, Math.min(100, Math.round(p)))
+})
+
+const ariaLabel = computed(() => props.message || props.label || (props.tone === 'error' ? '执行失败' : '执行中'))
+
+onMounted(() => {
+  if (props.variant === 'chip') return
+  measure()
+  syncRadius()
+  tickElapsed()
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => measure())
+    if (rootEl.value) observer.observe(rootEl.value)
+    sizeObserver = observer
+  }
+  radiusTimer = setInterval(syncRadius, 250)
+  tickTimer = setInterval(tickElapsed, 1000)
+})
+
+onBeforeUnmount(() => {
+  sizeObserver?.disconnect()
+  sizeObserver = null
+  if (radiusTimer) clearInterval(radiusTimer)
+  if (tickTimer) clearInterval(tickTimer)
+})
+</script>
+
+<template>
+  <div
+    ref="rootEl"
+    class="nls-root"
+    :class="[`is-${variant}`, `is-${tone}`, `is-${surface}`, { 'is-compact': compact }]"
+    :style="radius ? { borderRadius: radius } : undefined"
+    role="status"
+    aria-live="polite"
+    :aria-label="ariaLabel"
+  >
+    <!-- ① 底色：不透明，把底下的内容完全盖住 -->
+    <div class="ld-base" aria-hidden="true" />
+    <!-- ② 流光层：3 个模糊光斑缓慢游走（亮/暗两套配色；视频画面恒深色） -->
+    <div class="ld-fluid" aria-hidden="true">
+      <span class="ld-blob ld-blob--1" />
+      <span class="ld-blob ld-blob--2" />
+      <span class="ld-blob ld-blob--3" />
+    </div>
+
+    <!-- 紧凑形态：一行小胶囊，塞进状态栏 -->
+    <template v-if="variant === 'chip'">
+      <i class="ld-dot" aria-hidden="true" />
+      <span v-if="label" class="nls-chip-label">{{ label }}</span>
+      <span class="nls-chip-msg">{{ message || '处理中…' }}</span>
+      <span v-if="shownPercent !== null" class="nls-chip-pct">{{ shownPercent }}%</span>
+    </template>
+
+    <!-- 整块形态 -->
+    <template v-else>
+      <div class="ld-top">
+        <span class="ld-state">
+          <i class="ld-dot" aria-hidden="true" />{{ label || (tone === 'error' ? '执行失败' : '生成中') }}
+        </span>
+        <span v-if="tone !== 'error' && elapsedText" class="ld-timer">{{ elapsedText }}</span>
+      </div>
+
+      <div class="ld-progress">
+        <span v-if="tone === 'error'" class="ld-fail-mark" aria-hidden="true">!</span>
+        <template v-else>
+          <span class="ld-num">{{ shownPercent === null ? '···' : shownPercent }}</span>
+          <span v-if="shownPercent !== null" class="ld-pct">%</span>
+        </template>
+      </div>
+
+      <p class="ld-prompt">{{ message || (tone === 'error' ? '执行失败' : '执行中…') }}</p>
+      <p v-if="tone === 'error' && hint" class="ld-hint">{{ hint }}</p>
+
+      <div class="nls-action"><slot name="action" /></div>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+/* ============================================================
+   默认节点加载态（照底部状态栏那只流光版式收成通用件）
+   只动 transform / opacity（GPU 层），几十个节点同屏也不掉帧。
+   配色用**组件私有变量**：亮/暗两套 + 视频画面一套，改主题时各自取值。
+   ============================================================ */
+.nls-root {
+  /* 亮色（白卡） */
+  --nls-base: #ffffff;
+  --nls-state: #64748b;
+  --nls-dot: #0ea5e9;
+  --nls-timer-ink: #475569;
+  --nls-timer-bg: rgb(241 245 249 / 0.9);
+  --nls-timer-line: rgb(226 232 240 / 0.9);
+  --nls-num: #1e293b;
+  --nls-num-glow: 0 0 16px rgb(14 165 233 / 0.25);
+  --nls-pct: #0284c7;
+  --nls-prompt: #475569;
+  --nls-hint: #9f8b8b;
+  --nls-blob-1: radial-gradient(circle, rgba(56, 189, 248, 0.35) 0%, transparent 70%);
+  --nls-blob-2: radial-gradient(circle, rgba(129, 140, 248, 0.3) 0%, transparent 70%);
+  --nls-blob-3: radial-gradient(circle, rgba(45, 212, 191, 0.3) 0%, transparent 70%);
+  --nls-fluid-opacity: 0.75;
+  --nls-radius: 8px;
+
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 不接指针：加载期间节点照样能拖、能选 */
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: var(--nls-radius);
+  animation: ld-in 0.18s ease-out;
+}
+
+/* 暗色（深海青紫） */
+html.dark .nls-root {
+  --nls-base: #0f172a;
+  --nls-state: #94a3b8;
+  --nls-dot: #22d3ee;
+  --nls-timer-ink: #cbd5e1;
+  --nls-timer-bg: rgb(2 6 23 / 0.7);
+  --nls-timer-line: rgb(51 65 85 / 0.6);
+  --nls-num: #ffffff;
+  --nls-num-glow: 0 0 20px rgb(56 189 248 / 0.4);
+  --nls-pct: #22d3ee;
+  --nls-prompt: #cbd5e1;
+  --nls-hint: #a18585;
+  --nls-blob-1: radial-gradient(circle, rgba(14, 165, 233, 0.45) 0%, rgba(56, 189, 248, 0) 70%);
+  --nls-blob-2: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, rgba(139, 92, 246, 0) 70%);
+  --nls-blob-3: radial-gradient(circle, rgba(20, 184, 166, 0.35) 0%, transparent 70%);
+  --nls-fluid-opacity: 0.85;
+}
+
+/* 视频画面里：恒深色底，避免加载时白闪一下 */
+.nls-root.is-media {
+  --nls-base: #050505;
+  --nls-state: #94a3b8;
+  --nls-dot: #22d3ee;
+  --nls-timer-ink: #cbd5e1;
+  --nls-timer-bg: rgb(2 6 23 / 0.7);
+  --nls-timer-line: rgb(51 65 85 / 0.6);
+  --nls-num: #ffffff;
+  --nls-num-glow: 0 0 20px rgb(56 189 248 / 0.4);
+  --nls-pct: #22d3ee;
+  --nls-prompt: #cbd5e1;
+  --nls-hint: #a18585;
+  --nls-blob-1: radial-gradient(circle, rgba(14, 165, 233, 0.45) 0%, rgba(56, 189, 248, 0) 70%);
+  --nls-blob-2: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, rgba(139, 92, 246, 0) 70%);
+  --nls-blob-3: radial-gradient(circle, rgba(20, 184, 166, 0.35) 0%, transparent 70%);
+  --nls-fluid-opacity: 0.85;
+  --nls-radius: 0px;
+}
+
+/* 失败态：同一块整卡覆盖，只换成「没成」的交代 */
+.nls-root.is-error {
+  --nls-base: #fef2f2;
+  --nls-state: #dc2626;
+  --nls-dot: #ef4444;
+  --nls-prompt: #b91c1c;
+}
+html.dark .nls-root.is-error {
+  --nls-base: #1f0f12;
+  --nls-prompt: #fca5a5;
+}
+
+/* ① 底色 */
+.ld-base {
+  position: absolute;
+  inset: 0;
+  background: var(--nls-base);
+}
+
+/* ② 流光层 */
+.ld-fluid {
+  position: absolute;
+  inset: -20px;
+  overflow: hidden;
+  filter: blur(28px);
+  opacity: var(--nls-fluid-opacity);
+  pointer-events: none;
+}
+.ld-blob {
+  position: absolute;
+  border-radius: 999px;
+  will-change: transform, opacity;
+}
+.ld-blob--1 {
+  top: 15%;
+  left: 15%;
+  width: 70%;
+  height: 70%;
+  background: var(--nls-blob-1);
+  animation: ld-orbit-1 9s ease-in-out infinite;
+}
+.ld-blob--2 {
+  bottom: 15%;
+  right: 15%;
+  width: 75%;
+  height: 75%;
+  background: var(--nls-blob-2);
+  animation: ld-orbit-2 11s ease-in-out infinite;
+}
+.ld-blob--3 {
+  top: 50%;
+  left: 50%;
+  width: 60%;
+  height: 60%;
+  margin: -30% 0 0 -30%;
+  background: var(--nls-blob-3);
+  animation: ld-pulse 8s ease-in-out infinite;
+}
+
+/* 左上状态词 + 右上耗时 */
+.ld-top {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ld-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--nls-state);
+}
+.ld-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--nls-dot);
+  animation: ld-blink 1.4s ease-in-out infinite;
+}
+.ld-timer {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--nls-timer-ink);
+  background: var(--nls-timer-bg);
+  border: 1px solid var(--nls-timer-line);
+}
+
+/* 中间超大百分比 */
+.ld-progress {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.ld-num {
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--nls-num);
+  text-shadow: var(--nls-num-glow);
+}
+.ld-pct {
+  margin-left: 2px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--nls-pct);
+}
+
+/* 下方一行阶段文案（可换行，最多 3 行） */
+.ld-prompt {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--nls-prompt);
+}
+
+/* 失败：中间一个感叹号，下面写原因 + 一句下一步 */
+.ld-fail-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #ef4444; /* 主题色白名单: 失败标记底色（红），加载装饰的一部分 */
+  color: #ffffff; /* 主题色白名单: 失败标记字色（恒白，压在红底上） */
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 22px rgb(239 68 68 / 0.35); /* 主题色白名单: 失败标记外发光（加载装饰） */
+}
+.ld-hint {
+  position: relative;
+  z-index: 2;
+  margin: 4px 0 0;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--nls-hint);
+}
+
+/* `#action` 插槽里的按钮自己定位（取消按钮贴右下角），这里不造盒子 */
+.nls-action {
+  display: contents;
+}
+
+/* 失败态：光斑压暗偏红，不和「正在生成」的科技蓝混淆 */
+.nls-root.is-error .ld-fluid {
+  opacity: 0.4;
+  filter: saturate(0.5) blur(28px);
+}
+
+/* 小容器：降一档字号，保住文案 */
+.nls-root.is-compact .ld-num {
+  font-size: 28px;
+}
+.nls-root.is-compact .ld-pct {
+  font-size: 14px;
+}
+.nls-root.is-compact .ld-fail-mark {
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+}
+.nls-root.is-compact .ld-top {
+  top: 6px;
+  left: 8px;
+  right: 8px;
+}
+.nls-root.is-compact .ld-state,
+.nls-root.is-compact .ld-timer {
+  font-size: 10px;
+}
+.nls-root.is-compact .ld-timer {
+  padding: 1px 7px;
+}
+.nls-root.is-compact .ld-prompt {
+  font-size: 11px;
+  max-width: calc(100% - 16px);
+}
+
+/* ============================================================
+   紧凑形态：一行小胶囊（状态栏里用）。
+   同一套流光藏在字后面，不铺不透明整块 —— 底下的画面/面板仍然看得见。
+   ============================================================ */
+.nls-root.is-chip {
+  position: relative;
+  inset: auto;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  overflow: hidden;
+  /* 小胶囊自己要有底：它盖在状态栏面板上，纯光斑看不出边界 */
+  background: var(--ui-overlay-solid, #fff);
+  border: 1px solid var(--ui-line, rgb(0 0 0 / 0.08));
+  animation: ld-in 0.18s ease-out;
+  color: var(--nls-state);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+html.dark .nls-root.is-chip {
+  /* 暗色下用面板底色，避免亮白胶囊压在深色状态栏上 */
+  background: var(--ui-panel, #1b1b1b);
+  border-color: var(--ui-line, rgb(255 255 255 / 0.1));
+}
+.nls-root.is-chip .ld-base {
+  display: none;
+}
+.nls-root.is-chip .ld-fluid {
+  inset: -10px;
+  filter: blur(12px);
+  opacity: 0.7;
+}
+.nls-root.is-chip .ld-blob--1,
+.nls-root.is-chip .ld-blob--2,
+.nls-root.is-chip .ld-blob--3 {
+  width: 55%;
+  height: 220%;
+  margin: 0;
+}
+.nls-root.is-chip .ld-blob--1 {
+  top: -60%;
+  left: -10%;
+}
+.nls-root.is-chip .ld-blob--2 {
+  bottom: -60%;
+  right: -10%;
+}
+.nls-root.is-chip .ld-blob--3 {
+  top: 50%;
+  left: 50%;
+}
+.nls-chip-label,
+.nls-chip-msg,
+.nls-chip-pct {
+  position: relative;
+  z-index: 2;
+}
+.nls-chip-label {
+  color: var(--nls-num);
+}
+.nls-chip-msg {
+  color: var(--nls-prompt);
+}
+.nls-chip-pct {
+  color: var(--nls-pct);
+  font-variant-numeric: tabular-nums;
+}
+.nls-root.is-chip.is-error .ld-dot {
+  animation: none;
+}
+
+@keyframes ld-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ld-orbit-1 {
+  0% {
+    transform: translate3d(-30%, -25%, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate3d(30%, 15%, 0) scale(1.3) rotate(120deg);
+  }
+  66% {
+    transform: translate3d(-10%, 35%, 0) scale(0.9) rotate(240deg);
+  }
+  100% {
+    transform: translate3d(-30%, -25%, 0) scale(1) rotate(360deg);
+  }
+}
+@keyframes ld-orbit-2 {
+  0% {
+    transform: translate3d(35%, 30%, 0) scale(1.2) rotate(360deg);
+  }
+  33% {
+    transform: translate3d(-25%, -20%, 0) scale(0.85) rotate(240deg);
+  }
+  66% {
+    transform: translate3d(20%, -35%, 0) scale(1.25) rotate(120deg);
+  }
+  100% {
+    transform: translate3d(35%, 30%, 0) scale(1.2) rotate(0deg);
+  }
+}
+@keyframes ld-pulse {
+  0%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.85;
+  }
+}
+@keyframes ld-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nls-root,
+  .ld-blob,
+  .ld-dot {
+    animation: none !important;
+  }
+}
+</style>

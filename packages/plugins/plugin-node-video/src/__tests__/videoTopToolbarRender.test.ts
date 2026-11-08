@@ -14,6 +14,8 @@ import { RegistryImpl } from '@mini-canvas/kernel'
 // 只导入主题**插件**（走注册流程），不导入它的实现组件（与图片包同一条 T07 口径）
 import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import VideoTopToolbar from '../VideoTopToolbar.vue'
+import VideoClipDock from '../video-clip-panel/VideoClipDock.vue'
+import { beginOverlay, endOverlay, setCropPending } from '../videoSession'
 
 async function themeUiField(): Promise<{ top(name: string): { value: unknown } | undefined }> {
   const { Context } = await import('@mini-canvas/canvas-data')
@@ -83,5 +85,48 @@ describe('视频节点顶部操作条', () => {
   it('旧地址（videoUrl）的节点也算有视频：迁移期判据与内容组件同源', async () => {
     const html = await render('v1', { videoUrl: 'blob:legacy' }, true)
     expect(html).toContain('裁剪画面')
+  })
+
+  /**
+   * 用户口径 2026-11-08：「视频顶部状态栏里面的这些加载效果，全部使用默认的就行」。
+   *
+   * 处理中不再自造「裁剪中…」文字 + 转圈：整格换成默认主题的加载件（紧凑形态）。
+   */
+  it('★ 裁剪处理中 → 用默认加载件的紧凑形态，不再出现「裁剪中…」文字按钮', async () => {
+    beginOverlay('v1', 'crop')
+    setCropPending('v1', true)
+    try {
+      const html = await render('v1', { resourceId: 'res-1' }, true)
+      expect(html).toContain('is-chip')
+      expect(html).toContain('裁剪中')
+      expect(html).toContain('正在处理…')
+      expect(html).not.toContain('裁剪中…')
+    } finally {
+      setCropPending('v1', false)
+      endOverlay('v1')
+    }
+  })
+})
+
+describe('剪辑底栏的处理中态', () => {
+  function renderDock(pending: boolean): Promise<string> {
+    const app = createSSRApp({
+      render: () =>
+        h(VideoClipDock as Component, { pending, snap: true, loop: false, configOpen: false }),
+    })
+    app.provide(RENDER_CONTEXT_KEY, renderCtx([]))
+    return renderToString(app)
+  }
+
+  it('★ 剪辑处理中 → 同一只默认加载件（不再自造「剪辑中…」）', async () => {
+    const busy = await renderDock(true)
+    expect(busy).toContain('is-chip')
+    expect(busy).toContain('剪辑中')
+    expect(busy).toContain('正在处理…')
+    expect(busy).not.toContain('剪辑中…')
+
+    const idle = await renderDock(false)
+    expect(idle).not.toContain('is-chip')
+    expect(idle).toContain('确认')
   })
 })

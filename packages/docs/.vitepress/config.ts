@@ -223,6 +223,7 @@ const pluginsSidebar = [
       { text: '气泡提示', link: '/plugins/theme-components/tooltip' },
       { text: '下拉选择器', link: '/plugins/theme-components/select' },
       { text: '全屏预览', link: '/plugins/theme-components/media-viewer' },
+      { text: '节点加载态', link: '/plugins/theme-components/node-loading-state' },
       { text: '精细滑块', link: '/plugins/theme-components/precision-slider' },
       { text: '取色器', link: '/plugins/theme-components/color-field' },
       { text: '参数控件', link: '/plugins/theme-components/tool-param-field' },

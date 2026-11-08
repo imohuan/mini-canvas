@@ -29,6 +29,7 @@ import {
   ToolParamField,
   ColorField,
   NodeEmptyState,
+  NodeLoadingState,
   SlotDebugPopover,
 } from "./components/ui"
 import MediaViewer from "./components/ui/MediaViewer.vue"
@@ -148,6 +149,7 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   ui.add("Toaster", UiToaster, { id: "default" })
   ui.add("feedbackHost", FeedbackHost, { id: "default" })
   ui.add("nodeEmptyState", NodeEmptyState, { id: "default" })
+  ui.add("nodeLoadingState", NodeLoadingState, { id: "default" })
   ui.add("slotDebugPopover", SlotDebugPopover, { id: "default" })
   ui.add("mediaViewer", MediaViewer, { id: "default" })
   ui.add("slider", PrecisionSlider, { id: "default" })
@@ -190,7 +192,7 @@ export const themeComponentsPlugin: PluginModule = { name, inject, Config, apply
  * 下拉 / 选择 / 提示不再从这里提供：它们统一使用 ui 目录里登记的
  * 分离件（DropdownMenu / Select / Tooltip），本主题不再维护第二套实现。
  */
-export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState } from "./components/ui"
+export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState, NodeLoadingState } from "./components/ui"
 export { MediaViewer } from "./components/ui"
 export { themePreviewLayer, registerThemePreview } from "./themePreview"
 export { ThemeStudio, registerThemeStudio, THEME_STUDIO_NAV_ID } from "./components/theme-studio/register"
