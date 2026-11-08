@@ -66,3 +66,13 @@ for (const must of [
 }
 
 console.log('\nassets 已就绪（npx 装完即可直接看画布）')
+
+// ── 默认 provider：随包发一份，启动时自动铺到数据根 ──
+//
+// 为什么要有：web2api 的 provider 已从源码内置改成外挂文件（见 src/providers/load.ts）。
+// 装包的人不会自己去写这三个文件，但"装完就能生成"是承诺 —— 所以包里带一份，
+// 服务启动时若数据根还没有同名文件就复制过去（已有的绝不覆盖，用户改过的优先）。
+const PROVIDER_SOURCE = path.join(PACKAGE_ROOT, 'providers')
+if (await exists(PROVIDER_SOURCE)) {
+  console.log('✓ 默认 provider 随包发布（启动时自动铺到 <数据根>/providers/）')
+}

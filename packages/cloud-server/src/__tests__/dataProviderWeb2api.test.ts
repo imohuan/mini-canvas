@@ -18,9 +18,16 @@ import { fileURLToPath } from 'node:url'
 import type { Provider } from '../providers/types'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-/** 仓库根（packages/cloud-server/src/__tests__ → 上四级） */
+/**
+ * 仓库里可版本化的源文件：packages/cloud-server/providers/*.js
+ *
+ * 运行时那三个文件在数据根（默认 <仓库>/.mini-canvas/providers/，被 .gitignore 忽略），
+ * 由部署脚本从这份源文件复制过去。测试测源文件，另有一条守卫检查两边是否同步。
+ */
+const PROVIDERS_DIR = path.resolve(HERE, '../../providers')
+/** 运行时数据目录（本地开发时就是仓库根的 .mini-canvas） */
 const REPO_ROOT = path.resolve(HERE, '../../../..')
-const PROVIDERS_DIR = path.join(REPO_ROOT, '.mini-canvas', 'providers')
+const DEPLOYED_DIR = path.join(REPO_ROOT, '.mini-canvas', 'providers')
 
 /** 按数据根装载真实 provider 文件（与 load.ts 同一手法：data: URL） */
 async function load(file: string): Promise<Provider> {
@@ -35,6 +42,20 @@ async function load(file: string): Promise<Provider> {
 const FILES = ['web2api-image.js', 'web2api-video.js', 'web2api-audio.js'] as const
 
 describe('数据根里的 web2api provider 文件', () => {
+  it('部署副本与仓库源文件内容一致（改了源文件记得同步到数据根）', async () => {
+    for (const f of FILES) {
+      const src = await fs.readFile(path.join(PROVIDERS_DIR, f), 'utf8')
+      let deployed: string
+      try {
+        deployed = await fs.readFile(path.join(DEPLOYED_DIR, f), 'utf8')
+      } catch {
+        // 还没部署过（CI / 干净检出）：跳过这一条，不影响源文件的其它断言
+        continue
+      }
+      expect(deployed.trimEnd(), f + ' 与仓库源文件不同步').toBe(src.trimEnd())
+    }
+  })
+
   it('三个文件都能装载，且都导出 id / actions / submit', async () => {
     for (const f of FILES) {
       const p = await load(f)

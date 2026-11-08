@@ -19,6 +19,7 @@ import { CanvasResourceStore } from './store/canvasResources.js'
 import { ProjectStore } from './store/projectStore.js'
 import { AssetStore } from './store/assetStore.js'
 import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
+import { fileURLToPath } from 'node:url'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
@@ -31,12 +32,18 @@ import { CanvasDocument } from './mcp/canvasDoc.js'
 import { CanvasDocumentPool } from './mcp/canvasDocPool.js'
 import { TOOL_LIST } from './mcp/server.js'
 import { ProviderRegistry } from './providers/registry.js'
-import { loadProvidersFromDir, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
+import { loadProvidersFromDir, seedDefaultProviders, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
 import { watchProviders, type ProviderWatcher } from './providers/watch.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
 import { DEFAULT_CANVAS_ID, canvasDir } from './store/canvasPaths.js'
 import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
+
+/**
+ * 本包根目录（src/ 的上一级；打包后是 dist/ 的上一级）。
+ * 用来找随包的默认 provider（providers/*.js）与 assets。
+ */
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 import { makeFetchSelfBytes } from './tasks/selfFetch.js'
 import { branchStore } from '@mini-canvas/plugin-agent/server/agent/branchStore.js'
 import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from '@mini-canvas/plugin-agent/server/agent/testModel.js'
@@ -120,9 +127,15 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   }
 
   // ==================== 平台提供方（后台的「投递箱」）====================
-  // 内置 web2api 用**和外挂完全一样**的接口注册；再扫一遍目录把外挂装进来。
+  // 全部走外挂文件：目录里丢一个 .js 就是一个平台，热加载。
+  // 随包自带一份默认的（本包 providers/web2api-*.js）：启动时**只补缺失的文件**
+  // 到数据根，用户改过/自己写的绝不覆盖。
   // 后台加一个平台 → 前端的模型下拉里自动多一项（前端一行不用改）。
   const providersDir = path.resolve(opts.providersDir ?? path.join(dataDir, DEFAULT_PROVIDERS_DIR))
+  const seeded = await seedDefaultProviders(path.join(PACKAGE_ROOT, 'providers'), providersDir)
+  if (seeded.length > 0) {
+    console.log('[cloud-server] 已铺入默认 provider：' + seeded.join(', '))
+  }
   // 外挂后台插件的目录（与 providers 并列；丢 .js 进去即多一个后台插件）
   const serverPluginsDir = path.resolve(
     opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),

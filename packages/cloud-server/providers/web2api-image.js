@@ -1,0 +1,384 @@
+/**
+ * web2api · 图片生成（provider，自包含单文件）
+ *
+ * 直接调 web2api 的 HTTP 任务接口（不再走 MCP）：
+ *   POST /api/tasks            -> { code, message, data: task }
+ *   GET  /api/tasks/:id        -> { code, message, data: task }
+ *   POST /api/tasks/:id/cancel -> { code, message, data: { cancelled } }
+ *
+ * 动作 id 与原前端插件保持一致（web2api:...），旧画布里存过的 actionId 继续有效。
+ *
+ * 环境变量：
+ *   WEB2API_BASE      服务地址，默认 http://localhost:8033
+ *   WEB2API_API_KEY   可选；服务端设了 API_KEY 时填同一个
+ */
+
+const BASE = (process.env.WEB2API_BASE || 'http://localhost:8033').replace(/\/+$/, '')
+
+/** 一次 HTTP 调用：统一解 code / 超时 / 人话错误 */
+async function api(path, init = {}, timeoutMs = 60000) {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), timeoutMs)
+  try {
+    const headers = { 'Content-Type': 'application/json', Accept: 'application/json', ...(init.headers || {}) }
+    const key = process.env.WEB2API_API_KEY
+    if (key) headers.Authorization = 'Bearer ' + key
+    const res = await fetch(BASE + path, { ...init, headers, signal: ac.signal })
+    const text = await res.text()
+    let body
+    try {
+      body = text ? JSON.parse(text) : {}
+    } catch {
+      throw new Error('web2api 返回的不是 JSON（HTTP ' + res.status + '）')
+    }
+    if (body && typeof body.code === 'number' && body.code !== 0) {
+      throw new Error(body.message || 'web2api 错误 ' + body.code)
+    }
+    if (!res.ok) throw new Error(body?.message || 'web2api HTTP ' + res.status)
+    return body
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('web2api 请求超时（' + BASE + '）')
+    }
+    if (/fetch failed|ECONNREFUSED|Failed to fetch|NetworkError/i.test(msg)) {
+      throw new Error('连不上 web2api（' + BASE + '）。请先启动它，或设置 WEB2API_BASE')
+    }
+    throw new Error(msg || 'web2api 调用失败')
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** 空值不发，免得覆盖服务端默认 */
+function cleanValues(values) {
+  const out = {}
+  for (const [k, v] of Object.entries(values || {})) {
+    if (v === undefined || v === null || v === '') continue
+    out[k] = v
+  }
+  return out
+}
+
+/** 值 -> 前缀里的字面量：数字原样，字符串加引号 */
+function literalOf(value) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : undefined
+  if (typeof value === 'boolean') return String(value)
+  const s = String(value).trim()
+  return s === '' ? undefined : '"' + s.replace(/"/g, '') + '"'
+}
+
+/** 拼 chat-auto 前缀：/image(model:"Seedream 4.5", ratio:"16:9") 正文 */
+function buildChatAutoPrompt(mode, model, values, body) {
+  const parts = []
+  const modelLit = literalOf(model)
+  if (modelLit !== undefined) parts.push('model:' + modelLit)
+  const ratioLit = literalOf(values.ratio)
+  if (ratioLit !== undefined) parts.push('ratio:' + ratioLit)
+  const styleLit = literalOf(values.style)
+  if (styleLit !== undefined) parts.push('style:' + styleLit)
+  const head = '/' + mode + (parts.length > 0 ? '(' + parts.join(', ') + ')' : '')
+  const text = String(body || '').trim()
+  return text ? head + ' ' + text : head
+}
+
+/** 上游素材 -> 参考图地址（只认图片 / 视频） */
+function referenceUrls(input) {
+  return (input.resources || [])
+    .filter((r) => (r.kind === 'image' || r.kind === 'video') && typeof r.url === 'string' && r.url)
+    .map((r) => r.url)
+}
+
+/** 上游文本素材 -> 追加进提示词 */
+function upstreamText(input) {
+  return (input.resources || [])
+    .filter((r) => r.kind === 'text' && typeof r.value === 'string' && r.value.trim() !== '')
+    .map((r) => r.value)
+    .join('\n')
+}
+
+/** 组一次下单参数 */
+function buildParams(action, input) {
+  const values = (input.values || {})
+  const body = [input.prompt || '', upstreamText(input)].filter((s) => String(s).trim() !== '').join('\n')
+  const refs = referenceUrls(input)
+
+  if (action.promptMode === 'chat-auto') {
+    const params = { prompt: buildChatAutoPrompt(action.mediaMode || 'image', action.model, values, body) }
+    if (refs.length > 0) params.referenceImages = refs
+    return params
+  }
+
+  const params = cleanValues(values)
+  if (action.model !== undefined && action.model !== '') params.model = action.model
+  params.prompt = body
+  if (refs.length > 0) params.referenceImages = refs
+  return params
+}
+
+/** 任务结果里的产物地址（兼容数组 / 嵌套对象） */
+function collectUrls(result) {
+  const out = []
+  const push = (v) => {
+    if (typeof v === 'string') {
+      if (/^(https?:|data:|\/)/i.test(v)) out.push(v)
+    } else if (Array.isArray(v)) {
+      for (const item of v) push(item)
+    } else if (v && typeof v === 'object') {
+      push(v.url)
+      push(v.uri)
+      push(v.src)
+      push(v.urls)
+      push(v.downloadUrl)
+      push(v.resource)
+    }
+  }
+  push(result)
+  return [...new Set(out)]
+}
+
+/** 相对地址补成 web2api 的绝对地址 */
+function absolutize(u) {
+  const s = String(u || '').trim()
+  if (!s) return ''
+  if (/^(https?:|data:|blob:)/i.test(s)) return s
+  return BASE + (s.startsWith('/') ? s : '/' + s)
+}
+
+/** 提交一次任务，返回 taskId */
+async function submitTask(action, input) {
+  const body = await api('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ platform: action.platform, operation: action.operation, params: buildParams(action, input) }),
+  })
+  const task = body && body.data
+  if (!task || typeof task.id !== 'string' || !task.id) throw new Error('web2api 没有返回任务 id')
+  return task.id
+}
+
+/** 查一次任务 */
+async function pollTask(taskId) {
+  const body = await api('/api/tasks/' + encodeURIComponent(taskId))
+  const t = body && body.data
+  if (!t || typeof t !== 'object') return { status: 'running', message: '任务查询返回空', taskId }
+  const status = String(t.status || '')
+
+  if (status === 'completed' || status === 'success' || status === 'done') {
+    const urls = collectUrls(t.result).map(absolutize).filter(Boolean)
+    if (urls.length === 0) return { status: 'error', error: '任务完成但没有产出资源', taskId }
+    return { status: 'done', urls, taskId }
+  }
+  if (status === 'failed') return { status: 'error', error: t.message || '任务执行失败', taskId }
+  if (status === 'cancelled') return { status: 'error', error: t.message || '任务已取消', taskId }
+
+  // paused（等验证码）/ retrying / pending（换号重排）：都在自己往前走，不算失败、不占超时。
+  const waiting = status === 'paused' || status === 'retrying' || status === 'pending'
+  return {
+    status: 'running',
+    message: t.message || '生成中…',
+    ...(typeof t.progress === 'number' ? { progress: t.progress } : {}),
+    taskId,
+    ...(waiting ? { waiting: true } : {}),
+  }
+}
+
+/** 取消服务端任务 */
+async function cancelTask(taskId) {
+  try {
+    await api('/api/tasks/' + encodeURIComponent(taskId) + '/cancel', { method: 'POST' }, 15000)
+  } catch {
+    /* 已是终态 / 服务端不认：本机已取消，不算错 */
+  }
+}
+
+
+const ratio_doubao = {
+  key: 'ratio', kind: 'ratio', label: '比例', type: 'select', default: '16:9',
+  options: [
+    { label: '1:1', value: '1:1' },
+    { label: '3:4', value: '3:4' },
+    { label: '4:3', value: '4:3' },
+    { label: '9:16', value: '9:16' },
+    { label: '16:9', value: '16:9' },
+    { label: '3:2', value: '3:2' },
+  ],
+}
+
+const ratio_dola = {
+  key: 'ratio', kind: 'ratio', label: '比例', type: 'select', default: '1:1',
+  options: [
+    { label: '1:1', value: '1:1' },
+    { label: '2:3', value: '2:3' },
+    { label: '3:4', value: '3:4' },
+    { label: '4:3', value: '4:3' },
+    { label: '9:16', value: '9:16' },
+    { label: '16:9', value: '16:9' },
+  ],
+}
+
+const ratio_chatgpt = {
+  key: 'ratio', kind: 'ratio', label: '比例', type: 'select', default: '1:1',
+  options: [
+    { label: '1:1', value: '1:1' },
+    { label: '2:3', value: '2:3' },
+    { label: '3:4', value: '3:4' },
+    { label: '4:3', value: '4:3' },
+    { label: '9:16', value: '9:16' },
+    { label: '16:9', value: '16:9' },
+  ],
+}
+
+const ratio_apimart = {
+  key: 'ratio', kind: 'ratio', label: '比例', type: 'select', default: '1:1',
+  options: [
+    { label: '1:1', value: '1:1' },
+    { label: '3:2', value: '3:2' },
+    { label: '2:3', value: '2:3' },
+    { label: '4:3', value: '4:3' },
+    { label: '3:4', value: '3:4' },
+    { label: '5:4', value: '5:4' },
+    { label: '4:5', value: '4:5' },
+    { label: '16:9', value: '16:9' },
+    { label: '9:16', value: '9:16' },
+    { label: '2:1', value: '2:1' },
+    { label: '1:2', value: '1:2' },
+    { label: '3:1', value: '3:1' },
+    { label: '1:3', value: '1:3' },
+    { label: '21:9', value: '21:9' },
+    { label: '9:21', value: '9:21' },
+  ],
+}
+
+const resolution_apimart = {
+  key: 'resolution', kind: 'resolution', label: '分辨率', type: 'select', default: '1k',
+  options: [
+    { label: '1K (标清)', value: '1k' },
+    { label: '2K (高清)', value: '2k' },
+    { label: '4K (超清)', value: '4k' },
+  ],
+}
+
+const count_apimart = { key: 'n', kind: 'count', label: '数量', type: 'number', default: 1, min: 1, max: 10, step: 1 }
+
+const provider = {
+  id: 'web2api-image',
+  actions: [
+    {
+      id: 'web2api:doubao-image-seedream45',
+      title: '豆包 Seedream 4.5',
+      description: '豆包网页 UI 自动化生图（Seedream 4.5）：比例可选；风格写在提示词里',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 10,
+      platform: 'doubao', operation: 'chat-auto',
+      promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 4.5',
+      fields: [ratio_doubao],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+    {
+      id: 'web2api:doubao-image-seedream50lite',
+      title: '豆包 Seedream 5.0 Lite',
+      description: '豆包网页 UI 自动化生图（Seedream 5.0 Lite）：比例可选；风格写在提示词里',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 11,
+      platform: 'doubao', operation: 'chat-auto',
+      promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 5.0 Lite',
+      fields: [ratio_doubao],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+    {
+      id: 'web2api:doubao-image-seedream40',
+      title: '豆包 Seedream 4.0',
+      description: '豆包网页 UI 自动化生图（Seedream 4.0）：比例可选；风格写在提示词里',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 12,
+      platform: 'doubao', operation: 'chat-auto',
+      promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 4.0',
+      fields: [ratio_doubao],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+    {
+      id: 'web2api:dola-image-seedream50pro',
+      title: 'Dola Seedream 5.0 Pro',
+      description: 'Dola 网页 UI 自动化生图（Seedream 5.0 Pro）；需海外网络',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 13,
+      platform: 'dola', operation: 'chat-auto',
+      promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 5.0 Pro',
+      fields: [ratio_dola],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+    {
+      id: 'web2api:dola-image-seedream45',
+      title: 'Dola Seedream 4.5',
+      description: 'Dola 网页 UI 自动化生图（Seedream 4.5）；需海外网络',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 14,
+      platform: 'dola', operation: 'chat-auto',
+      promptMode: 'chat-auto', mediaMode: 'image', model: 'Seedream 4.5',
+      fields: [ratio_dola],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+    {
+      id: 'web2api:chatgpt-image',
+      title: 'ChatGPT 官方',
+      description: 'ChatGPT 官方渠道（image_gen，需登录态）：比例可选；风格写在提示词里',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 15,
+      platform: 'chatgpt', operation: 'generate-image',
+      promptMode: 'plain',
+      fields: [ratio_chatgpt],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+    {
+      id: 'web2api:apimart-image',
+      title: 'GPT Image 2（API）',
+      description: 'APIMart 中转（GPT Image 2）：比例 / 分辨率 / 张数可选',
+      group: 'web2api · 图片',
+      nodeTypes: ['image'],
+      needsPrompt: true,
+      order: 16,
+      platform: 'apimart', operation: 'generate-image',
+      promptMode: 'plain',
+      fields: [ratio_apimart, resolution_apimart, count_apimart],
+      pollIntervalMs: 1500, pollTimeoutMs: 600000,
+    },
+  ],
+
+  async submit(action, input) {
+    try {
+      return { taskId: await submitTask(action, input) }
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+  },
+
+  async poll(taskId) {
+    try {
+      return await pollTask(taskId)
+    } catch (err) {
+      // 查不到不是终态：报给用户，由任务的超时兜底
+      return { status: 'running', message: err instanceof Error ? err.message : '任务查询失败', taskId }
+    }
+  },
+
+  async cancel(taskId) {
+    await cancelTask(taskId)
+  },
+}
+
+export default provider
+
+

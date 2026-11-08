@@ -78,3 +78,48 @@ export async function loadProvidersFromDir(dir: string): Promise<LoadResult> {
 function isNotFound(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ENOENT'
 }
+
+/**
+ * 把随包自带的 provider（本包 providers/*.js）铺到数据根的 providers 目录。
+ *
+ * 只会写目标不存在 的文件 —— 用户改过 / 自己写的同名文件绝不被覆盖。
+ * 目录不存在就建（缺目录本身等价于没有 provider，建出来才能放东西）。
+ *
+ * 为什么需要它：provider 是外挂文件，装包的人不会手写。随包带一份默认的，
+ * 启动时铺好，装完就能生成 才成立。返回值是复制了哪些文件名（给启动日志用）。
+ */
+export async function seedDefaultProviders(sourceDir: string, targetDir: string): Promise<string[]> {
+  let names: string[]
+  try {
+    names = await fs.readdir(sourceDir)
+  } catch (err) {
+    if (isNotFound(err)) return []
+    throw err
+  }
+  const copied: string[] = []
+  try {
+    await fs.mkdir(targetDir, { recursive: true })
+  } catch {
+    return []
+  }
+  for (const name of names) {
+    if (!name.endsWith('.js')) continue
+    if (name.startsWith('_') || name.startsWith('.')) continue
+    const target = path.join(targetDir, name)
+    try {
+      // 已存在（用户可能改过）→ 不动它
+      await fs.access(target)
+      continue
+    } catch {
+      // 不存在：可以复制
+    }
+    try {
+      await fs.copyFile(path.join(sourceDir, name), target)
+      copied.push(name)
+    } catch {
+      // 单个文件失败不影响启动
+    }
+  }
+  return copied
+}
+
