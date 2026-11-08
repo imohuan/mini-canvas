@@ -305,6 +305,19 @@
   height: 22px;
 }
 
+/*
+ * provider 自带图标走 <img>（Base64 图片）：给同一档尺寸，否则它会按原始像素画 ——
+ * 1×1 的小图被缩成 0，大图撑破 35px 的图标托（用户 2026-11-08 截图：列表里一格空白）。
+ * object-fit: contain 保住比例，圆角与图标托的 9px 对齐。
+ */
+.ac-model-brand :deep(img) {
+  width: 22px;
+  height: 22px;
+  display: block;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
 .ac-model-copy {
   display: flex;
   flex-direction: column;

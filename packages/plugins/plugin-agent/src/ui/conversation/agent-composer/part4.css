@@ -286,6 +286,16 @@
   height: 14px;
 }
 
+/* provider 图标走 <img>：与 svg 同一档尺寸（平台分组那一列用的是品牌图，很少是 img，
+   但同一份清单里两种都可能出现，规则必须成对写） */
+.ac-rail-brand :deep(img) {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+  border-radius: 3px;
+}
+
 .ac-rail-name {
   flex: 1;
   min-width: 0;
@@ -633,6 +643,11 @@
 
   .ac-rail-icon,
   .ac-rail-brand {
+    width: 13px;
+    height: 13px;
+  }
+
+  .ac-rail-brand :deep(img) {
     width: 13px;
     height: 13px;
   }

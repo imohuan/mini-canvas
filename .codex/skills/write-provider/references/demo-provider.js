@@ -249,11 +249,14 @@ const ICON_SVG =
   '<circle cx="8" cy="13" r="1.4"/><path d="M12 13h6M12 16.5h4"/></svg>'
 
 /**
- * Base64 图片图标：必须是 data:image/(png|jpeg|webp|gif|svg+xml);base64,…
- * 这里是一张 1x1 的 PNG，换成真图时保持同样格式即可。
+ * Base64 图片图标：`data:image/(png|jpeg|webp|gif|svg+xml);base64,…`。
+ *
+ * 这里是一张 64×64 的 PNG（圆角方块 + 白色十字），不是 1×1 占位图 ——
+ * 1×1 会被按原始像素画成一个色块，看不出是什么。真图请保持「方形、留白自足」，
+ * 显示尺寸由界面定（列表 22px、触发器 14px），大图只用于保清晰度。
  */
 const ICON_BASE64 =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACQUlEQVR42uXb11KUQRQE4H4MsyKCCCKIIIoI72YWcxZzFnMW4ztIXuKSl/wKbRUXu0VBcWCm6Br+6arvvk9fzwCO2XBsjiHBWmbj8TmuR/6Hn5hlEjgdv+nkLJNkVcdvPjXDJFrZ8adnmGTLHr/lzDRjsPTxZ6cZk0UDbG2YYkwWHL+tYYoxyg1wbpIxyg6w/fwkY5QdYMeFCcYoN8DFCcZo/vi8SxnGDHmXM1Syou6DnVcyVLKi7oP8q+NUsqLug/xr41QyBxD3wa7rY1Syou6DghtjVLKi7oOCm6NUMgcQ90HhrVEqWVH3QeHtESqZA4j7YHfjCJWsqPugqHGYSlbUfVB0Z5hK5gDiPthzd4hKVtR9UHxviK5Cic8NKL4/SFfBDOBxA0oeDNJVKPG5ASUP03QVzAAeN2DvozRdhRKfG1D6OE1XocTnBpQ+GaCrYAbwuAH7ng7QVSjxuQFlz/qpZEXdB2XP+6lkDiDug/IXfVSyou6D8pd9VDIHEPfB/qZeKllR90FFUy+VrKj7oOJVD5XMAcR9cOB1D5WsqPug8k03layo+6DybTeVzAHEfVD1LkUlK+o+qHqfopI5gLgPDn5IUcmKug+qP3YxZvPvhKo/dTFG2Vdihz53MkbZAQ5/6WSMcgN87WCMsgPUfOtgjBa8GK/53s6YLPovcKS5nTFZ8tdIbXMbY7Dsv6HaH21MshX9HDv6s5VJtKq/g3W/WpkkTr9H6363MAm8/xDX/2nherSmP8rr//5jSFzv+A8zebcnSss2QgAAAABJRU5ErkJggg=='
 
 // ============================== 异步任务表 ==============================
 
