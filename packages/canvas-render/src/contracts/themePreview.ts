@@ -1,69 +1,86 @@
 /**
- * themePreview —— 主题工作台的「预览画布」契约。
+ * themePreview —— 主题工作台「预览画板」的绘制契约。
  *
- * 为什么要有这层：主题页只应该收集颜色、提供一块画布；画布上出现什么（节点、连线、
- * 选框、参考线、刀光）由**各插件自己注册、自己画**。插件没装 → 没有它的图层，
- * 主题页不需要认识任何具体插件。
+ * 这里不再用 Vue 组件叠加，而是**一组同步的绘制函数**：
+ * 宿主按 order 依次调用每层的 paint(ctx)，每层拿到自己的 div（绝对定位、铺满画板），
+ * 自己决定往里面放什么 DOM，也可以读 host 提供的真实节点矩形。
  *
- * 用法：
- * - 宿主（主题工作台）用 createThemePreviewScene 建场景，provideThemePreviewScene 下发；
- * - 插件在 apply 里 ctx.slots.register('theme-preview', { component, order })；
- * - 图层组件里 useThemePreviewScene() 拿坐标 / 模式 / settings 读取器。
+ * 为什么改成函数：
+ * - 预览是"一次性把画面画出来"，没有交互、没有响应式状态，用 Vue 组件反而要处理挂载顺序；
+ * - 节点高度由浏览器排版决定（文字多就会被撑高），绘制函数每次执行都现读矩形，
+ *   端口 / 连线 / 选框 / 刀光因此天然对齐；
+ * - 插件作者只写一个 paint 函数，卸载时宿主整层删掉，没有组件生命周期要管。
  */
-import { computed, inject, provide, ref, type ComputedRef, type InjectionKey, type Ref } from 'vue'
-import { resolveThemeColorValue } from './themePalette'
 
-/** 预览画布统一使用的槽名（插件往这里注册自己的图层组件）。 */
+/** 预览画布统一使用的槽名（插件往这里注册自己的绘制层）。 */
 export const THEME_PREVIEW_SLOT = 'theme-preview'
 
-/** 画布坐标（单位 px，原点在预览画布左上角）。 */
-export interface ThemePreviewRect {
+/** 画板坐标（px，原点在画板左上角）。 */
+export interface PreviewRect {
   x: number
   y: number
   w: number
   h: number
 }
 
-/** 预览画布默认提供的两个节点；所有插件都按这两个矩形定位自己的效果。 */
-export interface ThemePreviewNode extends ThemePreviewRect {
-  id: 'preview-a' | 'preview-b'
+/** 预览里的一个节点：矩形 + 身份，供图层区分"这是第几个节点"。 */
+export interface PreviewNodeRect extends PreviewRect {
+  id: string
+  /** 节点类型（text / image / …），图层可以据此画不同的壳 */
+  kind?: string
+  /** 标题，画在卡片上方 */
+  title?: string
 }
 
-export type ThemePreviewMode = 'light' | 'dark'
+export type PreviewMode = 'light' | 'dark'
 
-/** 场景里读配置的最小接口（与 settings 同形，插件图层不必自己拿 ctx）。 */
-export interface ThemePreviewSettings {
-  get(key: string): unknown
+/**
+ * 绘制上下文：一次 paint 调用的全部输入。
+ *
+ * el 是本层专属的 div（position:absolute; inset:0; pointer-events:none），
+ * 每次重画前宿主会清空它，绘制函数不必自己 remove 旧内容。
+ */
+export interface PreviewPaintCtx {
+  /** 画板根节点：需要量别的层或真实 DOM 时从这里查 */
+  root: HTMLElement
+  /** 本层自己的容器，已绝对定位铺满画板 */
+  el: HTMLElement
+  /** 当前画板上的全部节点矩形（flow 坐标，按 id 索引） */
+  rects: Record<string, PreviewRect>
+  /** 同上，但保留顺序与身份，画连线时按数组中相邻关系取端点 */
+  nodes: readonly PreviewNodeRect[]
+  /** 亮色 / 暗色 */
+  mode: PreviewMode
+  /** 读主题色：colors('accentColor')，已按 mode 解析成 hex */
+  colors: (key: string) => string
+  /** 读任意原始设置值（插件自己的几何/开关配置用） */
+  get: (key: string) => unknown
+  /** 是否允许动效（系统开了"减少动态效果"时为 false） */
+  motion: boolean
+  /**
+   * 上报"这层画到了哪里"（画板坐标）。
+   *
+   * 取景要用它：节点矩形只覆盖卡片本体，标题、端口、选框、刀光都在卡片外。
+   * 不上报的部分不会进入取景范围，容易被裁掉或让画面偏心。
+   */
+  claim?: (rect: PreviewRect) => void
 }
 
-export interface ThemePreviewScene {
-  /** 当前预览的亮 / 暗模式 */
-  mode: Readonly<Ref<ThemePreviewMode>>
-  /** 两个默认节点（位置 / 尺寸由契约固定，插件只读） */
-  nodes: readonly ThemePreviewNode[]
-  /** 真实 settings 读取器；独立验收页 / 单测没有时是 null */
-  settings: ThemePreviewSettings | null
-  /** 配置版本号：settings 改动时 +1，让图层里的取色重新计算 */
-  revision: Readonly<Ref<number>>
-  /** 图层上报自己占用的矩形（用于「所有内容并集 + padding」自动取景） */
-  registerBounds(id: string, rect: ThemePreviewRect): void
-  unregisterBounds(id: string): void
-  /** 所有已注册图层的并集；没有图层时是整块画板 */
-  bounds: Readonly<Ref<ThemePreviewRect>>
+/** 一个预览层：只有一个同步绘制函数。 */
+export interface PreviewLayer {
+  paint(ctx: PreviewPaintCtx): void
 }
 
-/** 默认画板：640 × 400，两个节点 + 一条连线的基础排布。 */
-export const THEME_PREVIEW_ARTBOARD: ThemePreviewRect = { x: 0, y: 0, w: 720, h: 400 }
+/** 默认画板：两个节点 + 一条连线的保底布局（空画布时用）。 */
+export const THEME_PREVIEW_ARTBOARD: PreviewRect = { x: 0, y: 0, w: 720, h: 400 }
 
-export const THEME_PREVIEW_NODES: readonly ThemePreviewNode[] = Object.freeze([
-  { id: 'preview-a', x: 60, y: 110, w: 230, h: 150 },
-  { id: 'preview-b', x: 470, y: 110, w: 230, h: 160 },
+export const THEME_PREVIEW_NODES: readonly PreviewNodeRect[] = Object.freeze([
+  { id: 'preview-a', kind: 'text', title: '灵感速记', x: 56, y: 92, w: 312, h: 224 },
+  { id: 'preview-b', kind: 'image', title: '海边房间', x: 452, y: 262, w: 292, h: 184 },
 ])
 
-export const THEME_PREVIEW_KEY: InjectionKey<ThemePreviewScene> = Symbol.for('mini-canvas-theme-preview')
-
-function unionRect(list: ThemePreviewRect[]): ThemePreviewRect | null {
-  if (list.length === 0) return null
+/** 把一组矩形求并集（空数组返回 null）。 */
+export function unionPreviewRect(list: readonly PreviewRect[]): PreviewRect | null {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
@@ -79,78 +96,40 @@ function unionRect(list: ThemePreviewRect[]): ThemePreviewRect | null {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
 
-export function createThemePreviewScene(options: {
-  mode: Ref<ThemePreviewMode>
-  settings?: ThemePreviewSettings | null
-  nodes?: readonly ThemePreviewNode[]
-  revision?: Ref<number>
-}): ThemePreviewScene {
-  const nodes = options.nodes ?? THEME_PREVIEW_NODES
-  const registered = ref<Record<string, ThemePreviewRect>>({})
-  const revision = options.revision ?? ref(0)
+/** 按 id 建索引，给绘制函数用。 */
+export function indexPreviewRects(nodes: readonly PreviewNodeRect[]): Record<string, PreviewRect> {
+  const out: Record<string, PreviewRect> = {}
+  for (const n of nodes) out[n.id] = { x: n.x, y: n.y, w: n.w, h: n.h }
+  return out
+}
 
-  const bounds = computed<ThemePreviewRect>(() => {
-    void registered.value
-    return unionRect(Object.values(registered.value)) ?? THEME_PREVIEW_ARTBOARD
-  })
+/** 主题色板里"可留空"的 key（清空 = 跟随强调色）。 */
+const OPTIONAL_COLOR_KEYS = new Set([
+  'edgeFlowColor',
+  'alignGuideColor',
+  'multiSelectBoxColor',
+  'multiSelectFrameOuterColor',
+  'multiSelectFrameInnerColor',
+  'pathColor',
+  'bladeColor',
+])
 
-  return {
-    mode: options.mode,
-    nodes,
-    settings: options.settings ?? null,
-    revision,
-    registerBounds(id: string, rect: ThemePreviewRect): void {
-      registered.value = { ...registered.value, [id]: rect }
-    },
-    unregisterBounds(id: string): void {
-      if (!(id in registered.value)) return
-      const next = { ...registered.value }
-      delete next[id]
-      registered.value = next
-    },
-    bounds,
+/**
+ * 读一个主题色。get 是设置读取器，mode 决定读亮格还是暗格。
+ * 留空的颜色跟随强调色；读不到时返回 fallback。
+ */
+export function readPreviewColor(
+  get: (key: string) => unknown,
+  key: string,
+  mode: PreviewMode,
+  fallback: string,
+): string {
+  const suffix = mode === 'dark' ? 'Dark' : 'Light'
+  const raw = get(key + suffix) ?? get(key)
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (value) return value
+  if (key !== 'accentColor' && OPTIONAL_COLOR_KEYS.has(key)) {
+    return readPreviewColor(get, 'accentColor', mode, fallback)
   }
-}
-
-export function provideThemePreviewScene(scene: ThemePreviewScene): void {
-  provide(THEME_PREVIEW_KEY, scene)
-}
-
-const FALLBACK_MODE = ref<ThemePreviewMode>('light')
-const FALLBACK_SCENE: ThemePreviewScene = createThemePreviewScene({ mode: FALLBACK_MODE })
-
-/**
- * 图层组件读场景。没有宿主 provide 时给一份空场景（默认两个节点、无 settings），
- * 这样单测 / 独立渲染不会炸，只是不显示真实配置色。
- */
-export function useThemePreviewScene(): ThemePreviewScene {
-  return inject(THEME_PREVIEW_KEY, FALLBACK_SCENE)
-}
-
-/**
- * 读宿主色板 token（accentColor / edgeRailColor …）在当前预览模式下的颜色。
- * 场景没有 settings 时回落兜底值，保证独立页 / 单测也能画。
- */
-export function useThemePreviewColor(tokenKey: string, fallback: string): ComputedRef<string> {
-  const scene = useThemePreviewScene()
-  return computed(() => {
-    void scene.revision.value
-    if (!scene.settings) return fallback
-    return resolveThemeColorValue((key) => scene.settings?.get(key), tokenKey, scene.mode.value) || fallback
-  })
-}
-
-/**
- * 读插件自己申报的两格制颜色（如 multiSelectFrameOuterColor / pathColor）。
- * 空串 / 缺失 = 跟随主题强调色（与各插件配置语义一致）。
- */
-export function useThemePreviewPluginColor(baseKey: string, fallback: string): ComputedRef<string> {
-  const scene = useThemePreviewScene()
-  return computed(() => {
-    void scene.revision.value
-    const suffix = scene.mode.value === 'dark' ? 'Dark' : 'Light'
-    const raw = scene.settings?.get(baseKey + suffix) ?? scene.settings?.get(baseKey)
-    const value = typeof raw === 'string' ? raw.trim() : ''
-    return value || fallback
-  })
+  return fallback
 }

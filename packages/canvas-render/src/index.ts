@@ -212,24 +212,21 @@ export {
 export type { ThemeMode, ThemeModeSettingsLike } from './contracts/themeModeSettings'
 // 取色板当前值（JS 通道）：SVG 表现属性/canvas 2D 这类吃不到 var() 的地方用它
 export { useThemeColor } from './contracts/useThemeColor'
-// 主题工作台预览契约：插件各自往 theme-preview 槽注册图层，工作台只负责取景。
+// 主题工作台预览契约：插件各自往 theme-preview 槽注册一个 paint 函数，宿主按 order 依次执行。
 export {
   THEME_PREVIEW_SLOT,
   THEME_PREVIEW_ARTBOARD,
   THEME_PREVIEW_NODES,
-  THEME_PREVIEW_KEY,
-  createThemePreviewScene,
-  provideThemePreviewScene,
-  useThemePreviewScene,
-  useThemePreviewColor,
-  useThemePreviewPluginColor,
+  readPreviewColor,
+  unionPreviewRect,
+  indexPreviewRects,
 } from './contracts/themePreview'
 export type {
-  ThemePreviewRect,
-  ThemePreviewNode,
-  ThemePreviewMode,
-  ThemePreviewScene,
-  ThemePreviewSettings,
+  PreviewRect,
+  PreviewNodeRect,
+  PreviewMode,
+  PreviewLayer,
+  PreviewPaintCtx,
 } from './contracts/themePreview'
 // 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
 export { useSoleNodeSelected, isSoleSelected } from './contracts/nodeSelection'

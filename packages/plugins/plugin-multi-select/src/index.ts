@@ -1,7 +1,7 @@
 // plugin-multi-select —— 多选交互插件（v2 复刻老版 multi-select：自绘 Shift+拖框选 + SelectionFrame 群组框）。
 export { multiSelectPlugin, name, apply, handleMultiSelectKey, Config } from './multiSelectPlugin'
 export type { MultiSelectService } from './multiSelectPlugin'
-export { ThemePreviewSelection, registerThemePreview } from './themePreview'
+export { multiSelectPreviewLayer, registerThemePreview } from './themePreview'
 // 纯逻辑引擎（框选碰撞/包围盒/整组拖动成员；零 Vue 可单测）
 export {
   hitTestRects,
