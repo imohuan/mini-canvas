@@ -1261,6 +1261,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/plugin-theme-canvas':
+        specifier: workspace:*
+        version: link:../plugin-theme-canvas
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
