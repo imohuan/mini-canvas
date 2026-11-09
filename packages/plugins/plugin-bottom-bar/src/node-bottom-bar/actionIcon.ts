@@ -18,6 +18,10 @@ import { customModelIcon, modelIconOf, type ModelIcon, type ModelTone } from './
 export interface ModelIconServiceLike {
   svgOfName(name: string): string
   platformOfName(name: string): string
+  /** 模型 ID / provider → 平台 key（Agent 服务有；测试桩可能没有） */
+  platformOf?(modelId: string, provider?: string): string
+  /** 平台 key → 完整 `<svg>`（品牌图标，自带颜色） */
+  svgOf?(platform: string): string
   /** `icon` 写名字时的查表（见 modelIconService.ts） */
   svgOfIconHint?(hint: string): string
   platformOfIconHint?(hint: string): string
@@ -73,4 +77,38 @@ export function resolveActionIcon(
 
   // 4. 本地兜底：按节点类型给个通用图形，绝不空白
   return modelIconOf(title, nodeType)
+}
+
+/**
+ * 选中的 Agent 模型 → 图标（底栏聊天 trigger 用，用户 2026-11-09：
+ * 图片/视频/音频的触发器都有模型图标，文本对话那条也要有）。
+ *
+ * 判定与 Agent 面板同一把尺子（modelBrandIcons.detectPlatform）：
+ * 1. 先按模型 ID 认平台（deepseek-* / glm-* / seedance-* …）；
+ * 2. 认不出再看显示名（displayName 里写「DeepSeek 官方」这类）；
+ * 3. 再看 provider（openrouter 上的 claude-* 靠 provider 落对）；
+ * 4. 都认不出 → 本地兜底（`text` 家族的线稿图形，绝不空白）。
+ *
+ * @param displayName 可选；Agent 配置里的显示名（帮「test 模型」这类认不出 ID 的补一手）
+ */
+export function resolveModelRowIcon(
+  modelId: string,
+  provider: string,
+  service: ModelIconServiceLike | undefined,
+  displayName?: string,
+): ModelIcon {
+  const tryPlatform = service?.platformOf && service.svgOf
+  if (tryPlatform) {
+    // 1. 模型 ID（与面板同源）；custom = 自建网关那一格，也算认出
+    const p1 = service.platformOf!(modelId, provider)
+    if (p1 !== 'custom') return { tone: toneOf(p1), svg: service.svgOf!(p1) }
+    // 2. 显示名（「DeepSeek 官方」「test 模型」这类 modelId 认不出的）
+    const p2 = service.platformOfName(displayName?.trim() || '')
+    if (p2 !== 'custom') return { tone: toneOf(p2), svg: service.svgOfName(p2) }
+    // 3. provider 名（openrouter/anthropic、newapi/deepseek 这类前缀）
+    const p3 = service.platformOfName(provider)
+    if (p3 !== 'custom') return { tone: toneOf(p3), svg: service.svgOfName(p3) }
+  }
+  // 4. 兜底：显示名 → 本地家族表（认不出给 text 线稿，绝不空白）
+  return modelIconOf(displayName || modelId, 'text')
 }

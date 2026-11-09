@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { resolveActionIcon, type ModelIconServiceLike } from '../node-bottom-bar/actionIcon'
+import { resolveModelRowIcon } from '../node-bottom-bar/actionIcon'
 
 const PLATFORMS = ['seedance', 'volcengine', 'kling', 'doubao', 'audio', 'custom']
 
@@ -78,5 +79,42 @@ describe('resolveActionIcon：图标优先级', () => {
     const icon = resolveActionIcon('豆包 Seedance 2.0', evil, svc, 'video')
     expect(icon.tone).toBe('seedance')
     expect(icon.svg).not.toContain('alert')
+  })
+})
+
+describe('resolveModelRowIcon：选中的 Agent 模型 → 图标（用户 2026-11-09 trigger 缺图标）', () => {
+  const rowSvc: ModelIconServiceLike = {
+    svgOfName: (n) => '<svg data-from="name">' + n + '</svg>',
+    platformOfName: (n) => (/deepseek/i.test(n) ? 'deepseek' : 'custom'),
+    platformOf: (modelId, provider) => (/^deepseek|^ds-/.test(modelId) ? 'deepseek' : /deepseek/.test(provider ?? '') ? 'deepseek' : 'custom'),
+    svgOf: (p) => '<svg data-from="brand">' + p + '</svg>',
+  }
+
+  it('模型 ID 能认平台 → 品牌图标（deepseek-v4.1-flash → deepseek）', () => {
+    const icon = resolveModelRowIcon('deepseek-v4.1-flash', 'openrouter', rowSvc)
+    expect(icon.tone).toBe('deepseek')
+    expect(icon.svg).toContain('data-from="brand"')
+  })
+
+  it('模型 ID 认不出 → 显示名补一手', () => {
+    const icon = resolveModelRowIcon('test-model', 'test', rowSvc, 'DeepSeek 官方')
+    expect(icon.tone).toBe('deepseek')
+    expect(icon.svg).toContain('data-from="name"')
+  })
+
+  it('显示名也认不出 → provider 补一手', () => {
+    const icon = resolveModelRowIcon('自研模型', 'deepseek官方', rowSvc)
+    expect(icon.tone).toBe('deepseek')
+  })
+
+  it('全都认不出 → 本地 text 线稿兜底，绝不空白', () => {
+    const icon = resolveModelRowIcon('自研模型', '自建网关', rowSvc)
+    expect(icon.tone).toBe('text')
+    expect(icon.svg.startsWith('<svg')).toBe(true)
+  })
+
+  it('Agent 没装（无服务）→ 本地兜底仍给图', () => {
+    const icon = resolveModelRowIcon('deepseek-v4', 'x', undefined)
+    expect(icon.svg.startsWith('<svg')).toBe(true)
   })
 })

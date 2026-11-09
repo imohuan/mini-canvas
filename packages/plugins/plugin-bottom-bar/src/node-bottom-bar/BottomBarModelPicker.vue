@@ -17,7 +17,8 @@
  * Agent 没装（取不到组件）时：退回原来的动作下拉（由父组件决定），这里只负责报告。
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { resolveModelRowIcon, type ModelIcon, type ModelIconServiceLike } from './actionIcon'
 import type { ModelRowLike } from './modelPickerBridge'
 
 const props = defineProps<{
@@ -40,6 +41,10 @@ const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 /** Agent 注册的模型面板；没装 Agent 时是 undefined */
 const AgentModelPicker = useUiComponent('agentModelPicker')
+/** 渲染上下文：取 Agent 的 modelIcons 服务（与面板同一把图标尺子） */
+const { ctx } = useCanvasRender()
+/** 模型图标服务：Agent 提供时按平台给品牌图，没装 Agent 时用本地兜底 */
+const iconService = computed<ModelIconServiceLike | undefined>(() => ctx.tryGet('modelIcons'))
 
 /**
  * 面板宽度：分栏视图要宽一点，否则左栏平台列表被挤成一条缝（400px 实测只能露半行）。
@@ -88,6 +93,13 @@ const label = computed(() => {
   return hit?.displayName || props.model.modelId
 })
 
+/** 触发器左侧的模型图标（用户 2026-11-09：与图片/视频/音频同款） */
+const icon = computed<ModelIcon | null>(() => {
+  if (!props.model) return null
+  const hit = props.models.find((m) => m.provider === props.model!.provider && m.modelId === props.model!.modelId)
+  return resolveModelRowIcon(props.model.modelId, props.model.provider, iconService.value, hit?.displayName)
+})
+
 function pick(m: { provider: string; modelId: string }): void {
   emit('pick', m)
   open.value = false
@@ -100,6 +112,7 @@ function pick(m: { provider: string; modelId: string }): void {
       <Button variant="ghost" size="sm" class="nb-action-select nb-model-trigger" type="button"
         :disabled="disabled" :aria-expanded="open" title="选择模型" aria-label="选择模型"
         data-testid="bar-model-picker">
+        <span v-if="icon" class="nb-model-badge" :data-tone="icon.tone" aria-hidden="true" v-html="icon.svg" />
         <span class="nb-model-trigger-label">{{ label }}</span>
         <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

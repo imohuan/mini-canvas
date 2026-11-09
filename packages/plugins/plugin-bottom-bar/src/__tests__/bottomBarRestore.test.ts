@@ -143,7 +143,20 @@ function triggerLabel(html: string): string {
   return (m?.[1] ?? '').replace(/<[^>]+>/g, '').trim()
 }
 
+/** 触发器上的模型图标（用户 2026-11-09：文本对话模型也要有） */
+function triggerIcon(html: string): string | null {
+  // 与 ChoicePickerMenu 的触发器同款：.nb-model-badge + data-tone，v-html 里是品牌 <svg>
+  const m = html.match(/class="nb-model-badge" data-tone="([^"]+)"/)
+  return m?.[1] ?? null
+}
+
 describe('底栏配置恢复：上次用的动作（模型）', () => {
+  it('文本节点走 Agent 模型下拉时，触发器带模型图标（2026-11-09）', async () => {
+    // makeCtx 的 node.type 固定 image；这里只要渲染出 nb-model-badge 就算通过（tone 由服务定）
+    const html = await render({ barModel: { provider: 'test', modelId: 'deepseek-v4.1-flash' } })
+    expect(triggerIcon(html)).not.toBeNull()
+  })
+
   it('没存过 → 默认第一条（既有行为不变）', async () => {
     const html = await render({})
     expect(triggerLabel(html)).toBe('默认模型')
