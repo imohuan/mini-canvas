@@ -16,6 +16,7 @@
  */
 import { ref, type Ref } from 'vue'
 import { resolveAgentBaseUrl, DEFAULT_RETRY_ROUNDS, type AiRequestResult } from '../aiActions'
+import { withAdminToken } from '@mini-canvas/canvas-base'
 import { readAgentModels } from './modelPickerBridge'
 
 export interface AgentChatDeps {
@@ -151,7 +152,7 @@ export async function requestAgentChat(
     try {
       const res = await f(base + '/api/agent/chat/completion', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+        headers: withAdminToken({ 'content-type': 'application/json', accept: 'text/event-stream' }),
         body: JSON.stringify({
           stream: true,
           // 用户选的模型：底栏下拉里的那一项

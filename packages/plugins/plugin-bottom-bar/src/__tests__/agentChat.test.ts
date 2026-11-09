@@ -8,8 +8,19 @@
  * 1. 请求体带 provider + model（否则会落到后台默认模型，等于没选）；
  * 2. 文本节点没有输入内容 / 没选模型时不允许发。
  */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@mini-canvas/canvas-base'
 import { requestAgentChat, readBarModelChoice, choiceStillValid } from '../node-bottom-bar/useAgentChat'
+
+/** 最小的 localStorage 替身（Node 里没有 DOM；令牌走全局 localStorage） */
+class MemoryStorage {
+  private m = new Map<string, string>()
+  getItem(k: string) { return this.m.has(k) ? this.m.get(k)! : null }
+  setItem(k: string, v: string) { this.m.set(k, v) }
+  removeItem(k: string) { this.m.delete(k) }
+}
+
+afterEach(() => { delete (globalThis as { localStorage?: unknown }).localStorage })
 
 describe('requestAgentChat：带用户选的模型', () => {
   function fetchReturning(body: string): typeof fetch {
@@ -42,6 +53,33 @@ describe('requestAgentChat：带用户选的模型', () => {
     expect(body.model).toBe('deepseek-v4.1-flash')
     expect(body.stream).toBe(true)
     expect(Array.isArray(body.messages)).toBe(true)
+  })
+
+  it("★ 请求头带管理令牌（漏了就是后台 403，用户 2026-11-09）", async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    localStorage.setItem(ADMIN_TOKEN_KEY, "tok-bar-123")
+    try {
+      const calls: Array<{ headers: Record<string, string> }> = []
+      const f = (async (_url: string, init: RequestInit) => {
+        calls.push({ headers: init.headers as Record<string, string> })
+        return new Response(
+          'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+          {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          },
+        )
+      }) as unknown as typeof fetch
+      const r = await requestAgentChat([{ role: "user", content: "你好" }], {
+        baseUrl: "http://127.0.0.1:8865",
+        provider: "local",
+        model: "deepseek-v4.1-flash",
+        fetchImpl: f,
+      })
+      expect(r.ok).toBe(true)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]!.headers[ADMIN_TOKEN_HEADER]).toBe("tok-bar-123")
+    } catch (err) { throw err }
   })
 
   it('流式增量按段回调，最终拼成全文', async () => {
