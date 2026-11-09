@@ -37,6 +37,7 @@ import ToolParamGroup from "./components/ui/ToolParamGroup.vue"
 import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue"
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue"
 import ToolParamSlider from "./components/ui/ToolParamSlider.vue"
+import ToolParamHint from "./components/ui/ToolParamHint.vue"
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue"
 import UiKitDebugOverlay from "./components/ui/UiKitDebugOverlay.vue"
 import FeedbackHost from "./components/ui/FeedbackHost.vue"
@@ -154,6 +155,7 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   ui.add("mediaViewer", MediaViewer, { id: "default" })
   ui.add("slider", PrecisionSlider, { id: "default" })
   ui.add("toolParamField", ToolParamField, { id: "default" })
+  ui.add("toolParamHint", ToolParamHint, { id: "default" })
   ui.add("toolParamGroup", ToolParamGroup, { id: "default" })
   ui.add("toolParamGrid", ToolOptionGrid, { id: "default" })
   ui.add("toolParamRatio", ToolRatioGrid, { id: "default" })

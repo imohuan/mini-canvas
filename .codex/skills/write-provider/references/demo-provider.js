@@ -318,6 +318,7 @@ const provider = {
           key: 'ratio',
           kind: 'ratio',
           label: '比例（kind: ratio + columns 6）',
+          description: '决定输出画面的宽高比，影响构图与裁切位置。竖屏选 9:16，横屏选 16:9。',
           type: 'select',
           columns: 6,
           default: '16:9',
@@ -336,6 +337,7 @@ const provider = {
         {
           key: 'quality',
           label: '画质（grid，自动 3 列）',
+          description: '越高越细，但生成时间也更长。日常用「高清」就够。',
           type: 'grid',
           default: 'hd',
           options: [
@@ -388,6 +390,7 @@ const provider = {
         {
           key: 'durationSec',
           label: '时长（number + min/max，滑块）',
+          description: '成片长度，单位秒。超过上限会被截断到 15 秒。',
           type: 'number',
           default: 6,
           min: 4,
@@ -417,6 +420,7 @@ const provider = {
         {
           key: 'model',
           label: '模型（select）',
+          description: '决定生成质量和速度。推荐用标准模型，赶时间用快速模型。',
           type: 'select',
           default: 'v2',
           options: [
@@ -431,6 +435,7 @@ const provider = {
         {
           key: 'note',
           label: '备注（string）',
+          description: '只给你自己看的备注，不会发给模型。',
           type: 'string',
           default: '',
           placeholder: '随便写点什么',
@@ -438,6 +443,7 @@ const provider = {
         {
           key: 'upscale',
           label: '放大 2 倍（boolean）',
+          description: '打开后成片长宽各放大一倍，适合小图出大图。',
           type: 'boolean',
           default: false,
         },

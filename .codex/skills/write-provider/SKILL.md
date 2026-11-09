@@ -90,7 +90,9 @@ pollTimeoutMs / externalRunState`。写别的一律到不了前端（历史上 `
 - `promptBinding: 'text'`：输入框直接绑文本节点的 `data.text`。
 - `nodeTypes: ['image'|'video'|'audio']`：只在对应节点上出现；省略 = 都适用。
 - `order`：小的排前面。
-- `fields`：可视化参数。每项 `{ key, label, type, default, options?, min?, max?, step?, unit?, columns?, kind? }`。
+- `fields`：可视化参数。每项 `{ key, label, description?, type, default, options?, min?, max?, step?, unit?, columns?, kind? }`。
+  `description` 写一句人话解释这个参数干什么用，前端会显示出来
+  （下拉在展开的列表顶部，网格/滑块在标题下，文本/数字/开关在控件下）。
   **`type` 是主体**，5 个值覆盖常规需求：`select` / `grid`（按钮网格）/ `number`
   （滑块或输入框）/ `string` / `boolean`。**`kind` 只剩 `ratio` 一个**，专给基础控件
   画不出来的比例网格。每种写法画成什么、`columns` 怎么用，见

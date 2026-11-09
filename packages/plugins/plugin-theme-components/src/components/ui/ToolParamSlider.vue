@@ -17,6 +17,7 @@
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { Minus, Plus } from 'lucide-vue-next'
+import ToolParamHint from './ToolParamHint.vue'
 import {
   NumberField,
   NumberFieldContent,
@@ -32,8 +33,10 @@ const props = withDefaults(
     modelValue?: string | number | boolean
     disabled?: boolean
     hideTitle?: boolean
+    /** 说明文字（自己画标题时跟在标题下面；空串不渲染） */
+    hint?: string
   }>(),
-  { modelValue: '', disabled: false, hideTitle: false },
+  { modelValue: '', disabled: false, hideTitle: false, hint: '' },
 )
 
 const emit = defineEmits<{
@@ -63,10 +66,18 @@ function onSlider(value: number | number[] | undefined): void {
 
 <template>
   <section class="tps-block" :data-param-key="param.key">
-    <h4 v-if="!hideTitle" class="tps-title">
-      {{ param.label || param.key }}
-      <span v-if="param.unit" class="tps-unit">{{ param.unit }}</span>
-    </h4>
+    <div v-if="!hideTitle" class="tps-head">
+      <h4 class="tps-title">
+        {{ param.label || param.key }}
+        <span v-if="param.unit" class="tps-unit">{{ param.unit }}</span>
+      </h4>
+      <!--
+        参数说明（用户 2026-11-09：参数要有介绍，前端渲染出来）。
+        只在**自己画标题**时画它；hideTitle 表示标题归调用方，说明也归调用方，
+        否则同一句说明会出现两遍。
+      -->
+      <ToolParamHint :text="hint || param.description" />
+    </div>
     <!--
       与「设置 → 外观」里的数字字段**同一个组件、同一份布局**（用户 2026-11-08）：
       左边滑块、右边「− 数值 +」。
@@ -119,6 +130,11 @@ function onSlider(value: number | number[] | undefined): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.tps-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .tps-title {
   margin: 0;

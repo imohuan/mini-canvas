@@ -15,6 +15,7 @@
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
+import ToolParamHint from './ToolParamHint.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -48,7 +49,12 @@ function pick(value: string | number): void {
 
 <template>
   <section class="tog-block" :data-param-key="param.key">
-    <h4 v-if="!hideTitle" class="tog-title">{{ param.label || param.key }}</h4>
+    <!-- 标题 + 说明抱成一团（间距 2），与下面的网格仍隔 8 -->
+    <div v-if="!hideTitle" class="tog-head">
+      <h4 class="tog-title">{{ param.label || param.key }}</h4>
+      <!-- 参数说明：作者写的 description（用户 2026-11-09 要求渲染出来） -->
+      <ToolParamHint :text="param.description" />
+    </div>
     <div class="tog-grid" :style="gridStyle">
       <button
         v-for="opt in options"
@@ -73,6 +79,12 @@ function pick(value: string | number): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* 标题与说明贴在一起（2px），整团再与网格隔 8 —— 说明属于标题而非独立一块 */
+.tog-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .tog-title {
   margin: 0;

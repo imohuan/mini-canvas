@@ -20,6 +20,7 @@ import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@mini-canvas/ui-kit-shadcn'
 import ToolParamField from './ToolParamField.vue'
+import ToolParamHint from './ToolParamHint.vue'
 import { drawsOwnTitle, resolveInlineSoleSelect } from './paramKind'
 
 const props = withDefaults(
@@ -163,12 +164,17 @@ const summary = computed(() => {
           用户要求统一成竖排这一种。
         -->
         <div v-for="p in blocks" :key="p.key" class="tpg-block">
-          <h4 v-if="!isPreset(p)" class="tpg-title">{{ p.label || p.key }}</h4>
+          <div v-if="!isPreset(p)" class="tpg-head">
+            <h4 class="tpg-title">{{ p.label || p.key }}</h4>
+            <!-- 参数说明（用户 2026-11-09）：标题下面一行灰字，与各预设件的排版一致 -->
+            <ToolParamHint :text="p.description" />
+          </div>
           <ToolParamField
             :param="p"
             :model-value="(values?.[p.key] as string | number | boolean) ?? ''"
             :disabled="disabled"
             :id-prefix="idPrefix + '-b'"
+            hide-hint
             @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
           />
         </div>
@@ -393,6 +399,11 @@ const summary = computed(() => {
 }
 /* 非预设件（普通下拉 / 开关 / 输入）的标题：与各预设件自己的 h4 逐条对齐
    （12px / 700 / 深墨 / 20 行高），这样两类块并排时标题看起来是同一档。 */
+.tpg-menu--blocks .tpg-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .tpg-menu--blocks .tpg-title {
   margin: 0;
   height: 20px;

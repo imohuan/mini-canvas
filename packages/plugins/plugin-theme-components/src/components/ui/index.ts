@@ -17,6 +17,7 @@ export { default as NodeEmptyState } from './NodeEmptyState.vue'
 export { default as NodeLoadingState } from './NodeLoadingState.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）
 export { default as ToolParamGroup } from './ToolParamGroup.vue'
+export { default as ToolParamHint } from './ToolParamHint.vue'
 // 参数控件（判定表见 paramKind.ts）：
 //   基础控件由 `type` 决定 —— select / grid（按钮网格）/ number（滑块或输入框）/ string / boolean；
 //   专属 UI 由 `kind` 决定 —— 目前只有 ratio（按真实宽高比画小矩形的网格）。

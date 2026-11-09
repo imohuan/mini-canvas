@@ -28,13 +28,31 @@ export interface ActionParam {
   /** 语义类型：ratio / duration / resolution / speaker / camera / count / speed / format… */
   kind?: string
   label?: string
-  type: 'select' | 'number' | 'boolean' | 'text'
+  /**
+   * 一句话说明：这个参数是干什么的、怎么选。
+   *
+   * 原样送到前端，前端在参数标题下方渲染成一行灰色小字；
+   * 参数被"铺到外面"（只有一个下拉时）则作为下拉展开后的说明行 + 悬停提示。
+   * 写长一点没关系，前端会换行。
+   */
+  description?: string
+  /**
+   * 基础控件（与内核 ToolParamDef 同一套词表）。
+   *
+   * `text` 是 `string` 的老写法，仍然认 —— 已经有 provider 这么写了，
+   * 前端两种都画成单行输入框。
+   */
+  type: 'select' | 'grid' | 'string' | 'text' | 'number' | 'boolean'
   default?: string | number | boolean
   options?: ParamOption[]
   min?: number
   max?: number
   step?: number
   unit?: string
+  /** 按钮类控件的列数（grid / number+options / kind:ratio） */
+  columns?: number
+  /** type='string' 时的输入提示 */
+  placeholder?: string
 }
 
 /** 节点类型（动作服务哪几种节点） */

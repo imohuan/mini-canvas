@@ -227,6 +227,7 @@ const pluginsSidebar = [
       { text: '精细滑块', link: '/plugins/theme-components/precision-slider' },
       { text: '取色器', link: '/plugins/theme-components/color-field' },
       { text: '参数控件', link: '/plugins/theme-components/tool-param-field' },
+      { text: '参数说明', link: '/plugins/theme-components/tool-param-hint' },
       { text: '参数组', link: '/plugins/theme-components/tool-param-group' },
       { text: '选项网格', link: '/plugins/theme-components/tool-option-grid' },
       { text: '比例网格', link: '/plugins/theme-components/tool-ratio-grid' },

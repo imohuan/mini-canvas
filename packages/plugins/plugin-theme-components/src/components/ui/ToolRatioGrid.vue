@@ -15,6 +15,7 @@
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
+import ToolParamHint from './ToolParamHint.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -71,7 +72,11 @@ function pick(value: string | number): void {
 
 <template>
   <section class="trg-block" :data-param-key="param.key">
-    <h4 v-if="param.label" class="trg-title">{{ param.label }}</h4>
+    <div v-if="param.label || param.description" class="trg-head">
+      <h4 v-if="param.label" class="trg-title">{{ param.label }}</h4>
+      <!-- 参数说明（用户 2026-11-09：参数要有介绍，前端渲染出来） -->
+      <ToolParamHint :text="param.description" />
+    </div>
     <div class="trg-grid" :style="gridStyle">
       <button
         v-for="opt in options"
@@ -102,6 +107,11 @@ function pick(value: string | number): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.trg-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .trg-title {
   margin: 0;

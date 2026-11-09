@@ -29,6 +29,7 @@ import { resolvePresetKind, resolveBaseControl, gridColumns } from './paramKind'
 import ToolOptionGrid from './ToolOptionGrid.vue'
 import ToolRatioGrid from './ToolRatioGrid.vue'
 import ToolParamSlider from './ToolParamSlider.vue'
+import ToolParamHint from './ToolParamHint.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -38,8 +39,15 @@ const props = withDefaults(
     disabled?: boolean
     /** 唯一 id 前缀（同一面板里多份参数时保证 label/for 唯一） */
     idPrefix?: string
+    /**
+     * 不画参数说明（调用方已经在标题下面画过一遍时用）。
+     *
+     * 典型调用方是 ToolParamGroup：它把「标题 + 说明」当成一块的头部统一排版，
+     * 这里再画一遍就会重复。
+     */
+    hideHint?: boolean
   }>(),
-  { modelValue: '', disabled: false, idPrefix: 'tp' },
+  { modelValue: '', disabled: false, idPrefix: 'tp', hideHint: false },
 )
 
 const emit = defineEmits<{
@@ -136,6 +144,36 @@ const numberValue = computed(() => {
   const n = Number(props.modelValue)
   return Number.isFinite(n) ? n : 0
 })
+
+/**
+ * 参数说明（用户 2026-11-09：「参数应该提供描述，前端 UI 也要渲染出来」）。
+ */
+const hintText = computed(() => String(props.param.description ?? '').trim())
+
+/**
+ * 说明放在哪，**整个组件只此一处判定**，免得两种控件各写一份后漂移。
+ *
+ * - 下拉：写进展开后的列表顶部。触发器只有 32px 高、宽度还要显示当前值，
+ *   塞一行说明会把「模型 B」挤成省略号；
+ * - 其余（网格 / 比例 / 滑块 / 数字 / 文本 / 开关）：紧跟在控件下面一行灰字。
+ *
+ * 自定义组件（`param.component`）不掺和：作者自己决定要不要显示、显示在哪，
+ * 说明文字已经随 `param` 一起给了它。
+ */
+const isPlainSelect = computed(() => !custom.value && !preset.value && base.value === 'select')
+/**
+ * 说明画在控件下面 —— 只给「自己不会画标题」的那几个（滑块 / 数字 / 文本 / 开关）。
+ *
+ * 按钮网格与比例网格自己画标题，说明跟着标题走（各自组件里画）；
+ * 下拉的说明在展开后的列表里；自定义组件由作者自己决定。
+ * 调用方已经画过说明时传 `hide-hint`，避免同一句出现两遍。
+ */
+const showHintBelow = computed(() => {
+  if (hintText.value === '' || props.hideHint || custom.value) return false
+  return base.value === 'slider' || base.value === 'number' || base.value === 'text' || base.value === 'boolean'
+})
+/** 传给 ToolParamSlider 的说明：它被 hideTitle 时不自己画，由本组件补在下面 */
+const sliderHint = computed(() => (props.hideHint ? '' : hintText.value))
 </script>
 
 <template>
@@ -177,6 +215,12 @@ const numberValue = computed(() => {
       <SelectValue :placeholder="param.label || param.key">{{ selectLabel }}</SelectValue>
     </SelectTrigger>
     <SelectContent position="popper" side="bottom" :side-offset="4">
+      <!--
+        下拉的说明放在**展开后**的列表顶部（用户 2026-11-09：参数要有介绍）。
+        不放触发器：底栏那一行只有 30 多像素高，长说明会把当前值挤没。
+        不能放进可滚动的 item 区（会跟着选项一起滚走），所以用 sticky 钉在顶部。
+      -->
+      <div v-if="hintText && !hideHint" class="tpf-select-hint" role="note">{{ hintText }}</div>
       <SelectItem v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
     </SelectContent>
   </Select>
@@ -199,6 +243,7 @@ const numberValue = computed(() => {
     :model-value="numberValue"
     :disabled="disabled"
     hide-title
+    :hint="sliderHint"
     @update:model-value="onSlider"
   />
 
@@ -215,6 +260,9 @@ const numberValue = computed(() => {
     @change="base === 'number' ? onNumber($event) : onText($event)"
     @input="base === 'number' ? undefined : onText($event)"
   />
+
+  <!-- 说明行：位置判定见上面 showHintBelow（下拉走列表顶部那一行） -->
+  <ToolParamHint v-if="showHintBelow" :text="hintText" />
 </template>
 
 <style scoped>
@@ -268,6 +316,30 @@ const numberValue = computed(() => {
 /* 下拉触发器：跟随可用宽度（表单/参数面板里不该按内容收窄），外观交给 shadcn 与主题圆角 */
 .tpf-select {
   width: 100%;
+}
+/*
+ * 下拉展开后的说明行：钉在列表顶部，选项多到要滚时也一直看得见。
+ *
+ * 为什么钉住：它写在可滚动的 viewport 里（SelectContent 的 slot 就在那层），
+ * 选项一多就会跟着滚出去 —— 那时用户正在挑值，恰好最需要这行说明。
+ * 底色用面板底色，滚到它下面的选项不会透出来。
+ */
+.tpf-select-hint {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* 左内边距与选项文字对齐（SelectItem 自己带 px-3 = 12px，这里补同样的量再减 4 留白） */
+  margin: 0 0 6px;
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
+  background: var(--ui-overlay-solid, #fff);
+  color: var(--ui-ink-mute, #8c95a3);
+  /* 中文正文最低 12px（ui-style-guide §字号表）；11px 只留给徽章这类微元件 */
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* 开关：与设置界面的 Switch 同一件，只保留标签排版 */

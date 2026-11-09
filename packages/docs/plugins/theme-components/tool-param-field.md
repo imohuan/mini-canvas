@@ -47,6 +47,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 | `modelValue` | `string / number / boolean` | `''` | 当前值 |
 | `disabled` | `boolean` | `false` | 禁用 |
 | `idPrefix` | `string` | `'tp'` | id 前缀（同一面板里多份参数时保证 label/for 唯一） |
+| `hideHint` | `boolean` | `false` | 不画参数说明（调用方已在标题下面画过一遍时用，比如参数组浮层） |
 
 `ToolParamDef`（定义在 `packages/kernel/src/toolRegistry.ts`）的关键字段：
 
@@ -54,7 +55,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 | --- | --- | --- |
 | `key` | `string` | 参数键（必填） |
 | `label` | `string?` | 面板上显示的标签 |
-| `description` | `string?` | 一句话说明（tooltip 或辅助文字） |
+| `description` | `string?` | 一句话说明（怎么显示见下节「参数说明显示在哪」） |
 | `type` | `select / grid / number / string / boolean` | **基础控件类型**（主体） |
 | `kind` | `'ratio' \| string` | **专属 UI**，只认 `ratio` |
 | `options` | `ToolParamOption[]?` | `select` / `grid` 的候选值；`number` 带它也会变成网格 |
@@ -68,6 +69,30 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 ## Slots / 插槽
 
 **没有插槽。** 换控件靠 `param.kind` 与 `param.component`，不靠插槽。
+
+## 参数说明显示在哪（`description`）
+
+给参数写一句人话，解释它是干什么的。它会跟着参数显示，但有四种去处 ——
+每种都有自己的理由，不是随便塞的：
+
+| 控件 | 说明放在哪 | 为什么 |
+| --- | --- | --- |
+| 下拉（`select`） | **展开后的选项列表顶部**，钉住、不随选项滚走 | 触发器只有 32px 高、还要显示当前值，长说明会把值挤成省略号 |
+| 按钮网格 / 比例网格 / 滑块 | 紧跟在标题下面（间距 2px） | 它们自己画标题，说明属于标题 |
+| 文本 / 数字 / 开关 | 控件下面一行灰字 | 它们没有标题，说明跟在控件后面 |
+| 自定义 `component` | **不画**，作者自己决定 | 说明随 `param` 一起给了它，放哪由作者定 |
+
+样式统一走 [ToolParamHint](/plugins/theme-components/tool-param-hint)：
+12px、常规字重、弱化色、行高 18，允许折行。
+
+同一句说明**不会出现两遍**：参数组浮层画了标题与说明后，会给本组件传 `hide-hint`。
+
+写说明的几个建议：
+
+- 说清「改了它会怎样」，别只是重复参数名（不写「比例：调整比例」）。
+- 有推荐值就写出来（「日常用高清就够」）。
+- 有代价也写出来（「4K 会明显更慢」）。
+- 一两句就够；面板会自动折行，但你写三行没人会读。
 
 ## 事件、方法或暴露能力
 
