@@ -8,16 +8,37 @@
  * 环境变量：WEB2API_BASE / WEB2API_API_KEY。
  */
 
-const BASE = (process.env.WEB2API_BASE || 'http://localhost:8033').replace(/\/+$/, '')
+/**
+ * 服务地址与密钥：优先「平台管理」页存的配置（__mcProviderConfig，装载时注入），
+ * 回落环境变量（老部署兼容）。多账号：submit 按选中的账号 id 取对应那套值。
+ */
+function injected() {
+  return typeof __mcProviderConfig === 'undefined' ? { accounts: [], values: {}, byId: {} } : __mcProviderConfig
+}
+function accountValues(values) {
+  const inj = injected()
+  const preferred = values && typeof values.__accountId === 'string' ? values.__accountId : ''
+  if (preferred && inj.byId && inj.byId[preferred]) return inj.byId[preferred]
+  const accounts = inj.accounts || []
+  if (accounts.length > 0) return accounts[0].values || {}
+  return inj.values || {}
+}
+function baseOf(values) {
+  const b = values && typeof values.baseUrl === 'string' && values.baseUrl.trim()
+    ? values.baseUrl.trim()
+    : (process.env.WEB2API_BASE || 'http://localhost:8033')
+  return String(b).replace(/\/+$/, '')
+}
+const BASE = baseOf(injected().values || {})
 
-async function api(path, init = {}, timeoutMs = 120000) {
+async function api(path, init = {}, timeoutMs = 120000, values) {
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
   try {
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json', ...(init.headers || {}) }
-    const key = process.env.WEB2API_API_KEY
+    const key = values && values.apiKey ? values.apiKey : process.env.WEB2API_API_KEY
     if (key) headers.Authorization = 'Bearer ' + key
-    const res = await fetch(BASE + path, { ...init, headers, signal: ac.signal })
+    const res = await fetch(baseOf(values) + path, { ...init, headers, signal: ac.signal })
     const text = await res.text()
     let body
     try {
@@ -33,10 +54,10 @@ async function api(path, init = {}, timeoutMs = 120000) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('web2api 请求超时（' + BASE + '）')
+      throw new Error('web2api 请求超时（' + baseOf(values) + '）')
     }
     if (/fetch failed|ECONNREFUSED|Failed to fetch|NetworkError/i.test(msg)) {
-      throw new Error('连不上 web2api（' + BASE + '）。请先启动它，或设置 WEB2API_BASE')
+      throw new Error('连不上 web2api（' + baseOf(values) + '）。请先启动它，或在「平台」页配置服务地址')
     }
     throw new Error(msg || 'web2api 调用失败')
   } finally {
@@ -143,9 +164,10 @@ async function toLocalRef(url) {
   const form = new FormData()
   form.append('file', new Blob([buf], { type: mime || 'application/octet-stream' }), filename || 'ref.bin')
   const headers = {}
-  const key = process.env.WEB2API_API_KEY
+  const values = accountValues()
+  const key = values && values.apiKey ? values.apiKey : process.env.WEB2API_API_KEY
   if (key) headers.Authorization = 'Bearer ' + key
-  const res = await fetch(BASE + '/api/resources/upload', { method: 'POST', headers, body: form })
+  const res = await fetch(baseOf(values) + '/api/resources/upload', { method: 'POST', headers, body: form })
   const text = await res.text()
   let body
   try {
@@ -242,7 +264,7 @@ function absolutize(u) {
 }
 
 async function pollTask(taskId) {
-  const body = await api('/api/tasks/' + encodeURIComponent(taskId))
+  const body = await api('/api/tasks/' + encodeURIComponent(taskId), {}, 120000, accountValues())
   const t = body && body.data
   if (!t || typeof t !== 'object') return { status: 'running', message: '任务查询返回空', taskId }
   const status = String(t.status || '')
@@ -388,6 +410,12 @@ function speed(key, label, min, max, def) {
 
 export default {
   id: 'web2api-audio',
+  // 平台管理页据此渲染配置表单（与 web2api-image / video 同一套；多账号每套一份）
+  config: [
+    { key: 'baseUrl', label: '服务地址', type: 'string', default: 'http://localhost:8033',
+      placeholder: 'http://localhost:8033', description: 'web2api 服务的根地址。留空 = 用默认地址。' },
+    { key: 'apiKey', label: 'API Key', type: 'secret', description: 'web2api 开了 API_KEY 校验时才需要。留空 = 不带鉴权头。' },
+  ],
   actions: [
     {
       id: 'web2api:doubao-tts',
@@ -423,10 +451,11 @@ export default {
 
   async submit(action, input) {
     try {
+      const values = accountValues(input.values)
       const body = await api('/api/tasks', {
         method: 'POST',
         body: JSON.stringify({ platform: action.platform, operation: action.operation, params: await buildParams(action, input) }),
-      })
+      }, 120000, values)
       const task = body && body.data
       if (!task) return { error: 'web2api 没有返回任务信息' }
 
@@ -457,7 +486,7 @@ export default {
 
   async cancel(taskId) {
     try {
-      await api('/api/tasks/' + encodeURIComponent(taskId) + '/cancel', { method: 'POST' }, 15000)
+      await api('/api/tasks/' + encodeURIComponent(taskId) + '/cancel', { method: 'POST' }, 15000, accountValues())
     } catch {
       /* 已是终态 */
     }

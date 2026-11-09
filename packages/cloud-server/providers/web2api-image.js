@@ -13,17 +13,40 @@
  *   WEB2API_API_KEY   可选；服务端设了 API_KEY 时填同一个
  */
 
-const BASE = (process.env.WEB2API_BASE || 'http://localhost:8033').replace(/\/+$/, '')
+/**
+ * 服务地址与密钥：优先「平台管理」页存的配置（__mcProviderConfig，装载时注入），
+ * 回落环境变量（老部署兼容），再回落默认值。
+ * 多账号：submit 按动作参数里选中的账号 id 取对应那套值（见 accountValues）。
+ */
+function injected() {
+  return typeof __mcProviderConfig === 'undefined' ? { accounts: [], values: {}, byId: {} } : __mcProviderConfig
+}
+/** 这次任务用哪个账号的值：values.__accountId 优先，没选就第一账号 */
+function accountValues(values) {
+  const inj = injected()
+  const preferred = values && typeof values.__accountId === 'string' ? values.__accountId : ''
+  if (preferred && inj.byId && inj.byId[preferred]) return inj.byId[preferred]
+  const accounts = inj.accounts || []
+  if (accounts.length > 0) return accounts[0].values || {}
+  return inj.values || {}
+}
+function baseOf(values) {
+  const b = values && typeof values.baseUrl === 'string' && values.baseUrl.trim()
+    ? values.baseUrl.trim()
+    : (process.env.WEB2API_BASE || 'http://localhost:8033')
+  return String(b).replace(/\/+$/, '')
+}
+const BASE = baseOf(injected().values || {})
 
 /** 一次 HTTP 调用：统一解 code / 超时 / 人话错误 */
-async function api(path, init = {}, timeoutMs = 60000) {
+async function api(path, init = {}, timeoutMs = 60000, values) {
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
   try {
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json', ...(init.headers || {}) }
-    const key = process.env.WEB2API_API_KEY
+    const key = values && values.apiKey ? values.apiKey : process.env.WEB2API_API_KEY
     if (key) headers.Authorization = 'Bearer ' + key
-    const res = await fetch(BASE + path, { ...init, headers, signal: ac.signal })
+    const res = await fetch(baseOf(values) + path, { ...init, headers, signal: ac.signal })
     const text = await res.text()
     let body
     try {
@@ -39,10 +62,10 @@ async function api(path, init = {}, timeoutMs = 60000) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('web2api 请求超时（' + BASE + '）')
+      throw new Error('web2api 请求超时（' + baseOf(values) + '）')
     }
     if (/fetch failed|ECONNREFUSED|Failed to fetch|NetworkError/i.test(msg)) {
-      throw new Error('连不上 web2api（' + BASE + '）。请先启动它，或设置 WEB2API_BASE')
+      throw new Error('连不上 web2api（' + baseOf(values) + '）。请先启动它，或在「平台」页配置服务地址')
     }
     throw new Error(msg || 'web2api 调用失败')
   } finally {
@@ -218,10 +241,11 @@ function absolutize(u) {
 
 /** 提交一次任务，返回 taskId */
 async function submitTask(action, input) {
+  const values = accountValues(input.values)
   const body = await api('/api/tasks', {
     method: 'POST',
     body: JSON.stringify({ platform: action.platform, operation: action.operation, params: buildParams(action, input) }),
-  })
+  }, 60000, values)
   const task = body && body.data
   if (!task || typeof task.id !== 'string' || !task.id) throw new Error('web2api 没有返回任务 id')
   return task.id
@@ -229,7 +253,8 @@ async function submitTask(action, input) {
 
 /** 查一次任务 */
 async function pollTask(taskId) {
-  const body = await api('/api/tasks/' + encodeURIComponent(taskId))
+  // 轮询沿用注入的默认账号地址（任务从属关系由 taskId 保证，账号只决定打到哪台服务）
+  const body = await api('/api/tasks/' + encodeURIComponent(taskId), {}, 60000, accountValues())
   const t = body && body.data
   if (!t || typeof t !== 'object') return { status: 'running', message: '任务查询返回空', taskId }
   const status = String(t.status || '')
@@ -256,7 +281,7 @@ async function pollTask(taskId) {
 /** 取消服务端任务 */
 async function cancelTask(taskId) {
   try {
-    await api('/api/tasks/' + encodeURIComponent(taskId) + '/cancel', { method: 'POST' }, 15000)
+    await api('/api/tasks/' + encodeURIComponent(taskId) + '/cancel', { method: 'POST' }, 15000, accountValues())
   } catch {
     /* 已是终态 / 服务端不认：本机已取消，不算错 */
   }
@@ -334,6 +359,12 @@ const count_apimart = { key: 'n', label: '数量', type: 'number', default: 1, m
 
 const provider = {
   id: 'web2api-image',
+  // 平台管理页据此渲染配置表单（多账号每套一份；secret 只写不回读）
+  config: [
+    { key: 'baseUrl', label: '服务地址', type: 'string', default: 'http://localhost:8033',
+      placeholder: 'http://localhost:8033', description: 'web2api 服务的根地址。留空 = 用默认地址。' },
+    { key: 'apiKey', label: 'API Key', type: 'secret', description: 'web2api 开了 API_KEY 校验时才需要。留空 = 不带鉴权头。' },
+  ],
   actions: [
     {
       id: 'web2api:doubao-image-seedream45',
