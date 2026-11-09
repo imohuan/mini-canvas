@@ -78,6 +78,22 @@ describe('NodeLoadingState', () => {
     expect(html).not.toContain('ld-pct')
   })
 
+  /**
+   * 用户口径 2026-11-09：「失败状态那个正在移动的球，背景为什么还在？」
+   *
+   * 流光是「正在处理」的装饰。失败之后任务不跑了，再留着会让人以为还在继续，
+   * 所以整层不渲染 —— 不是调暗（调暗了它还在动）。
+   */
+  it('★ 失败态不画流光层（连光斑元素都不出现）', async () => {
+    const html = await render({ tone: 'error', message: 'ffmpeg 退出码 1' })
+    expect(html).not.toContain('ld-fluid')
+    expect(html).not.toContain('ld-blob')
+    // 底色还在（红调试底不能丢）
+    expect(html).toContain('ld-base')
+    // 加载态照常有流光
+    expect(await render({ percent: 10 })).toContain('ld-blob--1')
+  })
+
   it('紧凑形态：一行胶囊，带状态词与文案', async () => {
     const html = await render({ variant: 'chip', label: '裁剪中', message: '正在处理…' })
     expect(html).toContain('is-chip')

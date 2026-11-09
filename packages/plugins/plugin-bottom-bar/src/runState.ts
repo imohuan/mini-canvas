@@ -12,6 +12,15 @@ export interface NodeRunState {
   /** 0-100；外部只给阶段时省略（UI 走不确定态） */
   progress?: number
   message?: string
+  /**
+   * 状态词（节点左上角那一句）。不写就由默认加载件按状态给「生成中 / 执行失败」。
+   * 想让节点显示「排队中」这类说法时写它 —— 不需要新增状态。
+   */
+  label?: string
+  /** 失败原因（优先于 message 显示）。失败态应当提供，否则卡上只剩一个感叹号 */
+  reason?: string
+  /** 失败态第二行小字：下一步能做什么（可省略） */
+  hint?: string
   /** 异步任务 id（刷新后靠它续查） */
   taskId?: string
   /** 谁提交的（用户要求：保存「任务是谁提交的」） */
@@ -36,6 +45,9 @@ export function readRunState(data: Record<string, unknown> | undefined | null): 
   const progress = clampProgress(raw.progress)
   if (progress !== undefined) out.progress = progress
   if (typeof raw.message === 'string' && raw.message) out.message = raw.message
+  if (typeof raw.label === 'string' && raw.label) out.label = raw.label
+  if (typeof raw.reason === 'string' && raw.reason) out.reason = raw.reason
+  if (typeof raw.hint === 'string' && raw.hint) out.hint = raw.hint
   if (typeof raw.taskId === 'string' && raw.taskId) out.taskId = raw.taskId
   if (typeof raw.actionId === 'string' && raw.actionId) out.actionId = raw.actionId
   if (typeof raw.startedAt === 'number' && Number.isFinite(raw.startedAt)) out.startedAt = raw.startedAt
@@ -62,8 +74,13 @@ export function doneState(actionId: string, taskId?: string): NodeRunState {
   return { status: 'done', progress: 100, actionId, ...(taskId ? { taskId } : {}) }
 }
 
-/** 终态：error（失败文案给用户看，不写进作品字段） */
-export function errorState(actionId: string, message: string): NodeRunState {
-  return { status: 'error', message, actionId }
+/**
+ * 终态：error（失败文案给用户看，不写进作品字段）。
+ *
+ * 原因同时写进 `reason`（新契约字段）与 `message`（老读法仍在用），界面上优先读 `reason`。
+ * `hint` 是可选的下一步提示，不传就不显示。
+ */
+export function errorState(actionId: string, message: string, hint?: string): NodeRunState {
+  return { status: 'error', message, reason: message, actionId, ...(hint ? { hint } : {}) }
 }
 

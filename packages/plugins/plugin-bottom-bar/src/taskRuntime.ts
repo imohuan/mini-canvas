@@ -145,7 +145,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
   try {
     outcome = await action.run(input, runCtx)
   } catch (err) {
-    const rs = errorState(action.id, toError(err, '动作执行失败').error ?? '动作执行失败')
+    const rs = errorState(action.id, toError(err, '动作执行失败').error ?? '动作执行失败', '可以调整参数后再点一次')
     writeRuntime(rs)
     return toError(err, '动作执行失败')
   }
@@ -168,7 +168,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
     try {
       state = await poll()
     } catch (err) {
-      const rs = errorState(action.id, toError(err, '任务执行中断').error ?? '任务执行中断')
+      const rs = errorState(action.id, toError(err, '任务执行中断').error ?? '任务执行中断', '稍后再点一次试试')
       writeRuntime(rs)
       return toError(err, '任务执行中断')
     }
@@ -184,7 +184,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
       lastWriteAt = t
     }
     if (t - startedAt > (actionTimeout ?? timeoutMs)) {
-      const rs = errorState(action.id, '任务超时（未在预期时间内完成）')
+      const rs = errorState(action.id, '任务超时（未在预期时间内完成）', '稍后再点一次试试')
       writeRuntime(rs, true) // 超时也是终态
       return { ok: false, error: rs.message, taskId: next.taskId }
     }

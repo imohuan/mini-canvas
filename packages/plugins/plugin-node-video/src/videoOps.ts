@@ -725,7 +725,7 @@ export function createRealClipNode(ctx: VideoOpsContext, nodeId: string, result:
  * 进度盖在新节点上，处理完才显示裁剪/剪辑结果）。
  *
  * 数据契约：占位节点只带名字、画面尺寸与运行态（runState: running），**不带视频地址** ——
- * 内容组件对没有视频的节点渲染空态，任务覆盖层（bottom-bar 的 NodeTaskOverlay）读
+ * 内容组件对没有视频的节点渲染空态，节点状态层（壳的 state:overlay）读
  * runState 显示整卡流光进度。结果等后台完成后由 writeVideoResult 一次写入。
  *
  * @returns 新节点 id；没有图服务 / 建失败 → null（调用方放弃本次后台路径）
@@ -753,6 +753,7 @@ export function createPendingVideoNode(
     videoName: label,
     runState: {
       status: 'running',
+      label: '生成中',
       message: opts.kind === 'crop' ? '后台裁剪中…' : '后台剪辑中…',
       startedAt: Date.now(),
     },
@@ -788,11 +789,17 @@ export function writeVideoResult(
   return true
 }
 
-/** 后台失败：占位节点换失败态（覆盖层显示原因；节点保留，用户可删除后重试）。 */
+/**
+ * 后台失败：占位节点换失败态（状态层显示原因；节点保留，用户可删除后重试）。
+ *
+ * 原因写进 `reason`（界面优先读它），并保留 `message` 给老读法；`hint` 告诉用户下一步。
+ */
 export function failVideoNode(ctx: VideoOpsContext, nodeId: string, message: string): void {
   if (!ctx.read(nodeId)) return
   try {
-    ctx.writeRuntime?.(nodeId, { runState: { status: 'error', message } })
+    ctx.writeRuntime?.(nodeId, {
+      runState: { status: 'error', label: '处理失败', message, reason: message, hint: '可以调整后重新提交一次' },
+    })
   } catch {
     /* 节点可能刚被删：进度没有落点，静默 */
   }

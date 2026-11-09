@@ -66,7 +66,7 @@ function createPendingAudioNode(ctx: Context, sourceId: string, label: string): 
   const data: Record<string, unknown> = {
     label,
     audioName: label,
-    runState: { status: 'running', message: '后台提取音轨中…', startedAt: Date.now() },
+    runState: { status: 'running', label: '生成中', message: '后台提取音轨中…', startedAt: Date.now() },
   }
   try {
     return doc.transaction('video-to-audio-node', (tx) => {
@@ -112,7 +112,7 @@ function writeAudioResult(
   }
 }
 
-/** 失败：把原因写进占位节点（覆盖层据此显示；节点保留，用户能看到是哪一步不行） */
+/** 失败：把原因写进占位节点（状态层据此显示；节点保留，用户能看到是哪一步不行） */
 function failAudioNode(ctx: Context, nodeId: string, message: string): void {
   const doc = ctx.tryGet<{
     getNode(id: string): unknown
@@ -120,7 +120,9 @@ function failAudioNode(ctx: Context, nodeId: string, message: string): void {
   }>('doc')
   if (!doc?.getNode(nodeId)) return
   try {
-    doc.updateNodeRuntime(nodeId, { data: { runState: { status: 'error', message } } })
+    doc.updateNodeRuntime(nodeId, {
+      data: { runState: { status: 'error', label: '处理失败', message, reason: message, hint: '可以换个视频再试' } },
+    })
   } catch {
     /* 节点可能刚被删：进度没有落点，静默 */
   }

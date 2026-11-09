@@ -28,5 +28,10 @@ describe('data.runState 的读写口径', () => {
     expect(doneState('a', 'task-1')).toMatchObject({ status: 'done', progress: 100, actionId: 'a', taskId: 'task-1' })
     expect(errorState('a', '炸了')).toMatchObject({ status: 'error', message: '炸了', actionId: 'a' })
   })
+  it('errorState：原因同时写进 reason 与 message，hint 可选', () => {
+    const rs = errorState('a1', 'ffmpeg 退出码 1')
+    expect(rs).toMatchObject({ status: 'error', reason: 'ffmpeg 退出码 1', message: 'ffmpeg 退出码 1' })
+    expect(rs.hint).toBeUndefined()
+    expect(errorState('a1', '超时', '稍后再试').hint).toBe('稍后再试')
+  })
 })
-

@@ -373,7 +373,14 @@ export class TaskManager {
         if (this.settled.has(job.id)) return
         if (signal.aborted) {
           this.settled.add(job.id)
-          await this.writeRunState(job, { status: 'error', message: '已取消', actionId: action.id, taskId: job.id })
+          await this.writeRunState(job, {
+            status: 'error',
+            label: '已取消',
+            message: '已取消',
+            reason: '已取消',
+            actionId: action.id,
+            taskId: job.id,
+          })
           job.status = 'error'
           job.message = '已取消'
           job.finishedAt = this.now()
@@ -452,7 +459,15 @@ export class TaskManager {
       job,
       result.ok
         ? { status: 'done', progress: 100, message: '已完成', actionId: action.id, taskId: job.id, urls: result.urls ?? [] }
-        : { status: 'error', message: result.error ?? '任务失败', actionId: action.id, taskId: job.id },
+        : {
+            status: 'error',
+            label: '执行失败',
+            message: result.error ?? '任务失败',
+            reason: result.error ?? '任务失败',
+            hint: '可以调整参数后再点一次',
+            actionId: action.id,
+            taskId: job.id,
+          },
     )
 
     await this.deps.history.append(job.canvasId, this.toHistoryEntry(job, action, result, finishedAt, media))

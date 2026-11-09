@@ -121,7 +121,16 @@ const { hideOverlays, hideSlotBars } = visibility
  * 不依赖底部状态栏插件，卸载它之后图片 / 文本 / 可视化节点照样有加载态。
  */
 const taskState = useNodeTaskState({ data: () => props.data })
-const { loading, failed, covered, percent, message: taskMessage, startedAt: taskStartedAt } = taskState
+const {
+  loading,
+  failed,
+  covered,
+  percent,
+  label: taskLabel,
+  reason: taskReason,
+  hint: taskHint,
+  startedAt: taskStartedAt,
+} = taskState
 
 /**
  * 取消任务：**可选能力**（底部状态栏插件上架 nodeTask 服务才有）。
@@ -478,10 +487,10 @@ const {
       <NodeLoadingState
         v-if="showDefaultState"
         :tone="failed ? 'error' : 'loading'"
-        :label="failed ? '执行失败' : '生成中'"
+        :label="taskLabel"
         :percent="failed ? null : percent"
-        :message="taskMessage"
-        :hint="failed ? '可再点一次发送重试' : ''"
+        :message="taskReason"
+        :hint="taskHint"
         :started-at="failed ? 0 : taskStartedAt"
       >
         <template #action>

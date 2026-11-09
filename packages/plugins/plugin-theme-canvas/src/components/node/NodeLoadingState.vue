@@ -220,8 +220,9 @@ onBeforeUnmount(() => {
   >
     <!-- ① 底色：不透明，把底下的内容完全盖住 -->
     <div class="ld-base" aria-hidden="true" />
-    <!-- ② 流光层：3 个模糊光斑缓慢游走（亮/暗两套配色；视频画面恒深色） -->
-    <div class="ld-fluid" aria-hidden="true">
+    <!-- ② 流光层：3 个模糊光斑缓慢游走（亮/暗两套配色；视频画面恒深色）。
+         失败态**不画**：任务已经失败，底下还在游动会让人以为「还在跑」（用户 2026-11-09）。 -->
+    <div v-if="tone !== 'error'" class="ld-fluid" aria-hidden="true">
       <span class="ld-blob ld-blob--1" />
       <span class="ld-blob ld-blob--2" />
       <span class="ld-blob ld-blob--3" />
@@ -541,10 +542,19 @@ html.dark .nls-root.is-error {
   display: contents;
 }
 
-/* 失败态：光斑压暗偏红，不和「正在生成」的科技蓝混淆 */
+/*
+ * 失败态：**不要流光背景**。
+ *
+ * 用户口径 2026-11-09：任务已经失败了，底下却还在缓慢游动那团光，看着像「还在跑」。
+ * 流光是「正在处理」的装饰，失败态只需要一块安静的浅红底 + 原因 + 下一步，
+ * 所以这一层直接不画（不是调暗——调暗之后它还在动）。
+ */
 .nls-root.is-error .ld-fluid {
-  opacity: 0.4;
-  filter: saturate(0.5) blur(28px);
+  display: none;
+}
+/* 同上：失败态左上角的点不再闪。它一闪一闪就是在说「还在跑」，与失败自相矛盾。 */
+.nls-root.is-error .ld-dot {
+  animation: none;
 }
 
 /* 小容器：降一档字号，保住文案 */

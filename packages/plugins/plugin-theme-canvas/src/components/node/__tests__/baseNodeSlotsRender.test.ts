@@ -693,10 +693,58 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
     expect(failed).toContain('v2-state-layer')
     expect(failed).toContain('is-error')
     expect(failed).toContain('ffmpeg 退出码 1')
-    expect(failed).toContain('重试')
 
     const ready = await renderNode(r, { runState: { status: 'done', progress: 100 } }, {}, { type: 'text' })
     expect(ready).not.toContain('v2-state-layer')
+  })
+
+  /**
+   * 用户口径 2026-11-09：「文案应该由执行请求（即其他地方）自行配置，并且必须要提供对应的字段。」
+   *
+   * 壳不再替执行方写话术：状态词读 `runState.label`，失败原因读 `runState.reason`
+   * （老数据仍写 `message`，一并认），下一步提示读 `runState.hint`。没写就不显示 —— 不编假话。
+   */
+  it('★ 状态词 / 失败原因 / 下一步都来自 runState 字段，壳不写死', async () => {
+    const r = new NodeRegistry()
+    r.register('text', { in: ContentStub })
+
+    const loading = await renderNode(
+      r,
+      { runState: { status: 'running', label: '排队中', message: '前面还有 2 个任务' } },
+      {},
+      { type: 'text' },
+    )
+    expect(loading).toContain('排队中')
+    expect(loading).toContain('前面还有 2 个任务')
+
+    const failed = await renderNode(
+      r,
+      {
+        runState: {
+          status: 'error',
+          label: '转码失败',
+          reason: '原因：视频编码不受支持',
+          hint: '换一个 mp4 再试',
+        },
+      },
+      {},
+      { type: 'text' },
+    )
+    expect(failed).toContain('转码失败')
+    expect(failed).toContain('原因：视频编码不受支持')
+    expect(failed).toContain('换一个 mp4 再试')
+
+    // 没写 hint → 不出现壳自造的「可再点一次发送重试」
+    const bare = await renderNode(
+      r,
+      { runState: { status: 'error', reason: 'ffmpeg 退出码 1' } },
+      {},
+      { type: 'text' },
+    )
+    expect(bare).toContain('ffmpeg 退出码 1')
+    expect(bare).not.toContain('可再点一次发送重试')
+    // 没有 label → 组件按 tone 回落到「执行失败」
+    expect(bare).toContain('执行失败')
   })
 
   it('data.resizable=true → 渲染拖柄，且带 scale 反缩放绑定（与标题同一套语义）', async () => {
