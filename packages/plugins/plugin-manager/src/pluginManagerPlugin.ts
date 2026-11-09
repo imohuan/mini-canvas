@@ -13,7 +13,7 @@
  * 真正的后台还没定放哪；将来只要发同形状清单，本插件一行不用改。
  */
 import { markRaw, reactive } from 'vue'
-import { Puzzle } from 'lucide-vue-next'
+import { Puzzle, Server } from 'lucide-vue-next'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import {
   DEFAULT_CATALOG_URL,
@@ -22,6 +22,7 @@ import {
 } from './pluginManagerService'
 import PluginManagerNav from './components/settings/PluginManagerNav.vue'
 import PluginManagerPage from './components/settings/PluginManagerPage.vue'
+import ProviderManagerPage from './components/settings/ProviderManagerPage.vue'
 
 export const name = 'plugin-manager'
 /** 不写死依赖：宿主服务（manager / save）都做**可选探测** —— 缺了给清晰错误，不静默装死 */
@@ -75,6 +76,16 @@ export function apply(
     icon: Puzzle,
     order: 20,
     page: markRaw(PluginManagerPage),
+  })
+
+  // 平台管理页（provider 管理）：进「集成 → 平台」。
+  ctx.settingsMenu.nav({
+    id: 'nav/integration/providers',
+    category: 'category/integration',
+    title: '平台',
+    icon: Server,
+    order: 15,
+    page: markRaw(ProviderManagerPage),
   })
 
   // ① 设置面板左导航项
