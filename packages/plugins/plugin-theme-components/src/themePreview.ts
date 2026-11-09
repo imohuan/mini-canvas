@@ -31,6 +31,22 @@ function rectStyle(node: PreviewNodeRect): string {
     'left:' + node.x + 'px;top:' + node.y + 'px;width:' + node.w + 'px;height:' + node.h + 'px'
 }
 
+/**
+ * 按钮上的字色：按底色亮度现算。
+ *
+ * 强调色不一定是深色 —— 黑白这类浅色强调色上写白字会看不见。
+ */
+function inkOn(hex: string): string {
+  const raw = String(hex || '').replace('#', '').trim()
+  const full = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw.slice(0, 6)
+  if (full.length !== 6) return '#fff'
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  if (![r, g, b].every(Number.isFinite)) return '#fff'
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? '#1f2430' : '#fff'
+}
+
 /** 节点标题：放在卡片上缘外侧（与真实节点同一位置语义）。 */
 function paintTitle(card: HTMLElement, node: PreviewNodeRect, accent: string, ink: string): void {
   const title = el('div', 'pv-node-title')
@@ -71,6 +87,7 @@ function paintTextCard(
   warn: string,
   ink: string,
   surface: string,
+  dark: boolean,
 ): void {
   const body = el('div', '')
   body.style.cssText = 'display:flex;height:100%;flex-direction:column;justify-content:flex-start;gap:10px;padding:13px 14px 12px;overflow:hidden'
@@ -93,12 +110,15 @@ function paintTextCard(
       'border:1px solid transparent;border-radius:7px;font:inherit;font-size:10px;font-weight:650;' +
       'line-height:1;white-space:nowrap;cursor:default'
     const styles: Record<string, string> = {
-      primary: 'background:' + accent + ';color:#fff;box-shadow:0 1px 2px color-mix(in srgb,' + accent + ' 35%,transparent)',
-      hover: 'border-color:' + hover + ';background:' + hover + ';color:#fff',
-      ghost: 'border-color:#e2e5ea;background:' + surface + ';color:' + ink,
+      primary: 'background:' + accent + ';color:' + inkOn(accent) + ';box-shadow:0 1px 2px color-mix(in srgb,' + accent + ' 35%,transparent)',
+      hover: 'border-color:' + hover + ';background:' + hover + ';color:' + inkOn(hover),
+      ghost: 'border-color:' + (dark ? '#454545' : '#e2e5ea') + ';background:' + surface + ';color:' + ink,
       danger: 'border-color:' + danger + ';background:color-mix(in srgb,' + danger + ' 10%,transparent);color:' + danger,
-      warn: 'border-color:' + warn + ';background:color-mix(in srgb,' + warn + ' 14%,transparent);color:#9a6114',
-      disabled: 'border-color:#e2e5ea;background:#f6f7f9;color:#b3b9c2',
+      warn: 'border-color:' + warn + ';background:color-mix(in srgb,' + warn + ' 14%,transparent);color:' + warn,
+      disabled:
+        'border-color:' + (dark ? '#3a3a3a' : '#e2e5ea') +
+        ';background:' + (dark ? '#2c2c2c' : '#f6f7f9') +
+        ';color:' + (dark ? '#6f6f6f' : '#b3b9c2'),
     }
     btn.style.cssText = base + ';' + styles[kind]
     if (kind === 'disabled') btn.disabled = true
@@ -217,7 +237,7 @@ export const themePreviewLayer: PreviewLayer = {
         ';box-shadow:0 2px 10px ' + shadow
       paintTitle(card, node, accent, titleInk)
       if (node.kind === 'image') paintImageCard(card, node, accent)
-      else paintTextCard(card, accent, hover, danger, warn, ink, surface)
+      else paintTextCard(card, accent, hover, danger, warn, ink, surface, dark)
       paintPorts(card, accent, surface)
       stage.appendChild(card)
 

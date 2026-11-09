@@ -23,7 +23,7 @@ export interface LabState {
   /**
    * **只存用户自建模板**。
    *
-   * 预设（雾青 / 陶土 / 靛蓝 / 薄荷）永远从代码里的 LAB_THEMES 取，
+ * 预设（墨黑 / 素白 / 雾青 / 陶土 / 靛蓝 / 薄荷 / 朱砂 / 海蓝 / 罗兰）永远从代码里的 LAB_THEMES 取，
    * 不落进存档：以前把预设一起存了，用户在界面上改一格就会把预设写坏，
    * 而且再也回不到原样。
    */
@@ -47,7 +47,17 @@ const KEY = 'mini-canvas:plugin-theme-lab:v2'
 const LEGACY_KEY = 'mini-canvas:plugin-theme-lab:v1'
 
 /** 预设模板的 id 集合：这些永远只读，不能改名、不能改色、不能删除。 */
-export const PRESET_THEME_IDS: readonly string[] = ['mist', 'clay', 'indigo', 'mint']
+export const PRESET_THEME_IDS: readonly string[] = [
+  'mono-dark',
+  'mono-light',
+  'mist',
+  'clay',
+  'indigo',
+  'mint',
+  'crimson',
+  'ocean',
+  'violet',
+]
 
 export function isPresetTheme(theme: LabTheme): boolean {
   return PRESET_THEME_IDS.includes(theme.id)
@@ -59,6 +69,40 @@ export function isEditableTheme(theme: LabTheme): boolean {
 }
 
 export const LAB_THEMES: LabTheme[] = [
+  {
+    id: 'mono-dark',
+    name: '墨黑',
+    overrides: {
+      accentColorLight: '#1f2430', accentColorDark: '#e8ebf2', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      accentHoverColorLight: '#12161d', accentHoverColorDark: '#f7f9fc', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      dangerColorLight: '#c8323f', dangerColorDark: '#f0717b', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      warnColorLight: '#b0791f', warnColorDark: '#e3b65c', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeRailColorLight: '#858c99', edgeRailColorDark: '#4a505c', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeFlowColorLight: '#5c6472', edgeFlowColorDark: '#dfe4ec', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      alignGuideColorLight: '#8b919c', alignGuideColorDark: '#a8b0bc', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectBoxColorLight: '#3a414d', multiSelectBoxColorDark: '#d8dde6', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameOuterColorLight: '#7d8593', multiSelectFrameOuterColorDark: '#9aa2af', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameInnerColorLight: '#a7aeba', multiSelectFrameInnerColorDark: '#c3cad4', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      pathColor: '#3a414d', bladeColor: '#edc069', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+    },
+  },
+  {
+    id: 'mono-light',
+    name: '素白',
+    overrides: {
+      accentColorLight: '#98a2b3', accentColorDark: '#f4f6f9', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      accentHoverColorLight: '#7c8797', accentHoverColorDark: '#ffffff', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      dangerColorLight: '#c8323f', dangerColorDark: '#f0717b', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      warnColorLight: '#b0791f', warnColorDark: '#e3b65c', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeRailColorLight: '#9aa3b0', edgeRailColorDark: '#5a606b', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeFlowColorLight: '#7d8794', edgeFlowColorDark: '#e6e9ef', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      alignGuideColorLight: '#98a1ae', alignGuideColorDark: '#c2c8d2', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectBoxColorLight: '#8d97a6', multiSelectBoxColorDark: '#e8ebf1', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameOuterColorLight: '#a2abb8', multiSelectFrameOuterColorDark: '#b8bfca', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameInnerColorLight: '#bcc3ce', multiSelectFrameInnerColorDark: '#d2d7e0', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      pathColor: '#8d97a6', bladeColor: '#edc069', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+    },
+  },
   { id: 'mist', name: '雾青', overrides: {} },
   {
     id: 'clay',
@@ -109,6 +153,57 @@ export const LAB_THEMES: LabTheme[] = [
       multiSelectFrameOuterColorLight: '#70bb8e', multiSelectFrameOuterColorDark: '#7ad29d', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
       multiSelectFrameInnerColorLight: '#95cfa9', multiSelectFrameInnerColorDark: '#9adfb4', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
       pathColor: '#39a366', bladeColor: '#e6c66d', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+    },
+  },
+  {
+    id: 'crimson',
+    name: '朱砂',
+    overrides: {
+      accentColorLight: '#cc3f57', accentColorDark: '#ff7b92', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      accentHoverColorLight: '#ad2c43', accentHoverColorDark: '#e26077', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      dangerColorLight: '#b52a2a', dangerColorDark: '#f07270', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      warnColorLight: '#c98a1f', warnColorDark: '#eab655', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeRailColorLight: '#b3949b', edgeRailColorDark: '#75565f', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeFlowColorLight: '#f2678b', edgeFlowColorDark: '#ff8fb0', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      alignGuideColorLight: '#c47e95', alignGuideColorDark: '#f0a3b9', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectBoxColorLight: '#d0516f', multiSelectBoxColorDark: '#f07d97', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameOuterColorLight: '#d2839a', multiSelectFrameOuterColorDark: '#ef8ea5', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameInnerColorLight: '#e0a3b4', multiSelectFrameInnerColorDark: '#f2aabc', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      pathColor: '#d0516f', bladeColor: '#edc069', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+    },
+  },
+  {
+    id: 'ocean',
+    name: '海蓝',
+    overrides: {
+      accentColorLight: '#1877c9', accentColorDark: '#5cbcff', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      accentHoverColorLight: '#125fa5', accentHoverColorDark: '#3f9fe6', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      dangerColorLight: '#d94a4a', dangerColorDark: '#f27b7b', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      warnColorLight: '#c9922b', warnColorDark: '#eab45a', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeRailColorLight: '#8aa3b5', edgeRailColorDark: '#4f6a80', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeFlowColorLight: '#38b6f2', edgeFlowColorDark: '#66d6ff', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      alignGuideColorLight: '#6ba4c9', alignGuideColorDark: '#93cdf0', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectBoxColorLight: '#2a84cf', multiSelectBoxColorDark: '#66b9f2', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameOuterColorLight: '#6ba3cf', multiSelectFrameOuterColorDark: '#7dc0ee', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameInnerColorLight: '#93bfe0', multiSelectFrameInnerColorDark: '#9ed1f5', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      pathColor: '#2a86d0', bladeColor: '#f0c34d', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+    },
+  },
+  {
+    id: 'violet',
+    name: '罗兰',
+    overrides: {
+      accentColorLight: '#7a4fd8', accentColorDark: '#b195ff', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      accentHoverColorLight: '#6339bd', accentHoverColorDark: '#9a7cf0', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      dangerColorLight: '#d64a6a', dangerColorDark: '#f07b95', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      warnColorLight: '#c98a2f', warnColorDark: '#e7b565', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeRailColorLight: '#9c93b8', edgeRailColorDark: '#5f5679', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      edgeFlowColorLight: '#9a6bff', edgeFlowColorDark: '#b79bff', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      alignGuideColorLight: '#a189c9', alignGuideColorDark: '#c3adf0', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectBoxColorLight: '#8459dd', multiSelectBoxColorDark: '#a78bf4', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameOuterColorLight: '#a190d8', multiSelectFrameOuterColorDark: '#a996ef', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      multiSelectFrameInnerColorLight: '#bdaae5', multiSelectFrameInnerColorDark: '#c0aef7', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
+      pathColor: '#8459dd', bladeColor: '#f0c34d', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
     },
   },
 ]

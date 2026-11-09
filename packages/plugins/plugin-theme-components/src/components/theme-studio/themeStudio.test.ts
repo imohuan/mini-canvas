@@ -90,14 +90,14 @@ describe('颜色配方契约', () => {
       return values
     }
 
-    for (const theme of [LAB_THEMES[0], LAB_THEMES[1]]) {
+    for (const theme of LAB_THEMES) {
       const values = valuesFor(theme)
       expect(matchesThemeValues(theme, entries, modes, values)).toBe(true)
       expect(themeIdForValues(LAB_THEMES, entries, modes, values)).toBe(theme.id)
     }
 
     // 挑一套模板后改一个颜色：不再匹配任何模板 → 自定义
-    const clay = LAB_THEMES[1]
+    const clay = LAB_THEMES.find((theme) => theme.id === 'clay')!
     const clayValues = valuesFor(clay)
     const tweaked = { ...clayValues, accentColorLight: '#123456' }
     expect(matchesThemeValues(clay, entries, modes, tweaked)).toBe(false)
@@ -114,12 +114,33 @@ describe('颜色配方契约', () => {
 
   it('内置模板是只读真源：存档里不会出现它们', () => {
     // 预设永远从代码取，写存档时被过滤掉
-    expect(LAB_THEMES.map((t) => t.id)).toEqual(['mist', 'clay', 'indigo', 'mint'])
+    expect(LAB_THEMES.map((t) => t.id)).toEqual([
+      'mono-dark',
+      'mono-light',
+      'mist',
+      'clay',
+      'indigo',
+      'mint',
+      'crimson',
+      'ocean',
+      'violet',
+    ])
+    // 黑白两套排在最前面：亮色/暗色主题的固定底色
+    expect(LAB_THEMES[0].name).toBe('墨黑')
+    expect(LAB_THEMES[1].name).toBe('素白')
+    expect(LAB_THEMES[0].overrides.accentColorLight).toBe('#1f2430')
+    expect(LAB_THEMES[0].overrides.accentColorDark).toBe('#e8ebf2')
+    expect(LAB_THEMES[1].overrides.accentColorLight).toBe('#98a2b3')
+    expect(LAB_THEMES[1].overrides.accentColorDark).toBe('#f4f6f9')
+    const mist = LAB_THEMES.find((t) => t.id === 'mist')!
     // 雾青必须是"全部回归默认"，不能被任何历史改动污染
-    expect(LAB_THEMES[0].overrides).toEqual({})
-    expect(LAB_THEMES[1].overrides.accentColorLight).toBe('#c45a3b')
-    expect(LAB_THEMES[2].overrides.accentColorLight).toBe('#5667d8')
-    expect(LAB_THEMES[3].overrides.accentColorLight).toBe('#2f9e66')
+    expect(mist.overrides).toEqual({})
+    expect(LAB_THEMES.find((t) => t.id === 'clay')!.overrides.accentColorLight).toBe('#c45a3b')
+    expect(LAB_THEMES.find((t) => t.id === 'indigo')!.overrides.accentColorLight).toBe('#5667d8')
+    expect(LAB_THEMES.find((t) => t.id === 'mint')!.overrides.accentColorLight).toBe('#2f9e66')
+    expect(LAB_THEMES.find((t) => t.id === 'crimson')!.overrides.accentColorLight).toBe('#cc3f57')
+    expect(LAB_THEMES.find((t) => t.id === 'ocean')!.overrides.accentColorLight).toBe('#1877c9')
+    expect(LAB_THEMES.find((t) => t.id === 'violet')!.overrides.accentColorLight).toBe('#7a4fd8')
   })
 
   it('旧存档里被改坏的预设会被丢弃，用户自建模板保留下来', () => {
