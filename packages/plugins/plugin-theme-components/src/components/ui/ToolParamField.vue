@@ -74,7 +74,7 @@ const preset = computed<Component | undefined>(() => {
 const columns = computed(() => gridColumns(props.param, props.param.options?.length ?? 0))
 
 /** 控件收到的 props（统一形状：param / modelValue / disabled / columns） */
-const controlProps = computed<Record<string, unknown>>(() => ({
+const controlProps = computed(() => ({
   param: props.param,
   modelValue: props.modelValue,
   disabled: props.disabled,
@@ -113,7 +113,7 @@ function onBool(value: boolean): void {
   emit('update:modelValue', value)
 }
 
-function onSlider(value: number): void {
+function onSlider(value: string | number | boolean): void {
   emit('update:modelValue', value)
 }
 

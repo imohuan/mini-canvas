@@ -14,6 +14,9 @@
  */
 import { customModelIcon, modelIconOf, type ModelIcon, type ModelTone } from './modelIcons'
 
+/** 图标形状从 modelIcons 转出，调用方不必再单独找那个文件 */
+export type { ModelIcon }
+
 /** Agent 的 modelIcons 服务（可选依赖；没装 Agent 时为 undefined） */
 export interface ModelIconServiceLike {
   svgOfName(name: string): string

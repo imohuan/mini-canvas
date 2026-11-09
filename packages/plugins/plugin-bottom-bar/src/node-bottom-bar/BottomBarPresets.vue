@@ -58,6 +58,8 @@ const props = defineProps<{
     types?: string[]
     /** provider 在动作声明里带的模板（只读，跟动作一起上下线） */
     templates?: Array<{ id: string; name: string; prompt: string; description?: string; values?: Record<string, unknown> }>
+    /** provider 自带的 HTML 参数面板（命中时弹窗与底栏渲染同一份） */
+    panelHtml?: string
   }>
   /** 当前下拉里选中的动作 id（新建预设默认对准它） */
   currentId?: string
