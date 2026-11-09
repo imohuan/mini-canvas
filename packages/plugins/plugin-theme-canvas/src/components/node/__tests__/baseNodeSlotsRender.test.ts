@@ -608,6 +608,28 @@ describe('resize 进行中收起上/下控制栏（用户要求）', () => {
       expect(html).toContain('nls-root')
     }
   })
+
+  /**
+   * 用户口径 2026-11-09：「这些失败和加载状态阻塞了滚动事件。」
+   *
+   * 状态层盖在卡片上，底下常是挂了 `nowheel` 的视频控制条 / 文本区。
+   * 状态层如果 `pointer-events: none`，滚轮就会穿到那些 nowheel 元素上，画布不缩放。
+   * 所以这一层必须接指针；但**不能**带 nodrag/nopan —— 加载中的卡片仍要能拖、能选。
+   */
+  it('★ 状态层接指针（滚轮能到画布），但不带 nodrag/nopan（仍可拖动）', async () => {
+    const r = new NodeRegistry()
+    r.register('text', { in: ContentStub })
+    const html = await renderNode(
+      r,
+      { runState: { status: 'running', progress: 20 } },
+      {},
+      { type: 'text' },
+    )
+    const tag = html.match(/<div class="v2-state-layer[^>]*>/)?.[0] ?? ''
+    expect(tag).toContain('v2-state-layer')
+    expect(tag).not.toContain('nodrag')
+    expect(tag).not.toContain('nopan')
+  })
 })
 
 /**

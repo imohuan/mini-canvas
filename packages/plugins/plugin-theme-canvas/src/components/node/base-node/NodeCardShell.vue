@@ -467,11 +467,17 @@ const {
       尺寸与卡片严格一致（overlayLayerStyle），不反缩放 —— 画面像素对齐优先。
 
       顺序：有注册组件画注册组件，否则回落到内置 NodeLoadingState，都没有就不画。
-      根 pointer-events: none，只有「取消」按钮接指针 —— 加载期间节点照样能拖能选。
+
+      指针：这层**要接指针**（pointer-events: auto），但不带 nodrag/nopan ——
+      为什么必须接：它盖在卡片上，底下是视频控制条 / 文本编辑区这些挂了 `nowheel` 的元素。
+      层自己不接指针的话，滚轮会落到底下那些 nowheel 上，画布就不缩放了（用户实测：
+      「失败和加载状态阻塞了滚动事件」）。接住之后滚轮在这层上，画布照常缩放。
+      为什么不加 nodrag/nopan：按住加载中的卡片仍然应该能拖动、能选中 —— 带 nodrag 就拖不动了。
+      取消按钮在组件内部自己开 pointer-events。
     -->
     <div
       v-if="showStateLayer && !culledReduced"
-      class="v2-state-layer nodrag nopan"
+      class="v2-state-layer"
       :class="{ 'is-error': failed && !hasCustomStateOverlay }"
       :style="overlayLayerStyle"
     >
@@ -866,7 +872,10 @@ const {
 }
 
 /* —— 节点状态层（state:overlay，见模板注释）——
-    与卡片同级、同尺寸，盖住整张卡；不接指针，只有取消按钮例外（在 NodeLoadingState 的 #action 里）。
+    与卡片同级、同尺寸，盖住整张卡。
+    **接指针**：底下常是带 nowheel 的视频控制条 / 文本区，这层不接就会把滚轮吃掉、画布不能缩放。
+    但它不带 nodrag/nopan，所以按住这张卡仍然能拖动、点选 —— 只有滚轮和点击落在这一层上。
+    层内默认仍不接事件（子元素 pointer-events: none），取消按钮自己开（NodeLoadingState 的 #action）。
     z-index 取 24：高过卡片本体，低过编辑浮层（25）、多选圆点（26）与上/下控制栏（30）——
     用户口径「多选时在覆盖层上再叠一层覆盖没关系」，所以选中标记、工具条、编辑框照旧压在上面。 */
 .v2-state-layer {
@@ -875,7 +884,7 @@ const {
   top: 0;
   z-index: 24;
   overflow: visible;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 /* 取消按钮：右下角一小格，是覆盖层里唯一接指针的东西（加载期间节点照样能拖能选） */
