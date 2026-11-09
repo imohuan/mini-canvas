@@ -245,6 +245,56 @@ export class CloudApi {
 
   // ==================== 画布 ====================
 
+  // ==================== 平台管理（provider 管理） ====================
+
+  /** 拉平台清单（含声明的 config 与掩码后的账号值） */
+  async fetchProviders(): Promise<import('./apiTypes.js').ProviderRow[]> {
+    const res = await this.doFetch(this.absolute('/api/providers'), { headers: { accept: 'application/json' } })
+    if (!res.ok) throw httpError('拉平台清单', res.status, 'GET')
+    const body = (await res.json()) as { providers?: import('./apiTypes.js').ProviderRow[] }
+    return Array.isArray(body.providers) ? body.providers : []
+  }
+
+  /** 保存一个 provider 文件的账号清单（整体替换） */
+  async saveProviderAccounts(file: string, accounts: Array<{ id: string; name?: string; values: Record<string, string | number | boolean> }>): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/providers/' + encodeURIComponent(file) + '/config'), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ accounts }),
+    })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(body.error ?? '[cloud-client] 保存平台配置失败 ' + res.status)
+    }
+  }
+
+  /** 启用 / 停用一个 provider 文件（文件不动，装载时跳过） */
+  async setProviderEnabled(file: string, enabled: boolean): Promise<void> {
+    const res = await this.doFetch(
+      this.absolute('/api/providers/' + encodeURIComponent(file) + (enabled ? '/enable' : '/disable')),
+      { method: 'POST' },
+    )
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(body.error ?? '[cloud-client] 切换平台状态失败 ' + res.status)
+    }
+  }
+
+  /** 删除一个 provider 文件（重启不再铺回） */
+  async deleteProvider(file: string): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/providers/' + encodeURIComponent(file)), { method: 'DELETE' })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(body.error ?? '[cloud-client] 删除平台失败 ' + res.status)
+    }
+  }
+
+  /** 强制重扫 provider 目录（改配置 / 启停后后台自己会刷；这个给「强制刷新」按钮用） */
+  async reloadProviders(): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/providers/reload'), { method: 'POST' })
+    if (!res.ok) throw new Error('[cloud-client] 强制刷新失败 ' + res.status)
+  }
+
   /** 读画布（节点 + 边 + 视口） */
   async readCanvas(
     canvasId: string,

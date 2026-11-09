@@ -18,6 +18,30 @@ export interface ServerAction {
   [k: string]: unknown
 }
 
+/** provider 声明的一个配置项（与 cloud-server 的 ProviderConfigField 同形） */
+export interface ProviderConfigField {
+  key: string
+  label?: string
+  description?: string
+  type: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'secret'
+  default?: string | number | boolean
+  options?: Array<{ label: string; value: string }>
+  placeholder?: string
+  min?: number
+  max?: number
+  step?: number
+}
+
+/** GET /api/providers 的一行（secret 值已由后台掩掉） */
+export interface ProviderRow {
+  id: string
+  file: string
+  enabled: boolean
+  actions: number
+  config: ProviderConfigField[]
+  accounts: Array<{ id: string; name?: string; values: Record<string, string | number | boolean> }>
+}
+
 /** 后端给的任务（前端把它翻译成底栏认识的 running / done） */
 export interface ServerJob {
   id: string
