@@ -15,9 +15,9 @@ export interface HistoryPreviewItem {
 
 /** 生成详情弹窗需要的完整记录字段。 */
 export interface HistoryDetailItem extends HistoryPreviewItem {
-  prompt?: string
+  prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
   values?: Record<string, unknown>
-  resources?: Array<{ kind: string; url?: string; value?: string }>
+  resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
   finishedAt?: number
   error?: string
 }

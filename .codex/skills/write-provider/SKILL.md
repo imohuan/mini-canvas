@@ -64,7 +64,10 @@ export default provider
 - `submit` 必须给三种返回之一。返回空对象 `{}` 时后台会拿 `undefined` 当 taskId 去 poll，
   一直问到超时才失败；返回 `undefined` 或直接抛错会立刻判失败。
 
-`input` 的字段：`canvasId`、`nodeId`、`actionId`、`prompt`、`values`、`resources`。
+`input` 的字段：`canvasId`、`nodeId`、`actionId`、`prompts`、`values`、`resources`。
+`prompts` 是分段数组：`{ type: 'tag', value: '<资源 id>' }` 表示引用某个资源，
+`{ type: 'prompt', value: '文字' }` 是普通文字；顺序就是输入框里的顺序。
+要显示名字就从 `resources[]` 里按同一个 `id` 找 `name`（每个资源都带 `id` 与 `name`）。
 `resources[].url` 在提交前已被宿主解析成 data URL（或绝对地址），可以直接拿字节用；
 `kind` 是 `image` / `video` / `audio` / `text`，文本素材内容在 `value`。
 

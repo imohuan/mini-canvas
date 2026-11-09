@@ -84,20 +84,48 @@ function buildChatAutoPrompt(model, values, body) {
 }
 
 /**
- * 上游文本素材 -> 带名字的标签块（与图片那份同一口径）。
- * 连进来的文本给一个名字（节点标题优先，没有就 文本1 / 文本2…），
- * 正文包进 <text name="…">；用户在提示词里写 @标题内容 / @文本1 就能指到它。
+ * 资源在数组里的位置就是它的引用索引（从 1 开始）。
+ *
+ * 平台只认「第几个图 / 第几个视频」，不认画布上的节点名字：
+ * 名字是给人看的，resources 数组的顺序才是和模型对齐的唯一凭据。
  */
+function refLabel(resource, index) {
+  const kind = resource && typeof resource.kind === 'string' ? resource.kind : ''
+  const prefix =
+    kind === 'image' ? '图片'
+    : kind === 'video' ? '视频'
+    : kind === 'audio' ? '音频'
+    : kind === 'text' ? '文本'
+    : '资源'
+  return prefix + (index + 1)
+}
+
 function textBlocks(input) {
   const out = []
-  let n = 0
-  for (const r of input.resources || []) {
-    if (r.kind !== 'text') continue
-    n += 1
-    const raw = typeof r.name === 'string' ? r.name.trim() : ''
-    const name = raw !== '' ? raw : '文本' + n
+  const resources = input.resources || []
+  resources.forEach((r, i) => {
+    if (!r || r.kind !== 'text') return
     const value = typeof r.value === 'string' ? r.value : ''
-    out.push('<text name="' + name + '">\n' + value + '\n</text>')
+    out.push('<text name="' + refLabel(r, i) + '">\n' + value + '\n</text>')
+  })
+  return out
+}
+
+/** 提示词分段 → 平台要的一段文字（标签按资源在数组里的「类型+序号」展开） */
+function promptText(input) {
+  const labels = new Map()
+  const resources = input.resources || []
+  resources.forEach((r, i) => {
+    if (r && typeof r.id === 'string' && r.id) labels.set(r.id, refLabel(r, i))
+  })
+  let out = ''
+  for (const seg of input.prompts || []) {
+    if (!seg || typeof seg.value !== 'string') continue
+    if (seg.type === 'tag') {
+      out += '@' + (labels.get(seg.value) || seg.value)
+    } else {
+      out += seg.value
+    }
   }
   return out
 }
@@ -141,7 +169,7 @@ function attachRefs(action, input, params) {
 
 function buildParams(action, input) {
   const values = (input.values || {})
-  const body = [input.prompt || '', ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
+  const body = [promptText(input), ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
 
   if (action.promptMode === 'chat-auto') {
     const params = { prompt: buildChatAutoPrompt(action.model, values, body) }

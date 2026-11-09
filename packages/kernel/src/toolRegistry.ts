@@ -36,6 +36,18 @@ export interface ToolResource {
   value?: string
 }
 
+/**
+ * 提示词里的一段：标签（引用某个资源）或普通文字。
+ *
+ * 为什么把标签单独拆出来（用户 2026-11-09）：标签本身没有状态，资源才有；
+ * 标签只要记资源 id，名称与地址都去 resources 里查，两处才能一一对上。
+ */
+export interface ToolPromptSegment {
+  type: 'tag' | 'prompt'
+  /** tag = 资源 id；prompt = 原文 */
+  value: string
+}
+
 /** 工具参数下拉里的一项 */
 export interface ToolParamOption {
   label: string
@@ -157,8 +169,8 @@ export interface ToolParamDef {
 
 /** 一次工具调用的输入 */
 export interface ToolInput {
-  /** 用户在输入框里写的内容（文本提示词；富文本以纯文本形式给出） */
-  prompt?: string
+  /** 用户在输入框里写的内容（标签与文字分段给出，顺序就是输入框里的顺序） */
+  prompts?: ToolPromptSegment[]
   /** 画布上下文资源（上游连进来的素材） */
   resources?: ToolResource[]
   /** 用户在 UI 上选的参数值（键 = ToolParamDef.key） */

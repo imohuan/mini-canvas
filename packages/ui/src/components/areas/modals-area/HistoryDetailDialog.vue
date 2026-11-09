@@ -5,13 +5,19 @@ import AppDialog from '../../AppDialog.vue'
 import { formatBytes, formatDurationLong, formatExactTime, ratioLabel } from './historyCardText'
 import type { HistoryDetailItem } from './useHistoryPreview'
 
-defineProps<{
+const props = defineProps<{
   item: HistoryDetailItem | null
 }>()
 
 const emit = defineEmits<{ close: [] }>()
 
 const Button = useUiComponent('Button')
+
+/** 标签只记资源 id：名称去 resources 里找（两处靠 id 对照） */
+function resourceNameOf(id: string): string {
+  const hit = props.item?.resources?.find((r) => r.id === id)
+  return hit?.name || id
+}
 </script>
 
 <template>
@@ -60,7 +66,12 @@ const Button = useUiComponent('Button')
 
           <section class="hist-detail-sec">
             <h4 class="hist-detail-h">提示词</h4>
-            <p v-if="item.prompt" class="hist-detail-prompt">{{ item.prompt }}</p>
+            <p v-if="item.prompts?.length" class="hist-detail-prompt">
+              <template v-for="(seg, i) in item.prompts" :key="i">
+                <span v-if="seg.type === 'tag'" class="hist-detail-tag">@{{ resourceNameOf(seg.value) }}</span>
+                <span v-else>{{ seg.value }}</span>
+              </template>
+            </p>
             <p v-else class="hist-detail-empty">这条记录没有保存提示词（早期记录没有这一项）</p>
           </section>
 
@@ -78,6 +89,7 @@ const Button = useUiComponent('Button')
             <div v-if="item.resources?.length" class="hist-detail-refs">
               <div v-for="(r, i) in item.resources" :key="i" class="hist-detail-ref">
                 <span class="hist-detail-ref-kind">{{ r.kind }}</span>
+                <span v-if="r.name" class="hist-detail-ref-name">{{ r.name }}</span>
                 <img v-if="r.url && r.kind !== 'video' && r.kind !== 'audio'" :src="r.url" alt="" loading="lazy" />
                 <span v-else-if="r.url" class="hist-detail-ref-url">{{ r.url }}</span>
                 <span v-else class="hist-detail-ref-value">{{ r.value }}</span>
@@ -111,6 +123,8 @@ const Button = useUiComponent('Button')
 .hist-detail-ref { display: flex; flex-direction: column; gap: 4px; width: 104px; padding: 6px; border-radius: 8px; border: 1px solid var(--ui-line, rgb(128 128 128 / .2)); background: var(--ui-veil, rgb(127 127 127 / .06)); }
 .hist-detail-ref img { width: 100%; height: 68px; object-fit: cover; border-radius: 6px; display: block; }
 .hist-detail-ref-kind { font-size: 10px; color: var(--ui-ink-mute, #888); text-transform: uppercase; }
+.hist-detail-ref-name { font-size: 11px; font-weight: 600; color: var(--ui-ink, inherit); word-break: break-word; }
+.hist-detail-tag { color: var(--ui-accent, #0891b2); }
 .hist-detail-ref-value { font-size: 11px; line-height: 1.4; color: var(--ui-ink, inherit); max-height: 68px; overflow: auto; }
 .hist-detail-ref-url { font-size: 10px; line-height: 1.35; color: var(--ui-ink-mute, #888); word-break: break-all; max-height: 68px; overflow: auto; }
 </style>

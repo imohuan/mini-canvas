@@ -14,7 +14,7 @@ import { CloudApi } from './api.js'
 import { toBarAction, diffActions, staleActionIds, type BarActionLike } from './actions.js'
 import { CanvasDiffAdapter } from './canvasDiffAdapter.js'
 import { createRemoteSync, toSnapshot } from './remoteSync.js'
-import { makeJobPoll, submitJob, type ResourceLike, type RunDeps } from './jobRunner.js'
+import { makeJobPoll, submitJob, type PromptSegmentLike, type ResourceLike, type RunDeps } from './jobRunner.js'
 import { writeAudioResult, writeVideoResult } from './appliers.js'
 import { applyMergePlan, type DocLike } from './applyMerge.js'
 import { restoreOrSeed } from './restore.js'
@@ -453,13 +453,13 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
       // 节点 id 来自**第二个参数**（底栏契约 BarRunContext.nodeId），不在 input 里。
       // 之前误读 input.nodeId —— 那个键从来不存在，于是永远兜底成空串、被服务端判「缺少 nodeId」。
       async run(
-        input: { prompt?: string; values?: Record<string, unknown>; resources?: ResourceLike[] },
+        input: { prompts?: PromptSegmentLike[]; values?: Record<string, unknown>; resources?: ResourceLike[] },
         runCtx: { nodeId: string },
       ) {
         const r = await submitJob(deps, {
           nodeId: runCtx.nodeId,
           actionId: def.id,
-          ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+          ...(input.prompts !== undefined ? { prompts: input.prompts } : {}),
           ...(input.values ? { values: input.values } : {}),
           ...(input.resources ? { resources: input.resources } : {}),
         })

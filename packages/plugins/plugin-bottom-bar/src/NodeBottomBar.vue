@@ -18,6 +18,7 @@ import type { NotifyContract } from '@mini-canvas/canvas-base'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { PromptPreset } from './promptPresets'
 import { bottomBarTagSpecFor, toToolResources } from './panelSource'
+import { promptSegmentsFromDoc } from './promptSegments'
 import HtmlPanelFrame from './node-bottom-bar/HtmlPanelFrame.vue'
 import { readRunState } from './runState'
 import { exitReference, referenceActive, referenceOwner, selectionEpoch, toggleReference as toggleReferenceMode } from './referenceMode'
@@ -474,7 +475,7 @@ async function onRun(): Promise<void> {
   if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
   submitted.value = true
   await ctx.get<{ run(nodeId: string, actionId: string, input?: unknown): Promise<unknown> }>('nodeTask').run(props.id, currentAction.value.id, {
-    prompt: prompt.value,
+    prompts: promptSegmentsFromDoc(promptDoc.value, prompt.value),
     values: values.value,
     resources: toToolResources(shownMaterials.value),
   })

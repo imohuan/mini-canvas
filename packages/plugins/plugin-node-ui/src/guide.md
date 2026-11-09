@@ -236,7 +236,7 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
                ⚠️ 整体替换：少一个节点它就没了。只有真要换掉整张画布时才用。
   画布清单     CanvasUI.api('/api/canvases')                                 → { canvases: [{id,name}] }
   下单生成     CanvasUI.api('/api/jobs', { method:'POST', headers:{'content-type':'application/json'},
-                                         body: JSON.stringify({ canvasId, nodeId, actionId, prompt?, values? }) })
+                                         body: JSON.stringify({ canvasId, nodeId, actionId, prompts?, values?, resources? }) }) 
                （先 CanvasUI.api('/api/actions') 看有哪些 actionId 与参数）
 
 `path` 必须以 `/api/` 开头（宿主只转发这一类，防止被当成任意地址的代理）。
@@ -356,7 +356,9 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 
   // 调模型出媒体（与「画界面」是两条轨道，别混）
   GET  {base}/api/actions                              // 有哪些动作、要什么参数
-  POST {base}/api/jobs  { canvasId, nodeId, actionId, prompt?, values? }
+  POST {base}/api/jobs  { canvasId, nodeId, actionId, prompts?, values?, resources? }
+  prompts 是分段数组：[{type:"tag",value:"资源id"},{type:"prompt",value:"文字"}]；
+  resources 里每一项都有 id / name / kind，标签的 value 就是那个 id。
 
 ### 7.2 脚本（task-scripts/*.mjs）能用的 ctx
 

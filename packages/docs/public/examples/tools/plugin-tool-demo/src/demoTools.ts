@@ -7,6 +7,14 @@
 
 import type { ToolDef } from '@mini-canvas/kernel'
 
+/** 分段提示词拼成一段文字：标签展开成 @名称（名称从 resources 里按 id 查） */
+function promptText(input: { prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>; resources?: Array<{ id: string; name?: string }> }): string {
+  const nameOf = new Map((input.resources ?? []).map((r) => [r.id, r.name ?? r.id]))
+  return (input.prompts ?? [])
+    .map((s) => (s.type === 'tag' ? '@' + (nameOf.get(s.value) ?? s.value) : s.value))
+    .join('')
+}
+
 /** 工具分组名（UI 据此归类） */
 export const DEMO_GROUP = '演示'
 
@@ -23,7 +31,7 @@ export function reverseTool(): ToolDef {
     produces: 'text',                 // ① 它产出文本 → 文本节点能找到它
     params: [],
     run: (input) => {
-      const text = input.prompt ?? ''
+      const text = promptText(input)
       return { ok: true, text: text.split('').reverse().join('') }   // ② 同步形态：直接给结果
     },
   }
@@ -49,7 +57,7 @@ export function countTool(): ToolDef {
       },
     ],
     run: (input) => {
-      const text = input.prompt ?? ''
+      const text = promptText(input)
       const withSpaces = input.params?.withSpaces === true
       const total = withSpaces ? text.length : text.replace(/\s/g, '').length   // ④ 读参数值
       let step = 0

@@ -129,12 +129,14 @@ export class TaskManager {
       progress: 0,
       message: '任务已提交，等待执行…',
       request: {
-        ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+        ...(input.prompts ? { prompts: input.prompts } : {}),
         ...(input.values ? { values: input.values } : {}),
         ...(input.resources && input.resources.length > 0
           ? {
               resources: input.resources.map((r) => ({
+                ...(r.id ? { id: r.id } : {}),
                 kind: r.kind,
+                ...(r.name ? { name: r.name } : {}),
                 ...(r.url ? { url: r.url } : {}),
                 ...(typeof r.value === 'string' ? { value: r.value } : {}),
               })),
@@ -508,7 +510,7 @@ export class TaskManager {
       ...(result.urls && result.urls.length > 0 ? { urls: result.urls } : {}),
       ...(result.text ? { text: result.text } : {}),
       // 生成参数与参考素材：详情弹窗据此还原"当时到底用了什么"
-      ...(req?.prompt ? { prompt: req.prompt } : {}),
+      ...(req?.prompts && req.prompts.length > 0 ? { prompts: req.prompts } : {}),
       ...(req?.values && Object.keys(req.values).length > 0 ? { values: req.values } : {}),
       ...(req?.resources && req.resources.length > 0 ? { resources: req.resources } : {}),
       ...(media && Object.keys(media).length > 0 ? { media } : {}),

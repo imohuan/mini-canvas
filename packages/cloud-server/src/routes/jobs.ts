@@ -2,7 +2,7 @@
  * jobs 路由 —— 下单 / 查单 / 撤单。
  *
  * 契约：
- *   POST /api/jobs                ← { canvasId, nodeId, actionId, prompt?, values?, resources? }
+ *   POST /api/jobs                ← { canvasId, nodeId, actionId, prompts?, values?, resources? }
  *                                → { ok, jobId }
  *   GET  /api/jobs/:jobId        → { ok, job }
  *   POST /api/jobs/:jobId/cancel → { ok, cancelled }
@@ -42,7 +42,7 @@ export function jobsRoutes(tasks: TaskManager): Hono {
       canvasId,
       nodeId,
       actionId,
-      ...(typeof o.prompt === 'string' ? { prompt: o.prompt } : {}),
+      ...(Array.isArray(o.prompts) ? { prompts: o.prompts as JobInput['prompts'] } : {}),
       ...(o.values && typeof o.values === 'object' ? { values: o.values as Record<string, unknown> } : {}),
       ...(Array.isArray(o.resources) ? { resources: o.resources as JobInput['resources'] } : {}),
     }

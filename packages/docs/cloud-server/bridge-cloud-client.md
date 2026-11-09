@@ -48,7 +48,13 @@ export class MyCloudApi {
   }
 
   /** 下单生成任务 → jobId（后台 TaskManager 调 providers 真正执行） */
-  async createJob(input: { canvasId: string; nodeId: string; actionId: string; prompt?: string }) {
+  async createJob(input: {
+    canvasId: string
+    nodeId: string
+    actionId: string
+    prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
+    resources?: Array<{ id: string; kind: string; name: string; url?: string; value?: string }>
+  }) {
     const res = await fetch(this.absolute('/api/jobs'), {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
@@ -129,6 +135,29 @@ export function apply(ctx: Context): void {
 | `/api/history` | 生成历史（分页 + 汇总） |
 | `/api/kv/events` | SSE 实时事件（画布变更 / 任务进度 / 队列 / 目标） |
 | `/api/kv/:type/:key` | 小数据（设置/快捷键映射；画布数据不在这里） |
+
+下单（`POST /api/jobs`）的请求体里，提示词是**分段**的：
+
+```json
+{
+  "canvasId": "...",
+  "nodeId": "12",
+  "actionId": "web2api:...",
+  "prompts": [
+    { "type": "tag", "value": "<资源 id>" },
+    { "type": "prompt", "value": "，做成水彩风格" }
+  ],
+  "resources": [
+    { "id": "<资源 id>", "kind": "image", "name": "图片1", "url": "..." }
+  ]
+}
+```
+
+`tag` 只记资源 id，名称与地址在 `resources[]` 里按同一个 `id` 查；
+`name` 是**引用名**（类型 + 数组位置，如 `图片1`），与提示词里的 `@图片1` 对应。
+顺序就是用户输入的顺序，后台按数组顺序还原成 `@引用名` 的文本（见 `providers/web2api-*.js` 的 `promptText`）。
+
+> 历史记录里存的也是同一份 `prompts` / `resources`，生成详情弹窗按 id 把标签还原成名字显示。
 
 ## 它注入的三个服务（别的插件这样消费它）
 

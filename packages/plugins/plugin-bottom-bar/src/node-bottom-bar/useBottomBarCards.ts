@@ -260,10 +260,29 @@ export function useBottomBarCards(deps: CardDeps) {
       const v = settings?.get(key)
       return typeof v === 'number' && Number.isFinite(v) ? v : fallback
     }
+    /**
+     * 回退路径也要和 F 聚焦同一套「避开界面条 + 四边留白」参数，
+     * 否则自动布局插件没装/命令失败时，双击卡片会把内容压在顶栏底栏下面。
+     * 这里的取值口径与 plugin-auto-layout 一致（同一个设置键）。
+     */
+    const barsRaw = settings?.get('focusIncludeBars')
+    const barsOk = ['none', 'top', 'bottom', 'both']
+    const includeBars = (typeof barsRaw === 'string' && barsOk.includes(barsRaw) ? barsRaw : 'both') as
+      | 'none'
+      | 'top'
+      | 'bottom'
+      | 'both'
+    const paddingRaw = settings?.get('focusPadding')
+    const padding = typeof paddingRaw === 'number' && paddingRaw > 0 ? paddingRaw : 48
+    const topBarRaw = settings?.get('focusIncludeNodeTopBar')
+    const includeNodeTopBar = typeof topBarRaw === 'boolean' ? topBarRaw : true
     view.fitTo([nodeId], {
       heightRatio: readNum('focusHeightRatio', 0.5),
       minZoom: readNum('autoLayoutMinZoom', 0.1),
-      maxZoom: readNum('autoLayoutMaxZoom', 4),
+      maxZoom: readNum('autoLayoutMaxZoom', 2),
+      includeBars,
+      padding,
+      includeNodeTopBar,
       durationMs: 200,
     })
   }

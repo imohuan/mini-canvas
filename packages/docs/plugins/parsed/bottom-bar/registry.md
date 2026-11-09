@@ -35,6 +35,9 @@
 | `apply` | 结果怎么落到节点：`'applier'`（默认，交给同 kind 写入器） / `'self'`（本动作自己已写好节点） |
 | `run` | `(input: BarRunInput, runCtx: BarRunContext) => BarRunResult | Promise<...>` |
 
+`BarRunInput` 的字段：`{ prompts?: ToolPromptSegment[]; values?: Record<string, unknown>; resources?: ToolResource[] }`。
+`prompts` 是分段提示词（`tag` 段只记资源 id），细节见[服务页](/plugins/parsed/bottom-bar/service)。
+
 ## 使用方式与示例
 
 ```ts

@@ -12,13 +12,14 @@ import type {
   ToolResource,
   ToolResult,
   ToolOutcome,
+  ToolPromptSegment,
   ToolTemplate,
 } from '@mini-canvas/kernel'
 
 /** 一次动作调用的输入（与内核 ToolInput 同构的子集，底栏仅组装这三样） */
 export interface BarRunInput {
-  /** 用户在底栏输入框写的内容（needsPrompt 动作才有） */
-  prompt?: string
+  /** 用户在底栏输入框写的内容：标签与文字分开，顺序即输入顺序（needsPrompt 动作才有） */
+  prompts?: ToolPromptSegment[]
   /** 用户在可视化配置控件里选的值（键 = ToolParamDef.key） */
   values?: Record<string, unknown>
   /** 上游连进来的素材（与内核 ToolResource 同形） */

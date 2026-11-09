@@ -97,29 +97,28 @@ export function collectUpstreamMaterials(
     if (!data) continue
     const label = nonEmptyString(data.label)
 
-    const imageUrl = nonEmptyString(data.imageUrl) || nonEmptyString(data.panoUrl)
-    if (imageUrl) {
-      seen.add(edge.source)
-      out.push({
-        id: edge.source,
-        kind: 'image',
-        name: label || nonEmptyString(data.imageName) || '图片素材',
-        // refName 在排完序之后统一取节点名称（见 nameRefNames）
-        refName: '',
-        url: imageUrl,
-      })
-      continue
-    }
+    /**
+     * **节点类型优先**（用户 2026-11-09）：视频节点常带封面图（imageUrl），
+     * 先看 imageUrl 会把视频认成图片，提示词里就成了「图片N」。
+     * 可识别的媒体节点直接按自己的类型走；字段名只在类型未知时兜底。
+     */
+    const declared = node?.type === 'image' || node?.type === 'video' || node?.type === 'audio'
+      ? node.type
+      : ''
+    /** 持久资源引用：地址由调用方按当前后端 resolve（与 url 二选一或并存） */
+    const resourceId = nonEmptyString(data.resourceId)
 
     const videoUrl = nonEmptyString(data.videoUrl)
-    if (videoUrl) {
+    if (declared === 'video' || (!declared && videoUrl)) {
       seen.add(edge.source)
       out.push({
         id: edge.source,
         kind: 'video',
         name: label || nonEmptyString(data.videoName) || '视频',
         refName: '',
-        url: videoUrl,
+        ...(videoUrl ? { url: videoUrl } : {}),
+        // 已有可显示地址就不再带引用（老行为：不重复解析、不换身份）
+        ...(resourceId && !videoUrl ? { resourceId } : {}),
         ...(Number.isFinite(Number(data.videoDuration)) && Number(data.videoDuration) > 0
           ? { duration: Number(data.videoDuration) }
           : {}),
@@ -127,23 +126,38 @@ export function collectUpstreamMaterials(
       continue
     }
 
+    const imageUrl = nonEmptyString(data.imageUrl) || nonEmptyString(data.panoUrl)
+    if (declared === 'image' || (!declared && imageUrl)) {
+      seen.add(edge.source)
+      out.push({
+        id: edge.source,
+        kind: 'image',
+        name: label || nonEmptyString(data.imageName) || '图片素材',
+        // refName 在排完序之后统一取节点名称（见 nameRefNames）
+        refName: '',
+        ...(imageUrl ? { url: imageUrl } : {}),
+        ...(resourceId && !imageUrl ? { resourceId } : {}),
+      })
+      continue
+    }
+
     // 音频节点：素材行要如实显示连了什么（用户要求音频也能预览，不能默默丢掉）
     const audioUrl = nonEmptyString(data.audioUrl)
-    if (audioUrl) {
+    if (declared === 'audio' || (!declared && audioUrl)) {
       seen.add(edge.source)
       out.push({
         id: edge.source,
         kind: 'audio',
         name: label || nonEmptyString(data.audioName) || '音频',
         refName: '',
-        url: audioUrl,
+        ...(audioUrl ? { url: audioUrl } : {}),
+        ...(resourceId && !audioUrl ? { resourceId } : {}),
       })
       continue
     }
 
     // 只有持久引用（新节点的标准形态）：类型由节点自己声明，这里按已知媒体类型认。
     // 地址不在这里猜 —— 调用方拿到 resourceId 后交给资源服务 resolve。
-    const resourceId = nonEmptyString(data.resourceId)
     if (resourceId) {
       const kind: ToolResourceKind | '' =
         node?.type === 'video' ? 'video' : node?.type === 'audio' ? 'audio' : node?.type === 'image' ? 'image' : ''
@@ -268,17 +282,28 @@ export function resolveMaterialOrder<T extends { id: string }>(
     .map((e) => e.item)
 }
 
+/** 类型前缀 → 资源引用名用的中文词（与 provider 的 refLabel 同一套） */
+export function refKindLabel(kind: string | undefined): string {
+  return kind === 'image' ? '图片'
+    : kind === 'video' ? '视频'
+    : kind === 'audio' ? '音频'
+    : kind === 'text' ? '文本'
+    : '资源'
+}
+
 /**
- * 引用名 = **节点名称**（用户 2026-10-28 定案）。
+ * 引用名 = **类型 + 数组位置**（用户 2026-11-09 纠正）。
  *
- * 以前这里按顺序编「图片1 / 视频2 …」；现在直接用节点名称：
- * 名称在画布内唯一，改名后标签自动跟着变，排序也不会让标签指错对象。
- * 保序、保身份，只补 refName 一个字段（节点名称为空时才退回「素材」）。
+ * 只有 resources 数组的顺序和平台对得上；节点名（「图片 11」）对模型没有意义。
+ * 于是第 1 个资源叫「图片1」，第 2 个资源（哪怕是视频）叫「视频2」，
+ * 和 provider 里 refLabel(resource, index) 的算法逐字一致。
+ * 节点名仍保留在 name 里，给卡片 / 素材行显示用。
  */
 export function nameRefNames(materials: ReadonlyArray<UpstreamMaterial>): UpstreamMaterial[] {
   return materials.map((m, i) => ({
     ...m,
-    refName: String(m.name ?? '').trim() || '素材',
+    refName: refKindLabel(m.kind) + (i + 1),
+    name: compactRefName(m.name) || '素材',
     // 序号 = 显示位（与参考卡右上角那个数字同一口径，只做观察）
     index: i + 1,
   }))
@@ -331,11 +356,18 @@ export function placeChipAt(
 /** 素材 → 生成请求里的资源（只带工具需要的字段，避免把 UI 用的东西塞进请求） */
 export function toToolResources(materials: ReadonlyArray<UpstreamMaterial>): ToolResource[] {
   return materials.map((m) => {
-    const res: ToolResource = { id: m.id, kind: m.kind, name: m.name }
+    // 名称 = 引用名（类型 + 数组位置，如「图片1」），与提示词里的 @ 写法一致。
+    // 资源靠 id 与提示词标签对照；平台侧只认数组顺序，名字给人看。
+    const res: ToolResource = { id: m.id, kind: m.kind, name: m.refName || refKindLabel(m.kind) + (m.index || 1) }
     if (m.url) res.url = m.url
     if (m.value) res.value = m.value
     return res
   })
+}
+
+/** 标签 / 资源名 → 去掉所有空白（只用于发给后台的引用名，不改画布上的节点标题） */
+export function compactRefName(name: string | null | undefined): string {
+  return String(name ?? '').replace(/\s+/g, '')
 }
 
 /**
@@ -373,7 +405,8 @@ export function buildToolInput(
   params?: Record<string, unknown>,
 ): ToolInput {
   return {
-    prompt: (prompt || '').trim(),
+    // 单个字符串入口（预设 / 测试）也按分段数组交出去：普通文字就是一条 prompt
+    prompts: (prompt || '').trim() ? [{ type: 'prompt', value: (prompt || '').trim() }] : [],
     resources: toolResourcesFor(def, materials),
     params: { ...(params ?? {}) },
   }
@@ -669,25 +702,25 @@ export function bottomBarTagSpecFor(getMaterials: () => ReadonlyArray<UpstreamMa
       const materials = getMaterials()
       // 长名优先：避免「天空」把「天空之城」截走
       const sorted = [...materials]
-        .filter((m) => m.name.trim())
-        .sort((a, b) => normalizeRefName(b.name).length - normalizeRefName(a.name).length)
+        .filter((m) => m.refName.trim())
+        .sort((a, b) => normalizeRefName(b.refName).length - normalizeRefName(a.refName).length)
       // 名称到空白 / 中英文标点 / 换行 / 下一个 @ 为止
       const re = /@([^\s@，。,.、；;：:！!？?（）()【】\[\]"'“”‘’]{1,80})/g
       let m: RegExpExecArray | null
       while ((m = re.exec(text)) !== null) {
         const raw = m[1]
         const hit = sorted.find((mat) => {
-          const norm = normalizeRefName(mat.name)
+          const norm = normalizeRefName(mat.refName)
           return raw === norm || raw.startsWith(norm)
         })
-        const name = hit?.name ?? raw.trim()
+        const name = hit?.refName ?? raw.trim()
         if (!name) continue
-        const len = hit ? normalizeRefName(hit.name).length : name.length
+        const len = hit ? normalizeRefName(hit.refName).length : name.length
         const material = hit
         const item: ResourceItem = material
           ? {
               id: refNodeChipId(material.id),
-              name: material.name,
+              name: material.refName,
               category: '素材',
               chipKind: material.kind,
               ...(material.url ? { url: material.url } : {}),
@@ -733,7 +766,8 @@ export function toEditorResources(
      */
     const base: ResourceItem = {
       id: refNodeChipId(m.id),
-      name: m.refName || m.name,
+      // 标签显示 = 引用名（类型 + 数组位置），与平台收到的写法一致
+      name: m.refName || refKindLabel(m.kind) + (m.index || 1),
       category: '素材',
       // 序号：参考区里的显示位（拖拽后由 nameRefNames 重排，标签跟着变）
       ...(typeof m.index === 'number' && m.index > 0 ? { chipIndex: m.index } : {}),

@@ -8,8 +8,9 @@
  * - 没给顺序（老画布 / 从没拖过）→ **连线先后**（既有行为，一个字不改）；
  * - 给了 `data.refOrder`（用户拖过的节点 id 序列）→ 按它排；没列到的垫在最后、
  *   之间仍保持连线先后（稳定排序，不会把新连进来的素材插到中间乱跳）；
- * - **引用名 = 节点名称**（用户 2026-10-28 定案）：名称画布内唯一，
- *   排序只改先后，不会让标签指错对象、也不会改名。
+ * - **引用名 = 类型 + 数组位置**（用户 2026-11-09 纠正）：平台只认 resources 的顺序，
+ *   节点名（「图片 11」）对它没有意义；拖拽后引用名跟着位置重排。
+ * - **类型以节点自己的 type 为准**：视频常带封面图（imageUrl），不能被它抢成图片。
  */
 import { describe, expect, it } from 'vitest'
 import { collectUpstreamMaterials, materialCards, nextRefOrder, previewListFor, resolveMaterialUrls } from '../panelSource'
@@ -33,35 +34,75 @@ describe('collectUpstreamMaterials：素材顺序', () => {
   it('没给顺序 → 连线先后（既有行为不变）', () => {
     const m = collectUpstreamMaterials(edges, 't', getNode)
     expect(m.map((x) => x.id)).toEqual(['a', 'b', 'c'])
-    // 引用名 = 节点名称；没有 label 时按类型兜底（图片素材 / 视频 …）
-    expect(m.map((x) => x.refName)).toEqual(['图片素材', '图片素材', '图片素材'])
+    // 引用名 = 类型 + 数组位置（用户 2026-11-09：只有顺序对得上平台）
+    expect(m.map((x) => x.refName)).toEqual(['图片1', '图片2', '图片3'])
   })
 
-  it('给了顺序 → 按顺序排；引用名是节点名称，不随顺序变', () => {
+  it('给了顺序 → 按顺序排；引用名跟着数组位置重排', () => {
     const named = (id: string) =>
       id === 'a' ? { type: 'image', data: { label: '天空之城', imageUrl: 'https://x/a.png' } }
       : id === 'b' ? { type: 'image', data: { label: '雨声', imageUrl: 'https://x/b.png' } }
       : { type: 'image', data: { label: '封面', imageUrl: 'https://x/c.png' } }
     const m = collectUpstreamMaterials(edges, 't', named, ['c', 'a', 'b'])
     expect(m.map((x) => x.id)).toEqual(['c', 'a', 'b'])
-    expect(m.map((x) => x.refName)).toEqual(['封面', '天空之城', '雨声'])
+    // 拖拽后第一个位置叫「图片1」——名字就是位置，不跟着节点名走
+    expect(m.map((x) => x.refName)).toEqual(['图片1', '图片2', '图片3'])
+    // 节点名仍在 name 里（卡片 / 素材行显示用）
+    expect(m.map((x) => x.name)).toEqual(['封面', '天空之城', '雨声'])
   })
 
-  it('拖拽只改顺序：同一节点无论排第几，引用名都不变', () => {
+  it('拖拽只改顺序：引用名跟着位置变，节点 id 不变', () => {
     const named = (id: string) =>
       id === 'a' ? { type: 'image', data: { label: '天空之城', imageUrl: 'https://x/a.png' } }
       : { type: 'image', data: { label: '雨声', imageUrl: 'https://x/' + id + '.png' } }
     const before = collectUpstreamMaterials(edges, 't', named)
     const after = collectUpstreamMaterials(edges, 't', named, ['c', 'b', 'a'])
-    const nameOf = (list: typeof before, id: string) => list.find((m) => m.id === id)?.refName
-    for (const id of ['a', 'b', 'c']) expect(nameOf(after, id)).toBe(nameOf(before, id))
+    expect(before.map((m) => m.refName)).toEqual(['图片1', '图片2', '图片3'])
+    expect(after.map((m) => m.refName)).toEqual(['图片1', '图片2', '图片3'])
+    // 身份是节点 id，顺序变了身份不变
+    expect(after.map((m) => m.id)).toEqual(['c', 'b', 'a'])
   })
 
-  it('节点名称优先于文件名兜底（用户看到的永远是节点名）', () => {
+  it('节点名称留给显示用（name），引用名仍是类型+位置', () => {
     const g = (id: string) =>
       id === 'a' ? { type: 'image', data: { label: '天空之城', imageName: 'x.png', imageUrl: 'https://x/a.png' } } : undefined
     const m = collectUpstreamMaterials([{ source: 'a', target: 't' }], 't', g)
-    expect(m[0].refName).toBe('天空之城')
+    expect(m[0].refName).toBe('图片1')
+    expect(m[0].name).toBe('天空之城')
+  })
+
+  /**
+   * 用户 2026-11-09 报的真实 bug：视频节点自带封面图（imageUrl），
+   * 旧实现先看 imageUrl，于是视频在提示词里被写成「图片N」。
+   * 类型必须以节点自己的 type 为准。
+   */
+  it('视频节点带封面图也仍是视频（不能被 imageUrl 抢走类型）', () => {
+    const g = (id: string) =>
+      id === 'v' ? { type: 'video', data: { label: '视频 2', videoUrl: 'https://x/v.mp4', imageUrl: 'https://x/poster.png' } } : undefined
+    const m = collectUpstreamMaterials([{ source: 'v', target: 't' }], 't', g)
+    expect(m).toHaveLength(1)
+    expect(m[0].kind).toBe('video')
+    expect(m[0].refName).toBe('视频1')
+    expect(m[0].url).toBe('https://x/v.mp4')
+  })
+
+  it('音频 / 图片同样按节点类型认，不被别的媒体字段抢走', () => {
+    const g = (id: string) =>
+      id === 'a' ? { type: 'audio', data: { label: '音频 3', audioUrl: 'https://x/a.mp3', imageUrl: 'https://x/wave.png' } }
+      : id === 'i' ? { type: 'image', data: { label: '图片 11', imageUrl: 'https://x/i.png', videoUrl: 'https://x/loop.mp4' } }
+      : undefined
+    const m = collectUpstreamMaterials(
+      [
+        { source: 'a', target: 't' },
+        { source: 'i', target: 't' },
+      ],
+      't',
+      g,
+    )
+    expect(m.map((x) => [x.id, x.kind, x.refName])).toEqual([
+      ['a', 'audio', '音频1'],
+      ['i', 'image', '图片2'],
+    ])
   })
 
   it('旧行为兼容：给了顺序但没名字时，顺序仍然生效', () => {

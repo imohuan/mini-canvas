@@ -75,6 +75,7 @@ export type {
   ToolOutcome,
   ToolPollFn,
   ToolPollState,
+  ToolPromptSegment,
   ToolParamDef,
   ToolParamKind,
   ToolParamOption,

@@ -136,10 +136,10 @@ export function createUiState() {
       urls?: string[]
       canvasId?: string
       nodeId?: string
-      /** 提示词 / 参数 / 参考素材 / 媒体元数据：详情弹窗与卡片角标用 */
-      prompt?: string
+      /** 提示词（标签引用资源 id）/ 参数 / 参考素材 / 媒体元数据：详情弹窗与卡片角标用 */
+      prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
       values?: Record<string, unknown>
-      resources?: Array<{ kind: string; url?: string; value?: string }>
+      resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
       media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
       /** 生成完成的时间戳（详情弹窗显示精确时间；卡片显示"多久前"） */
       finishedAt?: number

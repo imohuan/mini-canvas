@@ -188,9 +188,10 @@ describe('generation_create 从入边收集参考图', () => {
     ]
     const r = collectReferenceResources(nodes, edges, 'out')
     expect(r).toEqual([
-      { kind: 'image', url: 'res:aaaa.png' },
-      { kind: 'video', url: 'res:bbbb.mp4' },
-      { kind: 'other', value: '一只猫' },
+      // id / name 与提示词里的 tag.value 一一对应；名称给人和模型辨认
+      { id: 'ref', kind: 'image', name: '图片', url: 'res:aaaa.png' },
+      { id: 'vid', kind: 'video', name: '视频', url: 'res:bbbb.mp4' },
+      { id: 'txt', kind: 'text', name: '文本', value: '一只猫' },
     ])
   })
 

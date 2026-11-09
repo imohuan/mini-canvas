@@ -218,9 +218,9 @@ export function createHistoryScope(state: UiState, host: UiHostScope, canvasList
             urls?: string[]
             canvasId?: string
             nodeId?: string
-            prompt?: string
+            prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
             values?: Record<string, unknown>
-            resources?: Array<{ kind: string; url?: string; value?: string }>
+            resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
             media?: { width?: number; height?: number; durationMs?: number; bytes?: number }
             error?: string
           }>
@@ -272,7 +272,7 @@ export function createHistoryScope(state: UiState, host: UiHostScope, canvasList
           ...(e.canvasId ? { canvasId: e.canvasId } : {}),
           ...(e.nodeId ? { nodeId: e.nodeId } : {}),
           finishedAt: e.finishedAt,
-          ...(e.prompt ? { prompt: e.prompt } : {}),
+          ...(e.prompts && e.prompts.length > 0 ? { prompts: e.prompts } : {}),
           ...(e.values && Object.keys(e.values).length > 0 ? { values: e.values } : {}),
           ...(e.resources && e.resources.length > 0 ? { resources: e.resources } : {}),
           ...(e.media && Object.keys(e.media).length > 0 ? { media: e.media } : {}),

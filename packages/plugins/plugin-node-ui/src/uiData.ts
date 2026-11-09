@@ -176,7 +176,9 @@ export const CANVAS_API_GUIDE = [
   '  （建议 `ui-` 开头 + 时间戳，避免撞上已有数字 id）。',
   '- 画布列表：`GET ${base}/api/canvases` → `{ canvases: [{id,name}] }`',
   '- 提交一次生成任务（AI 出图/出视频）：`POST ${base}/api/jobs`',
-  '  body `{ canvasId, nodeId, actionId, prompt?, values?, resources? }`',
+  '  body `{ canvasId, nodeId, actionId, prompts?, values?, resources? }`',
+  '  prompts 是分段数组：[{type:"tag",value:资源id},{type:"prompt",value:文字}]；',
+  '  resources 里每一项都有 id / name / kind，标签的 value 就是那个 id。',
   '  先 `GET ${base}/api/actions` 看有哪些 actionId 与参数。任务进度由后台写回那个节点。',
 ].join('\n')
 

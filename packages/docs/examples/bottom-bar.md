@@ -128,6 +128,19 @@ export function apply(ctx: Context): void {
 
 **⑦ 动作里的输入框与参数**：动作还能声明 `needsPrompt: true`（底栏显示大输入框）和 `fields`（复用工具的 `ToolParamDef`，底栏自动画参数控件）。最省事的路径是 `publishToolActions(ctx, { types: ['text'], produces: 'text', … })` —— 把 `ctx.tools` 里匹配的工具**整批**发布成底栏按钮，工具增减时它自动同步。这条链路真实插件每天都在用（见出处表第一行）。
 
+**⑧ 输入框交来的是分段提示词**：`needsPrompt: true` 时，`run(input)` 里的 `input.prompts` 不是字符串，
+而是 `[{ type: 'tag', value: '<资源 id>' }, { type: 'prompt', value: '文字' }]` —— 用户插入的素材标签单独成段，
+`value` 只记资源 id。要拼成一段文字时，拿 `input.resources` 按 id 查出名字，把标签展开成 `@图片1`：
+
+```ts
+function promptText(input: { prompts?: Array<{ type: string; value: string }>; resources?: Array<{ id?: string; name?: string }> }) {
+  const nameOf = new Map((input.resources ?? []).map((r) => [r.id, r.name ?? r.id]))
+  return (input.prompts ?? []).map((s) => (s.type === 'tag' ? '@' + (nameOf.get(s.value) ?? s.value) : s.value)).join('')
+}
+```
+
+不要退回读 `input.prompt` —— 那个字段已经换成 `prompts`（老写法读到的永远是 `undefined`）。
+
 ### 省事进阶：把工具整批发布成底栏按钮
 
 如果你装了案例 6 那样的生成工具，`publishToolActions` 一条调用就能让它们全部出现在底栏上 —— 不用为每个模型手写动作。真实文本节点插件的完整用法（节选自 `nodeTextPlugin.ts`，可对照抄）：

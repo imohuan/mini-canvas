@@ -67,7 +67,9 @@ export type CanvasDocResolver = (canvasId: string) => Promise<CanvasDocLike | un
 
 /** 参考素材（交给 provider 的一份上游内容） */
 export interface CanvasResourceRef {
+  id?: string
   kind: string
+  name?: string
   url?: string
   value?: string
 }
@@ -96,7 +98,9 @@ export function collectReferenceResources(
     const n = byId.get(id)
     if (!n) continue
     const d = (n.data ?? {}) as Record<string, unknown>
-    const kind = n.type === 'video' ? 'video' : n.type === 'audio' ? 'audio' : n.type === 'image' ? 'image' : 'other'
+    // 文本节点给 'text'（与底栏同一套词表）：provider 的 textBlocks 只认它，
+    // 给 'other' 会让参考文本被当成「平台不收」静默丢掉。
+    const kind = n.type === 'video' ? 'video' : n.type === 'audio' ? 'audio' : n.type === 'image' ? 'image' : 'text'
     // 媒体地址：优先读显式字段（imageUrl 等）；没有再回退用 resourceId 拼同源地址。
     // 很多媒体节点持久化时只写了 resourceId（没有 imageUrl），若只认 imageUrl 会丢参考图
     // （影响所有这类节点当上游的参考图场景，不只在 ffmpeg provider）。
@@ -106,7 +110,10 @@ export function collectReferenceResources(
         ? toResourceUrl(canvasId, d.resourceId.replace(/^[^/]+\//, ''))
         : undefined)
     const text = typeof d.text === 'string' ? d.text : undefined
-    out.push({ kind, ...(url ? { url } : {}), ...(text && !url ? { value: text } : {}) })
+    const name = typeof d.label === 'string' && d.label.trim() !== ''
+      ? d.label
+      : kind === 'video' ? '视频' : kind === 'audio' ? '音频' : kind === 'image' ? '图片' : '文本'
+    out.push({ id, kind, name, ...(url ? { url } : {}), ...(text && !url ? { value: text } : {}) })
   }
   return out
 }
@@ -583,7 +590,7 @@ export function createCanvasMcpServer(
         // 参考图来自画布上的**入边**（与底栏「连进来就算素材」同一套语义）：
         // target=本节点 的边，其 source 节点若有图片/视频/音频，就当参考素材交给 provider。
         // 这条不能少 —— provider 的参考图只认 input.resources，MCP 不收集的话参考图根本没传过去。
-        const resources: Array<{ kind: string; url?: string; value?: string }> = []
+        const resources: CanvasResourceRef[] = []
         let targetDoc: CanvasDocLike | undefined
         try {
           const picked = await pickDoc(args.canvasId)
@@ -609,7 +616,7 @@ export function createCanvasMcpServer(
           canvasId,
           nodeId: args.nodeId,
           actionId: args.actionId,
-          ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+          ...(args.prompt !== undefined ? { prompts: [{ type: 'prompt' as const, value: args.prompt }] } : {}),
           ...(args.values ? { values: args.values } : {}),
           ...(resources.length ? { resources } : {}),
         })

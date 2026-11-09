@@ -161,7 +161,7 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
         canvasId: 'c1',
         nodeId: 'n1',
         actionId: action.id,
-        prompt: '夕阳下的城市',
+        prompts: [{ type: 'prompt', value: '夕阳下的城市' }],
         values: { ratio: '16:9' },
       })
       expect(r).toEqual({ taskId: 'task-1' })
@@ -196,7 +196,7 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
         canvasId: 'c1',
         nodeId: 'n1',
         actionId: action.id,
-        prompt: '一只猫在跑',
+        prompts: [{ type: 'prompt', value: '一只猫在跑' }],
         values: { ratio: '9:16', durationSec: 10 },
       })
       const sent = calls[0].body as { params: { prompt: string } }
@@ -224,7 +224,7 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
         canvasId: 'c1',
         nodeId: 'n1',
         actionId: action.id,
-        prompt: '画一只猫',
+        prompts: [{ type: 'prompt', value: '画一只猫' }],
         values: { ratio: '1:1', resolution: '2k' },
         resources: [{ kind: 'image', url: 'data:image/png;base64,AAA' }],
       })
@@ -310,7 +310,7 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
     }) as typeof fetch
     try {
       const p = await load('web2api-image.js')
-      const r = await p.submit(p.actions[0], { canvasId: 'c1', nodeId: 'n1', actionId: p.actions[0].id, prompt: 'x' })
+      const r = await p.submit(p.actions[0], { canvasId: 'c1', nodeId: 'n1', actionId: p.actions[0].id, prompts: [{ type: 'prompt', value: 'x' }] })
       expect('error' in r).toBe(true)
       if ('error' in r) expect(r.error).toContain('连不上 web2api')
     } finally {
@@ -364,7 +364,9 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
           canvasId: 'c1',
           nodeId: 'n1',
           actionId,
-          prompt: '按 @封面 的风格，用 @标题内容',
+          prompts: [
+            { type: 'prompt', value: '按 @封面 的风格，用 @标题内容' },
+          ],
           values: {},
           resources: MIXED,
         })
@@ -408,18 +410,53 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
       expect(body.params.text).toBeTruthy()
     })
 
-    it('文本素材带名字进提示词（可以用 @名字 引用），且不糊成一段', async () => {
+    it('文本素材按「类型+数组位置」命名进提示词，且不糊成一段', async () => {
       const { body } = await submitWith('web2api-image.js', 'web2api:chatgpt-image')
       const prompt = String(body.params.prompt)
-      expect(prompt).toContain('<text name="标题内容">')
+      // MIXED 里第一项是文本 → 文本1；第二段正文在第 6 项 → 文本6
+      expect(prompt).toContain('<text name="文本1">')
       expect(prompt).toContain('一段标题文字')
-      expect(prompt).toContain('<text name="正文">')
+      expect(prompt).toContain('<text name="文本6">')
       expect(prompt).toContain('第二段正文')
-      // 用户自己的提示词在
+      // 用户自己的提示词原样在（这段是纯文字，不是标签）
       expect(prompt).toContain('用 @标题内容')
     })
 
-    it('文本没有名字时按 文本1 / 文本2 编号（保证引用名稳定）', async () => {
+    it('提示词里的 tag 只给资源 id，按 resources 的「类型+数组位置」展开（顺序不变）', async () => {
+      const globalAny = globalThis as unknown as { fetch: typeof fetch }
+      const original = globalAny.fetch
+      const seen: Array<{ body: { params: Record<string, unknown> } }> = []
+      globalAny.fetch = (async (_url: string, init?: RequestInit) => {
+        seen.push({ body: JSON.parse(String(init?.body ?? '{}')) })
+        return new Response(JSON.stringify({ code: 0, message: 'ok', data: { id: 't1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }) as typeof fetch
+      try {
+        const p = await load('web2api-image.js')
+        const action = p.actions.find((a) => a.id === 'web2api:apimart-image')!
+        await p.submit(action, {
+          canvasId: 'c1',
+          nodeId: 'n1',
+          actionId: action.id,
+          prompts: [
+            { type: 'prompt', value: '照着' },
+            { type: 'tag', value: 'n9' },
+            { type: 'prompt', value: '的风格画一只猫' },
+          ],
+          resources: [{ id: 'n9', kind: 'image', name: '封面', url: 'data:image/png;base64,IMG1' }],
+        })
+        const prompt = String(seen[0].body.params.prompt)
+        // 索引从 1 开始、按类型各自编号：第一个资源是图片，所以是 @图片1。
+        // 节点名「封面」不参与提示词（平台只认顺序）。
+        expect(prompt).toBe('照着@图片1的风格画一只猫')
+      } finally {
+        globalAny.fetch = original
+      }
+    })
+
+    it('文本按数组位置编号（文本1 / 文本2），与节点名无关', async () => {
       const globalAny = globalThis as unknown as { fetch: typeof fetch }
       const original = globalAny.fetch
       const seen: Array<{ body: { params: Record<string, unknown> } }> = []
@@ -437,7 +474,7 @@ describe('提交与轮询：直接调 web2api 的 HTTP 接口', () => {
           canvasId: 'c1',
           nodeId: 'n1',
           actionId: action.id,
-          prompt: 'x',
+          prompts: [{ type: 'prompt', value: 'x' }],
           resources: [
             { kind: 'text', value: 'A' },
             { kind: 'text', value: 'B' },

@@ -67,6 +67,38 @@ interface ToolInvokeOptions {
 | `templates` | `ToolTemplate[]?` | 预设提示词模板，面板渲染"模板"下拉 |
 | `run` | `(input: ToolInput, ctx: ToolRunContext) => ToolOutcome 或 Promise<ToolOutcome>` | 执行体 |
 
+### `input` 里有什么（`ToolInput`）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `prompts` | `ToolPromptSegment[]?` | 用户在输入框里写的内容，**分段**给出 |
+| `resources` | `ToolResource[]?` | 上游连进来的素材（图片 / 视频 / 音频 / 文本） |
+| `params` | `Record<string, unknown>?` | 用户在可视化控件里选的值（键 = `ToolParamDef.key`） |
+
+`prompts` 每一段是 `{ type: 'tag' | 'prompt'; value: string }`：
+
+- `type: 'prompt'` —— 普通文字，`value` 就是原文；
+- `type: 'tag'` —— 一个引用标签，`value` 是**资源 id**（不是名字）。
+
+标签为什么只存 id：标签本身没有状态，资源才有；名称、地址都去 `resources` 里按同一个 `id` 查，
+两处才能一一对上（以前两边各存一份名字，改名或换序就会指错）。
+
+```ts
+// 把分段提示词拼成一段文字（这是插件侧最常用的写法：标签展开成 @引用名）
+function promptText(
+  prompts: Array<{ type: 'tag' | 'prompt'; value: string }> | undefined,
+  resources: Array<{ id?: string; name?: string }> | undefined,
+): string {
+  const nameOf = new Map((resources ?? []).map((r) => [r.id, r.name ?? r.id]))
+  return (prompts ?? [])
+    .map((s) => (s.type === 'tag' ? '@' + (nameOf.get(s.value) ?? s.value) : s.value))
+    .join('')
+}
+```
+
+顺序就是用户输入的顺序；**不要**把标签丢掉或拍平成纯文本再往上传 ——
+后台要按 `id` 把标签对应回具体素材（见[引用名怎么算](/plugins/parsed/bottom-bar/index#引用名怎么算)）。
+
 `params` 里的每一项只描述"这个参数长什么样"，不用写控件代码：
 
 ```ts

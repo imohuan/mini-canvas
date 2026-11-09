@@ -163,9 +163,9 @@ export class CloudApi {
     canvasId: string
     nodeId: string
     actionId: string
-    prompt?: string
+    prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
     values?: Record<string, unknown>
-    resources?: Array<{ kind: string; url?: string; value?: string }>
+    resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
   }): Promise<string> {
     const res = await this.doFetch(this.absolute('/api/jobs'), {
       method: 'POST',

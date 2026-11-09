@@ -158,7 +158,7 @@ describe('下单', () => {
       canvasId: 'default',
       nodeId: 'n1',
       actionId: ACTION.id,
-      prompt: '一个坐在窗边的女孩',
+      prompts: [{ type: 'prompt', value: '一个坐在窗边的女孩' }],
       values: { ratio: '2:3', quality: '2k' },
       resources: [
         { kind: 'image', url: '/api/canvases/default/resources/abc.png' },
@@ -171,7 +171,7 @@ describe('下单', () => {
     expect(all).toHaveLength(1)
     const h = all[0]
     // 参数与参考素材必须落进账本 —— 否则详情弹窗只能看到一张图，无法复盘
-    expect(h.prompt).toBe('一个坐在窗边的女孩')
+    expect(h.prompts).toEqual([{ type: 'prompt', value: '一个坐在窗边的女孩' }])
     expect(h.values).toEqual({ ratio: '2:3', quality: '2k' })
     expect(h.resources).toEqual([
       { kind: 'image', url: '/api/canvases/default/resources/abc.png' },

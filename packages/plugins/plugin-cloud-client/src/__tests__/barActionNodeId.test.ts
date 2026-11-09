@@ -100,7 +100,7 @@ describe('云端动作下单带节点 id', () => {
 
     const NODE_ID = 'node-42'
     await (action!.run as (i: unknown, c: unknown) => Promise<unknown>)(
-      { prompt: '画只猫' },
+      { prompts: [{ type: 'prompt', value: '画只猫' }] },
       { nodeId: NODE_ID, nodeType: 'image', signal: new AbortController().signal, onProgress: () => {}, readData: () => ({}) },
     )
 

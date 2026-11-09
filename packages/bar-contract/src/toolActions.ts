@@ -58,7 +58,7 @@ export function publishToolActions(ctx: PluginScope, opts: PublishToolActionsOpt
       registerBarAction(
         ctx,
         toolToAction(tool, opts, (input) =>
-          tools.invoke(tool.name, { prompt: input.prompt, values: input.values, resources: input.resources }),
+          tools.invoke(tool.name, { prompts: input.prompts, values: input.values, resources: input.resources }),
         ),
       )
     }

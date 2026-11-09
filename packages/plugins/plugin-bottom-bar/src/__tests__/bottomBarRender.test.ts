@@ -267,15 +267,15 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
         return undefined
       },
     )
-    // 节点 id 仍是身份（请求组装 / 去重用），refName 是给人看的名称
+    // 节点 id 仍是身份（请求组装 / 去重用）；refName = 类型 + 数组位置
     expect(materials.map((m) => m.id)).toEqual(['i1', 't1', 'i2', 'v1'])
-    expect(materials.map((m) => m.refName)).toEqual(['猫', '文本', '狗', '视频'])
+    expect(materials.map((m) => m.refName)).toEqual(['图片1', '文本2', '图片3', '视频4'])
     // 编辑器资源项的 name 就是 refName（@ 下拉 / 卡片文案 / 纯文本 token 三处一致）
     const items = toEditorResources(materials)
-    expect(items.map((i) => i.name)).toEqual(['猫', '文本', '狗', '视频'])
+    expect(items.map((i) => i.name)).toEqual(['图片1', '文本2', '图片3', '视频4'])
   })
 
-  it('@ 引用回查：token 是节点名称或标签 id 都能回查', () => {
+  it('@ 引用回查：token 是引用名或标签 id 都能回查', () => {
     const materials = collectUpstreamMaterials(
       [{ source: 'i1', target: '35' }],
       '35',
@@ -283,9 +283,9 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     )
     const items = toEditorResources(materials)
     const resolve = makeResourceResolver(items)
-    // 身份 = ref-node:<节点 id>；名称就是节点名
-    expect(resolve('猫')?.id).toBe('ref-node:i1')
-    expect(resolve('ref-node:i1')?.name).toBe('猫')
+    // 身份 = ref-node:<节点 id>；显示名 = 类型 + 数组位置
+    expect(resolve('图片1')?.id).toBe('ref-node:i1')
+    expect(resolve('ref-node:i1')?.name).toBe('图片1')
     expect(resolve('不存在')).toBeNull()
   })
 
@@ -318,7 +318,7 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect(imgChildren[1][0]).toBe('img')
     expect((imgChildren[1][1] as Record<string, string>).class).toBe('resource-chip-thumb')
     expect((imgChildren[2][1] as Record<string, string>).class).toBe('resource-chip-name')
-    expect(imgChildren[2][2]).toBe('猫')
+    expect(imgChildren[2][2]).toBe('图片1')
     // 文本卡片：图标 + 名字，且带 resource-chip--text 修饰类
     expect((textSpec[1] as Record<string, string>).class).toContain('resource-chip--text')
     expect((textSpec.slice(2) as unknown[][])[0][0]).toBe('span')

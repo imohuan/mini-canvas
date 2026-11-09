@@ -19,10 +19,20 @@ export type PollState =
 
 /** 上游素材（与 kernel ToolResource 同形的最小面） */
 export interface ResourceLike {
+  /** 资源 id（与提示词里的 tag.value 一一对应） */
+  id?: string
   kind?: string
+  /** 资源名称（节点名称，给人和模型辨认用） */
+  name?: string
   url?: string
   value?: string
   [k: string]: unknown
+}
+
+/** 一段提示词：标签引用某个资源，或普通文字 */
+export interface PromptSegmentLike {
+  type: 'tag' | 'prompt'
+  value: string
 }
 
 export interface RunDeps {
@@ -41,18 +51,21 @@ export interface RunDeps {
 async function normalizeResources(
   deps: RunDeps,
   resources: ResourceLike[] | undefined,
-): Promise<Array<{ kind: string; url?: string; value?: string }>> {
-  const out: Array<{ kind: string; url?: string; value?: string }> = []
+): Promise<Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>> {
+  const out: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }> = []
   for (const r of resources ?? []) {
     const kind = typeof r.kind === 'string' ? r.kind : 'image'
+    const id = typeof r.id === 'string' && r.id !== '' ? r.id : undefined
+    const name = typeof r.name === 'string' && r.name !== '' ? r.name : undefined
     const url = typeof r.url === 'string' ? r.url : undefined
+    const base = { ...(id ? { id } : {}), kind, ...(name ? { name } : {}) }
     if (url && /^(data:|blob:)/i.test(url) && deps.toBlob) {
       // 后台拿不到 data:/blob: —— 先传上去换成画布资源地址（URL）
       try {
         const blob = await deps.toBlob(url)
         if (blob) {
           const uploaded = await deps.uploadLocal(deps.canvasId, blob, kind + '.bin')
-          out.push({ kind, url: uploaded.url })
+          out.push({ ...base, url: uploaded.url })
           continue
         }
       } catch (err) {
@@ -60,7 +73,7 @@ async function normalizeResources(
         continue
       }
     }
-    const item: { kind: string; url?: string; value?: string } = { kind }
+    const item: { id?: string; kind: string; name?: string; url?: string; value?: string } = { ...base }
     if (url) item.url = url
     if (typeof r.value === 'string') item.value = r.value
     out.push(item)
@@ -113,7 +126,7 @@ export function makeJobPoll(deps: RunDeps, jobId: string): () => Promise<PollSta
 /** 下单。返回 jobId（异步）或直接结果（同步完成）。 */
 export async function submitJob(
   deps: RunDeps,
-  input: { nodeId: string; actionId: string; prompt?: string; values?: Record<string, unknown>; resources?: ResourceLike[] },
+  input: { nodeId: string; actionId: string; prompts?: PromptSegmentLike[]; values?: Record<string, unknown>; resources?: ResourceLike[] },
 ): Promise<{ jobId: string } | { done: { ok: boolean; urls?: string[]; text?: string; error?: string } }> {
   // 节点里可能还躺着没上传的本地地址（dataURL）—— 后台取不到，先换个说法告诉它
   const data = deps.readNodeData(input.nodeId)
@@ -127,7 +140,7 @@ export async function submitJob(
     canvasId: deps.canvasId,
     nodeId: input.nodeId,
     actionId: input.actionId,
-    ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+    ...(input.prompts !== undefined ? { prompts: input.prompts } : {}),
     ...(input.values ? { values: input.values } : {}),
     ...(resources.length > 0 ? { resources } : {}),
   })

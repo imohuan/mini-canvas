@@ -35,9 +35,9 @@ export interface Job {
    * 详情弹窗据此还原"当时用了什么"。
    */
   request?: {
-    prompt?: string
+    prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
     values?: Record<string, unknown>
-    resources?: Array<{ kind: string; url?: string; value?: string }>
+    resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
   }
   createdAt: number
   finishedAt?: number
@@ -63,8 +63,8 @@ export interface HistoryEntry {
   rating: 'passed' | 'pending' | 'rejected'
   urls?: string[]
   text?: string
-  /** 用户当时的提示词（生成参数的一部分） */
-  prompt?: string
+  /** 用户当时的提示词（生成参数的一部分；标签引用资源 id） */
+  prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
   /** 用户当时选的参数（比例 / 时长 / 模型档位…，键 = 动作声明的 ActionParam.key） */
   values?: Record<string, unknown>
   /**
@@ -73,7 +73,7 @@ export interface HistoryEntry {
    * url 是**画布内地址**（/api/canvases/.../resources/...），详情弹窗可直接显示缩略图；
    * 参考文本放 value。
    */
-  resources?: Array<{ kind: string; url?: string; value?: string }>
+  resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
   /** 产物媒体元数据（尺寸 / 时长 / 字节数）：卡片用它画比例与角标，不必等媒体加载完 */
   media?: {
     width?: number

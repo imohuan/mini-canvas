@@ -72,7 +72,11 @@ POST {base}/api/agent/chat/completion  { model?, messages, stream?, max_tokens? 
 
 // 调模型出媒体（与「画界面」是两条轨道，别混）
 GET  {base}/api/actions                                         // 有哪些 actionId 与参数
-POST {base}/api/jobs  { canvasId, nodeId, actionId, prompt?, values? }
+POST {base}/api/jobs  { canvasId, nodeId, actionId, prompts?, values?, resources? }
+
+`prompts` 是分段数组：`[{ type: 'tag', value: '<资源 id>' }, { type: 'prompt', value: '文字' }]`；
+后台按 `resources` 的数组顺序把它还原成 `@图片1` 这类引用文本（顺序就是用户输入的顺序）。
+`resources[].id` 与标签的 `value` 一一对应，每个资源还带 `name` / `kind` / `url`。
 ```
 
 ## 六、插件自身信息

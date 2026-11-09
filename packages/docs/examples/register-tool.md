@@ -53,6 +53,17 @@ export const name = 'echo-tool'
  */
 export const inject = ['tools'] as string[]
 
+/** 把分段提示词拼成一段文字：标签展开成 @名称（名称从 resources 里按 id 查） */
+function promptText(
+  prompts: Array<{ type: 'tag' | 'prompt'; value: string }> | undefined,
+  resources: Array<{ id: string; name?: string }> | undefined,
+): string {
+  const nameOf = new Map((resources ?? []).map((r) => [r.id, r.name ?? r.id]))
+  return (prompts ?? [])
+    .map((s) => (s.type === 'tag' ? '@' + (nameOf.get(s.value) ?? s.value) : s.value))
+    .join('')
+}
+
 /**
  * ② 建一个工具。ToolDef 就是「一张工具说明书」：
  *    名字、显示名、吃什么、吐什么、参数长什么样、run 怎么执行。
@@ -81,12 +92,13 @@ export function createEchoTool(): ToolDef {
       },
     ],
 
-    // ⑥ run = 工具真正干活的地方。input 里有用户填的三样：prompt（输入框内容）、
+    // ⑥ run = 工具真正干活的地方。input 里有用户填的三样：prompts（输入框内容，
+    //    标签与文字分段给出）、
     //    params（参数）、resources（上游连进来的素材）。runCtx 里有发起节点的
     //    id（runCtx.nodeId）和画布 id（runCtx.canvasId），调用方给什么这里收什么。
     async run(input, runCtx) {
       const times = typeof input.params?.repeat === 'number' ? input.params.repeat : 1
-      const text = input.prompt ?? ''
+      const text = promptText(input.prompts, input.resources)
       const echo = Array.from({ length: times }, () => text).join('\n')
       return {
         ok: true,
@@ -123,13 +135,13 @@ import type { ToolResult, ToolPollFn } from '@mini-canvas/canvas-base'
 
 async run(input, runCtx): Promise<ToolResult | ToolPollFn> {
   // ① 提交任务。真实插件 POST {baseUrl}/api/tasks，字段对齐后台约定：
-  //    kind（产物类型）、promptText（提示词）、targetNodeId / canvasId（发起方）。
+  //    kind（产物类型）、prompts（分段提示词）、targetNodeId / canvasId（发起方）。
   const submit = await fetch(baseUrl + '/api/tasks', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       kind: 'text',
-      promptText: input.prompt,
+      prompts: input.prompts,
       targetNodeId: runCtx.nodeId,
       canvasId: runCtx.canvasId,
     }),
@@ -208,6 +220,10 @@ export function apply(ctx: Context, config?: EchoToolConfig): void {
 
 **⑥ run 的返回值有两种**：直接 `return { ok, text }` 是同步完成；如果调用要走后台，先提交任务，然后 `return` 一个**轮询函数**（每次返回 `{ status: 'running', message }` 或 `{ status: 'done', result }`），内核负责定时调它、把进度转发给 UI。真实插件的 run 就是第二种形态。
 
+**⑥ 提示词是分段的**：`input.prompts` 形如 `[{ type: 'tag', value: '<资源 id>' }, { type: 'prompt', value: '文字' }]`。
+标签只记资源 id，名字从 `input.resources` 里按同一个 `id` 找；顺序就是用户输入的顺序。
+要一段纯文本时，把标签展开成 `@名称` 再接上后面的文字即可（见 `promptText`）。
+
 **⑦ 绝不做假结果**：真实插件的红线 —— 请求失败就返回 `{ ok: false, error: '…' }`，让界面如实显示失败。假 success 会让用户以为生成成功、内容却没写进节点，排查起来要命。
 
 **produces 的「产物字段」约定**：工具产出哪种内容，结果就写哪个字段 —— text 工具写 `result.text`，图片工具写 `result.urls`。消费方（面板、底栏、写入器）按 `produces` 决定读哪个：真实文本工具的 poll 结束时把 `task.result.text` 透传进 `ToolResult.text`；文本节点的写入器读 `result.text` 写回 `data.text`。两边的词表都来自 `packages/kernel/src/toolRegistry.ts`（`ToolResult` / `ToolResourceKind`），别自己发明第三套。
@@ -229,7 +245,7 @@ export function apply(ctx: Context, config?: EchoToolConfig): void {
 | params 声明式 UI 的真实写法 | 同上（`paramsOf(cap)`，词表见 `packages/kernel/src/toolRegistry.ts` 的 `ToolParamDef`） | `type: 'select' / 'number' / …`，配 `options / min / max / step / unit` |
 | run 先提交、后轮询的异步形态 | 同上 `run(input, runCtx)` | POST `/api/tasks` 拿 taskId，返回 ToolPollFn；失败收敛成 `{ ok:false, error }`，不返回假 running |
 | 「批量注册多个模型」的复用入口 | 同上 `createTextGenerationTools` / `registerTextGenerationTools` | `models.map(cap => createTextGenerationTool(cap, options))` 后逐个 `registrar.register(def)` |
-| 面板按声明画参数、组装 invoke 输入 | `packages/plugins/plugin-node-image/src/panelSource.ts` + `ImageGeneratePanel.vue` | `resolveToolParams` 算默认值；点发送时 `{ prompt, resources, params }` 传给 `tools.invoke` |
+| 面板按声明画参数、组装 invoke 输入 | `packages/plugins/plugin-node-image/src/panelSource.ts` + `ImageGeneratePanel.vue` | `resolveToolParams` 算默认值；点发送时 `{ prompts, resources, params }` 传给 `tools.invoke` |
 | package.json 的 miniCanvas 段 | `packages/plugins/plugin-tool-text-generation/package.json` | `title / description / pluginName / installable` |
 
 ## 常见坑

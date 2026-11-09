@@ -104,8 +104,8 @@ export interface JobInput {
   /** 结果写回的目标节点 */
   nodeId: string
   actionId: string
-  /** 用户在输入框写的提示词 */
-  prompt?: string
+  /** 用户在输入框写的内容：标签引用资源 id，普通文字单独成段（顺序即输入顺序） */
+  prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>
   /** 用户在可视化控件里选的值（键 = ActionParam.key） */
   values?: Record<string, unknown>
   /**
@@ -114,7 +114,7 @@ export interface JobInput {
    * `url` 是**画布内引用**（res:<hash>）或绝对地址；provider 若需要真实字节/真实地址，
    * 由宿主在提交前解析好（见 tasks/ 的说明）。
    */
-  resources?: Array<{ kind: string; url?: string; value?: string }>
+  resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
 }
 
 /** 提交结果：要么给了 taskId（异步，要轮询），要么直接完成，要么直接失败 */

@@ -61,6 +61,8 @@ export type {
   ViewportContract,
   ViewContract,
   FitToOptions,
+  FocusPadding,
+  FocusInsets,
   FocusTarget,
   LayoutRect,
   ViewportState,

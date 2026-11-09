@@ -105,8 +105,9 @@ describe('canvas 动作门面', () => {
   it('runBarAction 有 nodeTask 时转发 nodeId/actionId/input', async () => {
     const nodeTask = { run: vi.fn(async () => ({ ok: true })), cancel: vi.fn() }
     const c = new CanvasService(fakeCtx({ nodeTask }))
-    await expect(c.runBarAction('n1', 'a1', { prompt: 'x' })).resolves.toEqual({ ok: true })
-    expect(nodeTask.run).toHaveBeenCalledWith('n1', 'a1', { prompt: 'x' })
+    const input = { prompts: [{ type: 'prompt' as const, value: 'x' }] }
+    await expect(c.runBarAction('n1', 'a1', input)).resolves.toEqual({ ok: true })
+    expect(nodeTask.run).toHaveBeenCalledWith('n1', 'a1', input)
     c.cancelBarAction('n1')
     expect(nodeTask.cancel).toHaveBeenCalledWith('n1')
   })

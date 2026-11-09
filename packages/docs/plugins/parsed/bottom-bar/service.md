@@ -44,7 +44,14 @@ FJ => FJ
 | `cancel` | `cancel(nodeId: string): void` | 取消某节点正在跑的任务（覆盖层「取消」按钮） |
 | `restoreAll` | `restoreAll(): Promise<void>` | 刷新续查：把所有 `running` 状态的节点接回来 |
 
-`run` 的 `input` 形状：`{ prompt?: string; values?: Record<string, unknown>; resources?: ToolResource[] }`。
+`run` 的 `input` 形状：`{ prompts?: ToolPromptSegment[]; values?: Record<string, unknown>; resources?: ToolResource[] }`。
+
+`prompts` 是提示词的分段数组：`[{ type: 'tag', value: '<资源 id>' }, { type: 'prompt', value: '文字' }]`。
+标签只记资源 id，名称与地址去 `resources[]` 里按同一个 `id` 查；顺序就是输入框里的顺序。
+
+`resources[]` 里的每一项都带 `id` / `kind` / `name`（可再带 `url` 或 `value`）。
+其中 `name` 用的是**引用名**（类型 + 数组位置，如 `图片1`），与提示词里的 `@图片1` 一一对应 ——
+算法见[引用名怎么算](/plugins/parsed/bottom-bar/index#引用名怎么算)。
 
 ## 一个真实调用
 

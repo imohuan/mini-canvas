@@ -29,7 +29,7 @@ describe('素材序号 = 参考区显示位', () => {
     expect(list.map((m) => m.index)).toEqual([1, 2])
   })
 
-  it('拖拽后的顺序（refOrder）决定序号，名字不动', () => {
+  it('拖拽后的顺序（refOrder）决定序号，引用名跟着位置走', () => {
     const materials = collectUpstreamMaterials(
       [
         { source: 'n1', target: 'me' },
@@ -40,15 +40,15 @@ describe('素材序号 = 参考区显示位', () => {
       ['n2', 'n1'],
     )
     expect(materials.map((m) => m.name)).toEqual(['狗', '猫'])
-    expect(materials.map((m) => m.refName)).toEqual(['狗', '猫'])
+    expect(materials.map((m) => m.refName)).toEqual(['图片1', '图片2'])
     expect(materials.map((m) => m.index)).toEqual([1, 2])
   })
 })
 
-describe('编辑器标签拿到序号，但引用名不被改写', () => {
-  it('chipIndex 跟素材顺序一致，name 保持节点名', () => {
+describe('编辑器标签拿到序号，引用名 = 类型+位置', () => {
+  it('chipIndex 跟素材顺序一致，name 是引用名，节点名仍在 name 字段之外', () => {
     const items = toEditorResources(nameRefNames([material('n2', '狗'), material('n1', '猫')]))
-    expect(items.map((i) => i.name)).toEqual(['狗', '猫'])
+    expect(items.map((i) => i.name)).toEqual(['图片1', '图片2'])
     expect(items.map((i) => i.chipIndex)).toEqual([1, 2])
     expect(items[0].id).toBe(refNodeChipId('n2'))
   })
@@ -61,7 +61,7 @@ describe('编辑器标签拿到序号，但引用名不被改写', () => {
     )!
     const props = nameNode[1] as Record<string, string>
     expect(props['data-chip-index']).toBe('2')
-    expect(nameNode[2]).toBe('狗')
+    expect(nameNode[2]).toBe('图片2')
   })
 })
 

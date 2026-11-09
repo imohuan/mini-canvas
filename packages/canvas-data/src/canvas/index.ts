@@ -52,6 +52,8 @@ export type {
   CanvasCreateNodeOptions,
   CanvasSelectMode,
   FitToOptions,
+  FocusPadding,
+  FocusInsets,
   FocusTarget,
   NodeLayoutContract,
   ViewContract,

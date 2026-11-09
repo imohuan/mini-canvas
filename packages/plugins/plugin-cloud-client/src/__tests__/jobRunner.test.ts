@@ -77,12 +77,46 @@ describe('下单', () => {
       return new Response(JSON.stringify({ ok: true, jobId: 'j1' }), { status: 200 })
     }
     const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
-    const r = await submitJob(deps(api), { nodeId: 'n1', actionId: 'a:1', prompt: '画只猫' })
+    const r = await submitJob(deps(api), {
+      nodeId: 'n1',
+      actionId: 'a:1',
+      prompts: [{ type: 'prompt', value: '画只猫' }],
+    })
     expect('jobId' in r && r.jobId).toBe('j1')
     expect(sent.canvasId).toBe('default')
     expect(sent.nodeId).toBe('n1')
     expect(sent.actionId).toBe('a:1')
-    expect(sent.prompt).toBe('画只猫')
+    // 不再有 prompt 字段：同一份内容以分段数组给出
+    expect(sent.prompt).toBeUndefined()
+    expect(sent.prompts).toEqual([{ type: 'prompt', value: '画只猫' }])
+  })
+
+  it('资源带着 id 与名称一起交给后台（与提示词里的 tag 对照）', async () => {
+    let sent: {
+      prompts?: Array<{ type: string; value: string }>
+      resources?: Array<{ id?: string; kind: string; name?: string; url?: string }>
+    } = {}
+    const fetchImpl: FetchLike = async (_url, init) => {
+      sent = JSON.parse(String(init?.body ?? '{}')) as typeof sent
+      return new Response(JSON.stringify({ ok: true, jobId: 'j1' }), { status: 200 })
+    }
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await submitJob(deps(api), {
+      nodeId: 'n1',
+      actionId: 'a:1',
+      prompts: [
+        { type: 'tag', value: 'n7' },
+        { type: 'prompt', value: ' 他说：你好' },
+      ],
+      resources: [{ id: 'n7', kind: 'audio', name: '音频3', url: '/api/canvases/default/resources/abcdef0123456789.mp3' }],
+    })
+    expect(sent.prompts).toEqual([
+      { type: 'tag', value: 'n7' },
+      { type: 'prompt', value: ' 他说：你好' },
+    ])
+    expect(sent.resources).toEqual([
+      { id: 'n7', kind: 'audio', name: '音频3', url: '/api/canvases/default/resources/abcdef0123456789.mp3' },
+    ])
   })
 
   it('上游素材里"后台取不到"的地址先上传再交（data:/blob:）', async () => {

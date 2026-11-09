@@ -63,16 +63,44 @@ function cleanValues(values) {
  * 为什么用标签而不是纯文本：纯文本拼在一起后，模型分不清哪段是「资料」、
  * 哪段是「我的指令」，也对应不上引用名。标签把边界和名字都写清楚。
  */
+/** 资源在数组里的位置就是它的引用索引（从 1 开始）；平台只认序号，不认节点名 */
+function refLabel(resource, index) {
+  const kind = resource && typeof resource.kind === 'string' ? resource.kind : ''
+  const prefix =
+    kind === 'image' ? '图片'
+    : kind === 'video' ? '视频'
+    : kind === 'audio' ? '音频'
+    : kind === 'text' ? '文本'
+    : '资源'
+  return prefix + (index + 1)
+}
+
 function textBlocks(input) {
   const out = []
-  let n = 0
-  for (const r of input.resources || []) {
-    if (r.kind !== 'text') continue
-    n += 1
-    const raw = typeof r.name === 'string' ? r.name.trim() : ''
-    const name = raw !== '' ? raw : '文本' + n
+  const resources = input.resources || []
+  resources.forEach((r, i) => {
+    if (!r || r.kind !== 'text') return
     const value = typeof r.value === 'string' ? r.value : ''
-    out.push('<text name="' + name + '">\n' + value + '\n</text>')
+    out.push('<text name="' + refLabel(r, i) + '">\n' + value + '\n</text>')
+  })
+  return out
+}
+
+/** 提示词分段 → 平台要的一段文字（标签按资源在数组里的「类型+序号」展开） */
+function promptText(input) {
+  const labels = new Map()
+  const resources = input.resources || []
+  resources.forEach((r, i) => {
+    if (r && typeof r.id === 'string' && r.id) labels.set(r.id, refLabel(r, i))
+  })
+  let out = ''
+  for (const seg of input.prompts || []) {
+    if (!seg || typeof seg.value !== 'string') continue
+    if (seg.type === 'tag') {
+      out += '@' + (labels.get(seg.value) || seg.value)
+    } else {
+      out += seg.value
+    }
   }
   return out
 }
@@ -181,7 +209,7 @@ async function attachRefs(action, input, params) {
 async function buildParams(action, input) {
   const params = cleanValues(input.values || {})
   if (action.model !== undefined && action.model !== '') params.model = action.model
-  params.text = [input.prompt || '', ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
+  params.text = [promptText(input), ...textBlocks(input)].filter((s) => String(s).trim() !== '').join('\n')
   return attachRefs(action, input, params)
 }
 
