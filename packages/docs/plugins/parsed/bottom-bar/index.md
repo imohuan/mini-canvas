@@ -17,7 +17,7 @@
 | 注册糖 | `registerBarAction` / `registerBarApplier` / `publishToolActions` | 别的插件的**作者入口** | [注册糖](/plugins/parsed/bottom-bar/registry) |
 | 注册场 | `node/bar` | 动作表（`actions/*`）+ 写入器表（`appliers/*`） | 同上 |
 | UI 槽 | `overlay` × 3 | 底栏宿主 / 参考选择态 / 全屏媒体预览 | [UI 插槽](/plugins/parsed/bottom-bar/slots) |
-| 节点区域 | `*/over:inset` | 任务进度覆盖层（通配所有节点类型） | 同上 |
+| 节点区域 | — | 任务进度覆盖层已并入节点壳（`state:overlay`），底栏不再注册 | 同上 |
 | 主题槽 | `bottomBar` | 默认底栏皮 `NodeBottomBar` | [主题槽](/plugins/parsed/bottom-bar/slots) |
 
 ## 身份与依赖

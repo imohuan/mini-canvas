@@ -21,7 +21,7 @@ export interface NodeRegionsInput {
 }
 
 /**
- * 十个区域的路由，以及每节点一份的能力实例缓存。
+ * 区域词的路由，以及每节点一份的能力实例缓存。
  *
  * 区域场是非响应式的普通对象，仍由 regionOff 订阅 bump regionTick；
  * 缓存仍建在节点这一层，卸载时统一 dispose。
@@ -56,6 +56,13 @@ export function useNodeRegions(input: NodeRegionsInput) {
   const onTopRegions = computed(() => regionEntries('on:top'))
   const onBottomRegions = computed(() => regionEntries('on:bottom'))
   const outsetRegions = computed(() => regionEntries('over:outset'))
+  /**
+   * 节点状态层（加载中 / 失败 / 自定义状态）的注册条目。
+   *
+   * 与 over:inset 分开：over:inset 是编辑浮层（裁剪框等，交互一变就该收），
+   * 这里是「节点现在是什么状态」，resize、多选、拖动都不许把它收起来。
+   */
+  const stateOverlayRegions = computed(() => regionEntries('state:overlay'))
   const editable = computed(() => Boolean(input.nodeWrite))
 
   const nodeDataRef = computed(() => (input.data() ?? {}) as Record<string, unknown>)
@@ -90,6 +97,7 @@ export function useNodeRegions(input: NodeRegionsInput) {
     onTopRegions,
     onBottomRegions,
     outsetRegions,
+    stateOverlayRegions,
     editable,
     capabilityCache,
     capabilityIsDev,

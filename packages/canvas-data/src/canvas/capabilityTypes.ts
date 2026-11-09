@@ -38,7 +38,7 @@ declare module '@mini-canvas/kernel' {
         component: unknown,
         opts?: { id?: string; order?: number },
       ): string
-      /** 往某节点类型的某区域挂组件（§8.3；十个区域词见 canvas/region.ts），自动回收 */
+      /** 往某节点类型的某区域挂组件（§8.3；区域词表见 canvas/region.ts），自动回收 */
       attach(type: string | '*', req: NodeAttachReq): Disposable
     }
     /**

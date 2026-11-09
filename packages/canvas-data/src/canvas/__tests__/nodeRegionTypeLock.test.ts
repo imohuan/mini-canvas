@@ -37,7 +37,7 @@ const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ n
 describe('步骤 9 类型锁：老段名不再是合法入参', () => {
   it('NodeRegistry.register 的展示段只收区域词', () => {
     const r = new NodeRegistry()
-    // @ts-expect-error content 已下线，不是区域词（十个区域词见 canvas/region.ts）
+    // @ts-expect-error content 已下线，不是区域词（区域词表见 canvas/region.ts）
     expect(() => r.register('text', { content: Comp })).toThrow(/不是合法区域词/)
     // @ts-expect-error top-toolbar 已下线，应写 out:top
     expect(() => r.register('text', { 'top-toolbar': Comp })).toThrow(/不是合法区域词/)

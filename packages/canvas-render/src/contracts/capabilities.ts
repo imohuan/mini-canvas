@@ -81,7 +81,7 @@ export function useCapabilities(): CapabilityBag {
   if (scope?.isDev && typeof console !== 'undefined') {
     console.warn(
       '[capability] useCapabilities() 取不到能力包：本组件不在 BaseNode 的区域渲染子树内' +
-        '（只有 RegionEntryHost 会 provide 能力袋）。用 ctx.nodes.attach(...) 挂到十个区域词上即可；' +
+        '（只有 RegionEntryHost 会 provide 能力袋）。用 ctx.nodes.attach(...) 挂到区域词上即可；' +
         '若它是画布级浮层（ctx.slots.register("overlay", …)），它本来就拿不到节点能力，' +
         '请改用 ctx.get(...) 直接取服务。详见设计文档 §4.5。',
     )

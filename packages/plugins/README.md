@@ -53,10 +53,10 @@ export const nodeTextPlugin: PluginModule = {
 - 段组件在渲染子树内，用 `useCanvasRender()` 拿 `ctx`（`ctx.get('doc')` / `ctx.get('text')` 等），
   **不反向依赖宿主**，也不需要自建注入令牌。
 
-> **位置名只有十个区域词**（设计文档 §五）：`in` / `title` / `out:top` / `out:bottom` /
-> `out:left` / `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset`。
+> **位置名只有词表里的区域词**（设计文档 §五，见 `canvas-data` 的 `NODE_REGIONS`）：`in` / `title` / `out:top` / `out:bottom` /
+> `out:left` / `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset` / `state:overlay`。
 > 老五段名（`content` / `top-toolbar` / `bottom-toolbar` / `overlay`）**已在步骤 9 下线**：
-> 写它们是编译期类型错误，运行时也会抛错并列出十个合法词。
+> 写它们是编译期类型错误，运行时也会抛错并列出全部合法词。
 
 ## 三、宿主怎么加载（manifest 即 plugins 数组）
 

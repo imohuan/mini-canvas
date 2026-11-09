@@ -22,7 +22,7 @@ import { assertRegion } from '../region'
 import type { NodeRegion } from '../region'
 
 /**
- * 节点展示的位置名 = **十个区域词**（设计文档 §五；步骤 9 起老五段名已下线）。
+ * 节点展示的位置名 = **区域词表**（设计文档 §五；步骤 9 起老五段名已下线）。
  *
  * 名字为什么还叫 `NodeSegment`：全仓重命名函数/类型的收益只有"读起来更顺"，却要动
  * 六七个测试文件的导入与断言。这里只把**含义**换成权威词表（单一来源 = region.ts 的 `NodeRegion`），

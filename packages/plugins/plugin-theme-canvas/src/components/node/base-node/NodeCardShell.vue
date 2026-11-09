@@ -112,7 +112,7 @@ const visibility = useNodeVisibilityPolicy({
   selectedCount,
   isHandTool,
 })
-const { hideOverlays, hideSlotBars, resizingThisNode } = visibility
+const { hideOverlays, hideSlotBars } = visibility
 
 /**
  * 节点的全局三态 + 加载覆盖层用的数据（进度 / 文案 / 计时）。
@@ -171,24 +171,28 @@ const {
   onTopRegions,
   onBottomRegions,
   outsetRegions,
+  stateOverlayRegions,
   editable,
   capabilityCache,
   capabilityIsDev,
 } = regions
 
 /**
- * over:inset 里这一轮要渲染的条目。
+ * 节点状态层（`state:overlay`）要不要画、按哪一套画。
  *
- * resize 中照旧收起"编辑类"浮层（裁剪框会跟着变尺寸、拖起来错位），
- * 但**放行加载 / 失败覆盖层**：它必须在 resize 期间继续显示（用户实测反馈：
- * 一拖尺寸加载态就消失，看着像任务断了）。
- * 放行方式是条目自己声明 props.keepOnResize === true：主题壳不认识任何具体插件，
- * 由注册方（任务覆盖层）自己说"我需要在 resize 时保留"。
+ * 判断顺序（用户 2026-11-09 定）：
+ * 1. 有插件在 `state:overlay` 注册了组件 → 直接渲染那个组件（它自己读 `data.runState`）；
+ * 2. 没注册组件、但节点有状态（加载中 / 失败）→ 画内置默认加载件；
+ * 3. 都没有 → 什么都不画，节点照常显示内容。
+ *
+ * 这一层**不参与任何交互压制**：resize、框选、多选、拖动都照常显示。
+ * 用户口径：「resize 还是多选，都不应该修改当前节点的状态。它有什么就显示什么。」
+ * 所以这里不读 hideOverlays / hideSlotBars / resizingThisNode —— 状态是数据，不是临时 UI。
  */
-const overlaySlotsForRender = computed(() => {
-  if (!resizingThisNode.value) return overlaySlots.value
-  return overlaySlots.value.filter((e) => e.props?.keepOnResize === true)
-})
+const hasCustomStateOverlay = computed(() => stateOverlayRegions.value.length > 0)
+const showStateLayer = computed(() => hasCustomStateOverlay.value || covered.value)
+/** 只有"没有任何注册组件"时才回落到内置加载件 */
+const showDefaultState = computed(() => !hasCustomStateOverlay.value && covered.value)
 
 const feedback = useNodeConnectionFeedback({
   ctx,
@@ -423,37 +427,6 @@ const {
         <div v-if="contentStack.length === 0" class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
 
-      <!--
-        加载 / 失败覆盖层：**由节点壳自己画**（用户 2026-11-09 拍板方案 A）。
-
-        为什么放在壳里而不是某个插件注册条目：这三种状态是每个节点都有的通用行为，
-        挂在底部状态栏插件上会导致「卸了底栏插件，节点就没有加载态」。
-        现在图片 / 视频 / 文本 / 可视化一律自带，跟着卡片尺寸走、跟着拖动/缩放走。
-
-        状态来源 = data.runState（与任务写入方同一把 key），判定收在 useNodeTaskState。
-        内容 = NodeLoadingState（同一份流光版本，按画布缩放分三档）。
-        根 pointer-events: none，只有「取消」按钮接指针 —— 加载期间节点照样能拖能选。
-      -->
-      <div v-if="covered && !culledReduced" class="v2-task-overlay" :class="{ 'is-error': failed }" role="status"
-        :aria-label="taskMessage || (failed ? '执行失败' : '执行中')">
-        <NodeLoadingState
-          :tone="failed ? 'error' : 'loading'"
-          :label="failed ? '执行失败' : '生成中'"
-          :percent="failed ? null : percent"
-          :message="taskMessage"
-          :hint="failed ? '可再点一次发送重试' : ''"
-          :started-at="failed ? 0 : taskStartedAt"
-        >
-          <template #action>
-            <!-- 取消：只有装了能取消任务的插件（底部状态栏提供 nodeTask）才出现 -->
-            <button v-if="canCancel" class="v2-task-cancel nodrag nopan" type="button" title="取消任务"
-              @click.stop="onCancelTask">
-              取消
-            </button>
-          </template>
-        </NodeLoadingState>
-      </div>
-
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
            反缩放：屏幕大小恒定，transform-origin 在右下角（钉在卡片角上不漂移）。
            只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
@@ -473,6 +446,57 @@ const {
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"
         :debug="debugHandle && !isConnecting" @hover="onPortHover" />
+    </div>
+
+    <!--
+      节点状态层（`state:overlay`）：加载中 / 执行失败 / 插件自定义状态。
+
+      为什么单独一层、与卡片**同级**（不在 .v2-card 里）：
+      - 它是「节点现在是什么状态」，不是临时 UI —— resize、框选、多选、拖动都照实显示；
+        放在卡片内部会被 `culledReduced` 这类可见性降级连坐（用户实测：一拖尺寸加载态就没了）；
+      - 与 over:inset（编辑浮层）分开，编辑框收起的规矩就管不到它。
+      尺寸与卡片严格一致（overlayLayerStyle），不反缩放 —— 画面像素对齐优先。
+
+      顺序：有注册组件画注册组件，否则回落到内置 NodeLoadingState，都没有就不画。
+      根 pointer-events: none，只有「取消」按钮接指针 —— 加载期间节点照样能拖能选。
+    -->
+    <div
+      v-if="showStateLayer && !culledReduced"
+      class="v2-state-layer nodrag nopan"
+      :class="{ 'is-error': failed && !hasCustomStateOverlay }"
+      :style="overlayLayerStyle"
+    >
+      <RegionEntryHost
+        v-for="seg in stateOverlayRegions"
+        :key="'state-' + seg.id"
+        :entry="seg"
+        :cache="capabilityCache"
+        :node-id="id"
+        :data="data"
+        :is-dev="capabilityIsDev"
+      />
+      <NodeLoadingState
+        v-if="showDefaultState"
+        :tone="failed ? 'error' : 'loading'"
+        :label="failed ? '执行失败' : '生成中'"
+        :percent="failed ? null : percent"
+        :message="taskMessage"
+        :hint="failed ? '可再点一次发送重试' : ''"
+        :started-at="failed ? 0 : taskStartedAt"
+      >
+        <template #action>
+          <!-- 取消：只有装了能取消任务的插件（底部状态栏提供 nodeTask）才出现 -->
+          <button
+            v-if="canCancel"
+            class="v2-task-cancel nodrag nopan"
+            type="button"
+            title="取消任务"
+            @click.stop="onCancelTask"
+          >
+            取消
+          </button>
+        </template>
+      </NodeLoadingState>
     </div>
 
     <!-- 下插槽：装了解层宿主时已随上面一起 Teleport 过去；这里只在原地模式渲染。 -->
@@ -504,11 +528,11 @@ const {
          尺寸与卡片严格一致（不反缩放）—— 浮层必须和底下的画面像素对齐，缩放会错位。
          z-index 高于卡片但低于上/下控制栏：编辑框盖住画面，但"确认/取消"按钮仍在最上层可点。 -->
     <div
-      v-if="overlaySlotsForRender.length > 0 && !culledReduced"
+      v-if="overlaySlots.length > 0 && !hideOverlays && !culledReduced"
       class="v2-overlay nodrag nopan"
       :style="overlayLayerStyle"
     >
-      <RegionEntryHost v-for="seg in overlaySlotsForRender" :key="'overlay-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
+      <RegionEntryHost v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- over:outset（新增区域）：盖住整张卡且允许超出卡片边界；与卡片重合（不反缩放，画面像素对齐优先），
@@ -832,14 +856,16 @@ const {
   background: var(--card-content-surface, #eee);
 }
 
-/* —— 加载 / 失败覆盖层（节点壳自绘，见模板注释）——
-   铺满卡内、跟随卡片圆角；不接指针，只有取消按钮例外（在 NodeLoadingState 的 #action 里）。 */
-.v2-task-overlay {
+/* —— 节点状态层（state:overlay，见模板注释）——
+    与卡片同级、同尺寸，盖住整张卡；不接指针，只有取消按钮例外（在 NodeLoadingState 的 #action 里）。
+    z-index 取 24：高过卡片本体，低过编辑浮层（25）、多选圆点（26）与上/下控制栏（30）——
+    用户口径「多选时在覆盖层上再叠一层覆盖没关系」，所以选中标记、工具条、编辑框照旧压在上面。 */
+.v2-state-layer {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   z-index: 24;
-  border-radius: inherit;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
 }
 

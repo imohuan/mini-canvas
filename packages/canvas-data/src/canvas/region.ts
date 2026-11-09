@@ -1,9 +1,9 @@
 /**
- * region —— 节点区域词层（设计文档 §五 十个区域词 / 步骤 3；步骤 9 已删老段名垫片）。
+ * region —— 节点区域词层（设计文档 §五 区域词 / 步骤 3；步骤 9 已删老段名垫片）。
  *
  * 两个职责，全部是纯函数、零 Vue：
- * 1. **词表与守卫**：十个闭合区域词（in/title/out:top/out:bottom/out:left/out:right/
- *    on:top/on:bottom/over:inset/over:outset）是节点上**唯一合法**的位置名。
+ * 1. **词表与守卫**：十一个闭合区域词（in/title/out:top/out:bottom/out:left/out:right/
+ *    on:top/on:bottom/over:inset/over:outset/state:overlay）是节点上**唯一合法**的位置名。
  *    老五段名（content / top-toolbar / bottom-toolbar / overlay）已在步骤 9 下线：
  *    类型上它们不再是 NodeRegion（编译期报错），运行时经 assertRegion 抛清晰错误。
  *    不留映射、不做归一 —— 垫片永久化就是"分不清谁是谁"的病根（决策 3 的退役安排）。
@@ -18,7 +18,15 @@ import type { Registry } from '@mini-canvas/kernel'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { NodeSegmentEntry } from './registry/nodeRenderer'
 
-/** 十个区域词（闭合词表；§五：位置决定贴在哪，名字自由） */
+/**
+ * 十一个区域词（闭合词表；§五：位置决定贴在哪，名字自由）。
+ *
+ * `state:overlay`（2026-11-09 新增）是节点**自身状态**的渲染位：加载中 / 执行失败 / 将来自定义的
+ * 「排队中」之类。它与 `over:inset` 分开的理由是两条互不相干的语义：
+ * - `over:inset` 是**编辑浮层**（裁剪框、扩展框、勾选层），交互一变化就该收起；
+ * - `state:overlay` 是**节点现在是什么状态**，与用户此刻在拖尺寸还是框选无关，永远照实显示。
+ * 挤在同一个区域里，只能靠 `keepOnResize` 这类特例补丁区分，补丁一多就又分不清谁是谁。
+ */
 export type NodeRegion =
   | 'in'
   | 'title'
@@ -30,6 +38,7 @@ export type NodeRegion =
   | 'on:bottom'
   | 'over:inset'
   | 'over:outset'
+  | 'state:overlay'
 
 /** 词表本体（诊断/枚举用；顺序与设计文档 §五 表格一致） */
 export const NODE_REGIONS = [
@@ -43,12 +52,13 @@ export const NODE_REGIONS = [
   'on:bottom',
   'over:inset',
   'over:outset',
+  'state:overlay',
 ] as const
 
 /** 词表查询用集合（守卫的热路径形式） */
 const REGION_SET: ReadonlySet<string> = new Set(NODE_REGIONS)
 
-/** 是不是十个区域词之一（闭合词表判定） */
+/** 是不是十一个区域词之一（闭合词表判定） */
 export function isRegion(value: string): value is NodeRegion {
   return REGION_SET.has(value)
 }
@@ -81,7 +91,7 @@ export function isRetiredSegmentName(value: string): boolean {
 }
 
 /**
- * 区域词守卫（步骤 9 运行时兜底）：只放行十个区域词，其余一律抛清晰错误。
+ * 区域词守卫（步骤 9 运行时兜底）：只放行十一个区域词，其余一律抛清晰错误。
  *
  * 决策 3 的退役安排：垫片不再存在。老五段名传进来**不静默、不错位渲染**，而是当场报错并
  * 列出全部合法词 —— 静默忽略会让人以为"注册成功了却不显示"，比报错难查得多。
@@ -90,7 +100,7 @@ export function assertRegion(value: string): NodeRegion {
   if (isRegion(value)) return value
   const retired = isRetiredSegmentName(value) ? '（老段名，步骤 9 已下线）' : ''
   throw new Error(
-    `[nodeRegion] "${value}" 不是合法区域词${retired}；合法区域词只有十个：` +
+    `[nodeRegion] "${value}" 不是合法区域词${retired}；合法区域词只有十一个：` +
       `${NODE_REGIONS.join(' / ')}（老段名到区域词的对照见 canvas/region.ts 顶部注释与设计文档 §五）`,
   )
 }

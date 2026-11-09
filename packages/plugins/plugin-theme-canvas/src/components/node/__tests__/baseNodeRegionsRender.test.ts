@@ -1,10 +1,10 @@
 /**
- * BaseNode 按区域遍历（设计文档步骤 3 / §五 十个区域词）。
+ * BaseNode 按区域遍历（设计文档步骤 3 / §五 区域词）。
  *
  * 锁三件事：
  * 1. 老段词已下线（步骤 9）：这里只锁「按区域词读出」的渲染结果
  *    （既有 baseNodeSlotsRender.test.ts 全组不动，这里只补"新读法"的等价证据）；
- * 2. 十个区域词各渲染出一个最小挂件（新区域 on:top/on:bottom/out:left/out:right/over:outset
+ * 2. 每个区域词各渲染出一个最小挂件（新区域 on:top/on:bottom/out:left/out:right/over:outset/state:overlay
  *    是本次新增渲染位，其余五个复用老容器的定位/压制语义）；
  * 3. 经 ctx.nodes.attach 落场（含 type='*' 通配）的区域条目同样能被 BaseNode 读出渲染。
  */
@@ -173,6 +173,24 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
     const clipAt = html.indexOf('v2-content-clip')
     const outsetAt = html.indexOf('probe-region-over-outset')
     expect(outsetAt).toBeGreaterThan(clipAt)
+  })
+
+  /**
+   * state:overlay（2026-11-09 新增）：节点状态层的注册位。
+   * 与 over:inset 分开的意义 —— 状态层不参与 resize/多选的收起，编辑浮层照旧收。
+   */
+  it('state:overlay：注册的组件渲染进独立状态层容器（不是 v2-overlay）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const f = new RegistryImpl<{ component: unknown }>()
+    f.add('image/state:overlay', { component: probeOf('state:overlay') }, { id: 's', order: 1 })
+    const html = await renderNode(r, f)
+    expect(html).toContain('probe-region-state-overlay')
+    expect(html).toContain('v2-state-layer')
+    // 没有 over:inset 条目 → 不该顺带画出编辑浮层容器
+    expect(html).not.toContain('v2-overlay')
+    // 有注册组件时不再叠加内置加载件（节点没有 runState，本来也不会画）
+    expect(html).not.toContain('nls-root')
   })
 
   it('十区域各一个挂件 → 十个探针全部渲染', async () => {

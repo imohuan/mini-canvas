@@ -1,12 +1,14 @@
 # 节点加载态 NodeLoadingState
 
-**一句话**：节点卡片、视频画面、状态栏里“正在处理”的那块统一长这样 —— 流光底色 + 超大进度 + 一行阶段文案。登记在 `ui` 目录名 `nodeLoadingState`。
+**一句话**：节点卡片、视频画面、状态栏里“正在处理”的那块统一长这样 —— 流光底色 + 超大进度 + 一行阶段文案。
+从 `@mini-canvas/plugin-theme-canvas` 直接导入使用（节点壳与视频插件都是这么用的）。
 
 源码：`packages/plugins/plugin-theme-canvas/src/components/node/NodeLoadingState.vue`。
 
 > **它住在哪**：跟着节点壳一起在「画布外观」主题包里。加载 / 失败覆盖层由 `NodeCardShell`
-> 直接画，所以图片、视频、文本、可视化所有节点类型都自带加载态，**不依赖底部状态栏插件**。
-> 从 `@mini-canvas/plugin-theme-canvas` 的入口导出，视频节点那几处复用的就是同一份实现。
+> 直接画在节点自己的状态层（区域词 `state:overlay`）上，所以图片、视频、文本、可视化所有节点类型
+> 都自带加载态，**不依赖底部状态栏插件**。从 `@mini-canvas/plugin-theme-canvas` 的入口导出，
+> 视频节点那几处复用的就是同一份实现。
 
 ## 这个组件能做到什么
 
@@ -58,10 +60,23 @@
 
 两条容易踩的行为：
 
-- **拖拽改尺寸时加载态不消失**。壳在 resize 期间会收起编辑类浮层，但放行声明了
-  `props.keepOnResize` 的覆盖层（任务覆盖层就是这么注册的）——否则一拖尺寸就像任务断了。
+- **状态层永远不被交互收起来**。它住在独立区域 `state:overlay` 上（不在 `over:inset`），
+  resize、框选、多选、拖动都照实显示 —— 用户口径「它有什么就显示什么」。
+  会被收起的只有上/下控制栏和编辑浮层，那是临时 UI，与状态无关。
 - **判据只有一份**。别在插件里另写「status === 'running'」；脏值一律按「加载成功」处理，
   不会因为一个坏字段把整张卡变成加载中或报错。
+
+## 想换个样子：注册自己的状态组件
+
+内置加载件是默认回落。需要「排队中」这类完全不同的外观时，往 `state:overlay` 挂一个组件即可，
+它读的还是同一个 `node.data.runState`：
+
+```ts
+// 文件：my-plugin/src/index.ts
+ctx.nodes.attach('*', { region: 'state:overlay', component: MyStateOverlay, id: 'my/state' })
+```
+
+壳的判断顺序：有注册组件就画组件 → 没有就画内置加载件 → 节点没有状态就什么都不画（正常显示内容）。
 
 ## Props
 
@@ -93,9 +108,9 @@
 ```vue
 <!-- 文件：packages/my-plugin/src/MyContent.vue -->
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { ref } from 'vue'
+import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
 
-const NodeLoadingState = useUiComponent('nodeLoadingState')
 const loading = ref(false)
 const percent = ref(0)
 </script>

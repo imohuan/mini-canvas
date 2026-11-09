@@ -4,7 +4,7 @@
 默认多大、能不能连线、卡片里放什么组件，一次说全。
 
 **它属于哪一块**：数据层的"画布语义层"（`packages/canvas-data/src/canvas/`）。
-相关文件有 `canvas/registry/registerNodeType.ts`（注册助手）、`canvas/region.ts`（十个区域词）、
+相关文件有 `canvas/registry/registerNodeType.ts`（注册助手）、`canvas/region.ts`（区域词表）、
 `canvas/registry/nodeRegistry.ts`（展示注册表）、`canvas/capabilities.ts`（`ctx.nodes` 这套糖的收口）。
 
 ## 它是什么
@@ -40,7 +40,7 @@
 
 一句反面话：**区域名必须闭合。** 老版的位置名有五个（`content` / `top-toolbar` / `bottom-toolbar` / `overlay` 等），
 新插件各写各的名字，同一个组件想放到"卡片上边外侧"就有好几种写法，主题改一个样式要翻遍全部插件。
-现在只有十个合法区域词，写老名字是**编译期类型错误**、运行时**当场抛错**（并列出全部合法词）。
+现在只有一张闭合的区域词表，写老名字是**编译期类型错误**、运行时**当场抛错**（并列出全部合法词）。
 
 ## 怎么用
 
@@ -145,9 +145,9 @@ ctx.nodes.register({
 
 **三者恰好给一个**；注册时校验，给两个或不给会当场抛 `DataPortError`。下游通过 `upstream` 能力读取，不直接猜 `data.imageUrl`。
 
-### 十个区域词（闭合词表）
+### 十一个区域词（闭合词表）
 
-位置**只能用下面十个词**。词表本体是 `packages/canvas-data/src/canvas/region.ts` 的 `NODE_REGIONS`：
+位置**只能用下面十一个词**。词表本体是 `packages/canvas-data/src/canvas/region.ts` 的 `NODE_REGIONS`：
 
 | 区域词 | 贴在哪 | 常见用途 |
 | --- | --- | --- |
@@ -161,28 +161,34 @@ ctx.nodes.register({
 | `on:bottom` | 贴在卡片**下边框线上** | 进度条 |
 | `over:inset` | 卡片内部的**覆盖层**（不超出卡片） | 编辑浮层（图片裁剪、视频剪辑） |
 | `over:outset` | 盖住整张卡、**允许超出边界** | 拖拽手柄、悬停放大 |
+| `state:overlay` | 卡片内部的**状态层**（与卡片同级） | 加载中 / 执行失败 / 自定义状态 |
+
+`state:overlay` 与 `over:inset` 分开，是为了让「节点现在什么状态」和「正在编辑什么」互不干扰：
+状态层不参与 resize、多选、拖动时的收起，编辑浮层照旧收起。
 
 ~~~ts
 // 文件：packages/canvas-data/src/canvas/region.ts
 // 格式：TypeScript 模块（词表与守卫，逐字摘录）
-// 位置：十个区域词的单一来源
+// 位置：区域词的单一来源
 
 export type NodeRegion =
   | 'in' | 'title'
   | 'out:top' | 'out:bottom' | 'out:left' | 'out:right'
   | 'on:top' | 'on:bottom'
   | 'over:inset' | 'over:outset'
+  | 'state:overlay'
 
 export const NODE_REGIONS = [
   'in', 'title',
   'out:top', 'out:bottom', 'out:left', 'out:right',
   'on:top', 'on:bottom',
   'over:inset', 'over:outset',
+  'state:overlay',
 ] as const
 
-/** 是不是十个区域词之一（闭合词表判定） */
+/** 是不是词表里的区域词之一（闭合词表判定） */
 export function isRegion(value: string): value is NodeRegion
-/** 只放行十个区域词，其余一律抛清晰错误（并列出全部合法词） */
+/** 只放行词表内的区域词，其余一律抛清晰错误（并列出全部合法词） */
 export function assertRegion(value: string): NodeRegion
 ~~~
 
@@ -249,7 +255,7 @@ export const RETIRED_SEGMENT_NAMES = [
 // 格式：TypeScript 模块（attach 的请求形状，逐字摘录）
 // 位置：两个 attach 糖的入参
 
-/** ctx.nodes.attach 的请求：region 是十个区域词之一；needs/props 是条目自己的数据 */
+/** ctx.nodes.attach 的请求：region 是区域词之一；needs/props 是条目自己的数据 */
 export interface NodeAttachReq {
   region: NodeRegion
   id?: string
@@ -353,7 +359,8 @@ export default defineNode({
 | 文本节点 | `packages/plugins/plugin-node-text/src/nodeTextPlugin.ts` | `ctx.nodes.register` 声明 text 类型 + `inputs`/`outputs`/`create` |
 | 图片节点 | `packages/plugins/plugin-node-image/src/nodeImagePlugin.ts` | 同上；注释里写着"以前这里写 capacity:1 把它限成一条"的教训 |
 | 3D 预览节点 | `packages/plugins/plugin-node-3d-preview/src/node3dPreviewPlugin.ts` | `outputs: []` 声明终点型节点 + `resizable: true` |
-| 底部状态栏 | `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts` | `ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, ... })` |
+| 图片格子勾选 | `packages/plugins/plugin-image-grid-split/src/index.ts` | `ctx.nodes.contribute('image', 'over:inset', GridSplitOverlay, ...)` 往编辑浮层上叠勾选层 |
+| 节点状态层 | `packages/plugins/plugin-theme-canvas/src/components/node/base-node/NodeCardShell.vue` | 壳自己渲染 `state:overlay`（加载中 / 失败 / 插件自定义状态） |
 | 多选群组框 | `packages/plugins/plugin-multi-select/src/multiSelectPlugin.ts` | `ctx.selectionRegion.attach({ region: 'out:top', needs: ['selection'], ... })` |
 | 节点外壳 | `packages/plugins/plugin-theme-canvas/src/components/node/BaseNode.vue` | 合成 `nodeRegistry` + `node/region` 场，按区域词渲染 |
 | 注册助手 | `packages/canvas-data/src/canvas/registry/registerNodeType.ts` | `ctx.nodes.register` 内部调它，一次落数据 + 展示两张表 |
@@ -677,7 +684,7 @@ export function apply(ctx: Context) {
 
 ## 常见坑
 
-1. **区域词只有十个，老名字当场报错。**
+1. **区域词是闭合词表，老名字当场报错。**
    `content` / `top-toolbar` / `bottom-toolbar` / `overlay` 都已下线：写它们会被 TS 拦住；
    纯 JS 调用方传进来时 `assertRegion` 会抛错并列出全部合法词。别指望"它能自动认出来"——
    不留垫片是刻意的选择（垫片永久化就是"分不清谁是谁"的病根）。

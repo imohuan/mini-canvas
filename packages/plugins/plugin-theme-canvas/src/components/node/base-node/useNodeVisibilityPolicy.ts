@@ -26,15 +26,9 @@ export function useNodeVisibilityPolicy(input: NodeVisibilityPolicyInput) {
       input.interaction?.isNodeDragging?.value === true ||
       input.isHandTool.value,
   )
-  /** 本节点是不是正在被拖 resize（壳据此只收起"编辑类"浮层，放行加载覆盖层） */
-  const resizingThisNode = computed(
-    () => input.interaction?.nodeResizeId?.value === input.id,
-  )
-
   return {
     hideToolbars,
     hideOverlays,
     hideSlotBars,
-    resizingThisNode,
   }
 }

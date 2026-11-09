@@ -18,7 +18,8 @@
 | 我的插件要用别人的功能 | 案例 5 | `inject: ['名字']` 或 `ctx.tryGet` | `plugin-node-image` |
 | AI/节点面板能调我的生成能力 | [案例 6](/examples/register-tool) | `ctx.tools.register` | `plugin-tool-text-generation` |
 | 节点顶部/底部状态栏装按钮或换面板 | [案例 9](/examples/node-toolbar) | `registerMode` / `ctx.slots.register` | `plugin-node-image` / `plugin-demo-kit` |
-| 节点/画面正在加载时显示统一的加载态 | [节点加载态](/plugins/theme-components/node-loading-state) | `useUiComponent('nodeLoadingState')` | `plugin-bottom-bar` / `plugin-node-video` |
+| 节点/画面正在加载时显示统一的加载态 | [节点加载态](/plugins/theme-components/node-loading-state) | `import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'` | `plugin-theme-canvas` / `plugin-node-video` |
+| 给节点加自定义状态层（排队中之类） | [节点加载态 · 注册自己的状态组件](/plugins/theme-components/node-loading-state) | `ctx.nodes.attach('*', { region: 'state:overlay', component })` | `plugin-theme-canvas` |
 | 工具栏下拉里嵌一块自定义面板（色板、宫格） | [下拉菜单](/plugins/theme-components/dropdown) | shadcn `DropdownMenuSub` 的默认插槽 | `plugin-image-grid-split` |
 | 节点底栏多一个动作按钮 | [案例 7](/examples/bottom-bar) | `registerBarAction`（跨插件） | `plugin-node-text` |
 | 拖文件/粘贴进画布建节点 | [案例 8](/examples/file-drop) | `ctx.effect` 包 window 监听 | `plugin-file-drop` |

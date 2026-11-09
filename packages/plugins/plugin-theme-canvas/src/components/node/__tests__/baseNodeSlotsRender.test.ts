@@ -539,12 +539,26 @@ describe('resize 进行中收起上/下控制栏（用户要求）', () => {
    *
    * 规则分层：
    * - 编辑类浮层（裁剪框 / 扩展框）resize 中照旧收起（跟着变尺寸会错位）；
-   * - 任务加载 / 失败覆盖层必须**继续显示** —— 它声明了 props.keepOnResize。
+   * - 节点状态层（state:overlay）**不参与压制** —— 它表达的是「节点现在什么状态」，
+   *   与用户此刻在拖尺寸无关，永远照实显示。
    */
-  it('★ resize 进行中 → 声明了 keepOnResize 的覆盖层仍然渲染', async () => {
-    const TaskOverlayStub = defineComponent({
-      name: 'TaskOverlayStub',
-      render: () => h('div', { class: 'probe-task-overlay' }),
+  it('★ resize 进行中 → 加载中节点的状态层仍然渲染', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const html = await renderNode(
+      r,
+      { runState: { status: 'running', progress: 42 } },
+      {},
+      { resizingId: 'n1' },
+    )
+    expect(html).toContain('v2-state-layer')
+    expect(html).toContain('nls-root')
+  })
+
+  it('★ resize 进行中 → state:overlay 注册的自定义状态组件也照常渲染', async () => {
+    const CustomState = defineComponent({
+      name: 'CustomState',
+      render: () => h('div', { class: 'probe-custom-state' }),
     })
     const r = new NodeRegistry()
     r.register('image', { in: ContentStub })
@@ -555,11 +569,10 @@ describe('resize 进行中收起上/下控制栏（用户要求）', () => {
       },
     })
     const ctx = renderCtx(r, {}, { resizingId: 'n1' })
-    // 模拟 bottom-bar 注册时带的 props（壳按 props.keepOnResize 决定 resize 期间是否保留）
     const regionField = {
       list: (key: string) =>
-        key === '*/over:inset'
-          ? [{ id: 'bottom-bar/overlay', order: 0, value: { component: TaskOverlayStub, props: { keepOnResize: true } } }]
+        key === '*/state:overlay'
+          ? [{ id: 'p/state', order: 0, value: { component: CustomState } }]
           : [],
       subscribe: () => ({ dispose: () => {} }),
     }
@@ -573,7 +586,27 @@ describe('resize 进行中收起上/下控制栏（用户要求）', () => {
     } as unknown as CanvasRenderContext
     app.provide(RENDER_CONTEXT_KEY, patched)
     const html = await renderToString(app)
-    expect(html).toContain('probe-task-overlay')
+    expect(html).toContain('probe-custom-state')
+  })
+
+  /**
+   * 用户口径 2026-11-09：「多选的时候，它会在覆盖层上再叠加一层覆盖，这其实都是没有关系的。」
+   *
+   * 多选只该多出选中标记与工具条，**不该动节点自己的状态**：加载中的卡在多选里照样是加载中。
+   */
+  it('★ 多选 / 框选中 → 加载中节点的状态层照常渲染', async () => {
+    const r = new NodeRegistry()
+    r.register('text', { in: ContentStub })
+    const data = { runState: { status: 'running', progress: 42 } }
+    for (const opts of [
+      { selectedIds: ['n1', 'n2'] },
+      { selecting: true },
+      { draggingId: 'n1' },
+    ]) {
+      const html = await renderNode(r, data, {}, { type: 'text', ...opts })
+      expect(html).toContain('v2-state-layer')
+      expect(html).toContain('nls-root')
+    }
   })
 })
 
@@ -633,7 +666,7 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
    * nodeTask 这类服务，加载态照样画出来。老实现是底部状态栏插件挂 over:inset，
    * 卸了它就没有覆盖层 —— 所以这条同时也防了回退。
    */
-  it('★ 加载中 → 节点壳自己画覆盖层（不依赖底栏插件的注册条目）', async () => {
+  it('★ 加载中 → 节点壳自己画状态层（不依赖底栏插件的注册条目）', async () => {
     const r = new NodeRegistry()
     r.register('text', { in: ContentStub })
     const html = await renderNode(
@@ -642,7 +675,7 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
       {},
       { type: 'text' },
     )
-    expect(html).toContain('v2-task-overlay')
+    expect(html).toContain('v2-state-layer')
     expect(html).toContain('nls-root')
     expect(html).toContain('>42<')
     expect(html).toContain('生成中…')
@@ -657,13 +690,13 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
       {},
       { type: 'text' },
     )
-    expect(failed).toContain('v2-task-overlay')
+    expect(failed).toContain('v2-state-layer')
     expect(failed).toContain('is-error')
     expect(failed).toContain('ffmpeg 退出码 1')
     expect(failed).toContain('重试')
 
     const ready = await renderNode(r, { runState: { status: 'done', progress: 100 } }, {}, { type: 'text' })
-    expect(ready).not.toContain('v2-task-overlay')
+    expect(ready).not.toContain('v2-state-layer')
   })
 
   it('data.resizable=true → 渲染拖柄，且带 scale 反缩放绑定（与标题同一套语义）', async () => {

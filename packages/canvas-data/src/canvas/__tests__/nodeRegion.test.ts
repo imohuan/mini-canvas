@@ -7,9 +7,9 @@ import { NODE_REGIONS, regionKey, isRegion, assertRegion, nodeRegionStackEntries
 const Comp = { name: 'Comp' }
 const Other = { name: 'Other' }
 
-describe('NodeRegion 十个区域词（设计文档 §五）', () => {
-  it('词表闭合 = 十个，顺序与设计文档一致', () => {
-    expect(NODE_REGIONS).toHaveLength(10)
+describe('NodeRegion 区域词表（设计文档 §五 + state:overlay）', () => {
+  it('词表闭合 = 十一个，state:overlay 排最后', () => {
+    expect(NODE_REGIONS).toHaveLength(11)
     expect([...NODE_REGIONS]).toEqual([
       'in',
       'title',
@@ -21,6 +21,7 @@ describe('NodeRegion 十个区域词（设计文档 §五）', () => {
       'on:bottom',
       'over:inset',
       'over:outset',
+      'state:overlay',
     ])
   })
 
@@ -29,7 +30,7 @@ describe('NodeRegion 十个区域词（设计文档 §五）', () => {
     expect(regionKey('*', 'in')).toBe('*/in')
   })
 
-  it('isRegion 只认这十个词（老五段名一律 false）', () => {
+  it('isRegion 只认词表里的词（老五段名一律 false）', () => {
     for (const r of NODE_REGIONS) expect(isRegion(r)).toBe(true)
     for (const old of ['content', 'top-toolbar', 'bottom-toolbar', 'overlay']) {
       expect(isRegion(old)).toBe(false)
@@ -37,9 +38,10 @@ describe('NodeRegion 十个区域词（设计文档 §五）', () => {
     expect(isRegion('out:middle')).toBe(false)
   })
 
-  it('assertRegion（步骤 9）：十个区域词放行；老五段名与表外词一律抛错', () => {
+  it('assertRegion（步骤 9）：词表内放行；老五段名与表外词一律抛错', () => {
     expect(assertRegion('in')).toBe('in')
     expect(assertRegion('over:outset')).toBe('over:outset')
+    expect(assertRegion('state:overlay')).toBe('state:overlay')
     // 老词不再是"可用入参"：当场抛错，报错给出十词全表与"老词已下线"的定性（不静默、不错位）
     for (const old of ['content', 'top-toolbar', 'bottom-toolbar', 'overlay']) {
       expect(() => assertRegion(old)).toThrow(/不是合法区域词/)
@@ -52,7 +54,7 @@ describe('NodeRegion 十个区域词（设计文档 §五）', () => {
 })
 
 describe('nodeRegionStackEntries：区域读取与 NodeRegistry 同源', () => {
-  it('基座 + 贡献：与 nodeSegmentStackEntries 逐项一致（十个区域全查）', () => {
+  it('基座 + 贡献：与 nodeSegmentStackEntries 逐项一致（每个区域全查）', () => {
     const r = new NodeRegistry()
     r.register('text', { in: Comp, 'out:top': Other })
     r.registerContribution('text', 'out:top', { id: 'x', component: Comp })

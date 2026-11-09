@@ -636,10 +636,10 @@ check(
     let overlayText = '';
     for (let i = 0; i < 40; i++) {
       await page.waitForTimeout(100);
-      if ((await page.locator('.task-overlay').count()) > 0) {
+      if ((await page.locator('.v2-state-layer').count()) > 0) {
         overlayShown = true;
         // 覆盖层已改版：不再有中间黑底卡片，文案直接落在卡上
-        overlayText = await page.locator('.task-overlay').innerText();
+        overlayText = await page.locator('.v2-state-layer').innerText();
         break;
       }
     }
@@ -678,7 +678,7 @@ check(
     const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
     return node?.data?.runState ?? null;
   });
-  const overlayAfterReload = await page.locator('.task-overlay').count();
+  const overlayAfterReload = await page.locator('.v2-state-layer').count();
   check(
     '刷新后不悬挂：覆盖层不再出现',
     overlayAfterReload === 0 && !!after && after.status !== 'running',

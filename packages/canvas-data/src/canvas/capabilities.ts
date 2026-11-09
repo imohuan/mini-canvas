@@ -98,7 +98,7 @@ export type SettingDefineArgs =
   | [defs: Record<string, SettingDefineItem>]
   | [group: string, items: Record<string, SettingDefineItem>]
 
-/** ctx.nodes.attach 的请求（§8.3）：region 是十个区域词之一；needs/props 是条目自己的数据 */
+/** ctx.nodes.attach 的请求（§8.3）：region 是区域词之一；needs/props 是条目自己的数据 */
 export interface NodeAttachReq {
   region: NodeRegion
   id?: string
@@ -163,7 +163,7 @@ export function buildCapabilities(
       opts?: { id?: string; order?: number },
     ): string
     /**
-     * 往某节点类型的某区域挂一个组件（§8.3 一等 API；十个区域词见 canvas/region.ts）。
+     * 往某节点类型的某区域挂一个组件（§8.3 一等 API；区域词表见 canvas/region.ts）。
      * 落 node/region 场，键 = `${type}/${region}`；type 传 '*' = 通配所有节点类型。
      * 自动回收：随所属插件 scope 卸载自动摘除。
      * @returns Disposable（dispose 手动撤销；不接返回值即"纯声明+自动回收"）
@@ -391,7 +391,7 @@ export function buildCapabilities(
       },
       attach(type: string | '*', req: NodeAttachReq): Disposable {
         // 场落点（§8.3）：node/region/<type>/<region>，位置进键不进值；
-        // needs/props 进 value（条目自己的数据）。region 只收十个区域词（步骤 9：不做归一）。
+        // needs/props 进 value（条目自己的数据）。region 只收区域词表里的词（步骤 9：不做归一）。
         const region = assertRegion(String(req.region))
         const regionField = land<NodeRegionAttachment>('node/region')
         const value: NodeRegionAttachment = {

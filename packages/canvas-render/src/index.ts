@@ -372,7 +372,7 @@ export type {
 } from './contracts/standardCapabilities'
 // 媒体创建器注册场名（节点的媒体类型插件往这里注册 addNode/applyToNode）
 export { MEDIA_CREATOR_FIELD } from './contracts/standardCapabilities'
-// 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的十个区域渲染位用它）
+// 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的各区域渲染位用它）
 export { default as RegionEntryHost } from './components/RegionEntryHost.vue'
 // 可替换设置面板宿主：提供外壳(遮罩/居中/✕/Esc/浮动窗) + 读 themeRegistry.winner('settingsPanel') 渲染内容区，把 ctx.settings 喂给它
 export { default as SettingsHost } from '@mini-canvas/vue-render/components/SettingsHost.vue'

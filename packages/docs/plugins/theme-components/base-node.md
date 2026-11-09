@@ -24,9 +24,9 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 - **标题条**：图标 + 名称 + 右侧附加信息（分辨率之类）。双击就地改名（Enter 提交 / Esc 取消）。
 - **端口**：左右浮动端口（真实的 VueFlow 连接点 + 可移动的半圆交互区），由
   [MovingHandle](/plugins/theme-components/moving-handle) 实现。
-- **区域渲染位（十个）**：插件往节点上叠 UI 的**唯一**正规入口 ——
+- **区域渲染位**：插件往节点上叠 UI 的**唯一**正规入口 ——
   `in` / `title` / `out:top` / `out:bottom` / `out:left` /
-  `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset`。
+  `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset` / `state:overlay`。
 - **能力包**：每条区域条目可以声明 `needs: ['node','zoom','selection',...]`，
   由它按条目取袋并 provide 给子树（每个节点一份实例）。
 - **其它**：低细节模式（缩小到一定程度只画框）、多选标记、可选拖拽缩放手柄、连接反馈高亮。
@@ -64,7 +64,7 @@ ctx.registryOf('node/region').add('text/out:top', { component: MyToolbar }, { id
 ctx.nodes.register({ type: 'text', /* ... */ segments: { 'out:top': MyToolbar } })
 ```
 
-十个区域词的位置含义：
+区域词的位置含义（词表在 `packages/canvas-data/src/canvas/region.ts`，共十一个）：
 
 | 区域词 | 位置 |
 | --- | --- |
@@ -75,6 +75,10 @@ ctx.nodes.register({ type: 'text', /* ... */ segments: { 'out:top': MyToolbar } 
 | `on:top` / `on:bottom` | 贴在卡片边框线上（进度条） |
 | `over:inset` | 盖住整张卡片，**受卡片边界裁剪**（编辑浮层），与上下控制栏同级 |
 | `over:outset` | 盖住整张卡且**允许超出卡片边界**（拖拽手柄、悬停放大） |
+| `state:overlay` | 节点**自身状态**的整卡渲染位（加载中 / 执行失败 / 自定义状态）；不参与 resize、多选、拖动的收起 |
+
+`state:overlay` 和 `over:inset` 是两件事：前者回答「这个节点现在什么状态」，后者是编辑时临时浮出的框。
+加载态别挂到 `over:inset` 上 —— 那里一拖尺寸就会被收起。
 
 ## 事件、方法或暴露能力
 
@@ -132,7 +136,7 @@ const node = useCapability('node')
 1. **这是红线组件**。它的行为契约有专门的 66 条不变量文档（`docs/tmp/canvas-core-v2-survey/core-node-contract.md`），
    改端口几何前必须先读，尤其 §9「端口区默认值双源漂移」。
 2. **老段名已下线**：`content` / `top-toolbar` / `bottom-toolbar` / `overlay`
-   传进去会**当场抛错**（不静默忽略），改用十个区域词。
+   传进去会**当场抛错**（不静默忽略），改用区域词表里的词。
 3. **区域场是非响应式的普通对象**：组件内部订了它的变更事件来驱动重渲染，所以运行期直接 `add`
    也会立刻出现；但别指望在模板里像 ref 那样直接用。
 4. **同一区域可以叠多层**：按 `order` 升序（小者在外），同 id 会去重。
