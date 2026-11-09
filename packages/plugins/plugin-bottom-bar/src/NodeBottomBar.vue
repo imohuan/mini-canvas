@@ -484,6 +484,27 @@ async function onRun(): Promise<void> {
 // —— 展开 / 设置 ——
 const expanded = ref(false)
 
+/**
+ * 底栏根节点的 pointerdown：只拦画布拖拽，**不能拦住浮层的「点外关闭」**。
+ *
+ * 为什么不能写 `@pointerdown.stop`（用户 2026-11-09 截图）：
+ * reka 的 DismissableLayer 在 **document** 上监听 pointerdown 来判断「点在外部」。
+ * 之前这里无条件 stop，事件到这一层就断了，document 永远收不到 —— 于是：
+ *   1. 点空白处关不掉；
+ *   2. 再点同一个 trigger 关不掉（那次 pointerdown 被拦，reka 既没收到外部点击、
+ *      也没走自己的 toggle）；
+ *   3. 点左边的模型下拉时也不关（两个触发器都在这个节点里）。
+ *
+ * 需要的只是「别让画布开始拖拽」（CanvasFlow 在外层用 pointerdown 判断），
+ * 所以改成按需 stop：有浮层开着就放行，平时照旧拦掉。
+ */
+function onRootPointerDown(e: PointerEvent): void {
+  // 有浮层开着（底栏自己的下拉、参数面板、预设弹窗…）→ 放行，
+  // 让 document 上的「点外关闭」判定能收到这一次点击。
+  if (document.querySelector('[data-dismissable-layer]')) return
+  e.stopPropagation()
+}
+
 /** 贴边收拢：只在收起态生效（展开是全屏 dialog，有自己的居中） */
 const { shift: barShift } = useBarNudge({
   el: barEl,
@@ -623,7 +644,7 @@ onBeforeUnmount(() => {
       :role="expanded ? 'dialog' : undefined"
       :aria-modal="expanded ? 'true' : undefined"
       data-testid="node-bottom-bar"
-      @pointerdown.stop
+      @pointerdown="onRootPointerDown"
     >
       <BottomBarPills
         :expanded="expanded"

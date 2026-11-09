@@ -187,7 +187,14 @@ const summary = computed(() => {
 .tpg-inline {
   display: block;
   width: 100%;
-  min-width: 0;
+  /*
+   * `!important` 是用户 2026-11-09 明确要求的（SelectTrigger 自带的 min-width 会压住这一层）。
+   *
+   * 同时给一档下限：宿主那一格是 `flex: none`（按内容收缩），
+   * 这个内联下拉只有 74px，左边模型下拉 183px 起 —— 并排看着宽度不匹配。
+   * 148px 与 .nb-field--action 的下限同档，两个下拉就齐了。
+   */
+  min-width: 148px !important;
 }
 /* 触发器照参考：h32、圆角 8、透明底、hover 浅底、13px 正文 */
 .tpg-trigger {
@@ -265,6 +272,18 @@ const summary = computed(() => {
 </style>
 
 <style>
+/*
+ * 内联下拉（形态 2）的触发器要铺满外层那一格。
+ *
+ * 必须写在**全局**样式里：Trigger 是调用方通过 slot 传进来的（ToolParamField → Select），
+ * 它的 DOM 不带本组件的 scoped 属性，`:deep()` 也命中不了。
+ * shadcn 的 SelectTrigger 自带 `w-fit`，底栏那份样式又给参数区写了 `width: auto`，
+ * 不覆盖的话宽度只跟内容走（实测 74px，左边模型下拉 183px）。
+ */
+.tpg-inline [data-slot='select-trigger'] {
+  width: 100%;
+}
+
 /* 浮层内容（经 Teleport 到 body，必须用全局样式）。
    浮层本身交给 shadcn PopoverContent（圆角/阴影/动画/点外关闭都是它的），
    这里只覆盖参数面板自己的宽度与内边距：宽 288（参考稿 w-72）、内边距 16（p-4）。 */
