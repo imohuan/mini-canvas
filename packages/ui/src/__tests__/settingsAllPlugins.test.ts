@@ -132,6 +132,15 @@ describe('真实全插件装配：设置菜单', () => {
     host.stop()
   })
 
+  it('平台管理页挂在「集成」分类下（plugin-manager 注册）', async () => {
+    const { host, settings, menu } = await bootAll()
+    const view = menu.resolve(settings.groups())
+    const nav = view.navs.find((n) => n.id === 'nav/integration/providers')
+    expect(nav, '平台管理 nav 未注册').toBeTruthy()
+    expect(nav!.title).toBe('平台')
+    host.stop()
+  })
+
   it('每个分组恰好出现一次', async () => {
     const { host, settings, menu } = await bootAll()
     const groups = settings.groups()
