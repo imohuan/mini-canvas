@@ -242,6 +242,23 @@ const persistence = useBottomBarPersistence({
 const { persistValues, persistValuesSoon, flushPersistValues } = persistence
 persistValuesSoonRef = persistValuesSoon
 
+/*
+ * 参数变化就安排落盘（400ms 防抖）。
+ *
+ * 之前这里只在「提示词变化」时保存（见 useBottomBarPrompt 的 persistValuesSoon 回调），
+ * 于是**切动作 / 改参数都不落盘**：节点 data.barValues 永远停在上一次，
+ * 重新选中节点时按旧值恢复 —— 表现就是「切到另一个动作，参数回到默认」，
+ * 以及旧动作的 model 值（v2）串到新动作（候选只有 a/b/c）上、下拉显示空白
+ * （用户 2026-11-09 截图）。
+ *
+ * 现在把 currentId / values 一起盯住：换动作与改值都写入，与提示词那条同一份防抖。
+ */
+watch(
+  [currentId, values],
+  () => persistValuesSoon(),
+  { deep: true },
+)
+
 // —— 上游素材 / 卡片 ——
 const materialApi = useBottomBarMaterials({ ctx, props, renderEdges, renderNodes })
 const {

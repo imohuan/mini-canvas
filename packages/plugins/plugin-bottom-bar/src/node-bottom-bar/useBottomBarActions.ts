@@ -150,14 +150,42 @@ export function useBottomBarActions(
     },
   )
 
+  /**
+   * 这个值在新动作的选项里还合法吗。
+   *
+   * 只对「有固定候选值」的参数有意义（select / grid / number+options）；
+   * 数值、文本、开关没有候选集，一律算合法。
+   *
+   * 空串也算**不合法**：它等于「没选」，会盖掉新动作的 default。
+   */
+  function valueFitsField(p: ToolParamDef, v: unknown): boolean {
+    const hasOptions = (p.options?.length ?? 0) > 0
+    if (!hasOptions) return true
+    if (v === undefined || v === null || v === '') return false
+    return (p.options ?? []).some((o) => String(o.value) === String(v))
+  }
+
   function selectAction(id: string): void {
     const prev = currentAction.value
     if (prev?.onDeselect) prev.onDeselect(props.id)
     currentId.value = id
-    // 换动作时保留用户已经调过的参数，但只保留新动作也声明了的 key。
+    /*
+     * 换动作时保留用户已经调过的参数，但必须同时满足两个条件：
+     *
+     * 1. key 在新动作里也声明了；
+     * 2. 那个值在新动作的候选值里**还合法**。
+     *
+     * 第 2 条是必须的（用户 2026-11-09 截图：切到「Base64 图标」后，
+     * 唯一的下拉显示成空白）：两个动作都用了 `model` 这个 key，但候选值不同 ——
+     * 旧动作是 `v2`，新动作只有 `a/b/c`。只按 key 判断就会把 `v2` 留下来，
+     * 它既不是新动作的任何一项、又盖住了 default `a`，于是下拉匹配不上任何选项，
+     * 显示成占位符。
+     */
     const kept: Record<string, unknown> = {}
     for (const p of (currentAction.value?.fields ?? []) as ToolParamDef[]) {
-      if (p.key in values.value) kept[p.key] = values.value[p.key]
+      if (!(p.key in values.value)) continue
+      const v = values.value[p.key]
+      if (valueFitsField(p, v)) kept[p.key] = v
     }
     values.value = { ...defaultsOf(currentAction.value), ...kept }
     currentAction.value?.onSelect?.(props.id)
