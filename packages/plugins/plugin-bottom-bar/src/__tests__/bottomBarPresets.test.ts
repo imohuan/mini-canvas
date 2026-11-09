@@ -191,4 +191,28 @@ describe('预设提示词面板：禁用改成独立页签', () => {
     expect(txtBody).toContain('max-width: 100%')
     expect(txtBody).toContain('text-overflow: ellipsis')
   })
+
+  /**
+   * 用户 2026-11-09：切到「平台模板」页签时面板变宽 —— 条目里的长标签把容器撑开了。
+   * 契约：面板宽度固定（不再 max-content），条目与标签都必须能省略。
+   */
+  it('面板宽度固定，切页签不变宽（长标签省略而不是撑开）', () => {
+    const css = read('../node-bottom-bar/prompt-presets.css')
+    const pop = css.slice(css.indexOf('.nbp-pop {'), css.indexOf('}', css.indexOf('.nbp-pop {')))
+    // 固定 width，不再是 max-content（只查声明行，注释里提到过这个词不算）
+    const decls = pop.split('\n').filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('/*'))
+    expect(decls.join('\n')).not.toContain('max-content')
+    expect(pop).toContain('width: min(380px')
+
+    const item = css.slice(css.indexOf('.nbp-item {'), css.indexOf('}', css.indexOf('.nbp-item {')))
+    expect(item).toContain('min-width: 0')
+
+    const name = css.slice(css.indexOf('.nbp-item-name {'), css.indexOf('}', css.indexOf('.nbp-item-name {')))
+    expect(name).toContain('min-width: 0')
+    expect(name).toContain('text-overflow: ellipsis')
+
+    const tag = css.slice(css.indexOf('.nbp-tag {'), css.indexOf('}', css.indexOf('.nbp-tag {')))
+    expect(tag).toContain('max-width')
+    expect(tag).toContain('text-overflow: ellipsis')
+  })
 })

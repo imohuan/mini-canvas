@@ -22,8 +22,13 @@
 
 /* 面板：宽度按内容长，给出上下限；靠近视口边缘时由组件库负责翻转 */
 .nbp-pop {
-  width: max-content;
-  min-width: 288px;
+  /*
+   * 宽度**固定**（用户 2026-11-09）：以前是 max-content，切到「平台模板」页签时
+   * 条目标签（平台模板 / 模型名 / 含参数）把面板撑宽，切换页签宽度就跳。
+   * 现在统一 380（窄屏按视口收），切换页签宽度不变。
+   */
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
   max-width: min(380px, calc(100vw - 24px));
   gap: 8px;
   padding: 12px;
@@ -80,6 +85,15 @@
   font-size: 10px;
   font-weight: 500;
   vertical-align: 1px;
+  /*
+   * 标签自己也要能省略：超长模型名（如「演示 · HTML 面板（带输入框）…」）
+   * 以前会把条目撑宽、进而把整个面板撑宽。
+   */
+  display: inline-block;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* 禁用的预设：仍然可读、可点开编辑，只是弱化 */
 .nbp-item.is-disabled {
@@ -179,6 +193,9 @@
   align-items: flex-start;
   gap: 8px;
   width: 100%;
+  /* 按钮默认按内容撑开（min-width:auto）→ 长标签会把面板撑宽；锁死成可收缩 */
+  min-width: 0;
+  box-sizing: border-box;
   margin: 0;
   padding: 8px;
   border: 0;
@@ -208,6 +225,12 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--ui-ink, #18202b);
+  /*
+   * 名字行里的「模型名」「含参数」标签很长，必须能收缩省略，
+   * 否则整条会把面板撑宽（用户 2026-11-09 截图：切平台模板宽度变大）。
+   */
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
