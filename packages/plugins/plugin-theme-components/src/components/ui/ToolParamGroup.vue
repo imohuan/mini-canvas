@@ -192,15 +192,20 @@ const summary = computed(() => {
  */
 .tpg-inline {
   display: block;
-  width: 100%;
   /*
-   * `!important` 是用户 2026-11-09 明确要求的（SelectTrigger 自带的 min-width 会压住这一层）。
+   * 宽度**跟着内容走**（用户 2026-11-09 第二次纠正）：
+   * 值就两个字就只占两个字那么宽，长名字才变宽。
    *
-   * 同时给一档下限：宿主那一格是 `flex: none`（按内容收缩），
-   * 这个内联下拉只有 74px，左边模型下拉 183px 起 —— 并排看着宽度不匹配。
-   * 148px 与 .nb-field--action 的下限同档，两个下拉就齐了。
+   * 不写 `width: 100%`：那会让它去填满宿主那一格，
+   * 值很短时右边空出一大片（用户截图里"占那么大空间"就是这个）。
+   * `max-content` + 上限：内容多宽就多宽，撑到上限就省略号。
+   *
+   * `!important` 是用户明确要求的（SelectTrigger 自带的 min-width 会压住这一层）。
+   * 下限 80px 也是用户给的具体值：再窄连"模型 A"都放不下，箭头和文字会挤在一起。
    */
-  min-width: 148px !important;
+  width: max-content;
+  max-width: 100%;
+  min-width: 80px !important;
 }
 /* 触发器照参考：h32、圆角 8、透明底、hover 浅底、13px 正文 */
 .tpg-trigger {
@@ -279,15 +284,32 @@ const summary = computed(() => {
 
 <style>
 /*
- * 内联下拉（形态 2）的触发器要铺满外层那一格。
+ * 内联下拉的触发器：撑满**外层那一格**。
+ *
+ * 关键区别（用户 2026-11-09 两次截图的差别就在这）：
+ * 外层 `.tpg-inline` 是 `width: max-content` + 下限 80 + 上限 100%，
+ * 所以「格子有多宽」已经由内容和上下限定死了；触发器只是把那一格填满。
+ * `width: auto` 反而会让它比格子窄 7px（内容宽 73，格子被 min-width 撑到 80），
+ * 看起来按钮比格子小一圈。
  *
  * 必须写在**全局**样式里：Trigger 是调用方通过 slot 传进来的（ToolParamField → Select），
  * 它的 DOM 不带本组件的 scoped 属性，`:deep()` 也命中不了。
- * shadcn 的 SelectTrigger 自带 `w-fit`，底栏那份样式又给参数区写了 `width: auto`，
- * 不覆盖的话宽度只跟内容走（实测 74px，左边模型下拉 183px）。
  */
 .tpg-inline [data-slot='select-trigger'] {
   width: 100%;
+}
+/*
+ * 长名字走省略号，不要硬切（实测超长值：内容 474px、显示区 184px，
+ * 默认的 text-overflow 是 clip，最后一句话被拦腰截断，看不出还有下文）。
+ *
+ * 选择器放在触发器内部的 SelectValue 上；已用 min-width: 0 让它能收缩
+ * —— flex 子项默认 min-width: auto，不给 0 的话它会坚持跟内容一样宽、压根不省略。
+ */
+.tpg-inline [data-slot='select-trigger'] [data-slot='select-value'] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 浮层内容（经 Teleport 到 body，必须用全局样式）。

@@ -1,17 +1,16 @@
 /**
- * 底栏两个下拉必须**一样宽**（用户 2026-11-09，带截图：「你管这个叫 340」之后的一轮）。
+ * 参数区内联下拉：**按内容宽，最小 80、最大 220**。
  *
- * 场景：动作的唯一参数是下拉，铺到底栏那一行，左边是模型下拉。
- * 用户口径：「这个下拉的宽度跟我这边的下拉不匹配」。
+ * 用户 2026-11-09 定稿口径：「我这边只需要它满足最小宽度，最大宽度限制一下，
+ * 而不是这种固定的宽度」。场景是动作的唯一参数是下拉，会铺到底栏那一行。
  *
  * 走过的弯路（别再回去）：
  * 1. 只给内联那格撑到 148px —— 模型那格按内容到了 183px，还是一大一小；
- * 2. 给两格各写死一个宽度 —— 模型名长短一变就溢出或留白。
+ * 2. 两格 flex: 1 1 0 平分 —— 确实等宽，但两个下拉都撑到 220px，
+ *    值很短时右边空一大片（用户截图：「扩展到全屏干啥」）。
  *
- * 现在的做法：两格同一条规则 `flex: 1 1 0` + 相同的 min/max，
- * 由这一行的富余空间平分，量出来永远相等（实测 220 = 220）。
- * 只在内联形态生效：参数是摘要按钮（tpg-root）时仍按内容收缩，
- * 否则「16:9」那种短摘要会被拉成一条长按钮（2026-10-14 用户明确否掉过）。
+ * 现在的做法：这一格 flex: none（不抢剩余空间，值短就窄）+ 下限 80 + 上限 220。
+ * 模型下拉那格（.nb-field--action）的 148～220 是它自己的口径，这次不动。
  */
 import { describe, expect, it } from 'vitest'
 import { readBottomBarCss } from './readBottomBarCss'
@@ -26,25 +25,37 @@ function blockOf(selector: string): string {
   return CSS.slice(open + 1, close)
 }
 
-describe('参数区内联下拉：与模型下拉等宽', () => {
-  it('两格共用同一条平分规则，且只在内联形态生效', () => {
-    const at = CSS.indexOf('.nb-field--params:has(.tpg-inline)')
-    expect(at, '找不到同时管两格的规则').toBeGreaterThan(-1)
-    const head = CSS.slice(CSS.lastIndexOf('}', at) + 1, CSS.indexOf('{', at))
-    expect(head).toContain('.nb-field--action')
-    expect(head).toContain('.nb-field--params:has(.tpg-inline)')
-
+describe('参数区内联下拉：按内容宽而不是固定宽', () => {
+  it('这一格不参与 flex 分配（值短就该窄）', () => {
     const body = blockOf('.nb-field--params:has(.tpg-inline)')
-    expect(body).toMatch(/flex:\s*1 1 0/)
+    expect(body).toMatch(/flex:\s*none/)
+    expect(body, '不该再写 flex: 1 1 0（那会把两格拉满）').not.toMatch(/flex:\s*1 1 0/)
+  })
+
+  it('下限 80、上限 220', () => {
+    const body = blockOf('.nb-field--params:has(.tpg-inline)')
+    expect(body).toMatch(/min-width:\s*80px/)
+    expect(body).toMatch(/max-width:\s*220px/)
+  })
+
+  it('模型下拉那格的口径不受影响', () => {
+    const body = blockOf('.nb-field--action')
     expect(body).toMatch(/min-width:\s*148px/)
     expect(body).toMatch(/max-width:\s*220px/)
   })
 
-  it('触发器铺满那一格（否则内部还是按内容 w-fit）', () => {
-    expect(blockOf(".nb-field--params .tpg-inline [data-slot='select-trigger']")).toMatch(/width:\s*100%/)
+  /* 触发器填满那一格：格子宽度已由 max-content + 80/220 定死，触发器缩会窄出一圈 */
+  it('触发器填满那一格', () => {
+    const body = blockOf(".nb-field--params .tpg-inline [data-slot='select-trigger']")
+    expect(body).toMatch(/width:\s*100%/)
+  })
+
+  it('.tpg-inline 自己的下限也是 80（与这一格对齐）', () => {
+    expect(blockOf('.nb-field--params .tpg-inline')).toMatch(/min-width:\s*80px/)
   })
 
   it('摘要按钮那一格不受影响（仍按内容收缩）', () => {
     expect(blockOf('.nb-field--params')).toMatch(/flex:\s*0 1 auto/)
   })
 })
+
