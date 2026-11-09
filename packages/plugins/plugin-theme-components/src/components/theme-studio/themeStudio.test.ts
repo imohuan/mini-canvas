@@ -116,7 +116,6 @@ describe('颜色配方契约', () => {
     // 预设永远从代码取，写存档时被过滤掉
     expect(LAB_THEMES.map((t) => t.id)).toEqual([
       'mono-dark',
-      'mono-light',
       'mist',
       'clay',
       'indigo',
@@ -125,13 +124,10 @@ describe('颜色配方契约', () => {
       'ocean',
       'violet',
     ])
-    // 黑白两套排在最前面：亮色/暗色主题的固定底色
+    // 墨黑排在最前面：亮暗两态都用近黑/近白强调色
     expect(LAB_THEMES[0].name).toBe('墨黑')
-    expect(LAB_THEMES[1].name).toBe('素白')
     expect(LAB_THEMES[0].overrides.accentColorLight).toBe('#1f2430')
     expect(LAB_THEMES[0].overrides.accentColorDark).toBe('#e8ebf2')
-    expect(LAB_THEMES[1].overrides.accentColorLight).toBe('#98a2b3')
-    expect(LAB_THEMES[1].overrides.accentColorDark).toBe('#f4f6f9')
     const mist = LAB_THEMES.find((t) => t.id === 'mist')!
     // 雾青必须是"全部回归默认"，不能被任何历史改动污染
     expect(mist.overrides).toEqual({})

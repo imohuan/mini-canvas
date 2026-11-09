@@ -23,7 +23,7 @@ export interface LabState {
   /**
    * **只存用户自建模板**。
    *
- * 预设（墨黑 / 素白 / 雾青 / 陶土 / 靛蓝 / 薄荷 / 朱砂 / 海蓝 / 罗兰）永远从代码里的 LAB_THEMES 取，
+ * 预设（墨黑 / 雾青 / 陶土 / 靛蓝 / 薄荷 / 朱砂 / 海蓝 / 罗兰）永远从代码里的 LAB_THEMES 取，
    * 不落进存档：以前把预设一起存了，用户在界面上改一格就会把预设写坏，
    * 而且再也回不到原样。
    */
@@ -49,7 +49,6 @@ const LEGACY_KEY = 'mini-canvas:plugin-theme-lab:v1'
 /** 预设模板的 id 集合：这些永远只读，不能改名、不能改色、不能删除。 */
 export const PRESET_THEME_IDS: readonly string[] = [
   'mono-dark',
-  'mono-light',
   'mist',
   'clay',
   'indigo',
@@ -84,23 +83,6 @@ export const LAB_THEMES: LabTheme[] = [
       multiSelectFrameOuterColorLight: '#7d8593', multiSelectFrameOuterColorDark: '#9aa2af', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
       multiSelectFrameInnerColorLight: '#a7aeba', multiSelectFrameInnerColorDark: '#c3cad4', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
       pathColor: '#3a414d', bladeColor: '#edc069', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-    },
-  },
-  {
-    id: 'mono-light',
-    name: '素白',
-    overrides: {
-      accentColorLight: '#98a2b3', accentColorDark: '#f4f6f9', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      accentHoverColorLight: '#7c8797', accentHoverColorDark: '#ffffff', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      dangerColorLight: '#c8323f', dangerColorDark: '#f0717b', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      warnColorLight: '#b0791f', warnColorDark: '#e3b65c', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      edgeRailColorLight: '#9aa3b0', edgeRailColorDark: '#5a606b', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      edgeFlowColorLight: '#7d8794', edgeFlowColorDark: '#e6e9ef', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      alignGuideColorLight: '#98a1ae', alignGuideColorDark: '#c2c8d2', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      multiSelectBoxColorLight: '#8d97a6', multiSelectBoxColorDark: '#e8ebf1', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      multiSelectFrameOuterColorLight: '#a2abb8', multiSelectFrameOuterColorDark: '#b8bfca', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      multiSelectFrameInnerColorLight: '#bcc3ce', multiSelectFrameInnerColorDark: '#d2d7e0', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
-      pathColor: '#8d97a6', bladeColor: '#edc069', // 主题色白名单: 主题模板预设（存的是用户挑的色值，不是界面样式）
     },
   },
   { id: 'mist', name: '雾青', overrides: {} },
