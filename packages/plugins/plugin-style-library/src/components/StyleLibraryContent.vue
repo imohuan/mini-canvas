@@ -16,7 +16,7 @@ import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
 import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
-import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
+import { styleItemPlacementOf, focusStyleNode } from '../stylePlacement'
 import { useCanvasGate } from '../useCanvasGate'
 
 const emit = defineEmits<{
@@ -99,15 +99,9 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
     return
   }
   const url = item.images[index] ?? item.cover
-  const view = ctx.tryGet<{
-    screenToFlow?: (p: { x: number; y: number }) => { x: number; y: number }
-    paneRect?: { value?: { x: number; y: number; width: number; height: number } }
-  }>('view')
+  // 落点 = **当前看得见的那块区域**的中心（平移/缩放后跟着走），见 stylePlacement 的门牌
   const position =
-    stylePlacementOf({
-      screenToFlow: view?.screenToFlow as never,
-      paneRect: view?.paneRect?.value as never,
-    }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+    styleItemPlacementOf(ctx) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   // 多图时带序号（第 1 张不加，避免"名 1"这种啰嗦标题）
   const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
   if (using.value) return

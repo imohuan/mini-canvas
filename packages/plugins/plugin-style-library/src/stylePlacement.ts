@@ -20,6 +20,9 @@
 /** 节点尺寸（缺省用图片节点的默认尺寸；只是为了让中心对齐，不需要精确） */
 export const DEFAULT_NODE_SIZE = { w: 320, h: 240 }
 
+/** 落点用到的节点类型（素材一律建成图片节点，尺寸也从它取） */
+const ITEM_NODE_TYPE = 'image'
+
 export interface PlacementInput {
   /** 屏幕坐标 → flow 坐标（useCanvasRender().flow.screenToFlow） */
   screenToFlow?(clientX: number, clientY: number): { x: number; y: number }
@@ -55,6 +58,55 @@ export function stylePlacementOf(input: PlacementInput): { x: number; y: number 
   const size = input.nodeSize ?? DEFAULT_NODE_SIZE
   // 节点左上角 = 中心 - 半尺寸（节点以左上角为坐标原点）
   return { x: center.x - size.w / 2, y: center.y - size.h / 2 }
+}
+
+/**
+ * 「加入画布」真正要用的上下文（只声明这里读的两件服务）。
+ *
+ * 为什么单独抽一层：`view` 服务上**没有** paneRect —— pane 矩形只能
+ * `getPaneEl().getBoundingClientRect()` 现量（与 `useCreateNode.viewportCenterFlow` 同一口径）。
+ * 2026-11-09 用户实测「平移到空白区域后加入素材，节点没落在看得见的地方」，
+ * 根因就是组件里读了一个永远为 undefined 的 `view.paneRect`，一路退回原点附近的随机兜底。
+ */
+export interface StylePlacementCtx {
+  tryGet<T = unknown>(name: string): T | undefined
+}
+
+interface ViewPortLike {
+  screenToFlow?(clientX: number, clientY: number): { x: number; y: number }
+  getPaneEl?(): HTMLElement | null
+}
+
+interface DocTypesLike {
+  types?: ReadonlyMap<string, { defaultSize?: { w: number; h: number } }>
+}
+
+/**
+ * 按**当前看得见的那块区域**的中心算落点（平移到哪、缩放到几，都跟）。
+ *
+ * 拿不到 view / pane / screenToFlow → undefined，调用方退回兜底，不抛错。
+ */
+export function styleItemPlacementOf(ctx: StylePlacementCtx): { x: number; y: number } | undefined {
+  const view = ctx.tryGet<ViewPortLike>('view')
+  const pane = view?.getPaneEl?.()
+  if (!view?.screenToFlow || !pane) return undefined
+
+  let rect: { left: number; top: number; width: number; height: number }
+  try {
+    rect = pane.getBoundingClientRect()
+  } catch {
+    return undefined
+  }
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) return undefined
+
+  // 尺寸取类型表：设置里改过图片默认尺寸后，中心对齐仍然准
+  const size = ctx.tryGet<DocTypesLike>('doc')?.types?.get(ITEM_NODE_TYPE)?.defaultSize
+
+  return stylePlacementOf({
+    screenToFlow: view.screenToFlow.bind(view),
+    paneRect: rect,
+    ...(size && size.w > 0 && size.h > 0 ? { nodeSize: size } : {}),
+  })
 }
 
 /** focusStyleNode 用到的服务（都可选：极简宿主可能只装了其中一部分） */

@@ -15,7 +15,7 @@ import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
 import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
-import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
+import { styleItemPlacementOf, focusStyleNode } from '../stylePlacement'
 import { useCanvasGate } from '../useCanvasGate'
 
 const emit = defineEmits<{
@@ -99,15 +99,9 @@ async function onUse(item: StyleCard): Promise<void> {
   using.value = true
   usingIds.value = [item.id]
   useError.value = ''
-  const view = ctx.tryGet<{
-    screenToFlow?: (p: { x: number; y: number }) => { x: number; y: number }
-    paneRect?: { value?: { x: number; y: number; width: number; height: number } }
-  }>('view')
+  // 落点 = **当前看得见的那块区域**的中心（平移/缩放后跟着走），见 stylePlacement 的门牌
   const position =
-    stylePlacementOf({
-      screenToFlow: view?.screenToFlow as never,
-      paneRect: view?.paneRect?.value as never,
-    }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+    styleItemPlacementOf(ctx) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   try {
     const result = await useStyleItem(styleItemDepsOf(ctx), { url, label: item.name }, position)
     if (!result.ok) {

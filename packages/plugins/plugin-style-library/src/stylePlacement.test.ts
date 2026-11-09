@@ -10,7 +10,75 @@
  *   3. 任何一环拿不到（未挂载 / 极简宿主）→ 退回旧行为，不抛错。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { stylePlacementOf, focusStyleNode } from './stylePlacement'
+import {
+  stylePlacementOf,
+  styleItemPlacementOf,
+  focusStyleNode,
+  type StylePlacementCtx,
+} from './stylePlacement'
+
+/**
+ * 回归：落点必须读**当前视口**，而不是 ctx 里根本不存在的 view.paneRect。
+ *
+ * 2026-11-09 用户实测：把画布平移到空白区域再点「加入画布」，节点跑到别处
+ * —— 因为 `view?.paneRect?.value` 恒为 undefined，一路退回原点附近的随机兜底。
+ * pane 矩形只能从 `view.getPaneEl().getBoundingClientRect()` 现量。
+ */
+describe('styleItemPlacementOf：从真实 view 服务取视口', () => {
+  /** 假 pane 元素：只实现被测代码用到的 getBoundingClientRect */
+  const pane = (left: number, top: number, width: number, height: number) =>
+    ({
+      getBoundingClientRect: () => ({
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        x: left,
+        y: top,
+        toJSON: () => ({}),
+      }),
+    }) as unknown as HTMLElement
+
+  /** 假 ctx：按服务名返回假对象（与真 Context.tryGet 同形） */
+  const fakeCtx = (services: Record<string, unknown>): StylePlacementCtx =>
+    ({ tryGet: ((name: string) => services[name]) as StylePlacementCtx['tryGet'] })
+
+  it('用 getPaneEl() 现量 pane，按平移后的视口中心落点', () => {
+    const ctx = fakeCtx({
+      // 平移后的视口：zoom=2，viewport.x=-100 → 屏幕原点是 flow(50,25)
+      view: {
+        screenToFlow: (x: number, y: number) => ({ x: (x - 100) / 2, y: (y - 50) / 2 }),
+        getPaneEl: () => pane(100, 50, 800, 600),
+      },
+      doc: { types: new Map([['image', { defaultSize: { w: 320, h: 240 } }]]) },
+    })
+    // 屏幕中心 (500,350) → flow(200,150)；扣半尺寸 → (40,30)
+    expect(styleItemPlacementOf(ctx)).toEqual({ x: 40, y: 30 })
+  })
+
+  it('节点尺寸取类型表，不写死 320×240', () => {
+    const ctx = fakeCtx({
+      view: {
+        screenToFlow: (x: number, y: number) => ({ x: (x - 100) / 2, y: (y - 50) / 2 }),
+        getPaneEl: () => pane(100, 50, 800, 600),
+      },
+      // 用户在设置里把图片默认尺寸改成 400×300
+      doc: { types: new Map([['image', { defaultSize: { w: 400, h: 300 } }]]) },
+    })
+    expect(styleItemPlacementOf(ctx)).toEqual({ x: 0, y: 0 })
+  })
+
+  it('没有 view 服务 / 没有 pane → undefined（调用方兜底）', () => {
+    expect(styleItemPlacementOf(fakeCtx({}))).toBeUndefined()
+    expect(
+      styleItemPlacementOf(
+        fakeCtx({ view: { screenToFlow: () => ({ x: 0, y: 0 }), getPaneEl: () => null } }),
+      ),
+    ).toBeUndefined()
+  })
+})
 
 describe('stylePlacementOf：按视口中心算落点', () => {
   it('屏幕中心换算成 flow 坐标，并扣掉节点尺寸的一半（让节点中心对齐视口中心）', () => {
