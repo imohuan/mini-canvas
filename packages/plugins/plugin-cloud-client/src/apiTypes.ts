@@ -63,7 +63,7 @@ export interface ServerHistoryEntry {
   nodeId: string
   actionId: string
   title: string
-  kind: 'image' | 'video' | 'audio' | 'other'
+  kind: 'image' | 'video' | 'audio' | 'text' | 'other'
   status: 'done' | 'error'
   rating: 'passed' | 'pending' | 'rejected'
   urls?: string[]

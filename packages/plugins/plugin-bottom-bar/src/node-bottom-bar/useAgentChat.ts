@@ -16,18 +16,22 @@
  */
 import { ref, type Ref } from 'vue'
 import { resolveAgentBaseUrl, DEFAULT_RETRY_ROUNDS, type AiRequestResult } from '../aiActions'
+import { submitAgentChatJob } from './agentJobSubmit'
 import { withAdminToken } from '@mini-canvas/canvas-base'
 import { readAgentModels } from './modelPickerBridge'
 
 export interface AgentChatDeps {
   ctx: { tryGet<T>(name: string): T | undefined }
+  /** 任务要写回的目标节点（后台把生成正文写进它的 data.text） */
+  nodeId: string
   /** 输入框里的正文 */
   prompt: Ref<string>
-  /** 写回正文（流式：每段增量调用一次） */
-  onDelta: (text: string) => void
-  /** 结束（成功或失败）后刷新一次节点数据 */
-  onDone?: () => void
+  /** 测试注入的 fetch（透传给下单；缺省全局 fetch） */
+  fetchImpl?: typeof fetch
 }
+
+/** 下单结果（提交即返回；生成过程与终态由后台写节点，前端跟随） */
+export type AgentChatSendResult = { ok: true; jobId: string } | { ok: false; error: string }
 
 /** 底栏记住的模型选择（存进节点 data，跟着作品走） */
 export interface BarModelChoice {
@@ -130,10 +134,9 @@ async function consumeStream(
 }
 
 /**
- * 用指定模型发一次对话（流式 + 退避重试）。
- *
- * 与 requestAiText 的区别：body 里**带 model / provider**，
- * 因此不会落到后台的默认模型 —— 用户选的是哪个就发哪个。
+ * 【已退役】直连对话接口的旧路径 —— 用户 2026-11-09 改为任务化（POST /api/jobs）。
+ * 保留导出只为不破坏 node-bottom-bar/index.ts 的旧出口；生产链路已不走这里。
+ * 与 requestAiText 的区别：body 里带 model / provider。
  */
 export async function requestAgentChat(
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
@@ -190,10 +193,8 @@ export async function requestAgentChat(
  * 收在一个 composable 里才不会各存一份。
  */
 export function useAgentChat(deps: AgentChatDeps) {
-  const running = ref(false)
   const error = ref('')
   const choice = ref<BarModelChoice | null>(null)
-  let abort: AbortController | null = null
 
   /** 从上下文里取 Agent 的模型清单（Agent 没装时为空） */
   function availableModels() {
@@ -208,47 +209,31 @@ export function useAgentChat(deps: AgentChatDeps) {
 
   /** 是否具备发送条件：选了模型 + 有正文 + 没在跑 */
   function canSend(): boolean {
-    return Boolean(choice.value) && deps.prompt.value.trim() !== '' && !running.value
+    // running 不在这里管：任务提交后加载态由后台写 runState、节点卡片读它 —— 单一事实源
+    return Boolean(choice.value) && deps.prompt.value.trim() !== ''
   }
 
-  async function send(): Promise<AiRequestResult> {
-    if (!canSend()) return { ok: false, error: '还没有选模型或输入为空', attempts: 0 }
+  async function send(): Promise<AgentChatSendResult> {
+    if (!canSend()) return { ok: false, error: '还没有选模型或输入为空' }
     const picked = choice.value!
     const base = resolveAgentBaseUrl(deps.ctx as never)
-    abort = new AbortController()
-    running.value = true
-    error.value = ''
-    let acc = ''
-    try {
-      const res = await requestAgentChat(
-        [{ role: 'user', content: deps.prompt.value }],
-        {
-          baseUrl: base,
-          provider: picked.provider,
-          model: picked.modelId,
-          signal: abort.signal,
-          onDelta: (piece) => {
-            acc += piece
-            deps.onDelta(acc)
-          },
-        },
-      )
-      if (!res.ok) error.value = res.error
-      return res
-    } finally {
-      running.value = false
-      abort = null
-      deps.onDone?.()
-    }
+    // 用户口径 2026-11-09：点发送 = 提交任务给后台（POST /api/jobs，动作 agent:chat）。
+    // 后台调模型、边生成边把正文写进节点 data.text；本节点 runState 也由后台写 ——
+    // 前端只提交，不再自己请求对话接口、不再自己写流。runState 由后台写，所以这里
+    // 不需要 running/error 本地状态（节点卡片会自动进入加载态）。
+    const r = await submitAgentChatJob({
+      baseUrl: base,
+      nodeId: deps.nodeId,
+      provider: picked.provider,
+      modelId: picked.modelId,
+      prompt: deps.prompt.value,
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    })
+    // 失败也要给用户看得见的一句话（任务没建成，不会有 runState error 帧）
+    if (!r.ok) error.value = r.error
+    return r
   }
 
-  /** 中途停止：只断开客户端，不删会话（这里本来就没有会话） */
-  function stop(): void {
-    abort?.abort()
-    abort = null
-    running.value = false
-  }
-
-  return { running, error, choice, pick, canSend, send, stop, availableModels }
+  return { error, choice, pick, canSend, send, availableModels }
 }
 

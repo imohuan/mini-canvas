@@ -330,11 +330,13 @@ export class TaskManager {
     }
   }
 
-  private async writeRunState(job: Job, runState: Record<string, unknown>): Promise<void> {
+  /** 写 runState（进度帧）；extra 里的字段与 runState 同帧写入（文本生成写 data.text 用） */
+  private async writeRunState(job: Job, runState: Record<string, unknown>, extra?: Record<string, unknown>): Promise<void> {
     try {
       // 写进**任务所属那张画布**的文档（多画布）：用 deps.doc 会写错画布 → 静默失败 → 进度卡 0
       const doc = this.deps.docForCanvas?.(job.canvasId) ?? this.deps.doc
-      await doc.batchNodes({ update: [{ id: job.nodeId, ...nodeRunStatePatch(runState) }] })
+      const data = extra ? { ...nodeRunStatePatch(runState).data, ...extra } : nodeRunStatePatch(runState).data
+      await doc.batchNodes({ update: [{ id: job.nodeId, data }] })
     } catch (err) {
       this.deps.onError?.('[tasks] 写节点进度失败（节点可能已被删除）', err)
     }
@@ -356,7 +358,8 @@ export class TaskManager {
     let lastPollAt = startedAt
 
     try {
-      const submitted = await provider.submit(action, input)
+      // 取消信号透传给 provider：长跑型（Agent 对话）靠它响应节点上的「取消」
+      const submitted = await provider.submit(action, input, signal)
 
       // 提交即完成（同步生成）
       if ('done' in submitted) {
@@ -402,6 +405,8 @@ export class TaskManager {
         if (poll.status === 'running') {
           job.progress = poll.progress ?? job.progress
           job.message = poll.message ?? job.message
+          // 文本生成的流式预览：provider 给了 partialText 就写进节点正文 —— 用户边跑边看内容长出来。
+          // 整段覆盖式更新（provider 每拍给的是「目前累计到哪」，不是增量）。
           await this.writeRunState(job, {
             status: 'running',
             progress: job.progress,
@@ -409,7 +414,7 @@ export class TaskManager {
             actionId: action.id,
             taskId: job.id,
             startedAt: job.createdAt,
-          })
+          }, typeof poll.partialText === 'string' ? { text: poll.partialText } : undefined)
           await this.sleep(interval)
           continue
         }
@@ -450,6 +455,9 @@ export class TaskManager {
     // 它返回的同源地址要**回填进 result**：历史 / runState 也用它 —— 否则那两处仍存 web2api 的原始地址，
     // 前端拿它当缩略图会因为「文件名不是内容哈希」被资源接口判非法（400），历史卡片就是一片裂图。
     let media: MediaProbe | undefined
+    /** 文本产物：节点类型是 text（或动作声明 text）时，正文写进 data.text —— 与前端 applier 同一字段 */
+    const isTextProduct = this.kindOf(action) === 'text' || action.nodeTypes?.[0] === 'text'
+    const textPayload = isTextProduct && result.ok && typeof result.text === 'string' ? { text: result.text } : undefined
     if (result.ok) {
       const sameOrigin = await this.writeMediaFields(job, action, result.urls)
       if (sameOrigin) {
@@ -470,6 +478,7 @@ export class TaskManager {
             actionId: action.id,
             taskId: job.id,
           },
+      textPayload,
     )
 
     await this.deps.history.append(job.canvasId, this.toHistoryEntry(job, action, result, finishedAt, media))
@@ -485,7 +494,7 @@ export class TaskManager {
   /** 从动作声明推断产物类型（前端按它分组 / 计数） */
   private kindOf(action: ActionDef): HistoryEntry['kind'] {
     const t = action.nodeTypes?.[0]
-    return t === 'image' || t === 'video' || t === 'audio' ? t : 'other'
+    return t === 'image' || t === 'video' || t === 'audio' || t === 'text' ? t : 'other'
   }
 
   private toHistoryEntry(

@@ -56,7 +56,7 @@ export interface ActionParam {
 }
 
 /** 节点类型（动作服务哪几种节点） */
-export type ProviderNodeType = 'image' | 'video' | 'audio'
+export type ProviderNodeType = 'image' | 'video' | 'audio' | 'text'
 
 /**
  * provider 声明的一个配置项（管理页据此动态渲染表单）。
@@ -148,6 +148,8 @@ export interface ProviderPollResult {
   status: 'running' | 'done' | 'error'
   progress?: number
   message?: string
+  /** running 一拍的**部分文本**（文本生成流式预览用；整段覆盖式更新，不是拼接） */
+  partialText?: string
   /** provider 自己的任务号（后台记着，取消时要用） */
   taskId?: string
   /** status=done 时的产物 */
@@ -186,7 +188,11 @@ export interface Provider {
    */
   config?: ProviderConfigField[]
   /** 提交一个任务 */
-  submit(action: ActionDef, input: JobInput): Promise<ProviderSubmitResult>
+  /**
+   * @param signal 取消信号（TaskManager 的 AbortController）：长跑型 submit（如 Agent 对话）
+   *   用它响应节点上的「取消」；轮询型 submit 可以忽略 —— 那类取消走 cancel()。
+   */
+  submit(action: ActionDef, input: JobInput, signal?: AbortSignal): Promise<ProviderSubmitResult>
   /** 查一次进度（submit 给了 taskId 才需要） */
   poll?(taskId: string, action: ActionDef): Promise<ProviderPollResult>
   /** 取消一个服务端任务（尽力而为） */

@@ -43,6 +43,7 @@ import {
 } from './providers/configStore.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
+import { createAgentChatProvider } from './tasks/agentChatProvider.js'
 import { DEFAULT_CANVAS_ID, canvasDir } from './store/canvasPaths.js'
 import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
 
@@ -154,6 +155,24 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const registry = new ProviderRegistry()
   const scanned = await loadProvidersFromDir(providersDir, { config: providerConfig })
   registry.load(scanned.providers)
+  // Agent 对话（任务化）：**懒取** Agent 服务 —— 这里（第 159 行）比 assembleAgentServices
+  // （第 303 行）早，直接 agentServices() 会把 agentBranch 这类「Agent 未装配」场景炸掉。
+  // 用闭包延迟到第一次任务提交时才解析；Agent 关闭时不注册 provider，
+  // /api/jobs 的 agent:chat 会明确报「未找到动作」。
+  if (agentEnabled) {
+    registry.add(
+      createAgentChatProvider({
+        get config() { return agentServices().config },
+        loadSdk: () => agentServices().loadSdk(),
+        // 每拍部分文本 → 节点 data.text（batchNodes 串行锁内写，revision 变更经 SSE 推前端）
+        onPartialText: async (canvasId, nodeId, text) => {
+          const docFor = docPool.for(canvasId)
+          await docFor.batchNodes({ update: [{ id: nodeId, data: { text } }] })
+        },
+        onError: (message, err) => console.warn(message, err),
+      }),
+    )
+  }
   /** providerId → 文件名（管理路由据此定位文件；同 id 多文件时后装载者胜） */
   const providerFileOf = new Map<string, string>()
   for (let i = 0; i < scanned.providers.length; i++) {

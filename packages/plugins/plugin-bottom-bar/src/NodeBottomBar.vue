@@ -149,17 +149,14 @@ const promptApi = useBottomBarPrompt({
 })
 const { prompt, promptDoc, onPromptUpdate, CHAR_LIMIT, charCount } = promptApi
 
-// —— 文本节点：直连 Agent（用户 2026-11-07） ——
+// —— 文本节点：任务化对话（用户 2026-11-09） ——
 // 这个下拉不是「底栏动作」，而是 Agent 里配好的模型清单；
-// 选中的模型存进节点 data.barModel，发送时随请求带上。
+// 选中的模型存进节点 data.barModel；点发送 = 提交任务给后台（动作 agent:chat），
+// 后台调模型、边生成边把正文写进本节点 data.text，加载态与终态也由后台写 —— 前端只提交。
 const agentChat = useAgentChat({
   ctx,
+  nodeId: props.id,
   prompt,
-  onDelta: (text) => {
-    prompt.value = text
-    promptDoc.value = undefined
-  },
-  onDone: () => persistValues(),
 })
 const { choice: agentChoice, pick: pickAgentModel, send: sendAgentMessage } = agentChat
 
@@ -466,14 +463,20 @@ if (typeof ctx.on === 'function') {
 }
 
 async function onRun(): Promise<void> {
-  // 文本 / 图片 / 视频走 Agent：带上用户在下拉里选的模型（用户 2026-11-07）
+  // 文本走 Agent 的任务化对话：提交任务（带上选的模型），生成过程由后台写节点
   if (useAgentModelsEffective.value) {
     if (!agentChat.canSend()) return
     persistValues()
     if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
     submitted.value = true
-    await sendAgentMessage()
-    resetSubmitted()
+    const r = await sendAgentMessage()
+    // 任务建成了就交给后台：加载态 / 完成 / 失败全由后台的 runState 帧驱动，
+    // 不在这里 resetSubmitted —— 否则卡片还没进入加载态按钮就先解锁了（连点窗口）。
+    // 只有下单失败才立即解锁并提示。
+    if (!r.ok) {
+      resetSubmitted()
+      ctx.tryGet<NotifyContract>('notify')?.error(r.error)
+    }
     return
   }
   if (!canRun.value || !currentAction.value) return
@@ -834,7 +837,7 @@ onBeforeUnmount(() => {
             v-if="useAgentModelsEffective"
             :models="agentChat.availableModels()"
             :model="agentChoice"
-            :disabled="running || agentChat.running.value"
+            :disabled="running"
             @pick="onAgentModelPicked"
           />
           <!-- 图片 / 视频：同一套卡片 + 分栏面板，但选的是生成动作（带参数） -->

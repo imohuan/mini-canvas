@@ -53,7 +53,7 @@ export interface HistoryEntry {
   /** 展示名（动作标题，如「豆包 Seedream 4.5」） */
   title: string
   /** 生成物类型 —— 前端按它分组 / 计数 */
-  kind: 'image' | 'video' | 'audio' | 'other'
+  kind: 'image' | 'video' | 'audio' | 'text' | 'other'
   status: 'done' | 'error'
   /**
    * 评级。目前是**占位**（还没有人工审核流程）：归档时统一写 'passed'，

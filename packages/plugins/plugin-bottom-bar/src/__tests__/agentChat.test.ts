@@ -9,8 +9,10 @@
  * 2. 文本节点没有输入内容 / 没选模型时不允许发。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@mini-canvas/canvas-base'
-import { requestAgentChat, readBarModelChoice, choiceStillValid } from '../node-bottom-bar/useAgentChat'
+import { useAgentChat, requestAgentChat, readBarModelChoice, choiceStillValid } from '../node-bottom-bar/useAgentChat'
+import { submitAgentChatJob } from '../node-bottom-bar/agentJobSubmit'
 
 /** 最小的 localStorage 替身（Node 里没有 DOM；令牌走全局 localStorage） */
 class MemoryStorage {
@@ -152,3 +154,69 @@ describe('节点里记住的模型选择', () => {
   })
 })
 
+
+/** 提交任务的下单契约（用户 2026-11-09：点发送 = 提交任务给后台） */
+describe('submitAgentChatJob：提交任务给后台', () => {
+  function fetchOk(): { f: typeof fetch; calls: Array<{ url: string; body: Record<string, unknown> }> } {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+    const f = (async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), body: JSON.parse(String(init.body)) })
+      return new Response(JSON.stringify({ ok: true, jobId: 'job-1' }), { status: 200 })
+    }) as unknown as typeof fetch
+    return { f, calls }
+  }
+
+  it(
+    '下单 POST /api/jobs：动作 agent:chat、模型与渠道放 values、提示词成 prompt 段',
+    async () => {
+      ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+      localStorage.setItem(ADMIN_TOKEN_KEY, 'tok-jobs')
+      const { f, calls } = fetchOk()
+      const r = await submitAgentChatJob({
+        baseUrl: 'http://127.0.0.1:8865',
+        nodeId: 'n9',
+        provider: 'deepseek',
+        modelId: 'deepseek-v4.1-flash',
+        prompt: '画一个小猫',
+        fetchImpl: f,
+      })
+      expect(r.ok).toBe(true)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]!.url).toBe('http://127.0.0.1:8865/api/jobs')
+      const body = calls[0]!.body
+      expect(body.actionId).toBe('agent:chat')
+      expect(body.nodeId).toBe('n9')
+      const values = body.values as Record<string, unknown>
+      expect(values.agentModel).toBe('deepseek-v4.1-flash')
+      expect(values.agentProvider).toBe('deepseek')
+      const prompts = body.prompts as Array<{ type: string; value: string }>
+      expect(prompts[0]!.type).toBe('prompt')
+      expect(prompts[0]!.value).toBe('画一个小猫')
+    },
+  )
+
+  it(
+    'useAgentChat.send 走下单而不是直连对话接口（不再请求 /api/agent/chat/completion）',
+    async () => {
+      ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+      const calls: Array<{ url: string }> = []
+      const f = (async (url: string) => {
+        calls.push({ url: String(url) })
+        return new Response(JSON.stringify({ ok: true, jobId: 'job-2' }), { status: 200 })
+      }) as unknown as typeof fetch
+      const prompt = ref('你好')
+      const chat = useAgentChat({
+        ctx: { tryGet: () => undefined },
+        nodeId: 'n1',
+        prompt,
+        fetchImpl: f,
+      })
+      chat.pick({ provider: 'p', modelId: 'm' })
+      const r = await chat.send()
+      expect(r.ok).toBe(true)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]!.url).toContain('/api/jobs')
+      expect(calls[0]!.url).not.toContain('chat/completion')
+    },
+  )
+})
