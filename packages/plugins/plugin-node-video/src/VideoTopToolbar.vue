@@ -18,6 +18,7 @@ import { computed, ref } from 'vue'
 import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
 import { createVideoOps, uploadVideo } from './videoOps'
 import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'
@@ -26,8 +27,6 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
 const Button = useUiComponent('Button')
-/** 默认主题的统一加载态（紧凑形态，塞进状态栏里表示「这一格在处理」） */
-const NodeLoadingState = useUiComponent('nodeLoadingState')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')

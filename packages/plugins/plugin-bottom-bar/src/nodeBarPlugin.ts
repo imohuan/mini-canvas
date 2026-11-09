@@ -19,7 +19,6 @@ import type { ToolResourceKind } from '@mini-canvas/kernel'
 import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
 import { readRunState } from './runState'
 import { publishToolActions, type PublishToolActionsOptions } from './toolActions'
-import NodeTaskOverlay from './NodeTaskOverlay.vue'
 import NodeBottomBar from './NodeBottomBar.vue'
 // 参考选择态浮层（顶行「参考」按钮引发）：注册进同一 overlay 槽，与底栏宿主同层。
 import ReferenceSelectOverlay from './ReferenceSelectOverlay.vue'
@@ -280,15 +279,9 @@ export function apply(ctx: Context) {
   new NodeBarService(ctx)
   const task = new NodeTaskService(ctx)
 
-  // 覆盖层挂节点 over:inset（* 通配；组件自己判空与显隐）
-  // keepOnResize：拖拽改尺寸期间仍然显示。加载态跟着卡片一起变，中途消失会像任务断了
-  // （用户 2026-11-09 实测反馈）。主题壳只认这个声明，不认识具体插件。
-  ctx.nodes.attach('*', {
-    region: 'over:inset',
-    component: NodeTaskOverlay,
-    id: 'bottom-bar/overlay',
-    props: { keepOnResize: true },
-  })
+  // 加载 / 失败覆盖层**不再挂在这里**（用户 2026-11-09 拍板方案 A）：
+  // 它已经搬进节点壳（plugin-theme-canvas 的 NodeCardShell），所有节点类型自带，
+  // 卸载本插件也照样显示。本插件只保留底栏本身与任务执行服务（nodeTask）。
 
   // 底栏内容注册成 nodeToolbar 的「默认模式」—— 与裁剪/扩展等模式完全平等，
   // 位置由节点壳的 out:bottom 锚点负责，本插件不再自己摆浮层。

@@ -1,5 +1,5 @@
 /**
- * NodeBottomBar / NodeTaskOverlay 的渲染契约（SSR 拿真实 HTML 断言）。
+ * NodeBottomBar 的渲染契约（SSR 拿真实 HTML 断言）。
  *
  * 锁用户可见的几件事（都来自用户明确要求）：
  * 1. 底栏只在**单选**时出现；没有可用动作时自身不产出 DOM；
@@ -19,7 +19,6 @@ import { RegistryImpl } from '@mini-canvas/kernel'
 import { Context } from '@mini-canvas/canvas-data'
 import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
 import NodeBottomBar from '../NodeBottomBar.vue'
-import NodeTaskOverlay from '../NodeTaskOverlay.vue'
 import type { BarAction } from '../barTypes'
 import { collectUpstreamMaterials, makeResourceResolver, toEditorResources } from '../panelSource'
 
@@ -498,81 +497,13 @@ describe('参数区：唯一一个下拉参数直接铺到外面（不套二级�
     expect(html).not.toContain('tpg-inline')
   })
 })
-describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
-  it('running + 有百分比 → 渲染超大百分比、耗时胶囊与文案（照参考稿的 3 元素版式）', async () => {
-    const html = await render(
-      NodeTaskOverlay as Component,
-      '35',
-      { runState: { status: 'running', progress: 42, message: '生成中…' } },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).toContain('task-overlay')
-    // 数字与百分号是两个元素（中间超大号 + 小号 %），所以分开断言
-    expect(html).toContain('>42<')
-    expect(html).toContain('%')
-    expect(html).toContain('生成中…')
-    // 流光层 3 个光斑（暗/亮两套配色靠 CSS，DOM 里就这 3 个）
-    expect(html).toContain('ld-blob--1')
-    expect(html).toContain('ld-blob--3')
-  })
-
-  it('running 但外部只给阶段（无 progress）→ 显示旋转图标而不是编一个百分比', async () => {
-    const html = await render(
-      NodeTaskOverlay as Component,
-      '35',
-      { runState: { status: 'running', message: '排队中' } },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).toContain('ld-spinner')
-    expect(html).not.toContain('···')
-    expect(html).toContain('排队中')
-  })
-
-  it('done / idle / 缺省 → 渲染空（error 另有整卡失败态，见下一条）', async () => {
-    const states = [
-      {},
-      { runState: { status: 'idle' } },
-      { runState: { status: 'done', progress: 100 } },
-    ]
-    for (const data of states) {
-      const html = await render(NodeTaskOverlay as Component, '35', data, makeCtx({ selectedIds: ['35'] }))
-      expect(html, JSON.stringify(data)).not.toContain('task-overlay')
-      expect(html, JSON.stringify(data)).not.toContain('task-failed')
-    }
-  })
-
-  /**
-   * 用户要求：失败也必须像加载态那样**整卡覆盖**，不要只在顶上贴一条；
-   * 且消息只出现在节点上（底栏一个字都不显示）。
-   */
-  it('失败态：同样是整卡覆盖（不是顶部小条），写清原因 + 下一步', async () => {
-    const html = await render(
-      NodeTaskOverlay as Component,
-      '35',
-      { runState: { status: 'error', message: '任务被暂停（可在 web2api 里恢复或重试）' } },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).toContain('task-failed')
-    expect(html).toContain('任务被暂停')
-    // 整卡覆盖：与加载态同一个容器（不是浮在顶部的一条）
-    expect(html).toContain('task-overlay')
-    expect(html).toContain('is-error')
-    // 给一句下一步，而不是编一个百分比
-    expect(html).toContain('重试')
-    expect(html).not.toContain('ld-pct')
-  })
-
-  it('失败态不显示取消按钮（没在跑，没什么可取消的）', async () => {
-    const html = await render(
-      NodeTaskOverlay as Component,
-      '35',
-      { runState: { status: 'error', message: '失败了' } },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).not.toContain('task-overlay-cancel')
-  })
-
-  /** 用户要求：所有任务消息只出现在节点覆盖层，底栏不再显示任何状态文案 */
+/**
+ * 加载 / 失败覆盖层已搬进节点壳（用户 2026-11-09 方案 A），
+ * 这里只保留「底栏自己不显示状态文案」这一条 —— 覆盖层本身的渲染契约搬去了
+ * plugin-theme-canvas 的 nodeLoadingStateRender / baseNodeSlotsRender。
+ */
+describe('底栏不承担状态展示', () => {
+  /** 用户要求：所有任务消息只出现在节点上，底栏不再显示任何状态文案 */
   it('底栏不显示任何状态文案（错误/完成都只在节点上）', async () => {
     for (const rs of [
       { status: 'error', message: '任务执行失败: 触发了风控' },
@@ -585,25 +516,4 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
     }
   })
 
-  it('没有中间黑底卡片：渲染里不出现旧的卡片/遮罩容器类名', async () => {
-    const html = await render(
-      NodeTaskOverlay as Component,
-      '35',
-      { runState: { status: 'running', progress: 10 } },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).not.toContain('task-overlay-card')
-    expect(html).not.toContain('task-overlay-mask')
-  })
-
-  it('取消按钮在（右下角那一个）', async () => {
-    const html = await render(
-      NodeTaskOverlay as Component,
-      '35',
-      { runState: { status: 'running', progress: 10 } },
-      makeCtx({ selectedIds: ['35'] }),
-    )
-    expect(html).toContain('task-overlay-cancel')
-    expect(html).toContain('取消')
-  })
 })

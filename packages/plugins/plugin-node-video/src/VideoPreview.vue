@@ -22,10 +22,9 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useUiComponent } from '@mini-canvas/canvas-render'
+import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
 
 const Button = useUiComponent('Button')
-/** 默认主题的统一加载态（与节点卡片 / 底栏任务进度同一只） */
-const NodeLoadingState = useUiComponent('nodeLoadingState')
 import VideoPlayerBar from "./VideoPlayerBar.vue"
 import { fitPreviewBox } from "./videoPreviewFit"
 

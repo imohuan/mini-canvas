@@ -2,7 +2,11 @@
 
 **一句话**：节点卡片、视频画面、状态栏里“正在处理”的那块统一长这样 —— 流光底色 + 超大进度 + 一行阶段文案。登记在 `ui` 目录名 `nodeLoadingState`。
 
-源码：`packages/plugins/plugin-theme-components/src/components/ui/NodeLoadingState.vue`。
+源码：`packages/plugins/plugin-theme-canvas/src/components/node/NodeLoadingState.vue`。
+
+> **它住在哪**：跟着节点壳一起在「画布外观」主题包里。加载 / 失败覆盖层由 `NodeCardShell`
+> 直接画，所以图片、视频、文本、可视化所有节点类型都自带加载态，**不依赖底部状态栏插件**。
+> 从 `@mini-canvas/plugin-theme-canvas` 的入口导出，视频节点那几处复用的就是同一份实现。
 
 ## 这个组件能做到什么
 
@@ -76,7 +80,7 @@
 
 | 插槽 | 说明 |
 | --- | --- |
-| `#action` | 右下角操作位（例如任务覆盖层的「取消」按钮）。只有这里的元素接收指针 |
+| `#action` | 右下角操作位（节点壳在里面放「取消」按钮）。只有这里的元素接收指针 |
 
 ## 事件、方法或暴露能力
 
@@ -142,7 +146,7 @@ const percent = ref(0)
 
 ## 真实插件参照
 
-- 任务进度覆盖层：`packages/plugins/plugin-bottom-bar/src/NodeTaskOverlay.vue`
+- 节点壳自绘加载覆盖层：`packages/plugins/plugin-theme-canvas/src/components/node/base-node/NodeCardShell.vue`
 - 视频帧图加载：`packages/plugins/plugin-node-video/src/VideoContent.vue`
 - 全屏视频加载：`packages/plugins/plugin-node-video/src/VideoPreview.vue`
 - 裁剪/剪辑处理中：`packages/plugins/plugin-node-video/src/VideoTopToolbar.vue`、`video-clip-panel/VideoClipDock.vue`

@@ -7,8 +7,9 @@ import {
   useCanvasRender,
   RegionEntryHost,
 } from '@mini-canvas/canvas-render'
-import { readNodeVisualState } from '@mini-canvas/canvas-data'
 import MovingHandle from '../MovingHandle.vue'
+import NodeLoadingState from '../NodeLoadingState.vue'
+import { useNodeTaskState } from './useNodeTaskState'
 import BaseTitle from '../BaseTitle.vue'
 import TitleLabel from '../TitleLabel.vue'
 import { useNodeCapability } from '../../../composables/useNodeCapability'
@@ -114,14 +115,25 @@ const visibility = useNodeVisibilityPolicy({
 const { hideOverlays, hideSlotBars, resizingThisNode } = visibility
 
 /**
- * 节点的全局三态（loading / error / ready），见 canvas-data 的 readNodeVisualState。
+ * 节点的全局三态 + 加载覆盖层用的数据（进度 / 文案 / 计时）。
  *
- * 用户口径 2026-11-09：节点就这三个状态，且是**全局**的 —— 壳、状态栏、加载覆盖层、
- * 视频播放拦截都读同一份判定。这里只用到「是不是被覆盖层盖住」这一条：
- * 盖住时不给 resize 把手（底下整张卡都被盖住，拖它既看不见效果又会搅乱任务期间的尺寸）。
+ * 用户口径 2026-11-09：这三个状态是全局的，覆盖层由**节点壳自己画** ——
+ * 不依赖底部状态栏插件，卸载它之后图片 / 文本 / 可视化节点照样有加载态。
  */
-const visualState = computed(() => readNodeVisualState({ data: props.data }))
-const covered = computed(() => visualState.value !== 'ready')
+const taskState = useNodeTaskState({ data: () => props.data })
+const { loading, failed, covered, percent, message: taskMessage, startedAt: taskStartedAt } = taskState
+
+/**
+ * 取消任务：**可选能力**（底部状态栏插件上架 nodeTask 服务才有）。
+ *
+ * 为什么做成可选：加载覆盖层现在住在节点壳里，壳不允许依赖任何一个业务插件
+ * （否则又是一条反向依赖）。没有该服务时按钮不渲染，只显示进度 —— 不报错、不假装能点。
+ */
+const cancelTask = (ctx.tryGet?.<{ cancel(nodeId: string): void } | undefined>('nodeTask'))?.cancel
+const canCancel = computed(() => typeof cancelTask === 'function' && loading.value)
+function onCancelTask(): void {
+  if (typeof cancelTask === 'function') cancelTask(props.id)
+}
 
 const regions = useNodeRegions({
   ctx,
@@ -409,6 +421,37 @@ const {
         <!-- in 区域（老 content 段）：基座 + attach 场条目按 order 同摞渲染 -->
       <RegionEntryHost v-for="seg in contentStack" :key="'in-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
         <div v-if="contentStack.length === 0" class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
+      </div>
+
+      <!--
+        加载 / 失败覆盖层：**由节点壳自己画**（用户 2026-11-09 拍板方案 A）。
+
+        为什么放在壳里而不是某个插件注册条目：这三种状态是每个节点都有的通用行为，
+        挂在底部状态栏插件上会导致「卸了底栏插件，节点就没有加载态」。
+        现在图片 / 视频 / 文本 / 可视化一律自带，跟着卡片尺寸走、跟着拖动/缩放走。
+
+        状态来源 = data.runState（与任务写入方同一把 key），判定收在 useNodeTaskState。
+        内容 = NodeLoadingState（同一份流光版本，按画布缩放分三档）。
+        根 pointer-events: none，只有「取消」按钮接指针 —— 加载期间节点照样能拖能选。
+      -->
+      <div v-if="covered && !culledReduced" class="v2-task-overlay" :class="{ 'is-error': failed }" role="status"
+        :aria-label="taskMessage || (failed ? '执行失败' : '执行中')">
+        <NodeLoadingState
+          :tone="failed ? 'error' : 'loading'"
+          :label="failed ? '执行失败' : '生成中'"
+          :percent="failed ? null : percent"
+          :message="taskMessage"
+          :hint="failed ? '可再点一次发送重试' : ''"
+          :started-at="failed ? 0 : taskStartedAt"
+        >
+          <template #action>
+            <!-- 取消：只有装了能取消任务的插件（底部状态栏提供 nodeTask）才出现 -->
+            <button v-if="canCancel" class="v2-task-cancel nodrag nopan" type="button" title="取消任务"
+              @click.stop="onCancelTask">
+              取消
+            </button>
+          </template>
+        </NodeLoadingState>
       </div>
 
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
@@ -787,6 +830,44 @@ const {
   justify-content: center;
   overflow: hidden;
   background: var(--card-content-surface, #eee);
+}
+
+/* —— 加载 / 失败覆盖层（节点壳自绘，见模板注释）——
+   铺满卡内、跟随卡片圆角；不接指针，只有取消按钮例外（在 NodeLoadingState 的 #action 里）。 */
+.v2-task-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 取消按钮：右下角一小格，是覆盖层里唯一接指针的东西（加载期间节点照样能拖能选） */
+.v2-task-cancel {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  background: var(--ui-overlay-solid, #fff);
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.15s ease-out, background-color 0.15s ease-out;
+}
+.v2-task-cancel:hover {
+  color: var(--ui-danger, #ef4444);
+  background: var(--ui-danger-soft, color-mix(in srgb, var(--ui-danger, #ef4444) 14%, transparent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-task-cancel {
+    transition: none;
+  }
 }
 
 /* —— 新增区域容器（out:left / out:right / on:top / on:bottom / over:outset）——

@@ -69,6 +69,13 @@ export { default as NodeModeBottomBar } from "./components/node/NodeModeBottomBa
  * - ConnectionLine / CustomEdge：拖线临时线与正式边（临时线内部委托给 CustomEdge）。
  */
 export { default as MovingHandle } from "./components/node/MovingHandle.vue"
+/**
+ * 节点加载态视觉件（随节点壳一起住在本包）。
+ *
+ * 视频内容 / 预览 / 状态栏直接 import 本入口复用同一份实现；
+ * 节点壳自己也在用，所以它属于「画布外观」而不是某个业务插件。
+ */
+export { default as NodeLoadingState } from "./components/node/NodeLoadingState.vue"
 export { default as ConnectionLine } from "./components/edge/ConnectionLine.vue"
 export { default as CustomEdge } from "./components/edge/CustomEdge.vue"
 

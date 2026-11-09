@@ -32,6 +32,7 @@
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
+    "@mini-canvas/plugin-theme-canvas": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "@mini-canvas/bar-contract": "workspace:*"
   },

@@ -626,6 +626,46 @@ describe('拖动进行中收起上/下控制栏（用户要求）', () => {
 })
 
 describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () => {
+  /**
+   * 用户口径 2026-11-09（方案 A）：加载 / 失败覆盖层是**节点壳自己的事**。
+   *
+   * 这条锁住「不依赖任何业务插件」：registry 里只注册了内容段、渲染上下文里也没有
+   * nodeTask 这类服务，加载态照样画出来。老实现是底部状态栏插件挂 over:inset，
+   * 卸了它就没有覆盖层 —— 所以这条同时也防了回退。
+   */
+  it('★ 加载中 → 节点壳自己画覆盖层（不依赖底栏插件的注册条目）', async () => {
+    const r = new NodeRegistry()
+    r.register('text', { in: ContentStub })
+    const html = await renderNode(
+      r,
+      { runState: { status: 'running', progress: 42, message: '生成中…' } },
+      {},
+      { type: 'text' },
+    )
+    expect(html).toContain('v2-task-overlay')
+    expect(html).toContain('nls-root')
+    expect(html).toContain('>42<')
+    expect(html).toContain('生成中…')
+  })
+
+  it('★ 失败 → 同一块壳内覆盖层，换成失败内容；加载成功则不画', async () => {
+    const r = new NodeRegistry()
+    r.register('text', { in: ContentStub })
+    const failed = await renderNode(
+      r,
+      { runState: { status: 'error', message: 'ffmpeg 退出码 1' } },
+      {},
+      { type: 'text' },
+    )
+    expect(failed).toContain('v2-task-overlay')
+    expect(failed).toContain('is-error')
+    expect(failed).toContain('ffmpeg 退出码 1')
+    expect(failed).toContain('重试')
+
+    const ready = await renderNode(r, { runState: { status: 'done', progress: 100 } }, {}, { type: 'text' })
+    expect(ready).not.toContain('v2-task-overlay')
+  })
+
   it('data.resizable=true → 渲染拖柄，且带 scale 反缩放绑定（与标题同一套语义）', async () => {
     const r = new NodeRegistry()
     r.register('text', { in: ContentStub })
