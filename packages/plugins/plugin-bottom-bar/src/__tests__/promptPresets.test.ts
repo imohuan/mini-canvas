@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import {
   addPreset,
   createPreset,
+  createTypedPreset,
   filterPresets,
   loadPromptPresets,
   normalizePresets,
@@ -78,6 +79,27 @@ describe('预设提示词：读盘', () => {
 })
 
 describe('预设：分类与可用性', () => {
+  /**
+   * 应用方式（用户 2026-11-09）：默认追加；只有明确写 replace 才替换。
+   * 旧数据没有这个字段 → 一律按追加，不改变既有行为。
+   */
+  it('applyMode：缺省/脏值按追加，replace 才替换', () => {
+    const list = normalizePresets([
+      { id: 'a', name: 'A', content: '正文' },
+      { id: 'b', name: 'B', content: '正文', applyMode: 'replace' },
+      { id: 'c', name: 'C', content: '正文', applyMode: 'nonsense' },
+    ])
+    expect(list[0].applyMode).toBeUndefined()
+    expect(list[1].applyMode).toBe('replace')
+    expect(list[2].applyMode).toBeUndefined()
+  })
+
+  it('createTypedPreset 带上 applyMode=replace', () => {
+    const p = createTypedPreset({ content: '正文', applyMode: 'replace' })
+    expect(p.applyMode).toBe('replace')
+    expect(createTypedPreset({ content: '正文' }).applyMode).toBeUndefined()
+  })
+
   it('provider / 通用 / 指定模型 三类', () => {
     expect(presetBucketOf({ id: 'a', name: 'a', content: 'x', createdAt: 0, source: 'provider' })).toBe('provider')
     expect(presetBucketOf({ id: 'b', name: 'b', content: 'x', createdAt: 0 })).toBe('general')

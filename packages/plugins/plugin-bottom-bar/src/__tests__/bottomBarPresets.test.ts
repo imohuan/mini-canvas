@@ -107,9 +107,12 @@ describe('预设提示词面板：只用全局组件', () => {
 })
 
 describe('预设提示词面板：禁用改成独立页签', () => {
+  /**
+   * 旧的「显示禁用预设」开关已删除（改成独立页签）。
+   * 2026-11-09 又引入了一个 Switch —— 用来选「追加 / 替换」，与禁用无关。
+   */
   it('不再有「显示禁用预设」开关', () => {
     expect(PRESETS).not.toContain('显示禁用预设')
-    expect(PRESETS).not.toContain("useUiComponent('Switch')")
   })
 
   it('五个页签：provider / 通用 / 指定模型 / 当前模型 / 禁用', () => {
@@ -156,5 +159,36 @@ describe('预设提示词面板：禁用改成独立页签', () => {
     expect(PRESETS).toContain('class="nbp-tabcount"')
     expect(PRESETS).toContain('没有禁用的预设')
     expect(PRESETS).toContain('当前节点用不了这个模型')
+  })
+
+  /**
+   * 用户 2026-11-09 的三点：① 预设要能编辑；② 应用方式可选追加 / 替换；
+   * ③ 参数触发器不能溢出容器。
+   */
+  it('预设可编辑（复用弹窗，就地覆盖）', () => {
+    expect(PRESETS).toContain('function startEdit')
+    expect(PRESETS).toContain('class="nbp-edit"')
+    // provider 自带的不给编辑入口
+    expect(PRESETS).toContain('平台模板不能编辑')
+  })
+
+  it('应用方式可选追加 / 替换，并随预设保存', () => {
+    expect(PRESETS).toContain('draftApplyMode')
+    expect(PRESETS).toContain('替换输入框内容')
+    expect(PRESETS).toContain('applyMode: draftApplyMode.value')
+    // 纯提示词分发时带上模式
+    expect(PRESETS).toContain("emit('apply', preset.content, preset.applyMode")
+  })
+
+  it('参数触发器限制在容器内（长摘要不溢出）', () => {
+    const css = read('../node-bottom-bar/prompt-presets.css')
+    const bh = css.indexOf('.nbp-dialog .nb-param-trigger {')
+    const body = css.slice(bh, css.indexOf('}', bh))
+    expect(body).toContain('max-width: 100%')
+    expect(body).toContain('min-width: 0')
+    const txt = css.indexOf('.nbp-dialog .nb-param-text {')
+    const txtBody = css.slice(txt, css.indexOf('}', txt))
+    expect(txtBody).toContain('max-width: 100%')
+    expect(txtBody).toContain('text-overflow: ellipsis')
   })
 })

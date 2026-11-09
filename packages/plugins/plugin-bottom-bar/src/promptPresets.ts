@@ -20,9 +20,18 @@ export interface PromptPreset {
   actionId?: string
   /** 应用时一并写入的参数值（键 = ToolParamDef.key） */
   values?: Record<string, unknown>
+  /**
+   * 应用方式（用户 2026-11-09）：
+   * - 'append'（默认）：接在输入框现有内容后面
+   * - 'replace'：清空输入框，只留这条预设
+   */
+  applyMode?: PresetApplyMode
   /** 来源：user = 自己建的；provider = 后台动作自带的模板 */
   source?: 'user' | 'provider'
 }
+
+/** 预设的应用方式 */
+export type PresetApplyMode = 'append' | 'replace'
 
 /** 预设按「归属」分成三类展示（provider 带的自成一类） */
 export type PresetBucket = 'provider' | 'general' | 'model'
@@ -76,6 +85,8 @@ export function normalizePresets(raw: unknown): PromptPreset[] {
       : 0
     const actionId = textOf(rec.actionId).trim()
     const values = plainValues(rec.values)
+    // 只有明确写了 'replace' 才算替换；其它（缺省 / 旧数据 / 脏值）一律按追加
+    const applyMode: PresetApplyMode = rec.applyMode === 'replace' ? 'replace' : 'append'
     out.push({
       id,
       name,
@@ -83,6 +94,7 @@ export function normalizePresets(raw: unknown): PromptPreset[] {
       createdAt,
       ...(actionId ? { actionId } : {}),
       ...(values ? { values } : {}),
+      ...(applyMode === 'replace' ? { applyMode } : {}),
       ...(rec.source === 'provider' ? { source: 'provider' as const } : {}),
     })
   }
@@ -172,16 +184,19 @@ export function createTypedPreset(input: {
   content: string
   actionId?: string
   values?: Record<string, unknown>
+  applyMode?: PresetApplyMode
   now?: number
 }): PromptPreset {
   const now = input.now ?? Date.now()
   const base = createPreset(input.name ?? '', input.content, now)
   const actionId = input.actionId?.trim()
   const values = input.values && Object.keys(input.values).length > 0 ? { ...input.values } : undefined
+  const applyMode = input.applyMode === 'replace' ? 'replace' : 'append'
   return {
     ...base,
     ...(actionId ? { actionId } : {}),
     ...(values ? { values } : {}),
+    ...(applyMode === 'replace' ? { applyMode } : {}),
   }
 }
 

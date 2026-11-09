@@ -23,6 +23,7 @@ import {
   presetEnabled,
   removePreset,
   type PresetBucket,
+  type PresetApplyMode,
   type PromptPreset,
 } from '../promptPresets'
 import { loadPresets, savePresets } from '../presetStore'
@@ -32,7 +33,7 @@ import type { ModelIcon } from './modelIcons'
 import { resolveActionIcon, type ModelIconServiceLike } from './actionIcon'
 import ChoicePickerMenu from './ChoicePickerMenu.vue'
 import HtmlPanelFrame from './HtmlPanelFrame.vue'
-import { ICON_BOOKMARK, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
+import { ICON_BOOKMARK, ICON_PENCIL, ICON_PLUS, ICON_SEARCH, ICON_TRASH } from './presetIcons'
 
 const props = defineProps<{
   /** 输入框不可用时（没有输入框 / AI 生成中）也不允许插入 */
@@ -64,7 +65,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   /** 用户点了某条预设：把正文放进输入框（已有内容时接在后面） */
-  apply: [content: string]
+  apply: [content: string, mode: PresetApplyMode]
   /** 应用一条「带模型 / 参数」的预设：调用方负责切模型 + 写参数 */
   applyPreset: [preset: PromptPreset]
 }>()
@@ -108,6 +109,7 @@ const DialogHeader = useUiComponent('DialogHeader')
 const DialogTitle = useUiComponent('DialogTitle')
 const Input = useUiComponent('Input')
 const Textarea = useUiComponent('Textarea')
+const Switch = useUiComponent('Switch')
 
 const open = ref(false)
 const query = ref('')
@@ -246,8 +248,33 @@ function use(preset: PromptPreset): void {
   }
   // 带模型 / 参数的预设交给调用方切模型与写参数；纯提示词仍走原来的插入
   if (preset.actionId || preset.values) emit('applyPreset', preset)
-  else if (preset.content.trim()) emit('apply', preset.content)
+  else if (preset.content.trim()) emit('apply', preset.content, preset.applyMode ?? 'append')
   open.value = false
+}
+
+/**
+ * 编辑一条预设（用户 2026-11-09）：复用新建弹窗，预填内容，保存时就地覆盖。
+ * provider 自带的模板是只读的，不给编辑入口。
+ */
+function startEdit(preset: PromptPreset): void {
+  if (preset.source === 'provider') {
+    notify?.info('平台模板不能编辑', { description: '要改请改 provider 文件里的 templates' })
+    return
+  }
+  editingId.value = preset.id
+  draftName.value = preset.name
+  draftContent.value = preset.content
+  draftActionId.value = preset.actionId ?? ''
+  draftApplyMode.value = preset.applyMode ?? 'append'
+  draftValues.value = preset.values ? { ...preset.values } : {}
+  open.value = false
+  creating.value = true
+  void nextTick(() => {
+    const el =
+      (nameInput.value?.$el as HTMLElement | undefined)
+      ?? (document.querySelector('.nbp-dialog input') as HTMLInputElement | null)
+    el?.focus?.()
+  })
 }
 
 function remove(id: string): void {
@@ -262,10 +289,14 @@ function remove(id: string): void {
 
 // —— 新建对话框 ——
 const creating = ref(false)
+/** 正在编辑的预设 id（空 = 新建） */
+const editingId = ref('')
 const draftName = ref('')
 const draftContent = ref('')
 /** 新建时选的目标模型（空串 = 通用，不绑模型） */
 const draftActionId = ref('')
+/** 应用方式：追加（默认）/ 替换 */
+const draftApplyMode = ref<PresetApplyMode>('append')
 /** 新建时挑的参数值（用模型自己的参数定义渲染，跟下拉里同一套控件） */
 const draftValues = ref<Record<string, unknown>>({})
 const nameInput = ref<{ $el?: HTMLElement } | null>(null)
@@ -379,8 +410,10 @@ function onDraftFieldChange(key: string, v: string | number | boolean): void {
 }
 
 function startCreate(): void {
+  editingId.value = ''
   draftName.value = ''
   draftContent.value = ''
+  draftApplyMode.value = 'append'
   // 新建时默认对准「当前选中的模型」：用户多半就是为它建预设
   draftActionId.value = (props.availableIds ?? []).includes(props.currentId ?? '')
     ? (props.currentId ?? '')
@@ -409,9 +442,33 @@ function startCreate(): void {
 
 function saveDraft(): void {
   if (!canSaveDraft.value) return
+  // 编辑：就地替换那条（provider 自带的不允许改，上面 startEdit 已挡掉）
+  if (editingId.value) {
+    const id = editingId.value
+    presets.value = presets.value.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            name: draftName.value.trim() || draftContent.value.trim().slice(0, 12) || p.name,
+            content: draftContent.value.trim(),
+            applyMode: draftApplyMode.value,
+            ...(draftActionId.value ? { actionId: draftActionId.value } : { actionId: undefined }),
+            ...(Object.keys(draftValues.value).length > 0 ? { values: draftValues.value } : { values: undefined }),
+          }
+        : p,
+    )
+    void persist().then((ok) => {
+      if (!ok) return
+      creating.value = false
+      editingId.value = ''
+      notify?.success('预设已更新', { description: draftName.value || '未命名预设' })
+    })
+    return
+  }
   const preset = createTypedPreset({
     name: draftName.value,
     content: draftContent.value,
+    applyMode: draftApplyMode.value,
     ...(draftActionId.value ? { actionId: draftActionId.value } : {}),
     ...(Object.keys(draftValues.value).length > 0 ? { values: draftValues.value } : {}),
   })
@@ -421,7 +478,7 @@ function saveDraft(): void {
     if (!ok) return
     creating.value = false
     if (preset.actionId || preset.values) emit('applyPreset', preset)
-    else emit('apply', preset.content)
+    else emit('apply', preset.content, preset.applyMode ?? 'append')
     open.value = false
     notify?.success('已使用新预设', { description: preset.name })
   })
@@ -549,17 +606,30 @@ function labelOfAction(id: string): string {
               </span>
               <span class="nbp-item-preview">{{ previewOf(p.content) }}</span>
             </span>
-            <span
-              v-if="p.source !== 'provider'"
-              class="nbp-del"
-              role="button"
-              tabindex="0"
-              :aria-label="'删除预设 ' + p.name"
-              :title="'删除 ' + p.name"
-              @click.stop="remove(p.id)"
-              @keydown.enter.stop.prevent="remove(p.id)"
-            >
-              <span aria-hidden="true" v-html="ICON_TRASH" />
+            <span v-if="p.source !== 'provider'" class="nbp-item-actions">
+              <!-- 编辑（用户 2026-11-09）：复用新建弹窗，保存时就地覆盖 -->
+              <span
+                class="nbp-edit"
+                role="button"
+                tabindex="0"
+                :aria-label="'编辑预设 ' + p.name"
+                :title="'编辑 ' + p.name"
+                @click.stop="startEdit(p)"
+                @keydown.enter.stop.prevent="startEdit(p)"
+              >
+                <span aria-hidden="true" v-html="ICON_PENCIL" />
+              </span>
+              <span
+                class="nbp-del"
+                role="button"
+                tabindex="0"
+                :aria-label="'删除预设 ' + p.name"
+                :title="'删除 ' + p.name"
+                @click.stop="remove(p.id)"
+                @keydown.enter.stop.prevent="remove(p.id)"
+              >
+                <span aria-hidden="true" v-html="ICON_TRASH" />
+              </span>
             </span>
           </button>
         </ScrollArea>
@@ -586,8 +656,10 @@ function labelOfAction(id: string): string {
       -->
       <div class="nbp-dialog-body">
         <DialogHeader class="nbp-dialog-head">
-          <DialogTitle class="nbp-dialog-title">新建预设</DialogTitle>
-          <DialogDescription class="nbp-dialog-desc">选模型、调参数、写提示词；保存后一起应用</DialogDescription>
+          <DialogTitle class="nbp-dialog-title">{{ editingId ? '编辑预设' : '新建预设' }}</DialogTitle>
+          <DialogDescription class="nbp-dialog-desc">
+            {{ editingId ? '改完保存，会覆盖这份预设' : '选模型、调参数、写提示词；保存后一起应用' }}
+          </DialogDescription>
         </DialogHeader>
 
         <div class="nbp-field">
@@ -614,6 +686,24 @@ function labelOfAction(id: string): string {
             placeholder="请输入预设内容…"
             @keydown.stop
             @keydown.enter.stop
+          />
+        </div>
+
+        <!--
+          应用方式（用户 2026-11-09）：追加 = 接在输入框现有内容后面；替换 = 清空后只留这条。
+          默认追加，保持旧行为；每条预设各自记住自己的选择。
+        -->
+        <div class="nbp-field nbp-field--row">
+          <div class="nbp-switch-text">
+            <Label for="nbp-apply-mode" class="nbp-label">替换输入框内容</Label>
+            <span class="nbp-switch-desc">
+              {{ draftApplyMode === 'replace' ? '使用时会清空输入框，只保留这条预设' : '使用时会接在输入框现有内容后面' }}
+            </span>
+          </div>
+          <Switch
+            id="nbp-apply-mode"
+            :model-value="draftApplyMode === 'replace'"
+            @update:model-value="(v: boolean) => (draftApplyMode = v ? 'replace' : 'append')"
           />
         </div>
 

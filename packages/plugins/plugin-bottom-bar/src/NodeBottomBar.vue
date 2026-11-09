@@ -548,8 +548,23 @@ function insertAt(): void {
  * 用户选预设多半是「先有这半句，再加一段固定要求」。
  * 走 editor 的 setText（按行拆段落），比 insertText 稳 —— 后者插不了换行。
  */
-function applyPreset(content: string): void {
+/**
+ * 把预设正文放进输入框。
+ *
+ * mode（用户 2026-11-09）：'append' 接在现有内容后面（默认，保持旧行为）；
+ * 'replace' 清空后只留这条预设。
+ */
+function applyPreset(content: string, mode: 'append' | 'replace' = 'append'): void {
   const editor = editorComponentRef.value
+  if (mode === 'replace') {
+    if (editor?.setText) {
+      editor.setText(content)
+      editor.focusEnd?.()
+      return
+    }
+    onPromptUpdate(content)
+    return
+  }
   if (editor?.setText) {
     // 读编辑器里**实际**的正文，而不是组件状态：两者正常同步，但以输入框里看到的为准
     const current = (editor.exportText?.() ?? prompt.value).trim()
@@ -593,7 +608,7 @@ function applyTypedPreset(preset: PromptPreset): void {
     // 等切模型的默认值写完之后再覆盖，避免被 selectAction 重置掉
     void nextTick(() => onPanelValues({ ...preset.values }))
   }
-  if (preset.content.trim()) applyPreset(preset.content)
+  if (preset.content.trim()) applyPreset(preset.content, preset.applyMode ?? 'append')
 }
 
 // —— Ctrl 拖资源 ——

@@ -234,16 +234,66 @@
   transition: opacity 0.16s ease-out, background-color 0.16s ease-out, color 0.16s ease-out;
 }
 .nbp-item:hover .nbp-del,
-.nbp-del:focus-visible {
+.nbp-del:focus-visible,
+.nbp-item:hover .nbp-edit,
+.nbp-edit:focus-visible {
   opacity: 1;
 }
 .nbp-del:hover {
   background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
   color: var(--ui-danger, #ef4444);
 }
-.nbp-del svg {
+.nbp-del svg,
+.nbp-edit svg {
   width: 14px;
   height: 14px;
+}
+
+/* 行尾操作（编辑 + 删除）：并排，hover 才出现（用户 2026-11-09 加了编辑） */
+.nbp-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.nbp-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: var(--ui-ink-mute, #8c95a3);
+  opacity: 0;
+  transition: opacity 0.16s ease-out, background-color 0.16s ease-out, color 0.16s ease-out;
+}
+.nbp-edit:hover {
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
+  color: var(--ui-ink, #18202b);
+}
+
+/*
+ * 弹窗里的「应用方式」一行：左说明、右开关。
+ * 必须写在 .nbp-field 之后或用更高的权重 —— 两条同权重时后写的 flex-direction: column 会盖掉它
+ *（实测第一版就是被覆盖、开关跑到说明下面去了）。
+ */
+.nbp-field.nbp-field--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nbp-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nbp-switch-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ui-ink-mute, #8c95a3);
 }
 
 .nbp-empty {
@@ -349,6 +399,10 @@
    */
   width: auto !important;
   flex: 0 0 auto !important;
+  /* 用户 2026-11-09：摘要过长也不能溢出弹窗右边缘 */
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden;
   /* 与上面「适用模型」那个下拉同高（32px），两行控件才不会一高一矮 */
   height: 32px;
   padding: 0 10px;
@@ -374,7 +428,10 @@
 .nbp-dialog .nb-param-trigger {
   box-sizing: border-box;
   /* 与 fallback（ToolParamGroup）分支同一口径：按内容自适应（用户 2026-11-08 图2 左侧按钮） */
+  /* 用户 2026-11-09：摘要很长时必须**限制在容器内**，不能溢出弹窗右边缘 */
   width: auto !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   flex: 0 0 auto !important;
   align-self: flex-start !important;
   display: inline-flex;
@@ -390,6 +447,7 @@
   cursor: pointer;
   border: 0;
   font-family: inherit;
+  overflow: hidden;
 }
 .nbp-dialog .nb-param-trigger:hover,
 .nbp-dialog .nb-param-trigger[aria-expanded='true'] {
@@ -404,7 +462,9 @@
 }
 .nbp-dialog .nb-param-text {
   min-width: 0;
-  max-width: 240px;
+  /* 摘要按剩余宽度省略：容器再窄也不会顶出面板 */
+  flex: 0 1 auto;
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
