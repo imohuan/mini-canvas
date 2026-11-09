@@ -108,6 +108,8 @@ export const KNOWN_GLOBALS = [
   'MiniCanvasKernel',
   'MiniCanvasBase',
   'MiniCanvasRender',
+  'MiniCanvasUiKit',
+  'MiniCanvasThemeContract',
   'ProseMirrorEditorBundle',
 ] as const
 

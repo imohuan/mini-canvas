@@ -21,6 +21,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { isValidProvider, type Provider } from './types.js'
+import { injectTextFor, type ProviderConfigFile } from './configStore.js'
 
 /** 默认的 provider 目录名（挂在数据根下，与 kv / canvases 并列） */
 export const DEFAULT_PROVIDERS_DIR = 'providers'
@@ -29,6 +30,8 @@ export interface LoadResult {
   providers: Provider[]
   /** 逐个文件的加载情况（诊断用：哪个文件坏了、为什么） */
   failures: Array<{ file: string; error: string }>
+  /** 成功装载的文件名（按装载顺序）—— 管理接口据此把 id 映射回文件 */
+  files: string[]
 }
 
 /**
@@ -36,15 +39,22 @@ export interface LoadResult {
  *
  * @param dir provider 目录；不存在 → 返回空（不是错误：可以一个外挂都没有）
  */
-export async function loadProvidersFromDir(dir: string): Promise<LoadResult> {
+export async function loadProvidersFromDir(
+  dir: string,
+  opts?: { config?: ProviderConfigFile },
+): Promise<LoadResult> {
   const providers: Provider[] = []
   const failures: LoadResult['failures'] = []
+  const files: string[] = []
+  // 没传 config（旧调用 / 单测）= 全部装载、不注入 —— 行为与从前一致。
+  const cfg: ProviderConfigFile = opts?.config ?? EMPTY_CONFIG
+  const disabled = new Set(cfg.disabledFiles)
 
   let entries: Array<import('node:fs').Dirent>
   try {
     entries = await fs.readdir(dir, { withFileTypes: true })
   } catch (err) {
-    if (isNotFound(err)) return { providers, failures }
+    if (isNotFound(err)) return { providers, failures, files }
     throw err
   }
 
@@ -53,11 +63,15 @@ export async function loadProvidersFromDir(dir: string): Promise<LoadResult> {
     if (!entry.isFile()) continue
     if (!entry.name.endsWith('.js')) continue
     if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue
+    if (disabled.has(entry.name)) continue
     const file = path.join(dir, entry.name)
     try {
       const text = await fs.readFile(file, 'utf8')
+      // 已存配置注入源码最前面（import 都在后面也没关系：provider 读值发生在函数调用时，
+      // 模块求值期先把 const 赋好即可）。没配过也注入空结构，provider 里 ?. / ?? 兜底统一。
+      const injected = injectTextFor({ accounts: cfg.files[entry.name]?.accounts ?? [] }) + text
       const mod = (await import(
-        /* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(text)
+        /* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(injected)
       )) as Record<string, unknown>
       // 支持两种写法：具名导出，或 default 整体导出
       const candidate = mod.default ?? mod
@@ -66,14 +80,17 @@ export async function loadProvidersFromDir(dir: string): Promise<LoadResult> {
         continue
       }
       providers.push(candidate)
+      files.push(entry.name)
     } catch (err) {
       // 坏文件不该把整个服务带崩 —— 记下来、继续扫下一个
       failures.push({ file: entry.name, error: err instanceof Error ? err.message : String(err) })
     }
   }
 
-  return { providers, failures }
+  return { providers, failures, files }
 }
+
+const EMPTY_CONFIG: ProviderConfigFile = { version: 2, disabledFiles: [], deletedFiles: [], files: {} }
 
 function isNotFound(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ENOENT'
@@ -88,7 +105,11 @@ function isNotFound(err: unknown): boolean {
  * 为什么需要它：provider 是外挂文件，装包的人不会手写。随包带一份默认的，
  * 启动时铺好，装完就能生成 才成立。返回值是复制了哪些文件名（给启动日志用）。
  */
-export async function seedDefaultProviders(sourceDir: string, targetDir: string): Promise<string[]> {
+export async function seedDefaultProviders(
+  sourceDir: string,
+  targetDir: string,
+  opts?: { skip?: readonly string[] },
+): Promise<string[]> {
   let names: string[]
   try {
     names = await fs.readdir(sourceDir)
@@ -105,6 +126,8 @@ export async function seedDefaultProviders(sourceDir: string, targetDir: string)
   for (const name of names) {
     if (!name.endsWith('.js')) continue
     if (name.startsWith('_') || name.startsWith('.')) continue
+    // 用户删过的（deletedFiles）不再铺回 —— 不然「删了重启又回来」
+    if (opts?.skip?.includes(name)) continue
     const target = path.join(targetDir, name)
     try {
       // 已存在（用户可能改过）→ 不动它

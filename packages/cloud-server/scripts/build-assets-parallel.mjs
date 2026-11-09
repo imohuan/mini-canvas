@@ -67,6 +67,8 @@ const HOST_EXTERNALS = [
   "@mini-canvas/canvas-base",
   "@mini-canvas/canvas-data",
   "@mini-canvas/canvas-render",
+    "@mini-canvas/ui-kit-shadcn",
+    "@mini-canvas/theme-contract",
   "prosemirror-editor-bundle",
   "vue",
   "@vue-flow/core",

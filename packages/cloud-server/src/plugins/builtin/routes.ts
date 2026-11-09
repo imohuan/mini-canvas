@@ -40,6 +40,7 @@ import type { TaskManager } from '../../tasks/taskManager.js'
 import type { HistoryStore } from '../../tasks/history.js'
 import type { ProjectStore } from '../../store/projectStore.js'
 import type { AssetStore } from '../../store/assetStore.js'
+import { providerAdminRoutes, type ProviderAdminService } from '../../routes/providerAdmin.js'
 
 /** 服务名常量（与 server.ts 的 inject 一一对应，改名要一起改） */
 export const S = {
@@ -161,6 +162,23 @@ export const actionsPlugin: PluginModule = {
   inject: [S.providerRegistry],
   apply(ctx) {
     ctx.routes.adopt(actionsRoutes(need<ProviderRegistry>(ctx, S.providerRegistry)))
+  },
+}
+
+/**
+ * provider-admin 内置插件：平台管理接口（设置面板「平台」页的数据源）。
+ * providerAdmin 服务由 server.ts 建好注入（含目录 / 配置存取 / 重扫）。
+ */
+export const providerAdminPlugin: PluginModule = {
+  name: 'provider-admin',
+  inject: [S.providerRegistry, 'providerAdmin'],
+  apply(ctx) {
+    ctx.routes.adopt(
+      providerAdminRoutes(
+        need<ProviderRegistry>(ctx, S.providerRegistry),
+        need<ProviderAdminService>(ctx, 'providerAdmin'),
+      ),
+    )
   },
 }
 
@@ -319,6 +337,7 @@ export const BUILTIN_PLUGINS: PluginModule[] = [
   canvasesPlugin,
   assetsPlugin,
   actionsPlugin,
+  providerAdminPlugin,
   jobsPlugin,
   historyPlugin,
   kvPlugin,

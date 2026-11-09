@@ -1,0 +1,170 @@
+/**
+ * provider 管理路由 —— 设置面板「平台」页的数据源。
+ *
+ * 契约：
+ *   GET    /api/providers                → 全部 provider（声明 + 启停 + 账号掩码值）
+ *   POST   /api/providers/reload         → 强制重扫目录
+ *   POST   /api/providers/:file/disable  → 停用（装载跳过该文件；文件不动）
+ *   POST   /api/providers/:file/enable   → 恢复启用
+ *   DELETE /api/providers/:file          → 删文件 + 记 deletedFiles（重启不再铺回）
+ *   PUT    /api/providers/:file/config   → 保存账号清单（整体替换；值注入 __mcProviderConfig）
+ *
+ * :file 是**文件名**（不是 provider id）：装载 import 之前只有文件名已知，
+ * 「注入配置」发生在执行前 —— 启停 / 删 / 配置全按文件名定位。
+ *
+ * 写接口走管理令牌白名单（ADMIN_WRITE_PREFIXES 里的 /api/providers/）+ 成对审计（withAudit）。
+ * GET 不要令牌（与 /api/actions 同级：读不构成攻击面）。
+ */
+import { Hono } from 'hono'
+import type { ProviderRegistry } from '../providers/registry.js'
+import type { ProviderConfigField } from '../providers/types.js'
+import { isSafeFileName, type ProviderAccount } from '../providers/configStore.js'
+
+/** 宿主注入的 providerAdmin 服务（server.ts 建好那一份） */
+export interface ProviderAdminService {
+  reload(): Promise<{ count: number; version: number }>
+  fileOf(id: string): string | undefined
+  setDisabled(file: string, disabled: boolean): Promise<void>
+  deleteFile(file: string): Promise<void>
+  saveAccounts(file: string, accounts: ProviderAccount[]): Promise<void>
+  readConfig(): Promise<{
+    disabledFiles: string[]
+    deletedFiles: string[]
+    files: Record<string, { accounts: ProviderAccount[] }>
+  }>
+  dir: string
+}
+
+/** secret 只写不回读：下发掩码（首4 + … + 末4），没存过给空串 */
+function maskOf(v: unknown): string {
+  const s = String(v ?? '')
+  if (!s) return ''
+  if (s.length <= 8) return s.slice(0, 1) + '…' + s.slice(-1)
+  return s.slice(0, 4) + '…' + s.slice(-4)
+}
+
+/** 给前端的一行 provider（声明 + 当前状态 + 掩码后的值） */
+export interface ProviderRow {
+  id: string
+  file: string
+  enabled: boolean
+  actions: number
+  config: ProviderConfigField[]
+  /** 每个账号：id / name / 值（secret 已按位掩掉） */
+  accounts: Array<{ id: string; name?: string; values: Record<string, string | number | boolean> }>
+}
+
+export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderAdminService): Hono {
+  const app = new Hono()
+
+  app.get('/api/providers', async (c) => {
+    const cfg = await admin.readConfig()
+    // 已装载的 provider：从 registry 拿（enabled 状态天然成立）+ 文件名由 fileOf 反查。
+    // 停用的文件不在 registry 里 —— 补一行「已停用」占位（声明拿不到：没 import），前端显示文件名。
+    const rows: ProviderRow[] = registry.listProviders().map((p) => {
+      const file = admin.fileOf(p.id) ?? ''
+      return {
+        id: p.id,
+        file,
+        enabled: true,
+        actions: p.actions.length,
+        config: p.config ?? [],
+        accounts: (cfg.files[file]?.accounts ?? []).map((a) => ({
+          id: a.id,
+          ...(a.name ? { name: a.name } : {}),
+          values: Object.fromEntries(
+            (p.config ?? []).map((f) => [
+              f.key,
+              f.type === 'secret' ? maskOf(a.values[f.key]) : (a.values[f.key] ?? ''),
+            ]),
+          ),
+        })),
+      }
+    })
+    // 停用文件：registry 里没有 —— 给占位行（配置表单拿不到声明，前端按「已停用」渲染）。
+    const knownFiles = new Set(rows.map((r) => r.file))
+    for (const file of cfg.disabledFiles) {
+      if (!isSafeFileName(file) || knownFiles.has(file)) continue
+      const accounts = cfg.files[file]?.accounts ?? []
+      rows.push({
+        id: file.replace(/\.js$/, ''),
+        file,
+        enabled: false,
+        actions: 0,
+        config: [],
+        accounts: accounts.map((a) => ({ id: a.id, ...(a.name ? { name: a.name } : {}), values: { ...a.values } })),
+      })
+    }
+    rows.sort((a, b) => a.id.localeCompare(b.id))
+    return c.json({ ok: true, providers: rows })
+  })
+
+  app.post('/api/providers/reload', async (c) => {
+    const r = await admin.reload()
+    return c.json({ ok: true, ...r })
+  })
+
+  /** 文件名参数守卫（所有 :file 路由共用） */
+  function safeFile(raw: string): string | undefined {
+    const decoded = decodeURIComponent(raw)
+    return isSafeFileName(decoded) ? decoded : undefined
+  }
+
+  app.post('/api/providers/:file/disable', async (c) => {
+    const file = safeFile(c.req.param('file'))
+    if (!file) return c.json({ ok: false, error: '非法文件名' }, 400)
+    await admin.setDisabled(file, true)
+    return c.json({ ok: true })
+  })
+
+  app.post('/api/providers/:file/enable', async (c) => {
+    const file = safeFile(c.req.param('file'))
+    if (!file) return c.json({ ok: false, error: '非法文件名' }, 400)
+    await admin.setDisabled(file, false)
+    return c.json({ ok: true })
+  })
+
+  app.delete('/api/providers/:file', async (c) => {
+    const file = safeFile(c.req.param('file'))
+    if (!file) return c.json({ ok: false, error: '非法文件名' }, 400)
+    await admin.deleteFile(file)
+    return c.json({ ok: true })
+  })
+
+  app.put('/api/providers/:file/config', async (c) => {
+    const file = safeFile(c.req.param('file'))
+    if (!file) return c.json({ ok: false, error: '非法文件名' }, 400)
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+    }
+    const accounts = (body as { accounts?: unknown }).accounts
+    if (!Array.isArray(accounts)) return c.json({ ok: false, error: 'accounts 必须是数组' }, 400)
+    const cleaned: ProviderAccount[] = []
+    for (const a of accounts) {
+      if (!a || typeof a !== 'object') continue
+      const id = String((a as { id?: unknown }).id ?? '').trim()
+      if (!id) continue
+      const values: Record<string, string | number | boolean> = {}
+      const raw = (a as { values?: unknown }).values
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') values[k] = v
+        }
+      }
+      cleaned.push({
+        id,
+        ...(typeof (a as { name?: unknown }).name === 'string'
+          ? { name: (a as { name: string }).name }
+          : {}),
+        values,
+      })
+    }
+    await admin.saveAccounts(file, cleaned)
+    return c.json({ ok: true })
+  })
+
+  return app
+}

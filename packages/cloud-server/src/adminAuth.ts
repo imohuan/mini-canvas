@@ -31,6 +31,7 @@ export interface AdminAuth {
 export const ADMIN_WRITE_PREFIXES = [
   '/api/server-plugins/',
   '/api/npm-plugins/',
+  '/api/providers/',
   '/api/agent/mcp',
   '/api/agent/skills',
   '/api/agent/system-prompt',
@@ -98,6 +99,12 @@ export function adminActionFor(method: string, pathname: string): AuditAction {
     if (pathname.includes('/uninstall')) return 'npm-plugin/uninstall'
     if (pathname.includes('/update')) return 'npm-plugin/update'
     return 'npm-plugin/install'
+  }
+  if (pathname.startsWith('/api/providers/')) {
+    if (pathname.endsWith('/enable')) return 'provider/enable'
+    if (pathname.endsWith('/disable')) return 'provider/disable'
+    if (pathname.endsWith('/config')) return 'provider/config'
+    return 'provider/delete'
   }
   return 'write'
 }

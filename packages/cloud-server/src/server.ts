@@ -10,6 +10,7 @@
  *
  * 前 3 项是纯接口，第 4 项是"打开就能看画布"的那一步。
  */
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { cors } from 'hono/cors'
 import { serve, type ServerType } from '@hono/node-server'
@@ -34,6 +35,12 @@ import { TOOL_LIST } from './mcp/server.js'
 import { ProviderRegistry } from './providers/registry.js'
 import { loadProvidersFromDir, seedDefaultProviders, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
 import { watchProviders, type ProviderWatcher } from './providers/watch.js'
+import {
+  readProviderConfig,
+  writeProviderConfig,
+  isSafeFileName,
+  type ProviderConfigFile,
+} from './providers/configStore.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
 import { DEFAULT_CANVAS_ID, canvasDir } from './store/canvasPaths.js'
@@ -132,7 +139,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 到数据根，用户改过/自己写的绝不覆盖。
   // 后台加一个平台 → 前端的模型下拉里自动多一项（前端一行不用改）。
   const providersDir = path.resolve(opts.providersDir ?? path.join(dataDir, DEFAULT_PROVIDERS_DIR))
-  const seeded = await seedDefaultProviders(path.join(PACKAGE_ROOT, 'providers'), providersDir)
+  const providerConfigFile = path.join(dataDir, 'providers-config.json')
+  const providerConfig: ProviderConfigFile = await readProviderConfig(providerConfigFile)
+  const seeded = await seedDefaultProviders(path.join(PACKAGE_ROOT, 'providers'), providersDir, {
+    skip: providerConfig.deletedFiles,
+  })
   if (seeded.length > 0) {
     console.log('[cloud-server] 已铺入默认 provider：' + seeded.join(', '))
   }
@@ -141,8 +152,13 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
   )
   const registry = new ProviderRegistry()
-  const scanned = await loadProvidersFromDir(providersDir)
+  const scanned = await loadProvidersFromDir(providersDir, { config: providerConfig })
   registry.load(scanned.providers)
+  /** providerId → 文件名（管理路由据此定位文件；同 id 多文件时后装载者胜） */
+  const providerFileOf = new Map<string, string>()
+  for (let i = 0; i < scanned.providers.length; i++) {
+    providerFileOf.set(scanned.providers[i]!.id, scanned.files[i] ?? '')
+  }
   for (const f of scanned.failures) {
     console.warn('[cloud-server] provider 加载失败 ' + f.file + '：' + f.error)
   }
@@ -799,8 +815,16 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * 否则它的动作会永远留在前端下拉里、点下去必然失败。
    */
   async function reloadProviders(): Promise<{ count: number; version: number }> {
-    const scanned = await loadProvidersFromDir(providersDir)
+    const config = await readProviderConfig(providerConfigFile)
+    providerConfig.disabledFiles = config.disabledFiles
+    providerConfig.deletedFiles = config.deletedFiles
+    providerConfig.files = config.files
+    const scanned = await loadProvidersFromDir(providersDir, { config })
     registry.replaceAll(scanned.providers)
+    providerFileOf.clear()
+    for (let i = 0; i < scanned.providers.length; i++) {
+      providerFileOf.set(scanned.providers[i]!.id, scanned.files[i] ?? '')
+    }
     for (const f of scanned.failures) {
       console.warn('[cloud-server] provider 加载失败 ' + f.file + '：' + f.error)
     }
@@ -814,6 +838,45 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         const r = await reloadProviders()
         console.log('[cloud-server] provider 目录已变更，动作清单更新为 ' + r.count + ' 项')
       })
+
+  host.ctx.inject('providerAdmin', {
+    /** providerId → 文件名（路由按 id 找文件；装载器每次重扫后现刷） */
+    fileOf: (id: string) => providerFileOf.get(id),
+    /** 重扫 + 换清单（启停 / 删文件 / 改配置后调） */
+    reload: reloadProviders,
+    /** 停用 / 恢复一个文件 */
+    async setDisabled(file: string, disabled: boolean): Promise<void> {
+      if (!isSafeFileName(file)) throw new Error('非法文件名')
+      const cfg = await readProviderConfig(providerConfigFile)
+      const set = new Set(cfg.disabledFiles)
+      if (disabled) set.add(file)
+      else set.delete(file)
+      cfg.disabledFiles = [...set]
+      await writeProviderConfig(providerConfigFile, cfg)
+      await reloadProviders()
+    },
+    /** 删除一个 provider 文件（记入 deletedFiles，重启不再铺回） */
+    async deleteFile(file: string): Promise<void> {
+      if (!isSafeFileName(file)) throw new Error('非法文件名')
+      await fs.rm(path.join(providersDir, file), { force: true })
+      const cfg = await readProviderConfig(providerConfigFile)
+      if (!cfg.deletedFiles.includes(file)) cfg.deletedFiles.push(file)
+      await writeProviderConfig(providerConfigFile, cfg)
+      await reloadProviders()
+    },
+    /** 保存一个文件的账号清单（整体替换该文件的账号） */
+    async saveAccounts(file: string, accounts: ProviderConfigFile['files'][string]['accounts']): Promise<void> {
+      if (!isSafeFileName(file)) throw new Error('非法文件名')
+      const cfg = await readProviderConfig(providerConfigFile)
+      cfg.files[file] = { accounts }
+      await writeProviderConfig(providerConfigFile, cfg)
+      await reloadProviders()
+    },
+    /** 读配置（GET 接口用） */
+    readConfig: () => readProviderConfig(providerConfigFile),
+    /** providers 目录 */
+    dir: providersDir,
+  })
 
   return {
     app,

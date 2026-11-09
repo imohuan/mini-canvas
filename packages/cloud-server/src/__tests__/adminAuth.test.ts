@@ -185,6 +185,7 @@ describe('isAdminPath', () => {
       '/api/showcase/': '/api/showcase/echo',
       '/api/agent/canvases/': '/api/agent/canvases/x/sessions',
       '/api/jobs': '/api/jobs',
+      '/api/providers/': '/api/providers/web2api-image.js/config',
     }
     for (const prefix of ADMIN_WRITE_PREFIXES) {
       const sample = samples[prefix]

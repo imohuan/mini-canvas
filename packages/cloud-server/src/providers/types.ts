@@ -59,6 +59,26 @@ export interface ActionParam {
 export type ProviderNodeType = 'image' | 'video' | 'audio'
 
 /**
+ * provider 声明的一个配置项（管理页据此动态渲染表单）。
+ *
+ * 值按「账号」存：每个账号一套 values，key = 这里的 key。
+ * secret 类型只在界面显示掩码，明文不下发。
+ */
+export interface ProviderConfigField {
+  key: string
+  label?: string
+  description?: string
+  /** secret = 只写不回读（管理页回显掩码；留空 = 不改） */
+  type: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'secret'
+  default?: string | number | boolean
+  options?: ParamOption[]
+  placeholder?: string
+  min?: number
+  max?: number
+  step?: number
+}
+
+/**
  * 一个动作的声明。
  *
  * 前半段是**给前端渲染**的（菜单长什么样）；后半段是**给后台执行**的
@@ -156,6 +176,15 @@ export interface Provider {
   id: string
   /** 它提供哪些动作 */
   actions: ActionDef[]
+  /**
+   * 它需要哪些配置项（管理页「平台」页据此长表单；多账号每套一份）。
+   *
+   * 已存的值由装载器注入成 `__mcProviderConfig` 常量：
+   *   { accounts: [{id, name, values}], values: 第一账号的 values, byId: {id → values} }
+   * provider 里用 `typeof __mcProviderConfig === 'undefined'` 兜底
+   * （测试 / 直接 import 源文件时该常量不存在，不能直接引用）。
+   */
+  config?: ProviderConfigField[]
   /** 提交一个任务 */
   submit(action: ActionDef, input: JobInput): Promise<ProviderSubmitResult>
   /** 查一次进度（submit 给了 taskId 才需要） */
