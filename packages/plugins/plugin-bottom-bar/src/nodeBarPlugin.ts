@@ -17,7 +17,7 @@ import type { BarAction, BarApplier } from './barTypes'
 import { registerBarAction, registerBarApplier } from '@mini-canvas/bar-contract'
 import type { ToolResourceKind } from '@mini-canvas/kernel'
 import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
-import { readRunState } from './runState'
+import { errorState, readRunState } from './runState'
 import { publishToolActions, type PublishToolActionsOptions } from './toolActions'
 import NodeBottomBar from './NodeBottomBar.vue'
 // 参考选择态浮层（顶行「参考」按钮引发）：注册进同一 overlay 槽，与底栏宿主同层。
@@ -201,7 +201,23 @@ export class NodeTaskService extends Service {
     const doc = this.doc()
     for (const node of doc.getNodes()) {
       const rs = readRunState(node.data)
-      if (rs.status !== 'running' || !rs.actionId) continue
+      if (rs.status !== 'running') continue
+      /*
+       * 没有 actionId / 没有 taskId 的 running = 永远没有终点的旧状态
+       * （后台重启过、演示数据、或早期版本只写了 running）。
+       * 这种卡片会一直显示「生成中 800 多分钟」，用户只能手动点取消 —— 用户实测就卡在这。
+       * 续查必须先有「哪条动作 + 哪个任务号」；缺一个就当场收敛成失败态，给一句能照做的提示。
+       */
+      if (!rs.actionId || !rs.taskId) {
+        this.deps().writeRuntime(node.id, {
+          runState: errorState(
+            rs.actionId ?? '',
+            '上次的任务已经不在后台了（服务重启或任务丢失）',
+            '重新点一次提交即可',
+          ),
+        })
+        continue
+      }
       // ★ 必须登记 AbortController：续查出来的任务同样要能被「取消」按钮中断。
       //   不登记的话 `cancel()` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈）。
       const ctrl = new AbortController()
@@ -213,7 +229,7 @@ export class NodeTaskService extends Service {
           nodeId: node.id,
           nodeType: node.type,
           registry: this.lookup(),
-          taskId: rs.taskId ?? '',
+          taskId: rs.taskId,
           actionId: rs.actionId,
           signal: ctrl.signal,
         },
@@ -351,12 +367,30 @@ export function apply(ctx: Context) {
   // - 冷启动 ctx:ready 那一刻文档还是空的（数据稍后才恢复）→ 不锁，等 doc 变化再来；
   // - 热装时文档已在 → 立刻跑；
   // - 真的空画布 → 每次 doc 变化只多一次 getNodes()，代价可忽略。
-  let restored = false
+  /**
+   * 已经「接上」的 (节点, 任务号)：同一个任务只续查一次，不因为文档再变就重跑。
+   *
+   * 为什么不能只跑一次就锁死（2026-11-10 实测）：云端客户端比本插件晚装，
+   * 它把服务器画布 replaceAll 进文档的那一刻，本插件早已在「本地空文档」上跑过一轮、把锁关上了。
+   * 结果是云端那份里 **running 的节点永远没人续查**，卡片一路显示「生成中 800 多分钟」
+   * —— 用户报的「一直卡在 0%」就是这个。现在改成每次文档真有内容都补一轮（按任务号幂等）。
+   */
+  const resumedTasks = new Set<string>()
   const tryRestore = () => {
-    if (restored) return
     const docServiceForCheck = ctx.get<DocService>('doc')
     if (!docServiceForCheck || docServiceForCheck.getNodes().length === 0) return // 数据还没恢复出来，等下一拍
-    restored = true
+    const pending = docServiceForCheck
+      .getNodes()
+      .filter((n) => {
+        const rs = readRunState(n.data)
+        return rs.status === 'running' && !resumedTasks.has(n.id + '\u0000' + (rs.taskId ?? ''))
+      })
+    // 没有待接的任务就什么都不做（文档每次改动都会走这里，不能白扫）
+    if (pending.length === 0) return
+    for (const n of pending) {
+      const rs = readRunState(n.data)
+      resumedTasks.add(n.id + '\u0000' + (rs.taskId ?? ''))
+    }
     void task.restoreAll()
   }
   const docService = ctx.get<{ subscribe(cb: (change: unknown) => void): () => void }>('doc')

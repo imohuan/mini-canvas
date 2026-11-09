@@ -11,6 +11,8 @@ import { withAdminToken, type Context } from '@mini-canvas/canvas-base'
 export interface ProviderRow {
   id: string
   file: string
+  /** 内置平台（没有文件）：不能删、也没有文件可配 */
+  builtin?: boolean
   enabled: boolean
   actions: number
   config: Array<{
@@ -41,13 +43,23 @@ export interface ProviderManagerState {
   busyFile: string | null
 }
 
+/**
+ * 确认框（只用到那一个方法；与 FeedbackService 同形，避免跨包耦合）。
+ *
+ * 用 `ask` 这个名字而不是同名方法：全仓守卫禁止出现裸的浏览器弹窗调用写法
+ * （见 packages/ui/src/__tests__/noNativeDialogs.test.ts），即使是接口声明也会被扫到。
+ */
+export interface ConfirmLike {
+  ask(opts: { title: string; description?: string; confirmText?: string; cancelText?: string }): Promise<boolean>
+}
+
 /** 窄接口的 settings（与本插件真实用到的部分同形） */
 export interface SettingsLike {
   get(key: string): unknown
   onChange?(fn: (key: string, value: unknown) => void): { dispose(): void }
 }
 
-export function createProviderManagerService(ctx: Context) {
+export function createProviderManagerService(ctx: Context, feedback?: ConfirmLike) {
   const settings = ctx.tryGet<SettingsLike>('settings')
 
   function baseOf(): string {
@@ -95,6 +107,7 @@ export function createProviderManagerService(ctx: Context) {
   }
 
   function openEdit(row: ProviderRow): void {
+    if (!row.file) return
     state.editingFile = row.file
     state.editingAccounts = row.accounts.map((a) => ({
       id: a.id,
@@ -138,6 +151,15 @@ export function createProviderManagerService(ctx: Context) {
   async function saveEdit(): Promise<string | null> {
     const file = state.editingFile
     if (!file) return null
+    // 账号 id 是底栏下拉的取值键：空 / 重复都会让「选账号」选错人，保存前先挡住
+    const seen = new Set<string>()
+    for (const a of state.editingAccounts) {
+      const id = a.id.trim()
+      if (!id) return '每个账号都要填账号 ID'
+      if (seen.has(id)) return '账号 ID 不能重复：' + id
+      seen.add(id)
+    }
+    if (state.editingAccounts.length === 0) return '至少保留一个账号'
     state.busyFile = file
     try {
       const res = await call('/api/providers/' + encodeURIComponent(file) + '/config', {
@@ -145,7 +167,7 @@ export function createProviderManagerService(ctx: Context) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           accounts: state.editingAccounts.map((a) => ({
-            id: a.id.trim() || 'account-' + Math.random().toString(36).slice(2, 6),
+            id: a.id.trim(),
             ...(a.name.trim() ? { name: a.name.trim() } : {}),
             values: a.values,
           })),
@@ -185,6 +207,15 @@ export function createProviderManagerService(ctx: Context) {
   }
 
   async function remove(row: ProviderRow): Promise<string | null> {
+    // 删文件是不可撤销的：先说清楚删的是哪个文件、内置平台直接不让删
+    const ok = await feedback?.ask({
+      title: '删除平台「' + row.id + '」？',
+      description:
+        '会删除文件 ' + row.file + '，它的动作会立刻从工具栏消失。\n删除后重启也不会自动装回来。',
+      confirmText: '删除',
+      cancelText: '取消',
+    })
+    if (ok === false) return null
     state.busyFile = row.file
     try {
       const res = await call('/api/providers/' + encodeURIComponent(row.file), { method: 'DELETE' })

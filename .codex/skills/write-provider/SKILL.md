@@ -35,6 +35,37 @@ description: 写或修改 mini-canvas 的后台 provider（数据根下的 provi
 
 ## 契约
 
+### 先声明配置项（`config`）
+
+平台要填的后台地址、API Key 这类东西，写进 `export const config`：
+
+```js
+export const config = [
+  { key: 'baseUrl', label: '服务地址', type: 'string', default: 'http://localhost:8033',
+    placeholder: 'http://localhost:8033', description: '留空 = 用默认地址。' },
+  { key: 'apiKey', label: 'API Key', type: 'secret', description: '开了鉴权才需要。' },
+]
+```
+
+`type` 六选一：`string` / `text` / `number` / `boolean` / `select`（配 `options`）/ `secret`。
+声明了它，**设置 → 集成 → 平台**会自动按这几个字段画出配置表单，一个账号一张；
+`secret` 只存服务端，回给界面的是掩码（原样保存回来不会覆盖真值）。
+
+### 运行时怎么读到配置
+
+装载器会在你的源码前面注入一个常量 `__mcProviderConfig`：
+
+```js
+const cfg = typeof __mcProviderConfig === 'undefined' ? null : __mcProviderConfig
+// cfg.accounts : [{ id, name?, values }]   全部账号（一个平台可以有多个号）
+// cfg.values   : 第一个账号的 values       单账号场景最常用
+// cfg.byId     : { 账号id → values }       按名字取
+```
+
+读值要带默认值兜底；没配过时它是空结构而不是不存在。多个账号就从 `input.values.__accountId`
+选号（界面上多账号的下拉会把这个键带上），取不到再回落到 `cfg.values`。
+**不要**把密钥写死在源码里，也不要每次调用都重读文件。
+
 ```js
 const provider = {
   id: 'my-provider',

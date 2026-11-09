@@ -87,6 +87,7 @@ const guideSidebar = [
       { text: '后台总览', link: '/cloud-server/' },
       { text: '快速上手', link: '/cloud-server/quickstart' },
       { text: '管理鉴权', link: '/cloud-server/admin-auth' },
+      { text: '平台配置', link: '/cloud-server/provider-settings' },
       { text: '后台插件', link: '/cloud-server/server-plugins' },
       { text: 'routes 接口', link: '/cloud-server/capabilities-routes' },
       { text: 'store 存储', link: '/cloud-server/capabilities-store' },

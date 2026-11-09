@@ -10,6 +10,7 @@
  */
 import { onMounted } from 'vue'
 import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 import type { NotifyContract } from '@mini-canvas/canvas-base'
 import {
   createProviderManagerService,
@@ -17,9 +18,15 @@ import {
 } from '../../providerManagerService'
 
 const { ctx } = useCanvasContextOrRender()
-const svc = createProviderManagerService(ctx)
-const s = svc.state
 const notify = ctx.tryGet<NotifyContract>('notify')
+// 删文件 / 卸载这类不可撤销动作一律走项目统一确认框（与插件页同一条通道）
+const feedback = ctx.tryGet<FeedbackService>('feedback')
+// 只交出确认那一件事（服务对象本身带着别的字段，形状越窄越不容易被误用）
+const svc = createProviderManagerService(
+  ctx,
+  feedback ? { ask: (opts) => feedback.confirm(opts) } : undefined,
+)
+const s = svc.state
 
 const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
@@ -79,19 +86,23 @@ function numOf(v: unknown): string {
         v-for="row in s.rows"
         :key="row.file"
         :label="row.id"
-        :description="row.file + ' · ' + row.actions + ' 个动作' + (row.enabled ? '' : ' · 已停用')"
+        :description="(row.file || '内置平台，没有文件') + ' · ' + row.actions + ' 个动作' + (row.enabled ? '' : ' · 已停用')"
       >
         <span class="pmp-row-actions">
           <Badge v-if="!row.enabled" variant="outline">停用</Badge>
           <Badge v-else-if="row.accounts.length > 1" variant="secondary">{{ row.accounts.length }} 个账号</Badge>
           <Switch
+            v-if="row.file"
             :model-value="row.enabled"
             :disabled="s.busyFile === row.file"
             :aria-label="'启用 ' + row.id"
             @update:model-value="() => onToggle(row)"
           />
-          <Button variant="outline" size="xs" type="button" @click="svc.openEdit(row)">配置</Button>
-          <Button variant="outline" size="xs" type="button" :disabled="s.busyFile === row.file" @click="onRemove(row)">删除</Button>
+          <template v-if="row.file">
+            <Button variant="outline" size="xs" type="button" @click="svc.openEdit(row)">配置</Button>
+            <Button variant="outline" size="xs" type="button" :disabled="s.busyFile === row.file" @click="onRemove(row)">删除</Button>
+          </template>
+          <Badge v-else variant="outline">内置</Badge>
         </span>
       </ShadcnSettingsRow>
       <p v-if="!s.rows.length && !s.loading" class="pmp-empty">还没有平台 —— 把 .js 放进数据根的 providers 目录即可</p>

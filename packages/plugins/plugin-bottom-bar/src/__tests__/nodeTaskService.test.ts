@@ -80,4 +80,54 @@ describe('NodeTaskService：同节点重复执行与取消', () => {
     expect(cancel).toHaveBeenCalledWith('n1')
     ctx.stop()
   })
+
+  it('running 但没有 taskId（后台重启过的残留）：当场收敛成失败态，不留下永远转圈的生成中', async () => {
+    const writes: Array<Record<string, unknown>> = []
+    const doc = {
+      getNode: () => ({ type: 'image', data: { runState: { status: 'running', actionId: 'gated' } } }),
+      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: { status: 'running', actionId: 'gated' } } }],
+      updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
+        if (patch.data) writes.push(patch.data)
+      },
+    }
+    const ctx = new Context()
+    ctx.inject('doc', doc)
+    ctx.plugin({
+      name: 'bar-host',
+      apply(c) {
+        new NodeBarService(c as never)
+      },
+    })
+    await ctx.start()
+    const task = new NodeTaskService(ctx as never)
+    await task.restoreAll()
+    expect(writes).toHaveLength(1)
+    expect(writes[0]!.runState).toMatchObject({ status: 'error', actionId: 'gated' })
+    ctx.stop()
+  })
+
+  it('running 但连 actionId 都没有（演示 / 早期数据）：同样收敛，别一直显示生成中', async () => {
+    const writes: Array<Record<string, unknown>> = []
+    const rs = { status: 'running', progress: 55, message: '分组任务执行中…' }
+    const doc = {
+      getNode: () => ({ type: 'group', data: { runState: rs } }),
+      getNodes: () => [{ id: 'g1', type: 'group', data: { runState: rs } }],
+      updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
+        if (patch.data) writes.push(patch.data)
+      },
+    }
+    const ctx = new Context()
+    ctx.inject('doc', doc)
+    ctx.plugin({
+      name: 'bar-host',
+      apply(c) {
+        new NodeBarService(c as never)
+      },
+    })
+    await ctx.start()
+    await new NodeTaskService(ctx as never).restoreAll()
+    expect(writes).toHaveLength(1)
+    expect(writes[0]!.runState).toMatchObject({ status: 'error' })
+    ctx.stop()
+  })
 })

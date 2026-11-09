@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { catalogPlugin } from './catalogPlugin.mjs'
+import { sseProxyPlugin } from './sseProxyPlugin.mjs'
 import { fileURLToPath } from 'node:url'
 import { uiKitDebugLocPlugin } from '@mini-canvas/ui-kit-shadcn/vite-plugin-debug-loc'
 
@@ -14,6 +15,8 @@ export default defineConfig({
     // 开发期在本 dev server 就地提供插件清单与产物（/plugin-catalog.json + /plugins/**），
     // 这样单开 ui dev 也能用插件管理；生产形态由 cloud-server 提供同两条路由。
     catalogPlugin({ pluginsDir: '../../packages/plugins' }),
+    // 实时通道单独转发：vite 内置代理转发这条长响应会挂住（详见插件注释）
+    sseProxyPlugin({ target: process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865' }),
     // 放在最后：enforce:'pre' 的 transform 仍会先于 vue 插件跑，改的是原始 SFC。
     // 只在 vite serve 生效（插件内部 apply:'serve'）；生产构建不会打标。
     uiKitDebugLocPlugin({ root: fileURLToPath(new URL('../..', import.meta.url)) }),

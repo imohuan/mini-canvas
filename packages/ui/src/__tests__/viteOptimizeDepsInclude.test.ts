@@ -38,6 +38,21 @@ describe('dev 代理的来源边界（多 Agent 端口）', () => {
     expect(config).toMatch(/proxy\.on\(\s*['"]proxyReq['"]/)
     expect(config).toMatch(/setHeader\(\s*['"]origin['"]\s*,\s*process\.env\.MINI_CANVAS_BACKEND\s*\|\|\s*['"]http:\/\/localhost:8865['"]\s*\)/)
   })
+
+  /**
+   * 实时通道（SSE）**不能**交给 vite 内置代理：2026-11-10 实测，后台 6ms 回 200，
+   * 经代理 4 秒都拿不到响应头 → 页面 EventSource 永远 CONNECTING，生成进度不刷新
+   * （用户报的「一直卡在 0%」）。所以必须是自己的插件，且挂的是同一条路径。
+   */
+  it('★ /api/kv/events 走独立转发插件，不落在内置 proxy 的 /api 上', () => {
+    const sse = readFileSync(path.join(UI, 'sseProxyPlugin.mjs'), 'utf8')
+    expect(sse).toMatch(/SSE_PATH\s*=\s*'\/api\/kv\/events'/) 
+    expect(sse).toMatch(/res\.flushHeaders\?\.\(\)/)
+    expect(sse).toMatch(/upRes\.pipe\(res\)/)
+    // 必须在 configureServer 里前置挂载：排在 vite 内置代理之后就等于没拦
+    expect(sse).toMatch(/configureServer\(server\)[\s\S]*middlewares\.use/)
+    expect(config).toMatch(/sseProxyPlugin\(\{\s*target:/)
+  })
 })
 
 /** 取 `optimizeDeps: { include: [...], exclude: [...] }` 里两段字符串数组 */

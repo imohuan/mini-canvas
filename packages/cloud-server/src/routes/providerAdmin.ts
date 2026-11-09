@@ -25,7 +25,8 @@ export interface ProviderAdminService {
   reload(): Promise<{ count: number; version: number }>
   fileOf(id: string): string | undefined
   setDisabled(file: string, disabled: boolean): Promise<void>
-  deleteFile(file: string): Promise<void>
+  /** 删除文件；文件本来就不存在（内置平台）返回 false */
+  deleteFile(file: string): Promise<boolean>
   saveAccounts(file: string, accounts: ProviderAccount[]): Promise<void>
   readConfig(): Promise<{
     disabledFiles: string[]
@@ -43,10 +44,18 @@ function maskOf(v: unknown): string {
   return s.slice(0, 4) + '…' + s.slice(-4)
 }
 
+/** 下发出去的那串掩码被原样送回来 = 用户没改，保留服务端原值（否则一次保存就把密钥写成 "sk-Z…RQFG"） */
+function sameMask(value: unknown, incoming: unknown): boolean {
+  const v = String(value ?? '')
+  return v !== '' && String(incoming ?? '') === maskOf(v)
+}
+
 /** 给前端的一行 provider（声明 + 当前状态 + 掩码后的值） */
 export interface ProviderRow {
   id: string
   file: string
+  /** 内置平台（没有文件）：界面上不给删、不给配 */
+  builtin?: boolean
   enabled: boolean
   actions: number
   config: ProviderConfigField[]
@@ -66,6 +75,7 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
       return {
         id: p.id,
         file,
+        ...(file === '' ? { builtin: true } : {}),
         enabled: true,
         actions: p.actions.length,
         config: p.config ?? [],
@@ -127,7 +137,9 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
   app.delete('/api/providers/:file', async (c) => {
     const file = safeFile(c.req.param('file'))
     if (!file) return c.json({ ok: false, error: '非法文件名' }, 400)
-    await admin.deleteFile(file)
+    const removed = await admin.deleteFile(file)
+    // 内置平台没有文件：明确报错，别让界面以为删掉了
+    if (!removed) return c.json({ ok: false, error: '这个平台是内置的，没有文件可删' }, 404)
     return c.json({ ok: true })
   })
 
@@ -142,6 +154,9 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
     }
     const accounts = (body as { accounts?: unknown }).accounts
     if (!Array.isArray(accounts)) return c.json({ ok: false, error: 'accounts 必须是数组' }, 400)
+    // 老值：按账号 id 查，用来把「回传的掩码」还原成真实密钥
+    const cfg = await admin.readConfig()
+    const prevById = new Map((cfg.files[file]?.accounts ?? []).map((a) => [a.id, a.values]))
     const cleaned: ProviderAccount[] = []
     for (const a of accounts) {
       if (!a || typeof a !== 'object') continue
@@ -150,8 +165,10 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
       const values: Record<string, string | number | boolean> = {}
       const raw = (a as { values?: unknown }).values
       if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const prev = prevById.get(id) ?? {}
         for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') values[k] = v
+          if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') continue
+          values[k] = sameMask(prev[k], v) ? prev[k]! : v
         }
       }
       cleaned.push({
