@@ -1,49 +1,58 @@
 /**
- * 文本 / 数字输入框的版式（用户 2026-11-08 截图：左侧文字贴边、像被裁掉一截）。
+ * 参数面板左边缘的裁剪契约（用户 2026-11-09，两次截图）。
  *
- * 根因：`.tpf-input` 写了 `padding: 5px 8px`，把 shadcn Input 本体的 `px-3`（12px）
- * 盖成 8px，上下也从 8px 压到 5px —— 文字贴着圆角，垂直方向又偏上。
- * 同时写死的 `border-radius: 8px` 会顶掉主题圆角档位（--mct-radius）。
+ * 现象：输入框聚焦时，左侧那圈聚焦环被切成一条竖线，右侧却是完整圆弧。
+ * 原因（12 倍放大 A/B 实测）：ScrollArea 的 viewport 是 `overflow: hidden`，
+ * 按自己的边框盒裁剪；shadcn 的聚焦环是向外扩 3px 的 box-shadow，
+ * 正好落在裁剪线外侧。未聚焦时边框完整，一聚焦就缺一角。
  *
- * 这类「覆盖组件本体尺寸」的错 SSR 断言不到样式，只能读源码锁住。
+ * 为什么不能靠改输入框：加 margin / padding 会让它比同列标题更窄，整块看着变形。
+ * 为什么不能 `overflow-x: visible`：CSS 规定一轴 visible、另一轴不是时，
+ * visible 被当成 auto；纵向要滚，横向就永远是 hidden。
+ *
+ * 采用的解法：把 4px 从外层 padding 挪到内容层 —— 总留白不变（16），
+ * 内容位置不变，只是裁剪边界向右让出 4px（3px 环 + 1px 余量）。
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const src = readFileSync(resolve(__dirname, '../ToolParamField.vue'), 'utf8')
+const group = readFileSync(resolve(__dirname, '../ToolParamGroup.vue'), 'utf8')
 
-/** 取某个选择器的规则块内容 */
 function blockOf(selector: string): string {
-  const at = src.indexOf(selector)
+  const at = group.indexOf(selector)
   if (at < 0) return ''
-  const open = src.indexOf('{', at)
-  const close = src.indexOf('}', open)
-  return open < 0 || close < 0 ? '' : src.slice(open + 1, close)
+  const open = group.indexOf('{', at)
+  const close = group.indexOf('}', open)
+  return open < 0 || close < 0 ? '' : group.slice(open + 1, close)
 }
 
-describe('输入框：尺寸交给组件库，自己只上色', () => {
-  it('.tpf-input 不再用 padding 简写盖掉左右内边距', () => {
-    const block = blockOf('.tpf-input {')
-    expect(block, '找不到 .tpf-input 规则').not.toBe('')
-    // `padding: 5px 8px` 会把 shadcn 的 px-3 压成 8px（真机实测过）
-    expect(block).not.toMatch(/\bpadding\s*:/)
+describe('滚动视口要给聚焦环留位置', () => {
+  it('外层左侧留白是 12（不是 16），让出 4px 给裁剪边界', () => {
+    const block = blockOf('.tpg-popover {')
+    const pad = /padding:\s*([^;]+);/.exec(block)?.[1]?.trim() ?? ''
+    expect(pad, '找不到 .tpg-popover 的 padding').not.toBe('')
+    const parts = pad.split(/\s+/).filter(Boolean)
+    // padding: top right bottom left
+    expect(parts.length).toBe(4)
+    expect(parts[3], '左侧应为 12px：' + pad).toBe('12px')
   })
 
-  it('.tpf-input 不写死 border-radius（否则主题圆角档位失效）', () => {
-    expect(blockOf('.tpf-input {')).not.toMatch(/border-radius\s*:/)
+  it('内容层补回那 4px，左右合计仍是 16', () => {
+    const block = blockOf('.tpg-scroll .tpg-menu {')
+    expect(block, '找不到 .tpg-scroll .tpg-menu 规则').not.toBe('')
+    expect(block).toMatch(/padding-left:\s*4px/)
+    expect(block).toMatch(/padding-right:\s*12px/)
   })
 
-  it('输入框高度与下拉触发器对齐（32px）', () => {
-    const blocks = [...src.matchAll(/\.tpf-input \{([^}]*)\}/g)].map((m) => m[1])
-    const all = blocks.join('\n')
-    expect(all).toMatch(/height:\s*32px/)
-  })
-
-  it('上下留白明确给出（不依赖组件库的 py-1）', () => {
-    const all = [...src.matchAll(/\.tpf-input \{([^}]*)\}/g)].map((m) => m[1]).join('\n')
-    expect(all).toMatch(/padding-top:\s*6px/)
-    expect(all).toMatch(/padding-bottom:\s*6px/)
+  it('输入框自己不加 margin / padding（那会让它比标题窄）', () => {
+    const field = readFileSync(resolve(__dirname, '../ToolParamField.vue'), 'utf8')
+    const at = field.indexOf('.tpf-input {')
+    const open = field.indexOf('{', at)
+    const close = field.indexOf('}', open)
+    const block = field.slice(open + 1, close)
+    expect(block).not.toMatch(/\bmargin/)
+    expect(block).not.toMatch(/\bpadding/)
   })
 })
 

@@ -291,12 +291,21 @@ const summary = computed(() => {
    */
   max-height: min(420px, 60vh);
   /*
-   * 内边距按「滚动条贴右边缘」重排（用户 2026-11-08）：
-   * 原本四周 16px，滚动条会落在 padding 内侧、离右边还有 16px，看着飘在内容里。
-   * 现在右侧只留 4px 给滚动条通道，其余三边仍 16px；内容再补 12px，
-   * 左右视觉留白合计仍是 16px。
+   * 内边距分两层：外层只留滚动条通道 + 左侧让位，视觉留白都在内容层（见 .tpg-menu）。
+   *
+   * 右侧 4：滚动条通道（用户 2026-11-08：滚动条要贴右边缘，不能飘在内容里）。
+   * 左侧 12 而不是 16：ScrollArea 的 viewport 是 `overflow: hidden`，按边框盒裁剪，
+   * 而 shadcn 的聚焦环是向外扩 3px 的 box-shadow —— 输入框紧贴左边缘时，
+   * 左边那圈环会被裁成一条竖线（用户 2026-11-09 截图，12 倍放大确认）。
+   *
+   * 为什么不直接 `overflow-x: visible`：CSS 规定一轴 visible、另一轴不是时，
+   * visible 会被当成 auto。纵向必须能滚，横向就永远是 hidden。
+   * 也不给输入框加 margin / padding：那会让它比同列标题更窄，看着变形。
+   *
+   * 所以把这 4px 从外层挪到内容层：12 + 4 = 16，内容位置与总宽都不变，
+   * 变的只是裁剪边界向右让出 4px，正好容纳聚焦环（3px + 1px 余量）。
    */
-  padding: 16px 4px 16px 16px;
+  padding: 16px 4px 16px 12px;
   gap: 12px;
   border-radius: var(--mct-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
@@ -318,8 +327,8 @@ const summary = computed(() => {
   max-height: calc(min(420px, 60vh) - 32px);
 }
 /*
- * 内层内容补回 12px：外层右 padding 只留 4px 给滚动条通道，
- * 内容自己再补 12，左右视觉留白合计仍是 16px。
+ * 内层内容补回视觉留白：外层右 4 是滚动条通道、左 12 是给聚焦环的让位，
+ * 内容再补左 4 / 右 12，四周合计仍是 16px。
  *
  * 注意不能写「viewport 的直接子级」选择器：reka 会在视口里再包一层 div，
  * 那条规则永远不命中（实测内层一直是 0 padding，内容贴着滚动条）。
@@ -330,6 +339,7 @@ const summary = computed(() => {
   /* 宽度跟随滚动视口（不按内容撑），padding 才能真的把内容从滚动条上推开 */
   width: 100%;
   max-width: 100%;
+  padding-left: 4px;
   padding-right: 12px;
   padding-bottom: 4px;
 }
