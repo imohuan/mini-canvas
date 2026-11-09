@@ -70,12 +70,42 @@ export interface LayoutRect {
 }
 
 /**
+ * 取景留白：一个值或 1~4 个值，写法和 CSS `padding` 一致。
+ *
+ * - 1 个值：四边同值
+ * - 2 个值：上下、左右
+ * - 3 个值：上、左右、下
+ * - 4 个值：上、右、下、左
+ *
+ * 单位由数值本身决定（整组统一）：
+ * - 全部 ≤ 1：按**比例**（0.1 = 每边留 10%）
+ * - 有任何一个 > 1：整组按**屏幕像素**（48 = 每边 48px）
+ */
+export type FocusPadding = number | readonly number[]
+
+/** 已解析的四边边距（像素，缺省 0） */
+export interface FocusInsets {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+/**
  * 取景参数（服务名 view 的 fitTo）。九个聚焦实现的所有差异都收在这里：
- * 是否改缩放、是否只在该内容不可见时动、可视区要不要扣掉状态栏。
+ * 是否改缩放、是否只在该内容不可见时动、可视区要不要扣掉状态栏与四边边距。
  */
 export interface FitToOptions {
-  /** 留白比例（0..0.49，与 VueFlow fitView 同义）；不写 heightRatio 时用它适配整块内容 */
-  padding?: number
+  /**
+   * 内容四周留白。**唯一的留白参数**，比例与像素共用它。
+   *
+   * 单位由值决定：全部 ≤ 1 = 比例（0.1 = 每边 10%）；有任何一个 > 1 = 屏幕像素（48 = 48px）。
+   * 支持 1~4 个值，顺序与 CSS `padding` 一致（上 / 右 / 下 / 左）。
+   *
+   * 它参与两件事：① 缩小可用区域 → 影响算出来的缩放倍率；② 决定内容居中到哪。
+   * 给了 `heightRatio` 时依然先扣它，再按高度占比算缩放。
+   */
+  padding?: FocusPadding
   /** 目标内容高度占视口高度的比例（auto-layout / 底栏用 0.5）；写了它就不看 padding */
   heightRatio?: number
   minZoom?: number
@@ -90,8 +120,25 @@ export interface FitToOptions {
   onlyIfOutOfView?: boolean
   /** 不可见判定的额外边距（屏幕像素） */
   margin?: number
-  /** 把上/下状态栏高度算进包围盒：缺省 'none' */
-  includeBars?: 'none' | 'bottom' | 'both'
+  /**
+   * 保留宿主界面条占的位置（内容避开它们）：缺省 'none'。
+   *
+   * - 'top'：扣掉顶部工具栏（标题栏 / 项目胶囊那一排）
+   * - 'bottom'：扣掉底部底栏（含状态栏）
+   * - 'both'：上下都扣
+   * 高度由宿主实时上报（view.setChromeBars），渲染层不写死像素。
+   */
+  includeBars?: 'none' | 'top' | 'bottom' | 'both'
+  /**
+   * 是否把**节点自己的顶部标题条**也算进聚焦范围（缺省 false）。
+   *
+   * 标题条绝对定位在卡片外侧，getNodeRect 只量卡片本体；打开它之后渲染层会量它的真实高度，
+   * 避免聚焦后标题条被裁掉。
+   *
+   * **不含底部控制栏**：底栏（输入框那一整块）高度很大且随内容变化，
+   * 把它算进来会让卡片被迫缩得很小；聚焦只保证「卡片 + 顶部标题条」完整可见。
+   */
+  includeNodeTopBar?: boolean
   /** 是否播放过渡；缺省 true */
   animate?: boolean
   durationMs?: number

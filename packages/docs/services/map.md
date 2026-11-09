@@ -72,14 +72,19 @@
 
 | 你想要的效果 | 参数 |
 | --- | --- |
-| 整块内容放进视口，留一点边 | `padding`（缺省 0.1） |
+| 整块内容放进视口，留一点边 | `padding: 0.1`（比例） |
+| 内容四周留固定像素 | `padding: 48`，也可写 `[上, 右, 下, 左]` |
 | 内容高度占视口一半左右 | `heightRatio: 0.5` |
 | 只平移，缩放不动 | `keepZoom: true` |
 | 固定缩放 | `zoom` |
 | 已经看得见就不要动 | `onlyIfOutOfView: true`，必要时给 `margin` |
 | 顺带选中目标 | `select: true`（由 `canvas.focus` 处理） |
-| 把底栏算进可视区 | `includeBars: 'bottom'` 或 `'both'` |
+| 避开顶部菜单 / 底部状态栏 | `includeBars: 'top'` / `'bottom'` / `'both'` |
+| 把节点自己的顶栏算进去 | `includeNodeTopBar: true`（底栏不参与） |
 | 逐帧调用，不要动画 | `animate: false` |
+
+按 `F` /「整理画布」聚焦时，避开界面条、留白、节点顶栏这三项由设置面板「布局 → 自动布局聚焦」控制
+（`focusIncludeBars` / `focusPadding` / `focusIncludeNodeTopBar`），细节见 [`view`](/services/view#按-f-聚焦时用哪套参数用户可调)。
 
 ## 四、`canvas` 动作
 

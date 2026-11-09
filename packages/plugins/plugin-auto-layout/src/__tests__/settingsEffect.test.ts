@@ -20,7 +20,7 @@ function makeView(nodeStore: NodeStore) {
     getViewport: () => ({ ...state }),
     setViewport: (v: { x: number; y: number; zoom: number }) => Object.assign(state, v),
     fitView: () => undefined,
-    fitTo: () => true,
+    fitTo: (_target?: unknown, _opts?: unknown) => true,
     getRootEl: () => null,
   }
 }
@@ -73,13 +73,64 @@ describe('auto-layout 配置改动实时生效', () => {
     await ctx.start()
 
     command.execute('auto-layout:focus-node', id)
-    expect(fitTo).toHaveBeenLastCalledWith([id], { heightRatio: 0.5, minZoom: 0.1, maxZoom: 4 })
+    expect(fitTo).toHaveBeenLastCalledWith([id], {
+      heightRatio: 0.5,
+      minZoom: 0.1,
+      maxZoom: 2,
+      includeBars: 'both',
+      padding: 48,
+      includeNodeTopBar: true,
+    })
 
     const settings = ctx.get<{ set(k: string, v: string | number | boolean): boolean }>('settings')
     settings.set('focusHeightRatio', 0.8)
     settings.set('autoLayoutMaxZoom', 2)
     command.execute('auto-layout:focus-node', id)
-    expect(fitTo).toHaveBeenLastCalledWith([id], { heightRatio: 0.8, minZoom: 0.1, maxZoom: 2 })
+    expect(fitTo).toHaveBeenLastCalledWith([id], {
+      heightRatio: 0.8,
+      minZoom: 0.1,
+      maxZoom: 2,
+      includeBars: 'both',
+      padding: 48,
+      includeNodeTopBar: true,
+    })
+  })
+
+  it('聚焦能避开界面条与留边：三项设置改完下一次就生效', async () => {
+    const { ctx, nodeStore, command, view } = makeCtx()
+    const id = addNode(nodeStore, 40, 60)
+    const fitTo = vi.spyOn(view, 'fitTo')
+    await ctx.start()
+
+    const settings = ctx.get<{ set(k: string, v: string | number | boolean): boolean }>('settings')
+    settings.set('focusIncludeBars', 'both')
+    settings.set('focusPadding', 24)
+    settings.set('focusIncludeNodeTopBar', false)
+
+    command.execute('auto-layout:focus-node', id)
+    expect(fitTo).toHaveBeenLastCalledWith([id], {
+      heightRatio: 0.5,
+      minZoom: 0.1,
+      maxZoom: 2,
+      includeBars: 'both',
+      padding: 24,
+      includeNodeTopBar: false,
+    })
+  })
+
+  it('非法的界面条取值回落到 none，不会把奇怪的值塞进取景', async () => {
+    const { ctx, nodeStore, command, view } = makeCtx()
+    const id = addNode(nodeStore, 40, 60)
+    const fitTo = vi.spyOn(view, 'fitTo')
+    await ctx.start()
+
+    const settings = ctx.get<{ set(k: string, v: string | number | boolean): boolean }>('settings')
+    settings.set('focusIncludeBars', 'bogus')
+    settings.set('focusPadding', -20)
+    command.execute('auto-layout:focus-node', id)
+    const opts = fitTo.mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(opts.includeBars).toBe('none')
+    expect(opts.padding).toBe(0)
   })
 
   it('面板改 direction=TB 后执行布局，节点垂直排布（而非仍按 LR）', async () => {

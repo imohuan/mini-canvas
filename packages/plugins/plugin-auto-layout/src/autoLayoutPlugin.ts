@@ -22,7 +22,12 @@
 
 import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import { resolveConfig } from '@mini-canvas/canvas-base'
-import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
+import type {
+  DocService,
+  SelectionService,
+  CanvasNode,
+  FitToOptions,
+} from '@mini-canvas/canvas-data'
 import { layoutHierarchy } from './groupHierarchy'
 import type { LayoutNode, LayoutDirection, AutoLayoutConfig } from './types'
 
@@ -86,8 +91,30 @@ export const Config = {
     description: '【F 聚焦选中节点】聚焦时允许缩到的最小倍率。内容特别多时也不会缩得比它更小。',
   },
   autoLayoutMaxZoom: {
-    type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局/自动布局聚焦',
+    type: 'number', default: 2, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局/自动布局聚焦',
     description: '【F 聚焦选中节点】聚焦时允许放大的最大倍率，避免选中单个小节点时画面放大过头。',
+  },
+  // —— 布局 / 自动布局聚焦 · 界面条（F 聚焦时躲开顶栏/底栏，并留出固定边距）——
+  focusIncludeBars: {
+    type: 'select', default: 'both', label: '避开界面条', group: '布局/自动布局聚焦',
+    description:
+      '【F 聚焦选中节点】聚焦时把顶部菜单栏 / 底部状态栏 / 左右抽屉占的位置算进去，内容不会被压在这些栏下面。选「都不避」时按整个屏幕取景。',
+    options: [
+      { value: 'none', label: '都不避（按整个屏幕）' },
+      { value: 'top', label: '只避顶部菜单' },
+      { value: 'bottom', label: '只避底部状态栏' },
+      { value: 'both', label: '避上下两条' },
+    ],
+  },
+  focusPadding: {
+    type: 'number', default: 48, min: 0, max: 400, step: 4, label: '聚焦留白（像素）', group: '布局/自动布局聚焦',
+    description:
+      '【F 聚焦选中节点】上下左右留多少像素（在避开的界面条之后再算）。留白越大，聚焦后节点越小、周围越空。小于等于 1 的值会按比例理解。',
+  },
+  focusIncludeNodeTopBar: {
+    type: 'boolean', default: true, label: '聚焦含节点顶栏', group: '布局/自动布局聚焦',
+    description:
+      '【F 聚焦选中节点】节点的标题条浮在卡片上方，打开后算进聚焦范围，避免被裁掉。底部控制栏不参与（它很高，算进来会把卡片压得过小）。',
   },
   // —— 布局 / 诊断（两个布局插件的诊断开关同住一格，字段名各自写明归属）——
   debug: {
@@ -141,8 +168,32 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       focusHeightRatio: read('focusHeightRatio', effectiveConfig.focusHeightRatio),
       autoLayoutMinZoom: read('autoLayoutMinZoom', effectiveConfig.autoLayoutMinZoom),
       autoLayoutMaxZoom: read('autoLayoutMaxZoom', effectiveConfig.autoLayoutMaxZoom),
+      focusIncludeBars: read('focusIncludeBars', effectiveConfig.focusIncludeBars),
+      focusPadding: read('focusPadding', effectiveConfig.focusPadding),
+      focusIncludeNodeTopBar: read('focusIncludeNodeTopBar', effectiveConfig.focusIncludeNodeTopBar),
       debug: read('debug', effectiveConfig.debug),
     })
+  }
+
+  /** 读界面条模式（每次执行现读面板值；非法值回落 'none'） */
+  function readChromeMode(): NonNullable<FitToOptions['includeBars']> {
+    const v = settings?.get('focusIncludeBars')
+    const ok = ['none', 'top', 'bottom', 'both'] as const
+    return (ok as readonly unknown[]).includes(v) ? (v as (typeof ok)[number]) : 'none'
+  }
+
+  /**
+   * 读聚焦留白。设置里是一个数（像素），直接交给 fitTo 的 `padding`。
+   * 非法值（负数/NaN/非数字）回落 0，等价于不留白。
+   */
+  function readPadding(): number {
+    const v = settings?.get('focusPadding')
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0
+  }
+
+  function readBool(key: string, fallback: boolean): boolean {
+    const v = settings?.get(key)
+    return typeof v === 'boolean' ? v : fallback
   }
 
   /** 节点绝对矩形快照（nodeLayout 实测/绝对；无服务退化为声明数据兜底） */
@@ -162,12 +213,26 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     if (nodes.length === 0) return
     const cfg = currentConfig()
     // 取景统一走 view.fitTo：缩放仍按「内容高度占比」算，min/max 夹取与过渡由服务负责。
-    view.fitTo(
-      nodes.map((n) => n.id),
-      opts.keepZoom
-        ? { keepZoom: true }
-        : { heightRatio: cfg.focusHeightRatio, minZoom: cfg.minZoom, maxZoom: cfg.maxZoom },
-    )
+    // includeBars / padding / includeNodeTopBar 是「别把内容压在栏下面」那一组：
+    // 顶部菜单、底部底栏、四边留白会先从可用区域里扣掉，再据此算倍率。
+    const chrome = {
+      includeBars: (readChromeMode() as FitToOptions['includeBars']) ?? 'none',
+      padding: readPadding(),
+      includeNodeTopBar: readBool('focusIncludeNodeTopBar', true),
+    }
+    const fitOpts = opts.keepZoom
+      ? { keepZoom: true, ...chrome }
+      : {
+          heightRatio: cfg.focusHeightRatio,
+          minZoom: cfg.minZoom,
+          maxZoom: cfg.maxZoom,
+          ...chrome,
+        }
+    const ids = nodes.map((n) => n.id)
+    view.fitTo(ids, fitOpts)
+    // 注意：这里不再需要「下一帧再量一次」。
+    // 以前那次校准是为了等底部控制栏展开；现在聚焦只看卡片 + 顶部标题条，
+    // 标题条在选中时就已存在、高度稳定，一次取景就是最终结果。
   }
 
   function focusSelected(): boolean {
