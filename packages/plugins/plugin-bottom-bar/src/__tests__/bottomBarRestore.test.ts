@@ -14,7 +14,7 @@
  *
  * 修法：挂载时优先恢复上次那个动作（它还在的话），参数按它声明的 key 复原。
  */
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
@@ -78,7 +78,12 @@ const SECOND: BarAction = {
   run: () => ({ ok: true }),
 }
 
-let uiField: { top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }
+/** Agent 面板的桩：文本节点只有在这个组件注册了时才会走 Agent 模型下拉 */
+function stub(name: string): { render(): unknown } {
+  return { render: () => null } as never
+}
+
+let uiField: RegistryImpl<unknown>
 beforeAll(async () => {
   const ctx = new Context()
   ctx.plugin(themeComponentsPlugin)
@@ -86,9 +91,16 @@ beforeAll(async () => {
   uiField = ctx.registryOf('ui') as typeof uiField
 })
 
+/** 文本节点的两条用例需要 Agent 的模型面板；其它用例不能看见它（会切下拉） */
+beforeEach(() => {
+  uiField.add('agentModelPicker', stub('AgentModelPicker'), { id: 'test-agent' })
+})
+
 function makeCtx(opts: { data?: Record<string, unknown> } = {}): CanvasRenderContext {
   const ids = new Set(['n2'])
   const node = { id: 'n2', type: 'image', data: opts.data ?? {} }
+  /** 没选过模型时应该自动落到的「默认模型」（与 Agent 会话初始模型同一条规则） */
+  const DEFAULT_AGENT_MODEL = { provider: 'deepseek', modelId: 'deepseek-v4-pro' }
   const services: Record<string, unknown> = {
     selection: { ids, has: (id: string) => ids.has(id), onChange: () => () => {} },
     doc: {
@@ -108,6 +120,14 @@ function makeCtx(opts: { data?: Record<string, unknown> } = {}): CanvasRenderCon
           },
         ],
       ]),
+    },
+    agent: {
+      state: {
+        models: [
+          { provider: 'deepseek', modelId: 'deepseek-v4-pro', hasKey: true, isDefault: true, isVision: false },
+          { provider: 'deepseek', modelId: 'deepseek-v4.1-flash', hasKey: true, isDefault: false, isVision: false },
+        ],
+      },
     },
     nodeBar: { list: () => [FIRST, SECOND] },
     nodeTask: { cancel: () => {}, run: async () => ({ ok: true }) },
@@ -151,10 +171,71 @@ function triggerIcon(html: string): string | null {
 }
 
 describe('底栏配置恢复：上次用的动作（模型）', () => {
+  // 注意：makeCtx 的节点类型是 image（走底栏动作下拉），不是文本（Agent 模型下拉）。
+  // Agent 默认模型这条要覆盖「文本节点」，所以单独建一个 text 类型的画布上下文。
+  function makeTextCtx(): CanvasRenderContext {
+    const node = { id: 'n2', type: 'text', data: {} }
+    const services: Record<string, unknown> = {
+      selection: { ids: new Set(['n2']), has: () => true, onChange: () => () => {} },
+      doc: {
+        getNode: (id: string) => (id === 'n2' ? node : undefined),
+        updateNode: () => {},
+        getNodes: () => [node],
+        getEdges: () => [],
+        subscribe: () => () => {},
+        types: new Map([[
+          'text',
+          { type: 'text', label: '文本', inputs: [{ acceptsTypes: ['text'] }], outputs: [{ contentType: 'text' }] },
+        ]]),
+      },
+      agent: {
+        state: {
+          models: [
+            { provider: 'deepseek', modelId: 'deepseek-v4-pro', hasKey: true, isDefault: true, isVision: false },
+            { provider: 'deepseek', modelId: 'deepseek-v4.1-flash', hasKey: true, isDefault: false, isVision: false },
+          ],
+        },
+      },
+      nodeBar: { list: () => [] },
+      nodeTask: { cancel: () => {}, run: async () => ({ ok: true }) },
+    }
+    return {
+      host: { nodeRegistry: { get: () => undefined }, themeRegistry: { winner: () => undefined, subscribe: () => () => {} } },
+      ctx: {
+        get: (n: string) => services[n],
+        tryGet: (n: string) => services[n],
+        on: () => ({ dispose: () => {} }),
+        registryOf: (kind: string) => (kind === 'ui' ? uiField : (new RegistryImpl() as unknown)),
+      },
+      viewport: { value: { zoom: 1 } },
+      flow: { queryNodeEl: () => null },
+      renderNodes: { value: [node] },
+      renderEdges: { value: [] },
+    } as unknown as CanvasRenderContext
+  }
+
+  function renderText(): Promise<string> {
+    const app = createSSRApp({ render: () => h(NodeBottomBar as Component, { id: 'n2', data: {} }) })
+    app.provide(RENDER_CONTEXT_KEY, makeTextCtx())
+    return renderToString(app)
+  }
+
   it('文本节点走 Agent 模型下拉时，触发器带模型图标（2026-11-09）', async () => {
     // makeCtx 的 node.type 固定 image；这里只要渲染出 nb-model-badge 就算通过（tone 由服务定）
     const html = await render({ barModel: { provider: 'test', modelId: 'deepseek-v4.1-flash' } })
     expect(triggerIcon(html)).not.toBeNull()
+  })
+
+  it('没存过模型 → 自动选中「默认」那颗，不是空的「选择模型」（用户 2026-11-09）', async () => {
+    const html = await renderText()
+    expect(triggerLabel(html)).toBe('deepseek-v4-pro')
+  })
+
+  it('存过的模型失效（Agent 删了它）→ 也落回默认，不带着废选择发请求', async () => {
+    const app = createSSRApp({ render: () => h(NodeBottomBar as Component, { id: 'n2', data: { barModel: { provider: 'deepseek', modelId: 'already-deleted' } } }) })
+    app.provide(RENDER_CONTEXT_KEY, makeTextCtx())
+    const html = await renderToString(app)
+    expect(triggerLabel(html)).toBe('deepseek-v4-pro')
   })
 
   it('没存过 → 默认第一条（既有行为不变）', async () => {

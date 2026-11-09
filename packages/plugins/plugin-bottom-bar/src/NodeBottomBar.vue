@@ -211,14 +211,21 @@ const actionChoices = computed(() =>
     }
   }),
 )
-// 打开时把节点里记着的模型读回来；Agent 删掉那个模型时回退到空（不带着失效选择发请求）
+// 打开时把节点里记着的模型读回来；Agent 删掉那个模型（或没存过）时落到「默认模型」
+// —— 用户 2026-11-09：下拉里标了「默认」的那颗就是初始选中，不该是空的「选择模型」。
+// 与 Agent 会话的初始模型同一条规则（usable.find(isDefault) ?? usable[0]，见 sessions.ts）。
 watch(
   [() => props.data?.barModel, useAgentModels],
   () => {
     if (!useAgentModels.value) return
     const saved = readBarModelChoice(props.data)
     const models = agentChat.availableModels()
-    agentChoice.value = choiceStillValid(saved, models) ? saved : null
+    if (choiceStillValid(saved, models)) { agentChoice.value = saved }
+    else {
+      const usable = models.filter((m) => m.hasKey)
+      const def = usable.find((m) => m.isDefault) ?? usable[0]
+      agentChoice.value = def ? { provider: def.provider, modelId: def.modelId } : null
+    }
   },
   { immediate: true },
 )
