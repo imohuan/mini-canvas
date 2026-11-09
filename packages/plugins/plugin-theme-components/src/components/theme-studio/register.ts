@@ -10,7 +10,7 @@ import { SETTINGS_HIDDEN_FIELD, SETTINGS_HIDDEN_KEY, type SettingsHiddenDecl } f
 import ThemeStudio from './ThemeStudio.vue'
 
 /** 设置面板里这一节的导航名（= Config 分组名 = settingsGroup 槽键） */
-export const THEME_STUDIO_NAV_ID = '主题工作台'
+export const THEME_STUDIO_NAV_ID = '外观/主题工作台'
 
 /**
  * 颜色配方要隐藏掉的设置项。

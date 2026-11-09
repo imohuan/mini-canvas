@@ -60,8 +60,8 @@ export const edgeCuttingPreviewLayer: PreviewLayer = {
       '.pv-cut-wide{fill:none;stroke:' + bladeColor + ';stroke-width:8;stroke-opacity:.18;stroke-linecap:round;' +
       'filter:drop-shadow(0 0 5px color-mix(in srgb,' + bladeColor + ' 55%,transparent))}' +
       '.pv-cut-mid{fill:none;stroke:' + bladeColor + ';stroke-width:3;stroke-opacity:.70;stroke-linecap:round}' +
-      '.pv-cut-edge{fill:none;stroke:#fff;stroke-width:1.2;stroke-linecap:round;' +
-      'filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px ' + bladeColor + ')}' +
+      '.pv-cut-edge{fill:none;stroke:#fff;stroke-width:1.2;stroke-linecap:round;' + // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+      'filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px ' + bladeColor + ')}' + // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
       '.pv-cut-spark{stroke:' + bladeColor + ';stroke-width:.9;stroke-linecap:round;opacity:.7}'
     root.appendChild(style)
 
@@ -71,7 +71,7 @@ export const edgeCuttingPreviewLayer: PreviewLayer = {
     }
     root.appendChild(svg('circle', {
       class: 'pv-cut-tip', cx: String(tip.x), cy: String(tip.y), r: '3.4',
-      fill: '#fff', 'fill-opacity': '0.95', stroke: bladeColor,
+      fill: '#fff', 'fill-opacity': '0.95', stroke: bladeColor, // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
     }))
     root.appendChild(svg('line', {
       class: 'pv-cut-spark',
@@ -90,8 +90,8 @@ export const edgeCuttingPreviewLayer: PreviewLayer = {
     label.textContent = 'Alt 划过'
     label.style.cssText =
       'position:absolute;left:' + (endX + 16) + 'px;top:' + (endY - 34) + 'px;' +
-      'padding:2px 7px;border-radius:999px;background:#fff;color:#6b7280;' +
-      'font-size:9px;font-weight:650;white-space:nowrap;box-shadow:0 1px 3px rgb(17 24 39 / 0.12)'
+      'padding:2px 7px;border-radius:999px;background:#fff;color:#6b7280;' + // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+      'font-size:9px;font-weight:650;white-space:nowrap;box-shadow:0 1px 3px rgb(17 24 39 / 0.12)' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
     ctx.el.appendChild(label)
 
     // 刀光与标签的外接框：上报后取景不会把这一侧切掉

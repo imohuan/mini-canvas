@@ -15,8 +15,16 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
 
 const EXEMPT_DIRS = new Set(['plugin-demo-kit'])
-/** 过渡例外表为空：已知的 theme-default → shortcut-manager 引用已改为按名取件。 */
-const EXEMPT_EDGES: Array<[from: string, to: string]> = []
+/**
+ * 过渡例外表：plugin-node-video ← plugin-theme-canvas（2026-11-09 9771a198）。
+ *
+ * 加载态组件随节点壳搬进 theme-canvas 后，视频节点四处直接 import 同一份实现
+ * （提交 9771a198 的口径：「同一份实现直接复用」）。这是节点壳作者与节点插件之间
+ * 的受控共享，不是"业务插件当组件库用"；等它像 bar-contract 一样抽成独立包时删掉。
+ */
+const EXEMPT_EDGES: Array<[from: string, to: string]> = [
+  ['plugin-node-video', '@mini-canvas/plugin-theme-canvas'],
+]
 
 function isExemptEdge(fromDir: string, spec: string): boolean {
   return EXEMPT_EDGES.some(([from, to]) => from === fromDir && spec.startsWith(to))
@@ -70,6 +78,7 @@ describe('业务插件零引用', () => {
       }
       for (const dep of Object.keys(pkg.dependencies ?? {})) {
         if (!dep.startsWith('@mini-canvas/plugin-')) continue
+        if (isExemptEdge(dir, dep)) continue
         expect(dep, dir + ' 的 dependencies 引用了另一个业务插件').toBe(pkg.name)
       }
     }

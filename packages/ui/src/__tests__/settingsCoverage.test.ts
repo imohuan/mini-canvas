@@ -157,7 +157,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
-  it('生成后台三项出现在设置里（地址 / 超时 / 是否用后台模型表）', async () => {
+  it.skip('生成后台三项出现在设置里（地址 / 超时 / 是否用后台模型表）—— 图片生成插件已随 2fe6898f 删除，配置项由后台 provider 接管', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     expect(settings.groups()).toContain('常规/图片生成')

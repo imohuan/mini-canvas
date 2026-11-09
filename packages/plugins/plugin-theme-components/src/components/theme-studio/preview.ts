@@ -123,7 +123,7 @@ export function useThemeStudioPreview(state: ThemeStudioState) {
       rects,
       nodes,
       mode: mode.value,
-      colors: (key: string) => readPreviewColor(rawGet, key, mode.value, '#0891b2'),
+      colors: (key: string) => readPreviewColor(rawGet, key, mode.value, '#0891b2'), // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
       get: (key: string) => rawGet(key),
       motion: motionAllowed(),
       /** 各层如实上报自己画的范围，取景据此计算 */

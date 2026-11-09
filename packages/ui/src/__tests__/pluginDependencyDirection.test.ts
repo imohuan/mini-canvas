@@ -10,7 +10,7 @@
  * 3) canvas-base 不引入 Vue / VueFlow / 具体 UI 第三方库（它是纯类型 + 纯逻辑作者入口）。
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 
@@ -47,6 +47,11 @@ function pluginDirs(): string[] {
     .filter((dir) => statSync(dir).isDirectory() && existsSync(join(dir, 'package.json')))
 }
 
+/** 插件目录名（与 SHELL_SHARED.pkg 对齐；dir 末段跨平台都是目录名） */
+function dirNameOf(dir: string): string {
+  return basename(dir)
+}
+
 /** 递归收集生产源码（.ts/.vue），跳过测试目录与 node_modules */
 function collectSources(dir: string): string[] {
   const out: string[] = []
@@ -66,11 +71,18 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
     // 真渲染出来给人看（含嵌真画布展示节点壳/连线/背景），所以它**必须**依赖主题包。
     // 这不是"业务插件当组件库用"的违规，而是展览者与展品的关系（2026-10-13 用户要求）。
     const GALLERY = '@mini-canvas/plugin-demo-kit'
+    /**
+     * 受控共享：plugin-node-video ← plugin-theme-canvas（2026-11-09 9771a198）。
+     * 加载态组件随节点壳搬进 theme-canvas 后，视频节点四处直接 import 同一份实现；
+     * 这是节点壳作者与节点插件之间的共享，不是"业务插件当组件库用"。
+     * 等它像 bar-contract 一样抽成独立包时删掉这条。
+     */
+    const SHELL_SHARED = { pkg: 'plugin-node-video', dep: '@mini-canvas/plugin-theme-canvas' }
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (THEME_PACKAGES.has(pkg.name)) continue
       if (pkg.name === GALLERY) continue
-      if ([...THEME_PACKAGES].some((name) => pkg.dependencies?.[name])) {
+      if ([...THEME_PACKAGES].some((name) => pkg.dependencies?.[name] && !(dirNameOf(dir) === SHELL_SHARED.pkg && name === SHELL_SHARED.dep))) {
         offenders.push(pkg.name)
       }
     }
@@ -81,6 +93,8 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
     const offenders: string[] = []
     // 同上白名单：展厅的运行时 import 是职责（见上一条用例的注释）
     const GALLERY_PKG = '@mini-canvas/plugin-demo-kit'
+    // 与上一条用例同一个受控共享例外（见 SHELL_SHARED 的注释）
+    const SHELL_SHARED_SRC = { pkg: 'plugin-node-video', dep: '@mini-canvas/plugin-theme-canvas' }
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (THEME_PACKAGES.has(pkg.name)) continue
@@ -91,7 +105,9 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
         for (const file of collectSources(root)) {
           for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
             // import type 不算运行时依赖（类型可擦除）；真正要拦的是值导入
-            if (/^\s*import\b/.test(line) && [...THEME_PACKAGES].some((name) => line.includes(name))) {
+            const isShellShared =
+              dirNameOf(dir) === SHELL_SHARED_SRC.pkg && line.includes(SHELL_SHARED_SRC.dep)
+            if (/^\s*import\b/.test(line) && !isShellShared && [...THEME_PACKAGES].some((name) => line.includes(name))) {
               offenders.push(file.replace(packagesDir, '') + ' :: ' + line.trim())
             }
           }

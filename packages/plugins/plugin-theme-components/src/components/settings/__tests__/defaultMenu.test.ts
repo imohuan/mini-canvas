@@ -90,9 +90,9 @@ describe('默认设置菜单', () => {
   it('主题工作台只有一个 section（由整页 pageGroup 挂到它，不再多一条一级入口）', () => {
     const menu = new SettingsMenuRegistry()
     registerDefaultSettingsMenu(menu.forPlugin('theme-default'))
-    const view = menu.resolve(['主题工作台'])
+    const view = menu.resolve(['外观/主题工作台'])
     const theme = view.navs.find((n) => n.id === 'nav/appearance/theme')!
-    const hits = theme.sections.filter((s) => s.groups.includes('主题工作台'))
+    const hits = theme.sections.filter((s) => s.groups.includes('外观/主题工作台'))
     expect(hits).toHaveLength(1)
     expect(hits[0].id).toBe('section/appearance/theme/lab')
     // 也没有任何一级 nav 的标题变成「主题工作台」

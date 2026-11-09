@@ -29,7 +29,7 @@ describe('只装默认主题时的颜色配方', () => {
     await ctx.start()
 
     // 分组必须存在，否则设置菜单会整节过滤掉
-    expect(ctx.get('settings').groups()).toContain('主题工作台')
+    expect(ctx.get('settings').groups()).toContain('外观/主题工作台')
 
     const app = createSSRApp({
       render: () => h(PluginSettingsContent, { settings: ctx.get('settings') }),

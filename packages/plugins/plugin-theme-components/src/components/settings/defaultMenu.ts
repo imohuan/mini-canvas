@@ -73,7 +73,7 @@ const sections: SettingsSectionDef[] = [
   s('appearance/theme', 'mode', '主题模式', '外观/主题模式', 35),
   s('appearance/theme', 'palette', '主题配色', '外观/主题配色', 40),
   s('appearance/theme', 'palette-dark', '暗色主题配色', '外观/暗色主题配色', 50),
-  s('appearance/theme', 'lab', '主题工作台', '主题工作台', 60),
+  s('appearance/theme', 'lab', '主题工作台', '外观/主题工作台', 60),
   s('integration/connect', 'generate', '生成', ['常规/图片生成', '常规/文本生成'], 10),
   s('integration/connect', 'upstream', '上游', '常规/上游接口', 20),
   s('integration/connect', 'cloud', '云端', ['常规/云端客户端', '连接/云端'], 30),

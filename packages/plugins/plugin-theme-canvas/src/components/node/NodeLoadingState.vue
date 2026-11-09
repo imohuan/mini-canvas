@@ -479,7 +479,7 @@ html.dark .nls-root.is-error {
   height: 52px;
   transform-origin: 50% 50%;
   animation: ld-spin 0.9s linear infinite;
-  filter: drop-shadow(0 0 10px rgb(56 189 248 / 0.35));
+  filter: drop-shadow(0 0 10px var(--ui-accent-soft, rgb(8 145 178 / 0.12))); /* 主题色白名单: var() 兜底里的具体色值是 accent 缺席时的降级，非独立配色 */
 }
 .ld-spinner-track {
   stroke: color-mix(in srgb, var(--nls-pct) 22%, transparent);

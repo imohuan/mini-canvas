@@ -39,12 +39,12 @@ function rectStyle(node: PreviewNodeRect): string {
 function inkOn(hex: string): string {
   const raw = String(hex || '').replace('#', '').trim()
   const full = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw.slice(0, 6)
-  if (full.length !== 6) return '#fff'
+  if (full.length !== 6) return '#fff' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
   const r = parseInt(full.slice(0, 2), 16)
   const g = parseInt(full.slice(2, 4), 16)
   const b = parseInt(full.slice(4, 6), 16)
-  if (![r, g, b].every(Number.isFinite)) return '#fff'
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? '#1f2430' : '#fff'
+  if (![r, g, b].every(Number.isFinite)) return '#fff' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? '#1f2430' : '#fff' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
 }
 
 /** 节点标题：放在卡片上缘外侧（与真实节点同一位置语义）。 */
@@ -112,13 +112,13 @@ function paintTextCard(
     const styles: Record<string, string> = {
       primary: 'background:' + accent + ';color:' + inkOn(accent) + ';box-shadow:0 1px 2px color-mix(in srgb,' + accent + ' 35%,transparent)',
       hover: 'border-color:' + hover + ';background:' + hover + ';color:' + inkOn(hover),
-      ghost: 'border-color:' + (dark ? '#454545' : '#e2e5ea') + ';background:' + surface + ';color:' + ink,
+      ghost: 'border-color:' + (dark ? '#454545' : '#e2e5ea') + ';background:' + surface + ';color:' + ink, // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
       danger: 'border-color:' + danger + ';background:color-mix(in srgb,' + danger + ' 10%,transparent);color:' + danger,
       warn: 'border-color:' + warn + ';background:color-mix(in srgb,' + warn + ' 14%,transparent);color:' + warn,
       disabled:
-        'border-color:' + (dark ? '#3a3a3a' : '#e2e5ea') +
-        ';background:' + (dark ? '#2c2c2c' : '#f6f7f9') +
-        ';color:' + (dark ? '#6f6f6f' : '#b3b9c2'),
+        'border-color:' + (dark ? '#3a3a3a' : '#e2e5ea') + // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+        ';background:' + (dark ? '#2c2c2c' : '#f6f7f9') + // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+        ';color:' + (dark ? '#6f6f6f' : '#b3b9c2'), // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
     }
     btn.style.cssText = base + ';' + styles[kind]
     if (kind === 'disabled') btn.disabled = true
@@ -138,9 +138,9 @@ function paintTextCard(
   // 色板小圆点：把连线 / 流光 / 强调 / 刀锋四个颜色放在按钮行末尾
   const swatches = el('span', '')
   swatches.style.cssText = 'display:inline-flex;align-items:center;gap:2px;margin-left:auto'
-  for (const color of [accent, '#22d3ee', accent, '#fbbf24']) {
+  for (const color of [accent, '#22d3ee', accent, '#fbbf24']) { // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
     const dot = el('i', '')
-    dot.style.cssText = 'width:8px;height:8px;border-radius:2px;box-shadow:inset 0 0 0 1px rgb(0 0 0 / 0.10);background:' + color
+    dot.style.cssText = 'width:8px;height:8px;border-radius:2px;box-shadow:inset 0 0 0 1px rgb(0 0 0 / 0.10);background:' + color // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
     swatches.appendChild(dot)
   }
   actions.appendChild(swatches)
@@ -157,12 +157,12 @@ function paintImageCard(card: HTMLElement, node: PreviewNodeRect, accent: string
   const art = el('div', '')
   art.style.cssText =
     'position:relative;width:100%;height:100%;overflow:hidden;border-radius:7px;' +
-    'background:linear-gradient(135deg,' + accent + ',#22d3ee 60%,#a5f3fc)'
+    'background:linear-gradient(135deg,' + accent + ',#22d3ee 60%,#a5f3fc)' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
   const caption = el('span', '')
   caption.textContent = '拖入图片开始'
   caption.style.cssText =
-    'position:absolute;left:9px;bottom:9px;padding:3px 8px;border-radius:5px;background:rgb(15 23 42 / 0.30);' +
-    'color:#fff;font-size:10px;font-weight:650;backdrop-filter:blur(4px)'
+    'position:absolute;left:9px;bottom:9px;padding:3px 8px;border-radius:5px;background:rgb(15 23 42 / 0.30);' + // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+    'color:#fff;font-size:10px;font-weight:650;backdrop-filter:blur(4px)' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
   art.appendChild(caption)
   body.appendChild(art)
   card.appendChild(body)
@@ -210,11 +210,11 @@ export const themePreviewLayer: PreviewLayer = {
 
     // 节点表面与文字色：亮暗两套，跟着样张模式走（不是整站主题）
     const dark = ctx.mode === 'dark'
-    const surface = dark ? '#252525' : '#ffffff'
-    const border = dark ? '#3a3a3a' : '#e5e7eb'
-    const ink = dark ? '#e8e8e8' : '#374151'
-    const titleInk = dark ? '#f2f2f2' : '#111827'
-    const shadow = dark ? 'rgb(0 0 0 / 0.45)' : 'rgb(17 24 39 / 0.09)'
+    const surface = dark ? '#252525' : '#ffffff' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+    const border = dark ? '#3a3a3a' : '#e5e7eb' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+    const ink = dark ? '#e8e8e8' : '#374151' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+    const titleInk = dark ? '#f2f2f2' : '#111827' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
+    const shadow = dark ? 'rgb(0 0 0 / 0.45)' : 'rgb(17 24 39 / 0.09)' // 主题色白名单: 预览层同步绘制的是画布内容快照（品牌色 / 素材色），不是界面 token
 
     const stage = el('div', '')
     stage.style.cssText = 'position:absolute;inset:0'
