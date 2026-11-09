@@ -39,8 +39,8 @@ describe('默认设置菜单', () => {
       '细节', '活动区域', '吸附区域', '图片分档', '视频分档',
     ]))
     expect(node.sections.find((s) => s.title === '细节')!.groups).not.toContain('节点/吸附带')
-    // 「内容」小节仍在，但缩略图字段已经搬到图片/视频两个独立小节
-    expect(node.sections.find((s) => s.title === '内容')!.groups).not.toContain('节点/缩略图')
+    // 「可视化节点分档」小节仍在，但缩略图字段已经搬到图片/视频两个独立小节
+    expect(node.sections.find((s) => s.title === '可视化节点分档')!.groups).not.toContain('节点/缩略图')
     expect(node.sections.find((s) => s.title === '吸附区域')!.groups).toEqual(['节点/吸附带'])
     // 图片/视频共用同一个 Config.group，靠字段前缀切片；菜单保留两块
     expect(node.sections.find((s) => s.title === '图片分档')!.groups).toEqual(['节点/缩略图'])

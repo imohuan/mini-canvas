@@ -114,7 +114,7 @@ const sections: SettingsSectionDef[] = [
   s(
     'canvas/node',
     'content',
-    '内容',
+    '可视化节点分档',
     ['节点/内容', '可视化节点/渲染清晰度', '常规/可视化节点'],
     50,
   ),
