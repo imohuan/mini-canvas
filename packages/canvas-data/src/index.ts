@@ -18,6 +18,7 @@ import './canvas/capabilityTypes'
 
 export * from './transient'
 export * from './nodeRunState'
+export * from './nodeVisualState'
 export * from './nodeStore'
 export * from './edgeStore'
 export * from './selection'

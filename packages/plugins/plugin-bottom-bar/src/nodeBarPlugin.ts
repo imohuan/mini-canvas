@@ -162,7 +162,7 @@ export class NodeTaskService extends Service {
   async run(
     nodeId: string,
     actionId: string,
-    input: { prompt?: string; values?: Record<string, unknown>; resources?: Parameters<typeof runAction>[0]['input']['resources'] } = {},
+    input: { prompts?: Parameters<typeof runAction>[0]['input']['prompts']; values?: Record<string, unknown>; resources?: Parameters<typeof runAction>[0]['input']['resources'] } = {},
   ) {
     const action = this.lookup().get(actionId)
     if (!action) return { ok: false as const, error: '未找到动作 ' + actionId }
@@ -281,7 +281,14 @@ export function apply(ctx: Context) {
   const task = new NodeTaskService(ctx)
 
   // 覆盖层挂节点 over:inset（* 通配；组件自己判空与显隐）
-  ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, id: 'bottom-bar/overlay' })
+  // keepOnResize：拖拽改尺寸期间仍然显示。加载态跟着卡片一起变，中途消失会像任务断了
+  // （用户 2026-11-09 实测反馈）。主题壳只认这个声明，不认识具体插件。
+  ctx.nodes.attach('*', {
+    region: 'over:inset',
+    component: NodeTaskOverlay,
+    id: 'bottom-bar/overlay',
+    props: { keepOnResize: true },
+  })
 
   // 底栏内容注册成 nodeToolbar 的「默认模式」—— 与裁剪/扩展等模式完全平等，
   // 位置由节点壳的 out:bottom 锚点负责，本插件不再自己摆浮层。

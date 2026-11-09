@@ -533,6 +533,48 @@ describe('resize 进行中收起上/下控制栏（用户要求）', () => {
     const html = await renderNode(r, {}, {}, { resizingId: 'n1' })
     expect(html).not.toContain('v2-overlay')
   })
+
+  /**
+   * 用户口径 2026-11-09：「resize 的时候 UI 的加载状态会消失，这让人很难受。」
+   *
+   * 规则分层：
+   * - 编辑类浮层（裁剪框 / 扩展框）resize 中照旧收起（跟着变尺寸会错位）；
+   * - 任务加载 / 失败覆盖层必须**继续显示** —— 它声明了 props.keepOnResize。
+   */
+  it('★ resize 进行中 → 声明了 keepOnResize 的覆盖层仍然渲染', async () => {
+    const TaskOverlayStub = defineComponent({
+      name: 'TaskOverlayStub',
+      render: () => h('div', { class: 'probe-task-overlay' }),
+    })
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const app = createSSRApp({
+      setup() {
+        useVueFlow().viewport.value = { x: 0, y: 0, zoom: 1 }
+        return () => h(BaseNode, { id: 'n1', type: 'image', data: {}, selected: false })
+      },
+    })
+    const ctx = renderCtx(r, {}, { resizingId: 'n1' })
+    // 模拟 bottom-bar 注册时带的 props（壳按 props.keepOnResize 决定 resize 期间是否保留）
+    const regionField = {
+      list: (key: string) =>
+        key === '*/over:inset'
+          ? [{ id: 'bottom-bar/overlay', order: 0, value: { component: TaskOverlayStub, props: { keepOnResize: true } } }]
+          : [],
+      subscribe: () => ({ dispose: () => {} }),
+    }
+    const patched = {
+      ...ctx,
+      ctx: {
+        get: (name: string) => (name === 'node/region' ? regionField : ctx.ctx.get(name)),
+        tryGet: (name: string) => (name === 'node/region' ? regionField : ctx.ctx.tryGet(name)),
+        registryOf: (name: string) => (name === 'node/region' ? regionField : undefined),
+      },
+    } as unknown as CanvasRenderContext
+    app.provide(RENDER_CONTEXT_KEY, patched)
+    const html = await renderToString(app)
+    expect(html).toContain('probe-task-overlay')
+  })
 })
 
 /**
@@ -598,6 +640,41 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
     r.register('image', { in: ContentStub })
     const html = await renderNode(r)
     expect(html).not.toContain('resize-handle')
+  })
+
+  /**
+   * 用户口径 2026-11-09：加载 / 错误状态下不该出现 resize 按钮。
+   *
+   * 理由：卡上盖着覆盖层，拖把手既看不见效果，又会把任务期间的尺寸搅乱。
+   * 判据是 canvas-data 的三态（readNodeVisualState）：只有 ready 才给把手。
+   */
+  it('★ 加载中 / 错误状态 → 不出拖柄；加载成功（done）照常出', async () => {
+    const r = new NodeRegistry()
+    r.register('text', { in: ContentStub })
+
+    const running = await renderNode(
+      r,
+      { resizable: true, runState: { status: 'running', progress: 42 } },
+      {},
+      { type: 'text' },
+    )
+    expect(running).not.toContain('resize-handle')
+
+    const failed = await renderNode(
+      r,
+      { resizable: true, runState: { status: 'error', message: '失败了' } },
+      {},
+      { type: 'text' },
+    )
+    expect(failed).not.toContain('resize-handle')
+
+    const done = await renderNode(
+      r,
+      { resizable: true, runState: { status: 'done', progress: 100 } },
+      {},
+      { type: 'text' },
+    )
+    expect(done).toContain('resize-handle')
   })
 
   /**

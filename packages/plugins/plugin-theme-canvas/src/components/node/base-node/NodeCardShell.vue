@@ -7,6 +7,7 @@ import {
   useCanvasRender,
   RegionEntryHost,
 } from '@mini-canvas/canvas-render'
+import { readNodeVisualState } from '@mini-canvas/canvas-data'
 import MovingHandle from '../MovingHandle.vue'
 import BaseTitle from '../BaseTitle.vue'
 import TitleLabel from '../TitleLabel.vue'
@@ -110,7 +111,17 @@ const visibility = useNodeVisibilityPolicy({
   selectedCount,
   isHandTool,
 })
-const { hideOverlays, hideSlotBars } = visibility
+const { hideOverlays, hideSlotBars, resizingThisNode } = visibility
+
+/**
+ * 节点的全局三态（loading / error / ready），见 canvas-data 的 readNodeVisualState。
+ *
+ * 用户口径 2026-11-09：节点就这三个状态，且是**全局**的 —— 壳、状态栏、加载覆盖层、
+ * 视频播放拦截都读同一份判定。这里只用到「是不是被覆盖层盖住」这一条：
+ * 盖住时不给 resize 把手（底下整张卡都被盖住，拖它既看不见效果又会搅乱任务期间的尺寸）。
+ */
+const visualState = computed(() => readNodeVisualState({ data: props.data }))
+const covered = computed(() => visualState.value !== 'ready')
 
 const regions = useNodeRegions({
   ctx,
@@ -152,6 +163,20 @@ const {
   capabilityCache,
   capabilityIsDev,
 } = regions
+
+/**
+ * over:inset 里这一轮要渲染的条目。
+ *
+ * resize 中照旧收起"编辑类"浮层（裁剪框会跟着变尺寸、拖起来错位），
+ * 但**放行加载 / 失败覆盖层**：它必须在 resize 期间继续显示（用户实测反馈：
+ * 一拖尺寸加载态就消失，看着像任务断了）。
+ * 放行方式是条目自己声明 props.keepOnResize === true：主题壳不认识任何具体插件，
+ * 由注册方（任务覆盖层）自己说"我需要在 resize 时保留"。
+ */
+const overlaySlotsForRender = computed(() => {
+  if (!resizingThisNode.value) return overlaySlots.value
+  return overlaySlots.value.filter((e) => e.props?.keepOnResize === true)
+})
 
 const feedback = useNodeConnectionFeedback({
   ctx,
@@ -389,7 +414,7 @@ const {
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
            反缩放：屏幕大小恒定，transform-origin 在右下角（钉在卡片角上不漂移）。
            只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
-      <div v-if="cardResizable && !culledReduced" class="resize-handle mc-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
+      <div v-if="cardResizable && !culledReduced && !covered" class="resize-handle mc-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
         :style="{ transform: `scale(${resizeHandleScale})` }" @pointerdown="card.onResizePointerDown">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
@@ -436,11 +461,11 @@ const {
          尺寸与卡片严格一致（不反缩放）—— 浮层必须和底下的画面像素对齐，缩放会错位。
          z-index 高于卡片但低于上/下控制栏：编辑框盖住画面，但"确认/取消"按钮仍在最上层可点。 -->
     <div
-      v-if="overlaySlots.length > 0 && !hideOverlays && !culledReduced"
+      v-if="overlaySlotsForRender.length > 0 && !culledReduced"
       class="v2-overlay nodrag nopan"
       :style="overlayLayerStyle"
     >
-      <RegionEntryHost v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
+      <RegionEntryHost v-for="seg in overlaySlotsForRender" :key="'overlay-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- over:outset（新增区域）：盖住整张卡且允许超出卡片边界；与卡片重合（不反缩放，画面像素对齐优先），
