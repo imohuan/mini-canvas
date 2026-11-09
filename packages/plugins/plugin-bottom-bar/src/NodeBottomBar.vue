@@ -52,6 +52,7 @@ import {
   useAgentChat,
   readBarModelChoice,
   choiceStillValid,
+  currentCanvasId,
   useBottomBarTagMenu,
   useCtrlResourceDrag,
   useBarNudge,
@@ -156,6 +157,8 @@ const { prompt, promptDoc, onPromptUpdate, CHAR_LIMIT, charCount } = promptApi
 const agentChat = useAgentChat({
   ctx,
   nodeId: props.id,
+  // 画布 id 从 URL 读（与宿主 / cloud-client 同一口径）；显式传下去，别让下单层自己猜
+  canvasId: currentCanvasId(),
   prompt,
 })
 const { choice: agentChoice, pick: pickAgentModel, send: sendAgentMessage } = agentChat

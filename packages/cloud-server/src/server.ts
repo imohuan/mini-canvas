@@ -33,6 +33,7 @@ import { CanvasDocument } from './mcp/canvasDoc.js'
 import { CanvasDocumentPool } from './mcp/canvasDocPool.js'
 import { TOOL_LIST } from './mcp/server.js'
 import { ProviderRegistry } from './providers/registry.js'
+import type { Provider } from './providers/types.js'
 import { loadProvidersFromDir, seedDefaultProviders, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
 import { watchProviders, type ProviderWatcher } from './providers/watch.js'
 import {
@@ -153,6 +154,16 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
   )
   const registry = new ProviderRegistry()
+  /**
+   * 内置 agent-chat 平台：首次启动装一次，之后每次 reload 也要补一份。
+   * 收成一处，免得两条路径的构造参数写歪（第一次热重载就是这么把它弄丢的）。
+   */
+  const agentChatProvider = (): Provider =>
+    createAgentChatProvider({
+      get config() { return agentServices().config },
+      loadSdk: () => agentServices().loadSdk(),
+      onError: (message, err) => console.warn(message, err),
+    })
   const scanned = await loadProvidersFromDir(providersDir, { config: providerConfig })
   registry.load(scanned.providers)
   // Agent 对话（任务化）：**懒取** Agent 服务 —— 这里（第 159 行）比 assembleAgentServices
@@ -160,18 +171,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 用闭包延迟到第一次任务提交时才解析；Agent 关闭时不注册 provider，
   // /api/jobs 的 agent:chat 会明确报「未找到动作」。
   if (agentEnabled) {
-    registry.add(
-      createAgentChatProvider({
-        get config() { return agentServices().config },
-        loadSdk: () => agentServices().loadSdk(),
-        // 每拍部分文本 → 节点 data.text（batchNodes 串行锁内写，revision 变更经 SSE 推前端）
-        onPartialText: async (canvasId, nodeId, text) => {
-          const docFor = docPool.for(canvasId)
-          await docFor.batchNodes({ update: [{ id: nodeId, data: { text } }] })
-        },
-        onError: (message, err) => console.warn(message, err),
-      }),
-    )
+    registry.add(agentChatProvider())
   }
   /** providerId → 文件名（管理路由据此定位文件；同 id 多文件时后装载者胜） */
   const providerFileOf = new Map<string, string>()
@@ -840,6 +840,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     providerConfig.files = config.files
     const scanned = await loadProvidersFromDir(providersDir, { config })
     registry.replaceAll(scanned.providers)
+    // replaceAll 会清空整张表（删掉的 provider 的动作为了不残留，必须清）——
+    // 但内置的 agent-chat 不在目录里，清完必须补回来，否则「保存一次配置 / 改一次启停」
+    // Agent 对话动作就从菜单里消失了（用户实测）。
+    if (agentEnabled) registry.add(agentChatProvider())
     providerFileOf.clear()
     for (let i = 0; i < scanned.providers.length; i++) {
       providerFileOf.set(scanned.providers[i]!.id, scanned.files[i] ?? '')
@@ -874,14 +878,23 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       await writeProviderConfig(providerConfigFile, cfg)
       await reloadProviders()
     },
-    /** 删除一个 provider 文件（记入 deletedFiles，重启不再铺回） */
-    async deleteFile(file: string): Promise<void> {
+    /**
+     * 删除一个 provider 文件（记入 deletedFiles，重启不再铺回）。
+     * 文件不存在返回 false —— 内置平台（agent-chat 这类没有文件的）不能假装删成功。
+     */
+    async deleteFile(file: string): Promise<boolean> {
       if (!isSafeFileName(file)) throw new Error('非法文件名')
+      try {
+        await fs.access(path.join(providersDir, file))
+      } catch {
+        return false
+      }
       await fs.rm(path.join(providersDir, file), { force: true })
       const cfg = await readProviderConfig(providerConfigFile)
       if (!cfg.deletedFiles.includes(file)) cfg.deletedFiles.push(file)
       await writeProviderConfig(providerConfigFile, cfg)
       await reloadProviders()
+      return true
     },
     /** 保存一个文件的账号清单（整体替换该文件的账号） */
     async saveAccounts(file: string, accounts: ProviderConfigFile['files'][string]['accounts']): Promise<void> {

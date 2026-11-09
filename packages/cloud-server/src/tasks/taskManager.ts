@@ -147,8 +147,17 @@ export class TaskManager {
     }
     this.jobs.set(job.id, job)
 
-    // 提交帧：立刻写节点，用户马上能看到"排队中"
-    await this.writeRunState(job, { status: 'running', progress: 0, message: job.message, actionId: action.id, taskId: job.id, startedAt: job.createdAt })
+    /**
+     * 提交帧：立刻写节点，用户马上能看到「排队中」。
+     *
+     * 文本任务要**先清掉上一次的正文**：用户的输入此刻已经落进 data.text（底栏发送前写的），
+     * 不重新开始的话，模型吐第一个字之前节点上还挂着上一次的回答（实测踩到）。
+     */
+    await this.writeRunState(
+      job,
+      { status: 'running', progress: 0, message: job.message, actionId: action.id, taskId: job.id, startedAt: job.createdAt },
+      this.kindOf(action) === 'text' ? { text: '' } : undefined,
+    )
 
     const ctrl = new AbortController()
     this.cancels.set(job.id, ctrl)

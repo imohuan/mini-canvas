@@ -24,6 +24,8 @@ export interface AgentChatDeps {
   ctx: { tryGet<T>(name: string): T | undefined }
   /** 任务要写回的目标节点（后台把生成正文写进它的 data.text） */
   nodeId: string
+  /** 目标画布 id（多画布下必须显式给，否则任务会写进 default —— 实测踩到） */
+  canvasId: string
   /** 输入框里的正文 */
   prompt: Ref<string>
   /** 测试注入的 fetch（透传给下单；缺省全局 fetch） */
@@ -224,6 +226,7 @@ export function useAgentChat(deps: AgentChatDeps) {
     const r = await submitAgentChatJob({
       baseUrl: base,
       nodeId: deps.nodeId,
+      canvasId: deps.canvasId,
       provider: picked.provider,
       modelId: picked.modelId,
       prompt: deps.prompt.value,

@@ -26,6 +26,12 @@ export function currentCanvasId(): string {
 export interface AgentJobInput {
   baseUrl: string
   nodeId: string
+  /**
+   * 目标画布 id。**必须由调用方显式给**（底栏从 URL / 宿主拿）。
+   * 多画布下靠 currentCanvasId() 的 URL 兜底会写错画布：任务跑进 default，
+   * 用户在当前画布上看不到任何变化（实测踩到）。
+   */
+  canvasId: string
   provider: string
   modelId: string
   prompt: string
@@ -51,7 +57,8 @@ export async function submitAgentChatJob(opts: AgentJobInput): Promise<AgentJobS
       method: 'POST',
       headers: withAdminToken({ 'content-type': 'application/json' }),
       body: JSON.stringify({
-        canvasId: currentCanvasId(),
+        // 用调用方显式给的画布（见 AgentJobInput.canvasId 的说明），不靠 URL 猜
+        canvasId: opts.canvasId || currentCanvasId(),
         nodeId: opts.nodeId,
         actionId: 'agent:chat',
         prompts: [{ type: 'prompt', value: opts.prompt }],

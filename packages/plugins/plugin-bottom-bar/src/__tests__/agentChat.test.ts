@@ -175,6 +175,7 @@ describe('submitAgentChatJob：提交任务给后台', () => {
       const r = await submitAgentChatJob({
         baseUrl: 'http://127.0.0.1:8865',
         nodeId: 'n9',
+        canvasId: 'acme-canvas',
         provider: 'deepseek',
         modelId: 'deepseek-v4.1-flash',
         prompt: '画一个小猫',
@@ -195,6 +196,21 @@ describe('submitAgentChatJob：提交任务给后台', () => {
     },
   )
 
+  it('画布 id 用调用方显式传的那张（不能靠 URL 猜 —— 否则多画布写错画布，实测踩到）', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const { f, calls } = fetchOk()
+    await submitAgentChatJob({
+      baseUrl: 'http://127.0.0.1:8865',
+      nodeId: 'n9',
+      canvasId: 'canvas-xyz',
+      provider: 'p',
+      modelId: 'm',
+      prompt: 'x',
+      fetchImpl: f,
+    })
+    expect(calls[0]!.body.canvasId).toBe('canvas-xyz')
+  })
+
   it(
     'useAgentChat.send 走下单而不是直连对话接口（不再请求 /api/agent/chat/completion）',
     async () => {
@@ -208,6 +224,7 @@ describe('submitAgentChatJob：提交任务给后台', () => {
       const chat = useAgentChat({
         ctx: { tryGet: () => undefined },
         nodeId: 'n1',
+        canvasId: 'c1',
         prompt,
         fetchImpl: f,
       })

@@ -1,16 +1,18 @@
-/** agentChatProvider —— 把 Agent 的单轮对话接进任务系统（内置 provider）。
+/**
+ * agentChatProvider —— 把 Agent 的单轮对话接进任务系统（内置 provider）。
  *
  * 用户口径 2026-11-09：底栏点发送 = 提交任务给后台；后台调模型、边生成边写节点，
  * 前端跟随画布 revision 更新 —— 不再是前端直连对话接口。
  *
- * 动作 id 固定 agent:chat（前端提交任务时用它）。submit 是长跑的：内部自己驱动
- * SDK 流，把每拍累计文本经 deps.onPartialText 写进节点，全部生成完才返回。
- * 因此不需要 poll —— 取消靠 AbortSignal（createJob 已接），进度靠 onPartialText。
+ * ## 为什么是「submit 立即返回 taskId + poll 拍往返」
+ *
+ * 第一版把整段生成塞进 submit 里跑完再返回，结果节点一直停在 0%：
+ * TaskManager 只在 poll 那一拍写进度帧，长跑型 submit 期间**一帧都不写**（用户实测）。
+ * 所以改成标准的异步 provider：submit 起一个后台生成循环、立刻返回 taskId；
+ * poll 每拍把「累计文本 + 进度 + 阶段文案」交回 TaskManager，由它统一写节点。
+ * 这样卡片有真实进度、输入框也能边生成边长字。
  */
-import type { ActionDef, JobInput, Provider } from '../providers/types.js'
-
-/** 每拍部分文本的落点（TaskManager 的 writeRunState extra） */
-export type PartialTextSink = (canvasId: string, nodeId: string, text: string) => Promise<void>
+import type { ActionDef, JobInput, Provider, ProviderPollResult } from '../providers/types.js'
 
 /** Agent 能力（server.ts 注入；Agent 关闭时整个 provider 不注册） */
 export interface AgentChatDeps {
@@ -26,8 +28,6 @@ export interface AgentChatDeps {
     }>
   }
   loadSdk: () => Promise<unknown>
-  /** 把部分文本写进节点正文（data.text，与前端输入框绑定同一字段） */
-  onPartialText: PartialTextSink
   onError?: (message: string, err?: unknown) => void
 }
 
@@ -36,10 +36,11 @@ export const AGENT_CHAT_ACTION_ID = 'agent:chat'
 /** SDK 的最小面（真实现是 @prismshadow/penguin-core；单测注入假的） */
 interface SdkLike {
   GenerativeModel: new (cfg: Record<string, unknown>) => {
-    streamGenerate(p: {
-      newMessages: unknown[]
-      signal?: AbortSignal
-    }): AsyncGenerator<unknown, { status: string; errorMessage?: string }, void>
+    streamGenerate(p: { newMessages: unknown[]; signal?: AbortSignal }): AsyncGenerator<
+      unknown,
+      { status: string; errorMessage?: string },
+      void
+    >
   }
   userText(t: string): unknown
   imageUrlMessage(u: string): unknown
@@ -75,28 +76,36 @@ function resourcesOf(resources: JobInput['resources']): { texts: string[]; image
   return { texts, images }
 }
 
-/** 动作声明：模型与渠道由前端下单时透传（provider 作者字段的惯用法） */
+/** 一次生成在后台的状态（轮询读它） */
+interface LiveRun {
+  status: 'running' | 'done' | 'error'
+  text: string
+  progress: number
+  message?: string
+  error?: string
+}
+
+/** 动作声明（模型与渠道由前端下单时放进 values 透传） */
 const ACTION: ActionDef = {
   id: AGENT_CHAT_ACTION_ID,
   title: 'Agent 对话',
   description: '文本节点直接问模型：任务化执行，边生成边写进节点',
   nodeTypes: ['text'],
   needsPrompt: true,
+  /** 文本生成大多十几秒：1s 拍一次，进度与流式文本都快 */
+  pollIntervalMs: 1_000,
   pollTimeoutMs: 300_000,
 }
 
 export function createAgentChatProvider(deps: AgentChatDeps): Provider {
+  /** provider 自己的任务号 → 后台生成状态 */
+  const runs = new Map<string, LiveRun>()
   return {
     id: 'agent-chat',
     actions: [ACTION],
-    /**
-     * @param signal 取消信号（TaskManager.createJob 接的 AbortController；
-     *   用户在节点上点「取消」→ 后台 abort → SDK 流停止 → submit 返回失败终态）。
-     */
-    async submit(_action, input, signal) {
-      // 前端下单时把选中模型放进 values（JobInput 的五个字段里最合适透传自定义数据的一个）：
-      // agentModel = 模型 id、agentProvider = 渠道 id。没给则落到项目默认模型
-      // （与 Agent 会话同一条解析规则）。
+
+    /** 起一次生成：立刻返回 taskId，真正跑在后台（poll 读状态） */
+    async submit(_action, input) {
       const v = (input.values ?? {}) as Record<string, unknown>
       const modelId = typeof v.agentModel === 'string' ? v.agentModel : ''
       const providerId = typeof v.agentProvider === 'string' && v.agentProvider ? v.agentProvider : undefined
@@ -110,52 +119,127 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
         return { error: '模型未配好凭据（' + (resolved.provider ?? providerId ?? '?') + ' / ' + (resolved.modelId ?? modelId) + '）。去「设置 → Agent → 模型」里配好再试。' }
       }
 
-      const user = promptsText(input.prompts)
-      const { texts, images } = resourcesOf(input.resources)
-      const fullPrompt = [user, ...texts].filter(Boolean).join('\n\n')
-
-      const sdk = (await deps.loadSdk()) as SdkLike
-      const llm = new sdk.GenerativeModel({
-        modelId: resolved.modelId ?? modelId,
-        ...(resolved.apiKey ? { apiKey: resolved.apiKey } : {}),
-        ...(resolved.baseUrl ? { baseUrl: resolved.baseUrl } : {}),
-        // 协议一定要带上：别名模型（如 deepseek-auto）SDK 猜不出协议会直接抛
-        ...(resolved.clientType ? { clientType: resolved.clientType } : {}),
-        ...(resolved.contextWindow ? { contextWindow: resolved.contextWindow } : {}),
-        tools: [],
-        thinkingLevel: 'none',
-        requestTimeoutMs: 300_000,
+      const taskId = nextTaskId()
+      // 起手就报 5%：「提交成功、正在连接」，避免第一拍之前一直停在 0%。
+      // 之后每拍按已生成字数往上推（文本模型没有真实百分比）。
+      runs.set(taskId, { status: 'running', text: '', progress: 5, message: '正在连接模型…' })
+      // 后台跑：不 await（submit 要立刻返回）；异常收进 states，poll 会报成 error
+      void runGeneration(taskId, resolved, input).catch((err) => {
+        // 兜底：runGeneration 自己会把失败写进 runs；这里只补「它整个抛了」的情况
+        deps.onError?.('[agent-chat] 生成循环异常', err)
+        const cur = runs.get(taskId)
+        if (cur && cur.status === 'running') {
+          cur.status = 'error'
+          cur.error = err instanceof Error ? err.message : String(err)
+        }
       })
-      const messages: unknown[] = []
-      if (fullPrompt !== '') messages.push(sdk.userText(fullPrompt))
-      for (const img of images) messages.push(sdk.imageUrlMessage(img))
-      if (messages.length === 0) messages.push(sdk.userText(''))
+      return { taskId }
+    },
 
-      let acc = ''
-      const gen = llm.streamGenerate({ newMessages: messages, ...(signal ? { signal } : {}) })
-      for (;;) {
-        const step = await gen.next()
-        if (step.done) {
-          if (step.value?.status !== 'completed') {
-            return { error: step.value?.errorMessage || '对话失败' }
-          }
-          break
-        }
-        const d = deltaOf(step.value)
-        if (d) {
-          acc += d
-          // 每拍整段覆盖式写入：batchNodes 内部有串行锁，revision 变更经 SSE 推给前端，
-          // 输入框与节点正文跟着长字。写失败不挡生成（节点可能已被删）。
-          try {
-            await deps.onPartialText(input.canvasId, input.nodeId, acc)
-          } catch (err) {
-            deps.onError?.('[agent-chat] 写流式文本失败（节点可能已被删）', err)
-          }
-        }
-        const fin = finalOf(step.value)
-        if (fin !== undefined) acc = fin
+    /** 拍一次：累计文本 + 进度 + 阶段文案；done 时带上最终正文 */
+    async poll(taskId) {
+      const st = runs.get(taskId)
+      if (!st) return { status: 'error', error: '任务在后台已不存在（可能服务重启过）' }
+      if (st.status === 'done') {
+        return { status: 'done', text: st.text } as ProviderPollResult
       }
-      return { done: true, text: acc }
+      if (st.status === 'error') {
+        return { status: 'error', error: st.error ?? '对话失败' } as ProviderPollResult
+      }
+      return {
+        status: 'running',
+        progress: st.progress,
+        ...(st.message ? { message: st.message } : {}),
+        /** 流式预览：TaskManager 把它写进 node.data.text（整段覆盖） */
+        ...(st.text ? { partialText: st.text } : {}),
+      } as ProviderPollResult
+    },
+
+    /** 取消：标记收敛即可（生成循环下一帧发现自己被弃用就停） */
+    async cancel(taskId) {
+      const st = runs.get(taskId)
+      if (st) st.status = 'error'
+      runs.delete(taskId)
     },
   }
+
+  /** 驱动 SDK 流，把「累计正文 / 进度 / 阶段」写进 runs[taskId] */
+  async function runGeneration(
+    taskId: string,
+    resolved: Awaited<ReturnType<AgentChatDeps['config']['resolveModel']>>,
+    input: JobInput,
+  ): Promise<void> {
+    const user = promptsText(input.prompts)
+    const { texts, images } = resourcesOf(input.resources)
+    const fullPrompt = [user, ...texts].filter(Boolean).join('\n\n')
+
+    const sdk = (await deps.loadSdk()) as SdkLike
+    const llm = new sdk.GenerativeModel({
+      modelId: resolved.modelId ?? ACTION.id,
+      ...(resolved.apiKey ? { apiKey: resolved.apiKey } : {}),
+      ...(resolved.baseUrl ? { baseUrl: resolved.baseUrl } : {}),
+      // 协议一定要带上：别名模型（如 deepseek-auto）SDK 猜不出协议会直接抛
+      ...(resolved.clientType ? { clientType: resolved.clientType } : {}),
+      ...(resolved.contextWindow ? { contextWindow: resolved.contextWindow } : {}),
+      tools: [],
+      thinkingLevel: 'none',
+      requestTimeoutMs: 300_000,
+    })
+    const messages: unknown[] = []
+    if (fullPrompt !== '') messages.push(sdk.userText(fullPrompt))
+    for (const img of images) messages.push(sdk.imageUrlMessage(img))
+    if (messages.length === 0) messages.push(sdk.userText(''))
+
+    const gen = llm.streamGenerate({ newMessages: messages })
+    let acc = ''
+    const startedAt = Date.now()
+    let status = 'completed'
+    let errorMessage: string | undefined
+    for (;;) {
+      const step = await gen.next()
+      const st = runs.get(taskId)
+      if (!st || st.status === 'error') return // 被取消了：不再写
+      if (step.done) {
+        status = step.value?.status ?? 'completed'
+        errorMessage = step.value?.errorMessage
+        break
+      }
+      const d = deltaOf(step.value)
+      if (d) {
+        acc += d
+        st.text = acc
+        st.message = '生成中…'
+        // 文本模型没有真实百分比（上游只吐字，不报进度）。这里用**时间**推：
+        //   · 0~3s 慢慢从 5 → 30（先让卡片看起来"动起来"）
+        //   · 之后每秒再 +2，封顶 95（剩下的留给终态）
+        // 纯按字数算会很难看：中文一句话才二三十字，长回复能卡在 10% 好几分钟（实测）。
+        const elapsed = Date.now() - startedAt
+        const byTime = elapsed < 3000 ? 5 + Math.floor((elapsed / 3000) * 25) : 30 + Math.floor((elapsed - 3000) / 1000) * 2
+        st.progress = Math.min(95, Math.max(st.progress, byTime))
+      }
+      const fin = finalOf(step.value)
+      if (fin !== undefined) {
+        acc = fin
+        st.text = acc
+      }
+    }
+    const st = runs.get(taskId)
+    if (!st || st.status === 'error') return
+    if (status !== 'completed') {
+      st.status = 'error'
+      st.error = errorMessage || '对话失败'
+      return
+    }
+    st.status = 'done'
+    st.text = acc
+    st.progress = 100
+    st.message = '已完成'
+  }
+}
+
+/** provider 内部任务号（单进程够用；只用来做 Map 键） */
+let seq = 0
+function nextTaskId(): string {
+  seq += 1
+  return 'agentchat-' + Date.now().toString(36) + '-' + seq.toString(36)
 }

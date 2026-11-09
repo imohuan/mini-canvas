@@ -1,6 +1,7 @@
 export { useBottomBarActions } from './useBottomBarActions'
 export { useBottomBarPrompt } from './useBottomBarPrompt'
 export { useAgentChat, readBarModelChoice, choiceStillValid, requestAgentChat } from './useAgentChat'
+export { submitAgentChatJob, currentCanvasId } from './agentJobSubmit'
 export type { BarModelChoice } from './useAgentChat'
 export { useBottomBarMaterials } from './useBottomBarMaterials'
 export { useBottomBarPersistence } from './useBottomBarPersistence'
