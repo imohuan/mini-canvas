@@ -35,8 +35,22 @@ export function actionsRoutes(
       const accounts = accountsOf?.(p.id) ?? []
       const defaultAccount = accounts.find((a) => a.default)?.id ?? accounts[0]?.id ?? ''
       for (const a of p.actions) {
+        /**
+         * 把「这条动作能不能取消」变成前端看得见的字段（用户 2026-11-10）。
+         *
+         * 函数没法过 JSON，所以这里只导出一个布尔：动作自己声明了 cancel、
+         * 或者 provider 提供了平台级 cancel 才算能取消。前端据此决定画不画取消按钮 ——
+         * 不能取消的动作就不该给用户一个点了没反应的按钮。
+         */
+        const cancellable = typeof a.cancel === 'function' || typeof p.cancel === 'function'
         out.push({
           ...a,
+          // 动作自带的执行函数不过线（前端不认识、也不该认识）
+          submit: undefined,
+          poll: undefined,
+          cancel: undefined,
+          resume: undefined,
+          cancellable,
           ...(icon ? { providerIcon: icon } : {}),
           ...(accounts.length > 1
             ? {

@@ -132,6 +132,14 @@ const NO_TASK_ID_GRACE_MS = 30_000
 /** 执行服务：run / cancel / restoreAll。runState 写盘走 doc.updateNodeRuntime（不进撤销栈）。 */
 export class NodeTaskService extends Service {
   private cancels = new Map<string, AbortController>()
+  /**
+   * 节点 → 外部取消函数（不在本服务里跑的任务用）。
+   *
+   * 文本对话是底栏直接 `POST /api/jobs` 下的单，没有经过 runAction，
+   * 所以 `cancels` 里没有它的句柄 —— 取消按钮点了就是空的。
+   * 这类任务提交时把「怎么取消」登记进来，覆盖层的取消按钮统一走这里。
+   */
+  private externalCancels = new Map<string, () => void | Promise<void>>()
 
   constructor(ctx: Context) {
     super(ctx, 'nodeTask')
@@ -200,6 +208,47 @@ export class NodeTaskService extends Service {
   /** 取消某节点正在跑的任务（覆盖层「取消」按钮） */
   cancel(nodeId: string): void {
     this.cancels.get(nodeId)?.abort()
+    // 外部登记的任务（文本对话直连后台下单的）：调用它自己的取消实现
+    const external = this.externalCancels.get(nodeId)
+    if (external) {
+      this.externalCancels.delete(nodeId)
+      void Promise.resolve()
+        .then(() => external())
+        .catch(() => {
+          /* 取消失败不抛给 UI：本地已经当作取消，后台那一侧失败下次会被状态帧纠正 */
+        })
+    }
+  }
+
+  /**
+   * 登记「不在本服务里跑的任务」的取消实现（文本对话用）。
+   *
+   * 返回一个注销函数：任务结束时调用，避免节点上留着一条过期回调，
+   * 下次取消时误伤新任务。
+   */
+  registerExternalCancel(nodeId: string, fn: () => void | Promise<void>): () => void {
+    this.externalCancels.set(nodeId, fn)
+    return () => {
+      if (this.externalCancels.get(nodeId) === fn) this.externalCancels.delete(nodeId)
+    }
+  }
+
+  /**
+   * 本节点当前那条任务**能不能取消**（覆盖层据此决定画不画取消按钮）。
+   *
+   * 用户 2026-11-10：有些任务没法取消，就不该给用户一个点了没反应的按钮。
+   * 判定顺序：节点 runState.actionId → 动作是否声明可取消（cancellable）或带 onCancel。
+   * 查不到动作时返回 false（宁可不画，也不给假按钮）。
+   */
+  canCancel(nodeId: string): boolean {
+    // 外部登记了取消实现 → 一定能取消（文本对话走这条）
+    if (this.externalCancels.has(nodeId)) return true
+    const rs = readRunState(this.doc().getNode(nodeId)?.data)
+    if (rs.status !== 'running' || !rs.actionId) return false
+    const action = this.lookup().get(rs.actionId)
+    if (!action) return false
+    if (typeof action.cancellable === 'boolean') return action.cancellable
+    return typeof action.onCancel === 'function'
   }
 
   /**

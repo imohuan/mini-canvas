@@ -90,6 +90,13 @@ export interface BarAction {
   resume?(taskId: string, runCtx: BarRunContext): ToolPollFn | undefined
   /** 取消一个已经在服务端排队的任务 */
   onCancel?(taskId: string, runCtx: BarRunContext): void | Promise<void>
+  /**
+   * 这条动作能否取消。
+   *
+   * 由发布方声明（用户 2026-11-10）：有些动作根本没有取消通道，给它画一个取消按钮
+   * 只会让用户点了没反应。没声明时按「有没有 onCancel」推断 —— 老动作不用改。
+   */
+  cancellable?: boolean
 }
 
 /** 结果写入器：把动作产物写进节点（走 doc.updateNode，是作品、进历史） */

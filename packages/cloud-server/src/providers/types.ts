@@ -125,9 +125,42 @@ export interface ActionDef {
    * （用户 2026-11-10：点发送立刻要看到 `0tokens`，不是等一两秒再变）。
    */
   progressDisplay?: { suffix?: string; startValue?: number }
+  /**
+   * 本动作**自己的执行方式**（用户 2026-11-10）。
+   *
+   * 为什么放在动作上而不是 provider 上：一个 provider 文件里常常声明好几条动作，
+   * 它们的执行逻辑差别很大（有的能取消、有的不能；有的有服务端任务号、有的是本地
+   * 长跑；有的轮询节奏不同）。挂在 provider 上的 `submit/poll/cancel` 只有一份，
+   * 分不清哪条动作支持什么 —— 于是「取消」按钮对不支持的节点也照画、点了没反应。
+   *
+   * 给了这里的函数就用它；没给就回落到 provider 上的同名函数（老 provider 不用改）。
+   */
+  submit?: ProviderActionSubmit
+  poll?: (taskId: string, ctx: ActionRunContext) => Promise<ProviderPollResult>
+  /**
+   * 取消这条动作产出的任务。**声明了才代表这条动作真的能取消** ——
+   * 前端据此决定显不显示「取消」按钮，后台据此决定要不要发取消。
+   */
+  cancel?: (taskId: string, ctx: ActionRunContext) => Promise<void> | void
+  /** 刷新后接着查（有服务端任务号的动作才有意义） */
+  resume?: (taskId: string, ctx: ActionRunContext) => Promise<ProviderPollResult>
   /** provider 可以塞自己的东西；内核与前端都不读 */
   [k: string]: unknown
 }
+
+/** 动作自带的执行上下文（与 provider 级函数拿到的形参一致） */
+export interface ActionRunContext {
+  /** 完整动作声明（provider 自己塞的字段从这里读） */
+  action: ActionDef
+  /** 下单时的入参（取消 / 续查时为 undefined） */
+  input?: JobInput
+}
+
+/** 动作自带的投递函数（返回服务端任务号 / 立即完成 / 失败） */
+export type ProviderActionSubmit = (
+  ctx: ActionRunContext,
+  signal?: AbortSignal,
+) => Promise<ProviderSubmitResult>
 
 /** 一次任务提交的入参（前端下单时给的） */
 export interface JobInput {

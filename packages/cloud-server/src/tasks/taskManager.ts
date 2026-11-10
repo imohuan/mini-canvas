@@ -222,9 +222,20 @@ export class TaskManager {
     if (job.providerTaskId) {
       const provider = this.deps.registry.providerOf(job.actionId)
       const action = this.deps.registry.getAction(job.actionId)
-      if (provider?.cancel && action) {
+      if (!action) return true
+      /**
+       * 取消走**动作自己声明的那一个**（用户 2026-11-10）。
+       *
+       * 以前只认 provider 级的 `cancel`：一个文件里多条动作共用一份，
+       * 分不清谁支持取消，于是对不支持的动作也发取消（并且点了没反应）。
+       * 动作自己没声明 cancel、provider 也没有，就跳过 —— 调用方据此提示「这条不可取消」。
+       */
+      const actionCancel = action.cancel
+      const providerCancel = provider?.cancel
+      if (actionCancel || providerCancel) {
         try {
-          await provider.cancel(job.providerTaskId, action)
+          if (actionCancel) await actionCancel(job.providerTaskId, { action })
+          else if (providerCancel) await providerCancel(job.providerTaskId, action)
         } catch (err) {
           // 服务端取消失败不改变"本地已取消"这个事实（用户已经看到取消了）
           this.deps.onError?.('[tasks] 服务端取消失败', err)
@@ -392,7 +403,10 @@ export class TaskManager {
 
     try {
       // 取消信号透传给 provider：长跑型（Agent 对话）靠它响应节点上的「取消」
-      const submitted = await provider.submit(action, input, signal)
+      // 动作自带的投递函数优先（一个 provider 里多条动作各用各的），没声明才回落到 provider 级
+      const submitted = action.submit
+        ? await action.submit({ action, input }, signal)
+        : await provider.submit(action, input, signal)
 
       // 提交即完成（同步生成）
       if ('done' in submitted) {
@@ -429,7 +443,11 @@ export class TaskManager {
           return this.finish(job, action, { ok: false, error: '任务超时（已等待 ' + minutes + ' 分钟）' })
         }
 
-        const poll = provider.poll ? await provider.poll(submitted.taskId, action) : { status: 'running' as const }
+        const poll = action.poll
+          ? await action.poll(submitted.taskId, { action })
+          : provider.poll
+            ? await provider.poll(submitted.taskId, action)
+            : { status: 'running' as const }
         // 这一拍如果是「等外部条件」（过验证码 / 换号退避），把它耗掉的时间记进 waitingMs
         if (poll.waiting) waitingMs += Math.max(0, this.now() - lastPollAt)
         lastPollAt = this.now()

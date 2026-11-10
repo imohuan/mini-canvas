@@ -28,7 +28,12 @@ function makeRegistry(): NodeRegistry {
   return x
 }
 
-function renderNode(registry: NodeRegistry, data: Record<string, unknown>): Promise<string> {
+function renderNode(
+  registry: NodeRegistry,
+  data: Record<string, unknown>,
+  /** 额外注入的服务（例如 nodeTask：取消按钮要不要画靠它回答） */
+  extraServices: Record<string, unknown> = {},
+): Promise<string> {
   const refOf = (v: unknown) => ({ value: v })
   const types = new Map([
     ['text', { type: 'text', label: '文本', defaultSize: { w: 300, h: 200 } }],
@@ -37,6 +42,7 @@ function renderNode(registry: NodeRegistry, data: Record<string, unknown>): Prom
     doc: { types, getNode: () => undefined, updateNode: () => {} },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
     selection: { ids: new Set<string>(), has: () => false, onChange: () => () => {} },
+    ...extraServices,
   }
   const renderCtx = {
     ctx: { get: (n: string) => services[n], tryGet: (n: string) => services[n] },
@@ -135,5 +141,28 @@ describe('加载 UI：全局唯一一件，字段由后台给', () => {
       runState: { status: 'running', progress: 40, value: 40, suffix: 'tokens', tail: '正在讲这个词的来历' },
     })
     expect(html).toContain('正在讲这个词的来历')
+  })
+
+  /**
+   * 用户 2026-11-10：有些任务根本没法取消，就不该给一个点了没反应的按钮。
+   * 判定交给底栏的 nodeTask.canCancel（它按「动作有没有声明取消」回答）。
+   */
+  it('★ 动作不支持取消 → 不画取消按钮', async () => {
+    const html = await renderNode(
+      r,
+      { text: '', runState: { status: 'running', progress: 10, value: 3, suffix: 'tokens' } },
+      { nodeTask: { cancel: () => {}, canCancel: () => false } },
+    )
+    expect(html).toContain('nls-root is-fill')
+    expect(html).not.toContain('v2-task-cancel')
+  })
+
+  it('★ 动作支持取消 → 照常画取消按钮', async () => {
+    const html = await renderNode(
+      r,
+      { text: '', runState: { status: 'running', progress: 10, value: 3, suffix: 'tokens' } },
+      { nodeTask: { cancel: () => {}, canCancel: () => true } },
+    )
+    expect(html).toContain('v2-task-cancel')
   })
 })

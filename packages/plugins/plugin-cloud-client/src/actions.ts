@@ -39,6 +39,11 @@ export interface BarActionLike {
   pollTimeoutMs?: number
   /** 状态由外部管（后台会写节点进度）—— 底栏据此不写本地 runState */
   externalRunState?: boolean
+  /**
+   * 这条动作能否取消（后台按「动作声明了 cancel」算出来）。
+   * 底栏取消按钮据此显示 —— 不能取消的动作不给点了没反应的按钮。
+   */
+  cancellable?: boolean
   run?: (...args: never[]) => unknown
   resume?: (...args: never[]) => unknown
   onCancel?: (...args: never[]) => unknown
@@ -71,6 +76,7 @@ export function toBarAction(
   ...(typeof def.providerIcon === 'string' && def.providerIcon.trim() !== ''
     ? { providerIcon: def.providerIcon }
     : {}),
+  ...(def.cancellable === true ? { cancellable: true } : {}),
   }
   /*
    * 多账号：清单必须原样带下去（用户 2026-11-10 反馈「二级菜单还没做」）。

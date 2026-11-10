@@ -111,7 +111,7 @@ function estimateStats(text: string): { chars: number; tokens: number } {
 }
 
 /** 动作声明（模型与渠道由前端下单时放进 values 透传） */
-const ACTION: ActionDef = {
+const BASE_ACTION: ActionDef = {
   id: AGENT_CHAT_ACTION_ID,
   title: 'Agent 对话',
   description: '文本节点直接问模型：任务化执行，边生成边写进节点',
@@ -127,78 +127,121 @@ const ACTION: ActionDef = {
 export function createAgentChatProvider(deps: AgentChatDeps): Provider {
   /** provider 自己的任务号 → 后台生成状态 */
   const runs = new Map<string, LiveRun>()
+  /**
+   * 任务号 → 中断手柄。
+   *
+   * 取消时**必须真的掐断上游生成流**（用户 2026-11-10：「文本的取消没有效果」）。
+   * 只把状态标成 error 的话，SDK 那边的 streamGenerate 还在继续吐字、继续花额度；
+   * 这里存一个 AbortController，cancel 时 abort，生成循环里的 signal 立刻生效。
+   */
+  const aborts = new Map<string, AbortController>()
+
+  /**
+   * 这条动作**自己的**执行方式（用户 2026-11-10：执行逻辑跟着 action 走）。
+   *
+   * 挂在 ACTION 上而不是 provider 上：一个 provider 可能有很多动作，各自能不能取消、
+   * 怎么投递、怎么续查都不一样；写在动作上，前端才敢只给「真能取消」的节点画按钮。
+   */
+  const ACTION: ActionDef = {
+    ...BASE_ACTION,
+    /** 投递：解析模型 → 起后台生成循环 → 立刻返回任务号 */
+    submit: async ({ input }) => submitAction(input ?? { canvasId: '', nodeId: '', actionId: AGENT_CHAT_ACTION_ID }),
+    /** 拍一次：累计正文 / 进度 / 展示字段 */
+    poll: async (taskId) => pollAction(taskId),
+    /** 取消：把这次生成标记成 error，生成循环下一拍就停，不再往节点写 */
+    cancel: async (taskId) => {
+      const st = runs.get(taskId)
+      if (st && st.status === 'running') {
+        st.status = 'error'
+        st.error = '已取消'
+      }
+    },
+    /** 刷新后接着查：任务还在 runs 里就继续；服务重启过则明确报错，不留永远转圈 */
+    resume: async (taskId) => pollAction(taskId),
+  }
+
   return {
     id: 'agent-chat',
     title: 'Agent 对话',
     description: '内置平台：文本节点直接问 Agent 的默认模型',
     actions: [ACTION],
 
-    /** 起一次生成：立刻返回 taskId，真正跑在后台（poll 读状态） */
-    async submit(_action, input) {
-      const v = (input.values ?? {}) as Record<string, unknown>
-      const modelId = typeof v.agentModel === 'string' ? v.agentModel : ''
-      const providerId = typeof v.agentProvider === 'string' && v.agentProvider ? v.agentProvider : undefined
-      let resolved
-      try {
-        resolved = await deps.config.resolveModel(providerId, modelId || undefined)
-      } catch (err) {
-        return { error: '解析模型失败：' + (err instanceof Error ? err.message : String(err)) }
-      }
-      if (!resolved.configured) {
-        return { error: '模型未配好凭据（' + (resolved.provider ?? providerId ?? '?') + ' / ' + (resolved.modelId ?? modelId) + '）。去「设置 → Agent → 模型」里配好再试。' }
-      }
+    /**
+     * 平台级兜底：动作没自带执行函数时用这份（老写法 / 别的宿主仍然能跑）。
+     * 现在是 action 上挂了 submit/poll/cancel/resume，实际走的也是这几个同名函数 ——
+     * 一份实现两处引用，不会出现「两套逻辑各写一遍」的漂移。
+     */
+    submit: async (_action, input) => submitAction(input),
+    poll: async (taskId) => pollAction(taskId),
+    cancel: async (taskId) => cancelAction(taskId),
+  }
 
-      const taskId = nextTaskId()
-      // 起手就报 5%：「提交成功、正在连接」，避免第一拍之前一直停在 0%。
-      // 之后每拍按已生成字数往上推（文本模型没有真实百分比）。
-      runs.set(taskId, { status: 'running', text: '', progress: 5, message: '正在连接模型…' })
-      // 后台跑：不 await（submit 要立刻返回）；异常收进 states，poll 会报成 error
-      void runGeneration(taskId, resolved, input).catch((err) => {
-        // 兜底：runGeneration 自己会把失败写进 runs；这里只补「它整个抛了」的情况
-        deps.onError?.('[agent-chat] 生成循环异常', err)
-        const cur = runs.get(taskId)
-        if (cur && cur.status === 'running') {
-          cur.status = 'error'
-          cur.error = err instanceof Error ? err.message : String(err)
-        }
-      })
-      return { taskId }
-    },
+  /** 起一次生成：立刻返回 taskId，真正跑在后台（poll 读状态） */
+  async function submitAction(input: JobInput) {
+    const v = (input.values ?? {}) as Record<string, unknown>
+    const modelId = typeof v.agentModel === 'string' ? v.agentModel : ''
+    const providerId = typeof v.agentProvider === 'string' && v.agentProvider ? v.agentProvider : undefined
+    let resolved
+    try {
+      resolved = await deps.config.resolveModel(providerId, modelId || undefined)
+    } catch (err) {
+      return { error: '解析模型失败：' + (err instanceof Error ? err.message : String(err)) }
+    }
+    if (!resolved.configured) {
+      return { error: '模型未配好凭据（' + (resolved.provider ?? providerId ?? '?') + ' / ' + (resolved.modelId ?? modelId) + '）。去「设置 → Agent → 模型」里配好再试。' }
+    }
 
-    /** 拍一次：累计文本 + 进度 + 阶段文案；done 时带上最终正文 */
-    async poll(taskId) {
-      const st = runs.get(taskId)
-      if (!st) return { status: 'error', error: '任务在后台已不存在（可能服务重启过）' }
-      if (st.status === 'done') {
-        return { status: 'done', text: st.text } as ProviderPollResult
+    const taskId = nextTaskId()
+    // 起手就报 5%：「提交成功、正在连接」，避免第一拍之前一直停在 0%。
+    runs.set(taskId, { status: 'running', text: '', progress: 5, message: '正在连接模型…' })
+    const ctrl = new AbortController()
+    aborts.set(taskId, ctrl)
+    // 后台跑：不 await（submit 要立刻返回）；异常收进 states，poll 会报成 error
+    void runGeneration(taskId, resolved, input, ctrl.signal).catch((err) => {
+      deps.onError?.('[agent-chat] 生成循环异常', err)
+      const cur = runs.get(taskId)
+      if (cur && cur.status === 'running') {
+        cur.status = 'error'
+        cur.error = err instanceof Error ? err.message : String(err)
       }
-      if (st.status === 'error') {
-        return { status: 'error', error: st.error ?? '对话失败' } as ProviderPollResult
-      }
-      return {
-        status: 'running',
-        progress: st.progress,
-        ...(st.message ? { message: st.message } : {}),
-        /** 流式预览：TaskManager 把它写进 node.data.text（整段覆盖） */
-        ...(st.text ? { partialText: st.text } : {}),
-        /** 已产出量 → 节点 runState.stats（加载层显示「已输出 N 字 / ≈M tokens」） */
-        ...(st.stats ? { stats: st.stats } : {}),
-        /**
-         * 加载 UI 的大数字 + 单位 + 滚动小尾巴（用户 2026-11-10：这些由**后台**给，
-         * 前端只管画）。还没吐字时给 0，界面立刻是 `0tokens` 而不是 `21%`。
-         */
-        value: st.stats?.tokens ?? 0,
-        suffix: 'tokens',
-        ...(st.text ? { tail: st.text } : {}),
-      } as ProviderPollResult
-    },
+    }).finally(() => aborts.delete(taskId))
+    return { taskId }
+  }
 
-    /** 取消：标记收敛即可（生成循环下一帧发现自己被弃用就停） */
-    async cancel(taskId) {
-      const st = runs.get(taskId)
-      if (st) st.status = 'error'
-      runs.delete(taskId)
-    },
+  /** 拍一次：累计文本 + 进度 + 阶段文案；done 时带上最终正文 */
+  async function pollAction(taskId: string): Promise<ProviderPollResult> {
+    const st = runs.get(taskId)
+    if (!st) return { status: 'error', error: '任务在后台已不存在（可能服务重启过）' }
+    if (st.status === 'done') return { status: 'done', text: st.text }
+    if (st.status === 'error') return { status: 'error', error: st.error ?? '对话失败' }
+    return {
+      status: 'running',
+      progress: st.progress,
+      ...(st.message ? { message: st.message } : {}),
+      /** 流式预览：TaskManager 把它写进 node.data.text（整段覆盖） */
+      ...(st.text ? { partialText: st.text } : {}),
+      /** 已产出量 → 节点 runState.stats（加载层显示「已输出 N 字 / ≈M tokens」） */
+      ...(st.stats ? { stats: st.stats } : {}),
+      /**
+       * 加载 UI 的大数字 + 单位 + 滚动小尾巴（用户 2026-11-10：这些由**后台**给，
+       * 前端只管画）。还没吐字时给 0，界面立刻是 `0tokens` 而不是 `21%`。
+       */
+      value: st.stats?.tokens ?? 0,
+      suffix: 'tokens',
+      ...(st.text ? { tail: st.text } : {}),
+    }
+  }
+
+  /** 取消：标记收敛，生成循环下一拍看见就停（不删记录 —— 取消后还要能读到「已取消」） */
+  async function cancelAction(taskId: string): Promise<void> {
+    const st = runs.get(taskId)
+    if (!st) return
+    if (st.status === 'running') {
+      st.status = 'error'
+      st.error = '已取消'
+    }
+    // 真掐断上游生成流：只改状态的话 SDK 还在吐字、还在花钱
+    aborts.get(taskId)?.abort()
   }
 
   /** 驱动 SDK 流，把「累计正文 / 进度 / 阶段」写进 runs[taskId] */
@@ -206,6 +249,7 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
     taskId: string,
     resolved: Awaited<ReturnType<AgentChatDeps['config']['resolveModel']>>,
     input: JobInput,
+    signal: AbortSignal,
   ): Promise<void> {
     const user = promptsText(input.prompts)
     const { texts, images } = resourcesOf(input.resources)
@@ -228,7 +272,7 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
     for (const img of images) messages.push(sdk.imageUrlMessage(img))
     if (messages.length === 0) messages.push(sdk.userText(''))
 
-    const gen = llm.streamGenerate({ newMessages: messages })
+    const gen = llm.streamGenerate({ newMessages: messages, signal })
     let acc = ''
     const startedAt = Date.now()
 
@@ -249,6 +293,8 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
     let errorMessage: string | undefined
     try {
     for (;;) {
+      // 收到取消信号就退出循环（cancel 会 abort 这个 signal）
+      if (signal.aborted) return
       const step = await gen.next()
       const st = runs.get(taskId)
       if (!st || st.status === 'error') return // 被取消了：不再写（finally 会清定时器）

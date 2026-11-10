@@ -172,4 +172,58 @@ describe('agent:chat 任务化：后台边生成边写节点', () => {
     )
     expect((job.job!.result?.text ?? '').trim().length).toBeGreaterThan(0)
   }, 60_000)
+
+  /**
+   * 用户 2026-11-10：「文本模型的取消没有效果」。
+   *
+   * 取消必须真的生效：后台把生成流掐断、节点收敛成「已取消」、而且**不再继续往节点写正文**
+   *（只改状态不停流的话，模型还在吐字、还在花额度）。
+   */
+  it('取消真的生效：节点停止在「已取消」，正文不再增长', async () => {
+    const canvasId = 'agentchat3'
+    const nodeId = 't3'
+    await seedTextNode(canvasId, nodeId)
+    const r = await post({
+      canvasId,
+      nodeId,
+      actionId: AGENT_CHAT_ACTION_ID,
+      prompts: [{ type: 'prompt', value: '数到一百' }],
+      // 慢速生成，好在中途取消
+      values: { agentModel: 'test模型', agentProvider: 'test', duration: 6000 },
+    })
+    const jobId = String(r.json.jobId)
+
+    // 等它真的开始吐字（不是还没提交就取消）
+    await waitFor(
+      async () => await readNode(canvasId, nodeId),
+      (n) => typeof n.data.text === 'string' && (n.data.text as string).length > 5,
+    )
+
+    const cancelRes = await srv.app.fetch(
+      new Request('http://localhost/api/jobs/' + jobId + '/cancel', { method: 'POST' }),
+    )
+    expect(cancelRes.status).toBe(200)
+
+    // 收敛成「已取消」
+    const cancelled = await waitFor(
+      async () => await readNode(canvasId, nodeId),
+      (n) => (n.data.runState as { status?: string } | undefined)?.status === 'error',
+    )
+    const rs = cancelled.data.runState as { reason?: string; message?: string }
+    expect(rs.reason ?? rs.message).toContain('取消')
+
+    // 取消后正文不再增长（流真的被掐断了，不是只改了状态）
+    const lenAtCancel = String(cancelled.data.text ?? '').length
+    await new Promise((res) => setTimeout(res, 1500))
+    const after = await readNode(canvasId, nodeId)
+    expect(String(after.data.text ?? '').length).toBe(lenAtCancel)
+  }, 60_000)
+
+  /** 能取消的动作要在清单里标出来（前端靠它决定画不画取消按钮） */
+  it('/api/actions 把可按取消的 agent:chat 标成 cancellable', async () => {
+    const res = await srv.app.fetch(new Request('http://localhost/api/actions'))
+    const body = (await res.json()) as { actions?: Array<{ id: string; cancellable?: boolean }> }
+    const chat = (body.actions ?? []).find((a) => a.id === AGENT_CHAT_ACTION_ID)
+    expect(chat?.cancellable).toBe(true)
+  })
 })

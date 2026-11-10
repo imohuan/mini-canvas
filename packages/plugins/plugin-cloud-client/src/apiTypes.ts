@@ -26,6 +26,11 @@ export interface ServerAction {
   accounts?: Array<{ id: string; name?: string }>
   /** 平台默认账号 id（不选号时用它） */
   defaultAccount?: string
+  /**
+   * 这条动作能不能取消（后台按「动作自己声明了 cancel / 平台提供 cancel」算出来）。
+   * 底栏据此决定画不画取消按钮 —— 函数不能过 JSON，只能传这个布尔。
+   */
+  cancellable?: boolean
   [k: string]: unknown
 }
 

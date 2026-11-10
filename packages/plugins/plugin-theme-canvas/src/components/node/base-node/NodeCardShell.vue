@@ -153,8 +153,28 @@ const progressSuffix = computed(() => taskSuffix.value)
  * 为什么做成可选：加载覆盖层现在住在节点壳里，壳不允许依赖任何一个业务插件
  * （否则又是一条反向依赖）。没有该服务时按钮不渲染，只显示进度 —— 不报错、不假装能点。
  */
-const cancelTask = (ctx.tryGet?.<{ cancel(nodeId: string): void } | undefined>('nodeTask'))?.cancel
-const canCancel = computed(() => typeof cancelTask === 'function' && loading.value)
+const taskService = ctx.tryGet?.<{
+  cancel(nodeId: string): void
+  /** 本节点这条任务能不能取消（底栏按动作声明算）；旧宿主没有这个方法时当作能取消 */
+  canCancel?(nodeId: string): boolean
+}>('nodeTask')
+const cancelTask = taskService?.cancel
+/**
+ * 取消按钮只在「加载中 + 这条动作确实能取消」时出现（用户 2026-11-10）。
+ *
+ * 以前只看「加载中」：有些动作根本没有取消通道（没有 onCancel），按钮照画，
+ * 点了什么都不发生 —— 用户看到的就是「取消没效果」。
+ */
+const canCancel = computed(() => {
+  if (typeof cancelTask !== 'function' || !loading.value) return false
+  const ask = taskService?.canCancel
+  if (typeof ask !== 'function') return true
+  try {
+    return ask.call(taskService, props.id)
+  } catch {
+    return false
+  }
+})
 function onCancelTask(): void {
   if (typeof cancelTask === 'function') cancelTask(props.id)
 }
