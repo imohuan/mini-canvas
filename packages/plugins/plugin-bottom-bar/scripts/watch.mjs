@@ -168,7 +168,8 @@ async function buildOnce(reason) {
   const t0 = Date.now()
   try {
     await new Promise((resolve, reject) => {
-      const child = spawn('pnpm', ['build'], { cwd: PKG_ROOT, shell: true, stdio: 'pipe' })
+      // 纯命令字符串（无外部参数拼接）：避开 DEP0190（args+shell 参数不转义直接拼接）
+      const child = spawn('pnpm build', { cwd: PKG_ROOT, shell: true, stdio: 'pipe' })
       let out = ''
       child.stdout.on('data', (d) => { out += d })
       child.stderr.on('data', (d) => { out += d })

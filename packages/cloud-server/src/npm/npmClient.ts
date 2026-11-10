@@ -98,22 +98,41 @@ export function createNpmClient(opts: NpmClientOptions = {}) {
     // 用 node:http 而不是 fetch：vitest 环境里全局 fetch 的连接池与本地 http server 的
     // 短生命周期端口有 keep-alive 竞态（实测 ECONNREFUSED，同 URL fetch 探针却成功）。
     // http.get 每次新建连接，行为可预期。
+    // 超时与重定向：registry 可能 302 到 CDN，网络挂起不能永久卡住安装请求。
     const buf = await new Promise<Buffer>((resolve, reject) => {
       void (async () => {
         const { get } = await import('node:http')
         const { get: getHttps } = await import('node:https')
-        const getter = tarballUrl.startsWith('https:') ? getHttps : get
-        const req = getter(tarballUrl, (res) => {
-          if (res.statusCode !== 200) {
-            reject(new Error('下载 tarball 失败：HTTP ' + res.statusCode + '（' + tarballUrl + '）'))
-            res.resume()
-            return
-          }
-          const chunks: Buffer[] = []
-          res.on('data', (c: Buffer) => chunks.push(c))
-          res.on('end', () => resolve(Buffer.concat(chunks)))
-        })
-        req.on('error', reject)
+        let remaining = 5
+        let url = tarballUrl
+        const attempt = (): void => {
+          const getter = url.startsWith('https:') ? getHttps : get
+          const req = getter(url, (res) => {
+            // 跟随重定向（registry → CDN 常见 302/307），防跳转环最多 5 跳
+            if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              res.resume()
+              if (remaining-- <= 0) {
+                reject(new Error('下载 tarball 失败：重定向超过 5 次（' + tarballUrl + '）'))
+                return
+              }
+              url = new URL(res.headers.location, url).toString()
+              attempt()
+              return
+            }
+            if (res.statusCode !== 200) {
+              reject(new Error('下载 tarball 失败：HTTP ' + res.statusCode + '（' + tarballUrl + '）'))
+              res.resume()
+              return
+            }
+            const chunks: Buffer[] = []
+            res.on('data', (c: Buffer) => chunks.push(c))
+            res.on('end', () => resolve(Buffer.concat(chunks)))
+          })
+          req.on('error', reject)
+          // 连接/响应挂起兜底：destroy 会触发 error → reject，不会悬着
+          req.setTimeout(timeoutMs, () => req.destroy(new Error('下载 tarball 超时（' + timeoutMs + 'ms）：' + tarballUrl)))
+        }
+        attempt()
       })()
     })
     const fs = await import('node:fs')
@@ -139,8 +158,19 @@ export async function extractTarball(tgzFile: string, destDir: string): Promise<
   const { execFile } = await import('node:child_process')
   const { promisify } = await import('node:util')
   const { mkdir } = await import('node:fs/promises')
+  const run = promisify(execFile)
   await mkdir(destDir, { recursive: true })
+  // 先列目录再解包：拒绝绝对路径与 ../ 穿越（恶意 tarball 覆盖任意文件的经典路径）
+  const listing = await run('tar', ['-tzf', tgzFile])
+  for (const entry of listing.stdout.split(/\r?\n/)) {
+    const name = entry.trim()
+    if (!name) continue
+    const stripped = name.replace(/^package\//, '')
+    if (path.isAbsolute(stripped) || stripped.split('/').includes('..')) {
+      throw new Error('tarball 含非法路径条目（拒绝解包）：' + name)
+    }
+  }
   // GNU tar 与 bsdtar（Windows 自带）都支持 -xzf 与 --strip-components
-  await promisify(execFile)('tar', ['-xzf', tgzFile, '-C', destDir, '--strip-components=1'])
+  await run('tar', ['-xzf', tgzFile, '-C', destDir, '--strip-components=1'])
   return path.join(destDir, 'package.json')
 }

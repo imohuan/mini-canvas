@@ -266,7 +266,6 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     }
     const vInfo = pk.versions[version] as unknown as { tarball?: string; dist?: { tarball: string }; miniCanvas?: Record<string, unknown> } & Record<string, unknown>
     const tarballUrl = vInfo.tarball ?? vInfo.dist?.tarball
-    console.log('[npm] tarballUrl:', tarballUrl)
     const mini = vInfo.miniCanvas as Record<string, unknown> | undefined
     // ③ installable 校验
     // ③ 是不是插件：看结构（pluginName + web/server 入口），不看 installable
@@ -360,7 +359,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       }
     } catch (err) {
       const cause = (err as { cause?: Error })?.cause
-      if (cause) console.log('[npm] downloadTarball cause:', cause.message)
+      if (cause) console.error('[npm] downloadTarball cause:', cause.message)
       return { status: 502, body: { ok: false, error: err instanceof Error ? err.message : String(err) } }
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
