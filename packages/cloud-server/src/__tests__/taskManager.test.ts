@@ -251,6 +251,29 @@ describe('下单', () => {
 })
 
 describe('异步推进到终态', () => {
+  /**
+   * 卡片上那行状态文案直接来自节点里的 runState.message，
+   * 所以必须在后台就把上游的英文词翻成中文（用户 2026-11-10）。
+   */
+  it('上游状态词翻成中文再写进节点', async () => {
+    let polls = 0
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll(): Promise<ProviderPollResult> {
+        polls += 1
+        if (polls < 4) return { status: 'running', progress: polls * 20, message: 'queued' }
+        return { status: 'done', urls: ['https://x/1.png'] }
+      },
+    }
+    const { tasks } = await setup(p)
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    // 第一拍进度落地后就能读到 job.message
+    expect(await waitFor(() => (tasks.getJob(job.id)?.message ?? '') === '排队中')).toBe(true)
+    expect(tasks.getJob(job.id)?.message).not.toMatch(/queued/i)
+    await waitFor(() => tasks.getJob(job.id)?.status === 'done')
+  })
   it('进度写进节点，终态写 done + 归档一笔历史', async () => {
     let polls = 0
     const p: Provider = {
