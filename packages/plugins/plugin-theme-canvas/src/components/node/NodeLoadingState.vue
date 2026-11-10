@@ -314,15 +314,12 @@ onBeforeUnmount(() => {
       </div>
 
       <!--
-        中间只留「不确定态光圈」与失败标记。
-        进度数字（token 数 / 百分比）挪到右下角（用户 2026-11-10：直接定位到右下角）——
-        中间那块地方留给阶段文案与正在返回的文字，读起来才顺。
+        进度仍在正中：大号数字 + 后缀。
+
+        用户 2026-11-10 的截图（红框）指的是**后缀**要落在数字的右下角，
+        不是把整块进度挪到卡片右下角 —— 之前的理解错了，这里恢复原版式。
       -->
-      <!--
-        缩到第 3 档时卡片太小，右下角那行放不下 —— 数字回中心画（原行为）。
-        第 1/2 档的数字在右下角，见下面的 .ld-corner。
-      -->
-      <div v-if="tone === 'error' || progressLabel === null || tier === 3" class="ld-progress">
+      <div class="ld-progress">
         <span v-if="tone === 'error'" class="ld-fail-mark" aria-hidden="true">!</span>
         <template v-else-if="progressLabel !== null">
           <template v-if="splitProgress">
@@ -344,20 +341,8 @@ onBeforeUnmount(() => {
         <p v-if="tone === 'error' && hint" class="ld-hint">{{ hint }}</p>
       </template>
 
-      <!--
-        右下角：进度读数（数字 + 后缀 / 整段文案）与取消按钮同一行。
-        数字与后缀分开画是为了字号不同（与原来中间那套同一份排版规则）。
-      -->
-      <div v-if="tier !== 3 && (progressLabel !== null || $slots.action)" class="ld-corner">
-        <span v-if="progressLabel !== null" class="ld-corner-progress">
-          <template v-if="splitProgress">
-            <span class="ld-corner-num">{{ shownValue }}</span>
-            <span class="ld-corner-suffix">{{ suffix }}</span>
-          </template>
-          <template v-else>{{ progressLabel }}</template>
-        </span>
-        <div class="nls-action"><slot name="action" /></div>
-      </div>
+      <!-- 取消按钮：第 3 档不画（小到点不准，且此时用户本来就不该在这里操作） -->
+      <div v-if="tier !== 3" class="nls-action"><slot name="action" /></div>
     </template>
   </div>
 </template>
@@ -556,12 +541,23 @@ html.dark .nls-root.is-error {
   color: var(--nls-num);
   text-shadow: var(--nls-num-glow);
 }
+/*
+ * 后缀（tokens / %）贴在数字的**右下角**。
+ *
+ * 用户 2026-11-10 的截图（红框）指明的是这个位置：数字照旧在正中，
+ * 只有后缀下沉到数字右下方，不再与数字同一基线。
+ * 用绝对定位挂在 .ld-progress 内，数字宽度变化时自动跟着走（不写死偏移量）。
+ */
 .ld-pct {
-  margin-left: 2px;
+  position: absolute;
+  left: 100%;
+  bottom: 2px;
+  margin-left: -2px;
   font-size: 22px;
   font-weight: 600;
   line-height: 1;
   color: var(--nls-pct);
+  white-space: nowrap;
 }
 
 /* 整段进度文案（progressText）：字号介于大数字与后缀之间 */
@@ -674,50 +670,8 @@ html.dark .nls-root.is-error {
   color: var(--nls-hint);
 }
 
-/*
- * 右下角：进度读数 + 取消按钮。
- *
- * 用户 2026-11-10：token 数 / 百分比直接定位到右下角（原先在正中偏上，挡住文案）。
- * 读数与按钮同一条基线靠右排，容器本身不接指针（只有按钮自己接）。
- */
-.ld-corner {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  z-index: 3;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  max-width: calc(100% - 20px);
-  pointer-events: none;
-}
-.ld-corner-progress {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: var(--nls-num);
-  text-shadow: var(--nls-num-glow);
-}
-.ld-corner-num {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-.ld-corner-suffix {
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--nls-pct);
-}
-.ld-corner-progress:not(:has(.ld-corner-num)) {
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
 /* `#action` 插槽里的按钮自己画（取消按钮），这里不造盒子 */
+/* `#action` 插槽里的按钮自己定位（取消按钮贴卡片右下角），这里不造盒子 */
 .nls-action {
   display: contents;
 }

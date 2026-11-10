@@ -916,8 +916,10 @@ const {
 
 /* 取消按钮：右下角一小格，是覆盖层里唯一接指针的东西（加载期间节点照样能拖能选） */
 .v2-task-cancel {
-  /* 位置由加载件右下角的 .ld-corner 决定（与进度读数同一行，用户 2026-11-10） */
-  flex: none;
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 3;
   padding: 3px 8px;
   border-radius: 6px;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));

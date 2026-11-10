@@ -150,30 +150,31 @@ describe('NodeLoadingState', () => {
   })
 
   /**
-   * 用户口径 2026-11-10：token 数 / 百分比直接定位到**右下角**，不在正中偏上。
-   * 第 1、2 档应落在 .ld-corner 里；中心只剩光圈或失败标记。
+   * 用户口径（2026-11-10 截图红框）：数字留在正中，**只是后缀**落到数字的右下角。
+   * 之前把整块进度搬到卡片右下角是理解错了，这里锁死正确版式。
    */
-  it('★ 第 1 档：进度数字在右下角（.ld-corner），不在中心', async () => {
+  it('★ 数字仍在正中，后缀单独一个元素（.ld-pct）挂在它右下角', async () => {
     const html = await render({ value: 451, suffix: 'tokens', message: '生成中…' }, { zoom: 1 })
-    expect(html).toContain('ld-corner')
-    expect(html).toContain('ld-corner-num')
+    expect(html).toContain('ld-progress')
+    expect(html).toContain('ld-num')
     expect(html).toContain('451')
+    expect(html).toContain('ld-pct')
     expect(html).toContain('tokens')
-    // 中心那块不再重复画一遍数字
-    expect(html).not.toContain('ld-num')
+    // 整块进度不再被搬到右下角那个容器里
+    expect(html).not.toContain('ld-corner')
   })
 
-  it('★ 第 2 档：同样把进度放在右下角', async () => {
+  it('★ 第 2 档同样保留中心数字 + 右下角后缀', async () => {
     const html = await render({ percent: 42, message: '生成中…' }, { zoom: 0.5 })
-    expect(html).toContain('ld-corner')
+    expect(html).toContain('ld-num')
+    expect(html).toContain('ld-pct')
     expect(html).toContain('42')
-    expect(html).not.toContain('ld-num')
   })
 
-  it('★ progressText 也放右下角，整段照画', async () => {
+  it('★ progressText 整段照画（优先于数字 + 后缀）', async () => {
     const html = await render({ progressText: '≈1.2k tokens', message: '生成中…' }, { zoom: 1 })
-    expect(html).toContain('ld-corner')
     expect(html).toContain('≈1.2k tokens')
+    expect(html).toContain('ld-progress-text')
   })
 
   it('★ 第 3 档（缩到很小）：只留中心数字，不写状态词与文案', async () => {
