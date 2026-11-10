@@ -50,9 +50,9 @@ const px = computed(() => props.size + 'px')
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: var(--ui-fill-subtle, color-mix(in srgb, currentColor 6%, transparent));
+  background: var(--ui-hover-soft);
   font-size: 13px;
   font-weight: 700;
-  color: var(--ui-ink-dim, #6b7280);
+  color: var(--ui-ink-dim);
 }
 </style>

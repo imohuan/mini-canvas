@@ -17,7 +17,6 @@ export interface PickerItem {
   title: string
   subtitle?: string
   note?: string
-  isDefault?: boolean
   /**
    * 这一行自己的图标（provider 的 icon / 图标名 / 兜底）。
    *
@@ -137,7 +136,7 @@ const items = computed(() =>
     title: o.title,
     subtitle: o.subtitle ?? '',
     note: o.note ?? '',
-    isDefault: o.isDefault ?? o.id === props.currentId,
+    // 「默认」标签已删（用户 2026-11-10）：底栏没选中时默认取第一项，不再标哪一行
     ...(o.icon?.svg ? { svg: o.icon.svg } : {}),
     // 多账号：行尾二级菜单用（只有一个号时面板不渲染箭头）
     ...(o.accounts && o.accounts.length > 0 ? { accounts: o.accounts } : {}),

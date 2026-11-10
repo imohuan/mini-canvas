@@ -50,7 +50,7 @@ export interface ProviderRow {
   accountFields?: string[]
   shared?: Record<string, string | number | boolean>
   accounts: ProviderAccountRow[]
-  /** 这个平台的模型明细（模型页按类型列出） */
+  /** 这个平台的模型明细 */
   models?: Array<{ id: string; title: string; nodeTypes: string[]; group?: string }>
   /** 这个平台服务哪些类型（后台给了就按它分；没给时按模型自己的 nodeTypes 判） */
   nodeTypes?: string[]
@@ -81,10 +81,6 @@ export interface ProviderManagerState {
   expanded: string[]
   /** 正在「编辑全局属性」的账号（`pid:index`） */
   editingSharedOf: string | null
-  /** 模型标签页：当前类型 */
-  modelType: string
-  /** 生成类型 → 默认模型 id */
-  defaults: Record<string, string>
 }
 
 /** 确认框（只用那一个方法；命名避开裸 confirm，见 noNativeDialogs 守卫） */
@@ -123,8 +119,6 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     busy: false,
     expanded: [],
     editingSharedOf: null,
-    modelType: '',
-    defaults: {},
   })
 
   async function refresh(): Promise<void> {
@@ -133,9 +127,8 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     try {
       const res = await call('/api/providers')
       if (!res.ok) throw new Error('拉平台清单失败 ' + res.status)
-      const body = (await res.json()) as { providers?: ProviderRow[]; defaults?: Record<string, string> }
+      const body = (await res.json()) as { providers?: ProviderRow[] }
       state.rows = Array.isArray(body.providers) ? body.providers : []
-      if (body.defaults) state.defaults = body.defaults
     } catch (err) {
       state.error = err instanceof Error ? err.message : String(err)
     } finally {
@@ -342,67 +335,6 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     }
   }
 
-  // ==================== 模型 / 默认模型 ====================
-
-  /**
-   * 从 provider 的动作里统计「有哪些生成类型」。
-   *
-   * 用户口径 2026-11-10：按实际提供的模型统计，没有的类型（比如暂时没有 3D）不显示。
-   */
-  function modelTypes(): Array<{ id: string; label: string; count: number }> {
-    /**
-     * 只统计**生成**类型 —— 文本对话走 Agent 自己的模型配置（用户 2026-11-10：
-     * 「这个文本模型是单独处理的，它不应该出现在这里」）。
-     */
-    const HIDDEN_TYPES = new Set(['text'])
-    const order = ['image', 'video', 'audio']
-    const label: Record<string, string> = { image: '图片', video: '视频', audio: '音频' }
-    const counts = new Map<string, number>()
-    for (const row of state.rows) {
-      if (!row.enabled) continue
-      // 按**模型**统计（不是按平台）：类型只要真的存在一个模型就算有
-      for (const m of row.models ?? []) {
-        const types = m.nodeTypes.length > 0 ? m.nodeTypes : nodeTypesOf(row)
-        for (const t of types) {
-          if (HIDDEN_TYPES.has(t)) continue
-          counts.set(t, (counts.get(t) ?? 0) + 1)
-        }
-      }
-    }
-    const ids = [...counts.keys()].sort((a, b) => {
-      const ia = order.indexOf(a)
-      const ib = order.indexOf(b)
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
-    })
-    return ids.map((id) => ({ id, label: label[id] ?? id.toUpperCase(), count: counts.get(id) ?? 0 }))
-  }
-
-  /** 一个平台提供的节点类型（来自它注册的动作；后台在 actions 里已算好数量，这里用声明） */
-  function nodeTypesOf(row: ProviderRow): string[] {
-    const raw = (row as unknown as { nodeTypes?: string[] }).nodeTypes
-    if (Array.isArray(raw) && raw.length > 0) return raw
-    // 后台行里没带 nodeTypes 时按动作数兜底：一个平台通常只服务一种类型，这里保守返回空
-    return []
-  }
-
-  async function setDefaultModel(type: string, modelId: string): Promise<string | null> {
-    const next = { ...state.defaults }
-    if (modelId === '') delete next[type]
-    else next[type] = modelId
-    state.defaults = next
-    try {
-      const res = await call('/api/providers/model-defaults', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ defaults: next }),
-      })
-      if (!res.ok) throw new Error('保存默认模型失败 ' + res.status)
-      return null
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err)
-    }
-  }
-
   // 服务地址改了 → 立刻按新地址重拉（与 cloud-client 同一条 onChange 通道）
   const offSettings = settings?.onChange?.(() => void refresh())
   ctx.effect(() => () => offSettings?.dispose())
@@ -425,8 +357,6 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     saveEdit,
     toggleEnabled,
     remove: removeRow,
-    modelTypes,
-    setDefaultModel,
   }
 
   function removeRow(row: ProviderRow): Promise<string | null> {

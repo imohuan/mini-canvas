@@ -387,12 +387,11 @@ const draftModelOptions = computed(() =>
 /** ChoicePicker 的一行：id / 标题；platform 不传，图标交给 Agent 按标题识别 */
 const pickerItems = computed(() =>
   [
-    { id: '', title: '通用（所有模型）', subtitle: '不绑定模型，任何节点都能用', isDefault: draftActionId.value === '' },
+    { id: '', title: '通用（所有模型）', subtitle: '不绑定模型，任何节点都能用' },
     ...draftModelOptions.value.map((o) => ({
       id: o.id,
       title: o.title,
       subtitle: '预设可用模型',
-      isDefault: o.id === draftActionId.value,
       /** 图标逐行带上：与底栏下拉、触发器同一份 */
       icon: o.icon,
     })),
