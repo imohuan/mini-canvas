@@ -29,9 +29,37 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
       label?: unknown
       reason?: unknown
       hint?: unknown
+      stats?: unknown
     },
   )
   /** 0-100；非法/缺失 → null（不确定态，不编一个假数字） */
+
+  /**
+   * 是否正在「流式长出内容」：加载中，且已经有正文可看。
+   *
+   * 用户口径 2026-11-10：AI 对话是按批吐字的，前端要能看到中间结果；
+   * 只显示 5% 然后一下跳到完成，等于没做流式。
+   * 所以「加载中且有内容」时，壳把正文露出来、只留状态条，而不是全屏盖住。
+   */
+  const streaming = computed(() => {
+    if (!loading.value) return false
+    const d = input.data()
+    const t = d?.text
+    return typeof t === 'string' && t.trim() !== ''
+  })
+
+  /**
+   * 已产出量（`runState.stats`，由执行方写：文本对话是「已输出 N 字 / ≈M tokens」）。
+   * 只用于加载层显示；别的任务类型不写，就没有。
+   */
+  const stats = computed(() => {
+    const s = runState.value.stats
+    if (!s || typeof s !== 'object') return undefined
+    const raw = s as { chars?: unknown; tokens?: unknown }
+    const chars = typeof raw.chars === 'number' && Number.isFinite(raw.chars) ? Math.max(0, Math.floor(raw.chars)) : undefined
+    const tokens = typeof raw.tokens === 'number' && Number.isFinite(raw.tokens) ? Math.max(0, Math.floor(raw.tokens)) : undefined
+    return chars === undefined && tokens === undefined ? undefined : { chars, tokens }
+  })
   const percent = computed(() => {
     const p = runState.value.progress
     return typeof p === 'number' && Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : null
@@ -66,5 +94,5 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
     return typeof v === 'number' && Number.isFinite(v) ? v : 0
   })
 
-  return { visualState, loading, failed, covered, percent, message, label, reason, hint, startedAt }
+  return { visualState, loading, failed, covered, percent, message, label, reason, hint, startedAt, stats, streaming }
 }

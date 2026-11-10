@@ -113,6 +113,12 @@ describe('agent:chat 任务化：后台边生成边写节点', () => {
       (n) => typeof n.data.text === 'string' && (n.data.text as string).length > 0,
     )
     expect(typeof streaming.data.text).toBe('string')
+    // ⑤ 生成过程中要带已输出量（加载层显示「已输出 N 字 / ≈M tokens」）
+    //    这里在 ③ 之后读一次 —— 那时候正文已经在长，stats 必须同拍就有。
+    const statsNow = (streaming.data.runState as { stats?: { chars?: number; tokens?: number } } | undefined)?.stats
+    expect(typeof statsNow?.chars).toBe('number')
+    expect(statsNow!.chars!).toBeGreaterThan(0)
+    expect(typeof statsNow?.tokens).toBe('number')
 
     // ④ 终态：done 100%，正文完整非空
     const done = await waitFor(

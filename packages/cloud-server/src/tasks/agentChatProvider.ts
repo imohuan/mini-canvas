@@ -83,6 +83,31 @@ interface LiveRun {
   progress: number
   message?: string
   error?: string
+  /**
+   * 已产出的量（用户 2026-11-10：加载态要看得到「现在输出了多少」）。
+   * chars = 字数；tokens ≈ 中文 1 字 0.6 token、英文 4 字符 1 token 粗估。
+   * 只用于显示，不参与业务判断，也不进历史。
+   */
+  stats?: { chars: number; tokens: number }
+}
+
+/**
+ * 粗略估一下「已输出多少」（用户 2026-11-10：加载态要看得到产出量）。
+ *
+ * 上游流只吐文本、不报 token 数，所以按经验值折算：
+ *   中日韩字符：1 字 ≈ 1.5 token
+ *   其他字符：4 字符 ≈ 1 token
+ * 只用于显示，不写历史、不参与计费。
+ */
+function estimateStats(text: string): { chars: number; tokens: number } {
+  const all = [...text]
+  let cjk = 0
+  for (const ch of all) {
+    const code = ch.codePointAt(0) ?? 0
+    if ((code >= 0x3400 && code <= 0x9fff) || (code >= 0x3040 && code <= 0x30ff) || (code >= 0xac00 && code <= 0xd7af)) cjk += 1
+  }
+  const other = Math.max(0, all.length - cjk)
+  return { chars: all.length, tokens: Math.round(cjk * 1.5 + other / 4) }
 }
 
 /** 动作声明（模型与渠道由前端下单时放进 values 透传） */
@@ -152,6 +177,8 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
         ...(st.message ? { message: st.message } : {}),
         /** 流式预览：TaskManager 把它写进 node.data.text（整段覆盖） */
         ...(st.text ? { partialText: st.text } : {}),
+        /** 已产出量 → 节点 runState.stats（加载层显示「已输出 N 字 / ≈M tokens」） */
+        ...(st.stats ? { stats: st.stats } : {}),
       } as ProviderPollResult
     },
 
@@ -193,12 +220,27 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
     const gen = llm.streamGenerate({ newMessages: messages })
     let acc = ''
     const startedAt = Date.now()
+
+    /**
+     * 等首包期间也要让界面动起来（用户 2026-11-10：不能从 5% 一步跳到完成）。
+     * 模型第一段文字常常要 1~3 秒，这段时间进度按时间慢慢爬，
+     * 否则卡片像卡死；一旦开始吐字就改用「按时间 + 已生成」的规则。
+     */
+    const waitingTimer = setInterval(() => {
+      const st = runs.get(taskId)
+      if (!st || st.status !== 'running') return
+      if (st.text !== '') return // 已经开始吐字，交给下面的逻辑
+      const elapsed = Date.now() - startedAt
+      st.progress = Math.min(30, 5 + Math.floor(elapsed / 300))
+      st.message = '等待模型响应…'
+    }, 300)
     let status = 'completed'
     let errorMessage: string | undefined
+    try {
     for (;;) {
       const step = await gen.next()
       const st = runs.get(taskId)
-      if (!st || st.status === 'error') return // 被取消了：不再写
+      if (!st || st.status === 'error') return // 被取消了：不再写（finally 会清定时器）
       if (step.done) {
         status = step.value?.status ?? 'completed'
         errorMessage = step.value?.errorMessage
@@ -209,6 +251,7 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
         acc += d
         st.text = acc
         st.message = '生成中…'
+        st.stats = estimateStats(acc)
         // 文本模型没有真实百分比（上游只吐字，不报进度）。这里用**时间**推：
         //   · 0~3s 慢慢从 5 → 30（先让卡片看起来"动起来"）
         //   · 之后每秒再 +2，封顶 95（剩下的留给终态）
@@ -222,6 +265,10 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
         acc = fin
         st.text = acc
       }
+    }
+    } finally {
+      // 生成循环无论怎么退出（成功 / 失败 / 被取消）都清掉「等首包」定时器
+      clearInterval(waitingTimer)
     }
     const st = runs.get(taskId)
     if (!st || st.status === 'error') return

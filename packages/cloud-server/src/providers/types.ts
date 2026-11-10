@@ -149,7 +149,13 @@ export interface ProviderPollResult {
   progress?: number
   message?: string
   /** running 一拍的**部分文本**（文本生成流式预览用；整段覆盖式更新，不是拼接） */
+  /** running 一拍的**部分文本**（文本生成流式预览用；整段覆盖式更新，不是拼接） */
   partialText?: string
+  /**
+   * running 一拍的**已产出量**（文本生成用）：加载层据此显示「已输出 N 字 / ≈M tokens」。
+   * 只是过程信息，写进节点 runState.stats；不写作品字段、不进历史。
+   */
+  stats?: { chars?: number; tokens?: number }
   /** provider 自己的任务号（后台记着，取消时要用） */
   taskId?: string
   /** status=done 时的产物 */

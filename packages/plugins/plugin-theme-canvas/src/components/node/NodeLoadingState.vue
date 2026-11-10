@@ -59,6 +59,11 @@ const props = withDefaults(
     hint?: string
     /** 计时起点（ms）。给了才在右上角显示已耗时；视频帧图这类瞬时加载不用给 */
     startedAt?: number
+    /**
+     * 已产出量（文本对话用）：加载中显示「已输出 N 字 · ≈M tokens」。
+     * 这只是**过程信息**，不进作品、不进历史 —— 用户 2026-11-10 的口径。
+     */
+    stats?: { chars?: number; tokens?: number }
   }>(),
   {
     variant: 'fill',
@@ -183,6 +188,16 @@ const shownPercent = computed(() => {
   return Math.max(0, Math.min(100, Math.round(p)))
 })
 
+/** 输出量文案（文本对话）：只有执行方给了 stats 才有 */
+const statsText = computed(() => {
+  const s = props.stats
+  if (!s) return ''
+  const parts: string[] = []
+  if (typeof s.chars === 'number' && Number.isFinite(s.chars)) parts.push('已输出 ' + Math.max(0, Math.floor(s.chars)) + ' 字')
+  if (typeof s.tokens === 'number' && Number.isFinite(s.tokens)) parts.push('≈' + Math.max(0, Math.floor(s.tokens)) + ' tokens')
+  return parts.join(' · ')
+})
+
 const ariaLabel = computed(() => props.message || props.label || (props.tone === 'error' ? '执行失败' : '执行中'))
 
 onMounted(() => {
@@ -233,6 +248,7 @@ onBeforeUnmount(() => {
       <i class="ld-dot" aria-hidden="true" />
       <span v-if="label" class="nls-chip-label">{{ label }}</span>
       <span class="nls-chip-msg">{{ message || '处理中…' }}</span>
+      <span v-if="statsText" class="nls-chip-stats">{{ statsText }}</span>
       <span v-if="shownPercent !== null" class="nls-chip-pct">{{ shownPercent }}%</span>
     </template>
 
@@ -262,6 +278,7 @@ onBeforeUnmount(() => {
       <!-- 阶段文案 / 失败原因：第 3 档不写（缩到那份上只剩一句糊字） -->
       <template v-if="tier !== 3">
         <p class="ld-prompt">{{ message || (tone === 'error' ? '执行失败' : '执行中…') }}</p>
+        <p v-if="statsText && tone !== 'error'" class="ld-stats">{{ statsText }}</p>
         <p v-if="tone === 'error' && hint" class="ld-hint">{{ hint }}</p>
       </template>
 
@@ -511,6 +528,16 @@ html.dark .nls-root.is-error {
   color: var(--nls-prompt);
 }
 
+/* 已产出量（文本对话的过程信息，不进作品） */
+.ld-stats {
+  position: relative;
+  z-index: 2;
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--nls-timer-ink);
+}
+
 /* 失败：中间一个感叹号，下面写原因 + 一句下一步 */
 .ld-fail-mark {
   display: inline-flex;
@@ -693,6 +720,12 @@ html.dark .nls-root.is-chip {
 }
 .nls-chip-pct {
   color: var(--nls-pct);
+  font-variant-numeric: tabular-nums;
+}
+.nls-chip-stats {
+  position: relative;
+  z-index: 2;
+  color: var(--nls-timer-ink);
   font-variant-numeric: tabular-nums;
 }
 .nls-root.is-chip.is-error .ld-dot {

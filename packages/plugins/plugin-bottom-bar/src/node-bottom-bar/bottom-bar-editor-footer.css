@@ -410,15 +410,25 @@
   /* 与文本选区同一个背景变量（用户口径：标签选中和文字选中背景一致，用灰） */
   background: var(--ui-selection-bg, rgb(0 0 0 / 0.18));
 }
+/*
+ * 占位符必须与正文**同一套字号/行高/起点**，否则会压到第一行文字上（用户 2026-11-10 截图：
+ * placeholder 和 node 里的旧文重叠）。
+ * 用与 .nb-editor .ProseMirror 完全一致的 13px / 1.75；left 也与它对齐，
+ * 顶部留 0，靠同样的行框把首行卡在同一个位置。
+ */
 .nb-placeholder {
   position: absolute;
   top: 0;
-  left: 2px;
+  left: 4px;
+  right: 4px;
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.75;
   pointer-events: none;
   user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* —— 底部行（参考图：左模型·参数，右图标·计数·发送） —— */

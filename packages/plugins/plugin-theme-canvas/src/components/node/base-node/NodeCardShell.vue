@@ -130,6 +130,8 @@ const {
   reason: taskReason,
   hint: taskHint,
   startedAt: taskStartedAt,
+  stats: taskStats,
+  streaming: taskStreaming,
 } = taskState
 
 /**
@@ -200,8 +202,19 @@ const {
  */
 const hasCustomStateOverlay = computed(() => stateOverlayRegions.value.length > 0)
 const showStateLayer = computed(() => hasCustomStateOverlay.value || covered.value)
-/** 只有"没有任何注册组件"时才回落到内置加载件 */
-const showDefaultState = computed(() => !hasCustomStateOverlay.value && covered.value)
+
+/**
+ * 流式生成中：**不铺全屏遮罩**，只在卡片顶上挂一条状态条。
+ *
+ * 用户口径 2026-11-10：AI 对话按批吐字，前端要能看到中间结果；
+ * 全屏盖住 → 用户只看到「5%」然后直接跳完成，等于没有流式。
+ * 条件：正在跑 + 已经有正文（没有正文时仍走全屏加载件，那时候没什么可看的）。
+ */
+const showStreamBar = computed(() => !hasCustomStateOverlay.value && taskStreaming.value)
+/** 全屏加载件：加载中且**还没有内容**（或失败）时才铺 */
+const showDefaultState = computed(
+  () => !hasCustomStateOverlay.value && covered.value && (!taskStreaming.value || failed.value),
+)
 
 const feedback = useNodeConnectionFeedback({
   ctx,
@@ -490,6 +503,22 @@ const {
         :data="data"
         :is-dev="capabilityIsDev"
       />
+      <!--
+        流式生成中：只挂一条**顶部状态条**，正文继续露出来（用户 2026-11-10）。
+        全屏遮罩会把正在长出来的文字盖住 —— 那正是「只看到 5% 然后跳完成」的原因。
+      -->
+      <div v-if="showStreamBar" class="v2-stream-bar nodrag nopan" role="status" aria-live="polite">
+        <NodeLoadingState
+          variant="chip"
+          :tone="failed ? 'error' : 'loading'"
+          :label="taskLabel"
+          :percent="failed ? null : percent"
+          :message="taskReason"
+          :started-at="failed ? 0 : taskStartedAt"
+          :stats="taskStats"
+        />
+        <button v-if="canCancel" class="v2-stream-cancel nodrag nopan" type="button" @click.stop="onCancelTask">取消</button>
+      </div>
       <NodeLoadingState
         v-if="showDefaultState"
         :tone="failed ? 'error' : 'loading'"
@@ -910,6 +939,49 @@ const {
 }
 @media (prefers-reduced-motion: reduce) {
   .v2-task-cancel {
+    transition: none;
+  }
+}
+
+/*
+ * 流式状态条（用户 2026-11-10）：贴在卡片顶部的一条小胶囊，不是全屏遮罩。
+ * AI 对话正在按批吐字，盖住就看不到中间结果 —— 那正是「只看到 5% 再跳完成」。
+ * pointer-events 默认穿透，只有胶囊和取消按钮自己接指针（加载期间节点照常能拖能选）。
+ */
+.v2-stream-bar {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.v2-stream-bar :deep(.nls-root.is-chip) {
+  pointer-events: auto;
+  max-width: 100%;
+}
+.v2-stream-cancel {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  background: var(--ui-overlay-solid, #fff);
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.15s ease-out, background-color 0.15s ease-out;
+}
+.v2-stream-cancel:hover {
+  color: var(--ui-danger, #ef4444);
+  background: var(--ui-danger-soft, color-mix(in srgb, var(--ui-danger, #ef4444) 14%, transparent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-stream-cancel {
     transition: none;
   }
 }

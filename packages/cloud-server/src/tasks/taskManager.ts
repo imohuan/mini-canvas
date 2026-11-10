@@ -423,6 +423,8 @@ export class TaskManager {
             actionId: action.id,
             taskId: job.id,
             startedAt: job.createdAt,
+            /** 已产出量：加载层显示「已输出 N 字 / ≈M tokens」（用户 2026-11-10） */
+            ...(poll.stats ? { stats: poll.stats } : {}),
           }, typeof poll.partialText === 'string' ? { text: poll.partialText } : undefined)
           await this.sleep(interval)
           continue
