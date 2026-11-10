@@ -428,12 +428,14 @@ html.dark .nls-root {
 /* 失败态：同一块整卡覆盖，只换成「没成」的交代 */
 .nls-root.is-error {
   --nls-base: #fef2f2;
-  --nls-state: #dc2626;
-  --nls-dot: #ef4444;
+  --nls-state: var(--nls-prompt);
+  --nls-dot: var(--ui-danger, #ef4444);
   --nls-prompt: #b91c1c;
 }
 html.dark .nls-root.is-error {
   --nls-base: #1f0f12;
+  --nls-state: var(--nls-prompt);
+  --nls-dot: var(--ui-danger, #ef4444);
   --nls-prompt: #fca5a5;
 }
 
