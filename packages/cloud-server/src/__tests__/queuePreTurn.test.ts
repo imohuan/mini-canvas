@@ -17,8 +17,8 @@ import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessio
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-/** 轮询等条件成立（不用固定延时：并行跑时机器负载高，固定值会假红） */
-async function waitFor(cond: () => boolean | Promise<boolean>, timeoutMs = 3000): Promise<void> {
+/** 轮询等条件成立（不用固定延时；上限 10s：全仓并行跑时磁盘负载高，3s 会假红——实测踩过） */
+async function waitFor(cond: () => boolean | Promise<boolean>, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!(await cond())) {
     if (Date.now() > deadline) throw new Error('waitFor 超时：条件一直没成立')
