@@ -12,6 +12,9 @@
  * 底栏自己的组件要取消任务时，仍可用内部执行器 `nodeTask.cancel`（它不是基础服务）。
  *
  * 整体换皮（像主题那样）：ctx.theme.add('bottomBar', MyBar, { order: -1 })
+ *
+ * 任务只由后台执行（用户口径 2026-11-10）：这里没有「前端自己轮询」那条路，
+ * 进度与终态由后台写节点、SSE 推回来，断线由 cloud-client 的一条全局定时器批量对账。
  */
 export { pluginBottomBar } from './pluginBar'
 export {
@@ -34,5 +37,5 @@ export type {
 } from './barTypes'
 export type { NodeRunState } from './runState'
 export { readRunState, runningState, progressState, doneState, errorState } from './runState'
-export { runAction, resumeAction, DEFAULT_INTERVAL, DEFAULT_TIMEOUT, DEFAULT_THROTTLE } from './taskRuntime'
+export { runAction } from './taskRuntime'
 export type { TaskDeps } from './taskRuntime'

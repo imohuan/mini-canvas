@@ -189,6 +189,24 @@ export class CloudApi {
     return body.job
   }
 
+  /**
+   * 批量查任务（前端那一条全局定时器用）。
+   *
+   * 一次问一批，**不是**一次问一个：画布上同时跑三个节点时，三轮请求变成一轮。
+   * 后台查不到的号返回 null（调用方据此写「任务不在后台了」），不整批失败。
+   */
+  async getJobs(jobIds: readonly string[]): Promise<Record<string, ServerJob | null>> {
+    const ids = jobIds.filter((id) => typeof id === 'string' && id !== '')
+    if (ids.length === 0) return {}
+    const res = await this.doFetch(
+      this.absolute('/api/jobs?ids=' + encodeURIComponent(ids.join(','))),
+      { headers: { accept: 'application/json' } },
+    )
+    if (!res.ok) throw httpError('批量查任务', res.status, 'GET')
+    const body = (await res.json()) as { jobs?: Record<string, ServerJob | null> }
+    return body.jobs ?? {}
+  }
+
   /** 查某节点当前有没有在跑的任务（前端据此禁用「发送」，挡住连点重复下单） */
   async activeJob(canvasId: string, nodeId: string): Promise<{ jobId: string; progress?: number } | null> {
     const res = await this.doFetch(

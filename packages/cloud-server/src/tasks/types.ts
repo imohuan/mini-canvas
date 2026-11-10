@@ -26,6 +26,13 @@ export interface Job {
   progress?: number
   message?: string
   /**
+   * 这条任务能不能取消（由动作 / 平台的 cancel 声明决定）。
+   *
+   * 每一帧 runState 都会带上它 —— 节点壳只读节点数据决定画不画「取消」按钮，
+   * 不去查动作表（刷新后动作清单还没到的那一小会儿也不会误判）。
+   */
+  canCancel?: boolean
+  /**
    * 加载 UI 的展示字段（由 provider 每拍给出，任务管理器原样透传）。
    *
    * 为什么放在 job 上而不是让前端算：用户口径 2026-11-10 —— 进度是**后台的**数据，

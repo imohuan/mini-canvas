@@ -30,8 +30,10 @@ export type { CanvasGraphSnapshot, MergeNode, MergeEdge, RemoteMergePlan } from 
 
 export { pendingUploadFields } from './resourceRef.js'
 
-export { makeJobPoll, submitJob, toPollState } from './jobRunner.js'
-export type { PollState, RunDeps, ResourceLike } from './jobRunner.js'
+export { submitJob } from './jobRunner.js'
+export type { RunDeps, ResourceLike } from './jobRunner.js'
+export { createJobsWatcher, frameOf, chunkIds, DEFAULT_WATCH_MS, DEFAULT_BATCH } from './jobsWatcher.js'
+export type { JobsWatcher, JobsWatcherDeps, RunningNodeLike } from './jobsWatcher.js'
 
 export { restoreOrSeed } from './restore.js'
 export type { RestoreDeps, RestoreResult } from './restore.js'

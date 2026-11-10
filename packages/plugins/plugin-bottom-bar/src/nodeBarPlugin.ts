@@ -16,7 +16,7 @@ import type { DocService } from '@mini-canvas/canvas-data'
 import type { BarAction, BarApplier } from './barTypes'
 import { registerBarAction, registerBarApplier } from '@mini-canvas/bar-contract'
 import type { ToolResourceKind } from '@mini-canvas/kernel'
-import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
+import { runAction, type TaskDeps } from './taskRuntime'
 import { errorState, readRunState } from './runState'
 import { publishToolActions, type PublishToolActionsOptions } from './toolActions'
 import NodeBottomBar from './NodeBottomBar.vue'
@@ -121,26 +121,15 @@ export class NodeBarService extends Service {
 }
 
 /**
- * 「已提交、任务号还没回来」的宽限期（ms）。
+ * 执行服务：run / cancel。runState 写盘走 doc.updateNodeRuntime（不进撤销栈）。
  *
- * 提交流程分两步写 runState：前端先写 running（无 taskId），后台建好任务再补 taskId。
- * 这段窗口里续查扫到 running-but-无-taskId 是正常现象，不能判失败。
- * 给 30 秒足够覆盖弱网下单，又短到不会让真正卡死的旧状态一直挂着。
+ * 用户口径 2026-11-10：**任务只有后台在跑**。这里不保存任何"正在跑"的句柄，
+ * 也不自己轮询 —— 前端只剩一条全局定时器（plugin-cloud-client 的 jobsWatcher）
+ * 负责对账。所以这个服务变薄了：
+ *   · run   = 提交（写 running 帧 + 调动作的 run）；
+ *   · cancel = 按节点上的 taskId 请后台取消。
  */
-const NO_TASK_ID_GRACE_MS = 30_000
-
-/** 执行服务：run / cancel / restoreAll。runState 写盘走 doc.updateNodeRuntime（不进撤销栈）。 */
 export class NodeTaskService extends Service {
-  private cancels = new Map<string, AbortController>()
-  /**
-   * 节点 → 外部取消函数（不在本服务里跑的任务用）。
-   *
-   * 文本对话是底栏直接 `POST /api/jobs` 下的单，没有经过 runAction，
-   * 所以 `cancels` 里没有它的句柄 —— 取消按钮点了就是空的。
-   * 这类任务提交时把「怎么取消」登记进来，覆盖层的取消按钮统一走这里。
-   */
-  private externalCancels = new Map<string, () => void | Promise<void>>()
-
   constructor(ctx: Context) {
     super(ctx, 'nodeTask')
   }
@@ -182,165 +171,76 @@ export class NodeTaskService extends Service {
   ) {
     const action = this.lookup().get(actionId)
     if (!action) return { ok: false as const, error: '未找到动作 ' + actionId }
-    // 同一节点只能有一条在跑：否则旧任务的 finally 会删掉新任务的控制器，
-    // 之后 cancel(nodeId) 就取消不到真正在跑的那条（Spec 五·14）。
-    this.cancels.get(nodeId)?.abort()
-    const ctrl = new AbortController()
-    this.cancels.set(nodeId, ctrl)
-    try {
-      return await runAction(
-        {
-          nodeId,
-          nodeType: this.doc().getNode(nodeId)?.type ?? '',
-          action,
-          input,
-          registry: this.lookup(),
-          signal: ctrl.signal,
-        },
-        this.deps(),
-      )
-    } finally {
-      // 只清自己这一条：后起的任务可能已经换成新控制器，别把它删掉。
-      if (this.cancels.get(nodeId) === ctrl) this.cancels.delete(nodeId)
-    }
-  }
-
-  /** 取消某节点正在跑的任务（覆盖层「取消」按钮） */
-  cancel(nodeId: string): void {
-    this.cancels.get(nodeId)?.abort()
-    // 外部登记的任务（文本对话直连后台下单的）：调用它自己的取消实现
-    const external = this.externalCancels.get(nodeId)
-    if (external) {
-      this.externalCancels.delete(nodeId)
-      void Promise.resolve()
-        .then(() => external())
-        .catch(() => {
-          /* 取消失败不抛给 UI：本地已经当作取消，后台那一侧失败下次会被状态帧纠正 */
-        })
-    }
-  }
-
-  /**
-   * 登记「不在本服务里跑的任务」的取消实现（文本对话用）。
-   *
-   * 返回一个注销函数：任务结束时调用，避免节点上留着一条过期回调，
-   * 下次取消时误伤新任务。
-   */
-  registerExternalCancel(nodeId: string, fn: () => void | Promise<void>): () => void {
-    this.externalCancels.set(nodeId, fn)
-    return () => {
-      if (this.externalCancels.get(nodeId) === fn) this.externalCancels.delete(nodeId)
-    }
+    return runAction(
+      {
+        nodeId,
+        nodeType: this.doc().getNode(nodeId)?.type ?? '',
+        action,
+        input,
+        registry: this.lookup(),
+      },
+      this.deps(),
+    )
   }
 
   /**
    * 取消某节点上的任务 —— **按节点上记着的任务号**取消（用户 2026-11-10）。
    *
-   * 统一口径：任务号只有一个真源 = `node.data.runState.taskId`（后台每一帧都写）。
-   * 不管任务是本地 runAction 起的、还是前端直连 /api/jobs 起的，都拿这个号去取消，
-   * 前端不再自己保管一份 —— 换标签页 / 刷新 / 换浏览器都还认得。
+   * 任务号只有一个真源 = `node.data.runState.taskId`（后台每一帧都写）。
+   * 拿它 + actionId 找到动作，调动作声明的 onCancel 请后台停下 —— 前端不保管句柄，
+   * 所以刷新 / 换标签页 / 换浏览器之后取消一样有效。
    *
-   * @returns 是否真的发出取消（false = 这条任务没有可取消的通道）
+   * 立刻把节点写成「已取消」：用户点了就要看到反应，不等后台那一帧回来。
+   *
+   * @returns 是否真的发出了取消（false = 这条任务没有可取消的通道）
    */
-  async cancelByNodeTaskId(nodeId: string): Promise<boolean> {
+  async cancel(nodeId: string): Promise<boolean> {
     const rs = readRunState(this.doc().getNode(nodeId)?.data)
     if (!rs.taskId) return false
-
-    // 本地 runAction 起的：abort 本地循环，再让它自己去上游取消（taskRuntime 内部按 action.onCancel）
-    const ctrl = this.cancels.get(nodeId)
-    if (ctrl) {
-      ctrl.abort()
-      return true
+    const action = rs.actionId ? this.lookup().get(rs.actionId) : undefined
+    if (!action || typeof action.onCancel !== 'function') return false
+    const data = this.doc().getNode(nodeId)?.data ?? {}
+    const runCtx = {
+      nodeId,
+      nodeType: this.doc().getNode(nodeId)?.type ?? '',
+      signal: new AbortController().signal,
+      onProgress: () => {},
+      readData: () => data,
     }
-
-    // 直连 /api/jobs 起的（文本对话）：用节点上的 jobId 请求后台取消
-    const external = this.externalCancels.get(nodeId)
-    if (!external) return false
-    this.externalCancels.delete(nodeId)
-    await Promise.resolve().then(() => external())
+    this.deps().writeRuntime(nodeId, { runState: errorState(rs.actionId ?? '', '已取消') })
+    try {
+      await action.onCancel(rs.taskId, runCtx)
+    } catch {
+      /* 请后台取消失败不改「本地已取消」这个事实；下一帧状态会把它纠正回来 */
+    }
     return true
+  }
+
+  /** 旧调用名（节点壳历史上用过）：与 cancel 同一件事 */
+  async cancelByNodeTaskId(nodeId: string): Promise<boolean> {
+    return this.cancel(nodeId)
   }
 
   /**
    * 本节点当前那条任务**能不能取消**（覆盖层据此决定画不画取消按钮）。
    *
-   * 用户 2026-11-10：有些任务没法取消，就不该给用户一个点了没反应的按钮。
-   * 判定顺序：节点 runState.actionId → 动作是否声明可取消（cancellable）或带 onCancel。
-   * 查不到动作时返回 false（宁可不画，也不给假按钮）。
+   * **只看节点数据**（用户 2026-11-10）：提交任务时执行方把 `runState.canCancel`
+   * 写进节点，这里原样读出来。不查动作表 —— 刷新后动作清单还没到的那一小会儿，
+   * 也不会把一条能取消的任务误判成不能取消。
+   *
+   * 老数据没有这个字段时，回落到「按 actionId 查动作」的旧判断（不改变旧行为）。
    */
   canCancel(nodeId: string): boolean {
-    // 外部登记了取消实现 → 一定能取消（文本对话走这条）
-    if (this.externalCancels.has(nodeId)) return true
     const rs = readRunState(this.doc().getNode(nodeId)?.data)
-    if (rs.status !== 'running' || !rs.actionId) return false
+    if (rs.status !== 'running') return false
+    const flag = (this.doc().getNode(nodeId)?.data as { runState?: { canCancel?: unknown } } | undefined)?.runState
+      ?.canCancel
+    if (typeof flag === 'boolean') return flag
+    if (!rs.actionId) return false
     const action = this.lookup().get(rs.actionId)
     if (!action) return false
     if (typeof action.cancellable === 'boolean') return action.cancellable
     return typeof action.onCancel === 'function'
-  }
-
-  /**
-   * 刷新续查：把所有 running 状态的节点接回来。
-   * 调用时机见 §0.5：ctx:ready（冷启动）与「排除自身的 ctx:plugin-installed」（manifest 热装）。
-   */
-  async restoreAll(): Promise<void> {
-    const doc = this.doc()
-    for (const node of doc.getNodes()) {
-      const rs = readRunState(node.data)
-      if (rs.status !== 'running') continue
-      /*
-       * 没有 taskId 的 running **不能立刻判失败**。
-       *
-       * 用户 2026-11-10 实测：第一次点发送时先闪一条「上次的任务已经不在后台了」，
-       * 然后才进正常加载态。原因是提交流程分两步 ——
-       *   ① 前端先把节点写成 running（此时还没有任务号）；
-       *   ② 后台建好任务后，才把 taskId 写进 runState。
-       * 续查在这一拍扫到 running 却没有 taskId，就当成「旧状态」收敛成失败，纯属误判。
-       *
-       * 现在按开始时间给一段宽限期：窗口内视为「正在提交」，跳过；超时仍没有任务号，
-       * 才按真正的旧状态处理（避免真的卡住一张永远不动的卡）。
-       */
-      if (!rs.taskId || !rs.actionId) {
-        const startedAt = rs.startedAt ?? 0
-        const age = Date.now() - startedAt
-        if (rs.actionId && startedAt > 0 && age <= NO_TASK_ID_GRACE_MS) continue
-        this.deps().writeRuntime(node.id, {
-          runState: errorState(
-            rs.actionId ?? '',
-            '上次的任务已经不在后台了（服务重启或任务丢失）',
-            '重新点一次提交即可',
-          ),
-        })
-        continue
-      }
-      /**
-       * 这个节点上**已经有本地任务在跑**（runAction 起的）→ 不续查。
-       *
-       * 用户 2026-11-10 实测：点发送后卡片先正常转，几秒后变「已取消」。
-       * 原因是这一轮 restoreAll 看到节点是 running 就去续查，同时把
-       * `this.cancels` 里那条**正在跑的本地任务** abort 掉；被 abort 的本地任务
-       * 按约定写「已取消」，于是任务还没跑完就先被判死。
-       * 续查只该接「上次留下的、本机没有句柄」的任务。
-       */
-      if (this.cancels.has(node.id)) continue
-      // ★ 必须登记 AbortController：续查出来的任务同样要能被「取消」按钮中断。
-      //   不登记的话 `cancel()` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈）。
-      const ctrl = new AbortController()
-      this.cancels.set(node.id, ctrl)
-      void resumeAction(
-        {
-          nodeId: node.id,
-          nodeType: node.type,
-          registry: this.lookup(),
-          taskId: rs.taskId,
-          actionId: rs.actionId,
-          signal: ctrl.signal,
-        },
-        this.deps(),
-      ).finally(() => {
-        if (this.cancels.get(node.id) === ctrl) this.cancels.delete(node.id)
-      })
-    }
   }
 }
 
@@ -455,54 +355,4 @@ export function apply(ctx: Context) {
 
   // 节点盖层只挂一份：参考点击与 Ctrl 拖拽共用统一会话，模式由会话自己判定。
   ctx.nodes.attach('*', { region: 'over:inset', component: NodeSelectOverlay, id: 'bottom-bar/select-node' })
-
-
-  // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；
-  // ready 之前必须排除自己的安装事件（否则在节点插件注册动作前就把可续查任务误判成中断），
-  // ready 之后放行它（manifest 路径 bottom-bar 是热装、ctx:ready 时还没它，靠这条补跑）。
-  //
-  // ⚠️ 为什么不能只在 ctx:ready 跑一次（2026-09-29 实测复现的 bug）：
-  // `ctx:ready` 在**插件装载完成**时就广播了，而画布数据是**之后**才从 storage 恢复进 nodeStore 的
-  // （见 createMiniCanvasHost：先 ctx.start() → 恢复画布 → nodeStore.replaceAll）。
-  // 于是 ready 那一刻 doc.getNodes() 还是空的 —— 续查扫了个空，界面就永远停在刷新前的进度上。
-  // 修法：订阅 doc 变化，等**文档真有 running 节点**了再续查（扫到就收工）。
-  // 只在「文档真的有内容了」之后跑一次并锁死：
-  // - 冷启动 ctx:ready 那一刻文档还是空的（数据稍后才恢复）→ 不锁，等 doc 变化再来；
-  // - 热装时文档已在 → 立刻跑；
-  // - 真的空画布 → 每次 doc 变化只多一次 getNodes()，代价可忽略。
-  /**
-   * 已经「接上」的 (节点, 任务号)：同一个任务只续查一次，不因为文档再变就重跑。
-   *
-   * 为什么不能只跑一次就锁死（2026-11-10 实测）：云端客户端比本插件晚装，
-   * 它把服务器画布 replaceAll 进文档的那一刻，本插件早已在「本地空文档」上跑过一轮、把锁关上了。
-   * 结果是云端那份里 **running 的节点永远没人续查**，卡片一路显示「生成中 800 多分钟」
-   * —— 用户报的「一直卡在 0%」就是这个。现在改成每次文档真有内容都补一轮（按任务号幂等）。
-   */
-  const resumedTasks = new Set<string>()
-  const tryRestore = () => {
-    const docServiceForCheck = ctx.get<DocService>('doc')
-    if (!docServiceForCheck || docServiceForCheck.getNodes().length === 0) return // 数据还没恢复出来，等下一拍
-    const pending = docServiceForCheck
-      .getNodes()
-      .filter((n) => {
-        const rs = readRunState(n.data)
-        return rs.status === 'running' && !resumedTasks.has(n.id + '\u0000' + (rs.taskId ?? ''))
-      })
-    // 没有待接的任务就什么都不做（文档每次改动都会走这里，不能白扫）
-    if (pending.length === 0) return
-    for (const n of pending) {
-      const rs = readRunState(n.data)
-      resumedTasks.add(n.id + '\u0000' + (rs.taskId ?? ''))
-    }
-    void task.restoreAll()
-  }
-  const docService = ctx.get<{ subscribe(cb: (change: unknown) => void): () => void }>('doc')
-  if (docService && typeof docService.subscribe === 'function') {
-    const off = docService.subscribe(tryRestore)
-    ctx.effect(() => () => off())
-  }
-  // 兜底再来一次：插件都装完/数据可能已就位时（顺序不定，两处都试，tryRestore 自带幂等）
-  ctx.on('ctx:ready', tryRestore)
-  ctx.on('ctx:plugin-installed', tryRestore)
-
 }

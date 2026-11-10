@@ -1,202 +1,172 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@mini-canvas/kernel'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { BarAction } from '../barTypes'
 import { NodeBarService, NodeTaskService, registerBarAction } from '../nodeBarPlugin'
 
 /**
- * NodeTaskService 的取消控制器归属（Spec 五·14）。
+ * NodeTaskService 的新形状（用户口径 2026-11-10）。
  *
- * 同一节点不能被两条任务同时占用：第二次 run 必须先把上一条 abort 掉。
- * 旧实现的 `finally { cancels.delete(nodeId) }` 会把**后一条**的控制器删掉，
- * 于是取消按钮对第二条任务失效。
+ * 任务只有后台在跑：这里不再保存 AbortController、不再自己轮询、也不再「刷新续查」。
+ * 它只剩两件事 —— 提交（写 running 帧 + 调动作的 run），取消（按节点上的 taskId 请后台停）。
  */
-function makeCtx(): { ctx: Context; doc: { getNode(id: string): unknown } } {
-  const doc = {
-    getNode: () => ({ type: 'image', data: {} }),
-    getNodes: () => [{ id: 'n1', type: 'image', data: {} }],
-    updateNodeRuntime: () => {},
+
+function makeDoc(initial: Record<string, unknown> = {}) {
+  const store: Record<string, { id: string; type: string; data: Record<string, unknown> }> = {
+    n1: { id: 'n1', type: 'image', data: { ...initial } },
   }
+  const writes: Array<Record<string, unknown>> = []
+  const doc = {
+    getNode: (id: string) => store[id],
+    getNodes: () => Object.values(store),
+    updateNodeRuntime: (id: string, patch: { data?: Record<string, unknown> }) => {
+      if (!store[id] || !patch.data) return
+      if (patch.data.runState) {
+        store[id].data = { ...store[id].data, runState: patch.data.runState }
+        writes.push(patch.data.runState as Record<string, unknown>)
+      }
+    },
+    updateNode: () => {},
+  }
+  return { doc, writes, store }
+}
+
+function makeCtx(doc: unknown, action: BarAction) {
   const ctx = new Context()
   ctx.inject('doc', doc)
   ctx.plugin({
     name: 'bar-host',
     apply(c) {
       new NodeBarService(c as never)
-      registerBarAction(c as never, GATED)
+      registerBarAction(c as never, action)
     },
   })
-  return { ctx, doc }
+  return ctx
 }
 
-const GATED: BarAction = {
-  id: 'gated',
+/** 永不自己结束、只由 onCancel 收尾的生成类动作（返回轮询函数） */
+const GENERATING: BarAction = {
+  id: 'gen',
   types: ['image'],
   title: '慢慢跑',
-  // 永不自己结束；只由 AbortSignal 收尾，用来观察「谁被取消」。
-  run: (_input, c) =>
-    new Promise((resolve) => {
-      if (c.signal.aborted) resolve({ ok: false, error: 'aborted' })
-      else c.signal.addEventListener('abort', () => resolve({ ok: false, error: 'aborted' }), { once: true })
-    }),
+  run: () => async () => ({ status: 'running' as const }),
+  onCancel: () => {},
 }
 
-describe('NodeTaskService：同节点重复执行与取消', () => {
-  it('第二次 run 先取消第一条；第一条收尾不会删掉第二条的控制器', async () => {
-    const { ctx } = makeCtx()
+describe('NodeTaskService.run：只提交，不等结果', () => {
+  it('写一帧 running（带 canCancel），立刻返回', async () => {
+    const { doc, writes } = makeDoc()
+    const ctx = makeCtx(doc, GENERATING)
     await ctx.start()
     const task = new NodeTaskService(ctx as never)
-    const first = task.run('n1', 'gated', {} as never)
-    await Promise.resolve()
-    const second = task.run('n1', 'gated', {} as never)
-    await Promise.resolve()
-
-    // 第二条仍在跑：cancel 必须能中止它（旧实现此时控制器已被第一条 finally 删掉）
-    task.cancel('n1')
-    await expect(second).resolves.toMatchObject({ ok: false })
-    await expect(first).resolves.toMatchObject({ ok: false })
+    const out = await task.run('n1', 'gen', {})
+    expect(out.ok).toBe(true)
+    expect(writes[0]).toMatchObject({ status: 'running', actionId: 'gen', canCancel: true })
     ctx.stop()
   })
 
-  it('restoreAll 续查的任务同样登记控制器（登记后取消按 taskId 发出）', async () => {
-    const doc = {
-      getNode: () => ({ type: 'image', data: { runState: { status: 'running', actionId: 'gated', taskId: 't1' } } }),
-      getNodes: () => [{ id: 'n1', type: 'image', data: {} }],
-      updateNodeRuntime: () => {},
-    }
-    const ctx = new Context()
-    ctx.inject('doc', doc)
-    ctx.plugin({
-      name: 'bar-host',
-      apply(c) {
-        new NodeBarService(c as never)
-      },
-    })
+  it('没有 onCancel 的动作：提交帧写 canCancel:false（不给假按钮）', async () => {
+    const { doc, writes } = makeDoc()
+    const plain: BarAction = { id: 'plain', types: ['image'], title: '普通', run: () => async () => ({ status: 'running' as const }) }
+    const ctx = makeCtx(doc, plain)
     await ctx.start()
-    const task = new NodeTaskService(ctx as never)
-    const cancel = vi.spyOn(task, 'cancel')
-    void task.restoreAll()
-    await Promise.resolve()
-    task.cancel('n1')
-    expect(cancel).toHaveBeenCalledWith('n1')
+    await new NodeTaskService(ctx as never).run('n1', 'plain', {})
+    expect(writes[0]).toMatchObject({ canCancel: false })
     ctx.stop()
   })
 
-  /**
-   * 用户 2026-11-10 实测：点发送后卡片先正常转，几秒后变「已取消」，后台任务其实还在跑。
-   *
-   * 根因：restoreAll 看到节点 running 就去续查，并 `cancels.get(nodeId)?.abort()` ——
-   * 那一下 abort 掉的正是**刚提交的本地任务**，它按约定写「已取消」。
-   * 续查只该接「本机没有句柄」的残留任务。
-   */
-  it('本地正在跑的任务不被当残留续查（否则会被自己 abort 成「已取消」）', async () => {
-    const rs = { status: 'running', actionId: 'gated', taskId: 't-local', startedAt: Date.now() }
-    let updates = 0
-    const doc = {
-      getNode: () => ({ type: 'image', data: { runState: rs } }),
-      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: rs } }],
-      updateNodeRuntime: () => { updates++ },
-    }
-    const ctx = new Context()
-    ctx.inject('doc', doc)
-    ctx.plugin({
-      name: 'bar-host',
-      apply(c) {
-        new NodeBarService(c as never)
-      },
-    })
+  it('动作不存在：直接给一句错误，不抛', async () => {
+    const { doc } = makeDoc()
+    const ctx = makeCtx(doc, GENERATING)
     await ctx.start()
-    const task = new NodeTaskService(ctx as never)
-    // 模拟「本地已有一条任务在跑」：登记一个控制器
-    const src = readFileSync(resolve(__dirname, '../nodeBarPlugin.ts'), 'utf8')
-    expect(src).toMatch(/if \(this\.cancels\.has\(node\.id\)\) continue/)
-    expect(src).not.toMatch(/this\.cancels\.get\(node\.id\)\?\.abort\(\)\n\s*this\.cancels\.set\(node\.id, ctrl\)/)
-    await task.restoreAll()
+    const out = await new NodeTaskService(ctx as never).run('n1', 'gone', {})
+    expect(out.ok).toBe(false)
+    ctx.stop()
+  })
+})
+
+describe('NodeTaskService.cancel：按节点上的 taskId 请后台停', () => {
+  it('拿 runState.taskId 调动作的 onCancel，并立刻写「已取消」', async () => {
+    const { doc, writes } = makeDoc({
+      runState: { status: 'running', actionId: 'gen', taskId: 'j7', canCancel: true },
+    })
+    const cancelFn = vi.fn()
+    const action: BarAction = { ...GENERATING, onCancel: cancelFn }
+    const ctx = makeCtx(doc, action)
+    await ctx.start()
+    const ok = await new NodeTaskService(ctx as never).cancel('n1')
+    expect(ok).toBe(true)
+    expect(cancelFn).toHaveBeenCalledWith('j7', expect.anything())
+    expect(writes.at(-1)).toMatchObject({ status: 'error', message: '已取消' })
     ctx.stop()
   })
 
-
-  /**
-   * 用户 2026-11-10 实测：第一次点发送先闪一条「上次的任务已经不在后台了」，然后才进正常加载态。
-   * 根因是提交流程分两步写 runState —— 前端先写 running（还没有 taskId），
-   * 后台建好任务后才补 taskId。续查在这段窗口里扫到 running 但没有任务号，误判成旧残留。
-   *
-   * 现在按 startedAt 给宽限期：窗口内跳过；窗口外仍收敛成失败（旧残留还是会收掉）。
-   */
-  it('running 但没有 taskId，且刚提交（宽限期内）：不判失败，也不写任何状态', async () => {
-    const writes: Array<Record<string, unknown>> = []
-    const rs = { status: 'running', actionId: 'gated', startedAt: Date.now() }
-    const doc = {
-      getNode: () => ({ type: 'image', data: { runState: rs } }),
-      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: rs } }],
-      updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
-        if (patch.data) writes.push(patch.data)
-      },
-    }
-    const ctx = new Context()
-    ctx.inject('doc', doc)
-    ctx.plugin({
-      name: 'bar-host',
-      apply(c) {
-        new NodeBarService(c as never)
-      },
-    })
+  it('节点上没有 taskId：什么都不做，返回 false', async () => {
+    const { doc } = makeDoc({ runState: { status: 'running', actionId: 'gen' } })
+    const cancelFn = vi.fn()
+    const ctx = makeCtx(doc, { ...GENERATING, onCancel: cancelFn })
     await ctx.start()
-    const task = new NodeTaskService(ctx as never)
-    await task.restoreAll()
-    expect(writes).toHaveLength(0)
+    const ok = await new NodeTaskService(ctx as never).cancel('n1')
+    expect(ok).toBe(false)
+    expect(cancelFn).not.toHaveBeenCalled()
     ctx.stop()
   })
 
-  it('running 但没有 taskId，且已经很久了（旧残留）：仍收敛成失败态，不留下永远转圈的生成中', async () => {
-    const writes: Array<Record<string, unknown>> = []
-    const stale = { status: 'running', actionId: 'gated', startedAt: Date.now() - 10 * 60_000 }
-    const doc = {
-      getNode: () => ({ type: 'image', data: { runState: stale } }),
-      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: stale } }],
-      updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
-        if (patch.data) writes.push(patch.data)
-      },
-    }
-    const ctx = new Context()
-    ctx.inject('doc', doc)
-    ctx.plugin({
-      name: 'bar-host',
-      apply(c) {
-        new NodeBarService(c as never)
-      },
-    })
+  it('动作没声明 onCancel：返回 false（没有可取消的通道）', async () => {
+    const { doc } = makeDoc({ runState: { status: 'running', actionId: 'plain', taskId: 'j7' } })
+    const ctx = makeCtx(doc, { id: 'plain', types: ['image'], title: '普通', run: () => ({ ok: true }) })
     await ctx.start()
-    const task = new NodeTaskService(ctx as never)
-    await task.restoreAll()
-    expect(writes).toHaveLength(1)
-    expect(writes[0]!.runState).toMatchObject({ status: 'error', actionId: 'gated' })
+    expect(await new NodeTaskService(ctx as never).cancel('n1')).toBe(false)
     ctx.stop()
   })
 
-  it('running 但连 actionId 都没有（演示 / 早期数据）：同样收敛，别一直显示生成中', async () => {
-    const writes: Array<Record<string, unknown>> = []
-    const rs = { status: 'running', progress: 55, message: '分组任务执行中…' }
-    const doc = {
-      getNode: () => ({ type: 'group', data: { runState: rs } }),
-      getNodes: () => [{ id: 'g1', type: 'group', data: { runState: rs } }],
-      updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
-        if (patch.data) writes.push(patch.data)
+  it('后台取消失败不改变「本地已取消」的事实', async () => {
+    const { doc, writes } = makeDoc({
+      runState: { status: 'running', actionId: 'gen', taskId: 'j7' },
+    })
+    const action: BarAction = {
+      ...GENERATING,
+      onCancel: () => {
+        throw new Error('后台 500')
       },
     }
-    const ctx = new Context()
-    ctx.inject('doc', doc)
-    ctx.plugin({
-      name: 'bar-host',
-      apply(c) {
-        new NodeBarService(c as never)
-      },
-    })
+    const ctx = makeCtx(doc, action)
     await ctx.start()
-    await new NodeTaskService(ctx as never).restoreAll()
-    expect(writes).toHaveLength(1)
-    expect(writes[0]!.runState).toMatchObject({ status: 'error' })
+    expect(await new NodeTaskService(ctx as never).cancel('n1')).toBe(true)
+    expect(writes.at(-1)).toMatchObject({ status: 'error', message: '已取消' })
+    ctx.stop()
+  })
+})
+
+describe('NodeTaskService.canCancel：只看节点数据', () => {
+  it('runState.canCancel=true → 能取消', async () => {
+    const { doc } = makeDoc({ runState: { status: 'running', actionId: 'gen', taskId: 'j1', canCancel: true } })
+    const ctx = makeCtx(doc, GENERATING)
+    await ctx.start()
+    expect(new NodeTaskService(ctx as never).canCancel('n1')).toBe(true)
+    ctx.stop()
+  })
+
+  it('runState.canCancel=false → 不画按钮（哪怕动作声明了 onCancel）', async () => {
+    const { doc } = makeDoc({ runState: { status: 'running', actionId: 'gen', taskId: 'j1', canCancel: false } })
+    const ctx = makeCtx(doc, GENERATING)
+    await ctx.start()
+    expect(new NodeTaskService(ctx as never).canCancel('n1')).toBe(false)
+    ctx.stop()
+  })
+
+  it('老数据没有这个字段 → 回落到动作声明（旧行为不变）', async () => {
+    const { doc } = makeDoc({ runState: { status: 'running', actionId: 'gen', taskId: 'j1' } })
+    const ctx = makeCtx(doc, GENERATING)
+    await ctx.start()
+    expect(new NodeTaskService(ctx as never).canCancel('n1')).toBe(true)
+    ctx.stop()
+  })
+
+  it('没在跑：「能不能取消」一律 false', async () => {
+    const { doc } = makeDoc({ runState: { status: 'done', actionId: 'gen', canCancel: true } })
+    const ctx = makeCtx(doc, GENERATING)
+    await ctx.start()
+    expect(new NodeTaskService(ctx as never).canCancel('n1')).toBe(false)
     ctx.stop()
   })
 })

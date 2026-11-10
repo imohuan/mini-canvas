@@ -14,7 +14,8 @@ import { CloudApi } from './api.js'
 import { toBarAction, diffActions, staleActionIds, type BarActionLike } from './actions.js'
 import { CanvasDiffAdapter } from './canvasDiffAdapter.js'
 import { createRemoteSync, toSnapshot } from './remoteSync.js'
-import { makeJobPoll, submitJob, type PromptSegmentLike, type ResourceLike, type RunDeps } from './jobRunner.js'
+import { submitJob, type PromptSegmentLike, type ResourceLike, type RunDeps } from './jobRunner.js'
+import { createJobsWatcher } from './jobsWatcher.js'
 import { writeAudioResult, writeVideoResult } from './appliers.js'
 import { applyMergePlan, type DocLike } from './applyMerge.js'
 import { restoreOrSeed } from './restore.js'
@@ -464,10 +465,15 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
           ...(input.resources ? { resources: input.resources } : {}),
         })
         if ('done' in r) return r.done
-        // 返回轮询函数：交给底栏既有的 taskRuntime 驱动
-        return makeJobPoll(deps, r.jobId)
+        /**
+         * 交出去了：**不再返回轮询函数**（用户 2026-11-10）。
+         *
+         * 进度与终态由后台写节点、SSE 推回来；SSE 断了由 jobsWatcher 那一条
+         * 全局定时器批量对账。前端再开一个循环就是同一件事的第二条链路。
+         */
+        return { ok: true, taskId: r.jobId }
       },
-      resume: (taskId: string) => makeJobPoll(deps, taskId),
+      // 取消：按节点上记着的任务号请后台停下（前端不保存任何句柄）
       onCancel: (taskId: string) => api.cancelJob(taskId),
     }
   }
@@ -546,6 +552,49 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
 
   // 历史服务与 cloud-client 状态属于应用级（apply 里已注入），这里不再重复。
 
+  // ==================== 4.5 任务对账（前端唯一的定时器）====================
+  //
+  // 用户口径 2026-11-10：任务只有后台在跑，前端不要「一个任务一个轮询」。
+  // 这一条定时器扫整张画布，把在跑的节点批量问一遍 —— 没有在跑的节点就一个请求都不发。
+  // 它只是 SSE 的兜底：推送正常时一问就发现已经一致，不写任何东西。
+  const jobsWatcher = createJobsWatcher({
+    listRunning: () => {
+      const out = []
+      for (const raw of doc.getNodes()) {
+        const n = raw as { id?: unknown; type?: unknown; data?: Record<string, unknown> }
+        if (typeof n.id !== 'string') continue
+        const rs = (n.data?.runState ?? {}) as { status?: unknown; taskId?: unknown; actionId?: unknown }
+        if (rs.status !== 'running') continue
+        out.push({
+          nodeId: n.id,
+          nodeType: typeof n.type === 'string' ? n.type : '',
+          taskId: typeof rs.taskId === 'string' ? rs.taskId : '',
+          ...(typeof rs.actionId === 'string' ? { actionId: rs.actionId } : {}),
+          ...(n.data ? { data: n.data } : {}),
+        })
+      }
+      return out
+    },
+    fetchJobs: (ids) => api.getJobs(ids),
+    // 进度帧不进撤销栈：与后台 / 底栏写的是同一把 key
+    writeRuntime: (nodeId, data) => {
+      if (!doc.getNode(nodeId)) return
+      doc.updateNodeRuntime(nodeId, { data })
+    },
+    // 终态产物：后台没写进来时（SSE 断着）至少把媒体字段补上
+    writeResult: (nodeId, data) => {
+      if (!doc.getNode(nodeId)) return
+      doc.updateNode(nodeId, { data })
+    },
+    visible: () => typeof document === 'undefined' || document.visibilityState === 'visible',
+    onError: (msg, err) => console.warn('[cloud-client] ' + msg, err),
+  })
+  // 回到前台立刻补一拍（后台标签页期间定时器还在跑，但被 visible 挡掉了）
+  const onVisibleAgain = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') void jobsWatcher.tick()
+  }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibleAgain)
+
   // ==================== 5. 实时跟随（一条 SSE 带三件事）====================
   const sync = createRemoteSync({
     // 一次完整快照：nodes/edges/revision 同一次读取，避免撕裂快照。
@@ -598,6 +647,8 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
     try {
       await sync.refreshBase()
       sync.start()
+      // 对账定时器在画布恢复之后才开：一开始 doc 还是本地的，扫不到真实的 running
+      jobsWatcher.start()
       const finalSnapshot = sync.serverSnapshot()
       if (finalSnapshot) adapter.primeFromSnapshot(finalSnapshot)
       // 启动时把版本同步进状态（设置页 / 诊断用）
@@ -619,6 +670,8 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
   return () => {
     if (timer) clearInterval(timer)
     timer = null
+    jobsWatcher.stop()
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibleAgain)
     sync.stop()
     if (previousAdapters.canvas) save?.useAdapter('canvas', previousAdapters.canvas)
     if (previousAdapters.resource) save?.useAdapter('resource', previousAdapters.resource)

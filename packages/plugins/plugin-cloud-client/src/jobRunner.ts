@@ -1,21 +1,12 @@
 /**
- * 一次动作调用的接线：上传素材 → 下单 → 返回轮询函数。
+ * 一次动作调用的接线：上传素材 → 下单。
  *
- * 与 plugin-web2api-tools 的 presetRun 是同一件事，只换"问谁"：
- * 那边直连 web2api，这边问 cloud-server。
- *
- * 为什么返回的是**轮询函数**而不是自己去等：底栏的 taskRuntime 本来就有完整的
- * 提交 → 轮询 → 终态 → resume 流程。复用它可以白拿三样东西：
- * 取消能立刻收敛、刷新后能续查、进度写法（落盘不进撤销栈）已经调好了。
+ * 用户口径 2026-11-10：**任务只有后台在跑**。这里只把活交出去，不等结果 ——
+ * 进度与终态由后台写节点、SSE 推回来，SSE 断了由 jobsWatcher 那一条全局定时器批量对账。
+ * 所以这里不再返回「轮询函数」，也就不存在「一个任务一个轮询」的第二条链路。
  */
 import type { CloudApi } from './api.js'
-import type { ServerJob } from './apiTypes.js'
 import { pendingUploadFields } from './resourceRef.js'
-
-/** 底栏认识的轮询状态（与内核 ToolPollState 同形；这里就地声明，避免 import） */
-export type PollState =
-  | { status: 'running'; progress?: number; message?: string; taskId?: string }
-  | { status: 'done'; result: { ok: boolean; urls?: string[]; text?: string; error?: string; taskId?: string } }
 
 /** 上游素材（与 kernel ToolResource 同形的最小面） */
 export interface ResourceLike {
@@ -79,58 +70,6 @@ async function normalizeResources(
     out.push(item)
   }
   return out
-}
-
-/** 把后端的 Job 翻译成底栏认识的轮询状态 */
-export function toPollState(job: ServerJob, jobId: string): PollState {
-  if (job.status === 'running') {
-    return {
-      status: 'running',
-      ...(typeof job.progress === 'number' ? { progress: job.progress } : {}),
-      ...(job.message ? { message: job.message } : {}),
-      // ★ taskId 必须带上：底栏靠它记 serverTaskId，点「取消」才发得出去。
-      //   不带的话，首次下单的取消只会 abort 本地等待，后台任务照跑、照烧额度。
-      taskId: jobId,
-    }
-  }
-  const r = job.result ?? { ok: false }
-  /*
-   * 失败原因必须落到卡片上。后台老版本 / 上游没给错误时 result.error 可能是空的，
-   * 那时卡片刻度只剩「任务失败」四个字，用户完全看不出问题（2026-11-10 实测）。
-   * 这里补一层：至少写出任务状态与动作 id，并提示去看历史或后台日志。
-   */
-  const failReason = typeof r.error === 'string' && r.error.trim()
-    ? r.error.trim()
-    : job.message && job.message !== 'queued'
-      ? job.message
-      : '任务失败（上游没返回原因）。可到「生成历史」查看这次任务，或检查平台配置与网络'
-  return {
-    status: 'done',
-    result: {
-      ok: job.status === 'done' && r.ok !== false,
-      ...(r.urls ? { urls: r.urls } : {}),
-      ...(r.text ? { text: r.text } : {}),
-      ...(job.status === 'done' && r.ok !== false ? {} : { error: failReason }),
-      taskId: jobId,
-    },
-  }
-}
-
-/** 造一个轮询函数（run 与 resume 共用一份实现） */
-export function makeJobPoll(deps: RunDeps, jobId: string): () => Promise<PollState> {
-  return async () => {
-    try {
-      const job = await deps.api.getJob(jobId)
-      if (!job) {
-        // 后台说没这个任务（服务重启 / 任务被清）：收敛成失败，别让界面永远转
-        return { status: 'done', result: { ok: false, error: '任务在后台已不存在（可能服务重启过）', taskId: jobId } }
-      }
-      return toPollState(job, jobId)
-    } catch (err) {
-      // 查一次失败不算终态：报给用户但继续（下一拍可能就好了）
-      return { status: 'running', message: err instanceof Error ? err.message : '任务查询失败', taskId: jobId }
-    }
-  }
 }
 
 /** 下单。返回 jobId（异步）或直接结果（同步完成）。 */

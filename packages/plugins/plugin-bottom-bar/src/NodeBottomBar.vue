@@ -512,20 +512,6 @@ const runState = computed(() => readRunState(props.data))
 const running = computed(() => runState.value.status === 'running')
 const canRun = computed(() => !running.value && !!currentAction.value && !invalidHint.value)
 
-/** 本节点登记过的取消注销函数（任务收敛 / 卸载时清掉，别误伤下一次任务） */
-let externalCancelOff: (() => void) | null = null
-function clearExternalCancel(): void {
-  externalCancelOff?.()
-  externalCancelOff = null
-}
-watch(
-  () => runState.value.status,
-  (s) => {
-    // 离开 running 就注销：任务已结束，再点取消不该找旧任务
-    if (s !== 'running') clearExternalCancel()
-  },
-)
-
 // —— 折叠 / 提交 ——
 const submitted = ref(false)
 function resetSubmitted(): void {
@@ -572,39 +558,17 @@ async function onRun(): Promise<void> {
           actionId: 'agent:chat',
           startedAt: Date.now(),
           stats: { chars: 0, tokens: 0 },
+          // 对话任务支持取消（后台 agent-chat 声明了 cancel）：节点壳据此画按钮
+          canCancel: true,
         },
       },
     })
     submitted.value = true
-    /**
-     * 登记取消实现（用户 2026-11-10：文本模型的取消没有效果）。
-     *
-     * 文本对话是直接 POST /api/jobs 下的单，没经过底栏本地的 runAction，
-     * 所以 nodeTask 里没有它的句柄 —— 覆盖层的取消按钮点了是空的。
-     * 这里把「用 jobId 去后台取消」登记进去，取消按钮就真的能停掉任务。
-     */
-    /**
-     * 登记取消实现（用户 2026-11-10）。
-     *
-     * 任务号从**节点**读（`data.runState.taskId`），不是从前端某个 ref ——
-     * 号先由后台写进节点，这里只是拿它去请求取消。
-     */
-    const unregister = ctx
-      .tryGet<{ registerExternalCancel?(nodeId: string, fn: () => void | Promise<void>): () => void }>('nodeTask')
-      ?.registerExternalCancel?.(props.id, async () => {
-        const id = props.data?.runState
-          ? (props.data.runState as { taskId?: unknown }).taskId
-          : undefined
-        await agentChat.cancel(typeof id === 'string' ? id : undefined)
-      })
-    externalCancelOff = unregister ?? null
     const r = await sendAgentMessage()
     // 任务建成了就交给后台：加载态 / 完成 / 失败全由后台的 runState 帧驱动，
     // 不在这里 resetSubmitted —— 否则卡片还没进入加载态按钮就先解锁了（连点窗口）。
     // 只有下单失败才立即解锁并提示。
     if (!r.ok) {
-      unregister?.()
-      externalCancelOff = null
       resetSubmitted()
       ctx.tryGet<NotifyContract>('notify')?.error(r.error)
     }
@@ -772,7 +736,6 @@ onMounted(() => {
   registerStartDragHandler(ctrlApi.startCtrlDrag)
 })
 onBeforeUnmount(() => {
-  clearExternalCancel()
   registerStartDragHandler(null)
   registerTagSpec(null)
   cancelPreviewSchedule()

@@ -242,6 +242,65 @@ describe('下单', () => {
     expect(rs.taskId).toBe(id)
   })
 
+  /**
+   * 用户口径 2026-11-10：取消按钮的显示依据写在节点数据里 ——
+   * 节点壳只读 `runState.canCancel`，不查动作表（刷新后动作清单还没到也不会误判）。
+   */
+  it('提交帧就写 canCancel（动作有 cancel → true）', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() {
+        return { taskId: 'pt1' }
+      },
+      async poll() {
+        return { status: 'running' as const }
+      },
+    }
+    const { doc, tasks } = await setup(p, {
+      interval: 100000,
+      action: { ...ACTION, cancel: async () => {} },
+    })
+    await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })
+    expect((await runStateOf(doc, 'n1')).canCancel).toBe(true)
+  })
+
+  it('动作和平台都没有 cancel → canCancel:false（不给假按钮）', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() {
+        return { taskId: 'pt1' }
+      },
+      async poll() {
+        return { status: 'running' as const }
+      },
+    }
+    const { doc, tasks } = await setup(p, { interval: 100000 })
+    await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })
+    expect((await runStateOf(doc, 'n1')).canCancel).toBe(false)
+  })
+
+  it('进度帧不会把 canCancel 冲掉（每一帧都要带）', async () => {
+    let polls = 0
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() {
+        return { taskId: 'pt1' }
+      },
+      async poll(): Promise<ProviderPollResult> {
+        polls += 1
+        if (polls < 3) return { status: 'running', progress: polls * 20 }
+        return { status: 'done', urls: ['https://x/1.png'] }
+      },
+    }
+    const { doc, tasks } = await setup(p, { action: { ...ACTION, cancel: async () => {} } })
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+    expect((await runStateOf(doc, 'n1')).canCancel).toBe(true)
+  })
+
   it('未知动作 → 明确报错（不是静默挂着）', async () => {
     const p: Provider = { id: 'p', actions: [ACTION], async submit() { return { done: true } } }
     const { tasks } = await setup(p)

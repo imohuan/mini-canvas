@@ -91,6 +91,20 @@ function displayOf(action: ActionDef): Record<string, unknown> {
   }
 }
 
+/**
+ * 这条任务能不能取消 → 写进 runState.canCancel（用户 2026-11-10）。
+ *
+ * 为什么写进节点：取消按钮归节点壳画，壳不查动作表、也不认识任何业务插件 ——
+ * 它只读节点自己的 data。把答案写在数据里，刷新 / 换标签页 / 换浏览器都还是一句话，
+ * 不用等动作清单加载完才知道按钮该不该出现。
+ *
+ * 判定口径与 /api/actions 的 `cancellable` 完全一致：动作自己声明了 cancel，
+ * 或者平台提供了 cancel。
+ */
+function canCancelOf(action: ActionDef, provider: Provider): boolean {
+  return typeof action.cancel === 'function' || typeof provider.cancel === 'function'
+}
+
 export class TaskManager {
   private readonly jobs = new Map<string, Job>()
   /** 每个 job 一个取消句柄 */
@@ -143,6 +157,8 @@ export class TaskManager {
       status: 'running',
       progress: 0,
       message: '任务已提交，等待执行…',
+      // 一条任务的可取消性在下单时就定了：节点壳每一帧都读它
+      canCancel: canCancelOf(action, provider),
       request: {
         ...(input.prompts ? { prompts: input.prompts } : {}),
         ...(input.values ? { values: input.values } : {}),
@@ -177,6 +193,8 @@ export class TaskManager {
         actionId: action.id,
         taskId: job.id,
         startedAt: job.createdAt,
+        // 节点壳只读这一条决定画不画「取消」按钮（不能取消的动作不给假按钮）
+        canCancel: canCancelOf(action, provider),
         // 提交帧就照动作声明的口径显示（用户 2026-11-10：点发送立刻看到 0tokens）
         ...displayOf(action),
       },
@@ -379,7 +397,12 @@ export class TaskManager {
     try {
       // 写进**任务所属那张画布**的文档（多画布）：用 deps.doc 会写错画布 → 静默失败 → 进度卡 0
       const doc = this.deps.docForCanvas?.(job.canvasId) ?? this.deps.doc
-      const data = extra ? { ...nodeRunStatePatch(runState).data, ...extra } : nodeRunStatePatch(runState).data
+      /**
+       * canCancel 每一帧都补上：runState 是**整块替换**写的，漏一帧就等于把按钮的
+       * 显示依据抹掉（卡片会在进度更新后突然失去「取消」按钮）。
+       */
+      const frame = job.canCancel === undefined ? runState : { ...runState, canCancel: job.canCancel }
+      const data = extra ? { ...nodeRunStatePatch(frame).data, ...extra } : nodeRunStatePatch(frame).data
       await doc.batchNodes({ update: [{ id: job.nodeId, data }] })
     } catch (err) {
       this.deps.onError?.('[tasks] 写节点进度失败（节点可能已被删除）', err)

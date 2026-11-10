@@ -4,12 +4,13 @@
  * 契约：
  *   POST /api/jobs                ← { canvasId, nodeId, actionId, prompts?, values?, resources? }
  *                                → { ok, jobId }
+ *   GET  /api/jobs?ids=a,b,c      → { ok, jobs: { a: Job|null, b: Job|null } }
  *   GET  /api/jobs/:jobId        → { ok, job }
  *   POST /api/jobs/:jobId/cancel → { ok, cancelled }
  *
- * 为什么前端要轮询：SSE 是主路（后台每写一帧节点都会推过去），
- * 但**兜底**不能少 —— 通道断了、推送丢了，轮询这一拍仍能把状态问回来。
- * 前端拿到的是同一个 Job 形状，翻译成底栏认识的 running/done 即可。
+ * 为什么有批量那条：SSE 是主路（后台每写一帧节点都会推过去），但**兜底**不能少 ——
+ * 通道断了、推送丢了，定时查这一拍仍能把状态问回来。而前端手里常常同时有好几个
+ * 在跑的节点，一条一条问就是 N 个请求；批量接口让「一轮定时器 = 一个请求」。
  */
 import { Hono } from 'hono'
 import type { TaskManager } from '../tasks/taskManager.js'
@@ -66,6 +67,29 @@ export function jobsRoutes(tasks: TaskManager): Hono {
     if (!canvasId || !nodeId) return c.json({ ok: false, error: '缺少 canvasId / nodeId' }, 400)
     const job = tasks.findJobByNode(canvasId, nodeId)
     return c.json({ ok: true, active: job && job.status === 'running' ? { jobId: job.id, progress: job.progress } : null })
+  })
+
+  /**
+   * 批量查任务（前端那一条全局定时器用）。
+   *
+   * ★ 必须注册在 `:jobId` 之前 —— Hono 先注册者优先，否则 '/api/jobs' 会被当成
+   *   一个 jobId 吃掉（和上面 active 同一个坑）。
+   *
+   * 查不到的给 null（前端据此写「任务不在后台了」），不整条 404 ——
+   * 一批里只要有一个陈旧的号，不该让其它几个都拿不到进度。
+   */
+  app.get('/api/jobs', (c) => {
+    const raw = c.req.query('ids') ?? ''
+    const ids = raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id !== '')
+    if (ids.length === 0) return c.json({ ok: false, error: '缺少 ids' }, 400)
+    // 上限保护：一次问太多没有意义（前端自己会分批）
+    if (ids.length > 200) return c.json({ ok: false, error: '一次最多查 200 个任务' }, 400)
+    const jobs: Record<string, unknown> = {}
+    for (const id of ids) jobs[id] = tasks.getJob(id) ?? null
+    return c.json({ ok: true, jobs })
   })
 
   app.get('/api/jobs/:jobId', (c) => {

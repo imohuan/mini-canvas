@@ -84,6 +84,13 @@ export interface ServerJob {
   status: 'running' | 'done' | 'error'
   progress?: number
   message?: string
+  /** 加载界面的大数字 / 单位 / 整段文案 / 滚动小尾巴（后台原样透传 provider 的字段） */
+  value?: number
+  suffix?: string
+  progressText?: string
+  tail?: string
+  /** 这条任务能不能取消（后台按动作声明算出来，前端只照着画按钮） */
+  canCancel?: boolean
   result?: { ok: boolean; urls?: string[]; text?: string; error?: string; taskId?: string }
 }
 

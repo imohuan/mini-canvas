@@ -154,7 +154,7 @@ const progressSuffix = computed(() => taskSuffix.value)
  * （否则又是一条反向依赖）。没有该服务时按钮不渲染，只显示进度 —— 不报错、不假装能点。
  */
 const taskService = ctx.tryGet?.<{
-  cancel(nodeId: string): void
+  cancel(nodeId: string): void | Promise<boolean>
   /** 按节点上记着的任务号取消（统一口径）；返回是否真的发出了取消 */
   cancelByNodeTaskId?(nodeId: string): Promise<boolean>
   /** 本节点这条任务能不能取消（底栏按动作声明算）；旧宿主没有这个方法时当作能取消 */
@@ -162,13 +162,20 @@ const taskService = ctx.tryGet?.<{
 }>('nodeTask')
 const cancelTask = taskService?.cancel
 /**
- * 取消按钮只在「加载中 + 这条动作确实能取消」时出现（用户 2026-11-10）。
+ * 取消按钮只在「加载中 + 这条任务确实能取消」时出现（用户 2026-11-10）。
  *
  * 以前只看「加载中」：有些动作根本没有取消通道（没有 onCancel），按钮照画，
  * 点了什么都不发生 —— 用户看到的就是「取消没效果」。
+ *
+ * 现在优先读**节点自己的数据** `runState.canCancel`：提交任务的一方（后台 / 底栏）
+ * 在写 running 帧时就把答案写进去了。壳不查动作表、也不认识任何业务插件 ——
+ * 刷新后动作清单还没加载完的那一小会儿，按钮也不会莫名其妙消失。
+ * 老数据没有这个字段时，再回落到 nodeTask.canCancel（旧行为不变）。
  */
 const canCancel = computed(() => {
   if (typeof cancelTask !== 'function' || !loading.value) return false
+  const flag = (props.data?.runState as { canCancel?: unknown } | undefined)?.canCancel
+  if (typeof flag === 'boolean') return flag
   const ask = taskService?.canCancel
   if (typeof ask !== 'function') return true
   try {

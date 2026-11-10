@@ -1,25 +1,20 @@
 /**
- * taskRuntime —— 执行一个底栏动作的纯逻辑流程（提交 → 轮询 → 终态 → 写回 / 刷新续查）。
+ * taskRuntime —— 把一个底栏动作**交出去**（只负责提交，不负责等结果）。
  *
- * 复用内核已有的轮询语义（ToolPollFn / ToolPollState，见 kernel/toolRegistry.ts），
- * 但自己驱动循环：动作不是注册在 ctx.tools 里，不能借用 ToolRegistry.invoke。
+ * 用户口径 2026-11-10：任务只有后台在跑。前端没有、也不该有自己执行 / 自己轮询的
+ * 第二条链路 —— 那会变成「每个任务一个定时器」，10 个任务就是 10 份请求，还会和后台
+ * 写的进度互相覆盖。所以这里只剩三件事：
  *
- * 写盘口径（唯一，见计划 §0.4）：
- * - runState 每一帧都写节点，走 doc.updateNodeRuntime（落盘但**不进撤销栈**）；
- * - 产物落到节点（图/文/视频地址）走写入器自己的 doc.updateNode（**进历史**，那是作品）。
- * - 中间帧 200ms 节流：节流窗口内**不写**（不论进度是否变），终态不节流、必写。
- *   为什么：scheduleCommit 每次都全图深拷贝 + save.set，650ms 一次全图序列化代价太高。
+ * 1. 提交那一帧立刻写 running（用户点了就要看到转圈，不等后台第一帧）；
+ * 2. 调动作的 run（云端动作内部就是 POST /api/jobs）；
+ * 3. 提交失败就写 error，不留悬挂的 running。
+ *
+ * 之后的进度、终态、产物全部由后台写进节点，前端那条**唯一的**全局定时器
+ * （plugin-cloud-client 的 jobsWatcher）负责兜底对账。
  */
 import type { BarAction, BarLookup, BarRunContext, BarRunInput } from './barTypes'
-import type { ToolOutcome, ToolPollFn, ToolPollState, ToolProgress, ToolResult } from '@mini-canvas/kernel'
-import { doneState, errorState, progressState, runningState, type NodeRunState } from './runState'
-
-/** 默认轮询间隔（与内核 DEFAULT_TOOL_INTERVAL 同口径） */
-export const DEFAULT_INTERVAL = 650
-/** 默认整体超时（与内核 DEFAULT_TOOL_TIMEOUT 同口径） */
-export const DEFAULT_TIMEOUT = 300_000
-/** 中间帧写盘节流窗口（ms）：窗口内不写，终态不受影响 */
-export const DEFAULT_THROTTLE = 200
+import type { ToolOutcome, ToolResult } from '@mini-canvas/kernel'
+import { errorState, runningState, type NodeRunState } from './runState'
 
 /** 执行依赖（组件装配真实现，测试注假货；node 可单测的关键） */
 export interface TaskDeps {
@@ -31,32 +26,6 @@ export interface TaskDeps {
   writeResult?(nodeId: string, data: Record<string, unknown>): void
   /** 调同 kind 写入器（可选；动作 apply:'self' 或没注册写入器时不调） */
   runApplier?(nodeId: string, result: ToolResult, ctx: { nodeType: string }): void | Promise<void>
-  interval?: number
-  timeoutMs?: number
-  throttleMs?: number
-  now?: () => number
-}
-
-/**
- * 睡到时间到 **或** 被取消（哪个先到算哪个）。
- *
- * 为什么不能直接 sleep：轮询循环只在每圈开头查一次 signal，而轮询间隔默认 3 秒 ——
- * 用户点了「取消」要**等下一拍**才看到反应（实测反馈「点取消没反应」）。
- * 这里让等待本身可被打断，取消立即收敛。
- */
-function sleepOrAbort(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve()
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    const onAbort = (): void => {
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
 }
 
 /** 把异常收敛成失败结果（不往外抛，调用方路径统一） */
@@ -71,248 +40,97 @@ export interface RunActionArgs {
   action: BarAction
   input: BarRunInput
   registry: BarLookup
-  signal?: AbortSignal
 }
 
 /**
- * 执行一个动作到终态。返回值就是动作的最终 ToolResult（UI 不必再读节点）。
+ * 提交一个动作。返回「提交这一步」的结果（同步完成的动作会直接给最终结果）。
+ *
  * 任何异常都被收敛成 { ok:false, error }，不留悬挂 running。
  */
 export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<ToolResult> {
-  const { nodeId, nodeType, action, input, registry, signal } = args
-  const interval = deps.interval ?? DEFAULT_INTERVAL
-  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT
-  const throttleMs = deps.throttleMs ?? DEFAULT_THROTTLE
-  const now = deps.now ?? Date.now
-  // 动作可以覆盖共享默认值（长视频任务不能被共享的 5 分钟超时误杀）
-  const actionInterval = action.pollIntervalMs
-  const actionTimeout = action.pollTimeoutMs
-
+  const { nodeId, action, input, registry } = args
   const runCtx: BarRunContext = {
     nodeId,
-    nodeType,
-    signal: signal ?? new AbortController().signal,
-    onProgress: () => {},
-    readData: () => deps.readData(nodeId),
-  }
-
-  /** 服务端任务 id（异步任务拿到后记下来，取消时要拿它去服务端真取消）。
-   *  注意：`let` 而不是塞进 runCtx —— runCtx 是给动作用的只读上下文，不该被它改写。 */
-  let serverTaskId: string | undefined
-  /** 取消：先 abort 客户端等待，再让动作自己去服务端取消（拿得到 taskId 才有意义） */
-  const cancelUpstream = async (): Promise<void> => {
-    if (!action.onCancel || !serverTaskId) return
-    try {
-      await action.onCancel(serverTaskId, runCtx)
-    } catch {
-      /* 服务端取消失败不改变本地已取消的事实（本地已 abort，用户已看到取消） */
-    }
-  }
-
-  /**
-   * 写节点进度。
-   *
-  * **外部管状态的动作不写中间帧**（如云端动作：后台自己会把进度写进节点）。
-   * 两支笔写同一张便利贴会来回跳 —— 后台一份时钟/文案，本地一份，谁也不服谁。
-   * 不声明 externalRunState 的动作（今天全部）行为不变。
-  *
-  * **但终态必须写**（`force`）：底栏的轮询本来就是「SSE 丢了之后的兜底」
-  * （见 routes/jobs.ts 文件头）。若连终态也交给后台，那一拍就会「问到了 done 却
-  * 什么都不写」—— 推送丢一次，卡片就永远停在 60% 转圈（2026-10-14 用户实测：
-  * 两个任务后台都已 done，画布上还在「等待中（第 73 轮）」，消息再没动过）。
-  * 写的是**同一条终态**（后台也是 done/error），不会与后台的帧互相打架。
-   */
-  const writeRuntime = (rs: NodeRunState, force = false): void => {
-    if (action.externalRunState && !force) return
-    deps.writeRuntime(nodeId, { runState: rs })
-  }
-
-  // ① 取消：直接收敛（不留悬挂 running）
-  if (signal?.aborted) {
-    const rs = errorState(action.id, '已取消')
-    writeRuntime(rs, true) // 终态：外部管状态的动作也要落地（否则卡片永远转）
-    return { ok: false, error: rs.message }
-  }
-
-  // ② 提交帧：running 0%（不节流——用户点了就要立刻看到）
-  writeRuntime(runningState(action.id))
-  const startedAt = now()
-  let lastWriteAt = startedAt
-  let lastState: NodeRunState | null = null
-
-  // ③ 跑
-  let outcome: ToolOutcome
-  try {
-    outcome = await action.run(input, runCtx)
-  } catch (err) {
-    const rs = errorState(action.id, toError(err, '动作执行失败').error ?? '动作执行失败', '可以调整参数后再点一次')
-    writeRuntime(rs)
-    return toError(err, '动作执行失败')
-  }
-
-  // ④ 同步完成
-  if (typeof outcome !== 'function') {
-    return finish(action, nodeType, outcome as ToolResult)
-  }
-
-  // ⑤ 异步：驱动轮询到 done（超时收敛成失败）
-  const poll = outcome as ToolPollFn
-  while (true) {
-    if (signal?.aborted) {
-      const rs = errorState(action.id, '已取消')
-      writeRuntime(rs, true) // 同上：用户点了取消必须立刻看到收敛
-      await cancelUpstream()
-      return { ok: false, error: rs.message }
-    }
-    let state: ToolPollState
-    try {
-      state = await poll()
-    } catch (err) {
-      const rs = errorState(action.id, toError(err, '任务执行中断').error ?? '任务执行中断', '稍后再点一次试试')
-      writeRuntime(rs)
-      return toError(err, '任务执行中断')
-    }
-    if (state.status === 'done') return finish(action, nodeType, state.result)
-    // running 帧才带 taskId：记下来，取消时要用它去服务端真取消
-    if (typeof state.taskId === 'string' && state.taskId) serverTaskId = state.taskId
-    // 中间帧：节流窗口内不写（不论进度是否变）；窗口外写
-    const t = now()
-    const next = progressState(lastState ?? runningState(action.id), state)
-    lastState = next
-    if (t - lastWriteAt >= throttleMs) {
-      writeRuntime(next)
-      lastWriteAt = t
-    }
-    if (t - startedAt > (actionTimeout ?? timeoutMs)) {
-      const rs = errorState(action.id, '任务超时（未在预期时间内完成）', '稍后再点一次试试')
-      writeRuntime(rs, true) // 超时也是终态
-      return { ok: false, error: rs.message, taskId: next.taskId }
-    }
-    await sleepOrAbort(actionInterval ?? interval, signal ?? new AbortController().signal)
-  }
-
-  /** 终态（不节流）：写 done/error，再交给写入器（除非动作声明了 self） */
-  async function finish(action: BarAction, nodeType: string, result: ToolResult): Promise<ToolResult> {
-    if (result.ok) {
-      // force：终态必须落盘。外部管状态的动作（云端）中间帧交给后台，
-      // 但兜底轮询问到的终态若也吞掉，SSE 丢一次帧卡片就永远停在 running。
-      writeRuntime(doneState(action.id, result.taskId), true)
-      if (action.apply !== 'self') {
-        const applier = registry.applierOf(nodeType)
-        if (applier) await applier(nodeId, result, { nodeType })
-        else if (deps.writeResult) deps.writeResult(nodeId, { runState: doneState(action.id, result.taskId) })
-      }
-      return result
-    }
-    const rs = errorState(action.id, result.error ?? '任务失败')
-    writeRuntime(rs, true)
-    return result
-  }
-}
-
-export interface ResumeActionArgs {
-  nodeId: string
-  nodeType: string
-  registry: BarLookup
-  taskId: string
-  actionId: string
-  /** 取消信号：续查出来的任务同样要能被「取消」中断（不传 = 不可取消） */
-  signal?: AbortSignal
-}
-
-export interface ResumeResult {
-  resumed: boolean
-  state: NodeRunState
-}
-
-/**
- * 刷新后续查：拿 data.runState 里的 taskId/actionId 把上次 running 的任务接回来。
- *
- * 关键约定：**错误分支必须在第一个 await 之前同步写完**——restoreAll 用 void 调它，
- * 异步分支抛错会被吞掉；同步写下的错误态是刷新场景唯一的兜底显示。
- */
-export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Promise<ResumeResult> {
-  const { nodeId, nodeType, registry, taskId, actionId, signal } = args
-  // 同步分支：动作不在了（提供方插件被卸/版本变了）或拿不到 taskId → 明确中断，不去猜
-  const action = registry.get(actionId)
-
-  /**
-   * 续查路径同样要尊重"外部管状态"（刷新后接着看的那些）。
-   *
-   * 注意这行**必须在 action 取到之后**才定义：之前的写法把 writeRuntime 提到了
-   * registry.get 前面，函数体里引用了一个还没赋值的 action —— 一进续查就抛。
-  *
-  * @param force 终态必须传 true —— 同 runAction：兜底轮询问到的终态若不落地，
-  *   刷新后（或 SSE 丢帧后）卡片会永远停在 running。
-   */
-  const writeRuntime = (rs: NodeRunState, force = false): void => {
-    if (action?.externalRunState && !force) return
-    deps.writeRuntime(nodeId, { runState: rs })
-  }
-
-  if (!action?.resume || !taskId) {
-    const rs = errorState(actionId, '刷新后任务已中断')
-    // 注意：这条是**同步写**（在第一个 await 之前）—— restoreAll 用 void 调它，
-    // 异步分支抛错会被吞掉，这里是刷新场景唯一的兜底显示。
-    writeRuntime(rs, true)
-    return { resumed: false, state: rs }
-  }
-
-  const runCtx: BarRunContext = {
-    nodeId,
-    nodeType,
+    nodeType: args.nodeType,
     signal: new AbortController().signal,
     onProgress: () => {},
     readData: () => deps.readData(nodeId),
   }
 
-  let lastState: NodeRunState = { status: 'running', progress: 0, actionId, taskId }
+  /**
+   * 提交帧：running 0% + 能不能取消。
+   *
+   * canCancel 写在**节点数据**里（不在内存里）—— 节点壳只读数据画按钮，
+   * 刷新 / 换标签页之后还是同一个答案。后台建好任务后会在自己的帧里再写一次。
+   */
+  const bootstrap = runningState(action.id)
+  deps.writeRuntime(nodeId, {
+    runState: {
+      ...bootstrap,
+      canCancel: action.cancellable === true || typeof action.onCancel === 'function',
+    },
+  })
+
+  let outcome: ToolOutcome
   try {
-    const poll = action.resume(taskId, runCtx)
-    if (!poll) {
-      const rs = errorState(actionId, '刷新后任务已中断')
-      writeRuntime(rs, true)
-      return { resumed: false, state: rs }
-    }
-    while (true) {
-      // 取消：续查的任务同样要能被打断（覆盖层「取消」按钮），且要顺手清掉服务端任务
-      if (signal?.aborted) {
-        const rs = errorState(actionId, '已取消')
-        writeRuntime(rs, true)
-        try {
-          if (typeof action.onCancel === 'function' && taskId) await action.onCancel(taskId, runCtx)
-        } catch {
-          /* 服务端取消失败不改本地已取消的事实 */
-        }
-        return { resumed: true, state: rs }
-      }
-      const state = await poll()
-      if (state.status === 'done') {
-        const result = state.result
-        if (result.ok) {
-          const rs = doneState(actionId, taskId)
-          writeRuntime(rs, true)
-          if (action.apply !== 'self') {
-            const applier = registry.applierOf(nodeType)
-            if (applier) await applier(nodeId, result, { nodeType })
-          }
-          return { resumed: true, state: rs }
-        }
-        const rs = errorState(actionId, result.error ?? '任务失败')
-        writeRuntime(rs, true)
-        return { resumed: true, state: rs }
-      }
-      lastState = progressState(lastState, state)
-      writeRuntime(lastState)
-      // ★ 等「interval」毫秒再问下一次 —— 续查循环漏了这一行，会变成疯狂连打服务端
-      //   （实测每秒几百次 /mcp 请求 + 每帧全图写盘，5 秒拖垮 dev server）。
-      //   间隔与主循环（runAction）同口径：deps.interval ?? DEFAULT_INTERVAL。
-      //   等待本身可被打断：覆盖层点取消要立刻收敛（见 sleepOrAbort）。
-      await sleepOrAbort(deps.interval ?? DEFAULT_INTERVAL, signal ?? new AbortController().signal)
-    }
+    outcome = await action.run(input, runCtx)
   } catch (err) {
-    const rs = errorState(actionId, toError(err, '任务执行中断').error ?? '任务执行中断')
-    writeRuntime(rs, true)
-    return { resumed: true, state: rs }
+    const rs = errorState(action.id, toError(err, '动作执行失败').error ?? '动作执行失败', '可以调整参数后再点一次')
+    deps.writeRuntime(nodeId, { runState: rs })
+    return toError(err, '动作执行失败')
   }
+
+  // 同步完成的动作（不是生成类）：结果直接落地，没有后台任务可等
+  if (typeof outcome !== 'function') {
+    const result = outcome as ToolResult
+    /**
+     * 「已经交给后台了」：动作声明了 externalRunState（云端动作就是这样），
+     * 返回的 taskId 是后台任务号，**不是**最终结果。
+     *
+     * 这时不能写 done —— 写了卡片就立刻显示完成，后台其实还在跑。
+     * 进度与终态由后台写节点，SSE / 全局定时器把结果带回来。
+     */
+    if (action.externalRunState && result.ok && result.taskId) {
+      deps.writeRuntime(nodeId, {
+        runState: {
+          ...runningState(action.id),
+          taskId: result.taskId,
+          canCancel: action.cancellable === true || typeof action.onCancel === 'function',
+        },
+      })
+      return result
+    }
+    return finish(action, args.nodeType, result)
+  }
+
+  /**
+   * 交了任务、给了轮询函数 —— **前端不去驱动它**。
+   *
+   * 进度与终态由后台写节点、SSE 推回来；SSE 断了由全局定时器批量对账。
+   * 在这里再开一个循环，就是同一件事的第二条链路（也正是要删掉的那条）。
+   */
+  return { ok: true }
+
+  /** 同步完成的终态：写 done/error，再交给写入器（除非动作声明了 self） */
+  async function finish(action: BarAction, nodeType: string, result: ToolResult): Promise<ToolResult> {
+    if (result.ok) {
+      deps.writeRuntime(nodeId, {
+        runState: { status: 'done', progress: 100, actionId: action.id, ...(result.taskId ? { taskId: result.taskId } : {}) },
+      })
+      if (action.apply !== 'self') {
+        const applier = registry.applierOf(nodeType)
+        if (applier) await applier(nodeId, result, { nodeType })
+        else if (deps.writeResult) deps.writeResult(nodeId, { runState: doneFrame(action.id, result.taskId) })
+      }
+      return result
+    }
+    const rs = errorState(action.id, result.error ?? '任务失败')
+    deps.writeRuntime(nodeId, { runState: rs })
+    return result
+  }
+}
+
+/** 同步完成时写进 data.runState 的那一帧（与 doneState 同形，就地收口避免多引一个导出） */
+function doneFrame(actionId: string, taskId?: string): NodeRunState {
+  return { status: 'done', progress: 100, actionId, ...(taskId ? { taskId } : {}) }
 }

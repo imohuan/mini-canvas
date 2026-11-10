@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { makeJobPoll, submitJob, toPollState, type RunDeps } from '../jobRunner'
+import { submitJob, type RunDeps } from '../jobRunner'
 import { CloudApi } from '../api'
 import type { FetchLike } from '../apiTypes'
-import type { ServerJob } from '../apiTypes'
 
 function fakeApi(handler: (url: string, init?: RequestInit) => { status?: number; body?: unknown }): CloudApi {
   const fetchImpl: FetchLike = async (url, init) => {
@@ -21,71 +20,6 @@ function deps(api: CloudApi, over: Partial<RunDeps> = {}): RunDeps {
     ...over,
   }
 }
-
-describe('Job → 底栏认识的轮询状态', () => {
-
-  it('running：带上 taskId（不带的话"取消"发不到后台）', () => {
-    const job: ServerJob = { id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'running', progress: 40, message: '跑着' }
-    expect(toPollState(job, 'j1')).toEqual({ status: 'running', progress: 40, message: '跑着', taskId: 'j1' })
-  })
-
-  it('done：带上产物', () => {
-    const job: ServerJob = {
-      id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'done',
-      result: { ok: true, urls: ['https://x/1.png'] },
-    }
-    expect(toPollState(job, 'j1')).toEqual({ status: 'done', result: { ok: true, urls: ['https://x/1.png'], taskId: 'j1' } })
-  })
-
-  it('error：收敛成 done + ok:false（底栏不会永远转）', () => {
-    const job: ServerJob = {
-      id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'error',
-      result: { ok: false, error: '平台说不行' },
-    }
-    const s = toPollState(job, 'j1')
-    expect(s.status).toBe('done')
-    expect(s.status === 'done' && s.result.ok).toBe(false)
-    expect(s.status === 'done' && s.result.error).toBe('平台说不行')
-  })
-
-  /**
-   * 失败必须有可读原因（用户 2026-11-10：「任务失败也没有说原因」）。
-   * 上游 / 老后台可能只回一个 error 状态、不带 result.error ——
-   * 那种情况不能再让卡片只剩「任务失败」四个字。
-   */
-  it('error 但没带原因：补一句能照着查的说明', () => {
-    const job: ServerJob = {
-      id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'error',
-      result: { ok: false },
-    }
-    const s = toPollState(job, 'j1')
-    expect(s.status).toBe('done')
-    const err = s.status === 'done' ? s.result.error ?? '' : ''
-    expect(err.length).toBeGreaterThan(10)
-    expect(err).toMatch(/生成历史|平台配置|网络/)
-  })
-})
-
-describe('轮询函数', () => {
-  it('问后台，翻译成底栏状态', async () => {
-    const api = fakeApi(() => ({ body: { ok: true, job: { id: 'j1', status: 'running', progress: 10 } } }))
-    const poll = makeJobPoll(deps(api), 'j1')
-    expect(await poll()).toEqual({ status: 'running', progress: 10, taskId: 'j1' })
-  })
-
-  it('任务在后台不存在 → 收敛成失败（别让界面永远转）', async () => {
-    const api = fakeApi(() => ({ status: 404, body: {} }))
-    const s = await makeJobPoll(deps(api), 'gone')()
-    expect(s.status).toBe('done')
-    expect(s.status === 'done' && s.result.ok).toBe(false)
-  })
-
-  it('查一次失败不算终态（报给用户但继续）', async () => {
-    const api = fakeApi(() => ({ status: 500, body: {} }))
-    const s = await makeJobPoll(deps(api), 'j1')()
-    expect(s.status).toBe('running')
-  })
-})
 
 describe('下单', () => {
   it('把画布 id 与动作一起交给后台', async () => {
@@ -167,5 +101,15 @@ describe('下单', () => {
     })
     await submitJob(d, { nodeId: 'n1', actionId: 'a:1' })
     expect(notes.join('')).toContain('imageUrl')
+  })
+
+  /**
+   * 用户口径 2026-11-10：前端不再自己轮询 —— 下单只返回任务号，
+   * 进度与终态由后台写节点 + jobsWatcher 对账。
+   */
+  it('下单只返回任务号（不再给轮询函数）', async () => {
+    const api = fakeApi(() => ({ body: { ok: true, jobId: 'j9' } }))
+    const r = await submitJob(deps(api), { nodeId: 'n1', actionId: 'a:1' })
+    expect(r).toEqual({ jobId: 'j9' })
   })
 })

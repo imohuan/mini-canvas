@@ -165,4 +165,28 @@ describe('加载 UI：全局唯一一件，字段由后台给', () => {
     )
     expect(html).toContain('v2-task-cancel')
   })
+
+  /**
+   * 用户口径 2026-11-10：显示依据写在**节点数据**里。
+   *
+   * 提交任务的一方把 `runState.canCancel` 写进节点，壳原样读它 ——
+   * 不查动作表，所以刷新后动作清单还没加载完的那一小会儿也不会误判。
+   */
+  it('★ 节点数据说能取消 → 画按钮（不看 nodeTask 怎么答）', async () => {
+    const html = await renderNode(
+      r,
+      { text: '', runState: { status: 'running', progress: 10, canCancel: true } },
+      { nodeTask: { cancel: () => {}, canCancel: () => false } },
+    )
+    expect(html).toContain('v2-task-cancel')
+  })
+
+  it('★ 节点数据说不能取消 → 不画按钮（哪怕 nodeTask 说能）', async () => {
+    const html = await renderNode(
+      r,
+      { text: '', runState: { status: 'running', progress: 10, canCancel: false } },
+      { nodeTask: { cancel: () => {}, canCancel: () => true } },
+    )
+    expect(html).not.toContain('v2-task-cancel')
+  })
 })
