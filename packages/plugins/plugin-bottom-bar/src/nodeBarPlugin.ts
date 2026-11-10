@@ -313,11 +313,19 @@ export class NodeTaskService extends Service {
         })
         continue
       }
+      /**
+       * 这个节点上**已经有本地任务在跑**（runAction 起的）→ 不续查。
+       *
+       * 用户 2026-11-10 实测：点发送后卡片先正常转，几秒后变「已取消」。
+       * 原因是这一轮 restoreAll 看到节点是 running 就去续查，同时把
+       * `this.cancels` 里那条**正在跑的本地任务** abort 掉；被 abort 的本地任务
+       * 按约定写「已取消」，于是任务还没跑完就先被判死。
+       * 续查只该接「上次留下的、本机没有句柄」的任务。
+       */
+      if (this.cancels.has(node.id)) continue
       // ★ 必须登记 AbortController：续查出来的任务同样要能被「取消」按钮中断。
       //   不登记的话 `cancel()` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈）。
       const ctrl = new AbortController()
-      // 续查重复触发同一节点时，先取消上一条，避免两个轮询写同一张卡片。
-      this.cancels.get(node.id)?.abort()
       this.cancels.set(node.id, ctrl)
       void resumeAction(
         {

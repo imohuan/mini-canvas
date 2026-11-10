@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@mini-canvas/kernel'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { BarAction } from '../barTypes'
 import { NodeBarService, NodeTaskService, registerBarAction } from '../nodeBarPlugin'
 
@@ -57,7 +59,7 @@ describe('NodeTaskService：同节点重复执行与取消', () => {
     ctx.stop()
   })
 
-  it('restoreAll 续查的任务同样登记控制器；重复登记时先取消旧的', async () => {
+  it('restoreAll 续查的任务同样登记控制器（登记后取消按 taskId 发出）', async () => {
     const doc = {
       getNode: () => ({ type: 'image', data: { runState: { status: 'running', actionId: 'gated', taskId: 't1' } } }),
       getNodes: () => [{ id: 'n1', type: 'image', data: {} }],
@@ -78,6 +80,39 @@ describe('NodeTaskService：同节点重复执行与取消', () => {
     await Promise.resolve()
     task.cancel('n1')
     expect(cancel).toHaveBeenCalledWith('n1')
+    ctx.stop()
+  })
+
+  /**
+   * 用户 2026-11-10 实测：点发送后卡片先正常转，几秒后变「已取消」，后台任务其实还在跑。
+   *
+   * 根因：restoreAll 看到节点 running 就去续查，并 `cancels.get(nodeId)?.abort()` ——
+   * 那一下 abort 掉的正是**刚提交的本地任务**，它按约定写「已取消」。
+   * 续查只该接「本机没有句柄」的残留任务。
+   */
+  it('本地正在跑的任务不被当残留续查（否则会被自己 abort 成「已取消」）', async () => {
+    const rs = { status: 'running', actionId: 'gated', taskId: 't-local', startedAt: Date.now() }
+    let updates = 0
+    const doc = {
+      getNode: () => ({ type: 'image', data: { runState: rs } }),
+      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: rs } }],
+      updateNodeRuntime: () => { updates++ },
+    }
+    const ctx = new Context()
+    ctx.inject('doc', doc)
+    ctx.plugin({
+      name: 'bar-host',
+      apply(c) {
+        new NodeBarService(c as never)
+      },
+    })
+    await ctx.start()
+    const task = new NodeTaskService(ctx as never)
+    // 模拟「本地已有一条任务在跑」：登记一个控制器
+    const src = readFileSync(resolve(__dirname, '../nodeBarPlugin.ts'), 'utf8')
+    expect(src).toMatch(/if \(this\.cancels\.has\(node\.id\)\) continue/)
+    expect(src).not.toMatch(/this\.cancels\.get\(node\.id\)\?\.abort\(\)\n\s*this\.cancels\.set\(node\.id, ctrl\)/)
+    await task.restoreAll()
     ctx.stop()
   })
 
