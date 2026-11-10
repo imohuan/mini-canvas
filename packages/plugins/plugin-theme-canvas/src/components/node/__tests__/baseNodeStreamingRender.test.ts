@@ -94,6 +94,39 @@ describe('流式生成：露出正文，只挂状态条', () => {
     expect(html).toContain('tokens')
   })
 
+  /**
+   * 用户实测：正文已经 400 多字了，状态条还显示 `100tokens`。
+   * 原因是 token 数被塞进了加载件的 `percent`（0~100 钳制），一超过 100 就封顶。
+   * 现在 token 走不设上限的 `value`，百分比仍走 `percent`。
+   */
+  it('token 数超过 100 不封顶（400+ tokens 要照实显示）', async () => {
+    const html = await renderNode(r, {
+      text: '一些已经生成的文字',
+      runState: { status: 'running', progress: 60, actionId: 'agent:chat', stats: { chars: 300, tokens: 451 } },
+    })
+    expect(html).toContain('451')
+    expect(html).toContain('tokens')
+    expect(html).not.toContain('100<span class="ld-pct"')
+  })
+
+  it('对话任务（agent:chat）即使还没有 stats，也显示 tokens 而不是百分比（用户 2026-11-10 实测）', async () => {
+    const html = await renderNode(r, {
+      text: '',
+      runState: { status: 'running', progress: 21, actionId: 'agent:chat' },
+    })
+    expect(html).toContain('tokens')
+    expect(html).not.toContain('>%<')
+  })
+
+  it('对话任务刚开始就显示 0tokens（不是 0%）', async () => {
+    const html = await renderNode(r, {
+      text: '',
+      runState: { status: 'running', progress: 0, actionId: 'agent:chat', stats: { chars: 0, tokens: 0 } },
+    })
+    expect(html).toContain('0')
+    expect(html).toContain('tokens')
+  })
+
   it('加载中但还没有正文 → 仍然全屏加载件（没内容可看）', async () => {
     const html = await renderNode(r, {
       text: '',

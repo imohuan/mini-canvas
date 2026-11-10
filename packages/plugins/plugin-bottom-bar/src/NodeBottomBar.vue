@@ -109,6 +109,26 @@ function onActionPicked(value: string | number): void {
   selectAction(String(value))
 }
 
+/** 当前动作所属平台的账号（多于一个才在触发器上出现账号入口） */
+const currentActionAccounts = computed<Array<{ id: string; name?: string }>>(() => {
+  const raw = (currentAction.value as { accounts?: Array<{ id: string; name?: string }> } | undefined)?.accounts
+  return Array.isArray(raw) ? raw : []
+})
+
+/** 当前选中的账号 id（空 = 用平台默认号） */
+const currentAccountId = computed<string>(() =>
+  typeof values.value.__accountId === 'string' ? values.value.__accountId : '',
+)
+
+/**
+ * 选了某个账号：只记下来（写进 `values.__accountId`，随任务一起提交），不改当前动作。
+ *
+ * 用户口径 2026-11-10：模型行仍然只有一行，账号在二级菜单里选；选中后触发器文本后面显示账号名。
+ */
+function onAccountPicked(_actionId: string, accountId: string): void {
+  onFieldChange('__accountId', accountId)
+}
+
 /**
  * provider 自带的 HTML 面板（有它就替掉默认的参数控件）。
  *
@@ -217,6 +237,10 @@ const actionChoices = computed(() =>
       note: summary,
       /** provider 图标 / 图标名 / 兜底 —— 下拉列表与触发器必须同源 */
       model: o.model,
+      /** 多账号：这个动作所属平台的账号清单（多于一个才出入口） */
+      accounts: (action as { accounts?: Array<{ id: string; name?: string }> } | undefined)?.accounts,
+      /** 当前选中的账号（记在节点 barValues.__accountId 里） */
+      accountId: typeof values.value.__accountId === 'string' ? values.value.__accountId : '',
     }
   }),
 )
@@ -483,8 +507,24 @@ async function onRun(): Promise<void> {
     // **不写 data.text** —— 那是节点正文 = 模型答案（用户 2026-11-10：
     // 发送后输入框不能被答案覆盖，占位符也不能和正文叠字）。
     persistValues()
-    // 清掉上一次的答案，让节点进入干净的「加载中」状态（后台随后逐段写新内容）。
-    ctx.get('doc').updateNode(props.id, { data: { text: '' } })
+    /**
+     * **发请求之前**就把节点置成「加载中」（用户 2026-11-10：
+     * 现在要等后台第一帧才算开始，中间一两秒画面上什么都没变）。
+     * 用 updateNodeRuntime：进度帧不进撤销栈，与后台写的是同一把 key。
+     */
+    ctx.get('doc').updateNodeRuntime(props.id, {
+      data: {
+        text: '',
+        runState: {
+          status: 'running',
+          progress: 0,
+          message: '任务已提交，等待执行…',
+          actionId: 'agent:chat',
+          startedAt: Date.now(),
+          stats: { chars: 0, tokens: 0 },
+        },
+      },
+    })
     submitted.value = true
     const r = await sendAgentMessage()
     // 任务建成了就交给后台：加载态 / 完成 / 失败全由后台的 runState 帧驱动，
@@ -862,6 +902,9 @@ onBeforeUnmount(() => {
             v-if="!useAgentModelsEffective && choicePickerAvailable"
             :options="actionChoices"
             :current-id="currentId"
+            :accounts="currentActionAccounts"
+            :account-id="currentAccountId"
+            @pick-account="onAccountPicked"
             :current-label="currentActionLabel"
             :current-model-icon="currentModelIcon"
             :disabled="running"

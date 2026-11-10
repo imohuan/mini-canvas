@@ -105,6 +105,17 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
    * 其它任务仍用百分比 —— 由调用方决定画哪个。
    */
   const tokenCount = computed(() => stats.value?.tokens)
+
+  /**
+   * 是不是「文本对话」任务（动作 agent:chat）。
+   *
+   * 用户 2026-11-10：这条链路要显示 token 数，不是百分比 ——
+   * 一开始还没吐字时 stats 不存在，所以不能靠「有没有 stats」判断，
+   * 得靠动作 id。
+   */
+  const isChatTask = computed(
+    () => (runState.value as { actionId?: unknown }).actionId === 'agent:chat',
+  )
   const startedAt = computed(() => {
     const v = runState.value.startedAt
     return typeof v === 'number' && Number.isFinite(v) ? v : 0
@@ -112,6 +123,6 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
 
   return {
     visualState, loading, failed, covered, percent, message, label, reason, hint, startedAt,
-    stats, streaming, streamTail, tokenCount,
+    stats, streaming, streamTail, tokenCount, isChatTask,
   }
 }

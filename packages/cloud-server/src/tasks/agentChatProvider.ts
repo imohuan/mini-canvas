@@ -127,6 +127,8 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
   const runs = new Map<string, LiveRun>()
   return {
     id: 'agent-chat',
+    title: 'Agent 对话',
+    description: '内置平台：文本节点直接问 Agent 的默认模型',
     actions: [ACTION],
 
     /** 起一次生成：立刻返回 taskId，真正跑在后台（poll 读状态） */

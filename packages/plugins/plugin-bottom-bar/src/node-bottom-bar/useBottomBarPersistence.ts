@@ -25,18 +25,32 @@ export function useBottomBarPersistence(deps: PersistDeps) {
     const storedAction = deps.storedActionId.value
     const onlyActionId =
       !rawStored || (Object.keys(rawStored).length > 0 && Object.keys(rawStored).every((k) => k === 'actionId'))
-    if (storedAction === deps.currentId.value && onlyActionId) return
-    if (!deps.showEditor.value && Object.keys(deps.values.value).length === 0) return
+    // 对话模式（文本节点 agent:chat）没有底栏动作，showEditor 恒为 false，
+    // 但输入框内容同样要落盘（barPrompt）—— 用户 2026-11-10：发送后输入框不能丢。
+    const conversation = deps.conversation?.value === true
+    /**
+     * 「参数没变」的快返只对**非对话**模式成立。
+     *
+     * 对话模式的 barValues 永远只有 actionId 一项，于是 storedAction === currentId
+     * 且 onlyActionId 恒为真 —— 原来这行直接 return，barPrompt 一次都没写进节点
+     * （用户实测：画布里 barPrompt 一直停在上一次的值，输入框重挂载就被旧值顶掉）。
+     */
+    if (!conversation && storedAction === deps.currentId.value && onlyActionId) return
+    if (!conversation && !deps.showEditor.value && Object.keys(deps.values.value).length === 0) return
     try {
       deps.ctx.get('doc').updateNode(deps.props.id, {
         data: {
           barValues: { ...deps.values.value, actionId: deps.currentId.value },
-          ...(deps.showEditor.value
-            ? deps.conversation?.value
-              ? promptPersistFields('none', deps.prompt.value)
-              : promptPersistFields(deps.promptBinding.value, deps.prompt.value)
-            : {}),
-          ...(deps.showEditor.value && deps.promptDoc.value ? promptDocPersistFields(deps.promptDoc.value) : {}),
+          ...(conversation
+            ? promptPersistFields('none', deps.prompt.value)
+            : deps.showEditor.value
+              ? promptPersistFields(deps.promptBinding.value, deps.prompt.value)
+              : {}),
+          ...(conversation && deps.promptDoc.value
+            ? promptDocPersistFields(deps.promptDoc.value)
+            : deps.showEditor.value && deps.promptDoc.value
+              ? promptDocPersistFields(deps.promptDoc.value)
+              : {}),
         },
       })
     } catch {

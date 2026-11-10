@@ -134,6 +134,7 @@ const {
   streaming: taskStreaming,
   streamTail: taskStreamTail,
   tokenCount: taskTokenCount,
+  isChatTask: taskIsChatTask,
 } = taskState
 /**
  * 状态条/加载件的「进度显示」：
@@ -142,12 +143,24 @@ const {
  * 用户 2026-11-10 明确要「20000tokens 这样的方式」，不是百分比。
  */
 const showTokenProgress = computed(
-  () => typeof taskTokenCount.value === 'number' && taskTokenCount.value > 0,
+  // 文本对话任务：**始终**用 token 显示（还没吐字时就是 0tokens），
+  // 不能等 stats 出现才切 —— 那会让「等待模型响应」那几秒显示成百分比（用户 2026-11-10 实测）。
+  () => taskIsChatTask.value || (typeof taskTokenCount.value === 'number' && taskTokenCount.value > 0),
 )
-const progressValue = computed(
-  () => (showTokenProgress.value ? (taskTokenCount.value as number) : percent.value),
+const progressValue = computed(() =>
+  showTokenProgress.value ? (taskTokenCount.value ?? 0) : percent.value,
 )
 const progressSuffix = computed(() => (showTokenProgress.value ? 'tokens' : '%'))
+/**
+ * 分给加载件的两个口：
+ * · `value` —— 不设上限（token 数会超过 100）；
+ * · `percent` —— 0~100，加载件内部会钳制。
+ *
+ * token 必须走 `value`：之前这里把 token 塞进 `percent`，加载件一钳制就成
+ * 「100tokens」封顶（用户 2026-11-10 实测 402 字仍显示 100tokens）。
+ */
+const progressAsValue = computed(() => (showTokenProgress.value ? progressValue.value : null))
+const progressAsPercent = computed(() => (showTokenProgress.value ? null : progressValue.value))
 
 /**
  * 取消任务：**可选能力**（底部状态栏插件上架 nodeTask 服务才有）。
@@ -527,11 +540,13 @@ const {
           variant="chip"
           :tone="failed ? 'error' : 'loading'"
           :label="taskLabel"
-          :percent="failed ? null : progressValue"
+          :percent="failed ? null : progressAsPercent"
+          :value="failed ? null : progressAsValue"
           :suffix="progressSuffix"
           :message="taskReason"
           :started-at="failed ? 0 : taskStartedAt"
           :stream-tail="failed ? '' : taskStreamTail"
+          :stats="failed ? undefined : taskStats"
         />
         <button v-if="canCancel" class="v2-stream-cancel nodrag nopan" type="button" @click.stop="onCancelTask">取消</button>
       </div>
@@ -539,12 +554,14 @@ const {
         v-if="showDefaultState"
         :tone="failed ? 'error' : 'loading'"
         :label="taskLabel"
-        :percent="failed ? null : progressValue"
+        :percent="failed ? null : progressAsPercent"
+        :value="failed ? null : progressAsValue"
         :suffix="progressSuffix"
         :message="taskReason"
         :hint="taskHint"
         :started-at="failed ? 0 : taskStartedAt"
         :stream-tail="failed ? '' : taskStreamTail"
+        :stats="failed ? undefined : taskStats"
       >
         <template #action>
           <!-- 取消：只有装了能取消任务的插件（底部状态栏提供 nodeTask）才出现 -->
