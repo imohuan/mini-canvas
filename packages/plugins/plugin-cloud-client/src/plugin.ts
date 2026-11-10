@@ -483,12 +483,27 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
       status.error = undefined
       if (!r.changed) return
       const f = ctx.registryOf<BarActionLike>('node/bar')
-      // 摘掉两类：① 上次有、这次没了的；② 同名族里不在清单中的
-      //（后者是本地插件"等底栏装好再试一次"那条重试路径可能留下的，也可能是后台删了的）
-      const existingIds = f.list('node/bar').map((e) => e.id)
-      for (const id of staleActionIds(existingIds, r.actions.map((a) => a.id))) f.remove('node/bar', id)
-      const { toRemove, toRegister } = diffActions(knownActionIds, r.actions)
-      for (const id of toRemove) f.remove('node/bar', id)
+      /*
+       * 摘掉两类：① 上次有、这次没了的；② 同名族里不在清单中的
+       *（后者是本地插件"等底栏装好再试一次"那条重试路径可能留下的，也可能是后台删了的）。
+       *
+       * ★ key 必须与注册时一致：`registerBarAction` 用的是 `actions/${id}`，
+       *   id 也用动作 id。以前这里写成 `f.list('node/bar')` / `f.remove('node/bar', id)`，
+       *   list 永远空、remove 永远 false —— 旧动作一条都删不掉，于是「停用平台后
+       *   下拉里还留着那些模型」（用户 2026-11-10 两次反馈）。见 staleKeyRemoval.test.ts。
+       */
+      const existingIds: string[] = []
+      for (const key of f.keys()) {
+        if (!key.startsWith('actions/')) continue
+        for (const entry of f.list(key)) existingIds.push(entry.id)
+      }
+      for (const id of staleActionIds(existingIds, r.actions.map((a) => a.id))) {
+        f.remove(`actions/${id}`, id)
+      }
+      // 以「实际扫到的旧条目」为准，而不是内存里的 knownActionIds：
+      // 热重装 / 首屏竞态都可能让 knownActionIds 落后，漏删就是幽灵菜单项。
+      const { toRemove, toRegister } = diffActions([...new Set([...knownActionIds, ...existingIds])], r.actions)
+      for (const id of toRemove) f.remove(`actions/${id}`, id)
       for (const def of toRegister) {
         // ★ 云端动作的进度由**后台**写进节点；底栏不要再写一遍（两支笔写同一张便利贴会来回跳）。
         const barAction = toBarAction(def, handlersFor(def))
