@@ -289,39 +289,42 @@ function clearAccountTimer(): void {
   }
 }
 
-function openAccountSoon(item: ChoiceItem): void {
+function openAccountSoon(item: ChoiceItem, row?: Element | null): void {
   if (!hasAccounts(item)) return
   clearAccountTimer()
   accountTimer = window.setTimeout(() => {
-    openAccount(item)
+    openAccount(item, row ? anchorIn(row) : null)
     accountTimer = null
   }, 120)
+}
+
+/**
+ * 在同一行里找箭头元素。
+ *
+ * 必须**按行找**，不能 `document.querySelectorAll('[data-account-anchor]')` 再按 id 匹配：
+ * 卡片视图与分栏视图在 DOM 里同时存在，两行 id 相同；按全页找会先命中隐藏的那一份，
+ * 它没有尺寸，菜单就被定位到屏幕左上角（用户 2026-11-10 反馈「二级菜单都不显示了」）。
+ */
+function anchorIn(row: Element): HTMLElement | null {
+  return row.querySelector<HTMLElement>('[data-account-anchor]')
 }
 
 /** 立刻打开某一行的账号菜单（点箭头走这条，不经延迟） */
 function openAccount(item: ChoiceItem, anchor?: HTMLElement | null): void {
   if (!hasAccounts(item)) return
   clearAccountTimer()
-  const el = anchor ?? accountAnchorOf(item)
+  const el = anchor ?? null
   accountAnchor.value = el
   if (el) {
     const r = el.getBoundingClientRect()
     // 菜单贴箭头右侧展开；右侧放不下就翻到左边（口径同任何下拉）
     const menuW = 168
     const left = r.right + 6 + menuW > window.innerWidth - 8 ? r.left - menuW - 6 : r.right + 6
-    const top = Math.min(Math.max(8, r.top - 6), window.innerHeight - 8 - 120)
+    // 先按「不超出屏幕下沿」压一次，再保证不小于 8 —— 反过来的话窗口矮时会被压成负数、跑出屏幕
+    const top = Math.max(8, Math.min(r.top - 6, window.innerHeight - 8 - 120))
     accountMenuPos.value = { left, top }
   }
   accountOpenId.value = item.id
-}
-
-/** 找某一行的箭头元素（模板里标了 data-account-anchor） */
-function accountAnchorOf(item: ChoiceItem): HTMLElement | null {
-  const all = document.querySelectorAll<HTMLElement>('[data-account-anchor]')
-  for (const el of all) {
-    if (el.dataset.accountAnchor === item.id) return el
-  }
-  return null
 }
 
 function closeAccountSoon(item: ChoiceItem): void {
@@ -446,7 +449,8 @@ defineExpose({ refreshLayout })
           <div v-if="filtered.length" class="ac-model-grid">
             <div v-for="item in filtered" :key="item.id" class="ac-model-entry"
               role="option" :aria-selected="item.id === currentId" :aria-disabled="item.disabled || undefined"
-              @mouseenter="openAccountSoon(item)" @mouseleave="closeAccountSoon(item)">
+              @mouseenter="openAccountSoon(item, $event.currentTarget as Element)"
+              @mouseleave="closeAccountSoon(item)">
               <Button variant="ghost" size="sm" class="ac-model-hit"
                 :disabled="item.disabled" @click="pick(item)">
                 <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
@@ -502,7 +506,8 @@ defineExpose({ refreshLayout })
               <div v-if="filtered.length" class="ac-model-row-list">
                 <div v-for="item in filtered" :key="item.id" class="ac-model-entry ac-model-entry-row"
                   role="option" :aria-selected="item.id === currentId" :aria-disabled="item.disabled || undefined"
-                  @mouseenter="openAccountSoon(item)" @mouseleave="closeAccountSoon(item)">
+                  @mouseenter="openAccountSoon(item, $event.currentTarget as Element)"
+                  @mouseleave="closeAccountSoon(item)">
                   <Button variant="ghost" size="sm" class="ac-model-hit"
                     :disabled="item.disabled" @click="pick(item)">
                     <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"

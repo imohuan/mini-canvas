@@ -8,6 +8,8 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { RegistryImpl } from '@mini-canvas/kernel'
@@ -94,5 +96,22 @@ describe('ChoicePicker 多账号二级菜单', () => {
       // 每个视图里名字只出现一次（卡片一次 + 分栏一次）
       expect(html.split(n).length - 1).toBe(2)
     }
+  })
+
+  /**
+   * 行级悬停：悬停事件必须挂在整行容器上（用户 2026-11-10：
+   * 「hover 应该是绑定在整个列表的 item 项里面，而不是单独绑定在某个按钮上面」）。
+   */
+  it('账号菜单的悬停挂在整行容器上，箭头只是纯图标', async () => {
+    const src = readFileSync(resolve(__dirname, '../ChoicePicker.vue'), 'utf8')
+    // 卡片视图与分栏视图各有一行，两处都要满足
+    const rows = src.match(/<div[^>]*class="ac-model-entry[^"]*"[\s\S]{0,300}?>/g) ?? []
+    expect(rows.length).toBeGreaterThanOrEqual(2)
+    for (const row of rows) expect(row).toContain('@mouseenter')
+    // 箭头本身只做「点开」，不带 hover 逻辑
+    const arrow = /<button[^>]*ac-model-account-trigger[\s\S]{0,400}?>/.exec(src)?.[0] ?? ''
+    expect(arrow).not.toContain('@mouseenter')
+    // 且不带任何自造底色
+    expect(arrow).not.toContain('data-picked')
   })
 })
