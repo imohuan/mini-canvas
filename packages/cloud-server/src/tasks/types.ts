@@ -25,6 +25,17 @@ export interface Job {
   status: JobStatus
   progress?: number
   message?: string
+  /**
+   * 加载 UI 的展示字段（由 provider 每拍给出，任务管理器原样透传）。
+   *
+   * 为什么放在 job 上而不是让前端算：用户口径 2026-11-10 —— 进度是**后台的**数据，
+   * provider 的轮询结果决定显示什么（token 数 / 自定义单位 / 滚动小尾巴），
+   * 前端只把字段画出来，不自己判断任务类型、也不自己估数。
+   */
+  value?: number
+  suffix?: string
+  progressText?: string
+  tail?: string
   /** 终态产物 */
   result?: { ok: boolean; urls?: string[]; text?: string; error?: string; taskId?: string }
   /**

@@ -76,6 +76,21 @@ function nodeRunStatePatch(runState: Record<string, unknown>): { data: Record<st
   return { data: { runState } }
 }
 
+/**
+ * 动作声明的进度口径 → 首帧 runState 字段。
+ *
+ * 没有声明就什么都不写（老动作照旧按百分比走）；声明了 `suffix: 'tokens'`
+ * 就在第一帧显示「0tokens」，不必等 provider 第一次轮询。
+ */
+function displayOf(action: ActionDef): Record<string, unknown> {
+  const d = action.progressDisplay
+  if (!d) return {}
+  return {
+    ...(d.startValue !== undefined ? { value: d.startValue } : {}),
+    ...(d.suffix !== undefined ? { suffix: d.suffix } : {}),
+  }
+}
+
 export class TaskManager {
   private readonly jobs = new Map<string, Job>()
   /** 每个 job 一个取消句柄 */
@@ -155,7 +170,16 @@ export class TaskManager {
      */
     await this.writeRunState(
       job,
-      { status: 'running', progress: 0, message: job.message, actionId: action.id, taskId: job.id, startedAt: job.createdAt },
+      {
+        status: 'running',
+        progress: 0,
+        message: job.message,
+        actionId: action.id,
+        taskId: job.id,
+        startedAt: job.createdAt,
+        // 提交帧就照动作声明的口径显示（用户 2026-11-10：点发送立刻看到 0tokens）
+        ...displayOf(action),
+      },
       this.kindOf(action) === 'text' ? { text: '' } : undefined,
     )
 
@@ -414,6 +438,12 @@ export class TaskManager {
         if (poll.status === 'running') {
           job.progress = poll.progress ?? job.progress
           job.message = poll.message ?? job.message
+          // 加载 UI 的展示字段：provider 说什么就写什么（用户 2026-11-10 ——
+          // 进度由后台给，前端只负责画）。undefined 时保留上一拍，不回退成百分比。
+          if (poll.value !== undefined) job.value = poll.value
+          if (poll.suffix !== undefined) job.suffix = poll.suffix
+          if (poll.progressText !== undefined) job.progressText = poll.progressText
+          if (poll.tail !== undefined) job.tail = poll.tail
           // 文本生成的流式预览：provider 给了 partialText 就写进节点正文 —— 用户边跑边看内容长出来。
           // 整段覆盖式更新（provider 每拍给的是「目前累计到哪」，不是增量）。
           await this.writeRunState(job, {
@@ -423,6 +453,10 @@ export class TaskManager {
             actionId: action.id,
             taskId: job.id,
             startedAt: job.createdAt,
+            ...(job.value !== undefined ? { value: job.value } : {}),
+            ...(job.suffix !== undefined ? { suffix: job.suffix } : {}),
+            ...(job.progressText !== undefined ? { progressText: job.progressText } : {}),
+            ...(job.tail !== undefined ? { tail: job.tail } : {}),
             /** 已产出量：加载层显示「已输出 N 字 / ≈M tokens」（用户 2026-11-10） */
             ...(poll.stats ? { stats: poll.stats } : {}),
           }, typeof poll.partialText === 'string' ? { text: poll.partialText } : undefined)

@@ -94,6 +94,13 @@ describe('agent:chat 任务化：后台边生成边写节点', () => {
     expect(rs0?.status).toBe('running')
     // 上一次的正文必须已经清掉（否则模型吐字前节点上挂着旧回答 —— 实测踩到）
     expect(String(first.data.text ?? '')).toBe('')
+    /**
+     * 提交那一帧就要带上「进度口径」：用户 2026-11-10 —— 点发送立刻看到 `0tokens`，
+     * 不是等第一拍轮询再从百分比换成 token。
+     */
+    const rs0Display = first.data.runState as { value?: number; suffix?: string }
+    expect(rs0Display.suffix).toBe('tokens')
+    expect(rs0Display.value).toBe(0)
 
     // ② 进度真的会动（不是卡在 0%）
     const advanced = await waitFor(
@@ -119,6 +126,21 @@ describe('agent:chat 任务化：后台边生成边写节点', () => {
     expect(typeof statsNow?.chars).toBe('number')
     expect(statsNow!.chars!).toBeGreaterThan(0)
     expect(typeof statsNow?.tokens).toBe('number')
+
+    /**
+     * 加载 UI 的展示字段由**后台**给（用户 2026-11-10：provider 轮询结果决定显示什么，
+     * 前端只管画）。生成过程中要有 token 数、单位、以及正在返回的一小段文字。
+     */
+    const rsStreaming = streaming.data.runState as {
+      value?: number
+      suffix?: string
+      tail?: string
+    }
+    expect(rsStreaming.suffix).toBe('tokens')
+    expect(typeof rsStreaming.value).toBe('number')
+    expect(rsStreaming.value!).toBeGreaterThan(0)
+    expect(typeof rsStreaming.tail).toBe('string')
+    expect((rsStreaming.tail as string).length).toBeGreaterThan(0)
 
     // ④ 终态：done 100%，正文完整非空
     const done = await waitFor(

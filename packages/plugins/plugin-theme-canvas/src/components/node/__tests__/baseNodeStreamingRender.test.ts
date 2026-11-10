@@ -72,67 +72,68 @@ function renderNode(registry: NodeRegistry, data: Record<string, unknown>): Prom
   return renderToString(app)
 }
 
-describe('流式生成：露出正文，只挂状态条', () => {
+describe('加载 UI：全局唯一一件，字段由后台给', () => {
   const r = makeRegistry()
 
-  it('加载中 + 已有正文 → 出现状态条，不铺全屏加载件', async () => {
+  /**
+   * 用户口径 2026-11-10：加载 UI 是全局唯一的一件，不许在它之外再画自己的状态条。
+   * 之前「加载中 + 有正文」会换成顶部小胶囊，那是多画了一套 —— 已删除。
+   */
+  it('加载中（有正文也一样）只画全局加载件，不出现第二套 UI', async () => {
     const html = await renderNode(r, {
       text: '这是模型边生成边写进来的正文',
-      runState: { status: 'running', progress: 32, message: '生成中…', stats: { chars: 18, tokens: 27 } },
+      runState: { status: 'running', progress: 32, message: '生成中…' },
     })
-    // 关键：换成顶部状态条，全屏遮罩不再铺 —— 正文因此不会被盖住
-    expect(html).toContain('v2-stream-bar')
-    expect(html).not.toContain('nls-root is-fill')
+    expect(html).toContain('nls-root is-fill')
+    expect(html).not.toContain('v2-stream-bar')
+    // 整个覆盖层里只有一份加载件
+    expect(html.match(/nls-root/g) ?? []).toHaveLength(1)
   })
 
-  it('状态条把已收 token 数当大数字显示（用户 2026-11-10：20000tokens 那种）', async () => {
+  /** 后台给什么就画什么（value + suffix），超过 100 不封顶 */
+  it('后台给 value=451 + suffix=tokens → 照实显示 451tokens', async () => {
     const html = await renderNode(r, {
       text: '一些已经生成的文字',
-      runState: { status: 'running', progress: 40, stats: { chars: 9, tokens: 14 } },
-    })
-    expect(html).toContain('14')
-    expect(html).toContain('tokens')
-  })
-
-  /**
-   * 用户实测：正文已经 400 多字了，状态条还显示 `100tokens`。
-   * 原因是 token 数被塞进了加载件的 `percent`（0~100 钳制），一超过 100 就封顶。
-   * 现在 token 走不设上限的 `value`，百分比仍走 `percent`。
-   */
-  it('token 数超过 100 不封顶（400+ tokens 要照实显示）', async () => {
-    const html = await renderNode(r, {
-      text: '一些已经生成的文字',
-      runState: { status: 'running', progress: 60, actionId: 'agent:chat', stats: { chars: 300, tokens: 451 } },
+      runState: { status: 'running', progress: 60, value: 451, suffix: 'tokens' },
     })
     expect(html).toContain('451')
     expect(html).toContain('tokens')
-    expect(html).not.toContain('100<span class="ld-pct"')
   })
 
-  it('对话任务（agent:chat）即使还没有 stats，也显示 tokens 而不是百分比（用户 2026-11-10 实测）', async () => {
+  it('后台给 value=0 也照画（提交那一帧的 0tokens）', async () => {
     const html = await renderNode(r, {
       text: '',
-      runState: { status: 'running', progress: 21, actionId: 'agent:chat' },
-    })
-    expect(html).toContain('tokens')
-    expect(html).not.toContain('>%<')
-  })
-
-  it('对话任务刚开始就显示 0tokens（不是 0%）', async () => {
-    const html = await renderNode(r, {
-      text: '',
-      runState: { status: 'running', progress: 0, actionId: 'agent:chat', stats: { chars: 0, tokens: 0 } },
+      runState: { status: 'running', progress: 0, value: 0, suffix: 'tokens' },
     })
     expect(html).toContain('0')
     expect(html).toContain('tokens')
   })
 
-  it('加载中但还没有正文 → 仍然全屏加载件（没内容可看）', async () => {
+  /** 没给 value 的动作（图片 / 视频）继续用百分比，行为不变 */
+  it('后台没给 value → 仍然按百分比画', async () => {
     const html = await renderNode(r, {
       text: '',
-      runState: { status: 'running', progress: 5, message: '正在连接模型…' },
+      runState: { status: 'running', progress: 42 },
     })
-    expect(html).toContain('nls-root is-fill')
-    expect(html).not.toContain('v2-stream-bar')
+    expect(html).toContain('42')
+    expect(html).toContain('%')
+  })
+
+  /** progressText 优先于 value + suffix（后台要显示任意说法时用） */
+  it('后台给 progressText → 整段照画，优先于 value/suffix', async () => {
+    const html = await renderNode(r, {
+      text: '',
+      runState: { status: 'running', progress: 30, value: 12, suffix: 'tokens', progressText: '≈1.2k tokens' },
+    })
+    expect(html).toContain('≈1.2k tokens')
+  })
+
+  /** 后台给的 tail 直接出现在加载件下（前端不再自己去正文末尾抠） */
+  it('后台给 tail → 加载件显示这段滚动文字', async () => {
+    const html = await renderNode(r, {
+      text: '正文很长很长很长',
+      runState: { status: 'running', progress: 40, value: 40, suffix: 'tokens', tail: '正在讲这个词的来历' },
+    })
+    expect(html).toContain('正在讲这个词的来历')
   })
 })

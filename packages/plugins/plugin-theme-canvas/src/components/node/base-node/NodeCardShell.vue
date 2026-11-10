@@ -131,36 +131,21 @@ const {
   hint: taskHint,
   startedAt: taskStartedAt,
   stats: taskStats,
-  streaming: taskStreaming,
   streamTail: taskStreamTail,
-  tokenCount: taskTokenCount,
-  isChatTask: taskIsChatTask,
+  displayValue: taskValue,
+  displaySuffix: taskSuffix,
+  displayText: taskProgressText,
 } = taskState
 /**
- * 状态条/加载件的「进度显示」：
- * · 文本任务（有 token 统计）→ 大数字显示**已收 token 数**，后缀 tokens（不钳上限）；
- * · 其它任务 → 沿用百分比。
- * 用户 2026-11-10 明确要「20000tokens 这样的方式」，不是百分比。
- */
-const showTokenProgress = computed(
-  // 文本对话任务：**始终**用 token 显示（还没吐字时就是 0tokens），
-  // 不能等 stats 出现才切 —— 那会让「等待模型响应」那几秒显示成百分比（用户 2026-11-10 实测）。
-  () => taskIsChatTask.value || (typeof taskTokenCount.value === 'number' && taskTokenCount.value > 0),
-)
-const progressValue = computed(() =>
-  showTokenProgress.value ? (taskTokenCount.value ?? 0) : percent.value,
-)
-const progressSuffix = computed(() => (showTokenProgress.value ? 'tokens' : '%'))
-/**
- * 分给加载件的两个口：
- * · `value` —— 不设上限（token 数会超过 100）；
- * · `percent` —— 0~100，加载件内部会钳制。
+ * 加载件的「进度显示」**全部来自后台**（`runState.value` / `suffix` / `progressText`）。
  *
- * token 必须走 `value`：之前这里把 token 塞进 `percent`，加载件一钳制就成
- * 「100tokens」封顶（用户 2026-11-10 实测 402 字仍显示 100tokens）。
+ * 用户口径 2026-11-10：进度是后台的数据 —— provider 的轮询结果决定显示什么，
+ * 前端只管把字段画出来，不自己判断任务类型、不自己估算 token。
+ * 后台没给 `value` 时回落到老的百分比字段（图片/视频那些动作照旧）。
  */
-const progressAsValue = computed(() => (showTokenProgress.value ? progressValue.value : null))
-const progressAsPercent = computed(() => (showTokenProgress.value ? null : progressValue.value))
+const progressAsValue = computed(() => taskValue.value)
+const progressAsPercent = computed(() => (taskValue.value === null ? percent.value : null))
+const progressSuffix = computed(() => taskSuffix.value)
 
 /**
  * 取消任务：**可选能力**（底部状态栏插件上架 nodeTask 服务才有）。
@@ -232,17 +217,13 @@ const hasCustomStateOverlay = computed(() => stateOverlayRegions.value.length > 
 const showStateLayer = computed(() => hasCustomStateOverlay.value || covered.value)
 
 /**
- * 流式生成中：**不铺全屏遮罩**，只在卡片顶上挂一条状态条。
+ * 全屏加载件：**加载中（或失败）就铺**，只有一种形态。
  *
- * 用户口径 2026-11-10：AI 对话按批吐字，前端要能看到中间结果；
- * 全屏盖住 → 用户只看到「5%」然后直接跳完成，等于没有流式。
- * 条件：正在跑 + 已经有正文（没有正文时仍走全屏加载件，那时候没什么可看的）。
+ * 用户口径 2026-11-10：加载 UI 是**全局唯一**的一件，不要额外再画一条自己的状态条。
+ * 之前这里按「有没有正文」切成两条 UI（全屏件 + 顶部小条），那是多画了一套；
+ * 现在只保留全局加载件，流式内容与进度都由它自己渲染。
  */
-const showStreamBar = computed(() => !hasCustomStateOverlay.value && taskStreaming.value)
-/** 全屏加载件：加载中且**还没有内容**（或失败）时才铺 */
-const showDefaultState = computed(
-  () => !hasCustomStateOverlay.value && covered.value && (!taskStreaming.value || failed.value),
-)
+const showDefaultState = computed(() => !hasCustomStateOverlay.value && covered.value)
 
 const feedback = useNodeConnectionFeedback({
   ctx,
@@ -531,25 +512,6 @@ const {
         :data="data"
         :is-dev="capabilityIsDev"
       />
-      <!--
-        流式生成中：只挂一条**顶部状态条**，正文继续露出来（用户 2026-11-10）。
-        全屏遮罩会把正在长出来的文字盖住 —— 那正是「只看到 5% 然后跳完成」的原因。
-      -->
-      <div v-if="showStreamBar" class="v2-stream-bar nodrag nopan" role="status" aria-live="polite">
-        <NodeLoadingState
-          variant="chip"
-          :tone="failed ? 'error' : 'loading'"
-          :label="taskLabel"
-          :percent="failed ? null : progressAsPercent"
-          :value="failed ? null : progressAsValue"
-          :suffix="progressSuffix"
-          :message="taskReason"
-          :started-at="failed ? 0 : taskStartedAt"
-          :stream-tail="failed ? '' : taskStreamTail"
-          :stats="failed ? undefined : taskStats"
-        />
-        <button v-if="canCancel" class="v2-stream-cancel nodrag nopan" type="button" @click.stop="onCancelTask">取消</button>
-      </div>
       <NodeLoadingState
         v-if="showDefaultState"
         :tone="failed ? 'error' : 'loading'"
@@ -557,6 +519,7 @@ const {
         :percent="failed ? null : progressAsPercent"
         :value="failed ? null : progressAsValue"
         :suffix="progressSuffix"
+        :progress-text="failed ? '' : taskProgressText"
         :message="taskReason"
         :hint="taskHint"
         :started-at="failed ? 0 : taskStartedAt"
@@ -974,49 +937,6 @@ const {
 }
 @media (prefers-reduced-motion: reduce) {
   .v2-task-cancel {
-    transition: none;
-  }
-}
-
-/*
- * 流式状态条（用户 2026-11-10）：贴在卡片顶部的一条小胶囊，不是全屏遮罩。
- * AI 对话正在按批吐字，盖住就看不到中间结果 —— 那正是「只看到 5% 再跳完成」。
- * pointer-events 默认穿透，只有胶囊和取消按钮自己接指针（加载期间节点照常能拖能选）。
- */
-.v2-stream-bar {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  right: 6px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  pointer-events: none;
-}
-.v2-stream-bar :deep(.nls-root.is-chip) {
-  pointer-events: auto;
-  max-width: 100%;
-}
-.v2-stream-cancel {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  background: var(--ui-overlay-solid, #fff);
-  color: var(--ui-ink-mute, #8c95a3);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: color 0.15s ease-out, background-color 0.15s ease-out;
-}
-.v2-stream-cancel:hover {
-  color: var(--ui-danger, #ef4444);
-  background: var(--ui-danger-soft, color-mix(in srgb, var(--ui-danger, #ef4444) 14%, transparent));
-}
-@media (prefers-reduced-motion: reduce) {
-  .v2-stream-cancel {
     transition: none;
   }
 }

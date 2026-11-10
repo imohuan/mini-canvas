@@ -30,6 +30,10 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
       reason?: unknown
       hint?: unknown
       stats?: unknown
+      value?: unknown
+      suffix?: unknown
+      progressText?: unknown
+      tail?: unknown
     },
   )
   /** 0-100；非法/缺失 → null（不确定态，不编一个假数字） */
@@ -96,26 +100,32 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
    */
   const streamTail = computed(() => {
     if (!loading.value) return ''
-    const t = input.data()?.text
-    return typeof t === 'string' ? t.slice(-40) : ''
+    // 后台给了 tail 就用它（provider 决定显示哪一段）；没给才回落到正文末尾
+    const t = runState.value.tail
+    if (typeof t === 'string' && t !== '') return t
+    const body = input.data()?.text
+    return typeof body === 'string' ? body.slice(-40) : ''
   })
 
   /**
-   * 大数字进度：文本任务用「已收 token 数」（用户口径 20000tokens），
-   * 其它任务仍用百分比 —— 由调用方决定画哪个。
-   */
-  const tokenCount = computed(() => stats.value?.tokens)
-
-  /**
-   * 是不是「文本对话」任务（动作 agent:chat）。
+   * 加载 UI 的大数字 / 单位 / 整段文案 —— **全部由后台写**（`runState.value` 等）。
    *
-   * 用户 2026-11-10：这条链路要显示 token 数，不是百分比 ——
-   * 一开始还没吐字时 stats 不存在，所以不能靠「有没有 stats」判断，
-   * 得靠动作 id。
+   * 用户口径 2026-11-10：进度是后台的数据，provider 轮询结果决定显示什么；
+   * 前端只读字段画出来，不判断任务类型、不估算 token。
    */
-  const isChatTask = computed(
-    () => (runState.value as { actionId?: unknown }).actionId === 'agent:chat',
-  )
+  const displayValue = computed(() => {
+    const v = runState.value.value
+    return typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : null
+  })
+  const displaySuffix = computed(() => {
+    const s = runState.value.suffix
+    return typeof s === 'string' && s !== '' ? s : '%'
+  })
+  const displayText = computed(() => {
+    const s = runState.value.progressText
+    return typeof s === 'string' ? s : ''
+  })
+
   const startedAt = computed(() => {
     const v = runState.value.startedAt
     return typeof v === 'number' && Number.isFinite(v) ? v : 0
@@ -123,6 +133,7 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
 
   return {
     visualState, loading, failed, covered, percent, message, label, reason, hint, startedAt,
-    stats, streaming, streamTail, tokenCount, isChatTask,
+    stats, streaming, streamTail,
+    displayValue, displaySuffix, displayText,
   }
 }

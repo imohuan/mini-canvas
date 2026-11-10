@@ -120,6 +120,8 @@ const ACTION: ActionDef = {
   /** 文本生成大多十几秒：1s 拍一次，进度与流式文本都快 */
   pollIntervalMs: 1_000,
   pollTimeoutMs: 300_000,
+  /** 对话的进度口径是「已收 token 数」，不是百分比；首帧先显示 0tokens */
+  progressDisplay: { suffix: 'tokens', startValue: 0 },
 }
 
 export function createAgentChatProvider(deps: AgentChatDeps): Provider {
@@ -181,6 +183,13 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
         ...(st.text ? { partialText: st.text } : {}),
         /** 已产出量 → 节点 runState.stats（加载层显示「已输出 N 字 / ≈M tokens」） */
         ...(st.stats ? { stats: st.stats } : {}),
+        /**
+         * 加载 UI 的大数字 + 单位 + 滚动小尾巴（用户 2026-11-10：这些由**后台**给，
+         * 前端只管画）。还没吐字时给 0，界面立刻是 `0tokens` 而不是 `21%`。
+         */
+        value: st.stats?.tokens ?? 0,
+        suffix: 'tokens',
+        ...(st.text ? { tail: st.text } : {}),
       } as ProviderPollResult
     },
 

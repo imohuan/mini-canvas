@@ -114,6 +114,17 @@ export interface ActionDef {
   /** 本动作自己的轮询节奏（长视频不能被共享的短超时误杀） */
   pollIntervalMs?: number
   pollTimeoutMs?: number
+  /**
+   * 本动作的进度显示口径（给加载 UI 用，前端只照画）。
+   *
+   * · `suffix`：大数字后面的单位，默认 `%`；token 类动作写 `tokens`。
+   * · `startValue`：提交那一帧显示的数字（还没有任何轮询结果时先显示它），默认 0。
+   *
+   * 为什么放在动作上：第一个进度帧在 provider 第一次 poll 之前就写了，
+   * 那时候还没有任何轮询结果；把口径写在动作声明里，提交帧就能照口径显示
+   * （用户 2026-11-10：点发送立刻要看到 `0tokens`，不是等一两秒再变）。
+   */
+  progressDisplay?: { suffix?: string; startValue?: number }
   /** provider 可以塞自己的东西；内核与前端都不读 */
   [k: string]: unknown
 }
@@ -148,6 +159,26 @@ export interface ProviderPollResult {
   status: 'running' | 'done' | 'error'
   progress?: number
   message?: string
+  /**
+   * 加载 UI 上那个**大数字**（不设上限）。
+   *
+   * 用户口径 2026-11-10：进度不一定是百分比 —— 对话要显示已收 token 数（20000 这种），
+   * 百分比会被 100 封顶。provider 想显示什么由它自己决定，前端只照着画。
+   */
+  value?: number
+  /** 大数字后面的单位，默认 `%`（token 场景传 `tokens`） */
+  suffix?: string
+  /**
+   * 整段进度文案（优先于 value + suffix）。
+   * 例如「≈1.2k tokens」这种不适合拆成数字 + 单位的写法。
+   */
+  progressText?: string
+  /**
+   * 加载 UI 下方那行**滚动的小尾巴**：正在返回的一小段文字。
+   * 与 partialText 分开：partialText 是作品正文（写进 data.text），
+   * 这个只是给人看的进度提示，不进作品、不进历史。
+   */
+  tail?: string
   /** running 一拍的**部分文本**（文本生成流式预览用；整段覆盖式更新，不是拼接） */
   /** running 一拍的**部分文本**（文本生成流式预览用；整段覆盖式更新，不是拼接） */
   partialText?: string
