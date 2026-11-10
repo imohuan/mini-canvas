@@ -182,6 +182,20 @@ export interface ProviderPollResult {
 export interface Provider {
   /** provider id（唯一；用来把任务路由回它） */
   id: string
+  /**
+   * 界面上显示的平台名字（中文名优先）。缺省时前端回落成 `id`。
+   *
+   * 用户口径 2026-11-10：平台要有自己的名称和介绍，与 `id` / `config` 同级直接写。
+   */
+  title?: string
+  /** 一行介绍（显示在名字下面） */
+  description?: string
+  /**
+   * 平台图标：SVG 字符串 / `data:image/...;base64,...` / 图标名。
+   *
+   * 两处消费：① 平台管理列表；② 作为该平台模型的**兜底图标**（动作与 Agent 品牌图标都认不出时用它）。
+   */
+  icon?: string
   /** 它提供哪些动作 */
   actions: ActionDef[]
   /**

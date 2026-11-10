@@ -42,6 +42,10 @@ const props = withDefaults(
     disabled?: boolean
     /** 弹窗里用：面板固定尺寸、向下开；底栏分栏时向上开 */
     inDialog?: boolean
+    /** 当前动作可选的账号（多于一个才显示「账号」入口） */
+    accounts?: Array<{ id: string; name?: string }>
+    /** 当前选中的账号（空 = 用平台默认号） */
+    accountId?: string
   }>(),
   {
     triggerTitle: '选择生成模型',
@@ -57,6 +61,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   pick: [id: string]
   unavailable: []
+  /** 选了某个账号（不改变当前动作，只记这个号） */
+  pickAccount: [id: string, accountId: string]
 }>()
 
 const Button = useUiComponent('Button')
@@ -64,9 +70,27 @@ const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const AgentChoicePicker = useUiComponent('agentChoicePicker')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 
 const open = ref(false)
 const available = computed(() => Boolean(AgentChoicePicker.value))
+
+/** 当前选中的账号名（触发器文本后面显示；没选就空着） */
+const accountName = computed(() => {
+  const list = props.accounts ?? []
+  if (list.length <= 1) return ''
+  if (!props.accountId) return ''
+  return list.find((a) => a.id === props.accountId)?.name ?? props.accountId
+})
+
+/** 账号菜单项（只有一个号时为空，入口不渲染） */
+const accountItems = computed(() => props.accounts ?? [])
+
+/** 触发器上那一小段账号文字：没选就写「默认」 */
+const accountShort = computed(() => accountName.value || '默认')
 
 /**
  * 菜单关闭时把视图状态重置回卡片。
@@ -122,6 +146,7 @@ function pick(item: { id: string }): void {
 </script>
 
 <template>
+  <span class="nb-choice-wrap">
   <DropdownMenu v-model:open="open">
     <DropdownMenuTrigger as-child>
       <Button
@@ -137,6 +162,7 @@ function pick(item: { id: string }): void {
         <span v-if="triggerIcon" class="nb-model-badge" :data-tone="triggerIcon.tone"
           aria-hidden="true" v-html="triggerIcon.svg" />
         <span class="nb-model-trigger-label">{{ triggerLabel }}</span>
+        <span v-if="accountName" class="nb-account-chip">· {{ accountName }}</span>
         <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
@@ -162,6 +188,39 @@ function pick(item: { id: string }): void {
       />
     </DropdownMenuContent>
   </DropdownMenu>
+  <!-- 多账号：模型行右侧的「账号」入口（账号只有一个时不显示） -->
+  <DropdownMenu v-if="accountItems.length > 1">
+    <DropdownMenuTrigger as-child>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="nb-account-trigger"
+        type="button"
+        :disabled="disabled"
+        :title="'选择账号（当前：' + (accountName || '默认') + '）'"
+        :aria-label="'选择账号（当前：' + (accountName || '默认') + '）'"
+      >
+        <span class="nb-account-label">{{ accountShort }}</span>
+        <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" side="bottom" class="nb-account-menu">
+      <DropdownMenuItem
+        v-for="a in accountItems"
+        :key="a.id"
+        class="nb-account-item"
+        :data-state="a.id === accountId ? 'checked' : undefined"
+        @select="emit('pickAccount', currentId, a.id)"
+      >
+        <span class="nb-account-item-name">{{ a.name || a.id }}</span>
+        <span v-if="a.id === accountId" class="nb-account-item-check">✓</span>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+  </span>
 </template>
 
 <!--

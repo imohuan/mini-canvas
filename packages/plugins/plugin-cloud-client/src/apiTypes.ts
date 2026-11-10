@@ -15,6 +15,8 @@ export interface ServerAction {
   needsPrompt?: boolean
   promptBinding?: 'none' | 'text'
   fields?: unknown[]
+  /** 所属平台的图标（兜底用） */
+  providerIcon?: string
   [k: string]: unknown
 }
 
@@ -36,10 +38,26 @@ export interface ProviderConfigField {
 export interface ProviderRow {
   id: string
   file: string
+  /** 内置平台（没有文件）：界面上只读 */
+  builtin?: boolean
+  /** 平台自己的名字 / 介绍 / 图标（provider 没写时缺省） */
+  title?: string
+  description?: string
+  icon?: string
   enabled: boolean
   actions: number
   config: ProviderConfigField[]
-  accounts: Array<{ id: string; name?: string; values: Record<string, string | number | boolean> }>
+  /** 账号级字段的 key 列表（其余字段是平台通用） */
+  accountFields?: string[]
+  /** 平台通用值（secret 已掩码） */
+  shared?: Record<string, string | number | boolean>
+  accounts: Array<{
+    id: string
+    name?: string
+    /** 默认账号：不选号时用它 */
+    default?: boolean
+    values: Record<string, string | number | boolean>
+  }>
 }
 
 /** 后端给的任务（前端把它翻译成底栏认识的 running / done） */

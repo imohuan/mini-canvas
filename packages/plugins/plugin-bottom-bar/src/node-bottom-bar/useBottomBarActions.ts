@@ -70,7 +70,13 @@ export function useBottomBarActions(
    * 3. 本地兜底（认不出平台时按节点类型给个通用图形，绝不空白）。
    */
   function modelIconOfAction(a: BarAction): ModelIcon {
-    return resolveActionIcon(a.title, a.icon, iconService.value, a.types?.[0] ?? nodeType.value)
+    return resolveActionIcon(
+      a.title,
+      a.icon,
+      iconService.value,
+      a.types?.[0] ?? nodeType.value,
+      (a as { providerIcon?: string }).providerIcon,
+    )
   }
 
   const actionOptions = computed(() =>

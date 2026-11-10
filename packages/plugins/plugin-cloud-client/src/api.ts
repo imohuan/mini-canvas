@@ -295,6 +295,45 @@ export class CloudApi {
     if (!res.ok) throw new Error('[cloud-client] 强制刷新失败 ' + res.status)
   }
 
+  /**
+   * 保存「平台通用值 + 每账号值 + 账号级字段」（新结构，点分隔 key）。
+   *
+   * 与 `saveProviderAccounts` 的分工：那个走旧接口（只交账号），这个能表达
+   * 「哪些字段是平台通用、哪些按账号」。界面用这个。
+   */
+  async saveProviderValues(
+    file: string,
+    payload: {
+      platformId?: string
+      shared: Record<string, string | number | boolean>
+      accountFields: string[]
+      accounts: Array<{ id: string; name?: string; default?: boolean; values: Record<string, string | number | boolean> }>
+    },
+  ): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/providers/' + encodeURIComponent(file) + '/values'), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(body.error ?? '[cloud-client] 保存平台配置失败 ' + res.status)
+    }
+  }
+
+  /** 保存生成类型 → 默认模型（全局） */
+  async saveModelDefaults(defaults: Record<string, string>): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/providers/model-defaults'), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ defaults }),
+    })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(body.error ?? '[cloud-client] 保存默认模型失败 ' + res.status)
+    }
+  }
+
   /** 读画布（节点 + 边 + 视口） */
   async readCanvas(
     canvasId: string,

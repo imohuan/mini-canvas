@@ -410,6 +410,10 @@ function speed(key, label, min, max, def) {
 
 export default {
   id: 'web2api-audio',
+  // 平台展示信息（管理页显示；icon 也作为该平台模型的兜底图标）
+  title: 'Web2API · 音频',
+  description: '豆包语音合成 / 火山引擎音频',
+  icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="wcAud" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#wcAud)"/><path d="M13 19.5a2.5 2.5 0 1 0 2.5 2.5v-6.6l6-1.4v3.5a2.5 2.5 0 1 0 2 2.45V10.5L15.5 12.4v7.1z" fill="#fff"/></svg>',
   // 平台管理页据此渲染配置表单（与 web2api-image / video 同一套；多账号每套一份）
   config: [
     { key: 'baseUrl', label: '服务地址', type: 'string', default: 'http://localhost:8033',

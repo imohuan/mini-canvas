@@ -359,6 +359,10 @@ const count_apimart = { key: 'n', label: '数量', type: 'number', default: 1, m
 
 const provider = {
   id: 'web2api-image',
+  // 平台展示信息（管理页显示；icon 也作为该平台模型的兜底图标）
+  title: 'Web2API · 图片',
+  description: '豆包 / Dola / Seedream 网页自动化生图',
+  icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="wcImg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#0891b2"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#wcImg)"/><path d="M9 22V10h4.2c3 0 4.8 1.6 4.8 4.1 0 2.2-1.4 3.7-3.7 4l4.2 3.9h-3.2l-4-3.9V22H9zm3-6.1h1.5c1.3 0 2-.6 2-1.8s-.7-1.8-2-1.8H12v3.6z" fill="#fff"/></svg>',
   // 平台管理页据此渲染配置表单（多账号每套一份；secret 只写不回读）
   config: [
     { key: 'baseUrl', label: '服务地址', type: 'string', default: 'http://localhost:8033',

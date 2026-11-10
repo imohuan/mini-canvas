@@ -16,7 +16,38 @@
 
 ## 启停与删除改的是什么
 
-启停、删除、账号配置都记在 `<数据根>/providers-config.json`：
+启停、删除、账号配置都记在 `<数据根>/providers-config.json`。配置值用**平铺的点分隔 key**，
+相同前缀的 key 天然共用一份值：
+
+```json
+{
+  "config": {
+    "token01.baseUrl": "https://token01.net",
+    "token01.apiKey.[0]": "sk-第一个号",
+    "token01.apiKey.[1]": "sk-第二个号"
+  },
+  "platforms": {
+    "token01": {
+      "accounts": [
+        { "id": "main", "name": "主号", "default": true },
+        { "id": "backup", "name": "备用" }
+      ],
+      "title": "Token01 中转站",
+      "description": "New API 中转站"
+    }
+  },
+  "defaults": { "图片": "web2api:doubao-image-seedream45" }
+}
+```
+
+- `pid.field` = 平台通用，所有账号共用一份；
+- `pid.field.[n]` = 第 n 个账号；读的时候把同前缀的 `[n]` 聚成数组，某个账号没写就沿用通用值；
+- `platforms[pid].accounts` = 账号清单（名字、默认号）；
+- `defaults` = 按生成类型存的默认模型（全局，不分平台）。
+
+旧结构（`files[文件名].accounts`）仍然能读；新结构优先。
+
+旧版（v2，只有账号）的结构长这样，仅供参考：
 
 ```json
 {
@@ -37,6 +68,24 @@ key 是**文件名**而不是平台 id：装载器要先知道文件才能 impor
 `deletedFiles` 里的名字，重启时不会再从随包自带的默认平台里补回来。
 
 ## 平台怎么声明配置项
+
+平台自己的名字、介绍、图标与 `id` / `config` 同级直接写：
+
+```js
+// 文件：<数据根>/providers/token01.js
+const provider = {
+  id: 'token01',
+  title: 'Token01 中转站',
+  description: 'New API 中转站，提供文本 / 图片 / 音频 / 视频',
+  icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">…</svg>',
+  config: [ /* 见下 */ ],
+}
+```
+
+`icon` 支持 SVG 字符串、`data:image/...;base64,...`、或图标名；没写就用平台名首字母兜底。
+它既显示在平台管理列表，也作为该平台模型的**兜底图标**（动作图标、品牌图标都认不出时用它）。
+
+平台停用后仍能显示名字/介绍/图标 —— 后台会把这些信息快照进配置，停用时不再读文件。
 
 平台文件里写 `export const config`：
 

@@ -29,6 +29,8 @@ export interface BarActionLike {
   templates?: unknown[]
   /** provider 自带的 HTML 配置面板（沙箱 iframe 渲染） */
   panelHtml?: string
+  /** 所属平台的图标（动作与品牌都认不出时兜底，用户口径 2026-11-10） */
+  providerIcon?: string
   pollIntervalMs?: number
   pollTimeoutMs?: number
   /** 状态由外部管（后台会写节点进度）—— 底栏据此不写本地 runState */
@@ -62,6 +64,9 @@ export function toBarAction(
     ...(typeof def.panelHtml === 'string' && def.panelHtml.trim() !== ''
       ? { panelHtml: def.panelHtml }
       : {}),
+  ...(typeof def.providerIcon === 'string' && def.providerIcon.trim() !== ''
+    ? { providerIcon: def.providerIcon }
+    : {}),
   }
   // 字段名换算：nodeTypes → types
   if (Array.isArray(def.nodeTypes) && def.nodeTypes.length > 0) out.types = [...def.nodeTypes]

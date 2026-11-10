@@ -48,12 +48,14 @@ function toneOf(platform: string): ModelTone {
  * @param icon      provider 声明的 icon：SVG / Base64 / 图标名
  * @param service   Agent 的图标服务
  * @param nodeType  节点类型（最后兜底用）
+ * @param providerIcon  所属平台声明的 icon（动作与品牌都认不出时用它兜底，用户口径 2026-11-10）
  */
 export function resolveActionIcon(
   title: string,
   icon: unknown,
   service: ModelIconServiceLike | undefined,
   nodeType?: string,
+  providerIcon?: unknown,
 ): ModelIcon {
   // 1. SVG / Base64：provider 直接给了图形
   const own = customModelIcon(icon)
@@ -78,7 +80,11 @@ export function resolveActionIcon(
     if (platform !== 'custom') return { tone: toneOf(platform), svg: service.svgOfName(title) }
   }
 
-  // 4. 本地兜底：按节点类型给个通用图形，绝不空白
+  // 4. 平台自己的图标：动作没写、品牌也认不出时，用 provider 声明的 icon 兜底
+  const fromProvider = customModelIcon(providerIcon)
+  if (fromProvider) return fromProvider
+
+  // 5. 本地兜底：按节点类型给个通用图形，绝不空白
   return modelIconOf(title, nodeType)
 }
 

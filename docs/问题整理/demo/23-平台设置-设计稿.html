@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>平台设置 · 设计稿 v3</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { height: 100%; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+  .canvas-bg { background-color: #eef1f5; background-image: radial-gradient(circle at 1px 1px, rgba(17,24,39,.10) 1px, transparent 0); background-size: 18px 18px; }
+  .scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+  .scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,.16); border-radius: 999px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .k-key { color: #a5b4fc; } .k-str { color: #86efac; } .k-num { color: #fbbf24; }
+  .k-bool { color: #67e8f9; } .k-punc { color: #64748b; }
+  .switch { transition: background-color .16s ease; }
+  .row-hover:hover { background: rgba(0,0,0,.03); }
+  details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+  .tab-btn { transition: color .14s ease, background-color .14s ease; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body class="h-full bg-[#eef1f5] text-[#374151] antialiased">
+
+<div class="mx-auto flex h-full max-w-[1640px] gap-5 p-5">
+
+  <!-- ============ 左：画布 + 弹窗 ============ -->
+  <section class="canvas-bg relative min-w-0 flex-1 overflow-hidden rounded-[18px] ring-1 ring-black/5">
+    <div class="pointer-events-none absolute left-6 top-8 w-[200px] rounded-[12px] bg-white/70 p-3 ring-1 ring-black/5">
+      <div class="mb-2 h-20 rounded-[8px] bg-gradient-to-br from-slate-200 to-slate-100"></div>
+      <div class="text-[11px] text-slate-400">图片 10</div>
+    </div>
+    <div class="pointer-events-none absolute bottom-10 left-16 w-[170px] rounded-[12px] bg-white/60 p-3 ring-1 ring-black/5">
+      <div class="mb-2 h-14 rounded-[8px] bg-gradient-to-br from-cyan-100 to-slate-100"></div>
+    </div>
+
+    <div class="absolute left-1/2 top-1/2 w-[min(860px,calc(100%-40px))] -translate-x-1/2 -translate-y-1/2">
+      <div class="overflow-hidden rounded-[16px] bg-white shadow-[0_32px_80px_-32px_rgba(16,24,40,.38)] ring-1 ring-black/5">
+        <!-- 头 -->
+        <header class="flex items-start gap-3 border-b border-black/5 px-5 pt-3.5 pb-0">
+          <div class="min-w-0 flex-1 pb-3">
+            <div class="flex items-center gap-2">
+              <h2 id="title" class="text-[15px] font-bold text-[#111827]">平台</h2>
+              <span id="count" class="rounded-full bg-black/[.04] px-2 py-[2px] text-[10px] font-semibold text-[#6b7280]">6 个平台</span>
+            </div>
+            <p id="sub" class="mt-0.5 text-[12px] text-[#6b7280]">改动即时生效，不用刷新。</p>
+          </div>
+          <button class="rounded-[8px] p-1.5 text-[#9ca3af] hover:bg-black/[.05]" title="关闭">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </header>
+
+        <!-- 标签页：平台 / 模型 -->
+        <div id="tabs" class="flex items-center gap-1 border-b border-black/5 px-4 pt-1"></div>
+
+        <div id="body" class="max-h-[600px] overflow-y-auto px-5 py-4 scroll"></div>
+      </div>
+      <p class="mt-3 text-center text-[11px] text-[#9ca3af]">设计稿 v3：配置项用开关切「账号级」；账号展开可编辑全局值；新增「模型」标签页按类型设默认模型。</p>
+    </div>
+  </section>
+
+  <!-- ============ 右：JSON ============ -->
+  <aside class="flex w-[430px] shrink-0 flex-col overflow-hidden rounded-[16px] bg-[#0f172a] ring-1 ring-black/10">
+    <header class="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+      <span class="size-2 rounded-full bg-cyan-400"></span>
+      <h3 class="text-[12px] font-semibold tracking-wide text-slate-200">配置 JSON</h3>
+      <span class="ml-auto rounded-full bg-white/10 px-2 py-[2px] text-[10px] text-slate-300">实时</span>
+    </header>
+    <pre id="json" class="scroll mono m-0 flex-1 overflow-auto px-4 py-3 text-[11.5px] leading-[1.65] text-slate-200"></pre>
+    <footer class="border-t border-white/10 px-4 py-2.5 text-[10.5px] leading-relaxed text-slate-400">
+      <span class="text-cyan-300">provider.key</span> = 平台通用，只有一份；<br />
+      <span class="text-cyan-300">provider.key.[n]</span> = 第 n 个账号的值。<br />
+      <span class="text-cyan-300">defaults.图片</span> 等 = 某类型下的默认模型（全局，不分平台）。
+    </footer>
+  </aside>
+</div>
+
+<script>
+function b64(svg) { return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))) }
+const ICON_A = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#0891b2"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#g1)"/><path d="M9 22V10h4.2c3 0 4.8 1.6 4.8 4.1 0 2.2-1.4 3.7-3.7 4l4.2 3.9h-3.2l-4-3.9V22H9zm3-6.1h1.5c1.3 0 2-.6 2-1.8s-.7-1.8-2-1.8H12v3.6z" fill="#fff"/></svg>'
+const ICON_B = b64('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#ede9fe"/><circle cx="16" cy="16" r="7" fill="#7c3aed"/><circle cx="16" cy="16" r="3" fill="#ede9fe"/></svg>')
+
+const state = {
+  tab: 'platform',
+  view: 'list', editing: null,
+  modelType: 'image',
+  providers: [
+    { id: 'agent-chat', file: '', builtin: true, enabled: true, actions: 1, title: 'Agent 对话',
+      desc: '内置平台，没有文件；文本节点直接用', icon: '', fields: [], accounts: [] },
+    { id: 'token01', file: 'token01.js', enabled: true, actions: 7, title: 'Token01 中转站',
+      desc: 'New API 中转站，用于图像 / 语音 / 视频', icon: ICON_A,
+      fields: [
+        { key: 'baseUrl', label: '站点地址', type: 'string', accountLevel: false, value: 'https://token01.net', hint: '中转站根地址，留空用默认' },
+        { key: 'apiKey', label: 'API Key', type: 'secret', accountLevel: true, hint: 'sk- 开头；每个账号各一把' },
+      ],
+      accounts: [
+        { id: 'main', name: '主号', default: true, values: { apiKey: 'sk-main-1a2b3c4d' } },
+        { id: 'backup', name: '备用号', default: false, values: { apiKey: 'sk-backup-9f8e7d6c' } },
+      ] },
+    { id: 'web2api-image', file: 'web2api-image.js', enabled: true, actions: 7, title: 'Web2API · 图片',
+      desc: '豆包 / Dola / Seedream 网页自动化生图', icon: ICON_B,
+      fields: [
+        { key: 'baseUrl', label: '服务地址', type: 'string', accountLevel: false, value: 'http://localhost:8033', hint: 'web2api 服务根地址' },
+        { key: 'apiKey', label: 'API Key', type: 'secret', accountLevel: false, value: '', hint: '开了校验才需要' },
+        { key: 'proxy', label: '代理地址', type: 'string', accountLevel: true, hint: '每个账号可能不同' },
+      ],
+      accounts: [{ id: 'main', name: '默认', default: true, values: { proxy: '' } }] },
+    { id: 'web2api-video', file: 'web2api-video.js', enabled: false, actions: 9, title: 'Web2API · 视频',
+      desc: 'Seedance / MiniMax 视频生成', icon: '',
+      fields: [{ key: 'baseUrl', label: '服务地址', type: 'string', accountLevel: false, value: 'http://localhost:8033', hint: 'web2api 服务根地址' }],
+      accounts: [{ id: 'main', name: '默认', default: true, values: {} }] },
+    { id: 'demo-skill-full', file: 'demo-skill-full.js', enabled: false, actions: 7, title: '演示 · 全功能',
+      desc: '控件 / 预设 / HTML 面板 / 异步轮询演示', icon: '', fields: [],
+      accounts: [{ id: 'main', name: '默认', default: true, values: {} }] },
+  ],
+  // 模型按「生成类型」分组；默认模型挂在类型上，不挂在平台
+  modelTypes: [
+    { id: 'text', label: '文本' },
+    { id: 'image', label: '图片' },
+    { id: 'video', label: '视频' },
+    { id: 'audio', label: '音频' },
+    { id: '3d', label: '3D 模型' },
+  ],
+  models: [
+    { id: 'agent:chat', type: 'text', title: 'Agent 对话（默认模型）', provider: 'agent-chat' },
+    { id: 'token01:text-chat', type: 'text', title: 'Token01 对话', provider: 'token01' },
+    { id: 'web2api:doubao-image-seedream45', type: 'image', title: '豆包 Seedream 4.5', provider: 'web2api-image' },
+    { id: 'web2api:doubao-image-seedream50lite', type: 'image', title: '豆包 Seedream 5.0 Lite', provider: 'web2api-image' },
+    { id: 'web2api:dola-image-seedream50pro', type: 'image', title: 'Dola Seedream 5.0 Pro', provider: 'web2api-image' },
+    { id: 'web2api:doubao-video-fast', type: 'video', title: '豆包 Seedance 2.0 Fast', provider: 'web2api-video' },
+    { id: 'web2api:seedance-video-20', type: 'video', title: 'Seedance 2.0', provider: 'web2api-video' },
+    { id: 'web2api:doubao-tts', type: 'audio', title: '豆包 · 语音合成', provider: 'token01' },
+  ],
+  defaults: { text: 'agent:chat', image: 'web2api:doubao-image-seedream45', video: '', audio: '', '3d': '' },
+}
+
+const $ = (s) => document.querySelector(s)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const P = (id) => state.providers.find((x) => x.id === id)
+
+function iconHtml(p, size = 34) {
+  if (!p) return ''
+  if (p.icon) {
+    return p.icon.startsWith('data:')
+      ? '<img src="' + p.icon + '" class="shrink-0 rounded-[9px] object-cover" style="width:' + size + 'px;height:' + size + 'px" />'
+      : '<span class="shrink-0 overflow-hidden rounded-[9px]" style="width:' + size + 'px;height:' + size + 'px">' + p.icon + '</span>'
+  }
+  const ch = (p.title || p.id || '?').trim().charAt(0).toUpperCase()
+  return '<span class="grid shrink-0 place-items-center rounded-[9px] bg-black/[.05] text-[13px] font-bold text-[#6b7280]" style="width:' + size + 'px;height:' + size + 'px">' + esc(ch) + '</span>'
+}
+
+// ---------- JSON ----------
+function build() {
+  const config = {}
+  const platforms = {}
+  for (const p of state.providers) {
+    if (!p.file) continue
+    platforms[p.id] = {
+      title: p.title, description: p.desc, enabled: p.enabled, actions: p.actions,
+      accounts: p.accounts.map((a, i) => ({ id: a.id, name: a.name, ...(a.default ? { default: true } : {}) })),
+    }
+    for (const f of p.fields) {
+      if (f.accountLevel) p.accounts.forEach((a, i) => { config[p.id + '.' + f.key + '.[' + i + ']'] = a.values?.[f.key] ?? '' })
+      else config[p.id + '.' + f.key] = f.value ?? ''
+    }
+  }
+  // 只导出「有这个类型模型」的类型，避免出现空的 3D 之类
+  const defaults = {}
+  for (const t of state.modelTypes) {
+    if (!state.models.some((m) => m.type === t.id)) continue
+    defaults[t.label] = state.defaults[t.id] || ''
+  }
+  return { config, platforms, defaults }
+}
+function hl(t) {
+  return esc(t)
+    .replace(/&quot;([^&]*?)&quot;(\s*:)/g, '<span class="k-key">&quot;$1&quot;</span><span class="k-punc">$2</span>')
+    .replace(/:\s*&quot;([^&]*?)&quot;/g, ': <span class="k-str">&quot;$1&quot;</span>')
+    .replace(/\b(true|false)\b/g, '<span class="k-bool">$1</span>')
+    .replace(/(:\s*)(-?\d+)/g, '$1<span class="k-num">$2</span>')
+}
+const renderJson = () => { $('#json').innerHTML = hl(JSON.stringify(build(), null, 2)) }
+
+// ---------- 标签页 ----------
+function renderTabs() {
+  const tabs = [
+    { id: 'platform', label: '平台' },
+    { id: 'model', label: '模型' },
+  ]
+  $('#tabs').innerHTML = tabs.map((t) => {
+    const on = state.tab === t.id
+    return '<button class="tab-btn -mb-px border-b-2 px-3 py-2 text-[12px] font-semibold ' +
+      (on ? 'border-[#0891b2] text-[#0891b2]' : 'border-transparent text-[#6b7280] hover:text-[#374151]') +
+      '" data-tab="' + t.id + '">' + t.label + '</button>'
+  }).join('')
+}
+
+// ---------- 平台列表 ----------
+function renderList() {
+  $('#title').textContent = '平台'
+  $('#sub').textContent = '改动即时生效，不用刷新；点「配置」调整平台配置与账号。'
+  $('#count').textContent = state.providers.length + ' 个平台'
+  $('#body').innerHTML = state.providers.map((p) => {
+    const acc = p.accounts.length > 1 ? '<span class="rounded-full bg-cyan-600/10 px-2 py-[2px] text-[10px] font-semibold text-cyan-700">' + p.accounts.length + ' 个账号</span>' : ''
+    const builtin = p.builtin ? '<span class="rounded-full bg-black/[.04] px-2 py-[2px] text-[10px] font-semibold text-[#6b7280]">内置</span>' : ''
+    const off = p.enabled ? '' : '<span class="rounded-full bg-amber-500/10 px-2 py-[2px] text-[10px] font-semibold text-amber-700">已停用</span>'
+    return '<div class="row-hover flex items-center gap-3 rounded-[10px] px-2 py-2.5">' + iconHtml(p) +
+      '<div class="min-w-0 flex-1"><div class="flex items-center gap-1.5">' +
+        '<span class="truncate text-[13px] font-semibold text-[#111827] ' + (p.enabled ? '' : 'opacity-60') + '">' + esc(p.title) + '</span>' + acc + builtin + off + '</div>' +
+        '<div class="truncate text-[11px] text-[#6b7280]">' + esc(p.desc) + '</div>' +
+        '<div class="truncate text-[10.5px] text-[#9ca3af]">' + esc((p.file ? p.file + ' · ' : '') + p.actions + ' 个动作' + (p.enabled ? '' : ' · 已停用')) + '</div>' +
+      '</div>' +
+      (p.builtin ? '<span class="text-[11px] text-[#9ca3af]">只读</span>'
+        : '<button class="switch relative h-[22px] w-[38px] shrink-0 rounded-full ' + (p.enabled ? 'bg-[#0891b2]' : 'bg-black/15') + '" data-toggle="' + p.id + '" role="switch"><span class="absolute top-[3px] size-4 rounded-full bg-white shadow transition-all ' + (p.enabled ? 'left-[19px]' : 'left-[3px]') + '"></span></button>' +
+          '<button class="rounded-[8px] px-2.5 py-1 text-[11.5px] font-medium ring-1 ring-black/10 hover:bg-black/[.04]" data-edit="' + p.id + '">配置</button>' +
+          '<button class="rounded-[8px] px-2.5 py-1 text-[11.5px] font-medium text-red-600 ring-1 ring-red-200 hover:bg-red-50" data-del="' + p.id + '">删除</button>') +
+    '</div>'
+  }).join('')
+  renderJson()
+}
+
+// ---------- 平台配置 ----------
+function fieldRow(p, f) {
+  const on = f.accountLevel
+  const valueShow = on
+    ? '<span class="text-[11px] text-[#9ca3af]">默认值（账号可覆盖）</span>'
+    : ''
+  return '<div class="flex flex-wrap items-center gap-3 px-3 py-2.5">' +
+    '<div class="min-w-[150px] flex-1">' +
+      '<div class="flex items-center gap-2"><span class="text-[12px] font-medium text-[#374151]">' + esc(f.label) + '</span>' +
+        (on ? '<span class="rounded-full bg-cyan-600/10 px-2 py-[1px] text-[9.5px] font-semibold text-cyan-700">账号级</span>'
+           : '<span class="rounded-full bg-black/[.04] px-2 py-[1px] text-[9.5px] font-semibold text-[#6b7280]">平台通用</span>') +
+      '</div>' +
+      '<div class="mt-1 text-[10.5px] text-[#9ca3af]">' + esc(f.hint) + '</div>' +
+    '</div>' +
+    '<div class="flex items-center gap-2">' +
+      '<input class="w-[260px] rounded-[8px] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] ring-1 ring-black/10 focus:outline-none focus:ring-2 focus:ring-cyan-600/40" value="' + esc(f.value ?? '') + '" placeholder="' + esc(f.hint) + '" data-gval="' + p.id + ':' + f.key + '" />' +
+      '<label class="flex cursor-pointer select-none items-center gap-1.5" title="打开后每个账号单独一份值">' +
+        '<span class="text-[10.5px] text-[#6b7280]">账号级</span>' +
+        '<button class="switch relative h-[20px] w-[34px] rounded-full ' + (on ? 'bg-[#0891b2]' : 'bg-black/15') + '" data-level="' + p.id + ':' + f.key + '" role="switch" aria-checked="' + on + '">' +
+          '<span class="absolute top-[3px] size-3.5 rounded-full bg-white shadow transition-all ' + (on ? 'left-[17px]' : 'left-[3px]') + '"></span>' +
+        '</button></label>' +
+    '</div></div>'
+}
+
+function accountBlock(p, a, i) {
+  const def = a.default
+    ? '<span class="rounded-full bg-cyan-600/10 px-2 py-[2px] text-[10px] font-semibold text-cyan-700">默认</span>'
+    : '<button class="rounded-full px-2 py-[2px] text-[10px] text-[#6b7280] ring-1 ring-black/10 hover:bg-black/[.04]" data-default="' + p.id + ':' + i + '">设为默认</button>'
+  const editing = state.accountEdit === p.id + ':' + i
+
+  const rows = p.fields.map((f) => {
+    const isAcc = f.accountLevel
+    const raw = a.values?.[f.key]
+    const overridden = isAcc && typeof raw === 'string' && raw !== ''
+    const tag = isAcc
+      ? (overridden
+        ? '<span class="rounded-full bg-amber-500/10 px-1.5 py-[1px] text-[9.5px] font-semibold text-amber-700">已覆盖</span>'
+        : '<span class="rounded-full bg-black/[.04] px-1.5 py-[1px] text-[9.5px] text-[#9ca3af]">继承平台值</span>')
+      : '<span class="rounded-full bg-black/[.03] px-1.5 py-[1px] text-[9.5px] text-[#9ca3af]">平台通用</span>'
+    let control
+    if (isAcc) {
+      control = '<input class="w-[230px] rounded-[7px] bg-white px-2 py-1 text-[11.5px] ring-1 ring-black/10 focus:outline-none focus:ring-2 focus:ring-cyan-600/40" value="' + esc(raw ?? '') + '" placeholder="留空 = 用平台通用值" data-aval="' + p.id + ':' + i + ':' + f.key + '" />'
+    } else if (editing) {
+      control = '<input class="w-[230px] rounded-[7px] bg-white px-2 py-1 text-[11.5px] ring-1 ring-cyan-600/40 focus:outline-none focus:ring-2 focus:ring-cyan-600/40" value="' + esc(f.value ?? '') + '" placeholder="' + esc(f.hint) + '" data-gval2="' + p.id + ':' + f.key + '" />' +
+        '<span class="ml-1 text-[9.5px] text-cyan-700">改的是平台通用值</span>'
+    } else {
+      control = '<span class="text-[11.5px] text-[#374151]">' + esc(f.value ? f.value : '（未设置）') + '</span>'
+    }
+    return '<div class="flex items-center gap-2 py-1">' +
+      '<span class="w-[72px] shrink-0 text-right text-[11px] text-[#6b7280]">' + esc(f.label) + '</span>' + control + tag +
+      (!isAcc && editing ? '' : '') +
+    '</div>'
+  })
+
+  return '<details ' + (editing ? 'open' : '') + ' class="rounded-[10px] bg-black/[.02] ring-1 ring-black/5">' +
+    '<summary class="flex cursor-pointer items-center gap-2 px-3 py-2">' +
+      '<svg class="size-3.5 shrink-0 text-[#9ca3af]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>' +
+      '<span class="grid size-5 place-items-center rounded-full bg-white text-[10px] font-bold text-[#6b7280] ring-1 ring-black/10">' + (i + 1) + '</span>' +
+      '<input class="w-[120px] rounded-[7px] bg-white px-2 py-1 text-[12px] font-medium ring-1 ring-black/10 focus:outline-none focus:ring-2 focus:ring-cyan-600/40" value="' + esc(a.name) + '" data-aname="' + p.id + ':' + i + '" onclick="event.stopPropagation()" />' +
+      '<span class="text-[10.5px] text-[#9ca3af]">id: ' + esc(a.id) + '</span>' + def +
+      '<span class="ml-auto flex items-center gap-1">' +
+        '<button class="rounded-[7px] px-2 py-1 text-[10.5px] font-medium text-[#374151] ring-1 ring-black/10 hover:bg-black/[.05]" data-editacc="' + p.id + ':' + i + '" onclick="event.stopPropagation()">' + (editing ? '完成' : '编辑全局属性') + '</button>' +
+        '<button class="rounded-[8px] p-1 text-[#9ca3af] hover:bg-red-50 hover:text-red-600" data-adel="' + p.id + ':' + i + '" onclick="event.stopPropagation()" title="删除账号">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>' +
+        '</button>' +
+      '</span>' +
+    '</summary>' +
+    '<div class="border-t border-black/5 px-3 py-2">' +
+      '<div class="mb-1 text-[10.5px] text-[#9ca3af]">' + (editing
+        ? '正在编辑：标「平台通用」的项改的是**所有账号共用**的值；标「已覆盖」的项只影响这个账号。'
+        : '点右上「编辑全局属性」可以直接改平台通用值；账号级项在这里单独填。') + '</div>' +
+      rows.join('') +
+    '</div>' +
+  '</details>'
+}
+
+function renderEdit() {
+  const p = P(state.editing)
+  if (!p) { state.view = 'list'; return renderList() }
+  $('#title').textContent = '配置平台'
+  $('#sub').textContent = p.title + ' · ' + p.file
+  $('#count').textContent = p.actions + ' 个动作'
+  $('#body').innerHTML =
+    '<div class="mb-3"><button class="rounded-[8px] px-2 py-1 text-[11.5px] text-[#6b7280] hover:bg-black/[.05]" data-back="1">← 返回平台列表</button></div>' +
+    '<div class="mb-4 flex items-start gap-3 border-b border-black/5 pb-4">' + iconHtml(p, 44) +
+      '<div class="min-w-0 flex-1"><div class="text-[14px] font-bold text-[#111827]">' + esc(p.title) + '</div>' +
+        '<div class="mt-0.5 text-[11.5px] text-[#6b7280]">' + esc(p.desc) + '</div></div></div>' +
+    '<section class="rounded-[12px] ring-1 ring-black/5">' +
+      '<div class="flex flex-wrap items-center gap-2 border-b border-black/5 px-3 py-2">' +
+        '<h4 class="text-[12px] font-bold text-[#111827]">配置项</h4>' +
+        '<span class="text-[10.5px] text-[#9ca3af]">默认都是平台通用；打开右边「账号级」开关，这一项才在每个账号里各存一份（通用值仍可在这里改）</span>' +
+      '</div>' +
+      '<div class="divide-y divide-black/5">' + p.fields.map((f) => fieldRow(p, f)).join('') + '</div>' +
+    '</section>' +
+    '<section class="mt-4">' +
+      '<div class="mb-2 flex items-center gap-2">' +
+        '<h4 class="text-[12px] font-bold text-[#111827]">账号</h4>' +
+        '<span class="text-[10.5px] text-[#9ca3af]">展开可看这个号的全部配置；标「默认」的就是不选号时用的</span>' +
+        '<button class="ml-auto rounded-[8px] px-2.5 py-1 text-[11.5px] font-medium ring-1 ring-black/10 hover:bg-black/[.04]" data-aadd="' + p.id + '">+ 添加账号</button>' +
+      '</div>' +
+      '<div class="flex flex-col gap-2">' + p.accounts.map((a, i) => accountBlock(p, a, i)).join('') + '</div>' +
+    '</section>'
+  renderJson()
+}
+
+// ---------- 模型标签页 ----------
+/** 只留「真的有模型」的类型：以后新增 3D 之类，只要有模型就自动出现，没有就不显示 */
+function availableTypes() {
+  return state.modelTypes.filter((t) => state.models.some((m) => m.type === t.id && (P(m.provider) || {}).enabled !== false))
+}
+
+function renderModel() {
+  const types = availableTypes()
+  const type = types.find((t) => t.id === state.modelType) || types[0]
+  if (!type) {
+    $('#title').textContent = '模型'
+    $('#sub').textContent = '按生成类型设默认模型；每个类型只有一个默认，全局生效（不分平台）。'
+    $('#count').textContent = '0 个类型'
+    $('#body').innerHTML = '<div class="rounded-[10px] border border-dashed border-black/10 px-3 py-10 text-center text-[11.5px] text-[#9ca3af]">现在没有任何可用模型。启用一个平台后，它提供的模型类型会出现在这里。</div>'
+    return renderJson()
+  }
+  const list = state.models.filter((m) => m.type === type.id)
+  const shown = list.filter((m) => (P(m.provider) || {}).enabled !== false)
+  const hidden = list.length - shown.length
+  $('#title').textContent = '模型'
+  $('#sub').textContent = '按生成类型设默认模型；每个类型只有一个默认，全局生效（不分平台）。'
+  $('#count').textContent = types.length + ' 个类型'
+
+  $('#body').innerHTML =
+    '<div class="flex gap-4">' +
+      '<nav class="w-[132px] shrink-0">' +
+        '<div class="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">生成类型</div>' +
+        '<div class="flex flex-col gap-0.5">' + types.map((t) => {
+          const on = t.id === type.id
+          const n = state.models.filter((m) => m.type === t.id).length
+          return '<button class="flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12px] ' +
+            (on ? 'bg-cyan-600/10 font-semibold text-cyan-700' : 'text-[#374151] hover:bg-black/[.04]') + '" data-type="' + t.id + '">' +
+            '<span class="flex-1">' + t.label + '</span>' +
+            '<span class="text-[10px] text-[#9ca3af]">' + n + '</span></button>'
+        }).join('') + '</div>' +
+      '</nav>' +
+      '<div class="min-w-0 flex-1">' +
+        '<div class="mb-2 flex items-center gap-2">' +
+          '<h4 class="text-[12px] font-bold text-[#111827]">' + type.label + ' 模型</h4>' +
+          '<span class="text-[10.5px] text-[#9ca3af]">共 ' + list.length + ' 个' + (hidden > 0 ? '（' + hidden + ' 个所属平台已停用，已隐藏）' : '') + '</span>' +
+        '</div>' +
+        (list.length === 0
+          ? '<div class="rounded-[10px] border border-dashed border-black/10 px-3 py-8 text-center text-[11.5px] text-[#9ca3af]">这一类还没有任何模型。以后新增这类平台（比如 3D）会自动出现在这里。</div>'
+          : '<div class="overflow-hidden rounded-[10px] ring-1 ring-black/5">' +
+              '<div class="grid grid-cols-[1fr_150px_92px] items-center gap-2 border-b border-black/5 bg-black/[.02] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">' +
+                '<span>模型</span><span>来自平台</span><span class="text-right">默认</span></div>' +
+              shown.map((m) => {
+                const p = P(m.provider)
+                const isDef = state.defaults[type.id] === m.id
+                return '<div class="row-hover grid grid-cols-[1fr_150px_92px] items-center gap-2 px-3 py-2 ' + (isDef ? 'bg-cyan-600/[.04]' : '') + '">' +
+                  '<div class="flex min-w-0 items-center gap-2">' + iconHtml(p, 26) +
+                    '<span class="truncate text-[12px] font-medium text-[#111827]">' + esc(m.title) + '</span>' +
+                    (isDef ? '<span class="rounded-full bg-cyan-600/10 px-1.5 py-[1px] text-[9.5px] font-semibold text-cyan-700">默认</span>' : '') + '</div>' +
+                  '<span class="truncate text-[11px] text-[#6b7280]">' + esc(p ? p.title : m.provider) + '</span>' +
+                  '<div class="flex justify-end">' +
+                    (isDef
+                      ? '<button class="rounded-[7px] px-2 py-1 text-[10.5px] text-[#9ca3af] hover:bg-black/[.05]" data-unset="' + type.id + '">取消默认</button>'
+                      : '<button class="rounded-[7px] px-2 py-1 text-[10.5px] font-medium text-cyan-700 ring-1 ring-cyan-600/25 hover:bg-cyan-50" data-setdef="' + type.id + ':' + m.id + '">设为默认</button>') +
+                  '</div></div>'
+              }).join('') +
+            '</div>') +
+      '</div>' +
+    '</div>'
+  renderJson()
+}
+
+function render() {
+  renderTabs()
+  if (state.tab === 'model') return renderModel()
+  return state.view === 'edit' ? renderEdit() : renderList()
+}
+
+// ---------- 事件 ----------
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-tab],[data-toggle],[data-edit],[data-del],[data-back],[data-level],[data-default],[data-aadd],[data-adel],[data-editacc],[data-type],[data-setdef],[data-unset]')
+  if (!t) return
+  const d = t.dataset
+
+  if (d.tab) { state.tab = d.tab; return render() }
+  if (d.type) { state.modelType = d.type; return render() }
+  if (d.setdef) { const [ty, id] = d.setdef.split(':'); state.defaults[ty] = id; return render() }
+  if (d.unset) { state.defaults[d.unset] = ''; return render() }
+
+  if (d.toggle) { const p = P(d.toggle); p.enabled = !p.enabled; return render() }
+  if (d.edit) { state.editing = d.edit; state.view = 'edit'; state.accountEdit = null; return render() }
+  if (d.back) { state.view = 'list'; state.editing = null; state.accountEdit = null; return render() }
+  if (d.del) {
+    const p = P(d.del)
+    if (!confirm('删除「' + p.title + '」？会删掉文件 ' + p.file)) return
+    state.providers = state.providers.filter((x) => x.id !== p.id)
+    state.view = 'list'; state.editing = null; return render()
+  }
+  if (d.level) {
+    const [pid, key] = d.level.split(':')
+    const p = P(pid); const f = p.fields.find((x) => x.key === key)
+    if (!f.accountLevel) {
+      f.accountLevel = true
+      const base = f.value ?? ''
+      p.accounts.forEach((a, i) => { (a.values ||= {})[key] = i === 0 ? base : (a.values?.[key] ?? '') })
+    } else {
+      f.accountLevel = false
+      f.value = p.accounts[0]?.values?.[key] ?? f.value ?? ''
+      p.accounts.forEach((a) => { if (a.values) delete a.values[key] })
+    }
+    return renderEdit()
+  }
+  if (d.default) {
+    const [pid, i] = d.default.split(':')
+    P(pid).accounts.forEach((a, k) => (a.default = String(k) === i)); return renderEdit()
+  }
+  if (d.editacc) {
+    state.accountEdit = state.accountEdit === d.editacc ? null : d.editacc
+    return renderEdit()
+  }
+  if (d.aadd) {
+    const p = P(d.aadd); const n = p.accounts.length
+    const values = {}
+    for (const f of p.fields) if (f.accountLevel) values[f.key] = ''
+    p.accounts.push({ id: 'account-' + (n + 1), name: '账号 ' + (n + 1), default: false, values })
+    return renderEdit()
+  }
+  if (d.adel) {
+    const [pid, i] = d.adel.split(':'); const p = P(pid)
+    if (p.accounts.length <= 1) return alert('至少保留一个账号')
+    p.accounts.splice(Number(i), 1)
+    if (!p.accounts.some((a) => a.default)) p.accounts[0].default = true
+    return renderEdit()
+  }
+})
+
+document.addEventListener('input', (e) => {
+  const el = e.target
+  if (el.dataset.gval || el.dataset.gval2) {
+    const raw = el.dataset.gval || el.dataset.gval2
+    const [pid, key] = raw.split(':')
+    P(pid).fields.find((f) => f.key === key).value = el.value
+    return renderJson()
+  }
+  if (el.dataset.aval) {
+    const [pid, i, key] = el.dataset.aval.split(':')
+    const a = P(pid).accounts[Number(i)]; (a.values ||= {})[key] = el.value; return renderJson()
+  }
+  if (el.dataset.aname) {
+    const [pid, i] = el.dataset.aname.split(':')
+    P(pid).accounts[Number(i)].name = el.value; return renderJson()
+  }
+})
+
+render()
+</script>
+</body>
+</html>

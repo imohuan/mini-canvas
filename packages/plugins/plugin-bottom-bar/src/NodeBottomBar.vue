@@ -163,6 +163,21 @@ function onPanelNotify(payload: { level: 'info' | 'success' | 'error'; message: 
 // —— 提示词 ——
 let persistValuesSoonRef: () => void = () => {}
 const AGENT_MODEL_TYPES = new Set(['text'])
+/**
+ * 节点数据里记着的底栏动作 id（挂载第一拍就有）。
+ *
+ * 底栏刚挂载时 `nodeType` 还没从 doc 同步回来（是 undefined），只看类型会把对话节点
+ * 判成「非对话」，于是输入框拿 `data.text`（模型答案）当初始值，接着又把答案写回
+ * `barPrompt` —— 用户实测：跑完一轮再刷新，输入框里全是答案。
+ */
+const dataActionId = computed(() => {
+  const raw = props.data?.barValues as { actionId?: unknown } | undefined
+  return typeof raw?.actionId === 'string' ? raw.actionId : ''
+})
+/** 对话模式：文本节点（或数据里已记着 agent:chat）用 Agent 的模型下拉 */
+const conversationMode = computed(
+  () => AGENT_MODEL_TYPES.has(String(nodeType.value ?? '')) || dataActionId.value === 'agent:chat',
+)
 const promptApi = useBottomBarPrompt({
   ctx,
   props,
@@ -174,11 +189,10 @@ const promptApi = useBottomBarPrompt({
    * 输入框存的是**你的问题**（barPrompt），节点正文存的是**模型的答案**（data.text）。
    * 两者解耦后，发送完问题还在、答案流式写进节点，占位符也不会和正文叠在一起。
    */
-  conversation: computed(() => AGENT_MODEL_TYPES.has(String(nodeType.value ?? ''))),
+  conversation: conversationMode,
   persistValuesSoon: () => persistValuesSoonRef(),
 })
 const { prompt, promptDoc, onPromptUpdate, CHAR_LIMIT, charCount } = promptApi
-const conversationMode = computed(() => AGENT_MODEL_TYPES.has(String(nodeType.value ?? '')))
 
 // —— 文本节点：任务化对话（用户 2026-11-09） ——
 // 这个下拉不是「底栏动作」，而是 Agent 里配好的模型清单；

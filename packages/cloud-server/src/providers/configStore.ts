@@ -28,6 +28,8 @@ import { promises as fs } from 'node:fs'
 export interface ProviderAccount {
   id: string
   name?: string
+  /** 默认账号：不选号时用它（用户口径 2026-11-10：要多账号里的默认号） */
+  default?: boolean
   /** secret 只存明文在服务端；下发接口给掩码 */
   values: Record<string, string | number | boolean>
 }
@@ -37,16 +39,44 @@ export interface ProviderFileConfig {
   accounts: ProviderAccount[]
 }
 
+/**
+ * 新版「点分隔 key」配置：一个平铺对象，key 就是 `providerId.field` 或 `providerId.field.[n]`。
+ *
+ * 为什么要有它：用户口径 2026-11-10 —— 「所有 provider 的配置放在同一级别的 JSON 中，
+ * key 支持点隔开；相同配置只需对应的 key 一样」。于是：
+ * - `token01.baseUrl`           = 平台通用（所有账号共用一份）
+ * - `token01.apiKey.[0]`        = 第 0 个账号的 apiKey（解析时还原成数组）
+ * - `web2api.baseUrl`           = 另一个平台引用同一个 key 名前缀，值天然共用一份
+ *
+ * 账号清单（id / name / 默认）仍放在 `platforms` 里 —— 数组下标本身不携带名字。
+ */
+export interface ProviderPlatformMeta {
+  accounts: Array<{ id: string; name?: string; default?: boolean }>
+  /** 平台展示信息快照：停用后 import 不到文件了，靠这份继续显示名字/介绍/图标 */
+  title?: string
+  description?: string
+  icon?: string
+}
+
+/** 一个生成类型的默认模型（图片 / 视频 / 音频 / 文本 / 以后可能有 3D） */
+export type ModelDefaults = Record<string, string>
+
 /** providers-config.json 的完整形状 */
 export interface ProviderConfigFile {
   version: 2
   disabledFiles: string[]
   deletedFiles: string[]
   files: Record<string, ProviderFileConfig>
+  /** 平铺的点分隔 key → 值（新结构；缺省 = 还没迁移过来，继续读旧 files） */
+  config?: Record<string, string | number | boolean>
+  /** platformId → 账号清单（名字、默认号） */
+  platforms?: Record<string, ProviderPlatformMeta>
+  /** 生成类型 → 默认模型 id（全局，不分平台） */
+  defaults?: ModelDefaults
 }
 
 export function emptyProviderConfig(): ProviderConfigFile {
-  return { version: 2, disabledFiles: [], deletedFiles: [], files: {} }
+  return { version: 2, disabledFiles: [], deletedFiles: [], files: {}, config: {}, platforms: {}, defaults: {} }
 }
 
 /** 文件名白名单：只允许普通 .js 名（无路径分隔），杜绝路径穿越 */
@@ -61,11 +91,55 @@ export async function readProviderConfig(file: string): Promise<ProviderConfigFi
     const raw = JSON.parse(text) as Record<string, unknown>
     if (!raw || typeof raw !== 'object') return emptyProviderConfig()
     const out = emptyProviderConfig()
+    // emptyProviderConfig() 一定会给这三张表；这里重新取一次是为了让 TS 知道它们不是 undefined
+    const config = (out.config ||= {})
+    const platforms = (out.platforms ||= {})
+    const defaults = (out.defaults ||= {})
     if (Array.isArray(raw.disabledFiles)) {
       out.disabledFiles = raw.disabledFiles.filter((n): n is string => typeof n === 'string')
     }
     if (Array.isArray(raw.deletedFiles)) {
       out.deletedFiles = raw.deletedFiles.filter((n): n is string => typeof n === 'string')
+    }
+    // 新结构：平铺的点分隔 key；值只收标量（数组由 `.[n]` 表达）
+    if (raw.config && typeof raw.config === 'object' && !Array.isArray(raw.config)) {
+      for (const [k, v] of Object.entries(raw.config as Record<string, unknown>)) {
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') config[k] = v
+      }
+    }
+    // platformId → 账号清单（名字与默认号；值在 config 里）
+    if (raw.platforms && typeof raw.platforms === 'object' && !Array.isArray(raw.platforms)) {
+      for (const [pid, v] of Object.entries(raw.platforms as Record<string, unknown>)) {
+        if (!v || typeof v !== 'object') continue
+        const accounts = (v as { accounts?: unknown }).accounts
+        if (!Array.isArray(accounts)) continue
+        platforms[pid] = {
+          accounts: accounts
+            .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+            .map((a) => ({
+              id: typeof a.id === 'string' ? a.id : '',
+              ...(typeof a.name === 'string' && a.name !== '' ? { name: a.name } : {}),
+              ...(a.default === true ? { default: true } : {}),
+            }))
+            .filter((a) => a.id !== ''),
+          ...(typeof (v as { title?: unknown }).title === 'string' && (v as { title: string }).title !== ''
+            ? { title: (v as { title: string }).title }
+            : {}),
+          ...(typeof (v as { description?: unknown }).description === 'string' &&
+          (v as { description: string }).description !== ''
+            ? { description: (v as { description: string }).description }
+            : {}),
+          ...(typeof (v as { icon?: unknown }).icon === 'string' && (v as { icon: string }).icon !== ''
+            ? { icon: (v as { icon: string }).icon }
+            : {}),
+        }
+      }
+    }
+    // 生成类型 → 默认模型
+    if (raw.defaults && typeof raw.defaults === 'object' && !Array.isArray(raw.defaults)) {
+      for (const [k, v] of Object.entries(raw.defaults as Record<string, unknown>)) {
+        if (typeof v === 'string' && v !== '') defaults[k] = v
+      }
     }
     // v2：files[文件名].accounts
     if (raw.files && typeof raw.files === 'object' && !Array.isArray(raw.files)) {
@@ -107,6 +181,82 @@ function normalizeValues(v: unknown): Record<string, string | number | boolean> 
   return out
 }
 
+/** `a.b.[0]` → `{ base: 'a.b', index: 0 }`；不是账号下标时 index 为 undefined */
+export function splitArrayKey(key: string): { base: string; index?: number } {
+  const m = /^(.*?)\.\[(\d+)\]$/.exec(key)
+  if (!m) return { base: key }
+  return { base: m[1]!, index: Number(m[2]) }
+}
+
+/** 点分隔 key 的最后一段就是字段名（`token01.baseUrl` → `baseUrl`；`token01.apiKey.[0]` → `apiKey`） */
+export function fieldOfKey(key: string): string {
+  const base = splitArrayKey(key).base
+  const parts = base.split('.')
+  return parts[parts.length - 1] ?? base
+}
+
+/** key 的前缀（平台部分）：`token01.apiKey.[0]` → `token01` */
+export function platformOfKey(key: string): string {
+  return splitArrayKey(key).base.split('.')[0] ?? ''
+}
+
+/**
+ * 把「平铺的点分隔 key」还原成 provider 运行期读的账号结构。
+ *
+ * 规则（用户口径 2026-11-10）：
+ *   `pid.field`      → 平台通用值，写进每个账号的 values（账号自己覆盖过才不同）
+ *   `pid.field.[n]`  → 第 n 个账号的值，覆盖通用值
+ * 账号 id / name / 默认号来自 `platforms[pid].accounts`（顺序即下标）。
+ */
+export function accountsForPlatform(
+  config: Record<string, string | number | boolean>,
+  meta: ProviderPlatformMeta | undefined,
+  pid: string,
+): Array<{ id: string; name?: string; default?: boolean; values: Record<string, string | number | boolean> }> {
+  /** 通用值：任何不带 `.[n]` 且前缀是 pid 的 key */
+  const shared: Record<string, string | number | boolean> = {}
+  /** 账号级：field → (index → value) */
+  const perAccount = new Map<string, Map<number, string | number | boolean>>()
+
+  for (const [key, value] of Object.entries(config)) {
+    if (platformOfKey(key) !== pid) continue
+    const { index } = splitArrayKey(key)
+    const field = fieldOfKey(key)
+    if (index === undefined) {
+      shared[field] = value
+    } else {
+      let byIndex = perAccount.get(field)
+      if (!byIndex) perAccount.set(field, (byIndex = new Map()))
+      byIndex.set(index, value)
+    }
+  }
+
+  const declared = meta?.accounts ?? []
+  // 下标比声明的账号多（用户手改过 JSON）也要能读出来：按最大下标补齐
+  let count = declared.length
+  for (const byIndex of perAccount.values()) {
+    for (const idx of byIndex.keys()) count = Math.max(count, idx + 1)
+  }
+  if (count === 0) return []
+
+  const out = []
+  for (let i = 0; i < count; i++) {
+    const acc = declared[i]
+    const values: Record<string, string | number | boolean> = { ...shared }
+    for (const [field, byIndex] of perAccount) {
+      const v = byIndex.get(i)
+      if (v !== undefined) values[field] = v
+    }
+    out.push({
+      id: acc?.id ?? 'account-' + (i + 1),
+      ...(acc?.name ? { name: acc.name } : {}),
+      ...(acc?.default ? { default: true } : {}),
+      values,
+    })
+  }
+  return out
+}
+
 /** 原子写（先写临时再改名，半截写入不会把配置打坏） */
 export async function writeProviderConfig(file: string, data: ProviderConfigFile): Promise<void> {
   const tmp = file + '.tmp'
@@ -124,15 +274,22 @@ export async function writeProviderConfig(file: string, data: ProviderConfigFile
  *   __mcProviderConfig.byId      — { 账号id → values }
  */
 export function injectTextFor(values: {
-  accounts: Array<{ id: string; name?: string; values: Record<string, string | number | boolean> }>
+  accounts: Array<{ id: string; name?: string; default?: boolean; values: Record<string, string | number | boolean> }>
 }): string {
   const accounts = values.accounts.map((a) => ({
     id: a.id,
     ...(a.name ? { name: a.name } : {}),
+    ...(a.default ? { default: true } : {}),
     values: a.values,
   }))
   const first = accounts[0]?.values ?? {}
+  /** 默认账号：没标默认时就是第一个 */
+  const defaultId = values.accounts.find((a) => a.default)?.id ?? accounts[0]?.id ?? ''
   const byId: Record<string, Record<string, string | number | boolean>> = {}
   for (const a of accounts) byId[a.id] = a.values
-  return 'const __mcProviderConfig = ' + JSON.stringify({ accounts, values: first, byId }) + ';\n'
+  return (
+    'const __mcProviderConfig = ' +
+    JSON.stringify({ accounts, values: first, byId, defaultId }) +
+    ';\n'
+  )
 }

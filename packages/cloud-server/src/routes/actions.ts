@@ -12,9 +12,47 @@
  */
 import { Hono } from 'hono'
 import type { ProviderRegistry } from '../providers/registry.js'
+import type { Provider } from '../providers/types.js'
 
-export function actionsRoutes(registry: ProviderRegistry): Hono {
+export function actionsRoutes(
+  registry: ProviderRegistry,
+  /** 宿主注入：按平台 id 查账号清单（拿不到就只有模型行，不出账号二级菜单） */
+  accountsOf?: (providerId: string) => Array<{ id: string; name?: string; default?: boolean }>,
+): Hono {
   const app = new Hono()
+
+  /**
+   * 把「所属平台的图标」贴到每条动作上。
+   *
+   * 为什么在后台做：前端只拿得到动作清单，拿不到 provider 对象；
+   * 而图标兜底需要「动作没写 → 用它所属平台写的」这一层（用户口径 2026-11-10）。
+   */
+  const withProviderIcons = (): Array<Record<string, unknown>> => {
+    const out: Array<Record<string, unknown>> = []
+    for (const p of registry.listProviders() as Provider[]) {
+      const icon = typeof p.icon === 'string' && p.icon.trim() !== '' ? p.icon : ''
+      // 账号清单（多账号时底栏要在模型行右侧出二级菜单；只有一个号就没什么可选）
+      const accounts = accountsOf?.(p.id) ?? []
+      const defaultAccount = accounts.find((a) => a.default)?.id ?? accounts[0]?.id ?? ''
+      for (const a of p.actions) {
+        out.push({
+          ...a,
+          ...(icon ? { providerIcon: icon } : {}),
+          ...(accounts.length > 1
+            ? {
+                accounts: accounts.map((acc) => ({ id: acc.id, name: acc.name ?? acc.id })),
+                defaultAccount,
+              }
+            : {}),
+        })
+      }
+    }
+    return out.sort(
+      (x, y) =>
+        (typeof x.order === 'number' ? x.order : Number.POSITIVE_INFINITY) -
+        (typeof y.order === 'number' ? y.order : Number.POSITIVE_INFINITY),
+    )
+  }
 
   app.get('/api/actions', (c) => {
     const version = registry.contentVersion
@@ -23,7 +61,7 @@ export function actionsRoutes(registry: ProviderRegistry): Hono {
     if (ifVersion !== undefined && Number(ifVersion) === version) {
       return c.json({ ok: true, version, changed: false, actions: [] })
     }
-    return c.json({ ok: true, version, changed: true, actions: registry.listActions() })
+    return c.json({ ok: true, version, changed: true, actions: withProviderIcons() })
   })
 
   return app

@@ -40,6 +40,7 @@ import {
   readProviderConfig,
   writeProviderConfig,
   isSafeFileName,
+  platformOfKey as providerIdOfKey,
   type ProviderConfigFile,
 } from './providers/configStore.js'
 import { HistoryStore } from './tasks/history.js'
@@ -838,6 +839,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     providerConfig.disabledFiles = config.disabledFiles
     providerConfig.deletedFiles = config.deletedFiles
     providerConfig.files = config.files
+    providerConfig.config = config.config
+    providerConfig.platforms = config.platforms
+    providerConfig.defaults = config.defaults
     const scanned = await loadProvidersFromDir(providersDir, { config })
     registry.replaceAll(scanned.providers)
     // replaceAll 会清空整张表（删掉的 provider 的动作为了不残留，必须清）——
@@ -852,6 +856,55 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       console.warn('[cloud-server] provider 加载失败 ' + f.file + '：' + f.error)
     }
     return { count: registry.listActions().length, version: registry.contentVersion }
+  }
+
+  /**
+   * 告诉前端「平台/配置变了，重拉动作与配置」。
+   *
+   * 用户口径 2026-11-10：操作完就应该实时生效，不该有刷新按钮。
+   * 前端 `remoteSync` 监听 `config/providers-version`，收到就 `reloadActions()`。
+   * 以前这个 key 从来没人写（实测 GET 是 404），所以实时那条路一直是死的。
+   */
+  async function broadcastProvidersChanged(): Promise<void> {
+    // 顺带把「已装载平台」的展示信息快照进配置：停用/删除后就 import 不到文件了，
+    // 没有这份快照，管理页上会退化成文件名（用户 2026-11-10 截图里停用后没有标题）。
+    await snapshotPlatformMeta()
+    try {
+      await kvStore.set('config', 'providers-version', Date.now())
+    } catch {
+      /* 只是提醒信号，写失败不影响配置本身 */
+    }
+  }
+
+  /** 把当前装载到的 provider 的名字/介绍/图标记进配置（供停用后显示） */
+  async function snapshotPlatformMeta(): Promise<void> {
+    try {
+      const cfg = await readProviderConfig(providerConfigFile)
+      const platforms = { ...(cfg.platforms ?? {}) }
+      let changed = false
+      for (const p of registry.listProviders()) {
+        const cur = platforms[p.id] ?? { accounts: [] }
+        const next = {
+          ...cur,
+          ...(p.title ? { title: p.title } : {}),
+          ...(p.description ? { description: p.description } : {}),
+          ...(p.icon ? { icon: p.icon } : {}),
+        }
+        if (
+          next.title !== cur.title ||
+          next.description !== cur.description ||
+          next.icon !== cur.icon
+        ) {
+          platforms[p.id] = next
+          changed = true
+        }
+      }
+      if (!changed) return
+      cfg.platforms = platforms
+      await writeProviderConfig(providerConfigFile, cfg)
+    } catch {
+      /* 快照只是展示用，失败了不影响启停本身 */
+    }
   }
 
   // 盯目录：后台丢一个 provider 进去，前端的菜单几秒内自己跟上
@@ -877,6 +930,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       cfg.disabledFiles = [...set]
       await writeProviderConfig(providerConfigFile, cfg)
       await reloadProviders()
+      await broadcastProvidersChanged()
     },
     /**
      * 删除一个 provider 文件（记入 deletedFiles，重启不再铺回）。
@@ -894,6 +948,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       if (!cfg.deletedFiles.includes(file)) cfg.deletedFiles.push(file)
       await writeProviderConfig(providerConfigFile, cfg)
       await reloadProviders()
+      await broadcastProvidersChanged()
       return true
     },
     /** 保存一个文件的账号清单（整体替换该文件的账号） */
@@ -901,11 +956,92 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       if (!isSafeFileName(file)) throw new Error('非法文件名')
       const cfg = await readProviderConfig(providerConfigFile)
       cfg.files[file] = { accounts }
+      // 同时写一份新结构：否则界面（已经按点分隔 key 读）看不到这次保存。
+      // 老接口暂时保留给脚本与旧调用方，两条路写同一个事实。
+      const pid = file.replace(/\.js$/, '')
+      const config: Record<string, string | number | boolean> = { ...(cfg.config ?? {}) }
+      for (const key of Object.keys(config)) {
+        if (providerIdOfKey(key) === pid) delete config[key]
+      }
+      for (let i = 0; i < accounts.length; i++) {
+        for (const [field, value] of Object.entries(accounts[i]!.values)) {
+          config[pid + '.' + field + '.[' + i + ']'] = value
+        }
+      }
+      cfg.config = config
+      const platforms = { ...(cfg.platforms ?? {}) }
+      platforms[pid] = {
+        accounts: accounts.map((a) => ({
+          id: a.id,
+          ...(a.name ? { name: a.name } : {}),
+          ...(a.default ? { default: true } : {}),
+        })),
+      }
+      cfg.platforms = platforms
       await writeProviderConfig(providerConfigFile, cfg)
       await reloadProviders()
+      await broadcastProvidersChanged()
+    },
+    /** 保存点分隔 key 配置（新结构）：通用值 + 每账号值 + 账号清单 */
+    async saveKeyConfig(
+      pid: string,
+      payload: {
+        shared: Record<string, string | number | boolean>
+        accounts: Array<{ id: string; name?: string; default?: boolean; values: Record<string, string | number | boolean> }>
+        accountFields: string[]
+      },
+    ): Promise<void> {
+      const cfg = await readProviderConfig(providerConfigFile)
+      const config: Record<string, string | number | boolean> = { ...(cfg.config ?? {}) }
+      // 先清掉这个平台原有的 key，再整体写回（避免删掉的字段残留）
+      for (const key of Object.keys(config)) {
+        if (providerIdOfKey(key) === pid) delete config[key]
+      }
+      const accountFieldSet = new Set(payload.accountFields)
+      for (const [field, value] of Object.entries(payload.shared)) {
+        config[pid + '.' + field] = value
+      }
+      // 账号级字段：下标就是账号顺序；留空的账号不写（读的时候回落通用值）
+      payload.accounts.forEach((acc, i) => {
+        for (const field of accountFieldSet) {
+          const v = acc.values?.[field]
+          if (typeof v === 'string' && v === '') continue
+          if (v === undefined) continue
+          config[pid + '.' + field + '.[' + i + ']'] = v
+        }
+      })
+      cfg.config = config
+      const platforms = { ...(cfg.platforms ?? {}) }
+      platforms[pid] = {
+        accounts: payload.accounts.map((a) => ({
+          id: a.id,
+          ...(a.name ? { name: a.name } : {}),
+          ...(a.default ? { default: true } : {}),
+        })),
+      }
+      cfg.platforms = platforms
+      await writeProviderConfig(providerConfigFile, cfg)
+      await reloadProviders()
+      await broadcastProvidersChanged()
+    },
+    /** 保存生成类型 → 默认模型 */
+    async saveDefaults(defaults: Record<string, string>): Promise<void> {
+      const cfg = await readProviderConfig(providerConfigFile)
+      cfg.defaults = defaults
+      await writeProviderConfig(providerConfigFile, cfg)
+      await broadcastProvidersChanged()
     },
     /** 读配置（GET 接口用） */
     readConfig: () => readProviderConfig(providerConfigFile),
+    /** 某个平台配置里的账号清单（动作清单要在每行带上“可选账号”，底栏据此出二级菜单） */
+    accountsOf(id: string): Array<{ id: string; name?: string; default?: boolean }> {
+      const accounts = providerConfig.platforms?.[id]?.accounts ?? []
+      return accounts.map((a) => ({
+        id: a.id,
+        ...(a.name ? { name: a.name } : {}),
+        ...(a.default ? { default: true } : {}),
+      }))
+    },
     /** providers 目录 */
     dir: providersDir,
   })

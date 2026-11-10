@@ -161,7 +161,17 @@ export const actionsPlugin: PluginModule = {
   name: 'actions',
   inject: [S.providerRegistry],
   apply(ctx) {
-    ctx.routes.adopt(actionsRoutes(need<ProviderRegistry>(ctx, S.providerRegistry)))
+    // 账号清单来自 providerAdmin（配置里的 platforms）。
+    // 注意：本插件排在 providerAdmin 之前，装配那一刻它还不在 —— 延迟到请求时再取，
+    // 否则（实测）动作清单永远拿不到账号列表，二级菜单就出不来。
+    ctx.routes.adopt(
+      actionsRoutes(need<ProviderRegistry>(ctx, S.providerRegistry), (id) => {
+        const admin = ctx.tryGet<{ accountsOf(id: string): Array<{ id: string; name?: string; default?: boolean }> }>(
+          'providerAdmin',
+        )
+        return admin ? admin.accountsOf(id) : []
+      }),
+    )
   },
 }
 

@@ -21,7 +21,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { isValidProvider, type Provider } from './types.js'
-import { injectTextFor, type ProviderConfigFile } from './configStore.js'
+import { injectTextFor, accountsForPlatform, platformOfKey, type ProviderConfigFile } from './configStore.js'
 
 /** 默认的 provider 目录名（挂在数据根下，与 kv / canvases 并列） */
 export const DEFAULT_PROVIDERS_DIR = 'providers'
@@ -69,7 +69,7 @@ export async function loadProvidersFromDir(
       const text = await fs.readFile(file, 'utf8')
       // 已存配置注入源码最前面（import 都在后面也没关系：provider 读值发生在函数调用时，
       // 模块求值期先把 const 赋好即可）。没配过也注入空结构，provider 里 ?. / ?? 兜底统一。
-      const injected = injectTextFor({ accounts: cfg.files[entry.name]?.accounts ?? [] }) + text
+      const injected = injectTextFor({ accounts: accountsForFile(cfg, entry.name) }) + text
       const mod = (await import(
         /* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(injected)
       )) as Record<string, unknown>
@@ -90,7 +90,46 @@ export async function loadProvidersFromDir(
   return { providers, failures, files }
 }
 
-const EMPTY_CONFIG: ProviderConfigFile = { version: 2, disabledFiles: [], deletedFiles: [], files: {} }
+const EMPTY_CONFIG: ProviderConfigFile = {
+  version: 2, disabledFiles: [], deletedFiles: [], files: {}, config: {}, platforms: {}, defaults: {},
+}
+
+/**
+ * 取某个 provider 文件的账号配置。
+ *
+ * 两步合并，保证旧数据还能用：
+ *   1. 旧结构 `files[文件名].accounts`（值直接写在账号里）；
+ *   2. 新结构 `config` 里点分隔 key（`pid.field` / `pid.field.[n]`）。
+ * 新结构优先：同一个字段两边都有时，以点分隔 key 为准（它才是界面正在编辑的那份）。
+ */
+function accountsForFile(
+  cfg: ProviderConfigFile,
+  file: string,
+): Array<{ id: string; name?: string; default?: boolean; values: Record<string, string | number | boolean> }> {
+  const legacy = cfg.files[file]?.accounts ?? []
+  // 新结构按 provider id 分组；文件 → id 的映射在装载阶段才知道，这里两种都试：
+  // 文件名去掉 .js 恰好就是历史约定（token01.js → token01），够用且不需要先 import。
+  const guessId = file.replace(/\.js$/, '')
+  const cfgPlatforms = cfg.platforms ?? {}
+  const cfgConfig = cfg.config ?? {}
+  const hasNew =
+    Object.keys(cfgPlatforms).includes(guessId) ||
+    Object.keys(cfgConfig).some((k) => platformOfKey(k) === guessId)
+  if (!hasNew) return legacy
+
+  const merged = accountsForPlatform(cfgConfig, cfgPlatforms[guessId], guessId)
+  if (merged.length === 0) return legacy
+  // 旧结构里可能有新结构还没搬过来的字段：只补缺，不覆盖
+  for (let i = 0; i < merged.length; i++) {
+    const old = legacy[i]
+    if (!old) continue
+    if (!merged[i]!.name && old.name) merged[i]!.name = old.name
+    for (const [k, v] of Object.entries(old.values)) {
+      if (merged[i]!.values[k] === undefined) merged[i]!.values[k] = v
+    }
+  }
+  return merged
+}
 
 function isNotFound(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ENOENT'

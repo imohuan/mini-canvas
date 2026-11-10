@@ -1,35 +1,62 @@
 /**
- * providerManagerService —— 「平台」页的数据与动作（provider 管理）。
+ * providerManagerService —— 「平台」页的数据与动作。
  *
- * 与 pluginManagerService 同款骨架：reactive 状态 + fetch 动作。
- * 数据来自 cloud-server 的 /api/providers（providerAdmin 路由）；
- * 服务地址沿用「连接」设置里的 cloudClientBaseUrl（空 = 同源），运行期跟随变化。
+ * 契约（与后台 `/api/providers` 同形）：
+ *   - 平台：id / 名字 / 介绍 / 图标 / 启停 / 动作数
+ *   - 配置：字段声明 `config`，`accountFields` 说明哪些按账号存，`shared` 是平台通用值
+ *   - 账号：id / 名字 / 默认 / 每号的值
+ *   - 默认模型：按「生成类型」存（`photo` 那类不是平台属性）
+ *
+ * 用户口径 2026-11-10：
+ * 1. 通用与账号级是**同一张清单**，靠每项一个开关切换；
+ * 2. 账号可展开做全量配置，并标出与通用值的差异；
+ * 3. 刷新按钮不需要 —— 后台改完会广播 `providers-version`，这里订阅即可；
+ * 4. 多账号只出现在下拉的二级菜单里，模型本身仍是一行。
  */
 import { reactive } from 'vue'
 import { withAdminToken, type Context } from '@mini-canvas/canvas-base'
-/** GET /api/providers 的一行（与 cloud-server 契约同形；就地声明避免跨插件依赖） */
+
+/** 一个配置字段（与后台 ProviderConfigField 同形） */
+export interface ProviderField {
+  key: string
+  label?: string
+  description?: string
+  type: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'secret'
+  default?: string | number | boolean
+  options?: Array<{ label: string; value: string }>
+  placeholder?: string
+  min?: number
+  max?: number
+  step?: number
+}
+
+export interface ProviderAccountRow {
+  id: string
+  name?: string
+  default?: boolean
+  values: Record<string, string | number | boolean>
+}
+
 export interface ProviderRow {
   id: string
   file: string
-  /** 内置平台（没有文件）：不能删、也没有文件可配 */
   builtin?: boolean
+  title?: string
+  description?: string
+  icon?: string
   enabled: boolean
   actions: number
-  config: Array<{
-    key: string
-    label?: string
-    description?: string
-    type: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'secret'
-    default?: string | number | boolean
-    options?: Array<{ label: string; value: string }>
-    placeholder?: string
-  }>
-  accounts: Array<{ id: string; name?: string; values: Record<string, string | number | boolean> }>
+  config: ProviderField[]
+  accountFields?: string[]
+  shared?: Record<string, string | number | boolean>
+  accounts: ProviderAccountRow[]
 }
 
-export interface ProviderAccountDraft {
+/** 一个账号的草稿（编辑中的副本，保存前不动真身） */
+export interface AccountDraft {
   id: string
   name: string
+  isDefault: boolean
   values: Record<string, string | number | boolean>
 }
 
@@ -37,23 +64,30 @@ export interface ProviderManagerState {
   loading: boolean
   error: string
   rows: ProviderRow[]
-  /** 正在编辑账号的 provider 文件（null = 没有打开编辑区） */
-  editingFile: string | null
-  editingAccounts: ProviderAccountDraft[]
-  busyFile: string | null
+  /** 当前正在编辑的平台 id（null = 列表视图） */
+  editingId: string | null
+  /** 编辑中：平台通用值 */
+  shared: Record<string, string | number | boolean>
+  /** 编辑中：哪些字段按账号存 */
+  accountFields: string[]
+  /** 编辑中：账号草稿 */
+  accounts: AccountDraft[]
+  busy: boolean
+  /** 哪些账号卡片是展开的（`pid:index`） */
+  expanded: string[]
+  /** 正在「编辑全局属性」的账号（`pid:index`） */
+  editingSharedOf: string | null
+  /** 模型标签页：当前类型 */
+  modelType: string
+  /** 生成类型 → 默认模型 id */
+  defaults: Record<string, string>
 }
 
-/**
- * 确认框（只用到那一个方法；与 FeedbackService 同形，避免跨包耦合）。
- *
- * 用 `ask` 这个名字而不是同名方法：全仓守卫禁止出现裸的浏览器弹窗调用写法
- * （见 packages/ui/src/__tests__/noNativeDialogs.test.ts），即使是接口声明也会被扫到。
- */
+/** 确认框（只用那一个方法；命名避开裸 confirm，见 noNativeDialogs 守卫） */
 export interface ConfirmLike {
   ask(opts: { title: string; description?: string; confirmText?: string; cancelText?: string }): Promise<boolean>
 }
 
-/** 窄接口的 settings（与本插件真实用到的部分同形） */
 export interface SettingsLike {
   get(key: string): unknown
   onChange?(fn: (key: string, value: unknown) => void): { dispose(): void }
@@ -64,9 +98,7 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
 
   function baseOf(): string {
     const raw = settings?.get('cloudClientBaseUrl')
-    if (typeof raw === 'string' && /^https?:\/\/[^/\s]+/i.test(raw.trim())) {
-      return raw.trim().replace(/\/+$/, '')
-    }
+    if (typeof raw === 'string' && /^https?:\/\/[^/\s]+/i.test(raw.trim())) return raw.trim().replace(/\/+$/, '')
     return ''
   }
 
@@ -80,9 +112,15 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     loading: false,
     error: '',
     rows: [],
-    editingFile: null,
-    editingAccounts: [],
-    busyFile: null,
+    editingId: null,
+    shared: {},
+    accountFields: [],
+    accounts: [],
+    busy: false,
+    expanded: [],
+    editingSharedOf: null,
+    modelType: '',
+    defaults: {},
   })
 
   async function refresh(): Promise<void> {
@@ -91,8 +129,9 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     try {
       const res = await call('/api/providers')
       if (!res.ok) throw new Error('拉平台清单失败 ' + res.status)
-      const body = (await res.json()) as { providers?: ProviderRow[] }
+      const body = (await res.json()) as { providers?: ProviderRow[]; defaults?: Record<string, string> }
       state.rows = Array.isArray(body.providers) ? body.providers : []
+      if (body.defaults) state.defaults = body.defaults
     } catch (err) {
       state.error = err instanceof Error ? err.message : String(err)
     } finally {
@@ -100,75 +139,143 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     }
   }
 
-  function secretMaskOf(v: unknown): string {
-    const s = String(v ?? '')
-    if (!s) return ''
-    return s.length <= 8 ? s.slice(0, 1) + '…' + s.slice(-1) : s.slice(0, 4) + '…' + s.slice(-4)
+  function rowOf(id: string): ProviderRow | undefined {
+    return state.rows.find((r) => r.id === id)
+  }
+
+  /** 平台的名字：provider 没写时回落 id */
+  function titleOf(row: ProviderRow): string {
+    return row.title && row.title.trim() !== '' ? row.title : row.id
+  }
+
+  function isAccountField(key: string): boolean {
+    return state.accountFields.includes(key)
   }
 
   function openEdit(row: ProviderRow): void {
     if (!row.file) return
-    state.editingFile = row.file
-    state.editingAccounts = row.accounts.map((a) => ({
+    state.editingId = row.id
+    state.shared = { ...(row.shared ?? {}) }
+    // 给每个字段补一个默认（未存过时用声明里的 default）
+    for (const f of row.config) {
+      if (state.shared[f.key] === undefined && f.default !== undefined) state.shared[f.key] = f.default
+    }
+    state.accountFields = [...(row.accountFields ?? [])]
+    state.accounts = row.accounts.map((a) => ({
       id: a.id,
       name: a.name ?? '',
-      // secret 已被后台掩码：回显掩码，保存时原样回传 = 不改（后台识别掩码保持原值）
+      isDefault: a.default === true,
       values: { ...a.values },
     }))
-    if (state.editingAccounts.length === 0) {
-      // 没配过：按声明给一份默认账号
-      const values: Record<string, string | number | boolean> = {}
-      for (const f of row.config) {
-        if (f.default !== undefined) values[f.key] = f.default
-        else if (f.type === 'boolean') values[f.key] = false
-        else if (f.type === 'number') values[f.key] = 0
-        else values[f.key] = ''
-      }
-      state.editingAccounts = [{ id: 'main', name: '默认', values }]
+    if (state.accounts.length === 0) {
+      state.accounts = [{ id: 'main', name: '默认', isDefault: true, values: {} }]
     }
+    if (!state.accounts.some((a) => a.isDefault)) state.accounts[0]!.isDefault = true
+    state.expanded = []
+    state.editingSharedOf = null
   }
 
   function closeEdit(): void {
-    state.editingFile = null
-    state.editingAccounts = []
+    state.editingId = null
+    state.shared = {}
+    state.accountFields = []
+    state.accounts = []
+    state.expanded = []
+    state.editingSharedOf = null
   }
 
-  function addAccount(row: ProviderRow): void {
-    const values: Record<string, string | number | boolean> = {}
-    for (const f of row.config) {
-      if (f.default !== undefined) values[f.key] = f.default
-      else if (f.type === 'boolean') values[f.key] = false
-      else if (f.type === 'number') values[f.key] = 0
-      else values[f.key] = ''
+  /**
+   * 切换某个字段是不是「账号级」。
+   *
+   * 转成账号级时，把当前通用值搬到第一个账号作为初始值（用户口径：
+   * 「指定后把该配置单独提炼到账号里作为第一项」），其余账号留空 = 继承通用值。
+   * 转回通用时，取第一个账号的值作为通用值。
+   */
+  function toggleAccountField(key: string): void {
+    if (isAccountField(key)) {
+      const first = state.accounts[0]
+      state.shared[key] = first?.values[key] ?? state.shared[key] ?? ''
+      state.accountFields = state.accountFields.filter((k) => k !== key)
+      for (const a of state.accounts) delete a.values[key]
+      return
     }
-    state.editingAccounts.push({ id: 'account-' + (state.editingAccounts.length + 1), name: '', values })
+    state.accountFields = [...state.accountFields, key]
+    const base = state.shared[key] ?? ''
+    state.accounts.forEach((a, i) => {
+      if (i === 0) a.values[key] = a.values[key] ?? base
+    })
+  }
+
+  function addAccount(): void {
+    const n = state.accounts.length
+    const values: Record<string, string | number | boolean> = {}
+    // 只为账号级字段建空位（用户口径：通用属性不重复）
+    for (const key of state.accountFields) values[key] = ''
+    state.accounts.push({ id: 'account-' + (n + 1), name: '账号 ' + (n + 1), isDefault: false, values })
   }
 
   function removeAccount(index: number): void {
-    state.editingAccounts.splice(index, 1)
+    if (state.accounts.length <= 1) return
+    const wasDefault = state.accounts[index]?.isDefault === true
+    state.accounts.splice(index, 1)
+    if (wasDefault && state.accounts[0]) state.accounts[0].isDefault = true
+    state.expanded = state.expanded.filter((k) => k !== `${state.editingId}:${index}`)
+  }
+
+  function setDefaultAccount(index: number): void {
+    state.accounts.forEach((a, i) => (a.isDefault = i === index))
+  }
+
+  function toggleExpanded(index: number): void {
+    const key = `${state.editingId}:${index}`
+    state.expanded = state.expanded.includes(key)
+      ? state.expanded.filter((k) => k !== key)
+      : [...state.expanded, key]
+  }
+
+  function isExpanded(index: number): boolean {
+    return state.expanded.includes(`${state.editingId}:${index}`)
+  }
+
+  function toggleEditShared(index: number): void {
+    const key = `${state.editingId}:${index}`
+    state.editingSharedOf = state.editingSharedOf === key ? null : key
+    if (state.editingSharedOf === key) toggleExpandedOpen(index)
+  }
+
+  function toggleExpandedOpen(index: number): void {
+    if (!isExpanded(index)) state.expanded = [...state.expanded, `${state.editingId}:${index}`]
+  }
+
+  function isEditingShared(index: number): boolean {
+    return state.editingSharedOf === `${state.editingId}:${index}`
   }
 
   async function saveEdit(): Promise<string | null> {
-    const file = state.editingFile
-    if (!file) return null
-    // 账号 id 是底栏下拉的取值键：空 / 重复都会让「选账号」选错人，保存前先挡住
+    const row = state.editingId ? rowOf(state.editingId) : undefined
+    if (!row) return null
     const seen = new Set<string>()
-    for (const a of state.editingAccounts) {
+    for (const a of state.accounts) {
       const id = a.id.trim()
       if (!id) return '每个账号都要填账号 ID'
       if (seen.has(id)) return '账号 ID 不能重复：' + id
       seen.add(id)
     }
-    if (state.editingAccounts.length === 0) return '至少保留一个账号'
-    state.busyFile = file
+    if (state.accounts.length === 0) return '至少保留一个账号'
+
+    state.busy = true
     try {
-      const res = await call('/api/providers/' + encodeURIComponent(file) + '/config', {
+      const res = await call('/api/providers/' + encodeURIComponent(row.file) + '/values', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          accounts: state.editingAccounts.map((a) => ({
+          platformId: row.id,
+          shared: state.shared,
+          accountFields: state.accountFields,
+          accounts: state.accounts.map((a) => ({
             id: a.id.trim(),
             ...(a.name.trim() ? { name: a.name.trim() } : {}),
+            ...(a.isDefault ? { default: true } : {}),
             values: a.values,
           })),
         }),
@@ -183,12 +290,12 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     } catch (err) {
       return err instanceof Error ? err.message : String(err)
     } finally {
-      state.busyFile = null
+      state.busy = false
     }
   }
 
   async function toggleEnabled(row: ProviderRow): Promise<string | null> {
-    state.busyFile = row.file
+    state.busy = true
     try {
       const res = await call('/api/providers/' + encodeURIComponent(row.file) + (row.enabled ? '/disable' : '/enable'), {
         method: 'POST',
@@ -202,65 +309,108 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     } catch (err) {
       return err instanceof Error ? err.message : String(err)
     } finally {
-      state.busyFile = null
+      state.busy = false
     }
   }
 
   async function remove(row: ProviderRow): Promise<string | null> {
-    // 删文件是不可撤销的：先说清楚删的是哪个文件、内置平台直接不让删
     const ok = await feedback?.ask({
-      title: '删除平台「' + row.id + '」？',
-      description:
-        '会删除文件 ' + row.file + '，它的动作会立刻从工具栏消失。\n删除后重启也不会自动装回来。',
+      title: '删除平台「' + titleOf(row) + '」？',
+      description: '会删除文件 ' + row.file + '，它的模型会立刻从底栏消失。\n删除后重启也不会自动装回来。',
       confirmText: '删除',
       cancelText: '取消',
     })
     if (ok === false) return null
-    state.busyFile = row.file
+    state.busy = true
     try {
       const res = await call('/api/providers/' + encodeURIComponent(row.file), { method: 'DELETE' })
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(body.error ?? '删除失败 ' + res.status)
       }
+      if (state.editingId === row.id) closeEdit()
       await refresh()
       return null
     } catch (err) {
       return err instanceof Error ? err.message : String(err)
     } finally {
-      state.busyFile = null
+      state.busy = false
     }
   }
 
-  async function forceReload(): Promise<string | null> {
-    state.loading = true
+  // ==================== 模型 / 默认模型 ====================
+
+  /**
+   * 从 provider 的动作里统计「有哪些生成类型」。
+   *
+   * 用户口径 2026-11-10：按实际提供的模型统计，没有的类型（比如暂时没有 3D）不显示。
+   */
+  function modelTypes(): Array<{ id: string; label: string; count: number }> {
+    const order = ['text', 'image', 'video', 'audio']
+    const label: Record<string, string> = { text: '文本', image: '图片', video: '视频', audio: '音频' }
+    const counts = new Map<string, number>()
+    for (const row of state.rows) {
+      if (!row.enabled) continue
+      for (const t of nodeTypesOf(row)) counts.set(t, (counts.get(t) ?? 0) + 1)
+    }
+    const ids = [...counts.keys()].sort((a, b) => {
+      const ia = order.indexOf(a)
+      const ib = order.indexOf(b)
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+    })
+    return ids.map((id) => ({ id, label: label[id] ?? id.toUpperCase(), count: counts.get(id) ?? 0 }))
+  }
+
+  /** 一个平台提供的节点类型（来自它注册的动作；后台在 actions 里已算好数量，这里用声明） */
+  function nodeTypesOf(row: ProviderRow): string[] {
+    const raw = (row as unknown as { nodeTypes?: string[] }).nodeTypes
+    if (Array.isArray(raw) && raw.length > 0) return raw
+    // 后台行里没带 nodeTypes 时按动作数兜底：一个平台通常只服务一种类型，这里保守返回空
+    return []
+  }
+
+  async function setDefaultModel(type: string, modelId: string): Promise<string | null> {
+    const next = { ...state.defaults }
+    if (modelId === '') delete next[type]
+    else next[type] = modelId
+    state.defaults = next
     try {
-      const res = await call('/api/providers/reload', { method: 'POST' })
-      if (!res.ok) throw new Error('强制刷新失败 ' + res.status)
-      await refresh()
+      const res = await call('/api/providers/model-defaults', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ defaults: next }),
+      })
+      if (!res.ok) throw new Error('保存默认模型失败 ' + res.status)
       return null
     } catch (err) {
-      state.loading = false
       return err instanceof Error ? err.message : String(err)
     }
   }
 
   // 服务地址改了 → 立刻按新地址重拉（与 cloud-client 同一条 onChange 通道）
-  const offSettings = settings?.onChange?.((_key, _value) => void refresh())
+  const offSettings = settings?.onChange?.(() => void refresh())
   ctx.effect(() => () => offSettings?.dispose())
 
   return {
     state,
     refresh,
+    titleOf,
     openEdit,
     closeEdit,
+    isAccountField,
+    toggleAccountField,
     addAccount,
     removeAccount,
+    setDefaultAccount,
+    isExpanded,
+    toggleExpanded,
+    isEditingShared,
+    toggleEditShared,
     saveEdit,
     toggleEnabled,
     remove: removeRow,
-    forceReload,
-    secretMaskOf,
+    modelTypes,
+    setDefaultModel,
   }
 
   function removeRow(row: ProviderRow): Promise<string | null> {

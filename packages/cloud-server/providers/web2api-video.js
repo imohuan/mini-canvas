@@ -325,6 +325,10 @@ const camera_doubao = {
 
 const provider = {
   id: 'web2api-video',
+  // 平台展示信息（管理页显示；icon 也作为该平台模型的兜底图标）
+  title: 'Web2API · 视频',
+  description: '豆包 Seedance / MiniMax 视频生成',
+  icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="wcVid" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#wcVid)"/><path d="M12 10.5 22 16l-10 5.5V10.5z" fill="#fff"/></svg>',
   // 平台管理页据此渲染配置表单（与 web2api-image 同一套；多账号每套一份）
   config: [
     { key: 'baseUrl', label: '服务地址', type: 'string', default: 'http://localhost:8033',
