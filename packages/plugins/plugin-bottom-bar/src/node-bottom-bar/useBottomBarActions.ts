@@ -193,6 +193,19 @@ export function useBottomBarActions(
       const v = values.value[p.key]
       if (valueFitsField(p, v)) kept[p.key] = v
     }
+    /*
+     * 账号选择要跨动作保留（用户 2026-11-10）：换模型不该把「用哪个号」忘掉。
+     *
+     * `__accountId` 不是动作声明的参数，所以上面的循环根本看不到它 ——
+     * 不在这里单独接一下，换个模型就等于把账号改回默认号。
+     * 只在「新动作也属于同一个平台、且确实有这个号」时保留：
+     * 换到别的平台后同一个 id 没有意义，留着会让触发器挂上一个不存在的号。
+     */
+    const pickedAccount = values.value.__accountId
+    const nextAccounts = (currentAction.value as { accounts?: Array<{ id: string }> } | undefined)?.accounts
+    if (typeof pickedAccount === 'string' && pickedAccount && nextAccounts?.some((a) => a.id === pickedAccount)) {
+      kept.__accountId = pickedAccount
+    }
     values.value = { ...defaultsOf(currentAction.value), ...kept }
     currentAction.value?.onSelect?.(props.id)
   }

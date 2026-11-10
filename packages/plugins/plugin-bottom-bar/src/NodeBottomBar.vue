@@ -115,10 +115,23 @@ const currentActionAccounts = computed<Array<{ id: string; name?: string }>>(() 
   return Array.isArray(raw) ? raw : []
 })
 
-/** 当前选中的账号 id（空 = 用平台默认号） */
-const currentAccountId = computed<string>(() =>
-  typeof values.value.__accountId === 'string' ? values.value.__accountId : '',
-)
+/**
+ * 当前选中的账号 id（空 = 用平台默认号）。
+ *
+ * 只有这个号属于**当前动作所属平台**时才认：账号 id 是平台内的，
+ * 换了动作（换平台）后旧 id 还在 values 里，不校验就会让触发器挂上一个别的平台的号。
+ */
+const currentAccountId = computed<string>(() => {
+  const raw = typeof values.value.__accountId === 'string' ? values.value.__accountId : ''
+  if (!raw) return ''
+  return currentActionAccounts.value.some((a) => a.id === raw) ? raw : ''
+})
+
+/** 当前动作所属平台的默认账号 id（选中它时触发器不再写账号名，避免「· 默认」重复） */
+const currentActionDefaultAccount = computed<string>(() => {
+  const raw = (currentAction.value as { defaultAccount?: unknown } | undefined)?.defaultAccount
+  return typeof raw === 'string' ? raw : ''
+})
 
 /**
  * 选了某个账号：只记下来（写进 `values.__accountId`，随任务一起提交），不改当前动作。
@@ -243,6 +256,8 @@ const actionChoices = computed(() =>
       .filter((v) => v !== undefined && v !== '')
       .map(String)
       .join(' · ')
+    const rowAccounts = (action as { accounts?: Array<{ id: string; name?: string }> } | undefined)?.accounts
+    const pickedAccount = typeof values.value.__accountId === 'string' ? values.value.__accountId : ''
     return {
       value: o.value,
       label: o.label,
@@ -252,9 +267,16 @@ const actionChoices = computed(() =>
       /** provider 图标 / 图标名 / 兜底 —— 下拉列表与触发器必须同源 */
       model: o.model,
       /** 多账号：这个动作所属平台的账号清单（多于一个才出入口） */
-      accounts: (action as { accounts?: Array<{ id: string; name?: string }> } | undefined)?.accounts,
-      /** 当前选中的账号（记在节点 barValues.__accountId 里） */
-      accountId: typeof values.value.__accountId === 'string' ? values.value.__accountId : '',
+      accounts: rowAccounts,
+      /** 平台默认号：选中它时触发器不写账号名 */
+      defaultAccount: (action as { defaultAccount?: string } | undefined)?.defaultAccount ?? '',
+      /**
+       * 当前选中的账号（记在节点 barValues.__accountId 里）。
+       *
+       * 只有这个号确实属于本行的平台才带上 —— 账号 id 是平台内的，
+       * 把 A 平台的号挂到 B 平台的行上，二级菜单会高亮一个不存在的项。
+       */
+      accountId: rowAccounts?.some((a) => a.id === pickedAccount) ? pickedAccount : '',
     }
   }),
 )
@@ -918,6 +940,7 @@ onBeforeUnmount(() => {
             :current-id="currentId"
             :accounts="currentActionAccounts"
             :account-id="currentAccountId"
+            :default-account="currentActionDefaultAccount"
             @pick-account="onAccountPicked"
             :current-label="currentActionLabel"
             :current-model-icon="currentModelIcon"

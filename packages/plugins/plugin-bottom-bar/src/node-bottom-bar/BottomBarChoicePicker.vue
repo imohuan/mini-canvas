@@ -24,6 +24,8 @@ export interface ActionChoice {
   accounts?: Array<{ id: string; name?: string }>
   /** 当前选中的账号 id（不选 = 平台默认号） */
   accountId?: string
+  /** 平台默认账号 id（选中它时触发器不写账号名） */
+  defaultAccount?: string
 }
 
 const props = defineProps<{
@@ -56,6 +58,7 @@ const items = computed(() =>
     icon: o.model ?? null,
     accounts: o.accounts,
     accountId: o.accountId,
+    defaultAccount: o.defaultAccount,
   })),
 )
 </script>

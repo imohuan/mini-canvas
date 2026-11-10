@@ -46,6 +46,17 @@ export interface ChoiceItem {
    * 给了 svg 就原样渲染，platform 继续只负责分组与名字。
    */
   svg?: string
+  /**
+   * 这一行所属平台的账号（多于一个才在行尾出「账号」二级菜单）。
+   *
+   * 用户口径 2026-11-10：一个平台可能有多个号；下拉里**不新增模型行**，
+   * 而是在这一行右侧挂一个箭头，hover / 点开二级菜单选账号。
+   */
+  accounts?: Array<{ id: string; name?: string }>
+  /** 这一行当前选中的账号 id（空 = 用平台默认号） */
+  accountId?: string
+  /** 平台默认账号 id（没显式选号时，菜单里在它旁边打勾） */
+  defaultAccount?: string
 }
 
 const props = withDefaults(
@@ -76,6 +87,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   pick: [item: ChoiceItem]
+  /** 选了某个账号（`item.id` 是行 id，账号归属这一行所属的平台） */
+  pickAccount: [itemId: string, accountId: string]
   /** 视图切换（底栏据此在分栏时把浮层加宽加高） */
   'update:view': [view: 'card' | 'split']
 }>()
@@ -86,6 +99,10 @@ const InputGroup = useUiComponent('InputGroup')
 const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
 const InputGroupInput = useUiComponent('InputGroupInput')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 
 const query = ref('')
 const view = ref<'card' | 'split'>('card')
@@ -219,6 +236,77 @@ function pick(item: ChoiceItem): void {
   emit('pick', item)
 }
 
+/** 这一行是否要出「账号」二级菜单：只有多于一个号才有得选 */
+function hasAccounts(item: ChoiceItem): boolean {
+  return (item.accounts?.length ?? 0) > 1
+}
+
+/** 这一行实际生效的账号：显式选过的优先，否则用平台默认号 */
+function effectiveAccountOf(item: ChoiceItem): string {
+  return item.accountId || item.defaultAccount || ''
+}
+
+/** 当前账号名；没选也没默认号就空着（触发器上不写多余的字） */
+function accountLabelOf(item: ChoiceItem): string {
+  const id = effectiveAccountOf(item)
+  if (!id) return ''
+  return (item.accounts ?? []).find((a) => a.id === id)?.name || id
+}
+
+/** 选了账号：只记账号，不改选中的模型 */
+function pickAccount(item: ChoiceItem, accountId: string): void {
+  emit('pickAccount', item.id, accountId)
+}
+
+/** 账号那一小段字：没选就写「默认」 */
+function accountShortOf(item: ChoiceItem): string {
+  return accountLabelOf(item) || '默认'
+}
+
+/*
+ * 整行悬停展开账号二级菜单（用户 2026-11-10）：
+ * 「整个 item 都可以进行 hover 来显示二级菜单，而不是只有这个图标才能 hover」。
+ *
+ * 做法：Sub 的 open 由我们控制，行 mouseenter 起一个 120ms 的小延迟再展开
+ * （与 reka 自己的 hover 节奏一致，避免扫过列表时一路弹）；
+ * 离开行给它 260ms 宽限 —— 指针要能从行挪到右侧弹出的菜单里。
+ * 指针真的进了菜单就取消关闭，离开菜单再收。
+ */
+const accountOpenId = ref('')
+let accountTimer: number | null = null
+
+function clearAccountTimer(): void {
+  if (accountTimer !== null) {
+    window.clearTimeout(accountTimer)
+    accountTimer = null
+  }
+}
+
+function openAccountSoon(item: ChoiceItem): void {
+  if (!hasAccounts(item)) return
+  clearAccountTimer()
+  accountTimer = window.setTimeout(() => {
+    accountOpenId.value = item.id
+    accountTimer = null
+  }, 120)
+}
+
+function closeAccountSoon(item: ChoiceItem): void {
+  if (!hasAccounts(item)) return
+  clearAccountTimer()
+  accountTimer = window.setTimeout(() => {
+    if (accountOpenId.value === item.id) accountOpenId.value = ''
+    accountTimer = null
+  }, 260)
+}
+
+/** 指针进了账号菜单：留住它 */
+function keepAccountMenu(): void {
+  clearAccountTimer()
+}
+
+onBeforeUnmount(() => clearAccountTimer())
+
 defineExpose({ refreshLayout })
 </script>
 
@@ -282,25 +370,49 @@ defineExpose({ refreshLayout })
         <AgentScrollArea class="ac-panel-scroll ac-view-pane" :class="{ 'is-active': view === 'card' }"
           body-class="ac-panel-scroll-body ac-model-scroll-body">
           <div v-if="filtered.length" class="ac-model-grid">
-            <Button v-for="item in filtered" :key="item.id" variant="ghost" size="sm"
-              role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
-              <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
-                v-html="item.svg || brandSvg(platformOf(item))"></span>
-              <span class="ac-model-copy">
-                <span class="ac-model-card-top">
-                  <span class="ac-model-id">{{ item.title }}</span>
-                  <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
-                  <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+            <div v-for="item in filtered" :key="item.id" class="ac-model-entry"
+              role="option" :aria-selected="item.id === currentId" :aria-disabled="item.disabled || undefined"
+              @mouseenter="openAccountSoon(item)" @mouseleave="closeAccountSoon(item)">
+              <Button variant="ghost" size="sm" class="ac-model-hit"
+                :disabled="item.disabled" @click="pick(item)">
+                <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
+                  v-html="item.svg || brandSvg(platformOf(item))"></span>
+                <span class="ac-model-copy">
+                  <span class="ac-model-card-top">
+                    <span class="ac-model-id">{{ item.title }}</span>
+                    <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
+                  </span>
+                  <span class="ac-model-meta">
+                    <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
+                    <template v-if="item.note">
+                      <span class="ac-dot-sep" aria-hidden="true"></span>
+                      <span>{{ item.note }}</span>
+                    </template>
+                  </span>
                 </span>
-                <span class="ac-model-meta">
-                  <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
-                  <template v-if="item.note">
-                    <span class="ac-dot-sep" aria-hidden="true"></span>
-                    <span>{{ item.note }}</span>
-                  </template>
-                </span>
-              </span>
-            </Button>
+              </Button>
+              <!-- 多账号：整行 hover / 点箭头 → 二级菜单选账号（不新增模型行） -->
+              <DropdownMenuSub v-if="hasAccounts(item)"
+                :open="accountOpenId === item.id"
+                @update:open="(v: boolean) => (accountOpenId = v ? item.id : '')">
+                <DropdownMenuSubTrigger class="ac-model-account-trigger"
+                  :title="'选择账号（当前：' + accountShortOf(item) + '）'"
+                  :aria-label="'选择账号（当前：' + accountShortOf(item) + '）'"
+                  :data-picked="item.accountId ? 'true' : undefined">
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent class="ac-model-account-menu"
+                  @mouseenter="keepAccountMenu" @mouseleave="closeAccountSoon(item)">
+                  <div class="ac-model-account-head">选择账号</div>
+                  <DropdownMenuItem v-for="a in item.accounts" :key="a.id"
+                    class="ac-model-account-item"
+                    @select.prevent="pickAccount(item, a.id)">
+                    <span class="ac-model-account-item-name">{{ a.name || a.id }}</span>
+                    <Check v-if="a.id === effectiveAccountOf(item)" :size="14" class="ac-model-account-check" />
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+            </div>
           </div>
           <div v-else class="ac-empty-state">
             <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -325,25 +437,48 @@ defineExpose({ refreshLayout })
           <div class="ac-split-main">
             <AgentScrollArea class="ac-split-scroll" body-class="ac-split-scroll-body">
               <div v-if="filtered.length" class="ac-model-row-list">
-                <Button v-for="item in filtered" :key="item.id" variant="ghost" size="sm"
-                  role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
-                  <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
-                  v-html="item.svg || brandSvg(platformOf(item))"></span>
-                  <span class="ac-model-copy">
-                    <span class="ac-model-id">{{ item.title }}</span>
-                    <span class="ac-model-meta">
-                      <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
-                      <template v-if="item.note">
-                        <span class="ac-dot-sep" aria-hidden="true"></span>
-                        <span>{{ item.note }}</span>
-                      </template>
+                <div v-for="item in filtered" :key="item.id" class="ac-model-entry ac-model-entry-row"
+                  role="option" :aria-selected="item.id === currentId" :aria-disabled="item.disabled || undefined"
+                  @mouseenter="openAccountSoon(item)" @mouseleave="closeAccountSoon(item)">
+                  <Button variant="ghost" size="sm" class="ac-model-hit"
+                    :disabled="item.disabled" @click="pick(item)">
+                    <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
+                    v-html="item.svg || brandSvg(platformOf(item))"></span>
+                    <span class="ac-model-copy">
+                      <span class="ac-model-id">{{ item.title }}</span>
+                      <span class="ac-model-meta">
+                        <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
+                        <template v-if="item.note">
+                          <span class="ac-dot-sep" aria-hidden="true"></span>
+                          <span>{{ item.note }}</span>
+                        </template>
+                      </span>
                     </span>
-                  </span>
-                  <span class="ac-model-badges">
-                    <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
-                  </span>
+                    <span class="ac-model-badges">
+                      <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
+                    </span>
+                  </Button>
+                  <DropdownMenuSub v-if="hasAccounts(item)"
+                    :open="accountOpenId === item.id"
+                    @update:open="(v: boolean) => (accountOpenId = v ? item.id : '')">
+                    <DropdownMenuSubTrigger class="ac-model-account-trigger"
+                      :title="'选择账号（当前：' + accountShortOf(item) + '）'"
+                      :aria-label="'选择账号（当前：' + accountShortOf(item) + '）'"
+                      :data-picked="item.accountId ? 'true' : undefined">
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent class="ac-model-account-menu"
+                      @mouseenter="keepAccountMenu" @mouseleave="closeAccountSoon(item)">
+                      <div class="ac-model-account-head">选择账号</div>
+                      <DropdownMenuItem v-for="a in item.accounts" :key="a.id"
+                        class="ac-model-account-item"
+                        @select.prevent="pickAccount(item, a.id)">
+                        <span class="ac-model-account-item-name">{{ a.name || a.id }}</span>
+                        <Check v-if="a.id === effectiveAccountOf(item)" :size="14" class="ac-model-account-check" />
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                   <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
-                </Button>
+                </div>
               </div>
               <div v-else class="ac-empty-state">
                 <span class="ac-empty-icon"><Search :size="18" /></span>

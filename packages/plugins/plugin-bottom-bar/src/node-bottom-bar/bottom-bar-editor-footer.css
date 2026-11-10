@@ -503,6 +503,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/*
+ * 触发器文本后面带账号名时放宽上限（用户 2026-11-10 图片 1 的效果：
+ * 「模型名 · 账号名」一行读完）。
+ *
+ * 220px 是给纯模型名留的；加上「· 账号 2」这一段就放不下了，
+ * 模型名被截成「Seedream 5.0 …」。账号是用户自己起的短名，多给一点地方就够。
+ */
+.nb-model-trigger.has-account {
+  max-width: 300px;
+}
 .nb-model-trigger-caret {
   flex: none;
   width: 14px;

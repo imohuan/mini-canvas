@@ -42,6 +42,38 @@ describe('后端动作 → 底栏动作', () => {
     expect(a.resume).toBe(handlers.resume)
     expect(a.onCancel).toBe(handlers.onCancel)
   })
+
+  /**
+   * 多账号清单要原样带到下bar（用户 2026-11-10：「二级菜单你还没做」）。
+   * 真因是这里只挑固定字段，accounts 被丢掉 —— 后台给了号，底栏拿不到。
+   */
+  it('账号清单原样带到下bar，默认号一起带', () => {
+    const a = toBarAction(
+      {
+        id: 'x:1',
+        title: 'X',
+        accounts: [{ id: 'main', name: '默认' }, { id: 'second', name: '账号 2' }],
+        defaultAccount: 'main',
+      },
+      handlers,
+    )
+    expect(a.accounts).toEqual([{ id: 'main', name: '默认' }, { id: 'second', name: '账号 2' }])
+    expect(a.defaultAccount).toBe('main')
+  })
+
+  it('没有账号信息时不写这两个字段（面板退回单号，不画箭头）', () => {
+    const a = toBarAction({ id: 'x:1', title: 'X' }, handlers)
+    expect(a.accounts).toBeUndefined()
+    expect(a.defaultAccount).toBeUndefined()
+  })
+
+  it('账号是脏数据时过滤掉（缺 id 的项不进菜单）', () => {
+    const a = toBarAction(
+      { id: 'x:1', title: 'X', accounts: [{ id: 'main' }, { name: '没有 id' }] as never },
+      handlers,
+    )
+    expect(a.accounts).toEqual([{ id: 'main' }])
+  })
 })
 
 describe('清单刷新：全量重建的差集', () => {

@@ -17,6 +17,15 @@ export interface ServerAction {
   fields?: unknown[]
   /** 所属平台的图标（兜底用） */
   providerIcon?: string
+  /**
+   * 这个动作所属平台的账号（多于一个才带；底栏据此在模型行右侧出二级菜单）。
+   *
+   * 账号清单来自后台的 `platforms[pid].accounts`，和动作一起下发 ——
+   * 前端不再自己拼第二条来源，避免「设置页里有两个号、下拉里没有」。
+   */
+  accounts?: Array<{ id: string; name?: string }>
+  /** 平台默认账号 id（不选号时用它） */
+  defaultAccount?: string
   [k: string]: unknown
 }
 

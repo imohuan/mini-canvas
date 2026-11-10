@@ -431,6 +431,111 @@
   background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 
+/*
+ * 多账号：一行 = 「选模型」按钮 + 行尾账号二级菜单 + 对勾。
+ *
+ * 用户口径 2026-11-10：同一个平台有多个号时，下拉里**不能多出重复的模型行**，
+ * 而是在这一行右侧挂一个箭头（DropdownMenuSub），hover / 点开选账号。
+ * 所以底色与选中态挪到整行（.ac-model-entry）上，里面的按钮只负责点击选模型。
+ */
+.ac-model-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 8px;
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+
+.ac-model-entry:hover,
+.ac-model-entry[aria-selected='true'] {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
+}
+
+/* 行内按钮：铺满左侧，底色交给整行（避免只亮一半） */
+.ac-model-entry .ac-model-hit,
+.ac-model-entry .ac-model-hit:hover,
+.ac-model-entry .ac-model-hit[aria-selected='true'] {
+  background: transparent;
+  flex: 1 1 auto;
+  /* 行内按钮不再自己占满一行：宽度由整行的 flex 分配（旁边还有账号箭头） */
+  width: auto;
+}
+
+/* 行尾箭头：只有右箭头（模型名长，再放文字会把名字挤成省略号），只在多账号时出现 */
+.ac-model-account-trigger {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  gap: 0;
+  border-radius: 7px;
+  color: var(--ui-ink-mute, #9ca3af);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+/*
+ * 箭头本身只是提示「这里有二级菜单」，**不加底色**（用户 2026-11-10：
+ * 「图标没有任何背景，只是单独纯粹作为一个图标显示在那里就行」）。
+ * 展开时只把颜色提亮，视觉重心仍在整行。
+ */
+.ac-model-account-trigger:hover,
+.ac-model-account-trigger[data-state='open'] {
+  background: transparent;
+  color: var(--ui-ink, #111827);
+}
+
+/* 这一行已经选过账号：箭头点亮，提示「用的是某个具体的号」 */
+.ac-model-account-trigger[data-picked='true'] {
+  color: var(--ui-brand, #0891b2);
+}
+
+.ac-model-account-trigger :deep(svg) {
+  width: 12px;
+  height: 12px;
+  opacity: 0.75;
+}
+
+/* 二级菜单：账号名 + 当前号的对勾 */
+.ac-model-account-menu {
+  min-width: 148px;
+}
+
+/* 二级菜单的标题：不加它不知道这个下拉是选什么的（用户 2026-11-10） */
+.ac-model-account-head {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-ink-mute, #9ca3af);
+  letter-spacing: 0.02em;
+}
+
+.ac-model-account-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.ac-model-account-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-model-account-check {
+  flex: none;
+  color: var(--ui-brand, #0891b2);
+}
+
 /* 分栏：**外层不再滚**，滚动交给左右两列各自负责（用户口径 2026-10-30，附截图）。
    不这么改的话，外层 .ac-menu-scroll 会把整块面板一起滚：左栏被裁掉半行、右栏的滚动条
    也挂在面板最外缘 —— 两列看着像同一根滚动条，实际谁都没法各自定位。

@@ -31,6 +31,10 @@ export interface BarActionLike {
   panelHtml?: string
   /** 所属平台的图标（动作与品牌都认不出时兜底，用户口径 2026-11-10） */
   providerIcon?: string
+  /** 所属平台的账号清单（多于一个才带；底栏在模型行右侧出「账号」二级菜单） */
+  accounts?: Array<{ id: string; name?: string }>
+  /** 平台默认账号 id（不选号时用它） */
+  defaultAccount?: string
   pollIntervalMs?: number
   pollTimeoutMs?: number
   /** 状态由外部管（后台会写节点进度）—— 底栏据此不写本地 runState */
@@ -67,6 +71,21 @@ export function toBarAction(
   ...(typeof def.providerIcon === 'string' && def.providerIcon.trim() !== ''
     ? { providerIcon: def.providerIcon }
     : {}),
+  }
+  /*
+   * 多账号：清单必须原样带下去（用户 2026-11-10 反馈「二级菜单还没做」）。
+   *
+   * 之前这里只挑了固定几个字段，`accounts` 被悄悄丢掉 —— 后台明明给了两个号，
+   * 底栏的模型行拿不到清单，自然画不出账号二级菜单。
+   * 只认形状完整的数组：后台没带 / 脏数据时当作「没有账号信息」，面板退化成单号。
+   */
+  if (Array.isArray(def.accounts) && def.accounts.length > 0) {
+    out.accounts = def.accounts
+      .filter((a): a is { id: string; name?: string } => Boolean(a) && typeof (a as { id?: unknown }).id === 'string')
+      .map((a) => ({ id: a.id, ...(typeof a.name === 'string' && a.name ? { name: a.name } : {}) }))
+  }
+  if (typeof def.defaultAccount === 'string' && def.defaultAccount) {
+    out.defaultAccount = def.defaultAccount
   }
   // 字段名换算：nodeTypes → types
   if (Array.isArray(def.nodeTypes) && def.nodeTypes.length > 0) out.types = [...def.nodeTypes]

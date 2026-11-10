@@ -27,6 +27,7 @@ beforeAll(() => {
   for (const n of [
     'Button', 'Badge', 'ScrollArea',
     'InputGroup', 'InputGroupAddon', 'InputGroupButton', 'InputGroupInput',
+    'DropdownMenuSub', 'DropdownMenuSubTrigger', 'DropdownMenuSubContent', 'DropdownMenuItem',
   ]) field.add(n, stub(n), { id: 'test' })
   uiField = field
 })

@@ -52,6 +52,8 @@ export interface ProviderRow {
   accounts: ProviderAccountRow[]
   /** 这个平台的模型明细（模型页按类型列出） */
   models?: Array<{ id: string; title: string; nodeTypes: string[]; group?: string }>
+  /** 这个平台服务哪些类型（后台给了就按它分；没给时按模型自己的 nodeTypes 判） */
+  nodeTypes?: string[]
 }
 
 /** 一个账号的草稿（编辑中的副本，保存前不动真身） */

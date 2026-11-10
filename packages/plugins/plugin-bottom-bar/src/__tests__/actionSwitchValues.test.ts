@@ -31,5 +31,16 @@ describe('换动作时参数的合法性校验', () => {
     const fn = /function valueFitsField[\s\S]*?\n  \}/.exec(src)?.[0] ?? ''
     expect(fn).toMatch(/if \(!hasOptions\) return true/)
   })
+
+  /**
+   * 账号选择不是动作参数，`fields` 循环看不到它 —— 必须单独保留，
+   * 否则换个模型就把「用哪个号」忘了（用户 2026-11-10）。
+   */
+  it('换动作时保留已选账号（新动作同平台且确实有这个号）', () => {
+    expect(src).toContain('__accountId')
+    const block = /const pickedAccount[\s\S]*?kept\.__accountId = pickedAccount/.exec(src)?.[0] ?? ''
+    expect(block).not.toBe('')
+    expect(block).toMatch(/nextAccounts\?\.some/)
+  })
 })
 

@@ -25,6 +25,12 @@ export interface PickerItem {
    * Agent 的 ChoicePicker 只认标题。传了就优先用这里的，列表与触发器才对得上。
    */
   icon?: ModelIcon | null
+  /** 这一行所属平台的账号（多于一个才在行尾出「账号」二级菜单） */
+  accounts?: Array<{ id: string; name?: string }>
+  /** 当前选中的账号 id（空 = 平台默认号） */
+  accountId?: string
+  /** 平台默认账号 id：选的就是它时不往触发器上再写一遍名字 */
+  defaultAccount?: string
 }
 
 const props = withDefaults(
@@ -46,6 +52,8 @@ const props = withDefaults(
     accounts?: Array<{ id: string; name?: string }>
     /** 当前选中的账号（空 = 用平台默认号） */
     accountId?: string
+    /** 平台默认账号 id（选了它就等于「按默认跑」，触发器不再写名字） */
+    defaultAccount?: string
   }>(),
   {
     triggerTitle: '选择生成模型',
@@ -70,27 +78,22 @@ const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const AgentChoicePicker = useUiComponent('agentChoicePicker')
-const DropdownMenuSub = useUiComponent('DropdownMenuSub')
-const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
-const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
-const DropdownMenuItem = useUiComponent('DropdownMenuItem')
-
 const open = ref(false)
 const available = computed(() => Boolean(AgentChoicePicker.value))
 
-/** 当前选中的账号名（触发器文本后面显示；没选就空着） */
+/**
+ * 当前选中的账号名（触发器文本后面显示；没选就空着）。
+ *
+ * 选的就是平台默认号时不显示：**默认号本来就是「不指定」的意思**，
+ * 再写一段「· 默认」只会把模型名挤短（用户 2026-11-10 截图）。
+ */
 const accountName = computed(() => {
   const list = props.accounts ?? []
   if (list.length <= 1) return ''
   if (!props.accountId) return ''
+  if (props.defaultAccount && props.accountId === props.defaultAccount) return ''
   return list.find((a) => a.id === props.accountId)?.name ?? props.accountId
 })
-
-/** 账号菜单项（只有一个号时为空，入口不渲染） */
-const accountItems = computed(() => props.accounts ?? [])
-
-/** 触发器上那一小段账号文字：没选就写「默认」 */
-const accountShort = computed(() => accountName.value || '默认')
 
 /**
  * 菜单关闭时把视图状态重置回卡片。
@@ -136,12 +139,26 @@ const items = computed(() =>
     note: o.note ?? '',
     isDefault: o.isDefault ?? o.id === props.currentId,
     ...(o.icon?.svg ? { svg: o.icon.svg } : {}),
+    // 多账号：行尾二级菜单用（只有一个号时面板不渲染箭头）
+    ...(o.accounts && o.accounts.length > 0 ? { accounts: o.accounts } : {}),
+    ...(o.accountId ? { accountId: o.accountId } : {}),
+    ...(o.defaultAccount ? { defaultAccount: o.defaultAccount } : {}),
   })),
 )
 
 function pick(item: { id: string }): void {
   emit('pick', item.id)
   open.value = false
+}
+
+/**
+ * 在行内二级菜单里选了账号：只记账号，面板留着。
+ *
+ * 账号是「给下一次生成用哪个号」的修饰，不是「执行」。选完面板不关，
+ * 用户可以接着点模型行；关掉面板后触发器文本后面会显示这个号的名字。
+ */
+function pickAccount(itemId: string, accountId: string): void {
+  emit('pickAccount', itemId, accountId)
 }
 </script>
 
@@ -153,6 +170,7 @@ function pick(item: { id: string }): void {
         variant="ghost"
         size="sm"
         class="nb-action-select nb-model-trigger"
+        :class="{ 'has-account': Boolean(accountName) }"
         type="button"
         :disabled="disabled"
         :aria-expanded="open"
@@ -184,40 +202,9 @@ function pick(item: { id: string }): void {
         :placeholder="placeholder"
         :empty-text="emptyText"
         @pick="pick"
+        @pick-account="pickAccount"
         @update:view="(v: 'card' | 'split') => (splitView = v === 'split')"
       />
-    </DropdownMenuContent>
-  </DropdownMenu>
-  <!-- 多账号：模型行右侧的「账号」入口（账号只有一个时不显示） -->
-  <DropdownMenu v-if="accountItems.length > 1">
-    <DropdownMenuTrigger as-child>
-      <Button
-        variant="ghost"
-        size="sm"
-        class="nb-account-trigger"
-        type="button"
-        :disabled="disabled"
-        :title="'选择账号（当前：' + (accountName || '默认') + '）'"
-        :aria-label="'选择账号（当前：' + (accountName || '默认') + '）'"
-      >
-        <span class="nb-account-label">{{ accountShort }}</span>
-        <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m9 6 6 6-6 6" />
-        </svg>
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" side="bottom" class="nb-account-menu">
-      <DropdownMenuItem
-        v-for="a in accountItems"
-        :key="a.id"
-        class="nb-account-item"
-        :data-state="a.id === accountId ? 'checked' : undefined"
-        @select="emit('pickAccount', currentId, a.id)"
-      >
-        <span class="nb-account-item-name">{{ a.name || a.id }}</span>
-        <span v-if="a.id === accountId" class="nb-account-item-check">✓</span>
-      </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
   </span>
