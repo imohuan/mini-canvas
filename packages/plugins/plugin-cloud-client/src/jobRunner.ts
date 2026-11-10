@@ -87,7 +87,7 @@ export function toPollState(job: ServerJob, jobId: string): PollState {
     return {
       status: 'running',
       ...(typeof job.progress === 'number' ? { progress: job.progress } : {}),
-      ...(job.message ? { message: job.message } : {}),
+      ...(job.message ? { message: localizeStatus(job.message) } : {}),
       // ★ taskId 必须带上：底栏靠它记 serverTaskId，点「取消」才发得出去。
       //   不带的话，首次下单的取消只会 abort 本地等待，后台任务照跑、照烧额度。
       taskId: jobId,
@@ -114,6 +114,34 @@ export function toPollState(job: ServerJob, jobId: string): PollState {
       taskId: jobId,
     },
   }
+}
+
+/**
+ * 上游状态词转中文。
+ *
+ * 卡片上那行阶段文案直接显示 provider 给的原文，而上游都是英文
+ * （`queued` / `in_progress` …）—— 用户 2026-11-10：「希望使用中文而不是英文」。
+ * 认识的词翻过来，其它原样保留（别把 provider 自己写的中文说明吞掉）。
+ */
+export function localizeStatus(message: string): string {
+  const text = message.trim()
+  if (!text) return text
+  const key = text.toLowerCase()
+  const table: Record<string, string> = {
+    queued: '排队中',
+    pending: '排队中',
+    waiting: '等待中',
+    starting: '启动中',
+    submitted: '已提交',
+    running: '生成中',
+    processing: '处理中',
+    generating: '生成中',
+    in_progress: '生成中',
+    inprogress: '生成中',
+    uploading: '上传中',
+    downloading: '下载中',
+  }
+  return table[key] ?? text
 }
 
 /** 造一个轮询函数（run 与 resume 共用一份实现） */
