@@ -72,7 +72,7 @@ const modelsOfType = computed(() => {
     if (!row.enabled) continue
     for (const m of row.models ?? []) {
       const types = m.nodeTypes.length > 0 ? m.nodeTypes : (row.nodeTypes ?? [])
-      if (!types.includes(t.id)) continue
+      if (t.id === 'text' || !types.includes(t.id)) continue
       out.push({ row, id: m.id, title: m.title })
     }
   }
@@ -331,6 +331,15 @@ function onSave(): void {
 </template>
 
 <style scoped>
+/*
+ * 控件尺寸统一（用户 2026-11-10：「输入框这么大，按钮这么小，全局统一一下」）。
+ * 项目 Input 默认 h-9（36px）、Button 默认 h-9；但设置页里之前混用了 size="xs"（24px），
+ * 于是同一行里输入框 36、按钮 24，看着像两套东西。这里把设置页的 Button 统一到 32px，
+ * 输入框也压到 32px，行高才对齐。
+ */
+.pmp :deep([data-slot='button']) { height: 32px; }
+.pmp :deep([data-slot='button'][data-size='xs']) { height: 28px; padding-inline: 8px; }
+.pmp :deep([data-slot='input']) { height: 32px; padding-block: 4px; }
 .pmp { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .pmp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--ui-line-faint, #eef0f4); }
 .pmp-tab { padding: 7px 11px; margin-bottom: -1px; border-bottom: 2px solid transparent; background: none; border-top: 0; border-left: 0; border-right: 0; font-size: 12px; font-weight: 600; color: var(--ui-ink-dim, #6b7280); cursor: pointer; }
@@ -364,12 +373,15 @@ function onSave(): void {
 .pmp-field { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--ui-line-faint, #eef0f4); }
 .pmp-field:first-of-type { border-top: 0; }
 .pmp-field-main { min-width: 130px; flex: 1; }
-.pmp-field-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ui-ink, #18202b); }
+.pmp-field-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; font-weight: 500; color: var(--ui-ink, #18202b); }
+.pmp-field-title > span:first-child { white-space: nowrap; }
 .pmp-field-desc { margin-top: 2px; font-size: 10.5px; color: var(--ui-ink-faint, #9ca3af); }
-.pmp-field-control { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.pmp-switch-label { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ui-ink-dim, #6b7280); }
+/* 右侧控件不给收缩：以前允许收缩，窄窗时「账号级」三个字被挤成一列（用户 2026-11-10 截图） */
+.pmp-field-control { display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-width: 0; }
+.pmp-switch-label { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap; font-size: 10.5px; color: var(--ui-ink-dim, #6b7280); }
+.pmp-switch-label > span { white-space: nowrap; }
 .pmp-input { width: 100%; max-width: 320px; }
-.pmp-field-control .pmp-input { max-width: 260px; }
+.pmp-field-control .pmp-input { width: 220px; max-width: 220px; flex-shrink: 0; }
 .pmp-account-name { max-width: 150px; }
 
 .pmp-account { margin-top: 8px; border: 1px solid var(--ui-line-faint, #eef0f4); border-radius: 10px; background: var(--ui-fill-quiet, color-mix(in srgb, currentColor 2%, transparent)); }

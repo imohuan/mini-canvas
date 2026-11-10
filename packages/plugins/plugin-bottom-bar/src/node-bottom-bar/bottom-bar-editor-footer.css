@@ -458,10 +458,16 @@
   flex: none;
   min-width: 0;
 }
-/* 模型下拉给一个最小宽度（用户实测反馈）：不设的话，模型名稍长就把触发框压成一条窄缝。
-   参数下拉**不设**下限 —— 它的摘要本来很短（16:9），按内容宽即可，见 .nb-field--params。 */
+/*
+ * 模型下拉的外壳：**不再固定最小宽度**。
+ *
+ * 以前这里写死 148px，而触发器本身按内容自适应（用户 2026-11-10 要求最小 85）——
+ * 两层下限打架，短模型名时外壳比按钮宽一截、长模型名时又把按钮压窄，
+ * 看起来就是「文字挤在一起 / 位置乱跳」。外壳只给一个上限，宽度交给按钮内容决定。
+ * 参数下拉同样不设下限（摘要很短，按内容宽即可，见 .nb-field--params）。
+ */
 .nb-field--action {
-  min-width: 148px;
+  min-width: 0;
   max-width: 220px;
 }
 /*
@@ -472,9 +478,11 @@
 .nb-model-trigger {
   gap: 6px;
   padding: 4px 8px;
-  min-width: 148px;
+  /* 用户 2026-11-10：最小宽度 148 太大，短模型名时右侧空一截；收到 85 并让宽度随内容自适应 */
+  min-width: 85px;
   max-width: 220px;
-  height: 32px;
+  width: auto;
+  height: 28px;
   border-radius: 8px;
   background: transparent;
   color: var(--ui-ink-dim, #6b7280);
@@ -788,7 +796,7 @@
  * 从前这里写 `flex: 1 1 0` 让两格平分整行 —— 那是为了"和模型下拉等宽"，
  * 结果两个下拉都被撑到 220，右边留一大片空白，用户直接否掉了这个方向。
  *
- * 模型下拉那格（.nb-field--action）的 148～220 是它自己的口径，这次不动。
+ * 模型下拉那格（.nb-field--action）不设下限、只留 220 上限，宽度随触发器内容走。
  */
 .nb-field--params:has(.tpg-inline) {
   flex: none;

@@ -10,7 +10,7 @@
  *    值很短时右边空一大片（用户截图：「扩展到全屏干啥」）。
  *
  * 现在的做法：这一格 flex: none（不抢剩余空间，值短就窄）+ 下限 80 + 上限 220。
- * 模型下拉那格（.nb-field--action）的 148～220 是它自己的口径，这次不动。
+ * 模型下拉那格（.nb-field--action）不设下限、只留 220 上限；触发器最小 85px、宽度随内容。
  */
 import { describe, expect, it } from 'vitest'
 import { readBottomBarCss } from './readBottomBarCss'
@@ -38,9 +38,23 @@ describe('参数区内联下拉：按内容宽而不是固定宽', () => {
     expect(body).toMatch(/max-width:\s*220px/)
   })
 
-  it('模型下拉那格的口径不受影响', () => {
+  /**
+   * 模型下拉那格：**不设下限**，宽度交给触发器内容（用户 2026-11-10）。
+   *
+   * 以前这里写死 148px，和触发器自己的 min-width 打架：短模型名时外壳比按钮宽一截，
+   * 长模型名时又把按钮压窄，看起来就是「文字挤在一起」。触发器的最小宽度定为 85px。
+   */
+  it('模型下拉那格只留上限，不设下限', () => {
     const body = blockOf('.nb-field--action')
-    expect(body).toMatch(/min-width:\s*148px/)
+    expect(body).toMatch(/min-width:\s*0/)
+    expect(body).toMatch(/max-width:\s*220px/)
+    expect(body).not.toMatch(/min-width:\s*148px/)
+  })
+
+  it('模型触发器按内容自适应，最小 85px', () => {
+    const body = blockOf('.nb-model-trigger')
+    expect(body).toMatch(/min-width:\s*85px/)
+    expect(body).toMatch(/width:\s*auto/)
     expect(body).toMatch(/max-width:\s*220px/)
   })
 

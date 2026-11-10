@@ -348,15 +348,23 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
    * 用户口径 2026-11-10：按实际提供的模型统计，没有的类型（比如暂时没有 3D）不显示。
    */
   function modelTypes(): Array<{ id: string; label: string; count: number }> {
-    const order = ['text', 'image', 'video', 'audio']
-    const label: Record<string, string> = { text: '文本', image: '图片', video: '视频', audio: '音频' }
+    /**
+     * 只统计**生成**类型 —— 文本对话走 Agent 自己的模型配置（用户 2026-11-10：
+     * 「这个文本模型是单独处理的，它不应该出现在这里」）。
+     */
+    const HIDDEN_TYPES = new Set(['text'])
+    const order = ['image', 'video', 'audio']
+    const label: Record<string, string> = { image: '图片', video: '视频', audio: '音频' }
     const counts = new Map<string, number>()
     for (const row of state.rows) {
       if (!row.enabled) continue
       // 按**模型**统计（不是按平台）：类型只要真的存在一个模型就算有
       for (const m of row.models ?? []) {
         const types = m.nodeTypes.length > 0 ? m.nodeTypes : nodeTypesOf(row)
-        for (const t of types) counts.set(t, (counts.get(t) ?? 0) + 1)
+        for (const t of types) {
+          if (HIDDEN_TYPES.has(t)) continue
+          counts.set(t, (counts.get(t) ?? 0) + 1)
+        }
       }
     }
     const ids = [...counts.keys()].sort((a, b) => {
