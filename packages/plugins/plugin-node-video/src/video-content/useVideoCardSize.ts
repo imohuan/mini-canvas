@@ -2,7 +2,6 @@ import { computed, nextTick, watch, type Ref } from 'vue'
 import type { VideoOpsContext } from '../videoOps'
 import {
   followedVideoCardSizePatch,
-  missingVideoCardSizePatch,
   videoCardSizePatch,
   type CardSizePatch,
 } from '../videoFit'
@@ -16,7 +15,7 @@ export interface VideoCardSizeOptions {
 }
 
 /**
- * 卡片尺寸兜底：挂载时补缺、换源时按新视频重算，两者都保持幂等。
+ * 卡片尺寸兜底：挂载时补算、换源时按新视频重算，两者都保持幂等。
  */
 export function useVideoCardSize(options: VideoCardSizeOptions) {
   const { nodeId, data, ops, sourceFields, onSourceChanged } = options
@@ -29,9 +28,18 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
     ops.write(nodeId(), current, patch.size)
   }
 
-  /** 挂载时补缺：推迟到 nextTick，让写入落在挂载完成之后 */
+  /**
+   * 挂载时补算：推迟到 nextTick，让写入落在挂载完成之后。
+   *
+   * 用 followedVideoCardSizePatch 而不是 missingVideoCardSizePatch：
+   * 后者只处理"卡片尺寸缺失"，而视频节点不允许手动 resize（resizable:false），
+   * 卡片尺寸不是用户的自由选择，一旦被后台 / 脚本 / 旧数据写歪
+   * （实测：440×260 的卡片装 1280×720 的 16:9 视频，画面被 contain 留黑边）
+   * 就永远没人纠正。followed 版本本就幂等（比例正确时返回 null、一次都不写），
+   * 挂载时整体重算一遍安全。
+   */
   function mountSize(): void {
-    void nextTick(() => syncCardSize(missingVideoCardSizePatch(data(), ops.fitLimits?.())))
+    void nextTick(() => syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.())))
   }
 
   watch(sourceKey, () => {
