@@ -81,11 +81,44 @@ describe('NodeTaskService：同节点重复执行与取消', () => {
     ctx.stop()
   })
 
-  it('running 但没有 taskId（后台重启过的残留）：当场收敛成失败态，不留下永远转圈的生成中', async () => {
+  /**
+   * 用户 2026-11-10 实测：第一次点发送先闪一条「上次的任务已经不在后台了」，然后才进正常加载态。
+   * 根因是提交流程分两步写 runState —— 前端先写 running（还没有 taskId），
+   * 后台建好任务后才补 taskId。续查在这段窗口里扫到 running 但没有任务号，误判成旧残留。
+   *
+   * 现在按 startedAt 给宽限期：窗口内跳过；窗口外仍收敛成失败（旧残留还是会收掉）。
+   */
+  it('running 但没有 taskId，且刚提交（宽限期内）：不判失败，也不写任何状态', async () => {
     const writes: Array<Record<string, unknown>> = []
+    const rs = { status: 'running', actionId: 'gated', startedAt: Date.now() }
     const doc = {
-      getNode: () => ({ type: 'image', data: { runState: { status: 'running', actionId: 'gated' } } }),
-      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: { status: 'running', actionId: 'gated' } } }],
+      getNode: () => ({ type: 'image', data: { runState: rs } }),
+      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: rs } }],
+      updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
+        if (patch.data) writes.push(patch.data)
+      },
+    }
+    const ctx = new Context()
+    ctx.inject('doc', doc)
+    ctx.plugin({
+      name: 'bar-host',
+      apply(c) {
+        new NodeBarService(c as never)
+      },
+    })
+    await ctx.start()
+    const task = new NodeTaskService(ctx as never)
+    await task.restoreAll()
+    expect(writes).toHaveLength(0)
+    ctx.stop()
+  })
+
+  it('running 但没有 taskId，且已经很久了（旧残留）：仍收敛成失败态，不留下永远转圈的生成中', async () => {
+    const writes: Array<Record<string, unknown>> = []
+    const stale = { status: 'running', actionId: 'gated', startedAt: Date.now() - 10 * 60_000 }
+    const doc = {
+      getNode: () => ({ type: 'image', data: { runState: stale } }),
+      getNodes: () => [{ id: 'n1', type: 'image', data: { runState: stale } }],
       updateNodeRuntime: (_id: string, patch: { data?: Record<string, unknown> }) => {
         if (patch.data) writes.push(patch.data)
       },

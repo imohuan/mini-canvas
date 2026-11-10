@@ -120,6 +120,15 @@ export class NodeBarService extends Service {
   }
 }
 
+/**
+ * 「已提交、任务号还没回来」的宽限期（ms）。
+ *
+ * 提交流程分两步写 runState：前端先写 running（无 taskId），后台建好任务再补 taskId。
+ * 这段窗口里续查扫到 running-but-无-taskId 是正常现象，不能判失败。
+ * 给 30 秒足够覆盖弱网下单，又短到不会让真正卡死的旧状态一直挂着。
+ */
+const NO_TASK_ID_GRACE_MS = 30_000
+
 /** 执行服务：run / cancel / restoreAll。runState 写盘走 doc.updateNodeRuntime（不进撤销栈）。 */
 export class NodeTaskService extends Service {
   private cancels = new Map<string, AbortController>()
@@ -203,12 +212,21 @@ export class NodeTaskService extends Service {
       const rs = readRunState(node.data)
       if (rs.status !== 'running') continue
       /*
-       * 没有 actionId / 没有 taskId 的 running = 永远没有终点的旧状态
-       * （后台重启过、演示数据、或早期版本只写了 running）。
-       * 这种卡片会一直显示「生成中 800 多分钟」，用户只能手动点取消 —— 用户实测就卡在这。
-       * 续查必须先有「哪条动作 + 哪个任务号」；缺一个就当场收敛成失败态，给一句能照做的提示。
+       * 没有 taskId 的 running **不能立刻判失败**。
+       *
+       * 用户 2026-11-10 实测：第一次点发送时先闪一条「上次的任务已经不在后台了」，
+       * 然后才进正常加载态。原因是提交流程分两步 ——
+       *   ① 前端先把节点写成 running（此时还没有任务号）；
+       *   ② 后台建好任务后，才把 taskId 写进 runState。
+       * 续查在这一拍扫到 running 却没有 taskId，就当成「旧状态」收敛成失败，纯属误判。
+       *
+       * 现在按开始时间给一段宽限期：窗口内视为「正在提交」，跳过；超时仍没有任务号，
+       * 才按真正的旧状态处理（避免真的卡住一张永远不动的卡）。
        */
-      if (!rs.actionId || !rs.taskId) {
+      if (!rs.taskId || !rs.actionId) {
+        const startedAt = rs.startedAt ?? 0
+        const age = Date.now() - startedAt
+        if (rs.actionId && startedAt > 0 && age <= NO_TASK_ID_GRACE_MS) continue
         this.deps().writeRuntime(node.id, {
           runState: errorState(
             rs.actionId ?? '',

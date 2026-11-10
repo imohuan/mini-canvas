@@ -149,6 +149,33 @@ describe('NodeLoadingState', () => {
     expect(html).toContain('生成中…')
   })
 
+  /**
+   * 用户口径 2026-11-10：token 数 / 百分比直接定位到**右下角**，不在正中偏上。
+   * 第 1、2 档应落在 .ld-corner 里；中心只剩光圈或失败标记。
+   */
+  it('★ 第 1 档：进度数字在右下角（.ld-corner），不在中心', async () => {
+    const html = await render({ value: 451, suffix: 'tokens', message: '生成中…' }, { zoom: 1 })
+    expect(html).toContain('ld-corner')
+    expect(html).toContain('ld-corner-num')
+    expect(html).toContain('451')
+    expect(html).toContain('tokens')
+    // 中心那块不再重复画一遍数字
+    expect(html).not.toContain('ld-num')
+  })
+
+  it('★ 第 2 档：同样把进度放在右下角', async () => {
+    const html = await render({ percent: 42, message: '生成中…' }, { zoom: 0.5 })
+    expect(html).toContain('ld-corner')
+    expect(html).toContain('42')
+    expect(html).not.toContain('ld-num')
+  })
+
+  it('★ progressText 也放右下角，整段照画', async () => {
+    const html = await render({ progressText: '≈1.2k tokens', message: '生成中…' }, { zoom: 1 })
+    expect(html).toContain('ld-corner')
+    expect(html).toContain('≈1.2k tokens')
+  })
+
   it('★ 第 3 档（缩到很小）：只留中心数字，不写状态词与文案', async () => {
     const html = await render({ percent: 42, message: '生成中…' }, { zoom: 0.2 })
     expect(html).toContain('is-tier3')
