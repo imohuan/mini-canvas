@@ -483,7 +483,15 @@ export class TaskManager {
         }
 
         if (poll.status === 'error') {
-          return this.finish(job, action, { ok: false, error: poll.error ?? '任务失败' })
+          /*
+           * 上游只说「失败」不给原因时，别把一句「任务失败」丢给用户（2026-11-10：
+           * 卡片上只有这四个字，完全看不出问题在哪）。带上动作名与 provider，
+           * 至少能定位是哪个平台、哪个模型。
+           */
+          const reason = typeof poll.error === 'string' && poll.error.trim()
+            ? poll.error.trim()
+            : '上游返回失败但没给原因（' + (action.title || action.id) + '）'
+          return this.finish(job, action, { ok: false, error: reason })
         }
         // 产物是 provider 那边的地址（可能跨机 / 换端口就取不到）：先让宿主把它收进本画布资源目录
         // （onArtifact），再写回节点 —— 顺序不能反，否则节点上写的同源地址取不到字节（显示空白）。
@@ -493,7 +501,15 @@ export class TaskManager {
       }
     } catch (err) {
       // 任何异常都收敛成失败，不留悬挂的 running
-      return this.finish(job, action, { ok: false, error: err instanceof Error ? err.message : String(err) })
+      /*
+       * 异常也要有可读原因。空 message 的 Error（比如底层抛了 `new Error()`）
+       * 会让卡片显示成「任务失败」—— 这里补上动作名与异常名，方便定位。
+       */
+      const msg = err instanceof Error ? err.message.trim() : String(err ?? '').trim()
+      const fallback = err instanceof Error && err.name && err.name !== 'Error'
+        ? err.name + '：' + (action.title || action.id) + ' 执行失败'
+        : (action.title || action.id) + ' 执行失败（后台没有给出具体原因）'
+      return this.finish(job, action, { ok: false, error: msg || fallback })
     } finally {
       this.cancels.delete(job.id)
     }

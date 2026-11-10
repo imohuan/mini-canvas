@@ -46,6 +46,23 @@ describe('Job → 底栏认识的轮询状态', () => {
     expect(s.status === 'done' && s.result.ok).toBe(false)
     expect(s.status === 'done' && s.result.error).toBe('平台说不行')
   })
+
+  /**
+   * 失败必须有可读原因（用户 2026-11-10：「任务失败也没有说原因」）。
+   * 上游 / 老后台可能只回一个 error 状态、不带 result.error ——
+   * 那种情况不能再让卡片只剩「任务失败」四个字。
+   */
+  it('error 但没带原因：补一句能照着查的说明', () => {
+    const job: ServerJob = {
+      id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'error',
+      result: { ok: false },
+    }
+    const s = toPollState(job, 'j1')
+    expect(s.status).toBe('done')
+    const err = s.status === 'done' ? s.result.error ?? '' : ''
+    expect(err.length).toBeGreaterThan(10)
+    expect(err).toMatch(/生成历史|平台配置|网络/)
+  })
 })
 
 describe('轮询函数', () => {

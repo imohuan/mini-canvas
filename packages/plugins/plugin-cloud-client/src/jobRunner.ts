@@ -94,13 +94,23 @@ export function toPollState(job: ServerJob, jobId: string): PollState {
     }
   }
   const r = job.result ?? { ok: false }
+  /*
+   * 失败原因必须落到卡片上。后台老版本 / 上游没给错误时 result.error 可能是空的，
+   * 那时卡片刻度只剩「任务失败」四个字，用户完全看不出问题（2026-11-10 实测）。
+   * 这里补一层：至少写出任务状态与动作 id，并提示去看历史或后台日志。
+   */
+  const failReason = typeof r.error === 'string' && r.error.trim()
+    ? r.error.trim()
+    : job.message && job.message !== 'queued'
+      ? job.message
+      : '任务失败（上游没返回原因）。可到「生成历史」查看这次任务，或检查平台配置与网络'
   return {
     status: 'done',
     result: {
       ok: job.status === 'done' && r.ok !== false,
       ...(r.urls ? { urls: r.urls } : {}),
       ...(r.text ? { text: r.text } : {}),
-      ...(r.error ? { error: r.error } : {}),
+      ...(job.status === 'done' && r.ok !== false ? {} : { error: failReason }),
       taskId: jobId,
     },
   }

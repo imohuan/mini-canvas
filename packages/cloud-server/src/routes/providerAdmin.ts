@@ -353,10 +353,24 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
       prev.set(id, bucket)
     }
 
+    /**
+     * 平台通用值：**掩码必须还原成真值再落盘**。
+     *
+     * 界面回传的是掩码（`sk-Z…RQFG`）。之前只有账号级字段走了 sameMask 还原，
+     * 通用值直接落盘 → 真 key 被覆盖成掩码 → 请求头带省略号直接抛错，
+     * 用户看到的就是「任务失败」但没有任何原因（2026-11-10 实测）。
+     */
+    const sharedOld: Record<string, string | number | boolean> = {}
+    for (const [k, v] of Object.entries(keyConfig)) {
+      if (platformOfKey(k) !== pid) continue
+      if (splitArrayKey(k).index !== undefined) continue
+      sharedOld[fieldOfKey(k)] = v
+    }
     const shared: Record<string, string | number | boolean> = {}
     if (b.shared && typeof b.shared === 'object' && !Array.isArray(b.shared)) {
       for (const [k, v] of Object.entries(b.shared as Record<string, unknown>)) {
-        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') shared[k] = v
+        if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') continue
+        shared[k] = sameMask(sharedOld[k], v) ? sharedOld[k]! : v
       }
     }
 

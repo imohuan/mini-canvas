@@ -148,4 +148,35 @@ describe('平台配置（点分隔 key）', () => {
     const afterEnable = await call('GET', '/api/kv/config/providers-version')
     expect(afterEnable.json.value).toBeGreaterThanOrEqual(afterDisable.json.value)
   })
+
+  /**
+   * 掩码回传必须还原（用户 2026-11-10 实测：任务直接失败且没有原因）。
+   *
+   * 界面把 `shared` 里的 secret 显示成 `sk-Z…RQFG`，用户点保存时原样回传。
+   * 之前只给账号级字段做了 sameMask 还原，通用值把真 key 覆盖成了带省略号的掩码；
+   * 带 `…` 的字符串进不了 HTTP 头，请求当场抛异常 —— 卡片上只剩「任务失败」。
+   */
+  it('平台通用值里的 secret 掩码回传时还原真值，不会把 key 写成掩码', async () => {
+    await call('PUT', '/api/providers/v-test.js/values', {
+      platformId: 'v-test',
+      shared: { baseUrl: 'https://shared', apiKey: 'sk-real-shared-1234567890' },
+      accountFields: [],
+      accounts: [{ id: 'main', name: '主号', values: {} }],
+    })
+    // 模拟界面：先读到掩码，再原样回传
+    const first = await call('GET', '/api/providers')
+    const masked = first.json.providers.find((x: any) => x.id === 'v-test').shared.apiKey as string
+    expect(masked).toContain('…')
+
+    await call('PUT', '/api/providers/v-test.js/values', {
+      platformId: 'v-test',
+      shared: { baseUrl: 'https://shared', apiKey: masked },
+      accountFields: [],
+      accounts: [{ id: 'main', name: '主号', values: {} }],
+    })
+
+    const saved = await readFile()
+    expect(saved.config['v-test.apiKey']).toBe('sk-real-shared-1234567890')
+    expect(saved.config['v-test.apiKey']).not.toContain('…')
+  })
 })
