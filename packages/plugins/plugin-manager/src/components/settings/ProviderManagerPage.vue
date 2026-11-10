@@ -59,14 +59,24 @@ watch(
   { immediate: true },
 )
 
-/** 该类型下的模型：按动作 id + 平台展开（一个动作 = 一条模型） */
+/**
+ * 该类型下的模型：一行一个**动作**（模型），而不是一个平台。
+ *
+ * 用户 2026-11-10：「默认模型是在列表里选的」，所以这里必须能看见每个模型名。
+ */
 const modelsOfType = computed(() => {
   const t = currentType.value
   if (!t) return []
-  return s.rows
-    .filter((r) => r.enabled)
-    .filter((r) => (r.nodeTypes ?? []).includes(t.id))
-    .map((r) => ({ row: r }))
+  const out: Array<{ row: ProviderRow; id: string; title: string }> = []
+  for (const row of s.rows) {
+    if (!row.enabled) continue
+    for (const m of row.models ?? []) {
+      const types = m.nodeTypes.length > 0 ? m.nodeTypes : (row.nodeTypes ?? [])
+      if (!types.includes(t.id)) continue
+      out.push({ row, id: m.id, title: m.title })
+    }
+  }
+  return out
 })
 
 function onSave(): void {
@@ -199,7 +209,10 @@ function onSave(): void {
         <div v-for="(acc, ai) in s.accounts" :key="ai" class="pmp-account">
           <div class="pmp-account-head">
             <button type="button" class="pmp-account-toggle" :aria-expanded="svc.isExpanded(ai)" @click="svc.toggleExpanded(ai)">
-              <span class="pmp-caret" :class="{ 'is-open': svc.isExpanded(ai) }">▸</span>
+              <svg class="pmp-caret" :class="{ 'is-open': svc.isExpanded(ai) }" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
               <span class="pmp-account-no">{{ ai + 1 }}</span>
             </button>
             <Input
@@ -288,26 +301,26 @@ function onSave(): void {
           <template v-if="currentType">
             <header class="pmp-model-head">
               <h4>{{ currentType.label }} 模型</h4>
-              <span class="pmp-hint">每个类型只有一个默认，全局生效</span>
+              <span class="pmp-hint">共 {{ modelsOfType.length }} 个 · 每个类型只有一个默认，全局生效</span>
             </header>
             <div class="pmp-table">
               <div class="pmp-tr pmp-th">
-                <span>平台</span>
-                <span>动作数</span>
+                <span>模型</span>
+                <span>来自平台</span>
                 <span class="pmp-td-right">默认</span>
               </div>
-              <div v-for="item in modelsOfType" :key="item.row.id" class="pmp-tr" :class="{ 'is-default': s.defaults[currentType!.id] === item.row.id }">
+              <div v-for="item in modelsOfType" :key="item.id" class="pmp-tr" :class="{ 'is-default': s.defaults[currentType!.id] === item.id }">
                 <span class="pmp-td-platform">
                   <ProviderIcon :icon="item.row.icon" :title="svc.titleOf(item.row)" :size="24" />
-                  <span>{{ svc.titleOf(item.row) }}</span>
+                  <span class="pmp-model-name">{{ item.title }}</span>
                 </span>
-                <span class="pmp-td-muted">{{ item.row.actions }} 个</span>
+                <span class="pmp-td-muted pmp-ellipsis">{{ svc.titleOf(item.row) }}</span>
                 <span class="pmp-td-right">
-                  <Badge v-if="s.defaults[currentType!.id] === item.row.id" variant="secondary">默认</Badge>
-                  <Button v-else variant="outline" size="xs" type="button" @click="void svc.setDefaultModel(currentType!.id, item.row.id).then(fail)">设为默认</Button>
+                  <Badge v-if="s.defaults[currentType!.id] === item.id" variant="secondary">默认</Badge>
+                  <Button v-else variant="outline" size="xs" type="button" @click="void svc.setDefaultModel(currentType!.id, item.id).then(fail)">设为默认</Button>
                 </span>
               </div>
-              <p v-if="modelsOfType.length === 0" class="pmp-empty">这一类还没有可用平台</p>
+              <p v-if="modelsOfType.length === 0" class="pmp-empty">这一类还没有可用模型</p>
             </div>
           </template>
           <p v-else class="pmp-empty">现在没有任何可用模型。启用一个平台后，它提供的类型会出现在这里。</p>
@@ -355,12 +368,14 @@ function onSave(): void {
 .pmp-field-desc { margin-top: 2px; font-size: 10.5px; color: var(--ui-ink-faint, #9ca3af); }
 .pmp-field-control { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .pmp-switch-label { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ui-ink-dim, #6b7280); }
-.pmp-input { min-width: 220px; }
+.pmp-input { width: 100%; max-width: 320px; }
+.pmp-field-control .pmp-input { max-width: 260px; }
+.pmp-account-name { max-width: 150px; }
 
 .pmp-account { margin-top: 8px; border: 1px solid var(--ui-line-faint, #eef0f4); border-radius: 10px; background: var(--ui-fill-quiet, color-mix(in srgb, currentColor 2%, transparent)); }
 .pmp-account-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
 .pmp-account-toggle { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; }
-.pmp-caret { font-size: 10px; color: var(--ui-ink-faint, #9ca3af); transition: transform .14s ease; }
+.pmp-caret { flex-shrink: 0; width: 15px; height: 15px; color: var(--ui-ink-dim, #6b7280); transition: transform .14s ease; }
 .pmp-caret.is-open { transform: rotate(90deg); }
 .pmp-account-no { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; background: var(--ui-surface, transparent); font-size: 10px; font-weight: 700; color: var(--ui-ink-dim, #6b7280); box-shadow: inset 0 0 0 1px var(--ui-line-hair, color-mix(in srgb, currentColor 10%, transparent)); }
 .pmp-account-name { min-width: 120px; max-width: 150px; }
@@ -392,4 +407,6 @@ function onSave(): void {
 .pmp-td-platform { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pmp-td-muted { font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
 .pmp-td-right { display: flex; justify-content: flex-end; }
+.pmp-model-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmp-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

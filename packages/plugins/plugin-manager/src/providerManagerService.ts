@@ -50,6 +50,8 @@ export interface ProviderRow {
   accountFields?: string[]
   shared?: Record<string, string | number | boolean>
   accounts: ProviderAccountRow[]
+  /** 这个平台的模型明细（模型页按类型列出） */
+  models?: Array<{ id: string; title: string; nodeTypes: string[]; group?: string }>
 }
 
 /** 一个账号的草稿（编辑中的副本，保存前不动真身） */
@@ -351,7 +353,11 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     const counts = new Map<string, number>()
     for (const row of state.rows) {
       if (!row.enabled) continue
-      for (const t of nodeTypesOf(row)) counts.set(t, (counts.get(t) ?? 0) + 1)
+      // 按**模型**统计（不是按平台）：类型只要真的存在一个模型就算有
+      for (const m of row.models ?? []) {
+        const types = m.nodeTypes.length > 0 ? m.nodeTypes : nodeTypesOf(row)
+        for (const t of types) counts.set(t, (counts.get(t) ?? 0) + 1)
+      }
     }
     const ids = [...counts.keys()].sort((a, b) => {
       const ia = order.indexOf(a)

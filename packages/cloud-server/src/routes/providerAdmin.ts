@@ -89,6 +89,8 @@ export interface ProviderRow {
   actions: number
   /** 这个平台提供哪些节点类型（image / video / audio / text）；界面按它统计「生成类型」 */
   nodeTypes?: string[]
+  /** 这个平台的模型明细（模型页按类型列出来，设置默认模型用） */
+  models?: Array<{ id: string; title: string; nodeTypes: string[]; group?: string }>
   config: ProviderConfigField[]
   /**
    * 哪些字段是「账号级」：key 列表。
@@ -150,6 +152,12 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
         id: p.id,
         file,
         ...(nodeTypesOfActions(p.actions).length > 0 ? { nodeTypes: nodeTypesOfActions(p.actions) } : {}),
+        models: p.actions.map((a) => ({
+          id: a.id,
+          title: a.title,
+          nodeTypes: a.nodeTypes ?? [],
+          ...(a.group ? { group: a.group } : {}),
+        })),
         ...(file === '' ? { builtin: true } : {}),
         ...(p.title ? { title: p.title } : {}),
         ...(p.description ? { description: p.description } : {}),
