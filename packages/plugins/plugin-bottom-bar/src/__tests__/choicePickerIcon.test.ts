@@ -32,9 +32,12 @@ describe('生成模型下拉：逐行图标', () => {
       resolve(__dirname, '../../../plugin-agent/src/ui/conversation/ChoicePicker.vue'),
       'utf8',
     )
-    // 卡片视图与分栏视图两处都必须走同一层回落
+    /*
+     * 卡片 / 分栏两个视图，每个视图里「有账号（SubTrigger）」与「单账号（Button）」
+     * 各有一份行模板，所以一共 4 处 —— 都要走同一层回落，不能有哪一份漏掉。
+     */
     const hits = cp.match(/item\.svg \|\| brandSvg\(platformOf\(item\)\)/g) ?? []
-    expect(hits.length).toBe(2)
+    expect(hits.length).toBe(4)
   })
 
   it('预设弹窗里的模型选择器也带图标（不再各自按标题猜）', () => {

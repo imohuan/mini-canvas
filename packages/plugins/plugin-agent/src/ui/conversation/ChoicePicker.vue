@@ -17,7 +17,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useUiComponent } from '@mini-canvas/canvas-render'
-import { Check, ChevronRight, Layers, Search, X } from 'lucide-vue-next'
+import { Check, Layers, Search, X } from 'lucide-vue-next'
 import { brandName, brandSvg, detectPlatform } from '../render/modelBrandIcons.js'
 import { scrollTopForVisibleItem } from '../shared/selectionScroll.js'
 import AgentScrollArea from './AgentScrollArea.vue'
@@ -99,6 +99,11 @@ const InputGroup = useUiComponent('InputGroup')
 const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
 const InputGroupInput = useUiComponent('InputGroupInput')
+const DropdownMenuSub = useUiComponent('DropdownMenuSub')
+const DropdownMenuSubTrigger = useUiComponent('DropdownMenuSubTrigger')
+const DropdownMenuSubContent = useUiComponent('DropdownMenuSubContent')
+const DropdownMenuItem = useUiComponent('DropdownMenuItem')
+const DropdownMenuLabel = useUiComponent('DropdownMenuLabel')
 
 const query = ref('')
 const view = ref<'card' | 'split'>('card')
@@ -225,6 +230,12 @@ onBeforeUnmount(() => {
   observer = null
   if (resizeTimer !== null) window.clearTimeout(resizeTimer)
   if (settleTimer !== null) window.clearTimeout(settleTimer)
+  clearAccountCloseTimer()
+  window.removeEventListener('pointerdown', onDocumentPointerDown, true)
+})
+
+onMounted(() => {
+  window.addEventListener('pointerdown', onDocumentPointerDown, true)
 })
 
 function pick(item: ChoiceItem): void {
@@ -242,147 +253,83 @@ function effectiveAccountOf(item: ChoiceItem): string {
   return item.accountId || item.defaultAccount || ''
 }
 
-/** 当前账号名；没选也没默认号就空着（触发器上不写多余的字） */
-function accountLabelOf(item: ChoiceItem): string {
-  const id = effectiveAccountOf(item)
-  if (!id) return ''
-  return (item.accounts ?? []).find((a) => a.id === id)?.name || id
-}
-
-/** 选了账号：只记账号，不改选中的模型；选完把菜单收起来 */
-function pickAccount(item: ChoiceItem, accountId: string): void {
-  emit('pickAccount', item.id, accountId)
-  clearAccountTimer()
-  accountOpenId.value = ''
-}
-
-/** 账号那一小段字：没选就写「默认」 */
-function accountShortOf(item: ChoiceItem): string {
-  return accountLabelOf(item) || '默认'
-}
-
-/*
- * 整行悬停展开账号菜单（用户 2026-11-10）：
- * 「整个 item 都可以进行 hover 来显示二级菜单，而不是只有这个图标才能 hover」。
- *
- * 这里**不借用任何菜单组件**的开关机制，只有一份自己的状态：
- * - reka 的 DropdownMenuSub 只认那个小触发器，指针一离开就关（实测来不及移过去）；
- * - 项目的 Popover 参与「浮层互斥」，它一打开就把父级「生成模型」菜单关掉。
- *
- * 所以账号菜单是一个自己画的小浮层（Teleport 到 body + 相对箭头定位）：
- * - 打开：整行 mouseenter，延迟 120ms（扫过列表时不会一路弹）；
- * - 关闭：行 / 菜单各自离开时给 500ms 宽限，指针进到菜单上就取消；
- * - 选了账号、面板收起、组件卸载都会立刻关。
- */
-/** 关菜单的宽限：要够指针穿过行与菜单之间那几像素空隙 */
-const ACCOUNT_CLOSE_GRACE = 500
-const accountOpenId = ref('')
-/** 菜单定位：以被悬停那一行的箭头为锚点 */
-const accountAnchor = ref<HTMLElement | null>(null)
-const accountMenuPos = ref<{ left: number; top: number }>({ left: 0, top: 0 })
-let accountTimer: number | null = null
-
-function clearAccountTimer(): void {
-  if (accountTimer !== null) {
-    window.clearTimeout(accountTimer)
-    accountTimer = null
-  }
-}
-
-function openAccountSoon(item: ChoiceItem, row?: Element | null): void {
-  if (!hasAccounts(item)) return
-  clearAccountTimer()
-  accountTimer = window.setTimeout(() => {
-    openAccount(item, row ? anchorIn(row) : null)
-    accountTimer = null
-  }, 120)
-}
+/** 当前展开账号子菜单的行 id（受控，选完要能立刻收起） */
+const accountMenuRow = ref('')
 
 /**
- * 在同一行里找箭头元素。
+ * 账号子菜单的开合通知。
  *
- * 必须**按行找**，不能 `document.querySelectorAll('[data-account-anchor]')` 再按 id 匹配：
- * 卡片视图与分栏视图在 DOM 里同时存在，两行 id 相同；按全页找会先命中隐藏的那一份，
- * 它没有尺寸，菜单就被定位到屏幕左上角（用户 2026-11-10 反馈「二级菜单都不显示了」）。
+ * 关闭**不直接照办**：reka 在指针离开那一下就会报 false，而用户此刻正要往
+ * 右下方的子菜单移动 —— 照办就等于「还没移过去就没了」（2026-11-10 反复踩到）。
+ * 这里把它记成「待关闭」，宽限期内指针回到行或子菜单就作废；
+ * 点击外部（pointerdown 在菜单外）与选中账号则立刻真关。
  */
-function anchorIn(row: Element): HTMLElement | null {
-  return row.querySelector<HTMLElement>('[data-account-anchor]')
-}
-
-/** 立刻打开某一行的账号菜单（点箭头走这条，不经延迟） */
-function openAccount(item: ChoiceItem, anchor?: HTMLElement | null): void {
-  if (!hasAccounts(item)) return
-  clearAccountTimer()
-  const el = anchor ?? null
-  accountAnchor.value = el
-  if (el) {
-    const r = el.getBoundingClientRect()
-    // 菜单贴箭头右侧展开；右侧放不下就翻到左边（口径同任何下拉）
-    const menuW = 168
-    const left = r.right + 6 + menuW > window.innerWidth - 8 ? r.left - menuW - 6 : r.right + 6
-    // 先按「不超出屏幕下沿」压一次，再保证不小于 8 —— 反过来的话窗口矮时会被压成负数、跑出屏幕
-    const top = Math.max(8, Math.min(r.top - 6, window.innerHeight - 8 - 120))
-    accountMenuPos.value = { left, top }
+function onAccountMenuToggle(itemId: string, open: boolean): void {
+  if (open) {
+    clearAccountCloseTimer()
+    accountMenuRow.value = itemId
+    return
   }
-  accountOpenId.value = item.id
+  if (accountMenuRow.value !== itemId) return
+  scheduleAccountClose(itemId)
 }
 
-function closeAccountSoon(item: ChoiceItem): void {
-  if (!hasAccounts(item)) return
-  clearAccountTimer()
-  accountTimer = window.setTimeout(() => {
-    if (accountOpenId.value === item.id) accountOpenId.value = ''
-    accountTimer = null
+/** 关子菜单的宽限（ms）：够指针穿过两级菜单之间那 8px 间距 */
+const ACCOUNT_CLOSE_GRACE = 420
+let accountCloseTimer: number | null = null
+
+function clearAccountCloseTimer(): void {
+  if (accountCloseTimer !== null) {
+    window.clearTimeout(accountCloseTimer)
+    accountCloseTimer = null
+  }
+}
+
+function scheduleAccountClose(itemId: string): void {
+  clearAccountCloseTimer()
+  accountCloseTimer = window.setTimeout(() => {
+    if (accountMenuRow.value === itemId) accountMenuRow.value = ''
+    accountCloseTimer = null
   }, ACCOUNT_CLOSE_GRACE)
 }
 
-/** 指针进了账号菜单：留住它 */
+/** 指针回到行 / 进了子菜单：取消待关闭 */
 function keepAccountMenu(): void {
-  clearAccountTimer()
-}
-
-/** 面板/组件收起时一并收掉账号菜单 */
-function closeAccountNow(): void {
-  clearAccountTimer()
-  accountOpenId.value = ''
+  clearAccountCloseTimer()
 }
 
 /**
- * 账号浮层是 Teleport 到 body 的，对「生成模型」那个 DropdownMenu 来说属于**外部**。
+ * 点外面：子菜单立刻收起（不占宽限期）。
  *
- * reka 的「点外面关闭」在 document 的**捕获**阶段监听 pointerdown —— 冒泡阶段的
- * .stop 拦不住它，所以点一下账号，整块模型面板就跟着关了（2026-11-10 实测）。
- * 这里在 window 的捕获阶段（比 document 更早）看一眼：点在账号浮层里就截断这次事件，
- * 外层收不到，自然不关；点在别处则把账号浮层收起。
+ * reka 自己只在**触发器**上判断点击，子菜单是独立浮层；点在别处时外层会关，
+ * 子菜单却可能留着（实测：选了账号后子菜单仍开着）。这里补一次判定。
  */
-function onAccountPointerDown(e: PointerEvent): void {
-  if (!accountOpenId.value) return
+function onDocumentPointerDown(e: PointerEvent): void {
+  if (!accountMenuRow.value) return
   const target = e.target as Element | null
   if (!target || typeof target.closest !== 'function') return
-  if (target.closest('.ac-account-pop')) {
-    e.stopPropagation()
-    return
-  }
-  if (!target.closest('.ac-model-account-trigger')) closeAccountNow()
+  if (target.closest('[data-slot="dropdown-menu-sub-content"]')) return
+  if (target.closest('.ac-model-entry-sub')) return
+  if (target.closest('.ac-model-account-menu')) return
+  clearAccountCloseTimer()
+  accountMenuRow.value = ''
 }
 
-/** 当前开着账号菜单的那一行 */
-const openRow = computed(() => props.items.find((i) => i.id === accountOpenId.value))
-const accountsOfOpenRow = computed(() => openRow.value?.accounts ?? [])
-const effectiveAccountOfOpenRow = computed(() => (openRow.value ? effectiveAccountOf(openRow.value) : ''))
-
-function pickAccountOfOpenRow(accountId: string): void {
-  const row = openRow.value
-  if (row) pickAccount(row, accountId)
+/** 选了账号：只记账号，不改选中的模型；选完收起子菜单，外层模型面板留着 */
+function pickAccount(item: ChoiceItem, accountId: string): void {
+  emit('pickAccount', item.id, accountId)
+  clearAccountCloseTimer()
+  accountMenuRow.value = ''
 }
 
-onMounted(() => {
-  window.addEventListener('pointerdown', onAccountPointerDown, true)
-})
-onBeforeUnmount(() => {
-  clearAccountTimer()
-  window.removeEventListener('pointerdown', onAccountPointerDown, true)
-})
+/*
+ * 多账号：**整行就是二级菜单的触发器**（用户 2026-11-10）。
+ *
+ * 结构与 packages/ui 左上角画布菜单完全一致：
+ *   DropdownMenuSub → DropdownMenuSubTrigger（整行）+ DropdownMenuSubContent（账号）
+ * 悬停展开、两级菜单的间距、以及「指针从行滑到菜单」的宽限，全部由主题组件实现，
+ * 不再自己算坐标、自己管开合（那样两级菜单之间没有留白，还会被外层菜单抢关）。
+ */
 
 defineExpose({ refreshLayout })
 </script>
@@ -447,12 +394,20 @@ defineExpose({ refreshLayout })
         <AgentScrollArea class="ac-panel-scroll ac-view-pane" :class="{ 'is-active': view === 'card' }"
           body-class="ac-panel-scroll-body ac-model-scroll-body">
           <div v-if="filtered.length" class="ac-model-grid">
-            <div v-for="item in filtered" :key="item.id" class="ac-model-entry"
-              role="option" :aria-selected="item.id === currentId" :aria-disabled="item.disabled || undefined"
-              @mouseenter="openAccountSoon(item, $event.currentTarget as Element)"
-              @mouseleave="closeAccountSoon(item)">
-              <Button variant="ghost" size="sm" class="ac-model-hit"
-                :disabled="item.disabled" @click="pick(item)">
+            <!--
+              多账号：整行就是 DropdownMenuSubTrigger（照 packages/ui 画布菜单）。
+              悬停整行展开账号菜单，两级菜单的间距由主题组件给。
+              点模型名仍然选模型；没有账号时退回普通按钮。
+            -->
+            <DropdownMenuSub v-for="item in filtered" :key="item.id"
+              :open="accountMenuRow === item.id"
+              @update:open="(v: boolean) => onAccountMenuToggle(item.id, v)">
+              <DropdownMenuSubTrigger v-if="hasAccounts(item)" class="ac-model-entry ac-model-entry-sub"
+                :aria-selected="item.id === currentId"
+                :disabled="item.disabled"
+                :text-value="item.title"
+                @mouseenter="keepAccountMenu"
+                @click="pick(item)">
                 <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
                   v-html="item.svg || brandSvg(platformOf(item))"></span>
                 <span class="ac-model-copy">
@@ -468,18 +423,38 @@ defineExpose({ refreshLayout })
                     </template>
                   </span>
                 </span>
+                <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+              </DropdownMenuSubTrigger>
+              <Button v-else variant="ghost" size="sm" class="ac-model-entry ac-model-hit"
+                role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
+                <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
+                  v-html="item.svg || brandSvg(platformOf(item))"></span>
+                <span class="ac-model-copy">
+                  <span class="ac-model-card-top">
+                    <span class="ac-model-id">{{ item.title }}</span>
+                    <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
+                  </span>
+                  <span class="ac-model-meta">
+                    <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
+                    <template v-if="item.note">
+                      <span class="ac-dot-sep" aria-hidden="true"></span>
+                      <span>{{ item.note }}</span>
+                    </template>
+                  </span>
+                </span>
+                <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
               </Button>
-              <!-- 多账号：整行 hover / 点箭头 → 账号菜单（不新增模型行） -->
-              <button v-if="hasAccounts(item)" type="button" class="ac-model-account-trigger"
-                :data-account-anchor="item.id"
-                :aria-expanded="accountOpenId === item.id"
-                :title="'选择账号（当前：' + accountShortOf(item) + '）'"
-                :aria-label="'选择账号（当前：' + accountShortOf(item) + '）'"
-                @click.stop="openAccount(item, $event.currentTarget as HTMLElement)">
-                <ChevronRight :size="14" aria-hidden="true" />
-              </button>
-              <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
-            </div>
+              <DropdownMenuSubContent v-if="hasAccounts(item)" class="ac-model-account-menu"
+                @mouseenter="keepAccountMenu" @mouseleave="scheduleAccountClose(item.id)">
+                <DropdownMenuLabel>选择账号</DropdownMenuLabel>
+                <DropdownMenuItem v-for="a in item.accounts" :key="a.id"
+                  class="ac-model-account-item"
+                  @select.prevent="pickAccount(item, a.id)">
+                  <span class="ac-model-account-item-name">{{ a.name || a.id }}</span>
+                  <Check v-if="a.id === effectiveAccountOf(item)" :size="14" />
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </div>
           <div v-else class="ac-empty-state">
             <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -504,14 +479,19 @@ defineExpose({ refreshLayout })
           <div class="ac-split-main">
             <AgentScrollArea class="ac-split-scroll" body-class="ac-split-scroll-body">
               <div v-if="filtered.length" class="ac-model-row-list">
-                <div v-for="item in filtered" :key="item.id" class="ac-model-entry ac-model-entry-row"
-                  role="option" :aria-selected="item.id === currentId" :aria-disabled="item.disabled || undefined"
-                  @mouseenter="openAccountSoon(item, $event.currentTarget as Element)"
-                  @mouseleave="closeAccountSoon(item)">
-                  <Button variant="ghost" size="sm" class="ac-model-hit"
-                    :disabled="item.disabled" @click="pick(item)">
+                <!-- 分栏视图同一套结构：整行就是二级菜单触发器 -->
+                <DropdownMenuSub v-for="item in filtered" :key="item.id"
+                  :open="accountMenuRow === item.id"
+                  @update:open="(v: boolean) => onAccountMenuToggle(item.id, v)">
+                  <DropdownMenuSubTrigger v-if="hasAccounts(item)"
+                    class="ac-model-entry ac-model-entry-row ac-model-entry-sub"
+                    :aria-selected="item.id === currentId"
+                    :disabled="item.disabled"
+                    :text-value="item.title"
+                    @mouseenter="keepAccountMenu"
+                    @click="pick(item)">
                     <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
-                    v-html="item.svg || brandSvg(platformOf(item))"></span>
+                      v-html="item.svg || brandSvg(platformOf(item))"></span>
                     <span class="ac-model-copy">
                       <span class="ac-model-id">{{ item.title }}</span>
                       <span class="ac-model-meta">
@@ -525,17 +505,38 @@ defineExpose({ refreshLayout })
                     <span class="ac-model-badges">
                       <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
                     </span>
+                    <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                  </DropdownMenuSubTrigger>
+                  <Button v-else variant="ghost" size="sm" class="ac-model-entry ac-model-entry-row ac-model-hit"
+                    role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
+                    <span class="ac-model-brand" :title="brandName(platformOf(item))" aria-hidden="true"
+                      v-html="item.svg || brandSvg(platformOf(item))"></span>
+                    <span class="ac-model-copy">
+                      <span class="ac-model-id">{{ item.title }}</span>
+                      <span class="ac-model-meta">
+                        <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
+                        <template v-if="item.note">
+                          <span class="ac-dot-sep" aria-hidden="true"></span>
+                          <span>{{ item.note }}</span>
+                        </template>
+                      </span>
+                    </span>
+                    <span class="ac-model-badges">
+                      <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
+                    </span>
+                    <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                   </Button>
-                  <button v-if="hasAccounts(item)" type="button" class="ac-model-account-trigger"
-                    :data-account-anchor="item.id"
-                    :aria-expanded="accountOpenId === item.id"
-                    :title="'选择账号（当前：' + accountShortOf(item) + '）'"
-                    :aria-label="'选择账号（当前：' + accountShortOf(item) + '）'"
-                    @click.stop="openAccount(item, $event.currentTarget as HTMLElement)">
-                    <ChevronRight :size="14" aria-hidden="true" />
-                  </button>
-                  <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
-                </div>
+                  <DropdownMenuSubContent v-if="hasAccounts(item)" class="ac-model-account-menu"
+                    @mouseenter="keepAccountMenu" @mouseleave="scheduleAccountClose(item.id)">
+                    <DropdownMenuLabel>选择账号</DropdownMenuLabel>
+                    <DropdownMenuItem v-for="a in item.accounts" :key="a.id"
+                      class="ac-model-account-item"
+                      @select.prevent="pickAccount(item, a.id)">
+                      <span class="ac-model-account-item-name">{{ a.name || a.id }}</span>
+                      <Check v-if="a.id === effectiveAccountOf(item)" :size="14" />
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
               </div>
               <div v-else class="ac-empty-state">
                 <span class="ac-empty-icon"><Search :size="18" /></span>
@@ -548,27 +549,6 @@ defineExpose({ refreshLayout })
       </div>
     </div>
 
-    <!--
-      账号菜单：自己画的浮层（Teleport 到 body）。
-      不用菜单组件的原因见脚本里 openAccountSoon 上方的注释：一个会被 reka 抢先关掉，
-      另一个参与浮层互斥、会把「生成模型」整体关掉。
-    -->
-    <Teleport to="body">
-      <div v-if="accountOpenId" class="ac-account-pop" role="menu" aria-label="选择账号"
-        :style="{ left: accountMenuPos.left + 'px', top: accountMenuPos.top + 'px' }"
-        @mouseenter="keepAccountMenu" @mouseleave="closeAccountNow">
-        <p class="ac-account-pop-head">选择账号</p>
-        <button v-for="a in accountsOfOpenRow" :key="a.id" type="button" role="menuitem"
-          class="ac-account-pop-item"
-          :data-active="a.id === effectiveAccountOfOpenRow ? 'true' : undefined"
-          @pointerdown.stop.prevent
-          @mousedown.prevent
-          @click="pickAccountOfOpenRow(a.id)">
-          <span class="ac-account-pop-name">{{ a.name || a.id }}</span>
-          <Check v-if="a.id === effectiveAccountOfOpenRow" :size="14" />
-        </button>
-      </div>
-    </Teleport>
   </div>
 </template>
 
