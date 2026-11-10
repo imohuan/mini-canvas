@@ -28,7 +28,7 @@ describe('persistValues：对话模式必须落 barPrompt（用户 2026-11-10 �
             : undefined,
         get: (n: string) => deps.ctx.tryGet(n),
       },
-      props: { id: 'n1', data: {} },
+      props: { id: 'n1', data: conversation ? { barValues: { actionId: 'agent:chat' } } : {} },
       currentId: { value: conversation ? 'agent:chat' : '' },
       values: { value: {} },
       storedActionId: { value: conversation ? 'agent:chat' : undefined },
@@ -62,6 +62,22 @@ describe('persistValues：对话模式必须落 barPrompt（用户 2026-11-10 �
     persistValues()
     expect(writes).toHaveLength(1)
     expect((writes[0] as { barPrompt?: string }).barPrompt).toBe('我问的问题')
+  })
+
+  /**
+   * 用户实测踩到的第二处：底栏刚挂载时 `nodeType` 还没同步回来（undefined），
+   * 只按类型判定「对话模式」会判成 false，于是输入框拿 `data.text`（模型答案）
+   * 当初始值，反过来又把答案写进 `barPrompt`。
+   * 现在同一份判定还要认节点数据里的 `barValues.actionId`。
+   */
+  it('conversation 标志为 false，但节点数据里 actionId=agent:chat：仍按对话模式落 barPrompt，不写 text', async () => {
+    const { deps, writes } = harness(false)
+    deps.props.data = { barValues: { actionId: 'agent:chat' } } as never
+    const { persistValues } = useBottomBarPersistence(deps as never)
+    persistValues()
+    expect(writes).toHaveLength(1)
+    expect((writes[0] as { barPrompt?: string }).barPrompt).toBe('我问的问题')
+    expect((writes[0] as { text?: unknown }).text).toBeUndefined()
   })
 
   it('非对话模式且 showEditor=false：保持老行为（什么都不写）', async () => {

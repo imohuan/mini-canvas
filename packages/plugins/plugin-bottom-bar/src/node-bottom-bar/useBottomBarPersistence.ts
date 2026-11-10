@@ -27,7 +27,10 @@ export function useBottomBarPersistence(deps: PersistDeps) {
       !rawStored || (Object.keys(rawStored).length > 0 && Object.keys(rawStored).every((k) => k === 'actionId'))
     // 对话模式（文本节点 agent:chat）没有底栏动作，showEditor 恒为 false，
     // 但输入框内容同样要落盘（barPrompt）—— 用户 2026-11-10：发送后输入框不能丢。
-    const conversation = deps.conversation?.value === true
+    const storedValues = deps.props.data?.barValues as { actionId?: unknown } | undefined
+    /** 同一个判定要认两处：节点类型（对话模式）或节点数据里的动作 id（挂载首拍还没有类型） */
+    const conversation =
+      deps.conversation?.value === true || storedValues?.actionId === 'agent:chat'
     /**
      * 「参数没变」的快返只对**非对话**模式成立。
      *
