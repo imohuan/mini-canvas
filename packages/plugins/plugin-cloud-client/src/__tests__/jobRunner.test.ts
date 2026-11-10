@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { localizeStatus, makeJobPoll, submitJob, toPollState, type RunDeps } from '../jobRunner'
+import { makeJobPoll, submitJob, toPollState, type RunDeps } from '../jobRunner'
 import { CloudApi } from '../api'
 import type { FetchLike } from '../apiTypes'
 import type { ServerJob } from '../apiTypes'
@@ -24,24 +24,6 @@ function deps(api: CloudApi, over: Partial<RunDeps> = {}): RunDeps {
 
 describe('Job → 底栏认识的轮询状态', () => {
 
-  /**
-   * 卡片上那行阶段文案直接显示 provider 原文，上游都是英文。
-   * 用户 2026-11-10：「希望使用中文而不是英文」（截图里就是 `queued`）。
-   */
-  it('上游状态词翻成中文（queued / processing …）', () => {
-    expect(localizeStatus('queued')).toBe('排队中')
-    expect(localizeStatus('processing')).toBe('处理中')
-    expect(localizeStatus('IN_PROGRESS')).toBe('生成中')
-    // provider 自己写的中文说明原样保留
-    expect(localizeStatus('正在合成音频')).toBe('正在合成音频')
-  })
-
-  it('running 帧的 message 也走中文（不再把 queued 直接甩到卡片上）', () => {
-    const job: ServerJob = { id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'running', message: 'queued' }
-    const s = toPollState(job, 'j1')
-    expect(s.status).toBe('running')
-    expect(s.status === 'running' && s.message).toBe('排队中')
-  })
   it('running：带上 taskId（不带的话"取消"发不到后台）', () => {
     const job: ServerJob = { id: 'j1', canvasId: 'default', nodeId: 'n1', actionId: 'a', providerId: 'p', status: 'running', progress: 40, message: '跑着' }
     expect(toPollState(job, 'j1')).toEqual({ status: 'running', progress: 40, message: '跑着', taskId: 'j1' })

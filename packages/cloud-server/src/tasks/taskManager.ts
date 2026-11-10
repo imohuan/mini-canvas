@@ -30,33 +30,6 @@ export const DEFAULT_INTERVAL = 1500
 /** 默认整体超时（ms）—— 长视频会被动作自己的 pollTimeoutMs 顶掉 */
 export const DEFAULT_TIMEOUT = 300_000
 
-/**
- * provider 给的状态词转中文（用户 2026-11-10：「希望使用中文而不是英文」）。
- *
- * 这行文案会被**直接写进节点**，所以必须在后台翻译 —— 只在前端翻是看不到效果的：
- * 卡片读的是节点里的 runState.message。认识的词翻过来，其它原样保留。
- */
-export function localizeProviderStatus(message: string | undefined): string | undefined {
-  if (typeof message !== 'string') return message
-  const text = message.trim()
-  if (!text) return text
-  const table: Record<string, string> = {
-    queued: '排队中',
-    pending: '排队中',
-    waiting: '等待中',
-    starting: '启动中',
-    submitted: '已提交',
-    running: '生成中',
-    processing: '处理中',
-    generating: '生成中',
-    in_progress: '生成中',
-    inprogress: '生成中',
-    uploading: '上传中',
-    downloading: '下载中',
-  }
-  return table[text.toLowerCase()] ?? text
-}
-
 /** 一次任务要用的外部能力（注入，便于单测给假货） */
 export interface TaskDeps {
   doc: CanvasDocument
@@ -482,7 +455,7 @@ export class TaskManager {
 
         if (poll.status === 'running') {
           job.progress = poll.progress ?? job.progress
-          job.message = localizeProviderStatus(poll.message) ?? job.message
+          job.message = poll.message ?? job.message
           // 加载 UI 的展示字段：provider 说什么就写什么（用户 2026-11-10 ——
           // 进度由后台给，前端只负责画）。undefined 时保留上一拍，不回退成百分比。
           if (poll.value !== undefined) job.value = poll.value

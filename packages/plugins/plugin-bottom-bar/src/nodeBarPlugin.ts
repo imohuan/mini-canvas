@@ -280,26 +280,6 @@ export class NodeTaskService extends Service {
   }
 
   /**
-   * 这个节点上是否有**本机正在跑**的任务句柄。
-   *
-   * 周期自检用它区分两种情况：真有任务在跑（别动），还是只剩一张写着 running 的卡片（得收掉）。
-   */
-  hasLocalHandle(nodeId: string): boolean {
-    return this.cancels.has(nodeId) || this.externalCancels.has(nodeId)
-  }
-
-  /**
-   * 收掉一张「写着运行中、其实没人管」的卡片。
-   *
-   * 周期自检用它；写盘走与 run / cancel 同一份 deps（runState 不进撤销栈）。
-   */
-  markStaleRunning(nodeId: string, actionId: string, reason: string): void {
-    this.deps().writeRuntime(nodeId, {
-      runState: errorState(actionId, reason, '重新点一次提交即可'),
-    })
-  }
-
-  /**
    * 刷新续查：把所有 running 状态的节点接回来。
    * 调用时机见 §0.5：ctx:ready（冷启动）与「排除自身的 ctx:plugin-installed」（manifest 热装）。
    */
@@ -525,44 +505,4 @@ export function apply(ctx: Context) {
   ctx.on('ctx:ready', tryRestore)
   ctx.on('ctx:plugin-installed', tryRestore)
 
-  /**
-   * 周期自检：把「显示运行中、但其实没人管」的卡片收掉。
-   *
-   * 用户 2026-11-10 反馈：节点明明没有在跑，卡片却显示「生成中 / 排队中」，
-   * 而且这个节点之后再也点不了发送（运行中禁止重复执行）。
-   *
-   * 成因是上面那份 `resumedTasks` 幂等表：同一条任务只接一次。
-   * 如果那一次续查碰上网络抖动、或者本机句柄刚好还在（被跳过），这一条就再也没人管了。
-   * 所以每隔一段时间独立核对一遍：
-   * - 本机有句柄 → 真有任务在跑，跳过；
-   * - 没有 taskId 且超过提交宽限 → 收敛成失败（同 restoreAll 口径）；
-   * - 有 taskId 且没有句柄 → 交给 restoreAll 重新接一次（幂等表在这里让路）。
-   */
-  const WATCHDOG_MS = 20_000
-  let watchdogTimer: number | null = null
-  const watchdog = () => {
-    const docServiceForCheck = ctx.tryGet<DocService>('doc')
-    if (!docServiceForCheck) return
-    let needRestore = false
-    for (const node of docServiceForCheck.getNodes()) {
-      const rs = readRunState(node.data)
-      if (rs.status !== 'running') continue
-      if (task.hasLocalHandle(node.id)) continue
-      if (!rs.taskId || !rs.actionId) {
-        const startedAt = rs.startedAt ?? 0
-        if (rs.actionId && startedAt > 0 && Date.now() - startedAt <= NO_TASK_ID_GRACE_MS) continue
-        task.markStaleRunning(node.id, rs.actionId ?? '', '这个任务已经不在后台了（可能服务重启过）')
-        continue
-      }
-      // 让幂等表忘掉这一条，restoreAll 才会重新接它
-      resumedTasks.delete(node.id + '\u0000' + rs.taskId)
-      needRestore = true
-    }
-    if (needRestore) void task.restoreAll()
-  }
-  watchdogTimer = globalThis.setInterval(watchdog, WATCHDOG_MS) as unknown as number
-  ctx.effect(() => () => {
-    if (watchdogTimer !== null) globalThis.clearInterval(watchdogTimer)
-    watchdogTimer = null
-  })
 }

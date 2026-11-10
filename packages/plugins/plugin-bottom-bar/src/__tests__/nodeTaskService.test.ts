@@ -116,20 +116,6 @@ describe('NodeTaskService：同节点重复执行与取消', () => {
     ctx.stop()
   })
 
-  /**
-   * 用户 2026-11-10：「节点明明正常，却显示运行中」——
-   * 那种残留没有任何人收，卡片永远转，而且该节点再也点不了发送。
-   * 现在有周期自检：本机没有句柄的 running 一律收敛成失败（可重新提交）。
-   */
-  it('周期自检能收掉「写着 running、其实没人管」的卡片', async () => {
-    const src = readFileSync(resolve(__dirname, '../nodeBarPlugin.ts'), 'utf8')
-    expect(src).toContain('markStaleRunning')
-    expect(src).toContain('hasLocalHandle')
-    // 自检必须跳过「本机真在跑」的节点
-    const body = /const watchdog = \(\) => \{[\s\S]*?\n  \}/.exec(src)?.[0] ?? ''
-    expect(body).toContain('hasLocalHandle')
-    expect(body).toContain('restoreAll')
-  })
 
   /**
    * 用户 2026-11-10 实测：第一次点发送先闪一条「上次的任务已经不在后台了」，然后才进正常加载态。
