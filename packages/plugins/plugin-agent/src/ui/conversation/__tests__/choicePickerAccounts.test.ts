@@ -28,6 +28,7 @@ beforeAll(() => {
   for (const n of [
     'Button', 'Badge', 'ScrollArea',
     'InputGroup', 'InputGroupAddon', 'InputGroupButton', 'InputGroupInput',
+    'DropdownMenu', 'DropdownMenuTrigger', 'DropdownMenuContent', 'DropdownMenuLabel',
     'DropdownMenuSub', 'DropdownMenuSubTrigger', 'DropdownMenuSubContent', 'DropdownMenuItem',
   ]) field.add(n, stub(n), { id: 'test' })
   uiField = field
@@ -65,11 +66,10 @@ const TWO = [
 ]
 
 describe('ChoicePicker 多账号二级菜单', () => {
-  it('多个号：行里出账号触发器，菜单里列出每个号', async () => {
+  it('多个号：行里出账号触发器（标题带当前号）', async () => {
     const html = await render([{ id: 'a', title: 'Seedream 5.0', accounts: TWO, accountId: 'second' }])
     expect(html).toContain('ac-model-account-trigger')
-    expect(html).toContain('账号 2')
-    expect(html).toContain('默认账号')
+    expect(html).toContain('选择账号（当前：账号 2）')
   })
 
   it('只有一个号：不出账号触发器', async () => {
