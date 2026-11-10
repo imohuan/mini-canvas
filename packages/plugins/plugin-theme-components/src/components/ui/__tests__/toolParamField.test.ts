@@ -73,6 +73,24 @@ describe('内置控件按 type 渲染', () => {
     const html = await render({ key: 'seed', label: '随机种子', type: 'number' }, 42)
     expect(html).toContain('type="number"')
   })
+  it('select option 允许 value 是空字符串（「留空=默认」），渲染不抛错（reka SelectItem 禁空值）', async () => {
+    const html = await render(
+      {
+        key: 'emotion',
+        label: '情感',
+        type: 'select',
+        default: '',
+        options: [
+          { label: '默认', value: '' },
+          { label: '开心', value: 'happy' },
+        ],
+      },
+      '',
+    )
+    // 不抛就是这条测试的主体：reka-ui 曾在空 value 项上直接报错
+    expect(html).toContain('data-slot="select-trigger"')
+    expect(html).toContain('默认')
+  })
 })
 
 describe('自定义组件渲染（用户明确要求的能力）', () => {

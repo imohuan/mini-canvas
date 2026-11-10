@@ -84,6 +84,17 @@ const controlProps = computed(() => ({
 /** select 的候选值（面板统一 Select 组件要的 {label,value} 形状） */
 const options = computed(() => (props.param.options ?? []).map((o) => ({ label: o.label, value: o.value })))
 
+/**
+ * reka-ui 的 SelectItem 不允许 value 是空字符串（空串被保留为「清空选择、显示
+ * 占位符」的哨兵）。但工具作者声明「留空 = 默认」时，合法选项的 value 就是 ''
+ * （比如 MiniMax 的情感：默认 / 开心 / 难过……）。这里把空值换成私有哨兵串
+ * 交给 SelectItem，选中后再映射回空串 —— 作者的 option 定义不用做任何妥协。
+ */
+const EMPTY_OPTION_VALUE = '__mini-canvas-empty__'
+const toSelectItemValue = (v: string | number): string | number => (v === '' ? EMPTY_OPTION_VALUE : v)
+const fromSelectItemValue = (v: unknown): string | number | boolean =>
+  (v === EMPTY_OPTION_VALUE ? '' : v) as string | number | boolean
+
 /** 传给自定义组件的 props（约定名 + 作者附加的静态 props） */
 const customProps = computed<Record<string, unknown>>(() => ({
   param: props.param,
@@ -96,7 +107,7 @@ const inputId = computed(() => `${props.idPrefix}-${props.param.key}`)
 
 function onSelect(value: unknown): void {
   // reka-ui 的 Select 允许 null（清空）；这里按旧语义回成空串，别把 null 传给工具参数
-  emit('update:modelValue', (value ?? '') as string | number)
+  emit('update:modelValue', fromSelectItemValue(value ?? ''))
 }
 
 function onNumber(e: Event): void {
@@ -221,7 +232,7 @@ const sliderHint = computed(() => (props.hideHint ? '' : hintText.value))
         不能放进可滚动的 item 区（会跟着选项一起滚走），所以用 sticky 钉在顶部。
       -->
       <div v-if="hintText && !hideHint" class="tpf-select-hint" role="note">{{ hintText }}</div>
-      <SelectItem v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
+      <SelectItem v-for="o in options" :key="o.value" :value="toSelectItemValue(o.value)">{{ o.label }}</SelectItem>
     </SelectContent>
   </Select>
 
