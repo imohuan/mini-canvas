@@ -197,8 +197,6 @@ export async function requestAgentChat(
 export function useAgentChat(deps: AgentChatDeps) {
   const error = ref('')
   const choice = ref<BarModelChoice | null>(null)
-  /** 最近一次提交的任务号（取消按钮要用它去后台真取消） */
-  const jobId = ref<string>('')
 
   /** 从上下文里取 Agent 的模型清单（Agent 没装时为空） */
   function availableModels() {
@@ -236,33 +234,33 @@ export function useAgentChat(deps: AgentChatDeps) {
     })
     // 失败也要给用户看得见的一句话（任务没建成，不会有 runState error 帧）
     if (!r.ok) error.value = r.error
-    else jobId.value = r.jobId
     return r
   }
 
   /**
-   * 取消这次对话（用户 2026-11-10：文本模型的取消没有效果）。
+   * 取消一次对话（用户 2026-11-10）。
    *
-   * 之前「取消」走的是底栏本地 taskRuntime 的 onCancel —— 可文本节点是直接
-   * `POST /api/jobs` 下的单，本地根本没有任务句柄，所以点了没反应。
-   * 这里用发送时拿到的 jobId 去后台真取消；后台再把生成流掐断并写「已取消」。
+   * **任务号只有一份真源：画布节点上的 `data.runState.taskId`**（后台每一帧都写）。
+   * 这里只负责「拿这个号去请求后台取消」，不在前端另存一份 ——
+   * 否则刷新 / 换标签页之后前端那份就没了，而节点上那份一直在。
    */
-  async function cancel(): Promise<void> {
-    const id = jobId.value
+  async function cancel(taskId?: string): Promise<void> {
+    const id = taskId ?? ''
     if (!id) return
     const base = resolveAgentBaseUrl(deps.ctx as never).replace(/\/+$/, '')
     const f = deps.fetchImpl ?? (typeof fetch === 'undefined' ? undefined : fetch)
     if (!f) return
     try {
-      await f(base + '/api/jobs/' + encodeURIComponent(id) + '/cancel', {
+      const res = await f(base + '/api/jobs/' + encodeURIComponent(id) + '/cancel', {
         method: 'POST',
         headers: withAdminToken({ 'content-type': 'application/json' }),
       })
+      if (!res.ok) error.value = '取消失败（HTTP ' + res.status + '）'
     } catch (err) {
       error.value = err instanceof Error ? err.message : '取消失败'
     }
   }
 
-  return { error, choice, pick, canSend, send, cancel, jobId, availableModels }
+  return { error, choice, pick, canSend, send, cancel, availableModels }
 }
 

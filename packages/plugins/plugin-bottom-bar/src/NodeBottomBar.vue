@@ -583,9 +583,20 @@ async function onRun(): Promise<void> {
      * 所以 nodeTask 里没有它的句柄 —— 覆盖层的取消按钮点了是空的。
      * 这里把「用 jobId 去后台取消」登记进去，取消按钮就真的能停掉任务。
      */
+    /**
+     * 登记取消实现（用户 2026-11-10）。
+     *
+     * 任务号从**节点**读（`data.runState.taskId`），不是从前端某个 ref ——
+     * 号先由后台写进节点，这里只是拿它去请求取消。
+     */
     const unregister = ctx
       .tryGet<{ registerExternalCancel?(nodeId: string, fn: () => void | Promise<void>): () => void }>('nodeTask')
-      ?.registerExternalCancel?.(props.id, () => agentChat.cancel())
+      ?.registerExternalCancel?.(props.id, async () => {
+        const id = props.data?.runState
+          ? (props.data.runState as { taskId?: unknown }).taskId
+          : undefined
+        await agentChat.cancel(typeof id === 'string' ? id : undefined)
+      })
     externalCancelOff = unregister ?? null
     const r = await sendAgentMessage()
     // 任务建成了就交给后台：加载态 / 完成 / 失败全由后台的 runState 帧驱动，

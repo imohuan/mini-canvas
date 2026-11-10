@@ -234,6 +234,34 @@ export class NodeTaskService extends Service {
   }
 
   /**
+   * 取消某节点上的任务 —— **按节点上记着的任务号**取消（用户 2026-11-10）。
+   *
+   * 统一口径：任务号只有一个真源 = `node.data.runState.taskId`（后台每一帧都写）。
+   * 不管任务是本地 runAction 起的、还是前端直连 /api/jobs 起的，都拿这个号去取消，
+   * 前端不再自己保管一份 —— 换标签页 / 刷新 / 换浏览器都还认得。
+   *
+   * @returns 是否真的发出取消（false = 这条任务没有可取消的通道）
+   */
+  async cancelByNodeTaskId(nodeId: string): Promise<boolean> {
+    const rs = readRunState(this.doc().getNode(nodeId)?.data)
+    if (!rs.taskId) return false
+
+    // 本地 runAction 起的：abort 本地循环，再让它自己去上游取消（taskRuntime 内部按 action.onCancel）
+    const ctrl = this.cancels.get(nodeId)
+    if (ctrl) {
+      ctrl.abort()
+      return true
+    }
+
+    // 直连 /api/jobs 起的（文本对话）：用节点上的 jobId 请求后台取消
+    const external = this.externalCancels.get(nodeId)
+    if (!external) return false
+    this.externalCancels.delete(nodeId)
+    await Promise.resolve().then(() => external())
+    return true
+  }
+
+  /**
    * 本节点当前那条任务**能不能取消**（覆盖层据此决定画不画取消按钮）。
    *
    * 用户 2026-11-10：有些任务没法取消，就不该给用户一个点了没反应的按钮。

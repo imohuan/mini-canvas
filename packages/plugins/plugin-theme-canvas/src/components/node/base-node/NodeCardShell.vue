@@ -155,6 +155,8 @@ const progressSuffix = computed(() => taskSuffix.value)
  */
 const taskService = ctx.tryGet?.<{
   cancel(nodeId: string): void
+  /** 按节点上记着的任务号取消（统一口径）；返回是否真的发出了取消 */
+  cancelByNodeTaskId?(nodeId: string): Promise<boolean>
   /** 本节点这条任务能不能取消（底栏按动作声明算）；旧宿主没有这个方法时当作能取消 */
   canCancel?(nodeId: string): boolean
 }>('nodeTask')
@@ -175,7 +177,18 @@ const canCancel = computed(() => {
     return false
   }
 })
+/**
+ * 取消本节点的任务。
+ *
+ * 统一按节点上的 `runState.taskId` 取消（用户 2026-11-10）——
+ * 任务号只有这一份真源，前端不另存，刷新 / 换标签页都还认得。
+ */
 function onCancelTask(): void {
+  const byTaskId = taskService?.cancelByNodeTaskId
+  if (typeof byTaskId === 'function') {
+    void Promise.resolve().then(() => byTaskId.call(taskService, props.id)).catch(() => {})
+    return
+  }
   if (typeof cancelTask === 'function') cancelTask(props.id)
 }
 
