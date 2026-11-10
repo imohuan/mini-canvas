@@ -34,6 +34,21 @@ describe('initialPromptText：挂载时从哪里恢复输入框内容', () => {
   })
 })
 
+describe('initialPromptText：对话模式（文本节点 agent:chat，用户 2026-11-10）', () => {
+  it('优先 barPrompt，绝不读 data.text（那是模型答案，会顶掉你的问题）', () => {
+    expect(initialPromptText({ text: '模型的答案', barPrompt: '我提的问题' }, { preferBarPrompt: true })).toBe('我提的问题')
+  })
+
+  it('只有 data.text 时也不拿它当输入（答案不是你的输入）', () => {
+    expect(initialPromptText({ text: '模型的答案' }, { preferBarPrompt: true })).toBe('')
+  })
+
+  it('数据都是空 / 缺失 → 空串', () => {
+    expect(initialPromptText({}, { preferBarPrompt: true })).toBe('')
+    expect(initialPromptText(undefined, { preferBarPrompt: true })).toBe('')
+  })
+})
+
 describe('promptPersistFields：输入要写回哪些 data 字段', () => {
   it("none 绑定 → 写 data.barPrompt（与 barValues 同一次 updateNode 落盘）", () => {
     expect(promptPersistFields('none', '画一只猫')).toEqual({ barPrompt: '画一只猫' })

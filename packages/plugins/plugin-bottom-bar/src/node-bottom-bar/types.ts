@@ -15,5 +15,7 @@ export interface BottomBarEditorHandle {
   markRefSlots?(): number
   removeRefChips?(ids: readonly string[]): boolean
   exportText?(): string
+  /** 编辑器当前是否有内容（用于占位符：避免和正文叠字，用户 2026-11-10） */
+  isEmpty?(): boolean
   setEditable?(next: boolean): void
 }

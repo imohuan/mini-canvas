@@ -104,6 +104,7 @@ const {
   previewPosition,
   exportText,
   serializeDoc,
+  isEmpty,
   deserializeDoc,
   focusEnd,
   insertText,
@@ -128,6 +129,8 @@ const {
 // 暴露导出方法给父组件
 defineExpose({
   exportText,
+  /** 正文是否为空（底栏占位符判断用；空段落不算内容） */
+  isEmpty,
   serializeDoc,
   deserializeDoc,
   focusEnd,

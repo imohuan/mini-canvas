@@ -89,10 +89,29 @@ export function useNodeTaskState(input: NodeTaskStateInput) {
     typeof runState.value.hint === 'string' ? runState.value.hint : '',
   )
   /** 计时起点（ms）；没写就不显示耗时 */
+
+  /**
+   * 正在返回的那一小段（用户 2026-11-10：「实时流输出的滑动文本效果」）。
+   * 取正文末尾，只用于加载层显示 —— 整篇在节点正文里。
+   */
+  const streamTail = computed(() => {
+    if (!loading.value) return ''
+    const t = input.data()?.text
+    return typeof t === 'string' ? t.slice(-40) : ''
+  })
+
+  /**
+   * 大数字进度：文本任务用「已收 token 数」（用户口径 20000tokens），
+   * 其它任务仍用百分比 —— 由调用方决定画哪个。
+   */
+  const tokenCount = computed(() => stats.value?.tokens)
   const startedAt = computed(() => {
     const v = runState.value.startedAt
     return typeof v === 'number' && Number.isFinite(v) ? v : 0
   })
 
-  return { visualState, loading, failed, covered, percent, message, label, reason, hint, startedAt, stats, streaming }
+  return {
+    visualState, loading, failed, covered, percent, message, label, reason, hint, startedAt,
+    stats, streaming, streamTail, tokenCount,
+  }
 }

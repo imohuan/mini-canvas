@@ -142,13 +142,23 @@ function onPanelNotify(payload: { level: 'info' | 'success' | 'error'; message: 
 
 // —— 提示词 ——
 let persistValuesSoonRef: () => void = () => {}
+const AGENT_MODEL_TYPES = new Set(['text'])
 const promptApi = useBottomBarPrompt({
   ctx,
   props,
   promptBinding,
+  /**
+   * 对话模式：文本节点用 Agent 的模型下拉（agent:chat）。
+   *
+   * 这个标志决定「输入框放哪一份内容」——用户 2026-11-10：
+   * 输入框存的是**你的问题**（barPrompt），节点正文存的是**模型的答案**（data.text）。
+   * 两者解耦后，发送完问题还在、答案流式写进节点，占位符也不会和正文叠在一起。
+   */
+  conversation: computed(() => AGENT_MODEL_TYPES.has(String(nodeType.value ?? ''))),
   persistValuesSoon: () => persistValuesSoonRef(),
 })
 const { prompt, promptDoc, onPromptUpdate, CHAR_LIMIT, charCount } = promptApi
+const conversationMode = computed(() => AGENT_MODEL_TYPES.has(String(nodeType.value ?? '')))
 
 // —— 文本节点：任务化对话（用户 2026-11-09） ——
 // 这个下拉不是「底栏动作」，而是 Agent 里配好的模型清单；
@@ -171,7 +181,6 @@ const { choice: agentChoice, pick: pickAgentModel, send: sendAgentMessage } = ag
  * 只有文本节点直接用「Agent 的对话模型」——图片 / 视频要走生成动作（带比例、时长等参数），
  * 由下面的 ChoicePicker 承接（同样是卡片 + 分栏那套面板）。
  */
-const AGENT_MODEL_TYPES = new Set(['text'])
 const useAgentModels = computed(() => AGENT_MODEL_TYPES.has(String(nodeType.value ?? '')))
 
 /**
@@ -244,6 +253,7 @@ const persistence = useBottomBarPersistence({
   storedActionId,
   showEditor,
   promptBinding,
+  conversation: conversationMode,
   prompt,
   promptDoc,
 })
@@ -469,8 +479,12 @@ async function onRun(): Promise<void> {
   // 文本走 Agent 的任务化对话：提交任务（带上选的模型），生成过程由后台写节点
   if (useAgentModelsEffective.value) {
     if (!agentChat.canSend()) return
+    // 只把「你的问题」落盘：写 barPrompt（persistValues 在对话模式已经这么做）。
+    // **不写 data.text** —— 那是节点正文 = 模型答案（用户 2026-11-10：
+    // 发送后输入框不能被答案覆盖，占位符也不能和正文叠字）。
     persistValues()
-    if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
+    // 清掉上一次的答案，让节点进入干净的「加载中」状态（后台随后逐段写新内容）。
+    ctx.get('doc').updateNode(props.id, { data: { text: '' } })
     submitted.value = true
     const r = await sendAgentMessage()
     // 任务建成了就交给后台：加载态 / 完成 / 失败全由后台的 runState 帧驱动，

@@ -132,7 +132,22 @@ const {
   startedAt: taskStartedAt,
   stats: taskStats,
   streaming: taskStreaming,
+  streamTail: taskStreamTail,
+  tokenCount: taskTokenCount,
 } = taskState
+/**
+ * 状态条/加载件的「进度显示」：
+ * · 文本任务（有 token 统计）→ 大数字显示**已收 token 数**，后缀 tokens（不钳上限）；
+ * · 其它任务 → 沿用百分比。
+ * 用户 2026-11-10 明确要「20000tokens 这样的方式」，不是百分比。
+ */
+const showTokenProgress = computed(
+  () => typeof taskTokenCount.value === 'number' && taskTokenCount.value > 0,
+)
+const progressValue = computed(
+  () => (showTokenProgress.value ? (taskTokenCount.value as number) : percent.value),
+)
+const progressSuffix = computed(() => (showTokenProgress.value ? 'tokens' : '%'))
 
 /**
  * 取消任务：**可选能力**（底部状态栏插件上架 nodeTask 服务才有）。
@@ -512,10 +527,11 @@ const {
           variant="chip"
           :tone="failed ? 'error' : 'loading'"
           :label="taskLabel"
-          :percent="failed ? null : percent"
+          :percent="failed ? null : progressValue"
+          :suffix="progressSuffix"
           :message="taskReason"
           :started-at="failed ? 0 : taskStartedAt"
-          :stats="taskStats"
+          :stream-tail="failed ? '' : taskStreamTail"
         />
         <button v-if="canCancel" class="v2-stream-cancel nodrag nopan" type="button" @click.stop="onCancelTask">取消</button>
       </div>
@@ -523,10 +539,12 @@ const {
         v-if="showDefaultState"
         :tone="failed ? 'error' : 'loading'"
         :label="taskLabel"
-        :percent="failed ? null : percent"
+        :percent="failed ? null : progressValue"
+        :suffix="progressSuffix"
         :message="taskReason"
         :hint="taskHint"
         :started-at="failed ? 0 : taskStartedAt"
+        :stream-tail="failed ? '' : taskStreamTail"
       >
         <template #action>
           <!-- 取消：只有装了能取消任务的插件（底部状态栏提供 nodeTask）才出现 -->

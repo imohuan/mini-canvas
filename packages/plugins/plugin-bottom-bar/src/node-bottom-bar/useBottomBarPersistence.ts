@@ -10,6 +10,8 @@ interface PersistDeps {
   storedActionId: ComputedRef<string | undefined>
   showEditor: ComputedRef<boolean>
   promptBinding: ComputedRef<'none' | 'text'>
+  /** 对话模式：输入框内容存 barPrompt（与节点正文 data.text 解耦） */
+  conversation?: ComputedRef<boolean>
   prompt: Ref<string>
   promptDoc: Ref<unknown>
 }
@@ -29,7 +31,11 @@ export function useBottomBarPersistence(deps: PersistDeps) {
       deps.ctx.get('doc').updateNode(deps.props.id, {
         data: {
           barValues: { ...deps.values.value, actionId: deps.currentId.value },
-          ...(deps.showEditor.value ? promptPersistFields(deps.promptBinding.value, deps.prompt.value) : {}),
+          ...(deps.showEditor.value
+            ? deps.conversation?.value
+              ? promptPersistFields('none', deps.prompt.value)
+              : promptPersistFields(deps.promptBinding.value, deps.prompt.value)
+            : {}),
           ...(deps.showEditor.value && deps.promptDoc.value ? promptDocPersistFields(deps.promptDoc.value) : {}),
         },
       })

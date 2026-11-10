@@ -479,7 +479,18 @@ export class TaskManager {
     await this.writeRunState(
       job,
       result.ok
-        ? { status: 'done', progress: 100, message: '已完成', actionId: action.id, taskId: job.id, urls: result.urls ?? [] }
+        ? {
+            status: 'done',
+            progress: 100,
+            message: '已完成',
+            actionId: action.id,
+            taskId: job.id,
+            urls: result.urls ?? [],
+            /** 文本任务带总量：用户想知道这次一共用了多少 token（只是过程信息） */
+            ...(isTextProduct && typeof result.text === 'string'
+              ? { stats: { chars: [...result.text].length, tokens: Math.round([...result.text].length * 0.9) } }
+              : {}),
+          }
         : {
             status: 'error',
             label: '执行失败',

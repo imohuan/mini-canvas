@@ -53,6 +53,24 @@ const props = withDefaults(
     label?: string
     /** 0-100；`null` = 不确定态（显示旋转的 SVG 图标，不编一个假数字） */
     percent?: number | null
+    /**
+     * 大数字（不设上限）。与 `suffix` 拼起来显示，例如 `20000` + `tokens`。
+     * 用户 2026-11-10：进度不一定是百分比 —— token 数会超过 100，不能钳。
+     * 传了 `progressText` 时以它为准（见下）。
+     */
+    value?: number | null
+    /** 数字后缀（默认 `%`）；token 这类传 `tokens`。没有 `value` 时不显示 */
+    suffix?: string
+    /**
+     * 整段进度文案（优先于 value + suffix）。
+     * 想让加载层显示任意说法时用它 —— 例如「已接收 1.2k tokens」。
+     */
+    progressText?: string
+    /**
+     * 正在返回的一小段文本（用户 2026-11-10：「实时流输出的滑动文本效果」）。
+     * 只会显示尾部十几二十个字，不是整篇 —— 整篇在节点正文里。
+     */
+    streamTail?: string
     /** 下方那行阶段文案 */
     message?: string
     /** 只有失败态用：下一行小字（告诉用户接下来能做什么） */
@@ -74,6 +92,9 @@ const props = withDefaults(
     message: '',
     hint: '',
     startedAt: 0,
+    suffix: '%',
+    progressText: '',
+    streamTail: '',
   },
 )
 
@@ -187,6 +208,35 @@ const shownPercent = computed(() => {
   if (typeof p !== 'number' || !Number.isFinite(p)) return null
   return Math.max(0, Math.min(100, Math.round(p)))
 })
+const shownValue = computed(() => {
+  const v = props.value
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    // 没给 value 时沿用老属性 percent（0-100）—— 既有调用方一行都不用改
+    return shownPercent.value
+  }
+  // 不设上限：token 数会超过 100（用户 2026-11-10）。只挡负数。
+  return Math.max(0, Math.round(v))
+})
+
+/** 整段进度文案：传了 progressText 就用它，否则 value + suffix */
+const progressLabel = computed(() => {
+  if (props.progressText) return props.progressText
+  if (shownValue.value === null) return null
+  return String(shownValue.value) + (props.suffix ?? '')
+})
+
+/** 数字 + 后缀分开画（样式不同：大号数字 + 小号后缀） */
+const splitProgress = computed(
+  () => props.progressText === '' && shownValue.value !== null,
+)
+
+/** 实时流尾部文本：只留最后 20 个字符 */
+const tailText = computed(() => {
+  const s = (props.streamTail ?? '').replace(/\s+/g, ' ').trim()
+  if (s === '') return ''
+  return [...s].slice(-20).join('')
+})
+
 
 /** 输出量文案（文本对话）：只有执行方给了 stats 才有 */
 const statsText = computed(() => {
@@ -248,8 +298,9 @@ onBeforeUnmount(() => {
       <i class="ld-dot" aria-hidden="true" />
       <span v-if="label" class="nls-chip-label">{{ label }}</span>
       <span class="nls-chip-msg">{{ message || '处理中…' }}</span>
-      <span v-if="statsText" class="nls-chip-stats">{{ statsText }}</span>
-      <span v-if="shownPercent !== null" class="nls-chip-pct">{{ shownPercent }}%</span>
+      <span v-if="tailText" class="nls-chip-tail">…{{ tailText }}</span>
+      <span v-if="progressLabel !== null" class="nls-chip-pct">{{ progressLabel }}</span>
+      <span v-else-if="statsText" class="nls-chip-stats">{{ statsText }}</span>
     </template>
 
     <!-- 整块形态 -->
@@ -264,11 +315,15 @@ onBeforeUnmount(() => {
 
       <div class="ld-progress">
         <span v-if="tone === 'error'" class="ld-fail-mark" aria-hidden="true">!</span>
-        <!-- 有进度就给数字；没有就用一个旋转的 SVG 图标（不编假百分比，也不放三个点） -->
-        <template v-else-if="shownPercent !== null">
-          <span class="ld-num">{{ shownPercent }}</span>
-          <span class="ld-pct">%</span>
+        <!--
+          有进度就给数字；没有就用一个旋转的 SVG 图标（不编假百分比，也不放三个点）。
+          两段拆开画是为了大小字重不同（大号数字 + 小号后缀）。传了 progressText 时整段一起画。
+        -->
+        <template v-else-if="splitProgress">
+          <span class="ld-num">{{ shownValue }}</span>
+          <span class="ld-pct">{{ suffix }}</span>
         </template>
+        <span v-else-if="progressLabel !== null" class="ld-progress-text">{{ progressLabel }}</span>
         <svg v-else class="ld-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <circle class="ld-spinner-track" cx="12" cy="12" r="9" />
           <circle class="ld-spinner-arc" cx="12" cy="12" r="9" />
@@ -278,7 +333,7 @@ onBeforeUnmount(() => {
       <!-- 阶段文案 / 失败原因：第 3 档不写（缩到那份上只剩一句糊字） -->
       <template v-if="tier !== 3">
         <p class="ld-prompt">{{ message || (tone === 'error' ? '执行失败' : '执行中…') }}</p>
-        <p v-if="statsText && tone !== 'error'" class="ld-stats">{{ statsText }}</p>
+        <p v-if="tailText && tone !== 'error'" class="ld-stream-tail">…{{ tailText }}</p>
         <p v-if="tone === 'error' && hint" class="ld-hint">{{ hint }}</p>
       </template>
 
@@ -488,6 +543,42 @@ html.dark .nls-root.is-error {
   font-weight: 600;
   line-height: 1;
   color: var(--nls-pct);
+}
+
+/* 整段进度文案（progressText）：字号介于大数字与后缀之间 */
+.ld-progress-text {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--nls-num);
+  text-shadow: var(--nls-num-glow);
+}
+.nls-root.is-tier2 .ld-progress-text {
+  font-size: 17px;
+}
+.nls-root.is-tier3 .ld-progress-text {
+  font-size: 13px;
+}
+
+/* 实时流尾部（「正在返回的那一小段」）：比阶段文案更弱，像终端回显 */
+.ld-stream-tail {
+  position: relative;
+  z-index: 2;
+  margin: 3px 0 0;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--nls-timer-ink);
+  opacity: 0.85;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 /* 不确定态：一个旋转的 SVG 光圈（不编百分比、不放三个点） */
@@ -727,6 +818,16 @@ html.dark .nls-root.is-chip {
   z-index: 2;
   color: var(--nls-timer-ink);
   font-variant-numeric: tabular-nums;
+}
+.nls-chip-tail {
+  position: relative;
+  z-index: 2;
+  max-width: 12em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--nls-timer-ink);
+  opacity: 0.85;
 }
 .nls-root.is-chip.is-error .ld-dot {
   animation: none;

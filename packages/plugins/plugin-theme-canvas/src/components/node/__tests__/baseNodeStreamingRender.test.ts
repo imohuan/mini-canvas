@@ -85,13 +85,13 @@ describe('流式生成：露出正文，只挂状态条', () => {
     expect(html).not.toContain('nls-root is-fill')
   })
 
-  it('状态条显示已输出量（字数 / tokens）', async () => {
+  it('状态条把已收 token 数当大数字显示（用户 2026-11-10：20000tokens 那种）', async () => {
     const html = await renderNode(r, {
       text: '一些已经生成的文字',
       runState: { status: 'running', progress: 40, stats: { chars: 9, tokens: 14 } },
     })
-    expect(html).toContain('已输出 9 字')
-    expect(html).toContain('≈14 tokens')
+    expect(html).toContain('14')
+    expect(html).toContain('tokens')
   })
 
   it('加载中但还没有正文 → 仍然全屏加载件（没内容可看）', async () => {

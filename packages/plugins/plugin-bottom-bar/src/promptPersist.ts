@@ -26,10 +26,19 @@ function asText(v: unknown): string | undefined {
  * 注意：`data.text` 是**空串**时也要优先它 —— 那表示“文本节点内容就是空”，
  * 不该串去读一个可能残留的 barPrompt。
  */
-export function initialPromptText(data: Record<string, unknown> | undefined | null): string {
+export function initialPromptText(
+  data: Record<string, unknown> | undefined | null,
+  opts?: { preferBarPrompt?: boolean },
+): string {
+  const bar = asText(data?.barPrompt)
+  //
+  // 对话输入（文本节点 agent:chat）**优先 barPrompt**，绝不读 data.text：
+  // data.text 是节点正文 = 模型答案。共用会让「发送后输入框被答案顶掉」，
+  // 也会让占位符和正文叠在一起（用户 2026-11-10 的两条问题）。
+  if (opts?.preferBarPrompt) return bar ?? ''
   const text = asText(data?.text)
   if (text !== undefined) return text
-  return asText(data?.barPrompt) ?? ''
+  return bar ?? ''
 }
 
 /**

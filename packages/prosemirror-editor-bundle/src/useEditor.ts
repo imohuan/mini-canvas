@@ -192,6 +192,15 @@ export function useEditor(
   }
 
   // 导出文本，将变量替换为真实值
+
+  /**
+   * 编辑器正文是否为空（用户 2026-11-10：占位符要靠它判断）。
+   * 只看文档里有没有文字/标签 —— 空段落不算内容。
+   */
+  function isEmpty(): boolean {
+    if (!view) return true
+    return plainTextOf(view.state.doc).trim() === '' && view.state.doc.childCount <= 1
+  }
   function exportText(): string {
     if (!view) return "";
     return exportTextOf(view.state.doc);
@@ -1089,6 +1098,8 @@ export function useEditor(
     previewPosition,
     // 导出方法
     exportText,
+    /** 正文是否为空（占位符判断用） */
+    isEmpty,
     serializeDoc,
     deserializeDoc,
     focusEnd,

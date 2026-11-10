@@ -503,6 +503,32 @@ describe('参数区：唯一一个下拉参数直接铺到外面（不套二级�
  * plugin-theme-canvas 的 nodeLoadingStateRender / baseNodeSlotsRender。
  */
 describe('底栏不承担状态展示', () => {
+
+describe('输入框占位符：有文字就不画（用户 2026-11-10 的叠字）', () => {
+  /**
+   * 截图里的重叠是「双击编辑」（节点正文）和占位符画在同一位置。
+   * 契约：只要输入框里有内容，占位符就不能出现 —— 两者永不同时渲染。
+   */
+  it('barPrompt 有内容 → 不出现 nb-placeholder', async () => {
+    const html = await render(
+      NodeBottomBar as Component,
+      '41',
+      { barPrompt: '我提的问题' },
+      makeCtx({ selectedIds: ['41'] }),
+    )
+    expect(html).not.toContain('nb-placeholder')
+  })
+
+  it('barPrompt 为空 → 出现占位符提示', async () => {
+    const html = await render(
+      NodeBottomBar as Component,
+      '42',
+      {},
+      makeCtx({ selectedIds: ['42'] }),
+    )
+    expect(html).toContain('nb-placeholder')
+  })
+})
   /** 用户要求：所有任务消息只出现在节点上，底栏不再显示任何状态文案 */
   it('底栏不显示任何状态文案（错误/完成都只在节点上）', async () => {
     for (const rs of [

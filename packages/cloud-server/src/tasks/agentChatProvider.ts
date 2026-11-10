@@ -281,6 +281,8 @@ export function createAgentChatProvider(deps: AgentChatDeps): Provider {
     st.text = acc
     st.progress = 100
     st.message = '已完成'
+    // 终态也带上总量：用户想知道这次一共收了多少 token（过程信息，不进历史）
+    st.stats = estimateStats(acc)
   }
 }
 
