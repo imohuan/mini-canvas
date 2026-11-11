@@ -724,6 +724,7 @@ const ctrlApi = useCtrlResourceDrag({
   renderEdges,
   refTiles,
   barShown,
+  barEl,
   bindTileToNode,
   markDragEnd,
   cancelPreviewTimers: () => { cancelPreviewSchedule(); cancelPreviewClose() },

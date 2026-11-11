@@ -5,6 +5,7 @@ import { nodeMediaOf, judgeSlotHover } from '../refSlotDrag'
 import {
   canEnterCtrlDragMode,
   ctrlBlockedByEditable,
+  pointerOnBottomBarCard,
   registerStartDragHandler,
 } from '../ctrlDragMode'
 import {
@@ -21,6 +22,8 @@ interface CtrlDeps {
   renderEdges: CanvasRenderContext['renderEdges']
   refTiles: Ref<RefTile[]>
   barShown: Ref<boolean>
+  /** 底栏根元素：Ctrl 门槛要读「鼠标是否停在这上面的某张卡片」 */
+  barEl: Ref<HTMLElement | null>
   bindTileToNode(tile: RefTile, nodeId: string, name: string): Promise<void>
   /** 与卡片点击共用同一份「刚拖完」时间戳（拖拽余波不再触发按钮点击） */
   markDragEnd(x: number, y: number): void
@@ -55,6 +58,7 @@ export function useCtrlResourceDrag(deps: CtrlDeps) {
       repeat: ev.repeat,
       barShown: deps.barShown.value,
       editableTarget,
+      hoveringCard: pointerOnBottomBarCard(deps.barEl.value),
     })) return
     if (ctrlSuppressed()) return
     clearCtrlSuppression()

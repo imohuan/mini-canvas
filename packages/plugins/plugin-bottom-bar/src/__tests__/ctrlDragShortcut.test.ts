@@ -13,15 +13,19 @@
  *
  * 所以门槛必须喂**底栏本体是否真的渲染**（visible && hasActions && !submitted），
  * 不能喂外壳是否存在。
+ *
+ * 2026-11-11 更新：底栏开着还不够，**鼠标必须停在某张素材卡上**才进入，
+ * 在画布空白处或底栏其它位置按 Ctrl 不触发。
  */
 import { describe, expect, it } from 'vitest'
-import { canEnterCtrlDragMode, ctrlBlockedByEditable } from '../ctrlDragMode'
+import { canEnterCtrlDragMode, ctrlBlockedByEditable, pointerOnBottomBarCard } from '../ctrlDragMode'
 
 const base = {
   key: 'Control',
   repeat: false,
   barShown: true,
   editableTarget: false,
+  hoveringCard: true,
 }
 
 describe('Ctrl 进入选择态：只在底栏真的显示时', () => {
@@ -44,6 +48,10 @@ describe('Ctrl 进入选择态：只在底栏真的显示时', () => {
   it('不是 Ctrl 键 → 不进入', () => {
     expect(canEnterCtrlDragMode({ ...base, key: 'Shift' })).toBe(false)
   })
+
+  it('鼠标不在任何素材卡上 → 不进入（用户 2026-11-11）', () => {
+    expect(canEnterCtrlDragMode({ ...base, hoveringCard: false })).toBe(false)
+  })
 })
 
 describe('Ctrl 的可编辑区保护：底栏自己的输入框要放行（用户 2026-10-28 真机）', () => {
@@ -57,5 +65,24 @@ describe('Ctrl 的可编辑区保护：底栏自己的输入框要放行（用�
 
   it('焦点在画布 / 普通元素 → 不拦', () => {
     expect(ctrlBlockedByEditable({ inEditable: false, inBottomBar: false })).toBe(false)
+  })
+})
+
+describe('鼠标是否停在素材卡上（用户 2026-11-11）', () => {
+  /** 用一个假的底栏根节点：只关心 querySelector 的返回值 */
+  const fakeBar = (hovered: boolean) =>
+    ({ querySelector: (sel: string) => (hovered && sel === '.nb-card:hover' ? {} : null) }) as unknown as HTMLElement
+
+  it('卡片被鼠标盖住 → true', () => {
+    expect(pointerOnBottomBarCard(fakeBar(true))).toBe(true)
+  })
+
+  it('鼠标在别处（画布 / 输入框 / 底栏其它位置）→ false', () => {
+    expect(pointerOnBottomBarCard(fakeBar(false))).toBe(false)
+  })
+
+  it('底栏还没挂上 / 已卸载 → false（不抛错）', () => {
+    expect(pointerOnBottomBarCard(null)).toBe(false)
+    expect(pointerOnBottomBarCard(undefined)).toBe(false)
   })
 })

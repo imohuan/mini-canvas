@@ -47,11 +47,28 @@ export function canEnterCtrlDragMode(input: {
   barShown: boolean
   /** 焦点是否在输入/可编辑区（那里 Ctrl 是文本快捷键） */
   editableTarget: boolean
+  /**
+   * 鼠标当前是否停在底栏的某张素材卡上（用户 2026-11-11）。
+   * 只有鼠标在卡片上按 Ctrl 才进入，避免在画布空白处误触。
+   */
+  hoveringCard: boolean
 }): boolean {
   if (input.key !== 'Control' || input.repeat) return false
   if (!input.barShown) return false
   if (input.editableTarget) return false
+  if (!input.hoveringCard) return false
   return true
+}
+
+/**
+ * 鼠标此刻是否停在底栏的某张素材卡上（读浏览器自己的 :hover，不用自己记状态）。
+ *
+ * 用户口径（2026-11-11）：按 Ctrl 之前先看鼠标在不在卡片上；在画布空白处、
+ * 输入框里或底栏其它地方按 Ctrl 都不该进入拖拽态。
+ */
+export function pointerOnBottomBarCard(barEl: HTMLElement | null | undefined): boolean {
+  if (!barEl) return false
+  return barEl.querySelector('.nb-card:hover') !== null
 }
 
 /**
