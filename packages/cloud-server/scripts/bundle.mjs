@@ -36,6 +36,14 @@ async function npmExternalNames() {
 
 const externals = await npmExternalNames()
 
+/**
+ * 发布产物要不要压缩 / 带 sourcemap。
+ *
+ * 默认压缩、不带 map：`npx` 装下来的包要尽量小，4 MB 的 map 没有意义。
+ * 本地排查线上问题时设 `PLUME_DEBUG_BUILD=1`，保留未压缩产物与 sourcemap。
+ */
+const DEBUG_BUILD = process.env.PLUME_DEBUG_BUILD === '1'
+
 // 先清 dist：esbuild 只写它认识的文件、**不会删旧产物**。
 // 之前用 tsc 产出的 server.js / static.js / *.d.ts 会残留，与新打包产物混在一起（旧代码仍可被 import）。
 await rm(path.join(PACKAGE_ROOT, 'dist'), { recursive: true, force: true })
@@ -51,7 +59,8 @@ await build({
   format: 'esm',
   platform: 'node',
   target: 'node20',
-  sourcemap: true,
+  minify: !DEBUG_BUILD,
+  sourcemap: DEBUG_BUILD,
   // 工作区包（@plume-canvas/*）不在 dependencies 里 → 自动内联
   external: externals,
 

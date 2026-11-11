@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@prismshadow/penguin-core@0.2.13':
-    hash: 732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547
+    hash: 0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe
     path: patches/@prismshadow__penguin-core@0.2.13.patch
 
 importers:
@@ -114,7 +114,7 @@ importers:
         version: link:../plugins/plugin-agent
       '@prismshadow/penguin-core':
         specifier: 0.2.13
-        version: 0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
       hono:
         specifier: ^4.6.0
         version: 4.13.5
@@ -125,6 +125,9 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
+      '@microsoft/api-extractor':
+        specifier: 7.58.9
+        version: 7.58.9(@types/node@24.13.2)
       '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -214,7 +217,7 @@ importers:
         version: link:../../kernel
       '@prismshadow/penguin-core':
         specifier: 0.2.13
-        version: 0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.38(typescript@6.0.3))
@@ -4115,10 +4118,6 @@ packages:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
 
-  brace-expansion@5.0.6:
-    resolution: {integrity: sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==}
-    engines: {node: 18 || 20 || >=22}
-
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
@@ -7683,7 +7682,7 @@ snapshots:
       - ws
       - zod
 
-  '@prismshadow/penguin-core@0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
+  '@prismshadow/penguin-core@0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/client': 2.2.0
       '@penguinharness/agent-company': 0.2.13
@@ -9031,10 +9030,6 @@ snapshots:
       balanced-match: 1.0.2
 
   brace-expansion@5.0.12:
-    dependencies:
-      balanced-match: 4.0.4
-
-  brace-expansion@5.0.6:
     dependencies:
       balanced-match: 4.0.4
 
@@ -10418,7 +10413,7 @@ snapshots:
 
   minimatch@10.2.3:
     dependencies:
-      brace-expansion: 5.0.6
+      brace-expansion: 5.0.12
 
   minimatch@10.2.6:
     dependencies:
