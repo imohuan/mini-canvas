@@ -94,9 +94,9 @@ async function save(): Promise<void> {
       title="会话标题模型"
       description="新会话第一轮结束后，用这个模型总结对话内容生成标题（替代「首句截断」）。两个都留空 = 用会话默认模型；起名失败时仍回落首句截断，不影响对话。"
     >
-      <ShadcnSettingsRow label="Provider" description="只有配了密钥的渠道能选">
+      <ShadcnSettingsRow label="渠道" description="只有配了密钥的渠道能选">
         <Select :model-value="provider || DEFAULT_VALUE" @update:model-value="pickProvider(String($event))">
-          <SelectTrigger class="ap-select" size="sm" aria-label="会话标题 Provider">
+          <SelectTrigger class="ap-select" size="sm" aria-label="会话标题渠道">
             <SelectValue placeholder="选择渠道" />
           </SelectTrigger>
           <!-- 设置弹窗里的浮层：popper + 抬高到遮罩之上 -->

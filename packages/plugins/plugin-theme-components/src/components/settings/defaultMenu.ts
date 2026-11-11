@@ -32,7 +32,7 @@ const navs: SettingsNavDef[] = [
    */
   { id: 'nav/personal/shortcuts', category: C.personal, title: '快捷键', order: 20 },
   { id: 'nav/appearance/theme', category: C.appearance, title: '主题', order: 10, icon: Brush },
-  { id: 'nav/integration/agent', category: C.integration, title: 'Agent', order: 10 },
+  { id: 'nav/integration/agent', category: C.integration, title: '智能助手', order: 10 },
   { id: 'nav/integration/plugins', category: C.integration, title: '插件', order: 20, icon: Puzzle },
   { id: 'nav/integration/connect', category: C.integration, title: '连接', order: 30 },
   { id: 'nav/canvas/interaction', category: C.canvas, title: '交互', order: 10 },
@@ -64,7 +64,7 @@ const s = (
 
 const sections: SettingsSectionDef[] = [
   s('personal/general', 'basic', '基础', '通用/基础', 10),
-  s('integration/agent', 'settings', 'Agent 设置', '集成/Agent', 10),
+  s('integration/agent', 'settings', '智能助手设置', '集成/Agent', 10),
   s('integration/plugins', 'catalog', '插件管理', '集成/插件', 10),
   s('appearance/theme', 'shape', '形状', '外观/形状', 10),
   s('appearance/theme', 'font', '字体', '外观/字体', 20),

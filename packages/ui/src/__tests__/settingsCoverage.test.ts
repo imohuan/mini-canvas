@@ -292,7 +292,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     // 「主题工作台」是 demo-kit 的二级整页，冷启动没有 demo-kit → 一级里应当一条都没有；
     // 另两个是真实一级项，必须恰好一条。
     expect(titles.filter((t) => t === '主题工作台')).toHaveLength(0)
-    for (const title of ['插件', 'Agent']) {
+    for (const title of ['插件', '智能助手']) {
       expect(titles.filter((t) => t === title), title + ' 出现了重复一级入口').toHaveLength(1)
     }
 

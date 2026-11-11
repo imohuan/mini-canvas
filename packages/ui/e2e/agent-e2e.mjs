@@ -173,7 +173,7 @@ if (needsModel > 0) {
   await page.locator('.psd-nav-item', { hasText: 'Agent' }).first().click()
   await page.waitForTimeout(400)
   check('设置里有 Agent 一级导航', (await page.locator('.asn').count()) > 0)
-  await page.locator('.asp-tab', { hasText: 'Provider' }).first().click()
+  await page.locator('.asp-tab', { hasText: '模型接入' }).first().click()
   await page.waitForTimeout(500)
   await snap('settings-models')
   // 新 Provider UI：填渠道 → 拉取 → 用 tag 勾选 → 保存
@@ -202,11 +202,11 @@ await page.locator('button[aria-label="Agent 设置"]').click()
 await page.waitForTimeout(600)
 await page.locator('.psd-nav-item', { hasText: 'Agent' }).first().click()
 await page.waitForTimeout(300)
-// Agent 页内部的分页签是**页面自己画的**（.asp-tab）：Provider / 技能 / MCP / 审批规则 / 系统提示词。
+// Agent 页内部的分页签是**页面自己画的**（.asp-tab）：模型接入 / 技能 / MCP / 审批规则 / 三种提示词。
 // 为什么不用面板的 .psd-tab-item：那是面板的页签标签，把整页注册进去会把页签条撑到 600px、
 // 内容区被压成 22px（实测），整页都看不见。
 const aspTabs = await page.locator('.asp-tab').allInnerTexts()
-check('设置里有一排分页签', aspTabs.includes('Provider') && aspTabs.includes('技能'), aspTabs.join('/'))
+check('设置里有一排分页签', aspTabs.includes('模型接入') && aspTabs.includes('技能'), aspTabs.join('/'))
 for (const a of [
   { tab: '技能', body: '.ap-skills' },
   { tab: 'MCP', body: '.ap-mcp' },
@@ -245,16 +245,20 @@ for (const a of [
 const bodyBox = await page.locator('.psd-content-body').boundingBox()
 check('设置内容区高度正常（没被压扁）', !!bodyBox && bodyBox.height > 200, 'h=' + (bodyBox ? Math.round(bodyBox.height) : 'null'))
 // Provider 页（用户口径：一个渠道配一批模型，拉取后 tag 多选 / 反选 / 全选）
-await page.locator('.asp-tab', { hasText: 'Provider' }).first().click()
+await page.locator('.asp-tab', { hasText: '模型接入' }).first().click()
 await page.waitForTimeout(600)
-check('Provider 页按渠道聚合（表头是「渠道」）', (await page.locator('.ap-models .ap-table .ap-tr.is-head').first().innerText()).includes('渠道'))
+check('模型接入页按渠道聚合（每行一个渠道）', (await page.locator('.ap-models .ap-list .ap-list-row').count()) > 0)
 const pullBtn = page.locator('.ap-models button', { hasText: '拉取模型清单' }).first()
-check('Provider 页有「拉取模型清单」按钮', (await pullBtn.count()) > 0)
-check('Provider 页有「新建渠道」按钮', (await page.locator('.ap-models button', { hasText: '新建渠道' }).count()) > 0)
-check('已配置渠道每行都有「编辑」', (await page.locator('.ap-models .ap-table .ap-tr:not(.is-head) button', { hasText: '编辑' }).count()) > 0)
+check('已配置渠道每行都有「配置」', (await page.locator('.ap-models .ap-list .ap-list-row button', { hasText: '配置' }).count()) > 0)
+check('模型接入页有「添加渠道」按钮', (await page.locator('.ap-models button', { hasText: '添加渠道' }).count()) > 0)
+// 列表态不再同时显示长表单：点「配置」进二级编辑页后才有「拉取模型清单」
+await page.locator('.ap-models .ap-list .ap-list-row button', { hasText: '配置' }).first().click()
+await page.waitForTimeout(400)
+check('点配置进入二级编辑页（有返回按钮）', (await page.locator('.ap-models button', { hasText: '返回渠道列表' }).count()) > 0)
+check('模型接入页有「拉取模型清单」按钮', (await pullBtn.count()) > 0)
 if ((await pullBtn.count()) > 0) {
   // 把编辑区的 Base URL 指向本地假上游，再拉 —— 清单就有确定的 4 个模型
-  await page.locator('.ap-models .ap-field', { hasText: 'Base URL' }).locator('input')
+  await page.locator('.ap-models .shadcn-settings-row', { hasText: '接口地址' }).locator('input')
     .fill('http://127.0.0.1:' + FAKE_UPSTREAM_PORT + '/v1')
   await page.waitForTimeout(200)
   await pullBtn.click()

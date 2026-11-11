@@ -54,7 +54,11 @@ export class AgentConfigBase {
     }
   }
 
-  /** 写入系统提示词（空串也允许 —— 那就是「没有额外指令」） */
+  /**
+   * 写入系统提示词（空串也允许 —— 那就是「没有额外指令」）。
+   *
+   * 这里**不展开**本站变量：用户随时会回来改一行，展开一次就把记号冻成当时的值。
+   */
   async setSystemPrompt(text: string): Promise<void> {
     await this.ensureInit()
     // 与「建会话时临时替换 AGENTS.md」排同一条队：否则一次保存可能落在
@@ -90,6 +94,9 @@ export class AgentConfigBase {
     const release = await this.acquirePromptLock()
     let previous = ''
     const target = sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID)
+    /** 模板原文与展开后的正文：只有模板真的带本站变量时才写盘 */
+    let templateRaw = ''
+    let templateExpanded = ''
     try {
       previous = await fs.readFile(target, 'utf8').catch(() => '')
       await fs.mkdir(path.dirname(target), { recursive: true })
@@ -99,7 +106,25 @@ export class AgentConfigBase {
       // **用户自己的 AGENTS.md 排在最前**：模式提示词 / 插件小节都加在它后面，谁都不顶掉谁。
       const combined = [previous.trim(), text].filter(Boolean).join('\n\n')
       await fs.writeFile(target, this.expandContext(combined), 'utf8')
+
+      // **系统提示词模板也支持同一套本站变量**（用户口径 2026-11-11：三种提示词共用一套变量）。
+      // SDK 只认它自己的 {{CWD}} / {{AGENTS_MD}} 等名字，不认 {{BACKEND_BASE_URL}}；
+      // 所以卡在「建会话前」把本站记号临时换成当前值，建完立刻还原（与 AGENTS.md 同一段锁）。
+      const cfg = await loadSystemConfig(this.sdkRoot)
+      templateRaw = String((cfg as { system_prompt?: unknown }).system_prompt ?? '')
+      templateExpanded = this.expandContext(templateRaw)
+      if (templateExpanded !== templateRaw) {
+        await this.withConfigLock(() =>
+          writeSystemConfig(this.sdkRoot, { ...cfg, system_prompt: templateExpanded }),
+        )
+      }
     } catch (err) {
+      // 写 AGENTS.md 之后、模板展开之前失败时，把 AGENTS.md 收回去，别把展开后的值留在盘上。
+      try {
+        await fs.writeFile(target, previous, 'utf8')
+      } catch {
+        /* 收不回去也只能这样：锁必须还，错误照抛 */
+      }
       // 写不进去就把锁还回去：否则这一条失败会把它后面的建会话全卡死。
       release()
       throw err
@@ -109,6 +134,19 @@ export class AgentConfigBase {
         await fs.writeFile(target, previous, 'utf8')
       } catch {
         /* 还原失败：保住眼下这条会话，别把错抛出去 */
+      }
+      // 模板还原：只在「当前还是我们写进去的那份」时退回原文。
+      // 否则说明这期间用户 / 别的写者改过配置，不能拿旧值盖掉。
+      try {
+        if (templateExpanded && templateExpanded !== templateRaw) {
+          await this.withConfigLock(async () => {
+            const fresh = await loadSystemConfig(this.sdkRoot)
+            if (String((fresh as { system_prompt?: unknown }).system_prompt ?? '') !== templateExpanded) return
+            await writeSystemConfig(this.sdkRoot, { ...fresh, system_prompt: templateRaw })
+          })
+        }
+      } catch {
+        /* 模板还原失败也只是留下展开后的值，不影响这一轮 */
       } finally {
         // 无论还原成败都要放锁，否则后面排队的建会话全卡死
         release()
@@ -292,6 +330,30 @@ export class AgentConfigBase {
       await writeSystemConfig(this.sdkRoot, next)
     })
     return { ok: true, missing: [] }
+  }
+
+  /**
+   * 写系统提示词模板（用户口径 2026-11-11：三种提示词用同一个编辑器，模板也能改）。
+   *
+   * 与 restoreTemplate 共用配置写锁。**必须保留 {{AGENTS_MD}}**：它是把 Agent 提示词 /
+   * 模式提示词送进模型的唯一通道，删掉后界面里怎么改都不会生效 —— 这种保存直接拒绝，
+   * 比让用户事后猜「为什么没反应」好。
+   *
+   * 模板里的本站变量**原样落盘**，建会话时再展开（见 withSystemPrompt），
+   * 所以端口 / 目录变了，下一次会话自动跟着变。
+   */
+  async saveTemplate(text: string): Promise<{ ok: boolean; missing: string[] }> {
+    await this.ensureInit()
+    const next = String(text ?? '')
+    const missing = templateMissing(next)
+    if (missing.includes('{{AGENTS_MD}}')) {
+      throw new Error('模板里必须有 {{AGENTS_MD}}，否则 Agent 提示词和模式提示词都进不去模型')
+    }
+    await this.withConfigLock(async () => {
+      const cfg = await loadSystemConfig(this.sdkRoot)
+      await writeSystemConfig(this.sdkRoot, { ...cfg, system_prompt: next })
+    })
+    return { ok: missing.length === 0, missing }
   }
 
   /** 数据根（fork 写 Trace 种子要按它推 Trace 目录；只给服务内部用） */

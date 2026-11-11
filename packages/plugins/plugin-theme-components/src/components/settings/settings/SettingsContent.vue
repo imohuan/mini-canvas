@@ -44,7 +44,8 @@ function selectTab(key: string): void {
   <div class="psd-panel">
     <header class="psd-panel-head">
       <h3 class="psd-panel-title">{{ activeEntry?.title || '设置' }}</h3>
-      <p v-if="activeEntry?.leaves.length" class="psd-panel-meta">
+      <!-- 自绘整页自己会说明内容，别再显示「1 个分组」这种对用户没信息量的计数 -->
+      <p v-if="activeEntry?.leaves.length && !activeEntry?.page" class="psd-panel-meta">
         {{ activeEntry.leaves.length }} 个分组
       </p>
     </header>

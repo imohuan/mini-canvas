@@ -287,6 +287,11 @@ export class AgentApi {
     return this.json('/api/agent/template/restore', { method: 'POST' })
   }
 
+  /** 写系统提示词模板（模板里必须有 {{AGENTS_MD}}；本站变量原样存，建会话时展开） */
+  saveTemplate(text: string): Promise<{ ok?: boolean; template?: TemplateHealthView }> {
+    return this.json('/api/agent/template', { method: 'PUT', body: JSON.stringify({ text }) })
+  }
+
   /** 读模式提示词清单（住后台 KV） */
   prompts(): Promise<{ prompts?: unknown[] }> {
     return this.json('/api/agent/prompts')

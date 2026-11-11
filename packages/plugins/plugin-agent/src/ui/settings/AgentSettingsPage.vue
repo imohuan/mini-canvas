@@ -3,7 +3,7 @@
  * AgentSettingsPage —— 设置面板里 Agent 这一页的整页。
  *
  * 结构（用户口径：上面一排页签切换不同内容）：
- *   ① 一行页签（Provider / 技能 / MCP / 审批规则 / 系统提示词…）
+ *   ① 一行页签（模型接入 / 技能 / MCP / 审批规则 / 三种提示词…）
  *   ② 下面只渲染当前选中的那一块
  *
  * 页签与页面壳子都用 @mini-canvas/ui-kit-shadcn 的 Tabs；业务页面各自负责内容，
@@ -31,16 +31,16 @@ const s = agent.state
 
 type TabKey = 'models' | 'skills' | 'mcp' | 'rules' | 'agentPrompt' | 'prompt' | 'template' | 'title'
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'models', label: 'Provider' },
+  { key: 'models', label: '模型接入' },
   { key: 'skills', label: '技能' },
-  { key: 'mcp', label: 'MCP' },
+  { key: 'mcp', label: 'MCP 服务' },
   { key: 'rules', label: '审批规则' },
   // 三层的名字必须分清楚（用户口径 2026-10-14：从前只有「系统提示词」一个名字，
   // 而它改的其实是模式清单 —— 名字指错了地方，比没有界面更坏）。
   { key: 'agentPrompt', label: 'Agent 提示词' },
   { key: 'prompt', label: '模式提示词' },
-  { key: 'template', label: '系统提示词模板' },
-  { key: 'title', label: '会话标题模型' },
+  { key: 'template', label: '系统提示词' },
+  { key: 'title', label: '标题模型' },
 ]
 const tab = ref<TabKey>('models')
 
@@ -77,8 +77,11 @@ onMounted(() => void agent.refresh())
 /* 整页：上面一行页签 + 下面的内容区；内容区自己滚动，页面本身不撑高外层。 */
 .asp { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .asp-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding-bottom: 2px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
-.asp-tab-list { flex: 1; min-width: 0; height: auto; justify-content: flex-start; flex-wrap: wrap; gap: 2px; overflow-x: auto; padding: 0; }
-.asp-tab { flex: none; height: 30px; padding: 0 10px; border-radius: var(--radius-control, 8px); font-size: 12px; font-weight: 600; }
+/* 页签按内容自动撑高：不写死高度，也不加滚动条。
+   之前 `overflow-x: auto` + 换行会多出一条几像素高的纵向滚动条（2026-11-11 截图），
+   那种滚动没有意义 —— 放不下就换行，让容器自己长高。 */
+.asp-tab-list { flex: 1; min-width: 0; height: auto; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 2px 4px; overflow: visible; padding: 0 0 5px; }
+.asp-tab { flex: none; height: auto; min-height: 30px; padding: 5px 10px; border-radius: var(--radius-control, 8px); font-size: 12px; font-weight: 600; }
 .asp-err { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-danger, #ef4444); }
 .asp-body { display: flex; flex-direction: column; min-width: 0; }
 </style>

@@ -67,6 +67,17 @@ export function createPromptDomain(ctx: AgentServiceContext, deps: AgentServiceD
     state.systemPrompt = typeof r.text === 'string' ? r.text : text
   }
 
+  /** 写系统提示词模板；保存后立刻用后台的体检结果刷新提示（缺 {{CWD}} 之类要看得见） */
+  async function saveTemplate(text: string): Promise<void> {
+    const r = await api.saveTemplate(text)
+    const tpl = r.template
+    state.templateHealth = {
+      ok: tpl?.ok !== false,
+      missing: Array.isArray(tpl?.missing) ? tpl.missing.map(String) : [],
+    }
+    if (typeof tpl?.template === 'string') state.templateText = tpl.template
+  }
+
   /**
    * 把提示词模板恢复成出厂模板（用户点按钮才调）。
    *
@@ -122,6 +133,7 @@ export function createPromptDomain(ctx: AgentServiceContext, deps: AgentServiceD
     loadTitleModel,
     saveTitleModel,
     saveSystemPrompt,
+    saveTemplate,
     restoreTemplate,
   }
 }

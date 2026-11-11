@@ -1,54 +1,34 @@
 <script setup lang="ts">
 /**
- * 提示词页 —— **模式提示词清单**（全能创作 / 剧本创编 + 用户自建），住后台 KV。
+ * PromptPage —— **模式提示词**：一套模式一段追加指令（全能创作 / 剧本创编 + 自建）。
  *
- * 用户口径（2026-10-05）：
- * 1. 这是一个**列表**，每条有自己的名字；
- * 2. 支持自己新增；
- * 3. 内置的两条（我给的两个默认提示词）**不允许删除**；
- * 4. 自建的那些可以增删改。
+ * 结构（用户口径 2026-11-11：选中后进入二级编辑页，不要再左右分栏/列表下塞表单）：
+ *   列表态：一行一套模式（名字 / 是否内置 / 字数），右上「新建模式」；
+ *   编辑态：整页换成这一套的编辑页，左上「返回模式列表」，变量面板与 Agent 提示词共用。
  *
- * 交互：列表点一条 = 右边编辑它；「新增」建一条空白；「保存」整包写回后台。
- * 整包写回而不是逐条接口：清单不长，一次事务写完，不会出现写一半的半个列表。
- *
- * 用户口径（2026-10-14）追加两件：
- * 5. 编辑框旁边要能看到**这台后台的地址与目录**（有些时候要用到）；
- * 6. 能**点一下就插**这些值（见「可用占位符」），不用手抄路径。
- *
- * UI 全部来自 @mini-canvas/ui-kit-shadcn；业务调用与草稿逻辑保持不变。
+ * 数据仍住后台 KV；整包写回，避免半个列表。
  */
-import { computed, onMounted, ref, type ComponentPublicInstance } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { AlertTriangle, Check, Plus, Save, Trash2, Wrench } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { PromptPreset } from '../../service/agentService.js'
-import type { ContextPlaceholderView } from '../../api/agentApi.js'
+import SettingsDetailHeader from './components/SettingsDetailHeader.vue'
+import PromptEditor from './components/PromptEditor.vue'
 import './settings.css'
 
 const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
-const Textarea = useUiComponent('Textarea')
-const ShadcnSettingsRow = useUiComponent('settingsRow')
-const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state
 
-/** 本地编辑副本（保存前不改动 state，避免边打边写） */
 const draft = ref<PromptPreset[]>([])
 const selectedId = ref('')
 const busy = ref(false)
 const saved = ref(false)
 const restoring = ref(false)
 let seq = 0
-
-/** 正文框；「插入占位符」要往光标处插，所以拿组件实例再取真实 DOM */
-const textarea = ref<ComponentPublicInstance | null>(null)
-
-function textareaElement(): HTMLTextAreaElement | null {
-  const el = textarea.value?.$el
-  return el instanceof HTMLTextAreaElement ? el : null
-}
 
 function clone(list: PromptPreset[]): PromptPreset[] {
   return list.map((p) => ({ ...p }))
@@ -68,50 +48,38 @@ onMounted(async () => {
 })
 
 const active = computed(() => draft.value.find((p) => p.id === selectedId.value))
+/** 空串 = 列表态；有值 = 正在编辑这一套 */
+const editingId = ref('')
 
-/** 脏了没（决定「保存」是否可点） */
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(s.prompts))
-
-/** 模板体检不通过（用户写什么提示词都进不了模型）——见 state.templateHealth */
 const templateBroken = computed(() => !s.templateHealth.ok)
+
+function openPreset(p: PromptPreset): void {
+  selectedId.value = p.id
+  editingId.value = p.id
+  saved.value = false
+}
+
+function backToList(): void {
+  editingId.value = ''
+  saved.value = false
+}
 
 function addPreset(): void {
   const id = 'user-' + Date.now() + '-' + ++seq
-  draft.value.push({ id, name: '新提示词', text: '' })
+  draft.value.push({ id, name: '新模式', text: '' })
   selectedId.value = id
+  editingId.value = id
   saved.value = false
 }
 
-/** 删除：内置项不给删（按钮也隐藏，这里是第二道闸） */
-function removePreset(p: PromptPreset): void {
-  if (p.builtin) return
+function removeActive(): void {
+  const p = active.value
+  if (!p || p.builtin) return
   draft.value = draft.value.filter((x) => x.id !== p.id)
-  if (selectedId.value === p.id) selectedId.value = draft.value[0]?.id ?? ''
+  selectedId.value = draft.value[0]?.id ?? ''
+  editingId.value = ''
   saved.value = false
-}
-
-/**
- * 把占位符插到**光标处**（没聚焦就追加到末尾）。
- * 用户多半是在句子中间想插一个路径，插在光标处才顺手。
- */
-function insertToken(token: string): void {
-  const cur = active.value
-  if (!cur) return
-  const el = textareaElement()
-  if (!el) {
-    cur.text = cur.text + token
-    saved.value = false
-    return
-  }
-  const start = el.selectionStart ?? cur.text.length
-  const end = el.selectionEnd ?? start
-  cur.text = cur.text.slice(0, start) + token + cur.text.slice(end)
-  saved.value = false
-  // 插完把光标放到记号后面（连插两个时不会挤在一起）
-  requestAnimationFrame(() => {
-    el.focus()
-    el.setSelectionRange(start + token.length, start + token.length)
-  })
 }
 
 async function save(): Promise<void> {
@@ -136,132 +104,100 @@ async function restore(): Promise<void> {
   }
 }
 
-/** 占位符分两组显示：本服务加的在前（用户多半要的是这些） */
-const ownPlaceholders = computed<ContextPlaceholderView[]>(() =>
-  (s.agentContext?.placeholders ?? []).filter((p) => p.source === 'mini-canvas'),
-)
-const harnessPlaceholders = computed<ContextPlaceholderView[]>(() =>
-  (s.agentContext?.placeholders ?? []).filter((p) => p.source === 'harness'),
-)
+function markDirty(): void {
+  saved.value = false
+}
+
+/** 列表里的一行预览：压掉换行，截一小段，避免长提示词把行撑高 */
+function previewOf(text: string): string {
+  const flat = text.replace(/\s+/g, ' ')
+  return flat.length > 64 ? flat.slice(0, 64) + '…' : flat
+}
 </script>
 
 <template>
   <div class="ap ap-prompt">
     <p v-if="s.error" class="ap-error">{{ s.error }}</p>
 
-    <!-- 模板坏了的时候，「编辑提示词」这件事本身就是无效的 —— 必须先说清楚 -->
     <div v-if="templateBroken" class="ap-warnblock">
       <p class="ap-warnline">
         <AlertTriangle :size="13" />
         <span>提示词模板坏了：缺 <code>{{ s.templateHealth.missing.join('、') }}</code>，
-          这会让你写的提示词一个字都进不到模型。</span>
+          这会让这里写的提示词一个字都进不到模型。</span>
       </p>
-      <p class="ap-hint">恢复出厂模板后即刻生效（不影响上面这份清单，也不动 MCP）。</p>
       <Button variant="outline" size="sm" type="button" :disabled="restoring" @click="restore">
         <Wrench :size="13" aria-hidden="true" /> {{ restoring ? '恢复中…' : '恢复出厂模板' }}
       </Button>
     </div>
 
-    <ShadcnSettingsSection title="模式提示词" :description="draft.length + ' 套 · 选中一套即可编辑它的名字与正文'">
-      <div class="ap-prompt-toolbar">
-        <Button variant="outline" size="sm" type="button" @click="addPreset">
-          <Plus :size="13" aria-hidden="true" /> 新增
-        </Button>
-      </div>
-
-      <!-- 行列表：**role=listitem + 行内一个真 button**（规范 §5 第 2 条：不要在 role=button
-           容器里再嵌真实 button —— 读屏会冲突）。选中动作放在那个 button 上。 -->
-      <div role="list">
-        <ShadcnSettingsRow
-          v-for="p in draft"
-          :key="p.id"
-          :label="p.name"
-          :description="p.builtin ? '内置 · 不可删除' : '自建'"
-        >
-          <div class="pp-actions">
-            <Button
-              :variant="p.id === selectedId ? 'default' : 'outline'"
-              size="sm"
-              type="button"
-              :aria-pressed="p.id === selectedId"
-              :aria-label="'编辑 ' + p.name"
-              @click="selectedId = p.id"
-            >编辑</Button>
-            <Button
-              v-if="!p.builtin"
-              variant="destructive"
-              size="icon-sm"
-              type="button"
-              :aria-label="'删除 ' + p.name"
-              @click.stop="removePreset(p)"
-            >
-              <Trash2 :size="13" aria-hidden="true" />
-            </Button>
-          </div>
-        </ShadcnSettingsRow>
-        <p v-if="!draft.length" class="ap-empty">还没有提示词</p>
-      </div>
-
-      <div v-if="active" class="ap-prompt-edit">
-        <ShadcnSettingsRow label="名称">
-          <Input v-model="active.name" class="ap-input" aria-label="模式名称" placeholder="模式名（显示在下拉里）" @input="saved = false" />
-        </ShadcnSettingsRow>
-        <div class="pp-text-head">
-          <span class="ap-hint">选中这个模式时，追加到「Agent 提示词」后面</span>
-          <span class="ap-count">{{ active.text.length }} 字</span>
+    <!-- ==================== 列表态 ==================== -->
+    <template v-if="!editingId">
+      <div class="ap-list-head">
+        <span class="ap-hint">{{ draft.length }} 套模式 · 选中哪套，就把它那一段接在 Agent 提示词后面</span>
+        <div class="ap-list-actions">
+          <Button v-if="dirty" type="button" size="sm" :disabled="busy" @click="save">
+            <Save :size="13" aria-hidden="true" /> 保存修改
+          </Button>
+          <Button size="sm" type="button" @click="addPreset">
+            <Plus :size="13" aria-hidden="true" /> 新建模式
+          </Button>
         </div>
-        <Textarea
-          ref="textarea"
-          v-model="active.text"
-          class="pp-textarea"
-          aria-label="模式提示词正文"
-          placeholder="写这个模式的追加指令…"
-          @input="saved = false"
-        />
+      </div>
 
-        <!-- 可用占位符：点一下插到光标处（用户口径：有些时候要用到后台地址与目录） -->
-        <details class="pp-ph" :open="!!s.agentContext">
-          <summary>
-            <span>可用占位符（点一下就插进正文）</span>
-            <span class="ap-count">{{ ownPlaceholders.length + harnessPlaceholders.length }} 个</span>
-          </summary>
-          <div class="pp-ph-body">
-            <p class="ap-hint">这些记号会在建会话时换成当时的值 —— 端口换了、目录挪了，下一句就跟着变。</p>
-            <div class="pp-ph-group">
-              <span class="pp-ph-title">这台后台（本站提供）</span>
-              <div class="pp-chips">
-                <Button
-                  v-for="p in ownPlaceholders"
-                  :key="p.token"
-                  variant="outline"
-                  size="xs"
-                  type="button"
-                  class="pp-chip"
-                  :title="p.description + (p.value ? '（当前：' + p.value + '）' : '')"
-                  @click="insertToken(p.token)"
-                ><code>{{ p.token }}</code></Button>
-              </div>
+      <ul class="ap-list">
+        <li v-for="p in draft" :key="p.id" class="ap-list-row">
+          <div class="ap-list-main">
+            <div class="ap-list-title">
+              <span class="ap-list-name">{{ p.name || '未命名模式' }}</span>
+              <span class="ap-badge">{{ p.builtin ? '内置 · 不可删除' : '自建' }}</span>
+              <span v-if="p.id === s.activePromptId" class="ap-badge is-on">当前使用</span>
             </div>
-            <div class="pp-ph-group">
-              <span class="pp-ph-title">运行时环境（SDK 提供，无需本站展开）</span>
-              <div class="pp-chips">
-                <Button
-                  v-for="p in harnessPlaceholders"
-                  :key="p.token"
-                  variant="outline"
-                  size="xs"
-                  type="button"
-                  class="pp-chip"
-                  :title="p.description"
-                  @click="insertToken(p.token)"
-                ><code>{{ p.token }}</code></Button>
-              </div>
-            </div>
+            <div class="ap-list-desc">{{ p.text ? previewOf(p.text) : '还没有正文' }}</div>
+            <div class="ap-list-meta">{{ p.text.length }} 字</div>
           </div>
-        </details>
+          <Button variant="outline" size="sm" type="button" :aria-label="'编辑 ' + p.name" @click="openPreset(p)">编辑</Button>
+        </li>
+      </ul>
+      <p v-if="!draft.length" class="ap-empty">还没有模式提示词</p>
+    </template>
 
-        <div class="pp-foot">
-          <span v-if="saved" class="ap-hint pp-ok"><Check :size="12" /> 已保存</span>
+    <!-- ==================== 编辑态（二级页） ==================== -->
+    <template v-else-if="active">
+      <SettingsDetailHeader
+        back-label="返回模式列表"
+        :title="'编辑模式 · ' + (active.name || '未命名模式')"
+        description="选中这套模式时，这段内容会接在 Agent 提示词后面一起进模型；变量在下面点一下就能插入。"
+        @back="backToList"
+      >
+        <template #actions>
+          <Button v-if="!active.builtin" variant="destructive" size="xs" type="button" :aria-label="'删除 ' + active.name" @click="removeActive">
+            <Trash2 :size="12" aria-hidden="true" /> 删除
+          </Button>
+        </template>
+      </SettingsDetailHeader>
+
+      <div class="ap-detail-form">
+        <label class="ap-field">
+          <span class="ap-field-label">模式名称</span>
+          <Input v-model="active.name" class="ap-input" aria-label="模式名称" placeholder="显示在模式选择里" @input="markDirty" />
+        </label>
+
+        <div class="ap-field">
+          <div class="ap-field-head">
+            <span class="ap-field-label">追加提示词</span>
+            <span class="ap-count">{{ active.text.length }} 字</span>
+          </div>
+          <PromptEditor
+            v-model="active.text"
+            label="模式提示词正文"
+            placeholder="写这套模式的追加指令…"
+            :height="240"
+            @update:model-value="markDirty"
+          />
+        </div>
+
+        <div class="ap-detail-foot is-sticky">
+          <span v-if="saved" class="ap-hint ap-ok"><Check :size="12" /> 已保存</span>
           <span v-else-if="dirty" class="ap-hint">有未保存的修改</span>
           <span v-else class="ap-hint">存在后台，换台机器也在</span>
           <Button type="button" size="sm" :disabled="busy || !dirty" @click="save">
@@ -269,43 +205,32 @@ const harnessPlaceholders = computed<ContextPlaceholderView[]>(() =>
           </Button>
         </div>
       </div>
-    </ShadcnSettingsSection>
-
-    <!-- 后台地址与目录：摆在这页，用户写提示词时一眼能看到 -->
-    <ShadcnSettingsSection
-      v-if="s.agentContext"
-      title="运行环境"
-      :description="s.agentContext.baseUrl || '未监听'"
-    >
-      <ShadcnSettingsRow
-        v-for="d in s.agentContext.dirs"
-        :key="d.label"
-        :label="d.label"
-        :description="d.path"
-      />
-    </ShadcnSettingsSection>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.ap-prompt-toolbar { display: flex; justify-content: flex-end; padding: 6px 0 2px; }
-.pp-actions { display: flex; align-items: center; gap: 6px; }
-.ap-prompt-edit { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 4px; }
-.pp-text-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-list-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.ap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-list-row { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-radius: 10px; }
+.ap-list-row:hover { background: var(--ui-hover, #f4f6f9); }
+.ap-list-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ap-list-title { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.ap-list-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--ui-ink, #18202b); }
+.ap-badge { flex: none; padding: 1px 6px; border-radius: 999px; background: var(--ui-hover, #f4f6f9); font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ap-badge.is-on { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); }
+.ap-list-desc, .ap-list-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ap-list-meta { font-size: 10.5px; color: var(--ui-ink-mute, #8c95a3); }
+.ap-detail-form { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+.ap-field { display: flex; flex-direction: column; gap: 6px; }
+.ap-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-field-label { font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
 .ap-input { width: 100%; }
-.pp-textarea { height: 180px; min-height: 140px; overflow-y: auto; field-sizing: fixed; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; line-height: 1.6; }
-.pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.pp-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-accent, #0891b2); }
+.ap-count { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ap-detail-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 2px; }
+.ap-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-accent, #0891b2); }
 .ap-warnblock { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 10px; border: 1px solid var(--ui-warn, #b45309); border-radius: var(--radius-control, 8px); }
 .ap-warnline { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-warn, #b45309); }
 .ap-warnline code { font-family: var(--font-mono, ui-monospace, monospace); }
-.pp-ph { border: 1px solid var(--ui-line-soft, #eef0f4); border-radius: var(--radius-control, 8px); }
-.pp-ph > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; font-size: 11px; color: var(--ui-ink-dim, #6b7280); cursor: pointer; list-style: none; }
-.pp-ph > summary::-webkit-details-marker { display: none; }
-.pp-ph-body { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; }
-.pp-ph-group { display: flex; flex-direction: column; gap: 5px; }
-.pp-ph-title { font-size: 10px; letter-spacing: 0.02em; color: var(--ui-ink-dim, #6b7280); }
-.pp-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.pp-chip { height: 22px; padding: 0 8px; font-family: var(--font-mono, ui-monospace, monospace); }
-.pp-chip code { font-size: 10px; }
 </style>

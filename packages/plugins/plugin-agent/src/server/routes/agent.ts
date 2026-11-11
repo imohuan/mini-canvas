@@ -234,6 +234,17 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     return c.json({ ok: true, template: await config.templateHealth() })
   })
 
+  /** 写系统提示词模板（三种提示词共用同一个编辑器；模板里必须有 {{AGENTS_MD}}） */
+  app.put('/api/agent/template', async (c) => {
+    const body = await safeJson(c)
+    if (!body || typeof body.text !== 'string') {
+      return c.json({ ok: false, error: 'body 需要 { text: string }' }, 400)
+    }
+    const r = await guard(() => config.saveTemplate(body.text as string))
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, template: await config.templateHealth() })
+  })
+
   /**
    * 模式提示词清单（全能创作 / 剧本创编 + 用户自建），住后台 KV。
    *

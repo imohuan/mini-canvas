@@ -60,11 +60,11 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
   // 同一套「卡片 / 分栏」交互的通用版：图片 / 视频的生成动作也用它（用户 2026-11-07）。
   ctx.registryOf<unknown>('ui').add('agentChoicePicker', ChoicePicker, { id: 'agent' })
 
-  // 菜单：进「集成 → Agent」。默认主题只提供默认树，本插件只注册自己的那一页。
+  // 菜单：进「集成 → 智能助手」。默认主题只提供默认树，本插件只注册自己的那一页。
   ctx.settingsMenu.nav({
     id: 'nav/integration/agent',
     category: 'category/integration',
-    title: 'Agent',
+    title: '智能助手',
     icon: Bot,
     order: 10,
     page: markRaw(AgentSettingsPage),
@@ -84,7 +84,7 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     order: 5,
     component: markRaw(AgentSettingsNav),
     // 只提供数据：外观由设置面板统一渲染，整页走 page，避免再自绘一套导航
-    meta: { title: 'Agent', category: '集成', icon: Bot, page: markRaw(AgentSettingsPage), pageGroup: '集成/Agent' },
+    meta: { title: '智能助手', category: '集成', icon: Bot, page: markRaw(AgentSettingsPage), pageGroup: '集成/Agent' },
   })
   // 内容：段的正文来自 settingsGroup/<完整分组 key>。整页只注册这一处，
   // 页签切换由页面自己负责（用户口径：上面一排页签切换 provider / 技能 / MCP / 系统提示词…）。

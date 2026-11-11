@@ -299,6 +299,8 @@ export interface AgentService {
   }): Promise<{ ok: boolean; models: string[]; error?: string }>
   /** 保存系统提示词 */
   saveSystemPrompt(text: string): Promise<void>
+  /** 保存系统提示词模板（模板里必须有 {{AGENTS_MD}}） */
+  saveTemplate(text: string): Promise<void>
   /** 把提示词模板恢复成出厂模板（模板体检不通过时用；见 state.templateHealth） */
   restoreTemplate(): Promise<void>
   /** 新建一个会话（清空消息区，不是删旧的） */

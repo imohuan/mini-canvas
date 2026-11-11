@@ -13,7 +13,7 @@ describe('默认设置菜单', () => {
     const view = menu.resolve([])
     expect(view.categories.map((c) => c.title)).toEqual(['个人', '外观', '集成', '画布', '开发'])
     expect(view.navs.map((n) => `${n.title}`)).toEqual([
-      '通用', '快捷键', '主题', 'Agent', '插件', '连接',
+      '通用', '快捷键', '主题', '智能助手', '插件', '连接',
       '交互', '布局', '节点', '边', '工具', '调试', '演示',
     ])
   })

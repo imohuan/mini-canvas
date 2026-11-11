@@ -20,6 +20,7 @@ import path from 'node:path'
 import { assembleSystemPrompt, loadAgentState } from '@prismshadow/penguin-core'
 import { AgentConfigService } from '@mini-canvas/plugin-agent/server/agent/config.js'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot } from '@mini-canvas/plugin-agent/server/agent/agentPaths.js'
+import { buildRuntimeContext } from '@mini-canvas/plugin-agent/server/agent/runtimeContext.js'
 import { KvStore } from '../store/kvStore'
 
 let dir: string
@@ -29,6 +30,7 @@ beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-three-layers-'))
   // 提示词清单落在宿主的 KV（settings.json），装配时由宿主注入 —— 测试里直接给真的那份。
   svc = new AgentConfigService(dir, { kv: new KvStore(dir) })
+  svc.setRuntimeContext(buildRuntimeContext({ baseUrl: 'http://127.0.0.1:8865', dataRoot: dir }))
 })
 
 afterEach(async () => {
@@ -84,5 +86,55 @@ describe('系统提示词三层都在最终结果里', () => {
     const sp = await assemble()
     expect(sp).toContain('用户原文')
     expect(sp).not.toContain('模式A')
+  })
+})
+
+/**
+ * 三种提示词共用一套本站变量（用户口径 2026-11-11）。
+ * SDK 只认 {{CWD}} / {{AGENTS_MD}} 等自带名字，本站的 {{BACKEND_BASE_URL}} 必须
+ * 在建会话那一刻临时替换，建完还原 —— 否则端口一换，模板就冻在旧地址上。
+ */
+describe('系统提示词模板也支持本站变量', () => {
+  async function writeTemplate(text: string): Promise<void> {
+    // 先让服务把 agent_state 初始化出来（system_config.yaml 才有），再改模板——
+    // 与真实服务「先启动、用户后改配置」同一顺序。
+    await svc.templateHealth()
+    const target = svc.systemConfigPath()
+    const yaml = await import('yaml')
+    const { promises: fs } = await import('node:fs')
+    const { loadAgentState } = await import('@prismshadow/penguin-core')
+    const state = await loadAgentState({ agentId: AGENT_ID, projectId: AGENT_PROJECT_ID, root: agentRoot(dir) })
+    await fs.writeFile(target, yaml.stringify({ ...state.systemConfig, system_prompt: text }, { lineWidth: 0 }), 'utf8')
+  }
+
+  it('模板里的 {{BACKEND_BASE_URL}} 在建会话时变成当前地址', async () => {
+    await writeTemplate('服务地址：{{BACKEND_BASE_URL}}\n\n{{AGENTS_MD}}')
+    const restore = await svc.withSystemPrompt('')
+    try {
+      const sp = await assemble()
+      expect(sp).toContain('服务地址：http://127.0.0.1:8865')
+      expect(sp).not.toContain('{{BACKEND_BASE_URL}}')
+    } finally {
+      await restore()
+    }
+  })
+
+  it('建完会话后模板回到原文（记号不能被冻住）', async () => {
+    await writeTemplate('服务地址：{{BACKEND_BASE_URL}}\n\n{{AGENTS_MD}}')
+    const restore = await svc.withSystemPrompt('')
+    await restore()
+    const health = await svc.templateHealth()
+    expect(health.template).toContain('{{BACKEND_BASE_URL}}')
+    expect(health.template).not.toContain('http://127.0.0.1:8865')
+  })
+
+  it('保存模板：允许改正文，但不许删掉 {{AGENTS_MD}}', async () => {
+    await writeTemplate('{{AGENTS_MD}}')
+    // 只保留 {{AGENTS_MD}} 时，缺 {{CWD}} / {{SESSION_ID}} 会如实报出来（不拦保存）
+    await expect(svc.saveTemplate('{{AGENTS_MD}}\n\n后台地址：{{BACKEND_BASE_URL}}')).resolves.toMatchObject({ ok: false })
+    expect((await svc.templateHealth()).template).toContain('{{BACKEND_BASE_URL}}')
+    await expect(svc.saveTemplate('没有把提示词送进去的通道')).rejects.toThrow('{{AGENTS_MD}}')
+    // 被拒绝的那次不能落盘
+    expect((await svc.templateHealth()).template).toContain('{{BACKEND_BASE_URL}}')
   })
 })

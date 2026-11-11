@@ -77,3 +77,42 @@
 .ap .shadcn-settings-row__label { font-size: 12px; }
 .ap .shadcn-settings-row__desc { font-size: 11px; }
 .ap .ap-form-stack { display: flex; flex-direction: column; gap: 8px; }
+
+/* —— 二级页的保存条 ——
+   三种提示词页共用：滚动到长正文中间时，保存仍在左下/右下看得见。
+   背景用面板底色，内容从下面滚过时不透字。 */
+.ap .ap-detail-foot.is-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 8px 0;
+  background: var(--ui-panel, #fff);
+}
+/* sticky 底条紧贴正文时，加一条极淡的分隔线，滚动内容才不会看起来被截断 */
+.ap .ap-detail-foot.is-sticky::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--ui-line-soft, #eef0f4);
+}
+
+/* 同一个底条也给 MCP / 渠道这类二级表单用 */
+.ap .ap-form-actions.is-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 10px 0;
+  background: var(--ui-panel, #fff);
+}
+.ap .ap-form-actions.is-sticky::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--ui-line-soft, #eef0f4);
+}

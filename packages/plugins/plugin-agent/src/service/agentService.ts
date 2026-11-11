@@ -272,6 +272,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     loadSkillCandidates: skills.loadSkillCandidates,
     loadUpstreamModels: skills.loadUpstreamModels,
     saveSystemPrompt: prompts.saveSystemPrompt,
+    saveTemplate: prompts.saveTemplate,
     restoreTemplate: prompts.restoreTemplate,
     removeSkill: skills.removeSkill,
     addMcp: mcp.addMcp,
